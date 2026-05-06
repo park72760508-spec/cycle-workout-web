@@ -1037,6 +1037,137 @@
       background: #eef2ff;
     }
 
+    /* TestFlight — iOS 비-Safari·인앱 브라우저용 Safari 유도 모달 (다크 테마) */
+    .stelvio-safari-tf-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100050;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 18px;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+    .stelvio-safari-tf-modal:not(.hidden) {
+      display: flex;
+    }
+    .stelvio-safari-tf-modal.hidden {
+      display: none !important;
+    }
+    .stelvio-safari-tf-modal__overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 10, 22, 0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      cursor: pointer;
+    }
+    .stelvio-safari-tf-modal__panel {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 400px;
+      padding: 28px 24px 22px;
+      border-radius: 20px;
+      background: linear-gradient(155deg, rgba(30, 32, 48, 0.97) 0%, rgba(18, 20, 32, 0.99) 100%);
+      border: 1px solid rgba(102, 126, 234, 0.35);
+      box-shadow:
+        0 24px 64px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(118, 75, 162, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      color: #e8eaf0;
+      text-align: center;
+      animation: stelvioSafariTfModalIn 0.28s ease-out;
+    }
+    @keyframes stelvioSafariTfModalIn {
+      from {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    .stelvio-safari-tf-modal__title {
+      margin: 0 0 12px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 50%, #e9d5ff 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .stelvio-safari-tf-modal__lead {
+      margin: 0 0 18px;
+      font-size: 0.95rem;
+      line-height: 1.55;
+      color: rgba(226, 232, 240, 0.88);
+    }
+    .stelvio-safari-tf-modal__copy {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      margin-bottom: 18px;
+      padding: 14px 18px;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+    .stelvio-safari-tf-modal__copy:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(102, 126, 234, 0.5);
+    }
+    .stelvio-safari-tf-modal__copy:active {
+      transform: translateY(0);
+    }
+    .stelvio-safari-tf-modal__copy.is-done {
+      background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+      box-shadow: 0 4px 18px rgba(52, 211, 153, 0.35);
+    }
+    .stelvio-safari-tf-modal__hint {
+      margin: 0 0 20px;
+      font-size: 0.82rem;
+      line-height: 1.65;
+      color: rgba(148, 163, 184, 0.95);
+      text-align: left;
+    }
+    .stelvio-safari-tf-modal__kbd {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #c4b5fd;
+      background: rgba(102, 126, 234, 0.2);
+      border: 1px solid rgba(102, 126, 234, 0.35);
+    }
+    .stelvio-safari-tf-modal__close {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(226, 232, 240, 0.9);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .stelvio-safari-tf-modal__close:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(167, 139, 250, 0.45);
+    }
+
     /* 사용자 정보 입력 폼 모바일 반응형 */
     @media (max-width: 768px) {
       #addUserForm {
@@ -2049,7 +2180,19 @@
                 </button>
               </div>
             </div>
-          </div>
+            </div>
+
+            <!-- iOS 인앱·제3자 브라우저: TestFlight Safari 유도 모달 -->
+            <div id="stelvioSafariTestFlightModal" class="stelvio-safari-tf-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="stelvioSafariTfTitle">
+              <div class="stelvio-safari-tf-modal__overlay" data-stelvio-tf-overlay tabindex="-1"></div>
+              <div class="stelvio-safari-tf-modal__panel">
+                <h2 id="stelvioSafariTfTitle" class="stelvio-safari-tf-modal__title">Safari에서 TestFlight 열기</h2>
+                <p class="stelvio-safari-tf-modal__lead">현재 브라우저에서는 TestFlight가 정상 연동되지 않습니다.</p>
+                <button type="button" class="stelvio-safari-tf-modal__copy" data-stelvio-tf-copy>링크 복사하기</button>
+                <p class="stelvio-safari-tf-modal__hint">오른쪽 아래 <span class="stelvio-safari-tf-modal__kbd">[...]</span> 아이콘을 눌러 <strong style="color:#c4b5fd;font-weight:600;">Safari로 열기</strong>를 선택하시거나, 복사한 주소를 Safari 앱에 붙여넣어 주세요!</p>
+                <button type="button" class="stelvio-safari-tf-modal__close" data-stelvio-tf-close>닫기</button>
+              </div>
+            </div>
             
             <!-- iOS 앱 Bluefy 안내 팝업 -->
             <div id="stelvioIosComingSoonModal" class="stelvio-coming-soon-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10003;">
@@ -14831,23 +14974,168 @@
     }
     
     /**
-     * STELVIO App Download 박스 클릭: 접속 기기 자동 판단 (Android→APK, iOS→TestFlight)
+     * STELVIO App Download: PC·Android는 APK(또는 플레이스홀더), iOS는 Safari/TestFlight·카카오 스킷·유도 모달 분기
+     * TestFlight 주소는 배포 시 아래 플레이스홀더만 교체하면 됩니다.
      */
-    var ANDROID_APP_DOWNLOAD_URL = 'https://firebasestorage.googleapis.com/v0/b/stelvio-ai.firebasestorage.app/o/app-release.apk?alt=media&token=db393f87-4858-44ba-89fb-404b146460c1';
-    var IOS_APP_TESTFLIGHT_URL = 'https://testflight.apple.com/join/YQm9dVHj';
-    function handleAppDownloadClick(event) {
+    var ANDROID_OR_PC_APP_DOWNLOAD_URL = 'https://firebasestorage.googleapis.com/v0/b/stelvio-ai.firebasestorage.app/o/app-release.apk?alt=media&token=db393f87-4858-44ba-89fb-404b146460c1';
+    var STELVIO_IOS_TESTFLIGHT_URL = 'https://testflight.apple.com/join/YOUR_TESTFLIGHT_CODE';
+    var __stelvioSafariTfCopyBtnDefaultHtml = '';
+
+    function stelvioIsIOSDevice() {
       var ua = navigator.userAgent || '';
-      var isAndroid = /Android/i.test(ua);
-      var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isAndroid) {
-        window.open(ANDROID_APP_DOWNLOAD_URL, '_blank', 'noopener');
-      } else if (isIOS) {
-        window.open(IOS_APP_TESTFLIGHT_URL, '_blank', 'noopener');
-      } else {
-        window.open(ANDROID_APP_DOWNLOAD_URL, '_blank', 'noopener');
+      if (/iPhone|iPad|iPod/i.test(ua)) return true;
+      if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+      return false;
+    }
+
+    function stelvioIsKakaoTalkIOSInApp(ua) {
+      ua = ua || navigator.userAgent || '';
+      return stelvioIsIOSDevice() && /KAKAOTALK/i.test(ua);
+    }
+
+    /**
+     * iOS 순수 Safari: Version/ + Safari/ 패턴이 있고, 크롬·파이어폭스·인앱 등 알려진 예외는 제외
+     */
+    function stelvioIsNativeIOSSafari(ua) {
+      ua = ua || navigator.userAgent || '';
+      if (!stelvioIsIOSDevice()) return false;
+      if (!/Version\/[\d.]+/.test(ua) || !/Safari\/[\d.]+/.test(ua)) return false;
+      if (/CriOS|FxiOS|EdgiOS/.test(ua)) return false;
+      if (/KAKAOTALK/i.test(ua)) return false;
+      if (/(Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|NAVER|Whale|DaumApps|Twitter|TikTok|MicroMessenger|GSA\/)/i.test(ua)) return false;
+      return true;
+    }
+
+    function openAndroidOrPcAppDownload() {
+      window.open(ANDROID_OR_PC_APP_DOWNLOAD_URL, '_blank', 'noopener');
+    }
+
+    function openKakaoExternalSafariWithUrl(url) {
+      var target = url || STELVIO_IOS_TESTFLIGHT_URL;
+      window.location.href = 'kakaotalk://web/openExternalApp?url=' + encodeURIComponent(target);
+    }
+
+    function showStelvioSafariTestFlightModal() {
+      var modal = document.getElementById('stelvioSafariTestFlightModal');
+      if (!modal) return;
+      if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
+      }
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      var copyBtn = modal.querySelector('[data-stelvio-tf-copy]');
+      if (copyBtn && __stelvioSafariTfCopyBtnDefaultHtml) {
+        copyBtn.innerHTML = __stelvioSafariTfCopyBtnDefaultHtml;
+        copyBtn.classList.remove('is-done');
       }
     }
+
+    function closeStelvioSafariTestFlightModal() {
+      var modal = document.getElementById('stelvioSafariTestFlightModal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+    window.closeStelvioSafariTestFlightModal = closeStelvioSafariTestFlightModal;
+
+    function stelvioCopyTestFlightLinkToClipboard(buttonEl) {
+      var url = STELVIO_IOS_TESTFLIGHT_URL;
+      var onDone = function () {
+        if (!buttonEl) return;
+        buttonEl.innerHTML = '복사되었습니다';
+        buttonEl.classList.add('is-done');
+        setTimeout(function () {
+          buttonEl.innerHTML = __stelvioSafariTfCopyBtnDefaultHtml || '링크 복사하기';
+          buttonEl.classList.remove('is-done');
+        }, 2200);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(onDone).catch(function () {
+          stelvioCopyTextExecCommand(url);
+          onDone();
+        });
+      } else {
+        stelvioCopyTextExecCommand(url);
+        onDone();
+      }
+    }
+
+    function stelvioCopyTextExecCommand(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch (e) {}
+      document.body.removeChild(ta);
+    }
+
+    function handleAppDownloadClick(event) {
+      if (event) {
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      }
+      var ua = navigator.userAgent || '';
+      var isAndroid = /Android/i.test(ua);
+
+      if (isAndroid || !stelvioIsIOSDevice()) {
+        openAndroidOrPcAppDownload();
+        return;
+      }
+
+      if (stelvioIsKakaoTalkIOSInApp(ua)) {
+        openKakaoExternalSafariWithUrl(STELVIO_IOS_TESTFLIGHT_URL);
+        return;
+      }
+
+      if (stelvioIsNativeIOSSafari(ua)) {
+        window.location.href = STELVIO_IOS_TESTFLIGHT_URL;
+        return;
+      }
+
+      showStelvioSafariTestFlightModal();
+    }
     window.handleAppDownloadClick = handleAppDownloadClick;
+
+    (function initStelvioSafariTestFlightModalUi() {
+      function bind() {
+        var modal = document.getElementById('stelvioSafariTestFlightModal');
+        if (!modal) return;
+        var copyBtn = modal.querySelector('[data-stelvio-tf-copy]');
+        if (copyBtn && !__stelvioSafariTfCopyBtnDefaultHtml) {
+          __stelvioSafariTfCopyBtnDefaultHtml = copyBtn.innerHTML;
+        }
+        var overlay = modal.querySelector('[data-stelvio-tf-overlay]');
+        var closeBtn = modal.querySelector('[data-stelvio-tf-close]');
+        if (overlay && !overlay._stelvioTfBound) {
+          overlay._stelvioTfBound = true;
+          overlay.addEventListener('click', closeStelvioSafariTestFlightModal);
+        }
+        if (closeBtn && !closeBtn._stelvioTfBound) {
+          closeBtn._stelvioTfBound = true;
+          closeBtn.addEventListener('click', closeStelvioSafariTestFlightModal);
+        }
+        if (copyBtn && !copyBtn._stelvioTfBound) {
+          copyBtn._stelvioTfBound = true;
+          copyBtn.addEventListener('click', function () {
+            stelvioCopyTestFlightLinkToClipboard(copyBtn);
+          });
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+      } else {
+        bind();
+      }
+    })();
     
     /**
      * iOS 앱 Bluefy 안내 팝업 표시/닫기
