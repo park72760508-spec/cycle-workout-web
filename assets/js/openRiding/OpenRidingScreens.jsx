@@ -8716,7 +8716,7 @@ function openRidingGroupsIsAdminGrade() {
   return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
 }
 
-/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(뷰포트 세로 중심~하단 구간의 아래 2/3 고정, style.css와 transform 연동) */
+/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(style.css: 네비 기준 하단 여백) */
 function OpenRidingGroupsList(props) {
   var firestore = props.firestore;
   var onOpenDetail = props.onOpenDetail || function () {};
@@ -8914,7 +8914,7 @@ function OpenRidingGroupsList(props) {
         style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)',
-          transform: fabLift ? 'translateY(calc(-50% - 14px))' : 'translateY(-50%)',
+          transform: fabLift ? 'translateY(-14px)' : 'translateY(0)',
           transition: 'transform 0.25s ease'
         }}
         title="그룹 생성"
@@ -10393,6 +10393,7 @@ function OpenRidingRoomApp(props) {
         className={
           'open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 w-full box-border ' +
           (view === 'groupDetail' && detailGroupId ? 'open-riding-app-body--group-detail-no-scrollbar ' : '') +
+          (view === 'groups' ? 'open-riding-app-body--groups-no-scrollbar ' : '') +
           ((view === 'detail' && detailRideId) || (view === 'groupDetail' && detailGroupId)
             ? 'open-riding-app-body--riding-detail '
             : 'pt-2 ') +
