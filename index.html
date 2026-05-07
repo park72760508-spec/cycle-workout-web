@@ -7816,6 +7816,13 @@
       } catch (e) {}
     }
 
+    /** 랭킹·주간 TOP10 공통: is_private가 true / 'true' / 1 등으로 올 때 비공개로 통일 */
+    function stelvioRankingIsPrivateRow(item) {
+      if (!item) return false;
+      var v = item.is_private;
+      return v === true || v === 'true' || v === 1 || v === '1';
+    }
+
     /**
      * 주간 마일리지 TOP10 조회 후 모달 표시 (Choose Your Path 입장 시 호출)
      * 로딩 시 녹색 큰 원 스피너 표시 → 조회 완료 시 랭킹 목록으로 교체.
@@ -7893,8 +7900,8 @@
         var html = '';
         list.forEach(function(item, idx) {
           var rank = item.rank || (idx + 1);
-          var isPrivate = item.is_private === true;
-          var isSelf = currentUserId && item.userId === currentUserId;
+          var isPrivate = stelvioRankingIsPrivateRow(item);
+          var isSelf = !!(currentUserId && String(item.userId || '') === String(currentUserId));
           var canSeeFull = isSelf || isAdmin;
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var name, tssStr;
@@ -7904,7 +7911,7 @@
               tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
             } else {
               name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
-              tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
+              tssStr = '\u2014';
             }
           } else {
             name = rawName;
@@ -7924,8 +7931,8 @@
           if (mr.rank >= 12) {
             html += '<div class="weekly-rank-item weekly-rank-ellipsis">....</div>';
           }
-          var mrIsPrivate = mr.is_private === true;
-          var mrCanSeeFull = currentUserId && mr.userId === currentUserId || isAdmin;
+          var mrIsPrivate = stelvioRankingIsPrivateRow(mr);
+          var mrCanSeeFull = (currentUserId && String(mr.userId || '') === String(currentUserId)) || isAdmin;
           var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var mrName, mrTssStr;
           if (mrIsPrivate) {
@@ -7934,7 +7941,7 @@
               mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
             } else {
               mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**';
-              mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
+              mrTssStr = '\u2014';
             }
           } else {
             mrName = mrRawName;
@@ -8818,6 +8825,11 @@
       var ot = document.getElementById('stelvioOvertakeBtn');
       if (ot) ot.classList.toggle('hidden', stelvioIsKmDistanceRanking() || stelvioIsGcRankingMode());
     }
+    function stelvioUpdateTssAggregateRefreshNote() {
+      var el = document.getElementById('stelvioTssAggRefreshNote');
+      if (!el) return;
+      el.classList.toggle('hidden', !stelvioIsTssRankingMode());
+    }
     function stelvioApplyDurationModeUi() {
       var label = document.getElementById('stelvioPeriodLabel');
       var sel = document.getElementById('stelvioPeriodSelect');
@@ -8833,6 +8845,7 @@
         sel.value = stelvioRankingState.period;
       }
       stelvioUpdateGroupRankingFilterUi();
+      stelvioUpdateTssAggregateRefreshNote();
     }
     function stelvioOnPeriodChange(val) {
       if (stelvioIsRollingWindowDurationRanking() || stelvioIsGcRankingMode()) return;
@@ -8892,7 +8905,8 @@
         duration: stelvioRankingState.duration,
         currentUserId: stelvioRankingCurrentUserId,
         currentUser: stelvioCurrentUser,
-        myRankSupremo: stelvioMyRankSupremo
+        myRankSupremo: stelvioMyRankSupremo,
+        viewerIsAdmin: typeof getViewerGrade === 'function' && getViewerGrade() === '1'
       };
       window.refreshStelvioDistributionChart(
         stelvioRankingState.listFilter === 'interest' ? stelvioChartPropsInterestFiltered(base) : base
@@ -9452,6 +9466,13 @@
       }
       return (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
     }
+
+    /** 비공개 행은 본인·관리자만 실수치, 그 외에는 대시만 표시 */
+    function stelvioFormatRankCellForViewer(item, canSeeFull) {
+      if (stelvioRankingIsPrivateRow(item) && !canSeeFull) return '\u2014';
+      return stelvioFormatRankCell(item);
+    }
+
     function renderStelvioRankingOneCategory(cat, byCategory, currentUserId, myRankSupremo, bodyEl) {
       if (!bodyEl) return;
       var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
@@ -9526,7 +9547,7 @@
             });
           } else {
             userIdxS = arr.findIndex(function (item) {
-              return item.userId === currentUserId;
+              return currentUserId && String(item.userId || '') === String(currentUserId);
             });
           }
         }
@@ -9550,11 +9571,12 @@
         function buildSupremoRow(item, categoryRank, extraRowClass) {
           extraRowClass = extraRowClass || '';
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          var isPrivate = item.is_private === true;
-          var isCurrent = currentUserId && item.userId === currentUserId;
+          var isPrivate = stelvioRankingIsPrivateRow(item);
+          var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
           var canSeeFull = isCurrent || isAdmin;
           var name;
-          var valStr = stelvioFormatRankCell(item);
+          var valStr = stelvioFormatRankCellForViewer(item, canSeeFull);
+          var profUrl = isPrivate && !canSeeFull ? null : item.profileImageUrl;
           if (isPrivate) {
             if (canSeeFull) {
               name = rawName.length > maxNameLenS ? rawName.substring(0, maxNameLenS - 2) + '..' : rawName;
@@ -9590,7 +9612,7 @@
           h += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
           h +=
             '<span class="stelvio-rank-name">' +
-            stelvioRankingAvatarHtml(item.profileImageUrl, {
+            stelvioRankingAvatarHtml(profUrl, {
               userId: item.userId,
               overlayName: name,
               ageCategory: item.ageCategory
@@ -9848,7 +9870,7 @@
           });
         } else {
           userIdx = arr.findIndex(function (item) {
-            return item.userId === currentUserId;
+            return currentUserId && String(item.userId || '') === String(currentUserId);
           });
         }
       }
@@ -9877,21 +9899,20 @@
         var categoryRank = (isExpired && userIdx >= 3 && idx === 3) ? (userIdx + 1) : (idx + 1);
         var dispR = stelvioRankDisplayNumber(item, categoryRank, cat, byCategory);
         var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        var isPrivate = item.is_private === true;
-        var isCurrent = currentUserId && item.userId === currentUserId;
+        var isPrivate = stelvioRankingIsPrivateRow(item);
+        var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
         var canSeeFull = isCurrent || isAdmin;
-        var name, valStr;
+        var name;
+        var valStr = stelvioFormatRankCellForViewer(item, canSeeFull);
+        var profUrlCat = isPrivate && !canSeeFull ? null : item.profileImageUrl;
         if (isPrivate) {
           if (canSeeFull) {
             name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
-            valStr = stelvioFormatRankCell(item);
           } else {
             name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
-            valStr = stelvioFormatRankCell(item);
           }
         } else {
           name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
-          valStr = stelvioFormatRankCell(item);
         }
         var globalPart = '';
         var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
@@ -9915,7 +9936,7 @@
         html += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
         html +=
           '<span class="stelvio-rank-name">' +
-          stelvioRankingAvatarHtml(item.profileImageUrl, {
+          stelvioRankingAvatarHtml(profUrlCat, {
             userId: item.userId,
             overlayName: name,
             ageCategory: item.ageCategory
@@ -9942,9 +9963,10 @@
         var mrDisp = stelvioRankDisplayNumber(mr, userIdx + 1, cat, byCategory);
         var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var mrName = mrRawName.length > maxNameLen ? mrRawName.substring(0, maxNameLen - 2) + '..' : mrRawName;
-        var mrVal = stelvioFormatRankCell(mr);
-        var mrIsPrivate = mr.is_private === true;
-        var mrCanSeeFull = currentUserId && mr.userId === currentUserId || isAdmin;
+        var mrIsPrivate = stelvioRankingIsPrivateRow(mr);
+        var mrCanSeeFull = (currentUserId && String(mr.userId || '') === String(currentUserId)) || isAdmin;
+        var mrVal = stelvioFormatRankCellForViewer(mr, mrCanSeeFull);
+        var mrProfUrl = mrIsPrivate && !mrCanSeeFull ? null : mr.profileImageUrl;
         if (mrIsPrivate && !mrCanSeeFull) { mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**'; }
         var mrBadgePart = (mrIsPrivate && mrCanSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
         var mrGroupHost =
@@ -9963,7 +9985,7 @@
         html += '<span class="stelvio-rank-pos">' + mrDisp + '위</span>';
         html +=
           '<span class="stelvio-rank-name">' +
-          stelvioRankingAvatarHtml(mr.profileImageUrl, {
+          stelvioRankingAvatarHtml(mrProfUrl, {
             userId: mr.userId,
             overlayName: mrName,
             ageCategory: mr.ageCategory
@@ -22248,6 +22270,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </div>
             <button type="button" class="stelvio-overtake-btn stelvio-orange-btn" id="stelvioOvertakeBtn" onclick="if(typeof handleStelvioOvertakeClick==='function')handleStelvioOvertakeClick();" title="바로 앞 순위자와 비교 분석">추월하기</button>
           </div>
+          </div>
+          <div id="stelvioTssAggRefreshNote" class="stelvio-tss-agg-refresh-note hidden" role="note" aria-live="polite">
+            <strong>갱신 주기 (TSS ↔ 주간 마일리지 TOP10)</strong><br>
+            두 화면은 <strong>동일한 주간 TSS 집계</strong>를 봅니다. 서버에서는 매일 <strong>KST 0·12·15·21시</strong>에 전체 랭킹 집계를 돌리고, <strong>15~23시에는 매 정시</strong>에 주간 TSS·TOP10 집계만 추가 갱신합니다.<br>
+            차이: <strong>주간 마일리지 TOP10</strong> 조회는 HTTP 캐시 <strong>약 2분(max-age=120)</strong>이 붙고, <strong>랭킹보드 TSS</strong> 탭은 같은 캐시 헤더 없이 집계·즉시 계산으로 응답합니다. 공통으로 집계 스냅샷은 갱신 후 최대 약 <strong>14시간</strong>까지 재사용될 수 있어, 그 사이 숫자는 위 정각 스케줄에 맞춰 바뀝니다.
           </div>
         </div>
         <!-- ② 내 랭킹 요약 Hero 카드 -->
