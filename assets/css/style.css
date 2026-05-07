@@ -6908,6 +6908,22 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-size: 0.9em;
   color: #64748b;
 }
+/* 그룹 탭 소모임 줄: 프로필 썸네일 크기·테두리 = GC 순위표 아바타 버튼(30×30·보라 링) */
+#stelvioRankingScreen .stelvio-group-list-avatar-slot {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
+  line-height: 0;
+}
+#stelvioRankingScreen .stelvio-rank-pos.stelvio-group-seq {
+  font-variant-numeric: tabular-nums;
+}
 .stelvio-rank-crown {
   width: 24px;
   height: 24px;
