@@ -4,7 +4,9 @@
  */
 import {
   collection,
+  collectionGroup,
   doc,
+  documentId,
   getDoc,
   getDocs,
   setDoc,
@@ -127,6 +129,124 @@ export function subscribeRidingGroups(db, isAdmin, onUpdate) {
         u();
       } catch (e) {}
     });
+  };
+}
+
+/**
+ * 내 UID가 멤버로 등록된 승인(APPROVED) 소모임만 실시간 수집(랭킹보드 「그룹」탭 등).
+ * collectionGroup `members` 중 타 컬렉션과 혼선을 막기 위해 경로 접두만 사용합니다.
+ *
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} uid
+ * @param {function(Array<{ id: string; groupId: string; name: string; photoUrl: string; memberCount: number|null }>): void} onUpdate
+ * @returns {function(): void}
+ */
+export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
+  if (!db || !uid || typeof onUpdate !== 'function') return function () {};
+  var u = String(uid).trim();
+  if (!u) return function () {};
+
+  var metaByGid = Object.create(null);
+  var unsubByGid = Object.create(null);
+  var membUnsub = null;
+
+  function sortedList() {
+    return Object.keys(metaByGid)
+      .map(function (gid) {
+        return metaByGid[gid];
+      })
+      .filter(Boolean)
+      .sort(function (a, b) {
+        var mcA = a.memberCount != null ? Number(a.memberCount) : 0;
+        var mcB = b.memberCount != null ? Number(b.memberCount) : 0;
+        if (mcB !== mcA) return mcB - mcA;
+        var na = String(a.name || '').toLowerCase();
+        var nb = String(b.name || '').toLowerCase();
+        if (na < nb) return -1;
+        if (na > nb) return 1;
+        return 0;
+      });
+  }
+
+  function emit() {
+    onUpdate(sortedList());
+  }
+
+  function unsubGroupDoc(gid) {
+    var fn = unsubByGid[gid];
+    if (fn) {
+      try {
+        fn();
+      } catch (e) {}
+      delete unsubByGid[gid];
+    }
+    delete metaByGid[gid];
+  }
+
+  function subGroupDoc(gid) {
+    if (unsubByGid[gid]) return;
+    var gRef = doc(db, RIDING_GROUP_COLLECTION, gid);
+    unsubByGid[gid] = onSnapshot(gRef, function (snap) {
+      if (!snap.exists()) {
+        unsubGroupDoc(gid);
+        emit();
+        return;
+      }
+      var gd = snap.data() || {};
+      var st = String(gd.status || '');
+      if (st !== GROUP_STATUS.APPROVED) {
+        unsubGroupDoc(gid);
+        emit();
+        return;
+      }
+      metaByGid[gid] = {
+        id: gid,
+        groupId: gid,
+        name: gd.name != null ? String(gd.name) : '(이름 없음)',
+        photoUrl: gd.photoUrl != null ? String(gd.photoUrl).trim() : '',
+        memberCount: gd.memberCount != null ? Number(gd.memberCount) : null
+      };
+      emit();
+    });
+  }
+
+  /** @param {string} path */
+  function parseStelvioGroupIdFromMemberPath(path) {
+    var p = String(path || '');
+    var prefix = RIDING_GROUP_COLLECTION + '/';
+    if (p.indexOf(prefix) !== 0) return null;
+    var rest = p.slice(prefix.length).split('/');
+    if (rest.length !== 3 || rest[2] !== u) return null;
+    if (rest[1] !== 'members') return null;
+    return rest[0] || null;
+  }
+
+  var qMem = query(collectionGroup(db, 'members'), where(documentId(), '==', u));
+  membUnsub = onSnapshot(qMem, function (snap) {
+    var want = Object.create(null);
+    snap.forEach(function (d) {
+      var gid = parseStelvioGroupIdFromMemberPath(d.ref.path);
+      if (gid) want[gid] = true;
+    });
+    Object.keys(unsubByGid).forEach(function (gid) {
+      if (!want[gid]) unsubGroupDoc(gid);
+    });
+    Object.keys(want).forEach(function (gid) {
+      subGroupDoc(gid);
+    });
+    if (snap.empty) {
+      emit();
+    }
+  });
+
+  return function () {
+    if (membUnsub) {
+      try {
+        membUnsub();
+      } catch (e2) {}
+      membUnsub = null;
+    }
+    Object.keys(unsubByGid).slice().forEach(unsubGroupDoc);
   };
 }
 
@@ -504,6 +624,7 @@ if (typeof window !== 'undefined') {
     RIDING_GROUP_COLLECTION,
     RIDING_GROUP_JOIN_REQUESTS_SUB,
     GROUP_STATUS,
+    subscribeMyRidingGroupsAsMember,
     subscribeRidingGroups,
     subscribeRidingGroupDetail,
     subscribeRidingGroupMembers,
