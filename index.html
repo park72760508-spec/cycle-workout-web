@@ -9639,10 +9639,10 @@
           mh +=
             '<div class="' +
             rowCls +
-            '" style="padding-left:20px;background:rgba(249,250,251,0.94)">';
+            ' stelvio-group-member-row">';
           if (rankInGroup <= 3) mh += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[rankInGroup - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
-          else mh += '<span class="stelvio-rank-crown"></span>';
-          mh += '<span class="stelvio-rank-pos">' + rankInGroup + '위</span>';
+          else mh += '<span class="stelvio-rank-crown" aria-hidden="true"></span>';
+          mh += '<span class="stelvio-rank-pos stelvio-group-member-pos">' + rankInGroup + '위</span>';
           mh +=
             '<span class="stelvio-rank-name">' +
             avatarBtn(prof, { userId: it.userId, overlayName: nm, ageCategory: it.ageCategory }) +
@@ -9680,12 +9680,9 @@
         var rowClsG =
           'stelvio-rank-row stelvio-rank-row--my-group stelvio-group-pick-row' +
           (isExp ? ' stelvio-group-pick-row--open' : '');
-        var seqG = gi + 1;
         chunks += '<button type="button" class="' + rowClsG + '" data-stelvio-group-pick="1" data-stelvio-group-id="' + escAttrL(gidi) + '" aria-expanded="' + (isExp ? 'true' : 'false') + '">';
-        chunks += '<span class="stelvio-rank-crown"></span>';
-        chunks += '<span class="stelvio-rank-pos stelvio-group-seq">' + seqG + '</span>';
         chunks +=
-          '<span class="stelvio-rank-name">' +
+          '<span class="stelvio-rank-name stelvio-group-pick-main">' +
           '<span class="stelvio-group-list-avatar-slot" aria-hidden="true">' +
           '<span class="stelvio-rank-avatar">' +
           '<img class="stelvio-rank-avatar-img" src="' +
