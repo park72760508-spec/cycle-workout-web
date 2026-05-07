@@ -8912,8 +8912,9 @@ function OpenRidingGroupsList(props) {
         type="button"
         className="open-riding-action-btn open-riding-group-fab fixed z-[100090] flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14 box-border"
         style={{
-          left: '20px',
-          bottom: 'calc(143px + env(safe-area-inset-bottom, 0px))',
+          left: 'auto',
+          right: '20px',
+          bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)',
           transform: fabLift ? 'translateY(-14px)' : 'translateY(0)',
@@ -9989,12 +9990,12 @@ function OpenRidingGroupDetailView(props) {
 
       {transferOpen ? (
         <div
-          className="fixed inset-0 z-[99980] flex items-end sm:items-center justify-center p-3 bg-black/40"
+          className="fixed inset-0 z-[100100] flex items-center justify-center p-3 sm:p-4 bg-black/40 overflow-y-auto overscroll-contain"
           role="dialog"
           aria-modal="true"
           aria-labelledby="open-riding-transfer-title"
         >
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden max-h-[min(85vh,100%)] flex flex-col my-auto">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
               <h4 id="open-riding-transfer-title" className="text-sm font-semibold text-slate-900 m-0">
                 방장 이관
@@ -10072,8 +10073,13 @@ function OpenRidingGroupDetailView(props) {
       ) : null}
 
       {(approved && !isMember) || (pending && isAdmin) ? (
-        <div className="open-riding-bottom-actions open-riding-group-detail-footer fixed left-0 right-0 px-3 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
-          <div className="max-w-lg mx-auto w-full space-y-2 box-border">
+        <div
+          className={
+            'open-riding-bottom-actions open-riding-group-detail-footer fixed left-0 right-0 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px] ' +
+            (pending && isAdmin ? 'open-riding-group-detail-footer--admin-cta' : '')
+          }
+        >
+          <div className="max-w-lg mx-auto w-full min-w-0 space-y-2 box-border">
             {approved && !isMember ? (
               myJoinRequest ? (
                 <p className="text-sm text-center text-slate-600 m-0 py-2 font-medium">가입 신청이 접수되었습니다. 방장 승인을 기다려 주세요.</p>
@@ -10102,22 +10108,26 @@ function OpenRidingGroupDetailView(props) {
               )
             ) : null}
             {pending && isAdmin ? (
-              <div className="flex gap-2 w-full box-border">
+              <div className="open-riding-group-admin-footer-row flex gap-1.5 sm:gap-2 w-full max-w-full min-w-0 box-border">
                 <button
                   type="button"
-                  className="open-riding-action-btn flex-1 min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-emerald-500 bg-emerald-600 text-white font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 box-border"
+                  className="open-riding-action-btn open-riding-group-admin-cta-hitbox flex-1 min-w-0 max-w-full flex flex-col justify-end items-stretch p-0 m-0 bg-transparent border-0 shadow-none rounded-none min-h-0 ring-0 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
                   disabled={busy}
                   onClick={doApprove}
                 >
-                  승인
+                  <span className="open-riding-group-admin-cta-face min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-emerald-500 bg-emerald-600 text-white font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 sm:px-2.5 box-border inline-flex items-center justify-center w-full max-w-full">
+                    승인
+                  </span>
                 </button>
                 <button
                   type="button"
-                  className="open-riding-action-btn flex-1 min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-red-300 bg-white text-red-700 font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 box-border"
+                  className="open-riding-action-btn open-riding-group-admin-cta-hitbox flex-1 min-w-0 max-w-full flex flex-col justify-end items-stretch p-0 m-0 bg-transparent border-0 shadow-none rounded-none min-h-0 ring-0 outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
                   disabled={busy}
                   onClick={doReject}
                 >
-                  반려
+                  <span className="open-riding-group-admin-cta-face min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-red-300 bg-white text-red-700 font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 sm:px-2.5 box-border inline-flex items-center justify-center w-full max-w-full">
+                    반려
+                  </span>
                 </button>
               </div>
             ) : null}
