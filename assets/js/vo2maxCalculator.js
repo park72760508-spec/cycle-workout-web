@@ -98,7 +98,7 @@
     return t[ageBracket];
   }
 
-  var FIRESTORE_MOD_VO2_STATS = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+  var FIRESTORE_MOD_VO2_STATS = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
   var firestoreModVo2StatsPromise = null;
   function getFirestoreModVo2Stats() {
     if (!firestoreModVo2StatsPromise) firestoreModVo2StatsPromise = import(FIRESTORE_MOD_VO2_STATS);

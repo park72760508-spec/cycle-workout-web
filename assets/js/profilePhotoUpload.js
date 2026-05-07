@@ -227,7 +227,7 @@
       console.warn('[ProfilePhoto] compat Storage 업로드 실패, authV9 모듈러로 재시도:', compatErr);
     }
 
-    var storageMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js');
+    var storageMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js');
     var bucketApp = window.firebaseStorageV9;
     if (!bucketApp) throw new Error('Firebase Storage가 초기화되지 않았습니다.');
     var refFn = storageMod.ref;

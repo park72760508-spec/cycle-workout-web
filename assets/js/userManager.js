@@ -1261,7 +1261,7 @@ async function apiGetUsers() {
       if (window.firestoreV9 && !useV8Firestore) {
         let firestoreModule;
         try {
-          firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+          firestoreModule = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
         } catch (importErr) {
           console.error('[apiGetUsers] Firebase Firestore CDN 로드 실패 (방화벽/네트워크 확인):', importErr);
           throw new Error('Firebase 모듈을 불러올 수 없습니다. 회사 WiFi/방화벽에서 gstatic.com 차단 여부를 확인해주세요.');
@@ -1356,7 +1356,7 @@ async function apiGetUsers() {
         if (window.firestoreV9 && !useV8Firestore) {
           let firestoreModule;
           try {
-            firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+            firestoreModule = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
           } catch (importErr) {
             console.error('[apiGetUsers] Firebase Firestore CDN 로드 실패:', importErr);
             throw new Error('Firebase 모듈을 불러올 수 없습니다. 회사 WiFi/방화벽에서 gstatic.com 차단 여부를 확인해주세요.');
@@ -1451,7 +1451,7 @@ async function apiGetUser(id) {
     
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
     if (window.firestoreV9) {
-      var firestoreMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var firestoreMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var getDoc = firestoreMod && firestoreMod.getDoc;
       var doc = firestoreMod && firestoreMod.doc;
       var collection = firestoreMod && firestoreMod.collection;
@@ -1582,7 +1582,7 @@ async function apiCreateUser(userData) {
     // Firestore에 저장
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
     if (window.firestoreV9) {
-      var setDocMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var setDocMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var setDoc = setDocMod && setDocMod.setDoc;
       var doc = setDocMod && setDocMod.doc;
       var collection = setDocMod && setDocMod.collection;
@@ -1650,7 +1650,7 @@ async function apiUpdateUser(id, userData) {
     // Firestore 업데이트
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
     if (window.firestoreV9) {
-      var updateDocMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var updateDocMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var updateDoc = updateDocMod && updateDocMod.updateDoc;
       var doc = updateDocMod && updateDocMod.doc;
       var collection = updateDocMod && updateDocMod.collection;
@@ -1714,7 +1714,7 @@ async function apiDeleteUser(id) {
     
     // 1. Firestore에서 사용자 문서 삭제
     if (window.firestoreV9) {
-      var deleteDocMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var deleteDocMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var deleteDoc = deleteDocMod && deleteDocMod.deleteDoc;
       var doc = deleteDocMod && deleteDocMod.doc;
       var collection = deleteDocMod && deleteDocMod.collection;
@@ -1751,7 +1751,7 @@ async function apiDeleteUser(id) {
           
           // v9 Modular 삭제
           if (currentAuthV9User && currentAuthV9User.uid === id && window.authV9) {
-            var authMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+            var authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
             var deleteUserV9 = authMod && authMod.deleteUser;
             if (deleteUserV9) await deleteUserV9(currentAuthV9User);
             console.log('✅ Firebase Authentication에서 본인 계정 삭제 완료 (v9):', id);
@@ -2226,7 +2226,7 @@ async function fetchMaxHrForYear(userId, year) {
   try {
     var yearStr = String(year);
     if (window.firestoreV9) {
-      var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var fsMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var getDoc = fsMod && fsMod.getDoc;
       var doc = fsMod && fsMod.doc;
       if (!getDoc || !doc) return null;
@@ -2271,7 +2271,7 @@ var HR_ROLLING_MAX_BPM = 220;
 async function fetchMaxHrRolling365Days(userId) {
   if (!userId || !window.firestoreV9) return null;
   try {
-    var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+    var fsMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
     var collection = fsMod.collection;
     var query = fsMod.query;
     var where = fsMod.where;
@@ -2376,7 +2376,7 @@ async function fetchYearlyPeaksForYear(userId, year) {
   try {
     var yearStr = String(year);
     if (window.firestoreV9) {
-      var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var fsMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var getDoc = fsMod && fsMod.getDoc;
       var doc = fsMod && fsMod.doc;
       if (!getDoc || !doc) return null;
@@ -4039,7 +4039,7 @@ async function deleteUser(userId) {
               await window.auth.signOut();
             }
             if (window.authV9?.currentUser) {
-              var signOutMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+              var signOutMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
               var signOut = signOutMod && signOutMod.signOut;
               if (signOut) await signOut(window.authV9);
             }

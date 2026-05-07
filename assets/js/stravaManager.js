@@ -1172,10 +1172,45 @@ async function syncStravaData(startDate = null, endDate = null, opts = {}) {
   const originalText = btn ? btn.textContent : '🔄 스트라바 동기화';
   const progressOverlay = document.getElementById('stravaSyncProgressOverlay');
   const progressText = document.getElementById('stravaSyncProgressText');
+  const progressCenter = document.getElementById('stravaSyncProgressCenter');
+
+  function updateStravaProgressCenter(current, total) {
+    if (!progressCenter) return;
+    if (typeof total === 'number' && total > 0 && typeof current === 'number') {
+      const cur = Math.max(0, current);
+      const pct = Math.min(100, Math.max(0, Math.round((cur / total) * 100)));
+      progressCenter.innerHTML =
+        '<span class="scp-line">' +
+        cur +
+        ' / ' +
+        total +
+        '</span><span class="scp-pct">(' +
+        pct +
+        '%)</span>';
+      return;
+    }
+    if (typeof total === 'number' && total === 0) {
+      progressCenter.innerHTML =
+        '<span class="scp-line">0 / 0</span><span class="scp-pct">(0%)</span>';
+      return;
+    }
+    progressCenter.textContent = '준비 중…';
+  }
 
   function showProgress(current, total) {
+    updateStravaProgressCenter(current, total);
     if (progressText) {
-      progressText.textContent = total >= 0 ? `${current} / ${total}` : '준비 중...';
+      if (typeof total === 'number' && total > 0 && typeof current === 'number') {
+        const cur = Math.max(0, current);
+        const pct = Math.min(100, Math.max(0, Math.round((cur / total) * 100)));
+        progressText.textContent = `${cur} / ${total} (${pct}%)`;
+      } else if (typeof total === 'number' && total === 0) {
+        progressText.textContent = '처리할 Strava 활동이 없습니다.';
+      } else if (typeof total === 'number' && total < 0) {
+        progressText.textContent = 'Strava 활동을 불러오는 중입니다…';
+      } else {
+        progressText.textContent = '준비 중…';
+      }
     }
     if (progressOverlay) {
       progressOverlay.classList.remove('hidden');
@@ -1376,6 +1411,10 @@ async function syncStravaDataWithMmp(months = 1, options) {
 
   function showProgress(m) {
     if (progressText) progressText.textContent = m || '준비 중...';
+    var c = document.getElementById('stravaSyncProgressCenter');
+    if (c) {
+      c.innerHTML = '<span class="scp-line">MMP</span><span class="scp-pct">서버 처리 중…</span>';
+    }
     if (progressOverlay) {
       progressOverlay.classList.remove('hidden');
       progressOverlay.style.display = 'flex';

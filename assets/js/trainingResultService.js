@@ -21,7 +21,7 @@ import {
   limit,
   startAfter,
   getDocs
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 /**
  * TSS (rTSS) 계산 — STELVIO 글로벌 개정 TSS. window.calculateStelvioRevisedTSS(stelvioRtss.js) 사용.

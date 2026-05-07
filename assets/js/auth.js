@@ -10,14 +10,14 @@
 // ============================================
 // Firebase v9 Modular SDK Import (CDN)
 // ============================================
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   updateProfile,
   signOut
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { firebaseConfig } from './firebase-config.js';
 
 // ============================================

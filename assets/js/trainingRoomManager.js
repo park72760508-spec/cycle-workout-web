@@ -233,7 +233,7 @@ async function enforceAuthPersistence() {
   }
   try {
     if (window.authV9) {
-      var authMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+      var authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
       var setPersistence = authMod && authMod.setPersistence;
       var browserLocalPersistence = authMod && authMod.browserLocalPersistence;
       var browserSessionPersistence = authMod && authMod.browserSessionPersistence;
@@ -813,7 +813,7 @@ async function loadTrainingRooms() {
 
     const fetchRooms = async () => {
       if (useV9) {
-        var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        var fsMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
         var collection = fsMod && fsMod.collection;
         var getDocs = fsMod && fsMod.getDocs;
         var query = fsMod && fsMod.query;
@@ -1306,7 +1306,7 @@ async function resolveManagerName(db, useV9, userId, elementId) {
     
     if (useV9) {
       // Firebase v9 Modular SDK
-      var fsMod2 = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var fsMod2 = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var getDoc = fsMod2 && fsMod2.getDoc;
       var doc = fsMod2 && fsMod2.doc;
       var collection = fsMod2 && fsMod2.collection;
@@ -1412,7 +1412,7 @@ async function updateManagerName(db, useV9, userId, roomId) {
     
     if (useV9) {
       // Firebase v9 Modular SDK
-      var fsMod3 = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var fsMod3 = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var getDoc = fsMod3 && fsMod3.getDoc;
       var doc = fsMod3 && fsMod3.doc;
       var collection = fsMod3 && fsMod3.collection;
@@ -4250,7 +4250,7 @@ async function getGrade3UsersFromFirestore() {
     // Firestore 쿼리 실행
     if (useV9) {
       // Firebase v9 Modular SDK
-      var firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var firestoreModule = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var collection = firestoreModule && firestoreModule.collection;
       var query = firestoreModule && firestoreModule.query;
       var where = firestoreModule && firestoreModule.where;

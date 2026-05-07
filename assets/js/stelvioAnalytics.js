@@ -43,7 +43,7 @@
   var isFlushing = false;
   var docListenerBound = false;
   /** index.html과 동일한 Firestore 모듈 버전 (v9 인스턴스와 토큰 일치) */
-  var FIRESTORE_MOD_URL = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+  var FIRESTORE_MOD_URL = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
   var firestoreModPromise = null;
 
   function getFirestoreMod() {
