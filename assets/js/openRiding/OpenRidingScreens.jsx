@@ -8716,7 +8716,7 @@ function openRidingGroupsIsAdminGrade() {
   return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
 }
 
-/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(뷰포트 높이 Y 기준 Y−2×네비 inner 높이, style.css) */
+/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(맨 위로 버튼과 동일 bottom, 항상 표시) */
 function OpenRidingGroupsList(props) {
   var firestore = props.firestore;
   var onOpenDetail = props.onOpenDetail || function () {};
@@ -8724,9 +8724,6 @@ function OpenRidingGroupsList(props) {
   var _rows = useState([]);
   var rows = _rows[0];
   var setRows = _rows[1];
-  var _fab = useState(false);
-  var fabLift = _fab[0];
-  var setFabLift = _fab[1];
   var _filterText = useState('');
   var filterText = _filterText[0];
   var setFilterText = _filterText[1];
@@ -8822,7 +8819,6 @@ function OpenRidingGroupsList(props) {
       var scrollEl = document.querySelector('#openRidingRoomScreen .open-riding-app-body');
       if (!scrollEl) return;
       function onScroll() {
-        setFabLift(scrollEl.scrollTop > 40);
         if (typeof window.refreshGlobalBackToTopState === 'function') window.refreshGlobalBackToTopState();
       }
       onScroll();
@@ -8913,9 +8909,7 @@ function OpenRidingGroupsList(props) {
         className="open-riding-action-btn open-riding-group-fab fixed z-[100090] flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14 box-border"
         style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)',
-          transform: fabLift ? 'translateY(calc(-50% - 14px))' : 'translateY(-50%)',
-          transition: 'transform 0.25s ease'
+          boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)'
         }}
         title="그룹 생성"
         aria-label="그룹 생성"
