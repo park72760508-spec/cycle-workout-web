@@ -1839,14 +1839,14 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-row:last-child {
   border-bottom: none;
 }
-#openRidingRoomScreen .open-riding-group-member-rank-list .stelvio-rank-crown {
-  width: 24px;
-  height: 24px;
-  margin-right: 6px;
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-seq {
+  min-width: 2.25rem;
+  margin-right: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #1e40af;
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  text-align: center;
 }
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-actions {
   flex-shrink: 0;
@@ -1854,13 +1854,67 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   margin-left: 6px;
 }
 
-#openRidingRoomScreen .open-riding-group-detail-footer.open-riding-bottom-actions {
+/*
+ * 그룹 목록·상세·생성/수정 하단: margin-bottom 으로 들림 금지 → padding-bottom + safe-area 로 터치 영역 확보
+ * (open-riding-bottom-actions 기본 margin-bottom 제거)
+ */
+#openRidingRoomScreen .open-riding-group-detail-footer.open-riding-bottom-actions,
+#openRidingRoomScreen .open-riding-group-form-footer.open-riding-bottom-actions {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 100060;
-  margin-bottom: 0;
+  margin-bottom: 0 !important;
+  pointer-events: auto;
+  isolation: isolate;
+  padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  padding-top: 10px;
+  box-sizing: border-box;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#openRidingRoomScreen .open-riding-group-detail-footer.open-riding-bottom-actions .open-riding-action-btn,
+#openRidingRoomScreen .open-riding-group-form-footer.open-riding-bottom-actions .open-riding-action-btn {
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+
+#openRidingRoomScreen .open-riding-group-search-input {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#openRidingRoomScreen .open-riding-group-search-submit {
+  pointer-events: auto;
+}
+
+#openRidingRoomScreen .open-riding-group-list-row-btn {
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#openRidingRoomScreen .open-riding-group-fab {
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-action-btn {
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  min-height: 36px;
+  min-width: 44px;
 }
 
 #openRidingRoomScreen .open-riding-detail-content-root {
