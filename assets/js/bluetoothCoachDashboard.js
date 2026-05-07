@@ -2127,18 +2127,39 @@ function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex
  * 훈련 시작 시 적용, 통화/문자/SNS 복귀 시 visibilitychange에서 재적용
  */
 async function activateBluetoothCoachWakeLock() {
-  if (!('wakeLock' in navigator)) {
-    console.warn('[Bluetooth Coach WakeLock] Wake Lock API 미지원');
-    return;
-  }
   if (!window.bluetoothCoachState) return;
   try {
-    if (window.bluetoothCoachState.wakeLock) return;
+    if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.refresh) {
+      await window.StelvioWakeLock.refresh();
+    }
+  } catch (e0) {
+    console.warn('[Bluetooth Coach WakeLock] StelvioWakeLock.refresh:', e0);
+  }
+  if (!('wakeLock' in navigator)) {
+    console.warn('[Bluetooth Coach WakeLock] Wake Lock API 미지원 (네이티브·무음영상 경로는 StelvioWakeLock)');
+    return;
+  }
+  try {
+    if (window.bluetoothCoachState.wakeLock) {
+      try {
+        await window.bluetoothCoachState.wakeLock.release();
+      } catch (relErr) {}
+      window.bluetoothCoachState.wakeLock = null;
+    }
     window.bluetoothCoachState.wakeLock = await navigator.wakeLock.request('screen');
     console.log('[Bluetooth Coach WakeLock] 화면 꺼짐 방지 활성화');
     window.bluetoothCoachState.wakeLock.addEventListener('release', () => {
       console.log('[Bluetooth Coach WakeLock] 시스템에 의해 해제됨');
       window.bluetoothCoachState.wakeLock = null;
+      if (
+        document.visibilityState === 'visible' &&
+        window.bluetoothCoachState &&
+        window.bluetoothCoachState.trainingState === 'running'
+      ) {
+        setTimeout(function () {
+          activateBluetoothCoachWakeLock();
+        }, 150);
+      }
     });
   } catch (err) {
     console.warn('[Bluetooth Coach WakeLock] 활성화 실패:', err);
@@ -2175,9 +2196,15 @@ function setupBluetoothCoachWakeLockVisibilityListener() {
     const screenEl = document.getElementById('bluetoothTrainingCoachScreen');
     if (!screenEl || window.getComputedStyle(screenEl).display === 'none') return;
     if (window.bluetoothCoachState && window.bluetoothCoachState.trainingState === 'running') {
-      // 통화/문자/SNS에서 복귀 시 기존 wake lock은 브라우저가 해제함 → 재요청
-      if (window.bluetoothCoachState.wakeLock) return; // 이미 유효하면 스킵
-      activateBluetoothCoachWakeLock();
+      if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.refresh) {
+        Promise.resolve(window.StelvioWakeLock.refresh()).catch(function () {});
+      }
+      setTimeout(function () {
+        activateBluetoothCoachWakeLock();
+      }, 80);
+      setTimeout(function () {
+        activateBluetoothCoachWakeLock();
+      }, 450);
     }
   }
   

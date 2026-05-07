@@ -4368,31 +4368,34 @@ window.indoorTrainingWakeLock = {
   fallbackVideo: null,
   
   async acquire() {
-    // 1순위: Screen Wake Lock API 사용 (최신 브라우저)
+    try {
+      if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.refresh) {
+        await window.StelvioWakeLock.refresh();
+      }
+    } catch (eSl) {}
     if ('wakeLock' in navigator) {
       try {
-        if (this.wakeLock) return; // 이미 활성화되어 있으면 재요청하지 않음
-        
+        if (this.wakeLock) {
+          try {
+            await this.wakeLock.release();
+          } catch (eRel) {}
+          this.wakeLock = null;
+        }
         this.wakeLock = await navigator.wakeLock.request('screen');
         console.log('[Indoor Training] Screen Wake Lock 활성화됨');
-        
-        // 시스템이 임의로 해제했을 때 자동 재획득
         this.wakeLock.addEventListener('release', () => {
           console.log('[Indoor Training] Screen Wake Lock이 시스템에 의해 해제됨');
           this.wakeLock = null;
-          // 훈련 중이면 자동 재획득
           if (window.indoorTrainingState?.trainingState === 'running') {
-            setTimeout(() => this.acquire(), 100);
+            setTimeout(() => this.acquire(), 150);
           }
         });
       } catch (err) {
         console.warn('[Indoor Training] Screen Wake Lock API 실패:', err);
         this.wakeLock = null;
-        // Fallback으로 비디오 트릭 사용
         this.acquireFallback();
       }
     } else {
-      // Wake Lock API 미지원 시 Fallback 사용
       console.log('[Indoor Training] Screen Wake Lock API 미지원, Fallback 사용');
       this.acquireFallback();
     }
@@ -4472,37 +4475,36 @@ window.indoorTrainingWakeLock = {
   }
 };
 
-// 페이지 가시성 변경 시 자동 재획득
-document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'visible' && 
-      window.indoorTrainingState?.trainingState === 'running' &&
-      window.indoorTrainingWakeLock) {
-    // 훈련 중이고 페이지가 다시 보이면 Wake Lock 재획득
+// 페이지 가시성·포커스·복귀 시 자동 재획득
+function indoorTrainingReacquireWakeLock() {
+  if (window.indoorTrainingState?.trainingState === 'running' && window.indoorTrainingWakeLock) {
     setTimeout(() => {
       window.indoorTrainingWakeLock.acquire();
-    }, 100);
+    }, 120);
   }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') indoorTrainingReacquireWakeLock();
 });
+window.addEventListener('pageshow', indoorTrainingReacquireWakeLock);
+window.addEventListener('focus', indoorTrainingReacquireWakeLock);
+try {
+  window.addEventListener('resume', indoorTrainingReacquireWakeLock);
+} catch (eR) {}
 
-// 페이지 포커스 시 재획득
-window.addEventListener('focus', () => {
-  if (window.indoorTrainingState?.trainingState === 'running' &&
-      window.indoorTrainingWakeLock) {
-    setTimeout(() => {
-      window.indoorTrainingWakeLock.acquire();
-    }, 100);
+(function indoorTrainingWakeLockGestureBridge() {
+  var lastG = 0;
+  function onGesture() {
+    if (window.indoorTrainingState?.trainingState !== 'running' || !window.indoorTrainingWakeLock) return;
+    var n = Date.now();
+    if (n - lastG < 1200) return;
+    lastG = n;
+    window.indoorTrainingWakeLock.acquire();
   }
-});
-
-// 사용자 상호작용 시 재획득 (터치, 클릭 등)
-['touchstart', 'click', 'pointerdown'].forEach(eventType => {
-  document.addEventListener(eventType, () => {
-    if (window.indoorTrainingState?.trainingState === 'running' &&
-        window.indoorTrainingWakeLock && !window.indoorTrainingWakeLock.wakeLock) {
-      window.indoorTrainingWakeLock.acquire();
-    }
-  }, { once: true, passive: true });
-});
+  ['touchstart', 'click', 'pointerdown'].forEach((eventType) => {
+    document.addEventListener(eventType, onGesture, { passive: true, capture: true });
+  });
+})();
 
 /**
  * 훈련 시작

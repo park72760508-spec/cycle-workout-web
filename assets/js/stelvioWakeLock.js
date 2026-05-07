@@ -8,7 +8,25 @@
   'use strict';
 
   var LOG = '[StelvioWakeLock]';
+  /** 코치 화면은 훈련 진행 중에만 웨이크(applyForScreen에서 별도 처리) */
   var WAKE_SCREEN_IDS = ['mobileDashboardScreen', 'trainingScreen', 'bluetoothIndividualScreen'];
+
+  /** 훈련 진행 여부(모바일·태블릿·인도어·블루투스·코치) — 복귀/주기 재획득 판단용 */
+  function stelvioIsTrainingLikeSessionActive() {
+    try {
+      var ts = window.trainingState;
+      if (ts && ts.isRunning === true) return true;
+      if (ts && ts.timerId != null && ts.timerId !== undefined && ts.paused !== true) return true;
+      var m = window.mobileTrainingState;
+      if (m && m.timerId != null && m.timerId !== undefined && m.paused !== true) return true;
+      var ind = window.indoorTrainingState;
+      if (ind && ind.trainingState === 'running') return true;
+      if (window.currentTrainingState === 'running') return true;
+      var bc = window.bluetoothCoachState;
+      if (bc && bc.trainingState === 'running') return true;
+    } catch (e) {}
+    return false;
+  }
 
   /** 앱 WebKit에서 숨김 video/스트림이 전체 레이어를 가리는 이슈 방지 */
   function shouldRunVideoHack() {
@@ -25,6 +43,8 @@
     videoEl: null,
     videoPollId: null,
     visTimer: null,
+    reacquireAfterReleaseTimer: null,
+    watchdogId: null,
     bound: false,
     lastSuccess: []
   };
@@ -76,6 +96,18 @@
         state.webLock = sentinel;
         state.webLock.addEventListener('release', function () {
           state.webLock = null;
+          if (state.desired && document.visibilityState === 'visible') {
+            clearTimeout(state.reacquireAfterReleaseTimer);
+            state.reacquireAfterReleaseTimer = setTimeout(function () {
+              state.reacquireAfterReleaseTimer = null;
+              if (!state.desired || document.visibilityState !== 'visible') return;
+              callNative(true);
+              requestWebApiWithRetries(3).catch(function () {});
+              if (state.videoEl && state.videoEl.paused) {
+                state.videoEl.play().catch(function () {});
+              }
+            }, 120);
+          }
         });
         logOk('Web API', 'navigator.wakeLock.request(screen)');
         return true;
@@ -219,7 +251,12 @@
     state.bound = true;
     function onVis() {
       if (document.visibilityState !== 'visible') return;
-      if (!state.desired) return;
+      var needWake =
+        state.desired ||
+        getWakeTargetScreenActive() ||
+        stelvioIsTrainingLikeSessionActive();
+      if (!needWake) return;
+      state.desired = true;
       clearTimeout(state.visTimer);
       state.visTimer = setTimeout(function () {
         state.visTimer = null;
@@ -229,11 +266,13 @@
         if (state.videoEl && state.videoEl.paused) {
           state.videoEl.play().catch(function () {});
         }
+        if (shouldRunVideoHack() && !state.videoEl) startVideoHack();
       }, 500);
     }
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('pageshow', onVis);
     window.addEventListener('focus', onVis);
+    window.addEventListener('resume', onVis);
   }
 
   function getWakeTargetScreenActive() {
@@ -241,7 +280,35 @@
       var el = document.getElementById(WAKE_SCREEN_IDS[i]);
       if (el && el.classList.contains('active')) return true;
     }
+    var coachEl = document.getElementById('bluetoothTrainingCoachScreen');
+    if (
+      coachEl &&
+      coachEl.classList.contains('active') &&
+      stelvioIsTrainingLikeSessionActive()
+    ) {
+      return true;
+    }
     return false;
+  }
+
+  function startWatchdog() {
+    if (state.watchdogId) return;
+    state.watchdogId = setInterval(function () {
+      if (!state.desired || document.visibilityState !== 'visible') return;
+      if (!getWakeTargetScreenActive() && !stelvioIsTrainingLikeSessionActive()) return;
+      callNative(true);
+      requestWebApiWithRetries(2).catch(function () {});
+      if (state.videoEl && state.videoEl.paused) {
+        state.videoEl.play().catch(function () {});
+      }
+    }, 50000);
+  }
+
+  function stopWatchdog() {
+    if (state.watchdogId) {
+      clearInterval(state.watchdogId);
+      state.watchdogId = null;
+    }
   }
 
   function acquire() {
@@ -249,6 +316,7 @@
     state.lastSuccess = [];
     bindVisibility();
     callNative(true);
+    startWatchdog();
     return requestWebApiWithRetries(3)
       .then(function () {
         if (shouldRunVideoHack()) startVideoHack();
@@ -262,6 +330,9 @@
     state.desired = false;
     clearTimeout(state.visTimer);
     state.visTimer = null;
+    clearTimeout(state.reacquireAfterReleaseTimer);
+    state.reacquireAfterReleaseTimer = null;
+    stopWatchdog();
     callNative(false);
     return releaseWebApi()
       .then(function () {
@@ -274,6 +345,9 @@
   }
 
   function applyForScreen(screenId) {
+    if (screenId === 'bluetoothTrainingCoachScreen') {
+      return stelvioIsTrainingLikeSessionActive() ? acquire() : tearDown();
+    }
     if (WAKE_SCREEN_IDS.indexOf(screenId) !== -1) {
       return acquire();
     }
@@ -282,15 +356,20 @@
 
   /** 훈련 화면에 머물 때는 legacy release 무시 */
   function releaseLegacy() {
-    if (getWakeTargetScreenActive()) {
-      console.log(LOG + ' legacy release 무시 (훈련 대상 화면 활성)');
+    if (getWakeTargetScreenActive() || stelvioIsTrainingLikeSessionActive()) {
+      console.log(LOG + ' legacy release 무시 (훈련 대상 화면·세션 활성)');
       return Promise.resolve();
     }
     return tearDown();
   }
 
   function refresh() {
-    if (!state.desired && !getWakeTargetScreenActive()) return Promise.resolve();
+    var hold =
+      state.desired || getWakeTargetScreenActive() || stelvioIsTrainingLikeSessionActive();
+    if (!hold) return Promise.resolve();
+    state.desired = true;
+    bindVisibility();
+    startWatchdog();
     state.lastSuccess = [];
     callNative(true);
     return requestWebApiWithRetries(3).then(function () {
@@ -305,6 +384,7 @@
     refresh: refresh,
     releaseLegacy: releaseLegacy,
     getWakeTargetScreenActive: getWakeTargetScreenActive,
+    isTrainingLikeActive: stelvioIsTrainingLikeSessionActive,
     WAKE_SCREEN_IDS: WAKE_SCREEN_IDS
   };
 })(typeof window !== 'undefined' ? window : this);

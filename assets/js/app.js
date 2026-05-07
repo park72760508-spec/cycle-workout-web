@@ -978,7 +978,13 @@ const ScreenAwake = (() => {
   }
 
   async function reAcquireIfNeeded() {
-    if (document.visibilityState !== 'visible' || !window?.trainingState?.isRunning) return;
+    if (document.visibilityState !== 'visible') return;
+    var train =
+      (typeof window.StelvioWakeLock !== 'undefined' &&
+        window.StelvioWakeLock.isTrainingLikeActive &&
+        window.StelvioWakeLock.isTrainingLikeActive()) ||
+      window?.trainingState?.isRunning;
+    if (!train) return;
     try {
       await acquire();
     } catch (err) {
@@ -990,11 +996,39 @@ const ScreenAwake = (() => {
     document.addEventListener('visibilitychange', reAcquireIfNeeded);
     window.addEventListener('pageshow', reAcquireIfNeeded);
     window.addEventListener('focus', reAcquireIfNeeded);
-    window.addEventListener('pagehide', release);
+    window.addEventListener('pagehide', function onPageHide() {
+      try {
+        var train =
+          (typeof window.StelvioWakeLock !== 'undefined' &&
+            window.StelvioWakeLock.isTrainingLikeActive &&
+            window.StelvioWakeLock.isTrainingLikeActive()) ||
+          window?.trainingState?.isRunning;
+        if (train) return;
+      } catch (e) {}
+      release();
+    });
+    if (typeof window.addEventListener === 'function') {
+      try {
+        window.addEventListener('resume', reAcquireIfNeeded);
+      } catch (e) {}
+    }
   }
 
-  return { acquire, release, init };
+  return { acquire, release, init, reAcquireIfNeeded };
 })();
+
+try {
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function _stelvioScreenAwakeInit() {
+        document.removeEventListener('DOMContentLoaded', _stelvioScreenAwakeInit);
+        if (typeof ScreenAwake !== 'undefined' && ScreenAwake.init) ScreenAwake.init();
+      });
+    } else if (typeof ScreenAwake !== 'undefined' && ScreenAwake.init) {
+      ScreenAwake.init();
+    }
+  }
+} catch (eInit) {}
 
 
 
