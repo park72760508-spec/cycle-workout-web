@@ -6877,20 +6877,21 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen .stelvio-rank-row.stelvio-rank-group-unjoined {
   background: transparent;
 }
-/* 그룹 탭: 소모임 선택 행(버튼) — 기본 버튼 테두리 제거, 행 레이아웃 유지 */
+/* 그룹 탭: 소모임 선택 행 — 사용자 메뉴얼「5. 아이폰(iOS)…블루투스 연동 가이드」 블록과 동일 계열 좌측 띠 + 연한 바탕 */
 #stelvioRankingScreen button.stelvio-group-pick-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   width: 100%;
   box-sizing: border-box;
   font: inherit;
   color: inherit;
-  background: transparent;
+  margin: 6px -4px 4px -4px;
+  padding: 12px 10px 12px 12px;
+  background: rgba(102, 126, 234, 0.05);
   border: none;
+  border-left: 3px solid #667eea;
   border-radius: 8px;
-  margin: 2px -4px;
-  padding: 10px 4px;
   cursor: pointer;
   text-align: left;
   box-shadow: none;
@@ -6902,7 +6903,62 @@ body:has(#trainingDetailModal:not(.hidden)) {
   outline-offset: 2px;
 }
 #stelvioRankingScreen button.stelvio-group-pick-row--open {
-  background: rgba(99, 102, 241, 0.08);
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.1) 0%, rgba(102, 126, 234, 0.035) 100%);
+}
+/* 그룹 행 메인 영역 (썸네일+이름만, 순번 열 없음) */
+#stelvioRankingScreen .stelvio-group-pick-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+/* 펼친 멤버 블록 — 회색 좌측 띠 + 연회색 바탕으로 소모임 행과 시각 분리 */
+#stelvioRankingScreen .stelvio-group-members-block {
+  margin: 0 -4px 10px -4px;
+  padding: 8px 8px 6px 10px;
+  background: rgba(248, 250, 252, 0.97);
+  border-left: 3px solid #cbd5e1;
+  border-radius: 0 10px 10px 8px;
+  box-sizing: border-box;
+}
+#stelvioRankingScreen .stelvio-group-members-block > .stelvio-ranking-empty {
+  margin: 10px 0 10px 4px !important;
+}
+/* 멤버 행 1위·2위·3위 메달 정렬 — 동일폭 크라운 열로 좌측 정렬 고정(#stelvioRankingScreen 단순 크라운 18px 규칙 무시) */
+#stelvioRankingScreen .stelvio-group-member-row.stelvio-rank-row {
+  justify-content: flex-start !important;
+  margin: 1px -2px !important;
+  padding: 6px 4px !important;
+  border-bottom: 1px solid #eef2f7 !important;
+  border-radius: 6px !important;
+}
+#stelvioRankingScreen .stelvio-group-member-row.stelvio-rank-row:last-child {
+  border-bottom: none !important;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-group-member-row .stelvio-rank-crown {
+  flex: 0 0 26px !important;
+  width: 26px !important;
+  min-width: 26px !important;
+  max-width: 26px !important;
+  height: 26px !important;
+  margin-right: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-group-member-row .stelvio-rank-crown img {
+  width: 24px !important;
+  height: 24px !important;
+  display: block;
+  flex-shrink: 0;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-group-member-row .stelvio-group-member-pos.stelvio-rank-pos {
+  flex: 0 0 3.75em !important;
+  min-width: 3.75em !important;
+  margin-right: 8px !important;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
 }
 #stelvioRankingScreen .stelvio-group-pick-meta {
   font-size: 0.9em;
@@ -6920,9 +6976,6 @@ body:has(#trainingDetailModal:not(.hidden)) {
   box-sizing: border-box;
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
   line-height: 0;
-}
-#stelvioRankingScreen .stelvio-rank-pos.stelvio-group-seq {
-  font-variant-numeric: tabular-nums;
 }
 .stelvio-rank-crown {
   width: 24px;
