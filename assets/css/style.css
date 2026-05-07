@@ -1896,6 +1896,7 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   pointer-events: auto;
   align-items: stretch;
 }
+/* 승인·반려 히트박스: 하단 글래스 네비 버튼(.open-riding-bottom-glass-nav__btn)과 동일한 터치·레이어 규칙 */
 #openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-hitbox {
   flex: 1 1 0;
   min-width: 0;
@@ -1903,9 +1904,25 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   max-width: 100%;
   width: auto;
   cursor: pointer;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
   box-sizing: border-box;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 100000 !important;
+  /* translateZ/backface 는 글래스+backdrop 상위에서 히트 구멍을 만들 수 있어 네비 버튼처럼 비활성 */
+  -webkit-transform: none;
+  transform: none;
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
   /* STELVIO: 둥근 face 디자인 유지, 터치·안전영역은 투명 셸로 확장 */
   padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
 }
@@ -1917,6 +1934,12 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 }
 #openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-face {
   flex-shrink: 0;
+  pointer-events: none !important;
+}
+
+#openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-hitbox svg,
+#openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-hitbox * {
+  pointer-events: none !important;
 }
 
 #openRidingRoomScreen .open-riding-group-search-input {
@@ -1932,12 +1955,32 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   -webkit-user-select: none;
 }
 
+/*
+ * 그룹 목록 FAB: 하단 글래스 네비 토큰 기준 — 네비 바( inner 고정 높이 )의 2배만큼 위로 띄움 + 노치/홈 인디케이터 inset
+ * (네비 루트 bottom 과 iOS 폰 보정은 html.open-riding-glass-nav-ios-phone 과 동일 계열)
+ */
 #openRidingRoomScreen .open-riding-group-fab {
   pointer-events: auto;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  left: auto;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) +
+      (var(--open-riding-glass-nav-inner-fixed-height) * 2)
+  );
+  box-sizing: border-box;
+  max-width: calc(100vw - max(16px, env(safe-area-inset-left, 0px)) - max(16px, env(safe-area-inset-right, 0px)));
+}
+html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fab {
+  bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) -
+      (var(--open-riding-glass-nav-inner-fixed-height) * 0.5) +
+      (var(--open-riding-glass-nav-inner-fixed-height) * 2)
+  );
 }
 
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-action-btn {
