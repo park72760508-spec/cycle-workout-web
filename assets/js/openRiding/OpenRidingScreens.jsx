@@ -684,7 +684,7 @@ function lookupOpenRidingUserNameByInvitePhone(firestoreDb, invitePhone) {
   if (candidates.length === 0) {
     return Promise.resolve(resolveOpenRidingInviteNameFromLocalUsers('', invitePhone) || '');
   }
-  return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+  return import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
     .then(function (mod) {
       var col = mod.collection(firestoreDb, 'users');
       var fields = ['contact', 'phone', 'phoneNumber', 'tel'];
@@ -9797,12 +9797,12 @@ function OpenRidingGroupDetailView(props) {
       <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative isolate bg-white">
         {grp.photoUrl ? (
           <>
-            <img
-              alt=""
-              src={String(grp.photoUrl)}
-              decoding="async"
+            <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 z-0 h-full min-h-[8rem] w-full object-cover object-center opacity-50 scale-[1.03]"
+              className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-50"
+              style={{
+                backgroundImage: 'url(' + JSON.stringify(String(grp.photoUrl)) + ')'
+              }}
             />
             <div
               aria-hidden="true"

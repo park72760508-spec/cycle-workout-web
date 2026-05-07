@@ -17,12 +17,12 @@ import {
   onSnapshot,
   Timestamp,
   serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 
 /** @param {unknown} v */
 function asStringArray(v) {
@@ -1561,7 +1561,7 @@ export async function triggerVerifyMeetingAttendanceForEndedRideIfHost(db, rideI
       if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] Functions 미초기화 — 참석 검증 생략');
       return { skipped: true, reason: 'NO_FUNCTIONS' };
     }
-    var funcMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-functions.js');
+    var funcMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js');
     var httpsCallable = funcMod.httpsCallable;
     if (typeof httpsCallable !== 'function') {
       return { skipped: true, reason: 'NO_HTTPS_CALLABLE' };

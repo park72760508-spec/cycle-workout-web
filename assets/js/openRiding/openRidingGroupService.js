@@ -18,12 +18,12 @@ import {
   increment,
   writeBatch,
   runTransaction
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
 

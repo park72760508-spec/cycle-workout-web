@@ -15,7 +15,7 @@ import {
   deleteDoc,
   writeBatch,
   serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { normalizePhoneDigits } from './openRidingService.js';
 
 /** @param {string} a @param {string} b */
