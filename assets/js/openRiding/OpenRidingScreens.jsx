@@ -2665,6 +2665,7 @@ function OpenRidingCalendarMain(props) {
   var filterPageOpen = !!props.filterPageOpen;
   var onOpenFilterPage = props.onOpenFilterPage || function () {};
   var onCloseFilterPage = props.onCloseFilterPage || function () {};
+  var onOpenGroups = typeof props.onOpenGroups === 'function' ? props.onOpenGroups : null;
 
   var _m = useState(function () { return new Date(); });
   var viewMonth = _m[0];
@@ -3832,6 +3833,19 @@ function OpenRidingCalendarMain(props) {
           </span>
           </div>
         </section>
+        {compact && onOpenGroups ? (
+          <div className="mt-2">
+            <button
+              type="button"
+              className="w-full rounded-xl border border-violet-400/90 bg-gradient-to-r from-violet-600 to-violet-700 text-white text-sm font-semibold py-2.5 shadow-md hover:from-violet-500 hover:to-violet-600 active:translate-y-px transition"
+              onClick={function () {
+                onOpenGroups();
+              }}
+            >
+              소모임(그룹) 관리
+            </button>
+          </div>
+        ) : null}
         <p className="mt-1.5 ml-1 text-[11px] sm:text-xs text-slate-500 leading-snug">
           * 라이딩 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트 사용
         </p>
@@ -8517,6 +8531,902 @@ function OpenRidingFriendsManage(props) {
   );
 }
 
+function openRidingGroupsIsAdminGrade() {
+  var g =
+    typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
+  return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
+}
+
+/** 소모임(그룹) 목록 — 승인/대기 필터·좌하단 생성 FAB */
+function OpenRidingGroupsList(props) {
+  var firestore = props.firestore;
+  var onOpenDetail = props.onOpenDetail || function () {};
+  var onCreate = props.onCreate || function () {};
+  var _rows = useState([]);
+  var rows = _rows[0];
+  var setRows = _rows[1];
+  var _fab = useState(false);
+  var fabLift = _fab[0];
+  var setFabLift = _fab[1];
+  var isAdmin = openRidingGroupsIsAdminGrade();
+  var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+  var GROUP_ST = gs.GROUP_STATUS || { PENDING: 'PENDING', APPROVED: 'APPROVED' };
+
+  useEffect(
+    function () {
+      if (!firestore || typeof gs.subscribeRidingGroups !== 'function') return;
+      return gs.subscribeRidingGroups(firestore, isAdmin, function (list) {
+        setRows(Array.isArray(list) ? list : []);
+      });
+    },
+    [firestore, isAdmin]
+  );
+
+  useEffect(
+    function () {
+      var scrollEl = document.querySelector('#openRidingRoomScreen .open-riding-app-body');
+      if (!scrollEl) return;
+      function onScroll() {
+        setFabLift(scrollEl.scrollTop > 40);
+        if (typeof window.refreshGlobalBackToTopState === 'function') window.refreshGlobalBackToTopState();
+      }
+      onScroll();
+      scrollEl.addEventListener('scroll', onScroll, { passive: true });
+      return function () {
+        scrollEl.removeEventListener('scroll', onScroll);
+      };
+    },
+    []
+  );
+
+  function regionLine(regions) {
+    var arr = Array.isArray(regions) ? regions : [];
+    if (!arr.length) return '-';
+    return arr
+      .map(function (r) {
+        return formatOpenRidingRegionShort(r);
+      })
+      .join(' · ');
+  }
+
+  return (
+    <div className="relative w-full max-w-lg mx-auto pb-4 text-left">
+      <p className="text-xs text-slate-500 mb-3 leading-snug m-0">
+        승인된 소모임만 모든 라이더에게 표시됩니다. 새로 만든 그룹은 관리자 승인 후 목록에 노출됩니다.
+      </p>
+      <ul className="space-y-2">
+        {!firestore ? (
+          <li className="text-sm text-slate-500">연결 오류</li>
+        ) : rows.length === 0 ? (
+          <li className="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white px-3 py-6 text-center">표시할 그룹이 없습니다.</li>
+        ) : (
+          rows.map(function (g) {
+            var st = String(g.status || '');
+            var pending = st === GROUP_ST.PENDING;
+            var name = g.name != null ? String(g.name) : '';
+            var photo = g.photoUrl != null ? String(g.photoUrl) : '';
+            return (
+              <li key={g.id}>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm hover:bg-slate-50/90 transition"
+                  onClick={function () {
+                    onOpenDetail(g.id);
+                  }}
+                >
+                  <span className="relative shrink-0">
+                    <span className="inline-flex h-14 w-14 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100">
+                      {photo ? (
+                        <img src={photo} alt="" className="h-full w-full object-cover" decoding="async" />
+                      ) : (
+                        <span className="text-lg font-bold text-violet-700">{name ? name.charAt(0) : 'G'}</span>
+                      )}
+                    </span>
+                    {pending && isAdmin ? (
+                      <span className="absolute -bottom-1 -right-1 rounded-full bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 border border-white shadow">
+                        승인 대기
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-slate-900 truncate text-[15px]">{name || '이름 없음'}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5 truncate">
+                      {regionLine(g.regions)}
+                      <span className="text-slate-300 mx-1">·</span>
+                      {g.memberCount != null ? String(g.memberCount) : '0'}명
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })
+        )}
+      </ul>
+      <button
+        type="button"
+        className="fixed z-[100090] flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14"
+        style={{
+          left: '20px',
+          bottom: 'calc(143px + env(safe-area-inset-bottom, 0px))',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)',
+          transform: fabLift ? 'translateY(-14px)' : 'translateY(0)',
+          transition: 'transform 0.25s ease'
+        }}
+        title="그룹 생성"
+        aria-label="그룹 생성"
+        onClick={function () {
+          onCreate();
+        }}
+      >
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/** 소모임 생성·수정 폼 */
+function OpenRidingGroupForm(props) {
+  var firestore = props.firestore;
+  var storage = props.storage;
+  var userId = props.userId || '';
+  var editGroupId = props.editGroupId || '';
+  var onCancel = props.onCancel || function () {};
+  var onSaved = props.onSaved || function () {};
+  var isEdit = !!editGroupId;
+  var koreaList = getKoreaRegionGroupsResolved();
+  var _sido = useState('');
+  var sidoPick = _sido[0];
+  var setSidoPick = _sido[1];
+  var _dist = useState('');
+  var distPick = _dist[0];
+  var setDistPick = _dist[1];
+  var _regions = useState([]);
+  var regions = _regions[0];
+  var setRegions = _regions[1];
+  var _name = useState('');
+  var name = _name[0];
+  var setName = _name[1];
+  var _intro = useState('');
+  var intro = _intro[0];
+  var setIntro = _intro[1];
+  var _pub = useState(true);
+  var isPublic = _pub[0];
+  var setPublic = _pub[1];
+  var _pw = useState('');
+  var joinPw = _pw[0];
+  var setJoinPw = _pw[1];
+  var _photoUrl = useState('');
+  var photoUrl = _photoUrl[0];
+  var setPhotoUrl = _photoUrl[1];
+  var _photoFile = useState(null);
+  var photoFile = _photoFile[0];
+  var setPhotoFile = _photoFile[1];
+  var _photoPreview = useState('');
+  var photoPreview = _photoPreview[0];
+  var setPhotoPreview = _photoPreview[1];
+  var _busy = useState(false);
+  var busy = _busy[0];
+  var setBusy = _busy[1];
+  var _loaded = useState(!isEdit);
+  var loaded = _loaded[0];
+  var setLoaded = _loaded[1];
+  var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+
+  var districtsForSido = useMemo(
+    function () {
+      var i;
+      for (i = 0; i < koreaList.length; i++) {
+        if (koreaList[i].sido === sidoPick) return koreaList[i].districts || [];
+      }
+      return [];
+    },
+    [koreaList, sidoPick]
+  );
+
+  useEffect(
+    function () {
+      if (!photoFile) {
+        setPhotoPreview('');
+        return;
+      }
+      var u = URL.createObjectURL(photoFile);
+      setPhotoPreview(u);
+      return function () {
+        URL.revokeObjectURL(u);
+      };
+    },
+    [photoFile]
+  );
+
+  useEffect(
+    function () {
+      if (!isEdit || !firestore || !editGroupId) {
+        setLoaded(true);
+        return;
+      }
+      setLoaded(false);
+      var cancelled = false;
+      if (typeof gs.fetchRidingGroupById !== 'function') {
+        setLoaded(true);
+        return;
+      }
+      gs
+        .fetchRidingGroupById(firestore, editGroupId)
+        .then(function (doc) {
+          if (cancelled || !doc) return;
+          setName(doc.name != null ? String(doc.name) : '');
+          setIntro(doc.intro != null ? String(doc.intro) : '');
+          setPublic(doc.isPublic !== false);
+          setJoinPw(doc.joinPassword != null ? String(doc.joinPassword) : '');
+          setRegions(Array.isArray(doc.regions) ? doc.regions.map(function (x) { return String(x); }) : []);
+          setPhotoUrl(doc.photoUrl != null ? String(doc.photoUrl) : '');
+          setPhotoFile(null);
+        })
+        .catch(function () {})
+        .finally(function () {
+          if (!cancelled) setLoaded(true);
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [firestore, editGroupId, isEdit]
+  );
+
+  function addRegion() {
+    var label = resolveOpenRidingFullRegionLabel(sidoPick, distPick, districtsForSido);
+    if (!label) return;
+    if (regions.indexOf(label) >= 0) {
+      setSidoPick('');
+      setDistPick('');
+      return;
+    }
+    setRegions(regions.concat([label]));
+    setSidoPick('');
+    setDistPick('');
+  }
+
+  function removeRegion(r) {
+    setRegions(regions.filter(function (x) {
+      return x !== r;
+    }));
+  }
+
+  function payloadFromForm(urlOverride) {
+    var url = urlOverride != null ? urlOverride : photoUrl;
+    return {
+      name: name.trim(),
+      regions: regions,
+      intro: intro.trim(),
+      isPublic: isPublic,
+      joinPassword: joinPw,
+      photoUrl: url || null
+    };
+  }
+
+  function submitCreate() {
+    if (!firestore || !userId) return;
+    if (!window.confirm('관리자 승인 후 리스트에 노출됩니다. 지금 저장할까요?')) return;
+    if (typeof gs.createRidingGroupPending !== 'function') return;
+    setBusy(true);
+    gs
+      .createRidingGroupPending(firestore, userId, payloadFromForm(null))
+      .then(function (newId) {
+        var chain = Promise.resolve();
+        if (photoFile && storage && typeof gs.uploadRidingGroupCover === 'function') {
+          chain = gs.uploadRidingGroupCover(storage, newId, photoFile).then(function (url) {
+            return gs.updateRidingGroupByOwner(firestore, userId, newId, payloadFromForm(url));
+          });
+        }
+        return chain.then(function () {
+          alert('저장되었습니다. 관리자 승인 후 목록에 노출됩니다.');
+          onSaved(newId);
+        });
+      })
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '저장 실패');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
+  function submitEdit() {
+    if (!firestore || !userId || !editGroupId) return;
+    if (typeof gs.updateRidingGroupByOwner !== 'function') return;
+    setBusy(true);
+    var id = editGroupId;
+    var chain = Promise.resolve();
+    if (photoFile && storage && typeof gs.uploadRidingGroupCover === 'function') {
+      chain = gs.uploadRidingGroupCover(storage, id, photoFile).then(function (url) {
+        return gs.updateRidingGroupByOwner(firestore, userId, id, payloadFromForm(url));
+      });
+    } else {
+      chain = gs.updateRidingGroupByOwner(firestore, userId, id, payloadFromForm());
+    }
+    chain
+      .then(function () {
+        onSaved(id);
+      })
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '수정 실패');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
+  if (!loaded) {
+    return (
+      <div className="flex justify-center py-16">
+        <span
+          className="inline-block h-10 w-10 rounded-full border-[3px] border-violet-200 border-t-violet-600 animate-spin"
+          style={{ animationDuration: '0.85s' }}
+          role="status"
+          aria-label="불러오는 중"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-28 text-sm text-slate-700">
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">그룹명 (최대 24자)</label>
+        <input
+          type="text"
+          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+          maxLength={24}
+          value={name}
+          onChange={function (e) {
+            setName(e.target.value);
+          }}
+        />
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">활동 지역</label>
+        <div className="flex gap-1 flex-wrap items-center">
+          <select
+            className="flex-1 min-w-[120px] rounded-lg border border-slate-200 px-2 py-1 text-sm bg-white"
+            aria-label="시·도"
+            value={sidoPick}
+            onChange={function (e) {
+              setSidoPick(e.target.value);
+              setDistPick('');
+            }}
+          >
+            <option value="">시·도</option>
+            {koreaList.map(function (g) {
+              return (
+                <option key={g.sido} value={g.sido}>
+                  {g.sido}
+                </option>
+              );
+            })}
+          </select>
+          <select
+            className="flex-1 min-w-[120px] rounded-lg border border-slate-200 px-2 py-1 text-sm bg-white"
+            aria-label="구·군"
+            value={distPick}
+            disabled={!sidoPick || !districtsForSido.length}
+            onChange={function (e) {
+              setDistPick(e.target.value);
+            }}
+          >
+            <option value="">{!sidoPick ? '시·도 먼저' : !districtsForSido.length ? '구·군 없음' : '구·군'}</option>
+            {districtsForSido.map(function (d) {
+              return (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              );
+            })}
+          </select>
+          <button type="button" className="rounded-lg bg-violet-600 text-white px-3 py-1 text-sm shrink-0 hover:bg-violet-700" onClick={addRegion}>
+            추가
+          </button>
+        </div>
+        <ul className="mt-2 flex flex-wrap gap-1">
+          {regions.map(function (r) {
+            return (
+              <li key={r}>
+                <button
+                  type="button"
+                  className="text-xs bg-white border border-slate-200 rounded-full px-2 py-0.5"
+                  onClick={function () {
+                    removeRegion(r);
+                  }}
+                >
+                  {r} ×
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">그룹 사진</label>
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="inline-flex h-20 w-20 rounded-full ring-2 ring-violet-200 overflow-hidden bg-slate-100 items-center justify-center shrink-0">
+            {photoFile && photoPreview ? (
+              <img src={photoPreview} alt="" className="h-full w-full object-cover" />
+            ) : photoUrl ? (
+              <img src={photoUrl} alt="" className="h-full w-full object-cover" decoding="async" />
+            ) : (
+              <span className="text-xs text-slate-400">없음</span>
+            )}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            className="text-xs max-w-[12rem]"
+            onChange={function (e) {
+              var f = e.target.files && e.target.files[0];
+              setPhotoFile(f || null);
+            }}
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">소개 (최대 500자)</label>
+        <textarea
+          className="w-full min-h-[120px] rounded-xl border border-slate-200 px-3 py-2 text-sm resize-y"
+          maxLength={500}
+          value={intro}
+          onChange={function (e) {
+            setIntro(e.target.value);
+          }}
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="text-sm text-slate-800">공개 그룹</label>
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-violet-600"
+          checked={isPublic}
+          onChange={function (e) {
+            setPublic(e.target.checked);
+          }}
+        />
+      </div>
+      {!isPublic ? (
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">가입 비밀번호 (4자 이상)</label>
+          <input
+            type="password"
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            maxLength={32}
+            value={joinPw}
+            placeholder="비공개 시 필수"
+            autoComplete="new-password"
+            onChange={function (e) {
+              setJoinPw(e.target.value);
+            }}
+          />
+        </div>
+      ) : null}
+
+      <div className="open-riding-bottom-actions fixed left-0 right-0 z-[99975] px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px] open-riding-group-form-footer">
+        <div className="max-w-lg mx-auto flex gap-2">
+          {isEdit ? (
+            <>
+              <button
+                type="button"
+                className="open-riding-action-btn flex-1 h-11 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium"
+                disabled={busy}
+                onClick={onCancel}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="open-riding-action-btn flex-1 h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700"
+                disabled={busy}
+                onClick={submitEdit}
+              >
+                {busy ? '처리 중…' : '수정'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="open-riding-action-btn flex-1 h-11 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium"
+                disabled={busy}
+                onClick={onCancel}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="open-riding-action-btn flex-1 h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700"
+                disabled={busy}
+                onClick={submitCreate}
+              >
+                {busy ? '처리 중…' : '그룹 생성'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 소모임 상세 + 멤버 + 가입·승인 */
+function OpenRidingGroupDetailView(props) {
+  var firestore = props.firestore;
+  var userId = props.userId || '';
+  var groupId = props.groupId || '';
+  var onBack = props.onBack || function () {};
+  var onEdit = props.onEdit || function () {};
+  var _g = useState(null);
+  var grp = _g[0];
+  var setGrp = _g[1];
+  var _mem = useState([]);
+  var members = _mem[0];
+  var setMembers = _mem[1];
+  var _busy = useState(false);
+  var busy = _busy[0];
+  var setBusy = _busy[1];
+  var _pw = useState('');
+  var joinPw = _pw[0];
+  var setJoinPw = _pw[1];
+  var _detailReady = useState(false);
+  var detailReady = _detailReady[0];
+  var setDetailReady = _detailReady[1];
+  var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+  var GROUP_ST = gs.GROUP_STATUS || { PENDING: 'PENDING', APPROVED: 'APPROVED', REJECTED: 'REJECTED' };
+  var isAdmin = openRidingGroupsIsAdminGrade();
+
+  useEffect(
+    function () {
+      if (!firestore || !groupId || typeof gs.subscribeRidingGroupDetail !== 'function') return;
+      setDetailReady(false);
+      setGrp(null);
+      return gs.subscribeRidingGroupDetail(firestore, groupId, function (doc) {
+        setGrp(doc);
+        setDetailReady(true);
+      });
+    },
+    [firestore, groupId]
+  );
+
+  useEffect(
+    function () {
+      if (!firestore || !groupId || typeof gs.subscribeRidingGroupMembers !== 'function') return;
+      return gs.subscribeRidingGroupMembers(firestore, groupId, function (list) {
+        setMembers(Array.isArray(list) ? list : []);
+      });
+    },
+    [firestore, groupId]
+  );
+
+  var isMember = useMemo(
+    function () {
+      var uid = String(userId);
+      return members.some(function (m) {
+        return String(m.userId || '') === uid;
+      });
+    },
+    [members, userId]
+  );
+
+  var isOwner = grp && String(grp.createdBy || '') === String(userId);
+
+  function displayNameForMember(m) {
+    var n = m.displayName != null ? String(m.displayName).trim() : '';
+    if (n) return n;
+    var uid = String(m.userId || '');
+    return uid.length > 4 ? '라이더 …' + uid.slice(-4) : '라이더';
+  }
+
+  function photoForMember(m) {
+    var u = m.profileImageUrl != null ? String(m.profileImageUrl).trim() : '';
+    return u || '';
+  }
+
+  function profileHintsForJoin() {
+    var pr = getOpenRidingProfileDefaults();
+    var cu =
+      typeof window !== 'undefined' && window.currentUser
+        ? window.currentUser
+        : (function () {
+            try {
+              return JSON.parse(localStorage.getItem('currentUser') || 'null');
+            } catch (e) {
+              return null;
+            }
+          })();
+    var img = '';
+    if (cu) {
+      img =
+        (cu.profileImageUrl && String(cu.profileImageUrl)) ||
+        (cu.photoURL && String(cu.photoURL)) ||
+        (cu.avatarUrl && String(cu.avatarUrl)) ||
+        '';
+    }
+    return { displayName: pr.hostName || '', profileImageUrl: img || null };
+  }
+
+  function doJoin() {
+    if (!firestore || !userId || !groupId) return;
+    if (typeof gs.joinRidingGroup !== 'function') return;
+    setBusy(true);
+    gs
+      .joinRidingGroup(firestore, userId, groupId, joinPw, profileHintsForJoin())
+      .then(function () {
+        setJoinPw('');
+      })
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '가입 실패');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
+  function doLeave() {
+    if (!firestore || !userId || !groupId) return;
+    if (!window.confirm('이 그룹에서 탈퇴할까요?')) return;
+    if (typeof gs.leaveRidingGroup !== 'function') return;
+    setBusy(true);
+    gs
+      .leaveRidingGroup(firestore, userId, groupId)
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '탈퇴 실패');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
+  function doApprove() {
+    if (!firestore || !userId || !groupId) return;
+    if (!window.confirm('이 그룹을 승인하고 목록에 공개할까요?')) return;
+    if (typeof gs.setRidingGroupStatusByAdmin !== 'function') return;
+    setBusy(true);
+    gs
+      .setRidingGroupStatusByAdmin(firestore, userId, groupId, GROUP_ST.APPROVED)
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '처리 실패');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
+  function doReject() {
+    if (!firestore || !userId || !groupId) return;
+    if (!window.confirm('이 그룹을 반려할까요? 목록에서 제외됩니다.')) return;
+    if (typeof gs.setRidingGroupStatusByAdmin !== 'function') return;
+    setBusy(true);
+    gs
+      .setRidingGroupStatusByAdmin(firestore, userId, groupId, GROUP_ST.REJECTED)
+      .then(function () {
+        onBack();
+      })
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '처리 실패');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
+  if (!detailReady) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <span
+          className="inline-block h-10 w-10 rounded-full border-[3px] border-violet-200 border-t-violet-600 animate-spin"
+          style={{ animationDuration: '0.85s' }}
+          role="status"
+          aria-label="불러오는 중"
+        />
+        <span className="text-xs text-slate-500">그룹 정보를 불러오는 중…</span>
+      </div>
+    );
+  }
+
+  if (!grp) {
+    return (
+      <div className="text-sm text-slate-500 py-8 text-center">
+        불러오는 중이거나 볼 수 없는 그룹입니다.
+        <div className="mt-4">
+          <button type="button" className="text-violet-700 font-medium underline" onClick={onBack}>
+            목록으로
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  var st = String(grp.status || '');
+  var approved = st === GROUP_ST.APPROVED;
+  var pending = st === GROUP_ST.PENDING;
+  var regLine = regionLineFromRegions(grp.regions);
+
+  return (
+    <div className="w-full max-w-lg mx-auto space-y-4 pb-28 text-left">
+      <button type="button" className="text-sm font-medium text-violet-700 -ml-0.5 mb-1" onClick={onBack}>
+        ← 그룹 목록
+      </button>
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        {grp.photoUrl ? (
+          <img src={String(grp.photoUrl)} alt="" className="w-full h-36 object-cover" decoding="async" />
+        ) : null}
+        <div className="p-4">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100">
+              {grp.photoUrl ? (
+                <img src={String(grp.photoUrl)} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-xl font-bold text-violet-700">{(grp.name || 'G').charAt(0)}</span>
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-bold text-slate-900 m-0 truncate">{grp.name != null ? String(grp.name) : ''}</h2>
+              <p className="text-xs text-slate-500 m-0 mt-1">
+                {regLine}
+                <span className="text-slate-300 mx-1">·</span>
+                {grp.memberCount != null ? String(grp.memberCount) : '0'}명
+                {grp.isPublic === false ? (
+                  <span className="ml-2 rounded-full bg-slate-200 text-slate-700 text-[10px] px-2 py-0.5">비공개</span>
+                ) : (
+                  <span className="ml-2 rounded-full bg-emerald-50 text-emerald-800 text-[10px] px-2 py-0.5 border border-emerald-200">공개</span>
+                )}
+              </p>
+              {pending && isAdmin ? (
+                <span className="inline-block mt-2 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">승인 대기</span>
+              ) : null}
+            </div>
+          </div>
+          {grp.intro ? (
+            <p className="text-sm text-slate-700 mt-3 whitespace-pre-wrap m-0 leading-relaxed">{String(grp.intro)}</p>
+          ) : (
+            <p className="text-sm text-slate-400 mt-3 m-0">등록된 소개가 없습니다.</p>
+          )}
+          {isOwner && (pending || approved) ? (
+            <button
+              type="button"
+              className="mt-3 text-sm font-semibold text-violet-700 underline"
+              onClick={function () {
+                onEdit();
+              }}
+            >
+              그룹 정보 수정
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5">
+          <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
+        </div>
+        <div className="p-2">
+          {members.length === 0 ? (
+            <p className="text-sm text-slate-500 m-0 px-1 py-2">멤버 정보를 불러오는 중입니다.</p>
+          ) : (
+            <table className="w-full table-fixed text-sm leading-snug border-collapse">
+              <thead>
+                <tr className="text-slate-600 bg-violet-50 border-b border-slate-100">
+                  <th className="py-2 pl-2 pr-1 font-medium w-[12%] text-left">#</th>
+                  <th className="py-2 px-1 font-medium w-[18%] text-left"> </th>
+                  <th className="py-2 px-1 font-medium w-[50%] text-left">이름</th>
+                  <th className="py-2 pr-2 pl-1 font-medium w-[20%] text-center">탈퇴</th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map(function (m, idx) {
+                  var uid = String(m.userId || '');
+                  var self = uid && uid === String(userId);
+                  var canLeave = self && !isOwner;
+                  return (
+                    <tr key={uid || idx} className="border-b border-slate-50 last:border-b-0 align-middle">
+                      <td className="py-2 pl-2 pr-1 text-slate-600 tabular-nums">{idx + 1}</td>
+                      <td className="py-2 px-1">
+                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-violet-300/80 overflow-hidden bg-gradient-to-br from-violet-100 to-slate-100 shadow-sm">
+                          {photoForMember(m) ? (
+                            <img src={photoForMember(m)} alt="" className="h-full w-full object-cover" decoding="async" />
+                          ) : (
+                            <span className="text-[10px] font-bold text-violet-800">{displayNameForMember(m).charAt(0)}</span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="py-2 px-1 font-medium text-slate-800 truncate" title={displayNameForMember(m)}>
+                        {displayNameForMember(m)}
+                        {String(m.role || '') === 'owner' ? (
+                          <span className="ml-1 text-[10px] font-semibold text-violet-600">방장</span>
+                        ) : null}
+                      </td>
+                      <td className="py-2 pr-2 pl-1 text-center">
+                        {canLeave ? (
+                          <button
+                            type="button"
+                            className="text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+                            disabled={busy}
+                            onClick={doLeave}
+                          >
+                            탈퇴
+                          </button>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      <div className="fixed left-0 right-0 bottom-0 z-[99975] px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
+        <div className="max-w-lg mx-auto space-y-2">
+          {approved && !isMember ? (
+            <>
+              {grp.isPublic === false ? (
+                <input
+                  type="password"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="가입 비밀번호"
+                  value={joinPw}
+                  onChange={function (e) {
+                    setJoinPw(e.target.value);
+                  }}
+                />
+              ) : null}
+              <button
+                type="button"
+                className="open-riding-action-btn w-full h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50"
+                disabled={busy}
+                onClick={doJoin}
+              >
+                그룹 가입하기
+              </button>
+            </>
+          ) : null}
+          {pending && isAdmin ? (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="open-riding-action-btn flex-1 h-11 rounded-xl border border-emerald-500 bg-emerald-600 text-white font-medium"
+                disabled={busy}
+                onClick={doApprove}
+              >
+                승인
+              </button>
+              <button
+                type="button"
+                className="open-riding-action-btn flex-1 h-11 rounded-xl border border-red-300 bg-white text-red-700 font-medium"
+                disabled={busy}
+                onClick={doReject}
+              >
+                반려
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function regionLineFromRegions(regions) {
+  var arr = Array.isArray(regions) ? regions : [];
+  if (!arr.length) return '-';
+  return arr
+    .map(function (r) {
+      return formatOpenRidingRegionShort(r);
+    })
+    .join(' · ');
+}
+
 /** 오픈 라이딩방 단일 앱: 컴팩트 달력·목록 ↔ 생성 ↔ 상세 */
 function OpenRidingRoomApp(props) {
   var firestore = props.firestore;
@@ -8530,6 +9440,9 @@ function OpenRidingRoomApp(props) {
   var _rid = useState(null);
   var detailRideId = _rid[0];
   var setDetailRideId = _rid[1];
+  var _gfd = useState(null);
+  var detailGroupId = _gfd[0];
+  var setDetailGroupId = _gfd[1];
   var _pic = useState(0);
   var pendingIncomingCount = _pic[0];
   var setPendingIncomingCount = _pic[1];
@@ -8583,7 +9496,15 @@ function OpenRidingRoomApp(props) {
             ? '맞춤 필터 설정'
             : view === 'friends'
               ? '친구 관리'
-              : '라이딩 모임';
+              : view === 'groups'
+                ? '그룹 관리'
+                : view === 'groupCreate'
+                  ? '그룹 만들기'
+                  : view === 'groupEdit'
+                    ? '그룹 수정'
+                    : view === 'groupDetail'
+                      ? '그룹 상세'
+                      : '라이딩 모임';
 
   var useGlassBottomNavSpacer = !!(
     firestore &&
@@ -8591,6 +9512,9 @@ function OpenRidingRoomApp(props) {
       view === 'filter' ||
       view === 'create' ||
       view === 'friends' ||
+      view === 'groups' ||
+      view === 'groupCreate' ||
+      view === 'groupEdit' ||
       (view === 'detail' && detailRideId) ||
       (view === 'edit' && detailRideId))
   );
@@ -8601,6 +9525,63 @@ function OpenRidingRoomApp(props) {
       <div className="p-4 text-center text-sm text-amber-900 rounded-xl border border-amber-200 bg-amber-50">
         Firestore에 연결되지 않았습니다. 네트워크 또는 로그인 상태를 확인한 뒤 다시 시도해 주세요.
       </div>
+    );
+  } else if (view === 'groupDetail' && detailGroupId) {
+    inner = (
+      <OpenRidingGroupDetailView
+        firestore={firestore}
+        userId={userId}
+        groupId={detailGroupId}
+        onBack={function () {
+          setDetailGroupId(null);
+          setView('groups');
+        }}
+        onEdit={function () {
+          setView('groupEdit');
+        }}
+      />
+    );
+  } else if (view === 'groupEdit' && detailGroupId) {
+    inner = (
+      <OpenRidingGroupForm
+        firestore={firestore}
+        storage={storage}
+        userId={userId}
+        editGroupId={detailGroupId}
+        onCancel={function () {
+          setView('groupDetail');
+        }}
+        onSaved={function () {
+          setView('groupDetail');
+        }}
+      />
+    );
+  } else if (view === 'groupCreate') {
+    inner = (
+      <OpenRidingGroupForm
+        firestore={firestore}
+        storage={storage}
+        userId={userId}
+        onCancel={function () {
+          setView('groups');
+        }}
+        onSaved={function () {
+          setView('groups');
+        }}
+      />
+    );
+  } else if (view === 'groups') {
+    inner = (
+      <OpenRidingGroupsList
+        firestore={firestore}
+        onOpenDetail={function (id) {
+          setDetailGroupId(id);
+          setView('groupDetail');
+        }}
+        onCreate={function () {
+          setView('groupCreate');
+        }}
+      />
     );
   } else if (view === 'create') {
     inner = (
@@ -8662,8 +9643,20 @@ function OpenRidingRoomApp(props) {
         filterPageOpen={view === 'filter'}
         onOpenFilterPage={function () { setView('filter'); }}
         onCloseFilterPage={function () { setView('main'); }}
-        onOpenCreate={function () { setView('create'); }}
-        onSelectRide={function (id) { setDetailRideId(id); setView('detail'); }}
+        onOpenCreate={function () {
+          setDetailGroupId(null);
+          setView('create');
+        }}
+        onSelectRide={function (id) {
+          setDetailGroupId(null);
+          setDetailRideId(id);
+          setView('detail');
+        }}
+        onOpenGroups={function () {
+          setDetailRideId(null);
+          setDetailGroupId(null);
+          setView('groups');
+        }}
       />
     );
   }
@@ -8684,7 +9677,9 @@ function OpenRidingRoomApp(props) {
       <div
         className={
           'open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 w-full box-border ' +
-          (view === 'detail' && detailRideId ? 'open-riding-app-body--riding-detail ' : 'pt-2 ') +
+          ((view === 'detail' && detailRideId) || (view === 'groupDetail' && detailGroupId)
+            ? 'open-riding-app-body--riding-detail '
+            : 'pt-2 ') +
           (useGlassBottomNavSpacer
             ? 'open-riding-app-body--glass-nav-spacer'
             : 'pb-[calc(1rem+env(safe-area-inset-bottom,0px))]')
@@ -8692,7 +9687,14 @@ function OpenRidingRoomApp(props) {
       >
         {inner}
       </div>
-      {firestore && (view === 'main' || view === 'filter' || view === 'create' || view === 'friends') ? (
+      {firestore &&
+      (view === 'main' ||
+        view === 'filter' ||
+        view === 'create' ||
+        view === 'friends' ||
+        view === 'groups' ||
+        view === 'groupCreate' ||
+        view === 'groupEdit') ? (
         <OpenRidingBottomGlassNav
           navVariant={
             view === 'main'
@@ -8703,12 +9705,15 @@ function OpenRidingRoomApp(props) {
                   ? 'create'
                   : view === 'friends'
                     ? 'friends'
-                    : 'main'
+                    : view === 'groups' || view === 'groupCreate' || view === 'groupEdit'
+                      ? 'main'
+                      : 'main'
           }
           onHome={function () {
             if (typeof showScreen === 'function') showScreen('basecampScreen');
           }}
           onMoim={function () {
+            setDetailGroupId(null);
             setView('main');
           }}
           onFilter={function () {
