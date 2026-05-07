@@ -1887,10 +1887,6 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   -webkit-tap-highlight-color: transparent;
 }
 
-#openRidingRoomScreen .open-riding-group-search-submit {
-  pointer-events: auto;
-}
-
 #openRidingRoomScreen .open-riding-group-list-row-btn {
   pointer-events: auto;
   touch-action: manipulation;
