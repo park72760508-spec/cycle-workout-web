@@ -1980,7 +1980,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /*
- * 그룹 목록 FAB: 글래스 네비 상단에 맞닿게(추가 간격 없음) — bottom = 루트 offset + 네비 inner 높이
+ * 그룹 목록 FAB: 뷰포트 세로 중심에서 하단까지 구간 중, 아래로 2/3 지점(→ top = 50vh + (50vh*2/3))
+ * JSX에서 translateY(-50%) 또는 scroll lift 시 translateY(calc(-50% - 14px))와 함께 사용해 버튼 중심이 해당 라인에 맞음
  */
 #openRidingRoomScreen .open-riding-group-fab {
   pointer-events: auto;
@@ -1991,15 +1992,10 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   -webkit-touch-callout: none;
   left: max(20px, env(safe-area-inset-left, 0px));
   right: auto;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-fixed-height));
+  top: calc(50vh + (50vh * 2 / 3));
+  bottom: auto;
   box-sizing: border-box;
   max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px)) - max(20px, env(safe-area-inset-right, 0px)));
-}
-html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fab {
-  bottom: calc(
-    16px + env(safe-area-inset-bottom, 0px) - (var(--open-riding-glass-nav-inner-fixed-height) * 0.5) +
-      var(--open-riding-glass-nav-inner-fixed-height)
-  );
 }
 
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-action-btn {
