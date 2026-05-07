@@ -9794,11 +9794,23 @@ function OpenRidingGroupDetailView(props) {
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-4 pb-6 text-left">
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative isolate bg-white">
         {grp.photoUrl ? (
-          <img src={String(grp.photoUrl)} alt="" className="w-full h-36 object-cover" decoding="async" />
+          <>
+            <img
+              alt=""
+              src={String(grp.photoUrl)}
+              decoding="async"
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-0 h-full min-h-[8rem] w-full object-cover object-center opacity-[0.2] scale-[1.03]"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-b from-white/90 via-white/94 to-white/[0.98]"
+            />
+          </>
         ) : null}
-        <div className="p-4">
+        <div className="relative z-[1] p-4">
           <div className="flex items-start gap-3">
             <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100">
               {grp.photoUrl ? (
@@ -10006,10 +10018,10 @@ function OpenRidingGroupDetailView(props) {
                           {nm}
                         </span>
                       </span>
-                      <span className="stelvio-rank-wkg open-riding-group-rank-actions flex flex-col sm:flex-row gap-1 items-end sm:items-center justify-end shrink-0">
+                      <span className="stelvio-rank-wkg open-riding-group-rank-actions open-riding-group-join-request-actions inline-flex flex-row flex-nowrap items-center justify-end gap-1.5 shrink-0 whitespace-nowrap">
                         <button
                           type="button"
-                          className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
+                          className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
                           disabled={busy}
                           onClick={function () {
                             doApproveJoinRequest(uid);
@@ -10019,7 +10031,7 @@ function OpenRidingGroupDetailView(props) {
                         </button>
                         <button
                           type="button"
-                          className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                          className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                           disabled={busy}
                           onClick={function () {
                             doRejectJoinRequest(uid);
