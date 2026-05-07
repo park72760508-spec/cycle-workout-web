@@ -1216,6 +1216,109 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   padding-right: 4px;
 }
 
+/* 라이딩 모임 하단 네비(6슬롯): 랭킹 허브와 동일 가로 스크롤·좌우 스크롤 힌트 */
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll {
+  width: calc(100% - 20px);
+  max-width: min(720px, 100% - 16px);
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .open-riding-bottom-glass-nav__inner {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-scroll-wrap {
+  position: relative;
+  width: 100%;
+  pointer-events: none;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-scroll-wrap .global-hub-glass-nav-scroll {
+  pointer-events: auto !important;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-edge {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  pointer-events: none !important;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.22s ease,
+    visibility 0.22s ease;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-edge--left {
+  left: 1px;
+  padding-left: 1px;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-edge--right {
+  right: 1px;
+  padding-right: 1px;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-edge--visible {
+  opacity: 1;
+  visibility: visible;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-edge__blob {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #7c3aed;
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(109, 40, 217, 0.12);
+  transform: translateZ(0);
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-edge__svg {
+  flex-shrink: 0;
+  display: block;
+  opacity: 0.92;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-edge--visible.global-hub-glass-nav-edge--left .global-hub-glass-nav-edge__blob {
+  animation: global-hub-edge-nudge-l 1.35s ease-in-out infinite;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-edge--visible.global-hub-glass-nav-edge--right .global-hub-glass-nav-edge__blob {
+  animation: global-hub-edge-nudge-r 1.35s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  #openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-edge--visible .global-hub-glass-nav-edge__blob {
+    animation: none !important;
+  }
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-scroll {
+  container-type: inline-size;
+  container-name: open-riding-moim-glass-nav;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  pointer-events: auto !important;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-inner--scroll {
+  width: max-content !important;
+  max-width: none !important;
+}
+#openRidingBottomGlassNavRoot.open-riding-moim-glass-nav--scroll .global-hub-glass-nav-inner--scroll > .open-riding-bottom-glass-nav__slot {
+  flex: 0 0 calc((100vw - 48px) / 5);
+  flex: 0 0 calc(100cqw / 5);
+  min-width: 0;
+}
+
 /* Pill: 테두리·그림자·클리핑 — 텔레그램형 플로팅 둥근 박스 */
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__pill,
 #globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__pill {
@@ -5395,6 +5498,20 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border-bottom: 1px solid #e5e7eb;
   touch-action: pan-y;
   background-clip: padding-box;
+}
+.stelvio-tss-agg-refresh-note {
+  margin-top: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.stelvio-tss-agg-refresh-note strong {
+  color: #334155;
+  font-weight: 600;
 }
 .stelvio-duration-chips-wrap {
   overflow-x: auto;
