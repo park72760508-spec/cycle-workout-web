@@ -1975,7 +1975,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /*
- * 그룹 목록 FAB: 글래스 네비 루트 bottom 오프셋 + inner 고정 높이 × 2 (화면 바닥에서 네비 바 높이의 2배 위 간격과 동등)
+ * 그룹 목록 FAB: 하단 글래스 네비와 같은 기준선(루트 bottom·inner 높이) 바로 위.
+ * 참고: position:fixed 에서 bottom 값이 클수록 요소는 화면 위로 올라감. ×2 를 넣으면 네비보다 한창 위로 가 “상단 쪽”처럼 보임.
  */
 #openRidingRoomScreen .open-riding-group-fab {
   pointer-events: auto;
@@ -1987,7 +1988,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   left: max(20px, env(safe-area-inset-left, 0px));
   right: auto;
   bottom: calc(
-    16px + env(safe-area-inset-bottom, 0px) + (var(--open-riding-glass-nav-inner-fixed-height) * 2)
+    16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-fixed-height) + 10px
   );
   box-sizing: border-box;
   max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px)) - max(20px, env(safe-area-inset-right, 0px)));
@@ -1995,7 +1996,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fab {
   bottom: calc(
     16px + env(safe-area-inset-bottom, 0px) - (var(--open-riding-glass-nav-inner-fixed-height) * 0.5) +
-      (var(--open-riding-glass-nav-inner-fixed-height) * 2)
+      var(--open-riding-glass-nav-inner-fixed-height) + 10px
   );
 }
 
