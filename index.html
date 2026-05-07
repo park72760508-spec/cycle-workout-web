@@ -8931,6 +8931,55 @@
         return e && e.userId && membUidSetObj[String(e.userId)];
       });
     }
+    /** 참가자 분포 배지 순위용: 현재 카테고리·랭킹 풀(관심 필터 반영) 기준 소모임 멤버 목록 렌더와 동일하게 GC 순 병합·정렬 후 본인 위치 */
+    function stelvioGroupTabExpandedViewerGcRank(baseIn) {
+      var uidV = stelvioRankingCurrentUserId;
+      if (!uidV || !stelvioGroupTabCachedMembers || !stelvioGroupTabCachedMembers.length) return null;
+      var catKey = stelvioRankingState.activeCategory || 'Supremo';
+      var poolRows =
+        baseIn &&
+        baseIn.byCategory &&
+        baseIn.byCategory[catKey] &&
+        Array.isArray(baseIn.byCategory[catKey])
+          ? baseIn.byCategory[catKey]
+          : [];
+      var poolUid = {};
+      for (var pi = 0; pi < poolRows.length; pi++) {
+        var pr = poolRows[pi];
+        if (pr && pr.userId) poolUid[String(pr.userId)] = pr;
+      }
+      var merged = [];
+      for (var mj = 0; mj < stelvioGroupTabCachedMembers.length; mj++) {
+        var mem = stelvioGroupTabCachedMembers[mj];
+        var uMem = mem && mem.userId != null ? String(mem.userId) : '';
+        if (!uMem) continue;
+        var rk = poolUid[uMem];
+        if (rk) {
+          merged.push(Object.assign({}, rk));
+        } else {
+          merged.push({
+            userId: uMem,
+            name: (mem.displayName != null ? String(mem.displayName) : '') || '(미등록)',
+            profileImageUrl: mem.profileImageUrl != null ? mem.profileImageUrl : null,
+            gcScore: null,
+            ageCategory: 'Supremo',
+            is_private: false
+          });
+        }
+      }
+      merged.sort(function (a, b) {
+        var sa = a.gcScore != null ? Number(a.gcScore) : NaN;
+        var sb = b.gcScore != null ? Number(b.gcScore) : NaN;
+        if (!isFinite(sa)) sa = -1;
+        if (!isFinite(sb)) sb = -1;
+        if (sb !== sa) return sb - sa;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
+      for (var mi = 0; mi < merged.length; mi++) {
+        if (String(merged[mi].userId) === String(uidV)) return mi + 1;
+      }
+      return null;
+    }
     function stelvioBuildGroupTabChartFilteredPayload(baseIn) {
       var empty = stelvioEmptyByCategoryBuckets();
       if (
@@ -8942,6 +8991,7 @@
           duration: 'gc',
           entries: [],
           byCategory: empty,
+          overrideDisplayRank: null,
           titleOverride: '참가자 분포',
           chartSubNoteOverride: '소모임 행을 눌러 멤버를 펼치면 이 소모임 기준 분포가 표시됩니다.',
           pillLabelOverride:
@@ -8962,10 +9012,12 @@
         slim[cats[ci]] = stelvioFilteredRowsGroupChart(cats[ci], srcBc, membUidSet);
       }
       var subEntries = stelvioMergeRankingEntriesFromByCategory(slim);
+      var grRank = stelvioGroupTabExpandedViewerGcRank(baseIn);
       return Object.assign({}, baseIn, {
         duration: 'gc',
         entries: subEntries,
         byCategory: slim,
+        overrideDisplayRank: grRank,
         titleOverride: '참가자 분포',
         chartSubNoteOverride: '펼친 소모임 멤버만 집계한 GC 점수 분포입니다.',
         pillLabelOverride:
@@ -9672,7 +9724,7 @@
         var gr = grpRows[gi];
         var gidi = String(gr.groupId || gr.id || '');
         var rawG = (gr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        var nameG = rawG.length > 12 ? rawG.substring(0, 10) + '..' : rawG;
+        var nameG = rawG.length > 15 ? rawG.substring(0, 15) + '..' : rawG;
         var ph = gr.photoUrl && String(gr.photoUrl).trim() ? String(gr.photoUrl).trim() : defGp;
         var mc = gr.memberCount;
         var mcShown = mc != null && isFinite(Number(mc)) ? Math.floor(Number(mc)) : '\u2014';
