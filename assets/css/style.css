@@ -1168,6 +1168,11 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   );
 }
 
+/* 오픈 라이딩방 활성: 맨 위로 버튼·그룹 생성 + 동일 bottom (고정). 그룹 +는 스크롤 들림 없음. */
+body:has(#openRidingRoomScreen.active) {
+  --open-riding-global-floating-actions-bottom: calc(143px + env(safe-area-inset-bottom, 0px));
+}
+
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer {
   padding-bottom: calc(
     16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-pad-y) * 2 +
@@ -1982,8 +1987,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /*
- * 그룹 목록 FAB: 세로좌표(상단=0, 뷰포트 높이=Y) 기준 라인 Y − 2×네비 inner 고정 높이
- * JSX에서 translateY(-50%)와 스크롤 시 +14px로 버튼 **세로 중심**이 위 라인에 맞춤
+ * 그룹 목록 FAB: 전역 맨 위로 버튼과 같은 bottom (--open-riding-global-floating-actions-bottom)
  */
 #openRidingRoomScreen .open-riding-group-fab {
   pointer-events: auto;
@@ -1994,8 +1998,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   -webkit-touch-callout: none;
   left: max(20px, env(safe-area-inset-left, 0px));
   right: auto;
-  top: calc(100vh - (2 * var(--open-riding-glass-nav-inner-fixed-height)));
-  bottom: auto;
+  top: auto;
+  bottom: var(--open-riding-global-floating-actions-bottom, calc(143px + env(safe-area-inset-bottom, 0px)));
   box-sizing: border-box;
   max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px)) - max(20px, env(safe-area-inset-right, 0px)));
 }
@@ -7641,7 +7645,7 @@ tr.stelvio-dashboard-current-grade td:last-child {
 /* 오픈 라이딩방: 하단 네비(Shell z-index:10025) 위로 FAB — 네비 높이 ≈ inner+safe padding */
 body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-top-active {
   z-index: 101000;
-  bottom: calc(143px + env(safe-area-inset-bottom, 0px));
+  bottom: var(--open-riding-global-floating-actions-bottom, calc(143px + env(safe-area-inset-bottom, 0px)));
 }
 .global-back-to-top-btn:hover {
   transform: translateY(-2px);
