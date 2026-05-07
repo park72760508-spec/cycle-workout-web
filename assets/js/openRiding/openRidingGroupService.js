@@ -4,9 +4,7 @@
  */
 import {
   collection,
-  collectionGroup,
   doc,
-  documentId,
   getDoc,
   getDocs,
   setDoc,
@@ -134,7 +132,8 @@ export function subscribeRidingGroups(db, isAdmin, onUpdate) {
 
 /**
  * 내 UID가 멤버로 등록된 승인(APPROVED) 소모임만 실시간 수집(랭킹보드 「그룹」탭 등).
- * collectionGroup `members` 중 타 컬렉션과 혼선을 막기 위해 경로 접두만 사용합니다.
+ * collectionGroup + documentId(UID) 쿼리는 Firestore에서 경로 전체가 아니라면 지원되지 않음.
+ * 대신 승인된 그룹 목록 스냅샷마다 각 그룹의 `members/{uid}` 문서를 개별 구독합니다.
  *
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} uid
@@ -147,8 +146,9 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
   if (!u) return function () {};
 
   var metaByGid = Object.create(null);
-  var unsubByGid = Object.create(null);
-  var membUnsub = null;
+  var unsubGroupByGid = Object.create(null);
+  var unsubMemberByGid = Object.create(null);
+  var approvedListUnsub = null;
 
   function sortedList() {
     return Object.keys(metaByGid)
@@ -173,22 +173,33 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
   }
 
   function unsubGroupDoc(gid) {
-    var fn = unsubByGid[gid];
-    if (fn) {
+    var gfn = unsubGroupByGid[gid];
+    if (gfn) {
       try {
-        fn();
+        gfn();
       } catch (e) {}
-      delete unsubByGid[gid];
+      delete unsubGroupByGid[gid];
     }
     delete metaByGid[gid];
   }
 
+  function unsubMemberSnap(gid) {
+    var mfn = unsubMemberByGid[gid];
+    if (mfn) {
+      try {
+        mfn();
+      } catch (e2) {}
+      delete unsubMemberByGid[gid];
+    }
+  }
+
   function subGroupDoc(gid) {
-    if (unsubByGid[gid]) return;
+    if (unsubGroupByGid[gid]) return;
     var gRef = doc(db, RIDING_GROUP_COLLECTION, gid);
-    unsubByGid[gid] = onSnapshot(gRef, function (snap) {
+    unsubGroupByGid[gid] = onSnapshot(gRef, function (snap) {
       if (!snap.exists()) {
         unsubGroupDoc(gid);
+        unsubMemberSnap(gid);
         emit();
         return;
       }
@@ -196,6 +207,7 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
       var st = String(gd.status || '');
       if (st !== GROUP_STATUS.APPROVED) {
         unsubGroupDoc(gid);
+        delete metaByGid[gid];
         emit();
         return;
       }
@@ -210,43 +222,58 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
     });
   }
 
-  /** @param {string} path */
-  function parseStelvioGroupIdFromMemberPath(path) {
-    var p = String(path || '');
-    var prefix = RIDING_GROUP_COLLECTION + '/';
-    if (p.indexOf(prefix) !== 0) return null;
-    var rest = p.slice(prefix.length).split('/');
-    if (rest.length !== 3 || rest[2] !== u) return null;
-    if (rest[1] !== 'members') return null;
-    return rest[0] || null;
+  function attachMembershipListener(gid) {
+    if (unsubMemberByGid[gid]) return;
+    var mRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', u);
+    unsubMemberByGid[gid] = onSnapshot(mRef, function (memSnap) {
+      if (memSnap.exists()) {
+        subGroupDoc(gid);
+      } else {
+        unsubGroupDoc(gid);
+        emit();
+      }
+    });
   }
 
-  var qMem = query(collectionGroup(db, 'members'), where(documentId(), '==', u));
-  membUnsub = onSnapshot(qMem, function (snap) {
-    var want = Object.create(null);
-    snap.forEach(function (d) {
-      var gid = parseStelvioGroupIdFromMemberPath(d.ref.path);
-      if (gid) want[gid] = true;
+  function detachMembershipListener(gid) {
+    unsubMemberSnap(gid);
+    unsubGroupDoc(gid);
+  }
+
+  var qApproved = query(
+    collection(db, RIDING_GROUP_COLLECTION),
+    where('status', '==', GROUP_STATUS.APPROVED),
+    orderBy('createdAt', 'desc')
+  );
+
+  approvedListUnsub = onSnapshot(qApproved, function (groupSnap) {
+    var approvedIds = Object.create(null);
+    groupSnap.forEach(function (d) {
+      if (d && d.id) approvedIds[String(d.id)] = true;
     });
-    Object.keys(unsubByGid).forEach(function (gid) {
-      if (!want[gid]) unsubGroupDoc(gid);
+    Object.keys(unsubMemberByGid).forEach(function (oldGid) {
+      if (!approvedIds[oldGid]) detachMembershipListener(oldGid);
     });
-    Object.keys(want).forEach(function (gid) {
-      subGroupDoc(gid);
+    Object.keys(approvedIds).forEach(function (gidOne) {
+      attachMembershipListener(gidOne);
     });
-    if (snap.empty) {
-      emit();
-    }
+    emit();
   });
 
   return function () {
-    if (membUnsub) {
+    if (approvedListUnsub) {
       try {
-        membUnsub();
-      } catch (e2) {}
-      membUnsub = null;
+        approvedListUnsub();
+      } catch (e3) {}
+      approvedListUnsub = null;
     }
-    Object.keys(unsubByGid).slice().forEach(unsubGroupDoc);
+    Object.keys(unsubMemberByGid).slice().forEach(function (gid) {
+      unsubMemberSnap(gid);
+    });
+    Object.keys(unsubGroupByGid).slice().forEach(function (gid) {
+      unsubGroupDoc(gid);
+    });
+    metaByGid = Object.create(null);
   };
 }
 
