@@ -8716,7 +8716,7 @@ function openRidingGroupsIsAdminGrade() {
   return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
 }
 
-/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(style.css: 네비 기준 하단 여백) */
+/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(뷰포트 높이 Y 기준 Y−2×네비 inner 높이, style.css) */
 function OpenRidingGroupsList(props) {
   var firestore = props.firestore;
   var onOpenDetail = props.onOpenDetail || function () {};
@@ -8914,7 +8914,7 @@ function OpenRidingGroupsList(props) {
         style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)',
-          transform: fabLift ? 'translateY(-14px)' : 'translateY(0)',
+          transform: fabLift ? 'translateY(calc(-50% - 14px))' : 'translateY(-50%)',
           transition: 'transform 0.25s ease'
         }}
         title="그룹 생성"
