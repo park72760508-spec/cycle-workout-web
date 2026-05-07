@@ -8009,9 +8009,14 @@
     var stelvioRankingSwrCache = { key: '', body: null, ts: 0 };
     var stelvioRankingPrefetchScheduled = false;
     var STELVIO_RANKING_FRIENDS_TIMEOUT_MS = 12000;
-    /** 랭킹 「그룹」탭: 소모임 Firestore 구독 세대·해제 */
-    var stelvioMyGroupsRankListenGen = 0;
+    /** 랭킹 「그룹」탭: 내 소모임 목록 구독 */
     var stelvioMyGroupsRankUnsub = null;
+    var stelvioLastMyGroupsFireRows = [];
+    var stelvioGroupTabExpandedId = null;
+    var stelvioGroupTabCachedMembers = [];
+    var stelvioGroupTabMembersUnsub = null;
+    /** @type {string|null} */
+    var stelvioGroupTabMembersSubForId = null;
     var STELVIO_DURATION_LABELS = {
       'tss': 'TSS',
       'personal_dist': '거리',
@@ -8240,7 +8245,6 @@
       }
     }
     function stelvioOnRankingListFilterChange(mode) {
-      if (stelvioIsGroupDistanceRanking()) return;
       var m = mode === 'interest' ? 'interest' : 'all';
       if (stelvioRankingState.listFilter === m) return;
       stelvioRankingState.listFilter = m;
@@ -8318,6 +8322,22 @@
       if (listBodyStar && !listBodyStar._stelvioStarDelegated) {
         listBodyStar._stelvioStarDelegated = true;
         listBodyStar.addEventListener('click', stelvioRankingListBodyStarClickHandler, true);
+      }
+      if (listBodyStar && !listBodyStar._stelvioGroupPickDelegated) {
+        listBodyStar._stelvioGroupPickDelegated = true;
+        listBodyStar.addEventListener('click', function (evGp) {
+          if (!stelvioIsGroupDistanceRanking()) return;
+          var tg = evGp.target;
+          var pickBt = tg && typeof tg.closest === 'function' ? tg.closest('[data-stelvio-group-pick="1"]') : null;
+          if (!pickBt || !listBodyStar.contains(pickBt)) return;
+          if (tg && typeof tg.closest === 'function' && tg.closest('a')) return;
+          var gidPick = pickBt.getAttribute('data-stelvio-group-id');
+          if (!gidPick) return;
+          if (typeof stelvioToggleGroupRankingPick === 'function') {
+            evGp.preventDefault();
+            stelvioToggleGroupRankingPick(evGp, gidPick);
+          }
+        });
       }
       var filtAll = document.getElementById('stelvioRankingListFilterAll');
       var filtInt = document.getElementById('stelvioRankingListFilterInterest');
@@ -8821,32 +8841,31 @@
       return stelvioIsPersonalDistanceRanking();
     }
     function stelvioIsRollingWindowDurationRanking() {
-      return stelvioIsTssRankingMode() || stelvioIsPersonalDistanceRanking() || stelvioIsGroupDistanceRanking();
+      return stelvioIsTssRankingMode() || stelvioIsPersonalDistanceRanking();
     }
     function stelvioUpdateGroupRankingFilterUi() {
       var isGroup = stelvioIsGroupDistanceRanking();
       var gWrap = document.querySelector('.stelvio-gender-dropdown');
       var cWrap = document.querySelector('.stelvio-category-dropdown');
-      if (gWrap) gWrap.classList.toggle('hidden', isGroup);
-      if (cWrap) cWrap.classList.toggle('hidden', isGroup);
+      if (gWrap) gWrap.classList.remove('hidden');
+      if (cWrap) cWrap.classList.remove('hidden');
       var filtWrap = document.querySelector('#stelvioRankingContent .stelvio-ranking-list-filter-toggle');
-      if (filtWrap) filtWrap.classList.toggle('hidden', isGroup);
+      if (filtWrap) filtWrap.classList.remove('hidden');
       var legend = document.querySelector('#stelvioRankingContent .stelvio-ranking-star-legend');
-      if (legend) legend.classList.toggle('hidden', isGroup);
+      if (legend) legend.classList.remove('hidden');
       var chartRt = document.getElementById('stelvio-distribution-chart-root');
-      if (chartRt) chartRt.classList.toggle('hidden', isGroup);
+      if (chartRt) chartRt.classList.remove('hidden');
       var ot = document.getElementById('stelvioOvertakeBtn');
-      if (ot) ot.classList.toggle('hidden', stelvioIsPersonalDistanceRanking() || stelvioIsGroupDistanceRanking() || stelvioIsGcRankingMode());
+      if (ot) ot.classList.toggle('hidden', stelvioIsPersonalDistanceRanking() || isGroup || stelvioIsGcRankingMode());
     }
     function stelvioApplyDurationModeUi() {
       var label = document.getElementById('stelvioPeriodLabel');
       var sel = document.getElementById('stelvioPeriodSelect');
       if (!label || !sel) return;
-      if (stelvioIsRollingWindowDurationRanking() || stelvioIsGcRankingMode()) {
+      if (stelvioIsRollingWindowDurationRanking() || stelvioIsGcRankingMode() || stelvioIsGroupDistanceRanking()) {
         if (stelvioIsTssRankingMode()) label.textContent = '주간';
-        else if (stelvioIsGroupDistanceRanking()) label.textContent = '나의 그룹';
         else if (stelvioIsKmDistanceRanking()) label.textContent = '최근 30일';
-        else if (stelvioIsGcRankingMode()) label.textContent = '월간';
+        else label.textContent = '월간';
         sel.disabled = true;
       } else {
         sel.disabled = false;
@@ -8856,7 +8875,7 @@
       stelvioUpdateGroupRankingFilterUi();
     }
     function stelvioOnPeriodChange(val) {
-      if (stelvioIsRollingWindowDurationRanking() || stelvioIsGcRankingMode()) return;
+      if (stelvioIsRollingWindowDurationRanking() || stelvioIsGcRankingMode() || stelvioIsGroupDistanceRanking()) return;
       stelvioRankingState.period = val;
       var label = document.getElementById('stelvioPeriodLabel');
       if (label) label.textContent = val === 'yearly' ? '명예의 전당' : '월간';
@@ -8864,7 +8883,6 @@
       fetchStelvioPeakPowerRanking();
     }
     function stelvioOnGenderChange(val) {
-      if (stelvioIsGroupDistanceRanking()) return;
       stelvioRankingState.gender = val;
       var label = document.getElementById('stelvioGenderLabel');
       if (label) label.textContent = val === 'M' ? '남성' : (val === 'F' ? '여성' : '전체');
@@ -8874,7 +8892,6 @@
     window.stelvioOnPeriodChange = stelvioOnPeriodChange;
     window.stelvioOnGenderChange = stelvioOnGenderChange;
     function stelvioOnCategoryChange(val) {
-      if (stelvioIsGroupDistanceRanking()) return;
       stelvioRankingState.activeCategory = val;
       var label = document.getElementById('stelvioCategoryLabel');
       if (label) label.textContent = STELVIO_CATEGORY_LABELS[val] || val;
@@ -8904,6 +8921,62 @@
       if (data && Array.isArray(data.entries) && data.entries.length) return data.entries;
       return stelvioMergeRankingEntriesFromByCategory(data && data.byCategory);
     }
+    function stelvioEmptyByCategoryBuckets() {
+      return { Supremo: [], Assoluto: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [] };
+    }
+    /** 차트 소스 byCategory(cat)에서 해당 소모임 멤버 UID만 포함 (wired는 필요 시 관심 필터까지 반영된 byCategory 사용) */
+    function stelvioFilteredRowsGroupChart(catKey, sourceBc, membUidSetObj) {
+      var raw = (sourceBc && sourceBc[catKey]) || [];
+      return raw.filter(function (e) {
+        return e && e.userId && membUidSetObj[String(e.userId)];
+      });
+    }
+    function stelvioBuildGroupTabChartFilteredPayload(baseIn) {
+      var empty = stelvioEmptyByCategoryBuckets();
+      if (
+        !stelvioGroupTabExpandedId ||
+        !stelvioGroupTabCachedMembers ||
+        !stelvioGroupTabCachedMembers.length
+      ) {
+        return Object.assign({}, baseIn, {
+          duration: 'gc',
+          entries: [],
+          byCategory: empty,
+          titleOverride: '참가자 분포',
+          chartSubNoteOverride: '소모임 행을 눌러 멤버를 펼치면 이 소모임 기준 분포가 표시됩니다.',
+          pillLabelOverride:
+            (STELVIO_CATEGORY_LABELS[stelvioRankingState.activeCategory] ||
+              stelvioRankingState.activeCategory ||
+              '전체') + ' · GC 환산 점수 · 소모임'
+        });
+      }
+      var membUidSet = {};
+      for (var ii = 0; ii < stelvioGroupTabCachedMembers.length; ii++) {
+        var mm = stelvioGroupTabCachedMembers[ii];
+        if (mm && mm.userId) membUidSet[String(mm.userId)] = true;
+      }
+      var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      var srcBc = (baseIn && baseIn.byCategory) || {};
+      var slim = {};
+      for (var ci = 0; ci < cats.length; ci++) {
+        slim[cats[ci]] = stelvioFilteredRowsGroupChart(cats[ci], srcBc, membUidSet);
+      }
+      var subEntries = stelvioMergeRankingEntriesFromByCategory(slim);
+      return Object.assign({}, baseIn, {
+        duration: 'gc',
+        entries: subEntries,
+        byCategory: slim,
+        titleOverride: '참가자 분포',
+        chartSubNoteOverride: '펼친 소모임 멤버만 집계한 GC 점수 분포입니다.',
+        pillLabelOverride:
+          (STELVIO_CATEGORY_LABELS[stelvioRankingState.activeCategory] ||
+            stelvioRankingState.activeCategory ||
+            '전체') +
+          ' · GC 환산 점수 · 소모임 ' +
+          String(stelvioGroupTabCachedMembers.length) +
+          '명'
+      });
+    }
     function refreshStelvioDistributionChartMounted() {
       if (typeof window.refreshStelvioDistributionChart !== 'function') return;
       var base = {
@@ -8916,9 +8989,14 @@
         myRankSupremo: stelvioMyRankSupremo,
         viewerIsAdmin: typeof getViewerGrade === 'function' && getViewerGrade() === '1'
       };
-      window.refreshStelvioDistributionChart(
-        stelvioRankingState.listFilter === 'interest' ? stelvioChartPropsInterestFiltered(base) : base
-      );
+      var wired = base;
+      if (stelvioRankingState.listFilter === 'interest') {
+        wired = stelvioChartPropsInterestFiltered(wired);
+      }
+      if (stelvioIsGroupDistanceRanking()) {
+        wired = stelvioBuildGroupTabChartFilteredPayload(wired);
+      }
+      window.refreshStelvioDistributionChart(wired);
     }
 
     function scheduleStelvioRankingWarmCacheOnce() {
@@ -8992,15 +9070,6 @@
           tabs.forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           stelvioRankingState.duration = btn.getAttribute('data-duration');
-          if (stelvioRankingState.duration === 'group_dist') {
-            stelvioRankingState.gender = 'all';
-            stelvioRankingState.activeCategory = 'Supremo';
-            var gSel0 = document.getElementById('stelvioGenderSelect');
-            if (gSel0) gSel0.value = 'all';
-            var gLab0 = document.getElementById('stelvioGenderLabel');
-            if (gLab0) gLab0.textContent = '전체';
-            stelvioSyncCategorySelectUi();
-          }
           stelvioApplyDurationModeUi();
           stelvioScrollRankingBoardToTopSmooth();
           fetchStelvioPeakPowerRanking();
@@ -9113,30 +9182,11 @@
             return null;
           }
         })();
-      if (stelvioRankingState.duration === 'group_dist') {
-        if (loading) loading.classList.add('hidden');
-        if (content) content.style.opacity = '1';
-        if (myGen !== stelvioRankingFetchGen) return;
-        stelvioRankingFullEntries = [];
-        stelvioRankingByCategory = { Supremo: [], Assoluto: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [] };
-        stelvioRankingApiStartStr = '';
-        stelvioRankingApiEndStr = '';
-        stelvioRankingExpandState = {};
-        stelvioRankingGapState = {};
-        stelvioRankingCurrentUserId = uid || null;
-        stelvioMyRankSupremo = null;
-        stelvioCurrentUser = null;
-        stelvioSyncCategorySelectUi();
-        renderStelvioHeroCard(null, null);
-        stelvioApplyDurationModeUi();
-        renderStelvioActiveCategory();
-        refreshStelvioDistributionChartMounted();
-        return;
-      }
-      var genderParam = stelvioRankingState.duration === 'group_dist' ? 'all' : stelvioRankingState.gender;
+      var apiDuration = stelvioIsGroupDistanceRanking() ? 'gc' : stelvioRankingState.duration;
+      var genderParam = stelvioRankingState.gender;
       var params = new URLSearchParams({
         period: stelvioRankingState.period,
-        duration: stelvioRankingState.duration,
+        duration: apiDuration,
         gender: genderParam,
       });
       if (uid) params.set('uid', uid);
@@ -9313,149 +9363,353 @@
       return msg.slice(0, m.index + m[0].length) + deltaHtml + msg.slice(m.index + m[0].length);
     }
 
-    function stelvioStopMyGroupsRankingListener() {
+    function stelvioTeardownGroupTabState() {
       if (stelvioMyGroupsRankUnsub) {
         try {
           stelvioMyGroupsRankUnsub();
-        } catch (eMyG) {}
+        } catch (eTg) {}
         stelvioMyGroupsRankUnsub = null;
       }
-      stelvioMyGroupsRankListenGen++;
+      if (stelvioGroupTabMembersUnsub) {
+        try {
+          stelvioGroupTabMembersUnsub();
+        } catch (eTm) {}
+        stelvioGroupTabMembersUnsub = null;
+      }
+      stelvioGroupTabMembersSubForId = null;
+      stelvioGroupTabExpandedId = null;
+      stelvioGroupTabCachedMembers = [];
+      stelvioLastMyGroupsFireRows = [];
     }
-    /** 그룹 탭: 로그인 사용자가 멤버인 승인 소모임만 Firestore로 표시 */
-    function stelvioApplyMyGroupsRankingSubscription(bodyEl) {
-      stelvioStopMyGroupsRankingListener();
-      var genCaptured = stelvioMyGroupsRankListenGen;
-      if (!bodyEl) bodyEl = document.getElementById('stelvioRankingListBody');
-      if (!bodyEl) return;
-      bodyEl.innerHTML = '<p class="stelvio-ranking-empty">목록 불러오는 중…</p>';
+    function stelvioStopGroupTabMembersOnly() {
+      if (stelvioGroupTabMembersUnsub) {
+        try {
+          stelvioGroupTabMembersUnsub();
+        } catch (eM) {}
+        stelvioGroupTabMembersUnsub = null;
+      }
+      stelvioGroupTabMembersSubForId = null;
+    }
+    /** 그룹 행 클릭: 멤버 목록 토글 — 다른 그룹 클릭 시 이전 접힘은 stelvioToggleGroupRankingPick 내부에서 처리 */
+    window.stelvioToggleGroupRankingPick = function (ev, gid) {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      var g = gid != null ? String(gid).trim() : '';
+      if (!g) return false;
+      var be = document.getElementById('stelvioRankingListBody');
+      if (String(stelvioGroupTabExpandedId) === String(g)) {
+        stelvioGroupTabExpandedId = null;
+        stelvioGroupTabCachedMembers = [];
+        stelvioStopGroupTabMembersOnly();
+      } else {
+        stelvioGroupTabExpandedId = g;
+        stelvioGroupTabCachedMembers = [];
+        stelvioStopGroupTabMembersOnly();
+        stelvioStartGroupTabMembersSubscription(g);
+      }
+      if (be) stelvioRenderGroupTabRankingList(be);
+      refreshStelvioDistributionChartMounted();
+      return false;
+    };
+    function stelvioStartGroupTabMembersSubscription(groupId) {
+      var gid = groupId != null ? String(groupId).trim() : '';
+      if (!gid || !window.firestoreV9) return;
+      if (String(stelvioGroupTabMembersSubForId) === gid && stelvioGroupTabMembersUnsub) return;
+      stelvioStopGroupTabMembersOnly();
+      stelvioGroupTabMembersSubForId = gid;
+      function attach() {
+        var svc = window.openRidingGroupService;
+        if (!svc || typeof svc.subscribeRidingGroupMembers !== 'function') return;
+        stelvioGroupTabMembersUnsub = svc.subscribeRidingGroupMembers(window.firestoreV9, gid, function (memRows) {
+          if (String(stelvioGroupTabExpandedId) !== gid) return;
+          stelvioGroupTabCachedMembers = Array.isArray(memRows) ? memRows.slice() : [];
+          var bel = document.getElementById('stelvioRankingListBody');
+          if (bel && stelvioIsGroupDistanceRanking()) {
+            stelvioRenderGroupTabRankingList(bel);
+            refreshStelvioDistributionChartMounted();
+          }
+        });
+      }
+      if (window.openRidingGroupService && typeof window.openRidingGroupService.subscribeRidingGroupMembers === 'function') {
+        attach();
+      } else {
+        import('./assets/js/openRiding/openRidingGroupService.js')
+          .then(function () {
+            attach();
+          })
+          .catch(function (eG) {
+            console.warn('[StelvioRanking] openRidingGroupService 로드 실패:', eG);
+          });
+      }
+    }
+    /** 나의 소모임 목록 Firestore 구독(탭 이탈 시 teardown) — 이미 연결되어 있으면 재구독하지 않음 */
+    function stelvioEnsureMyGroupsFirestoreSubscription(bodyElHint) {
+      if (!stelvioIsGroupDistanceRanking()) return;
+      if (stelvioMyGroupsRankUnsub) return;
       var uid =
         (window.currentUser && window.currentUser.id) ||
         (function () {
           try {
             var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
             return u && u.id ? u.id : null;
-          } catch (eUid) {
+          } catch (eEns) {
             return null;
           }
         })();
-      if (!uid) {
-        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">로그인 후 나의 소모임을 확인할 수 있습니다.</p>';
-        return;
-      }
-      if (!window.firestoreV9) {
-        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">연결 초기화 중입니다. 잠시 후 다시 시도해 주세요.</p>';
-        return;
-      }
-      function runSvc() {
-        if (genCaptured !== stelvioMyGroupsRankListenGen || !stelvioIsGroupDistanceRanking()) return;
+      if (!uid) return;
+      if (!window.firestoreV9) return;
+      function svcAttach() {
         var svcOk = !!(window.openRidingGroupService && typeof window.openRidingGroupService.subscribeMyRidingGroupsAsMember === 'function');
-        if (!svcOk) {
-          bodyEl.innerHTML = '<p class="stelvio-ranking-empty">소모임 모듈을 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.</p>';
-          return;
-        }
+        if (!svcOk) return;
         try {
-          stelvioMyGroupsRankUnsub = window.openRidingGroupService.subscribeMyRidingGroupsAsMember(window.firestoreV9, uid, function(rows) {
-            if (genCaptured !== stelvioMyGroupsRankListenGen || !stelvioIsGroupDistanceRanking()) return;
-            stelvioRenderMyGroupsRankingRows(bodyEl, rows);
+          stelvioMyGroupsRankUnsub = window.openRidingGroupService.subscribeMyRidingGroupsAsMember(window.firestoreV9, uid, function (rows) {
+            stelvioLastMyGroupsFireRows = rows && rows.length ? rows.slice() : [];
+            var be = document.getElementById('stelvioRankingListBody');
+            var keep = {};
+            var zi;
+            for (zi = 0; zi < stelvioLastMyGroupsFireRows.length; zi++) {
+              var r0 = stelvioLastMyGroupsFireRows[zi];
+              var id0 = r0 && (r0.groupId || r0.id) != null ? String(r0.groupId || r0.id) : '';
+              if (id0) keep[id0] = true;
+            }
+            if (stelvioGroupTabExpandedId != null && !keep[String(stelvioGroupTabExpandedId)]) {
+              stelvioGroupTabExpandedId = null;
+              stelvioGroupTabCachedMembers = [];
+              stelvioStopGroupTabMembersOnly();
+            }
+            if (!stelvioIsGroupDistanceRanking()) return;
+            if (!be && bodyElHint) be = bodyElHint;
+            if (be) stelvioRenderGroupTabRankingList(be);
+            refreshStelvioDistributionChartMounted();
           });
-        } catch (eSub) {
-          console.warn('[StelvioRanking] 나의 소모임 구독 오류:', eSub);
-          bodyEl.innerHTML = '<p class="stelvio-ranking-empty">목록을 불러오지 못했습니다.</p>';
+        } catch (eSb) {
+          console.warn('[StelvioRanking] 나의 소모임 구독 오류:', eSb);
         }
       }
       if (window.openRidingGroupService && typeof window.openRidingGroupService.subscribeMyRidingGroupsAsMember === 'function') {
-        runSvc();
+        svcAttach();
       } else {
         import('./assets/js/openRiding/openRidingGroupService.js')
           .then(function () {
-            runSvc();
+            svcAttach();
           })
-          .catch(function (eImp) {
-            console.warn('[StelvioRanking] openRidingGroupService 로드 실패:', eImp);
-            if (genCaptured !== stelvioMyGroupsRankListenGen || !stelvioIsGroupDistanceRanking()) return;
-            bodyEl.innerHTML = '<p class="stelvio-ranking-empty">소모임 모듈을 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.</p>';
+          .catch(function (eIm) {
+            console.warn('[StelvioRanking] openRidingGroupService 로드 실패:', eIm);
           });
       }
     }
-    /**
-     * 나의 소모임(그룹) 탭: Firestore rows(이미 정렬) 렌더
-     * @param {HTMLElement} bodyEl
-     * @param {Array<{ name: string; photoUrl: string; memberCount?: number|null }>} rows
-     */
-    function stelvioRenderMyGroupsRankingRows(bodyEl, rows) {
-      if (!bodyEl || !rows) return;
-      if (!rows.length) {
-        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">가입된 승인 소모임이 없습니다. 라이딩 모임에서 소모임에 가입해 보세요.</p>';
+    function stelvioFormatGroupTabGcCell(item, canSeeFull) {
+      if (stelvioRankingIsPrivateRow(item) && !canSeeFull) return '\u2014';
+      var g = item && item.gcScore != null ? Number(item.gcScore) : NaN;
+      if (!isFinite(g)) return '\u2014';
+      return g.toFixed(1);
+    }
+    function stelvioRenderGroupTabRankingList(bodyEl) {
+      if (!bodyEl) return;
+      if (!stelvioRankingByCategory) {
+        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">GC 랭킹 불러오는 중…</p>';
+        return;
+      }
+      var uidV =
+        (window.currentUser && window.currentUser.id) ||
+        (function () {
+          try {
+            var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            return u && u.id ? u.id : null;
+          } catch (eV) {
+            return null;
+          }
+        })();
+      if (!uidV) {
+        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">로그인 후 나의 소모임과 GC 순위를 확인할 수 있습니다.</p>';
         return;
       }
       var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
-      function escAttr(s) {
+      function escAttrL(s) {
         return String(s || '')
           .replace(/&/g, '&amp;')
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;')
           .replace(/</g, '&lt;');
       }
-      function escHtmlNm(s) {
-        return String(s || '')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/&/g, '&amp;');
+      function avatarBtn(profileUrl, meta) {
+        var uidRaw = meta && meta.userId != null ? String(meta.userId).trim() : '';
+        var raw =
+          profileUrl != null && String(profileUrl).trim()
+            ? String(profileUrl).trim()
+            : typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
+              ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
+              : 'assets/img/profile-placeholder.svg';
+        var src = escAttrL(raw);
+        var dataUid = '';
+        if (uidRaw) {
+          dataUid =
+            ' data-stelvio-rank-user-id="' +
+            escAttrL(uidRaw) +
+            '" data-stelvio-rank-overlay-name="' +
+            escAttrL((meta && meta.overlayName) || '') +
+            '" data-stelvio-rank-age-cat="' +
+            escAttrL((meta && meta.ageCategory) || '') +
+            '"';
+        }
+        return (
+          '<button type="button" class="stelvio-rank-avatar-btn" data-stelvio-rank-zoom-src="' +
+          src +
+          '"' +
+          dataUid +
+          ' title="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30" aria-label="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30">' +
+          '<span class="stelvio-rank-avatar" aria-hidden="true">' +
+          '<img class="stelvio-rank-avatar-img" src="' +
+          src +
+          '" alt="" width="30" height="30" loading="lazy" decoding="async" />' +
+          '</span>' +
+          '</button>'
+        );
       }
-      var defPhoto =
+      var grpRows = stelvioLastMyGroupsFireRows || [];
+      if (!grpRows.length && !stelvioMyGroupsRankUnsub) {
+        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">목록 불러오는 중…</p>';
+        return;
+      }
+      if (!grpRows.length) {
+        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">가입된 승인 소모임이 없습니다. 라이딩 모임에서 소모임에 가입해 보세요.</p>';
+        return;
+      }
+      var cat = stelvioRankingState.activeCategory;
+      var rankingPool = stelvioFilterRowsByListInterest((stelvioRankingByCategory && stelvioRankingByCategory[cat]) || []);
+      var poolUid = {};
+      for (var pi = 0; pi < rankingPool.length; pi++) {
+        var pr = rankingPool[pi];
+        if (pr && pr.userId) poolUid[String(pr.userId)] = pr;
+      }
+      var bcRef = stelvioRankingByCategory;
+      var isAdminG = typeof getViewerGrade === 'function' && getViewerGrade() === '1';
+      function memberBlockHtml(expandedForGid) {
+        var gids = expandedForGid != null ? String(expandedForGid).trim() : '';
+        if (String(stelvioGroupTabExpandedId) !== gids) return '';
+        if (!stelvioGroupTabCachedMembers.length && stelvioGroupTabMembersSubForId && String(stelvioGroupTabMembersSubForId) === gids) {
+          return '<div class="stelvio-group-members-block" role="region" aria-label="소모임 멤버 순위 로딩"><p class="stelvio-ranking-empty stelvio-ranking-loading-local" style="margin:10px 0 10px 12px">멤버 불러오는 중…</p></div>';
+        }
+        var merged = [];
+        for (var mj = 0; mj < stelvioGroupTabCachedMembers.length; mj++) {
+          var mem = stelvioGroupTabCachedMembers[mj];
+          var uMem = mem && mem.userId != null ? String(mem.userId) : '';
+          if (!uMem) continue;
+          var rk = poolUid[uMem];
+          if (rk) {
+            merged.push(Object.assign({}, rk));
+          } else {
+            merged.push({
+              userId: uMem,
+              name: (mem.displayName != null ? String(mem.displayName) : '') || '(미등록)',
+              profileImageUrl: mem.profileImageUrl != null ? mem.profileImageUrl : null,
+              gcScore: null,
+              ageCategory: 'Supremo',
+              is_private: false
+            });
+          }
+        }
+        merged.sort(function (a, b) {
+          var sa = a.gcScore != null ? Number(a.gcScore) : NaN;
+          var sb = b.gcScore != null ? Number(b.gcScore) : NaN;
+          if (!isFinite(sa)) sa = -1;
+          if (!isFinite(sb)) sb = -1;
+          if (sb !== sa) return sb - sa;
+          return String(a.name || '').localeCompare(String(b.name || ''));
+        });
+        var mh = '';
+        var maxNm = 12;
+        for (var mi = 0; mi < merged.length; mi++) {
+          var it = merged[mi];
+          var dispLm = mi + 1;
+          var rawNm = (it.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          var prv = stelvioRankingIsPrivateRow(it);
+          var isCur = !!(uidV && String(it.userId) === String(uidV));
+          var canFull = isCur || isAdminG;
+          var nm = rawNm.length > maxNm ? rawNm.substring(0, maxNm - 2) + '..' : rawNm;
+          var prof = prv && !canFull ? null : it.profileImageUrl;
+          var valStr = stelvioFormatGroupTabGcCell(it, canFull);
+          if (prv && canFull)
+            nm = rawNm.length > maxNm ? rawNm.substring(0, maxNm - 2) + '..' : rawNm;
+          if (prv && !canFull) nm = rawNm.length >= 2 ? rawNm.charAt(0) + '**' : '**';
+          var badgeP = prv && canFull ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
+          var dispGc = stelvioRankDisplayNumber(it, dispLm, cat, bcRef);
+          var rowCls = 'stelvio-rank-row stelvio-rank-row--group-member' + (isCur ? ' stelvio-rank-current' : '');
+          mh +=
+            '<div class="' +
+            rowCls +
+            '" style="padding-left:20px;background:rgba(249,250,251,0.94)">';
+          if (dispGc <= 3) mh += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispGc - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
+          else mh += '<span class="stelvio-rank-crown"></span>';
+          mh += '<span class="stelvio-rank-pos">' + dispGc + '위</span>';
+          mh +=
+            '<span class="stelvio-rank-name">' +
+            avatarBtn(prof, { userId: it.userId, overlayName: nm, ageCategory: it.ageCategory }) +
+            '<span class="stelvio-rank-name-text" title="' +
+            rawNm +
+            '">' +
+            nm +
+            '</span>' +
+            badgeP +
+            stelvioRankingStarButtonHtml(it.userId) +
+            '</span>';
+          mh += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
+          mh += '</div>';
+        }
+        if (!mh) {
+          mh =
+            '<p class="stelvio-ranking-empty" style="margin:10px 0 12px 20px;font-size:12px">등록된 멤버가 없습니다.</p>';
+        }
+        return '<div class="stelvio-group-members-block" role="region" aria-label="선택 소모임 멤버 GC 순위">' + mh + '</div>';
+      }
+      var defGp =
         typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
           ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
           : 'assets/img/profile-placeholder.svg';
-      function rowHtml(gr, ix) {
-        var disp = ix + 1;
-        var rawName = (gr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        var nameShow = rawName.length > 12 ? rawName.substring(0, 10) + '..' : rawName;
-        var ph = gr.photoUrl && String(gr.photoUrl).trim() ? String(gr.photoUrl).trim() : defPhoto;
+      var chunks = '';
+      for (var gi = 0; gi < grpRows.length; gi++) {
+        var gr = grpRows[gi];
+        var gidi = String(gr.groupId || gr.id || '');
+        var rawG = (gr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        var nameG = rawG.length > 12 ? rawG.substring(0, 10) + '..' : rawG;
+        var ph = gr.photoUrl && String(gr.photoUrl).trim() ? String(gr.photoUrl).trim() : defGp;
         var mc = gr.memberCount;
-        var mcDisp = mc != null && isFinite(Number(mc)) ? String(Math.floor(Number(mc))) : '—';
-        var h =
-          '<div class="stelvio-rank-row stelvio-rank-row--my-group">' +
-          (disp <= 3
-            ? '<span class="stelvio-rank-crown"><img src="' +
-              rankMedalSrc[disp - 1] +
-              '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>'
-            : '<span class="stelvio-rank-crown"></span>') +
-          '<span class="stelvio-rank-pos">' +
-          disp +
-          '위</span>' +
+        var mcShown = mc != null && isFinite(Number(mc)) ? Math.floor(Number(mc)) : '\u2014';
+        var isExp = String(stelvioGroupTabExpandedId) === gidi;
+        var rowClsG =
+          'stelvio-rank-row stelvio-rank-row--my-group stelvio-group-pick-row' +
+          (isExp ? ' stelvio-group-pick-row--open' : '');
+        var dispG = gi + 1;
+        chunks += '<button type="button" class="' + rowClsG + '" data-stelvio-group-pick="1" data-stelvio-group-id="' + escAttrL(gidi) + '" aria-expanded="' + (isExp ? 'true' : 'false') + '">';
+        if (dispG <= 3) chunks += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispG - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
+        else chunks += '<span class="stelvio-rank-crown"></span>';
+        chunks += '<span class="stelvio-rank-pos">' + dispG + '위</span>';
+        chunks +=
           '<span class="stelvio-rank-name">' +
           '<span class="stelvio-rank-avatar" aria-hidden="true">' +
           '<img class="stelvio-rank-avatar-img" src="' +
-          escAttr(ph) +
-          '" alt="" width="30" height="30" loading="lazy" decoding="async" />' +
+          escAttrL(ph) +
+          '" alt="" width="30" height="30" loading="lazy" decoding="async" /></span>' +
+          '<span class="stelvio-rank-name-text">' +
+          nameG +
           '</span>' +
-          '<span class="stelvio-rank-name-text" title="' +
-          escAttr(rawName) +
-          '">' +
-          escHtmlNm(nameShow) +
-          '</span>' +
-          '</span>' +
-          '<span class="stelvio-rank-wkg">' +
-          mcDisp +
-          '</span>' +
-          '</div>';
-        return h;
+          '</span>';
+        chunks += '<span class="stelvio-rank-wkg stelvio-group-pick-meta">' + escAttrL(String(mcShown)) + '명</span>';
+        chunks += '</button>';
+        chunks += memberBlockHtml(gidi);
       }
-      bodyEl.innerHTML = rows.map(function (gr, ix) {
-        return rowHtml(gr, ix);
-      }).join('');
+      bodyEl.innerHTML = chunks;
     }
 
     function renderStelvioHeroCard(currentUser, myRankSupremo) {
       var hero = document.getElementById('stelvioHeroCard');
       var textEl = document.getElementById('stelvioHeroText');
       if (!hero || !textEl) return;
-      if (stelvioIsGroupDistanceRanking()) {
-        hero.classList.add('hidden');
-        return;
-      }
-      var durLabel = STELVIO_DURATION_LABELS[stelvioRankingState.duration] || stelvioRankingState.duration;
+      var durLabel = stelvioIsGroupDistanceRanking()
+        ? STELVIO_DURATION_LABELS.gc || 'GC'
+        : STELVIO_DURATION_LABELS[stelvioRankingState.duration] || stelvioRankingState.duration;
       var userName = (window.currentUser && window.currentUser.name) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.name ? u.name : null; } catch(e){ return null; } })() || '사용자';
       var cu = currentUser || myRankSupremo;
       var uidHero = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
@@ -9504,7 +9758,7 @@
           var catPartTss = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + tssVal + ' TSS)' : tssVal + ' TSS';
           msg = userNameEsc + '님은 주간 ' + durLabel + ' ' + catPartTss + ', 전체 ' + globalRank + '위입니다.';
         }
-      } else if (stelvioIsGcRankingMode()) {
+      } else if (stelvioIsGcRankingMode() || stelvioIsGroupDistanceRanking()) {
         var gcSc = (cu.gcScore != null ? Number(cu.gcScore) : 0).toFixed(1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
           msg = userNameEsc + '님은 GC(종합 랭킹) 전체 ' + globalRank + '위(' + gcSc + '점)입니다.';
@@ -9537,16 +9791,27 @@
 
     function renderStelvioActiveCategory() {
       if (!stelvioIsGroupDistanceRanking()) {
-        stelvioStopMyGroupsRankingListener();
+        stelvioTeardownGroupTabState();
       }
       if (stelvioIsGroupDistanceRanking()) {
-        stelvioRankingState.activeCategory = 'Supremo';
-        var titleG = document.getElementById('stelvioListCategoryTitle');
-        var bodyElG = document.getElementById('stelvioRankingListBody');
-        var unitElG = document.querySelector('#stelvioRankingContent .stelvio-category-header-unit');
-        if (titleG) titleG.textContent = '나의 그룹';
-        if (unitElG) unitElG.textContent = '인원';
-        stelvioApplyMyGroupsRankingSubscription(bodyElG);
+        var catG = stelvioRankingState.activeCategory;
+        var titleG2 = document.getElementById('stelvioListCategoryTitle');
+        var bodyElG2 = document.getElementById('stelvioRankingListBody');
+        var unitElG2 = document.querySelector('#stelvioRankingContent .stelvio-category-header-unit');
+        if (titleG2) titleG2.textContent = STELVIO_CATEGORY_TITLES[catG] || (STELVIO_CATEGORY_LABELS[catG] || catG) + ' 순위';
+        if (unitElG2) unitElG2.textContent = '점수';
+        if (!stelvioRankingByCategory && bodyElG2) {
+          bodyElG2.innerHTML = '<p class="stelvio-ranking-empty">GC 랭킹 불러오는 중…</p>';
+        } else if (bodyElG2) {
+          stelvioEnsureMyGroupsFirestoreSubscription(bodyElG2);
+          stelvioRenderGroupTabRankingList(bodyElG2);
+          if (
+            stelvioGroupTabExpandedId &&
+            (!stelvioGroupTabMembersUnsub || String(stelvioGroupTabMembersSubForId) !== String(stelvioGroupTabExpandedId))
+          ) {
+            stelvioStartGroupTabMembersSubscription(stelvioGroupTabExpandedId);
+          }
+        }
         stelvioSyncRankingListFilterToggleUi();
         refreshStelvioDistributionChartMounted();
         return;
