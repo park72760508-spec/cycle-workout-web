@@ -8716,7 +8716,7 @@ function openRidingGroupsIsAdminGrade() {
   return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
 }
 
-/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(글래스 네비 높이 2배만큼 위) */
+/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(글래스 네비 바로 위) */
 function OpenRidingGroupsList(props) {
   var firestore = props.firestore;
   var onOpenDetail = props.onOpenDetail || function () {};
@@ -9794,9 +9794,6 @@ function OpenRidingGroupDetailView(props) {
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-4 pb-6 text-left">
-      <button type="button" className="text-sm font-medium text-violet-700 -ml-0.5 mb-1" onClick={onBack}>
-        ← 그룹 목록
-      </button>
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         {grp.photoUrl ? (
           <img src={String(grp.photoUrl)} alt="" className="w-full h-36 object-cover" decoding="async" />
@@ -10225,6 +10222,7 @@ function OpenRidingRoomApp(props) {
       view === 'groups' ||
       view === 'groupCreate' ||
       view === 'groupEdit' ||
+      (view === 'groupDetail' && detailGroupId) ||
       (view === 'detail' && detailRideId) ||
       (view === 'edit' && detailRideId))
   );
@@ -10400,7 +10398,8 @@ function OpenRidingRoomApp(props) {
         view === 'friends' ||
         view === 'groups' ||
         view === 'groupCreate' ||
-        view === 'groupEdit') ? (
+        view === 'groupEdit' ||
+        (view === 'groupDetail' && detailGroupId)) ? (
         <OpenRidingBottomGlassNav
           navVariant={
             view === 'main'
@@ -10411,7 +10410,10 @@ function OpenRidingRoomApp(props) {
                   ? 'create'
                   : view === 'friends'
                     ? 'friends'
-                    : view === 'groups' || view === 'groupCreate' || view === 'groupEdit'
+                    : view === 'groups' ||
+                        view === 'groupCreate' ||
+                        view === 'groupEdit' ||
+                        (view === 'groupDetail' && detailGroupId)
                       ? 'groups'
                       : 'main'
           }
