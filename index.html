@@ -9584,7 +9584,6 @@
         var pr = rankingPool[pi];
         if (pr && pr.userId) poolUid[String(pr.userId)] = pr;
       }
-      var bcRef = stelvioRankingByCategory;
       var isAdminG = typeof getViewerGrade === 'function' && getViewerGrade() === '1';
       function memberBlockHtml(expandedForGid) {
         var gids = expandedForGid != null ? String(expandedForGid).trim() : '';
@@ -9635,15 +9634,15 @@
             nm = rawNm.length > maxNm ? rawNm.substring(0, maxNm - 2) + '..' : rawNm;
           if (prv && !canFull) nm = rawNm.length >= 2 ? rawNm.charAt(0) + '**' : '**';
           var badgeP = prv && canFull ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
-          var dispGc = stelvioRankDisplayNumber(it, dispLm, cat, bcRef);
+          var rankInGroup = dispLm;
           var rowCls = 'stelvio-rank-row stelvio-rank-row--group-member' + (isCur ? ' stelvio-rank-current' : '');
           mh +=
             '<div class="' +
             rowCls +
             '" style="padding-left:20px;background:rgba(249,250,251,0.94)">';
-          if (dispGc <= 3) mh += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispGc - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
+          if (rankInGroup <= 3) mh += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[rankInGroup - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
           else mh += '<span class="stelvio-rank-crown"></span>';
-          mh += '<span class="stelvio-rank-pos">' + dispGc + '위</span>';
+          mh += '<span class="stelvio-rank-pos">' + rankInGroup + '위</span>';
           mh +=
             '<span class="stelvio-rank-name">' +
             avatarBtn(prof, { userId: it.userId, overlayName: nm, ageCategory: it.ageCategory }) +
@@ -9681,17 +9680,18 @@
         var rowClsG =
           'stelvio-rank-row stelvio-rank-row--my-group stelvio-group-pick-row' +
           (isExp ? ' stelvio-group-pick-row--open' : '');
-        var dispG = gi + 1;
+        var seqG = gi + 1;
         chunks += '<button type="button" class="' + rowClsG + '" data-stelvio-group-pick="1" data-stelvio-group-id="' + escAttrL(gidi) + '" aria-expanded="' + (isExp ? 'true' : 'false') + '">';
-        if (dispG <= 3) chunks += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispG - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
-        else chunks += '<span class="stelvio-rank-crown"></span>';
-        chunks += '<span class="stelvio-rank-pos">' + dispG + '위</span>';
+        chunks += '<span class="stelvio-rank-crown"></span>';
+        chunks += '<span class="stelvio-rank-pos stelvio-group-seq">' + seqG + '</span>';
         chunks +=
           '<span class="stelvio-rank-name">' +
-          '<span class="stelvio-rank-avatar" aria-hidden="true">' +
+          '<span class="stelvio-group-list-avatar-slot" aria-hidden="true">' +
+          '<span class="stelvio-rank-avatar">' +
           '<img class="stelvio-rank-avatar-img" src="' +
           escAttrL(ph) +
           '" alt="" width="30" height="30" loading="lazy" decoding="async" /></span>' +
+          '</span>' +
           '<span class="stelvio-rank-name-text">' +
           nameG +
           '</span>' +
@@ -9798,7 +9798,7 @@
         var titleG2 = document.getElementById('stelvioListCategoryTitle');
         var bodyElG2 = document.getElementById('stelvioRankingListBody');
         var unitElG2 = document.querySelector('#stelvioRankingContent .stelvio-category-header-unit');
-        if (titleG2) titleG2.textContent = STELVIO_CATEGORY_TITLES[catG] || (STELVIO_CATEGORY_LABELS[catG] || catG) + ' 순위';
+        if (titleG2) titleG2.textContent = '나의 그룹';
         if (unitElG2) unitElG2.textContent = '점수';
         if (!stelvioRankingByCategory && bodyElG2) {
           bodyElG2.innerHTML = '<p class="stelvio-ranking-empty">GC 랭킹 불러오는 중…</p>';
