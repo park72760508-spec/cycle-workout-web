@@ -121,6 +121,24 @@
     });
   }
 
+  function stelvioDistEntryIsPrivate(e) {
+    if (!e) return false;
+    var v = e.is_private;
+    return v === true || v === 'true' || v === 1 || v === '1';
+  }
+
+  /** 랭킹 목록과 동일: 타인 비공개 수치는 분포(히스토그램) 집계에서 제외 */
+  function filterCohortForPublicHistogram(list, currentUserId, viewerIsAdmin) {
+    if (!list || !list.length) return list;
+    return list.filter(function (e) {
+      if (!e) return false;
+      if (!stelvioDistEntryIsPrivate(e)) return true;
+      if (viewerIsAdmin) return true;
+      if (currentUserId && String(e.userId || '') === String(currentUserId)) return true;
+      return false;
+    });
+  }
+
   function buildBins(rawValues, isTss) {
     var values = rawValues.filter(function (v) {
       return v != null && !isNaN(v) && isFinite(v) && v >= 0;
@@ -169,6 +187,7 @@
     var currentUserId = p.currentUserId;
     var currentUser = p.currentUser;
     var myRankSupremo = p.myRankSupremo;
+    var viewerIsAdmin = p.viewerIsAdmin === true;
     var titleOverride = p.titleOverride;
     var pillLabelOverride = p.pillLabelOverride;
     var chartSubNoteOverride = p.chartSubNoteOverride;
@@ -222,16 +241,23 @@
       [entries, byCategory, activeCategory]
     );
 
+    var cohortForHistogram = useMemo(
+      function () {
+        return filterCohortForPublicHistogram(cohort, currentUserId, viewerIsAdmin);
+      },
+      [cohort, currentUserId, viewerIsAdmin]
+    );
+
     var values = useMemo(
       function () {
-        return cohort.map(function (e) {
+        return cohortForHistogram.map(function (e) {
           if (isTss) return Number(e.totalTss);
           if (isKmMode) return Number(e.totalKm);
           if (isGcMode) return Number(e.gcScore);
           return Number(e.wkg);
         });
       },
-      [cohort, isTss, isKmMode, isGcMode]
+      [cohortForHistogram, isTss, isKmMode, isGcMode]
     );
 
     var binPack = useMemo(
@@ -245,7 +271,7 @@
       function () {
         return nextGradientId();
       },
-      [activeCategory, duration, cohort.length]
+      [activeCategory, duration, cohortForHistogram.length]
     );
 
     var chartRows = binPack.rows;
