@@ -2858,7 +2858,6 @@ function OpenRidingCalendarMain(props) {
   var filterPageOpen = !!props.filterPageOpen;
   var onOpenFilterPage = props.onOpenFilterPage || function () {};
   var onCloseFilterPage = props.onCloseFilterPage || function () {};
-  var onOpenGroups = typeof props.onOpenGroups === 'function' ? props.onOpenGroups : null;
 
   var _m = useState(function () { return new Date(); });
   var viewMonth = _m[0];
@@ -4026,19 +4025,6 @@ function OpenRidingCalendarMain(props) {
           </span>
           </div>
         </section>
-        {compact && onOpenGroups ? (
-          <div className="mt-2">
-            <button
-              type="button"
-              className="w-full rounded-xl border border-violet-400/90 bg-gradient-to-r from-violet-600 to-violet-700 text-white text-sm font-semibold py-2.5 shadow-md hover:from-violet-500 hover:to-violet-600 active:translate-y-px transition"
-              onClick={function () {
-                onOpenGroups();
-              }}
-            >
-              소모임(그룹) 관리
-            </button>
-          </div>
-        ) : null}
         <p className="mt-1.5 ml-1 text-[11px] sm:text-xs text-slate-500 leading-snug">
           * 라이딩 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트 사용
         </p>
@@ -8741,9 +8727,91 @@ function OpenRidingGroupsList(props) {
   var _fab = useState(false);
   var fabLift = _fab[0];
   var setFabLift = _fab[1];
+  var _qName = useState('');
+  var filterGroupName = _qName[0];
+  var setFilterGroupName = _qName[1];
+  var _qOwner = useState('');
+  var filterOwner = _qOwner[0];
+  var setFilterOwner = _qOwner[1];
+  var _owp = useState({});
+  var ownerProfiles = _owp[0];
+  var setOwnerProfiles = _owp[1];
   var isAdmin = openRidingGroupsIsAdminGrade();
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
   var GROUP_ST = gs.GROUP_STATUS || { PENDING: 'PENDING', APPROVED: 'APPROVED' };
+
+  var ownerUidsKey = useMemo(
+    function () {
+      var u = {};
+      rows.forEach(function (g) {
+        var o = String(g.createdBy || '').trim();
+        if (o) u[o] = true;
+      });
+      return Object.keys(u)
+        .sort()
+        .join('\u0000');
+    },
+    [rows]
+  );
+
+  useEffect(
+    function () {
+      if (!ownerUidsKey) {
+        setOwnerProfiles({});
+        return;
+      }
+      var uids = ownerUidsKey.split('\u0000').filter(Boolean);
+      if (typeof window === 'undefined' || typeof window.getUserByUid !== 'function') {
+        setOwnerProfiles({});
+        return;
+      }
+      var cancelled = false;
+      Promise.all(
+        uids.map(function (uid) {
+          return window
+            .getUserByUid(uid)
+            .then(function (row) {
+              return { uid: uid, row: row };
+            })
+            .catch(function () {
+              return { uid: uid, row: null };
+            });
+        })
+      ).then(function (pairs) {
+        if (cancelled) return;
+        var next = {};
+        pairs.forEach(function (p) {
+          next[p.uid] = p.row;
+        });
+        setOwnerProfiles(next);
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [ownerUidsKey]
+  );
+
+  var filteredRows = useMemo(
+    function () {
+      var nq = String(filterGroupName || '')
+        .trim()
+        .toLowerCase();
+      var oq = String(filterOwner || '')
+        .trim()
+        .toLowerCase();
+      return rows.filter(function (g) {
+        if (nq && String(g.name || '').toLowerCase().indexOf(nq) < 0) return false;
+        if (!oq) return true;
+        var ouid = String(g.createdBy || '').toLowerCase();
+        if (ouid.indexOf(oq) >= 0) return true;
+        var op = ownerProfiles[String(g.createdBy || '')];
+        var oname = op ? openRidingFirestoreUserDisplayName(op).toLowerCase() : '';
+        return oname.indexOf(oq) >= 0;
+      });
+    },
+    [rows, filterGroupName, filterOwner, ownerProfiles]
+  );
 
   useEffect(
     function () {
@@ -8784,16 +8852,41 @@ function OpenRidingGroupsList(props) {
 
   return (
     <div className="relative w-full max-w-lg mx-auto pb-4 text-left">
-      <p className="text-xs text-slate-500 mb-3 leading-snug m-0">
-        승인된 소모임만 모든 라이더에게 표시됩니다. 새로 만든 그룹은 관리자 승인 후 목록에 노출됩니다.
-      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+        <div>
+          <label className="text-[11px] text-slate-500 block mb-1">그룹명 검색</label>
+          <input
+            type="search"
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            placeholder="그룹명"
+            value={filterGroupName}
+            onChange={function (e) {
+              setFilterGroupName(e.target.value);
+            }}
+          />
+        </div>
+        <div>
+          <label className="text-[11px] text-slate-500 block mb-1">방장 검색</label>
+          <input
+            type="search"
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            placeholder="이름 또는 UID"
+            value={filterOwner}
+            onChange={function (e) {
+              setFilterOwner(e.target.value);
+            }}
+          />
+        </div>
+      </div>
       <ul className="space-y-2">
         {!firestore ? (
           <li className="text-sm text-slate-500">연결 오류</li>
-        ) : rows.length === 0 ? (
-          <li className="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white px-3 py-6 text-center">표시할 그룹이 없습니다.</li>
+        ) : filteredRows.length === 0 ? (
+          <li className="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white px-3 py-6 text-center">
+            {rows.length === 0 ? '표시할 그룹이 없습니다.' : '검색 결과가 없습니다.'}
+          </li>
         ) : (
-          rows.map(function (g) {
+          filteredRows.map(function (g) {
             var st = String(g.status || '');
             var pending = st === GROUP_ST.PENDING;
             var name = g.name != null ? String(g.name) : '';
@@ -9263,6 +9356,8 @@ function openRidingFirestoreUserProfileImageUrl(userRow) {
   return String(u || '').trim();
 }
 
+var OPEN_RIDING_RANK_MEDAL_SRC = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
+
 /** 소모임 상세 + 멤버 + 가입·승인 */
 function OpenRidingGroupDetailView(props) {
   var firestore = props.firestore;
@@ -9303,21 +9398,32 @@ function OpenRidingGroupDetailView(props) {
   var _terr = useState('');
   var transferErr = _terr[0];
   var setTransferErr = _terr[1];
+  var _jr = useState([]);
+  var joinRequests = _jr[0];
+  var setJoinRequests = _jr[1];
+  var _mjr = useState(null);
+  var myJoinRequest = _mjr[0];
+  var setMyJoinRequest = _mjr[1];
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
   var GROUP_ST = gs.GROUP_STATUS || { PENDING: 'PENDING', APPROVED: 'APPROVED', REJECTED: 'REJECTED' };
   var isAdmin = openRidingGroupsIsAdminGrade();
 
   var memberUidsKey = useMemo(
     function () {
-      return members
-        .map(function (m) {
-          return String(m.userId || '');
-        })
-        .filter(Boolean)
+      var set = {};
+      members.forEach(function (m) {
+        var u = String(m.userId || '').trim();
+        if (u) set[u] = true;
+      });
+      joinRequests.forEach(function (j) {
+        var u = String(j.userId || '').trim();
+        if (u) set[u] = true;
+      });
+      return Object.keys(set)
         .sort()
         .join('\u0000');
     },
-    [members]
+    [members, joinRequests]
   );
 
   var memberUidSet = useMemo(
@@ -9393,6 +9499,42 @@ function OpenRidingGroupDetailView(props) {
     [firestore, groupId]
   );
 
+  var grpJoinReqSig = grp ? String(grp.status || '') + ':' + String(grp.createdBy || '') : '';
+
+  useEffect(
+    function () {
+      if (!firestore || !groupId || typeof gs.subscribeRidingGroupJoinRequests !== 'function') return undefined;
+      if (!grp || String(grp.status || '') !== GROUP_ST.APPROVED) {
+        setJoinRequests([]);
+        return undefined;
+      }
+      if (!(String(grp.createdBy || '') === String(userId) || isAdmin)) {
+        setJoinRequests([]);
+        return undefined;
+      }
+      return gs.subscribeRidingGroupJoinRequests(firestore, groupId, function (list) {
+        setJoinRequests(Array.isArray(list) ? list : []);
+      });
+    },
+    [firestore, groupId, grpJoinReqSig, userId, isAdmin]
+  );
+
+  useEffect(
+    function () {
+      if (!firestore || !groupId || !userId || typeof gs.subscribeRidingGroupMyJoinRequest !== 'function') {
+        return undefined;
+      }
+      if (!grp || String(grp.status || '') !== GROUP_ST.APPROVED) {
+        setMyJoinRequest(null);
+        return undefined;
+      }
+      return gs.subscribeRidingGroupMyJoinRequest(firestore, groupId, userId, function (row) {
+        setMyJoinRequest(row);
+      });
+    },
+    [firestore, groupId, userId, grpJoinReqSig]
+  );
+
   var isMember = useMemo(
     function () {
       var uid = String(userId);
@@ -9421,6 +9563,25 @@ function OpenRidingGroupDetailView(props) {
     var u = row ? openRidingFirestoreUserProfileImageUrl(row) : '';
     if (u) return u;
     var mimg = m.profileImageUrl != null ? String(m.profileImageUrl).trim() : '';
+    return mimg || '';
+  }
+
+  function displayNameForJoinRequest(j) {
+    var uid = String(j.userId || '');
+    var row = memberProfiles[uid];
+    var fromProf = row ? openRidingFirestoreUserDisplayName(row) : '';
+    if (fromProf) return fromProf;
+    var n = j.displayName != null ? String(j.displayName).trim() : '';
+    if (n) return n;
+    return uid.length > 4 ? '라이더 …' + uid.slice(-4) : '라이더';
+  }
+
+  function photoForJoinRequest(j) {
+    var uid = String(j.userId || '');
+    var row = memberProfiles[uid];
+    var u = row ? openRidingFirestoreUserProfileImageUrl(row) : '';
+    if (u) return u;
+    var mimg = j.profileImageUrl != null ? String(j.profileImageUrl).trim() : '';
     return mimg || '';
   }
 
@@ -9559,6 +9720,36 @@ function OpenRidingGroupDetailView(props) {
       });
   }
 
+  function doApproveJoinRequest(applicantUid) {
+    if (!firestore || !userId || !groupId || !applicantUid) return;
+    if (typeof gs.approveRidingGroupJoinRequest !== 'function') return;
+    if (!window.confirm('이 신청을 수락해 멤버로 등록할까요?')) return;
+    setBusy(true);
+    gs
+      .approveRidingGroupJoinRequest(firestore, String(userId), String(groupId), String(applicantUid))
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '수락 처리에 실패했습니다.');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
+  function doRejectJoinRequest(applicantUid) {
+    if (!firestore || !userId || !groupId || !applicantUid) return;
+    if (typeof gs.rejectRidingGroupJoinRequest !== 'function') return;
+    if (!window.confirm('이 가입 신청을 거절하고 목록에서 삭제할까요?')) return;
+    setBusy(true);
+    gs
+      .rejectRidingGroupJoinRequest(firestore, String(userId), String(groupId), String(applicantUid))
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '거절 처리에 실패했습니다.');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
   function doApprove() {
     if (!firestore || !userId || !groupId) return;
     if (!window.confirm('이 그룹을 승인하고 목록에 공개할까요?')) return;
@@ -9623,9 +9814,10 @@ function OpenRidingGroupDetailView(props) {
   var approved = st === GROUP_ST.APPROVED;
   var pending = st === GROUP_ST.PENDING;
   var regLine = regionLineFromRegions(grp.regions);
+  var canModerateJoin = approved && (isOwner || isAdmin);
 
   return (
-    <div className="w-full max-w-lg mx-auto space-y-4 pb-28 text-left">
+    <div className="w-full max-w-lg mx-auto space-y-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] text-left">
       <button type="button" className="text-sm font-medium text-violet-700 -ml-0.5 mb-1" onClick={onBack}>
         ← 그룹 목록
       </button>
@@ -9678,79 +9870,168 @@ function OpenRidingGroupDetailView(props) {
         </div>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
+        <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header">
           <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
         </div>
-        <div className="p-2">
+        <div className="stelvio-category-body px-2 sm:px-3 py-1 open-riding-group-member-rank-list">
           {members.length === 0 ? (
             <p className="text-sm text-slate-500 m-0 px-1 py-2">멤버 정보를 불러오는 중입니다.</p>
           ) : (
-            <table className="w-full table-fixed text-sm leading-snug border-collapse">
-              <thead>
-                <tr className="text-slate-600 bg-violet-50 border-b border-slate-100">
-                  <th className="py-2 pl-2 pr-1 font-medium w-[12%] text-left">#</th>
-                  <th className="py-2 px-1 font-medium w-[18%] text-left"> </th>
-                  <th className="py-2 px-1 font-medium w-[50%] text-left">이름</th>
-                  <th className="py-2 pr-2 pl-1 font-medium w-[20%] text-center">탈퇴·이관</th>
-                </tr>
-              </thead>
-              <tbody>
-                {members.map(function (m, idx) {
-                  var uid = String(m.userId || '');
-                  var self = uid && uid === String(userId);
-                  var isRowOwner = String(m.role || '') === 'owner';
-                  var canLeave = self && !isRowOwner;
-                  var canTransferOwnership = self && isRowOwner && !!isOwner;
-                  return (
-                    <tr key={uid || idx} className="border-b border-slate-50 last:border-b-0 align-middle">
-                      <td className="py-2 pl-2 pr-1 text-slate-600 tabular-nums">{idx + 1}</td>
-                      <td className="py-2 px-1">
-                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full ring-2 ring-violet-300/80 overflow-hidden bg-gradient-to-br from-violet-100 to-slate-100 shadow-sm">
-                          {photoForMember(m) ? (
-                            <img src={photoForMember(m)} alt="" className="h-full w-full object-cover" decoding="async" />
-                          ) : (
-                            <span className="text-[10px] font-bold text-violet-800">{displayNameForMember(m).charAt(0) || '·'}</span>
-                          )}
+            <div className="space-y-0">
+              {members.map(function (m, idx) {
+                var uid = String(m.userId || '');
+                var self = uid && uid === String(userId);
+                var isRowOwner = String(m.role || '') === 'owner';
+                var canLeave = self && !isRowOwner;
+                var canTransferOwnership = self && isRowOwner && !!isOwner;
+                var rank = idx + 1;
+                var nm = displayNameForMember(m);
+                var photo = photoForMember(m);
+                var initial = nm.charAt(0) || '·';
+                return (
+                  <div
+                    key={uid || idx}
+                    className={
+                      'stelvio-rank-row open-riding-group-rank-row' + (self ? ' stelvio-rank-current' : '')
+                    }
+                  >
+                    <span className="stelvio-rank-crown">
+                      {rank <= 3 ? (
+                        <img
+                          src={OPEN_RIDING_RANK_MEDAL_SRC[rank - 1]}
+                          alt=""
+                          width={24}
+                          height={24}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : null}
+                    </span>
+                    <span className="stelvio-rank-pos">{rank}위</span>
+                    <span className="stelvio-rank-name">
+                      {photo ? (
+                        <span className="inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100">
+                          <img className="stelvio-rank-avatar-img" src={photo} alt="" decoding="async" />
                         </span>
-                      </td>
-                      <td className="py-2 px-1 font-medium text-slate-800 truncate" title={displayNameForMember(m)}>
-                        {displayNameForMember(m)}
+                      ) : (
+                        <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
+                          {initial}
+                        </span>
+                      )}
+                      <span className="stelvio-rank-name-text truncate" title={nm}>
+                        {nm}
                         {isRowOwner ? (
                           <span className="ml-1 text-[10px] font-semibold text-violet-600">방장</span>
                         ) : null}
-                      </td>
-                      <td className="py-2 pr-2 pl-1 text-center">
-                        {canTransferOwnership ? (
-                          <button
-                            type="button"
-                            className="text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
-                            disabled={busy}
-                            onClick={openTransferModal}
-                          >
-                            이관
-                          </button>
-                        ) : canLeave ? (
-                          <button
-                            type="button"
-                            className="text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
-                            disabled={busy}
-                            onClick={doLeave}
-                          >
-                            탈퇴
-                          </button>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </span>
+                    </span>
+                    <span className="stelvio-rank-wkg open-riding-group-rank-actions">
+                      {canTransferOwnership ? (
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
+                          disabled={busy}
+                          onClick={openTransferModal}
+                        >
+                          이관
+                        </button>
+                      ) : canLeave ? (
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+                          disabled={busy}
+                          onClick={doLeave}
+                        >
+                          탈퇴
+                        </button>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </section>
+
+      {canModerateJoin ? (
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
+          <div className="bg-amber-50 border-b border-amber-200/70 px-3 py-2.5 stelvio-category-header">
+            <h3 className="text-sm font-semibold text-slate-800 m-0">가입 신청</h3>
+          </div>
+          <div className="stelvio-category-body px-2 sm:px-3 py-1 open-riding-group-member-rank-list">
+            {joinRequests.length === 0 ? (
+              <p className="text-sm text-slate-500 m-0 px-1 py-3 text-center">대기 중인 가입 신청이 없습니다.</p>
+            ) : (
+              <div className="space-y-0">
+                {joinRequests.map(function (j, idx) {
+                  var uid = String(j.userId || '');
+                  var rank = idx + 1;
+                  var nm = displayNameForJoinRequest(j);
+                  var photo = photoForJoinRequest(j);
+                  var initial = nm.charAt(0) || '·';
+                  return (
+                    <div key={uid || idx} className="stelvio-rank-row open-riding-group-rank-row">
+                      <span className="stelvio-rank-crown">
+                        {rank <= 3 ? (
+                          <img
+                            src={OPEN_RIDING_RANK_MEDAL_SRC[rank - 1]}
+                            alt=""
+                            width={24}
+                            height={24}
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : null}
+                      </span>
+                      <span className="stelvio-rank-pos">{rank}위</span>
+                      <span className="stelvio-rank-name">
+                        {photo ? (
+                          <span className="inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100">
+                            <img className="stelvio-rank-avatar-img" src={photo} alt="" decoding="async" />
+                          </span>
+                        ) : (
+                          <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-amber-50 to-slate-100 text-[10px] font-bold text-amber-900">
+                            {initial}
+                          </span>
+                        )}
+                        <span className="stelvio-rank-name-text truncate" title={nm}>
+                          {nm}
+                        </span>
+                      </span>
+                      <span className="stelvio-rank-wkg open-riding-group-rank-actions flex flex-col sm:flex-row gap-1 items-end sm:items-center justify-end shrink-0">
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
+                          disabled={busy}
+                          onClick={function () {
+                            doApproveJoinRequest(uid);
+                          }}
+                        >
+                          수락
+                        </button>
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                          disabled={busy}
+                          onClick={function () {
+                            doRejectJoinRequest(uid);
+                          }}
+                        >
+                          거절
+                        </button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {transferOpen ? (
         <div
@@ -9836,53 +10117,59 @@ function OpenRidingGroupDetailView(props) {
         </div>
       ) : null}
 
-      <div className="fixed left-0 right-0 bottom-0 z-[99975] px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
-        <div className="max-w-lg mx-auto space-y-2">
-          {approved && !isMember ? (
-            <>
-              {grp.isPublic === false ? (
-                <input
-                  type="password"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="가입 비밀번호"
-                  value={joinPw}
-                  onChange={function (e) {
-                    setJoinPw(e.target.value);
-                  }}
-                />
-              ) : null}
-              <button
-                type="button"
-                className="open-riding-action-btn w-full h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50"
-                disabled={busy}
-                onClick={doJoin}
-              >
-                그룹 가입하기
-              </button>
-            </>
-          ) : null}
-          {pending && isAdmin ? (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="open-riding-action-btn flex-1 h-11 rounded-xl border border-emerald-500 bg-emerald-600 text-white font-medium"
-                disabled={busy}
-                onClick={doApprove}
-              >
-                승인
-              </button>
-              <button
-                type="button"
-                className="open-riding-action-btn flex-1 h-11 rounded-xl border border-red-300 bg-white text-red-700 font-medium"
-                disabled={busy}
-                onClick={doReject}
-              >
-                반려
-              </button>
-            </div>
-          ) : null}
+      {(approved && !isMember) || (pending && isAdmin) ? (
+        <div className="open-riding-bottom-actions fixed left-0 right-0 z-[99975] px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px] open-riding-group-detail-footer">
+          <div className="max-w-lg mx-auto w-full space-y-2 box-border">
+            {approved && !isMember ? (
+              myJoinRequest ? (
+                <p className="text-sm text-center text-slate-600 m-0 py-2 font-medium">가입 신청이 접수되었습니다. 방장 승인을 기다려 주세요.</p>
+              ) : (
+                <>
+                  {grp.isPublic === false ? (
+                    <input
+                      type="password"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm box-border"
+                      placeholder="가입 비밀번호"
+                      value={joinPw}
+                      onChange={function (e) {
+                        setJoinPw(e.target.value);
+                      }}
+                    />
+                  ) : null}
+                  <button
+                    type="button"
+                    className="open-riding-action-btn w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50 text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-3 box-border"
+                    disabled={busy}
+                    onClick={doJoin}
+                  >
+                    그룹 가입하기
+                  </button>
+                </>
+              )
+            ) : null}
+            {pending && isAdmin ? (
+              <div className="flex gap-2 w-full box-border">
+                <button
+                  type="button"
+                  className="open-riding-action-btn flex-1 min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-emerald-500 bg-emerald-600 text-white font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 box-border"
+                  disabled={busy}
+                  onClick={doApprove}
+                >
+                  승인
+                </button>
+                <button
+                  type="button"
+                  className="open-riding-action-btn flex-1 min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-red-300 bg-white text-red-700 font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 box-border"
+                  disabled={busy}
+                  onClick={doReject}
+                >
+                  반려
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -10122,11 +10409,6 @@ function OpenRidingRoomApp(props) {
           setDetailRideId(id);
           setView('detail');
         }}
-        onOpenGroups={function () {
-          setDetailRideId(null);
-          setDetailGroupId(null);
-          setView('groups');
-        }}
       />
     );
   }
@@ -10147,6 +10429,7 @@ function OpenRidingRoomApp(props) {
       <div
         className={
           'open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 w-full box-border ' +
+          (view === 'groupDetail' && detailGroupId ? 'open-riding-app-body--group-detail-no-scrollbar ' : '') +
           ((view === 'detail' && detailRideId) || (view === 'groupDetail' && detailGroupId)
             ? 'open-riding-app-body--riding-detail '
             : 'pt-2 ') +

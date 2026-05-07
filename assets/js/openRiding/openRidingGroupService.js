@@ -27,6 +27,9 @@ import {
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
 
+/** 승인된 그룹 가입 신청 큐 — 문서 ID = 신청자 UID */
+export const RIDING_GROUP_JOIN_REQUESTS_SUB = 'joinRequests';
+
 export const GROUP_STATUS = {
   PENDING: 'PENDING',
   APPROVED: 'APPROVED',
@@ -166,6 +169,45 @@ export function subscribeRidingGroupMembers(db, groupId, cb) {
 
 /**
  * @param {import('firebase/firestore').Firestore} db
+ * @param {string} groupId
+ * @param {function(any[]): void} cb
+ */
+export function subscribeRidingGroupJoinRequests(db, groupId, cb) {
+  if (!db || !groupId || typeof cb !== 'function') return function () {};
+  var id = String(groupId).trim();
+  var ref = collection(db, RIDING_GROUP_COLLECTION, id, RIDING_GROUP_JOIN_REQUESTS_SUB);
+  var qy = query(ref, orderBy('requestedAt', 'asc'));
+  return onSnapshot(qy, function (snap) {
+    var rows = [];
+    snap.forEach(function (d) {
+      rows.push({ userId: d.id, ...d.data() });
+    });
+    cb(rows);
+  });
+}
+
+/**
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} groupId
+ * @param {string} uid
+ * @param {function(any|null): void} cb
+ */
+export function subscribeRidingGroupMyJoinRequest(db, groupId, uid, cb) {
+  if (!db || !groupId || !uid || typeof cb !== 'function') return function () {};
+  var id = String(groupId).trim();
+  var u = String(uid).trim();
+  var ref = doc(db, RIDING_GROUP_COLLECTION, id, RIDING_GROUP_JOIN_REQUESTS_SUB, u);
+  return onSnapshot(ref, function (snap) {
+    if (!snap.exists()) {
+      cb(null);
+      return;
+    }
+    cb({ userId: snap.id, ...snap.data() });
+  });
+}
+
+/**
+ * @param {import('firebase/firestore').Firestore} db
  * @param {string} uid
  * @param {{ name: string; regions: string[]; intro: string; isPublic: boolean; joinPassword?: string; photoUrl?: string|null }} payload
  */
@@ -265,6 +307,7 @@ export async function setRidingGroupStatusByAdmin(db, adminUid, groupId, nextSta
 }
 
 /**
+ * 승인된 그룹 가입 신청(방장·관리자 수락 후 멤버 등록)
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} uid
  * @param {string} groupId
@@ -273,7 +316,9 @@ export async function setRidingGroupStatusByAdmin(db, adminUid, groupId, nextSta
  */
 export async function joinRidingGroup(db, uid, groupId, passwordGuess, profileHints) {
   if (!db || !uid || !groupId) throw new Error('로그인이 필요합니다.');
-  var ref = doc(db, RIDING_GROUP_COLLECTION, String(groupId).trim());
+  var gid = String(groupId).trim();
+  var u = String(uid).trim();
+  var ref = doc(db, RIDING_GROUP_COLLECTION, gid);
   var snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
   var d = snap.data() || {};
@@ -282,22 +327,76 @@ export async function joinRidingGroup(db, uid, groupId, passwordGuess, profileHi
     var need = String(d.joinPassword || '');
     if (!need || String(passwordGuess || '') !== need) throw new Error('비밀번호가 일치하지 않습니다.');
   }
-  var memRef = doc(db, RIDING_GROUP_COLLECTION, String(groupId).trim(), 'members', String(uid).trim());
+  var memRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', u);
   var ex = await getDoc(memRef);
-  if (ex.exists()) return;
-  var batch = writeBatch(db);
+  if (ex.exists()) throw new Error('이미 이 그룹 멤버입니다.');
+  var jRef = doc(db, RIDING_GROUP_COLLECTION, gid, RIDING_GROUP_JOIN_REQUESTS_SUB, u);
+  var jEx = await getDoc(jRef);
+  if (jEx.exists()) throw new Error('이미 가입 신청이 접수되었습니다.');
   var ph = profileHints || {};
-  batch.set(memRef, {
-    joinedAt: serverTimestamp(),
+  await setDoc(jRef, {
+    requestedAt: serverTimestamp(),
     displayName: ph.displayName != null ? String(ph.displayName) : '',
-    profileImageUrl: ph.profileImageUrl != null ? ph.profileImageUrl : null,
-    role: 'member'
+    profileImageUrl: ph.profileImageUrl != null ? ph.profileImageUrl : null
   });
-  batch.update(ref, {
-    memberCount: increment(1),
-    updatedAt: serverTimestamp()
+}
+
+/**
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} moderatorUid — 방장 또는 grade=1 (규칙과 일치해야 함)
+ * @param {string} groupId
+ * @param {string} applicantUid
+ */
+export async function approveRidingGroupJoinRequest(db, moderatorUid, groupId, applicantUid) {
+  if (!db || !moderatorUid || !groupId || !applicantUid) throw new Error('요청이 올바르지 않습니다.');
+  var gid = String(groupId).trim();
+  var app = String(applicantUid).trim();
+  var gRef = doc(db, RIDING_GROUP_COLLECTION, gid);
+  var jRef = doc(db, RIDING_GROUP_COLLECTION, gid, RIDING_GROUP_JOIN_REQUESTS_SUB, app);
+  var mRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', app);
+  await runTransaction(db, function (transaction) {
+    return transaction.get(gRef).then(function (gSnap) {
+      if (!gSnap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
+      var gd = gSnap.data() || {};
+      if (String(gd.status || '') !== GROUP_STATUS.APPROVED) throw new Error('이 그룹은 가입을 수락할 수 없습니다.');
+      return transaction.get(jRef).then(function (jSnap) {
+        if (!jSnap.exists()) throw new Error('가입 신청을 찾을 수 없습니다.');
+        return transaction.get(mRef).then(function (mSnap) {
+          if (mSnap.exists()) throw new Error('이미 멤버입니다.');
+          var jd = jSnap.data() || {};
+          transaction.delete(jRef);
+          transaction.set(mRef, {
+            joinedAt: serverTimestamp(),
+            displayName: jd.displayName != null ? String(jd.displayName) : '',
+            profileImageUrl: jd.profileImageUrl != null ? jd.profileImageUrl : null,
+            role: 'member'
+          });
+          transaction.update(gRef, {
+            memberCount: increment(1),
+            updatedAt: serverTimestamp()
+          });
+        });
+      });
+    });
   });
-  await batch.commit();
+}
+
+/**
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} moderatorUid
+ * @param {string} groupId
+ * @param {string} applicantUid
+ */
+export async function rejectRidingGroupJoinRequest(db, moderatorUid, groupId, applicantUid) {
+  if (!db || !moderatorUid || !groupId || !applicantUid) throw new Error('요청이 올바르지 않습니다.');
+  var jRef = doc(
+    db,
+    RIDING_GROUP_COLLECTION,
+    String(groupId).trim(),
+    RIDING_GROUP_JOIN_REQUESTS_SUB,
+    String(applicantUid).trim()
+  );
+  await deleteDoc(jRef);
 }
 
 /**
@@ -403,14 +502,19 @@ export async function fetchRidingGroupById(db, groupId) {
 if (typeof window !== 'undefined') {
   window.openRidingGroupService = {
     RIDING_GROUP_COLLECTION,
+    RIDING_GROUP_JOIN_REQUESTS_SUB,
     GROUP_STATUS,
     subscribeRidingGroups,
     subscribeRidingGroupDetail,
     subscribeRidingGroupMembers,
+    subscribeRidingGroupJoinRequests,
+    subscribeRidingGroupMyJoinRequest,
     createRidingGroupPending,
     updateRidingGroupByOwner,
     setRidingGroupStatusByAdmin,
     joinRidingGroup,
+    approveRidingGroupJoinRequest,
+    rejectRidingGroupJoinRequest,
     leaveRidingGroup,
     transferRidingGroupOwnership,
     fetchRidingGroupById,
