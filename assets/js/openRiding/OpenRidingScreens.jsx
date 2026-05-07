@@ -2316,6 +2316,44 @@ function openRidingGlassNavBtnClass(isActive) {
   );
 }
 
+/** 라이딩 모임 하단 네비 가로 스크롤 — 좌·우 더 스크롤 가능 힌트(랭킹 허브 네비와 동일 규칙) */
+function openRidingMoimNavUpdateScrollEdgeHints(root) {
+  if (!root) return;
+  var sc = root.querySelector('.global-hub-glass-nav-scroll');
+  var left = root.querySelector('.global-hub-glass-nav-edge--left');
+  var right = root.querySelector('.global-hub-glass-nav-edge--right');
+  if (!sc || !left || !right) return;
+  var epsilon = 3;
+  var maxScroll = sc.scrollWidth - sc.clientWidth;
+  if (maxScroll <= epsilon) {
+    left.classList.remove('global-hub-glass-nav-edge--visible');
+    right.classList.remove('global-hub-glass-nav-edge--visible');
+    return;
+  }
+  if (sc.scrollLeft <= epsilon) left.classList.remove('global-hub-glass-nav-edge--visible');
+  else left.classList.add('global-hub-glass-nav-edge--visible');
+  if (sc.scrollLeft >= maxScroll - epsilon) right.classList.remove('global-hub-glass-nav-edge--visible');
+  else right.classList.add('global-hub-glass-nav-edge--visible');
+}
+
+function openRidingMoimNavScrollActiveIntoView(root, activeBtn) {
+  if (!root || !activeBtn) return;
+  var sc = root.querySelector('.global-hub-glass-nav-scroll');
+  if (!sc) return;
+  requestAnimationFrame(function () {
+    try {
+      var br = activeBtn.getBoundingClientRect();
+      var sr = sc.getBoundingClientRect();
+      var btnCx = br.left + br.width / 2;
+      var scCx = sr.left + sr.width / 2;
+      var delta = btnCx - scCx;
+      var maxScroll = Math.max(0, sc.scrollWidth - sc.clientWidth);
+      sc.scrollLeft = Math.max(0, Math.min(sc.scrollLeft + delta, maxScroll));
+      openRidingMoimNavUpdateScrollEdgeHints(root);
+    } catch (err) {}
+  });
+}
+
 /** iOS 휴대폰(Android 제외). 포털 네비 하단 추가 오프셋·본문 패딩 보정용 */
 function openRidingIsIOSPhoneUA() {
   if (typeof navigator === 'undefined') return false;
@@ -2334,6 +2372,9 @@ function OpenRidingGlassNavSlot(p) {
 function OpenRidingGlassNavPortal(p) {
   var innerContent = p.innerContent;
   var ariaLabel = p.ariaLabel || '하단 메뉴';
+  var enableScrollStrip = !!p.enableScrollStrip;
+  var scrollSyncKey = p.scrollSyncKey;
+  var navRef = useRef(null);
 
   useEffect(
     function () {
@@ -2347,13 +2388,131 @@ function OpenRidingGlassNavPortal(p) {
     []
   );
 
+  useEffect(
+    function () {
+      if (!enableScrollStrip) return undefined;
+      var root = navRef.current;
+      if (!root) return undefined;
+      if (root.getAttribute('data-open-riding-scroll-hint') === '1') return undefined;
+      root.setAttribute('data-open-riding-scroll-hint', '1');
+      var sc = root.querySelector('.global-hub-glass-nav-scroll');
+      if (!sc) return undefined;
+      var onScroll = function () {
+        openRidingMoimNavUpdateScrollEdgeHints(root);
+      };
+      sc.addEventListener('scroll', onScroll, { passive: true });
+      var onResize = function () {
+        openRidingMoimNavUpdateScrollEdgeHints(root);
+      };
+      window.addEventListener('resize', onResize);
+      var ro = null;
+      if (typeof ResizeObserver !== 'undefined') {
+        try {
+          ro = new ResizeObserver(function () {
+            openRidingMoimNavUpdateScrollEdgeHints(root);
+          });
+          ro.observe(sc);
+        } catch (eRo) {}
+      }
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          openRidingMoimNavUpdateScrollEdgeHints(root);
+        });
+      });
+      return function () {
+        sc.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onResize);
+        if (ro) {
+          try {
+            ro.disconnect();
+          } catch (eD) {}
+        }
+        root.removeAttribute('data-open-riding-scroll-hint');
+      };
+    },
+    [enableScrollStrip]
+  );
+
+  useEffect(
+    function () {
+      if (!enableScrollStrip) return;
+      var root = navRef.current;
+      if (!root) return;
+      var activeBtn = root.querySelector('.open-riding-bottom-glass-nav__btn--active');
+      openRidingMoimNavScrollActiveIntoView(root, activeBtn);
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          openRidingMoimNavUpdateScrollEdgeHints(root);
+        });
+      });
+    },
+    [enableScrollStrip, scrollSyncKey]
+  );
+
+  var edgeLeft = (
+    <span className="global-hub-glass-nav-edge global-hub-glass-nav-edge--left" aria-hidden="true">
+      <span className="global-hub-glass-nav-edge__blob">
+        <svg
+          className="global-hub-glass-nav-edge__svg"
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      </span>
+    </span>
+  );
+  var edgeRight = (
+    <span className="global-hub-glass-nav-edge global-hub-glass-nav-edge--right" aria-hidden="true">
+      <span className="global-hub-glass-nav-edge__blob">
+        <svg
+          className="global-hub-glass-nav-edge__svg"
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      </span>
+    </span>
+  );
+
+  var surfaceInner = enableScrollStrip ? (
+    <div className="global-hub-glass-nav-scroll-wrap">
+      <div className="global-hub-glass-nav-scroll">
+        <div className="open-riding-bottom-glass-nav__inner global-hub-glass-nav-inner global-hub-glass-nav-inner--scroll">{innerContent}</div>
+      </div>
+      {edgeLeft}
+      {edgeRight}
+    </div>
+  ) : (
+    <div className="open-riding-bottom-glass-nav__inner">{innerContent}</div>
+  );
+
   var navEl = (
-    <nav id="openRidingBottomGlassNavRoot" className="open-riding-bottom-glass-nav" role="navigation" aria-label={ariaLabel}>
+    <nav
+      ref={navRef}
+      id="openRidingBottomGlassNavRoot"
+      className={'open-riding-bottom-glass-nav' + (enableScrollStrip ? ' open-riding-moim-glass-nav--scroll' : '')}
+      role="navigation"
+      aria-label={ariaLabel}
+    >
       <div className="open-riding-bottom-glass-nav__pill">
         <div className="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true" />
-        <div className="open-riding-bottom-glass-nav__pill-surface">
-          <div className="open-riding-bottom-glass-nav__inner">{innerContent}</div>
-        </div>
+        <div className="open-riding-bottom-glass-nav__pill-surface">{surfaceInner}</div>
       </div>
     </nav>
   );
@@ -2365,19 +2524,21 @@ function OpenRidingGlassNavPortal(p) {
 }
 
 /**
- * 라이딩 모임 하단 네비: 항상 홈·모임·맞춤·주최·친구 (5슬롯)
+ * 라이딩 모임 하단 네비: 홈·모임·주최·그룹·친구·맞춤 (가로 스크롤 + 허브와 동일 좌우 힌트)
  */
 function OpenRidingBottomGlassNav(props) {
   var nv = props.navVariant || 'main';
   var navVariant =
-    nv === 'filter' || nv === 'create' || nv === 'friends' ? nv : 'main';
+    nv === 'filter' || nv === 'create' || nv === 'friends' || nv === 'groups' ? nv : 'main';
   var moimActive = navVariant === 'main';
   var filterActive = navVariant === 'filter';
   var createActive = navVariant === 'create';
+  var groupsActive = navVariant === 'groups';
   var onHome = props.onHome || function () {};
   var onMoim = props.onMoim || function () {};
   var onFilter = props.onFilter || function () {};
   var onCreate = props.onCreate || function () {};
+  var onGroups = props.onGroups || function () {};
   var onFriends = props.onFriends || function () {};
   var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
   var userId = props.userId || '';
@@ -2465,12 +2626,6 @@ function OpenRidingBottomGlassNav(props) {
         </button>
       </OpenRidingGlassNavSlot>
       <OpenRidingGlassNavSlot>
-        <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined} aria-label="맞춤 필터">
-          {iconFilter()}
-          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-        </button>
-      </OpenRidingGlassNavSlot>
-      <OpenRidingGlassNavSlot>
         <button
           type="button"
           className={openRidingGlassNavBtnClass(createActive)}
@@ -2482,11 +2637,49 @@ function OpenRidingBottomGlassNav(props) {
           <span className="open-riding-bottom-glass-nav__label">주최</span>
         </button>
       </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(groupsActive)}
+          onClick={onGroups}
+          aria-current={groupsActive ? 'page' : undefined}
+          aria-label="그룹 목록"
+        >
+          <img
+            src="assets/img/people.png"
+            alt=""
+            width={20}
+            height={20}
+            className="open-riding-bottom-glass-nav__friend-img block object-contain"
+            decoding="async"
+            onError={function (e) {
+              e.currentTarget.src = 'assets/img/user.png';
+              e.currentTarget.onerror = function () {
+                e.currentTarget.style.display = 'none';
+              };
+            }}
+          />
+          <span className="open-riding-bottom-glass-nav__label">그룹</span>
+        </button>
+      </OpenRidingGlassNavSlot>
       {renderFriendsButton(friendsActive)}
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined} aria-label="맞춤 필터">
+          {iconFilter()}
+          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
+        </button>
+      </OpenRidingGlassNavSlot>
     </>
   );
 
-  return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 모임 하단 메뉴" />;
+  return (
+    <OpenRidingGlassNavPortal
+      innerContent={innerContent}
+      ariaLabel="라이딩 모임 하단 메뉴"
+      enableScrollStrip={true}
+      scrollSyncKey={navVariant}
+    />
+  );
 }
 
 /** 상세 화면 하단: 홈·모임·수정·폭파·삭제 (기존 툴바 아이콘 재사용) */
@@ -9706,7 +9899,7 @@ function OpenRidingRoomApp(props) {
                   : view === 'friends'
                     ? 'friends'
                     : view === 'groups' || view === 'groupCreate' || view === 'groupEdit'
-                      ? 'main'
+                      ? 'groups'
                       : 'main'
           }
           onHome={function () {
@@ -9720,9 +9913,16 @@ function OpenRidingRoomApp(props) {
             setView('filter');
           }}
           onCreate={function () {
+            setDetailGroupId(null);
             setView('create');
           }}
+          onGroups={function () {
+            setDetailRideId(null);
+            setDetailGroupId(null);
+            setView('groups');
+          }}
           onFriends={function () {
+            setDetailGroupId(null);
             setView('friends');
           }}
           pendingIncomingCount={pendingIncomingCount}
