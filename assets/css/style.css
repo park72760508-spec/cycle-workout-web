@@ -1956,8 +1956,8 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 }
 
 /*
- * 그룹 목록 FAB: 하단 글래스 네비 토큰 기준 — 네비 바( inner 고정 높이 )의 2배만큼 위로 띄움 + 노치/홈 인디케이터 inset
- * (네비 루트 bottom 과 iOS 폰 보정은 html.open-riding-glass-nav-ios-phone 과 동일 계열)
+ * 그룹 목록 FAB: 맨 위로(globalBackToTopBtn)와 동일 bottom — 우측 20px 여백과 대칭으로 좌측 20px
+ * → body:has(#openRidingRoomScreen.active) .global-back-to-top-btn 과 세로 위치 통일
  */
 #openRidingRoomScreen .open-riding-group-fab {
   pointer-events: auto;
@@ -1966,21 +1966,11 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  left: auto;
-  right: max(16px, env(safe-area-inset-right, 0px));
-  bottom: calc(
-    16px + env(safe-area-inset-bottom, 0px) +
-      (var(--open-riding-glass-nav-inner-fixed-height) * 2)
-  );
+  left: max(20px, env(safe-area-inset-left, 0px));
+  right: auto;
+  bottom: calc(143px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
-  max-width: calc(100vw - max(16px, env(safe-area-inset-left, 0px)) - max(16px, env(safe-area-inset-right, 0px)));
-}
-html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fab {
-  bottom: calc(
-    16px + env(safe-area-inset-bottom, 0px) -
-      (var(--open-riding-glass-nav-inner-fixed-height) * 0.5) +
-      (var(--open-riding-glass-nav-inner-fixed-height) * 2)
-  );
+  max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px)) - max(20px, env(safe-area-inset-right, 0px)));
 }
 
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-action-btn {
