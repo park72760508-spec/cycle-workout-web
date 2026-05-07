@@ -9249,6 +9249,20 @@ function OpenRidingGroupForm(props) {
   );
 }
 
+function openRidingFirestoreUserDisplayName(userRow) {
+  if (!userRow || typeof userRow !== 'object') return '';
+  var n = userRow.name != null ? String(userRow.name).trim() : '';
+  if (n) return n;
+  var d = userRow.displayName != null ? String(userRow.displayName).trim() : '';
+  return d || '';
+}
+
+function openRidingFirestoreUserProfileImageUrl(userRow) {
+  if (!userRow || typeof userRow !== 'object') return '';
+  var u = userRow.profileImageUrl || userRow.photoURL || userRow.avatarUrl || '';
+  return String(u || '').trim();
+}
+
 /** 소모임 상세 + 멤버 + 가입·승인 */
 function OpenRidingGroupDetailView(props) {
   var firestore = props.firestore;
@@ -9271,9 +9285,90 @@ function OpenRidingGroupDetailView(props) {
   var _detailReady = useState(false);
   var detailReady = _detailReady[0];
   var setDetailReady = _detailReady[1];
+  var _mp = useState({});
+  var memberProfiles = _mp[0];
+  var setMemberProfiles = _mp[1];
+  var _to = useState(false);
+  var transferOpen = _to[0];
+  var setTransferOpen = _to[1];
+  var _ts = useState('');
+  var transferSearch = _ts[0];
+  var setTransferSearch = _ts[1];
+  var _tsb = useState(false);
+  var transferSearchBusy = _tsb[0];
+  var setTransferSearchBusy = _tsb[1];
+  var _tcand = useState([]);
+  var transferCandidates = _tcand[0];
+  var setTransferCandidates = _tcand[1];
+  var _terr = useState('');
+  var transferErr = _terr[0];
+  var setTransferErr = _terr[1];
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
   var GROUP_ST = gs.GROUP_STATUS || { PENDING: 'PENDING', APPROVED: 'APPROVED', REJECTED: 'REJECTED' };
   var isAdmin = openRidingGroupsIsAdminGrade();
+
+  var memberUidsKey = useMemo(
+    function () {
+      return members
+        .map(function (m) {
+          return String(m.userId || '');
+        })
+        .filter(Boolean)
+        .sort()
+        .join('\u0000');
+    },
+    [members]
+  );
+
+  var memberUidSet = useMemo(
+    function () {
+      var set = {};
+      members.forEach(function (m) {
+        var u = String(m.userId || '').trim();
+        if (u) set[u] = true;
+      });
+      return set;
+    },
+    [members]
+  );
+
+  useEffect(
+    function () {
+      if (!memberUidsKey) {
+        setMemberProfiles({});
+        return;
+      }
+      var uids = memberUidsKey.split('\u0000').filter(Boolean);
+      if (typeof window === 'undefined' || typeof window.getUserByUid !== 'function') {
+        setMemberProfiles({});
+        return;
+      }
+      var cancelled = false;
+      Promise.all(
+        uids.map(function (uid) {
+          return window
+            .getUserByUid(uid)
+            .then(function (row) {
+              return { uid: uid, row: row };
+            })
+            .catch(function () {
+              return { uid: uid, row: null };
+            });
+        })
+      ).then(function (pairs) {
+        if (cancelled) return;
+        var next = {};
+        pairs.forEach(function (p) {
+          next[p.uid] = p.row;
+        });
+        setMemberProfiles(next);
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [memberUidsKey]
+  );
 
   useEffect(
     function () {
@@ -9311,15 +9406,102 @@ function OpenRidingGroupDetailView(props) {
   var isOwner = grp && String(grp.createdBy || '') === String(userId);
 
   function displayNameForMember(m) {
+    var uid = String(m.userId || '');
+    var row = memberProfiles[uid];
+    var fromProf = row ? openRidingFirestoreUserDisplayName(row) : '';
+    if (fromProf) return fromProf;
     var n = m.displayName != null ? String(m.displayName).trim() : '';
     if (n) return n;
-    var uid = String(m.userId || '');
     return uid.length > 4 ? '라이더 …' + uid.slice(-4) : '라이더';
   }
 
   function photoForMember(m) {
-    var u = m.profileImageUrl != null ? String(m.profileImageUrl).trim() : '';
-    return u || '';
+    var uid = String(m.userId || '');
+    var row = memberProfiles[uid];
+    var u = row ? openRidingFirestoreUserProfileImageUrl(row) : '';
+    if (u) return u;
+    var mimg = m.profileImageUrl != null ? String(m.profileImageUrl).trim() : '';
+    return mimg || '';
+  }
+
+  function maskTransferContact(contact) {
+    var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
+    if (typeof fr.maskContactPrivacy === 'function') {
+      return fr.maskContactPrivacy(contact);
+    }
+    return String(contact || '').trim() ? '****' : '-';
+  }
+
+  function openTransferModal() {
+    setTransferSearch('');
+    setTransferCandidates([]);
+    setTransferErr('');
+    setTransferOpen(true);
+  }
+
+  function runTransferSearch() {
+    var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
+    if (!firestore || typeof fr.searchUsersForFriendRequest !== 'function') {
+      setTransferErr('검색을 사용할 수 없습니다.');
+      return;
+    }
+    var term = String(transferSearch || '').trim();
+    if (!term) {
+      setTransferErr('이름 또는 연락처를 입력해 주세요.');
+      return;
+    }
+    setTransferSearchBusy(true);
+    setTransferErr('');
+    fr
+      .searchUsersForFriendRequest(firestore, term, userId)
+      .then(function (res) {
+        var rows = (res && Array.isArray(res.rows) && res.rows) || [];
+        var my = String(userId);
+        var filtered = rows.filter(function (r) {
+          var u = String(r.uid || '').trim();
+          return u && u !== my && memberUidSet[u];
+        });
+        setTransferCandidates(filtered);
+        if (!filtered.length) {
+          setTransferErr('검색된 회원 중 이 그룹에 속한 다른 멤버가 없습니다.');
+        }
+      })
+      .catch(function (e) {
+        setTransferCandidates([]);
+        setTransferErr(e && e.message ? String(e.message) : '검색 실패');
+      })
+      .finally(function () {
+        setTransferSearchBusy(false);
+      });
+  }
+
+  function confirmTransferToCandidate(c) {
+    if (!c || !c.uid || !firestore || !userId || !groupId) return;
+    if (!memberUidSet[String(c.uid)]) {
+      alert('이 그룹 멤버에게만 방장을 이관할 수 있습니다.');
+      return;
+    }
+    var nm = c.name != null ? String(c.name).trim() : '해당 회원';
+    if (!window.confirm(nm + '님에게 방장 권한을 이관할까요?\n확인 후에는 새 방장만 그룹 정보를 수정할 수 있습니다.')) return;
+    if (typeof gs.transferRidingGroupOwnership !== 'function') {
+      alert('이관 기능을 사용할 수 없습니다. 앱을 새로고침한 뒤 다시 시도해 주세요.');
+      return;
+    }
+    setBusy(true);
+    gs
+      .transferRidingGroupOwnership(firestore, String(userId), String(groupId), String(c.uid))
+      .then(function () {
+        setTransferOpen(false);
+        setTransferCandidates([]);
+        setTransferSearch('');
+        setTransferErr('');
+      })
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '이관에 실패했습니다.');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
   }
 
   function profileHintsForJoin() {
@@ -9510,14 +9692,16 @@ function OpenRidingGroupDetailView(props) {
                   <th className="py-2 pl-2 pr-1 font-medium w-[12%] text-left">#</th>
                   <th className="py-2 px-1 font-medium w-[18%] text-left"> </th>
                   <th className="py-2 px-1 font-medium w-[50%] text-left">이름</th>
-                  <th className="py-2 pr-2 pl-1 font-medium w-[20%] text-center">탈퇴</th>
+                  <th className="py-2 pr-2 pl-1 font-medium w-[20%] text-center">탈퇴·이관</th>
                 </tr>
               </thead>
               <tbody>
                 {members.map(function (m, idx) {
                   var uid = String(m.userId || '');
                   var self = uid && uid === String(userId);
-                  var canLeave = self && !isOwner;
+                  var isRowOwner = String(m.role || '') === 'owner';
+                  var canLeave = self && !isRowOwner;
+                  var canTransferOwnership = self && isRowOwner && !!isOwner;
                   return (
                     <tr key={uid || idx} className="border-b border-slate-50 last:border-b-0 align-middle">
                       <td className="py-2 pl-2 pr-1 text-slate-600 tabular-nums">{idx + 1}</td>
@@ -9526,18 +9710,27 @@ function OpenRidingGroupDetailView(props) {
                           {photoForMember(m) ? (
                             <img src={photoForMember(m)} alt="" className="h-full w-full object-cover" decoding="async" />
                           ) : (
-                            <span className="text-[10px] font-bold text-violet-800">{displayNameForMember(m).charAt(0)}</span>
+                            <span className="text-[10px] font-bold text-violet-800">{displayNameForMember(m).charAt(0) || '·'}</span>
                           )}
                         </span>
                       </td>
                       <td className="py-2 px-1 font-medium text-slate-800 truncate" title={displayNameForMember(m)}>
                         {displayNameForMember(m)}
-                        {String(m.role || '') === 'owner' ? (
+                        {isRowOwner ? (
                           <span className="ml-1 text-[10px] font-semibold text-violet-600">방장</span>
                         ) : null}
                       </td>
                       <td className="py-2 pr-2 pl-1 text-center">
-                        {canLeave ? (
+                        {canTransferOwnership ? (
+                          <button
+                            type="button"
+                            className="text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
+                            disabled={busy}
+                            onClick={openTransferModal}
+                          >
+                            이관
+                          </button>
+                        ) : canLeave ? (
                           <button
                             type="button"
                             className="text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
@@ -9558,6 +9751,90 @@ function OpenRidingGroupDetailView(props) {
           )}
         </div>
       </section>
+
+      {transferOpen ? (
+        <div
+          className="fixed inset-0 z-[99980] flex items-end sm:items-center justify-center p-3 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-transfer-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
+              <h4 id="open-riding-transfer-title" className="text-sm font-semibold text-slate-900 m-0">
+                방장 이관
+              </h4>
+              <button
+                type="button"
+                className="text-xs font-medium text-slate-500 hover:text-slate-800 px-2 py-1 rounded-lg"
+                onClick={function () {
+                  setTransferOpen(false);
+                }}
+              >
+                닫기
+              </button>
+            </div>
+            <div className="p-4 space-y-3 overflow-y-auto flex-1">
+              <p className="text-xs text-slate-600 m-0 leading-relaxed">
+                이름 또는 연락처로 검색한 뒤, <strong>이 그룹에 이미 참여 중인 멤버</strong>만 선택할 수 있습니다.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="search"
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="이름 또는 연락처"
+                  value={transferSearch}
+                  onChange={function (e) {
+                    setTransferSearch(e.target.value);
+                  }}
+                  onKeyDown={function (e) {
+                    if (e.key === 'Enter') runTransferSearch();
+                  }}
+                />
+                <button
+                  type="button"
+                  className="shrink-0 rounded-xl bg-violet-600 text-white text-sm font-medium px-4 py-2 disabled:opacity-50"
+                  disabled={transferSearchBusy}
+                  onClick={runTransferSearch}
+                >
+                  {transferSearchBusy ? '검색…' : '검색'}
+                </button>
+              </div>
+              {transferErr ? <p className="text-xs text-amber-800 m-0">{transferErr}</p> : null}
+              {transferCandidates.length ? (
+                <ul className="list-none m-0 p-0 space-y-2">
+                  {transferCandidates.map(function (c) {
+                    var cuid = String(c.uid || '');
+                    return (
+                      <li
+                        key={cuid}
+                        className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-slate-800 truncate">{c.name || '회원'}</div>
+                          <div className="text-[11px] text-slate-500 truncate">
+                            연락처 {maskTransferContact(c.contact)}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-violet-500 text-violet-800 bg-white hover:bg-violet-50 disabled:opacity-40"
+                          disabled={busy}
+                          onClick={function () {
+                            confirmTransferToCandidate(c);
+                          }}
+                        >
+                          이관하기
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="fixed left-0 right-0 bottom-0 z-[99975] px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
         <div className="max-w-lg mx-auto space-y-2">

@@ -16,7 +16,8 @@ import {
   onSnapshot,
   serverTimestamp,
   increment,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 import {
   ref as storageRef,
@@ -325,6 +326,47 @@ export async function leaveRidingGroup(db, uid, groupId) {
 }
 
 /**
+ * 방장 이관: 현재 방장(createdBy)만 호출. 새 방장은 이미 그룹 멤버여야 함.
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} ownerUid
+ * @param {string} groupId
+ * @param {string} newOwnerUid
+ */
+export async function transferRidingGroupOwnership(db, ownerUid, groupId, newOwnerUid) {
+  if (!db || !ownerUid || !groupId || !newOwnerUid) throw new Error('요청이 올바르지 않습니다.');
+  var gid = String(groupId).trim();
+  var oldO = String(ownerUid).trim();
+  var newO = String(newOwnerUid).trim();
+  if (oldO === newO) throw new Error('같은 회원입니다.');
+  var gRef = doc(db, RIDING_GROUP_COLLECTION, gid);
+  var oldMemRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', oldO);
+  var newMemRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', newO);
+  await runTransaction(db, function (transaction) {
+    return transaction.get(gRef).then(function (gSnap) {
+      if (!gSnap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
+      var gd = gSnap.data() || {};
+      if (String(gd.createdBy || '') !== oldO) throw new Error('방장만 이관할 수 있습니다.');
+      var st = String(gd.status || '');
+      if (st !== GROUP_STATUS.PENDING && st !== GROUP_STATUS.APPROVED) throw new Error('이 그룹은 이관할 수 없습니다.');
+      return Promise.all([transaction.get(newMemRef), transaction.get(oldMemRef)]).then(function (snaps) {
+        var newMSnap = snaps[0];
+        var oldMSnap = snaps[1];
+        if (!newMSnap.exists()) {
+          throw new Error('선택한 회원이 이 그룹 멤버가 아닙니다. 먼저 그룹에 가입시킨 뒤 이관해 주세요.');
+        }
+        if (!oldMSnap.exists()) throw new Error('멤버 정보가 올바르지 않습니다.');
+        transaction.update(gRef, {
+          createdBy: newO,
+          updatedAt: serverTimestamp()
+        });
+        transaction.update(oldMemRef, { role: 'member' });
+        transaction.update(newMemRef, { role: 'owner' });
+      });
+    });
+  });
+}
+
+/**
  * @param {import('firebase/storage').FirebaseStorage} storage
  * @param {string} groupId
  * @param {File|Blob} file
@@ -370,6 +412,7 @@ if (typeof window !== 'undefined') {
     setRidingGroupStatusByAdmin,
     joinRidingGroup,
     leaveRidingGroup,
+    transferRidingGroupOwnership,
     fetchRidingGroupById,
     uploadRidingGroupCover
   };
