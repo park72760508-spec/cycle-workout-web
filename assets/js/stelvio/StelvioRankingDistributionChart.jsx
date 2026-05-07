@@ -208,6 +208,15 @@
       !isTss && !isKmMode && !isGcMode && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
     if (overrideMyWkg != null && (isNaN(overrideMyWkg) || !isFinite(overrideMyWkg))) overrideMyWkg = null;
 
+    var chartRankOverrideRaw = p.overrideDisplayRank;
+    var chartRankOverride =
+      isGcMode &&
+      typeof chartRankOverrideRaw === 'number' &&
+      isFinite(chartRankOverrideRaw) &&
+      chartRankOverrideRaw >= 1
+        ? Math.floor(chartRankOverrideRaw)
+        : null;
+
     var chartWrapRef = useRef(null);
     var _cw = useState(0);
     var chartContainerW = _cw[0];
@@ -369,7 +378,9 @@
     /** 배지 순위: 선택 부문(activeCategory)·동일 지표로 순위 표기 (Supremo=전체, 그 외=해당 부문 내) */
     var displayRank = null;
 
-    if (overrideMyWkg != null && !isTss && !isGcMode) {
+    if (chartRankOverride != null) {
+      displayRank = chartRankOverride;
+    } else if (overrideMyWkg != null && !isTss && !isGcMode) {
       displayRank = null;
     } else if (currentUserId) {
       if (activeCategory === 'Supremo') {
