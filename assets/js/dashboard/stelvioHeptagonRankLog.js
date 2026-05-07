@@ -7,9 +7,42 @@
 (function () {
   'use strict';
 
+  var FIRESTORE_MOD_URL = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+  var FIREBASE_APP_MOD_URL = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+
   var COL = 'heptagon_rank_log';
   /** 랭킹·이웃: Cloud Function `scheduledHeptagonCohortRanks`가 채움 */
   var COL_COHORT = 'heptagon_cohort_ranks';
+
+  /**
+   * 같은 JS 번들에서 import한 modular Firestore만 collection()/query()에 넘길 수 있음.
+   * window.firestoreV9는 다른 모듈 인스턴스면 "Expected first argument to collection() …" 발생.
+   */
+  function heptagonGetFirestoreDb(mod) {
+    if (!mod || typeof mod.collection !== 'function' || typeof mod.getFirestore !== 'function') {
+      return Promise.resolve(null);
+    }
+    if (typeof window !== 'undefined' && window.firestoreV9) {
+      try {
+        mod.collection(window.firestoreV9, '__stelvio_heptagon_firestore_probe');
+        return Promise.resolve(window.firestoreV9);
+      } catch (eProbe) {}
+    }
+    return import(FIREBASE_APP_MOD_URL)
+      .then(function (appMod) {
+        if (!appMod || typeof appMod.getApp !== 'function') {
+          return null;
+        }
+        try {
+          return mod.getFirestore(appMod.getApp('authV9'));
+        } catch (e) {
+          return null;
+        }
+      })
+      .catch(function () {
+        return null;
+      });
+  }
 
   /** `scheduledHeptagonCohortRanks`가 쓰는 문서 ID — 이웃 표 집계 순위용 */
   /**
@@ -40,17 +73,20 @@
    */
   function getStelvioHeptagonCohortEntry(o) {
     o = o || {};
-    if (!o.userId || !window.firestoreV9) {
+    if (!o.userId) {
       return Promise.resolve({ ok: false, data: null, error: 'no-uid' });
     }
-    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+    return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
         if (!mod || !mod.getDoc || !mod.doc || !mod.collection) {
           return { __cohortErr: 'no-mod' };
         }
-        var id = heptagonCohortDocId(o.monthKey, o.filterCategory, o.filterGender, o.userId);
-        var ref = mod.doc(mod.collection(window.firestoreV9, COL_COHORT), id);
-        return mod.getDoc(ref);
+        return heptagonGetFirestoreDb(mod).then(function (db) {
+          if (!db) return { __cohortErr: 'no-firestore' };
+          var id = heptagonCohortDocId(o.monthKey, o.filterCategory, o.filterGender, o.userId);
+          var ref = mod.doc(mod.collection(db, COL_COHORT), id);
+          return mod.getDoc(ref);
+        });
       })
       .then(function (snap) {
         if (snap && snap.__cohortErr) {
@@ -107,47 +143,49 @@
    */
   function saveStelvioHeptagonRankLog(p) {
     if (!p || !p.userId) return Promise.resolve(false);
-    if (!window.firestoreV9) return Promise.resolve(false);
-    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+    return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
         if (!mod || !mod.setDoc || !mod.doc || !mod.collection) return false;
-        var ref = mod.doc(mod.collection(window.firestoreV9, COL), String(p.userId));
-        var data = {
-          userId: String(p.userId),
-          displayName: (p.displayName && String(p.displayName).trim()) || '',
-          filterGender: p.filterGender != null ? String(p.filterGender) : 'all',
-          filterCategory: p.filterCategory != null ? String(p.filterCategory) : 'Supremo',
-          ageCategory: p.ageCategory != null ? String(p.ageCategory) : '',
-          period: p.period != null ? String(p.period) : 'monthly',
-          monthKey: p.monthKey != null ? String(p.monthKey) : monthKeyKst(),
-          updatedAt: mod.serverTimestamp(),
-          ranks: Array.isArray(p.ranks) ? p.ranks : [],
-          cohortNPerAxis: Array.isArray(p.cohortNPerAxis) ? p.cohortNPerAxis : [],
-          positionScores100: Array.isArray(p.positionScores100) ? p.positionScores100 : [],
-          sumPositionScores: Number(p.sumPositionScores) || 0,
-          avgPositionScore: Number(p.avgPositionScore) || 0,
-          pTier: Number(p.pTier) || 0,
-          tierId: p.tierId != null ? String(p.tierId) : 'C6',
-          nRef: Math.floor(Number(p.nRef)) || 0,
-        };
-        if (p.pComprehensive != null && isFinite(Number(p.pComprehensive))) {
-          data.pComprehensive = Number(p.pComprehensive);
-        }
-        if (p.comprehensiveRank != null && isFinite(Number(p.comprehensiveRank))) {
-          var crr = Math.floor(Number(p.comprehensiveRank));
-          if (crr >= 1) {
-            data.comprehensiveRank = crr;
+        return heptagonGetFirestoreDb(mod).then(function (db) {
+          if (!db) return false;
+          var ref = mod.doc(mod.collection(db, COL), String(p.userId));
+          var data = {
+            userId: String(p.userId),
+            displayName: (p.displayName && String(p.displayName).trim()) || '',
+            filterGender: p.filterGender != null ? String(p.filterGender) : 'all',
+            filterCategory: p.filterCategory != null ? String(p.filterCategory) : 'Supremo',
+            ageCategory: p.ageCategory != null ? String(p.ageCategory) : '',
+            period: p.period != null ? String(p.period) : 'monthly',
+            monthKey: p.monthKey != null ? String(p.monthKey) : monthKeyKst(),
+            updatedAt: mod.serverTimestamp(),
+            ranks: Array.isArray(p.ranks) ? p.ranks : [],
+            cohortNPerAxis: Array.isArray(p.cohortNPerAxis) ? p.cohortNPerAxis : [],
+            positionScores100: Array.isArray(p.positionScores100) ? p.positionScores100 : [],
+            sumPositionScores: Number(p.sumPositionScores) || 0,
+            avgPositionScore: Number(p.avgPositionScore) || 0,
+            pTier: Number(p.pTier) || 0,
+            tierId: p.tierId != null ? String(p.tierId) : 'C6',
+            nRef: Math.floor(Number(p.nRef)) || 0,
+          };
+          if (p.pComprehensive != null && isFinite(Number(p.pComprehensive))) {
+            data.pComprehensive = Number(p.pComprehensive);
           }
-        }
-        if (p.isPrivate === true) {
-          data.is_private = true;
-        } else {
-          data.is_private = false;
-        }
-        return mod.setDoc(ref, data, { merge: true });
+          if (p.comprehensiveRank != null && isFinite(Number(p.comprehensiveRank))) {
+            var crr = Math.floor(Number(p.comprehensiveRank));
+            if (crr >= 1) {
+              data.comprehensiveRank = crr;
+            }
+          }
+          if (p.isPrivate === true) {
+            data.is_private = true;
+          } else {
+            data.is_private = false;
+          }
+          return mod.setDoc(ref, data, { merge: true });
+        });
       })
-      .then(function () {
-        return true;
+      .then(function (savedOk) {
+        return savedOk !== false;
       })
       .catch(function (e) {
         if (typeof console !== 'undefined' && console.warn) {
@@ -163,28 +201,33 @@
    */
   function queryStelvioHeptagonRankTop(o) {
     o = o || {};
-    if (!window.firestoreV9) return Promise.resolve({ ok: false, items: [] });
     var monthKey = o.monthKey != null ? String(o.monthKey) : monthKeyKst();
     var filterCategory = o.filterCategory != null ? String(o.filterCategory) : 'Supremo';
     var filterGender = o.filterGender != null ? String(o.filterGender) : 'all';
     var lim = o.limit | 0;
     if (lim < 1) lim = 50;
     if (lim > 200) lim = 200;
-    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+    return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
-        if (!mod || !mod.query || !mod.getDocs) return { ok: false, items: [] };
-        var qy = mod.query(
-          mod.collection(window.firestoreV9, COL_COHORT),
-          mod.where('monthKey', '==', monthKey),
-          mod.where('filterCategory', '==', filterCategory),
-          mod.where('filterGender', '==', filterGender),
-          mod.orderBy('avgPositionScore', 'desc'),
-          mod.limit(lim)
-        );
-        return mod.getDocs(qy);
+        if (!mod || !mod.query || !mod.getDocs || !mod.collection) return null;
+        return heptagonGetFirestoreDb(mod).then(function (db) {
+          if (!db) return null;
+          var qy = mod.query(
+            mod.collection(db, COL_COHORT),
+            mod.where('monthKey', '==', monthKey),
+            mod.where('filterCategory', '==', filterCategory),
+            mod.where('filterGender', '==', filterGender),
+            mod.orderBy('avgPositionScore', 'desc'),
+            mod.limit(lim)
+          );
+          return mod.getDocs(qy);
+        });
       })
       .then(function (qs) {
         var items = [];
+        if (!qs || typeof qs.forEach !== 'function') {
+          return { ok: false, items: [], error: 'no-result' };
+        }
         qs.forEach(function (d) {
           var x = d.data();
           if (!x || !stelvioCohortRowMatchesFilter(x, filterCategory)) {
@@ -210,9 +253,6 @@
    */
   function queryStelvioHeptagonCohortBySumDesc(o) {
     o = o || {};
-    if (!window.firestoreV9) {
-      return Promise.resolve({ ok: false, items: [] });
-    }
     var monthKey = o.monthKey != null ? String(o.monthKey) : monthKeyKst();
     var filterCategory = o.filterCategory != null ? String(o.filterCategory) : 'Supremo';
     var filterGender = o.filterGender != null ? String(o.filterGender) : 'all';
@@ -223,24 +263,30 @@
     if (lim > 10000) {
       lim = 10000;
     }
-    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+    return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
         if (!mod || !mod.query || !mod.getDocs || !mod.collection) {
-          return { ok: false, items: [] };
+          return null;
         }
-        var col = mod.collection(window.firestoreV9, COL_COHORT);
-        var qy = mod.query(
-          col,
-          mod.where('filterCategory', '==', filterCategory),
-          mod.where('filterGender', '==', filterGender),
-          mod.where('monthKey', '==', monthKey),
-          mod.orderBy('sumPositionScores', 'desc'),
-          mod.limit(lim)
-        );
-        return mod.getDocs(qy);
+        return heptagonGetFirestoreDb(mod).then(function (db) {
+          if (!db) return null;
+          var col = mod.collection(db, COL_COHORT);
+          var qy = mod.query(
+            col,
+            mod.where('filterCategory', '==', filterCategory),
+            mod.where('filterGender', '==', filterGender),
+            mod.where('monthKey', '==', monthKey),
+            mod.orderBy('sumPositionScores', 'desc'),
+            mod.limit(lim)
+          );
+          return mod.getDocs(qy);
+        });
       })
       .then(function (qs) {
         var items = [];
+        if (!qs || typeof qs.forEach !== 'function') {
+          return { ok: false, items: [], error: 'no-result' };
+        }
         qs.forEach(function (d) {
           var x = d.data();
           if (!x || !stelvioCohortRowMatchesFilter(x, filterCategory)) {
@@ -267,30 +313,30 @@
    */
   function queryStelvioHeptagonCohortBoardN(o) {
     o = o || {};
-    if (!window.firestoreV9) {
-      return Promise.resolve({ ok: false, nTotal: 0 });
-    }
     var monthKey = o.monthKey != null ? String(o.monthKey) : monthKeyKst();
     var filterCategory = o.filterCategory != null ? String(o.filterCategory) : 'Supremo';
     var filterGender = o.filterGender != null ? String(o.filterGender) : 'all';
-    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+    return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
         if (!mod || !mod.query || !mod.getDocs || !mod.collection) {
-          return { __empty: 'no-mod' };
+          return null;
         }
-        var col = mod.collection(window.firestoreV9, COL_COHORT);
-        var qy = mod.query(
-          col,
-          mod.where('filterCategory', '==', filterCategory),
-          mod.where('filterGender', '==', filterGender),
-          mod.where('monthKey', '==', monthKey),
-          mod.orderBy('boardRank', 'desc'),
-          mod.limit(1)
-        );
-        return mod.getDocs(qy);
+        return heptagonGetFirestoreDb(mod).then(function (db) {
+          if (!db) return null;
+          var col = mod.collection(db, COL_COHORT);
+          var qy = mod.query(
+            col,
+            mod.where('filterCategory', '==', filterCategory),
+            mod.where('filterGender', '==', filterGender),
+            mod.where('monthKey', '==', monthKey),
+            mod.orderBy('boardRank', 'desc'),
+            mod.limit(1)
+          );
+          return mod.getDocs(qy);
+        });
       })
       .then(function (qs) {
-        if (qs && qs.__empty) {
+        if (qs == null) {
           return { ok: false, nTotal: 0 };
         }
         if (!qs || !qs.size || !qs.forEach) {
@@ -327,16 +373,19 @@
    * @returns {Promise<{ ok: boolean, exists?: boolean, data?: object|null, error?: string }>}
    */
   function getStelvioHeptagonRankLog(userId) {
-    if (!userId || !window.firestoreV9) {
+    if (!userId) {
       return Promise.resolve({ ok: false, data: null, error: 'no-uid' });
     }
-    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+    return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
         if (!mod || !mod.getDoc || !mod.doc || !mod.collection) {
           return { __heptagonGetErr: 'no-mod' };
         }
-        var ref = mod.doc(mod.collection(window.firestoreV9, COL), String(userId));
-        return mod.getDoc(ref);
+        return heptagonGetFirestoreDb(mod).then(function (db) {
+          if (!db) return { __heptagonGetErr: 'no-firestore' };
+          var ref = mod.doc(mod.collection(db, COL), String(userId));
+          return mod.getDoc(ref);
+        });
       })
       .then(function (snap) {
         if (snap && snap.__heptagonGetErr) {
@@ -368,9 +417,6 @@
    */
   function queryStelvioHeptagonSumNeighbors(o) {
     o = o || {};
-    if (!window.firestoreV9) {
-      return Promise.resolve({ ok: false, above: [], below: [], error: 'no-db' });
-    }
     var mySum = Number(o.mySum);
     if (!isFinite(mySum)) {
       return Promise.resolve({ ok: false, above: [], below: [], error: 'bad-sum' });
@@ -383,34 +429,42 @@
     if (lim < 1) lim = 3;
     if (lim > 10) lim = 10;
 
-    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+    return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
         if (!mod || !mod.query || !mod.getDocs || !mod.collection) {
           return { ok: false, above: [], below: [], error: 'no-mod' };
         }
-        var col = mod.collection(window.firestoreV9, COL_COHORT);
-        var qUp = mod.query(
-          col,
-          mod.where('filterCategory', '==', filterCategory),
-          mod.where('filterGender', '==', filterGender),
-          mod.where('monthKey', '==', monthKey),
-          mod.where('sumPositionScores', '>', mySum),
-          mod.orderBy('sumPositionScores', 'asc'),
-          mod.limit(lim)
-        );
-        var qDown = mod.query(
-          col,
-          mod.where('filterCategory', '==', filterCategory),
-          mod.where('filterGender', '==', filterGender),
-          mod.where('monthKey', '==', monthKey),
-          mod.where('sumPositionScores', '<', mySum),
-          mod.orderBy('sumPositionScores', 'desc'),
-          mod.limit(lim)
-        );
-        return Promise.all([mod.getDocs(qUp), mod.getDocs(qDown)]);
+        return heptagonGetFirestoreDb(mod).then(function (db) {
+          if (!db) {
+            return { ok: false, above: [], below: [], error: 'no-db' };
+          }
+          var col = mod.collection(db, COL_COHORT);
+          var qUp = mod.query(
+            col,
+            mod.where('filterCategory', '==', filterCategory),
+            mod.where('filterGender', '==', filterGender),
+            mod.where('monthKey', '==', monthKey),
+            mod.where('sumPositionScores', '>', mySum),
+            mod.orderBy('sumPositionScores', 'asc'),
+            mod.limit(lim)
+          );
+          var qDown = mod.query(
+            col,
+            mod.where('filterCategory', '==', filterCategory),
+            mod.where('filterGender', '==', filterGender),
+            mod.where('monthKey', '==', monthKey),
+            mod.where('sumPositionScores', '<', mySum),
+            mod.orderBy('sumPositionScores', 'desc'),
+            mod.limit(lim)
+          );
+          return Promise.all([mod.getDocs(qUp), mod.getDocs(qDown)]);
+        });
       })
       .then(function (ress) {
-        if (!ress || ress.length < 2) {
+        if (!Array.isArray(ress)) {
+          return ress && typeof ress === 'object' ? ress : { ok: false, above: [], below: [], error: 'no-result' };
+        }
+        if (ress.length < 2) {
           return { ok: false, above: [], below: [], error: 'no-result' };
         }
         var qsUp = ress[0];
