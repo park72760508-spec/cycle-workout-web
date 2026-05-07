@@ -126,6 +126,55 @@ function getBluetoothCoachSessionId() {
 }
 
 /**
+ * Realtime Database 규칙이 sessions에 대해 auth != null 일 때,
+ * 로그인 세션 복구보다 RTDB를 먼저 읽으면 permission_denied가 납니다.
+ * @returns {Promise<boolean>} 로그인된 사용자가 있으면 true
+ */
+function waitForFirebaseAuthForRealtimeDb(maxWaitMs) {
+  var maxMs = maxWaitMs != null ? maxWaitMs : 12000;
+  return new Promise(function (resolve) {
+    var authInst =
+      typeof window !== 'undefined' && window.auth
+        ? window.auth
+        : typeof firebase !== 'undefined' && firebase.auth
+          ? firebase.auth()
+          : null;
+    if (!authInst) {
+      resolve(false);
+      return;
+    }
+    if (authInst.currentUser) {
+      resolve(true);
+      return;
+    }
+    var settled = false;
+    var tid = null;
+    var unsub = authInst.onAuthStateChanged(function (user) {
+      if (settled) return;
+      if (user) {
+        settled = true;
+        if (tid != null) clearTimeout(tid);
+        try {
+          if (typeof unsub === 'function') unsub();
+        } catch (e) {}
+        resolve(true);
+      }
+    });
+    tid = setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      try {
+        if (typeof unsub === 'function') unsub();
+      } catch (e) {}
+      console.warn(
+        '[Bluetooth Coach] Firebase Auth가 준비되지 않았습니다. Realtime DB(sessions)는 로그인 후에만 접근 가능합니다. 콘솔의 규칙을 확인하거나 로그인 뒤 다시 여세요.'
+      );
+      resolve(false);
+    }, maxMs);
+  });
+}
+
+/**
  * Firebase에서 트랙 구성 정보 가져오기
  * sessions/{roomId}/devices 에서 track 값 가져오기 (track=15 형식)
  */
@@ -156,7 +205,13 @@ async function getTrackConfigFromFirebase() {
     console.warn('[Bluetooth Coach] SESSION_ID가 없습니다. 기본값 사용.');
     return { maxTracks: 10 }; // 기본값
   }
-  
+
+  var authed = await waitForFirebaseAuthForRealtimeDb(12000);
+  if (!authed) {
+    console.warn('[Bluetooth Coach] 미인증 상태라 sessions 경로를 읽지 않습니다. 기본값(트랙 10) 사용.');
+    return { maxTracks: 10 };
+  }
+
   try {
     // Firebase devices DB에서 track 값 가져오기
     const devicesSnapshot = await dbInstance.ref(`sessions/${sessionId}/devices`).once('value');
@@ -267,7 +322,9 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
       // Firebase 구독 시작
       console.log('🔍 [진단] setupFirebaseSubscriptions 호출 시작...');
       if (typeof setupFirebaseSubscriptions === 'function') {
-        setupFirebaseSubscriptions();
+        setupFirebaseSubscriptions().catch(function (e) {
+          console.warn('[Bluetooth Coach] setupFirebaseSubscriptions 실패:', e);
+        });
         console.log('✅ [진단] setupFirebaseSubscriptions 호출 완료');
       } else {
         console.warn('⚠️ [진단] setupFirebaseSubscriptions 함수가 없습니다.');
@@ -920,7 +977,7 @@ function startGaugeAnimationLoop() {
  * Firebase Realtime Database 구독 설정
  * sessions/{sessionId}/users/{trackId} 경로를 구독하여 실시간 데이터 수신
  */
-function setupFirebaseSubscriptions() {
+async function setupFirebaseSubscriptions() {
   const sessionId = getBluetoothCoachSessionId();
   
   // db 객체 확인 및 초기화 시도
@@ -945,6 +1002,12 @@ function setupFirebaseSubscriptions() {
   
   if (!sessionId) {
     console.warn('[Bluetooth Coach] SESSION_ID가 없습니다.');
+    return;
+  }
+
+  var authed = await waitForFirebaseAuthForRealtimeDb(12000);
+  if (!authed) {
+    console.warn('[Bluetooth Coach] 미인증 상태라 Firebase 실시간 구독을 시작하지 않습니다.');
     return;
   }
   
@@ -1055,7 +1118,10 @@ async function loadInitialUserDataForTracks() {
     console.warn('[Bluetooth Coach] Firebase가 초기화되지 않아 초기 사용자 데이터를 로드할 수 없습니다.');
     return;
   }
-  
+
+  var authed = await waitForFirebaseAuthForRealtimeDb(4000);
+  if (!authed) return;
+
   try {
     const usersSnapshot = await db.ref(`sessions/${sessionId}/users`).once('value');
     const usersData = usersSnapshot.val();
@@ -2321,7 +2387,9 @@ window.updateBluetoothCoachTracksFromFirebase = async function updateBluetoothCo
   if (newMaxTracks !== window.bluetoothCoachState.maxTrackCount) {
     window.bluetoothCoachState.maxTrackCount = newMaxTracks;
     createBluetoothCoachPowerMeterGrid();
-    setupFirebaseSubscriptions();
+    setupFirebaseSubscriptions().catch(function (e) {
+      console.warn('[Bluetooth Coach] setupFirebaseSubscriptions:', e);
+    });
     
     if (typeof showToast === 'function') {
       showToast(`${newMaxTracks}개 트랙으로 업데이트되었습니다.`);
@@ -2352,6 +2420,14 @@ window.addTracksToBluetoothCoach = async function addTracksToBluetoothCoach() {
   if (!sessionId || typeof db === 'undefined') {
     if (typeof showToast === 'function') {
       showToast('세션 정보를 찾을 수 없습니다.', 'error');
+    }
+    return;
+  }
+
+  var authed = await waitForFirebaseAuthForRealtimeDb(12000);
+  if (!authed) {
+    if (typeof showToast === 'function') {
+      showToast('로그인 후 트랙 설정을 변경할 수 있습니다.', 'error');
     }
     return;
   }
@@ -2411,7 +2487,9 @@ window.addTracksToBluetoothCoach = async function addTracksToBluetoothCoach() {
     
     // Firebase 구독 업데이트 (새 트랙 개수에 맞춰)
     if (typeof setupFirebaseSubscriptions === 'function') {
-      setupFirebaseSubscriptions();
+      setupFirebaseSubscriptions().catch(function (e) {
+        console.warn('[Bluetooth Coach] setupFirebaseSubscriptions:', e);
+      });
     }
     
     // 초과하는 트랙의 Firebase 데이터 삭제 (선택적 - 필요시 주석 해제)
