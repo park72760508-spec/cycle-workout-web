@@ -8727,12 +8727,9 @@ function OpenRidingGroupsList(props) {
   var _fab = useState(false);
   var fabLift = _fab[0];
   var setFabLift = _fab[1];
-  var _qName = useState('');
-  var filterGroupName = _qName[0];
-  var setFilterGroupName = _qName[1];
-  var _qOwner = useState('');
-  var filterOwner = _qOwner[0];
-  var setFilterOwner = _qOwner[1];
+  var _filterText = useState('');
+  var filterText = _filterText[0];
+  var setFilterText = _filterText[1];
   var _owp = useState({});
   var ownerProfiles = _owp[0];
   var setOwnerProfiles = _owp[1];
@@ -8794,23 +8791,20 @@ function OpenRidingGroupsList(props) {
 
   var filteredRows = useMemo(
     function () {
-      var nq = String(filterGroupName || '')
+      var q = String(filterText || '')
         .trim()
         .toLowerCase();
-      var oq = String(filterOwner || '')
-        .trim()
-        .toLowerCase();
+      if (!q) return rows;
       return rows.filter(function (g) {
-        if (nq && String(g.name || '').toLowerCase().indexOf(nq) < 0) return false;
-        if (!oq) return true;
+        if (String(g.name || '').toLowerCase().indexOf(q) >= 0) return true;
         var ouid = String(g.createdBy || '').toLowerCase();
-        if (ouid.indexOf(oq) >= 0) return true;
+        if (ouid.indexOf(q) >= 0) return true;
         var op = ownerProfiles[String(g.createdBy || '')];
         var oname = op ? openRidingFirestoreUserDisplayName(op).toLowerCase() : '';
-        return oname.indexOf(oq) >= 0;
+        return oname.indexOf(q) >= 0;
       });
     },
-    [rows, filterGroupName, filterOwner, ownerProfiles]
+    [rows, filterText, ownerProfiles]
   );
 
   useEffect(
@@ -8852,31 +8846,17 @@ function OpenRidingGroupsList(props) {
 
   return (
     <div className="relative w-full max-w-lg mx-auto pb-4 text-left">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-        <div>
-          <label className="text-[11px] text-slate-500 block mb-1">그룹명 검색</label>
-          <input
-            type="search"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            placeholder="그룹명"
-            value={filterGroupName}
-            onChange={function (e) {
-              setFilterGroupName(e.target.value);
-            }}
-          />
-        </div>
-        <div>
-          <label className="text-[11px] text-slate-500 block mb-1">방장 검색</label>
-          <input
-            type="search"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            placeholder="이름 또는 UID"
-            value={filterOwner}
-            onChange={function (e) {
-              setFilterOwner(e.target.value);
-            }}
-          />
-        </div>
+      <div className="w-full mb-3 box-border">
+        <input
+          type="search"
+          enterKeyHint="search"
+          className="open-riding-group-search-input w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm box-border"
+          placeholder="그룹명 · 방장 이름 · UID"
+          value={filterText}
+          onChange={function (e) {
+            setFilterText(e.target.value);
+          }}
+        />
       </div>
       <ul className="space-y-2">
         {!firestore ? (
@@ -8895,7 +8875,7 @@ function OpenRidingGroupsList(props) {
               <li key={g.id}>
                 <button
                   type="button"
-                  className="w-full flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm hover:bg-slate-50/90 transition"
+                  className="open-riding-action-btn open-riding-group-list-row-btn w-full flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm hover:bg-slate-50/90 transition box-border"
                   onClick={function () {
                     onOpenDetail(g.id);
                   }}
@@ -8930,7 +8910,7 @@ function OpenRidingGroupsList(props) {
       </ul>
       <button
         type="button"
-        className="fixed z-[100090] flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14"
+        className="open-riding-action-btn open-riding-group-fab fixed z-[100090] flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14 box-border"
         style={{
           left: '20px',
           bottom: 'calc(143px + env(safe-area-inset-bottom, 0px))',
@@ -9295,7 +9275,7 @@ function OpenRidingGroupForm(props) {
         </div>
       ) : null}
 
-      <div className="open-riding-bottom-actions fixed left-0 right-0 z-[99975] px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px] open-riding-group-form-footer">
+      <div className="open-riding-bottom-actions open-riding-group-form-footer fixed left-0 right-0 px-3 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
         <div className="max-w-lg mx-auto flex gap-2">
           {isEdit ? (
             <>
@@ -9355,8 +9335,6 @@ function openRidingFirestoreUserProfileImageUrl(userRow) {
   var u = userRow.profileImageUrl || userRow.photoURL || userRow.avatarUrl || '';
   return String(u || '').trim();
 }
-
-var OPEN_RIDING_RANK_MEDAL_SRC = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
 
 /** 소모임 상세 + 멤버 + 가입·승인 */
 function OpenRidingGroupDetailView(props) {
@@ -9896,19 +9874,7 @@ function OpenRidingGroupDetailView(props) {
                       'stelvio-rank-row open-riding-group-rank-row' + (self ? ' stelvio-rank-current' : '')
                     }
                   >
-                    <span className="stelvio-rank-crown">
-                      {rank <= 3 ? (
-                        <img
-                          src={OPEN_RIDING_RANK_MEDAL_SRC[rank - 1]}
-                          alt=""
-                          width={24}
-                          height={24}
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : null}
-                    </span>
-                    <span className="stelvio-rank-pos">{rank}위</span>
+                    <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank}</span>
                     <span className="stelvio-rank-name">
                       {photo ? (
                         <span className="inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100">
@@ -9930,7 +9896,7 @@ function OpenRidingGroupDetailView(props) {
                       {canTransferOwnership ? (
                         <button
                           type="button"
-                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
+                          className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
                           disabled={busy}
                           onClick={openTransferModal}
                         >
@@ -9939,7 +9905,7 @@ function OpenRidingGroupDetailView(props) {
                       ) : canLeave ? (
                         <button
                           type="button"
-                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+                          className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
                           disabled={busy}
                           onClick={doLeave}
                         >
@@ -9975,19 +9941,7 @@ function OpenRidingGroupDetailView(props) {
                   var initial = nm.charAt(0) || '·';
                   return (
                     <div key={uid || idx} className="stelvio-rank-row open-riding-group-rank-row">
-                      <span className="stelvio-rank-crown">
-                        {rank <= 3 ? (
-                          <img
-                            src={OPEN_RIDING_RANK_MEDAL_SRC[rank - 1]}
-                            alt=""
-                            width={24}
-                            height={24}
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        ) : null}
-                      </span>
-                      <span className="stelvio-rank-pos">{rank}위</span>
+                      <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank}</span>
                       <span className="stelvio-rank-name">
                         {photo ? (
                           <span className="inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100">
@@ -10005,7 +9959,7 @@ function OpenRidingGroupDetailView(props) {
                       <span className="stelvio-rank-wkg open-riding-group-rank-actions flex flex-col sm:flex-row gap-1 items-end sm:items-center justify-end shrink-0">
                         <button
                           type="button"
-                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
+                          className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
                           disabled={busy}
                           onClick={function () {
                             doApproveJoinRequest(uid);
@@ -10015,7 +9969,7 @@ function OpenRidingGroupDetailView(props) {
                         </button>
                         <button
                           type="button"
-                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                          className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                           disabled={busy}
                           onClick={function () {
                             doRejectJoinRequest(uid);
@@ -10118,7 +10072,7 @@ function OpenRidingGroupDetailView(props) {
       ) : null}
 
       {(approved && !isMember) || (pending && isAdmin) ? (
-        <div className="open-riding-bottom-actions fixed left-0 right-0 z-[99975] px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px] open-riding-group-detail-footer">
+        <div className="open-riding-bottom-actions open-riding-group-detail-footer fixed left-0 right-0 px-3 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
           <div className="max-w-lg mx-auto w-full space-y-2 box-border">
             {approved && !isMember ? (
               myJoinRequest ? (
