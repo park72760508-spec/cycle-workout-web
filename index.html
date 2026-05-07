@@ -1395,6 +1395,44 @@
       z-index: 10002;
     }
 
+    /* 비밀번호 재설정: #authScreen(z-index 1200)보다 위에 두고, 표시 시 JS로 body에 붙여 stacking 문제 해소 */
+    #forgotPasswordModal {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      z-index: 10102000 !important;
+      background: rgba(0, 0, 0, 0.5) !important;
+      backdrop-filter: blur(4px);
+      box-sizing: border-box;
+      padding: max(20px, env(safe-area-inset-top, 0px)) 16px max(20px, env(safe-area-inset-bottom, 0px)) 16px;
+    }
+
+    #forgotPasswordModal.hidden {
+      display: none !important;
+    }
+
+    #forgotPasswordModal .modal-overlay {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      background: transparent !important;
+      z-index: 1 !important;
+    }
+
+    #forgotPasswordModal .modal-content {
+      position: relative !important;
+      z-index: 10 !important;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+
     .edit-user-modal-content {
       position: relative;
       background: white;
@@ -2148,36 +2186,61 @@
             <div class="auth-status" id="authStatus"></div>
         </div>
           
-          <!-- 비밀번호 재설정 모달 -->
-          <div id="forgotPasswordModal" class="modal hidden" style="z-index: 10001;">
+          <!-- 비밀번호 재설정 모달 (표시 시 body로 이동 → authScreen stacking 위로) -->
+          <div id="forgotPasswordModal" class="modal hidden">
             <div class="modal-overlay" onclick="closeForgotPasswordModal()"></div>
-            <div class="modal-content" style="max-width: 400px; padding: 24px;">
-              <div class="modal-header" style="margin-bottom: 20px;">
+            <div class="modal-content" style="max-width: 400px; padding: 0; width: 100%; background: #fff; border-radius: 16px;">
+              <div class="modal-header" style="margin-bottom: 0; border-bottom: 1px solid #eee;">
                 <h3 style="font-size: 1.3em; color: #333; margin: 0;">비밀번호 재설정</h3>
                 <button class="modal-close" onclick="closeForgotPasswordModal()" aria-label="닫기" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
               </div>
               
-              <div class="modal-body">
-                <div style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
-                  <p style="color: #92400e; margin: 0; font-size: 13px; line-height: 1.5;">
-                    ⚠️ <strong>안내:</strong> 본 시스템은 전화번호 기반 인증을 사용하므로 실제 이메일로 비밀번호 재설정 링크를 받을 수 없습니다.<br>
-                    비밀번호를 잊으셨다면 <strong>관리자에게 문의</strong>하시거나, 관리자는 사용자 수정 화면에서 비밀번호를 초기화할 수 있습니다.
-                  </p>
+              <div class="modal-body" style="padding: 20px;">
+                <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 0 0 16px 0;">
+                  가입 시 등록한 <strong>전화번호</strong>와 <strong>생년</strong>이 일치하면 새 비밀번호(PIN)로 변경됩니다.
+                </p>
+
+                <div class="auth-input-group" style="margin-bottom: 14px;">
+                  <label for="forgotResetPhone" class="auth-label-left" style="display:block;margin-bottom:6px;">ID (전화번호)</label>
+                  <input type="tel" id="forgotResetPhone" inputmode="tel" autocomplete="username"
+                    placeholder="010-1234-5678" maxlength="13"
+                    style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:16px;box-sizing:border-box;"
+                    oninput="if(typeof formatPhoneNumber==='function'){this.value=formatPhoneNumber(this.value);}">
                 </div>
-                
-                <div style="margin-bottom: 20px; padding: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
-                  <p style="color: #0369a1; margin: 0; font-size: 14px; font-weight: 600; text-align: center;">
-                    이메일 주소: <a href="mailto:stelvio.ai.kr@gmail.com" style="color: #0284c7; text-decoration: underline;">stelvio.ai.kr@gmail.com</a>
-                  </p>
+                <div class="auth-input-group" style="margin-bottom: 14px;">
+                  <label for="forgotResetBirthYear" class="auth-label-left" style="display:block;margin-bottom:6px;">생년 (4자리)</label>
+                  <input type="text" id="forgotResetBirthYear" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="예: 1990"
+                    style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:16px;box-sizing:border-box;"
+                    oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
                 </div>
-                
-                <div class="auth-status" id="forgotPasswordStatus" style="display: none; margin-bottom: 15px;"></div>
+                <div class="auth-input-group" style="margin-bottom: 14px;">
+                  <label for="forgotResetPassword" class="auth-label-left" style="display:block;margin-bottom:6px;">비밀번호 초기화 번호 (새 PIN)</label>
+                  <input type="password" id="forgotResetPassword" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="20"
+                    placeholder="6자 이상 숫자"
+                    style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:16px;box-sizing:border-box;"
+                    oninput="this.value=this.value.replace(/\D/g,'')">
+                </div>
+                <div class="auth-input-group" style="margin-bottom: 14px;">
+                  <label for="forgotResetPasswordConfirm" class="auth-label-left" style="display:block;margin-bottom:6px;">비밀번호 초기화 번호 확인</label>
+                  <input type="password" id="forgotResetPasswordConfirm" inputmode="numeric" autocomplete="new-password" minlength="6" maxlength="20"
+                    placeholder="한 번 더 입력"
+                    style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:16px;box-sizing:border-box;"
+                    oninput="this.value=this.value.replace(/\D/g,'')">
+                </div>
+
+                <div class="auth-status" id="forgotPasswordStatus" style="display: none; margin-bottom: 0;"></div>
               </div>
               
-              <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 20px; justify-content: center;">
-                <button onclick="closeForgotPasswordModal()" style="width: 100%; padding: 12px; font-size: 14px; font-weight: 600; text-align: center; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; color: #0369a1; cursor: pointer; transition: all 0.2s ease;">
+              <div class="modal-footer" style="display: flex; flex-direction: column; gap: 10px; padding: 0 20px 20px; border: none;">
+                <button type="button" id="forgotResetSubmitBtn" onclick="if(typeof submitSelfServicePasswordReset==='function')submitSelfServicePasswordReset();"
+                  style="width: 100%; padding: 12px; font-size: 15px; font-weight: 600; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 8px; color: #fff; cursor: pointer;">
+                  비밀번호 변경
+                </button>
+                <button type="button" onclick="closeForgotPasswordModal()"
+                  style="width: 100%; padding: 12px; font-size: 14px; font-weight: 600; text-align: center; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; color: #475569; cursor: pointer;">
                   취소
                 </button>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8; text-align: center;">문의: <a href="mailto:stelvio.ai.kr@gmail.com" style="color:#0284c7;">stelvio.ai.kr@gmail.com</a></p>
               </div>
             </div>
             </div>
@@ -14924,40 +14987,138 @@
     });
 
     /**
-     * 비밀번호 재설정 모달 표시
+     * 비밀번호 재설정 모달 표시 (#authScreen 밖으로 올려 다른 오버레이보다 위에 표시)
      */
     function showForgotPasswordModal() {
-      const modal = document.getElementById('forgotPasswordModal');
-      if (modal) {
-        modal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
+      var modal = document.getElementById('forgotPasswordModal');
+      if (!modal) return;
+      if (modal.parentNode !== document.body) {
+        document.body.appendChild(modal);
       }
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      var statusEl = document.getElementById('forgotPasswordStatus');
+      if (statusEl) {
+        statusEl.textContent = '';
+        statusEl.style.display = 'none';
+        statusEl.className = 'auth-status';
+      }
+      var phoneEl = document.getElementById('forgotResetPhone');
+      if (phoneEl) phoneEl.focus();
     }
     
     /**
      * 비밀번호 재설정 모달 닫기
      */
     function closeForgotPasswordModal() {
-      const modal = document.getElementById('forgotPasswordModal');
+      var modal = document.getElementById('forgotPasswordModal');
       if (modal) {
         modal.classList.add('hidden');
         document.body.style.overflow = '';
-        
-        // 상태 메시지 초기화
-        const statusEl = document.getElementById('forgotPasswordStatus');
-        if (statusEl) {
-          statusEl.textContent = '';
-          statusEl.style.display = 'none';
-          statusEl.className = 'auth-status';
+      }
+      ['forgotResetPhone', 'forgotResetBirthYear', 'forgotResetPassword', 'forgotResetPasswordConfirm'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      var statusEl = document.getElementById('forgotPasswordStatus');
+      if (statusEl) {
+        statusEl.textContent = '';
+        statusEl.style.display = 'none';
+        statusEl.className = 'auth-status';
+      }
+    }
+
+    /**
+     * 본인 확인(전화번호·생년) 후 Cloud Function으로 비밀번호 변경
+     */
+    async function submitSelfServicePasswordReset() {
+      var phoneEl = document.getElementById('forgotResetPhone');
+      var birthEl = document.getElementById('forgotResetBirthYear');
+      var pwEl = document.getElementById('forgotResetPassword');
+      var pw2El = document.getElementById('forgotResetPasswordConfirm');
+      var btn = document.getElementById('forgotResetSubmitBtn');
+      if (!phoneEl || !birthEl || !pwEl || !pw2El) return;
+
+      var contact = (phoneEl.value || '').trim();
+      var birthYear = (birthEl.value || '').trim();
+      var newPassword = pwEl.value || '';
+      var newPasswordConfirm = pw2El.value || '';
+
+      var digits = contact.replace(/\D/g, '');
+      if (digits.length < 10) {
+        showForgotPasswordStatus('전화번호를 올바르게 입력해 주세요.', 'error');
+        phoneEl.focus();
+        return;
+      }
+      if (!/^\d{4}$/.test(birthYear)) {
+        showForgotPasswordStatus('생년을 4자리로 입력해 주세요.', 'error');
+        birthEl.focus();
+        return;
+      }
+      if (newPassword.length < 6) {
+        showForgotPasswordStatus('비밀번호 초기화 번호는 6자 이상이어야 합니다.', 'error');
+        pwEl.focus();
+        return;
+      }
+      if (newPassword !== newPasswordConfirm) {
+        showForgotPasswordStatus('비밀번호 초기화 번호와 확인 입력이 일치하지 않습니다.', 'error');
+        pw2El.focus();
+        return;
+      }
+
+      var projectId = (window.authV9 && window.authV9.app && window.authV9.app.options && window.authV9.app.options.projectId) || 'stelvio-ai';
+      var url = 'https://us-central1-' + projectId + '.cloudfunctions.net/selfServiceResetPasswordHttp';
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '처리 중...';
+      }
+      showForgotPasswordStatus('비밀번호를 변경하는 중입니다...', 'info');
+
+      try {
+        var res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contact: contact,
+            birthYear: birthYear,
+            newPassword: newPassword,
+            newPasswordConfirm: newPasswordConfirm
+          })
+        });
+        var data = null;
+        try {
+          data = await res.json();
+        } catch (eJson) {
+          showForgotPasswordStatus('응답을 읽는 중 오류가 발생했습니다.', 'error');
+          return;
+        }
+        var result = data && data.result ? data.result : null;
+        var error = data && data.error ? data.error : null;
+        if (res.ok && result && result.success === true) {
+          showForgotPasswordStatus(result.message || '비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.', 'success');
+          pwEl.value = '';
+          pw2El.value = '';
+        } else {
+          var errMsg = (error && error.message) ? error.message : '비밀번호 변경에 실패했습니다.';
+          showForgotPasswordStatus(errMsg, 'error');
+        }
+      } catch (err) {
+        if (typeof console !== 'undefined' && console.error) console.error('[submitSelfServicePasswordReset]', err);
+        showForgotPasswordStatus('네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '비밀번호 변경';
         }
       }
     }
+    window.submitSelfServicePasswordReset = submitSelfServicePasswordReset;
     
     /**
-     * 비밀번호 재설정 이메일 전송 (제거됨 - 전송 버튼 제거로 인해 사용하지 않음)
+     * 비밀번호 재설정 이메일 전송 (미사용)
      */
     async function sendPasswordResetEmail() {
-      // 전송 기능 제거됨
       console.log('비밀번호 재설정 전송 기능이 제거되었습니다.');
     }
     
@@ -14970,6 +15131,7 @@
         statusEl.textContent = message;
         statusEl.className = `auth-status ${type}`;
         statusEl.style.display = 'block';
+        statusEl.style.marginTop = '12px';
       }
     }
     
