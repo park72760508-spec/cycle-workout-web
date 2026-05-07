@@ -1824,9 +1824,45 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 }
 
 /* 세부 내용: 루트·본문 상단 패딩·스택 간격·게스트 상단·방장 수정/취소 행 상하 마진 제거(0) */
-#openRidingRoomScreen .open-riding-app-body--riding-detail {
-  padding-top: 0;
+#openRidingRoomScreen .open-riding-app-body--group-detail-no-scrollbar {
+  scrollbar-width: none;
 }
+#openRidingRoomScreen .open-riding-app-body--group-detail-no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-row {
+  border-bottom: 1px solid #f3f4f6;
+}
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-row:last-child {
+  border-bottom: none;
+}
+#openRidingRoomScreen .open-riding-group-member-rank-list .stelvio-rank-crown {
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-actions {
+  flex-shrink: 0;
+  min-width: 3.25rem;
+  margin-left: 6px;
+}
+
+#openRidingRoomScreen .open-riding-group-detail-footer.open-riding-bottom-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100060;
+  margin-bottom: 0;
+}
+
 #openRidingRoomScreen .open-riding-detail-content-root {
   display: flex;
   flex-direction: column;
