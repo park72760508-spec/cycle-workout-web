@@ -8716,7 +8716,7 @@ function openRidingGroupsIsAdminGrade() {
   return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
 }
 
-/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(맨 위로 버튼과 동일 높이·우측 20px과 대칭 여백) */
+/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(글래스 네비 높이 2배만큼 위) */
 function OpenRidingGroupsList(props) {
   var firestore = props.firestore;
   var onOpenDetail = props.onOpenDetail || function () {};
@@ -9793,7 +9793,7 @@ function OpenRidingGroupDetailView(props) {
   var canModerateJoin = approved && (isOwner || isAdmin);
 
   return (
-    <div className="w-full max-w-lg mx-auto space-y-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] text-left">
+    <div className="w-full max-w-lg mx-auto space-y-4 pb-6 text-left">
       <button type="button" className="text-sm font-medium text-violet-700 -ml-0.5 mb-1" onClick={onBack}>
         ← 그룹 목록
       </button>
@@ -9919,6 +9919,61 @@ function OpenRidingGroupDetailView(props) {
             </div>
           )}
         </div>
+        {(approved && !isMember) || (pending && isAdmin) ? (
+          <div className="open-riding-group-member-cta-slot open-riding-bottom-actions border-t border-slate-200/90 bg-[rgba(255,255,255,0.98)] px-3 pt-2 pb-3 space-y-2 box-border">
+            {approved && !isMember ? (
+              myJoinRequest ? (
+                <p className="text-sm text-center text-slate-600 m-0 py-2 font-medium">가입 신청이 접수되었습니다. 방장 승인을 기다려 주세요.</p>
+              ) : (
+                <>
+                  {grp.isPublic === false ? (
+                    <input
+                      type="password"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm box-border"
+                      placeholder="가입 비밀번호"
+                      value={joinPw}
+                      onChange={function (e) {
+                        setJoinPw(e.target.value);
+                      }}
+                    />
+                  ) : null}
+                  <button
+                    type="button"
+                    className="open-riding-action-btn w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50 text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-3 box-border"
+                    disabled={busy}
+                    onClick={doJoin}
+                  >
+                    그룹 가입하기
+                  </button>
+                </>
+              )
+            ) : null}
+            {pending && isAdmin ? (
+              <div className="open-riding-group-admin-footer-row flex gap-1.5 sm:gap-2 w-full max-w-full min-w-0 box-border">
+                <button
+                  type="button"
+                  className="open-riding-action-btn open-riding-group-admin-cta-hitbox flex-1 min-w-0 max-w-full flex flex-col justify-end items-stretch p-0 m-0 bg-transparent border-0 shadow-none rounded-none min-h-0 ring-0 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+                  disabled={busy}
+                  onClick={doApprove}
+                >
+                  <span className="open-riding-group-admin-cta-face min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-emerald-500 bg-emerald-600 text-white font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 sm:px-2.5 box-border inline-flex items-center justify-center w-full max-w-full">
+                    승인
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="open-riding-action-btn open-riding-group-admin-cta-hitbox flex-1 min-w-0 max-w-full flex flex-col justify-end items-stretch p-0 m-0 bg-transparent border-0 shadow-none rounded-none min-h-0 ring-0 outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
+                  disabled={busy}
+                  onClick={doReject}
+                >
+                  <span className="open-riding-group-admin-cta-face min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-red-300 bg-white text-red-700 font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 sm:px-2.5 box-border inline-flex items-center justify-center w-full max-w-full">
+                    반려
+                  </span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       {canModerateJoin ? (
@@ -10065,69 +10120,6 @@ function OpenRidingGroupDetailView(props) {
                 </ul>
               ) : null}
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {(approved && !isMember) || (pending && isAdmin) ? (
-        <div
-          className={
-            'open-riding-bottom-actions open-riding-group-detail-footer fixed left-0 right-0 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px] ' +
-            (pending && isAdmin ? 'open-riding-group-detail-footer--admin-cta' : '')
-          }
-        >
-          <div className="max-w-lg mx-auto w-full min-w-0 space-y-2 box-border">
-            {approved && !isMember ? (
-              myJoinRequest ? (
-                <p className="text-sm text-center text-slate-600 m-0 py-2 font-medium">가입 신청이 접수되었습니다. 방장 승인을 기다려 주세요.</p>
-              ) : (
-                <>
-                  {grp.isPublic === false ? (
-                    <input
-                      type="password"
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm box-border"
-                      placeholder="가입 비밀번호"
-                      value={joinPw}
-                      onChange={function (e) {
-                        setJoinPw(e.target.value);
-                      }}
-                    />
-                  ) : null}
-                  <button
-                    type="button"
-                    className="open-riding-action-btn w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50 text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-3 box-border"
-                    disabled={busy}
-                    onClick={doJoin}
-                  >
-                    그룹 가입하기
-                  </button>
-                </>
-              )
-            ) : null}
-            {pending && isAdmin ? (
-              <div className="open-riding-group-admin-footer-row flex gap-1.5 sm:gap-2 w-full max-w-full min-w-0 box-border">
-                <button
-                  type="button"
-                  className="open-riding-action-btn open-riding-group-admin-cta-hitbox flex-1 min-w-0 max-w-full flex flex-col justify-end items-stretch p-0 m-0 bg-transparent border-0 shadow-none rounded-none min-h-0 ring-0 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
-                  disabled={busy}
-                  onClick={doApprove}
-                >
-                  <span className="open-riding-group-admin-cta-face min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-emerald-500 bg-emerald-600 text-white font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 sm:px-2.5 box-border inline-flex items-center justify-center w-full max-w-full">
-                    승인
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="open-riding-action-btn open-riding-group-admin-cta-hitbox flex-1 min-w-0 max-w-full flex flex-col justify-end items-stretch p-0 m-0 bg-transparent border-0 shadow-none rounded-none min-h-0 ring-0 outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
-                  disabled={busy}
-                  onClick={doReject}
-                >
-                  <span className="open-riding-group-admin-cta-face min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl border border-red-300 bg-white text-red-700 font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-2 sm:px-2.5 box-border inline-flex items-center justify-center w-full max-w-full">
-                    반려
-                  </span>
-                </button>
-              </div>
-            ) : null}
           </div>
         </div>
       ) : null}
