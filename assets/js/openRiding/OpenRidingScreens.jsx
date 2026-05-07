@@ -8716,7 +8716,7 @@ function openRidingGroupsIsAdminGrade() {
   return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
 }
 
-/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(글래스 네비 바로 위) */
+/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(글래스 네비 상단선에 맞닿음) */
 function OpenRidingGroupsList(props) {
   var firestore = props.firestore;
   var onOpenDetail = props.onOpenDetail || function () {};
@@ -9802,11 +9802,11 @@ function OpenRidingGroupDetailView(props) {
               src={String(grp.photoUrl)}
               decoding="async"
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 z-0 h-full min-h-[8rem] w-full object-cover object-center opacity-[0.2] scale-[1.03]"
+              className="pointer-events-none absolute inset-0 z-0 h-full min-h-[8rem] w-full object-cover object-center opacity-50 scale-[1.03]"
             />
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-b from-white/90 via-white/94 to-white/[0.98]"
+              className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-b from-white/75 via-white/86 to-white/95"
             />
           </>
         ) : null}
