@@ -6905,13 +6905,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen button.stelvio-group-pick-row--open {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.1) 0%, rgba(102, 126, 234, 0.035) 100%);
 }
-/* 그룹 행 메인 영역 (썸네일+이름만, 순번 열 없음) */
-#stelvioRankingScreen .stelvio-group-pick-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
+#stelvioRankingScreen .stelvio-group-pick-main .stelvio-rank-name-text {
+  font-weight: 700;
+  color: #1f2937;
 }
 /* 펼친 멤버 블록 — 회색 좌측 띠 + 연회색 바탕으로 소모임 행과 시각 분리 */
 #stelvioRankingScreen .stelvio-group-members-block {
@@ -6925,40 +6921,16 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen .stelvio-group-members-block > .stelvio-ranking-empty {
   margin: 10px 0 10px 4px !important;
 }
-/* 멤버 행 1위·2위·3위 메달 정렬 — 동일폭 크라운 열로 좌측 정렬 고정(#stelvioRankingScreen 단순 크라운 18px 규칙 무시) */
+/* 멤버 행: GC 탭 순위 행과 동일 구조(1~3위만 메달 span, N위 직후 아바타+이름). 블록 안에서만 구분선 */
 #stelvioRankingScreen .stelvio-group-member-row.stelvio-rank-row {
   justify-content: flex-start !important;
   margin: 1px -2px !important;
-  padding: 6px 4px !important;
+  padding: 3px 4px !important;
   border-bottom: 1px solid #eef2f7 !important;
   border-radius: 6px !important;
 }
 #stelvioRankingScreen .stelvio-group-member-row.stelvio-rank-row:last-child {
   border-bottom: none !important;
-}
-#stelvioRankingScreen .stelvio-rank-row.stelvio-group-member-row .stelvio-rank-crown {
-  flex: 0 0 26px !important;
-  width: 26px !important;
-  min-width: 26px !important;
-  max-width: 26px !important;
-  height: 26px !important;
-  margin-right: 6px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-}
-#stelvioRankingScreen .stelvio-rank-row.stelvio-group-member-row .stelvio-rank-crown img {
-  width: 24px !important;
-  height: 24px !important;
-  display: block;
-  flex-shrink: 0;
-}
-#stelvioRankingScreen .stelvio-rank-row.stelvio-group-member-row .stelvio-group-member-pos.stelvio-rank-pos {
-  flex: 0 0 3.75em !important;
-  min-width: 3.75em !important;
-  margin-right: 8px !important;
-  font-variant-numeric: tabular-nums;
-  text-align: left;
 }
 #stelvioRankingScreen .stelvio-group-pick-meta {
   font-size: 0.9em;
