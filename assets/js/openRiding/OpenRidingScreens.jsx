@@ -8716,7 +8716,7 @@ function openRidingGroupsIsAdminGrade() {
   return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
 }
 
-/** 소모임(그룹) 목록 — 승인/대기 필터·좌하단 생성 FAB */
+/** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(맨 위로 버튼과 동일 높이·우측 20px과 대칭 여백) */
 function OpenRidingGroupsList(props) {
   var firestore = props.firestore;
   var onOpenDetail = props.onOpenDetail || function () {};
