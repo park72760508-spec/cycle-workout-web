@@ -2504,28 +2504,18 @@ async function hasWeeklyTssCheatDay(db, userId, startStr, endStr) {
 const WEEKLY_RANKING_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 const WEEKLY_TSS_BATCH_SIZE = 50; // 1000명 대비: 20배치로 완료
 
-/** 여러 사용자 주간 TSS 병렬 조회 (배치 단위로 실행해 Firestore 부하 완화)
- * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
+/**
+ * 주간 마일리지 TOP10 / getWeeklyRanking — TSS 랭킹보드 탭과 동일 풀·정렬
+ * (리그 분류 가능 사용자만, getWeeklyTssForUser 동일, gender=all)
+ */
 async function getWeeklyRankingEntries(db, startStr, endStr, usersSnap = null) {
-  const snap = usersSnap ?? await db.collection("users").get();
-  const docs = snap.docs;
-  const entries = [];
-  for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
-    const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map(async (doc) => {
-        const userId = doc.id;
-        const data = doc.data();
-        const name = data.name || "(이름 없음)";
-        const totalTss = await getWeeklyTssForUser(db, userId, startStr, endStr, data);
-        const is_private = data.is_private === true;
-        return totalTss > 0 ? { userId, name, totalTss, is_private } : null;
-      })
-    );
-    results.forEach((r) => { if (r) entries.push(r); });
-  }
-  entries.sort((a, b) => b.totalTss - a.totalTss);
-  return entries;
+  const { entries } = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, "all", usersSnap);
+  return entries.map((e) => ({
+    userId: e.userId,
+    name: e.name,
+    totalTss: e.totalTss,
+    is_private: e.is_private === true,
+  }));
 }
 
 /** 주간 랭킹 TOP10 조회 (캐시 5분 + 병렬 50명/배치, 1000명 대비 타임아웃 9분)
@@ -4183,8 +4173,28 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
     wPrevE,
   });
 
-  const entriesCurrent = await getWeeklyRankingEntries(db, wStart, wEnd, sharedUsersSnap);
-  const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
+  /** TSS 랭킹보드 탭과 동일 집계를 피크 시간대에도 갱신 → TOP10 팝업과 표시·순위 동기 */
+  let entriesCurrent = null;
+  for (const gender of ["all", "M", "F"]) {
+    const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
+    if (gender === "all") {
+      entriesCurrent = tss.entries.map((e) => ({
+        userId: e.userId,
+        name: e.name,
+        totalTss: e.totalTss,
+        is_private: e.is_private === true,
+      }));
+    }
+    const keyTss = `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`;
+    await writeRankingAggregatePayload(db, keyTss, {
+      byCategory: tss.byCategory,
+      entries: tss.entries,
+      startStr: wStart,
+      endStr: wEnd,
+    });
+  }
+
+  const top10Current = (entriesCurrent || []).slice(0, 10).map((e, i) => ({
     rank: i + 1,
     userId: e.userId,
     name: e.name,
@@ -4193,7 +4203,7 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
   }));
   const weeklyKey = `weekly_ranking_full_${wStart}_${wEnd}`;
   await writeRankingAggregatePayload(db, weeklyKey, {
-    fullEntries: entriesCurrent,
+    fullEntries: entriesCurrent || [],
     ranking: top10Current,
     startStr: wStart,
     endStr: wEnd,
@@ -4232,8 +4242,17 @@ async function runRebuildRankingAggregatesCore(db) {
   const sharedUsersSnap = await db.collection("users").get();
   console.log("[runRebuildRankingAggregatesCore] users snapshot fetched once, docs:", sharedUsersSnap.size);
 
+  let weeklyRankingFullCurrent = null;
   for (const gender of ["all", "M", "F"]) {
     const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
+    if (gender === "all") {
+      weeklyRankingFullCurrent = tss.entries.map((e) => ({
+        userId: e.userId,
+        name: e.name,
+        totalTss: e.totalTss,
+        is_private: e.is_private === true,
+      }));
+    }
     const keyTss = `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`;
     await writeRankingAggregatePayload(db, keyTss, {
       byCategory: tss.byCategory,
@@ -4296,7 +4315,7 @@ async function runRebuildRankingAggregatesCore(db) {
     }
   }
 
-  const entriesCurrent = await getWeeklyRankingEntries(db, wStart, wEnd, sharedUsersSnap);
+  const entriesCurrent = weeklyRankingFullCurrent || [];
   const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
     rank: i + 1,
     userId: e.userId,
