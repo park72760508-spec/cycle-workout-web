@@ -1853,6 +1853,11 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   min-width: 3.25rem;
   margin-left: 6px;
 }
+/* 가입 신청: 수락·거절 한 줄 — 열 너비는 내용 기준 */
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-join-request-actions.open-riding-group-rank-actions {
+  flex-wrap: nowrap;
+  min-width: min-content;
+}
 
 /*
  * 그룹 상세: 멤버 카드 하단 인라인 CTA (가입·관리자 승인/반려)
