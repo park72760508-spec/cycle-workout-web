@@ -76,6 +76,70 @@ async function fetchProfileImageUrlsMapForUsers(db, userIds) {
 }
 
 /**
+ * users·heptagon_cohort_ranks 등 문서에서 비공개 동의어를 통일 (집계 캐시 스냅샷에 플래그가 누락·구형인 경우 대비)
+ */
+function privacyFlagFromFirestoreDoc(data) {
+  if (!data || typeof data !== "object") return false;
+  const v =
+    data.is_private !== undefined && data.is_private !== null
+      ? data.is_private
+      : data.isPrivate;
+  return v === true || v === "true" || v === 1 || v === "1";
+}
+
+/**
+ * 집계본/캐시 행에 최신 users.is_private 반영 (TSS·거리·피크 탭이 GC 대비 스냅샷을 쓰는 경로에서 비공개가 풀리는 문제 방지)
+ */
+async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
+  if (!byCategory || typeof byCategory !== "object" || !db) return;
+  const idSet = new Set();
+  const addFromRow = (r) => {
+    if (r && r.userId != null) idSet.add(String(r.userId).trim());
+  };
+  for (const k of Object.keys(byCategory)) {
+    const rows = byCategory[k];
+    if (!Array.isArray(rows)) continue;
+    for (const r of rows) addFromRow(r);
+  }
+  if (Array.isArray(entries)) {
+    for (const r of entries) addFromRow(r);
+  }
+  const ids = [...idSet].filter((x) => x.length > 0);
+  if (!ids.length) return;
+
+  const privMap = new Map();
+  const FieldPath = admin.firestore.FieldPath;
+  const CHUNK = 30;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    chunk.forEach((id) => privMap.set(id, false));
+    try {
+      const qSnap = await db.collection("users").where(FieldPath.documentId(), "in", chunk).get();
+      qSnap.forEach((doc) => {
+        privMap.set(doc.id, privacyFlagFromFirestoreDoc(doc.data()));
+      });
+    } catch (e) {
+      console.warn("[hydrateRankingBoardPrivacyFromUsers]", e && e.message ? e.message : e);
+    }
+  }
+
+  const apply = (r) => {
+    if (!r || r.userId == null) return;
+    const id = String(r.userId).trim();
+    if (!privMap.has(id)) return;
+    r.is_private = privMap.get(id);
+  };
+  for (const k of Object.keys(byCategory)) {
+    const rows = byCategory[k];
+    if (!Array.isArray(rows)) continue;
+    for (const r of rows) apply(r);
+  }
+  if (Array.isArray(entries)) {
+    for (const r of entries) apply(r);
+  }
+}
+
+/**
  * 랭킹 응답의 byCategory(및 선택적 entries)에 users.profileImageUrl 최신값 반영.
  * 집계 캐시(ranking_aggregates 등)에는 필드가 없거나 오래된 경우가 있어 GC와 동일하게 HTTP 응답 직전에 보강.
  */
@@ -2688,7 +2752,7 @@ async function getWeeklyRankingEntries(db, startStr, endStr, usersSnap = null) {
     userId: e.userId,
     name: e.name,
     totalTss: e.totalTss,
-    is_private: e.is_private === true,
+    is_private: privacyFlagFromFirestoreDoc(e),
   }));
 }
 
@@ -2752,6 +2816,7 @@ exports.getWeeklyRanking = onRequest(
     };
 
     if (aggMatchesWeek) {
+      await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: weeklyAgg.fullEntries }, weeklyAgg.fullEntries);
       return buildWeeklyRankingResponse(weeklyAgg.fullEntries, true);
     }
 
@@ -2766,13 +2831,18 @@ exports.getWeeklyRanking = onRequest(
       const ranking = Array.isArray(data.ranking) ? data.ranking : [];
       const legacyMatches = legacyStart === startStr && legacyEnd === endStr && ranking.length > 0;
       if (legacyMatches) {
+        const fullEntries = Array.isArray(data.fullEntries) ? data.fullEntries : [];
+        const mergeHydrate = ranking.concat(fullEntries);
+        if (mergeHydrate.length) {
+          await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: mergeHydrate }, null);
+        }
         const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
         const ageMin = updatedAt ? Math.round((nowMs - updatedAt) / 60000) : null;
         let myRank = null;
-        if (userIdParam && Array.isArray(data.fullEntries)) {
-          const userIdx = data.fullEntries.findIndex((e) => e.userId === userIdParam);
+        if (userIdParam && fullEntries.length) {
+          const userIdx = fullEntries.findIndex((e) => e.userId === userIdParam);
           if (userIdx >= 10) {
-            const e = data.fullEntries[userIdx];
+            const e = fullEntries[userIdx];
             myRank = {
               rank: userIdx + 1,
               userId: e.userId,
@@ -3596,7 +3666,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
           weightKg: peak.weightKg,
           ageCategory: leagueCategory,
           gender,
-          is_private: data.is_private === true,
+          is_private: privacyFlagFromFirestoreDoc(data),
           profileImageUrl: profileImageUrlFromUserData(data),
         };
       })
@@ -3644,7 +3714,7 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
           totalTss,
           ageCategory: leagueCategory,
           gender,
-          is_private: data.is_private === true,
+          is_private: privacyFlagFromFirestoreDoc(data),
           profileImageUrl: profileImageUrlFromUserData(data),
         };
       })
@@ -3692,7 +3762,7 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
           totalKm,
           ageCategory: leagueCategory,
           gender,
-          is_private: data.is_private === true,
+          is_private: privacyFlagFromFirestoreDoc(data),
           profileImageUrl: profileImageUrlFromUserData(data),
         };
       })
@@ -4246,7 +4316,7 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
             weightKg: p.weightKg,
             ageCategory: leagueCategory,
             gender: String(data.gender || data.sex || "").toLowerCase(),
-            is_private: data.is_private === true,
+            is_private: privacyFlagFromFirestoreDoc(data),
             profileImageUrl: profileImageUrlFromUserData(data),
           };
           for (const slot of genders) {
@@ -4867,7 +4937,7 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
             name: (d.displayName && String(d.displayName).trim()) || "(이름 없음)",
             ageCategory: d.ageCategory != null ? String(d.ageCategory) : "",
             gender: g,
-            is_private: d.is_private === true,
+            is_private: privacyFlagFromFirestoreDoc(d),
             rank: seq,
             gcScore,
           });
@@ -4895,6 +4965,7 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
   }
   await hydrateRankingBoardProfileImages(db, byCategory);
   const entries = (byCategory.Supremo || []).slice();
+  await hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries);
   return { byCategory, entries, snapshotRangeStart, snapshotRangeEnd, snapshotAsOfSeoul };
 }
 
@@ -4918,9 +4989,10 @@ exports.getPeakPowerRanking = onRequest(
     const month = req.query.month ? parseInt(req.query.month, 10) : new Date().getMonth() + 1;
 
     const db = admin.firestore();
-    /** 집계/캐시 본에는 프로필 URL이 빠져 있거나 옛값일 수 있음 → 응답 직전 users 기준 보강 (GC는 빌더에서 이미 보강) */
+    /** 집계/캐시 행은 스냅샷 시점의 is_private일 수 있음 → 응답 직전 users 기준 비공개·프로필 URL 보강 */
     const finalizeRankingProfileUrls = async (payload) => {
       if (!payload || !payload.byCategory) return;
+      await hydrateRankingBoardPrivacyFromUsers(db, payload.byCategory, payload.entries);
       await hydrateRankingBoardProfileImages(db, payload.byCategory, payload.entries);
     };
 
