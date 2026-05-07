@@ -9579,47 +9579,6 @@
         return;
       }
       var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
-      function escAttrL(s) {
-        return String(s || '')
-          .replace(/&/g, '&amp;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;')
-          .replace(/</g, '&lt;');
-      }
-      function avatarBtn(profileUrl, meta) {
-        var uidRaw = meta && meta.userId != null ? String(meta.userId).trim() : '';
-        var raw =
-          profileUrl != null && String(profileUrl).trim()
-            ? String(profileUrl).trim()
-            : typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
-              ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
-              : 'assets/img/profile-placeholder.svg';
-        var src = escAttrL(raw);
-        var dataUid = '';
-        if (uidRaw) {
-          dataUid =
-            ' data-stelvio-rank-user-id="' +
-            escAttrL(uidRaw) +
-            '" data-stelvio-rank-overlay-name="' +
-            escAttrL((meta && meta.overlayName) || '') +
-            '" data-stelvio-rank-age-cat="' +
-            escAttrL((meta && meta.ageCategory) || '') +
-            '"';
-        }
-        return (
-          '<button type="button" class="stelvio-rank-avatar-btn" data-stelvio-rank-zoom-src="' +
-          src +
-          '"' +
-          dataUid +
-          ' title="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30" aria-label="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30">' +
-          '<span class="stelvio-rank-avatar" aria-hidden="true">' +
-          '<img class="stelvio-rank-avatar-img" src="' +
-          src +
-          '" alt="" width="30" height="30" loading="lazy" decoding="async" />' +
-          '</span>' +
-          '</button>'
-        );
-      }
       var grpRows = stelvioLastMyGroupsFireRows || [];
       if (!grpRows.length && !stelvioMyGroupsRankUnsub) {
         bodyEl.innerHTML = '<p class="stelvio-ranking-empty">목록 불러오는 중…</p>';
@@ -9692,12 +9651,13 @@
             '<div class="' +
             rowCls +
             ' stelvio-group-member-row">';
-          if (rankInGroup <= 3) mh += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[rankInGroup - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
-          else mh += '<span class="stelvio-rank-crown" aria-hidden="true"></span>';
-          mh += '<span class="stelvio-rank-pos stelvio-group-member-pos">' + rankInGroup + '위</span>';
+          if (rankInGroup <= 3) {
+            mh += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[rankInGroup - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
+          }
+          mh += '<span class="stelvio-rank-pos">' + rankInGroup + '위</span>';
           mh +=
             '<span class="stelvio-rank-name">' +
-            avatarBtn(prof, { userId: it.userId, overlayName: nm, ageCategory: it.ageCategory }) +
+            stelvioRankingAvatarHtml(prof, { userId: it.userId, overlayName: nm, ageCategory: it.ageCategory }) +
             '<span class="stelvio-rank-name-text" title="' +
             rawNm +
             '">' +
@@ -9732,20 +9692,20 @@
         var rowClsG =
           'stelvio-rank-row stelvio-rank-row--my-group stelvio-group-pick-row' +
           (isExp ? ' stelvio-group-pick-row--open' : '');
-        chunks += '<button type="button" class="' + rowClsG + '" data-stelvio-group-pick="1" data-stelvio-group-id="' + escAttrL(gidi) + '" aria-expanded="' + (isExp ? 'true' : 'false') + '">';
+        chunks += '<button type="button" class="' + rowClsG + '" data-stelvio-group-pick="1" data-stelvio-group-id="' + stelvioRankingEscapeAttr(gidi) + '" aria-expanded="' + (isExp ? 'true' : 'false') + '">';
         chunks +=
           '<span class="stelvio-rank-name stelvio-group-pick-main">' +
           '<span class="stelvio-group-list-avatar-slot" aria-hidden="true">' +
           '<span class="stelvio-rank-avatar">' +
           '<img class="stelvio-rank-avatar-img" src="' +
-          escAttrL(ph) +
+          stelvioRankingEscapeAttr(ph) +
           '" alt="" width="30" height="30" loading="lazy" decoding="async" /></span>' +
           '</span>' +
           '<span class="stelvio-rank-name-text">' +
           nameG +
           '</span>' +
           '</span>';
-        chunks += '<span class="stelvio-rank-wkg stelvio-group-pick-meta">' + escAttrL(String(mcShown)) + '명</span>';
+        chunks += '<span class="stelvio-rank-wkg stelvio-group-pick-meta">' + stelvioRankingEscapeAttr(String(mcShown)) + '명</span>';
         chunks += '</button>';
         chunks += memberBlockHtml(gidi);
       }
@@ -9953,56 +9913,57 @@
       return stelvioFormatRankCell(item);
     }
 
+    function stelvioRankingEscapeAttr(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;');
+    }
+    function stelvioRankingDefaultProfileImg() {
+      return typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
+        ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
+        : 'assets/img/profile-placeholder.svg';
+    }
+    function stelvioRankingAvatarHtml(profileImageUrl, avatarMeta) {
+      avatarMeta = avatarMeta || {};
+      var uidRaw = avatarMeta.userId != null ? String(avatarMeta.userId).trim() : '';
+      var onRaw = avatarMeta.overlayName != null ? String(avatarMeta.overlayName) : '';
+      var acRaw = avatarMeta.ageCategory != null ? String(avatarMeta.ageCategory) : '';
+      var raw =
+        profileImageUrl != null && String(profileImageUrl).trim()
+          ? String(profileImageUrl).trim()
+          : stelvioRankingDefaultProfileImg();
+      var src = stelvioRankingEscapeAttr(raw);
+      var dataUid = '';
+      if (uidRaw) {
+        dataUid =
+          ' data-stelvio-rank-user-id="' +
+          stelvioRankingEscapeAttr(uidRaw) +
+          '" data-stelvio-rank-overlay-name="' +
+          stelvioRankingEscapeAttr(onRaw) +
+          '" data-stelvio-rank-age-cat="' +
+          stelvioRankingEscapeAttr(acRaw) +
+          '"';
+      }
+      return (
+        '<button type="button" class="stelvio-rank-avatar-btn" data-stelvio-rank-zoom-src="' +
+        src +
+        '"' +
+        dataUid +
+        ' title="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30" aria-label="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30">' +
+        '<span class="stelvio-rank-avatar" aria-hidden="true">' +
+        '<img class="stelvio-rank-avatar-img" src="' +
+        src +
+        '" alt="" width="30" height="30" loading="lazy" decoding="async" />' +
+        '</span>' +
+        '</button>'
+      );
+    }
+
     function renderStelvioRankingOneCategory(cat, byCategory, currentUserId, myRankSupremo, bodyEl) {
       if (!bodyEl) return;
       var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
-      function stelvioRankingEscapeAttr(s) {
-        return String(s || '')
-          .replace(/&/g, '&amp;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;')
-          .replace(/</g, '&lt;');
-      }
-      function stelvioRankingDefaultProfileImg() {
-        return typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
-          ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
-          : 'assets/img/profile-placeholder.svg';
-      }
-      function stelvioRankingAvatarHtml(profileImageUrl, avatarMeta) {
-        avatarMeta = avatarMeta || {};
-        var uidRaw = avatarMeta.userId != null ? String(avatarMeta.userId).trim() : '';
-        var onRaw = avatarMeta.overlayName != null ? String(avatarMeta.overlayName) : '';
-        var acRaw = avatarMeta.ageCategory != null ? String(avatarMeta.ageCategory) : '';
-        var raw =
-          profileImageUrl != null && String(profileImageUrl).trim()
-            ? String(profileImageUrl).trim()
-            : stelvioRankingDefaultProfileImg();
-        var src = stelvioRankingEscapeAttr(raw);
-        var dataUid = '';
-        if (uidRaw) {
-          dataUid =
-            ' data-stelvio-rank-user-id="' +
-            stelvioRankingEscapeAttr(uidRaw) +
-            '" data-stelvio-rank-overlay-name="' +
-            stelvioRankingEscapeAttr(onRaw) +
-            '" data-stelvio-rank-age-cat="' +
-            stelvioRankingEscapeAttr(acRaw) +
-            '"';
-        }
-        return (
-          '<button type="button" class="stelvio-rank-avatar-btn" data-stelvio-rank-zoom-src="' +
-          src +
-          '"' +
-          dataUid +
-          ' title="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30" aria-label="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30">' +
-          '<span class="stelvio-rank-avatar" aria-hidden="true">' +
-          '<img class="stelvio-rank-avatar-img" src="' +
-          src +
-          '" alt="" width="30" height="30" loading="lazy" decoding="async" />' +
-          '</span>' +
-          '</button>'
-        );
-      }
       var arr = stelvioFilterRowsByListInterest(byCategory[cat] || []);
       var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
       var isExpired = typeof isUserExpired === 'function' && cu && isUserExpired(cu);
