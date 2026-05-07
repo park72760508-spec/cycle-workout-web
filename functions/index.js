@@ -320,6 +320,180 @@ exports.adminResetUserPasswordHttp = onRequest(
   }
 );
 
+/** 본인 확인용: 전화번호(contact)·생년(birth_year) 일치 시 이메일/비밀번호 계정 비밀번호만 변경 (로그인 불필요) */
+function selfResetDigitsOnly(raw) {
+  return String(raw || "").replace(/\D+/g, "");
+}
+function selfResetFormatContactForDb(digitsRaw) {
+  const d = selfResetDigitsOnly(digitsRaw);
+  if (!d) return "";
+  if (d.length < 7) return d;
+  const head = d.slice(0, 3);
+  const tail = d.slice(-4);
+  const mid = d.slice(head.length, d.length - tail.length);
+  return `${head}-${mid}-${tail}`;
+}
+
+const SELF_SERVICE_RESET_GENERIC =
+  "등록된 정보와 일치하지 않습니다. 전화번호·생년·비밀번호를 다시 확인해 주세요.";
+
+exports.selfServiceResetPasswordHttp = onRequest(
+  { cors: false },
+  async (req, res) => {
+    setCorsHeaders(req, res);
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: { code: "method-not-allowed", message: "POST만 허용됩니다." } });
+      return;
+    }
+
+    const sendError = (code, message, status = 400) => {
+      res.status(status).json({ error: { code, message } });
+    };
+
+    try {
+      let body = {};
+      try {
+        const raw = req.body;
+        if (typeof raw === "string") {
+          try {
+            body = JSON.parse(raw) || {};
+          } catch (eParse) {
+            body = {};
+          }
+        } else if (typeof raw === "object" && raw !== null) {
+          body = raw;
+        }
+      } catch (e) {
+        sendError("invalid-argument", "요청 본문이 올바르지 않습니다.");
+        return;
+      }
+
+      const contactRaw = body.contact != null ? String(body.contact).trim() : "";
+      const birthYearRaw = body.birthYear != null ? String(body.birthYear).trim() : "";
+      const newPassword = body.newPassword != null ? String(body.newPassword) : "";
+      const newPasswordConfirm = body.newPasswordConfirm != null ? String(body.newPasswordConfirm) : "";
+
+      const phoneDigits = selfResetDigitsOnly(contactRaw);
+      if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+        sendError("invalid-argument", "ID(전화번호)를 올바르게 입력해 주세요.");
+        return;
+      }
+      if (!birthYearRaw || !/^\d{4}$/.test(birthYearRaw)) {
+        sendError("invalid-argument", "생년(4자리)을 입력해 주세요.");
+        return;
+      }
+      const birthYearNum = parseInt(birthYearRaw, 10);
+      if (!Number.isFinite(birthYearNum) || birthYearNum < 1900 || birthYearNum > 2100) {
+        sendError("invalid-argument", "생년(4자리)을 올바르게 입력해 주세요.");
+        return;
+      }
+      if (!newPassword || newPassword.length < 6) {
+        sendError("invalid-argument", "비밀번호 초기화 번호는 6자 이상이어야 합니다.");
+        return;
+      }
+      if (newPassword !== newPasswordConfirm) {
+        sendError("invalid-argument", "비밀번호 초기화 번호와 확인 입력이 일치하지 않습니다.");
+        return;
+      }
+
+      const db = admin.firestore();
+      const formattedContact = selfResetFormatContactForDb(contactRaw);
+
+      let snaps = await db.collection("users").where("contact", "==", formattedContact).limit(5).get();
+      if (snaps.empty && phoneDigits !== formattedContact) {
+        snaps = await db.collection("users").where("contact", "==", phoneDigits).limit(5).get();
+      }
+
+      if (snaps.empty || snaps.size !== 1) {
+        sendError("permission-denied", SELF_SERVICE_RESET_GENERIC, 403);
+        return;
+      }
+
+      const doc = snaps.docs[0];
+      const data = doc.data() || {};
+      const storedBirth = data.birth_year;
+      const storedBirthNum =
+        storedBirth == null || storedBirth === "" ? NaN : parseInt(String(storedBirth), 10);
+      if (!Number.isFinite(storedBirthNum) || storedBirthNum !== birthYearNum) {
+        sendError("permission-denied", SELF_SERVICE_RESET_GENERIC, 403);
+        return;
+      }
+
+      const authUidFromDoc =
+        (data.uid && String(data.uid).trim()) ||
+        (data.id && String(data.id).trim()) ||
+        doc.id;
+
+      let resolvedAuthUid = null;
+      try {
+        await admin.auth().getUser(authUidFromDoc);
+        resolvedAuthUid = authUidFromDoc;
+      } catch (getUserErr) {
+        const code = getUserErr.code || (getUserErr.errorInfo && getUserErr.errorInfo.code);
+        if (code === "auth/user-not-found") {
+          const email =
+            (data.email && String(data.email).trim()) || `${phoneDigits}@stelvio.ai`;
+          try {
+            const userRecord = await admin.auth().getUserByEmail(email);
+            resolvedAuthUid = userRecord.uid;
+          } catch (emailErr) {
+            sendError("permission-denied", SELF_SERVICE_RESET_GENERIC, 403);
+            return;
+          }
+        } else {
+          console.error("[selfServiceResetPassword] getUser 실패:", getUserErr);
+          sendError("internal", "계정 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", 500);
+          return;
+        }
+      }
+
+      if (!resolvedAuthUid) {
+        sendError("permission-denied", SELF_SERVICE_RESET_GENERIC, 403);
+        return;
+      }
+
+      try {
+        await admin.auth().updateUser(resolvedAuthUid, { password: newPassword });
+      } catch (updErr) {
+        const code = updErr.code || (updErr.errorInfo && updErr.errorInfo.code);
+        const rawMessage = (updErr && updErr.message) ? String(updErr.message).trim() : "";
+        console.error("[selfServiceResetPassword] updateUser 오류 code=", code, "message=", rawMessage);
+        if (code === "auth/weak-password") {
+          sendError("invalid-argument", "비밀번호가 너무 약합니다. 6자 이상으로 다시 입력해 주세요.");
+          return;
+        }
+        if (code === "auth/user-not-found") {
+          sendError("permission-denied", SELF_SERVICE_RESET_GENERIC, 403);
+          return;
+        }
+        if (code === "auth/operation-not-allowed") {
+          sendError(
+            "failed-precondition",
+            "이 계정은 비밀번호 로그인을 사용할 수 없습니다. 관리자에게 문의해 주세요.",
+            412
+          );
+          return;
+        }
+        sendError("internal", "비밀번호 변경 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", 500);
+        return;
+      }
+
+      res.status(200).json({
+        result: { success: true, message: "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요." },
+      });
+    } catch (err) {
+      console.error("[selfServiceResetPassword] 오류:", err);
+      sendError("internal", "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", 500);
+    }
+  }
+);
+
 /**
  * Strava 인증 코드를 액세스/리프레시 토큰으로 교환하고 users/{userId}에 저장.
  * Client Secret은 서버(Secret Manager)에서만 사용. appConfig/strava에서 client_id, redirect_uri 읽음.
