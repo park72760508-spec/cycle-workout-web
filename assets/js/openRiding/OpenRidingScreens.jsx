@@ -8912,9 +8912,6 @@ function OpenRidingGroupsList(props) {
         type="button"
         className="open-riding-action-btn open-riding-group-fab fixed z-[100090] flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14 box-border"
         style={{
-          left: 'auto',
-          right: '20px',
-          bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)',
           transform: fabLift ? 'translateY(-14px)' : 'translateY(0)',
