@@ -86,9 +86,9 @@
       var firestoreMod = null;
       var collectionFn, docFn, setDocFn, getDocFn;
       try {
-        var appMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
-        var authMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
-        firestoreMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        var appMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
+        var authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+        firestoreMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
         var initApp = appMod && appMod.initializeApp;
         var getAuthFn = authMod && authMod.getAuth;
         var setPersistenceFn = authMod && authMod.setPersistence;
@@ -130,7 +130,7 @@
         if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Firestore 초기화');
         else console.log('✅ Firebase v9 Firestore 초기화');
         try {
-          var storageModMain = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js');
+          var storageModMain = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js');
           if (storageModMain && typeof storageModMain.getStorage === 'function') {
             window.firebaseStorageV9 = storageModMain.getStorage(appV9);
             if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Storage 초기화 (오픈 라이딩 GPX 등)');
@@ -155,7 +155,7 @@
         if (authMod.reauthenticateWithCredential) window.reauthenticateWithCredentialV9 = authMod.reauthenticateWithCredential;
         if (authMod.EmailAuthProvider) window.EmailAuthProviderV9 = authMod.EmailAuthProvider;
         try {
-          var funcMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-functions.js');
+          var funcMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js');
           if (funcMod && funcMod.getFunctions && funcMod.httpsCallable) {
             window.functionsV9 = funcMod.getFunctions(appV9);
             try {
@@ -188,8 +188,8 @@
       var el = document.querySelector('.auth-app-download-updated');
       if (!el) return;
       try {
-        var firebaseAppMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
-        var storageMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js');
+        var firebaseAppMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
+        var storageMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js');
         var getApp = firebaseAppMod && firebaseAppMod.getApp;
         var getStorageFn = storageMod && storageMod.getStorage;
         var refFn = storageMod && storageMod.ref;
@@ -5708,10 +5708,13 @@
     </div>
   </div>
 
-  <!-- Strava 동기화 진행 오버레이 (큰 녹색 스피너 + 진행 수/총 수) -->
+  <!-- Strava 동기화 진행 오버레이 (큰 녹색 스피너 중심에 N / Total (pct%), 캡션) -->
   <div id="stravaSyncProgressOverlay" class="strava-sync-progress-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10001; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); flex-direction: column;">
-    <div class="strava-sync-spinner" style="width: 64px; height: 64px; border: 4px solid rgba(34, 197, 94, 0.3); border-top-color: #22c55e; border-radius: 50%; animation: stravaSyncSpin 0.9s linear infinite;"></div>
-    <p id="stravaSyncProgressText" style="margin-top: 16px; font-size: 1.1em; font-weight: 600; color: #fff;">0 / 0</p>
+    <div class="strava-sync-progress-spinner-wrap">
+      <div class="strava-sync-spinner strava-sync-progress-ring" aria-hidden="true"></div>
+      <div id="stravaSyncProgressCenter" class="strava-sync-progress-center" aria-live="polite">준비 중…</div>
+    </div>
+    <p id="stravaSyncProgressText" class="strava-sync-progress-caption">준비 중…</p>
   </div>
   <!-- STRAVA 7일 동기화 확인 모달 (경로 선택 → 나의 기록 클릭 시, 일반 사용자 조건 충족 시 표시, grade=1 관리자는 팝업 없이 바로 화면 이동) -->
   <!-- 동적 FTP 산출 결과 모달 (나의 기록 화면 진입 시 자동 표시용, 10일 보이지 않음 체크박스 포함) -->
@@ -10491,7 +10494,7 @@
      * orderBy 쿼리 실패 시(인덱스 미생성 등) limit만 사용 후 메모리 정렬 시도
      */
     async function fetchJournalLogsInline(db, uid, limitVal) {
-      var mod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var mod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       if (!mod || typeof mod.collection !== 'function') {
         throw new Error('Firestore 모듈 로드 실패. 잠시 후 다시 시도해주세요.');
       }
@@ -12219,7 +12222,7 @@
   <script>
     (function () {
       if (window._firebaseStorageModReady) return;
-      window._firebaseStorageModReady = import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js')
+      window._firebaseStorageModReady = import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js')
         .then(function (m) {
           window.firebaseStorageModV9API = m;
           return m;
@@ -13768,7 +13771,7 @@
             var _wantsRemember = _rememberCb && _rememberCb.checked;
             try { localStorage.setItem('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e) {}
             try {
-              var _authModP = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+              var _authModP = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
               var _setPersistP = _authModP && _authModP.setPersistence;
               var _localP = _authModP && _authModP.browserLocalPersistence;
               var _sessionP = _authModP && _authModP.browserSessionPersistence;

@@ -999,9 +999,9 @@
 
     <!-- Firebase v9 Modular SDK (훈련 결과 저장용) -->
     <script type="module">
-      import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
-      import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
-      import { getAuth } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+      import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+      import { getAuth } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
       
       const firebaseConfig = {
         apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
@@ -1020,7 +1020,7 @@
           appV9 = initializeApp(firebaseConfig, 'authV9');
         } catch (e) {
           // 이미 초기화된 경우 기존 인스턴스 가져오기
-          const { getApp } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
+          const { getApp } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
           appV9 = getApp('authV9');
         }
         
@@ -1039,7 +1039,7 @@
         window.phoneToEmail = phoneToEmail;
         
         // signInWithEmailAndPassword 함수 가져오기
-        const { onAuthStateChanged, signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+        const { onAuthStateChanged, signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
         window.signInWithEmailAndPasswordV9 = signInWithEmailAndPassword;
         
         // 인증 상태 리스너 설정 (자동 복원)
