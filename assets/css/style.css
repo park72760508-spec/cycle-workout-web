@@ -1855,34 +1855,54 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 }
 
 /*
- * 그룹 목록·상세·생성/수정 하단: margin-bottom 으로 들림 금지 → padding-bottom + safe-area 로 터치 영역 확보
- * (open-riding-bottom-actions 기본 margin-bottom 제거)
+ * 그룹 상세: 멤버 카드 하단 인라인 CTA (가입·관리자 승인/반려)
  */
-#openRidingRoomScreen .open-riding-group-detail-footer.open-riding-bottom-actions,
+#openRidingRoomScreen .open-riding-group-member-cta-slot.open-riding-bottom-actions {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 0 !important;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#openRidingRoomScreen .open-riding-group-member-cta-slot.open-riding-bottom-actions .open-riding-action-btn {
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+
+/*
+ * 그룹 생성/수정 하단 고정: 글래스 네비 상단 바로 위( inner 고정 높이 + 루트 offset + 간격 )
+ */
 #openRidingRoomScreen .open-riding-group-form-footer.open-riding-bottom-actions {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-fixed-height) + 10px
+  );
   z-index: 100060;
   margin-bottom: 0 !important;
   pointer-events: auto;
   isolation: isolate;
   padding-left: max(10px, env(safe-area-inset-left, 0px));
   padding-right: max(10px, env(safe-area-inset-right, 0px));
-  padding-bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: 10px;
   padding-top: 10px;
   box-sizing: border-box;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 승인·반려: 하단 안전영역은 투명 히트박스(버튼)에만 — 이중 여백 방지 */
-#openRidingRoomScreen .open-riding-group-detail-footer.open-riding-bottom-actions.open-riding-group-detail-footer--admin-cta {
-  padding-bottom: 0;
+html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-form-footer.open-riding-bottom-actions {
+  bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) -
+      (var(--open-riding-glass-nav-inner-fixed-height) * 0.5) +
+      var(--open-riding-glass-nav-inner-fixed-height) + 10px
+  );
 }
 
-#openRidingRoomScreen .open-riding-group-detail-footer.open-riding-bottom-actions .open-riding-action-btn,
 #openRidingRoomScreen .open-riding-group-form-footer.open-riding-bottom-actions .open-riding-action-btn {
   pointer-events: auto;
   position: relative;
@@ -1890,14 +1910,13 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 }
 
 /* 승인·반려: 균등 폭·좌우 잘림 방지 + 투명 셸(실제 클릭) + 둥근 face(시각만) */
-#openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-footer-row {
+#openRidingRoomScreen .open-riding-group-member-cta-slot .open-riding-group-admin-footer-row {
   position: relative;
   z-index: 8;
   pointer-events: auto;
   align-items: stretch;
 }
-/* 승인·반려 히트박스: 하단 글래스 네비 버튼(.open-riding-bottom-glass-nav__btn)과 동일한 터치·레이어 규칙 */
-#openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-hitbox {
+#openRidingRoomScreen .open-riding-group-member-cta-slot .open-riding-group-admin-cta-hitbox {
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
@@ -1923,22 +1942,22 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   transform: none;
   backface-visibility: visible;
   -webkit-backface-visibility: visible;
-  /* STELVIO: 둥근 face 디자인 유지, 터치·안전영역은 투명 셸로 확장 */
-  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  /* 멤버 카드 하단: 하단 고정용 홈 인디케이터 패딩 불필요 */
+  padding-bottom: 0;
 }
-#openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-hitbox:disabled {
+#openRidingRoomScreen .open-riding-group-member-cta-slot .open-riding-group-admin-cta-hitbox:disabled {
   cursor: not-allowed;
 }
-#openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-hitbox:disabled .open-riding-group-admin-cta-face {
+#openRidingRoomScreen .open-riding-group-member-cta-slot .open-riding-group-admin-cta-hitbox:disabled .open-riding-group-admin-cta-face {
   opacity: 0.5;
 }
-#openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-face {
+#openRidingRoomScreen .open-riding-group-member-cta-slot .open-riding-group-admin-cta-face {
   flex-shrink: 0;
   pointer-events: none !important;
 }
 
-#openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-hitbox svg,
-#openRidingRoomScreen .open-riding-group-detail-footer .open-riding-group-admin-cta-hitbox * {
+#openRidingRoomScreen .open-riding-group-member-cta-slot .open-riding-group-admin-cta-hitbox svg,
+#openRidingRoomScreen .open-riding-group-member-cta-slot .open-riding-group-admin-cta-hitbox * {
   pointer-events: none !important;
 }
 
@@ -1956,8 +1975,7 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 }
 
 /*
- * 그룹 목록 FAB: 맨 위로(globalBackToTopBtn)와 동일 bottom — 우측 20px 여백과 대칭으로 좌측 20px
- * → body:has(#openRidingRoomScreen.active) .global-back-to-top-btn 과 세로 위치 통일
+ * 그룹 목록 FAB: 글래스 네비 루트 bottom 오프셋 + inner 고정 높이 × 2 (화면 바닥에서 네비 바 높이의 2배 위 간격과 동등)
  */
 #openRidingRoomScreen .open-riding-group-fab {
   pointer-events: auto;
@@ -1968,9 +1986,17 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   -webkit-touch-callout: none;
   left: max(20px, env(safe-area-inset-left, 0px));
   right: auto;
-  bottom: calc(143px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) + (var(--open-riding-glass-nav-inner-fixed-height) * 2)
+  );
   box-sizing: border-box;
   max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px)) - max(20px, env(safe-area-inset-right, 0px)));
+}
+html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fab {
+  bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) - (var(--open-riding-glass-nav-inner-fixed-height) * 0.5) +
+      (var(--open-riding-glass-nav-inner-fixed-height) * 2)
+  );
 }
 
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-action-btn {
