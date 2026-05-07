@@ -1824,10 +1824,12 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 }
 
 /* 세부 내용: 루트·본문 상단 패딩·스택 간격·게스트 상단·방장 수정/취소 행 상하 마진 제거(0) */
-#openRidingRoomScreen .open-riding-app-body--group-detail-no-scrollbar {
+#openRidingRoomScreen .open-riding-app-body--group-detail-no-scrollbar,
+#openRidingRoomScreen .open-riding-app-body--groups-no-scrollbar {
   scrollbar-width: none;
 }
-#openRidingRoomScreen .open-riding-app-body--group-detail-no-scrollbar::-webkit-scrollbar {
+#openRidingRoomScreen .open-riding-app-body--group-detail-no-scrollbar::-webkit-scrollbar,
+#openRidingRoomScreen .open-riding-app-body--groups-no-scrollbar::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
@@ -1980,8 +1982,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /*
- * 그룹 목록 FAB: 뷰포트 세로 중심에서 하단까지 구간 중, 아래로 2/3 지점(→ top = 50vh + (50vh*2/3))
- * JSX에서 translateY(-50%) 또는 scroll lift 시 translateY(calc(-50% - 14px))와 함께 사용해 버튼 중심이 해당 라인에 맞음
+ * 그룹 목록 FAB: 글래스 네비 상단(16px+safe+inner)보다 네비 inner 높이의 2배 위 — iOS 네비 오프셋과 동기
  */
 #openRidingRoomScreen .open-riding-group-fab {
   pointer-events: auto;
@@ -1992,10 +1993,19 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   -webkit-touch-callout: none;
   left: max(20px, env(safe-area-inset-left, 0px));
   right: auto;
-  top: calc(50vh + (50vh * 2 / 3));
-  bottom: auto;
+  top: auto;
+  bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-fixed-height) +
+      (2 * var(--open-riding-glass-nav-inner-fixed-height))
+  );
   box-sizing: border-box;
   max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px)) - max(20px, env(safe-area-inset-right, 0px)));
+}
+html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fab {
+  bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) - (var(--open-riding-glass-nav-inner-fixed-height) * 0.5) +
+      var(--open-riding-glass-nav-inner-fixed-height) + (2 * var(--open-riding-glass-nav-inner-fixed-height))
+  );
 }
 
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-action-btn {
