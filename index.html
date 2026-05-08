@@ -9050,22 +9050,23 @@
     }
     function stelvioBuildGroupTabChartFilteredPayload(baseIn) {
       var empty = stelvioEmptyByCategoryBuckets();
+      var metricLabel = stelvioGroupTabCurrentMetricLabel();
+      var catLabel = STELVIO_CATEGORY_LABELS[stelvioRankingState.activeCategory] || stelvioRankingState.activeCategory || '전체';
+      /* 차트가 올바른 필드를 읽으려면 현재 선택된 메트릭의 duration을 전달해야 함 */
+      var metricDuration = stelvioGroupTabMetric;
       if (
         !stelvioGroupTabExpandedId ||
         !stelvioGroupTabCachedMembers ||
         !stelvioGroupTabCachedMembers.length
       ) {
         return Object.assign({}, baseIn, {
-          duration: 'gc',
+          duration: metricDuration,
           entries: [],
           byCategory: empty,
           overrideDisplayRank: null,
           titleOverride: '참가자 분포',
           chartSubNoteOverride: '소모임 행을 눌러 멤버를 펼치면 이 소모임 기준 분포가 표시됩니다.',
-          pillLabelOverride:
-            (STELVIO_CATEGORY_LABELS[stelvioRankingState.activeCategory] ||
-              stelvioRankingState.activeCategory ||
-              '전체') + ' · ' + stelvioGroupTabCurrentMetricLabel() + ' · 소모임'
+          pillLabelOverride: catLabel + ' · ' + metricLabel + ' · 소모임'
         });
       }
       var membUidSet = {};
@@ -9081,20 +9082,17 @@
       }
       var subEntries = stelvioMergeRankingEntriesFromByCategory(slim);
       var grRank = stelvioGroupTabExpandedViewerGcRank(baseIn);
+      /* metricDuration을 차트에 전달 → 차트가 wkg/totalTss/totalKm/gcScore 중 맞는 필드를 읽음 */
       return Object.assign({}, baseIn, {
-        duration: 'gc',
+        duration: metricDuration,
         entries: subEntries,
         byCategory: slim,
         overrideDisplayRank: grRank,
         titleOverride: '참가자 분포',
-        chartSubNoteOverride: '펼친 소모임 멤버만 집계한 GC 점수 분포입니다.',
+        chartSubNoteOverride: '펼친 소모임 멤버만 집계한 ' + metricLabel + ' 분포입니다.',
         pillLabelOverride:
-          (STELVIO_CATEGORY_LABELS[stelvioRankingState.activeCategory] ||
-            stelvioRankingState.activeCategory ||
-            '전체') +
-          ' · ' + stelvioGroupTabCurrentMetricLabel() + ' · 소모임 ' +
-          String(stelvioGroupTabCachedMembers.length) +
-          '명'
+          catLabel + ' · ' + metricLabel + ' · 소모임 ' +
+          String(stelvioGroupTabCachedMembers.length) + '명'
       });
     }
     function refreshStelvioDistributionChartMounted() {
@@ -9103,7 +9101,8 @@
         entries: stelvioRankingFullEntries,
         byCategory: stelvioRankingByCategory,
         activeCategory: stelvioRankingState.activeCategory,
-        duration: stelvioRankingState.duration,
+        /* 그룹 탭에서는 실제 선택된 메트릭을 차트에 전달해야 올바른 필드(wkg/totalTss/totalKm/gcScore)를 읽음 */
+        duration: stelvioIsGroupDistanceRanking() ? stelvioGroupTabMetric : stelvioRankingState.duration,
         currentUserId: stelvioRankingCurrentUserId,
         currentUser: stelvioCurrentUser,
         myRankSupremo: stelvioMyRankSupremo,
