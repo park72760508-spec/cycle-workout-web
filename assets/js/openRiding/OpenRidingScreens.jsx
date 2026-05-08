@@ -8841,13 +8841,20 @@ function OpenRidingGroupsList(props) {
   }
 
   return (
-    <div className="relative w-full max-w-lg mx-auto pb-4 text-left">
+    <div
+      className="relative w-full max-w-lg mx-auto text-left box-border"
+      style={{
+        /* 스크롤 끝에서도 + 버튼·하단 네비에 가리지 않도록 (FAB bottom과 동일 토큰) */
+        paddingBottom:
+          'calc(4.5rem + (2 * var(--open-riding-glass-nav-inner-fixed-height)) + env(safe-area-inset-bottom, 0px))'
+      }}
+    >
       <div className="w-full mb-3 box-border">
         <input
           type="search"
           enterKeyHint="search"
           className="open-riding-group-search-input w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm box-border"
-          placeholder="그룹명 또는 방장 이름으로 검색"
+          placeholder="그룹명 또는 라이더 이름으로 검색"
           value={filterText}
           onChange={function (e) {
             setFilterText(e.target.value);
@@ -8906,7 +8913,7 @@ function OpenRidingGroupsList(props) {
       </ul>
       <button
         type="button"
-        className="open-riding-action-btn open-riding-group-fab fixed z-[100090] flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14 box-border"
+        className="open-riding-action-btn open-riding-group-fab fixed flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14 box-border"
         style={{
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)'
