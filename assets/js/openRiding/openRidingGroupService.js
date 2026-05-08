@@ -218,7 +218,8 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
         photoUrl: gd.photoUrl != null ? String(gd.photoUrl).trim() : '',
         memberCount: gd.memberCount != null ? Number(gd.memberCount) : null,
         createdBy: gd.createdBy != null ? String(gd.createdBy) : '',
-        regions: gd.regions != null ? gd.regions : null
+        regions: gd.regions != null ? gd.regions : null,
+        isPublic: gd.isPublic !== false
       };
       emit();
     });

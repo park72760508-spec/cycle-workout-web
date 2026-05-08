@@ -2592,7 +2592,7 @@ function OpenRidingBottomGlassNav(props) {
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
             <img src="assets/img/friends.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             {pendingIncomingCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '13px', height: '13px', fontSize: pendingIncomingCount > 9 ? 7 : 8, paddingLeft: pendingIncomingCount > 9 ? 3 : 3, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: pendingIncomingCount > 9 ? 9 : 10, paddingLeft: pendingIncomingCount > 9 ? 3 : 4, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
                 {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
               </span>
             ) : null}
@@ -2631,7 +2631,7 @@ function OpenRidingBottomGlassNav(props) {
             {pendingGroupJoinCount > 0 ? (
               <span
                 className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
-                style={{ minWidth: '13px', height: '13px', fontSize: pendingGroupJoinCount > 9 ? 7 : 8, paddingLeft: pendingGroupJoinCount > 9 ? 3 : 3, paddingRight: pendingGroupJoinCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }}
+                style={{ minWidth: '17px', height: '17px', fontSize: pendingGroupJoinCount > 9 ? 9 : 10, paddingLeft: pendingGroupJoinCount > 9 ? 3 : 4, paddingRight: pendingGroupJoinCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }}
                 aria-hidden="true"
               >
                 {pendingGroupJoinCount > 99 ? '99+' : pendingGroupJoinCount}
@@ -8898,6 +8898,7 @@ function OpenRidingGroupsList(props) {
             var name = g.name != null ? String(g.name) : '';
             var photo = g.photoUrl != null ? String(g.photoUrl) : '';
             var isHost = userId && String(g.createdBy || '') === String(userId);
+            var groupIsPublic = g.isPublic !== false;
             return (
               <li key={g.id}>
                 <button
@@ -8920,6 +8921,7 @@ function OpenRidingGroupsList(props) {
                         승인 대기
                       </span>
                     ) : null}
+                    {/* 2시 방향: 가입 요청 건수 */}
                     {(function () {
                       var cnt = joinRequestCountMap[g.id];
                       if (!cnt || cnt <= 0) return null;
@@ -8933,32 +8935,29 @@ function OpenRidingGroupsList(props) {
                         </span>
                       );
                     })()}
+                    {/* 10시 방향: 내 역할 (방장 / 가입) */}
+                    {userId ? (
+                      <span
+                        className={'absolute flex items-center justify-center rounded-full text-white border-2 border-white shadow pointer-events-none ' + (isHost ? 'bg-violet-600' : 'bg-red-600')}
+                        style={{ width: '16px', height: '16px', top: '2px', left: '0px', transform: 'translate(-30%, -20%)' }}
+                        aria-label={isHost ? '내가 방장' : '가입한 그룹'}
+                      >
+                        <svg className="block" width={9} height={9} viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                          <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold text-slate-900 truncate text-[15px]">{name || '이름 없음'}</span>
-                    <span className="flex items-center gap-1.5 flex-wrap text-xs text-slate-500 mt-0.5">
-                      <span className="truncate min-w-0">
-                        {regionLine(g.regions)}
-                        <span className="text-slate-300 mx-1">·</span>
-                        {g.memberCount != null ? String(g.memberCount) : '0'}명
+                    <span className="block text-xs text-slate-500 mt-0.5 truncate">
+                      {regionLine(g.regions)}
+                      <span className="text-slate-300 mx-1">·</span>
+                      {g.memberCount != null ? String(g.memberCount) : '0'}명
+                      <span className="text-slate-300 mx-1">·</span>
+                      <span className={groupIsPublic ? 'text-emerald-600' : 'text-slate-400'}>
+                        {groupIsPublic ? '공개' : '비공개'}
                       </span>
-                      {userId ? (
-                        isHost ? (
-                          <span className="inline-flex items-center gap-1 shrink-0">
-                            <span className="inline-block w-3 h-3 rounded-sm bg-violet-600 border border-violet-800/30 shrink-0" aria-hidden="true" />
-                            <span className="text-violet-700 font-semibold text-[10px]">방장</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 shrink-0">
-                            <span className="inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm shrink-0" style={{ width: '12px', height: '12px' }} aria-hidden="true">
-                              <svg className="block" width={8} height={8} viewBox="0 0 12 12" fill="none">
-                                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            </span>
-                            <span className="text-red-600 font-semibold text-[10px]">가입</span>
-                          </span>
-                        )
-                      ) : null}
                     </span>
                   </span>
                 </button>
@@ -8971,11 +8970,15 @@ function OpenRidingGroupsList(props) {
       {userId ? (
         <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10px] sm:text-[11px] text-slate-600 leading-snug px-1">
           <div className="flex gap-2 items-center min-w-0">
-            <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-violet-600 border border-violet-800/30" aria-hidden="true" />
+            <span className="inline-flex items-center justify-center rounded-full bg-violet-600 text-white ring-1 ring-white/90 shadow-sm shrink-0" style={{ width: '13px', height: '13px' }} aria-hidden="true">
+              <svg className="block" width={8} height={8} viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
             <span className="font-semibold text-slate-700 min-w-0">내가 방장</span>
           </div>
           <div className="flex gap-2 items-center min-w-0">
-            <span className="inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm shrink-0" style={{ width: '12px', height: '12px' }} aria-hidden="true">
+            <span className="inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm shrink-0" style={{ width: '13px', height: '13px' }} aria-hidden="true">
               <svg className="block" width={8} height={8} viewBox="0 0 12 12" fill="none">
                 <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
