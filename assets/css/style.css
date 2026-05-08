@@ -5755,6 +5755,43 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-wrap: nowrap;
   padding-bottom: 4px;
 }
+/* 그룹 탭 보조 지표 필터 */
+.stelvio-group-metric-filter {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 5px 12px 5px;
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  background: #fff;
+}
+.stelvio-group-metric-filter::-webkit-scrollbar { display: none; }
+.stelvio-group-metric-chips {
+  display: flex;
+  gap: 5px;
+  min-width: max-content;
+}
+.stelvio-group-metric-chip {
+  padding: 3px 11px;
+  border-radius: 20px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  line-height: 1.5;
+}
+.stelvio-group-metric-chip:hover {
+  border-color: #a78bfa;
+  color: #7c3aed;
+}
+.stelvio-group-metric-chip.active {
+  border-color: #7c3aed;
+  background: #7c3aed;
+  color: #fff;
+}
 .stelvio-filter-bar-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
