@@ -8899,9 +8899,11 @@
       var cWrap = document.querySelector('.stelvio-category-dropdown');
       if (gWrap) gWrap.classList.remove('hidden');
       if (cWrap) cWrap.classList.remove('hidden');
-      /* 그룹 탭: 기간 드롭다운 숨기기, 나머지 필터 유지 */
+      /* 그룹 탭: 기간 드롭다운 ↔ 항목 드롭다운 전환 */
       var pWrap = document.querySelector('.stelvio-period-dropdown');
       if (pWrap) pWrap.classList.toggle('hidden', isGroup);
+      var mDrop = document.getElementById('stelvioGroupMetricDropdown');
+      if (mDrop) mDrop.classList.toggle('hidden', !isGroup);
       var filtWrap = document.querySelector('#stelvioRankingContent .stelvio-ranking-list-filter-toggle');
       if (filtWrap) filtWrap.classList.remove('hidden');
       var legend = document.querySelector('#stelvioRankingContent .stelvio-ranking-star-legend');
@@ -8933,17 +8935,11 @@
         label.textContent = stelvioRankingState.period === 'yearly' ? '명예의 전당' : '월간';
         sel.value = stelvioRankingState.period;
       }
-      /* 그룹 탭 보조 지표 필터 표시/숨김 및 활성 칩 동기화 */
-      var gmf = document.getElementById('stelvioGroupMetricFilter');
-      if (gmf) {
-        var isGrp = stelvioIsGroupDistanceRanking();
-        gmf.classList.toggle('hidden', !isGrp);
-        if (isGrp) {
-          gmf.querySelectorAll('.stelvio-group-metric-chip').forEach(function (c) {
-            c.classList.toggle('active', c.getAttribute('data-group-metric') === stelvioGroupTabMetric);
-          });
-        }
-      }
+      /* 항목 드롭다운 라벨/select 동기화 */
+      var mSelD = document.getElementById('stelvioGroupMetricSelect');
+      if (mSelD) mSelD.value = stelvioGroupTabMetric;
+      var mLblD = document.getElementById('stelvioGroupMetricLabel');
+      if (mLblD) mLblD.textContent = stelvioGroupTabCurrentMetricLabel();
       stelvioUpdateGroupRankingFilterUi();
     }
     function stelvioOnPeriodChange(val) {
@@ -9505,6 +9501,10 @@
       stelvioGroupTabCachedMembers = [];
       stelvioLastMyGroupsFireRows = [];
       stelvioGroupTabMetric = 'gc';
+      var mSelT = document.getElementById('stelvioGroupMetricSelect');
+      if (mSelT) mSelT.value = 'gc';
+      var mLblT = document.getElementById('stelvioGroupMetricLabel');
+      if (mLblT) mLblT.textContent = 'GC';
     }
     function stelvioStopGroupTabMembersOnly() {
       if (stelvioGroupTabMembersUnsub) {
@@ -9763,12 +9763,11 @@
     function stelvioOnGroupTabMetricChange(metricKey) {
       if (stelvioGroupTabMetric === metricKey) return;
       stelvioGroupTabMetric = metricKey;
-      var gmf = document.getElementById('stelvioGroupMetricFilter');
-      if (gmf) {
-        gmf.querySelectorAll('.stelvio-group-metric-chip').forEach(function (c) {
-          c.classList.toggle('active', c.getAttribute('data-group-metric') === metricKey);
-        });
-      }
+      /* 드롭다운 UI 동기화 */
+      var mSel = document.getElementById('stelvioGroupMetricSelect');
+      if (mSel) mSel.value = metricKey;
+      var mLbl = document.getElementById('stelvioGroupMetricLabel');
+      if (mLbl) mLbl.textContent = stelvioGroupTabCurrentMetricLabel();
       stelvioApplyDurationModeUi();
       stelvioScrollRankingBoardToTopSmooth();
       fetchStelvioPeakPowerRanking();
@@ -23136,29 +23135,33 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <button type="button" class="stelvio-duration-tab" data-duration="60min">60분</button>
             </div>
           </div>
-          <!-- 그룹 탭 선택 시만 표시되는 보조 지표 필터 -->
-          <div id="stelvioGroupMetricFilter" class="stelvio-group-metric-filter hidden">
-            <div class="stelvio-group-metric-chips">
-              <button type="button" class="stelvio-group-metric-chip active" data-group-metric="gc"           onclick="stelvioOnGroupTabMetricChange('gc')">GC</button>
-              <button type="button" class="stelvio-group-metric-chip" data-group-metric="tss"          onclick="stelvioOnGroupTabMetricChange('tss')">TSS</button>
-              <button type="button" class="stelvio-group-metric-chip" data-group-metric="personal_dist" onclick="stelvioOnGroupTabMetricChange('personal_dist')">거리</button>
-              <button type="button" class="stelvio-group-metric-chip" data-group-metric="max"          onclick="stelvioOnGroupTabMetricChange('max')">Max</button>
-              <button type="button" class="stelvio-group-metric-chip" data-group-metric="1min"         onclick="stelvioOnGroupTabMetricChange('1min')">1분</button>
-              <button type="button" class="stelvio-group-metric-chip" data-group-metric="5min"         onclick="stelvioOnGroupTabMetricChange('5min')">5분</button>
-              <button type="button" class="stelvio-group-metric-chip" data-group-metric="10min"        onclick="stelvioOnGroupTabMetricChange('10min')">10분</button>
-              <button type="button" class="stelvio-group-metric-chip" data-group-metric="20min"        onclick="stelvioOnGroupTabMetricChange('20min')">20분</button>
-              <button type="button" class="stelvio-group-metric-chip" data-group-metric="40min"        onclick="stelvioOnGroupTabMetricChange('40min')">40분</button>
-              <button type="button" class="stelvio-group-metric-chip" data-group-metric="60min"        onclick="stelvioOnGroupTabMetricChange('60min')">60분</button>
-            </div>
-          </div>
           <div class="stelvio-filter-bar-wrap">
           <div class="stelvio-filter-bar">
+            <!-- 기간 필터: 그룹 탭 외 표시 -->
             <div class="stelvio-period-dropdown">
               <span id="stelvioPeriodLabel" class="stelvio-dropdown-label">월간</span>
               <span class="stelvio-dropdown-chevron">▾</span>
               <select id="stelvioPeriodSelect" class="stelvio-dropdown-select" onchange="stelvioOnPeriodChange(this.value);">
                 <option value="monthly">월간</option>
                 <option value="yearly">명예의 전당</option>
+              </select>
+            </div>
+            <!-- 항목 필터: 그룹 탭 전용 (기간 필터 대체) -->
+            <div class="stelvio-metric-dropdown hidden" id="stelvioGroupMetricDropdown">
+              <span class="stelvio-dropdown-caption">항목</span>
+              <span id="stelvioGroupMetricLabel" class="stelvio-dropdown-label">GC</span>
+              <span class="stelvio-dropdown-chevron">▾</span>
+              <select id="stelvioGroupMetricSelect" class="stelvio-dropdown-select" onchange="if(typeof stelvioOnGroupTabMetricChange==='function')stelvioOnGroupTabMetricChange(this.value);">
+                <option value="gc">GC</option>
+                <option value="tss">TSS</option>
+                <option value="personal_dist">거리</option>
+                <option value="max">Max</option>
+                <option value="1min">1분</option>
+                <option value="5min">5분</option>
+                <option value="10min">10분</option>
+                <option value="20min">20분</option>
+                <option value="40min">40분</option>
+                <option value="60min">60분</option>
               </select>
             </div>
             <div class="stelvio-gender-dropdown">
