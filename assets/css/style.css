@@ -7362,6 +7362,15 @@ button.stelvio-rank-avatar-btn:focus-visible {
   color: #6b7280;
   text-align: center;
 }
+.stelvio-ranking-empty--group {
+  line-height: 1.75;
+}
+.stelvio-ranking-empty-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #9ca3af;
+}
 .stelvio-rank-dots-row {
   padding: 4px 0;
   border-bottom: none;
