@@ -19668,7 +19668,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (raw.length === 0 && window.firestore) {
               try {
                 var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
-                snap.docs.forEach(function(d) { var dd = d.data(); var o = { id: d.id }; if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } } raw.push(o); });
+                var _excl = new Set(['run','swim','walk','trailrun','weighttraining']);
+                snap.docs.forEach(function(d) { var dd = d.data(); if (dd && String(dd.source||'').toLowerCase()==='strava' && _excl.has(String(dd.activity_type||'').trim().toLowerCase())) return; var o = { id: d.id }; if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } } raw.push(o); });
               } catch (e2) { raw = []; }
             }
             function parseDate(d) {
@@ -22032,8 +22033,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     }
                     if (logs.length === 0 && window.firestore) {
                       var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
+                      var _exclFtp = new Set(['run','swim','walk','trailrun','weighttraining']);
                       snap.docs.forEach(function(d) {
                         var dd = d.data();
+                        if (dd && String(dd.source||'').toLowerCase()==='strava' && _exclFtp.has(String(dd.activity_type||'').trim().toLowerCase())) return;
                         var o = { id: d.id };
                         if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
                         logs.push(o);
