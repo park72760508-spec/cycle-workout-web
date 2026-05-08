@@ -1152,6 +1152,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
   overflow-y: auto;
   min-height: 0;
+  scrollbar-width: none;
+}
+#openRidingRoomScreen .open-riding-app-body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /*
