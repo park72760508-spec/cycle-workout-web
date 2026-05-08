@@ -9947,6 +9947,9 @@ function OpenRidingGroupDetailView(props) {
                       }}
                     />
                   ) : null}
+                  <p className="text-xs text-slate-500 text-center m-0 pb-1 leading-snug">
+                    그룹 가입 시 멤버들에게 내 프로필이 공개됩니다
+                  </p>
                   <button
                     type="button"
                     className="open-riding-action-btn w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50 text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-3 box-border"
