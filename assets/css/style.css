@@ -5816,6 +5816,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   box-sizing: border-box;
 }
 #stelvioRankingScreen .stelvio-period-dropdown,
+#stelvioRankingScreen .stelvio-metric-dropdown,
 #stelvioRankingScreen .stelvio-gender-dropdown,
 #stelvioRankingScreen .stelvio-category-dropdown {
   position: relative;
