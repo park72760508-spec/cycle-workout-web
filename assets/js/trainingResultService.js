@@ -717,6 +717,18 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
  * @param {Object} [firestoreInstance] - Firestore 인스턴스 (선택사항)
  * @returns {Promise<Array>} 훈련 로그 배열
  */
+/** Strava 비라이딩 활동 타입 제외 목록 (Cloud Function EXCLUDED_ACTIVITY_TYPES와 동일) */
+const STRAVA_EXCLUDED_ACTIVITY_TYPES = new Set(['run', 'swim', 'walk', 'trailrun', 'weighttraining']);
+
+/** Strava 로그가 라이딩 기록에 반영해야 하는 대상인지 판별 */
+function isRidingLog(logData) {
+  var src = String(logData.source || '').toLowerCase();
+  if (src !== 'strava') return true; // Stelvio 앱 기록: 항상 포함
+  var actType = String(logData.activity_type || '').trim().toLowerCase();
+  if (!actType) return true; // activity_type 미설정(레거시): 포함
+  return !STRAVA_EXCLUDED_ACTIVITY_TYPES.has(actType);
+}
+
 export async function getUserTrainingLogs(userId, options = {}, firestoreInstance = null) {
   if (!userId) {
     throw new Error('userId는 필수입니다.');
@@ -748,6 +760,8 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
     
     querySnapshot.forEach((doc) => {
       var dd = doc.data() || {};
+      // Run/Swim/Walk/TrailRun/WeightTraining 등 비라이딩 Strava 활동은 라이딩 기록에서 제외
+      if (!isRidingLog(dd)) return;
       var o = { id: doc.id };
       if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
       logs.push(o);
