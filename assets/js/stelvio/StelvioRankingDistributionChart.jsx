@@ -203,18 +203,21 @@
         : isGcMode
           ? 'GC 환산 점수'
           : STELVIO_DURATION_LABELS[duration] || duration;
+    /* 그룹 탭에서 overrideDisplayRank는 메트릭에 관계없이 그룹 내 순위로 사용 */
+    var hasGroupRankOverride =
+      typeof p.overrideDisplayRank === 'number' &&
+      isFinite(p.overrideDisplayRank) &&
+      p.overrideDisplayRank >= 1;
     /** 오픈 라이딩 등: 랭킹 행과 무관하게 프로필 FTP 기준 W/kg으로 세로 기준선만 고정 */
     var overrideMyWkg =
       !isTss && !isKmMode && !isGcMode && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
     if (overrideMyWkg != null && (isNaN(overrideMyWkg) || !isFinite(overrideMyWkg))) overrideMyWkg = null;
 
     var chartRankOverrideRaw = p.overrideDisplayRank;
+    /* GC 모드 외 그룹 탭 메트릭에서도 overrideDisplayRank를 순위 배지에 사용 */
     var chartRankOverride =
-      isGcMode &&
-      typeof chartRankOverrideRaw === 'number' &&
-      isFinite(chartRankOverrideRaw) &&
-      chartRankOverrideRaw >= 1
-        ? Math.floor(chartRankOverrideRaw)
+      hasGroupRankOverride
+        ? Math.floor(p.overrideDisplayRank)
         : null;
 
     var chartWrapRef = useRef(null);
