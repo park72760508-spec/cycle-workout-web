@@ -5436,8 +5436,26 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .weekly-rank-name {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
   color: #1f2937;
+}
+.weekly-rank-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 주간 TOP10 아바타: 28px 소형 */
+#weeklyTop10Modal button.stelvio-rank-avatar-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
 }
 .ranking-private-badge {
   display: inline-block;
