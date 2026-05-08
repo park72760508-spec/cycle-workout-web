@@ -1166,9 +1166,17 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   --open-riding-glass-nav-inner-fixed-height: calc(
     var(--open-riding-glass-nav-inner-pad-y) * 2 + var(--open-riding-glass-nav-row-min)
   );
+  /*
+   * 그룹 생성 FAB bottom: 글래스 네비(#openRidingBottomGlassNavRoot)와 동일 기준선
+   *   bottom = env(safe-area) + 16px + 2 × --open-riding-glass-nav-inner-fixed-height
+   * → 네비 pill 높이의 약 2배만큼 화면 하단에서 떠 있으며, 세이프에어리어·홈 인디케이터와 겹치지 않음.
+   */
+  --open-riding-group-fab-bottom: calc(
+    env(safe-area-inset-bottom, 0px) + 16px + (2 * var(--open-riding-glass-nav-inner-fixed-height))
+  );
 }
 
-/* 오픈 라이딩방 활성: 맨 위로 버튼·그룹 생성 + 동일 bottom (고정). 그룹 +는 스크롤 들림 없음. */
+/* 오픈 라이딩방 활성: 맨 위로 버튼 등 --open-riding-global-floating-actions-bottom 참조. 그룹 생성 FAB는 별도 --open-riding-group-fab-bottom 사용. */
 body:has(#openRidingRoomScreen.active) {
   --open-riding-global-floating-actions-bottom: calc(143px + env(safe-area-inset-bottom, 0px));
 }
@@ -1987,7 +1995,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /*
- * 그룹 목록 FAB: 전역 맨 위로 버튼과 같은 bottom (--open-riding-global-floating-actions-bottom)
+ * 그룹 목록 FAB: 하단 글래스 네비 높이의 2배(+ 동일 하단 여백·세이프에어리어) — --open-riding-group-fab-bottom
  */
 #openRidingRoomScreen .open-riding-group-fab {
   pointer-events: auto;
@@ -1999,7 +2007,10 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   left: max(20px, env(safe-area-inset-left, 0px));
   right: auto;
   top: auto;
-  bottom: var(--open-riding-global-floating-actions-bottom, calc(143px + env(safe-area-inset-bottom, 0px)));
+  bottom: var(
+    --open-riding-group-fab-bottom,
+    calc(env(safe-area-inset-bottom, 0px) + 16px + (2 * var(--open-riding-glass-nav-inner-fixed-height)))
+  );
   box-sizing: border-box;
   max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px)) - max(20px, env(safe-area-inset-right, 0px)));
 }
