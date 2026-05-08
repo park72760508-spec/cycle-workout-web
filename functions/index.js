@@ -2786,6 +2786,7 @@ exports.getWeeklyRanking = onRequest(
         name: e.name,
         totalTss: Math.round(e.totalTss * 100) / 100,
         is_private: e.is_private === true,
+        profileImageUrl: e.profileImageUrl || null,
       }));
       let myRank = null;
       if (userIdParam) {
@@ -2798,6 +2799,7 @@ exports.getWeeklyRanking = onRequest(
             name: e.name,
             totalTss: Math.round(e.totalTss * 100) / 100,
             is_private: e.is_private === true,
+            profileImageUrl: e.profileImageUrl || null,
           };
         }
       }
@@ -2817,6 +2819,7 @@ exports.getWeeklyRanking = onRequest(
 
     if (aggMatchesWeek) {
       await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: weeklyAgg.fullEntries }, weeklyAgg.fullEntries);
+      await hydrateRankingBoardProfileImages(db, { Supremo: weeklyAgg.fullEntries }, weeklyAgg.fullEntries);
       return buildWeeklyRankingResponse(weeklyAgg.fullEntries, true);
     }
 
@@ -2835,6 +2838,7 @@ exports.getWeeklyRanking = onRequest(
         const mergeHydrate = ranking.concat(fullEntries);
         if (mergeHydrate.length) {
           await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: mergeHydrate }, null);
+          await hydrateRankingBoardProfileImages(db, { Supremo: mergeHydrate }, null);
         }
         const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
         const ageMin = updatedAt ? Math.round((nowMs - updatedAt) / 60000) : null;
@@ -2849,6 +2853,7 @@ exports.getWeeklyRanking = onRequest(
               name: e.name,
               totalTss: Math.round((e.totalTss || 0) * 100) / 100,
               is_private: e.is_private === true,
+              profileImageUrl: e.profileImageUrl || null,
             };
           }
         }
@@ -2856,7 +2861,14 @@ exports.getWeeklyRanking = onRequest(
         res.set("Cache-Control", "public, max-age=120");
         return res.status(200).json({
           success: true,
-          ranking,
+          ranking: ranking.map((e) => ({
+            rank: e.rank,
+            userId: e.userId,
+            name: e.name,
+            totalTss: e.totalTss,
+            is_private: e.is_private === true,
+            profileImageUrl: e.profileImageUrl || null,
+          })),
           startStr,
           endStr,
           myRank: myRank || undefined,
