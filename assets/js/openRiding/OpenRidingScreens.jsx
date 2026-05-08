@@ -8897,6 +8897,7 @@ function OpenRidingGroupsList(props) {
             var pending = st === GROUP_ST.PENDING;
             var name = g.name != null ? String(g.name) : '';
             var photo = g.photoUrl != null ? String(g.photoUrl) : '';
+            var isHost = userId && String(g.createdBy || '') === String(userId);
             return (
               <li key={g.id}>
                 <button
@@ -8935,10 +8936,29 @@ function OpenRidingGroupsList(props) {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold text-slate-900 truncate text-[15px]">{name || '이름 없음'}</span>
-                    <span className="block text-xs text-slate-500 mt-0.5 truncate">
-                      {regionLine(g.regions)}
-                      <span className="text-slate-300 mx-1">·</span>
-                      {g.memberCount != null ? String(g.memberCount) : '0'}명
+                    <span className="flex items-center gap-1.5 flex-wrap text-xs text-slate-500 mt-0.5">
+                      <span className="truncate min-w-0">
+                        {regionLine(g.regions)}
+                        <span className="text-slate-300 mx-1">·</span>
+                        {g.memberCount != null ? String(g.memberCount) : '0'}명
+                      </span>
+                      {userId ? (
+                        isHost ? (
+                          <span className="inline-flex items-center gap-1 shrink-0">
+                            <span className="inline-block w-3 h-3 rounded-sm bg-violet-600 border border-violet-800/30 shrink-0" aria-hidden="true" />
+                            <span className="text-violet-700 font-semibold text-[10px]">방장</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 shrink-0">
+                            <span className="inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm shrink-0" style={{ width: '12px', height: '12px' }} aria-hidden="true">
+                              <svg className="block" width={8} height={8} viewBox="0 0 12 12" fill="none">
+                                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </span>
+                            <span className="text-red-600 font-semibold text-[10px]">가입</span>
+                          </span>
+                        )
+                      ) : null}
                     </span>
                   </span>
                 </button>
@@ -8947,6 +8967,24 @@ function OpenRidingGroupsList(props) {
           })
         )}
       </ul>
+
+      {userId ? (
+        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10px] sm:text-[11px] text-slate-600 leading-snug px-1">
+          <div className="flex gap-2 items-center min-w-0">
+            <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-violet-600 border border-violet-800/30" aria-hidden="true" />
+            <span className="font-semibold text-slate-700 min-w-0">내가 방장</span>
+          </div>
+          <div className="flex gap-2 items-center min-w-0">
+            <span className="inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm shrink-0" style={{ width: '12px', height: '12px' }} aria-hidden="true">
+              <svg className="block" width={8} height={8} viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="font-semibold text-slate-700 min-w-0">가입 그룹</span>
+          </div>
+        </div>
+      ) : null}
+
       <button
         type="button"
         className="open-riding-action-btn open-riding-group-fab fixed flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14 box-border"

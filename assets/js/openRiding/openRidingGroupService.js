@@ -216,7 +216,9 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
         groupId: gid,
         name: gd.name != null ? String(gd.name) : '(이름 없음)',
         photoUrl: gd.photoUrl != null ? String(gd.photoUrl).trim() : '',
-        memberCount: gd.memberCount != null ? Number(gd.memberCount) : null
+        memberCount: gd.memberCount != null ? Number(gd.memberCount) : null,
+        createdBy: gd.createdBy != null ? String(gd.createdBy) : '',
+        regions: gd.regions != null ? gd.regions : null
       };
       emit();
     });
