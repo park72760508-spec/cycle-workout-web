@@ -2529,10 +2529,9 @@ function OpenRidingGlassNavPortal(p) {
 function OpenRidingBottomGlassNav(props) {
   var nv = props.navVariant || 'main';
   var navVariant =
-    nv === 'filter' || nv === 'create' || nv === 'friends' || nv === 'groups' ? nv : 'main';
+    nv === 'filter' || nv === 'friends' || nv === 'groups' ? nv : 'main';
   var moimActive = navVariant === 'main';
   var filterActive = navVariant === 'filter';
-  var createActive = navVariant === 'create';
   var groupsActive = navVariant === 'groups';
   var onHome = props.onHome || function () {};
   var onMoim = props.onMoim || function () {};
@@ -2541,6 +2540,7 @@ function OpenRidingBottomGlassNav(props) {
   var onGroups = props.onGroups || function () {};
   var onFriends = props.onFriends || function () {};
   var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
+  var pendingGroupJoinCount = typeof props.pendingGroupJoinCount === 'number' ? props.pendingGroupJoinCount : 0;
   var userId = props.userId || '';
 
   function iconHome() {
@@ -2605,6 +2605,45 @@ function OpenRidingBottomGlassNav(props) {
 
   var friendsActive = navVariant === 'friends';
 
+  function renderGroupsButton(isActive) {
+    return (
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(isActive)}
+          onClick={onGroups}
+          aria-current={isActive ? 'page' : undefined}
+          aria-label={'그룹' + (pendingGroupJoinCount > 0 ? ' (가입 요청 ' + pendingGroupJoinCount + '건)' : '')}
+        >
+          <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
+            <img
+              src="assets/img/people.png"
+              alt=""
+              width={20}
+              height={20}
+              className="open-riding-bottom-glass-nav__friend-img block object-contain"
+              decoding="async"
+              onError={function (e) {
+                e.currentTarget.src = 'assets/img/user.png';
+                e.currentTarget.onerror = function () { e.currentTarget.style.display = 'none'; };
+              }}
+            />
+            {pendingGroupJoinCount > 0 ? (
+              <span
+                className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
+                style={{ minWidth: '13px', height: '13px', fontSize: pendingGroupJoinCount > 9 ? 7 : 8, paddingLeft: pendingGroupJoinCount > 9 ? 3 : 3, paddingRight: pendingGroupJoinCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }}
+                aria-hidden="true"
+              >
+                {pendingGroupJoinCount > 99 ? '99+' : pendingGroupJoinCount}
+              </span>
+            ) : null}
+          </span>
+          <span className="open-riding-bottom-glass-nav__label">그룹</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+    );
+  }
+
   var innerContent = (
     <>
       <OpenRidingGlassNavSlot>
@@ -2625,43 +2664,7 @@ function OpenRidingBottomGlassNav(props) {
           <span className="open-riding-bottom-glass-nav__label">모임</span>
         </button>
       </OpenRidingGlassNavSlot>
-      <OpenRidingGlassNavSlot>
-        <button
-          type="button"
-          className={openRidingGlassNavBtnClass(createActive)}
-          onClick={onCreate}
-          aria-current={createActive ? 'page' : undefined}
-          aria-label="라이딩 주최"
-        >
-          {iconJuchey()}
-          <span className="open-riding-bottom-glass-nav__label">주최</span>
-        </button>
-      </OpenRidingGlassNavSlot>
-      <OpenRidingGlassNavSlot>
-        <button
-          type="button"
-          className={openRidingGlassNavBtnClass(groupsActive)}
-          onClick={onGroups}
-          aria-current={groupsActive ? 'page' : undefined}
-          aria-label="그룹 목록"
-        >
-          <img
-            src="assets/img/people.png"
-            alt=""
-            width={20}
-            height={20}
-            className="open-riding-bottom-glass-nav__friend-img block object-contain"
-            decoding="async"
-            onError={function (e) {
-              e.currentTarget.src = 'assets/img/user.png';
-              e.currentTarget.onerror = function () {
-                e.currentTarget.style.display = 'none';
-              };
-            }}
-          />
-          <span className="open-riding-bottom-glass-nav__label">그룹</span>
-        </button>
-      </OpenRidingGlassNavSlot>
+      {renderGroupsButton(groupsActive)}
       {renderFriendsButton(friendsActive)}
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined} aria-label="맞춤 필터">
@@ -4231,6 +4234,24 @@ function OpenRidingCalendarMain(props) {
       </div>
 
       {!compact ? renderListSection() : null}
+
+      {userId ? (
+        <button
+          type="button"
+          className="open-riding-action-btn open-riding-group-fab fixed flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14 box-border"
+          style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)'
+          }}
+          title="라이딩 생성"
+          aria-label="라이딩 생성"
+          onClick={onOpenCreate}
+        >
+          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -8719,6 +8740,8 @@ function openRidingGroupsIsAdminGrade() {
 /** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(맨 위로 버튼과 동일 bottom, 항상 표시) */
 function OpenRidingGroupsList(props) {
   var firestore = props.firestore;
+  var userId = props.userId || '';
+  var joinRequestCountMap = props.joinRequestCountMap || {};
   var onOpenDetail = props.onOpenDetail || function () {};
   var onCreate = props.onCreate || function () {};
   var _rows = useState([]);
@@ -8896,6 +8919,19 @@ function OpenRidingGroupsList(props) {
                         승인 대기
                       </span>
                     ) : null}
+                    {(function () {
+                      var cnt = joinRequestCountMap[g.id];
+                      if (!cnt || cnt <= 0) return null;
+                      return (
+                        <span
+                          className="absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold border-2 border-white shadow pointer-events-none"
+                          style={{ minWidth: '18px', height: '18px', fontSize: cnt > 9 ? 8 : 9, paddingLeft: 2, paddingRight: 2, top: '2px', right: '0px', transform: 'translate(30%, -20%)' }}
+                          aria-label={'가입 요청 ' + cnt + '건'}
+                        >
+                          {cnt > 99 ? '99+' : cnt}
+                        </span>
+                      );
+                    })()}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold text-slate-900 truncate text-[15px]">{name || '이름 없음'}</span>
@@ -10170,6 +10206,14 @@ function OpenRidingRoomApp(props) {
   var pendingIncomingCount = _pic[0];
   var setPendingIncomingCount = _pic[1];
 
+  var _pgj = useState(0);
+  var pendingGroupJoinCount = _pgj[0];
+  var setPendingGroupJoinCount = _pgj[1];
+
+  var _gjm = useState({});
+  var groupJoinCountMap = _gjm[0];
+  var setGroupJoinCountMap = _gjm[1];
+
   useEffect(
     function () {
       if (!firestore || !userId) {
@@ -10189,6 +10233,26 @@ function OpenRidingRoomApp(props) {
       };
     },
     [firestore, userId, view]
+  );
+
+  useEffect(
+    function () {
+      if (!firestore || !userId) {
+        setPendingGroupJoinCount(0);
+        setGroupJoinCountMap({});
+        return;
+      }
+      var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+      if (typeof gs.subscribeMyManagedGroupsJoinRequestCounts !== 'function') return;
+      var unsub = gs.subscribeMyManagedGroupsJoinRequestCounts(firestore, userId, function (total, countMap) {
+        setPendingGroupJoinCount(typeof total === 'number' ? total : 0);
+        setGroupJoinCountMap(countMap || {});
+      });
+      return function () {
+        if (typeof unsub === 'function') unsub();
+      };
+    },
+    [firestore, userId]
   );
 
   function handleEditNavDeleteRide() {
@@ -10298,6 +10362,8 @@ function OpenRidingRoomApp(props) {
     inner = (
       <OpenRidingGroupsList
         firestore={firestore}
+        userId={userId}
+        joinRequestCountMap={groupJoinCountMap}
         onOpenDetail={function (id) {
           setDetailGroupId(id);
           setView('groupDetail');
@@ -10419,20 +10485,16 @@ function OpenRidingRoomApp(props) {
         (view === 'groupDetail' && detailGroupId)) ? (
         <OpenRidingBottomGlassNav
           navVariant={
-            view === 'main'
-              ? 'main'
-              : view === 'filter'
-                ? 'filter'
-                : view === 'create'
-                  ? 'create'
-                  : view === 'friends'
-                    ? 'friends'
-                    : view === 'groups' ||
-                        view === 'groupCreate' ||
-                        view === 'groupEdit' ||
-                        (view === 'groupDetail' && detailGroupId)
-                      ? 'groups'
-                      : 'main'
+            view === 'filter'
+              ? 'filter'
+              : view === 'friends'
+                ? 'friends'
+                : view === 'groups' ||
+                    view === 'groupCreate' ||
+                    view === 'groupEdit' ||
+                    (view === 'groupDetail' && detailGroupId)
+                  ? 'groups'
+                  : 'main'
           }
           onHome={function () {
             if (typeof showScreen === 'function') showScreen('basecampScreen');
@@ -10458,6 +10520,7 @@ function OpenRidingRoomApp(props) {
             setView('friends');
           }}
           pendingIncomingCount={pendingIncomingCount}
+          pendingGroupJoinCount={pendingGroupJoinCount}
           userId={userId}
         />
       ) : null}
