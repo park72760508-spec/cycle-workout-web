@@ -9632,7 +9632,7 @@
           if (!uMem) continue;
           var rk = poolUid[uMem];
           if (rk) {
-            merged.push(Object.assign({}, rk));
+            merged.push(Object.assign({}, rk, { is_private: false }));
           } else {
             merged.push({
               userId: uMem,
@@ -10111,9 +10111,8 @@
       return (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
     }
 
-    /** 비공개 행은 본인·관리자만 실수치, 그 외에는 대시만 표시 */
+    /** 비공개 여부와 관계없이 값은 항상 공개. canSeeFull은 이름·아바타 표시 여부에만 사용됨 */
     function stelvioFormatRankCellForViewer(item, canSeeFull) {
-      if (stelvioRankingIsPrivateRow(item) && !canSeeFull) return '\u2014';
       return stelvioFormatRankCell(item);
     }
 
@@ -10218,7 +10217,8 @@
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var isPrivate = stelvioRankingIsPrivateRow(item);
           var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
-          var canSeeFull = isCurrent || isAdmin;
+          var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
+          var canSeeFull = isCurrent || isAdmin || isFriend;
           var name;
           var valStr = stelvioFormatRankCellForViewer(item, canSeeFull);
           var profUrl = isPrivate && !canSeeFull ? null : item.profileImageUrl;
@@ -10546,7 +10546,8 @@
         var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var isPrivate = stelvioRankingIsPrivateRow(item);
         var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
-        var canSeeFull = isCurrent || isAdmin;
+        var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
+        var canSeeFull = isCurrent || isAdmin || isFriend;
         var name;
         var valStr = stelvioFormatRankCellForViewer(item, canSeeFull);
         var profUrlCat = isPrivate && !canSeeFull ? null : item.profileImageUrl;
@@ -10609,7 +10610,8 @@
         var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var mrName = mrRawName.length > maxNameLen ? mrRawName.substring(0, maxNameLen - 2) + '..' : mrRawName;
         var mrIsPrivate = stelvioRankingIsPrivateRow(mr);
-        var mrCanSeeFull = (currentUserId && String(mr.userId || '') === String(currentUserId)) || isAdmin;
+        var mrIsFriend = stelvioRankingFriendUserSet.has(String(mr.userId || ''));
+        var mrCanSeeFull = (currentUserId && String(mr.userId || '') === String(currentUserId)) || isAdmin || mrIsFriend;
         var mrVal = stelvioFormatRankCellForViewer(mr, mrCanSeeFull);
         var mrProfUrl = mrIsPrivate && !mrCanSeeFull ? null : mr.profileImageUrl;
         if (mrIsPrivate && !mrCanSeeFull) { mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**'; }
