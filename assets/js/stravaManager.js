@@ -1401,26 +1401,42 @@ async function syncStravaDataWithMmp(months = 1, options) {
   var progressOverlay = document.getElementById(overlayId);
   var progressText = document.getElementById(textId);
   var defaultMsg = (startDateVal && endDateVal)
-    ? 'MMP 포함 동기화 중 (' + startDateVal + ' ~ ' + endDateVal + ')...'
+    ? 'MMP 포함 동기화 중(데이타 가공을 위해 장시간 소요됩니다)'
     : maxActivitiesVal != null
-      ? 'MMP 포함 동기화 중 (최근 ' + windowMonthsVal + '개월·최신 ' + maxActivitiesVal + '개 활동)...'
+      ? 'MMP 포함 동기화 중(데이타 가공을 위해 장시간 소요됩니다)'
       : daysVal
-        ? 'MMP 포함 동기화 중 (최근 ' + daysVal + '일)...'
-        : 'MMP 포함 동기화 중 (' + monthsVal + '개월)...';
+        ? 'MMP 포함 동기화 중(데이타 가공을 위해 장시간 소요됩니다)'
+        : 'MMP 포함 동기화 중(데이타 가공을 위해 장시간 소요됩니다)';
   var msg = (typeof progressMessage === 'string' && progressMessage) ? progressMessage : defaultMsg;
+
+  // 가짜 진행률 타이머 (서버 처리 중 0% → ~88% 비선형 증가, 완료 시 정리)
+  var _mmpPctTimer = null;
+  var _mmpPct = 0;
+  function _updatePctDisplay() {
+    var c = document.getElementById('stravaSyncProgressCenter');
+    if (c) c.innerHTML = '<span class="scp-pct">' + Math.round(_mmpPct) + '%</span>';
+  }
 
   function showProgress(m) {
     if (progressText) progressText.textContent = m || '준비 중...';
-    var c = document.getElementById('stravaSyncProgressCenter');
-    if (c) {
-      c.innerHTML = '<span class="scp-line">MMP</span><span class="scp-pct">서버 처리 중…</span>';
-    }
+    _mmpPct = 0;
+    _updatePctDisplay();
     if (progressOverlay) {
       progressOverlay.classList.remove('hidden');
       progressOverlay.style.display = 'flex';
     }
+    if (_mmpPctTimer) clearInterval(_mmpPctTimer);
+    _mmpPctTimer = setInterval(function () {
+      var gap = 88 - _mmpPct;
+      if (gap <= 0) return;
+      // 처음엔 빠르게, 88% 가까워질수록 느리게
+      _mmpPct += Math.max(0.4, gap * 0.045);
+      _mmpPct = Math.min(88, _mmpPct);
+      _updatePctDisplay();
+    }, 500);
   }
   function hideProgress() {
+    if (_mmpPctTimer) { clearInterval(_mmpPctTimer); _mmpPctTimer = null; }
     if (progressOverlay) {
       progressOverlay.classList.add('hidden');
       progressOverlay.style.display = 'none';
