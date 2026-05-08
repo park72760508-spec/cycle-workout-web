@@ -7930,8 +7930,7 @@
           html += '<span class="weekly-rank-position">' + rank + '위</span>';
           html += '<span class="weekly-rank-name">' +
             stelvioRankingAvatarHtml(profUrl, { userId: uid, overlayName: displayText }) +
-            '<span class="weekly-rank-name-text" title="' + rawName + '">' + displayText + '</span>' +
-            badgeHtml +
+            '<span class="weekly-rank-name-text" title="' + rawName + '">' + displayText + badgeHtml + '</span>' +
             '</span>';
           html += '<span class="weekly-rank-tss">' + tssStr + '</span>';
           html += '</div>';
@@ -7964,8 +7963,7 @@
           html += '<span class="weekly-rank-position">' + mr.rank + '위</span>';
           html += '<span class="weekly-rank-name">' +
             stelvioRankingAvatarHtml(mrProfUrl, { userId: mrUid, overlayName: mrDisplayText }) +
-            '<span class="weekly-rank-name-text" title="' + mrRawName + '">' + mrDisplayText + '</span>' +
-            mrBadgeHtml +
+            '<span class="weekly-rank-name-text" title="' + mrRawName + '">' + mrDisplayText + mrBadgeHtml + '</span>' +
             '</span>';
           html += '<span class="weekly-rank-tss">' + mrTssStr + '</span>';
           html += '</div>';
