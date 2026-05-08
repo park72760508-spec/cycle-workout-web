@@ -7905,20 +7905,21 @@
           var rank = item.rank || (idx + 1);
           var isPrivate = stelvioRankingIsPrivateRow(item);
           var isSelf = !!(currentUserId && String(item.userId || '') === String(currentUserId));
-          var canSeeFull = isSelf || isAdmin;
+          var uid = String(item.userId || '');
+          var canSeeFull = isSelf || isAdmin
+            || stelvioRankingFriendUserSet.has(uid)
+            || stelvioRankingGroupContactSet.has(uid);
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var name, tssStr;
+          tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
           if (isPrivate) {
             if (canSeeFull) {
               name = rawName + '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
-              tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
             } else {
               name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
-              tssStr = '\u2014';
             }
           } else {
             name = rawName;
-            tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
           }
           html += '<div class="weekly-rank-item">';
           if (rank <= 3) {
@@ -7935,20 +7936,21 @@
             html += '<div class="weekly-rank-item weekly-rank-ellipsis">....</div>';
           }
           var mrIsPrivate = stelvioRankingIsPrivateRow(mr);
-          var mrCanSeeFull = (currentUserId && String(mr.userId || '') === String(currentUserId)) || isAdmin;
+          var mrUid = String(mr.userId || '');
+          var mrCanSeeFull = (currentUserId && String(mr.userId || '') === String(currentUserId)) || isAdmin
+            || stelvioRankingFriendUserSet.has(mrUid)
+            || stelvioRankingGroupContactSet.has(mrUid);
           var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var mrName, mrTssStr;
+          mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
           if (mrIsPrivate) {
             if (mrCanSeeFull) {
               mrName = mrRawName + '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
-              mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
             } else {
               mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**';
-              mrTssStr = '\u2014';
             }
           } else {
             mrName = mrRawName;
-            mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
           }
           html += '<div class="weekly-rank-item weekly-rank-item-self" id="weeklyTop10MyRankRow">';
           html += '<span class="weekly-rank-position">' + mr.rank + '위</span>';
@@ -7989,6 +7991,7 @@
     var stelvioRankingState = { duration: 'gc', gender: 'all', period: 'monthly', activeCategory: 'Supremo', listFilter: 'all' };
     var stelvioRankingFavoriteUserSet = new Set();
     var stelvioRankingFriendUserSet = new Set();
+    var stelvioRankingGroupContactSet = new Set();
     var stelvioRankingFavoritesLsPrefix = 'stelvioRankingFavorites:';
     var stelvioRankingByCategory = null;
     var stelvioRankingFullEntries = null;
@@ -8069,6 +8072,40 @@
       }
     }
     window.stelvioRefreshRankingFriendSetFromFirestore = stelvioRefreshRankingFriendSetFromFirestore;
+
+    /** 내가 속한 소모임의 멤버 UID 세트 갱신 (주간 TOP10 비공개 처리에 활용) */
+    async function stelvioRefreshGroupContactSetFromFirestore() {
+      stelvioRankingGroupContactSet = new Set();
+      var myId = stelvioResolveRankingViewerUserId();
+      if (!myId) return;
+      var groupIds = (stelvioLastMyGroupsFireRows || [])
+        .map(function (r) { return String(r.groupId || r.id || '').trim(); })
+        .filter(Boolean);
+      if (!groupIds.length) return;
+      try {
+        var fs = null;
+        if (window.firestore && typeof window.firestore.collection === 'function') {
+          fs = window.firestore;
+        } else if (typeof firebase !== 'undefined' && firebase.firestore && typeof firebase.firestore === 'function') {
+          fs = firebase.firestore();
+        }
+        if (!fs || typeof fs.collection !== 'function') return;
+        var newSet = new Set();
+        await Promise.all(groupIds.map(async function (gid) {
+          try {
+            var snap = await fs.collection('stelvio_riding_groups').doc(gid).collection('members').get();
+            snap.forEach(function (d) {
+              var uid = String(d.id || '').trim();
+              if (uid && uid !== myId) newSet.add(uid);
+            });
+          } catch (e) {}
+        }));
+        stelvioRankingGroupContactSet = newSet;
+      } catch (eGc) {
+        if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[StelvioRanking] 그룹 멤버 세트 로드 실패:', eGc);
+      }
+    }
+
     function stelvioRankingFavoritesStorageKey() {
       var uid = stelvioRankingCurrentUserId;
       if (!uid && window.currentUser && window.currentUser.id) uid = window.currentUser.id;
@@ -8230,6 +8267,7 @@
       stelvioRefreshRankingFriendSetFromFirestore().then(function () {
         if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
       });
+      stelvioRefreshGroupContactSetFromFirestore();
     });
     function stelvioSyncRankingListFilterToggleUi() {
       var allBtn = document.getElementById('stelvioRankingListFilterAll');
@@ -9518,6 +9556,7 @@
         try {
           stelvioMyGroupsRankUnsub = window.openRidingGroupService.subscribeMyRidingGroupsAsMember(window.firestoreV9, uid, function (rows) {
             stelvioLastMyGroupsFireRows = rows && rows.length ? rows.slice() : [];
+            stelvioRefreshGroupContactSetFromFirestore();
             var be = document.getElementById('stelvioRankingListBody');
             var keep = {};
             var zi;
@@ -22870,16 +22909,16 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-duration-chips-wrap">
             <div class="stelvio-duration-chips" id="stelvioDurationTabs">
               <button type="button" class="stelvio-duration-tab active" data-duration="gc">GC</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="group_dist">그룹</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="tss">TSS</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="personal_dist">거리</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="max">Max</button>
               <button type="button" class="stelvio-duration-tab" data-duration="1min">1분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="5min">5분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="10min">10분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="20min">20분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="40min">40분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="60min">60분</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="max">Max</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="tss">TSS</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="personal_dist">거리</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="group_dist">그룹</button>
             </div>
           </div>
           <div class="stelvio-filter-bar-wrap">
