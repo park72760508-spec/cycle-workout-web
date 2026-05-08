@@ -1412,9 +1412,19 @@ async function syncStravaDataWithMmp(months = 1, options) {
   // 가짜 진행률 타이머 (서버 처리 중 0% → ~88% 비선형 증가, 완료 시 정리)
   var _mmpPctTimer = null;
   var _mmpPct = 0;
+  // innerHTML 대신 기존 span의 textContent만 교체 → DOM 노드 재생성 없음 → 스피너 animation 유지
   function _updatePctDisplay() {
     var c = document.getElementById('stravaSyncProgressCenter');
-    if (c) c.innerHTML = '<span class="scp-pct">' + Math.round(_mmpPct) + '%</span>';
+    if (!c) return;
+    var span = c.querySelector('.scp-pct');
+    if (!span) {
+      // 최초 1회만 span 생성 (HTML에 초기값 있으므로 일반적으로 이 경로는 타지 않음)
+      span = document.createElement('span');
+      span.className = 'scp-pct';
+      c.textContent = '';
+      c.appendChild(span);
+    }
+    span.textContent = Math.round(_mmpPct) + '%';
   }
 
   function showProgress(m) {
