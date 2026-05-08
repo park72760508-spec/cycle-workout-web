@@ -8847,7 +8847,7 @@ function OpenRidingGroupsList(props) {
           type="search"
           enterKeyHint="search"
           className="open-riding-group-search-input w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm box-border"
-          placeholder="그룹명 · 방장 이름 · UID"
+          placeholder="그룹명 또는 방장 이름으로 검색"
           value={filterText}
           onChange={function (e) {
             setFilterText(e.target.value);
