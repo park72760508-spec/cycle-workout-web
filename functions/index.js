@@ -1114,13 +1114,18 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   const userData = userDoc.data();
   const ftp = Number(userData.ftp) || 0;
 
-  let accessToken;
-  try {
-    const tokenResult = await refreshStravaTokenForUser(db, userId);
-    accessToken = tokenResult.accessToken;
-  } catch (e) {
-    console.error("[processStravaActivity] 토큰 갱신 실패:", userId, e.message);
-    return null;
+  // 만료 5분 전 이내거나 토큰 없을 때만 갱신 (무조건 갱신 시 Rotating Refresh Token 경쟁 조건 방지)
+  let accessToken = userData.strava_access_token || "";
+  const tokenExpiresAt = Number(userData.strava_expires_at || 0);
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (!accessToken || tokenExpiresAt < nowSec + 300) {
+    try {
+      const tokenResult = await refreshStravaTokenForUser(db, userId);
+      accessToken = tokenResult.accessToken;
+    } catch (e) {
+      console.error("[processStravaActivity] 토큰 갱신 실패:", userId, e.message);
+      return null;
+    }
   }
 
   const [detailRes, streamsRes] = await Promise.all([
@@ -1666,12 +1671,17 @@ const INTERNAL_SYNC_SECRET = "stelvio-internal-sync-v1"; // 청크 HTTP 인증 (
 /** 단일 사용자 Strava 동기화 (병렬 배치용). Webhook 실패 보완: MMP(5/10/30분 파워) 없으면 Streams로 보완. */
 async function processOneUserStravaSync(db, userId, userData, { afterUnix, beforeUnix }) {
   const ftp = Number(userData.ftp) || 0;
-  let accessToken;
-  try {
-    const tokenResult = await refreshStravaTokenForUser(db, userId);
-    accessToken = tokenResult.accessToken;
-  } catch (e) {
-    return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 갱신 실패: ${e.message}` };
+  // 만료 5분 전 이내거나 토큰 없을 때만 갱신 (무조건 갱신 시 Rotating Refresh Token 경쟁 조건 방지)
+  let accessToken = userData.strava_access_token || "";
+  const tokenExpiresAt = Number(userData.strava_expires_at || 0);
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (!accessToken || tokenExpiresAt < nowSec + 300) {
+    try {
+      const tokenResult = await refreshStravaTokenForUser(db, userId);
+      accessToken = tokenResult.accessToken;
+    } catch (e) {
+      return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 갱신 실패: ${e.message}` };
+    }
   }
   const actRes = await fetch(
     `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=50`,
