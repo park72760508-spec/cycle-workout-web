@@ -8899,6 +8899,9 @@
       var cWrap = document.querySelector('.stelvio-category-dropdown');
       if (gWrap) gWrap.classList.remove('hidden');
       if (cWrap) cWrap.classList.remove('hidden');
+      /* 그룹 탭: 기간 드롭다운 숨기기, 나머지 필터 유지 */
+      var pWrap = document.querySelector('.stelvio-period-dropdown');
+      if (pWrap) pWrap.classList.toggle('hidden', isGroup);
       var filtWrap = document.querySelector('#stelvioRankingContent .stelvio-ranking-list-filter-toggle');
       if (filtWrap) filtWrap.classList.remove('hidden');
       var legend = document.querySelector('#stelvioRankingContent .stelvio-ranking-star-legend');
@@ -9533,6 +9536,8 @@
       }
       if (be) stelvioRenderGroupTabRankingList(be);
       refreshStelvioDistributionChartMounted();
+      /* 소모임 확장/접힘 후 Hero 카드 갱신 */
+      if (stelvioIsGroupDistanceRanking()) renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
       return false;
     };
     function stelvioStartGroupTabMembersSubscription(groupId) {
@@ -9551,6 +9556,8 @@
           if (bel && stelvioIsGroupDistanceRanking()) {
             stelvioRenderGroupTabRankingList(bel);
             refreshStelvioDistributionChartMounted();
+            /* 멤버 로드 완료 후 Hero 카드 갱신 */
+            renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
           }
         });
       }
@@ -9667,6 +9674,91 @@
         default:             return 'W/kg';
       }
     }
+    /**
+     * 그룹 탭: 현재 확장된 소모임 내 뷰어의 순위 계산.
+     * 성별 필터(Supremo풀)만 적용 — 소모임 전체 순위 기준.
+     * @returns {{ groupName:string, overallRank:number|null, catRank:number|null, catLabel:string, metricVal:string }|null}
+     */
+    function stelvioGroupTabCalcViewerGroupRank() {
+      var uidV = stelvioResolveRankingViewerUserId();
+      var expGid = stelvioGroupTabExpandedId;
+      if (!uidV || !expGid || !stelvioGroupTabCachedMembers || !stelvioGroupTabCachedMembers.length) return null;
+      if (!stelvioRankingByCategory) return null;
+
+      /* 그룹명 */
+      var groupName = '';
+      var grpRows = stelvioLastMyGroupsFireRows || [];
+      for (var gi2 = 0; gi2 < grpRows.length; gi2++) {
+        var gr2 = grpRows[gi2];
+        if (gr2 && String(gr2.groupId || gr2.id || '') === String(expGid)) {
+          groupName = gr2.name || '';
+          break;
+        }
+      }
+
+      /* Supremo 풀(성별 필터 적용, 전 카테고리) */
+      var supMap = {};
+      var supArrC = (stelvioRankingByCategory['Supremo'] || []);
+      for (var si2 = 0; si2 < supArrC.length; si2++) {
+        if (supArrC[si2] && supArrC[si2].userId) supMap[String(supArrC[si2].userId)] = supArrC[si2];
+      }
+
+      /* 지표 값 추출 헬퍼(정렬용) */
+      function sortVal(e) {
+        var v = stelvioGroupTabGetMetricValue(e);
+        return isFinite(v) ? v : -1;
+      }
+
+      /* 소모임 멤버 중 Supremo 풀에 있는 멤버만 병합(전체 순위용 — 성별 필터만) */
+      function buildMergedAll(poolMap) {
+        var merged = [];
+        for (var mi2 = 0; mi2 < stelvioGroupTabCachedMembers.length; mi2++) {
+          var m2 = stelvioGroupTabCachedMembers[mi2];
+          var u2 = m2 && m2.userId != null ? String(m2.userId) : '';
+          if (!u2) continue;
+          var e2 = poolMap[u2];
+          if (e2) merged.push(Object.assign({}, e2, { is_private: false }));
+        }
+        merged.sort(function (a, b) { return sortVal(b) - sortVal(a); });
+        return merged;
+      }
+
+      var allMerged = buildMergedAll(supMap);
+      var overallRank = null;
+      for (var ai2 = 0; ai2 < allMerged.length; ai2++) {
+        if (String(allMerged[ai2].userId) === String(uidV)) { overallRank = ai2 + 1; break; }
+      }
+
+      /* 뷰어 카테고리 기준 순위 */
+      var viewerSupE = supMap[String(uidV)];
+      var viewerAgeCat = viewerSupE ? String(viewerSupE.ageCategory || '') : '';
+      var catRank = null, catLabel = '';
+      if (viewerAgeCat && viewerAgeCat !== 'Supremo' && STELVIO_CATEGORY_LABELS[viewerAgeCat]) {
+        catLabel = STELVIO_CATEGORY_LABELS[viewerAgeCat];
+        var catMapV = {};
+        var catArrV2 = (stelvioRankingByCategory[viewerAgeCat] || []);
+        for (var cii2 = 0; cii2 < catArrV2.length; cii2++) {
+          if (catArrV2[cii2] && catArrV2[cii2].userId) catMapV[String(catArrV2[cii2].userId)] = catArrV2[cii2];
+        }
+        var catMerged = buildMergedAll(catMapV);
+        for (var catI = 0; catI < catMerged.length; catI++) {
+          if (String(catMerged[catI].userId) === String(uidV)) { catRank = catI + 1; break; }
+        }
+      }
+
+      /* 뷰어 값 포맷 */
+      var ve = viewerSupE;
+      var metricVal;
+      switch (stelvioGroupTabMetric) {
+        case 'gc':           metricVal = (ve && ve.gcScore   != null ? Number(ve.gcScore)   : 0).toFixed(1) + '점';    break;
+        case 'tss':          metricVal = (ve && ve.totalTss  != null ? Number(ve.totalTss)  : 0).toFixed(1) + ' TSS';  break;
+        case 'personal_dist':metricVal = (ve && ve.totalKm   != null ? Number(ve.totalKm)   : 0).toFixed(1) + ' km';   break;
+        default:             metricVal = (ve && ve.wkg       != null ? Number(ve.wkg)       : 0).toFixed(2) + ' W/kg'; break;
+      }
+
+      return { groupName: groupName, overallRank: overallRank, catRank: catRank, catLabel: catLabel, metricVal: metricVal };
+    }
+
     /** 그룹 탭 지표 변경 핸들러 */
     function stelvioOnGroupTabMetricChange(metricKey) {
       if (stelvioGroupTabMetric === metricKey) return;
@@ -9719,6 +9811,19 @@
         var pr = rankingPool[pi];
         if (pr && pr.userId) poolUid[String(pr.userId)] = pr;
       }
+      /* 성별 필터 기준: Supremo 풀(API 레벨 성별 필터 적용) */
+      var supByUid = {};
+      var supPoolArr = (stelvioRankingByCategory && stelvioRankingByCategory['Supremo']) || [];
+      for (var supPi = 0; supPi < supPoolArr.length; supPi++) {
+        if (supPoolArr[supPi] && supPoolArr[supPi].userId) supByUid[String(supPoolArr[supPi].userId)] = supPoolArr[supPi];
+      }
+      /* 카테고리 기준 풀 (관심 필터 미적용, 순수 카테고리+성별 필터) */
+      var catRawByUid = (cat === 'Supremo') ? supByUid : (function () {
+        var m = {};
+        var arr = (stelvioRankingByCategory && stelvioRankingByCategory[cat]) || [];
+        for (var ci = 0; ci < arr.length; ci++) { if (arr[ci] && arr[ci].userId) m[String(arr[ci].userId)] = arr[ci]; }
+        return m;
+      })();
       var isAdminG = typeof getViewerGrade === 'function' && getViewerGrade() === '1';
       /** [data-stelvio-group-tab-root="1"] 밖 레이아웃이면 초기 구조가 아니므로 루트만 비우고 다시 준비 */
       function stelvioGroupTabEnsureRoot(bodyEl) {
@@ -9749,34 +9854,37 @@
         ) {
           return { mode: 'loading' };
         }
+        var myIdG = stelvioResolveRankingViewerUserId();
         var merged = [];
         for (var mj = 0; mj < stelvioGroupTabCachedMembers.length; mj++) {
           var mem = stelvioGroupTabCachedMembers[mj];
           var uMem = mem && mem.userId != null ? String(mem.userId) : '';
           if (!uMem) continue;
-          var rk = poolUid[uMem];
-          if (rk) {
-            merged.push(Object.assign({}, rk, { is_private: false }));
-          } else {
-          merged.push({
-            userId: uMem,
-            name: (mem.displayName != null ? String(mem.displayName) : '') || '(미등록)',
-            profileImageUrl: mem.profileImageUrl != null ? mem.profileImageUrl : null,
-            gcScore: null, totalTss: null, totalKm: null, wkg: null,
-            ageCategory: 'Supremo',
-            is_private: false
-          });
+          /* 1. 성별 필터: Supremo 풀에 없으면 성별 불일치 → 제외 */
+          var supE = supByUid[uMem];
+          if (!supE) continue;
+          /* 2. 카테고리 필터: Supremo가 아닌 경우 해당 카테고리에만 표시 */
+          if (cat !== 'Supremo' && !catRawByUid[uMem]) continue;
+          /* 3. 관심 필터 */
+          if (stelvioRankingState.listFilter === 'interest') {
+            var isFavG = stelvioRankingFavoriteUserSet.has(uMem);
+            var isFriendG = stelvioRankingFriendUserSet.has(uMem);
+            var isMeG = myIdG && uMem === String(myIdG);
+            if (!isFavG && !isFriendG && !isMeG) continue;
+          }
+          /* 카테고리 별 랭킹 데이터 우선, 없으면 Supremo 데이터 사용 */
+          var rk = poolUid[uMem] || catRawByUid[uMem] || supE;
+          merged.push(Object.assign({}, rk, { is_private: false }));
         }
-      }
-      merged.sort(function (a, b) {
-        var sa = stelvioGroupTabGetMetricValue(a);
-        var sb = stelvioGroupTabGetMetricValue(b);
-        if (!isFinite(sa)) sa = -1;
-        if (!isFinite(sb)) sb = -1;
-        if (sb !== sa) return sb - sa;
-        return String(a.name || '').localeCompare(String(b.name || ''));
-      });
-      return { mode: 'list', merged: merged };
+        merged.sort(function (a, b) {
+          var sa = stelvioGroupTabGetMetricValue(a);
+          var sb = stelvioGroupTabGetMetricValue(b);
+          if (!isFinite(sa)) sa = -1;
+          if (!isFinite(sb)) sb = -1;
+          if (sb !== sa) return sb - sa;
+          return String(a.name || '').localeCompare(String(b.name || ''));
+        });
+        return { mode: 'list', merged: merged };
       }
       function stelvioMedalImgSetIfChanged(img, medalUrl) {
         if (!img || !medalUrl) return;
@@ -10096,27 +10204,21 @@
           msg = userNameEsc + '님은 주간 ' + durLabel + ' ' + catPartTss + ', 전체 ' + globalRank + '위입니다.';
         }
       } else if (stelvioIsGroupDistanceRanking()) {
-        /* 그룹 탭: 선택된 메트릭에 따라 값과 라벨 동적 구성 */
-        var grpMetricLabel = stelvioGroupTabCurrentMetricLabel();
-        var grpMetricVal;
-        switch (stelvioGroupTabMetric) {
-          case 'gc':
-            grpMetricVal = (cu.gcScore != null ? Number(cu.gcScore) : 0).toFixed(1) + '점';
-            break;
-          case 'tss':
-            grpMetricVal = (cu.totalTss != null ? Number(cu.totalTss) : 0).toFixed(1) + ' TSS';
-            break;
-          case 'personal_dist':
-            grpMetricVal = (cu.totalKm != null ? Number(cu.totalKm) : 0).toFixed(1) + ' km';
-            break;
-          default:
-            grpMetricVal = (cu.wkg != null ? Number(cu.wkg) : 0).toFixed(2) + ' W/kg';
+        /* 그룹 탭: 확장된 소모임 내 순위 표시 */
+        var grpRankInfo = stelvioGroupTabCalcViewerGroupRank();
+        if (!grpRankInfo) {
+          /* 소모임이 선택되지 않았으면 Hero 카드 숨기기 */
+          hero.classList.add('hidden');
+          return;
         }
-        if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
-          msg = userNameEsc + '님은 ' + grpMetricLabel + ' 항목에서 전체 ' + globalRank + '위(' + grpMetricVal + ')입니다.';
+        var grpMetricLbl = stelvioGroupTabCurrentMetricLabel();
+        var grpNameEsc2 = stelvioEscapeHtml(grpRankInfo.groupName || '소모임');
+        if (grpRankInfo.overallRank == null) {
+          msg = userNameEsc + '님은 ' + grpMetricLbl + ' 항목에서 ' + grpNameEsc2 + '에 아직 기록이 없습니다.';
+        } else if (grpRankInfo.catRank != null && grpRankInfo.catLabel) {
+          msg = userNameEsc + '님은 ' + grpMetricLbl + ' 항목에서 ' + grpNameEsc2 + ' 전체에서 ' + grpRankInfo.overallRank + '위, ' + grpRankInfo.catLabel + ' 부문에서 ' + grpRankInfo.catRank + '위(' + grpRankInfo.metricVal + ')입니다.';
         } else {
-          var catPartGrp = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + grpMetricVal + ')' : grpMetricVal;
-          msg = userNameEsc + '님은 ' + grpMetricLabel + ' 항목에서 ' + catPartGrp + ', 전체 ' + globalRank + '위입니다.';
+          msg = userNameEsc + '님은 ' + grpMetricLbl + ' 항목에서 ' + grpNameEsc2 + ' 전체에서 ' + grpRankInfo.overallRank + '위(' + grpRankInfo.metricVal + ')입니다.';
         }
       } else if (stelvioIsGcRankingMode()) {
         var gcSc = (cu.gcScore != null ? Number(cu.gcScore) : 0).toFixed(1);
@@ -10171,6 +10273,8 @@
           ) {
             stelvioStartGroupTabMembersSubscription(stelvioGroupTabExpandedId);
           }
+          /* 카테고리/관심 필터 변경 후 Hero 카드 갱신 */
+          renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
         }
         stelvioSyncRankingListFilterToggleUi();
         refreshStelvioDistributionChartMounted();
