@@ -23243,7 +23243,145 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         </div>
       </div>
     </div>
+    <!-- 랭킹보드 사용자 검색 FAB (펼쳐보기 상태에서만 표시) -->
+    <div id="rankingSearchFab" class="ranking-search-fab ranking-search-fab--hidden">
+      <div class="ranking-search-row">
+        <button type="button" id="rankingSearchToggleBtn" class="ranking-search-toggle-btn" aria-label="이름 검색" title="이름 검색">
+          <img src="assets/img/glass.svg" class="ranking-search-glass-img" alt="" aria-hidden="true" />
+        </button>
+        <div id="rankingSearchInputWrap" class="ranking-search-input-wrap ranking-search-input-wrap--closed">
+          <input type="text" id="rankingSearchInput" class="ranking-search-input" placeholder="이름 입력..." autocomplete="off" maxlength="30" />
+          <button type="button" id="rankingSearchClearBtn" class="ranking-search-clear-btn" aria-label="검색어 지우기" title="지우기">✕</button>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <!-- 랭킹보드 검색 FAB 로직 -->
+  <script>
+    (function () {
+      'use strict';
+      var _inputOpen = false;
+
+      function _el(id) { return document.getElementById(id); }
+
+      /* 펼쳐보기 상태 여부 판단 */
+      function _isExpanded() {
+        var body = _el('stelvioRankingListBody');
+        if (!body) return false;
+
+        /* 케이스 1: 일반 탭 — "접어보기" 버튼이 렌더됐으면 펼쳐진 상태 */
+        var expandRows = body.querySelectorAll('.stelvio-rank-expand-row');
+        for (var i = 0; i < expandRows.length; i++) {
+          var center = expandRows[i].querySelector('.stelvio-rank-expand-center');
+          if (center && center.textContent.trim() === '접어보기') return true;
+        }
+
+        /* 케이스 2: Supremo "전체 랭킹" — minus(-) 버튼이 보이면 펼쳐진 상태 */
+        if (body.querySelector('.stelvio-rank-expand-minus')) return true;
+
+        /* 케이스 3: 관심 필터 활성 — 목록에 행이 있으면 사실상 전체 표시 */
+        if (
+          typeof stelvioRankingState !== 'undefined' &&
+          stelvioRankingState.listFilter === 'interest'
+        ) {
+          var dataRows = body.querySelectorAll('.stelvio-rank-row:not(.stelvio-rank-expand-row):not(.stelvio-rank-dots-row)');
+          if (dataRows.length > 0) return true;
+        }
+
+        return false;
+      }
+
+      /* FAB 가시성 갱신 */
+      function _updateFabVisibility() {
+        var fab = _el('rankingSearchFab');
+        if (!fab) return;
+        var show = _isExpanded();
+        fab.classList.toggle('ranking-search-fab--hidden', !show);
+        if (!show) _closeInput();
+      }
+
+      /* 검색 입력창 닫기 */
+      function _closeInput() {
+        _inputOpen = false;
+        var wrap = _el('rankingSearchInputWrap');
+        if (wrap) wrap.classList.add('ranking-search-input-wrap--closed');
+        var inp = _el('rankingSearchInput');
+        if (inp) { inp.value = ''; _applySearch(''); }
+      }
+
+      /* 검색 적용: 하이라이트 + 첫 번째 일치 항목으로 스크롤 */
+      function _applySearch(query) {
+        var body = _el('stelvioRankingListBody');
+        if (!body) return;
+        var q = query ? query.toLowerCase() : '';
+        var rows = body.querySelectorAll('.stelvio-rank-row:not(.stelvio-rank-expand-row):not(.stelvio-rank-dots-row)');
+        var firstMatch = null;
+        for (var i = 0; i < rows.length; i++) {
+          var nameEl = rows[i].querySelector('.stelvio-rank-name-text');
+          if (!nameEl) { rows[i].classList.remove('ranking-search-highlight'); continue; }
+          var name = (nameEl.textContent || '').toLowerCase();
+          if (q && name.indexOf(q) >= 0) {
+            rows[i].classList.add('ranking-search-highlight');
+            if (!firstMatch) firstMatch = rows[i];
+          } else {
+            rows[i].classList.remove('ranking-search-highlight');
+          }
+        }
+        if (firstMatch) firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      function _init() {
+        var toggleBtn = _el('rankingSearchToggleBtn');
+        var inp       = _el('rankingSearchInput');
+        var clearBtn  = _el('rankingSearchClearBtn');
+        if (!toggleBtn || !inp || !clearBtn) return;
+
+        /* 돋보기 버튼: 입력창 토글 */
+        toggleBtn.addEventListener('click', function () {
+          _inputOpen = !_inputOpen;
+          var wrap = _el('rankingSearchInputWrap');
+          if (wrap) wrap.classList.toggle('ranking-search-input-wrap--closed', !_inputOpen);
+          if (_inputOpen) {
+            setTimeout(function () { inp.focus(); }, 50);
+          } else {
+            inp.value = '';
+            _applySearch('');
+          }
+        });
+
+        /* 텍스트 입력 시 실시간 검색 */
+        inp.addEventListener('input', function () {
+          _applySearch(inp.value.trim());
+        });
+
+        /* ✕ 버튼: 검색어 초기화 */
+        clearBtn.addEventListener('click', function () {
+          inp.value = '';
+          _applySearch('');
+          inp.focus();
+        });
+
+        /* #stelvioRankingListBody 내용 변경 감시 → FAB 가시성·하이라이트 재적용 */
+        var listBody = _el('stelvioRankingListBody');
+        if (listBody) {
+          new MutationObserver(function () {
+            _updateFabVisibility();
+            if (_inputOpen && inp.value.trim()) _applySearch(inp.value.trim());
+          }).observe(listBody, { childList: true });
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _init);
+      } else {
+        _init();
+      }
+
+      /* 외부 호출용 (필요 시) */
+      window._rankingSearchFab = { update: _updateFabVisibility };
+    }());
+  </script>
 
   <!-- 전역 맨 위로 가기 플로팅 버튼 (라이딩 일지, 대시보드, 프로필, 워크아웃 화면) -->
   <button type="button" id="globalBackToTopBtn" class="global-back-to-top-btn" onclick="if(typeof handleGlobalBackToTop==='function')handleGlobalBackToTop();" aria-label="맨 위로 가기" title="맨 위로 가기">
