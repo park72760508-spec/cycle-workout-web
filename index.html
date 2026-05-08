@@ -7910,23 +7910,29 @@
             || stelvioRankingFriendUserSet.has(uid)
             || stelvioRankingGroupContactSet.has(uid);
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          var name, tssStr;
+          var displayText, badgeHtml = '', tssStr;
+          var profUrl = isPrivate && !canSeeFull ? null : (item.profileImageUrl || null);
           tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
           if (isPrivate) {
             if (canSeeFull) {
-              name = rawName + '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
+              displayText = rawName;
+              badgeHtml = '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
             } else {
-              name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
+              displayText = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
             }
           } else {
-            name = rawName;
+            displayText = rawName;
           }
           html += '<div class="weekly-rank-item">';
           if (rank <= 3) {
             html += '<span class="weekly-rank-medal"><img src="' + rankMedalSrc[rank - 1] + '" alt="" width="20" height="20" decoding="async" /></span>';
           }
           html += '<span class="weekly-rank-position">' + rank + '위</span>';
-          html += '<span class="weekly-rank-name">' + name + '</span>';
+          html += '<span class="weekly-rank-name">' +
+            stelvioRankingAvatarHtml(profUrl, { userId: uid, overlayName: displayText }) +
+            '<span class="weekly-rank-name-text" title="' + rawName + '">' + displayText + '</span>' +
+            badgeHtml +
+            '</span>';
           html += '<span class="weekly-rank-tss">' + tssStr + '</span>';
           html += '</div>';
         });
@@ -7941,20 +7947,26 @@
             || stelvioRankingFriendUserSet.has(mrUid)
             || stelvioRankingGroupContactSet.has(mrUid);
           var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          var mrName, mrTssStr;
+          var mrDisplayText, mrBadgeHtml = '', mrTssStr;
+          var mrProfUrl = mrIsPrivate && !mrCanSeeFull ? null : (mr.profileImageUrl || null);
           mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
           if (mrIsPrivate) {
             if (mrCanSeeFull) {
-              mrName = mrRawName + '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
+              mrDisplayText = mrRawName;
+              mrBadgeHtml = '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
             } else {
-              mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**';
+              mrDisplayText = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**';
             }
           } else {
-            mrName = mrRawName;
+            mrDisplayText = mrRawName;
           }
           html += '<div class="weekly-rank-item weekly-rank-item-self" id="weeklyTop10MyRankRow">';
           html += '<span class="weekly-rank-position">' + mr.rank + '위</span>';
-          html += '<span class="weekly-rank-name">' + mrName + '</span>';
+          html += '<span class="weekly-rank-name">' +
+            stelvioRankingAvatarHtml(mrProfUrl, { userId: mrUid, overlayName: mrDisplayText }) +
+            '<span class="weekly-rank-name-text" title="' + mrRawName + '">' + mrDisplayText + '</span>' +
+            mrBadgeHtml +
+            '</span>';
           html += '<span class="weekly-rank-tss">' + mrTssStr + '</span>';
           html += '</div>';
         }
