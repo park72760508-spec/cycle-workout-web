@@ -9448,6 +9448,8 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   border-radius: 50%;
   animation: stravaSyncSpin 0.9s linear infinite;
   box-shadow: 0 0 22px rgba(34, 197, 94, 0.4);
+  /* 스피너를 독립된 GPU 컴포지터 레이어로 격리 → DOM 변경이 애니메이션에 영향 안 줌 */
+  will-change: transform;
   transform: translateZ(0);
 }
 .strava-sync-progress-center {
