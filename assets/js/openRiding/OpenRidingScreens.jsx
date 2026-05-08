@@ -8753,6 +8753,10 @@ function OpenRidingGroupsList(props) {
   var _owp = useState({});
   var ownerProfiles = _owp[0];
   var setOwnerProfiles = _owp[1];
+  /* 내가 실제 멤버(수락 완료)로 가입된 그룹 ID 집합 */
+  var _myMemberIds = useState(new Set());
+  var myMemberGroupIds = _myMemberIds[0];
+  var setMyMemberGroupIds = _myMemberIds[1];
   var isAdmin = openRidingGroupsIsAdminGrade();
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
   var GROUP_ST = gs.GROUP_STATUS || { PENDING: 'PENDING', APPROVED: 'APPROVED' };
@@ -8837,6 +8841,36 @@ function OpenRidingGroupsList(props) {
     [firestore, isAdmin]
   );
 
+  /*
+   * 각 그룹의 members/{userId} 문서를 직접 구독 → 수락 완료 여부 판별
+   * joinRequests(신청 대기)는 members 문서가 없으므로 false 반환
+   * 탈퇴 후에는 members 문서가 삭제되므로 즉시 false로 업데이트
+   */
+  var rowsIdsKey = useMemo(
+    function () {
+      return rows.map(function (g) { return String(g.id || ''); }).filter(Boolean).sort().join('\0');
+    },
+    [rows]
+  );
+
+  useEffect(
+    function () {
+      var groupIds = rows.map(function (g) { return String(g.id || ''); }).filter(Boolean);
+      if (!firestore || !userId || !groupIds.length) {
+        setMyMemberGroupIds(new Set());
+        return;
+      }
+      if (typeof gs.subscribeUserGroupMemberships !== 'function') {
+        setMyMemberGroupIds(new Set());
+        return;
+      }
+      return gs.subscribeUserGroupMemberships(firestore, userId, groupIds, function (memberIds) {
+        setMyMemberGroupIds(memberIds instanceof Set ? memberIds : new Set());
+      });
+    },
+    [firestore, userId, rowsIdsKey]
+  );
+
   useEffect(
     function () {
       var scrollEl = document.querySelector('#openRidingRoomScreen .open-riding-app-body');
@@ -8898,6 +8932,8 @@ function OpenRidingGroupsList(props) {
             var name = g.name != null ? String(g.name) : '';
             var photo = g.photoUrl != null ? String(g.photoUrl) : '';
             var isHost = userId && String(g.createdBy || '') === String(userId);
+            /* 수락 완료된 가입 멤버 (방장 제외, 가입 신청만 한 경우 해당 없음) */
+            var isApprovedMember = !isHost && userId && myMemberGroupIds.has(String(g.id));
             var groupIsPublic = g.isPublic !== false;
             return (
               <li key={g.id}>
@@ -8935,8 +8971,8 @@ function OpenRidingGroupsList(props) {
                         </span>
                       );
                     })()}
-                    {/* 10시 방향: 내 역할 (방장 / 가입) */}
-                    {userId ? (
+                    {/* 10시 방향: 내 역할 (방장 / 수락 완료 가입) */}
+                    {(isHost || isApprovedMember) ? (
                       <span
                         className={'absolute flex items-center justify-center rounded-full text-white border-2 border-white shadow pointer-events-none ' + (isHost ? 'bg-violet-600' : 'bg-red-600')}
                         style={{ width: '16px', height: '16px', top: '2px', left: '0px', transform: 'translate(-30%, -20%)' }}

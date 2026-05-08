@@ -702,6 +702,48 @@ export function subscribeMyManagedGroupsJoinRequestCounts(db, userId, onUpdate) 
 }
 
 /**
+ * 현재 사용자가 지정된 그룹들의 members/{userId} 문서를 직접 구독.
+ * joinRequests(신청 대기) 상태는 포함하지 않음 — 수락 완료(members 문서 존재)만 true.
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} userId
+ * @param {string[]} groupIds  구독할 그룹 ID 배열 (화면에 보이는 그룹 목록)
+ * @param {function(Set<string>): void} onUpdate  멤버로 등록된 groupId Set
+ * @returns {function(): void}  unsubscribe
+ */
+export function subscribeUserGroupMemberships(db, userId, groupIds, onUpdate) {
+  if (!db || !userId || !Array.isArray(groupIds) || !groupIds.length || typeof onUpdate !== 'function') {
+    if (typeof onUpdate === 'function') onUpdate(new Set());
+    return function () {};
+  }
+  var uid = String(userId).trim();
+  var status = {};
+  var unsubs = [];
+
+  function emitSet() {
+    var s = new Set();
+    Object.keys(status).forEach(function (k) { if (status[k]) s.add(k); });
+    onUpdate(s);
+  }
+
+  groupIds.forEach(function (groupId) {
+    var gid = String(groupId).trim();
+    if (!gid) return;
+    status[gid] = false;
+    var mRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', uid);
+    var unsub = onSnapshot(
+      mRef,
+      function (snap) { status[gid] = snap.exists(); emitSet(); },
+      function ()     { status[gid] = false;          emitSet(); }
+    );
+    unsubs.push(unsub);
+  });
+
+  return function () {
+    unsubs.forEach(function (u) { try { u(); } catch (e) {} });
+  };
+}
+
+/**
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} groupId
  */
@@ -733,6 +775,7 @@ if (typeof window !== 'undefined') {
     transferRidingGroupOwnership,
     fetchRidingGroupById,
     uploadRidingGroupCover,
-    subscribeMyManagedGroupsJoinRequestCounts
+    subscribeMyManagedGroupsJoinRequestCounts,
+    subscribeUserGroupMemberships
   };
 }
