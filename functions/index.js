@@ -1230,6 +1230,12 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
   }
 
+  // Run/Swim/Walk/TrailRun/WeightTraining 등 비라이딩 활동은 라이딩 기록 컬렉션에 저장하지 않음
+  if (!isCyclingForMmp(mapped)) {
+    console.log(`[processStravaActivity] 비라이딩 활동 저장 제외: userId=${userId} activityId=${activityId} activity_type=${mapped.activity_type}`);
+    return { userId, activityId, userTss: 0, isNew: false };
+  }
+
   const existingIds = await getExistingStravaActivityIds(db, userId);
   const isNew = !existingIds.has(activityId);
 
@@ -1848,6 +1854,11 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
       if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
     }
+    // Run/Swim/Walk/TrailRun/WeightTraining 등 비라이딩 활동은 저장하지 않음
+    if (!isCyclingForMmp(mapped)) {
+      console.log(`[processOneUserStravaSync] 비라이딩 활동 저장 제외: userId=${userId} actId=${actId} activity_type=${mapped.activity_type}`);
+      continue;
+    }
     await logsRef.doc(actId).set(logDoc, { merge: true });
     existingIds.add(actId);
     newActivities += 1;
@@ -2445,6 +2456,11 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
         }
         if (userWeight != null) logDoc.weight = userWeight;
+        // Run/Swim/Walk/TrailRun/WeightTraining 등 비라이딩 활동은 저장하지 않음
+        if (!isCyclingForMmp(mapped)) {
+          console.log(`[manualStravaSyncWithMmp] 비라이딩 활동 저장 제외: uid=${uid} actId=${actId} activity_type=${mapped.activity_type}`);
+          continue;
+        }
         await logDocRef.set(logDoc, { merge: true });
         createdCount += 1;
         processedCount += 1;
