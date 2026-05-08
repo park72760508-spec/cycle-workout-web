@@ -1436,7 +1436,27 @@ async function syncStravaDataWithMmp(months = 1, options) {
     showProgress(msg);
 
     const auth = window.authV9 || window.auth || window.firebase?.auth?.();
-    const currentUser = auth?.currentUser;
+    // auth.currentUser는 Firebase SDK 초기화 타이밍이나 SESSION persistence 세션 복원 중에
+    // 잠시 null이 될 수 있으므로, onAuthStateChanged로 확정될 때까지 최대 5초 대기
+    const currentUser = await (function waitForCurrentUser() {
+      return new Promise(function (resolve) {
+        if (!auth) { resolve(null); return; }
+        if (auth.currentUser) { resolve(auth.currentUser); return; }
+        var settled = false;
+        var timer = setTimeout(function () {
+          if (!settled) { settled = true; if (typeof unsub === 'function') unsub(); resolve(auth.currentUser); }
+        }, 5000);
+        var unsub;
+        try {
+          unsub = auth.onAuthStateChanged(function (user) {
+            if (!settled) { settled = true; clearTimeout(timer); resolve(user); }
+          });
+        } catch (e) {
+          clearTimeout(timer);
+          resolve(auth.currentUser);
+        }
+      });
+    })();
     if (!currentUser) {
       throw new Error('로그인이 필요합니다. Firebase Auth로 로그인 후 다시 시도해 주세요.');
     }
