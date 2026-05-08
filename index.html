@@ -9596,11 +9596,34 @@
         if (pr && pr.userId) poolUid[String(pr.userId)] = pr;
       }
       var isAdminG = typeof getViewerGrade === 'function' && getViewerGrade() === '1';
-      function memberBlockHtml(expandedForGid) {
-        var gids = expandedForGid != null ? String(expandedForGid).trim() : '';
-        if (String(stelvioGroupTabExpandedId) !== gids) return '';
-        if (!stelvioGroupTabCachedMembers.length && stelvioGroupTabMembersSubForId && String(stelvioGroupTabMembersSubForId) === gids) {
-          return '<div class="stelvio-group-members-block" role="region" aria-label="소모임 멤버 순위 로딩"><p class="stelvio-ranking-empty stelvio-ranking-loading-local" style="margin:10px 0 10px 12px">멤버 불러오는 중…</p></div>';
+      /** [data-stelvio-group-tab-root="1"] 밖 레이아웃이면 초기 구조가 아니므로 루트만 비우고 다시 준비 */
+      function stelvioGroupTabEnsureRoot(bodyEl) {
+        var r = bodyEl.querySelector('[data-stelvio-group-tab-root="1"]');
+        if (r) return r;
+        bodyEl.innerHTML = '<div data-stelvio-group-tab-root="1" class="stelvio-group-tab-root"></div>';
+        return bodyEl.firstElementChild;
+      }
+      function stelvioCssEscAttrId(s) {
+        if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(String(s));
+        return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      }
+      /** 프로필 URL이 바뀐 경우에만 img src 갱신(같은 노드 유지 → 재디코딩·깜빡임 최소화) */
+      function stelvioRankImgSetSrcIfChanged(img, rawUrl) {
+        if (!img) return;
+        var key = rawUrl != null ? String(rawUrl) : '';
+        if (img.getAttribute('data-stelvio-ph-key') === key) return;
+        img.setAttribute('data-stelvio-ph-key', key);
+        img.setAttribute('src', stelvioRankingEscapeAttr(key || ''));
+      }
+      function stelvioGroupTabBuildMergedForGid(gids) {
+        var gidsT = gids != null ? String(gids).trim() : '';
+        if (String(stelvioGroupTabExpandedId) !== gidsT) return { mode: 'none' };
+        if (
+          !stelvioGroupTabCachedMembers.length &&
+          stelvioGroupTabMembersSubForId &&
+          String(stelvioGroupTabMembersSubForId) === gidsT
+        ) {
+          return { mode: 'loading' };
         }
         var merged = [];
         for (var mj = 0; mj < stelvioGroupTabCachedMembers.length; mj++) {
@@ -9629,10 +9652,160 @@
           if (sb !== sa) return sb - sa;
           return String(a.name || '').localeCompare(String(b.name || ''));
         });
-        var mh = '';
+        return { mode: 'list', merged: merged };
+      }
+      function stelvioMedalImgSetIfChanged(img, medalUrl) {
+        if (!img || !medalUrl) return;
+        var k = String(medalUrl);
+        if (img.getAttribute('data-stelvio-medal-key') === k) return;
+        img.setAttribute('data-stelvio-medal-key', k);
+        img.setAttribute('src', k);
+      }
+      function stelvioGroupTabPatchMemberSlot(slotEl, gidi, rankMedalSrc) {
+        if (!slotEl) return;
+        var st = stelvioGroupTabBuildMergedForGid(gidi);
+        if (st.mode === 'none') {
+          slotEl.textContent = '';
+          return;
+        }
+        if (st.mode === 'loading') {
+          slotEl.innerHTML =
+            '<div class="stelvio-group-members-block" role="region" aria-label="소모임 멤버 순위 로딩"><p class="stelvio-ranking-empty stelvio-ranking-loading-local" style="margin:10px 0 10px 12px">멤버 불러오는 중…</p></div>';
+          return;
+        }
+        var merged = st.merged;
         var maxNm = 12;
-        for (var mi = 0; mi < merged.length; mi++) {
+        var block = slotEl.querySelector('.stelvio-group-members-block');
+        var needFresh =
+          !block || !!(slotEl.querySelector('.stelvio-ranking-loading-local'));
+        if (needFresh) {
+          slotEl.textContent = '';
+          block = document.createElement('div');
+          block.className = 'stelvio-group-members-block';
+          block.setAttribute('role', 'region');
+          block.setAttribute('aria-label', '선택 소모임 멤버 GC 순위');
+          slotEl.appendChild(block);
+        }
+        if (!merged.length) {
+          block.textContent = '';
+          var epEmpty = document.createElement('p');
+          epEmpty.className = 'stelvio-ranking-empty';
+          epEmpty.style.margin = '10px 0 12px 20px';
+          epEmpty.style.fontSize = '12px';
+          epEmpty.textContent = '등록된 멤버가 없습니다.';
+          block.appendChild(epEmpty);
+          return;
+        }
+        var strayEmpty = block.querySelector(':scope > p.stelvio-ranking-empty:not(.stelvio-ranking-loading-local)');
+        if (strayEmpty) strayEmpty.remove();
+        function memberRowMarkup(itRow, rkIn, rkRaw, nmRow, profRow, valS, bdge) {
+          var crownH = '';
+          if (rkIn <= 3) {
+            crownH =
+              '<span class="stelvio-rank-crown"><img alt="" width="24" height="24" decoding="async" fetchpriority="low" /></span>';
+          }
+          return (
+            crownH +
+            '<span class="stelvio-rank-pos">' +
+            rkIn +
+            '위</span>' +
+            '<span class="stelvio-rank-name">' +
+            stelvioRankingAvatarHtml(profRow, { userId: itRow.userId, overlayName: nmRow, ageCategory: itRow.ageCategory }) +
+            '<span class="stelvio-rank-name-text" title="' +
+            rkRaw +
+            '">' +
+            nmRow +
+            '</span>' +
+            bdge +
+            '<span class="stelvio-rank-star-slot">' +
+            stelvioRankingStarButtonHtml(itRow.userId) +
+            '</span></span>' +
+            '<span class="stelvio-rank-wkg">' +
+            valS +
+            '</span>'
+          );
+        }
+        function patchOneMemberRow(rowEl, it, rankInGroup, rawNm, prv, isCur, canFull, nm, prof, valStr, badgeP, rkSrc) {
+          var rowClsP = 'stelvio-rank-row stelvio-rank-row--group-member' + (isCur ? ' stelvio-rank-current' : '');
+          rowEl.className = rowClsP + ' stelvio-group-member-row';
+          var crownEl = rowEl.querySelector(':scope > .stelvio-rank-crown');
+          if (rankInGroup <= 3) {
+            if (!crownEl) {
+              crownEl = document.createElement('span');
+              crownEl.className = 'stelvio-rank-crown';
+              var medals = document.createElement('img');
+              medals.alt = '';
+              medals.setAttribute('width', '24');
+              medals.setAttribute('height', '24');
+              medals.decoding = 'async';
+              medals.setAttribute('fetchpriority', 'low');
+              crownEl.appendChild(medals);
+              var posRef = rowEl.querySelector(':scope > .stelvio-rank-pos');
+              if (posRef) rowEl.insertBefore(crownEl, posRef);
+              else rowEl.insertBefore(crownEl, rowEl.firstChild);
+            }
+            stelvioMedalImgSetIfChanged(crownEl.querySelector('img'), rkSrc[rankInGroup - 1]);
+          } else if (crownEl) {
+            crownEl.parentNode.removeChild(crownEl);
+          }
+          var posN = rowEl.querySelector(':scope > .stelvio-rank-pos');
+          if (posN) posN.textContent = rankInGroup + '위';
+          var nw = rowEl.querySelector(':scope > .stelvio-rank-name');
+          if (!nw || !nw.querySelector('.stelvio-rank-avatar-btn')) {
+            rowEl.innerHTML = memberRowMarkup(it, rankInGroup, rawNm, nm, prof, valStr, badgeP);
+            var imgFresh = rowEl.querySelector('.stelvio-rank-avatar-img');
+            var pkFresh =
+              prof != null && String(prof).trim()
+                ? String(prof).trim()
+                : stelvioRankingDefaultProfileImg();
+            if (imgFresh) {
+              imgFresh.setAttribute('data-stelvio-ph-key', pkFresh);
+              stelvioRankImgSetSrcIfChanged(imgFresh, pkFresh);
+            }
+            if (rankInGroup <= 3) {
+              var cr = rowEl.querySelector(':scope > .stelvio-rank-crown img');
+              stelvioMedalImgSetIfChanged(cr, rkSrc[rankInGroup - 1]);
+            }
+            return;
+          }
+          var avatarBtn = nw.querySelector('.stelvio-rank-avatar-btn');
+          var profKey =
+            prof != null && String(prof).trim() ? String(prof).trim() : stelvioRankingDefaultProfileImg();
+          if (avatarBtn) {
+            var uidEsc = String(it.userId || '');
+            avatarBtn.setAttribute('data-stelvio-rank-user-id', stelvioRankingEscapeAttr(uidEsc));
+            avatarBtn.setAttribute('data-stelvio-rank-overlay-name', stelvioRankingEscapeAttr(nm));
+            avatarBtn.setAttribute('data-stelvio-rank-age-cat', stelvioRankingEscapeAttr(it.ageCategory || ''));
+            avatarBtn.setAttribute('data-stelvio-rank-zoom-src', stelvioRankingEscapeAttr(profKey));
+          }
+          stelvioRankImgSetSrcIfChanged(nw.querySelector('.stelvio-rank-avatar-img'), profKey);
+          var nt = nw.querySelector('.stelvio-rank-name-text');
+          if (nt) {
+            nt.innerHTML = nm;
+            nt.setAttribute('title', rawNm);
+          }
+          var oldBadges = nw.querySelectorAll('.ranking-private-badge');
+          for (var bi = 0; bi < oldBadges.length; bi++) oldBadges[bi].parentNode.removeChild(oldBadges[bi]);
+          var ss = nw.querySelector('.stelvio-rank-star-slot');
+          if (badgeP && ss) ss.insertAdjacentHTML('beforebegin', badgeP);
+          if (ss) ss.innerHTML = stelvioRankingStarButtonHtml(it.userId);
+          var wg = rowEl.querySelector(':scope > .stelvio-rank-wkg');
+          if (wg) wg.textContent = valStr;
+        }
+        var wantSet = {};
+        var mi;
+        for (mi = 0; mi < merged.length; mi++) wantSet[String(merged[mi].userId || '')] = true;
+        var oldRows = block.querySelectorAll('.stelvio-group-member-row[data-stelvio-member-uid]');
+        for (mi = 0; mi < oldRows.length; mi++) {
+          var ouid = oldRows[mi].getAttribute('data-stelvio-member-uid');
+          if (ouid && !wantSet[ouid]) oldRows[mi].parentNode.removeChild(oldRows[mi]);
+        }
+        var orderedRows = [];
+        for (mi = 0; mi < merged.length; mi++) {
           var it = merged[mi];
+          var uidM = String(it.userId || '');
+          var selR = '[data-stelvio-member-uid="' + stelvioCssEscAttrId(uidM) + '"]';
+          var row = uidM ? block.querySelector(selR) : null;
           var dispLm = mi + 1;
           var rawNm = (it.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var prv = stelvioRankingIsPrivateRow(it);
@@ -9641,48 +9814,49 @@
           var nm = rawNm.length > maxNm ? rawNm.substring(0, maxNm - 2) + '..' : rawNm;
           var prof = prv && !canFull ? null : it.profileImageUrl;
           var valStr = stelvioFormatGroupTabGcCell(it, canFull);
-          if (prv && canFull)
-            nm = rawNm.length > maxNm ? rawNm.substring(0, maxNm - 2) + '..' : rawNm;
+          if (prv && canFull) nm = rawNm.length > maxNm ? rawNm.substring(0, maxNm - 2) + '..' : rawNm;
           if (prv && !canFull) nm = rawNm.length >= 2 ? rawNm.charAt(0) + '**' : '**';
           var badgeP = prv && canFull ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
-          var rankInGroup = dispLm;
-          var rowCls = 'stelvio-rank-row stelvio-rank-row--group-member' + (isCur ? ' stelvio-rank-current' : '');
-          mh +=
-            '<div class="' +
-            rowCls +
-            ' stelvio-group-member-row">';
-          if (rankInGroup <= 3) {
-            mh += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[rankInGroup - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
+          var rkIn = dispLm;
+          if (!row) {
+            row = document.createElement('div');
+            row.setAttribute('data-stelvio-member-uid', uidM);
+            row.className =
+              'stelvio-rank-row stelvio-rank-row--group-member stelvio-group-member-row' +
+              (isCur ? ' stelvio-rank-current' : '');
+            row.innerHTML = memberRowMarkup(it, rkIn, rawNm, nm, prof, valStr, badgeP);
+            var imgN = row.querySelector('.stelvio-rank-avatar-img');
+            var pkNew =
+              prof != null && String(prof).trim()
+                ? String(prof).trim()
+                : stelvioRankingDefaultProfileImg();
+            if (imgN) {
+              imgN.setAttribute('data-stelvio-ph-key', pkNew);
+              stelvioRankImgSetSrcIfChanged(imgN, pkNew);
+            }
+            if (rkIn <= 3)
+              stelvioMedalImgSetIfChanged(row.querySelector(':scope > .stelvio-rank-crown img'), rankMedalSrc[rkIn - 1]);
+          } else {
+            patchOneMemberRow(row, it, rkIn, rawNm, prv, isCur, canFull, nm, prof, valStr, badgeP, rankMedalSrc);
           }
-          mh += '<span class="stelvio-rank-pos">' + rankInGroup + '위</span>';
-          mh +=
-            '<span class="stelvio-rank-name">' +
-            stelvioRankingAvatarHtml(prof, { userId: it.userId, overlayName: nm, ageCategory: it.ageCategory }) +
-            '<span class="stelvio-rank-name-text" title="' +
-            rawNm +
-            '">' +
-            nm +
-            '</span>' +
-            badgeP +
-            stelvioRankingStarButtonHtml(it.userId) +
-            '</span>';
-          mh += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
-          mh += '</div>';
+          orderedRows.push(row);
         }
-        if (!mh) {
-          mh =
-            '<p class="stelvio-ranking-empty" style="margin:10px 0 12px 20px;font-size:12px">등록된 멤버가 없습니다.</p>';
+        for (mi = 0; mi < orderedRows.length; mi++) {
+          block.appendChild(orderedRows[mi]);
         }
-        return '<div class="stelvio-group-members-block" role="region" aria-label="선택 소모임 멤버 GC 순위">' + mh + '</div>';
       }
       var defGp =
         typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
           ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
           : 'assets/img/profile-placeholder.svg';
-      var chunks = '';
-      for (var gi = 0; gi < grpRows.length; gi++) {
+      var listRoot = stelvioGroupTabEnsureRoot(bodyEl);
+      var seenIds = {};
+      var gi;
+      for (gi = 0; gi < grpRows.length; gi++) {
         var gr = grpRows[gi];
         var gidi = String(gr.groupId || gr.id || '');
+        if (!gidi) continue;
+        seenIds[gidi] = true;
         var rawG = (gr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var nameG = rawG.length > 15 ? rawG.substring(0, 15) + '..' : rawG;
         var ph = gr.photoUrl && String(gr.photoUrl).trim() ? String(gr.photoUrl).trim() : defGp;
@@ -9692,24 +9866,54 @@
         var rowClsG =
           'stelvio-rank-row stelvio-rank-row--my-group stelvio-group-pick-row' +
           (isExp ? ' stelvio-group-pick-row--open' : '');
-        chunks += '<button type="button" class="' + rowClsG + '" data-stelvio-group-pick="1" data-stelvio-group-id="' + stelvioRankingEscapeAttr(gidi) + '" aria-expanded="' + (isExp ? 'true' : 'false') + '">';
-        chunks +=
-          '<span class="stelvio-rank-name stelvio-group-pick-main">' +
-          '<span class="stelvio-group-list-avatar-slot" aria-hidden="true">' +
-          '<span class="stelvio-rank-avatar">' +
-          '<img class="stelvio-rank-avatar-img" src="' +
-          stelvioRankingEscapeAttr(ph) +
-          '" alt="" width="30" height="30" loading="lazy" decoding="async" /></span>' +
-          '</span>' +
-          '<span class="stelvio-rank-name-text">' +
-          nameG +
-          '</span>' +
-          '</span>';
-        chunks += '<span class="stelvio-rank-wkg stelvio-group-pick-meta">' + stelvioRankingEscapeAttr(String(mcShown)) + '명</span>';
-        chunks += '</button>';
-        chunks += memberBlockHtml(gidi);
+        var sel = '[data-stelvio-group-item-id="' + stelvioCssEscAttrId(gidi) + '"]';
+        var wrap = listRoot.querySelector(sel);
+        if (!wrap) {
+          wrap = document.createElement('div');
+          wrap.className = 'stelvio-group-tab-item';
+          wrap.setAttribute('data-stelvio-group-item-id', gidi);
+          var btnNew = document.createElement('button');
+          btnNew.type = 'button';
+          btnNew.className = rowClsG;
+          btnNew.setAttribute('data-stelvio-group-pick', '1');
+          btnNew.setAttribute('data-stelvio-group-id', gidi);
+          btnNew.setAttribute('aria-expanded', isExp ? 'true' : 'false');
+          btnNew.innerHTML =
+            '<span class="stelvio-rank-name stelvio-group-pick-main">' +
+            '<span class="stelvio-group-list-avatar-slot" aria-hidden="true">' +
+            '<span class="stelvio-rank-avatar">' +
+            '<img class="stelvio-rank-avatar-img" alt="" width="30" height="30" decoding="async" fetchpriority="low" /></span>' +
+            '</span>' +
+            '<span class="stelvio-rank-name-text"></span>' +
+            '</span>' +
+            '<span class="stelvio-rank-wkg stelvio-group-pick-meta"></span>';
+          var slotNew = document.createElement('div');
+          slotNew.className = 'stelvio-group-members-slot';
+          wrap.appendChild(btnNew);
+          wrap.appendChild(slotNew);
+          listRoot.appendChild(wrap);
+        }
+        var btn = wrap.querySelector('button[data-stelvio-group-pick="1"]');
+        var slot = wrap.querySelector('.stelvio-group-members-slot');
+        if (btn) {
+          btn.className = rowClsG;
+          btn.setAttribute('aria-expanded', isExp ? 'true' : 'false');
+          var nameEl = btn.querySelector('.stelvio-group-pick-main .stelvio-rank-name-text');
+          if (nameEl) nameEl.innerHTML = nameG;
+          var metaEl = btn.querySelector('.stelvio-group-pick-meta');
+          if (metaEl) metaEl.textContent = String(mcShown) + '명';
+          var gImg = btn.querySelector('.stelvio-rank-avatar-img');
+          stelvioRankImgSetSrcIfChanged(gImg, ph);
+        }
+        stelvioGroupTabPatchMemberSlot(slot, gidi, rankMedalSrc);
+        listRoot.appendChild(wrap);
       }
-      bodyEl.innerHTML = chunks;
+      var orphans = listRoot.querySelectorAll('.stelvio-group-tab-item[data-stelvio-group-item-id]');
+      for (var oi = 0; oi < orphans.length; oi++) {
+        var ow = orphans[oi];
+        var oid = ow.getAttribute('data-stelvio-group-item-id');
+        if (oid && !seenIds[oid]) ow.parentNode.removeChild(ow);
+      }
     }
 
     function renderStelvioHeroCard(currentUser, myRankSupremo) {
