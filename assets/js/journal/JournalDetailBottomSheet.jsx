@@ -747,10 +747,7 @@
 
   function TabSummary(props) {
     var log = props.log;
-    var userProfile = props.userProfile || {};
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
-    var DailyCharts = window.DailyTimeInZonesCharts;
-    var up = { id: userProfile.id || userProfile.uid, uid: userProfile.uid || userProfile.id, ftp: Number(userProfile.ftp) || 200, max_hr: Number(userProfile.max_hr) || 190 };
     var spd = log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
       ? Number(log.avg_speed_kmh)
       : avgSpeedKmhFromDistanceTime(log.distance_km, log.duration_sec);
@@ -764,22 +761,39 @@
       DetailRow({ label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-', isPr: false }),
       DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-', isPr: false })
     ];
-    var tizEl = log.time_in_zones && DailyCharts
-      ? React.createElement('div', { className: 'journal-detail-time-in-zones-wrap' },
-          React.createElement(DailyCharts, { log: log, userProfile: up })
-        )
-      : null;
-    return React.createElement('div', { className: 'journal-tab-content' },
-      rows.concat(tizEl ? [tizEl] : [])
-    );
+    /* 영역별 누적 시간 그래프는 Power Profile / Heart Rate 탭으로 이동됨 */
+    return React.createElement('div', { className: 'journal-tab-content' }, rows);
   }
 
   function TabPower(props) {
     var log = props.log;
     var yearlyPeaks = props.yearlyPeaks;
     var userWeight = props.userWeight || 0;
+    var userProfile = props.userProfile || {};
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     var pr = function(field) { return isPr(log, yearlyPeaks, field, userWeight); };
+
+    /* 파워 영역별 누적 시간 차트 — 파워 존 데이터가 있을 때만 렌더 */
+    var PowerTiz = window.PowerTimeInZonesChart;
+    var rawPowerZones = log.time_in_zones && log.time_in_zones.power;
+    var powerData = rawPowerZones
+      ? ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].map(function(k) {
+          return { zone: k.toUpperCase(), seconds: Number(rawPowerZones[k]) || 0 };
+        })
+      : null;
+    var hasPowerTiz = powerData && powerData.some(function(d) { return d.seconds > 0; });
+    var powerTizEl = hasPowerTiz && PowerTiz
+      ? React.createElement('div', { className: 'journal-detail-time-in-zones-wrap' },
+          React.createElement(PowerTiz, {
+            powerData: powerData,
+            ftp: Number(userProfile.ftp) || 200,
+            isFullWidth: true,
+            yAxisUnit: 'm',
+            titleOverride: '파워 존 분포'
+          })
+        )
+      : null;
+
     return React.createElement('div', { className: 'journal-tab-content' },
       DetailRow({ label: '평균 파워', value: log.avg_watts != null && log.avg_watts > 0 ? Math.round(log.avg_watts) + ' W' : '-', isPr: false }),
       DetailRow({ label: 'NP', value: log.weighted_watts != null && log.weighted_watts > 0 ? Math.round(log.weighted_watts) + ' W' : '-', isPr: false }),
@@ -795,7 +809,8 @@
           userWeight: userWeight,
           yearlyPeaks: yearlyPeaks
         })
-      )
+      ),
+      powerTizEl
     );
   }
 
@@ -803,8 +818,35 @@
     var log = props.log;
     var yearlyPeaks = props.yearlyPeaks;
     var userWeightForPr = props.userWeight || 0;
+    var userProfile = props.userProfile || {};
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     var pr = function(field) { return isPr(log, yearlyPeaks, field, userWeightForPr); };
+
+    /* 심박 영역별 누적 시간 차트 — HR 존 데이터가 있을 때만 렌더 */
+    var HrTiz = window.HRTimeInZonesChart;
+    var rawHrZones = log.time_in_zones && log.time_in_zones.hr;
+    var hrData = rawHrZones
+      ? ['z1', 'z2', 'z3', 'z4', 'z5'].map(function(k) {
+          return { zone: k.toUpperCase(), seconds: Number(rawHrZones[k]) || 0 };
+        })
+      : null;
+    var hasHrTiz = hrData && hrData.some(function(d) { return d.seconds > 0; });
+    /* maxHr: 세션 자체 최대 심박 우선, 없으면 프로필 값 사용 */
+    var maxHrForZones = Number(log.max_hr) > 0
+      ? Number(log.max_hr)
+      : (Number(userProfile.max_hr) > 0 ? Number(userProfile.max_hr) : 190);
+    var hrTizEl = hasHrTiz && HrTiz
+      ? React.createElement('div', { className: 'journal-detail-time-in-zones-wrap' },
+          React.createElement(HrTiz, {
+            hrData: hrData,
+            maxHr: maxHrForZones,
+            isFullWidth: true,
+            yAxisUnit: 'm',
+            titleOverride: '심박 존 분포'
+          })
+        )
+      : null;
+
     return React.createElement('div', { className: 'journal-tab-content' },
       DetailRow({ label: '평균 심박', value: log.avg_hr != null && log.avg_hr > 0 ? Math.round(log.avg_hr) + ' bpm' : '-', isPr: false }),
       DetailRow({ label: '최대 심박', value: log.max_hr != null && log.max_hr > 0 ? Math.round(log.max_hr) + ' bpm' : '-', isPr: pr('max_hr') }),
@@ -819,7 +861,8 @@
           yearlyPeaks: yearlyPeaks,
           userWeight: userWeightForPr
         })
-      )
+      ),
+      hrTizEl
     );
   }
 
@@ -876,7 +919,7 @@
             if (activeTab !== t.id) return null;
             var p = t.id === 'summary'
               ? { log: merged, userProfile: props.userProfile || {} }
-              : { log: merged, yearlyPeaks: yearlyPeaks, userWeight: userWeightForPr };
+              : { log: merged, yearlyPeaks: yearlyPeaks, userWeight: userWeightForPr, userProfile: props.userProfile || {} };
             return React.createElement(t.C, Object.assign({ key: t.id }, p));
           })
         ),
