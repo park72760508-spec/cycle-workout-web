@@ -9388,7 +9388,7 @@ function OpenRidingGroupForm(props) {
       ) : null}
 
       <div className="open-riding-bottom-actions open-riding-group-form-footer fixed left-0 right-0 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
-        <div className="w-full flex gap-2">
+        <div className="w-[94%] mx-auto flex gap-2">
           {isEdit ? (
             <>
               <button
