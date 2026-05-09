@@ -9448,6 +9448,14 @@ function openRidingFirestoreUserProfileImageUrl(userRow) {
   return String(u || '').trim();
 }
 
+function openRidingDefaultProfileImg() {
+  return (typeof window !== 'undefined' &&
+    typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' &&
+    window.STELVIO_DEFAULT_PROFILE_IMAGE_URL)
+    ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
+    : 'assets/img/profile-placeholder.svg';
+}
+
 /** 소모임 상세 + 멤버 + 가입·승인 */
 function OpenRidingGroupDetailView(props) {
   var firestore = props.firestore;
@@ -9653,7 +9661,7 @@ function OpenRidingGroupDetailView(props) {
     var u = row ? openRidingFirestoreUserProfileImageUrl(row) : '';
     if (u) return u;
     var mimg = m.profileImageUrl != null ? String(m.profileImageUrl).trim() : '';
-    return mimg || '';
+    return mimg || openRidingDefaultProfileImg();
   }
 
   function displayNameForJoinRequest(j) {
@@ -9672,7 +9680,7 @@ function OpenRidingGroupDetailView(props) {
     var u = row ? openRidingFirestoreUserProfileImageUrl(row) : '';
     if (u) return u;
     var mimg = j.profileImageUrl != null ? String(j.profileImageUrl).trim() : '';
-    return mimg || '';
+    return mimg || openRidingDefaultProfileImg();
   }
 
   function maskTransferContact(contact) {
