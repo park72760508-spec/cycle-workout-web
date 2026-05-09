@@ -6911,6 +6911,10 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #22c55e;
   text-shadow: 0 0 1px rgba(34, 197, 94, 0.22);
 }
+#stelvioRankingScreen .stelvio-legend-star--group {
+  color: #fb923c;
+  text-shadow: 0 0 1px rgba(251, 146, 60, 0.22);
+}
 #stelvioRankingScreen .stelvio-legend-star--interest {
   color: #c084fc;
   text-shadow: 0 0 1px rgba(192, 132, 252, 0.22);
@@ -7654,6 +7658,25 @@ button.stelvio-rank-avatar-btn:focus-visible {
   user-select: none;
 }
 #stelvioRankingScreen .stelvio-rank-friend-star--solo {
+  min-width: 1.25em;
+  text-align: center;
+}
+/* 그룹멤버 별: 진하지 않은 주황색 */
+#stelvioRankingScreen .stelvio-rank-group-star,
+#stelvioRankingScreen .stelvio-rank-name .stelvio-rank-group-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  color: #fb923c !important;
+  -webkit-text-fill-color: #fb923c;
+  text-shadow: 0 0 1px rgba(251, 146, 60, 0.28);
+  flex-shrink: 0;
+  pointer-events: none;
+  user-select: none;
+}
+#stelvioRankingScreen .stelvio-rank-group-star--solo {
   min-width: 1.25em;
   text-align: center;
 }
