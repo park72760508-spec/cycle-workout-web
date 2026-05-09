@@ -10371,6 +10371,9 @@
       if (!stelvioIsGroupDistanceRanking()) {
         stelvioTeardownGroupTabState();
       }
+      /* 그룹탭 전환 시 전체/관심 토글 버튼 숨김, 다른 탭으로 전환 시 다시 표시 */
+      var _filterToggleWrap = document.querySelector('.stelvio-ranking-list-filter-toggle');
+      if (_filterToggleWrap) _filterToggleWrap.style.display = stelvioIsGroupDistanceRanking() ? 'none' : '';
       if (stelvioIsGroupDistanceRanking()) {
         var catG = stelvioRankingState.activeCategory;
         var titleG2 = document.getElementById('stelvioListCategoryTitle');
