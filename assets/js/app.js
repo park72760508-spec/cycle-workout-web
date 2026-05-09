@@ -19965,6 +19965,18 @@ if (originalCleanupMobileDashboard) {
 
     if (!confirm('오늘 포함 최근 3일간 전체 사용자의 TSS를 재계산합니다.\n\n계속하시겠습니까?')) return;
 
+    // 설정 모달을 먼저 닫아 진행 모달이 명확히 보이도록
+    try {
+      var settingsModal = document.getElementById('settingsModal');
+      if (settingsModal) settingsModal.style.display = 'none';
+    } catch (e) {}
+
+    // 닫기 버튼 초기 상태로 리셋
+    var closeBtn0 = document.getElementById('tssRecalcCloseBtn');
+    if (closeBtn0) closeBtn0.style.display = 'none';
+    var spinner0 = document.getElementById('tssRecalcSpinner');
+    if (spinner0) spinner0.style.display = 'inline-block';
+
     var targetDates = getTargetDates(DAYS);
     var dateFrom = targetDates[targetDates.length - 1]; // 가장 오래된 날짜
     var dateTo   = targetDates[0];                      // 오늘
@@ -20061,5 +20073,181 @@ if (originalCleanupMobileDashboard) {
 
   window.adminRecalcTss3Days = adminRecalcTss3Days;
   window._closeTssRecalcModal = closeModal;
+})();
+
+/* ============================================================
+ * 베이스캠프 > 라이딩모임 버튼 알림 배지
+ * 건수 합계 = ① 참여중인 라이딩 + ② 그룹 가입신청 대기 + ③ 나에게 온 친구 요청
+ * Firebase v8 compat API(firebase.firestore()) 사용 — app.js 환경에 맞춤
+ * ============================================================ */
+(function () {
+  'use strict';
+
+  /* ── 내부 상태 ── */
+  var _counts = { rides: 0, groups: 0, friends: 0 };
+  var _unsubRides   = null;
+  var _unsubGroups  = null;
+  var _unsubFriends = null;
+  var _unsubGroupsList = null;
+  var _groupUnsubMap = {};
+
+  /* ── UI 업데이트 ── */
+  function _renderBadge() {
+    var total = _counts.rides + _counts.groups + _counts.friends;
+    var badge = document.getElementById('basecampRidingNotiBadge');
+    if (!badge) return;
+    if (total > 0) {
+      badge.textContent = total > 99 ? '99+' : String(total);
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  /* ── 구독 정리 ── */
+  function _clearAll() {
+    if (typeof _unsubRides   === 'function') { try { _unsubRides();   } catch(e){} }
+    if (typeof _unsubGroups  === 'function') { try { _unsubGroups();  } catch(e){} }
+    if (typeof _unsubFriends === 'function') { try { _unsubFriends(); } catch(e){} }
+    if (typeof _unsubGroupsList === 'function') { try { _unsubGroupsList(); } catch(e){} }
+    Object.keys(_groupUnsubMap).forEach(function(gid) {
+      try { _groupUnsubMap[gid](); } catch(e) {}
+    });
+    _unsubRides = _unsubGroups = _unsubFriends = _unsubGroupsList = null;
+    _groupUnsubMap = {};
+    _counts = { rides: 0, groups: 0, friends: 0 };
+  }
+
+  /* ── 현재 UID 조회 ── */
+  function _getUid() {
+    return (
+      (window.authV9 && window.authV9.currentUser && String(window.authV9.currentUser.uid || '')) ||
+      (window.auth   && window.auth.currentUser   && String(window.auth.currentUser.uid   || '')) ||
+      ''
+    ).trim() || null;
+  }
+
+  /* ── Firebase v8 compat Firestore 인스턴스 ── */
+  function _getFs() {
+    try {
+      if (typeof firebase !== 'undefined' && firebase.firestore) return firebase.firestore();
+    } catch(e) {}
+    return window.firestore || null;
+  }
+
+  /* ── 구독 시작 ── */
+  function _startSubscriptions() {
+    _clearAll();
+    var uid = _getUid();
+    var fs  = _getFs();
+    if (!uid || !fs) { _renderBadge(); return; }
+
+    /* ① 참여중인 라이딩 건수 */
+    try {
+      _unsubRides = fs.collection('rides')
+        .where('participants', 'array-contains', uid)
+        .onSnapshot(
+          function(snap) { _counts.rides = snap.size; _renderBadge(); },
+          function()     { _counts.rides = 0;         _renderBadge(); }
+        );
+    } catch(e) { _counts.rides = 0; }
+
+    /* ② 내가 개설한 그룹의 가입신청 대기 건수
+     *    stelvio_riding_groups (createdBy == uid & status == APPROVED)
+     *    → 각 그룹의 joinRequests 서브컬렉션 전체 건수 합계 */
+    try {
+      var groupTotalMap = {};
+
+      _unsubGroupsList = fs.collection('stelvio_riding_groups')
+        .where('status', '==', 'APPROVED')
+        .where('createdBy', '==', uid)
+        .onSnapshot(function(groupsSnap) {
+          /* 사라진 그룹 구독 해제 */
+          var currentIds = {};
+          groupsSnap.forEach(function(d) { currentIds[d.id] = true; });
+          Object.keys(_groupUnsubMap).forEach(function(gid) {
+            if (!currentIds[gid]) {
+              try { _groupUnsubMap[gid](); } catch(e) {}
+              delete _groupUnsubMap[gid];
+              delete groupTotalMap[gid];
+            }
+          });
+
+          /* 새 그룹 joinRequests 구독 */
+          Object.keys(currentIds).forEach(function(gid) {
+            if (_groupUnsubMap[gid]) return;
+            _groupUnsubMap[gid] = fs
+              .collection('stelvio_riding_groups').doc(gid)
+              .collection('joinRequests')
+              .onSnapshot(function(jSnap) {
+                groupTotalMap[gid] = jSnap.size;
+                _counts.groups = Object.keys(groupTotalMap).reduce(
+                  function(s, k) { return s + (groupTotalMap[k] || 0); }, 0
+                );
+                _renderBadge();
+              }, function() {
+                groupTotalMap[gid] = 0;
+                _counts.groups = Object.keys(groupTotalMap).reduce(
+                  function(s, k) { return s + (groupTotalMap[k] || 0); }, 0
+                );
+                _renderBadge();
+              });
+          });
+
+          /* 그룹이 없으면 즉시 0 반영 */
+          if (groupsSnap.empty) {
+            _counts.groups = 0;
+            _renderBadge();
+          }
+        }, function() { _counts.groups = 0; _renderBadge(); });
+    } catch(e) { _counts.groups = 0; }
+
+    /* ③ 나에게 온 친구 요청 건수 */
+    try {
+      _unsubFriends = fs.collection('friendRequests')
+        .where('toUid', '==', uid)
+        .where('status', '==', 'pending')
+        .onSnapshot(
+          function(snap) { _counts.friends = snap.size; _renderBadge(); },
+          function()     { _counts.friends = 0;         _renderBadge(); }
+        );
+    } catch(e) { _counts.friends = 0; }
+  }
+
+  /* ── 인증 상태 변경 감지 → 구독 시작/중지 ── */
+  function _bindAuthListener() {
+    /* Firebase v8 compat onAuthStateChanged */
+    if (typeof firebase !== 'undefined' && firebase.auth && typeof firebase.auth === 'function') {
+      try {
+        firebase.auth().onAuthStateChanged(function(user) {
+          if (user) {
+            _startSubscriptions();
+          } else {
+            _clearAll();
+            _renderBadge();
+          }
+        });
+        return;
+      } catch(e) {}
+    }
+    /* 위 방법 실패 시 폴링으로 대기 후 시작 */
+    var t = 0;
+    var poll = setInterval(function() {
+      t += 500;
+      var uid = _getUid();
+      if (uid) { clearInterval(poll); _startSubscriptions(); return; }
+      if (t > 10000) clearInterval(poll);
+    }, 500);
+  }
+
+  /* ── 페이지 준비 후 실행 ── */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _bindAuthListener);
+  } else {
+    _bindAuthListener();
+  }
+
+  /* 외부에서 강제 갱신 가능 */
+  window.refreshBasecampBadge = _startSubscriptions;
 })();
 
