@@ -9387,13 +9387,13 @@ function OpenRidingGroupForm(props) {
         </div>
       ) : null}
 
-      <div className="open-riding-bottom-actions open-riding-group-form-footer fixed left-0 right-0 px-3 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
-        <div className="max-w-lg mx-auto flex gap-2">
+      <div className="open-riding-bottom-actions open-riding-group-form-footer fixed left-0 right-0 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
+        <div className="w-full flex gap-2">
           {isEdit ? (
             <>
               <button
                 type="button"
-                className="open-riding-action-btn flex-1 h-11 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium"
+                className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium"
                 disabled={busy}
                 onClick={onCancel}
               >
@@ -9401,7 +9401,7 @@ function OpenRidingGroupForm(props) {
               </button>
               <button
                 type="button"
-                className="open-riding-action-btn flex-1 h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700"
+                className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700"
                 disabled={busy}
                 onClick={submitEdit}
               >
@@ -9412,7 +9412,7 @@ function OpenRidingGroupForm(props) {
             <>
               <button
                 type="button"
-                className="open-riding-action-btn flex-1 h-11 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium"
+                className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium"
                 disabled={busy}
                 onClick={onCancel}
               >
@@ -9420,7 +9420,7 @@ function OpenRidingGroupForm(props) {
               </button>
               <button
                 type="button"
-                className="open-riding-action-btn flex-1 h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700"
+                className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700"
                 disabled={busy}
                 onClick={submitCreate}
               >
