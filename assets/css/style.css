@@ -25946,6 +25946,30 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   transition: background 0.2s;
 }
 
+/* 검색 ghost row — 숨겨진 순위자를 검색 결과로 임시 삽입 */
+.stelvio-rank-row.ranking-search-ghost {
+  position: relative;
+  border-left: 3px solid #7c3aed !important;
+  background: rgba(167, 139, 250, 0.15) !important;
+  opacity: 0.92;
+}
+.stelvio-rank-row.ranking-search-ghost .ranking-search-ghost-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.12);
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  border-radius: 4px;
+  vertical-align: middle;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 /* 관리자 TSS 재계산 모달 스피너 */
 @keyframes tssRecalcSpin {
   to { transform: rotate(360deg); }
