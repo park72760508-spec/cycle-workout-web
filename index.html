@@ -2625,8 +2625,8 @@
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampOpenRiding" onclick="if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp(); else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="라이딩 모임">
                 <span>라이딩 모임</span>
-                <!-- 알림 배지: 위치 top:8px / right:8px (이후 수치 보정 가능) -->
-                <span id="basecampRidingNotiBadge" aria-label="알림 건수" style="display:none; position:absolute; top:8px; right:8px; min-width:20px; height:20px; background:#e53e3e; border-radius:50%; color:#fff; font-size:11px; font-weight:700; line-height:20px; text-align:center; padding:0 4px; box-sizing:border-box; z-index:10; pointer-events:none; white-space:nowrap;"></span>
+                <!-- 알림 배지: top:25% / right:25% (버튼 4등분 우상단 중앙) — 이후 수치 보정 가능 -->
+                <span id="basecampRidingNotiBadge" aria-label="알림 건수" style="display:none; position:absolute; top:25%; right:25%; transform:translate(50%,-50%); min-width:20px; height:20px; background:#e53e3e; border-radius:50%; color:#fff; font-size:11px; font-weight:700; line-height:20px; text-align:center; padding:0 4px; box-sizing:border-box; z-index:10; pointer-events:none; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,0.3);"></span>
               </button>
             </div>
             <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 환영합니다. 사용자명님 + 로그아웃 -->
