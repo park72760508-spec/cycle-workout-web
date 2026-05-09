@@ -8207,6 +8207,54 @@
         return false;
       });
     }
+    /**
+     * 관심 필터 ON 시 byCategory[cat]에 없는 그룹멤버를 Supremo 풀에서 보충하여 병합.
+     * 그룹 탭의 poolUid || supE 폴백 로직과 동일한 방식.
+     * @param {Array}  arr       - 이미 interest 필터된 행 배열
+     * @param {Object} byCategory- 전체 byCategory 객체
+     * @param {string} cat       - 현재 카테고리 키
+     * @returns {Array} 병합·정렬된 배열
+     */
+    function stelvioInterestMergeGroupMembers(arr, byCategory, cat) {
+      if (stelvioRankingState.listFilter !== 'interest') return arr;
+      if (!stelvioRankingGroupContactSet || !stelvioRankingGroupContactSet.size) return arr;
+
+      /* 이미 포함된 uid */
+      var included = {};
+      arr.forEach(function (item) { if (item && item.userId) included[String(item.userId)] = true; });
+
+      /* Supremo 풀 uid → 데이터 맵 */
+      var supByUid = {};
+      var supArr = (byCategory && byCategory['Supremo']) || [];
+      supArr.forEach(function (item) { if (item && item.userId) supByUid[String(item.userId)] = item; });
+
+      /* 특정 카테고리 풀 uid → 데이터 맵 */
+      var catByUid = {};
+      if (cat !== 'Supremo') {
+        var catArr2 = (byCategory && byCategory[cat]) || [];
+        catArr2.forEach(function (item) { if (item && item.userId) catByUid[String(item.userId)] = item; });
+      }
+
+      /* 누락된 그룹멤버 추가 */
+      var extra = [];
+      stelvioRankingGroupContactSet.forEach(function (uid) {
+        if (included[uid]) return;
+        var data = catByUid[uid] || supByUid[uid];
+        if (data) extra.push(data);
+      });
+      if (!extra.length) return arr;
+
+      /* 병합 후 현재 지표 내림차순 정렬 */
+      function getVal(item) {
+        if (!item) return -1;
+        if (stelvioIsKmDistanceRanking())  return item.totalKm  != null ? Number(item.totalKm)  : -1;
+        if (stelvioIsTssRankingMode())     return item.totalTss != null ? Number(item.totalTss) : -1;
+        if (stelvioIsGcRankingMode())      return item.gcScore  != null ? Number(item.gcScore)  : -1;
+        return item.wkg != null ? Number(item.wkg) : -1;
+      }
+      return arr.concat(extra).sort(function (a, b) { return getVal(b) - getVal(a); });
+    }
+
     function stelvioEffectiveMyRankSupremo(original) {
       if (!original) return null;
       if (stelvioRankingState.listFilter !== 'interest') return original;
@@ -9842,6 +9890,8 @@
       }
       var cat = stelvioRankingState.activeCategory;
       var rankingPool = stelvioFilterRowsByListInterest((stelvioRankingByCategory && stelvioRankingByCategory[cat]) || []);
+      /* 관심 필터 ON 시 byCategory[cat]에 없는 그룹멤버를 Supremo 풀에서 보충 */
+      rankingPool = stelvioInterestMergeGroupMembers(rankingPool, stelvioRankingByCategory, cat);
       var poolUid = {};
       for (var pi = 0; pi < rankingPool.length; pi++) {
         var pr = rankingPool[pi];
@@ -10456,6 +10506,8 @@
       if (!bodyEl) return;
       var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
       var arr = stelvioFilterRowsByListInterest(byCategory[cat] || []);
+      /* 관심 필터 ON 시 byCategory[cat]에 없는 그룹멤버를 Supremo 풀에서 보충 */
+      arr = stelvioInterestMergeGroupMembers(arr, byCategory, cat);
       /* 검색 FAB용 전체 배열 컨텍스트 노출 (grade=2,3 숨겨진 순위 ghost row 검색에 사용) */
       window._stelvioRankSearchCtx = {
         cat: cat,
