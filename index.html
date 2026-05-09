@@ -10444,7 +10444,8 @@
         isAdmin: (typeof getViewerGrade === 'function' && getViewerGrade() === '1'),
         formatValue: stelvioFormatRankCell,
         isPrivate: stelvioRankingIsPrivateRow,
-        friendSet: stelvioRankingFriendUserSet
+        friendSet: stelvioRankingFriendUserSet,
+        groupContactSet: stelvioRankingGroupContactSet
       };
       var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
       var isExpired = typeof isUserExpired === 'function' && cu && isUserExpired(cu);
@@ -23377,9 +23378,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       function _buildGhostRowHtml(item, rankNum, ctx) {
         var rawName = (item.name || '(이름 없음)');
         var uid = String(item.userId || '');
-        var isCurrent = !!(ctx.currentUserId && uid === String(ctx.currentUserId));
-        var isFriend  = !!(ctx.friendSet && typeof ctx.friendSet.has === 'function' && ctx.friendSet.has(uid));
-        var canSeeFull = isCurrent || ctx.isAdmin || isFriend;
+        var isCurrent      = !!(ctx.currentUserId && uid === String(ctx.currentUserId));
+        var isFriend       = !!(ctx.friendSet && typeof ctx.friendSet.has === 'function' && ctx.friendSet.has(uid));
+        var isGroupContact = !!(ctx.groupContactSet && typeof ctx.groupContactSet.has === 'function' && ctx.groupContactSet.has(uid));
+        var canSeeFull = isCurrent || ctx.isAdmin || isFriend || isGroupContact;
         var isPrivate  = typeof ctx.isPrivate === 'function' ? ctx.isPrivate(item) : false;
         var name;
         if (isPrivate && !canSeeFull) {
@@ -23461,12 +23463,23 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var ctx = window._stelvioRankSearchCtx;
             if (ctx && Array.isArray(ctx.arr) && ctx.arr.length > 0) {
 
-              /* 숨겨진 매치 수집 (MAX_GHOST 개 제한) */
+              /* 숨겨진 매치 수집 (MAX_GHOST 개 제한)
+               * 비공개 사용자는 친구·그룹멤버·본인·관리자가 아닌 경우 제외 */
               var hiddenMatches = [];
               for (var j = 0; j < ctx.arr.length && hiddenMatches.length < MAX_GHOST; j++) {
                 var item    = ctx.arr[j];
                 var uid     = String(item.userId || '');
                 if (visibleUidSet[uid]) continue;
+
+                /* 비공개 사용자 필터 */
+                var itmPrivate = typeof ctx.isPrivate === 'function' ? ctx.isPrivate(item) : false;
+                if (itmPrivate) {
+                  var itmIsCurrent      = !!(ctx.currentUserId && uid === String(ctx.currentUserId));
+                  var itmIsFriend       = !!(ctx.friendSet && typeof ctx.friendSet.has === 'function' && ctx.friendSet.has(uid));
+                  var itmIsGroupContact = !!(ctx.groupContactSet && typeof ctx.groupContactSet.has === 'function' && ctx.groupContactSet.has(uid));
+                  if (!itmIsCurrent && !ctx.isAdmin && !itmIsFriend && !itmIsGroupContact) continue;
+                }
+
                 var itmName = (item.name || '').toLowerCase();
                 if (itmName.indexOf(q) >= 0) hiddenMatches.push({ item: item, rankNum: j + 1 });
               }
