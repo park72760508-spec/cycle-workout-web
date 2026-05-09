@@ -23336,6 +23336,50 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         if (firstMatch) firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
 
+      /**
+       * 2글자 이상 검색: 현재 보이는 목록에 없으면 "펼쳐보기"를 자동 클릭해 확장 후 재검색
+       * - grade=2,3 일반 탭: 20개씩 확장되는 "펼쳐보기" 버튼 클릭 반복
+       * - grade=2,3 Supremo "펼쳐보기": 전체 표시로 전환
+       * - grade=1 관리자: "펼쳐보기" 텍스트가 없으므로 자동 확장 미동작 (영향 없음)
+       */
+      function _searchWithExpand(query) {
+        if (!query || query.length < 2) { _applySearch(query); return; }
+        var body = _el('stelvioRankingListBody');
+        if (!body) { _applySearch(query); return; }
+
+        var q = query.toLowerCase();
+        var MAX_ITER = 60; /* 무한 루프 방지 (20행×60 = 최대 1200명) */
+
+        for (var iter = 0; iter < MAX_ITER; iter++) {
+          /* 현재 렌더된 행에서 2글자 이상 일치 여부 확인 */
+          var rows = body.querySelectorAll('.stelvio-rank-row:not(.stelvio-rank-expand-row):not(.stelvio-rank-dots-row)');
+          var found = false;
+          for (var i = 0; i < rows.length; i++) {
+            var nameEl = rows[i].querySelector('.stelvio-rank-name-text');
+            if (nameEl && (nameEl.textContent || '').toLowerCase().indexOf(q) >= 0) {
+              found = true;
+              break;
+            }
+          }
+          if (found) break;
+
+          /* 미일치 → "펼쳐보기" 행 클릭으로 확장 시도 */
+          var didExpand = false;
+          var expandRows = body.querySelectorAll('.stelvio-rank-expand-row');
+          for (var j = 0; j < expandRows.length; j++) {
+            var center = expandRows[j].querySelector('.stelvio-rank-expand-center');
+            if (center && center.textContent.trim() === '펼쳐보기') {
+              expandRows[j].click(); /* onclick → handleStelvioRankingExpand / handleStelvioRankingGapSet 동기 실행 */
+              didExpand = true;
+              break;
+            }
+          }
+          if (!didExpand) break; /* 더 펼칠 항목 없음 */
+        }
+
+        _applySearch(query);
+      }
+
       function _init() {
         var toggleBtn = _el('rankingSearchToggleBtn');
         var inp       = _el('rankingSearchInput');
@@ -23355,9 +23399,16 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }
         });
 
-        /* 텍스트 입력 시 실시간 검색 */
+        /* 텍스트 입력 시 실시간 검색
+         * 2글자 이상: 미노출 항목도 자동 확장 후 검색
+         * 1글자 이하: 현재 보이는 범위만 검색 (확장 없음) */
         inp.addEventListener('input', function () {
-          _applySearch(inp.value.trim());
+          var q = inp.value.trim();
+          if (q.length >= 2) {
+            _searchWithExpand(q);
+          } else {
+            _applySearch(q);
+          }
         });
 
         /* ✕ 버튼: 검색어 초기화 */
@@ -23367,7 +23418,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           inp.focus();
         });
 
-        /* #stelvioRankingListBody 내용 변경 감시 → FAB 가시성·하이라이트 재적용 */
+        /* #stelvioRankingListBody 내용 변경 감시 → FAB 가시성·하이라이트 재적용
+         * (확장으로 인한 재렌더 후에는 _applySearch만 사용, 재확장 안 함) */
         var listBody = _el('stelvioRankingListBody');
         if (listBody) {
           new MutationObserver(function () {
