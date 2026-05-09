@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
@@ -7917,7 +7917,7 @@
         } else {
           showStamp = isWeeklyRankingFinalizedSeoul();
         }
-        var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
+        var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
         var isAdmin = (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
         var html = '';
         list.forEach(function(item, idx) {
@@ -9900,7 +9900,7 @@
         bodyEl.innerHTML = '<p class="stelvio-ranking-empty">로그인 후 나의 소모임과 GC 순위를 확인할 수 있습니다.</p>';
         return;
       }
-      var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
+      var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
       var grpRows = stelvioLastMyGroupsFireRows || [];
       if (!grpRows.length && !stelvioMyGroupsRankUnsub) {
         bodyEl.innerHTML = '<p class="stelvio-ranking-empty">목록 불러오는 중…</p>';
@@ -10536,7 +10536,7 @@
 
     function renderStelvioRankingOneCategory(cat, byCategory, currentUserId, myRankSupremo, bodyEl) {
       if (!bodyEl) return;
-      var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
+      var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
       var arr = stelvioFilterRowsByListInterest(byCategory[cat] || []);
       /* 관심 필터 ON 시 byCategory[cat]에 없는 그룹멤버를 Supremo 풀에서 보충 */
       arr = stelvioInterestMergeGroupMembers(arr, byCategory, cat);
@@ -23511,7 +23511,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         }
         var valStr   = typeof ctx.formatValue === 'function' ? ctx.formatValue(item) : '-';
         var safeName = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        var medals   = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
+        var medals   = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
         var html = '<div class="stelvio-rank-row ranking-search-ghost ranking-search-highlight'
           + (isCurrent ? ' stelvio-rank-current' : '') + '" data-search-ghost="1">';
         html += rankNum <= 3
