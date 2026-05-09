@@ -6024,6 +6024,24 @@
     </div>
   </div>
 
+  <!-- 관리자 전용: TSS 3일 재계산 진행 모달 -->
+  <div id="tssRecalcProgressModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); justify-content:center; align-items:center;">
+    <div style="background:#fff; border-radius:16px; padding:32px 28px; max-width:420px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.25); text-align:center; font-family:'Pretendard','Malgun Gothic',sans-serif;">
+      <div style="font-size:1.35em; font-weight:700; color:#6c47d4; margin-bottom:18px;">🔄 TSS 재계산</div>
+      <div id="tssRecalcProgressMsg" style="font-size:0.95em; color:#333; line-height:1.7; min-height:80px;">
+        처리 중...
+      </div>
+      <div style="margin-top:20px;">
+        <div id="tssRecalcSpinner" style="display:inline-block; width:28px; height:28px; border:3px solid #e0d4f8; border-top-color:#6c47d4; border-radius:50%; animation:tssRecalcSpin 0.8s linear infinite;"></div>
+      </div>
+      <button id="tssRecalcCloseBtn" type="button"
+        style="display:none; margin-top:20px; padding:10px 32px; background:#6c47d4; color:#fff; border:none; border-radius:8px; font-size:1em; font-weight:600; cursor:pointer;"
+        onclick="if(typeof window._closeTssRecalcModal==='function')window._closeTssRecalcModal(); document.getElementById('tssRecalcSpinner').style.display='none';">
+        닫기
+      </button>
+    </div>
+  </div>
+
   <!-- 스트라바(Strava) 신규 가입 가이드 모달 -->
   <div id="stravaSignupGuideModal" class="modal-overlay hidden" style="display: none;" onclick="if(event.target === this) closeStravaSignupGuideModal();">
     <div class="modal-content strava-signup-guide-modal" style="max-width: 90%; width: 800px; max-height: 90vh; display: flex; flex-direction: column;" onclick="event.stopPropagation();">
