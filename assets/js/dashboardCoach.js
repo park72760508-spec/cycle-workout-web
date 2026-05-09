@@ -175,9 +175,13 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
       var d = getLocalDateStrFromLog(log);
       return d && d >= start7Str && d <= todayStrForTSS;
     });
-    last7DaysTSS = Math.round(logsLast7.reduce(function (sum, l) { return sum + (Number(l.tss) || 0); }, 0));
+    last7DaysTSS = Math.round(logsLast7.reduce(function (sum, l) {
+      var t = Number(l.tss) || 0; return sum + ((t > 0 && t < 1200) ? t : 0);
+    }, 0));
   }
-  var totalTSS = Math.round((recentLogs || []).reduce(function (sum, l) { return sum + (Number(l.tss) || 0); }, 0));
+  var totalTSS = Math.round((recentLogs || []).reduce(function (sum, l) {
+    var t = Number(l.tss) || 0; return sum + ((t > 0 && t < 1200) ? t : 0);
+  }, 0));
   var weeklyTSS = Math.round(totalTSS / 4.3);
 
   // 컨디션 점수: API 호출 전에 공통 모듈로 산출해 프롬프트에 주입 — 코멘트에 표시되는 점수와 화면 표시(93점)가 일치하도록
