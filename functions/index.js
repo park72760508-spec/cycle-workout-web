@@ -4181,9 +4181,9 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
 // ---------- 랭킹 사전 집계 (스케줄러) + ranking_aggregates (HTTP 빠른 읽기) ----------
 const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
 /** ranking_aggregates 읽기 허용 최대 경과 시간. 집계 cron 간격보다 길게 두어 사용자 요청 시 전체 재스캔 빈도를 줄임 */
-const RANKING_AGG_MAX_STALE_MS = 14 * 60 * 60 * 1000; // 14시간 (최대 간격 자정→정오 12h + 여유)
-/** KST 00 · 12 · 15 · 21 정시 집계 하루 4회 */
-const RANKING_REBUILD_CRON = "0 0,12,15,21 * * *";
+const RANKING_AGG_MAX_STALE_MS = 26 * 60 * 60 * 1000; // 26시간 (하루 1회 22:00 기준 최대 24h 공백 + 여유)
+/** KST 22:00 정시 집계 하루 1회 */
+const RANKING_REBUILD_CRON = "0 22 * * *";
 const RANKING_ONE_PASS_BATCH = 50;
 
 /**
@@ -4636,7 +4636,7 @@ async function runRebuildRankingAggregatesCore(db) {
   return { wrote, ms };
 }
 
-/** KST 00 · 12 · 15 · 21 매 정시 랭킹 집계 갱신 (하루 4회) */
+/** KST 22:00 랭킹 집계 갱신 (하루 1회) */
 exports.rebuildRankingAggregates = onSchedule(
   {
     schedule: RANKING_REBUILD_CRON,
@@ -4674,7 +4674,7 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   }
 );
 
-// ---------- STELVIO 헵타곤·GC 랭킹: 전원 코호트 순위 → heptagon_cohort_ranks (일 1회 새벽 갱신, 조회는 스냅샷 읽기) ----------
+// ---------- STELVIO 헵타곤·GC 랭킹: 전원 코호트 순위 → heptagon_cohort_ranks (일 1회 22:30 갱신, 조회는 스냅샷 읽기) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
 
 /** 스케줄·수동 배치 공통 — `scheduledHeptagonCohortRanks` / `manualRebuildHeptagonCohortRanks` */
@@ -4692,8 +4692,8 @@ async function runHeptagonCohortRanksRebuildJob() {
 
 exports.scheduledHeptagonCohortRanks = onSchedule(
   {
-    /** 매일 01:00 KST — 전날까지 반영된 rolling28 피크 집계를 바탕으로 스냅샷 재빌드(랭킹 GC는 이 문서만 읽음) */
-    schedule: "0 1 * * *",
+    /** 매일 22:30 KST — 22:00 rebuildRankingAggregates 완료 후 rolling28 피크 집계를 바탕으로 스냅샷 재빌드(랭킹 GC는 이 문서만 읽음) */
+    schedule: "30 22 * * *",
     timeZone: "Asia/Seoul",
     memory: "2GiB",
     timeoutSeconds: 540,
@@ -5368,7 +5368,7 @@ exports.getPeakPowerRanking = onRequest(
       return res.status(200).json(out);
     }
 
-    /** GC: 헵타곤 7축 환산 합 — `heptagon_cohort_ranks` 일일 스냅샷(새벽 1시 `scheduledHeptagonCohortRanks` 갱신) */
+    /** GC: 헵타곤 7축 환산 합 — `heptagon_cohort_ranks` 일일 스냅샷(22:30 `scheduledHeptagonCohortRanks` 갱신) */
     if (durationType === "gc") {
       const monthKey = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
       const fg = gender === "M" || gender === "F" ? gender : "all";
