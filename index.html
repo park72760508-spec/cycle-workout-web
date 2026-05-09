@@ -14813,7 +14813,12 @@
             
           } catch (loginError) {
             // 미등록 번호 → 사용자 등록 화면으로 자동 이동
-            if (loginError.code === 'auth/user-not-found') {
+            // auth/user-not-found : Firebase 구버전 SDK
+            // auth/invalid-login-credentials : Firebase 최신 SDK (user-not-found + wrong-password 통합)
+            var _isUnregistered =
+              loginError.code === 'auth/user-not-found' ||
+              loginError.code === 'auth/invalid-login-credentials';
+            if (_isUnregistered) {
               if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('loading');
@@ -14980,6 +14985,7 @@
             errorMessage = '시도 횟수가 너무 많습니다. 잠시 후 다시 시도해주세요.';
             break;
           case 'auth/user-not-found':
+          case 'auth/invalid-login-credentials':
             // 미등록 번호 → 사용자 등록 화면으로 자동 이동 (finally가 버튼 복구)
             handleRegisterClick();
             return;
