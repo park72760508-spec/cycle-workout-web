@@ -25895,3 +25895,8 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   border-radius: 6px;
   transition: background 0.2s;
 }
+
+/* 관리자 TSS 재계산 모달 스피너 */
+@keyframes tssRecalcSpin {
+  to { transform: rotate(360deg); }
+}
