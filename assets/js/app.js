@@ -13787,6 +13787,8 @@ function ensureStelvioAdminAccessStatsButton() {
   if (accessRow) accessRow.style.display = 'none';
   host.style.display = 'flex';
   if (existing) return;
+
+  // ── 접속 통계 버튼 ──
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.id = 'stelvioDynamicAccessStatsBtn';
@@ -13799,6 +13801,19 @@ function ensureStelvioAdminAccessStatsButton() {
     if (typeof openAccessStatsScreen === 'function') openAccessStatsScreen();
   };
   host.appendChild(btn);
+
+  // ── TSS 3일 재계산 버튼 ──
+  const tssBtn = document.createElement('button');
+  tssBtn.type = 'button';
+  tssBtn.id = 'adminTssRecalcBtn';
+  tssBtn.textContent = '🔄 TSS 3일 재계산';
+  tssBtn.className = 'btn stelvio-purple-btn';
+  tssBtn.style.cssText =
+    'min-width: 200px; padding: 10px 16px; cursor: pointer; font-weight: 600; border: none; border-radius: 8px; margin-top: 8px;';
+  tssBtn.onclick = function () {
+    if (typeof window.adminRecalcTss3Days === 'function') window.adminRecalcTss3Days();
+  };
+  host.appendChild(tssBtn);
 }
 window.ensureStelvioAdminAccessStatsButton = ensureStelvioAdminAccessStatsButton;
 
@@ -19871,5 +19886,180 @@ if (originalCleanupMobileDashboard) {
   } else {
     bind();
   }
+})();
+
+/* ============================================================
+ * 관리자 전용: 전체 사용자 TSS 3일 재계산 (수동 실행)
+ * - 오늘 포함 3일치 훈련 로그의 tss 필드를 수정된 수식으로 재계산
+ * - grade=1 관리자가 설정 화면 → "🔄 TSS 3일 재계산" 버튼으로 실행
+ * ============================================================ */
+(function () {
+  'use strict';
+
+  var DAYS = 3;        // 오늘 포함 몇일 전까지
+  var MAX_TSS = 500;   // 단일 세션 절대 상한 (stelvioRtss.js와 동일)
+  var BATCH_PAUSE = 200; // 사용자 간 처리 딜레이(ms) — Firestore 쓰기 부하 완화
+
+  /* ── 날짜 헬퍼 ── */
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function toDateStr(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+  function getTargetDates(days) {
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var arr = [];
+    for (var i = 0; i < days; i++) {
+      var d = new Date(today);
+      d.setDate(today.getDate() - i);
+      arr.push(toDateStr(d));
+    }
+    return arr; // ['2026-05-09','2026-05-08','2026-05-07']
+  }
+
+  /* ── TSS 재계산 헬퍼 ── */
+  function recomputeTss(log, userFtp, userWeight) {
+    var ftpN = Number(userFtp) || 0;
+    var wKg  = Number(userWeight) || 70;
+    if (ftpN <= 0) return null; // FTP 없으면 재계산 불가
+
+    var dSec  = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : (log.duration || 0))) || 0;
+    var avgW  = Number(log.avg_watts != null ? log.avg_watts : (log.avgPower || 0)) || 0;
+    var npW   = Number(log.weighted_watts != null ? log.weighted_watts : (log.np || (log.normPower || 0))) || 0;
+
+    if (dSec <= 0 || avgW <= 0) return null; // 파워 정보 없으면 스킵
+    if (npW <= 0) npW = Math.round(avgW * 1.05); // NP 없으면 avgPower × 1.05 근사
+
+    if (typeof window.calculateStelvioRevisedTSS !== 'function') return null;
+    var tss = window.calculateStelvioRevisedTSS(dSec, avgW, npW, ftpN, wKg);
+    if (tss == null || isNaN(tss) || tss < 0) return null;
+    return Math.min(Math.round(tss * 100) / 100, MAX_TSS);
+  }
+
+  /* ── 모달 UI 헬퍼 ── */
+  function getModal() { return document.getElementById('tssRecalcProgressModal'); }
+  function setModalText(msg) {
+    var el = document.getElementById('tssRecalcProgressMsg');
+    if (el) el.innerHTML = msg;
+  }
+  function openModal() {
+    var m = getModal();
+    if (m) { m.style.display = 'flex'; }
+  }
+  function closeModal() {
+    var m = getModal();
+    if (m) { m.style.display = 'none'; }
+  }
+
+  /* ── 메인 재계산 함수 ── */
+  async function adminRecalcTss3Days() {
+    var fs = window.firestore;
+    if (!fs) { alert('Firestore가 초기화되지 않았습니다.'); return; }
+    if (!window.calculateStelvioRevisedTSS) { alert('TSS 계산 함수를 찾을 수 없습니다.'); return; }
+
+    var grade = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
+    var isAdmin = typeof window.isStelvioAdminGrade === 'function'
+      ? window.isStelvioAdminGrade(grade)
+      : (String(grade).trim() === '1' || Number(grade) === 1);
+    if (!isAdmin) { alert('관리자 권한이 필요합니다.'); return; }
+
+    if (!confirm('오늘 포함 최근 3일간 전체 사용자의 TSS를 재계산합니다.\n\n계속하시겠습니까?')) return;
+
+    var targetDates = getTargetDates(DAYS);
+    var dateFrom = targetDates[targetDates.length - 1]; // 가장 오래된 날짜
+    var dateTo   = targetDates[0];                      // 오늘
+
+    openModal();
+    setModalText('사용자 목록 조회 중...');
+
+    var totalUpdated = 0, totalSkipped = 0, totalError = 0;
+    var userCount = 0, processedUsers = 0;
+
+    try {
+      var usersSnap = await fs.collection('users').get();
+      userCount = usersSnap.size;
+      setModalText('총 ' + userCount + '명의 사용자 대상으로 처리 시작...');
+
+      for (var ui = 0; ui < usersSnap.docs.length; ui++) {
+        var userDoc = usersSnap.docs[ui];
+        var userId  = userDoc.id;
+        var userData = userDoc.data() || {};
+        var userFtp    = Number(userData.ftp) || 0;
+        var userWeight = Number(userData.weight || userData.weightKg) || 70;
+
+        processedUsers++;
+        setModalText(
+          '[' + processedUsers + '/' + userCount + '] ' + (userData.name || userId) + ' 처리 중...<br>' +
+          '✅ 업데이트: ' + totalUpdated + ' / ⏭ 스킵: ' + totalSkipped + ' / ❌ 오류: ' + totalError
+        );
+
+        // 해당 사용자의 대상 날짜 범위 로그 조회
+        var logsSnap;
+        try {
+          logsSnap = await fs.collection('users').doc(userId).collection('logs')
+            .where('date', '>=', dateFrom)
+            .where('date', '<=', dateTo)
+            .get();
+        } catch (e) {
+          totalError++;
+          continue;
+        }
+
+        if (logsSnap.empty) {
+          await new Promise(function(r) { setTimeout(r, 30); });
+          continue;
+        }
+
+        // 로그별 TSS 재계산 및 Firestore 업데이트
+        for (var li = 0; li < logsSnap.docs.length; li++) {
+          var logDoc  = logsSnap.docs[li];
+          var logData = logDoc.data() || {};
+
+          var newTss = recomputeTss(logData, userFtp, userWeight);
+          if (newTss === null) {
+            totalSkipped++;
+            continue;
+          }
+
+          var oldTss = Number(logData.tss) || 0;
+          if (Math.abs(newTss - oldTss) < 0.5) {
+            totalSkipped++;
+            continue; // 변화량 미미 → 스킵
+          }
+
+          try {
+            await logDoc.ref.update({ tss: newTss });
+            totalUpdated++;
+          } catch (e) {
+            totalError++;
+          }
+        }
+
+        // Firestore 쓰기 부하 완화
+        await new Promise(function(r) { setTimeout(r, BATCH_PAUSE); });
+      }
+
+      setModalText(
+        '✅ TSS 재계산 완료!<br><br>' +
+        '• 대상 기간: ' + dateFrom + ' ~ ' + dateTo + '<br>' +
+        '• 처리 사용자: ' + processedUsers + '명<br>' +
+        '• 업데이트된 로그: <strong>' + totalUpdated + '건</strong><br>' +
+        '• 변화 없어 스킵: ' + totalSkipped + '건<br>' +
+        '• 오류: ' + totalError + '건<br><br>' +
+        '<span style="color:#6c47d4;font-size:0.9em;">페이지를 새로고침하면 변경된 값이 반영됩니다.</span>'
+      );
+      var closeBtn = document.getElementById('tssRecalcCloseBtn');
+      if (closeBtn) closeBtn.style.display = 'inline-block';
+
+    } catch (e) {
+      setModalText('❌ 오류 발생: ' + (e.message || String(e)) +
+        '<br><br>업데이트: ' + totalUpdated + '건 / 오류: ' + totalError + '건');
+      var closeBtn2 = document.getElementById('tssRecalcCloseBtn');
+      if (closeBtn2) closeBtn2.style.display = 'inline-block';
+    }
+  }
+
+  window.adminRecalcTss3Days = adminRecalcTss3Days;
+  window._closeTssRecalcModal = closeModal;
 })();
 
