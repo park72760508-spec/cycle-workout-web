@@ -2720,14 +2720,18 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /* 베이스캠프 라이딩모임 버튼 알림 배지
- * 위치: top 8px / right 8px (12시~3시 중간, 1:30 위치 기준)
- * 이후 수치 보정 시 top/right 값 조정 */
+ * 위치: 버튼을 십자로 4등분 기준 우상단 중앙
+ *   top  = 25%  (상단 절반의 중앙 = 전체 높이의 1/4 지점)
+ *   right= 25%  (우측 절반의 중앙 = 전체 너비의 1/4 지점)
+ *   transform: translate(50%,-50%) → 배지 자체 중심점을 해당 좌표에 정렬
+ * 위치 보정 시: top / right 수치를 수정 */
 #basecampRidingNotiBadge {
   display: none;
   position: absolute;
-  /* ── 배지 위치 수치 (보정 요청 시 이 두 값을 수정) ── */
-  top: 8px;   /* 상단에서 8px */
-  right: 8px; /* 우측에서 8px */
+  /* ── 배지 위치 수치 (보정 요청 시 아래 두 값 조정) ── */
+  top: 25%;    /* 버튼 높이 4등분 기준 위에서 1칸 중앙 */
+  right: 25%;  /* 버튼 너비 4등분 기준 오른쪽 1칸 중앙 */
+  transform: translate(50%, -50%); /* 배지 중심점을 좌표에 정확히 맞춤 */
   /* ────────────────────────────────────────────── */
   min-width: 20px;
   height: 20px;
