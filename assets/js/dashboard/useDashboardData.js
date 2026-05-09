@@ -431,13 +431,18 @@
             var ds = parseDate(log.date);
             return ds && ds >= weekStartStr && ds <= todayStr;
           });
+          /* 9999 = "제한 없음" 플레이스홀더 및 비정상 대값 방어 — 단일 세션 상한 1,200 */
+          function _sanitizeTss(val) {
+            var n = Number(val) || 0;
+            return (n > 0 && n < 1200) ? n : 0;
+          }
           var byDate = {};
           logsInWeek.forEach(function(log) {
             var ds = parseDate(log.date);
             if (!ds) return;
             if (!byDate[ds]) byDate[ds] = { strava: [], stelvio: [] };
             var src = String(log.source || '').toLowerCase();
-            var tss = Number(log.tss) || 0;
+            var tss = _sanitizeTss(log.tss);
             if (src === 'strava') byDate[ds].strava.push(tss); else byDate[ds].stelvio.push(tss);
           });
           var weeklyTss = 0;
