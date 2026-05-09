@@ -12924,12 +12924,13 @@
               var s = sec % 60;
               var durationStr = min + '분 ' + s + '초';
               var np = log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0);
+              var _tssRaw = Number(log.tss) || 0;
               allMonthlyLogs.push({
                 date: dateKey,
                 distance: log.distance_km != null ? Number(log.distance_km) : 0,
                 duration: durationStr,
                 IF: log.if != null ? Number(log.if) : null,
-                TSS: log.tss != null ? Number(log.tss) : 0,
+                TSS: (_tssRaw > 0 && _tssRaw < 1200) ? _tssRaw : 0,
                 kJ: log.kilojoules != null ? Number(log.kilojoules) : 0,
                 avgCadence: log.avg_cadence != null ? Number(log.avg_cadence) : 0,
                 avgHeartRate: log.avg_hr != null ? Number(log.avg_hr) : 0,
@@ -13014,12 +13015,13 @@
             var s = sec % 60;
             var durationStr = min + '분 ' + s + '초';
             var np = log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0);
+            var _tssRaw = Number(log.tss) || 0;
             allMonthlyLogs.push({
               date: dateKey,
               distance: log.distance_km != null ? Number(log.distance_km) : 0,
               duration: durationStr,
               IF: log.if != null ? Number(log.if) : null,
-              TSS: log.tss != null ? Number(log.tss) : 0,
+              TSS: (_tssRaw > 0 && _tssRaw < 1200) ? _tssRaw : 0,
               kJ: log.kilojoules != null ? Number(log.kilojoules) : 0,
               avgCadence: log.avg_cadence != null ? Number(log.avg_cadence) : 0,
               avgHeartRate: log.avg_hr != null ? Number(log.avg_hr) : 0,
@@ -13672,7 +13674,8 @@
                 TSS: 0 
               };
             }
-            byWeek[key].TSS += Number(log.TSS) || 0;
+            var _wt = Number(log.TSS) || 0;
+            byWeek[key].TSS += (_wt > 0 && _wt < 1200) ? _wt : 0;
           });
           
           // 1주부터 실제 주 수까지 순차 정렬
@@ -14388,6 +14391,7 @@
        */
       function mergeLogsForDay(logs, dateKey) {
         if (!logs || logs.length === 0) return null;
+        function _saniTss(v) { var n = Number(v) || 0; return (n > 0 && n < 1200) ? n : 0; }
         if (logs.length === 1) {
           var log = logs[0];
           var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
@@ -14399,7 +14403,7 @@
             distance: log.distance_km != null ? Number(log.distance_km) : 0,
             duration: min + '분 ' + s + '초',
             IF: log.if != null ? Number(log.if) : null,
-            TSS: log.tss != null ? Number(log.tss) : 0,
+            TSS: _saniTss(log.tss),
             kJ: log.kilojoules != null ? Number(log.kilojoules) : 0,
             avgCadence: log.avg_cadence != null ? Number(log.avg_cadence) : 0,
             avgHeartRate: log.avg_hr != null ? Number(log.avg_hr) : 0,
@@ -14413,7 +14417,7 @@
         logs.forEach(function(log) {
           var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
           totalSec += sec;
-          totalTSS += Number(log.tss ?? 0);
+          totalTSS += _saniTss(log.tss);
           totalDist += Number(log.distance_km ?? 0);
           totalKj += Number(log.kilojoules ?? 0);
           var np = log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0);
@@ -21064,7 +21068,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               var dateStr = parseDateForDashboard(log.date);
               if (!dateStr || dateStr < sixtyDaysAgoStr || dateStr > todayStr) return;
               if (!byDate[dateStr]) byDate[dateStr] = { tss: 0 };
-              var tssValue = Number(log.tss) || 0;
+              var _raw = Number(log.tss) || 0;
+              var tssValue = (_raw > 0 && _raw < 1200) ? _raw : 0; /* 비정상 대값 방어 */
               byDate[dateStr].tss += tssValue;
             });
             
@@ -21571,7 +21576,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               if (!d || d < start7StrForCoach || d > todayStr7) return;
               if (!byDate7ForCoach[d]) byDate7ForCoach[d] = { strava: [], stelvio: [] };
               var src = String(log.source || '').toLowerCase();
-              var tss = Number(log.tss) || 0;
+              var _t7c = Number(log.tss) || 0;
+              var tss = (_t7c > 0 && _t7c < 1200) ? _t7c : 0;
               if (src === 'strava') byDate7ForCoach[d].strava.push(tss); else byDate7ForCoach[d].stelvio.push(tss);
             });
             var last7TSSForCoach = 0;
@@ -21734,11 +21740,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               var todayStr2 = todayForAI2.getFullYear() + '-' + String(todayForAI2.getMonth() + 1).padStart(2, '0') + '-' + String(todayForAI2.getDate()).padStart(2, '0');
               logsForFallback.forEach(function(log) {
                 var d = (log.completed_at || log.date || '').toString().split('T')[0];
-                if (d && d >= start7Str2 && d <= todayStr2) last7TSSFallback2 += Number(log.tss) || 0;
+                if (d && d >= start7Str2 && d <= todayStr2) {
+                  var _tf = Number(log.tss) || 0;
+                  last7TSSFallback2 += (_tf > 0 && _tf < 1200) ? _tf : 0;
+                }
               });
               last7TSSFallback2 = Math.round(last7TSSFallback2);
             }
-            var totalTSSFallback2 = logsForFallback.reduce(function(s, l) { return s + (Number(l.tss) || 0); }, 0);
+            var totalTSSFallback2 = logsForFallback.reduce(function(s, l) { var _t = Number(l.tss) || 0; return s + ((_t > 0 && _t < 1200) ? _t : 0); }, 0);
             var weeklyTSSFallback2 = Math.round(totalTSSFallback2 / 4.3);
             var conditionScoreFallback2 = 50;
             if (typeof window.computeConditionScore === 'function' && userProfile && logsForFallback.length > 0) {
