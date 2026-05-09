@@ -20998,6 +20998,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               var dateStr = parseDateForDashboard(log.date);
               return dateStr && dateStr >= week5StartStr && dateStr <= week5EndStr;
             });
+            /* TSS 단일 세션 상한 — 9999는 "제한 없음" 플레이스홀더, 그 외 비정상 대값 방어 */
+            var MAX_SESSION_TSS = 1200;
+            function sanitizeTss(val) {
+              var n = Number(val) || 0;
+              return (n > 0 && n < MAX_SESSION_TSS) ? n : 0;
+            }
             var byDate = {};
             logsInWeek.forEach(function(log) {
               var dateStr = parseDateForDashboard(log.date);
@@ -21005,9 +21011,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               if (!byDate[dateStr]) byDate[dateStr] = { strava: [], stelvio: [] };
               var src = String(log.source || '').toLowerCase();
               if (src === 'strava') {
-                byDate[dateStr].strava.push(Number(log.tss) || 0);
+                byDate[dateStr].strava.push(sanitizeTss(log.tss));
               } else {
-                byDate[dateStr].stelvio.push(Number(log.tss) || 0);
+                byDate[dateStr].stelvio.push(sanitizeTss(log.tss));
               }
             });
             var weeklyTss = 0;
