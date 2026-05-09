@@ -24,6 +24,16 @@
     };
   }
 
+  /**
+   * TSS 단일 세션 유효 범위 필터 (파일 전역 사용)
+   * 9999 = AI 스케줄 "제한 없음" 플레이스홀더, 그 외 비정상 대값 방어
+   * 단일 세션 현실 상한 ≈ 1,200 (200km 이상 울트라 라이딩)
+   */
+  function sanitizeTss(val) {
+    var n = Number(val) || 0;
+    return (n > 0 && n < 1200) ? n : 0;
+  }
+
   function parseDateForCoachAnalysis(date) {
     if (!date) return null;
     var d = null;
@@ -74,7 +84,7 @@
       if (!ds || ds < start7Str || ds > todayStr) return;
       if (!byDate7[ds]) byDate7[ds] = { strava: [], stelvio: [] };
       var src = String(log.source || '').toLowerCase();
-      var tss = Number(log.tss) || 0;
+      var tss = sanitizeTss(log.tss);
       if (src === 'strava') byDate7[ds].strava.push(tss);
       else byDate7[ds].stelvio.push(tss);
     });
@@ -431,18 +441,13 @@
             var ds = parseDate(log.date);
             return ds && ds >= weekStartStr && ds <= todayStr;
           });
-          /* 9999 = "제한 없음" 플레이스홀더 및 비정상 대값 방어 — 단일 세션 상한 1,200 */
-          function _sanitizeTss(val) {
-            var n = Number(val) || 0;
-            return (n > 0 && n < 1200) ? n : 0;
-          }
           var byDate = {};
           logsInWeek.forEach(function(log) {
             var ds = parseDate(log.date);
             if (!ds) return;
             if (!byDate[ds]) byDate[ds] = { strava: [], stelvio: [] };
             var src = String(log.source || '').toLowerCase();
-            var tss = _sanitizeTss(log.tss);
+            var tss = sanitizeTss(log.tss);
             if (src === 'strava') byDate[ds].strava.push(tss); else byDate[ds].stelvio.push(tss);
           });
           var weeklyTss = 0;
@@ -540,7 +545,7 @@
             var ds = parseDate(log.date);
             if (!ds || ds < sixtyDaysStr || ds > todayStr) return;
             if (!byDateChart[ds]) byDateChart[ds] = { tss: 0 };
-            byDateChart[ds].tss += Number(log.tss) || 0;
+            byDateChart[ds].tss += sanitizeTss(log.tss);
           });
           var xAxisDates = [];
           for (var i = 30; i >= 0; i -= 7) {
@@ -610,7 +615,7 @@
               chosen.forEach(function(l) {
                 var sec = Number(l.duration_sec ?? l.time ?? l.duration ?? 0) || (Number(l.duration_min) || 0) * 60;
                 totalSec += sec;
-                totalTss += Number(l.tss) || 0;
+                totalTss += sanitizeTss(l.tss);
                 sumNp += (Number(l.weighted_watts ?? l.np ?? l.avg_watts ?? 0)) * sec;
                 sumHr += (Number(l.avg_hr ?? 0)) * sec;
               });
@@ -644,7 +649,7 @@
             if (!dsT) return;
             if (!byDayTssBuckets[dsT]) byDayTssBuckets[dsT] = { strava: [], stelvio: [] };
             var srcT = String(log.source || '').toLowerCase();
-            var tssOne = Number(log.tss) || 0;
+            var tssOne = sanitizeTss(log.tss);
             if (srcT === 'strava') byDayTssBuckets[dsT].strava.push(tssOne);
             else byDayTssBuckets[dsT].stelvio.push(tssOne);
           });
@@ -851,7 +856,7 @@
                 chosen.forEach(function(h) {
                   var m = Number(h.duration_min) || 0;
                   totalMin += m;
-                  totalTss += Number(h.tss) || 0;
+                  totalTss += sanitizeTss(h.tss);
                   sumNp += (Number(h.np) || 0) * m;
                   sumAp += (Number(h.avg_power) || 0) * m;
                   sumHr += (Number(h.avg_hr) || 0) * m;
