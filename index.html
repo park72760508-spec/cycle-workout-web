@@ -2625,6 +2625,8 @@
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampOpenRiding" onclick="if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp(); else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="라이딩 모임">
                 <span>라이딩 모임</span>
+                <!-- 알림 배지: 위치 top:8px / right:8px (이후 수치 보정 가능) -->
+                <span id="basecampRidingNotiBadge" aria-label="알림 건수" style="display:none; position:absolute; top:8px; right:8px; min-width:20px; height:20px; background:#e53e3e; border-radius:50%; color:#fff; font-size:11px; font-weight:700; line-height:20px; text-align:center; padding:0 4px; box-sizing:border-box; z-index:10; pointer-events:none; white-space:nowrap;"></span>
               </button>
             </div>
             <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 환영합니다. 사용자명님 + 로그아웃 -->
@@ -6024,8 +6026,8 @@
     </div>
   </div>
 
-  <!-- 관리자 전용: TSS 3일 재계산 진행 모달 -->
-  <div id="tssRecalcProgressModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.6); justify-content:center; align-items:center;">
+  <!-- 관리자 전용: TSS 3일 재계산 진행 모달 (z-index는 settingsModal 10100200보다 높게) -->
+  <div id="tssRecalcProgressModal" style="display:none; position:fixed; inset:0; z-index:10200000; background:rgba(0,0,0,0.6); justify-content:center; align-items:center;">
     <div style="background:#fff; border-radius:16px; padding:32px 28px; max-width:420px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.25); text-align:center; font-family:'Pretendard','Malgun Gothic',sans-serif;">
       <div style="font-size:1.35em; font-weight:700; color:#6c47d4; margin-bottom:18px;">🔄 TSS 재계산</div>
       <div id="tssRecalcProgressMsg" style="font-size:0.95em; color:#333; line-height:1.7; min-height:80px;">
@@ -6036,7 +6038,7 @@
       </div>
       <button id="tssRecalcCloseBtn" type="button"
         style="display:none; margin-top:20px; padding:10px 32px; background:#6c47d4; color:#fff; border:none; border-radius:8px; font-size:1em; font-weight:600; cursor:pointer;"
-        onclick="if(typeof window._closeTssRecalcModal==='function')window._closeTssRecalcModal(); document.getElementById('tssRecalcSpinner').style.display='none';">
+        onclick="(function(){ if(typeof window._closeTssRecalcModal==='function')window._closeTssRecalcModal(); var sp=document.getElementById('tssRecalcSpinner'); if(sp)sp.style.display='none'; })();">
         닫기
       </button>
     </div>
