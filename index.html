@@ -8021,6 +8021,8 @@
     var stelvioRankingFavoriteUserSet = new Set();
     var stelvioRankingFriendUserSet = new Set();
     var stelvioRankingGroupContactSet = new Set();
+    /* uid → { userId, name, profileImageUrl } — 랭킹 풀에 없는 그룹멤버의 프로필 fallback */
+    var stelvioRankingGroupContactDataMap = {};
     var stelvioRankingFavoritesLsPrefix = 'stelvioRankingFavorites:';
     var stelvioRankingByCategory = null;
     var stelvioRankingFullEntries = null;
@@ -8107,6 +8109,7 @@
     /** 내가 속한 소모임의 멤버 UID 세트 갱신 (주간 TOP10 비공개 처리에 활용) */
     async function stelvioRefreshGroupContactSetFromFirestore() {
       stelvioRankingGroupContactSet = new Set();
+      stelvioRankingGroupContactDataMap = {};
       var myId = stelvioResolveRankingViewerUserId();
       if (!myId) return;
       var groupIds = (stelvioLastMyGroupsFireRows || [])
@@ -8122,16 +8125,29 @@
         }
         if (!fs || typeof fs.collection !== 'function') return;
         var newSet = new Set();
+        var newMap = {};
         await Promise.all(groupIds.map(async function (gid) {
           try {
             var snap = await fs.collection('stelvio_riding_groups').doc(gid).collection('members').get();
             snap.forEach(function (d) {
               var uid = String(d.id || '').trim();
-              if (uid && uid !== myId) newSet.add(uid);
+              if (!uid) return;
+              newSet.add(uid);
+              /* 프로필 fallback 맵 — displayName/profileImageUrl 저장 (랭킹 풀에 없는 멤버용) */
+              if (!newMap[uid]) {
+                var data = d.data ? d.data() : {};
+                newMap[uid] = {
+                  userId: uid,
+                  name: data.displayName || data.name || '',
+                  profileImageUrl: data.profileImageUrl || null,
+                  role: data.role || 'member'
+                };
+              }
             });
           } catch (e) {}
         }));
         stelvioRankingGroupContactSet = newSet;
+        stelvioRankingGroupContactDataMap = newMap;
       } catch (eGc) {
         if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[StelvioRanking] 그룹 멤버 세트 로드 실패:', eGc);
       }
@@ -8235,11 +8251,17 @@
         catArr2.forEach(function (item) { if (item && item.userId) catByUid[String(item.userId)] = item; });
       }
 
-      /* 누락된 그룹멤버 추가 */
+      /* 누락된 그룹멤버 추가
+       * 우선순위: 특정 카테고리 데이터 → Supremo 데이터 → 프로필 맵(랭킹 데이터 없는 경우 이름·이미지만) */
       var extra = [];
       stelvioRankingGroupContactSet.forEach(function (uid) {
         if (included[uid]) return;
         var data = catByUid[uid] || supByUid[uid];
+        if (!data && stelvioRankingGroupContactDataMap && stelvioRankingGroupContactDataMap[uid]) {
+          /* 랭킹 데이터 없는 멤버: 프로필만 있는 최소 행으로 표시 */
+          var prof = stelvioRankingGroupContactDataMap[uid];
+          data = { userId: uid, name: prof.name || '(이름 없음)', profileImageUrl: prof.profileImageUrl || null, wkg: 0, totalTss: 0, totalKm: 0, gcScore: 0 };
+        }
         if (data) extra.push(data);
       });
       if (!extra.length) return arr;
@@ -9946,10 +9968,9 @@
           var mem = stelvioGroupTabCachedMembers[mj];
           var uMem = mem && mem.userId != null ? String(mem.userId) : '';
           if (!uMem) continue;
-          /* 1. 성별 필터: Supremo 풀에 없으면 성별 불일치 → 제외 */
+          /* 1. 성별 필터: Supremo 풀에 없는 멤버도 그룹탭에서는 표시(프로필 fallback 사용) */
           var supE = supByUid[uMem];
-          if (!supE) continue;
-          /* 2. 카테고리 필터: Supremo가 아닌 경우 해당 카테고리에만 표시 */
+          /* 2. 카테고리 필터: Supremo가 아닌 경우 해당 카테고리에만 표시 (랭킹 데이터 없는 멤버는 Supremo에만 표시) */
           if (cat !== 'Supremo' && !catRawByUid[uMem]) continue;
           /* 3. 관심 필터 */
           if (stelvioRankingState.listFilter === 'interest') {
@@ -9959,9 +9980,15 @@
             var isMeG     = myIdG && uMem === String(myIdG);
             if (!isFavG && !isFriendG && !isGrpG && !isMeG) continue;
           }
-          /* 카테고리 별 랭킹 데이터 우선, 없으면 Supremo 데이터 사용 */
+          /* 카테고리 별 랭킹 데이터 우선, 없으면 Supremo → members 문서 프로필 순으로 fallback */
           var rk = poolUid[uMem] || catRawByUid[uMem] || supE;
-          merged.push(Object.assign({}, rk, { is_private: false }));
+          var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, gcScore: 0 };
+          /* 이름/이미지 fallback: 랭킹 풀에 이름이 없으면 members 문서의 displayName 사용 */
+          if (!mergedItem.name && mem.displayName) mergedItem.name = mem.displayName;
+          if (!mergedItem.profileImageUrl && mem.profileImageUrl) mergedItem.profileImageUrl = mem.profileImageUrl;
+          /* 방장 표시를 위해 role 보존 */
+          mergedItem._groupRole = mem.role || 'member';
+          merged.push(mergedItem);
         }
         merged.sort(function (a, b) {
           var sa = stelvioGroupTabGetMetricValue(a);
@@ -10103,7 +10130,7 @@
             nt.innerHTML = nm;
             nt.setAttribute('title', rawNm);
           }
-          var oldBadges = nw.querySelectorAll('.ranking-private-badge');
+          var oldBadges = nw.querySelectorAll('.ranking-private-badge, .stelvio-rank-owner-badge');
           for (var bi = 0; bi < oldBadges.length; bi++) oldBadges[bi].parentNode.removeChild(oldBadges[bi]);
           var ss = nw.querySelector('.stelvio-rank-star-slot');
           if (badgeP && ss) ss.insertAdjacentHTML('beforebegin', badgeP);
@@ -10135,7 +10162,9 @@
           var valStr = stelvioGroupTabFormatMemberValue(it, canFull);
           if (prv && canFull) nm = rawNm.length > maxNm ? rawNm.substring(0, maxNm - 2) + '..' : rawNm;
           if (prv && !canFull) nm = rawNm.length >= 2 ? rawNm.charAt(0) + '**' : '**';
-          var badgeP = prv && canFull ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
+          var isOwnerMember = String(it._groupRole || '') === 'owner';
+          var badgeP = isOwnerMember ? '<span class="stelvio-rank-owner-badge" title="방장">방장</span>' : '';
+          if (prv && canFull) badgeP += '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
           var rkIn = dispLm;
           if (!row) {
             row = document.createElement('div');
