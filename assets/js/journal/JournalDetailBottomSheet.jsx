@@ -773,24 +773,19 @@
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     var pr = function(field) { return isPr(log, yearlyPeaks, field, userWeight); };
 
-    /* 파워 영역별 누적 시간 차트 — 파워 존 데이터가 있을 때만 렌더 */
-    var PowerTiz = window.PowerTimeInZonesChart;
+    /* 파워 영역별 누적 시간 차트 — DailyTimeInZonesCharts에 power 존만 담은 log 전달 */
+    var DailyChartsPow = window.DailyTimeInZonesCharts;
     var rawPowerZones = log.time_in_zones && log.time_in_zones.power;
-    var powerData = rawPowerZones
-      ? ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].map(function(k) {
-          return { zone: k.toUpperCase(), seconds: Number(rawPowerZones[k]) || 0 };
-        })
+    var hasPowerTiz = rawPowerZones && Object.keys(rawPowerZones).some(function(k) {
+      return Number(rawPowerZones[k]) > 0;
+    });
+    var powerOnlyLog = hasPowerTiz
+      ? Object.assign({}, log, { time_in_zones: { power: rawPowerZones, hr: {} } })
       : null;
-    var hasPowerTiz = powerData && powerData.some(function(d) { return d.seconds > 0; });
-    var powerTizEl = hasPowerTiz && PowerTiz
+    var up = { id: userProfile.id || userProfile.uid, uid: userProfile.uid || userProfile.id, ftp: Number(userProfile.ftp) || 200, max_hr: Number(userProfile.max_hr) || 190 };
+    var powerTizEl = powerOnlyLog && DailyChartsPow
       ? React.createElement('div', { className: 'journal-detail-time-in-zones-wrap' },
-          React.createElement(PowerTiz, {
-            powerData: powerData,
-            ftp: Number(userProfile.ftp) || 200,
-            isFullWidth: true,
-            yAxisUnit: 'm',
-            titleOverride: '파워 존 분포'
-          })
+          React.createElement(DailyChartsPow, { log: powerOnlyLog, userProfile: up })
         )
       : null;
 
@@ -822,28 +817,22 @@
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     var pr = function(field) { return isPr(log, yearlyPeaks, field, userWeightForPr); };
 
-    /* 심박 영역별 누적 시간 차트 — HR 존 데이터가 있을 때만 렌더 */
-    var HrTiz = window.HRTimeInZonesChart;
+    /* 심박 영역별 누적 시간 차트 — DailyTimeInZonesCharts에 hr 존만 담은 log 전달 */
+    var DailyChartsHr = window.DailyTimeInZonesCharts;
     var rawHrZones = log.time_in_zones && log.time_in_zones.hr;
-    var hrData = rawHrZones
-      ? ['z1', 'z2', 'z3', 'z4', 'z5'].map(function(k) {
-          return { zone: k.toUpperCase(), seconds: Number(rawHrZones[k]) || 0 };
+    var hasHrTiz = rawHrZones && Object.keys(rawHrZones).some(function(k) {
+      return Number(rawHrZones[k]) > 0;
+    });
+    var hrOnlyLog = hasHrTiz
+      ? Object.assign({}, log, {
+          time_in_zones: { power: {}, hr: rawHrZones },
+          zone_ref_max_hr: Number(log.max_hr) > 0 ? Number(log.max_hr) : (Number(userProfile.max_hr) > 0 ? Number(userProfile.max_hr) : 0)
         })
       : null;
-    var hasHrTiz = hrData && hrData.some(function(d) { return d.seconds > 0; });
-    /* maxHr: 세션 자체 최대 심박 우선, 없으면 프로필 값 사용 */
-    var maxHrForZones = Number(log.max_hr) > 0
-      ? Number(log.max_hr)
-      : (Number(userProfile.max_hr) > 0 ? Number(userProfile.max_hr) : 190);
-    var hrTizEl = hasHrTiz && HrTiz
+    var upHr = { id: userProfile.id || userProfile.uid, uid: userProfile.uid || userProfile.id, ftp: Number(userProfile.ftp) || 200, max_hr: Number(userProfile.max_hr) || 190 };
+    var hrTizEl = hrOnlyLog && DailyChartsHr
       ? React.createElement('div', { className: 'journal-detail-time-in-zones-wrap' },
-          React.createElement(HrTiz, {
-            hrData: hrData,
-            maxHr: maxHrForZones,
-            isFullWidth: true,
-            yAxisUnit: 'm',
-            titleOverride: '심박 존 분포'
-          })
+          React.createElement(DailyChartsHr, { log: hrOnlyLog, userProfile: upHr })
         )
       : null;
 
