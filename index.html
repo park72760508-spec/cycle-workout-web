@@ -23314,29 +23314,37 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script>
     (function () {
       'use strict';
-      var _inputOpen = false;
+      var _inputOpen  = false;
+      var _mo         = null;   /* MutationObserver 참조 (disconnect/reconnect용) */
+      var _applying   = false;  /* 재진입 방지 플래그 */
+      var _listBody   = null;   /* observe 대상 캐시 */
+      var MAX_GHOST   = 15;     /* ghost row 최대 표시 수 */
 
       function _el(id) { return document.getElementById(id); }
+
+      /* ── Observer 연결 / 해제 헬퍼 ── */
+      function _moConnect() {
+        if (!_mo || !_listBody) return;
+        try { _mo.observe(_listBody, { childList: true }); } catch (e) {}
+      }
+      function _moDisconnect() {
+        if (!_mo) return;
+        try { _mo.disconnect(); } catch (e) {}
+      }
 
       /* 펼쳐보기 상태 여부 판단 */
       function _isExpanded() {
         var body = _el('stelvioRankingListBody');
         if (!body) return false;
-
-        /* 케이스 1: 일반 탭 — "접어보기" 버튼이 렌더됐으면 펼쳐진 상태 */
         var expandRows = body.querySelectorAll('.stelvio-rank-expand-row');
         for (var i = 0; i < expandRows.length; i++) {
           var center = expandRows[i].querySelector('.stelvio-rank-expand-center');
           if (center && center.textContent.trim() === '접어보기') return true;
         }
-
-        /* 케이스 2: Supremo "전체 랭킹" 펼침 여부 */
         if (
           typeof stelvioRankingGapState !== 'undefined' &&
           !!(stelvioRankingGapState.Supremo || {}).expanded
         ) return true;
-
-        /* 케이스 3: 관심 필터 활성 */
         if (
           typeof stelvioRankingState !== 'undefined' &&
           stelvioRankingState.listFilter === 'interest'
@@ -23344,7 +23352,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var dataRows = body.querySelectorAll('.stelvio-rank-row:not(.stelvio-rank-expand-row):not(.stelvio-rank-dots-row)');
           if (dataRows.length > 0) return true;
         }
-
         return false;
       }
 
@@ -23366,33 +23373,28 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         if (inp) { inp.value = ''; _applySearch(''); }
       }
 
-      /* ===== ghost row 빌더 =====
-       * ctx: window._stelvioRankSearchCtx
-       * item: arr의 항목, rankNum: 1-based 순위 */
+      /* ── ghost row HTML 빌더 ── */
       function _buildGhostRowHtml(item, rankNum, ctx) {
         var rawName = (item.name || '(이름 없음)');
         var uid = String(item.userId || '');
-        var isCurrent = ctx.currentUserId && uid === String(ctx.currentUserId);
-        var isFriend = ctx.friendSet && typeof ctx.friendSet.has === 'function' && ctx.friendSet.has(uid);
+        var isCurrent = !!(ctx.currentUserId && uid === String(ctx.currentUserId));
+        var isFriend  = !!(ctx.friendSet && typeof ctx.friendSet.has === 'function' && ctx.friendSet.has(uid));
         var canSeeFull = isCurrent || ctx.isAdmin || isFriend;
-        var isPrivate = typeof ctx.isPrivate === 'function' ? ctx.isPrivate(item) : false;
+        var isPrivate  = typeof ctx.isPrivate === 'function' ? ctx.isPrivate(item) : false;
         var name;
         if (isPrivate && !canSeeFull) {
           name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
         } else {
-          var maxLen = 10;
-          name = rawName.length > maxLen ? rawName.substring(0, maxLen - 2) + '..' : rawName;
+          name = rawName.length > 10 ? rawName.substring(0, 8) + '..' : rawName;
         }
-        var valStr = typeof ctx.formatValue === 'function' ? ctx.formatValue(item) : '-';
-        var safeName = name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        var medals = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
+        var valStr   = typeof ctx.formatValue === 'function' ? ctx.formatValue(item) : '-';
+        var safeName = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        var medals   = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
         var html = '<div class="stelvio-rank-row ranking-search-ghost ranking-search-highlight'
           + (isCurrent ? ' stelvio-rank-current' : '') + '" data-search-ghost="1">';
-        if (rankNum <= 3) {
-          html += '<span class="stelvio-rank-crown"><img src="' + medals[rankNum - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
-        } else {
-          html += '<span class="stelvio-rank-crown"></span>';
-        }
+        html += rankNum <= 3
+          ? '<span class="stelvio-rank-crown"><img src="' + medals[rankNum - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>'
+          : '<span class="stelvio-rank-crown"></span>';
         html += '<span class="stelvio-rank-pos">' + rankNum + '위</span>';
         html += '<span class="stelvio-rank-name">'
           + '<span class="stelvio-rank-name-text" title="' + safeName + '">' + safeName + '</span>'
@@ -23403,131 +23405,132 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         return html;
       }
 
-      /* ===== 기존 visible 행 rank 파싱 =====
-       * ".stelvio-rank-pos" 텍스트에서 순위 숫자 추출 */
+      /* visible 행에서 rank 숫자 파싱 */
       function _parseRankFromRow(row) {
         var posEl = row.querySelector('.stelvio-rank-pos');
         if (!posEl) return NaN;
-        var txt = (posEl.textContent || '').replace('위', '').trim();
-        return parseInt(txt, 10);
+        return parseInt((posEl.textContent || '').replace('위', '').trim(), 10);
       }
 
-      /* ===== 핵심 검색 함수 =====
-       * 1) 기존 ghost rows 제거
-       * 2) 현재 표시된 행 하이라이트
-       * 3) q.length >= 2: _stelvioRankSearchCtx.arr에서 숨겨진 항목 ghost row 삽입
-       * 4) 첫 번째 매치로 스크롤 */
+      /* ──────────────────────────────────────────────────────
+       * 핵심 검색 함수
+       * ① observer disconnect → DOM 조작 → observer reconnect
+       *   (이 3단계를 통해 MutationObserver 무한루프 차단)
+       * ② visible 행 하이라이트
+       * ③ 2글자 이상: 숨겨진 항목을 ghost row로 순위 위치에 삽입
+       * ────────────────────────────────────────────────────── */
       function _applySearch(query) {
-        var body = _el('stelvioRankingListBody');
-        if (!body) return;
+        if (_applying) return;          /* 재진입 차단 */
+        _applying = true;
+        _moDisconnect();                /* Observer 일시 해제 → DOM 변경 감지 방지 */
 
-        /* 1) 기존 ghost rows 모두 제거 */
-        var oldGhosts = body.querySelectorAll('[data-search-ghost]');
-        for (var g = 0; g < oldGhosts.length; g++) {
-          if (oldGhosts[g].parentNode) oldGhosts[g].parentNode.removeChild(oldGhosts[g]);
-        }
+        try {
+          var body = _el('stelvioRankingListBody');
+          if (!body) return;
 
-        var q = query ? query.toLowerCase().trim() : '';
-
-        /* 2) 현재 표시된 행 하이라이트 */
-        var visibleRows = body.querySelectorAll(
-          '.stelvio-rank-row:not(.stelvio-rank-expand-row):not(.stelvio-rank-dots-row):not([data-search-ghost])'
-        );
-        var firstMatch = null;
-        var visibleUidSet = {};
-        for (var i = 0; i < visibleRows.length; i++) {
-          var nameEl = visibleRows[i].querySelector('.stelvio-rank-name-text');
-          /* userId 수집 (ghost 삽입 중복 방지) */
-          var avatarBtn = visibleRows[i].querySelector('[data-stelvio-rank-user-id]');
-          if (avatarBtn) visibleUidSet[avatarBtn.getAttribute('data-stelvio-rank-user-id')] = true;
-
-          if (!nameEl) { visibleRows[i].classList.remove('ranking-search-highlight'); continue; }
-          var rowName = (nameEl.textContent || '').toLowerCase();
-          if (q && rowName.indexOf(q) >= 0) {
-            visibleRows[i].classList.add('ranking-search-highlight');
-            if (!firstMatch) firstMatch = visibleRows[i];
-          } else {
-            visibleRows[i].classList.remove('ranking-search-highlight');
+          /* ① 기존 ghost rows 제거 */
+          var oldGhosts = body.querySelectorAll('[data-search-ghost]');
+          for (var g = 0; g < oldGhosts.length; g++) {
+            try { body.removeChild(oldGhosts[g]); } catch (e) {}
           }
-        }
 
-        /* 3) 2글자 이상: 숨겨진 항목 ghost row 삽입 */
-        if (q.length >= 2) {
-          var ctx = window._stelvioRankSearchCtx;
-          if (ctx && Array.isArray(ctx.arr) && ctx.arr.length > 0) {
+          var q = query ? query.toLowerCase().trim() : '';
 
-            /* 숨겨진 매치 항목 수집 */
-            var hiddenMatches = [];
-            for (var j = 0; j < ctx.arr.length; j++) {
-              var item = ctx.arr[j];
-              var uid = String(item.userId || '');
-              if (visibleUidSet[uid]) continue; /* 이미 표시 중 */
-              var itemName = (item.name || '').toLowerCase();
-              if (itemName.indexOf(q) >= 0) {
-                hiddenMatches.push({ item: item, rankNum: j + 1 });
-              }
+          /* ② visible 행 하이라이트 + userId 수집 */
+          var visibleRows = body.querySelectorAll(
+            '.stelvio-rank-row:not(.stelvio-rank-expand-row):not(.stelvio-rank-dots-row):not([data-search-ghost])'
+          );
+          var firstMatch    = null;
+          var visibleUidSet = {};
+          for (var i = 0; i < visibleRows.length; i++) {
+            var nameEl    = visibleRows[i].querySelector('.stelvio-rank-name-text');
+            var avatarBtn = visibleRows[i].querySelector('[data-stelvio-rank-user-id]');
+            if (avatarBtn) visibleUidSet[avatarBtn.getAttribute('data-stelvio-rank-user-id') || ''] = true;
+            if (!nameEl) { visibleRows[i].classList.remove('ranking-search-highlight'); continue; }
+            var rowName = (nameEl.textContent || '').toLowerCase();
+            if (q && rowName.indexOf(q) >= 0) {
+              visibleRows[i].classList.add('ranking-search-highlight');
+              if (!firstMatch) firstMatch = visibleRows[i];
+            } else {
+              visibleRows[i].classList.remove('ranking-search-highlight');
             }
+          }
 
-            if (hiddenMatches.length > 0) {
-              /* 현재 visible 행의 rank 맵 빌드 (rank → element) */
-              var rankMap = [];
-              var allVisible = body.querySelectorAll(
-                '.stelvio-rank-row:not(.stelvio-rank-expand-row):not(.stelvio-rank-dots-row):not([data-search-ghost])'
-              );
-              for (var k = 0; k < allVisible.length; k++) {
-                var rn = _parseRankFromRow(allVisible[k]);
-                if (!isNaN(rn)) rankMap.push({ rank: rn, el: allVisible[k] });
+          /* ③ 2글자 이상: 숨겨진 항목 ghost row 삽입 */
+          if (q.length >= 2) {
+            var ctx = window._stelvioRankSearchCtx;
+            if (ctx && Array.isArray(ctx.arr) && ctx.arr.length > 0) {
+
+              /* 숨겨진 매치 수집 (MAX_GHOST 개 제한) */
+              var hiddenMatches = [];
+              for (var j = 0; j < ctx.arr.length && hiddenMatches.length < MAX_GHOST; j++) {
+                var item    = ctx.arr[j];
+                var uid     = String(item.userId || '');
+                if (visibleUidSet[uid]) continue;
+                var itmName = (item.name || '').toLowerCase();
+                if (itmName.indexOf(q) >= 0) hiddenMatches.push({ item: item, rankNum: j + 1 });
               }
-              rankMap.sort(function (a, b) { return a.rank - b.rank; });
 
-              /* 순위 오름차순으로 ghost row 삽입 */
-              hiddenMatches.sort(function (a, b) { return a.rankNum - b.rankNum; });
-              for (var m = 0; m < hiddenMatches.length; m++) {
-                var hm = hiddenMatches[m];
-                var ghostHtml = _buildGhostRowHtml(hm.item, hm.rankNum, ctx);
-                var tmpDiv = document.createElement('div');
-                tmpDiv.innerHTML = ghostHtml;
-                var ghostEl = tmpDiv.firstChild;
-
-                /* 삽입 위치: rank < hm.rankNum인 마지막 visible 행 다음 */
-                var insertAfterEl = null;
-                for (var r = rankMap.length - 1; r >= 0; r--) {
-                  if (rankMap[r].rank < hm.rankNum) {
-                    insertAfterEl = rankMap[r].el;
-                    break;
-                  }
+              if (hiddenMatches.length > 0) {
+                /* visible 행의 rank 맵 빌드 */
+                var rankMap = [];
+                var allVis  = body.querySelectorAll(
+                  '.stelvio-rank-row:not(.stelvio-rank-expand-row):not(.stelvio-rank-dots-row):not([data-search-ghost])'
+                );
+                for (var k = 0; k < allVis.length; k++) {
+                  var rn = _parseRankFromRow(allVis[k]);
+                  if (!isNaN(rn)) rankMap.push({ rank: rn, el: allVis[k] });
                 }
-
-                if (insertAfterEl) {
-                  /* insertAfterEl 바로 다음 sibling에 삽입
-                   * (이미 삽입된 ghost가 있으면 그 뒤로 밀기) */
-                  var nextSib = insertAfterEl.nextSibling;
-                  while (
-                    nextSib &&
-                    nextSib.nodeType === 1 &&
-                    nextSib.getAttribute &&
-                    nextSib.getAttribute('data-search-ghost') === '1'
-                  ) {
-                    nextSib = nextSib.nextSibling;
-                  }
-                  body.insertBefore(ghostEl, nextSib || null);
-                } else {
-                  /* rank가 모든 visible 행보다 낮은 경우 → 목록 맨 앞에 삽입 */
-                  var firstRow = body.querySelector('.stelvio-rank-row:not([data-search-ghost])');
-                  body.insertBefore(ghostEl, firstRow || null);
-                }
-
-                /* rankMap 갱신 (다음 ghost 삽입 위치 계산용) */
-                rankMap.push({ rank: hm.rankNum, el: ghostEl });
                 rankMap.sort(function (a, b) { return a.rank - b.rank; });
 
-                if (!firstMatch) firstMatch = ghostEl;
+                /* 순위 오름차순으로 ghost row 삽입 */
+                hiddenMatches.sort(function (a, b) { return a.rankNum - b.rankNum; });
+
+                for (var m = 0; m < hiddenMatches.length; m++) {
+                  var hm       = hiddenMatches[m];
+                  var tmpDiv   = document.createElement('div');
+                  tmpDiv.innerHTML = _buildGhostRowHtml(hm.item, hm.rankNum, ctx);
+                  var ghostEl  = tmpDiv.firstChild;
+                  if (!ghostEl) continue;
+
+                  /* 삽입 위치: rank < hm.rankNum인 마지막 visible 행의 바로 다음 */
+                  var insertAfterEl = null;
+                  for (var r = rankMap.length - 1; r >= 0; r--) {
+                    if (rankMap[r].rank < hm.rankNum) { insertAfterEl = rankMap[r].el; break; }
+                  }
+
+                  if (insertAfterEl) {
+                    /* 이미 삽입된 ghost 뒤로 밀어서 rank 순서 유지 */
+                    var nextSib = insertAfterEl.nextSibling;
+                    while (nextSib && nextSib.nodeType === 1 &&
+                           typeof nextSib.getAttribute === 'function' &&
+                           nextSib.getAttribute('data-search-ghost') === '1') {
+                      nextSib = nextSib.nextSibling;
+                    }
+                    body.insertBefore(ghostEl, nextSib || null);
+                  } else {
+                    /* 가장 낮은 rank → 맨 앞에 삽입 */
+                    var firstRow = body.querySelector('.stelvio-rank-row:not([data-search-ghost])');
+                    body.insertBefore(ghostEl, firstRow || null);
+                  }
+
+                  /* rankMap 갱신 */
+                  rankMap.push({ rank: hm.rankNum, el: ghostEl });
+                  rankMap.sort(function (a, b) { return a.rank - b.rank; });
+
+                  if (!firstMatch) firstMatch = ghostEl;
+                }
               }
             }
           }
-        }
 
-        if (firstMatch) firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (firstMatch) {
+            try { firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+          }
+        } finally {
+          _applying = false;
+          _moConnect();               /* Observer 재연결 */
+        }
       }
 
       function _init() {
@@ -23536,38 +23539,34 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var clearBtn  = _el('rankingSearchClearBtn');
         if (!toggleBtn || !inp || !clearBtn) return;
 
-        /* 돋보기 버튼: 입력창 토글 */
+        /* 돋보기 버튼 토글 */
         toggleBtn.addEventListener('click', function () {
           _inputOpen = !_inputOpen;
           var wrap = _el('rankingSearchInputWrap');
           if (wrap) wrap.classList.toggle('ranking-search-input-wrap--closed', !_inputOpen);
-          if (_inputOpen) {
-            setTimeout(function () { inp.focus(); }, 50);
-          } else {
-            inp.value = '';
-            _applySearch('');
-          }
+          if (_inputOpen) { setTimeout(function () { inp.focus(); }, 50); }
+          else { inp.value = ''; _applySearch(''); }
         });
 
-        /* 실시간 검색: 1글자 이하=visible만, 2글자 이상=ghost row도 삽입 */
-        inp.addEventListener('input', function () {
-          _applySearch(inp.value.trim());
-        });
+        /* 실시간 검색 */
+        inp.addEventListener('input', function () { _applySearch(inp.value.trim()); });
 
-        /* ✕ 버튼: 검색어 초기화 */
+        /* ✕ 버튼 */
         clearBtn.addEventListener('click', function () {
           inp.value = '';
           _applySearch('');
           inp.focus();
         });
 
-        /* 목록 재렌더 감시 → FAB 가시성·하이라이트 재적용 */
-        var listBody = _el('stelvioRankingListBody');
-        if (listBody) {
-          new MutationObserver(function () {
+        /* 목록 재렌더 감시
+         * ※ _applySearch 내부에서는 _moDisconnect로 해제되므로 재귀 발화 없음 */
+        _listBody = _el('stelvioRankingListBody');
+        if (_listBody) {
+          _mo = new MutationObserver(function () {
             _updateFabVisibility();
             if (_inputOpen && inp.value.trim()) _applySearch(inp.value.trim());
-          }).observe(listBody, { childList: true });
+          });
+          _moConnect();
         }
       }
 
