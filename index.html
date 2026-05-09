@@ -8311,9 +8311,9 @@
       stelvioRefreshRankingFriendSetFromFirestore().then(function () {
         if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
       });
-      stelvioRefreshGroupContactSetFromFirestore().then(function () {
-        if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
-      });
+      /* 그룹 탭 여부와 무관하게 구독 시작 → stelvioRankingGroupContactSet 채움
+       * (친구+그룹멤버 별 표시, 관심 필터 즉시 반영) */
+      stelvioEnsureMyGroupsFirestoreSubscription(null);
     });
     function stelvioSyncRankingListFilterToggleUi() {
       var allBtn = document.getElementById('stelvioRankingListFilterAll');
@@ -9608,7 +9608,8 @@
     }
     /** 나의 소모임 목록 Firestore 구독(탭 이탈 시 teardown) — 이미 연결되어 있으면 재구독하지 않음 */
     function stelvioEnsureMyGroupsFirestoreSubscription(bodyElHint) {
-      if (!stelvioIsGroupDistanceRanking()) return;
+      /* forceContactSet 호출 시 그룹 탭 모드와 무관하게 구독 시작
+       * (관심 필터 + 그룹멤버 별 표시를 위해 항상 구독이 필요) */
       if (stelvioMyGroupsRankUnsub) return;
       var uid =
         (window.currentUser && window.currentUser.id) ||
@@ -9628,7 +9629,10 @@
         try {
           stelvioMyGroupsRankUnsub = window.openRidingGroupService.subscribeMyRidingGroupsAsMember(window.firestoreV9, uid, function (rows) {
             stelvioLastMyGroupsFireRows = rows && rows.length ? rows.slice() : [];
-            stelvioRefreshGroupContactSetFromFirestore();
+            stelvioRefreshGroupContactSetFromFirestore().then(function () {
+              /* 그룹멤버 셋 갱신 후 랭킹 목록 재렌더 (관심 필터, 별 표시 즉시 반영) */
+              if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+            });
             var be = document.getElementById('stelvioRankingListBody');
             var keep = {};
             var zi;
