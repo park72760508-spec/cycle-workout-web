@@ -2622,7 +2622,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   z-index: 1; /* 이미지 위에 표시 */
 }
 
-.basecamp-btn span {
+.basecamp-btn span:not(#basecampRidingNotiBadge) {
   color: #fff !important;
   position: relative;
   z-index: 2; /* 오버레이 위에 표시 */
@@ -2721,33 +2721,50 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 
 /* 베이스캠프 라이딩모임 버튼 알림 배지
  * 위치: 버튼을 십자로 4등분 기준 우상단 중앙
- *   top  = 25%  (상단 절반의 중앙 = 전체 높이의 1/4 지점)
- *   right= 25%  (우측 절반의 중앙 = 전체 너비의 1/4 지점)
- *   transform: translate(50%,-50%) → 배지 자체 중심점을 해당 좌표에 정렬
- * 위치 보정 시: top / right 수치를 수정 */
+ *   top  = 25%  (버튼 높이 1/4 지점)
+ *   right= 25%  (버튼 너비 1/4 지점, 우측 기준)
+ *   transform: translate(50%,-50%) → 배지 중심점을 해당 좌표에 정렬
+ * 위치 보정 시: top / right 두 값만 수정 */
 #basecampRidingNotiBadge {
-  display: none;
-  position: absolute;
+  /* 표시 제어 */
+  display: none !important;
+  /* 절대 위치 — 부모 button의 position:relative 기준 */
+  position: absolute !important;
   /* ── 배지 위치 수치 (보정 요청 시 아래 두 값 조정) ── */
-  top: 25%;    /* 버튼 높이 4등분 기준 위에서 1칸 중앙 */
-  right: 25%;  /* 버튼 너비 4등분 기준 오른쪽 1칸 중앙 */
-  transform: translate(50%, -50%); /* 배지 중심점을 좌표에 정확히 맞춤 */
+  top: 25% !important;   /* 버튼 높이 4등분 → 우상단 중앙 */
+  right: 25% !important; /* 버튼 너비 4등분 → 우상단 중앙 */
+  transform: translate(50%, -50%) !important;
   /* ────────────────────────────────────────────── */
-  min-width: 20px;
-  height: 20px;
-  background: #e53e3e;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 20px;
-  text-align: center;
-  padding: 0 4px;
-  box-sizing: border-box;
-  z-index: 10;
-  pointer-events: none;
-  white-space: nowrap;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  /* 정원 형태 — width=height 고정, border-radius:50% */
+  width: 20px !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  background: #e53e3e !important;
+  border-radius: 50% !important;
+  color: #fff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 20px !important;
+  text-align: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  z-index: 20 !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35) !important;
+  text-shadow: none !important;
+  /* flex 레이아웃 무효화 */
+  order: unset !important;
+  flex: none !important;
+  align-self: auto !important;
+}
+
+/* 배지 숫자가 2자리 이상(10+)일 때 타원 방지 — 너비를 자동 확장하되 높이 고정 */
+#basecampRidingNotiBadge[data-wide] {
+  width: auto !important;
+  padding: 0 5px !important;
+  border-radius: 10px !important;
 }
 
 /* MY CAREER 화면 내부 버튼 텍스트 표시 스타일 */
@@ -4160,7 +4177,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /* 베이스캠프 버튼 span - basecamp-btn 클래스가 있을 때는 별도 처리 */
-#basecampScreen .btn-device.basecamp-btn span {
+#basecampScreen .btn-device.basecamp-btn span:not(#basecampRidingNotiBadge) {
   order: 1 !important; /* 하단에 배치 */
   font-size: 18px !important;
   font-weight: 600 !important;
