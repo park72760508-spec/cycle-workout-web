@@ -2658,7 +2658,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 /* 베이스캠프 화면의 MY CAREER 버튼 스타일 (좌하 버튼) */
 #basecampScreen .btn-device.basecamp-btn-career,
 #basecampScreen .basecamp-btn-career {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(03).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(03).svg') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
   background-size: 90% !important;
   background-position: center center !important;
@@ -2668,7 +2668,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 /* 베이스캠프: 랭킹보드·인도어 훈련 타일 (나의 기록과 동일 이미지 비율·속성) */
 #basecampScreen .btn-device.basecamp-btn-ranking,
 #basecampScreen .basecamp-btn-ranking {
-  background-image: url('https://stelvio.ai.kr/assets/img/m(01).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/m(01).svg') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
   background-size: 90% !important;
   background-position: center center !important;
@@ -2677,7 +2677,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 
 #basecampScreen .btn-device.basecamp-btn-indoor-entry,
 #basecampScreen .basecamp-btn-indoor-entry {
-  background-image: url('https://stelvio.ai.kr/assets/img/m(03).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/m(03).svg') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
   background-size: 90% !important;
   background-position: center center !important;
@@ -2698,7 +2698,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 /* 베이스캠프 화면의 오픈 라이딩방 버튼 스타일 (우하, b(04) 아트워크) */
 #basecampScreen .btn-device.basecamp-btn-manual,
 #basecampScreen .basecamp-btn-manual {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(04).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(04).svg') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
   background-size: 90% !important;
   background-position: center center !important;
@@ -2751,7 +2751,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .btn-device.basecamp-btn-profile,
 #basecampScreen .basecamp-btn-profile,
 .basecamp-btn-profile {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(03).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(03).svg') !important;
   background-color: rgba(255, 255, 255, 0.1) !important; /* PREMIUM 버튼과 동일한 배경색 */
   background-size: 90% !important; /* 이미지 크기 90%로 축소 (원본 비율 유지) */
   background-position: center center !important;
