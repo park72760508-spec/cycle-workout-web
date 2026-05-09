@@ -2736,15 +2736,15 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   transform: translate(50%, -50%) !important;
   /* ────────────────────────────────────────────── */
   /* 정원 형태 — width=height 고정, border-radius:50% */
-  width: 20px !important;
-  min-width: 20px !important;
-  height: 20px !important;
+  width: 26px !important;
+  min-width: 26px !important;
+  height: 26px !important;
   background: #e53e3e !important;
   border-radius: 50% !important;
   color: #fff !important;
-  font-size: 11px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
-  line-height: 20px !important;
+  line-height: 26px !important;
   text-align: center !important;
   padding: 0 !important;
   margin: 0 !important;
@@ -2763,8 +2763,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 /* 배지 숫자가 2자리 이상(10+)일 때 타원 방지 — 너비를 자동 확장하되 높이 고정 */
 #basecampRidingNotiBadge[data-wide] {
   width: auto !important;
-  padding: 0 5px !important;
-  border-radius: 10px !important;
+  padding: 0 6px !important;
+  border-radius: 13px !important;
 }
 
 /* MY CAREER 화면 내부 버튼 텍스트 표시 스타일 */
