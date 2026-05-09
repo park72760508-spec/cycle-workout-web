@@ -8311,7 +8311,9 @@
       stelvioRefreshRankingFriendSetFromFirestore().then(function () {
         if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
       });
-      stelvioRefreshGroupContactSetFromFirestore();
+      stelvioRefreshGroupContactSetFromFirestore().then(function () {
+        if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+      });
     });
     function stelvioSyncRankingListFilterToggleUi() {
       var allBtn = document.getElementById('stelvioRankingListFilterAll');
@@ -9897,10 +9899,11 @@
           if (cat !== 'Supremo' && !catRawByUid[uMem]) continue;
           /* 3. 관심 필터 */
           if (stelvioRankingState.listFilter === 'interest') {
-            var isFavG = stelvioRankingFavoriteUserSet.has(uMem);
+            var isFavG    = stelvioRankingFavoriteUserSet.has(uMem);
             var isFriendG = stelvioRankingFriendUserSet.has(uMem);
-            var isMeG = myIdG && uMem === String(myIdG);
-            if (!isFavG && !isFriendG && !isMeG) continue;
+            var isGrpG    = stelvioRankingGroupContactSet.has(uMem);
+            var isMeG     = myIdG && uMem === String(myIdG);
+            if (!isFavG && !isFriendG && !isGrpG && !isMeG) continue;
           }
           /* 카테고리 별 랭킹 데이터 우선, 없으면 Supremo 데이터 사용 */
           var rk = poolUid[uMem] || catRawByUid[uMem] || supE;
@@ -10653,6 +10656,21 @@
             var categoryRank = (userIdxS >= 3 && idx === 3) ? (userIdxS + 1) : (idx + 1);
             htmlS += buildSupremoRow(item, stelvioRankDisplayNumber(item, categoryRank, 'Supremo', byCategory), '');
           });
+          bodyEl.innerHTML = htmlS;
+          return;
+        }
+
+        /* 관심 필터 ON: 필터된 arr 전체(친구+그룹멤버+관심+본인)를 그대로 나열 — 접기/펼치기 없음 */
+        if (stelvioRankingState.listFilter === 'interest') {
+          arr.forEach(function(item, idx) {
+            htmlS += buildSupremoRow(item, stelvioRankDisplayNumber(item, idx + 1, 'Supremo', byCategory), '');
+          });
+          /* myRankSupremo가 arr에 없을 경우 별도 표시 */
+          if (myRankSupremo) {
+            var mrUidS = String(myRankSupremo.userId || '');
+            var inArrS = arr.some(function(it) { return String(it.userId || '') === mrUidS; });
+            if (!inArrS) htmlS += buildSupremoRow(myRankSupremo, Number(myRankSupremo.rank) || 1, ' stelvio-rank-my-supremo');
+          }
           bodyEl.innerHTML = htmlS;
           return;
         }
