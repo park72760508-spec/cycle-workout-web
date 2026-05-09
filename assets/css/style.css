@@ -25848,7 +25848,6 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   width: 26px;
   height: 26px;
   display: block;
-  filter: brightness(0) invert(1);
 }
 .ranking-search-input-wrap {
   display: flex;
