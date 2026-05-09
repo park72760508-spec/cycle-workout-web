@@ -20100,10 +20100,21 @@ if (originalCleanupMobileDashboard) {
     var badge = document.getElementById('basecampRidingNotiBadge');
     if (!badge) return;
     if (total > 0) {
-      badge.textContent = total > 99 ? '99+' : String(total);
-      badge.style.display = '';
+      var label = total > 99 ? '99+' : String(total);
+      badge.textContent = label;
+      /* 숫자가 2자리 이상이면 타원 허용 (data-wide 속성으로 CSS 분기) */
+      if (total >= 10) {
+        badge.setAttribute('data-wide', '1');
+      } else {
+        badge.removeAttribute('data-wide');
+      }
+      /* CSS의 display:none !important를 인라인으로 override */
+      badge.style.setProperty('display', 'flex', 'important');
+      badge.style.setProperty('align-items', 'center', 'important');
+      badge.style.setProperty('justify-content', 'center', 'important');
     } else {
-      badge.style.display = 'none';
+      badge.style.setProperty('display', 'none', 'important');
+      badge.removeAttribute('data-wide');
     }
   }
 
