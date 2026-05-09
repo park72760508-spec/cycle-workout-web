@@ -1902,8 +1902,9 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
  */
 #openRidingRoomScreen .open-riding-group-form-footer.open-riding-bottom-actions {
   position: fixed;
-  left: 0;
-  right: 0;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
   bottom: calc(
     16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-fixed-height) + 10px
   );
@@ -1911,11 +1912,11 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   margin-bottom: 0 !important;
   pointer-events: auto;
   isolation: isolate;
-  padding-left: max(10px, env(safe-area-inset-left, 0px));
-  padding-right: max(10px, env(safe-area-inset-right, 0px));
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
   padding-bottom: 10px;
   padding-top: 10px;
-  box-sizing: border-box;
+  box-sizing: border-box !important;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1926,6 +1927,9 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
       (var(--open-riding-glass-nav-inner-fixed-height) * 0.5) +
       var(--open-riding-glass-nav-inner-fixed-height) + 10px
   );
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
 }
 
 #openRidingRoomScreen .open-riding-group-form-footer.open-riding-bottom-actions .open-riding-action-btn {
