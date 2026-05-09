@@ -2703,6 +2703,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   background-size: 90% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
+  /* 알림 배지가 버튼 경계 밖으로 표시될 수 있도록 overflow 해제 */
+  overflow: visible !important;
 }
 
 #basecampScreen .btn-device.basecamp-btn-manual::before,
@@ -2710,11 +2712,38 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   background: rgba(135, 206, 235, 0.3) !important;
 }
 
-#basecampScreen .btn-device.basecamp-btn-manual span,
-#basecampScreen .basecamp-btn-manual span {
+#basecampScreen .btn-device.basecamp-btn-manual span:not(#basecampRidingNotiBadge),
+#basecampScreen .basecamp-btn-manual span:not(#basecampRidingNotiBadge) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
+}
+
+/* 베이스캠프 라이딩모임 버튼 알림 배지
+ * 위치: top 8px / right 8px (12시~3시 중간, 1:30 위치 기준)
+ * 이후 수치 보정 시 top/right 값 조정 */
+#basecampRidingNotiBadge {
+  display: none;
+  position: absolute;
+  /* ── 배지 위치 수치 (보정 요청 시 이 두 값을 수정) ── */
+  top: 8px;   /* 상단에서 8px */
+  right: 8px; /* 우측에서 8px */
+  /* ────────────────────────────────────────────── */
+  min-width: 20px;
+  height: 20px;
+  background: #e53e3e;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  padding: 0 4px;
+  box-sizing: border-box;
+  z-index: 10;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
 /* MY CAREER 화면 내부 버튼 텍스트 표시 스타일 */
