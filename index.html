@@ -23313,7 +23313,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <span class="weekly-top10-aff-icon" aria-hidden="true">⚡</span>
         <div class="weekly-top10-aff-text">
           <span class="weekly-top10-aff-title">스텔비오 제휴 할인 받기</span>
-          <span class="weekly-top10-aff-subtitle">환경설정에서 Gemini API &amp; STRAVA 연결 하면 사용자 정보에 활성화 됨</span>
+          <span class="weekly-top10-aff-subtitle">환경설정에서 Gemini API &amp; STRAVA 연결 하면 제휴 할인 활성화 됨</span>
         </div>
         <button type="button" id="weeklyTop10AffBtn" class="weekly-top10-aff-btn" onclick="onWeeklyTop10AffBannerClick(event)" aria-label="환경설정으로 이동">환경 설정</button>
       </div>
@@ -23424,14 +23424,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var allConnected = _affIsGeminiConnected(cu) && _affIsStravaConnected(cu);
 
         if (allConnected) {
-          /* ── 연동 완료: TOP10 닫고 프로필 화면으로 이동 ── */
+          /* ── 연동 완료: TOP10 닫고 제휴사 리스트 화면으로 이동 ── */
           if (typeof closeWeeklyTop10Modal === 'function') closeWeeklyTop10Modal();
           setTimeout(function () {
-            if (typeof showScreen === 'function') {
-              showScreen('profileScreen');
-              if (typeof window.loadUsers === 'function') {
-                setTimeout(function () { window.loadUsers(); }, 200);
-              }
+            if (typeof window.onAffiliateButtonClick === 'function') {
+              window.onAffiliateButtonClick();
+            } else if (typeof showScreen === 'function') {
+              showScreen('affiliateScreen');
+              if (typeof window.initAffiliateReact === 'function') window.initAffiliateReact();
             }
           }, 130);
 
