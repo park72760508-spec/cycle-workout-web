@@ -26262,6 +26262,20 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: #f8fafc;
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge */
+}
+.affiliate-react-root::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / WebView */
+}
+
+/* 폼 내부 스크롤 영역도 스크롤바 숨김 */
+#affiliateScreen .open-riding-app-body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#affiliateScreen .open-riding-app-body::-webkit-scrollbar {
+  display: none;
 }
 
 /* 제휴사 앱 내부 모든 요소 배경 기본값 리셋 */
