@@ -5531,29 +5531,6 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .weekly-top10-aff-banner--connected .weekly-top10-aff-icon {
   filter: drop-shadow(0 0 5px rgba(52,211,153,0.85));
 }
-/* 연동 완료 툴팁 */
-.weekly-top10-aff-tooltip {
-  position: absolute;
-  bottom: calc(100% + 7px);
-  right: 0;
-  background: #fff;
-  border: 1px solid rgba(5,150,105,0.3);
-  border-radius: 10px;
-  padding: 7px 11px;
-  font-size: 0.71rem;
-  color: #064e3b;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.13);
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(5px);
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  z-index: 10;
-}
-.weekly-top10-aff-tooltip--visible {
-  opacity: 1;
-  transform: translateY(0);
-}
 /* 좁은 화면 대응 */
 @media (max-width: 360px) {
   .weekly-top10-aff-title { font-size: 0.73rem; }
