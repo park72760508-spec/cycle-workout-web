@@ -952,7 +952,12 @@ function AffiliateDetail(props) {
   var isOwner = isAdmin || (userId && String(aff.createdBy) === String(userId));
 
   return (
-    <div className="w-full max-w-lg mx-auto space-y-4 pb-6 text-left">
+    <div
+      className="w-full max-w-lg mx-auto space-y-4 text-left"
+      style={{
+        paddingBottom: 'calc(var(--open-riding-glass-nav-inner-fixed-height, 58px) + env(safe-area-inset-bottom, 0px) + 32px)'
+      }}
+    >
 
       {/* ── 상단 히어로 카드: 그룹 상세와 동일 구조 ── */}
       <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative isolate bg-white">
@@ -973,16 +978,20 @@ function AffiliateDetail(props) {
 
         <div className="relative z-[1] p-4">
           <div className="flex items-start gap-3">
-            {/* 아바타 – 그룹 상세와 동일: h-16 w-16 · ring-2 · gradient bg */}
+            {/* 아바타 – object-contain으로 이미지 전체 표시 */}
             <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100">
               {aff.photoUrl
-                ? <img src={String(aff.photoUrl)} alt="" className="h-full w-full object-cover" decoding="async" />
+                ? <img src={String(aff.photoUrl)} alt="" decoding="async"
+                    style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center' }} />
                 : <span className="text-xl font-bold text-violet-700">{initial}</span>
               }
             </span>
 
             <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-bold text-slate-900 m-0 truncate">{aff.name || ''}</h2>
+              <h2 className="m-0 truncate font-extrabold text-slate-900"
+                style={{ fontSize: 'clamp(1.1rem, 4.5vw, 1.35rem)', lineHeight: '1.25' }}>
+                {aff.name || ''}
+              </h2>
               <p className="text-xs text-slate-500 m-0 mt-1">{regionLabel || '지역 미설정'}</p>
               {/* 기간 – 관리자만 표시 */}
               {isOwner && periodLabel ? (
@@ -1095,7 +1104,10 @@ function AffiliateApp(props) {
             </svg>
           </button>
           {/* 중앙: 타이틀 */}
-          <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate">{headerTitle}</h1>
+          <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate font-bold"
+            style={{ fontSize: view === 'detail' ? 'clamp(1.05rem, 4.5vw, 1.25rem)' : undefined }}>
+            {headerTitle}
+          </h1>
           {/* 우: 폼에서 X 닫기, 그 외 빈 대칭 공간 */}
           {(view === 'create' || view === 'edit') ? (
             <button type="button"
