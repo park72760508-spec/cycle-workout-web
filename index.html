@@ -147,6 +147,35 @@
         }
         window.authV9 = authV9;
         window.firestoreV9 = firestoreV9;
+        /* AffiliateScreens.jsx 등 Babel 스크립트에서 사용할 Firestore v9 함수 전역 노출 */
+        window._firebaseFirestoreFns = {
+          collection:      firestoreMod.collection,
+          doc:             firestoreMod.doc,
+          addDoc:          firestoreMod.addDoc,
+          setDoc:          firestoreMod.setDoc,
+          updateDoc:       firestoreMod.updateDoc,
+          deleteDoc:       firestoreMod.deleteDoc,
+          getDoc:          firestoreMod.getDoc,
+          getDocs:         firestoreMod.getDocs,
+          onSnapshot:      firestoreMod.onSnapshot,
+          query:           firestoreMod.query,
+          orderBy:         firestoreMod.orderBy,
+          where:           firestoreMod.where,
+          serverTimestamp: firestoreMod.serverTimestamp,
+          increment:       firestoreMod.increment
+        };
+        /* Storage v9 함수도 전역 노출 (이미지 업로드용) */
+        try {
+          var _storageMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js');
+          if (_storageMod) {
+            window._firebaseStorageFns = {
+              ref:            _storageMod.ref,
+              uploadBytes:    _storageMod.uploadBytes,
+              getDownloadURL: _storageMod.getDownloadURL,
+              deleteObject:   _storageMod.deleteObject
+            };
+          }
+        } catch(_se) { window._firebaseStorageFns = {}; }
         if (authMod.signInWithEmailAndPassword) window.signInWithEmailAndPasswordV9 = authMod.signInWithEmailAndPassword;
         if (authMod.createUserWithEmailAndPassword) window.createUserWithEmailAndPasswordV9 = authMod.createUserWithEmailAndPassword;
         if (authMod.updateProfile) window.updateProfileV9 = authMod.updateProfile;
