@@ -2675,10 +2675,14 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
             </div>
             <div class="stelvio-user-points-with-avatar">
               ${avatarBlock}
-              <div class="user-points">
-              <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
-              <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
-            </div>
+              <span class="point-badge point-accumulated" title="누적 포인트">
+                <span class="point-icon-val"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
+                <span class="point-label">누적포인트</span>
+              </span>
+              <span class="point-badge point-remaining" title="보유 포인트">
+                <span class="point-icon-val"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
+                <span class="point-label">보유포인트</span>
+              </span>
               ${affiliateBtnHtml}
             </div>
           </div>
