@@ -177,6 +177,26 @@ var affiliateService = {
       }
       return Promise.resolve('');
     } catch(e) { return Promise.reject(e); }
+  },
+
+  uploadPromoImage: function(storage, affiliateId, file) {
+    try {
+      var fns = window._firebaseStorageFns || {};
+      var ext = (file.name.split('.').pop() || 'jpg');
+      var path = 'affiliates/' + affiliateId + '/promo.' + ext;
+      if (typeof fns.ref === 'function' && typeof fns.uploadBytes === 'function' && typeof fns.getDownloadURL === 'function') {
+        var storageRef = fns.ref(storage, path);
+        return fns.uploadBytes(storageRef, file).then(function(snap) {
+          return fns.getDownloadURL(snap.ref);
+        });
+      }
+      // compat
+      if (typeof firebase !== 'undefined' && firebase.storage) {
+        var r = firebase.storage().ref(path);
+        return r.put(file).then(function() { return r.getDownloadURL(); });
+      }
+      return Promise.resolve('');
+    } catch(e) { return Promise.reject(e); }
   }
 };
 
@@ -386,6 +406,9 @@ function AffiliateForm(props) {
   var _photoUrl = useState('');   var photoUrl = _photoUrl[0]; var setPhotoUrl = _photoUrl[1];
   var _photoFile = useState(null);var photoFile = _photoFile[0]; var setPhotoFile = _photoFile[1];
   var _photoPreview = useState('');var photoPreview = _photoPreview[0]; var setPhotoPreview = _photoPreview[1];
+  var _promoUrl = useState('');   var promoUrl = _promoUrl[0]; var setPromoUrl = _promoUrl[1];
+  var _promoFile = useState(null);var promoFile = _promoFile[0]; var setPromoFile = _promoFile[1];
+  var _promoPreview = useState('');var promoPreview = _promoPreview[0]; var setPromoPreview = _promoPreview[1];
   var _busy = useState(false);    var busy = _busy[0]; var setBusy = _busy[1];
   var _loaded = useState(!isEdit);var loaded = _loaded[0]; var setLoaded = _loaded[1];
 
@@ -403,6 +426,14 @@ function AffiliateForm(props) {
     return function() { URL.revokeObjectURL(u); };
   }, [photoFile]);
 
+  // 홍보 이미지 미리보기
+  useEffect(function() {
+    if (!promoFile) { setPromoPreview(''); return; }
+    var u = URL.createObjectURL(promoFile);
+    setPromoPreview(u);
+    return function() { URL.revokeObjectURL(u); };
+  }, [promoFile]);
+
   // 수정 모드: 기존 데이터 로드
   useEffect(function() {
     if (!isEdit || !firestore || !editId) { setLoaded(true); return; }
@@ -419,6 +450,7 @@ function AffiliateForm(props) {
         setAddress(doc.address || '');
         setPhone(doc.phone || '');
         setPhotoUrl(doc.photoUrl || '');
+        setPromoUrl(doc.promoImageUrl || '');
       })
       .catch(function(){})
       .finally(function(){ if (!cancelled) setLoaded(true); });
@@ -442,8 +474,9 @@ function AffiliateForm(props) {
   }
   function removeRegion(r) { setRegions(regions.filter(function(x){ return x !== r; })); }
 
-  function buildPayload(urlOverride) {
+  function buildPayload(urlOverride, promoUrlOverride) {
     var url = urlOverride != null ? urlOverride : photoUrl;
+    var pUrl = promoUrlOverride != null ? promoUrlOverride : promoUrl;
     return {
       name: name.trim(),
       regions: regions,
@@ -452,7 +485,8 @@ function AffiliateForm(props) {
       periodEnd: periodEnd,
       address: address.trim(),
       phone: phone.trim(),
-      photoUrl: url || ''
+      photoUrl: url || '',
+      promoImageUrl: pUrl || ''
     };
   }
 
@@ -468,24 +502,46 @@ function AffiliateForm(props) {
     var savePromise;
     if (isEditMode) {
       var id = editId;
-      var chain = Promise.resolve().then(function(){
-        if (photoFile && storage) {
-          return affiliateService.uploadPhoto(storage, id, photoFile).then(function(url){
-            return affiliateService.update(firestore, id, buildPayload(url));
-          });
-        }
-        return affiliateService.update(firestore, id, buildPayload());
-      });
+      var chain = Promise.resolve()
+        .then(function(){
+          // 대표 사진 업로드 (변경된 경우)
+          if (photoFile && storage) {
+            return affiliateService.uploadPhoto(storage, id, photoFile);
+          }
+          return photoUrl;
+        })
+        .then(function(resolvedPhotoUrl){
+          // 홍보 이미지 업로드 (변경된 경우)
+          if (promoFile && storage) {
+            return affiliateService.uploadPromoImage(storage, id, promoFile)
+              .then(function(resolvedPromoUrl){
+                return affiliateService.update(firestore, id, buildPayload(resolvedPhotoUrl, resolvedPromoUrl));
+              });
+          }
+          return affiliateService.update(firestore, id, buildPayload(resolvedPhotoUrl, null));
+        });
       savePromise = chain.then(function(){ onSaved(id); });
     } else {
-      savePromise = affiliateService.create(firestore, userId, buildPayload(null))
+      savePromise = affiliateService.create(firestore, userId, buildPayload(null, null))
         .then(function(newId){
-          if (photoFile && storage && newId) {
-            return affiliateService.uploadPhoto(storage, newId, photoFile)
-              .then(function(url){ return affiliateService.update(firestore, newId, buildPayload(url)); })
-              .then(function(){ onSaved(newId); });
-          }
-          onSaved(newId);
+          if (!newId) { onSaved(newId); return; }
+          // 대표 사진 업로드
+          var p1 = (photoFile && storage)
+            ? affiliateService.uploadPhoto(storage, newId, photoFile)
+            : Promise.resolve(photoUrl);
+          // 홍보 이미지 업로드
+          return p1.then(function(resolvedPhotoUrl){
+            var p2 = (promoFile && storage)
+              ? affiliateService.uploadPromoImage(storage, newId, promoFile)
+              : Promise.resolve(promoUrl);
+            return p2.then(function(resolvedPromoUrl){
+              if (resolvedPhotoUrl || resolvedPromoUrl) {
+                return affiliateService.update(firestore, newId, buildPayload(resolvedPhotoUrl, resolvedPromoUrl))
+                  .then(function(){ onSaved(newId); });
+              }
+              onSaved(newId);
+            });
+          });
         });
     }
     savePromise.catch(function(e){
@@ -574,6 +630,59 @@ function AffiliateForm(props) {
           onChange={function(e){ setIntro(e.target.value); }}
           placeholder="제휴 혜택 및 소개를 입력하세요" />
         <span className="text-xs text-slate-400">{intro.length}/500</span>
+      </div>
+
+      {/* 홍보 이미지 */}
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">
+          홍보 이미지
+          <span className="ml-2 text-slate-400 font-normal">권장: 750 × 422px (16:9) · 1MB 이하</span>
+        </label>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+          {/* 이미지 미리보기 영역 */}
+          {(promoFile && promoPreview) ? (
+            <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
+              <img src={promoPreview} alt="홍보 이미지 미리보기"
+                className="w-full h-full object-cover" />
+              <button
+                type="button"
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white text-sm flex items-center justify-center hover:bg-black/70"
+                aria-label="이미지 제거"
+                onClick={function(){ setPromoFile(null); setPromoPreview(''); }}>
+                ×
+              </button>
+            </div>
+          ) : promoUrl ? (
+            <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
+              <img src={promoUrl} alt="홍보 이미지"
+                className="w-full h-full object-cover" decoding="async" />
+              <button
+                type="button"
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white text-sm flex items-center justify-center hover:bg-black/70"
+                aria-label="이미지 제거"
+                onClick={function(){ setPromoUrl(''); }}>
+                ×
+              </button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center gap-2 py-8 cursor-pointer hover:bg-slate-100 transition-colors">
+              <span className="text-3xl text-slate-300">🖼️</span>
+              <span className="text-xs text-slate-400">클릭하여 홍보 이미지 선택</span>
+              <span className="text-xs text-slate-300">JPG · PNG · WEBP</span>
+              <input type="file" accept="image/*" className="hidden"
+                onChange={function(e){ var f = e.target.files && e.target.files[0]; if(f) setPromoFile(f); e.target.value=''; }} />
+            </label>
+          )}
+        </div>
+        {/* 이미지가 있을 때 교체 버튼 */}
+        {(promoFile || promoUrl) && (
+          <label className="mt-2 inline-flex items-center gap-1 text-xs text-violet-600 cursor-pointer hover:text-violet-800">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            이미지 교체
+            <input type="file" accept="image/*" className="hidden"
+              onChange={function(e){ var f = e.target.files && e.target.files[0]; if(f) setPromoFile(f); e.target.value=''; }} />
+          </label>
+        )}
       </div>
 
       {/* 제휴 기간 */}
@@ -720,6 +829,20 @@ function AffiliateDetail(props) {
         <div className="stelvio-category-card rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <p className="text-xs font-semibold text-slate-500 mb-2">제휴 소개</p>
           <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{aff.intro}</p>
+        </div>
+      ) : null}
+
+      {/* 홍보 이미지 */}
+      {aff.promoImageUrl ? (
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <img
+            src={aff.promoImageUrl}
+            alt="홍보 이미지"
+            className="w-full object-cover"
+            style={{ aspectRatio: '16/9' }}
+            decoding="async"
+            loading="lazy"
+          />
         </div>
       ) : null}
 
