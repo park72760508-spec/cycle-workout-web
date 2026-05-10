@@ -1214,15 +1214,19 @@ function AffiliateApp(props) {
       {/* 헤더 – 그룹 화면과 동일한 grid 중앙 정렬 패턴 */}
       <header className="open-riding-inner-header">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
-          {/* 좌: 뒤로가기 */}
-          <button type="button"
-            className="shrink-0 inline-flex items-center justify-center w-[2.5em] h-[2.5em] rounded-lg text-slate-600 hover:bg-slate-100"
-            aria-label="뒤로가기"
-            onClick={goBack}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
+          {/* 좌: 목록에서는 뒤로가기 숨김, 상세/폼에서는 표시 */}
+          {view !== 'list' ? (
+            <button type="button"
+              className="shrink-0 inline-flex items-center justify-center w-[2.5em] h-[2.5em] rounded-lg text-slate-600 hover:bg-slate-100"
+              aria-label="뒤로가기"
+              onClick={goBack}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          ) : (
+            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+          )}
           {/* 중앙: 타이틀 */}
           <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate font-bold"
             style={{ fontSize: view === 'detail' ? 'clamp(1.05rem, 4.5vw, 1.25rem)' : undefined }}>
