@@ -59,6 +59,33 @@ function affiliateShowToast(msg) {
   alert(msg);
 }
 
+/**
+ * 제휴사 활성 기간 판정
+ * - periodStart/periodEnd 모두 없으면 → 항상 활성
+ * - periodEnd가 오늘보다 이전이면 → 기간 만료 (비활성)
+ * - periodStart가 오늘보다 이후이면 → 기간 미도래 (비활성)
+ * returns: 'active' | 'expired' | 'upcoming' | 'always'
+ */
+function affiliateActiveStatus(aff) {
+  if (!aff) return 'expired';
+  var hasStart = aff.periodStart && String(aff.periodStart).trim();
+  var hasEnd   = aff.periodEnd   && String(aff.periodEnd).trim();
+  if (!hasStart && !hasEnd) return 'always';
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (hasStart) {
+    var start = new Date(aff.periodStart);
+    start.setHours(0, 0, 0, 0);
+    if (today < start) return 'upcoming';
+  }
+  if (hasEnd) {
+    var end = new Date(aff.periodEnd);
+    end.setHours(23, 59, 59, 999);
+    if (today > end) return 'expired';
+  }
+  return 'active';
+}
+
 // ── Firestore 서비스 (Firebase v9 모듈러 – window.firestoreV9 기준) ──────────
 var affiliateService = {
   _col: function(db) {
@@ -336,32 +363,67 @@ function AffiliateList(props) {
           {filtered.map(function(aff) {
             var initial = affiliateInitials(aff.name);
             var regionLabel = (aff.regions || []).slice(0, 2).join(' · ') + ((aff.regions || []).length > 2 ? ' 외' : '');
-            var periodLabel = affiliateFormatPeriod(aff.periodStart, aff.periodEnd);
+            var status = affiliateActiveStatus(aff);
+            var isClickable = (status === 'active' || status === 'always');
+            /* 비활성 상태 레이블 */
+            var statusBadge = null;
+            if (status === 'expired') {
+              statusBadge = (
+                <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 border border-slate-200">
+                  기간 만료
+                </span>
+              );
+            } else if (status === 'upcoming') {
+              statusBadge = (
+                <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-500 border border-amber-200">
+                  준비 중
+                </span>
+              );
+            }
             return (
               <li key={aff.id}>
                 <button
                   type="button"
-                  className="open-riding-action-btn open-riding-group-list-row-btn w-full flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm hover:bg-slate-50/90 transition box-border"
-                  onClick={function(){ onOpenDetail(aff.id); }}
+                  disabled={!isClickable && !isAdmin}
+                  className={[
+                    'open-riding-action-btn open-riding-group-list-row-btn w-full flex items-center gap-3 rounded-2xl border px-3 py-3 text-left shadow-sm transition box-border',
+                    isClickable || isAdmin
+                      ? 'bg-white border-slate-200 hover:bg-slate-50/90'
+                      : 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                  ].join(' ')}
+                  onClick={function(){
+                    if (!isClickable && !isAdmin) return;
+                    onOpenDetail(aff.id);
+                  }}
+                  aria-disabled={!isClickable && !isAdmin}
                 >
-                  {/* 아바타 – 그룹 목록과 동일: h-14 w-14 · ring-2 ring-violet-200 · gradient bg */}
+                  {/* 아바타 */}
                   <span className="relative shrink-0">
-                    <span className="inline-flex h-14 w-14 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100">
+                    <span className={[
+                      'inline-flex h-14 w-14 items-center justify-center rounded-full ring-2 overflow-hidden',
+                      isClickable || isAdmin
+                        ? 'ring-violet-200 bg-gradient-to-br from-violet-50 to-slate-100'
+                        : 'ring-slate-200 bg-slate-100'
+                    ].join(' ')}>
                       {aff.photoUrl
-                        ? <img src={aff.photoUrl} alt="" className="h-full w-full object-cover" decoding="async" loading="lazy" />
-                        : <span className="text-lg font-bold text-violet-700">{initial}</span>
+                        ? <img src={aff.photoUrl} alt=""
+                            className={['h-full w-full object-cover', !isClickable && !isAdmin ? 'grayscale' : ''].join(' ')}
+                            decoding="async" loading="lazy" />
+                        : <span className={['text-lg font-bold', isClickable || isAdmin ? 'text-violet-700' : 'text-slate-400'].join(' ')}>{initial}</span>
                       }
                     </span>
                   </span>
                   {/* 텍스트 */}
                   <span className="min-w-0 flex-1">
-                    <span className="block font-semibold text-slate-900 truncate text-[15px]">{aff.name || '(이름 없음)'}</span>
+                    <span className={['block font-semibold truncate text-[15px]', isClickable || isAdmin ? 'text-slate-900' : 'text-slate-400'].join(' ')}>
+                      {aff.name || '(이름 없음)'}
+                    </span>
                     <span className="block text-xs text-slate-500 mt-0.5 truncate">
                       {regionLabel || '지역 미설정'}
-                      {periodLabel ? <span className="text-slate-300 mx-1">·</span> : null}
-                      {periodLabel || ''}
                     </span>
                   </span>
+                  {/* 상태 배지 (만료/준비중) */}
+                  {statusBadge}
                 </button>
               </li>
             );
@@ -845,11 +907,11 @@ function AffiliateDetail(props) {
 
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-bold text-slate-900 m-0 truncate">{aff.name || ''}</h2>
-              <p className="text-xs text-slate-500 m-0 mt-1">
-                {regionLabel || '지역 미설정'}
-                {periodLabel ? <span className="text-slate-300 mx-1">·</span> : null}
-                {periodLabel || ''}
-              </p>
+              <p className="text-xs text-slate-500 m-0 mt-1">{regionLabel || '지역 미설정'}</p>
+              {/* 기간 – 관리자만 표시 */}
+              {isOwner && periodLabel ? (
+                <p className="text-xs text-amber-600 m-0 mt-0.5">📅 {periodLabel}</p>
+              ) : null}
             </div>
 
             {/* 관리자 수정/삭제 버튼 */}
@@ -906,20 +968,6 @@ function AffiliateDetail(props) {
         </div>
       ) : null}
 
-      {/* 하단 CTA – 그룹 상세와 동일: open-riding-bottom-actions border-t */}
-      <div className="open-riding-group-member-cta-slot open-riding-bottom-actions border-t border-slate-200/90 bg-[rgba(255,255,255,0.98)] px-3 pt-2 pb-3 box-border">
-        {aff.phone ? (
-          <a href={'tel:' + aff.phone}
-            className="open-riding-action-btn block w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] text-center flex items-center justify-center hover:bg-violet-700">
-            📞 문의하기
-          </a>
-        ) : (
-          <button type="button"
-            className="open-riding-action-btn w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 text-[clamp(0.8125rem,3.8vw,0.9375rem)]">
-            할인 혜택 확인
-          </button>
-        )}
-      </div>
     </div>
   );
 }
