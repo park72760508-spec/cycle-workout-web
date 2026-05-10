@@ -8123,6 +8123,17 @@ function OpenRidingFriendsManage(props) {
     return s || '-';
   }
 
+  /** 전화번호처럼 보이는 문자열인지 판별 (숫자·하이픈·공백으로만 구성, 7자리 이상) */
+  function looksLikePhone(s) {
+    var clean = String(s || '').replace(/[\s\-\(\)]/g, '');
+    return /^\+?[\d]{7,15}$/.test(clean);
+  }
+
+  /** tel: 링크용 번호 생성 (숫자·+만 남김) */
+  function toTelHref(s) {
+    return 'tel:' + String(s || '').replace(/[^\d+]/g, '');
+  }
+
   /** 내가 보낸 요청 목록용 짧은 상태 문구 */
   function outgoingStatusShort(st) {
     var s = String(st || '');
@@ -8353,7 +8364,19 @@ function OpenRidingFriendsManage(props) {
                               className="py-2 px-1 text-slate-700 tabular-nums whitespace-nowrap overflow-hidden text-ellipsis align-middle min-w-0"
                               title={cont}
                             >
-                              {cont}
+                              {looksLikePhone(cont) ? (
+                                <a
+                                  href={toTelHref(cont)}
+                                  className="inline-flex items-center gap-1 text-violet-700 hover:text-violet-900 hover:underline active:text-violet-900 transition-colors"
+                                  aria-label={disp + ' 전화 걸기 ' + cont}
+                                  onClick={function(e) { e.stopPropagation(); }}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flexShrink:0}}>
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7a2 2 0 0 1 1.72 2.03z"/>
+                                  </svg>
+                                  {cont}
+                                </a>
+                              ) : cont}
                             </td>
                             <td className="py-2 pr-2 pl-1 text-center align-middle">
                               <button
