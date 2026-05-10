@@ -252,6 +252,18 @@ var affiliateService = {
     } catch(e) { return Promise.reject(e); }
   },
 
+  updateSortOrder: function(db, id, sortOrder) {
+    try {
+      var fns = window._firebaseFirestoreFns || {};
+      var ref = this._doc(db, id);
+      if (!ref) return Promise.resolve();
+      var payload = { sortOrder: sortOrder };
+      if (typeof fns.updateDoc === 'function') return fns.updateDoc(ref, payload);
+      if (typeof ref.update === 'function') return ref.update(payload);
+      return Promise.resolve();
+    } catch(e) { return Promise.resolve(); }
+  },
+
   remove: function(db, id) {
     try {
       var fns = window._firebaseFirestoreFns || {};
@@ -433,16 +445,41 @@ function AffiliateList(props) {
   var _loading = useState(true);
   var loading = _loading[0]; var setLoading = _loading[1];
 
+  /* ── 드래그 정렬 상태 ── */
+  var _localRows = useState(null);   /* 드래그 중 임시 순서 */
+  var localRows = _localRows[0]; var setLocalRows = _localRows[1];
+  var _draggingId = useState(null);  /* 현재 드래그 중인 아이템 id */
+  var draggingId = _draggingId[0]; var setDraggingId = _draggingId[1];
+  var _dragOverId = useState(null);  /* 드롭 대상 id */
+  var dragOverId = _dragOverId[0]; var setDragOverId = _dragOverId[1];
+  var _saving = useState(false);     /* Firestore 순서 저장 중 */
+  var saving = _saving[0]; var setSaving = _saving[1];
+  var dragSrcRef = useRef(null);     /* 드래그 소스 id (ref – state 클로저 방지) */
+  var touchRef   = useRef(null);     /* 터치 드래그 상태 */
+
   var listRef = useRef(null);
   var _showScrollTop = useState(false);
   var showScrollTop = _showScrollTop[0]; var setShowScrollTop = _showScrollTop[1];
 
-  // Firestore 구독
+  /* 검색 중이 아닌 관리자만 드래그 허용 */
+  var canDrag = isAdmin && !filterText.trim();
+
+  // Firestore 구독 – sortOrder 있으면 오름차순, 없으면 createdAt 내림차순 보조 정렬
   useEffect(function() {
     if (!firestore) { setLoading(false); return; }
     setLoading(true);
     var unsub = affiliateService.subscribe(firestore, function(list) {
-      setRows(list);
+      /* 클라이언트 정렬: sortOrder ASC → createdAt DESC */
+      var sorted = list.slice().sort(function(a, b) {
+        var ao = a.sortOrder != null ? a.sortOrder : 999999;
+        var bo = b.sortOrder != null ? b.sortOrder : 999999;
+        if (ao !== bo) return ao - bo;
+        var at = a.createdAt ? String(a.createdAt) : '';
+        var bt = b.createdAt ? String(b.createdAt) : '';
+        return bt < at ? -1 : bt > at ? 1 : 0;
+      });
+      setRows(sorted);
+      setLocalRows(null); /* 외부 업데이트 시 로컬 순서 초기화 */
       setLoading(false);
     });
     return function() { if (typeof unsub === 'function') unsub(); };
@@ -457,15 +494,82 @@ function AffiliateList(props) {
     return function() { el.removeEventListener('scroll', onScroll); };
   }, []);
 
+  /* ── 드래그 헬퍼 ── */
+  function doReorder(srcId, dstId) {
+    if (!srcId || !dstId || srcId === dstId) return;
+    var base = localRows || rows;
+    var fromIdx = -1, toIdx = -1;
+    for (var i = 0; i < base.length; i++) {
+      if (base[i].id === srcId) fromIdx = i;
+      if (base[i].id === dstId) toIdx   = i;
+    }
+    if (fromIdx === -1 || toIdx === -1) return;
+    var next = base.slice();
+    var item = next.splice(fromIdx, 1)[0];
+    next.splice(toIdx, 0, item);
+    setLocalRows(next);
+    setDragOverId(dstId);
+  }
+
+  function doSaveOrder(overrideRows) {
+    var toSave = overrideRows || localRows;
+    if (!toSave) { dragSrcRef.current = null; setDraggingId(null); setDragOverId(null); return; }
+    setSaving(true);
+    var updates = toSave.map(function(row, idx) {
+      return affiliateService.updateSortOrder(firestore, row.id, idx);
+    });
+    Promise.all(updates)
+      .catch(function(e) { console.warn('[Affiliate] 순서 저장 실패:', e); })
+      .finally(function() {
+        setSaving(false);
+        dragSrcRef.current = null;
+        setDraggingId(null);
+        setDragOverId(null);
+        /* localRows는 구독 업데이트 시 초기화 */
+      });
+  }
+
+  /* 터치 이동 핸들러 (전역 – li에 passive:false 필요) */
+  useEffect(function() {
+    if (!canDrag) return;
+    function onTouchMove(e) {
+      if (!touchRef.current) return;
+      e.preventDefault(); /* 스크롤 방지 */
+      var t = e.touches[0];
+      var el = document.elementFromPoint(t.clientX, t.clientY);
+      if (!el) return;
+      var li = el.closest ? el.closest('[data-aff-drag-id]') : null;
+      if (!li) return;
+      var overId = li.getAttribute('data-aff-drag-id');
+      if (overId && overId !== touchRef.current.id) {
+        doReorder(touchRef.current.id, overId);
+      }
+    }
+    function onTouchEnd() {
+      if (!touchRef.current) return;
+      touchRef.current = null;
+      doSaveOrder();
+    }
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend',  onTouchEnd,  { passive: true  });
+    return function() {
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend',  onTouchEnd);
+    };
+  }, [canDrag, localRows, rows]);  /* eslint-disable-line */
+
+  /* baseRows: 드래그 중에는 로컬 순서 사용 */
+  var baseRows = localRows || rows;
+
   var filtered = useMemo(function() {
     var q = String(filterText || '').trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(function(a) {
+    if (!q) return baseRows;
+    return baseRows.filter(function(a) {
       if (String(a.name || '').toLowerCase().indexOf(q) >= 0) return true;
       if ((a.regions || []).join(' ').toLowerCase().indexOf(q) >= 0) return true;
       return false;
     });
-  }, [rows, filterText]);
+  }, [baseRows, filterText]);
 
   return (
     <div
@@ -496,12 +600,26 @@ function AffiliateList(props) {
           {filterText ? '검색 결과가 없습니다.' : '등록된 제휴사가 없습니다.'}
         </p>
       ) : (
+        <>
+        {/* 저장 중 인디케이터 */}
+        {saving && (
+          <div className="flex items-center gap-2 text-xs text-violet-600 mb-2 px-1">
+            <span className="inline-block h-3 w-3 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" style={{ animationDuration: '0.7s' }} />
+            순서 저장 중…
+          </div>
+        )}
+        {canDrag && !filterText && (
+          <p className="text-xs text-slate-400 mb-2 px-1">☰ 아이콘을 드래그하여 순서를 변경할 수 있습니다.</p>
+        )}
+
         <ul className="space-y-2">
           {filtered.map(function(aff) {
             var initial = affiliateInitials(aff.name);
             var regionLabel = (aff.regions || []).slice(0, 2).join(' · ') + ((aff.regions || []).length > 2 ? ' 외' : '');
             var status = affiliateActiveStatus(aff);
             var isClickable = (status === 'active' || status === 'always');
+            var isDragging  = draggingId === aff.id;
+            var isDragOver  = dragOverId  === aff.id && !isDragging;
             /* 비활성 상태 레이블 */
             var statusBadge = null;
             if (status === 'expired') {
@@ -518,12 +636,57 @@ function AffiliateList(props) {
               );
             }
             return (
-              <li key={aff.id} className="relative">
+              <li
+                key={aff.id}
+                data-aff-drag-id={aff.id}
+                className="relative"
+                draggable={canDrag}
+                onDragStart={canDrag ? function(e) {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', aff.id);
+                  dragSrcRef.current = aff.id;
+                  setDraggingId(aff.id);
+                  if (!localRows) setLocalRows(rows.slice());
+                } : undefined}
+                onDragOver={canDrag ? function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } : undefined}
+                onDragEnter={canDrag ? function() { doReorder(dragSrcRef.current, aff.id); } : undefined}
+                onDragEnd={canDrag ? function() { doSaveOrder(); } : undefined}
+                onTouchStart={canDrag ? function() {
+                  touchRef.current = { id: aff.id };
+                  dragSrcRef.current = aff.id;
+                  setDraggingId(aff.id);
+                  if (!localRows) setLocalRows(rows.slice());
+                } : undefined}
+                style={{
+                  opacity:   isDragging ? 0.45 : 1,
+                  transform: isDragging ? 'scale(0.97)' : 'none',
+                  transition: 'opacity 0.15s, transform 0.15s'
+                }}
+              >
+                {/* 드래그 핸들 (관리자 + 필터 없을 때만) */}
+                {canDrag && (
+                  <span
+                    className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center text-slate-300 cursor-grab select-none z-10"
+                    style={{ touchAction: 'none' }}
+                    aria-hidden="true"
+                  >
+                    <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor">
+                      <circle cx="4" cy="3"  r="1.6"/><circle cx="10" cy="3"  r="1.6"/>
+                      <circle cx="4" cy="9"  r="1.6"/><circle cx="10" cy="9"  r="1.6"/>
+                      <circle cx="4" cy="15" r="1.6"/><circle cx="10" cy="15" r="1.6"/>
+                    </svg>
+                  </span>
+                )}
+                {/* 드롭 대상 강조선 */}
+                {isDragOver && (
+                  <span className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-violet-400 z-20" aria-hidden="true" />
+                )}
                 <button
                   type="button"
                   disabled={!isClickable && !isAdmin}
                   className={[
-                    'open-riding-action-btn open-riding-group-list-row-btn w-full flex items-center gap-3 rounded-2xl border px-3 py-3 text-left shadow-sm transition box-border',
+                    'open-riding-action-btn open-riding-group-list-row-btn w-full flex items-center rounded-2xl border px-3 py-3 text-left shadow-sm transition box-border',
+                    canDrag ? 'pl-8 gap-3' : 'gap-3',
                     isClickable || isAdmin
                       ? 'bg-white border-slate-200 hover:bg-slate-50/90'
                       : 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
@@ -589,6 +752,7 @@ function AffiliateList(props) {
             );
           })}
         </ul>
+        </>
       )}
 
       {/* 등록 FAB (grade=1 only) */}
