@@ -23428,7 +23428,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           if (typeof closeWeeklyTop10Modal === 'function') closeWeeklyTop10Modal();
           setTimeout(function () {
             if (typeof window.onAffiliateButtonClick === 'function') {
-              window.onAffiliateButtonClick();
+              /* isConnected = true 명시 전달 (미전달 시 미연결 분기로 빠지는 버그 방지) */
+              window.onAffiliateButtonClick(true);
             } else if (typeof showScreen === 'function') {
               showScreen('affiliateScreen');
               if (typeof window.initAffiliateReact === 'function') window.initAffiliateReact();
