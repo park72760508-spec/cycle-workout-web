@@ -293,19 +293,22 @@ function AffiliateList(props) {
   }, [rows, filterText]);
 
   return (
-    <div className="relative w-full max-w-lg mx-auto" style={{ paddingBottom: '90px' }}>
+    <div
+      className="relative w-full max-w-lg mx-auto text-left box-border"
+      style={{
+        paddingBottom: 'calc(4.5rem + (2 * var(--open-riding-glass-nav-inner-fixed-height, 58px)) + env(safe-area-inset-bottom, 0px))'
+      }}
+    >
       {/* 검색 */}
-      <div className="mb-3 px-1">
-        <div className="relative">
-          <span className="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">🔍</span>
-          <input
-            type="search"
-            className="open-riding-group-search-input w-full rounded-xl border border-slate-200 pl-9 pr-3 py-2 text-sm bg-white shadow-sm"
-            placeholder="상호명으로 검색"
-            value={filterText}
-            onChange={function(e){ setFilter(e.target.value); }}
-          />
-        </div>
+      <div className="w-full mb-3 box-border">
+        <input
+          type="search"
+          enterKeyHint="search"
+          className="open-riding-group-search-input w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm box-border"
+          placeholder="상호명으로 검색"
+          value={filterText}
+          onChange={function(e){ setFilter(e.target.value); }}
+        />
       </div>
 
       {/* 목록 */}
@@ -318,7 +321,7 @@ function AffiliateList(props) {
           {filterText ? '검색 결과가 없습니다.' : '등록된 제휴사가 없습니다.'}
         </p>
       ) : (
-        <ul className="space-y-2 px-1">
+        <ul className="space-y-2">
           {filtered.map(function(aff) {
             var initial = affiliateInitials(aff.name);
             var regionLabel = (aff.regions || []).slice(0, 2).join(' · ') + ((aff.regions || []).length > 2 ? ' 외' : '');
@@ -327,23 +330,27 @@ function AffiliateList(props) {
               <li key={aff.id}>
                 <button
                   type="button"
-                  className="open-riding-group-list-row-btn w-full flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm hover:shadow-md hover:border-violet-200 transition-all"
+                  className="open-riding-action-btn open-riding-group-list-row-btn w-full flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm hover:bg-slate-50/90 transition box-border"
                   onClick={function(){ onOpenDetail(aff.id); }}
                 >
-                  {/* 아바타 */}
-                  <span className="affiliate-avatar-circle shrink-0">
-                    {aff.photoUrl
-                      ? <img src={aff.photoUrl} alt="" className="h-full w-full object-cover rounded-full" decoding="async" loading="lazy" />
-                      : <span className="text-white font-bold text-lg">{initial}</span>
-                    }
+                  {/* 아바타 – 그룹 목록과 동일: h-14 w-14 · ring-2 ring-violet-200 · gradient bg */}
+                  <span className="relative shrink-0">
+                    <span className="inline-flex h-14 w-14 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100">
+                      {aff.photoUrl
+                        ? <img src={aff.photoUrl} alt="" className="h-full w-full object-cover" decoding="async" loading="lazy" />
+                        : <span className="text-lg font-bold text-violet-700">{initial}</span>
+                      }
+                    </span>
                   </span>
                   {/* 텍스트 */}
-                  <span className="flex-1 min-w-0">
-                    <span className="block font-bold text-slate-800 text-sm truncate">{aff.name || '(이름 없음)'}</span>
-                    {regionLabel ? <span className="block text-xs text-slate-400 truncate mt-0.5">{regionLabel}</span> : null}
-                    {periodLabel ? <span className="block text-xs text-slate-400 truncate">{periodLabel}</span> : null}
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-slate-900 truncate text-[15px]">{aff.name || '(이름 없음)'}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5 truncate">
+                      {regionLabel || '지역 미설정'}
+                      {periodLabel ? <span className="text-slate-300 mx-1">·</span> : null}
+                      {periodLabel || ''}
+                    </span>
                   </span>
-                  <span className="text-slate-300 shrink-0">›</span>
                 </button>
               </li>
             );
@@ -786,51 +793,65 @@ function AffiliateDetail(props) {
   var isOwner = isAdmin || (userId && String(aff.createdBy) === String(userId));
 
   return (
-    <div className="open-riding-detail-content-root w-full max-w-lg mx-auto pb-32 text-sm space-y-4 px-1">
+    <div className="w-full max-w-lg mx-auto space-y-4 pb-6 text-left">
 
-      {/* 상단 카드: 아바타 + 기본 정보 */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        {/* 배경 블러 (사진 있을 때) */}
-        {aff.photoUrl && (
-          <div className="h-24 w-full overflow-hidden relative">
-            <img src={aff.photoUrl} alt="" className="w-full h-full object-cover" style={{ filter: 'blur(8px)', transform: 'scale(1.1)' }} />
-            <div className="absolute inset-0 bg-black/30" />
-          </div>
-        )}
-        <div className={`flex gap-4 items-start px-5 ${aff.photoUrl ? '-mt-10' : 'pt-5'} pb-5`}>
-          {/* 아바타 원형 */}
-          <span className="affiliate-avatar-circle affiliate-avatar-lg shrink-0 shadow-md">
-            {aff.photoUrl
-              ? <img src={aff.photoUrl} alt="" className="h-full w-full object-cover rounded-full" decoding="async" />
-              : <span className="text-white font-bold text-2xl">{initial}</span>
-            }
-          </span>
-          <div className="flex-1 min-w-0 pt-1">
-            <p className="font-bold text-slate-800 text-base leading-snug">{aff.name}</p>
-            {regionLabel ? <p className="text-xs text-slate-400 mt-0.5">📍 {regionLabel}</p> : null}
-            {periodLabel ? <p className="text-xs text-slate-400">🗓 {periodLabel}</p> : null}
-          </div>
-          {/* 관리자 버튼 */}
-          {isOwner && (
-            <div className="flex flex-col gap-1 shrink-0">
-              <button type="button"
-                className="text-xs px-3 py-1 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100"
-                onClick={function(){ onEdit(affiliateId); }}>수정</button>
-              <button type="button"
-                className="text-xs px-3 py-1 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
-                disabled={busy} onClick={handleDelete}>삭제</button>
+      {/* ── 상단 히어로 카드: 그룹 상세와 동일 구조 ── */}
+      <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative isolate bg-white">
+        {/* 배경 이미지 + 그라데이션 오버레이 (사진 있을 때) */}
+        {aff.photoUrl ? (
+          <>
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-50"
+              style={{ backgroundImage: 'url(' + JSON.stringify(String(aff.photoUrl)) + ')' }}
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-b from-white/75 via-white/86 to-white/95"
+            />
+          </>
+        ) : null}
+
+        <div className="relative z-[1] p-4">
+          <div className="flex items-start gap-3">
+            {/* 아바타 – 그룹 상세와 동일: h-16 w-16 · ring-2 · gradient bg */}
+            <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100">
+              {aff.photoUrl
+                ? <img src={String(aff.photoUrl)} alt="" className="h-full w-full object-cover" decoding="async" />
+                : <span className="text-xl font-bold text-violet-700">{initial}</span>
+              }
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-bold text-slate-900 m-0 truncate">{aff.name || ''}</h2>
+              <p className="text-xs text-slate-500 m-0 mt-1">
+                {regionLabel || '지역 미설정'}
+                {periodLabel ? <span className="text-slate-300 mx-1">·</span> : null}
+                {periodLabel || ''}
+              </p>
             </div>
+
+            {/* 관리자 수정/삭제 버튼 */}
+            {isOwner && (
+              <div className="flex flex-col gap-1 shrink-0">
+                <button type="button"
+                  className="text-xs px-3 py-1 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100"
+                  onClick={function(){ onEdit(affiliateId); }}>수정</button>
+                <button type="button"
+                  className="text-xs px-3 py-1 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                  disabled={busy} onClick={handleDelete}>삭제</button>
+              </div>
+            )}
+          </div>
+
+          {/* 제휴 소개 – 그룹 상세처럼 히어로 카드 내부에 배치 */}
+          {aff.intro ? (
+            <p className="text-sm text-slate-700 mt-3 whitespace-pre-wrap m-0 leading-relaxed">{aff.intro}</p>
+          ) : (
+            <p className="text-sm text-slate-400 mt-3 m-0">등록된 소개가 없습니다.</p>
           )}
         </div>
       </div>
-
-      {/* 제휴 소개 */}
-      {aff.intro ? (
-        <div className="stelvio-category-card rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-          <p className="text-xs font-semibold text-slate-500 mb-2">제휴 소개</p>
-          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{aff.intro}</p>
-        </div>
-      ) : null}
 
       {/* 홍보 이미지 */}
       {aff.promoImageUrl ? (
@@ -848,37 +869,35 @@ function AffiliateDetail(props) {
 
       {/* 주소 / 전화번호 */}
       {(aff.address || aff.phone) ? (
-        <div className="stelvio-category-card rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm space-y-2">
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm space-y-2">
           {aff.address ? (
             <div className="flex gap-2 text-sm text-slate-700 items-start">
-              <span className="shrink-0">📍</span>
+              <span className="shrink-0 text-slate-400">📍</span>
               <span>{aff.address}</span>
             </div>
           ) : null}
           {aff.phone ? (
             <div className="flex gap-2 text-sm items-center">
-              <span className="shrink-0">📞</span>
+              <span className="shrink-0 text-slate-400">📞</span>
               <a href={'tel:' + aff.phone} className="text-violet-600 hover:underline">{aff.phone}</a>
             </div>
           ) : null}
         </div>
       ) : null}
 
-      {/* 하단 CTA */}
-      <div className="open-riding-group-member-cta-slot open-riding-bottom-actions fixed left-0 right-0">
-        <div className="w-[94%] mx-auto py-2">
-          {aff.phone ? (
-            <a href={'tel:' + aff.phone}
-              className="open-riding-action-btn block w-full h-11 rounded-xl bg-violet-600 text-white font-medium text-sm text-center leading-[44px] hover:bg-violet-700">
-              📞 문의하기
-            </a>
-          ) : (
-            <button type="button"
-              className="open-riding-action-btn w-full h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700">
-              할인 혜택 확인
-            </button>
-          )}
-        </div>
+      {/* 하단 CTA – 그룹 상세와 동일: open-riding-bottom-actions border-t */}
+      <div className="open-riding-group-member-cta-slot open-riding-bottom-actions border-t border-slate-200/90 bg-[rgba(255,255,255,0.98)] px-3 pt-2 pb-3 box-border">
+        {aff.phone ? (
+          <a href={'tel:' + aff.phone}
+            className="open-riding-action-btn block w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium text-[clamp(0.8125rem,3.8vw,0.9375rem)] text-center flex items-center justify-center hover:bg-violet-700">
+            📞 문의하기
+          </a>
+        ) : (
+          <button type="button"
+            className="open-riding-action-btn w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 text-[clamp(0.8125rem,3.8vw,0.9375rem)]">
+            할인 혜택 확인
+          </button>
+        )}
       </div>
     </div>
   );
@@ -918,28 +937,34 @@ function AffiliateApp(props) {
   return (
     <div className="open-riding-app-root flex flex-col" style={{ minHeight: '100vh' }}>
 
-      {/* 헤더 */}
-      <header className="open-riding-inner-header flex items-center gap-2 px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-50">
-        <button type="button"
-          className="p-1 rounded-lg text-slate-600 hover:bg-slate-100 shrink-0"
-          aria-label="뒤로가기"
-          onClick={goBack}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-        <h1 className="open-riding-screen-title font-bold text-slate-800 text-base flex-1">{headerTitle}</h1>
-        {/* 폼에서 X 닫기 */}
-        {(view === 'create' || view === 'edit') && (
+      {/* 헤더 – 그룹 화면과 동일한 grid 중앙 정렬 패턴 */}
+      <header className="open-riding-inner-header">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
+          {/* 좌: 뒤로가기 */}
           <button type="button"
-            className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 shrink-0"
-            aria-label="닫기"
+            className="shrink-0 inline-flex items-center justify-center w-[2.5em] h-[2.5em] rounded-lg text-slate-600 hover:bg-slate-100"
+            aria-label="뒤로가기"
             onClick={goBack}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
-        )}
+          {/* 중앙: 타이틀 */}
+          <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate">{headerTitle}</h1>
+          {/* 우: 폼에서 X 닫기, 그 외 빈 대칭 공간 */}
+          {(view === 'create' || view === 'edit') ? (
+            <button type="button"
+              className="shrink-0 inline-flex items-center justify-center w-[2.5em] h-[2.5em] rounded-lg text-slate-400 hover:bg-slate-100"
+              aria-label="닫기"
+              onClick={goBack}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          ) : (
+            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+          )}
+        </div>
       </header>
 
       {/* 본문 */}
