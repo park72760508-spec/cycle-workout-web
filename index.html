@@ -23536,8 +23536,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script>
     (function () {
       var affiliateReactRoot = null;
+      var _affiliateInitializing = false; /* 이중 호출 방지 플래그 */
 
       window.destroyAffiliateReact = function () {
+        _affiliateInitializing = false;
         try {
           if (affiliateReactRoot && typeof affiliateReactRoot.unmount === 'function') {
             affiliateReactRoot.unmount();
@@ -23551,15 +23553,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         if (el) el.innerHTML = '';
       };
 
-      window.initAffiliateReact = function () {
+      function _doMountAffiliateReact() {
         var rootEl = document.getElementById('affiliate-react-root');
         if (!rootEl || typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
           console.warn('[Affiliate] React 또는 root 없음');
+          _affiliateInitializing = false;
           return;
         }
         if (typeof window.AffiliateApp !== 'function') {
           console.warn('[Affiliate] AffiliateApp 없음');
           rootEl.innerHTML = '<p style="padding:16px;color:#b91c1c;font-size:13px;">제휴사 모듈을 불러오지 못했습니다. 새로고침해 주세요.</p>';
+          _affiliateInitializing = false;
           return;
         }
         var firestore = window.firestoreV9 || null;
@@ -23582,6 +23586,35 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         } else if (typeof ReactDOM.render === 'function') {
           ReactDOM.render(el, rootEl);
         }
+        _affiliateInitializing = false;
+      }
+
+      window.initAffiliateReact = function () {
+        /* 동시에 여러 번 호출되는 경쟁 상태 방지 */
+        if (_affiliateInitializing) {
+          console.log('[Affiliate] 이미 초기화 중 – 중복 호출 무시');
+          return;
+        }
+        _affiliateInitializing = true;
+
+        /* firestoreV9가 아직 준비 안 된 경우: 최대 3초 폴링 */
+        if (!window.firestoreV9) {
+          var pollCount = 0;
+          var maxPoll   = 15; /* 200ms × 15 = 3초 */
+          var pollTimer = setInterval(function() {
+            pollCount++;
+            if (window.firestoreV9 || pollCount >= maxPoll) {
+              clearInterval(pollTimer);
+              if (!window.firestoreV9) {
+                console.warn('[Affiliate] firestoreV9 준비 타임아웃 – null로 마운트');
+              }
+              _doMountAffiliateReact();
+            }
+          }, 200);
+          return;
+        }
+
+        _doMountAffiliateReact();
       };
     })();
   </script>
