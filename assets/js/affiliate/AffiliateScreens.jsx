@@ -335,6 +335,73 @@ function affiliateGetDistricts(sido) {
   return [];
 }
 
+// ── 스타버스트 배지 SVG 경로 생성 ─────────────────────────────
+function affiliateStarburstPath(cx, cy, outerR, innerR, points) {
+  var pts = [];
+  for (var i = 0; i < points * 2; i++) {
+    var angle = (i * Math.PI) / points - Math.PI / 2;
+    var r = (i % 2 === 0) ? outerR : innerR;
+    pts.push((cx + r * Math.cos(angle)).toFixed(2) + ',' + (cy + r * Math.sin(angle)).toFixed(2));
+  }
+  return 'M' + pts.join('L') + 'Z';
+}
+
+/**
+ * 빨간 스타버스트(톱니 인장) 모양의 할인율 배지
+ * 첨부 이미지와 동일한 디자인 — 흰색 "N%" / "OFF"
+ */
+function AffiliateDiscountBadge(props) {
+  var discount = props.discount;
+  var size     = props.size || 54;
+  if (!discount && discount !== 0) return null;
+  var d = parseInt(discount, 10);
+  if (isNaN(d) || d <= 0) return null;
+
+  /* 12-포인트 스타버스트 (outerR=49, innerR=39) */
+  var path = affiliateStarburstPath(50, 50, 49, 39, 12);
+
+  /* 폰트 크기를 배지 size에 맞춰 조정 */
+  var fsPct  = Math.round(size * 0.27);  /* "N%"  */
+  var fsOff  = Math.round(size * 0.19);  /* "OFF" */
+
+  return (
+    React.createElement('div', {
+      style: {
+        position: 'relative',
+        width:    size + 'px',
+        height:   size + 'px',
+        flexShrink: 0,
+        filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.25))'
+      },
+      'aria-label': d + '% 할인'
+    },
+      React.createElement('svg', {
+        viewBox: '0 0 100 100',
+        style: { position: 'absolute', inset: 0, width: '100%', height: '100%' }
+      },
+        React.createElement('path', { d: path, fill: '#dc2626' })
+      ),
+      React.createElement('div', {
+        style: {
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          color: '#ffffff',
+          fontWeight: '900',
+          lineHeight: '1',
+          letterSpacing: '-0.01em',
+          textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+          userSelect: 'none',
+          pointerEvents: 'none'
+        }
+      },
+        React.createElement('span', { style: { fontSize: fsPct + 'px' } }, d + '%'),
+        React.createElement('span', { style: { fontSize: fsOff + 'px', marginTop: '1px', letterSpacing: '0.06em' } }, 'OFF')
+      )
+    )
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 // 제휴사 목록 화면
 // ══════════════════════════════════════════════════════════════
@@ -436,7 +503,7 @@ function AffiliateList(props) {
               );
             }
             return (
-              <li key={aff.id}>
+              <li key={aff.id} className="relative">
                 <button
                   type="button"
                   disabled={!isClickable && !isAdmin}
@@ -452,19 +519,29 @@ function AffiliateList(props) {
                   }}
                   aria-disabled={!isClickable && !isAdmin}
                 >
-                  {/* 아바타 */}
+                  {/* 아바타 – 상세화면과 동일: object-contain으로 이미지 전체 표시 */}
                   <span className="relative shrink-0">
                     <span className={[
-                      'inline-flex h-14 w-14 items-center justify-center rounded-full ring-2 overflow-hidden',
+                      'relative inline-block h-14 w-14 rounded-full ring-2 overflow-hidden',
                       isClickable || isAdmin
                         ? 'ring-violet-200 bg-gradient-to-br from-violet-50 to-slate-100'
                         : 'ring-slate-200 bg-slate-100'
                     ].join(' ')}>
                       {aff.photoUrl
                         ? <img src={aff.photoUrl} alt=""
-                            className={['h-full w-full object-cover', !isClickable && !isAdmin ? 'grayscale' : ''].join(' ')}
-                            decoding="async" loading="lazy" />
-                        : <span className={['text-lg font-bold', isClickable || isAdmin ? 'text-violet-700' : 'text-slate-400'].join(' ')}>{initial}</span>
+                            decoding="async" loading="lazy"
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'contain',
+                              objectPosition: 'center',
+                              filter: (!isClickable && !isAdmin) ? 'grayscale(1)' : 'none'
+                            }} />
+                        : <span className={[
+                            'absolute inset-0 flex items-center justify-center text-lg font-bold',
+                            isClickable || isAdmin ? 'text-violet-700' : 'text-slate-400'
+                          ].join(' ')}>{initial}</span>
                       }
                     </span>
                   </span>
@@ -480,6 +557,19 @@ function AffiliateList(props) {
                   {/* 상태 배지 (만료/준비중) */}
                   {statusBadge}
                 </button>
+
+                {/* 할인율 배지 – 카드 우측 상단에 절대 위치 */}
+                {aff.discount && parseInt(aff.discount, 10) > 0 ? (
+                  <div style={{
+                    position: 'absolute',
+                    top: '-6px',
+                    right: '6px',
+                    zIndex: 10,
+                    pointerEvents: 'none'
+                  }}>
+                    <AffiliateDiscountBadge discount={aff.discount} size={52} />
+                  </div>
+                ) : null}
               </li>
             );
           })}
@@ -536,6 +626,7 @@ function AffiliateForm(props) {
   var _intro = useState('');      var intro = _intro[0]; var setIntro = _intro[1];
   var _pStart = useState('');     var periodStart = _pStart[0]; var setPStart = _pStart[1];
   var _pEnd = useState('');       var periodEnd = _pEnd[0]; var setPEnd = _pEnd[1];
+  var _discount = useState('');   var discount = _discount[0]; var setDiscount = _discount[1];
   var _address = useState('');    var address = _address[0]; var setAddress = _address[1];
   var _phone = useState('');      var phone = _phone[0]; var setPhone = _phone[1];
   var _photoUrl = useState('');   var photoUrl = _photoUrl[0]; var setPhotoUrl = _photoUrl[1];
@@ -586,6 +677,7 @@ function AffiliateForm(props) {
         setPhone(doc.phone || '');
         setPhotoUrl(doc.photoUrl || '');
         setPromoUrl(doc.promoImageUrl || '');
+        setDiscount(doc.discount != null ? String(doc.discount) : '');
       })
       .catch(function(){})
       .finally(function(){ if (!cancelled) setLoaded(true); });
@@ -612,12 +704,14 @@ function AffiliateForm(props) {
   function buildPayload(urlOverride, promoUrlOverride) {
     var url = urlOverride != null ? urlOverride : photoUrl;
     var pUrl = promoUrlOverride != null ? promoUrlOverride : promoUrl;
+    var discountNum = parseInt(discount, 10);
     return {
       name: name.trim(),
       regions: regions,
       intro: intro.trim(),
       periodStart: periodStart,
       periodEnd: periodEnd,
+      discount: (!isNaN(discountNum) && discountNum > 0) ? discountNum : null,
       address: address.trim(),
       phone: phone.trim(),
       photoUrl: url || '',
@@ -861,6 +955,32 @@ function AffiliateForm(props) {
           <input type="date" className="rounded-xl border border-slate-200 px-3 py-2 text-sm flex-1 min-w-[140px]"
             value={periodEnd} onChange={function(e){ setPEnd(e.target.value); }} />
         </div>
+      </div>
+
+      {/* 할인율 */}
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">할인율 적용</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min="0" max="100" step="1"
+            className="rounded-xl border border-slate-200 px-3 py-2 text-sm w-28 text-center"
+            placeholder="숫자 입력"
+            value={discount}
+            onChange={function(e){
+              var v = e.target.value.replace(/[^0-9]/g, '');
+              if (v === '' || (parseInt(v, 10) >= 0 && parseInt(v, 10) <= 100)) setDiscount(v);
+            }}
+          />
+          <span className="text-sm text-slate-600 font-semibold">%</span>
+          {/* 미리보기 배지 */}
+          {discount && parseInt(discount, 10) > 0 ? (
+            <div className="ml-2">
+              <AffiliateDiscountBadge discount={discount} size={48} />
+            </div>
+          ) : null}
+        </div>
+        <p className="text-xs text-slate-400 mt-1">0 ~ 100 사이의 숫자를 입력하세요. 비워두면 배지가 표시되지 않습니다.</p>
       </div>
 
       {/* 주소 */}
