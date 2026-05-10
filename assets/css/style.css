@@ -5453,15 +5453,16 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .weekly-top10-aff-banner {
   display: none; /* JS가 updateWeeklyTop10AffBanner()로 제어 */
   align-items: center;
-  gap: 8px;
-  margin-top: 9px;
-  padding: 9px 11px;
-  border-radius: 12px;
+  gap: 10px;
+  margin: 0;
+  padding: 11px 16px;
+  border-radius: 0;
   background: linear-gradient(135deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%);
-  box-shadow: 0 2px 12px rgba(99,60,220,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 0 rgba(99,60,220,0.2);
   position: relative;
   overflow: hidden;
   box-sizing: border-box;
+  width: 100%;
 }
 .weekly-top10-aff-banner::before {
   content: '';
