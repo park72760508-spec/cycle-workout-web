@@ -24008,6 +24008,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 <span class="open-riding-bottom-glass-nav__label">설정</span>
               </button>
             </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="affiliate" aria-label="제휴사">
+                <img src="assets/img/deal.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">제휴</span>
+              </button>
+            </div>
           </div>
           </div>
           <span class="global-hub-glass-nav-edge global-hub-glass-nav-edge--left" aria-hidden="true">
@@ -24036,7 +24042,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         trainingJournalScreen: 'journal',
         profileScreen: 'profile',
         workoutScreen: 'train',
-        aiScheduleScreen: 'plan'
+        aiScheduleScreen: 'plan',
+        affiliateScreen: 'affiliate'
       };
       var HUB_NAV_SCREEN_IDS = [
         'stelvioRankingScreen',
@@ -24044,7 +24051,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         'trainingJournalScreen',
         'profileScreen',
         'workoutScreen',
-        'aiScheduleScreen'
+        'aiScheduleScreen',
+        'affiliateScreen'
       ];
       window.__hubNavModalTab = window.__hubNavModalTab || null;
       function hubNavShowsForScreen(screenId) {
@@ -24173,6 +24181,28 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (typeof closeSubscribeOverlay === 'function') closeSubscribeOverlay();
             window.__hubNavModalTab = null;
             if (typeof openSettingsModal === 'function') openSettingsModal();
+            return;
+          }
+          if (key === 'affiliate') {
+            if (typeof closeSubscribeOverlay === 'function') closeSubscribeOverlay();
+            if (typeof closeSettingsModal === 'function') closeSettingsModal();
+            window.__hubNavModalTab = null;
+            if (typeof window.onAffiliateButtonClick === 'function') {
+              /* 현재 사용자의 Gemini API + STRAVA 연결 여부 자동 감지 */
+              var _cu = null;
+              try { _cu = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){}
+              var _hasGemini = false, _hasStrava = false;
+              if (_cu) {
+                var _sts = _cu.API_sts;
+                _hasGemini = (_sts === true || _sts === 'true' || _sts === 1 || _sts === '1') ||
+                             !!(_cu.gemini_api_registered === true || _cu.gemini_api_registered === 'true') ||
+                             !!((_cu.gemini_api_key != null ? String(_cu.gemini_api_key).trim() : '').length);
+                var _r = _cu.strava_refresh_token != null ? String(_cu.strava_refresh_token).trim() : '';
+                var _a = _cu.strava_access_token != null ? String(_cu.strava_access_token).trim() : '';
+                _hasStrava = !!(_r || _a);
+              }
+              window.onAffiliateButtonClick(_hasGemini && _hasStrava);
+            }
             return;
           }
           if (typeof closeSubscribeOverlay === 'function') closeSubscribeOverlay();
