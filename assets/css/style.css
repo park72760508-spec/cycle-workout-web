@@ -26253,7 +26253,7 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg-main, #f8fafc);
+  background: #f8fafc;
 }
 
 .affiliate-react-root {
@@ -26261,6 +26261,16 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   height: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  background: #f8fafc;
+}
+
+/* 제휴사 앱 내부 모든 요소 배경 기본값 리셋 */
+#affiliateScreen .open-riding-app-root {
+  background: #f8fafc;
+  color: #1e293b;
+}
+#affiliateScreen .open-riding-app-body {
+  background: #f8fafc;
 }
 
 /* 아바타 원형 배지 */
