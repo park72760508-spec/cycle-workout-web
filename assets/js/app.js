@@ -6873,7 +6873,7 @@ window.showScreen = function(screenId) {
   const targetScreen = document.getElementById(screenId);
   if (targetScreen) {
     // flex 레이아웃이 필요한 화면 (Coach 대시보드, 모바일 대시보드, 워크아웃 화면)
-    const flexScreens = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen', 'stelvioRankingScreen', 'openRidingRoomScreen', 'authScreen'];
+    const flexScreens = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen', 'stelvioRankingScreen', 'openRidingRoomScreen', 'authScreen', 'affiliateScreen'];
     targetScreen.style.display = flexScreens.includes(screenId) ? 'flex' : 'block';
     targetScreen.classList.add('active');
     targetScreen.style.opacity = '1';
@@ -6956,6 +6956,14 @@ function initializeCurrentScreen(screenId) {
           window.initOpenRidingRoomReact().catch(function (e) {
             console.warn('[openRidingRoomScreen] init:', e);
           });
+        }
+      }, 0);
+      break;
+
+    case 'affiliateScreen':
+      setTimeout(function () {
+        if (typeof window.initAffiliateReact === 'function') {
+          window.initAffiliateReact();
         }
       }, 0);
       break;
