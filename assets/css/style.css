@@ -5495,7 +5495,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .weekly-top10-aff-subtitle {
   font-size: 0.65rem;
-  color: #a78bfa;
+  color: #ffffff;
   line-height: 1.3;
 }
 /* 바로 가기 / 혜택 확인 버튼 */
