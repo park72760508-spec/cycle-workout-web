@@ -2639,6 +2639,18 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
         : defaultAv;
     const profileUrl = stelvioEscapeHtmlAttr(profileUrlRaw);
     const canEditAvatar = !!(viewerId && String(user.id) === String(viewerId));
+    const isAffiliateActive = hasAiForUser && hasStrava;
+    const affiliateBtnHtml = canEditAvatar
+      ? `<button type="button"
+              class="stelvio-affiliate-btn ${isAffiliateActive ? 'stelvio-affiliate-btn--active' : 'stelvio-affiliate-btn--inactive'}"
+              onclick="event.stopPropagation(); onAffiliateButtonClick(${isAffiliateActive})"
+              title="${isAffiliateActive ? '제휴사 할인 혜택 확인' : 'Gemini API와 STRAVA를 먼저 연결해주세요'}"
+              aria-label="제휴사 할인 혜택"
+              ${isAffiliateActive ? '' : 'aria-disabled="true"'}>
+              <span class="stelvio-affiliate-btn-icon" aria-hidden="true">🎁</span>
+              <span class="stelvio-affiliate-btn-label">제휴사 할인</span>
+            </button>`
+      : '';
     const avatarBlock = canEditAvatar
       ? `<button type="button" class="stelvio-profile-card-avatar-btn" onclick="event.stopPropagation();typeof stelvioOpenProfilePhotoPicker==='function'&&stelvioOpenProfilePhotoPicker('${user.id}')" aria-label="프로필 사진 변경">
               <span class="stelvio-profile-card-avatar-ring">
@@ -2667,6 +2679,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
               <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
               <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
             </div>
+              ${affiliateBtnHtml}
             </div>
           </div>
           <div class="user-actions" onclick="event.stopPropagation();">
