@@ -26358,11 +26358,56 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
 }
 
+/* ── 제휴사 등록/수정 폼 하단 고정 버튼 바: 네비바 위에 배치 ──
+   (그룹 폼 푸터 #openRidingRoomScreen 버전과 동일 공식 적용)      */
+#affiliateScreen .open-riding-group-form-footer.open-riding-bottom-actions {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  /* 네비바 바닥 간격 16px + safe-area + 네비바 높이 + 추가 여백 10px */
+  bottom: calc(
+    16px
+    + env(safe-area-inset-bottom, 0px)
+    + var(--open-riding-glass-nav-inner-fixed-height, 58px)
+    + 10px
+  ) !important;
+  z-index: 100060;
+  margin-bottom: 0 !important;
+  pointer-events: auto;
+  isolation: isolate;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-bottom: 10px;
+  padding-top: 10px;
+  box-sizing: border-box !important;
+  background: rgba(255,255,255,0.97) !important;
+  border-top: 1px solid rgba(226,232,240,0.9);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS 홈 버튼 없는 기기: 네비바가 좀 더 위에 있으므로 보정 */
+html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-footer.open-riding-bottom-actions {
+  bottom: calc(
+    16px
+    + env(safe-area-inset-bottom, 0px)
+    - (var(--open-riding-glass-nav-inner-fixed-height, 58px) * 0.5)
+    + var(--open-riding-glass-nav-inner-fixed-height, 58px)
+    + 10px
+  ) !important;
+}
+
+#affiliateScreen .open-riding-group-form-footer.open-riding-bottom-actions .open-riding-action-btn {
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+
 /* 모바일 안전 영역 패딩 */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .affiliate-screen-root .open-riding-group-form-footer {
-    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-  }
   .affiliate-screen-root .open-riding-group-member-cta-slot {
     padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   }
