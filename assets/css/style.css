@@ -26311,10 +26311,13 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 등록 FAB – 좌측 하단 */
+/* 등록 FAB – 좌측 하단 (네비바 2배 높이 위치) */
 .affiliate-fab-create {
   left: max(20px, env(safe-area-inset-left, 20px));
-  bottom: calc(max(24px, env(safe-area-inset-bottom, 24px)) + 8px);
+  bottom: calc(
+    (2 * var(--open-riding-glass-nav-inner-fixed-height, 58px))
+    + env(safe-area-inset-bottom, 0px)
+  );
   width: 52px;
   height: 52px;
   background: linear-gradient(135deg, #6d28d9, #4f46e5);
@@ -26327,10 +26330,13 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   box-shadow: 0 2px 8px rgba(109, 40, 217, 0.3);
 }
 
-/* 스크롤 위로 버튼 – 우측 하단 */
+/* 스크롤 위로 버튼 – 우측 하단 (네비바 2배 높이 위치) */
 .affiliate-scroll-top-btn {
   right: max(20px, env(safe-area-inset-right, 20px));
-  bottom: calc(max(24px, env(safe-area-inset-bottom, 24px)) + 8px);
+  bottom: calc(
+    (2 * var(--open-riding-glass-nav-inner-fixed-height, 58px))
+    + env(safe-area-inset-bottom, 0px)
+  );
   width: 42px;
   height: 42px;
   font-size: 16px;
