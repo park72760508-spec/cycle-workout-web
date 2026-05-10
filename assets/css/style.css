@@ -8587,9 +8587,9 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   color: #6b7280;
 }
 
-/* 제휴 버튼 – 3번째 컬럼 (flex:1, 중앙 정렬) */
+/* 제휴 버튼 – 3번째 컬럼 (4/5 너비, 중앙 정렬) */
 #profileScreen .stelvio-user-points-with-avatar > .stelvio-affiliate-btn {
-  flex: 1 1 0;
+  flex: 0.8 1 0;
   display: flex;
   flex-direction: column;
   align-items: center;
