@@ -5449,6 +5449,117 @@ body:has(#trainingDetailModal:not(.hidden)) {
   accent-color: #7c3aed;
 }
 
+/* ── TOP10 팝업 제휴 할인 배너 ────────────────────────────────────────── */
+.weekly-top10-aff-banner {
+  display: none; /* JS가 updateWeeklyTop10AffBanner()로 제어 */
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%);
+  box-shadow: 0 2px 12px rgba(99,60,220,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.weekly-top10-aff-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(139,92,246,0.18) 0%, transparent 60%);
+  pointer-events: none;
+}
+.weekly-top10-aff-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 5px rgba(251,191,36,0.75));
+}
+.weekly-top10-aff-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.weekly-top10-aff-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f5f3ff;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.weekly-top10-aff-subtitle {
+  font-size: 0.65rem;
+  color: #a78bfa;
+  line-height: 1.3;
+}
+/* 바로 가기 / 혜택 확인 버튼 */
+.weekly-top10-aff-btn {
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  color: #fff;
+  font-size: 0.71rem;
+  font-weight: 700;
+  padding: 5px 11px;
+  border: 1px solid rgba(167,139,250,0.45);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 1px 6px rgba(124,58,237,0.5);
+  transition: transform 0.12s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  white-space: nowrap;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.weekly-top10-aff-btn:active,
+.weekly-top10-aff-btn--pressed {
+  transform: scale(0.91);
+  box-shadow: 0 1px 3px rgba(124,58,237,0.28);
+}
+/* 모두 연동 완료 상태: 초록 강조 */
+.weekly-top10-aff-banner--connected .weekly-top10-aff-btn {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  border-color: rgba(52,211,153,0.45);
+  box-shadow: 0 1px 6px rgba(5,150,105,0.5);
+}
+.weekly-top10-aff-banner--connected .weekly-top10-aff-icon {
+  filter: drop-shadow(0 0 5px rgba(52,211,153,0.85));
+}
+/* 연동 완료 툴팁 */
+.weekly-top10-aff-tooltip {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  right: 0;
+  background: #fff;
+  border: 1px solid rgba(5,150,105,0.3);
+  border-radius: 10px;
+  padding: 7px 11px;
+  font-size: 0.71rem;
+  color: #064e3b;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.13);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 10;
+}
+.weekly-top10-aff-tooltip--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* 좁은 화면 대응 */
+@media (max-width: 360px) {
+  .weekly-top10-aff-title { font-size: 0.73rem; }
+  .weekly-top10-aff-subtitle { font-size: 0.6rem; }
+  .weekly-top10-aff-btn { font-size: 0.66rem; padding: 4px 9px; }
+}
+
 /* 주간 마일리지 TOP10 순위 확정 후 도장 오버레이 (순위표 정중앙, 1/4 크기, -45도 회전) */
 .weekly-top10-body-inner {
   min-height: 100%;
