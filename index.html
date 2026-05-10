@@ -2750,6 +2750,11 @@
     <div id="open-riding-react-root" class="open-riding-react-root" aria-live="polite"></div>
   </div>
 
+  <!-- 제휴사 화면 (React AffiliateApp) -->
+  <div id="affiliateScreen" class="screen affiliate-screen-root" style="display: none;">
+    <div id="affiliate-react-root" class="affiliate-react-root" aria-live="polite"></div>
+  </div>
+
   <!-- 센서 연결 (Device Settings) 화면 -->
   <div id="deviceSettingScreen" class="screen" style="display: none;">
     <div class="basecamp-background-image"></div>
@@ -22933,6 +22938,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             try { window.destroyOpenRidingRoomReact(); } catch (eD) {}
           }
         }
+        /* 제휴사 화면 진입 시 React 마운트, 이탈 시 언마운트 */
+        if (prevScreen && prevScreen.id === 'affiliateScreen' && screenId !== 'affiliateScreen') {
+          if (typeof window.destroyAffiliateReact === 'function') {
+            try { window.destroyAffiliateReact(); } catch (eD) {}
+          }
+        }
+        if (screenId === 'affiliateScreen') {
+          setTimeout(function() {
+            if (typeof window.initAffiliateReact === 'function') window.initAffiliateReact();
+          }, 0);
+        }
         var targetScreen = document.getElementById(screenId);
         if (!targetScreen) {
           console.error('[showScreen] 화면을 찾을 수 없습니다:', screenId);
@@ -23416,22 +23432,68 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         if (!isConnected) {
           /* 미연결 → 안내 Toast 후 환경설정 모달 */
           var msg = 'Gemini API와 STRAVA를 환경설정에서 먼저 연결해주세요.';
-          if (typeof window.showToast === 'function') {
-            window.showToast(msg);
-          } else {
-            alert(msg);
-          }
+          if (typeof window.showToast === 'function') window.showToast(msg); else alert(msg);
           return;
         }
-
-        /* 연결 완료 → 제휴 혜택 화면으로 이동 (현재: 프로필 화면 유지 + 안내 Toast) */
-        if (typeof window.showToast === 'function') {
-          window.showToast('🎁 제휴사 할인이 활성화되었습니다! 담당자를 통해 혜택을 안내받으세요.');
+        /* 연결 완료 → 제휴사 목록 화면으로 이동 */
+        if (typeof window.showScreen === 'function') {
+          window.showScreen('affiliateScreen');
         }
-        /*
-         * TODO: 제휴 혜택 전용 페이지가 추가되면 아래 주석을 해제하고 연결하세요.
-         * if (typeof showScreen === 'function') showScreen('affiliateBenefitScreen');
-         */
+      };
+    })();
+  </script>
+
+  <!-- ═══ 제휴사 화면 React 스크립트 ═══ -->
+  <script src="assets/js/affiliate/AffiliateScreens.jsx?v=affiliate-v1" type="text/babel"></script>
+  <script>
+    (function () {
+      var affiliateReactRoot = null;
+
+      window.destroyAffiliateReact = function () {
+        try {
+          if (affiliateReactRoot && typeof affiliateReactRoot.unmount === 'function') {
+            affiliateReactRoot.unmount();
+          } else if (typeof ReactDOM !== 'undefined' && typeof ReactDOM.unmountComponentAtNode === 'function') {
+            var el = document.getElementById('affiliate-react-root');
+            if (el) ReactDOM.unmountComponentAtNode(el);
+          }
+        } catch (e) { console.warn('[Affiliate] unmount:', e); }
+        affiliateReactRoot = null;
+        var el = document.getElementById('affiliate-react-root');
+        if (el) el.innerHTML = '';
+      };
+
+      window.initAffiliateReact = function () {
+        var rootEl = document.getElementById('affiliate-react-root');
+        if (!rootEl || typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+          console.warn('[Affiliate] React 또는 root 없음');
+          return;
+        }
+        if (typeof window.AffiliateApp !== 'function') {
+          console.warn('[Affiliate] AffiliateApp 없음');
+          rootEl.innerHTML = '<p style="padding:16px;color:#b91c1c;font-size:13px;">제휴사 모듈을 불러오지 못했습니다. 새로고침해 주세요.</p>';
+          return;
+        }
+        var firestore = window.firestoreV9 || null;
+        var storage   = window.firebaseStorageV9 || null;
+        var userId    = '';
+        try {
+          if (window.authV9 && window.authV9.currentUser) userId = window.authV9.currentUser.uid;
+          if (!userId) {
+            var cu = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+            if (cu) userId = String(cu.id || cu.uid || '');
+          }
+        } catch (e) {}
+
+        var el = React.createElement(window.AffiliateApp, { firestore: firestore, storage: storage, userId: userId });
+        if (!affiliateReactRoot) {
+          affiliateReactRoot = ReactDOM.createRoot ? ReactDOM.createRoot(rootEl) : null;
+        }
+        if (affiliateReactRoot && affiliateReactRoot.render) {
+          affiliateReactRoot.render(el);
+        } else if (typeof ReactDOM.render === 'function') {
+          ReactDOM.render(el, rootEl);
+        }
       };
     })();
   </script>
