@@ -8587,16 +8587,26 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   color: #6b7280;
 }
 
-/* 제휴 버튼 – 3번째 컬럼 (4/5 너비, 중앙 정렬) */
+/* 아이콘·라벨 – 2/3 축소 컨텍스트 */
+#profileScreen .stelvio-user-points-with-avatar > .stelvio-affiliate-btn .stelvio-affiliate-btn-icon {
+  font-size: 0.9rem;
+}
+#profileScreen .stelvio-user-points-with-avatar > .stelvio-affiliate-btn .stelvio-affiliate-btn-label {
+  font-size: 0.5rem;
+}
+
+/* 제휴 버튼 – 3번째 컬럼 2/3 너비 */
 #profileScreen .stelvio-user-points-with-avatar > .stelvio-affiliate-btn {
-  flex: 0.8 1 0;
+  /* 현재 크기(flex:0.8)의 2/3 → 약 0.533 */
+  flex: 0.533 1 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   margin-left: 0;
-  padding: 5px 8px;
+  padding: 4px 5px;
   min-width: 0;
+  max-width: 64px; /* 기존 ~96px의 2/3 */
 }
 
 #profileScreen .user-card .point-icon {
