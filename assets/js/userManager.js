@@ -2665,44 +2665,51 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
     return `
       <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
         <div class="user-header">
-          <div class="user-name-wrapper">
-            <div class="user-name user-name-with-indicators">
-              <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</span>
-              <span class="user-name-badges" title="AI 페어링 / Strava 연결">
-                <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링" aria-label="AI 페어링"></span>
-                <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결" aria-label="Strava 연결"></span>
-              </span>
-            </div>
-            <div class="stelvio-user-points-with-avatar">
-              ${avatarBlock}
-              <div class="user-points">
-                <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
-                <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
+
+          <!-- 1줄: 2분할 (좌: 등급+이름+연결표시, 우: 대시보드·수정·삭제) -->
+          <div class="user-row1">
+            <div class="user-name-wrapper">
+              <div class="user-name user-name-with-indicators">
+                <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</span>
+                <span class="user-name-badges" title="AI 페어링 / Strava 연결">
+                  <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링" aria-label="AI 페어링"></span>
+                  <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결" aria-label="Strava 연결"></span>
+                </span>
               </div>
-              ${affiliateBtnHtml}
+            </div>
+            <div class="user-actions" onclick="event.stopPropagation();">
+              ${showDashboardBtn ? `<button class="btn-dashboard" onclick="event.stopPropagation();showPerformanceDashboard('${user.id}')" title="대시보드 보기">📊 대시보드</button>` : ''}
+              ${canEdit ? `<button class="btn-edit" onclick="event.stopPropagation();editUser('${user.id}')" title="수정"><img src="assets/img/edit2.png" alt="수정" style="width:20px;height:20px;display:block;" /></button><button class="btn-delete ${deleteButtonClass}" onclick="event.stopPropagation();deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}><img src="assets/img/delete2.png" alt="삭제" style="width:20px;height:20px;display:block;" /></button>` : ''}
             </div>
           </div>
-          <div class="user-actions" onclick="event.stopPropagation();">
-            ${showDashboardBtn ? `<button class="btn-dashboard" onclick="event.stopPropagation();showPerformanceDashboard('${user.id}')" title="대시보드 보기">📊 대시보드</button>` : ''}
-            ${canEdit ? `<button class="btn-edit" onclick="event.stopPropagation();editUser('${user.id}')" title="수정"><img src="assets/img/edit2.png" alt="수정" style="width:20px;height:20px;display:block;" /></button><button class="btn-delete ${deleteButtonClass}" onclick="event.stopPropagation();deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}><img src="assets/img/delete2.png" alt="삭제" style="width:20px;height:20px;display:block;" /></button>` : ''}
+
+          <!-- 2줄: 3분할 전체 너비 (아바타 | 포인트 | 제휴사 할인) -->
+          <div class="stelvio-user-points-with-avatar">
+            ${avatarBlock}
+            <div class="user-points">
+              <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
+              <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
+            </div>
+            ${affiliateBtnHtml}
           </div>
+
         </div>
         <div class="user-details">
+
+          <!-- 3줄: FTP · 체중 · W/kg -->
           <div class="user-stats">
             <span class="stat">FTP: ${user.ftp || '-'}W</span>
             <span class="stat">체중: ${user.weight || '-'}kg</span>
             <span class="stat">W/kg: ${wkg}</span>
-            ${canTogglePrivacy ? `
-            <span class="user-privacy-toggle-inline" onclick="event.stopPropagation();">
-              <label class="privacy-toggle-label">
-                <input type="checkbox" class="privacy-toggle-input" ${isPrivate ? 'checked' : ''} onchange="toggleUserPrivacy('${user.id}', this.checked)">
-                <span class="privacy-toggle-slider"></span>
-                <span class="privacy-toggle-text">${isPrivate ? '비공개' : '공개'}</span>
-              </label>
-            </span>
-            ` : ''}
           </div>
-          <div class="user-meta"><span class="contact">${user.contact || ''}</span><span class="expiry ${expiryClass}">만료일: ${expiryText}</span></div>
+
+          <!-- 4줄: 3분할 (공개/비공개 | 연락처 | 만료일) -->
+          <div class="user-meta">
+            <span class="user-meta-privacy">${canTogglePrivacy ? `<span class="user-privacy-toggle-inline" onclick="event.stopPropagation();"><label class="privacy-toggle-label"><input type="checkbox" class="privacy-toggle-input" ${isPrivate ? 'checked' : ''} onchange="toggleUserPrivacy('${user.id}', this.checked)"><span class="privacy-toggle-slider"></span><span class="privacy-toggle-text">${isPrivate ? '비공개' : '공개'}</span></label></span>` : ''}</span>
+            <span class="contact">${user.contact || ''}</span>
+            <span class="expiry ${expiryClass}">만료일: ${expiryText}</span>
+          </div>
+
         </div>
       </div>
     `;
