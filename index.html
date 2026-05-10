@@ -7866,6 +7866,7 @@
       if (dontShowCb) dontShowCb.checked = false;
       body.innerHTML = getWeeklyTop10LoadingHtml();
       modal.classList.remove('hidden');
+      if (typeof window.updateWeeklyTop10AffBanner === 'function') window.updateWeeklyTop10AffBanner();
       try {
         var currentUserId = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
         var peakWeeklyTop10Kst = false;
@@ -23259,6 +23260,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <input type="checkbox" id="weeklyTop10DontShowToday" />
             <span>오늘 그만 보기</span>
           </label>
+          <!-- 제휴 할인 배너: Gemini API + STRAVA 미연결 시 환경설정 유도, 연결 완료 시 혜택 확인 -->
+          <div id="weeklyTop10AffBanner" class="weekly-top10-aff-banner" role="region" aria-label="스텔비오 제휴 할인 안내">
+            <span class="weekly-top10-aff-icon" aria-hidden="true">⚡</span>
+            <div class="weekly-top10-aff-text">
+              <span class="weekly-top10-aff-title">스텔비오 제휴 할인 받기</span>
+              <span class="weekly-top10-aff-subtitle">Gemini API &amp; STRAVA 연결 시 프로필 화면에서 활성화</span>
+            </div>
+            <button type="button" id="weeklyTop10AffBtn" class="weekly-top10-aff-btn" onclick="onWeeklyTop10AffBannerClick(event)" aria-label="제휴 할인 바로 가기">바로 가기</button>
+          </div>
         </div>
         <button class="training-detail-close" onclick="closeWeeklyTop10Modal()" aria-label="닫기">&times;</button>
       </div>
@@ -23274,6 +23284,147 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       </div>
     </div>
   </div>
+
+  <!-- ── 제휴 할인 배너 로직 ──────────────────────────────────────────── -->
+  <script>
+    (function () {
+      'use strict';
+
+      /** 현재 로그인 사용자 오브젝트 (window.users 행 병합) */
+      function _affGetCurrentUser() {
+        var cu = window.currentUser || null;
+        var uid = cu && (cu.id || cu.uid) ? String(cu.id || cu.uid) : null;
+        if (uid && Array.isArray(window.users)) {
+          var row = window.users.find(function (u) {
+            return u && String(u.id || u.uid || '') === uid;
+          });
+          if (row) cu = Object.assign({}, cu || {}, row);
+        }
+        return cu;
+      }
+
+      /** Gemini API 연결 여부 확인 (userManager.js의 userHasGeminiApiRegistered와 동일 로직) */
+      function _affIsGeminiConnected(u) {
+        if (typeof window.userHasGeminiApiRegistered === 'function') {
+          return window.userHasGeminiApiRegistered(u);
+        }
+        if (!u) return false;
+        var sts = u.API_sts;
+        if (sts === true || sts === 'true' || sts === 1 || sts === '1') return true;
+        var reg = u.gemini_api_registered;
+        if (reg === true || reg === 'true' || reg === 1 || reg === '1') return true;
+        var k = u.gemini_api_key != null ? String(u.gemini_api_key).trim() : '';
+        if (k.length > 0) return true;
+        try {
+          var lk = localStorage.getItem('geminiApiKey');
+          return !!(lk && String(lk).trim());
+        } catch (_) {}
+        return false;
+      }
+
+      /** STRAVA 연결 여부 확인 (userManager.js의 userHasStravaConnected와 동일 로직) */
+      function _affIsStravaConnected(u) {
+        if (typeof window.userHasStravaConnected === 'function') {
+          return window.userHasStravaConnected(u);
+        }
+        if (!u) return false;
+        var r = u.strava_refresh_token != null ? String(u.strava_refresh_token).trim() : '';
+        var a = u.strava_access_token != null ? String(u.strava_access_token).trim() : '';
+        return !!(r || a);
+      }
+
+      /**
+       * 배너 상태 갱신 — fetchAndShowWeeklyTop10Modal 호출 시 실행.
+       * 미연결: "바로 가기" (보라 버튼) / 연결 완료: "혜택 확인" (초록 버튼)
+       */
+      window.updateWeeklyTop10AffBanner = function () {
+        var banner = document.getElementById('weeklyTop10AffBanner');
+        var btn    = document.getElementById('weeklyTop10AffBtn');
+        if (!banner) return;
+
+        var cu           = _affGetCurrentUser();
+        var hasGemini    = _affIsGeminiConnected(cu);
+        var hasStrava    = _affIsStravaConnected(cu);
+        var allConnected = hasGemini && hasStrava;
+
+        banner.style.display = 'flex';
+
+        if (allConnected) {
+          banner.classList.add('weekly-top10-aff-banner--connected');
+          if (btn) btn.textContent = '혜택 확인';
+        } else {
+          banner.classList.remove('weekly-top10-aff-banner--connected');
+          if (btn) btn.textContent = '바로 가기';
+        }
+      };
+
+      /**
+       * 배너 '바로 가기 / 혜택 확인' 버튼 클릭 핸들러.
+       * - 미연결: TOP10 닫고 → 환경설정 모달 열기
+       * - 연결 완료: 툴팁으로 혜택 활성화 안내
+       */
+      window.onWeeklyTop10AffBannerClick = function (e) {
+        if (e) e.stopPropagation();
+
+        /* 버튼 scale-down 피드백 */
+        var btn = document.getElementById('weeklyTop10AffBtn');
+        if (btn) {
+          btn.classList.add('weekly-top10-aff-btn--pressed');
+          setTimeout(function () {
+            btn.classList.remove('weekly-top10-aff-btn--pressed');
+          }, 220);
+        }
+
+        var cu           = _affGetCurrentUser();
+        var allConnected = _affIsGeminiConnected(cu) && _affIsStravaConnected(cu);
+
+        if (allConnected) {
+          /* ── 이미 연동 완료: 배너 위에 툴팁 표시 ── */
+          var banner = document.getElementById('weeklyTop10AffBanner');
+          if (!banner) return;
+
+          var existing = banner.querySelector('.weekly-top10-aff-tooltip');
+          if (existing) {
+            /* 이미 떠 있으면 토글 */
+            existing.classList.toggle('weekly-top10-aff-tooltip--visible');
+            if (existing.classList.contains('weekly-top10-aff-tooltip--visible')) {
+              clearTimeout(existing._affHideTimer);
+              existing._affHideTimer = setTimeout(function () {
+                existing.classList.remove('weekly-top10-aff-tooltip--visible');
+              }, 3200);
+            }
+            return;
+          }
+
+          var tip = document.createElement('div');
+          tip.className = 'weekly-top10-aff-tooltip';
+          tip.textContent = '✅ 연동 완료! 프로필 화면에서 혜택을 확인하세요.';
+          banner.style.position = 'relative';
+          banner.appendChild(tip);
+
+          requestAnimationFrame(function () {
+            tip.classList.add('weekly-top10-aff-tooltip--visible');
+          });
+
+          tip._affHideTimer = setTimeout(function () {
+            tip.classList.remove('weekly-top10-aff-tooltip--visible');
+            setTimeout(function () {
+              if (tip.parentNode) tip.parentNode.removeChild(tip);
+            }, 220);
+          }, 3200);
+
+        } else {
+          /* ── 미연결: TOP10 모달 닫고 환경설정 열기 ── */
+          if (typeof closeWeeklyTop10Modal === 'function') closeWeeklyTop10Modal();
+          setTimeout(function () {
+            if (typeof openSettingsModal === 'function') {
+              openSettingsModal();
+            }
+          }, 130);
+        }
+      };
+    })();
+  </script>
 
   <!-- STELVIO 랭킹 보드 (프로필 선택 화면과 동일한 전체 화면) -->
   <div id="stelvioRankingScreen" class="screen stelvio-ranking-screen-root">
