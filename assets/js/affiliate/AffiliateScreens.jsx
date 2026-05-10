@@ -60,6 +60,56 @@ function affiliateShowToast(msg) {
 }
 
 /**
+ * Canvas API를 이용한 이미지 압축 및 리사이즈
+ * @param {File}   file    - 원본 이미지 파일
+ * @param {number} maxPx   - 긴 변 최대 픽셀 (초과 시 비율 유지하며 축소)
+ * @param {number} quality - JPEG 출력 품질 0~1
+ * @returns {Promise<File>} 압축된 File (실패 시 원본 반환)
+ */
+function compressImageFile(file, maxPx, quality) {
+  maxPx   = maxPx   || 1200;
+  quality = quality || 0.85;
+  return new Promise(function(resolve) {
+    if (!file || typeof file.type !== 'string' || !file.type.startsWith('image/')) {
+      resolve(file);
+      return;
+    }
+    var reader = new FileReader();
+    reader.onerror = function() { resolve(file); };
+    reader.onload  = function(e) {
+      var img = new Image();
+      img.onerror = function() { resolve(file); };
+      img.onload  = function() {
+        var w = img.naturalWidth;
+        var h = img.naturalHeight;
+        /* 긴 변이 maxPx를 초과하면 비율 유지하며 축소 */
+        if (w > maxPx || h > maxPx) {
+          if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+          else        { w = Math.round(w * maxPx / h); h = maxPx; }
+        }
+        /* 원본보다 크게 되지 않도록 */
+        if (w === img.naturalWidth && h === img.naturalHeight && file.type === 'image/jpeg') {
+          resolve(file);
+          return;
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width  = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(function(blob) {
+          if (!blob) { resolve(file); return; }
+          var safeName = (file.name || 'image').replace(/\.[^.]+$/, '') + '.jpg';
+          resolve(new File([blob], safeName, { type: 'image/jpeg', lastModified: Date.now() }));
+        }, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
  * 제휴사 활성 기간 판정
  * - periodStart/periodEnd 모두 없으면 → 항상 활성
  * - periodEnd가 오늘보다 이전이면 → 기간 만료 (비활성)
@@ -202,15 +252,19 @@ var affiliateService = {
   uploadPhoto: function(storage, affiliateId, file) {
     try {
       var fns = window._firebaseStorageFns || {};
+      /* compressImageFile이 항상 .jpg를 반환하므로 ext=jpg 고정 */
+      var ext = (file.type === 'image/jpeg' || (file.name || '').toLowerCase().endsWith('.jpg')) ? 'jpg'
+              : (file.name.split('.').pop() || 'jpg');
+      var path = 'affiliates/' + affiliateId + '/cover.' + ext;
       if (typeof fns.ref === 'function' && typeof fns.uploadBytes === 'function' && typeof fns.getDownloadURL === 'function') {
-        var storageRef = fns.ref(storage, 'affiliates/' + affiliateId + '/cover.' + (file.name.split('.').pop() || 'jpg'));
+        var storageRef = fns.ref(storage, path);
         return fns.uploadBytes(storageRef, file).then(function(snap) {
           return fns.getDownloadURL(snap.ref);
         });
       }
       // compat
       if (typeof firebase !== 'undefined' && firebase.storage) {
-        var r = firebase.storage().ref('affiliates/' + affiliateId + '/cover.' + (file.name.split('.').pop() || 'jpg'));
+        var r = firebase.storage().ref(path);
         return r.put(file).then(function() { return r.getDownloadURL(); });
       }
       return Promise.resolve('');
@@ -220,7 +274,8 @@ var affiliateService = {
   uploadPromoImage: function(storage, affiliateId, file) {
     try {
       var fns = window._firebaseStorageFns || {};
-      var ext = (file.name.split('.').pop() || 'jpg');
+      var ext = (file.type === 'image/jpeg' || (file.name || '').toLowerCase().endsWith('.jpg')) ? 'jpg'
+              : (file.name.split('.').pop() || 'jpg');
       var path = 'affiliates/' + affiliateId + '/promo.' + ext;
       if (typeof fns.ref === 'function' && typeof fns.uploadBytes === 'function' && typeof fns.getDownloadURL === 'function') {
         var storageRef = fns.ref(storage, path);
@@ -697,18 +752,31 @@ function AffiliateForm(props) {
 
       {/* 제휴사 사진 */}
       <div>
-        <label className="text-xs text-slate-500 block mb-1">제휴사 사진</label>
+        <label className="text-xs text-slate-500 block mb-1">
+          제휴사 사진
+          <span className="ml-2 text-slate-400 font-normal">권장: 400 × 400px · 자동 압축 적용</span>
+        </label>
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="inline-flex h-20 w-20 rounded-full ring-2 ring-violet-200 overflow-hidden bg-slate-100 items-center justify-center shrink-0">
+          {/* 원형 아바타 미리보기 – overflow-hidden + block img로 꽉 채움 */}
+          <span className="relative inline-block h-20 w-20 rounded-full ring-2 ring-violet-200 overflow-hidden bg-slate-100 shrink-0">
             {photoFile && photoPreview
-              ? <img src={photoPreview} alt="" className="h-full w-full object-cover" />
+              ? <img src={photoPreview} alt=""
+                  style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
               : photoUrl
-                ? <img src={photoUrl} alt="" className="h-full w-full object-cover" decoding="async" />
-                : <span className="text-xs text-slate-400">없음</span>
+                ? <img src={photoUrl} alt="" decoding="async"
+                    style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+                : <span className="absolute inset-0 flex items-center justify-center text-xs text-slate-400">없음</span>
             }
           </span>
           <input type="file" accept="image/*" className="text-xs max-w-[12rem]"
-            onChange={function(e){ var f = e.target.files && e.target.files[0]; setPhotoFile(f || null); }} />
+            onChange={function(e){
+              var f = e.target.files && e.target.files[0];
+              if (!f) { setPhotoFile(null); return; }
+              /* 아바타: 긴 변 800px / JPEG 0.85 압축 */
+              compressImageFile(f, 800, 0.85).then(function(compressed) {
+                setPhotoFile(compressed);
+              });
+            }} />
         </div>
       </div>
 
@@ -760,7 +828,15 @@ function AffiliateForm(props) {
               <span className="text-xs text-slate-400">클릭하여 홍보 이미지 선택</span>
               <span className="text-xs text-slate-300">JPG · PNG · WEBP</span>
               <input type="file" accept="image/*" className="hidden"
-                onChange={function(e){ var f = e.target.files && e.target.files[0]; if(f) setPromoFile(f); e.target.value=''; }} />
+                onChange={function(e){
+                  var f = e.target.files && e.target.files[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  /* 홍보 이미지: 긴 변 1200px / JPEG 0.85 압축 */
+                  compressImageFile(f, 1200, 0.85).then(function(compressed) {
+                    setPromoFile(compressed);
+                  });
+                }} />
             </label>
           )}
         </div>
