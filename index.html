@@ -23260,17 +23260,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <input type="checkbox" id="weeklyTop10DontShowToday" />
             <span>오늘 그만 보기</span>
           </label>
-          <!-- 제휴 할인 배너: Gemini API + STRAVA 미연결 시 환경설정 유도, 연결 완료 시 혜택 확인 -->
-          <div id="weeklyTop10AffBanner" class="weekly-top10-aff-banner" role="region" aria-label="스텔비오 제휴 할인 안내">
-            <span class="weekly-top10-aff-icon" aria-hidden="true">⚡</span>
-            <div class="weekly-top10-aff-text">
-              <span class="weekly-top10-aff-title">스텔비오 제휴 할인 받기</span>
-              <span class="weekly-top10-aff-subtitle">Gemini API &amp; STRAVA 연결 시 프로필 화면에서 활성화</span>
-            </div>
-            <button type="button" id="weeklyTop10AffBtn" class="weekly-top10-aff-btn" onclick="onWeeklyTop10AffBannerClick(event)" aria-label="제휴 할인 바로 가기">바로 가기</button>
-          </div>
         </div>
         <button class="training-detail-close" onclick="closeWeeklyTop10Modal()" aria-label="닫기">&times;</button>
+      </div>
+      <!-- 제휴 할인 배너: 모달 전체 너비 / Gemini API + STRAVA 미연결 시 환경설정 유도, 연결 완료 시 혜택 확인 -->
+      <div id="weeklyTop10AffBanner" class="weekly-top10-aff-banner" role="region" aria-label="스텔비오 제휴 할인 안내">
+        <span class="weekly-top10-aff-icon" aria-hidden="true">⚡</span>
+        <div class="weekly-top10-aff-text">
+          <span class="weekly-top10-aff-title">스텔비오 제휴 할인 받기</span>
+          <span class="weekly-top10-aff-subtitle">환경설정에서 Gemini API &amp; STRAVA 연결 하면 사용자 정보에 활성화 됨</span>
+        </div>
+        <button type="button" id="weeklyTop10AffBtn" class="weekly-top10-aff-btn" onclick="onWeeklyTop10AffBannerClick(event)" aria-label="제휴 할인 바로 가기">바로 가기</button>
       </div>
       <div class="training-detail-body" id="weeklyTop10Body">
         <!-- 랭킹 목록이 여기에 동적으로 표시됩니다 -->
