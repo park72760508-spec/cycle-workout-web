@@ -252,20 +252,20 @@ var affiliateService = {
   uploadPhoto: function(storage, affiliateId, file) {
     try {
       var fns = window._firebaseStorageFns || {};
-      /* compressImageFile이 항상 .jpg를 반환하므로 ext=jpg 고정 */
-      var ext = (file.type === 'image/jpeg' || (file.name || '').toLowerCase().endsWith('.jpg')) ? 'jpg'
-              : (file.name.split('.').pop() || 'jpg');
-      var path = 'affiliates/' + affiliateId + '/cover.' + ext;
+      /* 압축 후 항상 JPEG이므로 파일명을 cover.jpg로 고정
+         (기존 cover.png 등이 있어도 덮어쓰기 가능) */
+      var path = 'affiliates/' + affiliateId + '/cover.jpg';
       if (typeof fns.ref === 'function' && typeof fns.uploadBytes === 'function' && typeof fns.getDownloadURL === 'function') {
         var storageRef = fns.ref(storage, path);
-        return fns.uploadBytes(storageRef, file).then(function(snap) {
+        var meta = { contentType: 'image/jpeg' };
+        return fns.uploadBytes(storageRef, file, meta).then(function(snap) {
           return fns.getDownloadURL(snap.ref);
         });
       }
       // compat
       if (typeof firebase !== 'undefined' && firebase.storage) {
         var r = firebase.storage().ref(path);
-        return r.put(file).then(function() { return r.getDownloadURL(); });
+        return r.put(file, { contentType: 'image/jpeg' }).then(function() { return r.getDownloadURL(); });
       }
       return Promise.resolve('');
     } catch(e) { return Promise.reject(e); }
@@ -274,19 +274,19 @@ var affiliateService = {
   uploadPromoImage: function(storage, affiliateId, file) {
     try {
       var fns = window._firebaseStorageFns || {};
-      var ext = (file.type === 'image/jpeg' || (file.name || '').toLowerCase().endsWith('.jpg')) ? 'jpg'
-              : (file.name.split('.').pop() || 'jpg');
-      var path = 'affiliates/' + affiliateId + '/promo.' + ext;
+      /* 압축 후 항상 JPEG이므로 파일명을 promo.jpg로 고정 */
+      var path = 'affiliates/' + affiliateId + '/promo.jpg';
       if (typeof fns.ref === 'function' && typeof fns.uploadBytes === 'function' && typeof fns.getDownloadURL === 'function') {
         var storageRef = fns.ref(storage, path);
-        return fns.uploadBytes(storageRef, file).then(function(snap) {
+        var meta = { contentType: 'image/jpeg' };
+        return fns.uploadBytes(storageRef, file, meta).then(function(snap) {
           return fns.getDownloadURL(snap.ref);
         });
       }
       // compat
       if (typeof firebase !== 'undefined' && firebase.storage) {
         var r = firebase.storage().ref(path);
-        return r.put(file).then(function() { return r.getDownloadURL(); });
+        return r.put(file, { contentType: 'image/jpeg' }).then(function() { return r.getDownloadURL(); });
       }
       return Promise.resolve('');
     } catch(e) { return Promise.reject(e); }
