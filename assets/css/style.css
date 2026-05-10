@@ -8350,45 +8350,118 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   flex-shrink: 0;
 }
 
-/* 프로필 사진 + 포인트 배지 + 제휴 버튼: 항상 1행 (줄바꿈 방지) */
+/* ═══ 프로필 카드 4-분할 정보 바: 아바타 │ 적립포인트 │ 보유포인트 │ 제휴사 ═══ */
 #profileScreen .stelvio-user-points-with-avatar {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
+  align-items: stretch;
+  gap: 0;
+  margin-top: 6px;
   width: 100%;
   min-width: 0;
-  box-sizing: border-box;
-}
-
-/* 포인트 배지 2개를 1행으로 강제 — 뒤쪽 .user-card .user-points(wrap) 규칙을 덮어씀 */
-#profileScreen .stelvio-user-points-with-avatar .user-points {
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  align-items: center !important;
-  gap: 4px !important;
-  flex: 1 1 0 !important;
-  min-width: 0 !important;
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  border-radius: 12px;
   overflow: hidden;
+  box-sizing: border-box;
+  background: rgba(248, 250, 252, 0.85);
 }
 
-#profileScreen .stelvio-user-points-with-avatar .point-badge {
-  flex-shrink: 1;
+/* 아바타 섹션 */
+#profileScreen .stelvio-user-points-with-avatar > .stelvio-profile-card-avatar-btn,
+#profileScreen .stelvio-user-points-with-avatar > .stelvio-profile-card-avatar-readonly {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 8px;
+  border-right: 1px solid rgba(0, 0, 0, 0.09);
+}
+
+/* 포인트 배지 – 직접 자식, 각각 flex:1 균등 분할 (generic .user-card .point-badge 덮어씀) */
+#profileScreen .stelvio-user-points-with-avatar > .point-badge {
+  flex: 1 1 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 7px 4px !important;
+  gap: 2px !important;
+  border-radius: 0 !important;
+  min-width: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.09) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   white-space: nowrap;
-  min-width: 0;
-  max-width: none;
-  padding: 3px 6px !important;
+  transition: background 0.15s !important;
+  cursor: default;
+}
+#profileScreen .stelvio-user-points-with-avatar > .point-badge:hover {
+  transform: none !important;
+  box-shadow: none !important;
 }
 
-/* 숫자 잘림 완전 제거 */
-#profileScreen .stelvio-user-points-with-avatar .point-value {
+/* 아이콘 + 숫자 한 행 */
+#profileScreen .stelvio-user-points-with-avatar > .point-badge .point-icon-val {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+#profileScreen .stelvio-user-points-with-avatar > .point-badge .point-icon {
+  font-size: 13px;
+  line-height: 1;
+  display: inline-block;
+  flex-shrink: 0;
+}
+#profileScreen .stelvio-user-points-with-avatar > .point-badge .point-value {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
   overflow: visible;
   text-overflow: clip;
   max-width: none;
+}
+
+/* 라벨 (누적포인트 / 보유포인트) */
+#profileScreen .stelvio-user-points-with-avatar > .point-badge .point-label {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.55;
   white-space: nowrap;
+  line-height: 1;
+}
+
+/* 누적 포인트 색 */
+#profileScreen .stelvio-user-points-with-avatar > .point-badge.point-accumulated {
+  background: rgba(239, 68, 68, 0.06);
+  color: #dc2626;
+}
+#profileScreen .stelvio-user-points-with-avatar > .point-badge.point-accumulated .point-icon {
+  filter: drop-shadow(0 1px 2px rgba(239, 68, 68, 0.3));
+}
+#profileScreen .stelvio-user-points-with-avatar > .point-badge.point-accumulated .point-label {
+  color: #b91c1c;
+}
+
+/* 보유 포인트 색 */
+#profileScreen .stelvio-user-points-with-avatar > .point-badge.point-remaining {
+  background: rgba(16, 185, 129, 0.06);
+  color: #059669;
+}
+#profileScreen .stelvio-user-points-with-avatar > .point-badge.point-remaining .point-icon {
+  filter: drop-shadow(0 1px 2px rgba(16, 185, 129, 0.3));
+}
+#profileScreen .stelvio-user-points-with-avatar > .point-badge.point-remaining .point-label {
+  color: #047857;
+}
+
+/* 마지막 배지 (제휴 버튼 없을 때)는 오른쪽 경계선 없앰 */
+#profileScreen .stelvio-user-points-with-avatar > .point-badge:last-child {
+  border-right: none !important;
 }
 
 #profileScreen .stelvio-profile-card-avatar-btn {
@@ -8567,9 +8640,19 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   color: #6b7280;
 }
 
-/* 포인트 행에서 버튼이 우측으로 밀리도록 margin-left: auto */
-#profileScreen .stelvio-user-points-with-avatar .stelvio-affiliate-btn {
-  margin-left: auto;
+/* 제휴 버튼 – 4번째 셀, 오른쪽 끝 (margin-left: auto 제거) */
+#profileScreen .stelvio-user-points-with-avatar > .stelvio-affiliate-btn {
+  flex-shrink: 0;
+  align-self: stretch;
+  border-radius: 0 11px 11px 0;
+  border-left: none;
+  margin-left: 0;
+  padding: 7px 10px;
+  min-width: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 #profileScreen .user-card .point-icon {
