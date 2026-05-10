@@ -182,9 +182,22 @@ var affiliateService = {
       var fns = window._firebaseFirestoreFns || {};
       var ref = this._doc(db, id);
       if (!ref) return Promise.reject(new Error('no ref'));
-      if (typeof fns.getDoc === 'function') {
-        return fns.getDoc(ref).then(function(d) {
+      /* getDocFromServer: 캐시를 건너뛰고 서버에서 직접 읽어 최신 데이터 보장
+         (이미지 수정 후 즉시 최신 photoUrl 반영을 위해 서버 우선) */
+      var readFn = typeof fns.getDocFromServer === 'function'
+        ? fns.getDocFromServer
+        : (typeof fns.getDoc === 'function' ? fns.getDoc : null);
+      if (readFn) {
+        return readFn(ref).then(function(d) {
           return d.exists() ? Object.assign({ id: d.id }, d.data()) : null;
+        }).catch(function() {
+          /* 서버 읽기 실패 시 캐시에서 재시도 */
+          if (typeof fns.getDoc === 'function') {
+            return fns.getDoc(ref).then(function(d) {
+              return d.exists() ? Object.assign({ id: d.id }, d.data()) : null;
+            });
+          }
+          return null;
         });
       }
       // compat
@@ -252,12 +265,13 @@ var affiliateService = {
   uploadPhoto: function(storage, affiliateId, file) {
     try {
       var fns = window._firebaseStorageFns || {};
-      /* 압축 후 항상 JPEG이므로 파일명을 cover.jpg로 고정
-         (기존 cover.png 등이 있어도 덮어쓰기 가능) */
-      var path = 'affiliates/' + affiliateId + '/cover.jpg';
+      /* 타임스탬프를 파일명에 포함해 매 업로드마다 고유 URL 생성
+         → CDN/브라우저 캐시 문제 없이 항상 새 이미지 반영 */
+      var ts   = Date.now();
+      var path = 'affiliates/' + affiliateId + '/cover_' + ts + '.jpg';
+      var meta = { contentType: 'image/jpeg' };
       if (typeof fns.ref === 'function' && typeof fns.uploadBytes === 'function' && typeof fns.getDownloadURL === 'function') {
         var storageRef = fns.ref(storage, path);
-        var meta = { contentType: 'image/jpeg' };
         return fns.uploadBytes(storageRef, file, meta).then(function(snap) {
           return fns.getDownloadURL(snap.ref);
         });
@@ -265,7 +279,7 @@ var affiliateService = {
       // compat
       if (typeof firebase !== 'undefined' && firebase.storage) {
         var r = firebase.storage().ref(path);
-        return r.put(file, { contentType: 'image/jpeg' }).then(function() { return r.getDownloadURL(); });
+        return r.put(file, meta).then(function() { return r.getDownloadURL(); });
       }
       return Promise.resolve('');
     } catch(e) { return Promise.reject(e); }
@@ -274,11 +288,12 @@ var affiliateService = {
   uploadPromoImage: function(storage, affiliateId, file) {
     try {
       var fns = window._firebaseStorageFns || {};
-      /* 압축 후 항상 JPEG이므로 파일명을 promo.jpg로 고정 */
-      var path = 'affiliates/' + affiliateId + '/promo.jpg';
+      /* 타임스탬프로 고유 파일명 생성 */
+      var ts   = Date.now();
+      var path = 'affiliates/' + affiliateId + '/promo_' + ts + '.jpg';
+      var meta = { contentType: 'image/jpeg' };
       if (typeof fns.ref === 'function' && typeof fns.uploadBytes === 'function' && typeof fns.getDownloadURL === 'function') {
         var storageRef = fns.ref(storage, path);
-        var meta = { contentType: 'image/jpeg' };
         return fns.uploadBytes(storageRef, file, meta).then(function(snap) {
           return fns.getDownloadURL(snap.ref);
         });
@@ -286,7 +301,7 @@ var affiliateService = {
       // compat
       if (typeof firebase !== 'undefined' && firebase.storage) {
         var r = firebase.storage().ref(path);
-        return r.put(file, { contentType: 'image/jpeg' }).then(function() { return r.getDownloadURL(); });
+        return r.put(file, meta).then(function() { return r.getDownloadURL(); });
       }
       return Promise.resolve('');
     } catch(e) { return Promise.reject(e); }
