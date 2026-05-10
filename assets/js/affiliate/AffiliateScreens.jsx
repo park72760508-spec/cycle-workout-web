@@ -121,17 +121,25 @@ var affiliateService = {
     try {
       var fns = window._firebaseFirestoreFns || {};
       var col = this._col(db);
-      if (!col) return Promise.reject(new Error('no col'));
-      var ts = (fns.serverTimestamp || (typeof firebase !== 'undefined' ? firebase.firestore.FieldValue.serverTimestamp : null));
+      if (!col) return Promise.reject(new Error('Firestore 컬렉션에 접근할 수 없습니다.'));
+      /* serverTimestamp: v9 모듈러 또는 compat 방식 모두 대응 */
+      var tsFn = typeof fns.serverTimestamp === 'function' ? fns.serverTimestamp
+        : (typeof firebase !== 'undefined' && firebase.firestore && typeof firebase.firestore.FieldValue !== 'undefined')
+          ? firebase.firestore.FieldValue.serverTimestamp
+          : null;
+      var now = new Date().toISOString();
       var payload = Object.assign({}, data, {
-        createdBy: userId,
-        createdAt: ts ? ts() : new Date().toISOString(),
-        updatedAt: ts ? ts() : new Date().toISOString()
+        createdBy: userId || '',
+        createdAt: tsFn ? tsFn() : now,
+        updatedAt: tsFn ? tsFn() : now
       });
       if (typeof fns.addDoc === 'function') {
         return fns.addDoc(col, payload).then(function(ref) { return ref.id; });
       }
-      return col.add(payload).then(function(ref) { return ref.id; });
+      if (typeof col.add === 'function') {
+        return col.add(payload).then(function(ref) { return ref.id; });
+      }
+      return Promise.reject(new Error('addDoc 함수를 찾을 수 없습니다.'));
     } catch(e) { return Promise.reject(e); }
   },
 
@@ -139,15 +147,18 @@ var affiliateService = {
     try {
       var fns = window._firebaseFirestoreFns || {};
       var ref = this._doc(db, id);
-      if (!ref) return Promise.reject(new Error('no ref'));
-      var ts = (fns.serverTimestamp || null);
+      if (!ref) return Promise.reject(new Error('문서 참조를 찾을 수 없습니다.'));
+      var tsFn = typeof fns.serverTimestamp === 'function' ? fns.serverTimestamp : null;
       var payload = Object.assign({}, data, {
-        updatedAt: ts ? ts() : new Date().toISOString()
+        updatedAt: tsFn ? tsFn() : new Date().toISOString()
       });
       if (typeof fns.updateDoc === 'function') {
         return fns.updateDoc(ref, payload);
       }
-      return ref.update(payload);
+      if (typeof ref.update === 'function') {
+        return ref.update(payload);
+      }
+      return Promise.reject(new Error('updateDoc 함수를 찾을 수 없습니다.'));
     } catch(e) { return Promise.reject(e); }
   },
 
@@ -500,59 +511,63 @@ function AffiliateForm(props) {
   function validate() {
     if (!name.trim()) { affiliateShowToast('제휴사명을 입력해주세요.'); return false; }
     if (name.trim().length > 24) { affiliateShowToast('제휴사명은 24자 이내여야 합니다.'); return false; }
+    if (!firestore) { affiliateShowToast('데이터베이스에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.'); return false; }
     return true;
   }
 
   function doSave(isEditMode) {
     if (!validate()) return;
     setBusy(true);
+
+    /* 이미지 업로드 실패 시 URL을 빈 문자열로 처리하여 텍스트 데이터는 저장되도록 */
+    function safeUploadPhoto(st, id, file) {
+      if (!st || !file) return Promise.resolve(photoUrl || '');
+      return affiliateService.uploadPhoto(st, id, file).catch(function(e){
+        console.warn('[Affiliate] 대표 사진 업로드 실패:', e);
+        return photoUrl || '';
+      });
+    }
+    function safeUploadPromo(st, id, file) {
+      if (!st || !file) return Promise.resolve(promoUrl || '');
+      return affiliateService.uploadPromoImage(st, id, file).catch(function(e){
+        console.warn('[Affiliate] 홍보 이미지 업로드 실패:', e);
+        return promoUrl || '';
+      });
+    }
+
     var savePromise;
     if (isEditMode) {
       var id = editId;
-      var chain = Promise.resolve()
-        .then(function(){
-          // 대표 사진 업로드 (변경된 경우)
-          if (photoFile && storage) {
-            return affiliateService.uploadPhoto(storage, id, photoFile);
-          }
-          return photoUrl;
-        })
+      savePromise = safeUploadPhoto(storage, id, photoFile)
         .then(function(resolvedPhotoUrl){
-          // 홍보 이미지 업로드 (변경된 경우)
-          if (promoFile && storage) {
-            return affiliateService.uploadPromoImage(storage, id, promoFile)
-              .then(function(resolvedPromoUrl){
-                return affiliateService.update(firestore, id, buildPayload(resolvedPhotoUrl, resolvedPromoUrl));
-              });
-          }
-          return affiliateService.update(firestore, id, buildPayload(resolvedPhotoUrl, null));
-        });
-      savePromise = chain.then(function(){ onSaved(id); });
-    } else {
-      savePromise = affiliateService.create(firestore, userId, buildPayload(null, null))
-        .then(function(newId){
-          if (!newId) { onSaved(newId); return; }
-          // 대표 사진 업로드
-          var p1 = (photoFile && storage)
-            ? affiliateService.uploadPhoto(storage, newId, photoFile)
-            : Promise.resolve(photoUrl);
-          // 홍보 이미지 업로드
-          return p1.then(function(resolvedPhotoUrl){
-            var p2 = (promoFile && storage)
-              ? affiliateService.uploadPromoImage(storage, newId, promoFile)
-              : Promise.resolve(promoUrl);
-            return p2.then(function(resolvedPromoUrl){
-              if (resolvedPhotoUrl || resolvedPromoUrl) {
-                return affiliateService.update(firestore, newId, buildPayload(resolvedPhotoUrl, resolvedPromoUrl))
-                  .then(function(){ onSaved(newId); });
-              }
-              onSaved(newId);
+          return safeUploadPromo(storage, id, promoFile)
+            .then(function(resolvedPromoUrl){
+              return affiliateService.update(firestore, id, buildPayload(resolvedPhotoUrl, resolvedPromoUrl));
             });
-          });
+        })
+        .then(function(){ onSaved(id); });
+    } else {
+      /* 1) 텍스트 데이터 먼저 저장 → 2) 이미지 업로드 후 URL 업데이트 */
+      savePromise = affiliateService.create(firestore, userId, buildPayload('', ''))
+        .then(function(newId){
+          if (!newId) { onSaved(''); return; }
+          return safeUploadPhoto(storage, newId, photoFile)
+            .then(function(resolvedPhotoUrl){
+              return safeUploadPromo(storage, newId, promoFile)
+                .then(function(resolvedPromoUrl){
+                  /* 이미지 URL이 하나라도 있으면 업데이트 */
+                  if (resolvedPhotoUrl || resolvedPromoUrl) {
+                    return affiliateService.update(firestore, newId, buildPayload(resolvedPhotoUrl, resolvedPromoUrl))
+                      .catch(function(e){ console.warn('[Affiliate] URL 업데이트 실패:', e); });
+                  }
+                })
+                .then(function(){ onSaved(newId); });
+            });
         });
     }
     savePromise.catch(function(e){
-      affiliateShowToast(e && e.message ? e.message : '저장에 실패했습니다.');
+      console.error('[Affiliate] 저장 오류:', e);
+      affiliateShowToast(e && e.message ? e.message : '저장에 실패했습니다. 다시 시도해주세요.');
     }).finally(function(){ setBusy(false); });
   }
 
@@ -565,7 +580,13 @@ function AffiliateForm(props) {
   }
 
   return (
-    <div className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-4 pb-28 text-sm text-slate-700 px-1">
+    <div
+      className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-4 text-sm text-slate-700 px-1"
+      style={{
+        /* 하단 고정 버튼 바(~70px) + 네비바 위치(16+safe+navH+10) + 여유 20px */
+        paddingBottom: 'calc(70px + 16px + var(--open-riding-glass-nav-inner-fixed-height, 58px) + 10px + env(safe-area-inset-bottom, 0px) + 20px)'
+      }}
+    >
 
       {/* 제휴사명 */}
       <div>
@@ -720,14 +741,14 @@ function AffiliateForm(props) {
           placeholder="전화번호를 입력하세요" />
       </div>
 
-      {/* 하단 고정 버튼 */}
-      <div className="open-riding-bottom-actions open-riding-group-form-footer fixed left-0 right-0 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
+      {/* 하단 고정 버튼 – CSS로 네비바 위에 위치 고정 */}
+      <div className="open-riding-bottom-actions open-riding-group-form-footer">
         <div className="w-[94%] mx-auto flex gap-2">
           <button type="button"
-            className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium"
+            className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium disabled:opacity-50"
             disabled={busy} onClick={onCancel}>취소</button>
           <button type="button"
-            className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700"
+            className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50"
             disabled={busy} onClick={function(){ doSave(isEdit); }}>
             {busy ? '처리 중…' : isEdit ? '수정' : '제휴사 등록'}
           </button>
