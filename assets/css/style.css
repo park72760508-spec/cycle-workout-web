@@ -8484,6 +8484,87 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   filter: drop-shadow(0 1px 2px rgba(16, 185, 129, 0.3));
 }
 
+/* ── 프로필 카드 제휴사 할인 버튼 ─────────────────────────────────────── */
+#profileScreen .stelvio-affiliate-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 5px 8px;
+  min-width: 52px;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  background-color: #fff;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.12s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+}
+
+/* 활성: 골드 그라데이션 테두리 + 글로우 펄스 */
+#profileScreen .stelvio-affiliate-btn--active {
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #f97316 100%) border-box;
+  box-shadow:
+    0 0 10px rgba(251,191,36,0.45),
+    0 2px 6px rgba(0,0,0,0.1);
+  animation: stelvio-aff-glow 2.6s ease-in-out infinite;
+}
+#profileScreen .stelvio-affiliate-btn--active:active {
+  transform: scale(0.91);
+  box-shadow: 0 0 4px rgba(251,191,36,0.3), 0 1px 3px rgba(0,0,0,0.1);
+  animation: none;
+}
+
+@keyframes stelvio-aff-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(251,191,36,0.4), 0 2px 6px rgba(0,0,0,0.1); }
+  50%       { box-shadow: 0 0 18px rgba(251,191,36,0.85), 0 3px 10px rgba(0,0,0,0.14); }
+}
+
+/* 비활성: 그레이스케일 + 저불투명 */
+#profileScreen .stelvio-affiliate-btn--inactive {
+  filter: grayscale(1);
+  opacity: 0.38;
+  border-color: #d1d5db;
+  cursor: default;
+  pointer-events: auto; /* 클릭해서 안내 메시지 표시 */
+}
+
+/* 아이콘 */
+#profileScreen .stelvio-affiliate-btn-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+  display: block;
+}
+
+/* 라벨 */
+#profileScreen .stelvio-affiliate-btn-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #92400e;
+  line-height: 1;
+  white-space: nowrap;
+  display: block;
+}
+
+/* 비활성 상태의 라벨 색은 회색으로 */
+#profileScreen .stelvio-affiliate-btn--inactive .stelvio-affiliate-btn-label {
+  color: #6b7280;
+}
+
+/* 포인트 행에서 버튼이 우측으로 밀리도록 margin-left: auto */
+#profileScreen .stelvio-user-points-with-avatar .stelvio-affiliate-btn {
+  margin-left: auto;
+}
+
 #profileScreen .user-card .point-icon {
   display: inline-flex;
   align-items: center;
