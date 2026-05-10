@@ -155,7 +155,7 @@ var affiliateService = {
     try {
       var fns = window._firebaseFirestoreFns || {};
       var col = this._col(db);
-      if (!col) { cb([]); return function(){}; }
+      if (!col) { cb([], new Error('Firestore 컬렉션 참조 없음')); return function(){}; }
       var orderByFn = fns.orderBy || null;
       var queryFn   = fns.query   || null;
       var onSnap    = fns.onSnapshot || null;
@@ -164,17 +164,27 @@ var affiliateService = {
         return onSnap(q, function(snap) {
           var list = [];
           snap.forEach(function(d) { list.push(Object.assign({ id: d.id }, d.data())); });
-          cb(list);
-        }, function() { cb([]); });
+          cb(list, null);
+        }, function(err) {
+          console.error('[Affiliate] onSnapshot 에러:', err && (err.code || err.message));
+          cb([], err || new Error('실시간 구독 오류'));
+        });
       }
       // compat
       var unsub = q.onSnapshot(function(snap) {
         var list = [];
         snap.forEach(function(d) { list.push(Object.assign({ id: d.id }, d.data())); });
-        cb(list);
-      }, function() { cb([]); });
+        cb(list, null);
+      }, function(err) {
+        console.error('[Affiliate] onSnapshot 에러(compat):', err && (err.code || err.message));
+        cb([], err || new Error('실시간 구독 오류'));
+      });
       return unsub;
-    } catch(e) { cb([]); return function(){}; }
+    } catch(e) {
+      console.error('[Affiliate] subscribe 초기화 오류:', e && e.message);
+      cb([], e || new Error('구독 초기화 오류'));
+      return function(){};
+    }
   },
 
   fetchById: function(db, id) {
@@ -444,6 +454,10 @@ function AffiliateList(props) {
   var filterText = _filter[0]; var setFilter = _filter[1];
   var _loading = useState(true);
   var loading = _loading[0]; var setLoading = _loading[1];
+  var _error = useState(null);
+  var loadError = _error[0]; var setLoadError = _error[1];
+  var _retryKey = useState(0);
+  var retryKey = _retryKey[0]; var setRetryKey = _retryKey[1];
 
   /* ── 드래그 정렬 상태 ── */
   var _localRows = useState(null);   /* 드래그 중 임시 순서 */
@@ -466,9 +480,25 @@ function AffiliateList(props) {
 
   // Firestore 구독 – sortOrder 있으면 오름차순, 없으면 createdAt 내림차순 보조 정렬
   useEffect(function() {
-    if (!firestore) { setLoading(false); return; }
+    if (!firestore) {
+      /* firestore prop이 null이면 initAffiliateReact의 폴링이 재렌더를 트리거할 때까지 대기 */
+      setLoading(true);
+      setLoadError(null);
+      return;
+    }
     setLoading(true);
-    var unsub = affiliateService.subscribe(firestore, function(list) {
+    setLoadError(null);
+    var unsub = affiliateService.subscribe(firestore, function(list, err) {
+      if (err) {
+        /* 에러 코드별 사용자 메시지 */
+        var msg = '제휴사 목록을 불러오지 못했습니다.';
+        if (err.code === 'permission-denied') msg = '접근 권한이 없습니다. 다시 로그인해 주세요.';
+        else if (err.code === 'unavailable')  msg = '네트워크 연결을 확인하고 다시 시도해 주세요.';
+        setLoadError(new Error(msg));
+        setLoading(false);
+        return;
+      }
+      setLoadError(null);
       /* 클라이언트 정렬: sortOrder ASC → createdAt DESC */
       var sorted = list.slice().sort(function(a, b) {
         var ao = a.sortOrder != null ? a.sortOrder : 999999;
@@ -483,7 +513,7 @@ function AffiliateList(props) {
       setLoading(false);
     });
     return function() { if (typeof unsub === 'function') unsub(); };
-  }, [firestore]);
+  }, [firestore, retryKey]);
 
   // 스크롤 감지 (위로 가기 버튼)
   useEffect(function() {
@@ -594,6 +624,21 @@ function AffiliateList(props) {
       {loading ? (
         <div className="flex justify-center py-16">
           <span className="inline-block h-10 w-10 rounded-full border-[3px] border-violet-200 border-t-violet-600 animate-spin" style={{ animationDuration: '0.85s' }} />
+        </div>
+      ) : loadError ? (
+        <div className="flex flex-col items-center py-16 gap-3">
+          <p className="text-center text-slate-400 text-sm">{loadError.message}</p>
+          <button
+            type="button"
+            className="open-riding-action-btn px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium hover:bg-violet-700"
+            onClick={function() {
+              setLoadError(null);
+              setLoading(true);
+              setRetryKey(function(k) { return k + 1; });
+            }}
+          >
+            다시 불러오기
+          </button>
         </div>
       ) : filtered.length === 0 ? (
         <p className="text-center text-slate-400 text-sm py-16">
