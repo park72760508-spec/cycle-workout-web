@@ -118,6 +118,8 @@ function formatRidingDistanceKm(n) {
 }
 
 /**
+ * 카카오 승인 본문을 문자·공백·줄바꿈까지 완벽히 재현.
+ * 헤더 문자열은 변수를 거치지 않고 리터럴에 직접 삽입하여 인코딩 오염 차단.
  * meetup_level: 폼에 저장된 문자열 그대로 (예: 중급(28~32km/h))
  */
 function buildMeetupOpenAlimtalkMessage(vars) {
@@ -128,7 +130,11 @@ function buildMeetupOpenAlimtalkMessage(vars) {
   const meetupLevel = String(vars.meetupLevel || "").trim() || "-";
   const ridingDistance = String(vars.ridingDistance || "").trim() || "0km";
 
-  const raw = `${MEETUP_OPEN_HEADER_LINE}
+  // ─────────────────────────────────────────────────────────────────
+  // 아래 리터럴은 카카오 승인 템플릿(UH_5528) 본문과 1:1 대응.
+  // 들여쓰기·공백·줄바꿈을 절대 변경하지 말 것.
+  // ─────────────────────────────────────────────────────────────────
+  const raw = `[STELVIO 오프라인 라이딩 모임 오픈 안내]
 
 안녕하세요 ${userName}님,
 요청하신 STELVIO 오프라인 라이딩 모임 일정이 오픈되어 안내해 드립니다.
@@ -144,7 +150,8 @@ ${userName}님께서 요청하신 일정에 맞춰 안전하게 라이딩을 준
 
 ※ 본 메시지는 'STELVIO 오프라인 라이딩 모임 오픈 알림'을 사전 신청하신 회원님께만 발송되는 정보성 안내 메시지입니다.`;
 
-  // 줄바꿈 정규화는 sendAlimtalkUnified 에서 templateKind 별로 처리
+  // \r\n → \n 정규화 (Windows 환경 소스 저장 시 CRLF 혼입 방지)
+  // 최종 줄바꿈 형식(LF/CRLF)은 sendAlimtalkUnified 에서 templateKind별로 결정
   return raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
