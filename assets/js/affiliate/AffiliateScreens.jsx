@@ -797,6 +797,15 @@ function AffiliateList(props) {
             );
           })}
         </ul>
+
+        {/* STELVIO 로고 */}
+        <div className="flex justify-center mt-4 mb-2">
+          <img
+            src="assets/img/stelvio.svg"
+            alt="STELVIO"
+            style={{ width: '52px', height: '52px', objectFit: 'contain' }}
+          />
+        </div>
         </>
       )}
 
