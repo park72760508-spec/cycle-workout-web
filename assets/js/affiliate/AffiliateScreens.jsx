@@ -658,7 +658,7 @@ function AffiliateList(props) {
           </div>
         )}
         {!filterText && (
-          <div className="mb-2 px-2 py-2 rounded-xl" style={{ background: 'linear-gradient(90deg,#ede9fe 0%,#f3e8ff 100%)', border: '1px solid #c4b5fd' }}>
+          <div className="mb-2 px-2 py-2 rounded-xl" style={{ background: 'linear-gradient(90deg,#f6f4ff 0%,#f9f4ff 100%)', border: '1px solid #e2dafe' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <p className="text-xs font-bold" style={{ color: '#6d28d9', flex: 1 }}>🎁 할인 적용 방법</p>
               <button
