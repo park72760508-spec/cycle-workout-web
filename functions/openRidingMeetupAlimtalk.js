@@ -20,6 +20,8 @@ const {
 /** 알리고 subject_1 / 본문 첫 줄 검수 템플릿명(대괄호 없음) — 카카오 승인명과 동일 */
 const MEETUP_ALIM_SUBJECT_KO = "STELVIO 오프라인 라이딩 모임 안내";
 const MEETUP_HEADER_LINE = `[${MEETUP_ALIM_SUBJECT_KO}]`;
+/** 승인 템플릿 두 번째 헤더 줄 — message_1 내 첫 번째 헤더 바로 다음 행 */
+const MEETUP_OPEN_HEADER_LINE = "[STELVIO 오프라인 라이딩 모임 오픈 안내]";
 
 /** 승인 템플릿 코드(운영 기본). env·Firestore로 덮어쓰기 가능 */
 const DEFAULT_MEETUP_OPEN_TPL_CODE = "UH_5528";
@@ -101,6 +103,7 @@ function buildMeetupOpenAlimtalkMessage(vars) {
   const ridingDistance = String(vars.ridingDistance || "").trim() || "0km";
 
   const raw = `${MEETUP_HEADER_LINE}
+${MEETUP_OPEN_HEADER_LINE}
 
 안녕하세요 ${userName}님,
 요청하신 STELVIO 오프라인 라이딩 모임 일정이 오픈되어 안내해 드립니다.
