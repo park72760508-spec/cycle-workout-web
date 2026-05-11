@@ -612,6 +612,26 @@ function AffiliateList(props) {
         paddingBottom: 'calc(4.5rem + (2 * var(--open-riding-glass-nav-inner-fixed-height, 58px)) + env(safe-area-inset-bottom, 0px))'
       }}
     >
+      {/* 중앙 워터마크 로고 */}
+      <div
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 0,
+          pointerEvents: 'none',
+          opacity: 0.08,
+        }}
+        aria-hidden="true"
+      >
+        <img
+          src="assets/img/stelvio.svg"
+          alt=""
+          style={{ width: '220px', height: '220px', objectFit: 'contain' }}
+        />
+      </div>
+
       {/* 검색 */}
       <div className="w-full mb-3 box-border">
         <input
@@ -814,14 +834,6 @@ function AffiliateList(props) {
           })}
         </ul>
 
-        {/* STELVIO 로고 */}
-        <div className="flex justify-center mt-4 mb-2">
-          <img
-            src="assets/img/stelvio.svg"
-            alt="STELVIO"
-            style={{ width: '78px', height: '78px', objectFit: 'contain' }}
-          />
-        </div>
         </>
       )}
 
