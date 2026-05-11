@@ -803,6 +803,28 @@ function applyInitialAuthRouting() {
       if (typeof applyScrollContainmentForScreen === 'function') {
         applyScrollContainmentForScreen('basecampScreen');
       }
+      // 자동 인증(캐시 세션 복구) 후에도 TOP10 팝업 표시
+      window.__basecampShownAfterAuth = true;
+      setTimeout(function tryShowTop10AfterAutoAuth() {
+        if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return;
+        if (window.__showScreenRedirectedToAuth === true) return;
+        if (window.__basecampShownAfterAuth !== true) return;
+        var bc = document.getElementById('basecampScreen');
+        if (!bc || !bc.classList.contains('active')) return;
+        var cur = window.currentUser;
+        if (typeof window.userNeedsMandatoryIntegratedSetup === 'function' && cur && window.userNeedsMandatoryIntegratedSetup(cur)) {
+          window.__deferWeeklyTop10UntilIntegratedDismiss = true;
+          var sm = document.getElementById('settingsModal');
+          if (typeof openSettingsModal === 'function' && (!sm || sm.style.display !== 'flex')) {
+            openSettingsModal();
+          }
+          return;
+        }
+        if (typeof window.fetchAndShowWeeklyTop10Modal === 'function') {
+          window.fetchAndShowWeeklyTop10Modal();
+          window.__basecampShownAfterAuth = false;
+        }
+      }, 900);
     } else {
       const connectionScreen = document.getElementById('connectionScreen');
       if (connectionScreen) {
