@@ -3,19 +3,18 @@
 export const ALIGO_KAKAO_NAT_REGION = "asia-northeast3" as const;
 
 /**
- * firebase-functions ^7: `vpcEgress` + `networkInterface` → Cloud Run 매니페스트 `vpc.networkInterfaces`.
+ * firebase-functions ^7: `vpcEgress: "ALL_TRAFFIC"` + `networkInterface` → Cloud Run Direct VPC Egress.
+ * 모든 알리고 카카오톡 API 호출 함수(meetupInviteAlimtalkHttpsRelay, missionSubscriptionAlimtalkHttpsRelay 등)는
+ * Cloud NAT 고정 IP를 통해 나가도록 항상 이 옵션을 사용한다.
  *
- * 🔧 배포 분석 단계 오류 예:
- *   Unexpected key `endpoints[..].vpc.networkInterfaces` … install a newer version of the Firebase CLI
- * → 우선순위: `npm install -g firebase-tools@latest` (NetworkInterfaces 지원 버전 필요)
+ * ※ 배포 전 firebase-tools 최신화 필요:
+ *    npm install -g firebase-tools@latest
  *
- * 📌 최신 CLI를 바로 못 올릴 경우에만 배포 직전:
- *    PowerShell: `$env:STELVIO_FUNCTIONS_USE_DIRECT_VPC='0'` 후 `firebase deploy`
- *    (region만 포함 → Direct VPC 미적용, 고정 egress NAT 코드 경로 미반영 가능)
+ * [이전 조건부 로직 제거 이유]
+ * STELVIO_FUNCTIONS_USE_DIRECT_VPC 환경변수가 배포 셸에 설정되지 않으면 VPC가 빠진 채로
+ * 배포되어 랜덤 egress IP(34.96.x)가 사용되고 알리고 code=-99 가 발생한다.
+ * Cloud NAT·VPC 인프라가 이미 구성돼 있으므로 항상 활성화한다.
  */
-
-const omitDirectVpcForDeploy =
-  String(process.env.STELVIO_FUNCTIONS_USE_DIRECT_VPC || "").trim() === "0";
 
 export type AligoKakaoCloudFunctionVpcEgressOpts = {
   readonly region: typeof ALIGO_KAKAO_NAT_REGION;
@@ -23,16 +22,14 @@ export type AligoKakaoCloudFunctionVpcEgressOpts = {
   readonly networkInterface?: { readonly network: string; readonly subnetwork: string };
 };
 
-export const ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS: AligoKakaoCloudFunctionVpcEgressOpts = omitDirectVpcForDeploy
-  ? { region: ALIGO_KAKAO_NAT_REGION }
-  : {
-      region: ALIGO_KAKAO_NAT_REGION,
-      vpcEgress: "ALL_TRAFFIC",
-      networkInterface: {
-        network: "default",
-        subnetwork: "default",
-      },
-    };
+export const ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS: AligoKakaoCloudFunctionVpcEgressOpts = {
+  region: ALIGO_KAKAO_NAT_REGION,
+  vpcEgress: "ALL_TRAFFIC",
+  networkInterface: {
+    network: "default",
+    subnetwork: "default",
+  },
+};
 
 /**
  * VPC+NAT 출구 진단용 공인 IPv4 (카카오톡 API 허용 IP 대조용; 알리고 kakaoapi와 동일 egress일 가능성이 큼).
