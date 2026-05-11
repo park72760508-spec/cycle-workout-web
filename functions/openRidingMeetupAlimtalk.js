@@ -139,7 +139,8 @@ ${userName}님께서 요청하신 일정에 맞춰 안전하게 라이딩을 준
 
 ※ 본 메시지는 'STELVIO 오프라인 라이딩 모임 오픈 알림'을 사전 신청하신 회원님께만 발송되는 정보성 안내 메시지입니다.`;
 
-  return raw.replace(/\r?\n/g, "\r\n");
+  // 줄바꿈 정규화는 sendAlimtalkUnified 에서 templateKind 별로 처리
+  return raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 /**
