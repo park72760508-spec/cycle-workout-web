@@ -18,12 +18,17 @@ const {
 } = require("./lib/aligoAlimtalkUnified");
 
 /**
- * 알리고 subject_1 — 카카오 승인 템플릿 제목(대괄호 없음).
- * message_1 첫 줄 MEETUP_OPEN_HEADER_LINE 의 괄호 내 텍스트와 반드시 일치해야 함.
+ * 알리고 subject_1 — 알리고에 등록된 카카오 승인 템플릿 제목(대괄호 없음).
+ * ※ 알리고 UH_5528 등록 제목은 "STELVIO 오프라인 라이딩 모임 안내" (오픈 없음).
+ *    message_1 첫 줄(MEETUP_OPEN_HEADER_LINE)은 별도로 "[...오픈 안내]" 형식 유지.
  */
-const MEETUP_ALIM_SUBJECT_KO = "STELVIO 오프라인 라이딩 모임 오픈 안내";
-/** 승인 템플릿 message_1 첫 줄 — 카카오 승인 본문과 바이트 단위로 일치해야 함 */
-const MEETUP_OPEN_HEADER_LINE = `[${MEETUP_ALIM_SUBJECT_KO}]`;
+const MEETUP_ALIM_SUBJECT_KO = "STELVIO 오프라인 라이딩 모임 안내";
+/**
+ * 승인 템플릿 message_1 첫 줄.
+ * 알리고 등록 본문 첫 줄: "[STELVIO 오프라인 라이딩 모임 오픈 안내]"
+ * subject_1 과 달리 본문에는 "오픈"이 포함되어 있음 — 둘을 일치시키면 안 됨.
+ */
+const MEETUP_OPEN_HEADER_LINE = "[STELVIO 오프라인 라이딩 모임 오픈 안내]";
 
 /** 승인 템플릿 코드(운영 기본). env·Firestore로 덮어쓰기 가능 */
 const DEFAULT_MEETUP_OPEN_TPL_CODE = "UH_5528";
