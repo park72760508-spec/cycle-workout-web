@@ -1,6 +1,6 @@
 /**
  * 오픈 라이딩 모임 생성 시 — 초대된 연락처(라이딩 친구)에게 카카오 알림톡(알리고) 발송.
- * 카카오 채널: @stelvio_ai · 승인 템플릿 코드: UH_5528 · 템플릿명: [STELVIO 오프라인 라이딩 모임 안내]
+ * 카카오 채널: @stelvio_ai · 승인 템플릿 코드: UH_5528 · 템플릿명: [STELVIO 오프라인 라이딩 모임 오픈 안내]
  * 대체문자: 미사용(failover N)
  *
  * tpl_code 기본값 UH_5528 — 다른 값이 필요하면 ALIGO_MEETUP_OPEN_TPL_CODE 또는 appConfig/aligo.meetup_open_tpl_code
@@ -17,11 +17,13 @@ const {
   sendAlimtalkUnified,
 } = require("./lib/aligoAlimtalkUnified");
 
-/** 알리고 subject_1 / 본문 첫 줄 검수 템플릿명(대괄호 없음) — 카카오 승인명과 동일 */
-const MEETUP_ALIM_SUBJECT_KO = "STELVIO 오프라인 라이딩 모임 안내";
-const MEETUP_HEADER_LINE = `[${MEETUP_ALIM_SUBJECT_KO}]`;
-/** 승인 템플릿 두 번째 헤더 줄 — message_1 내 첫 번째 헤더 바로 다음 행 */
-const MEETUP_OPEN_HEADER_LINE = "[STELVIO 오프라인 라이딩 모임 오픈 안내]";
+/**
+ * 알리고 subject_1 — 카카오 승인 템플릿 제목(대괄호 없음).
+ * message_1 첫 줄 MEETUP_OPEN_HEADER_LINE 의 괄호 내 텍스트와 반드시 일치해야 함.
+ */
+const MEETUP_ALIM_SUBJECT_KO = "STELVIO 오프라인 라이딩 모임 오픈 안내";
+/** 승인 템플릿 message_1 첫 줄 — 카카오 승인 본문과 바이트 단위로 일치해야 함 */
+const MEETUP_OPEN_HEADER_LINE = `[${MEETUP_ALIM_SUBJECT_KO}]`;
 
 /** 승인 템플릿 코드(운영 기본). env·Firestore로 덮어쓰기 가능 */
 const DEFAULT_MEETUP_OPEN_TPL_CODE = "UH_5528";
@@ -46,19 +48,36 @@ function getReceiverPhoneFromUserData(userData) {
   ).trim();
 }
 
-/** Firestore Timestamp | Date | string → 서울 달력 YYYY-MM-DD */
+/** Firestore Timestamp | Date | string | 직렬화된 {_seconds} → 서울 달력 YYYY-MM-DD */
 function toYmdSeoulFromRideDate(value) {
   if (value == null || value === "") return "";
   if (typeof value === "string") {
-    const m = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    const s = value.trim();
+    // YYYY-MM-DD
+    const m1 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
+    // M/D/YY, MM/DD/YYYY, M/D/YYYY
+    const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m2) {
+      const yyyy = m2[3].length === 2 ? `20${m2[3]}` : m2[3];
+      return `${yyyy}-${m2[1].padStart(2, "0")}-${m2[2].padStart(2, "0")}`;
+    }
   }
+  // Firestore Timestamp 직렬화 형태 { _seconds: number, _nanoseconds: number }
+  if (value && typeof value === "object" && typeof value._seconds === "number") {
+    const d = new Date(value._seconds * 1000);
+    if (!Number.isNaN(d.getTime())) {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d);
+    }
+  }
+  // Firestore Timestamp (live 인스턴스)
   if (typeof value?.toDate === "function") {
     const d = value.toDate();
     if (!Number.isNaN(d.getTime())) {
       return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d);
     }
   }
+  // JS Date 객체
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(value);
   }
@@ -85,7 +104,9 @@ function formatMeetupDatetimeForTemplate(rideDateRaw, departureTimeRaw) {
 }
 
 function formatRidingDistanceKm(n) {
-  const x = Number(n);
+  // "40km" 처럼 단위가 붙은 문자열 → 숫자만 추출 후 파싱
+  const raw = String(n ?? "").replace(/[^\d.]/g, "");
+  const x = raw !== "" ? Number(raw) : Number(n);
   if (!Number.isFinite(x) || x <= 0) return "0km";
   if (Number.isInteger(x)) return `${x}km`;
   return `${Math.round(x * 10) / 10}km`;
@@ -102,8 +123,7 @@ function buildMeetupOpenAlimtalkMessage(vars) {
   const meetupLevel = String(vars.meetupLevel || "").trim() || "-";
   const ridingDistance = String(vars.ridingDistance || "").trim() || "0km";
 
-  const raw = `${MEETUP_HEADER_LINE}
-${MEETUP_OPEN_HEADER_LINE}
+  const raw = `${MEETUP_OPEN_HEADER_LINE}
 
 안녕하세요 ${userName}님,
 요청하신 STELVIO 오프라인 라이딩 모임 일정이 오픈되어 안내해 드립니다.
@@ -161,7 +181,9 @@ function resolveFriendUidFromInviteMap(inviteFriendUidByPhone, normalizedPhoneDi
 }
 
 /**
- * 등록 친구 UID가 있으면 users 문서의 연락처로 수신 번호 결정, 없으면 invitedList 값 사용
+ * 등록 친구 UID가 있으면 users 문서의 연락처·성명으로 수신 번호·표시 이름 결정,
+ * 없으면 invitedList 값 사용.
+ * @returns {{ phone: string, source: string, nameFromProfile: string }}
  */
 async function resolveMeetupInviteReceiverPhone(db, normalizedDigits, inviteFriendUidByPhone) {
   const uid = resolveFriendUidFromInviteMap(inviteFriendUidByPhone, normalizedDigits);
@@ -171,14 +193,17 @@ async function resolveMeetupInviteReceiverPhone(db, normalizedDigits, inviteFrie
       const d = snap.exists ? snap.data() : null;
       if (d) {
         const fromUser = normalizePhoneDigitsServer(getReceiverPhoneFromUserData(d));
-        if (fromUser.length >= 8) return { phone: fromUser, source: "users_profile" };
+        const nameFromProfile = String(d.name || d.user_name || d.displayName || "").trim();
+        if (fromUser.length >= 8) {
+          return { phone: fromUser, source: "users_profile", nameFromProfile };
+        }
       }
     } catch (e) {
       console.warn("[meetupAlimtalk] users 전화 해석 실패 uid=%s %s", uid, e && e.message ? e.message : e);
     }
   }
-  if (normalizedDigits.length >= 8) return { phone: normalizedDigits, source: "invite_list" };
-  return { phone: normalizedDigits, source: "invalid" };
+  if (normalizedDigits.length >= 8) return { phone: normalizedDigits, source: "invite_list", nameFromProfile: "" };
+  return { phone: normalizedDigits, source: "invalid", nameFromProfile: "" };
 }
 
 /**
@@ -231,8 +256,9 @@ async function sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData) {
     const phone = phones[i];
     const resolved = await resolveMeetupInviteReceiverPhone(db, phone, inviteFriendUidByPhone);
     const recvDigits = normalizePhoneDigitsServer(resolved.phone);
+    // 이름 우선순위: ① inviteDisplayByPhone(초대 시 입력) ② users 프로필 성명 ③ "회원"
     const displayFromMap = resolveInviteDisplayName(inviteDisplayByPhone, phone);
-    const userName = displayFromMap || "회원";
+    const userName = displayFromMap || resolved.nameFromProfile || "회원";
     const message = buildMeetupOpenAlimtalkMessage({
       userName,
       meetupName,
