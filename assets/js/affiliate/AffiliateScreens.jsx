@@ -612,26 +612,6 @@ function AffiliateList(props) {
         paddingBottom: 'calc(4.5rem + (2 * var(--open-riding-glass-nav-inner-fixed-height, 58px)) + env(safe-area-inset-bottom, 0px))'
       }}
     >
-      {/* 중앙 워터마크 로고 */}
-      <div
-        style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 0,
-          pointerEvents: 'none',
-          opacity: 0.08,
-        }}
-        aria-hidden="true"
-      >
-        <img
-          src="assets/img/stelvio.svg"
-          alt=""
-          style={{ width: '220px', height: '220px', objectFit: 'contain' }}
-        />
-      </div>
-
       {/* 검색 */}
       <div className="w-full mb-3 box-border">
         <input
@@ -766,7 +746,7 @@ function AffiliateList(props) {
                   type="button"
                   disabled={!isClickable && !isAdmin}
                   className={[
-                    'open-riding-action-btn open-riding-group-list-row-btn w-full flex items-center rounded-2xl border px-3 py-3 text-left shadow-sm transition box-border',
+                    'open-riding-action-btn open-riding-group-list-row-btn relative w-full flex items-center rounded-2xl border px-3 py-3 text-left shadow-sm transition box-border overflow-hidden',
                     canDrag ? 'pl-8 gap-3' : 'gap-3',
                     isClickable || isAdmin
                       ? 'bg-white border-slate-200 hover:bg-slate-50/90'
@@ -778,8 +758,28 @@ function AffiliateList(props) {
                   }}
                   aria-disabled={!isClickable && !isAdmin}
                 >
+                  {/* STELVIO 워터마크 */}
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none',
+                      zIndex: 0,
+                      opacity: 0.07,
+                    }}
+                  >
+                    <img
+                      src="assets/img/stelvio.svg"
+                      alt=""
+                      style={{ width: '56px', height: '56px', objectFit: 'contain' }}
+                    />
+                  </span>
                   {/* 아바타 – 상세화면과 동일: object-contain으로 이미지 전체 표시 */}
-                  <span className="relative shrink-0">
+                  <span className="relative shrink-0" style={{ zIndex: 1 }}>
                     <span className={[
                       'relative inline-block h-14 w-14 rounded-full ring-2 overflow-hidden',
                       isClickable || isAdmin
@@ -805,7 +805,7 @@ function AffiliateList(props) {
                     </span>
                   </span>
                   {/* 텍스트 */}
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1" style={{ position: 'relative', zIndex: 1 }}>
                     <span className={['block font-semibold truncate text-[15px]', isClickable || isAdmin ? 'text-slate-900' : 'text-slate-400'].join(' ')}>
                       {aff.name || '(이름 없음)'}
                     </span>
