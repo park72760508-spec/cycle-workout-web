@@ -39,15 +39,31 @@ export interface AligoAlimtalkConfig {
   button_1?: string;
 }
 
-/** 모임 알림톡 기본 버튼 — 환경변수·Firestore 미설정 시 필수 Fallback */
+/**
+ * 모임 알림톡 기본 버튼 — 환경변수(ALIGO_MEETUP_OPEN_BUTTON_1) 또는
+ * Firestore(appConfig/aligo.meetup_open_button_1) 미설정 시 자동 적용되는 Fallback.
+ *
+ * ⚠️ 아래 값은 카카오 채널 관리자 센터에 실제 승인된 버튼 정보와 한 글자도 틀리면 안 됩니다.
+ *
+ *  [반드시 확인해야 할 3가지]
+ *  1) name     : 카카오 채널 관리자 센터에 등록된 버튼명 그대로.
+ *                "참석 하기"(띄어쓰기 있음) vs "참석하기"(없음) — 완전히 일치해야 함.
+ *                현재 기본값: "참석하기" (띄어쓰기 없음)
+ *  2) linkType : "WL" = 웹링크, "AL" = 앱링크 — 등록된 버튼 타입과 반드시 일치.
+ *                현재 기본값: "WL" (웹링크)
+ *  3) URL      : linkMo(모바일) / linkPc(PC) — 등록 시 입력한 URL 그대로.
+ *
+ *  위 값이 실제 등록 정보와 다를 경우 "메시지가 템플릿과 일치하지않음" 에러가 발생합니다.
+ *  실제 버튼명이 "참석 하기"(띄어쓰기 있음)라면 name 값을 "참석 하기"로 변경하세요.
+ */
 const DEFAULT_MEETUP_OPEN_BUTTON_1 = JSON.stringify({
   button: [
     {
-      name: "참석 하기",
+      name: "참석하기",
       linkType: "WL",
       linkTypeName: "웹링크",
-      linkMo: "https://stelvio.ai",
-      linkPc: "https://stelvio.ai",
+      linkMo: "https://stelvio.ai.kr",
+      linkPc: "https://stelvio.ai.kr",
     },
   ],
 });
@@ -193,17 +209,8 @@ export async function sendAlimtalkUnified(
   }
   const recvName = safeAlimtalkDisplayNameUnified(args.displayName || "");
 
-  /**
-   * 줄바꿈 정책:
-   *   MISSION_SUBSCRIPTION → \r\n (CRLF): 알리고에 CRLF로 등록된 UH_2120 계열
-   *   MEETUP_OFFLINE_OPEN  → \n   (LF):   알리고에 LF로 등록된 UH_5528 계열
-   * ※ 미션은 CRLF로 정상 수신 확인됨. 모임은 구조 동일 메시지임에도 지속 실패하여
-   *    LF 전환으로 원인 검증.
-   */
-  const messageOut =
-    args.templateKind === ALIMTALK_TEMPLATE.MEETUP_OFFLINE_OPEN
-      ? args.message.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-      : args.message.replace(/\r?\n/g, "\r\n");
+  // 카카오 알림톡 표준 줄바꿈: CRLF(\r\n) 통일 — 모든 템플릿 동일 적용
+  const messageOut = args.message.replace(/\r?\n/g, "\r\n");
 
   console.log(
     `${args.logTag || "[Aligo unified]"} message_1 진단 (앞80자): ${JSON.stringify(messageOut.slice(0, 80))}`
