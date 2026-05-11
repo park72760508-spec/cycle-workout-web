@@ -459,6 +459,10 @@ function AffiliateList(props) {
   var _retryKey = useState(0);
   var retryKey = _retryKey[0]; var setRetryKey = _retryKey[1];
 
+  /* ── 할인 안내 접기/펼치기 ── */
+  var _discountOpen = useState(false);
+  var discountOpen = _discountOpen[0]; var setDiscountOpen = _discountOpen[1];
+
   /* ── 드래그 정렬 상태 ── */
   var _localRows = useState(null);   /* 드래그 중 임시 순서 */
   var localRows = _localRows[0]; var setLocalRows = _localRows[1];
@@ -653,10 +657,19 @@ function AffiliateList(props) {
             순서 저장 중…
           </div>
         )}
-        {canDrag && !filterText && (
+        {!filterText && (
           <div className="mb-2 px-2 py-2 rounded-xl" style={{ background: 'linear-gradient(90deg,#ede9fe 0%,#f3e8ff 100%)', border: '1px solid #c4b5fd' }}>
-            <p className="text-xs font-bold" style={{ color: '#6d28d9' }}>🎁 할인 적용 방법</p>
-            <p className="mt-0.5 whitespace-nowrap" style={{ color: '#7c3aed', fontSize: 'clamp(9px, 2.8vw, 12px)' }}>적용 받을 '제휴사 배너'를 클릭하여 직원에게 제시</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <p className="text-xs font-bold" style={{ color: '#6d28d9', flex: 1 }}>🎁 할인 적용 방법</p>
+              <button
+                type="button"
+                onClick={function() { setDiscountOpen(!discountOpen); }}
+                style={{ background: 'none', border: 'none', color: '#7c3aed', fontSize: '16px', fontWeight: 'bold', lineHeight: 1, cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}
+              >{discountOpen ? '-' : '+'}</button>
+            </div>
+            {discountOpen && (
+              <p className="mt-0.5 whitespace-nowrap" style={{ color: '#7c3aed', fontSize: 'clamp(9px, 2.8vw, 12px)' }}>적용 받을 '제휴사 배너'를 클릭하여 직원에게 제시</p>
+            )}
           </div>
         )}
 
