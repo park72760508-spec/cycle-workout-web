@@ -35,7 +35,22 @@ export interface AligoAlimtalkConfig {
   apikey: string;
   userid: string;
   token: string;
+  /** 알림톡 버튼 JSON (알리고 button_1 파라미터). 미설정 시 기본 '참석 하기' 버튼 적용 */
+  button_1?: string;
 }
+
+/** 모임 알림톡 기본 버튼 — 환경변수·Firestore 미설정 시 필수 Fallback */
+const DEFAULT_MEETUP_OPEN_BUTTON_1 = JSON.stringify({
+  button: [
+    {
+      name: "참석 하기",
+      linkType: "WL",
+      linkTypeName: "웹링크",
+      linkMo: "https://stelvio.ai",
+      linkPc: "https://stelvio.ai",
+    },
+  ],
+});
 
 /** 빈 값·단일 비(문자/숫자) 기호 등 recvname 오류 유발값 방지 — PointReward·모임 동일 규칙 */
 export function safeAlimtalkDisplayNameUnified(raw: unknown): string {
@@ -119,6 +134,19 @@ export async function loadAligoAlimtalkConfig(
     );
   }
 
+  // ── button_1: MEETUP_OFFLINE_OPEN 전용 ──────────────────────────────────
+  // 우선순위: env(ALIGO_MEETUP_OPEN_BUTTON_1) > Firestore(appConfig/aligo.meetup_open_button_1)
+  //           > 기본값(DEFAULT_MEETUP_OPEN_BUTTON_1 — '참석 하기' 웹링크 버튼)
+  let button1: string | undefined;
+  if (kind === ALIMTALK_TEMPLATE.MEETUP_OFFLINE_OPEN) {
+    button1 = String(
+      process.env.ALIGO_MEETUP_OPEN_BUTTON_1 ||
+        (appConfig as { meetup_open_button_1?: unknown }).meetup_open_button_1 ||
+        (appConfig as { meetupOpenButton1?: unknown }).meetupOpenButton1 ||
+        DEFAULT_MEETUP_OPEN_BUTTON_1
+    ).trim();
+  }
+
   const missing: string[] = [];
   if (!senderkey) missing.push("senderkey(ALIGO_SENDER_KEY 또는 appConfig/aligo.senderkey)");
   if (!sender) missing.push("sender(ALIGO_SENDER 또는 appConfig/aligo.sender)");
@@ -139,6 +167,7 @@ export async function loadAligoAlimtalkConfig(
     apikey,
     userid,
     token,
+    ...(button1 !== undefined ? { button_1: button1 } : {}),
   };
 }
 
@@ -201,10 +230,10 @@ export async function sendAlimtalkUnified(
     const btn = String(process.env.ALIGO_ALIMTALK_BUTTON_1 || "").trim();
     if (btn) body.button_1 = btn;
   } else {
+    // MEETUP_OFFLINE_OPEN: emtitle(선택) + button_1(필수 — loadAligoAlimtalkConfig 에서 기본값 보장)
     const em = String(process.env.ALIGO_MEETUP_ALIMTALK_EMTITLE_1 || "").trim();
     if (em) body.emtitle_1 = em;
-    const btn = String(process.env.ALIGO_MEETUP_OPEN_BUTTON_1 || "").trim();
-    if (btn) body.button_1 = btn;
+    if (cfg.button_1) body.button_1 = cfg.button_1;
   }
 
   console.log(
