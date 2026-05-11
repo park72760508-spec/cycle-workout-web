@@ -769,13 +769,13 @@ function AffiliateList(props) {
                       justifyContent: 'center',
                       pointerEvents: 'none',
                       zIndex: 0,
-                      opacity: 0.07,
+                      opacity: 0.10,
                     }}
                   >
                     <img
                       src="assets/img/stelvio.svg"
                       alt=""
-                      style={{ width: '56px', height: '56px', objectFit: 'contain' }}
+                      style={{ width: '72px', height: '72px', objectFit: 'contain' }}
                     />
                   </span>
                   {/* 아바타 – 상세화면과 동일: object-contain으로 이미지 전체 표시 */}
