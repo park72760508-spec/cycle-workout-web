@@ -654,7 +654,10 @@ function AffiliateList(props) {
           </div>
         )}
         {canDrag && !filterText && (
-          <p className="text-xs text-slate-400 mb-2 px-1">🎁 할인 적용 방법 : 매장에서 결제하실 때 현재 보고 계신 '제휴사 할인 배너'를 직원에게 제시해 주세요.</p>
+          <div className="mb-2 px-2 py-2 rounded-xl" style={{ background: 'linear-gradient(90deg,#ede9fe 0%,#f3e8ff 100%)', border: '1px solid #c4b5fd' }}>
+            <p className="text-xs font-bold" style={{ color: '#6d28d9' }}>🎁 할인 적용 방법</p>
+            <p className="text-xs mt-0.5" style={{ color: '#7c3aed' }}>적용 받을 '제휴사 할인 배너'를 클릭하여 직원에게 제시해 주세요.</p>
+          </div>
         )}
 
         <ul className="space-y-2">
