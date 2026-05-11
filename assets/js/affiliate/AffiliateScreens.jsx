@@ -654,7 +654,7 @@ function AffiliateList(props) {
           </div>
         )}
         {canDrag && !filterText && (
-          <p className="text-xs text-slate-400 mb-2 px-1">☰ 아이콘을 드래그하여 순서를 변경할 수 있습니다.</p>
+          <p className="text-xs text-slate-400 mb-2 px-1">🎁 할인 적용 방법 : 매장에서 결제하실 때 현재 보고 계신 '제휴사 할인 배너'를 직원에게 제시해 주세요.</p>
         )}
 
         <ul className="space-y-2">
