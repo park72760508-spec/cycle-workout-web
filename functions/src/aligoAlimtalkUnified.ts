@@ -163,7 +163,22 @@ export async function sendAlimtalkUnified(
     throw new Error("알림톡 수신자 번호가 비어 있습니다.");
   }
   const recvName = safeAlimtalkDisplayNameUnified(args.displayName || "");
-  const messageOut = args.message.replace(/\r?\n/g, "\r\n");
+
+  /**
+   * 줄바꿈 정책:
+   *   MISSION_SUBSCRIPTION → \r\n (CRLF): 알리고에 CRLF로 등록된 UH_2120 계열
+   *   MEETUP_OFFLINE_OPEN  → \n   (LF):   알리고에 LF로 등록된 UH_5528 계열
+   * ※ 미션은 CRLF로 정상 수신 확인됨. 모임은 구조 동일 메시지임에도 지속 실패하여
+   *    LF 전환으로 원인 검증.
+   */
+  const messageOut =
+    args.templateKind === ALIMTALK_TEMPLATE.MEETUP_OFFLINE_OPEN
+      ? args.message.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+      : args.message.replace(/\r?\n/g, "\r\n");
+
+  console.log(
+    `${args.logTag || "[Aligo unified]"} message_1 진단 (앞80자): ${JSON.stringify(messageOut.slice(0, 80))}`
+  );
 
   const body: Record<string, string> = {
     senderkey: cfg.senderkey,
