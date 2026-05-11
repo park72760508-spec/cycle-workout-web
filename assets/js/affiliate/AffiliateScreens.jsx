@@ -803,7 +803,7 @@ function AffiliateList(props) {
           <img
             src="assets/img/stelvio.svg"
             alt="STELVIO"
-            style={{ width: '52px', height: '52px', objectFit: 'contain' }}
+            style={{ width: '78px', height: '78px', objectFit: 'contain' }}
           />
         </div>
         </>
