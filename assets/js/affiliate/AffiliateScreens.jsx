@@ -60,6 +60,30 @@ function affiliateShowToast(msg) {
 }
 
 /**
+ * 텍스트 내 URL을 찾아 클릭 가능한 <a> 링크로 변환.
+ * http(s)://로 시작하는 URL만 인식. XSS 방지를 위해 href 는 http/https 만 허용.
+ */
+function affiliateRenderTextWithLinks(text) {
+  if (!text) return null;
+  var URL_RE = /(https?:\/\/[^\s　\u3000"'<>）】」』\]]+)/g;
+  var parts = String(text).split(URL_RE);
+  return parts.map(function(part, i) {
+    if (URL_RE.test(part)) {
+      URL_RE.lastIndex = 0;
+      return React.createElement('a', {
+        key: i,
+        href: part,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        style: { color: '#7c3aed', wordBreak: 'break-all', textDecoration: 'underline' }
+      }, part);
+    }
+    URL_RE.lastIndex = 0;
+    return part;
+  });
+}
+
+/**
  * Canvas API를 이용한 이미지 압축 및 리사이즈
  * @param {File}   file    - 원본 이미지 파일
  * @param {number} maxPx   - 긴 변 최대 픽셀 (초과 시 비율 유지하며 축소)
@@ -781,10 +805,10 @@ function AffiliateList(props) {
                   {/* 아바타 – 상세화면과 동일: object-contain으로 이미지 전체 표시 */}
                   <span className="relative shrink-0" style={{ zIndex: 1 }}>
                     <span className={[
-                      'relative inline-block h-14 w-14 rounded-full ring-2 overflow-hidden',
+                      'relative inline-block h-14 w-14 rounded-full ring-2 overflow-hidden bg-white',
                       isClickable || isAdmin
-                        ? 'ring-violet-200 bg-gradient-to-br from-violet-50 to-slate-100'
-                        : 'ring-slate-200 bg-slate-100'
+                        ? 'ring-violet-200'
+                        : 'ring-slate-200'
                     ].join(' ')}>
                       {aff.photoUrl
                         ? <img src={aff.photoUrl} alt=""
@@ -1360,7 +1384,7 @@ function AffiliateDetail(props) {
         <div className="relative z-[1] p-4">
           <div className="flex items-start gap-3">
             {/* 아바타 – object-contain으로 이미지 전체 표시 */}
-            <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100">
+            <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-white">
               {aff.photoUrl
                 ? <img src={String(aff.photoUrl)} alt="" decoding="async"
                     style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center' }} />
@@ -1395,7 +1419,9 @@ function AffiliateDetail(props) {
 
           {/* 제휴 소개 – 그룹 상세처럼 히어로 카드 내부에 배치 */}
           {aff.intro ? (
-            <p className="text-sm text-slate-700 mt-3 whitespace-pre-wrap m-0 leading-relaxed">{aff.intro}</p>
+            <p className="text-sm text-slate-700 mt-3 whitespace-pre-wrap m-0 leading-relaxed">
+              {affiliateRenderTextWithLinks(aff.intro)}
+            </p>
           ) : (
             <p className="text-sm text-slate-400 mt-3 m-0">등록된 소개가 없습니다.</p>
           )}
