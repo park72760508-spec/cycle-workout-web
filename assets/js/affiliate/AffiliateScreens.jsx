@@ -736,34 +736,34 @@ function AffiliateList(props) {
                 key={aff.id}
                 data-aff-drag-id={aff.id}
                 className="relative"
-                draggable={canDrag}
-                onDragStart={canDrag ? function(e) {
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', aff.id);
-                  dragSrcRef.current = aff.id;
-                  setDraggingId(aff.id);
-                  if (!localRows) setLocalRows(rows.slice());
-                } : undefined}
                 onDragOver={canDrag ? function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } : undefined}
                 onDragEnter={canDrag ? function() { doReorder(dragSrcRef.current, aff.id); } : undefined}
-                onDragEnd={canDrag ? function() { doSaveOrder(); } : undefined}
-                onTouchStart={canDrag ? function() {
-                  touchRef.current = { id: aff.id };
-                  dragSrcRef.current = aff.id;
-                  setDraggingId(aff.id);
-                  if (!localRows) setLocalRows(rows.slice());
-                } : undefined}
                 style={{
                   opacity:   isDragging ? 0.45 : 1,
                   transform: isDragging ? 'scale(0.97)' : 'none',
                   transition: 'opacity 0.15s, transform 0.15s'
                 }}
               >
-                {/* 드래그 핸들 (관리자 + 필터 없을 때만) */}
+                {/* 드래그 핸들 (관리자 + 필터 없을 때만) — 핸들에서만 드래그 시작 */}
                 {canDrag && (
                   <span
-                    className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center text-slate-300 cursor-grab select-none z-10"
+                    className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center text-slate-300 cursor-grab active:cursor-grabbing select-none z-10"
                     style={{ touchAction: 'none' }}
+                    draggable={true}
+                    onDragStart={function(e) {
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', aff.id);
+                      dragSrcRef.current = aff.id;
+                      setDraggingId(aff.id);
+                      if (!localRows) setLocalRows(rows.slice());
+                    }}
+                    onDragEnd={function() { doSaveOrder(); }}
+                    onTouchStart={function() {
+                      touchRef.current = { id: aff.id };
+                      dragSrcRef.current = aff.id;
+                      setDraggingId(aff.id);
+                      if (!localRows) setLocalRows(rows.slice());
+                    }}
                     aria-hidden="true"
                   >
                     <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor">
@@ -780,6 +780,7 @@ function AffiliateList(props) {
                 <button
                   type="button"
                   disabled={!isClickable && !isAdmin}
+                  draggable={false}
                   className={[
                     'open-riding-action-btn open-riding-group-list-row-btn relative w-full flex items-center rounded-2xl border px-3 py-3 text-left shadow-sm transition box-border overflow-hidden',
                     canDrag ? 'pl-8 gap-3' : 'gap-3',
