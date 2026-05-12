@@ -83,7 +83,8 @@
       DailySummary ? React.createElement(DailySummary, {
         selectedDate: selectedDate,
         logs: logsForSelectedDate,
-        onShowDetail: openDetailSheet
+        onShowDetail: openDetailSheet,
+        userProfile: data.userProfile
       }) : null,
       MonthlyDashboard ? React.createElement(MonthlyDashboard, {
         trainingLogs: trainingLogs,

@@ -32,7 +32,7 @@
     return Math.round((d / (t / 3600)) * 100) / 100;
   }
 
-  function mergeLogsForSummary(logs) {
+  function mergeLogsForSummary(logs, userProfile) {
     if (!logs || logs.length === 0) return null;
     if (logs.length === 1) {
       var log = logs[0];
@@ -45,7 +45,7 @@
       return {
         distance: dist,
         durationSec: sec,
-        tss: log.tss != null ? Number(log.tss) : 0,
+        tss: getEffectiveTss(log, userProfile),
         if: log.if != null ? Number(log.if) : null,
         kj: log.kilojoules != null ? Number(log.kilojoules) : 0,
         avgWatts: log.avg_watts != null ? Number(log.avg_watts) : null,
@@ -66,7 +66,7 @@
       var l = logs[i];
       var s = Number(l.duration_sec != null ? l.duration_sec : (l.time != null ? l.time : l.duration)) || 0;
       totalSec += s;
-      totalTSS += Number(l.tss || 0);
+      totalTSS += getEffectiveTss(l, userProfile);
       totalDist += Number(l.distance_km || 0);
       totalKj += Number(l.kilojoules || 0);
       sumElev += Number(l.elevation_gain || 0);
@@ -99,6 +99,38 @@
     };
   }
 
+  /**
+   * 저장된 TSS가 유효 범위(0 < tss <= 500)면 그대로 사용.
+   * 구버전 계산 버그로 인해 500 초과 값이 저장된 경우 calculateStelvioRevisedTSS로 재계산.
+   * 재계산 불가 시 _saniTss(< 1200)로 폴백.
+   */
+  function getEffectiveTss(log, userProfile) {
+    var rawTss = log.tss != null ? Number(log.tss) : 0;
+    if (rawTss > 0 && rawTss <= 500) return rawTss;
+
+    // 500 초과: 구버전 버그값 → calculateStelvioRevisedTSS로 재계산 시도
+    if (typeof window.calculateStelvioRevisedTSS === 'function') {
+      var prof = userProfile;
+      if (!prof) {
+        var cu = window.currentUser || (function() {
+          try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; }
+        })();
+        if (cu) prof = { ftp: Number(cu.ftp || 0), weight: Number(cu.weight || cu.weightKg || 0) };
+      }
+      var ftp    = prof ? Number(prof.ftp    || 0) : 0;
+      var weight = prof ? Number(prof.weight || 0) : 0;
+      var sec    = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
+      var ap     = Number(log.avg_watts    || 0);
+      var np     = Number(log.weighted_watts || log.avg_watts || 0);
+      if (ftp > 0 && weight > 0 && sec > 0 && ap > 0) {
+        return window.calculateStelvioRevisedTSS(sec, ap, np, ftp, weight);
+      }
+    }
+
+    // 재계산 불가: 월간 로직(_saniTss)과 동일하게 0 < tss < 1200 범위만 허용
+    return (rawTss > 0 && rawTss < 1200) ? rawTss : 0;
+  }
+
   function formatDateKey(key) {
     if (!key || key.length < 10) return key;
     var parts = key.split('-');
@@ -110,12 +142,13 @@
     var selectedDate = props.selectedDate;
     var logs = props.logs || [];
     var onShowDetail = props.onShowDetail;
+    var userProfile = props.userProfile || null;
 
     if (!selectedDate || logs.length === 0) {
       return null;
     }
 
-    var summary = mergeLogsForSummary(logs);
+    var summary = mergeLogsForSummary(logs, userProfile);
 
     return React.createElement('div', { className: 'card journal-daily-summary' },
       React.createElement('div', { className: 'journal-daily-summary-header' },
