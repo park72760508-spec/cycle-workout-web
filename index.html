@@ -12448,17 +12448,22 @@
               });
               
               // 같은 날 Strava와 Stelvio가 둘 다 있으면 Strava 훈련 로그 우선 표시, Stelvio만 있으면 Stelvio 표시
+              // 단, Strava TSS 합이 0이면 Stelvio 로그도 보존 (TSS 계산용)
               Object.keys(touchedDateKeys).forEach(function(dateKey) {
                 var arr = miniCalendarStateJournal.trainingLogs[dateKey];
                 if (!arr || arr.length === 0) return;
-                var hasStrava = arr.some(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
-                if (hasStrava) {
-                  var beforeCount = arr.length;
-                  miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
-                  var afterCount = miniCalendarStateJournal.trainingLogs[dateKey].length;
-                  if (beforeCount !== afterCount) {
-                    console.log('[MiniCalendarJournal] Strava 우선 적용:', { dateKey: dateKey, before: beforeCount, after: afterCount });
+                var stravaLogs = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
+                if (stravaLogs.length > 0) {
+                  var stravaTssSum = stravaLogs.reduce(function(s, l) { return s + (Number(l.tss) || 0); }, 0);
+                  if (stravaTssSum > 0) {
+                    var beforeCount = arr.length;
+                    miniCalendarStateJournal.trainingLogs[dateKey] = stravaLogs;
+                    var afterCount = miniCalendarStateJournal.trainingLogs[dateKey].length;
+                    if (beforeCount !== afterCount) {
+                      console.log('[MiniCalendarJournal] Strava 우선 적용:', { dateKey: dateKey, before: beforeCount, after: afterCount });
+                    }
                   }
+                  // Strava TSS=0이면 원본(Strava+Stelvio 모두) 유지 — Stelvio TSS로 계산 가능하도록
                 }
                 // Stelvio만 있으면 그대로 유지 (필터 없음)
               });
@@ -12999,18 +13004,24 @@
         });
         
         // 같은 날 Strava 있으면 Strava 우선 표시, Stelvio만 있으면 Stelvio 표시
+        // 단, Strava TSS 합이 0이면 Stelvio 로그도 보존 (TSS 계산용)
         Object.keys(miniCalendarStateJournal.trainingLogs).forEach(function(dateKey) {
           var arr = miniCalendarStateJournal.trainingLogs[dateKey];
           if (!arr || arr.length === 0) return;
-          var hasStrava = arr.some(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
-          if (hasStrava) {
-            var beforeCount = arr.length;
-            miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
-            var afterCount = miniCalendarStateJournal.trainingLogs[dateKey].length;
-            if (beforeCount !== afterCount) {
-              console.log('[MiniCalendarJournal] Strava 우선 적용 (병합 중):', { dateKey: dateKey, before: beforeCount, after: afterCount });
+          var stravaLogs = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
+          if (stravaLogs.length > 0) {
+            var stravaTssSum = stravaLogs.reduce(function(s, l) { return s + (Number(l.tss) || 0); }, 0);
+            if (stravaTssSum > 0) {
+              var beforeCount = arr.length;
+              miniCalendarStateJournal.trainingLogs[dateKey] = stravaLogs;
+              var afterCount = miniCalendarStateJournal.trainingLogs[dateKey].length;
+              if (beforeCount !== afterCount) {
+                console.log('[MiniCalendarJournal] Strava 우선 적용 (병합 중):', { dateKey: dateKey, before: beforeCount, after: afterCount });
+              }
             }
+            // Strava TSS=0이면 원본(Strava+Stelvio 모두) 유지 — Stelvio TSS로 계산 가능하도록
           }
+          // Stelvio만 있으면 그대로 유지 (필터 없음)
         });
       }
 
@@ -13152,6 +13163,7 @@
               var _tssRaw = Number(log.tss) || 0;
               allMonthlyLogs.push({
                 date: dateKey,
+                source: log.source || '',
                 distance: log.distance_km != null ? Number(log.distance_km) : 0,
                 duration: durationStr,
                 IF: log.if != null ? Number(log.if) : null,
@@ -13243,6 +13255,7 @@
             var _tssRaw = Number(log.tss) || 0;
             allMonthlyLogs.push({
               date: dateKey,
+              source: log.source || '',
               distance: log.distance_km != null ? Number(log.distance_km) : 0,
               duration: durationStr,
               IF: log.if != null ? Number(log.if) : null,
