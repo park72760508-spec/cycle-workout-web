@@ -121,10 +121,11 @@
           var ss = s % 60;
           allLogs.push({
             date: dk,
+            source: l.source || '',
             distance: l.distance_km != null ? Number(l.distance_km) : 0,
             duration: m + '분 ' + ss + '초',
             IF: l.if,
-            TSS: l.tss,
+            TSS: (function() { var t = Number(l.tss) || 0; return (t > 0 && t < 1200) ? t : 0; })(),
             kJ: l.kilojoules,
             avgCadence: l.avg_cadence,
             avgHeartRate: l.avg_hr,
