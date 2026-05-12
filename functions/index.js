@@ -942,12 +942,21 @@ function getStravaClientSecret() {
 /** STELVIO rTSS: 프로필 체중 없을 때 가정 체중 (kJ 가드레일·W/kg 가중치용) */
 const STELVIO_RTSS_DEFAULT_WEIGHT_KG = 70;
 
+/**
+ * STELVIO 글로벌 개정 TSS (rTSS) — W/kg 가중치
+ * [수정] kJ 가드레일 재설계 (클라이언트 stelvioRtss.js와 동일한 로직 적용)
+ *  구버전 wPerKg < 2.5 → tssPerKJ > 15.0, wPerKg > 4.0 → tssPerKJ < 6.0 로직은
+ *  정상 범위(0.05~0.8 TSS/kJ)보다 10~100배 높아 비정상 파워 데이터 입력 시 수천~수만 TSS 발생.
+ *  (예: 2026-05-09~12 기간 TSS 4173·9927·9927.2 버그의 원인)
+ *  변경 후: 1.5 TSS/kJ 단일 상한 + 500 TSS 절대 상한으로 통일.
+ */
 function calculateStelvioRevisedTSS(durationSec, avgPower, np, ftp, weight) {
   const d = Number(durationSec);
-  const npN = Number(np);
+  // 비정상 파워 데이터 방어: 최대 2500W (세계 최고 스프린터 피크 파워 수준)
+  const npN = Math.min(Number(np), 2500);
   const ftpN = Number(ftp);
   const w = Number(weight);
-  const avgN = Number(avgPower);
+  const avgN = Math.min(Number(avgPower), 2500);
   if (!ftpN || !w || ftpN <= 0 || w <= 0) return 0;
   if (npN <= 0 || avgN <= 0) return 0;
   if (!d || d <= 0) return 0;
@@ -959,11 +968,14 @@ function calculateStelvioRevisedTSS(durationSec, avgPower, np, ftp, weight) {
   let wFactor = Math.pow(3.0 / wPerKg, 0.15);
   wFactor = Math.max(0.8, Math.min(1.2, wFactor));
   let adjustedTSS = baseTSS * wFactor;
+  // TSS/kJ 상한: 정상 라이딩 최대 허용치(1.5 TSS/kJ) 초과 시 보정
   const tssPerKJ = adjustedTSS / totalKJ;
-  if (wPerKg < 2.5) {
-    if (tssPerKJ > 15.0) adjustedTSS = totalKJ * 15.0;
-  } else if (wPerKg > 4.0) {
-    if (tssPerKJ < 6.0) adjustedTSS = totalKJ * 6.0;
+  if (tssPerKJ > 1.5) {
+    adjustedTSS = totalKJ * 1.5;
+  }
+  // 단일 세션 절대 상한: 약 8시간 극한 레이스 기준 500 TSS
+  if (adjustedTSS > 500) {
+    adjustedTSS = 500;
   }
   return Math.round(adjustedTSS * 10) / 10;
 }
@@ -6840,6 +6852,136 @@ exports.rebuildWeeklyTssStelvioRollingStats = onSchedule(
     }
   }
 );
+
+// ---------- Strava TSS 일괄 재계산 (잘못 저장된 기간의 TSS 정정) ----------
+/**
+ * HTTP Callable: 특정 날짜 범위의 모든 사용자 Strava 로그 TSS 재계산·정정
+ * 용도: 2026-05-09~05-12 기간 TSS 계산 버그(tssPerKJ 가드레일 미적용으로 4173·9927 등 과대값)
+ *       로 저장된 데이터를 올바른 값으로 정정.
+ *
+ * 호출 파라미터 (HTTPS onCall):
+ *   startDate: "YYYY-MM-DD"  (기본값: "2026-05-09")
+ *   endDate:   "YYYY-MM-DD"  (기본값: "2026-05-12")
+ *   dryRun:    boolean       (true이면 실제 쓰기 없이 리포트만 반환)
+ *
+ * 보안: Firebase Auth 어드민 토큰 필요 (customClaims.admin === true)
+ */
+exports.fixStravaTssBatch = functions
+  .runWith({ timeoutSeconds: 540, memory: "1GiB" })
+  .https.onCall(async (data, context) => {
+    // 어드민 권한 확인
+    if (!context.auth || !context.auth.token || context.auth.token.admin !== true) {
+      throw new functions.https.HttpsError("permission-denied", "어드민 권한이 필요합니다.");
+    }
+
+    const db = admin.firestore();
+    const startDate = (data && data.startDate) || "2026-05-09";
+    const endDate   = (data && data.endDate)   || "2026-05-12";
+    const dryRun    = !!(data && data.dryRun);
+
+    console.log(`[fixStravaTssBatch] 시작: ${startDate} ~ ${endDate}, dryRun=${dryRun}`);
+
+    // 모든 사용자 목록
+    const usersSnap = await db.collection("users").get();
+    const results = { total: 0, updated: 0, skipped: 0, errors: 0, details: [] };
+
+    for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
+      const userData = userDoc.data() || {};
+      // 체중: 프로필에서 읽기 (없으면 기본값 70kg)
+      const weightKg = (Number(userData.weight) > 0 ? Number(userData.weight)
+        : (Number(userData.weightKg) > 0 ? Number(userData.weightKg) : STELVIO_RTSS_DEFAULT_WEIGHT_KG));
+
+      let logsSnap;
+      try {
+        logsSnap = await db.collection("users").doc(userId).collection("logs")
+          .where("source", "==", "strava")
+          .where("date", ">=", startDate)
+          .where("date", "<=", endDate)
+          .get();
+      } catch (e) {
+        results.errors++;
+        console.error(`[fixStravaTssBatch] 사용자 ${userId} 조회 오류:`, e.message);
+        continue;
+      }
+
+      if (logsSnap.empty) continue;
+
+      let batch = db.batch();
+      let batchCount = 0;
+
+      for (const logDoc of logsSnap.docs) {
+        results.total++;
+        const log = logDoc.data() || {};
+
+        const durationSec = Number(log.duration_sec || log.time) || 0;
+        const avgWatts    = log.avg_watts != null ? Number(log.avg_watts) : null;
+        const weightedWatts = log.weighted_watts != null ? Number(log.weighted_watts) : null;
+        const ftpAtTime   = Number(log.ftp_at_time) || 0;
+        const oldTss      = Number(log.tss) || 0;
+
+        // 재계산에 필요한 데이터가 없으면 건너뜀
+        if (durationSec <= 0 || ftpAtTime <= 0) {
+          results.skipped++;
+          continue;
+        }
+
+        const np = weightedWatts != null ? weightedWatts : (avgWatts != null ? avgWatts : 0);
+        const avgForTss = (avgWatts != null && avgWatts > 0) ? avgWatts : np;
+        if (np <= 0 || avgForTss <= 0) {
+          results.skipped++;
+          continue;
+        }
+
+        const newTss = Math.max(0, calculateStelvioRevisedTSS(durationSec, avgForTss, np, ftpAtTime, weightKg));
+
+        // TSS 값이 바뀐 경우만 업데이트
+        if (Math.abs(newTss - oldTss) < 0.05) {
+          results.skipped++;
+          continue;
+        }
+
+        results.details.push({
+          userId,
+          logId: logDoc.id,
+          date: log.date,
+          oldTss,
+          newTss,
+          durationSec,
+          np: Math.round(np),
+          ftp: ftpAtTime,
+        });
+
+        if (!dryRun) {
+          batch.update(logDoc.ref, { tss: newTss, tss_recalculated_at: new Date().toISOString() });
+          batchCount++;
+          if (batchCount >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            batchCount = 0;
+          }
+        }
+        results.updated++;
+      }
+
+      if (!dryRun && batchCount > 0) {
+        await batch.commit();
+      }
+    }
+
+    console.log(`[fixStravaTssBatch] 완료: total=${results.total}, updated=${results.updated}, skipped=${results.skipped}, errors=${results.errors}`);
+    return {
+      success: true,
+      dryRun,
+      startDate,
+      endDate,
+      total: results.total,
+      updated: results.updated,
+      skipped: results.skipped,
+      errors: results.errors,
+      details: results.details.slice(0, 200), // 최대 200건 리포트
+    };
+  });
 
 // ---------- STELVIO AI 네이버 구독 자동화 (30분 스케줄, TypeScript 빌드 결과 사용) ----------
 const path = require("path");
