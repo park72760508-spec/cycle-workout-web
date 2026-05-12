@@ -653,6 +653,7 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
 module.exports = {
   runRebuildHeptagonCohortRanks,
   buildLiveGcRankingPayload,
+  getMonthKeyKstNow,
   HEPTAGON_COHORT_COL,
   HEPTAGON_GENDERS,
   HEPTAGON_CATEGORIES,

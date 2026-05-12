@@ -4800,6 +4800,170 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
   }
 );
 
+/**
+ * [1회성 검증] 순위 등락 미리보기 — 읽기 전용, Firestore 쓰기 없음.
+ *
+ * 현재 `heptagon_cohort_ranks` 의 sumPositionScores 로 새 순위를 재계산해
+ * "rebuildHeptagonCohortRanks 실행 시 어떤 rankChange 가 기록될지" 미리 확인합니다.
+ *
+ * GET https://<region>-stelvio-ai.cloudfunctions.net/previewHeptagonRankChanges
+ *   ?secret=stelvio-internal-sync-v1
+ *   &gender=all          (all|M|F, 기본 all)
+ *   &category=Supremo    (Supremo|Assoluto|Bianco|Rosa|Infinito|Leggenda, 기본 Supremo)
+ *   &limit=50            (최대 200, 기본 50)
+ */
+exports.previewHeptagonRankChanges = onRequest(
+  { cors: false, timeoutSeconds: 120, memory: "512MiB" },
+  async (req, res) => {
+    const secret = req.query.secret || req.headers["x-internal-secret"] || req.headers["X-Internal-Secret"];
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      res.status(403).json({ success: false, error: "?secret= 값이 올바르지 않습니다." });
+      return;
+    }
+
+    const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    const monthKey = heptagonCohortRanks.getMonthKeyKstNow();
+    const filterGender = req.query.gender || "all";
+    const filterCategory = req.query.category || "Supremo";
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+
+    try {
+      const db = admin.firestore();
+
+      const snap = await db
+        .collection(heptagonCohortRanks.HEPTAGON_COHORT_COL)
+        .where("monthKey", "==", monthKey)
+        .where("filterGender", "==", filterGender)
+        .where("filterCategory", "==", filterCategory)
+        .get();
+
+      if (snap.empty) {
+        res.status(200).json({
+          success: true,
+          message: "해당 조건의 문서가 없습니다.",
+          monthKey, filterGender, filterCategory,
+        });
+        return;
+      }
+
+      // sumPositionScores 기준 재정렬 → 신규 순위 계산 (rebuildHeptagonCohortRanks 와 동일 정렬)
+      const rows = snap.docs.map((doc) => {
+        const d = doc.data();
+        return {
+          docId: doc.id,
+          userId: d.userId || "",
+          displayName: (d.displayName || "(이름없음)").toString().trim(),
+          boardRank: d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : null,
+          sumPositionScores: d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0,
+          asOfSeoul: d.asOfSeoul || "",
+          storedPreviousBoardRank: d.previousBoardRank != null ? Number(d.previousBoardRank) : null,
+          storedRankChange: d.rankChange != null ? Number(d.rankChange) : null,
+        };
+      });
+
+      rows.sort((a, b) => {
+        if (b.sumPositionScores !== a.sumPositionScores) return b.sumPositionScores - a.sumPositionScores;
+        return String(a.userId).localeCompare(String(b.userId));
+      });
+
+      const docsAsOf = rows.length > 0 ? rows[0].asOfSeoul : null;
+      const isNewDay = docsAsOf !== todayYmd;
+
+      const samples = rows.slice(0, limit).map((r, i) => {
+        const newRank = i + 1;
+        const prevRank = r.boardRank; // 어제 집계된 순위
+        const change = prevRank != null ? prevRank - newRank : null;
+        return {
+          newRank,
+          prevRank,
+          rankChange: change,
+          direction: change == null ? "신규" : change > 0 ? `↑${change}` : change < 0 ? `↓${Math.abs(change)}` : "-",
+          userId: r.userId,
+          displayName: r.displayName,
+          sumPositionScores: Number(r.sumPositionScores.toFixed(2)),
+          asOfSeoul: r.asOfSeoul,
+          storedPreviousBoardRank: r.storedPreviousBoardRank,
+          storedRankChange: r.storedRankChange,
+        };
+      });
+
+      const summary = {
+        total: rows.length,
+        shown: samples.length,
+        isNewDay,
+        todayYmd,
+        docsAsOf,
+        improved: samples.filter((r) => r.rankChange != null && r.rankChange > 0).length,
+        declined: samples.filter((r) => r.rankChange != null && r.rankChange < 0).length,
+        same: samples.filter((r) => r.rankChange === 0).length,
+        newEntry: samples.filter((r) => r.rankChange == null).length,
+      };
+
+      res.status(200).json({
+        success: true,
+        monthKey,
+        filterGender,
+        filterCategory,
+        note: isNewDay
+          ? "✅ 문서가 어제 기준입니다. 아래 samples 의 rankChange 가 실제 갱신 시 저장될 값입니다. manualApplyRankChanges 로 지금 바로 적용할 수 있습니다."
+          : "ℹ️ 오늘 이미 갱신된 문서입니다. storedRankChange 에 저장된 값을 확인하세요.",
+        summary,
+        samples,
+      });
+    } catch (err) {
+      console.error("[previewHeptagonRankChanges]", err);
+      res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
+    }
+  }
+);
+
+/**
+ * [1회성 수동 적용] 순위 등락(rankChange / previousBoardRank) 을 지금 즉시 계산·저장.
+ * — 스케줄 본(`scheduledHeptagonCohortRanks`) 과 완전히 동일한 코드 경로 실행.
+ * — 먼저 `previewHeptagonRankChanges` 로 예상 변동을 확인한 뒤 실행 권장.
+ *
+ * GET  https://<region>-stelvio-ai.cloudfunctions.net/manualApplyRankChanges?secret=stelvio-internal-sync-v1
+ * POST X-Internal-Secret: stelvio-internal-sync-v1
+ *
+ * 응답: { success, monthKey, startStr, endStr, wrote, ms, peakSource }
+ */
+exports.manualApplyRankChanges = onRequest(
+  { cors: false, timeoutSeconds: 540, memory: "2GiB" },
+  async (req, res) => {
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+
+    const secret =
+      req.query.secret ||
+      req.headers["x-internal-secret"] ||
+      req.headers["X-Internal-Secret"];
+
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      res.status(403).json({
+        success: false,
+        error: "인증 실패 — GET: ?secret=stelvio-internal-sync-v1 / POST: X-Internal-Secret 헤더 사용",
+      });
+      return;
+    }
+
+    try {
+      console.log("[manualApplyRankChanges] 수동 1회 실행 시작");
+      const r = await runHeptagonCohortRanksRebuildJob();
+      console.log("[manualApplyRankChanges] 완료", r);
+      res.status(200).json({
+        success: true,
+        message:
+          "heptagon_cohort_ranks 갱신 완료. " +
+          "previousBoardRank / rankChange 필드가 저장되었습니다. " +
+          "랭킹보드 GC 탭에서 이름 옆 등락 배지(↑↓-)를 확인하세요.",
+        ...r,
+      });
+    } catch (err) {
+      console.error("[manualApplyRankChanges]", err);
+      res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
+    }
+  }
+);
+
 /** 동기부여 메시지 (주간 TSS 랭킹) */
 function buildMotivationMessageTss(currentUser, nextUser) {
   if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
