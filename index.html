@@ -10651,6 +10651,18 @@
             name = rawName.length > maxNameLenS ? rawName.substring(0, maxNameLenS - 2) + '..' : rawName;
           }
           var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
+          var rankChangePart = '';
+          if (stelvioIsGcRankingMode() && item.rankChange != null && item.previousBoardRank != null) {
+            var rc = item.rankChange;
+            var prevR = item.previousBoardRank;
+            if (rc > 0) {
+              rankChangePart = '<span class="stelvio-rank-change stelvio-rank-change--up" title="전날 ' + prevR + '위">(↑' + rc + ')</span>';
+            } else if (rc < 0) {
+              rankChangePart = '<span class="stelvio-rank-change stelvio-rank-change--down" title="전날 ' + prevR + '위">(↓' + Math.abs(rc) + ')</span>';
+            } else {
+              rankChangePart = '<span class="stelvio-rank-change stelvio-rank-change--flat" title="전날 ' + prevR + '위">(-)</span>';
+            }
+          }
           var groupHostStripe =
             stelvioIsGroupDistanceRanking() && isCurrent;
           var groupAttended =
@@ -10686,6 +10698,7 @@
             '">' +
             name +
             '</span>' +
+            rankChangePart +
             badgePart +
             stelvioRankingStarButtonHtml(item.userId) +
             '</span>';
