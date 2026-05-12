@@ -1360,6 +1360,8 @@
   }
 
   function mapHeptagonCohortToBoardRow(d, myUid) {
+    var rc = d.rankChange != null && isFinite(Number(d.rankChange)) ? Math.round(Number(d.rankChange)) : null;
+    var pb = d.previousBoardRank != null && isFinite(Number(d.previousBoardRank)) ? Math.floor(Number(d.previousBoardRank)) : null;
     return {
       userId: d.userId != null ? String(d.userId) : '',
       displayName: (d.displayName && String(d.displayName).trim()) || '—',
@@ -1367,7 +1369,9 @@
       sumPositionScores: d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : null,
       isPrivate: d.is_private === true,
       isMe: !!(myUid && d.userId != null && String(d.userId) === String(myUid)),
-      isInserted: false
+      isInserted: false,
+      rankChange: rc,
+      previousBoardRank: pb
     };
   }
 
@@ -2047,6 +2051,29 @@
                       row.boardRank != null && isFinite(row.boardRank)
                         ? String(Math.floor(Number(row.boardRank))) + '위'
                         : '—';
+                    // 순위 등락 배지: rankChange > 0 = 상승(연한빨강), < 0 = 하락(연한파랑), 0 = 보합(그레이)
+                    var rankChangeBadge = null;
+                    if (row.rankChange != null && row.previousBoardRank != null) {
+                      if (row.rankChange > 0) {
+                        rankChangeBadge = (
+                          <span className="stelvio-rank-change stelvio-rank-change--up" title={'전날 ' + row.previousBoardRank + '위'}>
+                            {'(↑' + row.rankChange + ')'}
+                          </span>
+                        );
+                      } else if (row.rankChange < 0) {
+                        rankChangeBadge = (
+                          <span className="stelvio-rank-change stelvio-rank-change--down" title={'전날 ' + row.previousBoardRank + '위'}>
+                            {'(↓' + Math.abs(row.rankChange) + ')'}
+                          </span>
+                        );
+                      } else {
+                        rankChangeBadge = (
+                          <span className="stelvio-rank-change stelvio-rank-change--flat" title={'전날 ' + row.previousBoardRank + '위'}>
+                            {'(-)'}
+                          </span>
+                        );
+                      }
+                    }
                     return (
                       <tr
                         key={row.isMe && row.isInserted ? 'me-ins' : 'br-' + (row.userId || idx)}
@@ -2067,6 +2094,7 @@
                               </span>
                             </span>
                           )}
+                          {rankChangeBadge}
                           {npb.showPrivateBadge ? (
                             <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">
                               비
