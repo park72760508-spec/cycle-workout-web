@@ -349,6 +349,30 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
     peakSource = "legacy";
   }
 
+  // 배치 쓰기 전에 기존 문서의 boardRank·asOfSeoul 을 한 번에 읽어 전날 순위 비교에 사용
+  // docId: `${monthKey}_${filterCategory}_${filterGender}_${userId}` → boardRank, asOfSeoul
+  const prevRankMap = new Map(); // key: docId, value: { boardRank, asOfSeoul }
+  try {
+    const existingSnap = await db
+      .collection(HEPTAGON_COHORT_COL)
+      .where("monthKey", "==", monthKey)
+      .select("boardRank", "asOfSeoul")
+      .get();
+    for (const doc of existingSnap.docs) {
+      const d = doc.data();
+      if (d.boardRank != null && isFinite(Number(d.boardRank))) {
+        prevRankMap.set(doc.id, {
+          boardRank: Math.floor(Number(d.boardRank)),
+          asOfSeoul: d.asOfSeoul || "",
+        });
+      }
+    }
+    console.log("[runRebuildHeptagonCohortRanks] prevRankMap loaded:", prevRankMap.size);
+  } catch (e) {
+    // 조회 실패 시 전날 순위 없이 계속 진행
+    console.warn("[runRebuildHeptagonCohortRanks] prevRankMap load failed:", e && e.message);
+  }
+
   let wrote = 0;
   let batch = db.batch();
   let batchCount = 0;
@@ -423,6 +447,21 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
         const boardTierId = heptagonCohortBoardTierIdFromLevelPercent(pCohort);
         const crSynth = comprehensiveRankFromSumPosition100(r.sumPositionScores, L);
         const crSynthI = isFinite(crSynth) ? Math.max(1, Math.min(L, Math.round(crSynth))) : null;
+
+        // 전날 순위 등락 계산: 당일 재실행 시 previousBoardRank 를 덮어쓰지 않음(merge 유지)
+        const existing = prevRankMap.get(docId);
+        const rankChangeFields = {};
+        if (existing && existing.asOfSeoul !== todayYmd) {
+          // 새 날짜 집계 — 기존 boardRank 를 전날 순위로 보존
+          rankChangeFields.previousBoardRank = existing.boardRank;
+          rankChangeFields.rankChange = existing.boardRank - boardRank; // 양수=상승, 음수=하락, 0=보합
+        } else if (!existing) {
+          // 최초 등록 — 비교 대상 없음
+          rankChangeFields.previousBoardRank = null;
+          rankChangeFields.rankChange = null;
+        }
+        // existing && asOfSeoul === todayYmd 인 경우: 당일 재실행 → 필드 미포함(merge로 기존값 유지)
+
         batch.set(
           ref,
           {
@@ -450,6 +489,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
             comprehensiveRankSynthetic: crSynthI,
             is_private: r.is_private === true,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            ...rankChangeFields,
           },
           { merge: true }
         );
