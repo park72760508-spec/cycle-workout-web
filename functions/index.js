@@ -6867,7 +6867,7 @@ exports.rebuildWeeklyTssStelvioRollingStats = onSchedule(
  * 보안: Firebase Auth 어드민 토큰 필요 (customClaims.admin === true)
  */
 exports.fixStravaTssBatch = functions
-  .runWith({ timeoutSeconds: 540, memory: "1GiB" })
+  .runWith({ timeoutSeconds: 540, memory: "1GB" })
   .https.onCall(async (data, context) => {
     // 어드민 권한 확인
     if (!context.auth || !context.auth.token || context.auth.token.admin !== true) {
