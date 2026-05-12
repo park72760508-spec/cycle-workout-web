@@ -13844,6 +13844,49 @@ function ensureStelvioAdminAccessStatsButton() {
     if (typeof window.adminRecalcTss3Days === 'function') window.adminRecalcTss3Days();
   };
   host.appendChild(tssBtn);
+
+  // ── 주간 마일리지 수동 집계 버튼 ──
+  const rankingBtn = document.createElement('button');
+  rankingBtn.type = 'button';
+  rankingBtn.id = 'adminRebuildWeeklyRankingBtn';
+  rankingBtn.textContent = '🏆 주간 마일리지 수동 집계';
+  rankingBtn.className = 'btn stelvio-purple-btn';
+  rankingBtn.style.cssText =
+    'min-width: 200px; padding: 10px 16px; cursor: pointer; font-weight: 600; border: none; border-radius: 8px; margin-top: 8px;';
+  rankingBtn.onclick = async function () {
+    if (rankingBtn.disabled) return;
+    rankingBtn.disabled = true;
+    rankingBtn.textContent = '⏳ 집계 중...';
+    try {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error('로그인이 필요합니다.');
+      const idToken = await user.getIdToken(true);
+      const url = 'https://us-central1-stelvio-ai.cloudfunctions.net/manualRebuildWeeklyRanking';
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + idToken }
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.success) {
+        rankingBtn.textContent = '✅ 집계 완료!';
+        if (typeof showToast === 'function') showToast('주간 마일리지 TOP10 집계가 완료되었습니다.');
+        setTimeout(function () {
+          rankingBtn.textContent = '🏆 주간 마일리지 수동 집계';
+          rankingBtn.disabled = false;
+        }, 3000);
+      } else {
+        throw new Error(json.error || ('HTTP ' + res.status));
+      }
+    } catch (e) {
+      rankingBtn.textContent = '❌ 집계 실패';
+      if (typeof showToast === 'function') showToast('집계 오류: ' + (e.message || e));
+      setTimeout(function () {
+        rankingBtn.textContent = '🏆 주간 마일리지 수동 집계';
+        rankingBtn.disabled = false;
+      }, 3000);
+    }
+  };
+  host.appendChild(rankingBtn);
 }
 window.ensureStelvioAdminAccessStatsButton = ensureStelvioAdminAccessStatsButton;
 
