@@ -1527,8 +1527,7 @@ function AffiliateApp(props) {
             <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
           )}
           {/* 중앙: 타이틀 */}
-          <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate font-bold"
-            style={{ fontSize: view === 'detail' ? 'clamp(1.05rem, 4.5vw, 1.25rem)' : undefined }}>
+          <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate">
             {headerTitle}
           </h1>
           {/* 우: 폼에서 X 닫기, 그 외 빈 대칭 공간 */}
