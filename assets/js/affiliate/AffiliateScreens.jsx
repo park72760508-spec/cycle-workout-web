@@ -120,6 +120,9 @@ function compressImageFile(file, maxPx, quality) {
         canvas.width  = w;
         canvas.height = h;
         var ctx = canvas.getContext('2d');
+        /* JPEG는 투명도를 지원하지 않으므로 흰색 배경을 먼저 채워 투명 영역이 검정으로 변하는 것을 방지 */
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
         ctx.drawImage(img, 0, 0, w, h);
         canvas.toBlob(function(blob) {
           if (!blob) { resolve(file); return; }
