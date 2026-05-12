@@ -539,6 +539,14 @@ function AffiliateList(props) {
         var bt = b.createdAt ? String(b.createdAt) : '';
         return bt < at ? -1 : bt > at ? 1 : 0;
       });
+      /* 일반 사용자: 화면 접속 시마다 Fisher-Yates 셔플로 순서 무작위 배치
+         어드민은 드래그 정렬 관리를 위해 고정 순서 유지 */
+      if (!isAdmin) {
+        for (var i = sorted.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var tmp = sorted[i]; sorted[i] = sorted[j]; sorted[j] = tmp;
+        }
+      }
       setRows(sorted);
       setLocalRows(null); /* 외부 업데이트 시 로컬 순서 초기화 */
       setLoading(false);
