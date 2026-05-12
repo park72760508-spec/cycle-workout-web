@@ -4698,15 +4698,15 @@ exports.manualRebuildWeeklyRanking = onRequest(
       authorized = true;
     }
 
+    // 즉시 202 반환 후 백그라운드에서 집계 실행 (집계 소요 시간이 길어 클라이언트 타임아웃 방지)
+    res.status(202).json({ success: true, message: "주간 마일리지 집계를 시작했습니다. 완료까지 1~5분 소요됩니다." });
     try {
       const t0 = Date.now();
       await runRebuildRankingAggregatesCore(db);
       const ms = Date.now() - t0;
       console.log("[manualRebuildWeeklyRanking] 완료, ms:", ms);
-      res.status(200).json({ success: true, ms });
     } catch (e) {
       console.error("[manualRebuildWeeklyRanking]", e && e.message ? e.message : e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }
 );
