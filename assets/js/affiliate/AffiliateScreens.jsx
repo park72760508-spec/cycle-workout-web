@@ -1137,7 +1137,7 @@ function AffiliateForm(props) {
         </label>
         <div className="flex items-center gap-3 flex-wrap">
           {/* 원형 아바타 미리보기 – overflow-hidden + block img로 꽉 채움 */}
-          <span className="relative inline-block h-20 w-20 rounded-full ring-2 ring-violet-200 overflow-hidden bg-slate-100 shrink-0">
+          <span className="relative inline-block h-20 w-20 rounded-full ring-2 ring-violet-200 overflow-hidden bg-white shrink-0">
             {photoFile && photoPreview
               ? <img src={photoPreview} alt=""
                   style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
