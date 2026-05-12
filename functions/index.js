@@ -4945,21 +4945,26 @@ exports.manualApplyRankChanges = onRequest(
       return;
     }
 
+    // 프록시 타임아웃 대응: 202 를 먼저 응답하고 Cloud Run 인스턴스가 백그라운드에서 작업을 계속 실행.
+    // Cloud Run(Firebase Functions v2)은 res.json() 이후에도 timeoutSeconds(540s)까지 핸들러가 실행됨.
+    const startedAt = new Date().toISOString();
+    console.log("[manualApplyRankChanges] 수동 1회 실행 시작", startedAt);
+    res.status(202).json({
+      success: true,
+      status: "started",
+      message:
+        "작업이 시작되었습니다. 약 2~4분 후 Firebase Console → Functions → 로그에서 " +
+        "'[manualApplyRankChanges] 완료' 메시지를 확인하세요.",
+      startedAt,
+      logKeyword: "[manualApplyRankChanges] 완료",
+    });
+
+    // 응답 후 실행 — 프록시가 연결을 끊어도 Cloud Run 인스턴스는 계속 동작
     try {
-      console.log("[manualApplyRankChanges] 수동 1회 실행 시작");
       const r = await runHeptagonCohortRanksRebuildJob();
-      console.log("[manualApplyRankChanges] 완료", r);
-      res.status(200).json({
-        success: true,
-        message:
-          "heptagon_cohort_ranks 갱신 완료. " +
-          "previousBoardRank / rankChange 필드가 저장되었습니다. " +
-          "랭킹보드 GC 탭에서 이름 옆 등락 배지(↑↓-)를 확인하세요.",
-        ...r,
-      });
+      console.log("[manualApplyRankChanges] 완료", JSON.stringify({ ...r, startedAt }));
     } catch (err) {
-      console.error("[manualApplyRankChanges]", err);
-      res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
+      console.error("[manualApplyRankChanges] 오류", err && err.message ? err.message : String(err));
     }
   }
 );
@@ -5142,6 +5147,8 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
             is_private: privacyFlagFromFirestoreDoc(d),
             rank: seq,
             gcScore,
+            rankChange: d.rankChange != null && isFinite(Number(d.rankChange)) ? Math.round(Number(d.rankChange)) : null,
+            previousBoardRank: d.previousBoardRank != null && isFinite(Number(d.previousBoardRank)) ? Math.floor(Number(d.previousBoardRank)) : null,
           });
         }
         const got = snap.docs.length;
