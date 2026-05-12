@@ -453,8 +453,9 @@
           var weeklyTss = 0;
           Object.keys(byDate).forEach(function(ds) {
             var day = byDate[ds];
-            if (day.strava.length > 0) day.strava.forEach(function(t) { weeklyTss += t; });
-            else if (day.stelvio.length > 0) day.stelvio.forEach(function(t) { weeklyTss += t; });
+            var stravaSum = day.strava.reduce(function(s, t) { return s + t; }, 0);
+            var stelvioSum = day.stelvio.reduce(function(s, t) { return s + t; }, 0);
+            weeklyTss += stravaSum > 0 ? stravaSum : stelvioSum;
           });
           var weeklyTarget = 225;
           if (typeof window.getWeeklyTargetTSS === 'function') {
@@ -656,10 +657,9 @@
           var dayTssTotals = {};
           Object.keys(byDayTssBuckets).forEach(function(dsT) {
             var buck = byDayTssBuckets[dsT];
-            var tot = 0;
-            if (buck.strava.length > 0) buck.strava.forEach(function(t) { tot += t; });
-            else if (buck.stelvio.length > 0) buck.stelvio.forEach(function(t) { tot += t; });
-            dayTssTotals[dsT] = tot;
+            var stravaSum = buck.strava.reduce(function(s, t) { return s + t; }, 0);
+            var stelvioSum = buck.stelvio.reduce(function(s, t) { return s + t; }, 0);
+            dayTssTotals[dsT] = stravaSum > 0 ? stravaSum : stelvioSum;
           });
           var weeklyTssRows = [];
           for (var wkOff = 29; wkOff >= 0; wkOff--) {
