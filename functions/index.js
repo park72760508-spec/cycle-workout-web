@@ -4667,6 +4667,50 @@ exports.rebuildRankingAggregates = onSchedule(
   }
 );
 
+/**
+ * 수동: 주간 마일리지 TOP10 + TSS 랭킹 집계 즉시 재빌드 (스케줄 rebuildRankingAggregates와 동일).
+ * TSS 데이터 수동 정정 후 랭킹을 즉시 반영할 때 사용.
+ * GET/POST ?secret=stelvio-internal-sync-v1
+ * 예: Invoke-RestMethod -Uri "https://us-central1-stelvio-ai.cloudfunctions.net/manualRebuildWeeklyRanking?secret=stelvio-internal-sync-v1"
+ */
+exports.manualRebuildWeeklyRanking = onRequest(
+  { cors: true, timeoutSeconds: 540, memory: "1GB" },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Internal-Secret");
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+
+    // 인증: INTERNAL_SYNC_SECRET 또는 grade=1 Firebase Bearer 토큰
+    const rawSecret = req.query.secret || req.headers["x-internal-secret"] || req.headers["X-Internal-Secret"];
+    let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+
+    const db = admin.firestore();
+    if (!authorized) {
+      const uid = await getUidFromRequest(req, res);
+      if (!uid) return;
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      if (grade !== "1") {
+        res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
+        return;
+      }
+      authorized = true;
+    }
+
+    try {
+      const t0 = Date.now();
+      await runRebuildRankingAggregatesCore(db);
+      const ms = Date.now() - t0;
+      console.log("[manualRebuildWeeklyRanking] 완료, ms:", ms);
+      res.status(200).json({ success: true, ms });
+    } catch (e) {
+      console.error("[manualRebuildWeeklyRanking]", e && e.message ? e.message : e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 /** KST 15~23시 매 정시 — 주간 마일리지 TOP10 집계만 갱신 (운동 직후 TSS 반영 지연 완화) */
 exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   {
