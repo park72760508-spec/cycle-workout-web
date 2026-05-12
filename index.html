@@ -7978,7 +7978,7 @@
           } else {
             displayText = rawName;
           }
-          html += '<div class="weekly-rank-item">';
+          html += '<div class="weekly-rank-item' + (isSelf ? ' weekly-rank-item-self' : '') + '"' + (isSelf ? ' id="weeklyTop10MyRankRow"' : '') + '>';
           if (rank <= 3) {
             html += '<span class="weekly-rank-medal"><img src="' + rankMedalSrc[rank - 1] + '" alt="" width="20" height="20" decoding="async" /></span>';
           }
@@ -8031,7 +8031,7 @@
           html += '</div></div>';
         }
         body.innerHTML = html;
-        if (myRankData && myRankData.rank > 10) {
+        if (currentUserId) {
           requestAnimationFrame(function() {
             requestAnimationFrame(function() {
               var el = document.getElementById('weeklyTop10MyRankRow');
@@ -13856,11 +13856,29 @@
             return Object.assign({}, log, { vi: vi, ef: ef, style: getVIStyle(vi) });
           });
           
-          // 주별 TSS 합산
-          const byWeek = {};
+          // 날짜별 Strava/Stelvio 중복 제거 (Strava 우선) 후 주별 TSS 합산
+          const byDayForWeekly = {};
           enrichedLogsForWeeklyTSS.forEach(function(log) {
             const d = log.date || '';
             if (d.length < 10) return;
+            if (!byDayForWeekly[d]) byDayForWeekly[d] = { strava: [], stelvio: [] };
+            var srcW = String(log.source || '').toLowerCase();
+            var tssW = Number(log.TSS) || 0;
+            if (tssW > 0 && tssW < 1200) {
+              if (srcW === 'strava') byDayForWeekly[d].strava.push(tssW);
+              else byDayForWeekly[d].stelvio.push(tssW);
+            }
+          });
+          const dayTssForWeekly = {};
+          Object.keys(byDayForWeekly).forEach(function(d) {
+            var buck = byDayForWeekly[d];
+            var stravaSum = buck.strava.reduce(function(s, t) { return s + t; }, 0);
+            var stelvioSum = buck.stelvio.reduce(function(s, t) { return s + t; }, 0);
+            dayTssForWeekly[d] = stravaSum > 0 ? stravaSum : stelvioSum;
+          });
+
+          const byWeek = {};
+          Object.keys(dayTssForWeekly).forEach(function(d) {
             const week = getWeekNumber(d);
             if (!week) return;
             
@@ -13899,8 +13917,7 @@
                 TSS: 0 
               };
             }
-            var _wt = Number(log.TSS) || 0;
-            byWeek[key].TSS += (_wt > 0 && _wt < 1200) ? _wt : 0;
+            byWeek[key].TSS += dayTssForWeekly[d] || 0;
           });
           
           // 1주부터 실제 주 수까지 순차 정렬
