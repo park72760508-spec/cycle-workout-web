@@ -242,11 +242,22 @@ async function chunkedGetAll(db, refs, chunkSize) {
 }
 
 /**
- * 기간 내 일 버킂이 하나라도 없으면 해당 일만 reconcile(로컬 채우기).
+ * 기간 내 일 버킷 채우기.
+ * @param {boolean} [forceReconcile=false] true이면 이미 존재하는 버킷도 강제 재계산 (로그 수동 수정 후 즉시 반영 시 사용).
  */
-async function ensureRankingBucketsFilledForRange(db, userId, userData, startStr, endStr) {
+async function ensureRankingBucketsFilledForRange(db, userId, userData, startStr, endStr, forceReconcile) {
   const dates = listInclusiveYmdsSeoul(startStr, endStr);
   if (dates.length === 0) return;
+  if (forceReconcile) {
+    // 기존 버킷 존재 여부와 무관하게 전체 재계산
+    for (const ymd of dates) {
+      /* eslint-disable no-await-in-loop */
+      await reconcileUserRankingDayBucket(db, userId, ymd, userData || {});
+      /* eslint-enable no-await-in-loop */
+    }
+    return;
+  }
+  // 기본 동작: 버킷이 없는 날만 채우기
   const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
   const snaps = await chunkedGetAll(db, refs, 30);
   for (let i = 0; i < dates.length; i++) {
@@ -275,8 +286,8 @@ function effectiveDayKmFromSnap(snap) {
   return ks > 0 ? ks : kk;
 }
 
-async function weeklyTssSumFromDayBuckets(db, userId, userData, startStr, endStr) {
-  await ensureRankingBucketsFilledForRange(db, userId, userData, startStr, endStr);
+async function weeklyTssSumFromDayBuckets(db, userId, userData, startStr, endStr, forceReconcile) {
+  await ensureRankingBucketsFilledForRange(db, userId, userData, startStr, endStr, forceReconcile);
   const dates = listInclusiveYmdsSeoul(startStr, endStr);
   const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
   const snaps = await chunkedGetAll(db, refs, 30);

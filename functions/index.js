@@ -4674,7 +4674,7 @@ exports.rebuildRankingAggregates = onSchedule(
  * 예: Invoke-RestMethod -Uri "https://us-central1-stelvio-ai.cloudfunctions.net/manualRebuildWeeklyRanking?secret=stelvio-internal-sync-v1"
  */
 exports.manualRebuildWeeklyRanking = onRequest(
-  { cors: true, timeoutSeconds: 540, memory: "1GB" },
+  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -4698,15 +4698,46 @@ exports.manualRebuildWeeklyRanking = onRequest(
       authorized = true;
     }
 
-    // 즉시 202 반환 후 백그라운드에서 집계 실행 (집계 소요 시간이 길어 클라이언트 타임아웃 방지)
-    res.status(202).json({ success: true, message: "주간 마일리지 집계를 시작했습니다. 완료까지 1~5분 소요됩니다." });
     try {
       const t0 = Date.now();
+
+      // [1단계] 현재 주·이전 주 ranking_day_totals 버킷 강제 재계산
+      // — ensureRankingBucketsFilledForRange는 기존 버킷을 갱신하지 않으므로,
+      //   TSS 수동 수정 후 즉시 반영하려면 로그에서 직접 재계산이 필요.
+      const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
+      const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
+      const usersSnap = await db.collection("users").get();
+      console.log("[manualRebuildWeeklyRanking] 버킷 강제 재계산 시작, users:", usersSnap.size,
+        { wStart, wEnd, wPrevS, wPrevE });
+
+      for (const userDoc of usersSnap.docs) {
+        const userId = userDoc.id;
+        const userData = userDoc.data() || {};
+        try {
+          // 현재 주 강제 재계산
+          await rankingDayRollup.ensureRankingBucketsFilledForRange(
+            db, userId, userData, wStart, wEnd, true
+          );
+          // 이전 주 강제 재계산 (이전 주 TOP10도 동기화)
+          await rankingDayRollup.ensureRankingBucketsFilledForRange(
+            db, userId, userData, wPrevS, wPrevE, true
+          );
+        } catch (e) {
+          console.warn("[manualRebuildWeeklyRanking] 버킷 재계산 실패:", userId, e && e.message);
+        }
+      }
+      console.log("[manualRebuildWeeklyRanking] 버킷 강제 재계산 완료, ms:", Date.now() - t0);
+
+      // [2단계] 전체 랭킹 집계 (ranking_aggregates 문서 갱신)
       await runRebuildRankingAggregatesCore(db);
+
       const ms = Date.now() - t0;
-      console.log("[manualRebuildWeeklyRanking] 완료, ms:", ms);
+      console.log("[manualRebuildWeeklyRanking] 전체 완료, ms:", ms);
+      res.status(200).json({ success: true, message: "주간 마일리지 집계가 완료되었습니다.", ms });
     } catch (e) {
-      console.error("[manualRebuildWeeklyRanking]", e && e.message ? e.message : e);
+      const msg = e && e.message ? e.message : String(e);
+      console.error("[manualRebuildWeeklyRanking]", msg);
+      res.status(500).json({ success: false, error: msg });
     }
   }
 );
