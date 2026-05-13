@@ -4207,9 +4207,9 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
 // ---------- 랭킹 사전 집계 (스케줄러) + ranking_aggregates (HTTP 빠른 읽기) ----------
 const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
 /** ranking_aggregates 읽기 허용 최대 경과 시간. 집계 cron 간격보다 길게 두어 사용자 요청 시 전체 재스캔 빈도를 줄임 */
-const RANKING_AGG_MAX_STALE_MS = 26 * 60 * 60 * 1000; // 26시간 (하루 1회 22:00 기준 최대 24h 공백 + 여유)
-/** KST 22:00 정시 집계 하루 1회 */
-const RANKING_REBUILD_CRON = "0 22 * * *";
+const RANKING_AGG_MAX_STALE_MS = 26 * 60 * 60 * 1000; // 26시간 (하루 1회 23:00 기준 최대 24h 공백 + 여유)
+/** KST 23:00 정시 집계 하루 1회 — 클라이언트 localStorage 만료 시각(23:00 KST)에 맞춰 신선한 데이터를 즉시 제공 */
+const RANKING_REBUILD_CRON = "0 23 * * *";
 const RANKING_ONE_PASS_BATCH = 50;
 
 /**
@@ -4697,7 +4697,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   return { wrote, ms };
 }
 
-/** KST 22:00 랭킹 집계 갱신 (하루 1회) */
+/** KST 23:00 랭킹 집계 갱신 (하루 1회) */
 exports.rebuildRankingAggregates = onSchedule(
   {
     schedule: RANKING_REBUILD_CRON,
@@ -4849,8 +4849,8 @@ async function runHeptagonCohortRanksRebuildJob() {
 
 exports.scheduledHeptagonCohortRanks = onSchedule(
   {
-    /** 매일 22:30 KST — 22:00 rebuildRankingAggregates 완료 후 rolling28 피크 집계를 바탕으로 스냅샷 재빌드(랭킹 GC는 이 문서만 읽음) */
-    schedule: "30 22 * * *",
+    /** 매일 23:30 KST — 23:00 rebuildRankingAggregates 완료 후 rolling28 피크 집계를 바탕으로 스냅샷 재빌드(랭킹 GC는 이 문서만 읽음) */
+    schedule: "30 23 * * *",
     timeZone: "Asia/Seoul",
     memory: "2GiB",
     timeoutSeconds: 540,
@@ -5346,6 +5346,8 @@ exports.getPeakPowerRanking = onRequest(
       return;
     }
     res.set("Access-Control-Allow-Origin", "*");
+    // 사전 집계 데이터는 5분간 CDN/프록시 캐싱 허용 (클라이언트는 localStorage로 별도 1일 캐시)
+    res.set("Cache-Control", "public, max-age=300, s-maxage=300, stale-while-revalidate=60");
     try {
     const period = req.query.period || "monthly";
     const durationType = req.query.duration || "5min";
