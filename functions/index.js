@@ -4536,6 +4536,7 @@ async function runRebuildRankingAggregatesCore(db) {
   const sharedUsersSnap = await db.collection("users").get();
   console.log("[runRebuildRankingAggregatesCore] users snapshot fetched once, docs:", sharedUsersSnap.size);
 
+  // ── 1. 주간 TSS 집계 (gender=all,M,F) ──
   let weeklyRankingFullCurrent = null;
   for (const gender of ["all", "M", "F"]) {
     const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
@@ -4555,7 +4556,49 @@ async function runRebuildRankingAggregatesCore(db) {
       endStr: wEnd,
     });
     wrote++;
+  }
 
+  // ── 2. weekly_ranking_full_* 을 가장 먼저 기록 ──
+  // TSS 집계가 끝난 직후 TOP10 문서를 저장함으로써, 이후 단계에서 타임아웃이 발생해도
+  // getWeeklyRanking 이 항상 최신 TOP10 데이터를 반환할 수 있도록 보장.
+  const entriesCurrent = weeklyRankingFullCurrent || [];
+  const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
+    rank: i + 1,
+    userId: e.userId,
+    name: e.name,
+    totalTss: Math.round(e.totalTss * 100) / 100,
+    is_private: e.is_private === true,
+  }));
+  const weeklyKey = `weekly_ranking_full_${wStart}_${wEnd}`;
+  await writeRankingAggregatePayload(db, weeklyKey, {
+    fullEntries: entriesCurrent,
+    ranking: top10Current,
+    startStr: wStart,
+    endStr: wEnd,
+  });
+  wrote++;
+  console.log("[runRebuildRankingAggregatesCore] weekly_ranking_full 저장 완료", { wStart, wEnd, entries: entriesCurrent.length });
+
+  // ── 3. 이전 주 TOP10 ──
+  const entriesPrevEarly = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
+  const top10PrevEarly = entriesPrevEarly.slice(0, 10).map((e, i) => ({
+    rank: i + 1,
+    userId: e.userId,
+    name: e.name,
+    totalTss: Math.round(e.totalTss * 100) / 100,
+    is_private: e.is_private === true,
+  }));
+  const weeklyKeyPrevEarly = `weekly_ranking_full_${wPrevS}_${wPrevE}`;
+  await writeRankingAggregatePayload(db, weeklyKeyPrevEarly, {
+    fullEntries: entriesPrevEarly,
+    ranking: top10PrevEarly,
+    startStr: wPrevS,
+    endStr: wPrevE,
+  });
+  wrote++;
+
+  // ── 4. 30일 거리 랭킹 ──
+  for (const gender of ["all", "M", "F"]) {
     const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender, sharedUsersSnap);
     const keyD = `peakRanking_personal_dist_30d_${gender}_${r30s}_${r30e}`;
     await writeRankingAggregatePayload(db, keyD, {
@@ -4577,6 +4620,7 @@ async function runRebuildRankingAggregatesCore(db) {
   });
   wrote++;
 
+  // ── 5. 피크파워 28일/365일 ──
   const allDurMonthly = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, sharedUsersSnap);
   for (const gender of ["all", "M", "F"]) {
     for (const durationType of Object.keys(DURATION_FIELDS)) {
@@ -4608,40 +4652,6 @@ async function runRebuildRankingAggregatesCore(db) {
       wrote++;
     }
   }
-
-  const entriesCurrent = weeklyRankingFullCurrent || [];
-  const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
-    rank: i + 1,
-    userId: e.userId,
-    name: e.name,
-    totalTss: Math.round(e.totalTss * 100) / 100,
-    is_private: e.is_private === true,
-  }));
-  const weeklyKey = `weekly_ranking_full_${wStart}_${wEnd}`;
-  await writeRankingAggregatePayload(db, weeklyKey, {
-    fullEntries: entriesCurrent,
-    ranking: top10Current,
-    startStr: wStart,
-    endStr: wEnd,
-  });
-  wrote++;
-
-  const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
-  const top10Prev = entriesPrev.slice(0, 10).map((e, i) => ({
-    rank: i + 1,
-    userId: e.userId,
-    name: e.name,
-    totalTss: Math.round(e.totalTss * 100) / 100,
-    is_private: e.is_private === true,
-  }));
-  const weeklyKeyPrev = `weekly_ranking_full_${wPrevS}_${wPrevE}`;
-  await writeRankingAggregatePayload(db, weeklyKeyPrev, {
-    fullEntries: entriesPrev,
-    ranking: top10Prev,
-    startStr: wPrevS,
-    endStr: wPrevE,
-  });
-  wrote++;
 
   const ms = Date.now() - t0;
   console.log("[runRebuildRankingAggregatesCore] done", { wrote, ms });
