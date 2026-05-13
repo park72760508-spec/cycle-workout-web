@@ -2808,15 +2808,6 @@ exports.getWeeklyRanking = onRequest(
     const userIdParam = (req.query && req.query.userId) || "";
     const usePrevWeek = weekParam === "prev";
     const { startStr, endStr } = usePrevWeek ? getWeekRangeSeoul(-1) : getWeekRangeSeoul();
-    const weeklyAggKey = `weekly_ranking_full_${startStr}_${endStr}`;
-    const weeklyAgg = await readRankingAggregatePayloadIfFresh(db, weeklyAggKey);
-    // fullEntries가 빈 배열이어도 날짜가 일치하고 updatedAt이 최신이면 유효한 집계로 간주
-    // (주 시작일에 아직 운동 기록이 없는 경우 등)
-    const aggMatchesWeek =
-      weeklyAgg &&
-      weeklyAgg.startStr === startStr &&
-      weeklyAgg.endStr === endStr &&
-      Array.isArray(weeklyAgg.fullEntries);
 
     const buildWeeklyRankingResponse = (entries, precomputed) => {
       const top10 = entries.slice(0, 10).map((e, i) => ({
@@ -2829,10 +2820,11 @@ exports.getWeeklyRanking = onRequest(
       }));
       let myRank = null;
       if (userIdParam) {
+        // 전체 entries에서 내 순위를 찾아 TOP10 밖이면 myRank로 반환
         const userIdx = entries.findIndex((e) => e.userId === userIdParam);
-        if (userIdx >= 10) {
-          const e = entries[userIdx];
-          myRank = {
+        const e = entries[userIdx];
+        if (e) {
+          const r = {
             rank: userIdx + 1,
             userId: e.userId,
             name: e.name,
@@ -2840,6 +2832,7 @@ exports.getWeeklyRanking = onRequest(
             is_private: e.is_private === true,
             profileImageUrl: e.profileImageUrl || null,
           };
+          if (userIdx >= 10) myRank = r;  // TOP10 밖일 때만 별도 표시
         }
       }
       res.set("Access-Control-Allow-Origin", "*");
@@ -2855,6 +2848,26 @@ exports.getWeeklyRanking = onRequest(
       else if (precomputed === false) rankBody.liveComputed = true;
       return res.status(200).json(rankBody);
     };
+
+    // ── 1순위: TSS탭과 동일한 집계 문서 (peakRanking_weekly_tss_v2_all_*) ──
+    // TOP10 모달과 TSS탭이 항상 동일한 데이터를 표시하도록 같은 소스 공유.
+    const tssCacheKey = `peakRanking_weekly_tss_v2_all_${startStr}_${endStr}`;
+    const tssAgg = await readRankingAggregatePayloadIfFresh(db, tssCacheKey);
+    if (tssAgg && tssAgg.startStr === startStr && tssAgg.endStr === endStr && Array.isArray(tssAgg.entries)) {
+      const entries = tssAgg.entries; // 전체 순위 배열 (rank, userId, name, totalTss, is_private, profileImageUrl 등)
+      await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: entries }, entries);
+      await hydrateRankingBoardProfileImages(db, { Supremo: entries }, entries);
+      return buildWeeklyRankingResponse(entries, true);
+    }
+
+    // ── 2순위: weekly_ranking_full_* (수동 집계가 직접 쓴 문서) ──
+    const weeklyAggKey = `weekly_ranking_full_${startStr}_${endStr}`;
+    const weeklyAgg = await readRankingAggregatePayloadIfFresh(db, weeklyAggKey);
+    const aggMatchesWeek =
+      weeklyAgg &&
+      weeklyAgg.startStr === startStr &&
+      weeklyAgg.endStr === endStr &&
+      Array.isArray(weeklyAgg.fullEntries);
 
     if (aggMatchesWeek) {
       await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: weeklyAgg.fullEntries }, weeklyAgg.fullEntries);
