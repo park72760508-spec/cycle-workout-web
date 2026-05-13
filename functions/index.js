@@ -2810,12 +2810,13 @@ exports.getWeeklyRanking = onRequest(
     const { startStr, endStr } = usePrevWeek ? getWeekRangeSeoul(-1) : getWeekRangeSeoul();
     const weeklyAggKey = `weekly_ranking_full_${startStr}_${endStr}`;
     const weeklyAgg = await readRankingAggregatePayloadIfFresh(db, weeklyAggKey);
+    // fullEntries가 빈 배열이어도 날짜가 일치하고 updatedAt이 최신이면 유효한 집계로 간주
+    // (주 시작일에 아직 운동 기록이 없는 경우 등)
     const aggMatchesWeek =
       weeklyAgg &&
       weeklyAgg.startStr === startStr &&
       weeklyAgg.endStr === endStr &&
-      Array.isArray(weeklyAgg.fullEntries) &&
-      weeklyAgg.fullEntries.length > 0;
+      Array.isArray(weeklyAgg.fullEntries);
 
     const buildWeeklyRankingResponse = (entries, precomputed) => {
       const top10 = entries.slice(0, 10).map((e, i) => ({
@@ -2842,7 +2843,7 @@ exports.getWeeklyRanking = onRequest(
         }
       }
       res.set("Access-Control-Allow-Origin", "*");
-      res.set("Cache-Control", "public, max-age=120");
+      res.set("Cache-Control", "no-store");
       const rankBody = {
         success: true,
         ranking: top10,
@@ -2896,7 +2897,7 @@ exports.getWeeklyRanking = onRequest(
           }
         }
         res.set("Access-Control-Allow-Origin", "*");
-        res.set("Cache-Control", "public, max-age=120");
+        res.set("Cache-Control", "no-store");
         return res.status(200).json({
           success: true,
           ranking: ranking.map((e) => ({
@@ -4522,8 +4523,12 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
   console.log("[refreshWeeklyMileageTop10AggregatesOnly] done", { ms: Date.now() - t0 });
 }
 
-/** @param {FirebaseFirestore.Firestore} db */
-async function runRebuildRankingAggregatesCore(db) {
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {boolean} [forceReconcile=false] true이면 집계 전 모든 사용자의 현재·이전 주 일 버킷을 logs에서 강제 재계산.
+ *   수동 집계(manualRebuildWeeklyRanking) 시 TSS 수동 수정값을 즉시 반영할 때 사용.
+ */
+async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   const t0 = Date.now();
   let wrote = 0;
   const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
@@ -4534,7 +4539,28 @@ async function runRebuildRankingAggregatesCore(db) {
 
   // [비용절감] users 컬렉션을 단 1회만 읽어 모든 랭킹 함수에 공유 주입 (기존 10회 → 1회)
   const sharedUsersSnap = await db.collection("users").get();
-  console.log("[runRebuildRankingAggregatesCore] users snapshot fetched once, docs:", sharedUsersSnap.size);
+  console.log("[runRebuildRankingAggregatesCore] users snapshot fetched once, docs:", sharedUsersSnap.size,
+    { forceReconcile: !!forceReconcile, wStart, wEnd });
+
+  // ── 0. 버킷 강제 재계산 (수동 집계 시에만 실행) ──
+  // 사용자 루프를 집계 루프와 분리하지 않고 여기서 일괄 처리함으로써 Firestore 읽기 중복을 줄임.
+  if (forceReconcile) {
+    const RECONCILE_BATCH = 10; // 동시 처리 사용자 수 (타임아웃 방지)
+    for (let i = 0; i < sharedUsersSnap.docs.length; i += RECONCILE_BATCH) {
+      const batch = sharedUsersSnap.docs.slice(i, i + RECONCILE_BATCH);
+      await Promise.all(batch.map(async (userDoc) => {
+        const uid = userDoc.id;
+        const udata = userDoc.data() || {};
+        try {
+          await rankingDayRollup.ensureRankingBucketsFilledForRange(db, uid, udata, wStart, wEnd, true);
+          await rankingDayRollup.ensureRankingBucketsFilledForRange(db, uid, udata, wPrevS, wPrevE, true);
+        } catch (e) {
+          console.warn("[runRebuildRankingAggregatesCore] bucket reconcile 실패:", uid, e && e.message);
+        }
+      }));
+    }
+    console.log("[runRebuildRankingAggregatesCore] 버킷 강제 재계산 완료, ms:", Date.now() - t0);
+  }
 
   // ── 1. 주간 TSS 집계 (gender=all,M,F) ──
   let weeklyRankingFullCurrent = null;
@@ -4710,44 +4736,65 @@ exports.manualRebuildWeeklyRanking = onRequest(
 
     try {
       const t0 = Date.now();
-
-      // [1단계] 현재 주·이전 주 ranking_day_totals 버킷 강제 재계산
-      // — ensureRankingBucketsFilledForRange는 기존 버킷을 갱신하지 않으므로,
-      //   TSS 수동 수정 후 즉시 반영하려면 로그에서 직접 재계산이 필요.
       const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
       const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
-      const usersSnap = await db.collection("users").get();
-      console.log("[manualRebuildWeeklyRanking] 버킷 강제 재계산 시작, users:", usersSnap.size,
-        { wStart, wEnd, wPrevS, wPrevE });
 
-      for (const userDoc of usersSnap.docs) {
-        const userId = userDoc.id;
-        const userData = userDoc.data() || {};
-        try {
-          // 현재 주 강제 재계산
-          await rankingDayRollup.ensureRankingBucketsFilledForRange(
-            db, userId, userData, wStart, wEnd, true
-          );
-          // 이전 주 강제 재계산 (이전 주 TOP10도 동기화)
-          await rankingDayRollup.ensureRankingBucketsFilledForRange(
-            db, userId, userData, wPrevS, wPrevE, true
-          );
-        } catch (e) {
-          console.warn("[manualRebuildWeeklyRanking] 버킷 재계산 실패:", userId, e && e.message);
+      // 사용자 스냅샷 1회 로드 (이후 모든 집계 공유)
+      const sharedUsersSnap = await db.collection("users").get();
+      console.log("[manualRebuildWeeklyRanking] 시작, users:", sharedUsersSnap.size, { wStart, wEnd });
+
+      // ── [필수] 현재 주 + 이전 주 TOP10 즉시 집계 후 응답 ──
+      // 프록시 타임아웃(130초) 이내에 응답하기 위해 TOP10·TSS 탭 갱신만 먼저 완료.
+      // 나머지 랭킹(피크파워·거리)은 응답 후 백그라운드에서 처리.
+
+      // 현재 주 — TSS all/M/F (TSS 랭킹보드 탭과 동기화)
+      let entriesCurrent = [];
+      for (const gender of ["all", "M", "F"]) {
+        const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
+        if (gender === "all") {
+          entriesCurrent = tss.entries.map((e) => ({
+            userId: e.userId, name: e.name, totalTss: e.totalTss, is_private: e.is_private === true,
+          }));
         }
+        await writeRankingAggregatePayload(db, `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`, {
+          byCategory: tss.byCategory, entries: tss.entries, startStr: wStart, endStr: wEnd,
+        });
       }
-      console.log("[manualRebuildWeeklyRanking] 버킷 강제 재계산 완료, ms:", Date.now() - t0);
+      // 현재 주 TOP10 저장
+      const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
+        rank: i + 1, userId: e.userId, name: e.name,
+        totalTss: Math.round(e.totalTss * 100) / 100, is_private: e.is_private === true,
+      }));
+      await writeRankingAggregatePayload(db, `weekly_ranking_full_${wStart}_${wEnd}`, {
+        fullEntries: entriesCurrent, ranking: top10Current, startStr: wStart, endStr: wEnd,
+      });
+      console.log("[manualRebuildWeeklyRanking] 현재 주 TOP10 저장 완료, entries:", entriesCurrent.length);
 
-      // [2단계] 전체 랭킹 집계 (ranking_aggregates 문서 갱신)
-      await runRebuildRankingAggregatesCore(db);
+      // 이전 주 TOP10 저장
+      const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
+      const top10Prev = entriesPrev.slice(0, 10).map((e, i) => ({
+        rank: i + 1, userId: e.userId, name: e.name,
+        totalTss: Math.round(e.totalTss * 100) / 100, is_private: e.is_private === true,
+      }));
+      await writeRankingAggregatePayload(db, `weekly_ranking_full_${wPrevS}_${wPrevE}`, {
+        fullEntries: entriesPrev, ranking: top10Prev, startStr: wPrevS, endStr: wPrevE,
+      });
 
       const ms = Date.now() - t0;
-      console.log("[manualRebuildWeeklyRanking] 전체 완료, ms:", ms);
+      console.log("[manualRebuildWeeklyRanking] TOP10 집계 완료, ms:", ms);
+
+      // ── 응답 먼저 반환 (프록시 타임아웃 방지) ──
       res.status(200).json({ success: true, message: "주간 마일리지 집계가 완료되었습니다.", ms });
+
+      // ── [백그라운드] 나머지 랭킹 집계 (피크파워·거리 등) ──
+      // TOP10은 이미 갱신됨. 나머지는 매일 22:00 스케줄러가 처리하므로 실패해도 무방.
+      runRebuildRankingAggregatesCore(db).catch((e) => {
+        console.warn("[manualRebuildWeeklyRanking] 백그라운드 full 집계 오류:", e && e.message);
+      });
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
       console.error("[manualRebuildWeeklyRanking]", msg);
-      res.status(500).json({ success: false, error: msg });
+      if (!res.headersSent) res.status(500).json({ success: false, error: msg });
     }
   }
 );
