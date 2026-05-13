@@ -8701,8 +8701,23 @@
       var g = gender === 'M' || gender === 'F' ? gender : 'all';
       var key = ['v2', period || '', duration || '', g].join('|');
       var now = Date.now();
+
+      // 1순위: 인메모리 캐시 (45초 TTL — 탭 내 반복 호출 방어)
       var hit = STELVIO_RANK_PROFILE_FETCH_CACHE[key];
       if (hit && hit.data && hit.at && now - hit.at < STELVIO_RANK_PROFILE_CACHE_MS) return hit.data;
+
+      // 2순위: localStorage 랭킹 캐시 (다음 23:00 KST까지 유효)
+      // 메인 rankingBoard fetch와 동일한 키 구조 사용 → 탭 프리페치 결과를 즉시 활용
+      try {
+        var lcParams = new URLSearchParams({ period: period || '', duration: duration || '', gender: g });
+        var lcKey = 'peak:' + lcParams.toString();
+        var lcEntry = stelvioRankingLocalCache.get(lcKey);
+        if (lcEntry && lcEntry.data && lcEntry.data.success && lcEntry.data.byCategory) {
+          STELVIO_RANK_PROFILE_FETCH_CACHE[key] = { at: now, data: lcEntry.data };
+          return lcEntry.data;
+        }
+      } catch (eLc) {}
+
       var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
       var toMs = Math.min(STELVIO_RANKING_FETCH_TIMEOUT_MS || 35000, 16000);
       var to =
@@ -9363,6 +9378,35 @@
       window.refreshStelvioDistributionChart(wired);
     }
 
+    /**
+     * 베이스캠프 진입 후 백그라운드에서 모든 랭킹 탭 데이터를 미리 로딩해 localStorage에 저장.
+     * 탭당 500ms 간격으로 순차 요청하여 서버 부하를 분산.
+     * 이미 신선한(10분 이내) 캐시가 있는 탭은 건너뜀.
+     */
+    function stelvioBackgroundPrefetchAllTabs(uid) {
+      var RANKING_API = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
+      var durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min', 'tss', 'personal_dist', 'group_dist'];
+      durations.forEach(function (dur, idx) {
+        setTimeout(function () {
+          try {
+            var params = new URLSearchParams({ period: 'monthly', duration: dur, gender: 'all' });
+            if (uid) params.set('uid', uid);
+            var lcKey = 'peak:' + params.toString();
+            var cached = stelvioRankingLocalCache.get(lcKey);
+            if (cached && !stelvioRankingLocalCache.isStale(cached)) return;
+            fetch(RANKING_API + '?' + params.toString(), { method: 'GET', mode: 'cors', cache: 'no-store' })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (data) {
+                if (data && data.success && data.byCategory) {
+                  stelvioRankingLocalCache.set(lcKey, data);
+                }
+              })
+              .catch(function () {});
+          } catch (ePf) {}
+        }, (idx + 1) * 500);
+      });
+    }
+
     function scheduleStelvioRankingWarmCacheOnce() {
       if (stelvioRankingPrefetchScheduled) return;
       stelvioRankingPrefetchScheduled = true;
@@ -9384,6 +9428,9 @@
         });
         if (uid) params.set('uid', uid);
         var key = params.toString();
+        var lcKey = 'peak:' + key;
+
+        // SWR 메모리 히트 → 백그라운드 탭 프리페치만 실행
         var c = stelvioRankingSwrCache;
         if (
           c &&
@@ -9393,8 +9440,19 @@
           c.body.byCategory &&
           Date.now() - c.ts < STELVIO_RANKING_SWR_MAX_MS
         ) {
+          stelvioBackgroundPrefetchAllTabs(uid);
           return;
         }
+
+        // localStorage 히트 → SWR에도 올리고 탭 프리페치
+        var lcEntry = stelvioRankingLocalCache.get(lcKey);
+        if (lcEntry && lcEntry.data && lcEntry.data.success && lcEntry.data.byCategory) {
+          stelvioRankingSwrCache = { key: key, body: lcEntry.data, ts: Date.now() };
+          stelvioBackgroundPrefetchAllTabs(uid);
+          return;
+        }
+
+        // 캐시 없음 → GC 데이터 fetch 후 localStorage + SWR 저장, 이후 탭 프리페치
         var warmUrl = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + key;
         fetch(warmUrl, { method: 'GET', mode: 'cors', cache: 'no-store' })
           .then(function (r) {
@@ -9402,7 +9460,9 @@
           })
           .then(function (data) {
             if (data && data.success && data.byCategory) {
+              stelvioRankingLocalCache.set(lcKey, data);
               stelvioRankingSwrCache = { key: key, body: data, ts: Date.now() };
+              stelvioBackgroundPrefetchAllTabs(uid);
             }
           })
           .catch(function () {});
