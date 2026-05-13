@@ -13868,8 +13868,9 @@ function ensureStelvioAdminAccessStatsButton() {
       });
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.success) {
+        const msInfo = json.ms ? ` (${(json.ms / 1000).toFixed(1)}초)` : '';
         rankingBtn.textContent = '✅ 집계 완료!';
-        if (typeof showToast === 'function') showToast('주간 마일리지 TOP10 집계가 완료되었습니다.');
+        if (typeof showToast === 'function') showToast('주간 마일리지 TOP10 집계가 완료되었습니다.' + msInfo);
         setTimeout(function () {
           rankingBtn.textContent = '🏆 주간 마일리지 수동 집계';
           rankingBtn.disabled = false;
