@@ -66,6 +66,7 @@
     mobileDashboardScreen: true,
     trainingScreen: true,
     bluetoothIndividualScreen: true,
+    affiliateScreen: true,
     profileScreen: true,
     openRidingRoomScreen: true
   };
@@ -84,6 +85,7 @@
     mobileDashboardScreen: '훈련 화면 (모바일)',
     trainingScreen: '훈련 화면 (태블릿)',
     bluetoothIndividualScreen: '훈련 화면 (그룹)',
+    affiliateScreen: '제휴사 목록',
     profileScreen: '사용자 정보'
   };
 
@@ -720,6 +722,7 @@
       { key: 'mobileDashboardScreen', val: screens.mobileDashboardScreen },
       { key: 'trainingScreen', val: screens.trainingScreen },
       { key: 'bluetoothIndividualScreen', val: screens.bluetoothIndividualScreen },
+      { key: 'affiliateScreen', val: screens.affiliateScreen },
       { key: 'profileScreen', val: screens.profileScreen }
     ];
 
