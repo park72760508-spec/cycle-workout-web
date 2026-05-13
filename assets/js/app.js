@@ -13871,6 +13871,15 @@ function ensureStelvioAdminAccessStatsButton() {
         const msInfo = json.ms ? ` (${(json.ms / 1000).toFixed(1)}초)` : '';
         rankingBtn.textContent = '✅ 집계 완료!';
         if (typeof showToast === 'function') showToast('주간 마일리지 TOP10 집계가 완료되었습니다.' + msInfo);
+        // 집계 완료 후 TOP10 모달이 열려 있으면 최신 데이터로 즉시 갱신
+        try {
+          const top10Modal = document.getElementById('weeklyTop10Modal');
+          if (top10Modal && !top10Modal.classList.contains('hidden')) {
+            if (typeof window.fetchAndShowWeeklyTop10Modal === 'function') {
+              window.fetchAndShowWeeklyTop10Modal(true);
+            }
+          }
+        } catch (_e) {}
         setTimeout(function () {
           rankingBtn.textContent = '🏆 주간 마일리지 수동 집계';
           rankingBtn.disabled = false;
