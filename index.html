@@ -9607,6 +9607,105 @@
       }
     }
 
+    /**
+     * localStorage에 캐시된 모든 랭킹 데이터(기간·지표·성별 무관)를 스캔하여
+     * userId → profileImageUrl 맵을 반환한다.
+     * 기존 fix의 버그: 키에 &uid=XXX 파라미터가 붙어 정확 매칭 실패 → 전체 키 순회로 교체.
+     */
+    function stelvioCollectAllCachedProfileUrls() {
+      var map = {};
+      var prefix = STELVIO_RANKING_LC_PREFIX + 'peak:';
+      var CAT_NAMES = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      try {
+        for (var _i = 0; _i < localStorage.length; _i++) {
+          var _k = localStorage.key(_i);
+          if (!_k || _k.indexOf(prefix) !== 0) continue;
+          try {
+            var _raw = localStorage.getItem(_k);
+            if (!_raw) continue;
+            var _obj = JSON.parse(_raw);
+            var _d = _obj && _obj.data;
+            if (!_d) continue;
+            /* byCategory 순회 */
+            if (_d.byCategory) {
+              for (var _ci = 0; _ci < CAT_NAMES.length; _ci++) {
+                var _catArr = _d.byCategory[CAT_NAMES[_ci]] || [];
+                for (var _ai = 0; _ai < _catArr.length; _ai++) {
+                  var _e = _catArr[_ai];
+                  if (_e && _e.userId && _e.profileImageUrl && !map[String(_e.userId)]) {
+                    map[String(_e.userId)] = _e.profileImageUrl;
+                  }
+                }
+              }
+            }
+            /* entries 배열 */
+            if (Array.isArray(_d.entries)) {
+              for (var _ei = 0; _ei < _d.entries.length; _ei++) {
+                var _en = _d.entries[_ei];
+                if (_en && _en.userId && _en.profileImageUrl && !map[String(_en.userId)]) {
+                  map[String(_en.userId)] = _en.profileImageUrl;
+                }
+              }
+            }
+            /* currentUser */
+            if (_d.currentUser && _d.currentUser.userId && _d.currentUser.profileImageUrl) {
+              var _cu = String(_d.currentUser.userId);
+              if (!map[_cu]) map[_cu] = _d.currentUser.profileImageUrl;
+            }
+          } catch (_e2) {}
+        }
+      } catch (_e3) {}
+      /* stelvioRankingGroupContactDataMap(Firestore 그룹 멤버)도 병합 */
+      if (stelvioRankingGroupContactDataMap) {
+        var _ckeys = Object.keys(stelvioRankingGroupContactDataMap);
+        for (var _cki = 0; _cki < _ckeys.length; _cki++) {
+          var _ck = _ckeys[_cki];
+          var _ce = stelvioRankingGroupContactDataMap[_ck];
+          if (_ce && _ce.profileImageUrl && !map[_ck]) map[_ck] = _ce.profileImageUrl;
+        }
+      }
+      return map;
+    }
+
+    /**
+     * GC API 응답에 profileImageUrl이 없는 항목을 다른 metric 캐시로 보충한다.
+     * GC 탭 메인 목록(buildSupremoRow)과 그룹탭 양쪽이 stelvioRankingByCategory를
+     * 공유하므로 여기서 한 번만 처리하면 두 탭 모두 해결된다.
+     */
+    function stelvioEnrichMissingProfileImages(data) {
+      if (!data || !data.byCategory) return;
+      var fallback = stelvioCollectAllCachedProfileUrls();
+      if (!Object.keys(fallback).length) return;
+      var CAT_NAMES = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      for (var ci = 0; ci < CAT_NAMES.length; ci++) {
+        var rows = data.byCategory[CAT_NAMES[ci]] || [];
+        for (var ri = 0; ri < rows.length; ri++) {
+          var row = rows[ri];
+          if (row && row.userId && !row.profileImageUrl) {
+            var fb = fallback[String(row.userId)];
+            if (fb) row.profileImageUrl = fb;
+          }
+        }
+      }
+      if (Array.isArray(data.entries)) {
+        for (var ei = 0; ei < data.entries.length; ei++) {
+          var en = data.entries[ei];
+          if (en && en.userId && !en.profileImageUrl) {
+            var fbE = fallback[String(en.userId)];
+            if (fbE) en.profileImageUrl = fbE;
+          }
+        }
+      }
+      if (data.currentUser && data.currentUser.userId && !data.currentUser.profileImageUrl) {
+        var fbC = fallback[String(data.currentUser.userId)];
+        if (fbC) data.currentUser.profileImageUrl = fbC;
+      }
+      if (data.myRankSupremo && data.myRankSupremo.userId && !data.myRankSupremo.profileImageUrl) {
+        var fbM = fallback[String(data.myRankSupremo.userId)];
+        if (fbM) data.myRankSupremo.profileImageUrl = fbM;
+      }
+    }
+
     function stelvioApplyPeakRankingFetchResult(data, myGen, uid) {
       if (myGen !== stelvioRankingFetchGen) return;
       if (!data || !data.success || !data.byCategory) {
@@ -9621,6 +9720,8 @@
       if (uid && typeof stelvioMergeViewerProfileImageIntoRankingPayload === 'function') {
         stelvioMergeViewerProfileImageIntoRankingPayload(data, uid);
       }
+      /* GC API에 profileImageUrl이 없는 사용자를 다른 metric 캐시로 보충 */
+      stelvioEnrichMissingProfileImages(data);
       stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
       stelvioRankingByCategory = data.byCategory;
       stelvioRankingApiStartStr = typeof data.startStr === 'string' ? data.startStr : '';
@@ -10190,57 +10291,28 @@
 
       /**
        * 그룹탭 전용 프로필 URL 통합 조회 맵:
-       * GC API는 일부 사용자의 profileImageUrl을 null로 반환할 수 있음.
-       * TSS/거리 등 다른 metric API 캐시(localStorage)와 contactDataMap을 모두 훑어
-       * 어느 소스든 URL이 있으면 멤버 아바타 표시에 사용한다.
+       * stelvioEnrichMissingProfileImages() 가 이미 stelvioRankingByCategory를
+       * 보충했으므로, 여기서는 byCategory + Firestore contactMap 만 합산하면 충분.
+       * (stelvioCollectAllCachedProfileUrls는 stelvioEnrichMissingProfileImages 내부에서 호출됨)
        */
       var stelvioGroupProfileUrlMap = (function () {
-        var map = {};
-        /* 1. 현재 API 응답의 모든 카테고리 */
+        /* stelvioCollectAllCachedProfileUrls() 로 전체 localStorage 스캔 결과를 기반으로 시작 */
+        var map = (typeof stelvioCollectAllCachedProfileUrls === 'function')
+          ? stelvioCollectAllCachedProfileUrls()
+          : {};
+        /* 현재 API 응답(stelvioEnrichMissingProfileImages 적용 후)으로 덮어쓰기/추가 */
         var CAT_NAMES = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
         if (stelvioRankingByCategory) {
           for (var _ci = 0; _ci < CAT_NAMES.length; _ci++) {
             var _arr = stelvioRankingByCategory[CAT_NAMES[_ci]] || [];
             for (var _ai = 0; _ai < _arr.length; _ai++) {
               var _e = _arr[_ai];
-              if (_e && _e.userId && _e.profileImageUrl && !map[String(_e.userId)]) {
-                map[String(_e.userId)] = _e.profileImageUrl;
+              if (_e && _e.userId && _e.profileImageUrl) {
+                map[String(_e.userId)] = _e.profileImageUrl; // 최신 값으로 갱신
               }
             }
           }
         }
-        /* 2. 그룹 멤버 contact 맵 (stelvioRefreshGroupContactSetFromFirestore 결과) */
-        if (stelvioRankingGroupContactDataMap) {
-          var _ckeys = Object.keys(stelvioRankingGroupContactDataMap);
-          for (var _cki = 0; _cki < _ckeys.length; _cki++) {
-            var _ck = _ckeys[_cki];
-            var _ce = stelvioRankingGroupContactDataMap[_ck];
-            if (_ce && _ce.profileImageUrl && !map[_ck]) map[_ck] = _ce.profileImageUrl;
-          }
-        }
-        /* 3. localStorage에 캐시된 다른 metric 데이터에서 보충
-              GC API에 없어도 TSS·거리 API 캐시에 profileImageUrl이 있는 경우 활용 */
-        try {
-          var _durations = ['tss', 'personal_dist', 'max', '1min', '5min', '10min', '20min', '40min', '60min'];
-          var _lcPrefix = (typeof STELVIO_RANKING_LC_PREFIX !== 'undefined' ? STELVIO_RANKING_LC_PREFIX : 'stelvioRC:v1:');
-          for (var _di = 0; _di < _durations.length; _di++) {
-            var _dur = _durations[_di];
-            var _lcKey = _lcPrefix + 'peak:period=monthly&duration=' + _dur + '&gender=all';
-            var _raw = localStorage.getItem(_lcKey);
-            if (!_raw) continue;
-            var _cached = JSON.parse(_raw);
-            if (!_cached || !_cached.data || !_cached.data.byCategory) continue;
-            for (var _cai = 0; _cai < CAT_NAMES.length; _cai++) {
-              var _caArr = _cached.data.byCategory[CAT_NAMES[_cai]] || [];
-              for (var _caI = 0; _caI < _caArr.length; _caI++) {
-                var _caE = _caArr[_caI];
-                if (_caE && _caE.userId && _caE.profileImageUrl && !map[String(_caE.userId)]) {
-                  map[String(_caE.userId)] = _caE.profileImageUrl;
-                }
-              }
-            }
-          }
-        } catch (_lcErr) {}
         return map;
       })();
 
