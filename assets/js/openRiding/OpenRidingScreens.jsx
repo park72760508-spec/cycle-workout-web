@@ -10030,7 +10030,17 @@ function OpenRidingGroupDetailView(props) {
                     <span className="stelvio-rank-name">
                       {photo ? (
                         <span className="inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100">
-                          <img className="stelvio-rank-avatar-img" src={photo} alt="" decoding="async" />
+                          <img
+                            className="stelvio-rank-avatar-img"
+                            src={photo}
+                            alt=""
+                            decoding="async"
+                            onError={function(e) {
+                              e.currentTarget.onerror = null;
+                              var def = openRidingDefaultProfileImg();
+                              if (e.currentTarget.src !== def) e.currentTarget.src = def;
+                            }}
+                          />
                         </span>
                       ) : (
                         <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
@@ -10155,7 +10165,17 @@ function OpenRidingGroupDetailView(props) {
                       <span className="stelvio-rank-name">
                         {photo ? (
                           <span className="inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100">
-                            <img className="stelvio-rank-avatar-img" src={photo} alt="" decoding="async" />
+                            <img
+                              className="stelvio-rank-avatar-img"
+                              src={photo}
+                              alt=""
+                              decoding="async"
+                              onError={function(e) {
+                                e.currentTarget.onerror = null;
+                                var def = openRidingDefaultProfileImg();
+                                if (e.currentTarget.src !== def) e.currentTarget.src = def;
+                              }}
+                            />
                           </span>
                         ) : (
                           <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-amber-50 to-slate-100 text-[10px] font-bold text-amber-900">
