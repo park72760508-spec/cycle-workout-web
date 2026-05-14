@@ -130,11 +130,15 @@
     if (yearlyPeaks) {
       ['max_watts', 'max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_40min_watts', 'max_60min_watts'].forEach(function(f) {
         peakParts.push(yearlyPeaks[f]);
+        // W/kg 저장 필드도 키에 포함 (사전 계산된 _wkg 값 변경 시 차트 재생성)
+        var wkgKey = f.replace('_watts', '_wkg');
+        if (yearlyPeaks[wkgKey] != null) peakParts.push(yearlyPeaks[wkgKey]);
       });
     }
     var pk = peakParts.join(',');
     return [
       userWeight,
+      log.weight || 0,
       pk,
       log.avg_watts,
       log.max_watts,
@@ -158,6 +162,7 @@
     }
     return [
       userWeight,
+      log.weight || 0,
       peakParts.join(','),
       log.avg_hr,
       log.max_hr,
@@ -612,6 +617,7 @@
         torque_effectiveness_right: log.torque_effectiveness_right,
         avg_hr: log.avg_hr,
         max_hr: log.max_hr,
+        max_heartrate: log.max_heartrate,
         max_hr_5sec: log.max_hr_5sec,
         max_hr_1min: log.max_hr_1min,
         max_hr_5min: log.max_hr_5min,
@@ -629,6 +635,7 @@
         max_40min_watts: log.max_40min_watts,
         max_60min_watts: log.max_60min_watts,
         max_watts: log.max_watts,
+        weight: log.weight,
         time_in_zones: log.time_in_zones,
         source: log.source
       };
@@ -706,6 +713,7 @@
       torque_effectiveness_right: null,
       avg_hr: totalSec > 0 ? sumHrSec / totalSec : null,
       max_hr: maxHr || null,
+      max_heartrate: maxHr || null,
       max_hr_5sec: maxHr5 || null,
       max_hr_1min: maxHr1 || null,
       max_hr_5min: maxHr5m || null,
@@ -723,6 +731,7 @@
       max_40min_watts: max40w || null,
       max_60min_watts: max60w || null,
       max_watts: maxW || null,
+      weight: logs[0].weight,
       time_in_zones: mergedTiz,
       source: logs[0].source
     };

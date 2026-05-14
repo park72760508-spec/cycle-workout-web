@@ -86,8 +86,8 @@
       }
     }, []);
 
-    // PR 표시용 yearly_peaks 조회 (기존 renderMiniCalendarJournal 로직 이관)
-    useEffect(function loadYearlyPeaks() {
+    // PR 표시용 yearly_peaks 조회
+    var runYearlyPeaksFetch = useCallback(function() {
       var userId = getCurrentUserId();
       if (!userId || typeof window.fetchYearlyPeaksForYear !== 'function') return;
       var yearsToFetch = [currentYear - 1, currentYear, currentYear + 1];
@@ -105,6 +105,11 @@
         })
         .catch(function(e) { console.warn('[useJournalData] yearly_peaks 조회 실패:', e); });
     }, [currentYear]);
+
+    // 연도 변경 시(달 이동으로 연도 바뀔 때) 자동 재조회
+    useEffect(function loadYearlyPeaks() {
+      runYearlyPeaksFetch();
+    }, [runYearlyPeaksFetch]);
 
     // 훈련 로그 로드
     var runTrainingLogsFetch = useCallback(function(forceRefresh) {
@@ -157,12 +162,16 @@
       function onRefresh(ev) {
         var force = !(ev && ev.detail && ev.detail.force === false);
         runTrainingLogsFetch(force);
+        // 로그 갱신 시 yearly_peaks도 함께 재조회:
+        // Cloud Function이 새 라이딩 저장 후 peaks를 업데이트하므로
+        // 최신 PR 정보를 반영하기 위해 항상 재패치한다.
+        runYearlyPeaksFetch();
       }
       window.addEventListener('journal-training-logs-refresh', onRefresh);
       return function() {
         window.removeEventListener('journal-training-logs-refresh', onRefresh);
       };
-    }, [runTrainingLogsFetch]);
+    }, [runTrainingLogsFetch, runYearlyPeaksFetch]);
 
     useEffect(function autoSelectDefaultJournalDate() {
       if (loading) return;
