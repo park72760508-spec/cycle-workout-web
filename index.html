@@ -10554,6 +10554,74 @@
         stelvioWriteStoredRank(rkKey, globalRank);
       }
       textEl.innerHTML = msg;
+
+      /* GC탭 전용: 펼쳐보기 토글 버튼 표시 제어 */
+      var heroToggleRow = document.getElementById('stelvioHeroExpandToggleRow');
+      if (heroToggleRow) {
+        if (stelvioIsGcRankingMode()) {
+          heroToggleRow.classList.remove('hidden');
+        } else {
+          heroToggleRow.classList.add('hidden');
+          /* GC 모드가 아니면 펼쳐진 영역도 닫기 */
+          var expandArea = document.getElementById('stelvioHeroExpandArea');
+          if (expandArea) {
+            expandArea.classList.remove('stelvio-hero-expand-area--open');
+            if (expandArea._heptagonReactRoot) {
+              try { expandArea._heptagonReactRoot.unmount(); } catch(e) {}
+              expandArea._heptagonReactRoot = null;
+            } else if (typeof ReactDOM !== 'undefined' && ReactDOM.unmountComponentAtNode) {
+              ReactDOM.unmountComponentAtNode(expandArea);
+            }
+          }
+          var expandBtnIcon = document.getElementById('stelvioHeroExpandBtnIcon');
+          var expandBtnLabel = document.getElementById('stelvioHeroExpandBtnLabel');
+          if (expandBtnIcon) expandBtnIcon.textContent = '+';
+          if (expandBtnLabel) expandBtnLabel.textContent = '펼쳐보기';
+        }
+      }
+    }
+
+    /** GC탭 히어로카드 펼쳐보기/접어보기 토글 */
+    function stelvioHeroExpandToggle() {
+      var expandArea = document.getElementById('stelvioHeroExpandArea');
+      var expandBtnIcon = document.getElementById('stelvioHeroExpandBtnIcon');
+      var expandBtnLabel = document.getElementById('stelvioHeroExpandBtnLabel');
+      if (!expandArea) return;
+
+      var isOpen = expandArea.classList.contains('stelvio-hero-expand-area--open');
+      if (isOpen) {
+        /* 접기 */
+        expandArea.classList.remove('stelvio-hero-expand-area--open');
+        if (expandBtnIcon) expandBtnIcon.textContent = '+';
+        if (expandBtnLabel) expandBtnLabel.textContent = '펼쳐보기';
+        /* React 컴포넌트 언마운트 */
+        if (expandArea._heptagonReactRoot) {
+          try { expandArea._heptagonReactRoot.unmount(); } catch(e) {}
+          expandArea._heptagonReactRoot = null;
+        } else if (typeof ReactDOM !== 'undefined' && ReactDOM.unmountComponentAtNode) {
+          ReactDOM.unmountComponentAtNode(expandArea);
+        }
+      } else {
+        /* 펼치기 */
+        expandArea.classList.add('stelvio-hero-expand-area--open');
+        if (expandBtnIcon) expandBtnIcon.textContent = '−';
+        if (expandBtnLabel) expandBtnLabel.textContent = '접어보기';
+        /* StelvioOctagonRanksCard 마운트 */
+        if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && typeof window.StelvioOctagonRanksCard === 'function') {
+          var userProfile = window.currentUser || (function() {
+            try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; }
+          })();
+          var el = React.createElement(window.StelvioOctagonRanksCard, { userProfile: userProfile });
+          if (ReactDOM.createRoot) {
+            if (!expandArea._heptagonReactRoot) {
+              expandArea._heptagonReactRoot = ReactDOM.createRoot(expandArea);
+            }
+            expandArea._heptagonReactRoot.render(el);
+          } else {
+            ReactDOM.render(el, expandArea);
+          }
+        }
+      }
     }
 
     function renderStelvioActiveCategory() {
@@ -23959,6 +24027,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <!-- ② 내 랭킹 요약 Hero 카드 -->
         <div id="stelvioHeroCard" class="stelvio-hero-card hidden">
           <p id="stelvioHeroText" class="stelvio-hero-text"></p>
+          <!-- GC탭 전용: 펼쳐보기/접어보기 토글 -->
+          <div id="stelvioHeroExpandToggleRow" class="stelvio-hero-expand-toggle-row hidden">
+            <button type="button" id="stelvioHeroExpandBtn" class="stelvio-hero-expand-btn" onclick="if(typeof stelvioHeroExpandToggle==='function')stelvioHeroExpandToggle();">
+              <span class="stelvio-hero-expand-btn-icon" id="stelvioHeroExpandBtnIcon">+</span>
+              <span id="stelvioHeroExpandBtnLabel">펼쳐보기</span>
+            </button>
+          </div>
+          <!-- 펼쳐진 영역: STELVIO 헵타곤 (레벨 포지션) -->
+          <div id="stelvioHeroExpandArea" class="stelvio-hero-expand-area"></div>
         </div>
         <!-- 로딩 -->
         <div id="stelvioRankingLoading" class="stelvio-ranking-loading hidden">
