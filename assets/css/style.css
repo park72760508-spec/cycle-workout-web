@@ -8453,8 +8453,8 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   flex-shrink: 0;
 }
 
-/* ── 2줄: 3등분 레이아웃 전체 너비 (테두리·구분선 없음) ── */
-/* 아바타(1/3) │ 포인트(1/3) │ 제휴사 할인(1/3) */
+/* ── 2줄: 4등분 레이아웃 전체 너비 (테두리·구분선 없음) ── */
+/* 아바타(1/4) │ 누적포인트(1/4) │ 보유포인트(1/4) │ 제휴사 할인(1/4) */
 #profileScreen .stelvio-user-points-with-avatar {
   display: flex;
   flex-direction: row;
@@ -8466,7 +8466,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   box-sizing: border-box;
 }
 
-/* 아바타 섹션 – flex:1 (1/3) */
+/* 아바타 섹션 – flex:1 (1/4), 중앙정렬 */
 #profileScreen .stelvio-user-points-with-avatar > .stelvio-profile-card-avatar-btn,
 #profileScreen .stelvio-user-points-with-avatar > .stelvio-profile-card-avatar-readonly {
   flex: 1 1 0;
@@ -8476,25 +8476,15 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   min-width: 0;
 }
 
-/* 포인트 섹션 – flex:1 (1/3), 1줄 강제 */
-#profileScreen .stelvio-user-points-with-avatar .user-points {
-  flex: 1 1 0 !important;
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 8px !important;
-  min-width: 0 !important;
-  overflow: visible !important;
-}
-
-/* 포인트 배지 (이 컨텍스트) */
-#profileScreen .stelvio-user-points-with-avatar .point-badge {
-  flex-shrink: 1;
+/* 포인트 배지 직접 자식 – 각 flex:1 (1/4), 중앙정렬 */
+#profileScreen .stelvio-user-points-with-avatar > .point-badge {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   white-space: nowrap;
   min-width: 0;
-  padding: 3px 7px !important;
+  padding: 3px 5px !important;
 }
 
 /* 숫자 잘림 없음 */
@@ -8689,10 +8679,9 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   font-size: 0.5rem;
 }
 
-/* 제휴 버튼 – 3번째 컬럼 2/3 너비 */
+/* 제휴 버튼 – 4번째 컬럼 1/4 균등 */
 #profileScreen .stelvio-user-points-with-avatar > .stelvio-affiliate-btn {
-  /* 현재 크기(flex:0.8)의 2/3 → 약 0.533 */
-  flex: 0.533 1 0;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -8700,7 +8689,6 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   margin-left: 0;
   padding: 4px 5px;
   min-width: 0;
-  max-width: 64px; /* 기존 ~96px의 2/3 */
 }
 
 #profileScreen .user-card .point-icon {
@@ -8721,10 +8709,11 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   vertical-align: middle;
   flex-shrink: 0; /* 아이콘 크기 고정 */
 }
-/* 4줄: 3분할 (공개/비공개 | 연락처 | 만료일) */
+/* 4줄: 1행(공개/비공개 | 연락처) + 2행(만료일 좌측) */
 #profileScreen .user-card .user-meta {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0;
   color: var(--text-muted);
@@ -8739,9 +8728,11 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   flex: 1 1 0;
   text-align: center;
 }
+/* 만료일: 다음 줄로 내려서 좌측 정렬 */
 #profileScreen .user-card .user-meta .expiry {
-  flex: 1 1 0;
-  text-align: right;
+  flex: 0 0 100%;
+  text-align: left;
+  margin-top: 3px;
 }
 
 /* 비공개 토글 (user-meta 안으로 이동) */
