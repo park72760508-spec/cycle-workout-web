@@ -6811,6 +6811,52 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-weight: 700;
 }
 
+/* 랭킹보드 GC탭 히어로카드 펼쳐보기/접어보기 */
+.stelvio-hero-expand-toggle-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+.stelvio-hero-expand-toggle-row.hidden {
+  display: none;
+}
+.stelvio-hero-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1.5px solid rgba(102, 126, 234, 0.4);
+  border-radius: 20px;
+  padding: 5px 16px;
+  font-size: 0.82rem;
+  color: #667eea;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  letter-spacing: 0.01em;
+}
+.stelvio-hero-expand-btn:hover {
+  background: rgba(102, 126, 234, 0.08);
+  border-color: rgba(102, 126, 234, 0.65);
+  color: #4f46e5;
+}
+.stelvio-hero-expand-btn-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+  font-weight: 700;
+}
+.stelvio-hero-expand-area {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-top: 0;
+}
+.stelvio-hero-expand-area--open {
+  max-height: 1600px;
+  margin-top: 14px;
+  transition: max-height 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* ③ 카테고리 탭 (가로 탭) */
 .stelvio-category-tabs {
   display: flex;
