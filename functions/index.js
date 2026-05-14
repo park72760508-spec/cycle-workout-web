@@ -142,45 +142,44 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
 /**
  * 랭킹 응답의 byCategory(및 선택적 entries)에 users.profileImageUrl 최신값 반영.
  * 집계 캐시(ranking_aggregates 등)에는 필드가 없거나 오래된 경우가 있어 GC와 동일하게 HTTP 응답 직전에 보강.
+ *
+ * 중요: 기존에는 profileImageUrl이 비어 있을 때만 보강했지만,
+ * 사용자가 프로필 사진을 교체하면 Firebase Storage 토큰이 바뀌어 캐시된 구 URL이 403을 반환한다.
+ * PC 브라우저는 디스크 캐시로 구 이미지를 보여줄 수 있지만 모바일은 캐시가 없어 깨진 이미지가 표시된다.
+ * 이를 방지하기 위해 모든 항목의 URL을 항상 users 컬렉션의 최신값으로 덮어쓴다.
  */
 async function hydrateRankingBoardProfileImages(db, byCategory, entries) {
   if (!byCategory || typeof byCategory !== "object") return;
-  const ids = [];
-  const pushIfNeedsHydration = (r) => {
+  const idSet = new Set();
+  const collectId = (r) => {
     if (!r || !r.userId) return;
-    const u = String(r.userId);
-    const cur = r.profileImageUrl;
-    if (typeof cur === "string" && cur.trim().length > 0) return;
-    ids.push(u);
+    idSet.add(String(r.userId).trim());
   };
   for (const k of Object.keys(byCategory)) {
     const rows = byCategory[k];
     if (!Array.isArray(rows)) continue;
-    for (const r of rows) pushIfNeedsHydration(r);
+    for (const r of rows) collectId(r);
   }
   if (Array.isArray(entries)) {
-    for (const r of entries) pushIfNeedsHydration(r);
+    for (const r of entries) collectId(r);
   }
+  const ids = [...idSet].filter(Boolean);
   if (!ids.length) return;
   const urlMap = await fetchProfileImageUrlsMapForUsers(db, ids);
-  const hydratedUids = new Set(ids.map((x) => String(x).trim()).filter(Boolean));
+  const apply = (r) => {
+    if (!r || !r.userId) return;
+    const u = String(r.userId).trim();
+    if (!urlMap.has(u)) return;
+    const fresh = urlMap.get(u);
+    if (fresh != null) r.profileImageUrl = fresh;
+  };
   for (const k of Object.keys(byCategory)) {
     const rows = byCategory[k];
     if (!Array.isArray(rows)) continue;
-    for (const r of rows) {
-      if (!r || !r.userId) continue;
-      const u = String(r.userId);
-      if (!hydratedUids.has(u)) continue;
-      r.profileImageUrl = urlMap.has(u) ? urlMap.get(u) : null;
-    }
+    for (const r of rows) apply(r);
   }
   if (Array.isArray(entries)) {
-    for (const r of entries) {
-      if (!r || !r.userId) continue;
-      const u = String(r.userId);
-      if (!hydratedUids.has(u)) continue;
-      r.profileImageUrl = urlMap.has(u) ? urlMap.get(u) : null;
-    }
+    for (const r of entries) apply(r);
   }
 }
 
