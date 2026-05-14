@@ -8454,16 +8454,17 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* ── 2줄: 4등분 레이아웃 전체 너비 (테두리·구분선 없음) ── */
-/* 아바타(1/4) │ 누적포인트(1/4) │ 보유포인트(1/4) │ 제휴사 할인(1/4) */
+/* 아바타(1/4) │ 누적포인트(1/4) │ 보유포인트(1/4) │ 공개/비공개(1/4) */
 #profileScreen .stelvio-user-points-with-avatar {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 0;
+  gap: 6px;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  padding: 4px 2px;
 }
 
 /* 아바타 섹션 – flex:1 (1/4), 중앙정렬 */
@@ -8679,15 +8680,12 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   font-size: 0.5rem;
 }
 
-/* 제휴 버튼 – 4번째 컬럼 1/4 균등 */
-#profileScreen .stelvio-user-points-with-avatar > .stelvio-affiliate-btn {
+/* 공개/비공개 토글 – 4번째 컬럼 1/4 균등 */
+#profileScreen .stelvio-user-points-with-avatar > .avatar-row-privacy {
   flex: 1 1 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-left: 0;
-  padding: 4px 5px;
   min-width: 0;
 }
 
@@ -8709,37 +8707,40 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   vertical-align: middle;
   flex-shrink: 0; /* 아이콘 크기 고정 */
 }
-/* 4줄: 1행(공개/비공개 | 연락처) + 2행(만료일 좌측) */
+/* 4줄: 1행(연락처 | 만료일) */
 #profileScreen .user-card .user-meta {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0;
+  gap: 6px;
   color: var(--text-muted);
   font-size: 13px;
 }
-#profileScreen .user-card .user-meta .user-meta-privacy {
-  flex: 1 1 0;
-  display: flex;
-  align-items: center;
-}
 #profileScreen .user-card .user-meta .contact {
   flex: 1 1 0;
-  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-/* 만료일: 다음 줄로 내려서 좌측 정렬 */
+/* 만료일: 연락처와 같은 줄, 우측 정렬 */
 #profileScreen .user-card .user-meta .expiry {
-  flex: 0 0 100%;
-  text-align: left;
-  margin-top: 3px;
+  flex: 0 0 auto;
+  text-align: right;
+  white-space: nowrap;
 }
 
-/* 비공개 토글 (user-meta 안으로 이동) */
+/* 비공개 토글 (avatar-row 4번째 칸) */
 #profileScreen .user-card .user-privacy-toggle-inline {
   margin-left: 0;
   display: inline-flex;
   align-items: center;
+}
+/* avatar-row-privacy 안의 토글 레이블 – 크기 축소하여 칸에 맞춤 */
+#profileScreen .stelvio-user-points-with-avatar > .avatar-row-privacy .privacy-toggle-label {
+  gap: 4px;
+  font-size: 11px;
 }
 #profileScreen .user-card .user-stats {
   display: flex;
