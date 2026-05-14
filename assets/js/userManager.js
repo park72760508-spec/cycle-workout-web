@@ -2639,18 +2639,16 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
         : defaultAv;
     const profileUrl = stelvioEscapeHtmlAttr(profileUrlRaw);
     const canEditAvatar = !!(viewerId && String(user.id) === String(viewerId));
-    const isAffiliateActive = hasAiForUser && hasStrava;
-    const affiliateBtnHtml = canEditAvatar
-      ? `<button type="button"
-              class="stelvio-affiliate-btn ${isAffiliateActive ? 'stelvio-affiliate-btn--active' : 'stelvio-affiliate-btn--inactive'}"
-              onclick="event.stopPropagation(); onAffiliateButtonClick(${isAffiliateActive})"
-              title="${isAffiliateActive ? '제휴사 할인 혜택 확인' : 'Gemini API와 STRAVA를 먼저 연결해주세요'}"
-              aria-label="제휴사 할인 혜택"
-              ${isAffiliateActive ? '' : 'aria-disabled="true"'}>
-              <span class="stelvio-affiliate-btn-icon" aria-hidden="true">🎁</span>
-              <span class="stelvio-affiliate-btn-label">제휴사 할인</span>
-            </button>`
-      : '';
+    /* 공개/비공개 토글 – 4번째 칸 (본인만 표시) */
+    const privacyColHtml = canTogglePrivacy
+      ? `<span class="avatar-row-privacy" onclick="event.stopPropagation();">
+              <label class="privacy-toggle-label">
+                <input type="checkbox" class="privacy-toggle-input" ${isPrivate ? 'checked' : ''} onchange="toggleUserPrivacy('${user.id}', this.checked)">
+                <span class="privacy-toggle-slider"></span>
+                <span class="privacy-toggle-text">${isPrivate ? '비공개' : '공개'}</span>
+              </label>
+            </span>`
+      : '<span class="avatar-row-privacy"></span>';
     const avatarBlock = canEditAvatar
       ? `<button type="button" class="stelvio-profile-card-avatar-btn" onclick="event.stopPropagation();typeof stelvioOpenProfilePhotoPicker==='function'&&stelvioOpenProfilePhotoPicker('${user.id}')" aria-label="프로필 사진 변경">
               <span class="stelvio-profile-card-avatar-ring">
@@ -2683,12 +2681,12 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
             </div>
           </div>
 
-          <!-- 2줄: 4등분 전체 너비 (아바타 25% | 누적포인트 25% | 보유포인트 25% | 제휴사 할인 25%) -->
+          <!-- 2줄: 4등분 전체 너비 (아바타 25% | 누적포인트 25% | 보유포인트 25% | 공개/비공개 25%) -->
           <div class="stelvio-user-points-with-avatar">
             ${avatarBlock}
             <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
             <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
-            ${affiliateBtnHtml}
+            ${privacyColHtml}
           </div>
 
         </div>
@@ -2701,9 +2699,8 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
             <span class="stat">W/kg: ${wkg}</span>
           </div>
 
-          <!-- 4줄: 3분할 (공개/비공개 | 연락처 | 만료일) -->
+          <!-- 4줄: 2분할 (연락처 | 만료일) -->
           <div class="user-meta">
-            <span class="user-meta-privacy">${canTogglePrivacy ? `<span class="user-privacy-toggle-inline" onclick="event.stopPropagation();"><label class="privacy-toggle-label"><input type="checkbox" class="privacy-toggle-input" ${isPrivate ? 'checked' : ''} onchange="toggleUserPrivacy('${user.id}', this.checked)"><span class="privacy-toggle-slider"></span><span class="privacy-toggle-text">${isPrivate ? '비공개' : '공개'}</span></label></span>` : ''}</span>
             <span class="contact">${user.contact || ''}</span>
             <span class="expiry ${expiryClass}">만료일: ${expiryText}</span>
           </div>
