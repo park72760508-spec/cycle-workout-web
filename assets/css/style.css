@@ -6152,8 +6152,25 @@ body:has(#trainingDetailModal:not(.hidden)) {
   background: transparent !important;
   width: 100%;
   line-height: 0;
-  box-shadow: none !important;
   cursor: pointer;
+  border-radius: 8px;
+  animation: stelvio-tier-beast-orange-neon 1.9s ease-in-out infinite;
+}
+@keyframes stelvio-tier-beast-orange-neon {
+  0%,
+  100% {
+    box-shadow:
+      0 0 10px rgba(234, 88, 12, 0.35),
+      0 0 22px rgba(249, 115, 22, 0.2);
+    filter: drop-shadow(0 0 5px rgba(234, 88, 12, 0.45)) brightness(1);
+  }
+  50% {
+    box-shadow:
+      0 0 18px rgba(234, 88, 12, 0.65),
+      0 0 38px rgba(249, 115, 22, 0.4),
+      0 0 55px rgba(251, 146, 60, 0.22);
+    filter: drop-shadow(0 0 12px rgba(234, 88, 12, 0.82)) drop-shadow(0 0 24px rgba(249, 115, 22, 0.45)) brightness(1.12);
+  }
 }
 .stelvio-octagon-tier-btn--leveltag {
   margin-top: 4px;
@@ -6195,14 +6212,18 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin-top: 4px;
   padding: 3px 10px;
   border-radius: 9999px;
-  background: #7c3aed;
+  background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
   color: #fff;
   font-size: clamp(0.6rem, 2vw, 0.75rem);
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.02em;
   text-align: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  box-shadow:
+    0 0 0 2px rgba(251, 146, 60, 0.35),
+    0 0 10px rgba(234, 88, 12, 0.55),
+    0 1px 3px rgba(0, 0, 0, 0.18);
+  animation: stelvio-level-name-orange-pulse 1.8s ease-in-out infinite;
 }
 /* 헵타곤 카드: 세로 레벨바 옆열 — 레벨 pill + 막대 */
 .stelvio-level-bar-cell {
@@ -6264,46 +6285,68 @@ body:has(#trainingDetailModal:not(.hidden)) {
   width: 100%;
   max-width: 7.75rem;
 }
-/* 세로바 상단 등급 pill: 차트와 동일 패밀리 — 연한 바이올렛 바 + 진한 글자/테두리 */
+/* 세로바 상단 등급 pill: 주황색 네온 강조 — 버튼으로 인식되도록 강한 glow + 깜빡임 */
 .stelvio-octagon-tier-level-name--sidebar-neon {
   display: block;
   width: 100%;
   margin-top: 0;
   max-width: 7.75rem;
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: 9999px;
-  border: 1px solid rgba(109, 40, 217, 0.45);
-  background: linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%);
-  color: #5b21b6;
+  border: 2px solid rgba(234, 88, 12, 0.8);
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 60%, #fed7aa 100%);
+  color: #9a3412;
   font-size: clamp(0.58rem, 1.85vw, 0.72rem);
   font-weight: 800;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   box-sizing: border-box;
-  box-shadow: 0 1px 2px rgba(91, 33, 182, 0.07);
-  animation: stelvio-tier-pill-neon-glow 2.4s ease-in-out infinite;
+  cursor: pointer;
+  animation: stelvio-tier-pill-orange-neon 1.6s ease-in-out infinite;
 }
-@keyframes stelvio-tier-pill-neon-glow {
+@keyframes stelvio-tier-pill-orange-neon {
   0%,
   100% {
-    border-color: rgba(109, 40, 217, 0.4);
+    border-color: rgba(234, 88, 12, 0.6);
     box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.55) inset,
-      0 0 6px rgba(109, 40, 217, 0.14),
-      0 1px 2px rgba(91, 33, 182, 0.06);
+      0 0 0 1px rgba(255, 255, 255, 0.7) inset,
+      0 0 8px rgba(249, 115, 22, 0.45),
+      0 0 18px rgba(234, 88, 12, 0.22),
+      0 1px 3px rgba(154, 52, 18, 0.15);
     filter: brightness(1);
   }
   50% {
-    border-color: rgba(91, 33, 182, 0.72);
+    border-color: rgba(234, 88, 12, 1);
     box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.82) inset,
-      0 0 14px rgba(124, 58, 237, 0.2),
-      0 1px 2px rgba(91, 33, 182, 0.12);
-    filter: brightness(1.03);
+      0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+      0 0 14px rgba(249, 115, 22, 0.78),
+      0 0 30px rgba(234, 88, 12, 0.42),
+      0 0 46px rgba(251, 146, 60, 0.18),
+      0 1px 3px rgba(154, 52, 18, 0.22);
+    filter: brightness(1.08);
+  }
+}
+/* 레벨 이름 공통 주황 pulse keyframe (센터 배지 + 사이드바) */
+@keyframes stelvio-level-name-orange-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(251, 146, 60, 0.3),
+      0 0 8px rgba(234, 88, 12, 0.45),
+      0 1px 3px rgba(0, 0, 0, 0.18);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(251, 146, 60, 0.65),
+      0 0 18px rgba(234, 88, 12, 0.72),
+      0 0 32px rgba(249, 115, 22, 0.32),
+      0 1px 3px rgba(0, 0, 0, 0.18);
+    filter: brightness(1.1);
   }
 }
 .stelvio-octagon-tier-img {
@@ -6312,6 +6355,16 @@ body:has(#trainingDetailModal:not(.hidden)) {
   height: auto;
   /* 자산에 검은 배경이 있을 때 뒤 옥타 그래프가 비치게(검정=#000 를 투과에 가깝게) */
   mix-blend-mode: screen;
+  animation: stelvio-tier-img-orange-glow 1.9s ease-in-out infinite;
+}
+@keyframes stelvio-tier-img-orange-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px rgba(234, 88, 12, 0.5)) brightness(1.05);
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(234, 88, 12, 0.9)) drop-shadow(0 0 28px rgba(249, 115, 22, 0.55)) brightness(1.18);
+  }
 }
 .stelvio-octagon-tier-fallback {
   display: inline-block;
