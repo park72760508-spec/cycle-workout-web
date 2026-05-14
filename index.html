@@ -10379,11 +10379,19 @@
           var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, gcScore: 0 };
           /* 이름/이미지 fallback: 랭킹 풀에 이름이 없으면 members 문서의 displayName 사용 */
           if (!mergedItem.name && mem.displayName) mergedItem.name = mem.displayName;
+          /* 우선순위:
+             ① stelvioGroupProfileUrlMap — 랭킹 API 응답에서 구성, users 컬렉션 최신값 반영 가능성 높음
+             ② Firestore 멤버 구독 데이터(mem.profileImageUrl) — 가입 시 스냅샷, 프로필 변경 후 구버전일 수 있음
+             mergedItem.profileImageUrl(랭킹 풀 데이터)가 있을 때도 mapUrl이 있으면 최신값으로 덮어씀 */
+          var _mapUrl = (stelvioGroupProfileUrlMap && stelvioGroupProfileUrlMap[uMem] && String(stelvioGroupProfileUrlMap[uMem]).trim())
+            ? String(stelvioGroupProfileUrlMap[uMem]).trim()
+            : '';
+          var _mUrl = (mem.profileImageUrl && String(mem.profileImageUrl).trim()) ? String(mem.profileImageUrl).trim() : '';
           if (!mergedItem.profileImageUrl) {
-            /* 우선순위: ① Firestore 멤버 구독 데이터 → ② 통합 프로필 맵 (다른 metric 캐시 포함) */
-            var _mUrl = (mem.profileImageUrl && String(mem.profileImageUrl).trim()) ? String(mem.profileImageUrl).trim() : '';
-            var _mapUrl = (!_mUrl && stelvioGroupProfileUrlMap && stelvioGroupProfileUrlMap[uMem]) ? stelvioGroupProfileUrlMap[uMem] : '';
-            mergedItem.profileImageUrl = _mUrl || _mapUrl || null;
+            mergedItem.profileImageUrl = _mapUrl || _mUrl || null;
+          } else if (_mapUrl && _mapUrl !== mergedItem.profileImageUrl) {
+            /* 랭킹 풀에 URL이 있어도 stelvioGroupProfileUrlMap에 더 최신 URL이 있으면 교체 */
+            mergedItem.profileImageUrl = _mapUrl;
           }
           /* 방장 표시를 위해 role 보존 */
           mergedItem._groupRole = mem.role || 'member';
@@ -11007,7 +11015,7 @@
         '<span class="stelvio-rank-avatar" aria-hidden="true">' +
         '<img class="stelvio-rank-avatar-img" src="' +
         src +
-        '" alt="" width="30" height="30" loading="lazy" decoding="async"' +
+        '" alt="" width="30" height="30" decoding="async"' +
         ' onerror="if(typeof stelvioOnAvatarImgError===\'function\')stelvioOnAvatarImgError(this);" />' +
         '</span>' +
         '</button>'
