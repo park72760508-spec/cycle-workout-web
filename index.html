@@ -8182,6 +8182,19 @@
       return { get: get, set: set, clearAll: clearAll, isStale: isStale };
     })();
     window.stelvioRankingLocalCache = stelvioRankingLocalCache;
+
+    /**
+     * 가장 최근에 지나간 23:00 KST (UTC 14:00) 타임스탬프를 반환한다.
+     * 앱이 롤오버 전에 캐시한 데이터를 롤오버 이후에도 그대로 쓰고 있는지 판별하는 데 사용.
+     */
+    function stelvioGetLastRolloverTs() {
+      var now = Date.now();
+      var kstNow = new Date(now + 9 * 3600000);
+      var todayRollover = Date.UTC(
+        kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate(), 14, 0, 0
+      );
+      return todayRollover <= now ? todayRollover : todayRollover - 86400000;
+    }
     var stelvioRankingPrefetchScheduled = false;
     var STELVIO_RANKING_FRIENDS_TIMEOUT_MS = 12000;
     /** 랭킹 「그룹」탭: 내 소모임 목록 구독 */
@@ -9511,6 +9524,40 @@
       bindStelvioRankingEvents();
     }
 
+    /**
+     * 앱 장기 구동 시 갱신 감지:
+     * 브라우저 탭/앱이 포그라운드로 돌아올 때(visibilitychange) 랭킹보드가
+     * 활성 화면이면 SWR이 롤오버(23:00 KST) 이전 캐시인지 확인하여
+     * 해당 시 로딩 없이 백그라운드 재검증을 자동 실행한다.
+     */
+    (function () {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible') return;
+        /* 랭킹보드 화면이 현재 활성 상태인지 확인 */
+        var rankScreen = document.getElementById('stelvioRankingScreen');
+        if (!rankScreen) return;
+        var isActive =
+          rankScreen.classList.contains('active') ||
+          rankScreen.style.display === 'flex' ||
+          rankScreen.style.display === 'block';
+        if (!isActive) return;
+
+        var lastRollover = (typeof stelvioGetLastRolloverTs === 'function') ? stelvioGetLastRolloverTs() : 0;
+        if (!lastRollover) return;
+
+        var swr = stelvioRankingSwrCache;
+        var swrNeedsRefresh = swr && swr.ts && swr.ts < lastRollover;
+        if (swrNeedsRefresh) {
+          /* SWR 타임스탬프를 0으로 초기화 → fetchStelvioPeakPowerRanking 재호출 시
+             로컬 캐시가 있으면 즉시 표시 + bgRevalidate, 없으면 SWR 본문으로 즉시 표시 + bgRevalidate */
+          stelvioRankingSwrCache = { key: swr.key, body: swr.body, ts: 0 };
+          if (typeof fetchStelvioPeakPowerRanking === 'function') {
+            fetchStelvioPeakPowerRanking().catch(function () {});
+          }
+        }
+      });
+    })();
+
     /** 랭킹 API·집계 캐시에 profileImageUrl이 없을 때 로그인 사용자 행에 로컬 저장 URL 반영 */
     function stelvioGetViewerStoredProfileImageUrl(viewerUid) {
       if (!viewerUid) return '';
@@ -9661,12 +9708,17 @@
       }
 
       var nowMs = Date.now();
+      /* 가장 최근 23:00 KST 롤오버 시각 — 이보다 이전에 캐시된 데이터는 갱신 필요 */
+      var lastRollover = (typeof stelvioGetLastRolloverTs === 'function') ? stelvioGetLastRolloverTs() : 0;
 
       // ── 1순위: in-memory SWR 캐시 (2분 TTL, 세션 내 빠른 탭 전환용) ──
       var swr = stelvioRankingSwrCache;
-      if (swr && swr.key === swrKey && swr.body && swr.body.success && swr.body.byCategory && nowMs - swr.ts < STELVIO_RANKING_SWR_MAX_MS) {
+      var swrValid = swr && swr.key === swrKey && swr.body && swr.body.success && swr.body.byCategory;
+      /* 롤오버 이전에 캐시된 SWR은 "유효"로 보지 않고 즉시 표시 후 백그라운드 재검증 */
+      var swrIsPostRollover = swrValid && lastRollover > 0 && swr.ts < lastRollover;
+      if (swrValid && !swrIsPostRollover && nowMs - swr.ts < STELVIO_RANKING_SWR_MAX_MS) {
         applyFromCache(swr.body);
-        return; // SWR TTL 내에는 백그라운드 재검증 불필요
+        return; // SWR TTL 내·롤오버 이전 → 백그라운드 재검증 불필요
       }
 
       // ── 2순위: localStorage 캐시 (다음 23:00 KST까지 유효) ──
@@ -9675,10 +9727,19 @@
         // in-memory SWR도 즉시 갱신
         stelvioRankingSwrCache = { key: swrKey, body: lcEntry.data, ts: Date.now() };
         applyFromCache(lcEntry.data);
-        // 10분 이상 경과한 캐시는 백그라운드에서 재검증
-        if (stelvioRankingLocalCache.isStale(lcEntry)) {
+        /* 10분 이상 경과 OR 롤오버 이전 캐시 → 로딩 표시 없이 백그라운드 재검증 */
+        var lcIsPostRollover = lastRollover > 0 && lcEntry.cachedAt < lastRollover;
+        if (stelvioRankingLocalCache.isStale(lcEntry) || lcIsPostRollover) {
           bgRevalidate().catch(function () {});
         }
+        return;
+      }
+
+      /* SWR에 데이터가 있지만 롤오버 이후 케이스 (localStorage는 만료됨):
+         로딩 스피너 없이 이전 데이터를 즉시 표시하고 백그라운드에서 최신 데이터 갱신 */
+      if (swrValid) {
+        applyFromCache(swr.body);
+        bgRevalidate().catch(function () {});
         return;
       }
 
