@@ -10705,11 +10705,9 @@
           } else {
             globalRank = supIdxHero + 1;
           }
-          /* 서버에서 계산된 전날 대비 순위 등락 캡처 */
-          if (stelvioIsGcRankingMode()) {
-            gcRowRankChange = rowSup.rankChange != null ? rowSup.rankChange : null;
-            gcRowPrevRank = rowSup.previousBoardRank != null ? rowSup.previousBoardRank : null;
-          }
+          /* 서버에서 계산된 전날 대비 순위 등락 캡처 (전 탭 공통) */
+          gcRowRankChange = rowSup.rankChange != null ? rowSup.rankChange : null;
+          gcRowPrevRank = rowSup.previousBoardRank != null ? rowSup.previousBoardRank : null;
         }
       }
       var ageLabel = STELVIO_CATEGORY_LABELS[cu.ageCategory] || '';
@@ -10778,8 +10776,8 @@
           [stelvioRankingState.period || '', stelvioRankingState.duration || '', genderForKey || '', stelvioRankingApiEndStr || ''].join('_');
         var rkKey = stelvioRankDeltaStorageKey(uidHero, stelvioRankingState.period, stelvioRankingState.duration, genderForKey, rangeKey);
         var deltaHtml;
-        /* GC 탭: 서버측 rankChange(전날 대비)를 사용 — 리스트 행과 동일한 포맷/색상 적용 */
-        if (stelvioIsGcRankingMode() && gcRowRankChange != null && gcRowPrevRank != null) {
+        /* 서버측 rankChange(전날 대비) 사용 — 전 탭에서 리스트 행과 동일한 포맷/색상 적용 */
+        if (gcRowRankChange != null && gcRowPrevRank != null) {
           var rcH = gcRowRankChange;
           var prevRH = gcRowPrevRank;
           if (rcH > 0) {
@@ -11127,7 +11125,7 @@
           }
           var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
           var rankChangePart = '';
-          if (stelvioIsGcRankingMode() && item.rankChange != null && item.previousBoardRank != null) {
+          if (item.rankChange != null && item.previousBoardRank != null) {
             var rc = item.rankChange;
             var prevR = item.previousBoardRank;
             if (rc > 0) {
@@ -11485,7 +11483,7 @@
         var globalPart = '';
         var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
         var rankChangePart = '';
-        if (stelvioIsGcRankingMode() && item.rankChange != null && item.previousBoardRank != null) {
+        if (item.rankChange != null && item.previousBoardRank != null) {
           var rc = item.rankChange;
           var prevR = item.previousBoardRank;
           if (rc > 0) {
@@ -11552,7 +11550,7 @@
         if (mrIsPrivate && !mrCanSeeFull) { mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**'; }
         var mrBadgePart = (mrIsPrivate && mrCanSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
         var mrRankChangePart = '';
-        if (stelvioIsGcRankingMode() && mr.rankChange != null && mr.previousBoardRank != null) {
+        if (mr.rankChange != null && mr.previousBoardRank != null) {
           var mrRc = mr.rankChange;
           var mrPrevR = mr.previousBoardRank;
           if (mrRc > 0) {
