@@ -4211,6 +4211,97 @@ const RANKING_AGG_MAX_STALE_MS = 26 * 60 * 60 * 1000; // 26시간 (하루 1회 2
 const RANKING_REBUILD_CRON = "0 23 * * *";
 const RANKING_ONE_PASS_BATCH = 50;
 
+/** 비-GC 탭(Max/1분/5분/…/거리/TSS) 순위 등락 스냅샷 컬렉션 */
+const PEAK_RANK_HISTORY_COL = "peak_rank_history";
+
+/**
+ * 비-GC 탭의 순위 등락(rankChange / previousBoardRank)을 계산해 entries 배열에 직접 주입하고,
+ * 오늘 서울 날짜 기준 순위 스냅샷을 Firestore(PEAK_RANK_HISTORY_COL)에 저장한다.
+ *
+ * - 신규 날짜 첫 호출: 어제 스냅샷과 비교해 rankChange / previousBoardRank 계산 후 저장.
+ * - 당일 재호출: 기존 저장된 rankChange를 재사용(덮어쓰지 않음).
+ * - entries / byCategory 는 같은 객체 참조이므로 byCategory도 자동 반영됨.
+ *
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {Array<{userId:string, rank:number, [key:string]:any}>} entries
+ * @param {string} historyKey  고유 식별자 (예: "peak_5min_monthly_all")
+ */
+async function applyPeakRankChanges(db, entries, historyKey) {
+  if (!db || !historyKey || !Array.isArray(entries) || entries.length === 0) return;
+  const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const ref = db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey);
+
+  let prevRanks = {};
+  let prevAsOf = "";
+  let prevRankChanges = {};
+  let prevPreviousRanks = {};
+  try {
+    const snap = await ref.get();
+    if (snap.exists) {
+      const d = snap.data();
+      prevAsOf = d.asOfSeoul || "";
+      prevRanks = (d.ranks && typeof d.ranks === "object") ? d.ranks : {};
+      prevRankChanges = (d.rankChanges && typeof d.rankChanges === "object") ? d.rankChanges : {};
+      prevPreviousRanks = (d.previousRanks && typeof d.previousRanks === "object") ? d.previousRanks : {};
+    }
+  } catch (eRead) {
+    console.warn("[applyPeakRankChanges] 이전 순위 읽기 실패:", historyKey, eRead && eRead.message);
+  }
+
+  const isNewDay = prevAsOf !== todayYmd;
+  const newRanks = {};
+  const newRankChanges = {};
+  const newPreviousRanks = {};
+
+  for (const e of entries) {
+    const uid = String(e.userId || "").trim();
+    if (!uid) continue;
+    const currRank = e.rank != null && isFinite(Number(e.rank)) ? Math.floor(Number(e.rank)) : null;
+    if (currRank == null) continue;
+    newRanks[uid] = currRank;
+
+    if (isNewDay) {
+      // 새 날짜: 어제 스냅샷과 비교
+      if (prevRanks[uid] != null) {
+        const prev = Math.floor(Number(prevRanks[uid]));
+        if (isFinite(prev) && prev >= 1) {
+          e.rankChange = prev - currRank; // 양수=상승, 음수=하락, 0=보합
+          e.previousBoardRank = prev;
+          newRankChanges[uid] = e.rankChange;
+          newPreviousRanks[uid] = prev;
+        }
+      }
+    } else {
+      // 당일 재실행: 기존 계산값 복원
+      if (prevRankChanges[uid] != null) {
+        e.rankChange = Number(prevRankChanges[uid]);
+        e.previousBoardRank = prevPreviousRanks[uid] != null ? Number(prevPreviousRanks[uid]) : null;
+      }
+    }
+  }
+
+  // 스냅샷 저장 (오류여도 응답에는 영향 없음)
+  try {
+    if (isNewDay) {
+      await ref.set({
+        asOfSeoul: todayYmd,
+        ranks: newRanks,
+        rankChanges: newRankChanges,
+        previousRanks: newPreviousRanks,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      // 당일 재실행: ranks만 갱신, rankChanges·previousRanks는 유지
+      await ref.set(
+        { ranks: newRanks, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    }
+  } catch (eWrite) {
+    console.warn("[applyPeakRankChanges] 스냅샷 저장 실패:", historyKey, eWrite && eWrite.message);
+  }
+}
+
 /**
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} cacheKey
@@ -5440,6 +5531,7 @@ exports.getPeakPowerRanking = onRequest(
       }
 
       const { entries, byCategory } = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, gender);
+      await applyPeakRankChanges(db, entries, `peak_tss_weekly_${gender}`);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
       await cacheRef.set({
@@ -5549,6 +5641,7 @@ exports.getPeakPowerRanking = onRequest(
       }
 
       const { entries, byCategory } = await getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, gender);
+      await applyPeakRankChanges(db, entries, `peak_personal_dist_rolling30_${gender}`);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
       await cacheRef.set({
@@ -5836,6 +5929,7 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
+    await applyPeakRankChanges(db, entries, `peak_${durationType}_${period}_${gender}`);
     let cohortAvgHrBpm = null;
     if (
       (period === "rolling30" || period === "monthly" || period === "rolling6m" || period === "rolling183") &&
