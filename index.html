@@ -10690,6 +10690,9 @@
       }
       hero.classList.remove('hidden');
       var globalRank = cu.rank || 0;
+      /* GC 모드용 서버측 순위 등락 (리스트 행과 동일 포맷 적용을 위해 추출) */
+      var gcRowRankChange = null;
+      var gcRowPrevRank = null;
       if (stelvioRankingByCategory && uidHero) {
         var supArrHero = stelvioRankingByCategory.Supremo || [];
         var supIdxHero = supArrHero.findIndex(function (e) {
@@ -10701,6 +10704,11 @@
             globalRank = Math.floor(Number(rowSup.rank));
           } else {
             globalRank = supIdxHero + 1;
+          }
+          /* 서버에서 계산된 전날 대비 순위 등락 캡처 */
+          if (stelvioIsGcRankingMode()) {
+            gcRowRankChange = rowSup.rankChange != null ? rowSup.rankChange : null;
+            gcRowPrevRank = rowSup.previousBoardRank != null ? rowSup.previousBoardRank : null;
           }
         }
       }
@@ -10769,8 +10777,23 @@
           stelvioRankingApiStartStr ||
           [stelvioRankingState.period || '', stelvioRankingState.duration || '', genderForKey || '', stelvioRankingApiEndStr || ''].join('_');
         var rkKey = stelvioRankDeltaStorageKey(uidHero, stelvioRankingState.period, stelvioRankingState.duration, genderForKey, rangeKey);
-        var prevStored = stelvioReadStoredRank(rkKey);
-        var deltaHtml = stelvioRankDeltaBadgeHtml(prevStored, globalRank);
+        var deltaHtml;
+        /* GC 탭: 서버측 rankChange(전날 대비)를 사용 — 리스트 행과 동일한 포맷/색상 적용 */
+        if (stelvioIsGcRankingMode() && gcRowRankChange != null && gcRowPrevRank != null) {
+          var rcH = gcRowRankChange;
+          var prevRH = gcRowPrevRank;
+          if (rcH > 0) {
+            deltaHtml = ' <span class="stelvio-rank-change stelvio-rank-change--up" title="전날 ' + prevRH + '위">(↑' + rcH + ')</span>';
+          } else if (rcH < 0) {
+            deltaHtml = ' <span class="stelvio-rank-change stelvio-rank-change--down" title="전날 ' + prevRH + '위">(↓' + Math.abs(rcH) + ')</span>';
+          } else {
+            deltaHtml = ' <span class="stelvio-rank-change stelvio-rank-change--flat" title="전날 ' + prevRH + '위">(-)</span>';
+          }
+        } else {
+          /* 다른 탭: 기존 방식(직전 조회 대비, localStorage) 유지 */
+          var prevStored = stelvioReadStoredRank(rkKey);
+          deltaHtml = stelvioRankDeltaBadgeHtml(prevStored, globalRank);
+        }
         msg = stelvioInjectRankDeltaAfterPrimaryRank(msg, globalRank, deltaHtml);
         stelvioWriteStoredRank(rkKey, globalRank);
       }
