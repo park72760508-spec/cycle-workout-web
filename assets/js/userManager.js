@@ -2683,13 +2683,11 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
             </div>
           </div>
 
-          <!-- 2줄: 3분할 전체 너비 (아바타 | 포인트 | 제휴사 할인) -->
+          <!-- 2줄: 4등분 전체 너비 (아바타 25% | 누적포인트 25% | 보유포인트 25% | 제휴사 할인 25%) -->
           <div class="stelvio-user-points-with-avatar">
             ${avatarBlock}
-            <div class="user-points">
-              <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
-              <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
-            </div>
+            <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
+            <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
             ${affiliateBtnHtml}
           </div>
 
