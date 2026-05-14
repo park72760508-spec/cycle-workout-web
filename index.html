@@ -8926,6 +8926,11 @@
       backdrop.setAttribute('data-stelvio-rank-zoom-gen', String(seq));
       backdrop.setAttribute('data-stelvio-rank-overlay-name', meta.overlayName != null ? String(meta.overlayName) : '');
 
+      img.onerror = function () {
+        img.onerror = null;
+        var def = (typeof stelvioRankingDefaultProfileImg === 'function') ? stelvioRankingDefaultProfileImg() : 'assets/img/profile-placeholder.svg';
+        if (img.src !== def) img.src = def;
+      };
       img.src = imageSrc;
 
       var uidTrim = meta.userId != null ? String(meta.userId).trim() : '';
@@ -10200,7 +10205,17 @@
         var key = rawUrl != null ? String(rawUrl) : '';
         if (img.getAttribute('data-stelvio-ph-key') === key) return;
         img.setAttribute('data-stelvio-ph-key', key);
-        img.setAttribute('src', stelvioRankingEscapeAttr(key || ''));
+        /* img.src 는 DOM API 직접 할당 — setAttribute+HTML이스케이프 금지.
+           Firebase Storage URL의 &token= 등 쿼리 파라미터가 &amp;token= 으로 깨지면
+           인증 실패(403)로 이미지가 표시되지 않는 버그 원인이 됨. */
+        if (!img.onerror) {
+          img.onerror = function () {
+            img.onerror = null;
+            var def = (typeof stelvioRankingDefaultProfileImg === 'function') ? stelvioRankingDefaultProfileImg() : 'assets/img/profile-placeholder.svg';
+            if (img.src !== def) img.src = def;
+          };
+        }
+        img.src = key || stelvioRankingDefaultProfileImg();
       }
       function stelvioGroupTabBuildMergedForGid(gids) {
         var gidsT = gids != null ? String(gids).trim() : '';
@@ -10369,10 +10384,13 @@
             prof != null && String(prof).trim() ? String(prof).trim() : stelvioRankingDefaultProfileImg();
           if (avatarBtn) {
             var uidEsc = String(it.userId || '');
-            avatarBtn.setAttribute('data-stelvio-rank-user-id', stelvioRankingEscapeAttr(uidEsc));
-            avatarBtn.setAttribute('data-stelvio-rank-overlay-name', stelvioRankingEscapeAttr(nm));
-            avatarBtn.setAttribute('data-stelvio-rank-age-cat', stelvioRankingEscapeAttr(it.ageCategory || ''));
-            avatarBtn.setAttribute('data-stelvio-rank-zoom-src', stelvioRankingEscapeAttr(profKey));
+            /* data-* 속성은 setAttribute로 직접 설정 — HTML 이스케이프 불필요.
+               특히 zoom-src에 URL을 이스케이프하면 & → &amp; 로 저장되어
+               확대 모달에서 원본 URL을 복원하지 못해 이미지가 깨짐. */
+            avatarBtn.setAttribute('data-stelvio-rank-user-id', uidEsc);
+            avatarBtn.setAttribute('data-stelvio-rank-overlay-name', nm);
+            avatarBtn.setAttribute('data-stelvio-rank-age-cat', it.ageCategory || '');
+            avatarBtn.setAttribute('data-stelvio-rank-zoom-src', profKey);
           }
           stelvioRankImgSetSrcIfChanged(nw.querySelector('.stelvio-rank-avatar-img'), profKey);
           var nt = nw.querySelector('.stelvio-rank-name-text');
@@ -10816,6 +10834,13 @@
         ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
         : 'assets/img/profile-placeholder.svg';
     }
+    /** 이미지 로드 실패(403·404·CORS 등) 시 플레이스홀더로 교체 */
+    function stelvioOnAvatarImgError(img) {
+      if (!img) return;
+      img.onerror = null;
+      var def = stelvioRankingDefaultProfileImg();
+      if (img.src !== def) img.src = def;
+    }
     function stelvioRankingAvatarHtml(profileImageUrl, avatarMeta) {
       avatarMeta = avatarMeta || {};
       var uidRaw = avatarMeta.userId != null ? String(avatarMeta.userId).trim() : '';
@@ -10825,6 +10850,8 @@
         profileImageUrl != null && String(profileImageUrl).trim()
           ? String(profileImageUrl).trim()
           : stelvioRankingDefaultProfileImg();
+      /* HTML 문자열로 삽입(innerHTML)되므로 src·data 속성값은 HTML 이스케이프 필요.
+         HTML 파서가 &amp; → & 로 복원하여 최종 URL은 올바름. */
       var src = stelvioRankingEscapeAttr(raw);
       var dataUid = '';
       if (uidRaw) {
@@ -10846,7 +10873,8 @@
         '<span class="stelvio-rank-avatar" aria-hidden="true">' +
         '<img class="stelvio-rank-avatar-img" src="' +
         src +
-        '" alt="" width="30" height="30" loading="lazy" decoding="async" />' +
+        '" alt="" width="30" height="30" loading="lazy" decoding="async"' +
+        ' onerror="if(typeof stelvioOnAvatarImgError===\'function\')stelvioOnAvatarImgError(this);" />' +
         '</span>' +
         '</button>'
       );
