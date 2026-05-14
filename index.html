@@ -10187,6 +10187,63 @@
         for (var ci = 0; ci < arr.length; ci++) { if (arr[ci] && arr[ci].userId) m[String(arr[ci].userId)] = arr[ci]; }
         return m;
       })();
+
+      /**
+       * 그룹탭 전용 프로필 URL 통합 조회 맵:
+       * GC API는 일부 사용자의 profileImageUrl을 null로 반환할 수 있음.
+       * TSS/거리 등 다른 metric API 캐시(localStorage)와 contactDataMap을 모두 훑어
+       * 어느 소스든 URL이 있으면 멤버 아바타 표시에 사용한다.
+       */
+      var stelvioGroupProfileUrlMap = (function () {
+        var map = {};
+        /* 1. 현재 API 응답의 모든 카테고리 */
+        var CAT_NAMES = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+        if (stelvioRankingByCategory) {
+          for (var _ci = 0; _ci < CAT_NAMES.length; _ci++) {
+            var _arr = stelvioRankingByCategory[CAT_NAMES[_ci]] || [];
+            for (var _ai = 0; _ai < _arr.length; _ai++) {
+              var _e = _arr[_ai];
+              if (_e && _e.userId && _e.profileImageUrl && !map[String(_e.userId)]) {
+                map[String(_e.userId)] = _e.profileImageUrl;
+              }
+            }
+          }
+        }
+        /* 2. 그룹 멤버 contact 맵 (stelvioRefreshGroupContactSetFromFirestore 결과) */
+        if (stelvioRankingGroupContactDataMap) {
+          var _ckeys = Object.keys(stelvioRankingGroupContactDataMap);
+          for (var _cki = 0; _cki < _ckeys.length; _cki++) {
+            var _ck = _ckeys[_cki];
+            var _ce = stelvioRankingGroupContactDataMap[_ck];
+            if (_ce && _ce.profileImageUrl && !map[_ck]) map[_ck] = _ce.profileImageUrl;
+          }
+        }
+        /* 3. localStorage에 캐시된 다른 metric 데이터에서 보충
+              GC API에 없어도 TSS·거리 API 캐시에 profileImageUrl이 있는 경우 활용 */
+        try {
+          var _durations = ['tss', 'personal_dist', 'max', '1min', '5min', '10min', '20min', '40min', '60min'];
+          var _lcPrefix = (typeof STELVIO_RANKING_LC_PREFIX !== 'undefined' ? STELVIO_RANKING_LC_PREFIX : 'stelvioRC:v1:');
+          for (var _di = 0; _di < _durations.length; _di++) {
+            var _dur = _durations[_di];
+            var _lcKey = _lcPrefix + 'peak:period=monthly&duration=' + _dur + '&gender=all';
+            var _raw = localStorage.getItem(_lcKey);
+            if (!_raw) continue;
+            var _cached = JSON.parse(_raw);
+            if (!_cached || !_cached.data || !_cached.data.byCategory) continue;
+            for (var _cai = 0; _cai < CAT_NAMES.length; _cai++) {
+              var _caArr = _cached.data.byCategory[CAT_NAMES[_cai]] || [];
+              for (var _caI = 0; _caI < _caArr.length; _caI++) {
+                var _caE = _caArr[_caI];
+                if (_caE && _caE.userId && _caE.profileImageUrl && !map[String(_caE.userId)]) {
+                  map[String(_caE.userId)] = _caE.profileImageUrl;
+                }
+              }
+            }
+          }
+        } catch (_lcErr) {}
+        return map;
+      })();
+
       var isAdminG = typeof getViewerGrade === 'function' && getViewerGrade() === '1';
       /** [data-stelvio-group-tab-root="1"] 밖 레이아웃이면 초기 구조가 아니므로 루트만 비우고 다시 준비 */
       function stelvioGroupTabEnsureRoot(bodyEl) {
@@ -10250,7 +10307,12 @@
           var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, gcScore: 0 };
           /* 이름/이미지 fallback: 랭킹 풀에 이름이 없으면 members 문서의 displayName 사용 */
           if (!mergedItem.name && mem.displayName) mergedItem.name = mem.displayName;
-          if (!mergedItem.profileImageUrl && mem.profileImageUrl) mergedItem.profileImageUrl = mem.profileImageUrl;
+          if (!mergedItem.profileImageUrl) {
+            /* 우선순위: ① Firestore 멤버 구독 데이터 → ② 통합 프로필 맵 (다른 metric 캐시 포함) */
+            var _mUrl = (mem.profileImageUrl && String(mem.profileImageUrl).trim()) ? String(mem.profileImageUrl).trim() : '';
+            var _mapUrl = (!_mUrl && stelvioGroupProfileUrlMap && stelvioGroupProfileUrlMap[uMem]) ? stelvioGroupProfileUrlMap[uMem] : '';
+            mergedItem.profileImageUrl = _mUrl || _mapUrl || null;
+          }
           /* 방장 표시를 위해 role 보존 */
           mergedItem._groupRole = mem.role || 'member';
           merged.push(mergedItem);
