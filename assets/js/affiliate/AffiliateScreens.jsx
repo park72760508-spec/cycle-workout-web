@@ -467,6 +467,218 @@ function AffiliateDiscountBadge(props) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// 만족도 별 평가 서비스
+// ══════════════════════════════════════════════════════════════
+var affiliateRatingService = {
+  _ratingRef: function(db, affiliateId, userId) {
+    var fns = window._firebaseFirestoreFns || {};
+    if (typeof fns.doc === 'function') return fns.doc(db, 'affiliates', affiliateId, 'ratings', userId);
+    if (typeof firebase !== 'undefined' && firebase.firestore)
+      return db.collection('affiliates').doc(affiliateId).collection('ratings').doc(userId);
+    return null;
+  },
+  _affRef: function(db, affiliateId) {
+    var fns = window._firebaseFirestoreFns || {};
+    if (typeof fns.doc === 'function') return fns.doc(db, 'affiliates', affiliateId);
+    if (typeof firebase !== 'undefined' && firebase.firestore)
+      return db.collection('affiliates').doc(affiliateId);
+    return null;
+  },
+  getUserRating: function(db, affiliateId, userId) {
+    if (!db || !affiliateId || !userId) return Promise.resolve(null);
+    try {
+      var fns = window._firebaseFirestoreFns || {};
+      var ref = this._ratingRef(db, affiliateId, userId);
+      if (!ref) return Promise.resolve(null);
+      var getFn = typeof fns.getDoc === 'function' ? fns.getDoc : null;
+      if (getFn) return getFn(ref).then(function(d) { return d.exists() ? d.data() : null; }).catch(function() { return null; });
+      return ref.get().then(function(d) { return d.exists ? d.data() : null; }).catch(function() { return null; });
+    } catch(e) { return Promise.resolve(null); }
+  },
+  submitRating: function(db, affiliateId, userId, newScore) {
+    if (!db || !affiliateId || !userId || !newScore) return Promise.reject(new Error('필수 파라미터 없음'));
+    var self = this;
+    var fns = window._firebaseFirestoreFns || {};
+    var tsFn = typeof fns.serverTimestamp === 'function' ? fns.serverTimestamp : null;
+    var now = tsFn ? tsFn() : new Date().toISOString();
+    /* FieldValue.increment 지원 여부 확인 */
+    var incFn = typeof fns.increment === 'function' ? fns.increment : null;
+    if (!incFn && typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldValue)
+      incFn = firebase.firestore.FieldValue.increment;
+    return self.getUserRating(db, affiliateId, userId).then(function(oldRating) {
+      var isFirst = !oldRating;
+      var oldScore = oldRating ? (Number(oldRating.score) || 0) : 0;
+      var scoreDelta = newScore - oldScore;
+      var ratingRef = self._ratingRef(db, affiliateId, userId);
+      var affRef    = self._affRef(db, affiliateId);
+      if (!ratingRef || !affRef) return Promise.reject(new Error('ref 없음'));
+      /* ratings/{userId} 문서 저장 */
+      var ratingPayload = { score: newScore, updatedAt: now };
+      if (isFirst) ratingPayload.createdAt = now;
+      var setFn = typeof fns.setDoc === 'function' ? fns.setDoc : null;
+      var updFn = typeof fns.updateDoc === 'function' ? fns.updateDoc : null;
+      var ratingP = setFn
+        ? setFn(ratingRef, ratingPayload, { merge: true })
+        : ratingRef.set(ratingPayload, { merge: true });
+      /* affiliates 문서 집계 업데이트 */
+      var aggP;
+      if (incFn) {
+        /* increment 사용: 원자적으로 ratingSum·ratingCount 갱신 */
+        var affUpd = { ratingSum: incFn(scoreDelta), updatedAt: now };
+        if (isFirst) affUpd.ratingCount = incFn(1);
+        aggP = updFn ? updFn(affRef, affUpd) : affRef.update(affUpd);
+      } else {
+        /* fallback: 읽고 직접 계산 후 쓰기 (원자성 약함, 비상 대비) */
+        var getDocFn = typeof fns.getDoc === 'function' ? fns.getDoc : null;
+        var readP = getDocFn ? getDocFn(affRef) : affRef.get();
+        aggP = readP.then(function(d) {
+          var data = d.exists() ? d.data() : {};
+          var newSum   = (Number(data.ratingSum)   || 0) + scoreDelta;
+          var newCount = (Number(data.ratingCount) || 0) + (isFirst ? 1 : 0);
+          var affUpd2 = { ratingSum: newSum, ratingCount: newCount, updatedAt: now };
+          return updFn ? updFn(affRef, affUpd2) : affRef.update(affUpd2);
+        });
+      }
+      return Promise.all([ratingP, aggP]);
+    });
+  }
+};
+
+// ── 별 아이콘 공통 경로 (20×20 viewBox) ──────────────────────
+var AFFILIATE_STAR_PATH = 'M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z';
+
+/**
+ * 목록용 평균 별 표시 (display only)
+ * ratingSum / ratingCount 로 평균을 계산해 그라데이션으로 부분 채움 표현
+ */
+function AffiliateRatingDisplay(props) {
+  var ratingSum   = Number(props.ratingSum)   || 0;
+  var ratingCount = Number(props.ratingCount) || 0;
+  var size        = props.size || 12;
+  var avg = ratingCount > 0 ? Math.min(5, Math.max(0, ratingSum / ratingCount)) : 0;
+  var avgFixed = Math.round(avg * 10) / 10;
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '1px', verticalAlign: 'middle' }}>
+      {[1, 2, 3, 4, 5].map(function(i) {
+        /* 각 별의 채움 비율 0~1 계산 */
+        var fill = Math.min(1, Math.max(0, avg - (i - 1)));
+        var gradId = 'aff-sg-' + i + '-' + ratingCount;
+        return (
+          <svg key={i} viewBox="0 0 20 20" width={size} height={size} style={{ display: 'block', flexShrink: 0 }}>
+            <defs>
+              <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset={(fill * 100) + '%'} stopColor="#f59e0b" />
+                <stop offset={(fill * 100) + '%'} stopColor="#e2e8f0" />
+              </linearGradient>
+            </defs>
+            <path d={AFFILIATE_STAR_PATH} fill={'url(#' + gradId + ')'} />
+          </svg>
+        );
+      })}
+      <span style={{ fontSize: size + 'px', color: '#94a3b8', marginLeft: '2px', lineHeight: 1 }}>
+        {avgFixed > 0 ? avgFixed.toFixed(1) : ''}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * 상세화면용 만족도 별 평가 위젯 (interactive)
+ * - 첫 평가 시: ratingCount +1, ratingSum + score
+ * - 재평가 시: ratingCount 고정, ratingSum 차분 반영
+ * - 사용자 부여 점수 항상 표시 + 언제든 변경 가능
+ */
+function AffiliateRatingWidget(props) {
+  var firestore   = props.firestore;
+  var affiliateId = props.affiliateId || '';
+  var userId      = props.userId || '';
+
+  var _myScore = useState(0); var myScore = _myScore[0]; var setMyScore = _myScore[1];
+  var _hover   = useState(0); var hoverScore = _hover[0]; var setHover = _hover[1];
+  var _loading = useState(true); var loading = _loading[0]; var setLoading = _loading[1];
+  var _saving  = useState(false); var saving = _saving[0]; var setSaving = _saving[1];
+
+  useEffect(function() {
+    if (!firestore || !affiliateId || !userId) { setLoading(false); return; }
+    setLoading(true);
+    affiliateRatingService.getUserRating(firestore, affiliateId, userId)
+      .then(function(data) {
+        if (data && data.score) setMyScore(Number(data.score) || 0);
+        setLoading(false);
+      })
+      .catch(function() { setLoading(false); });
+  }, [firestore, affiliateId, userId]);
+
+  function handleRate(score) {
+    if (saving) return;
+    if (score === myScore) return; /* 동일 점수 재클릭 → 무시 */
+    setSaving(true);
+    affiliateRatingService.submitRating(firestore, affiliateId, userId, score)
+      .then(function() {
+        setMyScore(score);
+        affiliateShowToast('만족도가 저장되었습니다.');
+      })
+      .catch(function() {
+        affiliateShowToast('저장에 실패했습니다. 다시 시도해 주세요.');
+      })
+      .finally(function() { setSaving(false); });
+  }
+
+  var displayScore = hoverScore || myScore;
+  var STAR_SIZE = 32;
+
+  return (
+    <div className="rounded-2xl border border-violet-100 bg-white px-4 py-4 shadow-sm">
+      <p className="text-sm font-semibold text-slate-700 m-0 mb-1">
+        ⭐ 만족도 평가
+      </p>
+      <p className="text-xs text-slate-400 m-0 mb-3">
+        {myScore > 0 ? '현재 평가: ' + myScore + '점  (별을 눌러 변경 가능)' : '별을 눌러 만족도를 평가해 주세요'}
+      </p>
+      {loading ? (
+        <div className="flex justify-center py-2">
+          <span className="inline-block h-5 w-5 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" style={{ animationDuration: '0.7s' }} />
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
+          {[1, 2, 3, 4, 5].map(function(i) {
+            var filled = displayScore >= i;
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={saving}
+                onClick={function() { handleRate(i); }}
+                onMouseEnter={function() { setHover(i); }}
+                onMouseLeave={function() { setHover(0); }}
+                style={{
+                  background: 'none', border: 'none', padding: '2px',
+                  cursor: saving ? 'default' : 'pointer',
+                  color: filled ? '#f59e0b' : '#d1d5db',
+                  transition: 'color 0.1s, transform 0.1s',
+                  transform: (hoverScore === i && !saving) ? 'scale(1.15)' : 'scale(1)',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent'
+                }}
+                aria-label={i + '점 평가'}
+              >
+                <svg viewBox="0 0 20 20" width={STAR_SIZE} height={STAR_SIZE} style={{ display: 'block' }}>
+                  <path d={AFFILIATE_STAR_PATH} fill="currentColor" />
+                </svg>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {saving && (
+        <p className="text-center text-xs text-violet-500 m-0 mt-2">저장 중…</p>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // 제휴사 목록 화면
 // ══════════════════════════════════════════════════════════════
 function AffiliateList(props) {
@@ -848,6 +1060,24 @@ function AffiliateList(props) {
                     <span className="block text-xs text-slate-500 mt-0.5 truncate">
                       {regionLabel || '지역 미설정'}
                     </span>
+                    {/* 주소 + 만족도 평균 (grade=1 관리자 전용) */}
+                    {isAdmin && aff.address ? (
+                      <span className="block text-xs text-slate-400 mt-0.5 truncate">
+                        📍 {aff.address}
+                      </span>
+                    ) : null}
+                    {isAdmin && (aff.ratingCount > 0) ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+                        <AffiliateRatingDisplay
+                          ratingSum={aff.ratingSum}
+                          ratingCount={aff.ratingCount}
+                          size={12}
+                        />
+                        <span style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1 }}>
+                          ({aff.ratingCount}명)
+                        </span>
+                      </span>
+                    ) : null}
                   </span>
                   {/* 상태 배지 (만료/준비중) */}
                   {statusBadge}
@@ -1470,6 +1700,15 @@ function AffiliateDetail(props) {
             </div>
           ) : null}
         </div>
+      ) : null}
+
+      {/* 만족도 평가 위젯 – 로그인한 사용자 전체 표시 */}
+      {userId ? (
+        <AffiliateRatingWidget
+          firestore={firestore}
+          affiliateId={affiliateId}
+          userId={userId}
+        />
       ) : null}
 
     </div>
