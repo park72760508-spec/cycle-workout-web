@@ -496,7 +496,9 @@ var affiliateRatingService = {
     } catch(e) { return Promise.resolve(null); }
   },
   submitRating: function(db, affiliateId, userId, newScore) {
-    if (!db || !affiliateId || !userId || !newScore) return Promise.reject(new Error('필수 파라미터 없음'));
+    if (!db || !affiliateId || !userId) return Promise.reject(new Error('필수 파라미터 없음'));
+    var n = Number(newScore);
+    if (n !== n || n < 1 || n > 5) return Promise.reject(new Error('점수는 1~5만 허용'));
     var self = this;
     var fns = window._firebaseFirestoreFns || {};
     var tsFn = typeof fns.serverTimestamp === 'function' ? fns.serverTimestamp : null;
@@ -508,33 +510,87 @@ var affiliateRatingService = {
     return self.getUserRating(db, affiliateId, userId).then(function(oldRating) {
       var isFirst = !oldRating;
       var oldScore = oldRating ? (Number(oldRating.score) || 0) : 0;
-      var scoreDelta = newScore - oldScore;
+      var oldCounted = oldScore >= 2;
+      var newCounted = n >= 2;
+      var countDelta = (newCounted ? 1 : 0) - (oldCounted ? 1 : 0);
+      var sumDelta = 0;
+      if (oldCounted && newCounted) sumDelta = n - oldScore;
+      else if (!oldCounted && newCounted) sumDelta = n;
+      else if (oldCounted && !newCounted) sumDelta = -oldScore;
       var ratingRef = self._ratingRef(db, affiliateId, userId);
       var affRef    = self._affRef(db, affiliateId);
       if (!ratingRef || !affRef) return Promise.reject(new Error('ref 없음'));
       /* ratings/{userId} 문서 저장 */
-      var ratingPayload = { score: newScore, updatedAt: now };
+      var ratingPayload = { score: n, updatedAt: now };
       if (isFirst) ratingPayload.createdAt = now;
       var setFn = typeof fns.setDoc === 'function' ? fns.setDoc : null;
       var updFn = typeof fns.updateDoc === 'function' ? fns.updateDoc : null;
       var ratingP = setFn
         ? setFn(ratingRef, ratingPayload, { merge: true })
         : ratingRef.set(ratingPayload, { merge: true });
-      /* affiliates 문서 집계 업데이트 */
+      /* affiliates 집계: 2~5점만 평균·인원에 포함(1점·미채움 구간은 제외) */
       var aggP;
-      if (incFn) {
-        /* increment 사용: 원자적으로 ratingSum·ratingCount 갱신 */
-        var affUpd = { ratingSum: incFn(scoreDelta), updatedAt: now };
-        if (isFirst) affUpd.ratingCount = incFn(1);
+      if (sumDelta === 0 && countDelta === 0) {
+        aggP = Promise.resolve();
+      } else if (incFn) {
+        var affUpd = { updatedAt: now };
+        if (sumDelta !== 0) affUpd.ratingSum = incFn(sumDelta);
+        if (countDelta !== 0) affUpd.ratingCount = incFn(countDelta);
         aggP = updFn ? updFn(affRef, affUpd) : affRef.update(affUpd);
       } else {
-        /* fallback: 읽고 직접 계산 후 쓰기 (원자성 약함, 비상 대비) */
         var getDocFn = typeof fns.getDoc === 'function' ? fns.getDoc : null;
         var readP = getDocFn ? getDocFn(affRef) : affRef.get();
         aggP = readP.then(function(d) {
           var data = d.exists() ? d.data() : {};
-          var newSum   = (Number(data.ratingSum)   || 0) + scoreDelta;
-          var newCount = (Number(data.ratingCount) || 0) + (isFirst ? 1 : 0);
+          var newSum   = Math.max(0, (Number(data.ratingSum)   || 0) + sumDelta);
+          var newCount = Math.max(0, (Number(data.ratingCount) || 0) + countDelta);
+          var affUpd2 = { ratingSum: newSum, ratingCount: newCount, updatedAt: now };
+          return updFn ? updFn(affRef, affUpd2) : affRef.update(affUpd2);
+        });
+      }
+      return Promise.all([ratingP, aggP]);
+    });
+  },
+  /**
+   * 만족도 평가 삭제: ratings 문서 제거 + affiliates 집계에서 제외 (ratingSum·ratingCount 차감)
+   */
+  clearRating: function(db, affiliateId, userId) {
+    if (!db || !affiliateId || !userId) return Promise.reject(new Error('필수 파라미터 없음'));
+    var self = this;
+    var fns = window._firebaseFirestoreFns || {};
+    var tsFn = typeof fns.serverTimestamp === 'function' ? fns.serverTimestamp : null;
+    var now = tsFn ? tsFn() : new Date().toISOString();
+    var incFn = typeof fns.increment === 'function' ? fns.increment : null;
+    if (!incFn && typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldValue)
+      incFn = firebase.firestore.FieldValue.increment;
+    var ratingRef = self._ratingRef(db, affiliateId, userId);
+    var affRef    = self._affRef(db, affiliateId);
+    if (!ratingRef || !affRef) return Promise.reject(new Error('ref 없음'));
+    return self.getUserRating(db, affiliateId, userId).then(function(oldRating) {
+      var oldScore = oldRating ? (Number(oldRating.score) || 0) : 0;
+      if (!oldScore) return Promise.resolve();
+      var delFn = typeof fns.deleteDoc === 'function' ? fns.deleteDoc : null;
+      var updFn = typeof fns.updateDoc === 'function' ? fns.updateDoc : null;
+      var ratingP = delFn
+        ? delFn(ratingRef)
+        : ratingRef.delete();
+      var wasCounted = oldScore >= 2;
+      if (!wasCounted) return ratingP;
+      var aggP;
+      if (incFn) {
+        var affUpd = {
+          ratingSum: incFn(-oldScore),
+          ratingCount: incFn(-1),
+          updatedAt: now
+        };
+        aggP = updFn ? updFn(affRef, affUpd) : affRef.update(affUpd);
+      } else {
+        var getDocFn = typeof fns.getDoc === 'function' ? fns.getDoc : null;
+        var readP = getDocFn ? getDocFn(affRef) : affRef.get();
+        aggP = readP.then(function(d) {
+          var data = d.exists() ? d.data() : {};
+          var newSum   = Math.max(0, (Number(data.ratingSum)   || 0) - oldScore);
+          var newCount = Math.max(0, (Number(data.ratingCount) || 0) - 1);
           var affUpd2 = { ratingSum: newSum, ratingCount: newCount, updatedAt: now };
           return updFn ? updFn(affRef, affUpd2) : affRef.update(affUpd2);
         });
@@ -604,7 +660,8 @@ function AffiliateRatingDisplay(props) {
  * 상세화면용 만족도 별 평가 위젯 (interactive)
  * - 첫 평가 시: ratingCount +1, ratingSum + score
  * - 재평가 시: ratingCount 고정, ratingSum 차분 반영
- * - 사용자 부여 점수 항상 표시 + 언제든 변경 가능
+ * - 현재와 같은 별을 다시 누르면 초기화(OFF): 집계·대상자에서 제외
+ * - 채움은 2점부터 표시(1점·미평가는 첫 별 구간 OFF와 동일하게 전부 비활성 색)
  */
 function AffiliateRatingWidget(props) {
   var firestore   = props.firestore;
@@ -621,7 +678,7 @@ function AffiliateRatingWidget(props) {
     setLoading(true);
     affiliateRatingService.getUserRating(firestore, affiliateId, userId)
       .then(function(data) {
-        if (data && data.score) setMyScore(Number(data.score) || 0);
+        if (data && data.score != null) setMyScore(Number(data.score) || 0);
         setLoading(false);
       })
       .catch(function() { setLoading(false); });
@@ -629,7 +686,20 @@ function AffiliateRatingWidget(props) {
 
   function handleRate(score) {
     if (saving) return;
-    if (score === myScore) return; /* 동일 점수 재클릭 → 무시 */
+    if (score === myScore) {
+      setSaving(true);
+      affiliateRatingService.clearRating(firestore, affiliateId, userId)
+        .then(function() {
+          setMyScore(0);
+          setHover(0);
+          affiliateShowToast('만족도 평가가 초기화되었습니다.');
+        })
+        .catch(function() {
+          affiliateShowToast('초기화에 실패했습니다. 다시 시도해 주세요.');
+        })
+        .finally(function() { setSaving(false); });
+      return;
+    }
     setSaving(true);
     affiliateRatingService.submitRating(firestore, affiliateId, userId, score)
       .then(function() {
@@ -642,7 +712,9 @@ function AffiliateRatingWidget(props) {
       .finally(function() { setSaving(false); });
   }
 
+  /* 2점 미만(미평가·1점)은 첫 별 구간까지 OFF — hover는 1점도 미리보기 가능 */
   var displayScore = hoverScore || myScore;
+  var fillScore = displayScore >= 2 ? displayScore : 0;
   var STAR_SIZE = 32;
 
   return (
@@ -651,7 +723,11 @@ function AffiliateRatingWidget(props) {
         ⭐ 만족도 평가
       </p>
       <p className="text-xs text-slate-400 m-0 mb-3">
-        {myScore > 0 ? '현재 평가: ' + myScore + '점  (별을 눌러 변경 가능)' : '별을 눌러 만족도를 평가해 주세요'}
+        {myScore >= 2
+          ? '현재 평가: ' + myScore + '점 · 같은 별을 다시 누르면 초기화됩니다'
+          : myScore === 1
+            ? '1점(낮음)으로 저장됨 · 같은 별을 다시 눌러 초기화하거나 2점 이상을 선택하세요'
+            : '2~5번 별을 눌러 만족도를 평가해 주세요 (같은 별 재클릭 시 초기화)'}
       </p>
       {loading ? (
         <div className="flex justify-center py-2">
@@ -660,7 +736,7 @@ function AffiliateRatingWidget(props) {
       ) : (
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
           {[1, 2, 3, 4, 5].map(function(i) {
-            var filled = displayScore >= i;
+            var filled = fillScore >= i;
             return (
               <button
                 key={i}
