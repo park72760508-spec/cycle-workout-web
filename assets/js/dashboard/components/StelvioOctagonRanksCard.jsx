@@ -1295,6 +1295,12 @@
     return 'assets/img/' + (m[tierId] || 'G.svg');
   }
 
+  /** 존(티어) ID → 등급 레벨 문자 (HC=A … C6=G), 리스트 배지용 */
+  function heptagonTierIdToGradeLetter(tierId) {
+    var m = { HC: 'A', C1: 'B', C2: 'C', C3: 'D', C4: 'E', C5: 'F', C6: 'G' };
+    return m[tierId] || 'G';
+  }
+
   /** 헵타곤 중앙 이미지 하단 표기용(레벨A=HC) */
   function tierLevelDisplayName(tierId) {
     var m = { HC: '레벨A', C1: '레벨B', C2: '레벨C', C3: '레벨D', C4: '레벨E', C5: '레벨F', C6: '레벨G' };
@@ -2074,6 +2080,33 @@
                         );
                       }
                     }
+                    var gradeLetterBadge = null;
+                    if (row.boardRank != null && isFinite(row.boardRank) && nEffModal >= 1) {
+                      var pRow = heptagonLevelPercentForRankN(
+                        Math.floor(Number(row.boardRank)),
+                        nEffModal,
+                        isVirtModal,
+                        boardC,
+                        viewerAgeCategory
+                      );
+                      var tierRowObj = heptagonBoardTierIdFromLevelPercent(pRow);
+                      var gLet = heptagonTierIdToGradeLetter(tierRowObj && tierRowObj.id);
+                      gradeLetterBadge = (
+                        <span
+                          className={'stelvio-hept-grade stelvio-hept-grade--' + gLet.toLowerCase()}
+                          title={
+                            '동일 조건·월(환산) 집계 등급 레벨 ' +
+                            gLet +
+                            ' · 상대 순위% 약 ' +
+                            (typeof pRow === 'number' && isFinite(pRow) ? pRow.toFixed(1) : '—') +
+                            '%'
+                          }
+                          aria-label={'등급 ' + gLet}
+                        >
+                          {gLet}
+                        </span>
+                      );
+                    }
                     return (
                       <tr
                         key={row.isMe && row.isInserted ? 'me-ins' : 'br-' + (row.userId || idx)}
@@ -2094,7 +2127,12 @@
                               </span>
                             </span>
                           )}
-                          {rankChangeBadge}
+                          {rankChangeBadge || gradeLetterBadge ? (
+                            <span className="stelvio-heptagon-detail-modal__rank-meta">
+                              {rankChangeBadge}
+                              {gradeLetterBadge}
+                            </span>
+                          ) : null}
                           {npb.showPrivateBadge ? (
                             <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">
                               비
