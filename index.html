@@ -8520,13 +8520,14 @@
       if (stelvioRankingFriendUserSet.has(s)) return;
       if (stelvioRankingFavoriteUserSet.has(s)) stelvioRankingFavoriteUserSet.delete(s);
       else stelvioRankingFavoriteUserSet.add(s);
+      /* 인메모리 Set이 이미 정확하게 갱신된 상태이므로 localStorage에 저장만 하고
+         다시 읽어오지 않는다. 읽어오면 저장 실패 시 방금 추가한 항목이 사라지는 버그 발생 */
       try {
         localStorage.setItem(
           stelvioRankingFavoritesStorageKey(),
           JSON.stringify(Array.from(stelvioRankingFavoriteUserSet))
         );
       } catch (e3) {}
-      stelvioRefreshRankingFavoriteSetFromStorage();
       if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
     }
     window.stelvioToggleRankingFavorite = stelvioToggleRankingFavorite;
@@ -9728,8 +9729,13 @@
       stelvioRankingApiEndStr = typeof data.endStr === 'string' ? data.endStr : '';
       stelvioRankingExpandState = {};
       stelvioRankingGapState = {};
+      var _prevRankingUid = stelvioRankingCurrentUserId;
       stelvioRankingCurrentUserId = uid;
-      stelvioRefreshRankingFavoriteSetFromStorage();
+      /* userId가 변경된 경우(첫 로드 또는 계정 전환)에만 localStorage에서 즐겨찾기를 다시 읽는다.
+         같은 사용자의 백그라운드 재검증에서는 인메모리 Set을 덮어쓰지 않아 토글 결과를 보존한다 */
+      if (_prevRankingUid !== uid) {
+        stelvioRefreshRankingFavoriteSetFromStorage();
+      }
       stelvioMyRankSupremo = data.myRankSupremo || null;
       stelvioCurrentUser = data.currentUser || null;
       stelvioSyncCategorySelectUi();
