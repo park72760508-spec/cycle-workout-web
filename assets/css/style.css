@@ -6783,6 +6783,68 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin-top: 0;
 }
 
+/* 이름 옆: 순위 등락 + 등급(A~G) 배지를 한 덩어리로 */
+.stelvio-heptagon-detail-modal__rank-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.stelvio-heptagon-detail-modal__rank-meta .stelvio-rank-change {
+  margin-left: 0;
+}
+
+/* 동일 조건(환산) 순위표 — 등급 레벨 문자 배지 (은은한 톤) */
+.stelvio-hept-grade {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.15;
+  padding: 2px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  cursor: default;
+  white-space: nowrap;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+}
+.stelvio-hept-grade--a {
+  color: #6d28d9;
+  background: rgba(139, 92, 246, 0.11);
+  border: 1px solid rgba(124, 58, 237, 0.18);
+}
+.stelvio-hept-grade--b {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.09);
+  border: 1px solid rgba(220, 38, 38, 0.16);
+}
+.stelvio-hept-grade--c {
+  color: #c2410c;
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px solid rgba(234, 88, 12, 0.16);
+}
+.stelvio-hept-grade--d {
+  color: #a16207;
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(202, 138, 4, 0.2);
+}
+.stelvio-hept-grade--e {
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.09);
+  border: 1px solid rgba(22, 163, 74, 0.16);
+}
+.stelvio-hept-grade--f {
+  color: #1e40af;
+  background: rgba(37, 99, 235, 0.09);
+  border: 1px solid rgba(29, 78, 216, 0.16);
+}
+.stelvio-hept-grade--g {
+  color: #64748b;
+  background: rgba(100, 116, 139, 0.12);
+  border: 1px solid rgba(100, 116, 139, 0.2);
+}
+
 /* 순위 등락 배지 */
 .stelvio-rank-change {
   display: inline-block;
