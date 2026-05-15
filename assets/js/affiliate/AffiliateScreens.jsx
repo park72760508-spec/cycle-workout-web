@@ -547,32 +547,49 @@ var affiliateRatingService = {
 // ── 별 아이콘 공통 경로 (20×20 viewBox) ──────────────────────
 var AFFILIATE_STAR_PATH = 'M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z';
 
+/** 평균 만족도(0~5) → 채움 색 (낮음: 차분한 슬레이트, 높음: 앰버) */
+function affiliateRatingFillColorForAverage(avg) {
+  var t = Math.min(5, Math.max(0, Number(avg) || 0)) / 5;
+  var r1 = 148, g1 = 163, b1 = 184; /* #94a3b8 */
+  var r2 = 245, g2 = 158, b2 = 11;  /* #f59e0b */
+  var r = Math.round(r1 + (r2 - r1) * t);
+  var g = Math.round(g1 + (g2 - g1) * t);
+  var b = Math.round(b1 + (b2 - b1) * t);
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
 /**
  * 목록용 평균 별 표시 (display only)
- * ratingSum / ratingCount 로 평균을 계산해 그라데이션으로 부분 채움 표현
+ * - ratingSum / ratingCount 평균으로 각 별당 0~1 채움 (예: 4.5 → 5번째 별 50%)
+ * - clipPath로 좌→우 정확히 채움, 색은 평균 만족도 비율로 보간
  */
 function AffiliateRatingDisplay(props) {
   var ratingSum   = Number(props.ratingSum)   || 0;
   var ratingCount = Number(props.ratingCount) || 0;
   var size        = props.size || 12;
+  var affiliateKey = String(props.affiliateId || props.uniqueKey || 'x').replace(/[^a-zA-Z0-9_-]/g, '_');
   var avg = ratingCount > 0 ? Math.min(5, Math.max(0, ratingSum / ratingCount)) : 0;
   var avgFixed = Math.round(avg * 10) / 10;
+  var fillRgb = affiliateRatingFillColorForAverage(avg);
+  var emptyRgb = '#e2e8f0';
 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '1px', verticalAlign: 'middle' }}>
       {[1, 2, 3, 4, 5].map(function(i) {
-        /* 각 별의 채움 비율 0~1 계산 */
-        var fill = Math.min(1, Math.max(0, avg - (i - 1)));
-        var gradId = 'aff-sg-' + i + '-' + ratingCount;
+        var fillPortion = Math.min(1, Math.max(0, avg - (i - 1)));
+        var clipW = Math.max(0, Math.min(20, fillPortion * 20));
+        var clipId = 'aff-star-clip-' + affiliateKey + '-' + i;
         return (
           <svg key={i} viewBox="0 0 20 20" width={size} height={size} style={{ display: 'block', flexShrink: 0 }}>
             <defs>
-              <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset={(fill * 100) + '%'} stopColor="#f59e0b" />
-                <stop offset={(fill * 100) + '%'} stopColor="#e2e8f0" />
-              </linearGradient>
+              <clipPath id={clipId}>
+                <rect x="0" y="0" width={clipW} height="20" />
+              </clipPath>
             </defs>
-            <path d={AFFILIATE_STAR_PATH} fill={'url(#' + gradId + ')'} />
+            <path d={AFFILIATE_STAR_PATH} fill={emptyRgb} />
+            {fillPortion > 0 ? (
+              <path d={AFFILIATE_STAR_PATH} fill={fillRgb} clipPath={'url(#' + clipId + ')'} />
+            ) : null}
           </svg>
         );
       })}
@@ -1060,15 +1077,11 @@ function AffiliateList(props) {
                     <span className="block text-xs text-slate-500 mt-0.5 truncate">
                       {regionLabel || '지역 미설정'}
                     </span>
-                    {/* 주소 + 만족도 평균 (grade=1 관리자 전용) */}
-                    {isAdmin && aff.address ? (
-                      <span className="block text-xs text-slate-400 mt-0.5 truncate">
-                        📍 {aff.address}
-                      </span>
-                    ) : null}
+                    {/* 만족도 평균 (grade=1 관리자 전용) */}
                     {isAdmin && (aff.ratingCount > 0) ? (
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
                         <AffiliateRatingDisplay
+                          affiliateId={aff.id}
                           ratingSum={aff.ratingSum}
                           ratingCount={aff.ratingCount}
                           size={12}
