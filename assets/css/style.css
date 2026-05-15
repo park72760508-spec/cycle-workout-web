@@ -7826,16 +7826,18 @@ button.stelvio-rank-avatar-btn:focus-visible {
   touch-action: manipulation;
   border: none;
   background: transparent;
-  padding: 0;
+  padding: 2px;
   margin: 0;
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
-  /* 관심 미등록(outline 별): 테두리만 희미하게 — 이전 대비 알파 약 50% 추가 완화 */
-  color: rgba(148, 163, 184, 0.19);
+  /* 관심 미등록(outline 별): 클릭 가능함을 인지할 수 있도록 충분히 보이게 설정 */
+  color: rgba(148, 163, 184, 0.60);
   vertical-align: middle;
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
+  min-width: 24px;
+  min-height: 24px;
 }
 #stelvioRankingScreen .stelvio-rank-star-svg--outline path {
   stroke-width: 1.2;
@@ -7886,7 +7888,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
   text-shadow: 0 0 1px rgba(192, 132, 252, 0.28);
 }
 #stelvioRankingScreen .stelvio-rank-star-btn:not(.stelvio-rank-star-btn--on):hover {
-  color: rgba(100, 116, 139, 0.24);
+  color: rgba(100, 116, 139, 0.80);
 }
 #stelvioRankingScreen .stelvio-rank-star-btn--on:hover {
   opacity: 0.88;
