@@ -197,24 +197,27 @@ function pollForAuthV9(maxWaitMs) {
  * localStorage 'stelvio_auth_persist_local' 키로 선택 여부를 공유.
  */
 async function enforceAuthPersistence() {
-  /* localStorage + cookie 동시 읽기 (iOS localStorage 소실 대비) */
+  /* localStorage·쿠키 어느 한쪽이라도 '1'이면 LOCAL — iOS 분할/소실 대비 */
   var wantsLocal = (function() {
+    var ls = null;
     try {
-      var v = localStorage.getItem('stelvio_auth_persist_local');
-      if (v != null) return v === '1';
-    } catch(e) {}
-    /* cookie fallback */
+      ls = localStorage.getItem('stelvio_auth_persist_local');
+    } catch (e) {}
+    var ckIs1 = false;
     try {
       var nameEQ = 'sl_stelvio_auth_persist_local=';
       var ca = document.cookie.split(';');
       for (var i = 0; i < ca.length; i++) {
         var c = ca[i].trim();
         if (c.indexOf(nameEQ) === 0) {
-          return decodeURIComponent(c.substring(nameEQ.length)) === '1';
+          ckIs1 = decodeURIComponent(c.substring(nameEQ.length)) === '1';
+          break;
         }
       }
-    } catch(e2) {}
-    return false;
+    } catch (e2) {}
+    if (ls === '1') return true;
+    if (ls === '0') return false;
+    return ckIs1;
   })();
   var persistLabel = wantsLocal ? 'LOCAL (상태 유지)' : 'SESSION (세션만)';
   try {

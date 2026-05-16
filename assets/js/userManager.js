@@ -1338,8 +1338,8 @@ async function apiGetUsers() {
       }
     }
     
-    // grade 확인: Firestore 데이터 > userData > 기본값 '2'
-    const userGrade = String(currentUserData?.grade || userGradeFromData || '2');
+    // grade 확인: Firestore 데이터 > userData > 기본값 '2' (관리자 판별은 문자·숫자 모두)
+    const userGrade = currentUserData?.grade ?? userGradeFromData ?? '2';
     console.log('[apiGetUsers] 👤 현재 사용자 정보:', { 
       userId: userIdToCheck,
       name: currentUserData?.name,
@@ -1348,8 +1348,8 @@ async function apiGetUsers() {
       hasCurrentUserDoc: !!currentUserDoc?.exists
     });
     
-    // 관리자(grade='1')인 경우에만 전체 목록 조회
-    if (userGrade === '1') {
+    // 관리자(grade=1 문자·숫자)인 경우에만 전체 목록 조회
+    if (typeof isStelvioAdminGrade === 'function' ? isStelvioAdminGrade(userGrade) : String(userGrade).trim() === '1') {
       console.log('[apiGetUsers] 🔑 관리자 권한 확인됨 - 전체 사용자 목록 조회 시작');
       try {
         // firestoreV9 사용 (authV9에 사용자 있을 때만)
@@ -2900,9 +2900,14 @@ async function loadUsers() {
       }
       const profileSubtitleEmpty = document.getElementById('profileScreenSubtitle');
       if (profileSubtitleEmpty) {
-        const subG = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : '2';
-        if (subG === '1') {
-          profileSubtitleEmpty.textContent = '현재 가입자 수 : 0 명';
+        var _lg =
+          typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true
+            ? '1'
+            : typeof getLoginUserGrade === 'function'
+              ? getLoginUserGrade()
+              : '2';
+        if (typeof isStelvioAdminGrade === 'function' ? isStelvioAdminGrade(_lg) : String(_lg).trim() === '1') {
+          profileSubtitleEmpty.textContent = '현재 가입자 수(전체) : 0 명';
           profileSubtitleEmpty.style.display = '';
         } else {
           profileSubtitleEmpty.textContent = '';
@@ -2918,31 +2923,35 @@ async function loadUsers() {
 
     const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
     const isTempAdmin  = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
-    const viewerGrade  = isTempAdmin
-      ? '1'
-      : (typeof getViewerGrade === 'function'
-          ? String(getViewerGrade())
-          : String(mergedViewer?.grade ?? '2'));
-    const viewerId     = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
+    /** 프로필 카드 권한(수정·대시보드): 로그인 계정 기준 — 관리자가 다른 프로필을 선택해도 전체 관리 UI 유지 */
+    const loginGradeRaw =
+      isTempAdmin
+        ? '1'
+        : (typeof getLoginUserGrade === 'function' ? getLoginUserGrade() : String(mergedViewer?.grade ?? '2'));
+    const isLoginAdmin =
+      isTempAdmin ||
+      (typeof isStelvioAdminGrade === 'function' && isStelvioAdminGrade(loginGradeRaw));
+    const profileCardGrade = isLoginAdmin ? '1' : String(loginGradeRaw).trim();
+
+    const viewerId = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
 
     console.log('[loadUsers] 🔐 권한 확인:', { 
-      viewerGrade, 
+      profileCardGrade,
+      isLoginAdmin,
       viewerId,
       isTempAdmin,
       mergedViewerName: mergedViewer?.name 
     });
 
-    // 권한에 따른 사용자 목록 필터링
+    // 목록 노출: 로그인이 관리자면 API 전체(users) — 선택 프로필 등급(getViewerGrade)과 무관
     let visibleUsers = users;
-    if (viewerGrade === '1') {
-      // 관리자(grade=1): 모든 사용자 보기
+    if (isLoginAdmin) {
       visibleUsers = users;
-      console.log('[loadUsers] ✅ 관리자 권한 - 모든 사용자 표시:', visibleUsers.length);
-    } else if (viewerGrade === '2' || viewerGrade === '3') {
-      // 일반 사용자(grade=2,3): 본인 계정만 보기
+      console.log('[loadUsers] ✅ 로그인 관리자 - 전체 사용자 표시:', visibleUsers.length);
+    } else if (profileCardGrade === '2' || profileCardGrade === '3') {
       if (viewerId) {
         visibleUsers = users.filter(u => String(u.id) === viewerId);
-        console.log('[loadUsers] 👤 일반 사용자 - 본인 계정만 표시:', visibleUsers.length);
+        console.log('[loadUsers] 👤 일반·코치 - 본인 계정만 표시:', visibleUsers.length);
       } else {
         visibleUsers = [];
         console.warn('[loadUsers] ⚠️ viewerId가 없어 빈 목록 반환');
@@ -2951,13 +2960,15 @@ async function loadUsers() {
 
     visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
-    // 관리자(grade=1)일 때만 검색 섹션 표시 및 전체 목록 저장 (검색 시 사용)
+    const totalMemberCountForAdmin = isLoginAdmin ? users.length : visibleUsers.length;
+
+    // 로그인 관리자일 때만 검색 섹션 표시 및 전체 목록 저장 (검색 시 사용)
     const searchSection = document.getElementById('profileSearchSection');
     if (searchSection) {
-      if (viewerGrade === '1') {
+      if (isLoginAdmin) {
         searchSection.style.display = 'block';
         window._profileScreenAllUsers = visibleUsers.slice();
-        window._profileScreenContext = { viewerGrade, viewerId };
+        window._profileScreenContext = { viewerGrade: profileCardGrade, viewerId };
         const nameInput = document.getElementById('profileSearchName');
         const contactInput = document.getElementById('profileSearchContact');
         if (nameInput) nameInput.value = '';
@@ -2972,12 +2983,11 @@ async function loadUsers() {
       }
     }
 
-    renderProfileUserCards(visibleUsers, viewerGrade, viewerId);
+    renderProfileUserCards(visibleUsers, profileCardGrade, viewerId);
     const profileSubtitle = document.getElementById('profileScreenSubtitle');
     if (profileSubtitle) {
-      const subGrade = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : '2';
-      if (subGrade === '1') {
-        profileSubtitle.textContent = '현재 가입자 수 : ' + visibleUsers.length + ' 명';
+      if (isLoginAdmin) {
+        profileSubtitle.textContent = '현재 가입자 수(전체) : ' + totalMemberCountForAdmin + ' 명';
         profileSubtitle.style.display = '';
       } else {
         profileSubtitle.textContent = '';
@@ -2985,7 +2995,7 @@ async function loadUsers() {
       }
     }
     if (visibleUsers.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
-      window.refreshProfileMaxHrAndRerender(visibleUsers, viewerGrade, viewerId).catch(() => {});
+      window.refreshProfileMaxHrAndRerender(visibleUsers, profileCardGrade, viewerId).catch(() => {});
     }
 
     const profileScreen = document.getElementById('profileScreen');
