@@ -633,7 +633,23 @@ export async function uploadRidingGroupCover(storage, groupId, file) {
   var name = 'cover_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '.' + ext;
   var path = 'stelvio_riding_groups/' + gid + '/' + name;
   var r = storageRef(storage, path);
-  var ct = typeof File !== 'undefined' && file instanceof File && file.type ? file.type : 'image/jpeg';
+  var ct =
+    typeof File !== 'undefined' && file instanceof File && file.type && String(file.type).indexOf('image/') === 0
+      ? file.type
+      : null;
+  if (!ct) {
+    var byExt = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      bmp: 'image/bmp',
+      heic: 'image/heic',
+      heif: 'image/heif'
+    };
+    ct = byExt[ext] || 'image/jpeg';
+  }
   await uploadBytes(r, file, { contentType: ct });
   return getDownloadURL(r);
 }
