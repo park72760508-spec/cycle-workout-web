@@ -23903,16 +23903,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     (function () {
       'use strict';
 
-      /** 현재 로그인 사용자 오브젝트 (window.users 행 병합) */
+      /** 현재 로그인 사용자 오브젝트 — memory · users 시트 · localStorage 순 병합 (토큰 유실 방지) */
       function _affGetCurrentUser() {
-        var cu = window.currentUser || null;
-        var uid = cu && (cu.id || cu.uid) ? String(cu.id || cu.uid) : null;
+        var cu = window.currentUser ? Object.assign({}, window.currentUser) : null;
+        var uid = cu && (cu.id || cu.uid) ? String(cu.id || cu.uid) : '';
         if (uid && Array.isArray(window.users)) {
           var row = window.users.find(function (u) {
             return u && String(u.id || u.uid || '') === uid;
           });
           if (row) cu = Object.assign({}, cu || {}, row);
         }
+        try {
+          var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
+          if (ls && typeof ls === 'object') {
+            cu = Object.assign({}, ls, cu || {});
+          }
+        } catch (_) {}
         return cu;
       }
 
@@ -24019,6 +24025,23 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               openSettingsModal();
             }
           }, 130);
+        }
+      };
+
+      /** 네비·기타 진입점용 — 배너와 동일한 병합/검사 */
+      window.AffiliateDiscountEligibility = {
+        getMergedUser: function () {
+          return _affGetCurrentUser();
+        },
+        hasGemini: function (u) {
+          return _affIsGeminiConnected(u || _affGetCurrentUser());
+        },
+        hasStrava: function (u) {
+          return _affIsStravaConnected(u || _affGetCurrentUser());
+        },
+        isEligible: function () {
+          var u = _affGetCurrentUser();
+          return _affIsGeminiConnected(u) && _affIsStravaConnected(u);
         }
       };
     })();
@@ -24163,6 +24186,20 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         _affiliateInitializing = false;
       }
 
+      /** Auth 세션 복원 전 onSnapshot 시 permission-denied 방지 */
+      function _affiliateMountAfterAuthReady() {
+        var mount = function () {
+          _doMountAffiliateReact();
+        };
+        try {
+          if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
+            window.authV9.authStateReady().then(mount).catch(mount);
+            return;
+          }
+        } catch (e1) {}
+        mount();
+      }
+
       window.initAffiliateReact = function () {
         /* 동시에 여러 번 호출되는 경쟁 상태 방지 */
         if (_affiliateInitializing) {
@@ -24182,13 +24219,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               if (!window.firestoreV9) {
                 console.warn('[Affiliate] firestoreV9 준비 타임아웃 – null로 마운트');
               }
-              _doMountAffiliateReact();
+              _affiliateMountAfterAuthReady();
             }
           }, 200);
           return;
         }
 
-        _doMountAffiliateReact();
+        _affiliateMountAfterAuthReady();
       };
     })();
   </script>
@@ -24892,20 +24929,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (typeof closeSettingsModal === 'function') closeSettingsModal();
             window.__hubNavModalTab = null;
             if (typeof window.onAffiliateButtonClick === 'function') {
-              /* 현재 사용자의 Gemini API + STRAVA 연결 여부 자동 감지 */
-              var _cu = null;
-              try { _cu = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){}
-              var _hasGemini = false, _hasStrava = false;
-              if (_cu) {
-                var _sts = _cu.API_sts;
-                _hasGemini = (_sts === true || _sts === 'true' || _sts === 1 || _sts === '1') ||
-                             !!(_cu.gemini_api_registered === true || _cu.gemini_api_registered === 'true') ||
-                             !!((_cu.gemini_api_key != null ? String(_cu.gemini_api_key).trim() : '').length);
-                var _r = _cu.strava_refresh_token != null ? String(_cu.strava_refresh_token).trim() : '';
-                var _a = _cu.strava_access_token != null ? String(_cu.strava_access_token).trim() : '';
-                _hasStrava = !!(_r || _a);
-              }
-              window.onAffiliateButtonClick(_hasGemini && _hasStrava);
+              /* 배너와 동일: memory·users·localStorage 병합 후 Gemini/Strava 판별 */
+              var _eligible =
+                typeof window.AffiliateDiscountEligibility !== 'undefined' &&
+                typeof window.AffiliateDiscountEligibility.isEligible === 'function'
+                  ? window.AffiliateDiscountEligibility.isEligible()
+                  : false;
+              window.onAffiliateButtonClick(_eligible);
             }
             return;
           }
