@@ -15360,7 +15360,7 @@
       window._stelvioStorageSet('stelvio_auth_persist_local', '0');
     };
 
-    /* [SESSION-only] 저장된 전화번호·비밀번호로 폼 채움 + 선택 시 자동 로그인 1회 */
+    /* [SESSION-only] 저장된 전화번호·비밀번호로 폼 채움 + 선택 시 자동 로그인 */
     window.stelvioScheduleAutoLoginFromSavedCredentials = function () {
       try {
         var idKey = window.STELVIO_SAVED_LOGIN_ID_KEY || 'stelvio_saved_id';
@@ -15369,23 +15369,26 @@
         var pw = localStorage.getItem(pwKey);
         if (!id || !pw || String(pw).length === 0) return;
         if (window.__stelvioPhoneAuthBusy) return;
+        /* Android: Firebase 세션은 끊겼는데 localStorage 프로필만 남으면 이전에는 여기서 return되어 자동 로그인이 막힘 → Firebase currentUser만으로 판단 */
         try {
           if (window.authV9 && window.authV9.currentUser) return;
           if (window.auth && window.auth.currentUser) return;
         } catch (eA) {}
-        try {
-          var cu = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-          if (cu && (cu.id != null || cu.uid != null)) return;
-        } catch (eB) {}
         var now = Date.now();
         var lastTs = parseInt(sessionStorage.getItem('stelvio_auto_login_ts') || '0', 10);
-        if (now - lastTs < 3500) return;
+        /* 연속 restore 호출 대비 짧은 디바운스(안드로이드 다중 초기화 완화) */
+        if (now - lastTs < 900) return;
         sessionStorage.setItem('stelvio_auto_login_ts', String(now));
         setTimeout(function () {
           if (typeof handlePhoneAuth !== 'function') return;
           if (window.__stelvioPhoneAuthBusy) return;
+          /* 제출 직전 한 번 더: 이미 Firebase 로그인된 경우만 스킵 */
+          try {
+            if (window.authV9 && window.authV9.currentUser) return;
+            if (window.auth && window.auth.currentUser) return;
+          } catch (e2) {}
           handlePhoneAuth();
-        }, 450);
+        }, 200);
       } catch (eC) {}
     };
 
@@ -15592,8 +15595,11 @@
                 if (userCredential && userCredential.user) {
                   usedV9ForLogin = true;
                   console.log('✅ 로그인 성공 (authV9):', userCredential.user.uid);
+                  /* v8 동기: RTDB용. await 제거 — Android에서 이중 네트워크 로그인으로 체감 지연 큼 → 백그라운드 처리 */
                   if (auth && typeof auth.signInWithEmailAndPassword === 'function') {
-                    try { await auth.signInWithEmailAndPassword(email, password); } catch (v8SyncErr) { console.warn('[Login] v8 동기화 실패 (무시):', v8SyncErr); }
+                    auth.signInWithEmailAndPassword(email, password).catch(function (v8SyncErr) {
+                      console.warn('[Login] v8 동기화 실패 (무시):', v8SyncErr);
+                    });
                   }
                 }
               } catch (v9Err) {
@@ -15619,13 +15625,13 @@
               }
             } catch (eEarlySave) {}
 
-            /* Firestore 읽기 전 토큰 동기화(SESSION에서도 안전) */
+            /* Firestore 전 첫 토큰: 캐시 우선(빠름). 재시도 시에만 forceRefresh */
             try {
               if (user && typeof user.getIdToken === 'function') {
-                await user.getIdToken(true);
+                await user.getIdToken(false);
               }
             } catch (eTokSync) {
-              console.warn('[Login] 토큰 강제 갱신 지연:', eTokSync && eTokSync.message);
+              console.warn('[Login] 토큰 동기화:', eTokSync && eTokSync.message);
             }
 
             /* Firestore 프로필 읽기 전에 Auth 준비 + ID 토큰 강제 갱신 */
@@ -15680,12 +15686,12 @@
                 } catch (e1) {}
               }
               try {
-                await waitForGetUserByUidReady(8000);
+                await waitForGetUserByUidReady(3500);
               } catch (eWait0) {
-                await new Promise(function (r) { setTimeout(r, 500); });
-                await waitForGetUserByUidReady(6000);
+                await new Promise(function (r) { setTimeout(r, 200); });
+                await waitForGetUserByUidReady(2500);
               }
-              await stelvioRefreshV9IdToken(true);
+              await stelvioRefreshV9IdToken(false);
 
               var getUserByUidFn = window.getUserByUid;
               if (typeof getUserByUidFn !== 'function') {
@@ -15695,8 +15701,8 @@
               for (var _attempt = 0; _attempt < 6; _attempt++) {
                 await stelvioRefreshV9IdToken(_attempt > 0);
                 if (_attempt > 0) {
-                  await new Promise(function (r) { setTimeout(r, 500 + _attempt * 150); });
-                  await waitForGetUserByUidReady(2500);
+                  await new Promise(function (r) { setTimeout(r, 280 + _attempt * 100); });
+                  await waitForGetUserByUidReady(1200);
                   getUserByUidFn = window.getUserByUid;
                   if (typeof getUserByUidFn !== 'function') continue;
                 }
