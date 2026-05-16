@@ -5907,6 +5907,9 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
       await finalizeRankingProfileUrls(out);
+      if (Array.isArray(out.byCategory.Supremo)) {
+        out.entries = out.byCategory.Supremo.slice();
+      }
       return res.status(200).json(out);
     }
     const cacheRef = db.collection("cache").doc(cacheKey);
@@ -5939,6 +5942,9 @@ exports.getPeakPowerRanking = onRequest(
           }
         }
         await finalizeRankingProfileUrls(out);
+        if (Array.isArray(out.byCategory.Supremo)) {
+          out.entries = out.byCategory.Supremo.slice();
+        }
         return res.status(200).json(out);
       }
     }
