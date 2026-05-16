@@ -10570,8 +10570,7 @@
           if (!uMem) continue;
           /* 1. 성별 필터: Supremo 풀에 없는 멤버도 그룹탭에서는 표시(프로필 fallback 사용) */
           var supE = supByUid[uMem];
-          /* 2. 카테고리 필터: Supremo가 아닌 경우 해당 카테고리에만 표시 (랭킹 데이터 없는 멤버는 Supremo에만 표시) */
-          if (cat !== 'Supremo' && !catRawByUid[uMem]) continue;
+          /* 2. 소모임 멤버는 랭킹 부문·지표 값 유무와 관계없이 전원 표시(값만 0/—). 과거: 부문 미포함 시 제외 */
           /* 3. 관심 필터 */
           if (stelvioRankingState.listFilter === 'interest') {
             var isFavG    = stelvioRankingFavoriteUserSet.has(uMem);
