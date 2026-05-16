@@ -15461,6 +15461,16 @@
         wantsPersist = ls === '1' || (ls !== '0' && ckIs1);
       } catch (eP) {}
       cb.checked = !!wantsPersist;
+      /* 인증 화면 진입 시 로그인 API 프리패치 — Android에서 첫 탭 지연 완화 */
+      try {
+        if (window.authV9 && typeof window.signInWithEmailAndPasswordV9 !== 'function') {
+          import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js').then(function (m) {
+            if (m && m.signInWithEmailAndPassword && !window.signInWithEmailAndPasswordV9) {
+              window.signInWithEmailAndPasswordV9 = m.signInWithEmailAndPassword;
+            }
+          }).catch(function () {});
+        }
+      } catch (ePre) {}
     };
 
     window.persistAuthRememberCredentialsIfChecked = function(phone, password) {
@@ -15554,11 +15564,44 @@
       showAuthStatus('로그인 중...', 'info');
       
       try {
-        // Realtime Database 규칙이 기본 앱 auth를 사용하므로 window.auth(기본 앱)로 로그인
-        const auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-        if (!auth || !window.phoneToEmail) {
-          throw new Error('Firebase 인증 모듈이 로드되지 않았습니다.');
+        /* Android 등: compat script가 늦게 붙어도 authV9만 있으면 로그인 가능 — 짧게 대기·signIn 함수 보강 */
+        async function waitForStelvioAuthReadyForLogin(maxMs) {
+          var t0 = Date.now();
+          var maxWait = maxMs != null ? maxMs : 12000;
+          var delay = 45;
+          while (Date.now() - t0 < maxWait) {
+            var authCompat = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+            var hasV9 = !!(window.authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function');
+            var hasV8 = !!(authCompat && typeof authCompat.signInWithEmailAndPassword === 'function');
+            if (typeof window.phoneToEmail === 'function' && (hasV9 || hasV8)) {
+              return { authCompat: authCompat, ok: true };
+            }
+            try {
+              if (window.authV9 && typeof window.signInWithEmailAndPasswordV9 !== 'function') {
+                var _am = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+                if (_am && _am.signInWithEmailAndPassword) {
+                  window.signInWithEmailAndPasswordV9 = _am.signInWithEmailAndPassword;
+                }
+              }
+            } catch (eIm) {}
+            await new Promise(function (r) { setTimeout(r, delay); });
+            if (delay < 140) delay += 12;
+          }
+          var authLast = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+          var v9ok = !!(window.authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function');
+          var v8ok = !!(authLast && typeof authLast.signInWithEmailAndPassword === 'function');
+          return { authCompat: authLast, ok: !!(typeof window.phoneToEmail === 'function' && (v9ok || v8ok)) };
         }
+
+        showAuthStatus('인증 모듈 준비 중…', 'info');
+        var _authReady = await waitForStelvioAuthReadyForLogin(12000);
+        const auth = _authReady.authCompat;
+        if (!_authReady.ok) {
+          throw new Error('Firebase 인증 모듈이 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.');
+        }
+        showAuthStatus('로그인 중...', 'info');
+
+        // Realtime Database 규칙용 compat 선택적 동기화(없어도 v9 로그인·Firestore는 진행)
         
         const email = window.phoneToEmail(phone);
         const formattedPhone = (window.formatPhoneForDB || window.formatPhoneNumber || ((p) => p))(phone);
@@ -15823,7 +15866,18 @@
             unsubscribe();
           }, 5000);
         } else {
-          console.warn('[Auth Guard] Auth not available, skipping user list load');
+          console.warn('[Auth Guard] compat auth 없음 — v9 세션으로 사용자 목록 동기화 직접 시도');
+          Promise.all([
+            typeof loadUsers === 'function' ? loadUsers() : Promise.resolve(),
+            typeof syncUsersFromDB === 'function' ? syncUsersFromDB().catch(function (err) {
+              console.warn('⚠️ DB 동기화 중 오류 (무시 가능):', err);
+              return Promise.resolve();
+            }) : Promise.resolve()
+          ]).then(function () {
+            console.log('✅ 사용자 목록 DB 동기화 완료');
+          }).catch(function (err) {
+            console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시하고 계속 진행):', err);
+          });
         }
         
         // 베이스캠프 화면으로 이동
@@ -16463,7 +16517,16 @@
             unsubscribe();
           }, 5000);
         } else {
-          console.warn('[Auth Guard] Auth not available, skipping user list load');
+          console.warn('[Auth Guard] compat auth 없음 — 가입 직후 사용자 목록 동기화 직접 시도');
+          Promise.all([
+            typeof loadUsers === 'function' ? loadUsers() : Promise.resolve(),
+            typeof syncUsersFromDB === 'function' ? syncUsersFromDB().catch(function (err) {
+              console.warn('⚠️ DB 동기화 중 오류 (무시):', err);
+              return Promise.resolve();
+            }) : Promise.resolve()
+          ]).catch(function (err) {
+            console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시):', err);
+          });
         }
         
       } catch (error) {
