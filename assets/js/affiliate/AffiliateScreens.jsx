@@ -830,6 +830,8 @@ function AffiliateList(props) {
   var loadError = _error[0]; var setLoadError = _error[1];
   var _retryKey = useState(0);
   var retryKey = _retryKey[0]; var setRetryKey = _retryKey[1];
+  var affiliateAuthRetryRef = useRef(0);
+  var affiliateFirestoreRef = useRef(null);
 
   /* ── 할인 안내 접기/펼치기 ── */
   var _discountOpen = useState(false);
@@ -856,6 +858,10 @@ function AffiliateList(props) {
 
   // Firestore 구독 – sortOrder 있으면 오름차순, 없으면 createdAt 내림차순 보조 정렬
   useEffect(function() {
+    if (affiliateFirestoreRef.current !== firestore) {
+      affiliateFirestoreRef.current = firestore;
+      affiliateAuthRetryRef.current = 0;
+    }
     if (!firestore) {
       /* firestore prop이 null이면 initAffiliateReact의 폴링이 재렌더를 트리거할 때까지 대기 */
       setLoading(true);
@@ -871,8 +877,38 @@ function AffiliateList(props) {
         if (err.code === 'permission-denied') {
           var hasAuth = false;
           try {
-            hasAuth = !!(window.authV9 && window.authV9.currentUser);
+            hasAuth = !!(
+              (window.authV9 && window.authV9.currentUser) ||
+              (window.auth && window.auth.currentUser)
+            );
           } catch (_) {}
+          /* 모바일: 토큰 붙기 전 스냅샷 거부 → 세션 준비 후 구독 한 번 재시도 */
+          if (!hasAuth && affiliateAuthRetryRef.current < 2) {
+            affiliateAuthRetryRef.current++;
+            var chain = Promise.resolve();
+            try {
+              if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
+                chain = window.authV9.authStateReady();
+              }
+            } catch (_e0) {}
+            chain
+              .then(function () {
+                return new Promise(function (r) {
+                  setTimeout(r, 400 + affiliateAuthRetryRef.current * 200);
+                });
+              })
+              .then(function () {
+                setRetryKey(function (k) {
+                  return k + 1;
+                });
+              })
+              .catch(function () {
+                setRetryKey(function (k) {
+                  return k + 1;
+                });
+              });
+            return;
+          }
           msg = hasAuth
             ? '제휴사 정보를 읽을 권한이 없습니다. 앱을 새로고침하거나 다시 로그인해 주세요.'
             : '로그인 세션이 준비되지 않았습니다. 잠시 후 다시 시도하거나 다시 로그인해 주세요.';
@@ -881,6 +917,7 @@ function AffiliateList(props) {
         setLoading(false);
         return;
       }
+      affiliateAuthRetryRef.current = 0;
       setLoadError(null);
       /* 클라이언트 정렬: sortOrder ASC → createdAt DESC */
       var sorted = list.slice().sort(function(a, b) {
