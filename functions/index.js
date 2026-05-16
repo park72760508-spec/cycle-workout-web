@@ -4214,86 +4214,141 @@ const RANKING_ONE_PASS_BATCH = 50;
 /** 비-GC 탭(Max/1분/5분/…/거리/TSS) 순위 등락 스냅샷 컬렉션 */
 const PEAK_RANK_HISTORY_COL = "peak_rank_history";
 
+/** GC 헵타곤 cohort 와 동일: 부문별 보드 순위 기준 등락 (전체 Supremo 순위와 분리) */
+const PEAK_RANK_BOARD_CATEGORIES = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
+
+/** 부문 배열 내 표시 순위(1..N). item.rank 는 전체(Supremo) 순위일 수 있어 인덱스 사용 */
+function buildPeakBoardRankMapForCategoryRows(rows) {
+  const ranks = {};
+  if (!Array.isArray(rows)) return ranks;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const uid = r && r.userId != null ? String(r.userId).trim() : "";
+    if (!uid) continue;
+    ranks[uid] = i + 1;
+  }
+  return ranks;
+}
+
+function normalizePeakRankHistoryDoc(d) {
+  if (!d || typeof d !== "object") {
+    return { asOfSeoul: "", ranksByCategory: {}, rankChangesByCategory: {}, previousRanksByCategory: {} };
+  }
+  if (d.ranksByCategory && typeof d.ranksByCategory === "object") {
+    return {
+      asOfSeoul: d.asOfSeoul || "",
+      ranksByCategory: d.ranksByCategory,
+      rankChangesByCategory:
+        d.rankChangesByCategory && typeof d.rankChangesByCategory === "object" ? d.rankChangesByCategory : {},
+      previousRanksByCategory:
+        d.previousRanksByCategory && typeof d.previousRanksByCategory === "object"
+          ? d.previousRanksByCategory
+          : {},
+    };
+  }
+  return {
+    asOfSeoul: d.asOfSeoul || "",
+    ranksByCategory: d.ranks && typeof d.ranks === "object" ? { Supremo: d.ranks } : {},
+    rankChangesByCategory:
+      d.rankChanges && typeof d.rankChanges === "object" ? { Supremo: d.rankChanges } : {},
+    previousRanksByCategory:
+      d.previousRanks && typeof d.previousRanks === "object" ? { Supremo: d.previousRanks } : {},
+  };
+}
+
 /**
- * 비-GC 탭의 순위 등락(rankChange / previousBoardRank)을 계산해 entries 배열에 직접 주입하고,
- * 오늘 서울 날짜 기준 순위 스냅샷을 Firestore(PEAK_RANK_HISTORY_COL)에 저장한다.
- *
- * - 신규 날짜 첫 호출: 어제 스냅샷과 비교해 rankChange / previousBoardRank 계산 후 저장.
- * - 당일 재호출: 기존 저장된 rankChange를 재사용(덮어쓰지 않음).
- * - entries / byCategory 는 같은 객체 참조이므로 byCategory도 자동 반영됨.
+ * 비-GC 탭 순위 등락: GC·헵타곤과 같이 filterCategory(부문)별 boardRank 로 전날 대비 계산.
  *
  * @param {import('firebase-admin').firestore.Firestore} db
- * @param {Array<{userId:string, rank:number, [key:string]:any}>} entries
- * @param {string} historyKey  고유 식별자 (예: "peak_5min_monthly_all")
+ * @param {Record<string, any[]>} byCategory
+ * @param {string} historyKey
  */
-async function applyPeakRankChanges(db, entries, historyKey) {
-  if (!db || !historyKey || !Array.isArray(entries) || entries.length === 0) return;
+async function applyPeakRankChanges(db, byCategory, historyKey) {
+  if (!db || !historyKey || !byCategory || typeof byCategory !== "object") return;
   const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const ref = db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey);
 
-  let prevRanks = {};
+  let prevNorm = normalizePeakRankHistoryDoc(null);
   let prevAsOf = "";
-  let prevRankChanges = {};
-  let prevPreviousRanks = {};
   try {
     const snap = await ref.get();
     if (snap.exists) {
-      const d = snap.data();
-      prevAsOf = d.asOfSeoul || "";
-      prevRanks = (d.ranks && typeof d.ranks === "object") ? d.ranks : {};
-      prevRankChanges = (d.rankChanges && typeof d.rankChanges === "object") ? d.rankChanges : {};
-      prevPreviousRanks = (d.previousRanks && typeof d.previousRanks === "object") ? d.previousRanks : {};
+      prevNorm = normalizePeakRankHistoryDoc(snap.data());
+      prevAsOf = prevNorm.asOfSeoul || "";
     }
   } catch (eRead) {
     console.warn("[applyPeakRankChanges] 이전 순위 읽기 실패:", historyKey, eRead && eRead.message);
   }
 
   const isNewDay = prevAsOf !== todayYmd;
-  const newRanks = {};
-  const newRankChanges = {};
-  const newPreviousRanks = {};
+  const newRanksByCategory = {};
+  const newRankChangesByCategory = {};
+  const newPreviousRanksByCategory = {};
 
-  for (const e of entries) {
-    const uid = String(e.userId || "").trim();
-    if (!uid) continue;
-    const currRank = e.rank != null && isFinite(Number(e.rank)) ? Math.floor(Number(e.rank)) : null;
-    if (currRank == null) continue;
-    newRanks[uid] = currRank;
+  for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+    const rows = byCategory[cat];
+    if (!Array.isArray(rows) || !rows.length) continue;
 
-    if (isNewDay) {
-      // 새 날짜: 어제 스냅샷과 비교
-      if (prevRanks[uid] != null) {
-        const prev = Math.floor(Number(prevRanks[uid]));
-        if (isFinite(prev) && prev >= 1) {
-          e.rankChange = prev - currRank; // 양수=상승, 음수=하락, 0=보합
-          e.previousBoardRank = prev;
-          newRankChanges[uid] = e.rankChange;
-          newPreviousRanks[uid] = prev;
+    const currRanks = buildPeakBoardRankMapForCategoryRows(rows);
+    newRanksByCategory[cat] = currRanks;
+
+    const prevRanksCat =
+      isNewDay && prevNorm.ranksByCategory[cat] && typeof prevNorm.ranksByCategory[cat] === "object"
+        ? prevNorm.ranksByCategory[cat]
+        : {};
+    const prevChangesCat =
+      !isNewDay && prevNorm.rankChangesByCategory[cat] ? prevNorm.rankChangesByCategory[cat] : {};
+    const prevPreviousCat =
+      !isNewDay && prevNorm.previousRanksByCategory[cat] ? prevNorm.previousRanksByCategory[cat] : {};
+
+    newRankChangesByCategory[cat] = {};
+    newPreviousRanksByCategory[cat] = {};
+
+    for (let i = 0; i < rows.length; i++) {
+      const e = rows[i];
+      const uid = e && e.userId != null ? String(e.userId).trim() : "";
+      if (!uid) continue;
+      const curr = currRanks[uid];
+      if (curr == null) continue;
+
+      delete e.rankChange;
+      delete e.previousBoardRank;
+
+      if (isNewDay) {
+        if (prevRanksCat[uid] != null) {
+          const prev = Math.floor(Number(prevRanksCat[uid]));
+          if (isFinite(prev) && prev >= 1) {
+            e.rankChange = prev - curr;
+            e.previousBoardRank = prev;
+            newRankChangesByCategory[cat][uid] = e.rankChange;
+            newPreviousRanksByCategory[cat][uid] = prev;
+          }
         }
-      }
-    } else {
-      // 당일 재실행: 기존 계산값 복원
-      if (prevRankChanges[uid] != null) {
-        e.rankChange = Number(prevRankChanges[uid]);
-        e.previousBoardRank = prevPreviousRanks[uid] != null ? Number(prevPreviousRanks[uid]) : null;
+      } else if (prevChangesCat[uid] != null) {
+        e.rankChange = Number(prevChangesCat[uid]);
+        e.previousBoardRank =
+          prevPreviousCat[uid] != null ? Number(prevPreviousCat[uid]) : null;
+        newRankChangesByCategory[cat][uid] = e.rankChange;
+        if (e.previousBoardRank != null) newPreviousRanksByCategory[cat][uid] = e.previousBoardRank;
       }
     }
   }
 
-  // 스냅샷 저장 (오류여도 응답에는 영향 없음)
   try {
     if (isNewDay) {
       await ref.set({
         asOfSeoul: todayYmd,
-        ranks: newRanks,
-        rankChanges: newRankChanges,
-        previousRanks: newPreviousRanks,
+        ranksByCategory: newRanksByCategory,
+        rankChangesByCategory: newRankChangesByCategory,
+        previousRanksByCategory: newPreviousRanksByCategory,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {
-      // 당일 재실행: ranks만 갱신, rankChanges·previousRanks는 유지
       await ref.set(
-        { ranks: newRanks, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        {
+          ranksByCategory: newRanksByCategory,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
         { merge: true }
       );
     }
@@ -4302,44 +4357,8 @@ async function applyPeakRankChanges(db, entries, historyKey) {
   }
 }
 
-/**
- * 집계/캐시 JSON 복원 후 Supremo·부문 행이 서로 다른 객체일 때 rankChange가 한쪽에만 붙는 문제 보정.
- * 어떤 카테고리든 유효한 rankChange+previousBoardRank가 있으면 userId 기준으로 전체 카테고리에 복제한다.
- * @param {Record<string, any[]>|null|undefined} byCategory
- */
-function propagatePeakRankMovementAcrossCategories(byCategory) {
-  if (!byCategory || typeof byCategory !== "object") return;
-  /** @type {Record<string, { rankChange: number, previousBoardRank: number }>} */
-  const map = Object.create(null);
-  const ingest = (row) => {
-    if (!row || row.userId == null) return;
-    const uid = String(row.userId).trim();
-    if (!uid) return;
-    if (row.rankChange == null || row.previousBoardRank == null) return;
-    const rcN = Number(row.rankChange);
-    const prN = Math.floor(Number(row.previousBoardRank));
-    if (!isFinite(rcN) || !isFinite(prN) || prN < 1) return;
-    map[uid] = { rankChange: rcN, previousBoardRank: prN };
-  };
-  for (const cat of Object.keys(byCategory)) {
-    const rows = byCategory[cat];
-    if (!Array.isArray(rows)) continue;
-    for (const r of rows) ingest(r);
-  }
-  const uids = Object.keys(map);
-  if (!uids.length) return;
-  for (const cat of Object.keys(byCategory)) {
-    const rows = byCategory[cat];
-    if (!Array.isArray(rows)) continue;
-    for (const r of rows) {
-      if (!r || r.userId == null) continue;
-      const pk = map[String(r.userId).trim()];
-      if (!pk) continue;
-      r.rankChange = pk.rankChange;
-      r.previousBoardRank = pk.previousBoardRank;
-    }
-  }
-}
+/** @deprecated 전체(Supremo) 등락을 부문에 복사하지 않음 — applyPeakRankChanges 가 부문별 처리 */
+function propagatePeakRankMovementAcrossCategories() {}
 
 /**
  * 집계/캐시 응답에 peak_rank_history 기준 전날 대비 등락 주입 (TSS·거리·피크 공통).
@@ -4350,15 +4369,11 @@ function propagatePeakRankMovementAcrossCategories(byCategory) {
  */
 async function hydratePeakRankMovementOnPayload(db, byCategory, entries, historyKey) {
   if (!db || !historyKey || !byCategory) return;
-  const list =
-    Array.isArray(entries) && entries.length > 0
-      ? entries
-      : Array.isArray(byCategory.Supremo)
-        ? byCategory.Supremo
-        : [];
-  if (!list.length) return;
-  await applyPeakRankChanges(db, list, historyKey);
-  propagatePeakRankMovementAcrossCategories(byCategory);
+  const hasAny = PEAK_RANK_BOARD_CATEGORIES.some(
+    (cat) => Array.isArray(byCategory[cat]) && byCategory[cat].length > 0
+  );
+  if (!hasAny) return;
+  await applyPeakRankChanges(db, byCategory, historyKey);
 }
 
 /**
@@ -4728,7 +4743,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   let weeklyRankingFullCurrent = null;
   for (const gender of ["all", "M", "F"]) {
     const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
-    await applyPeakRankChanges(db, tss.entries, `peak_tss_weekly_${gender}`);
+    await applyPeakRankChanges(db, tss.byCategory, `peak_tss_weekly_${gender}`);
     if (gender === "all") {
       weeklyRankingFullCurrent = tss.entries.map((e) => ({
         userId: e.userId,
@@ -4789,7 +4804,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   // ── 4. 30일 거리 랭킹 ──
   for (const gender of ["all", "M", "F"]) {
     const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender, sharedUsersSnap);
-    await applyPeakRankChanges(db, dist.entries, `peak_personal_dist_rolling30_${gender}`);
+    await applyPeakRankChanges(db, dist.byCategory, `peak_personal_dist_rolling30_${gender}`);
     const keyD = `peakRanking_personal_dist_30d_${gender}_${r30s}_${r30e}`;
     await writeRankingAggregatePayload(db, keyD, {
       byCategory: dist.byCategory,
@@ -4815,7 +4830,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   for (const gender of ["all", "M", "F"]) {
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const pack = allDurMonthly[gender][durationType];
-      await applyPeakRankChanges(db, pack.entries, `peak_${durationType}_monthly_${gender}`);
+      await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
       const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
       await writeRankingAggregatePayload(db, ckey, {
         byCategory: pack.byCategory,
@@ -4832,7 +4847,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   for (const gender of ["all", "M", "F"]) {
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const pack = allDurYear[gender][durationType];
-      await applyPeakRankChanges(db, pack.entries, `peak_${durationType}_yearly_${gender}`);
+      await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_yearly_${gender}`);
       const ckey = `peakRanking_v2_yearly_${durationType}_${gender}_${r365s}_${r365e}`;
       await writeRankingAggregatePayload(db, ckey, {
         byCategory: pack.byCategory,
@@ -5604,8 +5619,7 @@ exports.getPeakPowerRanking = onRequest(
       }
 
       const { entries, byCategory } = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, gender);
-      await applyPeakRankChanges(db, entries, `peak_tss_weekly_${gender}`);
-      propagatePeakRankMovementAcrossCategories(byCategory);
+      await applyPeakRankChanges(db, byCategory, `peak_tss_weekly_${gender}`);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
       await cacheRef.set({
@@ -5735,8 +5749,7 @@ exports.getPeakPowerRanking = onRequest(
       }
 
       const { entries, byCategory } = await getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, gender);
-      await applyPeakRankChanges(db, entries, `peak_personal_dist_rolling30_${gender}`);
-      propagatePeakRankMovementAcrossCategories(byCategory);
+      await applyPeakRankChanges(db, byCategory, `peak_personal_dist_rolling30_${gender}`);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
       await cacheRef.set({
@@ -5967,7 +5980,6 @@ exports.getPeakPowerRanking = onRequest(
         payload.entries,
         `peak_${durationType}_${period}_${gender}`
       );
-      propagatePeakRankMovementAcrossCategories(payload.byCategory);
     }
     const aggPeak =
       forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
@@ -6047,8 +6059,7 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
-    await applyPeakRankChanges(db, entries, `peak_${durationType}_${period}_${gender}`);
-    propagatePeakRankMovementAcrossCategories(byCategory);
+    await applyPeakRankChanges(db, byCategory, `peak_${durationType}_${period}_${gender}`);
     let cohortAvgHrBpm = null;
     if (
       (period === "rolling30" || period === "monthly" || period === "rolling6m" || period === "rolling183") &&
