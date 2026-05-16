@@ -732,15 +732,54 @@ function authenticatePhoneWithDB(phoneNumber) {
 
 // 앱 초기 진입 시 한 번 호출: authUser → currentUser 안정 복원
 function checkAuthStatus() {
-  const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
-  const current  = JSON.parse(localStorage.getItem('currentUser') || 'null');
+  let authUser = null;
+  let current = null;
+  try {
+    authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+  } catch (_e) {
+    authUser = null;
+  }
+  try {
+    current = JSON.parse(localStorage.getItem('currentUser') || 'null');
+  } catch (_e2) {
+    current = null;
+  }
   const restored = authUser || current;
 
   if (restored) {
     window.currentUser = restored;
-    localStorage.setItem('currentUser', JSON.stringify(restored));
+    try {
+      localStorage.setItem('currentUser', JSON.stringify(restored));
+    } catch (e) {}
   }
 }
+
+/**
+ * 화면 전환·가드용: Firebase 세션이 아직 복원되지 않았어도 로컬에 프로필이 있으면 인증된 것으로 본다(iOS Safari 지연 완화).
+ * 호출 시 프로필만 있고 window.currentUser가 비어 있으면 checkAuthStatus로 한 번 맞춤.
+ */
+function stelvioIsNavigationAuthenticated() {
+  if (window.auth && window.auth.currentUser) return true;
+  if (window.authV9 && window.authV9.currentUser) return true;
+  if (window.currentUser != null && (window.currentUser.id != null || window.currentUser.uid != null)) {
+    return true;
+  }
+  try {
+    var au = JSON.parse(localStorage.getItem('authUser') || 'null');
+    var cu = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    var su = au || cu;
+    if (su && (su.id != null || su.uid != null)) {
+      try {
+        checkAuthStatus();
+      } catch (e) {}
+      return true;
+    }
+  } catch (e2) {}
+  if (window.isPhoneAuthenticated === true) return true;
+  if (typeof isPhoneAuthenticated !== 'undefined' && isPhoneAuthenticated) return true;
+  return false;
+}
+window.stelvioIsNavigationAuthenticated = stelvioIsNavigationAuthenticated;
 
 /**
  * 스플래시 DOM에 남은 !important·MutationObserver가 인증/베이스캠프 전환을 막는 경우가 있어
@@ -783,6 +822,7 @@ function applyInitialAuthRouting() {
     return;
   }
 
+  (async function stelvioApplyInitialAuthRoutingBody() {
   document.body.style.setProperty('background-color', '#f6f8fa', 'important');
   document.body.style.setProperty('background-attachment', 'fixed', 'important');
 
@@ -790,6 +830,25 @@ function applyInitialAuthRouting() {
     checkAuthStatus();
   } catch (e) {
     console.warn('[init] checkAuthStatus:', e);
+  }
+
+  /* iOS·PWA: IndexedDB 세션 복원이 로컬스토리지 프로필보다 늦을 수 있음 — 토큰 붙은 뒤 라우팅 */
+  try {
+    var hadProf =
+      !!(window.currentUser && (window.currentUser.id != null || window.currentUser.uid != null));
+    var hadTok =
+      !!(window.authV9 && window.authV9.currentUser) || !!(window.auth && window.auth.currentUser);
+    if (hadProf && !hadTok && window.authV9 && typeof window.authV9.authStateReady === 'function') {
+      await Promise.race([
+        window.authV9.authStateReady(),
+        new Promise(function (r) {
+          setTimeout(r, 6500);
+        })
+      ]);
+    }
+    checkAuthStatus();
+  } catch (e2) {
+    console.warn('[init] authStateReady 대기:', e2);
   }
 
   if (window.currentUser) {
@@ -883,6 +942,9 @@ function applyInitialAuthRouting() {
   } else {
     setTimeout(runPostAuthRoutingDeferred, 0);
   }
+  })().catch(function (err) {
+    console.warn('[applyInitialAuthRouting] async 본문:', err);
+  });
 }
 
 window.dismissSplashFully = dismissSplashFully;
@@ -6806,8 +6868,13 @@ window.showScreen = function(screenId) {
   // TOP10 등 "인증 후에만 노출" 로직용: 리다이렉트 여부 플래그 (index.html 래퍼에서 사용)
   window.__showScreenRedirectedToAuth = false;
 
-  // Firebase 인증 상태 확인 (우선순위: Firebase Auth > 전화번호 인증)
-  const isFirebaseAuthenticated = (window.auth?.currentUser != null || window.authV9?.currentUser != null) || window.currentUser != null;
+  // Firebase / 로컬 프로필 / 전화 인증 (iOS는 세션 복원·스토리지 타이밍 차이 대비)
+  const isFirebaseAuthenticated =
+    typeof stelvioIsNavigationAuthenticated === 'function'
+      ? stelvioIsNavigationAuthenticated()
+      : (window.auth?.currentUser != null ||
+         window.authV9?.currentUser != null ||
+         window.currentUser != null);
   const phoneAuth = window.isPhoneAuthenticated === true || isPhoneAuthenticated;
   const isAuthenticated = isFirebaseAuthenticated || phoneAuth;
 
@@ -13871,6 +13938,12 @@ function ensureStelvioAdminAccessStatsButton() {
         const msInfo = json.ms ? ` (${(json.ms / 1000).toFixed(1)}초)` : '';
         rankingBtn.textContent = '✅ 집계 완료!';
         if (typeof showToast === 'function') showToast('주간 마일리지 TOP10 집계가 완료되었습니다.' + msInfo);
+        // 수동 집계 후 로컬 캐시 전체 무효화 → 다음 조회 시 서버에서 최신 데이터 로드
+        try {
+          if (window.stelvioRankingLocalCache && typeof window.stelvioRankingLocalCache.clearAll === 'function') {
+            window.stelvioRankingLocalCache.clearAll();
+          }
+        } catch (_e) {}
         // 집계 완료 후 TOP10 모달이 열려 있으면 최신 데이터로 즉시 갱신
         try {
           const top10Modal = document.getElementById('weeklyTop10Modal');
