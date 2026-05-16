@@ -15323,16 +15323,44 @@
     };
     /* localStorage + cookie 동시 읽기: localStorage 우선, 없으면 cookie */
     window._stelvioStorageGet = function(key) {
+      var rememberKey = window.STELVIO_AUTH_REMEMBER_KEY;
+      function validRememberJson(raw) {
+        if (raw == null || raw === '') return null;
+        try {
+          var o = JSON.parse(raw);
+          if (o && o.v === 1 && o.phone && typeof o.password === 'string') return raw;
+        } catch (e) {}
+        return null;
+      }
+      if (key === rememberKey) {
+        var lsRaw = null;
+        try { lsRaw = localStorage.getItem(key); } catch (e0) {}
+        var good = validRememberJson(lsRaw);
+        if (good) return good;
+        var ckRaw = null;
+        try { ckRaw = window._stelvioGetCookie('sl_' + key); } catch (e1) {}
+        good = validRememberJson(ckRaw);
+        if (good) return good;
+        return null;
+      }
       try {
         var v = localStorage.getItem(key);
         if (v != null) return v;
       } catch(e) {}
       return window._stelvioGetCookie('sl_' + key);
     };
-    /* localStorage + cookie 동시 쓰기 (cookie 30일) */
+    /* localStorage + cookie 동시 쓰기 (cookie 30일). 긴 값은 쿠키 4KB 제한으로 생략 → localStorage 우선 신뢰 */
     window._stelvioStorageSet = function(key, value) {
-      try { localStorage.setItem(key, value); } catch(e) {}
-      window._stelvioSetCookie('sl_' + key, value, 30);
+      var val = value == null ? '' : String(value);
+      try { localStorage.setItem(key, val); } catch(e) {}
+      try {
+        var encLen = encodeURIComponent(val).length;
+        if (encLen <= 3800) {
+          window._stelvioSetCookie('sl_' + key, val, 30);
+        } else if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[StelvioStorage] 쿠키 생략(4KB 한계):', key, 'encLen=', encLen);
+        }
+      } catch(e2) {}
     };
     /* localStorage + cookie 동시 삭제 */
     window._stelvioStorageDel = function(key) {
@@ -15386,10 +15414,66 @@
       } catch (err) {
         console.warn('[AuthRemember] 자격증명 복원 실패:', err && err.message);
       }
+      /* JSON·쿠키 실패 시: 영속 플래그 ON이면 legacy 키(currentUser.contact + userPassword_* / lastPassword)로 복원 */
+      if (wantsPersist) {
+        try {
+          var phoneGuess = '';
+          try {
+            var cu0 = window.currentUser;
+            if (!cu0) {
+              try { cu0 = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (eCu) { cu0 = null; }
+            }
+            if (!cu0) {
+              try { cu0 = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (eCu2) { cu0 = null; }
+            }
+            if (cu0 && cu0.contact) phoneGuess = String(cu0.contact).trim();
+          } catch (ePh) {}
+          var normG = phoneGuess.replace(/\D/g, '');
+          var dashG = (normG.length === 11 && normG.indexOf('010') === 0)
+            ? normG.slice(0, 3) + '-' + normG.slice(3, 7) + '-' + normG.slice(7, 11)
+            : phoneGuess;
+          var pwGuess = '';
+          try {
+            if (dashG) pwGuess = localStorage.getItem('userPassword_' + dashG) || '';
+            if (!pwGuess && normG) pwGuess = localStorage.getItem('userPassword_' + normG) || '';
+            if (!pwGuess) pwGuess = localStorage.getItem('lastPassword') || '';
+          } catch (ePw) {}
+          if (!phoneGuess || !pwGuess) {
+            try {
+              var wantNorm = phoneGuess ? phoneGuess.replace(/\D/g, '') : '';
+              for (var ki = 0; ki < localStorage.length; ki++) {
+                var lk = localStorage.key(ki);
+                if (!lk || lk.indexOf('userPassword_') !== 0) continue;
+                var suf = lk.slice('userPassword_'.length);
+                var pv = localStorage.getItem(lk);
+                if (!suf || !pv) continue;
+                if (wantNorm && suf.replace(/\D/g, '') !== wantNorm) continue;
+                phoneGuess = phoneGuess || suf;
+                pwGuess = pv;
+                break;
+              }
+            } catch (eScan) {}
+          }
+          if (phoneGuess && pwGuess) {
+            phoneInput.value = phoneGuess;
+            passwordInput.value = pwGuess;
+            if (window.formatPhoneNumber) {
+              phoneInput.value = window.formatPhoneNumber(phoneInput.value);
+            }
+            cb.checked = true;
+            try {
+              var repayload = JSON.stringify({ v: 1, phone: phoneInput.value, password: pwGuess });
+              window._stelvioStorageSet(window.STELVIO_AUTH_REMEMBER_KEY, repayload);
+              console.log('[AuthRemember] legacy 키로 복원 후 통합 저장소 재동기화');
+            } catch (eSync) {}
+            return;
+          }
+        } catch (eLeg) {}
+      }
       /* 저장된 비번이 없어도 "로그인 상태 유지"가 켜져 있으면 체크 표시(Firebase LOCAL과 UI 일치) */
       cb.checked = !!wantsPersist;
       if (wantsPersist) {
-        console.log('[AuthRemember] 영속 플래그만 복원 — 체크 ON (자격증명 저장 없음)');
+        console.log('[AuthRemember] 영속 플래그만 복원 — 체크 ON (자격증명·legacy 없음)');
       } else {
         console.log('[AuthRemember] 저장된 자격증명·영속 플래그 없음');
       }
@@ -15540,6 +15624,13 @@
             
             showAuthStatus('✅ 로그인 성공!', 'success');
 
+            /* Firestore 프로필 로드 전에도 저장 — getUserByUid 지연/실패 시에도 재접속 시 폼·세션 일치 */
+            try {
+              if (typeof window.persistAuthRememberCredentialsIfChecked === 'function') {
+                window.persistAuthRememberCredentialsIfChecked(phone, password);
+              }
+            } catch (eEarlySave) {}
+
             /* iOS: 토큰·Auth 상태가 userCredential 직후에도 한 박자 늦을 수 있음 */
             try {
               if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
@@ -15632,9 +15723,6 @@
                 localStorage.setItem('userPassword_' + phoneWithDash, password);
                 localStorage.setItem('userPassword_' + normalizedPhone, password);
                 localStorage.setItem('lastPassword', password);
-                if (typeof window.persistAuthRememberCredentialsIfChecked === 'function') {
-                  window.persistAuthRememberCredentialsIfChecked(phone, password);
-                }
                 window.isPhoneAuthenticated = true;
                 
                 console.log('✅ 사용자 정보 로드 완료:', { name: userData.name, uid: user.uid });
@@ -16295,6 +16383,11 @@
         localStorage.setItem('userPassword_' + phoneWithDash, password);
         localStorage.setItem('userPassword_' + normalizedPhone, password);
         localStorage.setItem('lastPassword', password);
+        try {
+          if (typeof window.persistAuthRememberCredentialsIfChecked === 'function') {
+            window.persistAuthRememberCredentialsIfChecked(phone, password);
+          }
+        } catch (eRegSave) {}
         
         showRegisterStatus('✅ 회원가입 성공!', 'success');
         if (ftpUsedMin && typeof showToast === 'function') {
