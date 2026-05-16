@@ -25242,14 +25242,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         </div>
         <button class="training-detail-close" onclick="closeWeeklyTop10Modal()" aria-label="닫기">&times;</button>
       </div>
-      <!-- 제휴 할인 배너: 모달 전체 너비 / Gemini API + STRAVA 미연결 시 환경설정 유도, 연결 완료 시 혜택 확인 -->
+      <!-- 제휴 할인 배너: 모달 전체 너비 / 미설정·완료 사용자 동일 UI(혜택 확인), STRAVA 미연결 시 제휴 목록 배너 클릭만 이용 불가 안내 -->
       <div id="weeklyTop10AffBanner" class="weekly-top10-aff-banner" role="region" aria-label="스텔비오 제휴 할인 안내">
         <img src="assets/img/gift.svg" class="weekly-top10-aff-icon" alt="" aria-hidden="true" style="width:2em;height:2em;object-fit:contain;flex-shrink:0;" />
         <div class="weekly-top10-aff-text">
           <span class="weekly-top10-aff-title">스텔비오 제휴 할인 받기</span>
           <span class="weekly-top10-aff-subtitle">환경설정에서 Gemini API &amp; STRAVA 연결 하면 제휴 할인 활성화 됨</span>
         </div>
-        <button type="button" id="weeklyTop10AffBtn" class="weekly-top10-aff-btn" onclick="onWeeklyTop10AffBannerClick(event)" aria-label="환경설정으로 이동">환경 설정</button>
+        <button type="button" id="weeklyTop10AffBtn" class="weekly-top10-aff-btn" onclick="onWeeklyTop10AffBannerClick(event)" aria-label="혜택 확인">혜택 확인</button>
       </div>
       <div class="training-detail-body" id="weeklyTop10Body">
         <!-- 랭킹 목록이 여기에 동적으로 표시됩니다 -->
@@ -25324,45 +25324,33 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
 
       /**
        * 배너 상태 갱신 — fetchAndShowWeeklyTop10Modal 호출 시 실행.
-       * 미연결: "바로 가기" (보라 버튼) / 연결 완료: "혜택 확인" (초록 버튼)
+       * 미설정·완료 사용자 동일 UI: "스텔비오 제휴 할인 받기" + "혜택 확인"
        */
       window.updateWeeklyTop10AffBanner = function () {
         var banner = document.getElementById('weeklyTop10AffBanner');
         var btn    = document.getElementById('weeklyTop10AffBtn');
         if (!banner) return;
 
-        var cu           = _affGetCurrentUser();
-        var hasGemini    = _affIsGeminiConnected(cu);
-        var hasStrava    = _affIsStravaConnected(cu);
-        var allConnected = hasGemini && hasStrava;
-
         banner.style.display = 'flex';
+        banner.classList.add('weekly-top10-aff-banner--connected');
 
         var subtitle = banner.querySelector('.weekly-top10-aff-subtitle');
         var textBox  = banner.querySelector('.weekly-top10-aff-text');
 
-        if (allConnected) {
-          banner.classList.add('weekly-top10-aff-banner--connected');
-          if (btn) btn.textContent = '혜택 확인';
-          if (subtitle) subtitle.style.display = 'none';
-          if (textBox)  textBox.style.justifyContent = 'center';
-        } else {
-          banner.classList.remove('weekly-top10-aff-banner--connected');
-          if (btn) btn.textContent = '환경 설정';
-          if (subtitle) subtitle.style.display = '';
-          if (textBox)  textBox.style.justifyContent = '';
+        if (btn) {
+          btn.textContent = '혜택 확인';
+          btn.setAttribute('aria-label', '혜택 확인');
         }
+        if (subtitle) subtitle.style.display = 'none';
+        if (textBox) textBox.style.justifyContent = 'center';
       };
 
       /**
-       * 배너 '바로 가기 / 혜택 확인' 버튼 클릭 핸들러.
-       * - 미연결: TOP10 닫고 → 환경설정 모달 열기
-       * - 연결 완료: 툴팁으로 혜택 활성화 안내
+       * 배너 '혜택 확인' 버튼 클릭 — TOP10 닫고 제휴사 목록 화면으로 이동
        */
       window.onWeeklyTop10AffBannerClick = function (e) {
         if (e) e.stopPropagation();
 
-        /* 버튼 scale-down 피드백 */
         var btn = document.getElementById('weeklyTop10AffBtn');
         if (btn) {
           btn.classList.add('weekly-top10-aff-btn--pressed');
@@ -25371,31 +25359,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }, 220);
         }
 
-        var cu           = _affGetCurrentUser();
-        var allConnected = _affIsGeminiConnected(cu) && _affIsStravaConnected(cu);
-
-        if (allConnected) {
-          /* ── 연동 완료: TOP10 닫고 제휴사 리스트 화면으로 이동 ── */
-          if (typeof closeWeeklyTop10Modal === 'function') closeWeeklyTop10Modal();
-          setTimeout(function () {
-            if (typeof window.onAffiliateButtonClick === 'function') {
-              /* isConnected = true 명시 전달 (미전달 시 미연결 분기로 빠지는 버그 방지) */
-              window.onAffiliateButtonClick(true);
-            } else if (typeof showScreen === 'function') {
-              showScreen('affiliateScreen');
-              if (typeof window.initAffiliateReact === 'function') window.initAffiliateReact();
-            }
-          }, 130);
-
-        } else {
-          /* ── 미연결: TOP10 모달 닫고 환경설정 열기 ── */
-          if (typeof closeWeeklyTop10Modal === 'function') closeWeeklyTop10Modal();
-          setTimeout(function () {
-            if (typeof openSettingsModal === 'function') {
-              openSettingsModal();
-            }
-          }, 130);
-        }
+        if (typeof closeWeeklyTop10Modal === 'function') closeWeeklyTop10Modal();
+        setTimeout(function () {
+          if (typeof window.onAffiliateButtonClick === 'function') {
+            window.onAffiliateButtonClick();
+          } else if (typeof showScreen === 'function') {
+            showScreen('affiliateScreen');
+            if (typeof window.initAffiliateReact === 'function') window.initAffiliateReact();
+          }
+        }, 130);
       };
 
       /** 네비·기타 진입점용 — 배너와 동일한 병합/검사 */
@@ -25409,9 +25381,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         hasStrava: function (u) {
           return _affIsStravaConnected(u || _affGetCurrentUser());
         },
+        /** 제휴 할인 이용 가능 여부 — STRAVA 연결만 확인 */
         isEligible: function () {
-          var u = _affGetCurrentUser();
-          return _affIsGeminiConnected(u) && _affIsStravaConnected(u);
+          return _affIsStravaConnected(_affGetCurrentUser());
         }
       };
     })();
@@ -25458,7 +25430,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           '<div style="font-size:2.2rem;margin-bottom:10px;">🔗</div>',
           '<p style="font-weight:700;font-size:1rem;color:#1e293b;margin:0 0 8px;">제휴 할인 이용 불가</p>',
           '<p style="font-size:0.85rem;color:#64748b;line-height:1.55;margin:0 0 20px;">',
-          'Gemini API와 STRAVA를<br>환경설정에서 먼저 연결해주세요.',
+          'STRAVA를<br>환경설정에서 먼저 연결해주세요.',
           '</p>',
           '<div style="display:flex;gap:10px;">',
           '<button id="_aff-alert-cancel" style="flex:1;padding:10px 0;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;font-size:0.875rem;color:#64748b;cursor:pointer;font-weight:500;">닫기</button>',
@@ -25484,13 +25456,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         setTimeout(close, 4000);
       }
 
-      window.onAffiliateButtonClick = function (isConnected) {
-        if (!isConnected) {
-          /* 미연결 → 화면 중앙 안내 다이얼로그 */
-          _showAffiliateConnectAlert();
-          return;
-        }
-        /* 연결 완료 → 제휴사 목록 화면으로 이동 */
+      /** 제휴 목록 배너 클릭 등 — STRAVA 미연결 시 이용 불가 안내 */
+      window.showAffiliateConnectAlert = _showAffiliateConnectAlert;
+
+      /** 네비·TOP10 등 — 제휴사 목록 화면으로 이동 (이용 불가 팝업 없음) */
+      window.onAffiliateButtonClick = function () {
         if (typeof window.showScreen === 'function') {
           window.showScreen('affiliateScreen');
         }
@@ -26332,13 +26302,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (typeof closeSettingsModal === 'function') closeSettingsModal();
             window.__hubNavModalTab = null;
             if (typeof window.onAffiliateButtonClick === 'function') {
-              /* 배너와 동일: memory·users·localStorage 병합 후 Gemini/Strava 판별 */
-              var _eligible =
-                typeof window.AffiliateDiscountEligibility !== 'undefined' &&
-                typeof window.AffiliateDiscountEligibility.isEligible === 'function'
-                  ? window.AffiliateDiscountEligibility.isEligible()
-                  : false;
-              window.onAffiliateButtonClick(_eligible);
+              window.onAffiliateButtonClick();
             }
             return;
           }
