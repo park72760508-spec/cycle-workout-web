@@ -8203,6 +8203,10 @@
     /** users/{uid} 읽기 실패·이름 없음 — 동일 세션에서 반복 호출 방지 */
     var stelvioGroupTabUserNameMiss = {};
     var stelvioGroupTabUserNameFetchGen = 0;
+    /** `users/{uid}`에서 보강한 프로필 이미지 URL */
+    var stelvioGroupTabUserProfileCache = {};
+    var stelvioGroupTabUserProfileMiss = {};
+    var stelvioGroupTabUserProfileFetchGen = 0;
     var STELVIO_DURATION_LABELS = {
       'tss': 'TSS',
       'personal_dist': '거리',
@@ -8375,6 +8379,88 @@
           }
         });
         if (gen !== stelvioGroupTabUserNameFetchGen) return;
+        var bel = document.getElementById('stelvioRankingListBody');
+        if (!bel || typeof stelvioRenderGroupTabRankingList !== 'function') return;
+        if (typeof stelvioIsGroupDistanceRanking === 'function' && !stelvioIsGroupDistanceRanking()) return;
+        stelvioRenderGroupTabRankingList(bel);
+      });
+    }
+
+    function stelvioNormalizeProfileImageUrl(url) {
+      if (url == null) return '';
+      var s = String(url).trim();
+      if (!s) return '';
+      return s.replace(/&amp;/g, '&');
+    }
+
+    /**
+     * 그룹 멤버 프로필 URL: users 보강 캐시 → 소모임 contact → 멤버 스냅샷 → 랭킹 풀 순.
+     * (랭킹 localStorage·집계 캐시의 구 URL이 멤버 실제 사진을 가리는 문제 방지)
+     */
+    function stelvioResolveGroupMemberProfileUrl(uid, mem, rankingUrl, mapUrl) {
+      var u = uid != null ? String(uid).trim() : '';
+      var candidates = [];
+      function push(v) {
+        var n = stelvioNormalizeProfileImageUrl(v);
+        if (!n) return;
+        for (var i = 0; i < candidates.length; i++) {
+          if (candidates[i] === n) return;
+        }
+        candidates.push(n);
+      }
+      if (u && stelvioGroupTabUserProfileCache[u]) push(stelvioGroupTabUserProfileCache[u]);
+      if (mapUrl) push(mapUrl);
+      if (stelvioRankingGroupContactDataMap && u && stelvioRankingGroupContactDataMap[u]) {
+        push(stelvioRankingGroupContactDataMap[u].profileImageUrl);
+      }
+      if (mem && mem.profileImageUrl) push(mem.profileImageUrl);
+      if (rankingUrl) push(rankingUrl);
+      return candidates.length ? candidates[0] : null;
+    }
+
+    /** 그룹 멤버 아바타: Firestore users 문서에서 profileImageUrl 보강 */
+    function stelvioHydrateGroupTabMemberProfilesFromUsers(uids) {
+      var uniq = [];
+      var seen = {};
+      for (var ii = 0; ii < (uids || []).length; ii++) {
+        var u = String(uids[ii] || '').trim();
+        if (!u || seen[u]) continue;
+        seen[u] = true;
+        if (stelvioGroupTabUserProfileCache[u]) continue;
+        if (stelvioGroupTabUserProfileMiss[u]) continue;
+        uniq.push(u);
+      }
+      if (!uniq.length || typeof window.getUserByUid !== 'function') return;
+      var gen = ++stelvioGroupTabUserProfileFetchGen;
+      Promise.all(
+        uniq.map(function (uid) {
+          return window
+            .getUserByUid(uid)
+            .then(function (prof) {
+              if (!prof) return;
+              var url =
+                stelvioNormalizeProfileImageUrl(prof.profileImageUrl) ||
+                stelvioNormalizeProfileImageUrl(prof.photoURL) ||
+                stelvioNormalizeProfileImageUrl(prof.photoUrl);
+              if (!url) return;
+              stelvioGroupTabUserProfileCache[uid] = url;
+              if (stelvioRankingGroupContactDataMap) {
+                var ex = stelvioRankingGroupContactDataMap[uid] || { userId: uid };
+                ex.profileImageUrl = url;
+                stelvioRankingGroupContactDataMap[uid] = ex;
+              }
+            })
+            .catch(function () {});
+        })
+      ).then(function () {
+        uniq.forEach(function (u) {
+          if (stelvioGroupTabUserProfileCache[u]) {
+            delete stelvioGroupTabUserProfileMiss[u];
+          } else {
+            stelvioGroupTabUserProfileMiss[u] = true;
+          }
+        });
+        if (gen !== stelvioGroupTabUserProfileFetchGen) return;
         var bel = document.getElementById('stelvioRankingListBody');
         if (!bel || typeof stelvioRenderGroupTabRankingList !== 'function') return;
         if (typeof stelvioIsGroupDistanceRanking === 'function' && !stelvioIsGroupDistanceRanking()) return;
@@ -9540,6 +9626,9 @@
               .then(function (data) {
                 if (data && data.success && data.byCategory) {
                   data.durationType = dur;
+                  data.period = 'monthly';
+                  data.gender = 'all';
+                  stelvioApplyClientPeakRankMovementFromSnapshot(data);
                   stelvioEnsurePeakPowerRankMovementOnPayload(data);
                   stelvioRankingLocalCache.set(lcKey, data);
                 }
@@ -9892,6 +9981,137 @@
       }
     }
 
+    var STELVIO_PEAK_RANK_SNAPSHOT_PREFIX = 'stelvio_peak_rank_snap:';
+
+    function stelvioSeoulYmd() {
+      try {
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+      } catch (eSeoul) {
+        return new Date().toISOString().slice(0, 10);
+      }
+    }
+
+    function stelvioPeakRankSnapshotStorageKey(data) {
+      var period =
+        (data && data.period) ||
+        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) ||
+        'monthly';
+      var duration =
+        (data && data.durationType) ||
+        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.duration) ||
+        '';
+      var gender =
+        (data && data.gender) ||
+        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.gender) ||
+        'all';
+      var startStr = (data && data.startStr) || '';
+      var endStr = (data && data.endStr) || '';
+      return STELVIO_PEAK_RANK_SNAPSHOT_PREFIX + [period, duration, gender, startStr, endStr].join('|');
+    }
+
+    function stelvioBuildPeakRankMapFromSupremo(byCategory) {
+      var ranks = {};
+      var sup = (byCategory && byCategory.Supremo) || [];
+      for (var i = 0; i < sup.length; i++) {
+        var r = sup[i];
+        if (!r || r.userId == null) continue;
+        var curr =
+          r.rank != null && isFinite(Number(r.rank)) ? Math.floor(Number(r.rank)) : i + 1;
+        if (curr >= 1) ranks[String(r.userId)] = curr;
+      }
+      return ranks;
+    }
+
+    /**
+     * Max·구간 피크: 서버 peak_rank_history 미배포·스냅샷 없을 때도 전날 대비 등락 표시.
+     * 서버가 rankChange를 내려주면 그 값을 우선하고, 없을 때만 localStorage 스냅샷으로 보강.
+     */
+    function stelvioApplyClientPeakRankMovementFromSnapshot(data) {
+      if (!data || !data.byCategory) return;
+      var duration =
+        data.durationType ||
+        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.duration) ||
+        '';
+      if (!stelvioIsPeakPowerDurationForRankChange(duration)) return;
+      if (!data.durationType) data.durationType = duration;
+
+      var today = stelvioSeoulYmd();
+      var snapKey = stelvioPeakRankSnapshotStorageKey(data);
+      var currRanks = stelvioBuildPeakRankMapFromSupremo(data.byCategory);
+      var stored = null;
+      try {
+        var rawSnap = localStorage.getItem(snapKey);
+        if (rawSnap) stored = JSON.parse(rawSnap);
+      } catch (eSnap) {}
+
+      var isNewDay = !stored || stored.asOfSeoul !== today;
+      var newRankChanges =
+        stored && stored.rankChanges && typeof stored.rankChanges === 'object'
+          ? Object.assign({}, stored.rankChanges)
+          : {};
+      var newPreviousRanks =
+        stored && stored.previousRanks && typeof stored.previousRanks === 'object'
+          ? Object.assign({}, stored.previousRanks)
+          : {};
+
+      var CATS_SNAP = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+
+      function applySnapRow(row) {
+        if (!row || row.userId == null) return;
+        var uid = String(row.userId);
+        var curr =
+          row.rank != null && isFinite(Number(row.rank))
+            ? Math.floor(Number(row.rank))
+            : currRanks[uid] != null
+              ? currRanks[uid]
+              : null;
+        if (curr == null || curr < 1) return;
+        if (row.rankChange != null && row.previousBoardRank != null) return;
+
+        if (isNewDay) {
+          var prevRanks = (stored && stored.ranks) || {};
+          if (prevRanks[uid] != null) {
+            var prev = Math.floor(Number(prevRanks[uid]));
+            if (isFinite(prev) && prev >= 1) {
+              row.rankChange = prev - curr;
+              row.previousBoardRank = prev;
+              newRankChanges[uid] = row.rankChange;
+              newPreviousRanks[uid] = prev;
+            }
+          }
+        } else if (newRankChanges[uid] != null) {
+          row.rankChange = Number(newRankChanges[uid]);
+          row.previousBoardRank =
+            newPreviousRanks[uid] != null ? Number(newPreviousRanks[uid]) : null;
+        }
+      }
+
+      var csi;
+      for (csi = 0; csi < CATS_SNAP.length; csi++) {
+        var snapRows = data.byCategory[CATS_SNAP[csi]];
+        if (!Array.isArray(snapRows)) continue;
+        for (var sri = 0; sri < snapRows.length; sri++) applySnapRow(snapRows[sri]);
+      }
+      if (Array.isArray(data.entries)) {
+        for (var sei = 0; sei < data.entries.length; sei++) applySnapRow(data.entries[sei]);
+      }
+      if (data.currentUser) applySnapRow(data.currentUser);
+      if (data.myRankSupremo) applySnapRow(data.myRankSupremo);
+
+      try {
+        localStorage.setItem(
+          snapKey,
+          JSON.stringify({
+            asOfSeoul: today,
+            ranks: currRanks,
+            rankChanges: newRankChanges,
+            previousRanks: newPreviousRanks,
+            savedAt: Date.now(),
+          })
+        );
+      } catch (eWrSnap) {}
+    }
+
     function stelvioEnrichMissingProfileImages(data) {
       if (!data || !data.byCategory) return;
       var fallback = stelvioCollectAllCachedProfileUrls();
@@ -9943,6 +10163,13 @@
       if (!data.durationType && typeof stelvioRankingState !== 'undefined' && stelvioRankingState.duration) {
         data.durationType = stelvioRankingState.duration;
       }
+      if (!data.period && typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) {
+        data.period = stelvioRankingState.period;
+      }
+      if (!data.gender && typeof stelvioRankingState !== 'undefined' && stelvioRankingState.gender) {
+        data.gender = stelvioRankingState.gender;
+      }
+      stelvioApplyClientPeakRankMovementFromSnapshot(data);
       stelvioEnsurePeakPowerRankMovementOnPayload(data);
       /* GC API에 profileImageUrl이 없는 사용자를 다른 metric 캐시로 보충 */
       stelvioEnrichMissingProfileImages(data);
@@ -10204,6 +10431,9 @@
       stelvioGroupTabUserNameCache = {};
       stelvioGroupTabUserNameMiss = {};
       stelvioGroupTabUserNameFetchGen = 0;
+      stelvioGroupTabUserProfileCache = {};
+      stelvioGroupTabUserProfileMiss = {};
+      stelvioGroupTabUserProfileFetchGen = 0;
       stelvioGroupTabMetric = 'gc';
       var mSelT = document.getElementById('stelvioGroupMetricSelect');
       if (mSelT) mSelT.value = 'gc';
@@ -10535,17 +10765,25 @@
       })();
 
       /**
-       * 그룹탭 전용 프로필 URL 통합 조회 맵:
-       * stelvioEnrichMissingProfileImages() 가 이미 stelvioRankingByCategory를
-       * 보충했으므로, 여기서는 byCategory + Firestore contactMap 만 합산하면 충분.
-       * (stelvioCollectAllCachedProfileUrls는 stelvioEnrichMissingProfileImages 내부에서 호출됨)
+       * 그룹탭 프로필 URL 맵: users 보강 캐시 → 소모임 contact → 현재 랭킹 API 순.
+       * (전체 localStorage 스캔은 구·깨진 Storage URL이 남아 특정 사용자만 미표시되는 원인이 됨)
        */
       var stelvioGroupProfileUrlMap = (function () {
-        /* stelvioCollectAllCachedProfileUrls() 로 전체 localStorage 스캔 결과를 기반으로 시작 */
-        var map = (typeof stelvioCollectAllCachedProfileUrls === 'function')
-          ? stelvioCollectAllCachedProfileUrls()
-          : {};
-        /* 현재 API 응답(stelvioEnrichMissingProfileImages 적용 후)으로 덮어쓰기/추가 */
+        var map = {};
+        var uidK;
+        if (stelvioRankingGroupContactDataMap) {
+          for (uidK in stelvioRankingGroupContactDataMap) {
+            if (!Object.prototype.hasOwnProperty.call(stelvioRankingGroupContactDataMap, uidK)) continue;
+            var ce = stelvioRankingGroupContactDataMap[uidK];
+            var cu = ce && ce.profileImageUrl ? stelvioNormalizeProfileImageUrl(ce.profileImageUrl) : '';
+            if (cu) map[String(uidK)] = cu;
+          }
+        }
+        for (uidK in stelvioGroupTabUserProfileCache) {
+          if (!Object.prototype.hasOwnProperty.call(stelvioGroupTabUserProfileCache, uidK)) continue;
+          var cp = stelvioNormalizeProfileImageUrl(stelvioGroupTabUserProfileCache[uidK]);
+          if (cp) map[String(uidK)] = cp;
+        }
         var CAT_NAMES = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
         if (stelvioRankingByCategory) {
           for (var _ci = 0; _ci < CAT_NAMES.length; _ci++) {
@@ -10553,7 +10791,7 @@
             for (var _ai = 0; _ai < _arr.length; _ai++) {
               var _e = _arr[_ai];
               if (_e && _e.userId && _e.profileImageUrl) {
-                map[String(_e.userId)] = _e.profileImageUrl; // 최신 값으로 갱신
+                map[String(_e.userId)] = stelvioNormalizeProfileImageUrl(_e.profileImageUrl);
               }
             }
           }
@@ -10623,20 +10861,16 @@
           var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, gcScore: 0 };
           var _tabMemName = stelvioResolveGroupTabMemberName(mem, mergedItem, uMem);
           if (_tabMemName) mergedItem.name = _tabMemName;
-          /* 우선순위:
-             ① stelvioGroupProfileUrlMap — 랭킹 API 응답에서 구성, users 컬렉션 최신값 반영 가능성 높음
-             ② Firestore 멤버 구독 데이터(mem.profileImageUrl) — 가입 시 스냅샷, 프로필 변경 후 구버전일 수 있음
-             mergedItem.profileImageUrl(랭킹 풀 데이터)가 있을 때도 mapUrl이 있으면 최신값으로 덮어씀 */
-          var _mapUrl = (stelvioGroupProfileUrlMap && stelvioGroupProfileUrlMap[uMem] && String(stelvioGroupProfileUrlMap[uMem]).trim())
-            ? String(stelvioGroupProfileUrlMap[uMem]).trim()
-            : '';
-          var _mUrl = (mem.profileImageUrl && String(mem.profileImageUrl).trim()) ? String(mem.profileImageUrl).trim() : '';
-          if (!mergedItem.profileImageUrl) {
-            mergedItem.profileImageUrl = _mapUrl || _mUrl || null;
-          } else if (_mapUrl && _mapUrl !== mergedItem.profileImageUrl) {
-            /* 랭킹 풀에 URL이 있어도 stelvioGroupProfileUrlMap에 더 최신 URL이 있으면 교체 */
-            mergedItem.profileImageUrl = _mapUrl;
-          }
+          var _mapUrl =
+            stelvioGroupProfileUrlMap && stelvioGroupProfileUrlMap[uMem]
+              ? stelvioGroupProfileUrlMap[uMem]
+              : '';
+          mergedItem.profileImageUrl = stelvioResolveGroupMemberProfileUrl(
+            uMem,
+            mem,
+            mergedItem.profileImageUrl,
+            _mapUrl
+          );
           /* 방장 표시를 위해 role 보존 */
           mergedItem._groupRole = mem.role || 'member';
           merged.push(mergedItem);
@@ -10672,6 +10906,7 @@
         }
         var merged = st.merged;
         var needUserProfileNames = [];
+        var needUserProfilePhotos = [];
         var maxNm = 12;
         var block = slotEl.querySelector('.stelvio-group-members-block');
         var needFresh =
@@ -10826,6 +11061,14 @@
             var ch = stelvioGroupTabUserNameCache[uidM];
             if (!ch || !String(ch).trim() || stelvioIsRankingPlaceholderDisplayName(ch)) needUserProfileNames.push(uidM);
           }
+          if (
+            uidM &&
+            !prof &&
+            !stelvioGroupTabUserProfileMiss[uidM] &&
+            !stelvioGroupTabUserProfileCache[uidM]
+          ) {
+            needUserProfilePhotos.push(uidM);
+          }
           if (!row) {
             row = document.createElement('div');
             row.setAttribute('data-stelvio-member-uid', uidM);
@@ -10853,6 +11096,7 @@
           block.appendChild(orderedRows[mi]);
         }
         if (needUserProfileNames.length) stelvioHydrateGroupTabMemberNamesFromUsers(needUserProfileNames);
+        if (needUserProfilePhotos.length) stelvioHydrateGroupTabMemberProfilesFromUsers(needUserProfilePhotos);
       }
       var defGp =
         typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
