@@ -8106,7 +8106,8 @@
     // 매일 23:00 KST(= UTC 14:00) 업데이트에 맞춰 만료되므로 앱 재시작 후에도
     // 당일 23:00 이전이면 서버 요청 없이 즉시 표시된다.
     // 스케줄러 외 수동집계 발생 시에는 clearAll()로 즉시 무효화한다.
-    var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v1:';
+    /* v2: 피크(Max·구간) 탭 등락 필드 보강 배포 후 구 캐시(필드 없음) 일괄 무효화 */
+    var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v2:';
     var STELVIO_RANKING_LC_STALE_MS = 10 * 60 * 1000; // 10분 후 백그라운드 재검증
     var stelvioRankingLocalCache = (function () {
       /** 다음 23:00 KST(UTC 14:00) 타임스탬프를 구한다. */
