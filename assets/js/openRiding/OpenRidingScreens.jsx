@@ -10436,8 +10436,47 @@ function regionLineFromRegions(regions) {
 function OpenRidingRoomApp(props) {
   var firestore = props.firestore;
   var storage = props.storage;
-  var userId = props.userId || '';
   var userLabel = props.userLabel || '라이더';
+
+  /** PC/모바일: Firebase 세션 복원 전에는 Firestore가 permission-denied — UID를 auth와 동기화 */
+  var _uidEff = useState(function () {
+    return String(props.userId || '').trim();
+  });
+  var effectiveUserId = _uidEff[0];
+  var setEffectiveUserId = _uidEff[1];
+
+  useEffect(
+    function () {
+      function syncUid() {
+        var id = '';
+        try {
+          if (typeof window !== 'undefined' && typeof window.getOpenRidingUserId === 'function') {
+            id = String(window.getOpenRidingUserId() || '').trim();
+          }
+        } catch (e0) {}
+        if (id) setEffectiveUserId(id);
+      }
+      syncUid();
+      var unsub = null;
+      try {
+        if (
+          typeof window !== 'undefined' &&
+          window.authV9 &&
+          typeof window.authV9.onAuthStateChanged === 'function'
+        ) {
+          unsub = window.authV9.onAuthStateChanged(syncUid);
+        }
+      } catch (e1) {}
+      return function () {
+        if (typeof unsub === 'function') {
+          try {
+            unsub();
+          } catch (e2) {}
+        }
+      };
+    },
+    []
+  );
 
   var _v = useState('main');
   var view = _v[0];
@@ -10462,14 +10501,14 @@ function OpenRidingRoomApp(props) {
 
   useEffect(
     function () {
-      if (!firestore || !userId) {
+      if (!firestore || !effectiveUserId) {
         setPendingIncomingCount(0);
         return;
       }
       var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
       if (typeof fr.countPendingIncomingFriendRequests !== 'function') return;
       var cancelled = false;
-      fr.countPendingIncomingFriendRequests(firestore, userId).then(function (n) {
+      fr.countPendingIncomingFriendRequests(firestore, effectiveUserId).then(function (n) {
         if (!cancelled) setPendingIncomingCount(typeof n === 'number' ? n : 0);
       }).catch(function () {
         if (!cancelled) setPendingIncomingCount(0);
@@ -10478,19 +10517,19 @@ function OpenRidingRoomApp(props) {
         cancelled = true;
       };
     },
-    [firestore, userId, view]
+    [firestore, effectiveUserId, view]
   );
 
   useEffect(
     function () {
-      if (!firestore || !userId) {
+      if (!firestore || !effectiveUserId) {
         setPendingGroupJoinCount(0);
         setGroupJoinCountMap({});
         return;
       }
       var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
       if (typeof gs.subscribeMyManagedGroupsJoinRequestCounts !== 'function') return;
-      var unsub = gs.subscribeMyManagedGroupsJoinRequestCounts(firestore, userId, function (total, countMap) {
+      var unsub = gs.subscribeMyManagedGroupsJoinRequestCounts(firestore, effectiveUserId, function (total, countMap) {
         setPendingGroupJoinCount(typeof total === 'number' ? total : 0);
         setGroupJoinCountMap(countMap || {});
       });
@@ -10498,16 +10537,16 @@ function OpenRidingRoomApp(props) {
         if (typeof unsub === 'function') unsub();
       };
     },
-    [firestore, userId]
+    [firestore, effectiveUserId]
   );
 
   function handleEditNavDeleteRide() {
-    if (!firestore || !userId || !detailRideId) return;
+    if (!firestore || !effectiveUserId || !detailRideId) return;
     var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
     if (typeof svc.deleteRideByHost !== 'function') return;
     if (!window.confirm('등록한 라이딩을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) return;
     svc
-      .deleteRideByHost(firestore, detailRideId, userId)
+      .deleteRideByHost(firestore, detailRideId, effectiveUserId)
       .then(function () {
         setDetailRideId(null);
         setView('main');
@@ -10564,7 +10603,7 @@ function OpenRidingRoomApp(props) {
     inner = (
       <OpenRidingGroupDetailView
         firestore={firestore}
-        userId={userId}
+        userId={effectiveUserId}
         groupId={detailGroupId}
         onBack={function () {
           setDetailGroupId(null);
@@ -10580,7 +10619,7 @@ function OpenRidingRoomApp(props) {
       <OpenRidingGroupForm
         firestore={firestore}
         storage={storage}
-        userId={userId}
+        userId={effectiveUserId}
         editGroupId={detailGroupId}
         onCancel={function () {
           setView('groupDetail');
@@ -10595,7 +10634,7 @@ function OpenRidingRoomApp(props) {
       <OpenRidingGroupForm
         firestore={firestore}
         storage={storage}
-        userId={userId}
+        userId={effectiveUserId}
         onCancel={function () {
           setView('groups');
         }}
@@ -10608,7 +10647,7 @@ function OpenRidingRoomApp(props) {
     inner = (
       <OpenRidingGroupsList
         firestore={firestore}
-        userId={userId}
+        userId={effectiveUserId}
         joinRequestCountMap={groupJoinCountMap}
         onOpenDetail={function (id) {
           setDetailGroupId(id);
@@ -10624,7 +10663,7 @@ function OpenRidingRoomApp(props) {
       <OpenRidingCreateForm
         firestore={firestore}
         storage={storage}
-        hostUserId={userId}
+        hostUserId={effectiveUserId}
         onCreated={function () { setView('main'); }}
       />
     );
@@ -10633,7 +10672,7 @@ function OpenRidingRoomApp(props) {
       <OpenRidingCreateForm
         firestore={firestore}
         storage={storage}
-        hostUserId={userId}
+        hostUserId={effectiveUserId}
         editRideId={detailRideId}
         onCreated={function () { setView('main'); }}
         onEditSaved={function () { setView('detail'); }}
@@ -10652,7 +10691,7 @@ function OpenRidingRoomApp(props) {
         firestore={firestore}
         storage={storage}
         rideId={detailRideId}
-        userId={userId}
+        userId={effectiveUserId}
         onBack={function () { setView('main'); }}
         onOpenEdit={function () { setView('edit'); }}
         onHome={function () {
@@ -10664,7 +10703,7 @@ function OpenRidingRoomApp(props) {
     inner = (
       <OpenRidingFriendsManage
         firestore={firestore}
-        userId={userId}
+        userId={effectiveUserId}
         onBack={function () { setView('main'); }}
       />
     );
@@ -10673,7 +10712,7 @@ function OpenRidingRoomApp(props) {
       <OpenRidingCalendarMain
         firestore={firestore}
         storage={storage}
-        userId={userId}
+        userId={effectiveUserId}
         userLabel={userLabel}
         compact={true}
         filterPageOpen={view === 'filter'}
@@ -10793,7 +10832,7 @@ function OpenRidingRoomApp(props) {
           }}
           pendingIncomingCount={pendingIncomingCount}
           pendingGroupJoinCount={pendingGroupJoinCount}
-          userId={userId}
+          userId={effectiveUserId}
         />
       ) : null}
     </div>
