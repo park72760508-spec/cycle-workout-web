@@ -841,6 +841,10 @@ async function signOut() {
     window.currentUser = null;
     localStorage.removeItem('currentUser');
     localStorage.removeItem('authUser');
+    /* [SESSION-only] 로그아웃 시 저장 자격 삭제 */
+    if (typeof window.clearAuthRememberCredentials === 'function') {
+      try { window.clearAuthRememberCredentials(); } catch (eClr) {}
+    }
     
     // 관리자 기능 숨기기 (training.js의 함수 호출)
     if (typeof window.hideAdminFeatures === 'function') {

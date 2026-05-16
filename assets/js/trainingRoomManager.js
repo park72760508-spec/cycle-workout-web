@@ -191,43 +191,16 @@ function pollForAuthV9(maxWaitMs) {
 }
 
 /**
- * Auth 영속성 적용:
- * "로그인 상태 유지" 체크 시 LOCAL (앱 재시작 후에도 유지),
- * 미체크 시 SESSION (현재 세션만 유지 — 앱 종료 시 로그아웃).
- * localStorage 'stelvio_auth_persist_local' 키로 선택 여부를 공유.
+ * Auth 영속성: [SESSION-only] 항상 browserSessionPersistence — 로그인 유지는 index.html의 stelvio_saved_* 수동 저장.
  */
 async function enforceAuthPersistence() {
-  /* localStorage·쿠키 어느 한쪽이라도 '1'이면 LOCAL — iOS 분할/소실 대비 */
-  var wantsLocal = (function() {
-    var ls = null;
-    try {
-      ls = localStorage.getItem('stelvio_auth_persist_local');
-    } catch (e) {}
-    var ckIs1 = false;
-    try {
-      var nameEQ = 'sl_stelvio_auth_persist_local=';
-      var ca = document.cookie.split(';');
-      for (var i = 0; i < ca.length; i++) {
-        var c = ca[i].trim();
-        if (c.indexOf(nameEQ) === 0) {
-          ckIs1 = decodeURIComponent(c.substring(nameEQ.length)) === '1';
-          break;
-        }
-      }
-    } catch (e2) {}
-    if (ls === '1') return true;
-    if (ls === '0') return false;
-    return ckIs1;
-  })();
-  var persistLabel = wantsLocal ? 'LOCAL (상태 유지)' : 'SESSION (세션만)';
+  /* [SESSION-only 전면 전환] browserLocalPersistence 미사용 — 항상 SESSION */
+  var persistLabel = 'SESSION (고정)';
   try {
     if (window.firebase && typeof window.firebase.auth === 'function') {
       const auth = window.firebase.auth();
       if (auth && typeof auth.setPersistence === 'function' && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
-        var compatPersist = wantsLocal
-          ? window.firebase.auth.Auth.Persistence.LOCAL
-          : window.firebase.auth.Auth.Persistence.SESSION;
-        await auth.setPersistence(compatPersist);
+        await auth.setPersistence(window.firebase.auth.Auth.Persistence.SESSION);
         console.log('[Auth Ready] setPersistence(' + persistLabel + ') applied (compat)');
       }
     }
@@ -238,10 +211,8 @@ async function enforceAuthPersistence() {
     if (window.authV9) {
       var authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
       var setPersistence = authMod && authMod.setPersistence;
-      var browserLocalPersistence = authMod && authMod.browserLocalPersistence;
       var browserSessionPersistence = authMod && authMod.browserSessionPersistence;
-      var targetPersistence = wantsLocal ? browserLocalPersistence : browserSessionPersistence;
-      if (setPersistence && targetPersistence) await setPersistence(window.authV9, targetPersistence);
+      if (setPersistence && browserSessionPersistence) await setPersistence(window.authV9, browserSessionPersistence);
       console.log('[Auth Ready] setPersistence(' + persistLabel + ') applied (v9)');
     }
   } catch (e) {
@@ -251,7 +222,7 @@ async function enforceAuthPersistence() {
 
 /**
  * Firebase Auth 상태가 확정될 때까지 대기 (onAuthStateChanged 사용)
- * 진입 시 setPersistence(LOCAL) 적용 후 대기.
+ * 진입 시 setPersistence(SESSION) 적용 후 대기.
  * @param {number} maxWaitMs - 최대 대기 시간 (밀리초), 기본값: 3000ms
  * @returns {Promise<void>}
  */

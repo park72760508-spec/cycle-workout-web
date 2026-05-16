@@ -983,35 +983,14 @@ function showAuthScreen() {
 
 // ★ 로그아웃: 권한/세션 완전 초기화
 function logout() {
-   // ✅ 전화번호 인증 폼 완전 초기화
-      // 전체 새로고침
-      window.location.reload();
-   
-  //resetAuthForm();
-   
-  try {
-    // 1) 등급/세션 정보 전부 제거
-    localStorage.removeItem('authUser');
-    localStorage.removeItem('currentUser');
-    window.currentUser = null;
-
-    // 2) 임시 관리자 오버라이드 삭제(개발 중 사용했다면)
-    if (typeof window.__TEMP_ADMIN_OVERRIDE__ !== 'undefined') {
-      try { delete window.__TEMP_ADMIN_OVERRIDE__; } catch (e) { window.__TEMP_ADMIN_OVERRIDE__ = false; }
-    }
-
-    // 3) 화면 인증 화면으로 전환
-    showAuthScreen();
-
-    // 4) 사용자 목록/상태 뷰가 남아있다면 정리(선택)
-    const userList = document.getElementById('userList');
-    if (userList) userList.innerHTML = `<div class="muted">로그아웃되었습니다. 다시 로그인해주세요.</div>`;
-
-    // 토스트 안내(선택)
-    if (typeof showToast === 'function') showToast('로그아웃 되었습니다.');
-  } catch (e) {
-    console.error('로그아웃 처리 중 오류:', e);
-  }
+   // ✅ [SESSION-only] 저장 자격 삭제 후 새로고침
+   try {
+     if (typeof window.clearAuthRememberCredentials === 'function') {
+       window.clearAuthRememberCredentials();
+     }
+   } catch (_) {}
+   // ✅ 전화번호 인증 폼 완전 초기화 — 전체 새로고침
+   window.location.reload();
 }
 
 
