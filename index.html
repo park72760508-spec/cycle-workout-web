@@ -276,7 +276,7 @@
       try {
         var appConfigRef = docFn(firestoreV9, 'appConfig', 'strava');
         var snap = await getDocFn(appConfigRef);
-        if (snap && snap.exists && snap.exists()) {
+        if (window.stelvioDocSnapExists(snap)) {
           var d = snap.data ? snap.data() : null;
           if (d && d.strava_client_id) {
             window.STRAVA_CLIENT_ID = d.strava_client_id;
@@ -318,6 +318,14 @@
     window.phoneToEmail = phoneToEmail;
     window.formatPhoneNumber = formatPhoneNumber;
 
+    /* Firestore v9+: exists는 boolean 속성 / 구버전·일부 번들은 exists() 메서드 — 혼용 시 TypeError로 프로필 null 처리되는 버그 방지 */
+    window.stelvioDocSnapExists = function (snap) {
+      if (!snap) return false;
+      if (typeof snap.exists === 'boolean') return snap.exists;
+      if (typeof snap.exists === 'function') return snap.exists();
+      return false;
+    };
+
     window.saveNewUserToFirestore = async function (uid, userData) {
       if (!firestoreV9 || !collectionFn || !docFn || !setDocFn) throw new Error('Firestore V9가 초기화되지 않았습니다.');
       var usersRef = collectionFn(firestoreV9, 'users');
@@ -330,7 +338,7 @@
       var usersRef = collectionFn(firestoreV9, 'users');
       var userDocRef = docFn(usersRef, uid);
       var userDoc = await getDocFn(userDocRef);
-      if (userDoc && userDoc.exists && userDoc.exists()) {
+      if (window.stelvioDocSnapExists(userDoc)) {
         var data = userDoc.data ? userDoc.data() : {};
         var out = { id: uid };
         for (var k in data) { if (data.hasOwnProperty(k)) out[k] = data[k]; }
