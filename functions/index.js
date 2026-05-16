@@ -4669,6 +4669,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   let weeklyRankingFullCurrent = null;
   for (const gender of ["all", "M", "F"]) {
     const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
+    await applyPeakRankChanges(db, tss.entries, `peak_tss_weekly_${gender}`);
     if (gender === "all") {
       weeklyRankingFullCurrent = tss.entries.map((e) => ({
         userId: e.userId,
@@ -4729,6 +4730,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   // ── 4. 30일 거리 랭킹 ──
   for (const gender of ["all", "M", "F"]) {
     const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender, sharedUsersSnap);
+    await applyPeakRankChanges(db, dist.entries, `peak_personal_dist_rolling30_${gender}`);
     const keyD = `peakRanking_personal_dist_30d_${gender}_${r30s}_${r30e}`;
     await writeRankingAggregatePayload(db, keyD, {
       byCategory: dist.byCategory,
@@ -4754,6 +4756,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   for (const gender of ["all", "M", "F"]) {
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const pack = allDurMonthly[gender][durationType];
+      await applyPeakRankChanges(db, pack.entries, `peak_${durationType}_monthly_${gender}`);
       const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
       await writeRankingAggregatePayload(db, ckey, {
         byCategory: pack.byCategory,
@@ -4770,6 +4773,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   for (const gender of ["all", "M", "F"]) {
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const pack = allDurYear[gender][durationType];
+      await applyPeakRankChanges(db, pack.entries, `peak_${durationType}_yearly_${gender}`);
       const ckey = `peakRanking_v2_yearly_${durationType}_${gender}_${r365s}_${r365e}`;
       await writeRankingAggregatePayload(db, ckey, {
         byCategory: pack.byCategory,
@@ -5859,6 +5863,16 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     const cacheKey = `peakRanking_v2_${period}_${durationType}_${gender}_${startStr}_${endStr}`;
+    /**
+     * Max·구간 피크 탭: 사전 집계/메모리 캐시 응답에도 `peak_rank_history` 기준 등락을 매 요청 보강.
+     * (집계 문서가 옛날 포맷이거나 필드 누락이어도 GC 탭과 동일하게 UI에 반영되도록)
+     */
+    async function hydratePeakPowerRankMovementIfNeeded(payload) {
+      if (!payload || !payload.byCategory || !DURATION_FIELDS[durationType]) return;
+      const sup = payload.byCategory.Supremo;
+      if (!Array.isArray(sup) || sup.length === 0) return;
+      await applyPeakRankChanges(db, sup, `peak_${durationType}_${period}_${gender}`);
+    }
     const aggPeak = await readRankingAggregatePayloadIfFresh(db, cacheKey);
     if (aggPeak && aggPeak.byCategory) {
       let out = {
@@ -5874,6 +5888,7 @@ exports.getPeakPowerRanking = onRequest(
       if (aggPeak.cohortAvgHrBpm != null && !isNaN(Number(aggPeak.cohortAvgHrBpm))) {
         out.cohortAvgHrBpm = Number(aggPeak.cohortAvgHrBpm);
       }
+      await hydratePeakPowerRankMovementIfNeeded(out);
       if (uid) {
         const cat = aggPeak.byCategory;
         let current = null, nextUser = null;
@@ -5905,7 +5920,7 @@ exports.getPeakPowerRanking = onRequest(
         if (data.cohortAvgHrBpm != null && !isNaN(Number(data.cohortAvgHrBpm))) {
           out.cohortAvgHrBpm = Number(data.cohortAvgHrBpm);
         }
-        const entries = Array.isArray(data.entries) ? data.entries : [];
+        await hydratePeakPowerRankMovementIfNeeded(out);
         if (uid) {
           const cat = data.byCategory;
           let current = null, nextUser = null;
