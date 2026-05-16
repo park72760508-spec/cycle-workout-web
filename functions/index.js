@@ -5532,11 +5532,13 @@ exports.getPeakPowerRanking = onRequest(
       await hydrateRankingBoardProfileImages(db, payload.byCategory, payload.entries);
     };
 
+    const forceRankMv = req.query.rankMv === "1" || req.query.rankMv === "true";
+
     /** 주간 TSS 랭킹 탭: 기간은 주간 마일리지 TOP10과 동일(월~오늘), 월간/명예 필터 미적용 */
     if (durationType === "tss") {
       const { startStr, endStr } = getWeekRangeSeoul();
       const cacheKey = `peakRanking_weekly_tss_v2_${gender}_${startStr}_${endStr}`;
-      const aggTss = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      const aggTss = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
       if (aggTss && aggTss.byCategory) {
         let out = {
           success: true,
@@ -5574,9 +5576,9 @@ exports.getPeakPowerRanking = onRequest(
         return res.status(200).json(out);
       }
       const cacheRef = db.collection("cache").doc(cacheKey);
-      const cacheSnap = await cacheRef.get();
+      const cacheSnap = forceRankMv ? null : await cacheRef.get();
       const nowMs = Date.now();
-      if (cacheSnap.exists) {
+      if (cacheSnap && cacheSnap.exists) {
         const data = cacheSnap.data();
         const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
         if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
@@ -5655,7 +5657,7 @@ exports.getPeakPowerRanking = onRequest(
     if (durationType === "personal_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
       const cacheKey = `peakRanking_personal_dist_30d_${gender}_${startStr}_${endStr}`;
-      const aggPd = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      const aggPd = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
       if (aggPd && aggPd.byCategory) {
         let out = {
           success: true,
@@ -5699,9 +5701,9 @@ exports.getPeakPowerRanking = onRequest(
         return res.status(200).json(out);
       }
       const cacheRef = db.collection("cache").doc(cacheKey);
-      const cacheSnap = await cacheRef.get();
+      const cacheSnap = forceRankMv ? null : await cacheRef.get();
       const nowMs = Date.now();
-      if (cacheSnap.exists) {
+      if (cacheSnap && cacheSnap.exists) {
         const data = cacheSnap.data();
         const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
         if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
@@ -5784,7 +5786,8 @@ exports.getPeakPowerRanking = onRequest(
     if (durationType === "group_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
       const cacheKey = `peakRanking_group_dist_30d_${startStr}_${endStr}`;
-      const aggG = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      const groupRankHistoryKey = "peak_group_dist_rolling30_all";
+      const aggG = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
       if (aggG && aggG.byCategory) {
         const byCategory = JSON.parse(JSON.stringify(aggG.byCategory));
         const entries = JSON.parse(JSON.stringify(Array.isArray(aggG.entries) ? aggG.entries : []));
@@ -5816,13 +5819,18 @@ exports.getPeakPowerRanking = onRequest(
             out.motivationMessage = buildMotivationMessage(current, nextUser);
           }
         }
+        const gdAggEntries = Array.isArray(out.entries) ? out.entries : out.byCategory.Supremo || [];
+        await hydratePeakRankMovementOnPayload(db, out.byCategory, gdAggEntries, groupRankHistoryKey);
+        if (!out.entries && Array.isArray(out.byCategory.Supremo)) {
+          out.entries = out.byCategory.Supremo.slice();
+        }
         await finalizeRankingProfileUrls(out);
         return res.status(200).json(out);
       }
       const cacheRef = db.collection("cache").doc(cacheKey);
-      const cacheSnap = await cacheRef.get();
+      const cacheSnap = forceRankMv ? null : await cacheRef.get();
       const nowMs = Date.now();
-      if (cacheSnap.exists) {
+      if (cacheSnap && cacheSnap.exists) {
         const data = cacheSnap.data();
         const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
         if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
@@ -5856,6 +5864,11 @@ exports.getPeakPowerRanking = onRequest(
               out.motivationMessage = buildMotivationMessage(current, nextUser);
             }
           }
+          const gdCacheEntries = entries.length ? entries : out.byCategory.Supremo || [];
+          await hydratePeakRankMovementOnPayload(db, out.byCategory, gdCacheEntries, groupRankHistoryKey);
+          if (!out.entries.length && Array.isArray(out.byCategory.Supremo)) {
+            out.entries = out.byCategory.Supremo.slice();
+          }
           await finalizeRankingProfileUrls(out);
           return res.status(200).json(out);
         }
@@ -5877,6 +5890,7 @@ exports.getPeakPowerRanking = onRequest(
       const byCatOut = JSON.parse(JSON.stringify(byCategory));
       const entriesOut = JSON.parse(JSON.stringify(entries));
       await applyGroupRankingParticipationForViewer(db, byCatOut, entriesOut, startStr, endStr, uid);
+      await applyPeakRankChanges(db, byCatOut, groupRankHistoryKey);
       const out = { success: true, byCategory: byCatOut, entries: entriesOut, startStr, endStr, period: "rolling30", durationType: "group_dist", gender: "all" };
       if (uid) {
         const arrAll = byCatOut.Supremo || [];
@@ -5967,7 +5981,6 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     const cacheKey = `peakRanking_v2_${period}_${durationType}_${gender}_${startStr}_${endStr}`;
-    const forceRankMv = req.query.rankMv === "1" || req.query.rankMv === "true";
     /**
      * Max·구간 피크 탭: 사전 집계/메모리 캐시 응답에도 `peak_rank_history` 기준 등락을 매 요청 보강.
      * (집계 문서가 옛날 포맷이거나 필드 누락이어도 GC 탭과 동일하게 UI에 반영되도록)
