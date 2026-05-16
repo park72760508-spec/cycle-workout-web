@@ -461,16 +461,23 @@
       : '나의 FTP';
     var refValueNote =
       typeof p.overrideReferenceValueNote === 'string' ? p.overrideReferenceValueNote : ' (프로필)';
+    var rankChHtml = '';
+    if (currentUserId && typeof global.stelvioRankChangeBadgePlainForUser === 'function') {
+      rankChHtml = global.stelvioRankChangeBadgePlainForUser(activeCategory, currentUserId);
+    } else if (currentUserId && typeof global.stelvioRankChangeBadgeHtmlForUser === 'function') {
+      var rankChRaw = global.stelvioRankChangeBadgeHtmlForUser(activeCategory, currentUserId);
+      rankChHtml = rankChRaw ? String(rankChRaw).replace(/<[^>]+>/g, '') : '';
+    }
     var badgeMain = overrideMyWkg != null && !isTss && !isKmMode && !isGcMode ? refBadgeTitle : '나의 위치';
     var badgeSub =
       overrideMyWkg != null && !isTss && !isKmMode && !isGcMode && valueFmt
         ? '· ' + valueFmt + (refValueNote || '')
         : displayRank != null && valueFmt
-        ? '· ' + displayRank + '위 · ' + valueFmt
+        ? '· ' + displayRank + '위' + rankChHtml + ' · ' + valueFmt
         : valueFmt
         ? '· ' + valueFmt
         : displayRank != null
-        ? '· ' + displayRank + '위'
+        ? '· ' + displayRank + '위' + rankChHtml
         : '';
 
     var catTitle = STELVIO_CATEGORY_LABELS[activeCategory] || activeCategory || '전체';
