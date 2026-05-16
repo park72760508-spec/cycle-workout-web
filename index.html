@@ -10115,6 +10115,32 @@
     window.stelvioServerRankChangeBadgeHtml = stelvioServerRankChangeBadgeHtml;
     var STELVIO_RANK_BOARD_CATS = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
 
+    function stelvioPeakBoardRankMapsEqual(a, b) {
+      if (!a || typeof a !== 'object') a = {};
+      if (!b || typeof b !== 'object') b = {};
+      var keysA = Object.keys(a);
+      var keysB = Object.keys(b);
+      if (keysA.length !== keysB.length) return false;
+      for (var ei = 0; ei < keysA.length; ei++) {
+        var k = keysA[ei];
+        if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+        if (Math.floor(Number(a[k])) !== Math.floor(Number(b[k]))) return false;
+      }
+      return true;
+    }
+
+    function stelvioPeakRankChangesAllZero(chCat) {
+      if (!chCat || typeof chCat !== 'object') return false;
+      var vals = Object.keys(chCat).map(function (k) {
+        return chCat[k];
+      });
+      if (!vals.length) return false;
+      for (var zi = 0; zi < vals.length; zi++) {
+        if (Number(vals[zi]) !== 0) return false;
+      }
+      return true;
+    }
+
     /** GC·헵타곤과 동일: 부문 목록 내 표시 순위(1..N, item.rank 전체순위와 별도) */
     function stelvioBuildPeakRankMapForCategory(byCategory, catKey) {
       var ranks = {};
@@ -10418,7 +10444,10 @@
 
     function stelvioNormalizePeakRankSnapshotStored(stored) {
       if (!stored) return null;
-      if (stored.ranksByCategory && typeof stored.ranksByCategory === 'object') return stored;
+      if (stored.ranksByCategory && typeof stored.ranksByCategory === 'object') {
+        if (!stored.prevDayRanksByCategory) stored.prevDayRanksByCategory = {};
+        return stored;
+      }
       return {
         asOfSeoul: stored.asOfSeoul,
         ranksByCategory: stored.ranks ? { Supremo: stored.ranks } : {},
@@ -10430,7 +10459,7 @@
     }
 
     /**
-     * Max·구간 피크: GC와 동일하게 부문별 boardRank 기준 전날 대비 등락(서버 우선·로컬 스냅샷 보강).
+     * Max·구간 피크: GC와 동일 — 23:00 집계로 순위가 바뀔 때만 재계산, 자정만 바뀌면 등락 유지.
      */
     function stelvioApplyClientPeakRankMovementFromSnapshot(data) {
       if (!data || !data.byCategory) return;
@@ -10473,6 +10502,15 @@
         if (storedNorm.ranksByCategory) {
           prevDayRanksByCategory = Object.assign({}, storedNorm.ranksByCategory);
         }
+        if (storedNorm.rankChangesByCategory) {
+          rankChangesByCategory = Object.assign({}, storedNorm.rankChangesByCategory);
+        }
+        if (storedNorm.previousRanksByCategory) {
+          previousRanksByCategory = Object.assign({}, storedNorm.previousRanksByCategory);
+        }
+        if (storedNorm.prevDayRanksByCategory) {
+          prevDayRanksByCategory = Object.assign({}, storedNorm.prevDayRanksByCategory);
+        }
       }
 
       var csi;
@@ -10484,16 +10522,14 @@
         var currCatRanks = stelvioBuildPeakRankMapForCategory(data.byCategory, catKey);
         ranksByCategory[catKey] = currCatRanks;
 
-        var baseline = stelvioResolvePreviousPeakRanksBaselineForCategory(data, storedNorm, today, catKey);
-        if (
-          !Object.keys(baseline).length &&
-          storedNorm &&
-          storedNorm.asOfSeoul === today &&
-          storedNorm.ranksByCategory &&
-          storedNorm.ranksByCategory[catKey]
-        ) {
-          baseline = Object.assign({}, storedNorm.ranksByCategory[catKey]);
-        }
+        var prevStoredRanks =
+          storedNorm && storedNorm.ranksByCategory && storedNorm.ranksByCategory[catKey]
+            ? storedNorm.ranksByCategory[catKey]
+            : {};
+        var prevDayStored =
+          storedNorm && storedNorm.prevDayRanksByCategory && storedNorm.prevDayRanksByCategory[catKey]
+            ? storedNorm.prevDayRanksByCategory[catKey]
+            : prevDayRanksByCategory[catKey] || {};
 
         var chCat =
           rankChangesByCategory[catKey] && typeof rankChangesByCategory[catKey] === 'object'
@@ -10504,25 +10540,49 @@
             ? previousRanksByCategory[catKey]
             : {};
 
-        /* 당일 스냅샷에 저장된 부문별 등락을 먼저 행에 반영 */
-        if (storedNorm && storedNorm.asOfSeoul === today) {
-          stelvioApplyStoredRankChangesToCategoryRows(snapRows, chCat, prCat);
+        var ranksChanged = !stelvioPeakBoardRankMapsEqual(prevStoredRanks, currCatRanks);
+        var compareBaseline = prevStoredRanks;
+
+        if (
+          !ranksChanged &&
+          Object.keys(prevDayStored).length > 0 &&
+          stelvioPeakBoardRankMapsEqual(prevStoredRanks, currCatRanks) &&
+          !stelvioPeakBoardRankMapsEqual(prevDayStored, currCatRanks) &&
+          stelvioPeakRankChangesAllZero(chCat)
+        ) {
+          ranksChanged = true;
+          compareBaseline = prevDayStored;
         }
 
-        for (var sri = 0; sri < snapRows.length; sri++) {
-          var row = snapRows[sri];
-          if (!row || row.userId == null) continue;
-          var uid = String(row.userId);
-          var curr = currCatRanks[uid] != null ? currCatRanks[uid] : null;
-          stelvioApplyPeakRankChangeToRow(row, uid, curr, baseline, chCat, prCat);
-          if (row.rankChange != null && row.previousBoardRank != null) {
-            chCat[uid] = row.rankChange;
-            prCat[uid] = row.previousBoardRank;
+        if (!ranksChanged && Object.keys(chCat).length) {
+          stelvioApplyStoredRankChangesToCategoryRows(snapRows, chCat, prCat);
+        } else if (ranksChanged) {
+          if (!Object.keys(compareBaseline).length) {
+            compareBaseline = stelvioResolvePreviousPeakRanksBaselineForCategory(
+              data,
+              storedNorm,
+              today,
+              catKey
+            );
+          }
+          if (Object.keys(compareBaseline).length) {
+            for (var sri = 0; sri < snapRows.length; sri++) {
+              var row = snapRows[sri];
+              if (!row || row.userId == null) continue;
+              var uid = String(row.userId);
+              var curr = currCatRanks[uid] != null ? currCatRanks[uid] : null;
+              stelvioApplyPeakRankChangeToRow(row, uid, curr, compareBaseline, chCat, prCat);
+            }
           }
         }
 
         rankChangesByCategory[catKey] = chCat;
         previousRanksByCategory[catKey] = prCat;
+        if (ranksChanged && Object.keys(compareBaseline).length) {
+          prevDayRanksByCategory[catKey] = compareBaseline;
+        } else if (Object.keys(prevDayStored).length) {
+          prevDayRanksByCategory[catKey] = prevDayStored;
+        }
       }
 
       if (data.currentUser && data.currentUser.userId != null) {
