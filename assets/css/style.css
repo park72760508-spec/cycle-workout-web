@@ -7342,6 +7342,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen .stelvio-group-member-row.stelvio-rank-row:last-child {
   border-bottom: none !important;
 }
+/* 그룹 멤버: 이름 직후 등락 — 홍길동(↓3) */
+#stelvioRankingScreen .stelvio-group-member-row .stelvio-rank-name-text .stelvio-rank-change {
+  margin-left: 0;
+  font-size: 0.92em;
+  vertical-align: baseline;
+}
 #stelvioRankingScreen .stelvio-group-pick-meta {
   font-size: 0.9em;
   color: #64748b;
