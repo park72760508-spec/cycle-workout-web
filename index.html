@@ -7794,8 +7794,9 @@
 
     /**
      * 주간 마일리지 TOP10 모달 닫기
+     * @param {{ skipIntegratedSetupReopen?: boolean }} [options] - true면 환경설정 재표시 생략(혜택 확인→제휴 목록 등)
      */
-    function closeWeeklyTop10Modal() {
+    function closeWeeklyTop10Modal(options) {
       var cb = document.getElementById('weeklyTop10DontShowToday');
       if (cb && cb.checked) {
         setWeeklyTop10SuppressToday();
@@ -7804,11 +7805,16 @@
       if (modal) {
         modal.classList.add('hidden');
       }
-      try {
-        if (typeof window.finalizeMandatoryIntegratedWeeklyTop10Dismiss === 'function') {
-          window.finalizeMandatoryIntegratedWeeklyTop10Dismiss();
-        }
-      } catch (eReopenApi) {}
+      var skipReopen = options && options.skipIntegratedSetupReopen === true;
+      if (!skipReopen) {
+        try {
+          if (typeof window.finalizeMandatoryIntegratedWeeklyTop10Dismiss === 'function') {
+            window.finalizeMandatoryIntegratedWeeklyTop10Dismiss();
+          }
+        } catch (eReopenApi) {}
+      } else {
+        window.__integratedSetupReopenAfterTop10Dismiss = false;
+      }
     }
 
     /**
@@ -25359,7 +25365,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }, 220);
         }
 
-        if (typeof closeWeeklyTop10Modal === 'function') closeWeeklyTop10Modal();
+        if (typeof closeWeeklyTop10Modal === 'function') {
+          closeWeeklyTop10Modal({ skipIntegratedSetupReopen: true });
+        }
         setTimeout(function () {
           if (typeof window.onAffiliateButtonClick === 'function') {
             window.onAffiliateButtonClick();
