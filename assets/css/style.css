@@ -14465,7 +14465,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: #ea580c; /* 주황색 — STELVIO 앱 설치하기 */
   text-align: center;
 }
 .auth-app-download-icons {
