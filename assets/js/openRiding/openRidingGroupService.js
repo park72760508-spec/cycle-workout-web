@@ -51,17 +51,43 @@ function asStringArray(v) {
   }).filter(Boolean);
 }
 
+/** @param {{ id?: string; createdAt?: import('firebase/firestore').Timestamp | { seconds?: number } }} row */
+function ridingGroupCreatedAtMs(row) {
+  if (!row) return 0;
+  var c = row.createdAt;
+  if (c && typeof c.toMillis === 'function') return c.toMillis();
+  if (c && typeof c.seconds === 'number') return c.seconds * 1000;
+  return 0;
+}
+
+/** 승인된 전체 목록 + 내가 방장인 승인 대기 그룹 (동일 id는 한 번만) */
+function mergeApprovedAndMyPendingRidingGroups(approvedRows, pendingMineRows) {
+  var map = Object.create(null);
+  function add(row) {
+    if (!row || !row.id) return;
+    map[String(row.id)] = row;
+  }
+  (approvedRows || []).forEach(add);
+  (pendingMineRows || []).forEach(add);
+  return Object.keys(map)
+    .map(function (id) {
+      return map[id];
+    })
+    .sort(function (a, b) {
+      return ridingGroupCreatedAtMs(b) - ridingGroupCreatedAtMs(a);
+    });
+}
+
 /**
  * @param {import('firebase/firestore').Firestore} db
  * @param {boolean} isAdmin
  * @param {function(any[]): void} onUpdate
+ * @param {string} [viewerUid] 로그인 UID — 일반 사용자일 때 본인이 등록한 승인 전 그룹을 목록에 합침
  * @returns {function(): void}
  */
-export function subscribeRidingGroups(db, isAdmin, onUpdate) {
+export function subscribeRidingGroups(db, isAdmin, onUpdate, viewerUid) {
   if (!db || typeof onUpdate !== 'function') return function () {};
   var unsubs = [];
-
-  function merge() {}
 
   if (isAdmin) {
     var qPend = query(
@@ -107,20 +133,43 @@ export function subscribeRidingGroups(db, isAdmin, onUpdate) {
     };
   }
 
-  var qUser = query(
+  var approved = [];
+  var myPending = [];
+  function emitViewer() {
+    onUpdate(mergeApprovedAndMyPendingRidingGroups(approved, myPending));
+  }
+  var qApproved = query(
     collection(db, RIDING_GROUP_COLLECTION),
     where('status', '==', GROUP_STATUS.APPROVED),
     orderBy('createdAt', 'desc')
   );
   unsubs.push(
-    onSnapshot(qUser, function (snap) {
-      var rows = [];
+    onSnapshot(qApproved, function (snap) {
+      approved = [];
       snap.forEach(function (d) {
-        rows.push({ id: d.id, ...d.data() });
+        approved.push({ id: d.id, ...d.data() });
       });
-      onUpdate(rows);
+      emitViewer();
     })
   );
+  var vu = viewerUid != null ? String(viewerUid).trim() : '';
+  if (vu) {
+    var qMyPending = query(
+      collection(db, RIDING_GROUP_COLLECTION),
+      where('status', '==', GROUP_STATUS.PENDING),
+      where('createdBy', '==', vu),
+      orderBy('createdAt', 'desc')
+    );
+    unsubs.push(
+      onSnapshot(qMyPending, function (snap) {
+        myPending = [];
+        snap.forEach(function (d) {
+          myPending.push({ id: d.id, ...d.data() });
+        });
+        emitViewer();
+      })
+    );
+  }
   return function () {
     unsubs.forEach(function (u) {
       try {

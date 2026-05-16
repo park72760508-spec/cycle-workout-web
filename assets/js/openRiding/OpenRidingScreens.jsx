@@ -8859,9 +8859,9 @@ function OpenRidingGroupsList(props) {
       if (!firestore || typeof gs.subscribeRidingGroups !== 'function') return;
       return gs.subscribeRidingGroups(firestore, isAdmin, function (list) {
         setRows(Array.isArray(list) ? list : []);
-      });
+      }, userId);
     },
-    [firestore, isAdmin]
+    [firestore, isAdmin, userId]
   );
 
   /*
@@ -8975,7 +8975,7 @@ function OpenRidingGroupsList(props) {
                         <span className="text-lg font-bold text-violet-700">{name ? name.charAt(0) : 'G'}</span>
                       )}
                     </span>
-                    {pending && isAdmin ? (
+                    {pending && (isAdmin || isHost) ? (
                       <span className="absolute -bottom-1 -right-1 rounded-full bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 border border-white shadow">
                         승인 대기
                       </span>
