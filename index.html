@@ -15640,6 +15640,21 @@
               }
             } catch (eEarlySave) {}
 
+            /* iOS Safari/WKWebView: browserLocalPersistence(IndexedDB) 사용 시 로그인 직후 Firestore에 토큰이 붙기 전 getDoc가 나가는 레이스 방지 */
+            try {
+              if (user && typeof user.getIdToken === 'function') {
+                await user.getIdToken(true);
+              }
+            } catch (eTokSync) {
+              console.warn('[Login] 토큰 강제 갱신 지연:', eTokSync && eTokSync.message);
+            }
+            if (_wantsRemember) {
+              if (typeof showAuthStatus === 'function') {
+                showAuthStatus('사용자 정보 확인 중…', 'info');
+              }
+              await new Promise(function (r) { setTimeout(r, 600); });
+            }
+
             /* Firestore 프로필 읽기 전에 Auth 준비 + ID 토큰 강제 갱신(LOCAL persistence·iOS에서 규칙상 getDoc 거부 방지) */
             // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱). iPhone: 재시도
             try {
