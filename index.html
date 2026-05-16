@@ -8251,6 +8251,79 @@
     }
     window.stelvioRefreshRankingFriendSetFromFirestore = stelvioRefreshRankingFriendSetFromFirestore;
 
+    /**
+     * 랭킹/프로필 API 기본 플레이스홀더는 실제 이름으로 보지 않고 다음 fallback을 허용한다.
+     */
+    function stelvioIsRankingPlaceholderDisplayName(s) {
+      if (s == null) return true;
+      var t = String(s).trim();
+      if (!t) return true;
+      if (t === '(이름 없음)' || t === '이름 없음' || t === '(nameless)' || /^이름\s*없음/i.test(t)) return true;
+      return false;
+    }
+
+    /**
+     * 소모임 members/{uid} 문서에서 표시용 이름 후보 추출 (필드 누락·레거시 스키마 대비).
+     */
+    function stelvioMemberDocDisplayNameFromData(data) {
+      if (!data || typeof data !== 'object') return '';
+      var keys = ['displayName', 'name', 'nickname', 'userName', 'memberName', 'user_name'];
+      for (var ki = 0; ki < keys.length; ki++) {
+        var v = data[keys[ki]];
+        if (v != null) {
+          var t = String(v).trim();
+          if (t) return t;
+        }
+      }
+      return '';
+    }
+
+    /**
+     * 그룹 탭 멤버 행: 랭킹 풀·Firestore 멤버 문서·캐시·동일 기간 다른 카테고리 랭킹 순으로 이름 보강.
+     */
+    function stelvioResolveGroupTabMemberName(memDoc, rankingRow, uidStr) {
+      if (!uidStr) return '';
+      function pick(x) {
+        if (x == null) return '';
+        var s = String(x).trim();
+        return s;
+      }
+      if (rankingRow && !stelvioIsRankingPlaceholderDisplayName(rankingRow.name) && pick(rankingRow.name)) {
+        return pick(rankingRow.name);
+      }
+      if (memDoc) {
+        var fromMem = stelvioMemberDocDisplayNameFromData(memDoc);
+        if (pick(fromMem)) return pick(fromMem);
+      }
+      var gc = stelvioRankingGroupContactDataMap && stelvioRankingGroupContactDataMap[uidStr];
+      if (gc && pick(gc.name)) return pick(gc.name);
+      if (window.currentUser && String(window.currentUser.id || '') === uidStr && pick(window.currentUser.name)) {
+        return pick(window.currentUser.name);
+      }
+      try {
+        var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+        if (u && String(u.id || '') === uidStr && pick(u.name)) return pick(u.name);
+      } catch (eNm) {}
+      if (stelvioRankingByCategory) {
+        var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+        for (var ci = 0; ci < cats.length; ci++) {
+          var arr = stelvioRankingByCategory[cats[ci]] || [];
+          for (var ai = 0; ai < arr.length; ai++) {
+            var row = arr[ai];
+            if (
+              row &&
+              String(row.userId || '') === uidStr &&
+              !stelvioIsRankingPlaceholderDisplayName(row.name) &&
+              pick(row.name)
+            ) {
+              return pick(row.name);
+            }
+          }
+        }
+      }
+      return '';
+    }
+
     /** 내가 속한 소모임의 멤버 UID 세트 갱신 (주간 TOP10 비공개 처리에 활용) */
     async function stelvioRefreshGroupContactSetFromFirestore() {
       stelvioRankingGroupContactSet = new Set();
@@ -8283,7 +8356,7 @@
                 var data = d.data ? d.data() : {};
                 newMap[uid] = {
                   userId: uid,
-                  name: data.displayName || data.name || '',
+                  name: stelvioMemberDocDisplayNameFromData(data),
                   profileImageUrl: data.profileImageUrl || null,
                   role: data.role || 'member'
                 };
@@ -10374,8 +10447,8 @@
           /* 카테고리 별 랭킹 데이터 우선, 없으면 Supremo → members 문서 프로필 순으로 fallback */
           var rk = poolUid[uMem] || catRawByUid[uMem] || supE;
           var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, gcScore: 0 };
-          /* 이름/이미지 fallback: 랭킹 풀에 이름이 없으면 members 문서의 displayName 사용 */
-          if (!mergedItem.name && mem.displayName) mergedItem.name = mem.displayName;
+          var _tabMemName = stelvioResolveGroupTabMemberName(mem, mergedItem, uMem);
+          if (_tabMemName) mergedItem.name = _tabMemName;
           /* 우선순위:
              ① stelvioGroupProfileUrlMap — 랭킹 API 응답에서 구성, users 컬렉션 최신값 반영 가능성 높음
              ② Firestore 멤버 구독 데이터(mem.profileImageUrl) — 가입 시 스냅샷, 프로필 변경 후 구버전일 수 있음
