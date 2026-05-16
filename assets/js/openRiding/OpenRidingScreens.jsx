@@ -9977,38 +9977,10 @@ function OpenRidingGroupDetailView(props) {
   }
 
   var detailShellClass = 'w-full max-w-lg mx-auto';
-  var groupDetailBackBar = (
-    <div className="flex items-center">
-      <button
-        type="button"
-        className="open-riding-action-btn inline-flex items-center gap-1 rounded-lg px-1.5 py-2 -ml-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100/90"
-        onClick={onBack}
-        aria-label="그룹 관리로 뒤로 가기"
-      >
-        <svg
-          className="shrink-0 -mr-0.5"
-          width="22"
-          height="22"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-        뒤로 가기
-      </button>
-      <span className="text-xs text-slate-400 truncate ml-1">· 그룹 관리</span>
-    </div>
-  );
 
   if (!detailReady) {
     return (
-      <div className={detailShellClass + ' space-y-2'}>
-        {groupDetailBackBar}
+      <div className={detailShellClass}>
         <div className="flex flex-col items-center justify-center py-16 gap-3">
         <span
           className="inline-block h-10 w-10 rounded-full border-[3px] border-violet-200 border-t-violet-600 animate-spin"
@@ -10024,8 +9996,7 @@ function OpenRidingGroupDetailView(props) {
 
   if (!grp) {
     return (
-      <div className={detailShellClass + ' space-y-2'}>
-        {groupDetailBackBar}
+      <div className={detailShellClass}>
         <div className="text-sm text-slate-500 py-8 text-center">
         불러오는 중이거나 볼 수 없는 그룹입니다.
         <div className="mt-4">
@@ -10046,7 +10017,6 @@ function OpenRidingGroupDetailView(props) {
 
   return (
     <div className={detailShellClass + ' space-y-4 pb-6 text-left'}>
-      {groupDetailBackBar}
       <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative isolate bg-white">
         {grp.photoUrl ? (
           <>
@@ -10726,12 +10696,38 @@ function OpenRidingRoomApp(props) {
   return (
     <div className="open-riding-app-root relative z-0">
       <div className="open-riding-inner-header">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
-          <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+        <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center w-full min-w-0 flex-1 gap-x-1">
+          {view === 'groupDetail' && detailGroupId ? (
+            <button
+              type="button"
+              className="open-riding-action-btn shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100/90 -ml-0.5"
+              onClick={function () {
+                setDetailGroupId(null);
+                setView('groups');
+              }}
+              aria-label="그룹 관리로 뒤로"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+          ) : (
+            <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
+          )}
           <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
             {headerTitle}
           </h1>
-          <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+          <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
         </div>
       </div>
       {/* 스크롤 전용 본문: pseudo는 pointer-events:none. 메인·필터는 글래스 하단 네비만큼 하단 여백(style.css) */}
