@@ -6898,6 +6898,11 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #6b7280;
   font-weight: 700;
 }
+.stelvio-hero-text .stelvio-rank-change,
+.stelvio-heptagon-detail-modal__summary-row strong .stelvio-rank-change,
+.stelvio-octagon-tier-hint-rank .stelvio-rank-change {
+  font-weight: 700;
+}
 
 /* 랭킹보드 GC탭 히어로카드 펼쳐보기/접어보기 */
 .stelvio-hero-expand-toggle-row {
