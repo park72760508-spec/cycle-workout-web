@@ -11,6 +11,29 @@ var useMemo    = React.useMemo;
 var useRef     = React.useRef;
 
 // ── 헬퍼 함수 ────────────────────────────────────────────────────
+/** STRAVA 연결 여부 — 제휴 할인 이용 가능 판별 (환경 미설정 = STRAVA 미연결) */
+function affiliateIsStravaConnected() {
+  try {
+    if (
+      typeof window.AffiliateDiscountEligibility !== 'undefined' &&
+      typeof window.AffiliateDiscountEligibility.hasStrava === 'function'
+    ) {
+      return window.AffiliateDiscountEligibility.hasStrava();
+    }
+    if (
+      typeof window.AffiliateDiscountEligibility !== 'undefined' &&
+      typeof window.AffiliateDiscountEligibility.isEligible === 'function'
+    ) {
+      return window.AffiliateDiscountEligibility.isEligible();
+    }
+  } catch (e0) {}
+  var u = affiliateCurrentUser();
+  if (!u) return false;
+  var r = u.strava_refresh_token != null ? String(u.strava_refresh_token).trim() : '';
+  var a = u.strava_access_token != null ? String(u.strava_access_token).trim() : '';
+  return !!(r || a);
+}
+
 function affiliateCurrentUser() {
   try {
     if (
@@ -1187,6 +1210,12 @@ function AffiliateList(props) {
                   ].join(' ')}
                   onClick={function(){
                     if (!isClickable && !isAdmin) return;
+                    if (!affiliateIsStravaConnected() && !isAdmin) {
+                      if (typeof window.showAffiliateConnectAlert === 'function') {
+                        window.showAffiliateConnectAlert();
+                      }
+                      return;
+                    }
                     onOpenDetail(aff.id);
                   }}
                   aria-disabled={!isClickable && !isAdmin}
