@@ -92,7 +92,6 @@
         var initApp = appMod && appMod.initializeApp;
         var getAuthFn = authMod && authMod.getAuth;
         var setPersistenceFn = authMod && authMod.setPersistence;
-        var browserLocalPersistence = authMod && authMod.browserLocalPersistence;
         var browserSessionPersistence = authMod && authMod.browserSessionPersistence;
         var initFirestore = firestoreMod && firestoreMod.initializeFirestore;
         if (typeof initApp !== 'function' || typeof getAuthFn !== 'function' || typeof initFirestore !== 'function') {
@@ -100,41 +99,12 @@
         }
         var appV9 = initApp(firebaseConfig, 'authV9');
         authV9 = getAuthFn(appV9);
-        /* 초기 persistence: "로그인 상태 유지" 선택 시 LOCAL, 미선택 시 SESSION
-         * enforceAuthPersistence()도 동일 키를 읽어 적용.
-         * localStorage 소실 대비 cookie fallback 병행 */
-        if (typeof setPersistenceFn === 'function') {
-          /* localStorage가 '0'이어도 쿠키가 '1'이면 LOCAL — iOS에서 저장소 불일치 시 SESSION으로 깨지며 Firestore 미인증 유발 방지 */
-          var _wantsLocal = (function() {
-            var ls = null;
-            try {
-              ls = localStorage.getItem('stelvio_auth_persist_local');
-            } catch (eLs) {}
-            var ckIs1 = false;
-            try {
-              var _nameEQ = 'sl_stelvio_auth_persist_local=';
-              var _ca = document.cookie.split(';');
-              for (var _i = 0; _i < _ca.length; _i++) {
-                var _c = _ca[_i].trim();
-                if (_c.indexOf(_nameEQ) === 0) {
-                  ckIs1 = decodeURIComponent(_c.substring(_nameEQ.length)) === '1';
-                  break;
-                }
-              }
-            } catch (eCk) {}
-            /* LS에 명시적 '0'이면 SESSION 우선(쿠키만 남은 스테일 값 무시). LS가 비어/실패면 쿠키 '1'로 iOS 불일치 보정 */
-            if (ls === '1') return true;
-            if (ls === '0') return false;
-            return ckIs1;
-          })();
-          var _initPersistence = _wantsLocal ? browserLocalPersistence : browserSessionPersistence;
-          if (_initPersistence) {
-            /* LOCAL 전환은 IndexedDB에 쓰기까지 비동기 — 완료 전 signIn/Firestore 조합 시 iOS에서 토큰 미부착·getDoc 실패 유발 */
-            await setPersistenceFn(authV9, _initPersistence).catch(function(e) {
-              if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] setPersistence 실패:', e && e.message);
-              else console.warn('[Firebase v9] setPersistence 실패:', e && e.message);
-            });
-          }
+        /* [SESSION-only 전면 전환] browserLocalPersistence(IndexedDB) 미사용 — iOS 비동기 지연 회피. "로그인 유지"는 localStorage 수동 저장으로 처리. */
+        if (typeof setPersistenceFn === 'function' && browserSessionPersistence) {
+          await setPersistenceFn(authV9, browserSessionPersistence).catch(function (e) {
+            if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] setPersistence(SESSION) 실패:', e && e.message);
+            else console.warn('[Firebase v9] setPersistence(SESSION) 실패:', e && e.message);
+          });
         }
         if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Auth 초기화');
         else console.log('✅ Firebase v9 Auth 초기화');
@@ -15299,6 +15269,9 @@
     // isSignUpMode 변수 제거 (더 이상 사용하지 않음)
 
     window.STELVIO_AUTH_REMEMBER_KEY = 'stelvio_remember_login_v1';
+    /* [SESSION-only 로그인 유지] Firebase에 비밀번호 저장 안 함 — 자동 로그인용 평문 키(요구사항) */
+    window.STELVIO_SAVED_LOGIN_ID_KEY = 'stelvio_saved_id';
+    window.STELVIO_SAVED_LOGIN_PW_KEY = 'stelvio_saved_pw';
 
     /* ── Cookie 보조 저장소 헬퍼 ──────────────────────────────────────────
      * iOS는 저장공간 부족·ITP·Safari 데이터 삭제 등으로 localStorage가
@@ -15378,9 +15351,42 @@
     };
 
     window.clearAuthRememberCredentials = function() {
+      /* [SESSION-only] 저장 자격 증명 전부 제거 */
       window._stelvioStorageDel(window.STELVIO_AUTH_REMEMBER_KEY);
-      /* persist 플래그도 함께 초기화 */
+      try {
+        localStorage.removeItem(window.STELVIO_SAVED_LOGIN_ID_KEY);
+        localStorage.removeItem(window.STELVIO_SAVED_LOGIN_PW_KEY);
+      } catch (eRm) {}
       window._stelvioStorageSet('stelvio_auth_persist_local', '0');
+    };
+
+    /* [SESSION-only] 저장된 전화번호·비밀번호로 폼 채움 + 선택 시 자동 로그인 1회 */
+    window.stelvioScheduleAutoLoginFromSavedCredentials = function () {
+      try {
+        var idKey = window.STELVIO_SAVED_LOGIN_ID_KEY || 'stelvio_saved_id';
+        var pwKey = window.STELVIO_SAVED_LOGIN_PW_KEY || 'stelvio_saved_pw';
+        var id = localStorage.getItem(idKey);
+        var pw = localStorage.getItem(pwKey);
+        if (!id || !pw || String(pw).length === 0) return;
+        if (window.__stelvioPhoneAuthBusy) return;
+        try {
+          if (window.authV9 && window.authV9.currentUser) return;
+          if (window.auth && window.auth.currentUser) return;
+        } catch (eA) {}
+        try {
+          var cu = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+          if (cu && (cu.id != null || cu.uid != null)) return;
+        } catch (eB) {}
+        var now = Date.now();
+        var lastTs = parseInt(sessionStorage.getItem('stelvio_auto_login_ts') || '0', 10);
+        if (now - lastTs < 3500) return;
+        sessionStorage.setItem('stelvio_auto_login_ts', String(now));
+        setTimeout(function () {
+          if (typeof handlePhoneAuth !== 'function') return;
+          if (window.__stelvioPhoneAuthBusy) return;
+          handlePhoneAuth();
+        }, 450);
+      } catch (eC) {}
     };
 
     window.restoreAuthRememberCredentials = function() {
@@ -15388,6 +15394,52 @@
       var passwordInput = document.getElementById('authPasswordInput');
       var cb = document.getElementById('authRememberLogin');
       if (!phoneInput || !passwordInput || !cb) return;
+      var idKey = window.STELVIO_SAVED_LOGIN_ID_KEY || 'stelvio_saved_id';
+      var pwKey = window.STELVIO_SAVED_LOGIN_PW_KEY || 'stelvio_saved_pw';
+      /* 우선: 요구사항 키 stelvio_saved_id / stelvio_saved_pw */
+      try {
+        var sid = localStorage.getItem(idKey);
+        var spw = localStorage.getItem(pwKey);
+        if (sid && typeof spw === 'string' && spw.length > 0) {
+          phoneInput.value = sid;
+          passwordInput.value = spw;
+          if (window.formatPhoneNumber) {
+            phoneInput.value = window.formatPhoneNumber(phoneInput.value);
+          }
+          cb.checked = true;
+          console.log('[AuthRemember] stelvio_saved_* 복원 + 자동 로그인 예약');
+          if (typeof window.stelvioScheduleAutoLoginFromSavedCredentials === 'function') {
+            window.stelvioScheduleAutoLoginFromSavedCredentials();
+          }
+          return;
+        }
+      } catch (eNew) {}
+      /* 호환: 기존 JSON 통합 저장소 */
+      try {
+        var raw = window._stelvioStorageGet(window.STELVIO_AUTH_REMEMBER_KEY);
+        if (raw) {
+          var o = JSON.parse(raw);
+          if (o && o.v === 1 && o.phone && typeof o.password === 'string') {
+            phoneInput.value = o.phone;
+            passwordInput.value = o.password;
+            if (window.formatPhoneNumber) {
+              phoneInput.value = window.formatPhoneNumber(phoneInput.value);
+            }
+            cb.checked = true;
+            console.log('[AuthRemember] 레거시 JSON 복원');
+            if (typeof window.stelvioScheduleAutoLoginFromSavedCredentials === 'function') {
+              try {
+                localStorage.setItem(idKey, phoneInput.value);
+                localStorage.setItem(pwKey, o.password);
+              } catch (eM) {}
+              window.stelvioScheduleAutoLoginFromSavedCredentials();
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('[AuthRemember] 복원 실패:', err && err.message);
+      }
       var wantsPersist = false;
       try {
         var ls = localStorage.getItem('stelvio_auth_persist_local');
@@ -15405,87 +15457,7 @@
         } catch (eCk) {}
         wantsPersist = ls === '1' || (ls !== '0' && ckIs1);
       } catch (eP) {}
-      try {
-        var raw = window._stelvioStorageGet(window.STELVIO_AUTH_REMEMBER_KEY);
-        if (raw) {
-          var o = JSON.parse(raw);
-          if (o && o.v === 1 && o.phone && typeof o.password === 'string') {
-            phoneInput.value = o.phone;
-            passwordInput.value = o.password;
-            if (window.formatPhoneNumber) {
-              phoneInput.value = window.formatPhoneNumber(phoneInput.value);
-            }
-            cb.checked = true;
-            console.log('[AuthRemember] 자격증명 복원 완료');
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('[AuthRemember] 자격증명 복원 실패:', err && err.message);
-      }
-      /* JSON·쿠키 실패 시: 영속 플래그 ON이면 legacy 키(currentUser.contact + userPassword_* / lastPassword)로 복원 */
-      if (wantsPersist) {
-        try {
-          var phoneGuess = '';
-          try {
-            var cu0 = window.currentUser;
-            if (!cu0) {
-              try { cu0 = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (eCu) { cu0 = null; }
-            }
-            if (!cu0) {
-              try { cu0 = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (eCu2) { cu0 = null; }
-            }
-            if (cu0 && cu0.contact) phoneGuess = String(cu0.contact).trim();
-          } catch (ePh) {}
-          var normG = phoneGuess.replace(/\D/g, '');
-          var dashG = (normG.length === 11 && normG.indexOf('010') === 0)
-            ? normG.slice(0, 3) + '-' + normG.slice(3, 7) + '-' + normG.slice(7, 11)
-            : phoneGuess;
-          var pwGuess = '';
-          try {
-            if (dashG) pwGuess = localStorage.getItem('userPassword_' + dashG) || '';
-            if (!pwGuess && normG) pwGuess = localStorage.getItem('userPassword_' + normG) || '';
-            if (!pwGuess) pwGuess = localStorage.getItem('lastPassword') || '';
-          } catch (ePw) {}
-          if (!phoneGuess || !pwGuess) {
-            try {
-              var wantNorm = phoneGuess ? phoneGuess.replace(/\D/g, '') : '';
-              for (var ki = 0; ki < localStorage.length; ki++) {
-                var lk = localStorage.key(ki);
-                if (!lk || lk.indexOf('userPassword_') !== 0) continue;
-                var suf = lk.slice('userPassword_'.length);
-                var pv = localStorage.getItem(lk);
-                if (!suf || !pv) continue;
-                if (wantNorm && suf.replace(/\D/g, '') !== wantNorm) continue;
-                phoneGuess = phoneGuess || suf;
-                pwGuess = pv;
-                break;
-              }
-            } catch (eScan) {}
-          }
-          if (phoneGuess && pwGuess) {
-            phoneInput.value = phoneGuess;
-            passwordInput.value = pwGuess;
-            if (window.formatPhoneNumber) {
-              phoneInput.value = window.formatPhoneNumber(phoneInput.value);
-            }
-            cb.checked = true;
-            try {
-              var repayload = JSON.stringify({ v: 1, phone: phoneInput.value, password: pwGuess });
-              window._stelvioStorageSet(window.STELVIO_AUTH_REMEMBER_KEY, repayload);
-              console.log('[AuthRemember] legacy 키로 복원 후 통합 저장소 재동기화');
-            } catch (eSync) {}
-            return;
-          }
-        } catch (eLeg) {}
-      }
-      /* 저장된 비번이 없어도 "로그인 상태 유지"가 켜져 있으면 체크 표시(Firebase LOCAL과 UI 일치) */
       cb.checked = !!wantsPersist;
-      if (wantsPersist) {
-        console.log('[AuthRemember] 영속 플래그만 복원 — 체크 ON (자격증명·legacy 없음)');
-      } else {
-        console.log('[AuthRemember] 저장된 자격증명·영속 플래그 없음');
-      }
     };
 
     window.persistAuthRememberCredentialsIfChecked = function(phone, password) {
@@ -15500,13 +15472,21 @@
         if (normalized.length === 11 && normalized.indexOf('010') === 0) {
           phoneDisp = normalized.slice(0, 3) + '-' + normalized.slice(3, 7) + '-' + normalized.slice(7, 11);
         }
-        var payload = JSON.stringify({ v: 1, phone: phoneDisp, password: String(password || '') });
-        window._stelvioStorageSet(window.STELVIO_AUTH_REMEMBER_KEY, payload);
-        /* persist 플래그 동기화 */
+        /* [SESSION-only] 체크 ON일 때만 평문 저장 — 다음 방문 시 자동 입력·자동 로그인 */
+        try {
+          localStorage.setItem(window.STELVIO_SAVED_LOGIN_ID_KEY, phoneDisp);
+          localStorage.setItem(window.STELVIO_SAVED_LOGIN_PW_KEY, String(password || ''));
+        } catch (eLs) {
+          console.warn('[AuthRemember] stelvio_saved_* 저장 실패:', eLs && eLs.message);
+        }
         window._stelvioStorageSet('stelvio_auth_persist_local', '1');
-        console.log('[AuthRemember] 자격증명 저장 (localStorage + cookie 30일)');
+        try {
+          var payload = JSON.stringify({ v: 1, phone: phoneDisp, password: String(password || '') });
+          window._stelvioStorageSet(window.STELVIO_AUTH_REMEMBER_KEY, payload);
+        } catch (e2) {}
+        console.log('[AuthRemember] SESSION 모드 — localStorage 자격 저장 완료');
       } catch (e) {
-        console.warn('[AuthRemember] 자격증명 저장 실패:', e && e.message);
+        console.warn('[AuthRemember] 저장 실패:', e && e.message);
       }
     };
     
@@ -15582,7 +15562,7 @@
         console.log('🔐 로그인 시도:', { email: email, phone: phone, formattedPhone: formattedPhone });
         
         try {
-            // 🔒 로그인 상태 유지 체크박스 → Firebase persistence 적용
+            // [SESSION-only 전면 전환] Firebase Auth는 항상 SESSION. "로그인 상태 유지"는 stelvio_saved_* localStorage로만 처리.
             var _rememberCb = document.getElementById('authRememberLogin');
             var _wantsRemember = _rememberCb && _rememberCb.checked;
             try { window._stelvioStorageSet('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e) {}
@@ -15590,15 +15570,14 @@
             try {
               var _authModP = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
               var _setPersistP = _authModP && _authModP.setPersistence;
-              var _localP = _authModP && _authModP.browserLocalPersistence;
               var _sessionP = _authModP && _authModP.browserSessionPersistence;
-              if (typeof _setPersistP === 'function') {
-                if (window.authV9) await _setPersistP(window.authV9, _wantsRemember ? _localP : _sessionP).catch(function(){});
+              if (typeof _setPersistP === 'function' && _sessionP) {
+                if (window.authV9) await _setPersistP(window.authV9, _sessionP).catch(function(){});
                 if (window.auth && typeof window.auth.setPersistence === 'function' && window.firebase && window.firebase.auth && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
-                  await window.auth.setPersistence(_wantsRemember ? window.firebase.auth.Auth.Persistence.LOCAL : window.firebase.auth.Auth.Persistence.SESSION).catch(function(){});
+                  await window.auth.setPersistence(window.firebase.auth.Auth.Persistence.SESSION).catch(function(){});
                 }
               }
-              console.log('[Auth] setPersistence:', _wantsRemember ? 'LOCAL (상태 유지)' : 'SESSION (이번 세션만)');
+              console.log('[Auth] setPersistence: SESSION 고정 (browserLocalPersistence 미사용)');
             } catch(persistErr) {
               console.warn('[Auth] setPersistence 실패 (무시):', persistErr && persistErr.message);
             }
@@ -15640,7 +15619,7 @@
               }
             } catch (eEarlySave) {}
 
-            /* iOS Safari/WKWebView: browserLocalPersistence(IndexedDB) 사용 시 로그인 직후 Firestore에 토큰이 붙기 전 getDoc가 나가는 레이스 방지 */
+            /* Firestore 읽기 전 토큰 동기화(SESSION에서도 안전) */
             try {
               if (user && typeof user.getIdToken === 'function') {
                 await user.getIdToken(true);
@@ -15648,14 +15627,8 @@
             } catch (eTokSync) {
               console.warn('[Login] 토큰 강제 갱신 지연:', eTokSync && eTokSync.message);
             }
-            if (_wantsRemember) {
-              if (typeof showAuthStatus === 'function') {
-                showAuthStatus('사용자 정보 확인 중…', 'info');
-              }
-              await new Promise(function (r) { setTimeout(r, 600); });
-            }
 
-            /* Firestore 프로필 읽기 전에 Auth 준비 + ID 토큰 강제 갱신(LOCAL persistence·iOS에서 규칙상 getDoc 거부 방지) */
+            /* Firestore 프로필 읽기 전에 Auth 준비 + ID 토큰 강제 갱신 */
             // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱). iPhone: 재시도
             try {
               /** Firestore 모듈·getUserByUid 부착까지: 이벤트 + 짧은 폴링(기존 300ms×15=최대 4.5초 간헐 지연 완화) */
@@ -16062,6 +16035,12 @@
         window.currentUser = null;
         try { localStorage.removeItem('currentUser'); } catch (e) {}
         try { localStorage.removeItem('authUser'); } catch (e) {}
+        /* [SESSION-only] 명시적 로그아웃 시 저장된 로그인 자격 즉시 삭제 */
+        try {
+          if (typeof window.clearAuthRememberCredentials === 'function') {
+            window.clearAuthRememberCredentials();
+          }
+        } catch (eClear) {}
         
         // 🔒 보안: 훈련일지 상태 초기화 (다른 사용자 데이터 노출 방지)
         if (typeof window !== 'undefined' && window.miniCalendarStateJournal) {
@@ -16088,6 +16067,11 @@
         // 오류가 발생해도 UI는 업데이트
         window.currentUser = null;
         try { localStorage.removeItem('currentUser'); } catch (e) {}
+        try {
+          if (typeof window.clearAuthRememberCredentials === 'function') {
+            window.clearAuthRememberCredentials();
+          }
+        } catch (eClr2) {}
         if (typeof updateAuthBarUI === 'function') updateAuthBarUI(null);
         if (typeof showToast === 'function') showToast('로그아웃되었습니다.');
       });
