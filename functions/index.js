@@ -4230,9 +4230,37 @@ function buildPeakBoardRankMapForCategoryRows(rows) {
   return ranks;
 }
 
+/** GC rebuildHeptagonCohortRanks 와 동일: 집계 순위 맵이 실제로 바뀌었는지 */
+function peakBoardRankMapsEqual(a, b) {
+  if (!a || typeof a !== "object") a = {};
+  if (!b || typeof b !== "object") b = {};
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (let i = 0; i < keysA.length; i++) {
+    const k = keysA[i];
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (Math.floor(Number(a[k])) !== Math.floor(Number(b[k]))) return false;
+  }
+  return true;
+}
+
+function peakRankChangesAllZero(chMap) {
+  if (!chMap || typeof chMap !== "object") return false;
+  const vals = Object.values(chMap);
+  if (!vals.length) return false;
+  return vals.every((v) => Number(v) === 0);
+}
+
 function normalizePeakRankHistoryDoc(d) {
   if (!d || typeof d !== "object") {
-    return { asOfSeoul: "", ranksByCategory: {}, rankChangesByCategory: {}, previousRanksByCategory: {} };
+    return {
+      asOfSeoul: "",
+      ranksByCategory: {},
+      rankChangesByCategory: {},
+      previousRanksByCategory: {},
+      prevDayRanksByCategory: {},
+    };
   }
   if (d.ranksByCategory && typeof d.ranksByCategory === "object") {
     return {
@@ -4244,6 +4272,10 @@ function normalizePeakRankHistoryDoc(d) {
         d.previousRanksByCategory && typeof d.previousRanksByCategory === "object"
           ? d.previousRanksByCategory
           : {},
+      prevDayRanksByCategory:
+        d.prevDayRanksByCategory && typeof d.prevDayRanksByCategory === "object"
+          ? d.prevDayRanksByCategory
+          : {},
     };
   }
   return {
@@ -4253,11 +4285,13 @@ function normalizePeakRankHistoryDoc(d) {
       d.rankChanges && typeof d.rankChanges === "object" ? { Supremo: d.rankChanges } : {},
     previousRanksByCategory:
       d.previousRanks && typeof d.previousRanks === "object" ? { Supremo: d.previousRanks } : {},
+    prevDayRanksByCategory: {},
   };
 }
 
 /**
- * 비-GC 탭 순위 등락: GC·헵타곤과 같이 filterCategory(부문)별 boardRank 로 전날 대비 계산.
+ * 비-GC 탭 순위 등락: GC 헵타곤과 같이 **23:00 집계로 순위가 실제 변경될 때만** 재계산.
+ * 달력만 바뀌고(자정) 순위가 동일하면 전날 23:00에 저장된 등락을 유지한다.
  *
  * @param {import('firebase-admin').firestore.Firestore} db
  * @param {Record<string, any[]>} byCategory
@@ -4269,21 +4303,19 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
   const ref = db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey);
 
   let prevNorm = normalizePeakRankHistoryDoc(null);
-  let prevAsOf = "";
   try {
     const snap = await ref.get();
     if (snap.exists) {
       prevNorm = normalizePeakRankHistoryDoc(snap.data());
-      prevAsOf = prevNorm.asOfSeoul || "";
     }
   } catch (eRead) {
     console.warn("[applyPeakRankChanges] 이전 순위 읽기 실패:", historyKey, eRead && eRead.message);
   }
 
-  const isNewDay = prevAsOf !== todayYmd;
   const newRanksByCategory = {};
   const newRankChangesByCategory = {};
   const newPreviousRanksByCategory = {};
+  const newPrevDayRanksByCategory = {};
 
   for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
     const rows = byCategory[cat];
@@ -4293,16 +4325,44 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
     newRanksByCategory[cat] = currRanks;
 
     const prevRanksCat =
-      isNewDay && prevNorm.ranksByCategory[cat] && typeof prevNorm.ranksByCategory[cat] === "object"
+      prevNorm.ranksByCategory[cat] && typeof prevNorm.ranksByCategory[cat] === "object"
         ? prevNorm.ranksByCategory[cat]
         : {};
+    const prevDayRanksCat =
+      prevNorm.prevDayRanksByCategory[cat] && typeof prevNorm.prevDayRanksByCategory[cat] === "object"
+        ? prevNorm.prevDayRanksByCategory[cat]
+        : {};
     const prevChangesCat =
-      !isNewDay && prevNorm.rankChangesByCategory[cat] ? prevNorm.rankChangesByCategory[cat] : {};
+      prevNorm.rankChangesByCategory[cat] && typeof prevNorm.rankChangesByCategory[cat] === "object"
+        ? prevNorm.rankChangesByCategory[cat]
+        : {};
     const prevPreviousCat =
-      !isNewDay && prevNorm.previousRanksByCategory[cat] ? prevNorm.previousRanksByCategory[cat] : {};
+      prevNorm.previousRanksByCategory[cat] && typeof prevNorm.previousRanksByCategory[cat] === "object"
+        ? prevNorm.previousRanksByCategory[cat]
+        : {};
 
-    newRankChangesByCategory[cat] = {};
-    newPreviousRanksByCategory[cat] = {};
+    let ranksChanged = !peakBoardRankMapsEqual(prevRanksCat, currRanks);
+    let compareBaseline = prevRanksCat;
+
+    /* 자정 이후 순위 동일·등락만 0으로 잘못 저장된 경우: 전전일(23:00 직전) 스냅샷으로 복구 */
+    if (
+      !ranksChanged &&
+      Object.keys(prevDayRanksCat).length > 0 &&
+      peakBoardRankMapsEqual(prevRanksCat, currRanks) &&
+      !peakBoardRankMapsEqual(prevDayRanksCat, currRanks) &&
+      peakRankChangesAllZero(prevChangesCat)
+    ) {
+      ranksChanged = true;
+      compareBaseline = prevDayRanksCat;
+    }
+
+    newRankChangesByCategory[cat] = ranksChanged ? {} : Object.assign({}, prevChangesCat);
+    newPreviousRanksByCategory[cat] = ranksChanged ? {} : Object.assign({}, prevPreviousCat);
+    newPrevDayRanksByCategory[cat] = ranksChanged
+      ? compareBaseline
+      : Object.keys(prevDayRanksCat).length
+        ? prevDayRanksCat
+        : prevRanksCat;
 
     for (let i = 0; i < rows.length; i++) {
       const e = rows[i];
@@ -4314,9 +4374,9 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
       delete e.rankChange;
       delete e.previousBoardRank;
 
-      if (isNewDay) {
-        if (prevRanksCat[uid] != null) {
-          const prev = Math.floor(Number(prevRanksCat[uid]));
+      if (ranksChanged) {
+        if (compareBaseline[uid] != null) {
+          const prev = Math.floor(Number(compareBaseline[uid]));
           if (isFinite(prev) && prev >= 1) {
             e.rankChange = prev - curr;
             e.previousBoardRank = prev;
@@ -4335,23 +4395,14 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
   }
 
   try {
-    if (isNewDay) {
-      await ref.set({
-        asOfSeoul: todayYmd,
-        ranksByCategory: newRanksByCategory,
-        rankChangesByCategory: newRankChangesByCategory,
-        previousRanksByCategory: newPreviousRanksByCategory,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    } else {
-      await ref.set(
-        {
-          ranksByCategory: newRanksByCategory,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-    }
+    await ref.set({
+      asOfSeoul: todayYmd,
+      ranksByCategory: newRanksByCategory,
+      rankChangesByCategory: newRankChangesByCategory,
+      previousRanksByCategory: newPreviousRanksByCategory,
+      prevDayRanksByCategory: newPrevDayRanksByCategory,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   } catch (eWrite) {
     console.warn("[applyPeakRankChanges] 스냅샷 저장 실패:", historyKey, eWrite && eWrite.message);
   }
