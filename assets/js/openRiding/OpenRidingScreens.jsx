@@ -9976,9 +9976,40 @@ function OpenRidingGroupDetailView(props) {
       });
   }
 
+  var detailShellClass = 'w-full max-w-lg mx-auto';
+  var groupDetailBackBar = (
+    <div className="flex items-center">
+      <button
+        type="button"
+        className="open-riding-action-btn inline-flex items-center gap-1 rounded-lg px-1.5 py-2 -ml-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100/90"
+        onClick={onBack}
+        aria-label="그룹 관리로 뒤로 가기"
+      >
+        <svg
+          className="shrink-0 -mr-0.5"
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        뒤로 가기
+      </button>
+      <span className="text-xs text-slate-400 truncate ml-1">· 그룹 관리</span>
+    </div>
+  );
+
   if (!detailReady) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
+      <div className={detailShellClass + ' space-y-2'}>
+        {groupDetailBackBar}
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
         <span
           className="inline-block h-10 w-10 rounded-full border-[3px] border-violet-200 border-t-violet-600 animate-spin"
           style={{ animationDuration: '0.85s' }}
@@ -9986,18 +10017,22 @@ function OpenRidingGroupDetailView(props) {
           aria-label="불러오는 중"
         />
         <span className="text-xs text-slate-500">그룹 정보를 불러오는 중…</span>
+        </div>
       </div>
     );
   }
 
   if (!grp) {
     return (
-      <div className="text-sm text-slate-500 py-8 text-center">
+      <div className={detailShellClass + ' space-y-2'}>
+        {groupDetailBackBar}
+        <div className="text-sm text-slate-500 py-8 text-center">
         불러오는 중이거나 볼 수 없는 그룹입니다.
         <div className="mt-4">
           <button type="button" className="text-violet-700 font-medium underline" onClick={onBack}>
             목록으로
           </button>
+        </div>
         </div>
       </div>
     );
@@ -10010,7 +10045,8 @@ function OpenRidingGroupDetailView(props) {
   var canModerateJoin = approved && (isOwner || isAdmin);
 
   return (
-    <div className="w-full max-w-lg mx-auto space-y-4 pb-6 text-left">
+    <div className={detailShellClass + ' space-y-4 pb-6 text-left'}>
+      {groupDetailBackBar}
       <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative isolate bg-white">
         {grp.photoUrl ? (
           <>
