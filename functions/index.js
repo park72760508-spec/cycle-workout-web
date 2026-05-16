@@ -5954,6 +5954,7 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     const cacheKey = `peakRanking_v2_${period}_${durationType}_${gender}_${startStr}_${endStr}`;
+    const forceRankMv = req.query.rankMv === "1" || req.query.rankMv === "true";
     /**
      * Max·구간 피크 탭: 사전 집계/메모리 캐시 응답에도 `peak_rank_history` 기준 등락을 매 요청 보강.
      * (집계 문서가 옛날 포맷이거나 필드 누락이어도 GC 탭과 동일하게 UI에 반영되도록)
@@ -5966,8 +5967,10 @@ exports.getPeakPowerRanking = onRequest(
         payload.entries,
         `peak_${durationType}_${period}_${gender}`
       );
+      propagatePeakRankMovementAcrossCategories(payload.byCategory);
     }
-    const aggPeak = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+    const aggPeak =
+      forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
     if (aggPeak && aggPeak.byCategory) {
       let out = {
         success: true,
@@ -6007,9 +6010,9 @@ exports.getPeakPowerRanking = onRequest(
       return res.status(200).json(out);
     }
     const cacheRef = db.collection("cache").doc(cacheKey);
-    const cacheSnap = await cacheRef.get();
+    const cacheSnap = forceRankMv ? null : await cacheRef.get();
     const nowMs = Date.now();
-    if (cacheSnap.exists) {
+    if (cacheSnap && cacheSnap.exists) {
       const data = cacheSnap.data();
       const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
       if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
