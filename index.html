@@ -11506,13 +11506,13 @@
             '<span class="stelvio-rank-pos">' +
             rkIn +
             '위</span>' +
-            rankChG +
             '<span class="stelvio-rank-name">' +
             stelvioRankingAvatarHtml(profRow, { userId: itRow.userId, overlayName: nmRow, ageCategory: itRow.ageCategory }) +
             '<span class="stelvio-rank-name-text" title="' +
             rkRaw +
             '">' +
             nmRow +
+            rankChG +
             '</span>' +
             bdge +
             '<span class="stelvio-rank-star-slot">' +
@@ -11549,15 +11549,14 @@
           var posN = rowEl.querySelector(':scope > .stelvio-rank-pos');
           if (posN) {
             posN.textContent = rankInGroup + '위';
-            var nextSib = posN.nextElementSibling;
-            var rankChEl = nextSib && nextSib.classList && nextSib.classList.contains('stelvio-rank-change')
-              ? nextSib
-              : null;
-            var rankChHtml = stelvioServerRankChangeBadgeHtml(it.rankChange, it.previousBoardRank);
-            if (rankChHtml) {
-              if (rankChEl) rankChEl.outerHTML = rankChHtml;
-              else posN.insertAdjacentHTML('afterend', rankChHtml);
-            } else if (rankChEl) rankChEl.parentNode.removeChild(rankChEl);
+            var rankChBesidePos = posN.nextElementSibling;
+            if (
+              rankChBesidePos &&
+              rankChBesidePos.classList &&
+              rankChBesidePos.classList.contains('stelvio-rank-change')
+            ) {
+              rankChBesidePos.parentNode.removeChild(rankChBesidePos);
+            }
           }
           var nw = rowEl.querySelector(':scope > .stelvio-rank-name');
           if (!nw || !nw.querySelector('.stelvio-rank-avatar-btn')) {
@@ -11593,7 +11592,8 @@
           stelvioRankImgSetSrcIfChanged(nw.querySelector('.stelvio-rank-avatar-img'), profKey);
           var nt = nw.querySelector('.stelvio-rank-name-text');
           if (nt) {
-            nt.innerHTML = nm;
+            var rankChNm = stelvioServerRankChangeBadgeHtml(it.rankChange, it.previousBoardRank);
+            nt.innerHTML = nm + rankChNm;
             nt.setAttribute('title', rawNm);
           }
           var oldBadges = nw.querySelectorAll('.ranking-private-badge, .stelvio-rank-owner-badge');
