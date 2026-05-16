@@ -9616,7 +9616,7 @@
       durations.forEach(function (dur, idx) {
         setTimeout(function () {
           try {
-            var params = new URLSearchParams({ period: 'monthly', duration: dur, gender: 'all' });
+            var params = new URLSearchParams({ period: 'monthly', duration: dur, gender: 'all', rankMv: '1' });
             if (uid) params.set('uid', uid);
             var lcKey = stelvioPeakRankingLcKey(params.toString());
             var cached = stelvioRankingLocalCache.get(lcKey);
@@ -9981,7 +9981,7 @@
       }
     }
 
-    var STELVIO_PEAK_RANK_SNAPSHOT_PREFIX = 'stelvio_peak_rank_snap:';
+    var STELVIO_PEAK_RANK_SNAPSHOT_PREFIX = 'stelvio_peak_rank_snap:v2:';
 
     function stelvioSeoulYmd() {
       try {
@@ -9991,22 +9991,158 @@
       }
     }
 
+    function stelvioPeakRankMoveParamsFromData(data) {
+      return {
+        period:
+          (data && data.period) ||
+          (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) ||
+          'monthly',
+        duration:
+          (data && data.durationType) ||
+          (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.duration) ||
+          '',
+        gender:
+          (data && data.gender) ||
+          (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.gender) ||
+          'all',
+      };
+    }
+
+    /** 기간(start/end)이 바뀌어도 동일 탭·필터는 같은 스냅샷 키를 쓴다 */
     function stelvioPeakRankSnapshotStorageKey(data) {
-      var period =
-        (data && data.period) ||
-        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) ||
-        'monthly';
-      var duration =
-        (data && data.durationType) ||
-        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.duration) ||
-        '';
-      var gender =
-        (data && data.gender) ||
-        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.gender) ||
-        'all';
+      var p = stelvioPeakRankMoveParamsFromData(data);
+      return STELVIO_PEAK_RANK_SNAPSHOT_PREFIX + [p.period, p.duration, p.gender].join('|');
+    }
+
+    function stelvioReadPeakRankSnapshot(snapKey, data) {
+      try {
+        var raw = localStorage.getItem(snapKey);
+        if (raw) return JSON.parse(raw);
+      } catch (e0) {}
+      var p = stelvioPeakRankMoveParamsFromData(data);
       var startStr = (data && data.startStr) || '';
       var endStr = (data && data.endStr) || '';
-      return STELVIO_PEAK_RANK_SNAPSHOT_PREFIX + [period, duration, gender, startStr, endStr].join('|');
+      if (!startStr && !endStr) return null;
+      try {
+        var legacyKey =
+          'stelvio_peak_rank_snap:' + [p.period, p.duration, p.gender, startStr, endStr].join('|');
+        var rawL = localStorage.getItem(legacyKey);
+        if (rawL) return JSON.parse(rawL);
+      } catch (e1) {}
+      return null;
+    }
+
+    /** 23:00 KST 롤오버 이전에 저장된 peak 랭킹 localStorage에서 전날 순위 맵 추출 */
+    function stelvioLoadPeakRanksFromRankingLocalCache(params) {
+      var beforeMs =
+        typeof stelvioGetLastRolloverTs === 'function' ? stelvioGetLastRolloverTs() : Date.now() - 86400000;
+      var bestRanks = null;
+      var bestAt = 0;
+      var needle = 'duration=' + encodeURIComponent(params.duration || '');
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (!k || k.indexOf(STELVIO_RANKING_LC_PREFIX) !== 0) continue;
+          if (k.indexOf(STELVIO_PEAK_LC_KEY_PREFIX) < 0) continue;
+          if (k.indexOf(needle) < 0) continue;
+          if (params.period && k.indexOf('period=' + encodeURIComponent(params.period)) < 0) continue;
+          if (params.gender && k.indexOf('gender=' + encodeURIComponent(params.gender)) < 0) continue;
+          var raw = localStorage.getItem(k);
+          if (!raw) continue;
+          var entry = JSON.parse(raw);
+          if (!entry || !entry.data || !entry.data.byCategory) continue;
+          if (!entry.cachedAt || entry.cachedAt >= beforeMs) continue;
+          var ranks = stelvioBuildPeakRankMapFromSupremo(entry.data.byCategory);
+          if (!Object.keys(ranks).length) continue;
+          if (entry.cachedAt >= bestAt) {
+            bestAt = entry.cachedAt;
+            bestRanks = ranks;
+          }
+        }
+      } catch (eScan) {}
+      return bestRanks;
+    }
+
+    function stelvioResolvePreviousPeakRanksBaseline(data, stored, today) {
+      var baseline = {};
+      var uid;
+      function mergeMap(src) {
+        if (!src || typeof src !== 'object') return;
+        for (uid in src) {
+          if (Object.prototype.hasOwnProperty.call(src, uid)) baseline[uid] = src[uid];
+        }
+      }
+      if (stored && stored.prevDayRanks && typeof stored.prevDayRanks === 'object') {
+        mergeMap(stored.prevDayRanks);
+      }
+      if (stored && stored.asOfSeoul && stored.asOfSeoul !== today && stored.ranks) {
+        mergeMap(stored.ranks);
+      }
+      var fromLc = stelvioLoadPeakRanksFromRankingLocalCache(stelvioPeakRankMoveParamsFromData(data));
+      if (fromLc) mergeMap(fromLc);
+      return baseline;
+    }
+
+    function stelvioApplyPeakRankChangeToRow(row, uid, curr, baseline, outChanges, outPrevious) {
+      if (!row || curr == null || curr < 1) return;
+      if (row.rankChange != null && row.previousBoardRank != null) return;
+      if (baseline[uid] == null) return;
+      var prev = Math.floor(Number(baseline[uid]));
+      if (!isFinite(prev) || prev < 1) return;
+      row.rankChange = prev - curr;
+      row.previousBoardRank = prev;
+      outChanges[uid] = row.rankChange;
+      outPrevious[uid] = prev;
+    }
+
+    /** API entries에만 붙은 rankChange를 byCategory 전 행에 복사 */
+    function stelvioSyncPeakRankMovementFromEntries(data) {
+      if (!data || !data.byCategory) return;
+      var dt =
+        data.durationType ||
+        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.duration) ||
+        '';
+      if (!stelvioIsPeakPowerDurationForRankChange(dt)) return;
+      var map = {};
+      var CATS_E = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      var ci;
+      function ingest(r) {
+        if (!r || r.userId == null || r.rankChange == null || r.previousBoardRank == null) return;
+        var rcN = Number(r.rankChange);
+        var prN = Math.floor(Number(r.previousBoardRank));
+        if (!isFinite(rcN) || !isFinite(prN) || prN < 1) return;
+        map[String(r.userId)] = { rankChange: rcN, previousBoardRank: prN };
+      }
+      if (Array.isArray(data.entries)) {
+        for (ci = 0; ci < data.entries.length; ci++) ingest(data.entries[ci]);
+      }
+      var sup = data.byCategory.Supremo;
+      if (Array.isArray(sup)) {
+        for (ci = 0; ci < sup.length; ci++) ingest(sup[ci]);
+      }
+      if (!Object.keys(map).length) return;
+      for (ci = 0; ci < CATS_E.length; ci++) {
+        var rows = data.byCategory[CATS_E[ci]];
+        if (!Array.isArray(rows)) continue;
+        for (var ri = 0; ri < rows.length; ri++) {
+          var row = rows[ri];
+          if (!row || row.userId == null) continue;
+          var pk = map[String(row.userId)];
+          if (!pk) continue;
+          row.rankChange = pk.rankChange;
+          row.previousBoardRank = pk.previousBoardRank;
+        }
+      }
+    }
+
+    function stelvioPeakRankMovementPresentOnPayload(data) {
+      if (!data || !data.byCategory) return false;
+      var sup = data.byCategory.Supremo || [];
+      for (var i = 0; i < sup.length; i++) {
+        var r = sup[i];
+        if (r && r.rankChange != null && r.previousBoardRank != null) return true;
+      }
+      return false;
     }
 
     function stelvioBuildPeakRankMapFromSupremo(byCategory) {
@@ -10023,8 +10159,7 @@
     }
 
     /**
-     * Max·구간 피크: 서버 peak_rank_history 미배포·스냅샷 없을 때도 전날 대비 등락 표시.
-     * 서버가 rankChange를 내려주면 그 값을 우선하고, 없을 때만 localStorage 스냅샷으로 보강.
+     * Max·구간 피크: 전날(23:00 KST 롤오버) 대비 등락 — 서버 값 우선, 없으면 스냅샷·랭킹 캐시·당일 첫 조회 기준.
      */
     function stelvioApplyClientPeakRankMovementFromSnapshot(data) {
       if (!data || !data.byCategory) return;
@@ -10034,23 +10169,38 @@
         '';
       if (!stelvioIsPeakPowerDurationForRankChange(duration)) return;
       if (!data.durationType) data.durationType = duration;
+      if (!data.period && typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) {
+        data.period = stelvioRankingState.period;
+      }
+      if (!data.gender && typeof stelvioRankingState !== 'undefined' && stelvioRankingState.gender) {
+        data.gender = stelvioRankingState.gender;
+      }
+
+      stelvioSyncPeakRankMovementFromEntries(data);
 
       var today = stelvioSeoulYmd();
       var snapKey = stelvioPeakRankSnapshotStorageKey(data);
       var currRanks = stelvioBuildPeakRankMapFromSupremo(data.byCategory);
-      var stored = null;
-      try {
-        var rawSnap = localStorage.getItem(snapKey);
-        if (rawSnap) stored = JSON.parse(rawSnap);
-      } catch (eSnap) {}
+      var stored = stelvioReadPeakRankSnapshot(snapKey, data);
 
-      var isNewDay = !stored || stored.asOfSeoul !== today;
+      var baseline = stelvioResolvePreviousPeakRanksBaseline(data, stored, today);
+      /* 당일 2회째 이상 방문: 오늘 첫 스냅샷 대비 등락(전날 기준이 없을 때 즉시 표시용) */
+      if (
+        !Object.keys(baseline).length &&
+        stored &&
+        stored.asOfSeoul === today &&
+        stored.ranks &&
+        typeof stored.ranks === 'object'
+      ) {
+        baseline = Object.assign({}, stored.ranks);
+      }
+
       var newRankChanges =
-        stored && stored.rankChanges && typeof stored.rankChanges === 'object'
+        stored && stored.asOfSeoul === today && stored.rankChanges && typeof stored.rankChanges === 'object'
           ? Object.assign({}, stored.rankChanges)
           : {};
       var newPreviousRanks =
-        stored && stored.previousRanks && typeof stored.previousRanks === 'object'
+        stored && stored.asOfSeoul === today && stored.previousRanks && typeof stored.previousRanks === 'object'
           ? Object.assign({}, stored.previousRanks)
           : {};
 
@@ -10065,25 +10215,7 @@
             : currRanks[uid] != null
               ? currRanks[uid]
               : null;
-        if (curr == null || curr < 1) return;
-        if (row.rankChange != null && row.previousBoardRank != null) return;
-
-        if (isNewDay) {
-          var prevRanks = (stored && stored.ranks) || {};
-          if (prevRanks[uid] != null) {
-            var prev = Math.floor(Number(prevRanks[uid]));
-            if (isFinite(prev) && prev >= 1) {
-              row.rankChange = prev - curr;
-              row.previousBoardRank = prev;
-              newRankChanges[uid] = row.rankChange;
-              newPreviousRanks[uid] = prev;
-            }
-          }
-        } else if (newRankChanges[uid] != null) {
-          row.rankChange = Number(newRankChanges[uid]);
-          row.previousBoardRank =
-            newPreviousRanks[uid] != null ? Number(newPreviousRanks[uid]) : null;
-        }
+        stelvioApplyPeakRankChangeToRow(row, uid, curr, baseline, newRankChanges, newPreviousRanks);
       }
 
       var csi;
@@ -10098,12 +10230,22 @@
       if (data.currentUser) applySnapRow(data.currentUser);
       if (data.myRankSupremo) applySnapRow(data.myRankSupremo);
 
+      var prevDayRanksToStore = {};
+      if (stored && stored.asOfSeoul !== today && stored.ranks) {
+        prevDayRanksToStore = Object.assign({}, stored.ranks);
+      } else if (Object.keys(baseline).length) {
+        prevDayRanksToStore = Object.assign({}, baseline);
+      } else if (stored && stored.prevDayRanks) {
+        prevDayRanksToStore = Object.assign({}, stored.prevDayRanks);
+      }
+
       try {
         localStorage.setItem(
           snapKey,
           JSON.stringify({
             asOfSeoul: today,
             ranks: currRanks,
+            prevDayRanks: prevDayRanksToStore,
             rankChanges: newRankChanges,
             previousRanks: newPreviousRanks,
             savedAt: Date.now(),
@@ -10169,6 +10311,7 @@
       if (!data.gender && typeof stelvioRankingState !== 'undefined' && stelvioRankingState.gender) {
         data.gender = stelvioRankingState.gender;
       }
+      stelvioSyncPeakRankMovementFromEntries(data);
       stelvioApplyClientPeakRankMovementFromSnapshot(data);
       stelvioEnsurePeakPowerRankMovementOnPayload(data);
       /* GC API에 profileImageUrl이 없는 사용자를 다른 metric 캐시로 보충 */
@@ -10223,6 +10366,8 @@
         gender: genderParam,
       });
       if (uid) params.set('uid', uid);
+      var isPeakDur = stelvioIsPeakPowerDurationForRankChange(apiDuration);
+      if (isPeakDur) params.set('rankMv', '1');
       var swrKey = params.toString();
       var lcKey = stelvioPeakRankingLcKey(swrKey);
       var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + swrKey;
@@ -10243,6 +10388,7 @@
           stelvioApplyPeakRankingFetchResult(body, myGen, uid);
         }
         stelvioApplyDurationModeUi();
+        return stelvioPeakRankMovementPresentOnPayload(body);
       }
 
       /** 백그라운드 재검증: 서버에서 최신 데이터를 가져와 캐시·UI 갱신 */
@@ -10279,8 +10425,10 @@
       /* 롤오버 이전에 캐시된 SWR은 "유효"로 보지 않고 즉시 표시 후 백그라운드 재검증 */
       var swrIsPostRollover = swrValid && lastRollover > 0 && swr.ts < lastRollover;
       if (swrValid && !swrIsPostRollover && nowMs - swr.ts < STELVIO_RANKING_SWR_MAX_MS) {
-        applyFromCache(swr.body);
-        return; // SWR TTL 내·롤오버 이전 → 백그라운드 재검증 불필요
+        var swrHasMv = applyFromCache(swr.body);
+        if (!isPeakDur || swrHasMv) return;
+        bgRevalidate().catch(function () {});
+        return;
       }
 
       // ── 2순위: localStorage 캐시 (다음 23:00 KST까지 유효) ──
@@ -10288,10 +10436,15 @@
       if (lcEntry && lcEntry.data && lcEntry.data.success && lcEntry.data.byCategory) {
         // in-memory SWR도 즉시 갱신
         stelvioRankingSwrCache = { key: swrKey, body: lcEntry.data, ts: Date.now() };
-        applyFromCache(lcEntry.data);
-        /* 10분 이상 경과 OR 롤오버 이전 캐시 → 로딩 표시 없이 백그라운드 재검증 */
+        var lcHasMv = applyFromCache(lcEntry.data);
+        /* 10분 이상 경과 OR 롤오버 이전 캐시 OR 피크 등락 없음 → 백그라운드 재검증 */
         var lcIsPostRollover = lastRollover > 0 && lcEntry.cachedAt < lastRollover;
-        if (stelvioRankingLocalCache.isStale(lcEntry) || lcIsPostRollover) {
+        if (
+          isPeakDur &&
+          (!lcHasMv || stelvioRankingLocalCache.isStale(lcEntry) || lcIsPostRollover)
+        ) {
+          bgRevalidate().catch(function () {});
+        } else if (stelvioRankingLocalCache.isStale(lcEntry) || lcIsPostRollover) {
           bgRevalidate().catch(function () {});
         }
         return;
