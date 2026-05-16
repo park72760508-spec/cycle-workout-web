@@ -8106,8 +8106,8 @@
     // 매일 23:00 KST(= UTC 14:00) 업데이트에 맞춰 만료되므로 앱 재시작 후에도
     // 당일 23:00 이전이면 서버 요청 없이 즉시 표시된다.
     // 스케줄러 외 수동집계 발생 시에는 clearAll()로 즉시 무효화한다.
-    /* v2: 피크(Max·구간) 탭 등락 필드 보강 배포 후 구 캐시(필드 없음) 일괄 무효화 */
-    var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v2:';
+    /* v3: 피크 탭 등락 entries/byCategory 동기화 + 히어로 주입 보강 반영 후 캐시 무효화 */
+    var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_STALE_MS = 10 * 60 * 1000; // 10분 후 백그라운드 재검증
     var stelvioRankingLocalCache = (function () {
       /** 다음 23:00 KST(UTC 14:00) 타임스탬프를 구한다. */
@@ -9795,6 +9795,67 @@
      * GC 탭 메인 목록(buildSupremoRow)과 그룹탭 양쪽이 stelvioRankingByCategory를
      * 공유하므로 여기서 한 번만 처리하면 두 탭 모두 해결된다.
      */
+    /**
+     * Max·구간 피크 탭: entries ↔ Supremo ↔ 연령대 행 간 rankChange/previousBoardRank 통일.
+     * JSON 역직렬화 후 객체가 갈라져 일부 행에만 필드가 있거나 문자열로 올 때 GC와 동일 표시를 맞춘다.
+     */
+    function stelvioEnsurePeakPowerRankMovementOnPayload(data) {
+      if (!data || !data.byCategory || typeof data.byCategory !== 'object') return;
+      var dt = data.durationType;
+      if (!dt || dt === 'gc' || dt === 'tss' || dt === 'personal_dist' || dt === 'group_dist') return;
+      var peak = { max: 1, '1min': 1, '5min': 1, '10min': 1, '20min': 1, '40min': 1, '60min': 1 };
+      if (!peak[dt]) return;
+      var map = {};
+      function addFromRow(r) {
+        if (!r || r.userId == null) return;
+        var rc = r.rankChange;
+        var pr = r.previousBoardRank;
+        if (rc == null || pr == null) return;
+        var rcN = Number(rc);
+        var prN = Math.floor(Number(pr));
+        if (!isFinite(rcN) || !isFinite(prN) || prN < 1) return;
+        map[String(r.userId)] = { rankChange: rcN, previousBoardRank: prN };
+      }
+      var ei;
+      if (Array.isArray(data.entries)) {
+        for (ei = 0; ei < data.entries.length; ei++) addFromRow(data.entries[ei]);
+      }
+      var sup = data.byCategory.Supremo;
+      if (Array.isArray(sup)) {
+        for (ei = 0; ei < sup.length; ei++) addFromRow(sup[ei]);
+      }
+      var mk = Object.keys(map);
+      if (!mk.length) return;
+      var CATS = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      var ci;
+      for (ci = 0; ci < CATS.length; ci++) {
+        var rows = data.byCategory[CATS[ci]];
+        if (!Array.isArray(rows)) continue;
+        for (var ri = 0; ri < rows.length; ri++) {
+          var row = rows[ri];
+          if (!row || row.userId == null) continue;
+          var pk = map[String(row.userId)];
+          if (!pk) continue;
+          row.rankChange = pk.rankChange;
+          row.previousBoardRank = pk.previousBoardRank;
+        }
+      }
+      if (data.currentUser && data.currentUser.userId != null) {
+        var pc = map[String(data.currentUser.userId)];
+        if (pc) {
+          data.currentUser.rankChange = pc.rankChange;
+          data.currentUser.previousBoardRank = pc.previousBoardRank;
+        }
+      }
+      if (data.myRankSupremo && data.myRankSupremo.userId != null) {
+        var pm = map[String(data.myRankSupremo.userId)];
+        if (pm) {
+          data.myRankSupremo.rankChange = pm.rankChange;
+          data.myRankSupremo.previousBoardRank = pm.previousBoardRank;
+        }
+      }
+    }
+
     function stelvioEnrichMissingProfileImages(data) {
       if (!data || !data.byCategory) return;
       var fallback = stelvioCollectAllCachedProfileUrls();
@@ -9843,6 +9904,7 @@
       if (uid && typeof stelvioMergeViewerProfileImageIntoRankingPayload === 'function') {
         stelvioMergeViewerProfileImageIntoRankingPayload(data, uid);
       }
+      stelvioEnsurePeakPowerRankMovementOnPayload(data);
       /* GC API에 profileImageUrl이 없는 사용자를 다른 metric 캐시로 보충 */
       stelvioEnrichMissingProfileImages(data);
       stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
@@ -10066,8 +10128,21 @@
       var g = String(Math.floor(globalRank));
       var re = new RegExp('(전체 |최고 )(' + g + ')위');
       var m = re.exec(msg);
-      if (!m) return msg;
-      return msg.slice(0, m.index + m[0].length) + deltaHtml + msg.slice(m.index + m[0].length);
+      if (m) {
+        return msg.slice(0, m.index + m[0].length) + deltaHtml + msg.slice(m.index + m[0].length);
+      }
+      /* GC: "종합 랭킹) 전체 N위", 피크: "평균파워 전체 N위", "… 부문 …, 전체 N위" 등 공백 변형 */
+      var reLoose = new RegExp('전체\\s*' + g + '위');
+      var m2 = reLoose.exec(msg);
+      if (m2) {
+        return msg.slice(0, m2.index + m2[0].length) + deltaHtml + msg.slice(m2.index + m2[0].length);
+      }
+      var reBest = new RegExp('최고\\s*' + g + '위');
+      var m3 = reBest.exec(msg);
+      if (m3) {
+        return msg.slice(0, m3.index + m3[0].length) + deltaHtml + msg.slice(m3.index + m3[0].length);
+      }
+      return msg;
     }
 
     function stelvioTeardownGroupTabState() {
