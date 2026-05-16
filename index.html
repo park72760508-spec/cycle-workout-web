@@ -13891,6 +13891,40 @@
         } catch (err) {}
         return '';
       }
+      window.getOpenRidingUserId = getOpenRidingUserId;
+
+      /** 모바일: 세션 복원 전 Firestore가 비인증으로 붙는 것 방지 */
+      async function waitOpenRidingAuthAndFirestore(maxMs) {
+        maxMs = maxMs || 12000;
+        var t0 = Date.now();
+        while (!window.firestoreV9 && Date.now() - t0 < Math.min(maxMs, 4000)) {
+          await new Promise(function (r) {
+            setTimeout(r, 80);
+          });
+        }
+        try {
+          if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
+            await Promise.race([
+              window.authV9.authStateReady(),
+              new Promise(function (r) {
+                setTimeout(r, maxMs);
+              })
+            ]);
+            return;
+          }
+        } catch (eA) {}
+        while (Date.now() - t0 < maxMs) {
+          if (window.authV9 && window.authV9.currentUser) return;
+          if (window.auth && window.auth.currentUser) return;
+          try {
+            var ju = JSON.parse(localStorage.getItem('authUser') || 'null');
+            if (ju && ju.id != null) return;
+          } catch (eB) {}
+          await new Promise(function (r) {
+            setTimeout(r, 120);
+          });
+        }
+      }
       function getOpenRidingUserLabel() {
         try {
           var c = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
@@ -13920,6 +13954,7 @@
           rootEl.innerHTML = '<p class="text-sm text-amber-800 px-2">오픈 라이딩 훅 로드 실패. 새로고침해 주세요.</p>';
           return;
         }
+        await waitOpenRidingAuthAndFirestore(12000);
         var firestore = window.firestoreV9 || null;
         var storage = window.firebaseStorageV9 || null;
         var userId = getOpenRidingUserId();
