@@ -8976,7 +8976,7 @@ function OpenRidingGroupsList(props) {
                       )}
                     </span>
                     {pending && (isAdmin || isHost) ? (
-                      <span className="absolute -bottom-1 -right-1 rounded-full bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 border border-white shadow">
+                      <span className="absolute -bottom-1 -right-1 rounded-full bg-amber-500 text-white text-[18px] font-bold px-3 py-1 border-2 border-white shadow leading-none">
                         승인 대기
                       </span>
                     ) : null}
@@ -8986,8 +8986,8 @@ function OpenRidingGroupsList(props) {
                       if (!cnt || cnt <= 0) return null;
                       return (
                         <span
-                          className="absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold border-2 border-white shadow pointer-events-none"
-                          style={{ minWidth: '18px', height: '18px', fontSize: cnt > 9 ? 8 : 9, paddingLeft: 2, paddingRight: 2, top: '2px', right: '0px', transform: 'translate(30%, -20%)' }}
+                          className="absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold border-4 border-white shadow pointer-events-none"
+                          style={{ minWidth: '36px', height: '36px', fontSize: cnt > 9 ? 16 : 18, paddingLeft: 4, paddingRight: 4, top: '2px', right: '0px', transform: 'translate(30%, -20%)' }}
                           aria-label={'가입 요청 ' + cnt + '건'}
                         >
                           {cnt > 99 ? '99+' : cnt}
@@ -8997,11 +8997,11 @@ function OpenRidingGroupsList(props) {
                     {/* 10시 방향: 내 역할 (방장 / 수락 완료 가입) */}
                     {(isHost || isApprovedMember) ? (
                       <span
-                        className={'absolute flex items-center justify-center rounded-full text-white border-2 border-white shadow pointer-events-none ' + (isHost ? 'bg-violet-600' : 'bg-red-600')}
-                        style={{ width: '16px', height: '16px', top: '2px', left: '0px', transform: 'translate(-30%, -20%)' }}
+                        className={'absolute flex items-center justify-center rounded-full text-white border-4 border-white shadow pointer-events-none ' + (isHost ? 'bg-violet-600' : 'bg-red-600')}
+                        style={{ width: '32px', height: '32px', top: '2px', left: '0px', transform: 'translate(-30%, -20%)' }}
                         aria-label={isHost ? '내가 방장' : '가입한 그룹'}
                       >
-                        <svg className="block" width={9} height={9} viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                        <svg className="block" width={18} height={18} viewBox="0 0 12 12" fill="none" aria-hidden="true">
                           <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </span>

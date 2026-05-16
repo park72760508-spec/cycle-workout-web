@@ -154,17 +154,15 @@ export function subscribeRidingGroups(db, isAdmin, onUpdate, viewerUid) {
   );
   var vu = viewerUid != null ? String(viewerUid).trim() : '';
   if (vu) {
-    var qMyPending = query(
-      collection(db, RIDING_GROUP_COLLECTION),
-      where('status', '==', GROUP_STATUS.PENDING),
-      where('createdBy', '==', vu),
-      orderBy('createdAt', 'desc')
-    );
+    // status + createdBy + orderBy 는 별도 복합 인덱스 필요 → createdBy 만 조회 후 PENDING 만 사용(단일 필드 쿼리, 인덱스 자동)
+    var qMine = query(collection(db, RIDING_GROUP_COLLECTION), where('createdBy', '==', vu));
     unsubs.push(
-      onSnapshot(qMyPending, function (snap) {
+      onSnapshot(qMine, function (snap) {
         myPending = [];
         snap.forEach(function (d) {
-          myPending.push({ id: d.id, ...d.data() });
+          var data = d.data() || {};
+          if (String(data.status || '') !== GROUP_STATUS.PENDING) return;
+          myPending.push({ id: d.id, ...data });
         });
         emitViewer();
       })
