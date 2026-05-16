@@ -15392,6 +15392,12 @@
      * One-Stop Flow: 로그인 시도 → 실패 시 회원가입 모드로 전환
      */
     async function handlePhoneAuth() {
+      if (window.__stelvioPhoneAuthBusy) {
+        console.warn('[Auth] 로그인 처리 중입니다. 잠시만 기다려 주세요.');
+        return;
+      }
+      window.__stelvioPhoneAuthBusy = true;
+
       const phoneInput = document.getElementById('authPhoneInput');
       const passwordInput = document.getElementById('authPasswordInput');
       const submitBtn = document.getElementById('authSubmitBtn');
@@ -15401,12 +15407,14 @@
       if (!phoneInput) {
         console.error('❌ authPhoneInput 요소를 찾을 수 없습니다');
         showAuthStatus('시스템 오류가 발생했습니다. 페이지를 새로고침해주세요.', 'error');
+        window.__stelvioPhoneAuthBusy = false;
         return;
       }
       
       if (!passwordInput) {
         console.error('❌ authPasswordInput 요소를 찾을 수 없습니다');
         showAuthStatus('시스템 오류가 발생했습니다. 페이지를 새로고침해주세요.', 'error');
+        window.__stelvioPhoneAuthBusy = false;
         return;
       }
       
@@ -15418,12 +15426,14 @@
       if (!phone) {
         showAuthStatus('전화번호를 입력해주세요.', 'error');
         phoneInput.focus();
+        window.__stelvioPhoneAuthBusy = false;
         return;
       }
       
       if (!password) {
         showAuthStatus('비밀번호를 입력해주세요.', 'error');
         passwordInput.focus();
+        window.__stelvioPhoneAuthBusy = false;
         return;
       }
       
@@ -15452,7 +15462,8 @@
             // 🔒 로그인 상태 유지 체크박스 → Firebase persistence 적용
             var _rememberCb = document.getElementById('authRememberLogin');
             var _wantsRemember = _rememberCb && _rememberCb.checked;
-            try { localStorage.setItem('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e) {}
+            try { window._stelvioStorageSet('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e) {}
+            try { localStorage.setItem('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e2) {}
             try {
               var _authModP = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
               var _setPersistP = _authModP && _authModP.setPersistence;
@@ -15498,8 +15509,15 @@
             const user = userCredential.user;
             
             showAuthStatus('✅ 로그인 성공!', 'success');
+
+            /* iOS: 토큰·Auth 상태가 userCredential 직후에도 한 박자 늦을 수 있음 */
+            try {
+              if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
+                await window.authV9.authStateReady().catch(function () {});
+              }
+            } catch (eAuthR) {}
             
-            // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱). iPhone 8: v9 비동기 초기화 대기
+            // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱). iPhone: 재시도
             try {
               /** Firestore 모듈·getUserByUid 부착까지: 이벤트 + 짧은 폴링(기존 300ms×15=최대 4.5초 간헐 지연 완화) */
               async function waitForGetUserByUidReady(maxMs) {
@@ -15533,15 +15551,28 @@
                   }, ms);
                 });
               }
-              await waitForGetUserByUidReady(3200);
+              await waitForGetUserByUidReady(4000);
 
               var getUserByUidFn = window.getUserByUid;
               if (typeof getUserByUidFn !== 'function') {
                 throw new Error('시스템 초기화 중입니다. 잠시 후 다시 시도해주세요.');
               }
-              
-              var userData = await getUserByUidFn(user.uid);
-              
+              var userData = null;
+              for (var _attempt = 0; _attempt < 6; _attempt++) {
+                if (_attempt > 0) {
+                  await new Promise(function (r) { setTimeout(r, 400); });
+                  await waitForGetUserByUidReady(2000);
+                  getUserByUidFn = window.getUserByUid;
+                  if (typeof getUserByUidFn !== 'function') continue;
+                }
+                try {
+                  userData = await getUserByUidFn(user.uid);
+                } catch (gue) {
+                  userData = null;
+                  console.warn('[Login] getUserByUid 재시도', _attempt, gue && gue.message);
+                }
+                if (userData) break;
+              }
               if (userData) {
                 window.currentUser = userData;
                 localStorage.setItem('currentUser', JSON.stringify(userData));
@@ -15579,10 +15610,11 @@
                 console.log('✅ 사용자 정보 로드 완료:', { name: userData.name, uid: user.uid });
                 
                 if (typeof showToast === 'function') {
-                  showToast(`${userData.name}님, 로그인되었습니다.`);
+                  showToast(userData.name + '님, 로그인되었습니다.');
                 }
+                try { window._stelvioStorageSet('stelvio_last_session_uid', String(user.uid)); } catch (eSu) {}
               } else {
-                console.warn('⚠️ users/{uid} 문서가 없습니다:', user.uid);
+                console.warn('⚠️ users/{uid} 문서가 없습니다 (재시도 후):', user.uid);
                 window.isPhoneAuthenticated = false;
                 if (typeof showToast === 'function') {
                   showToast('사용자 정보를 찾을 수 없습니다.');
@@ -15617,6 +15649,7 @@
             throw loginError;
           }
         
+        if (window.currentUser && (window.currentUser.id != null || window.currentUser.uid != null)) {
         // 로그인 성공 후 처리
         if (auth) {
           var unsubscribe = auth.onAuthStateChanged(function(user) {
@@ -15739,8 +15772,15 @@
           }
         };
         
-        // 약간의 지연 후 화면 전환 (UI 업데이트를 위해)
-        setTimeout(switchToBasecamp, 500);
+        // 약간의 지연 후 화면 전환 (UI·세션 안정화)
+        setTimeout(switchToBasecamp, 450);
+        } else {
+          console.warn('[Login] Firestore 프로필 없음 — 베이스캠프 이동 생략');
+          showAuthStatus('❌ 회원 정보를 불러오지 못했습니다. 네트워크 확인 후 다시 시도해 주세요.', 'error');
+          if (typeof showToast === 'function') {
+            showToast('회원 정보를 불러오지 못했습니다.');
+          }
+        }
         
       } catch (error) {
         console.error('인증 오류:', error);
@@ -15794,6 +15834,7 @@
           submitBtn.classList.remove('loading');
           submitBtn.textContent = '시작하기';
         }
+        window.__stelvioPhoneAuthBusy = false;
       }
     }
     
