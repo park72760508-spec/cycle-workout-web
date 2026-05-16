@@ -8097,9 +8097,13 @@
     var stelvioRankingApiEndStr = '';
     /** 동시 fetch 호출 시 오래된 응답이 UI를 덮어쓰지 않도록 세대 번호 */
     var stelvioRankingFetchGen = 0;
-    var STELVIO_RANKING_FETCH_TIMEOUT_MS = 35000;
+    /** 포그라운드(캐시 없음) 1차 조회 — 집계 캐시 히트용, rankMv 없음 */
+    var STELVIO_RANKING_FETCH_TIMEOUT_MS = 48000;
+    /** 백그라운드 재검증·등락 보강(rankMv) — UI 차단 없음 */
+    var STELVIO_RANKING_BG_FETCH_TIMEOUT_MS = 90000;
     /** 동일 쿼리 재방문 시 즉시 표시 후 백그라운드 재검증(SWR) — 최종 데이터는 항상 최신 응답 기준 */
     var STELVIO_RANKING_SWR_MAX_MS = 120000;
+    var stelvioRankingBgFetchInFlight = {};
     var stelvioRankingSwrCache = { key: '', body: null, ts: 0 };
 
     // ─── 랭킹 로컬 캐시 (localStorage) ─────────────────────────────────────────
@@ -8170,7 +8174,24 @@
       function isStale(entry) {
         return !entry || (Date.now() - entry.cachedAt) > STELVIO_RANKING_LC_STALE_MS;
       }
-      return { get: get, set: set, clearAll: clearAll, isStale: isStale };
+      /** 만료되어도 삭제하지 않고 반환(타임아웃 시 폴백 표시용) */
+      function getSoft(key) {
+        try {
+          var raw = localStorage.getItem(STELVIO_RANKING_LC_PREFIX + key);
+          if (!raw) return null;
+          var obj = JSON.parse(raw);
+          if (!obj || !obj.data) return null;
+          return {
+            data: obj.data,
+            cachedAt: obj.cachedAt || 0,
+            expiresAt: obj.expiresAt || 0,
+            expired: !!(obj.expiresAt && Date.now() >= obj.expiresAt),
+          };
+        } catch (eSoft) {
+          return null;
+        }
+      }
+      return { get: get, set: set, clearAll: clearAll, isStale: isStale, getSoft: getSoft };
     })();
     window.stelvioRankingLocalCache = stelvioRankingLocalCache;
 
@@ -9616,7 +9637,7 @@
       durations.forEach(function (dur, idx) {
         setTimeout(function () {
           try {
-            var params = new URLSearchParams({ period: 'monthly', duration: dur, gender: 'all', rankMv: '1' });
+            var params = new URLSearchParams({ period: 'monthly', duration: dur, gender: 'all' });
             if (uid) params.set('uid', uid);
             var lcKey = stelvioPeakRankingLcKey(params.toString());
             var cached = stelvioRankingLocalCache.get(lcKey);
@@ -9908,6 +9929,113 @@
     var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v4:';
     function stelvioPeakRankingLcKey(swrKey) {
       return STELVIO_PEAK_LC_KEY_PREFIX + (swrKey || '');
+    }
+
+    function stelvioBuildRankingBoardCacheKey(apiDuration, genderParam, uid, period) {
+      var p = new URLSearchParams({
+        period: period || (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) || 'monthly',
+        duration: apiDuration,
+        gender: genderParam || 'all',
+      });
+      if (uid) p.set('uid', uid);
+      return p.toString();
+    }
+
+    function stelvioBuildRankingBoardFetchUrl(cacheKeyStr, withRankMv, needsRankMv) {
+      var p = new URLSearchParams(cacheKeyStr || '');
+      if (withRankMv && needsRankMv) p.set('rankMv', '1');
+      else p.delete('rankMv');
+      return 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + p.toString();
+    }
+
+    function stelvioFindRankingBoardCacheFallback(cacheKeyStr) {
+      if (!cacheKeyStr) return null;
+      var lcFull = stelvioPeakRankingLcKey(cacheKeyStr);
+      var exact = stelvioRankingLocalCache.getSoft(lcFull);
+      if (exact && exact.data && exact.data.success && exact.data.byCategory) return exact;
+      var want = new URLSearchParams(cacheKeyStr);
+      var wantDur = want.get('duration');
+      var wantPeriod = want.get('period') || 'monthly';
+      var wantGender = want.get('gender') || 'all';
+      if (!wantDur) return null;
+      var keyNoUid = stelvioBuildRankingBoardCacheKey(wantDur, wantGender, null, wantPeriod);
+      if (keyNoUid !== cacheKeyStr) {
+        var noUid = stelvioRankingLocalCache.getSoft(stelvioPeakRankingLcKey(keyNoUid));
+        if (noUid && noUid.data && noUid.data.success && noUid.data.byCategory) return noUid;
+      }
+      var prefix = STELVIO_RANKING_LC_PREFIX + STELVIO_PEAK_LC_KEY_PREFIX;
+      var best = null;
+      var bestAt = 0;
+      try {
+        for (var fi = 0; fi < localStorage.length; fi++) {
+          var fk = localStorage.key(fi);
+          if (!fk || fk.indexOf(prefix) !== 0) continue;
+          var suffix = fk.slice(prefix.length);
+          var fp;
+          try {
+            fp = new URLSearchParams(suffix);
+          } catch (eFp) {
+            continue;
+          }
+          if (fp.get('duration') !== wantDur) continue;
+          if ((fp.get('period') || 'monthly') !== wantPeriod) continue;
+          var soft = stelvioRankingLocalCache.getSoft(suffix);
+          if (!soft || !soft.data || !soft.data.success || !soft.data.byCategory) continue;
+          if (soft.cachedAt >= bestAt) {
+            bestAt = soft.cachedAt;
+            best = soft;
+          }
+        }
+      } catch (eScanFb) {}
+      return best;
+    }
+
+    function stelvioEnsureRankingRefreshHint() {
+      var content = document.getElementById('stelvioRankingContent');
+      if (!content || document.getElementById('stelvioRankingRefreshHint')) return;
+      var hint = document.createElement('p');
+      hint.id = 'stelvioRankingRefreshHint';
+      hint.className = 'stelvio-ranking-refresh-hint hidden';
+      hint.setAttribute('role', 'status');
+      hint.textContent = '저장된 순위를 표시 중입니다. 최신 데이터를 백그라운드에서 불러오는 중…';
+      content.insertBefore(hint, content.firstChild);
+    }
+
+    function stelvioSetRankingRefreshHint(visible) {
+      stelvioEnsureRankingRefreshHint();
+      var hint = document.getElementById('stelvioRankingRefreshHint');
+      if (hint) hint.classList.toggle('hidden', !visible);
+    }
+
+    async function stelvioRankingBoardFetchJson(url, timeoutMs, myGen) {
+      var fetchController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var fetchOpts = { method: 'GET', mode: 'cors', cache: 'no-store' };
+      var timer = null;
+      if (fetchController) {
+        fetchOpts.signal = fetchController.signal;
+        timer = setTimeout(function () {
+          try {
+            fetchController.abort();
+          } catch (eAb0) {}
+        }, timeoutMs);
+      }
+      try {
+        var res = await fetch(url, fetchOpts);
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        if (myGen !== stelvioRankingFetchGen) return null;
+        if (!res.ok) return null;
+        var data = await res.json().catch(function () {
+          return null;
+        });
+        if (myGen !== stelvioRankingFetchGen) return null;
+        return data;
+      } catch (eFetch) {
+        if (timer) clearTimeout(timer);
+        throw eFetch;
+      }
     }
     /** GC·피크 공통: 서버 rankChange / previousBoardRank → (↑n)(↓n)(-) HTML */
     function stelvioServerRankChangeBadgeHtml(rc, prevR) {
@@ -10393,7 +10521,6 @@
       var myGen = ++stelvioRankingFetchGen;
       var loading = document.getElementById('stelvioRankingLoading');
       var content = document.getElementById('stelvioRankingContent');
-      var fetchTimer = null;
 
       var uid =
         (window.currentUser && window.currentUser.id) ||
@@ -10407,26 +10534,25 @@
         })();
       var apiDuration = stelvioIsGroupDistanceRanking() ? stelvioGroupTabMetric : stelvioRankingState.duration;
       var genderParam = stelvioRankingState.gender;
-      var params = new URLSearchParams({
-        period: stelvioRankingState.period,
-        duration: apiDuration,
-        gender: genderParam,
-      });
-      if (uid) params.set('uid', uid);
       var rankMvDuration = stelvioIsGroupDistanceRanking() ? stelvioGroupTabMetric : apiDuration;
       var needsRankMv = stelvioSupportsRankMovementDuration(rankMvDuration);
-      if (needsRankMv) params.set('rankMv', '1');
-      var swrKey = params.toString();
+      /* rankMv는 URL·캐시 키에 넣지 않음 → 서버 집계 캐시 히트·로컬 재사용 */
+      var cacheKeyStr = stelvioBuildRankingBoardCacheKey(
+        apiDuration,
+        genderParam,
+        uid,
+        stelvioRankingState.period
+      );
+      var swrKey = cacheKeyStr;
       var lcKey = stelvioPeakRankingLcKey(swrKey);
-      var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + swrKey;
+      var urlFast = stelvioBuildRankingBoardFetchUrl(cacheKeyStr, false, needsRankMv);
+      var urlRankMv = stelvioBuildRankingBoardFetchUrl(cacheKeyStr, true, needsRankMv);
 
-      /** 서버에서 받은 신선한 데이터를 in-memory·localStorage 양쪽에 저장 */
       function saveFreshPeakData(data) {
         stelvioRankingSwrCache = { key: swrKey, body: data, ts: Date.now() };
         stelvioRankingLocalCache.set(lcKey, data);
       }
 
-      /** 캐시 데이터를 UI에 적용 (등락 보강 후 반영 여부 판단) */
       function applyFromCache(body) {
         if (loading) loading.classList.add('hidden');
         if (content) content.style.opacity = '1';
@@ -10439,110 +10565,132 @@
         return stelvioPeakRankMovementPresentOnPayload(working);
       }
 
-      /** 백그라운드 재검증: 서버에서 최신 데이터를 가져와 캐시·UI 갱신 */
-      async function bgRevalidate() {
-        var bgTimer2 = null;
-        var fetchController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        var fetchOpts = { method: 'GET', mode: 'cors', cache: 'no-store' };
-        if (fetchController) {
-          fetchOpts.signal = fetchController.signal;
-          bgTimer2 = setTimeout(function () { try { fetchController.abort(); } catch (_) {} }, STELVIO_RANKING_FETCH_TIMEOUT_MS);
+      function tryApplySoftFallback() {
+        var soft =
+          stelvioRankingLocalCache.getSoft(lcKey) || stelvioFindRankingBoardCacheFallback(cacheKeyStr);
+        if (soft && soft.data && soft.data.success && soft.data.byCategory) {
+          applyFromCache(soft.data);
+          stelvioSetRankingRefreshHint(true);
+          return true;
         }
+        return false;
+      }
+
+      /**
+       * 백그라운드 재검증 — UI 차단 없음, 실패해도 에러 메시지 없음.
+       * @param {boolean} withRankMv — true면 등락 보강(느릴 수 있음)
+       */
+      async function bgRevalidate(withRankMv) {
+        var bgKey = swrKey + (withRankMv ? '|mv' : '|fast');
+        if (stelvioRankingBgFetchInFlight[bgKey]) return;
+        stelvioRankingBgFetchInFlight[bgKey] = true;
+        var fetchUrl = withRankMv ? urlRankMv : urlFast;
         try {
-          var resBg = await fetch(url, fetchOpts);
-          if (bgTimer2) { clearTimeout(bgTimer2); bgTimer2 = null; }
-          if (myGen !== stelvioRankingFetchGen || !resBg.ok) return;
-          var dataFresh = await resBg.json().catch(function () { return null; });
+          var dataFresh = await stelvioRankingBoardFetchJson(
+            fetchUrl,
+            STELVIO_RANKING_BG_FETCH_TIMEOUT_MS,
+            myGen
+          );
           if (!dataFresh || !dataFresh.success || !dataFresh.byCategory) return;
           stelvioApplyPeakRankingFetchResult(dataFresh, myGen, uid);
           saveFreshPeakData(dataFresh);
+          stelvioSetRankingRefreshHint(false);
         } catch (eBg) {
-          if (bgTimer2) clearTimeout(bgTimer2);
+          /* 백그라운드 실패는 조용히 무시(이미 캐시 UI 표시 중) */
         } finally {
+          delete stelvioRankingBgFetchInFlight[bgKey];
           if (myGen === stelvioRankingFetchGen) stelvioApplyDurationModeUi();
         }
       }
 
-      var nowMs = Date.now();
-      /* 가장 최근 23:00 KST 롤오버 시각 — 이보다 이전에 캐시된 데이터는 갱신 필요 */
-      var lastRollover = (typeof stelvioGetLastRolloverTs === 'function') ? stelvioGetLastRolloverTs() : 0;
+      function scheduleBgRefresh(includeRankMv) {
+        if (includeRankMv && needsRankMv) {
+          bgRevalidate(true).catch(function () {});
+        } else {
+          bgRevalidate(false).catch(function () {});
+        }
+      }
 
-      // ── 1순위: in-memory SWR 캐시 (2분 TTL, 세션 내 빠른 탭 전환용) ──
+      var nowMs = Date.now();
+      var lastRollover = typeof stelvioGetLastRolloverTs === 'function' ? stelvioGetLastRolloverTs() : 0;
+      stelvioSetRankingRefreshHint(false);
+
       var swr = stelvioRankingSwrCache;
       var swrValid = swr && swr.key === swrKey && swr.body && swr.body.success && swr.body.byCategory;
-      /* 롤오버 이전에 캐시된 SWR은 "유효"로 보지 않고 즉시 표시 후 백그라운드 재검증 */
       var swrIsPostRollover = swrValid && lastRollover > 0 && swr.ts < lastRollover;
       if (swrValid && !swrIsPostRollover && nowMs - swr.ts < STELVIO_RANKING_SWR_MAX_MS) {
         var swrHasMv = applyFromCache(swr.body);
-        if (!needsRankMv || swrHasMv) return;
-        bgRevalidate().catch(function () {});
+        if (!needsRankMv || swrHasMv) {
+          if (stelvioRankingLocalCache.isStale({ cachedAt: swr.ts }) || swrIsPostRollover) {
+            scheduleBgRefresh(!swrHasMv && needsRankMv);
+          }
+          return;
+        }
+        scheduleBgRefresh(true);
         return;
       }
 
-      // ── 2순위: localStorage 캐시 (다음 23:00 KST까지 유효) ──
       var lcEntry = stelvioRankingLocalCache.get(lcKey);
       if (lcEntry && lcEntry.data && lcEntry.data.success && lcEntry.data.byCategory) {
-        // in-memory SWR도 즉시 갱신
         stelvioRankingSwrCache = { key: swrKey, body: lcEntry.data, ts: Date.now() };
         var lcHasMv = applyFromCache(lcEntry.data);
-        /* 10분 이상 경과 OR 롤오버 이전 캐시 OR 피크 등락 없음 → 백그라운드 재검증 */
         var lcIsPostRollover = lastRollover > 0 && lcEntry.cachedAt < lastRollover;
-        if (
-          needsRankMv &&
-          (!lcHasMv || stelvioRankingLocalCache.isStale(lcEntry) || lcIsPostRollover)
-        ) {
-          bgRevalidate().catch(function () {});
-        } else if (stelvioRankingLocalCache.isStale(lcEntry) || lcIsPostRollover) {
-          bgRevalidate().catch(function () {});
+        var lcStale = stelvioRankingLocalCache.isStale(lcEntry);
+        if (lcIsPostRollover || lcStale) {
+          scheduleBgRefresh(needsRankMv && !lcHasMv);
+        } else if (needsRankMv && !lcHasMv) {
+          scheduleBgRefresh(true);
         }
         return;
       }
 
-      /* SWR에 데이터가 있지만 롤오버 이후 케이스 (localStorage는 만료됨):
-         로딩 스피너 없이 이전 데이터를 즉시 표시하고 백그라운드에서 최신 데이터 갱신 */
       if (swrValid) {
         applyFromCache(swr.body);
-        bgRevalidate().catch(function () {});
+        scheduleBgRefresh(needsRankMv);
         return;
       }
 
-      // ── 3순위: 캐시 없음 — 서버에서 직접 로드 ──
-      if (loading) loading.classList.remove('hidden');
-      if (content) content.style.opacity = '0.5';
+      var showedSoft = tryApplySoftFallback();
+
+      if (!showedSoft) {
+        if (loading) loading.classList.remove('hidden');
+        if (content) content.style.opacity = '0.5';
+      }
 
       try {
-        var fetchController2 = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        var fetchOpts2 = { method: 'GET', mode: 'cors', cache: 'no-store' };
-        if (fetchController2) {
-          fetchOpts2.signal = fetchController2.signal;
-          fetchTimer = setTimeout(function () { try { fetchController2.abort(); } catch (eAb) {} }, STELVIO_RANKING_FETCH_TIMEOUT_MS);
-        }
-        var res2 = await fetch(url, fetchOpts2);
-        if (fetchTimer) { clearTimeout(fetchTimer); fetchTimer = null; }
-        if (myGen !== stelvioRankingFetchGen) return;
-        if (!res2.ok) throw new Error('HTTP ' + res2.status);
-        var data2 = await res2.json().catch(function () { return { success: false }; });
+        var data2 = await stelvioRankingBoardFetchJson(urlFast, STELVIO_RANKING_FETCH_TIMEOUT_MS, myGen);
         if (myGen !== stelvioRankingFetchGen) return;
         if (data2 && data2.success && data2.byCategory) {
           stelvioApplyPeakRankingFetchResult(data2, myGen, uid);
           saveFreshPeakData(data2);
-        } else {
+          stelvioSetRankingRefreshHint(false);
+          var hasMv = stelvioPeakRankMovementPresentOnPayload(data2);
+          if (needsRankMv && !hasMv) scheduleBgRefresh(true);
+        } else if (!showedSoft) {
           stelvioApplyPeakRankingFetchResult(data2, myGen, uid);
         }
       } catch (e) {
-        if (fetchTimer) { clearTimeout(fetchTimer); fetchTimer = null; }
         if (myGen !== stelvioRankingFetchGen) return;
-        var isAbort = e && (e.name === 'AbortError' || (typeof DOMException !== 'undefined' && e instanceof DOMException && e.name === 'AbortError') || (e.message && String(e.message).toLowerCase().indexOf('abort') >= 0));
+        var isAbort =
+          e &&
+          (e.name === 'AbortError' ||
+            (typeof DOMException !== 'undefined' && e instanceof DOMException && e.name === 'AbortError') ||
+            (e.message && String(e.message).toLowerCase().indexOf('abort') >= 0));
         if (!isAbort) console.warn('[StelvioRanking] 조회 실패:', e);
-        stelvioRankingFullEntries = null;
-        stelvioRankingByCategory = null;
-        stelvioRankingApiStartStr = '';
-        stelvioRankingApiEndStr = '';
-        var errMsg = isAbort ? '요청 시간이 초과되었습니다. 네트워크 확인 후 다시 시도해 주세요.' : '연결에 실패했습니다. 나중에 다시 시도해 주세요.';
-        renderStelvioRankingError(errMsg);
-        refreshStelvioDistributionChartMounted();
+        if (showedSoft || tryApplySoftFallback()) {
+          scheduleBgRefresh(true);
+        } else {
+          stelvioRankingFullEntries = null;
+          stelvioRankingByCategory = null;
+          stelvioRankingApiStartStr = '';
+          stelvioRankingApiEndStr = '';
+          var errMsg = isAbort
+            ? '요청 시간이 초과되었습니다. 잠시 후 탭을 다시 선택해 주세요.'
+            : '연결에 실패했습니다. 나중에 다시 시도해 주세요.';
+          renderStelvioRankingError(errMsg);
+          refreshStelvioDistributionChartMounted();
+        }
       } finally {
-        if (fetchTimer) clearTimeout(fetchTimer);
         if (myGen !== stelvioRankingFetchGen) return;
         stelvioApplyDurationModeUi();
         if (loading) loading.classList.add('hidden');
