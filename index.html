@@ -24221,14 +24221,36 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         _affiliateInitializing = false;
       }
 
-      /** Auth 세션 복원 전 onSnapshot 시 permission-denied 방지 */
+      /**
+       * Auth 세션 복원 전 onSnapshot 시 permission-denied 방지.
+       * 모바일: authStateReady 직후에도 currentUser 가 한 박자 늦을 수 있어 짧게 폴링 후 마운트.
+       */
       function _affiliateMountAfterAuthReady() {
         var mount = function () {
           _doMountAffiliateReact();
         };
         try {
           if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
-            window.authV9.authStateReady().then(mount).catch(mount);
+            window.authV9
+              .authStateReady()
+              .then(function () {
+                var tries = 0;
+                var maxTries = 30; /* ~2.4s */
+                function tick() {
+                  if (window.authV9 && window.authV9.currentUser) {
+                    mount();
+                    return;
+                  }
+                  tries++;
+                  if (tries >= maxTries) {
+                    mount();
+                    return;
+                  }
+                  setTimeout(tick, 80);
+                }
+                tick();
+              })
+              .catch(mount);
             return;
           }
         } catch (e1) {}
