@@ -622,6 +622,48 @@ export async function leaveRidingGroup(db, uid, groupId) {
 }
 
 /**
+ * 방장 전용·승인 대기(PENDING) 그룹만 삭제.
+ * 다른 멤버(members 문서)가 방장 외에 없어야 하며, joinRequests 가 있으면 불가(규칙상 PENDING 에는 없음).
+ * 본인 members 문서 삭제 후 그룹 문서 삭제(클라이언트 규칙 호환).
+ */
+export async function deleteRidingGroupByOwner(db, uid, groupId) {
+  if (!db || !uid || !groupId) throw new Error('요청이 올바르지 않습니다.');
+  var u = String(uid).trim();
+  var gid = String(groupId).trim();
+  var gRef = doc(db, RIDING_GROUP_COLLECTION, gid);
+  var gSnap = await getDoc(gRef);
+  if (!gSnap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
+  var gd = gSnap.data() || {};
+  if (String(gd.createdBy || '') !== u) throw new Error('삭제 권한이 없습니다.');
+  if (String(gd.status || '') !== GROUP_STATUS.PENDING) {
+    throw new Error('관리자 승인 대기 중인 그룹만 삭제할 수 있습니다.');
+  }
+
+  var memCol = collection(db, RIDING_GROUP_COLLECTION, gid, 'members');
+  var memSnap = await getDocs(memCol);
+  var extra = [];
+  memSnap.forEach(function (ds) {
+    if (String(ds.id) !== u) extra.push(ds.id);
+  });
+  if (extra.length > 0) {
+    throw new Error('다른 멤버가 있으면 그룹을 삭제할 수 없습니다.');
+  }
+
+  var jrCol = collection(db, RIDING_GROUP_COLLECTION, gid, RIDING_GROUP_JOIN_REQUESTS_SUB);
+  var jrSnap = await getDocs(jrCol);
+  if (!jrSnap.empty) {
+    throw new Error('가입 신청 대기자가 있으면 삭제할 수 없습니다.');
+  }
+
+  var batch = writeBatch(db);
+  memSnap.forEach(function (ds) {
+    batch.delete(ds.ref);
+  });
+  batch.delete(gRef);
+  await batch.commit();
+}
+
+/**
  * 방장 이관: 현재 방장(createdBy)만 호출. 새 방장은 이미 그룹 멤버여야 함.
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} ownerUid
@@ -835,6 +877,7 @@ if (typeof window !== 'undefined') {
     approveRidingGroupJoinRequest,
     rejectRidingGroupJoinRequest,
     leaveRidingGroup,
+    deleteRidingGroupByOwner,
     transferRidingGroupOwnership,
     fetchRidingGroupById,
     uploadRidingGroupCover,

@@ -9681,6 +9681,44 @@ function OpenRidingGroupDetailView(props) {
 
   var isOwner = grp && String(grp.createdBy || '') === String(userId);
 
+  var createdByUid = grp ? String(grp.createdBy || '') : '';
+  var nonOwnerMemberCount = useMemo(
+    function () {
+      if (!createdByUid) return 0;
+      return members.filter(function (m) {
+        return String(m.userId || '') !== createdByUid;
+      }).length;
+    },
+    [members, createdByUid]
+  );
+  var applicantCountExcludingMembers = useMemo(
+    function () {
+      if (!grp || String(grp.status || '') !== GROUP_ST.APPROVED) return 0;
+      return joinRequests.length;
+    },
+    [grp, joinRequests]
+  );
+  var ownerHasMemberDoc = useMemo(
+    function () {
+      if (!userId || !createdByUid) return false;
+      return members.some(function (m) {
+        return String(m.userId || '') === String(userId) && String(m.userId || '') === createdByUid;
+      });
+    },
+    [members, userId, createdByUid]
+  );
+  var canDeletePendingGroup = useMemo(
+    function () {
+      if (!isOwner) return false;
+      if (!grp || String(grp.status || '') !== GROUP_ST.PENDING) return false;
+      if (nonOwnerMemberCount !== 0) return false;
+      if (applicantCountExcludingMembers !== 0) return false;
+      if (!ownerHasMemberDoc) return false;
+      return true;
+    },
+    [grp, isOwner, nonOwnerMemberCount, applicantCountExcludingMembers, ownerHasMemberDoc]
+  );
+
   function displayNameForMember(m) {
     var uid = String(m.userId || '');
     var row = memberProfiles[uid];
@@ -9917,6 +9955,27 @@ function OpenRidingGroupDetailView(props) {
       });
   }
 
+  function doDeletePendingGroup() {
+    if (!firestore || !userId || !groupId || !canDeletePendingGroup) return;
+    if (!window.confirm('이 그룹을 완전히 삭제할까요? 삭제 후에는 복구할 수 없습니다.')) return;
+    if (typeof gs.deleteRidingGroupByOwner !== 'function') {
+      alert('삭제 기능을 사용할 수 없습니다. 앱을 새로고침한 뒤 다시 시도해 주세요.');
+      return;
+    }
+    setBusy(true);
+    gs
+      .deleteRidingGroupByOwner(firestore, String(userId), String(groupId))
+      .then(function () {
+        onBack();
+      })
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '삭제에 실패했습니다.');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
   if (!detailReady) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -9989,8 +10048,10 @@ function OpenRidingGroupDetailView(props) {
                   <span className="ml-2 rounded-full bg-emerald-50 text-emerald-800 text-[10px] px-2 py-0.5 border border-emerald-200">공개</span>
                 )}
               </p>
-              {pending && isAdmin ? (
-                <span className="inline-block mt-2 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">승인 대기</span>
+              {pending && (isAdmin || isOwner) ? (
+                <span className="inline-block mt-2 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                  승인 대기
+                </span>
               ) : null}
             </div>
           </div>
@@ -9999,7 +10060,45 @@ function OpenRidingGroupDetailView(props) {
           ) : (
             <p className="text-sm text-slate-400 mt-3 m-0">등록된 소개가 없습니다.</p>
           )}
-          {isOwner && (pending || approved) ? (
+          {pending && isOwner ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-3 space-y-3">
+              <p className="text-xs text-amber-950 m-0 leading-snug">
+                관리자 승인 전입니다. 아래에서 <strong>그룹 정보 수정</strong>을 하거나, 조건을 만족하면{' '}
+                <strong>그룹 삭제</strong>를 할 수 있습니다.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 disabled:opacity-50"
+                  disabled={!!busy}
+                  onClick={function () {
+                    onEdit();
+                  }}
+                >
+                  그룹 정보 수정
+                </button>
+                <button
+                  type="button"
+                  className={
+                    'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm ' +
+                    (canDeletePendingGroup && !busy
+                      ? 'border-red-300 bg-white text-red-700 hover:bg-red-50'
+                      : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed')
+                  }
+                  disabled={!canDeletePendingGroup || !!busy}
+                  onClick={doDeletePendingGroup}
+                >
+                  그룹 삭제
+                </button>
+              </div>
+              {!canDeletePendingGroup ? (
+                <p className="text-[11px] text-amber-900/85 m-0 leading-snug">
+                  삭제는 방장(본인) 멤버만 있는 상태이고, 다른 멤버·가입 신청 대기자가 없을 때만 가능합니다.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {isOwner && approved ? (
             <button
               type="button"
               className="mt-3 text-sm font-semibold text-violet-700 underline"
