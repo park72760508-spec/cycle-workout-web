@@ -7092,6 +7092,19 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-ranking-content {
   transition: opacity 0.2s;
 }
+.stelvio-ranking-refresh-hint {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #4a5568;
+  background: rgba(102, 126, 234, 0.08);
+  border-radius: 8px;
+  text-align: center;
+}
+.stelvio-ranking-refresh-hint.hidden {
+  display: none;
+}
 #stelvioRankingScreen .stelvio-distribution-chart-root {
   width: 100%;
   max-width: 100%;
