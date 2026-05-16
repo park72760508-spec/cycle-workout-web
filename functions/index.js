@@ -4303,6 +4303,65 @@ async function applyPeakRankChanges(db, entries, historyKey) {
 }
 
 /**
+ * 집계/캐시 JSON 복원 후 Supremo·부문 행이 서로 다른 객체일 때 rankChange가 한쪽에만 붙는 문제 보정.
+ * 어떤 카테고리든 유효한 rankChange+previousBoardRank가 있으면 userId 기준으로 전체 카테고리에 복제한다.
+ * @param {Record<string, any[]>|null|undefined} byCategory
+ */
+function propagatePeakRankMovementAcrossCategories(byCategory) {
+  if (!byCategory || typeof byCategory !== "object") return;
+  /** @type {Record<string, { rankChange: number, previousBoardRank: number }>} */
+  const map = Object.create(null);
+  const ingest = (row) => {
+    if (!row || row.userId == null) return;
+    const uid = String(row.userId).trim();
+    if (!uid) return;
+    if (row.rankChange == null || row.previousBoardRank == null) return;
+    const rcN = Number(row.rankChange);
+    const prN = Math.floor(Number(row.previousBoardRank));
+    if (!isFinite(rcN) || !isFinite(prN) || prN < 1) return;
+    map[uid] = { rankChange: rcN, previousBoardRank: prN };
+  };
+  for (const cat of Object.keys(byCategory)) {
+    const rows = byCategory[cat];
+    if (!Array.isArray(rows)) continue;
+    for (const r of rows) ingest(r);
+  }
+  const uids = Object.keys(map);
+  if (!uids.length) return;
+  for (const cat of Object.keys(byCategory)) {
+    const rows = byCategory[cat];
+    if (!Array.isArray(rows)) continue;
+    for (const r of rows) {
+      if (!r || r.userId == null) continue;
+      const pk = map[String(r.userId).trim()];
+      if (!pk) continue;
+      r.rankChange = pk.rankChange;
+      r.previousBoardRank = pk.previousBoardRank;
+    }
+  }
+}
+
+/**
+ * 집계/캐시 응답에 peak_rank_history 기준 전날 대비 등락 주입 (TSS·거리·피크 공통).
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {Record<string, any[]>|null|undefined} byCategory
+ * @param {any[]|null|undefined} entries
+ * @param {string} historyKey
+ */
+async function hydratePeakRankMovementOnPayload(db, byCategory, entries, historyKey) {
+  if (!db || !historyKey || !byCategory) return;
+  const list =
+    Array.isArray(entries) && entries.length > 0
+      ? entries
+      : Array.isArray(byCategory.Supremo)
+        ? byCategory.Supremo
+        : [];
+  if (!list.length) return;
+  await applyPeakRankChanges(db, list, historyKey);
+  propagatePeakRankMovementAcrossCategories(byCategory);
+}
+
+/**
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} cacheKey
  * @returns {Promise<object|null>} payload
@@ -5491,6 +5550,11 @@ exports.getPeakPowerRanking = onRequest(
             out.motivationMessage = buildMotivationMessage(current, nextUser);
           }
         }
+        const tssAggEntries = Array.isArray(aggTss.entries) ? aggTss.entries : out.byCategory.Supremo;
+        await hydratePeakRankMovementOnPayload(db, out.byCategory, tssAggEntries, `peak_tss_weekly_${gender}`);
+        if (!out.entries && Array.isArray(out.byCategory.Supremo)) {
+          out.entries = out.byCategory.Supremo.slice();
+        }
         await finalizeRankingProfileUrls(out);
         return res.status(200).json(out);
       }
@@ -5529,6 +5593,11 @@ exports.getPeakPowerRanking = onRequest(
               out.motivationMessage = buildMotivationMessage(current, nextUser);
             }
           }
+          const tssCacheEntries = entries.length ? entries : (out.byCategory.Supremo || []);
+          await hydratePeakRankMovementOnPayload(db, out.byCategory, tssCacheEntries, `peak_tss_weekly_${gender}`);
+          if (!out.entries && Array.isArray(out.byCategory.Supremo)) {
+            out.entries = out.byCategory.Supremo.slice();
+          }
           await finalizeRankingProfileUrls(out);
           return res.status(200).json(out);
         }
@@ -5536,6 +5605,7 @@ exports.getPeakPowerRanking = onRequest(
 
       const { entries, byCategory } = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, gender);
       await applyPeakRankChanges(db, entries, `peak_tss_weekly_${gender}`);
+      propagatePeakRankMovementAcrossCategories(byCategory);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
       await cacheRef.set({
@@ -5601,6 +5671,16 @@ exports.getPeakPowerRanking = onRequest(
             out.motivationMessage = buildMotivationMessage(current, nextUser);
           }
         }
+        const pdAggEntries = Array.isArray(aggPd.entries) ? aggPd.entries : out.byCategory.Supremo;
+        await hydratePeakRankMovementOnPayload(
+          db,
+          out.byCategory,
+          pdAggEntries,
+          `peak_personal_dist_rolling30_${gender}`
+        );
+        if (!out.entries && Array.isArray(out.byCategory.Supremo)) {
+          out.entries = out.byCategory.Supremo.slice();
+        }
         await finalizeRankingProfileUrls(out);
         return res.status(200).json(out);
       }
@@ -5639,6 +5719,16 @@ exports.getPeakPowerRanking = onRequest(
               out.motivationMessage = buildMotivationMessage(current, nextUser);
             }
           }
+          const pdCacheEntries = out.entries.length ? out.entries : (out.byCategory.Supremo || []);
+          await hydratePeakRankMovementOnPayload(
+            db,
+            out.byCategory,
+            pdCacheEntries,
+            `peak_personal_dist_rolling30_${gender}`
+          );
+          if (!out.entries.length && Array.isArray(out.byCategory.Supremo)) {
+            out.entries = out.byCategory.Supremo.slice();
+          }
           await finalizeRankingProfileUrls(out);
           return res.status(200).json(out);
         }
@@ -5646,6 +5736,7 @@ exports.getPeakPowerRanking = onRequest(
 
       const { entries, byCategory } = await getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, gender);
       await applyPeakRankChanges(db, entries, `peak_personal_dist_rolling30_${gender}`);
+      propagatePeakRankMovementAcrossCategories(byCategory);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
       await cacheRef.set({
@@ -5869,9 +5960,12 @@ exports.getPeakPowerRanking = onRequest(
      */
     async function hydratePeakPowerRankMovementIfNeeded(payload) {
       if (!payload || !payload.byCategory || !DURATION_FIELDS[durationType]) return;
-      const sup = payload.byCategory.Supremo;
-      if (!Array.isArray(sup) || sup.length === 0) return;
-      await applyPeakRankChanges(db, sup, `peak_${durationType}_${period}_${gender}`);
+      await hydratePeakRankMovementOnPayload(
+        db,
+        payload.byCategory,
+        payload.entries,
+        `peak_${durationType}_${period}_${gender}`
+      );
     }
     const aggPeak = await readRankingAggregatePayloadIfFresh(db, cacheKey);
     if (aggPeak && aggPeak.byCategory) {
@@ -5951,6 +6045,7 @@ exports.getPeakPowerRanking = onRequest(
 
     const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
     await applyPeakRankChanges(db, entries, `peak_${durationType}_${period}_${gender}`);
+    propagatePeakRankMovementAcrossCategories(byCategory);
     let cohortAvgHrBpm = null;
     if (
       (period === "rolling30" || period === "monthly" || period === "rolling6m" || period === "rolling183") &&
@@ -5991,6 +6086,9 @@ exports.getPeakPowerRanking = onRequest(
         out.currentUser = current;
         out.motivationMessage = buildMotivationMessage(current, nextUser);
       }
+    }
+    if (Array.isArray(byCategory.Supremo)) {
+      out.entries = byCategory.Supremo.slice();
     }
     await finalizeRankingProfileUrls(out);
     res.status(200).json(out);
