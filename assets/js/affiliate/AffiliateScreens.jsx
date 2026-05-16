@@ -13,16 +13,56 @@ var useRef     = React.useRef;
 // ── 헬퍼 함수 ────────────────────────────────────────────────────
 function affiliateCurrentUser() {
   try {
-    var c = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    return c || null;
-  } catch (e) { return null; }
+    if (
+      typeof window.AffiliateDiscountEligibility !== 'undefined' &&
+      typeof window.AffiliateDiscountEligibility.getMergedUser === 'function'
+    ) {
+      var m = window.AffiliateDiscountEligibility.getMergedUser();
+      if (m) return m;
+    }
+  } catch (e0) {}
+  try {
+    var cu = window.currentUser ? Object.assign({}, window.currentUser) : null;
+    var uid = cu && (cu.id || cu.uid) ? String(cu.id || cu.uid) : '';
+    if (uid && Array.isArray(window.users)) {
+      var row = window.users.find(function (u) {
+        return u && String(u.id || u.uid || '') === uid;
+      });
+      if (row) cu = Object.assign({}, cu || {}, row);
+    }
+    try {
+      var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (ls && typeof ls === 'object') {
+        cu = Object.assign({}, ls, cu || {});
+      }
+    } catch (_) {}
+    if (cu) return cu;
+  } catch (e1) {}
+  try {
+    return JSON.parse(localStorage.getItem('currentUser') || 'null');
+  } catch (e2) {
+    return null;
+  }
 }
 
 function affiliateIsAdminGrade() {
   try {
+    if (typeof window.isStelvioAdminGrade === 'function' && typeof window.getLoginUserGrade === 'function') {
+      return window.isStelvioAdminGrade(window.getLoginUserGrade());
+    }
+  } catch (e) {}
+  try {
     var u = affiliateCurrentUser();
-    return u && (String(u.grade) === '1' || String(u.grade) === '0');
-  } catch (e) { return false; }
+    if (!u || u.grade == null) return false;
+    if (typeof window.isStelvioAdminGrade === 'function') {
+      return window.isStelvioAdminGrade(u.grade);
+    }
+    var g = String(u.grade).trim();
+    if (g === '1') return true;
+    return Number(g) === 1;
+  } catch (e2) {
+    return false;
+  }
 }
 
 function affiliateCurrentUserId() {
@@ -828,8 +868,15 @@ function AffiliateList(props) {
       if (err) {
         /* 에러 코드별 사용자 메시지 */
         var msg = '제휴사 목록을 불러오지 못했습니다.';
-        if (err.code === 'permission-denied') msg = '접근 권한이 없습니다. 다시 로그인해 주세요.';
-        else if (err.code === 'unavailable')  msg = '네트워크 연결을 확인하고 다시 시도해 주세요.';
+        if (err.code === 'permission-denied') {
+          var hasAuth = false;
+          try {
+            hasAuth = !!(window.authV9 && window.authV9.currentUser);
+          } catch (_) {}
+          msg = hasAuth
+            ? '제휴사 정보를 읽을 권한이 없습니다. 앱을 새로고침하거나 다시 로그인해 주세요.'
+            : '로그인 세션이 준비되지 않았습니다. 잠시 후 다시 시도하거나 다시 로그인해 주세요.';
+        } else if (err.code === 'unavailable')  msg = '네트워크 연결을 확인하고 다시 시도해 주세요.';
         setLoadError(new Error(msg));
         setLoading(false);
         return;
