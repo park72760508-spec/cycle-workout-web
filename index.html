@@ -129,7 +129,8 @@
           })();
           var _initPersistence = _wantsLocal ? browserLocalPersistence : browserSessionPersistence;
           if (_initPersistence) {
-            setPersistenceFn(authV9, _initPersistence).catch(function(e) {
+            /* LOCAL 전환은 IndexedDB에 쓰기까지 비동기 — 완료 전 signIn/Firestore 조합 시 iOS에서 토큰 미부착·getDoc 실패 유발 */
+            await setPersistenceFn(authV9, _initPersistence).catch(function(e) {
               if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] setPersistence 실패:', e && e.message);
               else console.warn('[Firebase v9] setPersistence 실패:', e && e.message);
             });
@@ -15631,19 +15632,16 @@
               }
             } catch (eEarlySave) {}
 
-            /* iOS: 토큰·Auth 상태가 userCredential 직후에도 한 박자 늦을 수 있음 */
-            try {
-              if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
-                await window.authV9.authStateReady().catch(function () {});
-              }
-            } catch (eAuthR) {}
-            
+            /* Firestore 프로필 읽기 전에 Auth 준비 + ID 토큰 강제 갱신(LOCAL persistence·iOS에서 규칙상 getDoc 거부 방지) */
             // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱). iPhone: 재시도
             try {
               /** Firestore 모듈·getUserByUid 부착까지: 이벤트 + 짧은 폴링(기존 300ms×15=최대 4.5초 간헐 지연 완화) */
               async function waitForGetUserByUidReady(maxMs) {
                 var ms = maxMs != null ? maxMs : 3200;
-                if (typeof window.getUserByUid === 'function') return;
+                function apiReady() {
+                  return !!(typeof window.getUserByUid === 'function' && window.firestoreV9);
+                }
+                if (apiReady()) return;
                 await new Promise(function (resolve, reject) {
                   var settled = false;
                   var deadline = Date.now() + ms;
@@ -15660,19 +15658,38 @@
                     else reject(new Error('시스템 초기화 중입니다. 잠시 후 다시 시도해주세요.'));
                   }
                   function onEvt() {
-                    if (typeof window.getUserByUid === 'function') settle(true);
+                    if (apiReady()) settle(true);
                   }
                   window.addEventListener('stelvio-v9-firebase-user-api-ready', onEvt);
                   var iv = setInterval(function () {
-                    if (typeof window.getUserByUid === 'function') settle(true);
+                    if (apiReady()) settle(true);
                     else if (Date.now() >= deadline) settle(false);
                   }, 40);
                   var to = setTimeout(function () {
-                    settle(typeof window.getUserByUid === 'function');
+                    settle(apiReady());
                   }, ms);
                 });
               }
-              await waitForGetUserByUidReady(4000);
+              async function stelvioRefreshV9IdToken(force) {
+                try {
+                  if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
+                    await window.authV9.authStateReady().catch(function () {});
+                  }
+                } catch (e0) {}
+                try {
+                  var u = window.authV9 && window.authV9.currentUser;
+                  if (u && typeof u.getIdToken === 'function') {
+                    await u.getIdToken(!!force);
+                  }
+                } catch (e1) {}
+              }
+              try {
+                await waitForGetUserByUidReady(8000);
+              } catch (eWait0) {
+                await new Promise(function (r) { setTimeout(r, 500); });
+                await waitForGetUserByUidReady(6000);
+              }
+              await stelvioRefreshV9IdToken(true);
 
               var getUserByUidFn = window.getUserByUid;
               if (typeof getUserByUidFn !== 'function') {
@@ -15680,9 +15697,10 @@
               }
               var userData = null;
               for (var _attempt = 0; _attempt < 6; _attempt++) {
+                await stelvioRefreshV9IdToken(_attempt > 0);
                 if (_attempt > 0) {
-                  await new Promise(function (r) { setTimeout(r, 400); });
-                  await waitForGetUserByUidReady(2000);
+                  await new Promise(function (r) { setTimeout(r, 500 + _attempt * 150); });
+                  await waitForGetUserByUidReady(2500);
                   getUserByUidFn = window.getUserByUid;
                   if (typeof getUserByUidFn !== 'function') continue;
                 }
@@ -15696,8 +15714,12 @@
               }
               if (userData) {
                 window.currentUser = userData;
-                localStorage.setItem('currentUser', JSON.stringify(userData));
-                localStorage.setItem('authUser', JSON.stringify(userData));
+                try {
+                  localStorage.setItem('currentUser', JSON.stringify(userData));
+                  localStorage.setItem('authUser', JSON.stringify(userData));
+                } catch (eLS0) {
+                  console.warn('[Login] localStorage 프로필 저장 실패:', eLS0 && eLS0.message);
+                }
                 console.log('✅ [인증] 사용자 정보 저장 (나이/성별 포함):', { birth_year: userData.birth_year, gender: userData.gender, hasBirthYear: !!userData.birth_year, hasGender: !!userData.gender });
                 
                 // 🔒 보안: 로그인 성공 시 훈련일지 상태 초기화 (이전 사용자 데이터 노출 방지)
@@ -15720,9 +15742,13 @@
                 const phoneWithDash = phone.includes('-') ? phone : (normalizedPhone.length === 11 && normalizedPhone.startsWith('010') 
                   ? `${normalizedPhone.slice(0,3)}-${normalizedPhone.slice(3,7)}-${normalizedPhone.slice(7,11)}` 
                   : phone);
-                localStorage.setItem('userPassword_' + phoneWithDash, password);
-                localStorage.setItem('userPassword_' + normalizedPhone, password);
-                localStorage.setItem('lastPassword', password);
+                try {
+                  localStorage.setItem('userPassword_' + phoneWithDash, password);
+                  localStorage.setItem('userPassword_' + normalizedPhone, password);
+                  localStorage.setItem('lastPassword', password);
+                } catch (eLS1) {
+                  console.warn('[Login] localStorage 비밀번호 보조키 저장 실패:', eLS1 && eLS1.message);
+                }
                 window.isPhoneAuthenticated = true;
                 
                 console.log('✅ 사용자 정보 로드 완료:', { name: userData.name, uid: user.uid });
