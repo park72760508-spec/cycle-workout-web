@@ -882,16 +882,24 @@ function AffiliateList(props) {
               (window.auth && window.auth.currentUser)
             );
           } catch (_) {}
-          /* 모바일: 토큰 붙기 전 스냅샷 거부 → 세션 준비 후 구독 한 번 재시도 */
-          if (!hasAuth && affiliateAuthRetryRef.current < 2) {
+          /* 모바일·LOCAL persistence: currentUser는 있는데 ID 토큰이 아직 안 붙은 경우도 있음 → 갱신 후 재구독 */
+          if (affiliateAuthRetryRef.current < 2) {
             affiliateAuthRetryRef.current++;
-            var chain = Promise.resolve();
+            var chainPd = Promise.resolve();
             try {
               if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
-                chain = window.authV9.authStateReady();
+                chainPd = window.authV9.authStateReady();
               }
             } catch (_e0) {}
-            chain
+            chainPd
+              .then(function () {
+                try {
+                  var uPd = window.authV9 && window.authV9.currentUser;
+                  if (uPd && typeof uPd.getIdToken === 'function') {
+                    return uPd.getIdToken(true);
+                  }
+                } catch (_e1) {}
+              })
               .then(function () {
                 return new Promise(function (r) {
                   setTimeout(r, 400 + affiliateAuthRetryRef.current * 200);
