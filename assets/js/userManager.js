@@ -3089,7 +3089,7 @@ async function loadUsers() {
     console.log('[loadUsers] ✅ 사용자 목록 렌더링 완료:', { 
       totalUsers: users.length,
       visibleUsers: visibleUsers.length,
-      viewerGrade 
+      profileCardGrade
     });
     
     if (typeof showToast === 'function') {
