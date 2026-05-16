@@ -104,17 +104,28 @@
          * enforceAuthPersistence()도 동일 키를 읽어 적용.
          * localStorage 소실 대비 cookie fallback 병행 */
         if (typeof setPersistenceFn === 'function') {
+          /* localStorage가 '0'이어도 쿠키가 '1'이면 LOCAL — iOS에서 저장소 불일치 시 SESSION으로 깨지며 Firestore 미인증 유발 방지 */
           var _wantsLocal = (function() {
-            try { var v = localStorage.getItem('stelvio_auth_persist_local'); if (v != null) return v === '1'; } catch(e) {}
+            var ls = null;
+            try {
+              ls = localStorage.getItem('stelvio_auth_persist_local');
+            } catch (eLs) {}
+            var ckIs1 = false;
             try {
               var _nameEQ = 'sl_stelvio_auth_persist_local=';
               var _ca = document.cookie.split(';');
               for (var _i = 0; _i < _ca.length; _i++) {
                 var _c = _ca[_i].trim();
-                if (_c.indexOf(_nameEQ) === 0) return decodeURIComponent(_c.substring(_nameEQ.length)) === '1';
+                if (_c.indexOf(_nameEQ) === 0) {
+                  ckIs1 = decodeURIComponent(_c.substring(_nameEQ.length)) === '1';
+                  break;
+                }
               }
-            } catch(e2) {}
-            return false;
+            } catch (eCk) {}
+            /* LS에 명시적 '0'이면 SESSION 우선(쿠키만 남은 스테일 값 무시). LS가 비어/실패면 쿠키 '1'로 iOS 불일치 보정 */
+            if (ls === '1') return true;
+            if (ls === '0') return false;
+            return ckIs1;
           })();
           var _initPersistence = _wantsLocal ? browserLocalPersistence : browserSessionPersistence;
           if (_initPersistence) {
@@ -15340,28 +15351,47 @@
       var passwordInput = document.getElementById('authPasswordInput');
       var cb = document.getElementById('authRememberLogin');
       if (!phoneInput || !passwordInput || !cb) return;
+      var wantsPersist = false;
+      try {
+        var ls = localStorage.getItem('stelvio_auth_persist_local');
+        var ckIs1 = false;
+        try {
+          var nameEQ = 'sl_stelvio_auth_persist_local=';
+          var ca = document.cookie.split(';');
+          for (var pi = 0; pi < ca.length; pi++) {
+            var c = ca[pi].trim();
+            if (c.indexOf(nameEQ) === 0) {
+              ckIs1 = decodeURIComponent(c.substring(nameEQ.length)) === '1';
+              break;
+            }
+          }
+        } catch (eCk) {}
+        wantsPersist = ls === '1' || (ls !== '0' && ckIs1);
+      } catch (eP) {}
       try {
         var raw = window._stelvioStorageGet(window.STELVIO_AUTH_REMEMBER_KEY);
-        if (!raw) {
-          cb.checked = false;
-          console.log('[AuthRemember] 저장된 자격증명 없음 (localStorage+cookie 모두 비어있음)');
-          return;
+        if (raw) {
+          var o = JSON.parse(raw);
+          if (o && o.v === 1 && o.phone && typeof o.password === 'string') {
+            phoneInput.value = o.phone;
+            passwordInput.value = o.password;
+            if (window.formatPhoneNumber) {
+              phoneInput.value = window.formatPhoneNumber(phoneInput.value);
+            }
+            cb.checked = true;
+            console.log('[AuthRemember] 자격증명 복원 완료');
+            return;
+          }
         }
-        var o = JSON.parse(raw);
-        if (!o || o.v !== 1 || !o.phone || typeof o.password !== 'string') {
-          cb.checked = false;
-          return;
-        }
-        phoneInput.value = o.phone;
-        passwordInput.value = o.password;
-        cb.checked = true;
-        if (window.formatPhoneNumber) {
-          phoneInput.value = window.formatPhoneNumber(phoneInput.value);
-        }
-        console.log('[AuthRemember] 자격증명 복원 완료 (source:', window._stelvioGetCookie('sl_' + window.STELVIO_AUTH_REMEMBER_KEY) ? 'cookie' : 'localStorage', ')');
       } catch (err) {
-        cb.checked = false;
         console.warn('[AuthRemember] 자격증명 복원 실패:', err && err.message);
+      }
+      /* 저장된 비번이 없어도 "로그인 상태 유지"가 켜져 있으면 체크 표시(Firebase LOCAL과 UI 일치) */
+      cb.checked = !!wantsPersist;
+      if (wantsPersist) {
+        console.log('[AuthRemember] 영속 플래그만 복원 — 체크 ON (자격증명 저장 없음)');
+      } else {
+        console.log('[AuthRemember] 저장된 자격증명·영속 플래그 없음');
       }
     };
 
@@ -24279,7 +24309,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 var maxTries = 30; /* ~2.4s */
                 function tick() {
                   if (window.authV9 && window.authV9.currentUser) {
-                    mount();
+                    var u = window.authV9.currentUser;
+                    if (u && typeof u.getIdToken === 'function') {
+                      u.getIdToken(true)
+                        .then(function () {
+                          mount();
+                        })
+                        .catch(function () {
+                          mount();
+                        });
+                    } else {
+                      mount();
+                    }
                     return;
                   }
                   tries++;
