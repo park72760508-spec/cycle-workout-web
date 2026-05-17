@@ -25,6 +25,7 @@
   var STELVIO_DURATION_LABELS = {
     tss: 'TSS',
     personal_dist: '거리 30일',
+    personal_speed: '항속 6개월',
     group_dist: '그룹 30일',
     gc: 'GC',
     '1min': '1분',
@@ -194,15 +195,18 @@
 
     var isTss = duration === 'tss';
     var isKmMode = duration === 'personal_dist' || duration === 'group_dist';
+    var isSpeedMode = duration === 'personal_speed';
     var isGcMode = duration === 'gc';
-    var isHistLike = isTss || isKmMode || isGcMode;
+    var isHistLike = isTss || isKmMode || isSpeedMode || isGcMode;
     var durLabel = isTss
       ? '주간 TSS'
-      : isKmMode
-        ? (duration === 'group_dist' ? '그룹 30일 거리' : '거리 30일')
-        : isGcMode
-          ? 'GC 환산 점수'
-          : STELVIO_DURATION_LABELS[duration] || duration;
+      : isSpeedMode
+        ? '항속 6개월'
+        : isKmMode
+          ? (duration === 'group_dist' ? '그룹 30일 거리' : '거리 30일')
+          : isGcMode
+            ? 'GC 환산 점수'
+            : STELVIO_DURATION_LABELS[duration] || duration;
     /* 그룹 탭에서 overrideDisplayRank는 메트릭에 관계없이 그룹 내 순위로 사용 */
     var hasGroupRankOverride =
       typeof p.overrideDisplayRank === 'number' &&
@@ -210,7 +214,7 @@
       p.overrideDisplayRank >= 1;
     /** 오픈 라이딩 등: 랭킹 행과 무관하게 프로필 FTP 기준 W/kg으로 세로 기준선만 고정 */
     var overrideMyWkg =
-      !isTss && !isKmMode && !isGcMode && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
+      !isTss && !isKmMode && !isSpeedMode && !isGcMode && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
     if (overrideMyWkg != null && (isNaN(overrideMyWkg) || !isFinite(overrideMyWkg))) overrideMyWkg = null;
 
     var chartRankOverrideRaw = p.overrideDisplayRank;
@@ -264,12 +268,13 @@
       function () {
         return cohortForHistogram.map(function (e) {
           if (isTss) return Number(e.totalTss);
+          if (isSpeedMode) return Number(e.speedKmh);
           if (isKmMode) return Number(e.totalKm);
           if (isGcMode) return Number(e.gcScore);
           return Number(e.wkg);
         });
       },
-      [cohortForHistogram, isTss, isKmMode, isGcMode]
+      [cohortForHistogram, isTss, isSpeedMode, isKmMode, isGcMode]
     );
 
     var binPack = useMemo(
@@ -293,6 +298,7 @@
     var openRidingTierBandWeightKg =
       !isTss &&
       !isKmMode &&
+      !isSpeedMode &&
       !isGcMode &&
       p.openRidingTierBandWeightKg != null &&
       isFinite(Number(p.openRidingTierBandWeightKg)) &&
@@ -326,7 +332,7 @@
     var openRidingTierStripOverlapPx = openRidingTierBandWeightKg && openRidingTierBandSegments.length > 0 ? 15 : 0;
 
     var myRaw = null;
-    if (overrideMyWkg != null && !isTss && !isKmMode && !isGcMode) {
+    if (overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode) {
       myRaw = overrideMyWkg;
     }
     if (myRaw == null && currentUserId && cohort.length) {
@@ -337,26 +343,47 @@
         return e.userId === currentUserId;
       })[0];
       if (mine) {
-        myRaw = isTss ? Number(mine.totalTss) : isKmMode ? Number(mine.totalKm) : isGcMode ? Number(mine.gcScore) : Number(mine.wkg);
+        myRaw = isTss
+          ? Number(mine.totalTss)
+          : isSpeedMode
+            ? Number(mine.speedKmh)
+            : isKmMode
+              ? Number(mine.totalKm)
+              : isGcMode
+                ? Number(mine.gcScore)
+                : Number(mine.wkg);
       }
     }
     if ((myRaw == null || isNaN(myRaw)) && currentUserId && myRankSupremo && myRankSupremo.userId === currentUserId) {
       myRaw = isTss
         ? Number(myRankSupremo.totalTss)
-        : isKmMode
-          ? Number(myRankSupremo.totalKm)
-          : isGcMode
-            ? Number(myRankSupremo.gcScore)
-            : Number(myRankSupremo.wkg);
+        : isSpeedMode
+          ? Number(myRankSupremo.speedKmh)
+          : isKmMode
+            ? Number(myRankSupremo.totalKm)
+            : isGcMode
+              ? Number(myRankSupremo.gcScore)
+              : Number(myRankSupremo.wkg);
     }
     if ((myRaw == null || isNaN(myRaw)) && currentUser && currentUser.userId === currentUserId) {
       myRaw = isTss
         ? Number(currentUser.totalTss)
-        : isKmMode
-          ? Number(currentUser.totalKm)
-          : isGcMode
-            ? Number(currentUser.gcScore)
-            : Number(currentUser.wkg);
+        : isSpeedMode
+          ? Number(currentUser.speedKmh)
+          : isKmMode
+            ? Number(currentUser.totalKm)
+            : isGcMode
+              ? Number(currentUser.gcScore)
+              : Number(currentUser.wkg);
+    }
+    if (
+      (myRaw == null || isNaN(myRaw)) &&
+      isSpeedMode &&
+      currentUserId &&
+      currentUser &&
+      currentUser.speedKmh != null
+    ) {
+      myRaw = Number(currentUser.speedKmh);
     }
     if (
       (myRaw == null || isNaN(myRaw)) &&
@@ -373,6 +400,7 @@
     function rowMetricForRank(e) {
       if (!e) return NaN;
       if (isTss) return Number(e.totalTss);
+      if (isSpeedMode) return Number(e.speedKmh);
       if (isKmMode) return Number(e.totalKm);
       if (isGcMode) return Number(e.gcScore);
       return Number(e.wkg);
@@ -383,7 +411,7 @@
 
     if (chartRankOverride != null) {
       displayRank = chartRankOverride;
-    } else if (overrideMyWkg != null && !isTss && !isGcMode) {
+    } else if (overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode) {
       displayRank = null;
     } else if (currentUserId) {
       if (activeCategory === 'Supremo') {
@@ -434,7 +462,7 @@
             displayRank = catIdx + 1;
           }
         } else if (myRaw != null && !isNaN(myRaw) && catArrR.length) {
-          var epsR = isTss || isKmMode || isGcMode ? 1e-6 : 1e-9;
+          var epsR = isTss || isKmMode || isSpeedMode || isGcMode ? 1e-6 : 1e-9;
           var gt = 0;
           for (var gj = 0; gj < catArrR.length; gj++) {
             var rv = rowMetricForRank(catArrR[gj]);
@@ -449,11 +477,13 @@
       myRaw != null && !isNaN(myRaw)
         ? isTss
           ? myRaw.toFixed(1) + ' TSS'
-          : isKmMode
-            ? myRaw.toFixed(1) + ' km'
-            : isGcMode
-              ? myRaw.toFixed(1) + ' 점'
-              : myRaw.toFixed(2) + ' W/kg'
+          : isSpeedMode
+            ? myRaw.toFixed(1) + ' km/h'
+            : isKmMode
+              ? myRaw.toFixed(1) + ' km'
+              : isGcMode
+                ? myRaw.toFixed(1) + ' 점'
+                : myRaw.toFixed(2) + ' W/kg'
         : '';
 
     var refBadgeTitle = typeof p.overrideReferenceBadgeTitle === 'string' && p.overrideReferenceBadgeTitle.trim()
@@ -468,9 +498,9 @@
       var rankChRaw = global.stelvioRankChangeBadgeHtmlForUser(activeCategory, currentUserId);
       rankChHtml = rankChRaw ? String(rankChRaw).replace(/<[^>]+>/g, '') : '';
     }
-    var badgeMain = overrideMyWkg != null && !isTss && !isKmMode && !isGcMode ? refBadgeTitle : '나의 위치';
+    var badgeMain = overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode ? refBadgeTitle : '나의 위치';
     var badgeSub =
-      overrideMyWkg != null && !isTss && !isKmMode && !isGcMode && valueFmt
+      overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode && valueFmt
         ? '· ' + valueFmt + (refValueNote || '')
         : displayRank != null && valueFmt
         ? '· ' + displayRank + '위' + rankChHtml + ' · ' + valueFmt
