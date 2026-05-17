@@ -8366,10 +8366,18 @@ async function authenticatePhone() {
         authUser.grade = String(prevViewer.grade);
       }
 
-      // 인증 주체(등급 포함)를 별도로 보관
-      localStorage.setItem('authUser', JSON.stringify(authUser));  // ← 등급 보존 백업
-      localStorage.setItem('currentUser', JSON.stringify(authUser));
+      // 인증 주체(등급 포함)를 별도로 보관 (localStorage에는 경량 스냅샷만)
       window.currentUser = authUser;
+      if (typeof window.persistStelvioUserToLocalStorage === 'function') {
+        window.persistStelvioUserToLocalStorage(authUser);
+      } else {
+        try {
+          localStorage.setItem('authUser', JSON.stringify(authUser));
+          localStorage.setItem('currentUser', JSON.stringify(authUser));
+        } catch (eLsAuth) {
+          console.warn('[Auth] currentUser 저장 실패:', eLsAuth && eLsAuth.message);
+        }
+      }
       // ================================================================================
 
       // 성공 애니메이션

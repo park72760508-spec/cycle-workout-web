@@ -108,6 +108,142 @@ if (typeof window !== 'undefined') {
   window.isStelvioSysConsoleAdmin = isStelvioSysConsoleAdmin;
 }
 
+/** localStorage용 — Firestore 전체 문서 대신 필수 필드만 (QuotaExceeded 방지) */
+var STELVIO_USER_LS_SNAPSHOT_KEYS = [
+  'id', 'uid', 'name', 'contact', 'phone', 'phoneNumber', 'tel',
+  'ftp', 'ftp_watts', 'FTP', 'weight', 'weightKg', 'weight_kg',
+  'birth_year', 'birthYear', 'gender', 'sex', 'challenge', 'grade',
+  'expiry_date', 'is_private', 'profileImageUrl', 'profile_image_url',
+  'max_hr', 'maxHr', 'acc_points', 'rem_points', 'last_training_date',
+  'email', 'created_at', 'lastLogin',
+  'strava_connected', 'has_strava', 'gemini_api_registered', 'geminiApiRegistered',
+];
+
+function sanitizeFieldForUserLocalStorage(key, val) {
+  if (val == null) return undefined;
+  if (typeof val === 'function') return undefined;
+  if (Array.isArray(val)) return undefined;
+  if (val && typeof val.toDate === 'function') {
+    try {
+      return val.toDate().toISOString();
+    } catch (_e) {
+      return undefined;
+    }
+  }
+  if (typeof val === 'object') {
+    if (key === 'birth' && val.year != null) return undefined;
+    return undefined;
+  }
+  if (typeof val === 'string') {
+    if (key === 'profileImageUrl' || key === 'profile_image_url') {
+      if (val.length > 2048 || val.indexOf('data:image') === 0) return undefined;
+    }
+    if (val.length > 8000) return val.slice(0, 8000);
+  }
+  return val;
+}
+
+function toStelvioUserStorageSnapshot(user) {
+  if (!user || typeof user !== 'object') return null;
+  const out = {};
+  const uid = user.id != null ? user.id : user.uid;
+  if (uid == null || uid === '') return null;
+  out.id = uid;
+  out.uid = uid;
+  let ki;
+  for (ki = 0; ki < STELVIO_USER_LS_SNAPSHOT_KEYS.length; ki++) {
+    const k = STELVIO_USER_LS_SNAPSHOT_KEYS[ki];
+    if (k === 'id' || k === 'uid') continue;
+    if (!Object.prototype.hasOwnProperty.call(user, k)) continue;
+    const v = sanitizeFieldForUserLocalStorage(k, user[k]);
+    if (v !== undefined) out[k] = v;
+  }
+  if (out.birth_year == null && user.birth && user.birth.year != null) {
+    out.birth_year = user.birth.year;
+  }
+  return out;
+}
+
+function pruneStelvioLocalStorageForQuota() {
+  try {
+    const keys = [];
+    let i;
+    for (i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k) keys.push(k);
+    }
+    keys.forEach(function (k) {
+      if (k.indexOf('stelvio_rank_prev') === 0) {
+        try {
+          localStorage.removeItem(k);
+        } catch (_e) {}
+      } else if (k.indexOf('stelvioPeakRanking') === 0 || k.indexOf('stelvioRanking') === 0) {
+        try {
+          localStorage.removeItem(k);
+        } catch (_e2) {}
+      }
+    });
+  } catch (_e3) {}
+}
+
+/**
+ * window.currentUser는 Firestore 전체 유지, localStorage에는 스냅샷만 저장.
+ * @returns {boolean} 저장 성공 여부
+ */
+function persistStelvioUserToLocalStorage(user, opts) {
+  opts = opts || {};
+  if (!user || typeof user !== 'object') {
+    try {
+      localStorage.removeItem('currentUser');
+      if (opts.authToo !== false) localStorage.removeItem('authUser');
+    } catch (_e) {}
+    return false;
+  }
+  const snap = toStelvioUserStorageSnapshot(user);
+  if (!snap) return false;
+  const json = JSON.stringify(snap);
+  const write = function () {
+    localStorage.setItem('currentUser', json);
+    if (opts.authToo !== false) localStorage.setItem('authUser', json);
+  };
+  try {
+    write();
+    return true;
+  } catch (e) {
+    if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
+      console.warn('[Auth] localStorage 용량 초과 — 랭킹 캐시 정리 후 재시도');
+      pruneStelvioLocalStorageForQuota();
+      try {
+        write();
+        return true;
+      } catch (e2) {
+        try {
+          const minimal = JSON.stringify({
+            id: snap.id,
+            uid: snap.id,
+            grade: snap.grade != null ? snap.grade : '2',
+            name: snap.name || '',
+          });
+          localStorage.setItem('authUser', minimal);
+        } catch (_e4) {}
+        console.warn(
+          '[Auth] currentUser localStorage 저장 생략(용량 부족). 세션은 window.currentUser로 유지합니다.',
+          e2 && e2.message
+        );
+        return false;
+      }
+    }
+    console.warn('[Auth] localStorage 저장 실패:', e && e.message);
+    return false;
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.toStelvioUserStorageSnapshot = toStelvioUserStorageSnapshot;
+  window.persistStelvioUserToLocalStorage = persistStelvioUserToLocalStorage;
+  window.pruneStelvioLocalStorageForQuota = pruneStelvioLocalStorageForQuota;
+}
+
 /**
  * 일반 사용자에게는 STELVIO 흐름 추적용 console.log/info/debug/warn 출력을 숨김 (관리자만 통과).
  * console.error는 유지 — 장애 대응용.
@@ -744,8 +880,7 @@ async function signInWithGoogle() {
       
       // 전역 상태 업데이트
       window.currentUser = userData;
-      localStorage.setItem('currentUser', JSON.stringify(userData));
-      localStorage.setItem('authUser', JSON.stringify(userData));
+      persistStelvioUserToLocalStorage(userData);
       
       // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적 중 하나라도 없으면)
       const hasContact = userData.contact && userData.contact.trim() !== '';
@@ -798,8 +933,7 @@ async function signInWithGoogle() {
 
       // 전역 상태 업데이트
       window.currentUser = newUserData;
-      localStorage.setItem('currentUser', JSON.stringify(newUserData));
-      localStorage.setItem('authUser', JSON.stringify(newUserData));
+      persistStelvioUserToLocalStorage(newUserData);
 
       // 로그인 성공 플래그 설정
       isLoginJustCompleted = true;
@@ -909,8 +1043,7 @@ function initAuthStateListener() {
         
         // 전역 상태 업데이트
         window.currentUser = userData;
-        localStorage.setItem('currentUser', JSON.stringify(userData));
-        localStorage.setItem('authUser', JSON.stringify(userData));
+        persistStelvioUserToLocalStorage(userData);
         
         // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적 중 하나라도 없으면)
         const hasContact = userData.contact && userData.contact.trim() !== '';
@@ -975,8 +1108,7 @@ function initAuthStateListener() {
         await userDocRef.set(newUserData);
         
         window.currentUser = newUserData;
-        localStorage.setItem('currentUser', JSON.stringify(newUserData));
-        localStorage.setItem('authUser', JSON.stringify(newUserData));
+        persistStelvioUserToLocalStorage(newUserData);
         
         if (typeof loadUsers === 'function') {
           await loadUsers();
@@ -1047,8 +1179,14 @@ function initAuthStateListener() {
         if (userData) {
           // 전역 상태 업데이트 (나이·성별 포함 Firestore 전체 데이터)
           window.currentUser = userData;
-          localStorage.setItem('currentUser', JSON.stringify(userData));
-          localStorage.setItem('authUser', JSON.stringify(userData));
+          try {
+            persistStelvioUserToLocalStorage(userData);
+          } catch (storageErr) {
+            console.warn(
+              '[Auth] localStorage 저장 실패(프로필은 메모리에 유지):',
+              storageErr && storageErr.message
+            );
+          }
           
           if (isPhoneLogin && typeof window !== 'undefined') {
             window.isPhoneAuthenticated = true;
@@ -1142,6 +1280,21 @@ function initAuthStateListener() {
           window.isPhoneAuthenticated = false;
         }
       } catch (error) {
+        const isQuota =
+          error &&
+          (error.name === 'QuotaExceededError' ||
+            error.code === 22 ||
+            (error.message && error.message.indexOf('quota') >= 0));
+        if (isQuota) {
+          console.warn(
+            '[Auth] localStorage 용량 초과 — Firestore 프로필은 로드됐을 수 있습니다. 캐시 정리 후 새로고침을 권장합니다.',
+            error.message
+          );
+          if (typeof pruneStelvioLocalStorageForQuota === 'function') {
+            pruneStelvioLocalStorageForQuota();
+          }
+          return;
+        }
         console.error('❌ 사용자 정보 로드 실패:', error);
         // 권한 오류인 경우에도 로그아웃하지 않음 (Firestore 규칙 설정 문제일 수 있음)
         if (error.code === 'permission-denied') {
@@ -1709,7 +1862,7 @@ async function toggleUserPrivacy(userId, isPrivate) {
     if (res && res.success) {
       if (window.currentUser && String(window.currentUser.id) === userId) {
         window.currentUser.is_private = isPrivate;
-        try { localStorage.setItem('currentUser', JSON.stringify(window.currentUser)); } catch (e) {}
+        try { persistStelvioUserToLocalStorage(window.currentUser); } catch (e) {}
       }
       if (typeof loadUsers === 'function') await loadUsers();
       if (typeof showToast === 'function') showToast(isPrivate ? '비공개로 설정되었습니다.' : '공개로 설정되었습니다.');
@@ -3081,7 +3234,7 @@ async function loadUsers() {
             var au = JSON.parse(auStr);
             if (au && String(au.grade) !== String(meRow.grade)) {
               au.grade = String(meRow.grade);
-              localStorage.setItem('authUser', JSON.stringify(au));
+              persistStelvioUserToLocalStorage(au, { authToo: true });
             }
           }
         }
@@ -3164,10 +3317,8 @@ async function selectUser(userId) {
     
     window.currentUser = user;
     
-    try {
-      localStorage.setItem('currentUser', JSON.stringify(user));
-    } catch (e) {
-      console.warn('로컬 스토리지 저장 실패:', e);
+    if (!persistStelvioUserToLocalStorage(user)) {
+      console.warn('로컬 스토리지 저장 실패(용량 부족 가능). 메모리 프로필은 유지됩니다.');
     }
 
     showToast(`${user.name}님이 선택되었습니다.`);
@@ -3905,8 +4056,7 @@ async function completeUserInfo() {
       // 전역 상태 업데이트
       if (window.currentUser) {
         window.currentUser = { ...window.currentUser, ...updateData };
-        localStorage.setItem('currentUser', JSON.stringify(window.currentUser));
-        localStorage.setItem('authUser', JSON.stringify(window.currentUser));
+        persistStelvioUserToLocalStorage(window.currentUser);
       }
       
       // 모달 닫기
@@ -4147,8 +4297,7 @@ async function adoptCreatedUserAsViewer(createdInput) {
 
     window.currentUser = user;
     try {
-      localStorage.setItem('authUser', JSON.stringify(user));
-      localStorage.setItem('currentUser', JSON.stringify(user));
+      persistStelvioUserToLocalStorage(user);
     } catch (e) {
       console.warn('localStorage 저장 실패(무시 가능):', e);
     }
@@ -4503,7 +4652,7 @@ function showPerformanceDashboard(userId) {
           return;
         }
         window.currentUser = user;
-        localStorage.setItem('currentUser', JSON.stringify(user));
+        persistStelvioUserToLocalStorage(user);
       }
       // 대시보드 화면 표시
       if (typeof showScreen === 'function') {
@@ -4592,8 +4741,7 @@ async function findUserByPhone(phoneNumber) {
     if (foundUser) {
       // 전역 상태 업데이트
       window.currentUser = foundUser;
-      localStorage.setItem('currentUser', JSON.stringify(foundUser));
-      localStorage.setItem('authUser', JSON.stringify(foundUser));
+      persistStelvioUserToLocalStorage(foundUser);
       
       // 사용자 정보 상세 로그
       console.log('✅ 인증된 사용자 정보 설정 완료:', {
