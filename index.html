@@ -10702,9 +10702,10 @@
         data.byCategory
       ) {
         try {
+          /* 60분 파워만(서버와 동일) — 대시보드 FTP 폴백 값은 덮어쓰지 않음 */
           data = await window.stelvioAlignPersonalSpeedRankingWithDashboard(data, uid);
         } catch (eAlignSpd) {
-          console.warn('[StelvioRanking] 항속 대시보드 동기화 실패:', eAlignSpd && eAlignSpd.message);
+          console.warn('[StelvioRanking] 항속 60분 파워 동기화 실패:', eAlignSpd && eAlignSpd.message);
         }
       }
       stelvioApplyPeakRankingFetchResult(data, myGen, uid);
