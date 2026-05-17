@@ -9,6 +9,11 @@ const admin = require("firebase-admin");
 const EXCLUDED_ACTIVITY_TYPES = new Set(["run", "swim", "walk", "trailrun", "weighttraining"]);
 
 exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
+/** 사용자별 6개월 항속 사전 집계 — 랭킹 보드는 users×1회 읽기만 수행 */
+exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
+exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
+const ROLLUP_REBUILD_BATCH = 40;
+const BUCKET_GET_CHUNK = 100;
 
 const DURATION_FIELDS = {
   "1min": "max_1min_watts",
@@ -194,10 +199,20 @@ async function reconcileUserRankingDayBucket(db, userId, ymd, userData) {
     && Object.keys(DURATION_FIELDS).every((dt) => (payload[DURATION_FIELDS[dt]] || 0) <= 0)
   ) {
     await ref.delete().catch(() => {});
+    try {
+      await touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, null);
+    } catch (eTouch) {
+      console.warn("[rankingDayRollup] personal_speed touch(삭제) 실패:", userId, ymd, eTouch.message);
+    }
     return;
   }
 
   await ref.set(payload, { merge: false });
+  try {
+    await touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, payload);
+  } catch (eTouch2) {
+    console.warn("[rankingDayRollup] personal_speed touch 실패:", userId, ymd, eTouch2.message);
+  }
 }
 
 /**
@@ -471,8 +486,258 @@ async function max60minWattsFromDayBuckets(db, userId, userData, startStr, endSt
   const dates = listInclusiveYmdsSeoul(startStr, endStr);
   if (!dates.length) return 0;
   const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
-  const bucketSnaps = await chunkedGetAll(db, refs, 30);
+  const bucketSnaps = await chunkedGetAll(db, refs, BUCKET_GET_CHUNK);
   return max60minWattsFromBucketSnaps(bucketSnaps, startStr, endStr);
+}
+
+function addDaysSeoulYmd(ymdStr, deltaDays) {
+  const t = new Date(`${ymdStr}T12:00:00+09:00`).getTime() + deltaDays * 86400000;
+  return new Date(t).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
+function getRolling183DaysRangeSeoul() {
+  const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const startStr = addDaysSeoulYmd(endStr, -182);
+  return { startStr, endStr };
+}
+
+/** 대시보드·랭킹 공통 평지 항속(km/h) */
+function calculateSpeedOnFlat(power, weight) {
+  const P = Number(power);
+  const m = Number(weight);
+  if (!Number.isFinite(P) || P <= 0 || !Number.isFinite(m) || m <= 0) return 0;
+  const rho = 1.225;
+  const g = 9.81;
+  const Crr = 0.0045;
+  let CdA = 0.328 + (m - 70) * 0.0012;
+  if (CdA < 0.22) CdA = 0.22;
+  if (CdA > 0.42) CdA = 0.42;
+  const powerAtV = (vMs) => 0.5 * rho * CdA * vMs * vMs * vMs + Crr * m * g * vMs;
+  let lo = 0.1;
+  let hi = 40;
+  for (let i = 0; i < 55; i++) {
+    const mid = (lo + hi) / 2;
+    if (powerAtV(mid) < P) lo = mid;
+    else hi = mid;
+  }
+  return ((lo + hi) / 2) * 3.6;
+}
+
+function personalSpeed6mRollupRef(db, userId) {
+  return db.collection("users").doc(userId).collection(exports.RANKING_ROLLUPS_COLL).doc(exports.PERSONAL_SPEED_6M_ROLLUP_ID);
+}
+
+/**
+ * @returns {{ peak60minWatts:number, referenceWatts:number, speedKmh:number, weightKg:number, peak60Ymd:string }|null}
+ */
+function buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peak60Ymd) {
+  const rawWeight = Number(userData && (userData.weight || userData.weightKg)) || 0;
+  const weightKg = rawWeight > 0 ? Math.max(rawWeight, 45) : 0;
+  const ftp = Number(userData?.ftp ?? userData?.ftp_watts ?? userData?.FTP) || 0;
+  const useFallbackFtp = !(peak60 > 0) && ftp > 0;
+  let referenceWatts = peak60 > 0 ? peak60 : useFallbackFtp ? ftp * 0.93 : 0;
+  if (!(referenceWatts > 0) || !(weightKg > 0)) return null;
+  referenceWatts = Math.round(referenceWatts * 10) / 10;
+  const speedKmh = Math.round(calculateSpeedOnFlat(referenceWatts, weightKg) * 10) / 10;
+  if (!(speedKmh > 0)) return null;
+  return {
+    peak60minWatts: peak60 > 0 ? Math.round(peak60 * 10) / 10 : 0,
+    referenceWatts,
+    speedKmh,
+    weightKg,
+    peak60Ymd: peak60Ymd || "",
+  };
+}
+
+async function writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics) {
+  const ref = personalSpeed6mRollupRef(db, userId);
+  if (!metrics) {
+    await ref.delete().catch(() => {});
+    return;
+  }
+  await ref.set({
+    windowStart: startStr,
+    windowEnd: endStr,
+    peak60minWatts: metrics.peak60minWatts,
+    peak60Ymd: metrics.peak60Ymd || "",
+    referenceWatts: metrics.referenceWatts,
+    speedKmh: metrics.speedKmh,
+    weightKg: metrics.weightKg,
+    reconciled_at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+/**
+ * 6개월 창: ranking_day_totals 일 버킷만 1회 읽어 peak60·항속(km/h) 산출 (로그 스캔 없음).
+ * ensureMissingDays=true일 때만 누락 일자 버킷을 로그로 채움(수동 백필용, 23시 배치는 false).
+ */
+async function rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, opts) {
+  const ensureMissing = !!(opts && opts.ensureMissingDays);
+  if (ensureMissing) {
+    await ensureRankingBucketsFilledForRange(db, userId, userData || {}, startStr, endStr, false);
+  }
+  const dates = listInclusiveYmdsSeoul(startStr, endStr);
+  if (!dates.length) {
+    await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, null);
+    return null;
+  }
+  const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
+  const snaps = await chunkedGetAll(db, refs, BUCKET_GET_CHUNK);
+  const peak60 = max60minWattsFromBucketSnaps(snaps, startStr, endStr);
+  let peakYmd = "";
+  if (peak60 > 0) {
+    for (let i = 0; i < snaps.length; i++) {
+      const snap = snaps[i];
+      if (!snap || !snap.exists) continue;
+      const w = Number((snap.data() || {}).max_60min_watts) || 0;
+      if (w >= peak60 - 1e-6) {
+        peakYmd = dates[i];
+        break;
+      }
+    }
+  }
+  const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peakYmd);
+  await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
+  return metrics;
+}
+
+/**
+ * 로그→일 버킷 반영 직후: 증분 peak 갱신(대부분) / peak 하락 시에만 버킷 재스캔.
+ */
+async function touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, dayPayload) {
+  const { startStr, endStr } = getRolling183DaysRangeSeoul();
+  if (!ymd || ymd < startStr || ymd > endStr) {
+    return;
+  }
+  const ref = personalSpeed6mRollupRef(db, userId);
+  const existing = (await ref.get()).data() || null;
+  const day60 = dayPayload ? Number(dayPayload.max_60min_watts) || 0 : 0;
+  const windowOk =
+    existing &&
+    existing.windowStart === startStr &&
+    existing.windowEnd === endStr;
+  let peak60 = windowOk ? Number(existing.peak60minWatts) || 0 : 0;
+  let peakYmd = windowOk ? String(existing.peak60Ymd || "") : "";
+
+  if (!dayPayload) {
+    if (peakYmd === ymd || peak60 <= 0) {
+      await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, {
+        ensureMissingDays: false,
+      });
+    }
+    return;
+  }
+
+  if (day60 >= peak60) {
+    peak60 = day60;
+    peakYmd = ymd;
+  } else if (peakYmd === ymd) {
+    await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, {
+      ensureMissingDays: false,
+    });
+    return;
+  } else if (!windowOk) {
+    await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, {
+      ensureMissingDays: false,
+    });
+    return;
+  }
+
+  const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peakYmd);
+  await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
+}
+
+/**
+ * 23시 배치: 기본 skipUnchanged — 창이 맞는 personal_speed_6m은 재읽기 생략(체중/FTP만 바뀐 경우 km/h만 갱신).
+ * 로그 스캔(ensureMissingDays)은 수동 백필에서만 true.
+ */
+async function rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr, opts) {
+  if (!userDocs || !userDocs.length) return { rebuilt: 0, skipped: 0, metricsRefreshed: 0 };
+  const batchSize = (opts && opts.batchSize) || ROLLUP_REBUILD_BATCH;
+  const bucketOpts = { ensureMissingDays: !!(opts && opts.ensureMissingDays) };
+  const skipUnchanged = !opts || opts.skipUnchanged !== false;
+  let rebuilt = 0;
+  let skipped = 0;
+  let metricsRefreshed = 0;
+  let rollupMap = new Map();
+  if (skipUnchanged) {
+    rollupMap = await fetchPersonalSpeed6mRollupMap(
+      db,
+      userDocs.map((d) => d.id)
+    );
+  }
+  for (let i = 0; i < userDocs.length; i += batchSize) {
+    const batch = userDocs.slice(i, i + batchSize);
+    /* eslint-disable no-await-in-loop */
+    await Promise.all(
+      batch.map(async (udoc) => {
+        const userId = udoc.id;
+        const userData = udoc.data() || {};
+        try {
+          if (skipUnchanged) {
+            const ex = rollupMap.get(userId);
+            if (ex && ex.windowStart === startStr && ex.windowEnd === endStr) {
+              const peak60 = Number(ex.peak60minWatts) || 0;
+              const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(
+                userData,
+                peak60,
+                String(ex.peak60Ymd || "")
+              );
+              const prevSpd = Number(ex.speedKmh) || 0;
+              const prevW = Number(ex.weightKg) || 0;
+              if (
+                metrics &&
+                (Math.abs(metrics.speedKmh - prevSpd) > 0.05 ||
+                  Math.abs(metrics.weightKg - prevW) > 0.5 ||
+                  Math.abs(metrics.referenceWatts - (Number(ex.referenceWatts) || 0)) > 0.5)
+              ) {
+                await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
+                metricsRefreshed += 1;
+              }
+              skipped += 1;
+              return;
+            }
+          }
+          const m = await rebuildPersonalSpeed6mRollupFromBuckets(
+            db,
+            userId,
+            userData,
+            startStr,
+            endStr,
+            bucketOpts
+          );
+          if (m && m.speedKmh > 0) rebuilt += 1;
+        } catch (e) {
+          console.warn("[rankingDayRollup] personal_speed rollup 실패:", userId, e.message);
+        }
+      })
+    );
+    /* eslint-enable no-await-in-loop */
+  }
+  return { rebuilt, skipped, metricsRefreshed };
+}
+
+/**
+ * users 스냅샷 + rollup 1문서/사용자 batch getAll — O(users) 읽기.
+ * @returns {Map<string, object>} userId -> rollup data
+ */
+async function fetchPersonalSpeed6mRollupMap(db, userIds) {
+  const map = new Map();
+  if (!userIds.length) return map;
+  const chunk = 500;
+  for (let i = 0; i < userIds.length; i += chunk) {
+    const slice = userIds.slice(i, i + chunk);
+    const refs = slice.map((uid) => personalSpeed6mRollupRef(db, uid));
+    /* eslint-disable no-await-in-loop */
+    const snaps = await chunkedGetAll(db, refs, chunk);
+    /* eslint-enable no-await-in-loop */
+    for (let j = 0; j < slice.length; j++) {
+      if (snaps[j] && snaps[j].exists) {
+        map.set(slice[j], snaps[j].data() || {});
+      }
+    }
+  }
+  return map;
 }
 
 function maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr) {
@@ -509,3 +774,9 @@ exports.max60minWattsFromDayBuckets = max60minWattsFromDayBuckets;
 exports.maxHrByDurationFromBucketSnaps = maxHrByDurationFromBucketSnaps;
 exports.bucketRef = bucketRef;
 exports.chunkedGetAll = chunkedGetAll;
+exports.getRolling183DaysRangeSeoul = getRolling183DaysRangeSeoul;
+exports.calculateSpeedOnFlat = calculateSpeedOnFlat;
+exports.rebuildPersonalSpeed6mRollupFromBuckets = rebuildPersonalSpeed6mRollupFromBuckets;
+exports.rebuildPersonalSpeed6mRollupsBatch = rebuildPersonalSpeed6mRollupsBatch;
+exports.fetchPersonalSpeed6mRollupMap = fetchPersonalSpeed6mRollupMap;
+exports.touchPersonalSpeed6mRollupAfterDayChange = touchPersonalSpeed6mRollupAfterDayChange;

@@ -3889,63 +3889,50 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
 }
 
 /**
- * 개인: 최근 6개월(서울) 1시간 항속능력(km/h) — 대시보드 산출 로직과 동일
- * @param {{ ensureMissingDays?: boolean }} [opts] HTTP는 ensureMissingDays:false(버킷만 읽기), 23시 집계는 true
+ * users/{uid}/ranking_rollups/personal_speed_6m — 사용자당 1읽기로 보드 구성 (확장성).
+ * peak60minWatts·speedKmh는 로그 반영 시 touch / 23시 배치에서만 갱신(랭킹 API는 재산출하지 않음).
+ * 23시 집계·HTTP 폴백 공용. rollup 창이 startStr~endStr과 일치하는 행만 포함.
  */
-async function getPersonalSpeedRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null, opts = {}) {
-  const ensureMissingDays = opts.ensureMissingDays !== false;
-  const bucketOpts = { ensureMissingDays };
+async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, genderFilter, usersSnap = null) {
   const snap = usersSnap ?? await db.collection("users").get();
   const docs = snap.docs;
+  const rollupMap = await rankingDayRollup.fetchPersonalSpeed6mRollupMap(
+    db,
+    docs.map((d) => d.id)
+  );
   const entries = [];
-  for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
-    const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map(async (doc) => {
-        const userId = doc.id;
-        const data = doc.data();
-        const name = data.name || "(이름 없음)";
-        const gender = String(data.gender || data.sex || "").toLowerCase();
-        if (genderFilter && genderFilter !== "all") {
-          const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
-          const match = gender === "m" || gender === "male" || gender === "남" ? "male" : (gender === "f" || gender === "female" || gender === "여" ? "female" : null);
-          if (match !== g) return null;
-        }
-        const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
-        const challenge = data.challenge || "Fitness";
-        const leagueCategory = getLeagueCategory(challenge, birthYear);
-        if (!leagueCategory) return null;
-        const peak60 = await rankingDayRollup.max60minWattsFromDayBuckets(
-          db,
-          userId,
-          data,
-          startStr,
-          endStr,
-          bucketOpts
-        );
-        const rawWeight = Number(data.weight || data.weightKg) || 0;
-        const weightKg = rawWeight > 0 ? Math.max(rawWeight, 45) : 0;
-        const ftp = Number(data.ftp ?? data.ftp_watts ?? data.FTP) || 0;
-        const useFallbackFtp = !(peak60 > 0) && ftp > 0;
-        let referenceWatts = peak60 > 0 ? peak60 : useFallbackFtp ? ftp * 0.93 : 0;
-        if (!(referenceWatts > 0) || !(weightKg > 0)) return null;
-        referenceWatts = Math.round(referenceWatts * 10) / 10;
-        const speedKmh = Math.round(calculateSpeedOnFlat(referenceWatts, weightKg) * 10) / 10;
-        if (!(speedKmh > 0)) return null;
-        return {
-          userId,
-          name,
-          speedKmh,
-          referenceWatts,
-          weightKg,
-          ageCategory: leagueCategory,
-          gender,
-          is_private: privacyFlagFromFirestoreDoc(data),
-          profileImageUrl: profileImageUrlFromUserData(data),
-        };
-      })
-    );
-    results.forEach((r) => { if (r) entries.push(r); });
+  for (let di = 0; di < docs.length; di++) {
+    const doc = docs[di];
+    const userId = doc.id;
+    const data = doc.data();
+    const rollup = rollupMap.get(userId);
+    if (!rollup) continue;
+    if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) continue;
+    const speedKmh = Number(rollup.speedKmh);
+    if (!(speedKmh > 0)) continue;
+
+    const gender = String(data.gender || data.sex || "").toLowerCase();
+    if (genderFilter && genderFilter !== "all") {
+      const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
+      const match = gender === "m" || gender === "male" || gender === "남" ? "male" : (gender === "f" || gender === "female" || gender === "여" ? "female" : null);
+      if (match !== g) continue;
+    }
+    const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+    const challenge = data.challenge || "Fitness";
+    const leagueCategory = getLeagueCategory(challenge, birthYear);
+    if (!leagueCategory) continue;
+
+    entries.push({
+      userId,
+      name: data.name || "(이름 없음)",
+      speedKmh,
+      referenceWatts: rollup.referenceWatts != null ? Number(rollup.referenceWatts) : 0,
+      weightKg: rollup.weightKg != null ? Number(rollup.weightKg) : 0,
+      ageCategory: leagueCategory,
+      gender,
+      is_private: privacyFlagFromFirestoreDoc(data),
+      profileImageUrl: profileImageUrlFromUserData(data),
+    });
   }
   entries.sort((a, b) => b.speedKmh - a.speedKmh);
   const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
@@ -5066,11 +5053,17 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
     wrote++;
   }
 
-  // ── 4-1. 6개월 1시간 항속(km/h) 랭킹 — 대시보드 산출 로직, 매일 23시 집계 시 등락 스냅샷
+  // ── 4-1. 6개월 항속: personal_speed_6m(사전 집계)만 갱신·조회 — 전 사용자 로그/183일 버킷 일괄 스캔 없음
+  const speedRollupRebuild = await rankingDayRollup.rebuildPersonalSpeed6mRollupsBatch(
+    db,
+    sharedUsersSnap.docs,
+    r183s,
+    r183e,
+    { ensureMissingDays: !!forceReconcile, skipUnchanged: !forceReconcile }
+  );
+  console.log("[runRebuildRankingAggregatesCore] personal_speed rollups rebuilt", speedRollupRebuild);
   for (const gender of ["all", "M", "F"]) {
-    const spd = await getPersonalSpeedRankingBoardEntries(db, r183s, r183e, gender, sharedUsersSnap, {
-      ensureMissingDays: true,
-    });
+    const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r183s, r183e, gender, sharedUsersSnap);
     await applyPeakRankChanges(db, spd.byCategory, `peak_personal_speed_rolling183_${gender}`);
     const keyS = `peakRanking_personal_speed_183d_${gender}_${r183s}_${r183e}`;
     await writeRankingAggregatePayload(db, keyS, {
@@ -6159,21 +6152,45 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
-      const { entries, byCategory } = await getPersonalSpeedRankingBoardEntries(db, startStr, endStr, gender, null, {
-        ensureMissingDays: false,
-      });
-      await applyPeakRankChanges(db, byCategory, `peak_personal_speed_rolling183_${gender}`);
-      await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
-      await hydrateRankingBoardProfileImages(db, byCategory, entries);
-      await cacheRef.set({
-        byCategory,
-        entries,
-        startStr,
-        endStr,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      /* 전체 사용자×183일 버킷 스캔 금지 — rollup·월간 폴백만 (사용자 증가 대응) */
+      const rollupLive = await getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, gender, null);
+      if (rollupLive.entries.length > 0) {
+        await applyPeakRankChanges(db, rollupLive.byCategory, `peak_personal_speed_rolling183_${gender}`);
+        await writeRankingAggregatePayload(db, cacheKey, {
+          byCategory: rollupLive.byCategory,
+          entries: rollupLive.entries,
+          startStr,
+          endStr,
+        });
+        await hydrateRankingBoardProfileImages(db, rollupLive.byCategory, rollupLive.entries);
+        await cacheRef.set({
+          byCategory: rollupLive.byCategory,
+          entries: rollupLive.entries,
+          startStr,
+          endStr,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return res.status(200).json(
+          await buildPersonalSpeedOutFromPack(
+            { byCategory: rollupLive.byCategory, entries: rollupLive.entries, startStr, endStr },
+            { fromUserRollups: true }
+          )
+        );
+      }
+
+      const emptyBoard = {
+        Supremo: [],
+        Bianco: [],
+        Rosa: [],
+        Infinito: [],
+        Leggenda: [],
+        Assoluto: [],
+      };
       return res.status(200).json(
-        await buildPersonalSpeedOutFromPack({ byCategory, entries, startStr, endStr }, { computed: true })
+        await buildPersonalSpeedOutFromPack(
+          { byCategory: emptyBoard, entries: [], startStr, endStr },
+          { pendingAggregate: true }
+        )
       );
     }
 
