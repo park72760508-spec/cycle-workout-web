@@ -41,6 +41,23 @@ function profileImageUrlFromUserData(data) {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
 }
 
+/** 탈퇴(비활성) 사용자 — 랭킹·집계·프로필 노출 제외 (데이터는 보존) */
+function isRankingEligibleUserData(data) {
+  if (!data || typeof data !== "object") return false;
+  if (data.is_active === false) return false;
+  const accountStatus = String(data.account_status || "").trim().toLowerCase();
+  if (accountStatus === "withdrawn") return false;
+  const legacyStatus = String(data.status || "").trim().toLowerCase();
+  if (legacyStatus === "withdrawn" || legacyStatus === "inactive" || legacyStatus === "deleted") {
+    return false;
+  }
+  return true;
+}
+
+function filterRankingEligibleUserDocs(docs) {
+  return (docs || []).filter((d) => isRankingEligibleUserData(d.data()));
+}
+
 /** uid 목록으로 users 문서 배치 조회 → profileImageUrl 맵 (랭킹 스냅샷·집계 행 보강용) */
 async function fetchProfileImageUrlsMapForUsers(db, userIds) {
   const urlById = new Map();
@@ -3717,7 +3734,7 @@ async function getPeakHrForUser(db, userId, startStr, endStr, durationType) {
 async function getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, genderFilter, usersSnap = null) {
   if (!DURATION_HR_FIELDS[durationType]) return null;
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = snap.docs;
+  const docs = filterRankingEligibleUserDocs(snap.docs);
   let sum = 0;
   let n = 0;
   for (let i = 0; i < docs.length; i += PEAK_POWER_BATCH_SIZE) {
@@ -3754,7 +3771,7 @@ const PEAK_RANKING_USER_LOOKUP_ORDER = ["Assoluto", "Bianco", "Rosa", "Infinito"
  * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
 async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, genderFilter, usersSnap = null) {
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = snap.docs;
+  const docs = filterRankingEligibleUserDocs(snap.docs);
   const entries = [];
   for (let i = 0; i < docs.length; i += PEAK_POWER_BATCH_SIZE) {
     const batch = docs.slice(i, i + PEAK_POWER_BATCH_SIZE);
@@ -3803,7 +3820,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
  * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
 async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null) {
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = snap.docs;
+  const docs = filterRankingEligibleUserDocs(snap.docs);
   const entries = [];
   for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
     const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
@@ -3851,7 +3868,7 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
  * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
 async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null) {
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = snap.docs;
+  const docs = filterRankingEligibleUserDocs(snap.docs);
   const entries = [];
   for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
     const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
@@ -3901,7 +3918,7 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
  */
 async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, genderFilter, usersSnap = null, opts = {}) {
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = snap.docs;
+  const docs = filterRankingEligibleUserDocs(snap.docs);
   const logBatchSize =
     opts && opts.logBatchSize != null && Number.isFinite(Number(opts.logBatchSize))
       ? Math.max(1, Math.floor(Number(opts.logBatchSize)))
@@ -5012,7 +5029,7 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
   });
 
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = snap.docs;
+  const docs = filterRankingEligibleUserDocs(snap.docs);
   for (let i = 0; i < docs.length; i += RANKING_ONE_PASS_BATCH) {
     const batch = docs.slice(i, i + RANKING_ONE_PASS_BATCH);
     await Promise.all(
@@ -5239,10 +5256,11 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
 
   // ── 0. 버킷 강제 재계산 (수동 집계 시에만 실행) ──
   // 사용자 루프를 집계 루프와 분리하지 않고 여기서 일괄 처리함으로써 Firestore 읽기 중복을 줄임.
+  const rankingEligibleUserDocs = filterRankingEligibleUserDocs(sharedUsersSnap.docs);
   if (forceReconcile) {
     const RECONCILE_BATCH = 10; // 동시 처리 사용자 수 (타임아웃 방지)
-    for (let i = 0; i < sharedUsersSnap.docs.length; i += RECONCILE_BATCH) {
-      const batch = sharedUsersSnap.docs.slice(i, i + RECONCILE_BATCH);
+    for (let i = 0; i < rankingEligibleUserDocs.length; i += RECONCILE_BATCH) {
+      const batch = rankingEligibleUserDocs.slice(i, i + RECONCILE_BATCH);
       await Promise.all(batch.map(async (userDoc) => {
         const uid = userDoc.id;
         const udata = userDoc.data() || {};
@@ -5348,7 +5366,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   }
   const psRollup = await rankingDayRollup.preparePersonalSpeedRankingRebuild(
     db,
-    sharedUsersSnap.docs,
+    rankingEligibleUserDocs,
     r183s,
     r183e,
     { ensureMissingDays: false }
