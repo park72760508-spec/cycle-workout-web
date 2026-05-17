@@ -4794,6 +4794,25 @@ button[aria-disabled="true"] {
   min-height: 100vh;
   padding-bottom: 100px; /* 나가기 버튼을 위한 여백 */
 }
+
+#profileScreen .user-card--withdrawn {
+  opacity: 0.88;
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+#profileScreen .profile-withdrawn-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #6b7280;
+  background: #e5e7eb;
+  border-radius: 4px;
+  vertical-align: middle;
+}
 /* 훈련 등급 범례 컨테이너 */
 .challenge-legend-container {
   display: flex;
