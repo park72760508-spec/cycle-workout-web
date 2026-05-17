@@ -307,16 +307,29 @@
     return data;
   }
 
+  /** FTP×93% 폴백만 있고 로그 기반 60분 피크가 없는 경우 */
+  function isPersonalSpeedFtpOnlyMetrics(metrics, profile) {
+    if (!metrics || Number(metrics.peak60minWatts) > 0) return false;
+    var ftp = Number(profile && profile.ftp) || 0;
+    if (!(ftp > 0) || !(Number(metrics.referenceWatts) > 0)) return false;
+    var ftp93 = Math.round(ftp * 0.93 * 10) / 10;
+    return Math.abs(Number(metrics.referenceWatts) - ftp93) < 0.65;
+  }
+
   /**
-   * 랭킹 API 응답에서 본인(uid) 항속을 서버와 동일(60분 파워만)으로 맞춤.
+   * 랭킹 API 응답에서 본인(uid) 항속을 대시보드·맞춤필터 현실지표와 동일하게 맞춤.
    */
   async function alignPersonalSpeedRankingPayloadWithDashboard(data, uid) {
     data = filterPersonalSpeedBoardExcludeNonLog60(data);
     if (!data || !uid || !data.byCategory) return data;
     var profile = resolveProfileForOneHourAbility(uid);
     var logs = await fetchTrainingLogsForUser(uid, 400);
-    var metrics = computeOneHourAbilityFromLogs(logs, { ftp: profile.ftp, weight: profile.weight, rankingStrict: true });
-    if (!(metrics.speedKmh > 0)) {
+    var metrics = computeOneHourAbilityFromLogs(logs, {
+      ftp: profile.ftp,
+      weight: profile.weight,
+      rankingStrict: false
+    });
+    if (isPersonalSpeedFtpOnlyMetrics(metrics, profile) || !(metrics.speedKmh > 0)) {
       removeUidFromPersonalSpeedBoard(data, uid);
       return data;
     }
