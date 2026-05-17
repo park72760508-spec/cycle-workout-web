@@ -16903,8 +16903,16 @@
               if (userData) {
                 window.currentUser = userData;
                 try {
-                  localStorage.setItem('currentUser', JSON.stringify(userData));
-                  localStorage.setItem('authUser', JSON.stringify(userData));
+                  if (typeof window.persistStelvioUserToLocalStorage === 'function') {
+                    window.persistStelvioUserToLocalStorage(userData);
+                  } else {
+                    try {
+                      localStorage.setItem('currentUser', JSON.stringify(userData));
+                      localStorage.setItem('authUser', JSON.stringify(userData));
+                    } catch (eLsUser) {
+                      console.warn('[Login] currentUser 저장 실패:', eLsUser && eLsUser.message);
+                    }
+                  }
                 } catch (eLS0) {
                   console.warn('[Login] localStorage 프로필 저장 실패:', eLS0 && eLS0.message);
                 }
@@ -24563,7 +24571,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                                 setFtpModalOpen(false);
                                 setFtpCalcResult(null);
                                 var cur = window.currentUser;
-                                if (cur) { cur.ftp = ftpCalcResult.newFtp; try { localStorage.setItem('currentUser', JSON.stringify(cur)); } catch (e) {} }
+                                if (cur) {
+                                  cur.ftp = ftpCalcResult.newFtp;
+                                  if (typeof window.persistStelvioUserToLocalStorage === 'function') {
+                                    window.persistStelvioUserToLocalStorage(cur);
+                                  } else {
+                                    try { localStorage.setItem('currentUser', JSON.stringify(cur)); } catch (e) {}
+                                  }
+                                }
                                 if (typeof window.userFTP !== 'undefined') window.userFTP = ftpCalcResult.newFtp;
                                 if (typeof showToast === 'function') showToast('성공적으로 반영되었습니다', 'success');
                               } else {
