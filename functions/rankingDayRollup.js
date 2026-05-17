@@ -13,11 +13,11 @@ exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
 exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
 /** 랭킹 항속 산출식 버전 — 변경 시 rollup·순위 캐시 전면 재계산 */
-exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 7;
-/** rollup.peakSource — 대시보드·맞춤필터 현실지표와 동일(60분 MMP + 50분+ 평균파워, FTP 제외) */
-exports.PERSONAL_SPEED_PEAK_SOURCE_EFFECTIVE = "effective_60min_peak";
-/** @deprecated v5 이하 호환용 */
-exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60 = exports.PERSONAL_SPEED_PEAK_SOURCE_EFFECTIVE;
+exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 8;
+/** rollup.peakSource — 로그 max_60min_watts(60분 MMP)만, FTP·50분 avg 폴백 없음 */
+exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60 = "max_60min_watts";
+/** @deprecated v7 이하 호환 */
+exports.PERSONAL_SPEED_PEAK_SOURCE_EFFECTIVE = exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60;
 const ROLLUP_REBUILD_BATCH = 40;
 const BUCKET_GET_CHUNK = 100;
 
@@ -85,21 +85,6 @@ function dedupeTrainingLogsByDateStravaFirstServer(logs) {
   return out;
 }
 
-const MIN_60MIN_FALLBACK_RIDE_SEC = 50 * 60;
-const MAX_60MIN_FALLBACK_RIDE_SEC = 8 * 3600;
-
-function normalizeTrainingLogDurationSecServer(logData) {
-  const d = logData || {};
-  let sec = Number(d.duration_sec != null ? d.duration_sec : d.time != null ? d.time : d.duration) || 0;
-  if (!(sec > 0)) return 0;
-  if (sec > 86400 * 2) sec = Math.round(sec / 1000);
-  if (sec > 0 && sec < 600) {
-    const km = Number(d.distance_km) || 0;
-    if (km >= 8 && sec <= 360) sec = sec * 60;
-  }
-  return sec;
-}
-
 function maxPlausible60minFromSiblingPeaksServer(logData) {
   const d = logData || {};
   const m40 = Number(d.max_40min_watts) || 0;
@@ -113,20 +98,12 @@ function maxPlausible60minFromSiblingPeaksServer(logData) {
 }
 
 /**
- * 대시보드·랭킹 공통: max_60min_watts → 없으면 50분~8시간 라이드 avg_watts만.
- * weighted_watts(NP)는 60분 지속파워 대용으로 쓰지 않음. MMP 상한·구간 교차검증 적용.
+ * 랭킹·대시보드(로그 경로) 공통: max_60min_watts(60분 MMP)만. avg/NP/FTP 폴백 없음.
  */
-function effective60minWattsFromLogDashboard(logData, weightKg) {
+function peak60minWattsFromLogValidated(logData, weightKg) {
   const d = logData || {};
   const wFall = Number(weightKg) > 0 ? Math.max(Number(weightKg), 45) : 70;
   let w60 = Number(d.max_60min_watts) || 0;
-  if (w60 > 0 && !validatePeakPowerRecord("60min", w60, wFall)) w60 = 0;
-  if (!(w60 > 0)) {
-    const sec = normalizeTrainingLogDurationSecServer(d);
-    if (sec >= MIN_60MIN_FALLBACK_RIDE_SEC && sec <= MAX_60MIN_FALLBACK_RIDE_SEC) {
-      w60 = Number(d.avg_watts) || 0;
-    }
-  }
   if (!(w60 > 0)) return 0;
   if (!validatePeakPowerRecord("60min", w60, wFall)) return 0;
   const sibCap = maxPlausible60minFromSiblingPeaksServer(d);
@@ -134,47 +111,20 @@ function effective60minWattsFromLogDashboard(logData, weightKg) {
   return w60;
 }
 
-/** 랭킹 항속: 로그의 max_60min_watts 만 (FTP·50분 평균파워 폴백 없음) */
-function effective60minWattsFromLogRankingStrict(logData) {
-  const w60 = Number((logData || {}).max_60min_watts) || 0;
-  return w60 > 0 ? w60 : 0;
+/** @deprecated peak60minWattsFromLogValidated 와 동일 */
+function effective60minWattsFromLogDashboard(logData, weightKg) {
+  return peak60minWattsFromLogValidated(logData, weightKg);
+}
+
+/** @deprecated peak60minWattsFromLogValidated 와 동일 */
+function effective60minWattsFromLogRankingStrict(logData, weightKg) {
+  return peak60minWattsFromLogValidated(logData, weightKg || 70);
 }
 
 /**
  * 최근 6개월 로그에서 60분 파워(MMP) 최대만 사용 (레거시·비교용).
  */
-async function peak60RankingStrictFromLogs(db, userId, startStr, endStr) {
-  let peak60 = 0;
-  let peakYmd = "";
-  if (!db || !userId || !startStr || !endStr) return { peak60, peakYmd };
-  const logSnap = await db
-    .collection("users")
-    .doc(userId)
-    .collection("logs")
-    .where("date", ">=", startStr)
-    .where("date", "<=", endStr)
-    .get();
-  const inRange = logSnap.docs
-    .map((doc) => doc.data() || {})
-    .filter((d) => {
-      const ymd = normalizeLogDateToSeoulYmd(d.date);
-      return ymd && ymd >= startStr && ymd <= endStr;
-    });
-  const deduped = dedupeTrainingLogsByDateStravaFirstServer(inRange);
-  deduped.forEach((d) => {
-    const ymd = normalizeLogDateToSeoulYmd(d.date);
-    if (!ymd) return;
-    const w60 = effective60minWattsFromLogRankingStrict(d);
-    if (w60 > peak60) {
-      peak60 = w60;
-      peakYmd = ymd;
-    }
-  });
-  return { peak60, peakYmd };
-}
-
-/** 랭킹·대시보드 공통: max_60min_watts → 없으면 50분~8시간 avg_watts (검증·FTP 폴백 없음) */
-async function peak60DashboardStyleFromLogs(db, userId, startStr, endStr, weightKg) {
+async function peak60RankingStrictFromLogs(db, userId, startStr, endStr, weightKg) {
   let peak60 = 0;
   let peakYmd = "";
   if (!db || !userId || !startStr || !endStr) return { peak60, peakYmd };
@@ -196,13 +146,18 @@ async function peak60DashboardStyleFromLogs(db, userId, startStr, endStr, weight
   deduped.forEach((d) => {
     const ymd = normalizeLogDateToSeoulYmd(d.date);
     if (!ymd) return;
-    const w60 = effective60minWattsFromLogDashboard(d, wFall);
+    const w60 = peak60minWattsFromLogValidated(d, wFall);
     if (w60 > peak60) {
       peak60 = w60;
       peakYmd = ymd;
     }
   });
   return { peak60, peakYmd };
+}
+
+/** 최근 6개월 로그 max_60min_watts(60분 MMP) 최대 — 50분 avg·FTP 폴백 없음 */
+async function peak60DashboardStyleFromLogs(db, userId, startStr, endStr, weightKg) {
+  return peak60RankingStrictFromLogs(db, userId, startStr, endStr, weightKg);
 }
 
 function validatePeakPowerRecord(durationType, watts, weightKg) {
@@ -308,7 +263,7 @@ async function reconcileUserRankingDayBucket(db, userId, ymd, userData) {
       stelvioKmSum += kmPart;
     }
 
-    const w60Rank = effective60minWattsFromLogDashboard(d, weightKgFall > 0 ? weightKgFall : 70);
+    const w60Rank = peak60minWattsFromLogValidated(d, weightKgFall > 0 ? weightKgFall : 70);
     if (w60Rank > maxWattsByDur["60min"]) maxWattsByDur["60min"] = w60Rank;
 
     if (weightKgFall > 0) {
@@ -704,7 +659,7 @@ function ftp93ReferenceWattsFromUser(userData) {
 function personalSpeedRollupIsFtpDerived(rollup, userData) {
   if (!rollup) return false;
   const src = rollup.peakSource != null ? String(rollup.peakSource) : "";
-  if (src && src !== exports.PERSONAL_SPEED_PEAK_SOURCE_EFFECTIVE) return true;
+  if (src && src !== exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60) return true;
   const peak = Number(rollup.peak60minWatts) || 0;
   const ref = Number(rollup.referenceWatts) || 0;
   const ftp93 = ftp93ReferenceWattsFromUser(userData);
@@ -719,7 +674,7 @@ function personalSpeedRollupNeedsInvalidate(rollup, startStr, endStr, userData) 
   if (!rollup) return false;
   if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return false;
   if (Number(rollup.rollupLogicVersion) < exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) return true;
-  if (rollup.peakSource !== exports.PERSONAL_SPEED_PEAK_SOURCE_EFFECTIVE) return true;
+  if (rollup.peakSource !== exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60) return true;
   if (personalSpeedRollupIsFtpDerived(rollup, userData)) return true;
   return false;
 }
@@ -768,7 +723,7 @@ async function writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, end
     referenceWatts: metrics.referenceWatts,
     speedKmh: metrics.speedKmh,
     weightKg: metrics.weightKg,
-    peakSource: exports.PERSONAL_SPEED_PEAK_SOURCE_EFFECTIVE,
+    peakSource: exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60,
     rollupLogicVersion: exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
     reconciled_at: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -885,7 +840,7 @@ async function rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr
               ex.windowStart === startStr &&
               ex.windowEnd === endStr &&
               Number(ex.rollupLogicVersion) >= exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION &&
-              ex.peakSource === exports.PERSONAL_SPEED_PEAK_SOURCE_EFFECTIVE &&
+              ex.peakSource === exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60 &&
               Number(ex.speedKmh) > 0 &&
               !personalSpeedRollupIsFtpDerived(ex, userData)
             ) {
@@ -946,7 +901,7 @@ function personalSpeedRollupIsReady(rollup, startStr, endStr, userData) {
   if (!rollup) return false;
   if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return false;
   if (Number(rollup.rollupLogicVersion) < exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) return false;
-  if (rollup.peakSource !== exports.PERSONAL_SPEED_PEAK_SOURCE_EFFECTIVE) return false;
+  if (rollup.peakSource !== exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60) return false;
   if (!(Number(rollup.peak60minWatts) > 0)) return false;
   if (userData && personalSpeedRollupIsFtpDerived(rollup, userData)) return false;
   return Number(rollup.speedKmh) > 0;
@@ -1041,7 +996,7 @@ async function backfillMissingPersonalSpeedRollups(db, userDocs, startStr, endSt
               referenceWatts: m.referenceWatts,
               speedKmh: m.speedKmh,
               weightKg: m.weightKg,
-              peakSource: exports.PERSONAL_SPEED_PEAK_SOURCE_EFFECTIVE,
+              peakSource: exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60,
               rollupLogicVersion: exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
             });
             backfilled += 1;
@@ -1119,6 +1074,7 @@ exports.rebuildPersonalSpeed6mRollupFromBuckets = rebuildPersonalSpeed6mRollupFr
 exports.rebuildPersonalSpeed6mRollupsBatch = rebuildPersonalSpeed6mRollupsBatch;
 exports.fetchPersonalSpeed6mRollupMap = fetchPersonalSpeed6mRollupMap;
 exports.touchPersonalSpeed6mRollupAfterDayChange = touchPersonalSpeed6mRollupAfterDayChange;
+exports.peak60minWattsFromLogValidated = peak60minWattsFromLogValidated;
 exports.effective60minWattsFromLogDashboard = effective60minWattsFromLogDashboard;
 exports.peak60DashboardStyleFromLogs = peak60DashboardStyleFromLogs;
 exports.peak60RankingStrictFromLogs = peak60RankingStrictFromLogs;
