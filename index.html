@@ -9514,9 +9514,9 @@
       var cWrap = document.querySelector('.stelvio-category-dropdown');
       if (gWrap) gWrap.classList.remove('hidden');
       if (cWrap) cWrap.classList.remove('hidden');
-      /* 그룹 탭: 기간 드롭다운 ↔ 항목 드롭다운 전환 */
+      /* 그룹 탭: 기간 드롭다운 ↔ 항목 드롭다운 전환 · 항속: 고정 집계(기간 선택 없음) */
       var pWrap = document.querySelector('.stelvio-period-dropdown');
-      if (pWrap) pWrap.classList.toggle('hidden', isGroup);
+      if (pWrap) pWrap.classList.toggle('hidden', isGroup || stelvioIsPersonalSpeedRanking());
       var mDrop = document.getElementById('stelvioGroupMetricDropdown');
       if (mDrop) mDrop.classList.toggle('hidden', !isGroup);
       var filtWrap = document.querySelector('#stelvioRankingContent .stelvio-ranking-list-filter-toggle');
@@ -9541,8 +9541,6 @@
           label.textContent = '주간';
         } else if (stelvioIsKmDistanceRanking()) {
           label.textContent = '최근 30일';
-        } else if (stelvioIsPersonalSpeedRanking()) {
-          label.textContent = '최근 6개월';
         } else {
           label.textContent = '월간';
         }
