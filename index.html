@@ -8307,7 +8307,7 @@
     var STELVIO_DURATION_LABELS = {
       'tss': 'TSS',
       'personal_dist': '거리',
-      'personal_speed': '항속',
+      'personal_speed': '독주',
       'group_dist': '그룹',
       'gc': 'GC',
       '1min': '1분',
@@ -10882,9 +10882,9 @@
         var hintEl = document.getElementById('stelvioRankingRefreshHint');
         if (hintEl) {
           hintEl.textContent = data.approximate
-            ? '6개월 집계 준비 중입니다. 임시로 월간(28일) 60분 피크 기준 항속 순위를 표시합니다.'
+            ? '6개월 집계 준비 중입니다. 임시로 월간(28일) 60분 피크 기준 독주 순위를 표시합니다.'
             : data.pendingAggregate
-              ? '6개월 항속 순위 집계가 아직 없습니다. 매일 23시 집계 후 전체 순위가 표시됩니다.'
+              ? '6개월 독주 순위 집계가 아직 없습니다. 매일 23시 집계 후 전체 순위가 표시됩니다.'
               : '집계 갱신 대기 중입니다. 표시된 순위는 최근 집계 결과입니다.';
         }
       }
@@ -12050,7 +12050,7 @@
         }
       } else if (stelvioIsPersonalSpeedRanking()) {
         var spdP = (cu.speedKmh != null ? Number(cu.speedKmh) : 0).toFixed(1);
-        var spdMain = userNameEsc + '님은 60분 항속 능력 ';
+        var spdMain = userNameEsc + '님은 60분 독주 능력 ';
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
           spdMain += '전체 ' + globalRank + '위(' + spdP + ' km/h)입니다.';
         } else {
@@ -25913,7 +25913,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-duration-chips-wrap">
             <div class="stelvio-duration-chips" id="stelvioDurationTabs">
               <button type="button" class="stelvio-duration-tab active" data-duration="gc">GC</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="personal_speed">항속</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="personal_speed">독주</button>
               <button type="button" class="stelvio-duration-tab" data-duration="tss">TSS</button>
               <button type="button" class="stelvio-duration-tab" data-duration="personal_dist">거리</button>
               <button type="button" class="stelvio-duration-tab" data-duration="group_dist">그룹</button>
