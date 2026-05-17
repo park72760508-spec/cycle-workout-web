@@ -12,8 +12,10 @@ exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
 /** 사용자별 6개월 항속 사전 집계 — 랭킹 보드는 users×1회 읽기만 수행 */
 exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
-/** 랭킹 항속 산출식 버전 — 변경 시 rollup 재계산 (4: 60분 파워만, FTP 폴백 제외) */
-exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 4;
+/** 랭킹 항속 산출식 버전 — 변경 시 rollup·순위 캐시 전면 재계산 */
+exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 5;
+/** rollup.peakSource — 이 값만 랭킹 보드에 포함 */
+exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60 = "max_60min_watts";
 const ROLLUP_REBUILD_BATCH = 40;
 const BUCKET_GET_CHUNK = 100;
 
@@ -622,6 +624,44 @@ function personalSpeed6mRollupRef(db, userId) {
   return db.collection("users").doc(userId).collection(exports.RANKING_ROLLUPS_COLL).doc(exports.PERSONAL_SPEED_6M_ROLLUP_ID);
 }
 
+function ftp93ReferenceWattsFromUser(userData) {
+  const ftp =
+    Number(
+      userData &&
+        (userData.ftp != null
+          ? userData.ftp
+          : userData.ftp_watts != null
+            ? userData.ftp_watts
+            : userData.FTP)
+    ) || 0;
+  if (!(ftp > 0)) return 0;
+  return Math.round(ftp * 0.93 * 10) / 10;
+}
+
+/** 구버전·FTP×0.93 폴백으로 채워진 rollup 여부 (재집계 대상) */
+function personalSpeedRollupIsFtpDerived(rollup, userData) {
+  if (!rollup) return false;
+  const src = rollup.peakSource != null ? String(rollup.peakSource) : "";
+  if (src && src !== exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60) return true;
+  const peak = Number(rollup.peak60minWatts) || 0;
+  const ref = Number(rollup.referenceWatts) || 0;
+  const ftp93 = ftp93ReferenceWattsFromUser(userData);
+  if (!(ftp93 > 0)) return false;
+  const tol = 0.65;
+  if (peak > 0 && Math.abs(peak - ftp93) <= tol) return true;
+  if (ref > 0 && Math.abs(ref - ftp93) <= tol && !(peak > 0 && Math.abs(peak - ftp93) > tol)) return true;
+  return false;
+}
+
+function personalSpeedRollupNeedsInvalidate(rollup, startStr, endStr, userData) {
+  if (!rollup) return false;
+  if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return false;
+  if (Number(rollup.rollupLogicVersion) < exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) return true;
+  if (rollup.peakSource !== exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60) return true;
+  if (personalSpeedRollupIsFtpDerived(rollup, userData)) return true;
+  return false;
+}
+
 /**
  * @returns {{ peak60minWatts:number, referenceWatts:number, speedKmh:number, weightKg:number, peak60Ymd:string }|null}
  */
@@ -666,6 +706,7 @@ async function writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, end
     referenceWatts: metrics.referenceWatts,
     speedKmh: metrics.speedKmh,
     weightKg: metrics.weightKg,
+    peakSource: exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60,
     rollupLogicVersion: exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
     reconciled_at: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -766,7 +807,9 @@ async function rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr
               ex.windowStart === startStr &&
               ex.windowEnd === endStr &&
               Number(ex.rollupLogicVersion) >= exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION &&
-              Number(ex.speedKmh) > 0
+              ex.peakSource === exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60 &&
+              Number(ex.speedKmh) > 0 &&
+              !personalSpeedRollupIsFtpDerived(ex, userData)
             ) {
               const peak60 = Number(ex.peak60minWatts) || 0;
               const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(
@@ -821,12 +864,58 @@ function userHasWeightForPersonalSpeed(userData) {
   return w > 0;
 }
 
-function personalSpeedRollupIsReady(rollup, startStr, endStr) {
+function personalSpeedRollupIsReady(rollup, startStr, endStr, userData) {
   if (!rollup) return false;
   if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return false;
   if (Number(rollup.rollupLogicVersion) < exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) return false;
+  if (rollup.peakSource !== exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60) return false;
   if (!(Number(rollup.peak60minWatts) > 0)) return false;
+  if (userData && personalSpeedRollupIsFtpDerived(rollup, userData)) return false;
   return Number(rollup.speedKmh) > 0;
+}
+
+/**
+ * 구버전·FTP 유사 rollup 삭제 — 다음 rebuild에서 60분 파워만 반영.
+ */
+async function invalidateStalePersonalSpeedRollups(db, userDocs, startStr, endStr) {
+  if (!userDocs || !userDocs.length) return { purged: 0 };
+  const rollupMap = await fetchPersonalSpeed6mRollupMap(
+    db,
+    userDocs.map((d) => d.id)
+  );
+  let purged = 0;
+  const DELETE_BATCH = 400;
+  const toDelete = [];
+  for (let i = 0; i < userDocs.length; i++) {
+    const udoc = userDocs[i];
+    const rollup = rollupMap.get(udoc.id);
+    if (!rollup) continue;
+    if (!personalSpeedRollupNeedsInvalidate(rollup, startStr, endStr, udoc.data() || {})) continue;
+    toDelete.push(personalSpeed6mRollupRef(db, udoc.id));
+  }
+  for (let i = 0; i < toDelete.length; i += DELETE_BATCH) {
+    const slice = toDelete.slice(i, i + DELETE_BATCH);
+    /* eslint-disable no-await-in-loop */
+    const batch = db.batch();
+    slice.forEach((ref) => batch.delete(ref));
+    await batch.commit();
+    /* eslint-enable no-await-in-loop */
+    purged += slice.length;
+  }
+  return { purged };
+}
+
+/**
+ * 항속 랭킹 집계 전: 무효 rollup 제거 후 전 사용자 rollup 재계산(60분 파워만).
+ */
+async function preparePersonalSpeedRankingRebuild(db, userDocs, startStr, endStr, opts) {
+  const inv = await invalidateStalePersonalSpeedRollups(db, userDocs, startStr, endStr);
+  const batch = await rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr, {
+    skipUnchanged: false,
+    ensureMissingDays: !!(opts && opts.ensureMissingDays),
+    batchSize: (opts && opts.batchSize) || ROLLUP_REBUILD_BATCH,
+  });
+  return { purged: inv.purged, ...batch };
 }
 
 /**
@@ -845,7 +934,7 @@ async function backfillMissingPersonalSpeedRollups(db, userDocs, startStr, endSt
     const udoc = userDocs[i];
     const userData = udoc.data() || {};
     if (!userHasWeightForPersonalSpeed(userData)) continue;
-    if (personalSpeedRollupIsReady(rollupMap.get(udoc.id), startStr, endStr)) continue;
+    if (personalSpeedRollupIsReady(rollupMap.get(udoc.id), startStr, endStr, userData)) continue;
     toRun.push(udoc);
     if (toRun.length >= maxBackfill) break;
   }
@@ -874,6 +963,7 @@ async function backfillMissingPersonalSpeedRollups(db, userDocs, startStr, endSt
               referenceWatts: m.referenceWatts,
               speedKmh: m.speedKmh,
               weightKg: m.weightKg,
+              peakSource: exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60,
               rollupLogicVersion: exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
             });
             backfilled += 1;
@@ -959,4 +1049,7 @@ exports.dedupeTrainingLogsByDateStravaFirstServer = dedupeTrainingLogsByDateStra
 exports.buildPersonalSpeedMetricsFromUserAndPeak60 = buildPersonalSpeedMetricsFromUserAndPeak60;
 exports.backfillMissingPersonalSpeedRollups = backfillMissingPersonalSpeedRollups;
 exports.personalSpeedRollupIsReady = personalSpeedRollupIsReady;
+exports.personalSpeedRollupIsFtpDerived = personalSpeedRollupIsFtpDerived;
+exports.invalidateStalePersonalSpeedRollups = invalidateStalePersonalSpeedRollups;
+exports.preparePersonalSpeedRankingRebuild = preparePersonalSpeedRankingRebuild;
 exports.userHasWeightForPersonalSpeed = userHasWeightForPersonalSpeed;
