@@ -9411,8 +9411,8 @@
     function stelvioIsPersonalSpeedRanking() {
       return stelvioRankingState.duration === 'personal_speed';
     }
-    /** 항속 산식·필드 변경 시 bump — 로컬/SWR 캐시 무효화 (v10: 60분 MMP만·사전집계) */
-    var STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER = 10;
+    /** 항속 산식·필드 변경 시 bump — 로컬/SWR 캐시 무효화 (v11: 대시보드 logs 400건 루트) */
+    var STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER = 11;
     /** 항속 탭: 사전집계 응답은 당일 23시 KST 전까지 SWR 유지(빠른 재방문) */
     var STELVIO_PERSONAL_SPEED_SWR_MAX_MS = 24 * 60 * 60 * 1000;
     function stelvioPersonalSpeedBoardPayloadStale(data) {
@@ -10727,10 +10727,10 @@
           if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
             data = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
           }
-          /* 사전집계(v10)는 서버 MMP 기준 — 본인만 로그로 순위 보정 */
+          /* 사전집계(v11·대시보드 logs 루트)는 서버 peak60 기준 — 구버전만 본인 로그 보정 */
           if (
             uid &&
-            data.precomputed !== true &&
+            (data.precomputed !== true || Number(data.personalSpeedLogicVersion) < STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER) &&
             typeof window.stelvioAlignPersonalSpeedRankingWithDashboard === 'function'
           ) {
             data = await window.stelvioAlignPersonalSpeedRankingWithDashboard(data, uid);
