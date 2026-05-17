@@ -171,6 +171,7 @@
     var referenceWatts = oneHourAbility ? oneHourAbility.referenceWatts : 0;
     var last6mPeak60Watts = oneHourAbility ? oneHourAbility.peak60minWatts : 0;
     var last6mPeakDate = oneHourAbility ? oneHourAbility.peak60Ymd : '';
+    var useFallbackFtp93 = !(last6mPeak60Watts > 0) && ftpVal > 0;
     var estimatedGroupSpeed = soloSpeed > 0 ? Math.round(soloSpeed * 1.2 * 10) / 10 : 0;
     var referenceWkg = referenceWatts > 0 && weightVal > 0 ? Math.round((referenceWatts / weightVal) * 100) / 100 : 0;
     var oneHourAbilityRangeLabel =
