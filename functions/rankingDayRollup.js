@@ -12,8 +12,8 @@ exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
 /** 사용자별 6개월 항속 사전 집계 — 랭킹 보드는 users×1회 읽기만 수행 */
 exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
-/** 대시보드 「나의 1시간 항속 능력」산출식과 동기화 버전 — 변경 시 rollup 재계산 */
-exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 3;
+/** 랭킹 항속 산출식 버전 — 변경 시 rollup 재계산 (4: 60분 파워만, FTP 폴백 제외) */
+exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 4;
 const ROLLUP_REBUILD_BATCH = 40;
 const BUCKET_GET_CHUNK = 100;
 
@@ -82,7 +82,7 @@ function dedupeTrainingLogsByDateStravaFirstServer(logs) {
 }
 
 /**
- * 대시보드 PerformanceDashboard.jsx 와 동일: max_60min_watts → 없으면 50분+ 라이딩 avg/weighted 평균파워.
+ * 대시보드용: max_60min_watts → 없으면 50분+ avg/weighted (랭킹에는 미사용).
  */
 function effective60minWattsFromLogDashboard(logData) {
   const d = logData || {};
@@ -97,10 +97,16 @@ function effective60minWattsFromLogDashboard(logData) {
   return w60 > 0 ? w60 : 0;
 }
 
+/** 랭킹 항속: 로그의 max_60min_watts 만 (FTP·50분 평균파워 폴백 없음) */
+function effective60minWattsFromLogRankingStrict(logData) {
+  const w60 = Number((logData || {}).max_60min_watts) || 0;
+  return w60 > 0 ? w60 : 0;
+}
+
 /**
- * 최근 6개월 로그에서 대시보드와 동일 규칙으로 60분 피크(W)·일자 반환 (랭킹 rollup 전용).
+ * 최근 6개월 로그에서 60분 파워(MMP) 최대만 사용 (랭킹 rollup).
  */
-async function peak60DashboardStyleFromLogs(db, userId, startStr, endStr) {
+async function peak60RankingStrictFromLogs(db, userId, startStr, endStr) {
   let peak60 = 0;
   let peakYmd = "";
   if (!db || !userId || !startStr || !endStr) return { peak60, peakYmd };
@@ -121,13 +127,18 @@ async function peak60DashboardStyleFromLogs(db, userId, startStr, endStr) {
   deduped.forEach((d) => {
     const ymd = normalizeLogDateToSeoulYmd(d.date);
     if (!ymd) return;
-    const w60 = effective60minWattsFromLogDashboard(d);
+    const w60 = effective60minWattsFromLogRankingStrict(d);
     if (w60 > peak60) {
       peak60 = w60;
       peakYmd = ymd;
     }
   });
   return { peak60, peakYmd };
+}
+
+/** @deprecated 이름 호환 — 랭킹은 peak60RankingStrictFromLogs 사용 */
+async function peak60DashboardStyleFromLogs(db, userId, startStr, endStr) {
+  return peak60RankingStrictFromLogs(db, userId, startStr, endStr);
 }
 
 function validatePeakPowerRecord(durationType, watts, weightKg) {
@@ -233,8 +244,8 @@ async function reconcileUserRankingDayBucket(db, userId, ymd, userData) {
       stelvioKmSum += kmPart;
     }
 
-    const w60Dash = effective60minWattsFromLogDashboard(d);
-    if (w60Dash > maxWattsByDur["60min"]) maxWattsByDur["60min"] = w60Dash;
+    const w60Rank = effective60minWattsFromLogRankingStrict(d);
+    if (w60Rank > maxWattsByDur["60min"]) maxWattsByDur["60min"] = w60Rank;
 
     if (weightKgFall > 0) {
       for (const [durationType, field] of Object.entries(DURATION_FIELDS)) {
@@ -615,6 +626,8 @@ function personalSpeed6mRollupRef(db, userId) {
  * @returns {{ peak60minWatts:number, referenceWatts:number, speedKmh:number, weightKg:number, peak60Ymd:string }|null}
  */
 function buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peak60Ymd) {
+  const peak = Number(peak60) || 0;
+  if (!(peak > 0)) return null;
   const rawWeight =
     Number(
       userData &&
@@ -624,17 +637,14 @@ function buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peak60Ymd)
             ? userData.weightKg
             : userData.weight_kg)
     ) || 0;
-  /** 대시보드와 동일: 체중 45kg 바닥 미적용 */
   const weightKg = rawWeight > 0 ? rawWeight : 0;
-  const ftp = Number(userData?.ftp ?? userData?.ftp_watts ?? userData?.FTP) || 0;
-  const useFallbackFtp = !(peak60 > 0) && ftp > 0;
-  let referenceWatts = peak60 > 0 ? peak60 : useFallbackFtp ? ftp * 0.93 : 0;
-  if (!(referenceWatts > 0) || !(weightKg > 0)) return null;
+  let referenceWatts = peak;
+  if (!(weightKg > 0)) return null;
   referenceWatts = Math.round(referenceWatts * 10) / 10;
   const speedKmh = Math.round(calculateSpeedOnFlat(referenceWatts, weightKg) * 10) / 10;
   if (!(speedKmh > 0)) return null;
   return {
-    peak60minWatts: peak60 > 0 ? Math.round(peak60 * 10) / 10 : 0,
+    peak60minWatts: Math.round(peak * 10) / 10,
     referenceWatts,
     speedKmh,
     weightKg,
@@ -670,7 +680,7 @@ async function rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, sta
   if (ensureMissing) {
     await ensureRankingBucketsFilledForRange(db, userId, userData || {}, startStr, endStr, false);
   }
-  const { peak60, peakYmd } = await peak60DashboardStyleFromLogs(db, userId, startStr, endStr);
+  const { peak60, peakYmd } = await peak60RankingStrictFromLogs(db, userId, startStr, endStr);
   const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peakYmd);
   await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
   return metrics;
@@ -815,6 +825,7 @@ function personalSpeedRollupIsReady(rollup, startStr, endStr) {
   if (!rollup) return false;
   if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return false;
   if (Number(rollup.rollupLogicVersion) < exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) return false;
+  if (!(Number(rollup.peak60minWatts) > 0)) return false;
   return Number(rollup.speedKmh) > 0;
 }
 
@@ -942,6 +953,8 @@ exports.fetchPersonalSpeed6mRollupMap = fetchPersonalSpeed6mRollupMap;
 exports.touchPersonalSpeed6mRollupAfterDayChange = touchPersonalSpeed6mRollupAfterDayChange;
 exports.effective60minWattsFromLogDashboard = effective60minWattsFromLogDashboard;
 exports.peak60DashboardStyleFromLogs = peak60DashboardStyleFromLogs;
+exports.peak60RankingStrictFromLogs = peak60RankingStrictFromLogs;
+exports.effective60minWattsFromLogRankingStrict = effective60minWattsFromLogRankingStrict;
 exports.dedupeTrainingLogsByDateStravaFirstServer = dedupeTrainingLogsByDateStravaFirstServer;
 exports.buildPersonalSpeedMetricsFromUserAndPeak60 = buildPersonalSpeedMetricsFromUserAndPeak60;
 exports.backfillMissingPersonalSpeedRollups = backfillMissingPersonalSpeedRollups;
