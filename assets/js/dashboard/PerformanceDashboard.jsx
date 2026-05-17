@@ -150,8 +150,6 @@
     var oneHourAbilityModalOpen = _aero[0];
     var setOneHourAbilityModalOpen = _aero[1];
 
-    var todayYmd = getSeoulTodayYmd();
-    var start6mYmd = shiftYmd(todayYmd, -182);
     var ftpVal = Number(
       stats && stats.ftp != null ? stats.ftp :
       userProfile && userProfile.ftp != null ? userProfile.ftp :
@@ -165,41 +163,20 @@
       userProfile && userProfile.weight_kg != null ? userProfile.weight_kg :
       0
     ) || 0;
-    var last6mPeak60Watts = 0;
-    var last6mPeakDate = '';
-    (Array.isArray(recentLogs) ? recentLogs : []).forEach(function(log) {
-      var ymd = getSeoulYmdFromUnknown(log && log.date);
-      if (!ymd || ymd < start6mYmd || ymd > todayYmd) return;
-      var w60 = Number(log && log.max_60min_watts != null ? log.max_60min_watts : 0) || 0;
-      if (!(w60 > 0)) {
-        var sec = Number(
-          log && log.duration_sec != null ? log.duration_sec :
-          log && log.time != null ? log.time :
-          log && log.duration != null ? log.duration :
-          0
-        ) || 0;
-        if (sec >= 50 * 60) {
-          w60 = Number(
-            log && log.avg_watts != null ? log.avg_watts :
-            log && log.weighted_watts != null ? log.weighted_watts :
-            0
-          ) || 0;
-        }
-      }
-      if (w60 > last6mPeak60Watts) {
-        last6mPeak60Watts = w60;
-        last6mPeakDate = ymd;
-      }
-    });
-    var useFallbackFtp93 = !(last6mPeak60Watts > 0) && ftpVal > 0;
-    var referenceWattsRaw = last6mPeak60Watts > 0 ? last6mPeak60Watts : useFallbackFtp93 ? ftpVal * 0.93 : 0;
-    var referenceWatts = referenceWattsRaw > 0 ? Math.round(referenceWattsRaw * 10) / 10 : 0;
-    var calcSpeed = typeof window.calculateSpeedOnFlat === 'function' ? window.calculateSpeedOnFlat : calculateSpeedOnFlatFallback;
-    var soloSpeedRaw = calcSpeed && referenceWatts > 0 && weightVal > 0 ? Number(calcSpeed(referenceWatts, weightVal)) : 0;
-    var soloSpeed = soloSpeedRaw > 0 ? Math.round(soloSpeedRaw * 10) / 10 : 0;
+    var oneHourAbility =
+      typeof window.stelvioComputeOneHourAbilityFromLogs === 'function'
+        ? window.stelvioComputeOneHourAbilityFromLogs(recentLogs, { ftp: ftpVal, weight: weightVal })
+        : null;
+    var soloSpeed = oneHourAbility && oneHourAbility.speedKmh > 0 ? oneHourAbility.speedKmh : 0;
+    var referenceWatts = oneHourAbility ? oneHourAbility.referenceWatts : 0;
+    var last6mPeak60Watts = oneHourAbility ? oneHourAbility.peak60minWatts : 0;
+    var last6mPeakDate = oneHourAbility ? oneHourAbility.peak60Ymd : '';
     var estimatedGroupSpeed = soloSpeed > 0 ? Math.round(soloSpeed * 1.2 * 10) / 10 : 0;
     var referenceWkg = referenceWatts > 0 && weightVal > 0 ? Math.round((referenceWatts / weightVal) * 100) / 100 : 0;
-    var oneHourAbilityRangeLabel = start6mYmd && todayYmd ? start6mYmd + ' ~ ' + todayYmd : '';
+    var oneHourAbilityRangeLabel =
+      oneHourAbility && oneHourAbility.start6mYmd && oneHourAbility.end6mYmd
+        ? oneHourAbility.start6mYmd + ' ~ ' + oneHourAbility.end6mYmd
+        : '';
 
     // 스크롤 초기화: useLayoutEffect로 DOM 마운트 직후 1회 실행 (기존 setTimeout 4회 폐기)
     useLayoutEffect(function() {
