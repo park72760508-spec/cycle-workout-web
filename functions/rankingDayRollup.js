@@ -800,15 +800,8 @@ async function touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ym
     return;
   }
 
-  if (day60 >= peak60) {
-    peak60 = day60;
-    peakYmd = ymd;
-  } else if (peakYmd === ymd) {
-    await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, {
-      ensureMissingDays: false,
-    });
-    return;
-  } else if (!windowOk) {
+  /** 일 버킷 raw max_60min만 올리면 구(비검증)·FTP 유사 값이 peak에 남을 수 있음 → 로그 MMP 재스캔 */
+  if (day60 >= peak60 || peakYmd === ymd || !windowOk) {
     await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, {
       ensureMissingDays: false,
     });

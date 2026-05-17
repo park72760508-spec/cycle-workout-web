@@ -3496,12 +3496,26 @@ function calculateSpeedOnFlat(power, weight) {
  */
 function computeOneHourSustainedSpeedKmhFromBuckets(userData, bucketSnaps, startStr, endStr) {
   let peak60 = 0;
+  const rawW =
+    Number(
+      userData &&
+        (userData.weight != null
+          ? userData.weight
+          : userData.weightKg != null
+            ? userData.weightKg
+            : userData.weight_kg)
+    ) || 0;
+  const weightKgFall = rawW > 0 ? Math.max(rawW, 45) : 70;
   (bucketSnaps || []).forEach((snap) => {
     if (!snap || !snap.exists) return;
     const row = snap.data() || {};
     const ymd = row.ymd || snap.id || "";
     if (!ymd || ymd < startStr || ymd > endStr) return;
-    const w = Number(row.max_60min_watts) || 0;
+    const wRaw = Number(row.max_60min_watts) || 0;
+    const w = rankingDayRollup.peak60minWattsFromLogValidated(
+      { max_60min_watts: wRaw, max_40min_watts: row.max_40min_watts, max_20min_watts: row.max_20min_watts, max_10min_watts: row.max_10min_watts },
+      weightKgFall
+    );
     if (w > peak60) peak60 = w;
   });
   const m = rankingDayRollup.buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, "");
@@ -6254,6 +6268,7 @@ exports.getPeakPowerRanking = onRequest(
           period: "rolling183",
           durationType: "personal_speed",
           gender,
+          personalSpeedLogicVersion: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
           ...(meta || {}),
         };
         if (uid) {
