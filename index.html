@@ -9206,6 +9206,16 @@
         var tssRow = stelvioRankProfileSupremoRow(tssData, userId);
         var pdRow = stelvioRankProfileSupremoRow(pdData, userId);
         var spdRow = stelvioRankProfileSupremoRow(spdData, userId);
+        var spdRank = null;
+        if (spdData && spdData.byCategory && spdData.byCategory.Supremo) {
+          var spar = spdData.byCategory.Supremo || [];
+          for (var sk = 0; sk < spar.length; sk++) {
+            if (spar[sk] && String(spar[sk].userId) === String(userId)) {
+              spdRank = stelvioRankProfileRankFromRow(spar[sk], sk);
+              break;
+            }
+          }
+        }
         var tssTxt = '\u2014';
         var distTxt = '\u2014';
         var spdTxt = '\u2014';
@@ -9216,7 +9226,9 @@
           distTxt = Number(pdRow.totalKm).toFixed(1) + ' km';
         }
         if (spdRow && spdRow.speedKmh != null && !Number.isNaN(Number(spdRow.speedKmh)) && Number(spdRow.speedKmh) > 0) {
-          spdTxt = Number(spdRow.speedKmh).toFixed(1) + ' km/h';
+          spdTxt = Number(spdRow.speedKmh).toFixed(1) + ' km/h (' + stelvioRankProfileFormatRank(spdRank) + ')';
+        } else if (spdRank != null) {
+          spdTxt = '\u2014 (' + stelvioRankProfileFormatRank(spdRank) + ')';
         }
 
         if (!dieIfStale()) return;
