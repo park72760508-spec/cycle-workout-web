@@ -3888,12 +3888,16 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
   return { entries: withRank, byCategory };
 }
 
-/** 개인: 최근 6개월(서울) 1시간 항속능력(km/h) — 대시보드 산출 로직과 동일 */
-async function getPersonalSpeedRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null) {
+/**
+ * 개인: 최근 6개월(서울) 1시간 항속능력(km/h) — 대시보드 산출 로직과 동일
+ * @param {{ ensureMissingDays?: boolean }} [opts] HTTP는 ensureMissingDays:false(버킷만 읽기), 23시 집계는 true
+ */
+async function getPersonalSpeedRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null, opts = {}) {
+  const ensureMissingDays = opts.ensureMissingDays !== false;
+  const bucketOpts = { ensureMissingDays };
   const snap = usersSnap ?? await db.collection("users").get();
   const docs = snap.docs;
   const entries = [];
-  const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
   for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
     const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
     const results = await Promise.all(
@@ -3911,15 +3915,22 @@ async function getPersonalSpeedRankingBoardEntries(db, startStr, endStr, genderF
         const challenge = data.challenge || "Fitness";
         const leagueCategory = getLeagueCategory(challenge, birthYear);
         if (!leagueCategory) return null;
-        await rankingDayRollup.ensureRankingBucketsFilledForRange(db, userId, data, startStr, endStr);
-        const refs = dates.map((ymd) => rankingDayRollup.bucketRef(db, userId, ymd));
-        const bucketSnaps = await rankingDayRollup.chunkedGetAll(db, refs, 30);
-        const { speedKmh, referenceWatts, weightKg } = computeOneHourSustainedSpeedKmhFromBuckets(
+        const peak60 = await rankingDayRollup.max60minWattsFromDayBuckets(
+          db,
+          userId,
           data,
-          bucketSnaps,
           startStr,
-          endStr
+          endStr,
+          bucketOpts
         );
+        const rawWeight = Number(data.weight || data.weightKg) || 0;
+        const weightKg = rawWeight > 0 ? Math.max(rawWeight, 45) : 0;
+        const ftp = Number(data.ftp ?? data.ftp_watts ?? data.FTP) || 0;
+        const useFallbackFtp = !(peak60 > 0) && ftp > 0;
+        let referenceWatts = peak60 > 0 ? peak60 : useFallbackFtp ? ftp * 0.93 : 0;
+        if (!(referenceWatts > 0) || !(weightKg > 0)) return null;
+        referenceWatts = Math.round(referenceWatts * 10) / 10;
+        const speedKmh = Math.round(calculateSpeedOnFlat(referenceWatts, weightKg) * 10) / 10;
         if (!(speedKmh > 0)) return null;
         return {
           userId,
@@ -4552,6 +4563,90 @@ async function readRankingAggregatePayloadIfFresh(db, cacheKey) {
   }
 }
 
+/** 집계 직후·HTTP 폴백용 — 만료된 사전 집계도 허용 (전체 재스캔 방지) */
+async function readRankingAggregatePayloadAllowStale(db, cacheKey, maxStaleMs) {
+  if (!db || !cacheKey) return null;
+  try {
+    const ref = db.collection(RANKING_AGGREGATES_COLLECTION).doc(cacheKey);
+    const snap = await ref.get();
+    if (!snap.exists) return null;
+    const d = snap.data() || {};
+    const updatedAt = d.updatedAt && (d.updatedAt.toMillis ? d.updatedAt.toMillis() : d.updatedAt);
+    if (maxStaleMs > 0 && updatedAt && Date.now() - updatedAt > maxStaleMs) return null;
+    return d.payload && typeof d.payload === "object" ? d.payload : null;
+  } catch (e) {
+    console.warn("[readRankingAggregatePayloadAllowStale]", cacheKey, e.message);
+    return null;
+  }
+}
+
+const PERSONAL_SPEED_STALE_AGG_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * 월간(28일) 60분 피크 사전 집계 → 항속(km/h) 보드로 변환 (6개월 집계 miss 시 빠른 폴백)
+ */
+function transformPeakBoardToPersonalSpeed(byCategory) {
+  if (!byCategory || typeof byCategory !== "object") return null;
+  const out = { Supremo: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  let hasAny = false;
+  for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+    const rows = Array.isArray(byCategory[cat]) ? byCategory[cat] : [];
+    const mapped = [];
+    for (let i = 0; i < rows.length; i++) {
+      const e = rows[i];
+      if (!e || !e.userId) continue;
+      const weightKg = Number(e.weightKg) > 0 ? Number(e.weightKg) : 0;
+      let watts = Number(e.watts) || 0;
+      if (!(watts > 0) && e.wkg != null && weightKg > 0) {
+        watts = Number(e.wkg) * weightKg;
+      }
+      if (!(watts > 0) || !(weightKg > 0)) continue;
+      const referenceWatts = Math.round(watts * 10) / 10;
+      const speedKmh = Math.round(calculateSpeedOnFlat(referenceWatts, weightKg) * 10) / 10;
+      if (!(speedKmh > 0)) continue;
+      mapped.push({
+        userId: e.userId,
+        name: e.name || "(이름 없음)",
+        speedKmh,
+        referenceWatts,
+        weightKg,
+        ageCategory: e.ageCategory || cat,
+        gender: e.gender,
+        is_private: e.is_private === true,
+        profileImageUrl: e.profileImageUrl || null,
+        rankChange: e.rankChange,
+        previousBoardRank: e.previousBoardRank,
+      });
+      hasAny = true;
+    }
+    mapped.sort((a, b) => b.speedKmh - a.speedKmh);
+    out[cat] = mapped.map((row, idx) => ({ ...row, rank: idx + 1 }));
+  }
+  if (!hasAny) return null;
+  const entries = (out.Supremo || []).slice();
+  return { byCategory: out, entries };
+}
+
+async function getPersonalSpeedRankingFromMonthly60minFallback(db, gender) {
+  const { startStr, endStr } = getRolling28DaysRangeSeoul();
+  const cacheKey = `peakRanking_v2_monthly_60min_${gender}_${startStr}_${endStr}`;
+  let agg =
+    (await readRankingAggregatePayloadIfFresh(db, cacheKey)) ||
+    (await readRankingAggregatePayloadAllowStale(db, cacheKey, PERSONAL_SPEED_STALE_AGG_MS));
+  if (!agg || !agg.byCategory) {
+    const cacheRef = db.collection("cache").doc(cacheKey);
+    const cacheSnap = await cacheRef.get();
+    if (cacheSnap.exists) {
+      const data = cacheSnap.data() || {};
+      if (data.byCategory) agg = data;
+    }
+  }
+  if (!agg || !agg.byCategory) return null;
+  const pack = transformPeakBoardToPersonalSpeed(agg.byCategory);
+  if (!pack) return null;
+  return { ...pack, startStr, endStr, approximate: true };
+}
+
 /**
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} cacheKey
@@ -4973,7 +5068,9 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
 
   // ── 4-1. 6개월 1시간 항속(km/h) 랭킹 — 대시보드 산출 로직, 매일 23시 집계 시 등락 스냅샷
   for (const gender of ["all", "M", "F"]) {
-    const spd = await getPersonalSpeedRankingBoardEntries(db, r183s, r183e, gender, sharedUsersSnap);
+    const spd = await getPersonalSpeedRankingBoardEntries(db, r183s, r183e, gender, sharedUsersSnap, {
+      ensureMissingDays: true,
+    });
     await applyPeakRankChanges(db, spd.byCategory, `peak_personal_speed_rolling183_${gender}`);
     const keyS = `peakRanking_personal_speed_183d_${gender}_${r183s}_${r183e}`;
     await writeRankingAggregatePayload(db, keyS, {
@@ -5968,24 +6065,28 @@ exports.getPeakPowerRanking = onRequest(
     if (durationType === "personal_speed") {
       const { startStr, endStr } = getRolling183DaysRangeSeoul();
       const cacheKey = `peakRanking_personal_speed_183d_${gender}_${startStr}_${endStr}`;
-      const aggPs = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
-      if (aggPs && aggPs.byCategory) {
+
+      async function buildPersonalSpeedOutFromPack(pack, meta) {
+        const byCategory = pack.byCategory;
+        const entries = Array.isArray(pack.entries) ? pack.entries : (byCategory.Supremo || []).slice();
+        const outStart = pack.startStr || startStr;
+        const outEnd = pack.endStr || endStr;
         let out = {
           success: true,
-          byCategory: aggPs.byCategory,
-          entries: Array.isArray(aggPs.entries) ? aggPs.entries : [],
-          startStr,
-          endStr,
+          byCategory,
+          entries,
+          startStr: outStart,
+          endStr: outEnd,
           period: "rolling183",
           durationType: "personal_speed",
           gender,
-          precomputed: true,
+          ...(meta || {}),
         };
         if (uid) {
-          const cat = aggPs.byCategory;
-          let current = null; let nextUser = null;
+          let current = null;
+          let nextUser = null;
           for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
-            const arr = cat?.[c] || [];
+            const arr = byCategory?.[c] || [];
             const idx = arr.findIndex((e) => e.userId === uid);
             if (idx >= 0) {
               current = arr[idx];
@@ -5998,19 +6099,50 @@ exports.getPeakPowerRanking = onRequest(
             out.motivationMessage = buildMotivationMessage(current, nextUser);
           }
         }
-        const psAggEntries = Array.isArray(aggPs.entries) ? aggPs.entries : out.byCategory.Supremo;
-        await hydratePeakRankMovementOnPayload(
-          db,
-          out.byCategory,
-          psAggEntries,
-          `peak_personal_speed_rolling183_${gender}`
-        );
-        if (!out.entries && Array.isArray(out.byCategory.Supremo)) {
+        const psEntries = entries.length ? entries : (byCategory.Supremo || []);
+        if (!forceRankMv) {
+          await hydratePeakRankMovementOnPayload(
+            db,
+            out.byCategory,
+            psEntries,
+            `peak_personal_speed_rolling183_${gender}`
+          );
+        }
+        if (!out.entries.length && Array.isArray(out.byCategory.Supremo)) {
           out.entries = out.byCategory.Supremo.slice();
         }
         await finalizeRankingProfileUrls(out);
-        return res.status(200).json(out);
+        return out;
       }
+
+      const aggPs = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      if (aggPs && aggPs.byCategory) {
+        return res.status(200).json(
+          await buildPersonalSpeedOutFromPack(
+            { byCategory: aggPs.byCategory, entries: aggPs.entries, startStr, endStr },
+            { precomputed: true }
+          )
+        );
+      }
+
+      if (!forceRankMv) {
+        const aggStale = await readRankingAggregatePayloadAllowStale(db, cacheKey, PERSONAL_SPEED_STALE_AGG_MS);
+        if (aggStale && aggStale.byCategory) {
+          return res.status(200).json(
+            await buildPersonalSpeedOutFromPack(
+              { byCategory: aggStale.byCategory, entries: aggStale.entries, startStr, endStr },
+              { precomputed: true, stale: true }
+            )
+          );
+        }
+        const approx = await getPersonalSpeedRankingFromMonthly60minFallback(db, gender);
+        if (approx && approx.byCategory) {
+          return res.status(200).json(
+            await buildPersonalSpeedOutFromPack(approx, { precomputed: true, approximate: true })
+          );
+        }
+      }
+
       const cacheRef = db.collection("cache").doc(cacheKey);
       const cacheSnap = forceRankMv ? null : await cacheRef.get();
       const nowMs = Date.now();
@@ -6018,50 +6150,18 @@ exports.getPeakPowerRanking = onRequest(
         const data = cacheSnap.data();
         const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
         if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
-          const out = {
-            success: true,
-            byCategory: data.byCategory,
-            entries: Array.isArray(data.entries) ? data.entries : [],
-            startStr,
-            endStr,
-            period: "rolling183",
-            durationType: "personal_speed",
-            gender,
-            cached: true,
-          };
-          if (uid) {
-            let current = null; let nextUser = null;
-            const cat = data.byCategory;
-            for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
-              const arr = cat?.[c] || [];
-              const idx = arr.findIndex((e) => e.userId === uid);
-              if (idx >= 0) {
-                current = arr[idx];
-                nextUser = idx > 0 ? arr[idx - 1] : null;
-                break;
-              }
-            }
-            if (current) {
-              out.currentUser = current;
-              out.motivationMessage = buildMotivationMessage(current, nextUser);
-            }
-          }
-          const psCacheEntries = out.entries.length ? out.entries : (out.byCategory.Supremo || []);
-          await hydratePeakRankMovementOnPayload(
-            db,
-            out.byCategory,
-            psCacheEntries,
-            `peak_personal_speed_rolling183_${gender}`
+          return res.status(200).json(
+            await buildPersonalSpeedOutFromPack(
+              { byCategory: data.byCategory, entries: data.entries, startStr, endStr },
+              { cached: true }
+            )
           );
-          if (!out.entries.length && Array.isArray(out.byCategory.Supremo)) {
-            out.entries = out.byCategory.Supremo.slice();
-          }
-          await finalizeRankingProfileUrls(out);
-          return res.status(200).json(out);
         }
       }
 
-      const { entries, byCategory } = await getPersonalSpeedRankingBoardEntries(db, startStr, endStr, gender);
+      const { entries, byCategory } = await getPersonalSpeedRankingBoardEntries(db, startStr, endStr, gender, null, {
+        ensureMissingDays: false,
+      });
       await applyPeakRankChanges(db, byCategory, `peak_personal_speed_rolling183_${gender}`);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
@@ -6072,25 +6172,9 @@ exports.getPeakPowerRanking = onRequest(
         endStr,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      const out = { success: true, byCategory, entries, startStr, endStr, period: "rolling183", durationType: "personal_speed", gender };
-      if (uid) {
-        let current = null; let nextUser = null;
-        for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
-          const arr = byCategory[c] || [];
-          const idx = arr.findIndex((e) => e.userId === uid);
-          if (idx >= 0) {
-            current = arr[idx];
-            nextUser = idx > 0 ? arr[idx - 1] : null;
-            break;
-          }
-        }
-        if (current) {
-          out.currentUser = current;
-          out.motivationMessage = buildMotivationMessage(current, nextUser);
-        }
-      }
-      await finalizeRankingProfileUrls(out);
-      return res.status(200).json(out);
+      return res.status(200).json(
+        await buildPersonalSpeedOutFromPack({ byCategory, entries, startStr, endStr }, { computed: true })
+      );
     }
 
     /** 그룹: 방장별 최근 30일 오픈 라이딩 합산(일정당 참가자 당일 라이딩 거리 합) */

@@ -445,6 +445,36 @@ function computeUserPeaksAllDurationsFromBucketSnaps(userData, bucketSnaps, star
   return Object.keys(peaks).length ? { weightKg, peaks } : null;
 }
 
+/** 기간 내 일 버킷 max_60min_watts 최대값 (로그 재스캔 없음) */
+function max60minWattsFromBucketSnaps(bucketSnaps, startStr, endStr) {
+  let peak60 = 0;
+  (bucketSnaps || []).forEach((snap) => {
+    if (!snap || !snap.exists) return;
+    const row = snap.data() || {};
+    const ymd = row.ymd || snap.id || "";
+    if (!ymd || ymd < startStr || ymd > endStr) return;
+    const w = Number(row.max_60min_watts) || 0;
+    if (w > peak60) peak60 = w;
+  });
+  return peak60;
+}
+
+/**
+ * ranking_day_totals만 읽어 60분 피크(W) 반환.
+ * @param {{ ensureMissingDays?: boolean }} [opts] ensureMissingDays=false면 HTTP 빠른 경로(미존재 일은 스킵)
+ */
+async function max60minWattsFromDayBuckets(db, userId, userData, startStr, endStr, opts) {
+  const ensureMissing = !opts || opts.ensureMissingDays !== false;
+  if (ensureMissing) {
+    await ensureRankingBucketsFilledForRange(db, userId, userData || {}, startStr, endStr);
+  }
+  const dates = listInclusiveYmdsSeoul(startStr, endStr);
+  if (!dates.length) return 0;
+  const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
+  const bucketSnaps = await chunkedGetAll(db, refs, 30);
+  return max60minWattsFromBucketSnaps(bucketSnaps, startStr, endStr);
+}
+
 function maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr) {
   const out = {};
   for (const dt of Object.keys(DURATION_HR_FIELDS)) out[dt] = 0;
@@ -474,6 +504,8 @@ exports.weeklyTssSumFromDayBuckets = weeklyTssSumFromDayBuckets;
 exports.rollingKmSumFromDayBuckets = rollingKmSumFromDayBuckets;
 exports.cheatDayPresentFromBuckets = cheatDayPresentFromBuckets;
 exports.computeUserPeaksAllDurationsFromBucketSnaps = computeUserPeaksAllDurationsFromBucketSnaps;
+exports.max60minWattsFromBucketSnaps = max60minWattsFromBucketSnaps;
+exports.max60minWattsFromDayBuckets = max60minWattsFromDayBuckets;
 exports.maxHrByDurationFromBucketSnaps = maxHrByDurationFromBucketSnaps;
 exports.bucketRef = bucketRef;
 exports.chunkedGetAll = chunkedGetAll;
