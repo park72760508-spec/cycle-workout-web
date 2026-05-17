@@ -10705,7 +10705,7 @@
           if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
             data = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
           }
-          /* 대시보드 현실지표와 동일(60분 MMP·50분+ 평균파워) — FTP 폴백 순위 제외 */
+          /* 6개월 60분 MMP(max_60min_watts)만 — FTP 폴백 순위 제외 */
           data = await window.stelvioAlignPersonalSpeedRankingWithDashboard(data, uid);
         } catch (eAlignSpd) {
           console.warn('[StelvioRanking] 항속 60분 파워 동기화 실패:', eAlignSpd && eAlignSpd.message);
