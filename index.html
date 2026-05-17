@@ -11911,12 +11911,18 @@
         }
       } else if (stelvioIsPersonalSpeedRanking()) {
         var spdP = (cu.speedKmh != null ? Number(cu.speedKmh) : 0).toFixed(1);
+        var spdLine1 = userNameEsc + '님의 60분 피크 평균파워로 산출한 항속 능력';
+        var spdLine2;
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
-          msg = userNameEsc + '님은 최근 6개월 ' + durLabel + ' 전체 ' + globalRank + '위(' + spdP + ' km/h)입니다.';
+          spdLine2 = '전체 ' + globalRank + '위(' + spdP + ' km/h)입니다.';
         } else {
-          var catPartSpd = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + spdP + ' km/h)' : spdP + ' km/h';
-          msg = userNameEsc + '님은 최근 6개월 ' + durLabel + ' ' + catPartSpd + ', 전체 ' + globalRank + '위입니다.';
+          spdLine2 =
+            categoryRank > 0
+              ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + spdP + ' km/h), 전체 ' + globalRank + '위입니다.'
+              : '전체 ' + globalRank + '위(' + spdP + ' km/h)입니다.';
         }
+        var spdLine3 = '* 최근 6개월이내의 60분 피크 평균 파워값 기준';
+        msg = spdLine1 + '\n' + spdLine2 + '\n' + spdLine3;
       } else if (stelvioIsTssRankingMode()) {
         var tssVal = (cu.totalTss != null ? Number(cu.totalTss) : 0).toFixed(1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
