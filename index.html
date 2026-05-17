@@ -2109,6 +2109,7 @@
   <script defer src="assets/js/reactPropTypesBridge.js"></script>
   <script defer src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
   <script defer src="assets/js/useRiderAnalysis.js"></script>
+  <script defer src="assets/js/stelvio/stelvioOneHourAbility.js"></script>
   <script defer src="assets/js/dynamicFtpCalculation.js"></script>
 
   <!-- 0) 사용자 인증 -->
@@ -10689,6 +10690,26 @@
       }
     }
 
+    async function stelvioApplyPeakRankingFetchResultWithDashboardAlign(data, myGen, uid) {
+      if (
+        myGen === stelvioRankingFetchGen &&
+        uid &&
+        typeof stelvioIsPersonalSpeedRanking === 'function' &&
+        stelvioIsPersonalSpeedRanking() &&
+        typeof window.stelvioAlignPersonalSpeedRankingWithDashboard === 'function' &&
+        data &&
+        data.success &&
+        data.byCategory
+      ) {
+        try {
+          data = await window.stelvioAlignPersonalSpeedRankingWithDashboard(data, uid);
+        } catch (eAlignSpd) {
+          console.warn('[StelvioRanking] 항속 대시보드 동기화 실패:', eAlignSpd && eAlignSpd.message);
+        }
+      }
+      stelvioApplyPeakRankingFetchResult(data, myGen, uid);
+    }
+
     function stelvioApplyPeakRankingFetchResult(data, myGen, uid) {
       if (myGen !== stelvioRankingFetchGen) return;
       if (!data || !data.success || !data.byCategory) {
@@ -10802,14 +10823,14 @@
         stelvioRankingLocalCache.set(lcKey, data);
       }
 
-      function applyFromCache(body) {
+      async function applyFromCache(body) {
         if (loading) loading.classList.add('hidden');
         if (content) content.style.opacity = '1';
         var working = body;
         try {
           working = JSON.parse(JSON.stringify(body));
         } catch (eClone) {}
-        stelvioApplyPeakRankingFetchResult(working, myGen, uid);
+        await stelvioApplyPeakRankingFetchResultWithDashboardAlign(working, myGen, uid);
         stelvioApplyDurationModeUi();
         return stelvioPeakRankMovementPresentOnPayload(working);
       }
@@ -10841,7 +10862,7 @@
             myGen
           );
           if (!dataFresh || !dataFresh.success || !dataFresh.byCategory) return;
-          stelvioApplyPeakRankingFetchResult(dataFresh, myGen, uid);
+          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(dataFresh, myGen, uid);
           saveFreshPeakData(dataFresh);
           stelvioSetRankingRefreshHint(false);
         } catch (eBg) {
@@ -10876,7 +10897,7 @@
       var swrValid = swr && swr.key === swrKey && swr.body && swr.body.success && swr.body.byCategory;
       var swrIsPostRollover = swrValid && lastRollover > 0 && swr.ts < lastRollover;
       if (swrValid && !swrIsPostRollover && nowMs - swr.ts < STELVIO_RANKING_SWR_MAX_MS) {
-        applyFromCache(swr.body);
+        await applyFromCache(swr.body);
         scheduleRankMvIfNeeded();
         if (stelvioRankingLocalCache.isStale({ cachedAt: swr.ts }) || swrIsPostRollover) {
           scheduleBgRefresh(false);
@@ -10887,7 +10908,7 @@
       var lcEntry = stelvioRankingLocalCache.get(lcKey);
       if (lcEntry && lcEntry.data && lcEntry.data.success && lcEntry.data.byCategory) {
         stelvioRankingSwrCache = { key: swrKey, body: lcEntry.data, ts: Date.now() };
-        applyFromCache(lcEntry.data);
+        await applyFromCache(lcEntry.data);
         scheduleRankMvIfNeeded();
         var lcIsPostRollover = lastRollover > 0 && lcEntry.cachedAt < lastRollover;
         var lcStale = stelvioRankingLocalCache.isStale(lcEntry);
@@ -10896,7 +10917,7 @@
       }
 
       if (swrValid) {
-        applyFromCache(swr.body);
+        await applyFromCache(swr.body);
         scheduleBgRefresh(false);
         scheduleRankMvIfNeeded();
         return;
@@ -10913,13 +10934,13 @@
         var data2 = await stelvioRankingBoardFetchJson(urlFast, fetchTimeoutMs, myGen);
         if (myGen !== stelvioRankingFetchGen) return;
         if (data2 && data2.success && data2.byCategory) {
-          stelvioApplyPeakRankingFetchResult(data2, myGen, uid);
+          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
           saveFreshPeakData(data2);
           stelvioSetRankingRefreshHint(false);
           scheduleRankMvIfNeeded();
           scheduleBgRefresh(false);
         } else if (!showedSoft) {
-          stelvioApplyPeakRankingFetchResult(data2, myGen, uid);
+          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
         }
       } catch (e) {
         if (myGen !== stelvioRankingFetchGen) return;
