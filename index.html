@@ -10732,6 +10732,15 @@
       }
       stelvioMyRankSupremo = data.myRankSupremo || null;
       stelvioCurrentUser = data.currentUser || null;
+      if (data.approximate || data.stale) {
+        stelvioSetRankingRefreshHint(true);
+        var hintEl = document.getElementById('stelvioRankingRefreshHint');
+        if (hintEl) {
+          hintEl.textContent = data.approximate
+            ? '6개월 집계 준비 중입니다. 임시로 월간(28일) 60분 피크 기준 항속 순위를 표시합니다.'
+            : '집계 갱신 대기 중입니다. 표시된 순위는 최근 집계 결과입니다.';
+        }
+      }
       stelvioSyncCategorySelectUi();
       renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
       renderStelvioActiveCategory();
@@ -10773,6 +10782,11 @@
       var lcKey = stelvioPeakRankingLcKey(swrKey);
       var urlFast = stelvioBuildRankingBoardFetchUrl(cacheKeyStr, false, needsRankMv);
       var urlRankMv = stelvioBuildRankingBoardFetchUrl(cacheKeyStr, true, needsRankMv);
+      /* 항속(6개월): 사전 집계 miss 시에도 버킷 읽기만 수행하나 사용자 수가 많으면 여유 타임아웃 */
+      var fetchTimeoutMs =
+        typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()
+          ? Math.max(STELVIO_RANKING_FETCH_TIMEOUT_MS || 48000, 90000)
+          : STELVIO_RANKING_FETCH_TIMEOUT_MS;
 
       function saveFreshPeakData(data) {
         stelvioRankingSwrCache = { key: swrKey, body: data, ts: Date.now() };
@@ -10887,7 +10901,7 @@
       }
 
       try {
-        var data2 = await stelvioRankingBoardFetchJson(urlFast, STELVIO_RANKING_FETCH_TIMEOUT_MS, myGen);
+        var data2 = await stelvioRankingBoardFetchJson(urlFast, fetchTimeoutMs, myGen);
         if (myGen !== stelvioRankingFetchGen) return;
         if (data2 && data2.success && data2.byCategory) {
           stelvioApplyPeakRankingFetchResult(data2, myGen, uid);
