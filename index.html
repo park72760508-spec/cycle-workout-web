@@ -100,8 +100,15 @@
         var appV9 = initApp(firebaseConfig, 'authV9');
         authV9 = getAuthFn(appV9);
         /* [SESSION-only 전면 전환] browserLocalPersistence(IndexedDB) 미사용 — iOS 비동기 지연 회피. "로그인 유지"는 localStorage 수동 저장으로 처리. */
-        if (typeof setPersistenceFn === 'function' && browserSessionPersistence) {
+        if (
+          typeof setPersistenceFn === 'function' &&
+          browserSessionPersistence &&
+          typeof window.isStelvioFirebaseAuthWebEnv === 'function' &&
+          window.isStelvioFirebaseAuthWebEnv()
+        ) {
           await setPersistenceFn(authV9, browserSessionPersistence).catch(function (e) {
+            var code = e && e.code;
+            if (code === 'auth/unsupported-persistence-type' || code === 'auth/operation-not-supported-in-this-environment') return;
             if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] setPersistence(SESSION) 실패:', e && e.message);
             else console.warn('[Firebase v9] setPersistence(SESSION) 실패:', e && e.message);
           });
