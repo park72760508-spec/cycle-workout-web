@@ -9411,8 +9411,10 @@
     function stelvioIsPersonalSpeedRanking() {
       return stelvioRankingState.duration === 'personal_speed';
     }
-    /** 항속 산식·필드 변경 시 bump — 로컬/SWR 캐시 무효화 */
-    var STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER = 9;
+    /** 항속 산식·필드 변경 시 bump — 로컬/SWR 캐시 무효화 (v10: 60분 MMP만·사전집계) */
+    var STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER = 10;
+    /** 항속 탭: 사전집계 응답은 당일 23시 KST 전까지 SWR 유지(빠른 재방문) */
+    var STELVIO_PERSONAL_SPEED_SWR_MAX_MS = 24 * 60 * 60 * 1000;
     function stelvioPersonalSpeedBoardPayloadStale(data) {
       if (!data || !data.byCategory) return true;
       var psVer = Number(data.personalSpeedLogicVersion);
@@ -10712,10 +10714,8 @@
     async function stelvioApplyPeakRankingFetchResultWithDashboardAlign(data, myGen, uid) {
       if (
         myGen === stelvioRankingFetchGen &&
-        uid &&
         typeof stelvioIsPersonalSpeedRanking === 'function' &&
         stelvioIsPersonalSpeedRanking() &&
-        typeof window.stelvioAlignPersonalSpeedRankingWithDashboard === 'function' &&
         data &&
         data.success &&
         data.byCategory
@@ -10727,8 +10727,14 @@
           if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
             data = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
           }
-          /* 6개월 60분 MMP(max_60min_watts)만 — FTP 폴백 순위 제외 */
-          data = await window.stelvioAlignPersonalSpeedRankingWithDashboard(data, uid);
+          /* 사전집계(v10)는 서버 MMP 기준 — 본인만 로그로 순위 보정 */
+          if (
+            uid &&
+            data.precomputed !== true &&
+            typeof window.stelvioAlignPersonalSpeedRankingWithDashboard === 'function'
+          ) {
+            data = await window.stelvioAlignPersonalSpeedRankingWithDashboard(data, uid);
+          }
         } catch (eAlignSpd) {
           console.warn('[StelvioRanking] 항속 60분 파워 동기화 실패:', eAlignSpd && eAlignSpd.message);
         }
@@ -10921,14 +10927,20 @@
 
       var isPsRank =
         typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking();
+      var swrMaxMs =
+        isPsRank && typeof STELVIO_PERSONAL_SPEED_SWR_MAX_MS === 'number'
+          ? STELVIO_PERSONAL_SPEED_SWR_MAX_MS
+          : STELVIO_RANKING_SWR_MAX_MS;
       var swr = stelvioRankingSwrCache;
       var swrValid = swr && swr.key === swrKey && swr.body && swr.body.success && swr.body.byCategory;
       var swrPsStale = isPsRank && swrValid && stelvioPersonalSpeedBoardPayloadStale(swr.body);
+      var swrPsPrecomputed =
+        isPsRank && swrValid && swr.body.precomputed === true && !swrPsStale;
       var swrIsPostRollover = swrValid && lastRollover > 0 && swr.ts < lastRollover;
-      if (swrValid && !swrIsPostRollover && !swrPsStale && nowMs - swr.ts < STELVIO_RANKING_SWR_MAX_MS) {
+      if (swrValid && !swrIsPostRollover && !swrPsStale && nowMs - swr.ts < swrMaxMs) {
         await applyFromCache(swr.body);
         scheduleRankMvIfNeeded();
-        if (isPsRank || stelvioRankingLocalCache.isStale({ cachedAt: swr.ts }) || swrIsPostRollover) {
+        if (!swrPsPrecomputed && (stelvioRankingLocalCache.isStale({ cachedAt: swr.ts }) || swrIsPostRollover)) {
           scheduleBgRefresh(false);
         }
         return;
@@ -10947,7 +10959,9 @@
         scheduleRankMvIfNeeded();
         var lcIsPostRollover = lastRollover > 0 && lcEntry.cachedAt < lastRollover;
         var lcStale = stelvioRankingLocalCache.isStale(lcEntry);
-        if (isPsRank || lcIsPostRollover || lcStale) scheduleBgRefresh(false);
+        var lcPsPrecomputed =
+          isPsRank && lcEntry.data.precomputed === true && !lcPsStale;
+        if (!lcPsPrecomputed && (lcIsPostRollover || lcStale)) scheduleBgRefresh(false);
         return;
       }
 
@@ -10973,7 +10987,12 @@
           saveFreshPeakData(data2);
           stelvioSetRankingRefreshHint(false);
           scheduleRankMvIfNeeded();
-          scheduleBgRefresh(false);
+          var psSkipBg =
+            typeof stelvioIsPersonalSpeedRanking === 'function' &&
+            stelvioIsPersonalSpeedRanking() &&
+            data2.precomputed === true &&
+            !stelvioPersonalSpeedBoardPayloadStale(data2);
+          if (!psSkipBg) scheduleBgRefresh(false);
         } else if (!showedSoft) {
           await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
         }
