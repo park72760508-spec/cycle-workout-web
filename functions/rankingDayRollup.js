@@ -13,7 +13,7 @@ exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
 exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
 /** 랭킹 항속 산출식 버전 — 변경 시 rollup·순위 캐시 전면 재계산 */
-exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 8;
+exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 9;
 /** rollup.peakSource — 로그 max_60min_watts(60분 MMP)만, FTP·50분 avg 폴백 없음 */
 exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60 = "max_60min_watts";
 /** @deprecated v7 이하 호환 */
@@ -988,81 +988,102 @@ async function refreshPersonalSpeedRollupsPeakDriftFromLogs(db, userDocs, startS
   const maxScan =
     opts && opts.maxScan != null && Number.isFinite(Number(opts.maxScan))
       ? Math.max(0, Math.floor(Number(opts.maxScan)))
-      : 120;
+      : 0;
   const peakTolW = opts && opts.peakTolW != null ? Number(opts.peakTolW) : 1;
   const batchSize = (opts && opts.batchSize) || 20;
-  const candidates = [];
+  const speedMismatch = [];
+  const peakDriftRest = [];
   for (let i = 0; i < userDocs.length; i++) {
     const udoc = userDocs[i];
     const userData = udoc.data() || {};
     if (!userHasWeightForPersonalSpeed(userData)) continue;
     const rollup = rollupMap.get(udoc.id);
     if (!rollup || !personalSpeedRollupIsReady(rollup, startStr, endStr, userData)) continue;
-    candidates.push(udoc);
+    if (!personalSpeedRollupSpeedSynced(rollup, userData)) speedMismatch.push(udoc);
+    else peakDriftRest.push(udoc);
   }
   let refreshed = 0;
   let scanned = 0;
-  for (let i = 0; i < candidates.length && scanned < maxScan; i += batchSize) {
-    const batch = candidates.slice(i, i + batchSize);
-    if (scanned >= maxScan) break;
+
+  const rescanOne = async (udoc) => {
+    const userId = udoc.id;
+    const userData = udoc.data() || {};
+    const rollup = rollupMap.get(userId);
+    if (!rollup) return;
+    const rawW =
+      Number(
+        userData.weight != null
+          ? userData.weight
+          : userData.weightKg != null
+            ? userData.weightKg
+            : userData.weight_kg
+      ) || 0;
+    const weightKg = rawW > 0 ? Math.max(rawW, 45) : 70;
+    const { peak60: peakFromLogs, peakYmd } = await peak60DashboardStyleFromLogs(
+      db,
+      userId,
+      startStr,
+      endStr,
+      weightKg
+    );
+    const stored = Number(rollup.peak60minWatts) || 0;
+    const forceRescan = speedMismatch.indexOf(udoc) >= 0;
+    if (
+      !forceRescan &&
+      Math.abs(peakFromLogs - stored) <= peakTolW &&
+      (peakFromLogs > 0) === (stored > 0)
+    ) {
+      return;
+    }
+    const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(userData, peakFromLogs, peakYmd);
+    if (metrics && metrics.speedKmh > 0) {
+      await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
+      rollupMap.set(userId, {
+        windowStart: startStr,
+        windowEnd: endStr,
+        peak60minWatts: metrics.peak60minWatts,
+        peak60Ymd: metrics.peak60Ymd || "",
+        referenceWatts: metrics.referenceWatts,
+        speedKmh: metrics.speedKmh,
+        weightKg: metrics.weightKg,
+        peakSource: exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60,
+        rollupLogicVersion: exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
+      });
+      refreshed += 1;
+    } else {
+      await personalSpeed6mRollupRef(db, userId).delete().catch(() => {});
+      rollupMap.delete(userId);
+    }
+  };
+
+  for (let i = 0; i < speedMismatch.length; i += batchSize) {
+    const batch = speedMismatch.slice(i, i + batchSize);
     /* eslint-disable no-await-in-loop */
     await Promise.all(
       batch.map(async (udoc) => {
-        if (scanned >= maxScan) return;
         scanned += 1;
-        const userId = udoc.id;
-        const userData = udoc.data() || {};
-        const rollup = rollupMap.get(userId);
-        if (!rollup) return;
         try {
-          const rawW =
-            Number(
-              userData.weight != null
-                ? userData.weight
-                : userData.weightKg != null
-                  ? userData.weightKg
-                  : userData.weight_kg
-            ) || 0;
-          const weightKg = rawW > 0 ? Math.max(rawW, 45) : 70;
-          const { peak60: peakFromLogs, peakYmd } = await peak60DashboardStyleFromLogs(
-            db,
-            userId,
-            startStr,
-            endStr,
-            weightKg
-          );
-          const stored = Number(rollup.peak60minWatts) || 0;
-          if (
-            Math.abs(peakFromLogs - stored) <= peakTolW &&
-            (peakFromLogs > 0) === (stored > 0)
-          ) {
-            return;
-          }
-          const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(
-            userData,
-            peakFromLogs,
-            peakYmd
-          );
-          if (metrics && metrics.speedKmh > 0) {
-            await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
-            rollupMap.set(userId, {
-              windowStart: startStr,
-              windowEnd: endStr,
-              peak60minWatts: metrics.peak60minWatts,
-              peak60Ymd: metrics.peak60Ymd || "",
-              referenceWatts: metrics.referenceWatts,
-              speedKmh: metrics.speedKmh,
-              weightKg: metrics.weightKg,
-              peakSource: exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60,
-              rollupLogicVersion: exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
-            });
-            refreshed += 1;
-          } else {
-            await personalSpeed6mRollupRef(db, userId).delete().catch(() => {});
-            rollupMap.delete(userId);
-          }
+          await rescanOne(udoc);
         } catch (e) {
-          console.warn("[rankingDayRollup] peak drift refresh 실패:", userId, e.message);
+          console.warn("[rankingDayRollup] peak drift refresh 실패:", udoc.id, e.message);
+        }
+      })
+    );
+    /* eslint-enable no-await-in-loop */
+  }
+  const driftScanCap = maxScan > 0 ? maxScan : peakDriftRest.length;
+  for (let i = 0; i < peakDriftRest.length && scanned < driftScanCap; i += batchSize) {
+    const batch = peakDriftRest.slice(i, i + batchSize);
+    if (scanned >= driftScanCap) break;
+    /* eslint-disable no-await-in-loop */
+    await Promise.all(
+      batch.map(async (udoc) => {
+        if (scanned >= driftScanCap) return;
+        scanned += 1;
+        try {
+          await rescanOne(udoc);
+        } catch (e) {
+          console.warn("[rankingDayRollup] peak drift refresh 실패:", udoc.id, e.message);
         }
       })
     );

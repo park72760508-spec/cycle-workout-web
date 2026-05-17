@@ -3899,7 +3899,12 @@ async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endS
       startStr,
       endStr,
       rollupMap,
-      { maxScan: opts.maxPeakDriftScan != null ? opts.maxPeakDriftScan : 150 }
+      {
+        maxScan:
+          opts.maxPeakDriftScan != null && Number.isFinite(Number(opts.maxPeakDriftScan))
+            ? Number(opts.maxPeakDriftScan)
+            : 0,
+      }
     );
   }
   if (opts.backfillMissing !== false) {
@@ -4590,11 +4595,118 @@ async function readRankingAggregatePayloadAllowStale(db, cacheKey, maxStaleMs) {
 
 const PERSONAL_SPEED_STALE_AGG_MS = 14 * 24 * 60 * 60 * 1000;
 
+function personalSpeedAggregateHasPeak60Entries(payload) {
+  const lists = [];
+  if (Array.isArray(payload.entries)) lists.push(payload.entries);
+  const bc = payload.byCategory;
+  if (bc && typeof bc === "object") {
+    for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+      if (Array.isArray(bc[cat])) lists.push(bc[cat]);
+    }
+  }
+  for (let li = 0; li < lists.length; li++) {
+    const arr = lists[li];
+    for (let i = 0; i < arr.length; i++) {
+      const e = arr[i];
+      if (e && Number(e.peak60minWatts) > 0 && Number(e.speedKmh) > 0) return true;
+    }
+  }
+  return false;
+}
+
 function personalSpeedAggregateLogicOk(payload) {
   if (!payload || typeof payload !== "object") return false;
-  return (
-    Number(payload.personalSpeedLogicVersion) >= rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION
-  );
+  if (Number(payload.personalSpeedLogicVersion) < rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) {
+    return false;
+  }
+  return personalSpeedAggregateHasPeak60Entries(payload);
+}
+
+/**
+ * 사전집계·캐시 응답: rollup peak60 + 현재 체중으로 speedKmh 재산출(구 캐시 speed만 있는 행 보정).
+ */
+async function enrichPersonalSpeedPackFromRollups(db, pack, startStr, endStr) {
+  if (!pack || !pack.byCategory || !db) return pack;
+  const userIds = new Set();
+  for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+    const arr = pack.byCategory[cat];
+    if (!Array.isArray(arr)) continue;
+    arr.forEach((e) => {
+      if (e && e.userId) userIds.add(String(e.userId));
+    });
+  }
+  if (!userIds.size) return pack;
+  const rollupMap = await rankingDayRollup.fetchPersonalSpeed6mRollupMap(db, [...userIds]);
+  const userRefs = [...userIds].map((uid) => db.collection("users").doc(uid));
+  const userSnaps = [];
+  for (let ri = 0; ri < userRefs.length; ri += 300) {
+    const chunk = userRefs.slice(ri, ri + 300);
+    /* eslint-disable no-await-in-loop */
+    const part = chunk.length ? await db.getAll(...chunk) : [];
+    /* eslint-enable no-await-in-loop */
+    part.forEach((snap) => userSnaps.push(snap));
+  }
+  const userById = new Map();
+  userSnaps.forEach((snap) => {
+    if (snap.exists) userById.set(snap.id, snap.data() || {});
+  });
+
+  const remapRow = (row) => {
+    if (!row || !row.userId) return null;
+    const data = userById.get(String(row.userId));
+    const rollup = rollupMap.get(String(row.userId));
+    if (!data || !rollup) return null;
+    if (!rankingDayRollup.personalSpeedRollupIsReady(rollup, startStr, endStr, data)) return null;
+    const peak60 = Number(rollup.peak60minWatts) || 0;
+    const metrics = rankingDayRollup.buildPersonalSpeedMetricsFromUserAndPeak60(
+      data,
+      peak60,
+      String(rollup.peak60Ymd || "")
+    );
+    if (!metrics || !(metrics.speedKmh > 0)) return null;
+    return {
+      ...row,
+      speedKmh: metrics.speedKmh,
+      peak60minWatts: metrics.peak60minWatts,
+      referenceWatts: metrics.referenceWatts,
+      weightKg: metrics.weightKg,
+    };
+  };
+
+  const allRows = [];
+  for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+    const arr = pack.byCategory[cat];
+    if (!Array.isArray(arr)) {
+      pack.byCategory[cat] = [];
+      continue;
+    }
+    const next = [];
+    for (let i = 0; i < arr.length; i++) {
+      const r = remapRow(arr[i]);
+      if (r) next.push(r);
+    }
+    next.sort((a, b) => b.speedKmh - a.speedKmh);
+    pack.byCategory[cat] = next.map((e, i) => ({ ...e, rank: i + 1 }));
+    if (cat === "Supremo") {
+      next.forEach((r) => allRows.push(r));
+    }
+  }
+  if (!allRows.length) {
+    for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+      (pack.byCategory[cat] || []).forEach((r) => allRows.push(r));
+    }
+  }
+  const seen = new Set();
+  const merged = [];
+  allRows.sort((a, b) => b.speedKmh - a.speedKmh);
+  allRows.forEach((e) => {
+    const id = String(e.userId || "");
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    merged.push(e);
+  });
+  pack.entries = merged.map((e, i) => ({ ...e, rank: i + 1 }));
+  return pack;
 }
 
 /** 항속 탭 순위 등락·사전집계·cache 초기화 (FTP 폴백 제거·산식 변경 시) */
@@ -6190,33 +6302,25 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
-      /** rollup 백필 포함 실시간 보드 — 불완전(11명 등) aggregate보다 우선 */
-      const boardLive = await getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, gender, null, {
-        backfillMissing: true,
-        maxBackfill: forceRankMv ? 400 : 250,
-        rescanPeakDrift: true,
-        maxPeakDriftScan: forceRankMv ? 300 : 180,
-      });
+      const usersSnapPs = await db.collection("users").get();
+      const psUserCount = usersSnapPs.size || 0;
+      /** rollup 백필 포함 실시간 보드 — 불완전 aggregate보다 우선 */
+      const boardLive = await getPersonalSpeedRankingBoardEntriesFromRollups(
+        db,
+        startStr,
+        endStr,
+        gender,
+        usersSnapPs,
+        {
+          backfillMissing: true,
+          maxBackfill: forceRankMv ? 400 : 250,
+          rescanPeakDrift: true,
+          maxPeakDriftScan: forceRankMv ? psUserCount : Math.min(psUserCount, 500),
+        }
+      );
       const liveCount = boardLive.entries.length;
 
-      const aggPs = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
-      const aggCount = aggPs && Array.isArray(aggPs.entries) ? aggPs.entries.length : 0;
-      if (
-        !forceRankMv &&
-        aggPs &&
-        aggPs.byCategory &&
-        personalSpeedAggregateLogicOk(aggPs) &&
-        aggCount > 0 &&
-        aggCount >= liveCount
-      ) {
-        return res.status(200).json(
-          await buildPersonalSpeedOutFromPack(
-            { byCategory: aggPs.byCategory, entries: aggPs.entries, startStr, endStr },
-            { precomputed: true }
-          )
-        );
-      }
-
+      /** 실시간 보드가 있으면 항상 우선(구 사전집계 speed만 반환하던 버그 방지) */
       if (liveCount > 0) {
         await applyPeakRankChanges(db, boardLive.byCategory, `peak_personal_speed_rolling183_${gender}`);
         const psPayload = {
@@ -6235,7 +6339,29 @@ exports.getPeakPowerRanking = onRequest(
         return res.status(200).json(
           await buildPersonalSpeedOutFromPack(
             { byCategory: boardLive.byCategory, entries: boardLive.entries, startStr, endStr },
-            { fromUserRollups: true, backfilled: liveCount > aggCount }
+            { fromUserRollups: true }
+          )
+        );
+      }
+
+      const aggPs = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      if (
+        !forceRankMv &&
+        aggPs &&
+        aggPs.byCategory &&
+        personalSpeedAggregateLogicOk(aggPs) &&
+        (aggPs.entries || []).length > 0
+      ) {
+        const enriched = await enrichPersonalSpeedPackFromRollups(db, aggPs, startStr, endStr);
+        return res.status(200).json(
+          await buildPersonalSpeedOutFromPack(
+            {
+              byCategory: enriched.byCategory,
+              entries: enriched.entries,
+              startStr,
+              endStr,
+            },
+            { precomputed: true, enrichedFromRollups: true }
           )
         );
       }
@@ -6248,10 +6374,16 @@ exports.getPeakPowerRanking = onRequest(
           personalSpeedAggregateLogicOk(aggStale) &&
           (aggStale.entries || []).length > 0
         ) {
+          const enrichedStale = await enrichPersonalSpeedPackFromRollups(db, aggStale, startStr, endStr);
           return res.status(200).json(
             await buildPersonalSpeedOutFromPack(
-              { byCategory: aggStale.byCategory, entries: aggStale.entries, startStr, endStr },
-              { precomputed: true, stale: true }
+              {
+                byCategory: enrichedStale.byCategory,
+                entries: enrichedStale.entries,
+                startStr,
+                endStr,
+              },
+              { precomputed: true, stale: true, enrichedFromRollups: true }
             )
           );
         }
