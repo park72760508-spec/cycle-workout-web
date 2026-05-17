@@ -9020,7 +9020,11 @@
 
     async function stelvioRankProfileFetchPayload(period, duration, gender) {
       var g = gender === 'M' || gender === 'F' ? gender : 'all';
-      var key = ['v2', period || '', duration || '', g].join('|');
+      var cacheKeyStr =
+        typeof stelvioBuildRankingBoardCacheKey === 'function'
+          ? stelvioBuildRankingBoardCacheKey(duration, g, null, period)
+          : new URLSearchParams({ period: period || '', duration: duration || '', gender: g }).toString();
+      var key = 'v2|' + cacheKeyStr;
       var now = Date.now();
 
       // 1순위: 인메모리 캐시 (45초 TTL — 탭 내 반복 호출 방어)
@@ -9030,8 +9034,7 @@
       // 2순위: localStorage 랭킹 캐시 (다음 23:00 KST까지 유효)
       // 메인 rankingBoard fetch와 동일한 키 구조 사용 → 탭 프리페치 결과를 즉시 활용
       try {
-        var lcParams = new URLSearchParams({ period: period || '', duration: duration || '', gender: g });
-        var lcKey = stelvioPeakRankingLcKey(lcParams.toString());
+        var lcKey = stelvioPeakRankingLcKey(cacheKeyStr);
         var lcEntry = stelvioRankingLocalCache.get(lcKey);
         if (lcEntry && lcEntry.data && lcEntry.data.success && lcEntry.data.byCategory) {
           STELVIO_RANK_PROFILE_FETCH_CACHE[key] = { at: now, data: lcEntry.data };
@@ -9050,7 +9053,7 @@
           } catch (eab) {}
         }, toMs);
       try {
-        var params = new URLSearchParams({ period: period, duration: duration, gender: g });
+        var params = new URLSearchParams(cacheKeyStr);
         var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString();
         var res = await fetch(url, {
           method: 'GET',
@@ -9129,16 +9132,29 @@
 
       try {
         stelvioRankAvatarZoomSetRankSpinner(true);
-        var period = typeof stelvioRankingState !== 'undefined' ? stelvioRankingState.period : 'monthly';
+        var basePeriod = typeof stelvioRankingState !== 'undefined' ? stelvioRankingState.period : 'monthly';
         var gender = typeof stelvioRankingState !== 'undefined' ? stelvioRankingState.gender : 'all';
         var gSel = gender === 'group_dist' ? 'all' : gender;
+        var effTssPeriod =
+          typeof stelvioResolveRankingBoardPeriod === 'function'
+            ? stelvioResolveRankingBoardPeriod('tss', basePeriod)
+            : basePeriod;
+        var effDistPeriod =
+          typeof stelvioResolveRankingBoardPeriod === 'function'
+            ? stelvioResolveRankingBoardPeriod('personal_dist', basePeriod)
+            : basePeriod;
+        var effSpdPeriod =
+          typeof stelvioResolveRankingBoardPeriod === 'function'
+            ? stelvioResolveRankingBoardPeriod('personal_speed', basePeriod)
+            : 'rolling183';
 
-        var tasks = [stelvioRankProfileFetchPayload(period, 'gc', gSel)];
+        var tasks = [stelvioRankProfileFetchPayload(basePeriod, 'gc', gSel)];
         for (var di = 0; di < STELVIO_RANK_PROFILE_PEAK_DURS.length; di++) {
-          tasks.push(stelvioRankProfileFetchPayload(period, STELVIO_RANK_PROFILE_PEAK_DURS[di], gSel));
+          tasks.push(stelvioRankProfileFetchPayload(basePeriod, STELVIO_RANK_PROFILE_PEAK_DURS[di], gSel));
         }
-        tasks.push(stelvioRankProfileFetchPayload(period, 'tss', gSel));
-        tasks.push(stelvioRankProfileFetchPayload(period, 'personal_dist', gSel));
+        tasks.push(stelvioRankProfileFetchPayload(effTssPeriod, 'tss', gSel));
+        tasks.push(stelvioRankProfileFetchPayload(effDistPeriod, 'personal_dist', gSel));
+        tasks.push(stelvioRankProfileFetchPayload(effSpdPeriod, 'personal_speed', gSel));
 
         var results = await Promise.all(tasks);
         if (!dieIfStale()) return;
@@ -9186,15 +9202,21 @@
 
         var tssData = results[1 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
         var pdData = results[2 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
+        var spdData = results[3 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
         var tssRow = stelvioRankProfileSupremoRow(tssData, userId);
         var pdRow = stelvioRankProfileSupremoRow(pdData, userId);
+        var spdRow = stelvioRankProfileSupremoRow(spdData, userId);
         var tssTxt = '\u2014';
         var distTxt = '\u2014';
+        var spdTxt = '\u2014';
         if (tssRow && tssRow.totalTss != null && !Number.isNaN(Number(tssRow.totalTss))) {
           tssTxt = Number(tssRow.totalTss).toFixed(1) + ' TSS';
         }
         if (pdRow && pdRow.totalKm != null && !Number.isNaN(Number(pdRow.totalKm))) {
           distTxt = Number(pdRow.totalKm).toFixed(1) + ' km';
+        }
+        if (spdRow && spdRow.speedKmh != null && !Number.isNaN(Number(spdRow.speedKmh)) && Number(spdRow.speedKmh) > 0) {
+          spdTxt = Number(spdRow.speedKmh).toFixed(1) + ' km/h';
         }
 
         if (!dieIfStale()) return;
@@ -9207,7 +9229,12 @@
         l1.textContent = firstName ? firstName + ' \u00b7 ' + p1Mid + (p1Cat ? ' ' + p1Cat : '') : p1Mid + (p1Cat ? ' ' + p1Cat : '');
         l2.textContent = line2Parts.join(' \u00b7 ');
         l3.textContent =
-          '\uc8fc\uac04 TSS: ' + tssTxt + ' \u00b7 \ucd5c\uadfc 30\uc77c \uac70\ub9ac: ' + distTxt;
+          '\uc8fc\uac04 TSS: ' +
+          tssTxt +
+          ' \u00b7 \ucd5c\uadfc 30\uc77c \uac70\ub9ac: ' +
+          distTxt +
+          ' \u00b7 \ub3c5\uc8fc \ub2a5\ub825: ' +
+          spdTxt;
       } catch (eAll) {
         if (dieIfStale()) {
           l2.textContent = '\uc21c\uc704 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.';
