@@ -41,6 +41,34 @@ function isStelvioOpenRidingRoomAdminGrade(g) {
   return n === 1 || n === 3;
 }
 
+/** 계정 상태: active(정상) | withdrawn(탈퇴·비활성, 데이터 보존) */
+var ACCOUNT_STATUS_ACTIVE = 'active';
+var ACCOUNT_STATUS_WITHDRAWN = 'withdrawn';
+
+function getUserAccountStatus(user) {
+  if (!user) return ACCOUNT_STATUS_ACTIVE;
+  if (user.is_active === false) return ACCOUNT_STATUS_WITHDRAWN;
+  var s = String(user.account_status || user.status || '').trim().toLowerCase();
+  if (s === 'withdrawn' || s === 'inactive' || s === 'deleted' || s === 'deactivated') {
+    return ACCOUNT_STATUS_WITHDRAWN;
+  }
+  return ACCOUNT_STATUS_ACTIVE;
+}
+
+function isUserAccountActive(user) {
+  return getUserAccountStatus(user) === ACCOUNT_STATUS_ACTIVE;
+}
+
+function isUserWithdrawn(user) {
+  return getUserAccountStatus(user) === ACCOUNT_STATUS_WITHDRAWN;
+}
+
+function filterActiveUsers(users) {
+  return (Array.isArray(users) ? users : []).filter(function (u) {
+    return isUserAccountActive(u);
+  });
+}
+
 /** 로그인 계정 등급 — 프로필 선택으로 currentUser가 바뀌어도 로그인 UID 기준. authUser.grade는 오래된 값일 수 있어 users 목록(Firestore 동기화)을 최우선 */
 function getLoginUserGrade() {
   try {
@@ -867,16 +895,29 @@ async function signInWithGoogle() {
     const userDoc = await userDocRef.get();
 
     if (userDoc.exists) {
-      // 기존 회원: lastLogin만 업데이트
-      await userDocRef.update({
-        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      
       var docData = userDoc.data() || {};
       const userData = { id: user.uid };
       if (docData && typeof docData === 'object') {
         for (var k in docData) { if (docData.hasOwnProperty(k)) userData[k] = docData[k]; }
       }
+
+      if (isUserWithdrawn(userData)) {
+        window.currentUser = { id: user.uid, account_status: ACCOUNT_STATUS_WITHDRAWN };
+        try {
+          localStorage.removeItem('authUser');
+          localStorage.removeItem('currentUser');
+        } catch (eWd) {}
+        isLoginJustCompleted = true;
+        setTimeout(function () {
+          showCompleteUserInfoModal(userData);
+        }, 500);
+        return { success: true, user: userData, isNewUser: false, needsInfo: true, withdrawn: true };
+      }
+
+      // 기존 회원: lastLogin만 업데이트
+      await userDocRef.update({
+        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+      });
       
       // 전역 상태 업데이트
       window.currentUser = userData;
@@ -926,7 +967,8 @@ async function signInWithGoogle() {
         strava_access_token: '', // 기본값: 빈 문자열
         strava_refresh_token: '', // 기본값: 빈 문자열
         strava_expires_at: 0, // 기본값: 0
-        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+        lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+        account_status: ACCOUNT_STATUS_ACTIVE
       };
 
       await userDocRef.set(newUserData);
@@ -1030,16 +1072,29 @@ function initAuthStateListener() {
       const userDoc = await userDocRef.get();
       
       if (userDoc.exists) {
-        // 기존 회원: lastLogin만 업데이트
-        await userDocRef.update({
-          lastLogin: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
         var docData2 = userDoc.data() || {};
         const userData = { id: result.user.uid };
         if (docData2 && typeof docData2 === 'object') {
           for (var k2 in docData2) { if (docData2.hasOwnProperty(k2)) userData[k2] = docData2[k2]; }
         }
+
+        if (isUserWithdrawn(userData)) {
+          window.currentUser = { id: result.user.uid, account_status: ACCOUNT_STATUS_WITHDRAWN };
+          try {
+            localStorage.removeItem('authUser');
+            localStorage.removeItem('currentUser');
+          } catch (eWd2) {}
+          isLoginJustCompleted = true;
+          setTimeout(function () {
+            showCompleteUserInfoModal(userData);
+          }, 500);
+          return;
+        }
+
+        // 기존 회원: lastLogin만 업데이트
+        await userDocRef.update({
+          lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+        });
         
         // 전역 상태 업데이트
         window.currentUser = userData;
@@ -1102,7 +1157,8 @@ function initAuthStateListener() {
           strava_access_token: '',
           strava_refresh_token: '',
           strava_expires_at: 0,
-          lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+          lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+          account_status: ACCOUNT_STATUS_ACTIVE
         };
         
         await userDocRef.set(newUserData);
@@ -1157,6 +1213,9 @@ function initAuthStateListener() {
       try {
         const isPhoneLogin = firebaseUser.email && firebaseUser.email.endsWith('@stelvio.ai');
         const isAuthV9 = (auth === window.authV9);
+        const isCallbackPage = typeof window !== 'undefined' &&
+          (window.location.pathname.includes('callback.html') ||
+           window.location.href.includes('callback.html'));
         
         let userData = null;
         
@@ -1177,6 +1236,23 @@ function initAuthStateListener() {
         }
         
         if (userData) {
+          if (isUserWithdrawn(userData)) {
+            console.log('[Auth] 탈퇴 계정 — 미등록 상태로 처리 (재가입 대기)');
+            window.currentUser = { id: firebaseUser.uid, account_status: ACCOUNT_STATUS_WITHDRAWN };
+            window.isPhoneAuthenticated = false;
+            try {
+              localStorage.removeItem('authUser');
+              localStorage.removeItem('currentUser');
+            } catch (eWd3) {}
+            if (!isCallbackPage && isLoginJustCompleted) {
+              setTimeout(function () {
+                showCompleteUserInfoModal(userData);
+              }, 500);
+              isLoginJustCompleted = false;
+            }
+            return;
+          }
+
           // 전역 상태 업데이트 (나이·성별 포함 Firestore 전체 데이터)
           window.currentUser = userData;
           try {
@@ -1205,10 +1281,6 @@ function initAuthStateListener() {
           
           // 사용자 목록 동기화 (로그인 후)
           // callback.html에서는 사용자 목록 로드 및 화면 전환 건너뛰기
-          const isCallbackPage = typeof window !== 'undefined' && 
-            (window.location.pathname.includes('callback.html') || 
-             window.location.href.includes('callback.html'));
-          
           if (!isCallbackPage) {
             const heavySyncAfterAuth = async () => {
               if (typeof syncUsersFromDB === 'function') {
@@ -1670,14 +1742,60 @@ window.apiGetUser = window.apiGetUser || apiGetUser;
  * @param {object} userData - 사용자 데이터 (기존 Google Sheets 필드 구조)
  * @returns {Promise<{success: boolean, id?: string, error?: string}>}
  */
+/**
+ * 탈퇴(비활성) 계정 재가입 — 기존 uid·훈련 로그·로드 자료 유지
+ */
+async function apiReactivateUser(id, userData) {
+  try {
+    if (!id) {
+      return { success: false, error: '사용자 ID가 필요합니다.' };
+    }
+    const now = new Date().toISOString();
+    const defaultExpiryDate = (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() + 6);
+      return d.toISOString().split('T')[0];
+    })();
+    const reactivatePayload = {
+      account_status: ACCOUNT_STATUS_ACTIVE,
+      reactivated_at: now,
+      withdrawn_at: '',
+      name: userData.name || '',
+      contact: userData.contact || '',
+      ftp: parseInt(userData.ftp, 10) || 0,
+      weight: parseFloat(userData.weight) || 0,
+      birth_year: userData.birth_year != null ? parseInt(userData.birth_year, 10) : null,
+      gender: String(userData.gender || ''),
+      grade: String(userData.grade || '2'),
+      expiry_date: normalizeExpiryDate(userData.expiry_date) || defaultExpiryDate,
+      challenge: String(userData.challenge || 'Fitness')
+    };
+    const res = await apiUpdateUser(id, reactivatePayload);
+    if (res && res.success) {
+      console.log('✅ 탈퇴 계정 재가입(복구) 완료:', id);
+      return { success: true, id: id, reactivated: true };
+    }
+    return res || { success: false, error: '재가입 처리에 실패했습니다.' };
+  } catch (error) {
+    console.error('❌ 계정 재가입 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 async function apiCreateUser(userData) {
   try {
     console.log('apiCreateUser called with:', userData);
     
     // 현재 로그인한 사용자 확인
-    const currentUser = window.auth?.currentUser;
+    const currentUser = window.auth?.currentUser || window.authV9?.currentUser;
     if (!currentUser) {
       return { success: false, error: '로그인이 필요합니다.' };
+    }
+
+    const existingRes = await apiGetUser(currentUser.uid);
+    if (existingRes && existingRes.success && existingRes.item && isUserWithdrawn(existingRes.item)) {
+      console.log('[apiCreateUser] 탈퇴 계정 재가입 — 기존 데이터 복구');
+      return apiReactivateUser(currentUser.uid, userData);
     }
     
     // 전화번호(contact) 중복 검사
@@ -1703,6 +1821,8 @@ async function apiCreateUser(userData) {
         const users = (listRes && (listRes.items || listRes.users || listRes.data)) || [];
         
         const isDuplicated = users.some(u => {
+          if (!isUserAccountActive(u)) return false;
+          if (String(u.id) === String(currentUser.uid)) return false;
           const uContact = String(u?.contact || '').trim();
           if (!uContact) return false;
           
@@ -1751,7 +1871,8 @@ async function apiCreateUser(userData) {
       last_training_date: '', // 기본값: 빈 문자열
       strava_access_token: '', // 기본값: 빈 문자열
       strava_refresh_token: '', // 기본값: 빈 문자열
-      strava_expires_at: 0 // 기본값: 0
+      strava_expires_at: 0, // 기본값: 0
+      account_status: ACCOUNT_STATUS_ACTIVE
     };
     
     // Firestore에 저장
@@ -1821,6 +1942,9 @@ async function apiUpdateUser(id, userData) {
     if (userData.gemini_api_registered != null) updateData.gemini_api_registered = userData.gemini_api_registered === true;
     if (userData.API_sts != null) updateData.API_sts = userData.API_sts === true;
     if (userData.profileImageUrl != null) updateData.profileImageUrl = String(userData.profileImageUrl);
+    if (userData.account_status != null) updateData.account_status = String(userData.account_status);
+    if (userData.withdrawn_at != null) updateData.withdrawn_at = String(userData.withdrawn_at);
+    if (userData.reactivated_at != null) updateData.reactivated_at = String(userData.reactivated_at);
 
     // Firestore 업데이트
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
@@ -1886,84 +2010,57 @@ async function apiDeleteUser(id) {
     if (!id) {
       return { success: false, error: '사용자 ID가 필요합니다.' };
     }
-    
-    // 1. Firestore에서 사용자 문서 삭제
+
+    const now = new Date().toISOString();
+    const withdrawData = {
+      account_status: ACCOUNT_STATUS_WITHDRAWN,
+      withdrawn_at: now
+    };
+
+    // Firestore 문서는 유지하고 탈퇴(비활성) 처리 — 훈련 로그·로드 자료 보존
     if (window.firestoreV9) {
-      var deleteDocMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
-      var deleteDoc = deleteDocMod && deleteDocMod.deleteDoc;
-      var doc = deleteDocMod && deleteDocMod.doc;
-      var collection = deleteDocMod && deleteDocMod.collection;
-      const usersRef = collection(window.firestoreV9, 'users');
-      const userDocRef = doc(usersRef, id);
-      await deleteDoc(userDocRef);
-      
-      console.log('✅ 사용자 삭제 완료 (firestoreV9):', id);
+      var updateDocMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      var updateDocFn = updateDocMod && updateDocMod.updateDoc;
+      var docFn = updateDocMod && updateDocMod.doc;
+      var collectionFn = updateDocMod && updateDocMod.collection;
+      const usersRef = collectionFn(window.firestoreV9, 'users');
+      const userDocRef = docFn(usersRef, id);
+      await updateDocFn(userDocRef, withdrawData);
+
+      console.log('✅ 사용자 탈퇴(비활성) 처리 완료 (firestoreV9):', id);
     } else {
-      // v8 Compat 사용 (fallback)
-      await getUsersCollection().doc(id).delete();
-      
-      console.log('✅ 사용자 삭제 완료 (firestore v8):', id);
+      await getUsersCollection().doc(id).update(withdrawData);
+
+      console.log('✅ 사용자 탈퇴(비활성) 처리 완료 (firestore v8):', id);
     }
-    
-    // 2. Firebase Authentication에서 사용자 삭제
-    try {
-      // 현재 로그인한 사용자가 본인을 삭제하는 경우
-      const currentAuthUser = window.auth?.currentUser;
-      const currentAuthV9User = window.authV9?.currentUser;
-      const isOwnAccount = (currentAuthUser && currentAuthUser.uid === id) || 
-                           (currentAuthV9User && currentAuthV9User.uid === id);
-      
-      if (isOwnAccount) {
-        // 본인 계정 삭제: auth.currentUser.delete() 또는 authV9.deleteUser() 사용
-        console.log('🔐 본인 계정 삭제: Firebase Authentication에서 삭제 시작:', id);
-        
-        try {
-          // v8 Compat 삭제
-          if (currentAuthUser && currentAuthUser.uid === id) {
-            await currentAuthUser.delete();
-            console.log('✅ Firebase Authentication에서 본인 계정 삭제 완료 (v8):', id);
-          }
-          
-          // v9 Modular 삭제
-          if (currentAuthV9User && currentAuthV9User.uid === id && window.authV9) {
-            var authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
-            var deleteUserV9 = authMod && authMod.deleteUser;
-            if (deleteUserV9) await deleteUserV9(currentAuthV9User);
-            console.log('✅ Firebase Authentication에서 본인 계정 삭제 완료 (v9):', id);
-          }
-        } catch (authError) {
-          console.error('❌ Firebase Authentication 삭제 실패:', authError);
-          if (authError.code === 'auth/requires-recent-login') {
-            throw new Error('보안을 위해 최근에 로그인한 후 다시 시도해주세요.');
-          }
-          throw authError;
+
+    const currentAuthUser = window.auth?.currentUser;
+    const currentAuthV9User = window.authV9?.currentUser;
+    const isOwnAccount = (currentAuthUser && currentAuthUser.uid === id) ||
+                         (currentAuthV9User && currentAuthV9User.uid === id);
+
+    if (isOwnAccount) {
+      try {
+        if (window.auth && window.auth.signOut) {
+          await window.auth.signOut();
         }
-      } else {
-        // 다른 사용자 삭제: Firebase Admin SDK가 필요하지만 클라이언트에서는 불가능
-        console.warn('⚠️ 다른 사용자 삭제: Firebase Authentication 삭제는 Firebase Admin SDK가 필요합니다.');
-        console.warn('⚠️ 현재는 Firestore에서만 삭제되며, Firebase Authentication 삭제는 수동으로 처리해야 합니다.');
+        if (window.authV9) {
+          var signOutMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+          var signOutFn = signOutMod && signOutMod.signOut;
+          if (signOutFn) await signOutFn(window.authV9);
+        }
+      } catch (signOutErr) {
+        console.warn('⚠️ 탈퇴 후 로그아웃 처리 경고:', signOutErr);
       }
-    } catch (authError) {
-      console.error('❌ Firebase Authentication 삭제 실패:', authError);
-      
-      // 본인 계정 삭제 시 Authentication 삭제 실패는 전체 삭제 실패로 처리
-      const currentAuthUser = window.auth?.currentUser;
-      const currentAuthV9User = window.authV9?.currentUser;
-      const isOwnAccount = (currentAuthUser && currentAuthUser.uid === id) || 
-                           (currentAuthV9User && currentAuthV9User.uid === id);
-      
-      if (isOwnAccount) {
-        return {
-          success: false,
-          error: 'Firebase Authentication 삭제에 실패했습니다: ' + (authError.message || authError.code || '알 수 없는 오류')
-        };
-      }
-      
-      // 다른 사용자 삭제 실패 시에는 Firestore 삭제는 성공했으므로 경고만 표시하고 계속 진행
-      console.warn('⚠️ 다른 사용자 삭제: Firebase Authentication 삭제는 실패했지만 Firestore 삭제는 성공했습니다.');
+      window.currentUser = null;
+      try {
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('authUser');
+      } catch (eLs) {}
+      if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
     }
-    
-    return { success: true };
+
+    return { success: true, withdrawn: true };
   } catch (error) {
     console.error('❌ 사용자 삭제 실패:', error);
     return { success: false, error: error.message };
@@ -2055,7 +2152,7 @@ async function unifiedCreateUser(userData, source = 'profile') {
     userData.contact = normalizedContact;
 
     const listRes = await apiGetUsers();
-    const users = (listRes && (listRes.items || listRes.users || listRes.data)) || [];
+    const users = filterActiveUsers((listRes && (listRes.items || listRes.users || listRes.data)) || []);
     const isDuplicated = users.some(u => {
       const uDigits = unformatPhone(u?.contact || '');
       return uDigits === onlyDigits;
@@ -3048,7 +3145,7 @@ async function loadUsers() {
       return;
     }
 
-    const users = Array.isArray(result.items) ? result.items : [];
+    const users = filterActiveUsers(Array.isArray(result.items) ? result.items : []);
     console.log('[loadUsers] 👥 사용자 목록:', { 
       totalUsers: users.length,
       userIds: users.map(u => u.id),
@@ -4049,6 +4146,17 @@ async function completeUserInfo() {
       challenge: challenge,
       expiry_date: normalizeExpiryDate(extendedExpiryDate) // 6개월 무료 연장 적용
     };
+
+    try {
+      const existingRes = await apiGetUser(currentUser.uid);
+      if (existingRes && existingRes.success && existingRes.item && isUserWithdrawn(existingRes.item)) {
+        updateData.account_status = ACCOUNT_STATUS_ACTIVE;
+        updateData.reactivated_at = new Date().toISOString();
+        updateData.withdrawn_at = '';
+      }
+    } catch (eRe) {
+      console.warn('[completeUserInfo] 탈퇴 복구 확인 생략:', eRe);
+    }
     
     const result = await apiUpdateUser(currentUser.uid, updateData);
     
@@ -4212,8 +4320,8 @@ async function deleteUser(userId) {
   
   // 본인 계정 삭제 시 경고 메시지
   const confirmMessage = isOwnAccount
-    ? '정말로 본인 계정을 삭제하시겠습니까?\n삭제된 계정의 훈련 기록도 함께 삭제되며, 재가입 시에도 기존 계정으로 인식될 수 있습니다.\n계정을 삭제하면 로그아웃됩니다.'
-    : '정말로 이 사용자를 삭제하시겠습니까?\n삭제된 사용자의 훈련 기록도 함께 삭제됩니다.';
+    ? '정말로 탈퇴하시겠습니까?\n훈련 기록과 로드 자료는 보관되며, 순위에는 표시되지 않습니다.\n같은 전화번호로 다시 가입하면 기존 정보를 복구할 수 있습니다.\n탈퇴 후 로그아웃됩니다.'
+    : '정말로 이 사용자를 탈퇴(비활성) 처리하시겠습니까?\n데이터는 보관되며 순위·프로필 목록에서만 숨겨집니다.';
   
   if (!confirm(confirmMessage)) {
     return;
@@ -4223,7 +4331,7 @@ async function deleteUser(userId) {
     const result = await apiDeleteUser(userId);
     
     if (result.success) {
-      showToast('사용자가 삭제되었습니다.');
+      showToast(isOwnAccount ? '탈퇴 처리되었습니다. 다시 가입하면 기존 정보를 복구할 수 있습니다.' : '사용자가 탈퇴(비활성) 처리되었습니다.');
       
       // 본인 계정 삭제 시 로그아웃 처리
       if (isOwnAccount) {
@@ -4681,6 +4789,11 @@ window.apiGetUser    = window.apiGetUser    || apiGetUser;
 window.apiCreateUser = window.apiCreateUser || apiCreateUser;
 window.apiUpdateUser = window.apiUpdateUser || apiUpdateUser;
 window.apiDeleteUser = window.apiDeleteUser || apiDeleteUser;
+window.apiReactivateUser = window.apiReactivateUser || apiReactivateUser;
+window.isUserAccountActive = window.isUserAccountActive || isUserAccountActive;
+window.isUserWithdrawn = window.isUserWithdrawn || isUserWithdrawn;
+window.filterActiveUsers = window.filterActiveUsers || filterActiveUsers;
+window.getUserAccountStatus = window.getUserAccountStatus || getUserAccountStatus;
 
 // 전화번호 유틸리티 함수들 전역 노출
 window.formatPhoneForDB = window.formatPhoneForDB || formatPhoneForDB;
@@ -4721,8 +4834,11 @@ async function findUserByPhone(phoneNumber) {
       // DB의 contact 필드를 "010-1234-5678" 형식으로 변환
       const formattedDocContact = formatPhoneForDB(docContact);
       
-      // 형식화된 전화번호로 비교
+      // 형식화된 전화번호로 비교 (탈퇴 계정은 미등록으로 처리)
       if (formattedDocContact === formattedPhone) {
+        if (!isUserAccountActive(docData)) {
+          continue;
+        }
         var foundObj = { id: doc.id };
         if (docData && typeof docData === 'object') { for (var k in docData) { if (docData.hasOwnProperty(k)) foundObj[k] = docData[k]; } }
         foundUser = foundObj;

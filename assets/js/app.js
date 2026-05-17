@@ -684,6 +684,9 @@ function authenticatePhoneWithDB(phoneNumber) {
             
             // DB에서 사용자 검색
             const matchedUser = dbUsers.find(user => {
+                if (typeof isUserAccountActive === 'function' && !isUserAccountActive(user)) {
+                  return false;
+                }
                 const userPhone = normalizePhoneNumber(user.contact || '');
                 const matches = userPhone === normalizedInput;
                 console.log(`👤 ${user.name}: ${userPhone} === ${normalizedInput} ? ${matches}`);
@@ -8265,8 +8268,9 @@ async function syncUsersFromDB() {
       const result = await apiGetUsers();
 
       if (result && result.success && Array.isArray(result.items)) {
-        // ✅ 기존 변수/타입 유지
-        dbUsers = result.items || [];
+        // ✅ 기존 변수/타입 유지 (탈퇴·비활성 계정 제외)
+        var rawItems = result.items || [];
+        dbUsers = typeof filterActiveUsers === 'function' ? filterActiveUsers(rawItems) : rawItems;
         isDBConnected = true;
         lastDBSync = new Date();  // (변경전과 동일: Date 객체)
 
@@ -8662,6 +8666,9 @@ async function checkPhoneDuplicateBeforeRegistration(phoneNumber) {
     if (dbUsers && dbUsers.length > 0) {
       const normalizedInput = normalizePhoneNumber(phoneNumber);
       const existingUser = dbUsers.find(user => {
+        if (typeof isUserAccountActive === 'function' && !isUserAccountActive(user)) {
+          return false;
+        }
         const userPhone = normalizePhoneNumber(user.contact || '');
         return userPhone === normalizedInput;
       });
