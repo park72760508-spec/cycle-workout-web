@@ -93,35 +93,81 @@
     return out;
   }
 
+  /** rankingDayRollup PEAK_POWER_LIMITS["60min"] 와 동일 */
+  var PEAK_60MIN_LIMIT_WKG = 5.8;
+  var PEAK_60MIN_LIMIT_WATTS = 450;
+  var MIN_60MIN_FALLBACK_RIDE_SEC = 50 * 60;
+  var MAX_60MIN_FALLBACK_RIDE_SEC = 8 * 3600;
+
+  function weightKgForPeakValidation(weightKg) {
+    var w = Number(weightKg) || 0;
+    return w > 0 ? Math.max(w, 45) : 70;
+  }
+
+  function validatePeak60minWatts(watts, weightKg) {
+    var w = Number(watts) || 0;
+    if (!(w > 0)) return false;
+    var wkg = weightKgForPeakValidation(weightKg);
+    if (w / wkg > PEAK_60MIN_LIMIT_WKG) return false;
+    if (w > PEAK_60MIN_LIMIT_WATTS) return false;
+    return true;
+  }
+
+  /** duration_sec 우선; 분 단위·ms 오입력 일부 보정 */
+  function normalizeTrainingLogDurationSec(log) {
+    var raw =
+      log && log.duration_sec != null
+        ? log.duration_sec
+        : log && log.time != null
+          ? log.time
+          : log && log.duration != null
+            ? log.duration
+            : 0;
+    var sec = Number(raw) || 0;
+    if (!(sec > 0)) return 0;
+    if (sec > 86400 * 2) sec = Math.round(sec / 1000);
+    if (sec > 0 && sec < 600) {
+      var km = Number(log && log.distance_km) || 0;
+      if (km >= 8 && sec <= 360) sec = sec * 60;
+    }
+    return sec;
+  }
+
+  /** 동일 로그의 짧은 구간 MMP 대비 60분 후보 상한 (비정상 avg·NP 방지) */
+  function maxPlausible60minFromSiblingPeaks(log) {
+    var m40 = Number(log && log.max_40min_watts) || 0;
+    var m20 = Number(log && log.max_20min_watts) || 0;
+    var m10 = Number(log && log.max_10min_watts) || 0;
+    var cap = 0;
+    if (m40 > 0) cap = m40;
+    else if (m20 > 0) cap = m20 * 1.06;
+    else if (m10 > 0) cap = m10 * 1.12;
+    return cap > 0 ? Math.round(cap * 1.12 * 10) / 10 : 0;
+  }
+
   function effective60minWattsFromLog(log, opts) {
     opts = opts || {};
+    var weightKg =
+      Number(opts.weightKg) ||
+      Number(log && log.weight) ||
+      Number(log && log.weightKg) ||
+      0;
     var w60 = Number(log && log.max_60min_watts != null ? log.max_60min_watts : 0) || 0;
     if (opts.rankingStrict) {
-      return w60 > 0 ? w60 : 0;
+      return w60 > 0 && validatePeak60minWatts(w60, weightKg) ? w60 : 0;
     }
+    if (w60 > 0 && !validatePeak60minWatts(w60, weightKg)) w60 = 0;
     if (!(w60 > 0)) {
-      var sec =
-        Number(
-          log && log.duration_sec != null
-            ? log.duration_sec
-            : log && log.time != null
-              ? log.time
-              : log && log.duration != null
-                ? log.duration
-                : 0
-        ) || 0;
-      if (sec >= 50 * 60) {
-        w60 =
-          Number(
-            log && log.avg_watts != null
-              ? log.avg_watts
-              : log && log.weighted_watts != null
-                ? log.weighted_watts
-                : 0
-          ) || 0;
+      var sec = normalizeTrainingLogDurationSec(log);
+      if (sec >= MIN_60MIN_FALLBACK_RIDE_SEC && sec <= MAX_60MIN_FALLBACK_RIDE_SEC) {
+        w60 = Number(log && log.avg_watts != null ? log.avg_watts : 0) || 0;
       }
     }
-    return w60 > 0 ? w60 : 0;
+    if (!(w60 > 0)) return 0;
+    if (!validatePeak60minWatts(w60, weightKg)) return 0;
+    var sibCap = maxPlausible60minFromSiblingPeaks(log);
+    if (sibCap > 0 && w60 > sibCap) return 0;
+    return w60;
   }
 
   function calculateSpeedOnFlatFallback(power, weight) {
@@ -161,7 +207,9 @@
     var deduped = dedupeTrainingLogsByDateStravaFirst(Array.isArray(logs) ? logs : []);
     var last6mPeak60Watts = 0;
     var last6mPeakDate = '';
-    var logOpts = rankingStrict ? { rankingStrict: true } : {};
+    var logOpts = rankingStrict
+      ? { rankingStrict: true, weightKg: weightVal }
+      : { weightKg: weightVal };
     deduped.forEach(function (log) {
       var ymd = getSeoulYmdFromUnknown(log && log.date);
       if (!ymd || ymd < start6mYmd || ymd > todayYmd) return;
@@ -361,7 +409,50 @@
     return data;
   }
 
+  /** 지원용: 6개월 로그에서 60분 후보 상위 N건(검증 전·후) */
+  function debugList60minPeakCandidates(logs, profile, limit) {
+    profile = profile || {};
+    limit = limit || 8;
+    var todayYmd = getSeoulTodayYmd();
+    var start6mYmd = shiftYmd(todayYmd, -182);
+    var weightVal = Number(profile.weight) || 0;
+    var deduped = dedupeTrainingLogsByDateStravaFirst(Array.isArray(logs) ? logs : []);
+    var rows = [];
+    deduped.forEach(function (log) {
+      var ymd = getSeoulYmdFromUnknown(log && log.date);
+      if (!ymd || ymd < start6mYmd || ymd > todayYmd) return;
+      var rawM60 = Number(log.max_60min_watts) || 0;
+      var avg = Number(log.avg_watts) || 0;
+      var np = Number(log.weighted_watts) || 0;
+      var sec = normalizeTrainingLogDurationSec(log);
+      var accepted = effective60minWattsFromLog(log, { weightKg: weightVal });
+      var rejected = Math.max(rawM60, avg, np);
+      if (!(rejected > 0)) return;
+      rows.push({
+        date: ymd,
+        source: log.source || '',
+        title: log.title || '',
+        acceptedW: accepted,
+        max_60min_watts: rawM60,
+        avg_watts: avg,
+        weighted_watts: np,
+        duration_sec: sec,
+        max_20min_watts: Number(log.max_20min_watts) || 0,
+        max_40min_watts: Number(log.max_40min_watts) || 0
+      });
+    });
+    rows.sort(function (a, b) {
+      var ba = Math.max(b.max_60min_watts, b.avg_watts, b.weighted_watts);
+      var aa = Math.max(a.max_60min_watts, a.avg_watts, a.weighted_watts);
+      return ba - aa;
+    });
+    return rows.slice(0, limit);
+  }
+
   global.stelvioComputeOneHourAbilityFromLogs = computeOneHourAbilityFromLogs;
+  global.stelvioValidatePeak60minWatts = validatePeak60minWatts;
+  global.stelvioEffective60minWattsFromLog = effective60minWattsFromLog;
+  global.stelvioDebugList60minPeakCandidates = debugList60minPeakCandidates;
   global.stelvioDedupeTrainingLogsByDateStravaFirst = dedupeTrainingLogsByDateStravaFirst;
   global.stelvioAlignPersonalSpeedRankingWithDashboard = alignPersonalSpeedRankingPayloadWithDashboard;
   global.stelvioFilterPersonalSpeedBoardExcludeNonLog60 = filterPersonalSpeedBoardExcludeNonLog60;
