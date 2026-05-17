@@ -244,6 +244,25 @@
     return raw;
   }
 
+  function removeUidFromPersonalSpeedBoard(data, uid) {
+    if (!data || !uid) return;
+    var cats = ['Supremo', 'Bianco', 'Rosa', 'Infinito', 'Leggenda', 'Assoluto'];
+    cats.forEach(function (cat) {
+      var arr = data.byCategory && data.byCategory[cat];
+      if (!Array.isArray(arr)) return;
+      data.byCategory[cat] = arr.filter(function (e) {
+        return !e || String(e.userId) !== String(uid);
+      });
+    });
+    if (Array.isArray(data.entries)) {
+      data.entries = data.entries.filter(function (e) {
+        return !e || String(e.userId) !== String(uid);
+      });
+    }
+    if (data.currentUser && String(data.currentUser.userId) === String(uid)) data.currentUser = null;
+    if (data.myRankSupremo && String(data.myRankSupremo.userId) === String(uid)) data.myRankSupremo = null;
+  }
+
   function patchRankingEntrySpeed(entry, metrics, profile) {
     if (!entry || !metrics || !(metrics.speedKmh > 0)) return entry;
     entry.speedKmh = metrics.speedKmh;
@@ -255,14 +274,52 @@
   }
 
   /**
+   * 항속 보드에서 60분 파워 없이 speed만 있는 행 제거(FTP 폴백 잔여·구 캐시 방어).
+   */
+  function filterPersonalSpeedBoardExcludeNonLog60(data) {
+    if (!data || !data.byCategory) return data;
+    var cats = ['Supremo', 'Bianco', 'Rosa', 'Infinito', 'Leggenda', 'Assoluto'];
+    function keepRow(e) {
+      if (!e) return false;
+      if (Number(e.peak60minWatts) > 0) return true;
+      return !(Number(e.speedKmh) > 0);
+    }
+    function rerank(arr) {
+      if (!Array.isArray(arr)) return arr;
+      var kept = arr.filter(keepRow);
+      kept.sort(function (a, b) {
+        return (Number(b.speedKmh) || 0) - (Number(a.speedKmh) || 0);
+      });
+      return kept.map(function (row, idx) {
+        var o = row;
+        o.rank = idx + 1;
+        return o;
+      });
+    }
+    cats.forEach(function (cat) {
+      if (Array.isArray(data.byCategory[cat])) {
+        data.byCategory[cat] = rerank(data.byCategory[cat]);
+      }
+    });
+    if (Array.isArray(data.entries)) {
+      data.entries = rerank(data.entries);
+    }
+    return data;
+  }
+
+  /**
    * 랭킹 API 응답에서 본인(uid) 항속을 서버와 동일(60분 파워만)으로 맞춤.
    */
   async function alignPersonalSpeedRankingPayloadWithDashboard(data, uid) {
+    data = filterPersonalSpeedBoardExcludeNonLog60(data);
     if (!data || !uid || !data.byCategory) return data;
     var profile = resolveProfileForOneHourAbility(uid);
     var logs = await fetchTrainingLogsForUser(uid, 400);
     var metrics = computeOneHourAbilityFromLogs(logs, { ftp: profile.ftp, weight: profile.weight, rankingStrict: true });
-    if (!(metrics.speedKmh > 0)) return data;
+    if (!(metrics.speedKmh > 0)) {
+      removeUidFromPersonalSpeedBoard(data, uid);
+      return data;
+    }
 
     var cats = ['Supremo', 'Bianco', 'Rosa', 'Infinito', 'Leggenda', 'Assoluto'];
     cats.forEach(function (cat) {
@@ -294,4 +351,5 @@
   global.stelvioComputeOneHourAbilityFromLogs = computeOneHourAbilityFromLogs;
   global.stelvioDedupeTrainingLogsByDateStravaFirst = dedupeTrainingLogsByDateStravaFirst;
   global.stelvioAlignPersonalSpeedRankingWithDashboard = alignPersonalSpeedRankingPayloadWithDashboard;
+  global.stelvioFilterPersonalSpeedBoardExcludeNonLog60 = filterPersonalSpeedBoardExcludeNonLog60;
 })(typeof window !== 'undefined' ? window : globalThis);
