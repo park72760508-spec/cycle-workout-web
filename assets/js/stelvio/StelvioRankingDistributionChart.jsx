@@ -25,7 +25,7 @@
   var STELVIO_DURATION_LABELS = {
     tss: 'TSS',
     personal_dist: '거리 30일',
-    personal_speed: '항속 6개월',
+    personal_speed: '독주',
     group_dist: '그룹 30일',
     gc: 'GC',
     '1min': '1분',
@@ -201,7 +201,7 @@
     var durLabel = isTss
       ? '주간 TSS'
       : isSpeedMode
-        ? '항속 6개월'
+        ? '독주'
         : isKmMode
           ? (duration === 'group_dist' ? '그룹 30일 거리' : '거리 30일')
           : isGcMode
@@ -279,9 +279,9 @@
 
     var binPack = useMemo(
       function () {
-        return buildBins(values, isHistLike);
+        return buildBins(values, isTss);
       },
-      [values, isHistLike]
+      [values, isTss]
     );
 
     var gid = useMemo(
@@ -537,11 +537,13 @@
       var x1 = pl.x1;
       var rng = isTss
         ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' TSS'
-        : isKmMode
-        ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' km'
-        : isGcMode
-          ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' 점'
-          : x0.toFixed(2) + ' ~ ' + x1.toFixed(2) + ' 점';
+        : isSpeedMode
+          ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' km/h'
+          : isKmMode
+            ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' km'
+            : isGcMode
+              ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' 점'
+              : x0.toFixed(2) + ' ~ ' + x1.toFixed(2) + ' W/kg';
       return (
         <div className="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2 shadow-lg shadow-indigo-500/10 text-xs z-50">
           <div className="font-semibold text-slate-700 mb-0.5">{rng}</div>
