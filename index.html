@@ -8237,6 +8237,7 @@
     var STELVIO_DURATION_LABELS = {
       'tss': 'TSS',
       'personal_dist': '거리',
+      'personal_speed': '항속',
       'group_dist': '그룹',
       'gc': 'GC',
       '1min': '1분',
@@ -8659,6 +8660,7 @@
       function getVal(item) {
         if (!item) return -1;
         if (stelvioIsKmDistanceRanking())  return item.totalKm  != null ? Number(item.totalKm)  : -1;
+        if (stelvioIsSpeedKmhRanking())    return item.speedKmh != null ? Number(item.speedKmh) : -1;
         if (stelvioIsTssRankingMode())     return item.totalTss != null ? Number(item.totalTss) : -1;
         if (stelvioIsGcRankingMode())      return item.gcScore  != null ? Number(item.gcScore)  : -1;
         return item.wkg != null ? Number(item.wkg) : -1;
@@ -9398,14 +9400,20 @@
     function stelvioIsPersonalDistanceRanking() {
       return stelvioRankingState.duration === 'personal_dist';
     }
+    function stelvioIsPersonalSpeedRanking() {
+      return stelvioRankingState.duration === 'personal_speed';
+    }
     function stelvioIsGroupDistanceRanking() {
       return stelvioRankingState.duration === 'group_dist';
     }
     function stelvioIsKmDistanceRanking() {
       return stelvioIsPersonalDistanceRanking();
     }
+    function stelvioIsSpeedKmhRanking() {
+      return stelvioIsPersonalSpeedRanking();
+    }
     function stelvioIsRollingWindowDurationRanking() {
-      return stelvioIsTssRankingMode() || stelvioIsPersonalDistanceRanking();
+      return stelvioIsTssRankingMode() || stelvioIsPersonalDistanceRanking() || stelvioIsPersonalSpeedRanking();
     }
     function stelvioUpdateGroupRankingFilterUi() {
       var isGroup = stelvioIsGroupDistanceRanking();
@@ -9425,7 +9433,7 @@
       var chartRt = document.getElementById('stelvio-distribution-chart-root');
       if (chartRt) chartRt.classList.remove('hidden');
       var ot = document.getElementById('stelvioOvertakeBtn');
-      if (ot) ot.classList.toggle('hidden', stelvioIsPersonalDistanceRanking() || isGroup || stelvioIsGcRankingMode());
+      if (ot) ot.classList.toggle('hidden', stelvioIsPersonalDistanceRanking() || stelvioIsPersonalSpeedRanking() || isGroup || stelvioIsGcRankingMode());
     }
     function stelvioApplyDurationModeUi() {
       var label = document.getElementById('stelvioPeriodLabel');
@@ -9440,6 +9448,8 @@
           label.textContent = '주간';
         } else if (stelvioIsKmDistanceRanking()) {
           label.textContent = '최근 30일';
+        } else if (stelvioIsPersonalSpeedRanking()) {
+          label.textContent = '최근 6개월';
         } else {
           label.textContent = '월간';
         }
@@ -9639,7 +9649,7 @@
      */
     function stelvioBackgroundPrefetchAllTabs(uid) {
       var RANKING_API = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
-      var durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min', 'tss', 'personal_dist', 'group_dist'];
+      var durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min', 'tss', 'personal_dist', 'personal_speed', 'group_dist'];
       durations.forEach(function (dur, idx) {
         setTimeout(function () {
           try {
@@ -9653,7 +9663,7 @@
               .then(function (data) {
                 if (data && data.success && data.byCategory) {
                   data.durationType = dur;
-                  data.period = dur === 'tss' ? 'weekly' : dur === 'personal_dist' || dur === 'group_dist' ? 'rolling30' : 'monthly';
+                  data.period = dur === 'tss' ? 'weekly' : dur === 'personal_speed' ? 'rolling183' : dur === 'personal_dist' || dur === 'group_dist' ? 'rolling30' : 'monthly';
                   data.gender = 'all';
                   var smPf = stelvioExtractRankMovementFromPayload(data);
                   stelvioApplyClientPeakRankMovementFromSnapshot(data);
@@ -9925,7 +9935,7 @@
     function stelvioSupportsRankMovementDuration(dt) {
       if (!dt) return false;
       if (stelvioIsPeakPowerDurationForRankChange(dt)) return true;
-      return dt === 'tss' || dt === 'personal_dist' || dt === 'group_dist';
+      return dt === 'tss' || dt === 'personal_dist' || dt === 'personal_speed' || dt === 'group_dist';
     }
     function stelvioResolveRankMovementDurationType(data) {
       if (data && data.durationType) return data.durationType;
@@ -9941,6 +9951,7 @@
 
     function stelvioResolveRankingBoardPeriod(duration, period) {
       if (duration === 'tss') return 'weekly';
+      if (duration === 'personal_speed') return 'rolling183';
       if (duration === 'personal_dist' || duration === 'group_dist') return 'rolling30';
       return period || (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) || 'monthly';
     }
@@ -11800,6 +11811,14 @@
           var catPartKm = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + kmP + ' km)' : kmP + ' km';
           msg = userNameEsc + '님은 최근 30일 ' + durLabel + ' ' + catPartKm + ', 전체 ' + globalRank + '위입니다.';
         }
+      } else if (stelvioIsPersonalSpeedRanking()) {
+        var spdP = (cu.speedKmh != null ? Number(cu.speedKmh) : 0).toFixed(1);
+        if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
+          msg = userNameEsc + '님은 최근 6개월 ' + durLabel + ' 전체 ' + globalRank + '위(' + spdP + ' km/h)입니다.';
+        } else {
+          var catPartSpd = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + spdP + ' km/h)' : spdP + ' km/h';
+          msg = userNameEsc + '님은 최근 6개월 ' + durLabel + ' ' + catPartSpd + ', 전체 ' + globalRank + '위입니다.';
+        }
       } else if (stelvioIsTssRankingMode()) {
         var tssVal = (cu.totalTss != null ? Number(cu.totalTss) : 0).toFixed(1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
@@ -12009,7 +12028,8 @@
       var unitEl = document.querySelector('#stelvioRankingContent .stelvio-category-header-unit');
       if (titleEl) titleEl.textContent = STELVIO_CATEGORY_TITLES[cat] || (STELVIO_CATEGORY_LABELS[cat] || cat) + ' 순위';
       if (unitEl) {
-        if (stelvioIsKmDistanceRanking()) unitEl.textContent = 'km';
+        if (stelvioIsSpeedKmhRanking()) unitEl.textContent = 'km/h';
+        else if (stelvioIsKmDistanceRanking()) unitEl.textContent = 'km';
         else if (stelvioIsTssRankingMode()) unitEl.textContent = 'TSS';
         else if (stelvioIsGcRankingMode()) unitEl.textContent = '점수';
         else unitEl.textContent = 'W/kg';
@@ -12072,6 +12092,9 @@
     }
 
     function stelvioFormatRankCell(item) {
+      if (stelvioIsSpeedKmhRanking()) {
+        return (item.speedKmh != null ? Number(item.speedKmh) : 0).toFixed(1);
+      }
       if (stelvioIsKmDistanceRanking()) {
         return (item.totalKm != null ? Number(item.totalKm) : 0).toFixed(1);
       }
@@ -12687,7 +12710,7 @@
      * 추월하기 분석: API 호출 → AI 코멘트 생성 → 리포트 모달 표시
      */
     async function handleStelvioOvertakeClick() {
-      if (stelvioIsKmDistanceRanking() || stelvioIsGcRankingMode() || stelvioIsGroupDistanceRanking()) {
+      if (stelvioIsKmDistanceRanking() || stelvioIsSpeedKmhRanking() || stelvioIsGcRankingMode() || stelvioIsGroupDistanceRanking()) {
         return;
       }
       var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
@@ -25632,6 +25655,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-duration-chips-wrap">
             <div class="stelvio-duration-chips" id="stelvioDurationTabs">
               <button type="button" class="stelvio-duration-tab active" data-duration="gc">GC</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="personal_speed">항속</button>
               <button type="button" class="stelvio-duration-tab" data-duration="group_dist">그룹</button>
               <button type="button" class="stelvio-duration-tab" data-duration="tss">TSS</button>
               <button type="button" class="stelvio-duration-tab" data-duration="personal_dist">거리</button>
