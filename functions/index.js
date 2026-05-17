@@ -3947,7 +3947,7 @@ async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endS
       peak60,
       String(rollup.peak60Ymd || "")
     );
-    if (!metrics || !(metrics.speedKmh > 0)) continue;
+    if (!metrics || !(metrics.peak60minWatts > 0) || !(metrics.speedKmh > 0)) continue;
     const speedKmh = metrics.speedKmh;
 
     const gender = String(data.gender || data.sex || "").toLowerCase();
@@ -4628,12 +4628,95 @@ function personalSpeedAggregateHasPeak60Entries(payload) {
   return false;
 }
 
+/** 60분 피크 없이 speed만 있는 구 행이 섞이면 false */
+function personalSpeedPackRowsAllHaveLogPeak(payload) {
+  const lists = [];
+  if (Array.isArray(payload.entries)) lists.push(payload.entries);
+  const bc = payload.byCategory;
+  if (bc && typeof bc === "object") {
+    for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+      if (Array.isArray(bc[cat])) lists.push(bc[cat]);
+    }
+  }
+  for (let li = 0; li < lists.length; li++) {
+    const arr = lists[li];
+    for (let i = 0; i < arr.length; i++) {
+      const e = arr[i];
+      if (!e) continue;
+      if (Number(e.speedKmh) > 0 && !(Number(e.peak60minWatts) > 0)) return false;
+    }
+  }
+  return true;
+}
+
 function personalSpeedAggregateLogicOk(payload) {
   if (!payload || typeof payload !== "object") return false;
   if (Number(payload.personalSpeedLogicVersion) < rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) {
     return false;
   }
+  if (!personalSpeedPackRowsAllHaveLogPeak(payload)) return false;
   return personalSpeedAggregateHasPeak60Entries(payload);
+}
+
+/**
+ * 항속 보드: 60분 MMP·speed 둘 다 있는 행만 유지 후 재정렬(대시보드 rankingStrict와 동일 대상).
+ */
+function sanitizePersonalSpeedRankingPack(pack) {
+  const emptyCats = { Supremo: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  if (!pack || !pack.byCategory) {
+    return { byCategory: emptyCats, entries: [] };
+  }
+  const keep = (row) =>
+    row &&
+    row.userId &&
+    Number(row.peak60minWatts) > 0 &&
+    Number(row.speedKmh) > 0;
+  const byCategory = { ...emptyCats };
+  const merged = [];
+  for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+    const arr = Array.isArray(pack.byCategory[cat]) ? pack.byCategory[cat] : [];
+    const next = arr.filter(keep).sort((a, b) => b.speedKmh - a.speedKmh);
+    byCategory[cat] = next.map((e, i) => ({ ...e, rank: i + 1 }));
+    next.forEach((r) => merged.push(r));
+  }
+  merged.sort((a, b) => b.speedKmh - a.speedKmh);
+  const seen = new Set();
+  const entries = [];
+  merged.forEach((e) => {
+    const id = String(e.userId);
+    if (seen.has(id)) return;
+    seen.add(id);
+    entries.push(e);
+  });
+  entries.forEach((e, i) => {
+    e.rank = i + 1;
+  });
+  if (!byCategory.Supremo.length && entries.length) {
+    byCategory.Supremo = entries.map((e, i) => ({ ...e, rank: i + 1 }));
+  }
+  return { byCategory, entries };
+}
+
+/**
+ * 6개월 항속 사전집계 — ranking_aggregates + cache 동시 기록(클라이언트·HTTP 빠른 조회).
+ */
+async function persistPersonalSpeedRankingPack(db, cacheKey, pack, startStr, endStr) {
+  const sanitized = sanitizePersonalSpeedRankingPack(pack);
+  const payload = {
+    ...sanitized,
+    startStr,
+    endStr,
+    personalSpeedLogicVersion: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
+  };
+  await writeRankingAggregatePayload(db, cacheKey, payload);
+  await db
+    .collection("cache")
+    .doc(cacheKey)
+    .set({
+      ...payload,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  return payload;
 }
 
 /**
@@ -5257,16 +5340,12 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   for (const gender of ["all", "M", "F"]) {
     const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r183s, r183e, gender, sharedUsersSnap, {
       backfillMissing: true,
+      rescanPeakDrift: true,
+      maxPeakDriftScan: sharedUsersSnap.size || 0,
     });
     await applyPeakRankChanges(db, spd.byCategory, `peak_personal_speed_rolling183_${gender}`);
     const keyS = `peakRanking_personal_speed_183d_${gender}_${r183s}_${r183e}`;
-    await writeRankingAggregatePayload(db, keyS, {
-      byCategory: spd.byCategory,
-      entries: spd.entries,
-      startStr: r183s,
-      endStr: r183e,
-      personalSpeedLogicVersion: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
-    });
+    await persistPersonalSpeedRankingPack(db, keyS, spd, r183s, r183e);
     wrote++;
   }
 
@@ -6317,9 +6396,47 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
+      /** 1) 일일 집계(manualRebuild)로 저장된 사전집계 우선 — 빠른 응답 */
+      const tryReturnPrecomputed = async (aggPayload, meta) => {
+        if (!aggPayload || !aggPayload.byCategory || !personalSpeedAggregateLogicOk(aggPayload)) {
+          return null;
+        }
+        const sanitized = sanitizePersonalSpeedRankingPack(aggPayload);
+        if (!(sanitized.entries || []).length && !(sanitized.byCategory.Supremo || []).length) {
+          return null;
+        }
+        await hydrateRankingBoardProfileImages(db, sanitized.byCategory, sanitized.entries);
+        return res.status(200).json(
+          await buildPersonalSpeedOutFromPack(
+            { ...sanitized, startStr, endStr },
+            { precomputed: true, ...(meta || {}) }
+          )
+        );
+      };
+
+      if (!forceRankMv) {
+        const aggFresh = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+        const freshOut = await tryReturnPrecomputed(aggFresh, { source: "ranking_aggregates_fresh" });
+        if (freshOut) return freshOut;
+
+        const aggStale = await readRankingAggregatePayloadAllowStale(db, cacheKey, PERSONAL_SPEED_STALE_AGG_MS);
+        const staleOut = await tryReturnPrecomputed(aggStale, {
+          source: "ranking_aggregates_stale",
+          staleAggregate: true,
+        });
+        if (staleOut) return staleOut;
+
+        const cacheSnap = await cacheRef.get();
+        if (cacheSnap && cacheSnap.exists) {
+          const data = cacheSnap.data() || {};
+          const cacheOut = await tryReturnPrecomputed(data, { source: "cache_doc" });
+          if (cacheOut) return cacheOut;
+        }
+      }
+
+      /** 2) 사전집계 miss·rankMv: rollup 재스캔 후 Firebase에 저장 */
       const usersSnapPs = await db.collection("users").get();
       const psUserCount = usersSnapPs.size || 0;
-      /** rollup 백필 포함 실시간 보드 — 불완전 aggregate보다 우선 */
       const boardLive = await getPersonalSpeedRankingBoardEntriesFromRollups(
         db,
         startStr,
@@ -6329,98 +6446,27 @@ exports.getPeakPowerRanking = onRequest(
         {
           backfillMissing: true,
           maxBackfill: forceRankMv ? 400 : 250,
-          rescanPeakDrift: true,
-          maxPeakDriftScan: forceRankMv ? psUserCount : Math.min(psUserCount, 500),
+          rescanPeakDrift: forceRankMv,
+          maxPeakDriftScan: forceRankMv ? psUserCount : 0,
         }
       );
-      const liveCount = boardLive.entries.length;
-
-      /** 실시간 보드가 있으면 항상 우선(구 사전집계 speed만 반환하던 버그 방지) */
-      if (liveCount > 0) {
-        await applyPeakRankChanges(db, boardLive.byCategory, `peak_personal_speed_rolling183_${gender}`);
-        const psPayload = {
-          byCategory: boardLive.byCategory,
-          entries: boardLive.entries,
-          startStr,
-          endStr,
-          personalSpeedLogicVersion: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
-        };
-        await writeRankingAggregatePayload(db, cacheKey, psPayload);
-        await hydrateRankingBoardProfileImages(db, boardLive.byCategory, boardLive.entries);
-        await cacheRef.set({
-          ...psPayload,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      await applyPeakRankChanges(db, boardLive.byCategory, `peak_personal_speed_rolling183_${gender}`);
+      const psPayload = await persistPersonalSpeedRankingPack(
+        db,
+        cacheKey,
+        boardLive,
+        startStr,
+        endStr
+      );
+      await hydrateRankingBoardProfileImages(db, psPayload.byCategory, psPayload.entries);
+      if ((psPayload.entries || []).length > 0 || (psPayload.byCategory.Supremo || []).length > 0) {
         return res.status(200).json(
-          await buildPersonalSpeedOutFromPack(
-            { byCategory: boardLive.byCategory, entries: boardLive.entries, startStr, endStr },
-            { fromUserRollups: true }
-          )
+          await buildPersonalSpeedOutFromPack(psPayload, {
+            precomputed: true,
+            rebuiltOnDemand: true,
+            fromUserRollups: true,
+          })
         );
-      }
-
-      const aggPs = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
-      if (
-        !forceRankMv &&
-        aggPs &&
-        aggPs.byCategory &&
-        personalSpeedAggregateLogicOk(aggPs) &&
-        (aggPs.entries || []).length > 0
-      ) {
-        const enriched = await enrichPersonalSpeedPackFromRollups(db, aggPs, startStr, endStr);
-        return res.status(200).json(
-          await buildPersonalSpeedOutFromPack(
-            {
-              byCategory: enriched.byCategory,
-              entries: enriched.entries,
-              startStr,
-              endStr,
-            },
-            { precomputed: true, enrichedFromRollups: true }
-          )
-        );
-      }
-
-      if (!forceRankMv) {
-        const aggStale = await readRankingAggregatePayloadAllowStale(db, cacheKey, PERSONAL_SPEED_STALE_AGG_MS);
-        if (
-          aggStale &&
-          aggStale.byCategory &&
-          personalSpeedAggregateLogicOk(aggStale) &&
-          (aggStale.entries || []).length > 0
-        ) {
-          const enrichedStale = await enrichPersonalSpeedPackFromRollups(db, aggStale, startStr, endStr);
-          return res.status(200).json(
-            await buildPersonalSpeedOutFromPack(
-              {
-                byCategory: enrichedStale.byCategory,
-                entries: enrichedStale.entries,
-                startStr,
-                endStr,
-              },
-              { precomputed: true, stale: true, enrichedFromRollups: true }
-            )
-          );
-        }
-        const cacheSnap = await cacheRef.get();
-        const nowMs = Date.now();
-        if (cacheSnap && cacheSnap.exists) {
-          const data = cacheSnap.data();
-          const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
-          if (
-            updatedAt &&
-            nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS &&
-            (data.entries || []).length > 0 &&
-            personalSpeedAggregateLogicOk(data)
-          ) {
-            return res.status(200).json(
-              await buildPersonalSpeedOutFromPack(
-                { byCategory: data.byCategory, entries: data.entries, startStr, endStr },
-                { cached: true }
-              )
-            );
-          }
-        }
       }
 
       const emptyBoard = {

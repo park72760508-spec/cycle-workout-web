@@ -12,8 +12,11 @@ exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
 /** 사용자별 6개월 항속 사전 집계 — 랭킹 보드는 users×1회 읽기만 수행 */
 exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
-/** 랭킹 항속 산출식 버전 — 변경 시 rollup·순위 캐시 전면 재계산 */
-exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 9;
+/**
+ * 랭킹 항속 산출식 버전 — 변경 시 rollup·ranking_aggregates·cache 전면 재계산.
+ * v10: 대시보드와 동일(6개월 max_60min_watts·체중) · 60분 피크 없으면 순위 제외 · 사전집계 우선.
+ */
+exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 10;
 /** rollup.peakSource — 로그 max_60min_watts(60분 MMP)만, FTP·50분 avg 폴백 없음 */
 exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60 = "max_60min_watts";
 /** @deprecated v7 이하 호환 */
