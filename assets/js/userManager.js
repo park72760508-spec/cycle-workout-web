@@ -4320,8 +4320,8 @@ async function deleteUser(userId) {
   
   // 본인 계정 삭제 시 경고 메시지
   const confirmMessage = isOwnAccount
-    ? '정말로 탈퇴하시겠습니까?\n훈련 기록과 로드 자료는 보관되며, 순위에는 표시되지 않습니다.\n같은 전화번호로 다시 가입하면 기존 정보를 복구할 수 있습니다.\n탈퇴 후 로그아웃됩니다.'
-    : '정말로 이 사용자를 탈퇴(비활성) 처리하시겠습니까?\n데이터는 보관되며 순위·프로필 목록에서만 숨겨집니다.';
+    ? '정말로 탈퇴하시겠습니까?\n탈퇴 후 로그아웃됩니다.'
+    : '정말로 이 사용자를 탈퇴 처리하시겠습니까?';
   
   if (!confirm(confirmMessage)) {
     return;
@@ -4331,7 +4331,11 @@ async function deleteUser(userId) {
     const result = await apiDeleteUser(userId);
     
     if (result.success) {
-      showToast(isOwnAccount ? '탈퇴 처리되었습니다. 다시 가입하면 기존 정보를 복구할 수 있습니다.' : '사용자가 탈퇴(비활성) 처리되었습니다.');
+      showToast(
+        isOwnAccount
+          ? '탈퇴처리가 완료되었습니다.. 다음에 다시 뵙기를 희망합니다.'
+          : '탈퇴 처리가 완료되었습니다.'
+      );
       
       // 본인 계정 삭제 시 로그아웃 처리
       if (isOwnAccount) {
