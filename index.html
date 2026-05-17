@@ -10702,6 +10702,9 @@
         data.byCategory
       ) {
         try {
+          if (typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function') {
+            data = window.stelvioRecalcPersonalSpeedBoardFromPeak60(data);
+          }
           if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
             data = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
           }
