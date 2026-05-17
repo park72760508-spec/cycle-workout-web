@@ -11921,7 +11921,8 @@
               ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + spdP + ' km/h), 전체 ' + globalRank + '위입니다.'
               : '전체 ' + globalRank + '위(' + spdP + ' km/h)입니다.';
         }
-        var spdLine3 = '* 최근 6개월이내의 60분 피크 평균 파워값 기준';
+        var spdLine3 =
+          '<span class="stelvio-hero-speed-footnote">* 최근 6개월이내의 60분 피크 평균 파워값 기준</span>';
         msg = spdLine1 + '\n' + spdLine2 + '\n' + spdLine3;
       } else if (stelvioIsTssRankingMode()) {
         var tssVal = (cu.totalTss != null ? Number(cu.totalTss) : 0).toFixed(1);
