@@ -313,6 +313,59 @@
   }
 
   /**
+   * API/캐시 응답: peak60minWatts·프로필 체중으로 speedKmh 재산출 후 재정렬(구 speed 캐시 방어).
+   */
+  function recalcPersonalSpeedBoardFromPeak60(data) {
+    if (!data || !data.byCategory) return data;
+    var calcSpeed =
+      typeof global.calculateSpeedOnFlat === 'function'
+        ? global.calculateSpeedOnFlat
+        : calculateSpeedOnFlatFallback;
+    function patchRow(row) {
+      if (!row) return row;
+      var peak = Number(row.peak60minWatts) || 0;
+      var w =
+        Number(row.weightKg) > 0
+          ? Number(row.weightKg)
+          : 0;
+      if (!(peak > 0) || !(w > 0) || !validatePeak60minWatts(peak, w)) return null;
+      var ref = Math.round(peak * 10) / 10;
+      var spd = Number(calcSpeed(ref, w));
+      if (!(spd > 0)) return null;
+      row.peak60minWatts = ref;
+      row.referenceWatts = ref;
+      row.weightKg = w;
+      row.speedKmh = Math.round(spd * 10) / 10;
+      return row;
+    }
+    function rerank(arr) {
+      if (!Array.isArray(arr)) return arr;
+      var kept = [];
+      for (var i = 0; i < arr.length; i++) {
+        var p = patchRow(arr[i]);
+        if (p) kept.push(p);
+      }
+      kept.sort(function (a, b) {
+        return (Number(b.speedKmh) || 0) - (Number(a.speedKmh) || 0);
+      });
+      return kept.map(function (row, idx) {
+        row.rank = idx + 1;
+        return row;
+      });
+    }
+    var cats = ['Supremo', 'Bianco', 'Rosa', 'Infinito', 'Leggenda', 'Assoluto'];
+    cats.forEach(function (cat) {
+      if (Array.isArray(data.byCategory[cat])) {
+        data.byCategory[cat] = rerank(data.byCategory[cat]);
+      }
+    });
+    if (Array.isArray(data.entries)) data.entries = rerank(data.entries);
+    if (data.currentUser) patchRow(data.currentUser);
+    if (data.myRankSupremo) patchRow(data.myRankSupremo);
+    return data;
+  }
+
+  /**
    * 항속 보드에서 60분 파워 없이 speed만 있는 행 제거(FTP 폴백 잔여·구 캐시 방어).
    */
   function filterPersonalSpeedBoardExcludeNonLog60(data) {
@@ -359,6 +412,7 @@
    * 랭킹 API 응답에서 본인(uid) 항속을 6개월 60분 MMP 기준으로 맞춤(FTP 폴백 순위 제외).
    */
   async function alignPersonalSpeedRankingPayloadWithDashboard(data, uid) {
+    data = recalcPersonalSpeedBoardFromPeak60(data);
     data = filterPersonalSpeedBoardExcludeNonLog60(data);
     if (!data || !uid || !data.byCategory) return data;
     var profile = resolveProfileForOneHourAbility(uid);
@@ -444,6 +498,7 @@
   global.stelvioValidatePeak60minWatts = validatePeak60minWatts;
   global.stelvioEffective60minWattsFromLog = effective60minWattsFromLog;
   global.stelvioPeak60minWattsFromLog = peak60minWattsFromLog;
+  global.stelvioRecalcPersonalSpeedBoardFromPeak60 = recalcPersonalSpeedBoardFromPeak60;
   global.stelvioDebugList60minPeakCandidates = debugList60minPeakCandidates;
   global.stelvioDedupeTrainingLogsByDateStravaFirst = dedupeTrainingLogsByDateStravaFirst;
   global.stelvioAlignPersonalSpeedRankingWithDashboard = alignPersonalSpeedRankingPayloadWithDashboard;
