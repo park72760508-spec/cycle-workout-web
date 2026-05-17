@@ -6882,6 +6882,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-weight: 600;
   color: #1f2937;
   line-height: 1.5;
+  white-space: pre-line;
 }
 .stelvio-hero-text .stelvio-rank-delta {
   font-weight: 800;
