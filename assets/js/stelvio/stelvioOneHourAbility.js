@@ -96,8 +96,6 @@
   /** rankingDayRollup PEAK_POWER_LIMITS["60min"] 와 동일 */
   var PEAK_60MIN_LIMIT_WKG = 5.8;
   var PEAK_60MIN_LIMIT_WATTS = 450;
-  var MIN_60MIN_FALLBACK_RIDE_SEC = 50 * 60;
-  var MAX_60MIN_FALLBACK_RIDE_SEC = 8 * 3600;
 
   function weightKgForPeakValidation(weightKg) {
     var w = Number(weightKg) || 0;
@@ -145,6 +143,17 @@
     return cap > 0 ? Math.round(cap * 1.12 * 10) / 10 : 0;
   }
 
+  /** 로그 max_60min_watts(60분 MMP)만 — avg/50분 폴백 없음 */
+  function peak60minWattsFromLog(log, weightKg) {
+    var w60 = Number(log && log.max_60min_watts != null ? log.max_60min_watts : 0) || 0;
+    if (!(w60 > 0)) return 0;
+    if (!validatePeak60minWatts(w60, weightKg)) return 0;
+    var sibCap = maxPlausible60minFromSiblingPeaks(log);
+    if (sibCap > 0 && w60 > sibCap) return 0;
+    return w60;
+  }
+
+  /** @deprecated peak60minWattsFromLog 와 동일 */
   function effective60minWattsFromLog(log, opts) {
     opts = opts || {};
     var weightKg =
@@ -152,22 +161,7 @@
       Number(log && log.weight) ||
       Number(log && log.weightKg) ||
       0;
-    var w60 = Number(log && log.max_60min_watts != null ? log.max_60min_watts : 0) || 0;
-    if (opts.rankingStrict) {
-      return w60 > 0 && validatePeak60minWatts(w60, weightKg) ? w60 : 0;
-    }
-    if (w60 > 0 && !validatePeak60minWatts(w60, weightKg)) w60 = 0;
-    if (!(w60 > 0)) {
-      var sec = normalizeTrainingLogDurationSec(log);
-      if (sec >= MIN_60MIN_FALLBACK_RIDE_SEC && sec <= MAX_60MIN_FALLBACK_RIDE_SEC) {
-        w60 = Number(log && log.avg_watts != null ? log.avg_watts : 0) || 0;
-      }
-    }
-    if (!(w60 > 0)) return 0;
-    if (!validatePeak60minWatts(w60, weightKg)) return 0;
-    var sibCap = maxPlausible60minFromSiblingPeaks(log);
-    if (sibCap > 0 && w60 > sibCap) return 0;
-    return w60;
+    return peak60minWattsFromLog(log, weightKg);
   }
 
   function calculateSpeedOnFlatFallback(power, weight) {
@@ -207,13 +201,10 @@
     var deduped = dedupeTrainingLogsByDateStravaFirst(Array.isArray(logs) ? logs : []);
     var last6mPeak60Watts = 0;
     var last6mPeakDate = '';
-    var logOpts = rankingStrict
-      ? { rankingStrict: true, weightKg: weightVal }
-      : { weightKg: weightVal };
     deduped.forEach(function (log) {
       var ymd = getSeoulYmdFromUnknown(log && log.date);
       if (!ymd || ymd < start6mYmd || ymd > todayYmd) return;
-      var w60 = effective60minWattsFromLog(log, logOpts);
+      var w60 = peak60minWattsFromLog(log, weightVal);
       if (w60 > last6mPeak60Watts) {
         last6mPeak60Watts = w60;
         last6mPeakDate = ymd;
@@ -365,7 +356,7 @@
   }
 
   /**
-   * 랭킹 API 응답에서 본인(uid) 항속을 대시보드·맞춤필터 현실지표와 동일하게 맞춤.
+   * 랭킹 API 응답에서 본인(uid) 항속을 6개월 60분 MMP 기준으로 맞춤(FTP 폴백 순위 제외).
    */
   async function alignPersonalSpeedRankingPayloadWithDashboard(data, uid) {
     data = filterPersonalSpeedBoardExcludeNonLog60(data);
@@ -375,7 +366,7 @@
     var metrics = computeOneHourAbilityFromLogs(logs, {
       ftp: profile.ftp,
       weight: profile.weight,
-      rankingStrict: false
+      rankingStrict: true
     });
     if (isPersonalSpeedFtpOnlyMetrics(metrics, profile) || !(metrics.speedKmh > 0)) {
       removeUidFromPersonalSpeedBoard(data, uid);
@@ -425,7 +416,7 @@
       var avg = Number(log.avg_watts) || 0;
       var np = Number(log.weighted_watts) || 0;
       var sec = normalizeTrainingLogDurationSec(log);
-      var accepted = effective60minWattsFromLog(log, { weightKg: weightVal });
+      var accepted = peak60minWattsFromLog(log, weightVal);
       var rejected = Math.max(rawM60, avg, np);
       if (!(rejected > 0)) return;
       rows.push({
@@ -452,6 +443,7 @@
   global.stelvioComputeOneHourAbilityFromLogs = computeOneHourAbilityFromLogs;
   global.stelvioValidatePeak60minWatts = validatePeak60minWatts;
   global.stelvioEffective60minWattsFromLog = effective60minWattsFromLog;
+  global.stelvioPeak60minWattsFromLog = peak60minWattsFromLog;
   global.stelvioDebugList60minPeakCandidates = debugList60minPeakCandidates;
   global.stelvioDedupeTrainingLogsByDateStravaFirst = dedupeTrainingLogsByDateStravaFirst;
   global.stelvioAlignPersonalSpeedRankingWithDashboard = alignPersonalSpeedRankingPayloadWithDashboard;
