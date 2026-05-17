@@ -3492,8 +3492,7 @@ function calculateSpeedOnFlat(power, weight) {
 }
 
 /**
- * 대시보드 「나의 1시간 항속 능력」과 동일: 최근 6개월 일 버킷 max_60min 최대값,
- * 없으면 FTP×0.93 → calculateSpeedOnFlat
+ * 대시보드 「나의 1시간 항속 능력」과 동일 (rankingDayRollup 공용 산식).
  */
 function computeOneHourSustainedSpeedKmhFromBuckets(userData, bucketSnaps, startStr, endStr) {
   let peak60 = 0;
@@ -3505,15 +3504,9 @@ function computeOneHourSustainedSpeedKmhFromBuckets(userData, bucketSnaps, start
     const w = Number(row.max_60min_watts) || 0;
     if (w > peak60) peak60 = w;
   });
-  const rawWeight = Number(userData && (userData.weight || userData.weightKg)) || 0;
-  const weightKg = rawWeight > 0 ? Math.max(rawWeight, 45) : 0;
-  const ftp = Number(userData?.ftp ?? userData?.ftp_watts ?? userData?.FTP) || 0;
-  const useFallbackFtp = !(peak60 > 0) && ftp > 0;
-  let referenceWatts = peak60 > 0 ? peak60 : useFallbackFtp ? ftp * 0.93 : 0;
-  if (!(referenceWatts > 0) || !(weightKg > 0)) return { speedKmh: 0, referenceWatts: 0, weightKg: 0 };
-  referenceWatts = Math.round(referenceWatts * 10) / 10;
-  const speedKmh = Math.round(calculateSpeedOnFlat(referenceWatts, weightKg) * 10) / 10;
-  return { speedKmh, referenceWatts, weightKg };
+  const m = rankingDayRollup.buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, "");
+  if (!m) return { speedKmh: 0, referenceWatts: 0, weightKg: 0 };
+  return { speedKmh: m.speedKmh, referenceWatts: m.referenceWatts, weightKg: m.weightKg };
 }
 
 /** Asia/Seoul 달력 기준 오늘 포함 역산 최근 365일 (YYYY-MM-DD). 명예의 전당(연간 탭) 피크 집계용. */

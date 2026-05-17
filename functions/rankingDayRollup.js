@@ -12,6 +12,8 @@ exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
 /** 사용자별 6개월 항속 사전 집계 — 랭킹 보드는 users×1회 읽기만 수행 */
 exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
+/** 대시보드 「나의 1시간 항속 능력」산출식과 동기화 버전 — 변경 시 rollup 재계산 */
+exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 2;
 const ROLLUP_REBUILD_BATCH = 40;
 const BUCKET_GET_CHUNK = 100;
 
@@ -53,6 +55,49 @@ function isCyclingForMmp(logData) {
   const type = String(logData.activity_type || "").trim().toLowerCase();
   if (!type) return true;
   return !EXCLUDED_ACTIVITY_TYPES.has(type);
+}
+
+/**
+ * 대시보드 PerformanceDashboard.jsx 와 동일: max_60min_watts → 없으면 50분+ 라이딩 avg/weighted 평균파워.
+ */
+function effective60minWattsFromLogDashboard(logData) {
+  const d = logData || {};
+  let w60 = Number(d.max_60min_watts) || 0;
+  if (!(w60 > 0)) {
+    const sec =
+      Number(d.duration_sec != null ? d.duration_sec : d.time != null ? d.time : d.duration) || 0;
+    if (sec >= 50 * 60) {
+      w60 = Number(d.avg_watts != null ? d.avg_watts : d.weighted_watts != null ? d.weighted_watts : 0) || 0;
+    }
+  }
+  return w60 > 0 ? w60 : 0;
+}
+
+/**
+ * 최근 6개월 로그에서 대시보드와 동일 규칙으로 60분 피크(W)·일자 반환 (랭킹 rollup 전용).
+ */
+async function peak60DashboardStyleFromLogs(db, userId, startStr, endStr) {
+  let peak60 = 0;
+  let peakYmd = "";
+  if (!db || !userId || !startStr || !endStr) return { peak60, peakYmd };
+  const logSnap = await db
+    .collection("users")
+    .doc(userId)
+    .collection("logs")
+    .where("date", ">=", startStr)
+    .where("date", "<=", endStr)
+    .get();
+  logSnap.docs.forEach((doc) => {
+    const d = doc.data() || {};
+    const ymd = normalizeLogDateToSeoulYmd(d.date);
+    if (!ymd || ymd < startStr || ymd > endStr) return;
+    const w60 = effective60minWattsFromLogDashboard(d);
+    if (w60 > peak60) {
+      peak60 = w60;
+      peakYmd = ymd;
+    }
+  });
+  return { peak60, peakYmd };
 }
 
 function validatePeakPowerRecord(durationType, watts, weightKg) {
@@ -153,8 +198,12 @@ async function reconcileUserRankingDayBucket(db, userId, ymd, userData) {
       stelvioKmSum += kmPart;
     }
 
+    const w60Dash = effective60minWattsFromLogDashboard(d);
+    if (w60Dash > maxWattsByDur["60min"]) maxWattsByDur["60min"] = w60Dash;
+
     if (weightKgFall > 0) {
       for (const [durationType, field] of Object.entries(DURATION_FIELDS)) {
+        if (durationType === "60min") continue;
         const watts = Number(d[field]) || 0;
         if (watts <= 0) continue;
         /** computeUserPeaksAllDurationsFromSnapshot 과 동일: 프로필 체중(≥45)만으로 검증 */
@@ -531,8 +580,17 @@ function personalSpeed6mRollupRef(db, userId) {
  * @returns {{ peak60minWatts:number, referenceWatts:number, speedKmh:number, weightKg:number, peak60Ymd:string }|null}
  */
 function buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peak60Ymd) {
-  const rawWeight = Number(userData && (userData.weight || userData.weightKg)) || 0;
-  const weightKg = rawWeight > 0 ? Math.max(rawWeight, 45) : 0;
+  const rawWeight =
+    Number(
+      userData &&
+        (userData.weight != null
+          ? userData.weight
+          : userData.weightKg != null
+            ? userData.weightKg
+            : userData.weight_kg)
+    ) || 0;
+  /** 대시보드와 동일: 체중 45kg 바닥 미적용 */
+  const weightKg = rawWeight > 0 ? rawWeight : 0;
   const ftp = Number(userData?.ftp ?? userData?.ftp_watts ?? userData?.FTP) || 0;
   const useFallbackFtp = !(peak60 > 0) && ftp > 0;
   let referenceWatts = peak60 > 0 ? peak60 : useFallbackFtp ? ftp * 0.93 : 0;
@@ -563,6 +621,7 @@ async function writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, end
     referenceWatts: metrics.referenceWatts,
     speedKmh: metrics.speedKmh,
     weightKg: metrics.weightKg,
+    rollupLogicVersion: exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
     reconciled_at: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
@@ -576,26 +635,7 @@ async function rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, sta
   if (ensureMissing) {
     await ensureRankingBucketsFilledForRange(db, userId, userData || {}, startStr, endStr, false);
   }
-  const dates = listInclusiveYmdsSeoul(startStr, endStr);
-  if (!dates.length) {
-    await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, null);
-    return null;
-  }
-  const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
-  const snaps = await chunkedGetAll(db, refs, BUCKET_GET_CHUNK);
-  const peak60 = max60minWattsFromBucketSnaps(snaps, startStr, endStr);
-  let peakYmd = "";
-  if (peak60 > 0) {
-    for (let i = 0; i < snaps.length; i++) {
-      const snap = snaps[i];
-      if (!snap || !snap.exists) continue;
-      const w = Number((snap.data() || {}).max_60min_watts) || 0;
-      if (w >= peak60 - 1e-6) {
-        peakYmd = dates[i];
-        break;
-      }
-    }
-  }
+  const { peak60, peakYmd } = await peak60DashboardStyleFromLogs(db, userId, startStr, endStr);
   const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peakYmd);
   await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
   return metrics;
@@ -676,7 +716,12 @@ async function rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr
         try {
           if (skipUnchanged) {
             const ex = rollupMap.get(userId);
-            if (ex && ex.windowStart === startStr && ex.windowEnd === endStr) {
+            if (
+              ex &&
+              ex.windowStart === startStr &&
+              ex.windowEnd === endStr &&
+              Number(ex.rollupLogicVersion) === exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION
+            ) {
               const peak60 = Number(ex.peak60minWatts) || 0;
               const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(
                 userData,
@@ -780,3 +825,6 @@ exports.rebuildPersonalSpeed6mRollupFromBuckets = rebuildPersonalSpeed6mRollupFr
 exports.rebuildPersonalSpeed6mRollupsBatch = rebuildPersonalSpeed6mRollupsBatch;
 exports.fetchPersonalSpeed6mRollupMap = fetchPersonalSpeed6mRollupMap;
 exports.touchPersonalSpeed6mRollupAfterDayChange = touchPersonalSpeed6mRollupAfterDayChange;
+exports.effective60minWattsFromLogDashboard = effective60minWattsFromLogDashboard;
+exports.peak60DashboardStyleFromLogs = peak60DashboardStyleFromLogs;
+exports.buildPersonalSpeedMetricsFromUserAndPeak60 = buildPersonalSpeedMetricsFromUserAndPeak60;
