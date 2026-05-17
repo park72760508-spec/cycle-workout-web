@@ -93,8 +93,12 @@
     return out;
   }
 
-  function effective60minWattsFromLog(log) {
+  function effective60minWattsFromLog(log, opts) {
+    opts = opts || {};
     var w60 = Number(log && log.max_60min_watts != null ? log.max_60min_watts : 0) || 0;
+    if (opts.rankingStrict) {
+      return w60 > 0 ? w60 : 0;
+    }
     if (!(w60 > 0)) {
       var sec =
         Number(
@@ -145,10 +149,11 @@
 
   /**
    * @param {Array} logs
-   * @param {{ ftp?: number, weight?: number }} profile
+   * @param {{ ftp?: number, weight?: number, rankingStrict?: boolean }} profile
    */
   function computeOneHourAbilityFromLogs(logs, profile) {
     profile = profile || {};
+    var rankingStrict = profile.rankingStrict === true;
     var todayYmd = getSeoulTodayYmd();
     var start6mYmd = shiftYmd(todayYmd, -182);
     var ftpVal = Number(profile.ftp) || 0;
@@ -156,16 +161,17 @@
     var deduped = dedupeTrainingLogsByDateStravaFirst(Array.isArray(logs) ? logs : []);
     var last6mPeak60Watts = 0;
     var last6mPeakDate = '';
+    var logOpts = rankingStrict ? { rankingStrict: true } : {};
     deduped.forEach(function (log) {
       var ymd = getSeoulYmdFromUnknown(log && log.date);
       if (!ymd || ymd < start6mYmd || ymd > todayYmd) return;
-      var w60 = effective60minWattsFromLog(log);
+      var w60 = effective60minWattsFromLog(log, logOpts);
       if (w60 > last6mPeak60Watts) {
         last6mPeak60Watts = w60;
         last6mPeakDate = ymd;
       }
     });
-    var useFallbackFtp93 = !(last6mPeak60Watts > 0) && ftpVal > 0;
+    var useFallbackFtp93 = !rankingStrict && !(last6mPeak60Watts > 0) && ftpVal > 0;
     var referenceWattsRaw =
       last6mPeak60Watts > 0 ? last6mPeak60Watts : useFallbackFtp93 ? ftpVal * 0.93 : 0;
     var referenceWatts = referenceWattsRaw > 0 ? Math.round(referenceWattsRaw * 10) / 10 : 0;
@@ -249,13 +255,13 @@
   }
 
   /**
-   * 랭킹 API 응답에서 본인(uid) 항속을 대시보드 산출값으로 덮어씀.
+   * 랭킹 API 응답에서 본인(uid) 항속을 서버와 동일(60분 파워만)으로 맞춤.
    */
   async function alignPersonalSpeedRankingPayloadWithDashboard(data, uid) {
     if (!data || !uid || !data.byCategory) return data;
     var profile = resolveProfileForOneHourAbility(uid);
     var logs = await fetchTrainingLogsForUser(uid, 400);
-    var metrics = computeOneHourAbilityFromLogs(logs, profile);
+    var metrics = computeOneHourAbilityFromLogs(logs, { ftp: profile.ftp, weight: profile.weight, rankingStrict: true });
     if (!(metrics.speedKmh > 0)) return data;
 
     var cats = ['Supremo', 'Bianco', 'Rosa', 'Infinito', 'Leggenda', 'Assoluto'];
