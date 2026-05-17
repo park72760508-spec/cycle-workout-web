@@ -6884,6 +6884,15 @@ body:has(#trainingDetailModal:not(.hidden)) {
   line-height: 1.5;
   white-space: pre-line;
 }
+/* 항속 탭 히어로: 60분 피크 기준 안내 */
+.stelvio-hero-text .stelvio-hero-speed-footnote {
+  display: block;
+  margin-top: 0.35em;
+  font-size: 70%;
+  font-weight: 400;
+  color: #4b5563;
+  line-height: 1.45;
+}
 .stelvio-hero-text .stelvio-rank-delta {
   font-weight: 800;
   font-size: 0.92em;
