@@ -3892,6 +3892,16 @@ async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endS
     db,
     docs.map((d) => d.id)
   );
+  if (opts.rescanPeakDrift !== false) {
+    await rankingDayRollup.refreshPersonalSpeedRollupsPeakDriftFromLogs(
+      db,
+      docs,
+      startStr,
+      endStr,
+      rollupMap,
+      { maxScan: opts.maxPeakDriftScan != null ? opts.maxPeakDriftScan : 150 }
+    );
+  }
   if (opts.backfillMissing !== false) {
     const bf = await rankingDayRollup.backfillMissingPersonalSpeedRollups(
       db,
@@ -3912,7 +3922,14 @@ async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endS
     const data = doc.data();
     const rollup = rollupMap.get(userId);
     if (!rankingDayRollup.personalSpeedRollupIsReady(rollup, startStr, endStr, data)) continue;
-    const speedKmh = Number(rollup.speedKmh);
+    const peak60 = Number(rollup.peak60minWatts) || 0;
+    const metrics = rankingDayRollup.buildPersonalSpeedMetricsFromUserAndPeak60(
+      data,
+      peak60,
+      String(rollup.peak60Ymd || "")
+    );
+    if (!metrics || !(metrics.speedKmh > 0)) continue;
+    const speedKmh = metrics.speedKmh;
 
     const gender = String(data.gender || data.sex || "").toLowerCase();
     if (genderFilter && genderFilter !== "all") {
@@ -3929,9 +3946,9 @@ async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endS
       userId,
       name: data.name || "(이름 없음)",
       speedKmh,
-      peak60minWatts: Number(rollup.peak60minWatts) || 0,
-      referenceWatts: rollup.referenceWatts != null ? Number(rollup.referenceWatts) : 0,
-      weightKg: rollup.weightKg != null ? Number(rollup.weightKg) : 0,
+      peak60minWatts: metrics.peak60minWatts,
+      referenceWatts: metrics.referenceWatts,
+      weightKg: metrics.weightKg,
       ageCategory: leagueCategory,
       gender,
       is_private: privacyFlagFromFirestoreDoc(data),
@@ -6177,6 +6194,8 @@ exports.getPeakPowerRanking = onRequest(
       const boardLive = await getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, gender, null, {
         backfillMissing: true,
         maxBackfill: forceRankMv ? 400 : 250,
+        rescanPeakDrift: true,
+        maxPeakDriftScan: forceRankMv ? 300 : 180,
       });
       const liveCount = boardLive.entries.length;
 
