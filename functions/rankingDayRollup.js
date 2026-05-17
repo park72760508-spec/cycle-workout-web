@@ -13,7 +13,7 @@ exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
 exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
 /** 대시보드 「나의 1시간 항속 능력」산출식과 동기화 버전 — 변경 시 rollup 재계산 */
-exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 2;
+exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 3;
 const ROLLUP_REBUILD_BATCH = 40;
 const BUCKET_GET_CHUNK = 100;
 
@@ -58,6 +58,30 @@ function isCyclingForMmp(logData) {
 }
 
 /**
+ * useRiderAnalysis.dedupeTrainingLogsByDateStravaFirst 와 동일 — 동일 일자 Strava 우선.
+ */
+function dedupeTrainingLogsByDateStravaFirstServer(logs) {
+  if (!logs || !logs.length) return [];
+  const byDate = new Map();
+  logs.forEach((log) => {
+    const ds = normalizeLogDateToSeoulYmd(log && log.date);
+    if (!ds) return;
+    if (!byDate.has(ds)) byDate.set(ds, []);
+    byDate.get(ds).push(log);
+  });
+  const out = [];
+  byDate.forEach((arr) => {
+    const strava = arr.filter((l) => String(l.source || "").toLowerCase() === "strava");
+    const chosen =
+      strava.length > 0
+        ? strava
+        : arr.filter((l) => String(l.source || "").toLowerCase() !== "strava");
+    chosen.forEach((l) => out.push(l));
+  });
+  return out;
+}
+
+/**
  * 대시보드 PerformanceDashboard.jsx 와 동일: max_60min_watts → 없으면 50분+ 라이딩 avg/weighted 평균파워.
  */
 function effective60minWattsFromLogDashboard(logData) {
@@ -87,10 +111,16 @@ async function peak60DashboardStyleFromLogs(db, userId, startStr, endStr) {
     .where("date", ">=", startStr)
     .where("date", "<=", endStr)
     .get();
-  logSnap.docs.forEach((doc) => {
-    const d = doc.data() || {};
+  const inRange = logSnap.docs
+    .map((doc) => doc.data() || {})
+    .filter((d) => {
+      const ymd = normalizeLogDateToSeoulYmd(d.date);
+      return ymd && ymd >= startStr && ymd <= endStr;
+    });
+  const deduped = dedupeTrainingLogsByDateStravaFirstServer(inRange);
+  deduped.forEach((d) => {
     const ymd = normalizeLogDateToSeoulYmd(d.date);
-    if (!ymd || ymd < startStr || ymd > endStr) return;
+    if (!ymd) return;
     const w60 = effective60minWattsFromLogDashboard(d);
     if (w60 > peak60) {
       peak60 = w60;
@@ -181,12 +211,17 @@ async function reconcileUserRankingDayBucket(db, userId, ymd, userData) {
   const maxHrByDur = {};
   for (const dt of Object.keys(DURATION_HR_FIELDS)) maxHrByDur[dt] = 0;
 
+  const dayLogs = [];
   logSnap.docs.forEach((doc) => {
     const d = doc.data() || {};
     if (!isCyclingForMmp(d)) return;
     const dateStr = normalizeLogDateToSeoulYmd(d.date);
     if (!dateStr || dateStr !== ymd) return;
+    dayLogs.push(d);
+  });
 
+  const logsForDay = dedupeTrainingLogsByDateStravaFirstServer(dayLogs);
+  logsForDay.forEach((d) => {
     const tss = Number(d.tss) || 0;
     const isStrava = String(d.source || "").toLowerCase() === "strava";
     const kmPart = extractLogDistanceKm(d);
@@ -827,4 +862,5 @@ exports.fetchPersonalSpeed6mRollupMap = fetchPersonalSpeed6mRollupMap;
 exports.touchPersonalSpeed6mRollupAfterDayChange = touchPersonalSpeed6mRollupAfterDayChange;
 exports.effective60minWattsFromLogDashboard = effective60minWattsFromLogDashboard;
 exports.peak60DashboardStyleFromLogs = peak60DashboardStyleFromLogs;
+exports.dedupeTrainingLogsByDateStravaFirstServer = dedupeTrainingLogsByDateStravaFirstServer;
 exports.buildPersonalSpeedMetricsFromUserAndPeak60 = buildPersonalSpeedMetricsFromUserAndPeak60;
