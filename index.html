@@ -9415,7 +9415,8 @@
     var STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER = 9;
     function stelvioPersonalSpeedBoardPayloadStale(data) {
       if (!data || !data.byCategory) return true;
-      if (Number(data.personalSpeedLogicVersion) < STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER) return true;
+      var psVer = Number(data.personalSpeedLogicVersion);
+      if (!psVer || psVer < STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER) return true;
       var cats = ['Supremo', 'Bianco', 'Rosa', 'Infinito', 'Leggenda', 'Assoluto'];
       for (var ci = 0; ci < cats.length; ci++) {
         var arr = data.byCategory[cats[ci]] || [];
