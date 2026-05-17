@@ -195,6 +195,9 @@ function pollForAuthV9(maxWaitMs) {
  */
 async function enforceAuthPersistence() {
   /* [SESSION-only 전면 전환] browserLocalPersistence 미사용 — 항상 SESSION */
+  if (typeof window.isStelvioFirebaseAuthWebEnv === 'function' && !window.isStelvioFirebaseAuthWebEnv()) {
+    return;
+  }
   var persistLabel = 'SESSION (고정)';
   try {
     if (window.firebase && typeof window.firebase.auth === 'function') {

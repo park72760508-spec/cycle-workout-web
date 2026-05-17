@@ -1,5 +1,27 @@
 // assets/js/firebaseConfig.js
 
+/**
+ * Firebase Auth 웹 API(setPersistence, getRedirectResult 등) 사용 가능 환경인지.
+ * file://, in-app WebView, storage 비활성 시 false.
+ */
+function isStelvioFirebaseAuthWebEnv() {
+  try {
+    if (typeof window === 'undefined' || !window.location) return false;
+    var proto = String(window.location.protocol || '').toLowerCase();
+    if (proto !== 'http:' && proto !== 'https:' && proto !== 'chrome-extension:') return false;
+    if (typeof localStorage === 'undefined') return false;
+    var testKey = '__stelvio_auth_env__';
+    localStorage.setItem(testKey, '1');
+    localStorage.removeItem(testKey);
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+if (typeof window !== 'undefined') {
+  window.isStelvioFirebaseAuthWebEnv = isStelvioFirebaseAuthWebEnv;
+}
+
 // 1. 복사해둔 진짜 키 값으로 설정 (제일 중요!)
 const firebaseConfig = {
     apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
@@ -32,12 +54,21 @@ try {
     // Authentication 초기화
     auth = firebase.auth();
     window.auth = auth; // 전역 접근용
-    // 🔒 보안: SESSION persistence (공용 기기에서 이전 사용자 자동 로그인 방지)
-    auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).then(function() {
-      console.log('🔥 Firebase Auth: SESSION persistence 적용 (탭 종료 시 로그아웃)');
-    }).catch(function(e) {
-      console.warn('[Firebase] setPersistence(SESSION) 실패:', e?.message);
-    });
+    // 🔒 SESSION persistence — http(s) + storage 가능 환경에서만 (WebView/file://는 기본 persistence 유지)
+    if (isStelvioFirebaseAuthWebEnv()) {
+      auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).then(function() {
+        console.log('🔥 Firebase Auth: SESSION persistence 적용 (탭 종료 시 로그아웃)');
+      }).catch(function(e) {
+        var code = e && e.code;
+        if (code === 'auth/unsupported-persistence-type' || code === 'auth/operation-not-supported-in-this-environment') {
+          console.log('[Firebase] setPersistence(SESSION) 생략 — 현재 환경에서 미지원');
+        } else {
+          console.warn('[Firebase] setPersistence(SESSION) 실패:', e && e.message);
+        }
+      });
+    } else {
+      console.log('[Firebase] setPersistence(SESSION) 생략 — protocol:', window.location && window.location.protocol);
+    }
     
     // Firestore 초기화 (WebChannel 400 오류 방지: Long Polling 강제)
     firestore = firebase.firestore();

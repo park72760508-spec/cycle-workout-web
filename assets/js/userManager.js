@@ -655,6 +655,10 @@ if (typeof window !== 'undefined') {
 
 // ========== Firebase Authentication (Google Login) ==========
 
+function stelvioAuthWebEnvOk() {
+  return typeof window.isStelvioFirebaseAuthWebEnv === 'function' && window.isStelvioFirebaseAuthWebEnv();
+}
+
 /**
  * Google 로그인 (팝업 방식)
  * @returns {Promise<{success: boolean, user?: object, error?: string}>}
@@ -684,6 +688,9 @@ async function signInWithGoogle() {
         // COOP 경고는 무시하고 리다이렉트로 폴백
         console.warn('⚠️ COOP 정책 경고 발생 - 리다이렉트 방식으로 전환:', popupError.message);
         try {
+          if (!stelvioAuthWebEnvOk()) {
+            throw new Error('현재 앱 환경에서는 팝업 로그인만 지원됩니다. 브라우저에서 다시 시도해 주세요.');
+          }
           console.log('ℹ️ 리다이렉트 방식으로 로그인합니다...');
           await window.auth.signInWithRedirect(provider);
           return { 
@@ -700,6 +707,9 @@ async function signInWithGoogle() {
       // 팝업이 차단된 경우 리다이렉트로 폴백
       if (popupError.code === 'auth/popup-blocked' || 
           popupError.code === 'auth/popup-closed-by-user') {
+        if (!stelvioAuthWebEnvOk()) {
+          throw new Error('팝업이 차단되었습니다. 브라우저에서 팝업을 허용하거나 Safari/Chrome에서 열어 주세요.');
+        }
         console.log('ℹ️ 팝업이 차단되었습니다. 리다이렉트 방식으로 로그인합니다...');
         await window.auth.signInWithRedirect(provider);
         return { 
@@ -875,8 +885,8 @@ function initAuthStateListener() {
     return;
   }
 
-  // 리다이렉트 로그인 결과 처리 (페이지 로드 시) - v9에서는 getRedirectResult가 다를 수 있음
-  if (auth.getRedirectResult) {
+  // 리다이렉트 로그인 결과 처리 — http(s)+storage 환경에서만 (WebView 등은 onAuthStateChanged만 사용)
+  if (stelvioAuthWebEnvOk() && auth.getRedirectResult) {
     auth.getRedirectResult().then(async (result) => {
     if (result.user) {
       console.log('✅ 리다이렉트 로그인 성공:', result.user.email);
@@ -985,6 +995,14 @@ function initAuthStateListener() {
       }
     }
     }).catch((error) => {
+      var code = error && error.code;
+      if (
+        code === 'auth/operation-not-supported-in-this-environment' ||
+        code === 'auth/unsupported-persistence-type'
+      ) {
+        console.log('[Auth] getRedirectResult 생략 — 현재 환경에서 미지원(onAuthStateChanged 사용)');
+        return;
+      }
       console.error('❌ 리다이렉트 로그인 결과 처리 실패:', error);
     });
   }
