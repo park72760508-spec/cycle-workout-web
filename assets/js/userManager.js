@@ -2887,6 +2887,10 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
     const canDelete = canDeleteFor(user);
     const canTogglePrivacy = canTogglePrivacyFor(user);
     const isPrivate = user.is_private === true;
+    const isWithdrawnUser = typeof isUserWithdrawn === 'function' && isUserWithdrawn(user);
+    const withdrawnBadgeHtml = isWithdrawnUser && viewerGrade === '1'
+      ? '<span class="profile-withdrawn-badge" title="탈퇴(비활성)">탈퇴</span>'
+      : '';
     const deleteButtonDisabled = !canDelete ? 'disabled' : '';
     const deleteButtonClass = !canDelete ? 'disabled' : '';
     const challenge = String(user.challenge || 'Fitness').trim();
@@ -2933,14 +2937,14 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
             </span></span>`;
 
     return `
-      <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
+      <div class="user-card${isWithdrawnUser ? ' user-card--withdrawn' : ''}" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
         <div class="user-header">
 
           <!-- 1줄: 2분할 (좌: 등급+이름+연결표시, 우: 대시보드·수정·삭제) -->
           <div class="user-row1">
             <div class="user-name-wrapper">
               <div class="user-name user-name-with-indicators">
-                <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</span>
+                <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}${withdrawnBadgeHtml}</span>
                 <span class="user-name-badges" title="AI 페어링 / Strava 연결">
                   <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링" aria-label="AI 페어링"></span>
                   <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결" aria-label="Strava 연결"></span>
@@ -3145,9 +3149,31 @@ async function loadUsers() {
       return;
     }
 
-    const users = filterActiveUsers(Array.isArray(result.items) ? result.items : []);
-    console.log('[loadUsers] 👥 사용자 목록:', { 
+    const rawUsers = Array.isArray(result.items) ? result.items : [];
+    let viewerEarly = null;
+    let authUserEarly = null;
+    try { viewerEarly = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (_) {}
+    try { authUserEarly = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (_) {}
+    const mergedEarly = Object.assign({}, viewerEarly || {}, authUserEarly || {});
+    const isTempAdminEarly = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
+    const loginGradeEarly =
+      isTempAdminEarly
+        ? '1'
+        : (typeof getLoginUserGrade === 'function' ? getLoginUserGrade() : String(mergedEarly?.grade ?? '2'));
+    const isLoginAdminEarly =
+      isTempAdminEarly ||
+      (typeof isStelvioAdminGrade === 'function' && isStelvioAdminGrade(loginGradeEarly));
+
+    const users = isLoginAdminEarly ? rawUsers : filterActiveUsers(rawUsers);
+    const activeCount = filterActiveUsers(rawUsers).length;
+    const withdrawnCount = rawUsers.length - activeCount;
+
+    console.log('[loadUsers] 👥 사용자 목록:', {
       totalUsers: users.length,
+      rawTotal: rawUsers.length,
+      activeCount: activeCount,
+      withdrawnCount: withdrawnCount,
+      isLoginAdmin: isLoginAdminEarly,
       userIds: users.map(u => u.id),
       userNames: users.map(u => u.name)
     });
@@ -3179,7 +3205,7 @@ async function loadUsers() {
               ? getLoginUserGrade()
               : '2';
         if (typeof isStelvioAdminGrade === 'function' ? isStelvioAdminGrade(_lg) : String(_lg).trim() === '1') {
-          profileSubtitleEmpty.textContent = '현재 가입자 수(전체) : 0 명';
+          profileSubtitleEmpty.textContent = '현재 가입자 수(활성) : 0 명';
           profileSubtitleEmpty.style.display = '';
         } else {
           profileSubtitleEmpty.textContent = '';
@@ -3232,7 +3258,7 @@ async function loadUsers() {
 
     visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
-    const totalMemberCountForAdmin = isLoginAdmin ? users.length : visibleUsers.length;
+    const totalMemberCountForAdmin = isLoginAdmin ? activeCount : visibleUsers.length;
 
     // 로그인 관리자일 때만 검색 섹션 표시 및 전체 목록 저장 (검색 시 사용)
     const searchSection = document.getElementById('profileSearchSection');
@@ -3259,7 +3285,13 @@ async function loadUsers() {
     const profileSubtitle = document.getElementById('profileScreenSubtitle');
     if (profileSubtitle) {
       if (isLoginAdmin) {
-        profileSubtitle.textContent = '현재 가입자 수(전체) : ' + totalMemberCountForAdmin + ' 명';
+        var subtitleText = '현재 가입자 수(활성) : ' + totalMemberCountForAdmin + ' 명';
+        if (withdrawnCount > 0) {
+          subtitleText += ' · 목록 ' + users.length + '명(탈퇴 ' + withdrawnCount + '명 포함)';
+        } else {
+          subtitleText += ' · 목록 ' + users.length + '명';
+        }
+        profileSubtitle.textContent = subtitleText;
         profileSubtitle.style.display = '';
       } else {
         profileSubtitle.textContent = '';
