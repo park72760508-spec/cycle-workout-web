@@ -755,7 +755,8 @@ async function rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr
               ex &&
               ex.windowStart === startStr &&
               ex.windowEnd === endStr &&
-              Number(ex.rollupLogicVersion) === exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION
+              Number(ex.rollupLogicVersion) >= exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION &&
+              Number(ex.speedKmh) > 0
             ) {
               const peak60 = Number(ex.peak60minWatts) || 0;
               const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(
@@ -795,6 +796,85 @@ async function rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr
     /* eslint-enable no-await-in-loop */
   }
   return { rebuilt, skipped, metricsRefreshed };
+}
+
+function userHasWeightForPersonalSpeed(userData) {
+  const w =
+    Number(
+      userData &&
+        (userData.weight != null
+          ? userData.weight
+          : userData.weightKg != null
+            ? userData.weightKg
+            : userData.weight_kg)
+    ) || 0;
+  return w > 0;
+}
+
+function personalSpeedRollupIsReady(rollup, startStr, endStr) {
+  if (!rollup) return false;
+  if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return false;
+  if (Number(rollup.rollupLogicVersion) < exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) return false;
+  return Number(rollup.speedKmh) > 0;
+}
+
+/**
+ * rollup 미존재·구버전·창 불일치 사용자 — 대시보드 동일 로그 산출로 personal_speed_6m 생성.
+ * @param {Map<string, object>} rollupMap — 갱신된 rollup이 map에 병합됨
+ */
+async function backfillMissingPersonalSpeedRollups(db, userDocs, startStr, endStr, rollupMap, opts) {
+  if (!userDocs || !userDocs.length) return { backfilled: 0, attempted: 0 };
+  const batchSize = (opts && opts.batchSize) || ROLLUP_REBUILD_BATCH;
+  const maxBackfill =
+    opts && opts.maxBackfill != null && Number.isFinite(Number(opts.maxBackfill))
+      ? Math.max(0, Math.floor(Number(opts.maxBackfill)))
+      : Infinity;
+  const toRun = [];
+  for (let i = 0; i < userDocs.length; i++) {
+    const udoc = userDocs[i];
+    const userData = udoc.data() || {};
+    if (!userHasWeightForPersonalSpeed(userData)) continue;
+    if (personalSpeedRollupIsReady(rollupMap.get(udoc.id), startStr, endStr)) continue;
+    toRun.push(udoc);
+    if (toRun.length >= maxBackfill) break;
+  }
+  let backfilled = 0;
+  for (let i = 0; i < toRun.length; i += batchSize) {
+    const batch = toRun.slice(i, i + batchSize);
+    /* eslint-disable no-await-in-loop */
+    await Promise.all(
+      batch.map(async (udoc) => {
+        const userId = udoc.id;
+        try {
+          const m = await rebuildPersonalSpeed6mRollupFromBuckets(
+            db,
+            userId,
+            udoc.data() || {},
+            startStr,
+            endStr,
+            { ensureMissingDays: false }
+          );
+          if (m && m.speedKmh > 0) {
+            rollupMap.set(userId, {
+              windowStart: startStr,
+              windowEnd: endStr,
+              peak60minWatts: m.peak60minWatts,
+              peak60Ymd: m.peak60Ymd || "",
+              referenceWatts: m.referenceWatts,
+              speedKmh: m.speedKmh,
+              weightKg: m.weightKg,
+              rollupLogicVersion: exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
+            });
+            backfilled += 1;
+          }
+        } catch (e) {
+          console.warn("[rankingDayRollup] personal_speed backfill 실패:", userId, e.message);
+        }
+      })
+    );
+    /* eslint-enable no-await-in-loop */
+  }
+  return { backfilled, attempted: toRun.length };
 }
 
 /**
@@ -864,3 +944,6 @@ exports.effective60minWattsFromLogDashboard = effective60minWattsFromLogDashboar
 exports.peak60DashboardStyleFromLogs = peak60DashboardStyleFromLogs;
 exports.dedupeTrainingLogsByDateStravaFirstServer = dedupeTrainingLogsByDateStravaFirstServer;
 exports.buildPersonalSpeedMetricsFromUserAndPeak60 = buildPersonalSpeedMetricsFromUserAndPeak60;
+exports.backfillMissingPersonalSpeedRollups = backfillMissingPersonalSpeedRollups;
+exports.personalSpeedRollupIsReady = personalSpeedRollupIsReady;
+exports.userHasWeightForPersonalSpeed = userHasWeightForPersonalSpeed;

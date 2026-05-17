@@ -3882,27 +3882,37 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
 }
 
 /**
- * users/{uid}/ranking_rollups/personal_speed_6m — 사용자당 1읽기로 보드 구성 (확장성).
- * peak60minWatts·speedKmh는 로그 반영 시 touch / 23시 배치에서만 갱신(랭킹 API는 재산출하지 않음).
- * 23시 집계·HTTP 폴백 공용. rollup 창이 startStr~endStr과 일치하는 행만 포함.
+ * 항속 보드: rollup 일괄 읽기 + 미집계 사용자 로그 백필(대시보드 동일 산식).
+ * @param {{ backfillMissing?: boolean, maxBackfill?: number }} [opts]
  */
-async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, genderFilter, usersSnap = null) {
+async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, genderFilter, usersSnap = null, opts = {}) {
   const snap = usersSnap ?? await db.collection("users").get();
   const docs = snap.docs;
   const rollupMap = await rankingDayRollup.fetchPersonalSpeed6mRollupMap(
     db,
     docs.map((d) => d.id)
   );
+  if (opts.backfillMissing !== false) {
+    const bf = await rankingDayRollup.backfillMissingPersonalSpeedRollups(
+      db,
+      docs,
+      startStr,
+      endStr,
+      rollupMap,
+      opts
+    );
+    if (bf.backfilled > 0) {
+      console.log("[personal_speed] rollup backfill", { ...bf, startStr, endStr });
+    }
+  }
   const entries = [];
   for (let di = 0; di < docs.length; di++) {
     const doc = docs[di];
     const userId = doc.id;
     const data = doc.data();
     const rollup = rollupMap.get(userId);
-    if (!rollup) continue;
-    if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) continue;
+    if (!rankingDayRollup.personalSpeedRollupIsReady(rollup, startStr, endStr)) continue;
     const speedKmh = Number(rollup.speedKmh);
-    if (!(speedKmh > 0)) continue;
 
     const gender = String(data.gender || data.sex || "").toLowerCase();
     if (genderFilter && genderFilter !== "all") {
@@ -5046,17 +5056,11 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
     wrote++;
   }
 
-  // ── 4-1. 6개월 항속: personal_speed_6m(사전 집계)만 갱신·조회 — 전 사용자 로그/183일 버킷 일괄 스캔 없음
-  const speedRollupRebuild = await rankingDayRollup.rebuildPersonalSpeed6mRollupsBatch(
-    db,
-    sharedUsersSnap.docs,
-    r183s,
-    r183e,
-    { ensureMissingDays: !!forceReconcile, skipUnchanged: !forceReconcile }
-  );
-  console.log("[runRebuildRankingAggregatesCore] personal_speed rollups rebuilt", speedRollupRebuild);
+  // ── 4-1. 6개월 항속: rollup + 미집계 사용자 로그 백필 후 보드 저장
   for (const gender of ["all", "M", "F"]) {
-    const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r183s, r183e, gender, sharedUsersSnap);
+    const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r183s, r183e, gender, sharedUsersSnap, {
+      backfillMissing: true,
+    });
     await applyPeakRankChanges(db, spd.byCategory, `peak_personal_speed_rolling183_${gender}`);
     const keyS = `peakRanking_personal_speed_183d_${gender}_${r183s}_${r183e}`;
     await writeRankingAggregatePayload(db, keyS, {
@@ -6101,8 +6105,18 @@ exports.getPeakPowerRanking = onRequest(
         return out;
       }
 
+      const cacheRef = db.collection("cache").doc(cacheKey);
+
+      /** rollup 백필 포함 실시간 보드 — 불완전(11명 등) aggregate보다 우선 */
+      const boardLive = await getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, gender, null, {
+        backfillMissing: true,
+        maxBackfill: forceRankMv ? 400 : 250,
+      });
+      const liveCount = boardLive.entries.length;
+
       const aggPs = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
-      if (aggPs && aggPs.byCategory) {
+      const aggCount = aggPs && Array.isArray(aggPs.entries) ? aggPs.entries.length : 0;
+      if (!forceRankMv && aggPs && aggPs.byCategory && aggCount > 0 && aggCount >= liveCount) {
         return res.status(200).json(
           await buildPersonalSpeedOutFromPack(
             { byCategory: aggPs.byCategory, entries: aggPs.entries, startStr, endStr },
@@ -6111,9 +6125,33 @@ exports.getPeakPowerRanking = onRequest(
         );
       }
 
+      if (liveCount > 0) {
+        await applyPeakRankChanges(db, boardLive.byCategory, `peak_personal_speed_rolling183_${gender}`);
+        await writeRankingAggregatePayload(db, cacheKey, {
+          byCategory: boardLive.byCategory,
+          entries: boardLive.entries,
+          startStr,
+          endStr,
+        });
+        await hydrateRankingBoardProfileImages(db, boardLive.byCategory, boardLive.entries);
+        await cacheRef.set({
+          byCategory: boardLive.byCategory,
+          entries: boardLive.entries,
+          startStr,
+          endStr,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return res.status(200).json(
+          await buildPersonalSpeedOutFromPack(
+            { byCategory: boardLive.byCategory, entries: boardLive.entries, startStr, endStr },
+            { fromUserRollups: true, backfilled: liveCount > aggCount }
+          )
+        );
+      }
+
       if (!forceRankMv) {
         const aggStale = await readRankingAggregatePayloadAllowStale(db, cacheKey, PERSONAL_SPEED_STALE_AGG_MS);
-        if (aggStale && aggStale.byCategory) {
+        if (aggStale && aggStale.byCategory && (aggStale.entries || []).length > 0) {
           return res.status(200).json(
             await buildPersonalSpeedOutFromPack(
               { byCategory: aggStale.byCategory, entries: aggStale.entries, startStr, endStr },
@@ -6127,48 +6165,20 @@ exports.getPeakPowerRanking = onRequest(
             await buildPersonalSpeedOutFromPack(approx, { precomputed: true, approximate: true })
           );
         }
-      }
-
-      const cacheRef = db.collection("cache").doc(cacheKey);
-      const cacheSnap = forceRankMv ? null : await cacheRef.get();
-      const nowMs = Date.now();
-      if (cacheSnap && cacheSnap.exists) {
-        const data = cacheSnap.data();
-        const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
-        if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
-          return res.status(200).json(
-            await buildPersonalSpeedOutFromPack(
-              { byCategory: data.byCategory, entries: data.entries, startStr, endStr },
-              { cached: true }
-            )
-          );
+        const cacheSnap = await cacheRef.get();
+        const nowMs = Date.now();
+        if (cacheSnap && cacheSnap.exists) {
+          const data = cacheSnap.data();
+          const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
+          if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS && (data.entries || []).length > 0) {
+            return res.status(200).json(
+              await buildPersonalSpeedOutFromPack(
+                { byCategory: data.byCategory, entries: data.entries, startStr, endStr },
+                { cached: true }
+              )
+            );
+          }
         }
-      }
-
-      /* 전체 사용자×183일 버킷 스캔 금지 — rollup·월간 폴백만 (사용자 증가 대응) */
-      const rollupLive = await getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, gender, null);
-      if (rollupLive.entries.length > 0) {
-        await applyPeakRankChanges(db, rollupLive.byCategory, `peak_personal_speed_rolling183_${gender}`);
-        await writeRankingAggregatePayload(db, cacheKey, {
-          byCategory: rollupLive.byCategory,
-          entries: rollupLive.entries,
-          startStr,
-          endStr,
-        });
-        await hydrateRankingBoardProfileImages(db, rollupLive.byCategory, rollupLive.entries);
-        await cacheRef.set({
-          byCategory: rollupLive.byCategory,
-          entries: rollupLive.entries,
-          startStr,
-          endStr,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        return res.status(200).json(
-          await buildPersonalSpeedOutFromPack(
-            { byCategory: rollupLive.byCategory, entries: rollupLive.entries, startStr, endStr },
-            { fromUserRollups: true }
-          )
-        );
       }
 
       const emptyBoard = {
