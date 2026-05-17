@@ -58,6 +58,27 @@ function filterRankingEligibleUserDocs(docs) {
   return (docs || []).filter((d) => isRankingEligibleUserData(d.data()));
 }
 
+/** 랭킹 응답·집계 행에 탈퇴 여부 전달 (클라이언트에서 일반/관리자 분기) */
+function rankingUserStatusFieldsFromData(data) {
+  const withdrawn = !isRankingEligibleUserData(data);
+  const accountStatus = withdrawn
+    ? "withdrawn"
+    : (String(data.account_status || "active").trim() || "active");
+  return { account_status: accountStatus, isWithdrawn: withdrawn };
+}
+
+function weeklyTop10RowFromEntry(e, index) {
+  return {
+    rank: index + 1,
+    userId: e.userId,
+    name: e.name,
+    totalTss: Math.round(e.totalTss * 100) / 100,
+    is_private: e.is_private === true,
+    account_status: e.account_status || "active",
+    isWithdrawn: e.isWithdrawn === true,
+  };
+}
+
 /** uid 목록으로 users 문서 배치 조회 → profileImageUrl 맵 (랭킹 스냅샷·집계 행 보강용) */
 async function fetchProfileImageUrlsMapForUsers(db, userIds) {
   const urlById = new Map();
@@ -3734,7 +3755,7 @@ async function getPeakHrForUser(db, userId, startStr, endStr, durationType) {
 async function getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, genderFilter, usersSnap = null) {
   if (!DURATION_HR_FIELDS[durationType]) return null;
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = filterRankingEligibleUserDocs(snap.docs);
+  const docs = snap.docs;
   let sum = 0;
   let n = 0;
   for (let i = 0; i < docs.length; i += PEAK_POWER_BATCH_SIZE) {
@@ -3771,7 +3792,7 @@ const PEAK_RANKING_USER_LOOKUP_ORDER = ["Assoluto", "Bianco", "Rosa", "Infinito"
  * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
 async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, genderFilter, usersSnap = null) {
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = filterRankingEligibleUserDocs(snap.docs);
+  const docs = snap.docs;
   const entries = [];
   for (let i = 0; i < docs.length; i += PEAK_POWER_BATCH_SIZE) {
     const batch = docs.slice(i, i + PEAK_POWER_BATCH_SIZE);
@@ -3802,6 +3823,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
           gender,
           is_private: privacyFlagFromFirestoreDoc(data),
           profileImageUrl: profileImageUrlFromUserData(data),
+          ...rankingUserStatusFieldsFromData(data),
         };
       })
     );
@@ -3820,7 +3842,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
  * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
 async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null) {
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = filterRankingEligibleUserDocs(snap.docs);
+  const docs = snap.docs;
   const entries = [];
   for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
     const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
@@ -3850,6 +3872,7 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
           gender,
           is_private: privacyFlagFromFirestoreDoc(data),
           profileImageUrl: profileImageUrlFromUserData(data),
+          ...rankingUserStatusFieldsFromData(data),
         };
       })
     );
@@ -3868,7 +3891,7 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
  * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
 async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null) {
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = filterRankingEligibleUserDocs(snap.docs);
+  const docs = snap.docs;
   const entries = [];
   for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
     const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
@@ -3898,6 +3921,7 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
           gender,
           is_private: privacyFlagFromFirestoreDoc(data),
           profileImageUrl: profileImageUrlFromUserData(data),
+          ...rankingUserStatusFieldsFromData(data),
         };
       })
     );
@@ -3918,7 +3942,7 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
  */
 async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, genderFilter, usersSnap = null, opts = {}) {
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = filterRankingEligibleUserDocs(snap.docs);
+  const docs = snap.docs;
   const logBatchSize =
     opts && opts.logBatchSize != null && Number.isFinite(Number(opts.logBatchSize))
       ? Math.max(1, Math.floor(Number(opts.logBatchSize)))
@@ -3990,6 +4014,7 @@ async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endS
             gender,
             is_private: privacyFlagFromFirestoreDoc(data),
             profileImageUrl: profileImageUrlFromUserData(data),
+            ...rankingUserStatusFieldsFromData(data),
           });
         } catch (ePs) {
           console.warn("[personal_speed] log-route metrics 실패:", userId, ePs.message);
@@ -5029,7 +5054,7 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
   });
 
   const snap = usersSnap ?? await db.collection("users").get();
-  const docs = filterRankingEligibleUserDocs(snap.docs);
+  const docs = snap.docs;
   for (let i = 0; i < docs.length; i += RANKING_ONE_PASS_BATCH) {
     const batch = docs.slice(i, i + RANKING_ONE_PASS_BATCH);
     await Promise.all(
@@ -5080,6 +5105,7 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
             gender: String(data.gender || data.sex || "").toLowerCase(),
             is_private: privacyFlagFromFirestoreDoc(data),
             profileImageUrl: profileImageUrlFromUserData(data),
+            ...rankingUserStatusFieldsFromData(data),
           };
           for (const slot of genders) {
             if (slot === "M" && gKey !== "M") continue;
@@ -5200,13 +5226,7 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
     });
   }
 
-  const top10Current = (entriesCurrent || []).slice(0, 10).map((e, i) => ({
-    rank: i + 1,
-    userId: e.userId,
-    name: e.name,
-    totalTss: Math.round(e.totalTss * 100) / 100,
-    is_private: e.is_private === true,
-  }));
+  const top10Current = (entriesCurrent || []).slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
   const weeklyKey = `weekly_ranking_full_${wStart}_${wEnd}`;
   await writeRankingAggregatePayload(db, weeklyKey, {
     fullEntries: entriesCurrent || [],
@@ -5216,13 +5236,7 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
   });
 
   const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
-  const top10Prev = entriesPrev.slice(0, 10).map((e, i) => ({
-    rank: i + 1,
-    userId: e.userId,
-    name: e.name,
-    totalTss: Math.round(e.totalTss * 100) / 100,
-    is_private: e.is_private === true,
-  }));
+  const top10Prev = entriesPrev.slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
   const weeklyKeyPrev = `weekly_ranking_full_${wPrevS}_${wPrevE}`;
   await writeRankingAggregatePayload(db, weeklyKeyPrev, {
     fullEntries: entriesPrev,
@@ -5256,11 +5270,11 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
 
   // ── 0. 버킷 강제 재계산 (수동 집계 시에만 실행) ──
   // 사용자 루프를 집계 루프와 분리하지 않고 여기서 일괄 처리함으로써 Firestore 읽기 중복을 줄임.
-  const rankingEligibleUserDocs = filterRankingEligibleUserDocs(sharedUsersSnap.docs);
+  const allUserDocs = sharedUsersSnap.docs;
   if (forceReconcile) {
     const RECONCILE_BATCH = 10; // 동시 처리 사용자 수 (타임아웃 방지)
-    for (let i = 0; i < rankingEligibleUserDocs.length; i += RECONCILE_BATCH) {
-      const batch = rankingEligibleUserDocs.slice(i, i + RECONCILE_BATCH);
+    for (let i = 0; i < allUserDocs.length; i += RECONCILE_BATCH) {
+      const batch = allUserDocs.slice(i, i + RECONCILE_BATCH);
       await Promise.all(batch.map(async (userDoc) => {
         const uid = userDoc.id;
         const udata = userDoc.data() || {};
@@ -5302,13 +5316,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   // TSS 집계가 끝난 직후 TOP10 문서를 저장함으로써, 이후 단계에서 타임아웃이 발생해도
   // getWeeklyRanking 이 항상 최신 TOP10 데이터를 반환할 수 있도록 보장.
   const entriesCurrent = weeklyRankingFullCurrent || [];
-  const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
-    rank: i + 1,
-    userId: e.userId,
-    name: e.name,
-    totalTss: Math.round(e.totalTss * 100) / 100,
-    is_private: e.is_private === true,
-  }));
+  const top10Current = entriesCurrent.slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
   const weeklyKey = `weekly_ranking_full_${wStart}_${wEnd}`;
   await writeRankingAggregatePayload(db, weeklyKey, {
     fullEntries: entriesCurrent,
@@ -5321,13 +5329,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
 
   // ── 3. 이전 주 TOP10 ──
   const entriesPrevEarly = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
-  const top10PrevEarly = entriesPrevEarly.slice(0, 10).map((e, i) => ({
-    rank: i + 1,
-    userId: e.userId,
-    name: e.name,
-    totalTss: Math.round(e.totalTss * 100) / 100,
-    is_private: e.is_private === true,
-  }));
+  const top10PrevEarly = entriesPrevEarly.slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
   const weeklyKeyPrevEarly = `weekly_ranking_full_${wPrevS}_${wPrevE}`;
   await writeRankingAggregatePayload(db, weeklyKeyPrevEarly, {
     fullEntries: entriesPrevEarly,
@@ -5366,7 +5368,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   }
   const psRollup = await rankingDayRollup.preparePersonalSpeedRankingRebuild(
     db,
-    rankingEligibleUserDocs,
+    allUserDocs,
     r183s,
     r183e,
     { ensureMissingDays: false }
@@ -5510,10 +5512,7 @@ exports.manualRebuildWeeklyRanking = onRequest(
         });
       }
       // 현재 주 TOP10 저장
-      const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
-        rank: i + 1, userId: e.userId, name: e.name,
-        totalTss: Math.round(e.totalTss * 100) / 100, is_private: e.is_private === true,
-      }));
+      const top10Current = entriesCurrent.slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
       await writeRankingAggregatePayload(db, `weekly_ranking_full_${wStart}_${wEnd}`, {
         fullEntries: entriesCurrent, ranking: top10Current, startStr: wStart, endStr: wEnd,
       });
@@ -5521,10 +5520,7 @@ exports.manualRebuildWeeklyRanking = onRequest(
 
       // 이전 주 TOP10 저장
       const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
-      const top10Prev = entriesPrev.slice(0, 10).map((e, i) => ({
-        rank: i + 1, userId: e.userId, name: e.name,
-        totalTss: Math.round(e.totalTss * 100) / 100, is_private: e.is_private === true,
-      }));
+      const top10Prev = entriesPrev.slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
       await writeRankingAggregatePayload(db, `weekly_ranking_full_${wPrevS}_${wPrevE}`, {
         fullEntries: entriesPrev, ranking: top10Prev, startStr: wPrevS, endStr: wPrevE,
       });
