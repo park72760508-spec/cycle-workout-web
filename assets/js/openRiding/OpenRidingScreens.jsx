@@ -5065,7 +5065,27 @@ function OpenRidingCreateForm(props) {
         </div>
       </div>
 
-      <label className="block font-medium text-slate-700">출발 장소<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.departureLocation} onChange={function (e) { set('departureLocation', e.target.value); }} /></label>
+      {typeof window.DepartureLocationPlaceInput === 'function' ? (
+        <DepartureLocationPlaceInput
+          value={form.departureLocation}
+          disabled={isBusy}
+          resetKey={
+            editRideId
+              ? 'edit-' + editRideId + '-' + (editHydrated ? '1' : '0')
+              : 'create'
+          }
+          onChange={function (v) { set('departureLocation', v); }}
+        />
+      ) : (
+        <label className="block font-medium text-slate-700">
+          출발 장소
+          <input
+            className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+            value={form.departureLocation}
+            onChange={function (e) { set('departureLocation', e.target.value); }}
+          />
+        </label>
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block font-medium text-slate-700">
