@@ -8175,6 +8175,8 @@
     var stelvioRankingApiEndStr = '';
     /** 동시 fetch 호출 시 오래된 응답이 UI를 덮어쓰지 않도록 세대 번호 */
     var stelvioRankingFetchGen = 0;
+    /** fetchStelvioPeakPowerRanking 1회 호출당 첫 데이터 적용만 펼침 UI 초기화(이후 bg 재검증은 유지) */
+    var stelvioRankingAppliedFetchGen = 0;
     /** 포그라운드(캐시 없음) 1차 조회 — 집계 캐시 히트용, rankMv 없음 */
     var STELVIO_RANKING_FETCH_TIMEOUT_MS = 48000;
     /** 백그라운드 재검증·등락 보강(rankMv) — UI 차단 없음 */
@@ -10986,7 +10988,7 @@
       }
     }
 
-    async function stelvioApplyPeakRankingFetchResultWithDashboardAlign(data, myGen, uid) {
+    async function stelvioApplyPeakRankingFetchResultWithDashboardAlign(data, myGen, uid, applyOpts) {
       if (
         myGen === stelvioRankingFetchGen &&
         typeof stelvioIsPersonalSpeedRanking === 'function' &&
@@ -11014,10 +11016,11 @@
           console.warn('[StelvioRanking] 항속 60분 파워 동기화 실패:', eAlignSpd && eAlignSpd.message);
         }
       }
-      stelvioApplyPeakRankingFetchResult(data, myGen, uid);
+      stelvioApplyPeakRankingFetchResult(data, myGen, uid, applyOpts);
     }
 
-    function stelvioApplyPeakRankingFetchResult(data, myGen, uid) {
+    function stelvioApplyPeakRankingFetchResult(data, myGen, uid, applyOpts) {
+      applyOpts = applyOpts || {};
       if (myGen !== stelvioRankingFetchGen) return;
       if (!data || !data.success || !data.byCategory) {
         stelvioRankingFullEntries = null;
@@ -11028,6 +11031,13 @@
         refreshStelvioDistributionChartMounted();
         return;
       }
+      var isFirstApplyForFetchGen = myGen !== stelvioRankingAppliedFetchGen;
+      if (isFirstApplyForFetchGen) {
+        stelvioRankingAppliedFetchGen = myGen;
+      }
+      var resetExpandUi =
+        applyOpts.forceResetExpandUi === true ||
+        (applyOpts.preserveExpandUi !== true && isFirstApplyForFetchGen);
       if (uid && typeof stelvioMergeViewerProfileImageIntoRankingPayload === 'function') {
         stelvioMergeViewerProfileImageIntoRankingPayload(data, uid);
       }
@@ -11059,8 +11069,10 @@
       stelvioRankingByCategory = data.byCategory;
       stelvioRankingApiStartStr = typeof data.startStr === 'string' ? data.startStr : '';
       stelvioRankingApiEndStr = typeof data.endStr === 'string' ? data.endStr : '';
-      stelvioRankingExpandState = {};
-      stelvioRankingGapState = {};
+      if (resetExpandUi) {
+        stelvioRankingExpandState = {};
+        stelvioRankingGapState = {};
+      }
       var _prevRankingUid = stelvioRankingCurrentUserId;
       stelvioRankingCurrentUserId = uid;
       /* userId가 변경된 경우(첫 로드 또는 계정 전환)에만 localStorage에서 즐겨찾기를 다시 읽는다.
@@ -11209,7 +11221,9 @@
             myGen
           );
           if (!dataFresh || !dataFresh.success || !dataFresh.byCategory) return;
-          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(dataFresh, myGen, uid);
+          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(dataFresh, myGen, uid, {
+            preserveExpandUi: true,
+          });
           saveFreshPeakData(dataFresh);
           stelvioSetRankingRefreshHint(false);
         } catch (eBg) {
