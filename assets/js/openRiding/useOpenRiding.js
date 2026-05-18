@@ -189,6 +189,8 @@ export function useOpenRideDetail(db, rideId, userId) {
 
   /** 일정일(서울)이 오늘보다 지난 뒤: 방장이 상세를 열면 즉시 참석 검증 Callable 1회 */
   useEffect(() => {
+    var svc0 = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (svc0.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED === false) return undefined;
     if (!db || !rideId || !ride || !userId) return undefined;
     if (String(ride.hostUserId || '').trim() !== String(userId).trim()) return undefined;
     var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
@@ -208,6 +210,8 @@ export function useOpenRideDetail(db, rideId, userId) {
    * (앱/탭이 열려 있고 상세가 마운트된 경우에 한함 — 자정 스케줄 Cloud Function이 상시 처리)
    */
   useEffect(() => {
+    var svc0b = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (svc0b.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED === false) return undefined;
     if (!db || !rideId || !ride || !userId) return undefined;
     if (String(ride.hostUserId || '').trim() !== String(userId).trim()) return undefined;
     if (ride.attendanceVerificationRan === true) return undefined;

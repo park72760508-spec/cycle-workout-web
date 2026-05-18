@@ -256,6 +256,12 @@ export function isRideJoinClosedBySchedule(rideData) {
 }
 
 /**
+ * 당분간 Strava 참석 검증 비활성화 (Cloud Function·자동 트리거 모두 생략).
+ * 재개 시 true 로 변경.
+ */
+export const OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED = false;
+
+/**
  * Strava 참석 검증 자동 실행 조건: 라이딩 일정일(서울 달력)이 **오늘보다 이전**일 때만 true.
  * 당일 방장 후기 업로드와 무관 — 일정일이 지난 뒤(익일 0시 서울 이후)에만 검증되어, 당일 집 복귀 중인 참가자 활동 반영 시간을 확보한다.
  * 취소된 모임은 검증하지 않음.
@@ -1531,6 +1537,7 @@ const _openRidingAttendanceHostSucceeded = new Set();
  * @returns {Promise<{ skipped: boolean; reason?: string; result?: unknown; error?: string }>}
  */
 export async function triggerVerifyMeetingAttendanceForEndedRideIfHost(db, rideId, ride) {
+  if (!OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED) return { skipped: true, reason: 'DISABLED' };
   if (!db || !rideId || !ride || typeof ride !== 'object') return { skipped: true, reason: 'BAD_ARGS' };
   if (!isRideScheduleDatePastSeoul(ride)) return { skipped: true, reason: 'SCHEDULE_DAY_NOT_PAST' };
   if (ride.attendanceVerificationRan === true) return { skipped: true, reason: 'ALREADY_RAN' };
@@ -1622,6 +1629,7 @@ if (typeof window !== 'undefined') {
     getMillisecondsUntilSeoulMidnight,
     openRidingHostPublicReviewWritten,
     openRidingHostSummaryQualifiesAsGroupRide,
+    OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED,
     triggerVerifyMeetingAttendanceForEndedRideIfHost
   };
 }
