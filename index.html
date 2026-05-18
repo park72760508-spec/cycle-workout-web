@@ -11241,6 +11241,13 @@
           bgRevalidate(false).catch(function () {});
         }
       }
+      /** GC: 일 1회 스냅샷·CDN 캐시로 충분 — 백그라운드 재요청 시 이중 로딩·타임아웃 유발 */
+      function scheduleBgRefreshIfNeeded(includeRankMv) {
+        if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
+          return;
+        }
+        scheduleBgRefresh(includeRankMv);
+      }
 
       function scheduleRankMvIfNeeded() {
         if (!needsRankMv) return;
@@ -11275,7 +11282,7 @@
         scheduleRankMvIfNeeded();
         var memPsPre = isPsRank && memHit.body.precomputed === true;
         if (!memPsPre && stelvioRankingLocalCache.isStale({ cachedAt: memHit.ts })) {
-          scheduleBgRefresh(false);
+          scheduleBgRefreshIfNeeded(false);
         }
         return;
       }
@@ -11286,7 +11293,7 @@
         await applyFromCache(lcEntry.data, { instant: true, source: 'localStorage' });
         scheduleRankMvIfNeeded();
         var lcPsPre = isPsRank && lcEntry.data.precomputed === true;
-        if (!lcPsPre && stelvioRankingLocalCache.isStale(lcEntry)) scheduleBgRefresh(false);
+        if (!lcPsPre && stelvioRankingLocalCache.isStale(lcEntry)) scheduleBgRefreshIfNeeded(false);
         return;
       }
 
@@ -11296,7 +11303,7 @@
         stelvioRankingMemCacheSet(swrKey, swr.body);
         await applyFromCache(swr.body, { instant: true, source: 'swr' });
         scheduleRankMvIfNeeded();
-        if (!(isPsRank && swr.body.precomputed === true)) scheduleBgRefresh(false);
+        if (!(isPsRank && swr.body.precomputed === true)) scheduleBgRefreshIfNeeded(false);
         return;
       }
 
@@ -11338,7 +11345,7 @@
             stelvioIsPersonalSpeedRanking() &&
             data2.precomputed === true &&
             !stelvioPersonalSpeedBoardPayloadStale(data2);
-          if (!psSkipBg) scheduleBgRefresh(false);
+          if (!psSkipBg) scheduleBgRefreshIfNeeded(false);
         } else if (!showedSoft) {
           await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
         }
@@ -11351,7 +11358,7 @@
             (e.message && String(e.message).toLowerCase().indexOf('abort') >= 0));
         if (!isAbort) console.warn('[StelvioRanking] 조회 실패:', e);
         if (showedSoft || tryApplySoftFallback()) {
-          scheduleBgRefresh(true);
+          scheduleBgRefreshIfNeeded(true);
         } else {
           stelvioRankingFullEntries = null;
           stelvioRankingByCategory = null;
