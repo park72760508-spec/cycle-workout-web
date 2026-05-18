@@ -1,5 +1,6 @@
 /**
  * 라이딩 모임 참석 검증: Strava 활동 스트림(latlng, time) + 집결지 반경 200m + 모임 시각 ±1시간
+ * (Google Places API 와 무관 — places.googleapis.com 미사용)
  */
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
@@ -7,6 +8,15 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 
 /** defineSecret('STRAVA_CLIENT_SECRET') 반환 — SecretParam 타입 경로에 의존하지 않음 */
 type StravaClientSecretParam = ReturnType<typeof import("firebase-functions/params").defineSecret>;
+
+/**
+ * 당분간 참석 검증 비활성화.
+ * 재개: true 로 변경 후 functions 재배포 (또는 env OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED=1).
+ */
+export const ATTENDANCE_VERIFICATION_ENABLED =
+  process.env.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED === "1" ||
+  process.env.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED === "true" ||
+  false;
 
 /** 집결지 반경 (미터) */
 const MEETING_START_RADIUS_M = 200;
@@ -36,6 +46,8 @@ export interface VerifyMeetingAttendanceResult {
   missedCount: number;
   skippedCount: number;
   details: VerifyMeetingAttendanceUserDetail[];
+  /** 참석 검증 기능이 꺼져 있을 때 true */
+  disabled?: boolean;
 }
 
 /**
@@ -705,6 +717,20 @@ export async function executeVerifyAttendanceForEventId(
     throw new HttpsError("invalid-argument", "meetingId 가 필요합니다.");
   }
 
+  if (!ATTENDANCE_VERIFICATION_ENABLED) {
+    console.log("[verifyMeetingAttendance] 비활성화됨 — 실행 생략", { meetingId, callerUid });
+    return {
+      success: true,
+      meetingId,
+      processedCount: 0,
+      attendedCount: 0,
+      missedCount: 0,
+      skippedCount: 0,
+      details: [],
+      disabled: true,
+    };
+  }
+
   const meetingRef = db.collection("meetings").doc(meetingId);
   const meetingSnap = await meetingRef.get();
   const rideRef = db.collection("rides").doc(meetingId);
@@ -917,6 +943,10 @@ export function createScheduledRideAttendanceVerification(stravaClientSecret: St
       memory: "512MiB",
     },
     async () => {
+      if (!ATTENDANCE_VERIFICATION_ENABLED) {
+        console.log("[scheduledRideAttendanceVerification] 비활성화됨 — 일괄 검증 생략");
+        return;
+      }
       const clientSecret = stravaClientSecret.value() || process.env.STRAVA_CLIENT_SECRET || "";
       if (!clientSecret.trim()) {
         console.error("[scheduledRideAttendanceVerification] STRAVA_CLIENT_SECRET 없음");
