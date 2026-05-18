@@ -1365,6 +1365,135 @@
     };
   }
 
+  /** 랭킹보드 목록과 동일한 rankChange — Firestore 행에 없으면 stelvioRankingByCategory 보강 */
+  function rankChangeBadgeFromRankingBoard(categoryKey, userId) {
+    if (userId == null || userId === '') return null;
+    if (typeof window.stelvioRankChangeBadgeHtmlForUser === 'function') {
+      var html = window.stelvioRankChangeBadgeHtmlForUser(categoryKey, userId);
+      if (html) return html;
+    }
+    if (typeof window.stelvioFindRankingRowForUser === 'function' && typeof window.stelvioServerRankChangeBadgeHtml === 'function') {
+      var row = window.stelvioFindRankingRowForUser(categoryKey, userId);
+      if (row && row.rankChange != null && row.previousBoardRank != null) {
+        return window.stelvioServerRankChangeBadgeHtml(row.rankChange, row.previousBoardRank);
+      }
+    }
+    return null;
+  }
+
+  function overlayRankMovementFromRankingBoard(row, categoryKey) {
+    if (!row || row.userId == null) return row;
+    if (row.rankChange != null && row.previousBoardRank != null) return row;
+    if (typeof window.stelvioFindRankingRowForUser !== 'function') return row;
+    var src = window.stelvioFindRankingRowForUser(categoryKey, row.userId);
+    if (!src || src.rankChange == null || src.previousBoardRank == null) return row;
+    return Object.assign({}, row, {
+      rankChange: src.rankChange,
+      previousBoardRank: src.previousBoardRank
+    });
+  }
+
+  function rankChangeBadgeJsxFromRankingBoard(categoryKey, userId) {
+    var html = rankChangeBadgeFromRankingBoard(categoryKey, userId);
+    if (!html) return null;
+    return <span className="stelvio-rank-change-inline" dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+
+  /**
+   * 랭킹보드 GC API(`getPeakPowerRanking?duration=gc`) → 코호트 목록 형식.
+   * 서버 스냅샷+라이브 병합 결과이므로 모든 사용자 화면에서 동일 인원이 보인다.
+   */
+  function heptagonCohortItemsFromGcApi(gcData, filterCategory) {
+    if (!gcData || !gcData.success || !gcData.byCategory) {
+      return [];
+    }
+    var arr = gcData.byCategory[filterCategory] || [];
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var row = arr[i];
+      if (!row || row.userId == null) {
+        continue;
+      }
+      var sc = row.gcScore != null && isFinite(Number(row.gcScore)) ? Number(row.gcScore) : null;
+      if (sc == null) {
+        continue;
+      }
+      out.push({
+        userId: String(row.userId),
+        displayName: (row.name && String(row.name).trim()) || '(이름 없음)',
+        sumPositionScores: sc,
+        boardRank: row.rank != null && isFinite(Number(row.rank)) ? Math.floor(Number(row.rank)) : null,
+        ageCategory: row.ageCategory != null ? String(row.ageCategory) : '',
+        is_private: row.is_private === true,
+        rankChange: row.rankChange != null && isFinite(Number(row.rankChange)) ? Math.round(Number(row.rankChange)) : null,
+        previousBoardRank:
+          row.previousBoardRank != null && isFinite(Number(row.previousBoardRank))
+            ? Math.floor(Number(row.previousBoardRank))
+            : null
+      });
+    }
+    return out;
+  }
+
+  /** Firestore 코호트 + GC API(공유) 병합 — GC에만 있는 신규·미스냅샷 사용자를 타인 화면에도 표시 */
+  function mergeHeptagonCohortFirestoreWithGc(fsItems, gcItems) {
+    var gc = gcItems || [];
+    if (!gc.length) {
+      return (fsItems || []).slice();
+    }
+    var byId = Object.create(null);
+    var fs = fsItems || [];
+    var fi;
+    for (fi = 0; fi < fs.length; fi++) {
+      var f = fs[fi];
+      if (!f || f.userId == null) {
+        continue;
+      }
+      byId[String(f.userId)] = Object.assign({}, f);
+    }
+    for (var gi = 0; gi < gc.length; gi++) {
+      var g = gc[gi];
+      if (!g || g.userId == null) {
+        continue;
+      }
+      var uid = String(g.userId);
+      var prev = byId[uid];
+      if (prev) {
+        byId[uid] = Object.assign({}, prev, g, {
+          sumPositionScores:
+            g.sumPositionScores != null && isFinite(Number(g.sumPositionScores))
+              ? Number(g.sumPositionScores)
+              : prev.sumPositionScores,
+          displayName:
+            g.displayName && String(g.displayName).trim() && String(g.displayName).trim() !== '—'
+              ? String(g.displayName).trim()
+              : prev.displayName
+        });
+      } else {
+        byId[uid] = Object.assign({}, g);
+      }
+    }
+    var merged = [];
+    var keys = Object.keys(byId);
+    for (var ki = 0; ki < keys.length; ki++) {
+      merged.push(byId[keys[ki]]);
+    }
+    merged.sort(function(a, b) {
+      var sa =
+        a.sumPositionScores != null && isFinite(Number(a.sumPositionScores)) ? Number(a.sumPositionScores) : 0;
+      var sb =
+        b.sumPositionScores != null && isFinite(Number(b.sumPositionScores)) ? Number(b.sumPositionScores) : 0;
+      if (sb !== sa) {
+        return sb - sa;
+      }
+      return String(a.userId).localeCompare(String(b.userId));
+    });
+    for (var ri = 0; ri < merged.length; ri++) {
+      merged[ri].boardRank = ri + 1;
+    }
+    return merged;
+  }
+
   function mapHeptagonCohortToBoardRow(d, myUid) {
     var rc = d.rankChange != null && isFinite(Number(d.rankChange)) ? Math.round(Number(d.rankChange)) : null;
     var pb = d.previousBoardRank != null && isFinite(Number(d.previousBoardRank)) ? Math.floor(Number(d.previousBoardRank)) : null;
@@ -1923,7 +2052,10 @@
               }
             >
               <span>{isBoardSupremoAll ? '종합(환산) 순위' : '집계 순위 (필터)'}</span>
-              <strong>{rUi !== '—' && rUi != null ? String(rUi) + '위' : '—'}</strong>
+              <strong>
+                {rUi !== '—' && rUi != null ? String(rUi) + '위' : '—'}
+                {rankChangeBadgeJsxFromRankingBoard(boardC, viewerUserId)}
+              </strong>
             </div>
             {pT != null ? (
               <div
@@ -2030,8 +2162,8 @@
             <div className="stelvio-heptagon-detail-modal__tablewrap stelvio-heptagon-detail-modal__tablewrap--neighbor">
               <table className="stelvio-heptagon-detail-modal__table" role="grid">
                 <caption className="stelvio-heptagon-detail-modal__caption">
-                  {categoryLabel} · {genderLabel} — 환산점수 합(0~700)이 높은 순(랭킹보드·
-                  <code>heptagon_cohort_ranks</code> 집계, 상위 500명 표시, 본인은 목록에 없을 때 집계 순위 위치에 삽입)
+                  {categoryLabel} · {genderLabel} — 환산점수 합(0~700)이 높은 순(랭킹보드 GC API·
+                  <code>heptagon_cohort_ranks</code> 병합 — 모든 사용자 동일 목록, 본인만 스냅샷 밖이면 점수 기준 삽입)
                 </caption>
                 <thead>
                   <tr>
@@ -2046,6 +2178,7 @@
                 </thead>
                 <tbody>
                   {(boardState.rows || []).map(function(row, idx) {
+                    row = overlayRankMovementFromRankingBoard(row, boardC);
                     var npb = stelvioNeighborNameParts(
                       row.isMe ? myDisplayName : row.displayName,
                       row.isPrivate === true,
@@ -2057,29 +2190,7 @@
                       row.boardRank != null && isFinite(row.boardRank)
                         ? String(Math.floor(Number(row.boardRank))) + '위'
                         : '—';
-                    // 순위 등락 배지: rankChange > 0 = 상승(연한빨강), < 0 = 하락(연한파랑), 0 = 보합(그레이)
-                    var rankChangeBadge = null;
-                    if (row.rankChange != null && row.previousBoardRank != null) {
-                      if (row.rankChange > 0) {
-                        rankChangeBadge = (
-                          <span className="stelvio-rank-change stelvio-rank-change--up" title={'전날 ' + row.previousBoardRank + '위'}>
-                            {'(↑' + row.rankChange + ')'}
-                          </span>
-                        );
-                      } else if (row.rankChange < 0) {
-                        rankChangeBadge = (
-                          <span className="stelvio-rank-change stelvio-rank-change--down" title={'전날 ' + row.previousBoardRank + '위'}>
-                            {'(↓' + Math.abs(row.rankChange) + ')'}
-                          </span>
-                        );
-                      } else {
-                        rankChangeBadge = (
-                          <span className="stelvio-rank-change stelvio-rank-change--flat" title={'전날 ' + row.previousBoardRank + '위'}>
-                            {'(-)'}
-                          </span>
-                        );
-                      }
-                    }
+                    var rankChangeBadge = rankChangeBadgeJsxFromRankingBoard(boardC, row.userId);
                     var gradeLetterBadge = null;
                     if (row.boardRank != null && isFinite(row.boardRank) && nEffModal >= 1) {
                       var pRow = heptagonLevelPercentForRankN(
@@ -2279,6 +2390,8 @@
     var cohortOvlLoading = props.cohortOvlLoading === true || hct.kind === 'board_loading';
     var gcRank = props.gcRank;
     var showGcBadge = gcRank !== undefined;
+    var filterCategoryKey = props.filterCategoryKey != null ? String(props.filterCategoryKey) : 'Supremo';
+    var viewerUserId = props.viewerUserId != null ? String(props.viewerUserId) : '';
     useEffect(
       function() {
         setImgError(false);
@@ -2363,7 +2476,10 @@
             >
               <span className="stelvio-octagon-tier-gc__pill inline-flex items-baseline gap-1 rounded-full border border-slate-200/90 bg-white/90 px-2 py-0.5 text-[10px] text-slate-700 shadow-sm whitespace-nowrap">
                 <span className="font-bold tracking-tight text-violet-800">GC</span>
-                <span className="tabular-nums text-slate-600">{gcRank != null ? gcRank + '위' : '—'}</span>
+                <span className="tabular-nums text-slate-600">
+                  {gcRank != null ? gcRank + '위' : '—'}
+                  {viewerUserId ? rankChangeBadgeJsxFromRankingBoard('Supremo', viewerUserId) : null}
+                </span>
               </span>
             </div>
           ) : null}
@@ -2377,7 +2493,10 @@
           >
             {rankForUi != null ? (
               <span className="stelvio-octagon-tier-hint-split stelvio-octagon-tier-hint-split--cohort" title={virtLabel + ' · 집계 대상자 수 n(카드=팝업 동일 조건 표)'}>
-                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-rank">{String(rankForUi) + '위'}</span>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-rank">
+                  {String(rankForUi) + '위'}
+                  {viewerUserId ? rankChangeBadgeJsxFromRankingBoard(filterCategoryKey, viewerUserId) : null}
+                </span>
                 <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-nref">n={nCohortLine}</span>
                 <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-pct">
                   {pShow >= 0 && isFinite(pShow) ? pShow.toFixed(2) : hct.kind === 'board_partial' ? '…' : '—'}%
@@ -3534,7 +3653,7 @@
       [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category]
     );
 
-    function runHeptagonCohortBoardFetch(uidIn, gIn, cIn, setBoard, chartSupremoSumForVirtual, boardKind) {
+    function runHeptagonCohortBoardFetch(uidIn, gIn, cIn, setBoard, chartSupremoSumForVirtual, boardKind, gcApiData) {
       if (!uidIn) {
         setBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
         return;
@@ -3683,6 +3802,10 @@
                 myDS = { sumPositionScores: sv, displayName: '—' };
               }
             }
+            var gcItems = heptagonCohortItemsFromGcApi(gcApiData, cIn);
+            if (gcItems.length) {
+              items2 = mergeHeptagonCohortFirestoreWithGc(items2, gcItems);
+            }
             var nRe2 = reconcileHeptagonCohortNFromList(nTot2, items2);
             var built2 = buildHeptagonModalBoardRows(items2, uidIn, myD, myDS);
             var nReFromRows = nCohortFromHeptagonBoardRows({ rows: built2.rows, nCohort: 0, err: null });
@@ -3725,13 +3848,21 @@
           ) {
             chartEff = Number(chartSupremoSumStableRef.current);
           }
-          runHeptagonCohortBoardFetch(uid, gender, category, setHeptagonCardBoard, chartEff, 'card');
+          runHeptagonCohortBoardFetch(
+            uid,
+            gender,
+            category,
+            setHeptagonCardBoard,
+            chartEff,
+            'card',
+            gcRankingApi.data
+          );
         }, 56);
         return function() {
           clearTimeout(delB);
         };
       },
-      [uid, gender, category, heptagonGcSumForSync]
+      [uid, gender, category, heptagonGcSumForSync, gcRankingApi.data]
     );
 
     useEffect(
@@ -3757,9 +3888,26 @@
         ) {
           chartS = chartSupremoModalStableRef.current;
         }
-        runHeptagonCohortBoardFetch(uid, heptagonModalGender, heptagonModalCategory, setHeptagonModalBoard, chartS, 'modal');
+        runHeptagonCohortBoardFetch(
+          uid,
+          heptagonModalGender,
+          heptagonModalCategory,
+          setHeptagonModalBoard,
+          chartS,
+          'modal',
+          gcRankingApi.data
+        );
       },
-      [heptagonDetailOpen, uid, heptagonModalCategory, heptagonModalGender, gender, category, chartSupremoSumForModalVirtualOvl]
+      [
+        heptagonDetailOpen,
+        uid,
+        heptagonModalCategory,
+        heptagonModalGender,
+        gender,
+        category,
+        chartSupremoSumForModalVirtualOvl,
+        gcRankingApi.data
+      ]
     );
 
     useEffect(
@@ -4122,6 +4270,8 @@
                 heptagonCardTooltip={stelvioCardTooltip}
                 filterGenderLabel={labelForGender(gender)}
                 filterCategoryLabel={labelForCategory(category)}
+                filterCategoryKey={category}
+                viewerUserId={uid}
                 cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
                 gcRank={
                   uid
@@ -4188,6 +4338,8 @@
                   heptagonCardTooltip={stelvioCardTooltip}
                   filterGenderLabel={labelForGender(gender)}
                   filterCategoryLabel={labelForCategory(category)}
+                  filterCategoryKey={category}
+                  viewerUserId={uid}
                   cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
                   detachedLevelPill={true}
                   pctHintOpen={tierPctHintOpen}
