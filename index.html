@@ -8842,12 +8842,13 @@
         '"/></svg>'
       );
     }
-    function stelvioRankingStarButtonHtml(userId) {
+    function stelvioRankingStarButtonHtml(userId, opts) {
       if (!userId) return '';
+      opts = opts || {};
       var uid = String(userId);
       var fav         = stelvioRankingFavoriteUserSet.has(uid);
       var friend      = stelvioRankingFriendUserSet.has(uid);
-      var groupMember = stelvioRankingGroupContactSet.has(uid);
+      var groupMember = !opts.omitGroupMember && stelvioRankingGroupContactSet.has(uid);
       /* 친구 우선 */
       var friendTitle = '\ub77c\uc774\ub529 \ubaa8\uc784 \uce5c\uad6c (\uad00\uc2ec \ud1a0\uae00\uc740 \uce5c\uad6c \ubaa9\ub85d\uc5d0\uc11c \uc0ad\uc81c \ud6c4 \uac00\ub2a5)';
       if (friend) {
@@ -8860,7 +8861,7 @@
           '</span>'
         );
       }
-      /* 그룹멤버 (친구가 아닌 경우만) → 주황색 별 */
+      /* 그룹멤버 (친구가 아닌 경우만) → 주황색 별 — 그룹탭 멤버 목록에서는 생략 */
       if (groupMember) {
         var groupTitle = '\uadf8\ub8f9 \uba4c\ubc84';
         return (
@@ -9634,6 +9635,11 @@
       if (filtWrap) filtWrap.classList.remove('hidden');
       var legend = document.querySelector('#stelvioRankingContent .stelvio-ranking-star-legend');
       if (legend) legend.classList.remove('hidden');
+      var legendGroupItem = legend && legend.querySelector('.stelvio-legend-star--group');
+      if (legendGroupItem) {
+        var legendGroupWrap = legendGroupItem.closest('.stelvio-ranking-star-legend-item');
+        if (legendGroupWrap) legendGroupWrap.style.display = isGroup ? 'none' : '';
+      }
       var chartRt = document.getElementById('stelvio-distribution-chart-root');
       if (chartRt) chartRt.classList.remove('hidden');
       var ot = document.getElementById('stelvioOvertakeBtn');
@@ -12193,7 +12199,7 @@
             '</span>' +
             bdge +
             '<span class="stelvio-rank-star-slot">' +
-            stelvioRankingStarButtonHtml(itRow.userId) +
+            stelvioRankingStarButtonHtml(itRow.userId, { omitGroupMember: true }) +
             '</span></span>' +
             '<span class="stelvio-rank-wkg">' +
             valS +
@@ -12277,7 +12283,7 @@
           for (var bi = 0; bi < oldBadges.length; bi++) oldBadges[bi].parentNode.removeChild(oldBadges[bi]);
           var ss = nw.querySelector('.stelvio-rank-star-slot');
           if (badgeP && ss) ss.insertAdjacentHTML('beforebegin', badgeP);
-          if (ss) ss.innerHTML = stelvioRankingStarButtonHtml(it.userId);
+          if (ss) ss.innerHTML = stelvioRankingStarButtonHtml(it.userId, { omitGroupMember: true });
           var wg = rowEl.querySelector(':scope > .stelvio-rank-wkg');
           if (wg) wg.textContent = valStr;
         }
