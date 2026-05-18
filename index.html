@@ -12763,7 +12763,7 @@
     }
     window.handleStelvioRankingGapSet = handleStelvioRankingGapSet;
 
-    /** grade 2·3 전용: Supremo 펼침 시 상위 50 + 본인 주변 ±10만 표시(API 응답 전체 크기 불변, DOM만 제한). */
+    /** grade 2·3 전용: Supremo 펼침 시 상위 100 + 본인 주변 ±20만 표시(API 응답 전체 크기 불변, DOM만 제한). */
     function stelvioIsSupremoTrafficLimitedGrade() {
       if (typeof getViewerGrade !== 'function') return false;
       var vg = getViewerGrade();
@@ -13097,7 +13097,7 @@
             } else {
               if (stelvioIsSupremoTrafficLimitedGrade()) {
                 var idxOff = {};
-                var capOff = Math.min(49, lastIdx);
+                var capOff = Math.min(99, lastIdx);
                 for (var oj = topEndO + 1; oj <= capOff; oj++) idxOff[oj] = true;
                 renderSupremoRunsFromIdxSet(idxOff);
                 if (lastIdx > capOff) htmlS += dotsRowS();
@@ -13133,7 +13133,7 @@
             } else {
               if (stelvioIsSupremoTrafficLimitedGrade()) {
                 var idxNz = {};
-                var capNz = Math.min(49, lastIdx);
+                var capNz = Math.min(99, lastIdx);
                 for (var e0 = topEnd0 + 1; e0 <= capNz; e0++) idxNz[e0] = true;
                 renderSupremoRunsFromIdxSet(idxNz);
                 if (lastIdx > capNz) htmlS += dotsRowS();
@@ -13192,11 +13192,11 @@
             htmlS += supremoExpandControlRow(false);
           } else {
             var idxLim = {};
-            var top50End = Math.min(49, lastIdx);
-            for (var ti = 0; ti <= top50End; ti++) idxLim[ti] = true;
+            var top100End = Math.min(99, lastIdx);
+            for (var ti = 0; ti <= top100End; ti++) idxLim[ti] = true;
             if (userIdxS >= 0) {
-              var loNx = Math.max(0, userIdxS - 10);
-              var hiNx = Math.min(lastIdx, userIdxS + 10);
+              var loNx = Math.max(0, userIdxS - 20);
+              var hiNx = Math.min(lastIdx, userIdxS + 20);
               for (var nix = loNx; nix <= hiNx; nix++) idxLim[nix] = true;
             }
             renderSupremoRunsFromIdxSet(idxLim);
