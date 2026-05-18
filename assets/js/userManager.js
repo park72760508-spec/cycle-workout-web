@@ -205,7 +205,11 @@ function pruneStelvioLocalStorageForQuota() {
         try {
           localStorage.removeItem(k);
         } catch (_e) {}
-      } else if (k.indexOf('stelvioPeakRanking') === 0 || k.indexOf('stelvioRanking') === 0) {
+      } else if (
+        k.indexOf('stelvioPeakRanking') === 0 ||
+        (k.indexOf('stelvioRanking') === 0 &&
+          k.indexOf('stelvioRankingFavorites:') !== 0)
+      ) {
         try {
           localStorage.removeItem(k);
         } catch (_e2) {}
@@ -236,6 +240,11 @@ function persistStelvioUserToLocalStorage(user, opts) {
   };
   try {
     write();
+    if (typeof window.stelvioRefreshRankingFavoriteSetFromStorage === 'function') {
+      try {
+        window.stelvioRefreshRankingFavoriteSetFromStorage();
+      } catch (_eFav) {}
+    }
     return true;
   } catch (e) {
     if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
@@ -243,6 +252,11 @@ function persistStelvioUserToLocalStorage(user, opts) {
       pruneStelvioLocalStorageForQuota();
       try {
         write();
+        if (typeof window.stelvioRefreshRankingFavoriteSetFromStorage === 'function') {
+          try {
+            window.stelvioRefreshRankingFavoriteSetFromStorage();
+          } catch (_eFav2) {}
+        }
         return true;
       } catch (e2) {
         try {
