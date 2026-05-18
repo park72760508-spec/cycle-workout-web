@@ -1494,6 +1494,48 @@
     return merged;
   }
 
+  function heptagonFindGcCohortItemByUid(items, uid) {
+    if (!items || !uid) {
+      return null;
+    }
+    for (var hi = 0; hi < items.length; hi++) {
+      if (items[hi] && String(items[hi].userId) === String(uid)) {
+        return items[hi];
+      }
+    }
+    return null;
+  }
+
+  /** 랭킹보드 GC API 응답만으로 함목별 순위 표 구성 — Firestore 6회 조회 생략(속도) */
+  function heptagonBoardFromGcApiOnly(uidIn, gIn, cIn, chartSupremoSumForVirtual, gcApiData) {
+    if (!gcApiData || !gcApiData.success) {
+      return null;
+    }
+    var gcItems = heptagonCohortItemsFromGcApi(gcApiData, cIn);
+    if (!gcItems.length) {
+      return null;
+    }
+    var myD = heptagonFindGcCohortItemByUid(gcItems, uidIn);
+    var supGc = heptagonCohortItemsFromGcApi(gcApiData, 'Supremo');
+    var myDS = heptagonFindGcCohortItemByUid(supGc, uidIn);
+    if (
+      chartSupremoSumForVirtual != null &&
+      isFinite(Number(chartSupremoSumForVirtual)) &&
+      Number(chartSupremoSumForVirtual) > 0
+    ) {
+      var sv = Number(chartSupremoSumForVirtual);
+      if (gIn === 'M' || gIn === 'F') {
+        if (myD == null || myD.sumPositionScores == null || !isFinite(Number(myD.sumPositionScores)) || Number(myD.sumPositionScores) === 0) {
+          myD = myD ? Object.assign({}, myD, { sumPositionScores: sv }) : { sumPositionScores: sv, displayName: '—' };
+        }
+      }
+      myDS = myDS ? Object.assign({}, myDS, { sumPositionScores: sv }) : { sumPositionScores: sv, displayName: '—' };
+    }
+    var built = buildHeptagonModalBoardRows(gcItems, uidIn, myD, myDS);
+    var nCohort = Math.max(gcItems.length, nCohortFromHeptagonBoardRows({ rows: built.rows, nCohort: 0, err: null }));
+    return { rows: built.rows, meInList: built.meInList, nCohort: nCohort | 0 };
+  }
+
   function mapHeptagonCohortToBoardRow(d, myUid) {
     var rc = d.rankChange != null && isFinite(Number(d.rankChange)) ? Math.round(Number(d.rankChange)) : null;
     var pb = d.previousBoardRank != null && isFinite(Number(d.previousBoardRank)) ? Math.floor(Number(d.previousBoardRank)) : null;
@@ -3666,6 +3708,17 @@
       seqRef.current += 1;
       var fetchSeq = seqRef.current;
       setBoard({ loading: true, err: null, rows: [], nCohort: 0, meInList: false });
+      var gcOnly = heptagonBoardFromGcApiOnly(uidIn, gIn, cIn, chartSupremoSumForVirtual, gcApiData);
+      if (gcOnly) {
+        setBoard({
+          loading: false,
+          err: null,
+          rows: gcOnly.rows,
+          meInList: gcOnly.meInList,
+          nCohort: gcOnly.nCohort
+        });
+        return;
+      }
       var mk2 = currentMonthKeyKst();
       var prB = window.queryStelvioHeptagonCohortBySumDesc({
         monthKey: mk2,
