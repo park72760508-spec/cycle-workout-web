@@ -8368,6 +8368,10 @@
     var stelvioGroupTabUserProfileCache = {};
     var stelvioGroupTabUserProfileMiss = {};
     var stelvioGroupTabUserProfileFetchGen = 0;
+    /** 그룹 탭 방장 공지 — 편집 중 초안·저장 중 플래그 */
+    var stelvioGroupNoticeDraftByGid = {};
+    var stelvioGroupNoticeSavingByGid = {};
+    var STELVIO_GROUP_RANKING_NOTICE_MAX = 500;
     var STELVIO_DURATION_LABELS = {
       'tss': 'TSS',
       'personal_dist': '거리',
@@ -9013,6 +9017,7 @@
           var tg = evGp.target;
           var pickBt = tg && typeof tg.closest === 'function' ? tg.closest('[data-stelvio-group-pick="1"]') : null;
           if (!pickBt || !listBodyStar.contains(pickBt)) return;
+          if (tg && typeof tg.closest === 'function' && tg.closest('[data-stelvio-group-notice-root="1"]')) return;
           if (tg && typeof tg.closest === 'function' && tg.closest('a')) return;
           var gidPick = pickBt.getAttribute('data-stelvio-group-id');
           if (!gidPick) return;
@@ -11433,6 +11438,8 @@
       stelvioGroupTabUserProfileCache = {};
       stelvioGroupTabUserProfileMiss = {};
       stelvioGroupTabUserProfileFetchGen = 0;
+      stelvioGroupNoticeDraftByGid = {};
+      stelvioGroupNoticeSavingByGid = {};
       stelvioGroupTabMetric = 'gc';
       var mSelT = document.getElementById('stelvioGroupMetricSelect');
       if (mSelT) mSelT.value = 'gc';
@@ -11710,6 +11717,235 @@
       fetchStelvioPeakPowerRanking();
     }
     window.stelvioOnGroupTabMetricChange = stelvioOnGroupTabMetricChange;
+    function stelvioGroupRankingNoticeMaxLen() {
+      var svc = window.openRidingGroupService;
+      if (svc && svc.RIDING_GROUP_RANKING_NOTICE_MAX_LEN) return Number(svc.RIDING_GROUP_RANKING_NOTICE_MAX_LEN);
+      return STELVIO_GROUP_RANKING_NOTICE_MAX;
+    }
+    function stelvioGroupRankingNoticeDateLabel(ts) {
+      if (!ts) return '';
+      var d = null;
+      if (ts.toDate && typeof ts.toDate === 'function') d = ts.toDate();
+      else if (ts instanceof Date) d = ts;
+      else if (typeof ts.seconds === 'number') d = new Date(ts.seconds * 1000);
+      else if (typeof ts === 'number' && isFinite(ts)) d = new Date(ts);
+      if (!d || isNaN(d.getTime())) return '';
+      var y = d.getFullYear();
+      var m = String(d.getMonth() + 1);
+      if (m.length < 2) m = '0' + m;
+      var day = String(d.getDate());
+      if (day.length < 2) day = '0' + day;
+      return y + '.' + m + '.' + day;
+    }
+    function stelvioIsGroupRankingHostRow(gr, viewerUid) {
+      if (!gr || !viewerUid) return false;
+      return String(gr.createdBy || '') === String(viewerUid);
+    }
+    function stelvioGroupRankingNoticeTextFromRow(gr) {
+      var rn = gr && gr.rankingNotice;
+      if (!rn || rn.text == null) return '';
+      return String(rn.text).trim();
+    }
+    function stelvioGroupPickToggleMarkup(isExp) {
+      var icon = isExp ? '\u2212' : '+';
+      var label = isExp ? '\uc811\uc5b4\ubcf4\uae30' : '\ud3bc\uccd0\ubcf4\uae30';
+      return (
+        '<span class="stelvio-group-pick-toggle" aria-hidden="true">' +
+        '<span class="stelvio-group-pick-toggle-icon">' +
+        icon +
+        '</span>' +
+        '<span class="stelvio-group-pick-toggle-label">' +
+        label +
+        '</span></span>'
+      );
+    }
+    function stelvioGroupTabPatchNoticeSlot(noticeSlotEl, gr, gidi, isExp, viewerUid) {
+      if (!noticeSlotEl) return;
+      if (!isExp) {
+        noticeSlotEl.textContent = '';
+        noticeSlotEl.classList.add('hidden');
+        return;
+      }
+      var gid = gidi != null ? String(gidi).trim() : '';
+      var isHost = stelvioIsGroupRankingHostRow(gr, viewerUid);
+      var savedText = stelvioGroupRankingNoticeTextFromRow(gr);
+      var noticeAt = gr && gr.rankingNotice ? gr.rankingNotice.updatedAt : null;
+      var dateLbl = stelvioGroupRankingNoticeDateLabel(noticeAt);
+      var maxLen = stelvioGroupRankingNoticeMaxLen();
+      if (!isHost && !savedText) {
+        noticeSlotEl.textContent = '';
+        noticeSlotEl.classList.add('hidden');
+        return;
+      }
+      noticeSlotEl.classList.remove('hidden');
+      var root = noticeSlotEl.querySelector('[data-stelvio-group-notice-root="1"]');
+      if (!root) {
+        noticeSlotEl.textContent = '';
+        root = document.createElement('div');
+      }
+      if (!root || root.getAttribute('data-stelvio-group-notice-root') !== '1') {
+        noticeSlotEl.textContent = '';
+        root = document.createElement('div');
+        root.className = 'stelvio-group-notice-block';
+        root.setAttribute('data-stelvio-group-notice-root', '1');
+        root.setAttribute('data-stelvio-group-notice-gid', gid);
+        noticeSlotEl.appendChild(root);
+      }
+      root.setAttribute('data-stelvio-group-notice-gid', gid);
+      if (isHost) {
+        var draft =
+          stelvioGroupNoticeDraftByGid[gid] != null
+            ? String(stelvioGroupNoticeDraftByGid[gid])
+            : savedText;
+        var saving = !!stelvioGroupNoticeSavingByGid[gid];
+        var escDraft = draft
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        var dateHost = dateLbl
+          ? '<p class="stelvio-group-notice-date">작성일 ' + dateLbl + '</p>'
+          : '<p class="stelvio-group-notice-date stelvio-group-notice-date--muted">아직 등록된 공지가 없습니다</p>';
+        root.innerHTML =
+          '<div class="stelvio-group-notice-head"><span class="stelvio-group-notice-title">소모임 공지</span>' +
+          dateHost +
+          '</div>' +
+          '<textarea class="stelvio-group-notice-input" maxlength="' +
+          maxLen +
+          '" rows="4" placeholder="\uc18c\ubaa8\uc784 \uacf5\uc9c0\ub97c \uc785\ub825\ud558\uc138\uc694 (' +
+          maxLen +
+          '\uc790 \uc774\ub0b4)">' +
+          escDraft +
+          '</textarea>' +
+          '<div class="stelvio-group-notice-foot">' +
+          '<span class="stelvio-group-notice-count" data-stelvio-notice-count="' +
+          gid +
+          '">' +
+          String(draft.length) +
+          '/' +
+          maxLen +
+          '</span>' +
+          '<button type="button" class="stelvio-group-notice-save stelvio-purple-btn" data-stelvio-group-notice-save="' +
+          gid +
+          '"' +
+          (saving ? ' disabled' : '') +
+          '>' +
+          (saving ? '\uc800\uc7a5 \uc911\u2026' : '\uacf5\uc9c0 \ub4f1\ub85d') +
+          '</button></div>';
+        var ta = root.querySelector('.stelvio-group-notice-input');
+        var cntEl = root.querySelector('[data-stelvio-notice-count="' + gid + '"]');
+        var saveBtn = root.querySelector('[data-stelvio-group-notice-save="' + gid + '"]');
+        if (ta && !ta._stelvioNoticeBound) {
+          ta._stelvioNoticeBound = true;
+          ta.addEventListener('click', function (evTa) {
+            evTa.stopPropagation();
+          });
+          ta.addEventListener('input', function () {
+            var v = String(ta.value || '');
+            if (v.length > maxLen) {
+              v = v.slice(0, maxLen);
+              ta.value = v;
+            }
+            stelvioGroupNoticeDraftByGid[gid] = v;
+            if (cntEl) cntEl.textContent = String(v.length) + '/' + maxLen;
+          });
+        }
+        if (saveBtn && !saveBtn._stelvioNoticeSaveBound) {
+          saveBtn._stelvioNoticeSaveBound = true;
+          saveBtn.addEventListener('click', function (evSv) {
+            evSv.preventDefault();
+            evSv.stopPropagation();
+            if (typeof window.stelvioSaveGroupRankingNotice === 'function') {
+              window.stelvioSaveGroupRankingNotice(gid);
+            }
+          });
+        }
+        if (ta && ta.value !== draft) ta.value = draft;
+        if (cntEl) cntEl.textContent = String(draft.length) + '/' + maxLen;
+        if (saveBtn) {
+          saveBtn.disabled = saving;
+          saveBtn.textContent = saving ? '\uc800\uc7a5 \uc911\u2026' : '\uacf5\uc9c0 \ub4f1\ub85d';
+        }
+        return;
+      }
+      var escRead = savedText
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+      root.innerHTML =
+        '<div class="stelvio-group-notice-head"><span class="stelvio-group-notice-title">소모임 공지</span>' +
+        (dateLbl ? '<p class="stelvio-group-notice-date">작성일 ' + dateLbl + '</p>' : '') +
+        '</div>' +
+        '<p class="stelvio-group-notice-body">' +
+        escRead +
+        '</p>';
+    }
+    window.stelvioSaveGroupRankingNotice = async function (groupId) {
+      var gid = groupId != null ? String(groupId).trim() : '';
+      if (!gid) return;
+      var uid =
+        (window.currentUser && window.currentUser.id) ||
+        (function () {
+          try {
+            var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            return u && u.id ? u.id : null;
+          } catch (eSn) {
+            return null;
+          }
+        })();
+      if (!uid) {
+        if (typeof showToast === 'function') showToast('로그인이 필요합니다.', 'error');
+        return;
+      }
+      if (!window.firestoreV9) {
+        if (typeof showToast === 'function') showToast('연결을 확인해 주세요.', 'error');
+        return;
+      }
+      var grRow = null;
+      var grList = stelvioLastMyGroupsFireRows || [];
+      for (var giN = 0; giN < grList.length; giN++) {
+        var rN = grList[giN];
+        if (rN && String(rN.groupId || rN.id || '') === gid) {
+          grRow = rN;
+          break;
+        }
+      }
+      if (!stelvioIsGroupRankingHostRow(grRow, uid)) {
+        if (typeof showToast === 'function') showToast('방장만 공지를 등록할 수 있습니다.', 'error');
+        return;
+      }
+      var text =
+        stelvioGroupNoticeDraftByGid[gid] != null
+          ? String(stelvioGroupNoticeDraftByGid[gid])
+          : stelvioGroupRankingNoticeTextFromRow(grRow);
+      var maxN = stelvioGroupRankingNoticeMaxLen();
+      if (text.length > maxN) text = text.slice(0, maxN);
+      stelvioGroupNoticeSavingByGid[gid] = true;
+      var bel = document.getElementById('stelvioRankingListBody');
+      if (bel && stelvioIsGroupDistanceRanking()) stelvioRenderGroupTabRankingList(bel);
+      try {
+        var svc = window.openRidingGroupService;
+        if (!svc || typeof svc.updateRidingGroupRankingNotice !== 'function') {
+          await import('./assets/js/openRiding/openRidingGroupService.js');
+          svc = window.openRidingGroupService;
+        }
+        if (!svc || typeof svc.updateRidingGroupRankingNotice !== 'function') {
+          throw new Error('공지 저장 기능을 불러올 수 없습니다.');
+        }
+        await svc.updateRidingGroupRankingNotice(window.firestoreV9, uid, gid, text);
+        delete stelvioGroupNoticeDraftByGid[gid];
+        if (typeof showToast === 'function') showToast('공지가 등록되었습니다.', 'success');
+      } catch (eNt) {
+        console.warn('[StelvioRanking] 그룹 공지 저장 실패:', eNt);
+        if (typeof showToast === 'function') {
+          showToast((eNt && eNt.message) || '공지 저장에 실패했습니다.', 'error');
+        }
+      } finally {
+        delete stelvioGroupNoticeSavingByGid[gid];
+        var bel2 = document.getElementById('stelvioRankingListBody');
+        if (bel2 && stelvioIsGroupDistanceRanking()) stelvioRenderGroupTabRankingList(bel2);
+      }
+    };
     function stelvioRenderGroupTabRankingList(bodyEl) {
       if (!bodyEl) return;
       if (!stelvioRankingByCategory) {
@@ -12156,14 +12392,28 @@
             '</span>' +
             '<span class="stelvio-rank-name-text"></span>' +
             '</span>' +
-            '<span class="stelvio-rank-wkg stelvio-group-pick-meta"></span>';
+            '<span class="stelvio-group-pick-actions">' +
+            '<span class="stelvio-rank-wkg stelvio-group-pick-meta"></span>' +
+            stelvioGroupPickToggleMarkup(false) +
+            '</span>';
+          var noticeSlotNew = document.createElement('div');
+          noticeSlotNew.className = 'stelvio-group-notice-slot hidden';
           var slotNew = document.createElement('div');
           slotNew.className = 'stelvio-group-members-slot';
           wrap.appendChild(btnNew);
+          wrap.appendChild(noticeSlotNew);
           wrap.appendChild(slotNew);
           listRoot.appendChild(wrap);
         }
         var btn = wrap.querySelector('button[data-stelvio-group-pick="1"]');
+        var noticeSlot = wrap.querySelector('.stelvio-group-notice-slot');
+        if (!noticeSlot) {
+          noticeSlot = document.createElement('div');
+          noticeSlot.className = 'stelvio-group-notice-slot hidden';
+          var slotRef = wrap.querySelector('.stelvio-group-members-slot');
+          if (slotRef) wrap.insertBefore(noticeSlot, slotRef);
+          else wrap.appendChild(noticeSlot);
+        }
         var slot = wrap.querySelector('.stelvio-group-members-slot');
         if (btn) {
           btn.className = rowClsG;
@@ -12172,9 +12422,12 @@
           if (nameEl) nameEl.innerHTML = nameG;
           var metaEl = btn.querySelector('.stelvio-group-pick-meta');
           if (metaEl) metaEl.textContent = String(mcShown) + '명';
+          var toggleEl = btn.querySelector('.stelvio-group-pick-toggle');
+          if (toggleEl) toggleEl.outerHTML = stelvioGroupPickToggleMarkup(isExp);
           var gImg = btn.querySelector('.stelvio-rank-avatar-img');
           stelvioRankImgSetSrcIfChanged(gImg, ph);
         }
+        stelvioGroupTabPatchNoticeSlot(noticeSlot, gr, gidi, isExp, uidV);
         stelvioGroupTabPatchMemberSlot(slot, gidi, rankMedalSrc);
         listRoot.appendChild(wrap);
       }
