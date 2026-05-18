@@ -10297,6 +10297,79 @@
       }
       return '<span class="stelvio-rank-change stelvio-rank-change--flat" title="전날 ' + prevN + '위">(-)</span>';
     }
+    /** 그룹 탭 멤버: Supremo(전체) 순위 */
+    function stelvioGroupTabSupremoOverallRank(userId) {
+      if (userId == null || userId === '') return null;
+      var uid = String(userId);
+      var arr = (stelvioRankingByCategory && stelvioRankingByCategory['Supremo']) || [];
+      for (var si = 0; si < arr.length; si++) {
+        if (!arr[si] || String(arr[si].userId) !== uid) continue;
+        if (arr[si].rank != null && !isNaN(Number(arr[si].rank))) return Number(arr[si].rank);
+        return si + 1;
+      }
+      return null;
+    }
+    /** 그룹 탭용 등락(괄호 없이 / 로 이어 붙일 때) */
+    function stelvioRankChangeInlineSpanHtml(rc, prevR) {
+      if (rc == null || prevR == null) return '';
+      var rcN = Number(rc);
+      var prevN = Math.floor(Number(prevR));
+      if (!isFinite(rcN) || !isFinite(prevN) || prevN < 1) return '';
+      var cls = 'stelvio-rank-change stelvio-rank-change--inline ';
+      var text = '';
+      if (rcN > 0) {
+        cls += 'stelvio-rank-change--up';
+        text = '↑' + rcN;
+      } else if (rcN < 0) {
+        cls += 'stelvio-rank-change--down';
+        text = '↓' + Math.abs(rcN);
+      } else {
+        cls += 'stelvio-rank-change--flat';
+        text = '-';
+      }
+      return '<span class="' + cls + '" title="전날 ' + prevN + '위">' + text + '</span>';
+    }
+    /** 그룹 탭 멤버 이름 옆: (전체순위/등락) — 예: (128위/↑3) */
+    function stelvioGroupTabMemberNameRankMetaHtml(itRow) {
+      if (!itRow || itRow.userId == null) return '';
+      var uid = String(itRow.userId);
+      var overallRank = stelvioGroupTabSupremoOverallRank(uid);
+      var supRow =
+        typeof stelvioFindRankingRowForUser === 'function'
+          ? stelvioFindRankingRowForUser('Supremo', uid)
+          : null;
+      var src = supRow || itRow;
+      var rc = src.rankChange;
+      var prevR = src.previousBoardRank;
+      var overallPart =
+        overallRank != null && isFinite(overallRank) && overallRank >= 1
+          ? '<span class="stelvio-rank-overall" title="전체 순위(Supremo)">' + overallRank + '위</span>'
+          : '';
+      var changeInline = stelvioRankChangeInlineSpanHtml(rc, prevR);
+      var changeOnly = stelvioServerRankChangeBadgeHtml(rc, prevR);
+      if (!overallPart && !changeOnly) return '';
+      if (overallPart && changeInline) {
+        var prevNT =
+          prevR != null && isFinite(Number(prevR)) ? Math.floor(Number(prevR)) : '';
+        return (
+          '<span class="stelvio-rank-name-meta" title="전체 순위' +
+          (prevNT ? ', 전일 ' + prevNT + '위 대비' : '') +
+          '">(' +
+          overallPart +
+          '<span class="stelvio-rank-meta-sep" aria-hidden="true">/</span>' +
+          changeInline +
+          ')</span>'
+        );
+      }
+      if (overallPart) {
+        return (
+          '<span class="stelvio-rank-name-meta" title="전체 순위(Supremo)">(' +
+          overallPart +
+          ')</span>'
+        );
+      }
+      return changeOnly;
+    }
     function stelvioRankChangeFromRow(row) {
       if (!row || row.rankChange == null || row.previousBoardRank == null) return null;
       var rcN = Number(row.rankChange);
@@ -11785,6 +11858,11 @@
           /* 카테고리 별 랭킹 데이터 우선, 없으면 Supremo → members 문서 프로필 순으로 fallback */
           var rk = poolUid[uMem] || catRawByUid[uMem] || supE;
           var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, gcScore: 0 };
+          if (supE) {
+            if (supE.rank != null) mergedItem.rank = supE.rank;
+            if (supE.rankChange != null) mergedItem.rankChange = supE.rankChange;
+            if (supE.previousBoardRank != null) mergedItem.previousBoardRank = supE.previousBoardRank;
+          }
           var _tabMemName = stelvioResolveGroupTabMemberName(mem, mergedItem, uMem);
           if (_tabMemName) mergedItem.name = _tabMemName;
           var _mapUrl =
@@ -11863,7 +11941,7 @@
             crownH =
               '<span class="stelvio-rank-crown"><img alt="" width="24" height="24" decoding="async" fetchpriority="low" /></span>';
           }
-          var rankChG = stelvioServerRankChangeBadgeHtml(itRow.rankChange, itRow.previousBoardRank);
+          var rankMetaG = stelvioGroupTabMemberNameRankMetaHtml(itRow);
           return (
             crownH +
             '<span class="stelvio-rank-pos">' +
@@ -11875,7 +11953,7 @@
             rkRaw +
             '">' +
             nmRow +
-            rankChG +
+            rankMetaG +
             '</span>' +
             bdge +
             '<span class="stelvio-rank-star-slot">' +
@@ -11955,8 +12033,8 @@
           stelvioRankImgSetSrcIfChanged(nw.querySelector('.stelvio-rank-avatar-img'), profKey);
           var nt = nw.querySelector('.stelvio-rank-name-text');
           if (nt) {
-            var rankChNm = stelvioServerRankChangeBadgeHtml(it.rankChange, it.previousBoardRank);
-            nt.innerHTML = nm + rankChNm;
+            var rankMetaNm = stelvioGroupTabMemberNameRankMetaHtml(it);
+            nt.innerHTML = nm + rankMetaNm;
             nt.setAttribute('title', rawNm);
           }
           var oldBadges = nw.querySelectorAll('.ranking-private-badge, .stelvio-rank-owner-badge');
