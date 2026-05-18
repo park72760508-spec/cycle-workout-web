@@ -6647,17 +6647,43 @@ exports.getPeakPowerRanking = onRequest(
       return res.status(200).json(out);
     }
 
-    /** GC: 헵타곤 7축 환산 합 — `heptagon_cohort_ranks` 일일 스냅샷(22:30 `scheduledHeptagonCohortRanks` 갱신) */
+    /** GC: 헵타곤 7축 환산 합 — `heptagon_cohort_ranks` 일일 스냅샷(23:30 `scheduledHeptagonCohortRanks`) + 라이브 보강 */
     if (durationType === "gc") {
       const monthKey = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
       const fg = gender === "M" || gender === "F" ? gender : "all";
       let byCategory;
       let entries;
       let snap;
+      const heptagonDeps = {
+        getPeakPowerRankingEntries,
+        getLeagueCategory,
+        getRolling28DaysRangeSeoul,
+        admin,
+        readRankingAggregatePayloadIfFresh,
+        buildPeakPowerAllDurationsForRangeAllGendersOnePass,
+      };
       try {
         snap = await buildStelvioGcRankingPayload(db, monthKey, fg);
+        try {
+          const liveGc = await heptagonCohortRanks.buildLiveGcRankingPayload(db, fg, heptagonDeps);
+          const snapSupN = ((snap.byCategory && snap.byCategory.Supremo) || []).length;
+          const mergedSnap = heptagonCohortRanks.mergeGcRankingSnapshotWithLive(snap, liveGc, fg);
+          if (mergedSnap.gcMergedLiveCount > 0) {
+            console.log("[getPeakPowerRanking gc] merged live supplement", {
+              added: mergedSnap.gcMergedLiveCount,
+              snapN: snapSupN,
+              liveN: ((liveGc.byCategory && liveGc.byCategory.Supremo) || []).length,
+              peakSource: mergedSnap.peakSource,
+            });
+          }
+          snap = mergedSnap;
+        } catch (eGcLive) {
+          console.warn("[getPeakPowerRanking gc live merge]", eGcLive && eGcLive.message ? eGcLive.message : eGcLive);
+        }
         byCategory = snap.byCategory;
         entries = snap.entries;
+        await hydrateRankingBoardProfileImages(db, byCategory);
+        await hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries);
       } catch (eGc) {
         console.warn("[getPeakPowerRanking gc]", eGc && eGc.message ? eGc.message : eGc);
         return res.status(500).json({ success: false, error: "gc_ranking_failed" });
@@ -6675,6 +6701,7 @@ exports.getPeakPowerRanking = onRequest(
         gcMonthKey: monthKey,
         gcSnapshotAsOf: snap.snapshotAsOfSeoul || null,
         gcSnapshotDaily: true,
+        gcMergedLive: snap.gcMergedLive === true,
       };
       if (uid) {
         let current = null;

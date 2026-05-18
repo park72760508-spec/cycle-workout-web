@@ -107,16 +107,51 @@ function rankDisplayForChart(n) {
   return 3;
 }
 
+const HEPTAGON_AGE_CATEGORIES = ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
+
 /**
- * 단일 duration의 byCategory + 사용자 profile 부문으로, 화면과 동일한 "표시 순위" 1..
+ * 피크 byCategory에서 userId 행 탐색 — Supremo 우선, 없으면 연령·선수부 배열(대시보드 StelvioOctagonRanksCard [4]와 동일).
+ */
+function findUserPeakRowInByCategory(byCategory, userId) {
+  if (!byCategory || userId == null) return null;
+  const uid = String(userId);
+  const supremo = byCategory.Supremo || [];
+  const inSup = supremo.find((e) => e && String(e.userId) === uid);
+  if (inSup) return { entry: inSup, inSupremo: true };
+  for (let i = 0; i < HEPTAGON_AGE_CATEGORIES.length; i++) {
+    const cat = HEPTAGON_AGE_CATEGORIES[i];
+    const arr = byCategory[cat] || [];
+    const hit = arr.find((e) => e && String(e.userId) === uid);
+    if (hit) return { entry: hit, inSupremo: false };
+  }
+  return null;
+}
+
+/**
+ * 단일 duration의 byCategory + 사용자 profile 부문으로, 화면·대시보드와 동일한 "표시 순위" 1..
+ * Supremo: 배열 내 rank → W/kg 추정(rankInCategoryByValue) → 부문 배열 entry.rank 순.
  */
 function computeDisplayRankForUser(byCategory, userId, filterCategory, userAgeCategory) {
+  const found = findUserPeakRowInByCategory(byCategory, userId);
+  if (!found) return { rank: null, n: 0 };
+
+  const cu = found.entry;
   const supremo = byCategory.Supremo || [];
-  const cu = supremo.find((e) => e && e.userId === userId);
-  if (!cu) return { rank: null, n: 0 };
+  const nSup = cohortSizeForCategory(byCategory, "Supremo");
 
   if (filterCategory === "Supremo") {
-    return { rank: safeFloorRank(cu.rank), n: cohortSizeForCategory(byCategory, "Supremo") };
+    if (found.inSupremo) {
+      const r0 = safeFloorRank(cu.rank);
+      if (r0 != null) return { rank: r0, n: nSup };
+    }
+    const myVal = Number(cu.wkg);
+    if (isFinite(myVal) && myVal > 0 && supremo.length > 0) {
+      const est = rankInCategoryByValue(supremo, myVal);
+      if (est != null) return { rank: est, n: nSup };
+    }
+    const r1 = safeFloorRank(cu.rank);
+    if (r1 != null) return { rank: r1, n: nSup };
+    return { rank: null, n: nSup };
   }
   if (userAgeCategory && filterCategory === userAgeCategory) {
     const heroArr = byCategory[filterCategory] || [];
@@ -398,12 +433,18 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
       for (const d of HEPTAGON_DURATIONS) {
         const { byCategory } = cache[filterGender][d];
         const dr = computeDisplayRankForUser(byCategory, userId, "Supremo", meta.ageCategory);
-        if (dr == null || dr.rank == null || !isFinite(Number(dr.rank))) {
+        const nAxis = Number(dr && dr.n) | 0;
+        if (!dr || nAxis < 1) {
           ok = false;
           break;
         }
-        ranks.push(Number(dr.rank));
-        ns.push(Number(dr.n) | 0);
+        let rankUse = dr.rank;
+        if (rankUse == null || !isFinite(Number(rankUse))) {
+          /* 대시보드 computePTotalAndTier: null rank → effectiveRankForAverage = n(꼴찌) */
+          rankUse = nAxis;
+        }
+        ranks.push(Number(rankUse));
+        ns.push(nAxis);
       }
       if (!ok) continue;
       const tier = computePTotalAndTierHeptagon(ranks, ns);
@@ -573,12 +614,17 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
       for (const d of HEPTAGON_DURATIONS) {
         const { byCategory } = cache[filterG][d];
         const dr = computeDisplayRankForUser(byCategory, userId, "Supremo", meta.ageCategory);
-        if (dr == null || dr.rank == null || !isFinite(Number(dr.rank))) {
+        const nAxis = Number(dr && dr.n) | 0;
+        if (!dr || nAxis < 1) {
           ok = false;
           break;
         }
-        ranks.push(Number(dr.rank));
-        ns.push(Number(dr.n) | 0);
+        let rankUse = dr.rank;
+        if (rankUse == null || !isFinite(Number(rankUse))) {
+          rankUse = nAxis;
+        }
+        ranks.push(Number(rankUse));
+        ns.push(nAxis);
       }
       if (!ok) continue;
       const tier = computePTotalAndTierHeptagon(ranks, ns);
@@ -650,9 +696,75 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
   return { byCategory, entries, startStr, endStr, peakSource };
 }
 
+/**
+ * GC 랭킹보드: 일일 스냅샷에 없고 라이브 집계에만 있는 사용자를 병합(대시보드 헵타곤 목록·삽입과 정합).
+ * @param {object} snapPayload buildStelvioGcRankingPayload 결과
+ * @param {object} livePayload buildLiveGcRankingPayload 결과
+ * @param {string} filterGender
+ */
+function mergeGcRankingSnapshotWithLive(snapPayload, livePayload, filterGender) {
+  if (!snapPayload || !livePayload || !livePayload.byCategory) {
+    return snapPayload;
+  }
+  const byCategory = {
+    Supremo: [],
+    Assoluto: [],
+    Bianco: [],
+    Rosa: [],
+    Infinito: [],
+    Leggenda: [],
+  };
+  let added = 0;
+  for (let ci = 0; ci < HEPTAGON_CATEGORIES.length; ci++) {
+    const cat = HEPTAGON_CATEGORIES[ci];
+    const snapRows = (snapPayload.byCategory && snapPayload.byCategory[cat]) || [];
+    const liveRows = livePayload.byCategory[cat] || [];
+    const idSet = new Set();
+    const merged = [];
+    for (let si = 0; si < snapRows.length; si++) {
+      const r = snapRows[si];
+      if (!r || r.userId == null) continue;
+      const uid = String(r.userId);
+      if (idSet.has(uid)) continue;
+      idSet.add(uid);
+      merged.push(Object.assign({}, r));
+    }
+    for (let li = 0; li < liveRows.length; li++) {
+      const lr = liveRows[li];
+      if (!lr || lr.userId == null) continue;
+      const uid2 = String(lr.userId);
+      if (idSet.has(uid2)) continue;
+      idSet.add(uid2);
+      merged.push(Object.assign({}, lr));
+      added += 1;
+    }
+    merged.sort((a, b) => {
+      const sa = a.gcScore != null && isFinite(Number(a.gcScore)) ? Number(a.gcScore) : 0;
+      const sb = b.gcScore != null && isFinite(Number(b.gcScore)) ? Number(b.gcScore) : 0;
+      if (sb !== sa) return sb - sa;
+      return String(a.userId).localeCompare(String(b.userId));
+    });
+    for (let ri = 0; ri < merged.length; ri++) {
+      merged[ri].rank = ri + 1;
+    }
+    byCategory[cat] = merged;
+  }
+  return {
+    byCategory,
+    entries: (byCategory.Supremo || []).slice(),
+    snapshotRangeStart: snapPayload.snapshotRangeStart || livePayload.startStr || "",
+    snapshotRangeEnd: snapPayload.snapshotRangeEnd || livePayload.endStr || "",
+    snapshotAsOfSeoul: snapPayload.snapshotAsOfSeoul || "",
+    gcMergedLiveCount: added,
+    gcMergedLive: added > 0,
+    peakSource: livePayload.peakSource || null,
+  };
+}
+
 module.exports = {
   runRebuildHeptagonCohortRanks,
   buildLiveGcRankingPayload,
+  mergeGcRankingSnapshotWithLive,
   getMonthKeyKstNow,
   HEPTAGON_COHORT_COL,
   HEPTAGON_GENDERS,
