@@ -7344,6 +7344,10 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen button.stelvio-group-pick-row--open {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.1) 0%, rgba(102, 126, 234, 0.035) 100%);
 }
+#stelvioRankingScreen .stelvio-group-pick-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 #stelvioRankingScreen .stelvio-group-pick-main .stelvio-rank-name-text {
   font-weight: 700;
   color: #1f2937;
@@ -7395,9 +7399,120 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen .stelvio-group-member-row .stelvio-rank-name-text .stelvio-rank-change--inline {
   margin-left: 0;
 }
+#stelvioRankingScreen .stelvio-group-pick-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
 #stelvioRankingScreen .stelvio-group-pick-meta {
   font-size: 0.9em;
   color: #64748b;
+  flex-shrink: 0;
+}
+#stelvioRankingScreen .stelvio-group-pick-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #7c3aed;
+  white-space: nowrap;
+}
+#stelvioRankingScreen .stelvio-group-pick-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35em;
+  min-width: 1.35em;
+  font-size: 1.05em;
+  line-height: 1;
+  font-weight: 800;
+}
+#stelvioRankingScreen button.stelvio-group-pick-row--open .stelvio-group-pick-toggle {
+  color: #5b21b6;
+}
+#stelvioRankingScreen .stelvio-group-notice-slot.hidden {
+  display: none;
+}
+#stelvioRankingScreen .stelvio-group-notice-block {
+  margin: 0 -4px 6px -4px;
+  padding: 10px 10px 10px 12px;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  border-radius: 0 10px 10px 8px;
+  box-sizing: border-box;
+}
+#stelvioRankingScreen .stelvio-group-notice-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin-bottom: 8px;
+}
+#stelvioRankingScreen .stelvio-group-notice-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #92400e;
+}
+#stelvioRankingScreen .stelvio-group-notice-date {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b45309;
+}
+#stelvioRankingScreen .stelvio-group-notice-date--muted {
+  color: #a8a29e;
+  font-weight: 500;
+}
+#stelvioRankingScreen .stelvio-group-notice-body {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #44403c;
+  word-break: break-word;
+}
+#stelvioRankingScreen .stelvio-group-notice-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #1f2937;
+  background: #fff;
+  resize: vertical;
+  min-height: 72px;
+}
+#stelvioRankingScreen .stelvio-group-notice-input:focus {
+  outline: 2px solid rgba(124, 58, 237, 0.35);
+  border-color: #a78bfa;
+}
+#stelvioRankingScreen .stelvio-group-notice-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#stelvioRankingScreen .stelvio-group-notice-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #78716c;
+}
+#stelvioRankingScreen .stelvio-group-notice-save {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: 8px;
+  min-height: 34px;
 }
 /* 그룹 탭 소모임 줄: 프로필 썸네일 크기·테두리 = GC 순위표 아바타 버튼(30×30·보라 링) */
 #stelvioRankingScreen .stelvio-group-list-avatar-slot {
