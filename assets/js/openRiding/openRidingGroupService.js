@@ -27,6 +27,9 @@ import {
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
 
+/** 랭킹보드 그룹 탭 — 방장 메모식 공지(글자 수) */
+export const RIDING_GROUP_RANKING_NOTICE_MAX_LEN = 500;
+
 /** 승인된 그룹 가입 신청 큐 — 문서 ID = 신청자 UID */
 export const RIDING_GROUP_JOIN_REQUESTS_SUB = 'joinRequests';
 
@@ -258,6 +261,15 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
         emit();
         return;
       }
+      var rnRaw = gd.rankingNotice;
+      var rankingNotice = null;
+      if (rnRaw && typeof rnRaw === 'object') {
+        rankingNotice = {
+          text: trimLen(rnRaw.text, RIDING_GROUP_RANKING_NOTICE_MAX_LEN),
+          updatedAt: rnRaw.updatedAt != null ? rnRaw.updatedAt : null,
+          updatedBy: rnRaw.updatedBy != null ? String(rnRaw.updatedBy) : ''
+        };
+      }
       metaByGid[gid] = {
         id: gid,
         groupId: gid,
@@ -266,7 +278,8 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
         memberCount: gd.memberCount != null ? Number(gd.memberCount) : null,
         createdBy: gd.createdBy != null ? String(gd.createdBy) : '',
         regions: gd.regions != null ? gd.regions : null,
-        isPublic: gd.isPublic !== false
+        isPublic: gd.isPublic !== false,
+        rankingNotice: rankingNotice
       };
       emit();
     });
@@ -481,6 +494,34 @@ export async function updateRidingGroupByOwner(db, uid, groupId, payload) {
     isPublic,
     joinPassword: isPublic ? '' : joinPassword,
     photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
+    updatedAt: serverTimestamp()
+  });
+}
+
+/**
+ * 랭킹보드 그룹 탭 — 방장 공지(500자 이내 메모)
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} uid
+ * @param {string} groupId
+ * @param {string} text
+ */
+export async function updateRidingGroupRankingNotice(db, uid, groupId, text) {
+  if (!db || !uid || !groupId) throw new Error('요청이 올바르지 않습니다.');
+  var ref = doc(db, RIDING_GROUP_COLLECTION, String(groupId).trim());
+  var snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
+  var d = snap.data() || {};
+  if (String(d.createdBy || '') !== String(uid)) throw new Error('방장만 공지를 등록할 수 있습니다.');
+  if (String(d.status || '') !== GROUP_STATUS.APPROVED) {
+    throw new Error('승인된 소모임만 공지를 등록할 수 있습니다.');
+  }
+  var body = trimLen(text, RIDING_GROUP_RANKING_NOTICE_MAX_LEN);
+  await updateDoc(ref, {
+    rankingNotice: {
+      text: body,
+      updatedAt: serverTimestamp(),
+      updatedBy: String(uid).trim()
+    },
     updatedAt: serverTimestamp()
   });
 }
@@ -872,6 +913,8 @@ if (typeof window !== 'undefined') {
     subscribeRidingGroupMyJoinRequest,
     createRidingGroupPending,
     updateRidingGroupByOwner,
+    updateRidingGroupRankingNotice,
+    RIDING_GROUP_RANKING_NOTICE_MAX_LEN,
     setRidingGroupStatusByAdmin,
     joinRidingGroup,
     approveRidingGroupJoinRequest,
