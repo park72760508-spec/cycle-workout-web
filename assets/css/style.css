@@ -5882,7 +5882,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   position: relative;
 }
 .stelvio-ranking-body {
-  padding: 0 16px 16px;
+  padding: 0 4px 12px;
 }
 
 /* ① 고정 필터 영역 — sticky + 가로 스크롤 자식: top=0 경계 합성 시 1px 잔상 완화 */
@@ -5892,9 +5892,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   z-index: 10;
   background: #fff;
   padding: 12px 0 16px;
-  margin: 0 -16px 12px -16px;
-  padding-left: 16px;
-  padding-right: 16px;
+  margin: 0 -4px 12px -4px;
+  padding-left: 4px;
+  padding-right: 4px;
   border-bottom: 1px solid #e5e7eb;
   touch-action: pan-y;
   background-clip: padding-box;
@@ -7143,7 +7143,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 0 2px 12px;
+  padding: 0 0 12px;
 }
 .stelvio-category-card {
   margin-bottom: 16px;
@@ -7190,9 +7190,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 18px;
+  gap: 10px 14px;
   margin: 6px 0 10px;
-  padding: 8px 12px;
+  padding: 6px 8px;
   background: #f8fafc;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
@@ -7230,14 +7230,14 @@ body:has(#trainingDetailModal:not(.hidden)) {
   text-shadow: 0 0 1px rgba(192, 132, 252, 0.22);
 }
 #stelvioRankingScreen .stelvio-category-body {
-  padding: 4px 10px 6px;
+  padding: 4px 4px 6px;
 }
 #stelvioRankingScreen .stelvio-rank-row {
   padding: 3px 0;
 }
 #stelvioRankingScreen .stelvio-rank-row.stelvio-rank-current {
-  margin: 1px -4px;
-  padding: 3px 4px;
+  margin: 1px -2px;
+  padding: 3px 2px;
 }
 #stelvioRankingScreen .stelvio-rank-row.stelvio-rank-my-supremo {
   margin-top: 4px !important;
@@ -7895,6 +7895,17 @@ button.stelvio-rank-avatar-btn:focus-visible {
   background: #f9fafb;
   border: 2px solid #e5e7eb;
   box-shadow: none;
+  padding: 12px 8px;
+}
+#stelvioRankingScreen .stelvio-hero-card {
+  padding: 12px 8px;
+}
+#stelvioRankingScreen .stelvio-ranking-refresh-hint {
+  padding: 8px 6px;
+}
+#stelvioRankingScreen .stelvio-group-metric-filter {
+  padding-left: 4px;
+  padding-right: 4px;
 }
 #stelvioRankingScreen .stelvio-ranking-spinner {
   border-top-color: #00d4aa;
@@ -7905,6 +7916,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 #stelvioRankingScreen .stelvio-category-header {
+  padding: 8px 6px;
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
   flex-wrap: wrap;
@@ -8094,8 +8106,8 @@ tr.stelvio-dashboard-current-grade td:last-child {
   max-height: 100dvh !important;
   padding-top: max(20px, env(safe-area-inset-top, 0px)) !important;
   padding-bottom: 0 !important;
-  padding-left: 20px !important;
-  padding-right: 20px !important;
+  padding-left: max(4px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(4px, env(safe-area-inset-right, 0px)) !important;
   box-sizing: border-box !important;
   /* 세로 제스처를 자식 스크롤로 일관되게 넘김 (pinch-zoom 은 목록에서 의도치 않은 확대 유발 가능) */
   touch-action: pan-y;
