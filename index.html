@@ -8686,8 +8686,9 @@
     }
 
     function stelvioResolveRankingFavoritesOwnerUid() {
-      var uid = stelvioRankingCurrentUserId;
-      if (!uid && window.currentUser) {
+      /* 저장 키는 로그인 사용자 기준만 사용(stelvioRankingCurrentUserId 제외 — API·캐시 타이밍과 어긋나 새 항목만 유실됨) */
+      var uid = null;
+      if (window.currentUser) {
         uid = window.currentUser.id != null ? window.currentUser.id : window.currentUser.uid;
       }
       if (!uid) {
@@ -8699,7 +8700,36 @@
       if (!uid && window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
         uid = window.auth.currentUser.uid;
       }
-      return uid ? String(uid) : '';
+      if (!uid && window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) {
+        uid = window.authV9.currentUser.uid;
+      }
+      return uid ? String(uid).trim() : '';
+    }
+    function stelvioLoadRankingFavoriteIdsFromLocalStorage(ownerUid) {
+      var merged = [];
+      var seen = {};
+      function mergeIds(ids) {
+        (ids || []).forEach(function (id) {
+          var s = String(id);
+          if (!s || seen[s]) return;
+          seen[s] = true;
+          merged.push(s);
+        });
+      }
+      var keysToTry = [];
+      if (ownerUid) {
+        keysToTry.push(stelvioRankingFavoritesStorageKeyForUid(ownerUid));
+        keysToTry.push(stelvioRankingFavoritesLegacyStorageKeyForUid(ownerUid));
+      }
+      keysToTry.push(stelvioRankingFavoritesStorageKeyForUid(''));
+      keysToTry.push(stelvioRankingFavoritesLegacyStorageKeyForUid(''));
+      var iKt;
+      for (iKt = 0; iKt < keysToTry.length; iKt++) {
+        var kTry = keysToTry[iKt];
+        if (!kTry) continue;
+        mergeIds(stelvioRankingFavoritesParseLsArray(localStorage.getItem(kTry)));
+      }
+      return merged;
     }
     function stelvioRankingFavoritesStorageKeyForUid(ownerUid) {
       return stelvioRankingFavoritesLsPrefix + (ownerUid || '_guest');
@@ -8728,6 +8758,8 @@
         if (ownerUid) {
           try {
             localStorage.removeItem(stelvioRankingFavoritesLegacyStorageKeyForUid(ownerUid));
+            localStorage.removeItem(stelvioRankingFavoritesStorageKeyForUid(''));
+            localStorage.removeItem(stelvioRankingFavoritesLegacyStorageKeyForUid(''));
           } catch (eRmLeg) {}
         }
       };
@@ -8749,36 +8781,27 @@
         return false;
       }
     }
-    function stelvioRefreshRankingFavoriteSetFromStorage() {
+  /**
+   * localStorage → 인메모리 Set.
+   * @param {{ replaceMemory?: boolean }} opts replaceMemory=true: 계정 전환 시 LS만 반영. 기본은 메모리∪LS(저장 직후 refresh가 새 항목을 지우는 것 방지).
+   */
+    function stelvioRefreshRankingFavoriteSetFromStorage(opts) {
+      opts = opts || {};
       try {
         var ownerUid = stelvioResolveRankingFavoritesOwnerUid();
-        var merged = [];
-        var seen = {};
-        function mergeIds(ids) {
-          (ids || []).forEach(function (id) {
-            var s = String(id);
-            if (!s || seen[s]) return;
-            seen[s] = true;
-            merged.push(s);
+        var fromLs = stelvioLoadRankingFavoriteIdsFromLocalStorage(ownerUid);
+        if (opts.replaceMemory === true) {
+          stelvioRankingFavoriteUserSet = new Set(fromLs);
+        } else {
+          var union = new Set(stelvioRankingFavoriteUserSet);
+          fromLs.forEach(function (id) {
+            union.add(id);
           });
+          stelvioRankingFavoriteUserSet = union;
         }
-        var keysToTry = [];
-        if (ownerUid) {
-          keysToTry.push(stelvioRankingFavoritesStorageKeyForUid(ownerUid));
-          keysToTry.push(stelvioRankingFavoritesLegacyStorageKeyForUid(ownerUid));
-        }
-        keysToTry.push(stelvioRankingFavoritesStorageKeyForUid(''));
-        keysToTry.push(stelvioRankingFavoritesLegacyStorageKeyForUid(''));
-        var iKt;
-        for (iKt = 0; iKt < keysToTry.length; iKt++) {
-          var kTry = keysToTry[iKt];
-          if (!kTry) continue;
-          mergeIds(stelvioRankingFavoritesParseLsArray(localStorage.getItem(kTry)));
-        }
-        stelvioRankingFavoriteUserSet = new Set(merged);
-        if (merged.length) stelvioPersistRankingFavoritesToLocalStorage();
+        if (stelvioRankingFavoriteUserSet.size) stelvioPersistRankingFavoritesToLocalStorage();
       } catch (e2) {
-        stelvioRankingFavoriteUserSet = new Set();
+        if (opts.replaceMemory === true) stelvioRankingFavoriteUserSet = new Set();
       }
     }
     /** Supremo(전체): API item.rank = 전체 순위. 그 외 카테고리: item.rank는 전체 기준으로 박혀 있으므로 부문 순위는 전체 목록 기준 재계산 */
@@ -8976,13 +8999,34 @@
       else stelvioRankingFavoriteUserSet.add(s);
       /* 인메모리 Set이 이미 정확하게 갱신된 상태이므로 localStorage에 저장만 하고
          다시 읽어오지 않는다. 읽어오면 저장 실패 시 방금 추가한 항목이 사라지는 버그 발생 */
-      stelvioPersistRankingFavoritesToLocalStorage();
+      if (!stelvioPersistRankingFavoritesToLocalStorage()) {
+        if (typeof stelvioAdminWarn === 'function') {
+          stelvioAdminWarn('[StelvioRanking] 관심 목록 localStorage 저장 실패 — 용량 부족 가능');
+        }
+      }
       if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
     }
     window.stelvioToggleRankingFavorite = stelvioToggleRankingFavorite;
     window.stelvioRefreshRankingFavoriteSetFromStorage = stelvioRefreshRankingFavoriteSetFromStorage;
+    window.stelvioPersistRankingFavoritesToLocalStorage = stelvioPersistRankingFavoritesToLocalStorage;
+    if (!window._stelvioRankingFavoritesPagehideBound) {
+      window._stelvioRankingFavoritesPagehideBound = true;
+      window.addEventListener('pagehide', function () {
+        if (stelvioRankingFavoriteUserSet && stelvioRankingFavoriteUserSet.size) {
+          stelvioPersistRankingFavoritesToLocalStorage();
+        }
+      });
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden' && stelvioRankingFavoriteUserSet && stelvioRankingFavoriteUserSet.size) {
+          stelvioPersistRankingFavoritesToLocalStorage();
+        }
+      });
+    }
     document.addEventListener('stelvio-auth-ready', function () {
       stelvioRefreshRankingFavoriteSetFromStorage();
+      setTimeout(function () {
+        stelvioRefreshRankingFavoriteSetFromStorage();
+      }, 2000);
       stelvioRefreshRankingFriendSetFromFirestore().then(function () {
         if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
       });
@@ -11150,7 +11194,11 @@
       /* userId가 변경된 경우(첫 로드 또는 계정 전환)에만 localStorage에서 즐겨찾기를 다시 읽는다.
          같은 사용자의 백그라운드 재검증에서는 인메모리 Set을 덮어쓰지 않아 토글 결과를 보존한다 */
       if (_prevRankingUid !== uid) {
-        stelvioRefreshRankingFavoriteSetFromStorage();
+        var accountSwitch =
+          _prevRankingUid != null &&
+          uid != null &&
+          String(_prevRankingUid) !== String(uid);
+        stelvioRefreshRankingFavoriteSetFromStorage({ replaceMemory: accountSwitch });
       }
       stelvioMyRankSupremo = data.myRankSupremo || null;
       stelvioCurrentUser = data.currentUser || null;
