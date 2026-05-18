@@ -2969,30 +2969,47 @@ exports.getWeeklyRanking = onRequest(
       }
     }
 
-    // 사전 집계 miss·구캐시 불일치: 요청 주간 구간으로 즉시 산출 (신규 주 월요일 아침·집계 stale 구간 등)
-    try {
-      const liveEntries = await getWeeklyRankingEntries(db, startStr, endStr);
-      if (liveEntries.length > 0) {
-        try {
-          await writeRankingAggregatePayload(db, weeklyAggKey, {
-            fullEntries: liveEntries,
-            ranking: liveEntries.slice(0, 10).map((e, i) => ({
-              rank: i + 1,
-              userId: e.userId,
-              name: e.name,
-              totalTss: Math.round(e.totalTss * 100) / 100,
-              is_private: e.is_private === true,
-            })),
-            startStr,
-            endStr,
-          });
-        } catch (writeErr) {
-          console.warn("[getWeeklyRanking] aggregate write after live compute:", writeErr && writeErr.message ? writeErr.message : writeErr);
-        }
-        return buildWeeklyRankingResponse(liveEntries, false);
+    // 사전 집계 miss: stale weekly_ranking_full 또는 TSS 집계만 허용(기본은 전체 users 스캔 금지)
+    if (!ALLOW_RANKING_HTTP_LIVE_REBUILD) {
+      const weeklyStale = await readRankingAggregatePayloadAllowStale(db, weeklyAggKey, RANKING_HTTP_STALE_FALLBACK_MS);
+      if (weeklyStale && Array.isArray(weeklyStale.fullEntries) && weeklyStale.fullEntries.length > 0) {
+        return buildWeeklyRankingResponse(weeklyStale.fullEntries, true);
       }
-    } catch (liveErr) {
-      console.error("[getWeeklyRanking] live getWeeklyRankingEntries failed:", liveErr && liveErr.message ? liveErr.message : liveErr);
+      const tssStale = await readRankingAggregatePayloadAllowStale(db, tssCacheKey, RANKING_HTTP_STALE_FALLBACK_MS);
+      if (tssStale && Array.isArray(tssStale.entries) && tssStale.entries.length > 0) {
+        const fromTss = tssStale.entries.map((e) => ({
+          userId: e.userId,
+          name: e.name,
+          totalTss: e.totalTss,
+          is_private: e.is_private === true,
+        }));
+        return buildWeeklyRankingResponse(fromTss, true);
+      }
+    } else {
+      try {
+        const liveEntries = await getWeeklyRankingEntries(db, startStr, endStr);
+        if (liveEntries.length > 0) {
+          try {
+            await writeRankingAggregatePayload(db, weeklyAggKey, {
+              fullEntries: liveEntries,
+              ranking: liveEntries.slice(0, 10).map((e, i) => ({
+                rank: i + 1,
+                userId: e.userId,
+                name: e.name,
+                totalTss: Math.round(e.totalTss * 100) / 100,
+                is_private: e.is_private === true,
+              })),
+              startStr,
+              endStr,
+            });
+          } catch (writeErr) {
+            console.warn("[getWeeklyRanking] aggregate write after live compute:", writeErr && writeErr.message ? writeErr.message : writeErr);
+          }
+          return buildWeeklyRankingResponse(liveEntries, false);
+        }
+      } catch (liveErr) {
+        console.error("[getWeeklyRanking] live getWeeklyRankingEntries failed:", liveErr && liveErr.message ? liveErr.message : liveErr);
+      }
     }
 
     res.set("Access-Control-Allow-Origin", "*");
@@ -4398,6 +4415,30 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
 const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
 /** ranking_aggregates 읽기 허용 최대 경과 시간. 집계 cron 간격보다 길게 두어 사용자 요청 시 전체 재스캔 빈도를 줄임 */
 const RANKING_AGG_MAX_STALE_MS = 26 * 60 * 60 * 1000; // 26시간 (하루 1회 23:00 기준 최대 24h 공백 + 여유)
+/** HTTP에서 users×logs 전체 재집계 허용(기본 false — 사전집계·stale만 반환, 과금 폭탄 방지) */
+const ALLOW_RANKING_HTTP_LIVE_REBUILD = process.env.ALLOW_RANKING_HTTP_LIVE_REBUILD === "1";
+const RANKING_HTTP_STALE_FALLBACK_MS = 14 * 24 * 60 * 60 * 1000;
+
+function emptyPeakRankingByCategory() {
+  return { Supremo: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+}
+
+/**
+ * 사전집계 miss 시 stale 집계 반환. 없으면 pending(빈 보드) — 전체 users 스캔 대신.
+ * @returns {Promise<object|null>} 응답 본문 또는 null(라이브 재집계 진행)
+ */
+async function tryPeakRankingHttpStaleOrPending(db, cacheKey) {
+  const aggStale = await readRankingAggregatePayloadAllowStale(db, cacheKey, RANKING_HTTP_STALE_FALLBACK_MS);
+  if (aggStale && aggStale.byCategory) {
+    return { payload: aggStale, staleAggregate: true, precomputed: true };
+  }
+  if (ALLOW_RANKING_HTTP_LIVE_REBUILD) return null;
+  return {
+    payload: { byCategory: emptyPeakRankingByCategory(), entries: [] },
+    pendingAggregate: true,
+    precomputed: false,
+  };
+}
 /** KST 23:00 정시 집계 하루 1회 — 클라이언트 localStorage 만료 시각(23:00 KST)에 맞춰 신선한 데이터를 즉시 제공 */
 const RANKING_REBUILD_CRON = "0 23 * * *";
 const RANKING_ONE_PASS_BATCH = 50;
@@ -6196,6 +6237,52 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
+      const tssFallback = await tryPeakRankingHttpStaleOrPending(db, cacheKey);
+      if (tssFallback) {
+        const { entries: tssEnt, byCategory: tssCat } = tssFallback.payload;
+        let outTss = {
+          success: true,
+          byCategory: tssCat,
+          startStr,
+          endStr,
+          period: "weekly",
+          durationType: "tss",
+          gender,
+          precomputed: !!tssFallback.precomputed,
+          staleAggregate: !!tssFallback.staleAggregate,
+          pendingAggregate: !!tssFallback.pendingAggregate,
+        };
+        if (tssFallback.pendingAggregate) {
+          outTss.message = "랭킹 집계 준비 중입니다. 잠시 후 다시 시도해주세요.";
+        }
+        if (uid && !tssFallback.pendingAggregate) {
+          let current = null;
+          let nextUser = null;
+          for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+            const arr = tssCat[c] || [];
+            const idx = arr.findIndex((e) => e.userId === uid);
+            if (idx >= 0) {
+              current = arr[idx];
+              nextUser = idx > 0 ? arr[idx - 1] : null;
+              break;
+            }
+          }
+          if (current) {
+            outTss.currentUser = current;
+            outTss.motivationMessage = buildMotivationMessage(current, nextUser);
+          }
+        }
+        if (!tssFallback.pendingAggregate) {
+          const tssFbEntries = Array.isArray(tssEnt) ? tssEnt : outTss.byCategory.Supremo;
+          await hydratePeakRankMovementOnPayload(db, outTss.byCategory, tssFbEntries, `peak_tss_weekly_${gender}`);
+        }
+        if (!outTss.entries && Array.isArray(outTss.byCategory.Supremo)) {
+          outTss.entries = outTss.byCategory.Supremo.slice();
+        }
+        await finalizeRankingProfileUrls(outTss);
+        return res.status(200).json(outTss);
+      }
+
       const { entries, byCategory } = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, gender);
       await applyPeakRankChanges(db, byCategory, `peak_tss_weekly_${gender}`);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
@@ -6326,6 +6413,58 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
+      const distFallback = await tryPeakRankingHttpStaleOrPending(db, cacheKey);
+      if (distFallback) {
+        const { entries: distEnt, byCategory: distCat } = distFallback.payload;
+        const outDist = {
+          success: true,
+          byCategory: distCat,
+          entries: Array.isArray(distEnt) ? distEnt : [],
+          startStr,
+          endStr,
+          period: "rolling30",
+          durationType: "personal_dist",
+          gender,
+          precomputed: !!distFallback.precomputed,
+          staleAggregate: !!distFallback.staleAggregate,
+          pendingAggregate: !!distFallback.pendingAggregate,
+        };
+        if (distFallback.pendingAggregate) {
+          outDist.message = "랭킹 집계 준비 중입니다. 잠시 후 다시 시도해주세요.";
+        }
+        if (uid && !distFallback.pendingAggregate) {
+          let current = null;
+          let nextUser = null;
+          for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+            const arr = distCat[c] || [];
+            const idx = arr.findIndex((e) => e.userId === uid);
+            if (idx >= 0) {
+              current = arr[idx];
+              nextUser = idx > 0 ? arr[idx - 1] : null;
+              break;
+            }
+          }
+          if (current) {
+            outDist.currentUser = current;
+            outDist.motivationMessage = buildMotivationMessage(current, nextUser);
+          }
+        }
+        if (!distFallback.pendingAggregate) {
+          const pdFbEntries = outDist.entries.length ? outDist.entries : outDist.byCategory.Supremo;
+          await hydratePeakRankMovementOnPayload(
+            db,
+            outDist.byCategory,
+            pdFbEntries,
+            `peak_personal_dist_rolling30_${gender}`
+          );
+        }
+        if (!outDist.entries.length && Array.isArray(outDist.byCategory.Supremo)) {
+          outDist.entries = outDist.byCategory.Supremo.slice();
+        }
+        await finalizeRankingProfileUrls(outDist);
+        return res.status(200).json(outDist);
+      }
+
       const { entries, byCategory } = await getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, gender);
       await applyPeakRankChanges(db, byCategory, `peak_personal_dist_rolling30_${gender}`);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
@@ -6422,7 +6561,10 @@ exports.getPeakPowerRanking = onRequest(
           PERSONAL_SPEED_STALE_AGG_MS
         );
         if (aggVersionProbe && !personalSpeedAggregateLogicOk(aggVersionProbe)) {
-          await resetPersonalSpeedRankingDerivedState(db, startStr, endStr);
+          console.warn(
+            "[getPeakPowerRanking personal_speed] 구버전 집계 — HTTP에서 삭제·전체 재집계 생략(23:00 배치 대기)",
+            cacheKey
+          );
         }
       }
 
@@ -6469,7 +6611,19 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
-      /** 2) 사전집계 miss·rankMv: rollup 재스캔 후 Firebase에 저장 */
+      /** 2) 사전집계 miss: 기본은 pending만(전 사용자 rollup·로그 재스캔 금지) */
+      if (!ALLOW_RANKING_HTTP_LIVE_REBUILD) {
+        const emptyBoard = emptyPeakRankingByCategory();
+        return res.status(200).json(
+          await buildPersonalSpeedOutFromPack(
+            { byCategory: emptyBoard, entries: [], startStr, endStr },
+            {
+              pendingAggregate: true,
+              message: "랭킹 집계 준비 중입니다. 잠시 후 다시 시도해주세요.",
+            }
+          )
+        );
+      }
       const usersSnapPs = await db.collection("users").get();
       const boardLive = await getPersonalSpeedRankingBoardEntriesFromRollups(
         db,
@@ -6483,13 +6637,7 @@ exports.getPeakPowerRanking = onRequest(
         }
       );
       await applyPeakRankChanges(db, boardLive.byCategory, `peak_personal_speed_rolling183_${gender}`);
-      const psPayload = await persistPersonalSpeedRankingPack(
-        db,
-        cacheKey,
-        boardLive,
-        startStr,
-        endStr
-      );
+      const psPayload = await persistPersonalSpeedRankingPack(db, cacheKey, boardLive, startStr, endStr);
       await hydrateRankingBoardProfileImages(db, psPayload.byCategory, psPayload.entries);
       if ((psPayload.entries || []).length > 0 || (psPayload.byCategory.Supremo || []).length > 0) {
         return res.status(200).json(
@@ -6500,15 +6648,7 @@ exports.getPeakPowerRanking = onRequest(
           })
         );
       }
-
-      const emptyBoard = {
-        Supremo: [],
-        Bianco: [],
-        Rosa: [],
-        Infinito: [],
-        Leggenda: [],
-        Assoluto: [],
-      };
+      const emptyBoard = emptyPeakRankingByCategory();
       return res.status(200).json(
         await buildPersonalSpeedOutFromPack(
           { byCategory: emptyBoard, entries: [], startStr, endStr },
@@ -6806,6 +6946,54 @@ exports.getPeakPowerRanking = onRequest(
       }
     }
 
+    const peakFallback = await tryPeakRankingHttpStaleOrPending(db, cacheKey);
+    if (peakFallback) {
+      const { entries: peakEnt, byCategory: peakCat, cohortAvgHrBpm: peakCohortHr } = peakFallback.payload;
+      let outPeak = {
+        success: true,
+        byCategory: peakCat,
+        startStr,
+        endStr,
+        period,
+        durationType,
+        gender,
+        precomputed: !!peakFallback.precomputed,
+        staleAggregate: !!peakFallback.staleAggregate,
+        pendingAggregate: !!peakFallback.pendingAggregate,
+      };
+      if (peakCohortHr != null && !isNaN(Number(peakCohortHr))) {
+        outPeak.cohortAvgHrBpm = Number(peakCohortHr);
+      }
+      if (peakFallback.pendingAggregate) {
+        outPeak.message = "랭킹 집계 준비 중입니다. 잠시 후 다시 시도해주세요.";
+      }
+      if (uid && !peakFallback.pendingAggregate) {
+        let current = null;
+        let nextUser = null;
+        for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+          const arr = peakCat[c] || [];
+          const idx = arr.findIndex((e) => e.userId === uid);
+          if (idx >= 0) {
+            current = arr[idx];
+            nextUser = idx > 0 ? arr[idx - 1] : null;
+            break;
+          }
+        }
+        if (current) {
+          outPeak.currentUser = current;
+          outPeak.motivationMessage = buildMotivationMessage(current, nextUser);
+        }
+      }
+      if (!peakFallback.pendingAggregate) {
+        await hydratePeakPowerRankMovementIfNeeded(outPeak);
+      }
+      await finalizeRankingProfileUrls(outPeak);
+      if (Array.isArray(outPeak.byCategory.Supremo)) {
+        outPeak.entries = Array.isArray(peakEnt) ? peakEnt : outPeak.byCategory.Supremo.slice();
+      }
+      return res.status(200).json(outPeak);
+    }
+
     const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
     await applyPeakRankChanges(db, byCategory, `peak_${durationType}_${period}_${gender}`);
     let cohortAvgHrBpm = null;
@@ -6913,9 +7101,16 @@ exports.getOvertakeAnalysis = onRequest(
     const { startStr: week5StartStr, endStr: week5EndStr } = getWeek5RangeSeoul(todayStr);
 
     const results = [];
+    const overtakePeriodKey = period === "yearly" ? "yearly" : "monthly";
 
     for (const durationType of Object.keys(DURATION_FIELDS)) {
-      const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
+      const cacheKey = `peakRanking_v2_${overtakePeriodKey}_${durationType}_${gender}_${startStr}_${endStr}`;
+      const aggOvertake = await readRankingAggregatePayloadAllowStale(db, cacheKey, RANKING_HTTP_STALE_FALLBACK_MS);
+      const byCategory =
+        aggOvertake && aggOvertake.byCategory ? aggOvertake.byCategory : emptyPeakRankingByCategory();
+      if (!aggOvertake || !aggOvertake.byCategory) {
+        console.warn("[getOvertakeAnalysis] 집계 miss — 빈 부문 반환(전체 users 스캔 생략)", cacheKey);
+      }
       let current = null;
       let rival = null;
       for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {

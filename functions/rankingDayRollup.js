@@ -632,15 +632,38 @@ function max60minWattsFromBucketSnaps(bucketSnaps, startStr, endStr) {
  * @param {{ ensureMissingDays?: boolean }} [opts] ensureMissingDays=false면 HTTP 빠른 경로(미존재 일은 스킵)
  */
 async function max60minWattsFromDayBuckets(db, userId, userData, startStr, endStr, opts) {
-  const ensureMissing = !opts || opts.ensureMissingDays !== false;
+  const { peak60 } = await peak60YmdFromDayBuckets(db, userId, userData, startStr, endStr, opts);
+  return peak60;
+}
+
+/**
+ * ranking_day_totals만 읽어 60분 피크(W)·일자 반환 (로그 400건 스캔 없음).
+ * @param {{ ensureMissingDays?: boolean }} [opts] false면 미존재 일 버킷 채우기 생략(트리거·HTTP 핫 경로)
+ */
+async function peak60YmdFromDayBuckets(db, userId, userData, startStr, endStr, opts) {
+  const ensureMissing = opts && opts.ensureMissingDays === true;
   if (ensureMissing) {
     await ensureRankingBucketsFilledForRange(db, userId, userData || {}, startStr, endStr);
   }
   const dates = listInclusiveYmdsSeoul(startStr, endStr);
-  if (!dates.length) return 0;
+  if (!dates.length) return { peak60: 0, peakYmd: "" };
   const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
   const bucketSnaps = await chunkedGetAll(db, refs, BUCKET_GET_CHUNK);
-  return max60minWattsFromBucketSnaps(bucketSnaps, startStr, endStr);
+  let peak60 = 0;
+  let peakYmd = "";
+  for (let i = 0; i < bucketSnaps.length; i++) {
+    const snap = bucketSnaps[i];
+    if (!snap || !snap.exists) continue;
+    const row = snap.data() || {};
+    const ymd = row.ymd || dates[i] || "";
+    if (!ymd || ymd < startStr || ymd > endStr) continue;
+    const w = Number(row.max_60min_watts) || 0;
+    if (w > peak60) {
+      peak60 = w;
+      peakYmd = ymd;
+    }
+  }
+  return { peak60, peakYmd };
 }
 
 function addDaysSeoulYmd(ymdStr, deltaDays) {
@@ -787,7 +810,8 @@ async function writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, end
  * ensureMissingDays=true일 때만 누락 일자 버킷을 로그로 채움(수동 백필용, 23시 배치는 false).
  */
 async function rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, opts) {
-  const ensureMissing = !!(opts && opts.ensureMissingDays);
+  const fromBucketsOnly = !!(opts && opts.fromBucketsOnly);
+  const ensureMissing = !fromBucketsOnly && !!(opts && opts.ensureMissingDays);
   if (ensureMissing) {
     await ensureRankingBucketsFilledForRange(db, userId, userData || {}, startStr, endStr, false);
   }
@@ -801,13 +825,9 @@ async function rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, sta
             : userData.weight_kg)
     ) || 0;
   const weightKg = rawW > 0 ? Math.max(rawW, 45) : 70;
-  const { peak60, peakYmd } = await peak60DashboardStyleFromLogs(
-    db,
-    userId,
-    startStr,
-    endStr,
-    weightKg
-  );
+  const { peak60, peakYmd } = fromBucketsOnly
+    ? await peak60YmdFromDayBuckets(db, userId, userData, startStr, endStr, { ensureMissingDays: false })
+    : await peak60DashboardStyleFromLogs(db, userId, startStr, endStr, weightKg);
   const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peakYmd);
   await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
   return metrics;
@@ -830,26 +850,37 @@ async function touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ym
     existing.windowEnd === endStr;
   let peak60 = windowOk ? Number(existing.peak60minWatts) || 0 : 0;
   let peakYmd = windowOk ? String(existing.peak60Ymd || "") : "";
+  const bucketOnlyOpts = { ensureMissingDays: false, fromBucketsOnly: true };
 
   if (!dayPayload) {
     if (peakYmd === ymd || peak60 <= 0) {
-      await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, {
-        ensureMissingDays: false,
-      });
+      await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, bucketOnlyOpts);
     }
     return;
   }
 
-  /** 일 버킷 raw max_60min만 올리면 구(비검증)·FTP 유사 값이 peak에 남을 수 있음 → 로그 MMP 재스캔 */
-  if (day60 >= peak60 || peakYmd === ymd || !windowOk) {
-    await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, {
-      ensureMissingDays: false,
-    });
+  if (!windowOk) {
+    await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, bucketOnlyOpts);
     return;
   }
 
-  const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peakYmd);
-  await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
+  /** 신규 PR: 일 버킷 값만 반영(로그 400건 스캔 금지 — Strava 대량 동기화 시 과금 폭탄 방지) */
+  if (day60 > peak60) {
+    const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(userData, day60, ymd);
+    await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
+    return;
+  }
+
+  if (day60 === peak60 && peakYmd === ymd) {
+    const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peakYmd);
+    await writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics);
+    return;
+  }
+
+  /** 피크 일자 로그 수정·삭제로 하락 가능 → 일 버킷만 재집계 */
+  if (peakYmd === ymd && day60 < peak60) {
+    await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, bucketOnlyOpts);
+  }
 }
 
 /**
@@ -1247,6 +1278,7 @@ exports.cheatDayPresentFromBuckets = cheatDayPresentFromBuckets;
 exports.computeUserPeaksAllDurationsFromBucketSnaps = computeUserPeaksAllDurationsFromBucketSnaps;
 exports.max60minWattsFromBucketSnaps = max60minWattsFromBucketSnaps;
 exports.max60minWattsFromDayBuckets = max60minWattsFromDayBuckets;
+exports.peak60YmdFromDayBuckets = peak60YmdFromDayBuckets;
 exports.maxHrByDurationFromBucketSnaps = maxHrByDurationFromBucketSnaps;
 exports.bucketRef = bucketRef;
 exports.chunkedGetAll = chunkedGetAll;
