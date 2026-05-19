@@ -256,10 +256,10 @@ export function isRideJoinClosedBySchedule(rideData) {
 }
 
 /**
- * 당분간 Strava 참석 검증 비활성화 (Cloud Function·자동 트리거 모두 생략).
- * 재개 시 true 로 변경.
+ * Strava 참석 검증 (Cloud Function verifyMeetingAttendance + 일정 경과 후 방장 상세 트리거).
+ * Places API 미사용. 비활성화 시에만 false 로 변경.
  */
-export const OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED = false;
+export const OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED = true;
 
 /**
  * Strava 참석 검증 자동 실행 조건: 라이딩 일정일(서울 달력)이 **오늘보다 이전**일 때만 true.
