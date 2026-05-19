@@ -8130,12 +8130,12 @@
         var html = '';
         if (isPrevWeek) {
           html +=
-            '<p class="weekly-top10-loading-text" style="margin-bottom:12px;font-size:12px;color:#6b7280;">※ 전주 확정 순위' +
+            '<p class="weekly-top10-week-caption">※ 전주 확정 순위' +
             (data.startStr && data.endStr ? ' (' + data.startStr + ' ~ ' + data.endStr + ')' : '') +
             '</p>';
         } else if (data.startStr && data.endStr) {
           html +=
-            '<p class="weekly-top10-loading-text" style="margin-bottom:12px;font-size:12px;color:#6b7280;">※ 이번 주 순위 (' +
+            '<p class="weekly-top10-week-caption">※ 이번 주 순위 (' +
             data.startStr +
             ' ~ ' +
             data.endStr +
