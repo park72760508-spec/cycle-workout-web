@@ -5364,11 +5364,13 @@ function transformPeakBoardToPersonalSpeed(byCategory) {
       const referenceWatts = Math.round(watts * 10) / 10;
       const speedKmh = Math.round(calculateSpeedOnFlat(referenceWatts, weightKg) * 10) / 10;
       if (!(speedKmh > 0)) continue;
+      const peak60minWatts = Math.round(watts * 10) / 10;
       mapped.push({
         userId: e.userId,
         name: e.name || "(이름 없음)",
         speedKmh,
-        referenceWatts,
+        peak60minWatts,
+        referenceWatts: peak60minWatts,
         weightKg,
         ageCategory: e.ageCategory || cat,
         gender: e.gender,
@@ -5404,7 +5406,96 @@ async function getPersonalSpeedRankingFromMonthly60minFallback(db, gender) {
   if (!agg || !agg.byCategory) return null;
   const pack = transformPeakBoardToPersonalSpeed(agg.byCategory);
   if (!pack) return null;
-  return { ...pack, startStr, endStr, approximate: true };
+  const r183 = getRolling183DaysRangeSeoul();
+  return {
+    ...pack,
+    startStr: r183.startStr,
+    endStr: r183.endStr,
+    approximate: true,
+    approximateSource: "monthly_60min_peak",
+  };
+}
+
+/** users 하위 ranking_rollups/personal_speed_6m 만 읽어 독주 보드 구성(로그 전체 스캔 없음). */
+async function getPersonalSpeedRankingBoardFromRollupsCG(db, startStr, endStr, genderFilter) {
+  const FieldPath = admin.firestore.FieldPath;
+  const rollupId = rankingDayRollup.PERSONAL_SPEED_6M_ROLLUP_ID;
+  const coll = rankingDayRollup.RANKING_ROLLUPS_COLL;
+  let snap;
+  try {
+    snap = await db.collectionGroup(coll).where(FieldPath.documentId(), "==", rollupId).get();
+  } catch (eCg) {
+    console.warn("[getPersonalSpeedRankingBoardFromRollupsCG]", eCg && eCg.message ? eCg.message : eCg);
+    return null;
+  }
+  const hits = [];
+  snap.forEach((docSnap) => {
+    const r = docSnap.data() || {};
+    if (String(r.windowStart) !== String(startStr) || String(r.windowEnd) !== String(endStr)) return;
+    if (!(Number(r.peak60minWatts) > 0) || !(Number(r.speedKmh) > 0)) return;
+    const uid =
+      docSnap.ref.parent && docSnap.ref.parent.parent ? docSnap.ref.parent.parent.id : "";
+    if (!uid) return;
+    hits.push({ uid, rollup: r });
+  });
+  if (!hits.length) return null;
+
+  const entries = [];
+  const USER_BATCH = 100;
+  for (let i = 0; i < hits.length; i += USER_BATCH) {
+    const chunk = hits.slice(i, i + USER_BATCH);
+    const userRefs = chunk.map((h) => db.collection("users").doc(h.uid));
+    const userSnaps = await db.getAll(...userRefs);
+    for (let j = 0; j < chunk.length; j++) {
+      const userSnap = userSnaps[j];
+      if (!userSnap || !userSnap.exists) continue;
+      const data = userSnap.data() || {};
+      if (!rankingDayRollup.userHasWeightForPersonalSpeed(data)) continue;
+      const gender = String(data.gender || data.sex || "").toLowerCase();
+      if (genderFilter && genderFilter !== "all") {
+        const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
+        const match =
+          gender === "m" || gender === "male" || gender === "남"
+            ? "male"
+            : gender === "f" || gender === "female" || gender === "여"
+              ? "female"
+              : null;
+        if (match !== g) continue;
+      }
+      const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+      const challenge = data.challenge || "Fitness";
+      const leagueCategory = getLeagueCategory(challenge, birthYear);
+      if (!leagueCategory) continue;
+      const { uid, rollup } = chunk[j];
+      entries.push({
+        userId: uid,
+        name: data.name || "(이름 없음)",
+        speedKmh: Number(rollup.speedKmh),
+        peak60minWatts: Number(rollup.peak60minWatts),
+        referenceWatts: rollup.referenceWatts != null ? Number(rollup.referenceWatts) : Number(rollup.peak60minWatts),
+        weightKg: rollup.weightKg != null ? Number(rollup.weightKg) : Number(data.weight || data.weightKg || 0),
+        ageCategory: leagueCategory,
+        gender,
+        is_private: privacyFlagFromFirestoreDoc(data),
+        profileImageUrl: profileImageUrlFromUserData(data),
+        ...rankingUserStatusFieldsFromData(data),
+      });
+    }
+  }
+  if (!entries.length) return null;
+  entries.sort((a, b) => b.speedKmh - a.speedKmh);
+  const withRank = entries.map((e, idx) => ({ ...e, rank: idx + 1 }));
+  const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  withRank.forEach((e) => {
+    if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
+  });
+  for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+    if (Array.isArray(byCategory[cat])) {
+      byCategory[cat].sort((a, b) => b.speedKmh - a.speedKmh);
+      byCategory[cat] = byCategory[cat].map((row, idx) => ({ ...row, rank: idx + 1 }));
+    }
+  }
+  return { entries: withRank, byCategory };
 }
 
 /**
@@ -7127,8 +7218,8 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
-      /** 2) 사전집계 miss: 전일 endStr stale → 없으면 pending(라이브 재집계는 ALLOW 시) */
-      if (!ALLOW_RANKING_HTTP_LIVE_REBUILD) {
+      /** 2) 사전집계 miss: 전일 키·rollup CG·월간 60분 임시 → pending */
+      async function tryPersonalSpeedHttpFallbackBoard() {
         const psFallback = await tryPeakRankingHttpStaleOrPending(db, cacheKey);
         if (psFallback && psFallback.payload) {
           const psStaleOut = await tryReturnPrecomputed(psFallback.payload, {
@@ -7148,6 +7239,51 @@ exports.getPeakPowerRanking = onRequest(
         });
         if (psAnyOut) return psAnyOut;
 
+        const approxPack = await getPersonalSpeedRankingFromMonthly60minFallback(db, gender);
+        if (approxPack) {
+          const approxOut = await tryReturnPrecomputed(
+            {
+              ...approxPack,
+              personalSpeedLogicVersion: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
+              peakDataSource: rankingDayRollup.PERSONAL_SPEED_PEAK_DATA_SOURCE,
+            },
+            { approximate: true, source: "monthly_60min_fallback" }
+          );
+          if (approxOut) return approxOut;
+        }
+
+        const rollupLockKey = `http_ps_rollup_${cacheKey}`;
+        if (await tryAcquireRankingHttpLiveRebuildLock(db, rollupLockKey)) {
+          const boardFromRollup = await getPersonalSpeedRankingBoardFromRollupsCG(
+            db,
+            startStr,
+            endStr,
+            gender
+          );
+          if (boardFromRollup && rankingBoardPayloadHasRows(boardFromRollup)) {
+            const psPayload = await persistPersonalSpeedRankingPack(
+              db,
+              cacheKey,
+              boardFromRollup,
+              startStr,
+              endStr
+            );
+            const rollupOut = await tryReturnPrecomputed(psPayload, {
+              precomputed: true,
+              rebuiltOnDemand: true,
+              fromUserRollups: true,
+              source: "rollup_collection_group",
+            });
+            if (rollupOut) return rollupOut;
+          }
+        }
+        return null;
+      }
+
+      if (!ALLOW_RANKING_HTTP_LIVE_REBUILD) {
+        const fallbackOut = await tryPersonalSpeedHttpFallbackBoard();
+        if (fallbackOut) return fallbackOut;
+
         const emptyBoard = emptyPeakRankingByCategory();
         return res.status(200).json(
           await buildPersonalSpeedOutFromPack(
@@ -7159,6 +7295,8 @@ exports.getPeakPowerRanking = onRequest(
           )
         );
       }
+      const fallbackBeforeLive = await tryPersonalSpeedHttpFallbackBoard();
+      if (fallbackBeforeLive) return fallbackBeforeLive;
       const usersSnapPs = await db.collection("users").get();
       const boardLive = await getPersonalSpeedRankingBoardEntriesFromRollups(
         db,
