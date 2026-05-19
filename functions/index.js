@@ -2776,6 +2776,81 @@ function getWeekRangeSeoul(weekOffset = 0) {
   return { startStr, endStr };
 }
 
+/** YYYY-MM-DD — 전일 (로컬 달력, 주간 TSS 집계 키 롤오버용) */
+function previousCalendarDayStr(dateStr) {
+  if (!dateStr || String(dateStr).length < 10) return null;
+  const parts = String(dateStr).split("-").map(Number);
+  const y = parts[0];
+  const m = parts[1];
+  const d = parts[2];
+  if (!y || !m || !d) return null;
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - 1);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
+function weeklyTssBoardPayloadHasRows(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  if (Array.isArray(payload.entries) && payload.entries.length > 0) return true;
+  const sup = payload.byCategory && payload.byCategory.Supremo;
+  return Array.isArray(sup) && sup.length > 0;
+}
+
+/**
+ * 주간 TSS HTTP: endStr(오늘)이 바뀌면 새 cacheKey에 집계가 없어 빈 보드가 나오는 문제 방지.
+ * 1) 당일 키 fresh/stale 2) 같은 주 시작·전일 endStr 키 stale 3) null → 라이브 재집계
+ */
+async function readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender) {
+  const cacheKey = `peakRanking_weekly_tss_v2_${gender}_${startStr}_${endStr}`;
+  const fresh = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+  if (fresh && weeklyTssBoardPayloadHasRows(fresh)) {
+    return { payload: fresh, cacheKey, precomputed: true };
+  }
+  const staleExact = await readRankingAggregatePayloadAllowStale(
+    db,
+    cacheKey,
+    RANKING_HTTP_STALE_FALLBACK_MS
+  );
+  if (
+    staleExact &&
+    weeklyTssBoardPayloadHasRows(staleExact) &&
+    (!staleExact.startStr || String(staleExact.startStr) === startStr)
+  ) {
+    return { payload: staleExact, cacheKey, precomputed: true, staleAggregate: true };
+  }
+  const prevEnd = previousCalendarDayStr(endStr);
+  if (prevEnd && prevEnd >= startStr) {
+    const prevKey = `peakRanking_weekly_tss_v2_${gender}_${startStr}_${prevEnd}`;
+    const stalePrev = await readRankingAggregatePayloadAllowStale(
+      db,
+      prevKey,
+      RANKING_HTTP_STALE_FALLBACK_MS
+    );
+    if (stalePrev && weeklyTssBoardPayloadHasRows(stalePrev)) {
+      return {
+        payload: stalePrev,
+        cacheKey: prevKey,
+        precomputed: true,
+        staleAggregate: true,
+        dataThroughEndStr: prevEnd,
+      };
+    }
+  }
+  return null;
+}
+
+/** getWeeklyRanking TOP10용 — TSS 집계 entries 배열 */
+async function readWeeklyTssEntriesForTop10Http(db, startStr, endStr) {
+  const hit = await readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, "all");
+  if (!hit || !hit.payload) return null;
+  const ent = hit.payload.entries;
+  if (Array.isArray(ent) && ent.length > 0) return ent;
+  const sup = hit.payload.byCategory && hit.payload.byCategory.Supremo;
+  if (Array.isArray(sup) && sup.length > 0) return sup;
+  return null;
+}
+
 /** 사용자 로그에서 주간 TSS 합계 (날짜별: strava 우선, 없으면 stelvio) — ranking_day_totals 일 버킹 집계 */
 async function getWeeklyTssForUser(db, userId, startStr, endStr, userDataCached = null) {
   try {
@@ -2969,47 +3044,59 @@ exports.getWeeklyRanking = onRequest(
       }
     }
 
-    // 사전 집계 miss: stale weekly_ranking_full 또는 TSS 집계만 허용(기본은 전체 users 스캔 금지)
+    // 사전 집계 miss: stale(전일 endStr 키 포함) → 주간 TSS는 HTTP 라이브 재집계 허용(자정 직후 빈 목록 방지)
     if (!ALLOW_RANKING_HTTP_LIVE_REBUILD) {
       const weeklyStale = await readRankingAggregatePayloadAllowStale(db, weeklyAggKey, RANKING_HTTP_STALE_FALLBACK_MS);
-      if (weeklyStale && Array.isArray(weeklyStale.fullEntries) && weeklyStale.fullEntries.length > 0) {
+      const weeklyStaleMatchesWeek =
+        weeklyStale &&
+        (!weeklyStale.startStr || String(weeklyStale.startStr) === startStr) &&
+        (!weeklyStale.endStr || String(weeklyStale.endStr) === endStr);
+      if (weeklyStaleMatchesWeek && Array.isArray(weeklyStale.fullEntries) && weeklyStale.fullEntries.length > 0) {
         return buildWeeklyRankingResponse(weeklyStale.fullEntries, true);
       }
-      const tssStale = await readRankingAggregatePayloadAllowStale(db, tssCacheKey, RANKING_HTTP_STALE_FALLBACK_MS);
-      if (tssStale && Array.isArray(tssStale.entries) && tssStale.entries.length > 0) {
-        const fromTss = tssStale.entries.map((e) => ({
+      const fromTssRoll = await readWeeklyTssEntriesForTop10Http(db, startStr, endStr);
+      if (fromTssRoll && fromTssRoll.length > 0) {
+        const mapped = fromTssRoll.map((e) => ({
           userId: e.userId,
           name: e.name,
           totalTss: e.totalTss,
           is_private: e.is_private === true,
+          profileImageUrl: e.profileImageUrl || null,
         }));
-        return buildWeeklyRankingResponse(fromTss, true);
+        return buildWeeklyRankingResponse(mapped, true);
       }
-    } else {
-      try {
-        const liveEntries = await getWeeklyRankingEntries(db, startStr, endStr);
-        if (liveEntries.length > 0) {
-          try {
-            await writeRankingAggregatePayload(db, weeklyAggKey, {
-              fullEntries: liveEntries,
-              ranking: liveEntries.slice(0, 10).map((e, i) => ({
-                rank: i + 1,
-                userId: e.userId,
-                name: e.name,
-                totalTss: Math.round(e.totalTss * 100) / 100,
-                is_private: e.is_private === true,
-              })),
-              startStr,
-              endStr,
-            });
-          } catch (writeErr) {
-            console.warn("[getWeeklyRanking] aggregate write after live compute:", writeErr && writeErr.message ? writeErr.message : writeErr);
-          }
-          return buildWeeklyRankingResponse(liveEntries, false);
+    }
+    try {
+      const liveEntries = await getWeeklyRankingEntries(db, startStr, endStr);
+      if (liveEntries.length > 0) {
+        try {
+          await writeRankingAggregatePayload(db, weeklyAggKey, {
+            fullEntries: liveEntries,
+            ranking: liveEntries.slice(0, 10).map((e, i) => ({
+              rank: i + 1,
+              userId: e.userId,
+              name: e.name,
+              totalTss: Math.round(e.totalTss * 100) / 100,
+              is_private: e.is_private === true,
+            })),
+            startStr,
+            endStr,
+          });
+          const keyTssAll = `peakRanking_weekly_tss_v2_all_${startStr}_${endStr}`;
+          const tssBoard = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, "all");
+          await writeRankingAggregatePayload(db, keyTssAll, {
+            byCategory: tssBoard.byCategory,
+            entries: tssBoard.entries,
+            startStr,
+            endStr,
+          });
+        } catch (writeErr) {
+          console.warn("[getWeeklyRanking] aggregate write after live compute:", writeErr && writeErr.message ? writeErr.message : writeErr);
         }
-      } catch (liveErr) {
-        console.error("[getWeeklyRanking] live getWeeklyRankingEntries failed:", liveErr && liveErr.message ? liveErr.message : liveErr);
+        return buildWeeklyRankingResponse(liveEntries, false);
       }
+    } catch (liveErr) {
+      console.error("[getWeeklyRanking] live getWeeklyRankingEntries failed:", liveErr && liveErr.message ? liveErr.message : liveErr);
     }
 
     res.set("Access-Control-Allow-Origin", "*");
@@ -5604,6 +5691,26 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   }
 );
 
+/** KST 00:05 — 날짜(endStr) 변경 직후 주간 TSS·TOP10 집계 키 갱신 (자정~15시 빈 랭킹 방지) */
+exports.scheduledWeeklyTssMidnightRefresh = onSchedule(
+  {
+    schedule: "5 0 * * *",
+    timeZone: "Asia/Seoul",
+    memory: "1GiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    try {
+      await refreshWeeklyMileageTop10AggregatesOnly(db);
+      console.log("[scheduledWeeklyTssMidnightRefresh] ok");
+    } catch (e) {
+      console.error("[scheduledWeeklyTssMidnightRefresh]", e && e.message ? e.message : e);
+      throw e;
+    }
+  }
+);
+
 // ---------- STELVIO 헵타곤·GC 랭킹: 전원 코호트 순위 → heptagon_cohort_ranks (일 1회 22:30 갱신, 조회는 스냅샷 읽기) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
 
@@ -6237,9 +6344,11 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
-      const tssFallback = await tryPeakRankingHttpStaleOrPending(db, cacheKey);
-      if (tssFallback) {
-        const { entries: tssEnt, byCategory: tssCat } = tssFallback.payload;
+      const tssHit = await readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender);
+      if (tssHit && tssHit.payload && weeklyTssBoardPayloadHasRows(tssHit.payload)) {
+        const tssPayload = tssHit.payload;
+        const tssCat = tssPayload.byCategory || emptyPeakRankingByCategory();
+        const tssEnt = Array.isArray(tssPayload.entries) ? tssPayload.entries : tssCat.Supremo || [];
         let outTss = {
           success: true,
           byCategory: tssCat,
@@ -6248,14 +6357,13 @@ exports.getPeakPowerRanking = onRequest(
           period: "weekly",
           durationType: "tss",
           gender,
-          precomputed: !!tssFallback.precomputed,
-          staleAggregate: !!tssFallback.staleAggregate,
-          pendingAggregate: !!tssFallback.pendingAggregate,
+          precomputed: !!tssHit.precomputed,
+          staleAggregate: !!tssHit.staleAggregate,
         };
-        if (tssFallback.pendingAggregate) {
-          outTss.message = "랭킹 집계 준비 중입니다. 잠시 후 다시 시도해주세요.";
+        if (tssHit.dataThroughEndStr && tssHit.dataThroughEndStr !== endStr) {
+          outTss.dataThroughEndStr = tssHit.dataThroughEndStr;
         }
-        if (uid && !tssFallback.pendingAggregate) {
+        if (uid) {
           let current = null;
           let nextUser = null;
           for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
@@ -6272,10 +6380,8 @@ exports.getPeakPowerRanking = onRequest(
             outTss.motivationMessage = buildMotivationMessage(current, nextUser);
           }
         }
-        if (!tssFallback.pendingAggregate) {
-          const tssFbEntries = Array.isArray(tssEnt) ? tssEnt : outTss.byCategory.Supremo;
-          await hydratePeakRankMovementOnPayload(db, outTss.byCategory, tssFbEntries, `peak_tss_weekly_${gender}`);
-        }
+        const tssFbEntries = Array.isArray(tssEnt) && tssEnt.length ? tssEnt : outTss.byCategory.Supremo;
+        await hydratePeakRankMovementOnPayload(db, outTss.byCategory, tssFbEntries, `peak_tss_weekly_${gender}`);
         if (!outTss.entries && Array.isArray(outTss.byCategory.Supremo)) {
           outTss.entries = outTss.byCategory.Supremo.slice();
         }
