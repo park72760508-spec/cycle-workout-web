@@ -3066,37 +3066,48 @@ exports.getWeeklyRanking = onRequest(
         return buildWeeklyRankingResponse(mapped, true);
       }
     }
-    try {
-      const liveEntries = await getWeeklyRankingEntries(db, startStr, endStr);
-      if (liveEntries.length > 0) {
-        try {
-          await writeRankingAggregatePayload(db, weeklyAggKey, {
-            fullEntries: liveEntries,
-            ranking: liveEntries.slice(0, 10).map((e, i) => ({
-              rank: i + 1,
-              userId: e.userId,
-              name: e.name,
-              totalTss: Math.round(e.totalTss * 100) / 100,
-              is_private: e.is_private === true,
-            })),
-            startStr,
-            endStr,
-          });
-          const keyTssAll = `peakRanking_weekly_tss_v2_all_${startStr}_${endStr}`;
-          const tssBoard = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, "all");
-          await writeRankingAggregatePayload(db, keyTssAll, {
-            byCategory: tssBoard.byCategory,
-            entries: tssBoard.entries,
-            startStr,
-            endStr,
-          });
-        } catch (writeErr) {
-          console.warn("[getWeeklyRanking] aggregate write after live compute:", writeErr && writeErr.message ? writeErr.message : writeErr);
+    const weeklyLiveKey = tssCacheKey;
+    const mayLiveWeekly =
+      ALLOW_RANKING_HTTP_LIVE_REBUILD &&
+      (await tryAcquireRankingHttpLiveRebuildLock(db, weeklyLiveKey));
+    if (mayLiveWeekly) {
+      try {
+        const usersSnap = await db.collection("users").get();
+        const tssBoard = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, "all", usersSnap);
+        const liveEntries = (tssBoard.entries || []).map((e) => ({
+          userId: e.userId,
+          name: e.name,
+          totalTss: e.totalTss,
+          is_private: e.is_private === true,
+        }));
+        if (liveEntries.length > 0) {
+          try {
+            await writeRankingAggregatePayload(db, weeklyAggKey, {
+              fullEntries: liveEntries,
+              ranking: liveEntries.slice(0, 10).map((e, i) => ({
+                rank: i + 1,
+                userId: e.userId,
+                name: e.name,
+                totalTss: Math.round(e.totalTss * 100) / 100,
+                is_private: e.is_private === true,
+              })),
+              startStr,
+              endStr,
+            });
+            await writeRankingAggregatePayload(db, weeklyLiveKey, {
+              byCategory: tssBoard.byCategory,
+              entries: tssBoard.entries,
+              startStr,
+              endStr,
+            });
+          } catch (writeErr) {
+            console.warn("[getWeeklyRanking] aggregate write after live compute:", writeErr && writeErr.message ? writeErr.message : writeErr);
+          }
+          return buildWeeklyRankingResponse(liveEntries, false);
         }
-        return buildWeeklyRankingResponse(liveEntries, false);
+      } catch (liveErr) {
+        console.error("[getWeeklyRanking] live getWeeklyTssRankingBoardEntries failed:", liveErr && liveErr.message ? liveErr.message : liveErr);
       }
-    } catch (liveErr) {
-      console.error("[getWeeklyRanking] live getWeeklyRankingEntries failed:", liveErr && liveErr.message ? liveErr.message : liveErr);
     }
 
     res.set("Access-Control-Allow-Origin", "*");
@@ -4505,6 +4516,8 @@ const RANKING_AGG_MAX_STALE_MS = 26 * 60 * 60 * 1000; // 26시간 (하루 1회 2
 /** HTTP에서 users×logs 전체 재집계 허용(기본 false — 사전집계·stale만 반환, 과금 폭탄 방지) */
 const ALLOW_RANKING_HTTP_LIVE_REBUILD = process.env.ALLOW_RANKING_HTTP_LIVE_REBUILD === "1";
 const RANKING_HTTP_STALE_FALLBACK_MS = 14 * 24 * 60 * 60 * 1000;
+/** 동일 cacheKey HTTP 라이브 재집계 동시 실행 방지(23~01시 접속 폭주 시 users 전체 스캔 중복 억제) */
+const RANKING_HTTP_LIVE_REBUILD_LOCK_MS = 10 * 60 * 1000;
 
 function emptyPeakRankingByCategory() {
   return { Supremo: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
@@ -4526,6 +4539,29 @@ function parseRankingAggregateDateRangeFromCacheKey(cacheKey) {
  * 없으면 null → 호출부에서 라이브 재집계(빈 pending 응답으로 UI가 비는 문제 방지).
  * @returns {Promise<object|null>}
  */
+async function tryAcquireRankingHttpLiveRebuildLock(db, cacheKey) {
+  if (!db || !cacheKey) return true;
+  const safeId = String(cacheKey).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 120);
+  const ref = db.collection("ranking_meta").doc(`http_live_${safeId}`);
+  const now = Date.now();
+  try {
+    const snap = await ref.get();
+    if (snap.exists) {
+      const untilMs = Number((snap.data() || {}).untilMs) || 0;
+      if (untilMs > now) return false;
+    }
+    await ref.set({
+      cacheKey,
+      untilMs: now + RANKING_HTTP_LIVE_REBUILD_LOCK_MS,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (eLock) {
+    console.warn("[tryAcquireRankingHttpLiveRebuildLock]", cacheKey, eLock && eLock.message);
+    return true;
+  }
+}
+
 async function tryPeakRankingHttpStaleOrPending(db, cacheKey) {
   const tryStaleKey = async (key) => {
     const aggStale = await readRankingAggregatePayloadAllowStale(db, key, RANKING_HTTP_STALE_FALLBACK_MS);
@@ -5702,10 +5738,10 @@ exports.manualRebuildWeeklyRanking = onRequest(
   }
 );
 
-/** KST 15~23시 매 정시 — 주간 마일리지 TOP10 집계만 갱신 (운동 직후 TSS 반영 지연 완화) */
+/** KST 15~22시 매 정시 — 주간 TSS·TOP10만 갱신 (23:00은 rebuildRankingAggregates와 중복 방지로 제외) */
 exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   {
-    schedule: "0 15-23 * * *",
+    schedule: "0 15-22 * * *",
     timeZone: "Asia/Seoul",
     memory: "1GiB",
     timeoutSeconds: 540,
@@ -6419,7 +6455,47 @@ exports.getPeakPowerRanking = onRequest(
         return res.status(200).json(outTss);
       }
 
-      const { entries, byCategory } = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, gender);
+      if (!(await tryAcquireRankingHttpLiveRebuildLock(db, cacheKey))) {
+        const waitHit = await readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender);
+        if (waitHit && waitHit.payload && weeklyTssBoardPayloadHasRows(waitHit.payload)) {
+          const wp = waitHit.payload;
+          const wc = wp.byCategory || emptyPeakRankingByCategory();
+          let outWait = {
+            success: true,
+            byCategory: wc,
+            startStr,
+            endStr,
+            period: "weekly",
+            durationType: "tss",
+            gender,
+            precomputed: true,
+            staleAggregate: true,
+          };
+          if (!outWait.entries && Array.isArray(wc.Supremo)) outWait.entries = wc.Supremo.slice();
+          await finalizeRankingProfileUrls(outWait);
+          return res.status(200).json(outWait);
+        }
+        return res.status(200).json({
+          success: true,
+          byCategory: emptyPeakRankingByCategory(),
+          startStr,
+          endStr,
+          period: "weekly",
+          durationType: "tss",
+          gender,
+          pendingAggregate: true,
+          message: "랭킹 집계 준비 중입니다. 잠시 후 다시 시도해주세요.",
+        });
+      }
+
+      const usersSnapTss = await db.collection("users").get();
+      const { entries, byCategory } = await getWeeklyTssRankingBoardEntries(
+        db,
+        startStr,
+        endStr,
+        gender,
+        usersSnapTss
+      );
       await applyPeakRankChanges(db, byCategory, `peak_tss_weekly_${gender}`);
       await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
@@ -7130,6 +7206,29 @@ exports.getPeakPowerRanking = onRequest(
         outPeak.entries = Array.isArray(peakEnt) ? peakEnt : outPeak.byCategory.Supremo.slice();
       }
       return res.status(200).json(outPeak);
+    }
+
+    if (!(await tryAcquireRankingHttpLiveRebuildLock(db, cacheKey))) {
+      const retryFb = await tryPeakRankingHttpStaleOrPending(db, cacheKey);
+      if (retryFb && retryFb.payload && rankingBoardPayloadHasRows(retryFb.payload)) {
+        const { entries: peakEnt2, byCategory: peakCat2 } = retryFb.payload;
+        let outRetry = {
+          success: true,
+          byCategory: peakCat2,
+          startStr,
+          endStr,
+          period,
+          durationType,
+          gender,
+          precomputed: true,
+          staleAggregate: true,
+        };
+        if (Array.isArray(outRetry.byCategory.Supremo)) {
+          outRetry.entries = Array.isArray(peakEnt2) ? peakEnt2 : outRetry.byCategory.Supremo.slice();
+        }
+        await finalizeRankingProfileUrls(outRetry);
+        return res.status(200).json(outRetry);
+      }
     }
 
     const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
