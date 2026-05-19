@@ -5416,86 +5416,64 @@ async function getPersonalSpeedRankingFromMonthly60minFallback(db, gender) {
   };
 }
 
-/** users 하위 ranking_rollups/personal_speed_6m 만 읽어 독주 보드 구성(로그 전체 스캔 없음). */
+/**
+ * HTTP 폴백·수동 집계와 동일 — 6개월 로그에서 60분 MMP → km/h (rollup.speedKmh 캐시 미신뢰).
+ */
 async function getPersonalSpeedRankingBoardFromRollupsCG(db, startStr, endStr, genderFilter) {
-  const FieldPath = admin.firestore.FieldPath;
-  const rollupId = rankingDayRollup.PERSONAL_SPEED_6M_ROLLUP_ID;
-  const coll = rankingDayRollup.RANKING_ROLLUPS_COLL;
-  let snap;
   try {
-    snap = await db.collectionGroup(coll).where(FieldPath.documentId(), "==", rollupId).get();
+    const usersSnap = await db.collection("users").get();
+    return await getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, genderFilter, usersSnap, {
+      logBatchSize: 25,
+      syncRollups: false,
+    });
   } catch (eCg) {
     console.warn("[getPersonalSpeedRankingBoardFromRollupsCG]", eCg && eCg.message ? eCg.message : eCg);
     return null;
   }
-  const hits = [];
-  snap.forEach((docSnap) => {
-    const r = docSnap.data() || {};
-    if (String(r.windowStart) !== String(startStr) || String(r.windowEnd) !== String(endStr)) return;
-    if (!(Number(r.peak60minWatts) > 0) || !(Number(r.speedKmh) > 0)) return;
-    const uid =
-      docSnap.ref.parent && docSnap.ref.parent.parent ? docSnap.ref.parent.parent.id : "";
-    if (!uid) return;
-    hits.push({ uid, rollup: r });
-  });
-  if (!hits.length) return null;
+}
 
-  const entries = [];
-  const USER_BATCH = 100;
-  for (let i = 0; i < hits.length; i += USER_BATCH) {
-    const chunk = hits.slice(i, i + USER_BATCH);
-    const userRefs = chunk.map((h) => db.collection("users").doc(h.uid));
-    const userSnaps = await db.getAll(...userRefs);
-    for (let j = 0; j < chunk.length; j++) {
-      const userSnap = userSnaps[j];
-      if (!userSnap || !userSnap.exists) continue;
-      const data = userSnap.data() || {};
-      if (!rankingDayRollup.userHasWeightForPersonalSpeed(data)) continue;
-      const gender = String(data.gender || data.sex || "").toLowerCase();
-      if (genderFilter && genderFilter !== "all") {
-        const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
-        const match =
-          gender === "m" || gender === "male" || gender === "남"
-            ? "male"
-            : gender === "f" || gender === "female" || gender === "여"
-              ? "female"
-              : null;
-        if (match !== g) continue;
-      }
-      const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
-      const challenge = data.challenge || "Fitness";
-      const leagueCategory = getLeagueCategory(challenge, birthYear);
-      if (!leagueCategory) continue;
-      const { uid, rollup } = chunk[j];
-      entries.push({
-        userId: uid,
-        name: data.name || "(이름 없음)",
-        speedKmh: Number(rollup.speedKmh),
-        peak60minWatts: Number(rollup.peak60minWatts),
-        referenceWatts: rollup.referenceWatts != null ? Number(rollup.referenceWatts) : Number(rollup.peak60minWatts),
-        weightKg: rollup.weightKg != null ? Number(rollup.weightKg) : Number(data.weight || data.weightKg || 0),
-        ageCategory: leagueCategory,
-        gender,
-        is_private: privacyFlagFromFirestoreDoc(data),
-        profileImageUrl: profileImageUrlFromUserData(data),
-        ...rankingUserStatusFieldsFromData(data),
-      });
-    }
+/** 독주 API·캐시: 요청 사용자 본인 행만 대시보드 「1시간 항속」과 동일 로그 루트로 덮어씀 */
+async function patchPersonalSpeedViewerFromDashboardRoute(db, out, viewerUid, startStr, endStr) {
+  if (!db || !viewerUid || !out || !out.byCategory) return;
+  let userData = null;
+  try {
+    const userSnap = await db.collection("users").doc(String(viewerUid)).get();
+    if (!userSnap.exists) return;
+    userData = userSnap.data() || {};
+  } catch (_eUs) {
+    return;
   }
-  if (!entries.length) return null;
-  entries.sort((a, b) => b.speedKmh - a.speedKmh);
-  const withRank = entries.map((e, idx) => ({ ...e, rank: idx + 1 }));
-  const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
-  withRank.forEach((e) => {
-    if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
-  });
-  for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
-    if (Array.isArray(byCategory[cat])) {
-      byCategory[cat].sort((a, b) => b.speedKmh - a.speedKmh);
-      byCategory[cat] = byCategory[cat].map((row, idx) => ({ ...row, rank: idx + 1 }));
-    }
+  let metrics = null;
+  try {
+    metrics = await rankingDayRollup.computePersonalSpeedMetricsFromLogsDashboardRoute(
+      db,
+      String(viewerUid),
+      userData,
+      startStr,
+      endStr
+    );
+  } catch (eMet) {
+    console.warn("[patchPersonalSpeedViewerFromDashboardRoute]", viewerUid, eMet && eMet.message);
+    return;
   }
-  return { entries: withRank, byCategory };
+  if (!metrics || !(metrics.speedKmh > 0) || !(metrics.peak60minWatts > 0)) return;
+
+  function patchRow(row) {
+    if (!row || String(row.userId) !== String(viewerUid)) return;
+    row.speedKmh = metrics.speedKmh;
+    row.peak60minWatts = metrics.peak60minWatts;
+    row.referenceWatts = metrics.referenceWatts;
+    row.weightKg = metrics.weightKg;
+  }
+
+  for (const c of PEAK_RANK_BOARD_CATEGORIES) {
+    const arr = out.byCategory[c];
+    if (Array.isArray(arr)) arr.forEach(patchRow);
+  }
+  if (Array.isArray(out.entries)) out.entries.forEach(patchRow);
+  if (out.currentUser) patchRow(out.currentUser);
+  if (out.myRankSupremo) patchRow(out.myRankSupremo);
+  out.viewerSpeedFromDashboardLogs = true;
 }
 
 /**
@@ -7138,6 +7116,9 @@ exports.getPeakPowerRanking = onRequest(
         }
         if (!out.entries.length && Array.isArray(out.byCategory.Supremo)) {
           out.entries = out.byCategory.Supremo.slice();
+        }
+        if (uid && !forceRankMv) {
+          await patchPersonalSpeedViewerFromDashboardRoute(db, out, uid, outStart, outEnd);
         }
         await finalizeRankingProfileUrls(out);
         return out;
