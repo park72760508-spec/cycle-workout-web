@@ -33,6 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ATTENDANCE_VERIFICATION_ENABLED = void 0;
 exports.calculateDistance = calculateDistance;
 exports.fetchActivityLatLngTimeStreams = fetchActivityLatLngTimeStreams;
 exports.executeVerifyAttendanceForEventId = executeVerifyAttendanceForEventId;
@@ -40,10 +41,17 @@ exports.createVerifyMeetingAttendance = createVerifyMeetingAttendance;
 exports.createScheduledRideAttendanceVerification = createScheduledRideAttendanceVerification;
 /**
  * 라이딩 모임 참석 검증: Strava 활동 스트림(latlng, time) + 집결지 반경 200m + 모임 시각 ±1시간
+ * (Google Places API 와 무관 — places.googleapis.com 미사용)
  */
 const admin = __importStar(require("firebase-admin"));
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
+/**
+ * Strava 참석 검증 기본 ON (Places API 미사용).
+ * 비활성화만 env: OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED=0 또는 false
+ */
+exports.ATTENDANCE_VERIFICATION_ENABLED = process.env.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED !== "0" &&
+    process.env.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED !== "false";
 /** 집결지 반경 (미터) */
 const MEETING_START_RADIUS_M = 200;
 /** 모임 시각 기준 앞뒤 허용 구간 (밀리초) = 1시간 */
@@ -650,6 +658,19 @@ async function executeVerifyAttendanceForEventId(db, eventId, clientSecretTrim, 
     if (!meetingId) {
         throw new https_1.HttpsError("invalid-argument", "meetingId 가 필요합니다.");
     }
+    if (!exports.ATTENDANCE_VERIFICATION_ENABLED) {
+        console.log("[verifyMeetingAttendance] 비활성화됨 — 실행 생략", { meetingId, callerUid });
+        return {
+            success: true,
+            meetingId,
+            processedCount: 0,
+            attendedCount: 0,
+            missedCount: 0,
+            skippedCount: 0,
+            details: [],
+            disabled: true,
+        };
+    }
     const meetingRef = db.collection("meetings").doc(meetingId);
     const meetingSnap = await meetingRef.get();
     const rideRef = db.collection("rides").doc(meetingId);
@@ -830,6 +851,10 @@ function createScheduledRideAttendanceVerification(stravaClientSecret) {
         timeoutSeconds: 540,
         memory: "512MiB",
     }, async () => {
+        if (!exports.ATTENDANCE_VERIFICATION_ENABLED) {
+            console.log("[scheduledRideAttendanceVerification] 비활성화됨 — 일괄 검증 생략");
+            return;
+        }
         const clientSecret = stravaClientSecret.value() || process.env.STRAVA_CLIENT_SECRET || "";
         if (!clientSecret.trim()) {
             console.error("[scheduledRideAttendanceVerification] STRAVA_CLIENT_SECRET 없음");
