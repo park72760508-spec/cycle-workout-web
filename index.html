@@ -12667,10 +12667,11 @@
             nmRow +
             rankMetaG +
             '</span>' +
-            bdge +
             '<span class="stelvio-rank-star-slot">' +
             stelvioRankingStarButtonHtml(itRow.userId, { omitGroupMember: true }) +
-            '</span></span>' +
+            '</span>' +
+            bdge +
+            '</span>' +
             '<span class="stelvio-rank-wkg">' +
             valS +
             '</span>'
@@ -12752,8 +12753,8 @@
           var oldBadges = nw.querySelectorAll('.ranking-private-badge, .stelvio-rank-owner-badge');
           for (var bi = 0; bi < oldBadges.length; bi++) oldBadges[bi].parentNode.removeChild(oldBadges[bi]);
           var ss = nw.querySelector('.stelvio-rank-star-slot');
-          if (badgeP && ss) ss.insertAdjacentHTML('beforebegin', badgeP);
           if (ss) ss.innerHTML = stelvioRankingStarButtonHtml(it.userId, { omitGroupMember: true });
+          if (badgeP && ss) ss.insertAdjacentHTML('afterend', badgeP);
           var wg = rowEl.querySelector(':scope > .stelvio-rank-wkg');
           if (wg) wg.textContent = valStr;
         }
@@ -13450,8 +13451,8 @@
             name +
             '</span>' +
             rankChangePart +
-            badgePart +
             stelvioRankingStarButtonHtml(item.userId) +
+            badgePart +
             '</span>';
           h += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
           h += '</div>';
@@ -13793,8 +13794,8 @@
           '</span>' +
           rankChangePart +
           globalPart +
-          badgePart +
           stelvioRankingStarButtonHtml(item.userId) +
+          badgePart +
           '</span>';
         html += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
         html += '</div>';
@@ -13844,8 +13845,8 @@
           mrName +
           '</span>' +
           mrRankChangePart +
-          mrBadgePart +
           stelvioRankingStarButtonHtml(mr.userId) +
+          mrBadgePart +
           '</span>';
         html += '<span class="stelvio-rank-wkg">' + mrVal + '</span>';
         html += '</div>';
