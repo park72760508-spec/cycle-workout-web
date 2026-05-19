@@ -3859,6 +3859,22 @@ function getRolling183DaysRangeSeoul() {
   return { startStr, endStr };
 }
 
+/** 23:35 KST 헵타곤 배치 직후부터 요구되는 최소 asOfSeoul (YYYY-MM-DD) */
+function getMinHeptagonSnapshotAsOfSeoulYmd() {
+  const now = Date.now();
+  const kstNow = new Date(now + 9 * 3600000);
+  const todayHept = Date.UTC(
+    kstNow.getUTCFullYear(),
+    kstNow.getUTCMonth(),
+    kstNow.getUTCDate(),
+    14,
+    35,
+    0
+  );
+  const lastHept = todayHept <= now ? todayHept : todayHept - 86400000;
+  return new Date(lastHept).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
 /** 대시보드·오픈라이딩과 동일 — 평지 항속(km/h) 역산 */
 function calculateSpeedOnFlat(power, weight) {
   const P = Number(power);
@@ -6050,7 +6066,7 @@ exports.scheduledWeeklyTssMidnightRefresh = onSchedule(
   }
 );
 
-// ---------- STELVIO 헵타곤·GC 랭킹: 전원 코호트 순위 → heptagon_cohort_ranks (일 1회 22:30 갱신, 조회는 스냅샷 읽기) ----------
+// ---------- STELVIO 헵타곤·GC 랭킹: 전원 코호트 순위 → heptagon_cohort_ranks (일 1회 23:35 KST 갱신, 조회는 스냅샷 읽기) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
 
 /** 스케줄·수동 배치 공통 — `scheduledHeptagonCohortRanks` / `manualRebuildHeptagonCohortRanks` */
@@ -7056,22 +7072,38 @@ exports.getPeakPowerRanking = onRequest(
       const tryReturnPrecomputed = async (aggPayload, meta) => {
         if (!aggPayload || !aggPayload.byCategory) return null;
         let working = aggPayload;
-        if (!personalSpeedAggregateLogicOk(working)) {
-          working = await enrichPersonalSpeedPackFromLogs(db, JSON.parse(JSON.stringify(aggPayload)), startStr, endStr);
-          if (!personalSpeedAggregateLogicOk(working)) return null;
+        let logicOk = personalSpeedAggregateLogicOk(working);
+        if (!logicOk) {
+          try {
+            working = await enrichPersonalSpeedPackFromLogs(
+              db,
+              JSON.parse(JSON.stringify(aggPayload)),
+              startStr,
+              endStr
+            );
+          } catch (eEnrichPs) {
+            console.warn("[getPeakPowerRanking personal_speed] enrich failed:", eEnrichPs && eEnrichPs.message);
+          }
+          logicOk = personalSpeedAggregateLogicOk(working);
         }
         const sanitized = sanitizePersonalSpeedRankingPack(working);
         if (!(sanitized.entries || []).length && !(sanitized.byCategory.Supremo || []).length) {
           return null;
         }
-        sanitized.peakDataSource = rankingDayRollup.PERSONAL_SPEED_PEAK_DATA_SOURCE;
-        sanitized.personalSpeedLogicVersion = rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION;
+        sanitized.peakDataSource =
+          working.peakDataSource || rankingDayRollup.PERSONAL_SPEED_PEAK_DATA_SOURCE;
+        sanitized.personalSpeedLogicVersion =
+          working.personalSpeedLogicVersion != null
+            ? working.personalSpeedLogicVersion
+            : rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION;
         await hydrateRankingBoardProfileImages(db, sanitized.byCategory, sanitized.entries);
+        const outMeta = { precomputed: true, ...(meta || {}) };
+        if (!logicOk) {
+          outMeta.staleAggregate = true;
+          outMeta.approximate = true;
+        }
         return res.status(200).json(
-          await buildPersonalSpeedOutFromPack(
-            { ...sanitized, startStr, endStr },
-            { precomputed: true, ...(meta || {}) }
-          )
+          await buildPersonalSpeedOutFromPack({ ...sanitized, startStr, endStr }, outMeta)
         );
       };
 
@@ -7105,6 +7137,17 @@ exports.getPeakPowerRanking = onRequest(
           });
           if (psStaleOut) return psStaleOut;
         }
+        const psAnyStale = await readRankingAggregatePayloadAllowStale(
+          db,
+          cacheKey,
+          PERSONAL_SPEED_STALE_AGG_MS
+        );
+        const psAnyOut = await tryReturnPrecomputed(psAnyStale, {
+          source: "ranking_aggregates_any_stale",
+          staleAggregate: true,
+        });
+        if (psAnyOut) return psAnyOut;
+
         const emptyBoard = emptyPeakRankingByCategory();
         return res.status(200).json(
           await buildPersonalSpeedOutFromPack(
@@ -7300,6 +7343,8 @@ exports.getPeakPowerRanking = onRequest(
         return res.status(500).json({ success: false, error: "gc_ranking_failed" });
       }
       const rollingFallback = getRolling28DaysRangeSeoul();
+      const minGcAsOf = getMinHeptagonSnapshotAsOfSeoulYmd();
+      const gcAsOf = snap.snapshotAsOfSeoul ? String(snap.snapshotAsOfSeoul).trim().slice(0, 10) : "";
       const out = {
         success: true,
         byCategory,
@@ -7310,8 +7355,10 @@ exports.getPeakPowerRanking = onRequest(
         durationType: "gc",
         gender: fg,
         gcMonthKey: monthKey,
-        gcSnapshotAsOf: snap.snapshotAsOfSeoul || null,
+        gcSnapshotAsOf: gcAsOf || null,
         gcSnapshotDaily: true,
+        gcMinSnapshotAsOf: minGcAsOf,
+        gcSnapshotStale: !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf),
         gcHeptagonRebuildDateKst: heptagonMeta && heptagonMeta.dateKst ? String(heptagonMeta.dateKst) : null,
       };
       if (uid) {
