@@ -10334,8 +10334,7 @@
         } else if (stelvioIsKmDistanceRanking()) {
           label.textContent = '최근 30일';
         } else if (stelvioIsGcRankingMode()) {
-          var gcSnap = typeof window.stelvioLastGcSnapshotAsOf === 'string' ? window.stelvioLastGcSnapshotAsOf : '';
-          label.textContent = gcSnap ? '월간 · 집계 ' + gcSnap : '월간';
+          label.textContent = '월간';
         } else {
           label.textContent = '월간';
         }
