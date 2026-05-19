@@ -3078,14 +3078,77 @@ async function markMasterDailyRankingRebuildComplete(db) {
   });
 }
 
-/** GC 헵타고 스냅샷(23:35 KST) 완료 시각 — 집계 여부 확인용 */
+/** GC 헵타곤 스냅샷(23:35 KST) 완료 시각 — 집계 여부 확인용 */
 async function markHeptagonDailyRebuildComplete(db, resultSummary) {
   const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).set({
-    dateKst,
-    completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    summary: resultSummary && typeof resultSummary === "object" ? resultSummary : null,
-  });
+  await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).set(
+    {
+      dateKst,
+      status: "complete",
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      runningAt: admin.firestore.FieldValue.delete(),
+      lastError: admin.firestore.FieldValue.delete(),
+      summary: resultSummary && typeof resultSummary === "object" ? resultSummary : null,
+    },
+    { merge: true }
+  );
+}
+
+async function markHeptagonRebuildRunning(db) {
+  const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).set(
+    {
+      dateKst,
+      status: "running",
+      runningAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+async function markHeptagonRebuildFailed(db, err) {
+  const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const msg = err && err.message ? err.message : String(err || "unknown");
+  await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).set(
+    {
+      dateKst,
+      status: "failed",
+      runningAt: admin.firestore.FieldValue.delete(),
+      lastError: msg,
+      failedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/** 수동 HTTP가 60초 게이트웨이에서 끊겨도 중복 백그라운드 실행 억제 */
+async function heptagonManualRebuildAlreadyRunning(db) {
+  try {
+    const snap = await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).get();
+    if (!snap.exists) return false;
+    const d = snap.data() || {};
+    if (String(d.status || "") !== "running" || !d.runningAt) return false;
+    const t =
+      typeof d.runningAt.toMillis === "function"
+        ? d.runningAt.toMillis()
+        : d.runningAt instanceof Date
+          ? d.runningAt.getTime()
+          : 0;
+    return t > 0 && Date.now() - t < 20 * 60 * 1000;
+  } catch (_e) {
+    return false;
+  }
+}
+
+function startHeptagonCohortRanksRebuildInBackground(db) {
+  markHeptagonRebuildRunning(db)
+    .then(() => runHeptagonCohortRanksRebuildJob())
+    .then((r) => markHeptagonDailyRebuildComplete(db, r))
+    .then(() => console.log("[heptagon background rebuild] ok"))
+    .catch((e) => {
+      console.error("[heptagon background rebuild]", e && e.message ? e.message : e);
+      return markHeptagonRebuildFailed(db, e);
+    });
 }
 
 /** 사용자 로그에서 주간 TSS 합계 (날짜별: strava 우선, 없으면 stelvio) — ranking_day_totals 일 버킹 집계 */
@@ -6209,15 +6272,22 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
       return;
     }
 
-    const runOk = async () => {
-      const db = admin.firestore();
-      const r = await runHeptagonCohortRanksRebuildJob();
-      await markHeptagonDailyRebuildComplete(db, r);
-      console.log("[manualRebuildHeptagonCohortRanks] ok", r);
-      res.status(200).json({
+    const runAccepted = async (db) => {
+      if (await heptagonManualRebuildAlreadyRunning(db)) {
+        res.status(409).json({
+          success: false,
+          error:
+            "헵타곤 재집계가 이미 실행 중입니다. ranking_meta/heptagon_daily_rebuild 의 status=running 을 확인하세요.",
+        });
+        return;
+      }
+      startHeptagonCohortRanksRebuildInBackground(db);
+      res.status(202).json({
         success: true,
-        message: "heptagon_cohort_ranks 스냅샷을 갱신했습니다. 랭킹 GC 조회는 이 데이터를 사용합니다.",
-        ...r,
+        accepted: true,
+        message:
+          "헵타곤(GC) 재집계를 백그라운드에서 시작했습니다. HTTP 게이트웨이(약 60초) 제한으로 동기 완료 응답은 불가합니다. 완료 후 ranking_meta/heptagon_daily_rebuild 의 status=complete 를 확인하세요.",
+        checkMetaDoc: `ranking_meta/${RANKING_HEPTAGON_REBUILD_META_DOC}`,
       });
     };
 
@@ -6231,7 +6301,8 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
         return;
       }
       try {
-        await runOk();
+        const db = admin.firestore();
+        await runAccepted(db);
       } catch (err) {
         console.error("[manualRebuildHeptagonCohortRanks]", err);
         res.status(500).json({
@@ -6272,7 +6343,7 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
         authorized = true;
       }
 
-      await runOk();
+      await runAccepted(db);
     } catch (err) {
       console.error("[manualRebuildHeptagonCohortRanks]", err);
       res.status(500).json({
