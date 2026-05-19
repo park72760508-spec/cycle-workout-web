@@ -5065,27 +5065,18 @@ function OpenRidingCreateForm(props) {
         </div>
       </div>
 
-      {typeof window.DepartureLocationPlaceInput === 'function' ? (
-        <DepartureLocationPlaceInput
+      <label className="block font-medium text-slate-700">
+        출발 장소
+        <input
+          type="text"
+          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
           value={form.departureLocation}
           disabled={isBusy}
-          resetKey={
-            editRideId
-              ? 'edit-' + editRideId + '-' + (editHydrated ? '1' : '0')
-              : 'create'
-          }
-          onChange={function (v) { set('departureLocation', v); }}
+          placeholder="예: 한강공원 여의도 출발"
+          maxLength={120}
+          onChange={function (e) { set('departureLocation', e.target.value); }}
         />
-      ) : (
-        <label className="block font-medium text-slate-700">
-          출발 장소
-          <input
-            className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-            value={form.departureLocation}
-            onChange={function (e) { set('departureLocation', e.target.value); }}
-          />
-        </label>
-      )}
+      </label>
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block font-medium text-slate-700">
