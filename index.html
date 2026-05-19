@@ -11691,12 +11691,8 @@
           if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
             data = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
           }
-          /* 사전집계(v11·대시보드 logs 루트)는 서버 peak60 기준 — 구버전만 본인 로그 보정 */
-          if (
-            uid &&
-            (data.precomputed !== true || Number(data.personalSpeedLogicVersion) < STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER) &&
-            typeof window.stelvioAlignPersonalSpeedRankingWithDashboard === 'function'
-          ) {
+          /* 본인 행: 항상 대시보드 「나의 1시간 항속 능력」과 동일(6개월 60분 MMP·현재 체중) */
+          if (uid && typeof window.stelvioAlignPersonalSpeedRankingWithDashboard === 'function') {
             data = await window.stelvioAlignPersonalSpeedRankingWithDashboard(data, uid);
           }
         } catch (eAlignSpd) {
@@ -11932,13 +11928,17 @@
         if (content) content.style.opacity = '1';
         var working = stelvioCloneRankingPayload(body);
         var instant = opts.instant !== false && stelvioRankingCacheAllowsInstantApply(working);
-        if (instant) {
+        var psNeedsViewerAlign =
+          uid &&
+          typeof stelvioIsPersonalSpeedRanking === 'function' &&
+          stelvioIsPersonalSpeedRanking();
+        if (instant && !psNeedsViewerAlign) {
           if (typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()) {
             working = stelvioApplyPersonalSpeedPayloadSyncPatches(working);
           }
           stelvioApplyPeakRankingFetchResult(working, myGen, uid);
         } else {
-          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(working, myGen, uid);
+          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(working, myGen, uid, opts);
         }
         stelvioApplyDurationModeUi();
         if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
