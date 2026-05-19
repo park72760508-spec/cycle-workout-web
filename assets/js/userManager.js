@@ -201,7 +201,9 @@ function pruneStelvioLocalStorageForQuota() {
       if (k) keys.push(k);
     }
     keys.forEach(function (k) {
-      if (k.indexOf('stelvio_rank_prev') === 0) {
+      if (k.indexOf('stelvio_rank_favorites:') === 0) {
+        /* 랭킹 관심 목록 — 용량 정리 시 삭제하지 않음 */
+      } else if (k.indexOf('stelvio_rank_prev') === 0) {
         try {
           localStorage.removeItem(k);
         } catch (_e) {}
@@ -240,7 +242,11 @@ function persistStelvioUserToLocalStorage(user, opts) {
   };
   try {
     write();
-    if (typeof window.stelvioRefreshRankingFavoriteSetFromStorage === 'function') {
+    if (typeof window.stelvioRankingFavoritesRehydrateAndMaybeRender === 'function') {
+      try {
+        window.stelvioRankingFavoritesRehydrateAndMaybeRender();
+      } catch (_eFav) {}
+    } else if (typeof window.stelvioRefreshRankingFavoriteSetFromStorage === 'function') {
       try {
         window.stelvioRefreshRankingFavoriteSetFromStorage();
       } catch (_eFav) {}
@@ -252,7 +258,11 @@ function persistStelvioUserToLocalStorage(user, opts) {
       pruneStelvioLocalStorageForQuota();
       try {
         write();
-        if (typeof window.stelvioRefreshRankingFavoriteSetFromStorage === 'function') {
+        if (typeof window.stelvioRankingFavoritesRehydrateAndMaybeRender === 'function') {
+          try {
+            window.stelvioRankingFavoritesRehydrateAndMaybeRender();
+          } catch (_eFav2) {}
+        } else if (typeof window.stelvioRefreshRankingFavoriteSetFromStorage === 'function') {
           try {
             window.stelvioRefreshRankingFavoriteSetFromStorage();
           } catch (_eFav2) {}
