@@ -10,13 +10,12 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 type StravaClientSecretParam = ReturnType<typeof import("firebase-functions/params").defineSecret>;
 
 /**
- * 당분간 참석 검증 비활성화.
- * 재개: true 로 변경 후 functions 재배포 (또는 env OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED=1).
+ * Strava 참석 검증 기본 ON (Places API 미사용).
+ * 비활성화만 env: OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED=0 또는 false
  */
 export const ATTENDANCE_VERIFICATION_ENABLED =
-  process.env.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED === "1" ||
-  process.env.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED === "true" ||
-  false;
+  process.env.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED !== "0" &&
+  process.env.OPEN_RIDING_ATTENDANCE_VERIFICATION_ENABLED !== "false";
 
 /** 집결지 반경 (미터) */
 const MEETING_START_RADIUS_M = 200;
