@@ -8699,6 +8699,12 @@
           uid = u && (u.id || u.uid) ? u.id || u.uid : null;
         } catch (e1) { uid = null; }
       }
+      if (!uid) {
+        try {
+          var au = JSON.parse(localStorage.getItem('authUser') || 'null');
+          uid = au && (au.id || au.uid) ? au.id || au.uid : null;
+        } catch (eAu) { uid = null; }
+      }
       if (!uid && window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
         uid = window.auth.currentUser.uid;
       }
@@ -8707,6 +8713,102 @@
       }
       return uid ? String(uid).trim() : '';
     }
+    function stelvioGetRankingFirestoreCompat() {
+      if (window.firestore && typeof window.firestore.collection === 'function') return window.firestore;
+      try {
+        if (typeof firebase !== 'undefined' && firebase.firestore && typeof firebase.firestore === 'function') {
+          return firebase.firestore();
+        }
+      } catch (eFs) {}
+      return null;
+    }
+    var STELVIO_RANKING_FAVORITES_FS_FIELD = 'rankingFavoriteUserIds';
+    var stelvioRankingFavoritesFirestoreSaveTimer = null;
+    function stelvioRankingFavoritesFirestoreTimestamp() {
+      try {
+        if (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldValue) {
+          return firebase.firestore.FieldValue.serverTimestamp();
+        }
+      } catch (eTs) {}
+      return new Date().toISOString();
+    }
+    async function stelvioLoadRankingFavoriteIdsFromFirestore(ownerUid) {
+      if (!ownerUid) return [];
+      var fs = stelvioGetRankingFirestoreCompat();
+      if (!fs || typeof fs.collection !== 'function') return [];
+      try {
+        var snap = await Promise.race([
+          fs.collection('users').doc(String(ownerUid)).get(),
+          new Promise(function (_, reject) {
+            setTimeout(function () {
+              reject(new Error('stelvio-ranking-favorites-fs-timeout'));
+            }, 12000);
+          }),
+        ]);
+        if (!snap || !snap.exists) return [];
+        var d = snap.data() || {};
+        var arr = d[STELVIO_RANKING_FAVORITES_FS_FIELD];
+        if (!Array.isArray(arr)) return [];
+        return arr.map(function (x) { return String(x); }).filter(Boolean);
+      } catch (eLoadFs) {
+        if (typeof stelvioAdminWarn === 'function') {
+          stelvioAdminWarn('[StelvioRanking] 관심 Firestore 로드 실패:', eLoadFs && eLoadFs.message ? eLoadFs.message : eLoadFs);
+        }
+        return [];
+      }
+    }
+    function stelvioSchedulePersistRankingFavoritesToFirestore() {
+      var ownerUid = stelvioResolveRankingFavoritesOwnerUid();
+      if (!ownerUid) return;
+      if (stelvioRankingFavoritesFirestoreSaveTimer) {
+        clearTimeout(stelvioRankingFavoritesFirestoreSaveTimer);
+      }
+      stelvioRankingFavoritesFirestoreSaveTimer = setTimeout(function () {
+        stelvioRankingFavoritesFirestoreSaveTimer = null;
+        stelvioPersistRankingFavoritesToFirestoreNow();
+      }, 700);
+    }
+    async function stelvioPersistRankingFavoritesToFirestoreNow() {
+      var ownerUid = stelvioResolveRankingFavoritesOwnerUid();
+      if (!ownerUid) return;
+      var fs = stelvioGetRankingFirestoreCompat();
+      if (!fs || typeof fs.collection !== 'function') return;
+      var ids = Array.from(stelvioRankingFavoriteUserSet);
+      if (ids.length > 500) ids = ids.slice(0, 500);
+      var patch = {};
+      patch[STELVIO_RANKING_FAVORITES_FS_FIELD] = ids;
+      patch.rankingFavoritesUpdatedAt = stelvioRankingFavoritesFirestoreTimestamp();
+      try {
+        await fs.collection('users').doc(String(ownerUid)).set(patch, { merge: true });
+      } catch (eSaveFs) {
+        if (typeof stelvioAdminWarn === 'function') {
+          stelvioAdminWarn('[StelvioRanking] 관심 Firestore 저장 실패:', eSaveFs && eSaveFs.message ? eSaveFs.message : eSaveFs);
+        }
+      }
+    }
+    async function stelvioRefreshRankingFavoritesFromFirestore(opts) {
+      opts = opts || {};
+      var ownerUid = stelvioResolveRankingFavoritesOwnerUid();
+      if (!ownerUid) return;
+      var fromFs = await stelvioLoadRankingFavoriteIdsFromFirestore(ownerUid);
+      if (!fromFs.length && opts.replaceMemory !== true) return;
+      if (opts.replaceMemory === true) {
+        stelvioRankingFavoriteUserSet = new Set(fromFs);
+      } else {
+        var unionFs = new Set(stelvioRankingFavoriteUserSet);
+        fromFs.forEach(function (id) {
+          unionFs.add(id);
+        });
+        stelvioRankingFavoriteUserSet = unionFs;
+      }
+      if (stelvioRankingFavoriteUserSet.size) {
+        stelvioPersistRankingFavoritesToLocalStorage();
+      }
+      if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') {
+        renderStelvioActiveCategory();
+      }
+    }
+    window.stelvioRefreshRankingFavoritesFromFirestore = stelvioRefreshRankingFavoritesFromFirestore;
     function stelvioRankingFavoritesSessionKeyForUid(ownerUid) {
       return stelvioRankingFavoritesSsPrefix + (ownerUid || '_guest');
     }
@@ -8826,6 +8928,7 @@
         }
       }
       var ssOk = stelvioPersistRankingFavoritesToSessionStorage(ownerUid, payload);
+      stelvioSchedulePersistRankingFavoritesToFirestore();
       return lsOk || ssOk;
     }
   /**
@@ -8857,6 +8960,20 @@
       if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') {
         renderStelvioActiveCategory();
       }
+      /* 모바일 WebView: localStorage가 앱 재시작 후 비는 경우가 많아 Firestore를 권위 소스로 병합 */
+      stelvioRefreshRankingFavoritesFromFirestore(opts).catch(function () {});
+    }
+    function stelvioFlushRankingFavoritesPersistence() {
+      if (stelvioRankingFavoritesFirestoreSaveTimer) {
+        clearTimeout(stelvioRankingFavoritesFirestoreSaveTimer);
+        stelvioRankingFavoritesFirestoreSaveTimer = null;
+      }
+      if (stelvioRankingFavoriteUserSet && stelvioRankingFavoriteUserSet.size) {
+        stelvioPersistRankingFavoritesToLocalStorage();
+      } else if (stelvioResolveRankingFavoritesOwnerUid()) {
+        stelvioPersistRankingFavoritesToLocalStorage();
+      }
+      stelvioPersistRankingFavoritesToFirestoreNow();
     }
     /** Supremo(전체): API item.rank = 전체 순위. 그 외 카테고리: item.rank는 전체 기준으로 박혀 있으므로 부문 순위는 전체 목록 기준 재계산 */
     function stelvioCategoryRankInFullList(byCategory, categoryKey, userId) {
@@ -9067,15 +9184,11 @@
     if (!window._stelvioRankingFavoritesPagehideBound) {
       window._stelvioRankingFavoritesPagehideBound = true;
       window.addEventListener('pagehide', function () {
-        if (stelvioRankingFavoriteUserSet && stelvioRankingFavoriteUserSet.size) {
-          stelvioPersistRankingFavoritesToLocalStorage();
-        }
+        stelvioFlushRankingFavoritesPersistence();
       });
       document.addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'hidden') {
-          if (stelvioRankingFavoriteUserSet && stelvioRankingFavoriteUserSet.size) {
-            stelvioPersistRankingFavoritesToLocalStorage();
-          }
+          stelvioFlushRankingFavoritesPersistence();
           return;
         }
         if (document.visibilityState === 'visible') {
