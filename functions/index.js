@@ -5211,6 +5211,7 @@ async function persistPersonalSpeedRankingPack(db, cacheKey, pack, startStr, end
     endStr,
     personalSpeedLogicVersion: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
     peakDataSource: rankingDayRollup.PERSONAL_SPEED_PEAK_DATA_SOURCE,
+    ...(pack && pack.dashboardLogRouteEnriched === true ? { dashboardLogRouteEnriched: true } : {}),
   };
   await writeRankingAggregatePayload(db, cacheKey, payload);
   await db
@@ -5313,6 +5314,7 @@ async function enrichPersonalSpeedPackFromLogs(db, pack, startStr, endStr) {
     merged.push(e);
   });
   pack.entries = merged.map((e, i) => ({ ...e, rank: i + 1 }));
+  pack.dashboardLogRouteEnriched = true;
   return pack;
 }
 
@@ -5924,6 +5926,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
       logBatchSize: 25,
       syncRollups: true,
     });
+    spd.dashboardLogRouteEnriched = true;
     await applyPeakRankChanges(db, spd.byCategory, `peak_personal_speed_rolling183_${gender}`);
     const keyS = `peakRanking_personal_speed_183d_${gender}_${r183s}_${r183e}`;
     await persistPersonalSpeedRankingPack(db, keyS, spd, r183s, r183e);
@@ -7157,24 +7160,25 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
-      /** 1) 일일 집계(manualRebuild)로 저장된 사전집계 우선 — 빠른 응답 */
+      /**
+       * 사전집계·캐시 hit 시에도 전원 대시보드 로그 루트 재산출(수동 집계·23:00 build와 동일).
+       * logicOk 만으로 enrich 생략하면 구 rollup/FTP·체중 변경분이 남아 속도 불일치 발생.
+       */
       const tryReturnPrecomputed = async (aggPayload, meta) => {
         if (!aggPayload || !aggPayload.byCategory) return null;
-        let working = aggPayload;
-        let logicOk = personalSpeedAggregateLogicOk(working);
-        if (!logicOk) {
-          try {
-            working = await enrichPersonalSpeedPackFromLogs(
-              db,
-              JSON.parse(JSON.stringify(aggPayload)),
-              startStr,
-              endStr
-            );
-          } catch (eEnrichPs) {
-            console.warn("[getPeakPowerRanking personal_speed] enrich failed:", eEnrichPs && eEnrichPs.message);
-          }
-          logicOk = personalSpeedAggregateLogicOk(working);
+        let working;
+        try {
+          working = await enrichPersonalSpeedPackFromLogs(
+            db,
+            JSON.parse(JSON.stringify(aggPayload)),
+            startStr,
+            endStr
+          );
+        } catch (eEnrichPs) {
+          console.warn("[getPeakPowerRanking personal_speed] enrich failed:", eEnrichPs && eEnrichPs.message);
+          working = aggPayload;
         }
+        const logicOk = personalSpeedAggregateLogicOk(working);
         const sanitized = sanitizePersonalSpeedRankingPack(working);
         if (!(sanitized.entries || []).length && !(sanitized.byCategory.Supremo || []).length) {
           return null;
@@ -7185,11 +7189,16 @@ exports.getPeakPowerRanking = onRequest(
           working.personalSpeedLogicVersion != null
             ? working.personalSpeedLogicVersion
             : rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION;
+        sanitized.dashboardLogRouteEnriched = true;
         await hydrateRankingBoardProfileImages(db, sanitized.byCategory, sanitized.entries);
-        const outMeta = { precomputed: true, ...(meta || {}) };
+        const outMeta = {
+          precomputed: true,
+          dashboardLogRouteEnriched: true,
+          peakDataSource: sanitized.peakDataSource,
+          ...(meta || {}),
+        };
         if (!logicOk) {
           outMeta.staleAggregate = true;
-          outMeta.approximate = true;
         }
         return res.status(200).json(
           await buildPersonalSpeedOutFromPack({ ...sanitized, startStr, endStr }, outMeta)
@@ -7236,19 +7245,6 @@ exports.getPeakPowerRanking = onRequest(
           staleAggregate: true,
         });
         if (psAnyOut) return psAnyOut;
-
-        const approxPack = await getPersonalSpeedRankingFromMonthly60minFallback(db, gender);
-        if (approxPack) {
-          const approxOut = await tryReturnPrecomputed(
-            {
-              ...approxPack,
-              personalSpeedLogicVersion: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
-              peakDataSource: rankingDayRollup.PERSONAL_SPEED_PEAK_DATA_SOURCE,
-            },
-            { approximate: true, source: "monthly_60min_fallback" }
-          );
-          if (approxOut) return approxOut;
-        }
 
         const rollupLockKey = `http_ps_rollup_${cacheKey}`;
         if (await tryAcquireRankingHttpLiveRebuildLock(db, rollupLockKey)) {
@@ -7308,17 +7304,14 @@ exports.getPeakPowerRanking = onRequest(
         }
       );
       await applyPeakRankChanges(db, boardLive.byCategory, `peak_personal_speed_rolling183_${gender}`);
+      boardLive.dashboardLogRouteEnriched = true;
       const psPayload = await persistPersonalSpeedRankingPack(db, cacheKey, boardLive, startStr, endStr);
-      await hydrateRankingBoardProfileImages(db, psPayload.byCategory, psPayload.entries);
-      if ((psPayload.entries || []).length > 0 || (psPayload.byCategory.Supremo || []).length > 0) {
-        return res.status(200).json(
-          await buildPersonalSpeedOutFromPack(psPayload, {
-            precomputed: true,
-            rebuiltOnDemand: true,
-            fromUserRollups: true,
-          })
-        );
-      }
+      const liveEnrichedOut = await tryReturnPrecomputed(psPayload, {
+        rebuiltOnDemand: true,
+        fromUserRollups: true,
+        source: "live_rollup_build",
+      });
+      if (liveEnrichedOut) return liveEnrichedOut;
       const emptyBoard = emptyPeakRankingByCategory();
       return res.status(200).json(
         await buildPersonalSpeedOutFromPack(
