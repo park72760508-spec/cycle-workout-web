@@ -11685,13 +11685,16 @@
         data.byCategory
       ) {
         try {
-          if (typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function') {
+          if (
+            data.dashboardLogRouteEnriched !== true &&
+            typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function'
+          ) {
             data = window.stelvioRecalcPersonalSpeedBoardFromPeak60(data);
           }
           if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
             data = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
           }
-          /* 본인 행: 항상 대시보드 「나의 1시간 항속 능력」과 동일(6개월 60분 MMP·현재 체중) */
+          /* 본인 행: 로컬 프로필·로그로 한 번 더 맞춤(서버 enrich 후에도 체중 즉시 반영) */
           if (uid && typeof window.stelvioAlignPersonalSpeedRankingWithDashboard === 'function') {
             data = await window.stelvioAlignPersonalSpeedRankingWithDashboard(data, uid);
           }
@@ -11901,9 +11904,13 @@
           return stelvioGcPayloadMatchesLatestSnapshot(body);
         }
         if (typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()) {
-          if (stelvioRankingPayloadHasVisibleRows(body) && (body.approximate === true || body.staleAggregate === true)) {
+          if (body.dashboardLogRouteEnriched === true && stelvioRankingPayloadHasVisibleRows(body)) {
             return true;
           }
+          if (stelvioRankingPayloadHasVisibleRows(body) && body.staleAggregate === true) {
+            return true;
+          }
+          if (body.approximate === true) return false;
           if (stelvioPersonalSpeedBoardPayloadStale(body)) return false;
           if (body.precomputed === true) return true;
           return false;
@@ -11913,7 +11920,10 @@
 
       function stelvioApplyPersonalSpeedPayloadSyncPatches(data) {
         if (!data || !data.byCategory) return data;
-        if (typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function') {
+        if (
+          data.dashboardLogRouteEnriched !== true &&
+          typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function'
+        ) {
           data = window.stelvioRecalcPersonalSpeedBoardFromPeak60(data);
         }
         if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
@@ -12141,7 +12151,8 @@
           data2HasRows &&
           typeof stelvioIsPersonalSpeedRanking === 'function' &&
           stelvioIsPersonalSpeedRanking() &&
-          (data2.approximate === true || data2.staleAggregate === true);
+          data2.staleAggregate === true &&
+          data2.dashboardLogRouteEnriched !== true;
         var data2WindowOk =
           data2HasRows &&
           (data2PsApprox ||
