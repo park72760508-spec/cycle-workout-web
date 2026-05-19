@@ -7909,6 +7909,60 @@
       return 'weeklyTop10:' + kind + ':' + range.startStr + '_' + range.endStr + ':' + uid;
     }
 
+    /** 랭킹보드 TSS 탭·주간 TOP10 — 응답 startStr/endStr가 이번 주(월~오늘)와 일치하는지 */
+    function stelvioWeeklyTssBoardPayloadMatchesWeek(data) {
+      return weeklyTop10PayloadMatchesWeek(data, 0);
+    }
+
+    function stelvioRankingPayloadHasVisibleRows(data) {
+      if (!data || !data.byCategory) return false;
+      var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      for (var vi = 0; vi < cats.length; vi++) {
+        var rows = data.byCategory[cats[vi]];
+        if (Array.isArray(rows) && rows.length > 0) return true;
+      }
+      return false;
+    }
+
+    /** GC·피크(28일) 등 API 기간이 오늘 기준 창과 맞는지 */
+    function stelvioRankingPayloadMatchesCurrentApiWindow(data) {
+      if (!data || data.startStr == null || data.endStr == null) return true;
+      if (data.durationType === 'tss' || (typeof stelvioIsTssRankingMode === 'function' && stelvioIsTssRankingMode())) {
+        return stelvioWeeklyTssBoardPayloadMatchesWeek(data);
+      }
+      if (data.durationType === 'personal_dist') {
+        try {
+          var todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+          var tp = todayStr.split('-');
+          var ty = parseInt(tp[0], 10);
+          var tm = parseInt(tp[1], 10);
+          var td = parseInt(tp[2], 10);
+          var tdt = new Date(ty, tm - 1, td);
+          tdt.setDate(tdt.getDate() - 29);
+          var pad = function (n) { return String(n).padStart(2, '0'); };
+          var expS = tdt.getFullYear() + '-' + pad(tdt.getMonth() + 1) + '-' + pad(tdt.getDate());
+          return String(data.startStr) === String(expS) && String(data.endStr) === String(todayStr);
+        } catch (eR30) {
+          return true;
+        }
+      }
+      if (data.durationType === 'gc') return true;
+      try {
+        var todayStr2 = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        var p2 = todayStr2.split('-');
+        var y2 = parseInt(p2[0], 10);
+        var m2 = parseInt(p2[1], 10);
+        var d2 = parseInt(p2[2], 10);
+        var ed = new Date(y2, m2 - 1, d2);
+        ed.setDate(ed.getDate() - 27);
+        var pad2 = function (n2) { return String(n2).padStart(2, '0'); };
+        var expS2 = ed.getFullYear() + '-' + pad2(ed.getMonth() + 1) + '-' + pad2(ed.getDate());
+        return String(data.startStr) === String(expS2) && String(data.endStr) === String(todayStr2);
+      } catch (eR28) {
+        return true;
+      }
+    }
+
     /** Asia/Seoul 기준 오늘 날짜 YYYY-MM-DD (오늘 그만 보기 판별용) */
     function getSeoulDateStringYYYYMMDD() {
       try {
@@ -10764,6 +10818,8 @@
           if ((fp.get('period') || 'monthly') !== wantPeriod) continue;
           var soft = stelvioRankingLocalCache.getSoft(suffix);
           if (!soft || !soft.data || !soft.data.success || !soft.data.byCategory) continue;
+          if (!stelvioRankingPayloadHasVisibleRows(soft.data)) continue;
+          if (!stelvioRankingPayloadMatchesCurrentApiWindow(soft.data)) continue;
           if (soft.cachedAt >= bestAt) {
             bestAt = soft.cachedAt;
             best = soft;
@@ -11546,12 +11602,22 @@
     function stelvioApplyPeakRankingFetchResult(data, myGen, uid, applyOpts) {
       applyOpts = applyOpts || {};
       if (myGen !== stelvioRankingFetchGen) return;
-      if (!data || !data.success || !data.byCategory) {
+      if (
+        !data ||
+        !data.success ||
+        !data.byCategory ||
+        !stelvioRankingPayloadHasVisibleRows(data) ||
+        (data.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(data))
+      ) {
         stelvioRankingFullEntries = null;
         stelvioRankingByCategory = null;
         stelvioRankingApiStartStr = '';
         stelvioRankingApiEndStr = '';
-        renderStelvioRankingError('데이터를 불러올 수 없습니다.');
+        renderStelvioRankingError(
+          data && data.pendingAggregate
+            ? '랭킹 집계를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.'
+            : '데이터를 불러올 수 없습니다.'
+        );
         refreshStelvioDistributionChartMounted();
         return;
       }
@@ -11697,6 +11763,8 @@
           : STELVIO_RANKING_FETCH_TIMEOUT_MS;
 
       function saveFreshPeakData(data) {
+        if (!data || !stelvioRankingPayloadHasVisibleRows(data)) return;
+        if (!stelvioRankingPayloadMatchesCurrentApiWindow(data)) return;
         stelvioRankingMemCacheSet(swrKey, data);
         stelvioRankingLocalCache.set(lcKey, data);
       }
@@ -11749,10 +11817,20 @@
         return stelvioPeakRankMovementPresentOnPayload(working);
       }
 
+      function softRankingCacheUsable(soft) {
+        if (!soft || !soft.data || !soft.data.success || !soft.data.byCategory) return false;
+        if (soft.data.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(soft.data)) return false;
+        if (!stelvioRankingPayloadHasVisibleRows(soft.data)) return false;
+        if (!stelvioRankingPayloadMatchesCurrentApiWindow(soft.data)) return false;
+        var ts = soft.cachedAt || 0;
+        if (lastRollover > 0 && ts < lastRollover) return false;
+        return true;
+      }
+
       function tryApplySoftFallback() {
         var soft =
           stelvioRankingLocalCache.getSoft(lcKey) || stelvioFindRankingBoardCacheFallback(cacheKeyStr);
-        if (soft && soft.data && soft.data.success && soft.data.byCategory) {
+        if (softRankingCacheUsable(soft)) {
           applyFromCache(soft.data);
           stelvioSetRankingRefreshHint(true);
           return true;
@@ -11796,9 +11874,12 @@
           bgRevalidate(false).catch(function () {});
         }
       }
-      /** GC: 일 1회 스냅샷·CDN 캐시로 충분 — 백그라운드 재요청 시 이중 로딩·타임아웃 유발 */
+      /** GC: 23:00 KST 롤오버 직후에는 반드시 재조회(어제 soft 캐시 고착 방지). 그 외 탭은 기존 SWR */
       function scheduleBgRefreshIfNeeded(includeRankMv) {
         if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
+          if (lastRollover > 0 && nowMs - lastRollover < 6 * 60 * 60 * 1000) {
+            scheduleBgRefresh(false);
+          }
           return;
         }
         scheduleBgRefresh(includeRankMv);
@@ -11825,6 +11906,9 @@
 
       function cacheEntryUsable(entryTs, body) {
         if (!body || !body.success || !body.byCategory) return false;
+        if (body.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(body)) return false;
+        if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
+        if (!stelvioRankingPayloadMatchesCurrentApiWindow(body)) return false;
         if (isPsRank && stelvioPersonalSpeedBoardPayloadStale(body)) return false;
         if (lastRollover > 0 && entryTs < lastRollover) return false;
         if (nowMs - entryTs >= swrMaxMs) return false;
@@ -11890,7 +11974,14 @@
       try {
         var data2 = await stelvioRankingBoardFetchJson(urlFast, fetchTimeoutMs, myGen);
         if (myGen !== stelvioRankingFetchGen) return;
-        if (data2 && data2.success && data2.byCategory) {
+        if (
+          data2 &&
+          data2.success &&
+          data2.byCategory &&
+          stelvioRankingPayloadHasVisibleRows(data2) &&
+          stelvioRankingPayloadMatchesCurrentApiWindow(data2) &&
+          (!stelvioIsTssRankingMode() || stelvioWeeklyTssBoardPayloadMatchesWeek(data2))
+        ) {
           await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
           saveFreshPeakData(data2);
           stelvioSetRankingRefreshHint(false);
@@ -11901,6 +11992,8 @@
             data2.precomputed === true &&
             !stelvioPersonalSpeedBoardPayloadStale(data2);
           if (!psSkipBg) scheduleBgRefreshIfNeeded(false);
+        } else if (!showedSoft && tryApplySoftFallback()) {
+          scheduleBgRefreshIfNeeded(true);
         } else if (!showedSoft) {
           await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
         }
