@@ -2788,6 +2788,83 @@ function OpenRidingDetailGlassNav(props) {
   return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 상세 하단 메뉴" />;
 }
 
+/** 세부 내용 본문 하단: 수정·폭파·삭제 (방장·관리자, 네비와 동일 라벨·동작) */
+function OpenRidingDetailHostActions(props) {
+  var onEdit = props.onEdit || function () {};
+  var onCancel = props.onCancel || function () {};
+  var onDelete = props.onDelete || function () {};
+  var hostToolbarLocked = !!props.hostToolbarLocked;
+  var dis = hostToolbarLocked;
+
+  function permTitle(kind) {
+    if (kind === 'edit') {
+      return dis ? '라이딩 일정일이 지나 수정할 수 없습니다.' : undefined;
+    }
+    if (kind === 'cancel') {
+      return dis ? '라이딩 일정일이 지나 폭파할 수 없습니다.' : undefined;
+    }
+    return dis ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined;
+  }
+
+  function actionEntry(caption, btnInner, kind) {
+    return (
+      <div className="open-riding-detail-host-action-entry flex flex-col items-center gap-1 w-full" key={caption}>
+        <button
+          type="button"
+          className="open-riding-action-btn open-riding-detail-host-action-btn w-full min-h-[3.25rem] inline-flex flex-col items-center justify-center gap-1 rounded-xl border border-slate-200/90 bg-white text-slate-800 shadow-sm disabled:opacity-50 py-2.5 px-3"
+          disabled={dis}
+          aria-label={'라이딩 ' + caption}
+          title={permTitle(kind)}
+          onClick={
+            kind === 'edit' ? onEdit : kind === 'cancel' ? onCancel : onDelete
+          }
+        >
+          {btnInner}
+          <span className="open-riding-detail-host-action-caption open-riding-bottom-glass-nav__label text-[11px] font-medium text-slate-600 leading-tight">
+            {caption}
+          </span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="open-riding-detail-host-actions open-riding-bottom-actions mt-4" role="toolbar" aria-label="라이딩 관리">
+      <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto">
+        {actionEntry(
+          '수정',
+          <OpenRidingDashboardEditIcon className="shrink-0 text-violet-600 open-riding-bottom-glass-nav__icon" />,
+          'edit'
+        )}
+        {actionEntry(
+          '폭파',
+          <img
+            src="assets/img/cancel01.png"
+            alt=""
+            width={22}
+            height={22}
+            className="open-riding-bottom-glass-nav__friend-img block object-contain shrink-0"
+            decoding="async"
+          />,
+          'cancel'
+        )}
+        {actionEntry(
+          '삭제',
+          <img
+            src="assets/img/delete2.png"
+            alt=""
+            width={22}
+            height={22}
+            className="open-riding-bottom-glass-nav__friend-img block object-contain shrink-0"
+            decoding="async"
+          />,
+          'delete'
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** 수정 폼 하단: 모임·수정(상세)·삭제·저장 */
 function OpenRidingEditGlassNav(props) {
   var onMoim = props.onMoim || function () {};
@@ -7615,6 +7692,19 @@ function OpenRidingDetail(props) {
         </div>
       ) : null}
 
+      {!isCancelled && (isHost || _isAdmin1) ? (
+        <OpenRidingDetailHostActions
+          onEdit={onOpenEdit}
+          onCancel={function () {
+            prepareHostRefundPreviewAndOpen('cancel');
+          }}
+          onDelete={function () {
+            prepareHostRefundPreviewAndOpen('delete');
+          }}
+          hostToolbarLocked={hostToolbarPastLocked}
+        />
+      ) : null}
+
       {joinShareModalOpen ? (
         <div
           className="fixed inset-0 z-[200075] flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm"
@@ -7831,19 +7921,6 @@ function OpenRidingDetail(props) {
         </div>
       ) : null}
     </div>
-    <OpenRidingDetailGlassNav
-      onHome={onHome}
-      onMoim={onBack}
-      onEdit={onOpenEdit}
-      onCancel={function () {
-        prepareHostRefundPreviewAndOpen('cancel');
-      }}
-      onDelete={function () {
-        prepareHostRefundPreviewAndOpen('delete');
-      }}
-      hostToolbarLocked={hostToolbarPastLocked}
-      showHostActions={!isCancelled && (isHost || _isAdmin1)}
-    />
     </>
   );
 }
@@ -10771,6 +10848,30 @@ function OpenRidingRoomApp(props) {
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
+          ) : view === 'detail' && detailRideId ? (
+            <button
+              type="button"
+              className="open-riding-action-btn shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100/90 -ml-0.5"
+              onClick={function () {
+                setDetailRideId(null);
+                setView('main');
+              }}
+              aria-label="라이딩 모임으로 뒤로"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
           ) : (
             <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
           )}
@@ -10804,7 +10905,8 @@ function OpenRidingRoomApp(props) {
         view === 'groups' ||
         view === 'groupCreate' ||
         view === 'groupEdit' ||
-        (view === 'groupDetail' && detailGroupId)) ? (
+        (view === 'groupDetail' && detailGroupId) ||
+        (view === 'detail' && detailRideId)) ? (
         <OpenRidingBottomGlassNav
           navVariant={
             view === 'filter'
@@ -10823,6 +10925,7 @@ function OpenRidingRoomApp(props) {
           }}
           onMoim={function () {
             setDetailGroupId(null);
+            setDetailRideId(null);
             setView('main');
           }}
           onFilter={function () {
