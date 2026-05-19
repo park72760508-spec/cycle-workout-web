@@ -7851,6 +7851,64 @@
       }
     }
 
+    /** getWeekRangeSeoul(weekOffset) — Functions와 동일 (월요일~오늘 / 전주 월~일) */
+    function getWeekRangeSeoulClient(weekOffset) {
+      weekOffset = weekOffset == null ? 0 : Number(weekOffset);
+      try {
+        var todayStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Seoul',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date());
+        var parts = todayStr.split('-');
+        var y = parseInt(parts[0], 10);
+        var m = parseInt(parts[1], 10);
+        var d = parseInt(parts[2], 10);
+        var today = new Date(y, m - 1, d);
+        var dayOfWeek = today.getDay();
+        var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        var monday = new Date(today);
+        monday.setDate(today.getDate() + mondayOffset);
+        if (weekOffset < 0) {
+          monday.setDate(monday.getDate() + weekOffset * 7);
+          var sunday = new Date(monday);
+          sunday.setDate(monday.getDate() + 6);
+          var pad = function (n) {
+            return String(n).padStart(2, '0');
+          };
+          return {
+            startStr:
+              monday.getFullYear() + '-' + pad(monday.getMonth() + 1) + '-' + pad(monday.getDate()),
+            endStr: sunday.getFullYear() + '-' + pad(sunday.getMonth() + 1) + '-' + pad(sunday.getDate()),
+          };
+        }
+        var pad2 = function (n2) {
+          return String(n2).padStart(2, '0');
+        };
+        return {
+          startStr: monday.getFullYear() + '-' + pad2(monday.getMonth() + 1) + '-' + pad2(monday.getDate()),
+          endStr: todayStr,
+        };
+      } catch (eWr) {
+        return null;
+      }
+    }
+
+    function weeklyTop10PayloadMatchesWeek(data, weekOffset) {
+      if (!data || data.startStr == null || data.endStr == null) return false;
+      var expected = getWeekRangeSeoulClient(weekOffset);
+      if (!expected) return false;
+      return String(data.startStr) === String(expected.startStr) && String(data.endStr) === String(expected.endStr);
+    }
+
+    function weeklyTop10CacheKeyForWeek(kind, weekOffset, userId) {
+      var range = getWeekRangeSeoulClient(weekOffset);
+      var uid = userId || 'guest';
+      if (!range) return 'weeklyTop10:' + kind + ':' + uid;
+      return 'weeklyTop10:' + kind + ':' + range.startStr + '_' + range.endStr + ':' + uid;
+    }
+
     /** Asia/Seoul 기준 오늘 날짜 YYYY-MM-DD (오늘 그만 보기 판별용) */
     function getSeoulDateStringYYYYMMDD() {
       try {
@@ -7968,8 +8026,8 @@
       if (typeof window.updateWeeklyTop10AffBanner === 'function') window.updateWeeklyTop10AffBanner();
 
       var currentUserId = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
-      var top10LcKey = 'weeklyTop10:current:' + (currentUserId || 'guest');
-      var prevLcKey  = 'weeklyTop10:prev:'    + (currentUserId || 'guest');
+      var top10LcKey = weeklyTop10CacheKeyForWeek('current', 0, currentUserId);
+      var prevLcKey = weeklyTop10CacheKeyForWeek('prev', -1, currentUserId);
 
       /** 캐시에서 꺼낸 데이터 또는 서버 응답으로 UI를 렌더링 */
       function renderTop10(data, isFromCache) {
@@ -7991,6 +8049,19 @@
         var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
         var isAdmin = typeof stelvioRankingLoginIsAdmin === 'function' && stelvioRankingLoginIsAdmin();
         var html = '';
+        if (isPrevWeek) {
+          html +=
+            '<p class="weekly-top10-loading-text" style="margin-bottom:12px;font-size:12px;color:#6b7280;">※ 전주 확정 순위' +
+            (data.startStr && data.endStr ? ' (' + data.startStr + ' ~ ' + data.endStr + ')' : '') +
+            '</p>';
+        } else if (data.startStr && data.endStr) {
+          html +=
+            '<p class="weekly-top10-loading-text" style="margin-bottom:12px;font-size:12px;color:#6b7280;">※ 이번 주 순위 (' +
+            data.startStr +
+            ' ~ ' +
+            data.endStr +
+            ')</p>';
+        }
         list.forEach(function(item, idx) {
           var rank = item.rank || (idx + 1);
           var isPrivate = stelvioRankingIsPrivateRow(item);
@@ -8033,7 +8104,6 @@
           html += '</div>';
         }
         if (showStamp) {
-          if (isPrevWeek) html = '<p class="weekly-top10-loading-text" style="margin-bottom:12px;font-size:12px;color:#6b7280;">※ 전주 확정 순위</p>' + html;
           html = '<div class="weekly-top10-body-inner" style="position:relative;">' + html;
           html += '<div class="weekly-top10-stamp-overlay" style="position:absolute;left:0;top:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;pointer-events:none;">';
           html += '<img src="assets/img/crop1.png" alt="" class="weekly-top10-stamp-img" style="width:240px;height:auto;display:block;" />';
@@ -8073,13 +8143,27 @@
           stelvioRankingLocalCache.clearAll(); // 모든 랭킹 캐시 무효화
           body.innerHTML = getWeeklyTop10LoadingHtml();
           var freshData = await fetchWeeklyFromServer('current');
-          if (freshData.success && Array.isArray(freshData.ranking) && freshData.ranking.length > 0) {
+          if (
+            freshData.success &&
+            weeklyTop10PayloadMatchesWeek(freshData, 0) &&
+            Array.isArray(freshData.ranking) &&
+            freshData.ranking.length > 0
+          ) {
             stelvioRankingLocalCache.set(top10LcKey, freshData);
             renderTop10(freshData, false);
             return;
           }
+          if (!freshData.success || !weeklyTop10PayloadMatchesWeek(freshData, 0)) {
+            body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">데이터를 불러올 수 없습니다.</p>';
+            return;
+          }
           var freshPrev = await fetchWeeklyFromServer('prev');
-          if (freshPrev.success && Array.isArray(freshPrev.ranking) && freshPrev.ranking.length > 0) {
+          if (
+            freshPrev.success &&
+            weeklyTop10PayloadMatchesWeek(freshPrev, -1) &&
+            Array.isArray(freshPrev.ranking) &&
+            freshPrev.ranking.length > 0
+          ) {
             freshPrev._isPrevWeek = true;
             stelvioRankingLocalCache.set(prevLcKey, freshPrev);
             renderTop10(freshPrev, false);
@@ -8093,17 +8177,26 @@
 
         // ── 일반 접근: localStorage 캐시 우선 표시 ──
         var lcEntry = stelvioRankingLocalCache.get(top10LcKey);
-        if (lcEntry && lcEntry.data && lcEntry.data.success && Array.isArray(lcEntry.data.ranking) && lcEntry.data.ranking.length > 0) {
-          // 캐시 데이터를 즉시 표시 (로딩 스피너 없음)
+        if (
+          lcEntry &&
+          lcEntry.data &&
+          lcEntry.data.success &&
+          weeklyTop10PayloadMatchesWeek(lcEntry.data, 0) &&
+          Array.isArray(lcEntry.data.ranking) &&
+          lcEntry.data.ranking.length > 0
+        ) {
+          // 캐시 데이터를 즉시 표시 (로딩 스피너 없음) — 주차(startStr~endStr) 일치 시에만
           renderTop10(lcEntry.data, true);
           // 10분 이상 경과 시 백그라운드에서 재검증
           if (stelvioRankingLocalCache.isStale(lcEntry)) {
             (async function bgTop10Revalidate() {
               try {
                 var bg = await fetchWeeklyFromServer('current');
-                if (!bg.success || !Array.isArray(bg.ranking)) return;
-                stelvioRankingLocalCache.set(top10LcKey, bg);
-                if (bg.ranking.length > 0 && !modal.classList.contains('hidden')) renderTop10(bg, false);
+                if (!bg.success || !weeklyTop10PayloadMatchesWeek(bg, 0) || !Array.isArray(bg.ranking)) return;
+                if (bg.ranking.length > 0) {
+                  stelvioRankingLocalCache.set(top10LcKey, bg);
+                  if (!modal.classList.contains('hidden')) renderTop10(bg, false);
+                }
               } catch (_) {}
             })();
           }
@@ -8113,21 +8206,34 @@
         // ── 캐시 없음: 서버에서 로드 ──
         body.innerHTML = getWeeklyTop10LoadingHtml();
         var data = await fetchWeeklyFromServer('current');
-        if (!data.success || !Array.isArray(data.ranking)) {
+        if (!data.success || !Array.isArray(data.ranking) || !weeklyTop10PayloadMatchesWeek(data, 0)) {
           body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">데이터를 불러올 수 없습니다.</p>';
           return;
         }
         var list = data.ranking;
         if (!list || list.length === 0) {
-          // 이번 주 데이터 없음 → 전주 캐시 확인
+          // 이번 주 집계가 비어 있을 때만 전주 확정 순위 표시
           var prevLcEntry = stelvioRankingLocalCache.get(prevLcKey);
-          if (prevLcEntry && prevLcEntry.data && prevLcEntry.data.success && Array.isArray(prevLcEntry.data.ranking) && prevLcEntry.data.ranking.length > 0) {
+          if (
+            prevLcEntry &&
+            prevLcEntry.data &&
+            prevLcEntry.data.success &&
+            weeklyTop10PayloadMatchesWeek(prevLcEntry.data, -1) &&
+            Array.isArray(prevLcEntry.data.ranking) &&
+            prevLcEntry.data.ranking.length > 0
+          ) {
+            if (!prevLcEntry.data._isPrevWeek) prevLcEntry.data._isPrevWeek = true;
             renderTop10(prevLcEntry.data, true);
             return;
           }
           // 전주도 캐시 없음 → 서버에서 로드
           var prevData = await fetchWeeklyFromServer('prev');
-          if (!prevData.success || !Array.isArray(prevData.ranking) || prevData.ranking.length === 0) {
+          if (
+            !prevData.success ||
+            !weeklyTop10PayloadMatchesWeek(prevData, -1) ||
+            !Array.isArray(prevData.ranking) ||
+            prevData.ranking.length === 0
+          ) {
             modal.classList.add('hidden');
             if (typeof window.finalizeMandatoryIntegratedWeeklyTop10Dismiss === 'function') window.finalizeMandatoryIntegratedWeeklyTop10Dismiss();
             if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();
