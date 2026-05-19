@@ -11905,6 +11905,9 @@
           return stelvioGcPayloadMatchesLatestSnapshot(body);
         }
         if (typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()) {
+          if (stelvioRankingPayloadHasVisibleRows(body) && (body.approximate === true || body.staleAggregate === true)) {
+            return true;
+          }
           if (stelvioPersonalSpeedBoardPayloadStale(body)) return false;
           if (body.precomputed === true) return true;
           return false;
@@ -11963,7 +11966,12 @@
           }
           return true;
         }
-        if (isPsRank && stelvioPersonalSpeedBoardPayloadStale(soft.data)) {
+        if (
+          isPsRank &&
+          (soft.data.approximate === true ||
+            soft.data.staleAggregate === true ||
+            stelvioPersonalSpeedBoardPayloadStale(soft.data))
+        ) {
           return true;
         }
         if (lastRollover > 0 && ts < lastRollover) return false;
@@ -12052,7 +12060,13 @@
         if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
         if (!stelvioRankingPayloadMatchesCurrentApiWindow(body)) return false;
         if (body.durationType === 'gc' && !stelvioGcPayloadMatchesLatestSnapshot(body)) return false;
-        if (isPsRank && stelvioPersonalSpeedBoardPayloadStale(body)) return false;
+        if (
+          isPsRank &&
+          stelvioPersonalSpeedBoardPayloadStale(body) &&
+          !(body.approximate === true || body.staleAggregate === true)
+        ) {
+          return false;
+        }
         if (lastRollover > 0 && entryTs < lastRollover) return false;
         if (nowMs - entryTs >= swrMaxMs) return false;
         return true;
@@ -12123,10 +12137,16 @@
           data2.byCategory &&
           stelvioRankingPayloadHasVisibleRows(data2) &&
           !(data2.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(data2));
+        var data2PsApprox =
+          data2HasRows &&
+          typeof stelvioIsPersonalSpeedRanking === 'function' &&
+          stelvioIsPersonalSpeedRanking() &&
+          (data2.approximate === true || data2.staleAggregate === true);
         var data2WindowOk =
           data2HasRows &&
-          stelvioRankingPayloadMatchesCurrentApiWindow(data2) &&
-          (!stelvioIsTssRankingMode() || stelvioWeeklyTssBoardPayloadMatchesWeek(data2));
+          (data2PsApprox ||
+            (stelvioRankingPayloadMatchesCurrentApiWindow(data2) &&
+              (!stelvioIsTssRankingMode() || stelvioWeeklyTssBoardPayloadMatchesWeek(data2))));
         var data2GcStale =
           data2HasRows &&
           data2.durationType === 'gc' &&
