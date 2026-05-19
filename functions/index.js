@@ -2851,6 +2851,233 @@ async function readWeeklyTssEntriesForTop10Http(db, startStr, endStr) {
   return null;
 }
 
+function userMatchesWeeklyTssGenderFilter(userData, genderFilter) {
+  if (!genderFilter || genderFilter === "all") return true;
+  const gender = String((userData && (userData.gender || userData.sex)) || "").toLowerCase();
+  const want =
+    genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
+  const match =
+    gender === "m" || gender === "male" || gender === "남"
+      ? "male"
+      : gender === "f" || gender === "female" || gender === "여"
+        ? "female"
+        : null;
+  return match === want;
+}
+
+function weeklyTssEntryFromUserDoc(doc, totalTss) {
+  const userId = doc.id;
+  const data = doc.data() || {};
+  const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+  const challenge = data.challenge || "Fitness";
+  const leagueCategory = getLeagueCategory(challenge, birthYear);
+  if (!leagueCategory) return null;
+  return {
+    userId,
+    name: data.name || "(이름 없음)",
+    totalTss: Math.round(totalTss * 100) / 100,
+    ageCategory: leagueCategory,
+    gender: String(data.gender || data.sex || "").toLowerCase(),
+    is_private: privacyFlagFromFirestoreDoc(data),
+    profileImageUrl: profileImageUrlFromUserData(data),
+    ...rankingUserStatusFieldsFromData(data),
+  };
+}
+
+function rerankWeeklyTssEntries(entries) {
+  const sorted = (entries || []).slice().sort((a, b) => b.totalTss - a.totalTss);
+  const withRank = sorted.map((e, i) => ({ ...e, rank: i + 1 }));
+  const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  withRank.forEach((e) => {
+    if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
+  });
+  return { entries: withRank, byCategory };
+}
+
+/** ranking_aggregates 문서 updatedAt (ms) — 없으면 null */
+async function getRankingAggregateUpdatedAtMs(db, cacheKey) {
+  if (!db || !cacheKey) return null;
+  try {
+    const snap = await db.collection(RANKING_AGGREGATES_COLLECTION).doc(cacheKey).get();
+    if (!snap.exists) return null;
+    const d = snap.data() || {};
+    const u = d.updatedAt && (d.updatedAt.toMillis ? d.updatedAt.toMillis() : d.updatedAt);
+    return u ? Number(u) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** 주간 TSS all 집계가 maxAgeMs보다 오래됐는지 */
+async function isWeeklyTssAllAggregateStale(db, wStart, wEnd, maxAgeMs) {
+  const key = `peakRanking_weekly_tss_v2_all_${wStart}_${wEnd}`;
+  const updatedAt = await getRankingAggregateUpdatedAtMs(db, key);
+  if (!updatedAt) return true;
+  return Date.now() - updatedAt > maxAgeMs;
+}
+
+/** 당일 ranking_day_totals 문서가 있는 userId 목록 (collectionGroup, docId=ymd) */
+async function findUserIdsWithRankingDayOnDate(db, ymd) {
+  if (!ymd) return [];
+  const FieldPath = admin.firestore.FieldPath;
+  const coll = rankingDayRollup.RANKING_DAY_TOTALS_COLL;
+  try {
+    const snap = await db.collectionGroup(coll).where(FieldPath.documentId(), "==", ymd).get();
+    const ids = [];
+    snap.forEach((docSnap) => {
+      const uid = docSnap.ref.parent && docSnap.ref.parent.parent ? docSnap.ref.parent.parent.id : "";
+      if (uid) ids.push(uid);
+    });
+    return ids;
+  } catch (e) {
+    console.warn("[findUserIdsWithRankingDayOnDate]", ymd, e && e.message ? e.message : e);
+    return [];
+  }
+}
+
+/**
+ * 자정 직후: 전일 endStr 집계 + 오늘 하루 버킷만 합산 (users 전체 스캔 대체).
+ * 월요일(새 주) 또는 전일 집계 없으면 전체 스캔으로 폴백.
+ */
+async function buildWeeklyTssBoardIncrementalFromPreviousDay(db, wStart, wEnd, genderFilter, usersSnap) {
+  const prevEnd = previousCalendarDayStr(wEnd);
+  if (!prevEnd || prevEnd < wStart) {
+    return getWeeklyTssRankingBoardEntries(db, wStart, wEnd, genderFilter, usersSnap);
+  }
+  const prevKey = `peakRanking_weekly_tss_v2_${genderFilter}_${wStart}_${prevEnd}`;
+  const prevPayload = await readRankingAggregatePayloadAllowStale(
+    db,
+    prevKey,
+    RANKING_HTTP_STALE_FALLBACK_MS
+  );
+  if (!prevPayload || !weeklyTssBoardPayloadHasRows(prevPayload)) {
+    return getWeeklyTssRankingBoardEntries(db, wStart, wEnd, genderFilter, usersSnap);
+  }
+
+  const prevRows = Array.isArray(prevPayload.entries)
+    ? prevPayload.entries
+    : prevPayload.byCategory?.Supremo || [];
+  const userDocMap = new Map();
+  if (usersSnap && usersSnap.docs) {
+    usersSnap.docs.forEach((d) => userDocMap.set(d.id, d));
+  }
+
+  const merged = [];
+  const seen = new Set();
+
+  for (let i = 0; i < prevRows.length; i += WEEKLY_TSS_BATCH_SIZE) {
+    const slice = prevRows.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
+    /* eslint-disable no-await-in-loop */
+    const batchOut = await Promise.all(
+      slice.map(async (row) => {
+        const userId = row.userId;
+        if (!userId) return null;
+        let doc = userDocMap.get(userId);
+        let userData = doc ? doc.data() : null;
+        if (!userData) {
+          const us = await db.collection("users").doc(userId).get();
+          if (!us.exists) return null;
+          userData = us.data();
+          userDocMap.set(userId, us);
+        }
+        if (!userMatchesWeeklyTssGenderFilter(userData, genderFilter)) return null;
+        const dayTss = await rankingDayRollup.weeklyTssSumFromDayBuckets(
+          db,
+          userId,
+          userData,
+          wEnd,
+          wEnd
+        );
+        const newTotal = Math.round((Number(row.totalTss) + dayTss) * 100) / 100;
+        if (newTotal <= 0) return null;
+        const userDoc = userDocMap.get(userId);
+        const fresh = userDoc ? weeklyTssEntryFromUserDoc(userDoc, newTotal) : null;
+        if (!fresh) return null;
+        return { ...row, ...fresh, totalTss: newTotal };
+      })
+    );
+    /* eslint-enable no-await-in-loop */
+    batchOut.forEach((r) => {
+      if (r && r.userId) {
+        seen.add(r.userId);
+        merged.push(r);
+      }
+    });
+  }
+
+  const newDayUserIds = await findUserIdsWithRankingDayOnDate(db, wEnd);
+  for (let ni = 0; ni < newDayUserIds.length; ni += WEEKLY_TSS_BATCH_SIZE) {
+    const uidBatch = newDayUserIds.slice(ni, ni + WEEKLY_TSS_BATCH_SIZE);
+    /* eslint-disable no-await-in-loop */
+    const added = await Promise.all(
+      uidBatch.map(async (userId) => {
+        if (seen.has(userId)) return null;
+        let doc = userDocMap.get(userId);
+        if (!doc) {
+          const us = await db.collection("users").doc(userId).get();
+          if (!us.exists) return null;
+          doc = us;
+          userDocMap.set(userId, us);
+        }
+        const userData = doc.data();
+        if (!userMatchesWeeklyTssGenderFilter(userData, genderFilter)) return null;
+        const totalTssRaw = await getWeeklyTssForUser(db, userId, wStart, wEnd, userData);
+        if (totalTssRaw <= 0) return null;
+        return weeklyTssEntryFromUserDoc(doc, totalTssRaw);
+      })
+    );
+    /* eslint-enable no-await-in-loop */
+    added.forEach((r) => {
+      if (r && r.userId) {
+        seen.add(r.userId);
+        merged.push(r);
+      }
+    });
+  }
+
+  return rerankWeeklyTssEntries(merged);
+}
+
+async function persistWeeklyTssBoardsAndTop10(db, wStart, wEnd, boardsByGender) {
+  let entriesCurrent = null;
+  for (const gender of ["all", "M", "F"]) {
+    const tss = boardsByGender[gender];
+    if (!tss) continue;
+    if (gender === "all") {
+      entriesCurrent = (tss.entries || []).map((e) => ({
+        userId: e.userId,
+        name: e.name,
+        totalTss: e.totalTss,
+        is_private: e.is_private === true,
+      }));
+    }
+    const keyTss = `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`;
+    await writeRankingAggregatePayload(db, keyTss, {
+      byCategory: tss.byCategory,
+      entries: tss.entries,
+      startStr: wStart,
+      endStr: wEnd,
+    });
+  }
+  const top10Current = (entriesCurrent || []).slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
+  await writeRankingAggregatePayload(db, `weekly_ranking_full_${wStart}_${wEnd}`, {
+    fullEntries: entriesCurrent || [],
+    ranking: top10Current,
+    startStr: wStart,
+    endStr: wEnd,
+  });
+  return { entriesCurrent, top10Current };
+}
+
+/** 23:00 마스터 집계 완료 시각 기록 (시간별 TSS 보강 스킵 판단) */
+async function markMasterDailyRankingRebuildComplete(db) {
+  const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  await db.collection("ranking_meta").doc(RANKING_MASTER_REBUILD_META_DOC).set({
+    dateKst,
+    completedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
 /** 사용자 로그에서 주간 TSS 합계 (날짜별: strava 우선, 없으면 stelvio) — ranking_day_totals 일 버킹 집계 */
 async function getWeeklyTssForUser(db, userId, startStr, endStr, userDataCached = null) {
   try {
@@ -4518,6 +4745,9 @@ const ALLOW_RANKING_HTTP_LIVE_REBUILD = process.env.ALLOW_RANKING_HTTP_LIVE_REBU
 const RANKING_HTTP_STALE_FALLBACK_MS = 14 * 24 * 60 * 60 * 1000;
 /** 동일 cacheKey HTTP 라이브 재집계 동시 실행 방지(23~01시 접속 폭주 시 users 전체 스캔 중복 억제) */
 const RANKING_HTTP_LIVE_REBUILD_LOCK_MS = 10 * 60 * 1000;
+/** A안: 15~22시 시간별 TSS 보강 — 집계가 이 시간보다 오래됐을 때만 전체 스캔 */
+const RANKING_HOURLY_TSS_REFRESH_MIN_AGE_MS = 90 * 60 * 1000;
+const RANKING_MASTER_REBUILD_META_DOC = "master_daily_rebuild";
 
 function emptyPeakRankingByCategory() {
   return { Supremo: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
@@ -5382,8 +5612,7 @@ async function applyGroupRankingParticipationForViewer(db, byCategory, entries, 
 }
 
 /**
- * 주간 마일리지 TOP10 전용 집계만 갱신 (피크 타임 15~23시 매시).
- * `runRebuildRankingAggregatesCore` 전체 대비 부하가 작고, 운동 직후 TSS가 TOP10에 빨리 반영되도록 함.
+ * 주간 TSS·TOP10 전체 스캔 집계 (수동·마스터 23:00·90분 초과 시 시간별 보강).
  * @param {FirebaseFirestore.Firestore} db
  */
 async function refreshWeeklyMileageTop10AggregatesOnly(db) {
@@ -5399,40 +5628,21 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
     wPrevE,
   });
 
-  /** TSS 랭킹보드 탭과 동일 집계를 피크 시간대에도 갱신 → TOP10 팝업과 표시·순위 동기 */
-  let entriesCurrent = null;
+  const boardsByGender = {};
   for (const gender of ["all", "M", "F"]) {
-    const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
-    if (gender === "all") {
-      entriesCurrent = tss.entries.map((e) => ({
-        userId: e.userId,
-        name: e.name,
-        totalTss: e.totalTss,
-        is_private: e.is_private === true,
-      }));
-    }
-    const keyTss = `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`;
-    await writeRankingAggregatePayload(db, keyTss, {
-      byCategory: tss.byCategory,
-      entries: tss.entries,
-      startStr: wStart,
-      endStr: wEnd,
-    });
+    boardsByGender[gender] = await getWeeklyTssRankingBoardEntries(
+      db,
+      wStart,
+      wEnd,
+      gender,
+      sharedUsersSnap
+    );
   }
-
-  const top10Current = (entriesCurrent || []).slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
-  const weeklyKey = `weekly_ranking_full_${wStart}_${wEnd}`;
-  await writeRankingAggregatePayload(db, weeklyKey, {
-    fullEntries: entriesCurrent || [],
-    ranking: top10Current,
-    startStr: wStart,
-    endStr: wEnd,
-  });
+  await persistWeeklyTssBoardsAndTop10(db, wStart, wEnd, boardsByGender);
 
   const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
   const top10Prev = entriesPrev.slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
-  const weeklyKeyPrev = `weekly_ranking_full_${wPrevS}_${wPrevE}`;
-  await writeRankingAggregatePayload(db, weeklyKeyPrev, {
+  await writeRankingAggregatePayload(db, `weekly_ranking_full_${wPrevS}_${wPrevE}`, {
     fullEntries: entriesPrev,
     ranking: top10Prev,
     startStr: wPrevS,
@@ -5440,6 +5650,51 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
   });
 
   console.log("[refreshWeeklyMileageTop10AggregatesOnly] done", { ms: Date.now() - t0 });
+  return { mode: "full", ms: Date.now() - t0 };
+}
+
+/**
+ * A안 00:05 — 전일 집계 + 오늘 1일 버킷 증분 (users 전체 스캔 없음).
+ */
+async function refreshWeeklyTssMidnightIncremental(db) {
+  const t0 = Date.now();
+  const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
+  const prevEnd = previousCalendarDayStr(wEnd);
+  const sharedUsersSnap = await db.collection("users").get();
+  console.log("[refreshWeeklyTssMidnightIncremental] start", {
+    wStart,
+    wEnd,
+    prevEnd,
+    userCount: sharedUsersSnap.size,
+  });
+
+  const boardsByGender = {};
+  for (const gender of ["all", "M", "F"]) {
+    boardsByGender[gender] = await buildWeeklyTssBoardIncrementalFromPreviousDay(
+      db,
+      wStart,
+      wEnd,
+      gender,
+      sharedUsersSnap
+    );
+  }
+  await persistWeeklyTssBoardsAndTop10(db, wStart, wEnd, boardsByGender);
+  console.log("[refreshWeeklyTssMidnightIncremental] done", { ms: Date.now() - t0 });
+  return { mode: "incremental", ms: Date.now() - t0 };
+}
+
+/**
+ * A안 15~22시 — 집계가 90분 이상 지났을 때만 전체 TSS 스캔 (23:00 마스터 직후 중복 방지).
+ */
+async function refreshWeeklyMileageTop10IfStale(db, minAgeMs) {
+  const maxAge = minAgeMs != null ? minAgeMs : RANKING_HOURLY_TSS_REFRESH_MIN_AGE_MS;
+  const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
+  const stale = await isWeeklyTssAllAggregateStale(db, wStart, wEnd, maxAge);
+  if (!stale) {
+    console.log("[refreshWeeklyMileageTop10IfStale] skip (fresh aggregate)", { wStart, wEnd, maxAgeMs: maxAge });
+    return { skipped: true, reason: "fresh" };
+  }
+  return refreshWeeklyMileageTop10AggregatesOnly(db);
 }
 
 /**
@@ -5626,10 +5881,15 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
 
   const ms = Date.now() - t0;
   console.log("[runRebuildRankingAggregatesCore] done", { wrote, ms });
+  try {
+    await markMasterDailyRankingRebuildComplete(db);
+  } catch (eMeta) {
+    console.warn("[runRebuildRankingAggregatesCore] master meta write failed:", eMeta && eMeta.message);
+  }
   return { wrote, ms };
 }
 
-/** KST 23:00 랭킹 집계 갱신 (하루 1회) */
+/** KST 23:00 — A안 마스터 집계 (피크·TSS·거리·항속·TOP10 전체, 하루 1회) */
 exports.rebuildRankingAggregates = onSchedule(
   {
     schedule: RANKING_REBUILD_CRON,
@@ -5640,7 +5900,8 @@ exports.rebuildRankingAggregates = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
-      await runRebuildRankingAggregatesCore(db);
+      const r = await runRebuildRankingAggregatesCore(db);
+      console.log("[rebuildRankingAggregates] master ok", r);
     } catch (e) {
       console.error("[rebuildRankingAggregates]", e && e.message ? e.message : e);
       throw e;
@@ -5738,7 +5999,7 @@ exports.manualRebuildWeeklyRanking = onRequest(
   }
 );
 
-/** KST 15~22시 매 정시 — 주간 TSS·TOP10만 갱신 (23:00은 rebuildRankingAggregates와 중복 방지로 제외) */
+/** KST 15~22시 매 정시 — 집계가 90분↑ 지났을 때만 TSS·TOP10 전체 스캔 (A안) */
 exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   {
     schedule: "0 15-22 * * *",
@@ -5749,7 +6010,8 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
-      await refreshWeeklyMileageTop10AggregatesOnly(db);
+      const r = await refreshWeeklyMileageTop10IfStale(db);
+      console.log("[scheduledWeeklyTop10PeakRefresh]", r);
     } catch (e) {
       console.error("[scheduledWeeklyTop10PeakRefresh]", e && e.message ? e.message : e);
       throw e;
@@ -5757,7 +6019,7 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   }
 );
 
-/** KST 00:05 — 날짜(endStr) 변경 직후 주간 TSS·TOP10 집계 키 갱신 (자정~15시 빈 랭킹 방지) */
+/** KST 00:05 — endStr 롤오버 증분 집계 (전일 캐시 + 오늘 1일 버킷, A안) */
 exports.scheduledWeeklyTssMidnightRefresh = onSchedule(
   {
     schedule: "5 0 * * *",
@@ -5768,8 +6030,8 @@ exports.scheduledWeeklyTssMidnightRefresh = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
-      await refreshWeeklyMileageTop10AggregatesOnly(db);
-      console.log("[scheduledWeeklyTssMidnightRefresh] ok");
+      const r = await refreshWeeklyTssMidnightIncremental(db);
+      console.log("[scheduledWeeklyTssMidnightRefresh] ok", r);
     } catch (e) {
       console.error("[scheduledWeeklyTssMidnightRefresh]", e && e.message ? e.message : e);
       throw e;
@@ -5795,8 +6057,8 @@ async function runHeptagonCohortRanksRebuildJob() {
 
 exports.scheduledHeptagonCohortRanks = onSchedule(
   {
-    /** 매일 23:30 KST — 23:00 rebuildRankingAggregates 완료 후 rolling28 피크 집계를 바탕으로 스냅샷 재빌드(랭킹 GC는 이 문서만 읽음) */
-    schedule: "30 23 * * *",
+    /** 매일 23:35 KST — 23:00 마스터 집계 완료 후 GC 스냅샷 (A안) */
+    schedule: "35 23 * * *",
     timeZone: "Asia/Seoul",
     memory: "2GiB",
     timeoutSeconds: 540,
