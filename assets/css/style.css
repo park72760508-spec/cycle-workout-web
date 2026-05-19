@@ -2049,8 +2049,13 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 /* 방장 툴바: 위·아래 여백 ≈ 버튼 높이의 5% (버튼은 text-sm + py-2 + 아이콘 기준 높이 ~2.25rem 가정) */
 #openRidingRoomScreen .open-riding-detail-host-actions {
-  margin-top: calc(0.05 * 2.25rem);
-  margin-bottom: calc(0.05 * 2.25rem);
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
+}
+#openRidingRoomScreen .open-riding-detail-host-action-btn .open-riding-bottom-glass-nav__label,
+#openRidingRoomScreen .open-riding-detail-host-action-caption {
+  pointer-events: none;
 }
 
 /* 생성·참석 신청 동일 터치 높이 (비대칭 padding 금지 → 문구 아래 빈 줄 현상 방지) + Safari GPU 레이어·네이티브 스타일 간섭 차단 */
