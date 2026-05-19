@@ -11674,6 +11674,40 @@
       }
     }
 
+    /** 독주: 보드 즉시 표시 후 본인 행만 로컬 로그로 비동기 보정(전체 await 제거) */
+    function stelvioApplyPersonalSpeedInstantThenAlignViewer(data, myGen, uid, applyOpts) {
+      applyOpts = applyOpts || {};
+      var working = data;
+      if (working && working.byCategory) {
+        if (
+          working.dashboardLogRouteEnriched !== true &&
+          typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function'
+        ) {
+          working = window.stelvioRecalcPersonalSpeedBoardFromPeak60(working);
+        }
+        if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
+          working = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(working);
+        }
+      }
+      stelvioApplyPeakRankingFetchResult(working, myGen, uid, applyOpts);
+      if (
+        !uid ||
+        myGen !== stelvioRankingFetchGen ||
+        typeof window.stelvioAlignPersonalSpeedRankingWithDashboard !== 'function'
+      ) {
+        return;
+      }
+      window
+        .stelvioAlignPersonalSpeedRankingWithDashboard(working, uid)
+        .then(function (aligned) {
+          if (myGen !== stelvioRankingFetchGen || !aligned) return;
+          stelvioApplyPeakRankingFetchResult(aligned, myGen, uid, { preserveExpandUi: true });
+        })
+        .catch(function (eAlignBg) {
+          console.warn('[StelvioRanking] 항속 본인 행 보정 실패:', eAlignBg && eAlignBg.message);
+        });
+    }
+
     async function stelvioApplyPeakRankingFetchResultWithDashboardAlign(data, myGen, uid, applyOpts) {
       if (
         myGen === stelvioRankingFetchGen &&
@@ -11683,17 +11717,17 @@
         data.success &&
         data.byCategory
       ) {
+        if (data.dashboardLogRouteEnriched === true || data.fastPrecomputed === true) {
+          stelvioApplyPersonalSpeedInstantThenAlignViewer(data, myGen, uid, applyOpts);
+          return;
+        }
         try {
-          if (
-            data.dashboardLogRouteEnriched !== true &&
-            typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function'
-          ) {
+          if (typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function') {
             data = window.stelvioRecalcPersonalSpeedBoardFromPeak60(data);
           }
           if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
             data = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
           }
-          /* 본인 행: 로컬 프로필·로그로 한 번 더 맞춤(서버 enrich 후에도 체중 즉시 반영) */
           if (uid && typeof window.stelvioAlignPersonalSpeedRankingWithDashboard === 'function') {
             data = await window.stelvioAlignPersonalSpeedRankingWithDashboard(data, uid);
           }
@@ -11869,10 +11903,7 @@
       var urlFast = stelvioBuildRankingBoardFetchUrl(cacheKeyStr, false, needsRankMv);
       var urlRankMv = stelvioBuildRankingBoardFetchUrl(cacheKeyStr, true, needsRankMv);
       /* 항속(6개월): 사전 집계 miss 시에도 버킷 읽기만 수행하나 사용자 수가 많으면 여유 타임아웃 */
-      var fetchTimeoutMs =
-        typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()
-          ? Math.max(STELVIO_RANKING_FETCH_TIMEOUT_MS || 48000, 90000)
-          : STELVIO_RANKING_FETCH_TIMEOUT_MS;
+      var fetchTimeoutMs = STELVIO_RANKING_FETCH_TIMEOUT_MS;
 
       function saveFreshPeakData(data) {
         if (!data || !stelvioRankingPayloadHasVisibleRows(data)) return;
@@ -11941,11 +11972,18 @@
           uid &&
           typeof stelvioIsPersonalSpeedRanking === 'function' &&
           stelvioIsPersonalSpeedRanking();
-        if (instant && !psNeedsViewerAlign) {
-          if (typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()) {
-            working = stelvioApplyPersonalSpeedPayloadSyncPatches(working);
+        var psDeferViewerAlign =
+          psNeedsViewerAlign &&
+          (working.dashboardLogRouteEnriched === true || working.fastPrecomputed === true);
+        if (instant && (!psNeedsViewerAlign || psDeferViewerAlign)) {
+          if (psDeferViewerAlign) {
+            stelvioApplyPersonalSpeedInstantThenAlignViewer(working, myGen, uid, opts);
+          } else {
+            if (typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()) {
+              working = stelvioApplyPersonalSpeedPayloadSyncPatches(working);
+            }
+            stelvioApplyPeakRankingFetchResult(working, myGen, uid, opts);
           }
-          stelvioApplyPeakRankingFetchResult(working, myGen, uid);
         } else {
           await stelvioApplyPeakRankingFetchResultWithDashboardAlign(working, myGen, uid, opts);
         }
@@ -12085,7 +12123,10 @@
       if (memHit && cacheEntryUsable(memHit.ts, memHit.body)) {
         await applyFromCache(memHit.body, { instant: true, source: 'memory' });
         scheduleRankMvIfNeeded();
-        var memPsPre = isPsRank && memHit.body.precomputed === true;
+        var memPsPre =
+          isPsRank &&
+          (memHit.body.dashboardLogRouteEnriched === true ||
+            (memHit.body.precomputed === true && !stelvioPersonalSpeedBoardPayloadStale(memHit.body)));
         if (!memPsPre && stelvioRankingLocalCache.isStale({ cachedAt: memHit.ts })) {
           scheduleBgRefreshIfNeeded(false);
         }
@@ -12097,7 +12138,10 @@
         stelvioRankingMemCacheSet(swrKey, lcEntry.data);
         await applyFromCache(lcEntry.data, { instant: true, source: 'localStorage' });
         scheduleRankMvIfNeeded();
-        var lcPsPre = isPsRank && lcEntry.data.precomputed === true;
+        var lcPsPre =
+          isPsRank &&
+          (lcEntry.data.dashboardLogRouteEnriched === true ||
+            (lcEntry.data.precomputed === true && !stelvioPersonalSpeedBoardPayloadStale(lcEntry.data)));
         if (!lcPsPre && stelvioRankingLocalCache.isStale(lcEntry)) scheduleBgRefreshIfNeeded(false);
         return;
       }
@@ -12108,7 +12152,11 @@
         stelvioRankingMemCacheSet(swrKey, swr.body);
         await applyFromCache(swr.body, { instant: true, source: 'swr' });
         scheduleRankMvIfNeeded();
-        if (!(isPsRank && swr.body.precomputed === true)) scheduleBgRefreshIfNeeded(false);
+        var swrPsPre =
+          isPsRank &&
+          (swr.body.dashboardLogRouteEnriched === true ||
+            (swr.body.precomputed === true && !stelvioPersonalSpeedBoardPayloadStale(swr.body)));
+        if (!swrPsPre) scheduleBgRefreshIfNeeded(false);
         return;
       }
 
@@ -12163,14 +12211,21 @@
           typeof stelvioGcPayloadMatchesLatestSnapshot === 'function' &&
           !stelvioGcPayloadMatchesLatestSnapshot(data2);
         if (data2WindowOk || (data2HasRows && data2GcStale)) {
-          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
+          if (
+            isPsRank &&
+            data2 &&
+            (data2.dashboardLogRouteEnriched === true || data2.fastPrecomputed === true)
+          ) {
+            stelvioApplyPersonalSpeedInstantThenAlignViewer(data2, myGen, uid);
+          } else {
+            await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
+          }
           if (data2WindowOk) saveFreshPeakData(data2);
           if (!data2GcStale) stelvioSetRankingRefreshHint(false);
           scheduleRankMvIfNeeded();
           var psSkipBg =
-            typeof stelvioIsPersonalSpeedRanking === 'function' &&
-            stelvioIsPersonalSpeedRanking() &&
-            data2.precomputed === true &&
+            isPsRank &&
+            (data2.dashboardLogRouteEnriched === true || data2.fastPrecomputed === true) &&
             !stelvioPersonalSpeedBoardPayloadStale(data2);
           if (!psSkipBg || data2GcStale) scheduleBgRefreshIfNeeded(false);
         } else if (!showedSoft && tryApplySoftFallback()) {
