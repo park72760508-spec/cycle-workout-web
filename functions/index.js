@@ -3078,6 +3078,16 @@ async function markMasterDailyRankingRebuildComplete(db) {
   });
 }
 
+/** GC 헵타고 스냅샷(23:35 KST) 완료 시각 — 집계 여부 확인용 */
+async function markHeptagonDailyRebuildComplete(db, resultSummary) {
+  const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).set({
+    dateKst,
+    completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    summary: resultSummary && typeof resultSummary === "object" ? resultSummary : null,
+  });
+}
+
 /** 사용자 로그에서 주간 TSS 합계 (날짜별: strava 우선, 없으면 stelvio) — ranking_day_totals 일 버킹 집계 */
 async function getWeeklyTssForUser(db, userId, startStr, endStr, userDataCached = null) {
   try {
@@ -4748,6 +4758,7 @@ const RANKING_HTTP_LIVE_REBUILD_LOCK_MS = 10 * 60 * 1000;
 /** A안: 15~22시 시간별 TSS 보강 — 집계가 이 시간보다 오래됐을 때만 전체 스캔 */
 const RANKING_HOURLY_TSS_REFRESH_MIN_AGE_MS = 90 * 60 * 1000;
 const RANKING_MASTER_REBUILD_META_DOC = "master_daily_rebuild";
+const RANKING_HEPTAGON_REBUILD_META_DOC = "heptagon_daily_rebuild";
 
 function emptyPeakRankingByCategory() {
   return { Supremo: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
@@ -6064,8 +6075,10 @@ exports.scheduledHeptagonCohortRanks = onSchedule(
     timeoutSeconds: 540,
   },
   async () => {
+    const db = admin.firestore();
     try {
       const r = await runHeptagonCohortRanksRebuildJob();
+      await markHeptagonDailyRebuildComplete(db, r);
       console.log("[scheduledHeptagonCohortRanks] ok", r);
     } catch (e) {
       console.error("[scheduledHeptagonCohortRanks]", e && e.message ? e.message : e);
@@ -7266,13 +7279,18 @@ exports.getPeakPowerRanking = onRequest(
       return res.status(200).json(out);
     }
 
-    /** GC: 헵타곤 7축 환산 합 — `heptagon_cohort_ranks` 일일 스냅샷만 읽기(23:30 집계). 전원 라이브 재계산은 요청당 수십 초 소요되어 제외. */
+    /** GC: 헵타곤 7축 환산 — `heptagon_cohort_ranks` 일일 스냅샷만 읽기(23:35 KST 집계). 23:00은 피크/TSS 마스터. */
     if (durationType === "gc") {
       const monthKey = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
       const fg = gender === "M" || gender === "F" ? gender : "all";
       let byCategory;
       let entries;
       let snap;
+      let heptagonMeta = null;
+      try {
+        const metaSnap = await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).get();
+        if (metaSnap.exists) heptagonMeta = metaSnap.data() || null;
+      } catch (_eHm) {}
       try {
         snap = await buildStelvioGcRankingPayload(db, monthKey, fg);
         byCategory = snap.byCategory;
@@ -7294,6 +7312,7 @@ exports.getPeakPowerRanking = onRequest(
         gcMonthKey: monthKey,
         gcSnapshotAsOf: snap.snapshotAsOfSeoul || null,
         gcSnapshotDaily: true,
+        gcHeptagonRebuildDateKst: heptagonMeta && heptagonMeta.dateKst ? String(heptagonMeta.dateKst) : null,
       };
       if (uid) {
         let current = null;
