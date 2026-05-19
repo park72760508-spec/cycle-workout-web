@@ -8514,6 +8514,8 @@
       return todayRollover <= now ? todayRollover : todayRollover - 86400000;
     }
     var stelvioRankingPrefetchScheduled = false;
+    /** GC 탭: 23:00 롤오버 후 백그라운드 재조회는 앱 세션당 1회만 */
+    var stelvioGcPostRolloverBgDone = false;
     var STELVIO_RANKING_FRIENDS_TIMEOUT_MS = 12000;
     /** 랭킹 「그룹」탭: 내 소모임 목록 구독 */
     var stelvioMyGroupsRankUnsub = null;
@@ -11874,10 +11876,15 @@
           bgRevalidate(false).catch(function () {});
         }
       }
-      /** GC: 23:00 KST 롤오버 직후에는 반드시 재조회(어제 soft 캐시 고착 방지). 그 외 탭은 기존 SWR */
+      /** GC: 23:00~01:00 롤오버 구간 백그라운드 재조회는 세션당 1회만(동시 HTTP 폭주 방지) */
       function scheduleBgRefreshIfNeeded(includeRankMv) {
         if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
-          if (lastRollover > 0 && nowMs - lastRollover < 6 * 60 * 60 * 1000) {
+          if (
+            !stelvioGcPostRolloverBgDone &&
+            lastRollover > 0 &&
+            nowMs - lastRollover < 2 * 60 * 60 * 1000
+          ) {
+            stelvioGcPostRolloverBgDone = true;
             scheduleBgRefresh(false);
           }
           return;
