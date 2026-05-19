@@ -17,18 +17,18 @@ function peakMonthlyAggregateDocKey(durationType, gender, startStr, endStr) {
 }
 
 /**
- * 사전 집계(ranking_aggregates)가 모두 있으면 21회 로그 스캔 없이 동일 byCategory 사용
- * @param {Function} readFresh async (db, key) => payload | null  (readRankingAggregatePayloadIfFresh)
+ * 사전 집계(ranking_aggregates) 21슬롯 — 23:00 마스터와 동일 피크 보드
+ * @param {Function} readPayload async (db, key) => payload | null
  */
-async function tryLoadHeptagonPeakCacheFromAggregates(db, readFresh, startStr, endStr) {
-  if (!readFresh) return null;
+async function tryLoadHeptagonPeakCacheFromAggregates(db, readPayload, startStr, endStr) {
+  if (!readPayload) return null;
   const slots = [];
   for (const g of HEPTAGON_GENDERS) {
     for (const d of HEPTAGON_DURATIONS) {
       slots.push({ g, d, cacheKey: peakMonthlyAggregateDocKey(d, g, startStr, endStr) });
     }
   }
-  const payloads = await Promise.all(slots.map((s) => readFresh(db, s.cacheKey)));
+  const payloads = await Promise.all(slots.map((s) => readPayload(db, s.cacheKey)));
   const cache = {};
   for (let i = 0; i < slots.length; i++) {
     const { g, d } = slots[i];
@@ -45,6 +45,19 @@ async function tryLoadHeptagonPeakCacheFromAggregates(db, readFresh, startStr, e
     };
   }
   return cache;
+}
+
+/**
+ * 수동·스케줄 공통: 마스터 집계 캐시 우선(신선 → 26h stale) → 없으면 null
+ */
+async function tryLoadHeptagonPeakCacheForRebuild(db, readFresh, readAllowStale, startStr, endStr) {
+  let cache = await tryLoadHeptagonPeakCacheFromAggregates(db, readFresh, startStr, endStr);
+  if (cache) return { cache, peakSource: "aggregates_fresh" };
+  if (readAllowStale) {
+    cache = await tryLoadHeptagonPeakCacheFromAggregates(db, readAllowStale, startStr, endStr);
+    if (cache) return { cache, peakSource: "aggregates_stale" };
+  }
+  return null;
 }
 
 /** buildPeakPowerAllDurationsForRangeAllGendersOnePass 결과 → 헵타곤 cache[g][d] 형식 */
@@ -331,8 +344,9 @@ function computePTotalAndTierHeptagon(ranks, cohortNPerAxis) {
  * @param {Function} deps.getLeagueCategory
  * @param {Function} deps.getRolling28DaysRangeSeoul
  * @param {typeof import("firebase-admin")} admin
- * @param {Function} [deps.readRankingAggregatePayloadIfFresh] ranking_aggregates 1회 읽기 (선택)
- * @param {Function} [deps.buildPeakPowerAllDurationsForRangeAllGendersOnePass] 로그 1패스 집계 (선택)
+ * @param {Function} [deps.readRankingAggregatePayloadIfFresh] ranking_aggregates 신선(26h)
+ * @param {Function} [deps.readRankingAggregatePayloadAllowStale] 마스터 직후·수동 집계용 stale 허용
+ * @param {Function} [deps.buildPeakPowerAllDurationsForRangeAllGendersOnePass] 마스터와 동일 1패스 (선택)
  */
 async function runRebuildHeptagonCohortRanks(db, deps) {
   const {
@@ -340,6 +354,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
     getLeagueCategory,
     getRolling28DaysRangeSeoul,
     readRankingAggregatePayloadIfFresh,
+    readRankingAggregatePayloadAllowStale,
     buildPeakPowerAllDurationsForRangeAllGendersOnePass,
   } = deps;
   const { admin } = deps;
@@ -363,16 +378,27 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
     });
   }
 
-  let peakSource = "legacy";
-  let cache = await tryLoadHeptagonPeakCacheFromAggregates(db, readRankingAggregatePayloadIfFresh, startStr, endStr);
-  if (cache) {
-    peakSource = "aggregates";
+  let peakSource = "none";
+  let cache = null;
+  const aggHit = await tryLoadHeptagonPeakCacheForRebuild(
+    db,
+    readRankingAggregatePayloadIfFresh,
+    readRankingAggregatePayloadAllowStale,
+    startStr,
+    endStr
+  );
+  if (aggHit && aggHit.cache) {
+    cache = aggHit.cache;
+    peakSource = aggHit.peakSource;
   } else if (typeof buildPeakPowerAllDurationsForRangeAllGendersOnePass === "function") {
     const allDur = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr, usersSnap);
     cache = mapAllDurToHeptagonCache(allDur);
     if (cache) peakSource = "onepass";
   }
-  if (!cache) {
+  if (!cache && typeof getPeakPowerRankingEntries === "function") {
+    console.warn(
+      "[runRebuildHeptagonCohortRanks] aggregates·onepass miss — legacy 21× 피크 스캔(수동 집계와 다를 수 있음)"
+    );
     cache = {};
     for (const g of HEPTAGON_GENDERS) {
       cache[g] = {};
@@ -382,6 +408,9 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
       }
     }
     peakSource = "legacy";
+  }
+  if (!cache) {
+    throw new Error("heptagon_peak_cache_unavailable");
   }
 
   // 배치 쓰기 전에 기존 문서의 boardRank·asOfSeoul 을 한 번에 읽어 전날 순위 비교에 사용

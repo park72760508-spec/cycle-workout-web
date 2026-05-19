@@ -5982,6 +5982,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   } catch (eMeta) {
     console.warn("[runRebuildRankingAggregatesCore] master meta write failed:", eMeta && eMeta.message);
   }
+
   return { wrote, ms };
 }
 
@@ -6141,12 +6142,15 @@ const heptagonCohortRanks = require("./heptagonCohortRanks");
 /** 스케줄·수동 배치 공통 — `scheduledHeptagonCohortRanks` / `manualRebuildHeptagonCohortRanks` */
 async function runHeptagonCohortRanksRebuildJob() {
   const db = admin.firestore();
+  const readAllowStaleForHeptagon = async (dbRef, cacheKey) =>
+    readRankingAggregatePayloadAllowStale(dbRef, cacheKey, RANKING_AGG_MAX_STALE_MS);
   return heptagonCohortRanks.runRebuildHeptagonCohortRanks(db, {
     getPeakPowerRankingEntries,
     getLeagueCategory,
     getRolling28DaysRangeSeoul,
     admin,
     readRankingAggregatePayloadIfFresh,
+    readRankingAggregatePayloadAllowStale: readAllowStaleForHeptagon,
     buildPeakPowerAllDurationsForRangeAllGendersOnePass,
   });
 }
@@ -6162,6 +6166,17 @@ exports.scheduledHeptagonCohortRanks = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
+      const todayKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+      try {
+        const masterSnap = await db.collection("ranking_meta").doc(RANKING_MASTER_REBUILD_META_DOC).get();
+        const masterDate = masterSnap.exists ? String((masterSnap.data() || {}).dateKst || "") : "";
+        if (masterDate && masterDate !== todayKst) {
+          console.warn(
+            "[scheduledHeptagonCohortRanks] master_daily_rebuild 가 오늘이 아님 — 피크는 onepass/legacy 폴백 가능",
+            { masterDate, todayKst }
+          );
+        }
+      } catch (_eM) {}
       const r = await runHeptagonCohortRanksRebuildJob();
       await markHeptagonDailyRebuildComplete(db, r);
       console.log("[scheduledHeptagonCohortRanks] ok", r);
@@ -6192,7 +6207,9 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
     }
 
     const runOk = async () => {
+      const db = admin.firestore();
       const r = await runHeptagonCohortRanksRebuildJob();
+      await markHeptagonDailyRebuildComplete(db, r);
       console.log("[manualRebuildHeptagonCohortRanks] ok", r);
       res.status(200).json({
         success: true,
@@ -7479,6 +7496,9 @@ exports.getPeakPowerRanking = onRequest(
         gcMinSnapshotAsOf: minGcAsOf,
         gcSnapshotStale: !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf),
         gcHeptagonRebuildDateKst: heptagonMeta && heptagonMeta.dateKst ? String(heptagonMeta.dateKst) : null,
+        gcHeptagonPeakSource: heptagonMeta && heptagonMeta.summary && heptagonMeta.summary.peakSource
+          ? String(heptagonMeta.summary.peakSource)
+          : null,
       };
       if (uid) {
         let current = null;
