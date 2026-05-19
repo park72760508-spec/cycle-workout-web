@@ -5224,6 +5224,11 @@ function personalSpeedAggregateLogicOk(payload) {
   return personalSpeedAggregateHasPeak60Entries(payload);
 }
 
+/** 23:00·수동 집계로 저장된 pack — HTTP에서 전원 로그 재조회(enrich) 생략 가능 */
+function personalSpeedPrecomputedTrustworthy(payload) {
+  return personalSpeedAggregateLogicOk(payload) && payload.dashboardLogRouteEnriched === true;
+}
+
 /**
  * 항속 보드: 60분 MMP·speed 둘 다 있는 행만 유지 후 재정렬(대시보드 rankingStrict와 동일 대상).
  */
@@ -5337,7 +5342,7 @@ async function enrichPersonalSpeedPackFromLogs(db, pack, startStr, endStr) {
   };
 
   const allRows = [];
-  const ENRICH_BATCH = 20;
+  const ENRICH_BATCH = 40;
   for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
     const arr = pack.byCategory[cat];
     if (!Array.isArray(arr)) {
@@ -7197,7 +7202,8 @@ exports.getPeakPowerRanking = onRequest(
           }
         }
         const psEntries = entries.length ? entries : (byCategory.Supremo || []);
-        if (!forceRankMv) {
+        const fastPrecomputed = meta && meta.fastPrecomputed === true;
+        if (!forceRankMv && !fastPrecomputed) {
           await hydratePeakRankMovementOnPayload(
             db,
             out.byCategory,
@@ -7208,7 +7214,7 @@ exports.getPeakPowerRanking = onRequest(
         if (!out.entries.length && Array.isArray(out.byCategory.Supremo)) {
           out.entries = out.byCategory.Supremo.slice();
         }
-        if (uid && !forceRankMv) {
+        if (uid && !forceRankMv && !fastPrecomputed) {
           await patchPersonalSpeedViewerFromDashboardRoute(db, out, uid, outStart, outEnd);
         }
         await finalizeRankingProfileUrls(out);
@@ -7232,25 +7238,30 @@ exports.getPeakPowerRanking = onRequest(
       }
 
       /**
-       * 사전집계·캐시 hit 시에도 전원 대시보드 로그 루트 재산출(수동 집계·23:00 build와 동일).
-       * logicOk 만으로 enrich 생략하면 구 rollup/FTP·체중 변경분이 남아 속도 불일치 발생.
+       * 사전집계 hit: 23:00·수동 집계 pack(dashboardLogRouteEnriched)은 즉시 반환.
+       * 구버전·미검증 pack만 enrich(전원 로그 재산출).
        */
       const tryReturnPrecomputed = async (aggPayload, meta) => {
         if (!aggPayload || !aggPayload.byCategory) return null;
-        let working;
-        try {
-          working = await enrichPersonalSpeedPackFromLogs(
-            db,
-            JSON.parse(JSON.stringify(aggPayload)),
-            startStr,
-            endStr
-          );
-        } catch (eEnrichPs) {
-          console.warn("[getPeakPowerRanking personal_speed] enrich failed:", eEnrichPs && eEnrichPs.message);
-          working = aggPayload;
+        const fastTrust = personalSpeedPrecomputedTrustworthy(aggPayload);
+        let working = aggPayload;
+        if (!fastTrust) {
+          try {
+            working = await enrichPersonalSpeedPackFromLogs(
+              db,
+              JSON.parse(JSON.stringify(aggPayload)),
+              startStr,
+              endStr
+            );
+          } catch (eEnrichPs) {
+            console.warn("[getPeakPowerRanking personal_speed] enrich failed:", eEnrichPs && eEnrichPs.message);
+            working = aggPayload;
+          }
         }
         const logicOk = personalSpeedAggregateLogicOk(working);
-        const sanitized = sanitizePersonalSpeedRankingPack(working);
+        const sanitized = sanitizePersonalSpeedRankingPack(
+          fastTrust ? JSON.parse(JSON.stringify(working)) : working
+        );
         if (!(sanitized.entries || []).length && !(sanitized.byCategory.Supremo || []).length) {
           return null;
         }
@@ -7260,11 +7271,15 @@ exports.getPeakPowerRanking = onRequest(
           working.personalSpeedLogicVersion != null
             ? working.personalSpeedLogicVersion
             : rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION;
-        sanitized.dashboardLogRouteEnriched = true;
-        await hydrateRankingBoardProfileImages(db, sanitized.byCategory, sanitized.entries);
+        sanitized.dashboardLogRouteEnriched =
+          fastTrust || working.dashboardLogRouteEnriched === true;
+        if (!fastTrust) {
+          await hydrateRankingBoardProfileImages(db, sanitized.byCategory, sanitized.entries);
+        }
         const outMeta = {
           precomputed: true,
-          dashboardLogRouteEnriched: true,
+          dashboardLogRouteEnriched: sanitized.dashboardLogRouteEnriched === true,
+          fastPrecomputed: fastTrust,
           peakDataSource: sanitized.peakDataSource,
           ...(meta || {}),
         };
@@ -7326,6 +7341,7 @@ exports.getPeakPowerRanking = onRequest(
             gender
           );
           if (boardFromRollup && rankingBoardPayloadHasRows(boardFromRollup)) {
+            boardFromRollup.dashboardLogRouteEnriched = true;
             const psPayload = await persistPersonalSpeedRankingPack(
               db,
               cacheKey,
