@@ -201,8 +201,11 @@ function pruneStelvioLocalStorageForQuota() {
       if (k) keys.push(k);
     }
     keys.forEach(function (k) {
-      if (k.indexOf('stelvio_rank_favorites:') === 0) {
-        /* 랭킹 관심 목록 — 용량 정리 시 삭제하지 않음 */
+      if (
+        k.indexOf('stelvio_rank_favorites:') === 0 ||
+        k.indexOf('stelvioRankingFavorites:') === 0
+      ) {
+        /* 랭킹 관심 목록(신규·레거시 키) — 용량 정리 시 삭제하지 않음 */
       } else if (k.indexOf('stelvio_rank_prev') === 0) {
         try {
           localStorage.removeItem(k);
