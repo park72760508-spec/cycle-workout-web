@@ -8880,9 +8880,18 @@
       stelvioRankingSwrCache = { key: '', body: null, ts: 0 };
     }
 
+    function stelvioRankingHasAuthUser() {
+      try {
+        if (window.authV9 && window.authV9.currentUser) return true;
+        if (window.auth && window.auth.currentUser) return true;
+      } catch (eAuth) {}
+      return false;
+    }
+
     async function stelvioFetchRankingMetaFromFirestore() {
       var fs = stelvioRankingGetFirestore();
       if (!fs) return null;
+      if (!stelvioRankingHasAuthUser()) return null;
       try {
         var coll = fs.collection('ranking_meta');
         var snaps = await Promise.all([
