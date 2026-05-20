@@ -5987,7 +5987,7 @@
             <div style="margin-bottom: 8px;">
               <label style="font-size: 0.9em; margin: 0; display: flex; align-items: center; gap: 6px;">
                 <img src="assets/img/ai.gif" alt="AI" style="height: 2em; width: auto; vertical-align: middle;" />
-                Gemini API 키 (<a href="https://aistudio.google.com/app/apikey" id="settingsGeminiApiKeyIssueLink" style="color: #2e74e8; text-decoration: underline; font-weight: normal; cursor: pointer;" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openStelvioExternalUrl === 'function') { window.openStelvioExternalUrl('https://aistudio.google.com/app/apikey'); } else { window.open('https://aistudio.google.com/app/apikey', '_blank', 'noopener,noreferrer'); } return false;">API 키 발급받기</a>)
+                Gemini API 키 (<a href="javascript:void(0)" role="button" id="settingsGeminiApiKeyIssueLink" style="color: #2e74e8; text-decoration: underline; font-weight: normal; cursor: pointer;" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openStelvioExternalUrl === 'function') { window.openStelvioExternalUrl('https://aistudio.google.com/app/apikey'); } else { window.open('https://aistudio.google.com/app/apikey', '_blank', 'noopener,noreferrer'); } return false;">API 키 발급받기</a>)
               </label>
             </div>
             <input type="password" id="settingsGeminiApiKey" placeholder="API 키를 입력하세요" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;" />
@@ -20834,11 +20834,14 @@
         }
       }
     }
-    /** window.open 1회만 — 성공 시 즉시 true (여러 번 호출하면 탭이 중복됨) */
-    function tryWindowOpenVariants(url) {
+    /**
+     * 일반 브라우저: window.open 1회만 (noopener 시 w===null 이어도 탭은 열림 → link 폴백 금지)
+     * PWA/WebView: window.open 생략, 링크·Intent만 사용
+     */
+    function tryWindowOpenOnce(url) {
       try {
-        var w = window.open(url, '_blank', 'noopener,noreferrer');
-        if (w) return true;
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return true;
       } catch (e) {}
       return false;
     }
@@ -20863,7 +20866,10 @@
     function openStelvioExternalUrlPhaseFallbacks(url) {
       if (tryOpenCordovaSystemBrowser(url)) return;
       if (tryIosExternalUrlBridge(url)) return;
-      if (tryWindowOpenVariants(url)) return;
+      if (!openStelvioExternalUrlNeedsSameWindowFallback()) {
+        tryWindowOpenOnce(url);
+        return;
+      }
       if (tryProgrammaticLinkOpen(url, true)) return;
       if (tryAndroidExternalViewIntent(url)) return;
       if (openStelvioExternalUrlNeedsSameWindowFallback()) {
