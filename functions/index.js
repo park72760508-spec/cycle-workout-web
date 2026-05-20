@@ -3069,13 +3069,52 @@ async function persistWeeklyTssBoardsAndTop10(db, wStart, wEnd, boardsByGender) 
   return { entriesCurrent, top10Current };
 }
 
-/** 23:00 마스터 집계 완료 시각 기록 (시간별 TSS 보강 스킵 판단) */
-async function markMasterDailyRankingRebuildComplete(db) {
+/** 23:00 마스터 집계 — running / complete / failed (헵타곤 메타와 동일 패턴) */
+async function markMasterDailyRankingRebuildRunning(db, extra) {
   const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  await db.collection("ranking_meta").doc(RANKING_MASTER_REBUILD_META_DOC).set({
-    dateKst,
-    completedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  await db.collection("ranking_meta").doc(RANKING_MASTER_REBUILD_META_DOC).set(
+    {
+      dateKst,
+      status: "running",
+      runningAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastError: admin.firestore.FieldValue.delete(),
+      failedAt: admin.firestore.FieldValue.delete(),
+      ...(extra && typeof extra === "object" ? extra : {}),
+    },
+    { merge: true }
+  );
+}
+
+async function markMasterDailyRankingRebuildComplete(db, summary) {
+  const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  await db.collection("ranking_meta").doc(RANKING_MASTER_REBUILD_META_DOC).set(
+    {
+      dateKst,
+      status: "complete",
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      runningAt: admin.firestore.FieldValue.delete(),
+      lastError: admin.firestore.FieldValue.delete(),
+      failedAt: admin.firestore.FieldValue.delete(),
+      summary: summary && typeof summary === "object" ? summary : null,
+    },
+    { merge: true }
+  );
+}
+
+async function markMasterDailyRankingRebuildFailed(db, err, partial) {
+  const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const msg = err && err.message ? String(err.message) : err ? String(err) : "unknown";
+  await db.collection("ranking_meta").doc(RANKING_MASTER_REBUILD_META_DOC).set(
+    {
+      dateKst,
+      status: "failed",
+      failedAt: admin.firestore.FieldValue.serverTimestamp(),
+      runningAt: admin.firestore.FieldValue.delete(),
+      lastError: msg.slice(0, 2000),
+      partialSummary: partial && typeof partial === "object" ? partial : null,
+    },
+    { merge: true }
+  );
 }
 
 /** GC 헵타곤 스냅샷(23:35 KST) 완료 시각 — 집계 여부 확인용 */
@@ -5879,11 +5918,15 @@ async function refreshWeeklyMileageTop10IfStale(db, minAgeMs) {
 async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   const t0 = Date.now();
   let wrote = 0;
+  let lastPhase = "init";
   const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
   const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
   const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
   const { startStr: r30s, endStr: r30e } = getRolling30DaysRangeSeoul();
   const { startStr: r183s, endStr: r183e } = getRolling183DaysRangeSeoul();
+  try {
+    await markMasterDailyRankingRebuildRunning(db, { forceReconcile: !!forceReconcile });
+    lastPhase = "users_fetch";
   // [비용절감] users 컬렉션을 단 1회만 읽어 모든 랭킹 함수에 공유 주입 (기존 10회 → 1회)
   const sharedUsersSnap = await db.collection("users").get();
   console.log("[runRebuildRankingAggregatesCore] users snapshot fetched once, docs:", sharedUsersSnap.size,
@@ -5983,8 +6026,23 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
     }
   }
   console.log("[runRebuildRankingAggregatesCore] peak monthly(28d) 저장 완료", { r28s, r28e });
+  lastPhase = "peak_monthly_done";
+  /** 28일 피크·GC 핵심 구간 완료 시점 — 이후 독주(183d)에서 타임아웃 나도 메타·집계 확인 가능 */
+  try {
+    await markMasterDailyRankingRebuildComplete(db, {
+      wrote,
+      ms: Date.now() - t0,
+      phase: "peak_monthly",
+      partial: true,
+      r28s,
+      r28e,
+    });
+  } catch (ePeakMeta) {
+    console.warn("[runRebuildRankingAggregatesCore] peak_monthly meta write failed:", ePeakMeta && ePeakMeta.message);
+  }
 
   // ── 4. 30일 거리 랭킹 ──
+  lastPhase = "rolling30_dist";
   for (const gender of ["all", "M", "F"]) {
     const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender, sharedUsersSnap);
     await applyPeakRankChanges(db, dist.byCategory, `peak_personal_dist_rolling30_${gender}`);
@@ -5999,6 +6057,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   }
 
   // ── 4-1. 6개월 항속: 구 rollup(FTP·구버전) 제거 → 60분 파워만 재집계 → 보드 저장
+  lastPhase = "personal_speed";
   const psMetaRef = db.collection("ranking_meta").doc("personal_speed_logic");
   const psMetaSnap = await psMetaRef.get();
   const psMetaVer = psMetaSnap.exists ? Number((psMetaSnap.data() || {}).version) : 0;
@@ -6042,14 +6101,20 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   wrote++;
 
   const ms = Date.now() - t0;
+  lastPhase = "done";
   console.log("[runRebuildRankingAggregatesCore] done", { wrote, ms });
-  try {
-    await markMasterDailyRankingRebuildComplete(db);
-  } catch (eMeta) {
-    console.warn("[runRebuildRankingAggregatesCore] master meta write failed:", eMeta && eMeta.message);
-  }
-
+  await markMasterDailyRankingRebuildComplete(db, { wrote, ms, phase: "full", partial: false });
   return { wrote, ms };
+  } catch (eCore) {
+    const msFail = Date.now() - t0;
+    console.error("[runRebuildRankingAggregatesCore] failed", lastPhase, eCore && eCore.message ? eCore.message : eCore);
+    try {
+      await markMasterDailyRankingRebuildFailed(db, eCore, { wrote, ms: msFail, lastPhase });
+    } catch (eMetaFail) {
+      console.warn("[runRebuildRankingAggregatesCore] failed meta write:", eMetaFail && eMetaFail.message);
+    }
+    throw eCore;
+  }
 }
 
 /** KST 23:00 — A안 마스터 집계 (피크·TSS·거리·항속·TOP10 전체, 하루 1회) */
@@ -6068,6 +6133,11 @@ exports.rebuildRankingAggregates = onSchedule(
       console.log("[rebuildRankingAggregates] master ok", r);
     } catch (e) {
       console.error("[rebuildRankingAggregates]", e && e.message ? e.message : e);
+      try {
+        await markMasterDailyRankingRebuildFailed(db, e, { source: "rebuildRankingAggregates" });
+      } catch (eMeta) {
+        console.warn("[rebuildRankingAggregates] failed meta write:", eMeta && eMeta.message);
+      }
       throw e;
     }
   }
@@ -6129,6 +6199,11 @@ exports.manualRebuildWeeklyRanking = onRequest(
       console.log("[manualRebuildWeeklyRanking] 완료", JSON.stringify({ ...r, startedAt, forceReconcile }));
     } catch (e) {
       console.error("[manualRebuildWeeklyRanking] full 집계 오류:", e && e.message ? e.message : e);
+      try {
+        await markMasterDailyRankingRebuildFailed(db, e, { startedAt, forceReconcile, source: "manualRebuildWeeklyRanking" });
+      } catch (eMeta) {
+        console.warn("[manualRebuildWeeklyRanking] failed meta write:", eMeta && eMeta.message);
+      }
     }
   }
 );
