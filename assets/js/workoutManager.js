@@ -3583,11 +3583,21 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
         });
         console.log('📂 카테고리 필터 적용 (입문자 전용, Lite):', { categoryId, count: filteredWorkouts.length });
       } else {
-        filteredWorkouts = allWorkoutsForCount.filter(w => {
-          const cat = getWorkoutCategoryId(w);
-          return cat === categoryId;
-        });
-        console.log('📂 카테고리 필터 적용 (author 기준):', { categoryId, count: filteredWorkouts.length });
+        var zoneForFilter = workoutCategoryIdToZoneTag(categoryId);
+        if (zoneForFilter) {
+          filteredWorkouts = allWorkoutsForCount.filter(function (w) {
+            return workoutMatchesTargetZoneTag(w, zoneForFilter);
+          });
+          console.log('📂 카테고리 필터 적용 (Zone ' + zoneForFilter + '):', {
+            categoryId: categoryId,
+            count: filteredWorkouts.length,
+          });
+        } else {
+          filteredWorkouts = allWorkoutsForCount.filter(function (w) {
+            return getWorkoutCategoryId(w) === categoryId;
+          });
+          console.log('📂 카테고리 필터 적용 (author 기준):', { categoryId, count: filteredWorkouts.length });
+        }
       }
     }
 
@@ -3929,6 +3939,74 @@ function getWorkoutCategoryId(workout) {
 
 function workoutCategoryIdToZoneTag(categoryId) {
   return WORKOUT_CATEGORY_ZONE_TAG[categoryId] || '';
+}
+
+/**
+ * AI·코치 추천 문자열(예: "VO2 Max", "Active Recovery (Z1)") → Zone 태그(Z1~Z5, Z3~Z4)
+ * 워크아웃 검출은 카테고리명이 아닌 이 Zone 값으로만 수행한다.
+ */
+function extractZoneTagFromCategoryOrText(text) {
+  if (text == null || text === '') return '';
+  var raw = String(text).trim();
+  if (!raw) return '';
+  if (/Z\s*3\s*[~\-–]\s*Z\s*4|Z3\s*[~\-]\s*Z4|Z3-4|Z3\s*TO\s*Z4/i.test(raw)) return 'Z3~Z4';
+  var zm = raw.match(/\bZ\s*([1-5])\b/i);
+  if (zm) return 'Z' + zm[1];
+  var fromInfer = inferWorkoutCategoryFromZoneOrText(raw);
+  if (fromInfer && WORKOUT_CATEGORY_ZONE_TAG[fromInfer]) return WORKOUT_CATEGORY_ZONE_TAG[fromInfer];
+  var fromName = matchAuthorCategoryMap(raw);
+  if (fromName && WORKOUT_CATEGORY_ZONE_TAG[fromName]) return WORKOUT_CATEGORY_ZONE_TAG[fromName];
+  var normKey = raw.toLowerCase().replace(/[\s_-]+/g, ' ');
+  var aliasZone = {
+    recovery: 'Z1',
+    'active recovery': 'Z1',
+    endurance: 'Z2',
+    tempo: 'Z3',
+    'sweet spot': 'Z3~Z4',
+    sweetspot: 'Z3~Z4',
+    threshold: 'Z4',
+    'vo2 max': 'Z5',
+    vo2max: 'Z5',
+  };
+  if (aliasZone[normKey]) return aliasZone[normKey];
+  return '';
+}
+
+/** author/보정 author 텍스트가 타겟 Zone(Z1, Z5, Z3~Z4 등)을 포함하는지 */
+function authorTextMatchesTargetZoneTag(authorText, targetZone) {
+  if (!targetZone) return true;
+  var a = String(authorText || '').toUpperCase();
+  var z = String(targetZone).toUpperCase();
+  if (a.indexOf(z) >= 0) return true;
+  if (z.indexOf('Z3') >= 0 && z.indexOf('Z4') >= 0) {
+    if (/Z\s*3\s*[~\-–]\s*Z\s*4|Z3\s*~\s*Z4|Z3-4/.test(a)) return true;
+    if (/\bZ\s*3\b/.test(a) || /\bZ\s*4\b/.test(a) || /SWEET\s*SPOT/.test(a)) return true;
+  }
+  if (z === 'Z1' && (/\bZ\s*1\b/.test(a) || /ACTIVE\s*RECOVERY|\bRECOVERY\b/.test(a))) return true;
+  if (z === 'Z2' && (/\bZ\s*2\b/.test(a) || /\bENDURANCE\b/.test(a))) return true;
+  if (z === 'Z3' && /\bZ\s*3\b/.test(a)) return true;
+  if (z === 'Z4' && (/\bZ\s*4\b/.test(a) || /\bTHRESHOLD\b/.test(a))) return true;
+  if (z === 'Z5' && (/\bZ\s*5\b/.test(a) || /VO2\s*MAX/.test(a))) return true;
+  return false;
+}
+
+/**
+ * 워크아웃이 타겟 Zone과 일치하는지 (author Z표기 우선, 없으면 카테고리→Zone 보정)
+ */
+function workoutMatchesTargetZoneTag(workout, targetZone) {
+  if (!workout || !targetZone) return !targetZone;
+  var authorForMatch = ensureWorkoutAuthorZoneTag(workout);
+  if (authorTextMatchesTargetZoneTag(authorForMatch, targetZone)) return true;
+  var catZone = workoutCategoryIdToZoneTag(getWorkoutCategoryId(workout));
+  if (catZone && authorTextMatchesTargetZoneTag(catZone, targetZone)) return true;
+  var dom = getWorkoutDominantZone(workout);
+  if (dom) {
+    var z = String(targetZone).toUpperCase();
+    var map = { z1: 'Z1', z2: 'Z2', z3: 'Z3', z4: 'Z4', z5: 'Z5' };
+    if (map[dom] === z) return true;
+    if (z.indexOf('Z3') >= 0 && z.indexOf('Z4') >= 0 && (dom === 'z3' || dom === 'z4')) return true;
+  }
+  return false;
 }
 
 function authorTextHasZoneMarker(text) {
@@ -6499,6 +6577,9 @@ window.getWorkoutDominantZone = getWorkoutDominantZone;
 window.getWorkoutCategoryId = getWorkoutCategoryId;
 window.inferWorkoutCategoryFromZoneOrText = inferWorkoutCategoryFromZoneOrText;
 window.workoutCategoryIdToZoneTag = workoutCategoryIdToZoneTag;
+window.extractZoneTagFromCategoryOrText = extractZoneTagFromCategoryOrText;
+window.authorTextMatchesTargetZoneTag = authorTextMatchesTargetZoneTag;
+window.workoutMatchesTargetZoneTag = workoutMatchesTargetZoneTag;
 window.ensureWorkoutAuthorZoneTag = ensureWorkoutAuthorZoneTag;
 window.estimateWorkoutTSS = estimateWorkoutTSS;
 window.getSegmentFtpPercentForPreview = getSegmentFtpPercentForPreview;
