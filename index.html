@@ -8354,6 +8354,7 @@
      * STELVIO 랭킹 보드 모달 (피크 파워 W/kg)
      */
     var stelvioRankingState = { duration: 'gc', gender: 'all', period: 'monthly', activeCategory: 'Supremo', listFilter: 'all' };
+    if (stelvioRankingState.period === 'yearly') stelvioRankingState.period = 'monthly';
     var stelvioRankingFavoriteUserSet = new Set();
     var stelvioRankingFriendUserSet = new Set();
     var stelvioRankingGroupContactSet = new Set();
@@ -11488,6 +11489,7 @@
       if (duration === 'tss') return 'weekly';
       if (duration === 'personal_speed') return 'rolling183';
       if (duration === 'personal_dist' || duration === 'group_dist') return 'rolling30';
+      if (period === 'yearly') return 'monthly';
       return period || (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) || 'monthly';
     }
 
@@ -27931,7 +27933,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <span class="stelvio-dropdown-chevron">▾</span>
               <select id="stelvioPeriodSelect" class="stelvio-dropdown-select" onchange="stelvioOnPeriodChange(this.value);">
                 <option value="monthly">월간</option>
-                <option value="yearly">명예의 전당</option>
               </select>
             </div>
             <!-- 항목 필터: 그룹 탭 전용 (기간 필터 대체) -->
