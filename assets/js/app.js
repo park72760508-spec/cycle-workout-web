@@ -12362,6 +12362,9 @@ function stelvioCleanAiSelectedCategory(raw) {
     'vo2 max interval': 'VO2 Max',
   };
   if (aliases[key]) return aliases[key];
+  if (typeof window.textIndicatesZ5Vo2MaxCategory === 'function' && window.textIndicatesZ5Vo2MaxCategory(s)) {
+    return 'VO2 Max';
+  }
   var k;
   for (k in aliases) {
     if (aliases.hasOwnProperty(k) && key.indexOf(k) >= 0) return aliases[k];
@@ -12398,7 +12401,9 @@ function stelvioParseCoachBasisRecommendedWorkout(basisRaw) {
   if (!raw) return { category: '', zone: '', label: '' };
   var zone = stelvioExtractZoneTagFromText(raw);
   var category = '';
-  if (/Z1|Active\s*Recovery|\bRecovery\b/i.test(raw)) category = 'Recovery';
+  if (typeof window.textIndicatesZ5Vo2MaxCategory === 'function' && window.textIndicatesZ5Vo2MaxCategory(raw)) {
+    category = 'VO2Max';
+  } else if (/Z1|Active\s*Recovery|\bRecovery\b/i.test(raw)) category = 'Recovery';
   else if (/Z2|\bEndurance\b/i.test(raw)) category = 'Endurance';
   else if (/Sweet\s*Spot|SweetSpot|Z3\s*[~\-–]\s*Z\s*4/i.test(raw)) category = 'SweetSpot';
   else if (/Z3|\bTempo\b/i.test(raw)) category = 'Tempo';
@@ -12491,6 +12496,7 @@ function stelvioResolveTargetCategoryZone(basisCategory, selectedCategory, targe
       SweetSpot: 'Z3~Z4',
       Threshold: 'Z4',
       VO2Max: 'Z5',
+      'VO2 Max': 'Z5',
     };
     if (basisCategory && basisZoneMap[basisCategory]) zone = basisZoneMap[basisCategory];
   }
@@ -12573,6 +12579,10 @@ function stelvioAppendFromPool(out, pool, targetCategory, targetZone, reasonPref
 /** AI가 잘못된 workoutId를 줬을 때 TSS 순 풀에서 rank 슬롯에 맞게 치환 */
 function stelvioRemapInvalidRecommendationIds(recs, workoutDetails, targetCategory, targetZone) {
   var details = workoutDetails || [];
+  var remapZone =
+    String(targetZone || '').trim() ||
+    stelvioExtractZoneTagFromText(targetCategory) ||
+    '';
   var idSet = new Set(
     details.map(function (w) { return Number(w.id); }).filter(function (id) { return id > 0; })
   );
@@ -12589,7 +12599,8 @@ function stelvioRemapInvalidRecommendationIds(recs, workoutDetails, targetCatego
       stelvioFilterWorkoutPool(details, new Set(), targetCategory, targetZone, 'category')
     );
   }
-  if (!strictPool.length) strictPool = stelvioSortWorkoutsByTssAsc(details);
+  /* 타겟 Zone(Z5 등)이 정해졌으면 Endurance 등 다른 Zone으로 폴백하지 않음 */
+  if (!strictPool.length && !remapZone) strictPool = stelvioSortWorkoutsByTssAsc(details);
 
   var out = [];
   var used = new Set();
@@ -13307,6 +13318,7 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       SweetSpot: 'Z3~Z4',
       Threshold: 'Z4',
       VO2Max: 'Z5',
+      'VO2 Max': 'Z5',
     };
     const targetZoneHint = (function () {
       var fromCoach = basisRaw ? stelvioExtractZoneTagFromText(basisRaw) : '';

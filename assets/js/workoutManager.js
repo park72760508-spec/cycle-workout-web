@@ -3879,6 +3879,25 @@ var WORKOUT_CATEGORY_ZONE_TAG = {
 };
 
 /**
+ * VO2 Max / Z5 포괄 키워드 (AI 추천·author·category·title 매칭 공통)
+ * VO2 Max, VO2max, Vo2Mazx, VO2Max 등 + max/Max 포함 시 Z5로 간주
+ * @param {string} text
+ * @returns {boolean}
+ */
+function textIndicatesZ5Vo2MaxCategory(text) {
+  if (text == null || text === '') return false;
+  var raw = String(text).trim();
+  if (!raw) return false;
+  var upper = raw.toUpperCase();
+
+  if (/\bZ\s*5\b/.test(upper)) return true;
+  if (/VO2\s*MA[XZW]|V0?2\s*MA[XZW]|VO2MAX|VO2\s*MAX/i.test(raw)) return true;
+  if (/max/i.test(raw)) return true;
+
+  return false;
+}
+
+/**
  * author/category/title 등에 포함된 Zone·카테고리 키워드 → 표준 카테고리 ID
  * @param {string} text
  * @returns {string|null}
@@ -3891,7 +3910,7 @@ function inferWorkoutCategoryFromZoneOrText(text) {
 
   if (/Z\s*3\s*[~\-–]\s*Z\s*4|Z3\s*~\s*Z4|Z3-4|Z3\s*TO\s*Z4/i.test(raw)) return 'Sweet Spot';
   if (/\bZ\s*1\b/.test(upper) || /ACTIVE\s*RECOVERY/.test(upper)) return 'Active Recovery';
-  if (/\bZ\s*5\b/.test(upper) || /\bVO2\s*MAX\b/.test(upper)) return 'VO2 Max';
+  if (textIndicatesZ5Vo2MaxCategory(raw)) return 'VO2 Max';
   if (/\bZ\s*4\b/.test(upper) || /\bTHRESHOLD\b/.test(upper)) return 'Threshold';
   if (/\bZ\s*3\b/.test(upper) || /\bTEMPO\b/.test(upper)) return 'Tempo';
   if (/\bZ\s*2\b/.test(upper) || /\bENDURANCE\b/.test(upper)) return 'Endurance';
@@ -3902,6 +3921,7 @@ function inferWorkoutCategoryFromZoneOrText(text) {
 
 function matchAuthorCategoryMap(text) {
   if (!text) return null;
+  if (textIndicatesZ5Vo2MaxCategory(text)) return 'VO2 Max';
   var lower = String(text).trim().toLowerCase();
   if (!lower) return null;
   var i;
@@ -3923,6 +3943,7 @@ function getWorkoutCategoryId(workout) {
   if (!workout) return '기타';
   var authorVal = String(workout.author || '').trim();
   var catVal = String(workout.category || '').trim();
+  var titleVal = String(workout.title || workout.name || '').trim();
 
   var fromAuthorName = matchAuthorCategoryMap(authorVal);
   if (fromAuthorName) return fromAuthorName;
@@ -3933,6 +3954,11 @@ function getWorkoutCategoryId(workout) {
   if (fromCatName) return fromCatName;
   var fromCatZone = inferWorkoutCategoryFromZoneOrText(catVal);
   if (fromCatZone) return fromCatZone;
+
+  var fromTitleName = matchAuthorCategoryMap(titleVal);
+  if (fromTitleName) return fromTitleName;
+  var fromTitleZone = inferWorkoutCategoryFromZoneOrText(titleVal);
+  if (fromTitleZone) return fromTitleZone;
 
   return '기타';
 }
@@ -3952,6 +3978,7 @@ function extractZoneTagFromCategoryOrText(text) {
   if (/Z\s*3\s*[~\-–]\s*Z\s*4|Z3\s*[~\-]\s*Z4|Z3-4|Z3\s*TO\s*Z4/i.test(raw)) return 'Z3~Z4';
   var zm = raw.match(/\bZ\s*([1-5])\b/i);
   if (zm) return 'Z' + zm[1];
+  if (textIndicatesZ5Vo2MaxCategory(raw)) return 'Z5';
   var fromInfer = inferWorkoutCategoryFromZoneOrText(raw);
   if (fromInfer && WORKOUT_CATEGORY_ZONE_TAG[fromInfer]) return WORKOUT_CATEGORY_ZONE_TAG[fromInfer];
   var fromName = matchAuthorCategoryMap(raw);
@@ -3967,8 +3994,10 @@ function extractZoneTagFromCategoryOrText(text) {
     threshold: 'Z4',
     'vo2 max': 'Z5',
     vo2max: 'Z5',
+    'vo2 mazx': 'Z5',
   };
   if (aliasZone[normKey]) return aliasZone[normKey];
+  if (textIndicatesZ5Vo2MaxCategory(raw)) return 'Z5';
   return '';
 }
 
@@ -3986,7 +4015,7 @@ function authorTextMatchesTargetZoneTag(authorText, targetZone) {
   if (z === 'Z2' && (/\bZ\s*2\b/.test(a) || /\bENDURANCE\b/.test(a))) return true;
   if (z === 'Z3' && /\bZ\s*3\b/.test(a)) return true;
   if (z === 'Z4' && (/\bZ\s*4\b/.test(a) || /\bTHRESHOLD\b/.test(a))) return true;
-  if (z === 'Z5' && (/\bZ\s*5\b/.test(a) || /VO2\s*MAX/.test(a))) return true;
+  if (z === 'Z5' && textIndicatesZ5Vo2MaxCategory(authorText)) return true;
   return false;
 }
 
@@ -6579,6 +6608,7 @@ window.inferWorkoutCategoryFromZoneOrText = inferWorkoutCategoryFromZoneOrText;
 window.workoutCategoryIdToZoneTag = workoutCategoryIdToZoneTag;
 window.extractZoneTagFromCategoryOrText = extractZoneTagFromCategoryOrText;
 window.authorTextMatchesTargetZoneTag = authorTextMatchesTargetZoneTag;
+window.textIndicatesZ5Vo2MaxCategory = textIndicatesZ5Vo2MaxCategory;
 window.workoutMatchesTargetZoneTag = workoutMatchesTargetZoneTag;
 window.ensureWorkoutAuthorZoneTag = ensureWorkoutAuthorZoneTag;
 window.estimateWorkoutTSS = estimateWorkoutTSS;
