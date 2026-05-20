@@ -907,10 +907,15 @@
             return;
           }
 
+          var quotaCooldownSec =
+            typeof window.getGeminiQuotaCooldownRemainingSec === 'function'
+              ? window.getGeminiQuotaCooldownRemainingSec()
+              : 0;
           var analysis = await window.callGeminiCoach(userProfile, cleanLogs, last7TSS, {
             timeoutMs: 120000,
-            maxRetries: 5,
-            useStreaming: true,
+            maxRetries: 2,
+            useStreaming: quotaCooldownSec <= 0,
+            forceApi: retryCoach > 0,
             onChunk: function(delta, fullText) {
               try {
                 var match = fullText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)/);
