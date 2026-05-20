@@ -3081,6 +3081,12 @@ async function markMasterDailyRankingRebuildComplete(db) {
 /** GC 헵타곤 스냅샷(23:35 KST) 완료 시각 — 집계 여부 확인용 */
 async function markHeptagonDailyRebuildComplete(db, resultSummary) {
   const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const wrote = resultSummary && Number(resultSummary.wrote) > 0 ? Number(resultSummary.wrote) : 0;
+  if (wrote < 1) {
+    throw new Error(
+      "heptagon_daily_rebuild_complete_rejected_zero_writes"
+    );
+  }
   await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).set(
     {
       dateKst,
@@ -3121,10 +3127,12 @@ async function markHeptagonRebuildFailed(db, err) {
   );
 }
 
-/** 수동 HTTP가 60초 게이트웨이에서 끊겨도 중복 백그라운드 실행 억제 */
-async function heptagonManualRebuildAlreadyRunning(db) {
+/** 수동 HTTP 중복 실행 억제 — running 고착 시 자동 해제 */
+async function heptagonManualRebuildAlreadyRunning(db, opts) {
+  const force = opts && opts.force === true;
   try {
-    const snap = await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).get();
+    const ref = db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC);
+    const snap = await ref.get();
     if (!snap.exists) return false;
     const d = snap.data() || {};
     if (String(d.status || "") !== "running" || !d.runningAt) return false;
@@ -3134,7 +3142,26 @@ async function heptagonManualRebuildAlreadyRunning(db) {
         : d.runningAt instanceof Date
           ? d.runningAt.getTime()
           : 0;
-    return t > 0 && Date.now() - t < 20 * 60 * 1000;
+    const runningMs = t > 0 ? Date.now() - t : HEPTAGON_REBUILD_RUNNING_STALE_MS + 1;
+    if (force || runningMs >= HEPTAGON_REBUILD_RUNNING_STALE_MS) {
+      await ref.set(
+        {
+          status: "failed",
+          runningAt: admin.firestore.FieldValue.delete(),
+          lastError: force
+            ? "manual_force_clear_running"
+            : "stale_running_lock_cleared",
+          failedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      console.warn("[heptagonManualRebuildAlreadyRunning] stale running lock cleared", {
+        runningMs,
+        force: !!force,
+      });
+      return false;
+    }
+    return true;
   } catch (_e) {
     return false;
   }
@@ -4829,6 +4856,9 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
 const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
 /** ranking_aggregates 읽기 허용 최대 경과 시간. 집계 cron 간격보다 길게 두어 사용자 요청 시 전체 재스캔 빈도를 줄임 */
 const RANKING_AGG_MAX_STALE_MS = 26 * 60 * 60 * 1000; // 26시간 (하루 1회 23:00 기준 최대 24h 공백 + 여유)
+/** 헵타곤 재집계: 마스터 23:00 타임아웃·수동 재시도 시에도 ranking_aggregates 피크 보드 읽기 허용 */
+const HEPTAGON_AGG_STALE_MS = 8 * 24 * 60 * 60 * 1000;
+const HEPTAGON_REBUILD_RUNNING_STALE_MS = 25 * 60 * 1000;
 /** HTTP에서 users×logs 전체 재집계 허용(기본 false — 사전집계·stale만 반환, 과금 폭탄 방지) */
 const ALLOW_RANKING_HTTP_LIVE_REBUILD = process.env.ALLOW_RANKING_HTTP_LIVE_REBUILD === "1";
 const RANKING_HTTP_STALE_FALLBACK_MS = 14 * 24 * 60 * 60 * 1000;
@@ -5965,6 +5995,30 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   });
   wrote++;
 
+  // ── 3b. 피크파워 28일(헵타곤·Max·구간 탭) — 타임아웃 전에 반드시 기록 ──
+  const allDurMonthlyEarly = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(
+    db,
+    r28s,
+    r28e,
+    sharedUsersSnap
+  );
+  for (const gender of ["all", "M", "F"]) {
+    for (const durationType of Object.keys(DURATION_FIELDS)) {
+      const pack = allDurMonthlyEarly[gender][durationType];
+      await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
+      const ckeyEarly = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
+      await writeRankingAggregatePayload(db, ckeyEarly, {
+        byCategory: pack.byCategory,
+        entries: pack.entries,
+        startStr: r28s,
+        endStr: r28e,
+        cohortAvgHrBpm: pack.cohortAvgHrBpm,
+      });
+      wrote++;
+    }
+  }
+  console.log("[runRebuildRankingAggregatesCore] peak monthly(28d) 저장 완료", { r28s, r28e });
+
   // ── 4. 30일 거리 랭킹 ──
   for (const gender of ["all", "M", "F"]) {
     const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender, sharedUsersSnap);
@@ -6022,24 +6076,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   });
   wrote++;
 
-  // ── 5. 피크파워 28일/365일 ──
-  const allDurMonthly = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, sharedUsersSnap);
-  for (const gender of ["all", "M", "F"]) {
-    for (const durationType of Object.keys(DURATION_FIELDS)) {
-      const pack = allDurMonthly[gender][durationType];
-      await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
-      const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
-      await writeRankingAggregatePayload(db, ckey, {
-        byCategory: pack.byCategory,
-        entries: pack.entries,
-        startStr: r28s,
-        endStr: r28e,
-        cohortAvgHrBpm: pack.cohortAvgHrBpm,
-      });
-      wrote++;
-    }
-  }
-
+  // ── 5. 피크파워 365일(명예의 전당) — 28일은 3b에서 선행 저장 ──
   const allDurYear = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r365s, r365e, sharedUsersSnap);
   for (const gender of ["all", "M", "F"]) {
     for (const durationType of Object.keys(DURATION_FIELDS)) {
@@ -6225,7 +6262,7 @@ const heptagonCohortRanks = require("./heptagonCohortRanks");
 async function runHeptagonCohortRanksRebuildJob() {
   const db = admin.firestore();
   const readAllowStaleForHeptagon = async (dbRef, cacheKey) =>
-    readRankingAggregatePayloadAllowStale(dbRef, cacheKey, RANKING_AGG_MAX_STALE_MS);
+    readRankingAggregatePayloadAllowStale(dbRef, cacheKey, HEPTAGON_AGG_STALE_MS);
   return heptagonCohortRanks.runRebuildHeptagonCohortRanks(db, {
     getPeakPowerRankingEntries,
     getLeagueCategory,
@@ -6264,6 +6301,11 @@ exports.scheduledHeptagonCohortRanks = onSchedule(
       console.log("[scheduledHeptagonCohortRanks] ok", r);
     } catch (e) {
       console.error("[scheduledHeptagonCohortRanks]", e && e.message ? e.message : e);
+      try {
+        await markHeptagonRebuildFailed(db, e);
+      } catch (eMeta) {
+        console.warn("[scheduledHeptagonCohortRanks] failed meta write:", eMeta && eMeta.message);
+      }
       throw e;
     }
   }
@@ -6288,23 +6330,39 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
       return;
     }
 
+    const forceRun =
+      String(req.query?.force || req.body?.force || "").toLowerCase() === "true" ||
+      String(req.query?.force || req.body?.force || "") === "1";
+
     const runAccepted = async (db) => {
-      if (await heptagonManualRebuildAlreadyRunning(db)) {
+      if (await heptagonManualRebuildAlreadyRunning(db, { force: forceRun })) {
         res.status(409).json({
           success: false,
           error:
-            "헵타곤 재집계가 이미 실행 중입니다. ranking_meta/heptagon_daily_rebuild 의 status=running 을 확인하세요.",
+            "헵타곤 재집계가 이미 실행 중입니다. 25분 후 재시도하거나 ?force=1 로 고착 running 을 해제하세요.",
+          checkMetaDoc: `ranking_meta/${RANKING_HEPTAGON_REBUILD_META_DOC}`,
         });
         return;
       }
-      startHeptagonCohortRanksRebuildInBackground(db);
+      const startedAt = new Date().toISOString();
       res.status(202).json({
         success: true,
         accepted: true,
+        startedAt,
         message:
-          "헵타곤(GC) 재집계를 백그라운드에서 시작했습니다. HTTP 게이트웨이(약 60초) 제한으로 동기 완료 응답은 불가합니다. 완료 후 ranking_meta/heptagon_daily_rebuild 의 status=complete 를 확인하세요.",
+          "헵타곤(GC) 재집계를 시작했습니다. 약 2~9분 후 ranking_meta/heptagon_daily_rebuild status=complete·heptagon_cohort_ranks asOfSeoul(오늘)을 확인하세요.",
         checkMetaDoc: `ranking_meta/${RANKING_HEPTAGON_REBUILD_META_DOC}`,
+        logKeyword: "[runRebuildHeptagonCohortRanks] done",
       });
+      try {
+        await markHeptagonRebuildRunning(db);
+        const r = await runHeptagonCohortRanksRebuildJob();
+        await markHeptagonDailyRebuildComplete(db, r);
+        console.log("[manualRebuildHeptagonCohortRanks] 완료", JSON.stringify({ ...r, startedAt }));
+      } catch (err) {
+        console.error("[manualRebuildHeptagonCohortRanks]", err && err.message ? err.message : err);
+        await markHeptagonRebuildFailed(db, err);
+      }
     };
 
     if (req.method === "GET") {

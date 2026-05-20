@@ -18,7 +18,9 @@ function peakMonthlyAggregateDocKey(durationType, gender, startStr, endStr) {
 
 /**
  * 사전 집계(ranking_aggregates) 21슬롯 — 23:00 마스터와 동일 피크 보드
+ * 한 슬롯만 없어도 전체 null 이 되면 헵타곤이 며칠째 갱신되지 않음 → 부분 로드 + onepass 보강.
  * @param {Function} readPayload async (db, key) => payload | null
+ * @returns {{ cache: object, complete: boolean, missingSlots: Array<{g:string,d:string,cacheKey:string}> }|null}
  */
 async function tryLoadHeptagonPeakCacheFromAggregates(db, readPayload, startStr, endStr) {
   if (!readPayload) return null;
@@ -30,13 +32,19 @@ async function tryLoadHeptagonPeakCacheFromAggregates(db, readPayload, startStr,
   }
   const payloads = await Promise.all(slots.map((s) => readPayload(db, s.cacheKey)));
   const cache = {};
+  const missingSlots = [];
   for (let i = 0; i < slots.length; i++) {
-    const { g, d } = slots[i];
+    const { g, d, cacheKey } = slots[i];
     const payload = payloads[i];
-    if (!payload || !payload.byCategory) return null;
-    if (payload.startStr != null && payload.endStr != null
-      && (String(payload.startStr) !== startStr || String(payload.endStr) !== endStr)) {
-      return null;
+    if (
+      !payload ||
+      !payload.byCategory ||
+      (payload.startStr != null &&
+        payload.endStr != null &&
+        (String(payload.startStr) !== startStr || String(payload.endStr) !== endStr))
+    ) {
+      missingSlots.push({ g, d, cacheKey });
+      continue;
     }
     if (!cache[g]) cache[g] = {};
     cache[g][d] = {
@@ -44,20 +52,72 @@ async function tryLoadHeptagonPeakCacheFromAggregates(db, readPayload, startStr,
       entries: Array.isArray(payload.entries) ? payload.entries : [],
     };
   }
-  return cache;
+  if (!Object.keys(cache).length) return null;
+  return {
+    cache,
+    complete: missingSlots.length === 0,
+    missingSlots,
+  };
 }
 
 /**
- * 수동·스케줄 공통: 마스터 집계 캐시 우선(신선 → 26h stale) → 없으면 null
+ * 수동·스케줄 공통: 마스터 집계 캐시 우선(신선 → 긴 stale) → 부분만 있어도 반환
  */
 async function tryLoadHeptagonPeakCacheForRebuild(db, readFresh, readAllowStale, startStr, endStr) {
-  let cache = await tryLoadHeptagonPeakCacheFromAggregates(db, readFresh, startStr, endStr);
-  if (cache) return { cache, peakSource: "aggregates_fresh" };
+  const freshHit = await tryLoadHeptagonPeakCacheFromAggregates(db, readFresh, startStr, endStr);
+  if (freshHit && freshHit.complete) {
+    return { cache: freshHit.cache, peakSource: "aggregates_fresh", missingSlots: [] };
+  }
   if (readAllowStale) {
-    cache = await tryLoadHeptagonPeakCacheFromAggregates(db, readAllowStale, startStr, endStr);
-    if (cache) return { cache, peakSource: "aggregates_stale" };
+    const staleHit = await tryLoadHeptagonPeakCacheFromAggregates(db, readAllowStale, startStr, endStr);
+    if (staleHit && staleHit.complete) {
+      return { cache: staleHit.cache, peakSource: "aggregates_stale", missingSlots: [] };
+    }
+    if (staleHit && staleHit.cache) {
+      return {
+        cache: staleHit.cache,
+        peakSource: "aggregates_stale_partial",
+        missingSlots: staleHit.missingSlots,
+      };
+    }
+  }
+  if (freshHit && freshHit.cache) {
+    return {
+      cache: freshHit.cache,
+      peakSource: "aggregates_fresh_partial",
+      missingSlots: freshHit.missingSlots,
+    };
   }
   return null;
+}
+
+/** onepass 결과에서 누락 슬롯만 채움 */
+function fillHeptagonCacheMissingSlots(cache, fullMapped, missingSlots) {
+  if (!cache || !fullMapped || !missingSlots || !missingSlots.length) return cache;
+  for (let i = 0; i < missingSlots.length; i++) {
+    const { g, d } = missingSlots[i];
+    const pack = fullMapped[g] && fullMapped[g][d];
+    if (!pack || !pack.byCategory) continue;
+    if (!cache[g]) cache[g] = {};
+    cache[g][d] = {
+      byCategory: pack.byCategory,
+      entries: Array.isArray(pack.entries) ? pack.entries : [],
+    };
+  }
+  return cache;
+}
+
+/** 7축 피크 캐시 구조 검증 */
+function heptagonPeakCacheIsComplete(cache) {
+  if (!cache || typeof cache !== "object") return false;
+  for (const g of HEPTAGON_GENDERS) {
+    if (!cache[g] || typeof cache[g] !== "object") return false;
+    for (const d of HEPTAGON_DURATIONS) {
+      const slot = cache[g][d];
+      if (!slot || !slot.byCategory) return false;
+    }
+  }
+  return true;
 }
 
 /** buildPeakPowerAllDurationsForRangeAllGendersOnePass 결과 → 헵타곤 cache[g][d] 형식 */
@@ -380,6 +440,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
 
   let peakSource = "none";
   let cache = null;
+  let missingSlots = [];
   const aggHit = await tryLoadHeptagonPeakCacheForRebuild(
     db,
     readRankingAggregatePayloadIfFresh,
@@ -390,7 +451,22 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
   if (aggHit && aggHit.cache) {
     cache = aggHit.cache;
     peakSource = aggHit.peakSource;
-  } else if (typeof buildPeakPowerAllDurationsForRangeAllGendersOnePass === "function") {
+    missingSlots = Array.isArray(aggHit.missingSlots) ? aggHit.missingSlots : [];
+  }
+  if (
+    cache &&
+    missingSlots.length > 0 &&
+    typeof buildPeakPowerAllDurationsForRangeAllGendersOnePass === "function"
+  ) {
+    const allDurFill = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr, usersSnap);
+    const mappedFill = mapAllDurToHeptagonCache(allDurFill);
+    if (mappedFill) {
+      fillHeptagonCacheMissingSlots(cache, mappedFill, missingSlots);
+      peakSource = `${peakSource}+onepass_fill`;
+      missingSlots = [];
+    }
+  }
+  if (!cache && typeof buildPeakPowerAllDurationsForRangeAllGendersOnePass === "function") {
     const allDur = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr, usersSnap);
     cache = mapAllDurToHeptagonCache(allDur);
     if (cache) peakSource = "onepass";
@@ -409,8 +485,10 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
     }
     peakSource = "legacy";
   }
-  if (!cache) {
-    throw new Error("heptagon_peak_cache_unavailable");
+  if (!heptagonPeakCacheIsComplete(cache)) {
+    throw new Error(
+      `heptagon_peak_cache_unavailable(incomplete peakSource=${peakSource} missing=${missingSlots.length})`
+    );
   }
 
   // 배치 쓰기 전에 기존 문서의 boardRank·asOfSeoul 을 한 번에 읽어 전날 순위 비교에 사용
@@ -464,7 +542,12 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
       const ns = [];
       let ok = true;
       for (const d of HEPTAGON_DURATIONS) {
-        const { byCategory } = cache[filterGender][d];
+        const slot = cache[filterGender] && cache[filterGender][d];
+        if (!slot || !slot.byCategory) {
+          ok = false;
+          break;
+        }
+        const { byCategory } = slot;
         const dr = computeDisplayRankForUser(byCategory, userId, "Supremo", meta.ageCategory);
         const nAxis = Number(dr && dr.n) | 0;
         if (!dr || nAxis < 1) {
@@ -588,8 +671,22 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
   }
   await commitBatch();
   const ms = Date.now() - t0;
-  console.log("[runRebuildHeptagonCohortRanks] done", { monthKey, startStr, endStr, wrote, ms, users: userMeta.size, peakSource });
-  return { monthKey, startStr, endStr, wrote, ms, peakSource };
+  if (wrote < 1) {
+    throw new Error(
+      `heptagon_cohort_ranks_zero_writes(users=${userMeta.size} peakSource=${peakSource} asOf=${todayYmd})`
+    );
+  }
+  console.log("[runRebuildHeptagonCohortRanks] done", {
+    monthKey,
+    startStr,
+    endStr,
+    wrote,
+    ms,
+    users: userMeta.size,
+    peakSource,
+    asOfSeoul: todayYmd,
+  });
+  return { monthKey, startStr, endStr, wrote, ms, peakSource, asOfSeoul: todayYmd };
 }
 
 /**
@@ -626,8 +723,15 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
   }
 
   let peakSource = "legacy";
-  let cache = await tryLoadHeptagonPeakCacheFromAggregates(db, readRankingAggregatePayloadIfFresh, startStr, endStr);
-  if (cache) {
+  let cache = null;
+  const aggLive = await tryLoadHeptagonPeakCacheFromAggregates(
+    db,
+    readRankingAggregatePayloadIfFresh,
+    startStr,
+    endStr
+  );
+  if (aggLive && aggLive.complete && aggLive.cache) {
+    cache = aggLive.cache;
     peakSource = "aggregates";
   } else if (typeof buildPeakPowerAllDurationsForRangeAllGendersOnePass === "function") {
     const allDur = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr, usersSnap);
