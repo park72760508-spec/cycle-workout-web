@@ -213,6 +213,11 @@
             className: 'inline-block w-2 h-4 ml-0.5 align-middle bg-blue-500 animate-pulse'
           }))
         ),
+        coachData.quota_notice && React.createElement('div', {
+          className: 'mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200'
+        },
+          React.createElement('p', { className: 'text-xs text-amber-800' }, coachData.quota_notice)
+        ),
         hasError && React.createElement('div', {
           className: 'mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200'
         },
