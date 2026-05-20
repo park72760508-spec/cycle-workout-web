@@ -3880,7 +3880,8 @@ var WORKOUT_CATEGORY_ZONE_TAG = {
 
 /**
  * VO2 Max / Z5 포괄 키워드 (AI 추천·author·category·title 매칭 공통)
- * VO2 Max, VO2max, Vo2Mazx, VO2Max 등 + max/Max 포함 시 Z5로 간주
+ * - (Z5), Z5, VO2 Max/VO2max/VO2Max
+ * - VO2 + max/Max 동시 포함 (예: "VO2 Max (Z5)") — 단독 'max'만으로는 Z5 아님
  * @param {string} text
  * @returns {boolean}
  */
@@ -3892,7 +3893,7 @@ function textIndicatesZ5Vo2MaxCategory(text) {
 
   if (/\bZ\s*5\b/.test(upper)) return true;
   if (/VO2\s*MA[XZW]|V0?2\s*MA[XZW]|VO2MAX|VO2\s*MAX/i.test(raw)) return true;
-  if (/max/i.test(raw)) return true;
+  if (/vo2/i.test(raw) && /max/i.test(raw)) return true;
 
   return false;
 }
@@ -4019,6 +4020,15 @@ function authorTextMatchesTargetZoneTag(authorText, targetZone) {
   return false;
 }
 
+function workoutHasVo2SegmentType(workout) {
+  var segs = (workout && workout.segments) || [];
+  for (var i = 0; i < segs.length; i++) {
+    var st = String(segs[i].segment_type || segs[i].type || '').toLowerCase();
+    if (/vo2|v02/.test(st)) return true;
+  }
+  return false;
+}
+
 /**
  * 워크아웃이 타겟 Zone과 일치하는지 (author Z표기 우선, 없으면 카테고리→Zone 보정)
  */
@@ -4034,6 +4044,19 @@ function workoutMatchesTargetZoneTag(workout, targetZone) {
     var map = { z1: 'Z1', z2: 'Z2', z3: 'Z3', z4: 'Z4', z5: 'Z5' };
     if (map[dom] === z) return true;
     if (z.indexOf('Z3') >= 0 && z.indexOf('Z4') >= 0 && (dom === 'z3' || dom === 'z4')) return true;
+  }
+  if (String(targetZone).toUpperCase() === 'Z5') {
+    var blob = [
+      workout.author,
+      workout.category,
+      workout.title,
+      workout.name,
+      workout.description,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    if (textIndicatesZ5Vo2MaxCategory(blob)) return true;
+    if (workoutHasVo2SegmentType(workout)) return true;
   }
   return false;
 }

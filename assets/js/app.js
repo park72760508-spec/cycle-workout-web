@@ -12409,6 +12409,7 @@ function stelvioParseCoachBasisRecommendedWorkout(basisRaw) {
   else if (/Z3|\bTempo\b/i.test(raw)) category = 'Tempo';
   else if (/Z4|\bThreshold\b/i.test(raw)) category = 'Threshold';
   else if (/VO2\s*Max|VO2max|VO2Max|\bZ5\b/i.test(raw)) category = 'VO2Max';
+  if (category === 'VO2Max' && !zone) zone = 'Z5';
   if (!zone && category) zone = stelvioExtractZoneTagFromText(category);
   if (!category && zone) {
     var zoneToCat = { Z1: 'Recovery', Z2: 'Endurance', Z3: 'Tempo', 'Z3~Z4': 'SweetSpot', Z4: 'Threshold', Z5: 'VO2Max' };
@@ -12444,8 +12445,8 @@ function stelvioSelectWorkoutsForDetailFetch(availableWorkouts, targetZone, opts
   if (targetZone) {
     var zonePool = list.filter(function (w) { return stelvioWorkoutMatchesTargetZone(w, targetZone); });
     zonePool = stelvioSortWorkoutsByTssAsc(zonePool);
-    if (zonePool.length >= 3) return zonePool.slice(0, 15);
     if (zonePool.length > 0) return zonePool.slice(0, 15);
+    return [];
   }
 
   if (challenge === 'Fitness' && list.length > 0) {
@@ -12762,7 +12763,7 @@ function stelvioBuildDeterministicRecommendationData(workoutDetails, ctx) {
     ctx.targetZoneHint
   );
   var recs = stelvioBackfillAiRecommendations([], workoutDetails || [], resolved.category, resolved.zone);
-  if (!recs.length && (workoutDetails || []).length) {
+  if (!recs.length && (workoutDetails || []).length && !resolved.zone) {
     recs = stelvioSortWorkoutsByTssAsc(workoutDetails)
       .slice(0, 3)
       .map(function (w, idx) {
@@ -13113,14 +13114,16 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       var zonePoolAll = availableWorkouts.filter(function (w) {
         return stelvioWorkoutMatchesTargetZone(w, earlyTargetZone);
       });
-      var fetchedIdSet = new Set(workoutIds.map(function (id) { return Number(id); }));
       zonePoolAll = stelvioSortWorkoutsByTssAsc(zonePoolAll);
-      for (var zi = 0; zi < zonePoolAll.length && workoutIds.length < 15; zi++) {
-        var zid = Number(zonePoolAll[zi].id);
-        if (zid > 0 && !fetchedIdSet.has(zid)) {
-          fetchedIdSet.add(zid);
-          workoutIds.push(zid);
-        }
+      if (zonePoolAll.length > 0) {
+        workoutIds = zonePoolAll.slice(0, 15).map(function (w) { return w.id; });
+      } else {
+        workoutIds = [];
+        console.warn(
+          '[AI 추천] 타겟 Zone',
+          earlyTargetZone,
+          '에 맞는 워크아웃이 목록에 없습니다. Z2/Z3로 대체하지 않습니다.'
+        );
       }
     }
     
