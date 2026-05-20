@@ -13348,10 +13348,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
       throw lastError || new Error('API 호출에 실패했습니다.');
     };
     
-    // 토큰 제한 설정 (분석 로직과 동일하게)
-    const MAX_OUTPUT_TOKENS = 8192; // 상세한 분석 요청으로 인해 응답이 길어질 수 있으므로 8192로 증가
-    
-    // API 호출 (재시도 포함)
+    // API 호출 (재시도 포함) — JSON·한글 reason 완결용 출력 토큰 상한
     let data;
     try {
       data = await callGeminiAPI(apiUrl, {
@@ -13361,7 +13358,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
           }]
         }],
         generationConfig: {
-          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          maxOutputTokens: 8192,
           temperature: 0.2,   // 0.7 → 0.2: 워크아웃 카테고리 일관성 확보
           topP: 0.85,
           topK: 20
