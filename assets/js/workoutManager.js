@@ -3859,22 +3859,95 @@ var AUTHOR_CATEGORY_MAP = [
   'Active Recovery', 'Endurance', 'Sweet Spot', 'Tempo', 'Threshold', 'VO2 Max'
 ];
 
+var WORKOUT_CATEGORY_ZONE_TAG = {
+  'Active Recovery': 'Z1',
+  Endurance: 'Z2',
+  Tempo: 'Z3',
+  'Sweet Spot': 'Z3~Z4',
+  Threshold: 'Z4',
+  'VO2 Max': 'Z5',
+};
+
 /**
- * 워크아웃의 카테고리 계산 (구글 시트 Workouts.author 필드 기준)
+ * author/category/title 등에 포함된 Zone·카테고리 키워드 → 표준 카테고리 ID
+ * @param {string} text
+ * @returns {string|null}
+ */
+function inferWorkoutCategoryFromZoneOrText(text) {
+  if (!text) return null;
+  var raw = String(text).trim();
+  if (!raw) return null;
+  var upper = raw.toUpperCase();
+
+  if (/Z\s*3\s*[~\-–]\s*Z\s*4|Z3\s*~\s*Z4|Z3-4|Z3\s*TO\s*Z4/i.test(raw)) return 'Sweet Spot';
+  if (/\bZ\s*1\b/.test(upper) || /ACTIVE\s*RECOVERY/.test(upper)) return 'Active Recovery';
+  if (/\bZ\s*5\b/.test(upper) || /\bVO2\s*MAX\b/.test(upper)) return 'VO2 Max';
+  if (/\bZ\s*4\b/.test(upper) || /\bTHRESHOLD\b/.test(upper)) return 'Threshold';
+  if (/\bZ\s*3\b/.test(upper) || /\bTEMPO\b/.test(upper)) return 'Tempo';
+  if (/\bZ\s*2\b/.test(upper) || /\bENDURANCE\b/.test(upper)) return 'Endurance';
+  if (/\bSWEET\s*SPOT\b/.test(upper)) return 'Sweet Spot';
+
+  return null;
+}
+
+function matchAuthorCategoryMap(text) {
+  if (!text) return null;
+  var lower = String(text).trim().toLowerCase();
+  if (!lower) return null;
+  var i;
+  for (i = 0; i < AUTHOR_CATEGORY_MAP.length; i++) {
+    if (lower === AUTHOR_CATEGORY_MAP[i].toLowerCase()) return AUTHOR_CATEGORY_MAP[i];
+  }
+  for (i = 0; i < AUTHOR_CATEGORY_MAP.length; i++) {
+    if (lower.indexOf(AUTHOR_CATEGORY_MAP[i].toLowerCase()) >= 0) return AUTHOR_CATEGORY_MAP[i];
+  }
+  return null;
+}
+
+/**
+ * 워크아웃의 카테고리 계산 (author·category·Zone 표기 혼용 대응)
  * @param {Object} workout - workout 객체 (author 필드 포함)
  * @returns {string} 'Active Recovery'|'Endurance'|'Sweet Spot'|'Tempo'|'Threshold'|'VO2 Max'|'기타'
  */
 function getWorkoutCategoryId(workout) {
   if (!workout) return '기타';
-  const authorVal = String(workout.author || '').trim();
-  if (!authorVal) return '기타';
-  const authorLower = authorVal.toLowerCase();
-  for (let i = 0; i < AUTHOR_CATEGORY_MAP.length; i++) {
-    if (authorLower === AUTHOR_CATEGORY_MAP[i].toLowerCase()) {
-      return AUTHOR_CATEGORY_MAP[i];
-    }
-  }
+  var authorVal = String(workout.author || '').trim();
+  var catVal = String(workout.category || '').trim();
+
+  var fromAuthorName = matchAuthorCategoryMap(authorVal);
+  if (fromAuthorName) return fromAuthorName;
+  var fromAuthorZone = inferWorkoutCategoryFromZoneOrText(authorVal);
+  if (fromAuthorZone) return fromAuthorZone;
+
+  var fromCatName = matchAuthorCategoryMap(catVal);
+  if (fromCatName) return fromCatName;
+  var fromCatZone = inferWorkoutCategoryFromZoneOrText(catVal);
+  if (fromCatZone) return fromCatZone;
+
   return '기타';
+}
+
+function workoutCategoryIdToZoneTag(categoryId) {
+  return WORKOUT_CATEGORY_ZONE_TAG[categoryId] || '';
+}
+
+function authorTextHasZoneMarker(text) {
+  return /Z\s*1|Z\s*2|Z\s*3|Z\s*4|Z\s*5|Z3\s*[~\-–]\s*Z\s*4/i.test(String(text || ''));
+}
+
+/**
+ * AI Zone 필터·프롬프트용 — author 끝에 (Z1)~(Z5) 보정
+ * @param {Object} workout
+ * @returns {string}
+ */
+function ensureWorkoutAuthorZoneTag(workout) {
+  var baseAuthor = String(workout && workout.author != null ? workout.author : '').trim();
+  if (authorTextHasZoneMarker(baseAuthor)) return baseAuthor;
+  var catId = getWorkoutCategoryId(workout);
+  var zoneTag = workoutCategoryIdToZoneTag(catId);
+  if (!zoneTag || catId === '기타') return baseAuthor;
+  if (baseAuthor) return baseAuthor + ' (' + zoneTag + ')';
+  return catId + ' (' + zoneTag + ')';
 }
 
 /**
@@ -6424,6 +6497,9 @@ window.renderSegmentedWorkoutGraph = renderSegmentedWorkoutGraph;
 window.getSegmentZoneFromFtpPercent = getSegmentZoneFromFtpPercent;
 window.getWorkoutDominantZone = getWorkoutDominantZone;
 window.getWorkoutCategoryId = getWorkoutCategoryId;
+window.inferWorkoutCategoryFromZoneOrText = inferWorkoutCategoryFromZoneOrText;
+window.workoutCategoryIdToZoneTag = workoutCategoryIdToZoneTag;
+window.ensureWorkoutAuthorZoneTag = ensureWorkoutAuthorZoneTag;
 window.estimateWorkoutTSS = estimateWorkoutTSS;
 window.getSegmentFtpPercentForPreview = getSegmentFtpPercentForPreview;
 
