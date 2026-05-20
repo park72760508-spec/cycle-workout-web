@@ -6110,8 +6110,8 @@ exports.rebuildRankingAggregates = onSchedule(
   {
     schedule: RANKING_REBUILD_CRON,
     timeZone: "Asia/Seoul",
-    memory: "1GiB",
-    timeoutSeconds: 540,
+    memory: "2GiB",
+    timeoutSeconds: 3600,
   },
   async () => {
     const db = admin.firestore();
@@ -6126,20 +6126,20 @@ exports.rebuildRankingAggregates = onSchedule(
 );
 
 /**
- * 수동: 주간 마일리지 TOP10 + TSS 랭킹 집계 즉시 재빌드 (스케줄 rebuildRankingAggregates와 동일).
- * TSS 데이터 수동 정정 후 랭킹을 즉시 반영할 때 사용.
+ * 수동: `rebuildRankingAggregates`(23:00 마스터)와 동일 전체 집계 1회 실행.
+ * (구버전: TOP10만 먼저 응답 후 백그라운드 — 9분 제한에 피크·독주가 거의 항상 중단됨)
  * GET/POST ?secret=stelvio-internal-sync-v1
+ * 선택: ?forceReconcile=true — TSS 일 버킷 logs 강제 재계산
  * 예: Invoke-RestMethod -Uri "https://us-central1-stelvio-ai.cloudfunctions.net/manualRebuildWeeklyRanking?secret=stelvio-internal-sync-v1"
  */
 exports.manualRebuildWeeklyRanking = onRequest(
-  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  { cors: true, timeoutSeconds: 3600, memory: "2GiB" },
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Internal-Secret");
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
 
-    // 인증: INTERNAL_SYNC_SECRET 또는 grade=1 Firebase Bearer 토큰
     const rawSecret = req.query.secret || req.headers["x-internal-secret"] || req.headers["X-Internal-Secret"];
     let authorized = rawSecret === INTERNAL_SYNC_SECRET;
 
@@ -6156,61 +6156,31 @@ exports.manualRebuildWeeklyRanking = onRequest(
       authorized = true;
     }
 
+    const forceReconcile =
+      String(req.query?.forceReconcile || req.body?.forceReconcile || "").toLowerCase() === "true" ||
+      String(req.query?.forceReconcile || req.body?.forceReconcile || "") === "1";
+    const startedAt = new Date().toISOString();
+
+    res.status(202).json({
+      success: true,
+      accepted: true,
+      startedAt,
+      forceReconcile,
+      message:
+        "전체 랭킹 집계(TSS·TOP10·28일 피크·독주·거리)를 시작했습니다. 사용자 500명대 기준 15~30분 소요될 수 있습니다.",
+      logKeywords: [
+        "[runRebuildRankingAggregatesCore] peak monthly(28d) 저장 완료",
+        "[runRebuildRankingAggregatesCore] done",
+        "[manualRebuildWeeklyRanking] 완료",
+      ],
+      checkMetaDoc: `ranking_meta/${RANKING_MASTER_REBUILD_META_DOC}`,
+    });
+
     try {
-      const t0 = Date.now();
-      const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
-      const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
-
-      // 사용자 스냅샷 1회 로드 (이후 모든 집계 공유)
-      const sharedUsersSnap = await db.collection("users").get();
-      console.log("[manualRebuildWeeklyRanking] 시작, users:", sharedUsersSnap.size, { wStart, wEnd });
-
-      // ── [필수] 현재 주 + 이전 주 TOP10 즉시 집계 후 응답 ──
-      // 프록시 타임아웃(130초) 이내에 응답하기 위해 TOP10·TSS 탭 갱신만 먼저 완료.
-      // 나머지 랭킹(피크파워·거리)은 응답 후 백그라운드에서 처리.
-
-      // 현재 주 — TSS all/M/F (TSS 랭킹보드 탭과 동기화)
-      let entriesCurrent = [];
-      for (const gender of ["all", "M", "F"]) {
-        const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
-        if (gender === "all") {
-          entriesCurrent = tss.entries.map((e) => ({
-            userId: e.userId, name: e.name, totalTss: e.totalTss, is_private: e.is_private === true,
-          }));
-        }
-        await writeRankingAggregatePayload(db, `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`, {
-          byCategory: tss.byCategory, entries: tss.entries, startStr: wStart, endStr: wEnd,
-        });
-      }
-      // 현재 주 TOP10 저장
-      const top10Current = entriesCurrent.slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
-      await writeRankingAggregatePayload(db, `weekly_ranking_full_${wStart}_${wEnd}`, {
-        fullEntries: entriesCurrent, ranking: top10Current, startStr: wStart, endStr: wEnd,
-      });
-      console.log("[manualRebuildWeeklyRanking] 현재 주 TOP10 저장 완료, entries:", entriesCurrent.length);
-
-      // 이전 주 TOP10 저장
-      const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
-      const top10Prev = entriesPrev.slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
-      await writeRankingAggregatePayload(db, `weekly_ranking_full_${wPrevS}_${wPrevE}`, {
-        fullEntries: entriesPrev, ranking: top10Prev, startStr: wPrevS, endStr: wPrevE,
-      });
-
-      const ms = Date.now() - t0;
-      console.log("[manualRebuildWeeklyRanking] TOP10 집계 완료, ms:", ms);
-
-      // ── 응답 먼저 반환 (프록시 타임아웃 방지) ──
-      res.status(200).json({ success: true, message: "주간 마일리지 집계가 완료되었습니다.", ms });
-
-      // ── [백그라운드] 나머지 랭킹 집계 (피크파워·거리 등) ──
-      // TOP10은 이미 갱신됨. 나머지는 매일 22:00 스케줄러가 처리하므로 실패해도 무방.
-      runRebuildRankingAggregatesCore(db).catch((e) => {
-        console.warn("[manualRebuildWeeklyRanking] 백그라운드 full 집계 오류:", e && e.message);
-      });
+      const r = await runRebuildRankingAggregatesCore(db, forceReconcile);
+      console.log("[manualRebuildWeeklyRanking] 완료", JSON.stringify({ ...r, startedAt, forceReconcile }));
     } catch (e) {
-      const msg = e && e.message ? e.message : String(e);
-      console.error("[manualRebuildWeeklyRanking]", msg);
-      if (!res.headersSent) res.status(500).json({ success: false, error: msg });
+      console.error("[manualRebuildWeeklyRanking] full 집계 오류:", e && e.message ? e.message : e);
     }
   }
 );
