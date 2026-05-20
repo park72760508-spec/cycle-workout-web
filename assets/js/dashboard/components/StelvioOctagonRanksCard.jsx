@@ -3221,16 +3221,18 @@
 
         if (typeof window.getStelvioOctagonRanksCache === 'function') {
           var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
-          if (cached && cached.monthly && cached.hof) {
+          if (cached && cached.monthly) {
+            var hofRanksCache = (cached.hof && cached.hof.ranks) || cached.monthly.ranks;
+            var hofWkgsCache = (cached.hof && cached.hof.wkgs) || cached.monthly.wkgs;
             setState(
               stateFromRanksArray(
                 cached.monthly.ranks,
                 cached.monthly.cohortSizePerAxis,
-                cached.hof.ranks,
+                hofRanksCache,
                 null,
                 null,
                 cached.monthly.wkgs,
-                cached.hof.wkgs
+                hofWkgsCache
               )
             );
             fetchRanksSet(uid, 'monthly', gender, 'Supremo')
@@ -3259,10 +3261,7 @@
         octagonPeakReqRef.current += 1;
         var peakReqId = octagonPeakReqRef.current;
 
-        /**
-         * 1차: 월간 7축 getPeak 응답에서 선택 부문·Supremo를 동시 파생(기존 14건 → 7건, 동일 순위·n·wkg).
-         * 연간 동일 7건은 첫 패인트 후 갱신(HoF norm·캐시). 동일 호스트 연결 점유 시간 절감.
-         */
+        /** 월간(28일) 7축 getPeak만 사용 — 명예의 전당(365d) API 호출 제거 */
         setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
         fetchTwinCategoryPeakAxisRows(uid, 'monthly', gender, category)
           .then(function(pair) {
@@ -3271,71 +3270,33 @@
             }
             var mRows = pair.mRows;
             var sRows = pair.sRows;
-            /* 연간 패치 완료 전까지 monthly와 동일한 대역으로 두면 heptagonRadarDisplayNorms·state 구조 유지 */
             setState(stateFromApiRows(mRows, mRows, sRows));
-
-            fetchTwinCategoryPeakAxisRows(uid, 'yearly', gender, category)
-              .then(function(yPair) {
-                if (peakReqId !== octagonPeakReqRef.current) {
-                  return;
-                }
-                var hRows = yPair.mRows;
-                setState(function(prev) {
-                  if (!prev || !prev.monthly || !prev.supremoMonthly) {
-                    return prev;
-                  }
-                  var sr = prev.supremoMonthly.ranks;
-                  var sc = prev.supremoMonthly.cohortSizePerAxis;
-                  var mwPrev = prev.monthly.wkg;
-                  return stateFromRanksArray(
-                    prev.monthly.ranks,
-                    prev.monthly.cohortSizePerAxis,
-                    hRows.map(function(x) {
-                      return x.rank;
-                    }),
-                    sr,
-                    sc,
-                    mwPrev,
-                    hRows.map(function(x) {
-                      return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
-                    })
-                  );
+            if (typeof window.setStelvioOctagonRanksCache === 'function') {
+              try {
+                var monthlyRanks = mRows.map(function(x) {
+                  return x.rank;
                 });
-                if (typeof window.setStelvioOctagonRanksCache !== 'function') {
-                  return;
-                }
-                try {
-                  var monthlyRanks = mRows.map(function(x) {
-                    return x.rank;
-                  });
-                  var cohortSizePerAxis = mRows.map(function(x) {
-                    return x.n;
-                  });
-                  var hofRanks = hRows.map(function(x) {
-                    return x.rank;
-                  });
-                  var mwForCache = mRows.map(function(x) {
-                    return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
-                  });
-                  var hwForCache = hRows.map(function(x) {
-                    return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
-                  });
-                  window.setStelvioOctagonRanksCache(
-                    uid,
-                    gender,
-                    category,
-                    todayStr,
-                    monthlyRanks,
-                    cohortSizePerAxis,
-                    hofRanks,
-                    mwForCache,
-                    hwForCache
-                  );
-                } catch (e) {
-                  console.warn('[StelvioOctagon] cache write failed:', e && e.message);
-                }
-              })
-              .catch(function() {});
+                var cohortSizePerAxis = mRows.map(function(x) {
+                  return x.n;
+                });
+                var mwForCache = mRows.map(function(x) {
+                  return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+                });
+                window.setStelvioOctagonRanksCache(
+                  uid,
+                  gender,
+                  category,
+                  todayStr,
+                  monthlyRanks,
+                  cohortSizePerAxis,
+                  monthlyRanks,
+                  mwForCache,
+                  mwForCache
+                );
+              } catch (e) {
+                console.warn('[StelvioOctagon] cache write failed:', e && e.message);
+              }
+            }
           })
           .catch(function() {
             if (peakReqId !== octagonPeakReqRef.current) {
