@@ -2740,7 +2740,7 @@ function OpenRidingDetailGlassNav(props) {
                 : undefined
           }
         >
-          <OpenRidingDashboardEditIcon className="open-riding-bottom-glass-nav__icon text-violet-600 shrink-0" />
+          <img src="assets/img/edit2.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
           <span className="open-riding-bottom-glass-nav__label">수정</span>
         </button>
       </OpenRidingGlassNavSlot>
@@ -2788,13 +2788,14 @@ function OpenRidingDetailGlassNav(props) {
   return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 상세 하단 메뉴" />;
 }
 
-/** 세부 내용 본문 하단: 수정·폭파·삭제 (방장·관리자, 네비와 동일 라벨·동작) */
+/** 세부 내용 본문 하단: 수정·폭파·삭제 — 단일 블록·이미지 버튼(폭파/삭제와 동일 크기) */
 function OpenRidingDetailHostActions(props) {
   var onEdit = props.onEdit || function () {};
   var onCancel = props.onCancel || function () {};
   var onDelete = props.onDelete || function () {};
   var hostToolbarLocked = !!props.hostToolbarLocked;
   var dis = hostToolbarLocked;
+  var hostActionImgSize = 20;
 
   function permTitle(kind) {
     if (kind === 'edit') {
@@ -2806,60 +2807,42 @@ function OpenRidingDetailHostActions(props) {
     return dis ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined;
   }
 
-  function actionEntry(caption, btnInner, kind) {
+  function hostActionImg(src, alt) {
     return (
-      <div className="open-riding-detail-host-action-entry flex flex-col items-center gap-1 w-full" key={caption}>
-        <button
-          type="button"
-          className="open-riding-action-btn open-riding-detail-host-action-btn w-full min-h-[3.25rem] inline-flex flex-col items-center justify-center gap-1 rounded-xl border border-slate-200/90 bg-white text-slate-800 shadow-sm disabled:opacity-50 py-2.5 px-3"
-          disabled={dis}
-          aria-label={'라이딩 ' + caption}
-          title={permTitle(kind)}
-          onClick={
-            kind === 'edit' ? onEdit : kind === 'cancel' ? onCancel : onDelete
-          }
-        >
-          {btnInner}
-          <span className="open-riding-detail-host-action-caption open-riding-bottom-glass-nav__label text-[11px] font-medium text-slate-600 leading-tight">
-            {caption}
-          </span>
-        </button>
-      </div>
+      <img
+        src={src}
+        alt={alt}
+        width={hostActionImgSize}
+        height={hostActionImgSize}
+        className="open-riding-detail-host-action-img block object-contain shrink-0"
+        decoding="async"
+      />
+    );
+  }
+
+  function actionIconBtn(caption, kind, imgNode) {
+    return (
+      <button
+        key={caption}
+        type="button"
+        className="open-riding-action-btn open-riding-detail-host-icon-btn inline-flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+        disabled={dis}
+        aria-label={'라이딩 ' + caption}
+        title={permTitle(kind)}
+        onClick={kind === 'edit' ? onEdit : kind === 'cancel' ? onCancel : onDelete}
+      >
+        {imgNode}
+        <span className="open-riding-detail-host-action-caption open-riding-bottom-glass-nav__label">{caption}</span>
+      </button>
     );
   }
 
   return (
     <div className="open-riding-detail-host-actions open-riding-bottom-actions mt-4" role="toolbar" aria-label="라이딩 관리">
-      <div className="flex flex-col items-stretch gap-3 w-full max-w-sm mx-auto">
-        {actionEntry(
-          '수정',
-          <OpenRidingDashboardEditIcon className="shrink-0 text-violet-600 open-riding-bottom-glass-nav__icon" />,
-          'edit'
-        )}
-        {actionEntry(
-          '폭파',
-          <img
-            src="assets/img/cancel01.png"
-            alt=""
-            width={22}
-            height={22}
-            className="open-riding-bottom-glass-nav__friend-img block object-contain shrink-0"
-            decoding="async"
-          />,
-          'cancel'
-        )}
-        {actionEntry(
-          '삭제',
-          <img
-            src="assets/img/delete2.png"
-            alt=""
-            width={22}
-            height={22}
-            className="open-riding-bottom-glass-nav__friend-img block object-contain shrink-0"
-            decoding="async"
-          />,
-          'delete'
-        )}
+      <div className="open-riding-detail-host-actions-block">
+        {actionIconBtn('수정', 'edit', hostActionImg('assets/img/edit2.png', ''))}
+        {actionIconBtn('폭파', 'cancel', hostActionImg('assets/img/cancel01.png', ''))}
+        {actionIconBtn('삭제', 'delete', hostActionImg('assets/img/delete2.png', ''))}
       </div>
     </div>
   );
