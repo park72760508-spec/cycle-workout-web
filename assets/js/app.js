@@ -12936,192 +12936,45 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
 - 등급(grade): **${grade}**. ${gradeWeightNote}
 ` : '';
     
-    const prompt = `당신은 전문 사이클 코치입니다. 다음 정보를 바탕으로 오늘 수행할 최적의 워크아웃을 실질적으로 추천해주세요. 형식적인 추천이 아닌, 실제 훈련에 바로 적용할 수 있는 구체적이고 실용적인 추천을 해주세요.
+    const historyForPrompt = limitedHistory.slice(0, 14).map(function (h) {
+      return { d: h.date, min: h.duration, tss: h.tss, p: h.avgPower };
+    });
+    const workoutsForPrompt = limitedWorkouts.map(function (w) {
+      return { id: w.id, title: w.title, author: w.author || '', sec: w.totalSeconds || 0 };
+    });
+    const challengeHintOneLine =
+      challenge === 'Racing' ? 'Racing: Threshold·VO2Max·SweetSpot 우선, 저강도 회피.'
+      : challenge === 'GranFondo' ? 'GranFondo: Endurance·Tempo·SweetSpot·장거리 지구력.'
+      : challenge === 'IronMan' ? 'IronMan: Z2 60~70%, SS/Tempo 20~30%, VO2 5~10%. 스프린트·Z6+ 제외.'
+      : challenge === 'Fitness' ? 'Fitness: title (Lite) 1개 이상 필수, Endurance·Tempo·중강도.'
+      : challenge === 'Elite' ? 'Elite: 고강도·TSS 분산·회복 24~48h.'
+      : challenge === 'PRO' ? 'PRO: 최고 강도·높은 TSS·시즌 고려.'
+      : challengeWeightNote;
+    const zoneMapLine = 'Z1=Recovery, Z2=Endurance, Z3=Tempo, Z3~Z4=SweetSpot, Z4=Threshold, Z5=VO2Max';
+
+    const prompt = `사이클 코치: 아래 후보 워크아웃만 사용해 오늘 훈련 3개(1=약, 2=중, 3=강)를 고르세요. 응답은 JSON 하나만.
 ${basisBlock}
-⚠️ **중요: 사용자의 운동 목적은 "${challenge}"입니다. 반드시 이 목적에 맞는 훈련을 추천해야 합니다.**
-
-**사용자 정보:**
-- FTP: ${ftp}W
-- 체중: ${weight}kg
-- W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}
-- ⚠️ **운동 목적: ${challenge}** (Fitness: 일반 피트니스/다이어트, GranFondo: 그란폰도, IronMan: 아이언맨, Racing: 레이싱, Elite: 엘리트 선수, PRO: 프로 선수)
-  → **이 목적에 맞는 훈련만 추천해야 합니다. 목적과 무관한 훈련은 추천하지 마세요.**
-- **등급(grade): ${grade}** (1·3: 관리자/코치, 2: 일반) → 목적·등급에 따른 가중 적용.
-- 오늘의 몸상태: ${todayCondition} (조정 계수: ${(conditionAdjustment * 100).toFixed(0)}%)
-${userConditionScore != null && userConditionName ? `
-**⚠️ [최우선] 사용자가 선택한 오늘의 컨디션: "${userConditionName}" (${userConditionScore}점).**
-- JSON의 condition_score는 반드시 ${userConditionScore}로 설정하세요. (5 단위 정수이면 그대로, 아니면 55~95 범위 5 단위로 맞춤)
-- 이 컨디션에 맞는 강도의 워크아웃을 우선 추천하세요.
-` : ''}
-
-**과거 훈련 이력 분석 (최근 30일, 총 ${totalSessions}회):**
-${JSON.stringify(limitedHistory, null, 2)}
-
-**훈련 패턴 분석:**
-- 총 훈련 횟수: ${totalSessions}회 (30일간)
-- 평균 훈련 시간: ${avgDuration}분
-- 평균 파워: ${avgPower}W (FTP 대비 ${ftp > 0 ? ((avgPower / ftp) * 100).toFixed(1) : 0}%)
-- 평균 TSS: ${avgTSS}점
-- 주간 평균 TSS: ${weeklyTSS}점
-- 최근 7일 훈련: ${last7DaysSessions}회, 총 TSS: ${last7DaysTSS}점
-- 고강도 훈련 비율: ${highIntensityRatio}% (TSS > 50 또는 파워 > FTP 90%)
-- 훈련 빈도: ${totalSessions > 0 ? (totalSessions / 30).toFixed(1) : 0}회/일
-
-**사용 가능한 워크아웃 목록 (${limitedWorkouts.length}개):**
-※ 각 항목의 \`author\` 필드에 Zone 표기(예: "Z2", "Z3~Z4")가 포함되어 있습니다. 추천 시 반드시 이 필드로 Zone 매칭하세요.
-${JSON.stringify(limitedWorkouts.map(w => ({
-  id: w.id,
-  title: w.title,
-  author: w.author || '',
-  totalSeconds: w.totalSeconds,
-  segmentCount: w.segments?.length || 0,
-  // 세그먼트 정보는 간소화 (타입과 목표만)
-  segments: (w.segments || []).slice(0, 5).map(s => ({
-    type: s.type,
-    duration: s.duration,
-    targetType: s.targetType,
-    targetValue: s.targetValue
-  }))
-})), null, 2)}
-
-**실질적인 분석 요청사항:**
-1. **훈련 부하 분석**: 
-   - 최근 7일 TSS(${last7DaysTSS}점)와 주간 평균 TSS(${weeklyTSS}점)를 비교하여 과훈련 위험도를 평가하세요.
-   - 고강도 훈련 비율(${highIntensityRatio}%)을 고려하여 회복 필요 여부를 판단하세요.
-   - 훈련 빈도(${(totalSessions / 30).toFixed(1)}회/일)를 분석하여 적절한 훈련 간격을 제안하세요.
-
-2. **훈련 패턴 분석**:
-   - 최근 30일 훈련 이력을 분석하여 훈련 강도 추세를 파악하세요 (증가/감소/유지).
-   - 평균 파워(${avgPower}W, FTP 대비 ${ftp > 0 ? ((avgPower / ftp) * 100).toFixed(1) : 0}%)를 기준으로 현재 체력 수준을 평가하세요.
-   - 훈련 일정의 공백이나 연속 훈련 패턴을 확인하여 오늘의 적절한 강도를 결정하세요.
-
-3. **카테고리 및 Zone 선정** (basis가 있으면 해당 카테고리·Zone 고정, 없으면 아래 기준에서 분석하여 선택):
-   - **[Zone 분류 기준 — 카테고리↔Zone 매핑]**
-     * Active Recovery → **Z1**
-     * Endurance → **Z2**
-     * Tempo → **Z3**
-     * Sweet Spot → **Z3~Z4**
-     * Threshold → **Z4**
-     * VO2 Max → **Z5**
-   - 사용자의 피로도, 훈련 이력, 운동 목적(challenge)을 종합 분석하여 오늘 수행할 최적의 **타겟 카테고리**와 **타겟 Zone 문자열**(예: "Z2", "Z4", "Z3~Z4")을 결정하세요.
-   - 단순히 목적만 고려하지 말고, 실제 훈련 부하와 회복 상태를 우선 고려하세요. 과훈련 위험이 있으면 Recovery(Z1), 충분한 회복이 있었다면 목적에 맞는 적절한 강도 Zone을 선택하세요.
-${hasBasis ? `   - 🎯 **고정**: 오늘의 추천 타입 "${basisRaw || basisSourceLabel}"에 따라 카테고리는 **${basisCategory}**, 타겟 Zone은 **"${targetZoneHint}"** 로 고정합니다. 이 Zone·카테고리 범위를 벗어난 워크아웃은 추천하지 마세요. 훈련 목적(${challenge})·등급(${grade})에 가중을 두어 구체 워크아웃을 선정하세요.` : `   - ⚠️ **중요**: 사용자의 운동 목적은 "${challenge}"입니다. 이 목적에 맞는 Zone·카테고리를 반드시 선택해야 합니다.
-   - 위 분석을 바탕으로 카테고리(Active Recovery, Endurance, Tempo, Sweet Spot, Threshold, VO2 Max, Recovery 중 하나)와 대응 Zone을 실질적으로 선정하세요.`}
-${challenge === 'Racing' ? `
-**레이싱 목적 특별 지침:**
-- 레이싱 목적의 사용자이므로 경기 성능 향상에 초점을 맞춘 고강도 훈련을 우선 추천하세요.
-- Threshold, VO2Max, SweetSpot 카테고리의 워크아웃을 우선 고려하세요.
-- 레이싱에 필요한 순발력, 지구력, 회복력 향상을 위한 훈련을 추천하세요.
-- 경기 시뮬레이션 훈련이나 인터벌 훈련을 우선 추천하세요.
-- 일반 피트니스 목적의 저강도 훈련은 피하세요.
-` : ''}
-${challenge === 'GranFondo' ? `
-**그란폰도 목적 특별 지침:**
-- 그란폰도 목적의 사용자이므로 장거리 지구력 향상에 초점을 맞춘 훈련을 우선 추천하세요.
-- Endurance, Tempo, SweetSpot 카테고리의 워크아웃을 우선 고려하세요.
-- 장거리 라이딩에 필요한 지구력과 회복 능력 향상을 위한 훈련을 추천하세요.
-- 일반 피트니스 목적의 저강도 훈련은 피하세요.
-` : ''}
-${challenge === 'IronMan' ? `
-**IRONMAN(아이언맨) 목적 특별 지침 - 철인 3종 사이클 훈련 방법론:**
-아이언맨 180km 사이클 구간 완주 후 마라톤(Run)을 뛰어야 하므로, **안정적이고 일정한 파워 유지(Low Variability Index)**와 **근지구력 확보**가 최우선 목표입니다. 스프린트·잦은 인터벌·무산소(Zone 6 이상) 스프린트는 철인 훈련에 부적합하므로 추천에서 제외하세요.
-
-**주 단위 훈련 비중 배분:**
-1. **Base & Endurance (60~70%)** - 타겟: Zone 2 (FTP 55~75%)
-   - 지방 대사 효율을 높이기 위한 길고 지속적인 라이딩. 1~3시간 이상 파워의 변동 없이 꾸준히 밀어주는 훈련 중심.
-   - Endurance 카테고리 워크아웃을 우선 추천하세요.
-
-2. **Sweet Spot & Tempo (20~30%)** - 타겟: Zone 3 중상단 ~ Zone 4 하단 (FTP 75~93%)
-   - 근지구력 강화를 위해 15분~30분 단위의 긴 인터벌을 2~4세트 반복하는 워크아웃. 에어로바 포지션 유지 가정.
-   - SweetSpot, Tempo 카테고리 워크아웃을 우선 추천하세요.
-
-3. **VO2 Max (5~10%)** - 타겟: Zone 5 (FTP 106~120%)
-   - 짧은 시간(3~5분) 동안 심폐 한계를 자극하여 FTP 천장을 높이는 훈련. 무산소(Zone 6 이상) 스프린트는 철인 훈련에 부적합하므로 추천에서 제외.
-
-**추천 대상 카테고리:** Endurance, Tempo, SweetSpot, VO2Max (Zone 5 수준). **제외:** 스프린트·고강도 짧은 인터벌·무산소(Zone 6 이상) 워크아웃.
-` : ''}
-${challenge === 'Fitness' ? `
-**일반 피트니스/다이어트 목적 특별 지침:**
-- 일반 피트니스/다이어트 목적의 사용자이므로 건강과 체중 관리에 초점을 맞춘 훈련을 추천하세요.
-- **입문자 접근성**: 워크아웃 title에 **(Lite)**가 포함된 카테고리 워크아웃을 **1순위로 반드시 포함**하여 추천하세요.
-- Endurance, Tempo 카테고리의 워크아웃을 우선 고려하세요.
-- 과도한 고강도 훈련보다는 지속 가능한 중강도 훈련을 추천하세요.
-` : ''}
-${challenge === 'Elite' ? `
-**엘리트 선수(학생 선수) 특별 지침:**
-- 엘리트 선수용으로 작성된 고강도 워크아웃을 우선 추천하세요.
-- 훈련/휴식 비율을 최적화하여 과훈련을 방지하세요.
-- 주간 TSS(Training Stress Score)를 고려하여 훈련 부하를 분산시키세요.
-- 고강도 훈련 후에는 충분한 회복 시간(최소 24-48시간)을 권장합니다.
-- 전문적인 메트릭 분석(NP, IF, TSS, TSB)을 제공하여 훈련 효과를 극대화하세요.
-- 피크 성능을 위한 주기화(Periodization) 전략을 고려하세요.
-- 훈련 소화 능력을 고려하여 적절한 강도의 워크아웃을 추천하세요.
-` : ''}
-${challenge === 'PRO' ? `
-**PRO 선수(프로 선수) 특별 지침:**
-- PRO 선수용으로 작성된 최고 강도 워크아웃을 우선 추천하세요.
-- 프로 선수는 높은 훈련 부하를 소화할 수 있으므로, 강도가 높은 워크아웃을 추천하세요.
-- 훈련/휴식 비율을 최적화하되, 프로 선수의 높은 회복 능력을 고려하세요.
-- 주간 TSS(Training Stress Score)를 고려하여 훈련 부하를 분산시키되, 프로 선수 수준의 높은 부하를 감당할 수 있습니다.
-- 고강도 훈련 후 회복 시간을 고려하되, 프로 선수는 더 빠른 회복이 가능합니다.
-- 전문적인 메트릭 분석(NP, IF, TSS, TSB)을 제공하여 훈련 효과를 극대화하세요.
-- 피크 성능을 위한 주기화(Periodization) 전략을 고려하세요.
-- 프로 선수의 높은 훈련 소화 능력을 고려하여 강도가 높은 워크아웃을 추천하세요.
-- 경기 일정과 시즌을 고려한 훈련 계획을 제안하세요.
-` : ''}
-4. **워크아웃 추천 (Zone — author 매칭 필수)**:
-   - **[필터링 절대 규칙]**: 제공된 '사용 가능한 워크아웃 목록' 중, 3번에서 결정한 **타겟 Zone 문자열**(예: "Z1", "Z2", "Z3", "Z3~Z4", "Z4", "Z5")이 워크아웃의 **\`author\` 필드 텍스트에 반드시 포함**된 항목만 추천 후보로 삼으세요.
-     * 예: 타겟 Zone이 "Z2"이면 author에 "Z2"가 포함된 워크아웃만 후보. "Z4"만 있는 워크아웃은 제외.
-     * 예: 타겟 Zone이 "Z3~Z4"이면 author에 "Z3~Z4" 또는 동일 범위를 나타내는 표기가 포함된 워크아웃만 후보.
-     * **목적(challenge)과 Zone이 모두 일치하지 않는 워크아웃은 추천 금지.** author Zone 불일치·목적 불일치 항목은 recommendations에 넣지 마세요.
-${hasBasis ? `     * 🎯 basis 고정 시 타겟 Zone: **"${targetZoneHint}"** (${basisCategory} 카테고리).` : ''}
-   - ⚠️⚠️⚠️ **최우선 중요사항**: 사용자의 운동 목적은 "${challenge}"입니다.
-     * 반드시 이 목적에 맞는 워크아웃만 추천해야 합니다.
-     * 목적과 무관한 워크아웃은 절대 추천하지 마세요.
-     * 예를 들어, Racing 목적 사용자에게 Fitness 목적의 저강도 훈련을 추천하면 안 됩니다.
-     * 각 목적에 맞는 특화된 훈련을 추천해야 합니다.
-${challenge === 'Fitness' ? `
-   - **Fitness 입문자 접근성 (필수)**: 훈련 목적이 Fitness인 경우에만, **워크아웃 title에 (Lite)가 포함된 카테고리 워크아웃을 1순위로 반드시 포함**하여 추천하세요. 최소 1개 이상 (Lite) 워크아웃을 추천에 넣어 입문자 접근성을 높이세요. (Lite) 후보도 author Zone 필터를 통과해야 합니다.
-` : ''}
-   - **추천 순서(강도 순)**: 1번 = 가장 약한 강도(가벼운 훈련), 2번 = 중간 강도, 3번 = 가장 강한 강도(부하가 큰 훈련·TSS 기준). 반드시 이 순서로 제시하세요.
-   - **서로 다른 워크아웃**: 3개의 추천은 반드시 서로 다른 워크아웃이어야 합니다. 동일한 workoutId를 두 번 이상 추천하지 마세요. 1번·2번·3번 각각 다른 workoutId를 사용하세요.
-${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — author Zone·목적(${challenge})·등급(${grade}) 가중을 모두 만족하는 후보 중, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${challenge === 'Fitness' ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}` : `   - 선정된 카테고리·Zone에 해당하고 author 필터를 통과한 워크아웃 중, 사용자 상태와 **목적(${challenge})**에 맞는, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${challenge === 'Fitness' ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}`}
-   - **추천 이유(reason) 작성 규칙**: 각 reason에는 (1) 오늘 선택한 **Zone·카테고리 근거**, (2) 해당 워크아웃의 **author Zone이 타겟과 일치함**, (3) **목적(${challenge})·오늘 컨디션**에 부합하는 이유, (4) 예상 TSS·훈련 강도·기대 효과·주의사항을 구체적으로 기술하세요.
-   - 형식적인 설명이 아닌, 실제로 훈련할 때 참고할 수 있는 구체적인 가이드를 제공하세요.
-
-5. **컨디션 점수 (Condition Score) 평가 기준 (필수)**:
-   - **의미**: 최근 훈련 부하(TSS)·휴식·피로 누적을 반영한 "오늘의 몸 상태" 지표입니다. 100점은 이상적·극히 드문 경우에만 해당합니다.
-   - **반드시 5 단위로만 부여**: 55, 60, 65, 70, 75, 80, 85, 90, 95만 사용하세요. 100점은 **부여하지 마세요** (실질적 상한 95).
-   - **기준 (참고)**: 훈련 이력이 거의 없거나 회복 필요 → 55~65. 꾸준한 훈련·적당한 부하 → 70~80. 주간 TSS 달성·피로 없음 → 85~90. 레이스 직전 피크 등 매우 제한적 상황 → 90~95. 95 이상·100은 사용하지 마세요.
-   - **현실성**: 같은 훈련 데이터면 비슷한 점수가 나와야 하며, 과도하게 높은 점수(예: 100)는 피하세요.
-
-6. **최종 확인 (필수)**:
-   - 추천 개수: 반드시 **정확히 3개**의 워크아웃을 제시하세요.
-   - **author Zone 검증**: 3개 모두 3번에서 정한 타겟 Zone이 \`author\`에 포함되어야 합니다.
-   - **추천 강도 순서**: 1번(약) → 2번(중) → 3번(강). 1번이 가장 가벼운 훈련, 3번이 가장 부하가 큰 훈련이어야 합니다.
-   - **서로 다른 워크아웃**: 1번·2번·3번의 workoutId는 **각각 달라야 합니다**. 같은 workoutId를 두 번 사용하면 안 됩니다.
-   - (예상 TSS는 화면에서 자동으로 표시됩니다.)
-
-다음 JSON 형식으로 응답해주세요:
+목적: ${challenge}. 등급: ${grade}. FTP ${ftp}W, ${weight}kg, W/kg ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}. 몸상태: ${todayCondition}(${(conditionAdjustment * 100).toFixed(0)}%).
+${userConditionScore != null && userConditionName ? `[최우선] 사용자 컨디션 "${userConditionName}" ${userConditionScore}점 → condition_score는 ${userConditionScore}(5단위면 그대로, 아니면 55~95).` : ''}
+부하(30일 ${totalSessions}회): 주간TSS ${weeklyTSS}, 7일TSS ${last7DaysTSS}(${last7DaysSessions}회), 고강도 ${highIntensityRatio}%, 평균 ${avgDuration}분·${avgPower}W·TSS${avgTSS}.
+이력14일: ${JSON.stringify(historyForPrompt)}
+후보(${workoutsForPrompt.length}개, author=Zone): ${JSON.stringify(workoutsForPrompt)}
+목적지침: ${challengeHintOneLine}
+${hasBasis ? `고정: 카테고리 ${basisCategory}, 타겟 Zone "${targetZoneHint}". author에 Zone 포함·목적·등급 일치만.` : `Zone·카테고리는 부하·회복·목적 분석 후 선정. ${zoneMapLine}`}
+규칙: author Zone 불일치·목적 불일치 금지. workoutId 3개 모두 다름. reason 각 60자 이내. condition_score 55~95(5단위, 100금지). coach_comment 120자·categoryReason 60자 이내. 마크다운·백틱 금지.
 {
-  "condition_score": 55~95 (컨디션 점수, 반드시 5 단위 정수: 55,60,65,70,75,80,85,90,95. 100 사용 금지),
-  "training_status": "Recovery Needed" | "Building Base" | "Ready to Race" | "Peaking" | "Overreaching",
-  "vo2max_estimate": 20~100 (VO2max 추정값 ml/kg/min, 정수),
-  "coach_comment": "2문장 이내 한국어 코멘트",
+  "condition_score": 55~95,
+  "training_status": "Recovery Needed"|"Building Base"|"Ready to Race"|"Peaking"|"Overreaching",
+  "vo2max_estimate": 20~100,
+  "coach_comment": "한국어 2문장 이내",
   "selectedCategory": "Endurance",
-  "categoryReason": "1문장 이내 선정 이유",
+  "categoryReason": "1문장",
   "recommendations": [
-    { "rank": 1, "workoutId": 숫자(1번=약한 강도), "reason": "60자 이내 한 줄" },
-    { "rank": 2, "workoutId": 숫자(2번=중간 강도, 1번과 다른 ID), "reason": "60자 이내 한 줄" },
-    { "rank": 3, "workoutId": 숫자(3번=강한 강도, 1·2번과 다른 ID), "reason": "60자 이내 한 줄" }
+    { "rank": 1, "workoutId": 0, "reason": "60자 이내" },
+    { "rank": 2, "workoutId": 0, "reason": "60자 이내" },
+    { "rank": 3, "workoutId": 0, "reason": "60자 이내" }
   ]
-}
-**[출력 분량 — 토큰 초과 방지, 필수]**
-- coach_comment: 최대 2문장(합 120자 이내). categoryReason: 1문장(60자 이내).
-- recommendations[].reason: 각 60자 이내, 한 줄. 백틱·마크다운·코드블록(3중 백틱) 사용 금지.
-- selectedCategory에는 Zone 괄호를 붙이지 말고 카테고리 영문명만(예: Tempo, Endurance).
-중요: recommendations의 workoutId는 1·2·3번 각각 서로 달라야 합니다. rank 1=약, 2=중, 3=강 순서를 반드시 지키세요.
-중요: 반드시 유효한 JSON 객체 하나만 출력하세요. 마크다운·설명 문구 없이 { 로 시작해 } 로 끝나야 합니다.`;
+}`;
 
     // 7. Gemini API 호출
     // 모델 우선순위 설정 (속도 우선 - 워크아웃 추천은 빠른 응답이 중요)
@@ -13228,9 +13081,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
         apiVersion = 'v1beta';
       }
     }
-    
-    const apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
-    
+
     // 재시도 로직이 포함된 API 호출 함수
     const callGeminiAPI = async (url, body, maxRetries = 3) => {
       let lastError;
@@ -13374,19 +13225,23 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
           
         } catch (error) {
           lastError = error;
-          
+          var errMsg = error && error.message ? error.message : String(error);
+          var isTokenLimitErr =
+            errMsg.includes('토큰 제한') || errMsg.includes('MAX_TOKENS');
+          if (isTokenLimitErr) {
+            throw error;
+          }
+
           if (attempt < maxRetries) {
             var retryable =
-              error.message.includes('Failed to fetch') ||
-              error.message.includes('network') ||
-              error.message.includes('timeout') ||
-              error.message.includes('토큰 제한') ||
-              error.message.includes('MAX_TOKENS') ||
-              error.message.includes('high demand') ||
-              error.message.includes('503') ||
-              error.message.includes('429');
+              errMsg.includes('Failed to fetch') ||
+              errMsg.includes('network') ||
+              errMsg.includes('timeout') ||
+              errMsg.includes('high demand') ||
+              errMsg.includes('503') ||
+              errMsg.includes('429');
             if (retryable) {
-              console.warn(`API 재시도 (시도 ${attempt}/${maxRetries}):`, error.message);
+              console.warn(`API 재시도 (시도 ${attempt}/${maxRetries}):`, errMsg);
               continue;
             }
           }
@@ -13399,43 +13254,62 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
       throw lastError || new Error('API 호출에 실패했습니다.');
     };
     
-    var geminiRequestBody = {
-      contents: [{
-        parts: [{
-          text: prompt
-        }]
-      }],
-      generationConfig: {
-        maxOutputTokens: 8192,
+    const STELVIO_WORKOUT_AI_MAX_OUTPUT = 65535;
+
+    function stelvioBuildWorkoutAiRequestBody(forModel) {
+      var genCfg = {
+        maxOutputTokens: STELVIO_WORKOUT_AI_MAX_OUTPUT,
         temperature: 0.2,
         topP: 0.85,
         topK: 20,
-        responseMimeType: 'application/json'
+        responseMimeType: 'application/json',
+      };
+      if (/gemini-2\.5-flash$/i.test(forModel)) {
+        genCfg.thinkingConfig = { thinkingBudget: 0 };
       }
-    };
+      return {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: genCfg,
+      };
+    }
 
-    var modelTryOrder = [modelName, SECONDARY_MODEL, TERTIARY_MODEL].filter(function (m, idx, arr) {
-      return m && arr.indexOf(m) === idx;
-    });
+    function stelvioPickNextWorkoutAiModel(current, msg, tried) {
+      var isMax = /MAX_TOKENS|토큰 제한/i.test(msg);
+      var isOverload = /503|429|high demand|과부하/i.test(msg);
+      var pool = isMax
+        ? [TERTIARY_MODEL, PRIMARY_MODEL, SECONDARY_MODEL]
+        : isOverload
+          ? [SECONDARY_MODEL, TERTIARY_MODEL, PRIMARY_MODEL]
+          : [TERTIARY_MODEL, SECONDARY_MODEL, PRIMARY_MODEL];
+      for (var pi = 0; pi < pool.length; pi++) {
+        if (pool[pi] !== current && tried.indexOf(pool[pi]) === -1) return pool[pi];
+      }
+      return null;
+    }
 
     let data;
     let lastApiError;
+    var triedModels = [];
+    var currentTryModel = modelName;
     try {
-      for (var mi = 0; mi < modelTryOrder.length; mi++) {
-        var tryModel = modelTryOrder[mi];
-        var tryUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${tryModel}:generateContent?key=${apiKey}`;
+      while (triedModels.length < 3) {
+        if (!currentTryModel || triedModels.indexOf(currentTryModel) !== -1) break;
+        triedModels.push(currentTryModel);
+        var tryUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${currentTryModel}:generateContent?key=${apiKey}`;
         try {
-          data = await callGeminiAPI(tryUrl, geminiRequestBody);
-          modelName = tryModel;
+          data = await callGeminiAPI(tryUrl, stelvioBuildWorkoutAiRequestBody(currentTryModel));
+          modelName = currentTryModel;
           break;
         } catch (apiError) {
           lastApiError = apiError;
           var msg = apiError && apiError.message ? apiError.message : String(apiError);
-          var canFallback =
-            mi < modelTryOrder.length - 1 &&
-            (/503|429|high demand|과부하|토큰 제한|MAX_TOKENS/i.test(msg));
-          if (canFallback) {
-            console.warn('[AI 추천] 모델 폴백:', tryModel, '→', modelTryOrder[mi + 1], msg);
+          var nextModel = stelvioPickNextWorkoutAiModel(currentTryModel, msg, triedModels);
+          if (
+            nextModel &&
+            (/503|429|high demand|과부하|토큰 제한|MAX_TOKENS/i.test(msg))
+          ) {
+            console.warn('[AI 추천] 모델 전환:', currentTryModel, '→', nextModel, msg);
+            currentTryModel = nextModel;
             continue;
           }
           throw apiError;
