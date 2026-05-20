@@ -12424,6 +12424,57 @@ function stelvioBackfillAiRecommendations(recs, workoutDetails, targetCategory, 
   return out.slice(0, 3);
 }
 
+/** MAX_TOKENS 등으로 잘린 응답에서 recommendations·핵심 필드만 추출 */
+function stelvioSalvageTruncatedRecommendationJson(text) {
+  if (!text || typeof text !== 'string') return null;
+  var cleaned = String(text)
+    .replace(/```json\s*/gi, '')
+    .replace(/```/g, '')
+    .trim();
+  if (cleaned.indexOf('{') < 0) return null;
+
+  var cs = cleaned.match(/"condition_score"\s*:\s*(\d+)/);
+  var ts = cleaned.match(/"training_status"\s*:\s*"([^"]+)"/);
+  var vo2 = cleaned.match(/"vo2max_estimate"\s*:\s*(\d+)/);
+  var coach = cleaned.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  var sel = cleaned.match(/"selectedCategory"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+
+  var recs = [];
+  var blockRe =
+    /\{\s*"rank"\s*:\s*(\d+)\s*,\s*"workoutId"\s*:\s*(\d+)(?:\s*,\s*"reason"\s*:\s*"((?:[^"\\]|\\.)*)")?\s*\}/g;
+  var m;
+  while ((m = blockRe.exec(cleaned)) !== null && recs.length < 3) {
+    var wid = Number(m[2]);
+    if (!wid || recs.some(function (r) { return r.workoutId === wid; })) continue;
+    recs.push({
+      rank: Number(m[1]) || recs.length + 1,
+      workoutId: wid,
+      reason: (m[3] || 'AI 응답 일부 복구 추천').slice(0, 120),
+    });
+  }
+  if (!recs.length) {
+    var idRe = /"workoutId"\s*:\s*(\d+)/g;
+    var rankN = 1;
+    while ((m = idRe.exec(cleaned)) !== null && recs.length < 3) {
+      var idOnly = Number(m[1]);
+      if (idOnly > 0 && !recs.some(function (r) { return r.workoutId === idOnly; })) {
+        recs.push({ rank: rankN++, workoutId: idOnly, reason: 'AI 응답 일부 복구 추천' });
+      }
+    }
+  }
+  if (!recs.length) return null;
+
+  return {
+    condition_score: cs ? Number(cs[1]) : 70,
+    training_status: ts ? ts[1] : 'Building Base',
+    vo2max_estimate: vo2 ? Number(vo2[1]) : 50,
+    coach_comment: coach ? coach[1] : '',
+    selectedCategory: sel ? sel[1] : '',
+    categoryReason: '',
+    recommendations: recs,
+  };
+}
+
 // Gemini API를 사용한 워크아웃 분석 및 추천
 // options: { basisRecommendedWorkout?: string, userConditionScore?: number, userConditionName?: string } (컨디션별 강도 보정 입력 반영)
 async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
@@ -13056,17 +13107,21 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
   "condition_score": 55~95 (컨디션 점수, 반드시 5 단위 정수: 55,60,65,70,75,80,85,90,95. 100 사용 금지),
   "training_status": "Recovery Needed" | "Building Base" | "Ready to Race" | "Peaking" | "Overreaching",
   "vo2max_estimate": 20~100 (VO2max 추정값 ml/kg/min, 정수),
-  "coach_comment": "사용자 훈련 상황을 반영한 한국어 코멘트 (2~3문장)",
-  "selectedCategory": "선정된 카테고리 (예: Endurance (Z2))",
-  "categoryReason": "카테고리 선정 이유",
+  "coach_comment": "2문장 이내 한국어 코멘트",
+  "selectedCategory": "Endurance",
+  "categoryReason": "1문장 이내 선정 이유",
   "recommendations": [
-    { "rank": 1, "workoutId": 숫자(1번=약한 강도), "reason": "추천 이유" },
-    { "rank": 2, "workoutId": 숫자(2번=중간 강도, 1번과 다른 ID), "reason": "추천 이유" },
-    { "rank": 3, "workoutId": 숫자(3번=강한 강도, 1·2번과 다른 ID), "reason": "추천 이유" }
+    { "rank": 1, "workoutId": 숫자(1번=약한 강도), "reason": "60자 이내 한 줄" },
+    { "rank": 2, "workoutId": 숫자(2번=중간 강도, 1번과 다른 ID), "reason": "60자 이내 한 줄" },
+    { "rank": 3, "workoutId": 숫자(3번=강한 강도, 1·2번과 다른 ID), "reason": "60자 이내 한 줄" }
   ]
 }
+**[출력 분량 — 토큰 초과 방지, 필수]**
+- coach_comment: 최대 2문장(합 120자 이내). categoryReason: 1문장(60자 이내).
+- recommendations[].reason: 각 60자 이내, 한 줄. 백틱(\`)·마크다운·코드블록(```) 사용 금지.
+- selectedCategory에는 Zone 괄호를 붙이지 말고 카테고리 영문명만(예: Tempo, Endurance).
 중요: recommendations의 workoutId는 1·2·3번 각각 서로 달라야 합니다. rank 1=약, 2=중, 3=강 순서를 반드시 지키세요.
-중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
+중요: 반드시 유효한 JSON 객체 하나만 출력하세요. 마크다운·설명 문구 없이 { 로 시작해 } 로 끝나야 합니다.`;
 
     // 7. Gemini API 호출
     // 모델 우선순위 설정 (속도 우선 - 워크아웃 추천은 빠른 응답이 중요)
@@ -13292,31 +13347,23 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
           const finishReason = candidate.finishReason || candidate.finish_reason;
           const responseText = candidate.content.parts[0].text;
           
-          // MAX_TOKENS인 경우 부분 응답이라도 처리 시도
           if (finishReason === 'MAX_TOKENS') {
-            console.warn('응답이 토큰 제한에 도달했습니다. 부분 응답을 처리합니다. finishReason:', finishReason);
-            // JSON이 완전한지 확인
-            const jsonStart = responseText.indexOf('{');
-            const jsonEnd = responseText.lastIndexOf('}');
-            if (jsonStart !== -1 && jsonEnd !== -1) {
-              const jsonText = responseText.substring(jsonStart, jsonEnd + 1);
-              const openBraces = (jsonText.match(/{/g) || []).length;
-              const closeBraces = (jsonText.match(/}/g) || []).length;
-              // JSON이 완전하면 부분 응답이라도 허용
-              if (openBraces === closeBraces && responseText.length >= 200) {
-                console.log('MAX_TOKENS이지만 JSON이 완전합니다. 부분 응답을 허용합니다.');
-                // 부분 응답 허용 - 계속 진행
-              } else {
-                // JSON이 불완전하면 재시도
-                console.warn('MAX_TOKENS이고 JSON이 불완전합니다. 재시도합니다.');
-                throw new Error(`API 응답이 토큰 제한에 도달했습니다. finishReason: ${finishReason}`);
-              }
-            } else if (responseText.length >= 200) {
-              // JSON이 없지만 텍스트가 충분히 길면 허용
-              console.log('MAX_TOKENS이지만 응답 텍스트가 충분합니다. 부분 응답을 허용합니다.');
-              // 부분 응답 허용 - 계속 진행
-            } else {
-              throw new Error(`API 응답이 토큰 제한에 도달했고 응답이 너무 짧습니다. finishReason: ${finishReason}`);
+            console.warn('finishReason MAX_TOKENS — 불완전 JSON이면 재시도합니다.');
+            var jStart = responseText.indexOf('{');
+            var jEnd = responseText.lastIndexOf('}');
+            var jsonLooksComplete = false;
+            if (jStart !== -1 && jEnd > jStart) {
+              var slice = responseText.substring(jStart, jEnd + 1);
+              var openB = (slice.match(/{/g) || []).length;
+              var closeB = (slice.match(/}/g) || []).length;
+              jsonLooksComplete =
+                openB === closeB &&
+                /"recommendations"\s*:\s*\[/.test(slice) &&
+                /"workoutId"\s*:\s*\d+/.test(slice) &&
+                /\]\s*\}\s*$/.test(slice.replace(/\s+/g, ''));
+            }
+            if (!jsonLooksComplete) {
+              throw new Error(`API 응답이 토큰 제한에 도달했습니다. finishReason: ${finishReason}`);
             }
           } else if (finishReason && finishReason !== 'STOP' && finishReason !== 'END_OF_TURN') {
             console.warn('응답이 불완전합니다. finishReason:', finishReason);
@@ -13328,19 +13375,23 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
         } catch (error) {
           lastError = error;
           
-          // 네트워크 오류나 타임아웃인 경우 재시도
-          if ((error.message.includes('Failed to fetch') || 
-               error.message.includes('network') ||
-               error.message.includes('timeout')) && 
-              attempt < maxRetries) {
-            console.warn(`네트워크 오류 (시도 ${attempt}/${maxRetries}): ${error.message}`);
-            continue; // 재시도
+          if (attempt < maxRetries) {
+            var retryable =
+              error.message.includes('Failed to fetch') ||
+              error.message.includes('network') ||
+              error.message.includes('timeout') ||
+              error.message.includes('토큰 제한') ||
+              error.message.includes('MAX_TOKENS') ||
+              error.message.includes('high demand') ||
+              error.message.includes('503') ||
+              error.message.includes('429');
+            if (retryable) {
+              console.warn(`API 재시도 (시도 ${attempt}/${maxRetries}):`, error.message);
+              continue;
+            }
           }
-          
-          // 재시도 불가능한 오류는 즉시 throw
-          if (attempt >= maxRetries) {
-            throw error;
-          }
+
+          throw error;
         }
       }
       
@@ -13348,24 +13399,50 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
       throw lastError || new Error('API 호출에 실패했습니다.');
     };
     
-    // API 호출 (재시도 포함) — JSON·한글 reason 완결용 출력 토큰 상한
+    var geminiRequestBody = {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        maxOutputTokens: 8192,
+        temperature: 0.2,
+        topP: 0.85,
+        topK: 20,
+        responseMimeType: 'application/json'
+      }
+    };
+
+    var modelTryOrder = [modelName, SECONDARY_MODEL, TERTIARY_MODEL].filter(function (m, idx, arr) {
+      return m && arr.indexOf(m) === idx;
+    });
+
     let data;
+    let lastApiError;
     try {
-      data = await callGeminiAPI(apiUrl, {
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          maxOutputTokens: 8192,
-          temperature: 0.2,   // 0.7 → 0.2: 워크아웃 카테고리 일관성 확보
-          topP: 0.85,
-          topK: 20
+      for (var mi = 0; mi < modelTryOrder.length; mi++) {
+        var tryModel = modelTryOrder[mi];
+        var tryUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${tryModel}:generateContent?key=${apiKey}`;
+        try {
+          data = await callGeminiAPI(tryUrl, geminiRequestBody);
+          modelName = tryModel;
+          break;
+        } catch (apiError) {
+          lastApiError = apiError;
+          var msg = apiError && apiError.message ? apiError.message : String(apiError);
+          var canFallback =
+            mi < modelTryOrder.length - 1 &&
+            (/503|429|high demand|과부하|토큰 제한|MAX_TOKENS/i.test(msg));
+          if (canFallback) {
+            console.warn('[AI 추천] 모델 폴백:', tryModel, '→', modelTryOrder[mi + 1], msg);
+            continue;
+          }
+          throw apiError;
         }
-      });
+      }
+      if (!data) throw lastApiError || new Error('API 호출에 실패했습니다.');
     } catch (apiError) {
-      // API 호출 실패 시 사용자에게 재시도 옵션 제공
       throw new Error(`API 호출 실패: ${apiError.message}\n\n서버가 일시적으로 과부하 상태일 수 있습니다. 잠시 후 다시 시도해주세요.`);
     }
     
@@ -13376,7 +13453,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
       throw new Error('API 응답에 유효한 텍스트가 없습니다. 응답 구조를 확인하세요.');
     }
     
-    // 강화된 JSON 파싱 및 복구 함수 (훈련 분석 로직과 동일)
+    // 강화된 JSON 파싱 및 복구 (워크아웃 추천 — 잘린 MAX_TOKENS 응답 salvage 포함)
     const parseAndRecoverJSON = (text) => {
       if (!text || typeof text !== 'string') {
         return null;
@@ -13394,14 +13471,14 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
       
       if (jsonStart === -1) {
         console.warn('JSON 시작 문자({)를 찾을 수 없습니다.');
-        return null;
+        return stelvioSalvageTruncatedRecommendationJson(text);
       }
       
       if (jsonEnd === -1 || jsonEnd <= jsonStart) {
-        console.warn('JSON 종료 문자(})를 찾을 수 없거나 잘못된 위치입니다.');
-        // 불완전한 JSON 복구 시도
+        console.warn('JSON 종료 문자(}) 없음 — 잘린 응답 salvage 시도');
+        var salvagedEarly = stelvioSalvageTruncatedRecommendationJson(text);
+        if (salvagedEarly) return salvagedEarly;
         cleanedText = cleanedText.substring(jsonStart);
-        // 마지막 불완전한 속성 제거 시도
         cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*[^,}]*$/, '');
         cleanedText = cleanedText.replace(/,\s*$/, '');
         cleanedText += '}';
@@ -13414,7 +13491,9 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
         return JSON.parse(cleanedText);
       } catch (parseError) {
         console.warn('JSON 파싱 실패, 복구 시도 중...', parseError.message);
-        
+        var salvagedMid = stelvioSalvageTruncatedRecommendationJson(text);
+        if (salvagedMid) return salvagedMid;
+
         // 4단계: 복구 시도 - 불완전한 문자열 제거
         // 마지막 불완전한 문자열 속성 제거
         cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*"[^"]*$/, '');
@@ -13433,16 +13512,19 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
         try {
           return JSON.parse(cleanedText);
         } catch (secondError) {
-          console.error('JSON 복구 실패:', secondError);
-          return null;
+          console.warn('JSON.parse 2차 실패, 잘린 응답 salvage 시도:', secondError.message);
+          return stelvioSalvageTruncatedRecommendationJson(text);
         }
       }
     };
     
     // JSON 파싱 및 복구
     let recommendationData = parseAndRecoverJSON(responseText);
+    if (!recommendationData || !recommendationData.recommendations || !recommendationData.recommendations.length) {
+      recommendationData = stelvioSalvageTruncatedRecommendationJson(responseText);
+    }
     
-    if (!recommendationData) {
+    if (!recommendationData || !recommendationData.recommendations || !recommendationData.recommendations.length) {
       console.error('JSON 파싱 및 복구 실패. 원본 응답:', responseText);
       throw new Error('AI 응답을 파싱할 수 없습니다. 응답이 불완전하거나 형식이 올바르지 않습니다.');
     }
