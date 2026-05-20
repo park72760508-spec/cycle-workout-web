@@ -12348,7 +12348,7 @@ function stelvioCleanAiSelectedCategory(raw) {
   if (raw == null) return '';
   var s = String(raw).trim();
   s = s.replace(/\s*\(Z[^)]*\)/gi, '').replace(/\s*\[Z[^\]]*\]/gi, '').trim();
-  var key = s.toLowerCase();
+  var key = s.toLowerCase().replace(/[\s_-]+/g, ' ');
   var aliases = {
     recovery: 'Active Recovery',
     'active recovery': 'Active Recovery',
@@ -12359,6 +12359,7 @@ function stelvioCleanAiSelectedCategory(raw) {
     threshold: 'Threshold',
     'vo2 max': 'VO2 Max',
     vo2max: 'VO2 Max',
+    'vo2 max interval': 'VO2 Max',
   };
   if (aliases[key]) return aliases[key];
   var k;
@@ -12368,6 +12369,174 @@ function stelvioCleanAiSelectedCategory(raw) {
   return s;
 }
 
+/** basis·AI·규칙 엔진 카테고리 → getWorkoutCategoryId 표준명 */
+function stelvioNormalizeWorkoutCategoryId(cat) {
+  if (!cat) return '';
+  var cleaned = stelvioCleanAiSelectedCategory(cat);
+  var shortMap = {
+    Recovery: 'Active Recovery',
+    SweetSpot: 'Sweet Spot',
+    VO2Max: 'VO2 Max',
+    'Sweet Spot': 'Sweet Spot',
+    'VO2 Max': 'VO2 Max',
+    'Active Recovery': 'Active Recovery',
+  };
+  if (shortMap[cleaned]) return shortMap[cleaned];
+  if (shortMap[cat]) return shortMap[cat];
+  return cleaned || String(cat).trim();
+}
+
+function stelvioCategoryIdsEqual(a, b) {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return stelvioNormalizeWorkoutCategoryId(a) === stelvioNormalizeWorkoutCategoryId(b);
+}
+
+function stelvioResolveTargetCategoryZone(basisCategory, selectedCategory, targetZoneHint) {
+  var normCat =
+    stelvioNormalizeWorkoutCategoryId(selectedCategory) ||
+    stelvioNormalizeWorkoutCategoryId(basisCategory) ||
+    'Endurance';
+  var zone = String(targetZoneHint || '').trim();
+  if (!zone) {
+    var basisZoneMap = {
+      Recovery: 'Z1',
+      Endurance: 'Z2',
+      Tempo: 'Z3',
+      SweetSpot: 'Z3~Z4',
+      Threshold: 'Z4',
+      VO2Max: 'Z5',
+    };
+    if (basisCategory && basisZoneMap[basisCategory]) zone = basisZoneMap[basisCategory];
+  }
+  if (!zone && typeof window.workoutCategoryIdToZoneTag === 'function') {
+    zone = window.workoutCategoryIdToZoneTag(normCat) || zone;
+  }
+  return { category: normCat, zone: zone };
+}
+
+function stelvioGetWorkoutAuthorForZoneMatch(w) {
+  return typeof window.ensureWorkoutAuthorZoneTag === 'function'
+    ? window.ensureWorkoutAuthorZoneTag(w)
+    : String((w && w.author) || '');
+}
+
+function stelvioEstimateWorkoutTssSafe(w) {
+  return typeof window.estimateWorkoutTSS === 'function'
+    ? window.estimateWorkoutTSS(w)
+    : estimateWorkoutTSS(w);
+}
+
+function stelvioSortWorkoutsByTssAsc(list) {
+  return (list || []).slice().sort(function (a, b) {
+    return (Number(stelvioEstimateWorkoutTssSafe(a)) || 0) - (Number(stelvioEstimateWorkoutTssSafe(b)) || 0);
+  });
+}
+
+function stelvioFilterWorkoutPool(workoutDetails, usedIds, targetCategory, targetZone, mode) {
+  return (workoutDetails || []).filter(function (w) {
+    var wid = Number(w.id);
+    if (!wid || usedIds.has(wid)) return false;
+    var authorForMatch = stelvioGetWorkoutAuthorForZoneMatch(w);
+    var catId =
+      typeof window.getWorkoutCategoryId === 'function' ? window.getWorkoutCategoryId(w) : '';
+    if (mode === 'strict') {
+      if (targetCategory && catId && !stelvioCategoryIdsEqual(catId, targetCategory)) return false;
+      if (targetZone && !stelvioWorkoutAuthorMatchesTargetZone(authorForMatch, targetZone)) return false;
+      return true;
+    }
+    if (mode === 'zone') {
+      return !targetZone || stelvioWorkoutAuthorMatchesTargetZone(authorForMatch, targetZone);
+    }
+    if (mode === 'category') {
+      return !targetCategory || !catId || stelvioCategoryIdsEqual(catId, targetCategory);
+    }
+    return true;
+  });
+}
+
+function stelvioAppendFromPool(out, pool, targetCategory, targetZone, reasonPrefix) {
+  var used = new Set();
+  var i;
+  for (i = 0; i < out.length; i++) {
+    var id = Number(out[i].workoutId);
+    if (id > 0) used.add(id);
+  }
+  pool = stelvioSortWorkoutsByTssAsc(pool);
+  for (i = 0; i < pool.length && out.length < 3; i++) {
+    var w = pool[i];
+    var wid = Number(w.id);
+    if (!wid || used.has(wid)) continue;
+    used.add(wid);
+    out.push({
+      rank: out.length + 1,
+      workoutId: wid,
+      reason:
+        (reasonPrefix || '') +
+        (targetCategory ? targetCategory + ' ' : '') +
+        (targetZone ? '(' + targetZone + ') ' : '') +
+        (w.title || '워크아웃'),
+    });
+  }
+  for (i = 0; i < out.length; i++) out[i].rank = i + 1;
+  return out.slice(0, 3);
+}
+
+/** AI가 잘못된 workoutId를 줬을 때 TSS 순 풀에서 rank 슬롯에 맞게 치환 */
+function stelvioRemapInvalidRecommendationIds(recs, workoutDetails, targetCategory, targetZone) {
+  var details = workoutDetails || [];
+  var idSet = new Set(
+    details.map(function (w) { return Number(w.id); }).filter(function (id) { return id > 0; })
+  );
+  var strictPool = stelvioSortWorkoutsByTssAsc(
+    stelvioFilterWorkoutPool(details, new Set(), targetCategory, targetZone, 'strict')
+  );
+  if (!strictPool.length) {
+    strictPool = stelvioSortWorkoutsByTssAsc(
+      stelvioFilterWorkoutPool(details, new Set(), targetCategory, targetZone, 'zone')
+    );
+  }
+  if (!strictPool.length) {
+    strictPool = stelvioSortWorkoutsByTssAsc(
+      stelvioFilterWorkoutPool(details, new Set(), targetCategory, targetZone, 'category')
+    );
+  }
+  if (!strictPool.length) strictPool = stelvioSortWorkoutsByTssAsc(details);
+
+  var out = [];
+  var used = new Set();
+  var ri;
+  for (ri = 0; ri < (recs || []).length && out.length < 3; ri++) {
+    var r = recs[ri];
+    var rid = r.workoutId != null ? Number(r.workoutId) : null;
+    var slot = r.rank != null ? Number(r.rank) : out.length + 1;
+    if (rid > 0 && idSet.has(rid) && !used.has(rid)) {
+      used.add(rid);
+      out.push({ rank: slot, workoutId: rid, reason: r.reason || '' });
+      continue;
+    }
+    var pick = null;
+    for (var pi = 0; pi < strictPool.length; pi++) {
+      var pwid = Number(strictPool[pi].id);
+      if (pwid > 0 && !used.has(pwid)) {
+        pick = strictPool[pi];
+        break;
+      }
+    }
+    if (pick) {
+      used.add(Number(pick.id));
+      out.push({
+        rank: slot,
+        workoutId: Number(pick.id),
+        reason: r.reason || 'Zone·카테고리에 맞춰 유사 워크아웃으로 자동 매칭: ' + (pick.title || ''),
+      });
+    }
+  }
+  out.sort(function (a, b) { return (a.rank || 0) - (b.rank || 0); });
+  for (ri = 0; ri < out.length; ri++) out[ri].rank = ri + 1;
+  return out.slice(0, 3);
+}
+
 /** author Zone·카테고리 일치 여부 (AI 후보 필터·백필 공통) */
 function stelvioWorkoutAuthorMatchesTargetZone(authorText, targetZone) {
   if (!targetZone) return true;
@@ -12375,53 +12544,141 @@ function stelvioWorkoutAuthorMatchesTargetZone(authorText, targetZone) {
   var z = String(targetZone).toUpperCase();
   if (a.indexOf(z) >= 0) return true;
   if (z.indexOf('Z3') >= 0 && z.indexOf('Z4') >= 0) {
-    return /Z\s*3\s*[~\-–]\s*Z\s*4|Z3\s*~\s*Z4|Z3-4/.test(a);
+    if (/Z\s*3\s*[~\-–]\s*Z\s*4|Z3\s*~\s*Z4|Z3-4/.test(a)) return true;
+    if (/\bZ\s*3\b/.test(a) || /\bZ\s*4\b/.test(a) || /SWEET\s*SPOT/.test(a)) return true;
   }
+  if (z === 'Z1' && (/\bZ\s*1\b/.test(a) || /ACTIVE\s*RECOVERY|\bRECOVERY\b/.test(a))) return true;
+  if (z === 'Z2' && (/\bZ\s*2\b/.test(a) || /\bENDURANCE\b/.test(a))) return true;
+  if (z === 'Z5' && (/\bZ\s*5\b/.test(a) || /VO2\s*MAX/.test(a))) return true;
   return false;
 }
 
-/** AI recommendations 부족 시 workoutDetails에서 Zone·카테고리 맞는 항목으로 보완 */
+/** AI recommendations 부족 시 workoutDetails에서 Zone·카테고리 맞는 항목으로 보완 (단계적 완화) */
 function stelvioBackfillAiRecommendations(recs, workoutDetails, targetCategory, targetZone) {
+  var normCat = stelvioNormalizeWorkoutCategoryId(targetCategory);
+  var zone = String(targetZone || '').trim();
+  if (!zone && typeof window.workoutCategoryIdToZoneTag === 'function') {
+    zone = window.workoutCategoryIdToZoneTag(normCat) || '';
+  }
   var out = (recs || []).slice();
-  var used = new Set();
-  var i;
-  for (i = 0; i < out.length; i++) {
-    var id = Number(out[i].workoutId);
-    if (id > 0) used.add(id);
-  }
-  var pool = (workoutDetails || []).filter(function (w) {
-    var wid = Number(w.id);
-    if (!wid || used.has(wid)) return false;
-    if (targetCategory && typeof window.getWorkoutCategoryId === 'function') {
-      if (window.getWorkoutCategoryId(w) !== targetCategory) return false;
+  function usedIdsFromOut() {
+    var u = new Set();
+    var i;
+    for (i = 0; i < out.length; i++) {
+      var id = Number(out[i].workoutId);
+      if (id > 0) u.add(id);
     }
-    var authorForMatch =
-      typeof window.ensureWorkoutAuthorZoneTag === 'function'
-        ? window.ensureWorkoutAuthorZoneTag(w)
-        : String(w.author || '');
-    return stelvioWorkoutAuthorMatchesTargetZone(authorForMatch, targetZone);
-  });
-  pool.sort(function (a, b) {
-    var ta =
-      typeof window.estimateWorkoutTSS === 'function' ? window.estimateWorkoutTSS(a) : estimateWorkoutTSS(a);
-    var tb =
-      typeof window.estimateWorkoutTSS === 'function' ? window.estimateWorkoutTSS(b) : estimateWorkoutTSS(b);
-    return (Number(ta) || 0) - (Number(tb) || 0);
-  });
-  for (i = 0; i < pool.length && out.length < 3; i++) {
-    var w = pool[i];
-    out.push({
-      rank: out.length + 1,
-      workoutId: Number(w.id),
-      reason:
-        (targetCategory ? targetCategory + ' ' : '') +
-        (targetZone ? '(' + targetZone + ') ' : '') +
-        'Zone·카테고리에 맞춰 자동 보완 추천: ' +
-        (w.title || '워크아웃'),
-    });
+    return u;
   }
-  for (i = 0; i < out.length; i++) out[i].rank = i + 1;
+  if (out.length < 3) {
+    out = stelvioAppendFromPool(
+      out,
+      stelvioFilterWorkoutPool(workoutDetails, usedIdsFromOut(), normCat, zone, 'strict'),
+      normCat,
+      zone,
+      '자동 보완: '
+    );
+  }
+  if (out.length < 3) {
+    out = stelvioAppendFromPool(
+      out,
+      stelvioFilterWorkoutPool(workoutDetails, usedIdsFromOut(), normCat, zone, 'zone'),
+      normCat,
+      zone,
+      'Zone 기준 보완: '
+    );
+  }
+  if (out.length < 3) {
+    out = stelvioAppendFromPool(
+      out,
+      stelvioFilterWorkoutPool(workoutDetails, usedIdsFromOut(), normCat, zone, 'category'),
+      normCat,
+      zone,
+      '카테고리 기준 보완: '
+    );
+  }
+  if (out.length < 3) {
+    out = stelvioAppendFromPool(
+      out,
+      stelvioFilterWorkoutPool(workoutDetails, usedIdsFromOut(), normCat, zone, 'any'),
+      normCat,
+      zone,
+      '후보 풀 보완: '
+    );
+  }
   return out.slice(0, 3);
+}
+
+/** 추천 3개 확보·ID 치환·백필 (실패 시 throw 없음) */
+function stelvioReconcileAiRecommendations(recs, workoutDetails, ctx) {
+  ctx = ctx || {};
+  var resolved = stelvioResolveTargetCategoryZone(
+    ctx.basisCategory,
+    ctx.selectedCategory,
+    ctx.targetZoneHint
+  );
+  var normCat = resolved.category;
+  var zone = resolved.zone;
+  var details = workoutDetails || [];
+  if (!details.length) {
+    return { recommendations: [], resolvedCategory: normCat, resolvedZone: zone, usedFallback: true };
+  }
+
+  var out = stelvioRemapInvalidRecommendationIds(recs || [], details, normCat, zone);
+  out = out.filter(function (r) {
+    return details.some(function (w) { return Number(w.id) === Number(r.workoutId); });
+  });
+  if (out.length < 3) {
+    out = stelvioBackfillAiRecommendations(out, details, normCat, zone);
+  }
+  if (!out.length) {
+    out = stelvioBackfillAiRecommendations([], details, normCat, zone);
+  }
+  return {
+    recommendations: out.slice(0, 3),
+    resolvedCategory: normCat,
+    resolvedZone: zone,
+    usedFallback: !(recs && recs.length),
+  };
+}
+
+/** API·파싱·Zone 필터 전부 실패 시에도 화면 표시용 최소 추천 데이터 */
+function stelvioBuildDeterministicRecommendationData(workoutDetails, ctx) {
+  ctx = ctx || {};
+  var resolved = stelvioResolveTargetCategoryZone(
+    ctx.basisCategory,
+    ctx.selectedCategory,
+    ctx.targetZoneHint
+  );
+  var recs = stelvioBackfillAiRecommendations([], workoutDetails || [], resolved.category, resolved.zone);
+  if (!recs.length && (workoutDetails || []).length) {
+    recs = stelvioSortWorkoutsByTssAsc(workoutDetails)
+      .slice(0, 3)
+      .map(function (w, idx) {
+        return {
+          rank: idx + 1,
+          workoutId: Number(w.id),
+          reason: 'AI 응답 없음 — 후보 목록에서 강도 순 자동 추천: ' + (w.title || '워크아웃'),
+        };
+      });
+  }
+  var score = ctx.conditionScore;
+  if (score == null || score < 50) score = 70;
+  return {
+    condition_score: Math.max(50, Math.min(100, Math.round(Number(score)))),
+    training_status: ctx.trainingStatus || 'Building Base',
+    vo2max_estimate: typeof ctx.vo2maxEstimate === 'number' ? ctx.vo2maxEstimate : 50,
+    coach_comment:
+      ctx.coachComment ||
+      'AI 분석을 완료하지 못해 오늘 컨디션·훈련 부하에 맞는 후보 워크아웃을 자동으로 선정했습니다.',
+    selectedCategory: resolved.category,
+    categoryReason:
+      ctx.categoryReason ||
+      (resolved.zone
+        ? resolved.category + ' (' + resolved.zone + ') 기준 자동 추천'
+        : resolved.category + ' 기준 자동 추천'),
+    recommendations: recs,
+  };
 }
 
 /** MAX_TOKENS 등으로 잘린 응답에서 recommendations·핵심 필드만 추출 */
@@ -12482,7 +12739,13 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
   const userConditionScore = options.userConditionScore != null ? Math.max(55, Math.min(95, Math.round(Number(options.userConditionScore)))) : null;
   const userConditionName = options.userConditionName ? String(options.userConditionName).trim() : '';
   const contentDiv = document.getElementById('workoutRecommendationContent');
-  
+  var workoutDetailsForFallback = [];
+  var basisCategoryForFallback = '';
+  var targetZoneForFallback = '';
+  var effectiveConditionScoreForFallback = null;
+  var todayStrForFallback = '';
+  var challengeForFallback = 'Fitness';
+
   try {
     // 1. 사용자 기본 정보 수집 (운동 목적 강조)
     const ftp = user.ftp || 0;
@@ -12499,7 +12762,8 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       else if (normalized === 'pro') challenge = 'PRO';
       else if (normalized === 'fitness') challenge = 'Fitness';
     }
-    
+    challengeForFallback = challenge;
+
     // 사용자 정보 로깅 (디버깅용)
     console.log('[AI] 사용자:', user.id);
     
@@ -12754,7 +13018,8 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     // 모든 요청을 병렬로 실행하고 결과 수집
     const workoutDetailResults = await Promise.all(workoutDetailPromises);
     workoutDetails.push(...workoutDetailResults.filter(w => w !== null));
-    
+    workoutDetailsForFallback = workoutDetails;
+
     // 6. Gemini API에 전달할 프롬프트 생성
     // 훈련 이력 분석을 위한 상세 정보 포함
     // 로그 날짜는 로컬 기준 YYYY-MM-DD 사용 (toISOString은 UTC라 타임존 오류 발생)
@@ -12785,6 +13050,7 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
 
     // 최근 7일 이력 (단기 패턴) — 오늘 포함: 로컬 날짜 기준 [오늘-6일, 오늘] 7일간 합계 (UTC 사용 시 타임존 오류)
     const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    todayStrForFallback = todayStr;
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
@@ -12849,6 +13115,7 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       const conditionScoreMap = { '최상': 90, '좋음': 78, '보통': 65, '나쁨': 52 };
       effectiveConditionScore = conditionScoreMap[todayCondition] || 65;
     }
+    effectiveConditionScoreForFallback = effectiveConditionScore;
 
     // ── 대시보드 코치 추천 기반 OR 규칙 기반 카테고리 결정 ──────────────
     // 대시보드에서 coachData.recommended_workout이 전달된 경우 → 해당 카테고리 우선
@@ -12882,7 +13149,8 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       }
     }
     const hasBasis = !!basisCategory;
-    
+    basisCategoryForFallback = basisCategory;
+
     // 훈련 목적·등급 가중: Elite/PRO > Racing > GranFondo > Fitness. Grade 1·3 = 관리자(고급 워크아웃 선호)
     const gradeWeightNote = (grade === '1' || grade === '3')
       ? '등급 1·3(관리자/코치): 고급·고강도 워크아웃 선호에 가중을 두세요.'
@@ -12922,6 +13190,7 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       VO2Max: 'Z5',
     };
     const targetZoneHint = basisCategory ? (categoryToTargetZone[basisCategory] || '') : '';
+    targetZoneForFallback = targetZoneHint;
 
     const basisBlock = hasBasis ? `
 
@@ -13399,8 +13668,17 @@ ${hasBasis ? `고정: 카테고리 ${basisCategory}, 타겟 Zone "${targetZoneHi
     }
     
     if (!recommendationData || !recommendationData.recommendations || !recommendationData.recommendations.length) {
-      console.error('JSON 파싱 및 복구 실패. 원본 응답:', responseText);
-      throw new Error('AI 응답을 파싱할 수 없습니다. 응답이 불완전하거나 형식이 올바르지 않습니다.');
+      console.warn('[AI 추천] JSON 파싱 실패 — 결정론적 폴백 사용');
+      if (workoutDetails.length) {
+        recommendationData = stelvioBuildDeterministicRecommendationData(workoutDetails, {
+          basisCategory: basisCategoryForFallback,
+          targetZoneHint: targetZoneForFallback,
+          conditionScore: userConditionScore != null ? userConditionScore : effectiveConditionScoreForFallback,
+          challenge: challengeForFallback,
+        });
+      } else {
+        throw new Error('AI 응답을 파싱할 수 없습니다. 사용 가능한 워크아웃 후보가 없습니다.');
+      }
     }
     
     // selectedCategory 클렌징 — "Endurance (Z2)" → "Endurance"
@@ -13483,26 +13761,38 @@ ${hasBasis ? `고정: 카테고리 ${basisCategory}, 타겟 Zone "${targetZoneHi
       }
     }
 
-    deduped = deduped.filter(function (r) {
-      return (workoutDetails || []).some(function (w) {
-        return Number(w.id) === Number(r.workoutId);
-      });
+    var reconciled = stelvioReconcileAiRecommendations(deduped, workoutDetails, {
+      basisCategory: basisCategory,
+      selectedCategory: recommendationData.selectedCategory,
+      targetZoneHint: targetZoneHint,
+      conditionScore: userConditionScore != null ? userConditionScore : effectiveConditionScore,
+      challenge: challengeNorm,
     });
-    if (deduped.length < 3) {
-      var cleanCatForFill = stelvioCleanAiSelectedCategory(recommendationData.selectedCategory);
-      var fillZone =
-        typeof window.workoutCategoryIdToZoneTag === 'function'
-          ? window.workoutCategoryIdToZoneTag(cleanCatForFill)
-          : targetZoneHint || '';
-      deduped = stelvioBackfillAiRecommendations(
-        deduped,
-        workoutDetails,
-        cleanCatForFill || basisCategory,
-        fillZone
-      );
+    deduped = reconciled.recommendations;
+    if (reconciled.resolvedCategory) {
+      recommendationData.selectedCategory = reconciled.resolvedCategory;
+    }
+    if (reconciled.usedFallback && !recommendationData.coach_comment) {
+      recommendationData.coach_comment =
+        'AI 추천 ID·Zone 매칭을 보완하여 오늘 훈련에 맞는 워크아웃을 자동 선정했습니다.';
+    }
+    if (!deduped.length && workoutDetails.length) {
+      var deterministicPack = stelvioBuildDeterministicRecommendationData(workoutDetails, {
+        basisCategory: basisCategory,
+        selectedCategory: recommendationData.selectedCategory,
+        targetZoneHint: targetZoneHint,
+        conditionScore: userConditionScore != null ? userConditionScore : effectiveConditionScore,
+        coachComment: recommendationData.coach_comment,
+        categoryReason: recommendationData.categoryReason,
+        trainingStatus: recommendationData.training_status,
+        vo2maxEstimate: recommendationData.vo2max_estimate,
+      });
+      recommendationData = Object.assign(recommendationData, deterministicPack);
+      deduped = deterministicPack.recommendations;
+      console.warn('[AI 추천] Zone·author 매칭 실패 — 결정론적 3종 자동 추천');
     }
     if (!deduped.length) {
-      throw new Error('Zone·author 기준에 맞는 추천 워크아웃을 찾지 못했습니다. 워크아웃 목록의 author 필드를 확인해 주세요.');
+      throw new Error('추천할 워크아웃 후보가 없습니다. 워크아웃 목록을 불러온 뒤 다시 시도해 주세요.');
     }
 
     recommendationData.recommendations = deduped;
@@ -13528,7 +13818,38 @@ ${hasBasis ? `고정: 카테고리 ${basisCategory}, 타겟 Zone "${targetZoneHi
     
   } catch (error) {
     console.error('워크아웃 추천 오류:', error);
-    
+
+    if (workoutDetailsForFallback && workoutDetailsForFallback.length > 0) {
+      try {
+        var emergencyReco = stelvioBuildDeterministicRecommendationData(workoutDetailsForFallback, {
+          basisCategory: basisCategoryForFallback,
+          targetZoneHint: targetZoneForFallback,
+          conditionScore:
+            userConditionScore != null ? userConditionScore : effectiveConditionScoreForFallback,
+          challenge: challengeForFallback,
+        });
+        if (typeof window.setDashboardWorkoutRecommendationCache === 'function') {
+          var emergencyKey =
+            (typeof window.buildLogsSignatureForCache === 'function'
+              ? window.buildLogsSignatureForCache([])
+              : 'fallback') +
+            '_' +
+            (userConditionScore != null ? String(userConditionScore) : 'auto');
+          window.setDashboardWorkoutRecommendationCache(
+            user.id,
+            date,
+            emergencyKey,
+            emergencyReco,
+            workoutDetailsForFallback
+          );
+        }
+        displayWorkoutRecommendations(emergencyReco, workoutDetailsForFallback, date);
+        return;
+      } catch (fallbackErr) {
+        console.warn('[AI 추천] 결정론적 폴백 표시 실패:', fallbackErr);
+      }
+    }
+
     // 오류 메시지 파싱
     const errorMessage = error.message || '알 수 없는 오류가 발생했습니다.';
     const isOverloadError = errorMessage.includes('overloaded') || 
