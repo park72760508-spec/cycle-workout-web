@@ -12773,6 +12773,15 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
         : (basisCategory === 'Tempo' || basisCategory === 'SweetSpot')
           ? 'Z3~Z4 수준만 허용'
           : 'Z4~Z5 수준만 허용 (Recovery/Endurance 추천 금지)';
+    const categoryToTargetZone = {
+      Recovery: 'Z1',
+      Endurance: 'Z2',
+      Tempo: 'Z3',
+      SweetSpot: 'Z3~Z4',
+      Threshold: 'Z4',
+      VO2Max: 'Z5',
+    };
+    const targetZoneHint = basisCategory ? (categoryToTargetZone[basisCategory] || '') : '';
 
     const basisBlock = hasBasis ? `
 
@@ -12781,7 +12790,8 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
 - 시스템이 위 데이터를 분석하여 오늘의 훈련 카테고리를 **"${basisCategory}"**로 확정했습니다.
 - **이 카테고리 범위를 벗어난 워크아웃은 절대 추천하지 마세요.**
   - ${basisCategory}: ${allowedZoneGuide}
-- 위 카테고리 내에서 훈련 목적(${challenge})과 등급(${grade})을 적용해 구체적인 워크아웃 3개를 선정하세요.
+- **타겟 Zone(author 필터용):** "${targetZoneHint}" — 추천 후보는 반드시 \`author\` 필드에 이 Zone 문자열이 포함된 워크아웃만 사용하세요.
+- 위 카테고리·Zone 내에서 훈련 목적(${challenge})과 등급(${grade})을 적용해 구체적인 워크아웃 3개를 선정하세요.
 - 훈련 목적(challenge): **${challenge}**. ${challengeWeightNote}
 - 등급(grade): **${grade}**. ${gradeWeightNote}
 ` : '';
@@ -12818,9 +12828,11 @@ ${JSON.stringify(limitedHistory, null, 2)}
 - 훈련 빈도: ${totalSessions > 0 ? (totalSessions / 30).toFixed(1) : 0}회/일
 
 **사용 가능한 워크아웃 목록 (${limitedWorkouts.length}개):**
+※ 각 항목의 \`author\` 필드에 Zone 표기(예: "Z2", "Z3~Z4")가 포함되어 있습니다. 추천 시 반드시 이 필드로 Zone 매칭하세요.
 ${JSON.stringify(limitedWorkouts.map(w => ({
   id: w.id,
   title: w.title,
+  author: w.author || '',
   totalSeconds: w.totalSeconds,
   segmentCount: w.segments?.length || 0,
   // 세그먼트 정보는 간소화 (타입과 목표만)
@@ -12843,11 +12855,18 @@ ${JSON.stringify(limitedWorkouts.map(w => ({
    - 평균 파워(${avgPower}W, FTP 대비 ${ftp > 0 ? ((avgPower / ftp) * 100).toFixed(1) : 0}%)를 기준으로 현재 체력 수준을 평가하세요.
    - 훈련 일정의 공백이나 연속 훈련 패턴을 확인하여 오늘의 적절한 강도를 결정하세요.
 
-3. **카테고리 선정**:
-${hasBasis ? `   - 🎯 **고정**: 오늘의 추천 타입 "${basisRaw}"에 따라 카테고리는 **${basisCategory}** 로 고정합니다. 이 카테고리 내에서만 워크아웃 3개를 추천하세요. 훈련 목적(${challenge})·등급(${grade})에 가중을 두어 구체 워크아웃을 선정하세요.` : `   - ⚠️ **중요**: 사용자의 운동 목적은 "${challenge}"입니다. 이 목적에 맞는 훈련을 반드시 추천해야 합니다.
-   - 위 분석을 바탕으로 사용자의 운동 목적(${challenge})과 현재 상태를 종합하여 오늘의 운동 카테고리(Endurance, Tempo, SweetSpot, Threshold, VO2Max, Recovery 중 하나)를 실질적으로 선정하세요.
-   - 단순히 목적만 고려하지 말고, 실제 훈련 부하와 회복 상태를 우선 고려하세요.
-   - 과훈련 위험이 있으면 Recovery, 충분한 회복이 있었다면 적절한 강도 훈련을 추천하세요.`}
+3. **카테고리 및 Zone 선정** (basis가 있으면 해당 카테고리·Zone 고정, 없으면 아래 기준에서 분석하여 선택):
+   - **[Zone 분류 기준 — 카테고리↔Zone 매핑]**
+     * Active Recovery → **Z1**
+     * Endurance → **Z2**
+     * Tempo → **Z3**
+     * Sweet Spot → **Z3~Z4**
+     * Threshold → **Z4**
+     * VO2 Max → **Z5**
+   - 사용자의 피로도, 훈련 이력, 운동 목적(challenge)을 종합 분석하여 오늘 수행할 최적의 **타겟 카테고리**와 **타겟 Zone 문자열**(예: "Z2", "Z4", "Z3~Z4")을 결정하세요.
+   - 단순히 목적만 고려하지 말고, 실제 훈련 부하와 회복 상태를 우선 고려하세요. 과훈련 위험이 있으면 Recovery(Z1), 충분한 회복이 있었다면 목적에 맞는 적절한 강도 Zone을 선택하세요.
+${hasBasis ? `   - 🎯 **고정**: 오늘의 추천 타입 "${basisRaw || basisSourceLabel}"에 따라 카테고리는 **${basisCategory}**, 타겟 Zone은 **"${targetZoneHint}"** 로 고정합니다. 이 Zone·카테고리 범위를 벗어난 워크아웃은 추천하지 마세요. 훈련 목적(${challenge})·등급(${grade})에 가중을 두어 구체 워크아웃을 선정하세요.` : `   - ⚠️ **중요**: 사용자의 운동 목적은 "${challenge}"입니다. 이 목적에 맞는 Zone·카테고리를 반드시 선택해야 합니다.
+   - 위 분석을 바탕으로 카테고리(Active Recovery, Endurance, Tempo, Sweet Spot, Threshold, VO2 Max, Recovery 중 하나)와 대응 Zone을 실질적으로 선정하세요.`}
 ${challenge === 'Racing' ? `
 **레이싱 목적 특별 지침:**
 - 레이싱 목적의 사용자이므로 경기 성능 향상에 초점을 맞춘 고강도 훈련을 우선 추천하세요.
@@ -12910,27 +12929,25 @@ ${challenge === 'PRO' ? `
 - 프로 선수의 높은 훈련 소화 능력을 고려하여 강도가 높은 워크아웃을 추천하세요.
 - 경기 일정과 시즌을 고려한 훈련 계획을 제안하세요.
 ` : ''}
-4. **워크아웃 추천**:
-   - ⚠️⚠️⚠️ **최우선 중요사항**: 사용자의 운동 목적은 "${challenge}"입니다. 
+4. **워크아웃 추천 (Zone — author 매칭 필수)**:
+   - **[필터링 절대 규칙]**: 제공된 '사용 가능한 워크아웃 목록' 중, 3번에서 결정한 **타겟 Zone 문자열**(예: "Z1", "Z2", "Z3", "Z3~Z4", "Z4", "Z5")이 워크아웃의 **\`author\` 필드 텍스트에 반드시 포함**된 항목만 추천 후보로 삼으세요.
+     * 예: 타겟 Zone이 "Z2"이면 author에 "Z2"가 포함된 워크아웃만 후보. "Z4"만 있는 워크아웃은 제외.
+     * 예: 타겟 Zone이 "Z3~Z4"이면 author에 "Z3~Z4" 또는 동일 범위를 나타내는 표기가 포함된 워크아웃만 후보.
+     * **목적(challenge)과 Zone이 모두 일치하지 않는 워크아웃은 추천 금지.** author Zone 불일치·목적 불일치 항목은 recommendations에 넣지 마세요.
+${hasBasis ? `     * 🎯 basis 고정 시 타겟 Zone: **"${targetZoneHint}"** (${basisCategory} 카테고리).` : ''}
+   - ⚠️⚠️⚠️ **최우선 중요사항**: 사용자의 운동 목적은 "${challenge}"입니다.
      * 반드시 이 목적에 맞는 워크아웃만 추천해야 합니다.
      * 목적과 무관한 워크아웃은 절대 추천하지 마세요.
      * 예를 들어, Racing 목적 사용자에게 Fitness 목적의 저강도 훈련을 추천하면 안 됩니다.
      * 각 목적에 맞는 특화된 훈련을 추천해야 합니다.
 ${challenge === 'Fitness' ? `
-   - **Fitness 입문자 접근성 (필수)**: 훈련 목적이 Fitness인 경우에만, **워크아웃 title에 (Lite)가 포함된 카테고리 워크아웃을 1순위로 반드시 포함**하여 추천하세요. 최소 1개 이상 (Lite) 워크아웃을 추천에 넣어 입문자 접근성을 높이세요.
+   - **Fitness 입문자 접근성 (필수)**: 훈련 목적이 Fitness인 경우에만, **워크아웃 title에 (Lite)가 포함된 카테고리 워크아웃을 1순위로 반드시 포함**하여 추천하세요. 최소 1개 이상 (Lite) 워크아웃을 추천에 넣어 입문자 접근성을 높이세요. (Lite) 후보도 author Zone 필터를 통과해야 합니다.
 ` : ''}
-   - **추천 순서(강도 순)**: 1번 = 가장 약한 강도(가벼운 훈련), 2번 = 중간 강도, 3번 = 가장 강한 강도(부하가 큰 훈련). 반드시 이 순서로 제시하세요.
+   - **추천 순서(강도 순)**: 1번 = 가장 약한 강도(가벼운 훈련), 2번 = 중간 강도, 3번 = 가장 강한 강도(부하가 큰 훈련·TSS 기준). 반드시 이 순서로 제시하세요.
    - **서로 다른 워크아웃**: 3개의 추천은 반드시 서로 다른 워크아웃이어야 합니다. 동일한 workoutId를 두 번 이상 추천하지 마세요. 1번·2번·3번 각각 다른 workoutId를 사용하세요.
-${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basisRaw}" 기반) 워크아웃 중에서 **목적(${challenge})·등급(${grade}) 가중**을 적용해, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${challenge === 'Fitness' ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}` : `   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 **목적(${challenge})**에 맞는, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${challenge === 'Fitness' ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}`}
-   
-   - 각 추천 워크아웃에 대해 **구체적이고 실질적인 추천 이유**를 제공하세요:
-     * 왜 이 워크아웃이 오늘 적합한지 (훈련 부하, 회복 상태, **목적(${challenge}) 달성 관점**)
-     * 이 워크아웃이 사용자의 목적(${challenge}) 달성에 어떻게 도움이 되는지
-     * 예상 TSS와 훈련 강도
-     * 이 워크아웃을 수행했을 때의 기대 효과
-     * 주의사항이나 조정이 필요한 부분
+${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — author Zone·목적(${challenge})·등급(${grade}) 가중을 모두 만족하는 후보 중, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${challenge === 'Fitness' ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}` : `   - 선정된 카테고리·Zone에 해당하고 author 필터를 통과한 워크아웃 중, 사용자 상태와 **목적(${challenge})**에 맞는, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${challenge === 'Fitness' ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}`}
+   - **추천 이유(reason) 작성 규칙**: 각 reason에는 (1) 오늘 선택한 **Zone·카테고리 근거**, (2) 해당 워크아웃의 **author Zone이 타겟과 일치함**, (3) **목적(${challenge})·오늘 컨디션**에 부합하는 이유, (4) 예상 TSS·훈련 강도·기대 효과·주의사항을 구체적으로 기술하세요.
    - 형식적인 설명이 아닌, 실제로 훈련할 때 참고할 수 있는 구체적인 가이드를 제공하세요.
-   - 사용자의 목적(${challenge})과 맞지 않는 워크아웃은 추천하지 마세요.
 
 5. **컨디션 점수 (Condition Score) 평가 기준 (필수)**:
    - **의미**: 최근 훈련 부하(TSS)·휴식·피로 누적을 반영한 "오늘의 몸 상태" 지표입니다. 100점은 이상적·극히 드문 경우에만 해당합니다.
@@ -12940,6 +12957,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
 
 6. **최종 확인 (필수)**:
    - 추천 개수: 반드시 **정확히 3개**의 워크아웃을 제시하세요.
+   - **author Zone 검증**: 3개 모두 3번에서 정한 타겟 Zone이 \`author\`에 포함되어야 합니다.
    - **추천 강도 순서**: 1번(약) → 2번(중) → 3번(강). 1번이 가장 가벼운 훈련, 3번이 가장 부하가 큰 훈련이어야 합니다.
    - **서로 다른 워크아웃**: 1번·2번·3번의 workoutId는 **각각 달라야 합니다**. 같은 workoutId를 두 번 사용하면 안 됩니다.
    - (예상 TSS는 화면에서 자동으로 표시됩니다.)
