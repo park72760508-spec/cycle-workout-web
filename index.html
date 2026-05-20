@@ -6377,7 +6377,10 @@
             { label: 'Endurance', segment_type: 'tempo', duration_sec: 1800, target_type: 'ftp_pct', target_value: 65 },
             { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
           ];
-        } else if (/VO2\s*Max|VO2max|VO2Max|\(Z5\)|\bZ5\b/i.test(workoutType)) {
+        } else if (
+          (typeof window.textIndicatesZ5Vo2MaxCategory === 'function' && window.textIndicatesZ5Vo2MaxCategory(workoutType)) ||
+          /VO2\s*Max|VO2max|VO2Max|\(Z5\)|\bZ5\b/i.test(workoutType)
+        ) {
           segments = [
             { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 60 },
             { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
@@ -22098,7 +22101,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           if (allowed.indexOf(rw) !== -1) {
             recommended_workout = rw;
           } else if (rw) {
-            if (rw.indexOf('(Z5)') !== -1 || rw.indexOf('Z5') !== -1 || rw.toLowerCase().indexOf('vo2max') !== -1) recommended_workout = allowed[4];
+            if (
+              (typeof window.textIndicatesZ5Vo2MaxCategory === 'function' && window.textIndicatesZ5Vo2MaxCategory(rw)) ||
+              rw.indexOf('(Z5)') !== -1 ||
+              rw.indexOf('Z5') !== -1 ||
+              rw.toLowerCase().indexOf('vo2max') !== -1
+            ) recommended_workout = allowed[4];
             else if (rw.indexOf('(Z4)') !== -1 || rw.indexOf('Z4') !== -1 || rw.toLowerCase().indexOf('threshold') !== -1) recommended_workout = allowed[3];
             else if (rw.indexOf('(Z3)') !== -1 || rw.indexOf('Z3') !== -1 || rw.toLowerCase().indexOf('tempo') !== -1) recommended_workout = allowed[2];
             else if (rw.indexOf('(Z2)') !== -1 || rw.indexOf('Z2') !== -1 || rw.toLowerCase().indexOf('endurance') !== -1) recommended_workout = allowed[1];
@@ -22115,7 +22123,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               if (allowed.indexOf(workoutType) !== -1) {
                 normalizedType = workoutType;
               } else if (workoutType) {
-                if (workoutType.indexOf('(Z5)') !== -1 || workoutType.indexOf('Z5') !== -1 || workoutType.toLowerCase().indexOf('vo2max') !== -1) normalizedType = allowed[4];
+                if (
+                  (typeof window.textIndicatesZ5Vo2MaxCategory === 'function' && window.textIndicatesZ5Vo2MaxCategory(workoutType)) ||
+                  workoutType.indexOf('(Z5)') !== -1 ||
+                  workoutType.indexOf('Z5') !== -1 ||
+                  workoutType.toLowerCase().indexOf('vo2max') !== -1
+                ) normalizedType = allowed[4];
                 else if (workoutType.indexOf('(Z4)') !== -1 || workoutType.indexOf('Z4') !== -1 || workoutType.toLowerCase().indexOf('threshold') !== -1) normalizedType = allowed[3];
                 else if (workoutType.indexOf('(Z3)') !== -1 || workoutType.indexOf('Z3') !== -1 || workoutType.toLowerCase().indexOf('tempo') !== -1) normalizedType = allowed[2];
                 else if (workoutType.indexOf('(Z2)') !== -1 || workoutType.indexOf('Z2') !== -1 || workoutType.toLowerCase().indexOf('endurance') !== -1) normalizedType = allowed[1];
