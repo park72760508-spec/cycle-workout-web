@@ -5011,7 +5011,16 @@ function OpenRidingCreateForm(props) {
   /* 폼 루트 z-0, 하단 CTA는 style.css에서 z-5(고정 로고바 10000 미만)로 본문보다만 위 — 스크롤 시 고정바 뒤로 가려짐 */
   return (
     <>
-    <form ref={formRef} id="open-riding-ride-form" className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0" onSubmit={submit} noValidate>
+    <form
+      ref={formRef}
+      id="open-riding-ride-form"
+      className={
+        'open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 text-sm text-slate-700 relative z-0 ' +
+        (editRideId ? 'pb-28 ' : 'pb-1 ')
+      }
+      onSubmit={submit}
+      noValidate
+    >
       {!storage ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/95 text-amber-900 text-xs px-3 py-2 leading-snug m-0">
           Firebase Storage에 연결되지 않았습니다. GPX 파일은 업로드·저장되지 않습니다. 페이지를 새로고침한 뒤에도 동일하면 Firebase Console에서 Storage 사용 여부와 보안 규칙(쓰기 허용)을 확인해 주세요.
@@ -5659,7 +5668,30 @@ function OpenRidingCreateForm(props) {
             {isBusy ? '저장 중…' : '생성'}
           </button>
         </div>
-      ) : null}
+      ) : (
+        <div className="open-riding-bottom-actions open-riding-group-form-footer open-riding-edit-form-footer fixed left-0 right-0 pt-2 bg-[rgba(255,255,255,0.97)] border-t border-slate-200/90 backdrop-blur-[6px]">
+          <div className="w-[94%] mx-auto flex gap-2">
+            <button
+              type="button"
+              className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl border border-slate-300 bg-white text-slate-800 font-medium"
+              disabled={isBusy}
+              onClick={function () {
+                if (typeof onEditNavDetail === 'function') onEditNavDetail();
+              }}
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="open-riding-action-btn flex-1 min-w-0 h-11 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50"
+              disabled={isBusy || editGlassNavPastLocked}
+              title={editGlassNavPastLocked ? '라이딩 일정일이 지나 수정·저장할 수 없습니다.' : undefined}
+            >
+              {isBusy ? '저장 중…' : '저장'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {dateModalOpen ? (
         <div
@@ -5780,7 +5812,10 @@ function OpenRidingCreateForm(props) {
     {editRideId && isBusy ? (
       <div
         className="fixed left-1/2 z-[99990] flex -translate-x-1/2 flex-col items-center gap-1.5 px-4 pointer-events-none"
-        style={{ bottom: 'calc(88px + env(safe-area-inset-bottom, 0px))' }}
+        style={{
+          bottom:
+            'calc(16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-fixed-height, 66px) + 72px)'
+        }}
       >
         <div className="flex flex-col items-center gap-1 rounded-2xl border border-emerald-200/90 bg-white/95 px-4 py-3 shadow-lg">
           <span
@@ -5793,20 +5828,6 @@ function OpenRidingCreateForm(props) {
           <span className="text-[11px] font-semibold text-emerald-800">저장 중…</span>
         </div>
       </div>
-    ) : null}
-    {editRideId ? (
-      <OpenRidingEditGlassNav
-        onMoim={typeof onEditNavMoim === 'function' ? onEditNavMoim : function () {}}
-        onEdit={typeof onEditNavDetail === 'function' ? onEditNavDetail : function () {}}
-        onDelete={typeof onEditNavDelete === 'function' ? onEditNavDelete : function () {}}
-        onSave={function () {
-          if (formRef.current && typeof formRef.current.requestSubmit === 'function') {
-            formRef.current.requestSubmit();
-          }
-        }}
-        isBusy={isBusy}
-        hostToolbarLocked={editGlassNavPastLocked}
-      />
     ) : null}
     </>
   );
@@ -10747,13 +10768,9 @@ function OpenRidingRoomApp(props) {
         editRideId={detailRideId}
         onCreated={function () { setView('main'); }}
         onEditSaved={function () { setView('detail'); }}
-        onEditNavMoim={function () {
-          setView('main');
-        }}
         onEditNavDetail={function () {
           setView('detail');
         }}
-        onEditNavDelete={handleEditNavDeleteRide}
       />
     );
   } else if (view === 'detail' && detailRideId) {
@@ -10855,6 +10872,29 @@ function OpenRidingRoomApp(props) {
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
+          ) : view === 'edit' && detailRideId ? (
+            <button
+              type="button"
+              className="open-riding-action-btn shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100/90 -ml-0.5"
+              onClick={function () {
+                setView('detail');
+              }}
+              aria-label="세부 내용으로 뒤로"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
           ) : (
             <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
           )}
@@ -10874,7 +10914,8 @@ function OpenRidingRoomApp(props) {
             ? 'open-riding-app-body--riding-detail '
             : 'pt-2 ') +
           (useGlassBottomNavSpacer
-            ? 'open-riding-app-body--glass-nav-spacer'
+            ? 'open-riding-app-body--glass-nav-spacer' +
+              (view === 'edit' && detailRideId ? ' open-riding-app-body--ride-edit' : '')
             : 'pb-[calc(1rem+env(safe-area-inset-bottom,0px))]')
         }
       >
@@ -10889,7 +10930,8 @@ function OpenRidingRoomApp(props) {
         view === 'groupCreate' ||
         view === 'groupEdit' ||
         (view === 'groupDetail' && detailGroupId) ||
-        (view === 'detail' && detailRideId)) ? (
+        (view === 'detail' && detailRideId) ||
+        (view === 'edit' && detailRideId)) ? (
         <OpenRidingBottomGlassNav
           navVariant={
             view === 'filter'
