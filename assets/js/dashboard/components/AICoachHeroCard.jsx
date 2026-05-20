@@ -126,7 +126,9 @@
     var colors = getScoreColor(score);
     var commentText = streamingComment || coachData.coach_comment || '';
     var workoutType = coachData.recommended_workout || 'Active Recovery (Z1)';
-    var hasError = !!(coachData.error_reason);
+    var isQuotaInfo =
+      coachData.gemini_quota_exceeded === true || coachData.analysis_source === 'deterministic_quota';
+    var hasError = !!(coachData.error_reason) && !isQuotaInfo;
 
     var CircularEl = CircularProgress && typeof CircularProgress === 'function'
       ? React.createElement(CircularProgress, { value: score, size: 140, strokeWidth: 10 })
@@ -213,11 +215,30 @@
             className: 'inline-block w-2 h-4 ml-0.5 align-middle bg-blue-500 animate-pulse'
           }))
         ),
-        coachData.quota_notice && React.createElement('div', {
-          className: 'mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200'
-        },
-          React.createElement('p', { className: 'text-xs text-amber-800' }, coachData.quota_notice)
-        ),
+        isQuotaInfo &&
+          React.createElement(
+            'div',
+            {
+              className: 'mb-4 p-4 rounded-xl border border-sky-200',
+              style: { background: 'linear-gradient(135deg, #f0f9ff 0%, #eff6ff 100%)' },
+              role: 'status',
+              'aria-live': 'polite'
+            },
+            React.createElement(
+              'p',
+              { className: 'text-sm font-semibold text-sky-900 mb-2 flex items-center gap-2' },
+              React.createElement('span', { 'aria-hidden': 'true' }, 'ℹ️'),
+              coachData.quota_notice_title || 'AI 코멘트 안내 — 분석 오류가 아닙니다'
+            ),
+            React.createElement(
+              'p',
+              { className: 'text-xs text-sky-900 leading-relaxed mb-2' },
+              coachData.quota_notice ||
+                'Gemini API 무료 한도(일 20회)가 소진되어 AI 코멘트 대신 훈련 데이터 기반 안내를 표시합니다.'
+            ),
+            coachData.quota_notice_detail &&
+              React.createElement('p', { className: 'text-xs text-sky-800 leading-relaxed' }, coachData.quota_notice_detail)
+          ),
         hasError && React.createElement('div', {
           className: 'mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200'
         },
@@ -246,26 +267,33 @@
               React.createElement('span', { className: 'text-base font-bold' }, workoutType)
             )
           ),
-          hasError && React.createElement('button', {
-            type: 'button',
-            onClick: function(e) {
-              if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-              if (e && typeof e.preventDefault === 'function') e.preventDefault();
-              try {
-                var uid = String(userProfile.id || '');
-                if (uid) {
-                  Object.keys(localStorage).forEach(function(k) {
-                    if (k.indexOf('stelvio_dashboard_ai_coach_') === 0 && k.indexOf('_' + uid + '_') !== -1) {
-                      localStorage.removeItem(k);
-                    }
-                  });
-                }
-              } catch (e2) {}
-              if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
-              if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
+          (hasError || isQuotaInfo) &&
+            React.createElement('button', {
+              type: 'button',
+              onClick: function(e) {
+                if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (e && typeof e.preventDefault === 'function') e.preventDefault();
+                try {
+                  var uid = String(userProfile.id || '');
+                  if (uid) {
+                    Object.keys(localStorage).forEach(function(k) {
+                      if (k.indexOf('stelvio_dashboard_ai_coach_') === 0 && k.indexOf('_' + uid + '_') !== -1) {
+                        localStorage.removeItem(k);
+                      }
+                    });
+                  }
+                } catch (e2) {}
+                if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
+                if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
+              },
+              className:
+                'py-3.5 px-5 rounded-2xl font-semibold active:scale-[0.98] min-h-[52px] ' +
+                (isQuotaInfo && !hasError
+                  ? 'bg-sky-100 text-sky-900 hover:bg-sky-200 border border-sky-200'
+                  : 'bg-amber-100 text-amber-800 hover:bg-amber-200')
             },
-            className: 'py-3.5 px-5 rounded-2xl font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200 active:scale-[0.98] min-h-[52px]'
-          }, '다시 분석')
+              isQuotaInfo && !hasError ? 'AI 코멘트 다시 시도' : '다시 분석'
+            )
         )
       )
     );
