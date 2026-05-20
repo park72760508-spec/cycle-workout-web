@@ -4286,7 +4286,7 @@
           tierSummary={heptagonModalShowSummary}
           genderLabel={labelForGender(heptagonModalGender)}
           categoryLabel={labelForCategory(heptagonModalCategory)}
-          periodLabel="최근 4주 피크 파워 (상위 3주 합산)(월)"
+          periodLabel="최근 4주 최고 기록(월)"
           boardState={heptagonBoardForModal}
           boardFilterGender={heptagonModalGender}
           boardFilterCategory={heptagonModalCategory}
@@ -4437,7 +4437,7 @@
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(124, 58, 237, 0.45)', border: '1px solid #6d28d9' }} />
-              <span>최근 4주 피크 파워 (상위 3주 합산)</span>
+              <span>최근 4주 최고 기록</span>
             </div>
           </div>
           <div
