@@ -121,6 +121,28 @@ function determineDeterministicWorkoutCategory(conditionScore, last7DaysTSS, wee
   };
 }
 
+/** AI recommended_workout → Zone 포함 표준 문자열 (예: "VO2 Max" → "VO2 Max (Z5)") */
+function normalizeCoachRecommendedWorkout(aiValue, workoutDecision) {
+  var raw = String(aiValue || '').trim();
+  if (!raw) raw = 'Active Recovery (Z1)';
+  if (typeof window.stelvioParseCoachBasisRecommendedWorkout === 'function') {
+    var parsed = window.stelvioParseCoachBasisRecommendedWorkout(raw);
+    if (parsed.label) return parsed.label;
+  }
+  if (/\(Z[1-5]/i.test(raw)) return raw;
+  var zone =
+    typeof window.extractZoneTagFromCategoryOrText === 'function'
+      ? window.extractZoneTagFromCategoryOrText(raw)
+      : '';
+  var allowed = (workoutDecision && workoutDecision.allowedWorkouts) || [];
+  var i;
+  for (i = 0; i < allowed.length; i++) {
+    if (zone && allowed[i].indexOf(zone) >= 0) return allowed[i];
+  }
+  if (allowed.length > 0) return allowed[0];
+  return raw;
+}
+
 /** 저사양/모바일 감지: 타임아웃·재시도 연장용 */
 function isLowSpecOrMobile() {
   if (typeof window !== 'undefined' && typeof window.isMobile === 'function' && window.isMobile()) return true;
@@ -245,6 +267,9 @@ Task Requirements:
 2. **Training Status:** 현재 상태를 한 단어로 정의하세요 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
 3. **Coach Comment:** 사용자의 이름을 부르며, 최근 7일 TSS, 주간 평균 TSS, 현재 컨디션 점수와 함께 **현재 추정 VO2 Max({{calculatedVO2Max}})** 수치를 활용하여 훈련 성과를 언급하고 동기를 부여하는 조언을 한국어(경어체)로 작성하세요. 3~4문장 분량으로 상세하고 충분히 작성하고, 절대 문장을 도중에 끊지 마세요.
 4. **Recommended Workout:** 오늘 수행해야 할 추천 훈련 타입을 제안하세요.
+   - **반드시** 시스템이 결정한 허용 목록 중 하나를 **Zone 포함 전체 문자열**로 출력하세요: {{allowedWorkoutTypes}}
+   - 예: "VO2 Max (Z5)", "Active Recovery (Z1)" — "VO2 Max"처럼 Zone 없이 단독 출력 금지
+   - 규칙 기반 권장 카테고리: {{determinedWorkoutCategory}} ({{workoutCategoryReason}})
 
 Output Format (JSON Only):
 - vo2max_estimate는 시스템에서 제공한 값 **{{calculatedVO2Max}}**를 그대로 사용하세요. AI가 계산하지 않습니다.
@@ -253,7 +278,7 @@ Output Format (JSON Only):
   "training_status": "Ready to Race",
   "vo2max_estimate": {{calculatedVO2Max}},
   "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 현재 추정 VO2 Max는 {{calculatedVO2Max}}로, 컨디션과 잘 맞습니다. 오늘은 가벼운 리커버리로 조절하세요.",
-  "recommended_workout": "Active Recovery (Z1)"
+  "recommended_workout": "VO2 Max (Z5)"
 }
 `;
 
@@ -516,7 +541,10 @@ Output Format (JSON Only):
             training_status: result.training_status || 'Building Base',
             vo2max_estimate: calculatedVO2Max,
             coach_comment: result.coach_comment,
-            recommended_workout: result.recommended_workout || 'Active Recovery (Z1)'
+            recommended_workout: normalizeCoachRecommendedWorkout(
+              result.recommended_workout,
+              workoutDecision
+            ),
           };
         }
         lastError = new Error('응답이 잘렸거나 코멘트가 불완전합니다.');
@@ -533,7 +561,10 @@ Output Format (JSON Only):
         training_status: result.training_status || 'Building Base',
         vo2max_estimate: calculatedVO2Max,
         coach_comment: result.coach_comment || (userName + '님, 오늘도 화이팅하세요!'),
-        recommended_workout: result.recommended_workout || 'Active Recovery (Z1)'
+        recommended_workout: normalizeCoachRecommendedWorkout(
+          result.recommended_workout,
+          workoutDecision
+        ),
       };
     } catch (err) {
       lastError = err;
