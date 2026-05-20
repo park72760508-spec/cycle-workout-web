@@ -6377,7 +6377,19 @@
             { label: 'Endurance', segment_type: 'tempo', duration_sec: 1800, target_type: 'ftp_pct', target_value: 65 },
             { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
           ];
-        } else if (workoutType.indexOf('Tempo (Z3)') !== -1 || workoutType.indexOf('Z3') !== -1) {
+        } else if (/VO2\s*Max|VO2max|VO2Max|\(Z5\)|\bZ5\b/i.test(workoutType)) {
+          segments = [
+            { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 60 },
+            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
+            { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
+          ];
+        } else if (workoutType.indexOf('Tempo (Z3)') !== -1 || (/\bZ3\b/.test(workoutType) && !/Z3\s*[~\-–]\s*Z\s*4/i.test(workoutType))) {
           // Tempo: 워밍업 + 중강도 인터벌 + 쿨다운
           segments = [
             { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 60 },
@@ -6399,21 +6411,6 @@
             { label: 'Threshold', segment_type: 'threshold', duration_sec: 600, target_type: 'ftp_pct', target_value: 100 },
             { label: 'Rest', segment_type: 'rest', duration_sec: 300, target_type: 'ftp_pct', target_value: 50 },
             { label: 'Threshold', segment_type: 'threshold', duration_sec: 600, target_type: 'ftp_pct', target_value: 100 },
-            { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
-          ];
-        } else if (workoutType.indexOf('VO2max Intervals (Z5)') !== -1 || workoutType.indexOf('Z5') !== -1) {
-          // VO2max: 워밍업 + 초고강도 인터벌 + 쿨다운
-          segments = [
-            { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 60 },
-            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
-            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
-            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
-            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
-            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
-            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
-            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
-            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
-            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
             { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
           ];
         } else {
@@ -6878,24 +6875,37 @@
                 
                 // 기존 단일 추천이 있으면 배열로 변환
                 if (recommendedWorkouts.length === 0 && analysis.recommended_workout) {
+                  var primaryParsed =
+                    typeof window.stelvioParseCoachBasisRecommendedWorkout === 'function'
+                      ? window.stelvioParseCoachBasisRecommendedWorkout(analysis.recommended_workout)
+                      : { label: analysis.recommended_workout, zone: '' };
                   recommendedWorkouts = [
-                    { rank: 1, workout_type: analysis.recommended_workout, description: 'AI 추천 훈련' }
+                    {
+                      rank: 1,
+                      workout_type: primaryParsed.label || analysis.recommended_workout,
+                      description: 'AI 추천 훈련',
+                    },
                   ];
                 }
                 
-                // 3개 미만이면 기본값으로 채우기
+                // 3개 미만: 1순위와 동일 Zone(Z1~Z5) 내 타입으로만 채움 (Z2/Z3 기본값 채우기 금지)
                 while (recommendedWorkouts.length < 3) {
-                  var defaultTypes = ['Active Recovery (Z1)', 'Endurance (Z2)', 'Tempo (Z3)'];
-                  var defaultDescs = [
-                    '회복 훈련',
-                    '지구력 훈련',
-                    '중강도 훈련'
-                  ];
+                  var primaryType = (recommendedWorkouts[0] && recommendedWorkouts[0].workout_type) || 'Endurance (Z2)';
+                  var primaryZone =
+                    typeof window.stelvioExtractZoneTagFromText === 'function'
+                      ? window.stelvioExtractZoneTagFromText(primaryType)
+                      : (typeof window.extractZoneTagFromCategoryOrText === 'function'
+                          ? window.extractZoneTagFromCategoryOrText(primaryType)
+                          : '');
+                  var zoneLadder =
+                    typeof window.stelvioSameZoneWorkoutTypeLadder === 'function'
+                      ? window.stelvioSameZoneWorkoutTypeLadder(primaryZone)
+                      : ['Endurance (Z2)', 'Endurance (Z2)', 'Tempo (Z3)'];
                   var idx = recommendedWorkouts.length;
                   recommendedWorkouts.push({
                     rank: idx + 1,
-                    workout_type: defaultTypes[idx] || defaultTypes[0],
-                    description: defaultDescs[idx] || defaultDescs[0]
+                    workout_type: zoneLadder[idx] || zoneLadder[0],
+                    description: '동일 Zone(' + (primaryZone || '?') + ') 보완 추천',
                   });
                 }
                 
