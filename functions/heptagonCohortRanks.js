@@ -420,7 +420,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
     const existingSnap = await db
       .collection(HEPTAGON_COHORT_COL)
       .where("monthKey", "==", monthKey)
-      .select("boardRank", "asOfSeoul")
+      .select("boardRank", "asOfSeoul", "yesterdayOfficialBoardRank")
       .get();
     for (const doc of existingSnap.docs) {
       const d = doc.data();
@@ -428,6 +428,10 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
         prevRankMap.set(doc.id, {
           boardRank: Math.floor(Number(d.boardRank)),
           asOfSeoul: d.asOfSeoul || "",
+          yesterdayOfficialBoardRank:
+            d.yesterdayOfficialBoardRank != null && isFinite(Number(d.yesterdayOfficialBoardRank))
+              ? Math.floor(Number(d.yesterdayOfficialBoardRank))
+              : null,
         });
       }
     }
@@ -518,19 +522,31 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
         const crSynth = comprehensiveRankFromSumPosition100(r.sumPositionScores, L);
         const crSynthI = isFinite(crSynth) ? Math.max(1, Math.min(L, Math.round(crSynth))) : null;
 
-        // 전날 순위 등락 계산: 당일 재실행 시 previousBoardRank 를 덮어쓰지 않음(merge 유지)
+        /** 전일 23:35 정규 집계 순위(yesterdayOfficial) 고정 — 당일 수동 재집계 시에도 덮어쓰지 않음 */
         const existing = prevRankMap.get(docId);
         const rankChangeFields = {};
-        if (existing && existing.asOfSeoul !== todayYmd) {
-          // 새 날짜 집계 — 기존 boardRank 를 전날 순위로 보존
-          rankChangeFields.previousBoardRank = existing.boardRank;
-          rankChangeFields.rankChange = existing.boardRank - boardRank; // 양수=상승, 음수=하락, 0=보합
+        let yesterdayOfficial = null;
+        if (existing) {
+          if (existing.asOfSeoul && existing.asOfSeoul !== todayYmd) {
+            yesterdayOfficial = existing.boardRank;
+          } else if (
+            existing.yesterdayOfficialBoardRank != null &&
+            isFinite(Number(existing.yesterdayOfficialBoardRank))
+          ) {
+            yesterdayOfficial = Math.floor(Number(existing.yesterdayOfficialBoardRank));
+          }
+        }
+        if (yesterdayOfficial != null && yesterdayOfficial >= 1) {
+          rankChangeFields.yesterdayOfficialBoardRank = yesterdayOfficial;
+          rankChangeFields.previousBoardRank = yesterdayOfficial;
+          rankChangeFields.rankChange = yesterdayOfficial - boardRank;
         } else if (!existing) {
-          // 최초 등록 — 비교 대상 없음
           rankChangeFields.previousBoardRank = null;
           rankChangeFields.rankChange = null;
+          rankChangeFields.yesterdayOfficialBoardRank = null;
+        } else {
+          /* 당일 재집계: yesterdayOfficial·등락은 merge 유지, boardRank 등만 갱신 */
         }
-        // existing && asOfSeoul === todayYmd 인 경우: 당일 재실행 → 필드 미포함(merge로 기존값 유지)
 
         batch.set(
           ref,

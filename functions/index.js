@@ -4995,28 +4995,31 @@ function normalizePeakRankHistoryDoc(d) {
 }
 
 /**
- * 비-GC 탭 순위 등락: GC 헵타곤과 같이 **23:00 집계로 순위가 실제 변경될 때만** 재계산.
- * 달력만 바뀌고(자정) 순위가 동일하면 전날 23:00에 저장된 등락을 유지한다.
- *
- * @param {import('firebase-admin').firestore.Firestore} db
- * @param {Record<string, any[]>} byCategory
- * @param {string} historyKey
+ * 전일 23:00 정규 집계 시점의 공식 순위 맵(prevDay)을 등락 비교 기준으로 고정한다.
+ * 당일 수동 집계로 ranksByCategory만 바뀌어도 prevDay는 다음 정규 집계 전까지 유지된다.
  */
-async function applyPeakRankChanges(db, byCategory, historyKey) {
-  if (!db || !historyKey || !byCategory || typeof byCategory !== "object") return;
-  const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  const ref = db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey);
+function resolveOfficialPeakRankBaseline(prevNorm, prevRanksCat, prevDayRanksCat, todayYmd) {
+  const prevDay =
+    prevDayRanksCat && typeof prevDayRanksCat === "object" ? prevDayRanksCat : {};
+  if (Object.keys(prevDay).length > 0) return prevDay;
+  const isNewOfficialDay = !!(prevNorm.asOfSeoul && prevNorm.asOfSeoul < todayYmd);
+  if (isNewOfficialDay && Object.keys(prevRanksCat).length > 0) return prevRanksCat;
+  return prevRanksCat && typeof prevRanksCat === "object" ? prevRanksCat : {};
+}
 
-  let prevNorm = normalizePeakRankHistoryDoc(null);
-  try {
-    const snap = await ref.get();
-    if (snap.exists) {
-      prevNorm = normalizePeakRankHistoryDoc(snap.data());
-    }
-  } catch (eRead) {
-    console.warn("[applyPeakRankChanges] 이전 순위 읽기 실패:", historyKey, eRead && eRead.message);
+function freezeOfficialPrevDayRanks(prevNorm, prevRanksCat, prevDayRanksCat, todayYmd) {
+  const isNewOfficialDay = !prevNorm.asOfSeoul || prevNorm.asOfSeoul < todayYmd;
+  if (isNewOfficialDay && Object.keys(prevRanksCat).length > 0) {
+    return prevRanksCat;
   }
+  return prevDayRanksCat && typeof prevDayRanksCat === "object" ? prevDayRanksCat : {};
+}
 
+/**
+ * peak_rank_history / HTTP 응답 공통: 전일 정규 스냅샷 대비 등락을 행에 주입.
+ * @returns {{ newRanksByCategory, newRankChangesByCategory, newPreviousRanksByCategory, newPrevDayRanksByCategory }}
+ */
+function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
   const newRanksByCategory = {};
   const newRankChangesByCategory = {};
   const newPreviousRanksByCategory = {};
@@ -5027,47 +5030,22 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
     if (!Array.isArray(rows) || !rows.length) continue;
 
     const currRanks = buildPeakBoardRankMapForCategoryRows(rows);
-    newRanksByCategory[cat] = currRanks;
-
     const prevRanksCat =
       prevNorm.ranksByCategory[cat] && typeof prevNorm.ranksByCategory[cat] === "object"
         ? prevNorm.ranksByCategory[cat]
         : {};
-    const prevDayRanksCat =
+    const prevDayIn =
       prevNorm.prevDayRanksByCategory[cat] && typeof prevNorm.prevDayRanksByCategory[cat] === "object"
         ? prevNorm.prevDayRanksByCategory[cat]
         : {};
-    const prevChangesCat =
-      prevNorm.rankChangesByCategory[cat] && typeof prevNorm.rankChangesByCategory[cat] === "object"
-        ? prevNorm.rankChangesByCategory[cat]
-        : {};
-    const prevPreviousCat =
-      prevNorm.previousRanksByCategory[cat] && typeof prevNorm.previousRanksByCategory[cat] === "object"
-        ? prevNorm.previousRanksByCategory[cat]
-        : {};
 
-    let ranksChanged = !peakBoardRankMapsEqual(prevRanksCat, currRanks);
-    let compareBaseline = prevRanksCat;
+    const frozenPrevDay = freezeOfficialPrevDayRanks(prevNorm, prevRanksCat, prevDayIn, todayYmd);
+    const compareBaseline = resolveOfficialPeakRankBaseline(prevNorm, prevRanksCat, frozenPrevDay, todayYmd);
 
-    /* 자정 이후 순위 동일·등락만 0으로 잘못 저장된 경우: 전전일(23:00 직전) 스냅샷으로 복구 */
-    if (
-      !ranksChanged &&
-      Object.keys(prevDayRanksCat).length > 0 &&
-      peakBoardRankMapsEqual(prevRanksCat, currRanks) &&
-      !peakBoardRankMapsEqual(prevDayRanksCat, currRanks) &&
-      peakRankChangesAllZero(prevChangesCat)
-    ) {
-      ranksChanged = true;
-      compareBaseline = prevDayRanksCat;
-    }
-
-    newRankChangesByCategory[cat] = ranksChanged ? {} : Object.assign({}, prevChangesCat);
-    newPreviousRanksByCategory[cat] = ranksChanged ? {} : Object.assign({}, prevPreviousCat);
-    newPrevDayRanksByCategory[cat] = ranksChanged
-      ? compareBaseline
-      : Object.keys(prevDayRanksCat).length
-        ? prevDayRanksCat
-        : prevRanksCat;
+    newRanksByCategory[cat] = currRanks;
+    newPrevDayRanksByCategory[cat] = frozenPrevDay;
+    newRankChangesByCategory[cat] = {};
+    newPreviousRanksByCategory[cat] = {};
 
     for (let i = 0; i < rows.length; i++) {
       const e = rows[i];
@@ -5079,33 +5057,66 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
       delete e.rankChange;
       delete e.previousBoardRank;
 
-      if (ranksChanged) {
-        if (compareBaseline[uid] != null) {
-          const prev = Math.floor(Number(compareBaseline[uid]));
-          if (isFinite(prev) && prev >= 1) {
-            e.rankChange = prev - curr;
-            e.previousBoardRank = prev;
-            newRankChangesByCategory[cat][uid] = e.rankChange;
-            newPreviousRanksByCategory[cat][uid] = prev;
-          }
+      if (compareBaseline[uid] != null) {
+        const prev = Math.floor(Number(compareBaseline[uid]));
+        if (isFinite(prev) && prev >= 1) {
+          e.rankChange = prev - curr;
+          e.previousBoardRank = prev;
+          newRankChangesByCategory[cat][uid] = e.rankChange;
+          newPreviousRanksByCategory[cat][uid] = prev;
         }
-      } else if (prevChangesCat[uid] != null) {
-        e.rankChange = Number(prevChangesCat[uid]);
-        e.previousBoardRank =
-          prevPreviousCat[uid] != null ? Number(prevPreviousCat[uid]) : null;
-        newRankChangesByCategory[cat][uid] = e.rankChange;
-        if (e.previousBoardRank != null) newPreviousRanksByCategory[cat][uid] = e.previousBoardRank;
       }
     }
   }
 
+  return {
+    newRanksByCategory,
+    newRankChangesByCategory,
+    newPreviousRanksByCategory,
+    newPrevDayRanksByCategory,
+  };
+}
+
+async function readPeakRankHistoryNorm(db, historyKey) {
+  let prevNorm = normalizePeakRankHistoryDoc(null);
+  if (!db || !historyKey) return prevNorm;
   try {
-    await ref.set({
+    const snap = await db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey).get();
+    if (snap.exists) prevNorm = normalizePeakRankHistoryDoc(snap.data());
+  } catch (eRead) {
+    console.warn("[readPeakRankHistoryNorm] 실패:", historyKey, eRead && eRead.message);
+  }
+  return prevNorm;
+}
+
+/**
+ * HTTP 응답용 — peak_rank_history 읽기만 하고 행에 등락 주입(쓰기 없음).
+ */
+async function hydratePeakRankMovementFromHistory(db, byCategory, historyKey) {
+  if (!db || !historyKey || !byCategory || typeof byCategory !== "object") return;
+  const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const prevNorm = await readPeakRankHistoryNorm(db, historyKey);
+  computePeakRankMovementFields(byCategory, prevNorm, todayYmd);
+}
+
+/**
+ * 23:00 마스터·수동 full 집계 후 peak_rank_history 저장.
+ * 당일 중간 집계는 ranksByCategory만 갱신하고 prevDayRanksByCategory(전일 23시 공식 순위)는 유지.
+ */
+async function applyPeakRankChanges(db, byCategory, historyKey) {
+  if (!db || !historyKey || !byCategory || typeof byCategory !== "object") return;
+  const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const prevNorm = await readPeakRankHistoryNorm(db, historyKey);
+  const snapFields = computePeakRankMovementFields(byCategory, prevNorm, todayYmd);
+
+  try {
+    await db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey).set({
       asOfSeoul: todayYmd,
-      ranksByCategory: newRanksByCategory,
-      rankChangesByCategory: newRankChangesByCategory,
-      previousRanksByCategory: newPreviousRanksByCategory,
-      prevDayRanksByCategory: newPrevDayRanksByCategory,
+      ranksByCategory: snapFields.newRanksByCategory,
+      rankChangesByCategory: snapFields.newRankChangesByCategory,
+      previousRanksByCategory: snapFields.newPreviousRanksByCategory,
+      prevDayRanksByCategory: snapFields.newPrevDayRanksByCategory,
+      officialBaselineLabel: "prev_day_23h_kst",
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   } catch (eWrite) {
@@ -5129,7 +5140,7 @@ async function hydratePeakRankMovementOnPayload(db, byCategory, entries, history
     (cat) => Array.isArray(byCategory[cat]) && byCategory[cat].length > 0
   );
   if (!hasAny) return;
-  await applyPeakRankChanges(db, byCategory, historyKey);
+  await hydratePeakRankMovementFromHistory(db, byCategory, historyKey);
 }
 
 /**
@@ -6415,6 +6426,10 @@ exports.previewHeptagonRankChanges = onRequest(
           boardRank: d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : null,
           sumPositionScores: d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0,
           asOfSeoul: d.asOfSeoul || "",
+          yesterdayOfficialBoardRank:
+            d.yesterdayOfficialBoardRank != null && isFinite(Number(d.yesterdayOfficialBoardRank))
+              ? Math.floor(Number(d.yesterdayOfficialBoardRank))
+              : null,
           storedPreviousBoardRank: d.previousBoardRank != null ? Number(d.previousBoardRank) : null,
           storedRankChange: d.rankChange != null ? Number(d.rankChange) : null,
         };
@@ -6430,7 +6445,13 @@ exports.previewHeptagonRankChanges = onRequest(
 
       const samples = rows.slice(0, limit).map((r, i) => {
         const newRank = i + 1;
-        const prevRank = r.boardRank; // 어제 집계된 순위
+        let yesterdayOfficial = null;
+        if (r.asOfSeoul && r.asOfSeoul !== todayYmd && r.boardRank != null) {
+          yesterdayOfficial = r.boardRank;
+        } else if (r.yesterdayOfficialBoardRank != null) {
+          yesterdayOfficial = r.yesterdayOfficialBoardRank;
+        }
+        const prevRank = yesterdayOfficial;
         const change = prevRank != null ? prevRank - newRank : null;
         return {
           newRank,
@@ -6465,7 +6486,7 @@ exports.previewHeptagonRankChanges = onRequest(
         filterCategory,
         note: isNewDay
           ? "✅ 문서가 어제 기준입니다. 아래 samples 의 rankChange 가 실제 갱신 시 저장될 값입니다. manualApplyRankChanges 로 지금 바로 적용할 수 있습니다."
-          : "ℹ️ 오늘 이미 갱신된 문서입니다. storedRankChange 에 저장된 값을 확인하세요.",
+          : "ℹ️ 오늘 이미 갱신된 문서입니다. 등락은 yesterdayOfficialBoardRank(전일 23:35) 기준으로 계산됩니다.",
         summary,
         samples,
       });
@@ -6643,12 +6664,20 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
   let snapshotRangeStart = "";
   let snapshotRangeEnd = "";
   let snapshotAsOfSeoul = "";
+  /** 여러 문서 중 가장 최신 asOfSeoul·range 메타 사용(첫 페이지만 보면 구 스냅샷으로 오판하는 문제 방지) */
   function captureSnapshotMeta(d) {
-    if (!d || snapshotRangeStart) return;
+    if (!d) return;
     if (d.rangeStart == null || String(d.rangeStart).trim() === "") return;
-    snapshotRangeStart = String(d.rangeStart).trim();
-    snapshotRangeEnd = d.rangeEnd != null ? String(d.rangeEnd).trim() : "";
-    snapshotAsOfSeoul = d.asOfSeoul != null ? String(d.asOfSeoul).trim() : "";
+    const rs = String(d.rangeStart).trim();
+    const re = d.rangeEnd != null ? String(d.rangeEnd).trim() : "";
+    const asOf = d.asOfSeoul != null ? String(d.asOfSeoul).trim().slice(0, 10) : "";
+    if (!snapshotRangeStart) {
+      snapshotRangeStart = rs;
+      snapshotRangeEnd = re;
+    }
+    if (asOf && (!snapshotAsOfSeoul || asOf > snapshotAsOfSeoul)) {
+      snapshotAsOfSeoul = asOf;
+    }
   }
 
   const applyGenderScoreUnify = filterGender === "M" || filterGender === "F";
@@ -7561,6 +7590,17 @@ exports.getPeakPowerRanking = onRequest(
       const rollingFallback = getRolling28DaysRangeSeoul();
       const minGcAsOf = getMinHeptagonSnapshotAsOfSeoulYmd();
       const gcAsOf = snap.snapshotAsOfSeoul ? String(snap.snapshotAsOfSeoul).trim().slice(0, 10) : "";
+      const heptMetaDateKst =
+        heptagonMeta && heptagonMeta.dateKst ? String(heptagonMeta.dateKst).trim().slice(0, 10) : "";
+      const heptMetaComplete = heptagonMeta && String(heptagonMeta.status || "") === "complete";
+      const gcStaleVsMin = !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf);
+      /** 메타는 오늘 집계 완료인데 cohort asOf가 더 오래됨 → 배치 미반영·부분 실패 */
+      const gcStaleVsMeta = !!(
+        heptMetaComplete &&
+        heptMetaDateKst &&
+        gcAsOf &&
+        heptMetaDateKst > gcAsOf
+      );
       const out = {
         success: true,
         byCategory,
@@ -7574,8 +7614,9 @@ exports.getPeakPowerRanking = onRequest(
         gcSnapshotAsOf: gcAsOf || null,
         gcSnapshotDaily: true,
         gcMinSnapshotAsOf: minGcAsOf,
-        gcSnapshotStale: !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf),
-        gcHeptagonRebuildDateKst: heptagonMeta && heptagonMeta.dateKst ? String(heptagonMeta.dateKst) : null,
+        gcSnapshotStale: gcStaleVsMin || gcStaleVsMeta,
+        gcHeptagonRebuildDateKst: heptMetaDateKst || null,
+        gcHeptagonRebuildStatus: heptagonMeta && heptagonMeta.status ? String(heptagonMeta.status) : null,
         gcHeptagonPeakSource: heptagonMeta && heptagonMeta.summary && heptagonMeta.summary.peakSource
           ? String(heptagonMeta.summary.peakSource)
           : null,
