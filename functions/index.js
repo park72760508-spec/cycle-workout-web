@@ -4019,7 +4019,7 @@ function computeOneHourSustainedSpeedKmhFromBuckets(userData, bucketSnaps, start
   return { speedKmh: m.speedKmh, referenceWatts: m.referenceWatts, weightKg: m.weightKg };
 }
 
-/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 365일 (YYYY-MM-DD). 명예의 전당(연간 탭) 피크 집계용. */
+/** @deprecated 랭킹 명예의 전당(365d 롤링 피크) 집계 폐지. HR 등 레거시 참조용만 유지. */
 function getRolling365DaysRangeSeoul() {
   const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const startStr = addDaysSeoulYmd(endStr, -364);
@@ -5884,8 +5884,6 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
   const { startStr: r30s, endStr: r30e } = getRolling30DaysRangeSeoul();
   const { startStr: r183s, endStr: r183e } = getRolling183DaysRangeSeoul();
-  const { startStr: r365s, endStr: r365e } = getRolling365DaysRangeSeoul();
-
   // [비용절감] users 컬렉션을 단 1회만 읽어 모든 랭킹 함수에 공유 주입 (기존 10회 → 1회)
   const sharedUsersSnap = await db.collection("users").get();
   console.log("[runRebuildRankingAggregatesCore] users snapshot fetched once, docs:", sharedUsersSnap.size,
@@ -6042,24 +6040,6 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
     endStr: r30e,
   });
   wrote++;
-
-  // ── 5. 피크파워 365일(명예의 전당) — 28일은 3b에서 선행 저장 ──
-  const allDurYear = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r365s, r365e, sharedUsersSnap);
-  for (const gender of ["all", "M", "F"]) {
-    for (const durationType of Object.keys(DURATION_FIELDS)) {
-      const pack = allDurYear[gender][durationType];
-      await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_yearly_${gender}`);
-      const ckey = `peakRanking_v2_yearly_${durationType}_${gender}_${r365s}_${r365e}`;
-      await writeRankingAggregatePayload(db, ckey, {
-        byCategory: pack.byCategory,
-        entries: pack.entries,
-        startStr: r365s,
-        endStr: r365e,
-        cohortAvgHrBpm: pack.cohortAvgHrBpm,
-      });
-      wrote++;
-    }
-  }
 
   const ms = Date.now() - t0;
   console.log("[runRebuildRankingAggregatesCore] done", { wrote, ms });
@@ -6788,7 +6768,8 @@ exports.getPeakPowerRanking = onRequest(
     // 사전 집계 데이터는 5분간 CDN/프록시 캐싱 허용 (클라이언트는 localStorage로 별도 1일 캐시)
     res.set("Cache-Control", "public, max-age=300, s-maxage=300, stale-while-revalidate=60");
     try {
-    const period = req.query.period || "monthly";
+    let period = req.query.period || "monthly";
+    if (period === "yearly") period = "monthly";
     const durationType = req.query.duration || "5min";
     const gender = req.query.gender || "all";
     const uid = req.query.uid || null;
@@ -7638,11 +7619,7 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     let startStr, endStr;
-    if (period === "yearly") {
-      const r = getRolling365DaysRangeSeoul();
-      startStr = r.startStr;
-      endStr = r.endStr;
-    } else if (period === "rolling6m" || period === "rolling183") {
+    if (period === "rolling6m" || period === "rolling183") {
       const r = getRolling183DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
@@ -7897,7 +7874,8 @@ exports.getOvertakeAnalysis = onRequest(
     }
     res.set("Access-Control-Allow-Origin", "*");
     const uid = req.query.uid || req.body?.uid || null;
-    const period = req.query.period || req.body?.period || "monthly";
+    let period = req.query.period || req.body?.period || "monthly";
+    if (period === "yearly") period = "monthly";
     const gender = req.query.gender || req.body?.gender || "all";
 
     if (!uid) {
@@ -7906,23 +7884,16 @@ exports.getOvertakeAnalysis = onRequest(
 
     const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
     const month = req.query.month ? parseInt(req.query.month, 10) : new Date().getMonth() + 1;
-    let startStr, endStr;
-    if (period === "yearly") {
-      const r = getRolling365DaysRangeSeoul();
-      startStr = r.startStr;
-      endStr = r.endStr;
-    } else {
-      const r = getRolling28DaysRangeSeoul();
-      startStr = r.startStr;
-      endStr = r.endStr;
-    }
+    const r28 = getRolling28DaysRangeSeoul();
+    const startStr = r28.startStr;
+    const endStr = r28.endStr;
 
     const db = admin.firestore();
     const todayStr = req.query.today || req.body?.today || null;
     const { startStr: week5StartStr, endStr: week5EndStr } = getWeek5RangeSeoul(todayStr);
 
     const results = [];
-    const overtakePeriodKey = period === "yearly" ? "yearly" : "monthly";
+    const overtakePeriodKey = "monthly";
 
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const cacheKey = `peakRanking_v2_${overtakePeriodKey}_${durationType}_${gender}_${startStr}_${endStr}`;
