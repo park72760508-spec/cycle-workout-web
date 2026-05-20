@@ -2047,13 +2047,48 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #openRidingRoomScreen .open-riding-detail-content-root--guest {
   padding-top: 0;
 }
-/* 방장 툴바: 위·아래 여백 ≈ 버튼 높이의 5% (버튼은 text-sm + py-2 + 아이콘 기준 높이 ~2.25rem 가정) */
+/* 방장 툴바: 단일 블록 안에 수정·폭파·삭제 이미지 (하단 글래스 네비 friend-img와 동일 크기) */
 #openRidingRoomScreen .open-riding-detail-host-actions {
   margin-top: 1.25rem;
   margin-bottom: 0.5rem;
   padding-bottom: 0.25rem;
 }
-#openRidingRoomScreen .open-riding-detail-host-action-btn .open-riding-bottom-glass-nav__label,
+#openRidingRoomScreen .open-riding-detail-host-actions-block {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75rem;
+  width: 100%;
+  max-width: 20rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0.65rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+#openRidingRoomScreen .open-riding-detail-host-icon-btn {
+  min-width: 0;
+  min-height: 0;
+  padding: 0.15rem 0.35rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: #0f172a;
+}
+#openRidingRoomScreen .open-riding-detail-host-icon-btn:active:not(:disabled) {
+  background: rgba(148, 163, 184, 0.15);
+}
+#openRidingRoomScreen .open-riding-detail-host-action-img {
+  width: calc(20px * 1.1);
+  height: calc(20px * 1.1);
+  object-fit: contain;
+  display: block;
+}
+#openRidingRoomScreen .open-riding-detail-host-icon-btn .open-riding-bottom-glass-nav__label,
 #openRidingRoomScreen .open-riding-detail-host-action-caption {
   pointer-events: none;
 }
@@ -5433,6 +5468,18 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-size: 0.95em;
   color: #6b7280;
 }
+
+/* TOP10 랭킹 목록 상단 주차 안내 (로딩 문구와 분리 — 상단 여백 최소) */
+#weeklyTop10Body.training-detail-body {
+  padding-top: 6px;
+}
+.weekly-top10-week-caption {
+  margin: 0 0 8px 0;
+  padding: 0;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.3;
+}
 @keyframes weekly-top10-spin {
   to { transform: rotate(360deg); }
 }
@@ -8451,6 +8498,10 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
     overflow-y: auto;
     max-height: calc(85vh - 120px); /* 헤더 + Strava footer 높이 제외 */
     background: #ffffff; /* 대시보드 추천 디자인: 흰색 배경 유지 */
+  }
+
+  #weeklyTop10Body.training-detail-body {
+    padding-top: 4px;
   }
 
   .training-detail-label {
