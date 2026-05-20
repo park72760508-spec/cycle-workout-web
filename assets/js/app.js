@@ -13118,7 +13118,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** (Zone "${targetZoneHint}") — auth
 }
 **[출력 분량 — 토큰 초과 방지, 필수]**
 - coach_comment: 최대 2문장(합 120자 이내). categoryReason: 1문장(60자 이내).
-- recommendations[].reason: 각 60자 이내, 한 줄. 백틱(\`)·마크다운·코드블록(```) 사용 금지.
+- recommendations[].reason: 각 60자 이내, 한 줄. 백틱·마크다운·코드블록(3중 백틱) 사용 금지.
 - selectedCategory에는 Zone 괄호를 붙이지 말고 카테고리 영문명만(예: Tempo, Endurance).
 중요: recommendations의 workoutId는 1·2·3번 각각 서로 달라야 합니다. rank 1=약, 2=중, 3=강 순서를 반드시 지키세요.
 중요: 반드시 유효한 JSON 객체 하나만 출력하세요. 마크다운·설명 문구 없이 { 로 시작해 } 로 끝나야 합니다.`;
