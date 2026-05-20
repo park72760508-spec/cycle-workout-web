@@ -1194,6 +1194,14 @@ body:has(#openRidingRoomScreen.active) {
   box-sizing: border-box;
 }
 
+/* 라이딩 수정: 고정 취소·저장 바(글래스 네비 위)만큼 스크롤 하단 여백 추가 */
+#openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer.open-riding-app-body--ride-edit {
+  padding-bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-pad-y) * 2 +
+      var(--open-riding-glass-nav-row-min) + 37px + 56px
+  );
+}
+
 /* 플로팅 글래스 네비: 라이딩 모임 React 포털 + 허브(랭킹·대시보드·일지·프로필) 공통 — 터치·z-index·pointer-events 규칙 유지 */
 #openRidingBottomGlassNavRoot,
 #globalHubBottomGlassNavRoot {
@@ -1936,6 +1944,11 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   pointer-events: auto;
   position: relative;
   z-index: 2;
+}
+
+/* 라이딩 수정: 그룹 폼과 동일 — 글래스 네비 위 고정 취소·저장 + 하단 safe-area */
+#openRidingRoomScreen .open-riding-edit-form-footer.open-riding-group-form-footer.open-riding-bottom-actions {
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
 }
 
 /* 승인·반려: 균등 폭·좌우 잘림 방지 + 투명 셸(실제 클릭) + 둥근 face(시각만) */
