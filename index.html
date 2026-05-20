@@ -9032,8 +9032,19 @@
      */
     function stelvioGcPayloadMatchesLatestSnapshot(data) {
       if (!data || data.durationType !== 'gc') return true;
+      if (data.gcSnapshotStale === true) return false;
       var asOf = data.gcSnapshotAsOf != null ? String(data.gcSnapshotAsOf).trim().slice(0, 10) : '';
       if (!asOf) return false;
+      var metaDate =
+        data.gcHeptagonRebuildDateKst != null ? String(data.gcHeptagonRebuildDateKst).trim().slice(0, 10) : '';
+      if (
+        metaDate &&
+        asOf &&
+        data.gcHeptagonRebuildStatus === 'complete' &&
+        metaDate > asOf
+      ) {
+        return false;
+      }
       var monthKey = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Seoul',
         year: 'numeric',
@@ -9053,17 +9064,8 @@
         stelvioSetRankingRefreshHint(false);
         return;
       }
-      stelvioSetRankingRefreshHint(true);
-      var gcHint = document.getElementById('stelvioRankingRefreshHint');
-      if (gcHint) {
-        gcHint.textContent =
-          'GC 순위는 매일 23:35(KST) 헵타곤 집계 후 반영됩니다. 표시: ' +
-          (asOf || '미상') +
-          (minYmd ? ' · 필요: ' + minYmd + ' 이상' : '') +
-          (data.gcHeptagonRebuildDateKst
-            ? ' · 마지막 배치: ' + String(data.gcHeptagonRebuildDateKst)
-            : '');
-      }
+      /* 구 스냅샷은 힌트 문구 대신 fetch 측 스피너·백그라운드 재검증으로 처리 */
+      stelvioSetRankingRefreshHint(false);
     }
     var stelvioRankingPrefetchScheduled = false;
     /** GC 탭: 23:00 롤오버 후 백그라운드 재조회는 앱 세션당 1회만 */
@@ -11935,7 +11937,8 @@
     }
 
     /**
-     * Max·구간 피크: GC와 동일 — 23:00 집계로 순위가 바뀔 때만 재계산, 자정만 바뀌면 등락 유지.
+     * Peak·TSS·거리 등: 등락 비교 기준은 항상 전일 23:00 정규 스냅샷(prevDay).
+     * 당일 수동 집계로 ranks만 바뀌어도 prevDay는 다음 23시 집계 전까지 고정.
      */
     function stelvioApplyClientPeakRankMovementFromSnapshot(data) {
       if (!data || !data.byCategory) return;
@@ -12007,57 +12010,44 @@
             ? storedNorm.prevDayRanksByCategory[catKey]
             : prevDayRanksByCategory[catKey] || {};
 
-        var chCat =
-          rankChangesByCategory[catKey] && typeof rankChangesByCategory[catKey] === 'object'
-            ? rankChangesByCategory[catKey]
-            : {};
-        var prCat =
-          previousRanksByCategory[catKey] && typeof previousRanksByCategory[catKey] === 'object'
-            ? previousRanksByCategory[catKey]
-            : {};
-
-        var ranksChanged = !stelvioPeakBoardRankMapsEqual(prevStoredRanks, currCatRanks);
-        var compareBaseline = prevStoredRanks;
-
+        var chCat = {};
+        var prCat = {};
+        var frozenPrevDay = prevDayStored;
         if (
-          !ranksChanged &&
-          Object.keys(prevDayStored).length > 0 &&
-          stelvioPeakBoardRankMapsEqual(prevStoredRanks, currCatRanks) &&
-          !stelvioPeakBoardRankMapsEqual(prevDayStored, currCatRanks) &&
-          stelvioPeakRankChangesAllZero(chCat)
+          storedNorm &&
+          storedNorm.asOfSeoul &&
+          storedNorm.asOfSeoul < today &&
+          Object.keys(prevStoredRanks).length
         ) {
-          ranksChanged = true;
-          compareBaseline = prevDayStored;
+          frozenPrevDay = prevStoredRanks;
         }
+        var compareBaseline = Object.keys(frozenPrevDay).length
+          ? frozenPrevDay
+          : stelvioResolvePreviousPeakRanksBaselineForCategory(data, storedNorm, today, catKey);
+        var serverCatMv = serverMvSnapshot[catKey] || {};
 
-        if (!ranksChanged && Object.keys(chCat).length) {
-          stelvioApplyStoredRankChangesToCategoryRows(snapRows, chCat, prCat);
-        } else if (ranksChanged) {
-          if (!Object.keys(compareBaseline).length) {
-            compareBaseline = stelvioResolvePreviousPeakRanksBaselineForCategory(
-              data,
-              storedNorm,
-              today,
-              catKey
-            );
-          }
-          if (Object.keys(compareBaseline).length) {
-            for (var sri = 0; sri < snapRows.length; sri++) {
-              var row = snapRows[sri];
-              if (!row || row.userId == null) continue;
-              var uid = String(row.userId);
-              var curr = currCatRanks[uid] != null ? currCatRanks[uid] : null;
-              stelvioApplyPeakRankChangeToRow(row, uid, curr, compareBaseline, chCat, prCat);
-            }
+        if (Object.keys(compareBaseline).length) {
+          for (var sri = 0; sri < snapRows.length; sri++) {
+            var row = snapRows[sri];
+            if (!row || row.userId == null) continue;
+            var uid = String(row.userId);
+            if (serverCatMv[uid]) continue;
+            var curr = currCatRanks[uid] != null ? currCatRanks[uid] : null;
+            stelvioApplyPeakRankChangeToRow(row, uid, curr, compareBaseline, chCat, prCat);
           }
         }
 
         rankChangesByCategory[catKey] = chCat;
         previousRanksByCategory[catKey] = prCat;
-        if (ranksChanged && Object.keys(compareBaseline).length) {
-          prevDayRanksByCategory[catKey] = compareBaseline;
-        } else if (Object.keys(prevDayStored).length) {
-          prevDayRanksByCategory[catKey] = prevDayStored;
+        if (Object.keys(frozenPrevDay).length) {
+          prevDayRanksByCategory[catKey] = frozenPrevDay;
+        } else if (
+          storedNorm &&
+          storedNorm.asOfSeoul &&
+          storedNorm.asOfSeoul < today &&
+          Object.keys(prevStoredRanks).length
+        ) {
+          prevDayRanksByCategory[catKey] = prevStoredRanks;
         }
       }
 
@@ -12484,10 +12474,10 @@
           soft.data.durationType === 'gc' ||
           (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode());
         if (isGcSoft) {
+          if (soft.data.gcSnapshotStale === true) return false;
+          if (!stelvioGcPayloadMatchesLatestSnapshot(soft.data)) return false;
           var heptRollover = typeof stelvioGetLastHeptagonRolloverTs === 'function' ? stelvioGetLastHeptagonRolloverTs() : 0;
-          if (heptRollover > 0 && ts < heptRollover && !stelvioGcPayloadMatchesLatestSnapshot(soft.data)) {
-            return false;
-          }
+          if (heptRollover > 0 && ts < heptRollover) return false;
           return true;
         }
         if (
