@@ -5987,7 +5987,7 @@
             <div style="margin-bottom: 8px;">
               <label style="font-size: 0.9em; margin: 0; display: flex; align-items: center; gap: 6px;">
                 <img src="assets/img/ai.gif" alt="AI" style="height: 2em; width: auto; vertical-align: middle;" />
-                Gemini API 키 (<a href="https://aistudio.google.com/app/apikey" style="color: #2e74e8; text-decoration: underline; font-weight: normal; cursor: pointer;" onclick="event.preventDefault(); if (typeof window.openStelvioExternalUrl === 'function') window.openStelvioExternalUrl('https://aistudio.google.com/app/apikey'); else window.open('https://aistudio.google.com/app/apikey', '_blank', 'noopener,noreferrer'); return false;">API 키 발급받기</a>)
+                Gemini API 키 (<a href="https://aistudio.google.com/app/apikey" id="settingsGeminiApiKeyIssueLink" style="color: #2e74e8; text-decoration: underline; font-weight: normal; cursor: pointer;" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openStelvioExternalUrl === 'function') { window.openStelvioExternalUrl('https://aistudio.google.com/app/apikey'); } else { window.open('https://aistudio.google.com/app/apikey', '_blank', 'noopener,noreferrer'); } return false;">API 키 발급받기</a>)
               </label>
             </div>
             <input type="password" id="settingsGeminiApiKey" placeholder="API 키를 입력하세요" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;" />
@@ -20834,21 +20834,12 @@
         }
       }
     }
+    /** window.open 1회만 — 성공 시 즉시 true (여러 번 호출하면 탭이 중복됨) */
     function tryWindowOpenVariants(url) {
       try {
         var w = window.open(url, '_blank', 'noopener,noreferrer');
         if (w) return true;
       } catch (e) {}
-      try {
-        var w2 = window.open(url, '_blank');
-        if (w2) return true;
-      } catch (e2) {}
-      try {
-        if (window.top && window.top !== window) {
-          var w3 = window.top.open(url, '_blank');
-          if (w3) return true;
-        }
-      } catch (e3) {}
       return false;
     }
     /** Capacitor 앱: 동일 WebView를 외부 스토어 URL로 채우면 앱이 비어 종료된 것처럼 보임 → 사용 안 함 */
@@ -20872,10 +20863,8 @@
     function openStelvioExternalUrlPhaseFallbacks(url) {
       if (tryOpenCordovaSystemBrowser(url)) return;
       if (tryIosExternalUrlBridge(url)) return;
-      tryProgrammaticLinkOpen(url, true);
       if (tryWindowOpenVariants(url)) return;
-      tryProgrammaticLinkOpen(url, false);
-      if (tryWindowOpenVariants(url)) return;
+      if (tryProgrammaticLinkOpen(url, true)) return;
       if (tryAndroidExternalViewIntent(url)) return;
       if (openStelvioExternalUrlNeedsSameWindowFallback()) {
         if (isCapacitorShell()) {
@@ -20891,8 +20880,12 @@
         }
       }
     }
+    var stelvioLastExternalUrlOpen = { url: '', at: 0 };
     function openStelvioExternalUrl(url) {
       if (!url || typeof url !== 'string') return;
+      var now = Date.now();
+      if (stelvioLastExternalUrlOpen.url === url && now - stelvioLastExternalUrlOpen.at < 800) return;
+      stelvioLastExternalUrlOpen = { url: url, at: now };
       if (tryOpenCapacitorBrowserThen(url, function () {
         openStelvioExternalUrlPhaseFallbacks(url);
       })) {
@@ -22251,82 +22244,93 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               });
             });
             
-            // 3개 미만이면 Training Status 기반으로 채우기
-            while (recommended_workouts.length < 3) {
-              var fallbackTypes = [];
-              var fallbackDescs = [];
-              
-              if (trainingStatus === 'Recovery Needed' || trainingStatus === 'Overreaching' || conditionScore < 60) {
-                fallbackTypes = [allowed[0], allowed[0], allowed[1]]; // Z1, Z1, Z2
-                fallbackDescs = [
-                  '회복 훈련',
-                  '활성 회복',
-                  '지구력 훈련'
-                ];
-              } else if (trainingStatus === 'Building Base' || (conditionScore >= 60 && conditionScore < 75)) {
-                fallbackTypes = [allowed[1], allowed[1], allowed[2]]; // Z2, Z2, Z3
-              fallbackDescs = [
-                '지구력 훈련',
-                '중저강도 훈련',
-                '중강도 훈련'
-              ];
-              } else if (trainingStatus === 'Ready to Race' || (conditionScore >= 75 && conditionScore < 85)) {
-                fallbackTypes = [allowed[2], allowed[2], allowed[3]]; // Z3, Z3, Z4
-                fallbackDescs = [
-                  '중강도 훈련',
-                  '레이스 준비 훈련',
-                  '임계값 훈련'
-                ];
-              } else if (trainingStatus === 'Peaking' || conditionScore >= 85) {
-                fallbackTypes = [allowed[3], allowed[3], allowed[4]]; // Z4, Z4, Z5
-                fallbackDescs = [
-                  '임계값 훈련',
-                  '고강도 인터벌',
-                  '고강도 훈련'
-                ];
-              } else {
-                fallbackTypes = [allowed[1], allowed[2], allowed[2]]; // 기본값
-                fallbackDescs = [
-                  '지구력 훈련',
-                  '중강도 훈련',
-                  '유산소 훈련'
-                ];
+            function coachPrimaryZoneFromType(typeStr) {
+              var ts = typeStr != null ? String(typeStr).trim() : '';
+              if (!ts) return '';
+              if (typeof window.stelvioExtractZoneTagFromText === 'function') {
+                var z1 = window.stelvioExtractZoneTagFromText(ts);
+                if (z1) return z1;
               }
-              
-              var idx = recommended_workouts.length;
+              if (typeof window.extractZoneTagFromCategoryOrText === 'function') {
+                return window.extractZoneTagFromCategoryOrText(ts) || '';
+              }
+              return '';
+            }
+            var coachPrimaryZone = coachPrimaryZoneFromType(
+              (recommended_workouts[0] && recommended_workouts[0].workout_type) || recommended_workout
+            );
+
+            // 3개 미만: 1순위와 동일 Zone(Z5 등)으로만 채움 — 컨디션 점수 기반 Z2/Z3 채우기 금지
+            while (recommended_workouts.length < 3) {
+              var idxFill = recommended_workouts.length;
+              var fillType;
+              var fillDesc;
+              if (coachPrimaryZone && typeof window.stelvioSameZoneWorkoutTypeLadder === 'function') {
+                var zoneLadderCoach = window.stelvioSameZoneWorkoutTypeLadder(coachPrimaryZone);
+                fillType = zoneLadderCoach[idxFill] || zoneLadderCoach[0];
+                fillDesc = '동일 Zone(' + coachPrimaryZone + ') 보완 추천';
+              } else {
+                fillType = recommended_workout || defaultWorkout;
+                fillDesc = 'AI 추천 훈련';
+              }
               recommended_workouts.push({
-                rank: idx + 1,
-                workout_type: fallbackTypes[idx] || defaultWorkout,
-                description: fallbackDescs[idx] || 'AI 추천 훈련'
+                rank: idxFill + 1,
+                workout_type: fillType,
+                description: fillDesc,
               });
             }
           } else {
-            // 기존 단일 추천을 Training Status 기반으로 3개로 변환
-            var fallbackTypes = [];
-            var fallbackDescs = [];
-            
-            if (trainingStatus === 'Recovery Needed' || trainingStatus === 'Overreaching' || conditionScore < 60) {
-              fallbackTypes = [recommended_workout, allowed[0], allowed[1]];
-              fallbackDescs = ['AI 추천 훈련', '회복 훈련', '지구력 훈련'];
-            } else if (trainingStatus === 'Building Base' || (conditionScore >= 60 && conditionScore < 75)) {
-              fallbackTypes = [recommended_workout, allowed[1], allowed[2]];
-              fallbackDescs = ['AI 추천 훈련', '지구력 훈련', '중강도 훈련'];
-            } else if (trainingStatus === 'Ready to Race' || (conditionScore >= 75 && conditionScore < 85)) {
-              fallbackTypes = [recommended_workout, allowed[2], allowed[3]];
-              fallbackDescs = ['AI 추천 훈련', '중강도 훈련', '임계값 훈련'];
-            } else if (trainingStatus === 'Peaking' || conditionScore >= 85) {
-              fallbackTypes = [recommended_workout, allowed[3], allowed[4]];
-              fallbackDescs = ['AI 추천 훈련', '임계값 훈련', '고강도 훈련'];
+            var coachSingleZone = (function () {
+              var ts = recommended_workout || '';
+              if (typeof window.stelvioExtractZoneTagFromText === 'function') {
+                var z = window.stelvioExtractZoneTagFromText(ts);
+                if (z) return z;
+              }
+              if (typeof window.extractZoneTagFromCategoryOrText === 'function') {
+                return window.extractZoneTagFromCategoryOrText(ts) || '';
+              }
+              return '';
+            })();
+            if (coachSingleZone && typeof window.stelvioSameZoneWorkoutTypeLadder === 'function') {
+              var ladderSingle = window.stelvioSameZoneWorkoutTypeLadder(coachSingleZone);
+              recommended_workouts = [
+                { rank: 1, workout_type: ladderSingle[0], description: 'AI 추천 훈련' },
+                {
+                  rank: 2,
+                  workout_type: ladderSingle[1] || ladderSingle[0],
+                  description: '동일 Zone(' + coachSingleZone + ') 보완 추천',
+                },
+                {
+                  rank: 3,
+                  workout_type: ladderSingle[2] || ladderSingle[0],
+                  description: '동일 Zone(' + coachSingleZone + ') 보완 추천',
+                },
+              ];
             } else {
-              fallbackTypes = [recommended_workout, allowed[1], allowed[2]];
-              fallbackDescs = ['AI 추천 훈련', '지구력 훈련', '중강도 훈련'];
+              var fallbackTypes = [];
+              var fallbackDescs = [];
+              if (trainingStatus === 'Recovery Needed' || trainingStatus === 'Overreaching' || conditionScore < 60) {
+                fallbackTypes = [recommended_workout, allowed[0], allowed[1]];
+                fallbackDescs = ['AI 추천 훈련', '회복 훈련', '지구력 훈련'];
+              } else if (trainingStatus === 'Building Base' || (conditionScore >= 60 && conditionScore < 75)) {
+                fallbackTypes = [recommended_workout, allowed[1], allowed[2]];
+                fallbackDescs = ['AI 추천 훈련', '지구력 훈련', '중강도 훈련'];
+              } else if (trainingStatus === 'Ready to Race' || (conditionScore >= 75 && conditionScore < 85)) {
+                fallbackTypes = [recommended_workout, allowed[2], allowed[3]];
+                fallbackDescs = ['AI 추천 훈련', '중강도 훈련', '임계값 훈련'];
+              } else if (trainingStatus === 'Peaking' || conditionScore >= 85) {
+                fallbackTypes = [recommended_workout, allowed[3], allowed[4]];
+                fallbackDescs = ['AI 추천 훈련', '임계값 훈련', '고강도 훈련'];
+              } else {
+                fallbackTypes = [recommended_workout, allowed[1], allowed[2]];
+                fallbackDescs = ['AI 추천 훈련', '지구력 훈련', '중강도 훈련'];
+              }
+              recommended_workouts = [
+                { rank: 1, workout_type: fallbackTypes[0], description: fallbackDescs[0] },
+                { rank: 2, workout_type: fallbackTypes[1], description: fallbackDescs[1] },
+                { rank: 3, workout_type: fallbackTypes[2], description: fallbackDescs[2] },
+              ];
             }
-            
-            recommended_workouts = [
-              { rank: 1, workout_type: fallbackTypes[0], description: fallbackDescs[0] },
-              { rank: 2, workout_type: fallbackTypes[1], description: fallbackDescs[1] },
-              { rank: 3, workout_type: fallbackTypes[2], description: fallbackDescs[2] }
-            ];
           }
           
           // 컨디션 점수: 공통 모듈(conditionScoreModule)로 50~100 1점 단위 객관 산출 (1번·2번 동일: 중복 제거 + 기준일 오늘)
