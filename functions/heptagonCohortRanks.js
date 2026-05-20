@@ -1,7 +1,7 @@
 /**
  * STELVIO 헵타곤: 코호트별(월·성별·부문) **전면(Supremo) 환산 점수 합**이 동일한 값으로 모든 부문에 저장되고,
  * 각 부문 코호트에서는 이 값만으로 **내림차순** 정렬해 `boardRank`를 부여한다(부문마다 별도 환산 합을 계산하지 않음).
- * - 기간: `getRolling28DaysRangeSeoul` (최근 28일 = 7×4주, 서울) — 피크는 주차별 최고 후 상위 3주 평균·페널티
+ * - 기간: `getRolling28DaysRangeSeoul` (최근 28일, 서울) — 피크는 구간별 단일 최고값(일 버킷 max)
  * - 7축 `sumPositionScores`: 항상 `computeDisplayRankForUser(..., "Supremo", ...)` 랭크로만 산출
  */
 
@@ -691,7 +691,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
 
 /**
  * 즉시 GC 집계(디버그·비상용). 프로덕션 랭킹 GC는 `scheduledHeptagonCohortRanks` 스냅샷 + Firestore 읽기.
- * 대시보드와 동일 파이프라인(28일 롤링, 4주 중 3주 피크·페널티).
+ * 대시보드와 동일 파이프라인(28일 롤링, 구간별 최고 피크 1건).
  *
  * @param {string} filterGender `"all" | "M" | "F"` — getPeakPowerRanking gc 분기와 동일
  * @returns {{ byCategory: object, entries: Array, startStr: string, endStr: string, peakSource: string }}

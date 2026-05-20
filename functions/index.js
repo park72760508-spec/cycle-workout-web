@@ -4134,41 +4134,10 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
     return { watts, wkg: wkgVal, weightKg };
   }
 
-  const weekRanges = rankingDayRollup.splitInclusiveRangeIntoFourWeeks(startStr, endStr);
-
   const snapshot = await db.collection("users").doc(userId).collection("logs")
     .where("date", ">=", startStr)
     .where("date", "<=", endStr)
     .get();
-
-  if (weekRanges) {
-    const maxWW = [0, 0, 0, 0];
-    snapshot.docs.forEach((doc) => {
-      const d = doc.data();
-      if (!isCyclingForMmp(d)) return;
-      const dateStr = normalizeLogDateToSeoulYmd(d.date);
-      if (!dateStr) return;
-      let wi = -1;
-      for (let i = 0; i < 4; i++) {
-        if (dateStr >= weekRanges[i].startStr && dateStr <= weekRanges[i].endStr) {
-          wi = i;
-          break;
-        }
-      }
-      if (wi < 0) return;
-      const watts = Number(d[field]) || 0;
-      if (watts <= 0) return;
-      if (!validatePeakPowerRecord(durationType, watts, weightKg)) return;
-      if (watts > maxWW[wi]) maxWW[wi] = watts;
-    });
-    const weeklyWkg = maxWW.map((mw) =>
-      (mw > 0 ? Math.round((mw / weightKg) * 100) / 100 : 0)
-    );
-    const { finalWkg } = rankingDayRollup.calculateGcRankingFromWeeklyMaxWkg(weeklyWkg);
-    if (finalWkg <= 0) return null;
-    const wattsOut = Math.round(finalWkg * weightKg);
-    return { watts: wattsOut, wkg: finalWkg, weightKg };
-  }
 
   let maxWatts = 0;
   snapshot.docs.forEach((doc) => {
@@ -5703,14 +5672,12 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
         const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
         const refs = dates.map((ymd) => rankingDayRollup.bucketRef(db, userId, ymd));
         const bucketSnaps = await rankingDayRollup.chunkedGetAll(db, refs, 30);
-        const canFourWeek = !!rankingDayRollup.splitInclusiveRangeIntoFourWeeks(startStr, endStr);
-        let peakMap = null;
-        if (canFourWeek) {
-          peakMap = rankingDayRollup.computeFourWeekGcStylePeaksFromBucketSnaps(data, bucketSnaps, startStr, endStr);
-        }
-        if (!peakMap) {
-          peakMap = rankingDayRollup.computeUserPeaksAllDurationsFromBucketSnaps(data, bucketSnaps, startStr, endStr);
-        }
+        const peakMap = rankingDayRollup.computeUserPeaksAllDurationsFromBucketSnaps(
+          data,
+          bucketSnaps,
+          startStr,
+          endStr
+        );
         const hrMax = rankingDayRollup.maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr);
         for (const slot of genders) {
           if (slot === "M" && gKey !== "M") continue;

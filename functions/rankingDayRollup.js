@@ -510,25 +510,15 @@ function splitInclusiveRangeIntoFourWeeks(startStr, endStr) {
 }
 
 /**
- * GC / 헵타곤 피크: 4주 각 주 최대 W/kg → 상위 3주 평균 후 미달 주차 페널티
- * @param {number[]} weeklyMaxWkgArr - 길이 4, 해당 주 무기록이면 0
+ * @deprecated 상위 3주 평균·페널티 폐기. 호환 export: 주별 W/kg 배열 중 최대 1개만 반환.
+ * @param {number[]} weeklyMaxWkgArr
  * @returns {{ finalWkg: number, penaltyMultiplier: number }}
  */
 function calculateGcRankingFromWeeklyMaxWkg(weeklyMaxWkgArr) {
-  const activeWeeks = (weeklyMaxWkgArr || [])
-    .filter((val) => Number(val) > 0)
-    .sort((a, b) => Number(b) - Number(a));
-  const topWeeks = activeWeeks.slice(0, 3);
-  const count = topWeeks.length;
-  if (count === 0) return { finalWkg: 0, penaltyMultiplier: 1 };
-  const sum = topWeeks.reduce((acc, val) => acc + Number(val), 0);
-  const average = sum / count;
-  let penaltyMultiplier = 1.0;
-  if (count === 2) penaltyMultiplier = 0.85;
-  if (count === 1) penaltyMultiplier = 0.70;
-  const finalScore = average * penaltyMultiplier;
-  const finalWkg = Math.round(finalScore * 100) / 100;
-  return { finalWkg, penaltyMultiplier };
+  const active = (weeklyMaxWkgArr || []).map((v) => Number(v)).filter((v) => v > 0);
+  if (!active.length) return { finalWkg: 0, penaltyMultiplier: 1 };
+  const finalWkg = Math.round(Math.max(...active) * 100) / 100;
+  return { finalWkg, penaltyMultiplier: 1 };
 }
 
 function weekIndexForSeoulYmd(ymd, weekRanges) {
@@ -540,51 +530,13 @@ function weekIndexForSeoulYmd(ymd, weekRanges) {
 }
 
 /**
- * 일 버킷 스냅샷(28일)으로 duration별 상위 3주 평균 피크 W/kg 산출 — 로그 1패스 동치, 추가 읽기 없음.
+ * GC·헵타곤·28일 롤링: 일 버킷만 읽어 구간별 단일 최고 피크 W/kg (28일 내 max 1개).
  */
 function computeFourWeekGcStylePeaksFromBucketSnaps(userData, bucketSnaps, startStr, endStr) {
-  const rawWeight = Number(userData.weight || userData.weightKg || 0);
-  if (rawWeight <= 0) return null;
-  const weightKg = Math.max(rawWeight, 45);
-  const weekRanges = splitInclusiveRangeIntoFourWeeks(startStr, endStr);
-  if (!weekRanges) return null;
-
-  /** @type Record<string, number[]> duration -> 4주 최대 W */
-  const maxWattsByDurWeek = {};
-  for (const dt of Object.keys(DURATION_FIELDS)) {
-    maxWattsByDurWeek[dt] = [0, 0, 0, 0];
-  }
-
-  bucketSnaps.forEach((snap) => {
-    if (!snap || !snap.exists) return;
-    const row = snap.data() || {};
-    const ymd = row.ymd || snap.id || "";
-    if (!ymd || ymd < startStr || ymd > endStr) return;
-    const wi = weekIndexForSeoulYmd(ymd, weekRanges);
-    if (wi < 0) return;
-    for (const dt of Object.keys(DURATION_FIELDS)) {
-      const field = DURATION_FIELDS[dt];
-      const watts = Number(row[field]) || 0;
-      if (watts <= maxWattsByDurWeek[dt][wi]) continue;
-      if (!validatePeakPowerRecord(dt, watts, weightKg)) continue;
-      maxWattsByDurWeek[dt][wi] = watts;
-    }
-  });
-
-  const peaks = {};
-  for (const dt of Object.keys(DURATION_FIELDS)) {
-    const weeklyWkg = maxWattsByDurWeek[dt].map((mw) =>
-      (mw > 0 ? Math.round((mw / weightKg) * 100) / 100 : 0)
-    );
-    const { finalWkg } = calculateGcRankingFromWeeklyMaxWkg(weeklyWkg);
-    if (!finalWkg || finalWkg <= 0) continue;
-    const watts = Math.round(finalWkg * weightKg);
-    peaks[dt] = { watts, wkg: finalWkg, weightKg };
-  }
-  return Object.keys(peaks).length ? { weightKg, peaks } : null;
+  return computeUserPeaksAllDurationsFromBucketSnaps(userData, bucketSnaps, startStr, endStr);
 }
 
-/** 로그 스냅샷 대신 버킂 스냅샷 목록으로 computeUserPeaksAllDurationsFromSnapshot 동치 */
+/** 일 버킷 스냅샷(28일 등)으로 duration별 기간 내 최고 피크 1건 — 추가 로그 스캔 없음 */
 function computeUserPeaksAllDurationsFromBucketSnaps(userData, bucketSnaps, startStr, endStr) {
   const rawWeight = Number(userData.weight || userData.weightKg || 0);
   if (rawWeight <= 0) return null;
@@ -600,6 +552,8 @@ function computeUserPeaksAllDurationsFromBucketSnaps(userData, bucketSnaps, star
     for (const dt of Object.keys(DURATION_FIELDS)) {
       const field = DURATION_FIELDS[dt];
       const w = Number(row[field]) || 0;
+      if (w <= 0) continue;
+      if (!validatePeakPowerRecord(dt, w, weightKg)) continue;
       if (w > maxW[dt]) maxW[dt] = w;
     }
   });
@@ -607,9 +561,11 @@ function computeUserPeaksAllDurationsFromBucketSnaps(userData, bucketSnaps, star
   const peaks = {};
   for (const dt of Object.keys(DURATION_FIELDS)) {
     const mw = maxW[dt];
-    if (mw > 0) peaks[dt] = { watts: mw, wkg: Math.round((mw / weightKg) * 100) / 100, weightKg };
+    if (mw > 0) {
+      const wkg = Math.round((mw / weightKg) * 100) / 100;
+      peaks[dt] = { watts: mw, wkg, weightKg };
+    }
   }
-  if (!Object.keys(peaks).length) return null;
   return Object.keys(peaks).length ? { weightKg, peaks } : null;
 }
 
