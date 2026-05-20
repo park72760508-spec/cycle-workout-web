@@ -6111,7 +6111,8 @@ exports.rebuildRankingAggregates = onSchedule(
     schedule: RANKING_REBUILD_CRON,
     timeZone: "Asia/Seoul",
     memory: "2GiB",
-    timeoutSeconds: 3600,
+    /** Cloud Scheduler(onSchedule) 상한 1800s — 초과 시 deploy 실패 */
+    timeoutSeconds: 1800,
   },
   async () => {
     const db = admin.firestore();
