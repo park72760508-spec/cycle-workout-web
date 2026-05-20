@@ -12344,6 +12344,16 @@
       var loading = document.getElementById('stelvioRankingLoading');
       var content = document.getElementById('stelvioRankingContent');
 
+      function stelvioShowRankingBoardLoading(dimContent) {
+        stelvioSetRankingRefreshHint(false);
+        if (loading) loading.classList.remove('hidden');
+        if (content && dimContent !== false) content.style.opacity = '0.5';
+      }
+      function stelvioHideRankingBoardLoading() {
+        if (loading) loading.classList.add('hidden');
+        if (content) content.style.opacity = '1';
+      }
+
       var uid =
         (window.currentUser && window.currentUser.id) ||
         (function () {
@@ -12432,8 +12442,7 @@
 
       async function applyFromCache(body, opts) {
         opts = opts || {};
-        if (loading) loading.classList.add('hidden');
-        if (content) content.style.opacity = '1';
+        if (!opts.keepLoading) stelvioHideRankingBoardLoading();
         var working = stelvioCloneRankingPayload(body);
         var instant = opts.instant !== false && stelvioRankingCacheAllowsInstantApply(working);
         var psNeedsViewerAlign =
@@ -12498,8 +12507,8 @@
           (await stelvioRankingLocalCache.getSoft(lcKey)) ||
           (await stelvioFindRankingBoardCacheFallback(cacheKeyStr));
         if (softRankingCacheUsable(soft)) {
-          await applyFromCache(soft.data);
-          stelvioSetRankingRefreshHint(true);
+          stelvioShowRankingBoardLoading(true);
+          await applyFromCache(soft.data, { keepLoading: true });
           return true;
         }
         return false;
@@ -12530,7 +12539,10 @@
           /* 백그라운드 실패는 조용히 무시(이미 캐시 UI 표시 중) */
         } finally {
           delete stelvioRankingBgFetchInFlight[bgKey];
-          if (myGen === stelvioRankingFetchGen) stelvioApplyDurationModeUi();
+          if (myGen === stelvioRankingFetchGen) {
+            stelvioHideRankingBoardLoading();
+            stelvioApplyDurationModeUi();
+          }
         }
       }
 
@@ -12589,6 +12601,7 @@
       }
 
       await stelvioRankingMemCacheHydrateFromPersistent();
+      stelvioShowRankingBoardLoading(true);
 
       var memHit = stelvioRankingMemCacheGet(swrKey);
       if (memHit && cacheEntryUsable(memHit.ts, memHit.body)) {
@@ -12641,10 +12654,7 @@
             : null;
         var waitP = prefetchPromise || warmPromise;
         if (!waitP) return false;
-        if (!showedSoft) {
-          if (loading) loading.classList.remove('hidden');
-          if (content) content.style.opacity = '0.5';
-        }
+        stelvioShowRankingBoardLoading(true);
         try {
           await Promise.race([
             waitP,
@@ -12671,11 +12681,6 @@
       }
 
       if (await stelvioAwaitRankingWarmOrTabPrefetch()) return;
-
-      if (!showedSoft) {
-        if (loading) loading.classList.remove('hidden');
-        if (content) content.style.opacity = '0.5';
-      }
 
       try {
         var data2 = await stelvioRankingBoardFetchJson(urlFast, fetchTimeoutMs, myGen);
@@ -12749,8 +12754,7 @@
       } finally {
         if (myGen !== stelvioRankingFetchGen) return;
         stelvioApplyDurationModeUi();
-        if (loading) loading.classList.add('hidden');
-        if (content) content.style.opacity = '1';
+        stelvioHideRankingBoardLoading();
       }
     }
 
