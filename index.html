@@ -10272,6 +10272,16 @@
         }
       } catch (eLc) {}
 
+      if (typeof stelvioFindRankingBoardCacheFallback === 'function') {
+        try {
+          var lcFb = await stelvioFindRankingBoardCacheFallback(cacheKeyStr);
+          if (lcFb && lcFb.data && lcFb.data.success && lcFb.data.byCategory) {
+            STELVIO_RANK_PROFILE_FETCH_CACHE[key] = { at: now, data: lcFb.data };
+            return lcFb.data;
+          }
+        } catch (eLcFb) {}
+      }
+
       var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
       var toMs = Math.min(STELVIO_RANKING_FETCH_TIMEOUT_MS || 35000, 16000);
       var to =
@@ -10335,6 +10345,115 @@
 
     function stelvioRankProfileFormatRank(rankNum) {
       return rankNum != null && Number(rankNum) >= 1 ? Math.floor(Number(rankNum)) + '\uc704' : '\u2014';
+    }
+
+    /** 독주 보드와 동일: peak60·체중으로 speedKmh 보정(프로필 팝업·캐시용) */
+    function stelvioRankProfilePreparePersonalSpeedPayload(data) {
+      if (!data || !data.byCategory) return data;
+      if (typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 !== 'function') return data;
+      try {
+        return window.stelvioRecalcPersonalSpeedBoardFromPeak60(JSON.parse(JSON.stringify(data)));
+      } catch (ePsPrep) {
+        return data;
+      }
+    }
+
+    /** 독주 탭에 이미 표시 중인 보드 데이터(재산출·필터 반영됨) */
+    function stelvioRankProfileResolveLivePersonalSpeedBoard(gSel) {
+      if (typeof stelvioRankingByCategory === 'undefined' || !stelvioRankingByCategory) return null;
+      if (typeof stelvioIsPersonalSpeedRanking !== 'function' || !stelvioIsPersonalSpeedRanking()) return null;
+      var boardGender =
+        typeof stelvioRankingState !== 'undefined' && stelvioRankingState.gender
+          ? stelvioRankingState.gender
+          : 'all';
+      if (boardGender === 'group_dist') boardGender = 'all';
+      var want = gSel === 'M' || gSel === 'F' ? gSel : 'all';
+      if (want !== 'all' && boardGender !== 'all' && boardGender !== want) return null;
+      return { success: true, byCategory: stelvioRankingByCategory };
+    }
+
+    function stelvioRankProfileSpeedKmhFromRow(row) {
+      if (!row) return null;
+      var spd = Number(row.speedKmh);
+      if (spd > 0 && !Number.isNaN(spd)) return Math.round(spd * 10) / 10;
+      var peak = Number(row.peak60minWatts) || 0;
+      var w = Number(row.weightKg) || 0;
+      var calcFn =
+        typeof window !== 'undefined' && typeof window.calculateSpeedOnFlat === 'function'
+          ? window.calculateSpeedOnFlat
+          : typeof calculateSpeedOnFlat === 'function'
+            ? calculateSpeedOnFlat
+            : null;
+      if (peak > 0 && w > 0 && calcFn) {
+        var calc = Number(calcFn(peak, w));
+        if (calc > 0 && !Number.isNaN(calc)) return Math.round(calc * 10) / 10;
+      }
+      return null;
+    }
+
+    function stelvioRankProfileFindRowInCategory(data, userId, catKey) {
+      if (!data || !data.byCategory || !userId || !catKey) return { row: null, rank: null };
+      var arr = data.byCategory[catKey] || [];
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && String(arr[i].userId) === String(userId)) {
+          return { row: arr[i], rank: stelvioRankProfileRankFromRow(arr[i], i) };
+        }
+      }
+      return { row: null, rank: null };
+    }
+
+    /** 독주 순위 보드와 동일한 사용자 행·전체/부문 순위·km/h */
+    function stelvioRankProfileFindPersonalSpeedUser(rawData, userId, ageCategory) {
+      var empty = { row: null, speedKmh: null, supRank: null, catRank: null };
+      if (!rawData || !rawData.byCategory || !userId) return empty;
+      var processed = stelvioRankProfilePreparePersonalSpeedPayload(rawData);
+      var catKey = ageCategory ? String(ageCategory).trim() : '';
+      var supP = stelvioRankProfileFindRowInCategory(processed, userId, 'Supremo');
+      var supR = supP.rank;
+      var catR = null;
+      var catRow = null;
+      if (catKey && catKey !== 'Supremo') {
+        var catP = stelvioRankProfileFindRowInCategory(processed, userId, catKey);
+        catR = catP.rank;
+        catRow = catP.row;
+      }
+      var row = supP.row || catRow;
+      if (!row && processed !== rawData) {
+        var supRaw = stelvioRankProfileFindRowInCategory(rawData, userId, 'Supremo');
+        if (!supR && supRaw.rank != null) supR = supRaw.rank;
+        if (!row && supRaw.row) row = supRaw.row;
+        if (catKey && catKey !== 'Supremo' && !catRow) {
+          var catRaw = stelvioRankProfileFindRowInCategory(rawData, userId, catKey);
+          if (!catR && catRaw.rank != null) catR = catRaw.rank;
+          if (!row && catRaw.row) row = catRaw.row;
+        }
+      }
+      if (!supR && supP.row) supR = supP.rank;
+      return {
+        row: row,
+        speedKmh: stelvioRankProfileSpeedKmhFromRow(row),
+        supRank: supR,
+        catRank: catR
+      };
+    }
+
+    function stelvioRankProfileFormatSpeedAbilityText(info, catLab) {
+      info = info || {};
+      var spd = info.speedKmh;
+      var rankParts = [];
+      if (info.supRank != null) rankParts.push('\uc804\uccb4 ' + stelvioRankProfileFormatRank(info.supRank));
+      if (info.catRank != null) {
+        rankParts.push(
+          (catLab ? String(catLab) + ' ' : '\ubd80\ubb38 ') + stelvioRankProfileFormatRank(info.catRank)
+        );
+      }
+      var rankStr = rankParts.join(' \u00b7 ');
+      if (spd != null && spd > 0) {
+        var base = Number(spd).toFixed(1) + ' km/h';
+        return rankStr ? base + ' (' + rankStr + ')' : base;
+      }
+      if (rankStr) return '\u2014 (' + rankStr + ')';
+      return '\u2014';
     }
 
     function stelvioRankAvatarZoomSetRankSpinner(on) {
@@ -10432,33 +10551,20 @@
 
         var tssData = results[1 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
         var pdData = results[2 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
-        var spdData = results[3 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
+        var spdFetched = results[3 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
+        var spdLive = stelvioRankProfileResolveLivePersonalSpeedBoard(gSel);
+        var spdSource = spdLive || spdFetched;
         var tssRow = stelvioRankProfileSupremoRow(tssData, userId);
         var pdRow = stelvioRankProfileSupremoRow(pdData, userId);
-        var spdRow = stelvioRankProfileSupremoRow(spdData, userId);
-        var spdRank = null;
-        if (spdData && spdData.byCategory && spdData.byCategory.Supremo) {
-          var spar = spdData.byCategory.Supremo || [];
-          for (var sk = 0; sk < spar.length; sk++) {
-            if (spar[sk] && String(spar[sk].userId) === String(userId)) {
-              spdRank = stelvioRankProfileRankFromRow(spar[sk], sk);
-              break;
-            }
-          }
-        }
+        var spdInfo = stelvioRankProfileFindPersonalSpeedUser(spdSource, userId, catKey);
         var tssTxt = '\u2014';
         var distTxt = '\u2014';
-        var spdTxt = '\u2014';
+        var spdTxt = stelvioRankProfileFormatSpeedAbilityText(spdInfo, catLab);
         if (tssRow && tssRow.totalTss != null && !Number.isNaN(Number(tssRow.totalTss))) {
           tssTxt = Number(tssRow.totalTss).toFixed(1) + ' TSS';
         }
         if (pdRow && pdRow.totalKm != null && !Number.isNaN(Number(pdRow.totalKm))) {
           distTxt = Number(pdRow.totalKm).toFixed(1) + ' km';
-        }
-        if (spdRow && spdRow.speedKmh != null && !Number.isNaN(Number(spdRow.speedKmh)) && Number(spdRow.speedKmh) > 0) {
-          spdTxt = Number(spdRow.speedKmh).toFixed(1) + ' km/h (' + stelvioRankProfileFormatRank(spdRank) + ')';
-        } else if (spdRank != null) {
-          spdTxt = '\u2014 (' + stelvioRankProfileFormatRank(spdRank) + ')';
         }
 
         if (!dieIfStale()) return;
