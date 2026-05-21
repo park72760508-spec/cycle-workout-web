@@ -1092,6 +1092,9 @@ async function fetchStravaStreams(accessToken, activityId) {
   return { success: false, watts: null, heartrate: null };
 }
 
+/** max_watts 필드: 1초 순간 최대가 아닌 5초 롤링 평균의 최대 (필드명 max_watts 유지) */
+const MAX_WATTS_WINDOW_SEC = 5;
+
 /**
  * O(N) 슬라이딩 윈도우로 최대 평균 파워(MMP) 계산.
  * watts 배열: 인덱스 1초당 1개 값. seconds 구간의 최대 평균 파워 반환.
@@ -1110,6 +1113,18 @@ function calculateMaxAveragePower(wattsArray, seconds) {
     if (avg > maxAvg) maxAvg = avg;
   }
   return Math.round(maxAvg);
+}
+
+/** 파워 스트림(1Hz)에서 max_watts — 5초 롤링 평균 최대, 5초 미만이면 순간 최대 */
+function calculateMaxWattsFromPowerStream(wattsArray) {
+  if (!wattsArray || wattsArray.length === 0) return null;
+  const smoothed = smoothPowerSpikes(wattsArray);
+  if (smoothed.length >= MAX_WATTS_WINDOW_SEC) {
+    const v = calculateMaxAveragePower(smoothed, MAX_WATTS_WINDOW_SEC);
+    return v > 0 ? v : null;
+  }
+  const instant = Math.max(...smoothed.map((w) => Number(w) || 0));
+  return instant > 0 ? Math.round(instant) : null;
 }
 
 /** 심박 스트림 배열에서 구간별 최대 평균 심박 및 전체 최대 심박 계산 (MMP와 동일한 구간)
@@ -1198,6 +1213,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   let max30minWatts = null;
   let max40minWatts = null;
   let max60minWatts = null;
+  let maxWattsFromStream = null;
   if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
     const watts = smoothPowerSpikes(streamsRes.watts);
     max1minWatts = calculateMaxAveragePower(watts, 60);
@@ -1207,6 +1223,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     max30minWatts = calculateMaxAveragePower(watts, 1800);
     max40minWatts = calculateMaxAveragePower(watts, 2400);
     max60minWatts = calculateMaxAveragePower(watts, 3600);
+    maxWattsFromStream = calculateMaxWattsFromPowerStream(watts);
   }
 
   const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0
@@ -1244,7 +1261,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     avg_hr: mapped.avg_hr,
     max_hr: mapped.max_hr,
     avg_watts: mapped.avg_watts,
-    max_watts: mapped.max_watts,
+    max_watts: maxWattsFromStream ?? mapped.max_watts,
     weighted_watts: mapped.weighted_watts,
     kilojoules: mapped.kilojoules,
     elevation_gain: mapped.elevation_gain,
@@ -1784,8 +1801,8 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
           updateData.max_30min_watts = calculateMaxAveragePower(watts, 1800);
           updateData.max_40min_watts = calculateMaxAveragePower(watts, 2400);
           updateData.max_60min_watts = calculateMaxAveragePower(watts, 3600);
-          const streamMax = Math.max(...watts.map((w) => Number(w) || 0));
-          if (streamMax > 0) updateData.max_watts = Math.round(streamMax);
+          const streamMaxW = calculateMaxWattsFromPowerStream(watts);
+          if (streamMaxW != null) updateData.max_watts = streamMaxW;
           else if (act.max_watts != null) updateData.max_watts = Number(act.max_watts);
         }
         const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0 ? calculateMaxHeartRatePeaks(streamsRes.heartrate) : null;
@@ -1837,8 +1854,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       max30minWatts = calculateMaxAveragePower(watts, 1800);
       max40minWatts = calculateMaxAveragePower(watts, 2400);
       max60minWatts = calculateMaxAveragePower(watts, 3600);
-      const streamMax = Math.max(...watts.map((w) => Number(w) || 0));
-      if (streamMax > 0) maxWattsFromStream = Math.round(streamMax);
+      maxWattsFromStream = calculateMaxWattsFromPowerStream(watts);
     }
     const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0 ? calculateMaxHeartRatePeaks(streamsRes.heartrate) : null;
     let timeInZones = null;
@@ -2374,8 +2390,8 @@ exports.manualStravaSyncWithMmp = onRequest(
             updateData.max_30min_watts = calculateMaxAveragePower(wattsArray, 1800);
             updateData.max_40min_watts = calculateMaxAveragePower(wattsArray, 2400);
             updateData.max_60min_watts = calculateMaxAveragePower(wattsArray, 3600);
-            const streamMax = Math.max(...wattsArray.map((w) => Number(w) || 0));
-            if (streamMax > 0) updateData.max_watts = Math.round(streamMax);
+            const streamMaxW = calculateMaxWattsFromPowerStream(wattsArray);
+            if (streamMaxW != null) updateData.max_watts = streamMaxW;
             else if (act.max_watts != null) updateData.max_watts = Number(act.max_watts);
             console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 1m=${updateData.max_1min_watts}, 5m=${updateData.max_5min_watts}, 10m=${updateData.max_10min_watts}, 20m=${updateData.max_20min_watts}, 30m=${updateData.max_30min_watts}, 40m=${updateData.max_40min_watts}, 60m=${updateData.max_60min_watts}, max=${updateData.max_watts || "?"}`);
           }
@@ -2441,8 +2457,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           max30minWatts = calculateMaxAveragePower(wattsArray, 1800);
           max40minWatts = calculateMaxAveragePower(wattsArray, 2400);
           max60minWatts = calculateMaxAveragePower(wattsArray, 3600);
-          const streamMax = Math.max(...wattsArray.map((w) => Number(w) || 0));
-          if (streamMax > 0) maxWattsFromStream = Math.round(streamMax);
+          maxWattsFromStream = calculateMaxWattsFromPowerStream(wattsArray);
           console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 1m=${max1minWatts}, 5m=${max5minWatts}, 10m=${max10minWatts}, 20m=${max20minWatts}, 30m=${max30minWatts}, 40m=${max40minWatts}, 60m=${max60minWatts}, max=${maxWattsFromStream}`);
         }
         const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0 ? calculateMaxHeartRatePeaks(streamsRes.heartrate) : null;
