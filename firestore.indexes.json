@@ -109,6 +109,14 @@
         { "fieldPath": "windowEnd", "order": "ASCENDING" },
         { "fieldPath": "windowStart", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "ranking_rollups",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "windowEnd", "order": "ASCENDING" },
+        { "fieldPath": "windowStart", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
