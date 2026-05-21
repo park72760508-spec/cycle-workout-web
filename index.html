@@ -9616,12 +9616,14 @@
     var STELVIO_RANKING_FAVORITES_RESET_LS_FLAG = 'stelvio_rank_fav_schema_v2_done:';
     var stelvioRankingFavoritesFirestoreSaveTimer = null;
     var stelvioRankingFavoritesMigrateV2Promise = null;
+    /** users 병합 저장은 stelvioRankingV9SetUserMerge(setDoc v9)만 사용 — compat FieldValue 금지 */
     function stelvioRankingFavoritesFirestoreTimestamp() {
       try {
-        if (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldValue) {
-          return firebase.firestore.FieldValue.serverTimestamp();
+        var fns = window._firebaseFirestoreFns;
+        if (fns && typeof fns.serverTimestamp === 'function') {
+          return fns.serverTimestamp();
         }
-      } catch (eTs) {}
+      } catch (eTsV9) {}
       return new Date().toISOString();
     }
     async function stelvioLoadRankingFavoriteIdsFromFirestore(ownerUid) {
