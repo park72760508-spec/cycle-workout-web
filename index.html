@@ -8899,9 +8899,108 @@
     var stelvioRankingWarmSession = { gen: 0, promise: null, inFlight: false };
 
     function stelvioRankingGetFirestore() {
-      if (window.firestoreV9 && typeof window.firestoreV9.collection === 'function') return window.firestoreV9;
       if (window.firestore && typeof window.firestore.collection === 'function') return window.firestore;
       return null;
+    }
+
+    function stelvioRankingFirestoreV9Pack() {
+      var fns = window._firebaseFirestoreFns;
+      var db = window.firestoreV9;
+      if (!db || !fns || typeof fns.doc !== 'function' || typeof fns.getDoc !== 'function') return null;
+      return { db: db, fns: fns };
+    }
+
+    /** ranking_meta·users 관심·친구 — authV9 ID 토큰이 Firestore 규칙에 반영될 때까지 대기 */
+    async function stelvioEnsureRankingFirestoreAuthReady() {
+      try {
+        if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
+          await Promise.race([
+            window.authV9.authStateReady(),
+            new Promise(function (r) {
+              setTimeout(r, 8000);
+            }),
+          ]);
+        }
+      } catch (eReady) {}
+      var u =
+        (window.authV9 && window.authV9.currentUser) ||
+        (window.auth && window.auth.currentUser) ||
+        null;
+      if (u && typeof u.getIdToken === 'function') {
+        try {
+          await u.getIdToken(false);
+        } catch (eTok) {}
+      }
+      return !!(u && u.uid);
+    }
+
+    function stelvioRankingV9SnapExists(snap) {
+      if (!snap) return false;
+      if (typeof window.stelvioDocSnapExists === 'function') return window.stelvioDocSnapExists(snap);
+      if (typeof snap.exists === 'function') return snap.exists();
+      return !!snap.exists;
+    }
+
+    function stelvioRankingV9SnapData(snap) {
+      if (!snap) return null;
+      return typeof snap.data === 'function' ? snap.data() : null;
+    }
+
+    async function stelvioRankingV9GetDoc(collectionId, docId) {
+      var pack = stelvioRankingFirestoreV9Pack();
+      if (!pack) return null;
+      var ref = pack.fns.doc(pack.db, collectionId, docId);
+      var snap = await pack.fns.getDoc(ref);
+      if (!stelvioRankingV9SnapExists(snap)) return null;
+      return stelvioRankingV9SnapData(snap);
+    }
+
+    async function stelvioRankingV9GetUserData(ownerUid) {
+      var authUid =
+        (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) ||
+        (window.auth && window.auth.currentUser && window.auth.currentUser.uid) ||
+        '';
+      var readUid = authUid ? String(authUid) : ownerUid ? String(ownerUid) : '';
+      if (!readUid) return null;
+      if (!(await stelvioEnsureRankingFirestoreAuthReady())) return null;
+      return stelvioRankingV9GetDoc('users', readUid);
+    }
+
+    async function stelvioRankingV9SetUserMerge(ownerUid, patch) {
+      var pack = stelvioRankingFirestoreV9Pack();
+      if (!pack || !patch) return false;
+      var authUid =
+        (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) ||
+        (window.auth && window.auth.currentUser && window.auth.currentUser.uid) ||
+        '';
+      var writeUid = authUid ? String(authUid) : ownerUid ? String(ownerUid) : '';
+      if (!writeUid || !(await stelvioEnsureRankingFirestoreAuthReady())) return false;
+      var ref = pack.fns.doc(pack.db, 'users', writeUid);
+      await pack.fns.setDoc(ref, patch, { merge: true });
+      return true;
+    }
+
+    async function stelvioRankingV9ListFriends(ownerUid) {
+      var pack = stelvioRankingFirestoreV9Pack();
+      if (!pack || typeof pack.fns.collection !== 'function' || typeof pack.fns.getDocs !== 'function') {
+        return [];
+      }
+      var authUid =
+        (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) ||
+        (window.auth && window.auth.currentUser && window.auth.currentUser.uid) ||
+        '';
+      var readUid = authUid ? String(authUid) : ownerUid ? String(ownerUid) : '';
+      if (!readUid || !(await stelvioEnsureRankingFirestoreAuthReady())) return [];
+      var collRef = pack.fns.collection(pack.db, 'users', readUid, 'friends');
+      var snap = await pack.fns.getDocs(collRef);
+      var out = [];
+      if (!snap || !snap.forEach) return out;
+      snap.forEach(function (docSnap) {
+        var d = (docSnap.data && docSnap.data()) || {};
+        var fid = String(docSnap.id || d.friendUid || '').trim();
+        if (fid) out.push(fid);
+      });
+      return out;
     }
 
     function stelvioRankingMetaTsFromField(v) {
@@ -8960,22 +9059,25 @@
     }
 
     async function stelvioFetchRankingMetaFromFirestore() {
-      var fs = stelvioRankingGetFirestore();
-      if (!fs) return null;
-      if (!stelvioRankingHasAuthUser()) return null;
+      if (!stelvioRankingFirestoreV9Pack()) return null;
       try {
-        var coll = fs.collection('ranking_meta');
-        var snaps = await Promise.all([
-          coll.doc('master_daily_rebuild').get(),
-          coll.doc('heptagon_daily_rebuild').get(),
-          coll.doc('personal_speed_logic').get(),
-          coll.doc('peak_28d_board_refresh').get(),
-        ]);
+        await stelvioEnsureRankingFirestoreAuthReady();
+        var metaIds = [
+          'master_daily_rebuild',
+          'heptagon_daily_rebuild',
+          'personal_speed_logic',
+          'peak_28d_board_refresh',
+        ];
+        var rows = await Promise.all(
+          metaIds.map(function (id) {
+            return stelvioRankingV9GetDoc('ranking_meta', id);
+          })
+        );
         return {
-          master: snaps[0].exists ? snaps[0].data() : null,
-          heptagon: snaps[1].exists ? snaps[1].data() : null,
-          personalSpeed: snaps[2].exists ? snaps[2].data() : null,
-          peak28d: snaps[3].exists ? snaps[3].data() : null,
+          master: rows[0],
+          heptagon: rows[1],
+          personalSpeed: rows[2],
+          peak28d: rows[3],
         };
       } catch (eMeta) {
         console.warn('[StelvioRanking] ranking_meta 조회 실패:', eMeta && eMeta.message);
@@ -9008,7 +9110,7 @@
     }
 
     async function stelvioEnsureFirestoreForRankingMeta() {
-      if (stelvioRankingGetFirestore()) return true;
+      if (stelvioRankingFirestoreV9Pack()) return true;
       if (typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
         try {
           await Promise.race([
@@ -9019,7 +9121,7 @@
           ]);
         } catch (eFs) {}
       }
-      return !!stelvioRankingGetFirestore();
+      return !!stelvioRankingFirestoreV9Pack();
     }
 
     /**
@@ -9033,6 +9135,7 @@
         await stelvioRankingMemCacheHydrateFromPersistent();
         if (!uid) return { warmed: false, reason: 'no_uid' };
         await stelvioEnsureFirestoreForRankingMeta();
+        await stelvioEnsureRankingFirestoreAuthReady();
         var serverMeta = await stelvioFetchRankingMetaFromFirestore();
         var inv = await stelvioInvalidateRankingCachesIfMetaChanged(serverMeta);
         var warm = stelvioEnsureRankingBoardWarmPrefetch({
@@ -9199,31 +9302,17 @@
     async function stelvioRefreshRankingFriendSetFromFirestore() {
       stelvioRankingFriendUserSet = new Set();
       var myId = stelvioResolveRankingViewerUserId();
-      if (!myId) return;
+      if (!myId || !stelvioRankingFirestoreV9Pack()) return;
       try {
-        var fs = null;
-        if (window.firestore && typeof window.firestore.collection === 'function') {
-          fs = window.firestore;
-        } else if (typeof firebase !== 'undefined' && firebase.firestore && typeof firebase.firestore === 'function') {
-          fs = firebase.firestore();
-        }
-        if (!fs || typeof fs.collection !== 'function') return;
-        var friendsRef = fs.collection('users').doc(myId).collection('friends');
-        var snap = await Promise.race([
-          friendsRef.get(),
-          new Promise(function (_, reject) {
+        var ids = await Promise.race([
+          stelvioRankingV9ListFriends(myId),
+          new Promise(function (resolve) {
             setTimeout(function () {
-              reject(new Error('stelvio-friends-timeout'));
+              resolve([]);
             }, STELVIO_RANKING_FRIENDS_TIMEOUT_MS);
           }),
         ]);
-        var s = new Set();
-        snap.forEach(function (docSnap) {
-          var d = docSnap.data() || {};
-          var fid = String(docSnap.id || d.friendUid || '').trim();
-          if (fid) s.add(fid);
-        });
-        stelvioRankingFriendUserSet = s;
+        stelvioRankingFriendUserSet = new Set(ids || []);
       } catch (eFr) {
         if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[StelvioRanking] 친구 목록 로드 실패:', eFr);
       }
@@ -9486,9 +9575,15 @@
     }
 
     function stelvioResolveRankingFavoritesOwnerUid() {
-      /* 저장 키는 로그인 사용자 기준만 사용(stelvioRankingCurrentUserId 제외 — API·캐시 타이밍과 어긋나 새 항목만 유실됨) */
+      /* Firestore 규칙은 request.auth.uid — Auth UID를 최우선(프로필 id와 동일해야 함) */
       var uid = null;
-      if (window.currentUser) {
+      if (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) {
+        uid = window.authV9.currentUser.uid;
+      }
+      if (!uid && window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+        uid = window.auth.currentUser.uid;
+      }
+      if (!uid && window.currentUser) {
         uid = window.currentUser.id != null ? window.currentUser.id : window.currentUser.uid;
       }
       if (!uid) {
@@ -9502,12 +9597,6 @@
           var au = JSON.parse(localStorage.getItem('authUser') || 'null');
           uid = au && (au.id || au.uid) ? au.id || au.uid : null;
         } catch (eAu) { uid = null; }
-      }
-      if (!uid && window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
-        uid = window.auth.currentUser.uid;
-      }
-      if (!uid && window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) {
-        uid = window.authV9.currentUser.uid;
       }
       return uid ? String(uid).trim() : '';
     }
@@ -9537,19 +9626,17 @@
     }
     async function stelvioLoadRankingFavoriteIdsFromFirestore(ownerUid) {
       if (!ownerUid) return [];
-      var fs = stelvioGetRankingFirestoreCompat();
-      if (!fs || typeof fs.collection !== 'function') return [];
+      if (!stelvioRankingFirestoreV9Pack()) return [];
       try {
-        var snap = await Promise.race([
-          fs.collection('users').doc(String(ownerUid)).get(),
-          new Promise(function (_, reject) {
+        var d = await Promise.race([
+          stelvioRankingV9GetUserData(ownerUid),
+          new Promise(function (resolve) {
             setTimeout(function () {
-              reject(new Error('stelvio-ranking-favorites-fs-timeout'));
+              resolve(null);
             }, 12000);
           }),
         ]);
-        if (!snap || !snap.exists) return [];
-        var d = snap.data() || {};
+        if (!d) return [];
         var arr = d[STELVIO_RANKING_FAVORITES_FS_FIELD];
         if (!Array.isArray(arr)) return [];
         return arr.map(function (x) { return String(x); }).filter(Boolean);
@@ -9581,16 +9668,14 @@
     }
     async function stelvioPersistRankingFavoritesToFirestoreNow() {
       var ownerUid = stelvioResolveRankingFavoritesOwnerUid();
-      if (!ownerUid) return;
-      var fs = stelvioGetRankingFirestoreCompat();
-      if (!fs || typeof fs.collection !== 'function') return;
+      if (!ownerUid || !stelvioRankingFirestoreV9Pack()) return;
       var ids = Array.from(stelvioRankingFavoriteUserSet);
       if (ids.length > 500) ids = ids.slice(0, 500);
       var patch = {};
       patch[STELVIO_RANKING_FAVORITES_FS_FIELD] = ids;
       patch.rankingFavoritesUpdatedAt = stelvioRankingFavoritesFirestoreTimestamp();
       try {
-        await fs.collection('users').doc(String(ownerUid)).set(patch, { merge: true });
+        await stelvioRankingV9SetUserMerge(ownerUid, patch);
       } catch (eSaveFs) {
         if (typeof stelvioAdminWarn === 'function') {
           stelvioAdminWarn('[StelvioRanking] 관심 Firestore 저장 실패:', eSaveFs && eSaveFs.message ? eSaveFs.message : eSaveFs);
@@ -9621,35 +9706,31 @@
       var ownerUid = stelvioResolveRankingFavoritesOwnerUid();
       if (!ownerUid) return;
       var lsFlag = STELVIO_RANKING_FAVORITES_RESET_LS_FLAG + ownerUid;
-      var fs = stelvioGetRankingFirestoreCompat();
       var alreadyDone = false;
       try {
         if (localStorage.getItem(lsFlag) === '1') alreadyDone = true;
       } catch (eLf) {}
-      if (!alreadyDone && fs && typeof fs.collection === 'function') {
+      if (!alreadyDone && stelvioRankingFirestoreV9Pack()) {
         try {
-          var snapVer = await fs.collection('users').doc(String(ownerUid)).get();
-          if (snapVer && snapVer.exists) {
-            var dVer = snapVer.data() || {};
-            if (Number(dVer[STELVIO_RANKING_FAVORITES_SCHEMA_FIELD]) >= STELVIO_RANKING_FAVORITES_SCHEMA_VER) {
-              alreadyDone = true;
-              try {
-                localStorage.setItem(lsFlag, '1');
-              } catch (eLf2) {}
-            }
+          var dVer = await stelvioRankingV9GetUserData(ownerUid);
+          if (dVer && Number(dVer[STELVIO_RANKING_FAVORITES_SCHEMA_FIELD]) >= STELVIO_RANKING_FAVORITES_SCHEMA_VER) {
+            alreadyDone = true;
+            try {
+              localStorage.setItem(lsFlag, '1');
+            } catch (eLf2) {}
           }
         } catch (eVer) {}
       }
       if (alreadyDone) return;
       stelvioRankingFavoriteUserSet = new Set();
       stelvioClearRankingFavoritesLocalCaches(ownerUid);
-      if (fs && typeof fs.collection === 'function') {
+      if (stelvioRankingFirestoreV9Pack()) {
         var patchReset = {};
         patchReset[STELVIO_RANKING_FAVORITES_FS_FIELD] = [];
         patchReset[STELVIO_RANKING_FAVORITES_SCHEMA_FIELD] = STELVIO_RANKING_FAVORITES_SCHEMA_VER;
         patchReset.rankingFavoritesUpdatedAt = stelvioRankingFavoritesFirestoreTimestamp();
         try {
-          await fs.collection('users').doc(String(ownerUid)).set(patchReset, { merge: true });
+          await stelvioRankingV9SetUserMerge(ownerUid, patchReset);
         } catch (eResetFs) {
           if (typeof stelvioAdminWarn === 'function') {
             stelvioAdminWarn(
@@ -9862,6 +9943,7 @@
         stelvioRankingFavoriteUserSet.size === 0 ||
         opts.authoritative !== false;
       if (!needFirestore) return;
+      if (!(await stelvioEnsureRankingFirestoreAuthReady())) return;
       await stelvioRefreshRankingFavoritesFromFirestore({
         authoritative: opts.authoritative !== false,
         replaceMemory: opts.replaceMemory === true,
@@ -10119,7 +10201,7 @@
     }
     (function stelvioRankingFavoritesBootHydrate() {
       try {
-        stelvioEnsureRankingFavoritesHydrated({ forceFirestore: true, authoritative: true }).catch(function () {});
+        stelvioRefreshRankingFavoriteSetFromStorage({ authoritativeLocal: true });
       } catch (eBootFav) {}
     })();
     document.addEventListener('stelvio-auth-ready', function () {
@@ -19229,10 +19311,18 @@
                   showToast(userData.name + '님, 로그인되었습니다.');
                 }
                 try { window._stelvioStorageSet('stelvio_last_session_uid', String(user.uid)); } catch (eSu) {}
+                try {
+                  window.dispatchEvent(new CustomEvent('stelvio-auth-ready', { detail: { uid: user.uid } }));
+                } catch (eAuthEv) {}
                 if (typeof stelvioSyncRankingCacheWithFirestoreMeta === 'function') {
-                  stelvioSyncRankingCacheWithFirestoreMeta({ uid: userData.id, gender: 'all' }).catch(function () {});
+                  var syncUid = user.uid || userData.id;
+                  stelvioEnsureRankingFirestoreAuthReady()
+                    .then(function () {
+                      return stelvioSyncRankingCacheWithFirestoreMeta({ uid: syncUid, gender: 'all' });
+                    })
+                    .catch(function () {});
                 } else if (typeof stelvioBackgroundPrefetchAllTabs === 'function') {
-                  stelvioBackgroundPrefetchAllTabs(userData.id);
+                  stelvioBackgroundPrefetchAllTabs(user.uid || userData.id);
                 }
               } else {
                 console.warn('⚠️ users/{uid} 문서가 없습니다 (재시도 후):', user.uid);
