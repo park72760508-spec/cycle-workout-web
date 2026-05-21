@@ -11,7 +11,7 @@
   var FIREBASE_APP_MOD_URL = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 
   var COL = 'heptagon_rank_log';
-  /** 랭킹·이웃: Cloud Function `scheduledHeptagonCohortRanks`가 채움 */
+  /** 랭킹·이웃: Cloud Function `scheduledPeak28dHeptagonOnly`(03:20 KST)가 채움 */
   var COL_COHORT = 'heptagon_cohort_ranks';
 
   /**
@@ -44,7 +44,7 @@
       });
   }
 
-  /** `scheduledHeptagonCohortRanks`가 쓰는 문서 ID — 이웃 표 집계 순위용 */
+  /** `scheduledPeak28dHeptagonOnly`가 쓰는 문서 ID — 이웃 표 집계 순위용 */
   /**
    * Supremo가 아닐 때: 문서의 ageCategory가 선택 부문과 같을 때만 집계 행으로 인정(구버전 가상부문 문서 제외).
    */
