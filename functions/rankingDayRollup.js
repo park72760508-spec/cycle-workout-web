@@ -15,7 +15,7 @@ exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
 /** 28일 피크·GC·헵타곤 — 일 버킷만 증분 갱신(전체 로그 스캔 없음) */
 exports.PEAK_28D_ROLLUP_ID = "peak_28d";
 /** 4주(28일) 중 주별 최고 1건씩 → 4주 중 최대 1건으로 환산 (GC·헵타곤) */
-exports.PEAK_28D_LOGIC_VERSION = 2;
+exports.PEAK_28D_LOGIC_VERSION = 3;
 exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK = "four_week_one_peak";
 /**
  * 랭킹 항속 산출식 버전 — 변경 시 rollup·ranking_aggregates·cache 전면 재계산.
@@ -928,15 +928,49 @@ function peak28dRollupNeedsInvalidate(rollup, startStr, endStr) {
   if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return true;
   if (Number(rollup.rollupLogicVersion) < exports.PEAK_28D_LOGIC_VERSION) return true;
   if (rollup.peakMethod !== exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK) return true;
+  if (!rollup.userMeta || !rollup.userMeta.ageCategory) return true;
   return false;
 }
 
-async function writePeak28dRollupDoc(db, userId, userData, startStr, endStr, peakMap, hrMax) {
+/**
+ * 보드 조립 시 users.get() 없이 collectionGroup 만으로 행 구성.
+ * @param {object} userData
+ * @param {Function} getLeagueCategory — (challenge, birthYear) => string|null
+ */
+function snapshotUserMetaForPeakRollup(userData, getLeagueCategory) {
+  const data = userData || {};
+  const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+  const challenge = data.challenge || "Fitness";
+  const ageCategory = typeof getLeagueCategory === "function" ? getLeagueCategory(challenge, birthYear) : null;
+  const gender = String(data.gender || data.sex || "").toLowerCase();
+  const genderKey =
+    gender === "m" || gender === "male" || gender === "남"
+      ? "M"
+      : gender === "f" || gender === "female" || gender === "여"
+        ? "F"
+        : null;
+  const acc = String(data.account_status || "").trim().toLowerCase();
+  return {
+    name: (data.name || data.displayName || "(이름 없음)").toString().trim() || "(이름 없음)",
+    ageCategory: ageCategory || "",
+    genderKey,
+    is_private: data.is_private === true,
+    profileImageUrl: data.profileImageUrl || data.photoURL || data.profile_image_url || null,
+    account_status: data.account_status || "",
+    isWithdrawn: acc === "withdrawn" || acc === "inactive" || acc === "deleted",
+  };
+}
+
+async function writePeak28dRollupDoc(db, userId, userData, startStr, endStr, peakMap, hrMax, getLeagueCategory) {
   const ref = peak28dRollupRef(db, userId);
   if (!peakMap || !peakMap.peaks || !Object.keys(peakMap.peaks).length) {
     await ref.delete().catch(() => {});
     return null;
   }
+  const userMeta =
+    typeof getLeagueCategory === "function"
+      ? snapshotUserMetaForPeakRollup(userData, getLeagueCategory)
+      : null;
   const payload = {
     windowStart: startStr,
     windowEnd: endStr,
@@ -944,6 +978,7 @@ async function writePeak28dRollupDoc(db, userId, userData, startStr, endStr, pea
     peaks: peakMap.peaks,
     peakMethod: peakMap.peakMethod || exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
     hrMaxByDuration: hrMax || {},
+    userMeta,
     rollupLogicVersion: exports.PEAK_28D_LOGIC_VERSION,
     reconciled_at: admin.firestore.FieldValue.serverTimestamp(),
   };
@@ -964,8 +999,36 @@ async function rebuildPeak28dRollupFromBuckets(db, userId, userData, startStr, e
   const bucketSnaps = await chunkedGetAll(db, refs, BUCKET_GET_CHUNK);
   const peakMap = computeFourWeekGcStylePeaksFromBucketSnaps(userData, bucketSnaps, startStr, endStr);
   const hrMax = maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr);
-  await writePeak28dRollupDoc(db, userId, userData, startStr, endStr, peakMap, hrMax);
+  const getLc = opts && opts.getLeagueCategory;
+  await writePeak28dRollupDoc(db, userId, userData, startStr, endStr, peakMap, hrMax, getLc);
   return { peakMap, hrMax };
+}
+
+/**
+ * 청크 백필 — users 컬렉션을 cursor 로 N명만 rollup 갱신 (전체 1회 스캔 방지).
+ * @returns {{ processed: number, nextIndex: number, done: boolean, rebuilt: number }}
+ */
+async function rebuildPeak28dRollupsChunk(db, userDocs, startIndex, chunkSize, startStr, endStr, getLeagueCategory) {
+  const n = userDocs.length;
+  const end = Math.min(n, startIndex + chunkSize);
+  let rebuilt = 0;
+  for (let i = startIndex; i < end; i++) {
+    const udoc = userDocs[i];
+    /* eslint-disable no-await-in-loop */
+    await rebuildPeak28dRollupFromBuckets(db, udoc.id, udoc.data() || {}, startStr, endStr, {
+      ensureMissingDays: false,
+      getLeagueCategory,
+    });
+    /* eslint-enable no-await-in-loop */
+    rebuilt++;
+  }
+  return {
+    processed: end - startIndex,
+    nextIndex: end,
+    done: end >= n,
+    rebuilt,
+    totalUsers: n,
+  };
 }
 
 /**
@@ -1430,6 +1493,8 @@ exports.touchPeak28dRollupAfterDayChange = touchPeak28dRollupAfterDayChange;
 exports.rebuildPeak28dRollupsBatch = rebuildPeak28dRollupsBatch;
 exports.fetchPeak28dRollupMap = fetchPeak28dRollupMap;
 exports.peak28dRollupNeedsInvalidate = peak28dRollupNeedsInvalidate;
+exports.snapshotUserMetaForPeakRollup = snapshotUserMetaForPeakRollup;
+exports.rebuildPeak28dRollupsChunk = rebuildPeak28dRollupsChunk;
 exports.reconcileRankingDayTotalsOnLogWrite = reconcileRankingDayTotalsOnLogWrite;
 exports.reconcileUserRankingDayBucket = reconcileUserRankingDayBucket;
 exports.ensureRankingBucketsFilledForRange = ensureRankingBucketsFilledForRange;

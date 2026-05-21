@@ -33,6 +33,7 @@ if (!admin.apps.length) {
 }
 
 const rankingDayRollup = require("./rankingDayRollup");
+const peakBoardFast = require("./peakBoardFast");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -3148,23 +3149,36 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
       peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
       skipRollupBatch,
     });
-    if (useRollups && !skipRollupBatch && forceRollupBatch) {
-      const rollupPrep = await rankingDayRollup.rebuildPeak28dRollupsBatch(db, snap.docs, r28s, r28e, {
-        ensureMissingDays: !!(opts && opts.ensureMissingDays),
-        batchSize: 60,
-      });
-      console.log("[runRankingAggregatePeakMonthly28d] peak_28d rollups (force)", rollupPrep);
+    const skipRankHistory = opts && opts.skipRankHistory !== false;
+    let allDur;
+    let boardStats = null;
+    if (useRollups) {
+      allDur = await buildPeakPowerFromPeak28dRollupsFast(db, r28s, r28e, null);
+      boardStats = { mode: "collection_group_fast" };
+      if (
+        !allDur ||
+        !allDur.all ||
+        !allDur.all.max ||
+        !Array.isArray(allDur.all.max.entries) ||
+        allDur.all.max.entries.length < 1
+      ) {
+        console.warn("[runRankingAggregatePeakMonthly28d] fast path empty — legacy one-pass fallback");
+        allDur = await buildPeakPowerFromPeak28dRollupsOnePass(db, r28s, r28e, snap, null);
+        boardStats = { mode: "legacy_one_pass_fallback" };
+      }
+    } else {
+      allDur = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, snap, null);
+      boardStats = { mode: "legacy_one_pass" };
     }
-    const allDur = useRollups
-      ? await buildPeakPowerFromPeak28dRollupsOnePass(db, r28s, r28e, snap, null)
-      : await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, snap, null);
     const writeJobs = [];
     for (const gender of ["all", "M", "F"]) {
       for (const durationType of Object.keys(DURATION_FIELDS)) {
         writeJobs.push(
           (async () => {
             const pack = allDur[gender][durationType];
-            await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
+            if (!skipRankHistory) {
+              await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
+            }
             const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
             await writeRankingAggregatePayload(db, ckey, {
               byCategory: pack.byCategory,
@@ -3190,6 +3204,8 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
       peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
       peakMethod: rankingDayRollup.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
       skipRollupBatch,
+      boardStats,
+      skipRankHistory,
     };
     await markManualRankingPhaseMeta(db, "peak_monthly", "complete", result);
     console.log("[runRankingAggregatePeakMonthly28d] done", result);
@@ -5937,6 +5953,34 @@ function genderKeyFromUserData(data) {
  *         outer: gender "all"|"M"|"F", inner: durationType
  */
 /**
+ * collectionGroup(peak_28d) 1~2회 조회 + 메모리 정렬 — users×rollup·인라인 28버킷 재빌드 없음.
+ * @param {string|null} [onlyDuration]
+ */
+async function buildPeakPowerFromPeak28dRollupsFast(db, startStr, endStr, onlyDuration = null) {
+  const t0 = Date.now();
+  const rows = await peakBoardFast.fetchPeak28dRollupsForWindow(db, startStr, endStr);
+  const built = peakBoardFast.buildPeakBoardsFromRollupRows(rows, startStr, endStr, {
+    getLeagueCategory,
+    privacyFlagFromFirestoreDoc,
+    profileImageUrlFromUserData,
+    rankingUserStatusFieldsFromData,
+    DURATION_FIELDS,
+    DURATION_HR_FIELDS,
+  });
+  const ms = Date.now() - t0;
+  console.log("[buildPeakPowerFromPeak28dRollupsFast]", built.stats, { ms });
+  if (!onlyDuration) return built.boards;
+  const out = { all: {}, M: {}, F: {} };
+  ["all", "M", "F"].forEach((g) => {
+    out[g] = {};
+    if (built.boards[g] && built.boards[g][onlyDuration]) {
+      out[g][onlyDuration] = built.boards[g][onlyDuration];
+    }
+  });
+  return out;
+}
+
+/**
  * peak_28d rollup 1 read/사용자 — 일 버킷 28회×전체 users 스캔 대신 보드 조립 (4주 1피크 규칙).
  * @param {string|null} [onlyDuration] max|1min|… 단일 구간
  */
@@ -6780,6 +6824,83 @@ exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
           { merge: true }
         );
       } catch (_eM) {}
+      throw e;
+    }
+  }
+);
+
+/**
+ * KST 매 12분 — peak_28d rollup 청크 백필(80명/회). 전체 users 1회 스캔을 보드 집계와 분리.
+ */
+exports.scheduledPeak28dRollupBackfillChunk = onSchedule(
+  {
+    schedule: "*/12 * * * *",
+    timeZone: "Asia/Seoul",
+    memory: "1GiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    const { startStr, endStr } = getRolling28DaysRangeSeoul();
+    const metaRef = db.collection("ranking_meta").doc("peak_28d_backfill");
+    const CHUNK = 80;
+    try {
+      let meta = (await metaRef.get()).data() || {};
+      let userDocs = meta.userIdsCache;
+      if (!Array.isArray(userDocs) || !userDocs.length || meta.windowEnd !== endStr) {
+        const snap = await db.collection("users").get();
+        userDocs = snap.docs.map((d) => ({ id: d.id }));
+        await metaRef.set(
+          {
+            windowStart: startStr,
+            windowEnd: endStr,
+            userIdsCache: userDocs,
+            totalUsers: userDocs.length,
+            nextIndex: 0,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+        meta = { nextIndex: 0, totalUsers: userDocs.length };
+      }
+      const startIndex = Number(meta.nextIndex) || 0;
+      if (startIndex >= userDocs.length) {
+        console.log("[scheduledPeak28dRollupBackfillChunk] done — all users processed");
+        return;
+      }
+      const slice = userDocs.slice(startIndex, startIndex + CHUNK);
+      const docRefs = slice.map((u) => db.collection("users").doc(u.id));
+      const userSnaps = await rankingDayRollup.chunkedGetAll(db, docRefs, 40);
+      const userDocsForChunk = userSnaps.map((s, i) => ({
+        id: slice[i].id,
+        data: () => (s.exists ? s.data() : {}),
+      }));
+      const chunkResult = await rankingDayRollup.rebuildPeak28dRollupsChunk(
+        db,
+        userDocsForChunk,
+        0,
+        userDocsForChunk.length,
+        startStr,
+        endStr,
+        getLeagueCategory
+      );
+      const nextIndex = startIndex + chunkResult.processed;
+      await metaRef.set(
+        {
+          nextIndex,
+          lastChunk: chunkResult,
+          done: chunkResult.done,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      console.log("[scheduledPeak28dRollupBackfillChunk]", {
+        nextIndex,
+        total: userDocs.length,
+        rebuilt: chunkResult.rebuilt,
+      });
+    } catch (e) {
+      console.error("[scheduledPeak28dRollupBackfillChunk]", e && e.message ? e.message : e);
       throw e;
     }
   }
