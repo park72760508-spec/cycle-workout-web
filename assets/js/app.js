@@ -12570,6 +12570,37 @@ async function stelvioFetchWorkoutDetailsResilient(workoutIds, listItems, opts) 
   return details;
 }
 
+/** GAS getWorkoutsByCategory — API·시트 author 표기 차이(VO2 Max / VO2Max 등) 모두 조회 */
+function stelvioCategoryNamesForGasFetch(basisCategory) {
+  var key = String(basisCategory || '').trim();
+  var map = {
+    Recovery: ['Recovery', 'Active Recovery'],
+    Endurance: ['Endurance'],
+    Tempo: ['Tempo'],
+    SweetSpot: ['Sweet Spot', 'SweetSpot'],
+    Threshold: ['Threshold'],
+    VO2Max: ['VO2 Max', 'VO2Max', 'VO2'],
+    'VO2 Max': ['VO2 Max', 'VO2Max', 'VO2'],
+  };
+  if (map[key]) return map[key];
+  if (key) return [key];
+  return [];
+}
+
+/** 목록에 워크아웃 병합(중복 id 제거) */
+function stelvioMergeWorkoutLists(primary, extra) {
+  var merged = (primary || []).slice();
+  var seen = new Set(merged.map(function (w) { return stelvioWorkoutListId(w); }));
+  (extra || []).forEach(function (w) {
+    var id = stelvioWorkoutListId(w);
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      merged.push(w);
+    }
+  });
+  return merged;
+}
+
 async function stelvioFetchWorkoutsByCategoryNames(categoryNames) {
   var names = (categoryNames || []).filter(Boolean);
   if (!names.length || !window.GAS_URL) return [];
@@ -12601,6 +12632,13 @@ function stelvioSelectWorkoutsForDetailFetch(availableWorkouts, targetZone, opts
   if (targetZone) {
     var zonePool = stelvioCollectWorkoutsForTargetZone(list, targetZone, basisCategory);
     if (zonePool.length > 0) return zonePool.slice(0, 15);
+    var catNorm = stelvioNormalizeWorkoutCategoryId(basisCategory);
+    if (catNorm && typeof window.getWorkoutCategoryId === 'function') {
+      var catPool = list.filter(function (w) {
+        return stelvioCategoryIdsEqual(window.getWorkoutCategoryId(w), catNorm);
+      });
+      if (catPool.length > 0) return stelvioSortWorkoutsByTssAsc(catPool).slice(0, 15);
+    }
     return [];
   }
 
@@ -12920,6 +12958,17 @@ function stelvioBuildDeterministicRecommendationData(workoutDetails, ctx) {
     ctx.targetZoneHint
   );
   var recs = stelvioBackfillAiRecommendations([], workoutDetails || [], resolved.category, resolved.zone);
+  if (!recs.length && resolved.zone && (workoutDetails || []).length) {
+    var catNormOnly = stelvioNormalizeWorkoutCategoryId(resolved.category);
+    if (catNormOnly && typeof window.getWorkoutCategoryId === 'function') {
+      var catOnlyPool = stelvioSortWorkoutsByTssAsc(
+        (workoutDetails || []).filter(function (w) {
+          return stelvioCategoryIdsEqual(window.getWorkoutCategoryId(w), catNormOnly);
+        })
+      );
+      recs = stelvioBackfillAiRecommendations([], catOnlyPool, resolved.category, resolved.zone);
+    }
+  }
   if (!recs.length && (workoutDetails || []).length && !resolved.zone) {
     recs = stelvioSortWorkoutsByTssAsc(workoutDetails)
       .slice(0, 3)
@@ -12928,6 +12977,20 @@ function stelvioBuildDeterministicRecommendationData(workoutDetails, ctx) {
           rank: idx + 1,
           workoutId: Number(w.id),
           reason: 'AI 응답 없음 — 후보 목록에서 강도 순 자동 추천: ' + (w.title || '워크아웃'),
+        };
+      });
+  }
+  if (!recs.length && (workoutDetails || []).length) {
+    recs = stelvioSortWorkoutsByTssAsc(workoutDetails)
+      .slice(0, 3)
+      .map(function (w, idx) {
+        return {
+          rank: idx + 1,
+          workoutId: Number(w.id),
+          reason:
+            (resolved.zone ? resolved.zone + ' ' : '') +
+            '후보에서 강도 순 자동 추천: ' +
+            (w.title || '워크아웃'),
         };
       });
   }
@@ -12949,6 +13012,64 @@ function stelvioBuildDeterministicRecommendationData(workoutDetails, ctx) {
         : resolved.category + ' 기준 자동 추천'),
     recommendations: recs,
   };
+}
+
+/**
+ * Gemini 없이 코치 Zone·워크아웃 후보로 3종 추천 표시 (대시보드·API 실패 폴백)
+ * @returns {Promise<boolean>} 표시 성공 여부
+ */
+async function stelvioTryApplyDeterministicWorkoutRecommendation(ctx) {
+  ctx = ctx || {};
+  var details = (ctx.workoutDetails || []).slice();
+  var available = (ctx.availableWorkouts || []).slice();
+  var zone = String(ctx.targetZone || '').trim();
+  var basisCat = ctx.basisCategory || '';
+
+  if (!details.length && available.length) {
+    var pool = zone
+      ? stelvioCollectWorkoutsForTargetZone(available, zone, basisCat)
+      : available;
+    if (!pool.length && basisCat) {
+      var extra = await stelvioFetchWorkoutsByCategoryNames(stelvioCategoryNamesForGasFetch(basisCat));
+      if (extra.length) {
+        available = stelvioMergeWorkoutLists(available, extra);
+        pool = zone
+          ? stelvioCollectWorkoutsForTargetZone(available, zone, basisCat)
+          : available;
+      }
+    }
+    details = pool
+      .slice(0, 15)
+      .map(stelvioListItemAsWorkoutDetail)
+      .filter(Boolean);
+  }
+
+  if (!details.length) return false;
+
+  var pack = stelvioBuildDeterministicRecommendationData(details, {
+    basisCategory: basisCat,
+    selectedCategory: ctx.selectedCategory,
+    targetZoneHint: zone,
+    conditionScore: ctx.conditionScore,
+    coachComment: ctx.coachComment,
+    categoryReason: ctx.categoryReason,
+    trainingStatus: ctx.trainingStatus,
+    vo2maxEstimate: ctx.vo2maxEstimate,
+    challenge: ctx.challenge,
+  });
+  if (!pack.recommendations || !pack.recommendations.length) return false;
+
+  if (typeof window.setDashboardWorkoutRecommendationCache === 'function' && ctx.userId && ctx.date) {
+    window.setDashboardWorkoutRecommendationCache(
+      ctx.userId,
+      ctx.date,
+      ctx.cacheKey || 'deterministic',
+      pack,
+      details
+    );
+  }
+  displayWorkoutRecommendations(pack, details, ctx.date);
+  return true;
 }
 
 /** MAX_TOKENS 등으로 잘린 응답에서 recommendations·핵심 필드만 추출 */
@@ -13167,8 +13288,11 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       }
     }
     
-    // 4. 워크아웃 목록 조회 (모든 카테고리)
-    const categories = ['Endurance', 'Tempo', 'SweetSpot', 'Threshold', 'VO2Max', 'Recovery'];
+    // 4. 워크아웃 목록 조회 (author 표기: VO2 Max / Sweet Spot 등 GAS 매칭용 별칭 포함)
+    const categories = [
+      'Endurance', 'Tempo', 'Sweet Spot', 'SweetSpot', 'Threshold',
+      'VO2 Max', 'VO2Max', 'Recovery', 'Active Recovery',
+    ];
     let availableWorkouts = [];
     
     try {
@@ -13274,21 +13398,19 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       ? stelvioCollectWorkoutsForTargetZone(availableWorkouts, earlyTargetZone, earlyBasisCat)
       : listForDetailFetch;
 
-    if (earlyTargetZone === 'Z5' && zoneListForFetch.length < 3) {
-      var vo2Extra = await stelvioFetchWorkoutsByCategoryNames(['VO2Max']);
+    if (
+      (earlyTargetZone === 'Z5' || earlyBasisCat === 'VO2Max') &&
+      zoneListForFetch.length < 3
+    ) {
+      var vo2Extra = await stelvioFetchWorkoutsByCategoryNames(
+        stelvioCategoryNamesForGasFetch('VO2Max')
+      );
       if (vo2Extra.length) {
-        var mergedAvail = availableWorkouts.slice();
-        var seenAvail = new Set(mergedAvail.map(function (w) { return stelvioWorkoutListId(w); }));
-        vo2Extra.forEach(function (w) {
-          var wid = stelvioWorkoutListId(w);
-          if (wid && !seenAvail.has(wid)) {
-            seenAvail.add(wid);
-            mergedAvail.push(w);
-          }
+        availableWorkouts = stelvioMergeWorkoutLists(availableWorkouts, vo2Extra);
+        availableWorkoutsForFallback = availableWorkouts.slice();
+        zoneListForFetch = stelvioSelectWorkoutsForDetailFetch(availableWorkouts, earlyTargetZone, {
+          basisCategory: earlyBasisCat,
         });
-        availableWorkouts = mergedAvail;
-        availableWorkoutsForFallback = mergedAvail.slice();
-        zoneListForFetch = stelvioCollectWorkoutsForTargetZone(availableWorkouts, earlyTargetZone, earlyBasisCat);
       }
     }
 
@@ -13572,6 +13694,30 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       : challengeWeightNote;
     const zoneMapLine = 'Z1=Recovery, Z2=Endurance, Z3=Tempo, Z3~Z4=SweetSpot, Z4=Threshold, Z5=VO2Max';
 
+    // 대시보드: 코치가 이미 Zone·카테고리를 확정한 경우 Gemini 없이 Z5 등 후보에서 바로 3종 선정
+    if (options.preferDeterministic && hasBasis) {
+      var detShown = await stelvioTryApplyDeterministicWorkoutRecommendation({
+        workoutDetails: workoutDetails,
+        availableWorkouts: availableWorkouts,
+        targetZone: finalPromptZone || targetZoneHint || targetZoneForFallback,
+        basisCategory: basisCategory,
+        selectedCategory: promptCategoryLabel,
+        conditionScore:
+          userConditionScore != null ? userConditionScore : effectiveConditionScore,
+        challenge: challenge,
+        userId: user.id,
+        date: date,
+        cacheKey: workoutCacheKey,
+        coachComment:
+          '대시보드 AI 컨디션 분석에서 확정한 ' +
+          (promptCategoryLabel || basisCategory) +
+          ' Zone 워크아웃을 훈련 부하·강도 순으로 자동 선정했습니다.',
+        categoryReason: basisReasonLabel,
+      });
+      if (detShown) return;
+      console.warn('[AI 추천] 결정론적 선정 실패 — Gemini 후보 선정 시도');
+    }
+
     const prompt = `사이클 코치: 아래 후보 목록의 workoutId만 사용해 오늘 훈련 3개(1=약, 2=중, 3=강)를 고르세요. 응답은 JSON 하나만.
 ${basisBlock}
 목적: ${challenge}. 등급: ${grade}. FTP ${ftp}W, ${weight}kg, W/kg ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}. 몸상태: ${todayCondition}(${(conditionAdjustment * 100).toFixed(0)}%).
@@ -13596,6 +13742,36 @@ ${hasBasis ? `고정: 표시 카테고리 ${promptCategoryLabel}, 필터 Zone "$
     { "rank": 3, "workoutId": 0, "reason": "60자 이내" }
   ]
 }`;
+
+    // API 키 없음·대시보드 결정론 전용 — Gemini 호출 생략
+    if (!apiKey || !String(apiKey).trim() || options.skipGemini) {
+      var detNoGemini = await stelvioTryApplyDeterministicWorkoutRecommendation({
+        workoutDetails: workoutDetails,
+        availableWorkouts: availableWorkoutsForFallback.length
+          ? availableWorkoutsForFallback
+          : availableWorkouts,
+        targetZone: finalPromptZone || targetZoneHint || targetZoneForFallback,
+        basisCategory: basisCategory || basisCategoryForFallback,
+        selectedCategory: promptCategoryLabel,
+        conditionScore:
+          userConditionScore != null ? userConditionScore : effectiveConditionScore,
+        challenge: challenge,
+        userId: user.id,
+        date: date,
+        cacheKey: workoutCacheKey,
+        coachComment:
+          '코치가 확정한 ' +
+          (promptCategoryLabel || basisCategory || '훈련') +
+          ' 워크아웃을 후보 목록에서 자동 선정했습니다.',
+        categoryReason: basisReasonLabel,
+      });
+      if (detNoGemini) return;
+      if (!apiKey || !String(apiKey).trim()) {
+        throw new Error(
+          '추천할 워크아웃 후보가 없습니다. 워크아웃 목록을 불러온 뒤 다시 시도해 주세요.'
+        );
+      }
+    }
 
     // 7. Gemini API 호출
     // 모델 우선순위 설정 (속도 우선 - 워크아웃 추천은 빠른 응답이 중요)
@@ -13938,7 +14114,34 @@ ${hasBasis ? `고정: 표시 카테고리 ${promptCategoryLabel}, 필터 Zone "$
       }
       if (!data) throw lastApiError || new Error('API 호출에 실패했습니다.');
     } catch (apiError) {
-      throw new Error(`API 호출 실패: ${apiError.message}\n\n서버가 일시적으로 과부하 상태일 수 있습니다. 잠시 후 다시 시도해주세요.`);
+      var apiFailMsg = apiError && apiError.message ? apiError.message : String(apiError);
+      console.warn('[AI 추천] Gemini 호출 실패:', apiFailMsg);
+      if (hasBasis || workoutDetails.length || availableWorkoutsForFallback.length) {
+        var detAfterApiFail = await stelvioTryApplyDeterministicWorkoutRecommendation({
+          workoutDetails: workoutDetails,
+          availableWorkouts: availableWorkoutsForFallback,
+          targetZone: finalPromptZone || targetZoneHint || targetZoneForFallback,
+          basisCategory: basisCategory || basisCategoryForFallback,
+          selectedCategory: promptCategoryLabel,
+          conditionScore:
+            userConditionScore != null ? userConditionScore : effectiveConditionScore,
+          challenge: challenge,
+          userId: user.id,
+          date: date,
+          cacheKey: workoutCacheKey,
+          coachComment:
+            'AI 서버가 일시적으로 응답하지 않아 ' +
+            (promptCategoryLabel || basisCategory || '오늘') +
+            ' Zone 워크아웃을 자동으로 선정했습니다.',
+          categoryReason: basisReasonLabel,
+        });
+        if (detAfterApiFail) return;
+      }
+      throw new Error(
+        'API 호출 실패: ' +
+          apiFailMsg +
+          '\n\n서버가 일시적으로 과부하 상태일 수 있습니다. 잠시 후 다시 시도해주세요.'
+      );
     }
     
     const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -14212,6 +14415,24 @@ ${hasBasis ? `고정: 표시 카테고리 ${promptCategoryLabel}, 필터 Zone "$
       }
     }
     if (!deduped.length) {
+      var detLastChance = await stelvioTryApplyDeterministicWorkoutRecommendation({
+        workoutDetails: workoutDetails,
+        availableWorkouts: availableWorkoutsForFallback,
+        targetZone: enforceZone || targetZoneHint || targetZoneForFallback,
+        basisCategory: basisCategory || basisCategoryForFallback,
+        selectedCategory: recommendationData.selectedCategory,
+        conditionScore:
+          userConditionScore != null ? userConditionScore : effectiveConditionScore,
+        challenge: challenge,
+        userId: user.id,
+        date: date,
+        cacheKey: workoutCacheKey,
+        coachComment: recommendationData.coach_comment,
+        categoryReason: recommendationData.categoryReason,
+        trainingStatus: recommendationData.training_status,
+        vo2maxEstimate: recommendationData.vo2max_estimate,
+      });
+      if (detLastChance) return;
       throw new Error('추천할 워크아웃 후보가 없습니다. 워크아웃 목록을 불러온 뒤 다시 시도해 주세요.');
     }
 
@@ -14254,6 +14475,29 @@ ${hasBasis ? `고정: 표시 카테고리 ${promptCategoryLabel}, 필터 Zone "$
         .slice(0, 15)
         .map(stelvioListItemAsWorkoutDetail)
         .filter(Boolean);
+    }
+    if (!emergencyDetails.length && basisCategoryForFallback) {
+      try {
+        var emergExtra = await stelvioFetchWorkoutsByCategoryNames(
+          stelvioCategoryNamesForGasFetch(basisCategoryForFallback)
+        );
+        if (emergExtra.length) {
+          var emergMerged = stelvioMergeWorkoutLists(availableWorkoutsForFallback, emergExtra);
+          var emergPool2 = targetZoneForFallback
+            ? stelvioCollectWorkoutsForTargetZone(
+                emergMerged,
+                targetZoneForFallback,
+                basisCategoryForFallback
+              )
+            : emergMerged;
+          emergencyDetails = emergPool2
+            .slice(0, 15)
+            .map(stelvioListItemAsWorkoutDetail)
+            .filter(Boolean);
+        }
+      } catch (emergCatErr) {
+        console.warn('[AI 추천] 비상 카테고리 조회 실패:', emergCatErr);
+      }
     }
     if (emergencyDetails.length > 0) {
       try {
@@ -14660,16 +14904,7 @@ async function selectRecommendedWorkout(workoutId, date) {
 // coachData.recommended_workout(예: Active Recovery (Z1)) 기반 + 훈련목적·등급 가중 적용
 async function runDashboardAIWorkoutRecommendation(userProfile, coachData) {
   try {
-    const apiKey = localStorage.getItem('geminiApiKey');
-    if (!apiKey || !String(apiKey).trim()) {
-      if (typeof showToast === 'function') {
-        showToast('Gemini API 키가 없습니다. 환경 설정에서 입력해주세요.', 'error');
-      } else if (typeof alert === 'function') {
-        alert('Gemini API 키가 설정되지 않았습니다. 환경 설정에서 API 키를 입력해주세요.');
-      }
-      if (typeof openSettingsModal === 'function') { openSettingsModal(); }
-      return;
-    }
+    const apiKey = (localStorage.getItem('geminiApiKey') || '').trim();
     const user = userProfile || window.currentUser || (() => {
       try {
         const s = localStorage.getItem('currentUser');
@@ -14682,10 +14917,14 @@ async function runDashboardAIWorkoutRecommendation(userProfile, coachData) {
     }
     const today = new Date();
     const date = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-    const options = {};
+    const options = { preferDeterministic: true };
     if (coachData && coachData.recommended_workout) {
       var coachBasis = stelvioParseCoachBasisRecommendedWorkout(coachData.recommended_workout);
       options.basisRecommendedWorkout = coachBasis.label || String(coachData.recommended_workout).trim();
+    }
+    if (!apiKey) {
+      options.preferDeterministic = true;
+      options.skipGemini = true;
     }
     // 대시보드 AI 분析에서 이미 산출된 condition_score를 워크아웃 추천으로 그대로 전달:
     // 두 화면이 서로 다른 로그 전처리/todayStr로 독자 계산하면 점수 차이가 발생하므로,
@@ -14697,7 +14936,7 @@ async function runDashboardAIWorkoutRecommendation(userProfile, coachData) {
       }
     }
     showWorkoutRecommendationModal();
-    await analyzeAndRecommendWorkouts(date, user, apiKey, options);
+    await analyzeAndRecommendWorkouts(date, user, apiKey || '', options);
   } catch (e) {
     console.error('[AI] 오류:', e.message);
     if (typeof showToast === 'function') showToast('AI 추천 중 오류가 발생했습니다.', 'error');
@@ -14713,6 +14952,8 @@ window.stelvioSameZoneWorkoutTypeLadder = stelvioSameZoneWorkoutTypeLadder;
 window.stelvioExtractZoneTagFromText = stelvioExtractZoneTagFromText;
 window.selectRecommendedWorkout = selectRecommendedWorkout;
 window.runDashboardAIWorkoutRecommendation = runDashboardAIWorkoutRecommendation;
+window.stelvioTryApplyDeterministicWorkoutRecommendation = stelvioTryApplyDeterministicWorkoutRecommendation;
+window.stelvioCategoryNamesForGasFetch = stelvioCategoryNamesForGasFetch;
 window.loadTrainingJournalCalendar = loadTrainingJournalCalendar;
 window.handleTrainingDayClick = handleTrainingDayClick;
 window.saveGeminiApiKey = saveGeminiApiKey;
