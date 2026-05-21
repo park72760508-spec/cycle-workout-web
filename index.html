@@ -8891,7 +8891,7 @@
       return stelvioRankingMemCacheHydrateFromPersistent();
     }
 
-    /** Firestore ranking_meta(23:00 마스터·23:35 헵타곤·항속 버전)와 로컬 캐시 동기화용 */
+    /** Firestore ranking_meta(04:00 마스터·03:20 헵타곤·02:50 피크·항속 버전)와 로컬 캐시 동기화용 */
     var STELVIO_RANKING_SYNC_META_LC_KEY = 'stelvioRC:syncMeta:v1';
     var STELVIO_RANKING_META_FS_WAIT_MS = 3500;
     var stelvioRankingMetaSyncInFlight = null;
@@ -8980,7 +8980,7 @@
     }
 
     /**
-     * 23:00 정규 집계·수동 집계·헵타곤/GC·항속 산식 변경 시 서버 메타가 바뀌면 IndexedDB 캐시 전면 무효화.
+     * 04:00 정규 마스터 집계·수동 집계·헵타곤/GC·항속 산식 변경 시 서버 메타가 바뀌면 IndexedDB 캐시 전면 무효화.
      */
     async function stelvioInvalidateRankingCachesIfMetaChanged(serverMeta) {
       if (!serverMeta) return { invalidated: false, fingerprint: '' };
@@ -9063,24 +9063,24 @@
     window.stelvioSyncRankingCacheWithFirestoreMeta = stelvioSyncRankingCacheWithFirestoreMeta;
 
     /**
-     * 가장 최근에 지나간 23:00 KST (UTC 14:00) 타임스탬프를 반환한다.
+     * 가장 최근에 지나간 04:00 KST (UTC 19:00) 마스터 집계 롤오버 시각.
      * 앱이 롤오버 전에 캐시한 데이터를 롤오버 이후에도 그대로 쓰고 있는지 판별하는 데 사용.
      */
     function stelvioGetLastRolloverTs() {
       var now = Date.now();
       var kstNow = new Date(now + 9 * 3600000);
       var todayRollover = Date.UTC(
-        kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate(), 14, 0, 0
+        kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate(), 19, 0, 0
       );
       return todayRollover <= now ? todayRollover : todayRollover - 86400000;
     }
 
-    /** 가장 최근에 지나간 23:35 KST (UTC 14:35) — 헵타곤 GC 스냅샷 집계 시각 */
+    /** 가장 최근에 지나간 03:20 KST (UTC 18:20) — 헵타곤 GC 스냅샷 집계 시각 */
     function stelvioGetLastHeptagonRolloverTs() {
       var now = Date.now();
       var kstNow = new Date(now + 9 * 3600000);
       var todayHept = Date.UTC(
-        kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate(), 14, 35, 0
+        kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate(), 18, 20, 0
       );
       return todayHept <= now ? todayHept : todayHept - 86400000;
     }
@@ -9105,8 +9105,8 @@
     }
 
     /**
-     * GC: 매일 23:35 KST 헵타곤 스냅샷(asOfSeoul)이 최신 집계 회차 이상인지.
-     * 23:00~23:35 사이에는 전일 스냅샷이 정상(아직 당일 배치 전).
+     * GC: 매일 03:20 KST 헵타곤 스냅샷(asOfSeoul)이 최신 집계 회차 이상인지.
+     * 02:50~03:20 사이에는 전일 스냅샷이 정상(아직 당일 헵타곤 배치 전).
      */
     function stelvioGcPayloadMatchesLatestSnapshot(data) {
       if (!data || data.durationType !== 'gc') return true;
@@ -10317,7 +10317,7 @@
       var hit = STELVIO_RANK_PROFILE_FETCH_CACHE[key];
       if (hit && hit.data && hit.at && now - hit.at < STELVIO_RANK_PROFILE_CACHE_MS) return hit.data;
 
-      // 2순위: localStorage 랭킹 캐시 (다음 23:00 KST까지 유효)
+      // 2순위: localStorage 랭킹 캐시 (다음 04:00 KST 마스터 롤오버까지 유효)
       // 메인 rankingBoard fetch와 동일한 키 구조 사용 → 탭 프리페치 결과를 즉시 활용
       try {
         var lcKey = stelvioPeakRankingLcKey(cacheKeyStr);
@@ -11379,7 +11379,7 @@
     /**
      * 앱 장기 구동 시 갱신 감지:
      * 브라우저 탭/앱이 포그라운드로 돌아올 때(visibilitychange) 랭킹보드가
-     * 활성 화면이면 SWR이 롤오버(23:00 KST) 이전 캐시인지 확인하여
+     * 활성 화면이면 SWR이 롤오버(04:00 KST 마스터) 이전 캐시인지 확인하여
      * 해당 시 로딩 없이 백그라운드 재검증을 자동 실행한다.
      */
     (function () {
@@ -12125,7 +12125,7 @@
     }
 
     /**
-     * Peak·TSS·거리 등: 등락 비교 기준은 항상 전일 23:00 정규 스냅샷(prevDay).
+     * Peak·TSS·거리 등: 등락 비교 기준은 전일 04:00 마스터 정규 스냅샷(prevDay) — 피크·헵타곤은 02:50·03:20.
      * 당일 수동 집계로 ranks만 바뀌어도 prevDay는 다음 23시 집계 전까지 고정.
      */
     function stelvioApplyClientPeakRankMovementFromSnapshot(data) {
