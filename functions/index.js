@@ -3136,37 +3136,51 @@ async function markManualRankingPhaseMeta(db, phase, status, extra) {
 async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
   const t0 = Date.now();
   const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
-  const snap = usersSnap ?? (await db.collection("users").get());
   const useRollups = !(opts && opts.legacyOnePass === true);
   /** 기본 true — 553명×28버킷 선처리는 60분 타임아웃 유발. 보드 조립 시 rollup miss 만 개별 갱신 */
   const skipRollupBatch = opts && opts.skipRollupBatch === false ? false : true;
-  const forceRollupBatch = !!(opts && opts.forceRollupBatch);
+  const skipUsersFetch = useRollups && skipRollupBatch && !(opts && opts.skipUsersFetch === false);
+  const allowLegacyFallback = !!(opts && opts.allowLegacyFallback);
+  let snap = usersSnap;
+  if (!snap && !skipUsersFetch) snap = await db.collection("users").get();
+  const userCount = snap ? snap.size : 0;
   try {
     await markManualRankingPhaseMeta(db, "peak_monthly", "running", {
       r28s,
       r28e,
-      userCount: snap.size,
+      userCount,
       peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
       skipRollupBatch,
+      skipUsersFetch,
     });
     const skipRankHistory = opts && opts.skipRankHistory !== false;
     let allDur;
     let boardStats = null;
     if (useRollups) {
-      allDur = await buildPeakPowerFromPeak28dRollupsFast(db, r28s, r28e, null);
-      boardStats = { mode: "collection_group_fast" };
-      if (
-        !allDur ||
-        !allDur.all ||
-        !allDur.all.max ||
-        !Array.isArray(allDur.all.max.entries) ||
-        allDur.all.max.entries.length < 1
-      ) {
-        console.warn("[runRankingAggregatePeakMonthly28d] fast path empty — legacy one-pass fallback");
+      const fastBuilt = await buildPeakPowerFromPeak28dRollupsFast(db, r28s, r28e, null);
+      allDur = fastBuilt.boards;
+      boardStats = fastBuilt.stats;
+      const fastOk =
+        boardStats.used > 0 &&
+        allDur &&
+        allDur.all &&
+        allDur.all.max &&
+        Array.isArray(allDur.all.max.entries) &&
+        allDur.all.max.entries.length > 0;
+      if (!fastOk) {
+        if (!allowLegacyFallback) {
+          throw new Error(
+            `peak_28d fast board insufficient: rollupRows=${boardStats.rollupRows} used=${boardStats.used} skippedNoMeta=${boardStats.skippedNoMeta}. ` +
+              "scheduledPeak28dRollupBackfillChunk 대기 후 재시도. allowLegacyFallback=1 은 비권장(60분+)."
+          );
+        }
+        console.warn("[runRankingAggregatePeakMonthly28d] fast insufficient — legacy one-pass (allowLegacyFallback)");
+        if (!snap) snap = await db.collection("users").get();
         allDur = await buildPeakPowerFromPeak28dRollupsOnePass(db, r28s, r28e, snap, null);
-        boardStats = { mode: "legacy_one_pass_fallback" };
+        boardStats = { mode: "legacy_one_pass_fallback", prior: boardStats };
       }
     } else {
+      if (!snap) snap = await db.collection("users").get();
       allDur = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, snap, null);
       boardStats = { mode: "legacy_one_pass" };
     }
@@ -3200,10 +3214,11 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
       ms,
       startStr: r28s,
       endStr: r28e,
-      userCount: snap.size,
+      userCount: snap ? snap.size : userCount,
       peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
       peakMethod: rankingDayRollup.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
       skipRollupBatch,
+      skipUsersFetch,
       boardStats,
       skipRankHistory,
     };
@@ -3219,7 +3234,7 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
         ms: msFail,
         startStr: r28s,
         endStr: r28e,
-        userCount: snap.size,
+        userCount: snap ? snap.size : userCount,
         skipRollupBatch,
       });
     } catch (_eMeta) {}
@@ -5958,8 +5973,8 @@ function genderKeyFromUserData(data) {
  */
 async function buildPeakPowerFromPeak28dRollupsFast(db, startStr, endStr, onlyDuration = null) {
   const t0 = Date.now();
-  const rows = await peakBoardFast.fetchPeak28dRollupsForWindow(db, startStr, endStr);
-  const built = peakBoardFast.buildPeakBoardsFromRollupRows(rows, startStr, endStr, {
+  let rows = await peakBoardFast.fetchPeak28dRollupsForWindow(db, startStr, endStr);
+  let built = peakBoardFast.buildPeakBoardsFromRollupRows(rows, startStr, endStr, {
     getLeagueCategory,
     privacyFlagFromFirestoreDoc,
     profileImageUrlFromUserData,
@@ -5967,9 +5982,22 @@ async function buildPeakPowerFromPeak28dRollupsFast(db, startStr, endStr, onlyDu
     DURATION_FIELDS,
     DURATION_HR_FIELDS,
   });
+  if (built.stats.skippedNoMeta > 0 && built.stats.rollupRows > 0) {
+    rows = await peakBoardFast.enrichRollupRowsMissingUserMeta(db, rows, getLeagueCategory);
+    built = peakBoardFast.buildPeakBoardsFromRollupRows(rows, startStr, endStr, {
+      getLeagueCategory,
+      privacyFlagFromFirestoreDoc,
+      profileImageUrlFromUserData,
+      rankingUserStatusFieldsFromData,
+      DURATION_FIELDS,
+      DURATION_HR_FIELDS,
+    });
+    built.stats.enriched = true;
+  }
   const ms = Date.now() - t0;
-  console.log("[buildPeakPowerFromPeak28dRollupsFast]", built.stats, { ms });
-  if (!onlyDuration) return built.boards;
+  built.stats.ms = ms;
+  console.log("[buildPeakPowerFromPeak28dRollupsFast]", built.stats);
+  if (!onlyDuration) return built;
   const out = { all: {}, M: {}, F: {} };
   ["all", "M", "F"].forEach((g) => {
     out[g] = {};
@@ -5977,7 +6005,7 @@ async function buildPeakPowerFromPeak28dRollupsFast(db, startStr, endStr, onlyDu
       out[g][onlyDuration] = built.boards[g][onlyDuration];
     }
   });
-  return out;
+  return { boards: out, stats: built.stats };
 }
 
 /**
@@ -6034,7 +6062,7 @@ async function buildPeakPowerFromPeak28dRollupsOnePass(db, startStr, endStr, use
             data,
             startStr,
             endStr,
-            { ensureMissingDays: false }
+            { ensureMissingDays: false, getLeagueCategory }
           );
           hit = { peakMap: rebuilt.peakMap, hrMax: rebuilt.hrMax || {} };
         }
@@ -6705,7 +6733,11 @@ exports.manualRebuildRankingPhase = onRequest(
     try {
       let r;
       if (phase === "peak_monthly") {
-        r = await runRankingAggregatePeakMonthly28d(db, null, { skipRollupBatch: true });
+        r = await runRankingAggregatePeakMonthly28d(db, null, {
+          skipRollupBatch: true,
+          skipUsersFetch: true,
+          allowLegacyFallback: false,
+        });
       } else if (phase === "peak_duration") {
         r = await runRankingAggregatePeakMonthlyOneDuration(db, duration);
       } else if (phase === "personal_speed") {
@@ -6796,6 +6828,8 @@ exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
       const peakRes = await runRankingAggregatePeakMonthly28d(db, null, {
         ensureMissingDays: false,
         skipRollupBatch: true,
+        skipUsersFetch: true,
+        allowLegacyFallback: false,
       });
       console.log("[scheduledPeak28dBoardAndHeptagon] peak boards", peakRes);
       await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
@@ -6986,79 +7020,79 @@ exports.manualPeak28dBoardAndHeptagon = onRequest(
       return;
     }
     const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-    res.status(202).json({
-      success: true,
-      accepted: true,
-      step,
-      message:
-        step === "peak"
-          ? "28일 피크 보드(21)만 시작. 완료 후 step=heptagon 으로 헵타곤 실행."
-          : step === "heptagon"
-            ? "헵타곤만 시작(피크 보드 선행 완료 필요)."
-            : "피크 보드 후 헵타곤 순차 시작(최대 60분). step=peak·heptagon 분리 권장.",
-      checkMetaDocs: ["ranking_meta/peak_28d_board_refresh", `ranking_meta/${RANKING_HEPTAGON_REBUILD_META_DOC}`],
-      recoveryHint:
-        "DEADLINE 시: ① step=peak ② manual_ranking_phase_rebuild complete 확인 ③ step=heptagon&force=1",
-    });
-    (async () => {
+    let peakRes = null;
+    let heptRes = null;
+    try {
+      if (step === "peak" || step === "both") {
+        await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+          { dateKst, status: "running", runningAt: admin.firestore.FieldValue.serverTimestamp(), step },
+          { merge: true }
+        );
+        peakRes = await runRankingAggregatePeakMonthly28d(db, null, {
+          ensureMissingDays: false,
+          skipRollupBatch: true,
+          skipUsersFetch: true,
+          allowLegacyFallback: false,
+        });
+        await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+          {
+            dateKst,
+            status: "complete",
+            completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            runningAt: admin.firestore.FieldValue.delete(),
+            peakSummary: peakRes,
+            step,
+          },
+          { merge: true }
+        );
+        console.log("[manualPeak28dBoardAndHeptagon] peak done", peakRes);
+      }
+      if (step === "heptagon" || step === "both") {
+        await markHeptagonRebuildRunning(db);
+        heptRes = await runHeptagonCohortRanksRebuildJob();
+        await markHeptagonDailyRebuildComplete(db, heptRes);
+        console.log("[manualPeak28dBoardAndHeptagon] heptagon done", heptRes);
+      }
+      if (step === "both" && peakRes && heptRes) {
+        await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+          { heptagonSummary: heptRes, source: "manualPeak28dBoardAndHeptagon" },
+          { merge: true }
+        );
+      }
+      res.status(200).json({
+        success: true,
+        step,
+        peakRes,
+        heptRes,
+        message:
+          step === "peak"
+            ? "28일 피크 보드(21) 완료. 헵타곤은 step=heptagon 으로 실행."
+            : step === "heptagon"
+              ? "헵타곤 완료."
+              : "피크·헵타곤 완료.",
+        checkMetaDocs: ["ranking_meta/peak_28d_board_refresh", `ranking_meta/${RANKING_HEPTAGON_REBUILD_META_DOC}`],
+      });
+    } catch (e) {
+      console.error("[manualPeak28dBoardAndHeptagon]", e && e.message ? e.message : e);
+      const msg = e && e.message ? String(e.message).slice(0, 2000) : String(e);
       try {
-        let peakRes = null;
-        let heptRes = null;
         if (step === "peak" || step === "both") {
-          await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
-            { dateKst, status: "running", runningAt: admin.firestore.FieldValue.serverTimestamp(), step },
-            { merge: true }
-          );
-          peakRes = await runRankingAggregatePeakMonthly28d(db, null, {
-            ensureMissingDays: false,
-            skipRollupBatch: true,
-          });
           await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
             {
               dateKst,
-              status: "complete",
-              completedAt: admin.firestore.FieldValue.serverTimestamp(),
-              runningAt: admin.firestore.FieldValue.delete(),
-              peakSummary: peakRes,
-              step,
+              status: "failed",
+              failedAt: admin.firestore.FieldValue.serverTimestamp(),
+              lastError: msg,
             },
             { merge: true }
           );
-          console.log("[manualPeak28dBoardAndHeptagon] peak done", peakRes);
         }
         if (step === "heptagon" || step === "both") {
-          await markHeptagonRebuildRunning(db);
-          heptRes = await runHeptagonCohortRanksRebuildJob();
-          await markHeptagonDailyRebuildComplete(db, heptRes);
-          console.log("[manualPeak28dBoardAndHeptagon] heptagon done", heptRes);
+          await markHeptagonRebuildFailed(db, e);
         }
-        if (step === "both" && peakRes && heptRes) {
-          await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
-            { heptagonSummary: heptRes, source: "manualPeak28dBoardAndHeptagon" },
-            { merge: true }
-          );
-        }
-      } catch (e) {
-        console.error("[manualPeak28dBoardAndHeptagon]", e && e.message ? e.message : e);
-        const msg = e && e.message ? String(e.message).slice(0, 2000) : String(e);
-        try {
-          if (step === "peak" || step === "both") {
-            await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
-              {
-                dateKst,
-                status: "failed",
-                failedAt: admin.firestore.FieldValue.serverTimestamp(),
-                lastError: msg,
-              },
-              { merge: true }
-            );
-          }
-          if (step === "heptagon" || step === "both") {
-            await markHeptagonRebuildFailed(db, e);
-          }
-        } catch (_eMeta) {}
-      }
-    })();
+      } catch (_eMeta) {}
+      res.status(500).json({ success: false, error: msg, step });
+    }
   }
 );
 

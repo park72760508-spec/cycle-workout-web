@@ -6,8 +6,10 @@
 const rankingDayRollup = require("./rankingDayRollup");
 
 const ROLLUP_PAGE = 450;
+const ENRICH_USER_CHUNK = 80;
 
 /**
+ * v2·v3 peak_28d 모두 조회 (rollupLogicVersion==3 만 쓰면 대부분 빈 결과 → legacy 60분 폴백).
  * @param {import("firebase-admin").firestore.Firestore} db
  * @returns {Promise<Array<{ userId: string, rollup: object }>>}
  */
@@ -21,7 +23,6 @@ async function fetchPeak28dRollupsForWindow(db, startStr, endStr) {
       .collectionGroup(coll)
       .where("windowStart", "==", startStr)
       .where("windowEnd", "==", endStr)
-      .where("rollupLogicVersion", "==", rankingDayRollup.PEAK_28D_LOGIC_VERSION)
       .limit(ROLLUP_PAGE);
     if (lastDoc) q = q.startAfter(lastDoc);
     /* eslint-disable no-await-in-loop */
@@ -33,7 +34,9 @@ async function fetchPeak28dRollupsForWindow(db, startStr, endStr) {
       const userRef = doc.ref.parent && doc.ref.parent.parent;
       const userId = userRef && userRef.id ? userRef.id : "";
       if (!userId) return;
-      out.push({ userId, rollup: doc.data() || {} });
+      const data = doc.data() || {};
+      if (!data.peaks || typeof data.peaks !== "object" || !Object.keys(data.peaks).length) return;
+      out.push({ userId, rollup: data });
     });
     lastDoc = snap.docs[snap.docs.length - 1];
     if (snap.size < ROLLUP_PAGE) break;
@@ -42,13 +45,41 @@ async function fetchPeak28dRollupsForWindow(db, startStr, endStr) {
 }
 
 /**
+ * userMeta 없는 rollup 행만 users 배치 조회로 보강 (전체 554명 스캔·28버킷 재빌드 없음).
+ */
+async function enrichRollupRowsMissingUserMeta(db, rows, getLeagueCategory) {
+  if (!rows || !rows.length || typeof getLeagueCategory !== "function") return rows;
+  const needIds = [];
+  const rowById = new Map();
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const peaks = row.rollup && row.rollup.peaks;
+    if (!peaks || !Object.keys(peaks).length) continue;
+    const um = row.rollup.userMeta;
+    if (um && um.ageCategory) continue;
+    needIds.push(row.userId);
+    rowById.set(row.userId, row);
+  }
+  if (!needIds.length) return rows;
+
+  for (let i = 0; i < needIds.length; i += ENRICH_USER_CHUNK) {
+    const chunk = needIds.slice(i, i + ENRICH_USER_CHUNK);
+    const refs = chunk.map((uid) => db.collection("users").doc(uid));
+    /* eslint-disable no-await-in-loop */
+    const snaps = await rankingDayRollup.chunkedGetAll(db, refs, 40);
+    /* eslint-enable no-await-in-loop */
+    for (let j = 0; j < chunk.length; j++) {
+      const snap = snaps[j];
+      const row = rowById.get(chunk[j]);
+      if (!row || !snap || !snap.exists) continue;
+      row.rollup.userMeta = rankingDayRollup.snapshotUserMetaForPeakRollup(snap.data(), getLeagueCategory);
+    }
+  }
+  return rows;
+}
+
+/**
  * @param {object} deps — index.js 에서 주입
- * @param {Function} deps.getLeagueCategory
- * @param {Function} deps.privacyFlagFromFirestoreDoc
- * @param {Function} deps.profileImageUrlFromUserData
- * @param {Function} deps.rankingUserStatusFieldsFromData
- * @param {Record<string,string>} deps.DURATION_FIELDS
- * @param {Record<string,string>} deps.DURATION_HR_FIELDS
  */
 function buildPeakBoardsFromRollupRows(rollupRows, startStr, endStr, deps) {
   const {
@@ -200,5 +231,6 @@ function buildPeakBoardsFromRollupRows(rollupRows, startStr, endStr, deps) {
 
 module.exports = {
   fetchPeak28dRollupsForWindow,
+  enrichRollupRowsMissingUserMeta,
   buildPeakBoardsFromRollupRows,
 };
