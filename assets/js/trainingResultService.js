@@ -94,6 +94,9 @@ function addOneCalendarDayYmdSeoul(ymd) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(t);
 }
 
+/** max_watts: 5초 롤링 평균 최대 (필드명 max_watts 유지) */
+const MAX_WATTS_WINDOW_SEC = 5;
+
 /** 노이즈 필터 상수 */
 const POWER_SPIKE_THRESHOLD_W = 2000;
 const POWER_SPIKE_JUMP_W = 1000;
@@ -316,6 +319,18 @@ function calculateMaxAveragePower(wattsArray, seconds) {
     if (avg > maxAvg) maxAvg = avg;
   }
   return Math.round(maxAvg);
+}
+
+/** 1Hz 파워 스트림 → max_watts (5초 롤링 평균 최대) */
+function calculateMaxWattsFromPowerStream(wattsArray) {
+  if (!wattsArray || wattsArray.length === 0) return null;
+  const smoothed = smoothPowerSpikes(wattsArray);
+  if (smoothed.length >= MAX_WATTS_WINDOW_SEC) {
+    const v = calculateMaxAveragePower(smoothed, MAX_WATTS_WINDOW_SEC);
+    return v > 0 ? v : null;
+  }
+  const instant = Math.max(...smoothed.map((w) => Number(w) || 0));
+  return instant > 0 ? Math.round(instant) : null;
 }
 
 /**
@@ -582,6 +597,15 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const max40minWatts = wattsArray && wattsArray.length >= 2400 ? calculateMaxAveragePower(wattsArray, 2400) : null;
       const max60minWatts = wattsArray && wattsArray.length >= 3600 ? calculateMaxAveragePower(wattsArray, 3600) : null;
 
+      let maxWattsResolved =
+        trainingData.max_watts != null && Number(trainingData.max_watts) > 0
+          ? Math.round(Number(trainingData.max_watts))
+          : null;
+      if (wattsArray && wattsArray.length > 0) {
+        const fromStream = calculateMaxWattsFromPowerStream(wattsArray);
+        if (fromStream != null) maxWattsResolved = fromStream;
+      }
+
       // 심박 피크 계산 (저장 시 1회만, 훈련 루프 영향 없음) — 1Hz 시계열 기준
       const hrPeaks = hrOneHz.length > 0 ? calculateMaxHeartRatePeaks(hrOneHz) : null;
 
@@ -608,7 +632,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         ftp_at_time: effectiveFTP, // 훈련 당시의 FTP (Fallback: 20분 MMP 95% 또는 150W)
         avg_watts: avgWatts,
         weighted_watts: np, // NP (Normalized Power)
-        max_watts: trainingData.max_watts || null,
+        max_watts: maxWattsResolved,
         tss: tss,
         if: Math.round(intensityFactor * 100) / 100, // Intensity Factor (소수점 2자리)
         kilojoules: trainingData.kilojoules || null,
@@ -877,6 +901,8 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
  */
 if (typeof window !== 'undefined') {
   window.calculateTSS = calculateTSS;
+  window.calculateMaxAveragePower = calculateMaxAveragePower;
+  window.calculateMaxWattsFromPowerStream = calculateMaxWattsFromPowerStream;
   window.getUserTrainingLogs = getUserTrainingLogs;
   window.getTrainingLogsByDateRange = getTrainingLogsByDateRange;
 }

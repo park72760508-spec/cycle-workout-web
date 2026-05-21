@@ -933,7 +933,27 @@ async function saveTrainingResult(extra = {}) {
     const hrValues = session.hrData?.map(d => d.v).filter(v => v > 0) || [];
     
     const avgPower = powerValues.length ? Math.round(avg(powerValues)) : 0;
-    const maxPower = powerValues.length ? Math.max(...powerValues) : 0;
+    const wattsForMax = session.powerData.map(function (d) { return Number(d.v) || 0; });
+    let maxPower = 0;
+    if (typeof window.calculateMaxWattsFromPowerStream === 'function' && wattsForMax.length > 0) {
+      maxPower = window.calculateMaxWattsFromPowerStream(wattsForMax) || 0;
+    } else if (powerValues.length) {
+      maxPower = powerValues.length >= 5
+        ? (function () {
+            var sum = 0;
+            var i;
+            for (i = 0; i < 5; i++) sum += wattsForMax[i] || 0;
+            var maxAvg = sum / 5;
+            for (i = 5; i < wattsForMax.length; i++) {
+              sum -= wattsForMax[i - 5] || 0;
+              sum += wattsForMax[i] || 0;
+              var a = sum / 5;
+              if (a > maxAvg) maxAvg = a;
+            }
+            return Math.round(maxAvg);
+          })()
+        : Math.max.apply(null, powerValues);
+    }
     const avgHR = hrValues.length ? Math.round(avg(hrValues)) : 0;
     
     // 칼로리 계산: 훈련화면과 동일한 로직 적용
