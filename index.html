@@ -8449,7 +8449,7 @@
     /** 랭킹보드 접속 시 백그라운드 프리페치 세션(성별 변경·재진입 시 무효화) */
     var stelvioRankingPrefetchGen = 0;
     var stelvioRankingPrefetchInFlight = Object.create(null);
-    var STELVIO_RANKING_PREFETCH_CONCURRENCY = 4;
+    var STELVIO_RANKING_PREFETCH_CONCURRENCY = 5;
     var STELVIO_RANKING_BOARD_TAB_DURATIONS = [
       'gc',
       'max',
@@ -8912,14 +8912,16 @@
       return 0;
     }
 
-    function stelvioRankingBuildServerMetaFingerprint(master, hept, psLogic) {
+    function stelvioRankingBuildServerMetaFingerprint(master, hept, psLogic, peak28d) {
       var m = master || {};
       var h = hept || {};
       var p = psLogic || {};
+      var pk = peak28d || {};
       return [
         'm:' + String(m.dateKst || '') + ':' + stelvioRankingMetaTsFromField(m.completedAt),
         'h:' + String(h.dateKst || '') + ':' + String(h.status || '') + ':' + stelvioRankingMetaTsFromField(h.completedAt),
         'ps:' + String(p.version != null ? p.version : ''),
+        'pk:' + String(pk.dateKst || '') + ':' + String(pk.status || '') + ':' + stelvioRankingMetaTsFromField(pk.completedAt),
       ].join('|');
     }
 
@@ -8967,11 +8969,13 @@
           coll.doc('master_daily_rebuild').get(),
           coll.doc('heptagon_daily_rebuild').get(),
           coll.doc('personal_speed_logic').get(),
+          coll.doc('peak_28d_board_refresh').get(),
         ]);
         return {
           master: snaps[0].exists ? snaps[0].data() : null,
           heptagon: snaps[1].exists ? snaps[1].data() : null,
           personalSpeed: snaps[2].exists ? snaps[2].data() : null,
+          peak28d: snaps[3].exists ? snaps[3].data() : null,
         };
       } catch (eMeta) {
         console.warn('[StelvioRanking] ranking_meta 조회 실패:', eMeta && eMeta.message);
@@ -8987,7 +8991,8 @@
       var fp = stelvioRankingBuildServerMetaFingerprint(
         serverMeta.master,
         serverMeta.heptagon,
-        serverMeta.personalSpeed
+        serverMeta.personalSpeed,
+        serverMeta.peak28d
       );
       if (!fp) return { invalidated: false, fingerprint: '' };
       var stored = stelvioRankingReadStoredMetaFingerprint();
@@ -10749,6 +10754,10 @@
       stelvioSyncRankingListFilterToggleUi();
     }
     function openStelvioRankingBoardModal() {
+      window.__stelvioRankingOpening = true;
+      setTimeout(function () {
+        window.__stelvioRankingOpening = false;
+      }, 400);
       stelvioResetRankingBoardFiltersToDefault();
       stelvioRankingFavoritesRehydrateAndMaybeRender();
       if (typeof showScreen === 'function') {
@@ -11206,12 +11215,28 @@
       return data;
     }
 
+    /** IndexedDB·롤오버 기준으로 네트워크 없이 탭 캐시를 쓸 수 있는지 */
+    function stelvioRankingLocalEntryStillFresh(lcEntry, dur) {
+      if (!lcEntry || !lcEntry.data || !lcEntry.data.success || !lcEntry.data.byCategory) return false;
+      if (stelvioRankingLocalCache.isStale(lcEntry)) return false;
+      var cachedAt = lcEntry.cachedAt || 0;
+      var lastRollover = typeof stelvioGetLastRolloverTs === 'function' ? stelvioGetLastRolloverTs() : 0;
+      if (lastRollover > 0 && cachedAt < lastRollover) return false;
+      if (dur === 'gc') {
+        var heptRollover =
+          typeof stelvioGetLastHeptagonRolloverTs === 'function' ? stelvioGetLastHeptagonRolloverTs() : 0;
+        if (heptRollover > 0 && cachedAt < heptRollover) return false;
+      }
+      return true;
+    }
+
     /**
      * 단일 탭 API → 메모리·IndexedDB 저장. 진행 중이면 동일 Promise 재사용.
      */
     function stelvioPrefetchRankingTabToCache(dur, uid, gender, period, prefetchGen) {
       var cacheKeyStr = stelvioBuildRankingBoardCacheKey(dur, gender || 'all', uid, period);
-      if (stelvioRankingMemCacheGet(cacheKeyStr)) return Promise.resolve(true);
+      var memHit = stelvioRankingMemCacheGet(cacheKeyStr);
+      if (memHit && memHit.body) return Promise.resolve(true);
       if (stelvioRankingPrefetchInFlight[cacheKeyStr]) {
         return stelvioRankingPrefetchInFlight[cacheKeyStr];
       }
@@ -11219,7 +11244,7 @@
       var p = (async function () {
         try {
           var lcEntry = await stelvioRankingLocalCache.get(lcKey);
-          if (lcEntry && lcEntry.data && lcEntry.data.success && lcEntry.data.byCategory) {
+          if (stelvioRankingLocalEntryStillFresh(lcEntry, dur)) {
             stelvioRankingMemCacheSet(cacheKeyStr, lcEntry.data);
             stelvioRankingIndexPeakRankFromEntry(lcKey, lcEntry);
             return true;
@@ -11260,7 +11285,10 @@
       var skipDur = opts.skipDuration || '';
       var gen = ++stelvioRankingPrefetchGen;
       var queue = STELVIO_RANKING_BOARD_TAB_DURATIONS.filter(function (d) {
-        return d && d !== skipDur;
+        if (!d || d === skipDur) return false;
+        var ck = stelvioBuildRankingBoardCacheKey(d, gender || 'all', uid, period);
+        if (stelvioRankingMemCacheGet(ck)) return false;
+        return true;
       });
       var idx = 0;
       var allTabPromises = [];
@@ -11313,23 +11341,29 @@
       return p;
     }
 
-    /** 앱 idle·인증 후: Firestore 메타 동기화 + 전 탭 프리페치 */
+    /** 앱 idle·인증 후: ranking_meta 비교 → 필요 시 IndexedDB 무효화 + 전 탭·주간TOP10 백그라운드 적재 */
     function stelvioBackgroundPrefetchAllTabs(uid) {
       if (uid && typeof prefetchWeeklyTop10ToDeviceStorage === 'function') {
         prefetchWeeklyTop10ToDeviceStorage(uid).catch(function () {});
       }
       stelvioSyncRankingCacheWithFirestoreMeta({ uid: uid, gender: 'all' }).catch(function () {});
     }
+    window.stelvioBackgroundPrefetchAllTabs = stelvioBackgroundPrefetchAllTabs;
 
     function scheduleStelvioRankingWarmCacheOnce() {
       if (stelvioRankingPrefetchScheduled) return;
       stelvioRankingPrefetchScheduled = true;
       var run = function () {
-        if (!stelvioRankingBoardUid()) {
+        var uid = stelvioRankingBoardUid();
+        if (!uid) {
           stelvioRankingMemCacheHydrateFromPersistent().catch(function () {});
           return;
         }
-        stelvioSyncRankingCacheWithFirestoreMeta({ gender: 'all' }).catch(function () {});
+        if (typeof stelvioBackgroundPrefetchAllTabs === 'function') {
+          stelvioBackgroundPrefetchAllTabs(uid);
+        } else if (typeof stelvioSyncRankingCacheWithFirestoreMeta === 'function') {
+          stelvioSyncRankingCacheWithFirestoreMeta({ uid: uid, gender: 'all' }).catch(function () {});
+        }
       };
       if (typeof requestIdleCallback !== 'undefined') {
         requestIdleCallback(run, { timeout: 2000 });
@@ -11416,6 +11450,21 @@
             fetchStelvioPeakPowerRanking().catch(function () {});
           }
         }
+      });
+    })();
+
+    /** 앱이 포그라운드로 돌아올 때(랭킹 화면 여부 무관) ranking_meta만 비교 후 필요 시 전 탭 백그라운드 갱신 */
+    (function () {
+      var lastSilentMetaProbe = 0;
+      var STELVIO_RANKING_META_PROBE_MIN_MS = 4 * 60 * 1000;
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible') return;
+        var uid = stelvioRankingBoardUid();
+        if (!uid || typeof stelvioSyncRankingCacheWithFirestoreMeta !== 'function') return;
+        var now = Date.now();
+        if (now - lastSilentMetaProbe < STELVIO_RANKING_META_PROBE_MIN_MS) return;
+        lastSilentMetaProbe = now;
+        stelvioSyncRankingCacheWithFirestoreMeta({ uid: uid, gender: 'all' }).catch(function () {});
       });
     })();
 
@@ -27389,6 +27438,28 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }, 400);
         }
         
+        /* 랭킹: openStelvioRankingBoardModal 외 경로(showScreen만) 진입 시에도 IDB 즉시 표시 + 백그라운드 동기화 */
+        if (screenId === 'stelvioRankingScreen' && !window.__stelvioRankingOpening) {
+          (async function () {
+            if (typeof stelvioRankingMemCacheHydrateFromPersistent === 'function') {
+              await stelvioRankingMemCacheHydrateFromPersistent();
+            }
+            requestAnimationFrame(function () {
+              var scrollEl = document.getElementById('stelvioRankingScrollArea');
+              if (scrollEl) scrollEl.scrollTop = 0;
+            });
+            if (typeof stelvioSyncRankingCacheWithFirestoreMeta === 'function') {
+              stelvioSyncRankingCacheWithFirestoreMeta({
+                gender: (stelvioRankingState && stelvioRankingState.gender) || 'all',
+                skipDuration: (stelvioRankingState && stelvioRankingState.duration) || 'gc',
+              }).catch(function () {});
+            }
+            if (typeof fetchStelvioPeakPowerRanking === 'function') {
+              fetchStelvioPeakPowerRanking();
+            }
+          })();
+        }
+
         // 나의 기록: initializeCurrentScreen 호출 보장 (동적 FTP 자동 체크 포함)
         if (screenId === 'myCareerScreen') {
           console.log('[showScreen] myCareerScreen 감지 - initializeCurrentScreen 호출 시도');
