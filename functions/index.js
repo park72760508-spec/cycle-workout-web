@@ -3137,51 +3137,78 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
   const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
   const snap = usersSnap ?? (await db.collection("users").get());
   const useRollups = !(opts && opts.legacyOnePass === true);
-  await markManualRankingPhaseMeta(db, "peak_monthly", "running", {
-    r28s,
-    r28e,
-    userCount: snap.size,
-    peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
-  });
-  if (useRollups) {
-    const rollupPrep = await rankingDayRollup.rebuildPeak28dRollupsBatch(db, snap.docs, r28s, r28e, {
-      ensureMissingDays: !!(opts && opts.ensureMissingDays),
+  /** 기본 true — 553명×28버킷 선처리는 60분 타임아웃 유발. 보드 조립 시 rollup miss 만 개별 갱신 */
+  const skipRollupBatch = opts && opts.skipRollupBatch === false ? false : true;
+  const forceRollupBatch = !!(opts && opts.forceRollupBatch);
+  try {
+    await markManualRankingPhaseMeta(db, "peak_monthly", "running", {
+      r28s,
+      r28e,
+      userCount: snap.size,
+      peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
+      skipRollupBatch,
     });
-    console.log("[runRankingAggregatePeakMonthly28d] peak_28d rollups", rollupPrep);
-  }
-  const allDur = useRollups
-    ? await buildPeakPowerFromPeak28dRollupsOnePass(db, r28s, r28e, snap, null)
-    : await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, snap, null);
-  let wrote = 0;
-  for (const gender of ["all", "M", "F"]) {
-    for (const durationType of Object.keys(DURATION_FIELDS)) {
-      const pack = allDur[gender][durationType];
-      await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
-      const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
-      await writeRankingAggregatePayload(db, ckey, {
-        byCategory: pack.byCategory,
-        entries: pack.entries,
+    if (useRollups && !skipRollupBatch && forceRollupBatch) {
+      const rollupPrep = await rankingDayRollup.rebuildPeak28dRollupsBatch(db, snap.docs, r28s, r28e, {
+        ensureMissingDays: !!(opts && opts.ensureMissingDays),
+        batchSize: 60,
+      });
+      console.log("[runRankingAggregatePeakMonthly28d] peak_28d rollups (force)", rollupPrep);
+    }
+    const allDur = useRollups
+      ? await buildPeakPowerFromPeak28dRollupsOnePass(db, r28s, r28e, snap, null)
+      : await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, snap, null);
+    const writeJobs = [];
+    for (const gender of ["all", "M", "F"]) {
+      for (const durationType of Object.keys(DURATION_FIELDS)) {
+        writeJobs.push(
+          (async () => {
+            const pack = allDur[gender][durationType];
+            await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
+            const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
+            await writeRankingAggregatePayload(db, ckey, {
+              byCategory: pack.byCategory,
+              entries: pack.entries,
+              startStr: r28s,
+              endStr: r28e,
+              cohortAvgHrBpm: pack.cohortAvgHrBpm,
+            });
+          })()
+        );
+      }
+    }
+    await Promise.all(writeJobs);
+    const wrote = writeJobs.length;
+    const ms = Date.now() - t0;
+    const result = {
+      phase: "peak_monthly",
+      wrote,
+      ms,
+      startStr: r28s,
+      endStr: r28e,
+      userCount: snap.size,
+      peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
+      peakMethod: rankingDayRollup.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
+      skipRollupBatch,
+    };
+    await markManualRankingPhaseMeta(db, "peak_monthly", "complete", result);
+    console.log("[runRankingAggregatePeakMonthly28d] done", result);
+    return result;
+  } catch (ePeak) {
+    const msFail = Date.now() - t0;
+    console.error("[runRankingAggregatePeakMonthly28d] failed", ePeak && ePeak.message ? ePeak.message : ePeak);
+    try {
+      await markManualRankingPhaseMeta(db, "peak_monthly", "failed", {
+        lastError: ePeak && ePeak.message ? ePeak.message : String(ePeak),
+        ms: msFail,
         startStr: r28s,
         endStr: r28e,
-        cohortAvgHrBpm: pack.cohortAvgHrBpm,
+        userCount: snap.size,
+        skipRollupBatch,
       });
-      wrote++;
-    }
+    } catch (_eMeta) {}
+    throw ePeak;
   }
-  const ms = Date.now() - t0;
-  const result = {
-    phase: "peak_monthly",
-    wrote,
-    ms,
-    startStr: r28s,
-    endStr: r28e,
-    userCount: snap.size,
-    peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
-    peakMethod: rankingDayRollup.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
-  };
-  await markManualRankingPhaseMeta(db, "peak_monthly", "complete", result);
-  console.log("[runRankingAggregatePeakMonthly28d] done", result);
-  return result;
 }
 
 /** 28일 피크 단일 구간만 (max | 1min | 5min | 10min | 20min | 40min | 60min) */
@@ -6634,7 +6661,7 @@ exports.manualRebuildRankingPhase = onRequest(
     try {
       let r;
       if (phase === "peak_monthly") {
-        r = await runRankingAggregatePeakMonthly28d(db);
+        r = await runRankingAggregatePeakMonthly28d(db, null, { skipRollupBatch: true });
       } else if (phase === "peak_duration") {
         r = await runRankingAggregatePeakMonthlyOneDuration(db, duration);
       } else if (phase === "personal_speed") {
@@ -6701,12 +6728,13 @@ exports.scheduledWeeklyTssMidnightRefresh = onSchedule(
  * KST 02:50 — Strava 02:00 동기화 직후 peak_28d rollup → 피크 보드(21) → 헵타곤 GC.
  * 23:00 마스터 타임아웃·고착 시에도 Max~60분·7축이 당일 갱신되도록 분리.
  */
+/** KST 02:50 — 28일 피크 보드만 (헵타곤은 03:20 별도 스케줄, 9분 한도 회피) */
 exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
   {
     schedule: "50 2 * * *",
     timeZone: "Asia/Seoul",
     memory: "2GiB",
-    timeoutSeconds: 540,
+    timeoutSeconds: 1800,
   },
   async () => {
     const db = admin.firestore();
@@ -6717,14 +6745,15 @@ exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
           dateKst,
           status: "running",
           runningAt: admin.firestore.FieldValue.serverTimestamp(),
+          step: "peak_only",
         },
         { merge: true }
       );
-      const peakRes = await runRankingAggregatePeakMonthly28d(db, null, { ensureMissingDays: false });
+      const peakRes = await runRankingAggregatePeakMonthly28d(db, null, {
+        ensureMissingDays: false,
+        skipRollupBatch: true,
+      });
       console.log("[scheduledPeak28dBoardAndHeptagon] peak boards", peakRes);
-      await markHeptagonRebuildRunning(db);
-      const heptRes = await runHeptagonCohortRanksRebuildJob();
-      await markHeptagonDailyRebuildComplete(db, heptRes);
       await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
         {
           dateKst,
@@ -6732,16 +6761,13 @@ exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
           completedAt: admin.firestore.FieldValue.serverTimestamp(),
           runningAt: admin.firestore.FieldValue.delete(),
           peakSummary: peakRes,
-          heptagonSummary: heptRes,
+          note: "heptagon_scheduled_at_0320",
         },
         { merge: true }
       );
-      console.log("[scheduledPeak28dBoardAndHeptagon] ok", { peakRes, heptRes });
+      console.log("[scheduledPeak28dBoardAndHeptagon] peak ok (heptagon → scheduledPeak28dHeptagonOnly)", peakRes);
     } catch (e) {
       console.error("[scheduledPeak28dBoardAndHeptagon]", e && e.message ? e.message : e);
-      try {
-        await markHeptagonRebuildFailed(db, e);
-      } catch (_eH) {}
       try {
         await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
           {
@@ -6754,6 +6780,31 @@ exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
           { merge: true }
         );
       } catch (_eM) {}
+      throw e;
+    }
+  }
+);
+
+/** KST 03:20 — 02:50 피크 보드 이후 헵타곤 GC (단독 9분) */
+exports.scheduledPeak28dHeptagonOnly = onSchedule(
+  {
+    schedule: "20 3 * * *",
+    timeZone: "Asia/Seoul",
+    memory: "2GiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    try {
+      await markHeptagonRebuildRunning(db);
+      const heptRes = await runHeptagonCohortRanksRebuildJob();
+      await markHeptagonDailyRebuildComplete(db, heptRes);
+      console.log("[scheduledPeak28dHeptagonOnly] ok", heptRes);
+    } catch (e) {
+      console.error("[scheduledPeak28dHeptagonOnly]", e && e.message ? e.message : e);
+      try {
+        await markHeptagonRebuildFailed(db, e);
+      } catch (_eH) {}
       throw e;
     }
   }
@@ -6779,11 +6830,11 @@ async function runHeptagonCohortRanksRebuildJob() {
 }
 
 /**
- * 수동: 28일 피크 보드(21) + 헵타곤 GC (scheduledPeak28dBoardAndHeptagon 과 동일).
- * GET/POST ?secret=INTERNAL_SYNC_SECRET [&force=1 헵타곤 고착 해제]
+ * 수동: 28일 피크 보드(21) + 헵타곤 GC — step 분리 권장(553명·DEADLINE 방지).
+ * GET/POST ?secret=... [&force=1] [&step=peak|heptagon|both]  기본 both(순차·60분)
  */
 exports.manualPeak28dBoardAndHeptagon = onRequest(
-  { cors: true, timeoutSeconds: 540, memory: "2GiB" },
+  { cors: true, timeoutSeconds: 3600, memory: "2GiB" },
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -6800,8 +6851,12 @@ exports.manualPeak28dBoardAndHeptagon = onRequest(
     const forceRun =
       String(req.query?.force || req.body?.force || "").toLowerCase() === "true" ||
       String(req.query?.force || req.body?.force || "") === "1";
+    const stepRaw = String(req.query?.step || req.body?.step || "both")
+      .trim()
+      .toLowerCase();
+    const step = stepRaw === "peak" || stepRaw === "heptagon" ? stepRaw : "both";
     const db = admin.firestore();
-    if (await heptagonManualRebuildAlreadyRunning(db, { force: forceRun })) {
+    if (step !== "peak" && (await heptagonManualRebuildAlreadyRunning(db, { force: forceRun }))) {
       res.status(409).json({
         success: false,
         error: "헵타곤 running — ?force=1 후 재시도",
@@ -6809,37 +6864,80 @@ exports.manualPeak28dBoardAndHeptagon = onRequest(
       });
       return;
     }
+    const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
     res.status(202).json({
       success: true,
       accepted: true,
+      step,
       message:
-        "peak_28d 보드 + 헵타곤 집계 시작. ranking_meta/peak_28d_board_refresh · heptagon_daily_rebuild 확인.",
+        step === "peak"
+          ? "28일 피크 보드(21)만 시작. 완료 후 step=heptagon 으로 헵타곤 실행."
+          : step === "heptagon"
+            ? "헵타곤만 시작(피크 보드 선행 완료 필요)."
+            : "피크 보드 후 헵타곤 순차 시작(최대 60분). step=peak·heptagon 분리 권장.",
       checkMetaDocs: ["ranking_meta/peak_28d_board_refresh", `ranking_meta/${RANKING_HEPTAGON_REBUILD_META_DOC}`],
+      recoveryHint:
+        "DEADLINE 시: ① step=peak ② manual_ranking_phase_rebuild complete 확인 ③ step=heptagon&force=1",
     });
-    try {
-      const peakRes = await runRankingAggregatePeakMonthly28d(db, null, { ensureMissingDays: false });
-      await markHeptagonRebuildRunning(db);
-      const heptRes = await runHeptagonCohortRanksRebuildJob();
-      await markHeptagonDailyRebuildComplete(db, heptRes);
-      const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-      await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
-        {
-          dateKst,
-          status: "complete",
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-          peakSummary: peakRes,
-          heptagonSummary: heptRes,
-          source: "manualPeak28dBoardAndHeptagon",
-        },
-        { merge: true }
-      );
-      console.log("[manualPeak28dBoardAndHeptagon] 완료", { peakRes, heptRes });
-    } catch (e) {
-      console.error("[manualPeak28dBoardAndHeptagon]", e && e.message ? e.message : e);
+    (async () => {
       try {
-        await markHeptagonRebuildFailed(db, e);
-      } catch (_e) {}
-    }
+        let peakRes = null;
+        let heptRes = null;
+        if (step === "peak" || step === "both") {
+          await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+            { dateKst, status: "running", runningAt: admin.firestore.FieldValue.serverTimestamp(), step },
+            { merge: true }
+          );
+          peakRes = await runRankingAggregatePeakMonthly28d(db, null, {
+            ensureMissingDays: false,
+            skipRollupBatch: true,
+          });
+          await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+            {
+              dateKst,
+              status: "complete",
+              completedAt: admin.firestore.FieldValue.serverTimestamp(),
+              runningAt: admin.firestore.FieldValue.delete(),
+              peakSummary: peakRes,
+              step,
+            },
+            { merge: true }
+          );
+          console.log("[manualPeak28dBoardAndHeptagon] peak done", peakRes);
+        }
+        if (step === "heptagon" || step === "both") {
+          await markHeptagonRebuildRunning(db);
+          heptRes = await runHeptagonCohortRanksRebuildJob();
+          await markHeptagonDailyRebuildComplete(db, heptRes);
+          console.log("[manualPeak28dBoardAndHeptagon] heptagon done", heptRes);
+        }
+        if (step === "both" && peakRes && heptRes) {
+          await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+            { heptagonSummary: heptRes, source: "manualPeak28dBoardAndHeptagon" },
+            { merge: true }
+          );
+        }
+      } catch (e) {
+        console.error("[manualPeak28dBoardAndHeptagon]", e && e.message ? e.message : e);
+        const msg = e && e.message ? String(e.message).slice(0, 2000) : String(e);
+        try {
+          if (step === "peak" || step === "both") {
+            await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+              {
+                dateKst,
+                status: "failed",
+                failedAt: admin.firestore.FieldValue.serverTimestamp(),
+                lastError: msg,
+              },
+              { merge: true }
+            );
+          }
+          if (step === "heptagon" || step === "both") {
+            await markHeptagonRebuildFailed(db, e);
+          }
+        } catch (_eMeta) {}
+      }
+    })();
   }
 );
 
