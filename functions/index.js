@@ -3117,6 +3117,200 @@ async function markMasterDailyRankingRebuildFailed(db, err, partial) {
   );
 }
 
+async function markManualRankingPhaseMeta(db, phase, status, extra) {
+  const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  await db.collection("ranking_meta").doc(RANKING_PHASE_REBUILD_META_DOC).set(
+    {
+      dateKst,
+      phase: String(phase || ""),
+      status: String(status || ""),
+      progressAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(extra && typeof extra === "object" ? extra : {}),
+    },
+    { merge: true }
+  );
+}
+
+/** 28일 피크 → ranking_aggregates peakRanking_v2_monthly_* (Max~60분 전체) */
+async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
+  const t0 = Date.now();
+  const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
+  const snap = usersSnap ?? (await db.collection("users").get());
+  const useRollups = !(opts && opts.legacyOnePass === true);
+  await markManualRankingPhaseMeta(db, "peak_monthly", "running", {
+    r28s,
+    r28e,
+    userCount: snap.size,
+    peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
+  });
+  if (useRollups) {
+    const rollupPrep = await rankingDayRollup.rebuildPeak28dRollupsBatch(db, snap.docs, r28s, r28e, {
+      ensureMissingDays: !!(opts && opts.ensureMissingDays),
+    });
+    console.log("[runRankingAggregatePeakMonthly28d] peak_28d rollups", rollupPrep);
+  }
+  const allDur = useRollups
+    ? await buildPeakPowerFromPeak28dRollupsOnePass(db, r28s, r28e, snap, null)
+    : await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, snap, null);
+  let wrote = 0;
+  for (const gender of ["all", "M", "F"]) {
+    for (const durationType of Object.keys(DURATION_FIELDS)) {
+      const pack = allDur[gender][durationType];
+      await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
+      const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
+      await writeRankingAggregatePayload(db, ckey, {
+        byCategory: pack.byCategory,
+        entries: pack.entries,
+        startStr: r28s,
+        endStr: r28e,
+        cohortAvgHrBpm: pack.cohortAvgHrBpm,
+      });
+      wrote++;
+    }
+  }
+  const ms = Date.now() - t0;
+  const result = {
+    phase: "peak_monthly",
+    wrote,
+    ms,
+    startStr: r28s,
+    endStr: r28e,
+    userCount: snap.size,
+    peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
+    peakMethod: rankingDayRollup.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
+  };
+  await markManualRankingPhaseMeta(db, "peak_monthly", "complete", result);
+  console.log("[runRankingAggregatePeakMonthly28d] done", result);
+  return result;
+}
+
+/** 28일 피크 단일 구간만 (max | 1min | 5min | 10min | 20min | 40min | 60min) */
+async function runRankingAggregatePeakMonthlyOneDuration(db, durationType, usersSnap = null) {
+  if (!DURATION_FIELDS[durationType]) {
+    throw new Error(`invalid_duration:${durationType}`);
+  }
+  const t0 = Date.now();
+  const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
+  const snap = usersSnap ?? (await db.collection("users").get());
+  await markManualRankingPhaseMeta(db, "peak_duration", "running", {
+    durationType,
+    r28s,
+    r28e,
+    userCount: snap.size,
+  });
+  await rankingDayRollup.rebuildPeak28dRollupsBatch(db, snap.docs, r28s, r28e, { ensureMissingDays: false });
+  const allDur = await buildPeakPowerFromPeak28dRollupsOnePass(db, r28s, r28e, snap, durationType);
+  let wrote = 0;
+  for (const gender of ["all", "M", "F"]) {
+    const pack = allDur[gender][durationType];
+    await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
+    const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
+    await writeRankingAggregatePayload(db, ckey, {
+      byCategory: pack.byCategory,
+      entries: pack.entries,
+      startStr: r28s,
+      endStr: r28e,
+      cohortAvgHrBpm: pack.cohortAvgHrBpm,
+    });
+    wrote++;
+  }
+  const ms = Date.now() - t0;
+  const result = {
+    phase: "peak_duration",
+    durationType,
+    wrote,
+    ms,
+    startStr: r28s,
+    endStr: r28e,
+    userCount: snap.size,
+    cacheKeyExample: `peakRanking_v2_monthly_${durationType}_all_${r28s}_${r28e}`,
+  };
+  await markManualRankingPhaseMeta(db, "peak_duration", "complete", result);
+  console.log("[runRankingAggregatePeakMonthlyOneDuration] done", result);
+  return result;
+}
+
+/** 30일 개인 거리 랭킹 */
+async function runRankingAggregatePersonalDist30d(db, usersSnap = null) {
+  const t0 = Date.now();
+  const { startStr: r30s, endStr: r30e } = getRolling30DaysRangeSeoul();
+  const snap = usersSnap ?? (await db.collection("users").get());
+  await markManualRankingPhaseMeta(db, "personal_dist", "running", { r30s, r30e, userCount: snap.size });
+  let wrote = 0;
+  for (const gender of ["all", "M", "F"]) {
+    const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender, snap);
+    await applyPeakRankChanges(db, dist.byCategory, `peak_personal_dist_rolling30_${gender}`);
+    const keyD = `peakRanking_personal_dist_30d_${gender}_${r30s}_${r30e}`;
+    await writeRankingAggregatePayload(db, keyD, {
+      byCategory: dist.byCategory,
+      entries: dist.entries,
+      startStr: r30s,
+      endStr: r30e,
+    });
+    wrote++;
+  }
+  const ms = Date.now() - t0;
+  const result = { phase: "personal_dist", wrote, ms, startStr: r30s, endStr: r30e, userCount: snap.size };
+  await markManualRankingPhaseMeta(db, "personal_dist", "complete", result);
+  console.log("[runRankingAggregatePersonalDist30d] done", result);
+  return result;
+}
+
+/** 183일 독주(항속) 랭킹 */
+async function runRankingAggregatePersonalSpeed183d(db, usersSnap = null) {
+  const t0 = Date.now();
+  const { startStr: r183s, endStr: r183e } = getRolling183DaysRangeSeoul();
+  const snap = usersSnap ?? (await db.collection("users").get());
+  const allUserDocs = snap.docs;
+  await markManualRankingPhaseMeta(db, "personal_speed", "running", { r183s, r183e, userCount: snap.size });
+  const psMetaRef = db.collection("ranking_meta").doc("personal_speed_logic");
+  const psMetaSnap = await psMetaRef.get();
+  const psMetaVer = psMetaSnap.exists ? Number((psMetaSnap.data() || {}).version) : 0;
+  if (psMetaVer < rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) {
+    await resetPersonalSpeedRankingDerivedState(db, r183s, r183e);
+    await psMetaRef.set({
+      version: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+  const psRollup = await rankingDayRollup.preparePersonalSpeedRankingRebuild(db, allUserDocs, r183s, r183e, {
+    ensureMissingDays: false,
+  });
+  console.log("[runRankingAggregatePersonalSpeed183d] rollup", psRollup);
+  let wrote = 0;
+  for (const gender of ["all", "M", "F"]) {
+    const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r183s, r183e, gender, snap, {
+      logBatchSize: 25,
+      syncRollups: true,
+    });
+    spd.dashboardLogRouteEnriched = true;
+    await applyPeakRankChanges(db, spd.byCategory, `peak_personal_speed_rolling183_${gender}`);
+    const keyS = `peakRanking_personal_speed_183d_${gender}_${r183s}_${r183e}`;
+    await persistPersonalSpeedRankingPack(db, keyS, spd, r183s, r183e);
+    wrote++;
+  }
+  const ms = Date.now() - t0;
+  const result = { phase: "personal_speed", wrote, ms, startStr: r183s, endStr: r183e, psRollup, userCount: snap.size };
+  await markManualRankingPhaseMeta(db, "personal_speed", "complete", result);
+  console.log("[runRankingAggregatePersonalSpeed183d] done", result);
+  return result;
+}
+
+/** 장시간 구간 진행·멈춤 확인용 — Firestore만 새로고침해도 lastPhase·progressAt 갱신 */
+async function markMasterDailyRankingRebuildProgress(db, lastPhase, extra) {
+  const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  await db.collection("ranking_meta").doc(RANKING_MASTER_REBUILD_META_DOC).set(
+    {
+      dateKst,
+      status: "running",
+      lastPhase: String(lastPhase || ""),
+      progressAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(extra && typeof extra === "object" ? extra : {}),
+    },
+    { merge: true }
+  );
+}
+
 /** GC 헵타곤 스냅샷(23:35 KST) 완료 시각 — 집계 여부 확인용 */
 async function markHeptagonDailyRebuildComplete(db, resultSummary) {
   const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
@@ -3146,6 +3340,8 @@ async function markHeptagonRebuildRunning(db) {
       dateKst,
       status: "running",
       runningAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastError: admin.firestore.FieldValue.delete(),
+      failedAt: admin.firestore.FieldValue.delete(),
     },
     { merge: true }
   );
@@ -3164,6 +3360,44 @@ async function markHeptagonRebuildFailed(db, err) {
     },
     { merge: true }
   );
+}
+
+/** 마스터 집계 HTTP — running 고착 시 자동 해제 (헵타곤과 동일 25분) */
+async function masterManualRebuildAlreadyRunning(db, opts) {
+  const force = opts && opts.force === true;
+  try {
+    const ref = db.collection("ranking_meta").doc(RANKING_MASTER_REBUILD_META_DOC);
+    const snap = await ref.get();
+    if (!snap.exists) return false;
+    const d = snap.data() || {};
+    if (String(d.status || "") !== "running" || !d.runningAt) return false;
+    const t =
+      typeof d.runningAt.toMillis === "function"
+        ? d.runningAt.toMillis()
+        : d.runningAt instanceof Date
+          ? d.runningAt.getTime()
+          : 0;
+    const runningMs = t > 0 ? Date.now() - t : HEPTAGON_REBUILD_RUNNING_STALE_MS + 1;
+    if (force || runningMs >= HEPTAGON_REBUILD_RUNNING_STALE_MS) {
+      await ref.set(
+        {
+          status: "failed",
+          runningAt: admin.firestore.FieldValue.delete(),
+          lastError: force ? "manual_force_clear_running" : "stale_running_lock_cleared",
+          failedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      console.warn("[masterManualRebuildAlreadyRunning] stale running lock cleared", {
+        runningMs,
+        force: !!force,
+      });
+      return false;
+    }
+    return true;
+  } catch (_e) {
+    return false;
+  }
 }
 
 /** 수동 HTTP 중복 실행 억제 — running 고착 시 자동 해제 */
@@ -4875,6 +5109,8 @@ const RANKING_HTTP_LIVE_REBUILD_LOCK_MS = 10 * 60 * 1000;
 /** A안: 15~22시 시간별 TSS 보강 — 집계가 이 시간보다 오래됐을 때만 전체 스캔 */
 const RANKING_HOURLY_TSS_REFRESH_MIN_AGE_MS = 90 * 60 * 1000;
 const RANKING_MASTER_REBUILD_META_DOC = "master_daily_rebuild";
+/** 수동 부분 집계(피크·독주·거리) 진행 상태 */
+const RANKING_PHASE_REBUILD_META_DOC = "manual_ranking_phase_rebuild";
 const RANKING_HEPTAGON_REBUILD_META_DOC = "heptagon_daily_rebuild";
 
 function emptyPeakRankingByCategory() {
@@ -5673,13 +5909,140 @@ function genderKeyFromUserData(data) {
  * @returns {Promise<Record<string, Record<string, { entries: any[], byCategory: object, cohortAvgHrBpm: number|null }>>>}
  *         outer: gender "all"|"M"|"F", inner: durationType
  */
-/** [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
-async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr, usersSnap = null) {
+/**
+ * peak_28d rollup 1 read/사용자 — 일 버킷 28회×전체 users 스캔 대신 보드 조립 (4주 1피크 규칙).
+ * @param {string|null} [onlyDuration] max|1min|… 단일 구간
+ */
+async function buildPeakPowerFromPeak28dRollupsOnePass(db, startStr, endStr, usersSnap = null, onlyDuration = null) {
   const genders = ["all", "M", "F"];
+  const durKeys =
+    onlyDuration && DURATION_FIELDS[onlyDuration]
+      ? [onlyDuration]
+      : Object.keys(DURATION_FIELDS);
   const byGenderDur = {};
   genders.forEach((g) => {
     byGenderDur[g] = {};
-    for (const dt of Object.keys(DURATION_FIELDS)) {
+    for (const dt of durKeys) {
+      byGenderDur[g][dt] = { raw: [] };
+    }
+  });
+  const cohortSum = { all: {}, M: {}, F: {} };
+  const cohortN = { all: {}, M: {}, F: {} };
+  genders.forEach((g) => {
+    for (const dt of Object.keys(DURATION_HR_FIELDS)) {
+      cohortSum[g][dt] = 0;
+      cohortN[g][dt] = 0;
+    }
+  });
+
+  const snap = usersSnap ?? (await db.collection("users").get());
+  const docs = snap.docs;
+  let rollupMiss = 0;
+
+  for (let i = 0; i < docs.length; i += RANKING_ONE_PASS_BATCH) {
+    const batch = docs.slice(i, i + RANKING_ONE_PASS_BATCH);
+    const batchIds = batch.map((d) => d.id);
+    const rollupMap = await rankingDayRollup.fetchPeak28dRollupMap(db, batchIds, startStr, endStr);
+    await Promise.all(
+      batch.map(async (udoc) => {
+        const userId = udoc.id;
+        const data = udoc.data();
+        const name = data.name || "(이름 없음)";
+        const gKey = genderKeyFromUserData(data);
+        const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+        const challenge = data.challenge || "Fitness";
+        const leagueCategory = getLeagueCategory(challenge, birthYear);
+        if (!leagueCategory) return;
+
+        let hit = rollupMap.get(userId);
+        if (!hit || !hit.peakMap) {
+          rollupMiss++;
+          const rebuilt = await rankingDayRollup.rebuildPeak28dRollupFromBuckets(
+            db,
+            userId,
+            data,
+            startStr,
+            endStr,
+            { ensureMissingDays: false }
+          );
+          hit = { peakMap: rebuilt.peakMap, hrMax: rebuilt.hrMax || {} };
+        }
+        const peakMap = hit.peakMap;
+        const hrMax = hit.hrMax || {};
+        for (const slot of genders) {
+          if (slot === "M" && gKey !== "M") continue;
+          if (slot === "F" && gKey !== "F") continue;
+          for (const dth of Object.keys(DURATION_HR_FIELDS)) {
+            if (hrMax[dth] > 0) {
+              cohortSum[slot][dth] += hrMax[dth];
+              cohortN[slot][dth] += 1;
+            }
+          }
+        }
+        if (!peakMap || !peakMap.peaks) return;
+        for (const dt of Object.keys(peakMap.peaks)) {
+          const p = peakMap.peaks[dt];
+          if (!p || p.wkg <= 0) continue;
+          const row = {
+            userId,
+            name,
+            wkg: p.wkg,
+            watts: p.watts,
+            weightKg: p.weightKg,
+            ageCategory: leagueCategory,
+            gender: String(data.gender || data.sex || "").toLowerCase(),
+            is_private: privacyFlagFromFirestoreDoc(data),
+            profileImageUrl: profileImageUrlFromUserData(data),
+            ...rankingUserStatusFieldsFromData(data),
+          };
+          for (const slot of genders) {
+            if (slot === "M" && gKey !== "M") continue;
+            if (slot === "F" && gKey !== "F") continue;
+            byGenderDur[slot][dt].raw.push({ ...row });
+          }
+        }
+      })
+    );
+  }
+
+  console.log("[buildPeakPowerFromPeak28dRollupsOnePass] rollupMiss", rollupMiss, "users", docs.length);
+
+  const out = { all: {}, M: {}, F: {} };
+  genders.forEach((g) => {
+    for (const dt of durKeys) {
+      const raw = byGenderDur[g][dt].raw;
+      raw.sort((a, b) => b.wkg - a.wkg);
+      const withRank = raw.map((e, j) => ({ ...e, rank: j + 1 }));
+      const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+      withRank.forEach((e) => {
+        if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
+      });
+      let cohortAvgHrBpm = null;
+      if (DURATION_HR_FIELDS[dt] && cohortN[g][dt] > 0) {
+        cohortAvgHrBpm = Math.round((cohortSum[g][dt] / cohortN[g][dt]) * 10) / 10;
+      }
+      out[g][dt] = {
+        entries: withRank,
+        byCategory,
+        cohortAvgHrBpm: cohortAvgHrBpm != null && !isNaN(cohortAvgHrBpm) ? cohortAvgHrBpm : null,
+      };
+    }
+  });
+  return out;
+}
+
+/** [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지
+ * @param {string|null} [onlyDuration] max|1min|… 지정 시 해당 구간만 집계·반환(수동 1구간 재실행용) */
+async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr, usersSnap = null, onlyDuration = null) {
+  const genders = ["all", "M", "F"];
+  const durKeys =
+    onlyDuration && DURATION_FIELDS[onlyDuration]
+      ? [onlyDuration]
+      : Object.keys(DURATION_FIELDS);
+  const byGenderDur = {};
+  genders.forEach((g) => {
+    byGenderDur[g] = {};
+    for (const dt of durKeys) {
       byGenderDur[g][dt] = { raw: [] };
     }
   });
@@ -5711,7 +6074,7 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
         const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
         const refs = dates.map((ymd) => rankingDayRollup.bucketRef(db, userId, ymd));
         const bucketSnaps = await rankingDayRollup.chunkedGetAll(db, refs, 30);
-        const peakMap = rankingDayRollup.computeUserPeaksAllDurationsFromBucketSnaps(
+        const peakMap = rankingDayRollup.computeFourWeekGcStylePeaksFromBucketSnaps(
           data,
           bucketSnaps,
           startStr,
@@ -5756,7 +6119,7 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
 
   const out = { all: {}, M: {}, F: {} };
   genders.forEach((g) => {
-    for (const dt of Object.keys(DURATION_FIELDS)) {
+    for (const dt of durKeys) {
       const raw = byGenderDur[g][dt].raw;
       raw.sort((a, b) => b.wkg - a.wkg);
       const withRank = raw.map((e, j) => ({ ...e, rank: j + 1 }));
@@ -5913,9 +6276,9 @@ async function refreshWeeklyMileageTop10IfStale(db, minAgeMs) {
 /**
  * @param {FirebaseFirestore.Firestore} db
  * @param {boolean} [forceReconcile=false] true이면 집계 전 모든 사용자의 현재·이전 주 일 버킷을 logs에서 강제 재계산.
- *   수동 집계(manualRebuildWeeklyRanking) 시 TSS 수동 수정값을 즉시 반영할 때 사용.
+ * @param {{ skipPersonalSpeed?: boolean }} [opts] skipPersonalSpeed=true면 183일 독주 구간 생략(수동 긴급 완료용).
  */
-async function runRebuildRankingAggregatesCore(db, forceReconcile) {
+async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
   const t0 = Date.now();
   let wrote = 0;
   let lastPhase = "init";
@@ -5924,13 +6287,22 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
   const { startStr: r30s, endStr: r30e } = getRolling30DaysRangeSeoul();
   const { startStr: r183s, endStr: r183e } = getRolling183DaysRangeSeoul();
+  const skipPersonalSpeed = !!(opts && opts.skipPersonalSpeed);
   try {
-    await markMasterDailyRankingRebuildRunning(db, { forceReconcile: !!forceReconcile });
+    await markMasterDailyRankingRebuildRunning(db, {
+      forceReconcile: !!forceReconcile,
+      skipPersonalSpeed,
+      timeoutLimitSec: 3600,
+    });
     lastPhase = "users_fetch";
   // [비용절감] users 컬렉션을 단 1회만 읽어 모든 랭킹 함수에 공유 주입 (기존 10회 → 1회)
   const sharedUsersSnap = await db.collection("users").get();
   console.log("[runRebuildRankingAggregatesCore] users snapshot fetched once, docs:", sharedUsersSnap.size,
-    { forceReconcile: !!forceReconcile, wStart, wEnd });
+    { forceReconcile: !!forceReconcile, skipPersonalSpeed, wStart, wEnd });
+  await markMasterDailyRankingRebuildProgress(db, "users_fetch_done", {
+    userCount: sharedUsersSnap.size,
+    elapsedMs: Date.now() - t0,
+  });
 
   // ── 0. 버킷 강제 재계산 (수동 집계 시에만 실행) ──
   // 사용자 루프를 집계 루프와 분리하지 않고 여기서 일괄 처리함으로써 Firestore 읽기 중복을 줄임.
@@ -5990,6 +6362,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   });
   wrote++;
   console.log("[runRebuildRankingAggregatesCore] weekly_ranking_full 저장 완료", { wStart, wEnd, entries: entriesCurrent.length });
+  await markMasterDailyRankingRebuildProgress(db, "weekly_tss_top10_done", { wrote, elapsedMs: Date.now() - t0 });
 
   // ── 3. 이전 주 TOP10 ──
   const entriesPrevEarly = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
@@ -6004,28 +6377,11 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
   wrote++;
 
   // ── 3b. 피크파워 28일(헵타곤·Max·구간 탭) — 타임아웃 전에 반드시 기록 ──
-  const allDurMonthlyEarly = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(
-    db,
-    r28s,
-    r28e,
-    sharedUsersSnap
-  );
-  for (const gender of ["all", "M", "F"]) {
-    for (const durationType of Object.keys(DURATION_FIELDS)) {
-      const pack = allDurMonthlyEarly[gender][durationType];
-      await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
-      const ckeyEarly = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
-      await writeRankingAggregatePayload(db, ckeyEarly, {
-        byCategory: pack.byCategory,
-        entries: pack.entries,
-        startStr: r28s,
-        endStr: r28e,
-        cohortAvgHrBpm: pack.cohortAvgHrBpm,
-      });
-      wrote++;
-    }
-  }
-  console.log("[runRebuildRankingAggregatesCore] peak monthly(28d) 저장 완료", { r28s, r28e });
+  lastPhase = "peak_monthly_build";
+  await markMasterDailyRankingRebuildProgress(db, lastPhase, { wrote, elapsedMs: Date.now() - t0 });
+  const peakMonthlyRes = await runRankingAggregatePeakMonthly28d(db, sharedUsersSnap);
+  wrote += peakMonthlyRes.wrote;
+  console.log("[runRebuildRankingAggregatesCore] peak monthly(28d) 저장 완료", peakMonthlyRes);
   lastPhase = "peak_monthly_done";
   /** 28일 피크·GC 핵심 구간 완료 시점 — 이후 독주(183d)에서 타임아웃 나도 메타·집계 확인 가능 */
   try {
@@ -6043,53 +6399,29 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile) {
 
   // ── 4. 30일 거리 랭킹 ──
   lastPhase = "rolling30_dist";
-  for (const gender of ["all", "M", "F"]) {
-    const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender, sharedUsersSnap);
-    await applyPeakRankChanges(db, dist.byCategory, `peak_personal_dist_rolling30_${gender}`);
-    const keyD = `peakRanking_personal_dist_30d_${gender}_${r30s}_${r30e}`;
-    await writeRankingAggregatePayload(db, keyD, {
-      byCategory: dist.byCategory,
-      entries: dist.entries,
-      startStr: r30s,
-      endStr: r30e,
+  await markMasterDailyRankingRebuildProgress(db, lastPhase, { wrote, elapsedMs: Date.now() - t0 });
+  const distRes = await runRankingAggregatePersonalDist30d(db, sharedUsersSnap);
+  wrote += distRes.wrote;
+
+  // ── 4-1. 6개월 항속(독주) — 553명 기준 30~60분+ 소요 가능
+  if (!skipPersonalSpeed) {
+    const psRes = await runRankingAggregatePersonalSpeed183d(db, sharedUsersSnap);
+    wrote += psRes.wrote;
+    await markMasterDailyRankingRebuildProgress(db, "personal_speed_done", {
+      wrote,
+      elapsedMs: Date.now() - t0,
+      psRollup: psRes.psRollup,
     });
-    wrote++;
+  } else {
+    console.log("[runRebuildRankingAggregatesCore] personal_speed skipped (skipPersonalSpeed=1)");
+    await markMasterDailyRankingRebuildProgress(db, "personal_speed_skipped", {
+      wrote,
+      elapsedMs: Date.now() - t0,
+    });
   }
 
-  // ── 4-1. 6개월 항속: 구 rollup(FTP·구버전) 제거 → 60분 파워만 재집계 → 보드 저장
-  lastPhase = "personal_speed";
-  const psMetaRef = db.collection("ranking_meta").doc("personal_speed_logic");
-  const psMetaSnap = await psMetaRef.get();
-  const psMetaVer = psMetaSnap.exists ? Number((psMetaSnap.data() || {}).version) : 0;
-  const psLogicBumped = psMetaVer < rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION;
-  if (psLogicBumped) {
-    const psReset = await resetPersonalSpeedRankingDerivedState(db, r183s, r183e);
-    console.log("[runRebuildRankingAggregatesCore] personal_speed 산식 변경 — 캐시·순위이력 초기화", psReset);
-    await psMetaRef.set({
-      version: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  }
-  const psRollup = await rankingDayRollup.preparePersonalSpeedRankingRebuild(
-    db,
-    allUserDocs,
-    r183s,
-    r183e,
-    { ensureMissingDays: false }
-  );
-  console.log("[runRebuildRankingAggregatesCore] personal_speed rollup 재빌드", psRollup);
-  for (const gender of ["all", "M", "F"]) {
-    const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r183s, r183e, gender, sharedUsersSnap, {
-      logBatchSize: 25,
-      syncRollups: true,
-    });
-    spd.dashboardLogRouteEnriched = true;
-    await applyPeakRankChanges(db, spd.byCategory, `peak_personal_speed_rolling183_${gender}`);
-    const keyS = `peakRanking_personal_speed_183d_${gender}_${r183s}_${r183e}`;
-    await persistPersonalSpeedRankingPack(db, keyS, spd, r183s, r183e);
-    wrote++;
-  }
-
+  lastPhase = "group_dist";
+  await markMasterDailyRankingRebuildProgress(db, lastPhase, { wrote, elapsedMs: Date.now() - t0 });
   const group = await getRolling30dGroupDistanceByHostEntries(db, r30s, r30e, null);
   const keyG = `peakRanking_group_dist_30d_${r30s}_${r30e}`;
   await writeRankingAggregatePayload(db, keyG, {
@@ -6177,25 +6509,43 @@ exports.manualRebuildWeeklyRanking = onRequest(
     const forceReconcile =
       String(req.query?.forceReconcile || req.body?.forceReconcile || "").toLowerCase() === "true" ||
       String(req.query?.forceReconcile || req.body?.forceReconcile || "") === "1";
+    const skipPersonalSpeed =
+      String(req.query?.skipPersonalSpeed || req.body?.skipPersonalSpeed || "").toLowerCase() === "true" ||
+      String(req.query?.skipPersonalSpeed || req.body?.skipPersonalSpeed || "") === "1";
+    const forceRun =
+      String(req.query?.force || req.body?.force || "").toLowerCase() === "true" ||
+      String(req.query?.force || req.body?.force || "") === "1";
     const startedAt = new Date().toISOString();
+
+    if (await masterManualRebuildAlreadyRunning(db, { force: forceRun })) {
+      res.status(409).json({
+        success: false,
+        error:
+          "마스터 랭킹 집계가 이미 실행 중입니다. 25분 후 재시도하거나 ?force=1 로 고착 running 을 해제하세요.",
+        checkMetaDoc: `ranking_meta/${RANKING_MASTER_REBUILD_META_DOC}`,
+      });
+      return;
+    }
 
     res.status(202).json({
       success: true,
       accepted: true,
       startedAt,
       forceReconcile,
+      skipPersonalSpeed,
       message:
-        "전체 랭킹 집계(TSS·TOP10·28일 피크·독주·거리)를 시작했습니다. 사용자 500명대 기준 15~30분 소요될 수 있습니다.",
+        "전체 랭킹 집계를 시작했습니다. Firestore ranking_meta/master_daily_rebuild 의 lastPhase·progressAt 으로 진행을 확인하세요. 60분 타임아웃.",
       logKeywords: [
         "[runRebuildRankingAggregatesCore] peak monthly(28d) 저장 완료",
         "[runRebuildRankingAggregatesCore] done",
         "[manualRebuildWeeklyRanking] 완료",
       ],
       checkMetaDoc: `ranking_meta/${RANKING_MASTER_REBUILD_META_DOC}`,
+      progressFields: ["lastPhase", "progressAt", "elapsedMs"],
     });
 
     try {
-      const r = await runRebuildRankingAggregatesCore(db, forceReconcile);
+      const r = await runRebuildRankingAggregatesCore(db, forceReconcile, { skipPersonalSpeed });
       console.log("[manualRebuildWeeklyRanking] 완료", JSON.stringify({ ...r, startedAt, forceReconcile }));
     } catch (e) {
       console.error("[manualRebuildWeeklyRanking] full 집계 오류:", e && e.message ? e.message : e);
@@ -6203,6 +6553,105 @@ exports.manualRebuildWeeklyRanking = onRequest(
         await markMasterDailyRankingRebuildFailed(db, e, { startedAt, forceReconcile, source: "manualRebuildWeeklyRanking" });
       } catch (eMeta) {
         console.warn("[manualRebuildWeeklyRanking] failed meta write:", eMeta && eMeta.message);
+      }
+    }
+  }
+);
+
+/**
+ * 수동 부분 집계 — TSS·TOP10 없이 피크·독주·거리만 따로 실행.
+ * GET ?secret=stelvio-internal-sync-v1&phase=...
+ *
+ * phase:
+ *   peak_monthly     — Max~60분 28일 전체 (21문서: 7구간×3성별)
+ *   peak_duration    — 28일 단일 구간 (+ duration=max|1min|5min|10min|20min|40min|60min)
+ *   personal_speed   — 독주 183일
+ *   personal_dist    — 개인 거리 30일
+ *
+ * 진행: ranking_meta/manual_ranking_phase_rebuild
+ */
+exports.manualRebuildRankingPhase = onRequest(
+  { cors: true, timeoutSeconds: 3600, memory: "2GiB" },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Internal-Secret");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    const rawSecret = req.query.secret || req.headers["x-internal-secret"] || req.headers["X-Internal-Secret"];
+    let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+    const db = admin.firestore();
+    if (!authorized) {
+      const uid = await getUidFromRequest(req, res);
+      if (!uid) return;
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      if (grade !== "1") {
+        res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
+        return;
+      }
+      authorized = true;
+    }
+
+    const phase = String(req.query.phase || req.body?.phase || "")
+      .trim()
+      .toLowerCase();
+    const duration = String(req.query.duration || req.body?.duration || "").trim();
+    const validPhases = ["peak_monthly", "peak_duration", "personal_speed", "personal_dist"];
+    if (!validPhases.includes(phase)) {
+      res.status(400).json({
+        success: false,
+        error: "phase 필수: peak_monthly | peak_duration | personal_speed | personal_dist",
+        durations: Object.keys(DURATION_FIELDS),
+      });
+      return;
+    }
+    if (phase === "peak_duration" && !DURATION_FIELDS[duration]) {
+      res.status(400).json({
+        success: false,
+        error: "peak_duration 은 duration 필수",
+        durations: Object.keys(DURATION_FIELDS),
+      });
+      return;
+    }
+
+    const startedAt = new Date().toISOString();
+    const r28 = getRolling28DaysRangeSeoul();
+    res.status(202).json({
+      success: true,
+      accepted: true,
+      startedAt,
+      phase,
+      duration: phase === "peak_duration" ? duration : null,
+      rolling28: r28,
+      checkMetaDoc: `ranking_meta/${RANKING_PHASE_REBUILD_META_DOC}`,
+      message: "부분 집계 시작. Firestore manual_ranking_phase_rebuild 의 status·progressAt 확인.",
+    });
+
+    try {
+      let r;
+      if (phase === "peak_monthly") {
+        r = await runRankingAggregatePeakMonthly28d(db);
+      } else if (phase === "peak_duration") {
+        r = await runRankingAggregatePeakMonthlyOneDuration(db, duration);
+      } else if (phase === "personal_speed") {
+        r = await runRankingAggregatePersonalSpeed183d(db);
+      } else {
+        r = await runRankingAggregatePersonalDist30d(db);
+      }
+      console.log("[manualRebuildRankingPhase] 완료", JSON.stringify({ startedAt, ...r }));
+    } catch (e) {
+      console.error("[manualRebuildRankingPhase]", phase, e && e.message ? e.message : e);
+      try {
+        await markManualRankingPhaseMeta(db, phase, "failed", {
+          lastError: e && e.message ? e.message : String(e),
+          duration: phase === "peak_duration" ? duration : null,
+        });
+      } catch (eMeta) {
+        console.warn("[manualRebuildRankingPhase] failed meta write:", eMeta && eMeta.message);
       }
     }
   }
@@ -6248,6 +6697,68 @@ exports.scheduledWeeklyTssMidnightRefresh = onSchedule(
   }
 );
 
+/**
+ * KST 02:50 — Strava 02:00 동기화 직후 peak_28d rollup → 피크 보드(21) → 헵타곤 GC.
+ * 23:00 마스터 타임아웃·고착 시에도 Max~60분·7축이 당일 갱신되도록 분리.
+ */
+exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
+  {
+    schedule: "50 2 * * *",
+    timeZone: "Asia/Seoul",
+    memory: "2GiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    try {
+      await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+        {
+          dateKst,
+          status: "running",
+          runningAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      const peakRes = await runRankingAggregatePeakMonthly28d(db, null, { ensureMissingDays: false });
+      console.log("[scheduledPeak28dBoardAndHeptagon] peak boards", peakRes);
+      await markHeptagonRebuildRunning(db);
+      const heptRes = await runHeptagonCohortRanksRebuildJob();
+      await markHeptagonDailyRebuildComplete(db, heptRes);
+      await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+        {
+          dateKst,
+          status: "complete",
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          runningAt: admin.firestore.FieldValue.delete(),
+          peakSummary: peakRes,
+          heptagonSummary: heptRes,
+        },
+        { merge: true }
+      );
+      console.log("[scheduledPeak28dBoardAndHeptagon] ok", { peakRes, heptRes });
+    } catch (e) {
+      console.error("[scheduledPeak28dBoardAndHeptagon]", e && e.message ? e.message : e);
+      try {
+        await markHeptagonRebuildFailed(db, e);
+      } catch (_eH) {}
+      try {
+        await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+          {
+            dateKst,
+            status: "failed",
+            failedAt: admin.firestore.FieldValue.serverTimestamp(),
+            runningAt: admin.firestore.FieldValue.delete(),
+            lastError: e && e.message ? String(e.message).slice(0, 2000) : String(e),
+          },
+          { merge: true }
+        );
+      } catch (_eM) {}
+      throw e;
+    }
+  }
+);
+
 // ---------- STELVIO 헵타곤·GC 랭킹: 전원 코호트 순위 → heptagon_cohort_ranks (일 1회 23:35 KST 갱신, 조회는 스냅샷 읽기) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
 
@@ -6263,9 +6774,74 @@ async function runHeptagonCohortRanksRebuildJob() {
     admin,
     readRankingAggregatePayloadIfFresh,
     readRankingAggregatePayloadAllowStale: readAllowStaleForHeptagon,
-    buildPeakPowerAllDurationsForRangeAllGendersOnePass,
+    buildPeakPowerAllDurationsForRangeAllGendersOnePass: buildPeakPowerFromPeak28dRollupsOnePass,
   });
 }
+
+/**
+ * 수동: 28일 피크 보드(21) + 헵타곤 GC (scheduledPeak28dBoardAndHeptagon 과 동일).
+ * GET/POST ?secret=INTERNAL_SYNC_SECRET [&force=1 헵타곤 고착 해제]
+ */
+exports.manualPeak28dBoardAndHeptagon = onRequest(
+  { cors: true, timeoutSeconds: 540, memory: "2GiB" },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Internal-Secret");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    const rawSecret = req.query.secret || req.headers["x-internal-secret"] || req.headers["X-Internal-Secret"];
+    if (rawSecret !== INTERNAL_SYNC_SECRET) {
+      res.status(403).json({ success: false, error: "secret required" });
+      return;
+    }
+    const forceRun =
+      String(req.query?.force || req.body?.force || "").toLowerCase() === "true" ||
+      String(req.query?.force || req.body?.force || "") === "1";
+    const db = admin.firestore();
+    if (await heptagonManualRebuildAlreadyRunning(db, { force: forceRun })) {
+      res.status(409).json({
+        success: false,
+        error: "헵타곤 running — ?force=1 후 재시도",
+        checkMetaDoc: `ranking_meta/${RANKING_HEPTAGON_REBUILD_META_DOC}`,
+      });
+      return;
+    }
+    res.status(202).json({
+      success: true,
+      accepted: true,
+      message:
+        "peak_28d 보드 + 헵타곤 집계 시작. ranking_meta/peak_28d_board_refresh · heptagon_daily_rebuild 확인.",
+      checkMetaDocs: ["ranking_meta/peak_28d_board_refresh", `ranking_meta/${RANKING_HEPTAGON_REBUILD_META_DOC}`],
+    });
+    try {
+      const peakRes = await runRankingAggregatePeakMonthly28d(db, null, { ensureMissingDays: false });
+      await markHeptagonRebuildRunning(db);
+      const heptRes = await runHeptagonCohortRanksRebuildJob();
+      await markHeptagonDailyRebuildComplete(db, heptRes);
+      const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+      await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
+        {
+          dateKst,
+          status: "complete",
+          completedAt: admin.firestore.FieldValue.serverTimestamp(),
+          peakSummary: peakRes,
+          heptagonSummary: heptRes,
+          source: "manualPeak28dBoardAndHeptagon",
+        },
+        { merge: true }
+      );
+      console.log("[manualPeak28dBoardAndHeptagon] 완료", { peakRes, heptRes });
+    } catch (e) {
+      console.error("[manualPeak28dBoardAndHeptagon]", e && e.message ? e.message : e);
+      try {
+        await markHeptagonRebuildFailed(db, e);
+      } catch (_e) {}
+    }
+  }
+);
 
 exports.scheduledHeptagonCohortRanks = onSchedule(
   {

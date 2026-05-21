@@ -12,6 +12,11 @@ exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
 /** 사용자별 6개월 항속 사전 집계 — 랭킹 보드는 users×1회 읽기만 수행 */
 exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
+/** 28일 피크·GC·헵타곤 — 일 버킷만 증분 갱신(전체 로그 스캔 없음) */
+exports.PEAK_28D_ROLLUP_ID = "peak_28d";
+/** 4주(28일) 중 주별 최고 1건씩 → 4주 중 최대 1건으로 환산 (GC·헵타곤) */
+exports.PEAK_28D_LOGIC_VERSION = 2;
+exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK = "four_week_one_peak";
 /**
  * 랭킹 항속 산출식 버전 — 변경 시 rollup·ranking_aggregates·cache 전면 재계산.
  * v11: 대시보드와 동일 로그 조회(orderBy date desc·limit 400·6개월 필터·Strava dedupe)·max_60min_watts만.
@@ -366,6 +371,11 @@ async function reconcileUserRankingDayBucket(db, userId, ymd, userData) {
   } catch (eTouch2) {
     console.warn("[rankingDayRollup] personal_speed touch 실패:", userId, ymd, eTouch2.message);
   }
+  try {
+    await touchPeak28dRollupAfterDayChange(db, userId, userData, ymd, payload);
+  } catch (ePeak28) {
+    console.warn("[rankingDayRollup] peak_28d touch 실패:", userId, ymd, ePeak28.message);
+  }
 }
 
 /**
@@ -529,11 +539,77 @@ function weekIndexForSeoulYmd(ymd, weekRanges) {
   return -1;
 }
 
+function getRolling28DaysRangeSeoul() {
+  const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const startStr = addDaysSeoulYmd(endStr, -27);
+  return { startStr, endStr };
+}
+
 /**
- * GC·헵타곤·28일 롤링: 일 버킷만 읽어 구간별 단일 최고 피크 W/kg (28일 내 max 1개).
+ * GC·헵타곤: 28일을 4주로 나누고, 주별 최고 W/kg 중 **최대 1주**만 환산점수에 사용.
+ * (28일 전체 일별 max와 수학적으로 동일한 단일 피크이나, 주별 breakdown을 rollup에 저장)
+ */
+function computeUserPeaksFourWeekOnePeakFromBucketSnaps(userData, bucketSnaps, startStr, endStr) {
+  const rawWeight = Number(userData.weight || userData.weightKg || 0);
+  if (rawWeight <= 0) return null;
+  const weightKg = Math.max(rawWeight, 45);
+  const weekRanges = splitInclusiveRangeIntoFourWeeks(startStr, endStr);
+  if (!weekRanges) {
+    return computeUserPeaksAllDurationsFromBucketSnaps(userData, bucketSnaps, startStr, endStr);
+  }
+
+  const peaks = {};
+  for (const dt of Object.keys(DURATION_FIELDS)) {
+    const field = DURATION_FIELDS[dt];
+    const weeklyWkgArr = [];
+    let bestWatts = 0;
+    let bestWeekIndex = -1;
+
+    for (let w = 0; w < weekRanges.length; w++) {
+      const wr = weekRanges[w];
+      let weekMax = 0;
+      (bucketSnaps || []).forEach((snap) => {
+        if (!snap || !snap.exists) return;
+        const row = snap.data() || {};
+        const ymd = row.ymd || snap.id || "";
+        if (!ymd || ymd < wr.startStr || ymd > wr.endStr) return;
+        const watts = Number(row[field]) || 0;
+        if (watts <= 0) return;
+        if (!validatePeakPowerRecord(dt, watts, weightKg)) return;
+        if (watts > weekMax) weekMax = watts;
+      });
+      if (weekMax > 0) {
+        weeklyWkgArr.push(Math.round((weekMax / weightKg) * 100) / 100);
+        if (weekMax > bestWatts) {
+          bestWatts = weekMax;
+          bestWeekIndex = w;
+        }
+      }
+    }
+
+    if (bestWatts <= 0) continue;
+    const gc = calculateGcRankingFromWeeklyMaxWkg(weeklyWkgArr);
+    const finalWkg = gc.finalWkg > 0 ? gc.finalWkg : Math.round((bestWatts / weightKg) * 100) / 100;
+    peaks[dt] = {
+      watts: bestWatts,
+      wkg: finalWkg,
+      weightKg,
+      bestWeekIndex,
+      weeklyWkg: weeklyWkgArr,
+      peakMethod: exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
+    };
+  }
+
+  return Object.keys(peaks).length
+    ? { weightKg, peaks, peakMethod: exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK }
+    : null;
+}
+
+/**
+ * GC·헵타곤·28일 롤링: 4주 중 주별 최고 → 그중 1피크만 환산.
  */
 function computeFourWeekGcStylePeaksFromBucketSnaps(userData, bucketSnaps, startStr, endStr) {
-  return computeUserPeaksAllDurationsFromBucketSnaps(userData, bucketSnaps, startStr, endStr);
+  return computeUserPeaksFourWeekOnePeakFromBucketSnaps(userData, bucketSnaps, startStr, endStr);
 }
 
 /** 일 버킷 스냅샷(28일 등)으로 duration별 기간 내 최고 피크 1건 — 추가 로그 스캔 없음 */
@@ -837,6 +913,130 @@ async function touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ym
   if (peakYmd === ymd && day60 < peak60) {
     await rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, bucketOnlyOpts);
   }
+}
+
+function peak28dRollupRef(db, userId) {
+  return db
+    .collection("users")
+    .doc(userId)
+    .collection(exports.RANKING_ROLLUPS_COLL)
+    .doc(exports.PEAK_28D_ROLLUP_ID);
+}
+
+function peak28dRollupNeedsInvalidate(rollup, startStr, endStr) {
+  if (!rollup) return true;
+  if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return true;
+  if (Number(rollup.rollupLogicVersion) < exports.PEAK_28D_LOGIC_VERSION) return true;
+  if (rollup.peakMethod !== exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK) return true;
+  return false;
+}
+
+async function writePeak28dRollupDoc(db, userId, userData, startStr, endStr, peakMap, hrMax) {
+  const ref = peak28dRollupRef(db, userId);
+  if (!peakMap || !peakMap.peaks || !Object.keys(peakMap.peaks).length) {
+    await ref.delete().catch(() => {});
+    return null;
+  }
+  const payload = {
+    windowStart: startStr,
+    windowEnd: endStr,
+    weightKg: peakMap.weightKg,
+    peaks: peakMap.peaks,
+    peakMethod: peakMap.peakMethod || exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
+    hrMaxByDuration: hrMax || {},
+    rollupLogicVersion: exports.PEAK_28D_LOGIC_VERSION,
+    reconciled_at: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  await ref.set(payload);
+  return payload;
+}
+
+/**
+ * 28일 창: 일 버킷만 읽어 4주 1피크 rollup 갱신 (로그 400건 스캔 없음).
+ */
+async function rebuildPeak28dRollupFromBuckets(db, userId, userData, startStr, endStr, opts) {
+  const ensureMissing = !!(opts && opts.ensureMissingDays);
+  if (ensureMissing) {
+    await ensureRankingBucketsFilledForRange(db, userId, userData || {}, startStr, endStr, false);
+  }
+  const dates = listInclusiveYmdsSeoul(startStr, endStr);
+  const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
+  const bucketSnaps = await chunkedGetAll(db, refs, BUCKET_GET_CHUNK);
+  const peakMap = computeFourWeekGcStylePeaksFromBucketSnaps(userData, bucketSnaps, startStr, endStr);
+  const hrMax = maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr);
+  await writePeak28dRollupDoc(db, userId, userData, startStr, endStr, peakMap, hrMax);
+  return { peakMap, hrMax };
+}
+
+/**
+ * 로그→일 버킷 직후: 28일 창이면 일 버킷만 재읽어 peak_28d 갱신(로그 전체 스캔 없음, 최대 28 reads).
+ */
+async function touchPeak28dRollupAfterDayChange(db, userId, userData, ymd, _dayPayload) {
+  const { startStr, endStr } = getRolling28DaysRangeSeoul();
+  if (!ymd || ymd < startStr || ymd > endStr) return;
+  await rebuildPeak28dRollupFromBuckets(db, userId, userData, startStr, endStr, { ensureMissingDays: false });
+}
+
+/**
+ * 배치: 창·버전 불일치 rollup만 28버킷 재집계 (users×28 reads, logs 스캔 없음).
+ */
+async function rebuildPeak28dRollupsBatch(db, userDocs, startStr, endStr, opts) {
+  if (!userDocs || !userDocs.length) return { rebuilt: 0, skipped: 0 };
+  const batchSize = (opts && opts.batchSize) || ROLLUP_REBUILD_BATCH;
+  const ensureMissing = !!(opts && opts.ensureMissingDays);
+  let rebuilt = 0;
+  let skipped = 0;
+
+  for (let i = 0; i < userDocs.length; i += batchSize) {
+    const slice = userDocs.slice(i, i + batchSize);
+    /* eslint-disable no-await-in-loop */
+    const refs = slice.map((d) => peak28dRollupRef(db, d.id));
+    const rollSnaps = await chunkedGetAll(db, refs, 40);
+    await Promise.all(
+      slice.map(async (udoc, j) => {
+        const userId = udoc.id;
+        const userData = udoc.data() || {};
+        const existing = rollSnaps[j] && rollSnaps[j].exists ? rollSnaps[j].data() : null;
+        if (!peak28dRollupNeedsInvalidate(existing, startStr, endStr)) {
+          skipped++;
+          return;
+        }
+        await rebuildPeak28dRollupFromBuckets(db, userId, userData, startStr, endStr, {
+          ensureMissingDays: ensureMissing,
+        });
+        rebuilt++;
+      })
+    );
+    /* eslint-enable no-await-in-loop */
+  }
+  return { rebuilt, skipped };
+}
+
+/**
+ * @returns {Promise<Map<string, { peakMap: object, hrMax: object }>>}
+ */
+async function fetchPeak28dRollupMap(db, userIds, startStr, endStr) {
+  const map = new Map();
+  if (!userIds || !userIds.length) return map;
+  for (let i = 0; i < userIds.length; i += BUCKET_GET_CHUNK) {
+    const slice = userIds.slice(i, i + BUCKET_GET_CHUNK);
+    const refs = slice.map((uid) => peak28dRollupRef(db, uid));
+    /* eslint-disable no-await-in-loop */
+    const snaps = await chunkedGetAll(db, refs, 40);
+    /* eslint-enable no-await-in-loop */
+    for (let j = 0; j < slice.length; j++) {
+      const snap = snaps[j];
+      if (!snap || !snap.exists) continue;
+      const d = snap.data() || {};
+      if (d.windowStart !== startStr || d.windowEnd !== endStr) continue;
+      if (!d.peaks || typeof d.peaks !== "object") continue;
+      map.set(slice[j], {
+        peakMap: { weightKg: d.weightKg, peaks: d.peaks, peakMethod: d.peakMethod },
+        hrMax: d.hrMaxByDuration || {},
+      });
+    }
+  }
+  return map;
 }
 
 /**
@@ -1220,9 +1420,16 @@ function maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr) {
   return out;
 }
 
+exports.getRolling28DaysRangeSeoul = getRolling28DaysRangeSeoul;
 exports.splitInclusiveRangeIntoFourWeeks = splitInclusiveRangeIntoFourWeeks;
 exports.calculateGcRankingFromWeeklyMaxWkg = calculateGcRankingFromWeeklyMaxWkg;
+exports.computeUserPeaksFourWeekOnePeakFromBucketSnaps = computeUserPeaksFourWeekOnePeakFromBucketSnaps;
 exports.computeFourWeekGcStylePeaksFromBucketSnaps = computeFourWeekGcStylePeaksFromBucketSnaps;
+exports.rebuildPeak28dRollupFromBuckets = rebuildPeak28dRollupFromBuckets;
+exports.touchPeak28dRollupAfterDayChange = touchPeak28dRollupAfterDayChange;
+exports.rebuildPeak28dRollupsBatch = rebuildPeak28dRollupsBatch;
+exports.fetchPeak28dRollupMap = fetchPeak28dRollupMap;
+exports.peak28dRollupNeedsInvalidate = peak28dRollupNeedsInvalidate;
 exports.reconcileRankingDayTotalsOnLogWrite = reconcileRankingDayTotalsOnLogWrite;
 exports.reconcileUserRankingDayBucket = reconcileUserRankingDayBucket;
 exports.ensureRankingBucketsFilledForRange = ensureRankingBucketsFilledForRange;
