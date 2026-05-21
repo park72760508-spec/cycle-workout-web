@@ -3314,45 +3314,72 @@ async function runRankingAggregatePersonalDist30d(db, usersSnap = null) {
   return result;
 }
 
-/** 183일 독주(항속) 랭킹 */
-async function runRankingAggregatePersonalSpeed183d(db, usersSnap = null) {
+/** 4주(28일) 독주(항속) — 피크와 동일 롤링 창·일 버킷 rollup */
+function personalSpeedAggregateCacheKey(gender, startStr, endStr) {
+  return `peakRanking_personal_speed_28d_${gender}_${startStr}_${endStr}`;
+}
+
+function personalSpeedRankHistoryKey(gender) {
+  return `peak_personal_speed_rolling28d_${gender}`;
+}
+
+async function runRankingAggregatePersonalSpeed28d(db, usersSnap = null, opts) {
   const t0 = Date.now();
-  const { startStr: r183s, endStr: r183e } = getRolling183DaysRangeSeoul();
+  const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
   const snap = usersSnap ?? (await db.collection("users").get());
   const allUserDocs = snap.docs;
-  await markManualRankingPhaseMeta(db, "personal_speed", "running", { r183s, r183e, userCount: snap.size });
+  await markManualRankingPhaseMeta(db, "personal_speed", "running", {
+    r28s,
+    r28e,
+    userCount: snap.size,
+    period: rankingDayRollup.PERSONAL_SPEED_PERIOD_ROLLING,
+  });
   const psMetaRef = db.collection("ranking_meta").doc("personal_speed_logic");
   const psMetaSnap = await psMetaRef.get();
   const psMetaVer = psMetaSnap.exists ? Number((psMetaSnap.data() || {}).version) : 0;
   if (psMetaVer < rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) {
-    await resetPersonalSpeedRankingDerivedState(db, r183s, r183e);
+    await resetPersonalSpeedRankingDerivedState(db, r28s, r28e);
     await psMetaRef.set({
       version: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
+      period: rankingDayRollup.PERSONAL_SPEED_PERIOD_ROLLING,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
-  const psRollup = await rankingDayRollup.preparePersonalSpeedRankingRebuild(db, allUserDocs, r183s, r183e, {
-    ensureMissingDays: false,
+  const psRollup = await rankingDayRollup.preparePersonalSpeedRankingRebuild(db, allUserDocs, r28s, r28e, {
+    ensureMissingDays: !!(opts && opts.ensureMissingDays),
+    fromBucketsOnly: opts && opts.fromBucketsOnly === false ? false : true,
+    skipUnchanged: opts && opts.skipUnchanged === false ? false : true,
   });
-  console.log("[runRankingAggregatePersonalSpeed183d] rollup", psRollup);
+  console.log("[runRankingAggregatePersonalSpeed28d] rollup", psRollup);
   let wrote = 0;
   for (const gender of ["all", "M", "F"]) {
-    const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r183s, r183e, gender, snap, {
-      logBatchSize: 25,
-      syncRollups: true,
+    const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r28s, r28e, gender, snap, {
+      fromRollupsOnly: true,
+      syncRollups: false,
     });
     spd.dashboardLogRouteEnriched = true;
-    await applyPeakRankChanges(db, spd.byCategory, `peak_personal_speed_rolling183_${gender}`);
-    const keyS = `peakRanking_personal_speed_183d_${gender}_${r183s}_${r183e}`;
-    await persistPersonalSpeedRankingPack(db, keyS, spd, r183s, r183e);
+    await applyPeakRankChanges(db, spd.byCategory, personalSpeedRankHistoryKey(gender));
+    const keyS = personalSpeedAggregateCacheKey(gender, r28s, r28e);
+    await persistPersonalSpeedRankingPack(db, keyS, spd, r28s, r28e);
     wrote++;
   }
   const ms = Date.now() - t0;
-  const result = { phase: "personal_speed", wrote, ms, startStr: r183s, endStr: r183e, psRollup, userCount: snap.size };
+  const result = {
+    phase: "personal_speed",
+    wrote,
+    ms,
+    startStr: r28s,
+    endStr: r28e,
+    period: rankingDayRollup.PERSONAL_SPEED_PERIOD_ROLLING,
+    psRollup,
+    userCount: snap.size,
+  };
   await markManualRankingPhaseMeta(db, "personal_speed", "complete", result);
-  console.log("[runRankingAggregatePersonalSpeed183d] done", result);
+  console.log("[runRankingAggregatePersonalSpeed28d] done", result);
   return result;
 }
+
+/** @deprecated 이름 호환 */ const runRankingAggregatePersonalSpeed183d = runRankingAggregatePersonalSpeed28d;
 
 /** 장시간 구간 진행·멈춤 확인용 — Firestore만 새로고침해도 lastPhase·progressAt 갱신 */
 async function markMasterDailyRankingRebuildProgress(db, lastPhase, extra) {
@@ -4701,6 +4728,70 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
 async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endStr, genderFilter, usersSnap = null, opts = {}) {
   const snap = usersSnap ?? await db.collection("users").get();
   const docs = snap.docs;
+  if (opts && opts.fromRollupsOnly) {
+    const rollupMap = await rankingDayRollup.fetchPersonalSpeed6mRollupMap(
+      db,
+      docs.map((d) => d.id)
+    );
+    const entries = [];
+    for (let di = 0; di < docs.length; di++) {
+      const doc = docs[di];
+      const userId = doc.id;
+      const data = doc.data() || {};
+      if (!rankingDayRollup.userHasWeightForPersonalSpeed(data)) continue;
+      const rollup = rollupMap.get(userId);
+      if (
+        !rollup ||
+        rollup.windowStart !== startStr ||
+        rollup.windowEnd !== endStr ||
+        !(Number(rollup.speedKmh) > 0)
+      ) {
+        continue;
+      }
+      const gender = String(data.gender || data.sex || "").toLowerCase();
+      if (genderFilter && genderFilter !== "all") {
+        const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
+        const match =
+          gender === "m" || gender === "male" || gender === "남"
+            ? "male"
+            : gender === "f" || gender === "female" || gender === "여"
+              ? "female"
+              : null;
+        if (match !== g) continue;
+      }
+      const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+      const challenge = data.challenge || "Fitness";
+      const leagueCategory = getLeagueCategory(challenge, birthYear);
+      if (!leagueCategory) continue;
+      entries.push({
+        userId,
+        name: data.name || "(이름 없음)",
+        speedKmh: Number(rollup.speedKmh),
+        peak60minWatts: Number(rollup.peak60minWatts) || 0,
+        referenceWatts: Number(rollup.referenceWatts) || Number(rollup.peak60minWatts) || 0,
+        weightKg: Number(rollup.weightKg) || 0,
+        ageCategory: leagueCategory,
+        gender,
+        is_private: privacyFlagFromFirestoreDoc(data),
+        profileImageUrl: profileImageUrlFromUserData(data),
+        ...rankingUserStatusFieldsFromData(data),
+      });
+    }
+    entries.sort((a, b) => b.speedKmh - a.speedKmh);
+    const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
+    const byCategory = {
+      Supremo: withRank,
+      Bianco: [],
+      Rosa: [],
+      Infinito: [],
+      Leggenda: [],
+      Assoluto: [],
+    };
+    withRank.forEach((e) => {
+      if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
+    });
+    return { entries: withRank, byCategory };
+  }
   const logBatchSize =
     opts && opts.logBatchSize != null && Number.isFinite(Number(opts.logBatchSize))
       ? Math.max(1, Math.floor(Number(opts.logBatchSize)))
@@ -5740,12 +5831,12 @@ async function resetPersonalSpeedRankingDerivedState(db, startStr, endStr) {
   const genders = ["all", "M", "F"];
   for (let gi = 0; gi < genders.length; gi++) {
     const gender = genders[gi];
-    const historyKey = `peak_personal_speed_rolling183_${gender}`;
+    const historyKey = personalSpeedRankHistoryKey(gender);
     try {
       await db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey).delete();
       historyDeleted += 1;
     } catch (_eH) {}
-    const cacheKey = `peakRanking_personal_speed_183d_${gender}_${startStr}_${endStr}`;
+    const cacheKey = personalSpeedAggregateCacheKey(gender, startStr, endStr);
     try {
       await db.collection(RANKING_AGGREGATES_COLLECTION).doc(cacheKey).delete();
       cachesDeleted += 1;
@@ -5822,11 +5913,11 @@ async function getPersonalSpeedRankingFromMonthly60minFallback(db, gender) {
   if (!agg || !agg.byCategory) return null;
   const pack = transformPeakBoardToPersonalSpeed(agg.byCategory);
   if (!pack) return null;
-  const r183 = getRolling183DaysRangeSeoul();
+  const r28 = getRolling28DaysRangeSeoul();
   return {
     ...pack,
-    startStr: r183.startStr,
-    endStr: r183.endStr,
+    startStr: r28.startStr,
+    endStr: r28.endStr,
     approximate: true,
     approximateSource: "monthly_60min_peak",
   };
@@ -6388,7 +6479,6 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
   const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
   const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
   const { startStr: r30s, endStr: r30e } = getRolling30DaysRangeSeoul();
-  const { startStr: r183s, endStr: r183e } = getRolling183DaysRangeSeoul();
   const skipPersonalSpeed = !!(opts && opts.skipPersonalSpeed);
   try {
     await markMasterDailyRankingRebuildRunning(db, {
@@ -6487,7 +6577,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
     heptagonSchedule: "scheduledPeak28dHeptagonOnly 03:20 KST",
     masterSchedule: "rebuildRankingAggregates 03:40 KST",
   });
-  /** 주간 TSS·TOP10 완료 시점 — 이후 독주(183d) 타임아웃 시에도 마스터 메타 확인 가능 */
+  /** 주간 TSS·TOP10 완료 시점 — 이후 독주(28d) 구간 타임아웃 시에도 마스터 메타 확인 가능 */
   try {
     await markMasterDailyRankingRebuildComplete(db, {
       wrote,
@@ -6507,9 +6597,12 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
   const distRes = await runRankingAggregatePersonalDist30d(db, sharedUsersSnap);
   wrote += distRes.wrote;
 
-  // ── 4-1. 6개월 항속(독주) — 553명 기준 30~60분+ 소요 가능
+  // ── 4-1. 4주(28일) 항속(독주) — 일 버킷 rollup (구 183일 대비 대폭 단축)
   if (!skipPersonalSpeed) {
-    const psRes = await runRankingAggregatePersonalSpeed183d(db, sharedUsersSnap);
+    const psRes = await runRankingAggregatePersonalSpeed28d(db, sharedUsersSnap, {
+      fromBucketsOnly: true,
+      skipUnchanged: true,
+    });
     wrote += psRes.wrote;
     await markMasterDailyRankingRebuildProgress(db, "personal_speed_done", {
       wrote,
@@ -6697,7 +6790,7 @@ exports.manualRebuildWeeklyRanking = onRequest(
  * phase:
  *   peak_monthly     — Max~60분 28일 전체 (21문서: 7구간×3성별)
  *   peak_duration    — 28일 단일 구간 (+ duration=max|1min|5min|10min|20min|40min|60min)
- *   personal_speed   — 독주 183일
+ *   personal_speed   — 독주 4주(28일)
  *   personal_dist    — 개인 거리 30일
  *
  * 진행: ranking_meta/manual_ranking_phase_rebuild
@@ -6774,7 +6867,7 @@ exports.manualRebuildRankingPhase = onRequest(
       } else if (phase === "peak_duration") {
         r = await runRankingAggregatePeakMonthlyOneDuration(db, duration);
       } else if (phase === "personal_speed") {
-        r = await runRankingAggregatePersonalSpeed183d(db);
+        r = await runRankingAggregatePersonalSpeed28d(db, null, { fromBucketsOnly: true });
       } else {
         r = await runRankingAggregatePersonalDist30d(db);
       }
@@ -8070,10 +8163,10 @@ exports.getPeakPowerRanking = onRequest(
       return res.status(200).json(out);
     }
 
-    /** 개인: 최근 6개월(서울) 1시간 항속능력(km/h) 랭킹 */
+    /** 개인: 최근 4주(28일) 1시간 항속능력(km/h) 랭킹 */
     if (durationType === "personal_speed") {
-      const { startStr, endStr } = getRolling183DaysRangeSeoul();
-      const cacheKey = `peakRanking_personal_speed_183d_${gender}_${startStr}_${endStr}`;
+      const { startStr, endStr } = getRolling28DaysRangeSeoul();
+      const cacheKey = personalSpeedAggregateCacheKey(gender, startStr, endStr);
 
       async function buildPersonalSpeedOutFromPack(pack, meta) {
         const byCategory = pack.byCategory;
@@ -8086,7 +8179,7 @@ exports.getPeakPowerRanking = onRequest(
           entries,
           startStr: outStart,
           endStr: outEnd,
-          period: "rolling183",
+          period: rankingDayRollup.PERSONAL_SPEED_PERIOD_ROLLING,
           durationType: "personal_speed",
           gender,
           personalSpeedLogicVersion: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
@@ -8116,7 +8209,7 @@ exports.getPeakPowerRanking = onRequest(
             db,
             out.byCategory,
             psEntries,
-            `peak_personal_speed_rolling183_${gender}`
+            personalSpeedRankHistoryKey(gender)
           );
         }
         if (!out.entries.length && Array.isArray(out.byCategory.Supremo)) {
@@ -8298,7 +8391,7 @@ exports.getPeakPowerRanking = onRequest(
           syncRollups: true,
         }
       );
-      await applyPeakRankChanges(db, boardLive.byCategory, `peak_personal_speed_rolling183_${gender}`);
+      await applyPeakRankChanges(db, boardLive.byCategory, personalSpeedRankHistoryKey(gender));
       boardLive.dashboardLogRouteEnriched = true;
       const psPayload = await persistPersonalSpeedRankingPack(db, cacheKey, boardLive, startStr, endStr);
       const liveEnrichedOut = await tryReturnPrecomputed(psPayload, {
@@ -8521,8 +8614,12 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     let startStr, endStr;
-    if (period === "rolling6m" || period === "rolling183") {
-      const r = getRolling183DaysRangeSeoul();
+    if (period === "rolling28" || period === "rolling28d") {
+      const r = getRolling28DaysRangeSeoul();
+      startStr = r.startStr;
+      endStr = r.endStr;
+    } else if (period === "rolling6m" || period === "rolling183") {
+      const r = getRolling28DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
     } else if (period === "rolling30" || period === "monthly") {
@@ -8698,7 +8795,12 @@ exports.getPeakPowerRanking = onRequest(
     await applyPeakRankChanges(db, byCategory, `peak_${durationType}_${period}_${gender}`);
     let cohortAvgHrBpm = null;
     if (
-      (period === "rolling30" || period === "monthly" || period === "rolling6m" || period === "rolling183") &&
+      (period === "rolling30" ||
+        period === "monthly" ||
+        period === "rolling28" ||
+        period === "rolling28d" ||
+        period === "rolling6m" ||
+        period === "rolling183") &&
       DURATION_HR_FIELDS[durationType]
     ) {
       cohortAvgHrBpm = await getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, gender);

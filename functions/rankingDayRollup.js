@@ -9,9 +9,13 @@ const admin = require("firebase-admin");
 const EXCLUDED_ACTIVITY_TYPES = new Set(["run", "swim", "walk", "trailrun", "weighttraining"]);
 
 exports.RANKING_DAY_TOTALS_COLL = "ranking_day_totals";
-/** 사용자별 6개월 항속 사전 집계 — 랭킹 보드는 users×1회 읽기만 수행 */
+/** 사용자별 4주(28일) 항속 사전 집계 — rollup 읽기 후 보드 조립 */
 exports.RANKING_ROLLUPS_COLL = "ranking_rollups";
+exports.PERSONAL_SPEED_28D_ROLLUP_ID = "personal_speed_28d";
+/** @deprecated v12 이전 — prepare 시 삭제 */
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
+exports.PERSONAL_SPEED_ROLLUP_DOC_ID = exports.PERSONAL_SPEED_28D_ROLLUP_ID;
+exports.PERSONAL_SPEED_PERIOD_ROLLING = "rolling28";
 /** 28일 피크·GC·헵타곤 — 일 버킷만 증분 갱신(전체 로그 스캔 없음) */
 exports.PEAK_28D_ROLLUP_ID = "peak_28d";
 /** 4주(28일) 중 주별 최고 1건씩 → 4주 중 최대 1건으로 환산 (GC·헵타곤) */
@@ -19,9 +23,10 @@ exports.PEAK_28D_LOGIC_VERSION = 3;
 exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK = "four_week_one_peak";
 /**
  * 랭킹 항속 산출식 버전 — 변경 시 rollup·ranking_aggregates·cache 전면 재계산.
- * v11: 대시보드와 동일 로그 조회(orderBy date desc·limit 400·6개월 필터·Strava dedupe)·max_60min_watts만.
+ * v12: 4주(28일) 롤링 창·rollup doc personal_speed_28d·일 버킷 우선(183일 제거).
+ * v11: 대시보드 로그 루트·max_60min_watts.
  */
-exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 11;
+exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 12;
 /** 사전집계 payload.peakDataSource — 구 rollup/캐시와 구분 */
 exports.PERSONAL_SPEED_PEAK_DATA_SOURCE = "dashboard_logs_route_v11";
 /** useDashboardData·getUserTrainingLogs 와 동일 상한 */
@@ -731,8 +736,24 @@ function calculateSpeedOnFlat(power, weight) {
   return ((lo + hi) / 2) * 3.6;
 }
 
-function personalSpeed6mRollupRef(db, userId) {
-  return db.collection("users").doc(userId).collection(exports.RANKING_ROLLUPS_COLL).doc(exports.PERSONAL_SPEED_6M_ROLLUP_ID);
+function personalSpeedRollupRef(db, userId) {
+  return db
+    .collection("users")
+    .doc(userId)
+    .collection(exports.RANKING_ROLLUPS_COLL)
+    .doc(exports.PERSONAL_SPEED_ROLLUP_DOC_ID);
+}
+
+function personalSpeedLegacy6mRollupRef(db, userId) {
+  return db
+    .collection("users")
+    .doc(userId)
+    .collection(exports.RANKING_ROLLUPS_COLL)
+    .doc(exports.PERSONAL_SPEED_6M_ROLLUP_ID);
+}
+
+/** @deprecated */ function personalSpeed6mRollupRef(db, userId) {
+  return personalSpeedRollupRef(db, userId);
 }
 
 function ftp93ReferenceWattsFromUser(userData) {
@@ -818,7 +839,7 @@ function buildPersonalSpeedMetricsFromUserAndPeak60(userData, peak60, peak60Ymd)
 }
 
 async function writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, endStr, metrics) {
-  const ref = personalSpeed6mRollupRef(db, userId);
+  const ref = personalSpeedRollupRef(db, userId);
   if (!metrics) {
     await ref.delete().catch(() => {});
     return;
@@ -838,11 +859,11 @@ async function writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, end
 }
 
 /**
- * 6개월 창: ranking_day_totals 일 버킷만 1회 읽어 peak60·항속(km/h) 산출 (로그 스캔 없음).
- * ensureMissingDays=true일 때만 누락 일자 버킷을 로그로 채움(수동 백필용, 23시 배치는 false).
+ * 4주(28일) 창: ranking_day_totals 일 버킷만 읽어 peak60·항속(km/h) 산출 (로그 스캔 없음).
+ * ensureMissingDays=true일 때만 누락 일자 버킷을 로그로 채움(수동 백필용).
  */
 async function rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, opts) {
-  const fromBucketsOnly = !!(opts && opts.fromBucketsOnly);
+  const fromBucketsOnly = opts && opts.fromBucketsOnly === false ? false : true;
   const ensureMissing = !fromBucketsOnly && !!(opts && opts.ensureMissingDays);
   if (ensureMissing) {
     await ensureRankingBucketsFilledForRange(db, userId, userData || {}, startStr, endStr, false);
@@ -869,11 +890,11 @@ async function rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, sta
  * 로그→일 버킷 반영 직후: 증분 peak 갱신(대부분) / peak 하락 시에만 버킷 재스캔.
  */
 async function touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, dayPayload) {
-  const { startStr, endStr } = getRolling183DaysRangeSeoul();
+  const { startStr, endStr } = getRolling28DaysRangeSeoul();
   if (!ymd || ymd < startStr || ymd > endStr) {
     return;
   }
-  const ref = personalSpeed6mRollupRef(db, userId);
+  const ref = personalSpeedRollupRef(db, userId);
   const existing = (await ref.get()).data() || null;
   const day60 = dayPayload ? Number(dayPayload.max_60min_watts) || 0 : 0;
   const windowOk =
@@ -1103,13 +1124,16 @@ async function fetchPeak28dRollupMap(db, userIds, startStr, endStr) {
 }
 
 /**
- * 23시 배치: 기본 skipUnchanged — 창이 맞는 personal_speed_6m은 재읽기 생략(체중/FTP만 바뀐 경우 km/h만 갱신).
- * 로그 스캔(ensureMissingDays)은 수동 백필에서만 true.
+ * 배치: 창·버전 불일치만 재계산. 기본 fromBucketsOnly(28일 버킷만, 로그 스캔 없음).
  */
 async function rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr, opts) {
   if (!userDocs || !userDocs.length) return { rebuilt: 0, skipped: 0, metricsRefreshed: 0 };
   const batchSize = (opts && opts.batchSize) || ROLLUP_REBUILD_BATCH;
-  const bucketOpts = { ensureMissingDays: !!(opts && opts.ensureMissingDays) };
+  const fromBucketsOnly = opts && opts.fromBucketsOnly === false ? false : true;
+  const bucketOpts = {
+    ensureMissingDays: !!(opts && opts.ensureMissingDays),
+    fromBucketsOnly,
+  };
   const skipUnchanged = !opts || opts.skipUnchanged !== false;
   let rebuilt = 0;
   let skipped = 0;
@@ -1140,13 +1164,11 @@ async function rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr
                     : userData.weight_kg
               ) || 0;
             const weightKg = rawW > 0 ? Math.max(rawW, 45) : 70;
-            const { peak60: peakFromLogs, peakYmd } = await peak60DashboardStyleFromLogs(
-              db,
-              userId,
-              startStr,
-              endStr,
-              weightKg
-            );
+            const { peak60: peakFromLogs, peakYmd } = fromBucketsOnly
+              ? await peak60YmdFromDayBuckets(db, userId, userData, startStr, endStr, {
+                  ensureMissingDays: false,
+                })
+              : await peak60DashboardStyleFromLogs(db, userId, startStr, endStr, weightKg);
             const metrics = buildPersonalSpeedMetricsFromUserAndPeak60(
               userData,
               peakFromLogs,
@@ -1172,7 +1194,7 @@ async function rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr
               return;
             }
             if (ex) {
-              await personalSpeed6mRollupRef(db, userId).delete().catch(() => {});
+              await personalSpeedRollupRef(db, userId).delete().catch(() => {});
             }
             return;
           }
@@ -1236,7 +1258,7 @@ async function invalidateStalePersonalSpeedRollups(db, userDocs, startStr, endSt
     const rollup = rollupMap.get(udoc.id);
     if (!rollup) continue;
     if (!personalSpeedRollupNeedsInvalidate(rollup, startStr, endStr, udoc.data() || {})) continue;
-    toDelete.push(personalSpeed6mRollupRef(db, udoc.id));
+    toDelete.push(personalSpeedRollupRef(db, udoc.id));
   }
   for (let i = 0; i < toDelete.length; i += DELETE_BATCH) {
     const slice = toDelete.slice(i, i + DELETE_BATCH);
@@ -1250,17 +1272,46 @@ async function invalidateStalePersonalSpeedRollups(db, userDocs, startStr, endSt
   return { purged };
 }
 
+/** 구 personal_speed_6m 문서 삭제(창 183일 → 28일 전환) */
+async function purgeLegacyPersonalSpeed6mRollups(db, userDocs) {
+  if (!userDocs || !userDocs.length) return { legacyPurged: 0 };
+  let legacyPurged = 0;
+  const DELETE_BATCH = 400;
+  const refs = userDocs.map((d) => personalSpeedLegacy6mRollupRef(db, d.id));
+  for (let i = 0; i < refs.length; i += DELETE_BATCH) {
+    const slice = refs.slice(i, i + DELETE_BATCH);
+    /* eslint-disable no-await-in-loop */
+    const snaps = await chunkedGetAll(db, slice, 40);
+    const batch = db.batch();
+    let n = 0;
+    snaps.forEach((snap, j) => {
+      if (snap && snap.exists) {
+        batch.delete(slice[j]);
+        n++;
+      }
+    });
+    if (n > 0) {
+      await batch.commit();
+      legacyPurged += n;
+    }
+    /* eslint-enable no-await-in-loop */
+  }
+  return { legacyPurged };
+}
+
 /**
- * 항속 랭킹 집계 전: 무효 rollup 제거 후 전 사용자 rollup 재계산(60분 파워만).
+ * 항속 랭킹 집계 전: legacy 6m 삭제 → 무효 rollup 제거 → 28일 버킷 기반 재계산.
  */
 async function preparePersonalSpeedRankingRebuild(db, userDocs, startStr, endStr, opts) {
+  const legacy = await purgeLegacyPersonalSpeed6mRollups(db, userDocs);
   const inv = await invalidateStalePersonalSpeedRollups(db, userDocs, startStr, endStr);
   const batch = await rebuildPersonalSpeed6mRollupsBatch(db, userDocs, startStr, endStr, {
-    skipUnchanged: false,
+    skipUnchanged: !(opts && opts.skipUnchanged === false),
     ensureMissingDays: !!(opts && opts.ensureMissingDays),
+    fromBucketsOnly: opts && opts.fromBucketsOnly === false ? false : true,
     batchSize: (opts && opts.batchSize) || ROLLUP_REBUILD_BATCH,
   });
-  return { purged: inv.purged, ...batch };
+  return { legacyPurged: legacy.legacyPurged, purged: inv.purged, ...batch };
 }
 
 /**
@@ -1334,7 +1385,7 @@ async function refreshPersonalSpeedRollupsPeakDriftFromLogs(db, userDocs, startS
       });
       refreshed += 1;
     } else {
-      await personalSpeed6mRollupRef(db, userId).delete().catch(() => {});
+      await personalSpeedRollupRef(db, userId).delete().catch(() => {});
       rollupMap.delete(userId);
     }
   };
@@ -1453,7 +1504,7 @@ async function fetchPersonalSpeed6mRollupMap(db, userIds) {
   const chunk = 500;
   for (let i = 0; i < userIds.length; i += chunk) {
     const slice = userIds.slice(i, i + chunk);
-    const refs = slice.map((uid) => personalSpeed6mRollupRef(db, uid));
+    const refs = slice.map((uid) => personalSpeedRollupRef(db, uid));
     /* eslint-disable no-await-in-loop */
     const snaps = await chunkedGetAll(db, refs, chunk);
     /* eslint-enable no-await-in-loop */
