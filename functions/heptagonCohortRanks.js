@@ -605,7 +605,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
         const crSynth = comprehensiveRankFromSumPosition100(r.sumPositionScores, L);
         const crSynthI = isFinite(crSynth) ? Math.max(1, Math.min(L, Math.round(crSynth))) : null;
 
-        /** 전일 23:35 정규 집계 순위(yesterdayOfficial) 고정 — 당일 수동 재집계 시에도 덮어쓰지 않음 */
+        /** 전일 03:20 정규 집계 순위(yesterdayOfficial) 고정 — 당일 수동 재집계 시에도 덮어쓰지 않음 */
         const existing = prevRankMap.get(docId);
         const rankChangeFields = {};
         let yesterdayOfficial = null;
@@ -690,7 +690,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
 }
 
 /**
- * 즉시 GC 집계(디버그·비상용). 프로덕션 랭킹 GC는 `scheduledHeptagonCohortRanks` 스냅샷 + Firestore 읽기.
+ * 즉시 GC 집계(디버그·비상용). 프로덕션 GC는 `scheduledPeak28dHeptagonOnly`(03:20) 스냅샷 + Firestore 읽기.
  * 대시보드와 동일 파이프라인(28일 롤링, 구간별 최고 피크 1건).
  *
  * @param {string} filterGender `"all" | "M" | "F"` — getPeakPowerRanking gc 분기와 동일

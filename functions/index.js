@@ -3369,7 +3369,7 @@ async function markMasterDailyRankingRebuildProgress(db, lastPhase, extra) {
   );
 }
 
-/** GC 헵타곤 스냅샷(23:35 KST) 완료 시각 — 집계 여부 확인용 */
+/** GC 헵타곤 스냅샷(03:20 KST) 완료 시각 — 집계 여부 확인용 */
 async function markHeptagonDailyRebuildComplete(db, resultSummary) {
   const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const wrote = resultSummary && Number(resultSummary.wrote) > 0 ? Number(resultSummary.wrote) : 0;
@@ -4280,7 +4280,7 @@ function getRolling183DaysRangeSeoul() {
   return { startStr, endStr };
 }
 
-/** 23:35 KST 헵타곤 배치 직후부터 요구되는 최소 asOfSeoul (YYYY-MM-DD) */
+/** 03:20 KST 헵타곤 배치 직후부터 요구되는 최소 asOfSeoul (YYYY-MM-DD) */
 function getMinHeptagonSnapshotAsOfSeoulYmd() {
   const now = Date.now();
   const kstNow = new Date(now + 9 * 3600000);
@@ -4288,8 +4288,8 @@ function getMinHeptagonSnapshotAsOfSeoulYmd() {
     kstNow.getUTCFullYear(),
     kstNow.getUTCMonth(),
     kstNow.getUTCDate(),
-    14,
-    35,
+    18,
+    20,
     0
   );
   const lastHept = todayHept <= now ? todayHept : todayHept - 86400000;
@@ -5244,8 +5244,11 @@ async function tryPeakRankingHttpStaleOrPending(db, cacheKey) {
 
   return null;
 }
-/** KST 23:00 정시 집계 하루 1회 — 클라이언트 localStorage 만료 시각(23:00 KST)에 맞춰 신선한 데이터를 즉시 제공 */
-const RANKING_REBUILD_CRON = "0 23 * * *";
+/** KST 03:40 — 03:20 헵타곤(최대 9분) 완료 후 마스터. 피크·헵타곤 complete 게이트. */
+const RANKING_REBUILD_CRON = "40 3 * * *";
+/** 클라이언트 캐시 롤오버(KST 04:00) — 마스터 TOP10 반영 여유 */
+const RANKING_MASTER_ROLLOVER_UTC_HOUR = 19;
+const RANKING_MASTER_ROLLOVER_UTC_MIN = 0;
 const RANKING_ONE_PASS_BATCH = 50;
 
 /** 비-GC 탭(Max/1분/5분/…/거리/TSS) 순위 등락 스냅샷 컬렉션 */
@@ -6475,25 +6478,27 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
   });
   wrote++;
 
-  // ── 3b. 피크파워 28일(헵타곤·Max·구간 탭) — 타임아웃 전에 반드시 기록 ──
-  lastPhase = "peak_monthly_build";
-  await markMasterDailyRankingRebuildProgress(db, lastPhase, { wrote, elapsedMs: Date.now() - t0 });
-  const peakMonthlyRes = await runRankingAggregatePeakMonthly28d(db, sharedUsersSnap);
-  wrote += peakMonthlyRes.wrote;
-  console.log("[runRebuildRankingAggregatesCore] peak monthly(28d) 저장 완료", peakMonthlyRes);
-  lastPhase = "peak_monthly_done";
-  /** 28일 피크·GC 핵심 구간 완료 시점 — 이후 독주(183d)에서 타임아웃 나도 메타·집계 확인 가능 */
+  // 28일 피크·헵타곤 — 02:50·03:20 선행 완료 후 본 마스터(04:00)가 TSS·TOP10 등 갱신
+  lastPhase = "after_peak_0250_heptagon_0320";
+  await markMasterDailyRankingRebuildProgress(db, lastPhase, {
+    wrote,
+    elapsedMs: Date.now() - t0,
+    peakSchedule: "scheduledPeak28dBoardAndHeptagon 02:50 KST",
+    heptagonSchedule: "scheduledPeak28dHeptagonOnly 03:20 KST",
+    masterSchedule: "rebuildRankingAggregates 03:40 KST",
+  });
+  /** 주간 TSS·TOP10 완료 시점 — 이후 독주(183d) 타임아웃 시에도 마스터 메타 확인 가능 */
   try {
     await markMasterDailyRankingRebuildComplete(db, {
       wrote,
       ms: Date.now() - t0,
-      phase: "peak_monthly",
+      phase: "weekly_core",
       partial: true,
       r28s,
       r28e,
     });
-  } catch (ePeakMeta) {
-    console.warn("[runRebuildRankingAggregatesCore] peak_monthly meta write failed:", ePeakMeta && ePeakMeta.message);
+  } catch (ePartialMeta) {
+    console.warn("[runRebuildRankingAggregatesCore] weekly_core partial meta failed:", ePartialMeta && ePartialMeta.message);
   }
 
   // ── 4. 30일 거리 랭킹 ──
@@ -6548,7 +6553,30 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
   }
 }
 
-/** KST 23:00 — A안 마스터 집계 (피크·TSS·거리·항속·TOP10 전체, 하루 1회) */
+/**
+ * 스케줄 마스터 선행 조건: 당일 02:50 피크 보드·03:20 헵타곤 완료.
+ * @param {boolean} [opts.skipGate]
+ */
+async function assertPeakHeptagonCompleteBeforeMaster(db, opts) {
+  if (opts && opts.skipGate) return;
+  const todayKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const peakSnap = await db.collection("ranking_meta").doc("peak_28d_board_refresh").get();
+  const peak = peakSnap.exists ? peakSnap.data() || {} : {};
+  if (String(peak.dateKst || "") !== todayKst || String(peak.status || "") !== "complete") {
+    throw new Error(
+      `peak_28d_board_refresh not ready (${peak.status || "missing"}, dateKst=${peak.dateKst || ""}, need=${todayKst})`
+    );
+  }
+  const heptSnap = await db.collection("ranking_meta").doc(RANKING_HEPTAGON_REBUILD_META_DOC).get();
+  const hept = heptSnap.exists ? heptSnap.data() || {} : {};
+  if (String(hept.dateKst || "") !== todayKst || String(hept.status || "") !== "complete") {
+    throw new Error(
+      `heptagon_daily_rebuild not ready (${hept.status || "missing"}, dateKst=${hept.dateKst || ""}, need=${todayKst})`
+    );
+  }
+}
+
+/** KST 03:40 — 마스터 집계 (주간 TSS·TOP10·거리·항속). 02:50 피크·03:20 헵타곤 complete 후만 실행. */
 exports.rebuildRankingAggregates = onSchedule(
   {
     schedule: RANKING_REBUILD_CRON,
@@ -6560,6 +6588,7 @@ exports.rebuildRankingAggregates = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
+      await assertPeakHeptagonCompleteBeforeMaster(db);
       const r = await runRebuildRankingAggregatesCore(db);
       console.log("[rebuildRankingAggregates] master ok", r);
     } catch (e) {
@@ -6575,7 +6604,7 @@ exports.rebuildRankingAggregates = onSchedule(
 );
 
 /**
- * 수동: `rebuildRankingAggregates`(23:00 마스터)와 동일 전체 집계 1회 실행.
+ * 수동: `rebuildRankingAggregates`(03:40 마스터)와 동일. ?skipPeakHeptagonGate=1 선행 게이트 생략.
  * (구버전: TOP10만 먼저 응답 후 백그라운드 — 9분 제한에 피크·독주가 거의 항상 중단됨)
  * GET/POST ?secret=stelvio-internal-sync-v1
  * 선택: ?forceReconcile=true — TSS 일 버킷 logs 강제 재계산
@@ -6614,6 +6643,9 @@ exports.manualRebuildWeeklyRanking = onRequest(
     const forceRun =
       String(req.query?.force || req.body?.force || "").toLowerCase() === "true" ||
       String(req.query?.force || req.body?.force || "") === "1";
+    const skipPeakHeptagonGate =
+      String(req.query?.skipPeakHeptagonGate || req.body?.skipPeakHeptagonGate || "").toLowerCase() === "true" ||
+      String(req.query?.skipPeakHeptagonGate || req.body?.skipPeakHeptagonGate || "") === "1";
     const startedAt = new Date().toISOString();
 
     if (await masterManualRebuildAlreadyRunning(db, { force: forceRun })) {
@@ -6635,7 +6667,7 @@ exports.manualRebuildWeeklyRanking = onRequest(
       message:
         "전체 랭킹 집계를 시작했습니다. Firestore ranking_meta/master_daily_rebuild 의 lastPhase·progressAt 으로 진행을 확인하세요. 60분 타임아웃.",
       logKeywords: [
-        "[runRebuildRankingAggregatesCore] peak monthly(28d) 저장 완료",
+        "[runRebuildRankingAggregatesCore] weekly_ranking_full 저장 완료",
         "[runRebuildRankingAggregatesCore] done",
         "[manualRebuildWeeklyRanking] 완료",
       ],
@@ -6644,6 +6676,7 @@ exports.manualRebuildWeeklyRanking = onRequest(
     });
 
     try {
+      await assertPeakHeptagonCompleteBeforeMaster(db, { skipGate: skipPeakHeptagonGate });
       const r = await runRebuildRankingAggregatesCore(db, forceReconcile, { skipPersonalSpeed });
       console.log("[manualRebuildWeeklyRanking] 완료", JSON.stringify({ ...r, startedAt, forceReconcile }));
     } catch (e) {
@@ -6965,10 +6998,10 @@ exports.scheduledPeak28dHeptagonOnly = onSchedule(
   }
 );
 
-// ---------- STELVIO 헵타곤·GC 랭킹: 전원 코호트 순위 → heptagon_cohort_ranks (일 1회 23:35 KST 갱신, 조회는 스냅샷 읽기) ----------
+// ---------- STELVIO 헵타곤·GC 랭킹: heptagon_cohort_ranks (일 1회 03:20 KST — scheduledPeak28dHeptagonOnly) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
 
-/** 스케줄·수동 배치 공통 — `scheduledHeptagonCohortRanks` / `manualRebuildHeptagonCohortRanks` */
+/** 스케줄·수동 배치 공통 — `scheduledPeak28dHeptagonOnly` / `manualRebuildHeptagonCohortRanks` */
 async function runHeptagonCohortRanksRebuildJob() {
   const db = admin.firestore();
   const readAllowStaleForHeptagon = async (dbRef, cacheKey) =>
@@ -7096,42 +7129,7 @@ exports.manualPeak28dBoardAndHeptagon = onRequest(
   }
 );
 
-exports.scheduledHeptagonCohortRanks = onSchedule(
-  {
-    /** 매일 23:35 KST — 23:00 마스터 집계 완료 후 GC 스냅샷 (A안) */
-    schedule: "35 23 * * *",
-    timeZone: "Asia/Seoul",
-    memory: "2GiB",
-    timeoutSeconds: 540,
-  },
-  async () => {
-    const db = admin.firestore();
-    try {
-      const todayKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-      try {
-        const masterSnap = await db.collection("ranking_meta").doc(RANKING_MASTER_REBUILD_META_DOC).get();
-        const masterDate = masterSnap.exists ? String((masterSnap.data() || {}).dateKst || "") : "";
-        if (masterDate && masterDate !== todayKst) {
-          console.warn(
-            "[scheduledHeptagonCohortRanks] master_daily_rebuild 가 오늘이 아님 — 피크는 onepass/legacy 폴백 가능",
-            { masterDate, todayKst }
-          );
-        }
-      } catch (_eM) {}
-      const r = await runHeptagonCohortRanksRebuildJob();
-      await markHeptagonDailyRebuildComplete(db, r);
-      console.log("[scheduledHeptagonCohortRanks] ok", r);
-    } catch (e) {
-      console.error("[scheduledHeptagonCohortRanks]", e && e.message ? e.message : e);
-      try {
-        await markHeptagonRebuildFailed(db, e);
-      } catch (eMeta) {
-        console.warn("[scheduledHeptagonCohortRanks] failed meta write:", eMeta && eMeta.message);
-      }
-      throw e;
-    }
-  }
-);
+/** @deprecated 23:35 스케줄 제거 — `scheduledPeak28dHeptagonOnly`(03:20 KST) 로 대체. 수동은 manualRebuildHeptagonCohortRanks. */
 
 /**
  * 수동: 헵타곤 코호트 스냅샷 + GC 랭킹용 `heptagon_cohort_ranks` 재빌드 (스케줄 본과 동일).
@@ -7366,7 +7364,7 @@ exports.previewHeptagonRankChanges = onRequest(
         filterCategory,
         note: isNewDay
           ? "✅ 문서가 어제 기준입니다. 아래 samples 의 rankChange 가 실제 갱신 시 저장될 값입니다. manualApplyRankChanges 로 지금 바로 적용할 수 있습니다."
-          : "ℹ️ 오늘 이미 갱신된 문서입니다. 등락은 yesterdayOfficialBoardRank(전일 23:35) 기준으로 계산됩니다.",
+          : "ℹ️ 오늘 이미 갱신된 문서입니다. 등락은 yesterdayOfficialBoardRank(전일 03:20 정규 집계) 기준으로 계산됩니다.",
         summary,
         samples,
       });
@@ -7379,7 +7377,7 @@ exports.previewHeptagonRankChanges = onRequest(
 
 /**
  * [1회성 수동 적용] 순위 등락(rankChange / previousBoardRank) 을 지금 즉시 계산·저장.
- * — 스케줄 본(`scheduledHeptagonCohortRanks`) 과 완전히 동일한 코드 경로 실행.
+ * — 스케줄 본(`scheduledPeak28dHeptagonOnly` 03:20) 과 동일한 코드 경로 실행.
  * — 먼저 `previewHeptagonRankChanges` 로 예상 변동을 확인한 뒤 실행 권장.
  *
  * GET  https://<region>-stelvio-ai.cloudfunctions.net/manualApplyRankChanges?secret=stelvio-internal-sync-v1
@@ -8448,7 +8446,7 @@ exports.getPeakPowerRanking = onRequest(
       return res.status(200).json(out);
     }
 
-    /** GC: 헵타곤 7축 환산 — `heptagon_cohort_ranks` 일일 스냅샷만 읽기(23:35 KST 집계). 23:00은 피크/TSS 마스터. */
+    /** GC: 헵타곤 7축 — `heptagon_cohort_ranks` 스냅샷(03:20 KST). 피크 보드는 02:50·23:00 TSS 마스터. */
     if (durationType === "gc") {
       const monthKey = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
       const fg = gender === "M" || gender === "F" ? gender : "all";
