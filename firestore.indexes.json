@@ -105,9 +105,9 @@
       "collectionGroup": "ranking_rollups",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "windowStart", "order": "ASCENDING" },
+        { "fieldPath": "rollupLogicVersion", "order": "ASCENDING" },
         { "fieldPath": "windowEnd", "order": "ASCENDING" },
-        { "fieldPath": "rollupLogicVersion", "order": "ASCENDING" }
+        { "fieldPath": "windowStart", "order": "ASCENDING" }
       ]
     }
   ],
