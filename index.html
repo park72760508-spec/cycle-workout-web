@@ -8347,8 +8347,63 @@
 
     }
 
+    /** 베이스캠프·인증 직후 백그라운드 적재 — 모달 열기 전 IndexedDB에 주간 TOP10 저장 */
+    var weeklyTop10PrefetchInFlight = null;
+    async function prefetchWeeklyTop10ToDeviceStorage(userId) {
+      if (weeklyTop10PrefetchInFlight) return weeklyTop10PrefetchInFlight;
+      var uid =
+        userId ||
+        (window.currentUser && window.currentUser.id) ||
+        (function () {
+          try {
+            var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            return u && u.id ? u.id : null;
+          } catch (eU) {
+            return null;
+          }
+        })();
+      var top10LcKey = weeklyTop10CacheKeyForWeek('current', 0, uid);
+      weeklyTop10PrefetchInFlight = (async function () {
+        try {
+          await stelvioRankingMemCacheHydrateFromPersistent();
+          var lc = await stelvioRankingLocalCache.get(top10LcKey);
+          if (
+            lc &&
+            lc.data &&
+            lc.data.success &&
+            weeklyTop10PayloadMatchesWeek(lc.data, 0) &&
+            Array.isArray(lc.data.ranking) &&
+            lc.data.ranking.length > 0 &&
+            !stelvioRankingLocalCache.isStale(lc)
+          ) {
+            return;
+          }
+          var urlBase = 'https://us-central1-stelvio-ai.cloudfunctions.net/getWeeklyRanking';
+          var urlQ = urlBase + (uid ? '?userId=' + encodeURIComponent(uid) : '');
+          var res = await fetch(urlQ, { method: 'GET', mode: 'cors', cache: 'no-store' });
+          var data = await res.json().catch(function () {
+            return { success: false };
+          });
+          if (
+            data.success &&
+            weeklyTop10PayloadMatchesWeek(data, 0) &&
+            Array.isArray(data.ranking) &&
+            data.ranking.length > 0
+          ) {
+            await stelvioRankingLocalCache.set(top10LcKey, data);
+          }
+        } catch (ePf) {
+          console.warn('[WeeklyTop10] prefetch 저장 실패:', ePf && ePf.message ? ePf.message : ePf);
+        }
+      })().finally(function () {
+        weeklyTop10PrefetchInFlight = null;
+      });
+      return weeklyTop10PrefetchInFlight;
+    }
+
     window.closeWeeklyTop10Modal = closeWeeklyTop10Modal;
     window.fetchAndShowWeeklyTop10Modal = fetchAndShowWeeklyTop10Modal;
+    window.prefetchWeeklyTop10ToDeviceStorage = prefetchWeeklyTop10ToDeviceStorage;
 
     /**
      * STELVIO 랭킹 보드 모달 (피크 파워 W/kg)
@@ -11260,6 +11315,9 @@
 
     /** 앱 idle·인증 후: Firestore 메타 동기화 + 전 탭 프리페치 */
     function stelvioBackgroundPrefetchAllTabs(uid) {
+      if (uid && typeof prefetchWeeklyTop10ToDeviceStorage === 'function') {
+        prefetchWeeklyTop10ToDeviceStorage(uid).catch(function () {});
+      }
       stelvioSyncRankingCacheWithFirestoreMeta({ uid: uid, gender: 'all' }).catch(function () {});
     }
 
@@ -27316,6 +27374,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
 
             if (isAuth && typeof window.fetchAndShowWeeklyTop10Modal === 'function') {
+              if (typeof window.prefetchWeeklyTop10ToDeviceStorage === 'function') {
+                var prefetchUid = (cur && (cur.id || cur.uid)) || authUid || null;
+                window.prefetchWeeklyTop10ToDeviceStorage(prefetchUid).catch(function () {});
+              }
               window.fetchAndShowWeeklyTop10Modal();
               window.__basecampShownAfterAuth = false;
               return true;
