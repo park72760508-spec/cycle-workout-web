@@ -30,7 +30,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
   <script src="assets/js/firebaseConfig.js"></script>
-  <script src="assets/js/stelvioSupabaseConfig.js"></script>
   <!-- STELVIO: 콘솔 상세 로그는 grade=1(관리자)만 출력 — userManager 로드 후 isStelvioSysConsoleAdmin으로 판별 보강 -->
   <script>
     (function (w) {
@@ -8451,6 +8450,13 @@
     var stelvioRankingPrefetchGen = 0;
     var stelvioRankingPrefetchInFlight = Object.create(null);
     var STELVIO_RANKING_PREFETCH_CONCURRENCY = 5;
+    /** Stelvio WebView 앱: 동시 11탭 프리페치가 CPU·네트워크·발열 주원인 → 제한 */
+    var STELVIO_RANKING_THERMAL_WEBVIEW =
+      typeof window !== 'undefined' &&
+      (window.StelvioInApp === true || window.StelvioAppChannel === 'webview-native');
+    if (STELVIO_RANKING_THERMAL_WEBVIEW) {
+      STELVIO_RANKING_PREFETCH_CONCURRENCY = 1;
+    }
     var STELVIO_RANKING_BOARD_TAB_DURATIONS = [
       'gc',
       'max',
@@ -10857,15 +10863,22 @@
       });
       (async function () {
         await stelvioRankingMemCacheHydrateFromPersistent();
-        stelvioSyncRankingCacheWithFirestoreMeta({
-          gender: stelvioRankingState.gender || 'all',
-          skipDuration: 'gc',
-        }).catch(function () {});
+        if (!STELVIO_RANKING_THERMAL_WEBVIEW) {
+          stelvioSyncRankingCacheWithFirestoreMeta({
+            gender: stelvioRankingState.gender || 'all',
+            skipDuration: 'gc',
+          }).catch(function () {});
+        }
         fetchStelvioPeakPowerRanking();
       })();
       stelvioInitBackToTopButton();
     }
     function closeStelvioRankingBoardModal() {
+      stelvioRankingPrefetchGen++;
+      if (stelvioRankingTabSwitchTimer) {
+        clearTimeout(stelvioRankingTabSwitchTimer);
+        stelvioRankingTabSwitchTimer = null;
+      }
       if (typeof stelvioCloseRankAvatarZoom === 'function') stelvioCloseRankAvatarZoom();
       var m = document.getElementById('stelvioRankingScreen');
       if (m && m.classList.contains('active')) {
@@ -11375,6 +11388,10 @@
         if (stelvioRankingMemCacheGet(ck)) return false;
         return true;
       });
+      /* 앱 WebView: 전 탭 백그라운드 API 적재 중단(탭 전환 시 캐시·현재 탭 fetch만) */
+      if (STELVIO_RANKING_THERMAL_WEBVIEW && !opts.forceWarmAll) {
+        queue = [];
+      }
       var idx = 0;
       var allTabPromises = [];
       return new Promise(function (resolveWarm) {
@@ -11437,6 +11454,7 @@
 
     function scheduleStelvioRankingWarmCacheOnce() {
       if (stelvioRankingPrefetchScheduled) return;
+      if (STELVIO_RANKING_THERMAL_WEBVIEW) return;
       stelvioRankingPrefetchScheduled = true;
       var run = function () {
         var uid = stelvioRankingBoardUid();
@@ -11457,6 +11475,9 @@
       }
     }
 
+    var stelvioRankingTabSwitchTimer = null;
+    var stelvioRankingTabSwitchPendingDur = null;
+
     function bindStelvioRankingEvents() {
       var chips = document.getElementById('stelvioDurationTabs');
       if (chips && !chips._stelvioDurationTabsDelegated) {
@@ -11473,13 +11494,25 @@
             el = el.parentElement;
           }
           if (!btn || !chips.contains(btn)) return;
+          var nextDur = btn.getAttribute('data-duration');
+          if (!nextDur || nextDur === stelvioRankingState.duration) return;
           var tabs = chips.querySelectorAll('.stelvio-duration-tab');
           tabs.forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
-          stelvioRankingState.duration = btn.getAttribute('data-duration');
+          stelvioRankingState.duration = nextDur;
           stelvioApplyDurationModeUi();
           stelvioScrollRankingBoardToTopSmooth();
-          fetchStelvioPeakPowerRanking();
+          if (stelvioRankingTabSwitchTimer) {
+            clearTimeout(stelvioRankingTabSwitchTimer);
+            stelvioRankingTabSwitchTimer = null;
+          }
+          stelvioRankingTabSwitchPendingDur = nextDur;
+          var debounceMs = STELVIO_RANKING_THERMAL_WEBVIEW ? 120 : 60;
+          stelvioRankingTabSwitchTimer = setTimeout(function () {
+            stelvioRankingTabSwitchTimer = null;
+            if (stelvioRankingState.duration !== stelvioRankingTabSwitchPendingDur) return;
+            fetchStelvioPeakPowerRanking({ tabSwitch: true });
+          }, debounceMs);
         });
       }
       stelvioEnsureRankingFavoriteUiListeners();
@@ -12912,18 +12945,33 @@
         return true;
       }
 
-      await stelvioRankingMemCacheHydrateFromPersistent();
-      stelvioShowRankingBoardLoading(true);
+      if (!opts.skipMemHydrate) {
+        await stelvioRankingMemCacheHydrateFromPersistent();
+      }
+      var tabSwitchLight = !!opts.tabSwitch;
+      if (!tabSwitchLight) {
+        stelvioShowRankingBoardLoading(true);
+      }
 
       var memHit = stelvioRankingMemCacheGet(swrKey);
       if (memHit && cacheEntryUsable(memHit.ts, memHit.body)) {
         await applyFromCache(memHit.body, { instant: true, source: 'memory' });
-        scheduleRankMvIfNeeded();
+        if (!tabSwitchLight || !STELVIO_RANKING_THERMAL_WEBVIEW) {
+          scheduleRankMvIfNeeded();
+        } else {
+          setTimeout(function () {
+            if (myGen === stelvioRankingFetchGen) scheduleRankMvIfNeeded();
+          }, 2500);
+        }
         var memPsPre =
           isPsRank &&
           (memHit.body.dashboardLogRouteEnriched === true ||
             (memHit.body.precomputed === true && !stelvioPersonalSpeedBoardPayloadStale(memHit.body)));
-        if (!memPsPre && stelvioRankingLocalCache.isStale({ cachedAt: memHit.ts })) {
+        if (
+          !memPsPre &&
+          stelvioRankingLocalCache.isStale({ cachedAt: memHit.ts }) &&
+          (!STELVIO_RANKING_THERMAL_WEBVIEW || !tabSwitchLight)
+        ) {
           scheduleBgRefreshIfNeeded(false);
         }
         return;
@@ -14566,7 +14614,7 @@
         '<span class="stelvio-rank-avatar" aria-hidden="true">' +
         '<img class="stelvio-rank-avatar-img" src="' +
         src +
-        '" alt="" width="30" height="30" decoding="async"' +
+        '" alt="" width="30" height="30" loading="lazy" decoding="async" fetchpriority="low"' +
         ' onerror="if(typeof stelvioOnAvatarImgError===\'function\')stelvioOnAvatarImgError(this);" />' +
         '</span>' +
         '</button>'
