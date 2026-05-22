@@ -10110,6 +10110,26 @@ exports.fixStravaTssBatch = functions
     };
   });
 
+// ---------- Supabase Auth Bridge (Firebase ID Token → Custom JWT) ----------
+const supabaseAuthBridge = require("./supabaseAuthBridge");
+
+const mintSupabaseSessionConfig = {
+  cors: CORS_ORIGINS,
+  secrets: [supabaseAuthBridge.supabaseJwtSecret],
+};
+
+exports.mintSupabaseSessionHttp = onRequest(
+  mintSupabaseSessionConfig,
+  async (req, res) => {
+    await supabaseAuthBridge.handleMintSupabaseSession(
+      req,
+      res,
+      admin,
+      setCorsHeaders
+    );
+  }
+);
+
 // ---------- STELVIO AI 네이버 구독 자동화 (30분 스케줄, TypeScript 빌드 결과 사용) ----------
 const path = require("path");
 const fs = require("fs");
