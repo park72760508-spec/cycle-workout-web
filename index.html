@@ -30,6 +30,9 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
   <script src="assets/js/firebaseConfig.js"></script>
+  <!-- 랭킹보드 성능: DOM diff + Worker fetch (기능 동일, 렌더/파싱 분리) -->
+  <script src="https://cdn.jsdelivr.net/npm/morphdom@2.7.4/dist/morphdom-umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="assets/js/stelvioRankingPerf.js"></script>
   <!-- STELVIO: 콘솔 상세 로그는 grade=1(관리자)만 출력 — userManager 로드 후 isStelvioSysConsoleAdmin으로 판별 보강 -->
   <script>
     (function (w) {
@@ -10504,7 +10507,10 @@
       if (!data || !data.byCategory) return data;
       if (typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 !== 'function') return data;
       try {
-        return window.stelvioRecalcPersonalSpeedBoardFromPeak60(JSON.parse(JSON.stringify(data)));
+        var cloneFn = typeof stelvioStructuredClone === 'function' ? stelvioStructuredClone : function (d) {
+          return JSON.parse(JSON.stringify(d));
+        };
+        return window.stelvioRecalcPersonalSpeedBoardFromPeak60(cloneFn(data));
       } catch (ePsPrep) {
         return data;
       }
@@ -11801,6 +11807,21 @@
     }
 
     async function stelvioRankingBoardFetchJson(url, timeoutMs, myGen) {
+      if (typeof stelvioRankingBoardFetchJsonViaWorker === 'function') {
+        try {
+          var workerData = await stelvioRankingBoardFetchJsonViaWorker(
+            url,
+            timeoutMs,
+            myGen,
+            function (gen) {
+              return gen === stelvioRankingFetchGen;
+            }
+          );
+          if (workerData != null) return workerData;
+        } catch (eWf) {
+          /* 메인 스레드 fetch 폴백 */
+        }
+      }
       var fetchController = typeof AbortController !== 'undefined' ? new AbortController() : null;
       var fetchOpts = { method: 'GET', mode: 'cors', cache: 'no-store' };
       var timer = null;
@@ -11828,6 +11849,14 @@
       } catch (eFetch) {
         if (timer) clearTimeout(timer);
         throw eFetch;
+      }
+    }
+
+    function stelvioRankingPaintListBody(bodyEl, html) {
+      if (typeof stelvioRankingApplyListHtml === 'function') {
+        stelvioRankingApplyListHtml(bodyEl, html);
+      } else {
+        bodyEl.innerHTML = html;
       }
     }
     /** GC·피크 공통: 서버 rankChange / previousBoardRank → (↑n)(↓n)(-) HTML */
@@ -12743,6 +12772,9 @@
       }
 
       function stelvioCloneRankingPayload(body) {
+        if (typeof stelvioStructuredClone === 'function') {
+          return stelvioStructuredClone(body);
+        }
         try {
           return JSON.parse(JSON.stringify(body));
         } catch (eClone) {
@@ -14836,7 +14868,7 @@
             var categoryRank = (userIdxS >= 3 && idx === 3) ? (userIdxS + 1) : (idx + 1);
             htmlS += buildSupremoRow(item, stelvioRankDisplayNumber(item, categoryRank, 'Supremo', byCategory), '');
           });
-          bodyEl.innerHTML = htmlS;
+          stelvioRankingPaintListBody(bodyEl, htmlS);
           return;
         }
 
@@ -14851,7 +14883,7 @@
             var inArrS = arr.some(function(it) { return String(it.userId || '') === mrUidS; });
             if (!inArrS) htmlS += buildSupremoRow(myRankSupremo, Number(myRankSupremo.rank) || 1, ' stelvio-rank-my-supremo');
           }
-          bodyEl.innerHTML = htmlS;
+          stelvioRankingPaintListBody(bodyEl, htmlS);
           return;
         }
 
@@ -14878,12 +14910,15 @@
             }
           }
           htmlS += buildSupremoRow(myRankSupremo, Number(myRankSupremo.rank) || 1, ' stelvio-rank-my-supremo');
-          bodyEl.innerHTML = htmlS;
+          stelvioRankingPaintListBody(bodyEl, htmlS);
           return;
         }
 
         if (arr.length === 0 && myRankSupremo) {
-          bodyEl.innerHTML = buildSupremoRow(myRankSupremo, Number(myRankSupremo.rank) || 1, ' stelvio-rank-my-supremo');
+          stelvioRankingPaintListBody(
+            bodyEl,
+            buildSupremoRow(myRankSupremo, Number(myRankSupremo.rank) || 1, ' stelvio-rank-my-supremo')
+          );
           return;
         }
 
@@ -14913,7 +14948,7 @@
               htmlS += supremoExpandControlRow(false);
             }
           }
-          bodyEl.innerHTML = htmlS;
+          stelvioRankingPaintListBody(bodyEl, htmlS);
           return;
         }
 
@@ -14970,7 +15005,7 @@
             renderSupremoRunsFromIdxSet(idxLim);
             htmlS += supremoExpandControlRow(false);
           }
-          bodyEl.innerHTML = htmlS;
+          stelvioRankingPaintListBody(bodyEl, htmlS);
           return;
         }
 
@@ -14992,7 +15027,7 @@
           htmlS += supremoExpandControlRow(true);
         }
 
-        bodyEl.innerHTML = htmlS;
+        stelvioRankingPaintListBody(bodyEl, htmlS);
         return;
       }
 
@@ -15157,7 +15192,7 @@
         }
       }
 
-      bodyEl.innerHTML = html;
+      stelvioRankingPaintListBody(bodyEl, html);
     }
 
     /**
