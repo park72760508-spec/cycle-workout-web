@@ -1,20 +1,23 @@
 /**
- * Firebase Auth → Supabase Auth Bridge (Custom JWT minting)
+ * Firebase Auth → Supabase Auth Bridge (RS256 Custom JWT)
  *
- * 배포 전 Secret / 환경 변수:
- *   SUPABASE_JWT_SECRET  — Dashboard → Settings → API → JWT Secret (Legacy)
- *   SUPABASE_URL         — https://<project-ref>.supabase.co
- *   STELVIO_UID_NAMESPACE — 마이그레이션과 동일 (기본 DNS namespace UUID)
- *   FIREBASE_UID_UUID_MODE — v5 | literal (기본 v5)
+ * Legacy HS256(JWT Secret) 미사용 — Supabase JWT Signing Keys(RS256)와 페어링.
  *
- * firebase functions:secrets:set SUPABASE_JWT_SECRET
- * firebase functions:config:set (또는 .env) SUPABASE_URL=...
+ * Secrets / Params:
+ *   SUPABASE_CUSTOM_PRIVATE_KEY — RSA PEM (BEGIN ... PRIVATE KEY)
+ *   SUPABASE_JWT_KEY_ID         — JWT header `kid` (Dashboard 등록값과 동일)
+ *   SUPABASE_URL                — iss = {url}/auth/v1
+ *   STELVIO_UID_NAMESPACE       — UUID v5 namespace (마이그레이션 동일)
+ *   FIREBASE_UID_UUID_MODE      — v5 | literal
  */
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4, v5: uuidv5 } = require("uuid");
 const { defineSecret, defineString } = require("firebase-functions/params");
 
-const supabaseJwtSecret = defineSecret("SUPABASE_JWT_SECRET");
+const supabaseCustomPrivateKey = defineSecret("SUPABASE_CUSTOM_PRIVATE_KEY");
+const jwtKeyIdParam = defineString("SUPABASE_JWT_KEY_ID", {
+  description: "JWT kid — Supabase Dashboard JWT Signing Keys 등록 kid와 일치",
+});
 const supabaseUrlParam = defineString("SUPABASE_URL", {
   description: "Supabase project URL (iss claim)",
 });
@@ -24,6 +27,8 @@ const uidNamespaceParam = defineString("STELVIO_UID_NAMESPACE", {
 const uidModeParam = defineString("FIREBASE_UID_UUID_MODE", {
   default: "v5",
 });
+
+const JWT_ALGORITHM = "RS256";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -63,15 +68,37 @@ function buildSupabaseIssuer(supabaseUrl) {
 }
 
 /**
+ * Secret Manager에 저장된 PEM 정규화 (한 줄 \\n → 실제 줄바꿈)
+ * @param {string} raw
+ */
+function normalizePrivateKeyPem(raw) {
+  let pem = String(raw || "").trim();
+  if (!pem) {
+    throw Object.assign(new Error("Empty private key"), { code: "missing-key" });
+  }
+  if (pem.includes("\\n")) {
+    pem = pem.replace(/\\n/g, "\n");
+  }
+  if (
+    !pem.includes("BEGIN RSA PRIVATE KEY") &&
+    !pem.includes("BEGIN PRIVATE KEY")
+  ) {
+    throw Object.assign(new Error("Invalid PEM format"), { code: "invalid-pem" });
+  }
+  return pem;
+}
+
+/**
  * @param {object} p
  * @param {string} p.sub
- * @param {string} p.email
- * @param {string} p.jwtSecret
+ * @param {string} [p.email]
+ * @param {string} p.privateKeyPem
+ * @param {string} p.kid
  * @param {string} p.iss
  * @param {number} p.expiresInSec
  * @param {string} [p.sessionId]
  */
-function mintSupabaseJwt(p) {
+function mintSupabaseJwtRs256(p) {
   const now = Math.floor(Date.now() / 1000);
   const sessionId = p.sessionId || uuidv4();
   /** @type {Record<string, unknown>} */
@@ -89,17 +116,26 @@ function mintSupabaseJwt(p) {
   if (p.email) {
     payload.email = p.email;
   }
-  return jwt.sign(payload, p.jwtSecret, { algorithm: "HS256" });
+
+  return jwt.sign(payload, p.privateKeyPem, {
+    algorithm: JWT_ALGORITHM,
+    header: {
+      alg: JWT_ALGORITHM,
+      typ: "JWT",
+      kid: p.kid,
+    },
+  });
 }
 
 /**
  * @param {import('firebase-admin').auth.DecodedIdToken} decoded
  * @param {string} uidNamespace
  * @param {"v5"|"literal"} uidMode
- * @param {string} jwtSecret
+ * @param {string} privateKeyPem
+ * @param {string} kid
  * @param {string} iss
  */
-function mintSessionTokens(decoded, uidNamespace, uidMode, jwtSecret, iss) {
+function mintSessionTokens(decoded, uidNamespace, uidMode, privateKeyPem, kid, iss) {
   const firebaseUid = decoded.uid;
   const sub = resolveUserUuid(firebaseUid, uidNamespace, uidMode);
   if (!sub) {
@@ -109,25 +145,29 @@ function mintSessionTokens(decoded, uidNamespace, uidMode, jwtSecret, iss) {
   const sessionId = uuidv4();
   const email =
     (typeof decoded.email === "string" && decoded.email) ||
-    (decoded.firebase && decoded.firebase.identities && decoded.firebase.identities.email && decoded.firebase.identities.email[0]) ||
+    (decoded.firebase &&
+      decoded.firebase.identities &&
+      decoded.firebase.identities.email &&
+      decoded.firebase.identities.email[0]) ||
     undefined;
 
-  const access_token = mintSupabaseJwt({
+  const signOpts = {
     sub,
     email,
-    jwtSecret,
+    privateKeyPem,
+    kid,
     iss,
-    expiresInSec: DEFAULT_ACCESS_TTL_SEC,
     sessionId,
+  };
+
+  const access_token = mintSupabaseJwtRs256({
+    ...signOpts,
+    expiresInSec: DEFAULT_ACCESS_TTL_SEC,
   });
 
-  const refresh_token = mintSupabaseJwt({
-    sub,
-    email,
-    jwtSecret,
-    iss,
+  const refresh_token = mintSupabaseJwtRs256({
+    ...signOpts,
     expiresInSec: DEFAULT_REFRESH_TTL_SEC,
-    sessionId,
   });
 
   return {
@@ -135,13 +175,14 @@ function mintSessionTokens(decoded, uidNamespace, uidMode, jwtSecret, iss) {
     refresh_token,
     token_type: "bearer",
     expires_in: DEFAULT_ACCESS_TTL_SEC,
+    signing_algorithm: JWT_ALGORITHM,
+    jwt_kid: kid,
     supabase_user_id: sub,
     firebase_uid: firebaseUid,
   };
 }
 
 /**
- * HTTP handler — Authorization: Bearer <Firebase ID Token>
  * @param {import('firebase-functions/v2/https').Request} req
  * @param {import('firebase-functions/v2/https').Response} res
  * @param {import('firebase-admin')} admin
@@ -196,12 +237,27 @@ async function handleMintSupabaseSession(req, res, admin, setCorsHeaders) {
       return;
     }
 
-    const jwtSecret = supabaseJwtSecret.value();
-    if (!jwtSecret || !String(jwtSecret).trim()) {
-      console.error("[mintSupabaseSession] SUPABASE_JWT_SECRET not configured");
+    let privateKeyPem;
+    try {
+      privateKeyPem = normalizePrivateKeyPem(
+        supabaseCustomPrivateKey.value()
+      );
+    } catch (e) {
+      console.error("[mintSupabaseSession] private key:", e.message);
       sendError(
         "failed-precondition",
-        "서버 JWT 설정이 완료되지 않았습니다.",
+        "SUPABASE_CUSTOM_PRIVATE_KEY가 설정되지 않았거나 PEM 형식이 아닙니다.",
+        503
+      );
+      return;
+    }
+
+    const kid = String(jwtKeyIdParam.value() || "").trim();
+    if (!kid) {
+      console.error("[mintSupabaseSession] SUPABASE_JWT_KEY_ID missing");
+      sendError(
+        "failed-precondition",
+        "SUPABASE_JWT_KEY_ID 파라미터가 필요합니다 (JWT kid).",
         503
       );
       return;
@@ -219,7 +275,8 @@ async function handleMintSupabaseSession(req, res, admin, setCorsHeaders) {
       decoded,
       uidNamespace,
       uidMode,
-      String(jwtSecret).trim(),
+      privateKeyPem,
+      kid,
       iss
     );
 
@@ -230,16 +287,24 @@ async function handleMintSupabaseSession(req, res, admin, setCorsHeaders) {
       sendError("invalid-argument", "Firebase UID를 Supabase UUID로 변환할 수 없습니다.");
       return;
     }
+    if (err && err.code === "invalid-pem") {
+      sendError("failed-precondition", "Private Key PEM 형식 오류.", 503);
+      return;
+    }
     sendError("internal", "Supabase 세션 발급에 실패했습니다.", 500);
   }
 }
 
 module.exports = {
-  supabaseJwtSecret,
+  supabaseCustomPrivateKey,
+  jwtKeyIdParam,
   supabaseUrlParam,
   uidNamespaceParam,
   uidModeParam,
+  JWT_ALGORITHM,
   resolveUserUuid,
+  normalizePrivateKeyPem,
+  mintSupabaseJwtRs256,
   mintSessionTokens,
   handleMintSupabaseSession,
   DEFAULT_ACCESS_TTL_SEC,

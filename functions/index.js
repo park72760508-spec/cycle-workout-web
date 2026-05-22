@@ -10115,7 +10115,7 @@ const supabaseAuthBridge = require("./supabaseAuthBridge");
 
 const mintSupabaseSessionConfig = {
   cors: CORS_ORIGINS,
-  secrets: [supabaseAuthBridge.supabaseJwtSecret],
+  secrets: [supabaseAuthBridge.supabaseCustomPrivateKey],
 };
 
 exports.mintSupabaseSessionHttp = onRequest(
