@@ -3,3 +3,4 @@
  * @see ./db/index.ts
  */
 export * from "./db/index";
+export * from "../bootstrap";
