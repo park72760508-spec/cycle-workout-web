@@ -7244,6 +7244,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-category-body {
   padding: 8px 14px 12px;
 }
+/* 랭킹 리스트: 화면 밖 행 paint/layout 지연 (WebView 발열 완화) */
+#stelvioRankingListBody .stelvio-rank-row,
+#stelvioRankingScreen .stelvio-category-body .stelvio-rank-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+}
 .stelvio-rank-row {
   display: flex;
   align-items: center;
