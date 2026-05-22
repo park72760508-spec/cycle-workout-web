@@ -1,4 +1,19 @@
-import "dotenv/config";
+import { config as loadDotenv } from "dotenv";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** supabase/migration/.env (실행 cwd와 무관하게 로드) */
+const MIGRATION_ROOT = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  ".."
+);
+const ENV_FILE = resolve(MIGRATION_ROOT, ".env");
+if (existsSync(ENV_FILE)) {
+  loadDotenv({ path: ENV_FILE });
+} else {
+  loadDotenv();
+}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -42,11 +57,28 @@ export interface MigrationConfig {
   logPath: string;
 }
 
-export function loadConfig(argv: string[]): MigrationConfig {
-  const databaseUrl = process.env.DATABASE_URL?.trim();
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL 환경 변수가 필요합니다.");
+function resolveDatabaseUrl(): string {
+  const raw =
+    process.env.DATABASE_URL?.trim() ||
+    process.env.DIRECT_URL?.trim() ||
+    "";
+  const stripped = raw.replace(/^["']|["']$/g, "");
+  if (!stripped || /\[YOUR-PASSWORD\]/i.test(stripped)) {
+    const hint = existsSync(ENV_FILE)
+      ? `${ENV_FILE} 에 DATABASE_URL(또는 DIRECT_URL)과 실제 DB 비밀번호를 넣으세요.`
+      : `${ENV_FILE} 파일이 없습니다. .env.example 을 복사해 .env 를 만든 뒤 비밀번호를 채우세요.\n  PowerShell: Copy-Item .env.example .env`;
+    throw new Error(`DATABASE_URL 환경 변수가 필요합니다. ${hint}`);
   }
+  if (/:6543\//.test(stripped) || /pgbouncer=true/i.test(stripped)) {
+    console.warn(
+      "[config] 경고: 6543/pgbouncer URL 입니다. 마이그레이션은 Direct(5432) URI 를 권장합니다."
+    );
+  }
+  return stripped;
+}
+
+export function loadConfig(argv: string[]): MigrationConfig {
+  const databaseUrl = resolveDatabaseUrl();
 
   const rawPhases = process.env.MIGRATION_PHASES?.trim();
   const phases = rawPhases
