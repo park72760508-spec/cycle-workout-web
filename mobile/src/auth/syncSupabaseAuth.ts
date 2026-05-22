@@ -9,6 +9,9 @@ export interface MintSupabaseSessionResponse {
     refresh_token: string;
     token_type: string;
     expires_in: number;
+    /** Bridge 발급 알고리즘 (RS256) */
+    signing_algorithm?: string;
+    jwt_kid?: string;
     supabase_user_id: string;
     firebase_uid: string;
   };
@@ -51,7 +54,10 @@ export class SupabaseAuthBridgeError extends Error {
 }
 
 /**
- * Firebase 로그인 직후 호출 — Bridge API로 Custom JWT를 받아 Supabase 세션 주입.
+ * Firebase 로그인 직후 호출 — Bridge API로 RS256 Custom JWT를 받아 Supabase 세션 주입.
+ *
+ * 서버는 Legacy HS256이 아닌 Supabase JWT Signing Keys(RS256)용 Private Key로 서명합니다.
+ * @see docs/SUPABASE_AUTH_BRIDGE.md
  */
 export async function syncSupabaseAuth(
   config: SyncSupabaseAuthConfig
