@@ -698,6 +698,16 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       newExpiryDate: result.userUpdateData.expiry_date,
       trainingLogId: result.trainingLogId
     });
+
+    try {
+      const dualMod = await import('./supabaseDualWrite.js');
+      await dualMod.runSecondaryAfterTrainingSave(userId, trainingData, result);
+    } catch (dualErr) {
+      console.warn(
+        '[saveTrainingSession] Supabase secondary (Primary 유지):',
+        dualErr && dualErr.message ? dualErr.message : dualErr
+      );
+    }
     
     return {
       success: true,

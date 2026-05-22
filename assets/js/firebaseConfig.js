@@ -128,3 +128,21 @@ console.log("🔥 [Firebase Config] 최종 SESSION_ID:", SESSION_ID);
 console.log("🔥 [Firebase Config] URL 파라미터:", window.location.search);
 console.log("🔥 [Firebase Config] 전역 변수 currentTrainingRoomId:", window.currentTrainingRoomId);
 console.log("🔥 [Firebase Config] window.SESSION_ID:", window.SESSION_ID);
+
+/* Supabase Dual-Write (웹) — stelvioSupabaseConfig.js 와 동일. 배포 시 이 파일만 올려도 됨 */
+(function () {
+  var supabaseDefaults = {
+    supabaseUrl: 'https://eacrwhtbdqanaxpicqsm.supabase.co',
+    supabaseAnonKey: 'sb_publishable_H4woEe6KlAnkz9jGoVbjOQ_cyUHk8v4',
+    authBridgeUrl:
+      'https://us-central1-stelvio-ai.cloudfunctions.net/mintSupabaseSessionHttp',
+    uidNamespace: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+  };
+  var supabaseOver =
+    typeof window !== 'undefined' && window.__STELVIO_SUPABASE__;
+  window.STELVIO_SUPABASE_CONFIG = Object.assign(
+    {},
+    supabaseDefaults,
+    supabaseOver && typeof supabaseOver === 'object' ? supabaseOver : {}
+  );
+})();
