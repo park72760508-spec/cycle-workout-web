@@ -8,7 +8,7 @@
  *   SUPABASE_JWT_KEY_ID         — JWT header `kid` (Dashboard 등록값과 동일)
  *   SUPABASE_URL                — iss = {url}/auth/v1
  *   STELVIO_UID_NAMESPACE       — UUID v5 namespace (마이그레이션 동일)
- *   FIREBASE_UID_UUID_MODE      — v5 | literal
+ *   STELVIO_UID_UUID_MODE       — v5 | literal (.env 에 FIREBASE_ 접두사 사용 불가)
  */
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4, v5: uuidv5 } = require("uuid");
@@ -24,7 +24,7 @@ const supabaseUrlParam = defineString("SUPABASE_URL", {
 const uidNamespaceParam = defineString("STELVIO_UID_NAMESPACE", {
   default: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
 });
-const uidModeParam = defineString("FIREBASE_UID_UUID_MODE", {
+const uidModeParam = defineString("STELVIO_UID_UUID_MODE", {
   default: "v5",
 });
 
