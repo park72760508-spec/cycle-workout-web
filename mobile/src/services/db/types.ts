@@ -216,8 +216,6 @@ export interface ErrorReporter {
 }
 
 export interface DbServiceConfig {
-  /** false면 Supabase 쓰기 생략 (Firebase만) */
-  dualWriteEnabled: boolean;
   supabaseUrl: string;
   supabaseAnonKey: string;
   /** 마이그레이션과 동일 (기본 DNS namespace) */

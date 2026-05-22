@@ -1,4 +1,5 @@
-import type { DualWriteOperation } from "./types";
+import { shouldRunSupabaseDualWrite } from "./DualRunManager";
+import type { DualWriteOperation, FirebaseUserId } from "./types";
 
 export interface DualWriteReporter {
   onSecondaryFailure: (
@@ -9,16 +10,16 @@ export interface DualWriteReporter {
 
 /**
  * Strangler Fig — 병렬 dual-write.
- * Firebase(0) 실패 시 예외 전파, Supabase(1) 실패는 격리·리포트만.
+ * DualRunManager(Remote Config)가 Supabase 쓰기 허용 시에만 secondary 실행.
  */
 export async function executeParallelDualWrite<T>(
   operation: DualWriteOperation,
+  firebaseUserId: FirebaseUserId | undefined,
   firebaseTask: () => Promise<T>,
   supabaseTask: () => Promise<void>,
-  reporter: DualWriteReporter,
-  dualWriteEnabled: boolean
+  reporter: DualWriteReporter
 ): Promise<T> {
-  if (!dualWriteEnabled) {
+  if (!shouldRunSupabaseDualWrite(firebaseUserId)) {
     return firebaseTask();
   }
 
@@ -43,18 +44,17 @@ export async function executeParallelDualWrite<T>(
 
 /**
  * Firestore 트랜잭션 등 primary 결과가 필요한 쓰기.
- * Primary 완료 후 Supabase를 allSettled로 1회 시도 (실패 격리).
  */
 export async function executePrimaryThenSecondaryDualWrite<T>(
   operation: DualWriteOperation,
+  firebaseUserId: FirebaseUserId | undefined,
   firebaseTask: () => Promise<T>,
   supabaseTask: (primaryResult: T) => Promise<void>,
-  reporter: DualWriteReporter,
-  dualWriteEnabled: boolean
+  reporter: DualWriteReporter
 ): Promise<T> {
   const primaryResult = await firebaseTask();
 
-  if (!dualWriteEnabled) {
+  if (!shouldRunSupabaseDualWrite(firebaseUserId)) {
     return primaryResult;
   }
 

@@ -35,10 +35,16 @@ import type {
 } from "./types";
 import { DEFAULT_UID_NAMESPACE } from "./uid";
 import type { UidResolverConfig } from "./uid";
+import {
+  initDualRunManager,
+  type DualRunManagerConfig,
+} from "./DualRunManager";
 
 export interface InitDbServiceOptions extends SupabaseClientOptions {
   firebase: FirebasePorts;
   config: DbServiceConfig;
+  /** Remote Config 롤아웃 (미지정 시 기본 DualRunManager) */
+  dualRun?: DualRunManagerConfig;
 }
 
 let firebasePorts: FirebasePorts | null = null;
@@ -97,6 +103,7 @@ export function initDbService(options: InitDbServiceOptions): void {
   };
   supabase = getSupabaseClient(options.config, options);
   reporter = buildReporter(options.config);
+  initDualRunManager(options.dualRun ?? {});
 }
 
 /** 테스트/핫리로드용 */
@@ -120,13 +127,13 @@ export async function saveTrainingSession(
   userId: FirebaseUserId,
   trainingData: TrainingSessionInput
 ): Promise<SaveTrainingSessionResult> {
-  const { firebase, config, uid, supabase: sb, reporter: rpt } =
-    requireInit();
+  const { firebase, uid, supabase: sb, reporter: rpt } = requireInit();
 
   return executePrimaryThenSecondaryDualWrite(
     "saveTrainingSession",
+    userId,
     () => firebase.saveTrainingSession(userId, trainingData),
-    async (result) => {
+    async (result: SaveTrainingSessionResult) => {
       const rideRow = mapTrainingSessionToRideRow(
         userId,
         result.trainingLogId,
@@ -156,8 +163,7 @@ export async function saveTrainingSession(
         uid
       );
     },
-    rpt,
-    config.dualWriteEnabled
+    rpt
   );
 }
 
@@ -167,8 +173,7 @@ export async function saveTrainingSession(
 export async function saveStravaActivity(
   activity: StravaActivityInput
 ): Promise<SaveStravaActivityResult> {
-  const { firebase, config, uid, supabase: sb, reporter: rpt } =
-    requireInit();
+  const { firebase, uid, supabase: sb, reporter: rpt } = requireInit();
 
   const firebaseUid = String(activity.user_id);
   const activityId = String(
@@ -177,6 +182,7 @@ export async function saveStravaActivity(
 
   return executeParallelDualWrite(
     "saveStravaActivity",
+    firebaseUid,
     () => firebase.saveStravaActivity(activity),
     async () => {
       const rideRow = mapStravaActivityToRideRow(
@@ -189,8 +195,7 @@ export async function saveStravaActivity(
       }
       await insertRide(sb, firebaseUid, rideRow, uid);
     },
-    rpt,
-    config.dualWriteEnabled
+    rpt
   );
 }
 
@@ -201,13 +206,13 @@ export async function updateUserProfile(
   userId: FirebaseUserId,
   patch: UserProfilePatch
 ): Promise<void> {
-  const { firebase, config, uid, supabase: sb, reporter: rpt } =
-    requireInit();
+  const { firebase, uid, supabase: sb, reporter: rpt } = requireInit();
 
   const mapped = mapUserPatchToSupabase(userId, patch, uid);
 
   return executeParallelDualWrite(
     "updateUserProfile",
+    userId,
     () => firebase.updateUserProfile(userId, patch),
     async () => {
       if (!mapped) {
@@ -215,8 +220,7 @@ export async function updateUserProfile(
       }
       await updateUserRow(sb, userId, mapped.id, mapped.row, uid);
     },
-    rpt,
-    config.dualWriteEnabled
+    rpt
   );
 }
 
