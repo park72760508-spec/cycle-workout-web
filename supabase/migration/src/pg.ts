@@ -4,14 +4,25 @@ import { resolveUserUuid } from "./uid.js";
 
 const { Pool } = pg;
 
-export function createPool(config: MigrationConfig): pg.Pool {
-  return new Pool({
-    connectionString: config.databaseUrl,
+/** connection string 대신 URL 파싱 — 비밀번호의 ! @ # 등 특수문자 오류 방지 */
+function poolConfigFromDatabaseUrl(databaseUrl: string): pg.PoolConfig {
+  const u = new URL(databaseUrl);
+  const database = u.pathname.replace(/^\//, "") || "postgres";
+  return {
+    host: u.hostname,
+    port: u.port ? Number(u.port) : 5432,
+    user: decodeURIComponent(u.username),
+    password: decodeURIComponent(u.password),
+    database,
     max: 4,
-    ssl: config.databaseUrl.includes("localhost")
+    ssl: u.hostname.includes("localhost")
       ? undefined
       : { rejectUnauthorized: false },
-  });
+  };
+}
+
+export function createPool(config: MigrationConfig): pg.Pool {
+  return new Pool(poolConfigFromDatabaseUrl(config.databaseUrl));
 }
 
 /** auth.users에 존재하는 UUID 집합 (마이그레이션 대상 필터) */
