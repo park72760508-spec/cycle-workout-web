@@ -7,7 +7,8 @@
   "scripts": {
     "setup:env": "node -e \"const fs=require('fs'); if(!fs.existsSync('.env')){fs.copyFileSync('.env.example','.env'); console.log('Created .env — edit DATABASE_URL password');} else {console.log('.env already exists');}\"",
     "migrate": "tsx migrateData.ts",
-    "migrate:dry": "tsx migrateData.ts --dry-run"
+    "migrate:dry": "tsx migrateData.ts --dry-run",
+    "test:db": "tsx scripts/testDbConnection.ts"
   },
   "engines": {
     "node": ">=20"
