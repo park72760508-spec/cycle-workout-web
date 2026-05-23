@@ -507,6 +507,25 @@ export async function createRidingGroupPending(db, uid, payload) {
     role: 'owner'
   });
   await batch.commit();
+  try {
+    import('../openRidingDualWrite.js').then(function (mod) {
+      if (typeof mod.fireSecondaryTasksIsolated === 'function') {
+        mod.fireSecondaryTasksIsolated([
+          mod.runSecondaryAfterRidingGroupSave(u, ref.id, {
+            name,
+            regions,
+            intro,
+            isPublic,
+            joinPassword: isPublic ? '' : joinPassword,
+            photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
+            status: GROUP_STATUS.PENDING,
+            createdBy: u,
+            memberCount: 1,
+          }),
+        ]);
+      }
+    }).catch(function () {});
+  } catch (eSecGrp) {}
   return ref.id;
 }
 

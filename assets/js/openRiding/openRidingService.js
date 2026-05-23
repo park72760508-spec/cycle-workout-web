@@ -705,7 +705,17 @@ export async function createRide(db, hostUserId, input) {
       openRidingPointUpdatedAt: serverTimestamp()
     });
   });
-  return rideRef.id;
+  const createdRideId = rideRef.id;
+  try {
+    import('../openRidingDualWrite.js').then(function (mod) {
+      if (typeof mod.fireSecondaryTasksIsolated === 'function') {
+        mod.fireSecondaryTasksIsolated([
+          mod.runSecondaryAfterOpenRideSave(hostKey || hostUserId, createdRideId, payload),
+        ]);
+      }
+    }).catch(function () {});
+  } catch (eSecRide) {}
+  return createdRideId;
 }
 
 /**
