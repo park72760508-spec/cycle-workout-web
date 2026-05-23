@@ -14,6 +14,7 @@ const FIRESTORE_DOC_PATH = { collection: "appConfig", doc: "supabase_read_routin
 let cache = {
   useSupabaseGlobal: false,
   whitelistUids: [],
+  parityFallbackToFirebase: true,
   loadedAt: 0,
 };
 
@@ -68,6 +69,7 @@ async function refreshRankingReadConfig(admin, force = false) {
 
   let useSupabaseGlobal = false;
   let whitelistUids = [];
+  let parityFallbackToFirebase = true;
 
   const envCfg = loadFromEnv();
   useSupabaseGlobal = envCfg.useSupabaseGlobal;
@@ -90,15 +92,23 @@ async function refreshRankingReadConfig(admin, force = false) {
         } else if (d.SUPABASE_WHITELIST_UIDS != null) {
           whitelistUids = parseUidList(d.SUPABASE_WHITELIST_UIDS);
         }
+        if (d.parityFallbackToFirebase != null) {
+          parityFallbackToFirebase = parseParityFallback(d.parityFallbackToFirebase);
+        }
       }
     } catch (err) {
       console.warn("[rankingReadConfig] Firestore load failed:", err.message);
     }
   }
 
+  if (process.env.RANKING_PARITY_FALLBACK === "false") {
+    parityFallbackToFirebase = false;
+  }
+
   cache = {
     useSupabaseGlobal,
     whitelistUids,
+    parityFallbackToFirebase,
     loadedAt: now,
   };
   return getRankingReadConfig();
@@ -108,7 +118,16 @@ function getRankingReadConfig() {
   return {
     useSupabaseGlobal: cache.useSupabaseGlobal,
     whitelistUids: cache.whitelistUids.slice(),
+    /** true: Supabase·Firebase 불일치 시 Firebase 응답으로 폴백(화면 동일) */
+    parityFallbackToFirebase: cache.parityFallbackToFirebase !== false,
   };
+}
+
+function parseParityFallback(raw) {
+  if (raw === false || raw === 0) return false;
+  const s = String(raw ?? "").trim().toLowerCase();
+  if (s === "false" || s === "0" || s === "off") return false;
+  return true;
 }
 
 /**

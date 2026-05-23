@@ -37,6 +37,7 @@ const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const stravaDualWrite = require("./stravaDualWrite");
 const rankingReadRouter = require("./rankingReadRouter");
+const rankingParity = require("./rankingParity");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -2047,6 +2048,8 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
     errors: errors.length,
     dateFrom,
     dateTo,
+    dualWriteIngest:
+      "Firebase Primary + Supabase Secondary (all users when dual_write_status≠OFF)",
   });
   if (errors.length) console.warn(`${prefix} 오류:`, errors);
 }
@@ -2678,6 +2681,7 @@ async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
 
 /**
  * 매일 새벽 2시(Asia/Seoul)에 전날 Strava 활동 수집. 1000명 대비 청크 팬아웃.
+ * 각 활동: Firebase Primary + Supabase rides Secondary (stravaDualWrite, 전 사용자 ingest).
  */
 const stravaSyncScheduleOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "0 2 * * *",
@@ -7165,6 +7169,36 @@ exports.scheduledPeak28dHeptagonOnly = onSchedule(
   }
 );
 
+/**
+ * KST 03:40 — Strava 02:00·Supabase 03:15 집계 후 Firebase vs Supabase 랭킹 정합성 리포트.
+ * ranking_meta/supabase_parity_audit 에 저장 (네이버 결제·Strava 스케줄 본체는 변경 없음).
+ */
+const scheduledRankingParityAuditOptions =
+  supabaseDualWriteServer.appendServiceRoleSecret({
+    schedule: "40 3 * * *",
+    timeZone: "Asia/Seoul",
+    memory: "512MiB",
+    timeoutSeconds: 300,
+  });
+exports.scheduledRankingParityAudit = onSchedule(
+  scheduledRankingParityAuditOptions,
+  async () => {
+    const db = admin.firestore();
+    try {
+      await rankingParity.runNightlyParityAudit(admin, db, {
+        getWeekRangeSeoul,
+        getRolling28DaysRangeSeoul,
+      });
+    } catch (e) {
+      console.error(
+        "[scheduledRankingParityAudit]",
+        e && e.message ? e.message : e
+      );
+      throw e;
+    }
+  }
+);
+
 // ---------- STELVIO 헵타곤·GC 랭킹: heptagon_cohort_ranks (일 1회 03:20 KST — scheduledPeak28dHeptagonOnly) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
 
@@ -7862,6 +7896,7 @@ exports.getPeakPowerRanking = onRequest(
         admin,
         req.query || {},
         {
+          db,
           getWeekRangeSeoul,
           getRolling28DaysRangeSeoul,
           getRolling30DaysRangeSeoul,
@@ -7870,6 +7905,9 @@ exports.getPeakPowerRanking = onRequest(
       );
     if (supabasePeakPayload) {
       await finalizeRankingProfileUrls(supabasePeakPayload);
+      if (req.query.parity !== "1" && req.query.parity !== "true") {
+        delete supabasePeakPayload.rankingParity;
+      }
       return res.status(200).json(supabasePeakPayload);
     }
 

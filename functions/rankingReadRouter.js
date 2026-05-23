@@ -3,6 +3,7 @@
  */
 const rankingReadConfig = require("./rankingReadConfig");
 const supabaseRankingReader = require("./supabaseRankingReader");
+const rankingParity = require("./rankingParity");
 const { attachCurrentUserToPayload } = require("./rankingResponseAdapter");
 
 const SUPPORTED_PEAK_DURATIONS = new Set([
@@ -83,6 +84,30 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
 
     if (!payload) return null;
 
+    const cfg = rankingReadConfig.getRankingReadConfig();
+    const parityCtx = {
+      durationType,
+      gender,
+      startStr: payload.startStr,
+      endStr: payload.endStr,
+    };
+    const parityReport = await rankingParity.verifyPeakRankingParity(
+      admin,
+      deps.db,
+      payload,
+      parityCtx
+    );
+    payload.rankingParity = parityReport;
+
+    if (cfg.parityFallbackToFirebase && parityReport && parityReport.ok === false) {
+      console.warn("[rankingReadRouter] parity drift → Firebase fallback", {
+        durationType,
+        gender,
+        parityReport,
+      });
+      return null;
+    }
+
     attachCurrentUserToPayload(payload, uid, deps.buildMotivationMessage);
     console.log("[rankingReadRouter] Supabase read", {
       durationType,
@@ -90,6 +115,7 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
       uid: uid || "(anonymous)",
       reason: route.reason,
       entries: (payload.entries || []).length,
+      parityOk: parityReport && parityReport.ok,
     });
     return payload;
   } catch (err) {
