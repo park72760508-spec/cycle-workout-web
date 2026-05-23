@@ -7989,6 +7989,33 @@
     window.stelvioEnsureRankingReadSource = stelvioEnsureRankingReadSource;
     stelvioEnsureRankingReadSource().catch(function () {});
 
+    /** 랭킹 Read DB 진단 — Network 응답 readBackend vs 클라이언트 readDb 설정 */
+    function stelvioLogRankingReadBackend(tag, data, meta) {
+      try {
+        var backend = (data && (data.readBackend || data.readSource)) || '(none)';
+        var cfg =
+          typeof stelvioGetRankingReadSourceSync === 'function' ? stelvioGetRankingReadSourceSync() : '?';
+        var line =
+          '[StelvioRankingRead] ' +
+          String(tag || 'ranking') +
+          ' — response readBackend=' +
+          backend +
+          ', client readDb=' +
+          cfg;
+        if (meta && meta.duration) line += ', duration=' + meta.duration;
+        if (typeof console !== 'undefined' && console.info) console.info(line);
+        if (cfg === 'supabase' && backend === 'firebase') {
+          var hint =
+            '[StelvioRankingRead] Supabase Read ON이지만 Firebase 응답 — GC/그룹탭 미지원, 정합성 폴백, Supabase MV 오류 중 하나';
+          if (meta && meta.duration === 'gc') {
+            hint += ' (GC 탭은 Supabase Read Router 미적용 → 항상 Firebase)';
+          }
+          if (typeof console !== 'undefined' && console.warn) console.warn(hint);
+        }
+      } catch (eLogRb) {}
+    }
+    window.stelvioLogRankingReadBackend = stelvioLogRankingReadBackend;
+
     function weeklyTop10PayloadMatchesWeek(data, weekOffset) {
       if (!data || data.startStr == null || data.endStr == null) return false;
       var expected = getWeekRangeSeoulClient(weekOffset);
@@ -8469,6 +8496,7 @@
           var data = await res.json().catch(function () {
             return { success: false };
           });
+          stelvioLogRankingReadBackend('weeklyTop10', data, {});
           if (
             data.success &&
             weeklyTop10PayloadMatchesWeek(data, 0) &&
@@ -13024,6 +13052,9 @@
         refreshStelvioDistributionChartMounted();
         return;
       }
+      stelvioLogRankingReadBackend('rankingBoard', data, {
+        duration: data.durationType || (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.duration),
+      });
       var isFirstApplyForFetchGen = myGen !== stelvioRankingAppliedFetchGen;
       if (isFirstApplyForFetchGen) {
         stelvioRankingAppliedFetchGen = myGen;
