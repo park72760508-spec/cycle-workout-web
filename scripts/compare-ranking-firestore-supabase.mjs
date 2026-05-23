@@ -98,6 +98,66 @@ function nearlyEqual(a, b, eps) {
   return Math.abs(Number(a) - Number(b)) <= eps;
 }
 
+/** @returns {'pass'|'fail'|'skip'} */
+function boardStatus(ok, skipped) {
+  if (skipped) return "skip";
+  return ok ? "pass" : "fail";
+}
+
+function skipBoard(board, reason, hint, extra = {}) {
+  return {
+    board,
+    status: "skip",
+    ok: false,
+    skipped: true,
+    reason,
+    hint,
+    ...extra,
+  };
+}
+
+function failBoard(board, mismatches, extra = {}) {
+  return {
+    board,
+    status: "fail",
+    ok: false,
+    skipped: false,
+    mismatches,
+    ...extra,
+  };
+}
+
+function passBoard(board, compared, extra = {}) {
+  return {
+    board,
+    status: "pass",
+    ok: true,
+    skipped: false,
+    compared,
+    mismatches: [],
+    ...extra,
+  };
+}
+
+async function relationExists(pool, qualifiedName) {
+  const r = await pool.query(`SELECT to_regclass($1::text) IS NOT NULL AS exists`, [
+    qualifiedName,
+  ]);
+  return r.rows[0]?.exists === true;
+}
+
+async function pgSelect(pool, sql, params) {
+  try {
+    const res = await pool.query(sql, params);
+    return { ok: true, rows: res.rows };
+  } catch (e) {
+    if (e && e.code === "42P01") {
+      return { ok: false, code: "42P01", message: e.message };
+    }
+    throw e;
+  }
+}
+
 function initFirebase() {
   if (!admin.apps.length) {
     admin.initializeApp({ credential: admin.credential.applicationDefault() });
@@ -116,10 +176,23 @@ async function readAggregate(db, cacheKey) {
 async function compareWeeklyTss(db, pool, sample) {
   const { startStr, endStr } = weekRangeSeoul();
   const cacheKey = `peakRanking_weekly_tss_v2_all_${startStr}_${endStr}`;
+
+  if (!(await relationExists(pool, "public.mv_leaderboard_weekly_tss"))) {
+    return skipBoard(
+      "weekly_tss",
+      "supabase_mv_missing",
+      "스키마 마이그레이션(20260522000000) 적용 후 fn_refresh_ranking_materialized_views() 실행"
+    );
+  }
+
   const agg = await readAggregate(db, cacheKey);
   if (!agg?.rows?.length) {
-    console.warn("[weekly_tss] Firestore aggregate 없음:", cacheKey);
-    return { ok: false, reason: "no_firestore_aggregate" };
+    return skipBoard(
+      "weekly_tss",
+      "no_firestore_aggregate",
+      "Cloud Functions 랭킹 집계 배치 후 재시도, 또는 --boards=peak_60min 만 지정",
+      { cacheKey }
+    );
   }
 
   const fsTop = agg.rows
@@ -127,13 +200,18 @@ async function compareWeeklyTss(db, pool, sample) {
     .sort((a, b) => (b.totalTss ?? b.total_tss ?? 0) - (a.totalTss ?? a.total_tss ?? 0))
     .slice(0, sample);
 
-  const { rows: pgRows } = await pool.query(
+  const pgRes = await pgSelect(
+    pool,
     `SELECT user_id::text, weekly_tss::float8 AS weekly_tss
      FROM public.mv_leaderboard_weekly_tss
      ORDER BY weekly_tss DESC
      LIMIT $1`,
     [sample]
   );
+  if (!pgRes.ok) {
+    return skipBoard("weekly_tss", "supabase_query_error", pgRes.message);
+  }
+  const pgRows = pgRes.rows;
 
   const pgByUid = new Map(pgRows.map((r) => [r.user_id, r.weekly_tss]));
   const mismatches = [];
@@ -153,22 +231,32 @@ async function compareWeeklyTss(db, pool, sample) {
     }
   }
 
-  return {
-    ok: mismatches.length === 0,
-    board: "weekly_tss",
-    cacheKey,
-    compared: fsTop.length,
-    mismatches,
-  };
+  if (mismatches.length) {
+    return failBoard("weekly_tss", mismatches, { cacheKey, compared: fsTop.length });
+  }
+  return passBoard("weekly_tss", fsTop.length, { cacheKey });
 }
 
 async function comparePeak60min(db, pool, sample) {
   const { startStr, endStr } = rolling28Seoul();
   const cacheKey = `peakRanking_v2_monthly_60min_all_${startStr}_${endStr}`;
+
+  if (!(await relationExists(pool, "public.mv_leaderboard_peak_28d"))) {
+    return skipBoard(
+      "peak_60min",
+      "supabase_mv_missing",
+      "스키마 마이그레이션 적용 후 MV refresh 실행"
+    );
+  }
+
   const agg = await readAggregate(db, cacheKey);
   if (!agg?.rows?.length) {
-    console.warn("[peak_60min] Firestore aggregate 없음:", cacheKey);
-    return { ok: false, reason: "no_firestore_aggregate" };
+    return skipBoard(
+      "peak_60min",
+      "no_firestore_aggregate",
+      "피크 28일 집계(ranking_aggregates) 생성 후 재시도",
+      { cacheKey, range: { startStr, endStr } }
+    );
   }
 
   const fsTop = agg.rows
@@ -176,13 +264,18 @@ async function comparePeak60min(db, pool, sample) {
     .sort((a, b) => (b.wkg ?? 0) - (a.wkg ?? 0))
     .slice(0, sample);
 
-  const { rows: pgRows } = await pool.query(
+  const pgRes = await pgSelect(
+    pool,
     `SELECT user_id::text, peak_60min_wkg::float8 AS wkg
      FROM public.mv_leaderboard_peak_28d
      ORDER BY peak_60min_wkg DESC NULLS LAST
      LIMIT $1`,
     [sample]
   );
+  if (!pgRes.ok) {
+    return skipBoard("peak_60min", "supabase_query_error", pgRes.message);
+  }
+  const pgRows = pgRes.rows;
 
   const pgByUid = new Map(pgRows.map((r) => [r.user_id, r.wkg]));
   const mismatches = [];
@@ -202,20 +295,28 @@ async function comparePeak60min(db, pool, sample) {
     }
   }
 
-  return {
-    ok: mismatches.length === 0,
-    board: "peak_60min",
-    cacheKey,
-    range: { startStr, endStr },
-    compared: fsTop.length,
-    mismatches,
-  };
+  if (mismatches.length) {
+    return failBoard("peak_60min", mismatches, {
+      cacheKey,
+      range: { startStr, endStr },
+      compared: fsTop.length,
+    });
+  }
+  return passBoard("peak_60min", fsTop.length, { cacheKey, range: { startStr, endStr } });
 }
 
 async function compareHeptagon(db, pool, sample) {
   const monthKey = monthKeyKst();
   const filterCategory = "Supremo";
   const filterGender = "all";
+
+  if (!(await relationExists(pool, "public.heptagon_cohort_ranks"))) {
+    return skipBoard(
+      "heptagon",
+      "supabase_table_missing",
+      "Supabase SQL Editor 또는 CLI로 supabase/migrations/20260522120100_heptagon_cohort_ranks.sql 적용 후 SELECT fn_rebuild_heptagon_cohort_ranks();"
+    );
+  }
 
   const fsSnap = await db
     .collection("heptagon_cohort_ranks")
@@ -231,11 +332,16 @@ async function compareHeptagon(db, pool, sample) {
     .slice(0, sample);
 
   if (!fsDocs.length) {
-    console.warn("[heptagon] Firestore 문서 없음:", { monthKey, filterCategory, filterGender });
-    return { ok: false, reason: "no_firestore_heptagon" };
+    return skipBoard(
+      "heptagon",
+      "no_firestore_heptagon",
+      "Firestore heptagon_cohort_ranks(03:20 배치) 또는 수동 rebuild 후 재시도",
+      { monthKey, filterCategory, filterGender }
+    );
   }
 
-  const { rows: pgRows } = await pool.query(
+  const pgRes = await pgSelect(
+    pool,
     `SELECT user_id::text, board_rank, sum_position_scores::float8 AS sum_position_scores
      FROM public.heptagon_cohort_ranks
      WHERE month_key = $1 AND filter_category = $2 AND filter_gender = $3
@@ -243,6 +349,10 @@ async function compareHeptagon(db, pool, sample) {
      LIMIT $4`,
     [monthKey, filterCategory, filterGender, sample]
   );
+  if (!pgRes.ok) {
+    return skipBoard("heptagon", "supabase_query_error", pgRes.message);
+  }
+  const pgRows = pgRes.rows;
 
   const pgByUid = new Map(
     pgRows.map((r) => [r.user_id, { boardRank: r.board_rank, sum: r.sum_position_scores }])
@@ -282,13 +392,10 @@ async function compareHeptagon(db, pool, sample) {
     }
   }
 
-  return {
-    ok: mismatches.length === 0,
-    board: "heptagon",
-    monthKey,
-    compared: fsDocs.length,
-    mismatches,
-  };
+  if (mismatches.length) {
+    return failBoard("heptagon", mismatches, { monthKey, compared: fsDocs.length });
+  }
+  return passBoard("heptagon", fsDocs.length, { monthKey });
 }
 
 async function main() {
@@ -310,12 +417,25 @@ async function main() {
     }
 
     console.log("\n=== 랭킹 정합성 샘플 검증 ===\n");
-    let allOk = true;
+    let hasFail = false;
+    let hasSkip = false;
     for (const r of results) {
       if (!r) continue;
-      const status = r.ok ? "PASS" : "FAIL";
-      if (!r.ok) allOk = false;
-      console.log(`[${status}] ${r.board}`, r.ok ? `(n=${r.compared})` : r);
+      const label = (r.status || boardStatus(r.ok, r.skipped)).toUpperCase();
+      if (label === "FAIL") hasFail = true;
+      if (label === "SKIP") hasSkip = true;
+
+      if (label === "PASS") {
+        console.log(`[PASS] ${r.board} (n=${r.compared})`);
+        continue;
+      }
+      if (label === "SKIP") {
+        console.log(`[SKIP] ${r.board} — ${r.reason}`);
+        if (r.hint) console.log(`       → ${r.hint}`);
+        if (r.cacheKey) console.log(`       cacheKey: ${r.cacheKey}`);
+        continue;
+      }
+      console.log(`[FAIL] ${r.board}`, { compared: r.compared, cacheKey: r.cacheKey });
       if (r.mismatches?.length) {
         console.log("  mismatches:", JSON.stringify(r.mismatches.slice(0, 10), null, 2));
         if (r.mismatches.length > 10) {
@@ -324,8 +444,18 @@ async function main() {
       }
     }
 
-    console.log(allOk ? "\n전체 PASS — 읽기 전환 검토 가능" : "\nFAIL — Dual-Write·MV refresh·헵타곤 cron 확인");
-    process.exit(allOk ? 0 : 1);
+    if (hasFail) {
+      console.log("\nFAIL — Firestore vs Supabase 값 불일치. Dual-Write·MV refresh 확인.");
+      process.exit(1);
+    }
+    if (hasSkip) {
+      console.log(
+        "\nSKIP — 선행 조건 미충족(집계·마이그레이션). 위 안내 후 재실행. exit code 2."
+      );
+      process.exit(2);
+    }
+    console.log("\n전체 PASS — 읽기 전환 검토 가능");
+    process.exit(0);
   } finally {
     await pool.end();
   }
