@@ -26868,3 +26868,45 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
     padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* 관리자 환경설정 — 랭킹·집계 Read DB 토글 */
+.stelvio-admin-read-db-wrap {
+  width: 100%;
+  margin-top: 16px;
+  padding: 14px 12px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  box-sizing: border-box;
+  text-align: center;
+}
+.stelvio-admin-read-db-title {
+  font-size: 0.9em;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 4px;
+}
+.stelvio-admin-read-db-desc {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+.stelvio-admin-read-db-toggle {
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.stelvio-admin-read-db-toggle .stelvio-toggle-btn {
+  min-width: 120px;
+}
+.stelvio-admin-read-db-toggle .stelvio-toggle-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.stelvio-admin-read-db-status {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.45;
+}
