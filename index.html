@@ -2095,7 +2095,8 @@
       console.warn = function() {
         var msg = (arguments[0] && String(arguments[0])) || '';
         if (msg.indexOf('cdn.tailwindcss.com') !== -1 || msg.indexOf('Tailwind CSS') !== -1 && msg.indexOf('production') !== -1 ||
-            msg.indexOf('in-browser Babel') !== -1 || msg.indexOf('precompile your scripts') !== -1 || (msg.indexOf('Babel') !== -1 && msg.indexOf('production') !== -1)) {
+            msg.indexOf('in-browser Babel') !== -1 || msg.indexOf('precompile your scripts') !== -1 || (msg.indexOf('Babel') !== -1 && msg.indexOf('production') !== -1) ||
+            msg.indexOf('BloomFilter') !== -1 || msg.indexOf('BloomFilterError') !== -1) {
           return;
         }
         return orig.apply(console, arguments);
