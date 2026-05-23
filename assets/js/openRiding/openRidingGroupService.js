@@ -349,13 +349,55 @@ export function subscribeRidingGroupDetail(db, groupId, cb) {
   if (!db || !groupId || typeof cb !== 'function') return function () {};
   var id = String(groupId).trim();
   var ref = doc(db, RIDING_GROUP_COLLECTION, id);
-  return onSnapshot(ref, function (snap) {
-    if (!snap.exists()) {
-      cb(null);
-      return;
+  return onSnapshot(
+    ref,
+    function (snap) {
+      if (!snap.exists()) {
+        cb(null);
+        return;
+      }
+      cb({ id: snap.id, ...snap.data() });
+    },
+    function () {
+      /* BloomFilter 경고는 SDK가 full re-query로 복구 — onError 무시 */
     }
-    cb({ id: snap.id, ...snap.data() });
+  );
+}
+
+/**
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} groupId
+ * @returns {Promise<any[]>}
+ */
+export async function fetchRidingGroupMembersList(db, groupId) {
+  if (!db || !groupId) return [];
+  var id = String(groupId).trim();
+  var ref = collection(db, RIDING_GROUP_COLLECTION, id, 'members');
+  var qy = query(ref, orderBy('joinedAt', 'asc'));
+  var snap = await getDocs(qy);
+  var rows = [];
+  snap.forEach(function (d) {
+    rows.push({ userId: d.id, ...d.data() });
   });
+  return rows;
+}
+
+/**
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} groupId
+ * @returns {Promise<any[]>}
+ */
+export async function fetchRidingGroupJoinRequestsList(db, groupId) {
+  if (!db || !groupId) return [];
+  var id = String(groupId).trim();
+  var ref = collection(db, RIDING_GROUP_COLLECTION, id, RIDING_GROUP_JOIN_REQUESTS_SUB);
+  var qy = query(ref, orderBy('requestedAt', 'asc'));
+  var snap = await getDocs(qy);
+  var rows = [];
+  snap.forEach(function (d) {
+    rows.push({ userId: d.id, ...d.data() });
+  });
+  return rows;
 }
 
 /**
@@ -368,13 +410,17 @@ export function subscribeRidingGroupMembers(db, groupId, cb) {
   var id = String(groupId).trim();
   var ref = collection(db, RIDING_GROUP_COLLECTION, id, 'members');
   var qy = query(ref, orderBy('joinedAt', 'asc'));
-  return onSnapshot(qy, function (snap) {
-    var rows = [];
-    snap.forEach(function (d) {
-      rows.push({ userId: d.id, ...d.data() });
-    });
-    cb(rows);
-  });
+  return onSnapshot(
+    qy,
+    function (snap) {
+      var rows = [];
+      snap.forEach(function (d) {
+        rows.push({ userId: d.id, ...d.data() });
+      });
+      cb(rows);
+    },
+    function () {}
+  );
 }
 
 /**
@@ -387,13 +433,17 @@ export function subscribeRidingGroupJoinRequests(db, groupId, cb) {
   var id = String(groupId).trim();
   var ref = collection(db, RIDING_GROUP_COLLECTION, id, RIDING_GROUP_JOIN_REQUESTS_SUB);
   var qy = query(ref, orderBy('requestedAt', 'asc'));
-  return onSnapshot(qy, function (snap) {
-    var rows = [];
-    snap.forEach(function (d) {
-      rows.push({ userId: d.id, ...d.data() });
-    });
-    cb(rows);
-  });
+  return onSnapshot(
+    qy,
+    function (snap) {
+      var rows = [];
+      snap.forEach(function (d) {
+        rows.push({ userId: d.id, ...d.data() });
+      });
+      cb(rows);
+    },
+    function () {}
+  );
 }
 
 /**
@@ -923,6 +973,8 @@ if (typeof window !== 'undefined') {
     deleteRidingGroupByOwner,
     transferRidingGroupOwnership,
     fetchRidingGroupById,
+    fetchRidingGroupMembersList,
+    fetchRidingGroupJoinRequestsList,
     uploadRidingGroupCover,
     subscribeMyManagedGroupsJoinRequestCounts,
     subscribeUserGroupMemberships

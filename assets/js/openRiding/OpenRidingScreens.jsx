@@ -9991,6 +9991,32 @@ function OpenRidingGroupDetailView(props) {
     setBusy(true);
     gs
       .approveRidingGroupJoinRequest(firestore, String(userId), String(groupId), String(applicantUid))
+      .then(function () {
+        /* BloomFilter watch 경고 시에도 UI 즉시 반영 — getDocs 1회(실시간 구독은 유지) */
+        var tasks = [];
+        if (typeof gs.fetchRidingGroupMembersList === 'function') {
+          tasks.push(
+            gs.fetchRidingGroupMembersList(firestore, groupId).then(function (list) {
+              setMembers(Array.isArray(list) ? list : []);
+            })
+          );
+        }
+        if (typeof gs.fetchRidingGroupJoinRequestsList === 'function') {
+          tasks.push(
+            gs.fetchRidingGroupJoinRequestsList(firestore, groupId).then(function (list) {
+              setJoinRequests(Array.isArray(list) ? list : []);
+            })
+          );
+        }
+        if (typeof gs.fetchRidingGroupById === 'function') {
+          tasks.push(
+            gs.fetchRidingGroupById(firestore, groupId).then(function (doc) {
+              if (doc) setGrp(doc);
+            })
+          );
+        }
+        return Promise.all(tasks);
+      })
       .catch(function (e) {
         alert(e && e.message ? e.message : '수락 처리에 실패했습니다.');
       })
