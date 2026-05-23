@@ -1,0 +1,388 @@
+/**
+ * Cloud Functions — Firestore Primary 후 Supabase rides Secondary (Strangler Fig 1단계).
+ * Service Role로 RLS 우회 upsert (Webhook·배치 Strava 동기화용).
+ *
+ * Secret: SUPABASE_SERVICE_ROLE_KEY
+ * Params: SUPABASE_URL, STELVIO_UID_NAMESPACE, STELVIO_UID_UUID_MODE
+ *
+ * @see docs/DUAL_RUN_REMOTE_CONFIG.md, assets/js/supabaseDualWrite.js
+ */
+const { v5: uuidv5 } = require("uuid");
+const { defineSecret, defineString } = require("firebase-functions/params");
+const { createClient } = require("@supabase/supabase-js");
+
+const supabaseServiceRoleKey = defineSecret("SUPABASE_SERVICE_ROLE_KEY");
+const supabaseUrlParam = defineString("SUPABASE_URL", {
+  description: "Supabase project URL",
+});
+const uidNamespaceParam = defineString("STELVIO_UID_NAMESPACE", {
+  default: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+});
+const uidModeParam = defineString("STELVIO_UID_UUID_MODE", {
+  default: "v5",
+});
+
+const REMOTE_CONFIG_KEY_STATUS = "dual_write_status";
+const REMOTE_CONFIG_KEY_SHADOW_UIDS = "dual_write_shadow_uids";
+const REMOTE_CONFIG_KEY_CANARY_PERCENT = "dual_write_canary_percent";
+
+const DEFAULT_SHADOW_WHITELIST = ["Ys8GQZYyf3ZoEunSVGKnWNbtSkv2"];
+const DEFAULT_CANARY_PERCENT = 10;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** @type {{ status: string, shadowUids: string[], canaryPercent: number, lastFetchAt: number }} */
+let dualRunCache = {
+  status: "OFF",
+  shadowUids: DEFAULT_SHADOW_WHITELIST.slice(),
+  canaryPercent: DEFAULT_CANARY_PERCENT,
+  lastFetchAt: 0,
+};
+
+let supabaseAdminClient = null;
+
+function parseDualWriteStatus(raw) {
+  const n = String(raw || "")
+    .trim()
+    .toUpperCase();
+  if (["OFF", "SHADOW", "CANARY", "FULL"].includes(n)) return n;
+  return "OFF";
+}
+
+function parseShadowUidList(raw) {
+  if (!raw || !String(raw).trim()) return [];
+  const trimmed = String(raw).trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => String(v).trim()).filter(Boolean);
+      }
+    } catch (_) {
+      /* comma split */
+    }
+  }
+  return trimmed
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function mergeUidLists() {
+  const sets = new Set();
+  for (let i = 0; i < arguments.length; i++) {
+    const arr = arguments[i];
+    if (!arr) continue;
+    for (const u of arr) {
+      const t = String(u).trim();
+      if (t) sets.add(t);
+    }
+  }
+  return Array.from(sets);
+}
+
+function isUidInCanaryPercent(firebaseUid, percent) {
+  const uid = String(firebaseUid || "").trim();
+  if (!uid) return false;
+  const clamped = Math.min(100, Math.max(0, Math.trunc(percent)));
+  if (clamped <= 0) return false;
+  if (clamped >= 100) return true;
+  let hash = 0;
+  for (let i = 0; i < uid.length; i++) {
+    hash = (hash * 31 + uid.charCodeAt(i)) >>> 0;
+  }
+  return hash % 100 < clamped;
+}
+
+function evaluateSupabaseDualWrite(firebaseUid) {
+  const status = dualRunCache.status;
+  const uid = String(firebaseUid || "").trim();
+
+  switch (status) {
+    case "OFF":
+      return { execute: false, status, reason: "dual_write_status=OFF" };
+    case "FULL":
+      return { execute: true, status, reason: "dual_write_status=FULL" };
+    case "SHADOW": {
+      const allowed = dualRunCache.shadowUids.includes(uid);
+      return {
+        execute: allowed,
+        status,
+        reason: allowed ? "SHADOW whitelist" : "SHADOW uid not in whitelist",
+      };
+    }
+    case "CANARY": {
+      const inBucket = isUidInCanaryPercent(uid, dualRunCache.canaryPercent);
+      return {
+        execute: inBucket,
+        status,
+        reason: inBucket ? "CANARY in bucket" : "CANARY out of bucket",
+      };
+    }
+    default:
+      return { execute: false, status: "OFF", reason: "unknown status" };
+  }
+}
+
+function readRcParameterValue(template, key) {
+  const param = template.parameters && template.parameters[key];
+  if (!param) return undefined;
+  const dv = param.defaultValue;
+  if (dv && dv.value !== undefined && dv.value !== null) {
+    return String(dv.value);
+  }
+  const cv = param.conditionalValues;
+  if (cv && typeof cv === "object") {
+    for (const k of Object.keys(cv)) {
+      const entry = cv[k];
+      if (entry && entry.value !== undefined && entry.value !== null) {
+        return String(entry.value);
+      }
+    }
+  }
+  return undefined;
+}
+
+async function refreshDualRunFromRemoteConfig(admin, force = false) {
+  const minInterval = 5 * 60 * 1000;
+  const now = Date.now();
+  if (!force && now - dualRunCache.lastFetchAt < minInterval) {
+    return dualRunCache;
+  }
+
+  try {
+    const template = await admin.remoteConfig().getTemplate();
+    const status = parseDualWriteStatus(
+      readRcParameterValue(template, REMOTE_CONFIG_KEY_STATUS)
+    );
+    const rcShadow = parseShadowUidList(
+      readRcParameterValue(template, REMOTE_CONFIG_KEY_SHADOW_UIDS)
+    );
+    let canaryPercent = Number(
+      readRcParameterValue(template, REMOTE_CONFIG_KEY_CANARY_PERCENT)
+    );
+    if (!Number.isFinite(canaryPercent) || canaryPercent <= 0) {
+      canaryPercent = DEFAULT_CANARY_PERCENT;
+    }
+
+    dualRunCache = {
+      status,
+      shadowUids: mergeUidLists(DEFAULT_SHADOW_WHITELIST, rcShadow),
+      canaryPercent: Math.min(100, Math.max(0, Math.trunc(canaryPercent))),
+      lastFetchAt: now,
+    };
+    console.log("[supabaseDualWriteServer] Remote Config", {
+      status: dualRunCache.status,
+      shadowCount: dualRunCache.shadowUids.length,
+      canaryPercent: dualRunCache.canaryPercent,
+    });
+  } catch (err) {
+    console.warn("[supabaseDualWriteServer] Remote Config fetch 실패:", err);
+  }
+  return dualRunCache;
+}
+
+function resolveUserUuid(firebaseUid, uidNamespace, uidMode) {
+  const raw = String(firebaseUid || "").trim();
+  if (!raw) return null;
+  if (uidMode === "literal" || UUID_RE.test(raw)) {
+    return raw.toLowerCase();
+  }
+  return uuidv5(raw, uidNamespace);
+}
+
+function num(v, fallback = null) {
+  if (v == null || v === "") return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function int(v, fallback = 0) {
+  const n = num(v, fallback);
+  return n == null ? fallback : Math.trunc(n);
+}
+
+function str(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s || null;
+}
+
+function toRideDate(raw) {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "string") {
+    const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return null;
+  }
+  if (typeof raw === "object" && raw !== null && typeof raw.toDate === "function") {
+    return raw.toDate().toISOString().slice(0, 10);
+  }
+  return null;
+}
+
+function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
+  const userId = resolveUserUuid(
+    firebaseUid,
+    uidConfig.uidNamespace,
+    uidConfig.uidMode
+  );
+  const rideDate = toRideDate(log.date);
+  if (!userId || !rideDate) return null;
+
+  const sourceRaw = str(log.source)?.toLowerCase();
+  const source = sourceRaw === "strava" ? "strava" : "stelvio";
+  let activityId = str(log.activity_id);
+  if (!activityId) {
+    activityId = source === "strava" ? logDocId : "stelvio:" + logDocId;
+  }
+
+  const duration = int(log.duration_sec) || int(log.time) || 0;
+
+  return {
+    user_id: userId,
+    source,
+    activity_id: activityId,
+    activity_type: str(log.activity_type),
+    title: str(log.title),
+    ride_date: rideDate,
+    workout_id: str(log.workout_id),
+    duration_sec: duration,
+    distance_km: num(log.distance_km),
+    elevation_gain_m: num(log.elevation_gain),
+    avg_speed_kmh: num(log.avg_speed_kmh),
+    weight_at_ride_kg: num(log.weight),
+    ftp_at_time: num(log.ftp_at_time),
+    avg_watts: num(log.avg_watts),
+    weighted_watts: num(log.weighted_watts),
+    max_watts: num(log.max_watts),
+    tss: num(log.tss) ?? 0,
+    intensity_factor: num(log.if),
+    kilojoules: num(log.kilojoules),
+    earned_points: int(log.earned_points, 0),
+    avg_hr: int(log.avg_hr, 0) || null,
+    max_hr: int(log.max_hr, 0) || null,
+    avg_cadence: int(log.avg_cadence, 0) || null,
+    efficiency_factor: num(log.efficiency_factor),
+    rpe: int(log.rpe, 0) || null,
+    max_1min_watts: num(log.max_1min_watts),
+    max_5min_watts: num(log.max_5min_watts),
+    max_10min_watts: num(log.max_10min_watts),
+    max_20min_watts: num(log.max_20min_watts),
+    max_30min_watts: num(log.max_30min_watts),
+    max_40min_watts: num(log.max_40min_watts),
+    max_60min_watts: num(log.max_60min_watts),
+    max_hr_1min: int(log.max_hr_1min, 0) || null,
+    max_hr_5min: int(log.max_hr_5min, 0) || null,
+    max_hr_10min: int(log.max_hr_10min, 0) || null,
+    max_hr_20min: int(log.max_hr_20min, 0) || null,
+    max_hr_40min: int(log.max_hr_40min, 0) || null,
+    max_hr_60min: int(log.max_hr_60min, 0) || null,
+    tss_applied: Boolean(log.tss_applied),
+  };
+}
+
+function getSupabaseAdminClient() {
+  const url = String(supabaseUrlParam.value() || "").trim();
+  let serviceKey;
+  try {
+    serviceKey = String(supabaseServiceRoleKey.value() || "").trim();
+  } catch (err) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY Secret 미연결: " + err.message);
+  }
+  if (!url || !serviceKey) {
+    throw new Error("SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY 미설정");
+  }
+  if (!supabaseAdminClient) {
+    supabaseAdminClient = createClient(url, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return supabaseAdminClient;
+}
+
+async function writeRideToSupabase(rideRow) {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("rides").upsert(rideRow, {
+    onConflict: "user_id,activity_id",
+    ignoreDuplicates: false,
+  });
+  if (error) {
+    if (error.code === "23505") return;
+    throw error;
+  }
+}
+
+/**
+ * Strava log Firestore 저장(merge) 성공 후 Supabase rides upsert.
+ * @param {import('firebase-admin')} admin
+ * @param {string} userId Firebase UID
+ * @param {string} logDocId Firestore logs 문서 ID (Webhook·배치: Strava activity_id)
+ * @param {object} logDoc 저장된 log 필드
+ */
+async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc) {
+  await refreshDualRunFromRemoteConfig(admin, true);
+  const decision = evaluateSupabaseDualWrite(userId);
+  if (!decision.execute) {
+    console.log(
+      "[supabaseDualWriteServer] strava secondary 스킵:",
+      decision.reason
+    );
+    return { skipped: true, reason: decision.reason };
+  }
+
+  if (!logDocId || !logDoc) {
+    console.warn("[supabaseDualWriteServer] strava logDocId/log 없음");
+    return { skipped: true, reason: "missing log payload" };
+  }
+
+  const uidConfig = {
+    uidNamespace: uidNamespaceParam.value(),
+    uidMode: uidModeParam.value() === "literal" ? "literal" : "v5",
+  };
+
+  const row = mapTrainingLogToRideRow(userId, logDocId, logDoc, uidConfig);
+  if (!row) {
+    console.warn("[supabaseDualWriteServer] strava ride row 매핑 실패", {
+      userId,
+      logDocId,
+      date: logDoc.date,
+    });
+    return { skipped: true, reason: "map failed" };
+  }
+
+  await writeRideToSupabase(row);
+  console.log("[supabaseDualWriteServer] strava rides upsert OK", {
+    userId,
+    activity_id: row.activity_id,
+    ride_date: row.ride_date,
+    source: row.source,
+    status: decision.status,
+  });
+  return { skipped: false, activity_id: row.activity_id };
+}
+
+/** Cloud Function options.secrets 에 추가 */
+function appendServiceRoleSecret(options) {
+  const o = Object.assign({}, options);
+  o.secrets = Array.isArray(o.secrets) ? o.secrets.slice() : [];
+  if (!o.secrets.includes(supabaseServiceRoleKey)) {
+    o.secrets.push(supabaseServiceRoleKey);
+  }
+  return o;
+}
+
+module.exports = {
+  supabaseServiceRoleKey,
+  supabaseUrlParam,
+  uidNamespaceParam,
+  uidModeParam,
+  runSecondaryAfterStravaLogSave,
+  appendServiceRoleSecret,
+  mapTrainingLogToRideRow,
+  evaluateSupabaseDualWrite,
+  refreshDualRunFromRemoteConfig,
+};

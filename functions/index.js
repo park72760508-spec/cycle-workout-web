@@ -34,6 +34,24 @@ if (!admin.apps.length) {
 
 const rankingDayRollup = require("./rankingDayRollup");
 const peakBoardFast = require("./peakBoardFast");
+const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+
+/** Strava log Firestore Primary 성공 후 Supabase Secondary (실패해도 Primary 유지) */
+async function mirrorStravaLogToSupabase(userId, logDocId, logDoc) {
+  try {
+    await supabaseDualWriteServer.runSecondaryAfterStravaLogSave(
+      admin,
+      userId,
+      logDocId,
+      logDoc
+    );
+  } catch (err) {
+    console.warn(
+      "[Strava→Supabase] secondary (Primary 유지):",
+      err && err.message ? err.message : err
+    );
+  }
+}
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -1313,6 +1331,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
 
   const logsRef = db.collection("users").doc(userId).collection("logs");
   await logsRef.doc(activityId).set(logDoc, { merge: true });
+  await mirrorStravaLogToSupabase(userId, activityId, logDoc);
 
   let userTss = 0;
   if (isCyclingForMmp(mapped) && isNew && mapped.tss > 0 && (mapped.distance_km || 0) !== 0) {
@@ -1828,7 +1847,10 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
           });
           updateData.time_in_zones = timeInZones;
         }
-        if (Object.keys(updateData).length > 0) await entry.ref.update(updateData);
+        if (Object.keys(updateData).length > 0) {
+          await entry.ref.update(updateData);
+          await mirrorStravaLogToSupabase(userId, actId, { ...d, ...updateData });
+        }
       }
       continue;
     }
@@ -1936,6 +1958,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       continue;
     }
     await logsRef.doc(actId).set(logDoc, { merge: true });
+    await mirrorStravaLogToSupabase(userId, actId, logDoc);
     existingIds.add(actId);
     newActivities += 1;
     if (isCyclingForMmp(mapped)) {
@@ -2028,9 +2051,15 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
 }
 
 /** 1000명 대비: Strava 동기화 청크 워커 (50명/요청). 스케줄러가 팬아웃 호출. */
-const runStravaSyncChunkOptions = { cors: false, timeoutSeconds: 540 };
+const runStravaSyncChunkOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: false,
+  timeoutSeconds: 540,
+});
 if (STRAVA_CLIENT_SECRET) {
-  runStravaSyncChunkOptions.secrets = [STRAVA_CLIENT_SECRET];
+  runStravaSyncChunkOptions.secrets = runStravaSyncChunkOptions.secrets || [];
+  if (!runStravaSyncChunkOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    runStravaSyncChunkOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
 }
 exports.runStravaSyncChunk = onRequest(
   runStravaSyncChunkOptions,
@@ -2649,13 +2678,16 @@ async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
 /**
  * 매일 새벽 2시(Asia/Seoul)에 전날 Strava 활동 수집. 1000명 대비 청크 팬아웃.
  */
-const stravaSyncScheduleOptions = {
+const stravaSyncScheduleOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "0 2 * * *",
   timeZone: "Asia/Seoul",
   timeoutSeconds: 540,
-};
+});
 if (STRAVA_CLIENT_SECRET) {
-  stravaSyncScheduleOptions.secrets = [STRAVA_CLIENT_SECRET];
+  stravaSyncScheduleOptions.secrets = stravaSyncScheduleOptions.secrets || [];
+  if (!stravaSyncScheduleOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    stravaSyncScheduleOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
 }
 exports.stravaSyncPreviousDay = onSchedule(
   stravaSyncScheduleOptions,
@@ -2673,13 +2705,16 @@ exports.stravaSyncPreviousDay = onSchedule(
 /**
  * 일요일 19시(Asia/Seoul)에 당일(일요일) Strava 로그 수집. 1000명 대비 청크 팬아웃.
  */
-const stravaSyncSundayOptions = {
+const stravaSyncSundayOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "0 19 * * 0",
   timeZone: "Asia/Seoul",
   timeoutSeconds: 540,
-};
+});
 if (STRAVA_CLIENT_SECRET) {
-  stravaSyncSundayOptions.secrets = [STRAVA_CLIENT_SECRET];
+  stravaSyncSundayOptions.secrets = stravaSyncSundayOptions.secrets || [];
+  if (!stravaSyncSundayOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    stravaSyncSundayOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
 }
 exports.stravaSyncSunday = onSchedule(
   stravaSyncSundayOptions,
@@ -2699,13 +2734,17 @@ exports.stravaSyncSunday = onSchedule(
  * 새벽 배치·웹훅 누락 보완 시 사용. stravaSyncSunday와 동일한 기간 로직 및 청크 팬아웃.
  * 인증: X-Internal-Secret(STELVIO 내부, runStravaSyncChunk 동일) 또는 관리자(grade=1) Firebase Bearer.
  */
-const manualStravaSyncTodaySeoulOptions = {
+const manualStravaSyncTodaySeoulOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   region: "asia-northeast3",
   cors: false,
   timeoutSeconds: 540,
-};
+});
 if (STRAVA_CLIENT_SECRET) {
-  manualStravaSyncTodaySeoulOptions.secrets = [STRAVA_CLIENT_SECRET];
+  manualStravaSyncTodaySeoulOptions.secrets =
+    manualStravaSyncTodaySeoulOptions.secrets || [];
+  if (!manualStravaSyncTodaySeoulOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    manualStravaSyncTodaySeoulOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
 }
 exports.manualStravaSyncTodaySeoul = onRequest(
   manualStravaSyncTodaySeoulOptions,
