@@ -15161,6 +15161,9 @@ async function loadStelvioAdminRankingReadDbState() {
       } catch (_e) {}
     }
     applyStelvioAdminRankingReadDbUi(json.readSource, line);
+    if (typeof window.stelvioSetRankingReadSource === 'function') {
+      window.stelvioSetRankingReadSource(json.readSource);
+    }
   } catch (e) {
     applyStelvioAdminRankingReadDbUi(
       'firebase',
@@ -15213,15 +15216,19 @@ async function setStelvioAdminRankingReadDb(readSource) {
 
     var line = json.message || (target === 'supabase' ? 'Supabase Read' : 'Firebase Read');
     applyStelvioAdminRankingReadDbUi(json.readSource, line);
+    if (typeof window.stelvioSetRankingReadSource === 'function') {
+      window.stelvioSetRankingReadSource(json.readSource);
+    }
+    if (typeof window.stelvioEnsureRankingReadSource === 'function') {
+      await window.stelvioEnsureRankingReadSource(true);
+    }
     if (typeof showToast === 'function') {
       showToast(json.message || label + ' 전환 완료');
     }
 
-    try {
-      if (window.stelvioRankingLocalCache && typeof window.stelvioRankingLocalCache.clearAll === 'function') {
-        window.stelvioRankingLocalCache.clearAll();
-      }
-    } catch (_e) {}
+    if (typeof fetchStelvioPeakPowerRanking === 'function') {
+      fetchStelvioPeakPowerRanking({ forceReadSource: true }).catch(function () {});
+    }
   } catch (e) {
     if (typeof showToast === 'function') {
       showToast('Read DB 전환 오류: ' + (e && e.message ? e.message : e));
