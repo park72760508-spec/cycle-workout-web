@@ -8020,9 +8020,7 @@
               'GC 탭과 무관. Cloud Functions 로그 "[rankingReadRouter] weekly Supabase failed" 확인.';
           } else if (meta && meta.duration === 'gc') {
             hint =
-              '[StelvioRankingRead] GC 탭 — 설계상 Firebase만 사용(Supabase Read Router 미구현). 오류 아님.';
-            if (typeof console !== 'undefined' && console.info) console.info(hint);
-            return;
+              '[StelvioRankingRead] GC 탭 — Supabase heptagon_cohort_ranks 조회 실패 → Firebase 폴백. Functions 로그 "[rankingReadRouter] Supabase read failed" 확인.';
           } else if (meta && meta.duration === 'group_dist') {
             hint =
               '[StelvioRankingRead] 그룹 탭 — 설계상 Firebase만 사용(Supabase Read Router 미구현). 오류 아님.';
