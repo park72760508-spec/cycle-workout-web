@@ -24,6 +24,16 @@ import {
   uploadBytes,
   getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
+import {
+  subscribeRidingGroupsRouted,
+  subscribeRidingGroupDetailRouted,
+  subscribeRidingGroupMembersRouted,
+  subscribeRidingGroupJoinRequestsRouted,
+  fetchRidingGroupByIdRouted,
+  fetchRidingGroupMembersListRouted,
+  fetchRidingGroupJoinRequestsListRouted,
+} from './openRidingReadClient.js';
+import { scheduleRidingGroupDualWriteFromFirestore } from '../openRidingDualWrite.js';
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
 
@@ -89,99 +99,11 @@ function mergeApprovedAndMyPendingRidingGroups(approvedRows, pendingMineRows) {
  * @returns {function(): void}
  */
 export function subscribeRidingGroups(db, isAdmin, onUpdate, viewerUid) {
-  if (!db || typeof onUpdate !== 'function') return function () {};
-  var unsubs = [];
-
-  if (isAdmin) {
-    var qPend = query(
-      collection(db, RIDING_GROUP_COLLECTION),
-      where('status', '==', GROUP_STATUS.PENDING),
-      orderBy('createdAt', 'desc')
-    );
-    var qApp = query(
-      collection(db, RIDING_GROUP_COLLECTION),
-      where('status', '==', GROUP_STATUS.APPROVED),
-      orderBy('createdAt', 'desc')
-    );
-    var pend = [];
-    var app = [];
-    function emit() {
-      var merged = pend.concat(app);
-      onUpdate(merged);
-    }
-    unsubs.push(
-      onSnapshot(qPend, function (snap) {
-        pend = [];
-        snap.forEach(function (d) {
-          pend.push({ id: d.id, ...d.data() });
-        });
-        emit();
-      })
-    );
-    unsubs.push(
-      onSnapshot(qApp, function (snap) {
-        app = [];
-        snap.forEach(function (d) {
-          app.push({ id: d.id, ...d.data() });
-        });
-        emit();
-      })
-    );
-    return function () {
-      unsubs.forEach(function (u) {
-        try {
-          u();
-        } catch (e) {}
-      });
-    };
-  }
-
-  var approved = [];
-  var myPending = [];
-  function emitViewer() {
-    onUpdate(mergeApprovedAndMyPendingRidingGroups(approved, myPending));
-  }
-  var qApproved = query(
-    collection(db, RIDING_GROUP_COLLECTION),
-    where('status', '==', GROUP_STATUS.APPROVED),
-    orderBy('createdAt', 'desc')
-  );
-  unsubs.push(
-    onSnapshot(qApproved, function (snap) {
-      approved = [];
-      snap.forEach(function (d) {
-        approved.push({ id: d.id, ...d.data() });
-      });
-      emitViewer();
-    })
-  );
-  var vu = viewerUid != null ? String(viewerUid).trim() : '';
-  if (vu) {
-    // status + createdBy + orderBy 는 별도 복합 인덱스 필요 → createdBy 만 조회 후 PENDING 만 사용(단일 필드 쿼리, 인덱스 자동)
-    var qMine = query(collection(db, RIDING_GROUP_COLLECTION), where('createdBy', '==', vu));
-    unsubs.push(
-      onSnapshot(qMine, function (snap) {
-        myPending = [];
-        snap.forEach(function (d) {
-          var data = d.data() || {};
-          if (String(data.status || '') !== GROUP_STATUS.PENDING) return;
-          myPending.push({ id: d.id, ...data });
-        });
-        emitViewer();
-      })
-    );
-  }
-  return function () {
-    unsubs.forEach(function (u) {
-      try {
-        u();
-      } catch (e) {}
-    });
-  };
+  return subscribeRidingGroupsRouted(db, isAdmin, onUpdate, viewerUid);
 }
 
 /**
- * 내 UID가 멤버로 등록된 승인(APPROVED) 소모임만 실시간 수집(랭킹보드 「그룹」탭 등).
+ * 내 UID가 멤버로 등록된 승인(APPROVED) 소mo임만 실시간 수집
  * collectionGroup + documentId(UID) 쿼리는 Firestore에서 경로 전체가 아니라면 지원되지 않음.
  * 대신 승인된 그룹 목록 스냅샷마다 각 그룹의 `members/{uid}` 문서를 개별 구독합니다.
  *
@@ -346,104 +268,23 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
  * @param {function(any|null): void} cb
  */
 export function subscribeRidingGroupDetail(db, groupId, cb) {
-  if (!db || !groupId || typeof cb !== 'function') return function () {};
-  var id = String(groupId).trim();
-  var ref = doc(db, RIDING_GROUP_COLLECTION, id);
-  return onSnapshot(
-    ref,
-    function (snap) {
-      if (!snap.exists()) {
-        cb(null);
-        return;
-      }
-      cb({ id: snap.id, ...snap.data() });
-    },
-    function () {
-      /* BloomFilter 경고는 SDK가 full re-query로 복구 — onError 무시 */
-    }
-  );
+  return subscribeRidingGroupDetailRouted(db, groupId, cb);
 }
 
-/**
- * @param {import('firebase/firestore').Firestore} db
- * @param {string} groupId
- * @returns {Promise<any[]>}
- */
 export async function fetchRidingGroupMembersList(db, groupId) {
-  if (!db || !groupId) return [];
-  var id = String(groupId).trim();
-  var ref = collection(db, RIDING_GROUP_COLLECTION, id, 'members');
-  var qy = query(ref, orderBy('joinedAt', 'asc'));
-  var snap = await getDocs(qy);
-  var rows = [];
-  snap.forEach(function (d) {
-    rows.push({ userId: d.id, ...d.data() });
-  });
-  return rows;
+  return fetchRidingGroupMembersListRouted(db, groupId);
 }
 
-/**
- * @param {import('firebase/firestore').Firestore} db
- * @param {string} groupId
- * @returns {Promise<any[]>}
- */
 export async function fetchRidingGroupJoinRequestsList(db, groupId) {
-  if (!db || !groupId) return [];
-  var id = String(groupId).trim();
-  var ref = collection(db, RIDING_GROUP_COLLECTION, id, RIDING_GROUP_JOIN_REQUESTS_SUB);
-  var qy = query(ref, orderBy('requestedAt', 'asc'));
-  var snap = await getDocs(qy);
-  var rows = [];
-  snap.forEach(function (d) {
-    rows.push({ userId: d.id, ...d.data() });
-  });
-  return rows;
+  return fetchRidingGroupJoinRequestsListRouted(db, groupId);
 }
 
-/**
- * @param {import('firebase/firestore').Firestore} db
- * @param {string} groupId
- * @param {function(any[]): void} cb
- */
 export function subscribeRidingGroupMembers(db, groupId, cb) {
-  if (!db || !groupId || typeof cb !== 'function') return function () {};
-  var id = String(groupId).trim();
-  var ref = collection(db, RIDING_GROUP_COLLECTION, id, 'members');
-  var qy = query(ref, orderBy('joinedAt', 'asc'));
-  return onSnapshot(
-    qy,
-    function (snap) {
-      var rows = [];
-      snap.forEach(function (d) {
-        rows.push({ userId: d.id, ...d.data() });
-      });
-      cb(rows);
-    },
-    function () {}
-  );
+  return subscribeRidingGroupMembersRouted(db, groupId, cb);
 }
 
-/**
- * @param {import('firebase/firestore').Firestore} db
- * @param {string} groupId
- * @param {function(any[]): void} cb
- */
 export function subscribeRidingGroupJoinRequests(db, groupId, cb) {
-  if (!db || !groupId || typeof cb !== 'function') return function () {};
-  var id = String(groupId).trim();
-  var ref = collection(db, RIDING_GROUP_COLLECTION, id, RIDING_GROUP_JOIN_REQUESTS_SUB);
-  var qy = query(ref, orderBy('requestedAt', 'asc'));
-  return onSnapshot(
-    qy,
-    function (snap) {
-      var rows = [];
-      snap.forEach(function (d) {
-        rows.push({ userId: d.id, ...d.data() });
-      });
-      cb(rows);
-    },
-    function () {}
-  );
+  return subscribeRidingGroupJoinRequestsRouted(db, groupId, cb);
 }
 
 /**
@@ -507,25 +348,7 @@ export async function createRidingGroupPending(db, uid, payload) {
     role: 'owner'
   });
   await batch.commit();
-  try {
-    import('../openRidingDualWrite.js').then(function (mod) {
-      if (typeof mod.fireSecondaryTasksIsolated === 'function') {
-        mod.fireSecondaryTasksIsolated([
-          mod.runSecondaryAfterRidingGroupSave(u, ref.id, {
-            name,
-            regions,
-            intro,
-            isPublic,
-            joinPassword: isPublic ? '' : joinPassword,
-            photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
-            status: GROUP_STATUS.PENDING,
-            createdBy: u,
-            memberCount: 1,
-          }),
-        ]);
-      }
-    }).catch(function () {});
-  } catch (eSecGrp) {}
+  scheduleRidingGroupDualWriteFromFirestore(db, ref.id, u, { syncMembers: true });
   return ref.id;
 }
 
@@ -565,6 +388,7 @@ export async function updateRidingGroupByOwner(db, uid, groupId, payload) {
     photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
     updatedAt: serverTimestamp()
   });
+  scheduleRidingGroupDualWriteFromFirestore(db, groupId, uid, { syncMembers: true });
 }
 
 /**
@@ -593,6 +417,7 @@ export async function updateRidingGroupRankingNotice(db, uid, groupId, text) {
     },
     updatedAt: serverTimestamp()
   });
+  scheduleRidingGroupDualWriteFromFirestore(db, groupId, uid, { syncMembers: false });
 }
 
 /**
@@ -611,6 +436,7 @@ export async function setRidingGroupStatusByAdmin(db, adminUid, groupId, nextSta
     reviewedBy: String(adminUid).trim(),
     updatedAt: serverTimestamp()
   });
+  scheduleRidingGroupDualWriteFromFirestore(db, groupId, adminUid, { syncMembers: true });
 }
 
 /**
@@ -646,6 +472,7 @@ export async function joinRidingGroup(db, uid, groupId, passwordGuess, profileHi
     displayName: ph.displayName != null ? String(ph.displayName) : '',
     profileImageUrl: ph.profileImageUrl != null ? ph.profileImageUrl : null
   });
+  scheduleRidingGroupDualWriteFromFirestore(db, gid, u, { syncJoinRequests: true });
 }
 
 /**
@@ -686,6 +513,10 @@ export async function approveRidingGroupJoinRequest(db, moderatorUid, groupId, a
       });
     });
   });
+  scheduleRidingGroupDualWriteFromFirestore(db, gid, moderatorUid, {
+    syncMembers: true,
+    syncJoinRequests: true,
+  });
 }
 
 /**
@@ -704,6 +535,7 @@ export async function rejectRidingGroupJoinRequest(db, moderatorUid, groupId, ap
     String(applicantUid).trim()
   );
   await deleteDoc(jRef);
+  scheduleRidingGroupDualWriteFromFirestore(db, groupId, moderatorUid, { syncJoinRequests: true });
 }
 
 /**
@@ -729,6 +561,7 @@ export async function leaveRidingGroup(db, uid, groupId) {
     updatedAt: serverTimestamp()
   });
   await batch.commit();
+  scheduleRidingGroupDualWriteFromFirestore(db, gid, uid, { syncMembers: true });
 }
 
 /**
@@ -812,6 +645,7 @@ export async function transferRidingGroupOwnership(db, ownerUid, groupId, newOwn
       });
     });
   });
+  scheduleRidingGroupDualWriteFromFirestore(db, gid, ownerUid, { syncMembers: true });
 }
 
 /**
@@ -963,10 +797,7 @@ export function subscribeUserGroupMemberships(db, userId, groupIds, onUpdate) {
  * @param {string} groupId
  */
 export async function fetchRidingGroupById(db, groupId) {
-  if (!db || !groupId) return null;
-  var snap = await getDoc(doc(db, RIDING_GROUP_COLLECTION, String(groupId).trim()));
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() };
+  return fetchRidingGroupByIdRouted(db, groupId);
 }
 
 if (typeof window !== 'undefined') {

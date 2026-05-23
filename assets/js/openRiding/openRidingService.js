@@ -23,6 +23,12 @@ import {
   uploadBytes,
   getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
+import {
+  fetchRideByIdRouted,
+  fetchRidesInDateRangeRouted,
+  subscribeRideByIdRouted,
+} from './openRidingReadClient.js';
+import { scheduleOpenRideDualWriteFromFirestore } from '../openRidingDualWrite.js';
 
 /** @param {unknown} v */
 function asStringArray(v) {
@@ -706,15 +712,7 @@ export async function createRide(db, hostUserId, input) {
     });
   });
   const createdRideId = rideRef.id;
-  try {
-    import('../openRidingDualWrite.js').then(function (mod) {
-      if (typeof mod.fireSecondaryTasksIsolated === 'function') {
-        mod.fireSecondaryTasksIsolated([
-          mod.runSecondaryAfterOpenRideSave(hostKey || hostUserId, createdRideId, payload),
-        ]);
-      }
-    }).catch(function () {});
-  } catch (eSecRide) {}
+  scheduleOpenRideDualWriteFromFirestore(db, createdRideId, hostKey || hostUserId);
   return createdRideId;
 }
 
@@ -775,6 +773,7 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     updatedAt: serverTimestamp()
   };
   await updateDoc(rideRef, patch);
+  scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
 }
 
 /**
@@ -797,6 +796,7 @@ export async function mergeInviteDisplayByPhoneForHost(db, rideId, hostUserId, p
     inviteDisplayByPhone: merged,
     updatedAt: serverTimestamp()
   });
+  scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
 }
 
 /**
@@ -872,7 +872,11 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
     });
     return false;
   });
-  return { deleted: !!deleted };
+  const result = { deleted: !!deleted };
+  if (!result.deleted) {
+    scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
+  }
+  return result;
 }
 
 /**
@@ -961,19 +965,7 @@ export async function uploadRideGpx(storage, file, rideId) {
  * @param {Date} to
  */
 export async function fetchRidesInDateRange(db, from, to) {
-  const fromTs = Timestamp.fromDate(from);
-  const toTs = Timestamp.fromDate(to);
-  const q = query(
-    collection(db, 'rides'),
-    where('date', '>=', fromTs),
-    where('date', '<=', toTs),
-    orderBy('date', 'asc')
-  );
-  const snap = await getDocs(q);
-  /** @type {Array<Record<string, unknown> & { id: string }>} */
-  const list = [];
-  snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-  return list;
+  return fetchRidesInDateRangeRouted(db, from, to);
 }
 
 /**
@@ -982,9 +974,7 @@ export async function fetchRidesInDateRange(db, from, to) {
  * @param {string} rideId
  */
 export async function fetchRideById(db, rideId) {
-  const snap = await getDoc(doc(db, 'rides', rideId));
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() };
+  return fetchRideByIdRouted(db, rideId);
 }
 
 /**
@@ -996,24 +986,7 @@ export async function fetchRideById(db, rideId) {
  * @returns {() => void} unsubscribe
  */
 export function subscribeRideById(db, rideId, onNext, onError) {
-  if (!db || rideId == null || String(rideId).trim() === '') {
-    onNext(null);
-    return function () {};
-  }
-  const ref = doc(db, 'rides', String(rideId).trim());
-  return onSnapshot(
-    ref,
-    (snap) => {
-      if (!snap.exists()) onNext(null);
-      else onNext({ id: snap.id, ...snap.data() });
-    },
-    onError ||
-      function (err) {
-        if (typeof console !== 'undefined' && console.warn) {
-          console.warn('[openRiding] subscribeRideById', err);
-        }
-      }
-  );
+  return subscribeRideByIdRouted(db, rideId, onNext, onError);
 }
 
 /**
@@ -1101,6 +1074,7 @@ export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, merge
   await updateDoc(doc(db, 'rides', rideId), {
     hostPublicReviewSummary: block
   });
+  scheduleOpenRideDualWriteFromFirestore(db, rideId, null);
 }
 
 /** YYYY-M-D / YYYY-MM-DD 등을 YYYY-MM-DD로 맞춤 (합산·저장 시 일자 불일치 방지) */
@@ -1306,7 +1280,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
   const nameLabel = String(displayName != null ? displayName : '라이더').trim().slice(0, 80) || '라이더';
   const phoneLabel = String(participantPhone != null ? participantPhone : '').trim().slice(0, 80);
   const rideRef = doc(db, 'rides', rideId);
-  return runTransaction(db, async (transaction) => {
+  const result = await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(rideRef);
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
@@ -1387,6 +1361,8 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     });
     return { status: 'joined', role: 'waitlist', position: waitlist.length };
   });
+  scheduleOpenRideDualWriteFromFirestore(db, rideId, userId);
+  return result;
 }
 
 /**
@@ -1397,7 +1373,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
  */
 export async function leaveRideTransaction(db, rideId, userId) {
   const rideRef = doc(db, 'rides', rideId);
-  return runTransaction(db, async (transaction) => {
+  const result = await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(rideRef);
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
@@ -1477,6 +1453,8 @@ export async function leaveRideTransaction(db, rideId, userId) {
 
     return { status: 'noop', promotedUserId: null };
   });
+  scheduleOpenRideDualWriteFromFirestore(db, rideId, userId);
+  return result;
 }
 
 /**
