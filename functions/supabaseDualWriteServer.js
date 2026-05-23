@@ -6,6 +6,9 @@
  * Params: SUPABASE_URL, STELVIO_UID_NAMESPACE, STELVIO_UID_UUID_MODE
  *
  * @see docs/DUAL_RUN_REMOTE_CONFIG.md, assets/js/supabaseDualWrite.js
+ *
+ * 쓰기(ingest): dual_write_status !== OFF → **전 사용자** Supabase rides upsert.
+ * 읽기(랭킹): rankingReadConfig — SUPABASE_WHITELIST_UIDS / USE_SUPABASE_GLOBAL 만 적용.
  */
 const { v5: uuidv5 } = require("uuid");
 const { defineSecret, defineString } = require("firebase-functions/params");
@@ -95,34 +98,38 @@ function isUidInCanaryPercent(firebaseUid, percent) {
   return hash % 100 < clamped;
 }
 
-function evaluateSupabaseDualWrite(firebaseUid) {
+/**
+ * Secondary **쓰기**(Strava·훈련 ingest) — 전 사용자 대상.
+ * SHADOW/CANARY/FULL 은 “Secondary 기록 켜짐” 의미만 가지며, UID별 쓰기 제한은 하지 않음.
+ * 읽기 Canary(랭킹 MV)는 rankingReadConfig (SUPABASE_WHITELIST_UIDS / USE_SUPABASE_GLOBAL) 전용.
+ */
+function evaluateSecondaryIngestWrite(firebaseUid) {
   const status = dualRunCache.status;
   const uid = String(firebaseUid || "").trim();
 
-  switch (status) {
-    case "OFF":
-      return { execute: false, status, reason: "dual_write_status=OFF" };
-    case "FULL":
-      return { execute: true, status, reason: "dual_write_status=FULL" };
-    case "SHADOW": {
-      const allowed = dualRunCache.shadowUids.includes(uid);
-      return {
-        execute: allowed,
-        status,
-        reason: allowed ? "SHADOW whitelist" : "SHADOW uid not in whitelist",
-      };
-    }
-    case "CANARY": {
-      const inBucket = isUidInCanaryPercent(uid, dualRunCache.canaryPercent);
-      return {
-        execute: inBucket,
-        status,
-        reason: inBucket ? "CANARY in bucket" : "CANARY out of bucket",
-      };
-    }
-    default:
-      return { execute: false, status: "OFF", reason: "unknown status" };
+  if (process.env.SUPABASE_INGEST_DUAL_WRITE === "false") {
+    return {
+      execute: false,
+      status: "OFF",
+      reason: "SUPABASE_INGEST_DUAL_WRITE=false",
+    };
   }
+
+  if (status === "OFF") {
+    return { execute: false, status, reason: "dual_write_status=OFF" };
+  }
+
+  return {
+    execute: true,
+    status,
+    reason: `dual_write_status=${status}, ingest=all_users`,
+    userId: uid,
+  };
+}
+
+/** @deprecated 읽기 라우팅용 — 쓰기는 evaluateSecondaryIngestWrite 사용 */
+function evaluateSupabaseDualWrite(firebaseUid) {
+  return evaluateSecondaryIngestWrite(firebaseUid);
 }
 
 function readRcParameterValue(template, key) {
@@ -325,7 +332,7 @@ async function writeRideToSupabase(rideRow) {
  */
 async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc) {
   await refreshDualRunFromRemoteConfig(admin, true);
-  const decision = evaluateSupabaseDualWrite(userId);
+  const decision = evaluateSecondaryIngestWrite(userId);
   if (!decision.execute) {
     console.log(
       "[supabaseDualWriteServer] strava secondary 스킵:",
@@ -383,6 +390,9 @@ module.exports = {
   runSecondaryAfterStravaLogSave,
   appendServiceRoleSecret,
   mapTrainingLogToRideRow,
+  evaluateSecondaryIngestWrite,
   evaluateSupabaseDualWrite,
   refreshDualRunFromRemoteConfig,
+  resolveUserUuid,
+  getSupabaseAdminClient,
 };

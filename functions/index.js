@@ -35,23 +35,8 @@ if (!admin.apps.length) {
 const rankingDayRollup = require("./rankingDayRollup");
 const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
-
-/** Strava log Firestore Primary 성공 후 Supabase Secondary (실패해도 Primary 유지) */
-async function mirrorStravaLogToSupabase(userId, logDocId, logDoc) {
-  try {
-    await supabaseDualWriteServer.runSecondaryAfterStravaLogSave(
-      admin,
-      userId,
-      logDocId,
-      logDoc
-    );
-  } catch (err) {
-    console.warn(
-      "[Strava→Supabase] secondary (Primary 유지):",
-      err && err.message ? err.message : err
-    );
-  }
-}
+const stravaDualWrite = require("./stravaDualWrite");
+const rankingReadRouter = require("./rankingReadRouter");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -1330,8 +1315,13 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   const isNew = !existingIds.has(activityId);
 
   const logsRef = db.collection("users").doc(userId).collection("logs");
-  await logsRef.doc(activityId).set(logDoc, { merge: true });
-  await mirrorStravaLogToSupabase(userId, activityId, logDoc);
+  await stravaDualWrite.dualWriteStravaActivityLog(
+    admin,
+    userId,
+    activityId,
+    logDoc,
+    () => logsRef.doc(activityId).set(logDoc, { merge: true })
+  );
 
   let userTss = 0;
   if (isCyclingForMmp(mapped) && isNew && mapped.tss > 0 && (mapped.distance_km || 0) !== 0) {
@@ -1848,8 +1838,14 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
           updateData.time_in_zones = timeInZones;
         }
         if (Object.keys(updateData).length > 0) {
-          await entry.ref.update(updateData);
-          await mirrorStravaLogToSupabase(userId, actId, { ...d, ...updateData });
+          const mergedLog = { ...d, ...updateData };
+          await stravaDualWrite.dualWriteStravaActivityLog(
+            admin,
+            userId,
+            actId,
+            mergedLog,
+            () => entry.ref.update(updateData)
+          );
         }
       }
       continue;
@@ -1957,8 +1953,13 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       console.log(`[processOneUserStravaSync] 비라이딩 활동 저장 제외: userId=${userId} actId=${actId} activity_type=${mapped.activity_type}`);
       continue;
     }
-    await logsRef.doc(actId).set(logDoc, { merge: true });
-    await mirrorStravaLogToSupabase(userId, actId, logDoc);
+    await stravaDualWrite.dualWriteStravaActivityLog(
+      admin,
+      userId,
+      actId,
+      logDoc,
+      () => logsRef.doc(actId).set(logDoc, { merge: true })
+    );
     existingIds.add(actId);
     newActivities += 1;
     if (isCyclingForMmp(mapped)) {
@@ -3647,8 +3648,12 @@ async function getWeeklyRankingEntries(db, startStr, endStr, usersSnap = null) {
 
 /** 주간 랭킹 TOP10 조회 (캐시 5분 + 병렬 50명/배치, 1000명 대비 타임아웃 9분)
  * 쿼리: week=prev → 전주 랭킹 (새 주 시작 후 현재주 순위자 없을 때 사용) */
+const getWeeklyRankingOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: true,
+  timeoutSeconds: 540,
+});
 exports.getWeeklyRanking = onRequest(
-  { cors: true, timeoutSeconds: 540 },
+  getWeeklyRankingOptions,
   async (req, res) => {
     if (req.method === "OPTIONS") {
       res.status(204).send("");
@@ -3659,6 +3664,21 @@ exports.getWeeklyRanking = onRequest(
     const userIdParam = (req.query && req.query.userId) || "";
     const usePrevWeek = weekParam === "prev";
     const { startStr, endStr } = usePrevWeek ? getWeekRangeSeoul(-1) : getWeekRangeSeoul();
+
+    const weeklyFromSupabase = await rankingReadRouter.tryBuildWeeklyRankingFromSupabase(
+      admin,
+      req.query || {},
+      { getWeekRangeSeoul }
+    );
+    if (weeklyFromSupabase) {
+      const ent = weeklyFromSupabase.allEntries || [];
+      delete weeklyFromSupabase.allEntries;
+      await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: ent }, ent);
+      await hydrateRankingBoardProfileImages(db, { Supremo: ent }, ent);
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cache-Control", "no-store");
+      return res.status(200).json(weeklyFromSupabase);
+    }
 
     const buildWeeklyRankingResponse = (entries, precomputed) => {
       const top10 = entries.slice(0, 10).map((e, i) => ({
@@ -7805,9 +7825,13 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
 
 const PEAK_RANKING_CACHE_TTL_MS = 5 * 60 * 1000;
 
+const getPeakPowerRankingOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: true,
+  timeoutSeconds: 540,
+});
 /** 피크 파워 랭킹 API */
 exports.getPeakPowerRanking = onRequest(
-  { cors: true, timeoutSeconds: 540 },
+  getPeakPowerRankingOptions,
   async (req, res) => {
     if (req.method === "OPTIONS") {
       res.status(204).send("");
@@ -7832,6 +7856,22 @@ exports.getPeakPowerRanking = onRequest(
       await hydrateRankingBoardPrivacyFromUsers(db, payload.byCategory, payload.entries);
       await hydrateRankingBoardProfileImages(db, payload.byCategory, payload.entries);
     };
+
+    const supabasePeakPayload =
+      await rankingReadRouter.tryBuildPeakPowerRankingFromSupabase(
+        admin,
+        req.query || {},
+        {
+          getWeekRangeSeoul,
+          getRolling28DaysRangeSeoul,
+          getRolling30DaysRangeSeoul,
+          buildMotivationMessage,
+        }
+      );
+    if (supabasePeakPayload) {
+      await finalizeRankingProfileUrls(supabasePeakPayload);
+      return res.status(200).json(supabasePeakPayload);
+    }
 
     const forceRankMv = req.query.rankMv === "1" || req.query.rankMv === "true";
 
