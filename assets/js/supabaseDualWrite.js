@@ -83,6 +83,7 @@ function isUidInCanaryPercent(firebaseUid, percent) {
 }
 
 /**
+ * Secondary **쓰기**(훈련·Strava) — 전 사용자. 읽기 Canary는 서버 rankingReadConfig 전용.
  * @param {string|undefined} firebaseUid
  * @returns {{ execute: boolean, status: string, reason: string }}
  */
@@ -94,32 +95,16 @@ export function evaluateSupabaseDualWrite(firebaseUid) {
     : dualRunCache.status;
   const uid = String(firebaseUid || '').trim();
 
-  switch (status) {
-    case 'OFF':
-      return { execute: false, status, reason: 'dual_write_status=OFF' };
-    case 'FULL':
-      return { execute: true, status, reason: 'dual_write_status=FULL' };
-    case 'SHADOW': {
-      const allowed = dualRunCache.shadowUids.includes(uid);
-      return {
-        execute: allowed,
-        status,
-        reason: allowed
-          ? 'SHADOW whitelist'
-          : 'SHADOW uid not in whitelist',
-      };
-    }
-    case 'CANARY': {
-      const inBucket = isUidInCanaryPercent(uid, dualRunCache.canaryPercent);
-      return {
-        execute: inBucket,
-        status,
-        reason: inBucket ? 'CANARY in bucket' : 'CANARY out of bucket',
-      };
-    }
-    default:
-      return { execute: false, status: 'OFF', reason: 'unknown status' };
+  if (status === 'OFF') {
+    return { execute: false, status, reason: 'dual_write_status=OFF' };
   }
+
+  return {
+    execute: true,
+    status,
+    reason: `dual_write_status=${status}, ingest=all_users`,
+    userId: uid,
+  };
 }
 
 export function shouldRunSupabaseDualWrite(firebaseUid) {
