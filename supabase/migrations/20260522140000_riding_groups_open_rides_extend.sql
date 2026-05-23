@@ -16,19 +16,20 @@ END $$;
 
 -- -----------------------------------------------------------------------------
 -- 2. 소모임 (stelvio_riding_groups)
+-- CREATE IF NOT EXISTS 후 ALTER — 기존 불완전 테이블이 있어도 컬럼 보강
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.riding_groups (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  firestore_doc_id      text NOT NULL UNIQUE,
-  name                  text NOT NULL,
+  firestore_doc_id      text,
+  name                  text NOT NULL DEFAULT '',
   regions               text[] NOT NULL DEFAULT '{}',
   intro                 text NOT NULL DEFAULT '',
   is_public             boolean NOT NULL DEFAULT true,
   join_password         text NOT NULL DEFAULT '',
   photo_url             text,
   status                public.riding_group_status NOT NULL DEFAULT 'PENDING',
-  created_by            uuid NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
-  member_count          integer NOT NULL DEFAULT 0 CHECK (member_count >= 0),
+  created_by            uuid REFERENCES public.users(id) ON DELETE RESTRICT,
+  member_count          integer NOT NULL DEFAULT 0,
   ranking_notice        jsonb NOT NULL DEFAULT '{}'::jsonb,
   reviewed_at           timestamptz,
   reviewed_by           uuid REFERENCES public.users(id) ON DELETE SET NULL,
@@ -36,8 +37,58 @@ CREATE TABLE IF NOT EXISTS public.riding_groups (
   updated_at            timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.riding_groups
+  ADD COLUMN IF NOT EXISTS firestore_doc_id text,
+  ADD COLUMN IF NOT EXISTS name text,
+  ADD COLUMN IF NOT EXISTS regions text[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS intro text DEFAULT '',
+  ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT true,
+  ADD COLUMN IF NOT EXISTS join_password text DEFAULT '',
+  ADD COLUMN IF NOT EXISTS photo_url text,
+  ADD COLUMN IF NOT EXISTS member_count integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS ranking_notice jsonb DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS reviewed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS reviewed_by uuid,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+
+-- status / created_by — 타입·FK는 최초 생성 시에만 적용(이미 있으면 스킵)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'riding_groups' AND column_name = 'status'
+  ) THEN
+    ALTER TABLE public.riding_groups
+      ADD COLUMN status public.riding_group_status NOT NULL DEFAULT 'PENDING';
+  END IF;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'riding_groups' AND column_name = 'created_by'
+  ) THEN
+    ALTER TABLE public.riding_groups
+      ADD COLUMN created_by uuid REFERENCES public.users(id) ON DELETE RESTRICT;
+  END IF;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_riding_groups_firestore_doc_id
+  ON public.riding_groups (firestore_doc_id)
+  WHERE firestore_doc_id IS NOT NULL;
+
 COMMENT ON TABLE public.riding_groups IS 'Firestore stelvio_riding_groups/{groupId}';
-COMMENT ON COLUMN public.riding_groups.ranking_notice IS '{text, updatedAt, updatedBy} — 게시글/댓글 대신 그룹 공지';
+
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'riding_groups' AND column_name = 'ranking_notice'
+  ) THEN
+    EXECUTE 'COMMENT ON COLUMN public.riding_groups.ranking_notice IS ''{text, updatedAt, updatedBy} — 그룹 공지''';
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_riding_groups_status_created
   ON public.riding_groups (status, created_at DESC);
@@ -57,6 +108,22 @@ CREATE TABLE IF NOT EXISTS public.riding_group_members (
 CREATE INDEX IF NOT EXISTS idx_riding_group_members_user
   ON public.riding_group_members (user_id);
 
+ALTER TABLE public.riding_group_members
+  ADD COLUMN IF NOT EXISTS display_name text DEFAULT '',
+  ADD COLUMN IF NOT EXISTS profile_image_url text,
+  ADD COLUMN IF NOT EXISTS joined_at timestamptz DEFAULT now();
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'riding_group_members' AND column_name = 'role'
+  ) THEN
+    ALTER TABLE public.riding_group_members
+      ADD COLUMN role public.riding_group_member_role NOT NULL DEFAULT 'member';
+  END IF;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.riding_group_join_requests (
   group_id              uuid NOT NULL REFERENCES public.riding_groups(id) ON DELETE CASCADE,
   user_id               uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -69,10 +136,24 @@ CREATE TABLE IF NOT EXISTS public.riding_group_join_requests (
 CREATE INDEX IF NOT EXISTS idx_riding_group_join_requests_group
   ON public.riding_group_join_requests (group_id, requested_at DESC);
 
+ALTER TABLE public.riding_group_join_requests
+  ADD COLUMN IF NOT EXISTS display_name text DEFAULT '',
+  ADD COLUMN IF NOT EXISTS profile_image_url text,
+  ADD COLUMN IF NOT EXISTS requested_at timestamptz DEFAULT now();
+
 -- -----------------------------------------------------------------------------
 -- 3. 오픈 라이딩 (Firestore rides) — 누락 컬럼
 -- -----------------------------------------------------------------------------
-ALTER TABLE public.open_rides
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'open_rides'
+  ) THEN
+    RAISE NOTICE 'open_rides 테이블 없음 — 20260522000000_stelvio_schema_reset.sql 먼저 실행';
+    RETURN;
+  END IF;
+
+  ALTER TABLE public.open_rides
   ADD COLUMN IF NOT EXISTS firestore_doc_id text UNIQUE,
   ADD COLUMN IF NOT EXISTS is_private boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS ride_join_password text NOT NULL DEFAULT '',
@@ -89,15 +170,23 @@ ALTER TABLE public.open_rides
   ADD COLUMN IF NOT EXISTS host_point_refunded boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS participant_join_charge_sp integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS host_public_review_summary jsonb;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_open_rides_firestore_doc_id
   ON public.open_rides (firestore_doc_id)
   WHERE firestore_doc_id IS NOT NULL;
 
-ALTER TABLE public.open_ride_participants
-  ADD COLUMN IF NOT EXISTS display_name text NOT NULL DEFAULT '',
-  ADD COLUMN IF NOT EXISTS contact_info text NOT NULL DEFAULT '',
-  ADD COLUMN IF NOT EXISTS is_contact_public boolean NOT NULL DEFAULT false;
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'open_ride_participants'
+  ) THEN
+    ALTER TABLE public.open_ride_participants
+      ADD COLUMN IF NOT EXISTS display_name text DEFAULT '',
+      ADD COLUMN IF NOT EXISTS contact_info text DEFAULT '',
+      ADD COLUMN IF NOT EXISTS is_contact_public boolean DEFAULT false;
+  END IF;
+END $$;
 
 -- Strava 후기 서브컬렉션 (rides/{id}/participantStravaReview/{uid})
 CREATE TABLE IF NOT EXISTS public.open_ride_strava_reviews (
