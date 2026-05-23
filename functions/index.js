@@ -39,6 +39,7 @@ const stravaDualWrite = require("./stravaDualWrite");
 const rankingReadRouter = require("./rankingReadRouter");
 const rankingParity = require("./rankingParity");
 const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
+const rankingReadRoutingPublic = require("./rankingReadRoutingPublic");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -3722,6 +3723,8 @@ exports.getWeeklyRanking = onRequest(
       };
       if (precomputed === true) rankBody.precomputed = true;
       else if (precomputed === false) rankBody.liveComputed = true;
+      rankBody.readBackend = "firebase";
+      rankBody.readSource = "firebase";
       return res.status(200).json(rankBody);
     };
 
@@ -7223,6 +7226,38 @@ exports.adminSupabaseReadRouting = onRequest(
   }
 );
 
+/**
+ * 전 사용자 — 랭킹 Read DB (Firebase vs Supabase) 공개 조회.
+ * 클라이언트 IndexedDB·API 캐시 네임스페이스 분리용.
+ */
+exports.getRankingReadRoutingPublic = onRequest(
+  { cors: true, timeoutSeconds: 15 },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+    res.set("Cache-Control", "public, max-age=60, s-maxage=60");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    try {
+      const payload = await rankingReadRoutingPublic.getPublicRankingReadRouting(admin);
+      res.status(200).json(payload);
+    } catch (e) {
+      console.warn("[getRankingReadRoutingPublic]", e.message || e);
+      res.status(500).json({
+        success: false,
+        error: e.message || String(e),
+      });
+    }
+  }
+);
+
 exports.scheduledRankingParityAudit = onSchedule(
   scheduledRankingParityAuditOptions,
   async () => {
@@ -7917,6 +7952,14 @@ exports.getPeakPowerRanking = onRequest(
     res.set("Access-Control-Allow-Origin", "*");
     // 사전 집계 데이터는 5분간 CDN/프록시 캐싱 허용 (클라이언트는 localStorage로 별도 1일 캐시)
     res.set("Cache-Control", "public, max-age=300, s-maxage=300, stale-while-revalidate=60");
+    const origJsonPeak = res.json.bind(res);
+    res.json = (payload) => {
+      if (payload && typeof payload === "object" && payload.success && !payload.readBackend) {
+        payload.readBackend = "firebase";
+        payload.readSource = "firebase";
+      }
+      return origJsonPeak(payload);
+    };
     try {
     let period = req.query.period || "monthly";
     if (period === "yearly") period = "monthly";

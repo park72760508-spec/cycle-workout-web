@@ -109,6 +109,8 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
     }
 
     attachCurrentUserToPayload(payload, uid, deps.buildMotivationMessage);
+    payload.readBackend = "supabase";
+    payload.readSource = "supabase";
     console.log("[rankingReadRouter] Supabase read", {
       durationType,
       gender,
@@ -193,6 +195,7 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
       myRank: myRank || undefined,
       precomputed: true,
       readSource: "supabase",
+      readBackend: "supabase",
       allEntries: entries,
     };
   } catch (err) {
