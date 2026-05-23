@@ -7986,6 +7986,8 @@ exports.getPeakPowerRanking = onRequest(
           getWeekRangeSeoul,
           getRolling28DaysRangeSeoul,
           getRolling30DaysRangeSeoul,
+          getMinHeptagonSnapshotAsOfSeoulYmd,
+          RANKING_HEPTAGON_REBUILD_META_DOC,
           buildMotivationMessage,
         }
       );

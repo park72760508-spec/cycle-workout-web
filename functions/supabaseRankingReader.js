@@ -7,6 +7,16 @@ const {
   genderDbToClient,
 } = require("./rankingResponseAdapter");
 
+const HEPTAGON_CATEGORIES = [
+  "Supremo",
+  "Assoluto",
+  "Bianco",
+  "Rosa",
+  "Infinito",
+  "Leggenda",
+];
+const GC_RANKING_MAX_ROWS_PER_CATEGORY = 10000;
+
 const PEAK_WKG_COLUMN = {
   "1min": "peak_1min_wkg",
   "5min": "peak_5min_wkg",
@@ -293,6 +303,229 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
   };
 }
 
+function getMonthKeyKstNow() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
+}
+
+function mapGcRowToEntry(row, fbUid, filterGender, gcScore) {
+  const g =
+    filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
+  return {
+    userId: fbUid,
+    name: (row.display_name && String(row.display_name).trim()) || "(이름 없음)",
+    ageCategory: row.age_category != null ? String(row.age_category) : "",
+    gender: g,
+    is_private: row.is_private === true,
+    gcScore,
+    rankChange:
+      row.rank_change != null && isFinite(Number(row.rank_change))
+        ? Math.round(Number(row.rank_change))
+        : null,
+    previousBoardRank:
+      row.previous_board_rank != null && isFinite(Number(row.previous_board_rank))
+        ? Math.floor(Number(row.previous_board_rank))
+        : null,
+  };
+}
+
+function captureGcSnapshotMeta(d, state) {
+  if (!d || d.range_start == null) return;
+  const rs = String(d.range_start).trim();
+  const re = d.range_end != null ? String(d.range_end).trim() : "";
+  const asOf =
+    d.as_of_seoul != null ? String(d.as_of_seoul).trim().slice(0, 10) : "";
+  if (!state.snapshotRangeStart) {
+    state.snapshotRangeStart = rs;
+    state.snapshotRangeEnd = re;
+  }
+  if (asOf && (!state.snapshotAsOfSeoul || asOf > state.snapshotAsOfSeoul)) {
+    state.snapshotAsOfSeoul = asOf;
+  }
+}
+
+/**
+ * GC(헵타곤): Supabase `heptagon_cohort_ranks` — Firestore buildStelvioGcRankingPayload와 동일 정렬·성별 점수 통일.
+ * @param {import('firebase-admin')} admin
+ * @param {string} [monthKey] YYYY-MM (KST)
+ * @param {string} [filterGender] all | M | F
+ */
+async function fetchGcRanking(admin, monthKey, filterGender) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const uidMap = await getFirebaseUidByUuidMap(admin);
+  const mk = monthKey || getMonthKeyKstNow();
+  const fg = filterGender === "M" || filterGender === "F" ? filterGender : "all";
+  const applyGenderScoreUnify = fg === "M" || fg === "F";
+
+  let supreAllScores = null;
+  if (applyGenderScoreUnify) {
+    supreAllScores = new Map();
+    const { data: supAll, error: supAllErr } = await supabase
+      .from("heptagon_cohort_ranks")
+      .select("user_id, sum_position_scores, range_start, range_end, as_of_seoul")
+      .eq("month_key", mk)
+      .eq("filter_category", "Supremo")
+      .eq("filter_gender", "all")
+      .order("sum_position_scores", { ascending: false })
+      .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
+    if (supAllErr) throw supAllErr;
+    for (const row of supAll || []) {
+      const fbUid = uidMap.get(String(row.user_id));
+      if (
+        fbUid &&
+        row.sum_position_scores != null &&
+        isFinite(Number(row.sum_position_scores))
+      ) {
+        supreAllScores.set(fbUid, Number(row.sum_position_scores));
+      }
+    }
+  }
+
+  const metaState = {
+    snapshotRangeStart: "",
+    snapshotRangeEnd: "",
+    snapshotAsOfSeoul: "",
+  };
+  const byCategory = {
+    Supremo: [],
+    Assoluto: [],
+    Bianco: [],
+    Rosa: [],
+    Infinito: [],
+    Leggenda: [],
+  };
+
+  await Promise.all(
+    HEPTAGON_CATEGORIES.map(async (cat) => {
+      const { data, error } = await supabase
+        .from("heptagon_cohort_ranks")
+        .select(
+          "user_id, display_name, age_category, sum_position_scores, previous_board_rank, rank_change, range_start, range_end, as_of_seoul, is_private"
+        )
+        .eq("month_key", mk)
+        .eq("filter_category", cat)
+        .eq("filter_gender", fg)
+        .order("sum_position_scores", { ascending: false })
+        .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
+      if (error) throw error;
+
+      const rows = [];
+      for (let i = 0; i < (data || []).length; i++) {
+        const row = data[i];
+        captureGcSnapshotMeta(row, metaState);
+        const fbUid = uidMap.get(String(row.user_id));
+        if (!fbUid) continue;
+        let gcScore =
+          row.sum_position_scores != null && isFinite(Number(row.sum_position_scores))
+            ? Number(row.sum_position_scores)
+            : 0;
+        if (applyGenderScoreUnify && supreAllScores.has(fbUid)) {
+          gcScore = supreAllScores.get(fbUid);
+        }
+        const entry = mapGcRowToEntry(row, fbUid, fg, gcScore);
+        entry.rank = rows.length + 1;
+        rows.push(entry);
+      }
+
+      if (applyGenderScoreUnify) {
+        rows.sort((a, b) => {
+          if (b.gcScore !== a.gcScore) return b.gcScore - a.gcScore;
+          return String(a.userId).localeCompare(String(b.userId));
+        });
+        for (let ri = 0; ri < rows.length; ri++) {
+          rows[ri].rank = ri + 1;
+        }
+      }
+
+      byCategory[cat] = rows;
+    })
+  );
+
+  const entries = (byCategory.Supremo || []).slice();
+  if (!entries.length) {
+    return null;
+  }
+
+  return {
+    success: true,
+    byCategory,
+    entries,
+    startStr: metaState.snapshotRangeStart,
+    endStr: metaState.snapshotRangeEnd,
+    period: "monthly",
+    durationType: "gc",
+    gender: fg,
+    gcMonthKey: mk,
+    gcSnapshotAsOf: metaState.snapshotAsOfSeoul || null,
+    precomputed: true,
+    readSource: "supabase",
+  };
+}
+
+/**
+ * GC 응답 — ranking_meta·stale 플래그 (Firestore heptagon_daily_rebuild 메타).
+ */
+async function attachGcHeptagonMeta(admin, payload, deps) {
+  if (!payload || !deps) return payload;
+  const {
+    getMinHeptagonSnapshotAsOfSeoulYmd,
+    getRolling28DaysRangeSeoul,
+    RANKING_HEPTAGON_REBUILD_META_DOC,
+  } = deps;
+  const rollingFallback =
+    typeof getRolling28DaysRangeSeoul === "function"
+      ? getRolling28DaysRangeSeoul()
+      : { startStr: "", endStr: "" };
+  const minGcAsOf =
+    typeof getMinHeptagonSnapshotAsOfSeoulYmd === "function"
+      ? getMinHeptagonSnapshotAsOfSeoulYmd()
+      : "";
+  const gcAsOf = payload.gcSnapshotAsOf
+    ? String(payload.gcSnapshotAsOf).trim().slice(0, 10)
+    : "";
+
+  let heptagonMeta = null;
+  try {
+    const metaSnap = await admin
+      .firestore()
+      .collection("ranking_meta")
+      .doc(RANKING_HEPTAGON_REBUILD_META_DOC || "heptagon_daily_rebuild")
+      .get();
+    if (metaSnap.exists) heptagonMeta = metaSnap.data() || null;
+  } catch (_eHm) {
+    /* meta optional */
+  }
+
+  const heptMetaDateKst =
+    heptagonMeta && heptagonMeta.dateKst
+      ? String(heptagonMeta.dateKst).trim().slice(0, 10)
+      : "";
+  const heptMetaComplete =
+    heptagonMeta && String(heptagonMeta.status || "") === "complete";
+  const gcStaleVsMin = !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf);
+  const gcStaleVsMeta = !!(
+    heptMetaComplete &&
+    heptMetaDateKst &&
+    gcAsOf &&
+    heptMetaDateKst > gcAsOf
+  );
+
+  payload.startStr = payload.startStr || rollingFallback.startStr;
+  payload.endStr = payload.endStr || rollingFallback.endStr;
+  payload.gcSnapshotDaily = true;
+  payload.gcMinSnapshotAsOf = minGcAsOf;
+  payload.gcSnapshotStale = gcStaleVsMin || gcStaleVsMeta;
+  payload.gcHeptagonRebuildDateKst = heptMetaDateKst || null;
+  payload.gcHeptagonRebuildStatus =
+    heptagonMeta && heptagonMeta.status ? String(heptagonMeta.status) : null;
+  payload.gcHeptagonPeakSource =
+    heptagonMeta &&
+    heptagonMeta.summary &&
+    heptagonMeta.summary.peakSource
+      ? String(heptagonMeta.summary.peakSource)
+      : null;
+  return payload;
+}
+
 function resetUuidMapCacheForTests() {
   uuidToFirebaseCache = null;
   uuidMapLoadedAt = 0;
@@ -303,7 +536,11 @@ module.exports = {
   fetchPeakPowerMonthly,
   fetchPersonalDist,
   fetchPersonalSpeed,
+  fetchGcRanking,
+  attachGcHeptagonMeta,
   getFirebaseUidByUuidMap,
   resetUuidMapCacheForTests,
   resolveUuid,
+  getMonthKeyKstNow,
+  HEPTAGON_CATEGORIES,
 };

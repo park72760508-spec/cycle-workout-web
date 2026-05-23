@@ -7,6 +7,7 @@ const rankingParity = require("./rankingParity");
 const { attachCurrentUserToPayload } = require("./rankingResponseAdapter");
 
 const SUPPORTED_PEAK_DURATIONS = new Set([
+  "gc",
   "tss",
   "1min",
   "5min",
@@ -47,7 +48,18 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
       getRolling30DaysRangeSeoul,
     } = deps;
 
-    if (durationType === "tss") {
+    if (durationType === "gc") {
+      const monthKey = supabaseRankingReader.getMonthKeyKstNow();
+      const fg = gender === "M" || gender === "F" ? gender : "all";
+      payload = await supabaseRankingReader.fetchGcRanking(admin, monthKey, fg);
+      if (payload) {
+        await supabaseRankingReader.attachGcHeptagonMeta(admin, payload, {
+          getMinHeptagonSnapshotAsOfSeoulYmd: deps.getMinHeptagonSnapshotAsOfSeoulYmd,
+          getRolling28DaysRangeSeoul,
+          RANKING_HEPTAGON_REBUILD_META_DOC: deps.RANKING_HEPTAGON_REBUILD_META_DOC,
+        });
+      }
+    } else if (durationType === "tss") {
       const { startStr, endStr } = getWeekRangeSeoul();
       payload = await supabaseRankingReader.fetchWeeklyTssRanking(
         admin,
@@ -85,27 +97,30 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
     if (!payload) return null;
 
     const cfg = rankingReadConfig.getRankingReadConfig();
-    const parityCtx = {
-      durationType,
-      gender,
-      startStr: payload.startStr,
-      endStr: payload.endStr,
-    };
-    const parityReport = await rankingParity.verifyPeakRankingParity(
-      admin,
-      deps.db,
-      payload,
-      parityCtx
-    );
-    payload.rankingParity = parityReport;
-
-    if (cfg.parityFallbackToFirebase && parityReport && parityReport.ok === false) {
-      console.warn("[rankingReadRouter] parity drift → Firebase fallback", {
+    let parityReport = { ok: true, reason: "parity_skip_gc" };
+    if (durationType !== "gc") {
+      const parityCtx = {
         durationType,
         gender,
-        parityReport,
-      });
-      return null;
+        startStr: payload.startStr,
+        endStr: payload.endStr,
+      };
+      parityReport = await rankingParity.verifyPeakRankingParity(
+        admin,
+        deps.db,
+        payload,
+        parityCtx
+      );
+      payload.rankingParity = parityReport;
+
+      if (cfg.parityFallbackToFirebase && parityReport && parityReport.ok === false) {
+        console.warn("[rankingReadRouter] parity drift → Firebase fallback", {
+          durationType,
+          gender,
+          parityReport,
+        });
+        return null;
+      }
     }
 
     attachCurrentUserToPayload(payload, uid, deps.buildMotivationMessage);
