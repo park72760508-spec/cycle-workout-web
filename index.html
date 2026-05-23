@@ -7911,6 +7911,83 @@
       }
     }
 
+    /** 랭킹 Read DB — Firebase vs Supabase (관리자 토글 · IndexedDB·API 캐시 네임스페이스) */
+    var STELVIO_RANKING_READ_ROUTING_PUBLIC_URL =
+      'https://us-central1-stelvio-ai.cloudfunctions.net/getRankingReadRoutingPublic';
+    var STELVIO_RANKING_READ_SOURCE_CACHE_MS = 60000;
+    var stelvioRankingReadSourceState = { source: 'firebase', loadedAt: 0, loading: null };
+
+    function stelvioGetRankingReadSourceSync() {
+      return stelvioRankingReadSourceState.source === 'supabase' ? 'supabase' : 'firebase';
+    }
+
+    function stelvioSetRankingReadSource(source) {
+      stelvioRankingReadSourceState.source = source === 'supabase' ? 'supabase' : 'firebase';
+      stelvioRankingReadSourceState.loadedAt = Date.now();
+      stelvioRankingMemCacheHydratePromise = null;
+      if (typeof stelvioRankingClearMemCaches === 'function') stelvioRankingClearMemCaches();
+    }
+    window.stelvioSetRankingReadSource = stelvioSetRankingReadSource;
+    window.stelvioGetRankingReadSourceSync = stelvioGetRankingReadSourceSync;
+
+    function stelvioRankingPayloadMatchesReadSource(data) {
+      if (!data) return false;
+      var backend = data.readBackend || data.readSource;
+      if (!backend) return true;
+      return backend === stelvioGetRankingReadSourceSync();
+    }
+
+    function stelvioRankingSwrKeyMatchesReadSource(swrKey) {
+      if (!swrKey) return false;
+      try {
+        var p = new URLSearchParams(swrKey);
+        var keyDb = p.get('readDb');
+        if (!keyDb) return false;
+        return keyDb === stelvioGetRankingReadSourceSync();
+      } catch (eRdKey) {
+        return false;
+      }
+    }
+
+    async function stelvioEnsureRankingReadSource(force) {
+      var now = Date.now();
+      if (
+        !force &&
+        stelvioRankingReadSourceState.loadedAt > 0 &&
+        now - stelvioRankingReadSourceState.loadedAt < STELVIO_RANKING_READ_SOURCE_CACHE_MS
+      ) {
+        return stelvioGetRankingReadSourceSync();
+      }
+      if (stelvioRankingReadSourceState.loading && !force) {
+        return stelvioRankingReadSourceState.loading;
+      }
+      stelvioRankingReadSourceState.loading = (async function () {
+        try {
+          var res = await fetch(STELVIO_RANKING_READ_ROUTING_PUBLIC_URL, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-store',
+          });
+          var json = res.ok ? await res.json().catch(function () { return null; }) : null;
+          if (json && json.success && json.readSource) {
+            stelvioRankingReadSourceState.source =
+              json.readSource === 'supabase' ? 'supabase' : 'firebase';
+          }
+        } catch (ePubRead) {
+          /* 오프라인·오류 시 마지막 값 유지(기본 firebase) */
+        }
+        stelvioRankingReadSourceState.loadedAt = Date.now();
+        return stelvioGetRankingReadSourceSync();
+      })();
+      try {
+        return await stelvioRankingReadSourceState.loading;
+      } finally {
+        stelvioRankingReadSourceState.loading = null;
+      }
+    }
+    window.stelvioEnsureRankingReadSource = stelvioEnsureRankingReadSource;
+    stelvioEnsureRankingReadSource().catch(function () {});
+
     function weeklyTop10PayloadMatchesWeek(data, weekOffset) {
       if (!data || data.startStr == null || data.endStr == null) return false;
       var expected = getWeekRangeSeoulClient(weekOffset);
@@ -7919,10 +7996,11 @@
     }
 
     function weeklyTop10CacheKeyForWeek(kind, weekOffset, userId) {
+      var readDb = stelvioGetRankingReadSourceSync();
       var range = getWeekRangeSeoulClient(weekOffset);
       var uid = userId || 'guest';
-      if (!range) return 'weeklyTop10:' + kind + ':' + uid;
-      return 'weeklyTop10:' + kind + ':' + range.startStr + '_' + range.endStr + ':' + uid;
+      if (!range) return 'weeklyTop10:' + readDb + ':' + kind + ':' + uid;
+      return 'weeklyTop10:' + readDb + ':' + kind + ':' + range.startStr + '_' + range.endStr + ':' + uid;
     }
 
     /** 랭킹보드 TSS 탭·주간 TOP10 — 응답 startStr/endStr가 이번 주(월~오늘)와 일치하는지 */
@@ -8112,6 +8190,7 @@
         }
         return;
       }
+      await stelvioEnsureRankingReadSource();
       const modal = document.getElementById('weeklyTop10Modal');
       const body = document.getElementById('weeklyTop10Body');
       if (!modal || !body) return;
@@ -8354,20 +8433,21 @@
     var weeklyTop10PrefetchInFlight = null;
     async function prefetchWeeklyTop10ToDeviceStorage(userId) {
       if (weeklyTop10PrefetchInFlight) return weeklyTop10PrefetchInFlight;
-      var uid =
-        userId ||
-        (window.currentUser && window.currentUser.id) ||
-        (function () {
-          try {
-            var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
-            return u && u.id ? u.id : null;
-          } catch (eU) {
-            return null;
-          }
-        })();
-      var top10LcKey = weeklyTop10CacheKeyForWeek('current', 0, uid);
       weeklyTop10PrefetchInFlight = (async function () {
         try {
+          await stelvioEnsureRankingReadSource();
+          var uid =
+            userId ||
+            (window.currentUser && window.currentUser.id) ||
+            (function () {
+              try {
+                var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+                return u && u.id ? u.id : null;
+              } catch (eU) {
+                return null;
+              }
+            })();
+          var top10LcKey = weeklyTop10CacheKeyForWeek('current', 0, uid);
           await stelvioRankingMemCacheHydrateFromPersistent();
           var lc = await stelvioRankingLocalCache.get(top10LcKey);
           if (
@@ -8375,6 +8455,7 @@
             lc.data &&
             lc.data.success &&
             weeklyTop10PayloadMatchesWeek(lc.data, 0) &&
+            stelvioRankingPayloadMatchesReadSource(lc.data) &&
             Array.isArray(lc.data.ranking) &&
             lc.data.ranking.length > 0 &&
             !stelvioRankingLocalCache.isStale(lc)
@@ -8390,6 +8471,7 @@
           if (
             data.success &&
             weeklyTop10PayloadMatchesWeek(data, 0) &&
+            stelvioRankingPayloadMatchesReadSource(data) &&
             Array.isArray(data.ranking) &&
             data.ranking.length > 0
           ) {
@@ -8501,8 +8583,8 @@
     /** legacy localStorage 키 접두사(마이그레이션 정리용) */
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
-    /** peak IndexedDB 키 접두사 — hydrate·저장 시 동일 문자열 사용 */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v4:';
+    /** peak IndexedDB 키 접두사 — readDb(firebase|supabase) 포함 swrKey와 v4 이전 캐시 분리 */
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v5:';
     var STELVIO_RANKING_LC_STALE_MS = 10 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
     var STELVIO_RANKING_IDB_STORE = 'rankings';
@@ -8881,7 +8963,8 @@
           if (row.expiresAt && now >= row.expiresAt) continue;
           if (row.key.indexOf(STELVIO_PEAK_LC_KEY_PREFIX) === 0) {
             var swrKey = row.key.slice(STELVIO_PEAK_LC_KEY_PREFIX.length);
-            if (!swrKey || stelvioRankingMemCacheGet(swrKey)) continue;
+            if (!swrKey || !stelvioRankingSwrKeyMatchesReadSource(swrKey)) continue;
+            if (stelvioRankingMemCacheGet(swrKey)) continue;
             if (row.data.success && row.data.byCategory) {
               stelvioRankingMemCacheSet(swrKey, row.data);
               stelvioRankingIndexPeakRankFromEntry(row.key, {
@@ -11379,13 +11462,15 @@
      * 단일 탭 API → IndexedDB(1순위) + 메모리. 진행 중이면 동일 Promise 재사용.
      */
     function stelvioPrefetchRankingTabToCache(dur, uid, gender, period, prefetchGen) {
-      var cacheKeyStr = stelvioBuildRankingBoardCacheKey(dur, gender || 'all', uid, period);
-      if (stelvioRankingPrefetchInFlight[cacheKeyStr]) {
-        return stelvioRankingPrefetchInFlight[cacheKeyStr];
+      var inflightKey = String(dur || '') + '|' + String(gender || 'all') + '|' + String(uid || '') + '|' + String(period || 'monthly');
+      if (stelvioRankingPrefetchInFlight[inflightKey]) {
+        return stelvioRankingPrefetchInFlight[inflightKey];
       }
-      var lcKey = stelvioPeakRankingLcKey(cacheKeyStr);
       var p = (async function () {
         try {
+          await stelvioEnsureRankingReadSource();
+          var cacheKeyStr = stelvioBuildRankingBoardCacheKey(dur, gender || 'all', uid, period);
+          var lcKey = stelvioPeakRankingLcKey(cacheKeyStr);
           var lcEntry = await stelvioRankingLocalCache.get(lcKey);
           if (stelvioRankingLocalEntryStillFresh(lcEntry, dur)) {
             stelvioRankingMemCacheSet(cacheKeyStr, lcEntry.data);
@@ -11401,6 +11486,7 @@
           var data = res.ok ? await res.json().catch(function () { return null; }) : null;
           if (prefetchGen != null && prefetchGen !== stelvioRankingPrefetchGen) return false;
           if (!data || !data.success || !data.byCategory) return false;
+          if (!stelvioRankingPayloadMatchesReadSource(data)) return false;
           data = stelvioRankingNormalizePrefetchPayload(dur, gender, data);
           await stelvioRankingPersistPeakPayload(lcKey, cacheKeyStr, data);
           return true;
@@ -11408,9 +11494,9 @@
           return false;
         }
       })().finally(function () {
-        delete stelvioRankingPrefetchInFlight[cacheKeyStr];
+        delete stelvioRankingPrefetchInFlight[inflightKey];
       });
-      stelvioRankingPrefetchInFlight[cacheKeyStr] = p;
+      stelvioRankingPrefetchInFlight[inflightKey] = p;
       return p;
     }
 
@@ -11425,39 +11511,41 @@
       var period = opts.period != null ? opts.period : 'monthly';
       var skipDur = opts.skipDuration || '';
       var gen = ++stelvioRankingPrefetchGen;
-      var queue = STELVIO_RANKING_BOARD_TAB_DURATIONS.filter(function (d) {
-        if (!d || d === skipDur) return false;
-        var ck = stelvioBuildRankingBoardCacheKey(d, gender || 'all', uid, period);
-        if (stelvioRankingMemCacheGet(ck)) return false;
-        return true;
-      });
-      /* 앱 WebView: 전 탭 백그라운드 API 적재 중단(탭 전환 시 캐시·현재 탭 fetch만) */
-      if (STELVIO_RANKING_THERMAL_WEBVIEW && !opts.forceWarmAll) {
-        queue = [];
-      }
-      var idx = 0;
-      var allTabPromises = [];
-      return new Promise(function (resolveWarm) {
-        function pump() {
-          if (gen !== stelvioRankingPrefetchGen) {
-            resolveWarm();
-            return;
-          }
-          var batch = [];
-          while (idx < queue.length && batch.length < STELVIO_RANKING_PREFETCH_CONCURRENCY) {
-            allTabPromises.push(stelvioPrefetchRankingTabToCache(queue[idx++], uid, gender, period, gen));
-            batch.push(allTabPromises[allTabPromises.length - 1]);
-          }
-          if (!batch.length) {
-            Promise.all(allTabPromises).then(resolveWarm).catch(resolveWarm);
-            return;
-          }
-          Promise.all(batch).then(function () {
-            if (gen === stelvioRankingPrefetchGen) pump();
-            else resolveWarm();
-          });
+      return stelvioEnsureRankingReadSource().then(function () {
+        var queue = STELVIO_RANKING_BOARD_TAB_DURATIONS.filter(function (d) {
+          if (!d || d === skipDur) return false;
+          var ck = stelvioBuildRankingBoardCacheKey(d, gender || 'all', uid, period);
+          if (stelvioRankingMemCacheGet(ck)) return false;
+          return true;
+        });
+        /* 앱 WebView: 전 탭 백그라운드 API 적재 중단(탭 전환 시 캐시·현재 탭 fetch만) */
+        if (STELVIO_RANKING_THERMAL_WEBVIEW && !opts.forceWarmAll) {
+          queue = [];
         }
-        pump();
+        var idx = 0;
+        var allTabPromises = [];
+        return new Promise(function (resolveWarm) {
+          function pump() {
+            if (gen !== stelvioRankingPrefetchGen) {
+              resolveWarm();
+              return;
+            }
+            var batch = [];
+            while (idx < queue.length && batch.length < STELVIO_RANKING_PREFETCH_CONCURRENCY) {
+              allTabPromises.push(stelvioPrefetchRankingTabToCache(queue[idx++], uid, gender, period, gen));
+              batch.push(allTabPromises[allTabPromises.length - 1]);
+            }
+            if (!batch.length) {
+              Promise.all(allTabPromises).then(resolveWarm).catch(resolveWarm);
+              return;
+            }
+            Promise.all(batch).then(function () {
+              if (gen === stelvioRankingPrefetchGen) pump();
+              else resolveWarm();
+            });
+          }
+          pump();
+        });
       });
     }
 
@@ -11801,6 +11889,7 @@
         period: effPeriod,
         duration: apiDuration,
         gender: genderParam || 'all',
+        readDb: stelvioGetRankingReadSourceSync(),
       });
       if (uid) p.set('uid', uid);
       if (apiDuration === 'personal_speed') {
@@ -11847,6 +11936,7 @@
           }
           if (fp.get('duration') !== wantDur) continue;
           if ((fp.get('period') || 'monthly') !== wantPeriod) continue;
+          if ((fp.get('readDb') || '') !== stelvioGetRankingReadSourceSync()) continue;
           var soft = stelvioRankingSoftFromRow(row);
           if (!soft || !soft.data || !soft.data.success || !soft.data.byCategory) continue;
           if (!stelvioRankingPayloadHasVisibleRows(soft.data)) continue;
@@ -12787,6 +12877,7 @@
 
     async function fetchStelvioPeakPowerRanking(opts) {
       opts = opts || {};
+      await stelvioEnsureRankingReadSource(opts.forceReadSource);
       var myGen = ++stelvioRankingFetchGen;
 
       function stelvioShowRankingBoardLoading(dimContent) {
@@ -12826,6 +12917,7 @@
 
       function saveFreshPeakData(data) {
         if (!data || !stelvioRankingPayloadHasVisibleRows(data)) return;
+        if (!stelvioRankingPayloadMatchesReadSource(data)) return;
         if (!stelvioRankingPayloadMatchesCurrentApiWindow(data)) return;
         if (
           typeof stelvioIsGcRankingMode === 'function' &&
@@ -12919,6 +13011,7 @@
 
       function softRankingCacheUsable(soft) {
         if (!soft || !soft.data || !soft.data.success || !soft.data.byCategory) return false;
+        if (!stelvioRankingPayloadMatchesReadSource(soft.data)) return false;
         if (soft.data.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(soft.data)) return false;
         if (!stelvioRankingPayloadHasVisibleRows(soft.data)) return false;
         if (!stelvioRankingPayloadMatchesCurrentApiWindow(soft.data)) return false;
@@ -12973,6 +13066,7 @@
             myGen
           );
           if (!dataFresh || !dataFresh.success || !dataFresh.byCategory) return;
+          if (!stelvioRankingPayloadMatchesReadSource(dataFresh)) return;
           await stelvioApplyPeakRankingFetchResultWithDashboardAlign(dataFresh, myGen, uid, {
             preserveExpandUi: true,
           });
@@ -13027,6 +13121,7 @@
 
       function cacheEntryUsable(entryTs, body) {
         if (!body || !body.success || !body.byCategory) return false;
+        if (!stelvioRankingPayloadMatchesReadSource(body)) return false;
         if (body.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(body)) return false;
         if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
         if (!stelvioRankingPayloadMatchesCurrentApiWindow(body)) return false;
@@ -13093,7 +13188,15 @@
       var showedSoft = await tryApplySoftFallback();
 
       async function stelvioAwaitRankingWarmOrTabPrefetch() {
-        var prefetchPromise = stelvioRankingPrefetchInFlight[swrKey];
+        var prefetchInflightKey =
+          String(apiDuration || '') +
+          '|' +
+          String(genderParam || 'all') +
+          '|' +
+          String(uid || '') +
+          '|' +
+          String(stelvioRankingState.period || 'monthly');
+        var prefetchPromise = stelvioRankingPrefetchInFlight[prefetchInflightKey];
         var warmPromise =
           stelvioRankingWarmSession.inFlight && stelvioRankingWarmSession.promise
             ? stelvioRankingWarmSession.promise
@@ -13135,6 +13238,7 @@
           data2 &&
           data2.success &&
           data2.byCategory &&
+          stelvioRankingPayloadMatchesReadSource(data2) &&
           stelvioRankingPayloadHasVisibleRows(data2) &&
           !(data2.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(data2));
         var data2PsApprox =
