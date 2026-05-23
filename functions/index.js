@@ -7330,6 +7330,64 @@ exports.getOpenRideForRead = onRequest(
 );
 
 /**
+ * 기간 내 오픈 라이딩 목록 Read — Supabase Canary → Firebase 폴백.
+ */
+exports.getOpenRidesInDateRangeForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 45 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    const db = admin.firestore();
+    const startStr = String(req.query.startStr || req.query.start || "").trim();
+    const endStr = String(req.query.endStr || req.query.end || "").trim();
+    if (!startStr || !endStr) {
+      res.status(400).json({ success: false, error: "startStr, endStr 필요 (YYYY-MM-DD)" });
+      return;
+    }
+    try {
+      const fromSb = await groupReadRouter.tryFetchOpenRidesRangeFromSupabase(
+        admin,
+        db,
+        req.query
+      );
+      if (fromSb) {
+        res.status(200).json(fromSb);
+        return;
+      }
+      const from = admin.firestore.Timestamp.fromDate(new Date(startStr + "T00:00:00+09:00"));
+      const to = admin.firestore.Timestamp.fromDate(new Date(endStr + "T23:59:59+09:00"));
+      const snap = await db
+        .collection("rides")
+        .where("date", ">=", from)
+        .where("date", "<=", to)
+        .orderBy("date", "asc")
+        .get();
+      const rides = snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        readBackend: "firebase",
+      }));
+      res.status(200).json({
+        success: true,
+        rides,
+        startStr,
+        endStr,
+        readBackend: "firebase",
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
  * 소모임 단건 Read — Supabase Canary → Firebase 폴백 (Firestore JSON 형태).
  */
 exports.getRidingGroupForRead = onRequest(
@@ -7479,7 +7537,10 @@ exports.ingestRidingGroupDualWriteRelay = onRequest(
         firestoreDocId,
         groupData,
         actorUid,
-        { syncMembersFromFirestore: !!body.syncMembers }
+        {
+          syncMembersFromFirestore: !!body.syncMembers,
+          syncJoinRequestsFromFirestore: !!body.syncJoinRequests,
+        }
       );
       res.status(200).json({ success: true, ...result });
     } catch (e) {
