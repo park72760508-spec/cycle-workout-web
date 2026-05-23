@@ -13,15 +13,16 @@
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFileSync, existsSync } from "node:fs";
-import admin from "firebase-admin";
-import pg from "pg";
-import { v5 as uuidv5 } from "uuid";
+import { existsSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationDir = resolve(__dirname, "../supabase/migration");
 const requireFromMigration = createRequire(join(migrationDir, "package.json"));
+
 const { config: loadDotenv } = requireFromMigration("dotenv");
+const admin = requireFromMigration("firebase-admin");
+const pg = requireFromMigration("pg");
+const { v5: uuidv5 } = requireFromMigration("uuid");
 
 function loadEnv() {
   const envPath = join(migrationDir, ".env");
