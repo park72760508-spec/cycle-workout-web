@@ -242,6 +242,7 @@ export class DualRunManager {
 
   /**
    * Supabase secondary write 실행 여부 (dbService dual-write 최상단 게이트).
+   * SHADOW/CANARY/FULL = 전 사용자 Secondary 기록 ON. 읽기 분기는 앱/CF Read Router 별도.
    */
   shouldExecuteSupabaseWrite(
     firebaseUserId: FirebaseUserId | undefined
@@ -253,49 +254,19 @@ export class DualRunManager {
     const status = this.getStatus();
     const uid = String(firebaseUserId ?? "").trim();
 
-    switch (status) {
-      case "OFF":
-        return {
-          status,
-          executeSupabaseWrite: false,
-          reason: "dual_write_status=OFF",
-        };
-      case "FULL":
-        return {
-          status,
-          executeSupabaseWrite: true,
-          reason: "dual_write_status=FULL",
-        };
-      case "SHADOW": {
-        const allowed = this.cached.shadowUids.includes(uid);
-        return {
-          status,
-          executeSupabaseWrite: allowed,
-          reason: allowed
-            ? "dual_write_status=SHADOW, uid in whitelist"
-            : "dual_write_status=SHADOW, uid not in whitelist",
-        };
-      }
-      case "CANARY": {
-        const inBucket = isUidInCanaryPercent(
-          uid,
-          this.cached.canaryPercent
-        );
-        return {
-          status,
-          executeSupabaseWrite: inBucket,
-          reason: inBucket
-            ? `dual_write_status=CANARY, bucket < ${this.cached.canaryPercent}%`
-            : `dual_write_status=CANARY, bucket >= ${this.cached.canaryPercent}%`,
-        };
-      }
-      default:
-        return {
-          status: DEFAULT_STATUS,
-          executeSupabaseWrite: false,
-          reason: "unknown status fallback OFF",
-        };
+    if (status === "OFF") {
+      return {
+        status,
+        executeSupabaseWrite: false,
+        reason: "dual_write_status=OFF",
+      };
     }
+
+    return {
+      status,
+      executeSupabaseWrite: true,
+      reason: `dual_write_status=${status}, ingest=all_users`,
+    };
   }
 
   private getCachedValues(): RemoteConfigValues {

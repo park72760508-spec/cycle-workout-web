@@ -29,26 +29,20 @@ assert(
 const mgrFull = new DualRunManager({ localStatusOverride: "FULL" });
 assert(mgrFull.shouldExecuteSupabaseWrite("anyUid"), "FULL allows");
 
-const mgrShadow = new DualRunManager({
-  localStatusOverride: "SHADOW",
-  extraShadowUids: ["testUid123"],
-});
+const mgrShadow = new DualRunManager({ localStatusOverride: "SHADOW" });
 assert(
   mgrShadow.shouldExecuteSupabaseWrite("testUid123"),
-  "SHADOW whitelist hit"
+  "SHADOW ingest all users"
 );
 assert(
-  !mgrShadow.shouldExecuteSupabaseWrite("otherUid"),
-  "SHADOW whitelist miss"
+  mgrShadow.shouldExecuteSupabaseWrite("otherUid"),
+  "SHADOW ingest all users (not read whitelist)"
 );
 
-const canaryUid = "Ys8GQZYyf3ZoEunSVGKnWNbtSkv2";
-const bucket = isUidInCanaryPercent(canaryUid, 10);
 const mgrCanary = new DualRunManager({ localStatusOverride: "CANARY" });
-const decision = mgrCanary.evaluate(canaryUid);
 assert(
-  decision.executeSupabaseWrite === bucket,
-  "CANARY matches hash"
+  mgrCanary.shouldExecuteSupabaseWrite("anyUid"),
+  "CANARY ingest all users"
 );
 
 console.log("[dualRunManager.test] all passed");
