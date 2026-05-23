@@ -4,20 +4,28 @@
 
 ## 사전 조건 (필수)
 
-### 1. `auth.users` 이관
+### 1. `auth.users` 이관 (`migrateAuthUsers.ts`)
 
-`public.users.id`는 `auth.users(id)` FK입니다. **Firebase Auth 사용자를 Supabase Auth로 먼저 옮긴 뒤** 본 스크립트를 실행하세요.
+`public.users.id`는 `auth.users(id)` FK입니다. **Firebase Auth → Supabase Auth를 먼저** 실행하세요.
 
-Firebase UID(28자)는 UUID가 아닙니다. 기본 설정 `FIREBASE_UID_UUID_MODE=v5`는 동일 UID → 동일 UUID로 변환합니다.
+Firebase UID(28자) → `FIREBASE_UID_UUID_MODE=v5`로 **deterministic UUID** (`migrateData.ts`와 동일).
 
-**Auth 이관 시에도 같은 v5 규칙**을 써야 합니다. 예: Firebase UID `Ys8GQZYy...` → `uuidv5(uid, STELVIO_UID_NAMESPACE)`.
+```bash
+# .env 에 SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY 추가 (service_role secret)
+npm run migrate:auth:dry   # 생성 없이 시뮬레이션
+npm run migrate:auth       # Supabase Auth 사용자 생성
+```
+
+- Firebase **로그인 비밀번호는 이관 불가** → 임의 비밀번호 생성 후, 앱에서 **비밀번호 재설정/매직링크** 필요
+- 이메일 없는 계정: `{firebaseUid}@firebase-migrate.stelvio.local` (고유)
+- 실패 로그: `migration_auth_errors.log`
 
 ### 2. 환경 변수
 
 ```bash
 cd supabase/migration
 cp .env.example .env
-# DATABASE_URL, GOOGLE_APPLICATION_CREDENTIALS 설정
+# DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GOOGLE_APPLICATION_CREDENTIALS
 npm install
 ```
 
@@ -27,7 +35,31 @@ npm install
 
 `collectionGroup` 쿼리(`logs`, `ranking_day_totals` 등)에 필요한 복합 인덱스가 Firebase 콘솔에 있어야 합니다. 없으면 콘솔 링크로 인덱스 생성 후 재실행.
 
-## 실행
+## 소모임·미디어 이관 (`migrate:riding-groups`)
+
+Firestore `stelvio_riding_groups`, `rides` GPX/커버 URL → `riding_groups`, `media_assets`.
+
+**사전:** `migrate` / `migrate:auth`로 `public.users`·`open_rides`가 있어야 합니다.
+
+```bash
+npm run schema:riding-groups   # ON CONFLICT용 PK·UNIQUE 복구 (선택, migrate 시 자동 실행)
+npm run migrate:riding-groups
+```
+
+구버전 `riding_groups`만 있을 때 `firestore_doc_id` / `ON CONFLICT` 오류가 나면 Supabase SQL Editor에서  
+`supabase/migrations/20260522140300_riding_groups_migrate_constraints_repair.sql` 실행 후 재시도.
+
+## 실행 순서 (권장)
+
+```bash
+npm install
+npm run test:db              # DATABASE_URL
+npm run migrate:auth:dry     # ① Auth
+npm run migrate:auth         # ① Auth 실제 생성
+npm run test:db              # auth.users count ↑ 확인
+npm run migrate:dry          # ② Firestore 데이터
+npm run migrate              # ② Firestore 데이터 실제 이관
+```
 
 ```bash
 # 연결·매핑만 검증 (DB 쓰기 없음)

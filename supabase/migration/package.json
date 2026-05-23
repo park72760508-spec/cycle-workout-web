@@ -12,6 +12,7 @@
     "migrate:auth:dry": "tsx migrateAuthUsers.ts --dry-run",
     "test:db": "tsx scripts/testDbConnection.ts",
     "count:rides": "tsx scripts/countRides.ts",
+    "schema:riding-groups": "tsx scripts/ensureRidingGroupsSchema.ts",
     "migrate:riding-groups": "tsx scripts/migrateRidingGroupsAndMedia.ts",
     "verify:rankings": "node ../../scripts/compare-ranking-firestore-supabase.mjs"
   },
