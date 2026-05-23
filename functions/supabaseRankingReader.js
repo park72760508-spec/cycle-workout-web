@@ -16,6 +16,27 @@ const HEPTAGON_CATEGORIES = [
   "Leggenda",
 ];
 const GC_RANKING_MAX_ROWS_PER_CATEGORY = 10000;
+const SUPABASE_IN_QUERY_CHUNK = 200;
+
+function effectiveDayKmFromSummaryRow(row) {
+  const ks = Number(row.km_strava_sum) || 0;
+  const kk = Number(row.km_stelvio_sum) || 0;
+  return ks > 0 ? ks : kk;
+}
+
+async function supabaseSelectInChunks(supabase, table, select, column, ids, applyExtra) {
+  const out = [];
+  const list = (ids || []).filter(Boolean);
+  for (let i = 0; i < list.length; i += SUPABASE_IN_QUERY_CHUNK) {
+    const slice = list.slice(i, i + SUPABASE_IN_QUERY_CHUNK);
+    let q = supabase.from(table).select(select).in(column, slice);
+    if (typeof applyExtra === "function") q = applyExtra(q);
+    const { data, error } = await q;
+    if (error) throw error;
+    if (data && data.length) out.push(...data);
+  }
+  return out;
+}
 
 const PEAK_WKG_COLUMN = {
   "1min": "peak_1min_wkg",
@@ -303,6 +324,157 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
   };
 }
 
+/**
+ * 그룹 탭: 최근 30일 오픈 라이딩 — 방장별 참가자 당일 라이딩 거리(km) 합.
+ * Firestore getRolling30dGroupDistanceByHostEntries 와 동일 규칙(daily_summaries km).
+ * @param {import('firebase-admin')} admin
+ */
+async function fetchGroupDistRanking(admin, startStr, endStr) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const uidMap = await getFirebaseUidByUuidMap(admin);
+
+  const { data: openRides, error: ridesErr } = await supabase
+    .from("open_rides")
+    .select("id, host_user_id, host_name, ride_date, status")
+    .gte("ride_date", startStr)
+    .lte("ride_date", endStr)
+    .neq("status", "cancelled");
+  if (ridesErr) throw ridesErr;
+  if (!openRides || !openRides.length) return null;
+
+  const rideIds = openRides.map((r) => r.id);
+  const partRows = await supabaseSelectInChunks(
+    supabase,
+    "open_ride_participants",
+    "ride_id, user_id",
+    "ride_id",
+    rideIds,
+    (q) => q.eq("is_waitlist", false)
+  );
+
+  const partsByRide = new Map();
+  const participantUuidSet = new Set();
+  for (const pr of partRows) {
+    if (!pr || !pr.ride_id || !pr.user_id) continue;
+    const rid = String(pr.ride_id);
+    const uid = String(pr.user_id);
+    if (!partsByRide.has(rid)) partsByRide.set(rid, new Set());
+    partsByRide.get(rid).add(uid);
+    participantUuidSet.add(uid);
+  }
+
+  const participantUuids = Array.from(participantUuidSet);
+  const kmByUserDate = new Map();
+  if (participantUuids.length) {
+    const summaryRows = await supabaseSelectInChunks(
+      supabase,
+      "daily_summaries",
+      "user_id, summary_date, km_strava_sum, km_stelvio_sum",
+      "user_id",
+      participantUuids,
+      (q) => q.gte("summary_date", startStr).lte("summary_date", endStr)
+    );
+    for (const row of summaryRows) {
+      const key = `${String(row.user_id)}|${String(row.summary_date)}`;
+      const km = effectiveDayKmFromSummaryRow(row);
+      if (km > 0) kmByUserDate.set(key, Math.round(km * 100) / 100);
+    }
+  }
+
+  const byHost = new Map();
+  for (const ride of openRides) {
+    const hostUuid = String(ride.host_user_id || "");
+    const hostFb = uidMap.get(hostUuid);
+    if (!hostFb) continue;
+    const ymd = String(ride.ride_date || "").slice(0, 10);
+    if (!ymd || ymd < startStr || ymd > endStr) continue;
+    const partSet = partsByRide.get(String(ride.id));
+    if (!partSet || !partSet.size) continue;
+
+    let rideScore = 0;
+    partSet.forEach((pUuid) => {
+      const km = kmByUserDate.get(`${pUuid}|${ymd}`) || 0;
+      rideScore += km;
+    });
+    if (rideScore <= 0) continue;
+
+    if (!byHost.has(hostFb)) {
+      byHost.set(hostFb, {
+        hostUserId: hostFb,
+        hostUuid,
+        name:
+          (ride.host_name && String(ride.host_name).trim().slice(0, 80)) ||
+          "(이름 없음)",
+        totalKm: 0,
+      });
+    }
+    const agg = byHost.get(hostFb);
+    agg.totalKm += rideScore;
+  }
+
+  if (!byHost.size) return null;
+
+  const hostUuids = Array.from(
+    new Set(Array.from(byHost.values()).map((v) => v.hostUuid).filter(Boolean))
+  );
+  const hostProfileRows = hostUuids.length
+    ? await supabaseSelectInChunks(
+        supabase,
+        "users",
+        "id, display_name, profile_image_url",
+        "id",
+        hostUuids
+      )
+    : [];
+  const profileByUuid = new Map();
+  for (const u of hostProfileRows) {
+    if (u && u.id) profileByUuid.set(String(u.id), u);
+  }
+
+  const entries = [];
+  for (const [, v] of byHost) {
+    const prof = profileByUuid.get(v.hostUuid);
+    entries.push({
+      userId: v.hostUserId,
+      hostUserId: v.hostUserId,
+      name:
+        (prof && prof.display_name && String(prof.display_name).trim()) ||
+        v.name,
+      totalKm: Math.round(v.totalKm * 100) / 100,
+      ageCategory: "Supremo",
+      gender: "",
+      is_private: false,
+      rankingKind: "group",
+      currentUserParticipated: false,
+      profileImageUrl: (prof && prof.profile_image_url) || null,
+    });
+  }
+
+  entries.sort((a, b) => b.totalKm - a.totalKm);
+  const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
+  const byCategory = {
+    Supremo: withRank,
+    Bianco: [],
+    Rosa: [],
+    Infinito: [],
+    Leggenda: [],
+    Assoluto: [],
+  };
+
+  return {
+    success: true,
+    byCategory,
+    entries: withRank,
+    startStr,
+    endStr,
+    period: "rolling30",
+    durationType: "group_dist",
+    gender: "all",
+    precomputed: true,
+    readSource: "supabase",
+  };
+}
+
 function getMonthKeyKstNow() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
 }
@@ -537,6 +709,7 @@ module.exports = {
   fetchPersonalDist,
   fetchPersonalSpeed,
   fetchGcRanking,
+  fetchGroupDistRanking,
   attachGcHeptagonMeta,
   getFirebaseUidByUuidMap,
   resetUuidMapCacheForTests,

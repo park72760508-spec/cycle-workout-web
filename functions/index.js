@@ -7989,6 +7989,8 @@ exports.getPeakPowerRanking = onRequest(
           getMinHeptagonSnapshotAsOfSeoulYmd,
           RANKING_HEPTAGON_REBUILD_META_DOC,
           buildMotivationMessage,
+          applyGroupRankingParticipationForViewer,
+          hydratePeakRankMovementOnPayload,
         }
       );
     if (supabasePeakPayload) {

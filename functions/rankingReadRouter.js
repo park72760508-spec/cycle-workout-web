@@ -18,6 +18,7 @@ const SUPPORTED_PEAK_DURATIONS = new Set([
   "max",
   "personal_dist",
   "personal_speed",
+  "group_dist",
 ]);
 
 /**
@@ -67,6 +68,13 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
         endStr,
         gender
       );
+    } else if (durationType === "group_dist") {
+      const { startStr, endStr } = getRolling30DaysRangeSeoul();
+      payload = await supabaseRankingReader.fetchGroupDistRanking(
+        admin,
+        startStr,
+        endStr
+      );
     } else if (durationType === "personal_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
       payload = await supabaseRankingReader.fetchPersonalDist(
@@ -95,6 +103,39 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
     }
 
     if (!payload) return null;
+
+    if (
+      durationType === "group_dist" &&
+      payload &&
+      typeof deps.applyGroupRankingParticipationForViewer === "function"
+    ) {
+      await deps.applyGroupRankingParticipationForViewer(
+        deps.db,
+        payload.byCategory,
+        payload.entries,
+        payload.startStr,
+        payload.endStr,
+        uid
+      );
+    }
+    if (
+      durationType === "group_dist" &&
+      payload &&
+      typeof deps.hydratePeakRankMovementOnPayload === "function"
+    ) {
+      const gdEntries = Array.isArray(payload.entries)
+        ? payload.entries
+        : payload.byCategory?.Supremo || [];
+      await deps.hydratePeakRankMovementOnPayload(
+        deps.db,
+        payload.byCategory,
+        gdEntries,
+        "peak_group_dist_rolling30_all"
+      );
+      if (!payload.entries?.length && Array.isArray(payload.byCategory?.Supremo)) {
+        payload.entries = payload.byCategory.Supremo.slice();
+      }
+    }
 
     const cfg = rankingReadConfig.getRankingReadConfig();
     let parityReport = { ok: true, reason: "parity_skip_gc" };

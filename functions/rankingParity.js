@@ -117,6 +117,10 @@ async function verifyPeakRankingParity(admin, db, supabasePayload, ctx) {
     cacheKey = `peakRanking_personal_speed_28d_${gender}_${startStr}_${endStr}`;
     valueKey = "speedKmh";
     eps = 0.05;
+  } else if (durationType === "group_dist") {
+    cacheKey = `peakRanking_group_dist_30d_${startStr}_${endStr}`;
+    valueKey = "totalKm";
+    eps = 0.05;
   } else if (
     ["1min", "5min", "10min", "20min", "40min", "60min", "max"].includes(durationType)
   ) {
