@@ -7931,11 +7931,19 @@
     window.stelvioSetRankingReadSource = stelvioSetRankingReadSource;
     window.stelvioGetRankingReadSourceSync = stelvioGetRankingReadSourceSync;
 
+    /**
+     * 로컬 캐시·즉시 탭 전환·프리페치 적격 여부.
+     * Supabase Read ON이어도 GC·parity·MV 실패 시 readBackend=firebase 폴백이 정상 → 동일 파이프라인 허용.
+     * Firebase Read 모드에서는 supabase 응답만 거부(역방향 폴백 없음).
+     */
     function stelvioRankingPayloadMatchesReadSource(data) {
       if (!data) return false;
       var backend = data.readBackend || data.readSource;
       if (!backend) return true;
-      return backend === stelvioGetRankingReadSourceSync();
+      var cfg = stelvioGetRankingReadSourceSync();
+      if (backend === cfg) return true;
+      if (cfg === 'supabase' && backend === 'firebase') return true;
+      return false;
     }
 
     function stelvioRankingSwrKeyMatchesReadSource(swrKey) {
@@ -8012,10 +8020,14 @@
               'GC 탭과 무관. Cloud Functions 로그 "[rankingReadRouter] weekly Supabase failed" 확인.';
           } else if (meta && meta.duration === 'gc') {
             hint =
-              '[StelvioRankingRead] GC 탭 — Supabase Read Router 미적용(항상 Firebase ranking_aggregates)';
+              '[StelvioRankingRead] GC 탭 — 설계상 Firebase만 사용(Supabase Read Router 미구현). 오류 아님.';
+            if (typeof console !== 'undefined' && console.info) console.info(hint);
+            return;
           } else if (meta && meta.duration === 'group_dist') {
             hint =
-              '[StelvioRankingRead] 그룹 탭 — Supabase Read Router 미적용(항상 Firebase)';
+              '[StelvioRankingRead] 그룹 탭 — 설계상 Firebase만 사용(Supabase Read Router 미구현). 오류 아님.';
+            if (typeof console !== 'undefined' && console.info) console.info(hint);
+            return;
           } else {
             hint =
               '[StelvioRankingRead] Supabase Read ON이지만 Firebase 응답 — 정합성(parity) 폴백 또는 Supabase MV 오류 가능';
@@ -11177,6 +11189,7 @@
         if (s) s.scrollTop = 0;
       });
       (async function () {
+        await stelvioEnsureRankingReadSource();
         await stelvioRankingMemCacheHydrateFromPersistent();
         if (typeof stelvioScheduleRankingIdleMemPrewarm === 'function') {
           stelvioScheduleRankingIdleMemPrewarm({ force: true });
