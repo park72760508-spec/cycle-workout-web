@@ -3529,7 +3529,6 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   max-height: 1.5em !important;
   object-fit: contain !important;
   flex-shrink: 0 !important;
-  vertical-align: middle !important;
   display: block !important;
 }
 
@@ -7650,7 +7649,6 @@ body:has(#trainingDetailModal:not(.hidden)) {
   object-fit: cover;
   object-position: center;
   display: block;
-  vertical-align: top;
   border-radius: inherit;
   transform: translateZ(0);
   backface-visibility: hidden;
