@@ -358,7 +358,10 @@ function installStelvioNonAdminConsoleFilter() {
     /\[BluetoothIndividual\] ✅ 사용자 이름 실시간 업데이트/i,
     /\[getCurrentSegment\]/i,
     /\[현재 세그먼트 정보\]/i,
-    /\[updateSpeedometerTargetForSegment\]/i
+    /\[updateSpeedometerTargetForSegment\]/i,
+    /BloomFilter error/i,
+    /BloomFilterError/i,
+    /Applying bloom filter failed/i
   ];
   function shouldSuppress(args) {
     if (typeof window.isStelvioSysConsoleAdmin === 'function' && window.isStelvioSysConsoleAdmin()) return false;
