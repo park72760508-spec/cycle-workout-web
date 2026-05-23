@@ -50,6 +50,9 @@ import {
 } from "./aligoAlimtalkUnified";
 import { scrubAligoCredential } from "./aligoCredentials";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const supabaseDualWriteServer = require("../supabaseDualWriteServer");
+
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 
 // Client Secret: Firebase Secret Manager
@@ -658,6 +661,7 @@ export const stravaWebhook = onRequest(
       aligoUserIdSecret,
       aligoTokenSecret,
       missionAlimRelaySecret,
+      supabaseDualWriteServer.supabaseServiceRoleKey,
     ],
   } as any,
   async (req, res) => {
