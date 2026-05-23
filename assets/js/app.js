@@ -15064,8 +15064,175 @@ function ensureStelvioAdminAccessStatsButton() {
     }
   };
   host.appendChild(rankingBtn);
+
+  ensureStelvioAdminRankingReadDbToggle(host);
 }
 window.ensureStelvioAdminAccessStatsButton = ensureStelvioAdminAccessStatsButton;
+
+var STELVIO_ADMIN_READ_ROUTING_API =
+  'https://us-central1-stelvio-ai.cloudfunctions.net/adminSupabaseReadRouting';
+
+/** 관리자(grade=1) — 랭킹·집계 Read DB (Firebase ↔ Supabase) 토글 */
+function ensureStelvioAdminRankingReadDbToggle(hostEl) {
+  var host = hostEl || document.getElementById('settingsAdminDynamicStatsHost');
+  if (!host) return;
+  var g = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
+  var isAdmin =
+    typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g);
+  var wrap = document.getElementById('stelvioAdminReadDbToggleWrap');
+  if (!isAdmin) {
+    if (wrap) wrap.remove();
+    return;
+  }
+  if (wrap) {
+    loadStelvioAdminRankingReadDbState();
+    return;
+  }
+
+  wrap = document.createElement('div');
+  wrap.id = 'stelvioAdminReadDbToggleWrap';
+  wrap.className = 'stelvio-admin-read-db-wrap';
+  wrap.innerHTML =
+    '<div class="stelvio-admin-read-db-title">📊 랭킹·집계 Read DB</div>' +
+    '<p class="stelvio-admin-read-db-desc">getPeakPowerRanking · getWeeklyRanking 등 집계 조회 경로</p>' +
+    '<div class="stelvio-admin-read-db-toggle stelvio-gender-toggle">' +
+    '<button type="button" class="stelvio-toggle-btn" id="stelvioAdminReadDbFirebaseBtn" data-read-source="firebase">Firebase DB</button>' +
+    '<button type="button" class="stelvio-toggle-btn" id="stelvioAdminReadDbSupabaseBtn" data-read-source="supabase">Supabase DB</button>' +
+    '</div>' +
+    '<p class="stelvio-admin-read-db-status" id="stelvioAdminReadDbStatus">상태 불러오는 중…</p>';
+  host.appendChild(wrap);
+
+  var fbBtn = document.getElementById('stelvioAdminReadDbFirebaseBtn');
+  var sbBtn = document.getElementById('stelvioAdminReadDbSupabaseBtn');
+  if (fbBtn) {
+    fbBtn.onclick = function () {
+      if (fbBtn.classList.contains('active')) return;
+      setStelvioAdminRankingReadDb('firebase');
+    };
+  }
+  if (sbBtn) {
+    sbBtn.onclick = function () {
+      if (sbBtn.classList.contains('active')) return;
+      setStelvioAdminRankingReadDb('supabase');
+    };
+  }
+  loadStelvioAdminRankingReadDbState();
+}
+window.ensureStelvioAdminRankingReadDbToggle = ensureStelvioAdminRankingReadDbToggle;
+
+function applyStelvioAdminRankingReadDbUi(readSource, metaLine) {
+  var fbBtn = document.getElementById('stelvioAdminReadDbFirebaseBtn');
+  var sbBtn = document.getElementById('stelvioAdminReadDbSupabaseBtn');
+  var statusEl = document.getElementById('stelvioAdminReadDbStatus');
+  var src = readSource === 'supabase' ? 'supabase' : 'firebase';
+  if (fbBtn) fbBtn.classList.toggle('active', src === 'firebase');
+  if (sbBtn) sbBtn.classList.toggle('active', src === 'supabase');
+  if (statusEl) statusEl.textContent = metaLine || '';
+}
+
+async function loadStelvioAdminRankingReadDbState() {
+  var wrap = document.getElementById('stelvioAdminReadDbToggleWrap');
+  if (!wrap) return;
+  applyStelvioAdminRankingReadDbUi('firebase', '상태 불러오는 중…');
+  try {
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('로그인이 필요합니다.');
+    var idToken = await user.getIdToken(true);
+    var res = await fetch(STELVIO_ADMIN_READ_ROUTING_API, {
+      method: 'GET',
+      headers: { Authorization: 'Bearer ' + idToken },
+    });
+    var json = await res.json().catch(function () {
+      return {};
+    });
+    if (!res.ok || !json.success) {
+      throw new Error(json.error || 'HTTP ' + res.status);
+    }
+    var line =
+      json.readSource === 'supabase'
+        ? '현재: Supabase (전역 Read)'
+        : '현재: Firebase (기본 Read)';
+    if (json.parityFallbackToFirebase) {
+      line += ' · 정합성 불일치 시 Firebase 폴백';
+    }
+    if (json.updatedAt) {
+      try {
+        line += ' · 변경 ' + new Date(json.updatedAt).toLocaleString('ko-KR');
+      } catch (_e) {}
+    }
+    applyStelvioAdminRankingReadDbUi(json.readSource, line);
+  } catch (e) {
+    applyStelvioAdminRankingReadDbUi(
+      'firebase',
+      '상태 조회 실패: ' + (e && e.message ? e.message : e)
+    );
+  }
+}
+window.loadStelvioAdminRankingReadDbState = loadStelvioAdminRankingReadDbState;
+
+async function setStelvioAdminRankingReadDb(readSource) {
+  var target = readSource === 'supabase' ? 'supabase' : 'firebase';
+  var label = target === 'supabase' ? 'Supabase DB' : 'Firebase DB';
+  var confirmMsg =
+    target === 'supabase'
+      ? '랭킹·집계 Read DB를 Supabase로 전환합니다.\n\n' +
+        '· 전체 사용자의 랭킹 API 조회가 Supabase MV를 사용합니다.\n' +
+        '· 정합성 불일치 시 Firebase로 자동 폴백됩니다.\n' +
+        '· 훈련 일지·프로필 등 Firestore 직접 조회는 변경되지 않습니다.\n\n' +
+        '계속하시겠습니까?'
+      : '랭킹·집계 Read DB를 Firebase로 전환합니다.\n\n' +
+        '· 랭킹 API가 Firebase ranking_aggregates를 사용합니다.\n\n' +
+        '계속하시겠습니까?';
+  if (!window.confirm(confirmMsg)) return;
+
+  var statusEl = document.getElementById('stelvioAdminReadDbStatus');
+  if (statusEl) statusEl.textContent = label + '로 전환 중…';
+  var fbBtn = document.getElementById('stelvioAdminReadDbFirebaseBtn');
+  var sbBtn = document.getElementById('stelvioAdminReadDbSupabaseBtn');
+  if (fbBtn) fbBtn.disabled = true;
+  if (sbBtn) sbBtn.disabled = true;
+
+  try {
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('로그인이 필요합니다.');
+    var idToken = await user.getIdToken(true);
+    var res = await fetch(STELVIO_ADMIN_READ_ROUTING_API, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + idToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ readSource: target }),
+    });
+    var json = await res.json().catch(function () {
+      return {};
+    });
+    if (!res.ok || !json.success) {
+      throw new Error(json.error || 'HTTP ' + res.status);
+    }
+
+    var line = json.message || (target === 'supabase' ? 'Supabase Read' : 'Firebase Read');
+    applyStelvioAdminRankingReadDbUi(json.readSource, line);
+    if (typeof showToast === 'function') {
+      showToast(json.message || label + ' 전환 완료');
+    }
+
+    try {
+      if (window.stelvioRankingLocalCache && typeof window.stelvioRankingLocalCache.clearAll === 'function') {
+        window.stelvioRankingLocalCache.clearAll();
+      }
+    } catch (_e) {}
+  } catch (e) {
+    if (typeof showToast === 'function') {
+      showToast('Read DB 전환 오류: ' + (e && e.message ? e.message : e));
+    }
+    await loadStelvioAdminRankingReadDbState();
+  } finally {
+    if (fbBtn) fbBtn.disabled = false;
+    if (sbBtn) sbBtn.disabled = false;
+  }
+}
+window.setStelvioAdminRankingReadDb = setStelvioAdminRankingReadDb;
 
 function openSettingsModal() {
   const modal = document.getElementById('settingsModal');
