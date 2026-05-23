@@ -15229,6 +15229,17 @@ async function setStelvioAdminRankingReadDb(readSource) {
     if (typeof fetchStelvioPeakPowerRanking === 'function') {
       fetchStelvioPeakPowerRanking({ forceReadSource: true }).catch(function () {});
     }
+    if (typeof window.stelvioBackgroundPrefetchAllTabs === 'function') {
+      var prefetchUid =
+        (window.currentUser && window.currentUser.id) ||
+        (firebase.auth().currentUser && firebase.auth().currentUser.uid) ||
+        null;
+      if (prefetchUid) {
+        window.stelvioBackgroundPrefetchAllTabs(prefetchUid);
+      }
+    } else if (typeof window.stelvioEnsureRankingBoardWarmPrefetch === 'function') {
+      window.stelvioEnsureRankingBoardWarmPrefetch({ force: true, forceWarmAll: true });
+    }
   } catch (e) {
     if (typeof showToast === 'function') {
       showToast('Read DB 전환 오류: ' + (e && e.message ? e.message : e));
