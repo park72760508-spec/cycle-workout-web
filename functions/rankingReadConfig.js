@@ -146,9 +146,88 @@ async function shouldReadRankingFromSupabase(admin, requestFirebaseUid) {
   return { route: "firebase", reason: "default firebase primary read" };
 }
 
+/**
+ * 관리자 UI — appConfig/supabase_read_routing 갱신 (랭킹·집계 Read DB 전환).
+ * @param {import('firebase-admin')} admin
+ * @param {{ useSupabaseGlobal: boolean, parityFallbackToFirebase?: boolean, updatedBy?: string }} patch
+ */
+async function persistRankingReadRouting(admin, patch) {
+  if (!admin || !admin.firestore) {
+    throw new Error("Firestore admin required");
+  }
+  const ref = admin
+    .firestore()
+    .collection(FIRESTORE_DOC_PATH.collection)
+    .doc(FIRESTORE_DOC_PATH.doc);
+
+  const payload = {
+    useSupabaseGlobal: !!patch.useSupabaseGlobal,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (patch.updatedBy) {
+    payload.updatedBy = String(patch.updatedBy).trim();
+  }
+  if (patch.parityFallbackToFirebase != null) {
+    payload.parityFallbackToFirebase = !!patch.parityFallbackToFirebase;
+  } else if (patch.useSupabaseGlobal) {
+    payload.parityFallbackToFirebase = true;
+  }
+
+  await ref.set(payload, { merge: true });
+  cache.loadedAt = 0;
+  return refreshRankingReadConfig(admin, true);
+}
+
+/**
+ * @param {import('firebase-admin')} admin
+ */
+async function getRankingReadRoutingDocMeta(admin) {
+  if (!admin || !admin.firestore) {
+    return { updatedAt: null, updatedBy: null };
+  }
+  try {
+    const snap = await admin
+      .firestore()
+      .collection(FIRESTORE_DOC_PATH.collection)
+      .doc(FIRESTORE_DOC_PATH.doc)
+      .get();
+    if (!snap.exists) return { updatedAt: null, updatedBy: null };
+    const d = snap.data() || {};
+    const ts = d.updatedAt;
+    let updatedAt = null;
+    if (ts && typeof ts.toDate === "function") {
+      updatedAt = ts.toDate().toISOString();
+    } else if (typeof ts === "string") {
+      updatedAt = ts;
+    }
+    return {
+      updatedAt,
+      updatedBy: d.updatedBy ? String(d.updatedBy) : null,
+    };
+  } catch (_) {
+    return { updatedAt: null, updatedBy: null };
+  }
+}
+
+function buildReadRoutingStatus(cfg, meta) {
+  const useSupabaseGlobal = !!cfg.useSupabaseGlobal;
+  return {
+    readSource: useSupabaseGlobal ? "supabase" : "firebase",
+    useSupabaseGlobal,
+    parityFallbackToFirebase: cfg.parityFallbackToFirebase !== false,
+    whitelistCount: Array.isArray(cfg.whitelistUids) ? cfg.whitelistUids.length : 0,
+    updatedAt: meta.updatedAt,
+    updatedBy: meta.updatedBy,
+  };
+}
+
 module.exports = {
   refreshRankingReadConfig,
   getRankingReadConfig,
   shouldReadRankingFromSupabase,
   parseUidList,
+  persistRankingReadRouting,
+  getRankingReadRoutingDocMeta,
+  buildReadRoutingStatus,
+  FIRESTORE_DOC_PATH,
 };

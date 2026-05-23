@@ -38,6 +38,7 @@ const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const stravaDualWrite = require("./stravaDualWrite");
 const rankingReadRouter = require("./rankingReadRouter");
 const rankingParity = require("./rankingParity");
+const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -7180,6 +7181,48 @@ const scheduledRankingParityAuditOptions =
     memory: "512MiB",
     timeoutSeconds: 300,
   });
+/**
+ * 관리자(grade=1): 랭킹·집계 Read DB 전환 — appConfig/supabase_read_routing
+ * GET: 현재 readSource(firebase|supabase) · POST/JSON body: { readSource: "firebase"|"supabase" }
+ */
+exports.adminSupabaseReadRouting = onRequest(
+  { cors: true, timeoutSeconds: 30 },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET" && req.method !== "POST") {
+      res.status(405).json({ success: false, error: "GET 또는 POST만 지원합니다." });
+      return;
+    }
+
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
+      const payload = await rankingReadRoutingAdmin.handleAdminSupabaseReadRouting(
+        admin,
+        req,
+        req.method,
+        uid
+      );
+      res.status(200).json(payload);
+    } catch (e) {
+      const status = e.status || 500;
+      console.warn("[adminSupabaseReadRouting]", e.message || e);
+      res.status(status).json({
+        success: false,
+        error: e.message || String(e),
+      });
+    }
+  }
+);
+
 exports.scheduledRankingParityAudit = onSchedule(
   scheduledRankingParityAuditOptions,
   async () => {
