@@ -83,9 +83,10 @@ function isUidInCanaryPercent(firebaseUid, percent) {
 }
 
 /**
- * Secondary **쓰기**(훈련·Strava) — 전 사용자. 읽기 Canary는 서버 rankingReadConfig 전용.
+ * Secondary **쓰기** 게이트 — @see docs/DUAL_RUN_REMOTE_CONFIG.md
+ * SHADOW: whitelist · CANARY: whitelist + hash% · FULL: 전체
  * @param {string|undefined} firebaseUid
- * @returns {{ execute: boolean, status: string, reason: string }}
+ * @returns {{ execute: boolean, status: string, reason: string, userId?: string }}
  */
 export function evaluateSupabaseDualWrite(firebaseUid) {
   const override =
@@ -99,10 +100,68 @@ export function evaluateSupabaseDualWrite(firebaseUid) {
     return { execute: false, status, reason: 'dual_write_status=OFF' };
   }
 
+  if (status === 'FULL') {
+    return {
+      execute: true,
+      status,
+      reason: 'dual_write_status=FULL',
+      userId: uid,
+    };
+  }
+
+  const shadowList = mergeUidLists(
+    DEFAULT_SHADOW_WHITELIST,
+    dualRunCache.shadowUids,
+    override && Array.isArray(override.shadowUids) ? override.shadowUids : []
+  );
+
+  if (status === 'SHADOW') {
+    if (uid && shadowList.includes(uid)) {
+      return {
+        execute: true,
+        status,
+        reason: 'dual_write_status=SHADOW, whitelist',
+        userId: uid,
+      };
+    }
+    return {
+      execute: false,
+      status,
+      reason: 'dual_write_status=SHADOW, not in whitelist',
+      userId: uid,
+    };
+  }
+
+  if (status === 'CANARY') {
+    if (uid && shadowList.includes(uid)) {
+      return {
+        execute: true,
+        status,
+        reason: 'dual_write_status=CANARY, shadow whitelist',
+        userId: uid,
+      };
+    }
+    const pct = dualRunCache.canaryPercent;
+    if (uid && isUidInCanaryPercent(uid, pct)) {
+      return {
+        execute: true,
+        status,
+        reason: 'dual_write_status=CANARY, hash bucket<' + pct,
+        userId: uid,
+      };
+    }
+    return {
+      execute: false,
+      status,
+      reason: 'dual_write_status=CANARY, outside bucket',
+      userId: uid,
+    };
+  }
+
   return {
-    execute: true,
+    execute: false,
     status,
-    reason: `dual_write_status=${status}, ingest=all_users`,
+    reason: 'dual_write_status unknown: ' + status,
     userId: uid,
   };
 }
