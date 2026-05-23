@@ -4,9 +4,11 @@
  */
 import { loadConfig } from "../src/config.js";
 import { initFirestore } from "../src/firestore.js";
-import { createPool, loadAuthUserIdSet } from "../src/pg.js";
+import { createPool, loadAuthUserIdSet, loadPublicUserIdSet } from "../src/pg.js";
 import { resolveUserUuid, resolveOpenRideUuid } from "../src/uid.js";
 import { v5 as uuidv5 } from "uuid";
+import { applyRidingGroupsSchemaRepair } from "./ensureRidingGroupsSchema.js";
+import type { Pool } from "pg";
 
 function str(v: unknown): string | null {
   if (v == null) return null;
@@ -37,12 +39,38 @@ function inferStoragePath(url: string | null, fallback: string): string {
   return fallback;
 }
 
+async function runQuery(
+  pool: Pool,
+  label: string,
+  sql: string,
+  params?: unknown[]
+): Promise<void> {
+  try {
+    await pool.query(sql, params);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`[${label}] ${msg}`);
+  }
+}
+
 async function main(): Promise<void> {
   const config = loadConfig(process.argv);
   const db = initFirestore();
   const pool = createPool(config);
   const authIds = await loadAuthUserIdSet(pool, config);
+  const publicUserIds = await loadPublicUserIdSet(pool);
   const ns = config.uidNamespace;
+
+  function canMigrateUser(firebaseUid: string): boolean {
+    const uuid = resolveUserUuid(firebaseUid, config);
+    if (!uuid) return false;
+    const key = uuid.toLowerCase();
+    if (config.skipUsersWithoutAuth && !authIds.has(key)) return false;
+    return publicUserIds.has(key);
+  }
+
+  console.log("[migrate:riding-groups] 스키마 복구·검증...");
+  await applyRidingGroupsSchemaRepair(pool);
 
   console.log("[migrate:riding-groups] groups + open_rides media 시작");
 
@@ -53,17 +81,26 @@ async function main(): Promise<void> {
     const createdBy = str(d.createdBy);
     if (!createdBy) continue;
     const createdUuid = resolveUserUuid(createdBy, config);
-    if (!createdUuid || (config.skipUsersWithoutAuth && !authIds.has(createdUuid))) continue;
+    if (!createdUuid || !canMigrateUser(createdBy)) continue;
 
     const groupUuid = resolveRidingGroupUuid(doc.id, ns);
     const photoUrl = str(d.photoUrl);
-    await pool.query(
+    const reviewedByRaw = d.reviewedBy ? String(d.reviewedBy) : null;
+    const reviewedByUuid =
+      reviewedByRaw && canMigrateUser(reviewedByRaw)
+        ? resolveUserUuid(reviewedByRaw, config)
+        : null;
+
+    await runQuery(
+      pool,
+      `riding_groups insert ${doc.id}`,
       `INSERT INTO public.riding_groups (
         id, firestore_doc_id, name, regions, intro, is_public, join_password,
         photo_url, photo_storage_path, status, created_by, member_count,
         ranking_notice, reviewed_at, reviewed_by, created_at, updated_at
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-      ON CONFLICT (firestore_doc_id) DO UPDATE SET
+      ON CONFLICT (id) DO UPDATE SET
+        firestore_doc_id=EXCLUDED.firestore_doc_id,
         name=EXCLUDED.name, photo_url=EXCLUDED.photo_url,
         photo_storage_path=EXCLUDED.photo_storage_path,
         status=EXCLUDED.status, member_count=EXCLUDED.member_count,
@@ -85,14 +122,16 @@ async function main(): Promise<void> {
         Number(d.memberCount) || 0,
         JSON.stringify(d.rankingNotice || {}),
         d.reviewedAt ? toIso(d.reviewedAt) : null,
-        d.reviewedBy ? resolveUserUuid(String(d.reviewedBy), config) : null,
+        reviewedByUuid,
         toIso(d.createdAt),
         toIso(d.updatedAt),
       ]
     );
 
     if (photoUrl) {
-      await pool.query(
+      await runQuery(
+        pool,
+        `media_assets group_cover ${doc.id}`,
         `INSERT INTO public.media_assets (
           entity_type, entity_id, owner_user_id, storage_path, public_url, content_type
         ) VALUES ('group_cover',$1,$2,$3,$4,'image/jpeg')
@@ -111,8 +150,10 @@ async function main(): Promise<void> {
     for (const m of memSnap.docs) {
       const md = m.data();
       const uid = resolveUserUuid(m.id, config);
-      if (!uid) continue;
-      await pool.query(
+      if (!uid || !canMigrateUser(m.id)) continue;
+      await runQuery(
+        pool,
+        `riding_group_members ${doc.id}/${m.id}`,
         `INSERT INTO public.riding_group_members (
           group_id, user_id, role, display_name, profile_image_url, joined_at
         ) VALUES ($1,$2,$3,$4,$5,$6)
@@ -130,7 +171,9 @@ async function main(): Promise<void> {
       );
       const avatar = str(md.profileImageUrl);
       if (avatar) {
-        await pool.query(
+        await runQuery(
+          pool,
+          `media_assets user_avatar ${m.id}`,
           `INSERT INTO public.media_assets (
             entity_type, entity_id, owner_user_id, storage_path, public_url, content_type
           ) VALUES ('user_avatar',$1,$2,$3,$4,'image/jpeg')
@@ -144,8 +187,10 @@ async function main(): Promise<void> {
     for (const r of reqSnap.docs) {
       const rd = r.data();
       const uid = resolveUserUuid(r.id, config);
-      if (!uid) continue;
-      await pool.query(
+      if (!uid || !canMigrateUser(r.id)) continue;
+      await runQuery(
+        pool,
+        `riding_group_join_requests ${doc.id}/${r.id}`,
         `INSERT INTO public.riding_group_join_requests (
           group_id, user_id, display_name, profile_image_url, requested_at
         ) VALUES ($1,$2,$3,$4,$5)
@@ -169,10 +214,12 @@ async function main(): Promise<void> {
     const host = str(d.hostUserId);
     if (!host) continue;
     const hostUuid = resolveUserUuid(host, config);
-    if (!hostUuid) continue;
+    if (!hostUuid || !canMigrateUser(host)) continue;
     const rideUuid = resolveOpenRideUuid(doc.id, config);
     const gpxUrl = str(d.gpxUrl);
-    await pool.query(
+    await runQuery(
+      pool,
+      `open_rides gpx ${doc.id}`,
       `UPDATE public.open_rides SET
         gpx_url = COALESCE($2, gpx_url),
         gpx_storage_path = COALESCE($3, gpx_storage_path),
@@ -186,7 +233,9 @@ async function main(): Promise<void> {
       ]
     );
     if (gpxUrl) {
-      await pool.query(
+      await runQuery(
+        pool,
+        `media_assets open_ride_gpx ${doc.id}`,
         `INSERT INTO public.media_assets (
           entity_type, entity_id, owner_user_id, storage_path, public_url, content_type
         ) VALUES ('open_ride_gpx',$1,$2,$3,$4,'application/gpx+xml')
