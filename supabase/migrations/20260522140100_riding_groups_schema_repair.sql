@@ -23,6 +23,8 @@ ALTER TABLE public.riding_groups
   ADD COLUMN IF NOT EXISTS is_public boolean DEFAULT true,
   ADD COLUMN IF NOT EXISTS join_password text DEFAULT '',
   ADD COLUMN IF NOT EXISTS photo_url text,
+  ADD COLUMN IF NOT EXISTS photo_storage_path text,
+  ADD COLUMN IF NOT EXISTS cover_content_type text DEFAULT 'image/jpeg',
   ADD COLUMN IF NOT EXISTS member_count integer DEFAULT 0,
   ADD COLUMN IF NOT EXISTS ranking_notice jsonb DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS reviewed_at timestamptz,
@@ -52,9 +54,22 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class t ON c.conrelid = t.oid
+    JOIN pg_namespace n ON t.relnamespace = n.oid
+    WHERE n.nspname = 'public' AND t.relname = 'riding_groups' AND c.contype = 'p'
+  ) THEN
+    ALTER TABLE public.riding_groups ADD PRIMARY KEY (id);
+  END IF;
+END $$;
+
+DROP INDEX IF EXISTS public.idx_riding_groups_firestore_doc_id;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_riding_groups_firestore_doc_id
-  ON public.riding_groups (firestore_doc_id)
-  WHERE firestore_doc_id IS NOT NULL;
+  ON public.riding_groups (firestore_doc_id);
 
 COMMENT ON TABLE public.riding_groups IS 'Firestore stelvio_riding_groups/{groupId}';
 

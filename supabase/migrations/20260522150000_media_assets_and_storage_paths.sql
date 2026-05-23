@@ -35,6 +35,21 @@ CREATE TABLE IF NOT EXISTS public.media_assets (
   CONSTRAINT media_assets_entity_path_unique UNIQUE (entity_type, entity_id, storage_path)
 );
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_class WHERE relname = 'media_assets' AND relnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.media_assets'::regclass
+      AND conname = 'media_assets_entity_path_unique'
+  ) THEN
+    ALTER TABLE public.media_assets
+      ADD CONSTRAINT media_assets_entity_path_unique
+      UNIQUE (entity_type, entity_id, storage_path);
+  END IF;
+END $$;
+
 COMMENT ON TABLE public.media_assets IS
   'Firebase/Supabase Storage 메타 — 아바타·GPX·소모임 커버·첨부. public_url은 UI 표시용.';
 
