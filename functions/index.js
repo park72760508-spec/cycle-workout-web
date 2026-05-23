@@ -40,6 +40,10 @@ const rankingReadRouter = require("./rankingReadRouter");
 const rankingParity = require("./rankingParity");
 const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
 const rankingReadRoutingPublic = require("./rankingReadRoutingPublic");
+const groupReadRouter = require("./groupReadRouter");
+const groupReadRoutingPublic = require("./groupReadRoutingPublic");
+const groupDualWriteTriggers = require("./groupDualWriteTriggers");
+const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -7257,6 +7261,235 @@ exports.getRankingReadRoutingPublic = onRequest(
     }
   }
 );
+
+/**
+ * 전 사용자 — 라이딩 모임 Read DB (Firebase vs Supabase) 공개 조회.
+ */
+exports.getGroupsReadRoutingPublic = onRequest(
+  { cors: true, timeoutSeconds: 15 },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+    res.set("Cache-Control", "public, max-age=60, s-maxage=60");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    try {
+      const payload = await groupReadRoutingPublic.getPublicGroupsReadRouting(admin);
+      res.status(200).json(payload);
+    } catch (e) {
+      console.warn("[getGroupsReadRoutingPublic]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 오픈 라이딩 단건 Read — Supabase Canary → Firebase 폴백 (Firestore JSON 형태).
+ */
+exports.getOpenRideForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    const db = admin.firestore();
+    const rideId = String(req.query.rideId || req.query.id || "").trim();
+    if (!rideId) {
+      res.status(400).json({ success: false, error: "rideId 필요" });
+      return;
+    }
+    try {
+      const fromSb = await groupReadRouter.tryFetchOpenRideFromSupabase(admin, db, req.query);
+      if (fromSb) {
+        res.status(200).json(fromSb);
+        return;
+      }
+      const fromFb = await groupReadRouter.fetchOpenRideFromFirebase(db, rideId);
+      if (fromFb) {
+        res.status(200).json(fromFb);
+        return;
+      }
+      res.status(404).json({ success: false, error: "not_found" });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 소모임 단건 Read — Supabase Canary → Firebase 폴백 (Firestore JSON 형태).
+ */
+exports.getRidingGroupForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    const db = admin.firestore();
+    const groupId = String(req.query.groupId || req.query.id || "").trim();
+    if (!groupId) {
+      res.status(400).json({ success: false, error: "groupId 필요" });
+      return;
+    }
+    const includeJoinRequests =
+      req.query.includeJoinRequests === "1" || req.query.includeJoinRequests === "true";
+    try {
+      const fromSb = await groupReadRouter.tryFetchRidingGroupFromSupabase(admin, db, req.query);
+      if (fromSb) {
+        res.status(200).json(fromSb);
+        return;
+      }
+      const fromFb = await groupReadRouter.fetchRidingGroupFromFirebase(db, groupId, {
+        includeMembers: true,
+        includeJoinRequests,
+      });
+      if (fromFb) {
+        res.status(200).json(fromFb);
+        return;
+      }
+      res.status(404).json({ success: false, error: "not_found" });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 승인된 소모임 목록 Read — Supabase Canary → Firebase 폴백.
+ */
+exports.getApprovedRidingGroupsForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 45 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    const db = admin.firestore();
+    try {
+      const fromSb = await groupReadRouter.tryFetchApprovedRidingGroupsFromSupabase(
+        admin,
+        db,
+        req.query
+      );
+      if (fromSb) {
+        res.status(200).json(fromSb);
+        return;
+      }
+      const snap = await db
+        .collection("stelvio_riding_groups")
+        .where("status", "==", "APPROVED")
+        .orderBy("createdAt", "desc")
+        .limit(Math.min(Number(req.query.limit) || 200, 500))
+        .get();
+      const groups = snap.docs.map((d) => ({ id: d.id, ...d.data(), readBackend: "firebase" }));
+      res.status(200).json({ success: true, groups, readBackend: "firebase" });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+  }
+);
+
+/** 클라이언트 Secondary relay — Firestore Primary 성공 후 open_rides upsert */
+exports.ingestOpenRideDualWriteRelay = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원" });
+      return;
+    }
+    try {
+      const body = req.body || {};
+      const firestoreDocId = String(body.firestoreDocId || "").trim();
+      const rideData = body.rideData;
+      const actorUid = String(body.actorUid || rideData?.hostUserId || "").trim();
+      if (!firestoreDocId || !rideData) {
+        res.status(400).json({ success: false, error: "firestoreDocId, rideData 필요" });
+        return;
+      }
+      const result = await supabaseGroupDualWrite.runSecondaryAfterOpenRideWrite(
+        admin,
+        firestoreDocId,
+        rideData,
+        actorUid
+      );
+      res.status(200).json({ success: true, ...result });
+    } catch (e) {
+      console.warn("[ingestOpenRideDualWriteRelay]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/** 클라이언트 Secondary relay — riding_groups upsert */
+exports.ingestRidingGroupDualWriteRelay = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원" });
+      return;
+    }
+    try {
+      const body = req.body || {};
+      const firestoreDocId = String(body.firestoreDocId || "").trim();
+      const groupData = body.groupData;
+      const actorUid = String(body.actorUid || groupData?.createdBy || "").trim();
+      if (!firestoreDocId || !groupData) {
+        res.status(400).json({ success: false, error: "firestoreDocId, groupData 필요" });
+        return;
+      }
+      const result = await supabaseGroupDualWrite.runSecondaryAfterRidingGroupWrite(
+        admin,
+        firestoreDocId,
+        groupData,
+        actorUid,
+        { syncMembersFromFirestore: !!body.syncMembers }
+      );
+      res.status(200).json({ success: true, ...result });
+    } catch (e) {
+      console.warn("[ingestRidingGroupDualWriteRelay]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+Object.assign(exports, groupDualWriteTriggers);
 
 exports.scheduledRankingParityAudit = onSchedule(
   scheduledRankingParityAuditOptions,
