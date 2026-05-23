@@ -6,7 +6,14 @@
  *   dual_write_shadow_uids  — SHADOW 화이트리스트 Firebase UID (쉼표 구분)
  *   dual_write_canary_percent — CANARY 비율 0–100 (기본 10)
  */
+import {
+  createReactNativeRemoteConfigAdapter,
+  type RemoteConfigAdapter,
+} from "./dualRunRemoteConfig";
 import type { FirebaseUserId } from "./types";
+
+export type { RemoteConfigAdapter } from "./dualRunRemoteConfig";
+export { createReactNativeRemoteConfigAdapter } from "./dualRunRemoteConfig";
 
 export type DualWriteStatus = "OFF" | "SHADOW" | "CANARY" | "FULL";
 
@@ -38,13 +45,6 @@ export interface RemoteConfigValues {
   status: DualWriteStatus;
   shadowUids: string[];
   canaryPercent: number;
-}
-
-export interface RemoteConfigAdapter {
-  setDefaults(defaults: Record<string, string | number | boolean>): Promise<void>;
-  fetchAndActivate(): Promise<boolean>;
-  getString(key: string): string;
-  getNumber(key: string): number;
 }
 
 export interface DualRunManagerConfig {
@@ -309,9 +309,6 @@ export class DualRunManager {
   private async resolveRemoteConfigAdapter(): Promise<RemoteConfigAdapter | null> {
     if (this.remoteConfig) return this.remoteConfig;
     try {
-      const { createReactNativeRemoteConfigAdapter } = await import(
-        "./remoteConfigAdapter"
-      );
       this.remoteConfig = createReactNativeRemoteConfigAdapter();
       return this.remoteConfig;
     } catch {
