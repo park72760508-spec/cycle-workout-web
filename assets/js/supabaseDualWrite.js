@@ -461,30 +461,23 @@ export async function writeRideToSupabase(rideRow) {
 }
 
 /**
- * saveTrainingSession Firestore 성공 후 호출.
+ * Firestore log → Supabase rides upsert (training·Strava 공통).
  * @param {string} userId Firebase UID
- * @param {object} trainingData 입력
- * @param {object} txResult runTransaction 반환값
+ * @param {string} logDocId Firestore logs 문서 ID
+ * @param {object} log 저장된 log 필드
+ * @param {'training'|'strava'} label 로그 구분
  */
-export async function runSecondaryAfterTrainingSave(
-  userId,
-  trainingData,
-  txResult
-) {
+async function runSecondaryRideUpsert(userId, logDocId, log, label) {
   await refreshDualRunFromRemoteConfig(true);
   const decision = evaluateSupabaseDualWrite(userId);
   if (!decision.execute) {
-    console.log('[supabaseDualWrite] secondary 스킵:', decision.reason);
+    console.log('[supabaseDualWrite] ' + label + ' secondary 스킵:', decision.reason);
     return { skipped: true, reason: decision.reason };
   }
 
   const cfg = getConfig();
-  const logDocId = txResult && txResult.trainingLogId;
-  const log =
-    (txResult && txResult.trainingLogData) ||
-    buildFallbackLogFromTrainingData(trainingData, txResult);
   if (!logDocId || !log) {
-    console.warn('[supabaseDualWrite] logDocId/trainingLogData 없음');
+    console.warn('[supabaseDualWrite] ' + label + ' logDocId/log 없음');
     return { skipped: true, reason: 'missing log payload' };
   }
 
@@ -496,18 +489,47 @@ export async function runSecondaryAfterTrainingSave(
     cfg.uidNamespace
   );
   if (!row) {
-    console.warn('[supabaseDualWrite] ride row 매핑 실패');
+    console.warn('[supabaseDualWrite] ' + label + ' ride row 매핑 실패');
     return { skipped: true, reason: 'map failed' };
   }
 
   await writeRideToSupabase(row);
-  console.log('[supabaseDualWrite] rides upsert OK', {
+  console.log('[supabaseDualWrite] ' + label + ' rides upsert OK', {
     userId,
     activity_id: row.activity_id,
     ride_date: row.ride_date,
+    source: row.source,
     status: decision.status,
   });
   return { skipped: false, activity_id: row.activity_id };
+}
+
+/**
+ * saveTrainingSession Firestore 성공 후 호출.
+ * @param {string} userId Firebase UID
+ * @param {object} trainingData 입력
+ * @param {object} txResult runTransaction 반환값
+ */
+export async function runSecondaryAfterTrainingSave(
+  userId,
+  trainingData,
+  txResult
+) {
+  const logDocId = txResult && txResult.trainingLogId;
+  const log =
+    (txResult && txResult.trainingLogData) ||
+    buildFallbackLogFromTrainingData(trainingData, txResult);
+  return runSecondaryRideUpsert(userId, logDocId, log, 'training');
+}
+
+/**
+ * saveStravaActivityToFirebase Firestore 성공(또는 기존 log backfill) 후 호출.
+ * @param {string} userId Firebase UID
+ * @param {string} logDocId Firestore logs 문서 ID
+ * @param {object} trainingLog 저장·조회된 log 필드
+ */
+export async function runSecondaryAfterStravaSave(userId, logDocId, trainingLog) {
+  return runSecondaryRideUpsert(userId, logDocId, trainingLog, 'strava');
 }
 
 function buildFallbackLogFromTrainingData(trainingData, txResult) {

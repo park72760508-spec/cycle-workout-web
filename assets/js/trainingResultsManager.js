@@ -241,6 +241,21 @@ async function getStelvioLogDatesFromUserLogs(userId) {
 }
 
 /**
+ * Strava Firestore Primary 성공 후 Supabase Secondary (실패해도 Primary 유지).
+ */
+async function invokeStravaSupabaseSecondary(userId, logDocId, trainingLog) {
+  try {
+    const dualMod = await import('./supabaseDualWrite.js');
+    await dualMod.runSecondaryAfterStravaSave(userId, logDocId, trainingLog);
+  } catch (dualErr) {
+    console.warn(
+      '[saveStravaActivityToFirebase] Supabase secondary (Primary 유지):',
+      dualErr && dualErr.message ? dualErr.message : dualErr
+    );
+  }
+}
+
+/**
  * 스트라바 활동 저장 (Firebase Firestore)
  * Subcollection 구조: users/{userId}/logs/{logId}
  * 확장된 필드 구조로 저장 (Target Schema 기반)
@@ -288,8 +303,15 @@ async function saveStravaActivityToFirebase(activity) {
       .get();
     
     if (!existingQuery.empty) {
+      const existingDoc = existingQuery.docs[0];
       console.log('[saveStravaActivityToFirebase] ⚠️ 이미 존재하는 활동:', activityId);
-      return { success: true, id: activityId, isNew: false };
+      await invokeStravaSupabaseSecondary(userId, existingDoc.id, existingDoc.data());
+      return {
+        success: true,
+        id: existingDoc.id,
+        activityId: activityId,
+        isNew: false,
+      };
     }
     
     // 확장된 필드 구조로 변환 (Target Schema 기반)
@@ -377,6 +399,8 @@ async function saveStravaActivityToFirebase(activity) {
       logId: docRef.id,
       path: docRef.path
     });
+
+    await invokeStravaSupabaseSecondary(userId, docRef.id, trainingLog);
     
     return { success: true, id: docRef.id, activityId: activityId, isNew: true };
   } catch (error) {
