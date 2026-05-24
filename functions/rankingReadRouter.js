@@ -4,6 +4,8 @@
 const rankingReadConfig = require("./rankingReadConfig");
 const supabaseRankingReader = require("./supabaseRankingReader");
 const rankingParity = require("./rankingParity");
+const peakMovement = require("./rankingPeakMovement");
+const peakMovementSupabase = require("./rankingPeakMovementSupabase");
 const { attachCurrentUserToPayload } = require("./rankingResponseAdapter");
 
 const SUPPORTED_PEAK_DURATIONS = new Set([
@@ -117,23 +119,20 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
         payload.endStr,
         uid
       );
-    }
-    if (
-      durationType === "group_dist" &&
-      payload &&
-      typeof deps.hydratePeakRankMovementOnPayload === "function"
-    ) {
-      const gdEntries = Array.isArray(payload.entries)
-        ? payload.entries
-        : payload.byCategory?.Supremo || [];
-      await deps.hydratePeakRankMovementOnPayload(
-        deps.db,
-        payload.byCategory,
-        gdEntries,
-        "peak_group_dist_rolling30_all"
-      );
       if (!payload.entries?.length && Array.isArray(payload.byCategory?.Supremo)) {
         payload.entries = payload.byCategory.Supremo.slice();
+      }
+    }
+
+    /* GC: heptagon_cohort_ranks.rank_change — 그 외: Supabase peak_rank_board_snapshots (Firestore peak_rank_history 후순위) */
+    if (durationType !== "gc" && payload && payload.byCategory) {
+      const historyKey = peakMovement.resolvePeakRankHistoryKey(
+        durationType,
+        payload.period || query.period,
+        gender
+      );
+      if (historyKey) {
+        await peakMovementSupabase.hydratePeakRankMovementOnPayload(payload, historyKey);
       }
     }
 

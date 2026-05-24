@@ -5634,6 +5634,16 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
   } catch (eWrite) {
     console.warn("[applyPeakRankChanges] 스냅샷 저장 실패:", historyKey, eWrite && eWrite.message);
   }
+  try {
+    const { applyPeakRankChangesSupabase } = require("./rankingPeakMovementSupabase");
+    await applyPeakRankChangesSupabase(byCategory, historyKey);
+  } catch (eSb) {
+    console.warn(
+      "[applyPeakRankChanges] Supabase 스냅샷 저장 실패:",
+      historyKey,
+      eSb && eSb.message ? eSb.message : eSb
+    );
+  }
 }
 
 /** @deprecated 전체(Supremo) 등락을 부문에 복사하지 않음 — applyPeakRankChanges 가 부문별 처리 */
