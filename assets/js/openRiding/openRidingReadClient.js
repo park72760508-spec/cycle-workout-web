@@ -93,9 +93,11 @@ function membersFromGroupPayload(group) {
   if (!group || !Array.isArray(group._members)) return [];
   return group._members.map(function (m) {
     if (!m) return null;
+    var uid = m.userId != null ? String(m.userId) : m.id != null ? String(m.id) : '';
+    if (!uid) return null;
     return {
-      id: m.id,
-      userId: m.id,
+      id: uid,
+      userId: uid,
       joinedAt: m.joinedAt,
       displayName: m.displayName || '',
       profileImageUrl: m.profileImageUrl != null ? m.profileImageUrl : null,
@@ -252,6 +254,17 @@ export async function fetchRidingGroupByIdRouted(db, groupId, opts) {
   return { id: snap.id, ...snap.data() };
 }
 
+async function fetchRidingGroupMembersFromFirestore(db, groupId) {
+  const gid = String(groupId || '').trim();
+  if (!db || !gid) return [];
+  const snap = await getDocs(collection(db, 'stelvio_riding_groups', gid, 'members'));
+  const list = [];
+  snap.forEach(function (d) {
+    list.push({ id: d.id, userId: d.id, ...d.data() });
+  });
+  return list;
+}
+
 export async function fetchRidingGroupMembersListRouted(db, groupId) {
   await stelvioEnsureGroupsReadSource();
   const gid = String(groupId || '').trim();
@@ -262,13 +275,28 @@ export async function fetchRidingGroupMembersListRouted(db, groupId) {
       groupId: gid,
       includeJoinRequests: '0',
     });
-    if (json && json.success && json.group) return membersFromGroupPayload(json.group);
+    if (json && json.success && json.group) {
+      const fromSb = membersFromGroupPayload(json.group);
+      if (fromSb.length > 0) return fromSb;
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn(
+          '[openRidingRead] Supabase 멤버 0건 → Firestore parity fallback',
+          gid
+        );
+      }
+    }
   }
 
-  const snap = await getDocs(collection(db, 'stelvio_riding_groups', gid, 'members'));
+  return fetchRidingGroupMembersFromFirestore(db, groupId);
+}
+
+async function fetchRidingGroupJoinRequestsFromFirestore(db, groupId) {
+  const gid = String(groupId || '').trim();
+  if (!db || !gid) return [];
+  const snap = await getDocs(collection(db, 'stelvio_riding_groups', gid, 'joinRequests'));
   const list = [];
   snap.forEach(function (d) {
-    list.push({ id: d.id, ...d.data() });
+    list.push({ id: d.id, userId: d.id, ...d.data() });
   });
   return list;
 }
@@ -283,15 +311,13 @@ export async function fetchRidingGroupJoinRequestsListRouted(db, groupId) {
       groupId: gid,
       includeJoinRequests: '1',
     });
-    if (json && json.success && json.group) return joinRequestsFromGroupPayload(json.group);
+    if (json && json.success && json.group) {
+      const fromSb = joinRequestsFromGroupPayload(json.group);
+      if (fromSb.length > 0) return fromSb;
+    }
   }
 
-  const snap = await getDocs(collection(db, 'stelvio_riding_groups', gid, 'joinRequests'));
-  const list = [];
-  snap.forEach(function (d) {
-    list.push({ id: d.id, ...d.data() });
-  });
-  return list;
+  return fetchRidingGroupJoinRequestsFromFirestore(db, groupId);
 }
 
 export function subscribeRidingGroupDetailRouted(db, groupId, cb) {
@@ -358,7 +384,7 @@ export function subscribeRidingGroupMembersRouted(db, groupId, cb) {
     fsUnsub = onSnapshot(collection(db, 'stelvio_riding_groups', gid, 'members'), function (snap) {
       var list = [];
       snap.forEach(function (d) {
-        list.push({ id: d.id, ...d.data() });
+        list.push({ id: d.id, userId: d.id, ...d.data() });
       });
       cb(list);
     });
