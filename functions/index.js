@@ -7471,9 +7471,6 @@ exports.getApprovedRidingGroupsForRead = onRequest(
   }
 );
 
-  }
-);
-
 /** 클라이언트 Secondary relay — Firestore Primary 성공 후 open_rides upsert */
 exports.ingestOpenRideDualWriteRelay = onRequest(
   supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
