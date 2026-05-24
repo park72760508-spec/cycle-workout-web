@@ -15133,7 +15133,7 @@ function applyStelvioAdminRankingReadDbUi(readSource, metaLine) {
 async function loadStelvioAdminRankingReadDbState() {
   var wrap = document.getElementById('stelvioAdminReadDbToggleWrap');
   if (!wrap) return;
-  applyStelvioAdminRankingReadDbUi('firebase', '상태 불러오는 중…');
+  applyStelvioAdminRankingReadDbUi('supabase', '상태 불러오는 중…');
   try {
     var user = firebase.auth().currentUser;
     if (!user) throw new Error('로그인이 필요합니다.');
@@ -15166,9 +15166,15 @@ async function loadStelvioAdminRankingReadDbState() {
     }
   } catch (e) {
     applyStelvioAdminRankingReadDbUi(
-      'firebase',
-      '상태 조회 실패: ' + (e && e.message ? e.message : e)
+      'supabase',
+      '상태 조회 실패 — 기본 Supabase Read 적용: ' + (e && e.message ? e.message : e)
     );
+    if (typeof window.stelvioSetRankingReadSource === 'function') {
+      window.stelvioSetRankingReadSource('supabase');
+    }
+    if (typeof window.stelvioEnsureRankingReadSource === 'function') {
+      window.stelvioEnsureRankingReadSource(true).catch(function () {});
+    }
   }
 }
 window.loadStelvioAdminRankingReadDbState = loadStelvioAdminRankingReadDbState;
