@@ -2116,8 +2116,18 @@ function createUserFromAuth(authFormData) {
   return apiCreateUser(userData);
 }
 
+function triggerSupabaseUserProvisionAfterProfile() {
+  if (typeof window.provisionSupabaseUserAfterProfile === 'function') {
+    window.provisionSupabaseUserAfterProfile().catch(function (eProv) {
+      console.warn('[userManager] Supabase 프로비저닝(비차단):', eProv);
+    });
+  }
+}
+
 function onUserRegistrationSuccess(userData, source = 'auth') {
   console.log(`User registered successfully from ${source}:`, userData);
+
+  triggerSupabaseUserProvisionAfterProfile();
   
   adoptCreatedUserAsViewer(userData).then(ok => {
     if (!ok) console.warn('방금 생성한 사용자를 찾지 못해 뷰어 채택에 실패');
@@ -4228,6 +4238,8 @@ async function completeUserInfo() {
         window.currentUser = { ...window.currentUser, ...updateData };
         persistStelvioUserToLocalStorage(window.currentUser);
       }
+
+      triggerSupabaseUserProvisionAfterProfile();
       
       // 모달 닫기
       const modal = document.getElementById('completeUserInfoModal');
