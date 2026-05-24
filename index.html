@@ -13262,10 +13262,18 @@
       if (!data.gender && typeof stelvioRankingState !== 'undefined' && stelvioRankingState.gender) {
         data.gender = stelvioRankingState.gender;
       }
+      window.stelvioRankingLastReadBackend = data.readBackend || data.readSource || '';
       var serverMvSnap = stelvioExtractRankMovementFromPayload(data);
       if (!applyOpts.fastTabSwitch) {
         stelvioSyncPeakRankMovementFromEntries(data);
-        if (stelvioSupportsRankMovementDuration(stelvioResolveRankMovementDurationType(data))) {
+        var rankMvFromSupabase =
+          data.readBackend === 'supabase' ||
+          data.readSource === 'supabase' ||
+          data.rankMovementSource === 'supabase';
+        if (
+          stelvioSupportsRankMovementDuration(stelvioResolveRankMovementDurationType(data)) &&
+          !rankMvFromSupabase
+        ) {
           stelvioApplyClientPeakRankMovementFromSnapshot(data);
         }
         stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
@@ -13622,7 +13630,19 @@
 
       function scheduleRankMvIfNeeded() {
         if (!needsRankMv) return;
-        var payload = stelvioRankingByCategory ? { byCategory: stelvioRankingByCategory } : null;
+        if (
+          typeof stelvioGetRankingReadSourceSync === 'function' &&
+          stelvioGetRankingReadSourceSync() === 'supabase'
+        ) {
+          return;
+        }
+        if (window.stelvioRankingLastReadBackend === 'supabase') return;
+        var payload = stelvioRankingByCategory
+          ? {
+              byCategory: stelvioRankingByCategory,
+              readBackend: window.stelvioRankingLastReadBackend,
+            }
+          : null;
         if (!payload || !stelvioPeakRankMovementPresentOnPayload(payload)) {
           scheduleBgRefresh(true);
         }
