@@ -15665,6 +15665,87 @@
       return !Number.isNaN(n) && (n === 2 || n === 3);
     }
 
+    /** 랭킹 목록 초기 표시: 상위 N + 본인(또는 표시순위) 기준 ±NEIGH */
+    var STELVIO_RANKING_LIST_TOP_N = 5;
+    var STELVIO_RANKING_LIST_NEIGH = 3;
+
+    function stelvioRankingRowListRank(item, idx0) {
+      if (item && item.rank != null && isFinite(Number(item.rank))) return Number(item.rank);
+      return idx0 + 1;
+    }
+
+    function stelvioBuildRankingVisibleIdxPlan(arr, userIdx, myRank1s, topN, neigh) {
+      topN = topN != null ? topN : STELVIO_RANKING_LIST_TOP_N;
+      neigh = neigh != null ? neigh : STELVIO_RANKING_LIST_NEIGH;
+      var lastIdx = arr.length - 1;
+      var idxSet = {};
+      if (lastIdx < 0) {
+        return { runs: [], hasMiddleGap: false, hasTail: false, needsExpandControl: false, lastIdx: -1 };
+      }
+      var tEnd = Math.min(topN - 1, lastIdx);
+      for (var t = 0; t <= tEnd; t++) idxSet[t] = true;
+      if (userIdx >= 0) {
+        var w0 = Math.max(0, userIdx - neigh);
+        var w1 = Math.min(lastIdx, userIdx + neigh);
+        for (var w = w0; w <= w1; w++) idxSet[w] = true;
+      } else if (myRank1s > 0) {
+        for (var ri = 0; ri <= lastIdx; ri++) {
+          if (Math.abs(stelvioRankingRowListRank(arr[ri], ri) - myRank1s) <= neigh) idxSet[ri] = true;
+        }
+      }
+      var sortedIdx = Object.keys(idxSet)
+        .map(function (x) {
+          return Number(x);
+        })
+        .filter(function (n) {
+          return !Number.isNaN(n);
+        })
+        .sort(function (a, b) {
+          return a - b;
+        });
+      var runs = [];
+      if (sortedIdx.length) {
+        var rs = sortedIdx[0];
+        var re = sortedIdx[0];
+        for (var si = 1; si < sortedIdx.length; si++) {
+          if (sortedIdx[si] === re + 1) re = sortedIdx[si];
+          else {
+            runs.push([rs, re]);
+            rs = re = sortedIdx[si];
+          }
+        }
+        runs.push([rs, re]);
+      }
+      var hasMiddleGap = false;
+      for (var rg = 1; rg < runs.length; rg++) {
+        var mLo = runs[rg - 1][1] + 1;
+        var mHi = runs[rg][0] - 1;
+        if (mLo <= mHi) {
+          hasMiddleGap = true;
+          break;
+        }
+      }
+      var tailLoR = runs.length ? runs[runs.length - 1][1] + 1 : 0;
+      var hasTail = tailLoR <= lastIdx;
+      return {
+        runs: runs,
+        hasMiddleGap: hasMiddleGap,
+        hasTail: hasTail,
+        needsExpandControl: hasMiddleGap || hasTail,
+        lastIdx: lastIdx,
+      };
+    }
+
+    function stelvioViewerCanRankingGapControls() {
+      if (typeof getViewerGrade !== 'function') return false;
+      var vg = getViewerGrade();
+      if (vg == null || vg === '') return false;
+      var s = String(vg).trim();
+      if (s === '1' || s === '2' || s === '3') return true;
+      var n = Number(vg);
+      return !Number.isNaN(n) && n >= 1 && n <= 3;
+    }
+
     function stelvioFormatRankCell(item) {
       if (stelvioIsSpeedKmhRanking()) {
         return (item.speedKmh != null ? Number(item.speedKmh) : 0).toFixed(1);
@@ -15798,20 +15879,12 @@
           }
         }
         var htmlS = '';
-        var TOP_N = 5;
-        var NEIGH = 3;
+        var TOP_N = STELVIO_RANKING_LIST_TOP_N;
+        var NEIGH = STELVIO_RANKING_LIST_NEIGH;
         var lastIdx = arr.length - 1;
         var supremoExpanded = !!(stelvioRankingGapState.Supremo || {}).expanded;
         if (stelvioRankingState.listFilter === 'interest') supremoExpanded = true;
-        var _vgSup = typeof getViewerGrade === 'function' ? getViewerGrade() : null;
-        /* 전체(Supremo) 랭킹 접기/펼침: 구독·일반 회원(grade 1~3). 비공개 표시는 isAdmin(grade=1) 전용 로직 유지 */
-        var canSupremoGapControls = (function (vg) {
-          if (vg == null || vg === '') return false;
-          var s = String(vg).trim();
-          if (s === '1' || s === '2' || s === '3') return true;
-          var n = Number(vg);
-          return !Number.isNaN(n) && n >= 1 && n <= 3;
-        })(_vgSup);
+        var canSupremoGapControls = stelvioViewerCanRankingGapControls();
         var catKey = 'Supremo';
 
         function buildSupremoRow(item, categoryRank, extraRowClass) {
@@ -15988,33 +16061,6 @@
           return;
         }
 
-        if (userIdxS < 0 && myRankSupremo && arr.length > 0) {
-          var topEndO = Math.min(TOP_N - 1, lastIdx);
-          for (var oi = 0; oi <= topEndO; oi++) htmlS += buildSupremoRow(arr[oi], stelvioRankDisplayNumber(arr[oi], oi + 1, 'Supremo', byCategory), '');
-          if (lastIdx > topEndO) {
-            if (!supremoExpanded) {
-              htmlS += dotsRowS();
-              htmlS += supremoExpandControlRow(true);
-            } else {
-              if (stelvioIsSupremoTrafficLimitedGrade()) {
-                var idxOff = {};
-                var capOff = Math.min(99, lastIdx);
-                for (var oj = topEndO + 1; oj <= capOff; oj++) idxOff[oj] = true;
-                renderSupremoRunsFromIdxSet(idxOff);
-                if (lastIdx > capOff) htmlS += dotsRowS();
-              } else {
-                for (var oj2 = topEndO + 1; oj2 <= lastIdx; oj2++) {
-                  htmlS += buildSupremoRow(arr[oj2], stelvioRankDisplayNumber(arr[oj2], oj2 + 1, 'Supremo', byCategory), '');
-                }
-              }
-              htmlS += supremoExpandControlRow(false);
-            }
-          }
-          htmlS += buildSupremoRow(myRankSupremo, Number(myRankSupremo.rank) || 1, ' stelvio-rank-my-supremo');
-          stelvioRankingPaintListBody(bodyEl, htmlS, null, cat);
-          return;
-        }
-
         if (arr.length === 0 && myRankSupremo) {
           stelvioRankingPaintListBody(
             bodyEl,
@@ -16055,40 +16101,11 @@
           return;
         }
 
-        var myC = myRank1s - 1;
-        var idxSet = {};
-        var tEnd = Math.min(TOP_N - 1, lastIdx);
-        for (var t = 0; t <= tEnd; t++) idxSet[t] = true;
-        var w0 = Math.max(0, myC - NEIGH);
-        var w1 = Math.min(lastIdx, myC + NEIGH);
-        for (var w = w0; w <= w1; w++) idxSet[w] = true;
-        var sortedIdx = Object.keys(idxSet).map(function (x) { return Number(x); }).sort(function (a, b) { return a - b; });
-        var runs = [];
-        if (sortedIdx.length) {
-          var rs = sortedIdx[0];
-          var re = sortedIdx[0];
-          for (var si = 1; si < sortedIdx.length; si++) {
-            if (sortedIdx[si] === re + 1) re = sortedIdx[si];
-            else {
-              runs.push([rs, re]);
-              rs = re = sortedIdx[si];
-            }
-          }
-          runs.push([rs, re]);
-        }
-
-        var hasMiddleGap = false;
-        for (var rg = 1; rg < runs.length; rg++) {
-          var mLo = runs[rg - 1][1] + 1;
-          var mHi = runs[rg][0] - 1;
-          if (mLo <= mHi) {
-            hasMiddleGap = true;
-            break;
-          }
-        }
-        var tailLoR = runs.length ? runs[runs.length - 1][1] + 1 : 0;
-        var hasTail = tailLoR <= lastIdx;
-        var needsExpandControl = hasMiddleGap || hasTail;
+        var plan = stelvioBuildRankingVisibleIdxPlan(arr, userIdxS, myRank1s, TOP_N, NEIGH);
+        var runs = plan.runs;
+        var hasMiddleGap = plan.hasMiddleGap;
+        var hasTail = plan.hasTail;
+        var needsExpandControl = plan.needsExpandControl;
 
         if (supremoExpanded && needsExpandControl) {
           if (!stelvioIsSupremoTrafficLimitedGrade()) {
@@ -16104,6 +16121,10 @@
               var loNx = Math.max(0, userIdxS - 20);
               var hiNx = Math.min(lastIdx, userIdxS + 20);
               for (var nix = loNx; nix <= hiNx; nix++) idxLim[nix] = true;
+            } else if (myRank1s > 0) {
+              for (var nri = 0; nri <= lastIdx; nri++) {
+                if (Math.abs(stelvioRankingRowListRank(arr[nri], nri) - myRank1s) <= 20) idxLim[nri] = true;
+              }
             }
             renderSupremoRunsFromIdxSet(idxLim);
             htmlS += supremoExpandControlRow(false);
@@ -16130,6 +16151,17 @@
           htmlS += supremoExpandControlRow(true);
         }
 
+        if (userIdxS < 0 && myRankSupremo) {
+          var mrUidPlan = String(myRankSupremo.userId || '');
+          var inArrPlan = arr.some(function (it) {
+            return String(it.userId || '') === mrUidPlan;
+          });
+          if (!inArrPlan) {
+            if (htmlS.length) htmlS += dotsRowS();
+            htmlS += buildSupremoRow(myRankSupremo, myRank1s, ' stelvio-rank-my-supremo');
+          }
+        }
+
         stelvioRankingPaintListBody(bodyEl, htmlS, null, cat);
         return;
       }
@@ -16149,27 +16181,34 @@
       }
       var html = '';
       var maxNameLen = 12;
-      var displayArr = arr;
-      var expandLimit = 10;
+      var TOP_N_CAT = STELVIO_RANKING_LIST_TOP_N;
+      var NEIGH_CAT = STELVIO_RANKING_LIST_NEIGH;
+      var lastIdxCat = arr.length - 1;
+      var catExpanded = !!(stelvioRankingGapState[cat] || {}).expanded;
+      if (stelvioRankingState.listFilter === 'interest') catExpanded = true;
+      var canCatGapControls = stelvioViewerCanRankingGapControls();
 
-      if (isExpired) {
-        if (userIdx >= 0 && userIdx >= 3) {
-          displayArr = arr.slice(0, 3).concat([arr[userIdx]]);
-        } else {
-          displayArr = arr.slice(0, 3);
-        }
-      } else if (arr.length > 10) {
-        if (stelvioRankingState.listFilter === 'interest') {
-          expandLimit = arr.length;
-          displayArr = arr.slice();
-        } else {
-          expandLimit = stelvioRankingExpandState[cat] || 10;
-          displayArr = arr.slice(0, expandLimit);
-        }
+      function dotsRowCat() {
+        return '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span><span class="stelvio-rank-wkg"></span></div>';
       }
-
-      displayArr.forEach(function(item, idx) {
-        var categoryRank = (isExpired && userIdx >= 3 && idx === 3) ? (userIdx + 1) : (idx + 1);
+      function expandGapRowCat(forCollapsedState) {
+        if (!canCatGapControls) return '';
+        var minusHit = !forCollapsedState
+          ? ' stelvio-rank-expand-hit" onclick="event.stopPropagation();handleStelvioRankingGapSet(\'' + cat + '\',\'expanded\',false)" title="접어보기"'
+          : ' stelvio-rank-expand-muted"';
+        var plusHit = forCollapsedState
+          ? ' stelvio-rank-expand-hit" onclick="event.stopPropagation();handleStelvioRankingGapSet(\'' + cat + '\',\'expanded\',true)" title="펼쳐보기"'
+          : ' stelvio-rank-expand-muted"';
+        return (
+          '<div class="stelvio-rank-row stelvio-rank-expand-row stelvio-rank-expand-row-split" role="group" aria-label="전체 랭킹 접기 펼치기">' +
+          '<span role="button" tabindex="0" class="stelvio-rank-expand-left stelvio-rank-expand-minus' + minusHit + ' aria-label="접어보기">-</span>' +
+          '<span class="stelvio-rank-expand-center">전체 랭킹</span>' +
+          '<span role="button" tabindex="0" class="stelvio-rank-expand-right stelvio-rank-expand-plus' + plusHit + ' aria-label="펼쳐보기">+</span>' +
+          '</div>'
+        );
+      }
+      function buildCategoryRow(item, categoryRank, extraRowClass) {
+        extraRowClass = extraRowClass || '';
         var dispR = stelvioRankDisplayNumber(item, categoryRank, cat, byCategory);
         var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var isPrivate = stelvioRankingIsPrivateRow(item);
@@ -16205,11 +16244,12 @@
           (isCurrent ? ' stelvio-rank-current' : '') +
           (groupHostStripeCat ? ' stelvio-rank-group-host' : '') +
           (groupAttendedCat ? ' stelvio-rank-group-attended' : '') +
-          (groupUnjoinedCat ? ' stelvio-rank-group-unjoined' : '');
-        html += '<div class="' + rowClass + '">';
-        if (dispR <= 3) html += stelvioRankingMedalCrownHtml(dispR - 1);
-        html += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
-        html +=
+          (groupUnjoinedCat ? ' stelvio-rank-group-unjoined' : '') +
+          extraRowClass;
+        var h = '<div class="' + rowClass + '">';
+        if (dispR <= 3) h += stelvioRankingMedalCrownHtml(dispR - 1);
+        h += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
+        h +=
           '<span class="stelvio-rank-name">' +
           stelvioRankingAvatarHtml(
             profUrlCat,
@@ -16230,73 +16270,83 @@
           stelvioRankingStarButtonHtml(item.userId) +
           badgePart +
           '</span>';
-        html += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
-        html += '</div>';
-      });
-
-      var showMyRankRow = userIdx >= 0 && (userIdx + 1) >= 11 && userIdx >= expandLimit;
-      if (showMyRankRow) {
-        if ((userIdx + 1) >= 12) {
-          html += '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">....</span></span><span class="stelvio-rank-wkg"></span></div>';
+        h += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
+        h += '</div>';
+        return h;
+      }
+      function renderRangeCat(lo, hi) {
+        for (var ri = lo; ri <= hi; ri++) {
+          html += buildCategoryRow(arr[ri], stelvioRankDisplayNumber(arr[ri], ri + 1, cat, byCategory), '');
         }
-        var mr = arr[userIdx];
-        var mrDisp = stelvioRankDisplayNumber(mr, userIdx + 1, cat, byCategory);
-        var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        var mrName = mrRawName.length > maxNameLen ? mrRawName.substring(0, maxNameLen - 2) + '..' : mrRawName;
-        var mrIsPrivate = stelvioRankingIsPrivateRow(mr);
-        var mrIsFriend = stelvioRankingFriendUserSet.has(String(mr.userId || ''));
-        var mrCanSeeFull = (currentUserId && String(mr.userId || '') === String(currentUserId)) || isAdmin || mrIsFriend;
-        var mrVal = stelvioFormatRankCellForViewer(mr, mrCanSeeFull);
-        var mrProfUrl = mrIsPrivate && !mrCanSeeFull ? null : mr.profileImageUrl;
-        if (mrIsPrivate && !mrCanSeeFull) { mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**'; }
-        var mrBadgePart = (mrIsPrivate && mrCanSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
-        var mrRankChangePart = stelvioServerRankChangeBadgeHtml(mr.rankChange, mr.previousBoardRank);
-        var mrGroupHost =
-          stelvioIsGroupDistanceRanking() && currentUserId && mr && String(mr.userId || '') === String(currentUserId);
-        var mrGroupAttended =
-          stelvioIsGroupDistanceRanking() &&
-          mr &&
-          mr.currentUserParticipated &&
-          !(currentUserId && String(mr.userId || '') === String(currentUserId));
-        html +=
-          '<div class="stelvio-rank-row stelvio-rank-current stelvio-rank-my-supremo' +
-          (mrGroupHost ? ' stelvio-rank-group-host' : '') +
-          (mrGroupAttended ? ' stelvio-rank-group-attended' : '') +
-          '">';
-        if (mrDisp <= 3) html += stelvioRankingMedalCrownHtml(mrDisp - 1);
-        html += '<span class="stelvio-rank-pos">' + mrDisp + '위</span>';
-        html +=
-          '<span class="stelvio-rank-name">' +
-          stelvioRankingAvatarHtml(mrProfUrl, {
-            userId: mr.userId,
-            overlayName: mrName,
-            ageCategory: mr.ageCategory
-          }) +
-          '<span class="stelvio-rank-name-text" title="' +
-          mrRawName +
-          '">' +
-          mrName +
-          '</span>' +
-          mrRankChangePart +
-          stelvioRankingStarButtonHtml(mr.userId) +
-          mrBadgePart +
-          '</span>';
-        html += '<span class="stelvio-rank-wkg">' + mrVal + '</span>';
-        html += '</div>';
       }
 
-      if (!isExpired && arr.length > 10) {
-        var showExpand = arr.length > expandLimit;
-        var showCollapse = expandLimit > 10 && !showExpand;
-        if (showExpand) {
-          html += '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">....</span></span><span class="stelvio-rank-wkg"></span></div>';
-          html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingExpand(\'' + cat + '\')">';
-          html += '<span class="stelvio-rank-expand-left"></span><span class="stelvio-rank-expand-center">펼쳐보기</span><span class="stelvio-rank-expand-right stelvio-rank-expand-plus">+</span></div>';
+      if (isExpired) {
+        var displayArrExp = userIdx >= 0 && userIdx >= 3 ? arr.slice(0, 3).concat([arr[userIdx]]) : arr.slice(0, 3);
+        displayArrExp.forEach(function (item, idx) {
+          var categoryRankExp = userIdx >= 3 && idx === 3 ? userIdx + 1 : idx + 1;
+          html += buildCategoryRow(item, stelvioRankDisplayNumber(item, categoryRankExp, cat, byCategory), '');
+        });
+        stelvioRankingPaintListBody(bodyEl, html, null, cat);
+        return;
+      }
+
+      if (stelvioRankingState.listFilter === 'interest') {
+        arr.forEach(function (item, idx) {
+          html += buildCategoryRow(item, stelvioRankDisplayNumber(item, idx + 1, cat, byCategory), '');
+        });
+        stelvioRankingPaintListBody(bodyEl, html, null, cat);
+        return;
+      }
+
+      var myRank1sCat = 0;
+      if (userIdx >= 0) myRank1sCat = userIdx + 1;
+      else if (typeof stelvioCurrentUser !== 'undefined' && stelvioCurrentUser && stelvioCurrentUser.rank != null) {
+        myRank1sCat = Number(stelvioCurrentUser.rank) || 0;
+      }
+
+      if (myRank1sCat <= 0) {
+        var topEndGuest = Math.min(TOP_N_CAT - 1, lastIdxCat);
+        for (var gi = 0; gi <= topEndGuest; gi++) {
+          html += buildCategoryRow(arr[gi], stelvioRankDisplayNumber(arr[gi], gi + 1, cat, byCategory), '');
         }
-        if (showCollapse) {
-          html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingCollapse(\'' + cat + '\')">';
-          html += '<span class="stelvio-rank-expand-left"></span><span class="stelvio-rank-expand-center">접어보기</span><span class="stelvio-rank-expand-right stelvio-rank-expand-minus">-</span></div>';
+        if (lastIdxCat > topEndGuest) {
+          if (!catExpanded) {
+            html += dotsRowCat();
+            html += expandGapRowCat(true);
+          } else {
+            for (var gj = topEndGuest + 1; gj <= lastIdxCat; gj++) {
+              html += buildCategoryRow(arr[gj], stelvioRankDisplayNumber(arr[gj], gj + 1, cat, byCategory), '');
+            }
+            html += expandGapRowCat(false);
+          }
         }
+        stelvioRankingPaintListBody(bodyEl, html, null, cat);
+        return;
+      }
+
+      var planCat = stelvioBuildRankingVisibleIdxPlan(arr, userIdx, myRank1sCat, TOP_N_CAT, NEIGH_CAT);
+      if (catExpanded && planCat.needsExpandControl) {
+        for (var fullC = 0; fullC <= lastIdxCat; fullC++) {
+          html += buildCategoryRow(arr[fullC], stelvioRankDisplayNumber(arr[fullC], fullC + 1, cat, byCategory), '');
+        }
+        html += expandGapRowCat(false);
+        stelvioRankingPaintListBody(bodyEl, html, null, cat);
+        return;
+      }
+
+      for (var rc = 0; rc < planCat.runs.length; rc++) {
+        var loC = planCat.runs[rc][0];
+        var hiC = planCat.runs[rc][1];
+        if (rc > 0) {
+          var pLoC = planCat.runs[rc - 1][1] + 1;
+          var pHiC = loC - 1;
+          if (pLoC <= pHiC) html += dotsRowCat();
+        }
+        renderRangeCat(loC, hiC);
+      }
+      if (planCat.needsExpandControl && !catExpanded) {
+        if (planCat.hasTail) html += dotsRowCat();
+        html += expandGapRowCat(true);
       }
 
       stelvioRankingPaintListBody(bodyEl, html, null, cat);
