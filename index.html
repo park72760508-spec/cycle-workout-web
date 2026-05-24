@@ -8578,7 +8578,7 @@
     var STELVIO_RANKING_FETCH_TIMEOUT_MS = 48000;
     /** 백그라운드 재검증·등락 보강(rankMv) — UI 차단 없음 */
     var STELVIO_RANKING_BG_FETCH_TIMEOUT_MS = 90000;
-    /** 동일 쿼리 재방문 시 즉시 표시 후 백그라운드 재검증(SWR) — 최종 데이터는 항상 최신 응답 기준 */
+    /** 세션·메모리 캐시만 — 짧게 유지 후 IndexedDB·네트워크로 갱신 */
     var STELVIO_RANKING_SWR_MAX_MS = 120000;
     var stelvioRankingBgFetchInFlight = {};
     /** 마지막 조회 탭(레거시·하위 호환) */
@@ -8651,7 +8651,8 @@
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
     /** peak IndexedDB 키 접두사 — readDb(firebase|supabase) 포함 swrKey와 v4 이전 캐시 분리 */
     var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v5:';
-    var STELVIO_RANKING_LC_STALE_MS = 10 * 60 * 1000;
+    /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
+    var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
     var STELVIO_RANKING_IDB_STORE = 'rankings';
     var STELVIO_RANKING_IDB_VERSION = 1;
@@ -11667,14 +11668,23 @@
       return data;
     }
 
-    /** IndexedDB·롤오버 기준으로 네트워크 없이 탭 캐시를 쓸 수 있는지 */
+    /** IndexedDB·롤오버·API 기간 창 기준 — 전날 집계 후 다음날 집계 전까지 재다운로드 불필요 */
     function stelvioRankingLocalEntryStillFresh(lcEntry, dur) {
       if (!lcEntry || !lcEntry.data || !lcEntry.data.success || !lcEntry.data.byCategory) return false;
-      if (stelvioRankingLocalCache.isStale(lcEntry)) return false;
+      if (!stelvioRankingPayloadMatchesReadSource(lcEntry.data)) return false;
+      if (!stelvioRankingPayloadHasVisibleRows(lcEntry.data)) return false;
+      if (!stelvioRankingPayloadMatchesCurrentApiWindow(lcEntry.data)) return false;
+      if (lcEntry.expiresAt && Date.now() >= lcEntry.expiresAt) return false;
       var cachedAt = lcEntry.cachedAt || 0;
       var lastRollover = typeof stelvioGetLastRolloverTs === 'function' ? stelvioGetLastRolloverTs() : 0;
       if (lastRollover > 0 && cachedAt < lastRollover) return false;
       if (dur === 'gc') {
+        if (
+          typeof stelvioGcPayloadMatchesLatestSnapshot === 'function' &&
+          !stelvioGcPayloadMatchesLatestSnapshot(lcEntry.data)
+        ) {
+          return false;
+        }
         var heptRollover =
           typeof stelvioGetLastHeptagonRolloverTs === 'function' ? stelvioGetLastHeptagonRolloverTs() : 0;
         if (heptRollover > 0 && cachedAt < heptRollover) return false;
@@ -13659,7 +13669,14 @@
           ? STELVIO_PERSONAL_SPEED_SWR_MAX_MS
           : STELVIO_RANKING_SWR_MAX_MS;
 
-      function cacheEntryUsable(entryTs, body) {
+      /**
+       * @param {number} entryTs
+       * @param {object} body
+       * @param {{ fromPersistent?: boolean, expiresAt?: number }} [opts]
+       * fromPersistent: IndexedDB — 2분 SWR 미적용, expiresAt·롤오버·기간 창만 검사
+       */
+      function cacheEntryUsable(entryTs, body, opts) {
+        opts = opts || {};
         if (!body || !body.success || !body.byCategory) return false;
         if (!stelvioRankingPayloadMatchesReadSource(body)) return false;
         if (body.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(body)) return false;
@@ -13674,8 +13691,20 @@
           return false;
         }
         if (lastRollover > 0 && entryTs < lastRollover) return false;
-        if (nowMs - entryTs >= swrMaxMs) return false;
+        if (opts.fromPersistent) {
+          if (opts.expiresAt && nowMs >= opts.expiresAt) return false;
+        } else if (nowMs - entryTs >= swrMaxMs) {
+          return false;
+        }
         return true;
+      }
+
+      function cacheEntryUsableFromIdb(lcEntry) {
+        if (!lcEntry || !lcEntry.data) return false;
+        return cacheEntryUsable(lcEntry.cachedAt || nowMs, lcEntry.data, {
+          fromPersistent: true,
+          expiresAt: lcEntry.expiresAt || 0,
+        });
       }
 
       if (opts.backgroundOnly) {
@@ -13688,7 +13717,7 @@
           return;
         }
         var lcBg = await stelvioRankingLocalCache.get(lcKey);
-        if (lcBg && lcBg.data && cacheEntryUsable(lcBg.cachedAt || Date.now(), lcBg.data)) {
+        if (lcBg && cacheEntryUsableFromIdb(lcBg)) {
           stelvioRankingMemCacheSet(swrKey, lcBg.data);
           scheduleRankMvIfNeeded();
           if (stelvioRankingLocalCache.isStale(lcBg)) scheduleBgRefreshIfNeeded(false);
@@ -13708,11 +13737,7 @@
         if (!memTabHit) {
           try {
             var lcTabQuick = await stelvioRankingLocalCache.get(lcKey);
-            if (
-              lcTabQuick &&
-              lcTabQuick.data &&
-              cacheEntryUsable(lcTabQuick.cachedAt || Date.now(), lcTabQuick.data)
-            ) {
+            if (lcTabQuick && cacheEntryUsableFromIdb(lcTabQuick)) {
               stelvioRankingMemCacheSet(swrKey, lcTabQuick.data);
               memTabHit = stelvioRankingMemCacheGet(swrKey);
             }
@@ -13756,7 +13781,7 @@
 
       /** ① IndexedDB (기기 저장 1순위) */
       var lcEntry = await stelvioRankingLocalCache.get(lcKey);
-      if (lcEntry && lcEntry.data && cacheEntryUsable(lcEntry.cachedAt || nowMs, lcEntry.data)) {
+      if (lcEntry && cacheEntryUsableFromIdb(lcEntry)) {
         stelvioRankingMemCacheSet(swrKey, lcEntry.data);
         await applyFromCache(lcEntry.data, { instant: true, source: 'indexedDB' });
         if (!tabSwitchLight || !STELVIO_RANKING_THERMAL_WEBVIEW) {
@@ -13827,7 +13852,7 @@
         } catch (ePfWait) {}
         if (myGen !== stelvioRankingFetchGen) return true;
         var lcAfter = await stelvioRankingLocalCache.get(lcKey);
-        if (lcAfter && lcAfter.data && cacheEntryUsable(lcAfter.cachedAt || Date.now(), lcAfter.data)) {
+        if (lcAfter && cacheEntryUsableFromIdb(lcAfter)) {
           stelvioRankingMemCacheSet(swrKey, lcAfter.data);
           await applyFromCache(lcAfter.data, { instant: true, source: 'prefetch_idb' });
           scheduleRankMvIfNeeded();
