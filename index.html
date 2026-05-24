@@ -8615,12 +8615,10 @@
     var STELVIO_RANKING_FETCH_TIMEOUT_MS = 48000;
     /** 백그라운드 재검증·등락 보강(rankMv) — UI 차단 없음 */
     var STELVIO_RANKING_BG_FETCH_TIMEOUT_MS = 90000;
-    /** 세션·메모리 캐시만 — 짧게 유지 후 IndexedDB·네트워크로 갱신 */
-    var STELVIO_RANKING_SWR_MAX_MS = 120000;
     var stelvioRankingBgFetchInFlight = {};
-    /** 마지막 조회 탭(레거시·하위 호환) */
-    var stelvioRankingSwrCache = { key: '', body: null, ts: 0 };
-    /** 탭·성별·기간별 메모리 캐시 — IndexedDB 적재 후 보조(탭 조회는 IndexedDB 우선) */
+    /** 마지막 페인트 탭 참조(visibilitychange·롤오버). 별도 DB 없음 — 신선도는 IndexedDB expiresAt */
+    var stelvioRankingSwrCache = { key: '', body: null, ts: 0, expiresAt: 0 };
+    /** 탭·성별·기간별 RAM 미러(LRU) — IndexedDB peak:v5:* 와 동일 expiresAt·롤오버 규칙, 2분 SWR 없음 */
     var STELVIO_RANKING_MEM_CACHE_MAX = 36;
     /** 랭킹보드 접속 시 백그라운드 프리페치 세션(성별 변경·재진입 시 무효화) */
     var stelvioRankingPrefetchGen = 0;
@@ -8668,8 +8666,16 @@
       return e;
     }
 
-    function stelvioRankingMemCacheSet(swrKey, body) {
+    /**
+     * RAM 미러(탭 전환 속도용). 신선도·만료는 IndexedDB와 동일(expiresAt·롤오버·readDb).
+     * 별도 DB 없음 — LRU 최대 STELVIO_RANKING_MEM_CACHE_MAX 탭만 유지.
+     * @param {string} swrKey
+     * @param {object} body
+     * @param {{ cachedAt?: number, expiresAt?: number }} [meta]
+     */
+    function stelvioRankingMemCacheSet(swrKey, body, meta) {
       if (!swrKey || !body || !body.success || !body.byCategory) return;
+      meta = meta || {};
       if (!stelvioRankingMemCacheMap[swrKey]) {
         stelvioRankingMemCacheOrder.push(swrKey);
         while (stelvioRankingMemCacheOrder.length > STELVIO_RANKING_MEM_CACHE_MAX) {
@@ -8677,9 +8683,63 @@
           if (evict) delete stelvioRankingMemCacheMap[evict];
         }
       }
-      var ts = Date.now();
-      stelvioRankingMemCacheMap[swrKey] = { body: body, ts: ts };
-      stelvioRankingSwrCache = { key: swrKey, body: body, ts: ts };
+      var ts = meta.cachedAt != null ? meta.cachedAt : Date.now();
+      var expiresAt =
+        meta.expiresAt != null ? meta.expiresAt : stelvioRankingNextCacheExpiry();
+      stelvioRankingMemCacheMap[swrKey] = {
+        body: body,
+        ts: ts,
+        cachedAt: ts,
+        expiresAt: expiresAt,
+      };
+      stelvioRankingSwrCache = { key: swrKey, body: body, ts: ts, expiresAt: expiresAt };
+    }
+
+    /**
+     * IndexedDB와 동일한 유효성 검사(2분 세션 SWR 없음).
+     * @param {object} ctx — lastRollover, nowMs, isPsRank
+     */
+    function stelvioRankingCacheBodyUsable(entryTs, body, expiresAt, ctx) {
+      ctx = ctx || {};
+      var nowMs = ctx.nowMs != null ? ctx.nowMs : Date.now();
+      var lastRollover = ctx.lastRollover != null ? ctx.lastRollover : 0;
+      var isPsRank = !!ctx.isPsRank;
+      if (!body || !body.success || !body.byCategory) return false;
+      if (!stelvioRankingPayloadMatchesReadSource(body)) return false;
+      if (body.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(body)) return false;
+      if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
+      if (!stelvioRankingPayloadMatchesCurrentApiWindow(body)) return false;
+      if (body.durationType === 'gc' && !stelvioGcPayloadMatchesLatestSnapshot(body)) return false;
+      if (
+        isPsRank &&
+        stelvioPersonalSpeedBoardPayloadStale(body) &&
+        !(body.approximate === true || body.staleAggregate === true)
+      ) {
+        return false;
+      }
+      if (lastRollover > 0 && entryTs < lastRollover) return false;
+      if (expiresAt && nowMs >= expiresAt) return false;
+      return true;
+    }
+
+    function stelvioRankingCacheUsableFromMem(memEntry, ctx) {
+      if (!memEntry || !memEntry.body) return false;
+      return stelvioRankingCacheBodyUsable(
+        memEntry.cachedAt || memEntry.ts || Date.now(),
+        memEntry.body,
+        memEntry.expiresAt || 0,
+        ctx
+      );
+    }
+
+    function stelvioRankingCacheUsableFromIdbEntry(lcEntry, ctx) {
+      if (!lcEntry || !lcEntry.data) return false;
+      return stelvioRankingCacheBodyUsable(
+        lcEntry.cachedAt || Date.now(),
+        lcEntry.data,
+        lcEntry.expiresAt || 0,
+        ctx
+      );
     }
 
     /** legacy localStorage 키 접두사(마이그레이션 정리용) */
@@ -9088,7 +9148,10 @@
               stelvioRankingPayloadMatchesCurrentApiWindow(entry.data) &&
               stelvioRankingLocalEntryStillFresh(entry, apiDur)
             ) {
-              stelvioRankingMemCacheSet(ck, entry.data);
+              stelvioRankingMemCacheSet(ck, entry.data, {
+                cachedAt: entry.cachedAt,
+                expiresAt: entry.expiresAt,
+              });
               stelvioRankingIndexPeakRankFromEntry(lcKey, entry);
             }
           } catch (eTabHydr) {}
@@ -9125,7 +9188,10 @@
             if (!swrKey || !stelvioRankingSwrKeyMatchesReadSource(swrKey)) continue;
             if (stelvioRankingMemCacheGet(swrKey)) continue;
             if (row.data.success && row.data.byCategory) {
-              stelvioRankingMemCacheSet(swrKey, row.data);
+              stelvioRankingMemCacheSet(swrKey, row.data, {
+                cachedAt: row.cachedAt,
+                expiresAt: row.expiresAt,
+              });
               stelvioRankingIndexPeakRankFromEntry(row.key, {
                 data: row.data,
                 cachedAt: row.cachedAt || 0,
@@ -9222,7 +9288,10 @@
               stelvioRankingPayloadMatchesReadSource(entry.data) &&
               stelvioRankingPayloadMatchesCurrentApiWindow(entry.data)
             ) {
-              stelvioRankingMemCacheSet(ck, entry.data);
+              stelvioRankingMemCacheSet(ck, entry.data, {
+                cachedAt: entry.cachedAt,
+                expiresAt: entry.expiresAt,
+              });
               stelvioRankingIndexPeakRankFromEntry(lcKey, entry);
             }
           } catch (eIdleMem) {}
@@ -9326,7 +9395,10 @@
           ) {
             return false;
           }
-          stelvioRankingMemCacheSet(ck, entry.data);
+          stelvioRankingMemCacheSet(ck, entry.data, {
+            cachedAt: entry.cachedAt,
+            expiresAt: entry.expiresAt,
+          });
           stelvioRankingIndexPeakRankFromEntry(lcKey, entry);
           return stelvioInstantTabSwitchFromMemory(targetDur);
         })
@@ -9492,7 +9564,7 @@
     function stelvioRankingClearMemCaches() {
       stelvioRankingMemCacheMap = Object.create(null);
       stelvioRankingMemCacheOrder = [];
-      stelvioRankingSwrCache = { key: '', body: null, ts: 0 };
+      stelvioRankingSwrCache = { key: '', body: null, ts: 0, expiresAt: 0 };
     }
 
     function stelvioRankingHasAuthUser() {
@@ -11605,8 +11677,6 @@
     }
     /** 항속 산식·필드 변경 시 bump — 로컬/SWR 캐시 무효화 (v12: 랭킹 독주 6개월 덮어쓰기 제거) */
     var STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER = 12;
-    /** 항속 탭: 사전집계 응답은 당일 23시 KST 전까지 SWR 유지(빠른 재방문) */
-    var STELVIO_PERSONAL_SPEED_SWR_MAX_MS = 24 * 60 * 60 * 1000;
     function stelvioPersonalSpeedBoardPayloadStale(data) {
       if (!data || !data.byCategory) return true;
       var psVer = Number(data.personalSpeedLogicVersion);
@@ -11950,7 +12020,10 @@
           var lcKey = stelvioPeakRankingLcKey(cacheKeyStr);
           var lcEntry = await stelvioRankingLocalCache.get(lcKey);
           if (stelvioRankingLocalEntryStillFresh(lcEntry, apiDur)) {
-            stelvioRankingMemCacheSet(cacheKeyStr, lcEntry.data);
+            stelvioRankingMemCacheSet(cacheKeyStr, lcEntry.data, {
+              cachedAt: lcEntry.cachedAt,
+              expiresAt: lcEntry.expiresAt,
+            });
             stelvioRankingIndexPeakRankFromEntry(lcKey, lcEntry);
             return true;
           }
@@ -13921,53 +13994,15 @@
 
       var isPsRank =
         typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking();
-      var swrMaxMs =
-        isPsRank && typeof STELVIO_PERSONAL_SPEED_SWR_MAX_MS === 'number'
-          ? STELVIO_PERSONAL_SPEED_SWR_MAX_MS
-          : STELVIO_RANKING_SWR_MAX_MS;
-
-      /**
-       * @param {number} entryTs
-       * @param {object} body
-       * @param {{ fromPersistent?: boolean, expiresAt?: number }} [opts]
-       * fromPersistent: IndexedDB — 2분 SWR 미적용, expiresAt·롤오버·기간 창만 검사
-       * tabSwitch: 탭 전환 메모리 히트 — 세션 SWR(2분) 미적용
-       */
-      function cacheEntryUsable(entryTs, body, opts) {
-        opts = opts || {};
-        if (!body || !body.success || !body.byCategory) return false;
-        if (!stelvioRankingPayloadMatchesReadSource(body)) return false;
-        if (body.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(body)) return false;
-        if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
-        if (!stelvioRankingPayloadMatchesCurrentApiWindow(body)) return false;
-        if (body.durationType === 'gc' && !stelvioGcPayloadMatchesLatestSnapshot(body)) return false;
-        if (
-          isPsRank &&
-          stelvioPersonalSpeedBoardPayloadStale(body) &&
-          !(body.approximate === true || body.staleAggregate === true)
-        ) {
-          return false;
-        }
-        if (lastRollover > 0 && entryTs < lastRollover) return false;
-        if (opts.fromPersistent) {
-          if (opts.expiresAt && nowMs >= opts.expiresAt) return false;
-        } else if (!opts.tabSwitch && nowMs - entryTs >= swrMaxMs) {
-          return false;
-        }
-        return true;
-      }
+      var cacheCtx = { nowMs: nowMs, lastRollover: lastRollover, isPsRank: isPsRank };
 
       function cacheEntryUsableFromIdb(lcEntry) {
-        if (!lcEntry || !lcEntry.data) return false;
-        return cacheEntryUsable(lcEntry.cachedAt || nowMs, lcEntry.data, {
-          fromPersistent: true,
-          expiresAt: lcEntry.expiresAt || 0,
-        });
+        return stelvioRankingCacheUsableFromIdbEntry(lcEntry, cacheCtx);
       }
 
       if (opts.backgroundOnly) {
         var memBg = stelvioRankingMemCacheGet(swrKey);
-        if (memBg && memBg.body && cacheEntryUsable(memBg.ts, memBg.body)) {
+        if (memBg && memBg.body && stelvioRankingCacheUsableFromMem(memBg, cacheCtx)) {
           scheduleRankMvIfNeeded();
           if (stelvioRankingLocalCache.isStale({ data: memBg.body, cachedAt: memBg.ts })) {
             scheduleBgRefreshIfNeeded(false);
@@ -13976,7 +14011,10 @@
         }
         var lcBg = await stelvioRankingLocalCache.get(lcKey);
         if (lcBg && cacheEntryUsableFromIdb(lcBg)) {
-          stelvioRankingMemCacheSet(swrKey, lcBg.data);
+          stelvioRankingMemCacheSet(swrKey, lcBg.data, {
+            cachedAt: lcBg.cachedAt,
+            expiresAt: lcBg.expiresAt,
+          });
           scheduleRankMvIfNeeded();
           if (stelvioRankingLocalCache.isStale(lcBg)) scheduleBgRefreshIfNeeded(false);
           return;
@@ -13996,7 +14034,10 @@
           try {
             var lcTabQuick = await stelvioRankingLocalCache.get(lcKey);
             if (lcTabQuick && cacheEntryUsableFromIdb(lcTabQuick)) {
-              stelvioRankingMemCacheSet(swrKey, lcTabQuick.data);
+              stelvioRankingMemCacheSet(swrKey, lcTabQuick.data, {
+                cachedAt: lcTabQuick.cachedAt,
+                expiresAt: lcTabQuick.expiresAt,
+              });
               memTabHit = stelvioRankingMemCacheGet(swrKey);
             }
           } catch (eLcTab) {}
@@ -14004,7 +14045,7 @@
         if (memTabHit && memTabHit.body) {
           var memUsable = false;
           try {
-            memUsable = cacheEntryUsable(memTabHit.ts, memTabHit.body, { tabSwitch: true });
+            memUsable = stelvioRankingCacheUsableFromMem(memTabHit, cacheCtx);
           } catch (eMemChk) {
             memUsable = false;
           }
@@ -14040,7 +14081,10 @@
       /** ① IndexedDB (기기 저장 1순위) */
       var lcEntry = await stelvioRankingLocalCache.get(lcKey);
       if (lcEntry && cacheEntryUsableFromIdb(lcEntry)) {
-        stelvioRankingMemCacheSet(swrKey, lcEntry.data);
+        stelvioRankingMemCacheSet(swrKey, lcEntry.data, {
+          cachedAt: lcEntry.cachedAt,
+          expiresAt: lcEntry.expiresAt,
+        });
         await applyFromCache(lcEntry.data, { instant: true, source: 'indexedDB' });
         if (!tabSwitchLight || !STELVIO_RANKING_THERMAL_WEBVIEW) {
           scheduleRankMvIfNeeded();
@@ -14060,21 +14104,6 @@
         ) {
           scheduleBgRefreshIfNeeded(false);
         }
-        return;
-      }
-
-      /** ② SWR(세션) 캐시 */
-      var swr = stelvioRankingSwrCache;
-      var swrValid = swr && swr.key === swrKey && swr.body && swr.body.success && swr.body.byCategory;
-      if (swrValid && cacheEntryUsable(swr.ts, swr.body)) {
-        stelvioRankingPersistPeakPayload(lcKey, swrKey, swr.body).catch(function () {});
-        await applyFromCache(swr.body, { instant: true, source: 'swr' });
-        scheduleRankMvIfNeeded();
-        var swrPsPre =
-          isPsRank &&
-          (swr.body.dashboardLogRouteEnriched === true ||
-            (swr.body.precomputed === true && !stelvioPersonalSpeedBoardPayloadStale(swr.body)));
-        if (!swrPsPre) scheduleBgRefreshIfNeeded(false);
         return;
       }
 
@@ -14111,13 +14140,16 @@
         if (myGen !== stelvioRankingFetchGen) return true;
         var lcAfter = await stelvioRankingLocalCache.get(lcKey);
         if (lcAfter && cacheEntryUsableFromIdb(lcAfter)) {
-          stelvioRankingMemCacheSet(swrKey, lcAfter.data);
+          stelvioRankingMemCacheSet(swrKey, lcAfter.data, {
+            cachedAt: lcAfter.cachedAt,
+            expiresAt: lcAfter.expiresAt,
+          });
           await applyFromCache(lcAfter.data, { instant: true, source: 'prefetch_idb' });
           scheduleRankMvIfNeeded();
           return true;
         }
         var memAfterPrefetch = stelvioRankingMemCacheGet(swrKey);
-        if (memAfterPrefetch && cacheEntryUsable(memAfterPrefetch.ts, memAfterPrefetch.body)) {
+        if (memAfterPrefetch && stelvioRankingCacheUsableFromMem(memAfterPrefetch, cacheCtx)) {
           await applyFromCache(memAfterPrefetch.body, { instant: true, source: 'prefetch' });
           scheduleRankMvIfNeeded();
           return true;
