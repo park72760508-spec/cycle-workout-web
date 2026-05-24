@@ -1,0 +1,105 @@
+/**
+ * Supabase ranking_build_meta — pg_cron 집계 버전 (Firestore ranking_meta 대체).
+ */
+const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+
+const META_KEYS = [
+  "master_daily_rebuild",
+  "heptagon_daily_rebuild",
+  "personal_speed_logic",
+  "peak_28d_board_refresh",
+];
+
+function metaTsFromIso(iso) {
+  if (!iso) return 0;
+  const t = Date.parse(String(iso));
+  return isFinite(t) ? t : 0;
+}
+
+function rowToClientShape(row) {
+  if (!row) return null;
+  const dateKst = row.date_kst ? String(row.date_kst).slice(0, 10) : "";
+  return {
+    dateKst,
+    status: row.status || "complete",
+    version: row.version != null ? Number(row.version) : null,
+    completedAt: row.completed_at,
+  };
+}
+
+/**
+ * Firestore ranking_meta 와 동일 구조 + fingerprint (index.html 호환).
+ */
+function buildRankingBuildMetaPayload(rows) {
+  const byKey = {};
+  for (const row of rows || []) {
+    if (row && row.meta_key) byKey[row.meta_key] = row;
+  }
+
+  const master = rowToClientShape(byKey.master_daily_rebuild);
+  const heptagon = rowToClientShape(byKey.heptagon_daily_rebuild);
+  const personalSpeed = rowToClientShape(byKey.personal_speed_logic);
+  const peak28d = rowToClientShape(byKey.peak_28d_board_refresh);
+
+  const fingerprint = [
+    "m:" +
+      String((master && master.dateKst) || "") +
+      ":" +
+      metaTsFromIso(master && master.completedAt),
+    "h:" +
+      String((heptagon && heptagon.dateKst) || "") +
+      ":" +
+      String((heptagon && heptagon.status) || "") +
+      ":" +
+      metaTsFromIso(heptagon && heptagon.completedAt),
+    "ps:" + String(personalSpeed && personalSpeed.version != null ? personalSpeed.version : ""),
+    "pk:" +
+      String((peak28d && peak28d.dateKst) || "") +
+      ":" +
+      String((peak28d && peak28d.status) || "") +
+      ":" +
+      metaTsFromIso(peak28d && peak28d.completedAt),
+  ].join("|");
+
+  return {
+    source: "supabase",
+    master,
+    heptagon,
+    personalSpeed,
+    peak28d,
+    fingerprint,
+    rows: (rows || []).map((r) => ({
+      metaKey: r.meta_key,
+      dateKst: r.date_kst,
+      status: r.status,
+      version: r.version,
+      completedAt: r.completed_at,
+      updatedAt: r.updated_at,
+    })),
+  };
+}
+
+async function fetchRankingBuildMetaFromSupabase() {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) {
+    return { ...buildRankingBuildMetaPayload([]), error: "supabase_unavailable" };
+  }
+
+  const { data, error } = await supabase
+    .from("ranking_build_meta")
+    .select("meta_key, date_kst, status, version, completed_at, updated_at")
+    .in("meta_key", META_KEYS);
+
+  if (error) {
+    console.warn("[rankingBuildMetaSupabase] read failed:", error.message);
+    return { ...buildRankingBuildMetaPayload([]), error: error.message };
+  }
+
+  return buildRankingBuildMetaPayload(data || []);
+}
+
+module.exports = {
+  META_KEYS,
+  buildRankingBuildMetaPayload,
+  fetchRankingBuildMetaFromSupabase,
+};

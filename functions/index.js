@@ -7272,6 +7272,44 @@ exports.getRankingReadRoutingPublic = onRequest(
   }
 );
 
+/** Supabase pg_cron ranking_build_meta — IndexedDB 무효화·프리페치용 (Firestore ranking_meta 대체) */
+exports.getRankingBuildMetaPublic = onRequest(
+  { cors: true, timeoutSeconds: 15 },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+    res.set("Cache-Control", "public, max-age=30, s-maxage=30");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    try {
+      const rankingBuildMetaSupabase = require("./rankingBuildMetaSupabase");
+      const buildMeta = await rankingBuildMetaSupabase.fetchRankingBuildMetaFromSupabase();
+      res.status(200).json({
+        success: true,
+        buildMetaSource: "supabase",
+        buildMeta: {
+          master: buildMeta.master,
+          heptagon: buildMeta.heptagon,
+          personalSpeed: buildMeta.personalSpeed,
+          peak28d: buildMeta.peak28d,
+        },
+        buildMetaFingerprint: buildMeta.fingerprint || "",
+        error: buildMeta.error || undefined,
+      });
+    } catch (e) {
+      console.warn("[getRankingBuildMetaPublic]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 /**
  * 전 사용자 — 라이딩 모임 Read DB (Firebase vs Supabase) 공개 조회.
  */
