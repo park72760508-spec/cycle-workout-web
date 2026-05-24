@@ -12,7 +12,7 @@ const FIRESTORE_DOC_PATH = { collection: "appConfig", doc: "supabase_read_routin
 
 /** @type {{ useSupabaseGlobal: boolean, whitelistUids: string[], loadedAt: number }} */
 let cache = {
-  useSupabaseGlobal: false,
+  useSupabaseGlobal: true,
   whitelistUids: [],
   parityFallbackToFirebase: true,
   loadedAt: 0,
@@ -67,12 +67,15 @@ async function refreshRankingReadConfig(admin, force = false) {
     return getRankingReadConfig();
   }
 
-  let useSupabaseGlobal = false;
+  /** Firestore 문서 없을 때 기본 Supabase Read (관리자가 Firebase로 명시 전환 시에만 false) */
+  let useSupabaseGlobal = true;
   let whitelistUids = [];
   let parityFallbackToFirebase = true;
 
   const envCfg = loadFromEnv();
-  useSupabaseGlobal = envCfg.useSupabaseGlobal;
+  if (process.env.USE_SUPABASE_GLOBAL != null && String(process.env.USE_SUPABASE_GLOBAL).trim() !== "") {
+    useSupabaseGlobal = envCfg.useSupabaseGlobal;
+  }
   whitelistUids = envCfg.whitelistUids.slice();
 
   if (admin && admin.firestore) {
@@ -143,7 +146,7 @@ async function shouldReadRankingFromSupabase(admin, requestFirebaseUid) {
   if (uid && cache.whitelistUids.includes(uid)) {
     return { route: "supabase", reason: "uid in SUPABASE_WHITELIST_UIDS" };
   }
-  return { route: "firebase", reason: "default firebase primary read" };
+  return { route: "firebase", reason: "supabase_read_routing useSupabaseGlobal=false" };
 }
 
 /**
