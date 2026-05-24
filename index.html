@@ -7915,20 +7915,36 @@
     /** 랭킹 Read DB — Firebase vs Supabase (관리자 토글 · IndexedDB·API 캐시 네임스페이스) */
     var STELVIO_RANKING_READ_ROUTING_PUBLIC_URL =
       'https://us-central1-stelvio-ai.cloudfunctions.net/getRankingReadRoutingPublic';
+    var STELVIO_RANKING_BUILD_META_PUBLIC_URL =
+      'https://us-central1-stelvio-ai.cloudfunctions.net/getRankingBuildMetaPublic';
     var STELVIO_RANKING_READ_SOURCE_CACHE_MS = 60000;
-    var stelvioRankingReadSourceState = { source: 'firebase', loadedAt: 0, loading: null };
+    var stelvioRankingReadSourceState = {
+      source: 'firebase',
+      loadedAt: 0,
+      loading: null,
+      buildMeta: null,
+      buildMetaFingerprint: '',
+      buildMetaSource: '',
+    };
 
     function stelvioGetRankingReadSourceSync() {
       return stelvioRankingReadSourceState.source === 'supabase' ? 'supabase' : 'firebase';
     }
 
     function stelvioSetRankingReadSource(source) {
-      stelvioRankingReadSourceState.source = source === 'supabase' ? 'supabase' : 'firebase';
+      var prev = stelvioGetRankingReadSourceSync();
+      var next = source === 'supabase' ? 'supabase' : 'firebase';
+      stelvioRankingReadSourceState.source = next;
       stelvioRankingReadSourceState.loadedAt = Date.now();
       stelvioRankingMemCacheHydratePromise = null;
       if (typeof stelvioRankingClearMemCaches === 'function') stelvioRankingClearMemCaches();
       stelvioRankingLastPaintedSwrKey = '';
       stelvioRankingListHtmlCache = Object.create(null);
+      if (prev !== next) {
+        try {
+          localStorage.removeItem(STELVIO_RANKING_SYNC_META_LC_KEY);
+        } catch (eSw) {}
+      }
     }
     window.stelvioSetRankingReadSource = stelvioSetRankingReadSource;
     window.stelvioGetRankingReadSourceSync = stelvioGetRankingReadSourceSync;
@@ -7981,8 +7997,28 @@
           });
           var json = res.ok ? await res.json().catch(function () { return null; }) : null;
           if (json && json.success && json.readSource) {
-            stelvioRankingReadSourceState.source =
-              json.readSource === 'supabase' ? 'supabase' : 'firebase';
+            var nextRead = json.readSource === 'supabase' ? 'supabase' : 'firebase';
+            if (stelvioGetRankingReadSourceSync() !== nextRead) {
+              stelvioSetRankingReadSource(nextRead);
+            } else {
+              stelvioRankingReadSourceState.source = nextRead;
+            }
+            if (json.buildMetaSource) {
+              stelvioRankingReadSourceState.buildMetaSource = String(json.buildMetaSource);
+            }
+            if (json.buildMeta) {
+              stelvioRankingReadSourceState.buildMeta = json.buildMeta;
+            }
+            if (json.buildMetaFingerprint) {
+              stelvioRankingReadSourceState.buildMetaFingerprint = String(json.buildMetaFingerprint);
+            }
+            if (
+              json.readSource === 'supabase' &&
+              json.buildMeta &&
+              typeof stelvioApplyRankingBuildMetaInvalidationIfNeeded === 'function'
+            ) {
+              stelvioApplyRankingBuildMetaInvalidationIfNeeded(json.buildMeta).catch(function () {});
+            }
           }
         } catch (ePubRead) {
           /* 오프라인·오류 시 마지막 값 유지(기본 firebase) */
@@ -9201,8 +9237,8 @@
     }
     window.stelvioInstantTabSwitchFromMemory = stelvioInstantTabSwitchFromMemory;
 
-    /** Firestore ranking_meta(04:00 마스터·03:20 헵타곤·02:50 피크·항속 버전)와 로컬 캐시 동기화용 */
-    var STELVIO_RANKING_SYNC_META_LC_KEY = 'stelvioRC:syncMeta:v1';
+    /** 집계 메타 지문 — Supabase ranking_build_meta 또는 Firestore ranking_meta */
+    var STELVIO_RANKING_SYNC_META_LC_KEY = 'stelvioRC:syncMeta:v2';
     var STELVIO_RANKING_META_FS_WAIT_MS = 3500;
     var stelvioRankingMetaSyncInFlight = null;
     /** 인증 후 전 탭 프리페치 세션 — 랭킹보드 진입 시 스피너·대기에 사용 */
@@ -9368,6 +9404,76 @@
       return false;
     }
 
+    function stelvioRankingBuildMetaForFingerprint(serverMeta) {
+      if (!serverMeta) return null;
+      return {
+        master: serverMeta.master || null,
+        heptagon: serverMeta.heptagon || null,
+        personalSpeed: serverMeta.personalSpeed || null,
+        peak28d: serverMeta.peak28d || null,
+      };
+    }
+
+    async function stelvioFetchRankingBuildMetaFromSupabaseApi() {
+      try {
+        var res = await fetch(STELVIO_RANKING_BUILD_META_PUBLIC_URL, {
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-store',
+        });
+        var json = res.ok ? await res.json().catch(function () { return null; }) : null;
+        if (json && json.success && json.buildMeta) {
+          stelvioRankingReadSourceState.buildMetaSource = 'supabase';
+          stelvioRankingReadSourceState.buildMeta = json.buildMeta;
+          stelvioRankingReadSourceState.buildMetaFingerprint = json.buildMetaFingerprint || '';
+          return stelvioRankingBuildMetaForFingerprint(json.buildMeta);
+        }
+      } catch (eSbMeta) {
+        console.warn('[StelvioRanking] Supabase build meta 조회 실패:', eSbMeta && eSbMeta.message);
+      }
+      return null;
+    }
+
+    async function stelvioResolveServerRankingMetaForSync() {
+      await stelvioEnsureRankingReadSource(false);
+      if (stelvioGetRankingReadSourceSync() === 'supabase') {
+        if (stelvioRankingReadSourceState.buildMeta) {
+          return stelvioRankingBuildMetaForFingerprint(stelvioRankingReadSourceState.buildMeta);
+        }
+        return stelvioFetchRankingBuildMetaFromSupabaseApi();
+      }
+      return stelvioFetchRankingMetaFromFirestore();
+    }
+
+    /**
+     * Supabase pg_cron / 앱 항속 산식 버전 변경 시 IndexedDB 무효화(화면은 기존 캐시 즉시 표시 가능).
+     */
+    async function stelvioApplyRankingBuildMetaInvalidationIfNeeded(serverMeta) {
+      if (!serverMeta) return { invalidated: false, fingerprint: '' };
+      var psVer =
+        serverMeta.personalSpeed && serverMeta.personalSpeed.version != null
+          ? Number(serverMeta.personalSpeed.version)
+          : 0;
+      if (
+        typeof STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER === 'number' &&
+        STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER > psVer
+      ) {
+        await stelvioRankingPersistentCache.clearAll();
+        stelvioRankingClearMemCaches();
+        console.log(
+          '[StelvioRanking] 항속 산식 v' +
+            STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER +
+            ' > 서버 v' +
+            psVer +
+            ' — 랭킹 캐시 무효화'
+        );
+        try {
+          localStorage.removeItem(STELVIO_RANKING_SYNC_META_LC_KEY);
+        } catch (ePs) {}
+      }
+      return stelvioInvalidateRankingCachesIfMetaChanged(serverMeta);
+    }
+
     async function stelvioFetchRankingMetaFromFirestore() {
       if (!stelvioRankingFirestoreV9Pack()) return null;
       try {
@@ -9435,27 +9541,36 @@
     }
 
     /**
-     * 인증·앱 idle 시: ranking_meta와 비교 후 필요 시 캐시 무효화 + 전 탭 백그라운드 적재.
+     * 인증·랭킹 진입·포그라운드: Supabase ranking_build_meta 또는 Firestore ranking_meta 비교 후
+     * 필요 시만 IndexedDB 무효화 + 백그라운드 프리페치(UI 블로킹 없음).
      */
-    function stelvioSyncRankingCacheWithFirestoreMeta(opts) {
+    function stelvioSyncRankingCacheWithServerMeta(opts) {
       opts = opts || {};
       if (stelvioRankingMetaSyncInFlight) return stelvioRankingMetaSyncInFlight;
       var p = (async function () {
         var uid = opts.uid != null ? opts.uid : stelvioRankingBoardUid();
         await stelvioRankingMemCacheHydrateFromPersistent();
         if (!uid) return { warmed: false, reason: 'no_uid' };
-        await stelvioEnsureFirestoreForRankingMeta();
-        await stelvioEnsureRankingFirestoreAuthReady();
-        var serverMeta = await stelvioFetchRankingMetaFromFirestore();
-        var inv = await stelvioInvalidateRankingCachesIfMetaChanged(serverMeta);
+        var serverMeta = await stelvioResolveServerRankingMetaForSync();
+        if (!serverMeta && stelvioGetRankingReadSourceSync() === 'firebase') {
+          await stelvioEnsureFirestoreForRankingMeta();
+          await stelvioEnsureRankingFirestoreAuthReady();
+          serverMeta = await stelvioFetchRankingMetaFromFirestore();
+        }
+        var inv = await stelvioApplyRankingBuildMetaInvalidationIfNeeded(serverMeta);
         var warm = stelvioEnsureRankingBoardWarmPrefetch({
           uid: uid,
           gender: opts.gender || 'all',
           skipDuration: opts.skipDuration || '',
           force: inv.invalidated || opts.forcePrefetch === true,
-          forceWarmAll: opts.forcePrefetch === true,
+          forceWarmAll: opts.forcePrefetch === true && !STELVIO_RANKING_THERMAL_WEBVIEW,
         });
-        return { warmed: true, invalidated: inv.invalidated, warm: warm };
+        return {
+          warmed: true,
+          invalidated: inv.invalidated,
+          metaSource: stelvioGetRankingReadSourceSync(),
+          warm: warm,
+        };
       })()
         .catch(function (eSync) {
           console.warn('[StelvioRanking] meta sync 실패(로컬 캐시만 사용):', eSync && eSync.message);
@@ -9479,7 +9594,9 @@
       stelvioRankingMetaSyncInFlight = p;
       return p;
     }
-    window.stelvioSyncRankingCacheWithFirestoreMeta = stelvioSyncRankingCacheWithFirestoreMeta;
+    var stelvioSyncRankingCacheWithFirestoreMeta = stelvioSyncRankingCacheWithServerMeta;
+    window.stelvioSyncRankingCacheWithServerMeta = stelvioSyncRankingCacheWithServerMeta;
+    window.stelvioSyncRankingCacheWithFirestoreMeta = stelvioSyncRankingCacheWithServerMeta;
 
     /**
      * 가장 최근에 지나간 04:00 KST (UTC 19:00) 마스터 집계 롤오버 시각.
@@ -11218,10 +11335,10 @@
         if (typeof stelvioScheduleRankingIdleMemPrewarm === 'function') {
           stelvioScheduleRankingIdleMemPrewarm({ force: true });
         }
-        if (!STELVIO_RANKING_THERMAL_WEBVIEW) {
-          stelvioSyncRankingCacheWithFirestoreMeta({
+        if (typeof stelvioSyncRankingCacheWithServerMeta === 'function') {
+          stelvioSyncRankingCacheWithServerMeta({
             gender: stelvioRankingState.gender || 'all',
-            skipDuration: 'gc',
+            skipDuration: stelvioRankingState.duration || 'gc',
           }).catch(function () {});
         }
         fetchStelvioPeakPowerRanking();
@@ -11827,20 +11944,28 @@
       if (typeof prefetchWeeklyTop10ToDeviceStorage === 'function') {
         prefetchWeeklyTop10ToDeviceStorage(uid).catch(function () {});
       }
-      stelvioEnsureRankingBoardWarmPrefetch({
-        uid: uid,
-        gender: 'all',
-        force: true,
-        forceWarmAll: true,
-      });
-      if (typeof stelvioScheduleRankingIdleMemPrewarm === 'function') {
-        stelvioScheduleRankingIdleMemPrewarm({ uid: uid, force: true });
-      }
-      stelvioSyncRankingCacheWithFirestoreMeta({
-        uid: uid,
-        gender: 'all',
-        forcePrefetch: true,
-      }).catch(function () {});
+      (async function () {
+        try {
+          await stelvioEnsureRankingReadSource(true);
+        } catch (eRd) {}
+        if (typeof stelvioSyncRankingCacheWithServerMeta === 'function') {
+          await stelvioSyncRankingCacheWithServerMeta({
+            uid: uid,
+            gender: 'all',
+            forcePrefetch: true,
+          });
+        } else {
+          stelvioEnsureRankingBoardWarmPrefetch({
+            uid: uid,
+            gender: 'all',
+            force: true,
+            forceWarmAll: !STELVIO_RANKING_THERMAL_WEBVIEW,
+          });
+        }
+        if (typeof stelvioScheduleRankingIdleMemPrewarm === 'function') {
+          stelvioScheduleRankingIdleMemPrewarm({ uid: uid, force: true });
+        }
+      })().catch(function () {});
     }
     window.stelvioBackgroundPrefetchAllTabs = stelvioBackgroundPrefetchAllTabs;
 
