@@ -373,8 +373,7 @@
     var cats = ['Supremo', 'Bianco', 'Rosa', 'Infinito', 'Leggenda', 'Assoluto'];
     function keepRow(e) {
       if (!e) return false;
-      if (Number(e.peak60minWatts) > 0) return true;
-      return !(Number(e.speedKmh) > 0);
+      return Number(e.peak60minWatts) > 0 && Number(e.speedKmh) > 0;
     }
     function rerank(arr) {
       if (!Array.isArray(arr)) return arr;
@@ -410,11 +409,17 @@
 
   /**
    * 랭킹 API 응답에서 본인(uid) 항속을 6개월 60분 MMP 기준으로 맞춤(FTP 폴백 순위 제외).
+   * @param {{ preserveServerSpeed?: boolean }} [opts]
+   *   preserveServerSpeed: true — 랭킹보드(4주 집계) 응답 speedKmh 유지, 6개월 로그 덮어쓰기 생략
    */
-  async function alignPersonalSpeedRankingPayloadWithDashboard(data, uid) {
+  async function alignPersonalSpeedRankingPayloadWithDashboard(data, uid, opts) {
+    opts = opts || {};
     data = recalcPersonalSpeedBoardFromPeak60(data);
     data = filterPersonalSpeedBoardExcludeNonLog60(data);
     if (!data || !uid || !data.byCategory) return data;
+    if (opts.preserveServerSpeed === true) {
+      return data;
+    }
     var profile = resolveProfileForOneHourAbility(uid);
     var logs = await fetchTrainingLogsForUser(uid, 400);
     var metrics = computeOneHourAbilityFromLogs(logs, {
