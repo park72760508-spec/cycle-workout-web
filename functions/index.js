@@ -10658,6 +10658,7 @@ exports.fixStravaTssBatch = functions
 
 // ---------- Supabase Auth Bridge (Firebase ID Token → Custom JWT) ----------
 const supabaseAuthBridge = require("./supabaseAuthBridge");
+const supabaseUserProvision = require("./supabaseUserProvision");
 
 const mintSupabaseSessionConfig = {
   cors: CORS_ORIGINS,
@@ -10668,6 +10669,23 @@ exports.mintSupabaseSessionHttp = onRequest(
   mintSupabaseSessionConfig,
   async (req, res) => {
     await supabaseAuthBridge.handleMintSupabaseSession(
+      req,
+      res,
+      admin,
+      setCorsHeaders
+    );
+  }
+);
+
+const provisionSupabaseUserConfig = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: CORS_ORIGINS,
+  timeoutSeconds: 30,
+});
+
+exports.provisionSupabaseUserAfterProfileHttp = onRequest(
+  provisionSupabaseUserConfig,
+  async (req, res) => {
+    await supabaseUserProvision.handleProvisionSupabaseUserAfterProfile(
       req,
       res,
       admin,
