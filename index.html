@@ -9334,7 +9334,6 @@
       stelvioRankingFastTabSwitchFlag = true;
       try {
         stelvioRankingSyncPayloadGlobals(mem.body, uid);
-        stelvioHideRankingBoardLoadingUi();
         if (typeof stelvioSyncCategorySelectUi === 'function') stelvioSyncCategorySelectUi();
         if (typeof renderStelvioHeroCard === 'function') {
           renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
@@ -11765,6 +11764,7 @@
       var label = document.getElementById('stelvioGenderLabel');
       if (label) label.textContent = val === 'M' ? '남성' : (val === 'F' ? '여성' : '전체');
       stelvioScrollRankingBoardToTopSmooth();
+      stelvioBeginRankingTabSwitchUi();
       stelvioStartRankingBoardBackgroundPrefetch({
         gender: val,
         skipDuration:
@@ -12209,6 +12209,20 @@
     window.stelvioShowRankingBoardLoadingUi = stelvioShowRankingBoardLoadingUi;
     window.stelvioHideRankingBoardLoadingUi = stelvioHideRankingBoardLoadingUi;
 
+    /** 종목 탭 전환: 이전 탭 순위가 남아 보이지 않도록 스피너·목록 초기화 */
+    function stelvioBeginRankingTabSwitchUi() {
+      stelvioShowRankingBoardLoadingUi(true);
+      var listBody = document.getElementById('stelvioRankingListBody');
+      if (listBody) {
+        if (typeof stelvioRankingCancelListChunkJob === 'function') {
+          stelvioRankingCancelListChunkJob(listBody);
+        }
+        listBody.innerHTML = '';
+      }
+      stelvioRankingLastPaintedSwrKey = '';
+    }
+    window.stelvioBeginRankingTabSwitchUi = stelvioBeginRankingTabSwitchUi;
+
     function bindStelvioRankingEvents() {
       var chips = document.getElementById('stelvioDurationTabs');
       if (chips && !chips._stelvioDurationTabsDelegated) {
@@ -12237,11 +12251,13 @@
           stelvioRankingState.duration = nextDur;
           stelvioApplyDurationModeUi();
           stelvioScheduleRankingBoardScrollAfterTabApply();
-          /* 메모리/IndexedDB 히트 시 로딩 오버레이 없이 즉시 페인트, 네트워크는 백그라운드만 */
+          stelvioBeginRankingTabSwitchUi();
           var instantTabOk =
             typeof stelvioInstantTabSwitchFromMemory === 'function' &&
             stelvioInstantTabSwitchFromMemory(nextDur);
-          if (!instantTabOk && typeof stelvioPrimeTabSwitchFromIndexedDb === 'function') {
+          if (instantTabOk) {
+            stelvioHideRankingBoardLoadingUi();
+          } else if (typeof stelvioPrimeTabSwitchFromIndexedDb === 'function') {
             stelvioPrimeTabSwitchFromIndexedDb(nextDur).then(function (primed) {
               if (primed) stelvioHideRankingBoardLoadingUi();
             });
@@ -13550,6 +13566,7 @@
             : '데이터를 불러올 수 없습니다.'
         );
         refreshStelvioDistributionChartMounted();
+        stelvioHideRankingBoardLoadingUi();
         return;
       }
       stelvioLogRankingReadBackend('rankingBoard', data, {
@@ -13599,6 +13616,7 @@
             stelvioRankingFastTabSwitchFlag = false;
           }
         }
+        stelvioHideRankingBoardLoadingUi();
         return;
       }
       if (uid && typeof stelvioMergeViewerProfileImageIntoRankingPayload === 'function') {
@@ -13704,6 +13722,7 @@
         renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
         renderStelvioActiveCategory();
         stelvioFlushRankingBoardScrollAfterTabApply();
+        stelvioHideRankingBoardLoadingUi();
         stelvioRefreshRankingFriendSetFromFirestore()
           .then(function () {
             if (myGen !== stelvioRankingFetchGen) return;
@@ -13863,7 +13882,6 @@
 
       async function applyFromCache(body, opts) {
         opts = opts || {};
-        if (!opts.keepLoading) stelvioHideRankingBoardLoading();
         var working = opts.skipClone ? body : stelvioCloneRankingPayload(body);
         var instant = opts.instant !== false && stelvioRankingCacheAllowsInstantApply(working);
         var psNeedsViewerAlign =
@@ -14068,13 +14086,14 @@
             memUsable = false;
           }
           if (memUsable) {
-            stelvioHideRankingBoardLoading();
             await applyFromCache(memTabHit.body, {
               instant: true,
               source: 'mem',
               fastTabSwitch: true,
               preserveExpandUi: true,
               skipClone: true,
+              keepLoading: true,
+              tabSwitch: true,
             });
             if (!tabSwitchLight || !STELVIO_RANKING_THERMAL_WEBVIEW) {
               scheduleRankMvIfNeeded();
