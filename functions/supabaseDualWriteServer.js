@@ -158,6 +158,14 @@ async function refreshDualRunFromRemoteConfig(admin, force = false) {
     return dualRunCache;
   }
 
+  const envStatus = parseDualWriteStatus(process.env.DUAL_WRITE_STATUS);
+  if (envStatus !== "OFF") {
+    dualRunCache.status = envStatus;
+    dualRunCache.lastFetchAt = now;
+    console.log("[supabaseDualWriteServer] DUAL_WRITE_STATUS env", envStatus);
+    return dualRunCache;
+  }
+
   try {
     const template = await admin.remoteConfig().getTemplate();
     const status = parseDualWriteStatus(

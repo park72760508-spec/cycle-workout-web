@@ -71,8 +71,16 @@ function toRideDate(raw) {
   if (typeof raw === "object" && raw !== null && typeof raw.toDate === "function") {
     return raw.toDate().toISOString().slice(0, 10);
   }
-  if (typeof raw === "object" && raw !== null && typeof raw.seconds === "number") {
-    return new Date(raw.seconds * 1000).toISOString().slice(0, 10);
+  if (typeof raw === "object" && raw !== null) {
+    const sec =
+      typeof raw.seconds === "number"
+        ? raw.seconds
+        : typeof raw._seconds === "number"
+          ? raw._seconds
+          : null;
+    if (sec != null) {
+      return new Date(sec * 1000).toISOString().slice(0, 10);
+    }
   }
   return null;
 }
@@ -193,7 +201,16 @@ function mapFirestoreOpenRideToRows(firestoreDocId, d) {
   const hostUid = str(d.hostUserId) || str(d.host_user_id);
   const hostUserId = hostUid ? resolveUserUuid(hostUid) : null;
   const rideDate = toRideDate(d.date);
-  if (!hostUserId || !rideDate || !firestoreDocId) return null;
+  if (!hostUserId || !rideDate || !firestoreDocId) {
+    console.warn("[supabaseGroupDualWrite] map_open_ride_failed", {
+      firestoreDocId,
+      hostUid: hostUid || null,
+      hostUserId: hostUserId || null,
+      rideDate: rideDate || null,
+      dateType: d.date == null ? "null" : typeof d.date,
+    });
+    return null;
+  }
 
   const statusRaw = str(d.rideStatus)?.toLowerCase();
   let status = "active";
@@ -417,10 +434,22 @@ async function runSecondaryAfterOpenRideWrite(admin, firestoreDocId, rideData, a
 
   const mapped = mapFirestoreOpenRideToRows(firestoreDocId, rideData);
   if (!mapped) {
-    return { skipped: true, reason: "map_open_ride_failed" };
+    return {
+      skipped: true,
+      reason: "map_open_ride_failed",
+      hint: "hostUserId·date·firestoreDocId 확인 (public.users 이관 여부)",
+    };
   }
 
-  await upsertOpenRideToSupabase(mapped.openRide, mapped.participants);
+  try {
+    await upsertOpenRideToSupabase(mapped.openRide, mapped.participants);
+  } catch (upsertErr) {
+    console.error("[supabaseGroupDualWrite] open_rides upsert error", {
+      firestoreDocId,
+      message: upsertErr.message || String(upsertErr),
+    });
+    throw upsertErr;
+  }
   await syncMediaForOpenRide(firestoreDocId, rideData);
   console.log("[supabaseGroupDualWrite] open_rides upsert OK", {
     firestoreDocId,
