@@ -8630,13 +8630,12 @@
     var stelvioRankingMedalsPreloaded = false;
     var STELVIO_RANKING_TAB_WARM_WAIT_MS = 400;
     var STELVIO_RANKING_PREFETCH_CONCURRENCY = 5;
-    /** Stelvio WebView 앱: 동시 11탭 프리페치가 CPU·네트워크·발열 주원인 → 제한 */
+    /** WebView 일일 전 탭 워밍(인증·메타 변경) — 동시 2탭까지, 완료 후 발열 종료 */
+    var STELVIO_RANKING_WEBVIEW_WARM_CONCURRENCY = 2;
+    /** Stelvio WebView: 탭 클릭마다만 fetch 시 발열·로딩 ↑ → 인증·일일 메타 sync 시에는 전 탭 백그라운드 적재 */
     var STELVIO_RANKING_THERMAL_WEBVIEW =
       typeof window !== 'undefined' &&
       (window.StelvioInApp === true || window.StelvioAppChannel === 'webview-native');
-    if (STELVIO_RANKING_THERMAL_WEBVIEW) {
-      STELVIO_RANKING_PREFETCH_CONCURRENCY = 1;
-    }
     var STELVIO_RANKING_BOARD_TAB_DURATIONS = [
       'gc',
       'max',
@@ -9558,12 +9557,14 @@
           serverMeta = await stelvioFetchRankingMetaFromFirestore();
         }
         var inv = await stelvioApplyRankingBuildMetaInvalidationIfNeeded(serverMeta);
+        var warmAllTabs =
+          opts.forcePrefetch === true || inv.invalidated === true || opts.forceWarmAll === true;
         var warm = stelvioEnsureRankingBoardWarmPrefetch({
           uid: uid,
           gender: opts.gender || 'all',
           skipDuration: opts.skipDuration || '',
-          force: inv.invalidated || opts.forcePrefetch === true,
-          forceWarmAll: opts.forcePrefetch === true && !STELVIO_RANKING_THERMAL_WEBVIEW,
+          force: warmAllTabs,
+          forceWarmAll: warmAllTabs,
         });
         return {
           warmed: true,
@@ -9583,6 +9584,8 @@
                 uid: uid2,
                 gender: opts.gender || 'all',
                 skipDuration: opts.skipDuration || '',
+                force: opts.forcePrefetch === true,
+                forceWarmAll: opts.forcePrefetch === true,
               }),
             };
           }
@@ -11881,9 +11884,22 @@
           if (stelvioRankingMemCacheGet(ck)) return false;
           return true;
         });
-        /* 앱 WebView: 전 탭 백그라운드 API 적재 중단(탭 전환 시 캐시·현재 탭 fetch만) */
+        /* WebView: 일일 워밍(forceWarmAll)이 아니면 탭 클릭 시에만 fetch(발열·로딩 절감) */
         if (STELVIO_RANKING_THERMAL_WEBVIEW && !opts.forceWarmAll) {
           queue = [];
+        } else if (opts.forceWarmAll && queue.length) {
+          try {
+            console.info(
+              '[StelvioRanking] 전 탭 백그라운드 IndexedDB 적재 시작 — ' +
+                queue.length +
+                '탭' +
+                (STELVIO_RANKING_THERMAL_WEBVIEW ? ' (WebView 일일 워밍)' : '')
+            );
+          } catch (eLogW) {}
+        }
+        var prefetchConcurrency = STELVIO_RANKING_PREFETCH_CONCURRENCY;
+        if (STELVIO_RANKING_THERMAL_WEBVIEW && opts.forceWarmAll) {
+          prefetchConcurrency = STELVIO_RANKING_WEBVIEW_WARM_CONCURRENCY;
         }
         var idx = 0;
         var allTabPromises = [];
@@ -11894,7 +11910,7 @@
               return;
             }
             var batch = [];
-            while (idx < queue.length && batch.length < STELVIO_RANKING_PREFETCH_CONCURRENCY) {
+            while (idx < queue.length && batch.length < prefetchConcurrency) {
               allTabPromises.push(stelvioPrefetchRankingTabToCache(queue[idx++], uid, gender, period, gen));
               batch.push(allTabPromises[allTabPromises.length - 1]);
             }
@@ -11959,7 +11975,7 @@
             uid: uid,
             gender: 'all',
             force: true,
-            forceWarmAll: !STELVIO_RANKING_THERMAL_WEBVIEW,
+            forceWarmAll: true,
           });
         }
         if (typeof stelvioScheduleRankingIdleMemPrewarm === 'function') {
@@ -11971,7 +11987,6 @@
 
     function scheduleStelvioRankingWarmCacheOnce() {
       if (stelvioRankingPrefetchScheduled) return;
-      if (STELVIO_RANKING_THERMAL_WEBVIEW) return;
       stelvioRankingPrefetchScheduled = true;
         var run = function () {
         var uid = stelvioRankingBoardUid();
