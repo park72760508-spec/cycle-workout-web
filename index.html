@@ -9857,21 +9857,33 @@
         if (!fs || typeof fs.collection !== 'function') return;
         var newSet = new Set();
         var newMap = {};
+        var fetchMembers =
+          window.openRidingGroupService &&
+          typeof window.openRidingGroupService.fetchRidingGroupMembersList === 'function'
+            ? function (gid) {
+                return window.openRidingGroupService.fetchRidingGroupMembersList(fs, gid);
+              }
+            : async function (gid) {
+                var snap = await fs.collection('stelvio_riding_groups').doc(gid).collection('members').get();
+                var rows = [];
+                snap.forEach(function (d) {
+                  rows.push({ id: d.id, userId: d.id, ...(d.data ? d.data() : {}) });
+                });
+                return rows;
+              };
         await Promise.all(groupIds.map(async function (gid) {
           try {
-            var snap = await fs.collection('stelvio_riding_groups').doc(gid).collection('members').get();
-            snap.forEach(function (d) {
-              var uid = String(d.id || '').trim();
+            var memRows = await fetchMembers(gid);
+            (memRows || []).forEach(function (row) {
+              var uid = String((row && (row.userId || row.id)) || '').trim();
               if (!uid) return;
               newSet.add(uid);
-              /* 프로필 fallback 맵 — displayName/profileImageUrl 저장 (랭킹 풀에 없는 멤버용) */
               if (!newMap[uid]) {
-                var data = d.data ? d.data() : {};
                 newMap[uid] = {
                   userId: uid,
-                  name: stelvioMemberDocDisplayNameFromData(data),
-                  profileImageUrl: data.profileImageUrl || null,
-                  role: data.role || 'member'
+                  name: stelvioMemberDocDisplayNameFromData(row),
+                  profileImageUrl: row.profileImageUrl || null,
+                  role: row.role || 'member'
                 };
               }
             });
