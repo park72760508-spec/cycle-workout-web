@@ -81,6 +81,38 @@ async function tryFetchRidingGroupFromSupabase(admin, db, query) {
       includeJoinRequests,
     });
     if (!group) return null;
+
+    const cfg = groupReadConfig.getGroupReadConfig();
+    const sbMembers = Array.isArray(group._members) ? group._members : [];
+    const mc = Number(group.memberCount) || 0;
+    if (
+      cfg.parityFallbackToFirebase !== false &&
+      sbMembers.length === 0 &&
+      mc > 0
+    ) {
+      const fromFb = await fetchRidingGroupFromFirebase(db, groupId, {
+        includeMembers: true,
+        includeJoinRequests,
+      });
+      if (fromFb && fromFb.group) {
+        const fbMembers = Array.isArray(fromFb.group._members) ? fromFb.group._members : [];
+        if (fbMembers.length > 0) {
+          console.warn("[groupReadRouter] Supabase members empty → Firebase merge", {
+            groupId,
+            memberCount: mc,
+            fbCount: fbMembers.length,
+          });
+          group._members = fbMembers;
+          if (includeJoinRequests && (!group._joinRequests || !group._joinRequests.length)) {
+            group._joinRequests = fromFb.group._joinRequests || [];
+          }
+          group.readBackend = "supabase";
+          group.readSource = "supabase";
+          group.membersParityFallback = true;
+        }
+      }
+    }
+
     return { success: true, group, readBackend: "supabase", readSource: "supabase" };
   } catch (err) {
     console.error("[groupReadRouter] riding group Supabase failed:", err.message || err);
