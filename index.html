@@ -13580,7 +13580,6 @@
           : '';
       if (applyOpts.fastTabSwitch && applySwrKey && stelvioRankingLastPaintedSwrKey === applySwrKey) {
         stelvioHideRankingBoardLoadingUi();
-        favoritesHydratePromise.catch(function () {});
         return;
       }
       if (uid && typeof stelvioMergeViewerProfileImageIntoRankingPayload === 'function') {
