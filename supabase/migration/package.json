@@ -15,6 +15,7 @@
     "schema:riding-groups": "tsx scripts/ensureRidingGroupsSchema.ts",
     "migrate:riding-groups": "tsx scripts/migrateRidingGroupsAndMedia.ts",
     "verify:riding-groups": "tsx scripts/verifyRidingGroupsBackfill.ts",
+    "sync:group-members": "tsx scripts/syncRidingGroupMembersBackfill.ts",
     "verify:rankings": "node ../../scripts/compare-ranking-firestore-supabase.mjs"
   },
   "engines": {
