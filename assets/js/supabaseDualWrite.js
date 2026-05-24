@@ -170,6 +170,29 @@ export function shouldRunSupabaseDualWrite(firebaseUid) {
   return evaluateSupabaseDualWrite(firebaseUid).execute;
 }
 
+/**
+ * 오픈라이딩·소모임·Functions ingest — SHADOW/CANARY/FULL이면 Secondary ON (서버와 동일).
+ * 훈련 저장은 evaluateSupabaseDualWrite(SHADOW 화이트리스트) 사용.
+ */
+export function evaluateSecondaryIngestWrite(firebaseUid) {
+  const override =
+    typeof window !== 'undefined' && window.STELVIO_DUAL_WRITE_LOCAL_OVERRIDE;
+  const status = override
+    ? parseDualWriteStatus(override.status || override)
+    : dualRunCache.status;
+  const uid = String(firebaseUid || '').trim();
+
+  if (status === 'OFF') {
+    return { execute: false, status, reason: 'dual_write_status=OFF', userId: uid };
+  }
+  return {
+    execute: true,
+    status,
+    reason: 'dual_write_status=' + status + ', ingest=all_users',
+    userId: uid,
+  };
+}
+
 export async function refreshDualRunFromRemoteConfig(force = false) {
   const override =
     typeof window !== 'undefined' && window.STELVIO_DUAL_WRITE_LOCAL_OVERRIDE;

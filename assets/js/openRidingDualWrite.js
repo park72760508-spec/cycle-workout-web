@@ -3,13 +3,37 @@
  * @see assets/js/supabaseDualWrite.js, functions/supabaseGroupDualWriteServer.js
  */
 import {
-  evaluateSupabaseDualWrite,
+  evaluateSecondaryIngestWrite,
+  refreshDualRunFromRemoteConfig,
   shouldRunSupabaseDualWrite,
   syncSupabaseSessionFromBridge,
 } from './supabaseDualWrite.js';
 
 const OPEN_RIDE_DUAL_WRITE_RELAY =
   'https://us-central1-stelvio-ai.cloudfunctions.net/ingestOpenRideDualWriteRelay';
+
+/** Firestore Timestamp → relay JSON (date 매핑 실패 방지) */
+function serializeRideDataForRelay(data) {
+  if (!data || typeof data !== 'object') return data;
+  const out = Object.assign({}, data);
+  const rawDate = out.date;
+  if (rawDate != null) {
+    if (typeof rawDate.toDate === 'function') {
+      out.date = rawDate.toDate().toISOString();
+    } else if (typeof rawDate === 'object' && typeof rawDate.seconds === 'number') {
+      out.date = new Date(rawDate.seconds * 1000).toISOString();
+    } else if (typeof rawDate === 'object' && typeof rawDate._seconds === 'number') {
+      out.date = new Date(rawDate._seconds * 1000).toISOString();
+    }
+  }
+  if (out.createdAt != null && typeof out.createdAt.toDate === 'function') {
+    out.createdAt = out.createdAt.toDate().toISOString();
+  }
+  if (out.updatedAt != null && typeof out.updatedAt.toDate === 'function') {
+    out.updatedAt = out.updatedAt.toDate().toISOString();
+  }
+  return out;
+}
 
 function getConfig() {
   const c = (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
@@ -25,7 +49,8 @@ function getConfig() {
  * @param {object} rideData Firestore 문서 필드
  */
 export async function runSecondaryAfterOpenRideSave(actorUid, firestoreDocId, rideData) {
-  const decision = evaluateSupabaseDualWrite(actorUid);
+  await refreshDualRunFromRemoteConfig(true);
+  const decision = evaluateSecondaryIngestWrite(actorUid);
   if (!decision.execute) {
     console.log('[openRidingDualWrite] open ride secondary 스킵:', decision.reason);
     return { skipped: true, reason: decision.reason };
@@ -34,11 +59,13 @@ export async function runSecondaryAfterOpenRideSave(actorUid, firestoreDocId, ri
     return { skipped: true, reason: 'missing_payload' };
   }
 
+  const payload = serializeRideDataForRelay(rideData);
+
   try {
     await syncSupabaseSessionFromBridge();
   } catch (bridgeErr) {
     console.warn(
-      '[openRidingDualWrite] Auth Bridge 스킵(트리거가 서버 Secondary 처리):',
+      '[openRidingDualWrite] Auth Bridge 스킵(relay는 서버 service role):',
       bridgeErr && bridgeErr.message ? bridgeErr.message : bridgeErr
     );
   }
@@ -59,17 +86,21 @@ export async function runSecondaryAfterOpenRideSave(actorUid, firestoreDocId, ri
       },
       body: JSON.stringify({
         firestoreDocId,
-        rideData,
+        rideData: payload,
         actorUid,
       }),
     });
-    if (!res.ok) {
-      console.warn('[openRidingDualWrite] relay HTTP', res.status);
-      return { skipped: true, reason: 'relay_http_' + res.status };
-    }
     const json = await res.json().catch(function () {
       return {};
     });
+    if (!res.ok) {
+      console.warn('[openRidingDualWrite] relay HTTP', res.status, json);
+      return { skipped: true, reason: 'relay_http_' + res.status, detail: json };
+    }
+    if (json.skipped) {
+      console.warn('[openRidingDualWrite] relay skipped:', json.reason || json);
+      return json;
+    }
     console.log('[openRidingDualWrite] open ride relay OK', json);
     return json;
   } catch (relayErr) {
@@ -86,7 +117,8 @@ export async function runSecondaryAfterOpenRideSave(actorUid, firestoreDocId, ri
  */
 export async function runSecondaryAfterRidingGroupSave(actorUid, firestoreDocId, groupData, opts) {
   opts = opts || {};
-  const decision = evaluateSupabaseDualWrite(actorUid);
+  await refreshDualRunFromRemoteConfig(true);
+  const decision = evaluateSecondaryIngestWrite(actorUid);
   if (!decision.execute) {
     console.log('[openRidingDualWrite] riding group secondary 스킵:', decision.reason);
     return { skipped: true, reason: decision.reason };
@@ -122,13 +154,17 @@ export async function runSecondaryAfterRidingGroupSave(actorUid, firestoreDocId,
         syncJoinRequests: !!opts.syncJoinRequests,
       }),
     });
-    if (!res.ok) {
-      console.warn('[openRidingDualWrite] group relay HTTP', res.status);
-      return { skipped: true, reason: 'relay_http_' + res.status };
-    }
-    return await res.json().catch(function () {
-      return { skipped: false };
+    const json = await res.json().catch(function () {
+      return {};
     });
+    if (!res.ok) {
+      console.warn('[openRidingDualWrite] group relay HTTP', res.status, json);
+      return { skipped: true, reason: 'relay_http_' + res.status, detail: json };
+    }
+    if (json.skipped) {
+      console.warn('[openRidingDualWrite] group relay skipped:', json.reason || json);
+    }
+    return json;
   } catch (err) {
     console.warn('[openRidingDualWrite] group relay 실패:', err && err.message ? err.message : err);
     return { skipped: true, reason: 'relay_error' };
@@ -155,16 +191,32 @@ const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
 /**
  * Firestore commit 후 rides 문서 재조회 → Secondary relay (Fault Isolated).
  */
+function fetchRideDocForDualWrite(db, rideId, attempt) {
+  return import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js').then(
+    function (fs) {
+      return fs.getDoc(fs.doc(db, 'rides', String(rideId).trim()));
+    }
+  ).then(function (snap) {
+    if (snap && snap.exists()) return snap;
+    if (attempt < 2) {
+      return new Promise(function (resolve) {
+        setTimeout(resolve, 400);
+      }).then(function () {
+        return fetchRideDocForDualWrite(db, rideId, attempt + 1);
+      });
+    }
+    return snap;
+  });
+}
+
 export function scheduleOpenRideDualWriteFromFirestore(db, rideId, actorUid) {
   if (!db || !rideId) return;
-  Promise.allSettled([
-    import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js').then(function (fs) {
-      return fs.getDoc(fs.doc(db, 'rides', String(rideId).trim()));
-    }),
-  ])
-    .then(function (results) {
-      const snap = results[0].status === 'fulfilled' ? results[0].value : null;
-      if (!snap || !snap.exists()) return;
+  fetchRideDocForDualWrite(db, rideId, 0)
+    .then(function (snap) {
+      if (!snap || !snap.exists()) {
+        console.warn('[openRidingDualWrite] rides doc 없음 — secondary 스킵', rideId);
+        return;
+      }
       const data = snap.data();
       fireSecondaryTasksIsolated([
         runSecondaryAfterOpenRideSave(
@@ -174,7 +226,9 @@ export function scheduleOpenRideDualWriteFromFirestore(db, rideId, actorUid) {
         ),
       ]);
     })
-    .catch(function () {});
+    .catch(function (err) {
+      console.warn('[openRidingDualWrite] schedule fetch 실패:', err);
+    });
 }
 
 /**
