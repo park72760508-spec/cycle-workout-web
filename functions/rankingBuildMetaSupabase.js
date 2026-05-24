@@ -80,7 +80,14 @@ function buildRankingBuildMetaPayload(rows) {
 }
 
 async function fetchRankingBuildMetaFromSupabase() {
-  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  let supabase;
+  try {
+    supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  } catch (eClient) {
+    const msg = eClient && eClient.message ? eClient.message : String(eClient);
+    console.warn("[rankingBuildMetaSupabase] client init failed:", msg);
+    return { ...buildRankingBuildMetaPayload([]), error: msg };
+  }
   if (!supabase) {
     return { ...buildRankingBuildMetaPayload([]), error: "supabase_unavailable" };
   }
