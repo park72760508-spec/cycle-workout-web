@@ -7,6 +7,20 @@
 
 self.onmessage = function (ev) {
   var msg = ev.data || {};
+  if (msg.type === 'parseJson') {
+    var parseId = msg.id;
+    try {
+      var parsed = msg.text ? JSON.parse(String(msg.text)) : null;
+      self.postMessage({ id: parseId, ok: true, data: parsed });
+    } catch (parseErrOnly) {
+      self.postMessage({
+        id: parseId,
+        ok: false,
+        error: 'json-parse:' + (parseErrOnly && parseErrOnly.message),
+      });
+    }
+    return;
+  }
   if (msg.type !== 'fetchJson' || !msg.url) return;
   var id = msg.id;
   var timeoutMs = Math.max(1000, Number(msg.timeoutMs) || 30000);

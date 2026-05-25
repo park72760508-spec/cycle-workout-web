@@ -98,6 +98,26 @@
     });
   }
 
+  function parseRankingJsonInWorker(text, timeoutMs) {
+    var wk = ensureRankingWorker();
+    if (!wk) return Promise.reject(new Error('no-worker'));
+    var id = ++workerReqId;
+    var maxWait = Math.max(1000, Number(timeoutMs) || 5000);
+    return new Promise(function (resolve, reject) {
+      workerPending[id] = { resolve: resolve, reject: reject };
+      wk.postMessage({
+        id: id,
+        type: 'parseJson',
+        text: text,
+      });
+      setTimeout(function () {
+        if (!workerPending[id]) return;
+        delete workerPending[id];
+        reject(new Error('ranking-worker-parse-timeout'));
+      }, maxWait + 300);
+    });
+  }
+
   /**
    * fetchStelvioPeakPowerRanking용 — Worker 우선, 실패 시 null(호출부가 메인 fetch)
    */
@@ -113,7 +133,25 @@
     }
   }
 
+  /**
+   * IndexedDB 캐시가 문자열 JSON으로 저장된 구/이관 데이터일 때만 Worker에서 parse한다.
+   * 현재 캐시는 객체 그대로 저장되므로 일반 경로는 zero-copy에 가까운 객체 반환이다.
+   */
+  async function stelvioRankingNormalizeCachedPayloadViaWorker(value, timeoutMs) {
+    if (typeof value !== 'string') return value;
+    try {
+      return await parseRankingJsonInWorker(value, timeoutMs || 5000);
+    } catch (_) {
+      try {
+        return JSON.parse(value);
+      } catch (eJson) {
+        return null;
+      }
+    }
+  }
+
   w.stelvioStructuredClone = stelvioStructuredClone;
   w.stelvioRankingApplyListHtml = stelvioRankingApplyListHtml;
   w.stelvioRankingBoardFetchJsonViaWorker = stelvioRankingBoardFetchJsonViaWorker;
+  w.stelvioRankingNormalizeCachedPayloadViaWorker = stelvioRankingNormalizeCachedPayloadViaWorker;
 })(typeof window !== 'undefined' ? window : globalThis);
