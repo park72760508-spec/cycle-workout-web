@@ -143,14 +143,35 @@ async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
   return map;
 }
 
-/**
- * @param {import('firebase-admin')} admin
- */
-async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
-  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const uidMap = await getFirebaseUidByUuidMap(admin);
+function weeklyTssRowsToEntries(rows, uidMap, gender) {
+  const entries = [];
+  for (const row of rows || []) {
+    const fbUid = uidMap.get(String(row.user_id));
+    if (!fbUid) continue;
+    if (!profileGenderMatches(row, gender)) continue;
+    const totalTss = Math.round(Number(row.weekly_tss) * 100) / 100;
+    if (totalTss <= 0) continue;
+    entries.push({
+      ...mapRowToFirebaseUser(row, fbUid),
+      totalTss,
+      weekStart: row.week_start,
+      weekEnd: row.week_end,
+      metricsUpdatedAt: row.metrics_updated_at || null,
+    });
+  }
+  return entries;
+}
 
-  /* 실시간성: MV refresh 대기 없이 rides 트리거가 즉시 갱신하는 user_ranking_metrics를 직접 읽는다. */
+async function fetchWeeklyTssRowsFromDailySummariesLive(supabase, startStr, endStr) {
+  const { data, error } = await supabase.rpc("fn_weekly_tss_leaderboard_live", {
+    p_start: startStr,
+    p_end: endStr,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchWeeklyTssRowsFromUserRankingMetrics(supabase, startStr, endStr, gender) {
   const { data, error } = await supabase
     .from("user_ranking_metrics")
     .select(
@@ -168,30 +189,45 @@ async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
     supabase,
     (data || []).map((row) => row.user_id)
   );
-  const entries = [];
+  const rows = [];
   for (const row of data || []) {
-    const fbUid = uidMap.get(String(row.user_id));
-    if (!fbUid) continue;
     const profile = profileMap.get(String(row.user_id));
     if (!profile) continue;
     if (!profileGenderMatches(profile, gender)) continue;
-    const totalTss = Math.round(Number(row.weekly_tss) * 100) / 100;
-    if (totalTss <= 0) continue;
-    entries.push({
-      ...mapRowToFirebaseUser(
-        {
-          ...profile,
-          user_id: row.user_id,
-        },
-        fbUid
-      ),
-      totalTss,
-      weekStart: row.week_start,
-      weekEnd: row.week_end,
-      metricsUpdatedAt: row.metrics_updated_at || null,
+    rows.push({
+      ...profile,
+      user_id: row.user_id,
+      weekly_tss: row.weekly_tss,
+      week_start: row.week_start,
+      week_end: row.week_end,
+      weekly_has_cheat_day: row.weekly_has_cheat_day,
+      metrics_updated_at: row.metrics_updated_at,
     });
   }
+  return rows;
+}
 
+/**
+ * @param {import('firebase-admin')} admin
+ */
+async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const uidMap = await getFirebaseUidByUuidMap(admin);
+
+  let rows = [];
+  let source = "supabase_daily_summaries";
+  try {
+    rows = await fetchWeeklyTssRowsFromDailySummariesLive(supabase, startStr, endStr);
+  } catch (liveErr) {
+    console.warn(
+      "[supabaseRankingReader] weekly TSS live RPC failed, fallback metrics:",
+      liveErr && liveErr.message ? liveErr.message : liveErr
+    );
+    source = "supabase_user_ranking_metrics";
+    rows = await fetchWeeklyTssRowsFromUserRankingMetrics(supabase, startStr, endStr, gender);
+  }
+
+  const entries = weeklyTssRowsToEntries(rows, uidMap, gender);
   const { entries: ranked, byCategory } = buildByCategoryFromEntries(entries);
   return {
     success: true,
@@ -203,7 +239,9 @@ async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
     durationType: "tss",
     gender,
     precomputed: true,
+    liveComputed: source === "supabase_daily_summaries",
     readSource: "supabase",
+    supabaseWeeklyTssSource: source,
   };
 }
 
