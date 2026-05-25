@@ -536,7 +536,7 @@ export async function writeRideToSupabase(rideRow) {
  */
 async function runSecondaryRideUpsert(userId, logDocId, log, label) {
   await refreshDualRunFromRemoteConfig(true);
-  const decision = evaluateSupabaseDualWrite(userId);
+  const decision = evaluateSecondaryIngestWrite(userId);
   if (!decision.execute) {
     console.log('[supabaseDualWrite] ' + label + ' secondary 스킵:', decision.reason);
     return { skipped: true, reason: decision.reason };
