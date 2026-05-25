@@ -9417,8 +9417,21 @@
             force: true,
             delayBetweenTabsMs: STELVIO_RANKING_THERMAL_WEBVIEW ? 320 : 120,
           });
-          stelvioSchedulePreRenderAllWarmTabsFromMemory({ delayMs: STELVIO_RANKING_THERMAL_WEBVIEW ? 2200 : 900 });
-          return { mode: 'idb_to_ram_only', metaSame: true };
+          /*
+           * 메타가 같아도 해당 사용자/성별/기간 키가 IndexedDB에 없으면 탭 클릭 시 결국 서버를 탄다.
+           * 따라서 각 탭은 먼저 IDB hit를 확인하고, 빠진 키만 API로 채워 RAM+IDB를 완성한다.
+           */
+          await stelvioEnsureRankingBoardWarmPrefetch({
+            uid: uid,
+            gender: opts.gender || 'all',
+            period: opts.period || 'monthly',
+            force: true,
+            forceWarmAll: true,
+            delayBetweenTabsMs: STELVIO_RANKING_THERMAL_WEBVIEW ? 80 : 30,
+            prefetchConcurrency: STELVIO_RANKING_AGGRESSIVE_BOOT_CONCURRENCY,
+          });
+          stelvioSchedulePreRenderAllWarmTabsFromMemory({ delayMs: STELVIO_RANKING_THERMAL_WEBVIEW ? 900 : 260 });
+          return { mode: 'idb_to_ram_plus_missing_network_fill', metaSame: true };
         }
 
         var inv = await stelvioApplyRankingBuildMetaInvalidationIfNeeded(serverMeta);
@@ -9429,7 +9442,7 @@
             period: opts.period || 'monthly',
             force: true,
             forceWarmAll: true,
-            delayBetweenTabsMs: STELVIO_RANKING_THERMAL_WEBVIEW ? 180 : 90,
+            delayBetweenTabsMs: STELVIO_RANKING_THERMAL_WEBVIEW ? 80 : 30,
             prefetchConcurrency: STELVIO_RANKING_AGGRESSIVE_BOOT_CONCURRENCY,
           });
           stelvioScheduleRankingIdleMemPrewarm({
@@ -9439,7 +9452,7 @@
             force: true,
             delayBetweenTabsMs: STELVIO_RANKING_THERMAL_WEBVIEW ? 320 : 120,
           });
-          stelvioSchedulePreRenderAllWarmTabsFromMemory({ delayMs: STELVIO_RANKING_THERMAL_WEBVIEW ? 1600 : 600 });
+          stelvioSchedulePreRenderAllWarmTabsFromMemory({ delayMs: STELVIO_RANKING_THERMAL_WEBVIEW ? 900 : 260 });
           return { mode: 'network_warm_after_meta_change', invalidated: !!inv.invalidated };
         }
 
@@ -9480,7 +9493,7 @@
         initGlobalRankingPreWarm(opts);
       };
       var delayMs =
-        opts.delayMs != null ? Math.max(0, Number(opts.delayMs) || 0) : (STELVIO_RANKING_THERMAL_WEBVIEW ? 8500 : 5500);
+        opts.delayMs != null ? Math.max(0, Number(opts.delayMs) || 0) : (STELVIO_RANKING_THERMAL_WEBVIEW ? 1800 : 700);
       setTimeout(function () {
         if (typeof requestIdleCallback !== 'undefined') {
           requestIdleCallback(run, { timeout: STELVIO_RANKING_THERMAL_WEBVIEW ? 12000 : 7000 });
@@ -12360,7 +12373,7 @@
         prefetchWeeklyTop10ToDeviceStorage(uid).catch(function () {});
       }
       if (opts.forceNetwork !== true && typeof scheduleInitGlobalRankingPreWarm === 'function') {
-        scheduleInitGlobalRankingPreWarm({ uid: uid, force: opts.force === true });
+        scheduleInitGlobalRankingPreWarm({ uid: uid, force: opts.force === true, delayMs: 300 });
         return;
       }
       (async function () {
@@ -12406,7 +12419,7 @@
           return;
         }
         if (typeof scheduleInitGlobalRankingPreWarm === 'function') {
-          scheduleInitGlobalRankingPreWarm({ uid: uid });
+          scheduleInitGlobalRankingPreWarm({ uid: uid, delayMs: 300 });
         } else if (typeof stelvioBackgroundPrefetchAllTabs === 'function') {
           stelvioBackgroundPrefetchAllTabs(uid);
         } else if (typeof stelvioSyncRankingCacheWithFirestoreMeta === 'function') {
@@ -12816,6 +12829,44 @@
         }
       } catch (eScanFb) {}
       return best;
+    }
+
+    async function stelvioFindRankingBoardDirectCacheCandidates(cacheKeyStr) {
+      var out = [];
+      if (!cacheKeyStr) return out;
+      function pushSoft(label, soft) {
+        if (soft && soft.data && soft.data.success && soft.data.byCategory) {
+          out.push({ label: label, entry: soft });
+        }
+      }
+      try {
+        pushSoft('exact', await stelvioRankingLocalCache.getSoft(stelvioPeakRankingLcKey(cacheKeyStr)));
+        var want = new URLSearchParams(cacheKeyStr);
+        var wantDur = want.get('duration') || '';
+        var wantPeriod = want.get('period') || 'monthly';
+        var wantGender = want.get('gender') || 'all';
+        if (wantDur) {
+          var noUidKey = stelvioBuildRankingBoardCacheKey(wantDur, wantGender, null, wantPeriod);
+          if (noUidKey !== cacheKeyStr) {
+            pushSoft('no_uid', await stelvioRankingLocalCache.getSoft(stelvioPeakRankingLcKey(noUidKey)));
+          }
+          if (wantGender !== 'all') {
+            var allGenderKey = stelvioBuildRankingBoardCacheKey(wantDur, 'all', stelvioRankingBoardUidQuick(), wantPeriod);
+            if (allGenderKey !== cacheKeyStr && allGenderKey !== noUidKey) {
+              pushSoft('gender_all', await stelvioRankingLocalCache.getSoft(stelvioPeakRankingLcKey(allGenderKey)));
+            }
+            var allGenderNoUidKey = stelvioBuildRankingBoardCacheKey(wantDur, 'all', null, wantPeriod);
+            if (
+              allGenderNoUidKey !== cacheKeyStr &&
+              allGenderNoUidKey !== noUidKey &&
+              allGenderNoUidKey !== allGenderKey
+            ) {
+              pushSoft('gender_all_no_uid', await stelvioRankingLocalCache.getSoft(stelvioPeakRankingLcKey(allGenderNoUidKey)));
+            }
+          }
+        }
+      } catch (eDirectCache) {}
+      return out;
     }
 
     function stelvioEnsureRankingRefreshHint() {
@@ -14185,7 +14236,7 @@
       if (!opts.tabSwitch) {
         await stelvioEnsureRankingReadSource(opts.forceReadSource);
       } else if (!stelvioRankingReadSourceState.loadedAt) {
-        await stelvioEnsureRankingReadSource(false);
+        stelvioEnsureRankingReadSource(false).catch(function () {});
       }
       var tabSwitchLight = !!opts.tabSwitch;
       var swrKeyEarly = '';
@@ -14468,6 +14519,41 @@
         return stelvioRankingCacheUsableFromIdbEntry(lcEntry, cacheCtx);
       }
 
+      function cacheEntryRenderableFromIdb(lcEntry) {
+        if (!lcEntry || !lcEntry.data || !lcEntry.data.success || !lcEntry.data.byCategory) return false;
+        if (!stelvioRankingPayloadMatchesReadSource(lcEntry.data)) return false;
+        if (!stelvioRankingPayloadHasVisibleRows(lcEntry.data)) return false;
+        if (lcEntry.expiresAt && nowMs >= lcEntry.expiresAt) return false;
+        return true;
+      }
+
+      async function tryApplyDirectIdbInstantFallback(sourceLabel) {
+        var candidates = await stelvioFindRankingBoardDirectCacheCandidates(cacheKeyStr);
+        for (var ci = 0; ci < candidates.length; ci++) {
+          var cand = candidates[ci];
+          var entry = cand && cand.entry;
+          if (!cacheEntryRenderableFromIdb(entry)) continue;
+          stelvioRankingMemCacheSet(swrKey, entry.data, {
+            cachedAt: entry.cachedAt,
+            expiresAt: entry.expiresAt,
+          });
+          stelvioRankingIndexPeakRankFromEntry(lcKey, entry);
+          stelvioSetRankingRefreshHint(true);
+          await applyFromCache(entry.data, {
+            instant: true,
+            source: sourceLabel || cand.label || 'indexedDB_direct',
+            fastTabSwitch: true,
+            preserveExpandUi: true,
+            skipClone: true,
+            keepLoading: true,
+            tabSwitch: !!opts.tabSwitch,
+          });
+          scheduleBgRefreshIfNeeded(false);
+          return true;
+        }
+        return false;
+      }
+
       if (opts.backgroundOnly) {
         var memBg = stelvioRankingMemCacheGet(swrKey);
         if (memBg && memBg.body && stelvioRankingCacheUsableFromMem(memBg, cacheCtx)) {
@@ -14509,6 +14595,9 @@
               memTabHit = stelvioRankingMemCacheGet(swrKey);
             }
           } catch (eLcTab) {}
+        }
+        if (!memTabHit && (await tryApplyDirectIdbInstantFallback('tab_direct_indexedDB'))) {
+          return;
         }
         if (memTabHit && memTabHit.body) {
           var memUsable = false;
@@ -14575,6 +14664,8 @@
         }
         return;
       }
+
+      if (await tryApplyDirectIdbInstantFallback('direct_indexedDB')) return;
 
       var showedSoft = await tryApplySoftFallback();
 
@@ -21066,7 +21157,7 @@
                   window.dispatchEvent(new CustomEvent('stelvio-auth-ready', { detail: { uid: user.uid } }));
                 } catch (eAuthEv) {}
                 if (typeof scheduleInitGlobalRankingPreWarm === 'function') {
-                  scheduleInitGlobalRankingPreWarm({ uid: user.uid || userData.id });
+                  scheduleInitGlobalRankingPreWarm({ uid: user.uid || userData.id, delayMs: 300 });
                 } else if (typeof stelvioSyncRankingCacheWithFirestoreMeta === 'function') {
                   var syncUid = user.uid || userData.id;
                   stelvioEnsureRankingFirestoreAuthReady()
@@ -26835,7 +26926,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 window.currentUser = parsed;
                 console.log('[Dashboard] Restored user from localStorage:', parsed.id);
                 if (typeof scheduleInitGlobalRankingPreWarm === 'function') {
-                  scheduleInitGlobalRankingPreWarm({ uid: parsed.id });
+                  scheduleInitGlobalRankingPreWarm({ uid: parsed.id, delayMs: 300 });
                 } else if (typeof stelvioSyncRankingCacheWithFirestoreMeta === 'function') {
                   stelvioSyncRankingCacheWithFirestoreMeta({ uid: parsed.id, gender: 'all' }).catch(function () {});
                 }
