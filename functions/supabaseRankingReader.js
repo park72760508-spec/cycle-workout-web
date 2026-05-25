@@ -17,10 +17,6 @@ const HEPTAGON_CATEGORIES = [
 ];
 const GC_RANKING_MAX_ROWS_PER_CATEGORY = 10000;
 const SUPABASE_IN_QUERY_CHUNK = 200;
-const WEEKLY_TSS_MV_REFRESH_MIN_MS = 60 * 1000;
-
-let weeklyTssMvRefreshLastAt = 0;
-let weeklyTssMvRefreshInFlight = null;
 
 function effectiveDayKmFromSummaryRow(row) {
   const ks = Number(row.km_strava_sum) || 0;
@@ -119,35 +115,32 @@ function mapRowToFirebaseUser(row, firebaseUid) {
     name: row.display_name || "(이름 없음)",
     ageCategory: row.league_category || "unknown",
     gender: genderDbToClient(row.gender),
-    is_private: false,
+    is_private: row.is_private === true,
     profileImageUrl: row.profile_image_url || null,
   };
 }
 
-async function refreshWeeklyTssLeaderboardIfDue(supabase) {
-  const now = Date.now();
-  if (!supabase) return;
-  if (weeklyTssMvRefreshInFlight) return weeklyTssMvRefreshInFlight;
-  if (weeklyTssMvRefreshLastAt > 0 && now - weeklyTssMvRefreshLastAt < WEEKLY_TSS_MV_REFRESH_MIN_MS) {
-    return;
+function profileGenderMatches(profile, gender) {
+  if (!gender || gender === "all") return true;
+  const g = String(profile && profile.gender ? profile.gender : "").toLowerCase();
+  if (gender === "M") return g === "male" || g === "m" || g === "남";
+  if (gender === "F") return g === "female" || g === "f" || g === "여";
+  return true;
+}
+
+async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
+  const rows = await supabaseSelectInChunks(
+    supabase,
+    "v_user_public_profile",
+    "id, display_name, profile_image_url, gender, league_category, is_private",
+    "id",
+    userIds
+  );
+  const map = new Map();
+  for (const row of rows || []) {
+    if (row && row.id) map.set(String(row.id), row);
   }
-
-  weeklyTssMvRefreshInFlight = (async () => {
-    const { error } = await supabase.rpc("fn_refresh_weekly_tss_leaderboard");
-    if (error) {
-      console.warn(
-        "[supabaseRankingReader] weekly TSS MV refresh skipped:",
-        error.message
-      );
-      weeklyTssMvRefreshLastAt = Date.now();
-      return;
-    }
-    weeklyTssMvRefreshLastAt = Date.now();
-  })().finally(() => {
-    weeklyTssMvRefreshInFlight = null;
-  });
-
-  return weeklyTssMvRefreshInFlight;
+  return map;
 }
 
 /**
@@ -155,32 +148,47 @@ async function refreshWeeklyTssLeaderboardIfDue(supabase) {
  */
 async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  await refreshWeeklyTssLeaderboardIfDue(supabase);
   const uidMap = await getFirebaseUidByUuidMap(admin);
 
-  let query = supabase
-    .from("mv_leaderboard_weekly_tss")
+  /* 실시간성: MV refresh 대기 없이 rides 트리거가 즉시 갱신하는 user_ranking_metrics를 직접 읽는다. */
+  const { data, error } = await supabase
+    .from("user_ranking_metrics")
     .select(
-      "user_id, display_name, profile_image_url, gender, league_category, weekly_tss, week_start, week_end"
+      "user_id, weekly_tss, week_start, week_end, weekly_has_cheat_day, metrics_updated_at"
     )
     .eq("week_start", startStr)
     .eq("week_end", endStr)
-    .order("weekly_tss", { ascending: false });
-
-  query = applyGenderFilter(query, gender);
-
-  const { data, error } = await query.limit(2000);
+    .eq("weekly_has_cheat_day", false)
+    .gt("weekly_tss", 0)
+    .order("weekly_tss", { ascending: false })
+    .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
   if (error) throw error;
 
+  const profileMap = await getPublicProfileMapForSupabaseUsers(
+    supabase,
+    (data || []).map((row) => row.user_id)
+  );
   const entries = [];
   for (const row of data || []) {
     const fbUid = uidMap.get(String(row.user_id));
     if (!fbUid) continue;
+    const profile = profileMap.get(String(row.user_id));
+    if (!profile) continue;
+    if (!profileGenderMatches(profile, gender)) continue;
     const totalTss = Math.round(Number(row.weekly_tss) * 100) / 100;
     if (totalTss <= 0) continue;
     entries.push({
-      ...mapRowToFirebaseUser(row, fbUid),
+      ...mapRowToFirebaseUser(
+        {
+          ...profile,
+          user_id: row.user_id,
+        },
+        fbUid
+      ),
       totalTss,
+      weekStart: row.week_start,
+      weekEnd: row.week_end,
+      metricsUpdatedAt: row.metrics_updated_at || null,
     });
   }
 
