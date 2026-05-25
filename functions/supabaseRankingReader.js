@@ -112,7 +112,7 @@ function applyGenderFilter(query, gender) {
 function mapRowToFirebaseUser(row, firebaseUid) {
   return {
     userId: firebaseUid,
-    name: row.display_name || "(이름 없음)",
+    name: row.actual_name || row.name || row.display_name || "(이름 없음)",
     ageCategory: row.league_category || "unknown",
     gender: genderDbToClient(row.gender),
     is_private: row.is_private === true,
@@ -151,6 +151,31 @@ async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
   const map = new Map();
   for (const row of rows || []) {
     if (row && row.id) map.set(String(row.id), row);
+  }
+  try {
+    const userRows = await supabaseSelectInChunks(
+      supabase,
+      "users",
+      "id, firebase_uid, name, display_name, profile_image_url, gender, is_private",
+      "id",
+      userIds
+    );
+    for (const userRow of userRows || []) {
+      if (!userRow || !userRow.id) continue;
+      const key = String(userRow.id);
+      const prev = map.get(key) || {};
+      map.set(key, {
+        ...prev,
+        id: userRow.id,
+        firebase_uid: userRow.firebase_uid || prev.firebase_uid,
+        actual_name: userRow.name || userRow.display_name || prev.display_name,
+        profile_image_url: userRow.profile_image_url || prev.profile_image_url,
+        gender: userRow.gender || prev.gender,
+        is_private: userRow.is_private === true || prev.is_private === true,
+      });
+    }
+  } catch (err) {
+    console.warn("[supabaseRankingReader] actual profile name map failed:", err && err.message ? err.message : err);
   }
   return map;
 }
@@ -269,6 +294,14 @@ async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
     supabase,
     (rows || []).map((row) => row.user_id)
   );
+  const profileMap = await getPublicProfileMapForSupabaseUsers(
+    supabase,
+    (rows || []).map((row) => row.user_id)
+  );
+  rows = (rows || []).map((row) => {
+    const profile = profileMap.get(String(row.user_id));
+    return profile ? { ...row, ...profile, user_id: row.user_id } : row;
+  });
   const entries = weeklyTssRowsToEntries(rows, uidMap, gender);
   const { entries: ranked, byCategory } = buildByCategoryFromEntries(entries);
   return {
