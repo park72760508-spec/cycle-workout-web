@@ -9820,6 +9820,7 @@
           ? Number(serverMeta.personalSpeed.version)
           : 0;
       if (
+        psVer > 0 &&
         typeof STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER === 'number' &&
         STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER > psVer
       ) {
