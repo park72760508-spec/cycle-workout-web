@@ -7988,7 +7988,6 @@
       if (!backend) return true;
       var cfg = stelvioGetRankingReadSourceSync();
       if (backend === cfg) return true;
-      if (cfg === 'supabase' && backend === 'firebase') return true;
       return false;
     }
 
@@ -8668,7 +8667,7 @@
     var stelvioRankingBgFetchInFlight = {};
     /** 마지막 페인트 탭 참조(visibilitychange·롤오버). 별도 DB 없음 — 신선도는 IndexedDB expiresAt */
     var stelvioRankingSwrCache = { key: '', body: null, ts: 0, expiresAt: 0 };
-    /** 탭·성별·기간별 RAM 미러(LRU) — IndexedDB peak:v5:* 와 동일 expiresAt·롤오버 규칙, 2분 SWR 없음 */
+    /** 탭·성별·기간별 RAM 미러(LRU) — IndexedDB peak:v6:* 와 동일 expiresAt·롤오버 규칙, 2분 SWR 없음 */
     var STELVIO_RANKING_MEM_CACHE_MAX = 36;
     /** 랭킹보드 접속 시 백그라운드 프리페치 세션(성별 변경·재진입 시 무효화) */
     var stelvioRankingPrefetchGen = 0;
@@ -8800,7 +8799,7 @@
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
     /** peak IndexedDB 키 접두사 — readDb(firebase|supabase) 포함 swrKey와 v4 이전 캐시 분리 */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v5:';
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v6:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
