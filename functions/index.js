@@ -7605,6 +7605,161 @@ exports.adminSyncSupabaseFirebaseUidMap = onRequest(
   }
 );
 
+/**
+ * 관리자(grade=1): Firestore users/{uid}/logs 의 Strava 로그를 Supabase rides로 재전송.
+ * dual_write_status와 무관하게 STRAVA ingest 백필은 강제 실행한다.
+ */
+exports.adminBackfillStravaLogsToSupabase = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 3600, memory: "1GiB" }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원합니다." });
+      return;
+    }
+
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, callerUid);
+      const db = admin.firestore();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const targetUsers = String(body.targetUsers || req.query.targetUsers || "").trim().toLowerCase();
+      const requestedUid = String(body.uid || body.userId || req.query.uid || req.query.userId || "").trim();
+      const startDate = String(body.startDate || req.query.startDate || "").trim();
+      const endDate = String(body.endDate || req.query.endDate || "").trim();
+      const startAfterUid = String(body.startAfterUid || req.query.startAfterUid || "").trim();
+      const dryRun = String(body.dryRun ?? req.query.dryRun ?? "false").toLowerCase() === "true";
+      const maxUsers = Math.max(1, Math.min(300, Number(body.maxUsers || req.query.maxUsers || 50) || 50));
+      const maxLogsPerUser = Math.max(
+        1,
+        Math.min(3000, Number(body.maxLogsPerUser || req.query.maxLogsPerUser || 1000) || 1000)
+      );
+
+      let userDocs = [];
+      if (targetUsers === "all") {
+        let usersQuery = db
+          .collection("users")
+          .orderBy(admin.firestore.FieldPath.documentId())
+          .limit(maxUsers);
+        if (startAfterUid) usersQuery = usersQuery.startAfter(startAfterUid);
+        const usersSnap = await usersQuery.get();
+        userDocs = usersSnap.docs;
+      } else {
+        const uid = requestedUid || callerUid;
+        const userSnap = await db.collection("users").doc(uid).get();
+        if (!userSnap.exists) {
+          res.status(404).json({ success: false, error: "대상 사용자를 찾을 수 없습니다." });
+          return;
+        }
+        userDocs = [userSnap];
+      }
+
+      let scannedUsers = 0;
+      let provisionedUsers = 0;
+      let scannedLogs = 0;
+      let migratedLogs = 0;
+      let skippedLogs = 0;
+      let failedLogs = 0;
+      let truncatedUsers = 0;
+      const errors = [];
+
+      for (const userDoc of userDocs) {
+        const userId = userDoc.id;
+        scannedUsers += 1;
+        if (!dryRun) {
+          try {
+            await supabaseUserProvision.provisionSupabaseUserAfterProfile(admin, userId);
+            provisionedUsers += 1;
+          } catch (e) {
+            errors.push({
+              userId,
+              phase: "provision",
+              message: e && e.message ? e.message : String(e),
+            });
+          }
+        }
+
+        const logsSnap = await db
+          .collection("users")
+          .doc(userId)
+          .collection("logs")
+          .where("source", "==", "strava")
+          .limit(maxLogsPerUser)
+          .get();
+        if (logsSnap.size >= maxLogsPerUser) truncatedUsers += 1;
+
+        for (const logDoc of logsSnap.docs) {
+          const log = logDoc.data() || {};
+          const dateStr = String(log.date || "").slice(0, 10);
+          if (startDate && dateStr && dateStr < startDate) {
+            skippedLogs += 1;
+            continue;
+          }
+          if (endDate && dateStr && dateStr > endDate) {
+            skippedLogs += 1;
+            continue;
+          }
+          scannedLogs += 1;
+          if (dryRun) continue;
+          try {
+            const result = await supabaseDualWriteServer.runSecondaryAfterStravaLogSave(
+              admin,
+              userId,
+              logDoc.id,
+              log,
+              { force: true }
+            );
+            if (result && result.skipped) skippedLogs += 1;
+            else migratedLogs += 1;
+          } catch (e) {
+            failedLogs += 1;
+            if (errors.length < 30) {
+              errors.push({
+                userId,
+                logId: logDoc.id,
+                activityId: log.activity_id || null,
+                date: log.date || null,
+                message: e && e.message ? e.message : String(e),
+              });
+            }
+          }
+        }
+      }
+
+      const lastUser = userDocs[userDocs.length - 1];
+      res.status(200).json({
+        success: true,
+        dryRun,
+        scannedUsers,
+        provisionedUsers,
+        scannedLogs,
+        migratedLogs,
+        skippedLogs,
+        failedLogs,
+        truncatedUsers,
+        nextStartAfterUid:
+          targetUsers === "all" && userDocs.length === maxUsers && lastUser ? lastUser.id : null,
+        errors,
+      });
+    } catch (e) {
+      const status = e.status || 500;
+      console.warn("[adminBackfillStravaLogsToSupabase]", e.message || e);
+      res.status(status).json({
+        success: false,
+        error: e.message || String(e),
+      });
+    }
+  }
+);
+
 /** 관리자(grade=1): Supabase 비-GC 랭킹 등락 스냅샷 즉시 재생성. */
 exports.adminRebuildSupabaseRankSnapshots = onRequest(
   supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 300, memory: "512MiB" }),
@@ -10012,7 +10167,7 @@ exports.getOvertakeAnalysis = onRequest(
 /** 사용자 로그 생성/갱신 시 연간 최고 기록(yearly_peaks) 업서트. 검증 실패 시 suspicious_power_records에 Pending 저장.
  *  1st gen 트리거 사용 (Eventarc 권한 이슈 회피) */
 exports.onUserLogWritten = functions
-  .runWith({ timeoutSeconds: 120 })
+  .runWith({ timeoutSeconds: 120, secrets: ["SUPABASE_SERVICE_ROLE_KEY"] })
   .firestore.document("users/{userId}/logs/{logId}")
   .onWrite(async (change, context) => {
     const userId = context.params.userId;
@@ -10030,6 +10185,20 @@ exports.onUserLogWritten = functions
     const snap = change.after;
     if (!snap || !snap.exists) return;
     const logData = snap.data();
+    if (String(logData.source || "").toLowerCase() === "strava") {
+      try {
+        await supabaseUserProvision.provisionSupabaseUserAfterProfile(admin, userId);
+        await supabaseDualWriteServer.runSecondaryAfterStravaLogSave(
+          admin,
+          userId,
+          logId,
+          logData,
+          { force: true }
+        );
+      } catch (e) {
+        console.warn("[onUserLogWritten] Strava Supabase rides 동기화 실패:", userId, logId, e.message);
+      }
+    }
     try {
       await upsertYearlyPeakFromLog(db, userId, userData, logData, logId);
     } catch (e) {

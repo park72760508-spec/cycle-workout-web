@@ -331,6 +331,35 @@ async function writeRideToSupabase(rideRow) {
   }
 }
 
+async function resolveRideUserIdForFirebaseUid(supabase, firebaseUid, uidConfig) {
+  const fallbackId = resolveUserUuid(
+    firebaseUid,
+    uidConfig.uidNamespace,
+    uidConfig.uidMode
+  );
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id")
+      .eq("firebase_uid", String(firebaseUid || "").trim())
+      .maybeSingle();
+    if (error) {
+      console.warn("[supabaseDualWriteServer] firebase_uid 사용자 매핑 조회 실패:", {
+        firebaseUid,
+        message: error.message || String(error),
+      });
+      return fallbackId;
+    }
+    return data && data.id ? String(data.id) : fallbackId;
+  } catch (err) {
+    console.warn("[supabaseDualWriteServer] firebase_uid 사용자 매핑 예외:", {
+      firebaseUid,
+      message: err && err.message ? err.message : String(err),
+    });
+    return fallbackId;
+  }
+}
+
 /**
  * Strava log Firestore 저장(merge) 성공 후 Supabase rides upsert.
  * @param {import('firebase-admin')} admin
@@ -338,15 +367,29 @@ async function writeRideToSupabase(rideRow) {
  * @param {string} logDocId Firestore logs 문서 ID (Webhook·배치: Strava activity_id)
  * @param {object} logDoc 저장된 log 필드
  */
-async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc) {
+async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, options = {}) {
   await refreshDualRunFromRemoteConfig(admin, true);
-  const decision = evaluateSecondaryIngestWrite(userId);
+  let decision = evaluateSecondaryIngestWrite(userId);
+  const forceStravaIngest =
+    options.force === true || process.env.SUPABASE_STRAVA_INGEST_ALWAYS !== "false";
   if (!decision.execute) {
-    console.log(
-      "[supabaseDualWriteServer] strava secondary 스킵:",
-      decision.reason
-    );
-    return { skipped: true, reason: decision.reason };
+    if (
+      forceStravaIngest &&
+      process.env.SUPABASE_INGEST_DUAL_WRITE !== "false"
+    ) {
+      decision = {
+        execute: true,
+        status: "FORCED",
+        reason: `${decision.reason}; strava_ingest_forced`,
+        userId,
+      };
+    } else {
+      console.log(
+        "[supabaseDualWriteServer] strava secondary 스킵:",
+        decision.reason
+      );
+      return { skipped: true, reason: decision.reason };
+    }
   }
 
   if (!logDocId || !logDoc) {
@@ -369,6 +412,8 @@ async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc) {
     return { skipped: true, reason: "map failed" };
   }
 
+  const supabase = getSupabaseAdminClient();
+  row.user_id = await resolveRideUserIdForFirebaseUid(supabase, userId, uidConfig);
   await writeRideToSupabase(row);
   console.log("[supabaseDualWriteServer] strava rides upsert OK", {
     userId,
@@ -398,6 +443,7 @@ module.exports = {
   runSecondaryAfterStravaLogSave,
   appendServiceRoleSecret,
   mapTrainingLogToRideRow,
+  resolveRideUserIdForFirebaseUid,
   evaluateSecondaryIngestWrite,
   evaluateSupabaseDualWrite,
   refreshDualRunFromRemoteConfig,

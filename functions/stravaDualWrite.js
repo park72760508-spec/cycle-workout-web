@@ -19,21 +19,12 @@ async function dualWriteStravaActivityLog(
   logDoc,
   writePrimaryAsync
 ) {
-  const primaryPromise = Promise.resolve().then(() => writePrimaryAsync());
-  const secondaryPromise = supabaseDualWriteServer
-    .runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc)
-    .catch((err) => {
-      throw err;
-    });
+  const primaryResult = await Promise.resolve().then(() => writePrimaryAsync());
 
-  const [primaryResult, secondaryResult] = await Promise.allSettled([
-    primaryPromise,
-    secondaryPromise,
-  ]);
-
-  if (primaryResult.status === "rejected") {
-    throw primaryResult.reason;
-  }
+  const secondaryResult = await supabaseDualWriteServer
+    .runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, { force: true })
+    .then((value) => ({ status: "fulfilled", value }))
+    .catch((reason) => ({ status: "rejected", reason }));
 
   if (secondaryResult.status === "rejected") {
     console.error(
@@ -54,7 +45,7 @@ async function dualWriteStravaActivityLog(
     );
   }
 
-  return primaryResult.value;
+  return primaryResult;
 }
 
 module.exports = {
