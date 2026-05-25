@@ -89,6 +89,38 @@ async function httpGetJson(path, params) {
   return res.json().catch(function () { return null; });
 }
 
+async function httpGetJsonAuthed(path, params) {
+  const p = new URLSearchParams(params || {});
+  const token =
+    typeof window !== 'undefined' &&
+    window.authV9 &&
+    window.authV9.currentUser &&
+    typeof window.authV9.currentUser.getIdToken === 'function'
+      ? await window.authV9.currentUser.getIdToken()
+      : '';
+  const res = await fetch(path + '?' + p.toString(), {
+    method: 'GET',
+    mode: 'cors',
+    cache: 'no-store',
+    headers: token ? { Authorization: 'Bearer ' + token } : {},
+  });
+  if (!res.ok) return null;
+  return res.json().catch(function () { return null; });
+}
+
+export async function fetchTrainingLogsByDateRangeForReviewRouted(userId, year, month) {
+  const uid = String(userId || '').trim();
+  const y = Number(year);
+  const m = Number(month);
+  if (!uid || !Number.isFinite(y) || !Number.isFinite(m)) return [];
+  const json = await httpGetJsonAuthed(API_BASE + '/getOpenRideReviewLogsForRead', {
+    uid,
+    year: String(y),
+    month: String(m),
+  });
+  return json && json.success && Array.isArray(json.logs) ? json.logs : [];
+}
+
 function membersFromGroupPayload(group) {
   if (!group || !Array.isArray(group._members)) return [];
   return group._members.map(function (m) {

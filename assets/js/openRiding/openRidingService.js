@@ -26,6 +26,7 @@ import {
 import {
   fetchRideByIdRouted,
   fetchRidesInDateRangeRouted,
+  fetchTrainingLogsByDateRangeForReviewRouted,
   subscribeRideByIdRouted,
 } from './openRidingReadClient.js';
 import { scheduleOpenRideDualWriteFromFirestore } from '../openRidingDualWrite.js';
@@ -1595,6 +1596,7 @@ if (typeof window !== 'undefined') {
     fetchRidesInDateRange,
     fetchRideById,
     subscribeRideById,
+    fetchTrainingLogsByDateRangeForReview: fetchTrainingLogsByDateRangeForReviewRouted,
     syncHostPublicReviewSummary,
     syncParticipantStravaReviewContribution,
     subscribeParticipantStravaReviewSumKm,

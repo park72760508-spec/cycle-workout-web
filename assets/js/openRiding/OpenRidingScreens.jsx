@@ -975,6 +975,62 @@ function openRidingLogIsStrava(log) {
   return s === 'strava';
 }
 
+function openRidingReviewLogDedupeKey(log) {
+  if (!log || typeof log !== 'object') return '';
+  var id = log.activity_id != null ? String(log.activity_id).trim() : log.id != null ? String(log.id).trim() : '';
+  if (id) return 'id:' + id;
+  return [
+    String(log.source || '').trim().toLowerCase(),
+    openRidingLogYmdSeoul(log),
+    String(log.title || '').trim(),
+    String(Number(log.distance_km || 0)),
+    String(Number(log.duration_sec != null ? log.duration_sec : log.time != null ? log.time : 0))
+  ].join('|');
+}
+
+function openRidingMergeReviewLogs(primaryLogs, secondaryLogs) {
+  var out = [];
+  var seen = {};
+  [primaryLogs || [], secondaryLogs || []].forEach(function (list) {
+    (list || []).forEach(function (log) {
+      if (!log || typeof log !== 'object') return;
+      var key = openRidingReviewLogDedupeKey(log);
+      if (key && seen[key]) return;
+      if (key) seen[key] = true;
+      out.push(log);
+    });
+  });
+  return out;
+}
+
+function openRidingFetchReviewTrainingLogs(userId, year, month, db) {
+  var base = typeof window.getTrainingLogsByDateRange === 'function' ? window.getTrainingLogsByDateRange : null;
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  var sb =
+    typeof svc.fetchTrainingLogsByDateRangeForReview === 'function'
+      ? svc.fetchTrainingLogsByDateRangeForReview
+      : null;
+  if (!base && !sb) return Promise.resolve([]);
+  var jobs = [];
+  jobs.push(
+    base
+      ? base(userId, year, month, db).catch(function () {
+          return [];
+        })
+      : Promise.resolve([])
+  );
+  jobs.push(
+    sb
+      ? sb(userId, year, month).catch(function () {
+          return [];
+        })
+      : Promise.resolve([])
+  );
+  return Promise.all(jobs).then(function (parts) {
+    return openRidingMergeReviewLogs(parts[0], parts[1]);
+  });
+}
+
 /**
  * Host Strava logs same day: activities within ±10% of ride.distance (km), or distance > planned.
  * Among matches, pick the one closest to planned km (avoids picking a random ultra when a ~P ride exists).
@@ -999,7 +1055,12 @@ function openRidingPickStravaLogsForHostReview(dayLogs, ride) {
     var d = Number(l.distance_km != null ? l.distance_km : 0) || 0;
     return (d >= lo && d <= hi) || d > p;
   });
-  if (candidates.length === 0) return [];
+  if (candidates.length === 0) {
+    var sameDaySorted = dayLogs.slice().sort(function (a, b) {
+      return (Number(b.distance_km) || 0) - (Number(a.distance_km) || 0);
+    });
+    return sameDaySorted[0] ? [sameDaySorted[0]] : [];
+  }
   candidates.sort(function (a, b) {
     var da = Math.abs((Number(a.distance_km) || 0) - p);
     var db = Math.abs((Number(b.distance_km) || 0) - p);
@@ -6117,7 +6178,7 @@ function OpenRidingDetail(props) {
       });
       if (!inParts) return undefined;
       var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
-      var getRng = typeof window.getTrainingLogsByDateRange === 'function' ? window.getTrainingLogsByDateRange : null;
+      var getRng = openRidingFetchReviewTrainingLogs;
       var svcPart = typeof window !== 'undefined' ? window.openRidingService || {} : {};
       var syncPartFn =
         typeof svcPart.syncParticipantStravaReviewContribution === 'function'
@@ -6232,7 +6293,7 @@ function OpenRidingDetail(props) {
         setReviewLogsLoading(false);
         return undefined;
       }
-      var getRng = typeof window.getTrainingLogsByDateRange === 'function' ? window.getTrainingLogsByDateRange : null;
+      var getRng = openRidingFetchReviewTrainingLogs;
       var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
       var svcOr = typeof window !== 'undefined' ? window.openRidingService || {} : {};
       var fetchRideByIdFn = typeof svcOr.fetchRideById === 'function' ? svcOr.fetchRideById : null;
@@ -6254,7 +6315,7 @@ function OpenRidingDetail(props) {
         }
         var hProp = ride.hostPublicReviewSummary;
         var summaryFromRideProp =
-          rideDocHostSummaryMatchesRideDate(ride, ymd) && openRidingHostSummaryQualifiesAsGroupRideUi(ride, hProp)
+          rideDocHostSummaryMatchesRideDate(ride, ymd) && openRidingHostPublicReviewWrittenUi(ride, hProp)
             ? openRidingReviewLogFromStoredSummary(hProp.summary, ymd)
             : null;
         if (summaryFromRideProp) {
@@ -6273,7 +6334,7 @@ function OpenRidingDetail(props) {
               s &&
               typeof s === 'object' &&
               openRidingYmdEqual(d, ymd) &&
-              openRidingHostSummaryQualifiesAsGroupRideUi(fresh, { rideDateYmd: d, summary: s })
+              openRidingHostPublicReviewWrittenUi(fresh, { rideDateYmd: d, summary: s })
             ) {
               setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd));
               setReviewMergedLogSource('host_public');
@@ -6323,7 +6384,7 @@ function OpenRidingDetail(props) {
           s0 &&
           typeof s0 === 'object' &&
           openRidingYmdEqual(d0, ymd) &&
-          openRidingHostSummaryQualifiesAsGroupRideUi(rideDoc, { rideDateYmd: d0, summary: s0 })
+          openRidingHostPublicReviewWrittenUi(rideDoc, { rideDateYmd: d0, summary: s0 })
         ) {
           setReviewMergedLog(openRidingReviewLogFromStoredSummary(s0, ymd));
           if (role === 'participant' && !hostViewingOwnRide) {
@@ -6408,7 +6469,7 @@ function OpenRidingDetail(props) {
           }
           var hProp2 = ride.hostPublicReviewSummary;
           var summaryFromRideProp2 =
-            rideDocHostSummaryMatchesRideDate(ride, ymd) && openRidingHostSummaryQualifiesAsGroupRideUi(ride, hProp2)
+            rideDocHostSummaryMatchesRideDate(ride, ymd) && openRidingHostPublicReviewWrittenUi(ride, hProp2)
               ? openRidingReviewLogFromStoredSummary(hProp2.summary, ymd)
               : null;
           fetchRideByIdFn(db, rideId)
@@ -6470,7 +6531,7 @@ function OpenRidingDetail(props) {
       }
       var hProp2 = ride.hostPublicReviewSummary;
       var summaryFromRideProp2 =
-        rideDocHostSummaryMatchesRideDate(ride, ymd2) && openRidingHostSummaryQualifiesAsGroupRideUi(ride, hProp2)
+        rideDocHostSummaryMatchesRideDate(ride, ymd2) && openRidingHostPublicReviewWrittenUi(ride, hProp2)
           ? openRidingReviewLogFromStoredSummary(hProp2.summary, ymd2)
           : null;
       var cancelledEx = false;
@@ -6484,7 +6545,7 @@ function OpenRidingDetail(props) {
             s &&
             typeof s === 'object' &&
             openRidingYmdEqual(d, ymd2) &&
-            openRidingHostSummaryQualifiesAsGroupRideUi(fresh, { rideDateYmd: d, summary: s })
+            openRidingHostPublicReviewWrittenUi(fresh, { rideDateYmd: d, summary: s })
           ) {
             setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd2));
             setReviewMergedLogSource('host_public');
@@ -6975,7 +7036,7 @@ function OpenRidingDetail(props) {
   var guestHostSummaryOnRide =
     role !== 'participant' &&
     !!rideYmdHint &&
-    openRidingHostSummaryQualifiesAsGroupRideUi(ride, ride.hostPublicReviewSummary);
+    openRidingHostPublicReviewWrittenUi(ride, ride.hostPublicReviewSummary);
   /** 서울 기준 일정일이 지난 뒤에는 방장도 수정/취소/삭제 불가 — grade=1 관리자는 예외 */
   var _loginGr =
     typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
