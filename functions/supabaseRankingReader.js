@@ -6,6 +6,7 @@ const {
   buildByCategoryFromEntries,
   genderDbToClient,
 } = require("./rankingResponseAdapter");
+const rankingDayRollup = require("./rankingDayRollup");
 
 const HEPTAGON_CATEGORIES = [
   "Supremo",
@@ -175,7 +176,7 @@ async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
     const userRows = await supabaseSelectInChunks(
       supabase,
       "users",
-      "id, firebase_uid, name, display_name, profile_image_url, gender, challenge, birth_year, is_private",
+      "id, firebase_uid, name, display_name, profile_image_url, gender, challenge, birth_year, weight_kg, is_private",
       "id",
       userIds
     );
@@ -191,6 +192,7 @@ async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
         profile_image_url: userRow.profile_image_url || prev.profile_image_url,
         gender: userRow.gender || prev.gender,
         league_category: prev.league_category || deriveLeagueCategoryFromSupabaseUser(userRow),
+        weight_kg: Number(userRow.weight_kg) > 0 ? Number(userRow.weight_kg) : prev.weight_kg,
         is_private: userRow.is_private === true || prev.is_private === true,
       });
     }
@@ -464,13 +466,26 @@ async function fetchPersonalDist(admin, startStr, endStr, gender) {
 async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
 
+  async function loadMetricRows() {
+    const { data: metricRows, error: metricError } = await supabase
+      .from("user_ranking_metrics")
+      .select(
+        "user_id, speed_28d_kmh, speed_peak60_watts, speed_peak60_date, speed_window_start, speed_window_end, metrics_updated_at"
+      )
+      .gt("speed_28d_kmh", 0)
+      .order("speed_28d_kmh", { ascending: false })
+      .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
+    if (metricError) throw metricError;
+    return metricRows || [];
+  }
+
   let data = [];
   let source = "supabase_mv_leaderboard_speed_28d";
   try {
     let query = supabase
       .from("mv_leaderboard_speed_28d")
       .select(
-        "user_id, display_name, profile_image_url, gender, league_category, speed_28d_kmh, speed_window_start, speed_window_end"
+        "user_id, display_name, profile_image_url, gender, league_category, speed_28d_kmh, speed_peak60_watts, speed_peak60_date, speed_window_start, speed_window_end"
       )
       .gt("speed_28d_kmh", 0)
       .order("speed_28d_kmh", { ascending: false });
@@ -522,6 +537,27 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
     }
   }
 
+  if (
+    data.length &&
+    data[0] &&
+    data[0].speed_window_end &&
+    String(data[0].speed_window_end) !== String(endStr)
+  ) {
+    source = "supabase_user_ranking_metrics_window_refresh";
+    data = await loadMetricRows();
+  }
+
+  const profileMap = await getPublicProfileMapForSupabaseUsers(
+    supabase,
+    (data || []).map((row) => row.user_id)
+  );
+  data = (data || [])
+    .map((row) => {
+      const profile = profileMap.get(String(row.user_id));
+      return profile ? { ...row, ...profile, user_id: row.user_id } : row;
+    })
+    .filter((row) => profileGenderMatches(row, gender));
+
   const uidMap = await getFirebaseUidMapForSupabaseUsers(
     admin,
     supabase,
@@ -538,6 +574,7 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
       speedKmh,
       peak60minWatts: Number(row.speed_peak60_watts) || null,
       speedPeak60Date: row.speed_peak60_date || null,
+      weightKg: Number(row.weight_kg) || null,
     });
   }
 
@@ -553,6 +590,7 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
     durationType: "personal_speed",
     gender,
     precomputed: true,
+    personalSpeedLogicVersion: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
     readSource: "supabase",
     supabasePersonalSpeedSource: source,
   };
