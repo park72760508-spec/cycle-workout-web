@@ -8317,6 +8317,11 @@
           if (typeof stelvioServerRankChangeBadgeHtml !== 'function') return '';
           return stelvioServerRankChangeBadgeHtml(row && row.rankChange, row && row.previousBoardRank);
         }
+        function weeklyRankChangeTightHtml(row) {
+          var h = weeklyRankChangeHtml(row);
+          if (!h) return '';
+          return h.replace('class="stelvio-rank-change ', 'style="margin-left:0;margin-right:0;" class="stelvio-rank-change weekly-rank-change-tight ');
+        }
         function weeklyPrivateDisplayName(rawName) {
           return rawName && rawName.length >= 1 ? rawName.charAt(0) + '**' : '**';
         }
@@ -8350,7 +8355,7 @@
           html += '<div class="weekly-rank-item' + (isSelf ? ' weekly-rank-item-self' : '') + '"' + (isSelf ? ' id="weeklyTop10MyRankRow"' : '') + '>';
           if (rank <= 3) html += '<span class="weekly-rank-medal"><img src="' + rankMedalSrc[rank - 1] + '" alt="" width="20" height="20" decoding="async" /></span>';
           html += '<span class="weekly-rank-position">' + rank + '위</span>';
-          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(profUrl, { userId: uid2, overlayName: displayText }) + '<span class="weekly-rank-name-text" title="' + rawName + '">' + displayText + '</span>' + weeklyRankChangeHtml(item) + badgeHtml + '</span>';
+          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(profUrl, { userId: uid2, overlayName: displayText }) + '<span class="weekly-rank-name-text" title="' + rawName + '">' + displayText + weeklyRankChangeTightHtml(item) + '</span>' + badgeHtml + '</span>';
           html += '<span class="weekly-rank-tss">' + tssStr + '</span>';
           html += '</div>';
         });
@@ -8370,7 +8375,7 @@
           } else { mrDisplayText = mrRawName; }
           html += '<div class="weekly-rank-item weekly-rank-item-self" id="weeklyTop10MyRankRow">';
           html += '<span class="weekly-rank-position">' + mr.rank + '위</span>';
-          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(mrProfUrl, { userId: mrUid, overlayName: mrDisplayText }) + '<span class="weekly-rank-name-text" title="' + mrRawName + '">' + mrDisplayText + '</span>' + weeklyRankChangeHtml(mr) + mrBadgeHtml + '</span>';
+          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(mrProfUrl, { userId: mrUid, overlayName: mrDisplayText }) + '<span class="weekly-rank-name-text" title="' + mrRawName + '">' + mrDisplayText + weeklyRankChangeTightHtml(mr) + '</span>' + mrBadgeHtml + '</span>';
           html += '<span class="weekly-rank-tss">' + mrTssStr + '</span>';
           html += '</div>';
         }
