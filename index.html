@@ -8760,8 +8760,10 @@
       if (!stelvioRankingPayloadMatchesReadSource(body)) return false;
       if (body.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(body)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
+      var isGcBody = body.durationType === 'gc' || ctx.duration === 'gc';
+      if (isGcBody && !stelvioGcPayloadMatchesLatestSnapshot(body)) return false;
+      if (!isGcBody) return true;
       if (!stelvioRankingPayloadMatchesCurrentApiWindow(body)) return false;
-      if (body.durationType === 'gc' && !stelvioGcPayloadMatchesLatestSnapshot(body)) return false;
       if (
         isPsRank &&
         stelvioPersonalSpeedBoardPayloadStale(body) &&
@@ -9133,15 +9135,10 @@
       }
 
       async function pruneExpired() {
-        var rows = await getAllRecords();
-        var now = Date.now();
-        var expired = [];
-        for (var i = 0; i < rows.length; i++) {
-          if (rows[i] && rows[i].expiresAt && now >= rows[i].expiresAt) expired.push(rows[i].key);
-        }
-        for (var j = 0; j < expired.length; j++) {
-          await remove(expired[j]);
-        }
+        /*
+         * 랭킹 캐시는 만료 즉시 삭제하지 않는다.
+         * 비-GC 탭은 어제 날짜 캐시라도 먼저 즉시 표시하고 백그라운드에서 최신화해야 탭 이동 5~8초 대기를 막을 수 있다.
+         */
       }
 
       return {
@@ -9198,8 +9195,7 @@
               entry.data.success &&
               entry.data.byCategory &&
               stelvioRankingPayloadMatchesReadSource(entry.data) &&
-              stelvioRankingPayloadMatchesCurrentApiWindow(entry.data) &&
-              stelvioRankingLocalEntryStillFresh(entry, apiDur)
+              stelvioRankingEntryRenderableForFastTab(entry, apiDur)
             ) {
               stelvioRankingMemCacheSet(ck, entry.data, {
                 cachedAt: entry.cachedAt,
@@ -9231,11 +9227,9 @@
           return;
         }
         var rows = await stelvioRankingPersistentCache.getAllRecords();
-        var now = Date.now();
         for (var ri = 0; ri < rows.length; ri++) {
           var row = rows[ri];
           if (!row || !row.key || !row.data) continue;
-          if (row.expiresAt && now >= row.expiresAt) continue;
           if (row.key.indexOf(STELVIO_PEAK_LC_KEY_PREFIX) === 0) {
             var swrKey = row.key.slice(STELVIO_PEAK_LC_KEY_PREFIX.length);
             if (!swrKey || !stelvioRankingSwrKeyMatchesReadSource(swrKey)) continue;
@@ -9354,7 +9348,10 @@
               cachedPayload.success &&
               cachedPayload.byCategory &&
               stelvioRankingPayloadMatchesReadSource(cachedPayload) &&
-              stelvioRankingPayloadMatchesCurrentApiWindow(cachedPayload)
+              stelvioRankingEntryRenderableForFastTab(
+                { data: cachedPayload, cachedAt: entry.cachedAt, expiresAt: entry.expiresAt },
+                apiDurIdle
+              )
             ) {
               /* Meta 동일 boot path: 네트워크 없이 IDB payload를 LRU RAM에만 올려 탭 클릭 0ms 적용을 준비한다. */
               stelvioRankingMemCacheSet(ck, cachedPayload, {
@@ -12206,13 +12203,15 @@
       if (!stelvioRankingPayloadMatchesReadSource(lcEntry.data)) return false;
       if (lcEntry.data.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(lcEntry.data)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(lcEntry.data)) return false;
-      if (dur === 'gc') {
+      var isGcEntry = dur === 'gc' || lcEntry.data.durationType === 'gc';
+      if (isGcEntry) {
         if (
           typeof stelvioGcPayloadMatchesLatestSnapshot === 'function' &&
           !stelvioGcPayloadMatchesLatestSnapshot(lcEntry.data)
         ) {
           return false;
         }
+        if (!stelvioRankingPayloadMatchesCurrentApiWindow(lcEntry.data)) return false;
       }
       return true;
     }
@@ -12855,7 +12854,7 @@
           var soft = stelvioRankingSoftFromRow(row);
           if (!soft || !soft.data || !soft.data.success || !soft.data.byCategory) continue;
           if (!stelvioRankingPayloadHasVisibleRows(soft.data)) continue;
-          if (!stelvioRankingPayloadMatchesCurrentApiWindow(soft.data)) continue;
+          if (wantDur === 'gc' && !stelvioRankingPayloadMatchesCurrentApiWindow(soft.data)) continue;
           if (soft.cachedAt >= bestAt) {
             bestAt = soft.cachedAt;
             best = soft;
@@ -13193,7 +13192,7 @@
       opts = opts || {};
       if (!duration || !payload || !payload.success || !payload.byCategory) return;
       if (!stelvioRankingPayloadMatchesReadSource(payload)) return;
-      if (!stelvioRankingPayloadMatchesCurrentApiWindow(payload)) return;
+      if (duration === 'gc' && !stelvioRankingPayloadMatchesCurrentApiWindow(payload)) return;
       var view = stelvioRankingGetPreRenderView(duration);
       if (!view) return;
       var cacheKey = opts.cacheKey || stelvioBuildRankingBoardCacheKey(
@@ -14435,7 +14434,6 @@
         if (!stelvioRankingPayloadMatchesReadSource(soft.data)) return false;
         if (soft.data.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(soft.data)) return false;
         if (!stelvioRankingPayloadHasVisibleRows(soft.data)) return false;
-        if (!stelvioRankingPayloadMatchesCurrentApiWindow(soft.data)) return false;
         var ts = soft.cachedAt || 0;
         var isGcSoft =
           soft.data.durationType === 'gc' ||
@@ -14443,6 +14441,7 @@
         if (isGcSoft) {
           if (soft.data.gcSnapshotStale === true) return false;
           if (!stelvioGcPayloadMatchesLatestSnapshot(soft.data)) return false;
+          if (!stelvioRankingPayloadMatchesCurrentApiWindow(soft.data)) return false;
           var heptRollover = typeof stelvioGetLastHeptagonRolloverTs === 'function' ? stelvioGetLastHeptagonRolloverTs() : 0;
           if (heptRollover > 0 && ts < heptRollover) return false;
           return true;
@@ -14455,7 +14454,6 @@
         ) {
           return true;
         }
-        if (lastRollover > 0 && ts < lastRollover) return false;
         return true;
       }
 
@@ -14559,7 +14557,12 @@
 
       var isPsRank =
         typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking();
-      var cacheCtx = { nowMs: nowMs, lastRollover: lastRollover, isPsRank: isPsRank };
+      var cacheCtx = {
+        nowMs: nowMs,
+        lastRollover: lastRollover,
+        isPsRank: isPsRank,
+        duration: apiDuration,
+      };
 
       function cacheEntryUsableFromIdb(lcEntry) {
         return stelvioRankingCacheUsableFromIdbEntry(lcEntry, cacheCtx);
