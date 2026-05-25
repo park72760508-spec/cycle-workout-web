@@ -112,6 +112,7 @@ function mapFirestoreUserToRow(firebaseUid, d, uidConfig) {
 
   return {
     id,
+    firebase_uid: firebaseUid,
     name: str(d.name) ?? str(d.displayName) ?? str(d.user_name) ?? "",
     display_name: str(d.displayName) ?? str(d.display_name),
     contact: str(d.contact) ?? str(d.phone) ?? str(d.phoneNumber) ?? str(d.tel),

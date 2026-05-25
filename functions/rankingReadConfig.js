@@ -14,7 +14,7 @@ const FIRESTORE_DOC_PATH = { collection: "appConfig", doc: "supabase_read_routin
 let cache = {
   useSupabaseGlobal: true,
   whitelistUids: [],
-  parityFallbackToFirebase: true,
+  parityFallbackToFirebase: false,
   loadedAt: 0,
 };
 
@@ -70,7 +70,7 @@ async function refreshRankingReadConfig(admin, force = false) {
   /** Firestore 문서 없을 때 기본 Supabase Read (관리자가 Firebase로 명시 전환 시에만 false) */
   let useSupabaseGlobal = true;
   let whitelistUids = [];
-  let parityFallbackToFirebase = true;
+  let parityFallbackToFirebase = false;
 
   const envCfg = loadFromEnv();
   if (process.env.USE_SUPABASE_GLOBAL != null && String(process.env.USE_SUPABASE_GLOBAL).trim() !== "") {
@@ -104,7 +104,9 @@ async function refreshRankingReadConfig(admin, force = false) {
     }
   }
 
-  if (process.env.RANKING_PARITY_FALLBACK === "false") {
+  if (process.env.RANKING_PARITY_FALLBACK === "true") {
+    parityFallbackToFirebase = true;
+  } else if (process.env.RANKING_PARITY_FALLBACK === "false") {
     parityFallbackToFirebase = false;
   }
 
@@ -121,7 +123,7 @@ function getRankingReadConfig() {
   return {
     useSupabaseGlobal: cache.useSupabaseGlobal,
     whitelistUids: cache.whitelistUids.slice(),
-    /** true: Supabase·Firebase 불일치 시 Firebase 응답으로 폴백(화면 동일) */
+    /** true: 긴급 Canary 시에만 Supabase·Firebase 불일치 시 Firebase 응답으로 폴백 */
     parityFallbackToFirebase: cache.parityFallbackToFirebase !== false,
   };
 }
@@ -173,7 +175,7 @@ async function persistRankingReadRouting(admin, patch) {
   if (patch.parityFallbackToFirebase != null) {
     payload.parityFallbackToFirebase = !!patch.parityFallbackToFirebase;
   } else if (patch.useSupabaseGlobal) {
-    payload.parityFallbackToFirebase = true;
+    payload.parityFallbackToFirebase = false;
   }
 
   await ref.set(payload, { merge: true });

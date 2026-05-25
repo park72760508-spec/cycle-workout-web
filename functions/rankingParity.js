@@ -34,10 +34,19 @@ async function loadFirebaseAggregateSupremo(db, cacheKey) {
  * @param {number} sample
  */
 function compareSupremoTop(supabasePayload, fbAgg, valueKey, sample, eps) {
-  if (!supabasePayload || !fbAgg || !fbAgg.rows || !fbAgg.rows.length) {
+  if (!supabasePayload) {
     return {
       ok: false,
-      reason: "missing_firestore_aggregate",
+      reason: "missing_supabase_payload",
+      cacheKey: fbAgg && fbAgg.cacheKey,
+      compared: 0,
+      mismatches: [],
+    };
+  }
+  if (!fbAgg || !fbAgg.rows || !fbAgg.rows.length) {
+    return {
+      ok: true,
+      reason: "firebase_baseline_retired",
       cacheKey: fbAgg && fbAgg.cacheKey,
       compared: 0,
       mismatches: [],

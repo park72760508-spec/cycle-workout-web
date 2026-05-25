@@ -37,6 +37,7 @@ const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const stravaDualWrite = require("./stravaDualWrite");
 const rankingReadRouter = require("./rankingReadRouter");
+const supabaseRankingReader = require("./supabaseRankingReader");
 const rankingParity = require("./rankingParity");
 const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
 const rankingReadRoutingPublic = require("./rankingReadRoutingPublic");
@@ -3909,11 +3910,26 @@ exports.finalizeWeeklyRanking = onSchedule(
   async (event) => {
     const db = admin.firestore();
     const { startStr, endStr } = getWeekRangeSeoul();
-    const entries = await getWeeklyRankingEntries(db, startStr, endStr); // 500+ TSS/일 제외된 합산 기준
+    let entries = [];
+    let weeklyFromSupabase = false;
+    try {
+      const sbWeekly = await supabaseRankingReader.fetchWeeklyTssRanking(admin, startStr, endStr, "all");
+      entries = Array.isArray(sbWeekly && sbWeekly.entries) ? sbWeekly.entries : [];
+      weeklyFromSupabase = true;
+      console.log("[finalizeWeeklyRanking] Supabase weekly TSS source", {
+        entries: entries.length,
+        supabaseWeeklyTssSource: sbWeekly && sbWeekly.supabaseWeeklyTssSource,
+      });
+    } catch (eSbWeekly) {
+      console.error("[finalizeWeeklyRanking] Supabase weekly TSS failed:", eSbWeekly && eSbWeekly.message ? eSbWeekly.message : eSbWeekly);
+      entries = await getWeeklyRankingEntries(db, startStr, endStr); // emergency fallback only
+    }
     const pointRecipients = [];
     for (const e of entries) {
       if (pointRecipients.length >= 3) break;
-      const hasCheat = await hasWeeklyTssCheatDay(db, e.userId, startStr, endStr);
+      const hasCheat = weeklyFromSupabase
+        ? false
+        : await hasWeeklyTssCheatDay(db, e.userId, startStr, endStr);
       if (!hasCheat) pointRecipients.push({ ...e, rank: pointRecipients.length + 1 });
     }
     const points = [100, 50, 30]; // 1등 100SP, 2등 50SP, 3등 30SP
@@ -5427,6 +5443,10 @@ async function tryPeakRankingHttpStaleOrPending(db, cacheKey) {
 }
 /** KST 03:40 — 03:20 헵타곤(최대 9분) 완료 후 마스터. 피크·헵타곤 complete 게이트. */
 const RANKING_REBUILD_CRON = "40 3 * * *";
+const RANKING_AGGREGATION_CONTROL_DOC = {
+  collection: "appConfig",
+  doc: "ranking_aggregation_control",
+};
 /** 클라이언트 캐시 롤오버(KST 04:00) — 마스터 TOP10 반영 여유 */
 const RANKING_MASTER_ROLLOVER_UTC_HOUR = 19;
 const RANKING_MASTER_ROLLOVER_UTC_MIN = 0;
@@ -5449,6 +5469,64 @@ function buildPeakBoardRankMapForCategoryRows(rows) {
     ranks[uid] = i + 1;
   }
   return ranks;
+}
+
+function parseRankingAggregationBool(raw, fallback) {
+  if (raw == null || raw === "") return fallback;
+  const s = String(raw).trim().toLowerCase();
+  if (["1", "true", "yes", "on", "firebase", "enabled"].includes(s)) return true;
+  if (["0", "false", "no", "off", "supabase", "disabled"].includes(s)) return false;
+  return fallback;
+}
+
+/**
+ * Firebase 표시용 랭킹 사전집계 스케줄 게이트.
+ * 기본값은 Supabase 모드(비활성). 긴급 복구는 Firestore
+ * appConfig/ranking_aggregation_control 또는 관리자 HTTP로 즉시 전환한다.
+ */
+async function shouldRunFirebaseRankingScheduledJob(db, jobName) {
+  const defaultEnabled = parseRankingAggregationBool(
+    process.env.FIREBASE_RANKING_SCHEDULED_ENABLED,
+    false
+  );
+  let cfg = {};
+  try {
+    const snap = await db
+      .collection(RANKING_AGGREGATION_CONTROL_DOC.collection)
+      .doc(RANKING_AGGREGATION_CONTROL_DOC.doc)
+      .get();
+    if (snap.exists) cfg = snap.data() || {};
+  } catch (eCfg) {
+    console.warn(
+      "[rankingAggregationControl] config read failed; using env/default",
+      eCfg && eCfg.message ? eCfg.message : eCfg
+    );
+  }
+
+  const mode = String(cfg.mode || "").trim().toLowerCase();
+  let enabled =
+    cfg.firebaseScheduledEnabled === true ||
+    mode === "firebase" ||
+    defaultEnabled === true;
+
+  if (cfg.firebaseScheduledEnabled === false || mode === "supabase") {
+    enabled = false;
+  }
+  if (cfg.enabledJobs && cfg.enabledJobs[jobName] === true) {
+    enabled = true;
+  }
+  if (cfg.disabledJobs && cfg.disabledJobs[jobName] === true) {
+    enabled = false;
+  }
+
+  if (!enabled) {
+    console.log("[rankingAggregationControl] Firebase scheduled aggregation skipped", {
+      jobName,
+      mode: mode || "supabase(default)",
+      firebaseScheduledEnabled: cfg.firebaseScheduledEnabled,
+    });
+  }
+  return enabled;
 }
 
 /** GC rebuildHeptagonCohortRanks 와 동일: 집계 순위 맵이 실제로 바뀌었는지 */
@@ -6781,6 +6859,7 @@ exports.rebuildRankingAggregates = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
+      if (!(await shouldRunFirebaseRankingScheduledJob(db, "rebuildRankingAggregates"))) return;
       await assertPeakHeptagonCompleteBeforeMaster(db);
       const r = await runRebuildRankingAggregatesCore(db);
       console.log("[rebuildRankingAggregates] master ok", r);
@@ -6997,6 +7076,7 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
+      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledWeeklyTop10PeakRefresh"))) return;
       const r = await refreshWeeklyMileageTop10IfStale(db);
       console.log("[scheduledWeeklyTop10PeakRefresh]", r);
     } catch (e) {
@@ -7017,6 +7097,7 @@ exports.scheduledWeeklyTssMidnightRefresh = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
+      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledWeeklyTssMidnightRefresh"))) return;
       const r = await refreshWeeklyTssMidnightIncremental(db);
       console.log("[scheduledWeeklyTssMidnightRefresh] ok", r);
     } catch (e) {
@@ -7042,6 +7123,7 @@ exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
     const db = admin.firestore();
     const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
     try {
+      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledPeak28dBoardAndHeptagon"))) return;
       await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
         {
           dateKst,
@@ -7105,6 +7187,7 @@ exports.scheduledPeak28dRollupBackfillChunk = onSchedule(
     const metaRef = db.collection("ranking_meta").doc("peak_28d_backfill");
     const CHUNK = 80;
     try {
+      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledPeak28dRollupBackfillChunk"))) return;
       let meta = (await metaRef.get()).data() || {};
       let userDocs = meta.userIdsCache;
       if (!Array.isArray(userDocs) || !userDocs.length || meta.windowEnd !== endStr) {
@@ -7177,6 +7260,7 @@ exports.scheduledPeak28dHeptagonOnly = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
+      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledPeak28dHeptagonOnly"))) return;
       await markHeptagonRebuildRunning(db);
       const heptRes = await runHeptagonCohortRanksRebuildJob();
       await markHeptagonDailyRebuildComplete(db, heptRes);
@@ -7236,6 +7320,189 @@ exports.adminSupabaseReadRouting = onRequest(
     } catch (e) {
       const status = e.status || 500;
       console.warn("[adminSupabaseReadRouting]", e.message || e);
+      res.status(status).json({
+        success: false,
+        error: e.message || String(e),
+      });
+    }
+  }
+);
+
+/**
+ * 관리자(grade=1): Firebase 표시용 랭킹 사전집계 스케줄 ON/OFF.
+ * 기본은 Supabase 모드(OFF). POST { mode:"firebase", firebaseScheduledEnabled:true } 로 긴급 활성화.
+ */
+exports.adminRankingAggregationControl = onRequest(
+  { cors: true, timeoutSeconds: 30 },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET" && req.method !== "POST") {
+      res.status(405).json({ success: false, error: "GET 또는 POST만 지원합니다." });
+      return;
+    }
+
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
+      const db = admin.firestore();
+      const ref = db
+        .collection(RANKING_AGGREGATION_CONTROL_DOC.collection)
+        .doc(RANKING_AGGREGATION_CONTROL_DOC.doc);
+
+      if (req.method === "POST") {
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        const modeRaw = String(body.mode || req.query.mode || "").trim().toLowerCase();
+        const mode = modeRaw === "firebase" ? "firebase" : "supabase";
+        const firebaseScheduledEnabled =
+          body.firebaseScheduledEnabled != null
+            ? body.firebaseScheduledEnabled === true || String(body.firebaseScheduledEnabled).toLowerCase() === "true"
+            : mode === "firebase";
+        const next = {
+          mode,
+          firebaseScheduledEnabled,
+          disabledJobs: body.disabledJobs && typeof body.disabledJobs === "object" ? body.disabledJobs : {},
+          enabledJobs: body.enabledJobs && typeof body.enabledJobs === "object" ? body.enabledJobs : {},
+          updatedBy: uid,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        await ref.set(next, { merge: true });
+      }
+
+      const snap = await ref.get();
+      res.status(200).json({
+        success: true,
+        docPath: `${RANKING_AGGREGATION_CONTROL_DOC.collection}/${RANKING_AGGREGATION_CONTROL_DOC.doc}`,
+        defaultMode: "supabase",
+        control: snap.exists ? snap.data() : { mode: "supabase", firebaseScheduledEnabled: false },
+        emergencyEnableExample: {
+          mode: "firebase",
+          firebaseScheduledEnabled: true,
+          disabledJobs: {},
+          enabledJobs: {},
+        },
+      });
+    } catch (e) {
+      const status = e.status || 500;
+      console.warn("[adminRankingAggregationControl]", e.message || e);
+      res.status(status).json({
+        success: false,
+        error: e.message || String(e),
+      });
+    }
+  }
+);
+
+/**
+ * 관리자(grade=1): Supabase public.users.firebase_uid 역매핑 1회/보정 동기화.
+ * 랭킹 조회·스냅샷 생성이 Firestore users 전체 스캔 없이 Supabase만으로 동작하게 한다.
+ */
+exports.adminSyncSupabaseFirebaseUidMap = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 540, memory: "1GiB" }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원합니다." });
+      return;
+    }
+
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
+      const db = admin.firestore();
+      const snap = await db.collection("users").select().get();
+      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+      const uidConfig = {
+        uidNamespace: supabaseDualWriteServer.uidNamespaceParam.value(),
+        uidMode: supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5",
+      };
+      const rows = snap.docs
+        .map((doc) => {
+          const supabaseId = supabaseDualWriteServer.resolveUserUuid(
+            doc.id,
+            uidConfig.uidNamespace,
+            uidConfig.uidMode
+          );
+          return supabaseId ? { id: supabaseId, firebase_uid: doc.id } : null;
+        })
+        .filter(Boolean);
+
+      let updated = 0;
+      for (let i = 0; i < rows.length; i += 25) {
+        const chunk = rows.slice(i, i + 25);
+        await Promise.all(chunk.map(async (row) => {
+          const { error } = await supabase
+            .from("users")
+            .update({ firebase_uid: row.firebase_uid })
+            .eq("id", row.id);
+          if (error) throw error;
+          updated += 1;
+        }));
+      }
+
+      res.status(200).json({
+        success: true,
+        scanned: snap.size,
+        updated,
+        message: "Supabase users.firebase_uid 역매핑 동기화 완료",
+      });
+    } catch (e) {
+      const status = e.status || 500;
+      console.warn("[adminSyncSupabaseFirebaseUidMap]", e.message || e);
+      res.status(status).json({
+        success: false,
+        error: e.message || String(e),
+      });
+    }
+  }
+);
+
+/** 관리자(grade=1): Supabase 비-GC 랭킹 등락 스냅샷 즉시 재생성. */
+exports.adminRebuildSupabaseRankSnapshots = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 300, memory: "512MiB" }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원합니다." });
+      return;
+    }
+
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
+      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+      const { error } = await supabase.rpc("fn_rebuild_peak_rank_board_snapshots");
+      if (error) throw error;
+      res.status(200).json({
+        success: true,
+        message: "Supabase peak_rank_board_snapshots 재생성 완료",
+      });
+    } catch (e) {
+      const status = e.status || 500;
+      console.warn("[adminRebuildSupabaseRankSnapshots]", e.message || e);
       res.status(status).json({
         success: false,
         error: e.message || String(e),
@@ -9910,9 +10177,22 @@ exports.finalizeMonthlyPeakRanking = onSchedule(
     const points = [100, 50, 30];
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       for (const gender of ["all", "M", "F"]) {
-        const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
+        let byCategory;
+        try {
+          const sbPeak = await supabaseRankingReader.fetchPeakRewardRanking(
+            admin,
+            startStr,
+            endStr,
+            durationType,
+            gender
+          );
+          byCategory = sbPeak && sbPeak.byCategory;
+        } catch (eSbPeak) {
+          console.error("[finalizeMonthlyPeakRanking] Supabase peak reward failed:", durationType, gender, eSbPeak && eSbPeak.message ? eSbPeak.message : eSbPeak);
+          ({ byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender));
+        }
         for (const cat of ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"]) {
-          const arr = byCategory[cat] || [];
+          const arr = (byCategory && byCategory[cat]) || [];
           const top3 = arr.slice(0, 3);
           for (let i = 0; i < top3.length; i++) {
             const u = top3[i];
@@ -9948,9 +10228,22 @@ exports.finalizeYearlyPeakRanking = onSchedule(
     const points = [100, 50, 30];
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       for (const gender of ["all", "M", "F"]) {
-        const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
+        let byCategory;
+        try {
+          const sbPeak = await supabaseRankingReader.fetchPeakRewardRanking(
+            admin,
+            startStr,
+            endStr,
+            durationType,
+            gender
+          );
+          byCategory = sbPeak && sbPeak.byCategory;
+        } catch (eSbPeak) {
+          console.error("[finalizeYearlyPeakRanking] Supabase peak reward failed:", durationType, gender, eSbPeak && eSbPeak.message ? eSbPeak.message : eSbPeak);
+          ({ byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender));
+        }
         for (const cat of ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"]) {
-          const arr = byCategory[cat] || [];
+          const arr = (byCategory && byCategory[cat]) || [];
           const top3 = arr.slice(0, 3);
           for (let i = 0; i < top3.length; i++) {
             const u = top3[i];

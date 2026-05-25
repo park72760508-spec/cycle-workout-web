@@ -129,13 +129,25 @@ function profileGenderMatches(profile, gender) {
 }
 
 async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
-  const rows = await supabaseSelectInChunks(
-    supabase,
-    "v_user_public_profile",
-    "id, display_name, profile_image_url, gender, league_category, is_private",
-    "id",
-    userIds
-  );
+  let rows = [];
+  try {
+    rows = await supabaseSelectInChunks(
+      supabase,
+      "v_user_public_profile",
+      "id, firebase_uid, display_name, profile_image_url, gender, league_category, is_private",
+      "id",
+      userIds
+    );
+  } catch (err) {
+    if (!String(err && err.message ? err.message : err).includes("firebase_uid")) throw err;
+    rows = await supabaseSelectInChunks(
+      supabase,
+      "v_user_public_profile",
+      "id, display_name, profile_image_url, gender, league_category, is_private",
+      "id",
+      userIds
+    );
+  }
   const map = new Map();
   for (const row of rows || []) {
     if (row && row.id) map.set(String(row.id), row);
@@ -143,10 +155,36 @@ async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
   return map;
 }
 
+async function getFirebaseUidMapForSupabaseUsers(admin, supabase, userIds) {
+  const ids = Array.from(new Set((userIds || []).map((v) => String(v || "").trim()).filter(Boolean)));
+  const map = new Map();
+  if (!ids.length) return map;
+
+  try {
+    const profiles = await getPublicProfileMapForSupabaseUsers(supabase, ids);
+    profiles.forEach((profile, id) => {
+      const fbUid = profile && profile.firebase_uid ? String(profile.firebase_uid).trim() : "";
+      if (fbUid) map.set(id, fbUid);
+    });
+  } catch (err) {
+    console.warn("[supabaseRankingReader] firebase_uid profile map failed:", err && err.message ? err.message : err);
+  }
+
+  const missing = ids.filter((id) => !map.has(id));
+  if (missing.length) {
+    const legacyMap = await getFirebaseUidByUuidMap(admin);
+    missing.forEach((id) => {
+      const fbUid = legacyMap.get(id);
+      if (fbUid) map.set(id, fbUid);
+    });
+  }
+  return map;
+}
+
 function weeklyTssRowsToEntries(rows, uidMap, gender) {
   const entries = [];
   for (const row of rows || []) {
-    const fbUid = uidMap.get(String(row.user_id));
+    const fbUid = row.firebase_uid ? String(row.firebase_uid).trim() : uidMap.get(String(row.user_id));
     if (!fbUid) continue;
     if (!profileGenderMatches(row, gender)) continue;
     const totalTss = Math.round(Number(row.weekly_tss) * 100) / 100;
@@ -212,7 +250,6 @@ async function fetchWeeklyTssRowsFromUserRankingMetrics(supabase, startStr, endS
  */
 async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const uidMap = await getFirebaseUidByUuidMap(admin);
 
   let rows = [];
   let source = "supabase_daily_summaries";
@@ -227,6 +264,11 @@ async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
     rows = await fetchWeeklyTssRowsFromUserRankingMetrics(supabase, startStr, endStr, gender);
   }
 
+  const uidMap = await getFirebaseUidMapForSupabaseUsers(
+    admin,
+    supabase,
+    (rows || []).map((row) => row.user_id)
+  );
   const entries = weeklyTssRowsToEntries(rows, uidMap, gender);
   const { entries: ranked, byCategory } = buildByCategoryFromEntries(entries);
   return {
@@ -259,7 +301,6 @@ async function fetchPeakPowerMonthly(
   if (!col) return null;
 
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const uidMap = await getFirebaseUidByUuidMap(admin);
 
   let query = supabase
     .from("mv_leaderboard_peak_28d")
@@ -274,6 +315,11 @@ async function fetchPeakPowerMonthly(
   const { data, error } = await query.limit(2000);
   if (error) throw error;
 
+  const uidMap = await getFirebaseUidMapForSupabaseUsers(
+    admin,
+    supabase,
+    (data || []).map((row) => row.user_id)
+  );
   const entries = [];
   for (const row of data || []) {
     const fbUid = uidMap.get(String(row.user_id));
@@ -312,7 +358,6 @@ async function fetchPeakPowerMonthly(
  */
 async function fetchPersonalDist(admin, startStr, endStr, gender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const uidMap = await getFirebaseUidByUuidMap(admin);
 
   let query = supabase
     .from("mv_leaderboard_distance_30d")
@@ -327,6 +372,11 @@ async function fetchPersonalDist(admin, startStr, endStr, gender) {
   const { data, error } = await query.limit(2000);
   if (error) throw error;
 
+  const uidMap = await getFirebaseUidMapForSupabaseUsers(
+    admin,
+    supabase,
+    (data || []).map((row) => row.user_id)
+  );
   const entries = [];
   for (const row of data || []) {
     const fbUid = uidMap.get(String(row.user_id));
@@ -360,7 +410,6 @@ async function fetchPersonalDist(admin, startStr, endStr, gender) {
  */
 async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const uidMap = await getFirebaseUidByUuidMap(admin);
 
   let query = supabase
     .from("mv_leaderboard_speed_28d")
@@ -375,6 +424,11 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
   const { data, error } = await query.limit(2000);
   if (error) throw error;
 
+  const uidMap = await getFirebaseUidMapForSupabaseUsers(
+    admin,
+    supabase,
+    (data || []).map((row) => row.user_id)
+  );
   const entries = [];
   for (const row of data || []) {
     const fbUid = uidMap.get(String(row.user_id));
@@ -403,6 +457,55 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
   };
 }
 
+async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gender) {
+  if (!PEAK_WKG_COLUMN[durationType]) return null;
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const { data, error } = await supabase.rpc("fn_peak_reward_leaderboard", {
+    p_start: startStr,
+    p_end: endStr,
+    p_duration: durationType,
+    p_gender: gender || "all",
+  });
+  if (error) throw error;
+
+  const uidMap = await getFirebaseUidMapForSupabaseUsers(
+    admin,
+    supabase,
+    (data || []).map((row) => row.user_id)
+  );
+  const entries = [];
+  for (const row of data || []) {
+    const fbUid = row.firebase_uid ? String(row.firebase_uid).trim() : uidMap.get(String(row.user_id));
+    if (!fbUid) continue;
+    const wkg = Math.round(Number(row.peak_wkg) * 100) / 100;
+    if (!(wkg > 0)) continue;
+    entries.push({
+      userId: fbUid,
+      name: row.display_name || "(이름 없음)",
+      ageCategory: row.league_category || "unknown",
+      gender: genderDbToClient(row.gender),
+      is_private: false,
+      profileImageUrl: row.profile_image_url || null,
+      wkg,
+      watts: Number(row.peak_watts) || 0,
+    });
+  }
+
+  const { entries: ranked, byCategory } = buildByCategoryFromEntries(entries);
+  return {
+    success: true,
+    byCategory,
+    entries: ranked,
+    startStr,
+    endStr,
+    period: "reward",
+    durationType,
+    gender,
+    precomputed: true,
+    readSource: "supabase",
+  };
+}
+
 /**
  * 그룹 탭: 최근 30일 오픈 라이딩 — 방장별 참가자 당일 라이딩 거리(km) 합.
  * Firestore getRolling30dGroupDistanceByHostEntries 와 동일 규칙(daily_summaries km).
@@ -410,7 +513,6 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
  */
 async function fetchGroupDistRanking(admin, startStr, endStr) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const uidMap = await getFirebaseUidByUuidMap(admin);
 
   const { data: openRides, error: ridesErr } = await supabase
     .from("open_rides")
@@ -463,8 +565,6 @@ async function fetchGroupDistRanking(admin, startStr, endStr) {
   const byHost = new Map();
   for (const ride of openRides) {
     const hostUuid = String(ride.host_user_id || "");
-    const hostFb = uidMap.get(hostUuid);
-    if (!hostFb) continue;
     const ymd = String(ride.ride_date || "").slice(0, 10);
     if (!ymd || ymd < startStr || ymd > endStr) continue;
     const partSet = partsByRide.get(String(ride.id));
@@ -477,9 +577,8 @@ async function fetchGroupDistRanking(admin, startStr, endStr) {
     });
     if (rideScore <= 0) continue;
 
-    if (!byHost.has(hostFb)) {
-      byHost.set(hostFb, {
-        hostUserId: hostFb,
+    if (!byHost.has(hostUuid)) {
+      byHost.set(hostUuid, {
         hostUuid,
         name:
           (ride.host_name && String(ride.host_name).trim().slice(0, 80)) ||
@@ -487,7 +586,7 @@ async function fetchGroupDistRanking(admin, startStr, endStr) {
         totalKm: 0,
       });
     }
-    const agg = byHost.get(hostFb);
+    const agg = byHost.get(hostUuid);
     agg.totalKm += rideScore;
   }
 
@@ -496,6 +595,7 @@ async function fetchGroupDistRanking(admin, startStr, endStr) {
   const hostUuids = Array.from(
     new Set(Array.from(byHost.values()).map((v) => v.hostUuid).filter(Boolean))
   );
+  const uidMap = await getFirebaseUidMapForSupabaseUsers(admin, supabase, hostUuids);
   const hostProfileRows = hostUuids.length
     ? await supabaseSelectInChunks(
         supabase,
@@ -512,10 +612,12 @@ async function fetchGroupDistRanking(admin, startStr, endStr) {
 
   const entries = [];
   for (const [, v] of byHost) {
+    const hostUserId = uidMap.get(v.hostUuid);
+    if (!hostUserId) continue;
     const prof = profileByUuid.get(v.hostUuid);
     entries.push({
-      userId: v.hostUserId,
-      hostUserId: v.hostUserId,
+      userId: hostUserId,
+      hostUserId,
       name:
         (prof && prof.display_name && String(prof.display_name).trim()) ||
         v.name,
@@ -602,7 +704,6 @@ function captureGcSnapshotMeta(d, state) {
  */
 async function fetchGcRanking(admin, monthKey, filterGender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const uidMap = await getFirebaseUidByUuidMap(admin);
   const mk = monthKey || getMonthKeyKstNow();
   const fg = filterGender === "M" || filterGender === "F" ? filterGender : "all";
   const applyGenderScoreUnify = fg === "M" || fg === "F";
@@ -619,8 +720,13 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
       .order("sum_position_scores", { ascending: false })
       .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
     if (supAllErr) throw supAllErr;
+    const supAllUidMap = await getFirebaseUidMapForSupabaseUsers(
+      admin,
+      supabase,
+      (supAll || []).map((row) => row.user_id)
+    );
     for (const row of supAll || []) {
-      const fbUid = uidMap.get(String(row.user_id));
+      const fbUid = supAllUidMap.get(String(row.user_id));
       if (
         fbUid &&
         row.sum_position_scores != null &&
@@ -659,6 +765,11 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
         .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
       if (error) throw error;
 
+      const uidMap = await getFirebaseUidMapForSupabaseUsers(
+        admin,
+        supabase,
+        (data || []).map((row) => row.user_id)
+      );
       const rows = [];
       for (let i = 0; i < (data || []).length; i++) {
         const row = data[i];
@@ -736,19 +847,34 @@ async function attachGcHeptagonMeta(admin, payload, deps) {
 
   let heptagonMeta = null;
   try {
-    const metaSnap = await admin
-      .firestore()
-      .collection("ranking_meta")
-      .doc(RANKING_HEPTAGON_REBUILD_META_DOC || "heptagon_daily_rebuild")
-      .get();
-    if (metaSnap.exists) heptagonMeta = metaSnap.data() || null;
-  } catch (_eHm) {
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("ranking_build_meta")
+      .select("meta_key, date_kst, status, completed_at, updated_at")
+      .eq("meta_key", RANKING_HEPTAGON_REBUILD_META_DOC || "heptagon_daily_rebuild")
+      .maybeSingle();
+    if (error) throw error;
+    heptagonMeta = data || null;
+  } catch (eSbMeta) {
+    try {
+      const metaSnap = await admin
+        .firestore()
+        .collection("ranking_meta")
+        .doc(RANKING_HEPTAGON_REBUILD_META_DOC || "heptagon_daily_rebuild")
+        .get();
+      if (metaSnap.exists) heptagonMeta = metaSnap.data() || null;
+    } catch (_eHm) {}
+    if (!heptagonMeta) {
+      console.warn("[supabaseRankingReader] heptagon meta fallback failed:", eSbMeta && eSbMeta.message ? eSbMeta.message : eSbMeta);
+    }
+  }
+  if (!heptagonMeta) {
     /* meta optional */
   }
 
   const heptMetaDateKst =
-    heptagonMeta && heptagonMeta.dateKst
-      ? String(heptagonMeta.dateKst).trim().slice(0, 10)
+    heptagonMeta && (heptagonMeta.dateKst || heptagonMeta.date_kst)
+      ? String(heptagonMeta.dateKst || heptagonMeta.date_kst).trim().slice(0, 10)
       : "";
   const heptMetaComplete =
     heptagonMeta && String(heptagonMeta.status || "") === "complete";
@@ -787,6 +913,7 @@ module.exports = {
   fetchPeakPowerMonthly,
   fetchPersonalDist,
   fetchPersonalSpeed,
+  fetchPeakRewardRanking,
   fetchGcRanking,
   fetchGroupDistRanking,
   attachGcHeptagonMeta,
