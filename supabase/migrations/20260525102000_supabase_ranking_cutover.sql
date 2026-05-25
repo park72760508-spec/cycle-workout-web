@@ -298,7 +298,7 @@ BEGIN
     FROM public.open_rides o
     JOIN public.open_ride_participants p ON p.ride_id = o.id
     WHERE o.ride_date BETWEEN dist_start AND dist_end
-      AND COALESCE(o.status, '') <> 'cancelled'
+      AND (o.status IS NULL OR o.status <> 'cancelled'::public.open_ride_status)
       AND COALESCE(p.is_waitlist, false) = false
   ),
   host_scores AS (

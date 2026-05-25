@@ -32,18 +32,44 @@ BEGIN
     CROSS JOIN (VALUES ('all'), ('M'), ('F')) AS fg(filter_gender)
     CROSS JOIN unnest(ARRAY['max','1min','5min','10min','20min','40min','60min']::text[])
       WITH ORDINALITY AS d(duration, ord)
-    WHERE NOT p.is_private
-      AND public.fn_heptagon_gender_matches(p.gender, fg.filter_gender)
+    WHERE public.fn_heptagon_gender_matches(p.gender, fg.filter_gender)
   ),
-  ranked AS (
+  ranked_positive AS (
     SELECT
       *,
-      RANK() OVER (PARTITION BY filter_gender, duration ORDER BY wkg DESC, user_id) AS axis_rank,
+      (RANK() OVER (PARTITION BY filter_gender, duration ORDER BY wkg DESC, user_id))::integer AS axis_rank,
       COUNT(*) OVER (PARTITION BY filter_gender, duration)::integer AS axis_n
     FROM peaks
     WHERE wkg > 0
+  ),
+  axis_counts AS (
+    SELECT
+      filter_gender,
+      duration,
+      COUNT(*)::integer AS axis_n
+    FROM peaks
+    WHERE wkg > 0
+    GROUP BY filter_gender, duration
   )
-  SELECT * FROM ranked;
+  SELECT
+    p.filter_gender,
+    p.duration,
+    p.ord,
+    p.user_id,
+    p.wkg,
+    p.display_name,
+    p.age_category,
+    p.is_private,
+    rp.axis_rank,
+    COALESCE(rp.axis_n, ac.axis_n, 0)::integer AS axis_n
+  FROM peaks p
+  LEFT JOIN ranked_positive rp
+    ON rp.filter_gender = p.filter_gender
+   AND rp.duration = p.duration
+   AND rp.user_id = p.user_id
+  LEFT JOIN axis_counts ac
+    ON ac.filter_gender = p.filter_gender
+   AND ac.duration = p.duration;
 
   CREATE TEMP TABLE tmp_heptagon_sup_rows ON COMMIT DROP AS
   WITH per_user AS (
@@ -58,6 +84,7 @@ BEGIN
     FROM tmp_heptagon_axis
     GROUP BY filter_gender, user_id
     HAVING COUNT(*) = 7
+       AND bool_or(axis_rank IS NOT NULL)
   ),
   scored AS (
     SELECT
