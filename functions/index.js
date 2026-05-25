@@ -10187,7 +10187,6 @@ exports.onUserLogWritten = functions
     const logData = snap.data();
     if (String(logData.source || "").toLowerCase() === "strava") {
       try {
-        await supabaseUserProvision.provisionSupabaseUserAfterProfile(admin, userId);
         await supabaseDualWriteServer.runSecondaryAfterStravaLogSave(
           admin,
           userId,

@@ -331,6 +331,20 @@ async function writeRideToSupabase(rideRow) {
   }
 }
 
+function isSupabaseForeignKeyUserError(error) {
+  if (!error) return false;
+  const code = String(error.code || "");
+  const message = String(error.message || error.details || "");
+  return (
+    code === "23503" &&
+    (
+      message.includes("rides_user_id_fkey") ||
+      message.includes("rides") ||
+      message.includes("user_id")
+    )
+  );
+}
+
 async function resolveRideUserIdForFirebaseUid(supabase, firebaseUid, uidConfig) {
   const fallbackId = resolveUserUuid(
     firebaseUid,
@@ -414,7 +428,23 @@ async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, o
 
   const supabase = getSupabaseAdminClient();
   row.user_id = await resolveRideUserIdForFirebaseUid(supabase, userId, uidConfig);
-  await writeRideToSupabase(row);
+  try {
+    await writeRideToSupabase(row);
+  } catch (error) {
+    if (!isSupabaseForeignKeyUserError(error)) {
+      throw error;
+    }
+    console.warn("[supabaseDualWriteServer] rides user_id FK 실패, Supabase 사용자 보정 후 재시도:", {
+      userId,
+      logDocId,
+      mappedUserId: row.user_id,
+      message: error.message || String(error),
+    });
+    const supabaseUserProvision = require("./supabaseUserProvision");
+    await supabaseUserProvision.provisionSupabaseUserAfterProfile(admin, userId);
+    row.user_id = await resolveRideUserIdForFirebaseUid(supabase, userId, uidConfig);
+    await writeRideToSupabase(row);
+  }
   console.log("[supabaseDualWriteServer] strava rides upsert OK", {
     userId,
     activity_id: row.activity_id,
