@@ -14431,7 +14431,19 @@
           (await stelvioFindRankingBoardCacheFallback(cacheKeyStr));
         if (softRankingCacheUsable(soft)) {
           stelvioShowRankingBoardLoading(true);
-          await applyFromCache(soft.data, { keepLoading: true });
+          await applyFromCache(
+            soft.data,
+            opts.tabSwitch
+              ? {
+                  keepLoading: true,
+                  fastTabSwitch: true,
+                  preserveExpandUi: true,
+                  skipClone: true,
+                  tabSwitch: true,
+                  source: 'soft_indexedDB',
+                }
+              : { keepLoading: true }
+          );
           return true;
         }
         return false;
@@ -14643,7 +14655,15 @@
           cachedAt: lcEntry.cachedAt,
           expiresAt: lcEntry.expiresAt,
         });
-        await applyFromCache(lcEntry.data, { instant: true, source: 'indexedDB' });
+        await applyFromCache(lcEntry.data, {
+          instant: true,
+          source: 'indexedDB',
+          fastTabSwitch: !!opts.tabSwitch,
+          preserveExpandUi: !!opts.tabSwitch,
+          skipClone: !!opts.tabSwitch,
+          keepLoading: !!opts.tabSwitch,
+          tabSwitch: !!opts.tabSwitch,
+        });
         if (!tabSwitchLight || !STELVIO_RANKING_THERMAL_WEBVIEW) {
           scheduleRankMvIfNeeded();
         } else {
@@ -14704,13 +14724,29 @@
             cachedAt: lcAfter.cachedAt,
             expiresAt: lcAfter.expiresAt,
           });
-          await applyFromCache(lcAfter.data, { instant: true, source: 'prefetch_idb' });
+          await applyFromCache(lcAfter.data, {
+            instant: true,
+            source: 'prefetch_idb',
+            fastTabSwitch: !!opts.tabSwitch,
+            preserveExpandUi: !!opts.tabSwitch,
+            skipClone: !!opts.tabSwitch,
+            keepLoading: !!opts.tabSwitch,
+            tabSwitch: !!opts.tabSwitch,
+          });
           scheduleRankMvIfNeeded();
           return true;
         }
         var memAfterPrefetch = stelvioRankingMemCacheGet(swrKey);
         if (memAfterPrefetch && stelvioRankingCacheUsableFromMem(memAfterPrefetch, cacheCtx)) {
-          await applyFromCache(memAfterPrefetch.body, { instant: true, source: 'prefetch' });
+          await applyFromCache(memAfterPrefetch.body, {
+            instant: true,
+            source: 'prefetch',
+            fastTabSwitch: !!opts.tabSwitch,
+            preserveExpandUi: !!opts.tabSwitch,
+            skipClone: !!opts.tabSwitch,
+            keepLoading: !!opts.tabSwitch,
+            tabSwitch: !!opts.tabSwitch,
+          });
           scheduleRankMvIfNeeded();
           return true;
         }
