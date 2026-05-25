@@ -12813,11 +12813,11 @@
       var peak = { max: 1, '1min': 1, '5min': 1, '10min': 1, '20min': 1, '40min': 1, '60min': 1 };
       return !!peak[dt];
     }
-    /** GC 제외 랭킹보드 탭(피크·TSS·거리·그룹) — 순위 등락 대상 */
+    /** 랭킹보드 탭(피크·TSS·거리·그룹·GC) — 순위 등락 대상 */
     function stelvioSupportsRankMovementDuration(dt) {
       if (!dt) return false;
       if (stelvioIsPeakPowerDurationForRankChange(dt)) return true;
-      return dt === 'tss' || dt === 'personal_dist' || dt === 'personal_speed' || dt === 'group_dist';
+      return dt === 'gc' || dt === 'tss' || dt === 'personal_dist' || dt === 'personal_speed' || dt === 'group_dist';
     }
     function stelvioResolveRankMovementDurationType(data) {
       if (data && data.durationType) return data.durationType;
