@@ -183,10 +183,70 @@ async function fetchApprovedRidingGroups(admin, opts) {
     .filter(Boolean);
 }
 
+async function fetchUserRideLogsForMonth(firebaseUid, year, month) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return [];
+  const y = Number(year);
+  const m0 = Number(month);
+  if (!firebaseUid || !Number.isFinite(y) || !Number.isFinite(m0)) return [];
+
+  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
+  const mode = supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  const userUuid = supabaseDualWriteServer.resolveUserUuid(firebaseUid, ns, mode);
+  if (!userUuid) return [];
+
+  const start = new Date(y, m0, 1);
+  const end = new Date(y, m0 + 1, 0);
+  const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-01`;
+  const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+
+  const { data, error } = await supabase
+    .from("rides")
+    .select(
+      "activity_id, source, activity_type, title, ride_date, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, avg_cadence, avg_hr, max_hr, avg_watts, weighted_watts, max_watts, tss, intensity_factor, kilojoules, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_30min_watts, max_40min_watts, max_60min_watts"
+    )
+    .eq("user_id", userUuid)
+    .gte("ride_date", startStr)
+    .lte("ride_date", endStr)
+    .order("ride_date", { ascending: true });
+  if (error) throw error;
+
+  return (data || []).map((row) => ({
+    id: row.activity_id || `${row.source || "ride"}:${row.ride_date || ""}`,
+    activity_id: row.activity_id || null,
+    source: row.source || "strava",
+    activity_type: row.activity_type || null,
+    title: row.title || "",
+    date: row.ride_date || "",
+    duration_sec: Number(row.duration_sec) || 0,
+    distance_km: row.distance_km != null ? Number(row.distance_km) : null,
+    elevation_gain: row.elevation_gain_m != null ? Number(row.elevation_gain_m) : null,
+    avg_speed_kmh: row.avg_speed_kmh != null ? Number(row.avg_speed_kmh) : null,
+    avg_cadence: row.avg_cadence != null ? Number(row.avg_cadence) : null,
+    avg_hr: row.avg_hr != null ? Number(row.avg_hr) : null,
+    max_hr: row.max_hr != null ? Number(row.max_hr) : null,
+    avg_watts: row.avg_watts != null ? Number(row.avg_watts) : null,
+    weighted_watts: row.weighted_watts != null ? Number(row.weighted_watts) : null,
+    max_watts: row.max_watts != null ? Number(row.max_watts) : null,
+    tss: row.tss != null ? Number(row.tss) : null,
+    if: row.intensity_factor != null ? Number(row.intensity_factor) : null,
+    kilojoules: row.kilojoules != null ? Number(row.kilojoules) : null,
+    max_1min_watts: row.max_1min_watts != null ? Number(row.max_1min_watts) : null,
+    max_5min_watts: row.max_5min_watts != null ? Number(row.max_5min_watts) : null,
+    max_10min_watts: row.max_10min_watts != null ? Number(row.max_10min_watts) : null,
+    max_20min_watts: row.max_20min_watts != null ? Number(row.max_20min_watts) : null,
+    max_30min_watts: row.max_30min_watts != null ? Number(row.max_30min_watts) : null,
+    max_40min_watts: row.max_40min_watts != null ? Number(row.max_40min_watts) : null,
+    max_60min_watts: row.max_60min_watts != null ? Number(row.max_60min_watts) : null,
+    readBackend: "supabase",
+  }));
+}
+
 module.exports = {
   fetchOpenRideByFirestoreId,
   fetchOpenRidesInDateRange,
   fetchRidingGroupByFirestoreId,
   fetchApprovedRidingGroups,
+  fetchUserRideLogsForMonth,
   getUuidToFirebaseMap,
 };

@@ -45,6 +45,7 @@ const groupReadRouter = require("./groupReadRouter");
 const groupReadRoutingPublic = require("./groupReadRoutingPublic");
 const groupDualWriteTriggers = require("./groupDualWriteTriggers");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
+const supabaseGroupReader = require("./supabaseGroupReader");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -7701,6 +7702,59 @@ exports.getOpenRidesInDateRangeForRead = onRequest(
         readBackend: "firebase",
       });
     } catch (e) {
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 후기 전용 월별 라이딩 로그 Read — Firestore 훈련일지 반영 지연 시 Supabase rides에서 보강.
+ * 요청자는 본인 로그만 조회 가능.
+ */
+exports.getOpenRideReviewLogsForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+
+    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
+    const year = Number(req.query.year);
+    const month = Number(req.query.month);
+    if (!requestedUid || !Number.isFinite(year) || !Number.isFinite(month)) {
+      res.status(400).json({ success: false, error: "uid, year, month 필요" });
+      return;
+    }
+
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 라이딩 로그만 조회할 수 있습니다." });
+      return;
+    }
+
+    try {
+      const logs = await supabaseGroupReader.fetchUserRideLogsForMonth(
+        requestedUid,
+        year,
+        month
+      );
+      res.status(200).json({
+        success: true,
+        logs,
+        readBackend: "supabase",
+        readSource: "supabase",
+      });
+    } catch (e) {
+      console.warn("[getOpenRideReviewLogsForRead]", e.message || e);
       res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }
