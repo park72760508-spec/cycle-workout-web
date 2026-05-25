@@ -7852,7 +7852,7 @@ exports.adminRebuildSupabaseRankSnapshots = onRequest(
  * 클라이언트 IndexedDB·API 캐시 네임스페이스 분리용.
  */
 exports.getRankingReadRoutingPublic = onRequest(
-  { cors: true, timeoutSeconds: 15 },
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 15 }),
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -7881,7 +7881,7 @@ exports.getRankingReadRoutingPublic = onRequest(
 
 /** Supabase pg_cron ranking_build_meta — IndexedDB 무효화·프리페치용 (Firestore ranking_meta 대체) */
 exports.getRankingBuildMetaPublic = onRequest(
-  { cors: true, timeoutSeconds: 15 },
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 15 }),
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");

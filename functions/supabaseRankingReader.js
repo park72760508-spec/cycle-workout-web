@@ -799,15 +799,23 @@ function getMonthKeyKstNow() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
 }
 
-function mapGcRowToEntry(row, fbUid, filterGender, gcScore) {
+function mapGcRowToEntry(row, fbUid, filterGender, gcScore, profile) {
   const g =
     filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
+  const name =
+    (profile && profile.actual_name && String(profile.actual_name).trim()) ||
+    (profile && profile.display_name && String(profile.display_name).trim()) ||
+    (row.display_name && String(row.display_name).trim()) ||
+    "(이름 없음)";
   return {
     userId: fbUid,
-    name: (row.display_name && String(row.display_name).trim()) || "(이름 없음)",
-    ageCategory: row.age_category != null ? String(row.age_category) : "",
+    name,
+    ageCategory:
+      (profile && profile.league_category) ||
+      (row.age_category != null ? String(row.age_category) : ""),
     gender: g,
-    is_private: row.is_private === true,
+    is_private: row.is_private === true || (profile && profile.is_private === true),
+    profileImageUrl: (profile && profile.profile_image_url) || null,
     gcScore,
     rankChange:
       row.rank_change != null && isFinite(Number(row.rank_change))
@@ -909,6 +917,10 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
         supabase,
         (data || []).map((row) => row.user_id)
       );
+      const profileMap = await getPublicProfileMapForSupabaseUsers(
+        supabase,
+        (data || []).map((row) => row.user_id)
+      );
       const rows = [];
       for (let i = 0; i < (data || []).length; i++) {
         const row = data[i];
@@ -922,7 +934,7 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
         if (applyGenderScoreUnify && supreAllScores.has(fbUid)) {
           gcScore = supreAllScores.get(fbUid);
         }
-        const entry = mapGcRowToEntry(row, fbUid, fg, gcScore);
+        const entry = mapGcRowToEntry(row, fbUid, fg, gcScore, profileMap.get(String(row.user_id)));
         entry.rank = rows.length + 1;
         rows.push(entry);
       }
