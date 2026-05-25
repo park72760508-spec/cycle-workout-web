@@ -210,6 +210,25 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
       endStr,
       "all"
     );
+    if (!tssPayload || !Array.isArray(tssPayload.entries)) {
+      return null;
+    }
+    if (tssPayload.entries.length === 0) {
+      return null;
+    }
+    if (!usePrevWeek) {
+      await peakMovementSupabase.applyPeakRankChangesSupabase(
+        tssPayload.byCategory,
+        "peak_tss_weekly_all"
+      );
+      tssPayload.rankMovementSource = "supabase";
+      tssPayload.rankMovementHistoryKey = "peak_tss_weekly_all";
+    } else {
+      await peakMovementSupabase.hydratePeakRankMovementOnPayload(
+        tssPayload,
+        "peak_tss_weekly_all"
+      );
+    }
     const entries = tssPayload.entries || [];
 
     const top10 = entries.slice(0, 10).map((e, i) => ({
@@ -217,6 +236,8 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
       userId: e.userId,
       name: e.name,
       totalTss: e.totalTss,
+      rankChange: e.rankChange,
+      previousBoardRank: e.previousBoardRank,
       is_private: e.is_private === true,
       profileImageUrl: e.profileImageUrl || null,
     }));
@@ -231,6 +252,8 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
           userId: e.userId,
           name: e.name,
           totalTss: e.totalTss,
+          rankChange: e.rankChange,
+          previousBoardRank: e.previousBoardRank,
           is_private: e.is_private === true,
           profileImageUrl: e.profileImageUrl || null,
         };
@@ -251,6 +274,8 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
       precomputed: true,
       readSource: "supabase",
       readBackend: "supabase",
+      rankMovementSource: tssPayload.rankMovementSource,
+      rankMovementHistoryKey: tssPayload.rankMovementHistoryKey,
       allEntries: entries,
     };
   } catch (err) {

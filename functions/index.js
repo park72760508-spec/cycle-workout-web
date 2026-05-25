@@ -3696,6 +3696,8 @@ exports.getWeeklyRanking = onRequest(
         userId: e.userId,
         name: e.name,
         totalTss: Math.round(e.totalTss * 100) / 100,
+        rankChange: e.rankChange,
+        previousBoardRank: e.previousBoardRank,
         is_private: e.is_private === true,
         profileImageUrl: e.profileImageUrl || null,
       }));
@@ -3710,6 +3712,8 @@ exports.getWeeklyRanking = onRequest(
             userId: e.userId,
             name: e.name,
             totalTss: Math.round(e.totalTss * 100) / 100,
+            rankChange: e.rankChange,
+            previousBoardRank: e.previousBoardRank,
             is_private: e.is_private === true,
             profileImageUrl: e.profileImageUrl || null,
           };

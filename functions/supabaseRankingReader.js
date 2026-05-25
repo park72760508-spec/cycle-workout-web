@@ -17,6 +17,10 @@ const HEPTAGON_CATEGORIES = [
 ];
 const GC_RANKING_MAX_ROWS_PER_CATEGORY = 10000;
 const SUPABASE_IN_QUERY_CHUNK = 200;
+const WEEKLY_TSS_MV_REFRESH_MIN_MS = 60 * 1000;
+
+let weeklyTssMvRefreshLastAt = 0;
+let weeklyTssMvRefreshInFlight = null;
 
 function effectiveDayKmFromSummaryRow(row) {
   const ks = Number(row.km_strava_sum) || 0;
@@ -120,11 +124,38 @@ function mapRowToFirebaseUser(row, firebaseUid) {
   };
 }
 
+async function refreshWeeklyTssLeaderboardIfDue(supabase) {
+  const now = Date.now();
+  if (!supabase) return;
+  if (weeklyTssMvRefreshInFlight) return weeklyTssMvRefreshInFlight;
+  if (weeklyTssMvRefreshLastAt > 0 && now - weeklyTssMvRefreshLastAt < WEEKLY_TSS_MV_REFRESH_MIN_MS) {
+    return;
+  }
+
+  weeklyTssMvRefreshInFlight = (async () => {
+    const { error } = await supabase.rpc("fn_refresh_weekly_tss_leaderboard");
+    if (error) {
+      console.warn(
+        "[supabaseRankingReader] weekly TSS MV refresh skipped:",
+        error.message
+      );
+      weeklyTssMvRefreshLastAt = Date.now();
+      return;
+    }
+    weeklyTssMvRefreshLastAt = Date.now();
+  })().finally(() => {
+    weeklyTssMvRefreshInFlight = null;
+  });
+
+  return weeklyTssMvRefreshInFlight;
+}
+
 /**
  * @param {import('firebase-admin')} admin
  */
 async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  await refreshWeeklyTssLeaderboardIfDue(supabase);
   const uidMap = await getFirebaseUidByUuidMap(admin);
 
   let query = supabase
@@ -132,6 +163,8 @@ async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
     .select(
       "user_id, display_name, profile_image_url, gender, league_category, weekly_tss, week_start, week_end"
     )
+    .eq("week_start", startStr)
+    .eq("week_end", endStr)
     .order("weekly_tss", { ascending: false });
 
   query = applyGenderFilter(query, gender);
