@@ -1,9 +1,34 @@
 {
-  "database": {
-    "rules": "database.rules.json"
-  },
+  "database": { "rules": "database.rules.json" },
+  "firestore": { "indexes": "firestore.indexes.json" },
   "functions": {
     "source": "functions",
-    "predeploy": []
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "**/.*",
+      "**/node_modules/**",
+      "functions/**",
+      "supabase/**",
+      "mobile/**",
+      "docs/**",
+      "keys/**",
+      "scripts/**",
+      "database.rules.json",
+      "firestore.indexes.json",
+      "functions-list.json",
+      "package.json",
+      "package-lock.json"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
   }
 }
