@@ -11752,6 +11752,7 @@
       if (stelvioIsRollingWindowDurationRanking() || stelvioIsGcRankingMode() || stelvioIsGroupDistanceRanking()) {
         if (stelvioIsGroupDistanceRanking()) {
           if (stelvioGroupTabMetric === 'tss') label.textContent = '주간';
+          else if (stelvioGroupTabMetric === 'personal_speed') label.textContent = '최근 4주';
           else if (stelvioGroupTabMetric === 'personal_dist') label.textContent = '최근 30일';
           else label.textContent = '월간';
         } else if (stelvioIsTssRankingMode()) {
@@ -14545,6 +14546,7 @@
         case 'gc':           return entry.gcScore != null    ? Number(entry.gcScore)  : NaN;
         case 'tss':          return entry.totalTss != null   ? Number(entry.totalTss) : NaN;
         case 'personal_dist':return entry.totalKm != null    ? Number(entry.totalKm)  : NaN;
+        case 'personal_speed':return entry.speedKmh != null  ? Number(entry.speedKmh) : NaN;
         default:             return entry.wkg != null        ? Number(entry.wkg)      : NaN;
       }
     }
@@ -14557,12 +14559,13 @@
         case 'gc':           return v.toFixed(1);
         case 'tss':          return v.toFixed(1);
         case 'personal_dist':return v.toFixed(1) + ' km';
+        case 'personal_speed':return v.toFixed(1) + ' km/h';
         default:             return v.toFixed(2) + ' W/kg';
       }
     }
     /** 현재 그룹 지표 라벨 */
     function stelvioGroupTabCurrentMetricLabel() {
-      var m = { gc: 'GC', tss: 'TSS', personal_dist: '거리', max: 'Max',
+      var m = { gc: 'GC', personal_speed: '독주', tss: 'TSS', personal_dist: '거리', max: 'Max',
                 '1min': '1분', '5min': '5분', '10min': '10분',
                 '20min': '20분', '40min': '40분', '60min': '60분' };
       return m[stelvioGroupTabMetric] || stelvioGroupTabMetric;
@@ -14573,6 +14576,7 @@
         case 'gc':           return '점';
         case 'tss':          return 'TSS';
         case 'personal_dist':return 'km';
+        case 'personal_speed':return 'km/h';
         default:             return 'W/kg';
       }
     }
@@ -14655,6 +14659,7 @@
         case 'gc':           metricVal = (ve && ve.gcScore   != null ? Number(ve.gcScore)   : 0).toFixed(1) + '점';    break;
         case 'tss':          metricVal = (ve && ve.totalTss  != null ? Number(ve.totalTss)  : 0).toFixed(1) + ' TSS';  break;
         case 'personal_dist':metricVal = (ve && ve.totalKm   != null ? Number(ve.totalKm)   : 0).toFixed(1) + ' km';   break;
+        case 'personal_speed':metricVal = (ve && ve.speedKmh != null ? Number(ve.speedKmh)  : 0).toFixed(1) + ' km/h'; break;
         default:             metricVal = (ve && ve.wkg       != null ? Number(ve.wkg)       : 0).toFixed(2) + ' W/kg'; break;
       }
 
@@ -14907,8 +14912,9 @@
     };
     function stelvioRenderGroupTabRankingList(bodyEl) {
       if (!bodyEl) return;
+      var groupMetricLabelForMsg = stelvioGroupTabCurrentMetricLabel();
       if (!stelvioRankingByCategory) {
-        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">GC 랭킹 불러오는 중…</p>';
+        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">' + groupMetricLabelForMsg + ' 랭킹 불러오는 중…</p>';
         return;
       }
       var uidV =
@@ -14922,7 +14928,7 @@
           }
         })();
       if (!uidV) {
-        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">로그인 후 나의 소모임과 GC 순위를 확인할 수 있습니다.</p>';
+        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">로그인 후 나의 소모임과 ' + groupMetricLabelForMsg + ' 순위를 확인할 수 있습니다.</p>';
         return;
       }
       var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
@@ -15052,7 +15058,7 @@
           }
           /* 카테고리 별 랭킹 데이터 우선, 없으면 Supremo → members 문서 프로필 순으로 fallback */
           var rk = poolUid[uMem] || catRawByUid[uMem] || supE;
-          var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, gcScore: 0 };
+          var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, speedKmh: 0, gcScore: 0 };
           if (supE) {
             if (supE.rank != null) mergedItem.rank = supE.rank;
             if (supE.rankChange != null) mergedItem.rankChange = supE.rankChange;
@@ -15100,7 +15106,7 @@
         }
         if (st.mode === 'loading') {
           slotEl.innerHTML =
-            '<div class="stelvio-group-members-block" role="region" aria-label="소모임 멤버 순위 로딩"><p class="stelvio-ranking-empty stelvio-ranking-loading-local" style="margin:10px 0 10px 12px">멤버 불러오는 중…</p></div>';
+            '<div class="stelvio-group-members-block" role="region" aria-label="소모임 멤버 ' + stelvioGroupTabCurrentMetricLabel() + ' 순위 로딩"><p class="stelvio-ranking-empty stelvio-ranking-loading-local" style="margin:10px 0 10px 12px">멤버 불러오는 중…</p></div>';
           return;
         }
         var merged = st.merged;
@@ -15115,7 +15121,7 @@
           block = document.createElement('div');
           block.className = 'stelvio-group-members-block';
           block.setAttribute('role', 'region');
-          block.setAttribute('aria-label', '선택 소모임 멤버 GC 순위');
+          block.setAttribute('aria-label', '선택 소모임 멤버 ' + stelvioGroupTabCurrentMetricLabel() + ' 순위');
           slotEl.appendChild(block);
         }
         if (!merged.length) {
@@ -15651,7 +15657,7 @@
         if (titleG2) titleG2.textContent = '나의 그룹';
         if (unitElG2) unitElG2.textContent = stelvioGroupTabCurrentMetricUnit();
         if (!stelvioRankingByCategory && bodyElG2) {
-          bodyElG2.innerHTML = '<p class="stelvio-ranking-empty">GC 랭킹 불러오는 중…</p>';
+          bodyElG2.innerHTML = '<p class="stelvio-ranking-empty">' + stelvioGroupTabCurrentMetricLabel() + ' 랭킹 불러오는 중…</p>';
         } else if (bodyElG2) {
           stelvioEnsureMyGroupsFirestoreSubscription(bodyElG2);
           stelvioRenderGroupTabRankingList(bodyElG2);
@@ -29531,6 +29537,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <span class="stelvio-dropdown-chevron">▾</span>
               <select id="stelvioGroupMetricSelect" class="stelvio-dropdown-select" onchange="if(typeof stelvioOnGroupTabMetricChange==='function')stelvioOnGroupTabMetricChange(this.value);">
                 <option value="gc">GC</option>
+                <option value="personal_speed">독주</option>
                 <option value="tss">TSS</option>
                 <option value="personal_dist">거리</option>
                 <option value="max">Max</option>
