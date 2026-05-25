@@ -12471,7 +12471,7 @@
       var chips = document.getElementById('stelvioDurationTabs');
       if (chips && !chips._stelvioDurationTabsDelegated) {
         chips._stelvioDurationTabsDelegated = true;
-        chips.addEventListener('click', function (ev) {
+        chips.addEventListener('click', async function (ev) {
           var el = ev.target;
           var btn = null;
           var i;
@@ -12495,31 +12495,44 @@
           stelvioRankingState.duration = nextDur;
           stelvioApplyDurationModeUi();
           stelvioScheduleRankingBoardScrollAfterTabApply();
-          stelvioBeginRankingTabSwitchUi();
+
+          /*
+           * 탭 전환 체감 지연의 핵심 방지:
+           * 이전 구조는 IDB 조회를 시작하자마자 16ms 뒤 네트워크 fetch를 병렬로 열어,
+           * IDB가 조금만 늦어도 fetch 경로가 화면 적용을 선점했다. 이제 RAM/IDB가 먼저 끝난 뒤에만 네트워크로 간다.
+           */
           var instantTabOk =
             typeof stelvioInstantTabSwitchFromMemory === 'function' &&
             stelvioInstantTabSwitchFromMemory(nextDur);
           if (instantTabOk) {
             stelvioHideRankingBoardLoadingUi();
-          } else if (typeof stelvioPrimeTabSwitchFromIndexedDb === 'function') {
-            stelvioPrimeTabSwitchFromIndexedDb(nextDur).then(function (primed) {
+          } else {
+            stelvioBeginRankingTabSwitchUi();
+            var primed = false;
+            if (typeof stelvioPrimeTabSwitchFromIndexedDb === 'function') {
+              try {
+                primed = await stelvioPrimeTabSwitchFromIndexedDb(nextDur);
+              } catch (ePrimeTab) {
+                primed = false;
+              }
               if (primed) stelvioHideRankingBoardLoadingUi();
-            });
+            }
           }
+          if (stelvioRankingState.duration !== nextDur) return;
           if (stelvioRankingTabSwitchTimer) {
             clearTimeout(stelvioRankingTabSwitchTimer);
             stelvioRankingTabSwitchTimer = null;
           }
           stelvioRankingTabSwitchPendingDur = nextDur;
-          var debounceMs = instantTabOk ? 0 : 16;
+          var debounceMs = instantTabOk ? 0 : (primed ? 0 : 1);
           stelvioRankingTabSwitchTimer = setTimeout(function () {
             stelvioRankingTabSwitchTimer = null;
             if (stelvioRankingState.duration !== stelvioRankingTabSwitchPendingDur) return;
             fetchStelvioPeakPowerRanking({
               tabSwitch: true,
               skipMemHydrate: true,
-              silentRevalidate: !!instantTabOk,
-              backgroundOnly: !!instantTabOk,
+              silentRevalidate: !!(instantTabOk || primed),
+              backgroundOnly: !!(instantTabOk || primed),
             });
           }, debounceMs);
         });
