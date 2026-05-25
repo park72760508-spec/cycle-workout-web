@@ -13523,6 +13523,7 @@
 
     function stelvioApplyPersonalSpeedPayloadSyncPatches(data) {
       if (!data || !data.byCategory) return data;
+      var original = data;
       if (
         data.dashboardLogRouteEnriched !== true &&
         typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function'
@@ -13531,6 +13532,15 @@
       }
       if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
         data = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
+      }
+      if (
+        original &&
+        original.precomputed === true &&
+        (original.readBackend === 'supabase' || original.readSource === 'supabase') &&
+        stelvioRankingPayloadHasVisibleRows(original) &&
+        !stelvioRankingPayloadHasVisibleRows(data)
+      ) {
+        return original;
       }
       return data;
     }
