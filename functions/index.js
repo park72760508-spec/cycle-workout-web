@@ -777,6 +777,7 @@ exports.exchangeStravaCode = onRequest(
       const accessToken = tokenData.access_token || "";
       const refreshToken = tokenData.refresh_token || "";
       const expiresAt = tokenData.expires_at != null ? Number(tokenData.expires_at) : 0;
+      const scopeUpdate = buildStravaScopeUpdate(tokenData);
       const athleteId = tokenData.athlete != null && tokenData.athlete.id != null ? Number(tokenData.athlete.id) : null;
 
       if (!accessToken || !refreshToken) {
@@ -796,6 +797,7 @@ exports.exchangeStravaCode = onRequest(
         strava_access_token: accessToken,
         strava_refresh_token: refreshToken,
         strava_expires_at: expiresAt,
+        ...scopeUpdate,
       };
       if (athleteId != null) updateData.strava_athlete_id = athleteId;
       await userRef.update(updateData);
@@ -941,6 +943,7 @@ exports.refreshStravaToken = onRequest(
       const accessToken = tokenData.access_token || "";
       const newRefreshToken = tokenData.refresh_token || refreshToken;
       const expiresAt = tokenData.expires_at != null ? Number(tokenData.expires_at) : 0;
+      const scopeUpdate = buildStravaScopeUpdate(tokenData);
 
       if (!accessToken) {
         throw new HttpsError(
@@ -953,9 +956,10 @@ exports.refreshStravaToken = onRequest(
         strava_access_token: accessToken,
         strava_refresh_token: newRefreshToken,
         strava_expires_at: expiresAt,
+        ...scopeUpdate,
       });
 
-      res.status(200).json({ success: true, accessToken });
+      res.status(200).json({ success: true, accessToken, scope: scopeUpdate.strava_scope || undefined });
     } catch (err) {
       console.error("[refreshStravaToken]", err);
       if (!res.headersSent) {
@@ -987,6 +991,24 @@ function getStravaClientSecret() {
     }
   }
   return clientSecret;
+}
+
+function normalizeStravaScopes(scope) {
+  return String(scope || "")
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function buildStravaScopeUpdate(tokenData) {
+  if (!tokenData || tokenData.scope == null) return {};
+  const scopes = normalizeStravaScopes(tokenData.scope);
+  return {
+    strava_scope: scopes.join(" "),
+    strava_scope_checked_at: new Date().toISOString(),
+    strava_has_activity_read: scopes.includes("activity:read"),
+    strava_has_activity_read_all: scopes.includes("activity:read_all"),
+  };
 }
 
 /** STELVIO rTSS: 프로필 체중 없을 때 가정 체중 (kJ 가드레일·W/kg 가중치용) */
@@ -1767,13 +1789,15 @@ async function refreshStravaTokenForUser(db, userId) {
   const accessToken = tokenData.access_token || "";
   const newRefreshToken = tokenData.refresh_token || refreshToken;
   const expiresAt = tokenData.expires_at != null ? Number(tokenData.expires_at) : 0;
+  const scopeUpdate = buildStravaScopeUpdate(tokenData);
   if (!accessToken) throw new Error("Strava에서 access_token을 받지 못했습니다.");
   await userRef.update({
     strava_access_token: accessToken,
     strava_refresh_token: newRefreshToken,
     strava_expires_at: expiresAt,
+    ...scopeUpdate,
   });
-  return { accessToken };
+  return { accessToken, scope: scopeUpdate.strava_scope || "" };
 }
 
 async function updateUserMileageInFirestore(db, userId, todayTss) {
@@ -1865,8 +1889,40 @@ async function ensureExistingStravaLogMirroredToSupabase(userId, logDocId, logDa
   }
 }
 
+async function recordStravaActivityFetchDiagnostic(db, userId, diagnostic) {
+  try {
+    const count = Number(diagnostic && diagnostic.count);
+    const status = Number(diagnostic && diagnostic.status);
+    const update = {
+      strava_last_activity_fetch_at: new Date().toISOString(),
+      strava_last_activity_fetch_status: Number.isFinite(status) ? status : 0,
+      strava_last_activity_fetch_count: Number.isFinite(count) ? count : 0,
+      strava_last_activity_fetch_pages: Number(diagnostic && diagnostic.pages) || 0,
+      strava_last_activity_fetch_empty: Number.isFinite(count) ? count === 0 : true,
+      strava_last_activity_fetch_range: {
+        dateFrom: diagnostic && diagnostic.dateFrom ? String(diagnostic.dateFrom) : null,
+        dateTo: diagnostic && diagnostic.dateTo ? String(diagnostic.dateTo) : null,
+        afterUnix: Number(diagnostic && diagnostic.afterUnix) || null,
+        beforeUnix: Number(diagnostic && diagnostic.beforeUnix) || null,
+      },
+    };
+    if (diagnostic && diagnostic.error) {
+      update.strava_last_activity_fetch_error = String(diagnostic.error).slice(0, 500);
+    } else {
+      update.strava_last_activity_fetch_error = admin.firestore.FieldValue.delete();
+    }
+    await db.collection("users").doc(userId).update(update);
+  } catch (e) {
+    console.warn(
+      "[recordStravaActivityFetchDiagnostic] failed:",
+      userId,
+      e && e.message ? e.message : e
+    );
+  }
+}
+
 /** 단일 사용자 Strava 동기화 (병렬 배치용). Webhook 실패 보완: MMP(5/10/30분 파워) 없으면 Streams로 보완. */
-async function processOneUserStravaSync(db, userId, userData, { afterUnix, beforeUnix }) {
+async function processOneUserStravaSync(db, userId, userData, { afterUnix, beforeUnix, dateFrom, dateTo }) {
   const ftp = Number(userData.ftp) || 0;
   // 만료 5분 전 이내거나 토큰 없을 때만 갱신 (무조건 갱신 시 Rotating Refresh Token 경쟁 조건 방지)
   let accessToken = userData.strava_access_token || "";
@@ -1877,6 +1933,16 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       const tokenResult = await refreshStravaTokenForUser(db, userId);
       accessToken = tokenResult.accessToken;
     } catch (e) {
+      await recordStravaActivityFetchDiagnostic(db, userId, {
+        afterUnix,
+        beforeUnix,
+        dateFrom,
+        dateTo,
+        status: 0,
+        count: 0,
+        pages: 0,
+        error: `토큰 갱신 실패: ${e.message}`,
+      });
       return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 갱신 실패: ${e.message}` };
     }
   }
@@ -1891,11 +1957,31 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
         accessToken = tokenResult.accessToken;
         pageRes = await fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, page, 200);
       } catch (e) {
+        await recordStravaActivityFetchDiagnostic(db, userId, {
+          afterUnix,
+          beforeUnix,
+          dateFrom,
+          dateTo,
+          status: 401,
+          count: 0,
+          pages: page,
+          error: `토큰 재갱신 실패: ${e.message}`,
+        });
         return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 재갱신 실패: ${e.message}` };
       }
     }
     if (page === 1) firstPageStatus = pageRes.status || 0;
     if (!pageRes.success) {
+      await recordStravaActivityFetchDiagnostic(db, userId, {
+        afterUnix,
+        beforeUnix,
+        dateFrom,
+        dateTo,
+        status: pageRes.status || 0,
+        count: activities.length,
+        pages: page,
+        error: `활동 조회 실패: ${pageRes.status || pageRes.error}`,
+      });
       return { userId, processed: 0, newActivities: 0, userTss: 0, error: `활동 조회 실패: ${pageRes.status || pageRes.error}` };
     }
     activities.push(...pageRes.activities);
@@ -1904,6 +1990,17 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   }
   const actCount = activities.length;
   console.log(`[stravaSync] userId=${userId} athlete_id=${userData.strava_athlete_id || "?"} activities=${actCount} status=${firstPageStatus} pages=${page}`);
+  if (actCount === 0 || firstPageStatus !== 200) {
+    await recordStravaActivityFetchDiagnostic(db, userId, {
+      afterUnix,
+      beforeUnix,
+      dateFrom,
+      dateTo,
+      status: firstPageStatus,
+      count: actCount,
+      pages: page,
+    });
+  }
   const { ids: existingIds, docMap: existingDocMap } = await getExistingStravaLogsMap(db, userId);
   const stelvioDates = await getStelvioLogDates(db, userId);
   const logsRef = db.collection("users").doc(userId).collection("logs");
