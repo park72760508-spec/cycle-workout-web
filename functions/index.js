@@ -1067,7 +1067,7 @@ async function fetchStravaActivityDetail(accessToken, activityId) {
         await waitForStravaRateLimit(res);
         continue;
       }
-      if (!res.ok) return { success: false, error: `Strava ${res.status}` };
+      if (!res.ok) return { success: false, status: res.status, error: `Strava ${res.status}` };
       const activity = await res.json().catch(() => null);
       return activity ? { success: true, activity } : { success: false, error: "Invalid response" };
     } catch (e) {
@@ -1089,7 +1089,7 @@ async function fetchStravaStreams(accessToken, activityId) {
         await waitForStravaRateLimit(res);
         continue;
       }
-      if (!res.ok) return { success: false, watts: null, heartrate: null };
+      if (!res.ok) return { success: false, status: res.status, watts: null, heartrate: null };
       const raw = await res.json().catch(() => null);
       const streamArray = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.data) ? raw.data : []);
       const wattsStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "watts");
@@ -1102,6 +1102,42 @@ async function fetchStravaStreams(accessToken, activityId) {
     }
   }
   return { success: false, watts: null, heartrate: null };
+}
+
+async function fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, page, perPage) {
+  const url =
+    `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}` +
+    `&per_page=${perPage || 200}&page=${page || 1}`;
+  const maxRetries = 5;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (res.status === 429) {
+        await waitForStravaRateLimit(res);
+        continue;
+      }
+      if (!res.ok) {
+        return { success: false, status: res.status, activities: [], error: `Strava ${res.status}` };
+      }
+      const activities = await res.json().catch(() => []);
+      return {
+        success: true,
+        status: res.status,
+        activities: Array.isArray(activities) ? activities : [],
+      };
+    } catch (e) {
+      if (attempt === maxRetries) {
+        return {
+          success: false,
+          status: 0,
+          activities: [],
+          error: e && e.message ? e.message : "Request failed",
+        };
+      }
+    }
+  }
+  return { success: false, status: 429, activities: [], error: "Strava 429 retries exhausted" };
 }
 
 /** max_watts 필드: 1초 순간 최대가 아닌 5초 롤링 평균의 최대 (필드명 max_watts 유지) */
@@ -1205,10 +1241,23 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     }
   }
 
-  const [detailRes, streamsRes] = await Promise.all([
+  let [detailRes, streamsRes] = await Promise.all([
     fetchStravaActivityDetail(accessToken, activityId),
     fetchStravaStreams(accessToken, activityId),
   ]);
+  if ((detailRes && detailRes.status === 401) || (streamsRes && streamsRes.status === 401)) {
+    try {
+      const tokenResult = await refreshStravaTokenForUser(db, userId);
+      accessToken = tokenResult.accessToken;
+      [detailRes, streamsRes] = await Promise.all([
+        fetchStravaActivityDetail(accessToken, activityId),
+        fetchStravaStreams(accessToken, activityId),
+      ]);
+    } catch (e) {
+      console.error("[processStravaActivity] 401 후 토큰 재갱신 실패:", userId, e.message);
+      return null;
+    }
+  }
 
   if (!detailRes.success || !detailRes.activity) {
     console.warn("[processStravaActivity] 활동 상세 조회 실패:", activityId, detailRes.error);
@@ -1436,7 +1485,10 @@ function mapStravaActivityToLogSchema(activity, userId, ftpAtTime, weightKg) {
   let dateStr = "";
   if (startDateLocal) {
     try {
-      dateStr = new Date(startDateLocal).toISOString().split("T")[0];
+      const localDateMatch = String(startDateLocal).match(/^(\d{4}-\d{2}-\d{2})/);
+      dateStr = localDateMatch
+        ? localDateMatch[1]
+        : new Date(startDateLocal).toISOString().split("T")[0];
     } catch (e) {
       dateStr = String(startDateLocal).split("T")[0] || "";
     }
@@ -1658,7 +1710,8 @@ async function refreshStravaTokenForUser(db, userId) {
   const userRef = db.collection("users").doc(userId);
   const userSnap = await userRef.get();
   if (!userSnap.exists) throw new Error("사용자를 찾을 수 없습니다.");
-  const refreshToken = userSnap.data().strava_refresh_token || "";
+  const initialUserData = userSnap.data() || {};
+  const refreshToken = initialUserData.strava_refresh_token || "";
   if (!refreshToken) throw new Error("Strava 리프레시 토큰이 없습니다.");
   const appConfigSnap = await db.collection("appConfig").doc("strava").get();
   if (!appConfigSnap.exists) throw new Error("Strava 앱 설정이 없습니다.");
@@ -1672,13 +1725,45 @@ async function refreshStravaTokenForUser(db, userId) {
     grant_type: "refresh_token",
     refresh_token: refreshToken,
   });
-  const tokenRes = await fetch(tokenUrl, {
+  let tokenRes = await fetch(tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
-  const tokenData = await tokenRes.json().catch(() => ({}));
-  if (!tokenRes.ok) throw new Error(tokenData.message || tokenData.error || `Strava ${tokenRes.status}`);
+  let tokenData = await tokenRes.json().catch(() => ({}));
+  if (!tokenRes.ok) {
+    /*
+     * Strava refresh token은 회전형이다. 웹훅·수동·스케줄이 같은 사용자를 동시에 갱신하면
+     * 한 요청은 이미 사용된 refresh token으로 실패할 수 있으므로 최신 사용자 문서를 다시 읽어 복구한다.
+     */
+    const latestSnap = await userRef.get();
+    const latest = latestSnap.exists ? latestSnap.data() || {} : {};
+    const latestAccess = String(latest.strava_access_token || "");
+    const latestRefresh = String(latest.strava_refresh_token || "");
+    const latestExpires = Number(latest.strava_expires_at || 0);
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (latestAccess && latestRefresh && latestRefresh !== String(refreshToken) && latestExpires > nowSec + 300) {
+      console.warn("[refreshStravaTokenForUser] concurrent refresh recovered:", userId);
+      return { accessToken: latestAccess };
+    }
+    if (latestRefresh && latestRefresh !== String(refreshToken)) {
+      const retryBody = new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "refresh_token",
+        refresh_token: latestRefresh,
+      });
+      tokenRes = await fetch(tokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: retryBody.toString(),
+      });
+      tokenData = await tokenRes.json().catch(() => ({}));
+    }
+  }
+  if (!tokenRes.ok) {
+    throw new Error(tokenData.message || tokenData.error || `Strava ${tokenRes.status}`);
+  }
   const accessToken = tokenData.access_token || "";
   const newRefreshToken = tokenData.refresh_token || refreshToken;
   const expiresAt = tokenData.expires_at != null ? Number(tokenData.expires_at) : 0;
@@ -1768,16 +1853,30 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 갱신 실패: ${e.message}` };
     }
   }
-  const actRes = await fetch(
-    `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=50`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const activities = await actRes.json().catch(() => []);
-  const actCount = Array.isArray(activities) ? activities.length : 0;
-  console.log(`[stravaSync] userId=${userId} athlete_id=${userData.strava_athlete_id || "?"} activities=${actCount} status=${actRes.status}`);
-  if (!actRes.ok) {
-    return { userId, processed: 0, newActivities: 0, userTss: 0, error: `활동 조회 실패: ${actRes.status}` };
+  const activities = [];
+  let page = 1;
+  let firstPageStatus = 0;
+  while (page <= 10) {
+    let pageRes = await fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, page, 200);
+    if (!pageRes.success && pageRes.status === 401) {
+      try {
+        const tokenResult = await refreshStravaTokenForUser(db, userId);
+        accessToken = tokenResult.accessToken;
+        pageRes = await fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, page, 200);
+      } catch (e) {
+        return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 재갱신 실패: ${e.message}` };
+      }
+    }
+    if (page === 1) firstPageStatus = pageRes.status || 0;
+    if (!pageRes.success) {
+      return { userId, processed: 0, newActivities: 0, userTss: 0, error: `활동 조회 실패: ${pageRes.status || pageRes.error}` };
+    }
+    activities.push(...pageRes.activities);
+    if (pageRes.activities.length < 200) break;
+    page += 1;
   }
+  const actCount = activities.length;
+  console.log(`[stravaSync] userId=${userId} athlete_id=${userData.strava_athlete_id || "?"} activities=${actCount} status=${firstPageStatus} pages=${page}`);
   const { ids: existingIds, docMap: existingDocMap } = await getExistingStravaLogsMap(db, userId);
   const stelvioDates = await getStelvioLogDates(db, userId);
   const logsRef = db.collection("users").doc(userId).collection("logs");
@@ -1789,6 +1888,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   let newActivities = 0;
   for (const act of Array.isArray(activities) ? activities : []) {
     const actId = String(act.id);
+    try {
     if (existingIds.has(actId)) {
       const entry = existingDocMap.get(actId);
       const d = entry ? entry.data : {};
@@ -1984,6 +2084,14 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
         }
       }
     }
+    } catch (actErr) {
+      console.warn(
+        "[processOneUserStravaSync] activity skipped:",
+        userId,
+        actId,
+        actErr && actErr.message ? actErr.message : actErr
+      );
+    }
   }
   for (const [dateStr, tss] of dateOnlyStravaTss) {
     if (tss < TSS_PER_DAY_CHEAT_THRESHOLD) userTss += tss;
@@ -2029,9 +2137,20 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
 
   for (let i = 0; i < docs.length; i += STRAVA_SYNC_CONCURRENCY) {
     const batch = docs.slice(i, i + STRAVA_SYNC_CONCURRENCY);
-    const results = await Promise.all(
+    const settled = await Promise.allSettled(
       batch.map((doc) => processOneUserStravaSync(db, doc.id, doc.data(), { afterUnix, beforeUnix }))
     );
+    const results = settled.map((r, idx) => {
+      if (r.status === "fulfilled") return r.value;
+      const doc = batch[idx];
+      return {
+        userId: doc && doc.id ? doc.id : "(unknown)",
+        processed: 0,
+        newActivities: 0,
+        userTss: 0,
+        error: r.reason && r.reason.message ? r.reason.message : String(r.reason),
+      };
+    });
     for (const r of results) {
       if (r.error) errors.push(`사용자 ${r.userId}: ${r.error}`);
       if (r.processed) processed += 1;
@@ -2460,7 +2579,14 @@ exports.manualStravaSyncWithMmp = onRequest(
             updateData.time_in_zones = timeInZones;
           }
           if (Object.keys(updateData).length > 0) {
-            await logDocRef.update(updateData);
+            const mergedLog = { ...existingData, ...updateData };
+            await stravaDualWrite.dualWriteStravaActivityLog(
+              admin,
+              uid,
+              actId,
+              mergedLog,
+              () => logDocRef.update(updateData)
+            );
             updatedCount += 1;
           }
           processedCount += 1;
@@ -2577,7 +2703,13 @@ exports.manualStravaSyncWithMmp = onRequest(
           console.log(`[manualStravaSyncWithMmp] 비라이딩 활동 저장 제외: uid=${uid} actId=${actId} activity_type=${mapped.activity_type}`);
           continue;
         }
-        await logDocRef.set(logDoc, { merge: true });
+        await stravaDualWrite.dualWriteStravaActivityLog(
+          admin,
+          uid,
+          actId,
+          logDoc,
+          () => logDocRef.set(logDoc, { merge: true })
+        );
         createdCount += 1;
         processedCount += 1;
         const dateStr = mapped.date || "";
