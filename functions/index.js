@@ -2269,7 +2269,7 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
   for (let i = 0; i < docs.length; i += STRAVA_SYNC_CONCURRENCY) {
     const batch = docs.slice(i, i + STRAVA_SYNC_CONCURRENCY);
     const settled = await Promise.allSettled(
-      batch.map((doc) => processOneUserStravaSync(db, doc.id, doc.data(), { afterUnix, beforeUnix }))
+      batch.map((doc) => processOneUserStravaSync(db, doc.id, doc.data(), { afterUnix, beforeUnix, dateFrom, dateTo }))
     );
     const results = settled.map((r, idx) => {
       if (r.status === "fulfilled") return r.value;
