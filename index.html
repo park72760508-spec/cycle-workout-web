@@ -8425,6 +8425,15 @@
             body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">데이터를 불러올 수 없습니다.</p>';
             return;
           }
+          if (
+            freshData.readBackend === 'supabase' &&
+            freshData.currentWeekEmpty === true &&
+            Array.isArray(freshData.ranking) &&
+            freshData.ranking.length === 0
+          ) {
+            body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">이번 주 TSS 순위가 아직 없습니다. 새 주간 활동이 기록되면 즉시 반영됩니다.</p>';
+            return;
+          }
           var freshPrev = await fetchWeeklyFromServer('prev');
           if (
             freshPrev.success &&
@@ -8478,6 +8487,10 @@
         }
         var list = data.ranking;
         if (!list || list.length === 0) {
+          if (data.readBackend === 'supabase' && data.currentWeekEmpty === true) {
+            body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">이번 주 TSS 순위가 아직 없습니다. 새 주간 활동이 기록되면 즉시 반영됩니다.</p>';
+            return;
+          }
           // 이번 주 집계가 비어 있을 때만 전주 확정 순위 표시
           var prevLcEntry = await stelvioRankingLocalCache.get(prevLcKey);
           if (
