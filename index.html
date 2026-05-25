@@ -8687,6 +8687,7 @@
       (window.StelvioInApp === true || window.StelvioAppChannel === 'webview-native');
     var STELVIO_RANKING_BOARD_TAB_DURATIONS = [
       'gc',
+      'personal_speed',
       'max',
       '1min',
       '5min',
@@ -8696,7 +8697,6 @@
       '60min',
       'tss',
       'personal_dist',
-      'personal_speed',
       'group_dist',
     ];
     var stelvioRankingMemCacheMap = Object.create(null);
@@ -10420,6 +10420,7 @@
       return null;
     }
     var STELVIO_RANKING_FAVORITES_FS_FIELD = 'rankingFavoriteUserIds';
+    var STELVIO_RANKING_STARRED_USERS_FS_FIELD = 'starredUsers';
     /** 레거시 관심 DB 일괄 초기화 후 신규 토글만 반영 (users.rankingFavoritesSchemaVersion) */
     var STELVIO_RANKING_FAVORITES_SCHEMA_VER = 2;
     var STELVIO_RANKING_FAVORITES_SCHEMA_FIELD = 'rankingFavoritesSchemaVersion';
@@ -10449,9 +10450,19 @@
           }),
         ]);
         if (!d) return [];
-        var arr = d[STELVIO_RANKING_FAVORITES_FS_FIELD];
-        if (!Array.isArray(arr)) return [];
-        return arr.map(function (x) { return String(x); }).filter(Boolean);
+        var arr = [];
+        var primary = d[STELVIO_RANKING_STARRED_USERS_FS_FIELD];
+        var legacy = d[STELVIO_RANKING_FAVORITES_FS_FIELD];
+        if (Array.isArray(primary)) arr = arr.concat(primary);
+        if (Array.isArray(legacy)) arr = arr.concat(legacy);
+        var seen = {};
+        return arr
+          .map(function (x) { return String(x); })
+          .filter(function (x) {
+            if (!x || seen[x]) return false;
+            seen[x] = true;
+            return true;
+          });
       } catch (eLoadFs) {
         if (typeof stelvioAdminWarn === 'function') {
           stelvioAdminWarn('[StelvioRanking] 관심 Firestore 로드 실패:', eLoadFs && eLoadFs.message ? eLoadFs.message : eLoadFs);
@@ -10485,6 +10496,7 @@
       if (ids.length > 500) ids = ids.slice(0, 500);
       var patch = {};
       patch[STELVIO_RANKING_FAVORITES_FS_FIELD] = ids;
+      patch[STELVIO_RANKING_STARRED_USERS_FS_FIELD] = ids;
       patch.rankingFavoritesUpdatedAt = stelvioRankingFavoritesFirestoreTimestamp();
       try {
         await stelvioRankingV9SetUserMerge(ownerUid, patch);
@@ -10539,6 +10551,7 @@
       if (stelvioRankingFirestoreV9Pack()) {
         var patchReset = {};
         patchReset[STELVIO_RANKING_FAVORITES_FS_FIELD] = [];
+        patchReset[STELVIO_RANKING_STARRED_USERS_FS_FIELD] = [];
         patchReset[STELVIO_RANKING_FAVORITES_SCHEMA_FIELD] = STELVIO_RANKING_FAVORITES_SCHEMA_VER;
         patchReset.rankingFavoritesUpdatedAt = stelvioRankingFavoritesFirestoreTimestamp();
         try {
@@ -10953,7 +10966,7 @@
           '</span>'
         );
       }
-      var cls = 'stelvio-rank-star-btn' + (fav ? ' stelvio-rank-star-btn--on' : '');
+      var cls = 'stelvio-rank-star-btn' + (fav ? ' stelvio-rank-star-btn--on active' : '');
       return (
         '<span class="stelvio-rank-stars-wrap">' +
         '<button type="button" class="' +
@@ -10970,23 +10983,84 @@
         '</span>'
       );
     }
-    function stelvioToggleRankingFavorite(userId) {
-      if (!userId) return;
-      var s = String(userId);
-      if (stelvioRankingFriendUserSet.has(s)) return;
-      if (stelvioRankingFavoriteUserSet.has(s)) stelvioRankingFavoriteUserSet.delete(s);
-      else stelvioRankingFavoriteUserSet.add(s);
-      /* 인메모리 Set이 이미 정확하게 갱신된 상태이므로 localStorage에 저장만 하고
-         다시 읽어오지 않는다. 읽어오면 저장 실패 시 방금 추가한 항목이 사라지는 버그 발생 */
+
+    function stelvioApplyRankingStarOptimisticDom(userId, active) {
+      var uid = userId != null ? String(userId) : '';
+      if (!uid) return;
+      var sel = '[data-stelvio-rank-star="' + encodeURIComponent(uid) + '"]';
+      var buttons = document.querySelectorAll(sel);
+      buttons.forEach(function (btn) {
+        btn.classList.toggle('stelvio-rank-star-btn--on', !!active);
+        btn.classList.toggle('active', !!active);
+        btn.setAttribute('aria-label', active ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d');
+        btn.setAttribute('title', active ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d');
+        btn.innerHTML = stelvioRankingStarSvgHtml(!!active);
+      });
+    }
+
+    function stelvioSyncCurrentUserStarredUsersSnapshot() {
+      var ids = Array.from(stelvioRankingFavoriteUserSet);
+      function syncOne(key) {
+        try {
+          var raw = localStorage.getItem(key);
+          if (!raw) return;
+          var u = JSON.parse(raw);
+          if (!u || typeof u !== 'object') return;
+          u[STELVIO_RANKING_STARRED_USERS_FS_FIELD] = ids;
+          u[STELVIO_RANKING_FAVORITES_FS_FIELD] = ids;
+          localStorage.setItem(key, JSON.stringify(u));
+        } catch (eSyncLs) {}
+      }
+      try {
+        if (window.currentUser && typeof window.currentUser === 'object') {
+          window.currentUser[STELVIO_RANKING_STARRED_USERS_FS_FIELD] = ids;
+          window.currentUser[STELVIO_RANKING_FAVORITES_FS_FIELD] = ids;
+        }
+      } catch (eSyncWin) {}
+      syncOne('currentUser');
+      syncOne('authUser');
+    }
+
+    async function toggleUserStarStatusDB(targetUid) {
+      if (!targetUid) return false;
+      var s = String(targetUid);
+      if (stelvioRankingFriendUserSet.has(s)) return false;
+      var nextActive;
+      if (stelvioRankingFavoriteUserSet.has(s)) {
+        stelvioRankingFavoriteUserSet.delete(s);
+        nextActive = false;
+      } else {
+        stelvioRankingFavoriteUserSet.add(s);
+        nextActive = true;
+      }
+      stelvioApplyRankingStarOptimisticDom(s, nextActive);
+      stelvioSyncCurrentUserStarredUsersSnapshot();
       if (!stelvioPersistRankingFavoritesToLocalStorage()) {
         if (typeof stelvioAdminWarn === 'function') {
           stelvioAdminWarn('[StelvioRanking] 관심 목록 localStorage 저장 실패 — 용량 부족 가능');
         }
       }
-      /* 앱 강제 종료·2회차 재접속 시 LS가 비어도 Firestore에 즉시 반영 */
-      stelvioPersistRankingFavoritesToFirestoreImmediate().catch(function () {});
-      if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+      if (typeof renderStelvioActiveCategory === 'function') {
+        requestAnimationFrame(function () {
+          renderStelvioActiveCategory();
+        });
+      }
+      try {
+        await stelvioPersistRankingFavoritesToFirestoreImmediate();
+        return true;
+      } catch (eStarDb) {
+        if (typeof stelvioAdminWarn === 'function') {
+          stelvioAdminWarn('[StelvioRanking] 관심 DB 저장 실패:', eStarDb && eStarDb.message ? eStarDb.message : eStarDb);
+        }
+        return false;
+      }
     }
+
+    function stelvioToggleRankingFavorite(userId) {
+      if (!userId) return;
+      toggleUserStarStatusDB(userId).catch(function () {});
+    }
+    window.toggleUserStarStatusDB = toggleUserStarStatusDB;
     window.stelvioToggleRankingFavorite = stelvioToggleRankingFavorite;
     window.stelvioRefreshRankingFavoriteSetFromStorage = stelvioRefreshRankingFavoriteSetFromStorage;
     window.stelvioRankingFavoritesRehydrateAndMaybeRender = stelvioRankingFavoritesRehydrateAndMaybeRender;
@@ -16562,7 +16636,8 @@
           var isPrivate = stelvioRankingIsPrivateRow(item);
           var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
           var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
-          var canSeeFull = isCurrent || isAdmin || isFriend;
+          var isGroupContact = stelvioRankingGroupContactSet.has(String(item.userId || ''));
+          var canSeeFull = isCurrent || isAdmin || isFriend || isGroupContact;
           var name;
           var valStr = stelvioFormatRankCellForViewer(item, canSeeFull);
           var profUrl = isPrivate && !canSeeFull ? null : item.profileImageUrl;
@@ -16883,7 +16958,8 @@
         var isPrivate = stelvioRankingIsPrivateRow(item);
         var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
         var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
-        var canSeeFull = isCurrent || isAdmin || isFriend;
+        var isGroupContactCat = stelvioRankingGroupContactSet.has(String(item.userId || ''));
+        var canSeeFull = isCurrent || isAdmin || isFriend || isGroupContactCat;
         var name;
         var valStr = stelvioFormatRankCellForViewer(item, canSeeFull);
         var profUrlCat = isPrivate && !canSeeFull ? null : item.profileImageUrl;
