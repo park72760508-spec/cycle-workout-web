@@ -8313,6 +8313,10 @@
         var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
         var isAdmin = typeof stelvioRankingLoginIsAdmin === 'function' && stelvioRankingLoginIsAdmin();
         var html = '';
+        function weeklyRankChangeHtml(row) {
+          if (typeof stelvioServerRankChangeBadgeHtml !== 'function') return '';
+          return stelvioServerRankChangeBadgeHtml(row && row.rankChange, row && row.previousBoardRank);
+        }
         if (isPrevWeek) {
           html +=
             '<p class="weekly-top10-week-caption">※ 전주 확정 순위' +
@@ -8342,7 +8346,7 @@
           } else { displayText = rawName; }
           html += '<div class="weekly-rank-item' + (isSelf ? ' weekly-rank-item-self' : '') + '"' + (isSelf ? ' id="weeklyTop10MyRankRow"' : '') + '>';
           if (rank <= 3) html += '<span class="weekly-rank-medal"><img src="' + rankMedalSrc[rank - 1] + '" alt="" width="20" height="20" decoding="async" /></span>';
-          html += '<span class="weekly-rank-position">' + rank + '위</span>';
+          html += '<span class="weekly-rank-position">' + rank + '위' + weeklyRankChangeHtml(item) + '</span>';
           html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(profUrl, { userId: uid2, overlayName: displayText }) + '<span class="weekly-rank-name-text" title="' + rawName + '">' + displayText + badgeHtml + '</span></span>';
           html += '<span class="weekly-rank-tss">' + tssStr + '</span>';
           html += '</div>';
@@ -8362,7 +8366,7 @@
             else { mrDisplayText = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**'; }
           } else { mrDisplayText = mrRawName; }
           html += '<div class="weekly-rank-item weekly-rank-item-self" id="weeklyTop10MyRankRow">';
-          html += '<span class="weekly-rank-position">' + mr.rank + '위</span>';
+          html += '<span class="weekly-rank-position">' + mr.rank + '위' + weeklyRankChangeHtml(mr) + '</span>';
           html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(mrProfUrl, { userId: mrUid, overlayName: mrDisplayText }) + '<span class="weekly-rank-name-text" title="' + mrRawName + '">' + mrDisplayText + mrBadgeHtml + '</span></span>';
           html += '<span class="weekly-rank-tss">' + mrTssStr + '</span>';
           html += '</div>';
@@ -8449,21 +8453,19 @@
           Array.isArray(lcEntry.data.ranking) &&
           lcEntry.data.ranking.length > 0
         ) {
-          // 캐시 데이터를 즉시 표시 (로딩 스피너 없음) — 주차(startStr~endStr) 일치 시에만
+          // 캐시 데이터를 즉시 표시 — 주차(startStr~endStr) 일치 시에만.
+          // Supabase 집계/순위변동은 수시로 갱신될 수 있으므로 캐시 히트 후에도 조용히 재검증한다.
           renderTop10(lcEntry.data, true);
-          // 10분 이상 경과 시 백그라운드에서 재검증
-          if (stelvioRankingLocalCache.isStale(lcEntry)) {
-            (async function bgTop10Revalidate() {
-              try {
-                var bg = await fetchWeeklyFromServer('current');
-                if (!bg.success || !weeklyTop10PayloadMatchesWeek(bg, 0) || !Array.isArray(bg.ranking)) return;
-                if (bg.ranking.length > 0) {
-                  await stelvioRankingLocalCache.set(top10LcKey, bg);
-                  if (!modal.classList.contains('hidden')) renderTop10(bg, false);
-                }
-              } catch (_) {}
-            })();
-          }
+          (async function bgTop10Revalidate() {
+            try {
+              var bg = await fetchWeeklyFromServer('current');
+              if (!bg.success || !weeklyTop10PayloadMatchesWeek(bg, 0) || !Array.isArray(bg.ranking)) return;
+              if (bg.ranking.length > 0) {
+                await stelvioRankingLocalCache.set(top10LcKey, bg);
+                if (!modal.classList.contains('hidden')) renderTop10(bg, false);
+              }
+            } catch (_) {}
+          })();
           return;
         }
 
