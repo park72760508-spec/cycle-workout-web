@@ -1013,19 +1013,19 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-overflow-scrolling: touch;
 }
 
-/* Choose Your Path: 2×2 그리드, 동일 셀·열간격(gap 3.75px) */
+/* Choose Your Path: 2열 그리드, 동일 셀·열간격(gap 3.75px) */
 #basecampScreen .connection-device-section.basecamp-device-section .basecamp-path-grid {
   --basecamp-cell: calc((100% - 3.75px) / 2);
   width: 90% !important;
   max-width: 90% !important;
   display: grid !important;
   grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
-  grid-template-rows: repeat(2, var(--basecamp-cell)) !important;
+  grid-template-rows: repeat(3, var(--basecamp-cell)) !important;
   gap: 3.75px !important;
   margin: 0 5% !important;
   box-sizing: border-box !important;
   justify-content: center;
-  aspect-ratio: 1 !important;
+  aspect-ratio: 2 / 3 !important;
 }
 
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn {
@@ -1038,11 +1038,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box !important;
 }
 
-/* MY CAREER·오픈 라이딩방·랭킹·인도어 진입 = Choose Your Path 동일 셀 크기 */
+/* MY CAREER·오픈 라이딩방·랭킹·인도어·제휴 진입 = Choose Your Path 동일 셀 크기 */
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn-career,
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn-manual,
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn-ranking,
-#basecampScreen .connection-device-section .grid-2 .basecamp-btn-indoor-entry {
+#basecampScreen .connection-device-section .grid-2 .basecamp-btn-indoor-entry,
+#basecampScreen .connection-device-section .grid-2 .basecamp-btn-riding-group-entry,
+#basecampScreen .connection-device-section .grid-2 .basecamp-btn-affiliate-entry {
   width: 100% !important;
   height: 100% !important;
   min-height: 0 !important;
@@ -2746,7 +2748,11 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .btn-device.basecamp-btn-ranking span,
 #basecampScreen .basecamp-btn-ranking span,
 #basecampScreen .btn-device.basecamp-btn-indoor-entry span,
-#basecampScreen .basecamp-btn-indoor-entry span {
+#basecampScreen .basecamp-btn-indoor-entry span,
+#basecampScreen .btn-device.basecamp-btn-riding-group-entry span,
+#basecampScreen .basecamp-btn-riding-group-entry span,
+#basecampScreen .btn-device.basecamp-btn-affiliate-entry span,
+#basecampScreen .basecamp-btn-affiliate-entry span {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -2774,6 +2780,32 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
+}
+
+/* 베이스캠프 하단 추가 버튼: 라이딩 모임 / 제휴사 */
+#basecampScreen .btn-device.basecamp-btn-riding-group-entry,
+#basecampScreen .basecamp-btn-riding-group-entry {
+  background-image: url('https://stelvio.ai.kr/assets/img/s(05).svg') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
+#basecampScreen .btn-device.basecamp-btn-affiliate-entry,
+#basecampScreen .basecamp-btn-affiliate-entry {
+  background-image: url('https://stelvio.ai.kr/assets/img/s(06).svg') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
+#basecampScreen .btn-device.basecamp-btn-riding-group-entry::before,
+#basecampScreen .basecamp-btn-riding-group-entry::before,
+#basecampScreen .btn-device.basecamp-btn-affiliate-entry::before,
+#basecampScreen .basecamp-btn-affiliate-entry::before {
+  background: rgba(135, 206, 235, 0.3) !important;
 }
 
 /* 베이스캠프 라이딩모임 버튼 알림 배지
@@ -2877,6 +2909,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .btn-device.basecamp-btn-career,
 #basecampScreen .btn-device.basecamp-btn-ranking,
 #basecampScreen .btn-device.basecamp-btn-indoor-entry,
+#basecampScreen .btn-device.basecamp-btn-riding-group-entry,
+#basecampScreen .btn-device.basecamp-btn-affiliate-entry,
 .basecamp-btn-career {
   border: 2px solid rgba(135, 206, 235, 0.6) !important;
   color: #15803d !important;
@@ -2897,6 +2931,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .btn-device.basecamp-btn-career::before,
 #basecampScreen .btn-device.basecamp-btn-ranking::before,
 #basecampScreen .btn-device.basecamp-btn-indoor-entry::before,
+#basecampScreen .btn-device.basecamp-btn-riding-group-entry::before,
+#basecampScreen .btn-device.basecamp-btn-affiliate-entry::before,
 .basecamp-btn-career::before {
   content: '';
   position: absolute;
@@ -2925,6 +2961,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .btn-device.basecamp-btn-career:hover:not(:disabled),
 #basecampScreen .btn-device.basecamp-btn-ranking:hover:not(:disabled),
 #basecampScreen .btn-device.basecamp-btn-indoor-entry:hover:not(:disabled),
+#basecampScreen .btn-device.basecamp-btn-riding-group-entry:hover:not(:disabled),
+#basecampScreen .btn-device.basecamp-btn-affiliate-entry:hover:not(:disabled),
 .basecamp-btn-career:hover:not(:disabled) {
   border-color: rgba(135, 206, 235, 0.9) !important;
   transform: translateY(-2px);
@@ -7652,6 +7690,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border-radius: inherit;
   transform: translateZ(0);
   backface-visibility: hidden;
+}
+
+/* 탭 전환 캐시 HTML 재적용 시 아바타·메달 깜빡임 완화 */
+#stelvioRankingListBody.stelvio-ranking-list-stable .stelvio-rank-avatar-img,
+#stelvioRankingListBody.stelvio-ranking-list-stable .stelvio-rank-crown img {
+  content-visibility: auto;
 }
 
 button.stelvio-rank-avatar-btn {
