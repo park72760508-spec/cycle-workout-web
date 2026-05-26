@@ -2687,8 +2687,9 @@
                 <!-- 알림 배지: top:25% / right:25% (버튼 4등분 우상단 중앙) — 이후 수치 보정 가능 -->
                 <span id="basecampRidingNotiBadge" aria-label="알림 건수"></span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-group-entry" id="btnBasecampRidingGroupEntry" onclick="if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp(); else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="라이딩 모임">
-                <span>라이딩 모임</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-group-entry" id="btnBasecampRidingGroupEntry" onclick="if (typeof navigateToClubHouseFromBasecamp === 'function') navigateToClubHouseFromBasecamp(); else { window.__openRidingInitialView = 'groups'; if (typeof showScreen === 'function') showScreen('openRidingRoomScreen'); }" aria-label="클럽 하우스">
+                <span>클럽 하우스</span>
+                <span id="basecampClubHouseNotiBadge" aria-label="클럽 가입 신청 건수"></span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-affiliate-entry" id="btnBasecampAffiliateEntry" onclick="if (typeof window.onAffiliateButtonClick === 'function') window.onAffiliateButtonClick(); else if (typeof showScreen === 'function') showScreen('affiliateScreen');" aria-label="제휴사">
                 <span>제휴사</span>
@@ -19561,11 +19562,19 @@
         var storage = window.firebaseStorageV9 || null;
         var userId = getOpenRidingUserId();
         var userLabel = getOpenRidingUserLabel();
+        var initialView = '';
+        try {
+          initialView = String(window.__openRidingInitialView || '').trim();
+          window.__openRidingInitialView = '';
+        } catch (eInitView) {
+          initialView = '';
+        }
         var el = React.createElement(window.OpenRidingRoomApp, {
           firestore: firestore,
           storage: storage,
           userId: userId,
-          userLabel: userLabel
+          userLabel: userLabel,
+          initialView: initialView
         });
         if (!openRidingReactRoot) {
           openRidingReactRoot = ReactDOM.createRoot ? ReactDOM.createRoot(rootEl) : null;
@@ -19576,6 +19585,63 @@
           ReactDOM.render(el, rootEl);
         }
       };
+      window.navigateToClubHouseFromBasecamp = function () {
+        window.__openRidingInitialView = 'groups';
+        if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
+      };
+
+      var basecampClubHouseBadgeUnsub = null;
+      function setBasecampClubHouseBadgeCount(n) {
+        var badge = document.getElementById('basecampClubHouseNotiBadge');
+        if (!badge) return;
+        var count = Number(n) || 0;
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : String(count);
+          if (count > 9) badge.setAttribute('data-wide', '1');
+          else badge.removeAttribute('data-wide');
+          badge.style.setProperty('display', 'flex', 'important');
+          badge.classList.add('show');
+        } else {
+          badge.textContent = '';
+          badge.removeAttribute('data-wide');
+          badge.style.setProperty('display', 'none', 'important');
+          badge.classList.remove('show');
+        }
+      }
+      window.setBasecampClubHouseBadgeCount = setBasecampClubHouseBadgeCount;
+
+      async function startBasecampClubHouseBadgeSubscription() {
+        if (basecampClubHouseBadgeUnsub) {
+          try { basecampClubHouseBadgeUnsub(); } catch (eOld) {}
+          basecampClubHouseBadgeUnsub = null;
+        }
+        setBasecampClubHouseBadgeCount(0);
+        await waitOpenRidingAuthAndFirestore(8000);
+        var uid = getOpenRidingUserId();
+        var db = window.firestoreV9 || null;
+        if (!uid || !db) return;
+        try {
+          if (!window.openRidingGroupService || typeof window.openRidingGroupService.subscribeMyManagedGroupsJoinRequestCounts !== 'function') {
+            await import('./assets/js/openRiding/openRidingBoot.js?v=korea-region-groups-ui-20260403');
+          }
+          var svc = window.openRidingGroupService || {};
+          if (typeof svc.subscribeMyManagedGroupsJoinRequestCounts !== 'function') return;
+          basecampClubHouseBadgeUnsub = svc.subscribeMyManagedGroupsJoinRequestCounts(db, uid, function (total) {
+            setBasecampClubHouseBadgeCount(total);
+          });
+        } catch (eBadge) {
+          console.warn('[BasecampClubHouseBadge] 구독 실패:', eBadge && eBadge.message ? eBadge.message : eBadge);
+        }
+      }
+      window.startBasecampClubHouseBadgeSubscription = startBasecampClubHouseBadgeSubscription;
+      setTimeout(function () { startBasecampClubHouseBadgeSubscription(); }, 1200);
+      try {
+        if (window.authV9 && typeof window.authV9.onAuthStateChanged === 'function') {
+          window.authV9.onAuthStateChanged(function () {
+            startBasecampClubHouseBadgeSubscription();
+          });
+        }
+      } catch (eAuthBadge) {}
     })();
   </script>
   
