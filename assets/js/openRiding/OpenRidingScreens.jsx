@@ -2585,7 +2585,7 @@ function OpenRidingGlassNavPortal(p) {
 }
 
 /**
- * 라이딩 모임 하단 네비: 홈·모임·주최·그룹·친구·맞춤 (가로 스크롤 + 허브와 동일 좌우 힌트)
+ * 라이딩 모임 하단 네비: 홈·모임·클럽·친구·맞춤 (가로 스크롤 + 허브와 동일 좌우 힌트)
  */
 function OpenRidingBottomGlassNav(props) {
   var nv = props.navVariant || 'main';
@@ -2674,7 +2674,7 @@ function OpenRidingBottomGlassNav(props) {
           className={openRidingGlassNavBtnClass(isActive)}
           onClick={onGroups}
           aria-current={isActive ? 'page' : undefined}
-          aria-label={'그룹' + (pendingGroupJoinCount > 0 ? ' (가입 요청 ' + pendingGroupJoinCount + '건)' : '')}
+          aria-label={'클럽' + (pendingGroupJoinCount > 0 ? ' (가입 요청 ' + pendingGroupJoinCount + '건)' : '')}
         >
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
             <img
@@ -2699,7 +2699,7 @@ function OpenRidingBottomGlassNav(props) {
               </span>
             ) : null}
           </span>
-          <span className="open-riding-bottom-glass-nav__label">그룹</span>
+          <span className="open-riding-bottom-glass-nav__label">클럽</span>
         </button>
       </OpenRidingGlassNavSlot>
     );
@@ -9087,7 +9087,7 @@ function OpenRidingGroupsList(props) {
           type="search"
           enterKeyHint="search"
           className="open-riding-group-search-input w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm box-border"
-          placeholder="그룹명 또는 라이더 이름으로 검색"
+          placeholder="클럽명 또는 라이더 이름으로 검색"
           value={filterText}
           onChange={function (e) {
             setFilterText(e.target.value);
@@ -9099,7 +9099,7 @@ function OpenRidingGroupsList(props) {
           <li className="text-sm text-slate-500">연결 오류</li>
         ) : filteredRows.length === 0 ? (
           <li className="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white px-3 py-6 text-center">
-            {rows.length === 0 ? '표시할 그룹이 없습니다.' : '검색 결과가 없습니다.'}
+            {rows.length === 0 ? '표시할 클럽이 없습니다.' : '검색 결과가 없습니다.'}
           </li>
         ) : (
           filteredRows.map(function (g) {
@@ -9220,8 +9220,8 @@ function OpenRidingGroupsList(props) {
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
           boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)'
         }}
-        title="그룹 생성"
-        aria-label="그룹 생성"
+        title="클럽 생성"
+        aria-label="클럽 생성"
         onClick={function () {
           onCreate();
         }}
@@ -9613,7 +9613,7 @@ function OpenRidingGroupForm(props) {
                 disabled={busy}
                 onClick={submitCreate}
               >
-                {busy ? '처리 중…' : '그룹 생성'}
+                {busy ? '처리 중…' : '클럽 생성'}
               </button>
             </>
           )}
@@ -10657,7 +10657,9 @@ function OpenRidingRoomApp(props) {
     []
   );
 
-  var _v = useState('main');
+  var _v = useState(function () {
+    return props.initialView === 'groups' ? 'groups' : 'main';
+  });
   var view = _v[0];
   var setView = _v[1];
   var _rid = useState(null);
@@ -10748,13 +10750,13 @@ function OpenRidingRoomApp(props) {
             : view === 'friends'
               ? '친구 관리'
               : view === 'groups'
-                ? '그룹 관리'
+                ? '클럽 관리'
                 : view === 'groupCreate'
-                  ? '그룹 만들기'
+                  ? '클럽 만들기'
                   : view === 'groupEdit'
-                    ? '그룹 수정'
+                    ? '클럽 수정'
                     : view === 'groupDetail'
-                      ? '그룹 상세'
+                      ? '클럽 상세'
                       : '라이딩 모임';
 
   var useGlassBottomNavSpacer = !!(
@@ -10919,7 +10921,7 @@ function OpenRidingRoomApp(props) {
                 setDetailGroupId(null);
                 setView('groups');
               }}
-              aria-label="그룹 관리로 뒤로"
+              aria-label="클럽 관리로 뒤로"
             >
               <svg
                 width="22"
