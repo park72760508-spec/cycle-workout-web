@@ -6,6 +6,10 @@
 
 /** Strava API Rate Limit 방지를 위한 딜레이 (ms) */
 const STRAVA_SYNC_DELAY_MS = 1500;
+/** v2 onRequest 함수는 run.app URL이 Cloud Functions 호환 URL보다 CORS/게이트웨이 안정성이 높다. */
+const MANUAL_STRAVA_SYNC_WITH_MMP_URL =
+  (typeof window !== 'undefined' && window.MANUAL_STRAVA_SYNC_WITH_MMP_URL) ||
+  'https://manualstravasyncwithmmp-hkwksbqhjq-uc.a.run.app';
 
 /** 딜레이 유틸리티 함수 (ms) */
 function sleep(ms) {
@@ -1488,7 +1492,7 @@ async function syncStravaDataWithMmp(months = 1, options) {
     }
     const idToken = await currentUser.getIdToken();
 
-    var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/manualStravaSyncWithMmp?forceRecalcTimeInZones=true';
+    var url = MANUAL_STRAVA_SYNC_WITH_MMP_URL + '?forceRecalcTimeInZones=true';
     if (startDateVal && endDateVal) {
       url += '&startDate=' + encodeURIComponent(startDateVal) + '&endDate=' + encodeURIComponent(endDateVal);
     } else if (maxActivitiesVal != null) {
