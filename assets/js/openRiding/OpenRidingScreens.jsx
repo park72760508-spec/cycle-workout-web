@@ -10750,7 +10750,7 @@ function OpenRidingRoomApp(props) {
             : view === 'friends'
               ? '친구 관리'
               : view === 'groups'
-                ? '클럽 관리'
+                ? '클럽 리스트'
                 : view === 'groupCreate'
                   ? '클럽 만들기'
                   : view === 'groupEdit'
