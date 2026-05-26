@@ -2687,6 +2687,12 @@
                 <!-- 알림 배지: top:25% / right:25% (버튼 4등분 우상단 중앙) — 이후 수치 보정 가능 -->
                 <span id="basecampRidingNotiBadge" aria-label="알림 건수"></span>
               </button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-group-entry" id="btnBasecampRidingGroupEntry" onclick="if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp(); else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="라이딩 모임">
+                <span>라이딩 모임</span>
+              </button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-affiliate-entry" id="btnBasecampAffiliateEntry" onclick="if (typeof window.onAffiliateButtonClick === 'function') window.onAffiliateButtonClick(); else if (typeof showScreen === 'function') showScreen('affiliateScreen');" aria-label="제휴사">
+                <span>제휴사</span>
+              </button>
             </div>
             <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 환영합니다. 사용자명님 + 로그아웃 -->
             <div id="authBar" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 0; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
