@@ -1906,6 +1906,26 @@ async function recordStravaActivityFetchDiagnostic(db, userId, diagnostic) {
         beforeUnix: Number(diagnostic && diagnostic.beforeUnix) || null,
       },
     };
+    if (diagnostic && diagnostic.source) update.strava_last_activity_fetch_source = String(diagnostic.source).slice(0, 80);
+    if (diagnostic && diagnostic.scope) update.strava_last_activity_fetch_scope = String(diagnostic.scope).slice(0, 300);
+    if (diagnostic && diagnostic.hasActivityRead != null) {
+      update.strava_last_activity_fetch_has_activity_read = diagnostic.hasActivityRead === true;
+    }
+    if (diagnostic && diagnostic.hasActivityReadAll != null) {
+      update.strava_last_activity_fetch_has_activity_read_all = diagnostic.hasActivityReadAll === true;
+    }
+    if (diagnostic && diagnostic.storedAthleteId != null) {
+      update.strava_last_activity_fetch_stored_athlete_id = Number(diagnostic.storedAthleteId) || null;
+    }
+    if (diagnostic && diagnostic.tokenAthleteId != null) {
+      update.strava_last_activity_fetch_token_athlete_id = Number(diagnostic.tokenAthleteId) || null;
+    }
+    if (diagnostic && diagnostic.athleteIdMatches != null) {
+      update.strava_last_activity_fetch_athlete_id_matches = diagnostic.athleteIdMatches === true;
+    }
+    if (diagnostic && diagnostic.hint) {
+      update.strava_last_activity_fetch_hint = String(diagnostic.hint).slice(0, 500);
+    }
     if (diagnostic && diagnostic.error) {
       update.strava_last_activity_fetch_error = String(diagnostic.error).slice(0, 500);
     } else {
@@ -1918,6 +1938,52 @@ async function recordStravaActivityFetchDiagnostic(db, userId, diagnostic) {
       userId,
       e && e.message ? e.message : e
     );
+  }
+}
+
+function buildStravaFetchDiagnosticBase(userData, source) {
+  const scope = String((userData && userData.strava_scope) || "").trim();
+  return {
+    source,
+    scope,
+    hasActivityRead:
+      userData && userData.strava_has_activity_read != null
+        ? userData.strava_has_activity_read === true
+        : normalizeStravaScopes(scope).includes("activity:read"),
+    hasActivityReadAll:
+      userData && userData.strava_has_activity_read_all != null
+        ? userData.strava_has_activity_read_all === true
+        : normalizeStravaScopes(scope).includes("activity:read_all"),
+    storedAthleteId: userData && userData.strava_athlete_id != null ? Number(userData.strava_athlete_id) : null,
+  };
+}
+
+function buildEmptyStravaFetchHint(diagnosticBase, count, status) {
+  const hasReadAll = diagnosticBase && diagnosticBase.hasActivityReadAll === true;
+  const hasRead = diagnosticBase && diagnosticBase.hasActivityRead === true;
+  if (Number(status) !== 200) return "Strava 활동 목록 API가 200이 아니어서 수집 실패 상태입니다.";
+  if (!hasReadAll && !hasRead) return "활동 읽기 권한(activity:read 또는 activity:read_all)이 없어 활동 목록을 가져올 수 없습니다.";
+  if (hasReadAll && Number(count) === 0) {
+    return "activity:read_all 권한은 있으나 조회 기간 활동 목록이 0건입니다. 기간 내 실제 라이딩 없음, 다른 Strava 계정 연결, 또는 Strava 활동 공개/계정 상태를 확인해야 합니다.";
+  }
+  if (Number(count) === 0) return "조회 기간 활동 목록이 0건입니다. 기간과 연결 계정을 확인해야 합니다.";
+  return "";
+}
+
+async function fetchStravaAthleteProfileDiagnostic(accessToken) {
+  if (!accessToken) return null;
+  try {
+    const res = await fetch("https://www.strava.com/api/v3/athlete", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return { status: res.status, athleteId: null };
+    const athlete = await res.json().catch(() => null);
+    return {
+      status: res.status,
+      athleteId: athlete && athlete.id != null ? Number(athlete.id) : null,
+    };
+  } catch (e) {
+    return { status: 0, athleteId: null, error: e && e.message ? e.message : String(e) };
   }
 }
 
@@ -1991,7 +2057,9 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   const actCount = activities.length;
   console.log(`[stravaSync] userId=${userId} athlete_id=${userData.strava_athlete_id || "?"} activities=${actCount} status=${firstPageStatus} pages=${page}`);
   if (actCount === 0 || firstPageStatus !== 200) {
+    const diagnosticBase = buildStravaFetchDiagnosticBase(userData, "processOneUserStravaSync");
     await recordStravaActivityFetchDiagnostic(db, userId, {
+      ...diagnosticBase,
       afterUnix,
       beforeUnix,
       dateFrom,
@@ -1999,6 +2067,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       status: firstPageStatus,
       count: actCount,
       pages: page,
+      hint: buildEmptyStravaFetchHint(diagnosticBase, actCount, firstPageStatus),
     });
   }
   const { ids: existingIds, docMap: existingDocMap } = await getExistingStravaLogsMap(db, userId);
@@ -2487,8 +2556,9 @@ exports.manualStravaSyncWithMmp = onRequest(
     const startDateParam = req.query?.startDate || req.body?.startDate;
     const endDateParam = req.query?.endDate || req.body?.endDate;
     const targetUsersParam = String(req.query?.targetUsers || req.body?.targetUsers || "").toLowerCase();
+    const targetUidParam = String(req.query?.targetUid || req.body?.targetUid || "").trim();
     let maxActivitiesCap = null;
-    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", monthsParam, "days=", daysParam, "maxActivities=", maxActivitiesParam, "windowMonths=", windowMonthsParam, "startDate=", startDateParam, "endDate=", endDateParam, "targetUsers=", targetUsersParam, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
+    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", monthsParam, "days=", daysParam, "maxActivities=", maxActivitiesParam, "windowMonths=", windowMonthsParam, "startDate=", startDateParam, "endDate=", endDateParam, "targetUsers=", targetUsersParam, "targetUid=", targetUidParam ? "[provided]" : "", "forceRecalcTimeInZones=", forceRecalcTimeInZones);
 
     try {
     const uid = await getUidFromRequest(req, res);
@@ -2500,7 +2570,17 @@ exports.manualStravaSyncWithMmp = onRequest(
 
     const db = admin.firestore();
     let userIdsToProcess = [uid];
-    if (targetUsersParam === "all" || targetUsersParam === "admin") {
+    if (targetUidParam) {
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const callerData = callerSnap.exists ? callerSnap.data() : {};
+      const callerGrade = String(callerData.grade ?? "2");
+      if (callerGrade !== "1") {
+        res.status(403).json({ success: false, error: "관리자(grade=1)만 targetUid를 사용할 수 있습니다." });
+        return;
+      }
+      userIdsToProcess = [targetUidParam];
+      console.log("[manualStravaSyncWithMmp] 관리자 단일 사용자 대상:", targetUidParam);
+    } else if (targetUsersParam === "all" || targetUsersParam === "admin") {
       if (!startDateParam || !endDateParam || !String(startDateParam).trim() || !String(endDateParam).trim()) {
         res.status(400).json({ success: false, error: "targetUsers=all|admin 사용 시 startDate와 endDate가 필요합니다." });
         return;
@@ -2524,9 +2604,13 @@ exports.manualStravaSyncWithMmp = onRequest(
 
     let afterUnix;
     let beforeUnix;
+    let dateFromForDiagnostic;
+    let dateToForDiagnostic;
     if (startDateParam && endDateParam && String(startDateParam).trim() && String(endDateParam).trim()) {
-      const start = new Date(String(startDateParam).trim() + "T00:00:00");
-      const end = new Date(String(endDateParam).trim() + "T23:59:59");
+      const startYmd = String(startDateParam).trim().slice(0, 10);
+      const endYmd = String(endDateParam).trim().slice(0, 10);
+      const start = new Date(`${startYmd}T00:00:00+09:00`);
+      const end = new Date(`${endYmd}T23:59:59.999+09:00`);
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
         res.status(400).json({ success: false, error: "startDate 또는 endDate 형식이 올바르지 않습니다. (YYYY-MM-DD)" });
         return;
@@ -2537,6 +2621,8 @@ exports.manualStravaSyncWithMmp = onRequest(
       }
       afterUnix = Math.floor(start.getTime() / 1000);
       beforeUnix = Math.floor(end.getTime() / 1000);
+      dateFromForDiagnostic = startYmd;
+      dateToForDiagnostic = endYmd;
     } else {
       const now = new Date();
       beforeUnix = Math.floor(now.getTime() / 1000);
@@ -2558,6 +2644,8 @@ exports.manualStravaSyncWithMmp = onRequest(
         afterDate.setMonth(afterDate.getMonth() - months);
       }
       afterUnix = Math.floor(afterDate.getTime() / 1000);
+      dateFromForDiagnostic = new Date(afterUnix * 1000).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+      dateToForDiagnostic = new Date(beforeUnix * 1000).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
     }
 
     let totalProcessed = 0;
@@ -2593,6 +2681,7 @@ exports.manualStravaSyncWithMmp = onRequest(
     let apiCallCount = globalApiCallCount;
     const allActivities = [];
     let page = 1;
+    let firstPageStatus = 0;
     const fetchActivitiesWithRetry = async (retriesLeft = 5) => {
       const actRes = await fetch(
         `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=200&page=${page}`,
@@ -2609,7 +2698,21 @@ exports.manualStravaSyncWithMmp = onRequest(
       if (page > 1) await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
       const actRes = await fetchActivitiesWithRetry();
       apiCallCount += 1;
+      if (page === 1) firstPageStatus = actRes.status || 0;
       if (!actRes.ok) {
+        const diagnosticBase = buildStravaFetchDiagnosticBase(userData, "manualStravaSyncWithMmp");
+        await recordStravaActivityFetchDiagnostic(db, uid, {
+          ...diagnosticBase,
+          afterUnix,
+          beforeUnix,
+          dateFrom: dateFromForDiagnostic,
+          dateTo: dateToForDiagnostic,
+          status: actRes.status,
+          count: allActivities.length,
+          pages: page,
+          error: `활동 조회 실패: ${actRes.status}`,
+          hint: buildEmptyStravaFetchHint(diagnosticBase, allActivities.length, actRes.status),
+        });
         throw new Error(`활동 조회 실패: ${actRes.status}`);
       }
       const pageActivities = await actRes.json().catch(() => []);
@@ -2630,6 +2733,32 @@ exports.manualStravaSyncWithMmp = onRequest(
         `[manualStravaSyncWithMmp] userId=${uid} maxActivitiesCap=${maxActivitiesCap} fetched=${allActivities.length} process=${activitiesToProcess.length}`
       );
     }
+    const diagnosticBase = buildStravaFetchDiagnosticBase(userData, "manualStravaSyncWithMmp");
+    const manualDiagnostic = {
+      ...diagnosticBase,
+      afterUnix,
+      beforeUnix,
+      dateFrom: dateFromForDiagnostic,
+      dateTo: dateToForDiagnostic,
+      status: firstPageStatus || 200,
+      count: allActivities.length,
+      pages: page,
+      hint: buildEmptyStravaFetchHint(diagnosticBase, allActivities.length, firstPageStatus || 200),
+    };
+    if (targetUidParam && allActivities.length === 0 && firstPageStatus === 200) {
+      const athleteDiag = await fetchStravaAthleteProfileDiagnostic(accessToken);
+      if (athleteDiag) {
+        manualDiagnostic.tokenAthleteId = athleteDiag.athleteId;
+        if (athleteDiag.athleteId != null && diagnosticBase.storedAthleteId != null) {
+          manualDiagnostic.athleteIdMatches = Number(athleteDiag.athleteId) === Number(diagnosticBase.storedAthleteId);
+          if (!manualDiagnostic.athleteIdMatches) {
+            manualDiagnostic.hint = "토큰 소유 Strava athlete_id가 users 문서의 strava_athlete_id와 다릅니다. 다른 Strava 계정이 연결된 상태이므로 재연결이 필요합니다.";
+          }
+        }
+        if (athleteDiag.error) manualDiagnostic.error = `athlete 진단 실패: ${athleteDiag.error}`;
+      }
+    }
+    await recordStravaActivityFetchDiagnostic(db, uid, manualDiagnostic);
 
     const logsRef = db.collection("users").doc(uid).collection("logs");
     const stelvioDates = await getStelvioLogDates(db, uid);
