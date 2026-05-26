@@ -144,7 +144,9 @@ var STELVIO_USER_LS_SNAPSHOT_KEYS = [
   'expiry_date', 'is_private', 'profileImageUrl', 'profile_image_url',
   'max_hr', 'maxHr', 'acc_points', 'rem_points', 'last_training_date',
   'email', 'created_at', 'lastLogin',
-  'strava_connected', 'has_strava', 'gemini_api_registered', 'geminiApiRegistered',
+  'strava_connected', 'has_strava', 'strava_athlete_id', 'strava_scope',
+  'strava_has_activity_read', 'strava_has_activity_read_all', 'strava_expires_at',
+  'gemini_api_registered', 'geminiApiRegistered', 'API_sts',
 ];
 
 function sanitizeFieldForUserLocalStorage(key, val) {
@@ -2836,7 +2838,17 @@ function userHasStravaConnected(u) {
   if (!u || typeof u !== 'object') return false;
   const r = u.strava_refresh_token != null ? String(u.strava_refresh_token).trim() : '';
   const a = u.strava_access_token != null ? String(u.strava_access_token).trim() : '';
-  return !!(r || a);
+  if (r || a) return true;
+  const connected = u.strava_connected;
+  if (connected === true || connected === 'true' || connected === 1 || connected === '1') return true;
+  const hasStrava = u.has_strava;
+  if (hasStrava === true || hasStrava === 'true' || hasStrava === 1 || hasStrava === '1') return true;
+  const athleteId = u.strava_athlete_id != null ? String(u.strava_athlete_id).trim() : '';
+  if (athleteId) return true;
+  const scope = u.strava_scope != null ? String(u.strava_scope).trim() : '';
+  const hasRead = u.strava_has_activity_read === true || u.strava_has_activity_read === 'true';
+  const hasReadAll = u.strava_has_activity_read_all === true || u.strava_has_activity_read_all === 'true';
+  return !!(scope && (hasRead || hasReadAll || scope.indexOf('activity:read') !== -1));
 }
 
 function countProfileIntegrationStats(users) {
@@ -2867,9 +2879,62 @@ window.userHasStravaConnected = userHasStravaConnected;
  */
 function userNeedsMandatoryIntegratedSetup(u) {
   if (!u || typeof u !== 'object') return false;
-  return !userHasStravaConnected(u) || !userHasGeminiApiRegistered(u);
+  var merged = u;
+  try {
+    var uid = String(u.id || u.uid || '');
+    if (uid && Array.isArray(window.users)) {
+      var row = window.users.find(function (item) {
+        return item && String(item.id || item.uid || '') === uid;
+      });
+      if (row) merged = Object.assign({}, u, row);
+    }
+  } catch (_mergeErr) {}
+
+  var hasStrava = userHasStravaConnected(merged);
+  var hasGemini = userHasGeminiApiRegistered(merged);
+  if (!hasGemini) {
+    try {
+      var localKey = localStorage.getItem('geminiApiKey');
+      hasGemini = !!(localKey && String(localKey).trim());
+    } catch (_localKeyErr) {}
+  }
+  return !hasStrava || !hasGemini;
 }
 window.userNeedsMandatoryIntegratedSetup = userNeedsMandatoryIntegratedSetup;
+
+async function refreshCurrentUserFromFirestore(reason) {
+  try {
+    var uid =
+      (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid && String(window.authV9.currentUser.uid)) ||
+      (window.auth && window.auth.currentUser && window.auth.currentUser.uid && String(window.auth.currentUser.uid)) ||
+      (window.currentUser && (window.currentUser.id || window.currentUser.uid) && String(window.currentUser.id || window.currentUser.uid)) ||
+      null;
+    if (!uid || typeof apiGetUser !== 'function') return null;
+    var res = await apiGetUser(uid);
+    if (!res || !res.success || !res.item) return null;
+    window.currentUser = res.item;
+    try {
+      persistStelvioUserToLocalStorage(res.item);
+    } catch (_persistErr) {}
+    if (Array.isArray(window.users)) {
+      var replaced = false;
+      window.users = window.users.map(function (item) {
+        if (item && String(item.id || item.uid || '') === uid) {
+          replaced = true;
+          return Object.assign({}, item, res.item);
+        }
+        return item;
+      });
+      if (!replaced) window.users.push(res.item);
+    }
+    console.log('[refreshCurrentUserFromFirestore] refreshed:', reason || '', uid);
+    return res.item;
+  } catch (e) {
+    console.warn('[refreshCurrentUserFromFirestore] failed:', e && e.message ? e.message : e);
+    return null;
+  }
+}
+window.refreshCurrentUserFromFirestore = refreshCurrentUserFromFirestore;
 
 function stelvioEscapeHtmlAttr(str) {
   return String(str ?? '')

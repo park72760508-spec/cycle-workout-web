@@ -7625,8 +7625,43 @@ function oneLogPerDayPreferStravaFallback(logs) {
     }
   }
 
+  async function refreshCurrentUserAfterStravaConnection(reason) {
+    try {
+      if (typeof window.refreshCurrentUserFromFirestore === 'function') {
+        await window.refreshCurrentUserFromFirestore(reason || 'strava');
+      }
+      if (typeof window.updateSettingsGeminiApiStatusLine === 'function') {
+        window.updateSettingsGeminiApiStatusLine();
+      }
+      var modal = document.getElementById('settingsModal');
+      var cur = window.currentUser || (function () {
+        try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (_e) { return null; }
+      })();
+      if (
+        modal &&
+        modal.style.display === 'flex' &&
+        typeof window.userNeedsMandatoryIntegratedSetup === 'function' &&
+        cur &&
+        !window.userNeedsMandatoryIntegratedSetup(cur)
+      ) {
+        closeSettingsModal();
+      }
+    } catch (err) {
+      console.warn('[Strava] 연결 후 사용자 상태 갱신 실패:', err && err.message ? err.message : err);
+    }
+  }
+
+  window.onStravaPopupClosed = function () {
+    refreshCurrentUserAfterStravaConnection('strava-popup-closed');
+  };
+
   window.addEventListener('message', async function(e) {
     if (!e.data || !e.data.type) return;
+
+    if (e.data.type === 'strava_connected') {
+      refreshCurrentUserAfterStravaConnection('strava-connected-message');
+      return;
+    }
 
     // REQUEST_STATUS: AI 연결 상태만 전달
     if (e.data.type === 'REQUEST_STATUS') {
@@ -15705,13 +15740,38 @@ function saveGeminiApiKeyFromSettings() {
     alert('API 키를 입력하세요.');
     return;
   }
+
+  function markGeminiApiRegisteredLocal() {
+    if (window.currentUser && typeof window.currentUser === 'object') {
+      window.currentUser.API_sts = true;
+      window.currentUser.gemini_api_registered = true;
+      try {
+        if (typeof window.persistStelvioUserToLocalStorage === 'function') {
+          window.persistStelvioUserToLocalStorage(window.currentUser);
+        } else {
+          localStorage.setItem('currentUser', JSON.stringify(window.currentUser));
+        }
+      } catch (eLsGemini) {}
+    }
+  }
   
   // 기존 saveGeminiApiKey 함수를 재사용하되, 입력 필드만 변경
   const originalInput = document.getElementById('geminiApiKey');
   if (originalInput) {
     const tempValue = originalInput.value;
     originalInput.value = apiKey;
-    saveGeminiApiKey();
+    var saveResult = saveGeminiApiKey();
+    if (saveResult && typeof saveResult.then === 'function') {
+      saveResult.then(function () {
+        try {
+          var savedKey = localStorage.getItem('geminiApiKey');
+          if (savedKey && String(savedKey).trim()) {
+            markGeminiApiRegisteredLocal();
+            if (typeof updateSettingsGeminiApiStatusLine === 'function') updateSettingsGeminiApiStatusLine();
+          }
+        } catch (_saveCheckErr) {}
+      });
+    }
     originalInput.value = tempValue;
   } else {
     // geminiApiKey 요소가 없으면 직접 저장
@@ -15726,6 +15786,7 @@ function saveGeminiApiKeyFromSettings() {
       (window.currentUser && window.currentUser.id != null && String(window.currentUser.id)) ||
       (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid && String(window.authV9.currentUser.uid)) ||
       null;
+    markGeminiApiRegisteredLocal();
     if (profileIdFs && typeof apiUpdateUser === 'function') {
       apiUpdateUser(profileIdFs, { API_sts: true, gemini_api_registered: true }).catch(function () {});
     }
