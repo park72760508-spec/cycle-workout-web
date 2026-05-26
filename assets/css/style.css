@@ -2681,7 +2681,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   z-index: 1; /* 이미지 위에 표시 */
 }
 
-.basecamp-btn span:not(#basecampRidingNotiBadge) {
+.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge) {
   color: #fff !important;
   position: relative;
   z-index: 2; /* 오버레이 위에 표시 */
@@ -2749,8 +2749,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .basecamp-btn-ranking span,
 #basecampScreen .btn-device.basecamp-btn-indoor-entry span,
 #basecampScreen .basecamp-btn-indoor-entry span,
-#basecampScreen .btn-device.basecamp-btn-riding-group-entry span,
-#basecampScreen .basecamp-btn-riding-group-entry span,
+#basecampScreen .btn-device.basecamp-btn-riding-group-entry span:not(#basecampClubHouseNotiBadge),
+#basecampScreen .basecamp-btn-riding-group-entry span:not(#basecampClubHouseNotiBadge),
 #basecampScreen .btn-device.basecamp-btn-affiliate-entry span,
 #basecampScreen .basecamp-btn-affiliate-entry span {
   display: none !important;
@@ -2814,7 +2814,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
  *   right= 25%  (버튼 너비 1/4 지점, 우측 기준)
  *   transform: translate(50%,-50%) → 배지 중심점을 해당 좌표에 정렬
  * 위치 보정 시: top / right 두 값만 수정 */
-#basecampRidingNotiBadge {
+#basecampRidingNotiBadge,
+#basecampClubHouseNotiBadge {
   /* 표시 제어 */
   display: none !important;
   /* 절대 위치 — 부모 button의 position:relative 기준 */
@@ -2850,7 +2851,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /* 배지 숫자가 2자리 이상(10+)일 때 타원 방지 — 너비를 자동 확장하되 높이 고정 */
-#basecampRidingNotiBadge[data-wide] {
+#basecampRidingNotiBadge[data-wide],
+#basecampClubHouseNotiBadge[data-wide] {
   width: auto !important;
   padding: 0 6px !important;
   border-radius: 13px !important;
@@ -4271,7 +4273,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /* 베이스캠프 버튼 span - basecamp-btn 클래스가 있을 때는 별도 처리 */
-#basecampScreen .btn-device.basecamp-btn span:not(#basecampRidingNotiBadge) {
+#basecampScreen .btn-device.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge) {
   order: 1 !important; /* 하단에 배치 */
   font-size: 18px !important;
   font-weight: 600 !important;
