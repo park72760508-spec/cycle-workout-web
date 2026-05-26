@@ -12588,6 +12588,20 @@
     }
     window.stelvioBeginRankingTabSwitchUi = stelvioBeginRankingTabSwitchUi;
 
+    function stelvioResetRankingListExpansionForNewTab() {
+      stelvioRankingExpandState = {};
+      stelvioRankingGapState = {};
+      if (typeof stelvioGroupTabExpandedId !== 'undefined') stelvioGroupTabExpandedId = null;
+      if (typeof stelvioGroupTabCachedMembers !== 'undefined') stelvioGroupTabCachedMembers = [];
+      if (typeof stelvioStopGroupTabMembersOnly === 'function') stelvioStopGroupTabMembersOnly();
+      if (window._rankingSearchFab && typeof window._rankingSearchFab.update === 'function') {
+        setTimeout(function () {
+          window._rankingSearchFab.update();
+        }, 0);
+      }
+    }
+    window.stelvioResetRankingListExpansionForNewTab = stelvioResetRankingListExpansionForNewTab;
+
     function bindStelvioRankingEvents() {
       var chips = document.getElementById('stelvioDurationTabs');
       if (chips && !chips._stelvioDurationTabsDelegated) {
@@ -12614,6 +12628,7 @@
           tabs.forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           stelvioRankingState.duration = nextDur;
+          stelvioResetRankingListExpansionForNewTab();
           stelvioApplyDurationModeUi();
           if (typeof stelvioSyncRankingListHeaderUi === 'function') stelvioSyncRankingListHeaderUi();
           stelvioScheduleRankingBoardScrollAfterTabApply();
@@ -13170,6 +13185,11 @@
         stelvioRankingRememberListHtml(rememberCat, html);
         if (bodyEl) bodyEl.classList.add('stelvio-ranking-list-stable');
       }
+      if (window._rankingSearchFab && typeof window._rankingSearchFab.update === 'function') {
+        setTimeout(function () {
+          window._rankingSearchFab.update();
+        }, 0);
+      }
     }
 
     function stelvioRankingBoardUidQuick() {
@@ -13243,6 +13263,7 @@
 
     function stelvioRankingPaintListFromCacheIfAny(bodyEl, cat) {
       if (!bodyEl || !cat) return false;
+      if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) return false;
       var paintKey = stelvioRankingListPaintCacheKey(cat);
       var cached = stelvioRankingListHtmlCache[paintKey];
       if (!cached) return false;
@@ -16565,7 +16586,17 @@
         return (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1);
       }
       if (stelvioIsGcRankingMode()) {
-        return (item.gcScore != null ? Number(item.gcScore) : 0).toFixed(1);
+        var gcVal =
+          item.gcScore != null
+            ? Number(item.gcScore)
+            : item.sumPositionScores != null
+              ? Number(item.sumPositionScores)
+              : item.score != null
+                ? Number(item.score)
+                : item.points != null
+                  ? Number(item.points)
+                  : NaN;
+        return (isFinite(gcVal) ? gcVal : 0).toFixed(1);
       }
       return (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
     }
@@ -16638,14 +16669,6 @@
 
     function renderStelvioRankingOneCategory(cat, byCategory, currentUserId, myRankSupremo, bodyEl) {
       if (!bodyEl) return;
-      if (
-        stelvioRankingFastTabSwitchFlag &&
-        !window.__stelvioRankingOpening &&
-        stelvioRankingPaintListFromCacheIfAny(bodyEl, cat)
-      ) {
-        refreshStelvioDistributionChartMounted();
-        return;
-      }
       var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
       var arr = stelvioFilterRowsByListInterest(byCategory[cat] || []);
       if (typeof stelvioFilterRankingRowsForPublicViewer === 'function') {
@@ -16667,6 +16690,14 @@
         friendSet: stelvioRankingFriendUserSet,
         groupContactSet: stelvioRankingGroupContactSet
       };
+      if (
+        stelvioRankingFastTabSwitchFlag &&
+        !window.__stelvioRankingOpening &&
+        stelvioRankingPaintListFromCacheIfAny(bodyEl, cat)
+      ) {
+        refreshStelvioDistributionChartMounted();
+        return;
+      }
       var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
       var isExpired = typeof isUserExpired === 'function' && cu && isUserExpired(cu);
       var isAdmin =
@@ -30410,12 +30441,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
 
       /* ── Observer 연결 / 해제 헬퍼 ── */
       function _moConnect() {
+        _ensureObservedListBody();
         if (!_mo || !_listBody) return;
         try { _mo.observe(_listBody, { childList: true }); } catch (e) {}
       }
       function _moDisconnect() {
         if (!_mo) return;
         try { _mo.disconnect(); } catch (e) {}
+      }
+      function _ensureObservedListBody() {
+        var currentBody = _el('stelvioRankingListBody');
+        if (!currentBody || currentBody === _listBody) return;
+        _moDisconnect();
+        _listBody = currentBody;
       }
 
       /* 펼쳐보기 상태 여부 판단 */
@@ -30429,7 +30467,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         }
         if (
           typeof stelvioRankingGapState !== 'undefined' &&
-          !!(stelvioRankingGapState.Supremo || {}).expanded
+          typeof stelvioRankingState !== 'undefined' &&
+          !!(stelvioRankingGapState[stelvioRankingState.activeCategory || 'Supremo'] || {}).expanded
         ) return true;
         if (
           typeof stelvioRankingState !== 'undefined' &&
@@ -30445,6 +30484,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       function _updateFabVisibility() {
         var fab = _el('rankingSearchFab');
         if (!fab) return;
+        _ensureObservedListBody();
+        _moConnect();
         var show = _isExpanded();
         fab.classList.toggle('ranking-search-fab--hidden', !show);
         if (!show) _closeInput();
@@ -30674,7 +30715,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         _init();
       }
 
-      window._rankingSearchFab = { update: _updateFabVisibility };
+      window._rankingSearchFab = { update: _updateFabVisibility, reconnect: _moConnect };
     }());
   </script>
 
