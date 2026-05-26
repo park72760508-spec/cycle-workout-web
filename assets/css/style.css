@@ -1020,7 +1020,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   max-width: 90% !important;
   display: grid !important;
   grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
-  grid-template-rows: repeat(3, var(--basecamp-cell)) !important;
+  grid-template-rows: repeat(3, 1fr) !important;
   gap: 3.75px !important;
   margin: 0 5% !important;
   box-sizing: border-box !important;
