@@ -21578,12 +21578,10 @@ if (originalCleanupMobileDashboard) {
 })();
 
 /* ============================================================
- * 베이스캠프 > 라이딩모임 버튼 알림 배지 (v2)
- * 건수 합계 =
- *   ① 초대받은 라이딩 건수 (invitedList에 내 전화번호 있음 & uid가 participants에 없음 & 날짜 ≥ 오늘)
- *   ② 내가 개설한 그룹의 가입신청 대기 건수 (joinRequests 서브컬렉션 전체 — 승인/거부 시 문서 삭제됨)
- *   ③ 나에게 온 친구 요청 건수 (friendRequests toUid==uid & status==pending)
- * Firebase v8 compat API 사용 (app.js 환경)
+ * 베이스캠프 알림 배지 (v3)
+ * 라이딩 모임 버튼 = ① 초대받은 라이딩 + ③ 친구 요청
+ * 클럽 하우스 버튼 = ② 내가 방장인 그룹 가입신청 대기 합계 (클럽 리스트 배지와 동일)
+ * Firebase v8 compat API 사용 (app.js 환경 — firestoreV9·ES 모듈 import 불필요)
  * ============================================================ */
 (function () {
   'use strict';
@@ -21596,26 +21594,27 @@ if (originalCleanupMobileDashboard) {
   var _groupUnsubMap = {};
   var _cachedPhone  = null; // 정규화된 전화번호 캐시
 
-  /* ── UI 업데이트 ── */
-  function _renderBadge() {
-    var total = _counts.rides + _counts.groups + _counts.friends;
-    var badge = document.getElementById('basecampRidingNotiBadge');
+  /* ── UI 업데이트 (라이딩 모임·클럽 하우스 공통 배지 렌더) ── */
+  function _applyCountBadge(badgeId, count) {
+    var badge = document.getElementById(badgeId);
     if (!badge) return;
-    if (total > 0) {
-      var label = total > 99 ? '99+' : String(total);
-      badge.textContent = label;
-      /* 숫자가 2자리 이상이면 타원 허용 (data-wide 속성으로 CSS 분기) */
-      if (total >= 10) {
-        badge.setAttribute('data-wide', '1');
-      } else {
-        badge.removeAttribute('data-wide');
-      }
+    var n = Number(count) || 0;
+    if (n > 0) {
+      badge.textContent = n > 99 ? '99+' : String(n);
+      if (n >= 10) badge.setAttribute('data-wide', '1');
+      else badge.removeAttribute('data-wide');
       badge.classList.add('show');
     } else {
       badge.textContent = '';
       badge.classList.remove('show');
       badge.removeAttribute('data-wide');
     }
+  }
+
+  function _renderBadges() {
+    /* 클럽 가입신청은 클럽 하우스 전용 — 라이딩 모임과 중복 표시하지 않음 */
+    _applyCountBadge('basecampRidingNotiBadge', _counts.rides + _counts.friends);
+    _applyCountBadge('basecampClubHouseNotiBadge', _counts.groups);
   }
 
   /* ── 구독 전체 정리 ── */
@@ -21686,7 +21685,7 @@ if (originalCleanupMobileDashboard) {
   function _subscribeRides(fs, uid, normPhone) {
     if (typeof _unsubRides === 'function') { try { _unsubRides(); } catch(e){} _unsubRides = null; }
     if (!normPhone || normPhone.length < 8) {
-      _counts.rides = 0; _renderBadge(); return;
+      _counts.rides = 0; _renderBadges(); return;
     }
     var todayTs = _todayTs();
     try {
@@ -21709,9 +21708,9 @@ if (originalCleanupMobileDashboard) {
             count++;
           });
           _counts.rides = count;
-          _renderBadge();
-        }, function() { _counts.rides = 0; _renderBadge(); });
-    } catch(e) { _counts.rides = 0; _renderBadge(); }
+          _renderBadges();
+        }, function() { _counts.rides = 0; _renderBadges(); });
+    } catch(e) { _counts.rides = 0; _renderBadges(); }
   }
 
   /* ── ② 그룹 가입신청 대기 건수
@@ -21753,17 +21752,17 @@ if (originalCleanupMobileDashboard) {
                 groupTotalMap[gid] = jSnap.size;
                 _counts.groups = Object.keys(groupTotalMap)
                   .reduce(function(s, k) { return s + (groupTotalMap[k] || 0); }, 0);
-                _renderBadge();
+                _renderBadges();
               }, function() {
                 groupTotalMap[gid] = 0;
                 _counts.groups = Object.keys(groupTotalMap)
                   .reduce(function(s, k) { return s + (groupTotalMap[k] || 0); }, 0);
-                _renderBadge();
+                _renderBadges();
               });
           });
 
-          if (groupsSnap.empty) { _counts.groups = 0; _renderBadge(); }
-        }, function() { _counts.groups = 0; _renderBadge(); });
+          if (groupsSnap.empty) { _counts.groups = 0; _renderBadges(); }
+        }, function() { _counts.groups = 0; _renderBadges(); });
     } catch(e) { _counts.groups = 0; }
   }
 
@@ -21775,8 +21774,8 @@ if (originalCleanupMobileDashboard) {
         .where('toUid',   '==', uid)
         .where('status',  '==', 'pending')
         .onSnapshot(
-          function(snap) { _counts.friends = snap.size; _renderBadge(); },
-          function()     { _counts.friends = 0;         _renderBadge(); }
+          function(snap) { _counts.friends = snap.size; _renderBadges(); },
+          function()     { _counts.friends = 0;         _renderBadges(); }
         );
     } catch(e) { _counts.friends = 0; }
   }
@@ -21786,7 +21785,7 @@ if (originalCleanupMobileDashboard) {
     _clearAll();
     var uid = _getUid();
     var fs  = _getFs();
-    if (!uid || !fs) { _renderBadge(); return; }
+    if (!uid || !fs) { _renderBadges(); return; }
 
     /* ②③ 는 바로 구독 시작 */
     _subscribeGroups(fs, uid);
@@ -21800,18 +21799,23 @@ if (originalCleanupMobileDashboard) {
 
   /* ── 인증 상태 변경 감지 ── */
   function _bindAuthListener() {
+    function onAuthChange(user) {
+      if (user || _getUid()) { _startSubscriptions(); }
+      else { _clearAll(); _renderBadges(); }
+    }
     if (typeof firebase !== 'undefined' && firebase.auth && typeof firebase.auth === 'function') {
       try {
-        firebase.auth().onAuthStateChanged(function(user) {
-          if (user) { _startSubscriptions(); }
-          else       { _clearAll(); _renderBadge(); }
-        });
-        return;
-      } catch(e) {}
+        firebase.auth().onAuthStateChanged(onAuthChange);
+      } catch (e) {}
     }
-    /* 폴백: 폴링 */
+    if (window.authV9 && typeof window.authV9.onAuthStateChanged === 'function') {
+      try {
+        window.authV9.onAuthStateChanged(onAuthChange);
+      } catch (e2) {}
+    }
+    /* 폴백: 세션 복원 지연 시 폴링 */
     var elapsed = 0;
-    var poll = setInterval(function() {
+    var poll = setInterval(function () {
       elapsed += 500;
       if (_getUid()) { clearInterval(poll); _startSubscriptions(); return; }
       if (elapsed > 12000) clearInterval(poll);
