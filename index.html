@@ -15320,7 +15320,7 @@
     window.stelvioSyncRankingListHeaderUi = stelvioSyncRankingListHeaderUi;
     /**
      * 그룹 탭: 현재 확장된 소모임 내 뷰어의 순위 계산.
-     * 성별 필터(Supremo풀)만 적용 — 소모임 전체 순위 기준.
+     * 선택된 성별/카테고리 필터가 적용된 풀 기준으로 계산.
      * @returns {{ groupName:string, overallRank:number|null, catRank:number|null, catLabel:string, metricVal:string }|null}
      */
     function stelvioGroupTabCalcViewerGroupRank() {
@@ -15361,7 +15361,8 @@
           var u2 = m2 && m2.userId != null ? String(m2.userId) : '';
           if (!u2) continue;
           var e2 = poolMap[u2];
-          if (e2) merged.push(Object.assign({}, e2, { is_private: false }));
+          if (!e2) continue;
+          merged.push(Object.assign({}, e2, { is_private: false }));
         }
         merged.sort(function (a, b) { return sortVal(b) - sortVal(a); });
         return merged;
@@ -15783,21 +15784,15 @@
         }
         var myIdG = stelvioResolveRankingViewerUserId();
         var merged = [];
+        var scopedByUid = cat === 'Supremo' ? supByUid : catRawByUid;
         for (var mj = 0; mj < stelvioGroupTabCachedMembers.length; mj++) {
           var mem = stelvioGroupTabCachedMembers[mj];
           var uMem = mem && mem.userId != null ? String(mem.userId) : '';
           if (!uMem) continue;
-          /* 1. 성별 필터: Supremo 풀에 없는 멤버도 그룹탭에서는 표시(프로필 fallback 사용) */
-          var supE = supByUid[uMem];
-          /* 2. 소모임 멤버는 랭킹 부문·지표 값 유무와 관계없이 전원 표시(값만 0/—). 과거: 부문 미포함 시 제외 */
-          /* 카테고리 별 랭킹 데이터 우선, 없으면 Supremo → members 문서 프로필 순으로 fallback */
-          var rk = poolUid[uMem] || catRawByUid[uMem] || supE;
-          var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, speedKmh: 0, gcScore: 0 };
-          if (supE) {
-            if (supE.rank != null) mergedItem.rank = supE.rank;
-            if (supE.rankChange != null) mergedItem.rankChange = supE.rankChange;
-            if (supE.previousBoardRank != null) mergedItem.previousBoardRank = supE.previousBoardRank;
-          }
+          /* 성별/카테고리 필터에 포함된 대상만 소모임 순위에 표시 */
+          var rk = scopedByUid[uMem] || poolUid[uMem];
+          if (!rk) continue;
+          var mergedItem = Object.assign({}, rk, { is_private: false });
           var _tabMemName = stelvioResolveGroupTabMemberName(mem, mergedItem, uMem);
           if (_tabMemName) mergedItem.name = _tabMemName;
           var _mapUrl =
