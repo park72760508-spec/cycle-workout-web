@@ -9150,10 +9150,21 @@ function OpenRidingGroupsList(props) {
                     {(function () {
                       var cnt = joinRequestCountMap[g.id];
                       if (!cnt || cnt <= 0) return null;
+                      var isWide = cnt >= 10;
                       return (
                         <span
-                          className="absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold border-4 border-white shadow pointer-events-none"
-                          style={{ minWidth: '36px', height: '36px', fontSize: cnt > 9 ? 16 : 18, paddingLeft: 4, paddingRight: 4, top: '2px', right: '0px', transform: 'translate(30%, -20%)' }}
+                          className="absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold border-4 border-white shadow pointer-events-none leading-none"
+                          style={{
+                            width: isWide ? 'auto' : '32px',
+                            minWidth: '32px',
+                            height: '32px',
+                            fontSize: cnt > 99 ? 9 : (cnt > 9 ? 11 : 13),
+                            paddingLeft: isWide ? 4 : 0,
+                            paddingRight: isWide ? 4 : 0,
+                            top: '2px',
+                            right: '0px',
+                            transform: 'translate(30%, -20%)'
+                          }}
                           aria-label={'가입 요청 ' + cnt + '건'}
                         >
                           {cnt > 99 ? '99+' : cnt}
