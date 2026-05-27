@@ -893,18 +893,21 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
         .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
       if (error) throw error;
 
+      const heptagonCohortRanks = require("./heptagonCohortRanks");
+      const latestRows = heptagonCohortRanks.filterDocsToLatestAsOfSeoul(data || []);
+
       const uidMap = await getFirebaseUidMapForSupabaseUsers(
         admin,
         supabase,
-        (data || []).map((row) => row.user_id)
+        latestRows.map((row) => row.user_id)
       );
       const profileMap = await getPublicProfileMapForSupabaseUsers(
         supabase,
-        (data || []).map((row) => row.user_id)
+        latestRows.map((row) => row.user_id)
       );
       const rows = [];
-      for (let i = 0; i < (data || []).length; i++) {
-        const row = data[i];
+      for (let i = 0; i < latestRows.length; i++) {
+        const row = latestRows[i];
         captureGcSnapshotMeta(row, metaState);
         const fbUid = uidMap.get(String(row.user_id));
         if (!fbUid) continue;
@@ -924,7 +927,7 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
         rows.push(entry);
       }
 
-      byCategory[cat] = rows;
+      byCategory[cat] = heptagonCohortRanks.rerankGcBoardRows(rows);
     })
   );
 

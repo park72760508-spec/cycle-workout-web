@@ -2652,6 +2652,7 @@ exports.manualStravaSyncWithMmp = onRequest(
     let totalUpdated = 0;
     let totalCreated = 0;
     let globalApiCallCount = 0;
+    const userResults = [];
 
     for (const targetUid of userIdsToProcess) {
       if (globalApiCallCount >= STRAVA_API_CALL_LIMIT) {
@@ -2675,6 +2676,29 @@ exports.manualStravaSyncWithMmp = onRequest(
       accessToken = tokenResult.accessToken;
     } catch (e) {
       console.warn("[manualStravaSyncWithMmp] 토큰 갱신 실패, 건너뜀:", uid, e.message);
+        const diagnosticBase = buildStravaFetchDiagnosticBase(userData, "manualStravaSyncWithMmp");
+        await recordStravaActivityFetchDiagnostic(db, uid, {
+          ...diagnosticBase,
+          afterUnix,
+          beforeUnix,
+          dateFrom: dateFromForDiagnostic,
+          dateTo: dateToForDiagnostic,
+          status: 0,
+          count: 0,
+          pages: 0,
+          error: `토큰 갱신 실패: ${e && e.message ? e.message : String(e)}`,
+          hint: "Strava refresh_token이 만료·무효화되었거나 다른 동기화가 토큰을 회전시켰습니다. Strava 재연결 후 다시 실행해야 합니다.",
+        });
+        userResults.push({
+          userId: uid,
+          status: 0,
+          activitiesFound: 0,
+          processedCount: 0,
+          updatedCount: 0,
+          createdCount: 0,
+          error: `토큰 갱신 실패: ${e && e.message ? e.message : String(e)}`,
+          hint: "Strava 재연결 후 다시 실행해야 합니다.",
+        });
       continue;
     }
 
@@ -2745,7 +2769,7 @@ exports.manualStravaSyncWithMmp = onRequest(
       pages: page,
       hint: buildEmptyStravaFetchHint(diagnosticBase, allActivities.length, firstPageStatus || 200),
     };
-    if (targetUidParam && allActivities.length === 0 && firstPageStatus === 200) {
+    if (allActivities.length === 0 && firstPageStatus === 200) {
       const athleteDiag = await fetchStravaAthleteProfileDiagnostic(accessToken);
       if (athleteDiag) {
         manualDiagnostic.tokenAthleteId = athleteDiag.athleteId;
@@ -2759,6 +2783,18 @@ exports.manualStravaSyncWithMmp = onRequest(
       }
     }
     await recordStravaActivityFetchDiagnostic(db, uid, manualDiagnostic);
+    if (activitiesToProcess.length === 0) {
+      userResults.push({
+        userId: uid,
+        athleteId: userData.strava_athlete_id || null,
+        status: firstPageStatus || 200,
+        activitiesFound: allActivities.length,
+        processedCount: 0,
+        updatedCount: 0,
+        createdCount: 0,
+        hint: manualDiagnostic.hint || "",
+      });
+    }
 
     const logsRef = db.collection("users").doc(uid).collection("logs");
     const stelvioDates = await getStelvioLogDates(db, uid);
@@ -3024,8 +3060,29 @@ exports.manualStravaSyncWithMmp = onRequest(
     totalProcessed += processedCount;
     totalUpdated += updatedCount;
     totalCreated += createdCount;
+    if (activitiesToProcess.length > 0) {
+      userResults.push({
+        userId: uid,
+        athleteId: userData.strava_athlete_id || null,
+        status: firstPageStatus || 200,
+        activitiesFound: allActivities.length,
+        activitiesProcessed: activitiesToProcess.length,
+        processedCount,
+        updatedCount,
+        createdCount,
+      });
+    }
     } catch (userErr) {
       console.warn("[manualStravaSyncWithMmp] 사용자 처리 실패:", targetUid, userErr.message);
+      userResults.push({
+        userId: targetUid,
+        status: 0,
+        activitiesFound: 0,
+        processedCount: 0,
+        updatedCount: 0,
+        createdCount: 0,
+        error: userErr && userErr.message ? userErr.message : String(userErr),
+      });
     }
     }
 
@@ -3037,6 +3094,7 @@ exports.manualStravaSyncWithMmp = onRequest(
       createdCount: totalCreated,
       hasMore,
       apiCallCount: globalApiCallCount,
+      userResults,
     });
     } catch (err) {
       console.error("[manualStravaSyncWithMmp] 오류:", err);
@@ -9030,13 +9088,10 @@ function buildMotivationMessage(currentUser, nextUser) {
 const GC_RANKING_MAX_ROWS_PER_CATEGORY = 10000;
 /** 한 번 페이지 조회 크기(Firestore 1 라운드트립당 문서 상한을 완만히 둠). */
 const GC_RANKING_FETCH_PAGE_SIZE = 2500;
-/** M/F 순위 통일용 Supremo·gender=all 참조 사용자 수 상한(부문 상한과 정렬 유지 위해 동일 크기). */
-const GC_RANKING_SUPERMO_ALL_FETCH_CAP = 10000;
 
 /**
- * GC(헵타곤 환산): `heptagon_cohort_ranks` 읽기. 행 순서·표시 순위는 `sumPositionScores` desc 쿼리 결과와 일치시킴
- * (`boardRank`는 스냅샷 필드라 점수만 먼저 갱신될 때 헵타곤 카드와 숫자가 어긋날 수 있음).
- * 성별 M/F: 전체(all)·Supremo 환산 합으로 점수 통일 후 해당 성별 부문 재정렬·순위 부여.
+ * GC(헵타곤 환산): `heptagon_cohort_ranks` 읽기.
+ * 표시 순위는 헵타곤 공식 `boardRank`를 우선 사용해 GC와 헵타곤 카드 순위를 동기화한다.
  */
 async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
   const col = db.collection(heptagonCohortRanks.HEPTAGON_COHORT_COL);
@@ -9062,44 +9117,12 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
     }
   }
 
-  const applyGenderScoreUnify = filterGender === "M" || filterGender === "F";
-  let supreAllScores = null;
-  if (applyGenderScoreUnify) {
-    supreAllScores = new Map();
-    let curLast = null;
-    let supFetched = 0;
-    while (supFetched < GC_RANKING_SUPERMO_ALL_FETCH_CAP) {
-      const need = GC_RANKING_SUPERMO_ALL_FETCH_CAP - supFetched;
-      let qAll = col
-        .where("monthKey", "==", monthKey)
-        .where("filterCategory", "==", "Supremo")
-        .where("filterGender", "==", "all")
-        .orderBy("sumPositionScores", "desc")
-        .limit(Math.min(GC_RANKING_FETCH_PAGE_SIZE, need));
-      if (curLast) qAll = qAll.startAfter(curLast);
-      const snapAll = await qAll.get();
-      if (!snapAll || snapAll.empty || !snapAll.docs.length) break;
-      for (let ai = 0; ai < snapAll.docs.length; ai++) {
-        const docSnap = snapAll.docs[ai];
-        const d = docSnap.data();
-        captureSnapshotMeta(d);
-        if (d && d.userId != null && d.sumPositionScores != null && isFinite(Number(d.sumPositionScores))) {
-          supreAllScores.set(String(d.userId), Number(d.sumPositionScores));
-        }
-      }
-      supFetched += snapAll.docs.length;
-      if (snapAll.docs.length < Math.min(GC_RANKING_FETCH_PAGE_SIZE, need)) break;
-      curLast = snapAll.docs[snapAll.docs.length - 1];
-    }
-  }
-
   const categoryRowsLists = await Promise.all(
     categories.map(async (cat) => {
-      const rows = [];
-      let seq = 0;
+      const rawDocs = [];
       let cursor = null;
-      while (rows.length < GC_RANKING_MAX_ROWS_PER_CATEGORY) {
-        const room = GC_RANKING_MAX_ROWS_PER_CATEGORY - rows.length;
+      while (rawDocs.length < GC_RANKING_MAX_ROWS_PER_CATEGORY) {
+        const room = GC_RANKING_MAX_ROWS_PER_CATEGORY - rawDocs.length;
         let q = col
           .where("monthKey", "==", monthKey)
           .where("filterCategory", "==", cat)
@@ -9110,44 +9133,35 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
         const snap = await q.get();
         if (!snap || snap.empty || !snap.docs.length) break;
         for (let di = 0; di < snap.docs.length; di++) {
-          const docSnap = snap.docs[di];
-          const d = docSnap.data();
-          captureSnapshotMeta(d);
-          if (!d || !d.userId) continue;
-          seq += 1;
-          const uid = String(d.userId);
-          let gcScore = d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0;
-          if (applyGenderScoreUnify && supreAllScores.has(uid)) {
-            gcScore = supreAllScores.get(uid);
-          }
-          const g = filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
-          rows.push({
-            userId: uid,
-            name: (d.displayName && String(d.displayName).trim()) || "(이름 없음)",
-            ageCategory: d.ageCategory != null ? String(d.ageCategory) : "",
-            gender: g,
-            is_private: privacyFlagFromFirestoreDoc(d),
-            rank: seq,
-            gcScore,
-            rankChange: d.rankChange != null && isFinite(Number(d.rankChange)) ? Math.round(Number(d.rankChange)) : null,
-            previousBoardRank: d.previousBoardRank != null && isFinite(Number(d.previousBoardRank)) ? Math.floor(Number(d.previousBoardRank)) : null,
-          });
+          const d = snap.docs[di].data();
+          if (d && d.userId) rawDocs.push(d);
         }
         const got = snap.docs.length;
         if (got < Math.min(GC_RANKING_FETCH_PAGE_SIZE, room)) break;
         cursor = snap.docs[snap.docs.length - 1];
         if (!cursor) break;
       }
-      if (applyGenderScoreUnify) {
-        rows.sort((a, b) => {
-          if (b.gcScore !== a.gcScore) return b.gcScore - a.gcScore;
-          return String(a.userId).localeCompare(String(b.userId));
+      const latestDocs = heptagonCohortRanks.filterDocsToLatestAsOfSeoul(rawDocs);
+      const rows = [];
+      for (let di = 0; di < latestDocs.length; di++) {
+        const d = latestDocs[di];
+        captureSnapshotMeta(d);
+        const uid = String(d.userId);
+        const gcScore = d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0;
+        const g = filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
+        rows.push({
+          userId: uid,
+          name: (d.displayName && String(d.displayName).trim()) || "(이름 없음)",
+          ageCategory: d.ageCategory != null ? String(d.ageCategory) : "",
+          gender: g,
+          is_private: privacyFlagFromFirestoreDoc(d),
+          rank: d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : di + 1,
+          gcScore,
+          rankChange: d.rankChange != null && isFinite(Number(d.rankChange)) ? Math.round(Number(d.rankChange)) : null,
+          previousBoardRank: d.previousBoardRank != null && isFinite(Number(d.previousBoardRank)) ? Math.floor(Number(d.previousBoardRank)) : null,
         });
-        for (let ri = 0; ri < rows.length; ri++) {
-          rows[ri].rank = ri + 1;
-        }
       }
-      return { cat, rows };
+      return { cat, rows: heptagonCohortRanks.rerankGcBoardRows(rows) };
     })
   );
   for (let cri = 0; cri < categoryRowsLists.length; cri++) {

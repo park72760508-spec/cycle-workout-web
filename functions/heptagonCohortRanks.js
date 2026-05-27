@@ -791,9 +791,7 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
     supRowByUser[filterG] = supMap;
   }
 
-  const applyGenderScoreUnify = filterGender === "M" || filterGender === "F";
   const supMapFg = supRowByUser[filterGender];
-  const supMapAll = supRowByUser.all;
   const genderStr = filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
 
   const byCategory = {
@@ -817,10 +815,6 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
     const apiRows = [];
     for (let ri = 0; ri < rows.length; ri++) {
       const r = rows[ri];
-      let gcScore = r.sumPositionScores;
-      if (applyGenderScoreUnify && supMapAll.has(r.userId)) {
-        gcScore = supMapAll.get(r.userId).sumPositionScores;
-      }
       apiRows.push({
         userId: String(r.userId),
         name: r.displayName,
@@ -828,7 +822,7 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
         gender: genderStr,
         is_private: r.is_private === true,
         rank: 0,
-        gcScore,
+        gcScore: r.sumPositionScores,
       });
     }
     apiRows.sort((a, b) => {
@@ -888,6 +882,9 @@ function mergeGcRankingSnapshotWithLive(snapPayload, livePayload, filterGender) 
       added += 1;
     }
     merged.sort((a, b) => {
+      const ra = a.rank != null && isFinite(Number(a.rank)) ? Number(a.rank) : 0;
+      const rb = b.rank != null && isFinite(Number(b.rank)) ? Number(b.rank) : 0;
+      if (ra > 0 && rb > 0 && ra !== rb) return ra - rb;
       const sa = a.gcScore != null && isFinite(Number(a.gcScore)) ? Number(a.gcScore) : 0;
       const sb = b.gcScore != null && isFinite(Number(b.gcScore)) ? Number(b.gcScore) : 0;
       if (sb !== sa) return sb - sa;
@@ -910,11 +907,57 @@ function mergeGcRankingSnapshotWithLive(snapPayload, livePayload, filterGender) 
   };
 }
 
+/** Firestore `asOfSeoul` / Supabase `as_of_seoul` — YYYY-MM-DD */
+function asOfSeoulYmdFromDoc(d) {
+  if (!d || typeof d !== "object") return "";
+  const raw = d.asOfSeoul != null ? d.asOfSeoul : d.as_of_seoul;
+  return raw != null ? String(raw).trim().slice(0, 10) : "";
+}
+
+/**
+ * 코호트 행 중 가장 최신 스냅샷 일자만 남김.
+ * 재집계 시 탈락자 문서를 삭제하지 않아, 월 전체 문서를 세면 모수가 며칠째 고정될 수 있음.
+ */
+function latestAsOfSeoulYmdFromDocs(docs) {
+  let max = "";
+  for (let i = 0; i < (docs || []).length; i++) {
+    const a = asOfSeoulYmdFromDoc(docs[i]);
+    if (a && a > max) max = a;
+  }
+  return max;
+}
+
+function filterDocsToLatestAsOfSeoul(docs) {
+  const list = Array.isArray(docs) ? docs : [];
+  if (!list.length) return [];
+  const latest = latestAsOfSeoulYmdFromDocs(list);
+  if (!latest) return list;
+  return list.filter((d) => asOfSeoulYmdFromDoc(d) === latest);
+}
+
+/** GC 보드 표시 순위 — 환산 합 내림차순 후 1..N */
+function rerankGcBoardRows(rows) {
+  const sorted = (rows || []).slice().sort((a, b) => {
+    const sb = b.gcScore != null && isFinite(Number(b.gcScore)) ? Number(b.gcScore) : 0;
+    const sa = a.gcScore != null && isFinite(Number(a.gcScore)) ? Number(a.gcScore) : 0;
+    if (sb !== sa) return sb - sa;
+    return String(a.userId || "").localeCompare(String(b.userId || ""));
+  });
+  for (let i = 0; i < sorted.length; i++) {
+    sorted[i].rank = i + 1;
+  }
+  return sorted;
+}
+
 module.exports = {
   runRebuildHeptagonCohortRanks,
   buildLiveGcRankingPayload,
   mergeGcRankingSnapshotWithLive,
   getMonthKeyKstNow,
+  latestAsOfSeoulYmdFromDocs,
+  filterDocsToLatestAsOfSeoul,
+  rerankGcBoardRows,
+  asOfSeoulYmdFromDoc,
   HEPTAGON_COHORT_COL,
   HEPTAGON_GENDERS,
   HEPTAGON_CATEGORIES,
