@@ -427,13 +427,24 @@ async function fetchPersonalDist(admin, startStr, endStr, gender) {
   const { data, error } = await query.limit(2000);
   if (error) throw error;
 
-  const uidMap = await getFirebaseUidMapForSupabaseUsers(
-    admin,
+  const profileMap = await getPublicProfileMapForSupabaseUsers(
     supabase,
     (data || []).map((row) => row.user_id)
   );
+  const mergedRows = (data || [])
+    .map((row) => {
+      const profile = profileMap.get(String(row.user_id));
+      return profile ? { ...row, ...profile, user_id: row.user_id } : row;
+    })
+    .filter((row) => profileGenderMatches(row, gender));
+
+  const uidMap = await getFirebaseUidMapForSupabaseUsers(
+    admin,
+    supabase,
+    mergedRows.map((row) => row.user_id)
+  );
   const entries = [];
-  for (const row of data || []) {
+  for (const row of mergedRows) {
     const fbUid = uidMap.get(String(row.user_id));
     if (!fbUid) continue;
     const totalKm = Math.round(Number(row.distance_30d_km) * 100) / 100;
@@ -450,8 +461,8 @@ async function fetchPersonalDist(admin, startStr, endStr, gender) {
     byCategory,
     entries: ranked,
     startStr:
-      (data && data[0] && data[0].dist_window_start) || startStr,
-    endStr: (data && data[0] && data[0].dist_window_end) || endStr,
+      (mergedRows[0] && mergedRows[0].dist_window_start) || startStr,
+    endStr: (mergedRows[0] && mergedRows[0].dist_window_end) || endStr,
     period: "rolling30",
     durationType: "personal_dist",
     gender,
@@ -844,7 +855,7 @@ function captureGcSnapshotMeta(d, state) {
 }
 
 /**
- * GC(헵타곤): Supabase `heptagon_cohort_ranks` — Firestore buildStelvioGcRankingPayload와 동일 정렬·성별 점수 통일.
+ * GC(헵타곤): Supabase `heptagon_cohort_ranks`의 공식 board_rank를 그대로 표시 순위로 사용.
  * @param {import('firebase-admin')} admin
  * @param {string} [monthKey] YYYY-MM (KST)
  * @param {string} [filterGender] all | M | F
@@ -853,36 +864,6 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   const mk = monthKey || getMonthKeyKstNow();
   const fg = filterGender === "M" || filterGender === "F" ? filterGender : "all";
-  const applyGenderScoreUnify = fg === "M" || fg === "F";
-
-  let supreAllScores = null;
-  if (applyGenderScoreUnify) {
-    supreAllScores = new Map();
-    const { data: supAll, error: supAllErr } = await supabase
-      .from("heptagon_cohort_ranks")
-      .select("user_id, sum_position_scores, range_start, range_end, as_of_seoul")
-      .eq("month_key", mk)
-      .eq("filter_category", "Supremo")
-      .eq("filter_gender", "all")
-      .order("sum_position_scores", { ascending: false })
-      .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
-    if (supAllErr) throw supAllErr;
-    const supAllUidMap = await getFirebaseUidMapForSupabaseUsers(
-      admin,
-      supabase,
-      (supAll || []).map((row) => row.user_id)
-    );
-    for (const row of supAll || []) {
-      const fbUid = supAllUidMap.get(String(row.user_id));
-      if (
-        fbUid &&
-        row.sum_position_scores != null &&
-        isFinite(Number(row.sum_position_scores))
-      ) {
-        supreAllScores.set(fbUid, Number(row.sum_position_scores));
-      }
-    }
-  }
 
   const metaState = {
     snapshotRangeStart: "",
@@ -903,12 +884,12 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
       const { data, error } = await supabase
         .from("heptagon_cohort_ranks")
         .select(
-          "user_id, display_name, age_category, sum_position_scores, previous_board_rank, rank_change, range_start, range_end, as_of_seoul, is_private"
+          "user_id, display_name, age_category, board_rank, comprehensive_rank, sum_position_scores, previous_board_rank, rank_change, range_start, range_end, as_of_seoul, is_private"
         )
         .eq("month_key", mk)
         .eq("filter_category", cat)
         .eq("filter_gender", fg)
-        .order("sum_position_scores", { ascending: false })
+        .order("board_rank", { ascending: true })
         .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
       if (error) throw error;
 
@@ -927,26 +908,20 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
         captureGcSnapshotMeta(row, metaState);
         const fbUid = uidMap.get(String(row.user_id));
         if (!fbUid) continue;
-        let gcScore =
+        const gcScore =
           row.sum_position_scores != null && isFinite(Number(row.sum_position_scores))
             ? Number(row.sum_position_scores)
             : 0;
-        if (applyGenderScoreUnify && supreAllScores.has(fbUid)) {
-          gcScore = supreAllScores.get(fbUid);
-        }
         const entry = mapGcRowToEntry(row, fbUid, fg, gcScore, profileMap.get(String(row.user_id)));
-        entry.rank = rows.length + 1;
+        entry.rank =
+          row.board_rank != null && isFinite(Number(row.board_rank))
+            ? Math.floor(Number(row.board_rank))
+            : rows.length + 1;
+        entry.comprehensiveRank =
+          row.comprehensive_rank != null && isFinite(Number(row.comprehensive_rank))
+            ? Math.floor(Number(row.comprehensive_rank))
+            : entry.rank;
         rows.push(entry);
-      }
-
-      if (applyGenderScoreUnify) {
-        rows.sort((a, b) => {
-          if (b.gcScore !== a.gcScore) return b.gcScore - a.gcScore;
-          return String(a.userId).localeCompare(String(b.userId));
-        });
-        for (let ri = 0; ri < rows.length; ri++) {
-          rows[ri].rank = ri + 1;
-        }
       }
 
       byCategory[cat] = rows;
