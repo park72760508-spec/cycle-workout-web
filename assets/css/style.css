@@ -1887,6 +1887,25 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-join-request-actions.open-riding-group-rank-actions {
   flex-wrap: nowrap;
   min-width: min-content;
+  position: relative;
+  z-index: 4;
+  pointer-events: auto !important;
+  touch-action: manipulation;
+}
+
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-join-request-row .stelvio-rank-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 8.5rem);
+}
+
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-join-request-btn {
+  position: relative;
+  z-index: 5;
+  pointer-events: auto !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
 }
 
 /*
@@ -2743,21 +2762,6 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   background-repeat: no-repeat !important;
 }
 
-#basecampScreen .btn-device.basecamp-btn-career span,
-#basecampScreen .basecamp-btn-career span,
-#basecampScreen .btn-device.basecamp-btn-ranking span,
-#basecampScreen .basecamp-btn-ranking span,
-#basecampScreen .btn-device.basecamp-btn-indoor-entry span,
-#basecampScreen .basecamp-btn-indoor-entry span,
-#basecampScreen .btn-device.basecamp-btn-riding-group-entry span:not(#basecampClubHouseNotiBadge),
-#basecampScreen .basecamp-btn-riding-group-entry span:not(#basecampClubHouseNotiBadge),
-#basecampScreen .btn-device.basecamp-btn-affiliate-entry span,
-#basecampScreen .basecamp-btn-affiliate-entry span {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-}
-
 /* 베이스캠프 화면의 오픈 라이딩방 버튼 스타일 (우하, b(04) 아트워크) */
 #basecampScreen .btn-device.basecamp-btn-manual,
 #basecampScreen .basecamp-btn-manual {
@@ -2773,13 +2777,6 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .btn-device.basecamp-btn-manual::before,
 #basecampScreen .basecamp-btn-manual::before {
   background: rgba(135, 206, 235, 0.3) !important;
-}
-
-#basecampScreen .btn-device.basecamp-btn-manual span:not(#basecampRidingNotiBadge),
-#basecampScreen .basecamp-btn-manual span:not(#basecampRidingNotiBadge) {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
 }
 
 /* 베이스캠프 하단 추가 버튼: 라이딩 모임 / 제휴사 */
@@ -2874,7 +2871,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /* MY CAREER 화면 내부 버튼 텍스트 표시 스타일 */
-/* My Career 8버튼은 라벨 없음 - basecamp-btn-career span { display:none } 적용 */
+/* My Career 8버튼은 라벨 없음 — #myCareerScreen .basecamp-btn-career span { display:none } 적용 */
 
 /* MY CAREER 화면 내부 버튼 오버레이 조정 (텍스트 가독성 향상) */
 #myCareerScreen .basecamp-btn-career::before {
@@ -3359,7 +3356,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   }
 }
 
-.basecamp-btn-career span {
+/* MY CAREER 화면 8버튼만 라벨 숨김 (베이스캠프 path 그리드는 라벨 표시) */
+#myCareerScreen .basecamp-btn-career span {
   display: none !important;
 }
 
@@ -4292,19 +4290,27 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   z-index: 1 !important;
 }
 
-/* 베이스캠프 버튼 span - basecamp-btn 클래스가 있을 때는 별도 처리 */
-#basecampScreen .btn-device.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge) {
-  order: 1 !important; /* 하단에 배치 */
-  font-size: 18px !important;
-  font-weight: 600 !important;
-  text-align: center !important;
-  line-height: 1.4 !important;
-  width: 100% !important;
+/* 베이스캠프 path 그리드 버튼 — HTML span 텍스트(버튼 이름) 하단 표시 */
+#basecampScreen .basecamp-path-grid .btn-device.basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge),
+#basecampScreen .basecamp-path-grid .basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge) {
+  order: 1 !important;
   display: block !important;
-  margin-bottom: 0 !important;
-  margin-top: auto !important; /* 하단에 배치 */
+  visibility: visible !important;
+  opacity: 1 !important;
+  font-size: clamp(11px, 2.6vw, 14px) !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  line-height: 1.25 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  margin-top: auto !important;
+  padding: 0 4px 6px !important;
+  box-sizing: border-box !important;
   position: relative !important;
-  z-index: 1 !important;
+  z-index: 2 !important;
+  color: #fff !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65) !important;
+  pointer-events: none !important;
 }
 
 /* 연결된 상태 스타일 - 반투명 녹색 계열, 폰트 크기 유지, 텍스트 색깔만 진한 녹색 */
@@ -14543,11 +14549,13 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
     padding: 0 24px;            /* 카드 좌우 패딩과 동일하게 유지 */
   }
   
-  /* 베이스캠프·인도어 서브 버튼 이미지 위치 조정 - 상단으로 1/5 높이만큼 이동 (INDOOR TRAINING, SOLO TRAINING, USER PROFILE만) */
+  /* 베이스캠프 path 그리드·인도어 서브 — 아이콘을 위로 올려 하단 라벨 공간 확보 */
   #basecampScreen .basecamp-btn-ranking,
   #basecampScreen .basecamp-btn-indoor-entry,
   #basecampScreen .basecamp-btn-career,
   #basecampScreen .basecamp-btn-manual,
+  #basecampScreen .basecamp-btn-riding-group-entry,
+  #basecampScreen .basecamp-btn-affiliate-entry,
   #indoorTrainingSubScreen .basecamp-btn-indoor,
   #indoorTrainingSubScreen .basecamp-btn-solo,
   #indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-racing,
