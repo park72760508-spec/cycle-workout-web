@@ -9702,7 +9702,46 @@ function OpenRidingGroupDetailView(props) {
   var _mjr = useState(null);
   var myJoinRequest = _mjr[0];
   var setMyJoinRequest = _mjr[1];
+  /** 가입 신청 수락/거절 확인 모달 (WebView에서 window.confirm 미동작 대비) */
+  var _jConfirm = useState(null);
+  var joinActionConfirm = _jConfirm[0];
+  var setJoinActionConfirm = _jConfirm[1];
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+
+  function joinRequestApplicantUid(j) {
+    return String((j && (j.userId || j.id)) || '').trim();
+  }
+
+  function getGroupService() {
+    return (typeof window !== 'undefined' && window.openRidingGroupService) || gs || {};
+  }
+
+  function refreshGroupDetailListsAfterJoinModeration() {
+    var svc = getGroupService();
+    var tasks = [];
+    if (typeof svc.fetchRidingGroupMembersList === 'function') {
+      tasks.push(
+        svc.fetchRidingGroupMembersList(firestore, groupId).then(function (list) {
+          setMembers(Array.isArray(list) ? list : []);
+        })
+      );
+    }
+    if (typeof svc.fetchRidingGroupJoinRequestsList === 'function') {
+      tasks.push(
+        svc.fetchRidingGroupJoinRequestsList(firestore, groupId).then(function (list) {
+          setJoinRequests(Array.isArray(list) ? list : []);
+        })
+      );
+    }
+    if (typeof svc.fetchRidingGroupById === 'function') {
+      tasks.push(
+        svc.fetchRidingGroupById(firestore, groupId).then(function (doc) {
+          if (doc) setGrp(doc);
+        })
+      );
+    }
+    return Promise.all(tasks);
+  }
   var GROUP_ST = gs.GROUP_STATUS || { PENDING: 'PENDING', APPROVED: 'APPROVED', REJECTED: 'REJECTED' };
   var isAdmin = openRidingGroupsIsAdminGrade();
 
@@ -9714,7 +9753,7 @@ function OpenRidingGroupDetailView(props) {
         if (u) set[u] = true;
       });
       joinRequests.forEach(function (j) {
-        var u = String(j.userId || '').trim();
+        var u = joinRequestApplicantUid(j);
         if (u) set[u] = true;
       });
       return Object.keys(set)
@@ -9903,7 +9942,7 @@ function OpenRidingGroupDetailView(props) {
   }
 
   function displayNameForJoinRequest(j) {
-    var uid = String(j.userId || '');
+    var uid = joinRequestApplicantUid(j);
     var row = memberProfiles[uid];
     var fromProf = row ? openRidingFirestoreUserDisplayName(row) : '';
     if (fromProf) return fromProf;
@@ -9913,7 +9952,7 @@ function OpenRidingGroupDetailView(props) {
   }
 
   function photoForJoinRequest(j) {
-    var uid = String(j.userId || '');
+    var uid = joinRequestApplicantUid(j);
     var row = memberProfiles[uid];
     var u = row ? openRidingFirestoreUserProfileImageUrl(row) : '';
     if (u) return u;
@@ -10056,38 +10095,43 @@ function OpenRidingGroupDetailView(props) {
       });
   }
 
+  function openJoinActionConfirm(action, applicantUid, displayName) {
+    var uid = String(applicantUid || '').trim();
+    if (!uid) {
+      alert('신청자 정보를 확인할 수 없습니다.');
+      return;
+    }
+    setJoinActionConfirm({
+      action: action === 'reject' ? 'reject' : 'approve',
+      uid: uid,
+      name: displayName != null ? String(displayName) : '신청자'
+    });
+  }
+
+  function runJoinActionConfirm() {
+    var pending = joinActionConfirm;
+    if (!pending || !pending.uid) return;
+    setJoinActionConfirm(null);
+    if (pending.action === 'reject') doRejectJoinRequest(pending.uid);
+    else doApproveJoinRequest(pending.uid);
+  }
+
   function doApproveJoinRequest(applicantUid) {
-    if (!firestore || !userId || !groupId || !applicantUid) return;
-    if (typeof gs.approveRidingGroupJoinRequest !== 'function') return;
-    if (!window.confirm('이 신청을 수락해 멤버로 등록할까요?')) return;
+    var appUid = String(applicantUid || '').trim();
+    if (!firestore || !userId || !groupId || !appUid) {
+      alert('수락할 수 없습니다. 로그인·연결 상태를 확인해 주세요.');
+      return;
+    }
+    var svc = getGroupService();
+    if (typeof svc.approveRidingGroupJoinRequest !== 'function') {
+      alert('가입 수락 기능을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');
+      return;
+    }
     setBusy(true);
-    gs
-      .approveRidingGroupJoinRequest(firestore, String(userId), String(groupId), String(applicantUid))
+    svc
+      .approveRidingGroupJoinRequest(firestore, String(userId), String(groupId), appUid)
       .then(function () {
-        /* BloomFilter watch 경고 시에도 UI 즉시 반영 — getDocs 1회(실시간 구독은 유지) */
-        var tasks = [];
-        if (typeof gs.fetchRidingGroupMembersList === 'function') {
-          tasks.push(
-            gs.fetchRidingGroupMembersList(firestore, groupId).then(function (list) {
-              setMembers(Array.isArray(list) ? list : []);
-            })
-          );
-        }
-        if (typeof gs.fetchRidingGroupJoinRequestsList === 'function') {
-          tasks.push(
-            gs.fetchRidingGroupJoinRequestsList(firestore, groupId).then(function (list) {
-              setJoinRequests(Array.isArray(list) ? list : []);
-            })
-          );
-        }
-        if (typeof gs.fetchRidingGroupById === 'function') {
-          tasks.push(
-            gs.fetchRidingGroupById(firestore, groupId).then(function (doc) {
-              if (doc) setGrp(doc);
-            })
-          );
-        }
-        return Promise.all(tasks);
+        return refreshGroupDetailListsAfterJoinModeration();
       })
       .catch(function (e) {
         alert(e && e.message ? e.message : '수락 처리에 실패했습니다.');
@@ -10098,12 +10142,22 @@ function OpenRidingGroupDetailView(props) {
   }
 
   function doRejectJoinRequest(applicantUid) {
-    if (!firestore || !userId || !groupId || !applicantUid) return;
-    if (typeof gs.rejectRidingGroupJoinRequest !== 'function') return;
-    if (!window.confirm('이 가입 신청을 거절하고 목록에서 삭제할까요?')) return;
+    var appUid = String(applicantUid || '').trim();
+    if (!firestore || !userId || !groupId || !appUid) {
+      alert('거절할 수 없습니다. 로그인·연결 상태를 확인해 주세요.');
+      return;
+    }
+    var svc = getGroupService();
+    if (typeof svc.rejectRidingGroupJoinRequest !== 'function') {
+      alert('가입 거절 기능을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');
+      return;
+    }
     setBusy(true);
-    gs
-      .rejectRidingGroupJoinRequest(firestore, String(userId), String(groupId), String(applicantUid))
+    svc
+      .rejectRidingGroupJoinRequest(firestore, String(userId), String(groupId), appUid)
+      .then(function () {
+        return refreshGroupDetailListsAfterJoinModeration();
+      })
       .catch(function (e) {
         alert(e && e.message ? e.message : '거절 처리에 실패했습니다.');
       })
@@ -10462,13 +10516,13 @@ function OpenRidingGroupDetailView(props) {
             ) : (
               <div className="space-y-0">
                 {joinRequests.map(function (j, idx) {
-                  var uid = String(j.userId || '');
+                  var uid = joinRequestApplicantUid(j);
                   var rank = idx + 1;
                   var nm = displayNameForJoinRequest(j);
                   var photo = photoForJoinRequest(j);
                   var initial = nm.charAt(0) || '·';
                   return (
-                    <div key={uid || idx} className="stelvio-rank-row open-riding-group-rank-row">
+                    <div key={uid || idx} className="stelvio-rank-row open-riding-group-rank-row open-riding-group-join-request-row">
                       <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank}</span>
                       <span className="stelvio-rank-name">
                         {photo ? (
@@ -10497,20 +10551,24 @@ function OpenRidingGroupDetailView(props) {
                       <span className="stelvio-rank-wkg open-riding-group-rank-actions open-riding-group-join-request-actions inline-flex flex-row flex-nowrap items-center justify-end gap-1.5 shrink-0 whitespace-nowrap">
                         <button
                           type="button"
-                          className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
-                          disabled={busy}
-                          onClick={function () {
-                            doApproveJoinRequest(uid);
+                          className="open-riding-action-btn open-riding-group-join-request-btn shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
+                          disabled={busy || !uid}
+                          onClick={function (ev) {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            openJoinActionConfirm('approve', uid, nm);
                           }}
                         >
                           수락
                         </button>
                         <button
                           type="button"
-                          className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-                          disabled={busy}
-                          onClick={function () {
-                            doRejectJoinRequest(uid);
+                          className="open-riding-action-btn open-riding-group-join-request-btn shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                          disabled={busy || !uid}
+                          onClick={function (ev) {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            openJoinActionConfirm('reject', uid, nm);
                           }}
                         >
                           거절
@@ -10604,6 +10662,58 @@ function OpenRidingGroupDetailView(props) {
                   })}
                 </ul>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {joinActionConfirm ? (
+        <div
+          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[200060] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-join-action-dialog-title"
+          onClick={function (ev) {
+            if (ev.target !== ev.currentTarget || busy) return;
+            setJoinActionConfirm(null);
+          }}
+        >
+          <div
+            className="open-riding-bomb-modal-panel w-full max-w-sm py-6 px-6 text-center"
+            onClick={function (e) {
+              e.stopPropagation();
+            }}
+          >
+            <h4 id="open-riding-join-action-dialog-title" className="text-base font-bold text-slate-900 m-0 mb-2">
+              {joinActionConfirm.action === 'reject' ? '가입 거절' : '가입 수락'}
+            </h4>
+            <p className="text-sm text-slate-600 m-0 mb-5 leading-relaxed">
+              {joinActionConfirm.action === 'reject'
+                ? (joinActionConfirm.name || '신청자') + '님의 가입 신청을 거절하고 목록에서 삭제할까요?'
+                : (joinActionConfirm.name || '신청자') + '님을 멤버로 수락할까요?'}
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button
+                type="button"
+                className="open-riding-action-btn flex-1 min-h-[44px] rounded-xl border border-slate-300 bg-white text-slate-700 font-medium text-sm disabled:opacity-50"
+                disabled={busy}
+                onClick={function () {
+                  setJoinActionConfirm(null);
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className={
+                  'open-riding-action-btn flex-1 min-h-[44px] rounded-xl font-medium text-sm text-white disabled:opacity-50 ' +
+                  (joinActionConfirm.action === 'reject' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700')
+                }
+                disabled={busy}
+                onClick={runJoinActionConfirm}
+              >
+                {busy ? '처리 중…' : joinActionConfirm.action === 'reject' ? '거절' : '수락'}
+              </button>
             </div>
           </div>
         </div>
