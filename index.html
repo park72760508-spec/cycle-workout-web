@@ -19601,14 +19601,12 @@
         var count = Number(n) || 0;
         if (count > 0) {
           badge.textContent = count > 99 ? '99+' : String(count);
-          if (count > 9) badge.setAttribute('data-wide', '1');
+          if (count >= 10) badge.setAttribute('data-wide', '1');
           else badge.removeAttribute('data-wide');
-          badge.style.setProperty('display', 'flex', 'important');
           badge.classList.add('show');
         } else {
           badge.textContent = '';
           badge.removeAttribute('data-wide');
-          badge.style.setProperty('display', 'none', 'important');
           badge.classList.remove('show');
         }
       }
