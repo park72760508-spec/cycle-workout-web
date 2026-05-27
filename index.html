@@ -12101,6 +12101,7 @@
       var label = document.getElementById('stelvioCategoryLabel');
       if (label) label.textContent = STELVIO_CATEGORY_LABELS[val] || val;
       stelvioScrollRankingBoardToTopSmooth();
+      if (typeof stelvioSyncRankingListHeaderUi === 'function') stelvioSyncRankingListHeaderUi();
       renderStelvioActiveCategory();
     }
     window.stelvioOnCategoryChange = stelvioOnCategoryChange;
@@ -12635,6 +12636,10 @@
           tabs.forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           stelvioRankingState.duration = nextDur;
+          if (nextDur === 'group_dist' && stelvioRankingState.listFilter === 'interest') {
+            stelvioRankingState.listFilter = 'all';
+            stelvioSyncRankingListFilterToggleUi();
+          }
           stelvioResetRankingListExpansionForNewTab();
           stelvioApplyDurationModeUi();
           if (typeof stelvioSyncRankingListHeaderUi === 'function') stelvioSyncRankingListHeaderUi();
@@ -15271,18 +15276,10 @@
         default:             return entry.wkg != null        ? Number(entry.wkg)      : NaN;
       }
     }
-    /** 그룹 탭 현재 지표에 맞는 포맷된 값 문자열 */
+    /** 그룹 탭 현재 지표에 맞는 포맷된 값 문자열 (단위는 헤더 .stelvio-category-header-unit) */
     function stelvioGroupTabFormatMemberValue(item, canSeeFull) {
       if (stelvioRankingIsPrivateRow(item) && !canSeeFull) return '\u2014';
-      var v = stelvioGroupTabGetMetricValue(item);
-      if (!isFinite(v) || v < 0) return '\u2014';
-      switch (stelvioGroupTabMetric) {
-        case 'gc':           return v.toFixed(1);
-        case 'tss':          return v.toFixed(1);
-        case 'personal_dist':return v.toFixed(1) + ' km';
-        case 'personal_speed':return v.toFixed(1) + ' km/h';
-        default:             return v.toFixed(2) + ' W/kg';
-      }
+      return stelvioFormatRankCell(item);
     }
     /** 현재 그룹 지표 라벨 */
     function stelvioGroupTabCurrentMetricLabel() {
@@ -15302,7 +15299,7 @@
       }
     }
     function stelvioRankingCurrentListHeaderTitle() {
-      if (stelvioIsGroupDistanceRanking()) return '나의 그룹';
+      if (stelvioIsGroupDistanceRanking()) return '나의 클럽';
       var cat = (stelvioRankingState && stelvioRankingState.activeCategory) || 'Supremo';
       return STELVIO_CATEGORY_TITLES[cat] || (STELVIO_CATEGORY_LABELS[cat] || cat) + ' 순위';
     }
@@ -15343,9 +15340,9 @@
         }
       }
 
-      /* Supremo 풀(성별 필터 적용, 전 카테고리) */
+      var catKeyRank = stelvioRankingState.activeCategory || 'Supremo';
       var supMap = {};
-      var supArrC = (stelvioRankingByCategory['Supremo'] || []);
+      var supArrC = (stelvioRankingByCategory[catKeyRank] || []);
       for (var si2 = 0; si2 < supArrC.length; si2++) {
         if (supArrC[si2] && supArrC[si2].userId) supMap[String(supArrC[si2].userId)] = supArrC[si2];
       }
@@ -15376,11 +15373,16 @@
         if (String(allMerged[ai2].userId) === String(uidV)) { overallRank = ai2 + 1; break; }
       }
 
-      /* 뷰어 카테고리 기준 순위 */
+      /* 뷰어 연령 부문 순위 (전체·Supremo 필터일 때만) */
       var viewerSupE = supMap[String(uidV)];
       var viewerAgeCat = viewerSupE ? String(viewerSupE.ageCategory || '') : '';
       var catRank = null, catLabel = '';
-      if (viewerAgeCat && viewerAgeCat !== 'Supremo' && STELVIO_CATEGORY_LABELS[viewerAgeCat]) {
+      if (
+        catKeyRank === 'Supremo' &&
+        viewerAgeCat &&
+        viewerAgeCat !== 'Supremo' &&
+        STELVIO_CATEGORY_LABELS[viewerAgeCat]
+      ) {
         catLabel = STELVIO_CATEGORY_LABELS[viewerAgeCat];
         var catMapV = {};
         var catArrV2 = (stelvioRankingByCategory[viewerAgeCat] || []);
@@ -15683,10 +15685,8 @@
         bodyEl.innerHTML = '<p class="stelvio-ranking-empty stelvio-ranking-empty--group">가입된 승인 소모임이 없습니다.<br>라이딩 모임에서 그룹(소모임)에 가입해 보세요.<br><span class="stelvio-ranking-empty-note">* 그룹 생성 예 : 아카데미, MCT팀, 소모임 등</span></p>';
         return;
       }
-      var cat = stelvioRankingState.activeCategory;
-      var rankingPool = stelvioFilterRowsByListInterest((stelvioRankingByCategory && stelvioRankingByCategory[cat]) || []);
-      /* 관심 필터 ON 시 byCategory[cat]에 없는 그룹멤버를 Supremo 풀에서 보충 */
-      rankingPool = stelvioInterestMergeGroupMembers(rankingPool, stelvioRankingByCategory, cat);
+      var cat = stelvioRankingState.activeCategory || 'Supremo';
+      var rankingPool = (stelvioRankingByCategory && stelvioRankingByCategory[cat]) || [];
       var poolUid = {};
       for (var pi = 0; pi < rankingPool.length; pi++) {
         var pr = rankingPool[pi];
@@ -15790,14 +15790,6 @@
           /* 1. 성별 필터: Supremo 풀에 없는 멤버도 그룹탭에서는 표시(프로필 fallback 사용) */
           var supE = supByUid[uMem];
           /* 2. 소모임 멤버는 랭킹 부문·지표 값 유무와 관계없이 전원 표시(값만 0/—). 과거: 부문 미포함 시 제외 */
-          /* 3. 관심 필터 */
-          if (stelvioRankingState.listFilter === 'interest') {
-            var isFavG    = stelvioRankingFavoriteUserSet.has(uMem);
-            var isFriendG = stelvioRankingFriendUserSet.has(uMem);
-            var isGrpG    = stelvioRankingGroupContactSet.has(uMem);
-            var isMeG     = myIdG && uMem === String(myIdG);
-            if (!isFavG && !isFriendG && !isGrpG && !isMeG) continue;
-          }
           /* 카테고리 별 랭킹 데이터 우선, 없으면 Supremo → members 문서 프로필 순으로 fallback */
           var rk = poolUid[uMem] || catRawByUid[uMem] || supE;
           var mergedItem = rk ? Object.assign({}, rk, { is_private: false }) : { userId: uMem, is_private: false, wkg: 0, totalTss: 0, totalKm: 0, speedKmh: 0, gcScore: 0 };
@@ -16392,6 +16384,10 @@
       var _filterToggleWrap = document.querySelector('.stelvio-ranking-list-filter-toggle');
       if (_filterToggleWrap) _filterToggleWrap.style.display = stelvioIsGroupDistanceRanking() ? 'none' : '';
       if (stelvioIsGroupDistanceRanking()) {
+        if (stelvioRankingState.listFilter === 'interest') {
+          stelvioRankingState.listFilter = 'all';
+          stelvioSyncRankingListFilterToggleUi();
+        }
         var bodyElG2 = document.getElementById('stelvioRankingListBody');
         stelvioSyncRankingListHeaderUi();
         if (bodyElG2) stelvioEnsureMyGroupsFirestoreSubscription(bodyElG2);
@@ -16583,6 +16579,19 @@
     }
 
     function stelvioFormatRankCell(item) {
+      if (stelvioIsGroupDistanceRanking()) {
+        var vG = stelvioGroupTabGetMetricValue(item);
+        if (!isFinite(vG) || vG < 0) return '\u2014';
+        switch (stelvioGroupTabMetric) {
+          case 'gc':
+          case 'tss':
+          case 'personal_dist':
+          case 'personal_speed':
+            return vG.toFixed(1);
+          default:
+            return vG.toFixed(2);
+        }
+      }
       if (stelvioIsSpeedKmhRanking()) {
         return (item.speedKmh != null ? Number(item.speedKmh) : 0).toFixed(1);
       }
