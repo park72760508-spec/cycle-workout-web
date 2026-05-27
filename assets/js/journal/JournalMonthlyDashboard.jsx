@@ -39,7 +39,7 @@
     var currentYear = props.currentYear;
     var currentMonth = props.currentMonth;
 
-    var _useState = useState(false);
+    var _useState = useState(true);
     var accordionOpen = _useState[0];
     var setAccordionOpen = _useState[1];
 
