@@ -2790,6 +2790,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   background-size: 90% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
+  /* 알림 배지가 버튼 경계 밖으로 표시될 수 있도록 overflow 해제 */
+  overflow: visible !important;
 }
 
 #basecampScreen .btn-device.basecamp-btn-affiliate-entry,
@@ -2834,27 +2836,40 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   color: #fff !important;
   font-size: 13px !important;
   font-weight: 700 !important;
-  line-height: 26px !important;
+  line-height: 1 !important;
   text-align: center !important;
   padding: 0 !important;
   margin: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
   box-sizing: border-box !important;
   z-index: 20 !important;
   pointer-events: none !important;
   white-space: nowrap !important;
   box-shadow: 0 1px 4px rgba(0,0,0,0.35) !important;
   text-shadow: none !important;
+  font-variant-numeric: tabular-nums !important;
+  /* 숫자를 원 정중앙에 배치 */
+  align-items: center !important;
+  justify-content: center !important;
   /* flex 레이아웃 무효화 */
   order: unset !important;
   flex: none !important;
   align-self: auto !important;
 }
 
+/* 배지 표시 시 flex 중앙 정렬 (라이딩 모임·클럽하우스 공통) */
+#basecampRidingNotiBadge.show,
+#basecampClubHouseNotiBadge.show {
+  display: flex !important;
+}
+
 /* 배지 숫자가 2자리 이상(10+)일 때 타원 방지 — 너비를 자동 확장하되 높이 고정 */
 #basecampRidingNotiBadge[data-wide],
 #basecampClubHouseNotiBadge[data-wide] {
   width: auto !important;
-  padding: 0 6px !important;
+  min-width: 26px !important;
+  padding: 0 5px !important;
   border-radius: 13px !important;
 }
 
@@ -2928,6 +2943,11 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   align-items: center !important;
   padding-bottom: 12px !important;
   min-height: 160px !important;
+}
+
+#basecampScreen .btn-device.basecamp-btn-riding-group-entry,
+#basecampScreen .btn-device.basecamp-btn-manual {
+  overflow: visible !important;
 }
 
 #basecampScreen .btn-device.basecamp-btn-career::before,
