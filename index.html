@@ -12938,6 +12938,9 @@
       if (apiDuration === 'personal_speed') {
         p.set('psLv', String(STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER));
       }
+      if (apiDuration === 'personal_dist') {
+        p.set('distPriv', '1');
+      }
       return p.toString();
     }
 
@@ -13275,7 +13278,9 @@
 
     function stelvioRankingPaintListFromCacheIfAny(bodyEl, cat) {
       if (!bodyEl || !cat) return false;
+      /* GC·거리: is_private·마스킹이 캐시 HTML에 고정되지 않도록 매번 재렌더 (독주는 psLv 캐시 키로 페이로드 갱신) */
       if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) return false;
+      if (typeof stelvioIsKmDistanceRanking === 'function' && stelvioIsKmDistanceRanking()) return false;
       var paintKey = stelvioRankingListPaintCacheKey(cat);
       var cached = stelvioRankingListHtmlCache[paintKey];
       if (!cached) return false;
