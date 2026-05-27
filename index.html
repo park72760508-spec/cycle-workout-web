@@ -19594,56 +19594,10 @@
         if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
       };
 
-      var basecampClubHouseBadgeUnsub = null;
-      function setBasecampClubHouseBadgeCount(n) {
-        var badge = document.getElementById('basecampClubHouseNotiBadge');
-        if (!badge) return;
-        var count = Number(n) || 0;
-        if (count > 0) {
-          badge.textContent = count > 99 ? '99+' : String(count);
-          if (count >= 10) badge.setAttribute('data-wide', '1');
-          else badge.removeAttribute('data-wide');
-          badge.classList.add('show');
-        } else {
-          badge.textContent = '';
-          badge.removeAttribute('data-wide');
-          badge.classList.remove('show');
-        }
-      }
-      window.setBasecampClubHouseBadgeCount = setBasecampClubHouseBadgeCount;
-
-      async function startBasecampClubHouseBadgeSubscription() {
-        if (basecampClubHouseBadgeUnsub) {
-          try { basecampClubHouseBadgeUnsub(); } catch (eOld) {}
-          basecampClubHouseBadgeUnsub = null;
-        }
-        setBasecampClubHouseBadgeCount(0);
-        await waitOpenRidingAuthAndFirestore(8000);
-        var uid = getOpenRidingUserId();
-        var db = window.firestoreV9 || null;
-        if (!uid || !db) return;
-        try {
-          if (!window.openRidingGroupService || typeof window.openRidingGroupService.subscribeMyManagedGroupsJoinRequestCounts !== 'function') {
-            await import('./assets/js/openRiding/openRidingBoot.js?v=korea-region-groups-ui-20260403');
-          }
-          var svc = window.openRidingGroupService || {};
-          if (typeof svc.subscribeMyManagedGroupsJoinRequestCounts !== 'function') return;
-          basecampClubHouseBadgeUnsub = svc.subscribeMyManagedGroupsJoinRequestCounts(db, uid, function (total) {
-            setBasecampClubHouseBadgeCount(total);
-          });
-        } catch (eBadge) {
-          console.warn('[BasecampClubHouseBadge] 구독 실패:', eBadge && eBadge.message ? eBadge.message : eBadge);
-        }
-      }
-      window.startBasecampClubHouseBadgeSubscription = startBasecampClubHouseBadgeSubscription;
-      setTimeout(function () { startBasecampClubHouseBadgeSubscription(); }, 1200);
-      try {
-        if (window.authV9 && typeof window.authV9.onAuthStateChanged === 'function') {
-          window.authV9.onAuthStateChanged(function () {
-            startBasecampClubHouseBadgeSubscription();
-          });
-        }
-      } catch (eAuthBadge) {}
+      /* 클럽 하우스 배지: app.js v8 Firestore 구독(refreshBasecampBadge)에서 처리 — 중복 v9 구독 제거 */
+      window.startBasecampClubHouseBadgeSubscription = function () {
+        if (typeof window.refreshBasecampBadge === 'function') window.refreshBasecampBadge();
+      };
     })();
   </script>
   
