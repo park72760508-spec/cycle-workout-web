@@ -21610,12 +21610,10 @@ if (originalCleanupMobileDashboard) {
       } else {
         badge.removeAttribute('data-wide');
       }
-      /* CSS의 display:none !important를 인라인으로 override */
-      badge.style.setProperty('display', 'flex', 'important');
-      badge.style.setProperty('align-items', 'center', 'important');
-      badge.style.setProperty('justify-content', 'center', 'important');
+      badge.classList.add('show');
     } else {
-      badge.style.setProperty('display', 'none', 'important');
+      badge.textContent = '';
+      badge.classList.remove('show');
       badge.removeAttribute('data-wide');
     }
   }
