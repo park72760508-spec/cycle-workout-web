@@ -12941,6 +12941,9 @@
       if (apiDuration === 'personal_dist') {
         p.set('distPriv', '1');
       }
+      if (apiDuration === 'gc') {
+        p.set('gcSnap', '1');
+      }
       return p.toString();
     }
 
