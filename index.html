@@ -2679,20 +2679,20 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof handleMyCareerClick==='function'){handleMyCareerClick();}else if(typeof showMyCareerScreenWithLoading==='function'){showMyCareerScreenWithLoading();}else if(typeof showScreen==='function'){showScreen('myCareerScreen');}" aria-label="나의 기록">
                 <span>나의 기록</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-indoor-entry" id="btnBasecampIndoorEntry" onclick="if (typeof showScreen === 'function') showScreen('indoorTrainingSubScreen');" aria-label="인도어 훈련">
-                <span>인도어 훈련</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-group-entry" id="btnBasecampRidingGroupEntry" onclick="if (typeof navigateToClubHouseFromBasecamp === 'function') navigateToClubHouseFromBasecamp(); else { window.__openRidingInitialView = 'groups'; if (typeof showScreen === 'function') showScreen('openRidingRoomScreen'); }" aria-label="클럽 하우스">
+                <span>클럽 하우스</span>
+                <span id="basecampClubHouseNotiBadge" aria-label="클럽 가입 신청 건수"></span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampOpenRiding" onclick="if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp(); else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="라이딩 모임">
                 <span>라이딩 모임</span>
                 <!-- 알림 배지: top:25% / right:25% (버튼 4등분 우상단 중앙) — 이후 수치 보정 가능 -->
                 <span id="basecampRidingNotiBadge" aria-label="알림 건수"></span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-group-entry" id="btnBasecampRidingGroupEntry" onclick="if (typeof navigateToClubHouseFromBasecamp === 'function') navigateToClubHouseFromBasecamp(); else { window.__openRidingInitialView = 'groups'; if (typeof showScreen === 'function') showScreen('openRidingRoomScreen'); }" aria-label="클럽 하우스">
-                <span>클럽 하우스</span>
-                <span id="basecampClubHouseNotiBadge" aria-label="클럽 가입 신청 건수"></span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-indoor-entry" id="btnBasecampIndoorEntry" onclick="if (typeof showScreen === 'function') showScreen('indoorTrainingSubScreen');" aria-label="인도어 훈련">
+                <span>인도어 훈련</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-affiliate-entry" id="btnBasecampAffiliateEntry" onclick="if (typeof window.onAffiliateButtonClick === 'function') window.onAffiliateButtonClick(); else if (typeof showScreen === 'function') showScreen('affiliateScreen');" aria-label="제휴사">
-                <span>제휴사</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-affiliate-entry" id="btnBasecampAffiliateEntry" onclick="if (typeof window.onAffiliateButtonClick === 'function') window.onAffiliateButtonClick(); else if (typeof showScreen === 'function') showScreen('affiliateScreen');" aria-label="제휴 할인">
+                <span>제휴 할인</span>
               </button>
             </div>
             <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 환영합니다. 사용자명님 + 로그아웃 -->
