@@ -2349,23 +2349,8 @@ function openRidingTryContactPickerApi() {
 
 function openRidingBridgeOpenAddressBook() {
   try {
-    if (
-      typeof window !== 'undefined' &&
-      window.ReactNativeWebView &&
-      typeof window.ReactNativeWebView.postMessage === 'function'
-    ) {
-      var rnPayloads = [
-        { type: 'OPEN_ADDRESS_BOOK', source: 'openRidingCreate' },
-        { type: 'openAddressBook', source: 'openRidingCreate' },
-        { type: 'OPEN_RIDING_OPEN_ADDRESS_BOOK', source: 'openRidingCreate' }
-      ];
-      for (var ri = 0; ri < rnPayloads.length; ri++) {
-        try {
-          window.ReactNativeWebView.postMessage(JSON.stringify(rnPayloads[ri]));
-          return;
-        } catch (eRn) {}
-      }
-    }
+    /* 앱 재배포 없이: Chromium Contact Picker API 우선 (StelvioWebview는 주소록 postMessage 미구현) */
+    if (openRidingTryContactPickerApi()) return;
     var wh = typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers ? window.webkit.messageHandlers : null;
     if (wh) {
       var iosNames = ['openAddressBook', 'pickContacts', 'contacts', 'openContacts', 'addressBook'];
@@ -2391,10 +2376,23 @@ function openRidingBridgeOpenAddressBook() {
       window.Android.openAddressBook();
       return;
     }
-    if (openRidingTryContactPickerApi()) return;
+    if (
+      typeof window !== 'undefined' &&
+      window.ReactNativeWebView &&
+      typeof window.ReactNativeWebView.postMessage === 'function'
+    ) {
+      try {
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({ type: 'OPEN_ADDRESS_BOOK', source: 'openRidingCreate' })
+        );
+        return;
+      } catch (eRn) {}
+    }
   } catch (e1) {}
   if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
-    window.showToast('주소록을 열 수 없습니다. 앱을 최신 버전으로 업데이트한 뒤 다시 시도해 주세요.');
+    window.showToast(
+      '이 기기에서는 주소록 선택을 지원하지 않습니다. 친구목록에서 추가하거나, 전화번호를 직접 입력해 주세요.'
+    );
   } else if (typeof window !== 'undefined' && window.console) {
     window.console.warn('[오픈라이딩] openAddressBook 브릿지를 찾을 수 없습니다.');
   }
@@ -4602,7 +4600,6 @@ function OpenRidingCreateForm(props) {
         t === 'OPEN_RIDING_OPEN_ADDRESS_BOOK_RESULT' ||
         t === 'OPEN_ADDRESS_BOOK_RESULT' ||
         t === 'OPEN_ADDRESS_BOOK_SELECTED' ||
-        t === 'OPEN_ADDRESS_BOOK' ||
         t === 'addressBookSelected' ||
         t === 'ADDRESS_BOOK_SELECTED' ||
         t === 'stelvio.addressBook'
@@ -5402,7 +5399,7 @@ function OpenRidingCreateForm(props) {
         <h3 className="text-sm font-semibold text-violet-900">친구 초대 목록</h3>
         <button
           type="button"
-          className="w-full rounded-lg border-2 border-violet-600 bg-white py-2 text-sm font-semibold text-violet-700 shadow-sm hover:bg-violet-50"
+          className="open-riding-action-btn w-full rounded-lg border-2 border-violet-600 bg-white py-2 text-sm font-semibold text-violet-700 shadow-sm hover:bg-violet-50"
           onClick={openRidingBridgeOpenAddressBook}
         >
           주소록에서 초대하기
