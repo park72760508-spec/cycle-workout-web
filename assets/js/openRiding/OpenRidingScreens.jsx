@@ -2349,11 +2349,38 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — Android 우선, iOS 이중 규격, RN 폴백 (독립 try-catch)
+ * Stelvio 앱 WebView 주소록 — iOS WKWebView 표준(in 연산자·이중 규격), Android/RN 폴백
  */
 function openRidingBridgeOpenAddressBook() {
   if (typeof window === 'undefined') {
     return;
+  }
+
+  try {
+    if (window.webkit && window.webkit.messageHandlers) {
+      var hs = window.webkit.messageHandlers;
+
+      if ('openAddressBook' in hs) {
+        try {
+          hs.openAddressBook.postMessage({});
+        } catch (eObj) {
+          /* 객체 방식 실패 — 문자열 방식 시도 */
+        }
+        try {
+          hs.openAddressBook.postMessage('openAddressBook');
+        } catch (eStr) {
+          /* 문자열 방식 실패 — Android/RN 폴백 */
+        }
+        return;
+      }
+
+      if ('Stelvio' in hs) {
+        hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+        return;
+      }
+    }
+  } catch (eIos) {
+    /* iOS 실패 — Android로 진행 */
   }
 
   try {
@@ -2368,28 +2395,7 @@ function openRidingBridgeOpenAddressBook() {
       }
     }
   } catch (eAnd) {
-    /* Android 실패 — iOS로 진행 */
-  }
-
-  try {
-    if (window.webkit && window.webkit.messageHandlers) {
-      try {
-        window.webkit.messageHandlers.openAddressBook.postMessage({});
-        return;
-      } catch (eIos1) {
-        try {
-          window.webkit.messageHandlers.openAddressBook.postMessage('openAddressBook');
-          return;
-        } catch (eIos2) {
-          if (window.webkit.messageHandlers.Stelvio) {
-            window.webkit.messageHandlers.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-            return;
-          }
-        }
-      }
-    }
-  } catch (eIosGlobal) {
-    /* iOS 실패 — RN으로 진행 */
+    /* Android 실패 — RN으로 진행 */
   }
 
   try {
