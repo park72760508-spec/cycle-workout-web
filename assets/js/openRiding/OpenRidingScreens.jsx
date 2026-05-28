@@ -2330,89 +2330,41 @@ function openRidingDeliverAddressBookPayload(data) {
 }
 
 /**
- * Android WebView @JavascriptInterface — typeof가 'function'이 아닌 JSObject여도 호출 가능하도록 처리
- */
-function openRidingCallInjectedBridgeMethod(bridge, methodName) {
-  if (!bridge || bridge[methodName] == null) return false;
-  var m = bridge[methodName];
-  try {
-    if (typeof m === 'function') {
-      m.call(bridge);
-    } else {
-      bridge[methodName]();
-    }
-    return true;
-  } catch (eCall) {
-    if (typeof window !== 'undefined' && window.console) {
-      window.console.warn('[오픈라이딩] ' + methodName + ' 호출 실패:', eCall);
-    }
-    return false;
-  }
-}
-
-/**
  * Stelvio 앱 WebView: AndroidBridge / iOS openAddressBook (기존 네이티브 연동, 앱 재배포 불필요)
+ * DEBUG: alert는 무반응 원인 파악 후 제거 예정
  */
 function openRidingBridgeOpenAddressBook() {
-  try {
-    if (
-      typeof window !== 'undefined' &&
-      window.webkit &&
-      window.webkit.messageHandlers &&
-      window.webkit.messageHandlers.openAddressBook
-    ) {
-      window.webkit.messageHandlers.openAddressBook.postMessage({});
-      return;
+  alert('[DEBUG] 주소록 호출 시도 시작');
+  setTimeout(function () {
+    try {
+      if (typeof window === 'undefined') {
+        alert('연결된 앱 브릿지를 찾을 수 없습니다.');
+        return;
+      }
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openAddressBook) {
+        alert('[DEBUG] iOS openAddressBook 분기 진입');
+        window.webkit.messageHandlers.openAddressBook.postMessage({});
+        return;
+      }
+      if (window.AndroidBridge && typeof window.AndroidBridge.openAddressBook !== 'undefined') {
+        alert('[DEBUG] AndroidBridge openAddressBook 분기 진입');
+        window.AndroidBridge.openAddressBook();
+        return;
+      }
+      if (window.Android && typeof window.Android.openAddressBook !== 'undefined') {
+        alert('[DEBUG] Android(레거시) openAddressBook 분기 진입');
+        window.Android.openAddressBook();
+        return;
+      }
+      alert('연결된 앱 브릿지를 찾을 수 없습니다.');
+    } catch (err) {
+      alert('오류 발생: ' + (err && err.message ? err.message : String(err)));
     }
-    if (
-      typeof window !== 'undefined' &&
-      window.AndroidBridge &&
-      openRidingCallInjectedBridgeMethod(window.AndroidBridge, 'openAddressBook')
-    ) {
-      return;
-    }
-    if (
-      typeof window !== 'undefined' &&
-      window.Android &&
-      openRidingCallInjectedBridgeMethod(window.Android, 'openAddressBook')
-    ) {
-      return;
-    }
-  } catch (e1) {
-    if (typeof window !== 'undefined' && window.console) {
-      window.console.warn('[오픈라이딩] openAddressBook 호출 예외 발생:', e1);
-    }
-  }
-  if (typeof window !== 'undefined' && window.console) {
-    window.console.warn('[오픈라이딩] openAddressBook 브릿지를 찾을 수 없습니다.');
-  }
+  }, 0);
 }
 
 if (typeof window !== 'undefined') {
   window.openRidingBridgeOpenAddressBook = openRidingBridgeOpenAddressBook;
-}
-
-/** "주소록에서 초대하기" — 전역 바인딩·로컬 정의 모두 시도 (Babel/스코프 이슈 대비) */
-function openRidingOnAddressBookInviteClick(ev) {
-  if (ev && typeof ev.preventDefault === 'function') {
-    ev.preventDefault();
-  }
-  if (ev && typeof ev.stopPropagation === 'function') {
-    ev.stopPropagation();
-  }
-  var fn = null;
-  if (typeof window !== 'undefined' && typeof window.openRidingBridgeOpenAddressBook === 'function') {
-    fn = window.openRidingBridgeOpenAddressBook;
-  } else if (typeof openRidingBridgeOpenAddressBook === 'function') {
-    fn = openRidingBridgeOpenAddressBook;
-  }
-  if (fn) {
-    fn();
-    return;
-  }
-  if (typeof window !== 'undefined' && window.console) {
-    window.console.warn('[오픈라이딩] openRidingBridgeOpenAddressBook 함수를 찾을 수 없습니다.');
-  }
 }
 
 function daysInGregorianMonth(year, month1) {
@@ -5417,7 +5369,18 @@ function OpenRidingCreateForm(props) {
         <button
           type="button"
           className="open-riding-action-btn w-full rounded-lg border-2 border-violet-600 bg-white py-2 text-sm font-semibold text-violet-700 shadow-sm hover:bg-violet-50"
-          onClick={openRidingOnAddressBookInviteClick}
+          onClick={function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof console !== 'undefined' && console.log) {
+              console.log('Button Clicked');
+            }
+            if (typeof window.openRidingBridgeOpenAddressBook === 'function') {
+              window.openRidingBridgeOpenAddressBook();
+            } else {
+              alert('[DEBUG] window.openRidingBridgeOpenAddressBook 없음');
+            }
+          }}
         >
           주소록에서 초대하기
         </button>
