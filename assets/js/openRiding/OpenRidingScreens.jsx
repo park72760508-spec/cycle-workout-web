@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — iOS webkit 최우선, Android 유지, Cross-Origin 안전 스캔
+ * Stelvio 앱 WebView 주소록 — iOS in 연산자 직접 검증, Android 유지
  * DEBUG: alert는 원인 파악 후 제거 예정
  */
 function openRidingBridgeOpenAddressBook() {
@@ -2359,55 +2359,41 @@ function openRidingBridgeOpenAddressBook() {
 
   function runOpenAddressBookBridge() {
     try {
-      alert('[DEBUG] iOS 최종 복구 모드 시작');
+      alert('[DEBUG] iOS 직접 호출 모드 시작');
 
-      // 1. iOS 핸들러 정밀 탐색 (최우선)
       if (window.webkit && window.webkit.messageHandlers) {
-        var handlers = Object.keys(window.webkit.messageHandlers);
-        alert('[DEBUG] 발견된 iOS 핸들러: ' + handlers.join(', '));
+        var handlers = window.webkit.messageHandlers;
+        var candidates = ['openAddressBook', 'addressBook', 'openContacts', 'showAddressBook', 'StelvioAddressBook'];
+        var matchedNames = [];
 
-        if (handlers.indexOf('openAddressBook') > -1) {
-          window.webkit.messageHandlers.openAddressBook.postMessage({});
-          return;
-        }
-        for (var i = 0; i < handlers.length; i++) {
-          if (/address|contact|member|invite/i.test(handlers[i])) {
-            alert('[DEBUG] 유사 브릿지 실행: ' + handlers[i]);
-            window.webkit.messageHandlers[handlers[i]].postMessage({});
-            return;
+        for (var i = 0; i < candidates.length; i++) {
+          var name = candidates[i];
+          if (name in handlers) {
+            matchedNames.push(name);
           }
         }
+
+        if (matchedNames.length > 0) {
+          alert('[DEBUG] in 연산자로 발견된 iOS 핸들러: ' + matchedNames.join(', '));
+          alert('[DEBUG] iOS 핸들러 실행: ' + matchedNames[0]);
+          handlers[matchedNames[0]].postMessage({});
+          return;
+        }
+
+        alert('[DEBUG] 후보군에 핸들러 없음. 직접 강제 호출 시도(openAddressBook)');
+        handlers.openAddressBook.postMessage({});
+        return;
       }
 
-      // 2. Android (기존 작동 확인된 로직 유지)
       var androidTarget = window.AndroidBridge || window.Android;
       if (androidTarget && androidTarget.openAddressBook) {
         openRidingTryInvokeNativeMethod(androidTarget, 'openAddressBook');
         return;
       }
 
-      // 3. 보안 안전 스캔 (Cross-Origin 방어)
-      alert('[DEBUG] 전역 객체 안전 스캔 시작');
-      var winKeys = Object.keys(window);
-      for (var j = 0; j < winKeys.length; j++) {
-        try {
-          var key = winKeys[j];
-          if (key === 'webkit' || key === 'AndroidBridge' || key === 'Android') continue;
-
-          var obj = window[key];
-          if (obj && typeof obj.openAddressBook === 'function') {
-            alert('[DEBUG] 커스텀 브릿지 발견: ' + key);
-            obj.openAddressBook();
-            return;
-          }
-        } catch (e) {
-          continue;
-        }
-      }
-
-      alert('최종 결과: 주소록을 실행할 수 있는 앱 환경이 아닙니다.');
-    } catch (globalErr) {
-      alert('치명적 오류: ' + (globalErr && globalErr.message ? globalErr.message : String(globalErr)));
+      alert('최종 실패: 주소록 브릿지를 찾을 수 없습니다.');
+    } catch (e) {
+      alert('iOS 호출 시도 중 오류: ' + (e && e.message ? e.message : String(e)));
     }
   }
 
