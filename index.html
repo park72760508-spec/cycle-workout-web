@@ -12869,6 +12869,17 @@
       var peak = { max: 1, '1min': 1, '5min': 1, '10min': 1, '20min': 1, '40min': 1, '60min': 1 };
       return !!peak[dt];
     }
+    function stelvioIsPeakPowerDurationRankingMode() {
+      if (typeof stelvioRankingState === 'undefined' || !stelvioRankingState) return false;
+      return stelvioIsPeakPowerDurationForRankChange(stelvioRankingState.duration);
+    }
+    /** GC·피크·거리: is_private·친구/그룹 마스킹이 캐시 HTML에 고정되지 않도록 매번 재렌더 */
+    function stelvioRankingSkipsListHtmlCache() {
+      if (stelvioIsGcRankingMode()) return true;
+      if (stelvioIsPeakPowerDurationRankingMode()) return true;
+      if (stelvioIsKmDistanceRanking()) return true;
+      return false;
+    }
     /** 랭킹보드 탭(피크·TSS·거리·그룹·GC) — 순위 등락 대상 */
     function stelvioSupportsRankMovementDuration(dt) {
       if (!dt) return false;
@@ -13283,9 +13294,7 @@
 
     function stelvioRankingPaintListFromCacheIfAny(bodyEl, cat) {
       if (!bodyEl || !cat) return false;
-      /* GC·거리: is_private·마스킹이 캐시 HTML에 고정되지 않도록 매번 재렌더 (독주는 psLv 캐시 키로 페이로드 갱신) */
-      if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) return false;
-      if (typeof stelvioIsKmDistanceRanking === 'function' && stelvioIsKmDistanceRanking()) return false;
+      if (typeof stelvioRankingSkipsListHtmlCache === 'function' && stelvioRankingSkipsListHtmlCache()) return false;
       var paintKey = stelvioRankingListPaintCacheKey(cat);
       var cached = stelvioRankingListHtmlCache[paintKey];
       if (!cached) return false;
@@ -13296,6 +13305,7 @@
 
     function stelvioRankingRememberListHtml(cat, html) {
       if (!html) return;
+      if (typeof stelvioRankingSkipsListHtmlCache === 'function' && stelvioRankingSkipsListHtmlCache()) return;
       var paintKey = stelvioRankingListPaintCacheKey(cat);
       stelvioRankingListHtmlCache[paintKey] = html;
       stelvioRankingLastPaintedSwrKey = stelvioRankingCurrentSwrKey();
