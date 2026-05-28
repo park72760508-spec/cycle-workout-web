@@ -2727,7 +2727,7 @@
                 href="https://cafe.naver.com/stelvio"
                 target="_blank"
                 rel="noopener noreferrer"
-                onclick="window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer'); return false;"
+                onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;"
               >
                 <img class="basecamp-footer-cafe-icon" src="assets/img/community.png" alt="" />
                 <span>STELVIO 카페 바로가기</span>
@@ -2790,7 +2790,7 @@
                 href="https://cafe.naver.com/stelvio"
                 target="_blank"
                 rel="noopener noreferrer"
-                onclick="window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer'); return false;"
+                onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;"
               >
                 <img class="basecamp-footer-cafe-icon" src="assets/img/community.png" alt="" />
                 <span>STELVIO 카페 바로가기</span>
@@ -23245,6 +23245,20 @@
     }
     window.openStelvioExternalUrlNeedsSameWindowFallback = openStelvioExternalUrlNeedsSameWindowFallback;
     window.openStelvioExternalUrl = openStelvioExternalUrl;
+    /** 베이스캠프 하단 카페 링크 — WebView에서도 외부 브라우저로 열기 */
+    document.addEventListener(
+      'click',
+      function (ev) {
+        var link = ev.target && ev.target.closest ? ev.target.closest('.basecamp-footer-cafe-link') : null;
+        if (!link) return;
+        var url = String(link.getAttribute('href') || 'https://cafe.naver.com/stelvio').trim();
+        if (!url) return;
+        ev.preventDefault();
+        if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+        openStelvioExternalUrl(url);
+      },
+      true
+    );
   })();
   </script>
 <script src="assets/js/strava_auth.js"></script>
