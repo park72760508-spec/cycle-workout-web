@@ -2347,28 +2347,27 @@ function openRidingTryContactPickerApi() {
   }
 }
 
+/**
+ * Stelvio 앱 WebView: AndroidBridge / iOS openAddressBook (기존 네이티브 연동, 앱 재배포 불필요)
+ * — Contact Picker·RN postMessage보다 반드시 먼저 호출 (가짜 성공 시 주소록 UI가 안 뜨는 회귀 방지)
+ */
 function openRidingBridgeOpenAddressBook() {
   try {
-    /* 앱 재배포 없이: Chromium Contact Picker API 우선 (StelvioWebview는 주소록 postMessage 미구현) */
-    if (openRidingTryContactPickerApi()) return;
-    var wh = typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers ? window.webkit.messageHandlers : null;
-    if (wh) {
-      var iosNames = ['openAddressBook', 'pickContacts', 'contacts', 'openContacts', 'addressBook'];
-      for (var ii = 0; ii < iosNames.length; ii++) {
-        var h = wh[iosNames[ii]];
-        if (!h || typeof h.postMessage !== 'function') continue;
-        try {
-          h.postMessage({ source: 'openRidingCreate' });
-          return;
-        } catch (eIos1) {
-          try {
-            h.postMessage({});
-            return;
-          } catch (eIos2) {}
-        }
-      }
+    if (
+      typeof window !== 'undefined' &&
+      window.webkit &&
+      window.webkit.messageHandlers &&
+      window.webkit.messageHandlers.openAddressBook &&
+      typeof window.webkit.messageHandlers.openAddressBook.postMessage === 'function'
+    ) {
+      window.webkit.messageHandlers.openAddressBook.postMessage({});
+      return;
     }
-    if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.openAddressBook === 'function') {
+    if (
+      typeof window !== 'undefined' &&
+      window.AndroidBridge &&
+      typeof window.AndroidBridge.openAddressBook === 'function'
+    ) {
       window.AndroidBridge.openAddressBook();
       return;
     }
@@ -2376,24 +2375,9 @@ function openRidingBridgeOpenAddressBook() {
       window.Android.openAddressBook();
       return;
     }
-    if (
-      typeof window !== 'undefined' &&
-      window.ReactNativeWebView &&
-      typeof window.ReactNativeWebView.postMessage === 'function'
-    ) {
-      try {
-        window.ReactNativeWebView.postMessage(
-          JSON.stringify({ type: 'OPEN_ADDRESS_BOOK', source: 'openRidingCreate' })
-        );
-        return;
-      } catch (eRn) {}
-    }
+    if (openRidingTryContactPickerApi()) return;
   } catch (e1) {}
-  if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
-    window.showToast(
-      '이 기기에서는 주소록 선택을 지원하지 않습니다. 친구목록에서 추가하거나, 전화번호를 직접 입력해 주세요.'
-    );
-  } else if (typeof window !== 'undefined' && window.console) {
+  if (typeof window !== 'undefined' && window.console) {
     window.console.warn('[오픈라이딩] openAddressBook 브릿지를 찾을 수 없습니다.');
   }
 }
