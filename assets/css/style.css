@@ -548,16 +548,18 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 
 #basecampScreen.active {
   display: flex !important;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   /* 화면 확장: max-height 제거, safe-area 포함하여 하단 회색 바 제거 */
   min-height: 100vh;
   min-height: 100dvh;
   min-height: calc(100vh + env(safe-area-inset-bottom, 0px));
   min-height: -webkit-fill-available;
   height: var(--vvh, 100dvh) !important;
-  overflow-y: auto !important;
+  overflow: hidden !important;
   overflow-x: hidden !important;
+  overflow-y: hidden !important;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   overscroll-behavior-y: contain;
@@ -580,15 +582,17 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 #indoorTrainingSubScreen.active {
   display: flex !important;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   min-height: 100vh;
   min-height: 100dvh;
   min-height: calc(100vh + env(safe-area-inset-bottom, 0px));
   min-height: -webkit-fill-available;
   height: var(--vvh, 100dvh) !important;
-  overflow-y: auto !important;
+  overflow: hidden !important;
   overflow-x: hidden !important;
+  overflow-y: hidden !important;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   overscroll-behavior-y: contain;
@@ -953,8 +957,20 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   min-height: 0;
   flex-shrink: 0;
 }
-#basecampScreen.active > .connection-main-container {
+#basecampScreen.active > .connection-main-container,
+#indoorTrainingSubScreen.active > .connection-main-container {
+  flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  align-self: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
 }
 
 #basecampScreen .connection-form-container {
@@ -1227,7 +1243,8 @@ body:has(#openRidingRoomScreen.active) {
   background: transparent;
   border: none;
   box-shadow: none;
-  pointer-events: auto;
+  /* 루트는 터치 통과 — pill·슬롯·버튼만 pointer-events:auto (하단 폼·카페 링크 클릭 가로채기 방지) */
+  pointer-events: none;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
@@ -3557,10 +3574,12 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   text-align: center;
   margin-top: 30px;
   padding-top: 20px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(34, 197, 94, 0.2);
   position: relative;
-  z-index: 5;
+  z-index: 20;
   pointer-events: auto;
+  flex-shrink: 0;
 }
 
 /* 베이스캠프 푸터 텍스트 - 진녹색 (강제 적용) */
