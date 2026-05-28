@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — iOS 직접 실행·예외 처리, Android/RN 폴백
+ * Stelvio 앱 WebView 주소록 — Android 우선, iOS 이중 규격, RN 폴백 (독립 try-catch)
  */
 function openRidingBridgeOpenAddressBook() {
   if (typeof window === 'undefined') {
@@ -2357,77 +2357,47 @@ function openRidingBridgeOpenAddressBook() {
   }
 
   try {
-    if (window.webkit && window.webkit.messageHandlers) {
-      try {
-        window.webkit.messageHandlers.openAddressBook.postMessage({});
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[DEBUG] iOS openAddressBook 직접 호출 성공');
-        }
-        return;
-      } catch (eIos) {
-        try {
-          window.webkit.messageHandlers.openAddressBook.postMessage('openAddressBook');
-          return;
-        } catch (eIosStr) {
-          try {
-            window.webkit.messageHandlers.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-            return;
-          } catch (eStelvio) {
-            /* iOS 폴백 모두 실패 — 다음 경로 시도 */
-          }
-        }
-      }
-    }
-
     var android = window.AndroidBridge || window.Android;
     if (android && typeof android.openAddressBook === 'function') {
       android.openAddressBook();
       return;
     }
     if (android && android.openAddressBook != null) {
-      openRidingTryInvokeNativeMethod(android, 'openAddressBook');
-      return;
-    }
-
-    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
-      return;
-    }
-
-    var skipKeys = {
-      webkit: 1,
-      AndroidBridge: 1,
-      Android: 1,
-      ReactNativeWebView: 1,
-      parent: 1,
-      top: 1,
-      frames: 1,
-      opener: 1,
-      self: 1,
-      window: 1,
-    };
-    var winKeys = Object.keys(window);
-    for (var j = 0; j < winKeys.length; j++) {
-      try {
-        var key = winKeys[j];
-        if (skipKeys[key]) continue;
-        try {
-          var obj = window[key];
-          if (obj && typeof obj.openAddressBook === 'function') {
-            obj.openAddressBook();
-            return;
-          }
-        } catch (eInner) {
-          continue;
-        }
-      } catch (eOuter) {
-        continue;
+      if (openRidingTryInvokeNativeMethod(android, 'openAddressBook')) {
+        return;
       }
     }
-  } catch (globalE) {
-    if (typeof console !== 'undefined' && console.error) {
-      console.error('[오픈라이딩] 주소록 호출 실패:', globalE);
+  } catch (eAnd) {
+    /* Android 실패 — iOS로 진행 */
+  }
+
+  try {
+    if (window.webkit && window.webkit.messageHandlers) {
+      try {
+        window.webkit.messageHandlers.openAddressBook.postMessage({});
+        return;
+      } catch (eIos1) {
+        try {
+          window.webkit.messageHandlers.openAddressBook.postMessage('openAddressBook');
+          return;
+        } catch (eIos2) {
+          if (window.webkit.messageHandlers.Stelvio) {
+            window.webkit.messageHandlers.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+            return;
+          }
+        }
+      }
     }
+  } catch (eIosGlobal) {
+    /* iOS 실패 — RN으로 진행 */
+  }
+
+  try {
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
+    }
+  } catch (eRn) {
+    /* RN 실패 — 종료 */
   }
 }
 
