@@ -2311,6 +2311,18 @@ function OpenRidingGpxCoursePanel(props) {
 
 function openRidingBridgeOpenAddressBook() {
   try {
+    if (
+      typeof window !== 'undefined' &&
+      window.ReactNativeWebView &&
+      typeof window.ReactNativeWebView.postMessage === 'function'
+    ) {
+      window.ReactNativeWebView.postMessage(
+        JSON.stringify({
+          type: 'OPEN_RIDING_OPEN_ADDRESS_BOOK'
+        })
+      );
+      return;
+    }
     if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openAddressBook) {
       window.webkit.messageHandlers.openAddressBook.postMessage({});
       return;
@@ -4508,10 +4520,22 @@ function OpenRidingCreateForm(props) {
 
     function onMessage(ev) {
       var d = ev && ev.data;
+      if (typeof d === 'string') {
+        var s = String(d).trim();
+        if (!s) return;
+        try {
+          d = JSON.parse(s);
+        } catch (_eParse) {
+          return;
+        }
+      }
       if (d == null || typeof d !== 'object') return;
       var t = d.type != null ? String(d.type) : '';
       if (
         t === 'OPEN_RIDING_ADDRESS_BOOK' ||
+        t === 'OPEN_RIDING_ADDRESS_BOOK_SELECTED' ||
+        t === 'OPEN_RIDING_OPEN_ADDRESS_BOOK_RESULT' ||
+        t === 'OPEN_ADDRESS_BOOK_RESULT' ||
         t === 'addressBookSelected' ||
         t === 'ADDRESS_BOOK_SELECTED' ||
         t === 'stelvio.addressBook'
