@@ -2329,27 +2329,8 @@ function openRidingDeliverAddressBookPayload(data) {
   return false;
 }
 
-function openRidingTryContactPickerApi() {
-  try {
-    if (typeof navigator === 'undefined' || !navigator.contacts || typeof navigator.contacts.select !== 'function') {
-      return false;
-    }
-    navigator.contacts
-      .select(['name', 'tel'], { multiple: true })
-      .then(function (contacts) {
-        if (!contacts || !contacts.length) return;
-        openRidingDeliverAddressBookPayload(contacts);
-      })
-      .catch(function () {});
-    return true;
-  } catch (ePick) {
-    return false;
-  }
-}
-
 /**
  * Stelvio 앱 WebView: AndroidBridge / iOS openAddressBook (기존 네이티브 연동, 앱 재배포 불필요)
- * — Contact Picker·RN postMessage보다 반드시 먼저 호출 (가짜 성공 시 주소록 UI가 안 뜨는 회귀 방지)
  */
 function openRidingBridgeOpenAddressBook() {
   try {
@@ -2359,22 +2340,25 @@ function openRidingBridgeOpenAddressBook() {
       window.webkit.messageHandlers &&
       window.webkit.messageHandlers.openAddressBook
     ) {
-      window.webkit.messageHandlers.openAddressBook.postMessage('');
+      window.webkit.messageHandlers.openAddressBook.postMessage({});
       return;
     }
     if (
       typeof window !== 'undefined' &&
       window.AndroidBridge &&
-      typeof window.AndroidBridge.openAddressBook === 'function'
+      window.AndroidBridge.openAddressBook
     ) {
       window.AndroidBridge.openAddressBook();
       return;
     }
-    if (typeof window !== 'undefined' && window.Android && typeof window.Android.openAddressBook === 'function') {
+    if (
+      typeof window !== 'undefined' &&
+      window.Android &&
+      window.Android.openAddressBook
+    ) {
       window.Android.openAddressBook();
       return;
     }
-    if (openRidingTryContactPickerApi()) return;
   } catch (e1) {
     if (typeof window !== 'undefined' && window.console) {
       window.console.warn('[오픈라이딩] openAddressBook 호출 예외 발생:', e1);
