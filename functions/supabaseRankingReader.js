@@ -618,23 +618,22 @@ async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gen
   });
   if (error) throw error;
 
-  const uidMap = await getFirebaseUidMapForSupabaseUsers(
-    admin,
-    supabase,
-    (data || []).map((row) => row.user_id)
-  );
+  const userIds = (data || []).map((row) => row.user_id);
+  const uidMap = await getFirebaseUidMapForSupabaseUsers(admin, supabase, userIds);
+  const profileMap = await getPublicProfileMapForSupabaseUsers(supabase, userIds);
   const entries = [];
   for (const row of data || []) {
     const fbUid = row.firebase_uid ? String(row.firebase_uid).trim() : uidMap.get(String(row.user_id));
     if (!fbUid) continue;
     const wkg = Math.round(Number(row.peak_wkg) * 100) / 100;
     if (!(wkg > 0)) continue;
+    const profile = profileMap.get(String(row.user_id));
     entries.push({
       userId: fbUid,
       name: row.display_name || "(이름 없음)",
       ageCategory: row.league_category || "unknown",
       gender: genderDbToClient(row.gender),
-      is_private: false,
+      is_private: profile ? profile.is_private === true : false,
       profileImageUrl: row.profile_image_url || null,
       wkg,
       watts: Number(row.peak_watts) || 0,
