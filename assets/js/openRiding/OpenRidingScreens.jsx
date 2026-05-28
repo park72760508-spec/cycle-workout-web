@@ -2357,10 +2357,9 @@ function openRidingBridgeOpenAddressBook() {
       typeof window !== 'undefined' &&
       window.webkit &&
       window.webkit.messageHandlers &&
-      window.webkit.messageHandlers.openAddressBook &&
-      typeof window.webkit.messageHandlers.openAddressBook.postMessage === 'function'
+      window.webkit.messageHandlers.openAddressBook
     ) {
-      window.webkit.messageHandlers.openAddressBook.postMessage({});
+      window.webkit.messageHandlers.openAddressBook.postMessage('');
       return;
     }
     if (
@@ -2376,7 +2375,11 @@ function openRidingBridgeOpenAddressBook() {
       return;
     }
     if (openRidingTryContactPickerApi()) return;
-  } catch (e1) {}
+  } catch (e1) {
+    if (typeof window !== 'undefined' && window.console) {
+      window.console.warn('[오픈라이딩] openAddressBook 호출 예외 발생:', e1);
+    }
+  }
   if (typeof window !== 'undefined' && window.console) {
     window.console.warn('[오픈라이딩] openAddressBook 브릿지를 찾을 수 없습니다.');
   }
