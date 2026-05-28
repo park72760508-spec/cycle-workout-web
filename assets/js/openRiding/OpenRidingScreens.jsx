@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — iOS/Android 네이티브 우선, RN WebView는 최후 수단
+ * Stelvio 앱 WebView 주소록 — iOS webkit 최우선, Android 유지, Cross-Origin 안전 스캔
  * DEBUG: alert는 원인 파악 후 제거 예정
  */
 function openRidingBridgeOpenAddressBook() {
@@ -2359,78 +2359,55 @@ function openRidingBridgeOpenAddressBook() {
 
   function runOpenAddressBookBridge() {
     try {
-      alert('[DEBUG] 주소록 복구 로직 시작 (우선순위 재설정)');
+      alert('[DEBUG] iOS 최종 복구 모드 시작');
 
-      var iosHandler =
-        'webkit' in window &&
-        window.webkit &&
-        'messageHandlers' in window.webkit &&
-        window.webkit.messageHandlers &&
-        'openAddressBook' in window.webkit.messageHandlers &&
-        window.webkit.messageHandlers.openAddressBook;
+      // 1. iOS 핸들러 정밀 탐색 (최우선)
+      if (window.webkit && window.webkit.messageHandlers) {
+        var handlers = Object.keys(window.webkit.messageHandlers);
+        alert('[DEBUG] 발견된 iOS 핸들러: ' + handlers.join(', '));
 
-      if (iosHandler) {
-        alert('[DEBUG] 실제 호출 시도: iOS webkit.messageHandlers.openAddressBook');
-        window.webkit.messageHandlers.openAddressBook.postMessage({});
-        try {
-          alert('[DEBUG] 실제 호출 시도: iOS webkit.openAddressBook (문자열 폴백)');
-          window.webkit.messageHandlers.openAddressBook.postMessage('openAddressBook');
-        } catch (eIosStr) {
-          if (typeof console !== 'undefined' && console.warn) {
-            console.warn('[오픈라이딩] iOS postMessage 문자열 폴백 실패:', eIosStr);
-          }
+        if (handlers.indexOf('openAddressBook') > -1) {
+          window.webkit.messageHandlers.openAddressBook.postMessage({});
+          return;
         }
-        return;
-      }
-
-      if ('AndroidBridge' in window && window.AndroidBridge && 'openAddressBook' in window.AndroidBridge) {
-        alert('[DEBUG] 실제 호출 시도: AndroidBridge.openAddressBook');
-        openRidingTryInvokeNativeMethod(window.AndroidBridge, 'openAddressBook');
-        return;
-      }
-
-      if ('Android' in window && window.Android && 'openAddressBook' in window.Android) {
-        alert('[DEBUG] 실제 호출 시도: Android.openAddressBook');
-        openRidingTryInvokeNativeMethod(window.Android, 'openAddressBook');
-        return;
-      }
-
-      var androidTarget = window.AndroidBridge || window.Android;
-      if (androidTarget && androidTarget.openAddressBook != null) {
-        alert('[DEBUG] 실제 호출 시도: Android(합성).openAddressBook');
-        openRidingTryInvokeNativeMethod(androidTarget, 'openAddressBook');
-        return;
-      }
-
-      if ('ReactNativeWebView' in window && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-        alert('[DEBUG] 실제 호출 시도: ReactNativeWebView.postMessage (후순위)');
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
-      }
-
-      alert("[DEBUG] 전용 브릿지 없음. window 내 'openAddressBook' 탐색 시작");
-      for (var key in window) {
-        if (!Object.prototype.hasOwnProperty.call(window, key)) continue;
-        var cand = window[key];
-        if (!cand || cand.openAddressBook == null) continue;
-        if (typeof cand.openAddressBook === 'function' || 'openAddressBook' in cand) {
-          alert('[DEBUG] 실제 호출 시도: window.' + key + '.openAddressBook');
-          if (openRidingTryInvokeNativeMethod(cand, 'openAddressBook')) {
+        for (var i = 0; i < handlers.length; i++) {
+          if (/address|contact|member|invite/i.test(handlers[i])) {
+            alert('[DEBUG] 유사 브릿지 실행: ' + handlers[i]);
+            window.webkit.messageHandlers[handlers[i]].postMessage({});
             return;
           }
         }
       }
 
-      alert(
-        '[DEBUG] 모든 경로 시도 완료\n' +
-          'webkit in window: ' +
-          ('webkit' in window) +
-          '\nAndroidBridge in window: ' +
-          ('AndroidBridge' in window) +
-          '\nReactNativeWebView in window: ' +
-          ('ReactNativeWebView' in window)
-      );
-    } catch (e) {
-      alert('오류 발생: ' + (e && e.message ? e.message : String(e)));
+      // 2. Android (기존 작동 확인된 로직 유지)
+      var androidTarget = window.AndroidBridge || window.Android;
+      if (androidTarget && androidTarget.openAddressBook) {
+        openRidingTryInvokeNativeMethod(androidTarget, 'openAddressBook');
+        return;
+      }
+
+      // 3. 보안 안전 스캔 (Cross-Origin 방어)
+      alert('[DEBUG] 전역 객체 안전 스캔 시작');
+      var winKeys = Object.keys(window);
+      for (var j = 0; j < winKeys.length; j++) {
+        try {
+          var key = winKeys[j];
+          if (key === 'webkit' || key === 'AndroidBridge' || key === 'Android') continue;
+
+          var obj = window[key];
+          if (obj && typeof obj.openAddressBook === 'function') {
+            alert('[DEBUG] 커스텀 브릿지 발견: ' + key);
+            obj.openAddressBook();
+            return;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      alert('최종 결과: 주소록을 실행할 수 있는 앱 환경이 아닙니다.');
+    } catch (globalErr) {
+      alert('치명적 오류: ' + (globalErr && globalErr.message ? globalErr.message : String(globalErr)));
     }
   }
 
