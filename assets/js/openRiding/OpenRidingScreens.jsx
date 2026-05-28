@@ -2329,24 +2329,7 @@ function openRidingDeliverAddressBookPayload(data) {
   return false;
 }
 
-function openRidingBridgeDebugLog(msg) {
-  if (typeof console !== 'undefined' && console.log) {
-    console.log(msg);
-  }
-}
-
-/** Stelvio / RN WebView 앱 환경 추정 (UserAgent·선제 주입 플래그) */
-function openRidingIsLikelyStelvioAppEnv() {
-  if (typeof window === 'undefined') return false;
-  if ('StelvioInApp' in window && window.StelvioInApp === true) return true;
-  if ('ReactNativeWebView' in window) return true;
-  if ('StelvioAppChannel' in window) return true;
-  var ua = typeof navigator !== 'undefined' && navigator.userAgent ? String(navigator.userAgent) : '';
-  if (/stelvio/i.test(ua)) return true;
-  return false;
-}
-
-/** 네이티브 메서드 1회 호출 (JSObject 대응) */
+/** Android @JavascriptInterface — typeof function이 아닌 JSObject도 호출 */
 function openRidingTryInvokeNativeMethod(host, methodName) {
   if (!host || !(methodName in host) || host[methodName] == null) return false;
   try {
@@ -2358,193 +2341,100 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
     }
     return true;
   } catch (eInvoke) {
-    openRidingBridgeDebugLog('[DEBUG] invoke 실패 ' + methodName + ': ' + eInvoke);
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[오픈라이딩] ' + methodName + ' 호출 실패:', eInvoke);
+    }
     return false;
-  }
-}
-
-/** `in` 연산자로 window·webkit 핸들러 존재 여부 덤프 */
-function openRidingDumpBridgePresenceInWindow() {
-  var lines = [];
-  var topKeys = [
-    'ReactNativeWebView',
-    'webkit',
-    'AndroidBridge',
-    'Android',
-    'Stelvio',
-    'StelvioBridge',
-    'StelvioInApp'
-  ];
-  var ti;
-  for (ti = 0; ti < topKeys.length; ti++) {
-    lines.push(topKeys[ti] + ' in window: ' + (topKeys[ti] in window));
-  }
-  if ('webkit' in window && window.webkit && 'messageHandlers' in window.webkit) {
-    var mh = window.webkit.messageHandlers;
-    var handlerProbe = ['openAddressBook', 'openContacts', 'Stelvio', 'stelvio', 'openContactPicker'];
-    for (var hi = 0; hi < handlerProbe.length; hi++) {
-      var hn = handlerProbe[hi];
-      lines.push('webkit.handler.' + hn + ': ' + (hn in mh));
-    }
-    for (var hk in mh) {
-      if (Object.prototype.hasOwnProperty.call(mh, hk) && /address|contact|stelvio|book/i.test(hk)) {
-        lines.push('webkit.handler[*] ' + hk + ': true');
-      }
-    }
-  }
-  return lines.join('\n');
-}
-
-/** iOS WKWebView — 유사 핸들러명 포함 (`in` 탐색) */
-function openRidingTryIosWebkitAddressBook() {
-  if (!('webkit' in window) || !window.webkit || !('messageHandlers' in window.webkit)) {
-    return false;
-  }
-  var handlers = window.webkit.messageHandlers;
-  var preferred = ['openAddressBook', 'openContacts', 'openContactPicker', 'Stelvio', 'stelvio'];
-  var pi;
-  for (pi = 0; pi < preferred.length; pi++) {
-    var name = preferred[pi];
-    if (name in handlers && handlers[name] && typeof handlers[name].postMessage === 'function') {
-      alert('[DEBUG] iOS webkit.' + name + ' postMessage({}) 호출');
-      handlers[name].postMessage({});
-      return true;
-    }
-  }
-  for (var key in handlers) {
-    if (!Object.prototype.hasOwnProperty.call(handlers, key)) continue;
-    if (!/address|contact|stelvio|book/i.test(key)) continue;
-    if (!handlers[key] || typeof handlers[key].postMessage !== 'function') continue;
-    alert('[DEBUG] iOS webkit 유사 핸들러 "' + key + '" postMessage({}) 호출');
-    handlers[key].postMessage({});
-    return true;
-  }
-  return false;
-}
-
-/** Android·Stelvio 주입 객체 (`in` + 메서드명 변형) */
-function openRidingTryAndroidInjectedAddressBook() {
-  var hostKeys = ['AndroidBridge', 'Android', 'Stelvio', 'StelvioBridge'];
-  var methodNames = ['openAddressBook', 'openContacts', 'openContactPicker', 'showAddressBook'];
-  var hi;
-  for (hi = 0; hi < hostKeys.length; hi++) {
-    var hostKey = hostKeys[hi];
-    if (!(hostKey in window)) continue;
-    var target = window[hostKey];
-    if (!target || typeof target !== 'object') continue;
-    var mi;
-    for (mi = 0; mi < methodNames.length; mi++) {
-      var mn = methodNames[mi];
-      if (!(mn in target) || target[mn] == null) continue;
-      alert('[DEBUG] ' + hostKey + '.' + mn + ' 호출 시도');
-      if (openRidingTryInvokeNativeMethod(target, mn)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/** ReactNativeWebView.postMessage (하이브리드 최우선) */
-function openRidingTryReactNativeWebViewAddressBook() {
-  if (!('ReactNativeWebView' in window)) return false;
-  var rn = window.ReactNativeWebView;
-  if (!rn || typeof rn.postMessage !== 'function') return false;
-  alert('[DEBUG] ReactNativeWebView 브릿지 호출');
-  rn.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
-  return true;
-}
-
-/** 최종 1회 — Stelvio 앱 환경에서 짐작 가능한 네이티브 경로 브루트포스 (무한 루프 없음) */
-function openRidingBruteForceAddressBookOnce() {
-  openRidingBridgeDebugLog('[DEBUG] 브루트포스 세션 시작');
-  alert('[DEBUG] Stelvio 앱 환경 — 브루트포스 호출 1회');
-
-  var rnTypes = [
-    'OPEN_ADDRESS_BOOK',
-    'OPEN_CONTACTS',
-    'OPEN_ADDRESSBOOK',
-    'openAddressBook',
-    'stelvio.openAddressBook'
-  ];
-  if ('ReactNativeWebView' in window && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
-    var ri;
-    for (ri = 0; ri < rnTypes.length; ri++) {
-      try {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: rnTypes[ri] }));
-      } catch (eRn) {}
-    }
-  }
-
-  openRidingTryIosWebkitAddressBook();
-  openRidingTryAndroidInjectedAddressBook();
-
-  var extraWindowKeys = ['StelvioNative', 'stelvioBridge', 'STELVIO_BRIDGE', 'NativeBridge'];
-  var wi;
-  for (wi = 0; wi < extraWindowKeys.length; wi++) {
-    var wk = extraWindowKeys[wi];
-    if (!(wk in window)) continue;
-    var obj = window[wk];
-    if (obj && typeof obj === 'object') {
-      openRidingTryInvokeNativeMethod(obj, 'openAddressBook');
-      openRidingTryInvokeNativeMethod(obj, 'openContacts');
-    }
   }
 }
 
 /**
- * Stelvio 앱 WebView — 심층 탐색형 주소록 브릿지 (in 연산자 + 재시도 + 브루트포스)
- * DEBUG: alert/console은 원인 파악 후 제거 예정
+ * Stelvio 앱 WebView 주소록 — iOS/Android 네이티브 우선, RN WebView는 최후 수단
+ * DEBUG: alert는 원인 파악 후 제거 예정
  */
 function openRidingBridgeOpenAddressBook() {
   if (typeof window === 'undefined') {
-    alert('[DEBUG] window 없음');
     return;
   }
 
-  var retryCount = 0;
-  var bruteForceDone = false;
-
-  function tryConnect() {
-    openRidingBridgeDebugLog('[DEBUG] 주소록 연결 시도 ' + (retryCount + 1) + '회차');
-
+  function runOpenAddressBookBridge() {
     try {
-      if (openRidingTryReactNativeWebViewAddressBook()) {
-        return;
-      }
-      if (openRidingTryIosWebkitAddressBook()) {
-        return;
-      }
-      if (openRidingTryAndroidInjectedAddressBook()) {
+      alert('[DEBUG] 주소록 복구 로직 시작 (우선순위 재설정)');
+
+      var iosHandler =
+        'webkit' in window &&
+        window.webkit &&
+        'messageHandlers' in window.webkit &&
+        window.webkit.messageHandlers &&
+        'openAddressBook' in window.webkit.messageHandlers &&
+        window.webkit.messageHandlers.openAddressBook;
+
+      if (iosHandler) {
+        alert('[DEBUG] 실제 호출 시도: iOS webkit.messageHandlers.openAddressBook');
+        window.webkit.messageHandlers.openAddressBook.postMessage({});
+        try {
+          alert('[DEBUG] 실제 호출 시도: iOS webkit.openAddressBook (문자열 폴백)');
+          window.webkit.messageHandlers.openAddressBook.postMessage('openAddressBook');
+        } catch (eIosStr) {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[오픈라이딩] iOS postMessage 문자열 폴백 실패:', eIosStr);
+          }
+        }
         return;
       }
 
-      if (retryCount < 3) {
-        retryCount++;
-        openRidingBridgeDebugLog('[DEBUG] 0.8초 후 재시도 예정 (' + retryCount + '/3)');
-        setTimeout(tryConnect, 800);
+      if ('AndroidBridge' in window && window.AndroidBridge && 'openAddressBook' in window.AndroidBridge) {
+        alert('[DEBUG] 실제 호출 시도: AndroidBridge.openAddressBook');
+        openRidingTryInvokeNativeMethod(window.AndroidBridge, 'openAddressBook');
         return;
       }
 
-      if (!bruteForceDone && openRidingIsLikelyStelvioAppEnv()) {
-        bruteForceDone = true;
-        openRidingBruteForceAddressBookOnce();
+      if ('Android' in window && window.Android && 'openAddressBook' in window.Android) {
+        alert('[DEBUG] 실제 호출 시도: Android.openAddressBook');
+        openRidingTryInvokeNativeMethod(window.Android, 'openAddressBook');
         return;
       }
 
-      var debugInfo = '결과: 브릿지 탐색 실패\n';
-      debugInfo += 'webkit in window: ' + ('webkit' in window) + '\n';
-      debugInfo += 'AndroidBridge in window: ' + ('AndroidBridge' in window) + '\n';
-      debugInfo += 'ReactNativeWebView in window: ' + ('ReactNativeWebView' in window) + '\n';
-      debugInfo += 'StelvioInApp: ' + ('StelvioInApp' in window ? String(window.StelvioInApp) : 'n/a') + '\n';
-      debugInfo += '---\n' + openRidingDumpBridgePresenceInWindow();
-      alert(debugInfo);
+      var androidTarget = window.AndroidBridge || window.Android;
+      if (androidTarget && androidTarget.openAddressBook != null) {
+        alert('[DEBUG] 실제 호출 시도: Android(합성).openAddressBook');
+        openRidingTryInvokeNativeMethod(androidTarget, 'openAddressBook');
+        return;
+      }
+
+      if ('ReactNativeWebView' in window && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        alert('[DEBUG] 실제 호출 시도: ReactNativeWebView.postMessage (후순위)');
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
+      }
+
+      alert("[DEBUG] 전용 브릿지 없음. window 내 'openAddressBook' 탐색 시작");
+      for (var key in window) {
+        if (!Object.prototype.hasOwnProperty.call(window, key)) continue;
+        var cand = window[key];
+        if (!cand || cand.openAddressBook == null) continue;
+        if (typeof cand.openAddressBook === 'function' || 'openAddressBook' in cand) {
+          alert('[DEBUG] 실제 호출 시도: window.' + key + '.openAddressBook');
+          if (openRidingTryInvokeNativeMethod(cand, 'openAddressBook')) {
+            return;
+          }
+        }
+      }
+
+      alert(
+        '[DEBUG] 모든 경로 시도 완료\n' +
+          'webkit in window: ' +
+          ('webkit' in window) +
+          '\nAndroidBridge in window: ' +
+          ('AndroidBridge' in window) +
+          '\nReactNativeWebView in window: ' +
+          ('ReactNativeWebView' in window)
+      );
     } catch (e) {
-      alert('실행 중 오류: ' + (e && e.message ? e.message : String(e)));
+      alert('오류 발생: ' + (e && e.message ? e.message : String(e)));
     }
   }
 
-  setTimeout(tryConnect, 0);
+  setTimeout(runOpenAddressBookBridge, 0);
 }
 
 if (typeof window !== 'undefined') {
