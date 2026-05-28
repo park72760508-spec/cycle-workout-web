@@ -23048,8 +23048,25 @@
   <!-- iOS/Android PWA·WebView: 외부 URL을 시스템 브라우저/새 탭으로 열기 (strava_auth 등보다 먼저 로드) -->
   <script>
   (function () {
+    function isStelvioNativeWebView() {
+      try {
+        if (window.StelvioInApp === true) return true;
+        if (window.StelvioAppChannel === 'webview-native') return true;
+        if (window.ReactNativeWebView) return true;
+      } catch (e) {}
+      return false;
+    }
+  /** StelvioWebview: 앱에 이미 있는 onOpenWindow + 시스템 브라우저 (앱 재배포 불필요) */
+    function openStelvioExternalUrlViaNativeWebView(url) {
+      try {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return true;
+      } catch (eOpen) {}
+      return false;
+    }
     function openStelvioExternalUrlNeedsSameWindowFallback() {
       try {
+        if (isStelvioNativeWebView()) return true;
         if (typeof navigator !== 'undefined' && navigator.standalone) return true;
         if (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) return true;
         var ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
@@ -23236,6 +23253,9 @@
       var now = Date.now();
       if (stelvioLastExternalUrlOpen.url === url && now - stelvioLastExternalUrlOpen.at < 800) return;
       stelvioLastExternalUrlOpen = { url: url, at: now };
+      if (isStelvioNativeWebView() && openStelvioExternalUrlViaNativeWebView(url)) {
+        return;
+      }
       if (tryOpenCapacitorBrowserThen(url, function () {
         openStelvioExternalUrlPhaseFallbacks(url);
       })) {
