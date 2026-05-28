@@ -2309,6 +2309,44 @@ function OpenRidingGpxCoursePanel(props) {
   );
 }
 
+function openRidingDeliverAddressBookPayload(data) {
+  var handlers = [
+    typeof window !== 'undefined' ? window.onOpenRidingAddressBookSelected : null,
+    typeof window !== 'undefined' ? window.onAddressBookSelected : null,
+    typeof window !== 'undefined' ? window.stelvioAddressBookPicked : null
+  ];
+  for (var i = 0; i < handlers.length; i++) {
+    if (typeof handlers[i] !== 'function') continue;
+    try {
+      handlers[i](data);
+      return true;
+    } catch (eH) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[오픈라이딩] 주소록 콜백 실패:', eH);
+      }
+    }
+  }
+  return false;
+}
+
+function openRidingTryContactPickerApi() {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.contacts || typeof navigator.contacts.select !== 'function') {
+      return false;
+    }
+    navigator.contacts
+      .select(['name', 'tel'], { multiple: true })
+      .then(function (contacts) {
+        if (!contacts || !contacts.length) return;
+        openRidingDeliverAddressBookPayload(contacts);
+      })
+      .catch(function () {});
+    return true;
+  } catch (ePick) {
+    return false;
+  }
+}
+
 function openRidingBridgeOpenAddressBook() {
   try {
     if (
@@ -2316,16 +2354,34 @@ function openRidingBridgeOpenAddressBook() {
       window.ReactNativeWebView &&
       typeof window.ReactNativeWebView.postMessage === 'function'
     ) {
-      window.ReactNativeWebView.postMessage(
-        JSON.stringify({
-          type: 'OPEN_RIDING_OPEN_ADDRESS_BOOK'
-        })
-      );
-      return;
+      var rnPayloads = [
+        { type: 'OPEN_ADDRESS_BOOK', source: 'openRidingCreate' },
+        { type: 'openAddressBook', source: 'openRidingCreate' },
+        { type: 'OPEN_RIDING_OPEN_ADDRESS_BOOK', source: 'openRidingCreate' }
+      ];
+      for (var ri = 0; ri < rnPayloads.length; ri++) {
+        try {
+          window.ReactNativeWebView.postMessage(JSON.stringify(rnPayloads[ri]));
+          return;
+        } catch (eRn) {}
+      }
     }
-    if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openAddressBook) {
-      window.webkit.messageHandlers.openAddressBook.postMessage({});
-      return;
+    var wh = typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers ? window.webkit.messageHandlers : null;
+    if (wh) {
+      var iosNames = ['openAddressBook', 'pickContacts', 'contacts', 'openContacts', 'addressBook'];
+      for (var ii = 0; ii < iosNames.length; ii++) {
+        var h = wh[iosNames[ii]];
+        if (!h || typeof h.postMessage !== 'function') continue;
+        try {
+          h.postMessage({ source: 'openRidingCreate' });
+          return;
+        } catch (eIos1) {
+          try {
+            h.postMessage({});
+            return;
+          } catch (eIos2) {}
+        }
+      }
     }
     if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.openAddressBook === 'function') {
       window.AndroidBridge.openAddressBook();
@@ -2335,8 +2391,13 @@ function openRidingBridgeOpenAddressBook() {
       window.Android.openAddressBook();
       return;
     }
+    if (openRidingTryContactPickerApi()) return;
   } catch (e1) {}
-  if (typeof window !== 'undefined' && window.console) window.console.warn('[오픈라이딩] openAddressBook 브릿지를 찾을 수 없습니다.');
+  if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+    window.showToast('주소록을 열 수 없습니다. 앱을 최신 버전으로 업데이트한 뒤 다시 시도해 주세요.');
+  } else if (typeof window !== 'undefined' && window.console) {
+    window.console.warn('[오픈라이딩] openAddressBook 브릿지를 찾을 수 없습니다.');
+  }
 }
 
 function daysInGregorianMonth(year, month1) {
@@ -4529,6 +4590,10 @@ function OpenRidingCreateForm(props) {
           return;
         }
       }
+      if (Array.isArray(d) && d.length) {
+        onAddressBookPayload(d);
+        return;
+      }
       if (d == null || typeof d !== 'object') return;
       var t = d.type != null ? String(d.type) : '';
       if (
@@ -4536,17 +4601,39 @@ function OpenRidingCreateForm(props) {
         t === 'OPEN_RIDING_ADDRESS_BOOK_SELECTED' ||
         t === 'OPEN_RIDING_OPEN_ADDRESS_BOOK_RESULT' ||
         t === 'OPEN_ADDRESS_BOOK_RESULT' ||
+        t === 'OPEN_ADDRESS_BOOK_SELECTED' ||
+        t === 'OPEN_ADDRESS_BOOK' ||
         t === 'addressBookSelected' ||
         t === 'ADDRESS_BOOK_SELECTED' ||
         t === 'stelvio.addressBook'
       ) {
-        onAddressBookPayload(d.payload != null ? d.payload : d.data != null ? d.data : d);
+        onAddressBookPayload(
+          d.payload != null
+            ? d.payload
+            : d.contacts != null
+              ? d.contacts
+              : d.items != null
+                ? d.items
+                : d.data != null
+                  ? d.data
+                  : d
+        );
       }
     }
+
+    function onAddressBookDomEvent(ev) {
+      var detail = ev && ev.detail != null ? ev.detail : null;
+      if (detail == null) return;
+      onAddressBookPayload(detail);
+    }
+    window.addEventListener('addressBookSelected', onAddressBookDomEvent);
+    window.addEventListener('openRidingAddressBookSelected', onAddressBookDomEvent);
     window.addEventListener('message', onMessage);
 
     return function () {
       window.removeEventListener('message', onMessage);
+      window.removeEventListener('addressBookSelected', onAddressBookDomEvent);
+      window.removeEventListener('openRidingAddressBookSelected', onAddressBookDomEvent);
       window.onAddressBookSelected = prevMain;
       window.onOpenRidingAddressBookSelected = prevAlt;
       window.stelvioAddressBookPicked = prevPick;
