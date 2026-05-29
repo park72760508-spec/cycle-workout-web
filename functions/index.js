@@ -159,6 +159,7 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
   if (!ids.length) return;
 
   const privMap = new Map();
+  const nameMap = new Map();
   const FieldPath = admin.firestore.FieldPath;
   const CHUNK = 30;
   for (let i = 0; i < ids.length; i += CHUNK) {
@@ -167,7 +168,14 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
     try {
       const qSnap = await db.collection("users").where(FieldPath.documentId(), "in", chunk).get();
       qSnap.forEach((doc) => {
-        privMap.set(doc.id, privacyFlagFromFirestoreDoc(doc.data()));
+        const data = doc.data() || {};
+        privMap.set(doc.id, privacyFlagFromFirestoreDoc(data));
+        const nm =
+          (data.name && String(data.name).trim()) ||
+          (data.displayName && String(data.displayName).trim()) ||
+          (data.display_name && String(data.display_name).trim()) ||
+          "";
+        if (nm && nm !== "비공개") nameMap.set(doc.id, nm);
       });
     } catch (e) {
       console.warn("[hydrateRankingBoardPrivacyFromUsers]", e && e.message ? e.message : e);
@@ -179,6 +187,9 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
     const id = String(r.userId).trim();
     if (!privMap.has(id)) return;
     r.is_private = privMap.get(id);
+    if (nameMap.has(id)) {
+      r.name = nameMap.get(id);
+    }
   };
   for (const k of Object.keys(byCategory)) {
     const rows = byCategory[k];

@@ -113,12 +113,38 @@ function applyGenderFilter(query, gender) {
 function mapRowToFirebaseUser(row, firebaseUid) {
   return {
     userId: firebaseUid,
-    name: row.actual_name || row.name || row.display_name || "(이름 없음)",
+    name: resolveRankingEntryName(row, row.display_name || row.name),
     ageCategory: row.league_category || "unknown",
     gender: genderDbToClient(row.gender),
     is_private: row.is_private === true,
     profileImageUrl: row.profile_image_url || null,
   };
+}
+
+/** GC·피크 공통: API 응답에는 실명 + is_private (UI에서 마스킹) */
+function resolveRankingEntryName(profileOrRow, rowFallbackName) {
+  const actual =
+    profileOrRow && profileOrRow.actual_name && String(profileOrRow.actual_name).trim()
+      ? String(profileOrRow.actual_name).trim()
+      : "";
+  if (actual) return actual;
+  const rowName =
+    rowFallbackName != null && String(rowFallbackName).trim() !== "비공개"
+      ? String(rowFallbackName).trim()
+      : "";
+  if (rowName) return rowName;
+  const profDisplay =
+    profileOrRow &&
+    profileOrRow.display_name &&
+    String(profileOrRow.display_name).trim() !== "비공개"
+      ? String(profileOrRow.display_name).trim()
+      : "";
+  if (profDisplay) return profDisplay;
+  const plainName =
+    profileOrRow && profileOrRow.name && String(profileOrRow.name).trim() !== "비공개"
+      ? String(profileOrRow.name).trim()
+      : "";
+  return plainName || "(이름 없음)";
 }
 
 function profileGenderMatches(profile, gender) {
@@ -630,11 +656,13 @@ async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gen
     const profile = profileMap.get(String(row.user_id));
     entries.push({
       userId: fbUid,
-      name: row.display_name || "(이름 없음)",
-      ageCategory: row.league_category || "unknown",
+      name: resolveRankingEntryName(profile, row.display_name),
+      ageCategory:
+        (profile && profile.league_category) || row.league_category || "unknown",
       gender: genderDbToClient(row.gender),
       is_private: profile ? profile.is_private === true : false,
-      profileImageUrl: row.profile_image_url || null,
+      profileImageUrl:
+        (profile && profile.profile_image_url) || row.profile_image_url || null,
       wkg,
       watts: Number(row.peak_watts) || 0,
     });
@@ -812,11 +840,7 @@ function getMonthKeyKstNow() {
 function mapGcRowToEntry(row, fbUid, filterGender, gcScore, profile) {
   const g =
     filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
-  const name =
-    (profile && profile.actual_name && String(profile.actual_name).trim()) ||
-    (profile && profile.display_name && String(profile.display_name).trim()) ||
-    (row.display_name && String(row.display_name).trim()) ||
-    "(이름 없음)";
+  const name = resolveRankingEntryName(profile || row, row.display_name);
   return {
     userId: fbUid,
     name,
