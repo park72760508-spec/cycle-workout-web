@@ -16813,7 +16813,8 @@
 
         function buildSupremoRow(item, categoryRank, extraRowClass) {
           extraRowClass = extraRowClass || '';
-          var rawName = stelvioRankingEscapeHtml(stelvioRankingResolveRowRawName(item));
+          var rawNamePlain = stelvioRankingResolveRowRawName(item);
+          var rawName = stelvioEscapeHtml(rawNamePlain);
           var isPrivate = stelvioRankingIsPrivateRow(item);
           var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
           var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
@@ -16826,7 +16827,7 @@
             if (canSeeFull) {
               name = rawName.length > maxNameLenS ? rawName.substring(0, maxNameLenS - 2) + '..' : rawName;
             } else {
-              name = stelvioRankingPrivateMaskedDisplayName(rawName);
+              name = stelvioEscapeHtml(stelvioRankingPrivateMaskedDisplayName(rawNamePlain));
             }
           } else {
             name = rawName.length > maxNameLenS ? rawName.substring(0, maxNameLenS - 2) + '..' : rawName;
@@ -17135,7 +17136,8 @@
       function buildCategoryRow(item, categoryRank, extraRowClass) {
         extraRowClass = extraRowClass || '';
         var dispR = stelvioRankDisplayNumber(item, categoryRank, cat, byCategory);
-        var rawName = stelvioRankingEscapeHtml(stelvioRankingResolveRowRawName(item));
+        var rawNamePlain = stelvioRankingResolveRowRawName(item);
+        var rawName = stelvioEscapeHtml(rawNamePlain);
         var isPrivate = stelvioRankingIsPrivateRow(item);
         var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
         var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
@@ -17148,7 +17150,7 @@
           if (canSeeFull) {
             name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
           } else {
-            name = stelvioRankingPrivateMaskedDisplayName(rawName);
+            name = stelvioEscapeHtml(stelvioRankingPrivateMaskedDisplayName(rawNamePlain));
           }
         } else {
           name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
