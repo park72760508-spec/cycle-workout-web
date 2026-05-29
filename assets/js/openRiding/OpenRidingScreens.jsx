@@ -2383,6 +2383,12 @@ function openRidingBridgeOpenAddressBook() {
   }
 
   try {
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
+    }
+  } catch (e) {}
+
+  try {
     window.location.href = 'stelvio://openAddressBook';
   } catch (e) {}
 }
