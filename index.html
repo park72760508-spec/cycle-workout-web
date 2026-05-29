@@ -9608,6 +9608,9 @@
 
       stelvioRankingFastTabSwitchFlag = true;
       try {
+        try {
+          stelvioRefreshRankingFavoriteSetFromStorage({ authoritativeLocal: true });
+        } catch (eFavMem) {}
         stelvioRankingSyncPayloadGlobals(mem.body, uid);
         if (typeof stelvioSyncCategorySelectUi === 'function') stelvioSyncCategorySelectUi();
         if (typeof renderStelvioHeroCard === 'function') {
@@ -12906,13 +12909,39 @@
       if (typeof stelvioRankingState === 'undefined' || !stelvioRankingState) return false;
       return stelvioIsPeakPowerDurationForRankChange(stelvioRankingState.duration);
     }
-    /** GC·피크·거리: is_private·친구/그룹 마스킹이 캐시 HTML에 고정되지 않도록 매번 재렌더 */
+    /** 친구·그룹·관심(보라별)은 사용자별 동적 — 목록 HTML 캐시 비활성(전 탭) */
     function stelvioRankingSkipsListHtmlCache() {
-      if (stelvioIsGcRankingMode()) return true;
-      if (stelvioIsPeakPowerDurationRankingMode()) return true;
-      if (stelvioIsKmDistanceRanking()) return true;
-      return false;
+      return true;
     }
+
+    /** 이미 그려진 목록 행의 별(친구·그룹·관심)만 갱신 — 캐시·프리렌더 복원 후 보정 */
+    function stelvioRankingRefreshListStarSlots(bodyEl) {
+      if (!bodyEl || typeof stelvioRankingStarButtonHtml !== 'function') return;
+      var avatarBtns = bodyEl.querySelectorAll('.stelvio-rank-avatar-btn[data-stelvio-rank-user-id]');
+      for (var si = 0; si < avatarBtns.length; si++) {
+        var avBtn = avatarBtns[si];
+        var uid = avBtn.getAttribute('data-stelvio-rank-user-id');
+        if (!uid) continue;
+        var nameWrap = avBtn.closest ? avBtn.closest('.stelvio-rank-name') : null;
+        if (!nameWrap) continue;
+        var oldStars = nameWrap.querySelectorAll('.stelvio-rank-stars-wrap');
+        for (var oi = 0; oi < oldStars.length; oi++) {
+          if (oldStars[oi].parentNode) oldStars[oi].parentNode.removeChild(oldStars[oi]);
+        }
+        var starHtml = stelvioRankingStarButtonHtml(uid);
+        if (!starHtml) continue;
+        var insertBefore =
+          nameWrap.querySelector('.ranking-private-badge') ||
+          nameWrap.querySelector('.stelvio-rank-owner-badge');
+        var holder = document.createElement('span');
+        holder.innerHTML = starHtml;
+        while (holder.firstChild) {
+          if (insertBefore) nameWrap.insertBefore(holder.firstChild, insertBefore);
+          else nameWrap.appendChild(holder.firstChild);
+        }
+      }
+    }
+    window.stelvioRankingRefreshListStarSlots = stelvioRankingRefreshListStarSlots;
     /** 랭킹보드 탭(피크·TSS·거리·그룹·GC) — 순위 등락 대상 */
     function stelvioSupportsRankMovementDuration(dt) {
       if (!dt) return false;
@@ -13245,9 +13274,12 @@
       } else {
         bodyEl.innerHTML = html;
       }
-      if (rememberCat && html) {
+      if (rememberCat && html && typeof stelvioRankingSkipsListHtmlCache === 'function' && !stelvioRankingSkipsListHtmlCache()) {
         stelvioRankingRememberListHtml(rememberCat, html);
         if (bodyEl) bodyEl.classList.add('stelvio-ranking-list-stable');
+      }
+      if (typeof stelvioRankingRefreshListStarSlots === 'function') {
+        stelvioRankingRefreshListStarSlots(bodyEl);
       }
       if (window._rankingSearchFab && typeof window._rankingSearchFab.update === 'function') {
         setTimeout(function () {
@@ -14317,6 +14349,12 @@
         stelvioRankingSyncPayloadGlobals(data, uid);
         refreshStelvioDistributionChartMounted();
         var bodyEarly = document.getElementById('stelvioRankingListBody');
+        try {
+          stelvioRefreshRankingFavoriteSetFromStorage({ authoritativeLocal: true });
+        } catch (eFavEarly) {}
+        if (bodyEarly && typeof stelvioRankingRefreshListStarSlots === 'function') {
+          stelvioRankingRefreshListStarSlots(bodyEarly);
+        }
         if (!stelvioRankingListBodyHasDataRows(bodyEarly)) {
           stelvioRankingFastTabSwitchFlag = true;
           try {
@@ -14446,12 +14484,16 @@
       }
       if (applyOpts.fastTabSwitch) {
         stelvioRankingFastTabSwitchFlag = true;
-        try {
-          stelvioFinishPeakRankingApplyAfterFavorites();
-        } finally {
-          stelvioRankingFastTabSwitchFlag = false;
-        }
-        favoritesHydratePromise.catch(function () {});
+        favoritesHydratePromise
+          .catch(function () {})
+          .then(function () {
+            if (myGen !== stelvioRankingFetchGen) return;
+            try {
+              stelvioFinishPeakRankingApplyAfterFavorites();
+            } finally {
+              stelvioRankingFastTabSwitchFlag = false;
+            }
+          });
         return;
       }
       favoritesHydratePromise
@@ -16421,6 +16463,12 @@
     }
 
     function renderStelvioActiveCategory() {
+      if (typeof stelvioEnsureRankingFavoriteUiListeners === 'function') {
+        stelvioEnsureRankingFavoriteUiListeners();
+      }
+      try {
+        stelvioRefreshRankingFavoriteSetFromStorage({ authoritativeLocal: true });
+      } catch (eFavRender) {}
       if (!stelvioIsGroupDistanceRanking()) {
         stelvioTeardownGroupTabState();
       }
