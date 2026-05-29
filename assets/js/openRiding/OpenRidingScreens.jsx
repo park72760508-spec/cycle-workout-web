@@ -2352,11 +2352,14 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
  * Stelvio 앱 WebView 주소록 — Universal Master Key (Sync Only, User Activation Call Stack)
  */
 function openRidingBridgeOpenAddressBook() {
+  var now = new Date();
+  var timeStr = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+
   try {
     // 1. Android 확인
     var and = window.AndroidBridge || window.Android;
     if (and && and.openAddressBook) {
-      alert('안드로이드 브릿지 호출 시킴입니다.');
+      alert('[' + timeStr + '] 안드로이드 브릿지 호출 시킴입니다.');
       and.openAddressBook();
       return;
     }
@@ -2367,29 +2370,29 @@ function openRidingBridgeOpenAddressBook() {
 
       // 경로 A: openAddressBook 핸들러
       if (h.openAddressBook) {
-        alert('iOS: openAddressBook 핸들러 타격 시킴입니다.');
+        alert('[' + timeStr + '] iOS: openAddressBook 타격 시킴입니다.');
         try { h.openAddressBook.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK'); } catch (e) {}
         try { h.openAddressBook.postMessage({ type: 'OPEN_ADDRESS_BOOK' }); } catch (e) {}
       }
 
       // 경로 B: Stelvio 통합 핸들러
       if (h.Stelvio) {
-        alert('iOS: Stelvio 핸들러 타격 시킴입니다.');
+        alert('[' + timeStr + '] iOS: Stelvio 타격 시킴입니다.');
         try { h.Stelvio.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK'); } catch (e) {}
       }
 
       // 경로 C: message 공용 핸들러
       if (h.message) {
-        alert('iOS: message 핸들러 타격 시킴입니다.');
+        alert('[' + timeStr + '] iOS: message 타격 시킴입니다.');
         try { h.message.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK'); } catch (e) {}
       }
     }
 
     // 3. 최후의 폴백 (URL Scheme)
-    alert('iOS: URL Scheme(stelvio://) 타격 시킴입니다.');
+    alert('[' + timeStr + '] iOS: URL Scheme(stelvio://) 타격 시킴입니다.');
     window.location.href = 'stelvio://openAddressBook';
   } catch (global_e) {
-    alert('실행 중 오류 발생: ' + global_e.message);
+    alert('[' + timeStr + '] 실행 중 오류 발생: ' + global_e.message);
   }
 }
 
