@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — Universal Shotgun (Sync Only, User Activation Call Stack)
+ * Stelvio 앱 WebView 주소록 — Universal Master Key (Sync Only, User Activation Call Stack)
  */
 function openRidingBridgeOpenAddressBook() {
   try {
@@ -2360,7 +2360,7 @@ function openRidingBridgeOpenAddressBook() {
     }
   } catch (e) {}
 
-  if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers) {
+  if (window.webkit && window.webkit.messageHandlers) {
     var h = window.webkit.messageHandlers;
     try {
       h.message.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
@@ -2372,16 +2372,16 @@ function openRidingBridgeOpenAddressBook() {
       h.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
     } catch (e) {}
     try {
-      h.stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+      h.open_address_book.postMessage({});
     } catch (e) {}
     try {
       h.openAddressBook.postMessage({});
     } catch (e) {}
     try {
-      h.openAddressBook.postMessage(null);
+      h.openAddressBook.postMessage('');
     } catch (e) {}
     try {
-      h.openAddressBook.postMessage('OPEN');
+      h.openAddressBook.postMessage(null);
     } catch (e) {}
   }
 
