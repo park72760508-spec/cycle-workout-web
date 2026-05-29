@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — Direct Dispatch (조건 없이 순차 강제 호출)
+ * Stelvio 앱 WebView 주소록 — iOS 동기식 직접 호출 (사용자 제스처 Call Stack 내 즉시 실행)
  */
 function openRidingBridgeOpenAddressBook() {
   if (typeof window === 'undefined') {
@@ -2358,12 +2358,12 @@ function openRidingBridgeOpenAddressBook() {
 
   try {
     var and = window.AndroidBridge || window.Android;
-    if (and && typeof and.openAddressBook === 'function') {
-      and.openAddressBook();
-      return;
-    }
-    if (and && and.openAddressBook != null) {
-      openRidingTryInvokeNativeMethod(and, 'openAddressBook');
+    if (and && and.openAddressBook) {
+      if (typeof and.openAddressBook === 'function') {
+        and.openAddressBook();
+      } else {
+        openRidingTryInvokeNativeMethod(and, 'openAddressBook');
+      }
       return;
     }
   } catch (eAnd) {}
@@ -2379,27 +2379,10 @@ function openRidingBridgeOpenAddressBook() {
     try {
       hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
     } catch (eIos3) {}
-    try {
-      hs.stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (eIos4) {}
   }
 
   try {
-    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
-    }
-  } catch (eRn) {}
-
-  try {
-    var iframe = document.createElement('iframe');
-    iframe.setAttribute('src', 'stelvio://openAddressBook');
-    iframe.setAttribute('style', 'display:none;');
-    document.body.appendChild(iframe);
-    setTimeout(function () {
-      if (iframe.parentNode) {
-        iframe.parentNode.removeChild(iframe);
-      }
-    }, 100);
+    window.location.href = 'stelvio://openAddressBook';
   } catch (eScheme) {}
 }
 
@@ -5412,13 +5395,8 @@ function OpenRidingCreateForm(props) {
           onClick={function (e) {
             e.preventDefault();
             e.stopPropagation();
-            if (typeof console !== 'undefined' && console.log) {
-              console.log('Button Clicked');
-            }
             if (typeof window.openRidingBridgeOpenAddressBook === 'function') {
               window.openRidingBridgeOpenAddressBook();
-            } else {
-              alert('[DEBUG] window.openRidingBridgeOpenAddressBook 없음');
             }
           }}
         >
