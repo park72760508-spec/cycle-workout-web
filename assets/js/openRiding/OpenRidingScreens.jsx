@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — iOS 표준 규격 (User Activation Call Stack)
+ * Stelvio 앱 WebView 주소록 — iOS 표준 + 디버그 alert (확인 후 alert 제거 예정)
  */
 function openRidingBridgeOpenAddressBook() {
   try {
@@ -2357,22 +2357,33 @@ function openRidingBridgeOpenAddressBook() {
       var hs = window.webkit.messageHandlers;
 
       if (hs.openAddressBook) {
+        alert('[DEBUG] iOS 핸들러(소문자) 발견');
+        try {
+          hs.openAddressBook.postMessage();
+        } catch (e) {}
         try {
           hs.openAddressBook.postMessage({});
         } catch (e) {}
         try {
           hs.openAddressBook.postMessage('');
         } catch (e) {}
+        return;
+      }
+
+      if (hs.OpenAddressBook) {
+        alert('[DEBUG] iOS 핸들러(대문자) 발견');
         try {
-          hs.openAddressBook.postMessage(null);
+          hs.OpenAddressBook.postMessage();
+        } catch (e) {}
+        try {
+          hs.OpenAddressBook.postMessage({});
         } catch (e) {}
         return;
       }
 
       if (hs.Stelvio) {
-        try {
-          hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-        } catch (e) {}
+        alert('[DEBUG] Stelvio 핸들러 발견');
+        hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
         return;
       }
     }
@@ -2383,9 +2394,10 @@ function openRidingBridgeOpenAddressBook() {
       return;
     }
 
+    alert('[DEBUG] URL Scheme 시도');
     window.location.href = 'stelvio://openAddressBook';
   } catch (e) {
-    console.error('[오픈라이딩] 주소록 호출 중 치명적 오류:', e);
+    alert('오류 발생: ' + (e && e.message ? e.message : String(e)));
   }
 }
 
