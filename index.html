@@ -8256,6 +8256,31 @@
       return v === true || v === 'true' || v === 1 || v === '1';
     }
 
+    /** Supabase v_user_public_profile 등에서 내려오는 마스킹 placeholder */
+    function stelvioRankingIsPrivatePlaceholderName(name) {
+      return String(name || '').trim() === '비공개';
+    }
+
+    /** GC·피크 공통: 행 데이터에서 실명 추출 (placeholder '비공개' 제외) */
+    function stelvioRankingResolveRowRawName(item) {
+      if (!item) return '(이름 없음)';
+      var fields = ['actualName', 'actual_name', 'name', 'displayName'];
+      for (var fi = 0; fi < fields.length; fi++) {
+        var val = item[fields[fi]];
+        if (val == null) continue;
+        var s = String(val).trim();
+        if (s && !stelvioRankingIsPrivatePlaceholderName(s)) return s;
+      }
+      return '(이름 없음)';
+    }
+
+    /** 타인 비공개: 첫 글자 + ** (placeholder면 ** 만) */
+    function stelvioRankingPrivateMaskedDisplayName(rawName) {
+      var n = String(rawName || '').trim();
+      if (!n || n === '(이름 없음)' || stelvioRankingIsPrivatePlaceholderName(n)) return '**';
+      return n.length >= 2 ? n.charAt(0) + '**' : '**';
+    }
+
     /** 탈퇴(비활성) 랭킹 행 — 서버 account_status / isWithdrawn */
     function stelvioRankingIsWithdrawnRow(item) {
       if (!item) return false;
@@ -8793,7 +8818,15 @@
       if (body.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(body)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
       var isGcBody = body.durationType === 'gc' || ctx.duration === 'gc';
-      if (isGcBody && stelvioRankingPayloadHasPrivatePlaceholderName(body)) return false;
+      var isPeakBody =
+        body.durationType === 'max' ||
+        body.durationType === '1min' ||
+        body.durationType === '5min' ||
+        body.durationType === '10min' ||
+        body.durationType === '20min' ||
+        body.durationType === '40min' ||
+        body.durationType === '60min';
+      if ((isGcBody || isPeakBody) && stelvioRankingPayloadHasPrivatePlaceholderName(body)) return false;
       if (isGcBody && !stelvioGcPayloadMatchesLatestSnapshot(body)) return false;
       if (
         isPsRank &&
@@ -8833,7 +8866,7 @@
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
     /** peak IndexedDB 키 접두사 — readDb(firebase|supabase) 포함 swrKey와 v4 이전 캐시 분리 */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v7:';
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v8:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
@@ -16780,7 +16813,7 @@
 
         function buildSupremoRow(item, categoryRank, extraRowClass) {
           extraRowClass = extraRowClass || '';
-          var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          var rawName = stelvioRankingEscapeHtml(stelvioRankingResolveRowRawName(item));
           var isPrivate = stelvioRankingIsPrivateRow(item);
           var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
           var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
@@ -16793,7 +16826,7 @@
             if (canSeeFull) {
               name = rawName.length > maxNameLenS ? rawName.substring(0, maxNameLenS - 2) + '..' : rawName;
             } else {
-              name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
+              name = stelvioRankingPrivateMaskedDisplayName(rawName);
             }
           } else {
             name = rawName.length > maxNameLenS ? rawName.substring(0, maxNameLenS - 2) + '..' : rawName;
@@ -17102,7 +17135,7 @@
       function buildCategoryRow(item, categoryRank, extraRowClass) {
         extraRowClass = extraRowClass || '';
         var dispR = stelvioRankDisplayNumber(item, categoryRank, cat, byCategory);
-        var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        var rawName = stelvioRankingEscapeHtml(stelvioRankingResolveRowRawName(item));
         var isPrivate = stelvioRankingIsPrivateRow(item);
         var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
         var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
@@ -17115,7 +17148,7 @@
           if (canSeeFull) {
             name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
           } else {
-            name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
+            name = stelvioRankingPrivateMaskedDisplayName(rawName);
           }
         } else {
           name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
@@ -30584,7 +30617,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
 
       /* ── ghost row HTML 빌더 ── */
       function _buildGhostRowHtml(item, rankNum, ctx) {
-        var rawName = (item.name || '(이름 없음)');
+        var rawName = stelvioRankingResolveRowRawName(item);
         var uid = String(item.userId || '');
         var isCurrent      = !!(ctx.currentUserId && uid === String(ctx.currentUserId));
         var isFriend       = !!(ctx.friendSet && typeof ctx.friendSet.has === 'function' && ctx.friendSet.has(uid));
@@ -30593,7 +30626,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var isPrivate  = typeof ctx.isPrivate === 'function' ? ctx.isPrivate(item) : false;
         var name;
         if (isPrivate && !canSeeFull) {
-          name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
+          name = stelvioRankingPrivateMaskedDisplayName(rawName);
         } else {
           name = rawName.length > 10 ? rawName.substring(0, 8) + '..' : rawName;
         }
