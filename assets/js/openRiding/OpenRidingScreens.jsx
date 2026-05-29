@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — Universal Dispatcher (User Activation Call Stack)
+ * Stelvio 앱 WebView 주소록 — iOS 정밀 타격 (User Activation Call Stack)
  */
 function openRidingBridgeOpenAddressBook() {
   try {
@@ -2362,33 +2362,31 @@ function openRidingBridgeOpenAddressBook() {
 
   if (window.webkit && window.webkit.messageHandlers) {
     var hs = window.webkit.messageHandlers;
-    var params = {};
-    try {
-      hs.openAddressBook.postMessage(params);
-    } catch (e) {}
-    try {
-      hs.OpenAddressBook.postMessage(params);
-    } catch (e) {}
-    try {
-      hs.openaddressbook.postMessage(params);
-    } catch (e) {}
-    try {
-      hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (e) {}
-    try {
-      hs.stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (e) {}
-    try {
-      hs.message.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (e) {}
+    var names = [
+      'openAddressBook',
+      'OpenAddressBook',
+      'openaddressbook',
+      'getAddressBook',
+      'contactPicker',
+      'selectContact',
+      'Stelvio',
+      'StelvioBridge',
+    ];
+    names.forEach(function (name) {
+      try {
+        if (hs[name]) {
+          hs[name].postMessage({});
+          hs[name].postMessage('OPEN');
+        }
+      } catch (e) {}
+    });
   }
 
   try {
-    window.prompt('STELVIO_COMMAND:OPEN_ADDRESS_BOOK');
-  } catch (e) {}
-
-  try {
     window.location.href = 'stelvio://openAddressBook';
+    setTimeout(function () {
+      window.location.href = 'stelvio://open_address_book';
+    }, 100);
   } catch (e) {}
 }
 
