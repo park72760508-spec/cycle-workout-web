@@ -2349,56 +2349,39 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — iOS 표준 + 디버그 alert (확인 후 alert 제거 예정)
+ * Stelvio 앱 WebView 주소록 — Universal Native Dispatcher (Sync Only)
  */
 function openRidingBridgeOpenAddressBook() {
   try {
-    if (window.webkit && window.webkit.messageHandlers) {
-      var hs = window.webkit.messageHandlers;
-
-      if (hs.openAddressBook) {
-        alert('[DEBUG] iOS 핸들러(소문자) 발견');
-        try {
-          hs.openAddressBook.postMessage();
-        } catch (e) {}
-        try {
-          hs.openAddressBook.postMessage({});
-        } catch (e) {}
-        try {
-          hs.openAddressBook.postMessage('');
-        } catch (e) {}
-        return;
-      }
-
-      if (hs.OpenAddressBook) {
-        alert('[DEBUG] iOS 핸들러(대문자) 발견');
-        try {
-          hs.OpenAddressBook.postMessage();
-        } catch (e) {}
-        try {
-          hs.OpenAddressBook.postMessage({});
-        } catch (e) {}
-        return;
-      }
-
-      if (hs.Stelvio) {
-        alert('[DEBUG] Stelvio 핸들러 발견');
-        hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-        return;
-      }
-    }
-
     var and = window.AndroidBridge || window.Android;
     if (and && and.openAddressBook) {
       and.openAddressBook();
       return;
     }
+  } catch (e) {}
 
-    alert('[DEBUG] URL Scheme 시도');
-    window.location.href = 'stelvio://openAddressBook';
-  } catch (e) {
-    alert('오류 발생: ' + (e && e.message ? e.message : String(e)));
+  if (window.webkit && window.webkit.messageHandlers) {
+    var hs = window.webkit.messageHandlers;
+    try {
+      hs.openAddressBook.postMessage({});
+    } catch (e) {}
+    try {
+      hs.OpenAddressBook.postMessage({});
+    } catch (e) {}
+    try {
+      hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+    } catch (e) {}
+    try {
+      hs.message.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+    } catch (e) {}
+    try {
+      hs.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
+    } catch (e) {}
   }
+
+  try {
+    window.location.href = 'stelvio://openAddressBook';
+  } catch (e) {}
 }
 
 if (typeof window !== 'undefined') {
