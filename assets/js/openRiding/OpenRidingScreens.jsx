@@ -2349,47 +2349,44 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — Direct Shotgun (Sync Only, User Activation Call Stack)
+ * Stelvio 앱 WebView 주소록 — iOS 표준 규격 (User Activation Call Stack)
  */
 function openRidingBridgeOpenAddressBook() {
-  if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers) {
-    var hs = window.webkit.messageHandlers;
-    try {
-      hs.openAddressBook.postMessage({});
-    } catch (e) {}
-    try {
-      hs.openAddressBook.postMessage(null);
-    } catch (e) {}
-    try {
-      hs.openAddressBook.postMessage('');
-    } catch (e) {}
-    try {
-      hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (e) {}
-    try {
-      hs.message.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (e) {}
-  }
-
   try {
-    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
-    }
-  } catch (e) {}
+    if (window.webkit && window.webkit.messageHandlers) {
+      var hs = window.webkit.messageHandlers;
 
-  try {
-    var and = window.AndroidBridge || window.Android;
-    if (and && and.openAddressBook) {
-      and.openAddressBook();
-      if (!window.webkit) {
+      if (hs.openAddressBook) {
+        try {
+          hs.openAddressBook.postMessage({});
+        } catch (e) {}
+        try {
+          hs.openAddressBook.postMessage('');
+        } catch (e) {}
+        try {
+          hs.openAddressBook.postMessage(null);
+        } catch (e) {}
+        return;
+      }
+
+      if (hs.Stelvio) {
+        try {
+          hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+        } catch (e) {}
         return;
       }
     }
-  } catch (e) {}
 
-  try {
+    var and = window.AndroidBridge || window.Android;
+    if (and && and.openAddressBook) {
+      and.openAddressBook();
+      return;
+    }
+
     window.location.href = 'stelvio://openAddressBook';
-  } catch (e) {}
+  } catch (e) {
+    console.error('[오픈라이딩] 주소록 호출 중 치명적 오류:', e);
+  }
 }
 
 if (typeof window !== 'undefined') {
