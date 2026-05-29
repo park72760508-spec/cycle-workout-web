@@ -2352,6 +2352,9 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
  * Stelvio 앱 WebView 주소록 — Universal Master Key (Sync Only, User Activation Call Stack)
  */
 function openRidingBridgeOpenAddressBook() {
+  // [보안] iOS User Gesture를 위해 어떠한 지연이나 복잡한 분기 없이 즉시 실행합니다.
+
+  // 1. Android (검증 완료된 경로)
   try {
     var and = window.AndroidBridge || window.Android;
     if (and && and.openAddressBook) {
@@ -2360,34 +2363,23 @@ function openRidingBridgeOpenAddressBook() {
     }
   } catch (e) {}
 
+  // 2. iOS (WebKit - 최후의 정밀 타격)
   if (window.webkit && window.webkit.messageHandlers) {
     var h = window.webkit.messageHandlers;
-    try {
-      h.message.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (e) {}
-    try {
-      h.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
-    } catch (e) {}
-    try {
-      h.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (e) {}
-    try {
-      h.open_address_book.postMessage({});
-    } catch (e) {}
-    try {
-      h.openAddressBook.postMessage({});
-    } catch (e) {}
-    try {
-      h.openAddressBook.postMessage('');
-    } catch (e) {}
-    try {
-      h.openAddressBook.postMessage(null);
-    } catch (e) {}
+
+    // 경로 A: 가장 유력한 핸들러 (과거 prompt에 떴던 핵심 문자열 전송)
+    try { h.openAddressBook.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK'); } catch (e) {}
+    try { h.openAddressBook.postMessage({ type: 'OPEN_ADDRESS_BOOK' }); } catch (e) {}
+
+    // 경로 B: 통합 핸들러 (Stelvio, message)
+    try { h.Stelvio.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK'); } catch (e) {}
+    try { h.message.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK'); } catch (e) {}
   }
 
+  // 3. 최후의 마스터키: URL Scheme (직접 위치 변경)
+  // 모든 JS 브릿지가 무반응일 때 시스템 레벨에서 가로채는 방식입니다.
   try {
     window.location.href = 'stelvio://openAddressBook';
-    window.location.href = 'stelvio://open_address_book';
   } catch (e) {}
 }
 
