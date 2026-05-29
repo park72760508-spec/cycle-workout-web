@@ -7170,9 +7170,14 @@ function OpenRidingDetail(props) {
     var uk = String(uid);
     var shareToPeers = !Object.prototype.hasOwnProperty.call(pcp, uk) || pcp[uk] === true;
     var attendeeViewer = isHost || hasApplied;
+    var isConfirmedParticipant = parts.some(function (id) {
+      return String(id) === uk;
+    });
     /** 일정 지난 뒤 정원·참석자 목록에서는 전화번호 자체를 표시하지 않음 */
     if (maskContacts) return null;
     if (!attendeeViewer) return ' (' + maskPhoneLastFourDisplay(rawStr) + ')';
+    /** 방장·참석(대기) 신청자는 참석 확정자 연락처 전체 공개(신청 시 비공개 선택 포함) */
+    if (isHost || (hasApplied && isConfirmedParticipant)) return ' (' + rawStr + ')';
     if (shareToPeers) return ' (' + rawStr + ')';
     return ' (' + maskPhoneLastFourDisplay(rawStr) + ')';
   }
