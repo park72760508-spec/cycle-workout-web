@@ -8,12 +8,32 @@ import {
   sendAlimtalkUnified,
 } from "./aligoAlimtalkUnified";
 
+/** Strava 웹훅 등 VPC 비적용 진입점에서 미션 알림만 NAT 고정 출구 HTTPS 릴레이로 전달할 때 사용 */
+export interface PointRewardMissionAlimVpcRelay {
+  url: string;
+  secret: string;
+}
+
+export interface PointRewardServiceOptions {
+  missionAlimVpcRelay?: PointRewardMissionAlimVpcRelay;
+}
+
 /** 포인트 계산 비율: 기본 1 TSS = 1 SP */
 const POINTS_PER_TSS = Number(process.env.POINTS_PER_TSS || "1");
 /** 구독 연장 트리거 포인트 기준치 */
 const SUBSCRIPTION_POINT_THRESHOLD = Number(process.env.SUBSCRIPTION_POINT_THRESHOLD || "500");
 /** 기준치 1회 충족 시 연장되는 일수 */
 const SUBSCRIPTION_DAYS_PER_THRESHOLD = Number(process.env.SUBSCRIPTION_DAYS_PER_THRESHOLD || "1");
+
+/**
+ * 포인트 적립·만료일(구독) 연장 안내 알림톡(UH_2120) 발송 스위치.
+ * 기본 비활성화. 재활성화 시 Functions env `MISSION_SUBSCRIPTION_ALIMTALK_ENABLED=1` 설정.
+ */
+function isMissionSubscriptionAlimtalkEnabled(): boolean {
+  return /^(1|true|yes)$/i.test(
+    String(process.env.MISSION_SUBSCRIPTION_ALIMTALK_ENABLED ?? "").trim()
+  );
+}
 
 const USERS_COLLECTION = "users";
 const POINT_HISTORY_COLLECTION = "point_history";
@@ -274,7 +294,10 @@ function buildAlimtalkMessage(params: {
 }
 
 export class PointRewardService {
-  constructor(private readonly db: Firestore) {}
+  constructor(
+    private readonly db: Firestore,
+    private readonly opts?: PointRewardServiceOptions
+  ) {}
 
   /**
    * 라이딩 미션 달성·구독 연장 알림톡(UH_2120 계열 tpl_code).
@@ -286,6 +309,36 @@ export class PointRewardService {
     subject: string,
     message: string
   ): Promise<void> {
+    const relay = this.opts?.missionAlimVpcRelay;
+    if (relay?.url?.trim() && relay?.secret) {
+      const ac = new AbortController();
+      const t = setTimeout(() => ac.abort(), 120_000);
+      let resp: Response;
+      try {
+        resp = await fetch(relay.url.trim(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-mission-alim-relay-secret": relay.secret,
+          },
+          body: JSON.stringify({
+            receiverPhone,
+            displayName,
+            subject,
+            message,
+          }),
+          signal: ac.signal,
+        });
+      } finally {
+        clearTimeout(t);
+      }
+      const bodyText = await resp.text().catch(() => "");
+      if (!resp.ok) {
+        throw new Error(`mission 알림 HTTPS 릴레이 실패 HTTP ${resp.status}: ${bodyText.slice(0, 800)}`);
+      }
+      return;
+    }
+
     const cfg = await loadAligoAlimtalkConfig(this.db, ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION);
     await sendAlimtalkUnified(cfg, {
       receiverPhone,
@@ -539,6 +592,9 @@ export class PointRewardService {
   async sendStelvioIndoorAlimtalkFromPayload(
     payload: StelvioIndoorAlimtalkPayload | null
   ): Promise<StelvioIndoorAlimtalkSendResult> {
+    if (!isMissionSubscriptionAlimtalkEnabled()) {
+      return { alimtalkSent: false, skipped: "alimtalk_disabled" };
+    }
     if (!payload) {
       return { alimtalkSent: false, skipped: "no_subscription_extension" };
     }
