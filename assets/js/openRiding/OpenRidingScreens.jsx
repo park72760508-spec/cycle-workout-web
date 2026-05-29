@@ -11221,6 +11221,29 @@ function OpenRidingRoomApp(props) {
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
+          ) : view === 'create' ? (
+            <button
+              type="button"
+              className="open-riding-action-btn shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100/90 -ml-0.5"
+              onClick={function () {
+                setView('main');
+              }}
+              aria-label="라이딩 모임으로 뒤로"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
           ) : (
             <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
           )}
