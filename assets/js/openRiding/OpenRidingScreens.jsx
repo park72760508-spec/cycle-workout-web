@@ -2352,54 +2352,31 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
  * Stelvio 앱 WebView 주소록 — Universal Master Key (Sync Only, User Activation Call Stack)
  */
 function openRidingBridgeOpenAddressBook() {
-  // [관리용 정보] 배포 시마다 아래 식별자를 변경하여 반영 여부를 확인하세요.
-  var VERSION_ID = '0530_REV_01';
-  var now = new Date();
-  var timestamp = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
-  var prefix = '[' + VERSION_ID + ' / ' + timestamp + '] ';
-
   try {
-    // 0. 함수 진입 즉시 보고
-    alert(prefix + '함수 진입 시킴입니다. (로직 시작)');
-
-    // 1. Android 경로
     var and = window.AndroidBridge || window.Android;
     if (and && and.openAddressBook) {
-      alert(prefix + '안드로이드 브릿지 호출 시킴입니다.');
       and.openAddressBook();
       return;
     }
+  } catch (e) {}
 
-    // 2. iOS (WebKit) 진단
-    if (window.webkit && window.webkit.messageHandlers) {
-      var h = window.webkit.messageHandlers;
-
-      // 경로 A: openAddressBook
-      if (h.openAddressBook) {
-        alert(prefix + 'iOS: openAddressBook 타격 시킴입니다.');
-        h.openAddressBook.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK');
-        h.openAddressBook.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-      }
-
-      // 경로 B: Stelvio
-      if (h.Stelvio) {
-        alert(prefix + 'iOS: Stelvio 타격 시킴입니다.');
-        h.Stelvio.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK');
-      }
-
-      // 경로 C: message
-      if (h.message) {
-        alert(prefix + 'iOS: message 타격 시킴입니다.');
-        h.message.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK');
-      }
+  if (window.webkit && window.webkit.messageHandlers) {
+    var h = window.webkit.messageHandlers;
+    if (h.openAddressBook) {
+      try { h.openAddressBook.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK'); } catch (e) {}
+      try { h.openAddressBook.postMessage({ type: 'OPEN_ADDRESS_BOOK' }); } catch (e) {}
     }
-
-    // 3. 최후의 폴백 (URL Scheme)
-    alert(prefix + 'iOS: URL Scheme(stelvio://) 최종 타격 시킴입니다.');
-    window.location.href = 'stelvio://openAddressBook';
-  } catch (err) {
-    alert(prefix + '치명적 오류 발생: ' + err.message);
+    if (h.Stelvio) {
+      try { h.Stelvio.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK'); } catch (e) {}
+    }
+    if (h.message) {
+      try { h.message.postMessage('STELVIO_COMMAND:OPEN_ADDRESS_BOOK'); } catch (e) {}
+    }
   }
+
+  try {
+    window.location.href = 'stelvio://openAddressBook';
+  } catch (e) {}
 }
 
 if (typeof window !== 'undefined') {
@@ -9418,6 +9395,9 @@ function OpenRidingGroupForm(props) {
   var _loaded = useState(!isEdit);
   var loaded = _loaded[0];
   var setLoaded = _loaded[1];
+  var _editCreatedBy = useState('');
+  var editGroupCreatedBy = _editCreatedBy[0];
+  var setEditGroupCreatedBy = _editCreatedBy[1];
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
 
   var districtsForSido = useMemo(
@@ -9469,6 +9449,7 @@ function OpenRidingGroupForm(props) {
           setRegions(Array.isArray(doc.regions) ? doc.regions.map(function (x) { return String(x); }) : []);
           setPhotoUrl(doc.photoUrl != null ? String(doc.photoUrl) : '');
           setPhotoFile(null);
+          setEditGroupCreatedBy(doc.createdBy != null ? String(doc.createdBy) : '');
         })
         .catch(function () {})
         .finally(function () {
@@ -9544,13 +9525,21 @@ function OpenRidingGroupForm(props) {
     if (typeof gs.updateRidingGroupByOwner !== 'function') return;
     setBusy(true);
     var id = editGroupId;
+    var asAdmin =
+      openRidingGroupsIsAdminGrade() &&
+      editGroupCreatedBy &&
+      String(editGroupCreatedBy) !== String(userId);
+    var updateFn =
+      asAdmin && typeof gs.updateRidingGroupByAdmin === 'function'
+        ? gs.updateRidingGroupByAdmin
+        : gs.updateRidingGroupByOwner;
     var chain = Promise.resolve();
     if (photoFile && storage && typeof gs.uploadRidingGroupCover === 'function') {
       chain = gs.uploadRidingGroupCover(storage, id, photoFile).then(function (url) {
-        return gs.updateRidingGroupByOwner(firestore, userId, id, payloadFromForm(url));
+        return updateFn(firestore, userId, id, payloadFromForm(url));
       });
     } else {
-      chain = gs.updateRidingGroupByOwner(firestore, userId, id, payloadFromForm());
+      chain = updateFn(firestore, userId, id, payloadFromForm());
     }
     chain
       .then(function () {
@@ -9833,6 +9822,9 @@ function OpenRidingGroupDetailView(props) {
   var _jConfirm = useState(null);
   var joinActionConfirm = _jConfirm[0];
   var setJoinActionConfirm = _jConfirm[1];
+  var _deleteConfirmOpen = useState(false);
+  var deleteConfirmOpen = _deleteConfirmOpen[0];
+  var setDeleteConfirmOpen = _deleteConfirmOpen[1];
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
 
   function joinRequestApplicantUid(j) {
@@ -10326,16 +10318,25 @@ function OpenRidingGroupDetailView(props) {
       });
   }
 
-  function doDeletePendingGroup() {
-    if (!firestore || !userId || !groupId || !canDeletePendingGroup) return;
-    if (!window.confirm('이 그룹을 완전히 삭제할까요? 삭제 후에는 복구할 수 없습니다.')) return;
-    if (typeof gs.deleteRidingGroupByOwner !== 'function') {
+  function requestDeleteGroup() {
+    setDeleteConfirmOpen(true);
+  }
+
+  function confirmDeleteGroup() {
+    if (!firestore || !userId || !groupId) return;
+    setDeleteConfirmOpen(false);
+    setBusy(true);
+    var promise;
+    if (isAdmin && typeof gs.deleteRidingGroupByAdmin === 'function') {
+      promise = gs.deleteRidingGroupByAdmin(firestore, String(userId), String(groupId));
+    } else if (canDeletePendingGroup && typeof gs.deleteRidingGroupByOwner === 'function') {
+      promise = gs.deleteRidingGroupByOwner(firestore, String(userId), String(groupId));
+    } else {
       alert('삭제 기능을 사용할 수 없습니다. 앱을 새로고침한 뒤 다시 시도해 주세요.');
+      setBusy(false);
       return;
     }
-    setBusy(true);
-    gs
-      .deleteRidingGroupByOwner(firestore, String(userId), String(groupId))
+    promise
       .then(function () {
         onBack();
       })
@@ -10463,7 +10464,7 @@ function OpenRidingGroupDetailView(props) {
                       : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed')
                   }
                   disabled={!canDeletePendingGroup || !!busy}
-                  onClick={doDeletePendingGroup}
+                  onClick={requestDeleteGroup}
                 >
                   그룹 삭제
                 </button>
@@ -10473,6 +10474,33 @@ function OpenRidingGroupDetailView(props) {
                   삭제는 방장(본인) 멤버만 있는 상태이고, 다른 멤버·가입 신청 대기자가 없을 때만 가능합니다.
                 </p>
               ) : null}
+            </div>
+          ) : null}
+          {isAdmin ? (
+            <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/90 px-3 py-3 space-y-3">
+              <p className="text-xs text-violet-950 m-0 leading-snug font-semibold">관리자 메뉴</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {!isOwner ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 disabled:opacity-50"
+                    disabled={!!busy}
+                    onClick={function () {
+                      onEdit();
+                    }}
+                  >
+                    그룹 정보 수정
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:opacity-50"
+                  disabled={!!busy}
+                  onClick={requestDeleteGroup}
+                >
+                  그룹 삭제
+                </button>
+              </div>
             </div>
           ) : null}
           {isOwner && approved ? (
@@ -10789,6 +10817,55 @@ function OpenRidingGroupDetailView(props) {
                   })}
                 </ul>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteConfirmOpen ? (
+        <div
+          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[200061] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-group-delete-dialog-title"
+          onClick={function (ev) {
+            if (ev.target !== ev.currentTarget || busy) return;
+            setDeleteConfirmOpen(false);
+          }}
+        >
+          <div
+            className="open-riding-bomb-modal-panel w-full max-w-sm py-6 px-6 text-center"
+            onClick={function (e) {
+              e.stopPropagation();
+            }}
+          >
+            <h4 id="open-riding-group-delete-dialog-title" className="text-base font-bold text-slate-900 m-0 mb-2">
+              클럽 삭제
+            </h4>
+            <p className="text-sm text-slate-600 m-0 mb-5 leading-relaxed">
+              {grp && grp.name ? '「' + String(grp.name) + '」' : '이'} 클럽을 완전히 삭제할까요?
+              <br />
+              삭제 후에는 복구할 수 없습니다.
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button
+                type="button"
+                className="open-riding-action-btn flex-1 min-h-[44px] rounded-xl border border-slate-300 bg-white text-slate-700 font-medium text-sm disabled:opacity-50"
+                disabled={busy}
+                onClick={function () {
+                  setDeleteConfirmOpen(false);
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="open-riding-action-btn flex-1 min-h-[44px] rounded-xl bg-red-600 hover:bg-red-700 font-medium text-sm text-white disabled:opacity-50"
+                disabled={busy}
+                onClick={confirmDeleteGroup}
+              >
+                {busy ? '처리 중…' : '삭제'}
+              </button>
             </div>
           </div>
         </div>
