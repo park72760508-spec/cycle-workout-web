@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — Universal Master Key (Sync Only)
+ * Stelvio 앱 WebView 주소록 — Unrolled Dispatcher (Sync Only, User Activation Call Stack)
  */
 function openRidingBridgeOpenAddressBook() {
   try {
@@ -2361,28 +2361,33 @@ function openRidingBridgeOpenAddressBook() {
   } catch (e) {}
 
   if (window.webkit && window.webkit.messageHandlers) {
-    var hs = window.webkit.messageHandlers;
-    var targets = ['openAddressBook', 'OpenAddressBook', 'Stelvio', 'message'];
-    targets.forEach(function (name) {
-      try {
-        if (hs[name]) {
-          hs[name].postMessage({});
-          hs[name].postMessage('');
-          hs[name].postMessage(null);
-        }
-      } catch (err) {}
-    });
+    var h = window.webkit.messageHandlers;
+    try {
+      h.openAddressBook.postMessage({});
+    } catch (e) {}
+    try {
+      h.openAddressBook.postMessage('');
+    } catch (e) {}
+    try {
+      h.openAddressBook.postMessage('{}');
+    } catch (e) {}
+    try {
+      h.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+    } catch (e) {}
+    try {
+      h.stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+    } catch (e) {}
+    try {
+      h.message.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+    } catch (e) {}
+    try {
+      h.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
+    } catch (e) {}
   }
 
   try {
-    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
-    }
-  } catch (err) {}
-
-  try {
     window.location.href = 'stelvio://openAddressBook';
-  } catch (err) {}
+  } catch (e) {}
 }
 
 if (typeof window !== 'undefined') {
