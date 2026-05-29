@@ -2349,40 +2349,47 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — WKWebView 동기식 직접 실행 (User Activation Call Stack)
+ * Stelvio 앱 WebView 주소록 — Universal Dispatcher (User Activation Call Stack)
  */
 function openRidingBridgeOpenAddressBook() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
   try {
     var and = window.AndroidBridge || window.Android;
     if (and && and.openAddressBook) {
       and.openAddressBook();
       return;
     }
-  } catch (eAnd) {}
+  } catch (e) {}
 
   if (window.webkit && window.webkit.messageHandlers) {
     var hs = window.webkit.messageHandlers;
+    var params = {};
     try {
-      hs.openAddressBook.postMessage({});
-    } catch (e1) {}
+      hs.openAddressBook.postMessage(params);
+    } catch (e) {}
     try {
-      hs.openAddressBook.postMessage('openAddressBook');
-    } catch (e2) {}
+      hs.OpenAddressBook.postMessage(params);
+    } catch (e) {}
     try {
-      hs.openAddressBook.postMessage(0);
-    } catch (e3) {}
+      hs.openaddressbook.postMessage(params);
+    } catch (e) {}
     try {
       hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (e4) {}
+    } catch (e) {}
+    try {
+      hs.stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+    } catch (e) {}
+    try {
+      hs.message.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+    } catch (e) {}
   }
 
   try {
+    window.prompt('STELVIO_COMMAND:OPEN_ADDRESS_BOOK');
+  } catch (e) {}
+
+  try {
     window.location.href = 'stelvio://openAddressBook';
-  } catch (eScheme) {}
+  } catch (e) {}
 }
 
 if (typeof window !== 'undefined') {
