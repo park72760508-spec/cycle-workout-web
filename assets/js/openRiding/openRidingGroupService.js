@@ -607,6 +607,72 @@ export async function deleteRidingGroupByOwner(db, uid, groupId) {
 }
 
 /**
+ * 관리자(grade=1) — 그룹 정보 수정 (방장 여부·상태 무관, Firestore 규칙 stelvioGroupIsAdmin)
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} adminUid
+ * @param {string} groupId
+ * @param {{ name: string; regions: string[]; intro: string; isPublic: boolean; joinPassword?: string; photoUrl?: string|null }} payload
+ */
+export async function updateRidingGroupByAdmin(db, adminUid, groupId, payload) {
+  if (!db || !adminUid || !groupId) throw new Error('요청이 올바르지 않습니다.');
+  var ref = doc(db, RIDING_GROUP_COLLECTION, String(groupId).trim());
+  var snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
+  var d = snap.data() || {};
+  var name = trimLen(payload.name, 24);
+  if (!name) throw new Error('그룹명을 입력해 주세요.');
+  var regions = asStringArray(payload.regions);
+  var intro = trimLen(payload.intro, 500);
+  var isPublic = !!payload.isPublic;
+  var joinPassword = isPublic ? '' : trimLen(payload.joinPassword, 32);
+  if (!isPublic) {
+    var prev = String(d.joinPassword || '');
+    if (!joinPassword && prev) joinPassword = prev;
+    if (!joinPassword || joinPassword.length < 4) throw new Error('비공개 그룹은 비밀번호(4자 이상)가 필요합니다.');
+  }
+  await updateDoc(ref, {
+    name,
+    regions,
+    intro,
+    isPublic,
+    joinPassword: isPublic ? '' : joinPassword,
+    photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
+    updatedAt: serverTimestamp()
+  });
+  scheduleRidingGroupDualWriteFromFirestore(db, groupId, adminUid, { syncMembers: true });
+}
+
+/**
+ * 관리자(grade=1) — 멤버·가입신청 포함 그룹 전체 삭제
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} adminUid
+ * @param {string} groupId
+ */
+export async function deleteRidingGroupByAdmin(db, adminUid, groupId) {
+  if (!db || !adminUid || !groupId) throw new Error('요청이 올바르지 않습니다.');
+  var gid = String(groupId).trim();
+  var gRef = doc(db, RIDING_GROUP_COLLECTION, gid);
+  var gSnap = await getDoc(gRef);
+  if (!gSnap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
+
+  var memCol = collection(db, RIDING_GROUP_COLLECTION, gid, 'members');
+  var jrCol = collection(db, RIDING_GROUP_COLLECTION, gid, RIDING_GROUP_JOIN_REQUESTS_SUB);
+  var memSnap = await getDocs(memCol);
+  var jrSnap = await getDocs(jrCol);
+
+  var batch = writeBatch(db);
+  memSnap.forEach(function (ds) {
+    batch.delete(ds.ref);
+  });
+  jrSnap.forEach(function (ds) {
+    batch.delete(ds.ref);
+  });
+  batch.delete(gRef);
+  await batch.commit();
+  scheduleRidingGroupDualWriteFromFirestore(db, gid, adminUid, { syncMembers: true });
+}
+
+/**
  * 방장 이관: 현재 방장(createdBy)만 호출. 새 방장은 이미 그룹 멤버여야 함.
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} ownerUid
@@ -648,6 +714,113 @@ export async function transferRidingGroupOwnership(db, ownerUid, groupId, newOwn
   scheduleRidingGroupDualWriteFromFirestore(db, gid, ownerUid, { syncMembers: true });
 }
 
+/** docs/storage.rules stelvio_riding_groups 커버: 2MB 미만 image/* */
+const RIDING_GROUP_COVER_MAX_BYTES = 1900 * 1024;
+const RIDING_GROUP_COVER_MAX_PX = 1200;
+
+function ridingGroupCoverBlobToFile(blob, baseName) {
+  var safe = String(baseName || 'cover').replace(/\.[^.]+$/, '') + '.jpg';
+  if (typeof File !== 'undefined') {
+    return new File([blob], safe, { type: 'image/jpeg', lastModified: Date.now() });
+  }
+  return blob;
+}
+
+function ridingGroupCoverCanvasToJpegBlob(canvas, quality) {
+  return new Promise(function (resolve) {
+    if (!canvas || typeof canvas.toBlob !== 'function') {
+      resolve(null);
+      return;
+    }
+    canvas.toBlob(
+      function (blob) {
+        resolve(blob);
+      },
+      'image/jpeg',
+      quality
+    );
+  });
+}
+
+/**
+ * 업로드 전 리사이즈·JPEG 압축 (Storage 2MB·image/* 규칙 준수)
+ * @param {File|Blob} file
+ * @returns {Promise<File|Blob>}
+ */
+async function compressRidingGroupCoverInput(file) {
+  if (!file) return file;
+  if (typeof File !== 'undefined' && file instanceof File && file.type && !String(file.type).startsWith('image/')) {
+    throw new Error('이미지 파일만 업로드할 수 있습니다.');
+  }
+  if (typeof document === 'undefined' || typeof Image === 'undefined') {
+    if (file.size != null && file.size >= RIDING_GROUP_COVER_MAX_BYTES) {
+      throw new Error('그룹 사진은 2MB 미만이어야 합니다. 더 작은 이미지를 선택해 주세요.');
+    }
+    return file;
+  }
+
+  var dataUrl = await new Promise(function (resolve, reject) {
+    var reader = new FileReader();
+    reader.onerror = function () {
+      reject(new Error('이미지를 읽을 수 없습니다.'));
+    };
+    reader.onload = function (e) {
+      resolve(e.target && e.target.result ? e.target.result : '');
+    };
+    reader.readAsDataURL(file);
+  });
+
+  var img = await new Promise(function (resolve, reject) {
+    var image = new Image();
+    image.onerror = function () {
+      reject(new Error('이미지 형식을 처리할 수 없습니다.'));
+    };
+    image.onload = function () {
+      resolve(image);
+    };
+    image.src = dataUrl;
+  });
+
+  var w = img.naturalWidth || img.width || 0;
+  var h = img.naturalHeight || img.height || 0;
+  if (!w || !h) throw new Error('이미지 크기를 확인할 수 없습니다.');
+  if (w > RIDING_GROUP_COVER_MAX_PX || h > RIDING_GROUP_COVER_MAX_PX) {
+    if (w >= h) {
+      h = Math.round((h * RIDING_GROUP_COVER_MAX_PX) / w);
+      w = RIDING_GROUP_COVER_MAX_PX;
+    } else {
+      w = Math.round((w * RIDING_GROUP_COVER_MAX_PX) / h);
+      h = RIDING_GROUP_COVER_MAX_PX;
+    }
+  }
+
+  var canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  var ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('이미지 처리를 지원하지 않는 환경입니다.');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+
+  var quality = 0.88;
+  var blob = null;
+  for (var attempt = 0; attempt < 8; attempt++) {
+    blob = await ridingGroupCoverCanvasToJpegBlob(canvas, quality);
+    if (!blob) break;
+    if (blob.size <= RIDING_GROUP_COVER_MAX_BYTES) {
+      return ridingGroupCoverBlobToFile(blob, file.name || 'cover');
+    }
+    quality -= 0.1;
+    if (quality < 0.35) break;
+  }
+
+  if (blob && blob.size <= RIDING_GROUP_COVER_MAX_BYTES) {
+    return ridingGroupCoverBlobToFile(blob, file.name || 'cover');
+  }
+  throw new Error('그룹 사진 용량이 2MB를 초과합니다. 더 작은 이미지를 선택해 주세요.');
+}
+
 /**
  * @param {import('firebase/storage').FirebaseStorage} storage
  * @param {string} groupId
@@ -657,33 +830,11 @@ export async function transferRidingGroupOwnership(db, ownerUid, groupId, newOwn
 export async function uploadRidingGroupCover(storage, groupId, file) {
   if (!storage || !groupId || !file) throw new Error('요청이 올바르지 않습니다.');
   var gid = String(groupId).trim();
-  var orig = typeof File !== 'undefined' && file instanceof File && file.name ? String(file.name) : '';
-  var ext = 'jpg';
-  if (orig && orig.indexOf('.') >= 0) {
-    var e = orig.split('.').pop();
-    if (e && /^[a-z0-9]{1,8}$/i.test(e)) ext = e.toLowerCase();
-  }
-  var name = 'cover_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '.' + ext;
+  var prepared = await compressRidingGroupCoverInput(file);
+  var name = 'cover_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '.jpg';
   var path = 'stelvio_riding_groups/' + gid + '/' + name;
   var r = storageRef(storage, path);
-  var ct =
-    typeof File !== 'undefined' && file instanceof File && file.type && String(file.type).indexOf('image/') === 0
-      ? file.type
-      : null;
-  if (!ct) {
-    var byExt = {
-      jpg: 'image/jpeg',
-      jpeg: 'image/jpeg',
-      png: 'image/png',
-      gif: 'image/gif',
-      webp: 'image/webp',
-      bmp: 'image/bmp',
-      heic: 'image/heic',
-      heif: 'image/heif'
-    };
-    ct = byExt[ext] || 'image/jpeg';
-  }
-  await uploadBytes(r, file, { contentType: ct });
+  await uploadBytes(r, prepared, { contentType: 'image/jpeg' });
   return getDownloadURL(r);
 }
 
@@ -821,6 +972,8 @@ if (typeof window !== 'undefined') {
     rejectRidingGroupJoinRequest,
     leaveRidingGroup,
     deleteRidingGroupByOwner,
+    updateRidingGroupByAdmin,
+    deleteRidingGroupByAdmin,
     transferRidingGroupOwnership,
     fetchRidingGroupById,
     fetchRidingGroupMembersList,
