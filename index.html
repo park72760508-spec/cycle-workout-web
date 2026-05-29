@@ -9572,7 +9572,7 @@
      * 탭 클릭 직후(디바운스·fetch 전) 메모리 캐시 히트 시 0ms UI 전환.
      * @returns {boolean} 즉시 렌더 성공 여부
      */
-    function stelvioInstantTabSwitchFromMemory(targetDur) {
+    async function stelvioInstantTabSwitchFromMemory(targetDur) {
       if (!targetDur || !stelvioRankingState) return false;
       var apiDur = stelvioResolveRankingBoardApiDuration(targetDur);
       if (!apiDur) return false;
@@ -9599,11 +9599,14 @@
         return false;
       }
 
-      if (typeof stelvioActivatePreRenderedRankingView === 'function' && stelvioActivatePreRenderedRankingView(targetDur)) {
-        if (needsRefreshHint && typeof stelvioSetRankingRefreshHint === 'function') {
-          stelvioSetRankingRefreshHint(true);
+      if (typeof stelvioActivatePreRenderedRankingView === 'function') {
+        var prOk = await stelvioActivatePreRenderedRankingView(targetDur);
+        if (prOk) {
+          if (needsRefreshHint && typeof stelvioSetRankingRefreshHint === 'function') {
+            stelvioSetRankingRefreshHint(true);
+          }
+          return true;
         }
-        return true;
       }
 
       stelvioRankingFastTabSwitchFlag = true;
@@ -9611,6 +9614,9 @@
         try {
           stelvioRefreshRankingFavoriteSetFromStorage({ authoritativeLocal: true });
         } catch (eFavMem) {}
+        if (typeof stelvioBootstrapRankingSocialSets === 'function') {
+          await stelvioBootstrapRankingSocialSets({ forceFirestore: false, subscribeGroups: true });
+        }
         stelvioRankingSyncPayloadGlobals(mem.body, uid);
         if (typeof stelvioSyncCategorySelectUi === 'function') stelvioSyncCategorySelectUi();
         if (typeof renderStelvioHeroCard === 'function') {
@@ -9619,6 +9625,10 @@
         if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
         if (typeof stelvioFlushRankingBoardScrollAfterTabApply === 'function') {
           stelvioFlushRankingBoardScrollAfterTabApply();
+        }
+        var bodyMem = document.getElementById('stelvioRankingListBody');
+        if (bodyMem && typeof stelvioRankingRefreshListStarSlots === 'function') {
+          stelvioRankingRefreshListStarSlots(bodyMem);
         }
         if (needsRefreshHint && typeof stelvioSetRankingRefreshHint === 'function') {
           stelvioSetRankingRefreshHint(true);
@@ -10669,6 +10679,38 @@
     }
     window.stelvioRefreshRankingFavoritesFromFirestore = stelvioRefreshRankingFavoritesFromFirestore;
     window.stelvioMigrateRankingFavoritesToV2Once = stelvioMigrateRankingFavoritesToV2Once;
+    window.stelvioRefreshGroupContactSetFromFirestore = stelvioRefreshGroupContactSetFromFirestore;
+
+    /**
+     * 친구·그룹멤버·관심(보라별) Set을 렌더 전에 복원 — 비공개/HTML캐시 작업과 무관하게 전 탭 공통.
+     */
+    async function stelvioBootstrapRankingSocialSets(opts) {
+      opts = opts || {};
+      try {
+        stelvioRefreshRankingFavoriteSetFromStorage({ authoritativeLocal: true });
+      } catch (eLs) {}
+      var tasks = [];
+      if (opts.favorites !== false) {
+        tasks.push(
+          stelvioEnsureRankingFavoritesHydrated({
+            forceFirestore: opts.forceFirestore === true,
+            authoritative: opts.authoritative !== false,
+            authoritativeLocal: true,
+          }).catch(function () {})
+        );
+      }
+      if (opts.friends !== false) {
+        tasks.push(stelvioRefreshRankingFriendSetFromFirestore().catch(function () {}));
+      }
+      if (opts.groups !== false) {
+        tasks.push(stelvioRefreshGroupContactSetFromFirestore().catch(function () {}));
+      }
+      await Promise.all(tasks);
+      if (opts.subscribeGroups !== false && typeof stelvioEnsureMyGroupsFirestoreSubscription === 'function') {
+        stelvioEnsureMyGroupsFirestoreSubscription(null);
+      }
+    }
+    window.stelvioBootstrapRankingSocialSets = stelvioBootstrapRankingSocialSets;
     function stelvioRankingFavoritesSessionKeyForUid(ownerUid) {
       return stelvioRankingFavoritesSsPrefix + (ownerUid || '_guest');
     }
@@ -11162,15 +11204,18 @@
     })();
     document.addEventListener('stelvio-auth-ready', function (ev) {
       stelvioRankingFavoritesRehydrateAndMaybeRender({ forceFirestore: true, authoritative: true });
+      if (typeof stelvioBootstrapRankingSocialSets === 'function') {
+        stelvioBootstrapRankingSocialSets({ forceFirestore: true, subscribeGroups: true })
+          .catch(function () {})
+          .then(function () {
+            if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') {
+              renderStelvioActiveCategory();
+            }
+          });
+      }
       setTimeout(function () {
         stelvioRankingFavoritesRehydrateAndMaybeRender({ forceFirestore: true, authoritative: true });
       }, 2000);
-      stelvioRefreshRankingFriendSetFromFirestore().then(function () {
-        if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
-      });
-      /* 그룹 탭 여부와 무관하게 구독 시작 → stelvioRankingGroupContactSet 채움
-       * (친구+그룹멤버 별 표시, 관심 필터 즉시 반영) */
-      stelvioEnsureMyGroupsFirestoreSubscription(null);
       /* 인증 직후: GC·독주·60분 등 전 탭 → IndexedDB(1순위) + 메모리 백그라운드 적재 */
       var authUid = ev && ev.detail && ev.detail.uid ? String(ev.detail.uid) : null;
       if (authUid && typeof stelvioBackgroundPrefetchAllTabs === 'function') {
@@ -11857,6 +11902,9 @@
             : Promise.resolve();
         var readSrcP = stelvioEnsureRankingReadSource();
         await Promise.all([hydrateP, readSrcP]);
+        if (typeof stelvioBootstrapRankingSocialSets === 'function') {
+          await stelvioBootstrapRankingSocialSets({ forceFirestore: true, subscribeGroups: true });
+        }
         var instantOpenOk =
           typeof stelvioInstantTabSwitchFromMemory === 'function' &&
           stelvioInstantTabSwitchFromMemory(stelvioRankingState.duration || 'gc');
@@ -13507,7 +13555,7 @@
     }
     window.stelvioSchedulePreRenderAllWarmTabsFromMemory = stelvioSchedulePreRenderAllWarmTabsFromMemory;
 
-    function stelvioActivatePreRenderedRankingView(duration) {
+    async function stelvioActivatePreRenderedRankingView(duration) {
       if (!duration) return false;
       var apiDur = stelvioResolveRankingBoardApiDuration(duration);
       var uid = typeof stelvioRankingBoardUid === 'function' ? stelvioRankingBoardUid() : null;
@@ -13538,6 +13586,12 @@
       if (typeof stelvioApplyDurationModeUi === 'function') stelvioApplyDurationModeUi();
       if (typeof stelvioSyncCategorySelectUi === 'function') stelvioSyncCategorySelectUi();
       if (typeof stelvioSyncRankingListHeaderUi === 'function') stelvioSyncRankingListHeaderUi();
+      try {
+        stelvioRefreshRankingFavoriteSetFromStorage({ authoritativeLocal: true });
+      } catch (eFavPr) {}
+      if (typeof stelvioBootstrapRankingSocialSets === 'function') {
+        await stelvioBootstrapRankingSocialSets({ forceFirestore: false, subscribeGroups: true });
+      }
       stelvioRankingFastTabSwitchFlag = true;
       try {
         if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
@@ -13547,6 +13601,10 @@
       if (typeof stelvioEnsureRankingFavoriteUiListeners === 'function') stelvioEnsureRankingFavoriteUiListeners();
       if (typeof renderStelvioHeroCard === 'function') renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
       if (typeof refreshStelvioDistributionChartMounted === 'function') refreshStelvioDistributionChartMounted();
+      var bodyPr = document.getElementById('stelvioRankingListBody');
+      if (bodyPr && typeof stelvioRankingRefreshListStarSlots === 'function') {
+        stelvioRankingRefreshListStarSlots(bodyPr);
+      }
       if (typeof stelvioFlushRankingBoardScrollAfterTabApply === 'function') {
         stelvioFlushRankingBoardScrollAfterTabApply();
       }
@@ -14469,18 +14527,23 @@
       }
       function stelvioFinishPeakRankingApplyAfterFavorites() {
         if (myGen !== stelvioRankingFetchGen) return;
-        stelvioSyncCategorySelectUi();
-        renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
-        renderStelvioActiveCategory();
-        stelvioFlushRankingBoardScrollAfterTabApply();
-        stelvioHideRankingBoardLoadingUi();
-        stelvioRefreshRankingFriendSetFromFirestore()
-          .then(function () {
-            if (myGen !== stelvioRankingFetchGen) return;
-            if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
-            stelvioFlushRankingBoardScrollAfterTabApply();
-          })
-          .catch(function () {});
+        var finishRender = function () {
+          if (myGen !== stelvioRankingFetchGen) return;
+          stelvioSyncCategorySelectUi();
+          renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
+          renderStelvioActiveCategory();
+          stelvioFlushRankingBoardScrollAfterTabApply();
+          stelvioHideRankingBoardLoadingUi();
+          var bodyAfter = document.getElementById('stelvioRankingListBody');
+          if (bodyAfter && typeof stelvioRankingRefreshListStarSlots === 'function') {
+            stelvioRankingRefreshListStarSlots(bodyAfter);
+          }
+        };
+        var socialP =
+          typeof stelvioBootstrapRankingSocialSets === 'function'
+            ? stelvioBootstrapRankingSocialSets({ forceFirestore: false, subscribeGroups: true })
+            : Promise.resolve();
+        socialP.catch(function () {}).then(finishRender);
       }
       if (applyOpts.fastTabSwitch) {
         stelvioRankingFastTabSwitchFlag = true;
