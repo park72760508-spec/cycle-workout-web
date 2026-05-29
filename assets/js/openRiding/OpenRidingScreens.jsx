@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — iOS 동기식 직접 호출 (사용자 제스처 Call Stack 내 즉시 실행)
+ * Stelvio 앱 WebView 주소록 — WKWebView 동기식 직접 실행 (User Activation Call Stack)
  */
 function openRidingBridgeOpenAddressBook() {
   if (typeof window === 'undefined') {
@@ -2359,11 +2359,7 @@ function openRidingBridgeOpenAddressBook() {
   try {
     var and = window.AndroidBridge || window.Android;
     if (and && and.openAddressBook) {
-      if (typeof and.openAddressBook === 'function') {
-        and.openAddressBook();
-      } else {
-        openRidingTryInvokeNativeMethod(and, 'openAddressBook');
-      }
+      and.openAddressBook();
       return;
     }
   } catch (eAnd) {}
@@ -2372,13 +2368,16 @@ function openRidingBridgeOpenAddressBook() {
     var hs = window.webkit.messageHandlers;
     try {
       hs.openAddressBook.postMessage({});
-    } catch (eIos1) {}
+    } catch (e1) {}
     try {
       hs.openAddressBook.postMessage('openAddressBook');
-    } catch (eIos2) {}
+    } catch (e2) {}
+    try {
+      hs.openAddressBook.postMessage(0);
+    } catch (e3) {}
     try {
       hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-    } catch (eIos3) {}
+    } catch (e4) {}
   }
 
   try {
@@ -5393,11 +5392,11 @@ function OpenRidingCreateForm(props) {
           type="button"
           className="open-riding-action-btn w-full rounded-lg border-2 border-violet-600 bg-white py-2 text-sm font-semibold text-violet-700 shadow-sm hover:bg-violet-50"
           onClick={function (e) {
-            e.preventDefault();
-            e.stopPropagation();
             if (typeof window.openRidingBridgeOpenAddressBook === 'function') {
               window.openRidingBridgeOpenAddressBook();
             }
+            e.preventDefault();
+            e.stopPropagation();
           }}
         >
           주소록에서 초대하기
