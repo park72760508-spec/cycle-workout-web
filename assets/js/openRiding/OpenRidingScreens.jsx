@@ -2349,7 +2349,7 @@ function openRidingTryInvokeNativeMethod(host, methodName) {
 }
 
 /**
- * Stelvio 앱 WebView 주소록 — iOS WKWebView 표준(in 연산자·이중 규격), Android/RN 폴백
+ * Stelvio 앱 WebView 주소록 — Direct Dispatch (조건 없이 순차 강제 호출)
  */
 function openRidingBridgeOpenAddressBook() {
   if (typeof window === 'undefined') {
@@ -2357,54 +2357,50 @@ function openRidingBridgeOpenAddressBook() {
   }
 
   try {
-    if (window.webkit && window.webkit.messageHandlers) {
-      var hs = window.webkit.messageHandlers;
-
-      if ('openAddressBook' in hs) {
-        try {
-          hs.openAddressBook.postMessage({});
-        } catch (eObj) {
-          /* 객체 방식 실패 — 문자열 방식 시도 */
-        }
-        try {
-          hs.openAddressBook.postMessage('openAddressBook');
-        } catch (eStr) {
-          /* 문자열 방식 실패 — Android/RN 폴백 */
-        }
-        return;
-      }
-
-      if ('Stelvio' in hs) {
-        hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
-        return;
-      }
-    }
-  } catch (eIos) {
-    /* iOS 실패 — Android로 진행 */
-  }
-
-  try {
-    var android = window.AndroidBridge || window.Android;
-    if (android && typeof android.openAddressBook === 'function') {
-      android.openAddressBook();
+    var and = window.AndroidBridge || window.Android;
+    if (and && typeof and.openAddressBook === 'function') {
+      and.openAddressBook();
       return;
     }
-    if (android && android.openAddressBook != null) {
-      if (openRidingTryInvokeNativeMethod(android, 'openAddressBook')) {
-        return;
-      }
+    if (and && and.openAddressBook != null) {
+      openRidingTryInvokeNativeMethod(and, 'openAddressBook');
+      return;
     }
-  } catch (eAnd) {
-    /* Android 실패 — RN으로 진행 */
+  } catch (eAnd) {}
+
+  if (window.webkit && window.webkit.messageHandlers) {
+    var hs = window.webkit.messageHandlers;
+    try {
+      hs.openAddressBook.postMessage({});
+    } catch (eIos1) {}
+    try {
+      hs.openAddressBook.postMessage('openAddressBook');
+    } catch (eIos2) {}
+    try {
+      hs.Stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+    } catch (eIos3) {}
+    try {
+      hs.stelvio.postMessage({ type: 'OPEN_ADDRESS_BOOK' });
+    } catch (eIos4) {}
   }
 
   try {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_ADDRESS_BOOK' }));
     }
-  } catch (eRn) {
-    /* RN 실패 — 종료 */
-  }
+  } catch (eRn) {}
+
+  try {
+    var iframe = document.createElement('iframe');
+    iframe.setAttribute('src', 'stelvio://openAddressBook');
+    iframe.setAttribute('style', 'display:none;');
+    document.body.appendChild(iframe);
+    setTimeout(function () {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    }, 100);
+  } catch (eScheme) {}
 }
 
 if (typeof window !== 'undefined') {
