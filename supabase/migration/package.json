@@ -21,6 +21,7 @@
     "sync:user-gender": "tsx scripts/syncUserGenderBackfill.ts",
     "sync:user-gender:dry": "tsx scripts/syncUserGenderBackfill.ts --dry-run",
     "sync:user-gender:refresh": "tsx scripts/syncUserGenderBackfill.ts --refresh-mv",
+    "rebuild:heptagon": "tsx scripts/rebuildHeptagonCohortRanks.ts",
     "verify:rankings": "node ../../scripts/compare-ranking-firestore-supabase.mjs"
   },
   "engines": {
