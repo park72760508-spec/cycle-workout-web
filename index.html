@@ -8380,67 +8380,213 @@
       return stelvioRankingPayloadEntriesAllMatchGender(data, want);
     }
 
-    function stelvioFilterRankingPayloadByGender(data, wantGender) {
-      if (!data || !data.byCategory) return data;
-      var want = stelvioNormalizeRankingGenderFilter(wantGender);
-      if (want === 'all') {
-        data.gender = 'all';
-        return data;
+    window.RANKING_BOARD_CATEGORIES = window.RANKING_BOARD_CATEGORIES || [
+      'Supremo',
+      'Assoluto',
+      'Bianco',
+      'Rosa',
+      'Infinito',
+      'Leggenda',
+    ];
+
+    window.stelvioBuildByCategoryFromRankingEntries = function (entries, cats) {
+      var list = cats || window.RANKING_BOARD_CATEGORIES;
+      var bc = {};
+      for (var ci = 0; ci < list.length; ci++) {
+        bc[list[ci]] = [];
       }
-      var out;
-      try {
-        out = JSON.parse(JSON.stringify(data));
-      } catch (eGenderClone) {
-        out = data;
-      }
-      var byCategory = {};
-      var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
-      for (var ci = 0; ci < cats.length; ci++) {
-        var cat = cats[ci];
-        var src = data.byCategory[cat] || [];
-        var filtered = [];
-        for (var fi = 0; fi < src.length; fi++) {
-          var row = src[fi];
-          if (
-            row &&
-            stelvioRankingGenderTokenMatchesWant(stelvioRankingRowGenderToken(row), want)
-          ) {
-            filtered.push(row);
-          }
+      for (var ei = 0; ei < (entries || []).length; ei++) {
+        var e = entries[ei];
+        if (!e) continue;
+        var cat =
+          e._stelvioRankCat && bc[e._stelvioRankCat]
+            ? e._stelvioRankCat
+            : e.ageCategory && bc[e.ageCategory]
+              ? e.ageCategory
+              : 'Supremo';
+        if (bc[cat]) {
+          bc[cat].push(e);
         }
-        filtered.sort(function (a, b) {
+      }
+      for (var cj = 0; cj < list.length; cj++) {
+        var key = list[cj];
+        var rows = bc[key] || [];
+        rows.sort(function (a, b) {
           if (a.rank != null && b.rank != null && (a.gcScore != null || b.gcScore != null)) {
             return Number(a.rank) - Number(b.rank);
           }
-          var sa = a.wkg != null ? a.wkg : a.totalTss != null ? a.totalTss : a.totalKm != null ? a.totalKm : a.speedKmh != null ? a.speedKmh : a.gcScore != null ? a.gcScore : 0;
-          var sb = b.wkg != null ? b.wkg : b.totalTss != null ? b.totalTss : b.totalKm != null ? b.totalKm : b.speedKmh != null ? b.speedKmh : b.gcScore != null ? b.gcScore : 0;
+          var sa =
+            a.wkg != null
+              ? a.wkg
+              : a.totalTss != null
+                ? a.totalTss
+                : a.totalKm != null
+                  ? a.totalKm
+                  : a.speedKmh != null
+                    ? a.speedKmh
+                    : a.gcScore != null
+                      ? a.gcScore
+                      : 0;
+          var sb =
+            b.wkg != null
+              ? b.wkg
+              : b.totalTss != null
+                ? b.totalTss
+                : b.totalKm != null
+                  ? b.totalKm
+                  : b.speedKmh != null
+                    ? b.speedKmh
+                    : b.gcScore != null
+                      ? b.gcScore
+                      : 0;
           return Number(sb) - Number(sa);
         });
-        for (var rk = 0; rk < filtered.length; rk++) {
-          filtered[rk] = Object.assign({}, filtered[rk], { rank: rk + 1 });
+        for (var rk = 0; rk < rows.length; rk++) {
+          rows[rk] = Object.assign({}, rows[rk], { rank: rk + 1 });
         }
-        byCategory[cat] = filtered;
+        bc[key] = rows;
       }
-      out.byCategory = byCategory;
-      out.entries = stelvioMergeRankingEntriesFromByCategory(byCategory);
+      return bc;
+    };
+
+    window.buildByCategoryFromEntries = window.buildByCategoryFromEntries || function (entries, cats) {
+      return window.stelvioBuildByCategoryFromRankingEntries(entries, cats);
+    };
+
+    /**
+     * clientFilter V2 — 성별 미상(빈 값)은 남성(m)으로 간주. window에 고정 등록(구 로직 덮어쓰기).
+     */
+    window.stelvioFilterRankingPayloadByGender = function (payload, wantGender) {
+      if (!payload) return payload;
+      if (!payload.byCategory && (!payload.allEntries || !payload.allEntries.length)) {
+        return payload;
+      }
+
+      var want = wantGender;
+      if (want !== 'M' && want !== 'F') {
+        want =
+          typeof stelvioNormalizeRankingGenderFilter === 'function'
+            ? stelvioNormalizeRankingGenderFilter(wantGender)
+            : wantGender;
+      }
+      if (!want || want === 'all') {
+        payload.gender = 'all';
+        return payload;
+      }
+
+      var out;
+      try {
+        out = JSON.parse(JSON.stringify(payload));
+      } catch (eCloneV2) {
+        out = payload;
+      }
+
+      var cats = window.RANKING_BOARD_CATEGORIES;
+      var tagged = [];
+      if (out.byCategory) {
+        for (var ci = 0; ci < cats.length; ci++) {
+          var cat = cats[ci];
+          var src = out.byCategory[cat] || [];
+          for (var ri = 0; ri < src.length; ri++) {
+            if (src[ri]) {
+              tagged.push({ row: src[ri], cat: cat });
+            }
+          }
+        }
+      } else if (Array.isArray(out.allEntries)) {
+        for (var ai = 0; ai < out.allEntries.length; ai++) {
+          if (out.allEntries[ai]) {
+            tagged.push({ row: out.allEntries[ai], cat: out.allEntries[ai].ageCategory || 'Supremo' });
+          }
+        }
+      }
+
+      var beforeCount = tagged.length;
+
+      var filteredTagged = tagged.filter(function (item) {
+        var row = item.row;
+        var g = String((row && row.gender) || (row && row.sex) || '')
+          .trim()
+          .toLowerCase();
+        if (!g) {
+          g = 'm';
+        }
+        if (want === 'M') {
+          return ['m', 'male', '남', '남성'].indexOf(g) >= 0;
+        }
+        if (want === 'F') {
+          return ['f', 'female', '여', '여성'].indexOf(g) >= 0;
+        }
+        return true;
+      });
+
+      var afterCount = filteredTagged.length;
+      var filteredEntries = [];
+      for (var fi = 0; fi < filteredTagged.length; fi++) {
+        var copy = Object.assign({}, filteredTagged[fi].row, {
+          _stelvioRankCat: filteredTagged[fi].cat,
+        });
+        filteredEntries.push(copy);
+      }
+
+      var dur =
+        out.durationType ||
+        out.duration ||
+        (payload && payload.durationType) ||
+        (typeof stelvioRankingState !== 'undefined' &&
+        stelvioRankingState &&
+        stelvioRankingState.duration
+          ? stelvioRankingState.duration
+          : '');
+      console.log(
+        '[Stelvio Filter V2 Debug] duration=' +
+          dur +
+          ' wantGender=' +
+          want +
+          ' 원본 행 개수: ' +
+          beforeCount +
+          ', 필터 후 행 개수: ' +
+          afterCount
+      );
+
+      out.allEntries = filteredEntries;
+      if (out.byCategory && typeof window.buildByCategoryFromEntries === 'function') {
+        out.byCategory = window.buildByCategoryFromEntries(filteredEntries, cats);
+      } else {
+        out.byCategory = window.stelvioBuildByCategoryFromRankingEntries(filteredEntries, cats);
+      }
+      out.entries =
+        typeof stelvioMergeRankingEntriesFromByCategory === 'function'
+          ? stelvioMergeRankingEntriesFromByCategory(out.byCategory)
+          : filteredEntries.slice();
       out.gender = want;
-      if (
-        out.currentUser &&
-        out.currentUser.userId &&
-        !stelvioRankingEntryMatchesGenderFilter(out.currentUser, want, want)
-      ) {
+
+      function rowPassesV2(row) {
+        var g = String((row && row.gender) || (row && row.sex) || '')
+          .trim()
+          .toLowerCase();
+        if (!g) {
+          g = 'm';
+        }
+        if (want === 'M') {
+          return ['m', 'male', '남', '남성'].indexOf(g) >= 0;
+        }
+        if (want === 'F') {
+          return ['f', 'female', '여', '여성'].indexOf(g) >= 0;
+        }
+        return true;
+      }
+
+      if (out.currentUser && out.currentUser.userId && !rowPassesV2(out.currentUser)) {
         out.currentUser = null;
         out.motivationMessage = null;
       }
-      if (
-        out.myRankSupremo &&
-        out.myRankSupremo.userId &&
-        !stelvioRankingEntryMatchesGenderFilter(out.myRankSupremo, want, want)
-      ) {
+      if (out.myRankSupremo && out.myRankSupremo.userId && !rowPassesV2(out.myRankSupremo)) {
         out.myRankSupremo = null;
       }
+
       return out;
-    }
+    };
 
     /**
      * 표시 직전 성별 정합.
@@ -8480,7 +8626,7 @@
         if (typeof stelvioEnrichRankingPayloadGenderFromCache === 'function') {
           stelvioEnrichRankingPayloadGenderFromCache(data);
         }
-        var unifiedFiltered = stelvioFilterRankingPayloadByGender(data, want);
+        var unifiedFiltered = window.stelvioFilterRankingPayloadByGender(data, want);
         if (!unifiedFiltered || !stelvioRankingPayloadHasVisibleRows(unifiedFiltered)) {
           if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
             try {
@@ -8583,7 +8729,7 @@
         stelvioEnrichRankingPayloadGenderFromCache(data);
       }
       if (stelvioRankingPayloadHasExplicitOppositeGender(data, want)) {
-        var filtered = stelvioFilterRankingPayloadByGender(data, want);
+        var filtered = window.stelvioFilterRankingPayloadByGender(data, want);
         var afterFilter = filtered && stelvioRankingPayloadHasVisibleRows(filtered) ? filtered : null;
         if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
           try {
@@ -9413,7 +9559,7 @@
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
     /** peak IndexedDB 키 접두사 — 사전집계 gender(GC 동일) 신뢰(v13) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v20:';
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v21:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
