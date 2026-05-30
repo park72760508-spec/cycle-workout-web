@@ -103,11 +103,115 @@ async function getFirebaseUidByUuidMap(admin) {
   return map;
 }
 
+/**
+ * MV/RPC 통합 뷰 조회 — SQL .eq('gender','female')는 DB에 F/M 저장 시 0건이므로 사용하지 않음.
+ * 성별 분리는 프로필 병합 후 profileGenderMatches 또는 all→slice 폴백으로 처리.
+ */
 function applyGenderFilter(query, gender) {
-  if (!gender || gender === "all") return query;
-  if (gender === "M") return query.eq("gender", "male");
-  if (gender === "F") return query.eq("gender", "female");
   return query;
+}
+
+function logSupabaseRankingRequest(tableOrRpc, gender, extra) {
+  const parts = [
+    "[Stelvio Supabase Request] Table:",
+    tableOrRpc,
+    "Gender Filter:",
+    gender || "all",
+  ];
+  if (extra) parts.push(String(extra));
+  console.log(parts.join(" "));
+}
+
+function countRankingPayloadEntries(payload) {
+  if (!payload || !payload.byCategory) return 0;
+  let n = 0;
+  for (const cat of HEPTAGON_CATEGORIES) {
+    const rows = payload.byCategory[cat];
+    if (Array.isArray(rows)) n += rows.length;
+  }
+  return n;
+}
+
+function filterSupabasePayloadByGender(payload, gender) {
+  if (!payload || !payload.byCategory || !gender || gender === "all") return payload;
+  const byCategory = {
+    Supremo: [],
+    Assoluto: [],
+    Bianco: [],
+    Rosa: [],
+    Infinito: [],
+    Leggenda: [],
+  };
+  for (const cat of HEPTAGON_CATEGORIES) {
+    const src = payload.byCategory[cat] || [];
+    byCategory[cat] = src.filter((row) => row && profileGenderMatches(row, gender));
+    for (let i = 0; i < byCategory[cat].length; i++) {
+      byCategory[cat][i] = { ...byCategory[cat][i], rank: i + 1 };
+      if (!byCategory[cat][i].gender) {
+        byCategory[cat][i].gender =
+          gender === "M" ? "male" : gender === "F" ? "female" : byCategory[cat][i].gender;
+      }
+    }
+  }
+  const entries = (byCategory.Supremo || []).slice();
+  const out = {
+    ...payload,
+    byCategory,
+    entries,
+    gender,
+    supabaseGenderFilteredClient: true,
+  };
+  if (
+    out.currentUser &&
+    out.currentUser.userId &&
+    !profileGenderMatches(out.currentUser, gender)
+  ) {
+    out.currentUser = null;
+    out.motivationMessage = null;
+  }
+  if (
+    out.myRankSupremo &&
+    out.myRankSupremo.userId &&
+    !profileGenderMatches(out.myRankSupremo, gender)
+  ) {
+    out.myRankSupremo = null;
+  }
+  return out;
+}
+
+async function withGenderAllFallback(fetchCore, admin, startStr, endStr, gender, label) {
+  let payload = await fetchCore(admin, startStr, endStr, gender);
+  const want = gender === "M" || gender === "F" ? gender : "all";
+  if (want === "all") return payload;
+  const n = countRankingPayloadEntries(payload);
+  console.log(
+    "[Stelvio Supabase Request] Result:",
+    label,
+    "gender=",
+    want,
+    "rows=",
+    n
+  );
+  if (n > 0) return payload;
+  logSupabaseRankingRequest(label, want, "slice=0 → fallback unified view gender=all + profile filter");
+  const allPayload = await fetchCore(admin, startStr, endStr, "all");
+  const nAll = countRankingPayloadEntries(allPayload);
+  if (!nAll) return payload;
+  const sliced = filterSupabasePayloadByGender(allPayload, want);
+  sliced.supabaseGenderFallbackFromAll = true;
+  sliced.readSource = sliced.readSource || "supabase";
+  console.log(
+    "[Stelvio Supabase Request] Fallback:",
+    label,
+    "gender=",
+    want,
+    "rows=",
+    countRankingPayloadEntries(sliced),
+    "(from all rows=",
+    nAll,
+    ")"
+  );
+  return sliced;
 }
 
 function mapRowToFirebaseUser(row, firebaseUid) {
@@ -149,9 +253,16 @@ function resolveRankingEntryName(profileOrRow, rowFallbackName) {
 
 function profileGenderMatches(profile, gender) {
   if (!gender || gender === "all") return true;
-  const g = String(profile && profile.gender ? profile.gender : "").toLowerCase();
-  if (gender === "M") return g === "male" || g === "m" || g === "남";
-  if (gender === "F") return g === "female" || g === "f" || g === "여";
+  const g = String(profile && profile.gender != null ? profile.gender : "")
+    .trim()
+    .toLowerCase();
+  if (!g) return false;
+  if (gender === "M") {
+    return g === "male" || g === "m" || g === "남" || g === "남성";
+  }
+  if (gender === "F") {
+    return g === "female" || g === "f" || g === "여" || g === "여성";
+  }
   return true;
 }
 
@@ -321,7 +432,8 @@ async function fetchWeeklyTssRowsFromUserRankingMetrics(supabase, startStr, endS
 /**
  * @param {import('firebase-admin')} admin
  */
-async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
+async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
+  logSupabaseRankingRequest("fn_weekly_tss_leaderboard_live|user_ranking_metrics", gender, "tss");
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
 
   let rows = [];
@@ -368,10 +480,21 @@ async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
   };
 }
 
+async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
+  return withGenderAllFallback(
+    fetchWeeklyTssRankingCore,
+    admin,
+    startStr,
+    endStr,
+    gender,
+    "weekly_tss"
+  );
+}
+
 /**
  * @param {import('firebase-admin')} admin
  */
-async function fetchPeakPowerMonthly(
+async function fetchPeakPowerMonthlyCore(
   admin,
   startStr,
   endStr,
@@ -381,6 +504,7 @@ async function fetchPeakPowerMonthly(
   const col = PEAK_WKG_COLUMN[durationType];
   if (!col) return null;
 
+  logSupabaseRankingRequest("mv_leaderboard_peak_28d", gender, durationType);
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
 
   let query = supabase
@@ -405,6 +529,7 @@ async function fetchPeakPowerMonthly(
   for (const row of data || []) {
     const fbUid = uidMap.get(String(row.user_id));
     if (!fbUid) continue;
+    if (!profileGenderMatches(row, gender)) continue;
     const wkg = Math.round(Number(row[col]) * 100) / 100;
     if (wkg <= 0) continue;
     entries.push({
@@ -434,10 +559,23 @@ async function fetchPeakPowerMonthly(
   };
 }
 
+async function fetchPeakPowerMonthly(admin, startStr, endStr, durationType, gender) {
+  const core = (a, s, e, g) => fetchPeakPowerMonthlyCore(a, s, e, durationType, g);
+  return withGenderAllFallback(
+    core,
+    admin,
+    startStr,
+    endStr,
+    gender,
+    `mv_leaderboard_peak_28d:${durationType}`
+  );
+}
+
 /**
  * @param {import('firebase-admin')} admin
  */
-async function fetchPersonalDist(admin, startStr, endStr, gender) {
+async function fetchPersonalDistCore(admin, startStr, endStr, gender) {
+  logSupabaseRankingRequest("mv_leaderboard_distance_30d", gender, "personal_dist");
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
 
   let query = supabase
@@ -497,10 +635,22 @@ async function fetchPersonalDist(admin, startStr, endStr, gender) {
   };
 }
 
+async function fetchPersonalDist(admin, startStr, endStr, gender) {
+  return withGenderAllFallback(
+    fetchPersonalDistCore,
+    admin,
+    startStr,
+    endStr,
+    gender,
+    "personal_dist"
+  );
+}
+
 /**
  * @param {import('firebase-admin')} admin
  */
-async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
+async function fetchPersonalSpeedCore(admin, startStr, endStr, gender) {
+  logSupabaseRankingRequest("mv_leaderboard_speed_28d", gender, "personal_speed");
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
 
   async function loadMetricRows() {
@@ -560,7 +710,6 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
     for (const row of metricRows || []) {
       const profile = profileMap.get(String(row.user_id));
       if (!profile) continue;
-      if (!profileGenderMatches(profile, gender)) continue;
       data.push({
         ...profile,
         user_id: row.user_id,
@@ -633,8 +782,20 @@ async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
   };
 }
 
-async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gender) {
+async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
+  return withGenderAllFallback(
+    fetchPersonalSpeedCore,
+    admin,
+    startStr,
+    endStr,
+    gender,
+    "personal_speed"
+  );
+}
+
+async function fetchPeakRewardRankingCore(admin, startStr, endStr, durationType, gender) {
   if (!PEAK_WKG_COLUMN[durationType]) return null;
+  logSupabaseRankingRequest("fn_peak_reward_leaderboard", gender, durationType);
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   const { data, error } = await supabase.rpc("fn_peak_reward_leaderboard", {
     p_start: startStr,
@@ -651,9 +812,11 @@ async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gen
   for (const row of data || []) {
     const fbUid = row.firebase_uid ? String(row.firebase_uid).trim() : uidMap.get(String(row.user_id));
     if (!fbUid) continue;
+    const profile = profileMap.get(String(row.user_id));
+    const merged = profile ? { ...row, ...profile } : row;
+    if (!profileGenderMatches(merged, gender)) continue;
     const wkg = Math.round(Number(row.peak_wkg) * 100) / 100;
     if (!(wkg > 0)) continue;
-    const profile = profileMap.get(String(row.user_id));
     entries.push({
       userId: fbUid,
       name: resolveRankingEntryName(profile, row.display_name),
@@ -681,6 +844,18 @@ async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gen
     precomputed: true,
     readSource: "supabase",
   };
+}
+
+async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gender) {
+  const core = (a, s, e, g) => fetchPeakRewardRankingCore(a, s, e, durationType, g);
+  return withGenderAllFallback(
+    core,
+    admin,
+    startStr,
+    endStr,
+    gender,
+    `fn_peak_reward_leaderboard:${durationType}`
+  );
 }
 
 /**

@@ -138,8 +138,13 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
     }
 
     const cfg = rankingReadConfig.getRankingReadConfig();
+    const fgRoute = gender === "M" || gender === "F" ? gender : "all";
     let parityReport = { ok: true, reason: "parity_skip_gc" };
-    if (durationType !== "gc") {
+    if (durationType !== "gc" && fgRoute !== "all") {
+      /* M/F 슬라이스는 Firebase all baseline과 1:1 비교 불가 — 빈 Supabase를 잘못 폐기하지 않음 */
+      parityReport = { ok: true, reason: "parity_skip_gender_slice" };
+      payload.rankingParity = parityReport;
+    } else if (durationType !== "gc") {
       const parityCtx = {
         durationType,
         gender,
