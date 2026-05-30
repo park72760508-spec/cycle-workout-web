@@ -8203,12 +8203,35 @@
       return data;
     }
 
-    /** M | F | all — 랭킹보드 성별 필터 정규화 */
+    /** M | F | all — 랭킹보드 성별 필터 정규화 (대소문자·한글·영문 표기 통합) */
     function stelvioNormalizeRankingGenderFilter(g) {
-      var s = String(g == null ? '' : g).trim();
-      if (s === 'M' || s === 'male' || s === '남' || s === '남성') return 'M';
-      if (s === 'F' || s === 'female' || s === '여' || s === '여성') return 'F';
+      var s = String(g == null ? '' : g).trim().toLowerCase();
+      if (s === 'm' || s === 'male' || s === '남' || s === '남성') return 'M';
+      if (s === 'f' || s === 'female' || s === '여' || s === '여성') return 'F';
       return 'all';
+    }
+
+    /** 행 gender 토큰 (trim + lower) */
+    function stelvioRankingRowGenderToken(entry) {
+      return String(entry && entry.gender != null ? entry.gender : '')
+        .trim()
+        .toLowerCase();
+    }
+
+    /** 정규화된 want(M|F)와 행 토큰 일치 — 빈 값은 M 요청 시에만 남성으로 간주 */
+    function stelvioRankingGenderTokenMatchesWant(token, wantNorm) {
+      if (wantNorm === 'all') return true;
+      var g = token;
+      if (!g) {
+        return wantNorm === 'M';
+      }
+      if (wantNorm === 'M') {
+        return g === 'm' || g === 'male' || g === '남' || g === '남성';
+      }
+      if (wantNorm === 'F') {
+        return g === 'f' || g === 'female' || g === '여' || g === '여성';
+      }
+      return false;
     }
 
     /** API·캐시 payload.gender (male/female 문자열 포함) → M|F|all */
@@ -8227,18 +8250,10 @@
     function stelvioRankingEntryMatchesGenderFilter(entry, genderFilter, payloadGenderMeta) {
       var gf = stelvioNormalizeRankingGenderFilter(genderFilter);
       if (gf === 'all') return true;
-      var g = String(entry && entry.gender != null ? entry.gender : '')
-        .trim()
-        .toLowerCase();
-      if (!g) {
-        return (
-          payloadGenderMeta != null &&
-          stelvioNormalizeRankingGenderFilter(payloadGenderMeta) === gf
-        );
-      }
-      if (gf === 'M') return g === 'male' || g === 'm' || g === '남' || g === '남성';
-      if (gf === 'F') return g === 'female' || g === 'f' || g === '여' || g === '여성';
-      return false;
+      return stelvioRankingGenderTokenMatchesWant(
+        stelvioRankingRowGenderToken(entry),
+        gf
+      );
     }
 
     /** 행에 명시된 성별이 요청과 반대인 사용자가 있는지(메타는 맞지만 본문이 섞인 캐시 보정용) */
@@ -9379,7 +9394,7 @@
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
     /** peak IndexedDB 키 접두사 — 사전집계 gender(GC 동일) 신뢰(v13) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v18:';
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v19:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
