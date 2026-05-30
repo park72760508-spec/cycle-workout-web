@@ -5751,7 +5751,7 @@ exports.backfillOpenRidingParticipantStravaReview = onRequest(
  * 그룹: 최근 30일 내 오픈 라이딩을 방장(hostUserId)별로 합산.
  * 각 일정의 점수 = 해당 일정일에 확정 참가자 각각의 라이딩 거리(일별 규칙 동일) 합.
  */
-async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, viewerUid) {
+async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, viewerUid, genderFilter) {
   const memo = new Map();
   async function dailyKmCached(uid, ymd) {
     const key = `${uid}|${ymd}`;
@@ -5800,19 +5800,29 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
     hostKeys.map((hid) => db.collection("users").doc(hid).get().catch(() => null)),
   );
   const urlByHostId = new Map();
+  const profileByHostId = new Map();
   hostKeys.forEach((hid, i) => {
     const sn = profileSnaps[i];
-    if (sn && sn.exists) urlByHostId.set(hid, profileImageUrlFromUserData(sn.data()));
-    else urlByHostId.set(hid, null);
+    if (sn && sn.exists) {
+      const ud = sn.data();
+      urlByHostId.set(hid, profileImageUrlFromUserData(ud));
+      profileByHostId.set(hid, ud);
+    } else {
+      urlByHostId.set(hid, null);
+      profileByHostId.set(hid, null);
+    }
   });
   for (const [, v] of byHost) {
+    const ud = profileByHostId.get(v.hostUserId);
+    if (!userMatchesWeeklyTssGenderFilter(ud, genderFilter)) continue;
+    const genderRaw = ud ? String(ud.gender || ud.sex || "").toLowerCase() : "";
     entries.push({
       userId: v.hostUserId,
       hostUserId: v.hostUserId,
       name: v.name,
       totalKm: Math.round(v.totalKm * 100) / 100,
       ageCategory: "Supremo",
-      gender: "",
+      gender: genderRaw,
       is_private: false,
       rankingKind: "group",
       currentUserParticipated: !!v.participated,
@@ -9885,8 +9895,12 @@ exports.getPeakPowerRanking = onRequest(
     if (durationType === "group_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
       const cacheKey = `peakRanking_group_dist_30d_${startStr}_${endStr}`;
-      const groupRankHistoryKey = "peak_group_dist_rolling30_all";
-      const aggG = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      const groupRankHistoryKey = `peak_group_dist_rolling30_${gender}`;
+      const groupGenderCacheOk = !gender || gender === "all";
+      const aggG =
+        forceRankMv || !groupGenderCacheOk
+          ? null
+          : await readRankingAggregatePayloadIfFresh(db, cacheKey);
       if (aggG && aggG.byCategory) {
         const byCategory = JSON.parse(JSON.stringify(aggG.byCategory));
         const entries = JSON.parse(JSON.stringify(Array.isArray(aggG.entries) ? aggG.entries : []));
@@ -9900,7 +9914,7 @@ exports.getPeakPowerRanking = onRequest(
           endStr,
           period: "rolling30",
           durationType: "group_dist",
-          gender: "all",
+          gender,
           precomputed: true,
         };
         if (uid) {
@@ -9927,7 +9941,8 @@ exports.getPeakPowerRanking = onRequest(
         return res.status(200).json(out);
       }
       const cacheRef = db.collection("cache").doc(cacheKey);
-      const cacheSnap = forceRankMv ? null : await cacheRef.get();
+      const cacheSnap =
+        forceRankMv || !groupGenderCacheOk ? null : await cacheRef.get();
       const nowMs = Date.now();
       if (cacheSnap && cacheSnap.exists) {
         const data = cacheSnap.data();
@@ -9945,7 +9960,7 @@ exports.getPeakPowerRanking = onRequest(
             endStr,
             period: "rolling30",
             durationType: "group_dist",
-            gender: "all",
+            gender,
             cached: true,
           };
           if (uid) {
@@ -9973,24 +9988,48 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
-      const { entries, byCategory } = await getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, null);
+      const { entries, byCategory } = await getRolling30dGroupDistanceByHostEntries(
+        db,
+        startStr,
+        endStr,
+        null,
+        gender
+      );
       const byCategoryAgg = JSON.parse(JSON.stringify(byCategory));
       const entriesAgg = JSON.parse(JSON.stringify(entries));
       await applyGroupRankingParticipationForViewer(db, byCategoryAgg, entriesAgg, startStr, endStr, null);
-      await writeRankingAggregatePayload(db, cacheKey, { byCategory: byCategoryAgg, entries: entriesAgg, startStr, endStr });
+      if (groupGenderCacheOk) {
+        await writeRankingAggregatePayload(db, cacheKey, {
+          byCategory: byCategoryAgg,
+          entries: entriesAgg,
+          startStr,
+          endStr,
+        });
+      }
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
-      await cacheRef.set({
-        byCategory,
-        entries,
-        startStr,
-        endStr,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      if (groupGenderCacheOk) {
+        await cacheRef.set({
+          byCategory,
+          entries,
+          startStr,
+          endStr,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
       const byCatOut = JSON.parse(JSON.stringify(byCategory));
       const entriesOut = JSON.parse(JSON.stringify(entries));
       await applyGroupRankingParticipationForViewer(db, byCatOut, entriesOut, startStr, endStr, uid);
       await applyPeakRankChanges(db, byCatOut, groupRankHistoryKey);
-      const out = { success: true, byCategory: byCatOut, entries: entriesOut, startStr, endStr, period: "rolling30", durationType: "group_dist", gender: "all" };
+      const out = {
+        success: true,
+        byCategory: byCatOut,
+        entries: entriesOut,
+        startStr,
+        endStr,
+        period: "rolling30",
+        durationType: "group_dist",
+        gender,
+      };
       if (uid) {
         const arrAll = byCatOut.Supremo || [];
         const participated = arrAll.filter((e) => e.currentUserParticipated || e.userId === uid);

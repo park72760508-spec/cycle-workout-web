@@ -75,7 +75,8 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
       payload = await supabaseRankingReader.fetchGroupDistRanking(
         admin,
         startStr,
-        endStr
+        endStr,
+        gender
       );
     } else if (durationType === "personal_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();

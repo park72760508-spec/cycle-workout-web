@@ -688,7 +688,7 @@ async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gen
  * Firestore getRolling30dGroupDistanceByHostEntries 와 동일 규칙(daily_summaries km).
  * @param {import('firebase-admin')} admin
  */
-async function fetchGroupDistRanking(admin, startStr, endStr) {
+async function fetchGroupDistRanking(admin, startStr, endStr, gender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
 
   const { data: openRides, error: ridesErr } = await supabase
@@ -776,8 +776,8 @@ async function fetchGroupDistRanking(admin, startStr, endStr) {
   const hostProfileRows = hostUuids.length
     ? await supabaseSelectInChunks(
         supabase,
-        "users",
-        "id, display_name, profile_image_url",
+        "v_user_public_profile",
+        "id, display_name, profile_image_url, gender, league_category, is_private",
         "id",
         hostUuids
       )
@@ -792,6 +792,7 @@ async function fetchGroupDistRanking(admin, startStr, endStr) {
     const hostUserId = uidMap.get(v.hostUuid);
     if (!hostUserId) continue;
     const prof = profileByUuid.get(v.hostUuid);
+    if (!profileGenderMatches(prof, gender)) continue;
     entries.push({
       userId: hostUserId,
       hostUserId,
@@ -799,9 +800,10 @@ async function fetchGroupDistRanking(admin, startStr, endStr) {
         (prof && prof.display_name && String(prof.display_name).trim()) ||
         v.name,
       totalKm: Math.round(v.totalKm * 100) / 100,
-      ageCategory: "Supremo",
-      gender: "",
-      is_private: false,
+      ageCategory:
+        (prof && prof.league_category) || "Supremo",
+      gender: genderDbToClient(prof && prof.gender),
+      is_private: prof ? prof.is_private === true : false,
       rankingKind: "group",
       currentUserParticipated: false,
       profileImageUrl: (prof && prof.profile_image_url) || null,
@@ -827,7 +829,7 @@ async function fetchGroupDistRanking(admin, startStr, endStr) {
     endStr,
     period: "rolling30",
     durationType: "group_dist",
-    gender: "all",
+    gender: gender || "all",
     precomputed: true,
     readSource: "supabase",
   };
