@@ -71,8 +71,7 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
 
     if (durationType === "gc") {
       const monthKey = supabaseRankingReader.getMonthKeyKstNow();
-      const fg = gender === "M" || gender === "F" ? gender : "all";
-      payload = await supabaseRankingReader.fetchGcRanking(admin, monthKey, fg);
+      payload = await supabaseRankingReader.fetchGcRanking(admin, monthKey, gender);
       if (payload) {
         await supabaseRankingReader.attachGcHeptagonMeta(admin, payload, {
           getMinHeptagonSnapshotAsOfSeoulYmd: deps.getMinHeptagonSnapshotAsOfSeoulYmd,

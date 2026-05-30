@@ -132,16 +132,12 @@ function countRankingPayloadEntries(payload) {
   return n;
 }
 
-function isGcDurationType(durationType) {
-  return durationType === "gc";
-}
-
 /**
- * 비-GC: Supabase는 항상 통합 MV/RPC(all)만 조회. 응답 gender 메타는 'all' 고정 → 클라이언트가 M/F 필터.
- * GC는 filter_gender 슬라이스 유지(요청 gender 그대로).
+ * Supabase(all) 조회 후 응답 gender 메타는 'all' 고정 → 클라이언트가 M/F 필터.
+ * GC·비-GC 동일.
  */
-function finalizeNonGcSupabasePayload(payload, durationType, requestedGender) {
-  if (!payload || isGcDurationType(durationType)) return payload;
+function finalizeUnifiedAllSupabasePayload(payload, durationType, requestedGender) {
+  if (!payload) return payload;
   const want =
     requestedGender === "M" || requestedGender === "F" ? requestedGender : "all";
   payload.gender = "all";
@@ -180,7 +176,7 @@ async function fetchNonGcSupabaseBoard(
     "rows=",
     n
   );
-  return finalizeNonGcSupabasePayload(payload, durationType, requestedGender);
+  return finalizeUnifiedAllSupabasePayload(payload, durationType, requestedGender);
 }
 
 function mapRowToFirebaseUser(row, firebaseUid) {
@@ -993,7 +989,7 @@ async function fetchGroupDistRanking(admin, startStr, endStr, requestedGender) {
     "rows=",
     countRankingPayloadEntries(payload)
   );
-  return finalizeNonGcSupabasePayload(payload, "group_dist", requestedGender);
+  return finalizeUnifiedAllSupabasePayload(payload, "group_dist", requestedGender);
 }
 
 function getMonthKeyKstNow() {
@@ -1050,15 +1046,15 @@ function captureGcSnapshotMeta(d, state) {
 }
 
 /**
- * GC(헵타곤): Supabase `heptagon_cohort_ranks`의 공식 board_rank를 그대로 표시 순위로 사용.
+ * GC(헵타곤) 코어: Supabase `heptagon_cohort_ranks` filter_gender 슬라이스 조회.
  * @param {import('firebase-admin')} admin
  * @param {string} [monthKey] YYYY-MM (KST)
- * @param {string} [filterGender] all | M | F
+ * @param {string} [queryGender] all | M | F — 래퍼는 M/F 요청 시 항상 all
  */
-async function fetchGcRanking(admin, monthKey, filterGender) {
+async function fetchGcRankingCore(admin, monthKey, queryGender) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   const mk = monthKey || getMonthKeyKstNow();
-  const fg = filterGender === "M" || filterGender === "F" ? filterGender : "all";
+  const fg = queryGender === "M" || queryGender === "F" ? queryGender : "all";
 
   const metaState = {
     snapshotRangeStart: "",
@@ -1131,22 +1127,6 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
     return null;
   }
 
-  let gcRowCount = 0;
-  for (const cat of HEPTAGON_CATEGORIES) {
-    gcRowCount += (byCategory[cat] || []).length;
-  }
-  /** 고장 슬라이스(찌꺼기 수건) → null → Firebase heptagon_cohort_ranks 폴백 */
-  if ((fg === "M" || fg === "F") && gcRowCount < 12) {
-    console.warn(
-      "[fetchGcRanking] thin gender slice filter_gender=",
-      fg,
-      "rows=",
-      gcRowCount,
-      "→ Firebase fallback"
-    );
-    return null;
-  }
-
   return {
     success: true,
     byCategory,
@@ -1161,6 +1141,37 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
     precomputed: true,
     readSource: "supabase",
   };
+}
+
+/**
+ * GC(헵타곤): M/F 요청도 Supabase는 filter_gender=all만 조회, 응답 gender=all.
+ * @param {import('firebase-admin')} admin
+ * @param {string} [monthKey] YYYY-MM (KST)
+ * @param {string} [requestedGender] all | M | F
+ */
+async function fetchGcRanking(admin, monthKey, requestedGender) {
+  const want =
+    requestedGender === "M" || requestedGender === "F" ? requestedGender : "all";
+  const mk = monthKey || getMonthKeyKstNow();
+  logSupabaseRankingRequest(
+    "heptagon_cohort_ranks",
+    want,
+    `queryForced=all month=${mk} (unified heptagon; no M/F slice)`
+  );
+  const payload = await fetchGcRankingCore(admin, mk, "all");
+  if (!payload) return null;
+  const n = countRankingPayloadEntries(payload);
+  console.log(
+    "[Stelvio Supabase Request] Result:",
+    "heptagon_cohort_ranks",
+    "requested=",
+    want,
+    "query=all",
+    "payload.gender=all",
+    "rows=",
+    n
+  );
+  return finalizeUnifiedAllSupabasePayload(payload, "gc", requestedGender);
 }
 
 /**
