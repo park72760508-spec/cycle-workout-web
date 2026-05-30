@@ -8237,25 +8237,27 @@
       return !stelvioRankingPayloadHasExplicitOppositeGender(data, want);
     }
 
-    /** 서버·Supabase·02:50 집계가 gender 슬라이스를 내려준 payload (GC와 동일 신뢰) */
+    /**
+     * 서버·Supabase·02:50 집계가 gender 슬라이스를 내려준 payload — GC·독주·TSS·거리·클럽·피크 공통.
+     * data.gender === 요청 성별 이고, 사전집계/Supabase 신호가 있으면 행 재집계 없이 신뢰.
+     */
     function stelvioRankingPayloadServerGenderSlice(data, wantGender) {
       if (!data) return false;
       var want = stelvioNormalizeRankingGenderFilter(wantGender);
       if (want === 'all') return true;
       if (stelvioNormalizeRankingGenderFilter(data.gender) !== want) return false;
-      if (data.durationType === 'gc') return true;
-      if (stelvioRankingPayloadPrecomputedForGender(data, want)) return true;
-      if (
+      var serverGenderSliced =
+        data.durationType === 'gc' ||
+        data.filterGenderPrecomputed === true ||
         data.readBackend === 'supabase' ||
         data.readSource === 'supabase' ||
         data.precomputed === true ||
         data.fastPrecomputed === true ||
-        data.cached === true
-      ) {
-        return !stelvioRankingPayloadHasExplicitOppositeGender(data, want);
-      }
-      return false;
+        data.cached === true;
+      if (!serverGenderSliced) return false;
+      return !stelvioRankingPayloadHasExplicitOppositeGender(data, want);
     }
+    window.stelvioRankingPayloadServerGenderSlice = stelvioRankingPayloadServerGenderSlice;
 
     /** 캐시·API payload가 요청 성별과 호환되는지 (GC·피크·TSS·독주 등 동일: 사전집계 gender 메타) */
     function stelvioRankingPayloadMatchesGenderFilter(data, wantGender) {
@@ -8336,7 +8338,10 @@
       if (stelvioRankingPayloadServerGenderSlice(data, want)) {
         data.gender = want;
         if (
+          data.durationType === 'gc' ||
           data.precomputed === true ||
+          data.fastPrecomputed === true ||
+          data.cached === true ||
           data.readBackend === 'supabase' ||
           data.readSource === 'supabase'
         ) {
@@ -8362,6 +8367,7 @@
       data.gender = want;
       return data;
     }
+    window.stelvioApplyRankingGenderFilterToPayload = stelvioApplyRankingGenderFilterToPayload;
 
     function stelvioGenderFromUserDoc(prof) {
       if (!prof) return '';
@@ -12447,6 +12453,7 @@
       if (label) label.textContent = val === 'M' ? '남성' : (val === 'F' ? '여성' : '전체');
       stelvioRankingListHtmlCache = Object.create(null);
       stelvioRankingLastPaintedSwrKey = '';
+      stelvioRankingFetchGen++;
       stelvioScrollRankingBoardToTopSmooth();
       stelvioBeginRankingTabSwitchUi();
       stelvioStartRankingBoardBackgroundPrefetch({
@@ -14958,6 +14965,15 @@
           typeof stelvioRankingState !== 'undefined' ? stelvioRankingState.period : 'monthly'
         );
       }
+      /* 독주: 성별 필터 전에 동기 패치(패치가 행을 비운 뒤 필터가 null을 내는 순서 꼬임 방지) */
+      if (
+        typeof stelvioIsPersonalSpeedRanking === 'function' &&
+        stelvioIsPersonalSpeedRanking() &&
+        data &&
+        data.byCategory
+      ) {
+        data = stelvioApplyPersonalSpeedPayloadSyncPatches(data);
+      }
       var genderAlignedEarly = stelvioApplyRankingGenderFilterToPayload(
         data,
         stelvioRankingState && stelvioRankingState.gender ? stelvioRankingState.gender : 'all'
@@ -15283,15 +15299,16 @@
           return;
         }
         var toSave = data;
+        if (
+          typeof stelvioIsPersonalSpeedRanking === 'function' &&
+          stelvioIsPersonalSpeedRanking()
+        ) {
+          toSave = stelvioApplyPersonalSpeedPayloadSyncPatches(toSave);
+        }
         if (genderParam && genderParam !== 'all') {
-          stelvioStampRankingPayloadRequestGender(toSave, genderParam);
-          if (toSave.precomputed === true || toSave.cached === true || toSave.fastPrecomputed === true) {
-            toSave.gender = stelvioNormalizeRankingGenderFilter(genderParam);
-          } else {
-            var saveAligned = stelvioApplyRankingGenderFilterToPayload(toSave, genderParam);
-            if (!saveAligned || !stelvioRankingPayloadMatchesGenderFilter(saveAligned, genderParam)) return;
-            toSave = saveAligned;
-          }
+          var saveAligned = stelvioApplyRankingGenderFilterToPayload(toSave, genderParam);
+          if (!saveAligned || !stelvioRankingPayloadMatchesGenderFilter(saveAligned, genderParam)) return;
+          toSave = saveAligned;
         }
         stelvioRankingPersistPeakPayload(lcKey, swrKey, toSave).catch(function () {});
       }
