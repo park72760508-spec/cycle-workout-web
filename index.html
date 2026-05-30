@@ -8230,14 +8230,13 @@
     }
 
     /**
-     * clientFilter 행 매칭 — 빈/미상 gender는 남성(m)으로 간주 후 M/F 배열 매칭.
-     * F 요청 시 빈 값은 female 배열에 없으므로 탈락.
+     * clientFilter — 성별 미상(빈 값)은 M/F 필터에서 제외(Firestore·Supabase 서버와 동일).
      */
     function stelvioRankingGenderTokenMatchesWant(token, wantNorm) {
       if (wantNorm === 'all') return true;
       var g = String(token == null ? '' : token).trim().toLowerCase();
       if (!g || g === 'all') {
-        g = 'm';
+        return false;
       }
       if (wantNorm === 'M') {
         return STELVIO_RANKING_GENDER_MALE_TOKENS.indexOf(g) >= 0;
@@ -8454,7 +8453,7 @@
     };
 
     /**
-     * clientFilter V2 — 성별 미상(빈 값)은 남성(m)으로 간주. window에 고정 등록(구 로직 덮어쓰기).
+     * clientFilter — gender=all 통합 payload 전용. 서버 gender=M|F 슬라이스는 filterGenderPrecomputed 신뢰.
      */
     window.stelvioFilterRankingPayloadByGender = function (payload, wantGender) {
       if (!payload) return payload;
@@ -8509,7 +8508,7 @@
           .trim()
           .toLowerCase();
         if (!g) {
-          g = 'm';
+          return false;
         }
         if (want === 'M') {
           return ['m', 'male', '남', '남성'].indexOf(g) >= 0;
@@ -8566,7 +8565,7 @@
           .trim()
           .toLowerCase();
         if (!g) {
-          g = 'm';
+          return false;
         }
         if (want === 'M') {
           return ['m', 'male', '남', '남성'].indexOf(g) >= 0;
@@ -14050,6 +14049,7 @@
         duration: apiDuration,
         gender: genderParam || 'all',
         readDb: stelvioGetRankingReadSourceSync(),
+        gfVer: '2',
       });
       if (uid) p.set('uid', uid);
       if (apiDuration === 'personal_speed') {
