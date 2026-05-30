@@ -104,10 +104,18 @@ async function getFirebaseUidByUuidMap(admin) {
 }
 
 /**
- * MV/RPC 통합 뷰 조회 — SQL .eq('gender','female')는 DB에 F/M 저장 시 0건이므로 사용하지 않음.
- * 성별 분리는 프로필 병합 후 profileGenderMatches 또는 all→slice 폴백으로 처리.
+ * MV/RPC 조회 — gender_code(male/female) 기준 SQL 슬라이스.
+ * 프로필 병합 후 profileGenderMatches로 2차 검증.
  */
+function genderFilterToDbEnum(gender) {
+  if (gender === "M") return "male";
+  if (gender === "F") return "female";
+  return null;
+}
+
 function applyGenderFilter(query, gender) {
+  const dbGender = genderFilterToDbEnum(gender);
+  if (dbGender) return query.eq("gender", dbGender);
   return query;
 }
 
@@ -1143,7 +1151,7 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
         const fbUid = uidMap.get(String(row.user_id));
         if (!fbUid) continue;
         const profile = profileMap.get(String(row.user_id));
-        if (profileGenderConflictsWithFilter(profile, fg)) continue;
+        if (!profileGenderMatches(profile, fg)) continue;
         const gcScore =
           row.sum_position_scores != null && isFinite(Number(row.sum_position_scores))
             ? Number(row.sum_position_scores)
