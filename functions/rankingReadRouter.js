@@ -145,10 +145,15 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
 
     /* GC: heptagon_cohort_ranks.rank_change — 그 외: Supabase peak_rank_board_snapshots (Firestore peak_rank_history 후순위) */
     if (durationType !== "gc" && payload && payload.byCategory) {
+      const historyGender =
+        payload.supabaseServedUnifiedAllView &&
+        (gender === "M" || gender === "F")
+          ? "all"
+          : gender;
       const historyKey = peakMovement.resolvePeakRankHistoryKey(
         durationType,
         payload.period || query.period,
-        gender
+        historyGender
       );
       if (historyKey) {
         await peakMovementSupabase.hydratePeakRankMovementOnPayload(payload, historyKey);
@@ -166,9 +171,15 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
     const cfg = rankingReadConfig.getRankingReadConfig();
     let parityReport = { ok: true, reason: "parity_skip_gc" };
     if (durationType !== "gc") {
+      /* 비-GC M/F: Supabase는 all 통합 뷰만 제공 → parity·history도 all 집계와 비교 */
+      const parityGender =
+        payload.supabaseServedUnifiedAllView &&
+        (gender === "M" || gender === "F")
+          ? "all"
+          : gender;
       const parityCtx = {
         durationType,
-        gender,
+        gender: parityGender,
         startStr: payload.startStr,
         endStr: payload.endStr,
       };

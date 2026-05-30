@@ -132,81 +132,55 @@ function countRankingPayloadEntries(payload) {
   return n;
 }
 
-function filterSupabasePayloadByGender(payload, gender) {
-  if (!payload || !payload.byCategory || !gender || gender === "all") return payload;
-  const byCategory = {
-    Supremo: [],
-    Assoluto: [],
-    Bianco: [],
-    Rosa: [],
-    Infinito: [],
-    Leggenda: [],
-  };
-  for (const cat of HEPTAGON_CATEGORIES) {
-    const src = payload.byCategory[cat] || [];
-    byCategory[cat] = src.filter((row) => row && profileGenderMatches(row, gender));
-    for (let i = 0; i < byCategory[cat].length; i++) {
-      byCategory[cat][i] = { ...byCategory[cat][i], rank: i + 1 };
-      if (!byCategory[cat][i].gender) {
-        byCategory[cat][i].gender =
-          gender === "M" ? "male" : gender === "F" ? "female" : byCategory[cat][i].gender;
-      }
-    }
-  }
-  const entries = (byCategory.Supremo || []).slice();
-  const out = {
-    ...payload,
-    byCategory,
-    entries,
-    gender,
-    supabaseGenderFilteredClient: true,
-  };
-  if (
-    out.currentUser &&
-    out.currentUser.userId &&
-    !profileGenderMatches(out.currentUser, gender)
-  ) {
-    out.currentUser = null;
-    out.motivationMessage = null;
-  }
-  if (
-    out.myRankSupremo &&
-    out.myRankSupremo.userId &&
-    !profileGenderMatches(out.myRankSupremo, gender)
-  ) {
-    out.myRankSupremo = null;
-  }
-  return out;
+function isGcDurationType(durationType) {
+  return durationType === "gc";
 }
 
 /**
- * M/F 요청: Supabase 슬라이스에 유효 행이 없으면 null → rankingReadRouter가 Firebase 집계로 폴백.
- * all 뷰 + profileGenderMatches 서버 필터는 row.gender 미매핑 시 전량 탈락하므로 사용하지 않음.
+ * 비-GC: Supabase는 항상 통합 MV/RPC(all)만 조회. 응답 gender 메타는 'all' 고정 → 클라이언트가 M/F 필터.
+ * GC는 filter_gender 슬라이스 유지(요청 gender 그대로).
  */
-async function withGenderAllFallback(fetchCore, admin, startStr, endStr, gender, label) {
-  const want = gender === "M" || gender === "F" ? gender : "all";
-  if (want === "all") {
-    return fetchCore(admin, startStr, endStr, gender);
+function finalizeNonGcSupabasePayload(payload, durationType, requestedGender) {
+  if (!payload || isGcDurationType(durationType)) return payload;
+  const want =
+    requestedGender === "M" || requestedGender === "F" ? requestedGender : "all";
+  payload.gender = "all";
+  if (want !== "all") {
+    payload.supabaseQueryGenderRequested = want;
+    payload.supabaseServedUnifiedAllView = true;
   }
-  const payload = await fetchCore(admin, startStr, endStr, gender);
+  return payload;
+}
+
+async function fetchNonGcSupabaseBoard(
+  fetchCore,
+  admin,
+  coreArgs,
+  requestedGender,
+  durationType,
+  label
+) {
+  const want =
+    requestedGender === "M" || requestedGender === "F" ? requestedGender : "all";
+  logSupabaseRankingRequest(
+    label,
+    want,
+    `queryForced=all duration=${durationType} (unified MV; no _M_all/_F_all)`
+  );
+  const payload = await fetchCore(admin, ...coreArgs, "all");
+  if (!payload) return null;
   const n = countRankingPayloadEntries(payload);
   console.log(
     "[Stelvio Supabase Request] Result:",
     label,
-    "gender=",
+    "requested=",
     want,
+    "query=all",
+    "payload.gender=all",
     "rows=",
     n
   );
-  if (n > 0) return payload;
-  console.warn(
-    "[Stelvio Supabase Request]",
-    label,
-    "gender=",
-    want,
-    "rows=0 → return null (Firebase ranking_aggregates fallback; client gender filter)"
-  );
-  return null;
+  return finalizeNonGcSupabasePayload(payload, durationType, requestedGender);
 }
 
 function mapRowToFirebaseUser(row, firebaseUid) {
@@ -476,12 +450,12 @@ async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
 }
 
 async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
-  return withGenderAllFallback(
+  return fetchNonGcSupabaseBoard(
     fetchWeeklyTssRankingCore,
     admin,
-    startStr,
-    endStr,
+    [startStr, endStr],
     gender,
+    "tss",
     "weekly_tss"
   );
 }
@@ -555,13 +529,12 @@ async function fetchPeakPowerMonthlyCore(
 }
 
 async function fetchPeakPowerMonthly(admin, startStr, endStr, durationType, gender) {
-  const core = (a, s, e, g) => fetchPeakPowerMonthlyCore(a, s, e, durationType, g);
-  return withGenderAllFallback(
-    core,
+  return fetchNonGcSupabaseBoard(
+    (a, s, e, g) => fetchPeakPowerMonthlyCore(a, s, e, durationType, g),
     admin,
-    startStr,
-    endStr,
+    [startStr, endStr],
     gender,
+    durationType,
     `mv_leaderboard_peak_28d:${durationType}`
   );
 }
@@ -631,12 +604,12 @@ async function fetchPersonalDistCore(admin, startStr, endStr, gender) {
 }
 
 async function fetchPersonalDist(admin, startStr, endStr, gender) {
-  return withGenderAllFallback(
+  return fetchNonGcSupabaseBoard(
     fetchPersonalDistCore,
     admin,
-    startStr,
-    endStr,
+    [startStr, endStr],
     gender,
+    "personal_dist",
     "personal_dist"
   );
 }
@@ -778,12 +751,12 @@ async function fetchPersonalSpeedCore(admin, startStr, endStr, gender) {
 }
 
 async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
-  return withGenderAllFallback(
+  return fetchNonGcSupabaseBoard(
     fetchPersonalSpeedCore,
     admin,
-    startStr,
-    endStr,
+    [startStr, endStr],
     gender,
+    "personal_speed",
     "personal_speed"
   );
 }
@@ -842,13 +815,12 @@ async function fetchPeakRewardRankingCore(admin, startStr, endStr, durationType,
 }
 
 async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gender) {
-  const core = (a, s, e, g) => fetchPeakRewardRankingCore(a, s, e, durationType, g);
-  return withGenderAllFallback(
-    core,
+  return fetchNonGcSupabaseBoard(
+    (a, s, e, g) => fetchPeakRewardRankingCore(a, s, e, durationType, g),
     admin,
-    startStr,
-    endStr,
+    [startStr, endStr],
     gender,
+    durationType,
     `fn_peak_reward_leaderboard:${durationType}`
   );
 }
@@ -858,7 +830,15 @@ async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gen
  * Firestore getRolling30dGroupDistanceByHostEntries 와 동일 규칙(daily_summaries km).
  * @param {import('firebase-admin')} admin
  */
-async function fetchGroupDistRanking(admin, startStr, endStr, gender) {
+async function fetchGroupDistRanking(admin, startStr, endStr, requestedGender) {
+  const want =
+    requestedGender === "M" || requestedGender === "F" ? requestedGender : "all";
+  const queryGender = "all";
+  logSupabaseRankingRequest(
+    "group_dist",
+    want,
+    "queryForced=all (unified; client gender filter)"
+  );
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
 
   const { data: openRides, error: ridesErr } = await supabase
@@ -962,7 +942,7 @@ async function fetchGroupDistRanking(admin, startStr, endStr, gender) {
     const hostUserId = uidMap.get(v.hostUuid);
     if (!hostUserId) continue;
     const prof = profileByUuid.get(v.hostUuid);
-    if (!profileGenderMatches(prof, gender)) continue;
+    if (!profileGenderMatches(prof, queryGender)) continue;
     entries.push({
       userId: hostUserId,
       hostUserId,
@@ -991,7 +971,7 @@ async function fetchGroupDistRanking(admin, startStr, endStr, gender) {
     Assoluto: [],
   };
 
-  return {
+  const payload = {
     success: true,
     byCategory,
     entries: withRank,
@@ -999,10 +979,21 @@ async function fetchGroupDistRanking(admin, startStr, endStr, gender) {
     endStr,
     period: "rolling30",
     durationType: "group_dist",
-    gender: gender || "all",
+    gender: "all",
     precomputed: true,
     readSource: "supabase",
   };
+  console.log(
+    "[Stelvio Supabase Request] Result:",
+    "group_dist",
+    "requested=",
+    want,
+    "query=all",
+    "payload.gender=all",
+    "rows=",
+    countRankingPayloadEntries(payload)
+  );
+  return finalizeNonGcSupabasePayload(payload, "group_dist", requestedGender);
 }
 
 function getMonthKeyKstNow() {
