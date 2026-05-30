@@ -13870,6 +13870,23 @@
     }
 
     async function stelvioRankingBoardFetchJson(url, timeoutMs, myGen) {
+      var reqUrlParsed = null;
+      try {
+        reqUrlParsed = new URL(String(url || ''));
+        if (
+          reqUrlParsed.hostname.indexOf('cloudfunctions.net') >= 0 &&
+          reqUrlParsed.pathname.indexOf('getPeakPowerRanking') >= 0
+        ) {
+          console.info(
+            '[Stelvio Supabase Request] endpoint=getPeakPowerRanking duration=' +
+              (reqUrlParsed.searchParams.get('duration') || '') +
+              ' gender=' +
+              (reqUrlParsed.searchParams.get('gender') || 'all') +
+              ' readDb=' +
+              (reqUrlParsed.searchParams.get('readDb') || '')
+          );
+        }
+      } catch (eReqLog) {}
       if (typeof stelvioRankingBoardFetchJsonViaWorker === 'function') {
         try {
           var workerData = await stelvioRankingBoardFetchJsonViaWorker(
@@ -13908,6 +13925,24 @@
           return null;
         });
         if (myGen !== stelvioRankingFetchGen) return null;
+        if (data && data.success && data.byCategory) {
+          try {
+            var rowN = typeof stelvioCountRankingPayloadRows === 'function' ? stelvioCountRankingPayloadRows(data) : 0;
+            console.info(
+              '[Stelvio Supabase Request] response duration=' +
+                (data.durationType ||
+                  (reqUrlParsed && reqUrlParsed.searchParams.get('duration')) ||
+                  '') +
+                ' gender=' +
+                (data.gender || '') +
+                ' readBackend=' +
+                (data.readBackend || data.readSource || '') +
+                ' rows=' +
+                rowN +
+                (data.supabaseGenderFallbackFromAll ? ' fallbackFromAll=1' : '')
+            );
+          } catch (eRespLog) {}
+        }
         return data;
       } catch (eFetch) {
         if (timer) clearTimeout(timer);
