@@ -9173,7 +9173,12 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
         captureSnapshotMeta(d);
         const uid = String(d.userId);
         const gcScore = d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0;
-        const g = filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
+        const g =
+          filterGender === "F"
+            ? "female"
+            : filterGender === "M"
+              ? "male"
+              : "";
         rows.push({
           userId: uid,
           name: (d.displayName && String(d.displayName).trim()) || "(이름 없음)",

@@ -1000,9 +1000,18 @@ function getMonthKeyKstNow() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
 }
 
+function resolveGcEntryGender(filterGender, profile, row) {
+  if (filterGender === "F") return "female";
+  if (filterGender === "M") return "male";
+  const fromProf =
+    profile && profile.gender != null ? genderDbToClient(profile.gender) : "";
+  if (fromProf) return fromProf;
+  if (row && row.gender != null) return genderDbToClient(row.gender);
+  return "";
+}
+
 function mapGcRowToEntry(row, fbUid, filterGender, gcScore, profile) {
-  const g =
-    filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
+  const g = resolveGcEntryGender(filterGender, profile, row);
   const name = resolveRankingEntryName(profile || row, row.display_name);
   return {
     userId: fbUid,
@@ -1119,6 +1128,22 @@ async function fetchGcRanking(admin, monthKey, filterGender) {
 
   const entries = (byCategory.Supremo || []).slice();
   if (!entries.length) {
+    return null;
+  }
+
+  let gcRowCount = 0;
+  for (const cat of HEPTAGON_CATEGORIES) {
+    gcRowCount += (byCategory[cat] || []).length;
+  }
+  /** 고장 슬라이스(찌꺼기 수건) → null → Firebase heptagon_cohort_ranks 폴백 */
+  if ((fg === "M" || fg === "F") && gcRowCount < 12) {
+    console.warn(
+      "[fetchGcRanking] thin gender slice filter_gender=",
+      fg,
+      "rows=",
+      gcRowCount,
+      "→ Firebase fallback"
+    );
     return null;
   }
 
