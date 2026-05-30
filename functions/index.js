@@ -11687,6 +11687,112 @@ exports.provisionSupabaseUserAfterProfileHttp = onRequest(
   }
 );
 
+const USER_PROFILE_SYNC_FIELDS = [
+  "gender",
+  "sex",
+  "name",
+  "displayName",
+  "contact",
+  "phone",
+  "phoneNumber",
+  "tel",
+  "birth_year",
+  "birthYear",
+  "weight",
+  "weightKg",
+  "weight_kg",
+  "ftp",
+  "challenge",
+  "grade",
+  "email",
+  "account_status",
+  "expiry_date",
+  "subscription_end_date",
+];
+
+function userProfileFieldsChanged(before, after) {
+  if (!before) return true;
+  return USER_PROFILE_SYNC_FIELDS.some((key) => before[key] !== after[key]);
+}
+
+/** Firestore users/{userId} 프로필 변경 → Supabase public.users 동기화 (gender 포함) */
+exports.onUserProfileWritten = functions
+  .runWith({ timeoutSeconds: 60, secrets: ["SUPABASE_SERVICE_ROLE_KEY"] })
+  .firestore.document("users/{userId}")
+  .onWrite(async (change, context) => {
+    const userId = context.params.userId;
+    if (!userId || !change.after.exists) return;
+
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.data() || {};
+    if (!userProfileFieldsChanged(before, after)) return;
+
+    try {
+      await supabaseUserProvision.upsertSupabaseUserProfileFromFirestore(admin, userId, {
+        ensureAuth: false,
+        requireNameContact: false,
+      });
+    } catch (e) {
+      console.warn("[onUserProfileWritten] Supabase profile sync failed:", userId, e.message || e);
+    }
+  });
+
+/**
+ * 관리자(grade=1): Firestore users.gender/sex → Supabase users.gender 백필 (배치).
+ * body/query: startAfterUid, maxUsers (기본 500, 최대 5000), dryRun
+ */
+exports.adminBackfillSupabaseUserGender = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 540, memory: "1GiB" }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원합니다." });
+      return;
+    }
+
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const startAfterUid = String(body.startAfterUid || req.query.startAfterUid || "").trim();
+      const maxUsers = Math.max(
+        1,
+        Math.min(5000, Number(body.maxUsers || req.query.maxUsers || 500) || 500)
+      );
+      const dryRun = String(body.dryRun ?? req.query.dryRun ?? "false").toLowerCase() === "true";
+
+      const stats = await supabaseUserProvision.backfillSupabaseUserGenderFromFirestore(admin, {
+        startAfterUid,
+        maxUsers,
+        dryRun,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: dryRun
+          ? "Firestore gender 소스 집계 (dry-run, Supabase 미갱신)"
+          : "Supabase users.gender 백필 배치 완료",
+        ...stats,
+      });
+    } catch (e) {
+      const status = e.status || 500;
+      console.warn("[adminBackfillSupabaseUserGender]", e.message || e);
+      res.status(status).json({
+        success: false,
+        error: e.message || String(e),
+      });
+    }
+  }
+);
+
 // ---------- STELVIO AI 네이버 구독 자동화 (30분 스케줄, TypeScript 빌드 결과 사용) ----------
 const path = require("path");
 const fs = require("fs");

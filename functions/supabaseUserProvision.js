@@ -217,7 +217,23 @@ async function upsertPublicUser(supabase, row) {
  * @param {import('firebase-admin')} admin
  * @param {string} firebaseUid
  */
-async function provisionSupabaseUserAfterProfile(admin, firebaseUid) {
+function getUidConfigFromParams() {
+  return {
+    uidNamespace: supabaseDualWriteServer.uidNamespaceParam.value(),
+    uidMode:
+      String(supabaseDualWriteServer.uidModeParam.value() || "v5").toLowerCase() === "literal"
+        ? "literal"
+        : "v5",
+  };
+}
+
+/**
+ * Firestore users/{uid} → public.users upsert (가입·프로필 수정·백필 공통).
+ * @param {import('firebase-admin')} admin
+ * @param {string} firebaseUid
+ * @param {{ ensureAuth?: boolean, requireNameContact?: boolean }} [opts]
+ */
+async function upsertSupabaseUserProfileFromFirestore(admin, firebaseUid, opts = {}) {
   const uid = String(firebaseUid || "").trim();
   if (!uid) {
     throw Object.assign(new Error("firebaseUid required"), { code: "invalid-uid" });
@@ -228,42 +244,161 @@ async function provisionSupabaseUserAfterProfile(admin, firebaseUid) {
     throw Object.assign(new Error("Firestore users 문서 없음"), { code: "firestore-missing" });
   }
 
-  const uidConfig = {
-    uidNamespace: supabaseDualWriteServer.uidNamespaceParam.value(),
-    uidMode:
-      String(supabaseDualWriteServer.uidModeParam.value() || "v5").toLowerCase() === "literal"
-        ? "literal"
-        : "v5",
-  };
-
+  const uidConfig = getUidConfigFromParams();
   const row = mapFirestoreUserToRow(uid, snap.data() || {}, uidConfig);
   if (!row) {
     throw Object.assign(new Error("Supabase UUID 변환 실패"), { code: "invalid-uid" });
   }
 
-  if (!str(row.name) || !row.contact) {
+  const requireNameContact = opts.requireNameContact !== false;
+  if (requireNameContact && (!str(row.name) || !row.contact)) {
     throw Object.assign(new Error("프로필 필수값(이름·연락처) 미완료"), {
       code: "profile-incomplete",
     });
   }
 
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const authResult = await ensureSupabaseAuthUser(
-    supabase,
-    admin,
-    uid,
-    row.id,
-    snap.data() || {}
-  );
+  let authResult = { action: "skipped", reason: "ensureAuth=false" };
+  if (opts.ensureAuth !== false) {
+    authResult = await ensureSupabaseAuthUser(
+      supabase,
+      admin,
+      uid,
+      row.id,
+      snap.data() || {}
+    );
+  }
   const profileResult = await upsertPublicUser(supabase, row);
 
   return {
     success: true,
     firebaseUid: uid,
     supabaseUserId: row.id,
+    gender: row.gender,
     auth: authResult,
     profile: profileResult,
   };
+}
+
+async function provisionSupabaseUserAfterProfile(admin, firebaseUid) {
+  return upsertSupabaseUserProfileFromFirestore(admin, firebaseUid, {
+    ensureAuth: true,
+    requireNameContact: true,
+  });
+}
+
+/**
+ * Firestore gender/sex만 Supabase users.gender에 동기화 (경량).
+ */
+async function syncSupabaseUserGenderFromFirestore(admin, firebaseUid) {
+  const uid = String(firebaseUid || "").trim();
+  if (!uid) return { skipped: true, reason: "invalid-uid" };
+
+  const snap = await admin.firestore().collection("users").doc(uid).get();
+  if (!snap.exists) return { skipped: true, reason: "firestore-missing" };
+
+  const uidConfig = getUidConfigFromParams();
+  const row = mapFirestoreUserToRow(uid, snap.data() || {}, uidConfig);
+  if (!row) return { skipped: true, reason: "invalid-uuid" };
+
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const { data: existing, error: readErr } = await supabase
+    .from("users")
+    .select("id, gender")
+    .eq("id", row.id)
+    .maybeSingle();
+  if (readErr) throw readErr;
+
+  if (!existing) {
+    const full = await upsertSupabaseUserProfileFromFirestore(admin, uid, {
+      ensureAuth: true,
+      requireNameContact: false,
+    });
+    return {
+      action: "upserted_full",
+      firebaseUid: uid,
+      gender: full.gender,
+      previousGender: null,
+    };
+  }
+
+  if (existing.gender === row.gender) {
+    return {
+      action: "unchanged",
+      firebaseUid: uid,
+      gender: row.gender,
+      previousGender: existing.gender,
+    };
+  }
+
+  const { error: updErr } = await supabase
+    .from("users")
+    .update({ gender: row.gender, updated_at: new Date().toISOString() })
+    .eq("id", row.id);
+  if (updErr) throw updErr;
+
+  return {
+    action: "updated",
+    firebaseUid: uid,
+    gender: row.gender,
+    previousGender: existing.gender,
+  };
+}
+
+/**
+ * @param {import('firebase-admin')} admin
+ * @param {{ startAfterUid?: string, maxUsers?: number, dryRun?: boolean }} [opts]
+ */
+async function backfillSupabaseUserGenderFromFirestore(admin, opts = {}) {
+  const db = admin.firestore();
+  const startAfterUid = String(opts.startAfterUid || "").trim();
+  const maxUsers = Math.max(1, Math.min(5000, Number(opts.maxUsers) || 500));
+  const dryRun = opts.dryRun === true;
+
+  let query = db.collection("users").orderBy(admin.firestore.FieldPath.documentId()).limit(maxUsers);
+  if (startAfterUid) query = query.startAfter(startAfterUid);
+
+  const snap = await query.get();
+  const stats = {
+    scanned: 0,
+    updated: 0,
+    unchanged: 0,
+    upsertedFull: 0,
+    skipped: 0,
+    male: 0,
+    female: 0,
+    unknown: 0,
+    errors: [],
+    lastUid: "",
+    dryRun,
+  };
+
+  for (const doc of snap.docs) {
+    stats.scanned += 1;
+    stats.lastUid = doc.id;
+    const mapped = mapGender((doc.data() || {}).gender ?? (doc.data() || {}).sex);
+    if (mapped === "male") stats.male += 1;
+    else if (mapped === "female") stats.female += 1;
+    else stats.unknown += 1;
+
+    if (dryRun) continue;
+
+    try {
+      const result = await syncSupabaseUserGenderFromFirestore(admin, doc.id);
+      if (result.action === "updated") stats.updated += 1;
+      else if (result.action === "upserted_full") stats.upsertedFull += 1;
+      else if (result.action === "unchanged") stats.unchanged += 1;
+      else stats.skipped += 1;
+    } catch (err) {
+      stats.errors.push({
+        userId: doc.id,
+        message: err && err.message ? err.message : String(err),
+      });
+    }
+  }
+
+  stats.hasMore = snap.size >= maxUsers;
+  return stats;
 }
 
 /**
@@ -327,7 +462,11 @@ async function handleProvisionSupabaseUserAfterProfile(req, res, admin, setCorsH
 }
 
 module.exports = {
+  mapGender,
   mapFirestoreUserToRow,
   provisionSupabaseUserAfterProfile,
+  upsertSupabaseUserProfileFromFirestore,
+  syncSupabaseUserGenderFromFirestore,
+  backfillSupabaseUserGenderFromFirestore,
   handleProvisionSupabaseUserAfterProfile,
 };
