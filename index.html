@@ -8203,33 +8203,47 @@
       return data;
     }
 
+    var STELVIO_RANKING_GENDER_MALE_TOKENS = ['m', 'male', '남', '남성'];
+    var STELVIO_RANKING_GENDER_FEMALE_TOKENS = ['f', 'female', '여', '여성'];
+
     /** M | F | all — 랭킹보드 성별 필터 정규화 (대소문자·한글·영문 표기 통합) */
     function stelvioNormalizeRankingGenderFilter(g) {
       var s = String(g == null ? '' : g).trim().toLowerCase();
-      if (s === 'm' || s === 'male' || s === '남' || s === '남성') return 'M';
-      if (s === 'f' || s === 'female' || s === '여' || s === '여성') return 'F';
+      if (STELVIO_RANKING_GENDER_MALE_TOKENS.indexOf(s) >= 0) return 'M';
+      if (STELVIO_RANKING_GENDER_FEMALE_TOKENS.indexOf(s) >= 0) return 'F';
       return 'all';
     }
 
-    /** 행 gender 토큰 (trim + lower) */
+    /** 행 gender/sex → clientFilter용 토큰 (trim + lower) */
     function stelvioRankingRowGenderToken(entry) {
-      return String(entry && entry.gender != null ? entry.gender : '')
-        .trim()
-        .toLowerCase();
+      if (!entry) return '';
+      var raw =
+        entry.gender != null && String(entry.gender).trim() !== ''
+          ? entry.gender
+          : entry.sex != null
+            ? entry.sex
+            : '';
+      var norm = stelvioNormalizeRankingGenderFilter(raw);
+      if (norm === 'M') return 'm';
+      if (norm === 'F') return 'f';
+      return String(raw == null ? '' : raw).trim().toLowerCase();
     }
 
-    /** 정규화된 want(M|F)와 행 토큰 일치 — 빈 값은 M 요청 시에만 남성으로 간주 */
+    /**
+     * clientFilter 행 매칭 — 빈/미상 gender는 남성(m)으로 간주 후 M/F 배열 매칭.
+     * F 요청 시 빈 값은 female 배열에 없으므로 탈락.
+     */
     function stelvioRankingGenderTokenMatchesWant(token, wantNorm) {
       if (wantNorm === 'all') return true;
-      var g = token;
-      if (!g) {
-        return wantNorm === 'M';
+      var g = String(token == null ? '' : token).trim().toLowerCase();
+      if (!g || g === 'all') {
+        g = 'm';
       }
       if (wantNorm === 'M') {
-        return g === 'm' || g === 'male' || g === '남' || g === '남성';
+        return STELVIO_RANKING_GENDER_MALE_TOKENS.indexOf(g) >= 0;
       }
       if (wantNorm === 'F') {
-        return g === 'f' || g === 'female' || g === '여' || g === '여성';
+        return STELVIO_RANKING_GENDER_FEMALE_TOKENS.indexOf(g) >= 0;
       }
       return false;
     }
@@ -8387,7 +8401,12 @@
         var filtered = [];
         for (var fi = 0; fi < src.length; fi++) {
           var row = src[fi];
-          if (row && stelvioRankingEntryMatchesGenderFilter(row, want, want)) filtered.push(row);
+          if (
+            row &&
+            stelvioRankingGenderTokenMatchesWant(stelvioRankingRowGenderToken(row), want)
+          ) {
+            filtered.push(row);
+          }
         }
         filtered.sort(function (a, b) {
           if (a.rank != null && b.rank != null && (a.gcScore != null || b.gcScore != null)) {
@@ -9394,7 +9413,7 @@
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
     /** peak IndexedDB 키 접두사 — 사전집계 gender(GC 동일) 신뢰(v13) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v19:';
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v20:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
