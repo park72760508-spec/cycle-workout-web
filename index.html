@@ -8435,31 +8435,18 @@
         }
         var gcMeta = stelvioRankingCoercePayloadGenderMeta(data.gender);
         if (gcMeta === want) {
-          if (stelvioRankingPayloadHasExplicitOppositeGender(data, want)) {
-            var gcFixOpp = stelvioFilterRankingPayloadByGender(data, want);
-            if (!gcFixOpp || !stelvioRankingPayloadHasVisibleRows(gcFixOpp)) return null;
-            gcFixOpp.gender = want;
-            if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
-              try {
-                console.info(
-                  '[Stelvio Filter Debug] duration=gc gender=' +
-                    want +
-                    ' gcOppositeRowFilter=1 필터 후 행: ' +
-                    stelvioCountRankingPayloadRows(gcFixOpp)
-                );
-              } catch (eLogGcOpp) {}
-            }
-            return gcFixOpp;
-          }
+          /* heptagon filter_gender 슬라이스 신뢰 — 행 gender(프로필·구캐시 혼재)로 재필터 금지 */
           data.gender = want;
           data.filterGenderPrecomputed = true;
+          stelvioStampRankingRowGendersFromPayloadMeta(data, want);
           if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
             try {
               console.info(
                 '[Stelvio Filter Debug] duration=gc gender=' +
                   want +
-                  ' serverSlice=1(gc) 원본 행 개수: ' +
-                  rowCountBefore
+                  ' serverSlice=1(gc) rows=' +
+                  rowCountBefore +
+                  ' (no row re-filter)'
               );
             } catch (eLogGc) {}
           }
@@ -9419,7 +9406,7 @@
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
     /** peak IndexedDB 키 접두사 — 사전집계 gender(GC 동일) 신뢰(v13) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v16:';
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v17:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
