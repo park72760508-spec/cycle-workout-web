@@ -8190,14 +8190,20 @@
       return false;
     }
 
-    /** 집계·API가 gender 쿼리로 이미 걸러진 payload(행 gender 누락 허용) */
-    function stelvioRankingPayloadServerGenderScoped(data, wantGender) {
+    /** UI·fetch·IndexedDB 캐시 키와 동일한 성별 요청 — 본문에 반대 성별이 명시된 행만 제외 */
+    function stelvioRankingPayloadTrustedForGenderRequest(data, wantGender) {
       if (!data) return false;
       var want = stelvioNormalizeRankingGenderFilter(wantGender);
       if (want === 'all') return true;
-      if (stelvioNormalizeRankingGenderFilter(data.gender) !== want) return false;
       if (!stelvioRankingPayloadHasVisibleRows(data)) return false;
       return !stelvioRankingPayloadHasExplicitOppositeGender(data, want);
+    }
+
+    function stelvioStampRankingPayloadRequestGender(data, wantGender) {
+      if (!data) return;
+      var want = stelvioNormalizeRankingGenderFilter(wantGender);
+      if (want !== 'all') data.gender = want;
+      else data.gender = 'all';
     }
 
     /** GC와 동일: payload 내 모든 순위 행이 요청 성별과 일치할 때만 사전 필터된 것으로 간주 */
@@ -8227,7 +8233,8 @@
       if (data.durationType === 'gc') {
         return stelvioNormalizeRankingGenderFilter(data.gender) === want;
       }
-      if (stelvioRankingPayloadServerGenderScoped(data, want)) return true;
+      if (stelvioRankingPayloadTrustedForGenderRequest(data, want)) return true;
+      if (stelvioNormalizeRankingGenderFilter(data.gender) === want) return true;
       return stelvioRankingPayloadEntriesAllMatchGender(data, want);
     }
 
@@ -8252,7 +8259,7 @@
         var filtered = [];
         for (var fi = 0; fi < src.length; fi++) {
           var row = src[fi];
-          if (row && stelvioRankingEntryMatchesGenderFilter(row, want, data.gender)) filtered.push(row);
+          if (row && stelvioRankingEntryMatchesGenderFilter(row, want, want)) filtered.push(row);
         }
         filtered.sort(function (a, b) {
           var sa = a.wkg != null ? a.wkg : a.totalTss != null ? a.totalTss : a.totalKm != null ? a.totalKm : a.speedKmh != null ? a.speedKmh : a.gcScore != null ? a.gcScore : 0;
@@ -8270,7 +8277,7 @@
       if (
         out.currentUser &&
         out.currentUser.userId &&
-        !stelvioRankingEntryMatchesGenderFilter(out.currentUser, want, data.gender)
+        !stelvioRankingEntryMatchesGenderFilter(out.currentUser, want, want)
       ) {
         out.currentUser = null;
         out.motivationMessage = null;
@@ -8278,7 +8285,7 @@
       if (
         out.myRankSupremo &&
         out.myRankSupremo.userId &&
-        !stelvioRankingEntryMatchesGenderFilter(out.myRankSupremo, want, data.gender)
+        !stelvioRankingEntryMatchesGenderFilter(out.myRankSupremo, want, want)
       ) {
         out.myRankSupremo = null;
       }
@@ -8288,7 +8295,8 @@
     /**
      * 표시 직전 성별 정합.
      * GC: heptagon_cohort_ranks filter_gender 사전집계(메타 불일치 시 재조회).
-     * 그 외 탭: 응답 gender 메타와 무관하게 byCategory 행 단위 필터(GC와 동일한 체감).
+     * 그 외: fetch·캐시 키 gender와 동일 요청이면 본문 유지(행 gender 누락 허용).
+     *       반대 성별이 행에 명시된 경우에만 byCategory 행 필터.
      */
     function stelvioApplyRankingGenderFilterToPayload(data, wantGender) {
       if (!data || !data.byCategory) return data;
@@ -8307,20 +8315,14 @@
       if (typeof stelvioEnrichRankingPayloadGenderFromCache === 'function') {
         stelvioEnrichRankingPayloadGenderFromCache(data);
       }
+      stelvioStampRankingPayloadRequestGender(data, want);
       if (!stelvioRankingPayloadHasVisibleRows(data)) return null;
-      if (stelvioRankingPayloadServerGenderScoped(data, want)) {
-        data.gender = want;
-        return data;
+      if (stelvioRankingPayloadHasExplicitOppositeGender(data, want)) {
+        var filtered = stelvioFilterRankingPayloadByGender(data, want);
+        return filtered && stelvioRankingPayloadHasVisibleRows(filtered) ? filtered : null;
       }
-      var filtered = stelvioFilterRankingPayloadByGender(data, want);
-      if (filtered && stelvioRankingPayloadHasVisibleRows(filtered)) {
-        return filtered;
-      }
-      if (stelvioNormalizeRankingGenderFilter(data.gender) === want && stelvioRankingPayloadHasVisibleRows(data)) {
-        data.gender = want;
-        return data;
-      }
-      return filtered && stelvioRankingPayloadHasVisibleRows(filtered) ? filtered : null;
+      data.gender = want;
+      return data;
     }
 
     function stelvioGenderFromUserDoc(prof) {
@@ -9113,8 +9115,8 @@
     /** legacy localStorage 키 접두사(마이그레이션 정리용) */
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
-    /** peak IndexedDB 키 접두사 — 독주·여성 서버집계 gender 메타 신뢰(v11) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v11:';
+    /** peak IndexedDB 키 접두사 — 요청 성별·독주 gender 신뢰(v12) */
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v12:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
@@ -14746,22 +14748,32 @@
 
     function stelvioApplyPersonalSpeedPayloadSyncPatches(data) {
       if (!data || !data.byCategory) return data;
-      var original = data;
+      var hadRowsBeforePatch =
+        typeof stelvioRankingPayloadHasVisibleRows === 'function' &&
+        stelvioRankingPayloadHasVisibleRows(data);
+      var snapshotBeforePatch = null;
+      if (hadRowsBeforePatch) {
+        try {
+          snapshotBeforePatch = JSON.parse(JSON.stringify(data));
+        } catch (ePsSnap) {
+          snapshotBeforePatch = null;
+        }
+      }
       if (
         data.dashboardLogRouteEnriched !== true &&
         typeof window.stelvioRecalcPersonalSpeedBoardFromPeak60 === 'function'
       ) {
-        data = window.stelvioRecalcPersonalSpeedBoardFromPeak60(data);
+        window.stelvioRecalcPersonalSpeedBoardFromPeak60(data);
       }
       if (typeof window.stelvioFilterPersonalSpeedBoardExcludeNonLog60 === 'function') {
-        data = window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
+        window.stelvioFilterPersonalSpeedBoardExcludeNonLog60(data);
       }
       if (
-        original &&
-        stelvioRankingPayloadHasVisibleRows(original) &&
+        snapshotBeforePatch &&
+        stelvioRankingPayloadHasVisibleRows(snapshotBeforePatch) &&
         !stelvioRankingPayloadHasVisibleRows(data)
       ) {
-        return original;
+        return snapshotBeforePatch;
       }
       return data;
     }
@@ -14805,13 +14817,7 @@
     function stelvioApplyPeakRankingFetchResult(data, myGen, uid, applyOpts) {
       applyOpts = applyOpts || {};
       if (myGen !== stelvioRankingFetchGen) return;
-      if (
-        !data ||
-        !data.success ||
-        !data.byCategory ||
-        !stelvioRankingPayloadHasVisibleRows(data) ||
-        (data.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(data))
-      ) {
+      if (!data || !data.success || !data.byCategory) {
         stelvioRankingFullEntries = null;
         stelvioRankingByCategory = null;
         stelvioRankingApiStartStr = '';
@@ -14872,6 +14878,29 @@
         return;
       }
       data = genderAlignedEarly;
+      if (
+        !stelvioRankingPayloadHasVisibleRows(data) ||
+        (data.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(data))
+      ) {
+        stelvioRankingFullEntries = null;
+        stelvioRankingByCategory = null;
+        stelvioRankingApiStartStr = '';
+        stelvioRankingApiEndStr = '';
+        var wantGEmpty =
+          stelvioRankingState && stelvioRankingState.gender
+            ? stelvioNormalizeRankingGenderFilter(stelvioRankingState.gender)
+            : 'all';
+        renderStelvioRankingError(
+          data && data.pendingAggregate
+            ? '랭킹 집계를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.'
+            : wantGEmpty === 'M' || wantGEmpty === 'F'
+              ? '선택한 성별 랭킹 데이터가 없습니다.'
+              : '데이터를 불러올 수 없습니다.'
+        );
+        refreshStelvioDistributionChartMounted();
+        stelvioHideRankingBoardLoadingUi();
+        return;
+      }
       var applySwrKey =
         typeof stelvioBuildRankingBoardCacheKey === 'function' && stelvioRankingState
           ? stelvioBuildRankingBoardCacheKey(
@@ -15136,7 +15165,8 @@
         }
         var toSave = data;
         if (genderParam && genderParam !== 'all') {
-          var saveAligned = stelvioApplyRankingGenderFilterToPayload(data, genderParam);
+          stelvioStampRankingPayloadRequestGender(toSave, genderParam);
+          var saveAligned = stelvioApplyRankingGenderFilterToPayload(toSave, genderParam);
           if (!saveAligned || !stelvioRankingPayloadMatchesGenderFilter(saveAligned, genderParam)) return;
           toSave = saveAligned;
         }
@@ -15157,6 +15187,13 @@
       /** 캐시 히트 시 항속 로그 재조회 생략(사전집계·신선 메모리 캐시) */
       function stelvioRankingCacheAllowsInstantApply(body) {
         if (!body || !body.success || !body.byCategory) return false;
+        if (
+          genderParam &&
+          genderParam !== 'all' &&
+          !stelvioRankingPayloadMatchesGenderFilter(body, genderParam)
+        ) {
+          return false;
+        }
         if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
           return stelvioGcPayloadMatchesLatestSnapshot(body);
         }
@@ -15601,16 +15638,21 @@
           typeof stelvioGcPayloadMatchesLatestSnapshot === 'function' &&
           !stelvioGcPayloadMatchesLatestSnapshot(data2);
         if (data2WindowOk || (data2HasRows && data2GcStale)) {
+          var data2Apply = data2;
+          if (data2Apply && genderParam && genderParam !== 'all') {
+            var data2Gender = stelvioApplyRankingGenderFilterToPayload(data2Apply, genderParam);
+            if (data2Gender) data2Apply = data2Gender;
+          }
           if (
             isPsRank &&
-            data2 &&
-            (data2.dashboardLogRouteEnriched === true || data2.fastPrecomputed === true)
+            data2Apply &&
+            (data2Apply.dashboardLogRouteEnriched === true || data2Apply.fastPrecomputed === true)
           ) {
-            stelvioApplyPersonalSpeedInstantThenAlignViewer(data2, myGen, uid);
+            stelvioApplyPersonalSpeedInstantThenAlignViewer(data2Apply, myGen, uid);
           } else {
-            await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
+            await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2Apply, myGen, uid);
           }
-          if (data2WindowOk) saveFreshPeakData(data2);
+          if (data2WindowOk) saveFreshPeakData(data2Apply);
           if (!data2GcStale) stelvioSetRankingRefreshHint(false);
           scheduleRankMvIfNeeded();
           var psSkipBg =
@@ -15621,7 +15663,12 @@
         } else if (!showedSoft && !forceGenderRefresh && (await tryApplySoftFallback())) {
           scheduleBgRefreshIfNeeded(true);
         } else if (!showedSoft) {
-          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2, myGen, uid);
+          var data2Fallback = data2;
+          if (data2Fallback && genderParam && genderParam !== 'all') {
+            var data2FbG = stelvioApplyRankingGenderFilterToPayload(data2Fallback, genderParam);
+            if (data2FbG) data2Fallback = data2FbG;
+          }
+          await stelvioApplyPeakRankingFetchResultWithDashboardAlign(data2Fallback, myGen, uid);
         }
       } catch (e) {
         if (myGen !== stelvioRankingFetchGen) return;
