@@ -1996,6 +1996,17 @@ async function apiUpdateUser(id, userData) {
       
       console.log('✅ 사용자 정보 업데이트 완료 (firestore v8):', id);
     }
+
+    if (
+      userData.gender != null ||
+      userData.birth_year != null ||
+      userData.weight != null ||
+      userData.name != null ||
+      userData.contact != null ||
+      userData.challenge != null
+    ) {
+      triggerSupabaseUserProvisionAfterProfile();
+    }
     
     return { success: true };
   } catch (error) {
