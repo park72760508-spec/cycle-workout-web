@@ -132,19 +132,33 @@ function countRankingPayloadEntries(payload) {
   return n;
 }
 
+function normalizeRankingGenderParam(g) {
+  return g === "M" || g === "F" ? g : "all";
+}
+
 /**
- * Supabase(all) 조회 후 응답 gender 메타는 'all' 고정 → 클라이언트가 M/F 필터.
- * GC·비-GC 동일.
+ * gender=all 통합 payload — 클라이언트 M/F 슬라이스용 메타만 부착.
  */
-function finalizeUnifiedAllSupabasePayload(payload, durationType, requestedGender) {
+function finalizeUnifiedAllSupabasePayload(payload) {
   if (!payload) return payload;
-  const want =
-    requestedGender === "M" || requestedGender === "F" ? requestedGender : "all";
   payload.gender = "all";
-  if (want !== "all") {
-    payload.supabaseQueryGenderRequested = want;
-    payload.supabaseServedUnifiedAllView = true;
-  }
+  delete payload.filterGenderPrecomputed;
+  delete payload.supabaseQueryGenderRequested;
+  delete payload.supabaseServedUnifiedAllView;
+  return payload;
+}
+
+/**
+ * gender=M|F — 서버에서 profileGenderMatches·MV 슬라이스로 이미 분리된 payload.
+ */
+function finalizeGenderFilteredSupabasePayload(payload, want) {
+  if (!payload) return payload;
+  if (want === "all") return finalizeUnifiedAllSupabasePayload(payload);
+  payload.gender = want;
+  payload.filterGenderPrecomputed = true;
+  payload.precomputed = payload.precomputed !== false;
+  delete payload.supabaseQueryGenderRequested;
+  delete payload.supabaseServedUnifiedAllView;
   return payload;
 }
 
@@ -156,14 +170,13 @@ async function fetchNonGcSupabaseBoard(
   durationType,
   label
 ) {
-  const want =
-    requestedGender === "M" || requestedGender === "F" ? requestedGender : "all";
+  const want = normalizeRankingGenderParam(requestedGender);
   logSupabaseRankingRequest(
     label,
     want,
-    `queryForced=all duration=${durationType} (unified MV; no _M_all/_F_all)`
+    `duration=${durationType} serverGenderFilter=${want}`
   );
-  const payload = await fetchCore(admin, ...coreArgs, "all");
+  const payload = await fetchCore(admin, ...coreArgs, want);
   if (!payload) return null;
   const n = countRankingPayloadEntries(payload);
   console.log(
@@ -171,12 +184,12 @@ async function fetchNonGcSupabaseBoard(
     label,
     "requested=",
     want,
-    "query=all",
-    "payload.gender=all",
+    "payload.gender=",
+    want,
     "rows=",
     n
   );
-  return finalizeUnifiedAllSupabasePayload(payload, durationType, requestedGender);
+  return finalizeGenderFilteredSupabasePayload(payload, want);
 }
 
 function mapRowToFirebaseUser(row, firebaseUid) {
@@ -485,6 +498,10 @@ async function fetchPeakPowerMonthlyCore(
   const { data, error } = await query.limit(2000);
   if (error) throw error;
 
+  const profileMap = await getPublicProfileMapForSupabaseUsers(
+    supabase,
+    (data || []).map((row) => row.user_id)
+  );
   const uidMap = await getFirebaseUidMapForSupabaseUsers(
     admin,
     supabase,
@@ -492,13 +509,15 @@ async function fetchPeakPowerMonthlyCore(
   );
   const entries = [];
   for (const row of data || []) {
+    const profile = profileMap.get(String(row.user_id));
+    const merged = profile ? { ...row, ...profile, user_id: row.user_id } : row;
     const fbUid = uidMap.get(String(row.user_id));
     if (!fbUid) continue;
-    if (!profileGenderMatches(row, gender)) continue;
+    if (!profileGenderMatches(merged, gender)) continue;
     const wkg = Math.round(Number(row[col]) * 100) / 100;
     if (wkg <= 0) continue;
     entries.push({
-      ...mapRowToFirebaseUser(row, fbUid),
+      ...mapRowToFirebaseUser(merged, fbUid),
       wkg,
       watts: 0,
       weightKg: null,
@@ -674,6 +693,7 @@ async function fetchPersonalSpeedCore(admin, startStr, endStr, gender) {
     for (const row of metricRows || []) {
       const profile = profileMap.get(String(row.user_id));
       if (!profile) continue;
+      if (!profileGenderMatches(profile, gender)) continue;
       data.push({
         ...profile,
         user_id: row.user_id,
@@ -786,7 +806,7 @@ async function fetchPeakRewardRankingCore(admin, startStr, endStr, durationType,
       name: resolveRankingEntryName(profile, row.display_name),
       ageCategory:
         (profile && profile.league_category) || row.league_category || "unknown",
-      gender: genderDbToClient(row.gender),
+      gender: genderDbToClient(merged.gender),
       is_private: profile ? profile.is_private === true : false,
       profileImageUrl:
         (profile && profile.profile_image_url) || row.profile_image_url || null,
@@ -827,13 +847,11 @@ async function fetchPeakRewardRanking(admin, startStr, endStr, durationType, gen
  * @param {import('firebase-admin')} admin
  */
 async function fetchGroupDistRanking(admin, startStr, endStr, requestedGender) {
-  const want =
-    requestedGender === "M" || requestedGender === "F" ? requestedGender : "all";
-  const queryGender = "all";
+  const want = normalizeRankingGenderParam(requestedGender);
   logSupabaseRankingRequest(
     "group_dist",
     want,
-    "queryForced=all (unified; client gender filter)"
+    `serverGenderFilter=${want}`
   );
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
 
@@ -938,7 +956,7 @@ async function fetchGroupDistRanking(admin, startStr, endStr, requestedGender) {
     const hostUserId = uidMap.get(v.hostUuid);
     if (!hostUserId) continue;
     const prof = profileByUuid.get(v.hostUuid);
-    if (!profileGenderMatches(prof, queryGender)) continue;
+    if (!profileGenderMatches(prof, want)) continue;
     entries.push({
       userId: hostUserId,
       hostUserId,
@@ -975,7 +993,7 @@ async function fetchGroupDistRanking(admin, startStr, endStr, requestedGender) {
     endStr,
     period: "rolling30",
     durationType: "group_dist",
-    gender: "all",
+    gender: want,
     precomputed: true,
     readSource: "supabase",
   };
@@ -984,12 +1002,12 @@ async function fetchGroupDistRanking(admin, startStr, endStr, requestedGender) {
     "group_dist",
     "requested=",
     want,
-    "query=all",
-    "payload.gender=all",
+    "payload.gender=",
+    want,
     "rows=",
     countRankingPayloadEntries(payload)
   );
-  return finalizeUnifiedAllSupabasePayload(payload, "group_dist", requestedGender);
+  return finalizeGenderFilteredSupabasePayload(payload, want);
 }
 
 function getMonthKeyKstNow() {
@@ -997,12 +1015,12 @@ function getMonthKeyKstNow() {
 }
 
 function resolveGcEntryGender(filterGender, profile, row) {
-  if (filterGender === "F") return "female";
-  if (filterGender === "M") return "male";
   const fromProf =
     profile && profile.gender != null ? genderDbToClient(profile.gender) : "";
   if (fromProf) return fromProf;
   if (row && row.gender != null) return genderDbToClient(row.gender);
+  if (filterGender === "F") return "female";
+  if (filterGender === "M") return "male";
   return "";
 }
 
@@ -1150,15 +1168,14 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
  * @param {string} [requestedGender] all | M | F
  */
 async function fetchGcRanking(admin, monthKey, requestedGender) {
-  const want =
-    requestedGender === "M" || requestedGender === "F" ? requestedGender : "all";
+  const want = normalizeRankingGenderParam(requestedGender);
   const mk = monthKey || getMonthKeyKstNow();
   logSupabaseRankingRequest(
     "heptagon_cohort_ranks",
     want,
-    `queryForced=all month=${mk} (unified heptagon; no M/F slice)`
+    `filter_gender=${want} month=${mk}`
   );
-  const payload = await fetchGcRankingCore(admin, mk, "all");
+  const payload = await fetchGcRankingCore(admin, mk, want);
   if (!payload) return null;
   const n = countRankingPayloadEntries(payload);
   console.log(
@@ -1166,12 +1183,12 @@ async function fetchGcRanking(admin, monthKey, requestedGender) {
     "heptagon_cohort_ranks",
     "requested=",
     want,
-    "query=all",
-    "payload.gender=all",
+    "payload.gender=",
+    want,
     "rows=",
     n
   );
-  return finalizeUnifiedAllSupabasePayload(payload, "gc", requestedGender);
+  return finalizeGenderFilteredSupabasePayload(payload, want);
 }
 
 /**
