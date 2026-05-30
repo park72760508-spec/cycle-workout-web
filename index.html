@@ -8298,43 +8298,45 @@
     }
 
     /**
-     * 서버·Supabase·02:50 집계가 gender 슬라이스를 내려준 payload — GC·독주·TSS·거리·클럽·피크 공통.
-     * data.gender === 요청 성별 이고, 사전집계/Supabase 신호가 있으면 행 재집계 없이 신뢰.
+     * 서버·Supabase·02:50 집계가 gender 슬라이스를 내려준 payload.
+     * GC: heptagon filter_gender — 메타 정확 일치만(추론·data.gender 덮어쓰기 금지).
+     * 비-GC: gender=all 통합 뷰는 false → 클라이언트 행 필터.
      */
     function stelvioRankingPayloadServerGenderSlice(data, wantGender) {
       if (!data) return false;
       var want = stelvioNormalizeRankingGenderFilter(wantGender);
       if (want === 'all') return true;
-      if (stelvioNormalizeRankingGenderFilter(data.gender) !== want) {
-        var canInferMetaFromServer =
-          (data.readBackend === 'supabase' ||
-            data.readSource === 'supabase' ||
-            data.precomputed === true ||
-            data.fastPrecomputed === true ||
-            data.cached === true) &&
-          stelvioRankingPayloadHasVisibleRows(data);
-        if (!canInferMetaFromServer) return false;
-        data.gender = want;
+      if (data.durationType === 'gc') {
+        return stelvioNormalizeRankingGenderFilter(data.gender) === want;
       }
-      var serverGenderSliced =
-        data.durationType === 'gc' ||
+      if (
+        stelvioNormalizeRankingGenderFilter(data.gender) === 'all' &&
+        (data.supabaseServedUnifiedAllView === true ||
+          data.readBackend === 'supabase' ||
+          data.readSource === 'supabase')
+      ) {
+        return false;
+      }
+      if (stelvioNormalizeRankingGenderFilter(data.gender) !== want) return false;
+      return (
         data.filterGenderPrecomputed === true ||
         data.readBackend === 'supabase' ||
         data.readSource === 'supabase' ||
         data.precomputed === true ||
         data.fastPrecomputed === true ||
-        data.cached === true;
-      if (!serverGenderSliced) return false;
-      /* 메타 일치 + 서버 슬라이스: 행 gender 미정의·혼재 검사 없이 전량 통과 (GC·독주·피크 공통) */
-      return true;
+        data.cached === true
+      );
     }
     window.stelvioRankingPayloadServerGenderSlice = stelvioRankingPayloadServerGenderSlice;
 
-    /** 캐시·API payload가 요청 성별과 호환되는지 (GC·피크·TSS·독주 등 동일: 사전집계 gender 메타) */
+    /** 캐시·API payload가 요청 성별과 호환되는지 */
     function stelvioRankingPayloadMatchesGenderFilter(data, wantGender) {
       if (!data) return false;
       var want = stelvioNormalizeRankingGenderFilter(wantGender);
       if (want === 'all') return true;
+      if (data.durationType === 'gc') {
+        return stelvioNormalizeRankingGenderFilter(data.gender) === want;
+      }
       if (stelvioRankingPayloadServerGenderSlice(data, want)) return true;
       if (stelvioRankingPayloadTrustedForGenderRequest(data, want)) return true;
       return stelvioRankingPayloadEntriesAllMatchGender(data, want);
@@ -8396,15 +8398,50 @@
 
     /**
      * 표시 직전 성별 정합.
-     * GC·독주·TSS·피크·거리·클럽 공통: API·Supabase·02:50 집계 gender 슬라이스는 메타 검증만(재집계 없음).
-     * 구 IndexedDB(all 본문)만 행 단위 필터.
+     * GC: Supabase filter_gender 슬라이스만 신뢰(행 재필터·byCategory 보정 없음).
+     * 비-GC: gender=all 통합 payload는 행 단위 clientFilter.
      */
     function stelvioApplyRankingGenderFilterToPayload(data, wantGender) {
       if (!data || !data.byCategory) return data;
-      data = stelvioRepairRankingByCategoryFromEntries(data);
       var want = stelvioNormalizeRankingGenderFilter(wantGender);
       var rowCountBefore = stelvioCountRankingPayloadRows(data);
       var durLabel = data.durationType || (stelvioRankingState && stelvioRankingState.duration) || '';
+
+      if (data.durationType === 'gc') {
+        if (want === 'all') {
+          data.gender = 'all';
+          return data;
+        }
+        if (stelvioNormalizeRankingGenderFilter(data.gender) === want) {
+          data.gender = want;
+          data.filterGenderPrecomputed = true;
+          if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
+            try {
+              console.info(
+                '[Stelvio Filter Debug] duration=gc gender=' +
+                  want +
+                  ' serverSlice=1(gc) 원본 행 개수: ' +
+                  rowCountBefore
+              );
+            } catch (eLogGc) {}
+          }
+          return data;
+        }
+        if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
+          try {
+            console.warn(
+              '[Stelvio Filter Debug] duration=gc gender=' +
+                want +
+                ' metaMismatch payloadGender=' +
+                String(data.gender)
+            );
+          } catch (eLogGcMiss) {}
+        }
+        return null;
+      }
+
+      data = stelvioRepairRankingByCategoryFromEntries(data);
+      rowCountBefore = stelvioCountRankingPayloadRows(data);
       if (want === 'all') {
         data.gender = 'all';
         if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
@@ -8424,7 +8461,6 @@
       if (stelvioRankingPayloadServerGenderSlice(data, want)) {
         data.gender = want;
         if (
-          data.durationType === 'gc' ||
           data.precomputed === true ||
           data.fastPrecomputed === true ||
           data.cached === true ||
@@ -15286,7 +15322,9 @@
       if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
         stelvioApplyPublicRankingVisibilityToPayload(data);
       }
-      data = stelvioRepairRankingByCategoryFromEntries(data);
+      if (data.durationType !== 'gc') {
+        data = stelvioRepairRankingByCategoryFromEntries(data);
+      }
       stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
       stelvioRankingByCategory = data.byCategory;
       stelvioRankingApiStartStr = typeof data.startStr === 'string' ? data.startStr : '';
