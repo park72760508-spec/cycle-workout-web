@@ -23,6 +23,24 @@ const SUPPORTED_PEAK_DURATIONS = new Set([
   "group_dist",
 ]);
 
+const RANKING_BOARD_CATEGORIES = [
+  "Supremo",
+  "Assoluto",
+  "Bianco",
+  "Rosa",
+  "Infinito",
+  "Leggenda",
+];
+
+function payloadHasVisibleRankingRows(payload) {
+  if (!payload || !payload.byCategory) return false;
+  for (let i = 0; i < RANKING_BOARD_CATEGORIES.length; i++) {
+    const rows = payload.byCategory[RANKING_BOARD_CATEGORIES[i]];
+    if (Array.isArray(rows) && rows.length > 0) return true;
+  }
+  return false;
+}
+
 /**
  * getPeakPowerRanking HTTP — Supabase 경로 가능 시 payload 반환, 아니면 null.
  * @param {import('firebase-admin')} admin
@@ -137,14 +155,17 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
       }
     }
 
+    if (!payloadHasVisibleRankingRows(payload)) {
+      console.warn("[rankingReadRouter] Supabase empty rows → Firebase fallback", {
+        durationType,
+        gender,
+      });
+      return null;
+    }
+
     const cfg = rankingReadConfig.getRankingReadConfig();
-    const fgRoute = gender === "M" || gender === "F" ? gender : "all";
     let parityReport = { ok: true, reason: "parity_skip_gc" };
-    if (durationType !== "gc" && fgRoute !== "all") {
-      /* M/F 슬라이스는 Firebase all baseline과 1:1 비교 불가 — 빈 Supabase를 잘못 폐기하지 않음 */
-      parityReport = { ok: true, reason: "parity_skip_gender_slice" };
-      payload.rankingParity = parityReport;
-    } else if (durationType !== "gc") {
+    if (durationType !== "gc") {
       const parityCtx = {
         durationType,
         gender,

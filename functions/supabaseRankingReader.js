@@ -179,10 +179,16 @@ function filterSupabasePayloadByGender(payload, gender) {
   return out;
 }
 
+/**
+ * M/F 요청: Supabase 슬라이스에 유효 행이 없으면 null → rankingReadRouter가 Firebase 집계로 폴백.
+ * all 뷰 + profileGenderMatches 서버 필터는 row.gender 미매핑 시 전량 탈락하므로 사용하지 않음.
+ */
 async function withGenderAllFallback(fetchCore, admin, startStr, endStr, gender, label) {
-  let payload = await fetchCore(admin, startStr, endStr, gender);
   const want = gender === "M" || gender === "F" ? gender : "all";
-  if (want === "all") return payload;
+  if (want === "all") {
+    return fetchCore(admin, startStr, endStr, gender);
+  }
+  const payload = await fetchCore(admin, startStr, endStr, gender);
   const n = countRankingPayloadEntries(payload);
   console.log(
     "[Stelvio Supabase Request] Result:",
@@ -193,25 +199,14 @@ async function withGenderAllFallback(fetchCore, admin, startStr, endStr, gender,
     n
   );
   if (n > 0) return payload;
-  logSupabaseRankingRequest(label, want, "slice=0 → fallback unified view gender=all + profile filter");
-  const allPayload = await fetchCore(admin, startStr, endStr, "all");
-  const nAll = countRankingPayloadEntries(allPayload);
-  if (!nAll) return payload;
-  const sliced = filterSupabasePayloadByGender(allPayload, want);
-  sliced.supabaseGenderFallbackFromAll = true;
-  sliced.readSource = sliced.readSource || "supabase";
-  console.log(
-    "[Stelvio Supabase Request] Fallback:",
+  console.warn(
+    "[Stelvio Supabase Request]",
     label,
     "gender=",
     want,
-    "rows=",
-    countRankingPayloadEntries(sliced),
-    "(from all rows=",
-    nAll,
-    ")"
+    "rows=0 → return null (Firebase ranking_aggregates fallback; client gender filter)"
   );
-  return sliced;
+  return null;
 }
 
 function mapRowToFirebaseUser(row, firebaseUid) {
