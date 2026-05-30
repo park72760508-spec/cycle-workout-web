@@ -8237,15 +8237,32 @@
       return !stelvioRankingPayloadHasExplicitOppositeGender(data, want);
     }
 
+    /** 서버·Supabase·02:50 집계가 gender 슬라이스를 내려준 payload (GC와 동일 신뢰) */
+    function stelvioRankingPayloadServerGenderSlice(data, wantGender) {
+      if (!data) return false;
+      var want = stelvioNormalizeRankingGenderFilter(wantGender);
+      if (want === 'all') return true;
+      if (stelvioNormalizeRankingGenderFilter(data.gender) !== want) return false;
+      if (data.durationType === 'gc') return true;
+      if (stelvioRankingPayloadPrecomputedForGender(data, want)) return true;
+      if (
+        data.readBackend === 'supabase' ||
+        data.readSource === 'supabase' ||
+        data.precomputed === true ||
+        data.fastPrecomputed === true ||
+        data.cached === true
+      ) {
+        return !stelvioRankingPayloadHasExplicitOppositeGender(data, want);
+      }
+      return false;
+    }
+
     /** 캐시·API payload가 요청 성별과 호환되는지 (GC·피크·TSS·독주 등 동일: 사전집계 gender 메타) */
     function stelvioRankingPayloadMatchesGenderFilter(data, wantGender) {
       if (!data) return false;
       var want = stelvioNormalizeRankingGenderFilter(wantGender);
       if (want === 'all') return true;
-      if (data.durationType === 'gc') {
-        return stelvioNormalizeRankingGenderFilter(data.gender) === want;
-      }
-      if (stelvioRankingPayloadPrecomputedForGender(data, want)) return true;
+      if (stelvioRankingPayloadServerGenderSlice(data, want)) return true;
       if (stelvioRankingPayloadTrustedForGenderRequest(data, want)) return true;
       return stelvioRankingPayloadEntriesAllMatchGender(data, want);
     }
@@ -8306,8 +8323,8 @@
 
     /**
      * 표시 직전 성별 정합.
-     * GC·그 외 탭 공통: 새벽 집계·API가 gender별로 분리된 payload는 메타만 검증(클라이언트 재집계 없음).
-     * 구 캐시·본문 혼입만 행 단위 보정.
+     * GC·독주·TSS·피크·거리·클럽 공통: API·Supabase·02:50 집계 gender 슬라이스는 메타 검증만(재집계 없음).
+     * 구 IndexedDB(all 본문)만 행 단위 필터.
      */
     function stelvioApplyRankingGenderFilterToPayload(data, wantGender) {
       if (!data || !data.byCategory) return data;
@@ -8316,20 +8333,18 @@
         data.gender = 'all';
         return data;
       }
-      if (data.durationType === 'gc') {
-        if (stelvioNormalizeRankingGenderFilter(data.gender) === want) {
-          data.gender = want;
-          return data;
-        }
-        return null;
-      }
-      stelvioStampRankingPayloadRequestGender(data, want);
-      if (!stelvioRankingPayloadHasVisibleRows(data)) return null;
-      if (stelvioRankingPayloadPrecomputedForGender(data, want)) {
+      if (stelvioRankingPayloadServerGenderSlice(data, want)) {
         data.gender = want;
-        data.filterGenderPrecomputed = true;
+        if (
+          data.precomputed === true ||
+          data.readBackend === 'supabase' ||
+          data.readSource === 'supabase'
+        ) {
+          data.filterGenderPrecomputed = true;
+        }
         return data;
       }
+      if (!stelvioRankingPayloadHasVisibleRows(data)) return null;
       if (
         !stelvioRankingPayloadHasExplicitOppositeGender(data, want) &&
         stelvioRankingPayloadTrustedForGenderRequest(data, want)
@@ -9139,7 +9154,7 @@
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
     /** peak IndexedDB 키 접두사 — 사전집계 gender(GC 동일) 신뢰(v13) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v13:';
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v14:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
@@ -12731,6 +12746,12 @@
           if (!data || !data.success || !data.byCategory) return false;
           if (!stelvioRankingPayloadMatchesReadSource(data)) return false;
           data = stelvioRankingNormalizePrefetchPayload(apiDur, gender, data);
+          if (
+            apiDur === 'personal_speed' &&
+            typeof stelvioApplyPersonalSpeedPayloadSyncPatches === 'function'
+          ) {
+            data = stelvioApplyPersonalSpeedPayloadSyncPatches(data);
+          }
           var pfGender = stelvioApplyRankingGenderFilterToPayload(data, gender || 'all');
           if (!pfGender) return false;
           data = pfGender;
@@ -14944,11 +14965,19 @@
       if (!genderAlignedEarly) {
         stelvioRankingFullEntries = null;
         stelvioRankingByCategory = null;
-        renderStelvioRankingError('선택한 성별 랭킹을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
-        stelvioHideRankingBoardLoadingUi();
-        if (typeof fetchStelvioPeakPowerRanking === 'function') {
-          fetchStelvioPeakPowerRanking({ forceGenderRefresh: true }).catch(function () {});
-        }
+        var wantGFail =
+          stelvioRankingState && stelvioRankingState.gender
+            ? stelvioNormalizeRankingGenderFilter(stelvioRankingState.gender)
+            : 'all';
+        var genderFailMsg =
+          data && data.pendingAggregate
+            ? '랭킹 집계를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.'
+            : wantGFail === 'M' || wantGFail === 'F'
+              ? '선택한 성별 랭킹 데이터가 없습니다.'
+              : '데이터를 불러올 수 없습니다.';
+        renderStelvioRankingError(genderFailMsg);
+        refreshStelvioDistributionChartMounted();
+        stelvioHideRankingBoardLoadingUiIfReady(true);
         return;
       }
       data = genderAlignedEarly;
@@ -15309,6 +15338,9 @@
       async function applyFromCache(body, opts) {
         opts = opts || {};
         var working = opts.skipClone ? body : stelvioCloneRankingPayload(body);
+        if (typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()) {
+          working = stelvioApplyPersonalSpeedPayloadSyncPatches(working);
+        }
         var alignedGender = stelvioApplyRankingGenderFilterToPayload(working, genderParam);
         if (!alignedGender) return false;
         working = alignedGender;
@@ -15328,9 +15360,6 @@
           if (psDeferViewerAlign) {
             stelvioApplyPersonalSpeedInstantThenAlignViewer(working, myGen, uid, opts);
           } else {
-            if (typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()) {
-              working = stelvioApplyPersonalSpeedPayloadSyncPatches(working);
-            }
             stelvioApplyPeakRankingFetchResult(working, myGen, uid, opts);
           }
         } else {
