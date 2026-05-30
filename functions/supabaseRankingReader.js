@@ -229,17 +229,39 @@ function resolveRankingEntryName(profileOrRow, rowFallbackName) {
   return plainName || "(이름 없음)";
 }
 
-function profileGenderMatches(profile, gender) {
-  if (!gender || gender === "all") return true;
-  const g = String(profile && profile.gender != null ? profile.gender : "")
+function profileGenderToken(profile) {
+  return String(profile && profile.gender != null ? profile.gender : "")
     .trim()
     .toLowerCase();
+}
+
+/** 피크·TSS 등: 프로필 gender 필수 일치 */
+function profileGenderMatches(profile, gender) {
+  if (!gender || gender === "all") return true;
+  const g = profileGenderToken(profile);
   if (!g) return false;
   if (g === "m" || g === "male" || g === "남" || g === "남성") {
     return gender === "M";
   }
   if (g === "f" || g === "female" || g === "여" || g === "여성") {
     return gender === "F";
+  }
+  return false;
+}
+
+/**
+ * GC 헵타곤 filter_gender 슬라이스: cohort 멤버십 우선.
+ * 프로필에 **명시적 반대 성별**만 제외, gender 미상은 슬라이스에 포함.
+ */
+function profileGenderConflictsWithFilter(profile, gender) {
+  if (!gender || gender === "all") return false;
+  const g = profileGenderToken(profile);
+  if (!g) return false;
+  if (gender === "M") {
+    return g === "f" || g === "female" || g === "여" || g === "여성";
+  }
+  if (gender === "F") {
+    return g === "m" || g === "male" || g === "남" || g === "남성";
   }
   return false;
 }
@@ -1121,7 +1143,7 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
         const fbUid = uidMap.get(String(row.user_id));
         if (!fbUid) continue;
         const profile = profileMap.get(String(row.user_id));
-        if (!profileGenderMatches(profile, fg)) continue;
+        if (profileGenderConflictsWithFilter(profile, fg)) continue;
         const gcScore =
           row.sum_position_scores != null && isFinite(Number(row.sum_position_scores))
             ? Number(row.sum_position_scores)
