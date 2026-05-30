@@ -8151,13 +8151,53 @@
       return 'all';
     }
 
-    function stelvioRankingEntryMatchesGenderFilter(entry, genderFilter) {
+    /**
+     * @param {string} [payloadGenderMeta] — API·캐시 응답 gender(M|F|all). 행에 gender 없을 때 서버 사전 필터 신뢰용
+     */
+    function stelvioRankingEntryMatchesGenderFilter(entry, genderFilter, payloadGenderMeta) {
       var gf = stelvioNormalizeRankingGenderFilter(genderFilter);
       if (gf === 'all') return true;
-      var g = String(entry && entry.gender != null ? entry.gender : '').toLowerCase();
+      var g = String(entry && entry.gender != null ? entry.gender : '')
+        .trim()
+        .toLowerCase();
+      if (!g) {
+        return (
+          payloadGenderMeta != null &&
+          stelvioNormalizeRankingGenderFilter(payloadGenderMeta) === gf
+        );
+      }
       if (gf === 'M') return g === 'male' || g === 'm' || g === '남' || g === '남성';
       if (gf === 'F') return g === 'female' || g === 'f' || g === '여' || g === '여성';
       return false;
+    }
+
+    /** 행에 명시된 성별이 요청과 반대인 사용자가 있는지(메타는 맞지만 본문이 섞인 캐시 보정용) */
+    function stelvioRankingPayloadHasExplicitOppositeGender(data, wantGender) {
+      if (!data || !data.byCategory) return false;
+      var want = stelvioNormalizeRankingGenderFilter(wantGender);
+      if (want === 'all') return false;
+      var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      for (var ci = 0; ci < cats.length; ci++) {
+        var rows = data.byCategory[cats[ci]] || [];
+        for (var ri = 0; ri < rows.length; ri++) {
+          var row = rows[ri];
+          if (!row || row.userId == null) continue;
+          var g = String(row.gender != null ? row.gender : '').trim();
+          if (!g) continue;
+          if (!stelvioRankingEntryMatchesGenderFilter(row, want, want)) return true;
+        }
+      }
+      return false;
+    }
+
+    /** 집계·API가 gender 쿼리로 이미 걸러진 payload(행 gender 누락 허용) */
+    function stelvioRankingPayloadServerGenderScoped(data, wantGender) {
+      if (!data) return false;
+      var want = stelvioNormalizeRankingGenderFilter(wantGender);
+      if (want === 'all') return true;
+      if (stelvioNormalizeRankingGenderFilter(data.gender) !== want) return false;
+      if (!stelvioRankingPayloadHasVisibleRows(data)) return false;
+      return !stelvioRankingPayloadHasExplicitOppositeGender(data, want);
     }
 
     /** GC와 동일: payload 내 모든 순위 행이 요청 성별과 일치할 때만 사전 필터된 것으로 간주 */
@@ -8173,7 +8213,7 @@
           var row = rows[ri];
           if (!row || row.userId == null) continue;
           any = true;
-          if (!stelvioRankingEntryMatchesGenderFilter(row, want)) return false;
+          if (!stelvioRankingEntryMatchesGenderFilter(row, want, data.gender)) return false;
         }
       }
       return any;
@@ -8187,6 +8227,7 @@
       if (data.durationType === 'gc') {
         return stelvioNormalizeRankingGenderFilter(data.gender) === want;
       }
+      if (stelvioRankingPayloadServerGenderScoped(data, want)) return true;
       return stelvioRankingPayloadEntriesAllMatchGender(data, want);
     }
 
@@ -8211,7 +8252,7 @@
         var filtered = [];
         for (var fi = 0; fi < src.length; fi++) {
           var row = src[fi];
-          if (row && stelvioRankingEntryMatchesGenderFilter(row, want)) filtered.push(row);
+          if (row && stelvioRankingEntryMatchesGenderFilter(row, want, data.gender)) filtered.push(row);
         }
         filtered.sort(function (a, b) {
           var sa = a.wkg != null ? a.wkg : a.totalTss != null ? a.totalTss : a.totalKm != null ? a.totalKm : a.speedKmh != null ? a.speedKmh : a.gcScore != null ? a.gcScore : 0;
@@ -8226,11 +8267,19 @@
       out.byCategory = byCategory;
       out.entries = stelvioMergeRankingEntriesFromByCategory(byCategory);
       out.gender = want;
-      if (out.currentUser && out.currentUser.userId && !stelvioRankingEntryMatchesGenderFilter(out.currentUser, want)) {
+      if (
+        out.currentUser &&
+        out.currentUser.userId &&
+        !stelvioRankingEntryMatchesGenderFilter(out.currentUser, want, data.gender)
+      ) {
         out.currentUser = null;
         out.motivationMessage = null;
       }
-      if (out.myRankSupremo && out.myRankSupremo.userId && !stelvioRankingEntryMatchesGenderFilter(out.myRankSupremo, want)) {
+      if (
+        out.myRankSupremo &&
+        out.myRankSupremo.userId &&
+        !stelvioRankingEntryMatchesGenderFilter(out.myRankSupremo, want, data.gender)
+      ) {
         out.myRankSupremo = null;
       }
       return out;
@@ -8259,7 +8308,19 @@
         stelvioEnrichRankingPayloadGenderFromCache(data);
       }
       if (!stelvioRankingPayloadHasVisibleRows(data)) return null;
-      return stelvioFilterRankingPayloadByGender(data, want);
+      if (stelvioRankingPayloadServerGenderScoped(data, want)) {
+        data.gender = want;
+        return data;
+      }
+      var filtered = stelvioFilterRankingPayloadByGender(data, want);
+      if (filtered && stelvioRankingPayloadHasVisibleRows(filtered)) {
+        return filtered;
+      }
+      if (stelvioNormalizeRankingGenderFilter(data.gender) === want && stelvioRankingPayloadHasVisibleRows(data)) {
+        data.gender = want;
+        return data;
+      }
+      return filtered && stelvioRankingPayloadHasVisibleRows(filtered) ? filtered : null;
     }
 
     function stelvioGenderFromUserDoc(prof) {
@@ -9052,8 +9113,8 @@
     /** legacy localStorage 키 접두사(마이그레이션 정리용) */
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
-    /** peak IndexedDB 키 접두사 — 성별 행 필터·캐시 검증(v10) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v10:';
+    /** peak IndexedDB 키 접두사 — 독주·여성 서버집계 gender 메타 신뢰(v11) */
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v11:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
@@ -14697,8 +14758,6 @@
       }
       if (
         original &&
-        original.precomputed === true &&
-        (original.readBackend === 'supabase' || original.readSource === 'supabase') &&
         stelvioRankingPayloadHasVisibleRows(original) &&
         !stelvioRankingPayloadHasVisibleRows(data)
       ) {
