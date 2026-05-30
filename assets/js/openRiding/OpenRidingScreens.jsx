@@ -9278,9 +9278,9 @@ function OpenRidingGroupsList(props) {
                     {/* 10시 방향: 내 역할 (방장 / 수락 완료 가입) */}
                     {(isHost || isApprovedMember) ? (
                       <span
-                        className={'absolute flex items-center justify-center rounded-full text-white border-4 border-white shadow pointer-events-none ' + (isHost ? 'bg-violet-600' : 'bg-red-600')}
+                        className={'absolute flex items-center justify-center rounded-full text-white border-4 border-white shadow pointer-events-none ' + (isHost ? 'bg-violet-600' : 'bg-emerald-600')}
                         style={{ width: '32px', height: '32px', top: '2px', left: '0px', transform: 'translate(-30%, -20%)' }}
-                        aria-label={isHost ? '내가 방장' : '가입한 그룹'}
+                        aria-label={isHost ? '내가 방장' : '가입 클럽'}
                       >
                         <svg className="block" width={18} height={18} viewBox="0 0 12 12" fill="none" aria-hidden="true">
                           <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -9318,12 +9318,12 @@ function OpenRidingGroupsList(props) {
             <span className="font-semibold text-slate-700 min-w-0">내가 방장</span>
           </div>
           <div className="flex gap-2 items-center min-w-0">
-            <span className="inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm shrink-0" style={{ width: '13px', height: '13px' }} aria-hidden="true">
+            <span className="inline-flex items-center justify-center rounded-full bg-emerald-600 text-white ring-1 ring-white/90 shadow-sm shrink-0" style={{ width: '13px', height: '13px' }} aria-hidden="true">
               <svg className="block" width={8} height={8} viewBox="0 0 12 12" fill="none">
                 <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
-            <span className="font-semibold text-slate-700 min-w-0">가입 그룹</span>
+            <span className="font-semibold text-slate-700 min-w-0">가입 클럽</span>
           </div>
         </div>
       ) : null}
