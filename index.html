@@ -8323,7 +8323,7 @@
       if (!data) return false;
       var want = stelvioNormalizeRankingGenderFilter(wantGender);
       if (want === 'all') return true;
-      if (data.durationType === 'gc') {
+      if (stelvioIsGcRankingPayload(data)) {
         return stelvioRankingPayloadGenderMetaMatches(data, want);
       }
       if (
@@ -8351,7 +8351,7 @@
       if (!data) return false;
       var want = stelvioNormalizeRankingGenderFilter(wantGender);
       if (want === 'all') return true;
-      if (data.durationType === 'gc') {
+      if (stelvioIsGcRankingPayload(data)) {
         return stelvioRankingPayloadGenderMetaMatches(data, want);
       }
       if (stelvioRankingPayloadServerGenderSlice(data, want)) return true;
@@ -8423,11 +8423,12 @@
      */
     function stelvioApplyRankingGenderFilterToPayload(data, wantGender) {
       if (!data || !data.byCategory) return data;
+      data = stelvioRankingAttachPayloadFilterMeta(data);
       var want = stelvioNormalizeRankingGenderFilter(wantGender);
       var rowCountBefore = stelvioCountRankingPayloadRows(data);
       var durLabel = data.durationType || (stelvioRankingState && stelvioRankingState.duration) || '';
 
-      if (data.durationType === 'gc') {
+      if (stelvioIsGcRankingPayload(data)) {
         if (want === 'all') {
           data.gender = 'all';
           return data;
@@ -8669,6 +8670,10 @@
 
     function stelvioReapplyRankingGenderFilterToDisplayedPayload(data) {
       if (!data || !data.byCategory || !stelvioRankingState) return null;
+      data = stelvioRankingAttachPayloadFilterMeta(data);
+      if (stelvioGcRankingGenderFilterLocked()) {
+        return data;
+      }
       var want = stelvioRankingState.gender || 'all';
       if (stelvioNormalizeRankingGenderFilter(want) === 'all') return data;
       var aligned = stelvioApplyRankingGenderFilterToPayload(data, want);
@@ -12602,6 +12607,49 @@
     function stelvioIsGcRankingMode() {
       return stelvioRankingState.duration === 'gc';
     }
+
+    /** payload.durationType 누락(프로필 보강·부분 객체) 시에도 GC 탭 판별 */
+    function stelvioIsGcRankingPayload(data) {
+      if (data && data.durationType === 'gc') return true;
+      return typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode();
+    }
+
+    function stelvioGcRankingGenderFilterLocked() {
+      return (
+        typeof stelvioIsGcRankingMode === 'function' &&
+        stelvioIsGcRankingMode() &&
+        stelvioRankingState &&
+        stelvioNormalizeRankingGenderFilter(stelvioRankingState.gender) !== 'all'
+      );
+    }
+
+    function stelvioRankingEnsurePayloadDurationType(data) {
+      if (!data) return data;
+      if (!data.durationType && typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
+        data.durationType = 'gc';
+      } else if (
+        !data.durationType &&
+        typeof stelvioRankingState !== 'undefined' &&
+        stelvioRankingState &&
+        stelvioRankingState.duration
+      ) {
+        data.durationType =
+          typeof stelvioResolveRankingBoardApiDuration === 'function'
+            ? stelvioResolveRankingBoardApiDuration(stelvioRankingState.duration) ||
+              stelvioRankingState.duration
+            : stelvioRankingState.duration;
+      }
+      return data;
+    }
+
+    function stelvioRankingAttachPayloadFilterMeta(data) {
+      if (!data || !stelvioRankingState) return data;
+      stelvioRankingEnsurePayloadDurationType(data);
+      if (data.gender == null || data.gender === '') {
+        data.gender = stelvioRankingState.gender || 'all';
+      }
+      return data;
+    }
     function stelvioIsTssRankingMode() {
       return stelvioRankingState.duration === 'tss';
     }
@@ -12711,6 +12759,13 @@
       stelvioRankingListHtmlCache = Object.create(null);
       stelvioRankingLastPaintedSwrKey = '';
       stelvioRankingFetchGen++;
+      if (typeof stelvioCleanupPreRenderedRankingViews === 'function') {
+        stelvioCleanupPreRenderedRankingViews({ keepActive: false });
+      }
+      if (typeof stelvioRankingPreRenderState !== 'undefined' && stelvioRankingPreRenderState) {
+        stelvioRankingPreRenderState.gen++;
+        stelvioRankingPreRenderState.jobs = Object.create(null);
+      }
       stelvioScrollRankingBoardToTopSmooth();
       stelvioBeginRankingTabSwitchUi();
       stelvioStartRankingBoardBackgroundPrefetch({
@@ -13633,7 +13688,9 @@
               var gNorm = stelvioGenderFromUserDoc(prof);
               if (gNorm && gNorm !== 'all') {
                 stelvioRankingUserGenderCache[uid] = gNorm;
-                stelvioApplyGenderToRankingPayloadRows(data, uid, gNorm);
+                if (!stelvioGcRankingGenderFilterLocked()) {
+                  stelvioApplyGenderToRankingPayloadRows(data, uid, gNorm);
+                }
               }
               var url = stelvioExtractProfileImageUrlFromUserDoc(prof);
               if (!url) {
@@ -13656,24 +13713,37 @@
       ).then(function () {
         if (gen !== stelvioRankingBoardProfileFetchGen) return false;
         if (fetchGen != null && fetchGen !== stelvioRankingFetchGen) return false;
+        var body = document.getElementById('stelvioRankingListBody');
         if (
+          data &&
+          data.byCategory &&
+          stelvioRankingByCategory === data.byCategory &&
+          stelvioGcRankingGenderFilterLocked()
+        ) {
+          if (body && typeof stelvioRankingRefreshListAvatars === 'function') {
+            stelvioRankingRefreshListAvatars(body);
+          }
+        } else if (
           data &&
           data.byCategory &&
           stelvioRankingByCategory === data.byCategory &&
           typeof stelvioReapplyRankingGenderFilterToDisplayedPayload === 'function'
         ) {
           stelvioReapplyRankingGenderFilterToDisplayedPayload(data);
+          body = document.getElementById('stelvioRankingListBody');
+          if (body && typeof stelvioRankingRefreshListAvatars === 'function') {
+            stelvioRankingRefreshListAvatars(body);
+          }
+        } else if (body && typeof stelvioRankingRefreshListAvatars === 'function') {
+          stelvioRankingRefreshListAvatars(body);
+        } else if (typeof renderStelvioActiveCategory === 'function') {
+          renderStelvioActiveCategory();
         }
-        var body = document.getElementById('stelvioRankingListBody');
         if (!body) return true;
         if (typeof stelvioIsGroupDistanceRanking === 'function' && stelvioIsGroupDistanceRanking()) {
           if (typeof stelvioRenderGroupTabRankingList === 'function') {
             stelvioRenderGroupTabRankingList(body);
           }
-        } else if (typeof stelvioRankingRefreshListAvatars === 'function') {
-          stelvioRankingRefreshListAvatars(body);
-        } else if (typeof renderStelvioActiveCategory === 'function') {
-          renderStelvioActiveCategory();
         }
         return true;
       });
@@ -14396,6 +14466,16 @@
       if (view.getAttribute('data-prerender-swr-key') !== ck) return false;
       var mem = stelvioRankingMemCacheGet(ck);
       if (!mem || !mem.body || !mem.body.success || !mem.body.byCategory) return false;
+      if (
+        stelvioRankingState &&
+        stelvioRankingState.gender &&
+        !stelvioRankingPayloadMatchesGenderFilter(
+          mem.body,
+          stelvioRankingState.gender
+        )
+      ) {
+        return false;
+      }
       var activeBody = document.getElementById('stelvioRankingListBody');
       if (activeBody && activeBody !== view) {
         if (typeof stelvioRankingCancelListChunkJob === 'function') stelvioRankingCancelListChunkJob(activeBody);
@@ -15385,8 +15465,10 @@
       if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
         stelvioApplyPublicRankingVisibilityToPayload(data);
       }
-      if (data.durationType !== 'gc') {
+      if (!stelvioIsGcRankingPayload(data)) {
         data = stelvioRepairRankingByCategoryFromEntries(data);
+      } else {
+        data.durationType = 'gc';
       }
       stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
       stelvioRankingByCategory = data.byCategory;
