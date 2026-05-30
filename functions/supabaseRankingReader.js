@@ -235,13 +235,13 @@ function profileGenderMatches(profile, gender) {
     .trim()
     .toLowerCase();
   if (!g) return false;
-  if (gender === "M") {
-    return g === "male" || g === "m" || g === "남" || g === "남성";
+  if (g === "m" || g === "male" || g === "남" || g === "남성") {
+    return gender === "M";
   }
-  if (gender === "F") {
-    return g === "female" || g === "f" || g === "여" || g === "여성";
+  if (g === "f" || g === "female" || g === "여" || g === "여성") {
+    return gender === "F";
   }
-  return true;
+  return false;
 }
 
 function deriveLeagueCategoryFromSupabaseUser(row) {
@@ -1120,11 +1120,13 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
         captureGcSnapshotMeta(row, metaState);
         const fbUid = uidMap.get(String(row.user_id));
         if (!fbUid) continue;
+        const profile = profileMap.get(String(row.user_id));
+        if (!profileGenderMatches(profile, fg)) continue;
         const gcScore =
           row.sum_position_scores != null && isFinite(Number(row.sum_position_scores))
             ? Number(row.sum_position_scores)
             : 0;
-        const entry = mapGcRowToEntry(row, fbUid, fg, gcScore, profileMap.get(String(row.user_id)));
+        const entry = mapGcRowToEntry(row, fbUid, fg, gcScore, profile);
         entry.rank =
           row.board_rank != null && isFinite(Number(row.board_rank))
             ? Math.floor(Number(row.board_rank))
