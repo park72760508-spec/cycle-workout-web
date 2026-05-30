@@ -7283,15 +7283,19 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
 
   lastPhase = "group_dist";
   await markMasterDailyRankingRebuildProgress(db, lastPhase, { wrote, elapsedMs: Date.now() - t0 });
-  const group = await getRolling30dGroupDistanceByHostEntries(db, r30s, r30e, null);
-  const keyG = `peakRanking_group_dist_30d_${r30s}_${r30e}`;
-  await writeRankingAggregatePayload(db, keyG, {
-    byCategory: group.byCategory,
-    entries: group.entries,
-    startStr: r30s,
-    endStr: r30e,
-  });
-  wrote++;
+  for (const gender of ["all", "M", "F"]) {
+    const group = await getRolling30dGroupDistanceByHostEntries(db, r30s, r30e, null, gender);
+    await applyPeakRankChanges(db, group.byCategory, `peak_group_dist_rolling30_${gender}`);
+    const keyG = `peakRanking_group_dist_30d_${gender}_${r30s}_${r30e}`;
+    await writeRankingAggregatePayload(db, keyG, {
+      byCategory: group.byCategory,
+      entries: group.entries,
+      startStr: r30s,
+      endStr: r30e,
+      gender,
+    });
+    wrote++;
+  }
 
   const ms = Date.now() - t0;
   lastPhase = "done";
@@ -9894,13 +9898,10 @@ exports.getPeakPowerRanking = onRequest(
     /** 그룹: 방장별 최근 30일 오픈 라이딩 합산(일정당 참가자 당일 라이딩 거리 합) */
     if (durationType === "group_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
-      const cacheKey = `peakRanking_group_dist_30d_${startStr}_${endStr}`;
-      const groupRankHistoryKey = `peak_group_dist_rolling30_${gender}`;
-      const groupGenderCacheOk = !gender || gender === "all";
-      const aggG =
-        forceRankMv || !groupGenderCacheOk
-          ? null
-          : await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      const fgGroup = gender === "M" || gender === "F" ? gender : "all";
+      const cacheKey = `peakRanking_group_dist_30d_${fgGroup}_${startStr}_${endStr}`;
+      const groupRankHistoryKey = `peak_group_dist_rolling30_${fgGroup}`;
+      const aggG = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
       if (aggG && aggG.byCategory) {
         const byCategory = JSON.parse(JSON.stringify(aggG.byCategory));
         const entries = JSON.parse(JSON.stringify(Array.isArray(aggG.entries) ? aggG.entries : []));
@@ -9914,7 +9915,7 @@ exports.getPeakPowerRanking = onRequest(
           endStr,
           period: "rolling30",
           durationType: "group_dist",
-          gender,
+          gender: fgGroup,
           precomputed: true,
         };
         if (uid) {
@@ -9941,8 +9942,7 @@ exports.getPeakPowerRanking = onRequest(
         return res.status(200).json(out);
       }
       const cacheRef = db.collection("cache").doc(cacheKey);
-      const cacheSnap =
-        forceRankMv || !groupGenderCacheOk ? null : await cacheRef.get();
+      const cacheSnap = forceRankMv ? null : await cacheRef.get();
       const nowMs = Date.now();
       if (cacheSnap && cacheSnap.exists) {
         const data = cacheSnap.data();
@@ -9960,7 +9960,7 @@ exports.getPeakPowerRanking = onRequest(
             endStr,
             period: "rolling30",
             durationType: "group_dist",
-            gender,
+            gender: fgGroup,
             cached: true,
           };
           if (uid) {
@@ -9993,29 +9993,27 @@ exports.getPeakPowerRanking = onRequest(
         startStr,
         endStr,
         null,
-        gender
+        fgGroup
       );
       const byCategoryAgg = JSON.parse(JSON.stringify(byCategory));
       const entriesAgg = JSON.parse(JSON.stringify(entries));
       await applyGroupRankingParticipationForViewer(db, byCategoryAgg, entriesAgg, startStr, endStr, null);
-      if (groupGenderCacheOk) {
-        await writeRankingAggregatePayload(db, cacheKey, {
-          byCategory: byCategoryAgg,
-          entries: entriesAgg,
-          startStr,
-          endStr,
-        });
-      }
+      await writeRankingAggregatePayload(db, cacheKey, {
+        byCategory: byCategoryAgg,
+        entries: entriesAgg,
+        startStr,
+        endStr,
+        gender: fgGroup,
+      });
       await hydrateRankingBoardProfileImages(db, byCategory, entries);
-      if (groupGenderCacheOk) {
-        await cacheRef.set({
-          byCategory,
-          entries,
-          startStr,
-          endStr,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
+      await cacheRef.set({
+        byCategory,
+        entries,
+        startStr,
+        endStr,
+        gender: fgGroup,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
       const byCatOut = JSON.parse(JSON.stringify(byCategory));
       const entriesOut = JSON.parse(JSON.stringify(entries));
       await applyGroupRankingParticipationForViewer(db, byCatOut, entriesOut, startStr, endStr, uid);
@@ -10028,7 +10026,8 @@ exports.getPeakPowerRanking = onRequest(
         endStr,
         period: "rolling30",
         durationType: "group_dist",
-        gender,
+        gender: fgGroup,
+        precomputed: false,
       };
       if (uid) {
         const arrAll = byCatOut.Supremo || [];
