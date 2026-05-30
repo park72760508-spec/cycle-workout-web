@@ -8352,14 +8352,8 @@
         return false;
       }
       if (stelvioNormalizeRankingGenderFilter(data.gender) !== want) return false;
-      return (
-        data.filterGenderPrecomputed === true ||
-        data.readBackend === 'supabase' ||
-        data.readSource === 'supabase' ||
-        data.precomputed === true ||
-        data.fastPrecomputed === true ||
-        data.cached === true
-      );
+      if (data.filterGenderPrecomputed !== true) return false;
+      return !stelvioRankingPayloadHasExplicitOppositeGender(data, want);
     }
     window.stelvioRankingPayloadServerGenderSlice = stelvioRankingPayloadServerGenderSlice;
 
@@ -8411,6 +8405,14 @@
         var key = list[cj];
         var rows = bc[key] || [];
         rows.sort(function (a, b) {
+          var aGc = a.gcScore != null && isFinite(Number(a.gcScore)) ? Number(a.gcScore) : null;
+          var bGc = b.gcScore != null && isFinite(Number(b.gcScore)) ? Number(b.gcScore) : null;
+          if (aGc != null || bGc != null) {
+            var saGc = aGc != null ? aGc : 0;
+            var sbGc = bGc != null ? bGc : 0;
+            if (sbGc !== saGc) return sbGc - saGc;
+            return String(a.userId || '').localeCompare(String(b.userId || ''));
+          }
           if (a.rank != null && b.rank != null && (a.gcScore != null || b.gcScore != null)) {
             return Number(a.rank) - Number(b.rank);
           }
@@ -8584,12 +8586,47 @@
         out.myRankSupremo = null;
       }
 
+      function resyncViewerRowFromByCategory(viewerRow, catHint) {
+        if (!viewerRow || viewerRow.userId == null || !out.byCategory) return null;
+        var uid = String(viewerRow.userId);
+        if (catHint && out.byCategory[catHint]) {
+          var hintRows = out.byCategory[catHint] || [];
+          for (var hi = 0; hi < hintRows.length; hi++) {
+            if (hintRows[hi] && String(hintRows[hi].userId) === uid) {
+              return Object.assign({}, hintRows[hi]);
+            }
+          }
+        }
+        for (var sci = 0; sci < cats.length; sci++) {
+          var scanRows = out.byCategory[cats[sci]] || [];
+          for (var sri = 0; sri < scanRows.length; sri++) {
+            if (scanRows[sri] && String(scanRows[sri].userId) === uid) {
+              return Object.assign({}, scanRows[sri]);
+            }
+          }
+        }
+        return null;
+      }
+
+      if (out.currentUser && out.currentUser.userId) {
+        var syncedCu = resyncViewerRowFromByCategory(out.currentUser, null);
+        if (syncedCu) out.currentUser = syncedCu;
+        else {
+          out.currentUser = null;
+          out.motivationMessage = null;
+        }
+      }
+      if (out.myRankSupremo && out.myRankSupremo.userId) {
+        var syncedMs = resyncViewerRowFromByCategory(out.myRankSupremo, 'Supremo');
+        out.myRankSupremo = syncedMs;
+      }
+
+      out.filterGenderPrecomputed = true;
       return out;
     };
 
     /**
-     * 표시 직전 성별 정합.
-     * Supabase gender=all 통합 payload → 프로필 보강 후 clientFilter (GC·비-GC 동일).
+     * 표시 직전 성별 정합 — M/F는 항상 행 단위 필터+재순위(서버 메타만으로 신뢰하지 않음).
      */
     function stelvioApplyRankingGenderFilterToPayload(data, wantGender) {
       if (!data || !data.byCategory) return data;
@@ -8606,6 +8643,7 @@
       rowCountBefore = stelvioCountRankingPayloadRows(data);
       if (want === 'all') {
         data.gender = 'all';
+        delete data.filterGenderPrecomputed;
         if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
           try {
             console.info(
@@ -8620,74 +8658,11 @@
         }
         return data;
       }
-      var payloadMeta = stelvioRankingCoercePayloadGenderMeta(data.gender);
-      if (payloadMeta === 'all' || data.supabaseServedUnifiedAllView === true) {
-        if (typeof stelvioEnrichRankingPayloadGenderFromCache === 'function') {
-          stelvioEnrichRankingPayloadGenderFromCache(data);
-        }
-        var unifiedFiltered = window.stelvioFilterRankingPayloadByGender(data, want);
-        if (!unifiedFiltered || !stelvioRankingPayloadHasVisibleRows(unifiedFiltered)) {
-          if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
-            try {
-              console.warn(
-                '[Stelvio Filter Debug] duration=' +
-                  durLabel +
-                  ' gender=' +
-                  want +
-                  ' clientFilter=1 empty 원본 행 개수: ' +
-                  rowCountBefore
-              );
-            } catch (eLogUnifiedEmpty) {}
-          }
-          return null;
-        }
-        if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
-          try {
-            console.info(
-              '[Stelvio Filter Debug] duration=' +
-                durLabel +
-                ' gender=' +
-                want +
-                ' clientFilter=1 원본 행 개수: ' +
-                rowCountBefore +
-                ', 필터 후 행 개수: ' +
-                stelvioCountRankingPayloadRows(unifiedFiltered)
-            );
-          } catch (eLogUnified) {}
-        }
-        return unifiedFiltered;
+      if (typeof stelvioEnrichRankingPayloadGenderFromCache === 'function') {
+        stelvioEnrichRankingPayloadGenderFromCache(data);
       }
-      if (stelvioRankingPayloadServerGenderSlice(data, want)) {
-        data.gender = want;
-        if (
-          data.precomputed === true ||
-          data.fastPrecomputed === true ||
-          data.cached === true ||
-          data.readBackend === 'supabase' ||
-          data.readSource === 'supabase'
-        ) {
-          data.filterGenderPrecomputed = true;
-        }
-        stelvioStampRankingRowGendersFromPayloadMeta(data, want);
-        if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
-          try {
-            console.info(
-              '[Stelvio Filter Debug] duration=' +
-                durLabel +
-                ' gender=' +
-                want +
-                ' serverSlice=1 meta=' +
-                String(data.gender) +
-                ' 원본 행 개수: ' +
-                rowCountBefore +
-                ', 필터 후 행 개수: ' +
-                stelvioCountRankingPayloadRows(data)
-            );
-          } catch (eLogG1) {}
-        }
-        return data;
-      }
-      if (!stelvioRankingPayloadHasVisibleRows(data)) {
+      var filtered = window.stelvioFilterRankingPayloadByGender(data, want);
+      if (!filtered || !stelvioRankingPayloadHasVisibleRows(filtered)) {
         if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
           try {
             console.warn(
@@ -8695,59 +8670,14 @@
                 durLabel +
                 ' gender=' +
                 want +
-                ' visibleRows=0 원본 행 개수: ' +
+                ' filtered=empty 원본 행 개수: ' +
                 rowCountBefore
             );
-          } catch (eLogG2) {}
+          } catch (eLogUnifiedEmpty) {}
         }
         return null;
       }
-      if (
-        !stelvioRankingPayloadHasExplicitOppositeGender(data, want) &&
-        stelvioRankingPayloadTrustedForGenderRequest(data, want)
-      ) {
-        data.gender = want;
-        stelvioStampRankingRowGendersFromPayloadMeta(data, want);
-        if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
-          try {
-            console.info(
-              '[Stelvio Filter Debug] duration=' +
-                durLabel +
-                ' gender=' +
-                want +
-                ' trusted=1 원본 행 개수: ' +
-                rowCountBefore +
-                ', 필터 후 행 개수: ' +
-                stelvioCountRankingPayloadRows(data)
-            );
-          } catch (eLogG3) {}
-        }
-        return data;
-      }
-      if (typeof stelvioEnrichRankingPayloadGenderFromCache === 'function') {
-        stelvioEnrichRankingPayloadGenderFromCache(data);
-      }
-      if (stelvioRankingPayloadHasExplicitOppositeGender(data, want)) {
-        var filtered = window.stelvioFilterRankingPayloadByGender(data, want);
-        var afterFilter = filtered && stelvioRankingPayloadHasVisibleRows(filtered) ? filtered : null;
-        if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
-          try {
-            console.info(
-              '[Stelvio Filter Debug] duration=' +
-                durLabel +
-                ' gender=' +
-                want +
-                ' clientFilter=1 원본 행 개수: ' +
-                rowCountBefore +
-                ', 필터 후 행 개수: ' +
-                (afterFilter ? stelvioCountRankingPayloadRows(afterFilter) : 0)
-            );
-          } catch (eLogG4) {}
-        }
-        return afterFilter;
-      }
-      data.gender = want;
-      stelvioStampRankingRowGendersFromPayloadMeta(data, want);
+      filtered.filterGenderPrecomputed = true;
       if (STELVIO_RANKING_GENDER_FILTER_DEBUG) {
         try {
           console.info(
@@ -8755,14 +8685,14 @@
               durLabel +
               ' gender=' +
               want +
-              ' passThrough=1 원본 행 개수: ' +
+              ' filtered=1 원본 행 개수: ' +
               rowCountBefore +
               ', 필터 후 행 개수: ' +
-              stelvioCountRankingPayloadRows(data)
+              stelvioCountRankingPayloadRows(filtered)
           );
-        } catch (eLogG5) {}
+        } catch (eLogUnified) {}
       }
-      return data;
+      return filtered;
     }
     window.stelvioApplyRankingGenderFilterToPayload = stelvioApplyRankingGenderFilterToPayload;
 
@@ -14049,7 +13979,7 @@
         duration: apiDuration,
         gender: genderParam || 'all',
         readDb: stelvioGetRankingReadSourceSync(),
-        gfVer: '2',
+        gfVer: '3',
       });
       if (uid) p.set('uid', uid);
       if (apiDuration === 'personal_speed') {
