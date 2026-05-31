@@ -14987,12 +14987,49 @@
     }
     window.stelvioActivatePreRenderedRankingView = stelvioActivatePreRenderedRankingView;
     window.stelvioCleanupPreRenderedRankingViews = stelvioCleanupPreRenderedRankingViews;
+    /** rankChange·boardRank·previousBoardRank 중 하나만 있어도 등락 필드 보강(Supabase rank_change 단독 등) */
+    function stelvioNormalizeRankMovementOnRow(row) {
+      if (!row) return;
+      var rank =
+        row.rank != null && isFinite(Number(row.rank)) ? Math.floor(Number(row.rank)) : null;
+      var prev =
+        row.previousBoardRank != null && isFinite(Number(row.previousBoardRank))
+          ? Math.floor(Number(row.previousBoardRank))
+          : null;
+      var rc = row.rankChange != null && isFinite(Number(row.rankChange)) ? Number(row.rankChange) : null;
+      if (rc != null && rank != null && rank >= 1 && (prev == null || prev < 1)) {
+        row.previousBoardRank = rank + Math.round(rc);
+        row.rankChange = Math.round(rc);
+      } else if (prev != null && prev >= 1 && rank != null && rank >= 1 && rc == null) {
+        row.rankChange = prev - rank;
+        row.previousBoardRank = prev;
+      } else if (rc != null && prev != null && prev >= 1) {
+        row.rankChange = Math.round(rc);
+        row.previousBoardRank = prev;
+      }
+    }
+
+    function stelvioNormalizeRankMovementOnPayload(data) {
+      if (!data || !data.byCategory) return;
+      var ci;
+      for (ci = 0; ci < STELVIO_RANK_BOARD_CATS.length; ci++) {
+        var rows = data.byCategory[STELVIO_RANK_BOARD_CATS[ci]] || [];
+        for (var ri = 0; ri < rows.length; ri++) {
+          stelvioNormalizeRankMovementOnRow(rows[ri]);
+        }
+      }
+      if (data.currentUser) stelvioNormalizeRankMovementOnRow(data.currentUser);
+      if (data.myRankSupremo) stelvioNormalizeRankMovementOnRow(data.myRankSupremo);
+    }
+
     /** GC·피크 공통: 서버 rankChange / previousBoardRank → (↑n)(↓n)(-) HTML */
     function stelvioServerRankChangeBadgeHtml(rc, prevR) {
-      if (rc == null || prevR == null) return '';
+      if (rc == null) return '';
       var rcN = Number(rc);
-      var prevN = Math.floor(Number(prevR));
-      if (!isFinite(rcN) || !isFinite(prevN) || prevN < 1) return '';
+      if (!isFinite(rcN)) return '';
+      var prevN =
+        prevR != null && isFinite(Number(prevR)) ? Math.floor(Number(prevR)) : null;
+      if (prevN == null || prevN < 1) return '';
       if (rcN > 0) {
         return '<span class="stelvio-rank-change stelvio-rank-change--up" title="전날 ' + prevN + '위">(↑' + rcN + ')</span>';
       }
@@ -15075,12 +15112,62 @@
       return changeOnly;
     }
     function stelvioRankChangeFromRow(row) {
-      if (!row || row.rankChange == null || row.previousBoardRank == null) return null;
+      if (!row) return null;
+      stelvioNormalizeRankMovementOnRow(row);
+      if (row.rankChange == null || row.previousBoardRank == null) return null;
       var rcN = Number(row.rankChange);
       var prN = Math.floor(Number(row.previousBoardRank));
       if (!isFinite(rcN) || !isFinite(prN) || prN < 1) return null;
       return { rc: rcN, prevR: prN };
     }
+
+    /** 랭킹보드 GC 탭·헵타곤 카드 시드 — 고정 payload 우선 */
+    function stelvioResolveGcRankingSeedFromRankingBoard(uid, gender) {
+      var pinned =
+        typeof stelvioGcPinnedRankingPayload !== 'undefined' && stelvioGcPinnedRankingPayload
+          ? stelvioGcPinnedRankingPayload
+          : null;
+      if (
+        pinned &&
+        pinned.success &&
+        pinned.byCategory &&
+        stelvioRankingPayloadHasVisibleRows(pinned) &&
+        (!uid ||
+          (pinned.byCategory.Supremo || []).some(function (r) {
+            return r && String(r.userId) === String(uid);
+          }))
+      ) {
+        return pinned;
+      }
+      if (
+        typeof stelvioRankingByCategory !== 'undefined' &&
+        stelvioRankingByCategory &&
+        stelvioIsGcRankingMode &&
+        stelvioIsGcRankingMode()
+      ) {
+        return {
+          success: true,
+          byCategory: stelvioRankingByCategory,
+          entries: stelvioRankingFullEntries || [],
+          durationType: 'gc',
+          gender: gender || (stelvioRankingState && stelvioRankingState.gender) || 'all',
+          gcSnapshotAsOf: window.stelvioLastGcSnapshotAsOf || null,
+          gcMonthKey: window.stelvioLastGcMonthKey || null,
+          readSource: window.stelvioRankingLastReadBackend || 'supabase',
+        };
+      }
+      return null;
+    }
+
+    function stelvioGcPayloadUsableForHeptagonGraph(data) {
+      if (!data || !data.success || !data.byCategory) return false;
+      var sup = data.byCategory.Supremo || [];
+      return sup.length > 0;
+    }
+
+    window.stelvioResolveGcRankingSeedFromRankingBoard = stelvioResolveGcRankingSeedFromRankingBoard;
+    window.stelvioGcPayloadUsableForHeptagonGraph = stelvioGcPayloadUsableForHeptagonGraph;
+    window.stelvioNormalizeRankMovementOnPayload = stelvioNormalizeRankMovementOnPayload;
 
     /** 랭킹 리스트와 동일 행(byCategory)에서 등락 조회 — 코멘트·요약·차트 배지 공통 */
     function stelvioFindRankingRowForUser(categoryKey, userId) {
@@ -15245,12 +15332,33 @@
      */
     function stelvioApplyGcRankMovementFromPriorSnapshot(data) {
       if (!data || !data.byCategory || data.durationType !== 'gc') return;
+      stelvioNormalizeRankMovementOnPayload(data);
       var serverMvSnap = stelvioExtractRankMovementFromPayload(data);
+      stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
       stelvioSyncPeakRankMovementFromEntries(data);
 
       var asOf =
         data.gcSnapshotAsOf != null ? String(data.gcSnapshotAsOf).trim().slice(0, 10) : '';
-      if (!asOf) return;
+      if (!asOf && data.endStr) {
+        asOf = String(data.endStr).trim().slice(0, 10);
+        data.gcSnapshotAsOf = asOf;
+      }
+      if (!asOf) {
+        try {
+          asOf = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Seoul',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date());
+          data.gcSnapshotAsOf = asOf;
+        } catch (eGcAsOf) {}
+      }
+      if (!asOf) {
+        stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
+        stelvioEnsurePeakPowerRankMovementOnPayload(data);
+        return;
+      }
 
       var monthKey =
         data.gcMonthKey != null
@@ -15280,6 +15388,7 @@
           for (var gri = 0; gri < rowsG.length; gri++) {
             var rowG = rowsG[gri];
             if (!rowG || rowG.userId == null) continue;
+            if (rowG.rankChange != null && rowG.previousBoardRank != null) continue;
             var uidG = String(rowG.userId);
             var currR = currCat[uidG];
             var prevR = priorCat[uidG];
@@ -15293,9 +15402,8 @@
         }
       }
 
-      if (!recomputed) {
-        stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
-      }
+      stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
+      stelvioNormalizeRankMovementOnPayload(data);
 
       if (data.currentUser && data.currentUser.userId != null) {
         var cuCatG =
