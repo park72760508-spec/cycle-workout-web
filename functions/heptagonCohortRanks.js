@@ -628,7 +628,12 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
           rankChangeFields.rankChange = null;
           rankChangeFields.yesterdayOfficialBoardRank = null;
         } else {
-          /* 당일 재집계: yesterdayOfficial·등락은 merge 유지, boardRank 등만 갱신 */
+          /* 당일 재집계: 직전 boardRank 대비 등락(Supabase fn_rebuild·랭킹보드 「직전 적용 집계」와 동일) */
+          const prevBr = Math.floor(Number(existing.boardRank));
+          if (isFinite(prevBr) && prevBr >= 1) {
+            rankChangeFields.previousBoardRank = prevBr;
+            rankChangeFields.rankChange = prevBr - boardRank;
+          }
         }
 
         batch.set(
