@@ -9352,9 +9352,57 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
         cursor = snap.docs[snap.docs.length - 1];
         if (!cursor) break;
       }
-      const latestDocs = heptagonCohortRanks.filterDocsToLatestAsOfSeoul(rawDocs);
-      const rows = [];
-      for (let di = 0; di < latestDocs.length; di++) {
+      return { cat, rawDocs };
+    })
+  );
+
+  const prevMonthKey = heptagonCohortRanks.getPreviousMonthKeyKst(monthKey);
+  let prevCategoryRowsLists = [];
+  if (prevMonthKey) {
+    prevCategoryRowsLists = await Promise.all(
+      categories.map(async (cat) => {
+        const rawDocs = [];
+        let cursor = null;
+        while (rawDocs.length < GC_RANKING_MAX_ROWS_PER_CATEGORY) {
+          const room = GC_RANKING_MAX_ROWS_PER_CATEGORY - rawDocs.length;
+          let q = col
+            .where("monthKey", "==", prevMonthKey)
+            .where("filterCategory", "==", cat)
+            .where("filterGender", "==", filterGender)
+            .orderBy("sumPositionScores", "desc")
+            .limit(Math.min(GC_RANKING_FETCH_PAGE_SIZE, room));
+          if (cursor) q = q.startAfter(cursor);
+          const snap = await q.get();
+          if (!snap || snap.empty || !snap.docs.length) break;
+          for (let di = 0; di < snap.docs.length; di++) {
+            const d = snap.docs[di].data();
+            if (d && d.userId) rawDocs.push(d);
+          }
+          const got = snap.docs.length;
+          if (got < Math.min(GC_RANKING_FETCH_PAGE_SIZE, room)) break;
+          cursor = snap.docs[snap.docs.length - 1];
+          if (!cursor) break;
+        }
+        return { cat, rawDocs };
+      })
+    );
+  }
+
+  const prevByCat = {};
+  for (let pi = 0; pi < prevCategoryRowsLists.length; pi++) {
+    prevByCat[prevCategoryRowsLists[pi].cat] = prevCategoryRowsLists[pi].rawDocs;
+  }
+
+  for (let cri = 0; cri < categoryRowsLists.length; cri++) {
+    const pr = categoryRowsLists[cri];
+    const cat = pr.cat;
+    let mergedRaw = pr.rawDocs || [];
+    if (prevByCat[cat] && prevByCat[cat].length) {
+      mergedRaw = mergedRaw.concat(prevByCat[cat]);
+    }
+    const latestDocs = heptagonCohortRanks.filterLatestGcDocsWithRankMovement(mergedRaw);
+    const rows = [];
+    for (let di = 0; di < latestDocs.length; di++) {
         const d = latestDocs[di];
         captureSnapshotMeta(d);
         const uid = String(d.userId);
@@ -9373,16 +9421,31 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
           is_private: privacyFlagFromFirestoreDoc(d),
           rank: d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : di + 1,
           gcScore,
-          rankChange: d.rankChange != null && isFinite(Number(d.rankChange)) ? Math.round(Number(d.rankChange)) : null,
-          previousBoardRank: d.previousBoardRank != null && isFinite(Number(d.previousBoardRank)) ? Math.floor(Number(d.previousBoardRank)) : null,
+          rankChange: (function () {
+            const raw =
+              d.rankChange != null
+                ? d.rankChange
+                : d.rank_change != null
+                  ? d.rank_change
+                  : null;
+            return raw != null && isFinite(Number(raw)) ? Math.round(Number(raw)) : null;
+          })(),
+          previousBoardRank: (function () {
+            const raw =
+              d.previousBoardRank != null
+                ? d.previousBoardRank
+                : d.previous_board_rank != null
+                  ? d.previous_board_rank
+                  : d.yesterdayOfficialBoardRank != null
+                    ? d.yesterdayOfficialBoardRank
+                    : d.yesterday_official_board_rank != null
+                      ? d.yesterday_official_board_rank
+                      : null;
+            return raw != null && isFinite(Number(raw)) ? Math.floor(Number(raw)) : null;
+          })(),
         });
-      }
-      return { cat, rows: heptagonCohortRanks.rerankGcBoardRows(rows) };
-    })
-  );
-  for (let cri = 0; cri < categoryRowsLists.length; cri++) {
-    const pr = categoryRowsLists[cri];
-    byCategory[pr.cat] = pr.rows;
+    }
+    byCategory[cat] = heptagonCohortRanks.rerankGcBoardRows(rows);
   }
   await hydrateRankingBoardProfileImages(db, byCategory);
   const entries = (byCategory.Supremo || []).slice();
@@ -10283,7 +10346,7 @@ exports.getPeakPowerRanking = onRequest(
         let nextUser = null;
         for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
           const arr = byCategory[c] || [];
-          const idx = arr.findIndex((e) => e.userId === uid);
+          const idx = arr.findIndex((e) => e && String(e.userId) === String(uid));
           if (idx >= 0) {
             current = arr[idx];
             nextUser = idx > 0 ? arr[idx - 1] : null;

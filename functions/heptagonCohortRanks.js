@@ -153,6 +153,21 @@ function getMonthKeyKstNow() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
 }
 
+/** YYYY-MM → 직전 달 (GC month_key·전월 마지막 as_of 등락 연동) */
+function getPreviousMonthKeyKst(monthKey) {
+  const m = String(monthKey || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(m)) return "";
+  const parts = m.split("-");
+  const y = Number(parts[0]);
+  const mo = Number(parts[1]);
+  if (!y || !mo) return "";
+  const d = new Date(Date.UTC(y, mo - 1, 1));
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  const yy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${yy}-${mm}`;
+}
+
 function safeFloorRank(n) {
   const r = Number(n);
   return isFinite(r) && r >= 1 ? Math.floor(r) : null;
@@ -1025,6 +1040,7 @@ module.exports = {
   buildLiveGcRankingPayload,
   mergeGcRankingSnapshotWithLive,
   getMonthKeyKstNow,
+  getPreviousMonthKeyKst,
   latestAsOfSeoulYmdFromDocs,
   filterDocsToLatestAsOfSeoul,
   filterLatestGcDocsWithRankMovement,

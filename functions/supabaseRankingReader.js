@@ -1104,21 +1104,6 @@ function getMonthKeyKstNow() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
 }
 
-/** YYYY-MM → 직전 달 (KST 월 키; GC 등락은 전월 마지막 as_of와 연결) */
-function getPreviousMonthKeyKst(monthKey) {
-  const m = String(monthKey || "").trim();
-  if (!/^\d{4}-\d{2}$/.test(m)) return "";
-  const parts = m.split("-");
-  const y = Number(parts[0]);
-  const mo = Number(parts[1]);
-  if (!y || !mo) return "";
-  const d = new Date(Date.UTC(y, mo - 1, 1));
-  d.setUTCMonth(d.getUTCMonth() - 1);
-  const yy = d.getUTCFullYear();
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  return `${yy}-${mm}`;
-}
-
 async function fetchGcCohortRankDocs(supabase, monthKey, category, filterGender) {
   const { data, error } = await supabase
     .from("heptagon_cohort_ranks")
@@ -1221,7 +1206,7 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
         (r) => r.rank_change != null && isFinite(Number(r.rank_change))
       );
       if (latestRows.length && !latestHasMovement) {
-        const prevMk = getPreviousMonthKeyKst(mk);
+        const prevMk = heptagonCohortRanks.getPreviousMonthKeyKst(mk);
         if (prevMk) {
           const prevDocs = await fetchGcCohortRankDocs(supabase, prevMk, cat, fg);
           if (prevDocs.length) {
@@ -1273,6 +1258,25 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
     return null;
   }
 
+  let gcRankMovementPresent = false;
+  for (let gci = 0; gci < HEPTAGON_CATEGORIES.length; gci++) {
+    const catRows = byCategory[HEPTAGON_CATEGORIES[gci]] || [];
+    for (let gri = 0; gri < catRows.length; gri++) {
+      const er = catRows[gri];
+      if (
+        er &&
+        er.rankChange != null &&
+        er.previousBoardRank != null &&
+        isFinite(Number(er.rankChange)) &&
+        isFinite(Number(er.previousBoardRank))
+      ) {
+        gcRankMovementPresent = true;
+        break;
+      }
+    }
+    if (gcRankMovementPresent) break;
+  }
+
   return {
     success: true,
     byCategory,
@@ -1284,6 +1288,8 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
     gender: fg,
     gcMonthKey: mk,
     gcSnapshotAsOf: metaState.snapshotAsOfSeoul || null,
+    gcRankMovementPresent,
+    rankMovementSource: gcRankMovementPresent ? "supabase_gc_cohort" : null,
     precomputed: true,
     readSource: "supabase",
   };
