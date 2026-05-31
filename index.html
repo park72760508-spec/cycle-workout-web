@@ -16307,7 +16307,12 @@
         });
       }
       stelvioMyRankSupremo = data.myRankSupremo || null;
-      stelvioCurrentUser = data.currentUser || null;
+      var resolvedCuPeak =
+        typeof stelvioRankingResolveCurrentUserFromPayload === 'function'
+          ? stelvioRankingResolveCurrentUserFromPayload(data, uid)
+          : null;
+      stelvioCurrentUser = resolvedCuPeak || data.currentUser || null;
+      if (resolvedCuPeak && !data.currentUser) data.currentUser = resolvedCuPeak;
       if (data.approximate || data.stale || data.pendingAggregate) {
         stelvioSetRankingRefreshHint(true);
         var hintEl = document.getElementById('stelvioRankingRefreshHint');
@@ -18283,8 +18288,15 @@
         ? STELVIO_DURATION_LABELS.gc || 'GC'
         : STELVIO_DURATION_LABELS[stelvioRankingState.duration] || stelvioRankingState.duration;
       var userName = (window.currentUser && window.currentUser.name) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.name ? u.name : null; } catch(e){ return null; } })() || '사용자';
-      var cu = currentUser || myRankSupremo;
       var uidHero = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
+      var cu = currentUser || myRankSupremo;
+      if (!cu && uidHero && typeof stelvioFindRankingRowForUser === 'function') {
+        var activeCatHero0 =
+          (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.activeCategory) || 'Supremo';
+        cu =
+          stelvioFindRankingRowForUser(activeCatHero0, uidHero) ||
+          stelvioFindRankingRowForUser('Supremo', uidHero);
+      }
       if (!cu) {
         hero.classList.add('hidden');
         return;
@@ -18311,7 +18323,9 @@
       var categoryRank = 0;
       if (stelvioRankingByCategory && cu.ageCategory && cu.userId) {
         var arr = stelvioRankingByCategory[cu.ageCategory] || [];
-        var idx = arr.findIndex(function(e) { return e.userId === cu.userId; });
+        var idx = arr.findIndex(function(e) {
+          return e && String(e.userId) === String(cu.userId);
+        });
         if (idx >= 0) categoryRank = idx + 1;
       }
       var msg;
@@ -18713,6 +18727,21 @@
       return !Number.isNaN(n) && n >= 1 && n <= 3;
     }
 
+    /** API currentUser 누락 시 byCategory에서 본인 행 복원 (GC·Supabase uid 문자열 불일치 대비) */
+    function stelvioRankingResolveCurrentUserFromPayload(data, uid) {
+      if (!data || !data.byCategory || uid == null || uid === '') return data && data.currentUser ? data.currentUser : null;
+      if (data.currentUser && String(data.currentUser.userId) === String(uid)) return data.currentUser;
+      var lookup = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      var uidStr = String(uid);
+      for (var li = 0; li < lookup.length; li++) {
+        var arrL = data.byCategory[lookup[li]] || [];
+        for (var lj = 0; lj < arrL.length; lj++) {
+          if (arrL[lj] && String(arrL[lj].userId) === uidStr) return arrL[lj];
+        }
+      }
+      return null;
+    }
+
     /** 즉시 탭·캐시 히트 후에도 분포 차트·본인 행이 동작하도록 전역 페이로드 동기화 */
     function stelvioRankingSyncPayloadGlobals(data, uid) {
       if (!data || !data.byCategory) return;
@@ -18728,7 +18757,12 @@
           ? stelvioResolveRankingFullEntries(data)
           : null;
       stelvioMyRankSupremo = data.myRankSupremo || null;
-      stelvioCurrentUser = data.currentUser || null;
+      var resolvedCu =
+        typeof stelvioRankingResolveCurrentUserFromPayload === 'function'
+          ? stelvioRankingResolveCurrentUserFromPayload(data, uid)
+          : null;
+      stelvioCurrentUser = resolvedCu || data.currentUser || null;
+      if (resolvedCu && !data.currentUser) data.currentUser = resolvedCu;
       stelvioRankingCurrentUserId = uid || null;
       if (typeof data.startStr === 'string') stelvioRankingApiStartStr = data.startStr;
       if (typeof data.endStr === 'string') stelvioRankingApiEndStr = data.endStr;
