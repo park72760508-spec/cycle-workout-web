@@ -863,6 +863,33 @@
    * 랭킹보드 GC 탭과 동일 산출: 순위(`computeDisplayRankLikeDistribution`·gc)·모수 n·레벨%·`gcScore`·등급.
    * 7축 레이더용 `positionScores100` 등은 `tierAfterOvl`에서 유지.
    */
+  function gcHeptagonPayloadUsable(data) {
+    if (typeof window.stelvioGcPayloadUsableForHeptagonGraph === 'function') {
+      return window.stelvioGcPayloadUsableForHeptagonGraph(data);
+    }
+    if (!data || !data.success || !data.byCategory) {
+      return false;
+    }
+    return heptagonCohortItemsFromGcApi(data, 'Supremo').length > 0;
+  }
+
+  function resolveGcRankingSeedForOctagon(uidIn, genderIn) {
+    if (typeof window.stelvioResolveGcRankingSeedFromRankingBoard === 'function') {
+      return window.stelvioResolveGcRankingSeedFromRankingBoard(uidIn, genderIn);
+    }
+    return null;
+  }
+
+  function gcHeptagonShowingStaleSnapshot(data) {
+    if (!data || !data.success) {
+      return false;
+    }
+    if (typeof window.stelvioGcIsHeptagonBatchCompleteForMinYmd === 'function' && typeof window.stelvioGcMinAcceptableSnapshotYmd === 'function') {
+      return !window.stelvioGcIsHeptagonBatchCompleteForMinYmd(data, window.stelvioGcMinAcceptableSnapshotYmd());
+    }
+    return data.gcSnapshotStale === true;
+  }
+
   function applyGcRankingBoardMerge(tierAfterOvl, gcData, uid, filterCategory, userAgeCategory) {
     if (!tierAfterOvl || !gcData || !gcData.success || !uid) {
       return tierAfterOvl;
@@ -2864,6 +2891,7 @@
     var p = props || {};
     var userProfile = p.userProfile;
     var DashboardCard = p.DashboardCard;
+    var initialGcRankingPayload = p.initialGcRankingPayload;
     var uid = userProfile && userProfile.id != null ? String(userProfile.id) : null;
     var userAgeCatStr = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
 
@@ -2957,8 +2985,15 @@
     var setGcRankingApi = _gcApi[1];
     /** GC 패치 세대(성별·uid 변경 후 이전 응답 무시) */
     var gcFetchSeqRef = useRef(0);
-    /** 마지막 성공 GC 응답(fetch 실패/abort 시 상태 복원) */
+    /** 마지막 성공 GC 응답(fetch 실패·집계 공백 시 직전 스냅샷 복원) */
     var lastGcSuccessRef = useRef(null);
+    if (initialGcRankingPayload && gcHeptagonPayloadUsable(initialGcRankingPayload) && !lastGcSuccessRef.current) {
+      lastGcSuccessRef.current = {
+        payload: initialGcRankingPayload,
+        uid: userProfile && userProfile.id ? String(userProfile.id) : '',
+        gender: 'all',
+      };
+    }
 
     /** 전체(Supremo) 랭킹 7축·환산 합 — 본인 부문 외(가상) 순위 비교의 1순위(전체랭킹·대시보드 `fetchRanksSet` Supremo) */
     var chartSupremoSumFromGlobalRanking = useMemo(
@@ -2986,16 +3021,23 @@
         var seq = gcFetchSeqRef.current + 1;
         gcFetchSeqRef.current = seq;
         var uidStr = String(uid);
+        var seedPayload = resolveGcRankingSeedForOctagon(uidStr, gender);
+        if (seedPayload && gcHeptagonPayloadUsable(seedPayload)) {
+          lastGcSuccessRef.current = { payload: seedPayload, uid: uidStr, gender: gender };
+        }
         var ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
         setGcRankingApi(function(prev) {
           var keep =
-            prev && prev.data && prev.data.success
+            prev && prev.data && gcHeptagonPayloadUsable(prev.data)
               ? prev.data
               : lastGcSuccessRef.current &&
                   lastGcSuccessRef.current.uid === uidStr &&
-                  lastGcSuccessRef.current.gender === gender
+                  lastGcSuccessRef.current.gender === gender &&
+                  gcHeptagonPayloadUsable(lastGcSuccessRef.current.payload)
                 ? lastGcSuccessRef.current.payload
-                : null;
+                : seedPayload && gcHeptagonPayloadUsable(seedPayload)
+                  ? seedPayload
+                  : null;
           return { loading: true, data: keep, err: null };
         });
         var url = buildRankingUrl(uid, 'gc', 'monthly', gender);
@@ -3007,21 +3049,22 @@
             if (seq !== gcFetchSeqRef.current) {
               return;
             }
-            if (data && data.success) {
+            if (data && data.success && gcHeptagonPayloadUsable(data)) {
               lastGcSuccessRef.current = { payload: data, uid: uidStr, gender: gender };
               setGcRankingApi({ loading: false, data: data, err: null });
               return;
             }
             setGcRankingApi(function(prev) {
               var keep =
-                prev && prev.data && prev.data.success
+                prev && prev.data && gcHeptagonPayloadUsable(prev.data)
                   ? prev.data
                   : lastGcSuccessRef.current &&
                       lastGcSuccessRef.current.uid === uidStr &&
-                      lastGcSuccessRef.current.gender === gender
+                      lastGcSuccessRef.current.gender === gender &&
+                      gcHeptagonPayloadUsable(lastGcSuccessRef.current.payload)
                     ? lastGcSuccessRef.current.payload
                     : null;
-              return { loading: false, data: keep, err: 'api' };
+              return { loading: false, data: keep, err: data && data.success ? 'empty' : 'api' };
             });
           })
           .catch(function(e) {
@@ -3034,11 +3077,12 @@
                 (typeof e.message === 'string' && e.message.indexOf('aborted') >= 0));
             setGcRankingApi(function(prev) {
               var keep =
-                prev && prev.data && prev.data.success
+                prev && prev.data && gcHeptagonPayloadUsable(prev.data)
                   ? prev.data
                   : lastGcSuccessRef.current &&
                       lastGcSuccessRef.current.uid === uidStr &&
-                      lastGcSuccessRef.current.gender === gender
+                      lastGcSuccessRef.current.gender === gender &&
+                      gcHeptagonPayloadUsable(lastGcSuccessRef.current.payload)
                     ? lastGcSuccessRef.current.payload
                     : null;
               return { loading: false, data: keep, err: isAbort ? null : 'fetch' };
@@ -3054,6 +3098,9 @@
       },
       [uid, gender]
     );
+
+    var gcHeptagonStaleSnapshot =
+      gcRankingApi.data && gcHeptagonPayloadUsable(gcRankingApi.data) && gcHeptagonShowingStaleSnapshot(gcRankingApi.data);
 
     /**
      * 코호트 표 삽입·OVL에 쓰는 환산 합: **GC API 점수 우선**(랭킹보드와 동일), 없으면 7축 Supremo 합.
@@ -3669,7 +3716,15 @@
       seqRef.current += 1;
       var fetchSeq = seqRef.current;
       setBoard({ loading: true, err: null, rows: [], nCohort: 0, meInList: false });
-      var gcOnly = heptagonBoardFromGcApiOnly(uidIn, gIn, cIn, chartSupremoSumForVirtual, gcApiData);
+      var gcDataEff = gcApiData;
+      if (
+        !gcHeptagonPayloadUsable(gcDataEff) &&
+        lastGcSuccessRef.current &&
+        gcHeptagonPayloadUsable(lastGcSuccessRef.current.payload)
+      ) {
+        gcDataEff = lastGcSuccessRef.current.payload;
+      }
+      var gcOnly = heptagonBoardFromGcApiOnly(uidIn, gIn, cIn, chartSupremoSumForVirtual, gcDataEff);
       if (gcOnly) {
         setBoard({
           loading: false,
@@ -4436,10 +4491,17 @@
       );
     }
 
+    var gcHeptagonStaleCaption = gcHeptagonStaleSnapshot ? (
+      <p className="weekly-top10-week-caption text-center mb-2 px-2" role="status">
+        ※ 직전 헵타곤 스냅샷 기준 표시 (03:20 집계 갱신 대기 중)
+      </p>
+    ) : null;
+
     if (DashboardCard) {
       return (
         <DashboardCard title="STELVIO 헵타곤 (레벨 포지션)">
           {filterRow}
+          {gcHeptagonStaleCaption}
           {body}
           {heptagonDetailModal}
         </DashboardCard>
@@ -4449,6 +4511,7 @@
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
         <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 헵타곤 (레벨 포지션)</h3>
         {filterRow}
+        {gcHeptagonStaleCaption}
         {body}
         {heptagonDetailModal}
       </div>
