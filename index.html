@@ -15162,16 +15162,170 @@
       if (!data.durationType) data.durationType = dt;
     }
 
+    var STELVIO_GC_RANK_BASELINE_PREFIX = 'stelvio_gc_rank_baseline:v1:';
+    var stelvioGcRankBaselineMem = Object.create(null);
+
+    function stelvioGcRankBaselineStorageKey(monthKey, gender, asOfYmd) {
+      return (
+        STELVIO_GC_RANK_BASELINE_PREFIX +
+        [String(monthKey || ''), String(gender || 'all'), String(asOfYmd || '')].join('|')
+      );
+    }
+
+    function stelvioGcRankMapsFromPayloadByCategory(data) {
+      var out = {};
+      if (!data || !data.byCategory) return out;
+      for (var ci = 0; ci < STELVIO_RANK_BOARD_CATS.length; ci++) {
+        var cat = STELVIO_RANK_BOARD_CATS[ci];
+        out[cat] = stelvioBuildPeakRankMapForCategory(data.byCategory, cat);
+      }
+      return out;
+    }
+
+    function stelvioReadGcRankBaseline(monthKey, gender, asOfYmd) {
+      var key = stelvioGcRankBaselineStorageKey(monthKey, gender, asOfYmd);
+      if (stelvioGcRankBaselineMem[key]) return stelvioGcRankBaselineMem[key];
+      try {
+        var raw = localStorage.getItem(key);
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && parsed.ranksByCategory) {
+            stelvioGcRankBaselineMem[key] = parsed.ranksByCategory;
+            return parsed.ranksByCategory;
+          }
+        }
+      } catch (eGcBl) {}
+      if (
+        stelvioGcPinnedRankingPayload &&
+        stelvioGcPinnedRankingPayload.durationType === 'gc' &&
+        stelvioGcPinnedRankingPayload.byCategory
+      ) {
+        var pinAsOf =
+          stelvioGcPinnedRankingPayload.gcSnapshotAsOf != null
+            ? String(stelvioGcPinnedRankingPayload.gcSnapshotAsOf).trim().slice(0, 10)
+            : '';
+        if (pinAsOf && pinAsOf === String(asOfYmd || '').trim().slice(0, 10)) {
+          var pinMaps = stelvioGcRankMapsFromPayloadByCategory(stelvioGcPinnedRankingPayload);
+          stelvioGcRankBaselineMem[key] = pinMaps;
+          return pinMaps;
+        }
+      }
+      return null;
+    }
+
+    function stelvioWriteGcRankBaseline(monthKey, gender, asOfYmd, ranksByCategory) {
+      if (!asOfYmd || !ranksByCategory) return;
+      var key = stelvioGcRankBaselineStorageKey(monthKey, gender, asOfYmd);
+      stelvioGcRankBaselineMem[key] = ranksByCategory;
+      try {
+        localStorage.setItem(
+          key,
+          JSON.stringify({ ranksByCategory: ranksByCategory, savedAt: Date.now() })
+        );
+      } catch (eGcWr) {}
+    }
+
+    /**
+     * GC 등락: 화면에 적용된 gcSnapshotAsOf 집계 vs 직전 asOf 집계(저장 baseline).
+     * 피크용 localStorage(prevDay·yesterdayOfficial)와 분리 — 전전일·캘린더 불일치 방지.
+     */
+    function stelvioApplyGcRankMovementFromPriorSnapshot(data) {
+      if (!data || !data.byCategory || data.durationType !== 'gc') return;
+      var serverMvSnap = stelvioExtractRankMovementFromPayload(data);
+      stelvioSyncPeakRankMovementFromEntries(data);
+
+      var asOf =
+        data.gcSnapshotAsOf != null ? String(data.gcSnapshotAsOf).trim().slice(0, 10) : '';
+      if (!asOf) return;
+
+      var monthKey =
+        data.gcMonthKey != null
+          ? String(data.gcMonthKey)
+          : asOf.length >= 7
+            ? asOf.slice(0, 7)
+            : '';
+      var gender =
+        data.gender ||
+        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState
+          ? stelvioRankingState.gender
+          : 'all') ||
+        'all';
+
+      var priorAsOf =
+        typeof stelvioSeoulYmdAddDays === 'function' ? stelvioSeoulYmdAddDays(asOf, -1) : '';
+      var priorMaps = priorAsOf ? stelvioReadGcRankBaseline(monthKey, gender, priorAsOf) : null;
+      var currMaps = stelvioGcRankMapsFromPayloadByCategory(data);
+      var recomputed = false;
+
+      if (priorMaps && typeof priorMaps === 'object') {
+        for (var gci = 0; gci < STELVIO_RANK_BOARD_CATS.length; gci++) {
+          var catG = STELVIO_RANK_BOARD_CATS[gci];
+          var rowsG = data.byCategory[catG] || [];
+          var priorCat = priorMaps[catG] || {};
+          var currCat = currMaps[catG] || {};
+          for (var gri = 0; gri < rowsG.length; gri++) {
+            var rowG = rowsG[gri];
+            if (!rowG || rowG.userId == null) continue;
+            var uidG = String(rowG.userId);
+            var currR = currCat[uidG];
+            var prevR = priorCat[uidG];
+            if (currR == null || currR < 1 || prevR == null || prevR < 1) continue;
+            var prevN = Math.floor(Number(prevR));
+            var currN = Math.floor(Number(currR));
+            rowG.previousBoardRank = prevN;
+            rowG.rankChange = prevN - currN;
+            recomputed = true;
+          }
+        }
+      }
+
+      if (!recomputed) {
+        stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
+      }
+
+      if (data.currentUser && data.currentUser.userId != null) {
+        var cuCatG =
+          data.currentUser.ageCategory && data.byCategory[data.currentUser.ageCategory]
+            ? data.currentUser.ageCategory
+            : 'Supremo';
+        var cuRowsG = data.byCategory[cuCatG] || [];
+        for (var cuiG = 0; cuiG < cuRowsG.length; cuiG++) {
+          if (String(cuRowsG[cuiG].userId) === String(data.currentUser.userId)) {
+            data.currentUser.rankChange = cuRowsG[cuiG].rankChange;
+            data.currentUser.previousBoardRank = cuRowsG[cuiG].previousBoardRank;
+            break;
+          }
+        }
+      }
+      if (data.myRankSupremo && data.myRankSupremo.userId != null) {
+        var supRowsG = data.byCategory.Supremo || [];
+        for (var smiG = 0; smiG < supRowsG.length; smiG++) {
+          if (String(supRowsG[smiG].userId) === String(data.myRankSupremo.userId)) {
+            data.myRankSupremo.rankChange = supRowsG[smiG].rankChange;
+            data.myRankSupremo.previousBoardRank = supRowsG[smiG].previousBoardRank;
+            break;
+          }
+        }
+      }
+
+      stelvioWriteGcRankBaseline(monthKey, gender, asOf, currMaps);
+      stelvioEnsurePeakPowerRankMovementOnPayload(data);
+    }
+
     /** GC·피크·TSS 등 — 서버 rankChange 보존 후, 없으면 로컬 스냅샷으로 등락 보강(탭 즉시 전환 포함) */
     function stelvioApplyRankMovementPipeline(data) {
       if (!data || !data.byCategory) return;
+      var duration = stelvioResolveRankMovementDurationType(data);
+      if (duration === 'gc') {
+        stelvioApplyGcRankMovementFromPriorSnapshot(data);
+        return;
+      }
       var serverMvSnap = stelvioExtractRankMovementFromPayload(data);
       stelvioSyncPeakRankMovementFromEntries(data);
       var rankMvFromSupabase =
         data.readBackend === 'supabase' ||
         data.readSource === 'supabase' ||
         data.rankMovementSource === 'supabase';
-      var duration = stelvioResolveRankMovementDurationType(data);
       var needsClientMv =
         stelvioSupportsRankMovementDuration(duration) &&
         (!rankMvFromSupabase || !stelvioPeakRankMovementPresentOnPayload(data));
