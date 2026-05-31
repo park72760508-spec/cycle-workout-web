@@ -7987,9 +7987,8 @@
     window.stelvioGetRankingReadSourceSync = stelvioGetRankingReadSourceSync;
 
     /**
-     * 로컬 캐시·즉시 탭 전환·프리페치 적격 여부.
-     * Supabase Read ON이어도 GC·parity·MV 실패 시 readBackend=firebase 폴백이 정상 → 동일 파이프라인 허용.
-     * Firebase Read 모드에서는 supabase 응답만 거부(역방향 폴백 없음).
+     * 로컬 캐시·즉시 탭 전환 적격 — readDb·응답 readBackend 일치만 허용.
+     * Supabase Read 시 readBackend=firebase 응답(구 캐시·폴백)은 거부.
      */
     function stelvioRankingPayloadMatchesReadSource(data) {
       if (!data) return false;
@@ -7998,6 +7997,15 @@
       var cfg = stelvioGetRankingReadSourceSync();
       if (backend === cfg) return true;
       return false;
+    }
+
+    function stelvioRankingPayloadFromSupabaseRead(data) {
+      if (!data) return false;
+      return (
+        data.readSource === 'supabase' ||
+        data.readBackend === 'supabase' ||
+        data.supabaseReadBlockedFirebaseFallback === true
+      );
     }
 
     function stelvioRankingSwrKeyMatchesReadSource(swrKey) {
@@ -8090,11 +8098,10 @@
           var hint;
           if (tag === 'weeklyTop10') {
             hint =
-              '[StelvioRankingRead] 주간 TOP10(getWeeklyRanking): Supabase MV 조회 실패 → Firebase 폴백. ' +
-              'GC 탭과 무관. Cloud Functions 로그 "[rankingReadRouter] weekly Supabase failed" 확인.';
+              '[StelvioRankingRead] 주간 TOP10 — readBackend=firebase(구버전·비정상). Supabase Read 전용 모드에서는 pending·재조회만 사용합니다.';
           } else if (meta && meta.duration === 'gc') {
             hint =
-              '[StelvioRankingRead] GC 탭 — Supabase heptagon_cohort_ranks 조회 실패 → Firebase 폴백. Functions 로그 "[rankingReadRouter] Supabase read failed" 확인.';
+              '[StelvioRankingRead] GC 탭 — readBackend=firebase(비정상). Supabase heptagon_cohort_ranks·Functions 로그 확인.';
           } else if (meta && meta.duration === 'group_dist') {
             hint =
               '[StelvioRankingRead] 그룹(방장 거리) API duration=group_dist — Supabase open_rides 조회 실패 → Firebase 폴백.';
@@ -10803,6 +10810,7 @@
           await stelvioEnsureRankingFirestoreAuthReady();
           serverMeta = await stelvioFetchRankingMetaFromFirestore();
         }
+        /* Supabase Read: ranking_build_meta만 사용 — Firestore ranking_meta 조회 생략 */
         var inv = await stelvioApplyRankingBuildMetaInvalidationIfNeeded(serverMeta);
         var warmAllTabs =
           opts.forcePrefetch === true || inv.invalidated === true || opts.forceWarmAll === true;
@@ -14114,6 +14122,12 @@
     function stelvioScheduleRankingBoardProfileHydrate(data, opts) {
       opts = opts || {};
       stelvioEnrichMissingProfileImages(data);
+      if (stelvioRankingPayloadFromSupabaseRead(data)) {
+        return;
+      }
+      if (stelvioGetRankingReadSourceSync() === 'supabase') {
+        return;
+      }
       stelvioHydrateRankingBoardProfilesFromUsers(data, opts).catch(function () {});
     }
 
