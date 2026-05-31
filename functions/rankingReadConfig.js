@@ -113,6 +113,11 @@ async function refreshRankingReadConfig(admin, force = false) {
     parityFallbackToFirebase = false;
   }
 
+  /** Supabase 전용 Read(cutover) 시 Firestore parity=true 여도 Firebase 대량 폴백·500 방지 */
+  if (useSupabaseGlobal && !safeIsFirebaseRankingReadAllowed()) {
+    parityFallbackToFirebase = false;
+  }
+
   cache = {
     useSupabaseGlobal,
     whitelistUids,
@@ -143,13 +148,21 @@ function isFirebaseRankingReadAllowed() {
   return parseBool(process.env.RANKING_READ_FORCE_FIREBASE) === true;
 }
 
+/** 배포 버전 불일치·구버전 rankingReadConfig 대비 */
+function safeIsFirebaseRankingReadAllowed() {
+  if (typeof isFirebaseRankingReadAllowed === "function") {
+    return isFirebaseRankingReadAllowed();
+  }
+  return false;
+}
+
 /**
  * @param {import('firebase-admin')} admin
  * @param {string|null|undefined} requestFirebaseUid API 요청 사용자 Firebase UID
  */
 async function shouldReadRankingFromSupabase(admin, requestFirebaseUid) {
   await refreshRankingReadConfig(admin, false);
-  if (!isFirebaseRankingReadAllowed()) {
+  if (!safeIsFirebaseRankingReadAllowed()) {
     return { route: "supabase", reason: "ranking_read_supabase_only(cutover)" };
   }
   if (cache.useSupabaseGlobal) {
@@ -242,6 +255,7 @@ module.exports = {
   getRankingReadConfig,
   shouldReadRankingFromSupabase,
   isFirebaseRankingReadAllowed,
+  safeIsFirebaseRankingReadAllowed,
   parseUidList,
   persistRankingReadRouting,
   getRankingReadRoutingDocMeta,

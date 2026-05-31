@@ -4245,6 +4245,8 @@ exports.getWeeklyRanking = onRequest(
       res.status(204).send("");
       return;
     }
+    res.set("Access-Control-Allow-Origin", "*");
+    try {
     const db = admin.firestore();
     const weekParam = (req.query && req.query.week) || "";
     const userIdParam = (req.query && req.query.userId) || "";
@@ -4295,8 +4297,7 @@ exports.getWeeklyRanking = onRequest(
       });
     }
 
-    if (!rankingReadConfig.isFirebaseRankingReadAllowed()) {
-      res.set("Access-Control-Allow-Origin", "*");
+    if (!rankingReadConfig.safeIsFirebaseRankingReadAllowed()) {
       res.set("Cache-Control", "no-store");
       return res.status(200).json({
         success: true,
@@ -4525,7 +4526,7 @@ exports.getWeeklyRanking = onRequest(
       }
     }
 
-    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Cache-Control", "no-store");
     res.status(200).json({
       success: true,
       ranking: [],
@@ -4534,6 +4535,28 @@ exports.getWeeklyRanking = onRequest(
       rebuilding: true,
       message: "랭킹 집계 준비 중입니다. 잠시 후 다시 시도해주세요.",
     });
+    } catch (errWeekly) {
+      console.error(
+        "[getWeeklyRanking] unhandled",
+        errWeekly && errWeekly.stack ? errWeekly.stack : errWeekly
+      );
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cache-Control", "no-store");
+      if (!res.headersSent) {
+        res.status(200).json({
+          success: true,
+          ranking: [],
+          readBackend: "supabase",
+          readSource: "supabase",
+          pendingAggregate: true,
+          error: "weekly_ranking_internal",
+          message:
+            errWeekly && errWeekly.message
+              ? String(errWeekly.message)
+              : "주간 랭킹 조회 중 오류가 발생했습니다.",
+        });
+      }
+    }
   }
 );
 
@@ -9387,7 +9410,7 @@ exports.getPeakPowerRanking = onRequest(
     const origJsonPeak = res.json.bind(res);
     res.json = (payload) => {
       if (payload && typeof payload === "object" && payload.success && !payload.readBackend) {
-        const fbReadLegacy = rankingReadConfig.isFirebaseRankingReadAllowed();
+        const fbReadLegacy = rankingReadConfig.safeIsFirebaseRankingReadAllowed();
         payload.readBackend = fbReadLegacy ? "firebase" : "supabase";
         payload.readSource = payload.readBackend;
       }
@@ -9447,20 +9470,40 @@ exports.getPeakPowerRanking = onRequest(
         durationType,
         gender,
       });
-      const pendingOnly = rankingReadRouter.buildSupabaseRankingPendingPayload(
-        durationType,
-        gender,
-        "router_null",
-        {
-          getWeekRangeSeoul,
-          getRolling28DaysRangeSeoul,
-          getRolling30DaysRangeSeoul,
-        }
-      );
+      const buildPending =
+        typeof rankingReadRouter.buildSupabaseRankingPendingPayload === "function"
+          ? rankingReadRouter.buildSupabaseRankingPendingPayload.bind(rankingReadRouter)
+          : null;
+      const pendingOnly = buildPending
+        ? buildPending(durationType, gender, "router_null", {
+            getWeekRangeSeoul,
+            getRolling28DaysRangeSeoul,
+            getRolling30DaysRangeSeoul,
+          })
+        : {
+            success: true,
+            byCategory: rankingReadRouter.emptyPeakRankingByCategory
+              ? rankingReadRouter.emptyPeakRankingByCategory()
+              : {
+                  Supremo: [],
+                  Assoluto: [],
+                  Bianco: [],
+                  Rosa: [],
+                  Infinito: [],
+                  Leggenda: [],
+                },
+            entries: [],
+            durationType,
+            gender,
+            pendingAggregate: true,
+            readBackend: "supabase",
+            readSource: "supabase",
+            message: "Supabase 랭킹 집계 준비 중입니다.",
+          };
       return res.status(200).json(pendingOnly);
     }
 
-    if (!rankingReadConfig.isFirebaseRankingReadAllowed()) {
+    if (!rankingReadConfig.safeIsFirebaseRankingReadAllowed()) {
       console.error("[getPeakPowerRanking] Firebase ranking read/aggregate disabled (Supabase cutover)");
       return res.status(200).json(
         rankingReadRouter.buildSupabaseRankingPendingPayload(durationType, gender, "firebase_read_disabled", {

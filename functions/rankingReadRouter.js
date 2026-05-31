@@ -130,7 +130,7 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
 
   const route = await rankingReadConfig.shouldReadRankingFromSupabase(admin, uid);
   if (route.route !== "supabase") {
-    if (!rankingReadConfig.isFirebaseRankingReadAllowed()) {
+    if (!rankingReadConfig.safeIsFirebaseRankingReadAllowed()) {
       return buildSupabaseRankingPendingPayload(
         durationType,
         gender,
@@ -151,7 +151,7 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
 
     if (durationType === "gc") {
       const monthKey = supabaseRankingReader.getMonthKeyKstNow();
-      payload = await supabaseRankingReader.fetchGcRanking(admin, monthKey, gender);
+      payload = await supabaseRankingReader.fetchGcRanking(admin, monthKey, gender, uid);
       if (payload) {
         await supabaseRankingReader.attachGcHeptagonMeta(admin, payload, {
           getMinHeptagonSnapshotAsOfSeoulYmd: deps.getMinHeptagonSnapshotAsOfSeoulYmd,
@@ -276,6 +276,18 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
       payload.rankingParity = parityReport;
 
       if (cfg.parityFallbackToFirebase && parityReport && parityReport.ok === false) {
+        if (!rankingReadConfig.safeIsFirebaseRankingReadAllowed()) {
+          console.warn(
+            "[rankingReadRouter] parity drift — Firebase fallback blocked, pending payload",
+            { durationType, gender, mismatchCount: parityReport.mismatchCount }
+          );
+          return buildSupabaseRankingPendingPayload(
+            durationType,
+            gender,
+            "parity_drift",
+            deps
+          );
+        }
         console.warn("[rankingReadRouter] parity drift → Firebase fallback (parityFallbackToFirebase=true)", {
           durationType,
           gender,
@@ -328,7 +340,7 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
     userIdParam
   );
   if (route.route !== "supabase") {
-    if (!rankingReadConfig.isFirebaseRankingReadAllowed()) {
+    if (!rankingReadConfig.safeIsFirebaseRankingReadAllowed()) {
       return {
         success: true,
         ranking: [],
@@ -441,7 +453,30 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
       "[rankingReadRouter] weekly Supabase failed:",
       err && err.message ? err.message : err
     );
-    return null;
+    const { getWeekRangeSeoul } = deps || {};
+    let startStr = "";
+    let endStr = "";
+    if (typeof getWeekRangeSeoul === "function") {
+      try {
+        const w = getWeekRangeSeoul();
+        startStr = w.startStr;
+        endStr = w.endStr;
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    return {
+      success: true,
+      ranking: [],
+      startStr,
+      endStr,
+      readBackend: "supabase",
+      readSource: "supabase",
+      pendingAggregate: true,
+      supabaseReadBlockedFirebaseFallback: true,
+      supabasePendingReason: "error",
+      message: "Supabase 주간 TSS 랭킹 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    };
   }
 }
 

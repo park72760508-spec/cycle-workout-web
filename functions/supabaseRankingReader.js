@@ -1259,7 +1259,95 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
  * @param {string} [monthKey] YYYY-MM (KST)
  * @param {string} [requestedGender] all | M | F
  */
-async function fetchGcRanking(admin, monthKey, requestedGender) {
+/**
+ * GC 탭 헵타곤(7축) 레이더 — Supremo 행의 ranks·cohort_n_per_axis (피크 7회 조회 폴백용).
+ * @param {import('firebase-admin')} admin
+ * @param {object} payload GC ranking payload
+ * @param {string|null} viewerFirebaseUid
+ * @param {string} gender all|M|F
+ */
+async function attachGcViewerHeptagonAxes(admin, payload, viewerFirebaseUid, gender) {
+  if (!payload || !viewerFirebaseUid) return payload;
+  const fbUid = String(viewerFirebaseUid).trim();
+  if (!fbUid) return payload;
+
+  const monthKey = payload.gcMonthKey || getMonthKeyKstNow();
+  const fg = gender === "M" || gender === "F" ? gender : "all";
+  let supabase;
+  try {
+    supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  } catch (eSb) {
+    return payload;
+  }
+
+  const uuid = resolveUuid(fbUid);
+  if (!uuid) return payload;
+
+  try {
+    const { data, error } = await supabase
+      .from("heptagon_cohort_ranks")
+      .select(
+        "user_id, filter_category, ranks, cohort_n_per_axis, position_scores100, sum_position_scores, board_rank"
+      )
+      .eq("month_key", monthKey)
+      .eq("filter_gender", fg)
+      .eq("filter_category", "Supremo")
+      .eq("user_id", uuid)
+      .order("as_of_seoul", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return payload;
+
+    const ranks = Array.isArray(data.ranks) ? data.ranks.map((r) => Math.floor(Number(r))) : null;
+    const cohortN = Array.isArray(data.cohort_n_per_axis)
+      ? data.cohort_n_per_axis.map((n) => Math.max(0, Math.floor(Number(n))))
+      : null;
+    const pos100 = Array.isArray(data.position_scores100)
+      ? data.position_scores100.map((v) => Number(v))
+      : null;
+    if (!ranks || ranks.length !== 7) return payload;
+
+    payload.viewerHeptagonAxis = {
+      ranks,
+      cohortSizePerAxis: cohortN && cohortN.length === 7 ? cohortN : ranks.map(() => 100),
+      positionScores100: pos100 && pos100.length === 7 ? pos100 : null,
+      sumPositionScores:
+        data.sum_position_scores != null && isFinite(Number(data.sum_position_scores))
+          ? Number(data.sum_position_scores)
+          : null,
+      boardRank:
+        data.board_rank != null && isFinite(Number(data.board_rank))
+          ? Math.floor(Number(data.board_rank))
+          : null,
+    };
+
+    const supRows = payload.byCategory && payload.byCategory.Supremo;
+    if (Array.isArray(supRows)) {
+      for (let i = 0; i < supRows.length; i++) {
+        const row = supRows[i];
+        if (row && String(row.userId) === fbUid) {
+          row.heptagonRanks = ranks;
+          row.heptagonCohortNPerAxis = payload.viewerHeptagonAxis.cohortSizePerAxis;
+          row.positionScores100 = payload.viewerHeptagonAxis.positionScores100;
+          break;
+        }
+      }
+    }
+    if (payload.currentUser && String(payload.currentUser.userId) === fbUid) {
+      payload.currentUser.heptagonRanks = ranks;
+      payload.currentUser.heptagonCohortNPerAxis = payload.viewerHeptagonAxis.cohortSizePerAxis;
+      payload.currentUser.positionScores100 = payload.viewerHeptagonAxis.positionScores100;
+    }
+  } catch (eAxis) {
+    console.warn(
+      "[supabaseRankingReader] attachGcViewerHeptagonAxes failed:",
+      eAxis && eAxis.message ? eAxis.message : eAxis
+    );
+  }
+  return payload;
+}
+
+async function fetchGcRanking(admin, monthKey, requestedGender, viewerFirebaseUid) {
   const want = normalizeRankingGenderParam(requestedGender);
   const mk = monthKey || getMonthKeyKstNow();
   logSupabaseRankingRequest(
@@ -1269,6 +1357,9 @@ async function fetchGcRanking(admin, monthKey, requestedGender) {
   );
   const payload = await fetchGcRankingCore(admin, mk, want);
   if (!payload) return null;
+  if (viewerFirebaseUid) {
+    await attachGcViewerHeptagonAxes(admin, payload, viewerFirebaseUid, want);
+  }
   const n = countRankingPayloadEntries(payload);
   console.log(
     "[Stelvio Supabase Request] Result:",
@@ -1370,6 +1461,7 @@ module.exports = {
   fetchGcRanking,
   fetchGroupDistRanking,
   attachGcHeptagonMeta,
+  attachGcViewerHeptagonAxes,
   getFirebaseUidByUuidMap,
   resetUuidMapCacheForTests,
   resolveUuid,
