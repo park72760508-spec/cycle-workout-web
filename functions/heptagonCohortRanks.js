@@ -940,6 +940,72 @@ function filterDocsToLatestAsOfSeoul(docs) {
   return list.filter((d) => asOfSeoulYmdFromDoc(d) === latest);
 }
 
+/** board_rank from cohort row (Firestore boardRank / Supabase board_rank). */
+function boardRankFromGcDoc(d) {
+  if (!d || typeof d !== "object") return null;
+  const raw = d.board_rank != null ? d.board_rank : d.boardRank;
+  if (raw == null || !isFinite(Number(raw))) return null;
+  const n = Math.floor(Number(raw));
+  return n >= 1 ? n : null;
+}
+
+/**
+ * 최신 as_of 행만 남기되, 당일 rank_change가 비어 있으면 직전 as_of board_rank로 등락 산출.
+ * (예: 6/1 스냅샷 INSERT 직후 — 5/31 스냅샷에는 rank_change가 이미 채워짐)
+ */
+function filterLatestGcDocsWithRankMovement(docs) {
+  const list = Array.isArray(docs) ? docs : [];
+  const latestRows = filterDocsToLatestAsOfSeoul(list);
+  if (!latestRows.length) return latestRows;
+
+  const hasMovement = latestRows.some(
+    (r) =>
+      r.rank_change != null &&
+      isFinite(Number(r.rank_change)) &&
+      boardRankFromGcDoc(r) != null
+  );
+  if (hasMovement) return latestRows;
+
+  const latestAsOf = latestAsOfSeoulYmdFromDocs(latestRows);
+  if (!latestAsOf) return latestRows;
+
+  const asOfSet = new Set();
+  for (let i = 0; i < list.length; i++) {
+    const a = asOfSeoulYmdFromDoc(list[i]);
+    if (a) asOfSet.add(a);
+  }
+  const sortedAsOf = Array.from(asOfSet).sort();
+  let priorAsOf = "";
+  for (let j = 0; j < sortedAsOf.length; j++) {
+    if (sortedAsOf[j] < latestAsOf) priorAsOf = sortedAsOf[j];
+  }
+  if (!priorAsOf) return latestRows;
+
+  const priorByUser = new Map();
+  for (let k = 0; k < list.length; k++) {
+    const row = list[k];
+    if (asOfSeoulYmdFromDoc(row) !== priorAsOf) continue;
+    const uid = row.user_id != null ? String(row.user_id) : "";
+    if (!uid) continue;
+    const br = boardRankFromGcDoc(row);
+    if (br != null) priorByUser.set(uid, br);
+  }
+  if (!priorByUser.size) return latestRows;
+
+  return latestRows.map((row) => {
+    const uid = row.user_id != null ? String(row.user_id) : "";
+    const priorRank = priorByUser.get(uid);
+    const currRank = boardRankFromGcDoc(row);
+    if (priorRank == null || currRank == null) return row;
+    return {
+      ...row,
+      previous_board_rank: priorRank,
+      yesterday_official_board_rank: priorRank,
+      rank_change: priorRank - currRank,
+    };
+  });
+}
+
 /** GC 보드 표시 순위 — 환산 합 내림차순 후 1..N */
 function rerankGcBoardRows(rows) {
   const sorted = (rows || []).slice().sort((a, b) => {
@@ -961,6 +1027,7 @@ module.exports = {
   getMonthKeyKstNow,
   latestAsOfSeoulYmdFromDocs,
   filterDocsToLatestAsOfSeoul,
+  filterLatestGcDocsWithRankMovement,
   rerankGcBoardRows,
   asOfSeoulYmdFromDoc,
   HEPTAGON_COHORT_COL,

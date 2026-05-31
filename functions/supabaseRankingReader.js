@@ -1104,6 +1104,36 @@ function getMonthKeyKstNow() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
 }
 
+/** YYYY-MM → 직전 달 (KST 월 키; GC 등락은 전월 마지막 as_of와 연결) */
+function getPreviousMonthKeyKst(monthKey) {
+  const m = String(monthKey || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(m)) return "";
+  const parts = m.split("-");
+  const y = Number(parts[0]);
+  const mo = Number(parts[1]);
+  if (!y || !mo) return "";
+  const d = new Date(Date.UTC(y, mo - 1, 1));
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  const yy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${yy}-${mm}`;
+}
+
+async function fetchGcCohortRankDocs(supabase, monthKey, category, filterGender) {
+  const { data, error } = await supabase
+    .from("heptagon_cohort_ranks")
+    .select(
+      "user_id, display_name, age_category, board_rank, comprehensive_rank, sum_position_scores, previous_board_rank, rank_change, yesterday_official_board_rank, range_start, range_end, as_of_seoul, is_private"
+    )
+    .eq("month_key", monthKey)
+    .eq("filter_category", category)
+    .eq("filter_gender", filterGender)
+    .order("board_rank", { ascending: true })
+    .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
+  if (error) throw error;
+  return data || [];
+}
+
 function resolveGcEntryGender(filterGender, profile, row) {
   const fromProf =
     profile && profile.gender != null ? genderDbToClient(profile.gender) : "";
@@ -1134,7 +1164,10 @@ function mapGcRowToEntry(row, fbUid, filterGender, gcScore, profile) {
     previousBoardRank:
       row.previous_board_rank != null && isFinite(Number(row.previous_board_rank))
         ? Math.floor(Number(row.previous_board_rank))
-        : null,
+        : row.yesterday_official_board_rank != null &&
+            isFinite(Number(row.yesterday_official_board_rank))
+          ? Math.floor(Number(row.yesterday_official_board_rank))
+          : null,
   };
 }
 
@@ -1178,22 +1211,25 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
     Leggenda: [],
   };
 
+  const heptagonCohortRanks = require("./heptagonCohortRanks");
+
   await Promise.all(
     HEPTAGON_CATEGORIES.map(async (cat) => {
-      const { data, error } = await supabase
-        .from("heptagon_cohort_ranks")
-        .select(
-          "user_id, display_name, age_category, board_rank, comprehensive_rank, sum_position_scores, previous_board_rank, rank_change, range_start, range_end, as_of_seoul, is_private"
-        )
-        .eq("month_key", mk)
-        .eq("filter_category", cat)
-        .eq("filter_gender", fg)
-        .order("board_rank", { ascending: true })
-        .limit(GC_RANKING_MAX_ROWS_PER_CATEGORY);
-      if (error) throw error;
-
-      const heptagonCohortRanks = require("./heptagonCohortRanks");
-      const latestRows = heptagonCohortRanks.filterDocsToLatestAsOfSeoul(data || []);
+      let cohortDocs = await fetchGcCohortRankDocs(supabase, mk, cat, fg);
+      let latestRows = heptagonCohortRanks.filterLatestGcDocsWithRankMovement(cohortDocs);
+      const latestHasMovement = latestRows.some(
+        (r) => r.rank_change != null && isFinite(Number(r.rank_change))
+      );
+      if (latestRows.length && !latestHasMovement) {
+        const prevMk = getPreviousMonthKeyKst(mk);
+        if (prevMk) {
+          const prevDocs = await fetchGcCohortRankDocs(supabase, prevMk, cat, fg);
+          if (prevDocs.length) {
+            cohortDocs = cohortDocs.concat(prevDocs);
+            latestRows = heptagonCohortRanks.filterLatestGcDocsWithRankMovement(cohortDocs);
+          }
+        }
+      }
 
       const uidMap = await getFirebaseUidMapForSupabaseUsers(
         admin,

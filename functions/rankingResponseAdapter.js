@@ -57,7 +57,7 @@ function attachCurrentUserToPayload(payload, uid, buildMotivationMessage) {
   for (let i = 0; i < PEAK_RANKING_USER_LOOKUP_ORDER.length; i++) {
     const c = PEAK_RANKING_USER_LOOKUP_ORDER[i];
     const arr = payload.byCategory[c] || [];
-    const idx = arr.findIndex((e) => e && e.userId === uid);
+    const idx = arr.findIndex((e) => e && String(e.userId) === String(uid));
     if (idx >= 0) {
       current = arr[idx];
       nextUser = idx > 0 ? arr[idx - 1] : null;
