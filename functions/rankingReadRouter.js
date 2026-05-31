@@ -41,6 +41,28 @@ function payloadHasVisibleRankingRows(payload) {
   return false;
 }
 
+/** Supabase 주간 TSS — 이번 주 비어 있으면 TOP10·TSS 탭 공통으로 전주 fallback */
+async function fetchSupabaseWeeklyTssWithPrevFallback(admin, startStr, endStr, gender, getWeekRangeSeoul) {
+  let payload = await supabaseRankingReader.fetchWeeklyTssRanking(admin, startStr, endStr, gender);
+  if (!payload || !Array.isArray(payload.entries)) return payload;
+  if (payload.entries.length > 0) return payload;
+  const prevRange = getWeekRangeSeoul(-1);
+  if (!prevRange || !prevRange.startStr || !prevRange.endStr) return payload;
+  const prevPayload = await supabaseRankingReader.fetchWeeklyTssRanking(
+    admin,
+    prevRange.startStr,
+    prevRange.endStr,
+    gender
+  );
+  if (!prevPayload || !Array.isArray(prevPayload.entries) || prevPayload.entries.length === 0) {
+    return payload;
+  }
+  prevPayload.prevWeekFallback = true;
+  prevPayload.displayStartStr = prevRange.startStr;
+  prevPayload.displayEndStr = prevRange.endStr;
+  return prevPayload;
+}
+
 /**
  * getPeakPowerRanking HTTP — Supabase 경로 가능 시 payload 반환, 아니면 null.
  * @param {import('firebase-admin')} admin
@@ -81,12 +103,17 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
       }
     } else if (durationType === "tss") {
       const { startStr, endStr } = getWeekRangeSeoul();
-      payload = await supabaseRankingReader.fetchWeeklyTssRanking(
+      payload = await fetchSupabaseWeeklyTssWithPrevFallback(
         admin,
         startStr,
         endStr,
-        gender
+        gender,
+        getWeekRangeSeoul
       );
+      if (payload && payload.prevWeekFallback) {
+        payload.startStr = payload.displayStartStr || payload.startStr;
+        payload.endStr = payload.displayEndStr || payload.endStr;
+      }
     } else if (durationType === "group_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
       payload = await supabaseRankingReader.fetchGroupDistRanking(
@@ -241,15 +268,24 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
       ? getWeekRangeSeoul(-1)
       : getWeekRangeSeoul();
 
-    const tssPayload = await supabaseRankingReader.fetchWeeklyTssRanking(
+    const tssPayload = await fetchSupabaseWeeklyTssWithPrevFallback(
       admin,
       startStr,
       endStr,
-      "all"
+      "all",
+      getWeekRangeSeoul
     );
     if (!tssPayload || !Array.isArray(tssPayload.entries)) {
       return null;
     }
+    const respStartStr =
+      !usePrevWeek && tssPayload.prevWeekFallback && tssPayload.displayStartStr
+        ? tssPayload.displayStartStr
+        : startStr;
+    const respEndStr =
+      !usePrevWeek && tssPayload.prevWeekFallback && tssPayload.displayEndStr
+        ? tssPayload.displayEndStr
+        : endStr;
     if (!usePrevWeek) {
       if (tssPayload.entries.length > 0) {
         await peakMovementSupabase.applyPeakRankChangesSupabase(
@@ -304,8 +340,8 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
     return {
       success: true,
       ranking: top10,
-      startStr,
-      endStr,
+      startStr: respStartStr,
+      endStr: respEndStr,
       myRank: myRank || undefined,
       precomputed: true,
       readSource: "supabase",
@@ -313,6 +349,9 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
       rankMovementSource: tssPayload.rankMovementSource,
       rankMovementHistoryKey: tssPayload.rankMovementHistoryKey,
       currentWeekEmpty: !usePrevWeek && entries.length === 0,
+      prevWeekFallback: !usePrevWeek && tssPayload.prevWeekFallback === true,
+      displayStartStr: tssPayload.displayStartStr,
+      displayEndStr: tssPayload.displayEndStr,
       supabaseWeeklyTssSource: tssPayload.supabaseWeeklyTssSource,
       allEntries: entries,
     };

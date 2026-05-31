@@ -3427,6 +3427,60 @@ async function readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender) 
   return null;
 }
 
+/** getPeakPowerRanking(tss) — readWeeklyTssRankingPayloadForHttp 결과 → HTTP JSON (TOP10·TSS 탭 동일 필드) */
+async function buildPeakTssRankingResponseFromHttpHit(db, tssHit, startStr, endStr, gender, uid) {
+  if (!tssHit || !tssHit.payload || !weeklyTssBoardPayloadHasRows(tssHit.payload)) return null;
+  const tssPayload = tssHit.payload;
+  const tssCat = tssPayload.byCategory || emptyPeakRankingByCategory();
+  const tssEnt = Array.isArray(tssPayload.entries) ? tssPayload.entries : tssCat.Supremo || [];
+  const outStartStr =
+    tssHit.prevWeekFallback && tssHit.displayStartStr ? tssHit.displayStartStr : startStr;
+  const outEndStr =
+    tssHit.prevWeekFallback && tssHit.displayEndStr ? tssHit.displayEndStr : endStr;
+  const outTss = {
+    success: true,
+    byCategory: tssCat,
+    startStr: outStartStr,
+    endStr: outEndStr,
+    period: "weekly",
+    durationType: "tss",
+    gender,
+    precomputed: !!tssHit.precomputed,
+    staleAggregate: !!tssHit.staleAggregate,
+  };
+  if (tssHit.prevWeekFallback) {
+    outTss.prevWeekFallback = true;
+    outTss.displayStartStr = tssHit.displayStartStr || outStartStr;
+    outTss.displayEndStr = tssHit.displayEndStr || outEndStr;
+  }
+  if (tssHit.dataThroughEndStr && tssHit.dataThroughEndStr !== endStr) {
+    outTss.dataThroughEndStr = tssHit.dataThroughEndStr;
+  }
+  if (uid) {
+    let current = null;
+    let nextUser = null;
+    for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+      const arr = tssCat[c] || [];
+      const idx = arr.findIndex((e) => e.userId === uid);
+      if (idx >= 0) {
+        current = arr[idx];
+        nextUser = idx > 0 ? arr[idx - 1] : null;
+        break;
+      }
+    }
+    if (current) {
+      outTss.currentUser = current;
+      outTss.motivationMessage = buildMotivationMessage(current, nextUser);
+    }
+  }
+  const tssFbEntries = Array.isArray(tssEnt) && tssEnt.length ? tssEnt : outTss.byCategory.Supremo;
+  await hydratePeakRankMovementOnPayload(db, outTss.byCategory, tssFbEntries, `peak_tss_weekly_${gender}`);
+  if (!outTss.entries && Array.isArray(outTss.byCategory.Supremo)) {
+    outTss.entries = outTss.byCategory.Supremo.slice();
+  }
+  return outTss;
+}
+
 /** getWeeklyRanking TOP10용 — TSS 집계 entries 배열 */
 async function readWeeklyTssEntriesForTop10Http(db, startStr, endStr) {
   const hit = await readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, "all");
@@ -9340,163 +9394,39 @@ exports.getPeakPowerRanking = onRequest(
 
     const forceRankMv = req.query.rankMv === "1" || req.query.rankMv === "true";
 
-    /** 주간 TSS 랭킹 탭: 기간은 주간 마일리지 TOP10과 동일(월~오늘), 월간/명예 필터 미적용 */
+    /** 주간 TSS 랭킹 탭: getWeeklyRanking·TOP10과 동일 readWeeklyTssRankingPayloadForHttp 경로 */
     if (durationType === "tss") {
       const { startStr, endStr } = getWeekRangeSeoul();
       const cacheKey = `peakRanking_weekly_tss_v2_${gender}_${startStr}_${endStr}`;
-      const aggTss = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
-      if (aggTss && aggTss.byCategory) {
-        let out = {
-          success: true,
-          byCategory: aggTss.byCategory,
+      const cacheRef = db.collection("cache").doc(cacheKey);
+
+      if (!forceRankMv) {
+        const tssHit = await readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender);
+        const outFromHit = await buildPeakTssRankingResponseFromHttpHit(
+          db,
+          tssHit,
           startStr,
           endStr,
-          period: "weekly",
-          durationType: "tss",
           gender,
-          precomputed: true,
-        };
-        if (uid) {
-          const cat = aggTss.byCategory;
-          let current = null; let nextUser = null;
-          for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
-            const arr = cat?.[c] || [];
-            const idx = arr.findIndex((e) => e.userId === uid);
-            if (idx >= 0) {
-              current = arr[idx];
-              nextUser = idx > 0 ? arr[idx - 1] : null;
-              break;
-            }
-          }
-          if (current) {
-            out.currentUser = current;
-            out.motivationMessage = buildMotivationMessage(current, nextUser);
-          }
+          uid
+        );
+        if (outFromHit) {
+          await finalizeRankingProfileUrls(outFromHit);
+          return res.status(200).json(outFromHit);
         }
-        const tssAggEntries = Array.isArray(aggTss.entries) ? aggTss.entries : out.byCategory.Supremo;
-        await hydratePeakRankMovementOnPayload(db, out.byCategory, tssAggEntries, `peak_tss_weekly_${gender}`);
-        if (!out.entries && Array.isArray(out.byCategory.Supremo)) {
-          out.entries = out.byCategory.Supremo.slice();
-        }
-        await finalizeRankingProfileUrls(out);
-        return res.status(200).json(out);
-      }
-      const cacheRef = db.collection("cache").doc(cacheKey);
-      const cacheSnap = forceRankMv ? null : await cacheRef.get();
-      const nowMs = Date.now();
-      if (cacheSnap && cacheSnap.exists) {
-        const data = cacheSnap.data();
-        const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
-        if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
-          let out = {
-            success: true,
-            byCategory: data.byCategory,
-            startStr,
-            endStr,
-            period: "weekly",
-            durationType: "tss",
-            gender,
-            cached: true,
-          };
-          const entries = Array.isArray(data.entries) ? data.entries : [];
-          if (uid) {
-            const cat = data.byCategory;
-            let current = null; let nextUser = null;
-            for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
-              const arr = cat?.[c] || [];
-              const idx = arr.findIndex((e) => e.userId === uid);
-              if (idx >= 0) {
-                current = arr[idx];
-                nextUser = idx > 0 ? arr[idx - 1] : null;
-                break;
-              }
-            }
-            if (current) {
-              out.currentUser = current;
-              out.motivationMessage = buildMotivationMessage(current, nextUser);
-            }
-          }
-          const tssCacheEntries = entries.length ? entries : (out.byCategory.Supremo || []);
-          await hydratePeakRankMovementOnPayload(db, out.byCategory, tssCacheEntries, `peak_tss_weekly_${gender}`);
-          if (!out.entries && Array.isArray(out.byCategory.Supremo)) {
-            out.entries = out.byCategory.Supremo.slice();
-          }
-          await finalizeRankingProfileUrls(out);
-          return res.status(200).json(out);
-        }
-      }
-
-      const tssHit = await readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender);
-      if (tssHit && tssHit.payload && weeklyTssBoardPayloadHasRows(tssHit.payload)) {
-        const tssPayload = tssHit.payload;
-        const tssCat = tssPayload.byCategory || emptyPeakRankingByCategory();
-        const tssEnt = Array.isArray(tssPayload.entries) ? tssPayload.entries : tssCat.Supremo || [];
-        const outStartStr =
-          tssHit.prevWeekFallback && tssHit.displayStartStr ? tssHit.displayStartStr : startStr;
-        const outEndStr =
-          tssHit.prevWeekFallback && tssHit.displayEndStr ? tssHit.displayEndStr : endStr;
-        let outTss = {
-          success: true,
-          byCategory: tssCat,
-          startStr: outStartStr,
-          endStr: outEndStr,
-          period: "weekly",
-          durationType: "tss",
-          gender,
-          precomputed: !!tssHit.precomputed,
-          staleAggregate: !!tssHit.staleAggregate,
-        };
-        if (tssHit.prevWeekFallback) {
-          outTss.prevWeekFallback = true;
-          outTss.displayStartStr = tssHit.displayStartStr || outStartStr;
-          outTss.displayEndStr = tssHit.displayEndStr || outEndStr;
-        }
-        if (tssHit.dataThroughEndStr && tssHit.dataThroughEndStr !== endStr) {
-          outTss.dataThroughEndStr = tssHit.dataThroughEndStr;
-        }
-        if (uid) {
-          let current = null;
-          let nextUser = null;
-          for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
-            const arr = tssCat[c] || [];
-            const idx = arr.findIndex((e) => e.userId === uid);
-            if (idx >= 0) {
-              current = arr[idx];
-              nextUser = idx > 0 ? arr[idx - 1] : null;
-              break;
-            }
-          }
-          if (current) {
-            outTss.currentUser = current;
-            outTss.motivationMessage = buildMotivationMessage(current, nextUser);
-          }
-        }
-        const tssFbEntries = Array.isArray(tssEnt) && tssEnt.length ? tssEnt : outTss.byCategory.Supremo;
-        await hydratePeakRankMovementOnPayload(db, outTss.byCategory, tssFbEntries, `peak_tss_weekly_${gender}`);
-        if (!outTss.entries && Array.isArray(outTss.byCategory.Supremo)) {
-          outTss.entries = outTss.byCategory.Supremo.slice();
-        }
-        await finalizeRankingProfileUrls(outTss);
-        return res.status(200).json(outTss);
       }
 
       if (!(await tryAcquireRankingHttpLiveRebuildLock(db, cacheKey))) {
         const waitHit = await readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender);
-        if (waitHit && waitHit.payload && weeklyTssBoardPayloadHasRows(waitHit.payload)) {
-          const wp = waitHit.payload;
-          const wc = wp.byCategory || emptyPeakRankingByCategory();
-          let outWait = {
-            success: true,
-            byCategory: wc,
-            startStr,
-            endStr,
-            period: "weekly",
-            durationType: "tss",
-            gender,
-            precomputed: true,
-            staleAggregate: true,
-          };
-          if (!outWait.entries && Array.isArray(wc.Supremo)) outWait.entries = wc.Supremo.slice();
+        const outWait = await buildPeakTssRankingResponseFromHttpHit(
+          db,
+          waitHit,
+          startStr,
+          endStr,
+          gender,
+          uid
+        );
+        if (outWait) {
           await finalizeRankingProfileUrls(outWait);
           return res.status(200).json(outWait);
         }
