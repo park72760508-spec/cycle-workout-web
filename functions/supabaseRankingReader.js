@@ -363,14 +363,74 @@ async function getFirebaseUidMapForSupabaseUsers(admin, supabase, userIds) {
   }
 
   const missing = ids.filter((id) => !map.has(id));
-  if (missing.length) {
-    const legacyMap = await getFirebaseUidByUuidMap(admin);
-    missing.forEach((id) => {
-      const fbUid = legacyMap.get(id);
-      if (fbUid) map.set(id, fbUid);
-    });
+  if (missing.length && supabase) {
+    try {
+      const uidRows = await supabaseSelectInChunks(
+        supabase,
+        "users",
+        "id, firebase_uid",
+        "id",
+        missing
+      );
+      for (const row of uidRows || []) {
+        if (!row || !row.id) continue;
+        const fbUid = row.firebase_uid ? String(row.firebase_uid).trim() : "";
+        if (fbUid) map.set(String(row.id), fbUid);
+      }
+    } catch (eUidCol) {
+      console.warn(
+        "[supabaseRankingReader] users.firebase_uid chunk lookup failed:",
+        eUidCol && eUidCol.message ? eUidCol.message : eUidCol
+      );
+    }
+  }
+
+  const stillMissing = ids.filter((id) => !map.has(id));
+  if (stillMissing.length && admin && admin.firestore) {
+    const FieldPath = admin.firestore.FieldPath;
+    const CHUNK = 30;
+    for (let i = 0; i < stillMissing.length; i += CHUNK) {
+      const chunk = stillMissing.slice(i, i + CHUNK);
+      try {
+        const qSnap = await admin
+          .firestore()
+          .collection("users")
+          .where(FieldPath.documentId(), "in", chunk)
+          .select()
+          .get();
+        qSnap.forEach((doc) => map.set(String(doc.id), doc.id));
+      } catch (eFsChunk) {
+        console.warn(
+          "[supabaseRankingReader] users docId chunk lookup failed:",
+          eFsChunk && eFsChunk.message ? eFsChunk.message : eFsChunk
+        );
+      }
+    }
+  }
+
+  const legacyMissing = ids.filter((id) => !map.has(id));
+  if (legacyMissing.length) {
+    console.warn(
+      "[supabaseRankingReader] firebase_uid unresolved after Supabase+chunk FS",
+      { count: legacyMissing.length, sample: legacyMissing.slice(0, 5) }
+    );
+    if (parseBool(process.env.SUPABASE_RANKING_ALLOW_LEGACY_USERS_SCAN) === true) {
+      const legacyMap = await getFirebaseUidByUuidMap(admin);
+      legacyMissing.forEach((id) => {
+        const fbUid = legacyMap.get(id);
+        if (fbUid) map.set(id, fbUid);
+      });
+    }
   }
   return map;
+}
+
+function parseBool(raw) {
+  if (raw === true || raw === 1) return true;
+  const s = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "on";
 }
 
 function weeklyTssRowsToEntries(rows, uidMap, gender) {
@@ -1256,17 +1316,10 @@ async function attachGcHeptagonMeta(admin, payload, deps) {
     if (error) throw error;
     heptagonMeta = data || null;
   } catch (eSbMeta) {
-    try {
-      const metaSnap = await admin
-        .firestore()
-        .collection("ranking_meta")
-        .doc(RANKING_HEPTAGON_REBUILD_META_DOC || "heptagon_daily_rebuild")
-        .get();
-      if (metaSnap.exists) heptagonMeta = metaSnap.data() || null;
-    } catch (_eHm) {}
-    if (!heptagonMeta) {
-      console.warn("[supabaseRankingReader] heptagon meta fallback failed:", eSbMeta && eSbMeta.message ? eSbMeta.message : eSbMeta);
-    }
+    console.warn(
+      "[supabaseRankingReader] heptagon meta read failed (no Firestore fallback):",
+      eSbMeta && eSbMeta.message ? eSbMeta.message : eSbMeta
+    );
   }
   if (!heptagonMeta) {
     /* meta optional */

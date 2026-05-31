@@ -32,6 +32,56 @@ const RANKING_BOARD_CATEGORIES = [
   "Leggenda",
 ];
 
+function emptyPeakRankingByCategory() {
+  return {
+    Supremo: [],
+    Assoluto: [],
+    Bianco: [],
+    Rosa: [],
+    Infinito: [],
+    Leggenda: [],
+  };
+}
+
+/**
+ * Supabase Read 모드에서 Firebase 폴백 대신 반환 — heptagon_cohort_ranks·ranking_aggregates 대량 Read 방지.
+ */
+function buildSupabaseRankingPendingPayload(durationType, gender, reason, deps) {
+  const out = {
+    success: true,
+    byCategory: emptyPeakRankingByCategory(),
+    entries: [],
+    durationType,
+    gender: gender || "all",
+    pendingAggregate: true,
+    readBackend: "supabase",
+    readSource: "supabase",
+    supabaseReadBlockedFirebaseFallback: true,
+    message:
+      reason === "empty"
+        ? "Supabase 랭킹 집계가 비어 있습니다. pg_cron·헵타곤 재빌드를 확인해 주세요."
+        : "Supabase 랭킹 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    supabasePendingReason: reason || "unknown",
+  };
+  if (durationType === "gc") {
+    out.period = "monthly";
+    out.gcMonthKey = supabaseRankingReader.getMonthKeyKstNow();
+    if (deps && typeof deps.getRolling28DaysRangeSeoul === "function") {
+      const r = deps.getRolling28DaysRangeSeoul();
+      out.startStr = r.startStr;
+      out.endStr = r.endStr;
+    }
+  } else if (durationType === "tss") {
+    out.period = "weekly";
+    if (deps && typeof deps.getWeekRangeSeoul === "function") {
+      const w = deps.getWeekRangeSeoul();
+      out.startStr = w.startStr;
+      out.endStr = w.endStr;
+    }
+  }
+  return out;
+}
+
 function payloadHasVisibleRankingRows(payload) {
   if (!payload || !payload.byCategory) return false;
   for (let i = 0; i < RANKING_BOARD_CATEGORIES.length; i++) {
@@ -187,11 +237,11 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
     }
 
     if (!payloadHasVisibleRankingRows(payload)) {
-      console.warn("[rankingReadRouter] Supabase empty rows → Firebase fallback", {
+      console.warn("[rankingReadRouter] Supabase empty rows — Firebase fallback blocked (read=supabase)", {
         durationType,
         gender,
       });
-      return null;
+      return buildSupabaseRankingPendingPayload(durationType, gender, "empty", deps);
     }
 
     const cfg = rankingReadConfig.getRankingReadConfig();
@@ -218,12 +268,19 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
       payload.rankingParity = parityReport;
 
       if (cfg.parityFallbackToFirebase && parityReport && parityReport.ok === false) {
-        console.warn("[rankingReadRouter] parity drift → Firebase fallback", {
+        console.warn("[rankingReadRouter] parity drift → Firebase fallback (parityFallbackToFirebase=true)", {
           durationType,
           gender,
           parityReport,
         });
         return null;
+      }
+      if (!cfg.parityFallbackToFirebase && parityReport && parityReport.ok === false) {
+        console.warn("[rankingReadRouter] parity drift — serving Supabase anyway (no Firebase fallback)", {
+          durationType,
+          gender,
+          mismatchCount: parityReport.mismatchCount,
+        });
       }
     }
 
@@ -241,10 +298,15 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
     return payload;
   } catch (err) {
     console.error(
-      "[rankingReadRouter] Supabase read failed — Firebase fallback:",
+      "[rankingReadRouter] Supabase read failed — Firebase fallback blocked:",
       err && err.message ? err.message : err
     );
-    return null;
+    return buildSupabaseRankingPendingPayload(
+      durationType,
+      gender,
+      "error",
+      deps
+    );
   }
 }
 
@@ -367,5 +429,7 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
 module.exports = {
   tryBuildPeakPowerRankingFromSupabase,
   tryBuildWeeklyRankingFromSupabase,
+  buildSupabaseRankingPendingPayload,
+  emptyPeakRankingByCategory,
   SUPPORTED_PEAK_DURATIONS,
 };

@@ -14,6 +14,7 @@ const FIRESTORE_DOC_PATH = { collection: "appConfig", doc: "supabase_read_routin
 let cache = {
   useSupabaseGlobal: true,
   whitelistUids: [],
+  /** Supabase Read 기본: parity 불일치 시 Firebase 전체 집계 폴백 금지(트래픽 폭주 방지) */
   parityFallbackToFirebase: false,
   loadedAt: 0,
 };
@@ -97,6 +98,8 @@ async function refreshRankingReadConfig(admin, force = false) {
         }
         if (d.parityFallbackToFirebase != null) {
           parityFallbackToFirebase = parseParityFallback(d.parityFallbackToFirebase);
+        } else if (useSupabaseGlobal) {
+          parityFallbackToFirebase = false;
         }
       }
     } catch (err) {
@@ -123,8 +126,8 @@ function getRankingReadConfig() {
   return {
     useSupabaseGlobal: cache.useSupabaseGlobal,
     whitelistUids: cache.whitelistUids.slice(),
-    /** true: 긴급 Canary 시에만 Supabase·Firebase 불일치 시 Firebase 응답으로 폴백 */
-    parityFallbackToFirebase: cache.parityFallbackToFirebase !== false,
+    /** true: 긴급 Canary 시에만 — 기본 false(Supabase Read 시 Firebase ranking_aggregates·집계 스캔 금지) */
+    parityFallbackToFirebase: cache.parityFallbackToFirebase === true,
   };
 }
 
@@ -219,7 +222,7 @@ function buildReadRoutingStatus(cfg, meta) {
   return {
     readSource: useSupabaseGlobal ? "supabase" : "firebase",
     useSupabaseGlobal,
-    parityFallbackToFirebase: cfg.parityFallbackToFirebase !== false,
+    parityFallbackToFirebase: cfg.parityFallbackToFirebase === true,
     whitelistCount: Array.isArray(cfg.whitelistUids) ? cfg.whitelistUids.length : 0,
     updatedAt: meta.updatedAt,
     updatedBy: meta.updatedBy,

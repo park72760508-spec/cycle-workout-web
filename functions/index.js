@@ -37,6 +37,7 @@ const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const stravaDualWrite = require("./stravaDualWrite");
 const rankingReadRouter = require("./rankingReadRouter");
+const rankingReadConfig = require("./rankingReadConfig");
 const supabaseRankingReader = require("./supabaseRankingReader");
 const rankingParity = require("./rankingParity");
 const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
@@ -4250,6 +4251,10 @@ exports.getWeeklyRanking = onRequest(
     const usePrevWeek = weekParam === "prev";
     const { startStr, endStr } = usePrevWeek ? getWeekRangeSeoul(-1) : getWeekRangeSeoul();
 
+    const weeklyReadRoute = await rankingReadConfig.shouldReadRankingFromSupabase(
+      admin,
+      userIdParam
+    );
     const weeklyFromSupabase = await rankingReadRouter.tryBuildWeeklyRankingFromSupabase(
       admin,
       req.query || {},
@@ -4258,15 +4263,36 @@ exports.getWeeklyRanking = onRequest(
     if (weeklyFromSupabase) {
       const ent = weeklyFromSupabase.allEntries || [];
       delete weeklyFromSupabase.allEntries;
-      await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: ent }, ent);
-      await hydrateRankingBoardProfileImages(db, { Supremo: ent }, ent);
+      if (
+        weeklyFromSupabase.readSource !== "supabase" &&
+        weeklyFromSupabase.readBackend !== "supabase"
+      ) {
+        await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: ent }, ent);
+        await hydrateRankingBoardProfileImages(db, { Supremo: ent }, ent);
+      }
       const hasRanking =
         Array.isArray(weeklyFromSupabase.ranking) && weeklyFromSupabase.ranking.length > 0;
-      if (hasRanking || usePrevWeek) {
+      if (hasRanking || usePrevWeek || weeklyFromSupabase.pendingAggregate) {
         res.set("Access-Control-Allow-Origin", "*");
         res.set("Cache-Control", "no-store");
         return res.status(200).json(weeklyFromSupabase);
       }
+    }
+
+    if (weeklyReadRoute.route === "supabase") {
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cache-Control", "no-store");
+      return res.status(200).json({
+        success: true,
+        ranking: [],
+        startStr,
+        endStr,
+        readBackend: "supabase",
+        readSource: "supabase",
+        pendingAggregate: true,
+        supabaseReadBlockedFirebaseFallback: true,
+        message: "Supabase 주간 TSS 랭킹을 불러오는 중입니다.",
+      });
     }
 
     const buildWeeklyRankingResponse = (entries, precomputed, weekOpts) => {
@@ -9364,10 +9390,18 @@ exports.getPeakPowerRanking = onRequest(
     /** 집계/캐시 행은 스냅샷 시점의 is_private일 수 있음 → 응답 직전 users 기준 비공개·프로필 URL 보강 */
     const finalizeRankingProfileUrls = async (payload) => {
       if (!payload || !payload.byCategory) return;
+      if (
+        payload.readSource === "supabase" ||
+        payload.readBackend === "supabase" ||
+        payload.supabaseReadBlockedFirebaseFallback === true
+      ) {
+        return;
+      }
       await hydrateRankingBoardPrivacyFromUsers(db, payload.byCategory, payload.entries);
       await hydrateRankingBoardProfileImages(db, payload.byCategory, payload.entries);
     };
 
+    const rankingReadRoute = await rankingReadConfig.shouldReadRankingFromSupabase(admin, uid);
     const supabasePeakPayload =
       await rankingReadRouter.tryBuildPeakPowerRankingFromSupabase(
         admin,
@@ -9390,6 +9424,24 @@ exports.getPeakPowerRanking = onRequest(
         delete supabasePeakPayload.rankingParity;
       }
       return res.status(200).json(supabasePeakPayload);
+    }
+
+    if (rankingReadRoute.route === "supabase") {
+      console.warn("[getPeakPowerRanking] Supabase read-only — Firebase ranking path skipped", {
+        durationType,
+        gender,
+      });
+      const pendingOnly = rankingReadRouter.buildSupabaseRankingPendingPayload(
+        durationType,
+        gender,
+        "router_null",
+        {
+          getWeekRangeSeoul,
+          getRolling28DaysRangeSeoul,
+          getRolling30DaysRangeSeoul,
+        }
+      );
+      return res.status(200).json(pendingOnly);
     }
 
     const forceRankMv = req.query.rankMv === "1" || req.query.rankMv === "true";
