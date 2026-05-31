@@ -3380,6 +3380,50 @@ async function readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender) 
       };
     }
   }
+  /** 새 주(월) 시작·이번 주 집계 없음 → 전주 확정 순위 */
+  const prevRange = getWeekRangeSeoul(-1);
+  if (prevRange && prevRange.startStr && prevRange.endStr) {
+    const prevWeekKey = `peakRanking_weekly_tss_v2_${gender}_${prevRange.startStr}_${prevRange.endStr}`;
+    let prevWeekPayload = await readRankingAggregatePayloadIfFresh(db, prevWeekKey);
+    if (!prevWeekPayload || !weeklyTssBoardPayloadHasRows(prevWeekPayload)) {
+      prevWeekPayload = await readRankingAggregatePayloadAllowStale(
+        db,
+        prevWeekKey,
+        RANKING_HTTP_STALE_FALLBACK_MS
+      );
+    }
+    if (!prevWeekPayload || !weeklyTssBoardPayloadHasRows(prevWeekPayload)) {
+      const weeklyAggKey = `weekly_ranking_full_${prevRange.startStr}_${prevRange.endStr}`;
+      const weeklyAgg = await readRankingAggregatePayloadAllowStale(
+        db,
+        weeklyAggKey,
+        RANKING_HTTP_STALE_FALLBACK_MS
+      );
+      if (
+        weeklyAgg &&
+        Array.isArray(weeklyAgg.fullEntries) &&
+        weeklyAgg.fullEntries.length > 0
+      ) {
+        prevWeekPayload = {
+          byCategory: { Supremo: weeklyAgg.fullEntries.slice(), Assoluto: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [] },
+          entries: weeklyAgg.fullEntries.slice(),
+          startStr: prevRange.startStr,
+          endStr: prevRange.endStr,
+        };
+      }
+    }
+    if (prevWeekPayload && weeklyTssBoardPayloadHasRows(prevWeekPayload)) {
+      return {
+        payload: prevWeekPayload,
+        cacheKey: prevWeekKey,
+        precomputed: true,
+        staleAggregate: true,
+        prevWeekFallback: true,
+        displayStartStr: prevRange.startStr,
+        displayEndStr: prevRange.endStr,
+      };
+    }
+  }
   return null;
 }
 
@@ -4162,12 +4206,19 @@ exports.getWeeklyRanking = onRequest(
       delete weeklyFromSupabase.allEntries;
       await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: ent }, ent);
       await hydrateRankingBoardProfileImages(db, { Supremo: ent }, ent);
-      res.set("Access-Control-Allow-Origin", "*");
-      res.set("Cache-Control", "no-store");
-      return res.status(200).json(weeklyFromSupabase);
+      const hasRanking =
+        Array.isArray(weeklyFromSupabase.ranking) && weeklyFromSupabase.ranking.length > 0;
+      if (hasRanking || usePrevWeek) {
+        res.set("Access-Control-Allow-Origin", "*");
+        res.set("Cache-Control", "no-store");
+        return res.status(200).json(weeklyFromSupabase);
+      }
     }
 
-    const buildWeeklyRankingResponse = (entries, precomputed) => {
+    const buildWeeklyRankingResponse = (entries, precomputed, weekOpts) => {
+      weekOpts = weekOpts || {};
+      const rs = weekOpts.startStr != null ? weekOpts.startStr : startStr;
+      const re = weekOpts.endStr != null ? weekOpts.endStr : endStr;
       const top10 = entries.slice(0, 10).map((e, i) => ({
         rank: i + 1,
         userId: e.userId,
@@ -4202,10 +4253,11 @@ exports.getWeeklyRanking = onRequest(
       const rankBody = {
         success: true,
         ranking: top10,
-        startStr,
-        endStr,
+        startStr: rs,
+        endStr: re,
         myRank: myRank || undefined,
       };
+      if (weekOpts.prevWeekFallback) rankBody.prevWeekFallback = true;
       if (precomputed === true) rankBody.precomputed = true;
       else if (precomputed === false) rankBody.liveComputed = true;
       rankBody.readBackend = "firebase";
@@ -4359,6 +4411,22 @@ exports.getWeeklyRanking = onRequest(
         }
       } catch (liveErr) {
         console.error("[getWeeklyRanking] live getWeeklyTssRankingBoardEntries failed:", liveErr && liveErr.message ? liveErr.message : liveErr);
+      }
+    }
+
+    if (!usePrevWeek) {
+      const prevRange = getWeekRangeSeoul(-1);
+      const prevEntries = await readWeeklyTssEntriesForTop10Http(
+        db,
+        prevRange.startStr,
+        prevRange.endStr
+      );
+      if (prevEntries && prevEntries.length > 0) {
+        return buildWeeklyRankingResponse(prevEntries, true, {
+          startStr: prevRange.startStr,
+          endStr: prevRange.endStr,
+          prevWeekFallback: true,
+        });
       }
     }
 
@@ -9363,17 +9431,26 @@ exports.getPeakPowerRanking = onRequest(
         const tssPayload = tssHit.payload;
         const tssCat = tssPayload.byCategory || emptyPeakRankingByCategory();
         const tssEnt = Array.isArray(tssPayload.entries) ? tssPayload.entries : tssCat.Supremo || [];
+        const outStartStr =
+          tssHit.prevWeekFallback && tssHit.displayStartStr ? tssHit.displayStartStr : startStr;
+        const outEndStr =
+          tssHit.prevWeekFallback && tssHit.displayEndStr ? tssHit.displayEndStr : endStr;
         let outTss = {
           success: true,
           byCategory: tssCat,
-          startStr,
-          endStr,
+          startStr: outStartStr,
+          endStr: outEndStr,
           period: "weekly",
           durationType: "tss",
           gender,
           precomputed: !!tssHit.precomputed,
           staleAggregate: !!tssHit.staleAggregate,
         };
+        if (tssHit.prevWeekFallback) {
+          outTss.prevWeekFallback = true;
+          outTss.displayStartStr = tssHit.displayStartStr || outStartStr;
+          outTss.displayEndStr = tssHit.displayEndStr || outEndStr;
+        }
         if (tssHit.dataThroughEndStr && tssHit.dataThroughEndStr !== endStr) {
           outTss.dataThroughEndStr = tssHit.dataThroughEndStr;
         }
@@ -10076,11 +10153,52 @@ exports.getPeakPowerRanking = onRequest(
       }
       const rollingFallback = getRolling28DaysRangeSeoul();
       const minGcAsOf = getMinHeptagonSnapshotAsOfSeoulYmd();
-      const gcAsOf = snap.snapshotAsOfSeoul ? String(snap.snapshotAsOfSeoul).trim().slice(0, 10) : "";
+      let gcAsOf = snap.snapshotAsOfSeoul ? String(snap.snapshotAsOfSeoul).trim().slice(0, 10) : "";
+      let gcStaleVsMin = !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf);
+      if (!entries.length || gcStaleVsMin) {
+        try {
+          const live = await heptagonCohortRanks.buildLiveGcRankingPayload(db, fg, {
+            getPeakPowerRankingEntries,
+            getLeagueCategory,
+            getRolling28DaysRangeSeoul,
+            readRankingAggregatePayloadIfFresh,
+            buildPeakPowerAllDurationsForRangeAllGendersOnePass,
+          });
+          if (live && live.byCategory) {
+            if (entries.length) {
+              const merged = heptagonCohortRanks.mergeGcRankingSnapshotWithLive(
+                {
+                  byCategory,
+                  entries,
+                  snapshotRangeStart: snap.snapshotRangeStart,
+                  snapshotRangeEnd: snap.snapshotRangeEnd,
+                  snapshotAsOfSeoul: gcAsOf,
+                },
+                live,
+                fg
+              );
+              byCategory = merged.byCategory;
+              entries = merged.entries;
+            } else {
+              byCategory = live.byCategory;
+              entries = live.entries || (live.byCategory.Supremo || []).slice();
+              if (live.startStr) snap.snapshotRangeStart = live.startStr;
+              if (live.endStr) snap.snapshotRangeEnd = live.endStr;
+            }
+            gcAsOf = gcAsOf || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+            gcStaleVsMin = !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf);
+          }
+        } catch (eLiveGc) {
+          console.warn(
+            "[getPeakPowerRanking gc] live fallback:",
+            eLiveGc && eLiveGc.message ? eLiveGc.message : eLiveGc
+          );
+        }
+      }
       const heptMetaDateKst =
         heptagonMeta && heptagonMeta.dateKst ? String(heptagonMeta.dateKst).trim().slice(0, 10) : "";
       const heptMetaComplete = heptagonMeta && String(heptagonMeta.status || "") === "complete";
-      const gcStaleVsMin = !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf);
+      gcStaleVsMin = !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf);
       /** 메타는 오늘 집계 완료인데 cohort asOf가 더 오래됨 → 배치 미반영·부분 실패 */
       const gcStaleVsMeta = !!(
         heptMetaComplete &&
