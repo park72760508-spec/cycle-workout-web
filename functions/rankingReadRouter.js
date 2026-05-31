@@ -130,6 +130,14 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
 
   const route = await rankingReadConfig.shouldReadRankingFromSupabase(admin, uid);
   if (route.route !== "supabase") {
+    if (!rankingReadConfig.isFirebaseRankingReadAllowed()) {
+      return buildSupabaseRankingPendingPayload(
+        durationType,
+        gender,
+        "firebase_read_disabled",
+        deps
+      );
+    }
     return null;
   }
 
@@ -320,6 +328,17 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
     userIdParam
   );
   if (route.route !== "supabase") {
+    if (!rankingReadConfig.isFirebaseRankingReadAllowed()) {
+      return {
+        success: true,
+        ranking: [],
+        readBackend: "supabase",
+        readSource: "supabase",
+        pendingAggregate: true,
+        supabaseReadBlockedFirebaseFallback: true,
+        message: "Firebase 주간 랭킹 Read 비활성(Supabase 전용).",
+      };
+    }
     return null;
   }
 

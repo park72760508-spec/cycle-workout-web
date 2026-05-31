@@ -15,7 +15,7 @@ async function getPublicRankingReadRouting(admin) {
     success: true,
     readSource,
     useSupabaseGlobal: cfg.useSupabaseGlobal,
-    parityFallbackToFirebase: cfg.parityFallbackToFirebase !== false,
+    parityFallbackToFirebase: cfg.parityFallbackToFirebase === true,
     note:
       "클라이언트 IndexedDB·getPeakPowerRanking 캐시 네임스페이스 분리용. Supabase Read 시 서버가 Supabase MV에서 응답합니다.",
   };

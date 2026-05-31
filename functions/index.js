@@ -4295,6 +4295,21 @@ exports.getWeeklyRanking = onRequest(
       });
     }
 
+    if (!rankingReadConfig.isFirebaseRankingReadAllowed()) {
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cache-Control", "no-store");
+      return res.status(200).json({
+        success: true,
+        ranking: [],
+        startStr,
+        endStr,
+        readBackend: "supabase",
+        readSource: "supabase",
+        pendingAggregate: true,
+        message: "Firebase 주간 랭킹 Read 비활성(Supabase 전용).",
+      });
+    }
+
     const buildWeeklyRankingResponse = (entries, precomputed, weekOpts) => {
       weekOpts = weekOpts || {};
       const rs = weekOpts.startStr != null ? weekOpts.startStr : startStr;
@@ -9372,8 +9387,9 @@ exports.getPeakPowerRanking = onRequest(
     const origJsonPeak = res.json.bind(res);
     res.json = (payload) => {
       if (payload && typeof payload === "object" && payload.success && !payload.readBackend) {
-        payload.readBackend = "firebase";
-        payload.readSource = "firebase";
+        const fbReadLegacy = rankingReadConfig.isFirebaseRankingReadAllowed();
+        payload.readBackend = fbReadLegacy ? "firebase" : "supabase";
+        payload.readSource = payload.readBackend;
       }
       return origJsonPeak(payload);
     };
@@ -9442,6 +9458,17 @@ exports.getPeakPowerRanking = onRequest(
         }
       );
       return res.status(200).json(pendingOnly);
+    }
+
+    if (!rankingReadConfig.isFirebaseRankingReadAllowed()) {
+      console.error("[getPeakPowerRanking] Firebase ranking read/aggregate disabled (Supabase cutover)");
+      return res.status(200).json(
+        rankingReadRouter.buildSupabaseRankingPendingPayload(durationType, gender, "firebase_read_disabled", {
+          getWeekRangeSeoul,
+          getRolling28DaysRangeSeoul,
+          getRolling30DaysRangeSeoul,
+        })
+      );
     }
 
     const forceRankMv = req.query.rankMv === "1" || req.query.rankMv === "true";

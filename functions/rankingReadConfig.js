@@ -138,12 +138,20 @@ function parseParityFallback(raw) {
   return true;
 }
 
+/** 이관 완료 후 Firebase 랭킹 Read·집계 HTTP 폴백 — 긴급 복구 시에만 true */
+function isFirebaseRankingReadAllowed() {
+  return parseBool(process.env.RANKING_READ_FORCE_FIREBASE) === true;
+}
+
 /**
  * @param {import('firebase-admin')} admin
  * @param {string|null|undefined} requestFirebaseUid API 요청 사용자 Firebase UID
  */
 async function shouldReadRankingFromSupabase(admin, requestFirebaseUid) {
   await refreshRankingReadConfig(admin, false);
+  if (!isFirebaseRankingReadAllowed()) {
+    return { route: "supabase", reason: "ranking_read_supabase_only(cutover)" };
+  }
   if (cache.useSupabaseGlobal) {
     return { route: "supabase", reason: "USE_SUPABASE_GLOBAL=true" };
   }
@@ -233,6 +241,7 @@ module.exports = {
   refreshRankingReadConfig,
   getRankingReadConfig,
   shouldReadRankingFromSupabase,
+  isFirebaseRankingReadAllowed,
   parseUidList,
   persistRankingReadRouting,
   getRankingReadRoutingDocMeta,
