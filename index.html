@@ -8140,6 +8140,143 @@
       return weeklyTop10PayloadMatchesWeek(data, 0);
     }
 
+    /** TSS 탭: TOP10 IndexedDB 캐시 → getPeakPowerRanking 형식 payload (즉시 표시 시드) */
+    function stelvioWeeklyTop10PayloadToTssBoardPayload(top10Data) {
+      if (!top10Data || !top10Data.success || !Array.isArray(top10Data.ranking)) return null;
+      if (!top10Data.ranking.length) return null;
+      var entries = top10Data.ranking.map(function (item, idx) {
+        return {
+          userId: item.userId,
+          name: item.name,
+          totalTss: item.totalTss != null ? Number(item.totalTss) : 0,
+          rank: item.rank != null ? item.rank : idx + 1,
+          rankChange: item.rankChange,
+          previousBoardRank: item.previousBoardRank,
+          is_private: item.is_private === true,
+          profileImageUrl: item.profileImageUrl || null,
+          ageCategory: 'Supremo',
+        };
+      });
+      var byCategory = stelvioEmptyByCategoryBuckets();
+      byCategory.Supremo = entries.slice();
+      var out = {
+        success: true,
+        byCategory: byCategory,
+        entries: entries.slice(),
+        durationType: 'tss',
+        period: 'weekly',
+        gender: 'all',
+        startStr: top10Data.startStr,
+        endStr: top10Data.endStr,
+        precomputed: top10Data.precomputed === true,
+        staleAggregate: top10Data.stale === true || top10Data.staleAggregate === true,
+        readBackend: top10Data.readBackend || top10Data.readSource || stelvioGetRankingReadSourceSync(),
+        readSource: top10Data.readSource || top10Data.readBackend || stelvioGetRankingReadSourceSync(),
+        seededFromWeeklyTop10: true,
+      };
+      if (top10Data.prevWeekFallback === true || top10Data._isPrevWeek === true) {
+        out.prevWeekFallback = true;
+        out.displayStartStr = top10Data.displayStartStr || top10Data.startStr;
+        out.displayEndStr = top10Data.displayEndStr || top10Data.endStr;
+        if (out.displayStartStr) out.startStr = out.displayStartStr;
+        if (out.displayEndStr) out.endStr = out.displayEndStr;
+      }
+      if (top10Data.myRank && top10Data.myRank.userId) {
+        out.myRankSupremo = top10Data.myRank;
+        out.currentUser = top10Data.myRank;
+      }
+      return out;
+    }
+
+    /** TOP10 로컬 캐시(현재 주 → prevWeekFallback → 전주 키) 조회 */
+    async function stelvioLoadWeeklyTop10CacheEntryForTssSeed(uid) {
+      try {
+        await stelvioEnsureRankingReadSource();
+      } catch (eRs) {}
+      var top10LcKey = weeklyTop10CacheKeyForWeek('current', 0, uid);
+      var prevLcKey = weeklyTop10CacheKeyForWeek('prev', -1, uid);
+      function usableTop10Entry(entry, weekOffset) {
+        if (!entry || !entry.data || !entry.data.success || !Array.isArray(entry.data.ranking)) return null;
+        if (!entry.data.ranking.length) return null;
+        if (!stelvioRankingPayloadMatchesReadSource(entry.data)) return null;
+        if (entry.data.prevWeekFallback === true) {
+          return weeklyTop10PayloadMatchesWeek(entry.data, -1) ? entry.data : null;
+        }
+        return weeklyTop10PayloadMatchesWeek(entry.data, weekOffset) ? entry.data : null;
+      }
+      var curEntry = await stelvioRankingLocalCache.get(top10LcKey);
+      var curData = usableTop10Entry(curEntry, 0);
+      if (curData) return curData;
+      if (curEntry && curEntry.data && curEntry.data.prevWeekFallback && usableTop10Entry(curEntry, -1)) {
+        return curEntry.data;
+      }
+      var prevEntry = await stelvioRankingLocalCache.get(prevLcKey);
+      var prevData = usableTop10Entry(prevEntry, -1);
+      if (prevData) {
+        if (!prevData._isPrevWeek) prevData = Object.assign({}, prevData, { _isPrevWeek: true });
+        return prevData;
+      }
+      return null;
+    }
+
+    var stelvioTssTop10SeedPayload = null;
+    var stelvioTssBoardWeekMeta = null;
+
+    function stelvioEnsureWeeklyTssWeekCaption() {
+      var content = document.getElementById('stelvioRankingContent');
+      if (!content || document.getElementById('stelvioWeeklyTssWeekCaption')) return;
+      var cap = document.createElement('p');
+      cap.id = 'stelvioWeeklyTssWeekCaption';
+      cap.className = 'weekly-top10-week-caption stelvio-weekly-tss-week-caption hidden';
+      cap.setAttribute('role', 'status');
+      var hint = document.getElementById('stelvioRankingRefreshHint');
+      if (hint && hint.parentNode === content) {
+        content.insertBefore(cap, hint);
+      } else {
+        content.insertBefore(cap, content.firstChild);
+      }
+    }
+
+    function stelvioUpdateWeeklyTssWeekCaption(data) {
+      stelvioEnsureWeeklyTssWeekCaption();
+      var el = document.getElementById('stelvioWeeklyTssWeekCaption');
+      if (!el) return;
+      if (typeof stelvioIsTssRankingMode === 'function' && !stelvioIsTssRankingMode()) {
+        el.classList.add('hidden');
+        return;
+      }
+      if (!data) {
+        el.classList.add('hidden');
+        return;
+      }
+      var isPrevWeek = data.prevWeekFallback === true || data._isPrevWeek === true;
+      if (isPrevWeek) {
+        var ds = data.displayStartStr || data.startStr;
+        var de = data.displayEndStr || data.endStr;
+        el.textContent =
+          '※ 전주 확정 순위' + (ds && de ? ' (' + ds + ' ~ ' + de + ')' : '');
+        el.classList.remove('hidden');
+        return;
+      }
+      if (data.startStr && data.endStr) {
+        el.textContent = '※ 이번 주 순위 (' + data.startStr + ' ~ ' + data.endStr + ')';
+        el.classList.remove('hidden');
+        return;
+      }
+      el.classList.add('hidden');
+    }
+
+    /** TSS 탭 진입: TOP10 IndexedDB → 즉시 표시 시드 (gender=all, 주차 일치) */
+    async function stelvioResolveWeeklyTop10TssSeedPayload(uid, wantGender) {
+      if (wantGender && wantGender !== 'all') return null;
+      var top10Raw = await stelvioLoadWeeklyTop10CacheEntryForTssSeed(uid);
+      if (!top10Raw) return null;
+      var payload = stelvioWeeklyTop10PayloadToTssBoardPayload(top10Raw);
+      if (!payload || !stelvioWeeklyTssBoardPayloadMatchesWeek(payload)) return null;
+      if (!stelvioRankingPayloadHasVisibleRows(payload)) return null;
+      return payload;
+    }
+
     function stelvioRankingPayloadHasVisibleRows(data) {
       if (!data || !data.byCategory) return false;
       var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
@@ -12890,6 +13027,9 @@
       if (chartRt) chartRt.classList.remove('hidden');
       var ot = document.getElementById('stelvioOvertakeBtn');
       if (ot) ot.classList.toggle('hidden', stelvioIsPersonalDistanceRanking() || stelvioIsPersonalSpeedRanking() || isGroup || stelvioIsGcRankingMode());
+      if (typeof stelvioIsTssRankingMode === 'function' && !stelvioIsTssRankingMode()) {
+        stelvioUpdateWeeklyTssWeekCaption(null);
+      }
     }
     function stelvioApplyDurationModeUi() {
       var label = document.getElementById('stelvioPeriodLabel');
@@ -12903,6 +13043,9 @@
           else label.textContent = '월간';
         } else if (stelvioIsTssRankingMode()) {
           label.textContent = '주간';
+          if (stelvioTssBoardWeekMeta) {
+            stelvioUpdateWeeklyTssWeekCaption(stelvioTssBoardWeekMeta);
+          }
         } else if (stelvioIsKmDistanceRanking()) {
           label.textContent = '최근 30일';
         } else if (stelvioIsGcRankingMode()) {
@@ -12964,6 +13107,9 @@
       if (label) label.textContent = STELVIO_CATEGORY_LABELS[val] || val;
       stelvioScrollRankingBoardToTopSmooth();
       if (typeof stelvioSyncRankingListHeaderUi === 'function') stelvioSyncRankingListHeaderUi();
+      if (typeof stelvioIsTssRankingMode === 'function' && !stelvioIsTssRankingMode()) {
+        stelvioUpdateWeeklyTssWeekCaption(null);
+      }
       renderStelvioActiveCategory();
     }
     window.stelvioOnCategoryChange = stelvioOnCategoryChange;
@@ -15635,6 +15781,20 @@
           stelvioApplyPeakRankingFetchResult(pinnedGcApply, myGen, uid, applyOpts);
           return;
         }
+        if (
+          typeof stelvioIsTssRankingMode === 'function' &&
+          stelvioIsTssRankingMode() &&
+          stelvioTssTop10SeedPayload &&
+          stelvioRankingPayloadHasVisibleRows(stelvioTssTop10SeedPayload) &&
+          stelvioWeeklyTssBoardPayloadMatchesWeek(stelvioTssTop10SeedPayload)
+        ) {
+          var pinnedTssApply = stelvioTssTop10SeedPayload;
+          try {
+            pinnedTssApply = JSON.parse(JSON.stringify(stelvioTssTop10SeedPayload));
+          } catch (ePinTssApply) {}
+          stelvioApplyPeakRankingFetchResult(pinnedTssApply, myGen, uid, applyOpts);
+          return;
+        }
         stelvioRankingFullEntries = null;
         stelvioRankingByCategory = null;
         stelvioRankingApiStartStr = '';
@@ -15741,6 +15901,32 @@
           stelvioGcPinnedRankingPayload = data;
         }
         stelvioSetGcRankingRefreshHintFromPayload(data);
+      }
+      if (data.durationType === 'tss') {
+        stelvioTssBoardWeekMeta = {
+          startStr: data.startStr,
+          endStr: data.endStr,
+          displayStartStr: data.displayStartStr,
+          displayEndStr: data.displayEndStr,
+          prevWeekFallback: data.prevWeekFallback === true,
+          _isPrevWeek: data._isPrevWeek === true,
+        };
+        stelvioUpdateWeeklyTssWeekCaption(data);
+        if (stelvioRankingPayloadHasVisibleRows(data)) {
+          try {
+            stelvioTssTop10SeedPayload = JSON.parse(JSON.stringify(data));
+          } catch (eTssPin) {
+            stelvioTssTop10SeedPayload = data;
+          }
+        }
+        if (data.seededFromWeeklyTop10 === true) {
+          stelvioSetRankingRefreshHint(true);
+          var tssSeedHint = document.getElementById('stelvioRankingRefreshHint');
+          if (tssSeedHint) {
+            tssSeedHint.textContent =
+              '주간 TOP10과 동일한 순위를 표시 중입니다. 최신 집계를 백그라운드에서 불러오는 중…';
+          }
+        }
       }
       if (resetExpandUi) {
         stelvioRankingExpandState = {};
@@ -15981,6 +16167,9 @@
         if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
           return stelvioGcPayloadMatchesDisplayWindow(body);
         }
+        if (typeof stelvioIsTssRankingMode === 'function' && stelvioIsTssRankingMode()) {
+          return stelvioWeeklyTssBoardPayloadMatchesWeek(body);
+        }
         if (typeof stelvioIsPersonalSpeedRanking === 'function' && stelvioIsPersonalSpeedRanking()) {
           if (body.dashboardLogRouteEnriched === true && stelvioRankingPayloadHasVisibleRows(body)) {
             return true;
@@ -16061,7 +16250,31 @@
         return true;
       }
 
+      async function tryApplyWeeklyTop10TssBoardSeed(sourceLabel) {
+        if (apiDuration !== 'tss' || forceGenderRefresh) return false;
+        if (genderParam && genderParam !== 'all') return false;
+        var seedPayload = await stelvioResolveWeeklyTop10TssSeedPayload(uid, genderParam);
+        if (!seedPayload) return false;
+        stelvioTssTop10SeedPayload = seedPayload;
+        var appliedSeed = await applyFromCache(seedPayload, {
+          instant: true,
+          source: sourceLabel || 'weeklyTop10_seed',
+          fastTabSwitch: true,
+          preserveExpandUi: true,
+          skipClone: true,
+          keepLoading: !!opts.tabSwitch && !opts.initialOpen,
+          tabSwitch: !!opts.tabSwitch,
+          initialOpen: !!opts.initialOpen,
+        });
+        if (!appliedSeed) return false;
+        scheduleBgRefreshIfNeeded(false);
+        return true;
+      }
+
       async function tryApplySoftFallback() {
+        if (apiDuration === 'tss' && !forceGenderRefresh && (await tryApplyWeeklyTop10TssBoardSeed('weeklyTop10_seed_soft'))) {
+          return true;
+        }
         var soft =
           (await stelvioRankingLocalCache.getSoft(lcKey)) ||
           (await stelvioFindRankingBoardCacheFallback(cacheKeyStr));
@@ -16259,6 +16472,9 @@
           } catch (eLcTab) {}
         }
         if (!memTabHit && (await tryApplyDirectIdbInstantFallback('tab_direct_indexedDB'))) {
+          return;
+        }
+        if (!memTabHit && (await tryApplyWeeklyTop10TssBoardSeed('weeklyTop10_seed_tab'))) {
           return;
         }
         if (memTabHit && memTabHit.body) {
