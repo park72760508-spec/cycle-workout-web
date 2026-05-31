@@ -125,7 +125,27 @@
     p.set('duration', duration);
     if (uid) p.set('uid', String(uid));
     if (duration !== 'tss') p.set('period', periodForPeak || 'monthly');
+    if (typeof window.stelvioGetRankingReadSourceSync === 'function') {
+      p.set('readDb', window.stelvioGetRankingReadSourceSync());
+    }
+    p.set('gfVer', '5');
     return RANKING_BASE + '?' + p.toString();
+  }
+
+  /** Supabase heptagon_cohort_ranks 7축 — 피크 7회 API 실패 시 GC 응답으로 레이더 복구 */
+  function stateFromGcViewerHeptagonAxis(gcData) {
+    if (!gcData || !gcData.success) return null;
+    var axis = gcData.viewerHeptagonAxis;
+    var cu = gcData.currentUser;
+    var ranks = (axis && axis.ranks) || (cu && cu.heptagonRanks);
+    var nPer = (axis && axis.cohortSizePerAxis) || (cu && cu.heptagonCohortNPerAxis);
+    if (!ranks || !ranks.length || ranks.length !== 7) return null;
+    if (!nPer || nPer.length !== 7) {
+      nPer = ranks.map(function() {
+        return 100;
+      });
+    }
+    return stateFromRanksArray(ranks, nPer, ranks, null, null, null, null);
   }
 
   function safeFloorRank(n) {
@@ -3349,10 +3369,30 @@
             if (peakReqId !== octagonPeakReqRef.current) {
               return;
             }
+            var fromGcAxis =
+              gcRankingApi.data && gcRankingApi.data.success
+                ? stateFromGcViewerHeptagonAxis(gcRankingApi.data)
+                : null;
+            if (fromGcAxis) {
+              setState(fromGcAxis);
+              return;
+            }
             setState({ loading: false, err: 'fetch', monthly: null, hof: null, supremoMonthly: null });
           });
       },
-      [uid, gender, category]
+      [uid, gender, category, gcRankingApi.data]
+    );
+
+    useEffect(
+      function() {
+        if (!uid || state.loading || state.err !== 'fetch') return;
+        var fromGc =
+          gcRankingApi.data && gcRankingApi.data.success
+            ? stateFromGcViewerHeptagonAxis(gcRankingApi.data)
+            : null;
+        if (fromGc) setState(fromGc);
+      },
+      [uid, state.loading, state.err, gcRankingApi.data]
     );
 
     var heptagonSummaryCache = useMemo(
