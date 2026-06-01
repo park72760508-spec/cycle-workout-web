@@ -2802,11 +2802,12 @@ function OpenRidingBottomGlassNav(props) {
   );
 }
 
-/** 상세 화면 하단: 홈·모임·수정·폭파·삭제 (기존 툴바 아이콘 재사용) */
+/** 상세 화면 하단: 홈·모임·수정·복사·폭파·삭제 (기존 툴바 아이콘 재사용) */
 function OpenRidingDetailGlassNav(props) {
   var onHome = props.onHome || function () {};
   var onMoim = props.onMoim || function () {};
   var onEdit = props.onEdit || function () {};
+  var onCopy = props.onCopy || function () {};
   var onCancel = props.onCancel || function () {};
   var onDelete = props.onDelete || function () {};
   var hostToolbarLocked = !!props.hostToolbarLocked;
@@ -2865,6 +2866,19 @@ function OpenRidingDetailGlassNav(props) {
         <button
           type="button"
           className={openRidingGlassNavBtnClass(false)}
+          onClick={onCopy}
+          disabled={!showHostActions}
+          aria-label="라이딩 복사"
+          title={!showHostActions ? '방장 또는 관리자만 이용할 수 있습니다.' : '새 모임으로 복사 (날짜·시간·초대 목록은 비움)'}
+        >
+          <img src="assets/img/copy.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <span className="open-riding-bottom-glass-nav__label">복사</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(false)}
           onClick={onCancel}
           disabled={!showHostActions || hostToolbarLocked}
           aria-label="라이딩 폭파"
@@ -2908,6 +2922,7 @@ function OpenRidingDetailGlassNav(props) {
 /** 세부 내용 본문 하단: 수정·폭파·삭제 — 단일 블록·이미지 버튼(폭파/삭제와 동일 크기) */
 function OpenRidingDetailHostActions(props) {
   var onEdit = props.onEdit || function () {};
+  var onCopy = props.onCopy || function () {};
   var onCancel = props.onCancel || function () {};
   var onDelete = props.onDelete || function () {};
   var hostToolbarLocked = !!props.hostToolbarLocked;
@@ -2915,6 +2930,9 @@ function OpenRidingDetailHostActions(props) {
   var hostActionImgSize = 20;
 
   function permTitle(kind) {
+    if (kind === 'copy') {
+      return undefined;
+    }
     if (kind === 'edit') {
       return dis ? '라이딩 일정일이 지나 수정할 수 없습니다.' : undefined;
     }
@@ -2938,15 +2956,24 @@ function OpenRidingDetailHostActions(props) {
   }
 
   function actionIconBtn(caption, kind, imgNode) {
+    var btnDisabled = kind === 'copy' ? false : dis;
     return (
       <button
         key={caption}
         type="button"
         className="open-riding-action-btn open-riding-detail-host-icon-btn inline-flex flex-col items-center justify-center gap-1 disabled:opacity-50"
-        disabled={dis}
+        disabled={btnDisabled}
         aria-label={'라이딩 ' + caption}
         title={permTitle(kind)}
-        onClick={kind === 'edit' ? onEdit : kind === 'cancel' ? onCancel : onDelete}
+        onClick={
+          kind === 'edit'
+            ? onEdit
+            : kind === 'copy'
+              ? onCopy
+              : kind === 'cancel'
+                ? onCancel
+                : onDelete
+        }
       >
         {imgNode}
         <span className="open-riding-detail-host-action-caption open-riding-bottom-glass-nav__label">{caption}</span>
@@ -2958,6 +2985,7 @@ function OpenRidingDetailHostActions(props) {
     <div className="open-riding-detail-host-actions open-riding-bottom-actions mt-4" role="toolbar" aria-label="라이딩 관리">
       <div className="open-riding-detail-host-actions-block">
         {actionIconBtn('수정', 'edit', hostActionImg('assets/img/edit2.png', ''))}
+        {actionIconBtn('복사', 'copy', hostActionImg('assets/img/copy.png', ''))}
         {actionIconBtn('폭파', 'cancel', hostActionImg('assets/img/cancel01.png', ''))}
         {actionIconBtn('삭제', 'delete', hostActionImg('assets/img/delete2.png', ''))}
       </div>
@@ -4447,11 +4475,15 @@ function OpenRidingCreateForm(props) {
   var storage = props.storage;
   var hostUserId = props.hostUserId;
   var editRideId = props.editRideId || null;
+  var copyFromRideId = props.copyFromRideId || null;
+  var sourceRideId = editRideId || copyFromRideId;
+  var isCopyMode = !!copyFromRideId && !editRideId;
   var onCreated = props.onCreated || function () {};
   var onEditSaved = props.onEditSaved || function () {};
   var onEditNavMoim = props.onEditNavMoim;
   var onEditNavDetail = props.onEditNavDetail;
   var onEditNavDelete = props.onEditNavDelete;
+  var onCopyCancel = props.onCopyCancel || function () {};
 
   var formRef = useRef(null);
 
@@ -4668,19 +4700,19 @@ function OpenRidingCreateForm(props) {
     [firestore, hostUserId]
   );
 
-  var _hyd = useState(!editRideId);
+  var _hyd = useState(!sourceRideId);
   var editHydrated = _hyd[0];
   var setEditHydrated = _hyd[1];
 
   useEffect(
     function () {
-      if (!editRideId || !firestore || typeof fetchRideById !== 'function') {
+      if (!sourceRideId || !firestore || typeof fetchRideById !== 'function') {
         setEditHydrated(true);
         return;
       }
       var cancelled = false;
       setEditHydrated(false);
-      fetchRideById(firestore, editRideId)
+      fetchRideById(firestore, sourceRideId)
         .then(function (ride) {
           if (cancelled) return;
           if (!ride) {
@@ -4728,27 +4760,29 @@ function OpenRidingCreateForm(props) {
             }
             return undefined;
           }
-          var inviteSelected = il.map(function (phone) {
-            var p = String(phone != null ? phone : '');
-            var k = normFn(p);
-            var nm = idp[k] && String(idp[k]).trim() ? String(idp[k]).trim() : '';
-            if (isOpenRidingInvitePlaceholderDisplayName(nm)) nm = '';
-            if (!nm && k.length >= 4) {
-              nm = '끝자리 ' + k.slice(-4);
-            } else if (!nm) {
-              nm = '초대 대상';
-            }
-            var fUid = lookupInviteFriendUid(k);
-            var rowOut = { name: nm, phone: p, key: k };
-            if (fUid) rowOut.friendUid = fUid;
-            return rowOut;
-          });
+          var inviteSelected = isCopyMode
+            ? []
+            : il.map(function (phone) {
+                var p = String(phone != null ? phone : '');
+                var k = normFn(p);
+                var nm = idp[k] && String(idp[k]).trim() ? String(idp[k]).trim() : '';
+                if (isOpenRidingInvitePlaceholderDisplayName(nm)) nm = '';
+                if (!nm && k.length >= 4) {
+                  nm = '끝자리 ' + k.slice(-4);
+                } else if (!nm) {
+                  nm = '초대 대상';
+                }
+                var fUid = lookupInviteFriendUid(k);
+                var rowOut = { name: nm, phone: p, key: k };
+                if (fUid) rowOut.friendUid = fUid;
+                return rowOut;
+              });
           setForm(
             Object.assign(
               {
                 title: String(ride.title || ''),
-                date: ymd,
-                departureTime: String(ride.departureTime || '07:00'),
+                date: isCopyMode ? '' : ymd,
+                departureTime: isCopyMode ? '07:00' : String(ride.departureTime || '07:00'),
                 departureLocation: String(ride.departureLocation || ''),
                 distance: Number(ride.distance) || 40,
                 course: String(ride.course || ''),
@@ -4762,9 +4796,11 @@ function OpenRidingCreateForm(props) {
                 isPrivate: !!ride.isPrivate,
                 invitePending: [],
                 inviteSelected: inviteSelected,
-                rideJoinPassword: String(ride.rideJoinPassword != null ? ride.rideJoinPassword : '')
-                  .replace(/\D/g, '')
-                  .slice(0, 4)
+                rideJoinPassword: isCopyMode
+                  ? ''
+                  : String(ride.rideJoinPassword != null ? ride.rideJoinPassword : '')
+                      .replace(/\D/g, '')
+                      .slice(0, 4)
               },
               openRidingApplyPackRulesFromRide(ride)
             )
@@ -4778,7 +4814,7 @@ function OpenRidingCreateForm(props) {
         cancelled = true;
       };
     },
-    [editRideId, firestore]
+    [sourceRideId, isCopyMode, firestore]
   );
 
   var _cph = useState(null);
@@ -4980,6 +5016,9 @@ function OpenRidingCreateForm(props) {
     if (!String(form.title || '').trim()) {
       checkList.push('모임명을 입력해 주세요.');
     }
+    if (!String(form.date || '').trim() || String(form.date).length < 10) {
+      checkList.push('날짜를 선택해 주세요.');
+    }
     if (!String(form.region || '').trim()) {
       checkList.push('지역이 선택되지 않았습니다. 시·도·구·군을 선택한 뒤 「추가」를 눌러 주세요.');
     }
@@ -5146,7 +5185,7 @@ function OpenRidingCreateForm(props) {
     await submitCore(false);
   }
 
-  if (editRideId && !editHydrated) {
+  if (sourceRideId && !editHydrated) {
     return <div className="py-12 text-center text-sm text-slate-500">불러오는 중…</div>;
   }
 
@@ -5178,6 +5217,11 @@ function OpenRidingCreateForm(props) {
       {!storage ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/95 text-amber-900 text-xs px-3 py-2 leading-snug m-0">
           Firebase Storage에 연결되지 않았습니다. GPX 파일은 업로드·저장되지 않습니다. 페이지를 새로고침한 뒤에도 동일하면 Firebase Console에서 Storage 사용 여부와 보안 규칙(쓰기 허용)을 확인해 주세요.
+        </p>
+      ) : null}
+      {isCopyMode ? (
+        <p className="rounded-lg border border-violet-200 bg-violet-50/95 text-violet-900 text-xs px-3 py-2 leading-snug m-0">
+          기존 모임 내용을 복사했습니다. 날짜·출발 시간·초대「선택된 목록」은 비워 두었으니 새 일정을 지정한 뒤 생성해 주세요. GPX는 등록된 파일을 그대로 사용합니다.
         </p>
       ) : null}
       <label className="block font-medium text-slate-700">모임명<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} /></label>
@@ -5248,7 +5292,7 @@ function OpenRidingCreateForm(props) {
             className="w-full text-left border border-slate-300 rounded-lg px-2 py-1.5 bg-white hover:bg-slate-50 text-sm text-slate-800 inline-flex items-center"
             onClick={openKoreanDateModal}
           >
-            {formatKoreanDateLabelFromYmd(form.date)}
+            {formatKoreanDateLabelFromYmd(form.date) || '날짜 선택'}
           </button>
         </div>
         <div className="min-w-0">
@@ -6088,6 +6132,7 @@ function OpenRidingDetail(props) {
   var userId = props.userId;
   var onBack = props.onBack || function () {};
   var onOpenEdit = props.onOpenEdit || function () {};
+  var onOpenCopy = props.onOpenCopy || function () {};
   var onHome = props.onHome || function () {};
   var _hooksD = getOpenRidingHooks();
   var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
@@ -7864,6 +7909,7 @@ function OpenRidingDetail(props) {
       {!isCancelled && (isHost || _isAdmin1) ? (
         <OpenRidingDetailHostActions
           onEdit={onOpenEdit}
+          onCopy={onOpenCopy}
           onCancel={function () {
             prepareHostRefundPreviewAndOpen('cancel');
           }}
@@ -10990,6 +11036,9 @@ function OpenRidingRoomApp(props) {
   var _rid = useState(null);
   var detailRideId = _rid[0];
   var setDetailRideId = _rid[1];
+  var _copyFrom = useState(null);
+  var copyFromRideId = _copyFrom[0];
+  var setCopyFromRideId = _copyFrom[1];
   var _gfd = useState(null);
   var detailGroupId = _gfd[0];
   var setDetailGroupId = _gfd[1];
@@ -11064,7 +11113,7 @@ function OpenRidingRoomApp(props) {
   }
 
   var headerTitle =
-    view === 'create'
+    view === 'create' || view === 'copy'
       ? '라이딩 생성'
       : view === 'edit'
         ? '라이딩 수정'
@@ -11089,6 +11138,7 @@ function OpenRidingRoomApp(props) {
     (view === 'main' ||
       view === 'filter' ||
       view === 'create' ||
+      view === 'copy' ||
       view === 'friends' ||
       view === 'groups' ||
       view === 'groupCreate' ||
@@ -11173,6 +11223,23 @@ function OpenRidingRoomApp(props) {
         onCreated={function () { setView('main'); }}
       />
     );
+  } else if (view === 'copy' && copyFromRideId) {
+    inner = (
+      <OpenRidingCreateForm
+        firestore={firestore}
+        storage={storage}
+        hostUserId={effectiveUserId}
+        copyFromRideId={copyFromRideId}
+        onCreated={function () {
+          setCopyFromRideId(null);
+          setView('main');
+        }}
+        onCopyCancel={function () {
+          setCopyFromRideId(null);
+          setView('detail');
+        }}
+      />
+    );
   } else if (view === 'edit' && detailRideId) {
     inner = (
       <OpenRidingCreateForm
@@ -11196,6 +11263,10 @@ function OpenRidingRoomApp(props) {
         userId={effectiveUserId}
         onBack={function () { setView('main'); }}
         onOpenEdit={function () { setView('edit'); }}
+        onOpenCopy={function () {
+          setCopyFromRideId(detailRideId);
+          setView('copy');
+        }}
         onHome={function () {
           if (typeof showScreen === 'function') showScreen('basecampScreen');
         }}
@@ -11309,14 +11380,19 @@ function OpenRidingRoomApp(props) {
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
-          ) : view === 'create' ? (
+          ) : view === 'create' || view === 'copy' ? (
             <button
               type="button"
               className="open-riding-action-btn shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100/90 -ml-0.5"
               onClick={function () {
+                if (view === 'copy') {
+                  setCopyFromRideId(null);
+                  setView('detail');
+                  return;
+                }
                 setView('main');
               }}
-              aria-label="라이딩 모임으로 뒤로"
+              aria-label={view === 'copy' ? '세부 내용으로 뒤로' : '라이딩 모임으로 뒤로'}
             >
               <svg
                 width="22"
@@ -11362,6 +11438,7 @@ function OpenRidingRoomApp(props) {
       (view === 'main' ||
         view === 'filter' ||
         view === 'create' ||
+        view === 'copy' ||
         view === 'friends' ||
         view === 'groups' ||
         view === 'groupCreate' ||
