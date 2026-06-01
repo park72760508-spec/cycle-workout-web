@@ -5773,101 +5773,58 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-weight: 600;
   color: #1f2937;
 }
-/* 주간 TOP10 모달 전용 — 이름·등락 레이아웃(다른 화면 미적용) */
-#weeklyTop10Modal .weekly-rank-name-text {
+/*
+ * 주간 TOP10 — 등락·비공개 배지는 사용자 이름 직후(weekly-rank-name-text 안).
+ * TSS 열은 행 오른쪽 고정. (flex:1로 이름영역이 늘어나 등락이 TSS 앞에 붙는 현상 방지)
+ */
+#weeklyTop10Modal .weekly-rank-item {
+  display: flex;
+  align-items: center;
+}
+#weeklyTop10Modal .weekly-rank-name {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 100%;
+  max-width: calc(100% - 5.5rem);
   display: inline-flex;
   align-items: center;
-  gap: 0;
-  vertical-align: middle;
-  overflow: hidden;
+  gap: 6px;
 }
-#weeklyTop10Modal .weekly-rank-name-label {
+#weeklyTop10Modal .weekly-rank-name-text {
+  display: inline;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
-  flex: 1 1 auto;
-  max-width: 11em;
+  vertical-align: middle;
+}
+#weeklyTop10Modal .weekly-rank-name-label {
+  display: inline;
 }
 #weeklyTop10Modal .weekly-rank-change-slot {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 1px;
-  flex-shrink: 0 !important;
+  display: inline;
   white-space: nowrap;
+  vertical-align: middle;
 }
 #weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
-#weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change {
-  flex-shrink: 0 !important;
-  overflow: visible;
-  font-size: 0.72rem;
-  line-height: 1.2;
-  white-space: nowrap !important;
+#weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change,
+#weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge {
+  display: inline;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+#weeklyTop10Modal .weekly-rank-tss {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 @media (max-width: 600px) {
-  #weeklyTop10Modal .weekly-rank-item {
-    align-items: center;
-  }
   #weeklyTop10Modal .weekly-rank-name {
-    flex: 1 1 auto;
-    min-width: 0;
-    flex-wrap: nowrap;
-    overflow: hidden;
-  }
-  #weeklyTop10Modal .weekly-rank-name-text {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: calc(100% - 34px);
-    overflow: hidden;
-  }
-  #weeklyTop10Modal .weekly-rank-name-label {
-    max-width: 100%;
-    flex: 1 1 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  #weeklyTop10Modal .weekly-rank-change-slot {
-    flex: 0 0 auto !important;
-    flex-shrink: 0 !important;
-    white-space: nowrap !important;
-  }
-  #weeklyTop10Modal .weekly-rank-tss {
-    flex: 0 0 auto;
-    margin-left: 4px;
+    flex: 0 1 auto;
+    max-width: calc(100% - 5rem);
   }
   #weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
   #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change {
     font-size: 0.74rem;
-  }
-}
-/* 랭킹보드 TSS 탭 전용 — 등락 배지 잘림 방지(다른 탭 미적용) */
-@media (max-width: 600px) {
-  #stelvioRankingScreen.stelvio-ranking-board--tss-active #stelvioRankingListBody.stelvio-ranking-list--tss .stelvio-rank-row .stelvio-rank-name,
-  #stelvioRankingScreen [data-ranking-view-duration="tss"].stelvio-ranking-tab-view--active .stelvio-rank-row .stelvio-rank-name {
-    flex-wrap: nowrap;
-    min-width: 0;
-    overflow: hidden;
-  }
-  #stelvioRankingScreen.stelvio-ranking-board--tss-active #stelvioRankingListBody.stelvio-ranking-list--tss .stelvio-rank-row .stelvio-rank-name-text,
-  #stelvioRankingScreen [data-ranking-view-duration="tss"].stelvio-ranking-tab-view--active .stelvio-rank-row .stelvio-rank-name-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    flex: 1 1 auto;
-    max-width: 100%;
-  }
-  #stelvioRankingScreen.stelvio-ranking-board--tss-active #stelvioRankingListBody.stelvio-ranking-list--tss .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
-  #stelvioRankingScreen [data-ranking-view-duration="tss"].stelvio-ranking-tab-view--active .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change {
-    flex-shrink: 0 !important;
-    white-space: nowrap !important;
-    overflow: visible !important;
   }
 }
 /* 주간 TOP10 아바타: 28px 소형 */
@@ -7154,6 +7111,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
     font-size: 0.72rem;
     margin-left: 2px;
     line-height: 1.2;
+    white-space: nowrap;
+    display: inline-block;
   }
 }
 
