@@ -12034,6 +12034,27 @@
       );
     }
 
+    function stelvioRankingRowVisibleInInterestFilter(uid) {
+      var id = uid != null ? String(uid).trim() : '';
+      if (!id) return false;
+      var myId = stelvioResolveRankingViewerUserId();
+      if (myId && id === myId) return true;
+      if (stelvioRankingFavoriteUserSet.has(id)) return true;
+      if (stelvioRankingFriendUserSet.has(id)) return true;
+      if (stelvioRankingGroupContactSet.has(id)) return true;
+      return false;
+    }
+    function stelvioRemoveRankingListRowsForUser(uid) {
+      var body = document.getElementById('stelvioRankingListBody');
+      if (!body || uid == null) return;
+      var target = String(uid);
+      var btns = body.querySelectorAll('.stelvio-rank-avatar-btn[data-stelvio-rank-user-id]');
+      btns.forEach(function (btn) {
+        if (String(btn.getAttribute('data-stelvio-rank-user-id') || '') !== target) return;
+        var row = btn.closest ? btn.closest('.stelvio-rank-row') : null;
+        if (row && row.parentNode) row.parentNode.removeChild(row);
+      });
+    }
     function stelvioApplyRankingStarOptimisticDom(userId, active) {
       var uid = userId != null ? String(userId) : '';
       if (!uid) return;
@@ -12090,10 +12111,13 @@
           stelvioAdminWarn('[StelvioRanking] 관심 목록 localStorage 저장 실패 — 용량 부족 가능');
         }
       }
-      if (typeof renderStelvioActiveCategory === 'function') {
-        requestAnimationFrame(function () {
-          stelvioWithRankingListScrollPreserved(renderStelvioActiveCategory);
-        });
+      /* 전체 목록: 별 UI만 갱신(전체 재렌더 시 스크롤 점프). 관심 필터: 목록에서 빠질 때만 해당 행 제거 */
+      if (
+        stelvioRankingState.listFilter === 'interest' &&
+        !nextActive &&
+        !stelvioRankingRowVisibleInInterestFilter(s)
+      ) {
+        stelvioRemoveRankingListRowsForUser(s);
       }
       try {
         await stelvioPersistRankingFavoritesToFirestoreImmediate();
@@ -12173,13 +12197,49 @@
         intBtn.setAttribute('aria-pressed', interestOn.toString());
       }
     }
-    /** 랭킹 목록 재렌더 시 스크롤 위치 유지 (관심 필터·별 토글) */
+    /** 랭킹 목록 재렌더 시 스크롤 위치 유지 (관심 필터 전환 등) */
     function stelvioWithRankingListScrollPreserved(renderFn) {
       var scrollEl = document.getElementById('stelvioRankingScrollArea');
       var prevTop = scrollEl ? scrollEl.scrollTop : 0;
+      var anchorUid = '';
+      var anchorOffset = 0;
+      if (scrollEl) {
+        var rows = scrollEl.querySelectorAll('.stelvio-rank-row');
+        var ri;
+        for (ri = 0; ri < rows.length; ri++) {
+          var row = rows[ri];
+          if (!row || !row.getBoundingClientRect) continue;
+          var rowRect = row.getBoundingClientRect();
+          var scrollRect = scrollEl.getBoundingClientRect();
+          if (rowRect.bottom <= scrollRect.top || rowRect.top >= scrollRect.bottom) continue;
+          var av = row.querySelector('.stelvio-rank-avatar-btn[data-stelvio-rank-user-id]');
+          if (!av) continue;
+          anchorUid = String(av.getAttribute('data-stelvio-rank-user-id') || '');
+          anchorOffset = row.offsetTop - scrollEl.scrollTop;
+          break;
+        }
+      }
       if (typeof renderFn === 'function') renderFn();
       if (!scrollEl) return;
       function restore() {
+        if (anchorUid) {
+          var btns = scrollEl.querySelectorAll('.stelvio-rank-avatar-btn[data-stelvio-rank-user-id]');
+          var bi;
+          for (bi = 0; bi < btns.length; bi++) {
+            if (String(btns[bi].getAttribute('data-stelvio-rank-user-id') || '') !== anchorUid) continue;
+            var anchorRow = btns[bi].closest ? btns[bi].closest('.stelvio-rank-row') : null;
+            if (anchorRow) {
+              var nextTop = anchorRow.offsetTop - anchorOffset;
+              scrollEl.scrollTop = nextTop;
+              try {
+                scrollEl.scrollTo({ top: nextTop, left: 0, behavior: 'auto' });
+              } catch (eScrollA) {
+                scrollEl.scrollTop = nextTop;
+              }
+              return;
+            }
+          }
+        }
         scrollEl.scrollTop = prevTop;
         try {
           scrollEl.scrollTo({ top: prevTop, left: 0, behavior: 'auto' });
@@ -12190,7 +12250,10 @@
       restore();
       requestAnimationFrame(function () {
         restore();
-        requestAnimationFrame(restore);
+        requestAnimationFrame(function () {
+          restore();
+          setTimeout(restore, 0);
+        });
       });
     }
     window.stelvioWithRankingListScrollPreserved = stelvioWithRankingListScrollPreserved;
@@ -12289,6 +12352,9 @@
       if (!btn) return;
       ev.preventDefault();
       ev.stopPropagation();
+      try {
+        btn.blur();
+      } catch (eBlur) {}
       var enc = btn.getAttribute('data-stelvio-rank-star');
       if (!enc) return;
       try {
