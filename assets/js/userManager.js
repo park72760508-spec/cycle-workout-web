@@ -63,6 +63,131 @@ function isUserWithdrawn(user) {
   return getUserAccountStatus(user) === ACCOUNT_STATUS_WITHDRAWN;
 }
 
+var WITHDRAWN_AUTH_BLOCK_MESSAGE =
+  '탈퇴처리된 사용자입니다.\n\n정상 사용을 위해 재가입을 통해 이용이 가능합니다.\n\n감사합니다.';
+
+var STELVIO_REJOIN_INTENT_KEY = 'stelvioRejoinIntent';
+
+function setStelvioRejoinIntent(on) {
+  try {
+    if (on) sessionStorage.setItem(STELVIO_REJOIN_INTENT_KEY, '1');
+    else sessionStorage.removeItem(STELVIO_REJOIN_INTENT_KEY);
+  } catch (e) {}
+}
+
+function consumeStelvioRejoinIntent() {
+  try {
+    if (sessionStorage.getItem(STELVIO_REJOIN_INTENT_KEY) === '1') {
+      sessionStorage.removeItem(STELVIO_REJOIN_INTENT_KEY);
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function signOutAllFirebaseAuth() {
+  try {
+    if (window.auth && window.auth.signOut) await window.auth.signOut();
+  } catch (e) {}
+  try {
+    if (window.authV9) {
+      var signOutMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+      if (signOutMod && signOutMod.signOut) await signOutMod.signOut(window.authV9);
+    }
+  } catch (e2) {}
+  window.currentUser = null;
+  window.isPhoneAuthenticated = false;
+  try {
+    localStorage.removeItem('authUser');
+    localStorage.removeItem('currentUser');
+  } catch (e3) {}
+}
+
+/**
+ * 탈퇴 계정 인증 차단 — 재가입 의도(sessionStorage)가 있을 때만 정보 입력 모달로 연결.
+ * @returns {Promise<{blocked: boolean, rejoin: boolean}>}
+ */
+async function handleWithdrawnUserAuth(userData, options) {
+  options = options || {};
+  var rejoinIntent = options.allowRejoinFlow === true || consumeStelvioRejoinIntent();
+  if (rejoinIntent) {
+    var uid =
+      (userData && userData.id) ||
+      (window.auth && window.auth.currentUser && window.auth.currentUser.uid) ||
+      (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) ||
+      null;
+    window.currentUser = userData && typeof userData === 'object' ? Object.assign({ id: uid }, userData) : { id: uid, account_status: ACCOUNT_STATUS_WITHDRAWN };
+    isLoginJustCompleted = true;
+    setTimeout(function () {
+      if (typeof showCompleteUserInfoModal === 'function') {
+        showCompleteUserInfoModal(window.currentUser);
+      }
+    }, 400);
+    return { blocked: false, rejoin: true };
+  }
+
+  await signOutAllFirebaseAuth();
+  if (typeof showWithdrawnUserBlockModal === 'function') {
+    showWithdrawnUserBlockModal();
+  } else if (typeof alert === 'function') {
+    alert(WITHDRAWN_AUTH_BLOCK_MESSAGE);
+  }
+  if (typeof showScreen === 'function') {
+    showScreen('authScreen');
+  }
+  return { blocked: true, rejoin: false };
+}
+
+function showWithdrawnUserBlockModal() {
+  var modal = document.getElementById('withdrawnUserBlockModal');
+  if (!modal) {
+    if (typeof alert === 'function') alert(WITHDRAWN_AUTH_BLOCK_MESSAGE);
+    return;
+  }
+  document.querySelectorAll('.screen').forEach(function (screen) {
+    screen.classList.remove('active');
+    screen.style.setProperty('display', 'none', 'important');
+  });
+  var authScreen = document.getElementById('authScreen');
+  if (authScreen) {
+    authScreen.classList.remove('active');
+    authScreen.style.setProperty('display', 'none', 'important');
+  }
+  if (modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
+  modal.classList.remove('hidden');
+  modal.style.setProperty('display', 'flex', 'important');
+  modal.style.setProperty('position', 'fixed', 'important');
+  modal.style.setProperty('inset', '0', 'important');
+  modal.style.setProperty('z-index', '10002', 'important');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeWithdrawnUserBlockModal() {
+  var modal = document.getElementById('withdrawnUserBlockModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.setProperty('display', 'none', 'important');
+  }
+  document.body.style.overflow = '';
+  if (typeof showScreen === 'function') {
+    showScreen('authScreen');
+  }
+}
+
+async function startWithdrawnUserRejoinFlow() {
+  closeWithdrawnUserBlockModal();
+  setStelvioRejoinIntent(true);
+  if (typeof signInWithGoogle === 'function') {
+    await signInWithGoogle();
+    return;
+  }
+  if (typeof showScreen === 'function') {
+    showScreen('authScreen');
+  }
+}
+
 function filterActiveUsers(users) {
   return (Array.isArray(users) ? users : []).filter(function (u) {
     return isUserAccountActive(u);
@@ -934,16 +1059,16 @@ async function signInWithGoogle() {
       }
 
       if (isUserWithdrawn(userData)) {
-        window.currentUser = { id: user.uid, account_status: ACCOUNT_STATUS_WITHDRAWN };
-        try {
-          localStorage.removeItem('authUser');
-          localStorage.removeItem('currentUser');
-        } catch (eWd) {}
         isLoginJustCompleted = true;
-        setTimeout(function () {
-          showCompleteUserInfoModal(userData);
-        }, 500);
-        return { success: true, user: userData, isNewUser: false, needsInfo: true, withdrawn: true };
+        var wdGoogle = await handleWithdrawnUserAuth(userData);
+        return {
+          success: !wdGoogle.blocked,
+          user: userData,
+          isNewUser: false,
+          needsInfo: wdGoogle.rejoin,
+          withdrawn: true,
+          blocked: wdGoogle.blocked,
+        };
       }
 
       // 기존 회원: lastLogin만 업데이트
@@ -1111,15 +1236,8 @@ function initAuthStateListener() {
         }
 
         if (isUserWithdrawn(userData)) {
-          window.currentUser = { id: result.user.uid, account_status: ACCOUNT_STATUS_WITHDRAWN };
-          try {
-            localStorage.removeItem('authUser');
-            localStorage.removeItem('currentUser');
-          } catch (eWd2) {}
           isLoginJustCompleted = true;
-          setTimeout(function () {
-            showCompleteUserInfoModal(userData);
-          }, 500);
+          await handleWithdrawnUserAuth(userData);
           return;
         }
 
@@ -1269,18 +1387,14 @@ function initAuthStateListener() {
         
         if (userData) {
           if (isUserWithdrawn(userData)) {
-            console.log('[Auth] 탈퇴 계정 — 미등록 상태로 처리 (재가입 대기)');
-            window.currentUser = { id: firebaseUser.uid, account_status: ACCOUNT_STATUS_WITHDRAWN };
+            console.log('[Auth] 탈퇴 계정 — 인증 차단');
             window.isPhoneAuthenticated = false;
-            try {
-              localStorage.removeItem('authUser');
-              localStorage.removeItem('currentUser');
-            } catch (eWd3) {}
             if (!isCallbackPage && isLoginJustCompleted) {
-              setTimeout(function () {
-                showCompleteUserInfoModal(userData);
-              }, 500);
+              isLoginJustCompleted = true;
+              await handleWithdrawnUserAuth(userData);
               isLoginJustCompleted = false;
+            } else {
+              await signOutAllFirebaseAuth();
             }
             return;
           }
@@ -2003,7 +2117,8 @@ async function apiUpdateUser(id, userData) {
       userData.weight != null ||
       userData.name != null ||
       userData.contact != null ||
-      userData.challenge != null
+      userData.challenge != null ||
+      userData.account_status != null
     ) {
       triggerSupabaseUserProvisionAfterProfile();
     }
@@ -2076,6 +2191,8 @@ async function apiDeleteUser(id) {
 
       console.log('✅ 사용자 탈퇴(비활성) 처리 완료 (firestore v8):', id);
     }
+
+    triggerSupabaseUserProvisionAfterProfile();
 
     const currentAuthUser = window.auth?.currentUser;
     const currentAuthV9User = window.authV9?.currentUser;
@@ -4946,6 +5063,11 @@ window.apiDeleteUser = window.apiDeleteUser || apiDeleteUser;
 window.apiReactivateUser = window.apiReactivateUser || apiReactivateUser;
 window.isUserAccountActive = window.isUserAccountActive || isUserAccountActive;
 window.isUserWithdrawn = window.isUserWithdrawn || isUserWithdrawn;
+window.handleWithdrawnUserAuth = handleWithdrawnUserAuth;
+window.showWithdrawnUserBlockModal = showWithdrawnUserBlockModal;
+window.closeWithdrawnUserBlockModal = closeWithdrawnUserBlockModal;
+window.startWithdrawnUserRejoinFlow = startWithdrawnUserRejoinFlow;
+window.setStelvioRejoinIntent = setStelvioRejoinIntent;
 window.filterActiveUsers = window.filterActiveUsers || filterActiveUsers;
 window.getUserAccountStatus = window.getUserAccountStatus || getUserAccountStatus;
 
