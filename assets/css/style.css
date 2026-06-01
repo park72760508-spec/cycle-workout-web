@@ -5790,21 +5790,31 @@ body:has(#trainingDetailModal:not(.hidden)) {
   gap: 6px;
 }
 #weeklyTop10Modal .weekly-rank-name-text {
-  display: inline;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   vertical-align: middle;
 }
 #weeklyTop10Modal .weekly-rank-name-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
   display: inline;
 }
 #weeklyTop10Modal .weekly-rank-change-slot {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
   white-space: nowrap;
   vertical-align: middle;
+  flex-shrink: 0;
+  overflow: visible;
 }
 #weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
 #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change,
@@ -5821,6 +5831,27 @@ body:has(#trainingDetailModal:not(.hidden)) {
   #weeklyTop10Modal .weekly-rank-name {
     flex: 0 1 auto;
     max-width: calc(100% - 5rem);
+  }
+  #weeklyTop10Modal .weekly-rank-name-text {
+    overflow: visible;
+    white-space: normal;
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    max-width: calc(100% - 4.5rem);
+  }
+  #weeklyTop10Modal .weekly-rank-change-slot {
+    flex-shrink: 0;
+    overflow: visible;
+    display: inline-flex;
+    align-items: center;
+  }
+  #weeklyTop10Modal .weekly-rank-name-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 0;
+    min-width: 0;
   }
   #weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
   #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change {
