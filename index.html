@@ -22776,12 +22776,15 @@
                   var bar = meta.data[i];
                   if (!bar) return;
                   var value = Math.round(Number(d.TSS) || 0);
+                  var barH = typeof bar.height === 'number' ? bar.height : bar.base - bar.y;
+                  if (barH < 14) return;
                   ctx.save();
-                  ctx.font = '12px sans-serif';
-                  ctx.fillStyle = '#6b7280';
+                  ctx.font = 'bold 11px sans-serif';
+                  ctx.fillStyle = 'rgba(21, 128, 61, 0.95)';
                   ctx.textAlign = 'center';
-                  ctx.textBaseline = 'bottom';
-                  ctx.fillText(String(value), bar.x, bar.y - 4);
+                  ctx.textBaseline = 'top';
+                  var padTop = Math.min(8, Math.max(4, Math.round(barH * 0.12)));
+                  ctx.fillText(String(value), bar.x, bar.y + padTop);
                   ctx.restore();
                 });
               }
