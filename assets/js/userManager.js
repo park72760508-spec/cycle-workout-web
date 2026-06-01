@@ -52,6 +52,9 @@ function getUserAccountStatus(user) {
   if (s === 'withdrawn' || s === 'inactive' || s === 'deleted' || s === 'deactivated') {
     return ACCOUNT_STATUS_WITHDRAWN;
   }
+  if (user.withdrawn_at && String(user.withdrawn_at).trim() && s !== 'active') {
+    return ACCOUNT_STATUS_WITHDRAWN;
+  }
   return ACCOUNT_STATUS_ACTIVE;
 }
 
@@ -105,6 +108,7 @@ async function signOutAllFirebaseAuth() {
 
 /**
  * 탈퇴 계정 인증 차단 — 재가입 의도(sessionStorage)가 있을 때만 정보 입력 모달로 연결.
+ * Firebase 인증 성공 → Firestore 프로필 확인 → 탈퇴 시 차단 순서를 따른다.
  * @returns {Promise<{blocked: boolean, rejoin: boolean}>}
  */
 async function handleWithdrawnUserAuth(userData, options) {
@@ -126,6 +130,13 @@ async function handleWithdrawnUserAuth(userData, options) {
     return { blocked: false, rejoin: true };
   }
 
+  window.currentUser = null;
+  window.isPhoneAuthenticated = false;
+  if (typeof isPhoneAuthenticated !== 'undefined') {
+    try {
+      isPhoneAuthenticated = false;
+    } catch (ePh) {}
+  }
   await signOutAllFirebaseAuth();
   if (typeof showWithdrawnUserBlockModal === 'function') {
     showWithdrawnUserBlockModal();
@@ -136,6 +147,25 @@ async function handleWithdrawnUserAuth(userData, options) {
     showScreen('authScreen');
   }
   return { blocked: true, rejoin: false };
+}
+
+/** localStorage·메모리에 남은 탈퇴 프로필 제거 */
+function clearWithdrawnUserFromLocalSession() {
+  try {
+    var keys = ['authUser', 'currentUser'];
+    for (var i = 0; i < keys.length; i++) {
+      var raw = localStorage.getItem(keys[i]);
+      if (!raw) continue;
+      var u = JSON.parse(raw);
+      if (u && isUserWithdrawn(u)) {
+        localStorage.removeItem(keys[i]);
+      }
+    }
+  } catch (eClr) {}
+  if (window.currentUser && isUserWithdrawn(window.currentUser)) {
+    window.currentUser = null;
+  }
+  window.isPhoneAuthenticated = false;
 }
 
 function showWithdrawnUserBlockModal() {
@@ -1218,6 +1248,8 @@ function initAuthStateListener() {
     return;
   }
 
+  clearWithdrawnUserFromLocalSession();
+
   // 리다이렉트 로그인 결과 처리 — http(s)+storage 환경에서만 (WebView 등은 onAuthStateChanged만 사용)
   if (stelvioAuthWebEnvOk() && auth.getRedirectResult) {
     auth.getRedirectResult().then(async (result) => {
@@ -1348,33 +1380,20 @@ function initAuthStateListener() {
   // 인증 상태 변경 리스너 설정
   auth.onAuthStateChanged(async (firebaseUser) => {
     if (firebaseUser) {
-      window.isAuthReady = true;
-      
-      // [Event-Driven Auth Guard] React Dashboard에 Auth 준비 신호 전달
-      console.log('[Mobile Debug] [Auth] User restored. Signaling Dashboard...');
-      try {
-        window.dispatchEvent(new CustomEvent('stelvio-auth-ready', { detail: { user: firebaseUser } }));
-        console.log('[Mobile Debug] [Auth] stelvio-auth-ready event dispatched successfully');
-      } catch (e) {
-        console.warn('[Auth] dispatchEvent stelvio-auth-ready failed:', e);
-      }
-      
+      const isPhoneLogin = firebaseUser.email && firebaseUser.email.endsWith('@stelvio.ai');
+      const isAuthV9 = (auth === window.authV9);
+      const isCallbackPage = typeof window !== 'undefined' &&
+        (window.location.pathname.includes('callback.html') ||
+         window.location.href.includes('callback.html'));
+
       // 로그인 상태: UID로 직접 users/{uid} 문서 가져오기 (간단하고 빠름)
       try {
-        const isPhoneLogin = firebaseUser.email && firebaseUser.email.endsWith('@stelvio.ai');
-        const isAuthV9 = (auth === window.authV9);
-        const isCallbackPage = typeof window !== 'undefined' &&
-          (window.location.pathname.includes('callback.html') ||
-           window.location.href.includes('callback.html'));
-        
         let userData = null;
-        
+
         // authV9인 경우 firestoreV9 사용, 그 외에는 compat firestore 사용
         if (isAuthV9 && typeof window.getUserByUid === 'function') {
-          // authV9 + firestoreV9 사용 (동일 앱)
           userData = await window.getUserByUid(firebaseUser.uid);
         } else {
-          // compat auth + compat firestore 사용
           const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
           if (userDoc.exists) {
             var docData3 = userDoc.data() || {};
@@ -1384,22 +1403,31 @@ function initAuthStateListener() {
             }
           }
         }
-        
-        if (userData) {
-          if (isUserWithdrawn(userData)) {
-            console.log('[Auth] 탈퇴 계정 — 인증 차단');
-            window.isPhoneAuthenticated = false;
-            if (!isCallbackPage && isLoginJustCompleted) {
-              isLoginJustCompleted = true;
-              await handleWithdrawnUserAuth(userData);
-              isLoginJustCompleted = false;
-            } else {
-              await signOutAllFirebaseAuth();
-            }
-            return;
-          }
 
-          // 전역 상태 업데이트 (나이·성별 포함 Firestore 전체 데이터)
+        /* Firebase 인증 성공 후 Firestore 프로필 확인 — 탈퇴 계정은 즉시 차단 */
+        if (userData && isUserWithdrawn(userData)) {
+          console.log('[Auth] 탈퇴 계정 — Firebase 인증 후 접속 차단');
+          window.isPhoneAuthenticated = false;
+          if (!isCallbackPage) {
+            await handleWithdrawnUserAuth(userData);
+          } else {
+            await signOutAllFirebaseAuth();
+          }
+          return;
+        }
+
+        window.isAuthReady = true;
+
+        // [Event-Driven Auth Guard] React Dashboard에 Auth 준비 신호 전달
+        console.log('[Mobile Debug] [Auth] User restored. Signaling Dashboard...');
+        try {
+          window.dispatchEvent(new CustomEvent('stelvio-auth-ready', { detail: { user: firebaseUser } }));
+          console.log('[Mobile Debug] [Auth] stelvio-auth-ready event dispatched successfully');
+        } catch (e) {
+          console.warn('[Auth] dispatchEvent stelvio-auth-ready failed:', e);
+        }
+
+        if (userData) {
           window.currentUser = userData;
           try {
             persistStelvioUserToLocalStorage(userData);
@@ -2172,6 +2200,7 @@ async function apiDeleteUser(id) {
     const now = new Date().toISOString();
     const withdrawData = {
       account_status: ACCOUNT_STATUS_WITHDRAWN,
+      is_active: false,
       withdrawn_at: now
     };
 
@@ -5064,6 +5093,7 @@ window.apiReactivateUser = window.apiReactivateUser || apiReactivateUser;
 window.isUserAccountActive = window.isUserAccountActive || isUserAccountActive;
 window.isUserWithdrawn = window.isUserWithdrawn || isUserWithdrawn;
 window.handleWithdrawnUserAuth = handleWithdrawnUserAuth;
+window.clearWithdrawnUserFromLocalSession = clearWithdrawnUserFromLocalSession;
 window.showWithdrawnUserBlockModal = showWithdrawnUserBlockModal;
 window.closeWithdrawnUserBlockModal = closeWithdrawnUserBlockModal;
 window.startWithdrawnUserRejoinFlow = startWithdrawnUserRejoinFlow;

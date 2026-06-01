@@ -704,8 +704,9 @@ function authenticatePhoneWithDB(phoneNumber) {
                   contact: matchedUser.contact,
                   ftp: parseInt(matchedUser.ftp) || 0,
                   weight: parseFloat(matchedUser.weight) || 0,
-                  grade: String(matchedUser.grade ?? '2'),            // ★ 등급 포함
-                  expiry_date: matchedUser.expiry_date ?? ''          // (선택) 만료일도 함께 보존
+                  grade: String(matchedUser.grade ?? '2'),
+                  expiry_date: matchedUser.expiry_date ?? '',
+                  account_status: matchedUser.account_status || 'active',
                 }
               });
             } else {
@@ -733,7 +734,7 @@ function authenticatePhoneWithDB(phoneNumber) {
 
 // ===== Auth 복구 & 로그아웃 유틸 =====
 
-// 앱 초기 진입 시 한 번 호출: authUser → currentUser 안정 복원
+// 앱 초기 진입 시 한 번 호출: authUser → currentUser 안정 복원 (탈퇴 계정 제외)
 function checkAuthStatus() {
   let authUser = null;
   let current = null;
@@ -747,7 +748,23 @@ function checkAuthStatus() {
   } catch (_e2) {
     current = null;
   }
-  const restored = authUser || current;
+  var restored = authUser || current;
+  if (
+    restored &&
+    typeof isUserWithdrawn === 'function' &&
+    isUserWithdrawn(restored)
+  ) {
+    if (typeof clearWithdrawnUserFromLocalSession === 'function') {
+      clearWithdrawnUserFromLocalSession();
+    } else {
+      window.currentUser = null;
+      try {
+        localStorage.removeItem('authUser');
+        localStorage.removeItem('currentUser');
+      } catch (eWd) {}
+    }
+    return;
+  }
 
   if (restored) {
     window.currentUser = restored;
@@ -762,9 +779,29 @@ function checkAuthStatus() {
  * 호출 시 프로필만 있고 window.currentUser가 비어 있으면 checkAuthStatus로 한 번 맞춤.
  */
 function stelvioIsNavigationAuthenticated() {
-  if (window.auth && window.auth.currentUser) return true;
-  if (window.authV9 && window.authV9.currentUser) return true;
+  if (window.auth && window.auth.currentUser) {
+    /* Firebase 세션은 onAuthStateChanged에서 탈퇴 검사 — 로컬 프로필만 탈퇴인 경우 차단 */
+    try {
+      var cuFb = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (cuFb && typeof isUserWithdrawn === 'function' && isUserWithdrawn(cuFb)) {
+        return false;
+      }
+    } catch (eFbWd) {}
+    return true;
+  }
+  if (window.authV9 && window.authV9.currentUser) {
+    try {
+      var cuV9 = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (cuV9 && typeof isUserWithdrawn === 'function' && isUserWithdrawn(cuV9)) {
+        return false;
+      }
+    } catch (eV9Wd) {}
+    return true;
+  }
   if (window.currentUser != null && (window.currentUser.id != null || window.currentUser.uid != null)) {
+    if (typeof isUserWithdrawn === 'function' && isUserWithdrawn(window.currentUser)) {
+      return false;
+    }
     return true;
   }
   try {
@@ -772,6 +809,12 @@ function stelvioIsNavigationAuthenticated() {
     var cu = JSON.parse(localStorage.getItem('currentUser') || 'null');
     var su = au || cu;
     if (su && (su.id != null || su.uid != null)) {
+      if (typeof isUserWithdrawn === 'function' && isUserWithdrawn(su)) {
+        if (typeof clearWithdrawnUserFromLocalSession === 'function') {
+          clearWithdrawnUserFromLocalSession();
+        }
+        return false;
+      }
       try {
         checkAuthStatus();
       } catch (e) {}
@@ -6862,6 +6905,29 @@ window.showScreen = function(screenId) {
 
   console.log('🔵 [Step 1-1] 화면 전환 요청:', screenId, '인증 상태:', isAuthenticated, '(Firebase:', isFirebaseAuthenticated, ', Phone:', phoneAuth, ')');
 
+  /* 탈퇴 계정 — 베이스캠프 등 접속 차단 (Firebase 인증 후 Firestore 확인과 병행) */
+  if (
+    screenId !== 'authScreen' &&
+    screenId !== 'loadingScreen' &&
+    screenId !== 'splashScreen'
+  ) {
+    var _wdCu = window.currentUser;
+    if (!_wdCu) {
+      try {
+        _wdCu = JSON.parse(localStorage.getItem('currentUser') || localStorage.getItem('authUser') || 'null');
+      } catch (eWdSc) {
+        _wdCu = null;
+      }
+    }
+    if (_wdCu && typeof isUserWithdrawn === 'function' && isUserWithdrawn(_wdCu)) {
+      if (typeof handleWithdrawnUserAuth === 'function') {
+        handleWithdrawnUserAuth(_wdCu).catch(function () {});
+      }
+      window.__showScreenRedirectedToAuth = true;
+      screenId = 'authScreen';
+    }
+  }
+
   // 환영 오버레이가 표시되어 있으면 화면 전환 차단
   const welcomeModal = document.getElementById('userWelcomeModal');
   const isWelcomeModalActive = welcomeModal &&
@@ -8389,6 +8455,17 @@ async function authenticatePhone() {
     const authResult = await authenticatePhoneWithDB(currentPhoneNumber);
     
     if (authResult.success) {
+      const authUser = authResult.user || authResult.data || authResult.item || authResult;
+      if (authUser && typeof isUserWithdrawn === 'function' && isUserWithdrawn(authUser)) {
+        authStatus.textContent = '탈퇴 처리된 계정입니다. 재가입이 필요합니다.';
+        authStatus.className = 'auth-status error';
+        authBtn.disabled = false;
+        authBtn.textContent = '인증하기';
+        if (typeof handleWithdrawnUserAuth === 'function') {
+          handleWithdrawnUserAuth(authUser).catch(function () {});
+        }
+        return;
+      }
       // ✅ 인증 성공
       isPhoneAuthenticated = true;
       authStatus.textContent = '✅ ' + authResult.message;
@@ -8396,8 +8473,6 @@ async function authenticatePhone() {
       authBtn.textContent = '인증 완료';
 
       // ============================== 중요: 인증 주체 보관 ==============================
-      // API 응답에서 사용자 객체 필드명(예: user/data/item) 프로젝트에 맞게 선택
-      const authUser = authResult.user || authResult.data || authResult.item || authResult; 
       // grade(등급) 누락 대비: 기존 currentUser/ authUser 백업에서 보강
       let prevViewer = null;
       try { prevViewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) {}
