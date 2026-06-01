@@ -11451,6 +11451,7 @@
       var patch = {};
       patch[STELVIO_RANKING_FAVORITES_FS_FIELD] = ids;
       patch[STELVIO_RANKING_STARRED_USERS_FS_FIELD] = ids;
+      patch[STELVIO_RANKING_FAVORITES_SCHEMA_FIELD] = STELVIO_RANKING_FAVORITES_SCHEMA_VER;
       patch.rankingFavoritesUpdatedAt = stelvioRankingFavoritesFirestoreTimestamp();
       try {
         await stelvioRankingV9SetUserMerge(ownerUid, patch);
@@ -11488,16 +11489,36 @@
       try {
         if (localStorage.getItem(lsFlag) === '1') alreadyDone = true;
       } catch (eLf) {}
+      var dVer = null;
       if (!alreadyDone && stelvioRankingFirestoreV9Pack()) {
         try {
-          var dVer = await stelvioRankingV9GetUserData(ownerUid);
-          if (dVer && Number(dVer[STELVIO_RANKING_FAVORITES_SCHEMA_FIELD]) >= STELVIO_RANKING_FAVORITES_SCHEMA_VER) {
-            alreadyDone = true;
-            try {
-              localStorage.setItem(lsFlag, '1');
-            } catch (eLf2) {}
-          }
+          dVer = await stelvioRankingV9GetUserData(ownerUid);
         } catch (eVer) {}
+      }
+      if (!alreadyDone && dVer) {
+        if (Number(dVer[STELVIO_RANKING_FAVORITES_SCHEMA_FIELD]) >= STELVIO_RANKING_FAVORITES_SCHEMA_VER) {
+          alreadyDone = true;
+        } else {
+          var existingIds = [];
+          var primary = dVer[STELVIO_RANKING_STARRED_USERS_FS_FIELD];
+          var legacy = dVer[STELVIO_RANKING_FAVORITES_FS_FIELD];
+          if (Array.isArray(primary)) existingIds = existingIds.concat(primary);
+          if (Array.isArray(legacy)) existingIds = existingIds.concat(legacy);
+          var hasSyncedData = existingIds.length > 0 || !!dVer.rankingFavoritesUpdatedAt;
+          if (hasSyncedData) {
+            var patchMark = {};
+            patchMark[STELVIO_RANKING_FAVORITES_SCHEMA_FIELD] = STELVIO_RANKING_FAVORITES_SCHEMA_VER;
+            try {
+              await stelvioRankingV9SetUserMerge(ownerUid, patchMark);
+            } catch (eMark) {}
+            alreadyDone = true;
+          }
+        }
+        if (alreadyDone) {
+          try {
+            localStorage.setItem(lsFlag, '1');
+          } catch (eLf2) {}
+        }
       }
       if (alreadyDone) return;
       stelvioRankingFavoriteUserSet = new Set();
@@ -11712,11 +11733,54 @@
    * @param {{ replaceMemory?: boolean, authoritativeLocal?: boolean }} opts
    *   authoritativeLocal=true: LS 내용으로 교체(빈 배열이면 비움). 기본 union은 토글 직후 재읽기에만 사용.
    */
+    function stelvioLoadRankingFavoriteIdsFromCurrentUserSnapshot() {
+      var merged = [];
+      var seen = {};
+      function mergeIds(ids) {
+        (ids || []).forEach(function (id) {
+          var s = String(id);
+          if (!s || seen[s]) return;
+          seen[s] = true;
+          merged.push(s);
+        });
+      }
+      try {
+        if (window.currentUser && typeof window.currentUser === 'object') {
+          mergeIds(window.currentUser[STELVIO_RANKING_STARRED_USERS_FS_FIELD]);
+          mergeIds(window.currentUser[STELVIO_RANKING_FAVORITES_FS_FIELD]);
+        }
+      } catch (eCu) {}
+      try {
+        var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+        if (u && typeof u === 'object') {
+          mergeIds(u[STELVIO_RANKING_STARRED_USERS_FS_FIELD]);
+          mergeIds(u[STELVIO_RANKING_FAVORITES_FS_FIELD]);
+        }
+      } catch (eLsCu) {}
+      try {
+        var au = JSON.parse(localStorage.getItem('authUser') || 'null');
+        if (au && typeof au === 'object') {
+          mergeIds(au[STELVIO_RANKING_STARRED_USERS_FS_FIELD]);
+          mergeIds(au[STELVIO_RANKING_FAVORITES_FS_FIELD]);
+        }
+      } catch (eLsAu) {}
+      return merged;
+    }
     function stelvioRefreshRankingFavoriteSetFromStorage(opts) {
       opts = opts || {};
       try {
         var ownerUid = stelvioResolveRankingFavoritesOwnerUid();
         var fromLs = stelvioLoadRankingFavoriteIdsFromLocalStorage(ownerUid);
+        var fromCu = stelvioLoadRankingFavoriteIdsFromCurrentUserSnapshot();
+        if (fromCu.length) {
+          var seenCu = {};
+          fromLs.forEach(function (id) {
+            seenCu[String(id)] = true;
+          });
+          fromCu.forEach(function (id) {
+            if (!seenCu[id]) fromLs.push(id);
+          });
+        }
         if (opts.authoritativeLocal === true || opts.replaceMemory === true) {
           stelvioRankingFavoriteUserSet = new Set(fromLs);
         } else {
@@ -12028,7 +12092,7 @@
       }
       if (typeof renderStelvioActiveCategory === 'function') {
         requestAnimationFrame(function () {
-          renderStelvioActiveCategory();
+          stelvioWithRankingListScrollPreserved(renderStelvioActiveCategory);
         });
       }
       try {
@@ -12109,6 +12173,27 @@
         intBtn.setAttribute('aria-pressed', interestOn.toString());
       }
     }
+    /** 랭킹 목록 재렌더 시 스크롤 위치 유지 (관심 필터·별 토글) */
+    function stelvioWithRankingListScrollPreserved(renderFn) {
+      var scrollEl = document.getElementById('stelvioRankingScrollArea');
+      var prevTop = scrollEl ? scrollEl.scrollTop : 0;
+      if (typeof renderFn === 'function') renderFn();
+      if (!scrollEl) return;
+      function restore() {
+        scrollEl.scrollTop = prevTop;
+        try {
+          scrollEl.scrollTo({ top: prevTop, left: 0, behavior: 'auto' });
+        } catch (eScroll) {
+          scrollEl.scrollTop = prevTop;
+        }
+      }
+      restore();
+      requestAnimationFrame(function () {
+        restore();
+        requestAnimationFrame(restore);
+      });
+    }
+    window.stelvioWithRankingListScrollPreserved = stelvioWithRankingListScrollPreserved;
     function stelvioOnRankingListFilterChange(mode) {
       var m = mode === 'interest' ? 'interest' : 'all';
       if (stelvioRankingState.listFilter === m) return;
@@ -12120,8 +12205,9 @@
         stelvioRankingGapState.Supremo = gapSup;
       }
       stelvioSyncRankingListFilterToggleUi();
-      stelvioScrollRankingBoardToTopSmooth();
-      if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+      stelvioWithRankingListScrollPreserved(function () {
+        if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+      });
     }
     window.stelvioOnRankingListFilterChange = stelvioOnRankingListFilterChange;
     function stelvioChartPropsInterestFiltered(p) {
