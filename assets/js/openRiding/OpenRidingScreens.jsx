@@ -1571,6 +1571,14 @@ function openRidingExtractPhoneFromContactRow(row) {
   return String(p != null ? p : '').trim();
 }
 
+/** Firestore users / 로컬 프로필 — contact·contactInfo 우선 (앱 기본 필드) */
+function openRidingPhoneFromUserProfileRow(row) {
+  if (!row || typeof row !== 'object') return '';
+  if (row.contact != null && String(row.contact).trim()) return String(row.contact).trim();
+  if (row.contactInfo != null && String(row.contactInfo).trim()) return String(row.contactInfo).trim();
+  return openRidingExtractPhoneFromContactRow(row);
+}
+
 /** 연락처 행에서 표시 이름 */
 function openRidingExtractNameFromContactRow(row) {
   if (!row || typeof row !== 'object') return '';
@@ -1683,9 +1691,10 @@ function buildOpenRidingInviteSelectedFromGroupMembers(members, memberProfiles, 
     var uid = String(m.userId || '').trim();
     if (!uid || uid === exUid) return;
     var prof = memberProfiles && memberProfiles[uid] ? memberProfiles[uid] : null;
-    var phoneRaw = prof ? openRidingExtractPhoneFromContactRow(prof) : '';
+    var phoneRaw = prof ? openRidingPhoneFromUserProfileRow(prof) : '';
     if (!phoneRaw && m.contact != null) phoneRaw = String(m.contact).trim();
     if (!phoneRaw && m.phone != null) phoneRaw = String(m.phone).trim();
+    if (!phoneRaw && m.contactInfo != null) phoneRaw = String(m.contactInfo).trim();
     var key = norm(phoneRaw);
     if (!key || key.length < 8 || seen[key]) return;
     seen[key] = true;
@@ -1701,6 +1710,47 @@ function buildOpenRidingInviteSelectedFromGroupMembers(members, memberProfiles, 
     });
   });
   return out;
+}
+
+/** 클럽 멤버 uid별 users 프로필 조회 후 선택 목록 행 구성 */
+function loadOpenRidingInviteSelectedFromGroupMembersAsync(firestore, members, memberProfiles, excludeUserId) {
+  var exUid = excludeUserId != null ? String(excludeUserId).trim() : '';
+  var uids = [];
+  (members || []).forEach(function (m) {
+    var uid = String(m.userId || '').trim();
+    if (!uid || uid === exUid) return;
+    if (uids.indexOf(uid) < 0) uids.push(uid);
+  });
+  if (!uids.length) {
+    return Promise.resolve([]);
+  }
+  var profiles = Object.assign({}, memberProfiles || {});
+  var getFn =
+    typeof window !== 'undefined' && typeof window.getUserByUid === 'function'
+      ? window.getUserByUid
+      : null;
+  var needFetch = uids.filter(function (uid) {
+    return !profiles[uid] || !openRidingPhoneFromUserProfileRow(profiles[uid]);
+  });
+  if (!getFn || !needFetch.length) {
+    return Promise.resolve(buildOpenRidingInviteSelectedFromGroupMembers(members, profiles, excludeUserId));
+  }
+  return Promise.all(
+    needFetch.map(function (uid) {
+      return getFn(uid)
+        .then(function (row) {
+          return { uid: uid, row: row };
+        })
+        .catch(function () {
+          return { uid: uid, row: null };
+        });
+    })
+  ).then(function (pairs) {
+    pairs.forEach(function (p) {
+      if (p && p.row) profiles[p.uid] = p.row;
+    });
+    return buildOpenRidingInviteSelectedFromGroupMembers(members, profiles, excludeUserId);
+  });
 }
 
 /**
@@ -10504,10 +10554,22 @@ function OpenRidingGroupDetailView(props) {
   var canManageApprovedGroup = approved && (isOwner || isAdmin);
 
   function handleCreateRideFromGroup() {
-    var rows = buildOpenRidingInviteSelectedFromGroupMembers(members, memberProfiles, userId);
-    if (typeof onCreateRide === 'function') {
-      onCreateRide(rows, grp && grp.name ? String(grp.name) : '');
-    }
+    if (busy) return;
+    setBusy(true);
+    loadOpenRidingInviteSelectedFromGroupMembersAsync(firestore, members, memberProfiles, userId)
+      .then(function (rows) {
+        if (typeof onCreateRide === 'function') {
+          onCreateRide(rows, grp && grp.name ? String(grp.name) : '');
+        }
+      })
+      .catch(function () {
+        if (typeof onCreateRide === 'function') {
+          onCreateRide([], grp && grp.name ? String(grp.name) : '');
+        }
+      })
+      .finally(function () {
+        setBusy(false);
+      });
   }
 
   return (
