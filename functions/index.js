@@ -4369,7 +4369,8 @@ exports.getWeeklyRanking = onRequest(
       const entries = tssAgg.entries; // 전체 순위 배열 (rank, userId, name, totalTss, is_private, profileImageUrl 등)
       await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: entries }, entries);
       await hydrateRankingBoardProfileImages(db, { Supremo: entries }, entries);
-      return buildWeeklyRankingResponse(entries, true);
+      const hydratedTss = await hydrateWeeklyRankingEntriesRankMovement(db, entries);
+      return buildWeeklyRankingResponse(hydratedTss, true);
     }
 
     // ── 2순위: weekly_ranking_full_* (수동 집계가 직접 쓴 문서) ──
@@ -4384,7 +4385,8 @@ exports.getWeeklyRanking = onRequest(
     if (aggMatchesWeek) {
       await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: weeklyAgg.fullEntries }, weeklyAgg.fullEntries);
       await hydrateRankingBoardProfileImages(db, { Supremo: weeklyAgg.fullEntries }, weeklyAgg.fullEntries);
-      return buildWeeklyRankingResponse(weeklyAgg.fullEntries, true);
+      const hydratedWeekly = await hydrateWeeklyRankingEntriesRankMovement(db, weeklyAgg.fullEntries);
+      return buildWeeklyRankingResponse(hydratedWeekly, true);
     }
 
     // 구버전 cache/* 문서는 startStr/endStr가 일치할 때만 사용 (집계 주간과 불일치 시 잘못된 주차 데이터 노출 방지)
@@ -4452,7 +4454,8 @@ exports.getWeeklyRanking = onRequest(
         (!weeklyStale.startStr || String(weeklyStale.startStr) === startStr) &&
         (!weeklyStale.endStr || String(weeklyStale.endStr) === endStr);
       if (weeklyStaleMatchesWeek && Array.isArray(weeklyStale.fullEntries) && weeklyStale.fullEntries.length > 0) {
-        return buildWeeklyRankingResponse(weeklyStale.fullEntries, true);
+        const hydratedStale = await hydrateWeeklyRankingEntriesRankMovement(db, weeklyStale.fullEntries);
+        return buildWeeklyRankingResponse(hydratedStale, true);
       }
       const fromTssRoll = await readWeeklyTssEntriesForTop10Http(db, startStr, endStr);
       if (fromTssRoll && fromTssRoll.length > 0) {
@@ -4463,7 +4466,8 @@ exports.getWeeklyRanking = onRequest(
           is_private: e.is_private === true,
           profileImageUrl: e.profileImageUrl || null,
         }));
-        return buildWeeklyRankingResponse(mapped, true);
+        const hydratedMapped = await hydrateWeeklyRankingEntriesRankMovement(db, mapped);
+        return buildWeeklyRankingResponse(hydratedMapped, true);
       }
     }
     const weeklyLiveKey = tssCacheKey;
@@ -4503,7 +4507,8 @@ exports.getWeeklyRanking = onRequest(
           } catch (writeErr) {
             console.warn("[getWeeklyRanking] aggregate write after live compute:", writeErr && writeErr.message ? writeErr.message : writeErr);
           }
-          return buildWeeklyRankingResponse(liveEntries, false);
+          const hydratedLive = await hydrateWeeklyRankingEntriesRankMovement(db, liveEntries);
+          return buildWeeklyRankingResponse(hydratedLive, false);
         }
       } catch (liveErr) {
         console.error("[getWeeklyRanking] live getWeeklyTssRankingBoardEntries failed:", liveErr && liveErr.message ? liveErr.message : liveErr);
@@ -4518,7 +4523,8 @@ exports.getWeeklyRanking = onRequest(
         prevRange.endStr
       );
       if (prevEntries && prevEntries.length > 0) {
-        return buildWeeklyRankingResponse(prevEntries, true, {
+        const hydratedPrev = await hydrateWeeklyRankingEntriesRankMovement(db, prevEntries);
+        return buildWeeklyRankingResponse(hydratedPrev, true, {
           startStr: prevRange.startStr,
           endStr: prevRange.endStr,
           prevWeekFallback: true,
@@ -6270,7 +6276,7 @@ function resolveOfficialPeakRankBaseline(prevNorm, prevRanksCat, prevDayRanksCat
   if (Object.keys(prevDay).length > 0) return prevDay;
   const isNewOfficialDay = !!(prevNorm.asOfSeoul && prevNorm.asOfSeoul < todayYmd);
   if (isNewOfficialDay && Object.keys(prevRanksCat).length > 0) return prevRanksCat;
-  return prevRanksCat && typeof prevRanksCat === "object" ? prevRanksCat : {};
+  return {};
 }
 
 function freezeOfficialPrevDayRanks(prevNorm, prevRanksCat, prevDayRanksCat, todayYmd) {
@@ -6363,6 +6369,30 @@ async function hydratePeakRankMovementFromHistory(db, byCategory, historyKey) {
   const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const prevNorm = await readPeakRankHistoryNorm(db, historyKey);
   computePeakRankMovementFields(byCategory, prevNorm, todayYmd);
+}
+
+/** 주간 마일리지 TOP10 — peak_rank_history 기준 전날 마지막 순위 대비 등락 재계산 */
+async function hydrateWeeklyRankingEntriesRankMovement(db, entries) {
+  if (!db || !Array.isArray(entries) || entries.length === 0) return entries;
+  const supremo = entries.map((e, i) => ({
+    userId: e.userId,
+    name: e.name,
+    totalTss: e.totalTss,
+    rank: e.rank != null ? e.rank : i + 1,
+    ageCategory: e.ageCategory || "Supremo",
+    is_private: e.is_private === true,
+    profileImageUrl: e.profileImageUrl || null,
+  }));
+  const byCategory = {
+    Supremo: supremo,
+    Assoluto: [],
+    Bianco: [],
+    Rosa: [],
+    Infinito: [],
+    Leggenda: [],
+  };
+  await hydratePeakRankMovementFromHistory(db, byCategory, "peak_tss_weekly_all");
+  return supremo;
 }
 
 /**

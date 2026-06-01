@@ -108,7 +108,7 @@ function resolveOfficialPeakRankBaseline(prevNorm, prevRanksCat, prevDayRanksCat
   if (Object.keys(prevDay).length > 0) return prevDay;
   const isNewOfficialDay = !!(prevNorm.asOfSeoul && prevNorm.asOfSeoul < todayYmd);
   if (isNewOfficialDay && Object.keys(prevRanksCat).length > 0) return prevRanksCat;
-  return prevRanksCat && typeof prevRanksCat === "object" ? prevRanksCat : {};
+  return {};
 }
 
 function seoulTodayYmd() {
