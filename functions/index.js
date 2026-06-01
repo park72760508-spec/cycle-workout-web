@@ -72,6 +72,36 @@ function filterRankingEligibleUserDocs(docs) {
   return (docs || []).filter((d) => isRankingEligibleUserData(d.data()));
 }
 
+/** API 응답·집계에서 탈퇴 사용자 행 제거 후 순위 재부여 */
+function filterWithdrawnUsersFromRankingPayload(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
+  if (payload.byCategory && typeof payload.byCategory === "object") {
+    const nextCat = {};
+    for (const cat of cats) {
+      const rows = Array.isArray(payload.byCategory[cat]) ? payload.byCategory[cat] : [];
+      const kept = rows.filter((r) => r && isRankingEligibleUserData(r) && r.isWithdrawn !== true);
+      nextCat[cat] = kept.map((r, i) => ({ ...r, rank: i + 1 }));
+    }
+    payload.byCategory = nextCat;
+  }
+  const filterEntries = (arr) => {
+    if (!Array.isArray(arr)) return arr;
+    const kept = arr.filter((r) => r && isRankingEligibleUserData(r) && r.isWithdrawn !== true);
+    return kept.map((r, i) => ({ ...r, rank: i + 1 }));
+  };
+  if (Array.isArray(payload.entries)) payload.entries = filterEntries(payload.entries);
+  if (Array.isArray(payload.ranking)) payload.ranking = filterEntries(payload.ranking);
+  if (Array.isArray(payload.fullEntries)) payload.fullEntries = filterEntries(payload.fullEntries);
+  if (payload.myRankSupremo && !isRankingEligibleUserData(payload.myRankSupremo)) {
+    payload.myRankSupremo = null;
+  }
+  if (payload.currentUser && !isRankingEligibleUserData(payload.currentUser)) {
+    payload.currentUser = null;
+  }
+  return payload;
+}
+
 /** 랭킹 응답·집계 행에 탈퇴 여부 전달 (클라이언트에서 일반/관리자 분기) */
 function rankingUserStatusFieldsFromData(data) {
   const withdrawn = !isRankingEligibleUserData(data);
@@ -4275,6 +4305,7 @@ exports.getWeeklyRanking = onRequest(
       const hasRanking =
         Array.isArray(weeklyFromSupabase.ranking) && weeklyFromSupabase.ranking.length > 0;
       if (hasRanking || usePrevWeek || weeklyFromSupabase.pendingAggregate) {
+        filterWithdrawnUsersFromRankingPayload(weeklyFromSupabase);
         res.set("Access-Control-Allow-Origin", "*");
         res.set("Cache-Control", "no-store");
         return res.status(200).json(weeklyFromSupabase);
@@ -5375,6 +5406,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
       batch.map(async (doc) => {
         const userId = doc.id;
         const data = doc.data();
+        if (!isRankingEligibleUserData(data)) return null;
         const name = data.name || "(이름 없음)";
         const gender = String(data.gender || data.sex || "").toLowerCase();
         if (genderFilter && genderFilter !== "all") {
@@ -5425,6 +5457,7 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
       batch.map(async (doc) => {
         const userId = doc.id;
         const data = doc.data();
+        if (!isRankingEligibleUserData(data)) return null;
         const name = data.name || "(이름 없음)";
         const gender = String(data.gender || data.sex || "").toLowerCase();
         if (genderFilter && genderFilter !== "all") {
@@ -5474,6 +5507,7 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
       batch.map(async (doc) => {
         const userId = doc.id;
         const data = doc.data();
+        if (!isRankingEligibleUserData(data)) return null;
         const name = data.name || "(이름 없음)";
         const gender = String(data.gender || data.sex || "").toLowerCase();
         if (genderFilter && genderFilter !== "all") {
@@ -5528,6 +5562,7 @@ async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endS
       const doc = docs[di];
       const userId = doc.id;
       const data = doc.data() || {};
+      if (!isRankingEligibleUserData(data)) continue;
       if (!rankingDayRollup.userHasWeightForPersonalSpeed(data)) continue;
       const rollup = rollupMap.get(userId);
       if (
@@ -5596,6 +5631,7 @@ async function getPersonalSpeedRankingBoardEntriesFromRollups(db, startStr, endS
   for (let di = 0; di < docs.length; di++) {
     const doc = docs[di];
     const data = doc.data() || {};
+    if (!isRankingEligibleUserData(data)) continue;
     if (!rankingDayRollup.userHasWeightForPersonalSpeed(data)) continue;
     const gender = String(data.gender || data.sex || "").toLowerCase();
     if (genderFilter && genderFilter !== "all") {
@@ -9522,6 +9558,9 @@ exports.getPeakPowerRanking = onRequest(
         const fbReadLegacy = rankingReadConfig.safeIsFirebaseRankingReadAllowed();
         payload.readBackend = fbReadLegacy ? "firebase" : "supabase";
         payload.readSource = payload.readBackend;
+      }
+      if (payload && typeof payload === "object" && (payload.byCategory || payload.entries || payload.ranking)) {
+        filterWithdrawnUsersFromRankingPayload(payload);
       }
       return origJsonPeak(payload);
     };

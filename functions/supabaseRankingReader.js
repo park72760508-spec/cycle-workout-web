@@ -243,6 +243,17 @@ function profileGenderToken(profile) {
     .toLowerCase();
 }
 
+/** Supabase users / v_user_public_profile — 탈퇴·정지 계정 랭킹 제외 */
+function isSupabaseRankingEligibleProfile(profile) {
+  if (!profile) return false;
+  if (profile.is_active === false) return false;
+  const st = String(profile.account_status || "active").trim().toLowerCase();
+  if (st === "withdrawn" || st === "suspended" || st === "inactive" || st === "deleted") {
+    return false;
+  }
+  return true;
+}
+
 /** 피크·TSS 등: 프로필 gender 필수 일치 */
 function profileGenderMatches(profile, gender) {
   if (!gender || gender === "all") return true;
@@ -321,12 +332,14 @@ async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
     const userRows = await supabaseSelectInChunks(
       supabase,
       "users",
-      "id, firebase_uid, name, display_name, profile_image_url, gender, challenge, birth_year, weight_kg, is_private",
+      "id, firebase_uid, name, display_name, profile_image_url, gender, challenge, birth_year, weight_kg, is_private, account_status",
       "id",
       userIds
     );
     for (const userRow of userRows || []) {
       if (!userRow || !userRow.id) continue;
+      const accountStatus = String(userRow.account_status || "active").trim().toLowerCase();
+      if (accountStatus !== "active") continue;
       const key = String(userRow.id);
       const prev = map.get(key) || {};
       map.set(key, {
@@ -339,6 +352,7 @@ async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
         league_category: prev.league_category || deriveLeagueCategoryFromSupabaseUser(userRow),
         weight_kg: Number(userRow.weight_kg) > 0 ? Number(userRow.weight_kg) : prev.weight_kg,
         is_private: userRow.is_private === true || prev.is_private === true,
+        account_status: userRow.account_status || "active",
       });
     }
   } catch (err) {
@@ -368,12 +382,14 @@ async function getFirebaseUidMapForSupabaseUsers(admin, supabase, userIds) {
       const uidRows = await supabaseSelectInChunks(
         supabase,
         "users",
-        "id, firebase_uid",
+        "id, firebase_uid, account_status",
         "id",
         missing
       );
       for (const row of uidRows || []) {
         if (!row || !row.id) continue;
+        const accountStatus = String(row.account_status || "active").trim().toLowerCase();
+        if (accountStatus !== "active") continue;
         const fbUid = row.firebase_uid ? String(row.firebase_uid).trim() : "";
         if (fbUid) map.set(String(row.id), fbUid);
       }
@@ -436,6 +452,7 @@ function parseBool(raw) {
 function weeklyTssRowsToEntries(rows, uidMap, gender) {
   const entries = [];
   for (const row of rows || []) {
+    if (!isSupabaseRankingEligibleProfile(row)) continue;
     const fbUid = row.firebase_uid ? String(row.firebase_uid).trim() : uidMap.get(String(row.user_id));
     if (!fbUid) continue;
     if (!profileGenderMatches(row, gender)) continue;
@@ -601,6 +618,7 @@ async function fetchPeakPowerMonthlyCore(
   for (const row of data || []) {
     const profile = profileMap.get(String(row.user_id));
     const merged = profile ? { ...row, ...profile, user_id: row.user_id } : row;
+    if (!isSupabaseRankingEligibleProfile(merged)) continue;
     const fbUid = uidMap.get(String(row.user_id));
     if (!fbUid) continue;
     if (!profileGenderMatches(merged, gender)) continue;
