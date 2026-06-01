@@ -168,20 +168,61 @@ function clearWithdrawnUserFromLocalSession() {
   window.isPhoneAuthenticated = false;
 }
 
+/** 로그인 화면 사전 확인용 — 전화번호별 탈퇴 플래그 (login_account_flags, 공개 read) */
+async function syncLoginAccountFlagForUser(userId, accountStatus) {
+  try {
+    if (!userId) return;
+    var contact = '';
+    if (window.currentUser && String(window.currentUser.id) === String(userId)) {
+      contact = window.currentUser.contact || '';
+    }
+    if (!contact && typeof apiGetUser === 'function') {
+      var res = await apiGetUser(userId);
+      if (res && res.success && res.item) contact = res.item.contact || '';
+    }
+    var digits = String(contact || '').replace(/\D/g, '');
+    if (digits.length < 10) return;
+
+    var now = new Date().toISOString();
+    if (window.firestoreV9) {
+      var mod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      var setDocFn = mod && mod.setDoc;
+      var deleteDocFn = mod && mod.deleteDoc;
+      var docFn = mod && mod.doc;
+      var collectionFn = mod && mod.collection;
+      if (!setDocFn || !docFn || !collectionFn) return;
+      var flagRef = docFn(collectionFn(window.firestoreV9, 'login_account_flags'), digits);
+      if (accountStatus === ACCOUNT_STATUS_WITHDRAWN) {
+        await setDocFn(
+          flagRef,
+          { account_status: ACCOUNT_STATUS_WITHDRAWN, uid: String(userId), updated_at: now },
+          { merge: true }
+        );
+      } else if (deleteDocFn) {
+        await deleteDocFn(flagRef).catch(function () {});
+      }
+    } else if (typeof firebase !== 'undefined' && firebase.firestore) {
+      var db = firebase.firestore();
+      var ref = db.collection('login_account_flags').doc(digits);
+      if (accountStatus === ACCOUNT_STATUS_WITHDRAWN) {
+        await ref.set({ account_status: ACCOUNT_STATUS_WITHDRAWN, uid: String(userId), updated_at: now }, { merge: true });
+      } else {
+        await ref.delete().catch(function () {});
+      }
+    }
+  } catch (eFlagSync) {
+    console.warn('[syncLoginAccountFlagForUser] 실패:', eFlagSync && eFlagSync.message);
+  }
+}
+
 function showWithdrawnUserBlockModal() {
   var modal = document.getElementById('withdrawnUserBlockModal');
   if (!modal) {
     if (typeof alert === 'function') alert(WITHDRAWN_AUTH_BLOCK_MESSAGE);
     return;
   }
-  document.querySelectorAll('.screen').forEach(function (screen) {
-    screen.classList.remove('active');
-    screen.style.setProperty('display', 'none', 'important');
-  });
-  var authScreen = document.getElementById('authScreen');
-  if (authScreen) {
-    authScreen.classList.remove('active');
-    authScreen.style.setProperty('display', 'none', 'important');
+  if (typeof dismissSplashFully === 'function') {
+    dismissSplashFully();
   }
   if (modal.parentElement !== document.body) {
     document.body.appendChild(modal);
@@ -190,8 +231,23 @@ function showWithdrawnUserBlockModal() {
   modal.style.setProperty('display', 'flex', 'important');
   modal.style.setProperty('position', 'fixed', 'important');
   modal.style.setProperty('inset', '0', 'important');
-  modal.style.setProperty('z-index', '10002', 'important');
+  modal.style.setProperty('z-index', '10102001', 'important');
+  modal.style.setProperty('visibility', 'visible', 'important');
+  modal.style.setProperty('opacity', '1', 'important');
+  modal.style.setProperty('pointer-events', 'auto', 'important');
+  modal.style.setProperty('background', 'rgba(0, 0, 0, 0.62)', 'important');
+  modal.style.setProperty('backdrop-filter', 'none', 'important');
+  var card = modal.querySelector('.modal-content') || modal.querySelector('.edit-user-modal-content');
+  if (card) {
+    card.style.setProperty('position', 'relative', 'important');
+    card.style.setProperty('z-index', '2', 'important');
+    card.style.setProperty('opacity', '1', 'important');
+    card.style.setProperty('filter', 'none', 'important');
+  }
   document.body.style.overflow = 'hidden';
+  if (typeof showScreen === 'function') {
+    showScreen('authScreen');
+  }
 }
 
 function closeWithdrawnUserBlockModal() {
@@ -1946,6 +2002,7 @@ async function apiReactivateUser(id, userData) {
     };
     const res = await apiUpdateUser(id, reactivatePayload);
     if (res && res.success) {
+      await syncLoginAccountFlagForUser(id, ACCOUNT_STATUS_ACTIVE);
       console.log('✅ 탈퇴 계정 재가입(복구) 완료:', id);
       return { success: true, id: id, reactivated: true };
     }
@@ -2221,6 +2278,7 @@ async function apiDeleteUser(id) {
       console.log('✅ 사용자 탈퇴(비활성) 처리 완료 (firestore v8):', id);
     }
 
+    await syncLoginAccountFlagForUser(id, ACCOUNT_STATUS_WITHDRAWN);
     triggerSupabaseUserProvisionAfterProfile();
 
     const currentAuthUser = window.auth?.currentUser;
