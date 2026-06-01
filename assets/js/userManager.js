@@ -198,8 +198,12 @@ async function syncLoginAccountFlagForUser(userId, accountStatus) {
           { account_status: ACCOUNT_STATUS_WITHDRAWN, uid: String(userId), updated_at: now },
           { merge: true }
         );
-      } else if (deleteDocFn) {
-        await deleteDocFn(flagRef).catch(function () {});
+      } else {
+        await setDocFn(
+          flagRef,
+          { account_status: ACCOUNT_STATUS_ACTIVE, uid: String(userId), updated_at: now },
+          { merge: true }
+        );
       }
     } else if (typeof firebase !== 'undefined' && firebase.firestore) {
       var db = firebase.firestore();
@@ -207,7 +211,7 @@ async function syncLoginAccountFlagForUser(userId, accountStatus) {
       if (accountStatus === ACCOUNT_STATUS_WITHDRAWN) {
         await ref.set({ account_status: ACCOUNT_STATUS_WITHDRAWN, uid: String(userId), updated_at: now }, { merge: true });
       } else {
-        await ref.delete().catch(function () {});
+        await ref.set({ account_status: ACCOUNT_STATUS_ACTIVE, uid: String(userId), updated_at: now }, { merge: true });
       }
     }
   } catch (eFlagSync) {
@@ -5156,6 +5160,7 @@ window.showWithdrawnUserBlockModal = showWithdrawnUserBlockModal;
 window.closeWithdrawnUserBlockModal = closeWithdrawnUserBlockModal;
 window.startWithdrawnUserRejoinFlow = startWithdrawnUserRejoinFlow;
 window.setStelvioRejoinIntent = setStelvioRejoinIntent;
+window.syncLoginAccountFlagForUser = syncLoginAccountFlagForUser;
 window.filterActiveUsers = window.filterActiveUsers || filterActiveUsers;
 window.getUserAccountStatus = window.getUserAccountStatus || getUserAccountStatus;
 
