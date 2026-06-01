@@ -365,22 +365,13 @@
     };
 
     /**
-     * 로그인 사전 확인: ① Firebase Auth 등록 여부 ② 탈퇴 플래그
-     * @returns {Promise<{registered:boolean, withdrawn:boolean, email:string}>}
+     * 로그인 사전 확인 — 탈퇴 플래그만 검사 (Firebase fetchSignInMethodsForEmail은
+     * 보안상 항상 빈 배열을 반환하므로 등록 여부 판별에 사용하지 않음)
+     * @returns {Promise<{withdrawn:boolean, hasRegisteredFlag:boolean, email:string}>}
      */
     window.stelvioPreflightPhoneLogin = async function (phone) {
       var email = typeof phoneToEmail === 'function' ? phoneToEmail(phone) : '';
       var digits = String(phone || '').replace(/\D/g, '');
-      var methods = [];
-      try {
-        methods = await window.stelvioFetchAuthSignInMethodsForEmail(email);
-      } catch (ePf) {
-        methods = [];
-      }
-      var registered = Array.isArray(methods) && methods.length > 0;
-      if (!registered) {
-        return { registered: false, withdrawn: false, email: email };
-      }
       var flag = null;
       try {
         flag = await window.stelvioLookupLoginAccountFlag(digits);
@@ -388,8 +379,9 @@
         flag = null;
       }
       var st = flag && flag.account_status ? String(flag.account_status).trim().toLowerCase() : '';
-      var withdrawn = st === 'withdrawn' || flag && flag.withdrawn === true;
-      return { registered: true, withdrawn: withdrawn, email: email };
+      var withdrawn = st === 'withdrawn' || (flag && flag.withdrawn === true);
+      var hasRegisteredFlag = !!flag && !withdrawn;
+      return { withdrawn: withdrawn, hasRegisteredFlag: hasRegisteredFlag, email: email };
     };
 
     try {
@@ -25038,21 +25030,11 @@
         const formattedPhone = (window.formatPhoneForDB || window.formatPhoneNumber || ((p) => p))(phone);
         console.log('🔐 로그인 시도:', { email: email, phone: phone, formattedPhone: formattedPhone });
 
-        /* ① Firebase Auth 등록 여부 ② 탈퇴 플래그 — 비밀번호 검증 전 */
+        /* 탈퇴 플래그만 사전 확인 — 등록 여부는 로그인 시도 결과로 판별 */
         showAuthStatus('회원 확인 중…', 'info');
-        var loginPreflight = { registered: true, withdrawn: false, email: email };
+        var loginPreflight = { withdrawn: false, hasRegisteredFlag: false, email: email };
         if (typeof window.stelvioPreflightPhoneLogin === 'function') {
           loginPreflight = await window.stelvioPreflightPhoneLogin(phone);
-        }
-        if (!loginPreflight.registered) {
-          if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('loading');
-            submitBtn.textContent = '시작하기';
-          }
-          window.__stelvioPhoneAuthBusy = false;
-          handleRegisterClick();
-          return;
         }
         if (loginPreflight.withdrawn) {
           if (submitBtn) {
@@ -25093,6 +25075,7 @@
             // 🔒 Firebase v9/v8 분기: authV9가 undefined면 v9 호출 시 SDK 내부 구조분해 에러 발생 → v8 폴백
             var userCredential = null;
             var usedV9ForLogin = false;
+            var lastAuthError = null;
             
             if (window.authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function') {
               try {
@@ -25108,15 +25091,22 @@
                   }
                 }
               } catch (v9Err) {
+                lastAuthError = v9Err;
                 console.warn('[Login] authV9 로그인 실패, v8 폴백 시도:', v9Err && v9Err.message);
                 userCredential = null;
               }
             }
             if (!userCredential && auth && typeof auth.signInWithEmailAndPassword === 'function') {
-              userCredential = await auth.signInWithEmailAndPassword(email, password);
-              if (userCredential && userCredential.user) console.log('✅ 로그인 성공 (auth v8):', userCredential.user.uid);
+              try {
+                userCredential = await auth.signInWithEmailAndPassword(email, password);
+                if (userCredential && userCredential.user) console.log('✅ 로그인 성공 (auth v8):', userCredential.user.uid);
+              } catch (v8Err) {
+                lastAuthError = v8Err;
+                throw v8Err;
+              }
             }
             if (!userCredential || !userCredential.user) {
+              if (lastAuthError) throw lastAuthError;
               throw new Error('인증 모듈이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
             }
             const user = userCredential.user;
@@ -25235,6 +25225,9 @@
                   return;
                 }
                 window.currentUser = userData;
+                if (typeof syncLoginAccountFlagForUser === 'function') {
+                  syncLoginAccountFlagForUser(user.uid, 'active').catch(function () {});
+                }
                 try {
                   if (typeof window.persistStelvioUserToLocalStorage === 'function') {
                     window.persistStelvioUserToLocalStorage(userData);
@@ -25331,11 +25324,40 @@
               loginError.code === 'auth/invalid-login-credentials' ||
               loginError.code === 'auth/invalid-credential'
             ) {
+              var phoneDigitsErr = String(phone || '').replace(/\D/g, '');
+              var flagOnErr = null;
+              if (typeof window.stelvioLookupLoginAccountFlag === 'function') {
+                try {
+                  flagOnErr = await window.stelvioLookupLoginAccountFlag(phoneDigitsErr);
+                } catch (eFlagErr) {
+                  flagOnErr = null;
+                }
+              }
+              var stErr = flagOnErr && flagOnErr.account_status ? String(flagOnErr.account_status).trim().toLowerCase() : '';
+              var withdrawnOnErr = stErr === 'withdrawn' || (flagOnErr && flagOnErr.withdrawn === true);
+              var knownRegistered = !!flagOnErr && !withdrawnOnErr;
+
               if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('loading');
                 submitBtn.textContent = '시작하기';
               }
+
+              if (withdrawnOnErr) {
+                window.__stelvioPhoneAuthBusy = false;
+                if (typeof showWithdrawnUserBlockModal === 'function') {
+                  showWithdrawnUserBlockModal();
+                } else if (typeof alert === 'function') {
+                  alert('탈퇴처리된 사용자입니다.\n\n정상 사용을 위해 재가입을 통해 이용이 가능합니다.\n\n감사합니다.');
+                }
+                return;
+              }
+              if (!knownRegistered) {
+                window.__stelvioPhoneAuthBusy = false;
+                handleRegisterClick();
+                return;
+              }
+
               showAuthStatus('❌ 비밀번호 입력이 잘못되었습니다.', 'error');
               if (typeof showToast === 'function') {
                 showToast('비밀번호 입력이 잘못되었습니다.');
@@ -25974,6 +25996,9 @@
         await new Promise(r => setTimeout(r, 200));
         await window.saveNewUserToFirestore(user.uid, userData);
         console.log('✅ Firestore users 컬렉션에 저장 완료:', userData);
+        if (typeof syncLoginAccountFlagForUser === 'function') {
+          syncLoginAccountFlagForUser(user.uid, 'active').catch(function () {});
+        }
         
         // 비밀번호를 localStorage에 저장 (callback.html에서 인증 복원용)
         const normalizedPhone = phone.replace(/-/g, '').replace(/\D/g, '');
