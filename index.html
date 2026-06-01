@@ -326,6 +326,72 @@
       }
       return null;
     };
+
+    /** Firebase Auth — 전화번호(@stelvio.ai) 계정 등록 여부 (비밀번호 검증 전) */
+    window.stelvioFetchAuthSignInMethodsForEmail = async function (email) {
+      var em = String(email || '').trim();
+      if (!em) return [];
+      try {
+        if (window.authV9) {
+          var authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+          if (authMod && authMod.fetchSignInMethodsForEmail) {
+            return await authMod.fetchSignInMethodsForEmail(window.authV9, em);
+          }
+        }
+      } catch (eV9m) {}
+      try {
+        var authCompat = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+        if (authCompat && typeof authCompat.fetchSignInMethodsForEmail === 'function') {
+          return await authCompat.fetchSignInMethodsForEmail(em);
+        }
+      } catch (eV8m) {}
+      return [];
+    };
+
+    /** 로그인 전 탈퇴 여부 — login_account_flags/{전화번호숫자} (공개 read) */
+    window.stelvioLookupLoginAccountFlag = async function (phoneDigits) {
+      var digits = String(phoneDigits || '').replace(/\D/g, '');
+      if (!digits || digits.length < 10 || !firestoreV9 || !collectionFn || !docFn || !getDocFn) {
+        return null;
+      }
+      try {
+        var flagRef = docFn(collectionFn(firestoreV9, 'login_account_flags'), digits);
+        var flagSnap = await getDocFn(flagRef);
+        if (window.stelvioDocSnapExists(flagSnap)) {
+          return flagSnap.data ? flagSnap.data() : null;
+        }
+      } catch (eFlag) {}
+      return null;
+    };
+
+    /**
+     * 로그인 사전 확인: ① Firebase Auth 등록 여부 ② 탈퇴 플래그
+     * @returns {Promise<{registered:boolean, withdrawn:boolean, email:string}>}
+     */
+    window.stelvioPreflightPhoneLogin = async function (phone) {
+      var email = typeof phoneToEmail === 'function' ? phoneToEmail(phone) : '';
+      var digits = String(phone || '').replace(/\D/g, '');
+      var methods = [];
+      try {
+        methods = await window.stelvioFetchAuthSignInMethodsForEmail(email);
+      } catch (ePf) {
+        methods = [];
+      }
+      var registered = Array.isArray(methods) && methods.length > 0;
+      if (!registered) {
+        return { registered: false, withdrawn: false, email: email };
+      }
+      var flag = null;
+      try {
+        flag = await window.stelvioLookupLoginAccountFlag(digits);
+      } catch (eFl) {
+        flag = null;
+      }
+      var st = flag && flag.account_status ? String(flag.account_status).trim().toLowerCase() : '';
+      var withdrawn = st === 'withdrawn' || flag && flag.withdrawn === true;
+      return { registered: true, withdrawn: withdrawn, email: email };
+    };
+
     try {
       window.dispatchEvent(new CustomEvent('stelvio-v9-firebase-user-api-ready'));
     } catch (eReady) {}
@@ -1456,6 +1522,57 @@
     #completeUserInfoModal .edit-user-modal-content {
       position: relative;
       z-index: 10002;
+    }
+
+    /* 탈퇴 계정 안내 — 인증·기타 오버레이 최상단 (forgotPasswordModal과 동일 레벨) */
+    #withdrawnUserBlockModal {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      z-index: 10102001 !important;
+      background: rgba(0, 0, 0, 0.62) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      box-sizing: border-box;
+      padding: max(20px, env(safe-area-inset-top, 0px)) 16px max(20px, env(safe-area-inset-bottom, 0px)) 16px;
+      pointer-events: auto !important;
+    }
+
+    #withdrawnUserBlockModal.hidden {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    #withdrawnUserBlockModal:not(.hidden) {
+      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+
+    #withdrawnUserBlockModal .modal-overlay {
+      display: none !important;
+    }
+
+    #withdrawnUserBlockModal .modal-content,
+    #withdrawnUserBlockModal .edit-user-modal-content {
+      position: relative !important;
+      z-index: 2 !important;
+      background: #fff !important;
+      border-radius: 16px !important;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35) !important;
+      max-width: 420px;
+      width: 100%;
+      margin: 0 auto;
+      pointer-events: auto !important;
+      opacity: 1 !important;
+      filter: none !important;
     }
 
     /* 비밀번호 재설정: #authScreen(z-index 1200)보다 위에 두고, 표시 시 JS로 body에 붙여 stacking 문제 해소 */
@@ -24920,6 +25037,37 @@
         const email = window.phoneToEmail(phone);
         const formattedPhone = (window.formatPhoneForDB || window.formatPhoneNumber || ((p) => p))(phone);
         console.log('🔐 로그인 시도:', { email: email, phone: phone, formattedPhone: formattedPhone });
+
+        /* ① Firebase Auth 등록 여부 ② 탈퇴 플래그 — 비밀번호 검증 전 */
+        showAuthStatus('회원 확인 중…', 'info');
+        var loginPreflight = { registered: true, withdrawn: false, email: email };
+        if (typeof window.stelvioPreflightPhoneLogin === 'function') {
+          loginPreflight = await window.stelvioPreflightPhoneLogin(phone);
+        }
+        if (!loginPreflight.registered) {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('loading');
+            submitBtn.textContent = '시작하기';
+          }
+          window.__stelvioPhoneAuthBusy = false;
+          handleRegisterClick();
+          return;
+        }
+        if (loginPreflight.withdrawn) {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('loading');
+            submitBtn.textContent = '시작하기';
+          }
+          window.__stelvioPhoneAuthBusy = false;
+          if (typeof showWithdrawnUserBlockModal === 'function') {
+            showWithdrawnUserBlockModal();
+          } else if (typeof alert === 'function') {
+            alert('탈퇴처리된 사용자입니다.\\n\\n정상 사용을 위해 재가입을 통해 이용이 가능합니다.\\n\\n감사합니다.');
+          }
+          return;
+        }
         
         try {
             // [SESSION-only 전면 전환] Firebase Auth는 항상 SESSION. "로그인 상태 유지"는 stelvio_saved_* localStorage로만 처리.
@@ -25169,19 +25317,30 @@
             }
             
           } catch (loginError) {
-            // 미등록 번호 → 사용자 등록 화면으로 자동 이동
-            // auth/user-not-found : Firebase 구버전 SDK
-            // auth/invalid-login-credentials : Firebase 최신 SDK (user-not-found + wrong-password 통합)
-            var _isUnregistered =
-              loginError.code === 'auth/user-not-found' ||
-              loginError.code === 'auth/invalid-login-credentials';
-            if (_isUnregistered) {
+            if (loginError.code === 'auth/user-not-found') {
               if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('loading');
                 submitBtn.textContent = '시작하기';
               }
               handleRegisterClick();
+              return;
+            }
+            if (
+              loginError.code === 'auth/wrong-password' ||
+              loginError.code === 'auth/invalid-login-credentials' ||
+              loginError.code === 'auth/invalid-credential'
+            ) {
+              if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('loading');
+                submitBtn.textContent = '시작하기';
+              }
+              showAuthStatus('❌ 비밀번호 입력이 잘못되었습니다.', 'error');
+              if (typeof showToast === 'function') {
+                showToast('비밀번호 입력이 잘못되었습니다.');
+              }
+              window.__stelvioPhoneAuthBusy = false;
               return;
             }
             
@@ -25339,11 +25498,10 @@
         var errMsg = String(err.message || '');
         var errorMessage = '알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
         switch (err.code) {
-          case 'auth/invalid-login-credentials':
-            errorMessage = '전화번호 또는 비밀번호가 올바르지 않습니다. 다시 확인해주세요.';
-            break;
           case 'auth/wrong-password':
-            errorMessage = '비밀번호가 올바르지 않습니다.';
+          case 'auth/invalid-login-credentials':
+          case 'auth/invalid-credential':
+            errorMessage = '비밀번호 입력이 잘못되었습니다.';
             break;
           case 'auth/invalid-email':
             errorMessage = '전화번호 형식이 올바르지 않습니다.';
@@ -25361,8 +25519,6 @@
             errorMessage = '시도 횟수가 너무 많습니다. 잠시 후 다시 시도해주세요.';
             break;
           case 'auth/user-not-found':
-          case 'auth/invalid-login-credentials':
-            // 미등록 번호 → 사용자 등록 화면으로 자동 이동 (finally가 버튼 복구)
             handleRegisterClick();
             return;
           default:
