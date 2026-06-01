@@ -5776,9 +5776,32 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .weekly-rank-name-text {
   flex: 1;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.weekly-rank-name-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+#weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change {
+  flex-shrink: 0;
+  overflow: visible;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+@media (max-width: 600px) {
+  #weeklyTop10Modal .weekly-rank-name {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  #weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change {
+    font-size: 0.74rem;
+  }
 }
 /* 주간 TOP10 아바타: 28px 소형 */
 #weeklyTop10Modal button.stelvio-rank-avatar-btn {
@@ -8037,6 +8060,10 @@ button.stelvio-rank-avatar-btn:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+#stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change {
+  flex-shrink: 0;
+  overflow: visible;
 }
 .stelvio-rank-global {
   flex-shrink: 0;
