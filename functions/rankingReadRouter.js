@@ -240,7 +240,9 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
         historyGender
       );
       if (historyKey) {
-        await peakMovementSupabase.hydratePeakRankMovementOnPayload(payload, historyKey);
+        await peakMovementSupabase.hydratePeakRankMovementOnPayload(payload, historyKey, {
+          admin,
+        });
       }
     }
 
@@ -379,19 +381,11 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
       !usePrevWeek && tssPayload.prevWeekFallback && tssPayload.displayEndStr
         ? tssPayload.displayEndStr
         : endStr;
-    if (!usePrevWeek) {
-      if (tssPayload.entries.length > 0) {
-        await peakMovementSupabase.applyPeakRankChangesSupabase(
-          tssPayload.byCategory,
-          "peak_tss_weekly_all"
-        );
-      }
-      tssPayload.rankMovementSource = "supabase";
-      tssPayload.rankMovementHistoryKey = "peak_tss_weekly_all";
-    } else if (tssPayload.entries.length > 0) {
+    if (tssPayload.entries.length > 0) {
       await peakMovementSupabase.hydratePeakRankMovementOnPayload(
         tssPayload,
-        "peak_tss_weekly_all"
+        "peak_tss_weekly_all",
+        { admin }
       );
     }
     const entries = tssPayload.entries || [];

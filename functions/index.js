@@ -4408,16 +4408,49 @@ exports.getWeeklyRanking = onRequest(
         }
         const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
         const ageMin = updatedAt ? Math.round((nowMs - updatedAt) / 60000) : null;
-        let myRank = null;
-        if (userIdParam && fullEntries.length) {
-          const userIdx = fullEntries.findIndex((e) => e.userId === userIdParam);
+        const legacyEntries = fullEntries.length
+          ? fullEntries
+          : ranking.map((e, i) => ({
+              userId: e.userId,
+              name: e.name,
+              totalTss: e.totalTss,
+              rank: e.rank != null ? e.rank : i + 1,
+              is_private: e.is_private === true,
+              profileImageUrl: e.profileImageUrl || null,
+            }));
+        const hydratedLegacy = await hydrateWeeklyRankingEntriesRankMovement(db, legacyEntries);
+        const rankBodyLegacy = {
+          success: true,
+          ranking: hydratedLegacy.slice(0, 10).map((e, i) => ({
+            rank: i + 1,
+            userId: e.userId,
+            name: e.name,
+            totalTss: Math.round((e.totalTss || 0) * 100) / 100,
+            rankChange: e.rankChange,
+            previousBoardRank: e.previousBoardRank,
+            is_private: e.is_private === true,
+            profileImageUrl: e.profileImageUrl || null,
+          })),
+          startStr,
+          endStr,
+          cached: true,
+          stale: true,
+          cacheAgeMin: ageMin,
+          rebuilding: true,
+          readBackend: "firebase",
+          readSource: "firebase",
+        };
+        if (userIdParam) {
+          const userIdx = hydratedLegacy.findIndex((e) => e.userId === userIdParam);
           if (userIdx >= 10) {
-            const e = fullEntries[userIdx];
-            myRank = {
+            const e = hydratedLegacy[userIdx];
+            rankBodyLegacy.myRank = {
               rank: userIdx + 1,
               userId: e.userId,
               name: e.name,
               totalTss: Math.round((e.totalTss || 0) * 100) / 100,
+              rankChange: e.rankChange,
+              previousBoardRank: e.previousBoardRank,
               is_private: e.is_private === true,
               profileImageUrl: e.profileImageUrl || null,
             };
@@ -4425,24 +4458,7 @@ exports.getWeeklyRanking = onRequest(
         }
         res.set("Access-Control-Allow-Origin", "*");
         res.set("Cache-Control", "no-store");
-        return res.status(200).json({
-          success: true,
-          ranking: ranking.map((e) => ({
-            rank: e.rank,
-            userId: e.userId,
-            name: e.name,
-            totalTss: e.totalTss,
-            is_private: e.is_private === true,
-            profileImageUrl: e.profileImageUrl || null,
-          })),
-          startStr,
-          endStr,
-          myRank: myRank || undefined,
-          cached: true,
-          stale: true,
-          cacheAgeMin: ageMin,
-          rebuilding: true,
-        });
+        return res.status(200).json(rankBodyLegacy);
       }
     }
 
@@ -6420,7 +6436,7 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
   }
   try {
     const { applyPeakRankChangesSupabase } = require("./rankingPeakMovementSupabase");
-    await applyPeakRankChangesSupabase(byCategory, historyKey);
+    await applyPeakRankChangesSupabase(byCategory, historyKey, { admin });
   } catch (eSb) {
     console.warn(
       "[applyPeakRankChanges] Supabase 스냅샷 저장 실패:",
