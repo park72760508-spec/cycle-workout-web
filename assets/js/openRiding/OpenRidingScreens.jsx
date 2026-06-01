@@ -4398,7 +4398,7 @@ function OpenRidingCalendarMain(props) {
               var isSel = selectedKey === key;
               var isConfirmedDay = participantConfirmedDateKeys.has(key);
               var isTodayCell = key === calendarTodayYmd;
-              var dayNumClass = 'day-number relative z-10 tabular-nums ';
+              var dayNumClass = 'relative z-10 tabular-nums ';
               if (isHostDay) {
                 dayNumClass += isPastCell ? 'text-violet-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
               } else if (hasMatch) {
@@ -4474,7 +4474,7 @@ function OpenRidingCalendarMain(props) {
                       </svg>
                     </span>
                   ) : null}
-                  <span className={dayNumClass}>{day}</span>
+                  <span className={dayNumClass + (isTodayCell ? ' open-riding-cal-today-num' : '')}>{day}</span>
                 </button>
               );
             })}
