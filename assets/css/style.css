@@ -2098,7 +2098,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #openRidingRoomScreen .open-riding-detail-content-root--guest {
   padding-top: 0;
 }
-/* 방장 툴바: 단일 블록 안에 수정·폭파·삭제 이미지 (하단 글래스 네비 friend-img와 동일 크기) */
+/* 방장 툴바: 단일 블록 안에 수정·복사·폭파·삭제 이미지 (하단 글래스 네비 friend-img와 동일 크기) */
 #openRidingRoomScreen .open-riding-detail-host-actions {
   margin-top: 1.25rem;
   margin-bottom: 0.5rem;
@@ -2109,9 +2109,9 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 1.75rem;
+  gap: 1.25rem;
   width: 100%;
-  max-width: 20rem;
+  max-width: 24rem;
   margin-left: auto;
   margin-right: auto;
   padding: 0.65rem 1.25rem;
