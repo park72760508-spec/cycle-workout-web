@@ -9326,7 +9326,7 @@
           html += '<div class="weekly-rank-item' + (isSelf ? ' weekly-rank-item-self' : '') + '"' + (isSelf ? ' id="weeklyTop10MyRankRow"' : '') + '>';
           if (rank <= 3) html += '<span class="weekly-rank-medal"><img src="' + rankMedalSrc[rank - 1] + '" alt="" width="20" height="20" decoding="async" /></span>';
           html += '<span class="weekly-rank-position">' + rank + '위</span>';
-          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(profUrl, { userId: uid2, overlayName: displayText }) + '<span class="weekly-rank-name-text" title="' + rawName + '">' + displayText + badgeHtml + '</span>' + weeklyRankChangeTightHtml(item) + '</span>';
+          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(profUrl, { userId: uid2, overlayName: displayText }) + '<span class="weekly-rank-name-text" title="' + rawName + '">' + displayText + weeklyRankChangeTightHtml(item) + badgeHtml + '</span></span>';
           html += '<span class="weekly-rank-tss">' + tssStr + '</span>';
           html += '</div>';
         });
@@ -9346,7 +9346,7 @@
           } else { mrDisplayText = mrRawName; }
           html += '<div class="weekly-rank-item weekly-rank-item-self" id="weeklyTop10MyRankRow">';
           html += '<span class="weekly-rank-position">' + mr.rank + '위</span>';
-          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(mrProfUrl, { userId: mrUid, overlayName: mrDisplayText }) + '<span class="weekly-rank-name-text" title="' + mrRawName + '">' + mrDisplayText + mrBadgeHtml + '</span>' + weeklyRankChangeTightHtml(mr) + '</span>';
+          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(mrProfUrl, { userId: mrUid, overlayName: mrDisplayText }) + '<span class="weekly-rank-name-text" title="' + mrRawName + '">' + mrDisplayText + weeklyRankChangeTightHtml(mr) + mrBadgeHtml + '</span></span>';
           html += '<span class="weekly-rank-tss">' + mrTssStr + '</span>';
           html += '</div>';
         }
