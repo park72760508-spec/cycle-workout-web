@@ -7048,6 +7048,30 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #909090;   /* 그레이 — 보합 */
 }
 
+/* 모바일(iOS·WebView): 등락 배지가 이름 영역에 잘리지 않도록 */
+@media (max-width: 600px) {
+  /* content-visibility:auto 는 Safari에서 행 내부 텍스트·배지가 비거나 보합만 보이는 현상 유발 */
+  #stelvioRankingListBody .stelvio-rank-row {
+    content-visibility: visible;
+    contain-intrinsic-size: auto;
+  }
+  #stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  #stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
+  #weeklyTop10Modal .weekly-rank-name .stelvio-rank-change {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    margin-left: 2px;
+    line-height: 1.2;
+  }
+  #weeklyTop10Modal .weekly-rank-name {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+}
+
 /* ② 내 랭킹 요약 Hero 카드 */
 .stelvio-hero-card {
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.1) 100%);
