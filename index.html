@@ -25072,6 +25072,20 @@
                 if (userData) break;
               }
               if (userData) {
+                /* Firebase 인증 성공 → Firestore 프로필 확인 → 탈퇴 시 차단 */
+                if (typeof isUserWithdrawn === 'function' && isUserWithdrawn(userData)) {
+                  if (typeof handleWithdrawnUserAuth === 'function') {
+                    await handleWithdrawnUserAuth(userData);
+                  } else if (typeof signOutAllFirebaseAuth === 'function') {
+                    await signOutAllFirebaseAuth();
+                  }
+                  if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('loading');
+                    submitBtn.textContent = '시작하기';
+                  }
+                  return;
+                }
                 window.currentUser = userData;
                 try {
                   if (typeof window.persistStelvioUserToLocalStorage === 'function') {
