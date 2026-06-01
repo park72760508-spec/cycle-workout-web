@@ -4386,7 +4386,7 @@ function OpenRidingCalendarMain(props) {
               );
             })}
           </div>
-          <div className="grid grid-cols-7 gap-1 overflow-visible pt-0.5">
+          <div className="grid grid-cols-7 gap-1 overflow-visible pt-0.5 open-riding-calendar-grid">
             {days.map(function (day, idx) {
               if (day == null) return <div key={'e' + idx} className={emptyH} />;
               var key = dateKey(year, month, day);
@@ -4397,7 +4397,8 @@ function OpenRidingCalendarMain(props) {
               var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
               var isSel = selectedKey === key;
               var isConfirmedDay = participantConfirmedDateKeys.has(key);
-              var dayNumClass = 'relative z-10 tabular-nums ';
+              var isTodayCell = key === calendarTodayYmd;
+              var dayNumClass = 'day-number relative z-10 tabular-nums ';
               if (isHostDay) {
                 dayNumClass += isPastCell ? 'text-violet-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
               } else if (hasMatch) {
@@ -4420,7 +4421,8 @@ function OpenRidingCalendarMain(props) {
                   type="button"
                   onClick={function () { setSelectedKey(key); }}
                   className={
-                    'relative overflow-visible ' + cellH + ' rounded-lg text-sm flex items-center justify-center transition ' +
+                    'open-riding-cal-day relative overflow-visible ' + cellH + ' rounded-lg text-sm flex items-center justify-center transition ' +
+                    (isTodayCell ? 'open-riding-cal-day--today ' : '') +
                     (isSel ? 'ring-2 ring-violet-500 font-semibold ' : '') +
                     ' hover:bg-slate-50'
                   }
