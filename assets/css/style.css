@@ -7060,11 +7060,14 @@ body:has(#trainingDetailModal:not(.hidden)) {
     row-gap: 2px;
   }
   #stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
-  #weeklyTop10Modal .weekly-rank-name .stelvio-rank-change {
+  #weeklyTop10Modal .weekly-rank-name .stelvio-rank-change,
+  #weeklyTop10Modal .weekly-rank-name > .stelvio-rank-change {
     flex-shrink: 0;
     font-size: 0.72rem;
     margin-left: 2px;
     line-height: 1.2;
+    max-width: none;
+    overflow: visible;
   }
   #weeklyTop10Modal .weekly-rank-name {
     flex-wrap: wrap;
