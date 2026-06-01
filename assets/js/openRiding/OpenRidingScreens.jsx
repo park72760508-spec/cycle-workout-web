@@ -10551,7 +10551,6 @@ function OpenRidingGroupDetailView(props) {
   var pending = st === GROUP_ST.PENDING;
   var regLine = regionLineFromRegions(grp.regions);
   var canModerateJoin = approved && (isOwner || isAdmin);
-  var canManageApprovedGroup = approved && (isOwner || isAdmin);
 
   function handleCreateRideFromGroup() {
     if (busy) return;
@@ -10626,7 +10625,7 @@ function OpenRidingGroupDetailView(props) {
           {pending && isOwner ? (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-3 space-y-3">
               <p className="text-xs text-amber-950 m-0 leading-snug">
-                관리자 승인 전입니다. 아래에서 <strong>그룹 정보 수정</strong>을 하거나, 조건을 만족하면{' '}
+                관리자 승인 전입니다. 아래에서 <strong>수정</strong>을 하거나, 조건을 만족하면{' '}
                 <strong>그룹 삭제</strong>를 할 수 있습니다.
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -10638,7 +10637,7 @@ function OpenRidingGroupDetailView(props) {
                     onEdit();
                   }}
                 >
-                  그룹 정보 수정
+                  수정
                 </button>
                 <button
                   type="button"
@@ -10661,32 +10660,60 @@ function OpenRidingGroupDetailView(props) {
               ) : null}
             </div>
           ) : null}
-          {isAdmin ? (
+          {(isOwner || isAdmin) && approved ? (
             <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/90 px-3 py-3 space-y-3">
               <p className="text-xs text-violet-950 m-0 leading-snug font-semibold">관리자 메뉴</p>
               <div className="flex flex-wrap items-center gap-2">
-                {!isOwner ? (
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 disabled:opacity-50"
-                    disabled={!!busy}
-                    onClick={function () {
-                      onEdit();
-                    }}
-                  >
-                    그룹 정보 수정
-                  </button>
-                ) : null}
-                {canManageApprovedGroup ? (
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-violet-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
-                    disabled={!!busy}
-                    onClick={handleCreateRideFromGroup}
-                  >
-                    라이딩 생성
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 disabled:opacity-50"
+                  disabled={!!busy}
+                  onClick={function () {
+                    onEdit();
+                  }}
+                >
+                  수정
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-violet-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
+                  disabled={!!busy}
+                  onClick={handleCreateRideFromGroup}
+                >
+                  라이딩 생성
+                </button>
+                <button
+                  type="button"
+                  className={
+                    'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm disabled:opacity-50 ' +
+                    (isAdmin || canDeletePendingGroup
+                      ? 'border-red-300 bg-white text-red-700 hover:bg-red-50'
+                      : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed')
+                  }
+                  disabled={!!busy || (!isAdmin && !canDeletePendingGroup)}
+                  onClick={requestDeleteGroup}
+                >
+                  그룹 삭제
+                </button>
+              </div>
+              <p className="text-[11px] text-violet-900/85 m-0 leading-snug">
+                라이딩 생성 시 클럽 멤버(전화번호 등록)가 초대「선택된 목록」에 자동으로 채워집니다.
+              </p>
+            </div>
+          ) : isAdmin && !approved && !isOwner ? (
+            <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/90 px-3 py-3 space-y-3">
+              <p className="text-xs text-violet-950 m-0 leading-snug font-semibold">관리자 메뉴</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 disabled:opacity-50"
+                  disabled={!!busy}
+                  onClick={function () {
+                    onEdit();
+                  }}
+                >
+                  수정
+                </button>
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:opacity-50"
@@ -10696,44 +10723,7 @@ function OpenRidingGroupDetailView(props) {
                   그룹 삭제
                 </button>
               </div>
-              {canManageApprovedGroup ? (
-                <p className="text-[11px] text-violet-900/85 m-0 leading-snug">
-                  라이딩 생성 시 클럽 멤버(전화번호 등록)가 초대「선택된 목록」에 자동으로 채워집니다.
-                </p>
-              ) : null}
             </div>
-          ) : null}
-          {isOwner && approved && !isAdmin ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 disabled:opacity-50"
-                disabled={!!busy}
-                onClick={function () {
-                  onEdit();
-                }}
-              >
-                그룹 정보 수정
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-violet-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
-                disabled={!!busy}
-                onClick={handleCreateRideFromGroup}
-              >
-                라이딩 생성
-              </button>
-            </div>
-          ) : isOwner && approved && isAdmin ? (
-            <button
-              type="button"
-              className="mt-3 text-sm font-semibold text-violet-700 underline"
-              onClick={function () {
-                onEdit();
-              }}
-            >
-              그룹 정보 수정
-            </button>
           ) : null}
         </div>
       </div>
