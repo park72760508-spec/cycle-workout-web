@@ -14271,7 +14271,9 @@
           if (oldRc[oi].parentNode) oldRc[oi].parentNode.removeChild(oldRc[oi]);
         }
         var rcHtml = item
-          ? stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank)
+          ? typeof stelvioRankChangeBadgeHtmlForListItem === 'function'
+            ? stelvioRankChangeBadgeHtmlForListItem(item, cat)
+            : stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank)
           : '';
         if (!rcHtml) continue;
         var nameText = nameWrap.querySelector('.stelvio-rank-name-text');
@@ -15029,6 +15031,31 @@
       }
     }
 
+    /** previousBoardRank − rankChange === currRank 이면 등락 필드가 현재 순위와 일치 */
+    function stelvioRankMovementRowMatchesCurrentRank(row, currRank) {
+      if (!row || row.rankChange == null || row.previousBoardRank == null) return false;
+      var rc = Math.round(Number(row.rankChange));
+      var prev = Math.floor(Number(row.previousBoardRank));
+      if (!isFinite(rc) || !isFinite(prev) || prev < 1) return false;
+      if (currRank == null || currRank < 1) return true;
+      return prev - rc === Math.floor(Number(currRank));
+    }
+
+    /** GC·클럽과 동일: 본인 등락은 Supremo(전체) 행 기준 */
+    function stelvioResolveRankChangeLookupCategory(categoryKey, userId) {
+      var cat =
+        categoryKey ||
+        (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.activeCategory) ||
+        'Supremo';
+      if (userId == null || userId === '') return cat;
+      if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
+        var viewerUid =
+          typeof stelvioResolveRankingViewerUserId === 'function' ? stelvioResolveRankingViewerUserId() : '';
+        if (viewerUid && String(userId) === String(viewerUid)) return 'Supremo';
+      }
+      return cat;
+    }
+
     function stelvioNormalizeRankMovementOnPayload(data) {
       if (!data || !data.byCategory) return;
       var ci;
@@ -15205,14 +15232,26 @@
     }
 
     function stelvioRankChangeBadgeHtmlForUser(categoryKey, userId) {
-      var mv = stelvioRankChangeFromRow(stelvioFindRankingRowForUser(categoryKey, userId));
+      var cat = stelvioResolveRankChangeLookupCategory(categoryKey, userId);
+      var mv = stelvioRankChangeFromRow(stelvioFindRankingRowForUser(cat, userId));
       if (!mv) return '';
       return stelvioServerRankChangeBadgeHtml(mv.rc, mv.prevR);
     }
 
+    /** 목록 행 — GC 본인은 클럽 탭과 같이 Supremo 등락, 그 외는 부문 행 */
+    function stelvioRankChangeBadgeHtmlForListItem(item, listCategoryKey) {
+      if (!item || item.userId == null) return '';
+      if (typeof stelvioRankChangeBadgeHtmlForUser === 'function') {
+        var html = stelvioRankChangeBadgeHtmlForUser(listCategoryKey || 'Supremo', item.userId);
+        if (html) return html;
+      }
+      return stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
+    }
+
     /** SVG·짧은 라벨용 — 리스트와 동일 rankChange, HTML 태그 없음 */
     function stelvioRankChangeBadgePlainForUser(categoryKey, userId) {
-      var mv = stelvioRankChangeFromRow(stelvioFindRankingRowForUser(categoryKey, userId));
+      var cat = stelvioResolveRankChangeLookupCategory(categoryKey, userId);
+      var mv = stelvioRankChangeFromRow(stelvioFindRankingRowForUser(cat, userId));
       if (!mv) return '';
       if (mv.rc > 0) return '(↑' + mv.rc + ')';
       if (mv.rc < 0) return '(↓' + Math.abs(mv.rc) + ')';
@@ -15232,8 +15271,11 @@
 
     window.stelvioFindRankingRowForUser = stelvioFindRankingRowForUser;
     window.stelvioRankChangeBadgeHtmlForUser = stelvioRankChangeBadgeHtmlForUser;
+    window.stelvioRankChangeBadgeHtmlForListItem = stelvioRankChangeBadgeHtmlForListItem;
     window.stelvioRankChangeBadgePlainForUser = stelvioRankChangeBadgePlainForUser;
     window.stelvioServerRankChangeBadgeHtml = stelvioServerRankChangeBadgeHtml;
+    window.stelvioResolveRankChangeLookupCategory = stelvioResolveRankChangeLookupCategory;
+    window.stelvioRankMovementRowMatchesCurrentRank = stelvioRankMovementRowMatchesCurrentRank;
     var STELVIO_RANK_BOARD_CATS = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
 
     function stelvioPeakBoardRankMapsEqual(a, b) {
@@ -15408,9 +15450,11 @@
           for (var gri = 0; gri < rowsG.length; gri++) {
             var rowG = rowsG[gri];
             if (!rowG || rowG.userId == null) continue;
-            if (rowG.rankChange != null && rowG.previousBoardRank != null) continue;
             var uidG = String(rowG.userId);
             var currR = currCat[uidG];
+            if (rowG.rankChange != null && rowG.previousBoardRank != null) {
+              if (stelvioRankMovementRowMatchesCurrentRank(rowG, currR)) continue;
+            }
             var prevR = priorCat[uidG];
             if (currR == null || currR < 1 || prevR == null || prevR < 1) continue;
             var prevN = Math.floor(Number(prevR));
@@ -15688,7 +15732,9 @@
 
     function stelvioApplyPeakRankChangeToRow(row, uid, curr, baseline, outChanges, outPrevious) {
       if (!row || curr == null || curr < 1) return;
-      if (row.rankChange != null && row.previousBoardRank != null) return;
+      if (row.rankChange != null && row.previousBoardRank != null) {
+        if (stelvioRankMovementRowMatchesCurrentRank(row, curr)) return;
+      }
       if (baseline[uid] == null) return;
       var prev = Math.floor(Number(baseline[uid]));
       if (!isFinite(prev) || prev < 1) return;
@@ -18765,16 +18811,37 @@
     /** API currentUser 누락 시 byCategory에서 본인 행 복원 (GC·Supabase uid 문자열 불일치 대비) */
     function stelvioRankingResolveCurrentUserFromPayload(data, uid) {
       if (!data || !data.byCategory || uid == null || uid === '') return data && data.currentUser ? data.currentUser : null;
-      if (data.currentUser && String(data.currentUser.userId) === String(uid)) return data.currentUser;
-      var lookup = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
       var uidStr = String(uid);
-      for (var li = 0; li < lookup.length; li++) {
-        var arrL = data.byCategory[lookup[li]] || [];
-        for (var lj = 0; lj < arrL.length; lj++) {
-          if (arrL[lj] && String(arrL[lj].userId) === uidStr) return arrL[lj];
+      var supRow = null;
+      var supArr = data.byCategory.Supremo || [];
+      for (var sj = 0; sj < supArr.length; sj++) {
+        if (supArr[sj] && String(supArr[sj].userId) === uidStr) {
+          supRow = supArr[sj];
+          break;
         }
       }
-      return null;
+      var fromCu =
+        data.currentUser && String(data.currentUser.userId) === uidStr ? data.currentUser : null;
+      if (!fromCu && !supRow) {
+        var lookup = ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+        for (var li = 0; li < lookup.length; li++) {
+          var arrL = data.byCategory[lookup[li]] || [];
+          for (var lj = 0; lj < arrL.length; lj++) {
+            if (arrL[lj] && String(arrL[lj].userId) === uidStr) return arrL[lj];
+          }
+        }
+        return null;
+      }
+      var base = fromCu ? Object.assign({}, fromCu) : Object.assign({}, supRow);
+      if (supRow) {
+        if (supRow.rank != null && isFinite(Number(supRow.rank))) base.rank = supRow.rank;
+        if (supRow.gcScore != null && isFinite(Number(supRow.gcScore))) base.gcScore = supRow.gcScore;
+        if (supRow.rankChange != null && supRow.previousBoardRank != null) {
+          base.rankChange = supRow.rankChange;
+          base.previousBoardRank = supRow.previousBoardRank;
+        }
+      }
+      return base;
     }
 
     /** 즉시 탭·캐시 히트 후에도 분포 차트·본인 행이 동작하도록 전역 페이로드 동기화 */
@@ -18791,6 +18858,12 @@
         typeof stelvioResolveRankingFullEntries === 'function'
           ? stelvioResolveRankingFullEntries(data)
           : null;
+      if (
+        data.durationType === 'gc' &&
+        typeof stelvioApplyGcRankMovementPipeline === 'function'
+      ) {
+        stelvioApplyGcRankMovementPipeline(data);
+      }
       stelvioMyRankSupremo = data.myRankSupremo || null;
       var resolvedCu =
         typeof stelvioRankingResolveCurrentUserFromPayload === 'function'
@@ -18798,12 +18871,6 @@
           : null;
       stelvioCurrentUser = resolvedCu || data.currentUser || null;
       if (resolvedCu && !data.currentUser) data.currentUser = resolvedCu;
-      if (
-        data.durationType === 'gc' &&
-        typeof stelvioApplyGcRankMovementPipeline === 'function'
-      ) {
-        stelvioApplyGcRankMovementPipeline(data);
-      }
       stelvioRankingCurrentUserId = uid || null;
       if (typeof data.startStr === 'string') stelvioRankingApiStartStr = data.startStr;
       if (typeof data.endStr === 'string') stelvioRankingApiEndStr = data.endStr;
@@ -19032,7 +19099,10 @@
             name = rawName.length > maxNameLenS ? rawName.substring(0, maxNameLenS - 2) + '..' : rawName;
           }
           var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
-          var rankChangePart = stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
+          var rankChangePart =
+            typeof stelvioRankChangeBadgeHtmlForListItem === 'function'
+              ? stelvioRankChangeBadgeHtmlForListItem(item, 'Supremo')
+              : stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
           var groupHostStripe =
             stelvioIsGroupDistanceRanking() && isCurrent;
           var groupAttended =
@@ -19356,7 +19426,10 @@
         }
         var globalPart = '';
         var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
-        var rankChangePart = stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
+        var rankChangePart =
+          typeof stelvioRankChangeBadgeHtmlForListItem === 'function'
+            ? stelvioRankChangeBadgeHtmlForListItem(item, cat)
+            : stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
         var groupHostStripeCat = stelvioIsGroupDistanceRanking() && isCurrent;
         var groupAttendedCat =
           stelvioIsGroupDistanceRanking() &&
