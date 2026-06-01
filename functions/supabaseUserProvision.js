@@ -100,6 +100,26 @@ function pickPhone(authUser, firestore) {
   );
 }
 
+function mapRankingFavoriteUserIds(raw) {
+  const src = Array.isArray(raw?.rankingFavoriteUserIds)
+    ? raw.rankingFavoriteUserIds
+    : Array.isArray(raw?.starredUsers)
+      ? raw.starredUsers
+      : Array.isArray(raw)
+        ? raw
+        : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of src) {
+    const id = String(item || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= 500) break;
+  }
+  return out;
+}
+
 function mapFirestoreUserToRow(firebaseUid, d, uidConfig) {
   const id = supabaseDualWriteServer.resolveUserUuid(
     firebaseUid,
@@ -133,6 +153,7 @@ function mapFirestoreUserToRow(firebaseUid, d, uidConfig) {
     is_private: Boolean(d.is_private),
     profile_image_url: str(d.profileImageUrl) ?? str(d.profile_image_url),
     max_hr: int(d.max_hr ?? d.maxHr, 0) || null,
+    ranking_favorite_user_ids: mapRankingFavoriteUserIds(d),
     created_at: toTimestamptz(d.created_at) ?? new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

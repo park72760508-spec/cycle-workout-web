@@ -11941,6 +11941,10 @@ const USER_PROFILE_SYNC_FIELDS = [
   "account_status",
   "expiry_date",
   "subscription_end_date",
+  "rankingFavoriteUserIds",
+  "starredUsers",
+  "rankingFavoritesUpdatedAt",
+  "rankingFavoritesSchemaVersion",
 ];
 
 function userProfileFieldsChanged(before, after) {
