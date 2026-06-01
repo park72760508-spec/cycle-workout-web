@@ -9359,6 +9359,16 @@
               stelvioRefreshWeeklyTop10RankChangeDom(body, data);
             });
           });
+          setTimeout(function () {
+            if (typeof stelvioRefreshWeeklyTop10RankChangeDom === 'function') {
+              stelvioRefreshWeeklyTop10RankChangeDom(body, data);
+            }
+          }, 600);
+          setTimeout(function () {
+            if (typeof stelvioRefreshWeeklyTop10RankChangeDom === 'function') {
+              stelvioRefreshWeeklyTop10RankChangeDom(body, data);
+            }
+          }, 1500);
         }
         if (currentUserId) {
           requestAnimationFrame(function() { requestAnimationFrame(function() {
@@ -10534,6 +10544,21 @@
         }
         if (bodyMem && typeof stelvioRankingRefreshListRankChangeSlots === 'function') {
           stelvioRankingRefreshListRankChangeSlots(bodyMem);
+          var _bodyMemRef = bodyMem;
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              var liveBody = document.getElementById('stelvioRankingListBody') || _bodyMemRef;
+              if (liveBody && typeof stelvioRankingRefreshListRankChangeSlots === 'function') {
+                stelvioRankingRefreshListRankChangeSlots(liveBody);
+              }
+            });
+          });
+          setTimeout(function () {
+            var liveBody = document.getElementById('stelvioRankingListBody') || _bodyMemRef;
+            if (liveBody && typeof stelvioRankingRefreshListRankChangeSlots === 'function') {
+              stelvioRankingRefreshListRankChangeSlots(liveBody);
+            }
+          }, 500);
         }
         if (needsRefreshHint && typeof stelvioSetRankingRefreshHint === 'function') {
           stelvioSetRankingRefreshHint(true);
@@ -14520,7 +14545,7 @@
         if (!row || row.userId == null || row.rankChange == null || row.previousBoardRank == null) return;
         var rc = Number(row.rankChange);
         var pr = Math.floor(Number(row.previousBoardRank));
-        if (!isFinite(rc) || !isFinite(pr) || pr < 1) return;
+        if (!isFinite(rc) || !isFinite(pr) || pr < 0) return;
         snap[String(row.userId)] = { rankChange: rc, previousBoardRank: pr };
       }
       var ri;
@@ -14547,7 +14572,16 @@
     function stelvioWeeklyTop10RankChangeBadgeHtml(row) {
       if (!row || typeof stelvioServerRankChangeBadgeHtml !== 'function') return '';
       if (typeof stelvioNormalizeRankMovementOnRow === 'function') stelvioNormalizeRankMovementOnRow(row);
-      var h = stelvioServerRankChangeBadgeHtml(row.rankChange, row.previousBoardRank);
+      var rcVal = row.rankChange;
+      var prVal = row.previousBoardRank;
+      if (rcVal == null && prVal == null) return '';
+      if (prVal == null && rcVal != null && row.rank != null) {
+        var estimatedPrev = Math.floor(Number(row.rank)) + Math.round(Number(rcVal));
+        if (isFinite(estimatedPrev) && estimatedPrev >= 1) {
+          prVal = estimatedPrev;
+        }
+      }
+      var h = stelvioServerRankChangeBadgeHtml(rcVal, prVal);
       if (!h) return '';
       return h.replace(
         'class="stelvio-rank-change ',
@@ -14556,21 +14590,54 @@
     }
 
     /** 주간 TOP10 모달 — 비동기 fetch 후 DOM에 등락 배지 재주입(모바일 WebView) */
-    function stelvioRefreshWeeklyTop10RankChangeDom(bodyEl, top10Data) {
+    function stelvioRefreshWeeklyTop10RankChangeDom(bodyEl, top10Data, _retryCount) {
       if (!bodyEl || !top10Data || !Array.isArray(top10Data.ranking)) return;
       var byUid = stelvioExtractRankMovementSnapFromTop10Data(top10Data);
+      var snapSize = Object.keys(byUid).length;
+      var retryCount = _retryCount || 0;
+      if (snapSize === 0 && retryCount < 6) {
+        var nextRetry = retryCount + 1;
+        var delay = nextRetry <= 3 ? 0 : 300;
+        if (delay === 0) {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              stelvioRefreshWeeklyTop10RankChangeDom(bodyEl, top10Data, nextRetry);
+            });
+          });
+        } else {
+          setTimeout(function () {
+            stelvioRefreshWeeklyTop10RankChangeDom(bodyEl, top10Data, nextRetry);
+          }, delay);
+        }
+        return;
+      }
       var items = bodyEl.querySelectorAll('.weekly-rank-item');
       var ii;
       for (ii = 0; ii < items.length; ii++) {
         var rowEl = items[ii];
         var avBtn = rowEl.querySelector('[data-stelvio-rank-user-id]');
         var uid = avBtn ? avBtn.getAttribute('data-stelvio-rank-user-id') : null;
-        if (!uid || !byUid[uid]) continue;
+        if (!uid) continue;
         var slot = rowEl.querySelector('.weekly-rank-change-slot');
         if (!slot) continue;
         var priv = slot.querySelector('.ranking-private-badge, .weekly-rank-private-badge-tight');
         var privHtml = priv ? priv.outerHTML : '';
-        var rcHtml = stelvioWeeklyTop10RankChangeBadgeHtml(byUid[uid]);
+        var rowData = byUid[uid];
+        if (!rowData) {
+          var ri;
+          for (ri = 0; ri < top10Data.ranking.length; ri++) {
+            if (top10Data.ranking[ri] && String(top10Data.ranking[ri].userId) === uid) {
+              rowData = top10Data.ranking[ri];
+              break;
+            }
+          }
+          if (!rowData && top10Data.myRank && String(top10Data.myRank.userId) === uid) {
+            rowData = top10Data.myRank;
+          }
+        }
+        if (!rowData) continue;
+        var rcHtml = stelvioWeeklyTop10RankChangeBadgeHtml(rowData);
+        if (!rcHtml) continue;
         slot.innerHTML = rcHtml + privHtml;
       }
     }
@@ -14599,18 +14666,24 @@
       var arr = stelvioRankingByCategory[cat] || [];
       if (arr.length === 0) {
         var retryN = refreshOpts._rankMvRetry || 0;
-        if (retryN < 4) {
-          requestAnimationFrame(function () {
+        if (retryN < 6) {
+          var nextOpts2 = {};
+          var ok2;
+          for (ok2 in refreshOpts) {
+            if (Object.prototype.hasOwnProperty.call(refreshOpts, ok2)) nextOpts2[ok2] = refreshOpts[ok2];
+          }
+          nextOpts2._rankMvRetry = retryN + 1;
+          if (retryN < 4) {
             requestAnimationFrame(function () {
-              var nextOpts = {};
-              var ok;
-              for (ok in refreshOpts) {
-                if (Object.prototype.hasOwnProperty.call(refreshOpts, ok)) nextOpts[ok] = refreshOpts[ok];
-              }
-              nextOpts._rankMvRetry = retryN + 1;
-              stelvioRankingRefreshListRankChangeSlots(bodyEl, nextOpts);
+              requestAnimationFrame(function () {
+                stelvioRankingRefreshListRankChangeSlots(bodyEl, nextOpts2);
+              });
             });
-          });
+          } else {
+            setTimeout(function () {
+              stelvioRankingRefreshListRankChangeSlots(bodyEl, nextOpts2);
+            }, 400);
+          }
         }
         return;
       }
