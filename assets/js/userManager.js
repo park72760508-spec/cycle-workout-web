@@ -230,6 +230,16 @@ async function fetchWithdrawnUserProfileByPhone(phone) {
   try {
     var phoneDigits = String(phone || '').replace(/\D/g, '');
     if (phoneDigits.length < 10) return null;
+
+    function pickWithdrawn(data, id) {
+      var contactDigits = String(data.contact || '').replace(/\D/g, '');
+      if (contactDigits !== phoneDigits) return null;
+      var isWithdrawn =
+        data.is_active === false ||
+        String(data.account_status || '').trim().toLowerCase() === 'withdrawn';
+      return isWithdrawn ? Object.assign({ id: id }, data) : null;
+    }
+
     if (window.firestoreV9) {
       var mod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var collection = mod && mod.collection;
@@ -238,30 +248,38 @@ async function fetchWithdrawnUserProfileByPhone(phone) {
       var getDocs = mod && mod.getDocs;
       if (!collection || !query || !where || !getDocs) return null;
       var usersRef = collection(window.firestoreV9, 'users');
-      var q = query(usersRef, where('is_active', '==', false));
-      var snap = await getDocs(q);
-      if (snap.empty) return null;
+
+      /* 1차: is_active===false */
+      var snap1 = await getDocs(query(usersRef, where('is_active', '==', false)));
       var found = null;
-      snap.forEach(function(docSnap) {
+      snap1.forEach(function(docSnap) {
         if (found) return;
-        var data = docSnap.data ? docSnap.data() : {};
-        var contactDigits = String(data.contact || '').replace(/\D/g, '');
-        if (contactDigits === phoneDigits) {
-          found = Object.assign({ id: docSnap.id }, data);
-        }
+        found = pickWithdrawn(docSnap.data ? docSnap.data() : {}, docSnap.id);
+      });
+      if (found) return found;
+
+      /* 2차: account_status==='withdrawn' (구형 탈퇴 계정) */
+      var snap2 = await getDocs(query(usersRef, where('account_status', '==', 'withdrawn')));
+      snap2.forEach(function(docSnap) {
+        if (found) return;
+        found = pickWithdrawn(docSnap.data ? docSnap.data() : {}, docSnap.id);
       });
       return found;
+
     } else if (typeof firebase !== 'undefined' && firebase.firestore) {
       var db = firebase.firestore();
-      var snap2 = await db.collection('users').where('is_active', '==', false).get();
+      var s1 = await db.collection('users').where('is_active', '==', false).get();
       var found2 = null;
-      snap2.forEach(function(docSnap) {
+      s1.forEach(function(docSnap) {
         if (found2) return;
-        var data = docSnap.data();
-        var contactDigits = String(data.contact || '').replace(/\D/g, '');
-        if (contactDigits === phoneDigits) {
-          found2 = Object.assign({ id: docSnap.id }, data);
-        }
+        found2 = pickWithdrawn(docSnap.data(), docSnap.id);
+      });
+      if (found2) return found2;
+
+      var s2 = await db.collection('users').where('account_status', '==', 'withdrawn').get();
+      s2.forEach(function(docSnap) {
+        if (found2) return;
+        found2 = pickWithdrawn(docSnap.data(), docSnap.id);
       });
       return found2;
     }
@@ -278,7 +296,15 @@ async function findDeletedUserByPhoneAndBirthYear(phone, birthYear) {
     const birthYearInt = parseInt(birthYear, 10);
     if (phoneDigits.length < 10 || !birthYearInt) return null;
 
-    // apiGetUsers는 관리자 권한이 필요하므로 Firestore 직접 쿼리
+    function matchRow(data, id) {
+      var contactDigits = String(data.contact || '').replace(/\D/g, '');
+      if (contactDigits !== phoneDigits) return null;
+      var isWithdrawn =
+        data.is_active === false ||
+        String(data.account_status || '').trim().toLowerCase() === 'withdrawn';
+      return isWithdrawn ? Object.assign({ id: id }, data) : null;
+    }
+
     if (window.firestoreV9) {
       var mod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
       var collection = mod && mod.collection;
@@ -288,37 +314,48 @@ async function findDeletedUserByPhoneAndBirthYear(phone, birthYear) {
       if (!collection || !query || !where || !getDocs) return null;
 
       var usersRef = collection(window.firestoreV9, 'users');
-      // birth_year + is_active===false 조회 후 JS에서 전화번호 2차 필터
-      var q = query(usersRef,
+
+      /* 1차: is_active===false + birth_year 일치 */
+      var snap1 = await getDocs(query(usersRef,
         where('birth_year', '==', birthYearInt),
         where('is_active', '==', false)
-      );
-      var snap = await getDocs(q);
-      if (snap.empty) return null;
+      ));
       var found = null;
-      snap.forEach(function(docSnap) {
+      snap1.forEach(function(docSnap) {
         if (found) return;
-        var data = docSnap.data ? docSnap.data() : {};
-        var contactDigits = String(data.contact || '').replace(/\D/g, '');
-        if (contactDigits === phoneDigits) {
-          found = Object.assign({ id: docSnap.id }, data);
-        }
+        found = matchRow(docSnap.data ? docSnap.data() : {}, docSnap.id);
+      });
+      if (found) return found;
+
+      /* 2차: account_status==='withdrawn' + birth_year 일치 (is_active 필드 없는 구형 탈퇴 계정) */
+      var snap2 = await getDocs(query(usersRef,
+        where('birth_year', '==', birthYearInt),
+        where('account_status', '==', 'withdrawn')
+      ));
+      snap2.forEach(function(docSnap) {
+        if (found) return;
+        found = matchRow(docSnap.data ? docSnap.data() : {}, docSnap.id);
       });
       return found;
+
     } else if (typeof firebase !== 'undefined' && firebase.firestore) {
       var db = firebase.firestore();
-      var snap2 = await db.collection('users')
+      var s1 = await db.collection('users')
         .where('birth_year', '==', birthYearInt)
-        .where('is_active', '==', false)
-        .get();
+        .where('is_active', '==', false).get();
       var found2 = null;
-      snap2.forEach(function(docSnap) {
+      s1.forEach(function(docSnap) {
         if (found2) return;
-        var data = docSnap.data();
-        var contactDigits = String(data.contact || '').replace(/\D/g, '');
-        if (contactDigits === phoneDigits) {
-          found2 = Object.assign({ id: docSnap.id }, data);
-        }
+        found2 = matchRow(docSnap.data(), docSnap.id);
+      });
+      if (found2) return found2;
+
+      var s2 = await db.collection('users')
+        .where('birth_year', '==', birthYearInt)
+        .where('account_status', '==', 'withdrawn').get();
+      s2.forEach(function(docSnap) {
+        if (found2) return;
+        found2 = matchRow(docSnap.data(), docSnap.id);
       });
       return found2;
     }
