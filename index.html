@@ -195,6 +195,8 @@
         }
         if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 SDK 초기화 완료');
         else console.log('✅ Firebase v9 SDK 초기화 완료');
+        /* firestoreV9 준비 완료 이벤트 — DOMContentLoaded 이후 탈퇴 사용자 구독 훅에서 수신 */
+        try { window.dispatchEvent(new CustomEvent('stelvio-firestoreV9-ready')); } catch(e) {}
       } catch (error) {
         console.error('❌ Firebase v9 초기화 실패:', error);
       }
@@ -9346,14 +9348,77 @@
       return url != null && String(url).trim() ? String(url).trim() : null;
     }
 
-    /** 탈퇴(비활성) 랭킹 행 — is_active===false / account_status / isWithdrawn */
+    /**
+     * 탈퇴 사용자 ID 집합 (Firestore 실시간 구독으로 채워짐)
+     * 랭킹 API 데이터에는 account_status/is_active 필드가 없으므로
+     * userId 기준으로 별도 관리하여 stelvioRankingIsWithdrawnRow 에서 참조한다.
+     */
+    var _stelvioWithdrawnUserIdSet = new Set();
+    var _stelvioWithdrawnUserIdUnsub = null;
+
+    /** Firestore users 컬렉션 구독: is_active===false 사용자 ID를 실시간으로 집합에 유지 */
+    function stelvioSubscribeWithdrawnUserIds() {
+      if (_stelvioWithdrawnUserIdUnsub) return; // 이미 구독 중
+      function attach() {
+        if (!window.firestoreV9) return;
+        import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
+          .then(function(mod) {
+            var coll = mod.collection, qFn = mod.query, wh = mod.where, onSnap = mod.onSnapshot;
+            if (!coll || !qFn || !wh || !onSnap) return;
+            var q = qFn(coll(window.firestoreV9, 'users'), wh('is_active', '==', false));
+            _stelvioWithdrawnUserIdUnsub = onSnap(q, function(snap) {
+              _stelvioWithdrawnUserIdSet = new Set();
+              snap.forEach(function(doc) { _stelvioWithdrawnUserIdSet.add(doc.id); });
+              /* stelvioRankingByCategory 에서 탈퇴 사용자 즉시 제거 후 재렌더 */
+              if (typeof stelvioRankingByCategory !== 'undefined' && stelvioRankingByCategory) {
+                if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
+                  stelvioApplyPublicRankingVisibilityToPayload({ byCategory: stelvioRankingByCategory });
+                }
+                if (typeof renderStelvioActiveCategory === 'function') {
+                  try { renderStelvioActiveCategory(); } catch(e) {}
+                }
+              }
+            }, function(err) {
+              console.warn('[stelvioRanking] 탈퇴 사용자 구독 실패:', err && err.message);
+            });
+          })
+          .catch(function() {});
+      }
+      if (window.firestoreV9) {
+        attach();
+      } else {
+        /* firestoreV9 초기화 대기 */
+        var _withdrawnRetry = setInterval(function() {
+          if (window.firestoreV9) { clearInterval(_withdrawnRetry); attach(); }
+        }, 500);
+        setTimeout(function() { clearInterval(_withdrawnRetry); }, 15000);
+      }
+    }
+    window.stelvioSubscribeWithdrawnUserIds = stelvioSubscribeWithdrawnUserIds;
+
+    /* firestoreV9가 이미 준비된 경우 즉시 시작, 아직이면 이벤트 수신 후 시작 */
+    if (window.firestoreV9) {
+      stelvioSubscribeWithdrawnUserIds();
+    } else {
+      window.addEventListener('stelvio-firestoreV9-ready', function _onFsReady() {
+        window.removeEventListener('stelvio-firestoreV9-ready', _onFsReady);
+        stelvioSubscribeWithdrawnUserIds();
+      }, { once: true });
+    }
+
+    /** 탈퇴(비활성) 랭킹 행 — is_active===false / account_status / isWithdrawn / ID 집합 */
     function stelvioRankingIsWithdrawnRow(item) {
       if (!item) return false;
       if (item.isWithdrawn === true) return true;
       // is_active: false → 삭제(비활성) 처리된 사용자 → 랭킹·화면 제외
       if (item.is_active === false) return true;
       var s = String(item.account_status || '').trim().toLowerCase();
-      return s === 'withdrawn' || s === 'inactive' || s === 'deleted';
+      if (s === 'withdrawn' || s === 'inactive' || s === 'deleted') return true;
+      /* Firestore 실시간 구독으로 채워진 탈퇴 ID 집합 확인 (API 데이터에 상태 필드 없을 때) */
+      if (item.userId && _stelvioWithdrawnUserIdSet.size > 0) {
+        if (_stelvioWithdrawnUserIdSet.has(String(item.userId))) return true;
+      }
+      return false;
     }
 
     /** 로그인 계정이 관리자인지 (선택 프로필이 아닌 로그인 UID 기준) */
@@ -13255,6 +13320,10 @@
         var s = document.getElementById('stelvioRankingScrollArea');
         if (s) s.scrollTop = 0;
       });
+      /* 탈퇴 사용자 ID 실시간 구독 시작 (랭킹 목록에서 즉시 제외) */
+      if (typeof stelvioSubscribeWithdrawnUserIds === 'function') {
+        stelvioSubscribeWithdrawnUserIds();
+      }
       (async function () {
         var hydrateP =
           typeof stelvioRankingMemCacheHydrateFromPersistent === 'function'
@@ -19503,6 +19572,8 @@
           /* 성별/카테고리 필터에 포함된 대상만 소모임 순위에 표시 */
           var rk = scopedByUid[uMem] || poolUid[uMem];
           if (!rk) continue;
+          /* 탈퇴 사용자는 클럽 탭에서도 제외 */
+          if (typeof stelvioRankingIsWithdrawnRow === 'function' && stelvioRankingIsWithdrawnRow(rk)) continue;
           var mergedItem = Object.assign({}, rk);
           // is_private: false 는 "삭제됨" 의미이므로 그룹 표시 시 제거 (원본이 false면 표시 제외는 stelvioRankingIsPrivateRow가 처리)
           if (mergedItem.is_private === false) delete mergedItem.is_private;
