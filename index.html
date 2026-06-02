@@ -26219,7 +26219,9 @@
             return;
           }
 
-          // 2) Firestore: is_active:true 만 업데이트 (프로필 데이터는 기존 값 유지)
+          // 2) Firestore: account_status:'active' + is_active:true 업데이트
+          //    현재 세션 사용자(A)가 탈퇴 사용자(B) 문서에 쓰기 권한이 없을 수 있으므로
+          //    보조 Firebase 앱 인스턴스로 탈퇴 계정 자격으로 업데이트 시도
           var rejoinNow = new Date().toISOString();
           var rejoinPayload = {
             account_status: 'active',
@@ -26227,13 +26229,68 @@
             reactivated_at: rejoinNow,
             withdrawn_at: ''
           };
-          if (typeof window.apiUpdateUser === 'function') {
-            await window.apiUpdateUser(rejoinTarget.id, rejoinPayload);
+          var rejoinUpdateOk = false;
+
+          /* ① 보조 앱 인스턴스로 탈퇴 계정 로그인 후 직접 setDoc (CF가 비밀번호 재설정 완료 후) */
+          try {
+            var _fbConf = window.authV9 && window.authV9.app && window.authV9.app.options;
+            if (_fbConf) {
+              var _fbMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
+              var _authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+              var _fsMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+              var _secApp = _fbMod.initializeApp(_fbConf, 'stelvio-rejoin-' + Date.now());
+              try {
+                var _secAuth = _authMod.getAuth(_secApp);
+                var _secDb = _fsMod.getFirestore(_secApp);
+                var _rejoinEmail = window.phoneToEmail ? window.phoneToEmail(phone) : (String(phone).replace(/\D/g,'') + '@stelvio.ai');
+                await _authMod.signInWithEmailAndPassword(_secAuth, _rejoinEmail, password);
+                await _fsMod.setDoc(
+                  _fsMod.doc(_fsMod.collection(_secDb, 'users'), rejoinTarget.id),
+                  rejoinPayload,
+                  { merge: true }
+                );
+                rejoinUpdateOk = true;
+                console.log('✅ 보조 앱으로 재활성화 업데이트 완료:', rejoinTarget.id);
+              } finally {
+                try { await _fbMod.deleteApp(_secApp); } catch(_) {}
+              }
+            }
+          } catch (_secErr) {
+            console.warn('[Register] 보조 앱 업데이트 실패, apiUpdateUser 폴백:', _secErr && _secErr.message);
+          }
+
+          /* ② 보조 앱 실패 시 apiUpdateUser 폴백 */
+          if (!rejoinUpdateOk && typeof window.apiUpdateUser === 'function') {
+            var _updateRes = await window.apiUpdateUser(rejoinTarget.id, rejoinPayload);
+            rejoinUpdateOk = !!(_updateRes && _updateRes.success);
+            if (!rejoinUpdateOk) {
+              console.warn('[Register] apiUpdateUser도 실패:', _updateRes && _updateRes.error);
+            }
+          }
+
+          if (!rejoinUpdateOk) {
+            showRegisterStatus('❌ 계정 재활성화에 실패했습니다. 관리자에게 문의하세요.', 'error');
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('loading'); submitBtn.textContent = '가입 완료'; }
+            return;
           }
 
           // 3) login_account_flags 업데이트 (탈퇴 플래그 해제)
           if (typeof syncLoginAccountFlagForUser === 'function') {
             syncLoginAccountFlagForUser(rejoinTarget.id, 'active').catch(function() {});
+          }
+          /* login_account_flags 직접 업데이트 (syncLoginAccountFlagForUser가 다른 uid로 조회할 수 있어 보조로 직접 처리) */
+          try {
+            var _flagMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+            var _flagDigits = String(phone || '').replace(/\D/g, '');
+            if (_flagDigits.length >= 10 && window.firestoreV9 && _flagMod.doc && _flagMod.setDoc && _flagMod.collection) {
+              await _flagMod.setDoc(
+                _flagMod.doc(_flagMod.collection(window.firestoreV9, 'login_account_flags'), _flagDigits),
+                { account_status: 'active', uid: rejoinTarget.id, updated_at: rejoinNow },
+                { merge: true }
+              );
+            }
+          } catch (_flagErr) {
+            console.warn('[Register] login_account_flags 업데이트 실패:', _flagErr && _flagErr.message);
           }
 
           // 4) 새 비밀번호 localStorage 저장 (자동 로그인 보조용)
@@ -26428,19 +26485,68 @@
               var _fbResetOk = _fbResetRes && _fbResetRes.result && _fbResetRes.result.success === true;
               if (!_fbResetOk) {
                 console.warn('[Register fallback] 비밀번호 재설정 실패 응답:', _fbResetRes);
+                showRegisterStatus('❌ 비밀번호 재설정에 실패했습니다. 생년이 일치하는지 확인해주세요.', 'error');
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('loading'); submitBtn.textContent = '가입 완료'; }
+                return;
               }
               var _fbNow = new Date().toISOString();
-              if (typeof window.apiUpdateUser === 'function') {
-                await window.apiUpdateUser(_fallbackRejoinTarget.id, {
-                  account_status: 'active',
-                  is_active: true,
-                  reactivated_at: _fbNow,
-                  withdrawn_at: ''
-                });
+              var _fbPayload = { account_status: 'active', is_active: true, reactivated_at: _fbNow, withdrawn_at: '' };
+              var _fbUpdateOk = false;
+
+              /* ① 보조 앱으로 탈퇴 계정 자격 업데이트 */
+              try {
+                var _fb2Conf = window.authV9 && window.authV9.app && window.authV9.app.options;
+                if (_fb2Conf) {
+                  var _fb2AppMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
+                  var _fb2AuthMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+                  var _fb2FsMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+                  var _fb2SecApp = _fb2AppMod.initializeApp(_fb2Conf, 'stelvio-rejoin-fb-' + Date.now());
+                  try {
+                    var _fb2SecAuth = _fb2AuthMod.getAuth(_fb2SecApp);
+                    var _fb2SecDb = _fb2FsMod.getFirestore(_fb2SecApp);
+                    var _fb2Email = window.phoneToEmail ? window.phoneToEmail(_fallbackPhone) : (String(_fallbackPhone).replace(/\D/g,'') + '@stelvio.ai');
+                    await _fb2AuthMod.signInWithEmailAndPassword(_fb2SecAuth, _fb2Email, _fallbackPassword);
+                    await _fb2FsMod.setDoc(
+                      _fb2FsMod.doc(_fb2FsMod.collection(_fb2SecDb, 'users'), _fallbackRejoinTarget.id),
+                      _fbPayload, { merge: true }
+                    );
+                    _fbUpdateOk = true;
+                    console.log('✅ [fallback] 보조 앱 재활성화 완료:', _fallbackRejoinTarget.id);
+                  } finally {
+                    try { await _fb2AppMod.deleteApp(_fb2SecApp); } catch(_) {}
+                  }
+                }
+              } catch (_fb2Err) {
+                console.warn('[Register fallback] 보조 앱 실패, apiUpdateUser 폴백:', _fb2Err && _fb2Err.message);
               }
-              if (typeof syncLoginAccountFlagForUser === 'function') {
-                syncLoginAccountFlagForUser(_fallbackRejoinTarget.id, 'active').catch(function() {});
+
+              /* ② 보조 앱 실패 시 apiUpdateUser 폴백 */
+              if (!_fbUpdateOk && typeof window.apiUpdateUser === 'function') {
+                var _fb2UpdateRes = await window.apiUpdateUser(_fallbackRejoinTarget.id, _fbPayload);
+                _fbUpdateOk = !!(_fb2UpdateRes && _fb2UpdateRes.success);
               }
+
+              if (!_fbUpdateOk) {
+                showRegisterStatus('❌ 계정 재활성화에 실패했습니다. 관리자에게 문의하세요.', 'error');
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('loading'); submitBtn.textContent = '가입 완료'; }
+                return;
+              }
+
+              /* login_account_flags 업데이트 */
+              try {
+                var _fb2FlagMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+                var _fb2FlagDigits = String(_fallbackPhone || '').replace(/\D/g, '');
+                if (_fb2FlagDigits.length >= 10 && window.firestoreV9) {
+                  await _fb2FlagMod.setDoc(
+                    _fb2FlagMod.doc(_fb2FlagMod.collection(window.firestoreV9, 'login_account_flags'), _fb2FlagDigits),
+                    { account_status: 'active', uid: _fallbackRejoinTarget.id, updated_at: _fbNow },
+                    { merge: true }
+                  );
+                }
+              } catch (_fb2FlagErr) {
+                console.warn('[Register fallback] login_account_flags 업데이트 실패:', _fb2FlagErr && _fb2FlagErr.message);
+              }
+
               var _fbPhoneDigits = String(_fallbackPhone || '').replace(/\D/g, '');
               var _fbPhoneWithDash = _fbPhoneDigits.length === 11 && _fbPhoneDigits.startsWith('010')
                 ? _fbPhoneDigits.slice(0,3) + '-' + _fbPhoneDigits.slice(3,7) + '-' + _fbPhoneDigits.slice(7,11)
