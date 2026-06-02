@@ -26045,9 +26045,18 @@
       const challenge = challengeInput.value;
       
       // ─── 재가입 여부 사전 판단 (검증 전에 먼저 확인) ───
-      // 재가입 모드: 전화번호 + 생년 + 비밀번호만 확인하면 충분 (프로필 데이터는 기존 값 유지)
-      var _isRejoinMode = !!(window._stelvioWithdrawnAuthPhone &&
-        String(phone || '').replace(/\D/g, '') === String(window._stelvioWithdrawnAuthPhone || '').replace(/\D/g, ''));
+      // _stelvioWithdrawnAuthPhone 또는 _stelvioWithdrawnUserProfile 중 하나라도 있고
+      // 전화번호가 탈퇴 계정 전화번호와 일치하면 재가입 모드로 판단
+      var _isRejoinMode = (function() {
+        var inputDigits = String(phone || '').replace(/\D/g, '');
+        if (window._stelvioWithdrawnAuthPhone) {
+          if (inputDigits === String(window._stelvioWithdrawnAuthPhone || '').replace(/\D/g, '')) return true;
+        }
+        if (window._stelvioWithdrawnUserProfile && window._stelvioWithdrawnUserProfile.contact) {
+          if (inputDigits === String(window._stelvioWithdrawnUserProfile.contact || '').replace(/\D/g, '')) return true;
+        }
+        return false;
+      })();
 
       // 유효성 검사
       if (!phone) {
@@ -26350,11 +26359,83 @@
         console.error('❌ 회원가입 오류:', error);
         var err = error || {};
         var errMsg = String(err.message || '');
+
+        /* ── auth/email-already-in-use: 탈퇴 사용자 재가입 안전망 ── */
+        if (err.code === 'auth/email-already-in-use') {
+          showRegisterStatus('기존 탈퇴 계정 확인 중...', 'info');
+          var _fallbackPhone = (function() { var el = document.getElementById('registerPhoneInput'); return el ? el.value.trim() : ''; })();
+          var _fallbackBirthYear = (function() { var el = document.getElementById('registerBirthYearInput'); return parseInt((el ? el.value : '') || '0', 10); })();
+          var _fallbackPassword = (function() { var el = document.getElementById('registerPasswordInput'); return el ? el.value : ''; })();
+          var _fallbackRejoinTarget = null;
+          try {
+            if (typeof window.findDeletedUserByPhoneAndBirthYear === 'function') {
+              _fallbackRejoinTarget = await window.findDeletedUserByPhoneAndBirthYear(_fallbackPhone, _fallbackBirthYear);
+            }
+          } catch (_fre) { console.warn('[Register fallback] 탈퇴 계정 조회 실패:', _fre && _fre.message); }
+
+          if (_fallbackRejoinTarget && _fallbackRejoinTarget.id) {
+            console.log('[Register fallback] 탈퇴 계정 발견, 재활성화 시도:', _fallbackRejoinTarget.id);
+            try {
+              var _fbProjectId = (window.authV9 && window.authV9.app && window.authV9.app.options && window.authV9.app.options.projectId) || 'stelvio-ai';
+              var _fbResetUrl = 'https://us-central1-' + _fbProjectId + '.cloudfunctions.net/selfServiceResetPasswordHttp';
+              var _fbResetRes = null;
+              try {
+                var _fbFetchRes = await fetch(_fbResetUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ contact: _fallbackPhone, birthYear: String(_fallbackBirthYear), newPassword: _fallbackPassword, newPasswordConfirm: _fallbackPassword })
+                });
+                _fbResetRes = await _fbFetchRes.json().catch(function() { return null; });
+              } catch (_fbResetErr) {
+                console.warn('[Register fallback] 비밀번호 재설정 실패:', _fbResetErr && _fbResetErr.message);
+              }
+              var _fbResetOk = _fbResetRes && _fbResetRes.result && _fbResetRes.result.success === true;
+              if (!_fbResetOk) {
+                console.warn('[Register fallback] 비밀번호 재설정 실패 응답:', _fbResetRes);
+              }
+              var _fbNow = new Date().toISOString();
+              if (typeof window.apiUpdateUser === 'function') {
+                await window.apiUpdateUser(_fallbackRejoinTarget.id, {
+                  account_status: 'active',
+                  is_active: true,
+                  reactivated_at: _fbNow,
+                  withdrawn_at: ''
+                });
+              }
+              if (typeof syncLoginAccountFlagForUser === 'function') {
+                syncLoginAccountFlagForUser(_fallbackRejoinTarget.id, 'active').catch(function() {});
+              }
+              var _fbPhoneDigits = String(_fallbackPhone || '').replace(/\D/g, '');
+              var _fbPhoneWithDash = _fbPhoneDigits.length === 11 && _fbPhoneDigits.startsWith('010')
+                ? _fbPhoneDigits.slice(0,3) + '-' + _fbPhoneDigits.slice(3,7) + '-' + _fbPhoneDigits.slice(7,11)
+                : _fallbackPhone;
+              try {
+                localStorage.setItem('userPassword_' + _fbPhoneWithDash, _fallbackPassword);
+                localStorage.setItem('userPassword_' + _fbPhoneDigits, _fallbackPassword);
+              } catch (eLs) {}
+              window._stelvioWithdrawnAuthPhone = null;
+              window._stelvioWithdrawnUserProfile = null;
+              showRegisterStatus('✅ 재가입이 완료되었습니다! 전화번호와 새 비밀번호로 로그인해 주세요.', 'success');
+              setTimeout(function() {
+                if (typeof handleRegisterBack === 'function') handleRegisterBack();
+                else if (typeof showScreen === 'function') showScreen('authScreen');
+              }, 2000);
+              return;
+            } catch (_fbErr) {
+              console.error('[Register fallback] 재활성화 중 오류:', _fbErr && _fbErr.message);
+              showRegisterStatus('❌ 계정 재활성화 중 오류가 발생했습니다. 관리자에게 문의하세요.', 'error');
+              if (typeof showToast === 'function') showToast('계정 재활성화 중 오류가 발생했습니다.');
+              return;
+            }
+          }
+          /* 탈퇴 계정도 아닌 경우: 일반 중복 전화번호 안내 */
+          showRegisterStatus('❌ 이미 사용 중인 전화번호입니다. 로그인을 시도해주세요.', 'error');
+          if (typeof showToast === 'function') showToast('이미 사용 중인 전화번호입니다. 로그인을 시도해주세요.');
+          return;
+        }
+
         var errorMessage = '알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
         switch (err.code) {
-          case 'auth/email-already-in-use':
-            errorMessage = '이미 사용 중인 전화번호입니다. 로그인을 시도해주세요.';
-            break;
           case 'auth/weak-password':
             errorMessage = '비밀번호는 6자 이상 입력해주세요.';
             break;
