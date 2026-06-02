@@ -9354,33 +9354,67 @@
      * userId 기준으로 별도 관리하여 stelvioRankingIsWithdrawnRow 에서 참조한다.
      */
     var _stelvioWithdrawnUserIdSet = new Set();
+    /* 두 구독의 unsubscribe 핸들 (is_active===false / account_status==='withdrawn') */
     var _stelvioWithdrawnUserIdUnsub = null;
+    var _stelvioWithdrawnByStatusUnsub = null;
+    /* 두 쿼리 결과를 각각 캐시 → 합집합을 _stelvioWithdrawnUserIdSet 으로 유지 */
+    var _withdrawnSetByFlag = new Set();    // is_active===false
+    var _withdrawnSetByStatus = new Set();  // account_status==='withdrawn'
 
-    /** Firestore users 컬렉션 구독: is_active===false 사용자 ID를 실시간으로 집합에 유지 */
+    function _rebuildWithdrawnSet() {
+      _stelvioWithdrawnUserIdSet = new Set();
+      _withdrawnSetByFlag.forEach(function(id) { _stelvioWithdrawnUserIdSet.add(id); });
+      _withdrawnSetByStatus.forEach(function(id) { _stelvioWithdrawnUserIdSet.add(id); });
+      /* 변경 즉시 랭킹 재렌더 */
+      if (typeof stelvioRankingByCategory !== 'undefined' && stelvioRankingByCategory) {
+        if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
+          stelvioApplyPublicRankingVisibilityToPayload({ byCategory: stelvioRankingByCategory });
+        }
+        if (typeof renderStelvioActiveCategory === 'function') {
+          try { renderStelvioActiveCategory(); } catch(e) {}
+        }
+      }
+    }
+
+    /**
+     * Firestore users 컬렉션 구독:
+     * - is_active===false  (신규 탈퇴)
+     * - account_status==='withdrawn' (구형 탈퇴, is_active 필드 없음)
+     * 두 쿼리 결과를 합집합으로 유지하여 랭킹보드에서 즉시 숨김 처리
+     */
     function stelvioSubscribeWithdrawnUserIds() {
-      if (_stelvioWithdrawnUserIdUnsub) return; // 이미 구독 중
+      if (_stelvioWithdrawnUserIdUnsub && _stelvioWithdrawnByStatusUnsub) return; // 이미 구독 중
       function attach() {
         if (!window.firestoreV9) return;
         import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
           .then(function(mod) {
             var coll = mod.collection, qFn = mod.query, wh = mod.where, onSnap = mod.onSnapshot;
             if (!coll || !qFn || !wh || !onSnap) return;
-            var q = qFn(coll(window.firestoreV9, 'users'), wh('is_active', '==', false));
-            _stelvioWithdrawnUserIdUnsub = onSnap(q, function(snap) {
-              _stelvioWithdrawnUserIdSet = new Set();
-              snap.forEach(function(doc) { _stelvioWithdrawnUserIdSet.add(doc.id); });
-              /* stelvioRankingByCategory 에서 탈퇴 사용자 즉시 제거 후 재렌더 */
-              if (typeof stelvioRankingByCategory !== 'undefined' && stelvioRankingByCategory) {
-                if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
-                  stelvioApplyPublicRankingVisibilityToPayload({ byCategory: stelvioRankingByCategory });
-                }
-                if (typeof renderStelvioActiveCategory === 'function') {
-                  try { renderStelvioActiveCategory(); } catch(e) {}
-                }
-              }
-            }, function(err) {
-              console.warn('[stelvioRanking] 탈퇴 사용자 구독 실패:', err && err.message);
-            });
+            var usersRef = coll(window.firestoreV9, 'users');
+
+            /* ① is_active===false 구독 */
+            if (!_stelvioWithdrawnUserIdUnsub) {
+              var q1 = qFn(usersRef, wh('is_active', '==', false));
+              _stelvioWithdrawnUserIdUnsub = onSnap(q1, function(snap) {
+                _withdrawnSetByFlag = new Set();
+                snap.forEach(function(doc) { _withdrawnSetByFlag.add(doc.id); });
+                _rebuildWithdrawnSet();
+              }, function(err) {
+                console.warn('[stelvioRanking] is_active 구독 실패:', err && err.message);
+              });
+            }
+
+            /* ② account_status==='withdrawn' 구독 (is_active 필드 없는 구형 탈퇴 계정) */
+            if (!_stelvioWithdrawnByStatusUnsub) {
+              var q2 = qFn(usersRef, wh('account_status', '==', 'withdrawn'));
+              _stelvioWithdrawnByStatusUnsub = onSnap(q2, function(snap) {
+                _withdrawnSetByStatus = new Set();
+                snap.forEach(function(doc) { _withdrawnSetByStatus.add(doc.id); });
+                _rebuildWithdrawnSet();
+              }, function(err) {
+                console.warn('[stelvioRanking] account_status 구독 실패:', err && err.message);
+              });
+            }
           })
           .catch(function() {});
       }
