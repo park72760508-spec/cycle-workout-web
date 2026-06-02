@@ -225,64 +225,79 @@ async function syncLoginAccountFlagForUser(userId, accountStatus) {
  * @param {number|string} birthYear - 생년 (4자리)
  * @returns {Promise<Object|null>} 매칭된 사용자 문서 또는 null
  */
-/** 전화번호만으로 탈퇴 사용자 프로필 조회 (재가입 화면 자동 입력용) */
+/**
+ * 전화번호만으로 탈퇴 사용자 프로필 조회 (재가입 화면 자동 입력용)
+ * 전략: login_account_flags/{digits} 공개 read → uid 취득 → users/{uid} 직접 read
+ * (users 컬렉션 WHERE 쿼리는 보안 규칙상 권한 오류가 발생하므로 사용하지 않음)
+ */
 async function fetchWithdrawnUserProfileByPhone(phone) {
   try {
     var phoneDigits = String(phone || '').replace(/\D/g, '');
     if (phoneDigits.length < 10) return null;
 
-    function pickWithdrawn(data, id) {
-      var contactDigits = String(data.contact || '').replace(/\D/g, '');
-      if (contactDigits !== phoneDigits) return null;
-      var isWithdrawn =
-        data.is_active === false ||
-        String(data.account_status || '').trim().toLowerCase() === 'withdrawn';
-      return isWithdrawn ? Object.assign({ id: id }, data) : null;
+    /* ① login_account_flags 에서 uid + account_status 확인 (공개 read) */
+    var flagData = null;
+    if (typeof window.stelvioLookupLoginAccountFlag === 'function') {
+      try { flagData = await window.stelvioLookupLoginAccountFlag(phoneDigits); } catch(_) {}
+    }
+    /* stelvioLookupLoginAccountFlag 미준비 시 직접 read */
+    if (!flagData && window.firestoreV9) {
+      try {
+        var _m = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+        var _doc = _m.doc, _getDoc = _m.getDoc, _coll = _m.collection;
+        if (_doc && _getDoc && _coll) {
+          var _flagSnap = await _getDoc(_doc(_coll(window.firestoreV9, 'login_account_flags'), phoneDigits));
+          if (_flagSnap && _flagSnap.exists && (typeof _flagSnap.exists === 'function' ? _flagSnap.exists() : _flagSnap.exists)) {
+            flagData = _flagSnap.data ? _flagSnap.data() : null;
+          }
+        }
+      } catch(_) {}
     }
 
+    var uid = flagData && flagData.uid ? String(flagData.uid) : null;
+    var flagStatus = flagData ? String(flagData.account_status || '').trim().toLowerCase() : '';
+    var isWithdrawnByFlag = (flagStatus === 'withdrawn');
+
+    if (!uid) return null; // 전화번호 미등록
+
+    /* ② users/{uid} 직접 read (단일 문서 read → 보안 규칙 통과 가능) */
+    var userData = null;
     if (window.firestoreV9) {
-      var mod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
-      var collection = mod && mod.collection;
-      var query = mod && mod.query;
-      var where = mod && mod.where;
-      var getDocs = mod && mod.getDocs;
-      if (!collection || !query || !where || !getDocs) return null;
-      var usersRef = collection(window.firestoreV9, 'users');
-
-      /* 1차: is_active===false */
-      var snap1 = await getDocs(query(usersRef, where('is_active', '==', false)));
-      var found = null;
-      snap1.forEach(function(docSnap) {
-        if (found) return;
-        found = pickWithdrawn(docSnap.data ? docSnap.data() : {}, docSnap.id);
-      });
-      if (found) return found;
-
-      /* 2차: account_status==='withdrawn' (구형 탈퇴 계정) */
-      var snap2 = await getDocs(query(usersRef, where('account_status', '==', 'withdrawn')));
-      snap2.forEach(function(docSnap) {
-        if (found) return;
-        found = pickWithdrawn(docSnap.data ? docSnap.data() : {}, docSnap.id);
-      });
-      return found;
-
+      try {
+        var mod2 = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+        var docFn2 = mod2.doc, getDocFn2 = mod2.getDoc, collFn2 = mod2.collection;
+        if (docFn2 && getDocFn2 && collFn2) {
+          var userSnap = await getDocFn2(docFn2(collFn2(window.firestoreV9, 'users'), uid));
+          if (userSnap && (typeof userSnap.exists === 'function' ? userSnap.exists() : userSnap.exists)) {
+            userData = Object.assign({ id: uid }, userSnap.data ? userSnap.data() : {});
+          }
+        }
+      } catch (e2) {
+        console.warn('[fetchWithdrawnUserProfileByPhone] users 직접 read 실패:', e2 && e2.message);
+      }
     } else if (typeof firebase !== 'undefined' && firebase.firestore) {
-      var db = firebase.firestore();
-      var s1 = await db.collection('users').where('is_active', '==', false).get();
-      var found2 = null;
-      s1.forEach(function(docSnap) {
-        if (found2) return;
-        found2 = pickWithdrawn(docSnap.data(), docSnap.id);
-      });
-      if (found2) return found2;
-
-      var s2 = await db.collection('users').where('account_status', '==', 'withdrawn').get();
-      s2.forEach(function(docSnap) {
-        if (found2) return;
-        found2 = pickWithdrawn(docSnap.data(), docSnap.id);
-      });
-      return found2;
+      try {
+        var snap = await firebase.firestore().collection('users').doc(uid).get();
+        if (snap && snap.exists) userData = Object.assign({ id: uid }, snap.data());
+      } catch (e3) {
+        console.warn('[fetchWithdrawnUserProfileByPhone] compat users 직접 read 실패:', e3 && e3.message);
+      }
     }
+
+    /* ③ 탈퇴 여부 최종 판단 */
+    if (userData) {
+      var isWithdrawnByData =
+        userData.is_active === false ||
+        String(userData.account_status || '').trim().toLowerCase() === 'withdrawn';
+      return (isWithdrawnByFlag || isWithdrawnByData) ? userData : null;
+    }
+
+    /* ④ users read 실패해도 flag가 'withdrawn'이면 최소 객체 반환 (자동 입력 일부 미지원) */
+    if (isWithdrawnByFlag && uid) {
+      console.log('[fetchWithdrawnUserProfileByPhone] users read 권한 없음, 최소 객체 반환:', uid);
+      return { id: uid, contact: phone, _profileLoadFailed: true };
+    }
+    return null;
   } catch (e) {
     console.warn('[fetchWithdrawnUserProfileByPhone] 조회 실패:', e && e.message);
   }
@@ -290,75 +305,85 @@ async function fetchWithdrawnUserProfileByPhone(phone) {
 }
 window.fetchWithdrawnUserProfileByPhone = fetchWithdrawnUserProfileByPhone;
 
+/**
+ * 전화번호 + 생년이 일치하는 탈퇴 계정 조회
+ * 전략:
+ *   1) login_account_flags/{digits} 공개 read → uid + account_status 확인
+ *   2) account_status === 'withdrawn' 이면 탈퇴 계정으로 판단
+ *   3) users/{uid} 직접 read 시도 → 성공 시 birth_year 클라이언트 검증 추가
+ *      실패(권한 없음)해도 uid가 있으면 최소 객체 반환 (생년 검증은 Cloud Function에 위임)
+ * (users 컬렉션 WHERE 쿼리는 보안 규칙상 권한 오류 → 사용 안 함)
+ */
 async function findDeletedUserByPhoneAndBirthYear(phone, birthYear) {
   try {
     const phoneDigits = String(phone || '').replace(/\D/g, '');
     const birthYearInt = parseInt(birthYear, 10);
     if (phoneDigits.length < 10 || !birthYearInt) return null;
 
-    function matchRow(data, id) {
-      var contactDigits = String(data.contact || '').replace(/\D/g, '');
-      if (contactDigits !== phoneDigits) return null;
-      var isWithdrawn =
-        data.is_active === false ||
-        String(data.account_status || '').trim().toLowerCase() === 'withdrawn';
-      return isWithdrawn ? Object.assign({ id: id }, data) : null;
+    /* ① login_account_flags 공개 read → uid + account_status */
+    var flagData = null;
+    if (typeof window.stelvioLookupLoginAccountFlag === 'function') {
+      try { flagData = await window.stelvioLookupLoginAccountFlag(phoneDigits); } catch(_) {}
+    }
+    if (!flagData && window.firestoreV9) {
+      try {
+        var _m = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+        if (_m.doc && _m.getDoc && _m.collection) {
+          var _flagSnap = await _m.getDoc(_m.doc(_m.collection(window.firestoreV9, 'login_account_flags'), phoneDigits));
+          if (_flagSnap && (_flagSnap.exists === true || (typeof _flagSnap.exists === 'function' && _flagSnap.exists()))) {
+            flagData = _flagSnap.data ? _flagSnap.data() : null;
+          }
+        }
+      } catch(_) {}
     }
 
+    var uid = flagData && flagData.uid ? String(flagData.uid) : null;
+    var flagStatus = String((flagData && flagData.account_status) || '').trim().toLowerCase();
+
+    if (!uid) {
+      console.warn('[findDeletedUserByPhoneAndBirthYear] 미등록 전화번호 (login_account_flags 없음)');
+      return null;
+    }
+    if (flagStatus !== 'withdrawn') {
+      console.log('[findDeletedUserByPhoneAndBirthYear] 탈퇴 계정 아님 (status:', flagStatus, ')');
+      return null;
+    }
+
+    /* ② users/{uid} 직접 read 시도 (보안 규칙에 따라 실패 가능) */
+    var userData = null;
     if (window.firestoreV9) {
-      var mod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
-      var collection = mod && mod.collection;
-      var query = mod && mod.query;
-      var where = mod && mod.where;
-      var getDocs = mod && mod.getDocs;
-      if (!collection || !query || !where || !getDocs) return null;
-
-      var usersRef = collection(window.firestoreV9, 'users');
-
-      /* 1차: is_active===false + birth_year 일치 */
-      var snap1 = await getDocs(query(usersRef,
-        where('birth_year', '==', birthYearInt),
-        where('is_active', '==', false)
-      ));
-      var found = null;
-      snap1.forEach(function(docSnap) {
-        if (found) return;
-        found = matchRow(docSnap.data ? docSnap.data() : {}, docSnap.id);
-      });
-      if (found) return found;
-
-      /* 2차: account_status==='withdrawn' + birth_year 일치 (is_active 필드 없는 구형 탈퇴 계정) */
-      var snap2 = await getDocs(query(usersRef,
-        where('birth_year', '==', birthYearInt),
-        where('account_status', '==', 'withdrawn')
-      ));
-      snap2.forEach(function(docSnap) {
-        if (found) return;
-        found = matchRow(docSnap.data ? docSnap.data() : {}, docSnap.id);
-      });
-      return found;
-
+      try {
+        var mod2 = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+        if (mod2.doc && mod2.getDoc && mod2.collection) {
+          var userSnap = await mod2.getDoc(mod2.doc(mod2.collection(window.firestoreV9, 'users'), uid));
+          if (userSnap && (typeof userSnap.exists === 'function' ? userSnap.exists() : userSnap.exists)) {
+            userData = Object.assign({ id: uid }, userSnap.data ? userSnap.data() : {});
+          }
+        }
+      } catch (e2) {
+        console.warn('[findDeletedUserByPhoneAndBirthYear] users 직접 read 실패 (권한):', e2 && e2.message);
+      }
     } else if (typeof firebase !== 'undefined' && firebase.firestore) {
-      var db = firebase.firestore();
-      var s1 = await db.collection('users')
-        .where('birth_year', '==', birthYearInt)
-        .where('is_active', '==', false).get();
-      var found2 = null;
-      s1.forEach(function(docSnap) {
-        if (found2) return;
-        found2 = matchRow(docSnap.data(), docSnap.id);
-      });
-      if (found2) return found2;
-
-      var s2 = await db.collection('users')
-        .where('birth_year', '==', birthYearInt)
-        .where('account_status', '==', 'withdrawn').get();
-      s2.forEach(function(docSnap) {
-        if (found2) return;
-        found2 = matchRow(docSnap.data(), docSnap.id);
-      });
-      return found2;
+      try {
+        var snap = await firebase.firestore().collection('users').doc(uid).get();
+        if (snap && snap.exists) userData = Object.assign({ id: uid }, snap.data());
+      } catch (e3) {
+        console.warn('[findDeletedUserByPhoneAndBirthYear] compat users read 실패:', e3 && e3.message);
+      }
     }
+
+    /* ③ users 읽기 성공 → 클라이언트 생년 검증 */
+    if (userData) {
+      if (Number(userData.birth_year) !== birthYearInt) {
+        console.warn('[findDeletedUserByPhoneAndBirthYear] 생년 불일치 (입력:', birthYearInt, '/ DB:', userData.birth_year, ')');
+        return null;
+      }
+      return userData;
+    }
+
+    /* ④ users 읽기 실패해도 uid는 있음 → 최소 객체 반환, 생년 검증은 Cloud Function에 위임 */
+    console.log('[findDeletedUserByPhoneAndBirthYear] users read 권한 없음, 최소 객체 반환 (생년검증=CF위임):', uid);
+    return { id: uid, contact: phone, _birthYearUnverified: true };
   } catch (e) {
     console.warn('[findDeletedUserByPhoneAndBirthYear] 조회 실패:', e && e.message);
   }
