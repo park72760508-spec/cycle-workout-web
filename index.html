@@ -3516,7 +3516,8 @@
             <p style="color: #444; font-size: 1rem; line-height: 1.7; margin: 0; white-space: pre-line; text-align: center;">
 탈퇴처리된 사용자입니다.
 
-정상 사용을 위해 재가입을 통해 이용이 가능합니다.
+동일한 전화번호와 생년으로 재가입하시면
+기존 프로필 정보를 복원하여 이용하실 수 있습니다.
 
 감사합니다.
             </p>
@@ -9306,10 +9307,13 @@
       } catch (e) {}
     }
 
-    /** 랭킹·주간 TOP10 공통: is_private가 true / 'true' / 1 등으로 올 때 비공개로 통일 */
+    /** 랭킹·주간 TOP10 공통: is_private===false(삭제됨) 이거나 true/'true'/1(비공개 설정) 이면 제외 */
     function stelvioRankingIsPrivateRow(item) {
       if (!item) return false;
       var v = item.is_private;
+      // is_private: false → 삭제(소프트 딜리트)된 사용자 → 랭킹 제외
+      if (v === false || v === 'false') return true;
+      // is_private: true → 비공개 설정 사용자 → 랭킹 제외 (기존 동작 유지)
       return v === true || v === 'true' || v === 1 || v === '1';
     }
 
@@ -13693,8 +13697,7 @@
             name: (mem.displayName != null ? String(mem.displayName) : '') || '(미등록)',
             profileImageUrl: mem.profileImageUrl != null ? mem.profileImageUrl : null,
             gcScore: null, totalTss: null, totalKm: null, wkg: null,
-            ageCategory: 'Supremo',
-            is_private: false
+            ageCategory: 'Supremo'
           });
         }
       }
@@ -19035,7 +19038,10 @@
           if (!u2) continue;
           var e2 = poolMap[u2];
           if (!e2) continue;
-          merged.push(Object.assign({}, e2, { is_private: false }));
+          // is_private: false 제거 — false는 이제 "삭제됨" 의미; 그룹 내 표시는 원본 값 유지
+          var e2copy = Object.assign({}, e2);
+          if (e2copy.is_private === false) delete e2copy.is_private;
+          merged.push(e2copy);
         }
         merged.sort(function (a, b) { return sortVal(b) - sortVal(a); });
         return merged;
@@ -19469,7 +19475,9 @@
           /* 성별/카테고리 필터에 포함된 대상만 소모임 순위에 표시 */
           var rk = scopedByUid[uMem] || poolUid[uMem];
           if (!rk) continue;
-          var mergedItem = Object.assign({}, rk, { is_private: false });
+          var mergedItem = Object.assign({}, rk);
+          // is_private: false 는 "삭제됨" 의미이므로 그룹 표시 시 제거 (원본이 false면 표시 제외는 stelvioRankingIsPrivateRow가 처리)
+          if (mergedItem.is_private === false) delete mergedItem.is_private;
           var _tabMemName = stelvioResolveGroupTabMemberName(mem, mergedItem, uMem);
           if (_tabMemName) mergedItem.name = _tabMemName;
           var _mapUrl =
@@ -25947,7 +25955,122 @@
         var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
         var email = window.phoneToEmail(phone);
         console.log('📝 회원가입 시작:', { email: email, name: name, ftp: ftp, weight: weight, challenge: challenge });
-        
+
+        // ─── 재가입 체크: 전화번호 + 생년이 일치하는 is_private:false 계정 조회 ───
+        showRegisterStatus('기존 계정 확인 중...', 'info');
+        var rejoinTarget = null;
+        if (typeof window.findDeletedUserByPhoneAndBirthYear === 'function') {
+          try {
+            rejoinTarget = await window.findDeletedUserByPhoneAndBirthYear(phone, birthYear);
+          } catch (rejoinCheckErr) {
+            console.warn('[Register] 재가입 사전 확인 실패 (무시):', rejoinCheckErr && rejoinCheckErr.message);
+          }
+        }
+
+        if (rejoinTarget && rejoinTarget.id) {
+          // ─── 재가입 플로우: 기존 Firebase Auth 계정 비밀번호 재설정 후 재활성화 ───
+          console.log('🔄 재가입 감지 - 기존 계정 재활성화:', rejoinTarget.id);
+          showRegisterStatus('기존 계정을 재활성화하는 중...', 'info');
+
+          // 1) Cloud Function으로 비밀번호 재설정
+          var projectId = (window.authV9 && window.authV9.app && window.authV9.app.options && window.authV9.app.options.projectId) || 'stelvio-ai';
+          var resetUrl = 'https://us-central1-' + projectId + '.cloudfunctions.net/selfServiceResetPasswordHttp';
+          var resetRes = null;
+          try {
+            var resetFetchRes = await fetch(resetUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contact: phone, birthYear: String(birthYear), newPassword: password, newPasswordConfirm: password })
+            });
+            resetRes = await resetFetchRes.json().catch(function() { return null; });
+          } catch (resetErr) {
+            console.warn('[Register] 비밀번호 재설정 요청 실패:', resetErr && resetErr.message);
+          }
+          var resetOk = resetRes && resetRes.result && resetRes.result.success === true;
+          if (!resetOk) {
+            // Cloud Function 실패 시에도 기존 비밀번호로 로그인 시도 (관대하게 처리)
+            console.warn('[Register] 비밀번호 재설정 실패, 기존 비밀번호로 로그인 시도...');
+          }
+
+          // 2) 새 비밀번호로 로그인 시도
+          var rejoinCredential = null;
+          try {
+            if (window.authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function') {
+              rejoinCredential = await window.signInWithEmailAndPasswordV9(window.authV9, email, password);
+            }
+          } catch (siErr) {
+            console.warn('[Register] authV9 재가입 로그인 실패:', siErr && siErr.message);
+          }
+          if (!rejoinCredential && auth && typeof auth.signInWithEmailAndPassword === 'function') {
+            try {
+              rejoinCredential = await auth.signInWithEmailAndPassword(email, password);
+            } catch (siErrV8) {
+              console.warn('[Register] v8 재가입 로그인 실패:', siErrV8 && siErrV8.message);
+            }
+          }
+          if (!rejoinCredential || !rejoinCredential.user) {
+            showRegisterStatus('❌ 재가입 로그인에 실패했습니다. 비밀번호를 확인하거나 관리자에게 문의하세요.', 'error');
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('loading'); submitBtn.textContent = '가입 완료'; }
+            return;
+          }
+
+          // 3) Firestore 사용자 정보 업데이트 + is_private: true 로 재활성화
+          var rejoinNow = new Date().toISOString();
+          var defaultExpiryRejoin = (() => { var d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().split('T')[0]; })();
+          var rejoinPayload = {
+            name: name,
+            contact: phone,
+            ftp: ftpToUse,
+            weight: weight,
+            birth_year: birthYear,
+            gender: gender,
+            challenge: challenge,
+            account_status: 'active',
+            is_active: true,
+            is_private: true,
+            reactivated_at: rejoinNow,
+            withdrawn_at: '',
+            expiry_date: defaultExpiryRejoin
+          };
+          if (typeof window.apiUpdateUser === 'function') {
+            await window.apiUpdateUser(rejoinTarget.id, rejoinPayload);
+          }
+          if (typeof syncLoginAccountFlagForUser === 'function') {
+            syncLoginAccountFlagForUser(rejoinTarget.id, 'active').catch(function() {});
+          }
+
+          // 4) 비밀번호 localStorage 저장
+          var normalizedPhoneRejoin = phone.replace(/-/g, '').replace(/\D/g, '');
+          var phoneWithDashRejoin = phone.includes('-') ? phone : (normalizedPhoneRejoin.length === 11 && normalizedPhoneRejoin.startsWith('010')
+            ? normalizedPhoneRejoin.slice(0,3) + '-' + normalizedPhoneRejoin.slice(3,7) + '-' + normalizedPhoneRejoin.slice(7,11)
+            : phone);
+          try {
+            localStorage.setItem('userPassword_' + phoneWithDashRejoin, password);
+            localStorage.setItem('userPassword_' + normalizedPhoneRejoin, password);
+            localStorage.setItem('lastPassword', password);
+          } catch (eLsRejoin) {}
+
+          showRegisterStatus('✅ 재가입이 완료되었습니다!', 'success');
+          showRegisterCelebration(name);
+          console.log('✅ 재가입 완료:', rejoinTarget.id);
+
+          if (auth) {
+            var unsubRejoin = auth.onAuthStateChanged(function(u) {
+              if (u) {
+                unsubRejoin();
+                Promise.all([
+                  typeof loadUsers === 'function' ? loadUsers() : Promise.resolve(),
+                  typeof syncUsersFromDB === 'function' ? syncUsersFromDB().catch(function() {}) : Promise.resolve()
+                ]).catch(function() {});
+              }
+            });
+            setTimeout(function() { unsubRejoin(); }, 5000);
+          }
+          return; // 재가입 완료 → 일반 신규 가입 흐름 skip
+        }
+        // ─── 재가입 체크 끝 ───
+
+        showRegisterStatus('계정을 생성하는 중...', 'info');
         var userCredential = null;
         if (window.authV9 && typeof window.createUserWithEmailAndPasswordV9 === 'function') {
           try {
