@@ -25093,6 +25093,13 @@
           window.__stelvioPhoneAuthBusy = false;
           /* 재가입 플로우에서 사용할 탈퇴 전화번호 저장 */
           window._stelvioWithdrawnAuthPhone = phone;
+          window._stelvioWithdrawnUserProfile = null;
+          /* 탈퇴 프로필 비동기 조회 (자동 입력용) — 실패해도 재가입 플로우는 정상 진행 */
+          if (typeof window.fetchWithdrawnUserProfileByPhone === 'function') {
+            window.fetchWithdrawnUserProfileByPhone(phone).then(function(prof) {
+              window._stelvioWithdrawnUserProfile = prof || null;
+            }).catch(function() {});
+          }
           if (typeof showWithdrawnUserBlockModal === 'function') {
             showWithdrawnUserBlockModal();
           } else if (typeof alert === 'function') {
@@ -25397,6 +25404,13 @@
                 window.__stelvioPhoneAuthBusy = false;
                 /* 재가입 플로우에서 사용할 탈퇴 전화번호 저장 */
                 window._stelvioWithdrawnAuthPhone = phone;
+                window._stelvioWithdrawnUserProfile = null;
+                /* 탈퇴 프로필 비동기 조회 (자동 입력용) */
+                if (typeof window.fetchWithdrawnUserProfileByPhone === 'function') {
+                  window.fetchWithdrawnUserProfileByPhone(phone).then(function(prof) {
+                    window._stelvioWithdrawnUserProfile = prof || null;
+                  }).catch(function() {});
+                }
                 if (typeof showWithdrawnUserBlockModal === 'function') {
                   showWithdrawnUserBlockModal();
                 } else if (typeof alert === 'function') {
@@ -25854,6 +25868,9 @@
       }
     }
     
+    /* 재가입 플로우(userManager.js)에서 접근할 수 있도록 전역 노출 */
+    window.handleRegisterClick = handleRegisterClick;
+
     /**
      * 사용자 등록 화면에서 뒤로 가기
      */
@@ -25871,6 +25888,30 @@
         registerScreen.style.opacity = '0';
         console.log('✅ 사용자 등록 화면 숨김 완료');
       }
+
+      /* 재가입 모드 상태 초기화 및 자동 입력 필드 복원 */
+      window._stelvioWithdrawnAuthPhone = null;
+      window._stelvioWithdrawnUserProfile = null;
+      ;(function resetRejoinFields() {
+        ['registerNameInput','registerPhoneInput','registerFTPInput','registerWeightInput'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) { el.readOnly = false; el.style.background = ''; el.value = ''; }
+        });
+        ['registerGenderInput','registerChallengeInput'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) { el.disabled = false; el.style.background = ''; el.value = el.id === 'registerChallengeInput' ? 'Fitness' : ''; }
+        });
+        ['registerPasswordInput','registerBirthYearInput'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+        var hdr = document.querySelector('#registerScreen h3');
+        if (hdr) hdr.textContent = '사용자 등록';
+        var sub = document.querySelector('#registerScreen p');
+        if (sub) sub.textContent = '정보를 입력하여 새 계정을 만드세요';
+        var st = document.getElementById('registerStatus');
+        if (st) { st.textContent = ''; st.style.display = 'none'; }
+      })();
       
       // 모든 화면 숨기기 (splashScreen, authScreen 제외)
       document.querySelectorAll('.screen').forEach(screen => {
@@ -26008,10 +26049,24 @@
         var email = window.phoneToEmail(phone);
         console.log('📝 회원가입 시작:', { email: email, name: name, ftp: ftp, weight: weight, challenge: challenge });
 
-        // ─── 재가입 체크: 전화번호 + 생년이 일치하는 is_private:false 계정 조회 ───
+        // ─── 재가입 체크: 전화번호 + 생년이 일치하는 is_active:false 계정 조회 ───
         showRegisterStatus('기존 계정 확인 중...', 'info');
         var rejoinTarget = null;
-        if (typeof window.findDeletedUserByPhoneAndBirthYear === 'function') {
+        /* 1순위: 재가입 화면 진입 시 미리 조회해 둔 탈퇴 프로필(생년 일치 검증) */
+        var _preloadedProfile = window._stelvioWithdrawnUserProfile || null;
+        var _phoneDigitsInput = String(phone || '').replace(/\D/g, '');
+        var _preloadedPhoneDigits = _preloadedProfile
+          ? String(_preloadedProfile.contact || '').replace(/\D/g, '') : '';
+        if (
+          _preloadedProfile && _preloadedProfile.id &&
+          _preloadedPhoneDigits === _phoneDigitsInput &&
+          Number(_preloadedProfile.birth_year) === birthYear
+        ) {
+          rejoinTarget = _preloadedProfile;
+          console.log('[Register] 사전 조회된 탈퇴 프로필 사용:', rejoinTarget.id);
+        }
+        /* 2순위: 사전 조회 없거나 생년 불일치 → Firestore 직접 조회 */
+        if (!rejoinTarget && typeof window.findDeletedUserByPhoneAndBirthYear === 'function') {
           try {
             rejoinTarget = await window.findDeletedUserByPhoneAndBirthYear(phone, birthYear);
           } catch (rejoinCheckErr) {
@@ -26077,7 +26132,25 @@
 
           console.log('✅ 재가입 완료 (is_active:true 업데이트):', rejoinTarget.id);
           showRegisterStatus('✅ 재가입이 완료되었습니다! 전화번호와 새 비밀번호로 로그인해 주세요.', 'success');
-          window._stelvioWithdrawnAuthPhone = null; // 재가입 전화번호 초기화
+          window._stelvioWithdrawnAuthPhone = null;
+          window._stelvioWithdrawnUserProfile = null;
+
+          /* 자동 입력으로 readOnly/disabled 처리된 필드 복원 */
+          (function resetRejoinFormFields() {
+            ['registerNameInput','registerPhoneInput','registerFTPInput','registerWeightInput'].forEach(function(id) {
+              var el = document.getElementById(id);
+              if (el) { el.readOnly = false; el.style.background = ''; }
+            });
+            ['registerGenderInput','registerChallengeInput'].forEach(function(id) {
+              var el = document.getElementById(id);
+              if (el) { el.disabled = false; el.style.background = ''; }
+            });
+            /* 헤더/설명 복원 */
+            var hdr = document.querySelector('#registerScreen h3');
+            if (hdr) hdr.textContent = '사용자 등록';
+            var sub = document.querySelector('#registerScreen p');
+            if (sub) sub.textContent = '정보를 입력하여 새 계정을 만드세요';
+          })();
 
           // 5) 인증 화면으로 이동 (현재 세션은 유지, 탈퇴 사용자는 신규 로그인으로 진입)
           setTimeout(function() {
