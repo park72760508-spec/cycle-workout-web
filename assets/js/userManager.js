@@ -48,8 +48,6 @@ var ACCOUNT_STATUS_WITHDRAWN = 'withdrawn';
 function getUserAccountStatus(user) {
   if (!user) return ACCOUNT_STATUS_ACTIVE;
   if (user.is_active === false) return ACCOUNT_STATUS_WITHDRAWN;
-  // is_private === false 는 소프트 삭제(비활성) 상태
-  if (user.is_private === false) return ACCOUNT_STATUS_WITHDRAWN;
   var s = String(user.account_status || user.status || '').trim().toLowerCase();
   if (s === 'withdrawn' || s === 'inactive' || s === 'deleted' || s === 'deactivated') {
     return ACCOUNT_STATUS_WITHDRAWN;
@@ -222,7 +220,7 @@ async function syncLoginAccountFlagForUser(userId, accountStatus) {
 }
 
 /**
- * 재가입 매칭: 전화번호와 생년이 일치하고 is_private===false 인 탈퇴 계정을 Firestore에서 조회
+ * 재가입 매칭: 전화번호와 생년이 일치하고 is_active===false 인 탈퇴 계정을 Firestore에서 조회
  * @param {string} phone - 전화번호 (하이픈 포함/제외 모두 가능)
  * @param {number|string} birthYear - 생년 (4자리)
  * @returns {Promise<Object|null>} 매칭된 사용자 문서 또는 null
@@ -243,15 +241,17 @@ async function findDeletedUserByPhoneAndBirthYear(phone, birthYear) {
       if (!collection || !query || !where || !getDocs) return null;
 
       var usersRef = collection(window.firestoreV9, 'users');
-      // birth_year 단일 인덱스로 조회 후 JS에서 전화번호 + is_private===false 필터
-      var q = query(usersRef, where('birth_year', '==', birthYearInt));
+      // birth_year + is_active===false 조회 후 JS에서 전화번호 2차 필터
+      var q = query(usersRef,
+        where('birth_year', '==', birthYearInt),
+        where('is_active', '==', false)
+      );
       var snap = await getDocs(q);
       if (snap.empty) return null;
       var found = null;
       snap.forEach(function(docSnap) {
         if (found) return;
         var data = docSnap.data ? docSnap.data() : {};
-        if (data.is_private !== false) return; // 삭제된 계정만
         var contactDigits = String(data.contact || '').replace(/\D/g, '');
         if (contactDigits === phoneDigits) {
           found = Object.assign({ id: docSnap.id }, data);
@@ -262,12 +262,12 @@ async function findDeletedUserByPhoneAndBirthYear(phone, birthYear) {
       var db = firebase.firestore();
       var snap2 = await db.collection('users')
         .where('birth_year', '==', birthYearInt)
+        .where('is_active', '==', false)
         .get();
       var found2 = null;
       snap2.forEach(function(docSnap) {
         if (found2) return;
         var data = docSnap.data();
-        if (data.is_private !== false) return; // 삭제된 계정만
         var contactDigits = String(data.contact || '').replace(/\D/g, '');
         if (contactDigits === phoneDigits) {
           found2 = Object.assign({ id: docSnap.id }, data);
@@ -2056,7 +2056,6 @@ async function apiReactivateUser(id, userData) {
     const reactivatePayload = {
       account_status: ACCOUNT_STATUS_ACTIVE,
       is_active: true,
-      is_private: true,
       reactivated_at: now,
       withdrawn_at: '',
       name: userData.name || '',
@@ -2328,7 +2327,6 @@ async function apiDeleteUser(id) {
     const withdrawData = {
       account_status: ACCOUNT_STATUS_WITHDRAWN,
       is_active: false,
-      is_private: false,
       withdrawn_at: now
     };
 
@@ -3278,10 +3276,9 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
     const canDelete = canDeleteFor(user);
     const canTogglePrivacy = canTogglePrivacyFor(user);
     const isPrivate = user.is_private === true;
-    const isDeletedByPrivate = user.is_private === false;
     const isWithdrawnUser = typeof isUserWithdrawn === 'function' && isUserWithdrawn(user);
     const withdrawnBadgeHtml = isWithdrawnUser && viewerGrade === '1'
-      ? '<span class="profile-withdrawn-badge" title="탈퇴(비활성)' + (isDeletedByPrivate ? ' - 삭제됨' : '') + '">' + (isDeletedByPrivate ? '삭제됨' : '탈퇴') + '</span>'
+      ? '<span class="profile-withdrawn-badge" title="탈퇴(비활성)">탈퇴</span>'
       : '';
     const deleteButtonDisabled = !canDelete ? 'disabled' : '';
     const deleteButtonClass = !canDelete ? 'disabled' : '';
@@ -3307,8 +3304,8 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
         : defaultAv;
     const profileUrl = stelvioEscapeHtmlAttr(profileUrlRaw);
     const canEditAvatar = !!(viewerId && String(user.id) === String(viewerId));
-    /* 공개/비공개 토글 – 4번째 칸 (본인만 표시, 삭제 상태는 미표시) */
-    const privacyColHtml = (canTogglePrivacy && !isDeletedByPrivate)
+    /* 공개/비공개 토글 – 4번째 칸 (본인만 표시) */
+    const privacyColHtml = canTogglePrivacy
       ? `<span class="avatar-row-privacy" onclick="event.stopPropagation();">
               <label class="privacy-toggle-label">
                 <input type="checkbox" class="privacy-toggle-input" ${isPrivate ? 'checked' : ''} onchange="toggleUserPrivacy('${user.id}', this.checked)">
