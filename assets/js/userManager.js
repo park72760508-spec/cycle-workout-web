@@ -225,6 +225,53 @@ async function syncLoginAccountFlagForUser(userId, accountStatus) {
  * @param {number|string} birthYear - 생년 (4자리)
  * @returns {Promise<Object|null>} 매칭된 사용자 문서 또는 null
  */
+/** 전화번호만으로 탈퇴 사용자 프로필 조회 (재가입 화면 자동 입력용) */
+async function fetchWithdrawnUserProfileByPhone(phone) {
+  try {
+    var phoneDigits = String(phone || '').replace(/\D/g, '');
+    if (phoneDigits.length < 10) return null;
+    if (window.firestoreV9) {
+      var mod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      var collection = mod && mod.collection;
+      var query = mod && mod.query;
+      var where = mod && mod.where;
+      var getDocs = mod && mod.getDocs;
+      if (!collection || !query || !where || !getDocs) return null;
+      var usersRef = collection(window.firestoreV9, 'users');
+      var q = query(usersRef, where('is_active', '==', false));
+      var snap = await getDocs(q);
+      if (snap.empty) return null;
+      var found = null;
+      snap.forEach(function(docSnap) {
+        if (found) return;
+        var data = docSnap.data ? docSnap.data() : {};
+        var contactDigits = String(data.contact || '').replace(/\D/g, '');
+        if (contactDigits === phoneDigits) {
+          found = Object.assign({ id: docSnap.id }, data);
+        }
+      });
+      return found;
+    } else if (typeof firebase !== 'undefined' && firebase.firestore) {
+      var db = firebase.firestore();
+      var snap2 = await db.collection('users').where('is_active', '==', false).get();
+      var found2 = null;
+      snap2.forEach(function(docSnap) {
+        if (found2) return;
+        var data = docSnap.data();
+        var contactDigits = String(data.contact || '').replace(/\D/g, '');
+        if (contactDigits === phoneDigits) {
+          found2 = Object.assign({ id: docSnap.id }, data);
+        }
+      });
+      return found2;
+    }
+  } catch (e) {
+    console.warn('[fetchWithdrawnUserProfileByPhone] 조회 실패:', e && e.message);
+  }
+  return null;
+}
+window.fetchWithdrawnUserProfileByPhone = fetchWithdrawnUserProfileByPhone;
+
 async function findDeletedUserByPhoneAndBirthYear(phone, birthYear) {
   try {
     const phoneDigits = String(phone || '').replace(/\D/g, '');
@@ -317,54 +364,106 @@ function showWithdrawnUserBlockModal() {
   }
 }
 
-function closeWithdrawnUserBlockModal() {
+function closeWithdrawnUserBlockModal(skipNav) {
   var modal = document.getElementById('withdrawnUserBlockModal');
   if (modal) {
     modal.classList.add('hidden');
     modal.style.setProperty('display', 'none', 'important');
   }
   document.body.style.overflow = '';
-  if (typeof showScreen === 'function') {
+  if (!skipNav && typeof showScreen === 'function') {
     showScreen('authScreen');
   }
 }
 
 async function startWithdrawnUserRejoinFlow() {
-  closeWithdrawnUserBlockModal();
-  /* ─── 재가입 플로우 ───
-     Google 로그인(signInWithGoogle)은 현재 세션(다른 사용자)을 재사용하거나
-     엉뚱한 UID로 덮어쓰는 버그의 원인이 됨 → 제거.
-     대신 가입 화면으로 이동 후 탈퇴 전화번호를 자동 입력한다.
-     handleRegister 내부에서 findDeletedUserByPhoneAndBirthYear 로 기존 계정을 찾아
-     is_active:true 만 업데이트하므로 신규 계정은 생성되지 않는다. */
+  /* 모달 닫기(인증 화면 이동 생략 — 바로 등록 화면으로 이동) */
+  closeWithdrawnUserBlockModal(true);
+
   var withdrawnPhone = window._stelvioWithdrawnAuthPhone || '';
-  if (typeof handleRegisterClick === 'function') {
-    handleRegisterClick();
-    if (withdrawnPhone) {
-      /* 등록 화면 렌더링 후 전화번호 자동 입력 */
-      setTimeout(function () {
-        var phoneInput = document.getElementById('registerPhoneInput');
-        if (phoneInput && !String(phoneInput.value || '').trim()) {
-          var fmt = typeof window.formatPhoneNumber === 'function'
-            ? window.formatPhoneNumber(withdrawnPhone)
-            : withdrawnPhone;
-          phoneInput.value = fmt;
-        }
-        /* 재가입 모드 힌트 표시 */
-        var statusEl = document.getElementById('registerStatus');
-        if (statusEl) {
-          statusEl.textContent = '탈퇴 계정 재가입: 생년과 새 비밀번호를 입력해주세요.';
-          statusEl.className = 'status-message info';
-          statusEl.style.display = 'block';
-        }
-      }, 350);
-    }
-  } else {
-    /* handleRegisterClick 없는 환경 — 인증 화면으로만 이동 */
-    if (typeof showScreen === 'function') {
-      showScreen('authScreen');
-    }
+  var profile = window._stelvioWithdrawnUserProfile || null;
+
+  /* 등록 화면으로 이동 */
+  var navigatedOk = false;
+  if (typeof window.handleRegisterClick === 'function') {
+    window.handleRegisterClick();
+    navigatedOk = true;
+  } else if (typeof showScreen === 'function') {
+    showScreen('registerScreen');
+    navigatedOk = true;
   }
+
+  if (!navigatedOk) return;
+
+  /* 화면 전환 완료 후 자동 입력 */
+  setTimeout(function () {
+    /* ── 헤더/안내 문구 변경 ── */
+    var headerEl = document.querySelector('#registerScreen h3');
+    if (headerEl) headerEl.textContent = '탈퇴 계정 재가입';
+    var subEl = document.querySelector('#registerScreen p');
+    if (subEl) subEl.textContent = '아래 정보를 확인하고 생년과 새 비밀번호를 입력하세요.';
+
+    /* ── 상태 힌트 ── */
+    var statusEl = document.getElementById('registerStatus');
+    if (statusEl) {
+      statusEl.textContent = '기존 정보가 자동 입력되었습니다. 생년과 새 비밀번호를 입력 후 가입 완료를 누르세요.';
+      statusEl.className = 'status-message info';
+      statusEl.style.display = 'block';
+    }
+
+    /* ── 전화번호 ── */
+    var phoneInput = document.getElementById('registerPhoneInput');
+    if (phoneInput && withdrawnPhone) {
+      var fmt = typeof window.formatPhoneNumber === 'function'
+        ? window.formatPhoneNumber(withdrawnPhone)
+        : withdrawnPhone;
+      phoneInput.value = fmt;
+      phoneInput.readOnly = true;
+      phoneInput.style.background = '#f0f0f0';
+    }
+
+    /* ── 프로필 데이터가 있는 경우 나머지 필드 자동 입력 ── */
+    if (profile) {
+      var nameInput = document.getElementById('registerNameInput');
+      if (nameInput && profile.name) {
+        nameInput.value = profile.name;
+        nameInput.readOnly = true;
+        nameInput.style.background = '#f0f0f0';
+      }
+
+      var ftpInput = document.getElementById('registerFTPInput');
+      if (ftpInput && profile.ftp != null) {
+        ftpInput.value = Number(profile.ftp) || '';
+        ftpInput.readOnly = true;
+        ftpInput.style.background = '#f0f0f0';
+      }
+
+      var weightInput = document.getElementById('registerWeightInput');
+      if (weightInput && profile.weight != null) {
+        weightInput.value = Number(profile.weight) || '';
+        weightInput.readOnly = true;
+        weightInput.style.background = '#f0f0f0';
+      }
+
+      var genderInput = document.getElementById('registerGenderInput');
+      if (genderInput && profile.gender) {
+        genderInput.value = profile.gender;
+        genderInput.disabled = true;
+        genderInput.style.background = '#f0f0f0';
+      }
+
+      var challengeInput = document.getElementById('registerChallengeInput');
+      if (challengeInput && profile.challenge) {
+        challengeInput.value = profile.challenge;
+        challengeInput.disabled = true;
+        challengeInput.style.background = '#f0f0f0';
+      }
+    }
+
+    /* ── 비밀번호·생년 필드에 포커스 ── */
+    var passwordInput = document.getElementById('registerPasswordInput');
+    if (passwordInput) passwordInput.focus();
+  }, 350);
 }
 
 function filterActiveUsers(users) {
