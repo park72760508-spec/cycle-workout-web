@@ -9307,13 +9307,10 @@
       } catch (e) {}
     }
 
-    /** 랭킹·주간 TOP10 공통: is_private===false(삭제됨) 이거나 true/'true'/1(비공개 설정) 이면 제외 */
+    /** 랭킹·주간 TOP10 공통: is_private가 true / 'true' / 1 등으로 올 때 비공개로 통일 */
     function stelvioRankingIsPrivateRow(item) {
       if (!item) return false;
       var v = item.is_private;
-      // is_private: false → 삭제(소프트 딜리트)된 사용자 → 랭킹 제외
-      if (v === false || v === 'false') return true;
-      // is_private: true → 비공개 설정 사용자 → 랭킹 제외 (기존 동작 유지)
       return v === true || v === 'true' || v === 1 || v === '1';
     }
 
@@ -9349,10 +9346,12 @@
       return url != null && String(url).trim() ? String(url).trim() : null;
     }
 
-    /** 탈퇴(비활성) 랭킹 행 — 서버 account_status / isWithdrawn */
+    /** 탈퇴(비활성) 랭킹 행 — is_active===false / account_status / isWithdrawn */
     function stelvioRankingIsWithdrawnRow(item) {
       if (!item) return false;
       if (item.isWithdrawn === true) return true;
+      // is_active: false → 삭제(비활성) 처리된 사용자 → 랭킹·화면 제외
+      if (item.is_active === false) return true;
       var s = String(item.account_status || '').trim().toLowerCase();
       return s === 'withdrawn' || s === 'inactive' || s === 'deleted';
     }
@@ -26027,7 +26026,6 @@
             challenge: challenge,
             account_status: 'active',
             is_active: true,
-            is_private: true,
             reactivated_at: rejoinNow,
             withdrawn_at: '',
             expiry_date: defaultExpiryRejoin
