@@ -17647,6 +17647,15 @@
         if (bodyEarly && typeof stelvioRankingRefreshRankChangeSlotsForActiveTab === 'function') {
           stelvioRankingRefreshRankChangeSlotsForActiveTab(bodyEarly);
         }
+        /* fastTabSwitch 경로: 그룹 탭(클럽)이 활성화된 경우 멤버 순위 값을 새 지표로 갱신 */
+        if (
+          bodyEarly &&
+          typeof stelvioIsGroupDistanceRanking === 'function' &&
+          stelvioIsGroupDistanceRanking() &&
+          typeof stelvioRenderGroupTabRankingList === 'function'
+        ) {
+          stelvioRenderGroupTabRankingList(bodyEarly);
+        }
         if (
           bodyEarly &&
           data.durationType === 'tss' &&
