@@ -331,13 +331,39 @@ function closeWithdrawnUserBlockModal() {
 
 async function startWithdrawnUserRejoinFlow() {
   closeWithdrawnUserBlockModal();
-  setStelvioRejoinIntent(true);
-  if (typeof signInWithGoogle === 'function') {
-    await signInWithGoogle();
-    return;
-  }
-  if (typeof showScreen === 'function') {
-    showScreen('authScreen');
+  /* ─── 재가입 플로우 ───
+     Google 로그인(signInWithGoogle)은 현재 세션(다른 사용자)을 재사용하거나
+     엉뚱한 UID로 덮어쓰는 버그의 원인이 됨 → 제거.
+     대신 가입 화면으로 이동 후 탈퇴 전화번호를 자동 입력한다.
+     handleRegister 내부에서 findDeletedUserByPhoneAndBirthYear 로 기존 계정을 찾아
+     is_active:true 만 업데이트하므로 신규 계정은 생성되지 않는다. */
+  var withdrawnPhone = window._stelvioWithdrawnAuthPhone || '';
+  if (typeof handleRegisterClick === 'function') {
+    handleRegisterClick();
+    if (withdrawnPhone) {
+      /* 등록 화면 렌더링 후 전화번호 자동 입력 */
+      setTimeout(function () {
+        var phoneInput = document.getElementById('registerPhoneInput');
+        if (phoneInput && !String(phoneInput.value || '').trim()) {
+          var fmt = typeof window.formatPhoneNumber === 'function'
+            ? window.formatPhoneNumber(withdrawnPhone)
+            : withdrawnPhone;
+          phoneInput.value = fmt;
+        }
+        /* 재가입 모드 힌트 표시 */
+        var statusEl = document.getElementById('registerStatus');
+        if (statusEl) {
+          statusEl.textContent = '탈퇴 계정 재가입: 생년과 새 비밀번호를 입력해주세요.';
+          statusEl.className = 'status-message info';
+          statusEl.style.display = 'block';
+        }
+      }, 350);
+    }
+  } else {
+    /* handleRegisterClick 없는 환경 — 인증 화면으로만 이동 */
+    if (typeof showScreen === 'function') {
+      showScreen('authScreen');
+    }
   }
 }
 
