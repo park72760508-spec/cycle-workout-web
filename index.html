@@ -26163,28 +26163,30 @@
         var email = window.phoneToEmail(phone);
         console.log('📝 회원가입 시작:', { email: email, name: name, ftp: ftp, weight: weight, challenge: challenge });
 
-        // ─── 재가입 체크: 전화번호 + 생년이 일치하는 is_active:false 계정 조회 ───
+        // ─── 재가입 체크: 전화번호 기준으로 탈퇴 계정 조회 (생년 검증은 CF에 위임) ───
         showRegisterStatus('기존 계정 확인 중...', 'info');
         var rejoinTarget = null;
-        /* 1순위: 재가입 화면 진입 시 미리 조회해 둔 탈퇴 프로필(생년 일치 검증) */
-        var _preloadedProfile = window._stelvioWithdrawnUserProfile || null;
         var _phoneDigitsInput = String(phone || '').replace(/\D/g, '');
+
+        /* 1순위: 사전 조회된 탈퇴 프로필 (_stelvioWithdrawnUserProfile) */
+        var _preloadedProfile = window._stelvioWithdrawnUserProfile || null;
         var _preloadedPhoneDigits = _preloadedProfile
           ? String(_preloadedProfile.contact || '').replace(/\D/g, '') : '';
-        if (
-          _preloadedProfile && _preloadedProfile.id &&
-          _preloadedPhoneDigits === _phoneDigitsInput &&
-          Number(_preloadedProfile.birth_year) === birthYear
-        ) {
-          rejoinTarget = _preloadedProfile;
-          console.log('[Register] 사전 조회된 탈퇴 프로필 사용:', rejoinTarget.id);
+        if (_preloadedProfile && _preloadedProfile.id && _preloadedPhoneDigits === _phoneDigitsInput) {
+          /* _profileLoadFailed: users read 권한 없어 최소 객체만 있는 경우 → 생년 검증 건너뜀(CF위임) */
+          if (_preloadedProfile._profileLoadFailed || Number(_preloadedProfile.birth_year) === birthYear) {
+            rejoinTarget = _preloadedProfile;
+            console.log('[Register] 사전 조회된 탈퇴 프로필 사용:', rejoinTarget.id,
+              _preloadedProfile._profileLoadFailed ? '(생년검증=CF위임)' : '');
+          }
         }
-        /* 2순위: 사전 조회 없거나 생년 불일치 → Firestore 직접 조회 */
+
+        /* 2순위: 사전 조회 없거나 불일치 → login_account_flags 기반 직접 조회 */
         if (!rejoinTarget && typeof window.findDeletedUserByPhoneAndBirthYear === 'function') {
           try {
             rejoinTarget = await window.findDeletedUserByPhoneAndBirthYear(phone, birthYear);
           } catch (rejoinCheckErr) {
-            console.warn('[Register] 재가입 사전 확인 실패 (무시):', rejoinCheckErr && rejoinCheckErr.message);
+            console.warn('[Register] 재가입 확인 실패 (무시):', rejoinCheckErr && rejoinCheckErr.message);
           }
         }
 
