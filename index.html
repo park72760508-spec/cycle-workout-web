@@ -14745,6 +14745,22 @@
         if (!uid) continue;
         var nameWrap = avBtn.closest ? avBtn.closest('.stelvio-rank-name') : null;
         if (!nameWrap) continue;
+        /* 그룹 멤버 행은 .stelvio-rank-star-slot 안에서 별을 관리:
+           슬롯 밖으로 이동하면 patchOneMemberRow 재호출 시 중복 표시됨 */
+        var _starGrpRow = nameWrap.closest ? nameWrap.closest('.stelvio-group-member-row') : null;
+        if (_starGrpRow) {
+          var _starSlot = _starGrpRow.querySelector('.stelvio-rank-star-slot');
+          if (_starSlot) {
+            /* 슬롯 외부로 이탈된 stray 별 제거 */
+            var _strayStars = nameWrap.querySelectorAll(':scope > .stelvio-rank-stars-wrap');
+            for (var _ssi = 0; _ssi < _strayStars.length; _ssi++) {
+              if (_strayStars[_ssi].parentNode) _strayStars[_ssi].parentNode.removeChild(_strayStars[_ssi]);
+            }
+            /* 슬롯 내부 별 갱신 (omitGroupMember 유지) */
+            _starSlot.innerHTML = stelvioRankingStarButtonHtml(uid, { omitGroupMember: true });
+          }
+          continue;
+        }
         var oldStars = nameWrap.querySelectorAll('.stelvio-rank-stars-wrap');
         for (var oi = 0; oi < oldStars.length; oi++) {
           if (oldStars[oi].parentNode) oldStars[oi].parentNode.removeChild(oldStars[oi]);
@@ -14934,6 +14950,10 @@
         var item = rowByUid[uid];
         var nameWrap = avBtn.closest ? avBtn.closest('.stelvio-rank-name') : null;
         if (!nameWrap) continue;
+        /* 그룹 멤버 행은 stelvioGroupTabMemberNameRankMetaHtml이 순위등락을 표시하므로
+           여기서 추가하면 중복 표시됨 → 스킵 */
+        var _rcGrpRow = nameWrap.closest ? nameWrap.closest('.stelvio-group-member-row') : null;
+        if (_rcGrpRow) continue;
         var allOldRc = nameWrap.querySelectorAll('.stelvio-rank-change');
         for (var oi = 0; oi < allOldRc.length; oi++) {
           if (allOldRc[oi].parentNode === nameWrap) {
@@ -19654,6 +19674,18 @@
           }
           var oldBadges = nw.querySelectorAll('.ranking-private-badge, .stelvio-rank-owner-badge');
           for (var bi = 0; bi < oldBadges.length; bi++) oldBadges[bi].parentNode.removeChild(oldBadges[bi]);
+          /* stelvioRankingRefreshListRankChangeSlots가 삽입했을 수 있는
+             nameWrap 직계 자식 .stelvio-rank-change 중복 제거 */
+          var strayRc = nw.querySelectorAll(':scope > .stelvio-rank-change');
+          for (var sri = 0; sri < strayRc.length; sri++) {
+            if (strayRc[sri].parentNode) strayRc[sri].parentNode.removeChild(strayRc[sri]);
+          }
+          /* stelvioRankingRefreshListStarSlots가 슬롯 밖에 삽입했을 수 있는
+             nameWrap 직계 자식 .stelvio-rank-stars-wrap 중복 제거 */
+          var strayStarsP = nw.querySelectorAll(':scope > .stelvio-rank-stars-wrap');
+          for (var sspi = 0; sspi < strayStarsP.length; sspi++) {
+            if (strayStarsP[sspi].parentNode) strayStarsP[sspi].parentNode.removeChild(strayStarsP[sspi]);
+          }
           var ss = nw.querySelector('.stelvio-rank-star-slot');
           if (ss) ss.innerHTML = stelvioRankingStarButtonHtml(it.userId, { omitGroupMember: true });
           if (badgeP && ss) ss.insertAdjacentHTML('afterend', badgeP);
