@@ -1899,6 +1899,29 @@
       position: relative;
       overflow: hidden;
     }
+    #trainingJournalScreen .journal-course-preview-block {
+      position: relative;
+      height: 148px;
+      margin: 0 0 12px 0;
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(124, 58, 237, 0.06) 0%, rgba(102, 126, 234, 0.02) 100%);
+      border: 1px solid rgba(124, 58, 237, 0.2);
+      overflow: hidden;
+    }
+    #trainingJournalScreen .journal-course-preview-block--sheet {
+      height: 180px;
+      margin-bottom: 14px;
+    }
+    #trainingJournalScreen .journal-course-preview-empty {
+      margin: 0 0 12px 0;
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #6b7280;
+      background: rgba(249, 250, 251, 0.9);
+      border: 1px dashed rgba(124, 58, 237, 0.25);
+      border-radius: 10px;
+    }
     #trainingJournalScreen .journal-daily-summary-header,
     #trainingJournalScreen .journal-daily-summary-grid,
     #trainingJournalScreen .journal-daily-summary-actions {
@@ -23542,7 +23565,7 @@
       var d = dateStr ? String(dateStr).slice(0, 10) : todaySeoul;
       var token = await window.authV9.currentUser.getIdToken(true);
       var res = await fetch(
-        'https://us-central1-stelvio-ai.cloudfunctions.net/backfillStravaRouteProfileForDate',
+        'https://asia-northeast3-stelvio-ai.cloudfunctions.net/backfillStravaRouteProfileForDate',
         {
           method: 'POST',
           headers: {
