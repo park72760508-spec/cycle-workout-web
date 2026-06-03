@@ -91,6 +91,14 @@ export function mapTrainingLogToRideRow(
     duration_sec: duration,
     distance_km: num(log.distance_km),
     elevation_gain_m: num(log.elevation_gain),
+    summary_polyline: str(log.summary_polyline),
+    elevation_profile_json:
+      log.elevation_profile != null
+        ? log.elevation_profile
+        : log.elevation_profile_json != null
+          ? log.elevation_profile_json
+          : null,
+    route_profile_updated_at: log.route_profile_updated_at || null,
     avg_speed_kmh: num(log.avg_speed_kmh),
     weight_at_ride_kg: num(log.weight),
     ftp_at_time: num(log.ftp_at_time),
