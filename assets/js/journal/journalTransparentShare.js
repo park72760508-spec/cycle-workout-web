@@ -746,6 +746,152 @@
     });
   }
 
+  /** Android WebView: AndroidBridge / ReactNativeWebView (동기 호출 가능한 경우만) */
+  function tryNativeSaveImageAndroid(blob, filename) {
+    return blobToDataUrl(blob).then(function (dataUrl) {
+      try {
+        var and = global.AndroidBridge || global.Android || global.StelvioAndroid;
+        if (and && typeof and.saveImageToGallery === 'function') {
+          and.saveImageToGallery(dataUrl, filename);
+          return true;
+        }
+        if (and && typeof and.saveImage === 'function') {
+          and.saveImage(dataUrl, filename);
+          return true;
+        }
+        if (and && typeof and.saveImageToPhotos === 'function') {
+          and.saveImageToPhotos(dataUrl, filename);
+          return true;
+        }
+      } catch (eAnd) {}
+
+      if (
+        global.ReactNativeWebView &&
+        typeof global.ReactNativeWebView.postMessage === 'function'
+      ) {
+        try {
+          global.ReactNativeWebView.postMessage(
+            JSON.stringify({
+              type: 'SAVE_IMAGE',
+              dataUrl: dataUrl,
+              filename: filename,
+              mimeType: (blob && blob.type) || 'image/jpeg',
+            })
+          );
+        } catch (eRn) {}
+      }
+      return false;
+    });
+  }
+
+  /**
+   * Android: 공유 API 실패 시 — 미리보기 + 「공유·저장」버튼(사용자 탭 = 새 제스처)
+   * @returns {Promise<'share-android'|'android-open'>}
+   */
+  function openAndroidImageSaveSheet(blob, filename) {
+    return new Promise(function (resolve, reject) {
+      var doc = global.document;
+      if (!doc || !doc.body) {
+        reject(new Error('저장 화면을 표시할 수 없습니다.'));
+        return;
+      }
+      var url = URL.createObjectURL(blob);
+      var overlay = doc.createElement('div');
+      overlay.className = 'journal-android-save-sheet';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+
+      var panel = doc.createElement('div');
+      panel.className = 'journal-android-save-sheet__panel';
+
+      var title = doc.createElement('p');
+      title.className = 'journal-android-save-sheet__title';
+      title.textContent = '이미지 저장·공유';
+
+      var img = doc.createElement('img');
+      img.className = 'journal-android-save-sheet__preview';
+      img.src = url;
+      img.alt = '저장할 라이딩 이미지';
+
+      var hint = doc.createElement('p');
+      hint.className = 'journal-android-save-sheet__hint';
+      hint.textContent =
+        '「공유·저장」을 누른 뒤 갤러리·파일·드라이브 등 원하는 앱을 선택하세요.';
+
+      function cleanup() {
+        URL.revokeObjectURL(url);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }
+
+      function shareFromUserTap() {
+        var mime = (blob && blob.type) || 'image/jpeg';
+        var file =
+          typeof File !== 'undefined' ? new File([blob], filename, { type: mime }) : null;
+        if (file && global.navigator && typeof global.navigator.share === 'function') {
+          global.navigator
+            .share({ files: [file] })
+            .then(function () {
+              cleanup();
+              resolve('share-android');
+            })
+            .catch(function (eShare) {
+              if (eShare && eShare.name === 'AbortError') return;
+              openBlobForAndroidView(url, filename);
+              cleanup();
+              resolve('android-open');
+            });
+          return;
+        }
+        openBlobForAndroidView(url, filename);
+        cleanup();
+        resolve('android-open');
+      }
+
+      var shareBtn = doc.createElement('button');
+      shareBtn.type = 'button';
+      shareBtn.className = 'journal-android-save-sheet__btn journal-android-save-sheet__btn--primary';
+      shareBtn.textContent = '공유·저장';
+      shareBtn.addEventListener('click', shareFromUserTap);
+
+      var closeBtn = doc.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'journal-android-save-sheet__btn journal-android-save-sheet__btn--ghost';
+      closeBtn.textContent = '닫기';
+      closeBtn.addEventListener('click', function () {
+        cleanup();
+        reject(Object.assign(new Error('저장 취소'), { name: 'AbortError' }));
+      });
+
+      panel.appendChild(title);
+      panel.appendChild(img);
+      panel.appendChild(hint);
+      panel.appendChild(shareBtn);
+      panel.appendChild(closeBtn);
+      overlay.appendChild(panel);
+      doc.body.appendChild(overlay);
+    });
+  }
+
+  function openBlobForAndroidView(blobUrl, filename) {
+    try {
+      var a = global.document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;';
+      global.document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        if (a.parentNode) a.parentNode.removeChild(a);
+      }, 500);
+    } catch (eOpen) {
+      try {
+        global.open(blobUrl, '_blank');
+      } catch (e2) {}
+    }
+  }
+
   function downloadBlob(blob, filename) {
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -806,8 +952,10 @@
     if (typeof global.showToast !== 'function') return;
     if (result === 'native' || result === 'share') {
       global.showToast('사진 보관함에 저장했습니다.', 'success');
-    } else if (result === 'share-android') {
+    } else if (result === 'share-android' || result === 'native-android') {
       global.showToast('선택한 앱·폴더에 저장되었습니다.', 'success');
+    } else if (result === 'android-open') {
+      global.showToast('이미지를 열었습니다. 갤러리·파일 앱으로 저장해 주세요.', 'info');
     } else if (result === 'save-picker') {
       global.showToast('선택한 위치에 저장했습니다.', 'success');
     } else if (result === 'download-mobile') {
@@ -836,8 +984,34 @@
   }
 
   /**
+   * Android 전용: 네이티브 → Web Share → 저장 시트(미리보기+공유 버튼)
+   * iOS·PC는 savePngBlob 사용
+   */
+  function savePngBlobAndroid(blob, filename) {
+    var mime = (blob && blob.type) || 'image/jpeg';
+    if (mime.indexOf('jpeg') < 0 && mime.indexOf('jpg') < 0) {
+      mime = 'image/jpeg';
+    }
+    var file =
+      typeof File !== 'undefined' ? new File([blob], filename, { type: mime }) : null;
+
+    return tryNativeSaveImageAndroid(blob, filename).then(function (nativeOk) {
+      if (nativeOk) return 'native-android';
+
+      if (file && global.navigator && typeof global.navigator.share === 'function') {
+        return shareFileWithUserPicker(file, {}).then(function (shared) {
+          if (shared === 'share') return 'share-android';
+          return openAndroidImageSaveSheet(blob, filename);
+        });
+      }
+
+      return openAndroidImageSaveSheet(blob, filename);
+    });
+  }
+
+  /**
    * iOS: savePngBlobIOS
-   * Android: 공유 시트(갤러리·파일 앱 선택)
+   * Android: savePngBlobAndroid
    * PC: download (저장 위치는 Composer에서 requestSaveFileHandle 선행)
    */
   function savePngBlob(blob, filename) {
@@ -852,18 +1026,8 @@
       return savePngBlobIOS(blob, filename, file);
     }
 
-    if (isAndroidDevice() && file) {
-      return shareFileWithUserPicker(file, {}).then(function (shared) {
-        if (shared === 'share') return 'share-android';
-        return saveBlobWithFilePicker(blob, filename).then(function (picked) {
-          if (picked === 'save-picker') return picked;
-          return Promise.reject(
-            new Error(
-              '저장·공유 창을 열 수 없습니다. 「저장·공유」를 다시 눌러 갤러리·파일 앱을 선택해 주세요.'
-            )
-          );
-        });
-      });
+    if (isAndroidDevice()) {
+      return savePngBlobAndroid(blob, filename);
     }
 
     if (isMobileDevice() && file) {
@@ -1114,6 +1278,8 @@
     requestSaveFileHandle: requestSaveFileHandle,
     writeBlobToSaveHandle: writeBlobToSaveHandle,
     savePngBlob: savePngBlob,
+    savePngBlobAndroid: savePngBlobAndroid,
+    isAndroidDevice: isAndroidDevice,
     notifySaveResult: notifySaveResult,
     exportTransparentSharePng: exportTransparentSharePng,
     openShareComposer: openShareComposer,

@@ -349,8 +349,13 @@
         var dateKey = log.date ? String(log.date).replace(/-/g, '') : 'ride';
         var fn = 'stelvio-ride-' + dateKey + '.jpg';
         var saveHandle = null;
+        var useAndroidSave =
+          isAndroidUa ||
+          (shareApi.isAndroidDevice && typeof shareApi.isAndroidDevice === 'function' &&
+            shareApi.isAndroidDevice());
 
-        if (typeof shareApi.requestSaveFileHandle === 'function') {
+        /* Android: showSaveFilePicker 선행 시 제스처 만료·무반응 — 합성 후 Android 전용 저장 */
+        if (!useAndroidSave && typeof shareApi.requestSaveFileHandle === 'function') {
           try {
             saveHandle = await shareApi.requestSaveFileHandle(fn);
           } catch (ePick) {
@@ -372,7 +377,12 @@
           return;
         }
 
-        var saveMethod = await shareApi.savePngBlob(blob, fn);
+        var saveMethod;
+        if (useAndroidSave && typeof shareApi.savePngBlobAndroid === 'function') {
+          saveMethod = await shareApi.savePngBlobAndroid(blob, fn);
+        } else {
+          saveMethod = await shareApi.savePngBlob(blob, fn);
+        }
         shareApi.notifySaveResult(saveMethod);
         onClose({ saved: true, saveMethod: saveMethod });
       } catch (e) {
