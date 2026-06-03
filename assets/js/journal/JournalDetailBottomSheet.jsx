@@ -748,7 +748,8 @@
           ? (logs[0].date || '') + ' 라이딩 ' + routeMerged.segmentCount + '회'
           : logs[0].title,
       _routeProfileMerged: routeMerged,
-      _logsForShare: logs
+      _logsForShare: logs,
+      _dailyRouteDoc: dailyRouteDoc || null
     };
   }
 
@@ -841,8 +842,14 @@
                   typeof onShareTransparent === 'function'
                     ? onShareTransparent(log)
                     : shareApi && typeof shareApi.openShareComposer === 'function'
-                      ? shareApi.openShareComposer(log)
-                      : shareApi.exportTransparentSharePng(log);
+                      ? shareApi.openShareComposer(log, {
+                          logs: log._logsForShare || props.logs,
+                          dailyRouteDoc: props.dailyRouteDoc || log._dailyRouteDoc || null
+                        })
+                      : shareApi.exportTransparentSharePng(log, {
+                          logs: log._logsForShare || props.logs,
+                          dailyRouteDoc: props.dailyRouteDoc || log._dailyRouteDoc || null
+                        });
                 Promise.resolve(p)
                   .catch(function (e) {
                     if (e && e.name === 'AbortError') return;
@@ -1009,7 +1016,8 @@
             var summaryLog = merged
               ? Object.assign({}, merged, {
                   _routeProfileMerged: routeMergedTab || merged._routeProfileMerged,
-                  _logsForShare: logs
+                  _logsForShare: logs,
+                  _dailyRouteDoc: dailyRouteDoc || null
                 })
               : logs[0] || null;
             var p = t.id === 'summary'

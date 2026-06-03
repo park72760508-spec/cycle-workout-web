@@ -112,28 +112,58 @@
     ];
   }
 
+  /** 요약 지도와 동일 소스(logs + daily_route_profiles)로 코스 프로파일 계산 */
+  function resolveRouteProfileForShare(log, opts) {
+    opts = opts || {};
+    if (!utils || !log) return null;
+    var logs = opts.logs || log._logsForShare || null;
+    var dailyDoc = opts.dailyRouteDoc || null;
+    if (logs && logs.length && typeof utils.routeProfileFromLogs === 'function') {
+      return utils.routeProfileFromLogs(logs, dailyDoc);
+    }
+    if (log._routeProfileMerged && log._routeProfileMerged.segments && log._routeProfileMerged.segments.length) {
+      return log._routeProfileMerged;
+    }
+    return utils.routeProfileFromLog(utils.normalizeLogRouteFields(log));
+  }
+
+  /** 다구간 시 flatten latlngs(활동 사이 직선) 사용 금지 */
+  function coursePathStringsFromRoute(route, viewW, viewH, padRatio) {
+    if (!utils || !route) return [];
+    var segs = route.segments;
+    var out = [];
+    var si, drawn;
+    if (segs && segs.length > 0 && typeof utils.latLngSegmentsToSvgPaths === 'function') {
+      drawn = utils.latLngSegmentsToSvgPaths(segs, viewW, viewH, padRatio);
+      for (si = 0; si < drawn.length; si++) {
+        if (drawn[si].pathD) out.push(drawn[si].pathD);
+      }
+      return out;
+    }
+    if (segs && segs.length > 0) {
+      for (si = 0; si < segs.length; si++) {
+        drawn = utils.latLngsToSvgPath(segs[si], viewW, viewH, padRatio);
+        if (drawn.pathD) out.push(drawn.pathD);
+      }
+      return out;
+    }
+    if ((route.segmentCount || 0) > 1) return [];
+    if (route.hasRoute && route.latlngs && route.latlngs.length >= 2) {
+      drawn = utils.latLngsToSvgPath(route.latlngs, viewW, viewH, padRatio);
+      if (drawn.pathD) out.push(drawn.pathD);
+    }
+    return out;
+  }
+
   function buildShareSvgMarkup(log, opts) {
     opts = opts || {};
     var w = opts.width || 1080;
     var h = opts.height || 1350;
     if (!utils || !log) return '';
-    var logs = opts.logs || log._logsForShare || null;
-    var route =
-      log._routeProfileMerged ||
-      (logs && typeof utils.routeProfileFromLogs === 'function'
-        ? utils.routeProfileFromLogs(logs)
-        : utils.routeProfileFromLog(log));
-    var coursePaths = [];
-    var si, segPath;
-    if (route.segments && route.segments.length) {
-      for (si = 0; si < route.segments.length; si++) {
-        segPath = utils.latLngsToSvgPath(route.segments[si], w - 120, 520, 0.12);
-        if (segPath.pathD) coursePaths.push(segPath.pathD);
-      }
-    } else if (route.hasRoute && route.latlngs && route.latlngs.length >= 2) {
-      segPath = utils.latLngsToSvgPath(route.latlngs, w - 120, 520, 0.12);
-      if (segPath.pathD) coursePaths.push(segPath.pathD);
-    }
+    var route = resolveRouteProfileForShare(log, opts);
+    if (!route) return '';
+    var coursePaths = coursePathStringsFromRoute(route, w - 120, 520, 0.12);
+    var si;
     var shapes = '';
     for (si = 0; si < coursePaths.length; si++) {
       shapes +=
@@ -472,6 +502,7 @@
   async function createOverlayPngBlob(log, opts) {
     opts = opts || {};
     if (log && log._logsForShare && !opts.logs) opts.logs = log._logsForShare;
+    if (opts.dailyRouteDoc == null && log && log._dailyRouteDoc) opts.dailyRouteDoc = log._dailyRouteDoc;
     var svg = buildShareSvgMarkup(log, opts);
     if (!svg) throw new Error('코스 데이터가 없어 공유 이미지를 만들 수 없습니다.');
     var summaryLines = summaryLinesFromLog(log);

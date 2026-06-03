@@ -146,6 +146,75 @@
     };
   }
 
+  /**
+   * 여러 구간 polyline → SVG path 배열 (전 구간 공통 bounds — Leaflet fitBounds와 동일, 활동 사이 직선 없음)
+   */
+  function latLngSegmentsToSvgPaths(segments, viewW, viewH, padRatio) {
+    viewW = viewW || 400;
+    viewH = viewH || 200;
+    padRatio = padRatio != null ? padRatio : 0.08;
+    var validSegs = [];
+    var si, seg;
+    for (si = 0; si < (segments || []).length; si++) {
+      seg = segments[si];
+      if (seg && seg.length >= 2) validSegs.push(seg);
+    }
+    if (validSegs.length === 0) return [];
+    if (validSegs.length === 1) {
+      return [latLngsToSvgPath(validSegs[0], viewW, viewH, padRatio)];
+    }
+
+    var minLat = validSegs[0][0][0];
+    var maxLat = validSegs[0][0][0];
+    var minLng = validSegs[0][0][1];
+    var maxLng = validSegs[0][0][1];
+    var i, j, pt;
+    for (si = 0; si < validSegs.length; si++) {
+      for (j = 0; j < validSegs[si].length; j++) {
+        pt = validSegs[si][j];
+        minLat = Math.min(minLat, pt[0]);
+        maxLat = Math.max(maxLat, pt[0]);
+        minLng = Math.min(minLng, pt[1]);
+        maxLng = Math.max(maxLng, pt[1]);
+      }
+    }
+    var latSpan = maxLat - minLat || 1e-6;
+    var lngSpan = maxLng - minLng || 1e-6;
+    var padX = viewW * padRatio;
+    var padY = viewH * padRatio;
+    var innerW = viewW - padX * 2;
+    var innerH = viewH - padY * 2;
+    var scale = Math.min(innerW / lngSpan, innerH / latSpan);
+    var usedW = lngSpan * scale;
+    var usedH = latSpan * scale;
+    var offX = padX + (innerW - usedW) / 2;
+    var offY = padY + (innerH - usedH) / 2;
+
+    function project(pt) {
+      var x = offX + (pt[1] - minLng) * scale;
+      var y = offY + (maxLat - pt[0]) * scale;
+      return [x, y];
+    }
+
+    var out = [];
+    for (si = 0; si < validSegs.length; si++) {
+      seg = validSegs[si];
+      var p0 = project(seg[0]);
+      var d = 'M ' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2);
+      for (i = 1; i < seg.length; i++) {
+        var pi = project(seg[i]);
+        d += ' L ' + pi[0].toFixed(2) + ' ' + pi[1].toFixed(2);
+      }
+      out.push({
+        pathD: d,
+        viewW: viewW,
+        viewH: viewH,
+        bounds: { minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng },
+      });
+    }
+    return out;
+  }
+
   function elevationToSvgPath(elev, viewW, viewH, padRatio) {
     viewW = viewW || 400;
     viewH = viewH || 80;
@@ -303,11 +372,14 @@
     var elev = log.elevation_profile != null ? log.elevation_profile : log.elevation_profile_json;
     var latlngs = poly ? downsampleLatLngs(decodePolyline(poly), 220) : [];
     var elevation = downsampleElevation(elev, 120);
+    var segs = latlngs.length >= 2 ? [latlngs] : [];
     return {
+      segments: segs,
       latlngs: latlngs,
       elevation: elevation,
       hasRoute: latlngs.length >= 2,
       hasElevation: elevation.length >= 2,
+      segmentCount: segs.length,
     };
   }
 
@@ -317,6 +389,7 @@
     normalizeElevationProfile: normalizeElevationProfile,
     downsampleElevation: downsampleElevation,
     latLngsToSvgPath: latLngsToSvgPath,
+    latLngSegmentsToSvgPaths: latLngSegmentsToSvgPaths,
     elevationToSvgPath: elevationToSvgPath,
     normalizeLogRouteFields: normalizeLogRouteFields,
     pickRouteLogFromLogs: pickRouteLogFromLogs,

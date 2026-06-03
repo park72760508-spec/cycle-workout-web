@@ -35,12 +35,22 @@
     var coursePaths = [];
     var si, segPath, segList;
 
-    if (route.segments && route.segments.length) {
+    if (route.segments && route.segments.length && typeof utils.latLngSegmentsToSvgPaths === 'function') {
+      var drawn = utils.latLngSegmentsToSvgPaths(route.segments, 400, 160, 0.1);
+      for (si = 0; si < drawn.length; si++) {
+        if (drawn[si].pathD) coursePaths.push(drawn[si].pathD);
+      }
+    } else if (route.segments && route.segments.length) {
       for (si = 0; si < route.segments.length; si++) {
         segPath = utils.latLngsToSvgPath(route.segments[si], 400, 160, 0.1);
         if (segPath.pathD) coursePaths.push(segPath.pathD);
       }
-    } else if (route.hasRoute && route.latlngs && route.latlngs.length >= 2) {
+    } else if (
+      (route.segmentCount || 0) <= 1 &&
+      route.hasRoute &&
+      route.latlngs &&
+      route.latlngs.length >= 2
+    ) {
       segPath = utils.latLngsToSvgPath(route.latlngs, 400, 160, 0.1);
       if (segPath.pathD) coursePaths.push(segPath.pathD);
     }
