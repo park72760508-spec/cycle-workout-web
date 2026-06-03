@@ -67,6 +67,8 @@
     var log = props.log;
     var onClose = props.onClose;
     var shareApi = window.journalTransparentShare;
+    var isAndroidUa =
+      typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
 
     var _loading = useState(true);
     var loading = _loading[0];
@@ -303,7 +305,9 @@
         var fn = 'stelvio-ride-' + dateKey + '.jpg';
         var saveMethod = await shareApi.savePngBlob(blob, fn);
         shareApi.notifySaveResult(saveMethod);
-        onClose({ saved: true, saveMethod: saveMethod });
+        if (saveMethod !== 'download-android-fallback') {
+          onClose({ saved: true, saveMethod: saveMethod });
+        }
       } catch (e) {
         if (e && e.name === 'AbortError') return;
         var msg = (e && e.message) || '저장 실패';
@@ -346,7 +350,7 @@
               className: 'journal-share-composer-action-btn journal-share-composer-save-btn',
               disabled: !bgUrl || loading || saving,
               onClick: onSave,
-            }, saving ? '저장 중…' : '저장')
+            }, saving ? '준비 중…' : isAndroidUa ? '저장·공유' : '저장')
           ),
           R.createElement('div', { className: 'journal-share-composer-scale-row' },
             R.createElement('span', { className: 'journal-share-composer-scale-label' }, '크기'),

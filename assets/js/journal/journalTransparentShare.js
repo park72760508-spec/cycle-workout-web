@@ -379,6 +379,44 @@
     return /Android|iPhone|iPad|iPod/i.test((global.navigator && global.navigator.userAgent) || '');
   }
 
+  function isIOSDevice() {
+    var ua = (global.navigator && global.navigator.userAgent) || '';
+    return (
+      /iPad|iPhone|iPod/i.test(ua) ||
+      ((global.navigator && global.navigator.platform === 'MacIntel') &&
+        (global.navigator.maxTouchPoints || 0) > 1)
+    );
+  }
+
+  function isAndroidDevice() {
+    return /Android/i.test((global.navigator && global.navigator.userAgent) || '');
+  }
+
+  /**
+   * Android: 시스템 공유 시트로 갤러리·드라이브 등 저장 위치 선택
+   * @returns {Promise<'share'|null>}
+   */
+  function shareFileWithUserPicker(file, meta) {
+    meta = meta || {};
+    if (!file || !global.navigator || typeof global.navigator.share !== 'function') {
+      return Promise.resolve(null);
+    }
+    var payload = {
+      files: [file],
+      title: meta.title || 'STELVIO Ride',
+    };
+    if (meta.text) payload.text = meta.text;
+    return global.navigator
+      .share(payload)
+      .then(function () {
+        return 'share';
+      })
+      .catch(function (e) {
+        if (e && e.name === 'AbortError') return Promise.reject(e);
+        return null;
+      });
+  }
+
   function blobToDataUrl(blob) {
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
@@ -437,6 +475,13 @@
     if (typeof global.showToast !== 'function') return;
     if (result === 'native' || result === 'share') {
       global.showToast('사진 보관함에 저장했습니다.', 'success');
+    } else if (result === 'share-android') {
+      global.showToast('선택한 앱으로 저장·공유할 수 있습니다.', 'success');
+    } else if (result === 'download-android-fallback') {
+      global.showToast(
+        '다운로드 폴더에 저장했습니다. 갤러리에는 「공유」 메뉴에서 사진 앱을 선택해 주세요.',
+        'info'
+      );
     } else if (result === 'download-mobile') {
       global.showToast(
         '이미지가 저장되었습니다. 갤러리·사진 앱에서 확인해 주세요.',
@@ -447,44 +492,52 @@
     }
   }
 
+  /** iOS: 네이티브 저장 → 공유 시트 → 다운로드 (기존 동작 유지) */
+  function savePngBlobIOS(blob, filename, file) {
+    return tryNativeSaveImageToGallery(blob, filename).then(function (nativeOk) {
+      if (nativeOk) return 'native';
+
+      if (file) {
+        return shareFileWithUserPicker(file, { title: 'STELVIO Ride' }).then(function (shared) {
+          if (shared === 'share') return 'share';
+          downloadBlob(blob, filename);
+          return 'download-mobile';
+        });
+      }
+
+      downloadBlob(blob, filename);
+      return 'download-mobile';
+    });
+  }
+
   /**
-   * 모바일: 공유 시트 → 「사진에 저장」 / 갤러리 앱 선택
+   * Android: 공유 시트로 저장 위치 선택 (갤러리·드라이브 등)
+   * iOS: savePngBlobIOS
    * PC: 파일 다운로드
    */
   function savePngBlob(blob, filename) {
-    var mobile = isMobileDevice();
     var mime = (blob && blob.type) || 'image/png';
     var file =
       typeof File !== 'undefined' ? new File([blob], filename, { type: mime }) : null;
 
-    if (mobile) {
-      return tryNativeSaveImageToGallery(blob, filename).then(function (nativeOk) {
-        if (nativeOk) return 'native';
+    if (isAndroidDevice() && file) {
+      return shareFileWithUserPicker(file, {
+        title: 'STELVIO 라이딩',
+        text: '갤러리·드라이브 등 저장할 앱을 선택하세요',
+      }).then(function (shared) {
+        if (shared === 'share') return 'share-android';
+        downloadBlob(blob, filename);
+        return 'download-android-fallback';
+      });
+    }
 
-        if (
-          file &&
-          global.navigator &&
-          typeof global.navigator.share === 'function' &&
-          typeof global.navigator.canShare === 'function'
-        ) {
-          try {
-            if (global.navigator.canShare({ files: [file] })) {
-              return global.navigator
-                .share({
-                  files: [file],
-                  title: 'STELVIO Ride',
-                })
-                .then(function () {
-                  return 'share';
-                });
-            }
-          } catch (shareErr) {
-            if (shareErr && shareErr.name === 'AbortError') {
-              return Promise.reject(shareErr);
-            }
-          }
-        }
+    if (isIOSDevice()) {
+      return savePngBlobIOS(blob, filename, file);
+    }
 
+    if (isMobileDevice() && file) {
+      return shareFileWithUserPicker(file, { title: 'STELVIO Ride' }).then(function (shared) {
+        if (shared === 'share') return 'share';
         downloadBlob(blob, filename);
         return 'download-mobile';
       });
