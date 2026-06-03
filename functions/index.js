@@ -36,6 +36,7 @@ const rankingDayRollup = require("./rankingDayRollup");
 const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const stravaDualWrite = require("./stravaDualWrite");
+const stravaRouteMerge = require("./stravaRouteMerge");
 const rankingReadRouter = require("./rankingReadRouter");
 const rankingReadConfig = require("./rankingReadConfig");
 const supabaseRankingReader = require("./supabaseRankingReader");
@@ -3219,6 +3220,36 @@ exports.manualStravaSyncWithMmp = onRequest(
       }
     }
 
+    const datesToMerge = new Set();
+    for (const act of activitiesToProcess) {
+      const rawStart = act.start_date_local || act.start_date || "";
+      const ds = rawStart ? String(rawStart).slice(0, 10) : "";
+      if (ds) datesToMerge.add(ds);
+    }
+    if (dateFromForDiagnostic && dateToForDiagnostic) {
+      let dCur = new Date(`${dateFromForDiagnostic}T12:00:00+09:00`);
+      const dEnd = new Date(`${dateToForDiagnostic}T12:00:00+09:00`);
+      while (dCur <= dEnd) {
+        datesToMerge.add(dCur.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }));
+        dCur.setDate(dCur.getDate() + 1);
+      }
+    }
+    const dailyMergeResults = [];
+    for (const mergeDate of datesToMerge) {
+      try {
+        const daySnap = await logsRef.where("date", "==", mergeDate).where("source", "==", "strava").get();
+        const mergeRes = await stravaRouteMerge.saveMergedDailyRouteProfile(
+          db,
+          uid,
+          mergeDate,
+          daySnap.docs.map((doc) => doc.data() || {})
+        );
+        dailyMergeResults.push({ date: mergeDate, ...mergeRes });
+      } catch (mergeErr) {
+        console.warn("[manualStravaSyncWithMmp] daily merge", mergeDate, mergeErr.message);
+      }
+    }
+
     globalApiCallCount = apiCallCount;
     totalProcessed += processedCount;
     totalUpdated += updatedCount;
@@ -3233,6 +3264,7 @@ exports.manualStravaSyncWithMmp = onRequest(
         processedCount,
         updatedCount,
         createdCount,
+        dailyRouteMerges: dailyMergeResults,
       });
     }
     } catch (userErr) {
@@ -3448,7 +3480,20 @@ async function backfillStravaRouteProfileForUserDate(db, userId, dateStr) {
       errors.push(`${actId}: ${e && e.message ? e.message : String(e)}`);
     }
   }
-  return { updated, skipped, errors };
+  let dailyRouteMerge = { saved: false, reason: "no_logs" };
+  try {
+    const afterSnap = await logsRef.where("date", "==", dateStr).where("source", "==", "strava").get();
+    dailyRouteMerge = await stravaRouteMerge.saveMergedDailyRouteProfile(
+      db,
+      userId,
+      dateStr,
+      afterSnap.docs.map((doc) => doc.data() || {})
+    );
+  } catch (mergeErr) {
+    console.warn("[backfillStravaRouteProfileForUserDate] daily merge save:", mergeErr.message);
+    dailyRouteMerge = { saved: false, error: mergeErr.message };
+  }
+  return { updated, skipped, errors, dailyRouteMerge };
 }
 
 const backfillStravaRouteProfileOptions = supabaseDualWriteServer.appendServiceRoleSecret({
