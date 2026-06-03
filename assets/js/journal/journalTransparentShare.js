@@ -13,9 +13,10 @@
   var SHARE_TITLE_Y = 80;
   var SHARE_LINE_STEP = 52;
   var SHARE_SUMMARY_LINE_COUNT = 5;
-  var SHARE_LINE_FONT = '600 36px system-ui, sans-serif';
   var SHARE_LOGO_GAP_BELOW_SPEED = 14;
   var STELVIO_LOGO_ASSET = 'assets/img/STELVIO AI.png';
+  var FONT_LATIN_STACK = '"Druk Wide", "Bebas Neue", sans-serif';
+  var FONT_KOREAN_STACK = 'Pretendard, "Noto Sans KR", sans-serif';
 
   function escapeXml(s) {
     return String(s || '')
@@ -132,29 +133,6 @@
       segPath = utils.latLngsToSvgPath(route.latlngs, w - 120, 520, 0.12);
       if (segPath.pathD) coursePaths.push(segPath.pathD);
     }
-    var elev = route.hasElevation
-      ? utils.elevationToSvgPath(route.elevation, w - 120, 200, 0.1)
-      : null;
-    var lines = summaryLinesFromLog(log);
-    var title = formatShareImageTitle(log, logs).slice(0, 96);
-    var yText = 80;
-    var textBlock = '';
-    textBlock +=
-      '<text x="60" y="' +
-      yText +
-      '" fill="#FFFFFF" font-size="42" font-weight="700" font-family="system-ui,sans-serif">' +
-      escapeXml(title) +
-      '</text>';
-    var li;
-    for (li = 0; li < lines.length; li++) {
-      yText += 52;
-      textBlock +=
-        '<text x="60" y="' +
-        yText +
-        '" fill="#FFFFFF" font-size="36" font-weight="600" font-family="system-ui,sans-serif">' +
-        escapeXml(lines[li]) +
-        '</text>';
-    }
     var shapes = '';
     for (si = 0; si < coursePaths.length; si++) {
       shapes +=
@@ -163,14 +141,6 @@
         ')"><path d="' +
         coursePaths[si] +
         '" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></g>';
-    }
-    if (elev && elev.pathD) {
-      shapes +=
-        '<g transform="translate(60, ' +
-        (h - 240) +
-        ')"><path d="' +
-        elev.pathD +
-        '" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>';
     }
     return (
       '<svg xmlns="http://www.w3.org/2000/svg" width="' +
@@ -183,9 +153,100 @@
       h +
       '">' +
       shapes +
-      textBlock +
       '</svg>'
     );
+  }
+
+  function isKoreanChar(ch) {
+    if (!ch) return false;
+    var c = ch.charCodeAt(0);
+    return (c >= 0xac00 && c <= 0xd7a3) || (c >= 0x3131 && c <= 0x318e);
+  }
+
+  function isLatinOrDigitChar(ch) {
+    if (!ch) return false;
+    var c = ch.charCodeAt(0);
+    return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122);
+  }
+
+  function tokenizeShareText(text) {
+    var s = String(text || '');
+    var tokens = [];
+    var i = 0;
+    while (i < s.length) {
+      var ch = s.charAt(i);
+      if (isLatinOrDigitChar(ch)) {
+        var j = i + 1;
+        while (j < s.length) {
+          var cj = s.charAt(j);
+          if (
+            isLatinOrDigitChar(cj) ||
+            cj === '.' ||
+            cj === ',' ||
+            cj === '/' ||
+            cj === '-' ||
+            cj === '+'
+          ) {
+            j++;
+          } else break;
+        }
+        tokens.push({ kind: 'lat', text: s.slice(i, j) });
+        i = j;
+      } else if (isKoreanChar(ch)) {
+        var jk = i + 1;
+        while (jk < s.length && isKoreanChar(s.charAt(jk))) jk++;
+        tokens.push({ kind: 'ko', text: s.slice(i, jk) });
+        i = jk;
+      } else {
+        tokens.push({ kind: 'ko', text: ch });
+        i++;
+      }
+    }
+    return tokens;
+  }
+
+  function canvasFontForToken(kind, fontSize) {
+    var weight = kind === 'lat' ? '700' : '600';
+    var stack = kind === 'lat' ? FONT_LATIN_STACK : FONT_KOREAN_STACK;
+    return weight + ' ' + fontSize + 'px ' + stack;
+  }
+
+  function drawCanvasTextLine(ctx, x, y, text, fontSize) {
+    var tokens = tokenizeShareText(text);
+    var cx = x;
+    var ti;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#FFFFFF';
+    for (ti = 0; ti < tokens.length; ti++) {
+      ctx.font = canvasFontForToken(tokens[ti].kind, fontSize);
+      ctx.fillText(tokens[ti].text, cx, y);
+      cx += ctx.measureText(tokens[ti].text).width;
+    }
+  }
+
+  function drawShareTextOnCanvas(ctx, log, logs) {
+    if (!ctx || !log) return;
+    var title = formatShareImageTitle(log, logs).slice(0, 96);
+    var lines = summaryLinesFromLog(log);
+    var yText = SHARE_TITLE_Y;
+    drawCanvasTextLine(ctx, SHARE_TEXT_X, yText, title, 42);
+    var li;
+    for (li = 0; li < lines.length; li++) {
+      yText += SHARE_LINE_STEP;
+      drawCanvasTextLine(ctx, SHARE_TEXT_X, yText, lines[li], 36);
+    }
+  }
+
+  function ensureShareFontsLoaded() {
+    if (!global.document || !global.document.fonts || typeof global.document.fonts.load !== 'function') {
+      return Promise.resolve();
+    }
+    return Promise.all([
+      global.document.fonts.load('700 42px ' + FONT_LATIN_STACK),
+      global.document.fonts.load('700 36px ' + FONT_LATIN_STACK),
+      global.document.fonts.load('600 42px ' + FONT_KOREAN_STACK),
+      global.document.fonts.load('600 36px ' + FONT_KOREAN_STACK),
+    ]).catch(function () {});
   }
 
   function resolveStelvioLogoAssetUrl() {
@@ -201,7 +262,7 @@
     var c = document.createElement('canvas');
     var ctx = c.getContext('2d');
     if (!ctx) return 200;
-    ctx.font = SHARE_LINE_FONT;
+    ctx.font = canvasFontForToken('lat', 36);
     return ctx.measureText(String(text || '-')).width;
   }
 
@@ -247,15 +308,17 @@
     ctx.drawImage(logoImg, logoX, logoY, logoW, logoH);
   }
 
-  /** SVG 렌더 + 평균속도 줄 너비에 맞춘 STELVIO 로고 합성 */
-  function svgToPngBlob(svgMarkup, speedLineText) {
+  /** SVG(코스) + Canvas 텍스트·로고 → PNG */
+  function svgToPngBlob(svgMarkup, speedLineText, log, logs) {
     var logoUrl = resolveStelvioLogoAssetUrl();
-    return Promise.all([
-      loadSvgMarkupAsImage(svgMarkup),
-      loadRasterImage(logoUrl).catch(function () {
-        return null;
-      }),
-    ]).then(function (parts) {
+    return ensureShareFontsLoaded().then(function () {
+      return Promise.all([
+        loadSvgMarkupAsImage(svgMarkup),
+        loadRasterImage(logoUrl).catch(function () {
+          return null;
+        }),
+      ]);
+    }).then(function (parts) {
       var svgImg = parts[0];
       var logoImg = parts[1];
       var canvas = document.createElement('canvas');
@@ -265,6 +328,7 @@
       if (!ctx) throw new Error('Canvas 2D unavailable');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(svgImg, 0, 0);
+      drawShareTextOnCanvas(ctx, log, logs);
       if (logoImg) drawStelvioLogoOnCanvas(ctx, speedLineText, logoImg);
       return new Promise(function (resolve, reject) {
         canvas.toBlob(
@@ -411,7 +475,8 @@
     if (!svg) throw new Error('코스 데이터가 없어 공유 이미지를 만들 수 없습니다.');
     var summaryLines = summaryLinesFromLog(log);
     var speedLineText = summaryLines[summaryLines.length - 1] || '-';
-    return svgToPngBlob(svg, speedLineText);
+    var shareLogs = opts.logs || log._logsForShare || null;
+    return svgToPngBlob(svg, speedLineText, log, shareLogs);
   }
 
   function fitContainRect(imgW, imgH, boxW, boxH) {

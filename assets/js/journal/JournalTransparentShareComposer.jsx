@@ -368,15 +368,23 @@
             : null
         ),
         R.createElement('div', { className: 'journal-share-composer-controls' },
-          R.createElement('label', { className: 'journal-share-composer-pick-btn' },
-            '배경 사진 선택',
-            R.createElement('input', {
-              ref: fileInputRef,
-              type: 'file',
-              accept: 'image/*',
-              className: 'journal-share-composer-file-input',
-              onChange: onPickBackground,
-            })
+          R.createElement('div', { className: 'journal-share-composer-actions-row' },
+            R.createElement('label', { className: 'journal-share-composer-action-btn journal-share-composer-pick-btn' },
+              '배경 사진 선택',
+              R.createElement('input', {
+                ref: fileInputRef,
+                type: 'file',
+                accept: 'image/*',
+                className: 'journal-share-composer-file-input',
+                onChange: onPickBackground,
+              })
+            ),
+            R.createElement('button', {
+              type: 'button',
+              className: 'journal-share-composer-action-btn journal-share-composer-save-btn',
+              disabled: !bgUrl || loading || saving,
+              onClick: onSave,
+            }, saving ? '저장 중…' : '저장')
           ),
           R.createElement('div', { className: 'journal-share-composer-scale-row' },
             R.createElement('span', { className: 'journal-share-composer-scale-label' }, '크기'),
@@ -417,13 +425,7 @@
               disabled: !bgUrl,
               onClick: placeOverlayDefault,
             }, '위치 초기화')
-          ),
-          R.createElement('button', {
-            type: 'button',
-            className: 'journal-share-composer-save-btn stelvio-purple-btn',
-            disabled: !bgUrl || loading || saving,
-            onClick: onSave,
-          }, saving ? '저장 중…' : '사진첩에 저장')
+          )
         )
       )
     );
