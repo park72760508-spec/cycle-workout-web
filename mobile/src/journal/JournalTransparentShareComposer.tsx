@@ -14,6 +14,7 @@ import {
   PanResponder,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -203,17 +204,45 @@ export function JournalTransparentShareComposer({
     setSaving(true);
     setErr(null);
     try {
-      const perm = await MediaLibrary.requestPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert("권한 필요", "사진첩 저장 권한을 허용해 주세요.");
-        return;
-      }
       const uri = await stageShotRef.current?.capture?.({
         format: "jpg",
         quality: 0.92,
         result: "tmpfile",
       });
       if (!uri) throw new Error("합성 캡처 실패");
+
+      if (isAndroid) {
+        const perm = await MediaLibrary.requestPermissionsAsync();
+        if (perm.granted) {
+          try {
+            await MediaLibrary.saveToLibraryAsync(uri);
+            Alert.alert("저장 완료", "공유 이미지가 사진첩에 저장되었습니다.");
+            onClose({ saved: true });
+            return;
+          } catch {
+            /* 갤러리 저장 실패 시 공유 시트로 폴백 */
+          }
+        }
+        try {
+          await Share.share({
+            url: uri,
+            title: "STELVIO Ride",
+          });
+          onClose({ saved: true });
+          return;
+        } catch (shareErr: unknown) {
+          if (shareErr instanceof Error && shareErr.message === "User did not share") {
+            return;
+          }
+          throw shareErr;
+        }
+      }
+
+      const perm = await MediaLibrary.requestPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("권한 필요", "사진첩 저장 권한을 허용해 주세요.");
+        return;
+      }
       await MediaLibrary.saveToLibraryAsync(uri);
       Alert.alert("저장 완료", "공유 이미지가 사진첩에 저장되었습니다.");
       onClose({ saved: true });
