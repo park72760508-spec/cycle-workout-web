@@ -412,6 +412,14 @@ async function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidNamespace)
     efficiency_factor: num(log.efficiency_factor),
     rpe: int(log.rpe, 0) || null,
     tss_applied: Boolean(log.tss_applied),
+    summary_polyline: str(log.summary_polyline),
+    elevation_profile_json:
+      log.elevation_profile != null
+        ? log.elevation_profile
+        : log.elevation_profile_json != null
+          ? log.elevation_profile_json
+          : null,
+    route_profile_updated_at: log.route_profile_updated_at || null,
   };
 }
 

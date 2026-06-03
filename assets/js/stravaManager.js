@@ -1317,6 +1317,12 @@ async function syncStravaData(startDate = null, endDate = null, opts = {}) {
         console.warn('[syncStravaData] 훈련일지 달력 새로고침 실패:', refreshErr);
       }
     }
+
+    if (result.success && typeof window.backfillStravaRouteProfileForDateClient === 'function') {
+      window.backfillStravaRouteProfileForDateClient().catch(function (eBf) {
+        console.warn('[syncStravaData] 코스 프로파일 백필:', eBf && eBf.message ? eBf.message : eBf);
+      });
+    }
     
     return result;
   } catch (error) {
@@ -1375,6 +1381,7 @@ async function syncStravaDataWithMmp(months = 1, options) {
   var textId = opts.textId || 'stravaSyncProgressText';
   var progressMessage = opts.progressMessage;
   var targetUsersVal = opts.targetUsers && String(opts.targetUsers).toLowerCase();
+  var targetUidVal = opts.targetUid != null ? String(opts.targetUid).trim() : '';
   var maxActivitiesVal =
     opts.maxActivities != null && opts.maxActivities !== ''
       ? Math.max(1, Math.min(200, parseInt(String(opts.maxActivities), 10) || 30))
@@ -1491,6 +1498,27 @@ async function syncStravaDataWithMmp(months = 1, options) {
       throw new Error('로그인이 필요합니다. Firebase Auth로 로그인 후 다시 시도해 주세요.');
     }
     const idToken = await currentUser.getIdToken();
+    var authUid = currentUser && currentUser.uid ? String(currentUser.uid) : '';
+    if (!targetUidVal) {
+      try {
+        var selectedUid =
+          (window.currentUser && (window.currentUser.id || window.currentUser.uid) && String(window.currentUser.id || window.currentUser.uid)) ||
+          '';
+        var loginGrade =
+          typeof getLoginUserGrade === 'function'
+            ? String(getLoginUserGrade())
+            : (typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '');
+        var isLoginAdmin =
+          typeof window.isStelvioAdminGrade === 'function'
+            ? window.isStelvioAdminGrade(loginGrade)
+            : (loginGrade === '1' || Number(loginGrade) === 1);
+        if (isLoginAdmin && selectedUid && authUid && selectedUid !== authUid) {
+          targetUidVal = selectedUid;
+        }
+      } catch (targetErr) {
+        console.warn('[syncStravaDataWithMmp] targetUid 자동 판정 실패:', targetErr && targetErr.message ? targetErr.message : targetErr);
+      }
+    }
 
     var url = MANUAL_STRAVA_SYNC_WITH_MMP_URL + '?forceRecalcTimeInZones=true';
     if (startDateVal && endDateVal) {
@@ -1504,6 +1532,8 @@ async function syncStravaDataWithMmp(months = 1, options) {
     }
     if (targetUsersVal === 'all' || targetUsersVal === 'admin') {
       url += '&targetUsers=' + encodeURIComponent(targetUsersVal);
+    } else if (targetUidVal && targetUidVal !== authUid) {
+      url += '&targetUid=' + encodeURIComponent(targetUidVal);
     }
     const res = await fetch(url, {
       method: 'GET',
@@ -1524,6 +1554,15 @@ async function syncStravaDataWithMmp(months = 1, options) {
     var createdCount = procData.createdCount != null ? procData.createdCount : 0;
     var hasMore = procData.hasMore;
     let message = `✅ MMP 포함 동기화 완료: 처리 ${processedCount}건 (신규 ${createdCount}, 업데이트 ${updatedCount})`;
+    if (processedCount === 0 && Array.isArray(procData.userResults) && procData.userResults.length > 0) {
+      var firstResult = procData.userResults[0] || {};
+      var found = firstResult.activitiesFound != null ? Number(firstResult.activitiesFound) : null;
+      if (found === 0 && firstResult.hint) {
+        message += ` - ${firstResult.hint}`;
+      } else if (found === 0) {
+        message += ' - 조회 기간의 Strava 활동이 0건입니다. 연결 계정과 조회 기간을 확인해 주세요.';
+      }
+    }
     if (hasMore) {
       message += '. 일부 활동이 남아있을 수 있습니다. 다시 실행해 보세요.';
     }
