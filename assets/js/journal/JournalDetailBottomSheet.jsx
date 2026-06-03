@@ -699,6 +699,10 @@
     } else if (logs[0].time_in_zones) {
       mergedTiz = logs[0].time_in_zones;
     }
+    var routeSrc =
+      window.stravaPolylineUtils && typeof window.stravaPolylineUtils.pickRouteLogFromLogs === 'function'
+        ? window.stravaPolylineUtils.pickRouteLogFromLogs(logs)
+        : logs[0];
     return {
       date: logs[0].date,
       distance_km: totalDist,
@@ -736,7 +740,14 @@
       max_watts: maxW || null,
       weight: logs[0].weight,
       time_in_zones: mergedTiz,
-      source: logs[0].source
+      source: logs[0].source,
+      summary_polyline: routeSrc ? routeSrc.summary_polyline : null,
+      elevation_profile: routeSrc
+        ? routeSrc.elevation_profile != null
+          ? routeSrc.elevation_profile
+          : routeSrc.elevation_profile_json
+        : null,
+      title: routeSrc && routeSrc.title ? routeSrc.title : logs[0].title
     };
   }
 
@@ -767,6 +778,11 @@
       return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     }
     var RouteBg = window.RidingCourseSvgBackground;
+    var utils = window.stravaPolylineUtils;
+    var routeInfo =
+      utils && log && typeof utils.routeProfileFromLog === 'function'
+        ? utils.routeProfileFromLog(log)
+        : { hasRoute: false, hasElevation: false };
     var spd = log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
       ? Number(log.avg_speed_kmh)
       : avgSpeedKmhFromDistanceTime(log.distance_km, log.duration_sec);
@@ -784,14 +800,18 @@
     return React.createElement(
       'div',
       { className: 'journal-tab-content journal-tab-content--summary-route' },
-      RouteBg
-        ? React.createElement(RouteBg, {
-            log: log,
-            opacity: 0.2,
-            variant: 'muted',
-            className: 'journal-summary-tab-route-bg'
-          })
-        : null,
+      RouteBg && (routeInfo.hasRoute || routeInfo.hasElevation)
+        ? React.createElement('div', { className: 'journal-course-preview-block journal-course-preview-block--sheet' },
+            React.createElement(RouteBg, {
+              log: log,
+              opacity: 0.4,
+              variant: 'muted',
+              className: 'journal-summary-tab-route-bg'
+            })
+          )
+        : React.createElement('p', { className: 'journal-course-preview-empty' },
+            '코스·고도 데이터 없음 — Strava MMP 동기화 후 다시 열어 주세요.'
+          ),
       React.createElement('div', { className: 'journal-tab-content-inner' }, rows),
       typeof onShareTransparent === 'function' || (window.journalTransparentShare && window.journalTransparentShare.exportTransparentSharePng)
         ? React.createElement(
@@ -965,14 +985,21 @@
         React.createElement('div', { className: 'journal-bottom-sheet-body' },
           tabs.map(function(t) {
             if (activeTab !== t.id) return null;
-            var routeLog = logs[0] || merged;
-            var summaryLog = merged
-              ? Object.assign({}, merged, {
-                  summary_polyline: routeLog.summary_polyline,
-                  elevation_profile: routeLog.elevation_profile,
-                  title: routeLog.title || merged.title
-                })
-              : routeLog;
+            var routeLog =
+              window.stravaPolylineUtils && typeof window.stravaPolylineUtils.pickRouteLogFromLogs === 'function'
+                ? window.stravaPolylineUtils.pickRouteLogFromLogs(logs)
+                : logs[0] || merged;
+            var summaryLog = merged || routeLog;
+            if (routeLog && merged) {
+              summaryLog = Object.assign({}, merged, {
+                summary_polyline: routeLog.summary_polyline,
+                elevation_profile:
+                  routeLog.elevation_profile != null
+                    ? routeLog.elevation_profile
+                    : routeLog.elevation_profile_json,
+                title: routeLog.title || merged.title
+              });
+            }
             var p = t.id === 'summary'
               ? { log: summaryLog, userProfile: props.userProfile || {} }
               : { log: merged, yearlyPeaks: yearlyPeaks, userWeight: userWeightForPr, userProfile: props.userProfile || {} };

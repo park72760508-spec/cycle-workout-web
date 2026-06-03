@@ -19,6 +19,7 @@
     var className = props.className || '';
 
     if (!utils || !log) return null;
+    log = utils.normalizeLogRouteFields ? utils.normalizeLogRouteFields(log) : log;
     var route = utils.routeProfileFromLog(log);
     if (!route.hasRoute && !route.hasElevation) return null;
 

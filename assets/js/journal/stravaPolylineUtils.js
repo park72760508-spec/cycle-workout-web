@@ -174,8 +174,36 @@
     return { pathD: d, viewW: viewW, viewH: viewH, minE: minE, maxE: maxE };
   }
 
+  /** Firestore·Supabase 필드명 통일 */
+  function normalizeLogRouteFields(log) {
+    if (!log || typeof log !== 'object') return log;
+    var poly =
+      log.summary_polyline != null ? String(log.summary_polyline).trim() : '';
+    var elev = log.elevation_profile != null ? log.elevation_profile : log.elevation_profile_json;
+    if (!poly && elev == null) return log;
+    var next = log;
+    if (log.elevation_profile == null && log.elevation_profile_json != null) {
+      next = Object.assign({}, log, { elevation_profile: log.elevation_profile_json });
+    }
+    return next;
+  }
+
+  /** 코스 polyline·고도가 있는 Strava 로그 우선 선택 (logs[0]만 쓰면 배경이 비어 보임) */
+  function pickRouteLogFromLogs(logs) {
+    if (!logs || !logs.length) return null;
+    var i, l, route;
+    for (i = 0; i < logs.length; i++) {
+      l = normalizeLogRouteFields(logs[i]);
+      if (!l) continue;
+      route = routeProfileFromLog(l);
+      if (route.hasRoute || route.hasElevation) return l;
+    }
+    return normalizeLogRouteFields(logs[0]);
+  }
+
   function routeProfileFromLog(log) {
-    if (!log) return { latlngs: [], elevation: [], hasRoute: false };
+    if (!log) return { latlngs: [], elevation: [], hasRoute: false, hasElevation: false };
+    log = normalizeLogRouteFields(log);
     var poly =
       log.summary_polyline != null
         ? String(log.summary_polyline).trim()
@@ -198,6 +226,8 @@
     downsampleElevation: downsampleElevation,
     latLngsToSvgPath: latLngsToSvgPath,
     elevationToSvgPath: elevationToSvgPath,
+    normalizeLogRouteFields: normalizeLogRouteFields,
+    pickRouteLogFromLogs: pickRouteLogFromLogs,
     routeProfileFromLog: routeProfileFromLog,
   };
 })(typeof window !== 'undefined' ? window : global);
