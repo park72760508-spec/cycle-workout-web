@@ -1186,6 +1186,16 @@ function buildStravaRouteProfileFields(activity, streamsRes) {
   };
 }
 
+/** Firestore Strava 로그에 코스 polyline·고도 프로파일 보강이 필요한지 */
+function stravaLogNeedsRouteProfile(logData) {
+  const d = logData || {};
+  if (!String(d.summary_polyline || "").trim()) return true;
+  if (d.elevation_profile == null && d.elevation_profile_json == null) return true;
+  if (Array.isArray(d.elevation_profile) && d.elevation_profile.length < 2) return true;
+  if (Array.isArray(d.elevation_profile_json) && d.elevation_profile_json.length < 2) return true;
+  return false;
+}
+
 /** Strava Streams API 호출 (watts, heartrate, altitude). 429 시 최대 5회 재시도 */
 async function fetchStravaStreams(accessToken, activityId) {
   const url = `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,watts,heartrate,altitude&key_by_type=true`;
@@ -2205,7 +2215,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       const needsTimeInZones = !d.time_in_zones || !d.time_in_zones.power;
       const needsWeight = d.weight == null;
       const needsActivityType = !String(d.activity_type || "").trim();
-      const needsRouteProfile = !String(d.summary_polyline || "").trim() || !d.elevation_profile;
+      const needsRouteProfile = stravaLogNeedsRouteProfile(d);
       if ((needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType || needsRouteProfile) && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         const updateData = {};
@@ -2959,7 +2969,8 @@ exports.manualStravaSyncWithMmp = onRequest(
         const needsTimeInZones = forceRecalcTimeInZones || !existingData.time_in_zones || !existingData.time_in_zones.power;
         const needsWeight = existingData.weight == null;
         const needsActivityType = !String(existingData.activity_type || "").trim();
-        if (needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType) {
+        const needsRouteProfile = stravaLogNeedsRouteProfile(existingData);
+        if (needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType || needsRouteProfile) {
           if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
           const updateData = {};
           if (needsActivityType) {
@@ -3011,6 +3022,21 @@ exports.manualStravaSyncWithMmp = onRequest(
               dateStr: existingData.date || "",
             });
             updateData.time_in_zones = timeInZones;
+          }
+          if (needsRouteProfile) {
+            let detailAct = act;
+            if (apiCallCount < STRAVA_API_CALL_LIMIT) {
+              await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
+              const detailResUp = await fetchStravaActivityDetail(accessToken, actId);
+              apiCallCount += 1;
+              if (detailResUp.success && detailResUp.activity) detailAct = detailResUp.activity;
+            }
+            const routeUp = buildStravaRouteProfileFields(detailAct, streamsRes);
+            if (routeUp) {
+              if (routeUp.summary_polyline) updateData.summary_polyline = routeUp.summary_polyline;
+              if (routeUp.elevation_profile) updateData.elevation_profile = routeUp.elevation_profile;
+              updateData.route_profile_updated_at = routeUp.route_profile_updated_at;
+            }
           }
           if (Object.keys(updateData).length > 0) {
             const mergedLog = { ...existingData, ...updateData };
@@ -3139,6 +3165,12 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
         }
         if (userWeight != null) logDoc.weight = userWeight;
+        const routeProfileManual = buildStravaRouteProfileFields(activity, streamsRes);
+        if (routeProfileManual) {
+          if (routeProfileManual.summary_polyline) logDoc.summary_polyline = routeProfileManual.summary_polyline;
+          if (routeProfileManual.elevation_profile) logDoc.elevation_profile = routeProfileManual.elevation_profile;
+          logDoc.route_profile_updated_at = routeProfileManual.route_profile_updated_at;
+        }
         // Run/Swim/Walk/TrailRun/WeightTraining 등 비라이딩 활동은 저장하지 않음
         if (!isCyclingForMmp(mapped)) {
           console.log(`[manualStravaSyncWithMmp] 비라이딩 활동 저장 제외: uid=${uid} actId=${actId} activity_type=${mapped.activity_type}`);
@@ -3381,7 +3413,7 @@ async function backfillStravaRouteProfileForUserDate(db, userId, dateStr) {
       skipped++;
       continue;
     }
-    if (String(d.summary_polyline || "").trim() && d.elevation_profile) {
+    if (!stravaLogNeedsRouteProfile(d)) {
       skipped++;
       continue;
     }
