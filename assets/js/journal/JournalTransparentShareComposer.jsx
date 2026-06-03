@@ -1,5 +1,6 @@
 /**
  * 투명 라이딩 오버레이 + 사용자 배경 사진 합성 (사진첩 UI)
+ * 상단(제목)·하단(맵+통계) 오버레이 2장 — 각각 드래그, 크기는 동일 비율
  * @global window.JournalTransparentShareComposer
  */
 /* global React, useState, useEffect, useRef, useCallback */
@@ -36,21 +37,6 @@
     });
   }
 
-  function loadImageFromFile(file) {
-    return new Promise(function (resolve, reject) {
-      var url = URL.createObjectURL(file);
-      loadImageFromUrl(url)
-        .then(function (img) {
-          img._objectUrl = url;
-          resolve(img);
-        })
-        .catch(function (e) {
-          URL.revokeObjectURL(url);
-          reject(e);
-        });
-    });
-  }
-
   function revokeUrl(url) {
     if (url) {
       try {
@@ -78,9 +64,13 @@
     var err = _err[0];
     var setErr = _err[1];
 
-    var _overlayUrl = useState(null);
-    var overlayUrl = _overlayUrl[0];
-    var setOverlayUrl = _overlayUrl[1];
+    var _overlayHeaderUrl = useState(null);
+    var overlayHeaderUrl = _overlayHeaderUrl[0];
+    var setOverlayHeaderUrl = _overlayHeaderUrl[1];
+
+    var _overlayBottomUrl = useState(null);
+    var overlayBottomUrl = _overlayBottomUrl[0];
+    var setOverlayBottomUrl = _overlayBottomUrl[1];
 
     var _bgUrl = useState(null);
     var bgUrl = _bgUrl[0];
@@ -90,9 +80,13 @@
     var scale = _scale[0];
     var setScale = _scale[1];
 
-    var _pos = useState({ x: 24, y: 24 });
-    var pos = _pos[0];
-    var setPos = _pos[1];
+    var _posHeader = useState({ x: 24, y: 16 });
+    var posHeader = _posHeader[0];
+    var setPosHeader = _posHeader[1];
+
+    var _posBottom = useState({ x: 24, y: 280 });
+    var posBottom = _posBottom[0];
+    var setPosBottom = _posBottom[1];
 
     var _saving = useState(false);
     var saving = _saving[0];
@@ -104,8 +98,8 @@
 
     var stageRef = useRef(null);
     var fileInputRef = useRef(null);
-    var overlayImgRef = useRef(null);
-    var bgImgRef = useRef(null);
+    var headerImgRef = useRef(null);
+    var bottomImgRef = useRef(null);
     var dragRef = useRef(null);
     var autoPickDoneRef = useRef(false);
 
@@ -127,17 +121,17 @@
       var cancelled = false;
       setLoading(true);
       setErr(null);
-      if (!shareApi || typeof shareApi.createOverlayPngBlob !== 'function') {
+      if (!shareApi || typeof shareApi.createOverlayPngBlobs !== 'function') {
         setErr('공유 모듈을 불러올 수 없습니다.');
         setLoading(false);
         return;
       }
       shareApi
-        .createOverlayPngBlob(log, props.opts || {})
-        .then(function (blob) {
+        .createOverlayPngBlobs(log, props.opts || {})
+        .then(function (result) {
           if (cancelled) return;
-          var url = URL.createObjectURL(blob);
-          setOverlayUrl(url);
+          setOverlayHeaderUrl(URL.createObjectURL(result.headerBlob));
+          setOverlayBottomUrl(URL.createObjectURL(result.bottomBlob));
           setLoading(false);
         })
         .catch(function (e) {
@@ -150,14 +144,17 @@
       };
     }, [log]);
 
-    var overlayUrlRef = useRef(null);
+    var headerUrlRef = useRef(null);
+    var bottomUrlRef = useRef(null);
     var bgUrlRef = useRef(null);
-    overlayUrlRef.current = overlayUrl;
+    headerUrlRef.current = overlayHeaderUrl;
+    bottomUrlRef.current = overlayBottomUrl;
     bgUrlRef.current = bgUrl;
 
     useEffect(function () {
       return function () {
-        revokeUrl(overlayUrlRef.current);
+        revokeUrl(headerUrlRef.current);
+        revokeUrl(bottomUrlRef.current);
         revokeUrl(bgUrlRef.current);
       };
     }, []);
@@ -202,30 +199,47 @@
     }, [bgUrl, loading]);
 
     var overlayBaseW = stageSize.w * 0.88;
-    var overlayNat = overlayImgRef.current;
-    var overlayDispW = overlayBaseW * scale;
-    var overlayDispH =
-      overlayNat && overlayNat.naturalWidth > 0
-        ? overlayDispW * (overlayNat.naturalHeight / overlayNat.naturalWidth)
-        : overlayDispW * (1350 / 1080);
+    var stickerW = overlayBaseW * scale;
+
+    var headerNat = headerImgRef.current;
+    var headerDispW = stickerW;
+    var headerDispH =
+      headerNat && headerNat.naturalWidth > 0
+        ? headerDispW * (headerNat.naturalHeight / headerNat.naturalWidth)
+        : headerDispW * (520 / 1080);
+
+    var bottomNat = bottomImgRef.current;
+    var bottomDispW = stickerW;
+    var bottomDispH =
+      bottomNat && bottomNat.naturalWidth > 0
+        ? bottomDispW * (bottomNat.naturalHeight / bottomNat.naturalWidth)
+        : bottomDispW * (830 / 1080);
 
     var placeOverlayDefault = useCallback(
       function () {
-        var ow = overlayBaseW * scale;
-        var oh =
-          overlayNat && overlayNat.naturalWidth > 0
-            ? ow * (overlayNat.naturalHeight / overlayNat.naturalWidth)
-            : ow * (1350 / 1080);
-        setPos({
-          x: Math.max(8, (stageSize.w - ow) * 0.04),
-          y: Math.max(8, (stageSize.h - oh) * 0.06),
+        var w = overlayBaseW * scale;
+        var hH =
+          headerNat && headerNat.naturalWidth > 0
+            ? w * (headerNat.naturalHeight / headerNat.naturalWidth)
+            : w * (520 / 1080);
+        var bH =
+          bottomNat && bottomNat.naturalWidth > 0
+            ? w * (bottomNat.naturalHeight / bottomNat.naturalWidth)
+            : w * (830 / 1080);
+        var x = Math.max(8, (stageSize.w - w) * 0.04);
+        setPosHeader({ x: x, y: Math.max(8, stageSize.h * 0.04) });
+        setPosBottom({
+          x: x,
+          y: Math.max(hH + 16, stageSize.h - bH - Math.max(12, stageSize.h * 0.06)),
         });
       },
-      [stageSize.w, stageSize.h, overlayBaseW, scale, overlayNat]
+      [stageSize.w, stageSize.h, overlayBaseW, scale, headerNat, bottomNat]
     );
 
-    function onOverlayImageLoad() {
-      if (bgUrl) placeOverlayDefault();
+    function onStickerLoad(kind) {
+      if (bgUrl) {
+        setTimeout(placeOverlayDefault, 80);
+      }
     }
 
     function onPickBackground(ev) {
@@ -240,19 +254,17 @@
       setBgUrl(url);
       setErr(null);
       ev.target.value = '';
-      setTimeout(function () {
-        if (overlayImgRef.current && overlayImgRef.current.naturalWidth > 0) {
-          placeOverlayDefault();
-        }
-      }, 80);
+      setTimeout(placeOverlayDefault, 120);
     }
 
-    function onOverlayPointerDown(ev) {
+    function onStickerPointerDown(kind, ev) {
       if (!bgUrl) return;
       ev.preventDefault();
       var el = ev.currentTarget;
       if (el.setPointerCapture) el.setPointerCapture(ev.pointerId);
+      var pos = kind === 'header' ? posHeader : posBottom;
       dragRef.current = {
+        kind: kind,
         pointerId: ev.pointerId,
         startX: ev.clientX,
         startY: ev.clientY,
@@ -261,22 +273,31 @@
       };
     }
 
-    function onOverlayPointerMove(ev) {
+    function onStickerPointerMove(ev) {
       var d = dragRef.current;
       if (!d || d.pointerId !== ev.pointerId) return;
       var dx = ev.clientX - d.startX;
       var dy = ev.clientY - d.startY;
       var nx = d.origX + dx;
       var ny = d.origY + dy;
-      var maxX = stageSize.w - overlayDispW + 20;
-      var maxY = stageSize.h - overlayDispH + 20;
-      setPos({
-        x: clamp(nx, -20, maxX),
-        y: clamp(ny, -20, maxY),
-      });
+      if (d.kind === 'header') {
+        var maxX = stageSize.w - headerDispW + 20;
+        var maxY = stageSize.h - headerDispH + 20;
+        setPosHeader({
+          x: clamp(nx, -20, maxX),
+          y: clamp(ny, -20, maxY),
+        });
+      } else {
+        var maxXB = stageSize.w - bottomDispW + 20;
+        var maxYB = stageSize.h - bottomDispH + 20;
+        setPosBottom({
+          x: clamp(nx, -20, maxXB),
+          y: clamp(ny, -20, maxYB),
+        });
+      }
     }
 
-    function onOverlayPointerUp(ev) {
+    function onStickerPointerUp(ev) {
       var d = dragRef.current;
       if (!d || d.pointerId !== ev.pointerId) return;
       dragRef.current = null;
@@ -286,20 +307,24 @@
     }
 
     async function onSave() {
-      if (!bgUrl || !overlayUrl || !shareApi) return;
+      if (!bgUrl || !overlayHeaderUrl || !overlayBottomUrl || !shareApi) return;
       setSaving(true);
       setErr(null);
       try {
         var bgImg = await loadImageFromUrl(bgUrl);
-        var ovImg = await loadImageFromUrl(overlayUrl);
-        bgImgRef.current = bgImg;
-        var blob = await shareApi.compositeShareToBlob(bgImg, ovImg, {
+        var headerImg = await loadImageFromUrl(overlayHeaderUrl);
+        var bottomImg = await loadImageFromUrl(overlayBottomUrl);
+        var blob = await shareApi.compositeShareDualToBlob(bgImg, headerImg, bottomImg, {
           stageW: stageSize.w,
           stageH: stageSize.h,
-          overlayLeft: pos.x,
-          overlayTop: pos.y,
-          overlayW: overlayDispW,
-          overlayH: overlayDispH,
+          headerLeft: posHeader.x,
+          headerTop: posHeader.y,
+          headerW: headerDispW,
+          headerH: headerDispH,
+          bottomLeft: posBottom.x,
+          bottomTop: posBottom.y,
+          bottomW: bottomDispW,
+          bottomH: bottomDispH,
         });
         var dateKey = log.date ? String(log.date).replace(/-/g, '') : 'ride';
         var fn = 'stelvio-ride-' + dateKey + '.jpg';
@@ -316,6 +341,35 @@
       } finally {
         setSaving(false);
       }
+    }
+
+    function renderSticker(url, kind, pos, dispW, dispH, imgRef) {
+      if (!url || loading) return null;
+      return R.createElement('img', {
+        ref: imgRef,
+        className:
+          'journal-share-composer-overlay-img journal-share-composer-overlay-img--' + kind +
+          (bgUrl ? '' : ' is-dimmed'),
+        src: url,
+        alt: kind === 'header' ? '상단 오버레이' : '하단 오버레이',
+        draggable: false,
+        style: {
+          width: dispW + 'px',
+          height: dispH + 'px',
+          left: pos.x + 'px',
+          top: pos.y + 'px',
+          touchAction: 'none',
+        },
+        onLoad: function () {
+          onStickerLoad(kind);
+        },
+        onPointerDown: function (ev) {
+          onStickerPointerDown(kind, ev);
+        },
+        onPointerMove: onStickerPointerMove,
+        onPointerUp: onStickerPointerUp,
+        onPointerCancel: onStickerPointerUp,
+      });
     }
 
     return R.createElement(
@@ -394,7 +448,7 @@
           )
         ),
         R.createElement('p', { className: 'journal-share-composer-hint' },
-          '배경 선택 후 오버레이를 드래그·크기 조절하여 맞추세요.'
+          '배경 선택 후 상단·하단 오버레이를 각각 드래그해 맞추세요. 크기는 두 영역이 같이 조절됩니다.'
         ),
         loading
           ? R.createElement('div', { className: 'journal-share-composer-loading' }, '라이딩 오버레이 준비 중…')
@@ -415,27 +469,8 @@
             : R.createElement('div', { className: 'journal-share-composer-bg-placeholder' },
                 '배경 사진을 선택하세요'
               ),
-          overlayUrl && !loading
-            ? R.createElement('img', {
-                ref: overlayImgRef,
-                className: 'journal-share-composer-overlay-img' + (bgUrl ? '' : ' is-dimmed'),
-                src: overlayUrl,
-                alt: '라이딩 오버레이',
-                draggable: false,
-                style: {
-                  width: overlayDispW + 'px',
-                  height: overlayDispH + 'px',
-                  left: pos.x + 'px',
-                  top: pos.y + 'px',
-                  touchAction: 'none',
-                },
-                onLoad: onOverlayImageLoad,
-                onPointerDown: onOverlayPointerDown,
-                onPointerMove: onOverlayPointerMove,
-                onPointerUp: onOverlayPointerUp,
-                onPointerCancel: onOverlayPointerUp,
-              })
-            : null
+          renderSticker(overlayHeaderUrl, 'header', posHeader, headerDispW, headerDispH, headerImgRef),
+          renderSticker(overlayBottomUrl, 'bottom', posBottom, bottomDispW, bottomDispH, bottomImgRef)
         )
       )
     );

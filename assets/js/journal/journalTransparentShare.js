@@ -19,6 +19,9 @@
   var SHARE_COURSE_GAP_ABOVE_STATS = 36;
   var SHARE_STATS_LABEL_Y = 1070;
   var SHARE_STATS_VALUE_Y = 1130;
+  /** 상단(제목) / 하단(맵+통계) 분리선 */
+  var SHARE_SPLIT_Y = 520;
+  var SHARE_BOTTOM_CANVAS_H = 1350 - SHARE_SPLIT_Y;
   var SHARE_FONT_SUB = 28;
   var SHARE_FONT_TITLE = 48;
   var SHARE_FONT_LABEL = 26;
@@ -106,6 +109,7 @@
     return (n < 10 ? '0' : '') + n;
   }
 
+  /** TIME 표시: 시:분 만 (예: 3:41, 0:52) */
   function formatDurationClock(sec) {
     if (sec == null || !isFinite(Number(sec)) || Number(sec) <= 0) {
       return { value: '-', unit: '' };
@@ -113,9 +117,7 @@
     var s = Math.floor(Number(sec));
     var h = Math.floor(s / 3600);
     var m = Math.floor((s % 3600) / 60);
-    var ss = s % 60;
-    if (h > 0) return { value: h + ':' + pad2(m) + ':' + pad2(ss), unit: '' };
-    return { value: m + ':' + pad2(ss), unit: '' };
+    return { value: h + ':' + pad2(m), unit: '' };
   }
 
   function formatShareHeaderSub(log) {
@@ -416,20 +418,30 @@
     clearTextShadow(ctx);
   }
 
-  function drawStatCellCentered(ctx, cx, cell) {
+  function drawStatCellCentered(ctx, cx, cell, yOffset) {
+    yOffset = yOffset || 0;
     ctx.globalAlpha = 0.72;
-    drawCanvasTextLine(ctx, cx, SHARE_STATS_LABEL_Y, cell.label, SHARE_FONT_LABEL, 'center');
+    drawCanvasTextLine(
+      ctx,
+      cx,
+      SHARE_STATS_LABEL_Y - yOffset,
+      cell.label,
+      SHARE_FONT_LABEL,
+      'center'
+    );
     ctx.globalAlpha = 1;
-    drawValueUnitCentered(ctx, cx, SHARE_STATS_VALUE_Y, cell.value, cell.unit);
+    drawValueUnitCentered(ctx, cx, SHARE_STATS_VALUE_Y - yOffset, cell.value, cell.unit);
   }
 
-  function drawShareTextOnCanvas(ctx, log, logs, logoBottomY) {
+  function drawShareHeaderOnCanvas(ctx, log, logs, logoImg) {
     if (!ctx || !log) return;
     var canvasW = ctx.canvas.width || 1080;
     var cx = canvasW / 2;
     var sub = formatShareHeaderSub(log);
     var title = formatShareHeaderTitle(log, logs);
-    var subY = (logoBottomY != null ? logoBottomY : SHARE_LOGO_TOP_Y) + SHARE_SUB_GAP_BELOW_LOGO;
+    var logoBottomY = SHARE_LOGO_TOP_Y;
+    if (logoImg) logoBottomY = drawShareLogoTop(ctx, log, logoImg);
+    var subY = logoBottomY + SHARE_SUB_GAP_BELOW_LOGO;
     var titleY = subY + SHARE_TITLE_GAP_BELOW_SUB;
     if (sub) {
       ctx.globalAlpha = 0.78;
@@ -437,14 +449,29 @@
       ctx.globalAlpha = 1;
     }
     drawCanvasTextLine(ctx, cx, titleY, title, SHARE_FONT_TITLE, 'center');
+  }
 
+  function drawShareBottomOnCanvas(ctx, log, logs, svgImg) {
+    if (!ctx || !log) return;
+    var canvasW = ctx.canvas.width || 1080;
+    if (svgImg) {
+      ctx.drawImage(svgImg, 0, -SHARE_SPLIT_Y, canvasW, 1350);
+    }
     var cells = shareStatCellsFromLog(log);
     var cols = cells.length;
     var totalW = canvasW - SHARE_PAD_X * 2;
     var colW = totalW / cols;
     var i;
     for (i = 0; i < cols; i++) {
-      drawStatCellCentered(ctx, SHARE_PAD_X + colW * i + colW / 2, cells[i]);
+      drawStatCellCentered(ctx, SHARE_PAD_X + colW * i + colW / 2, cells[i], SHARE_SPLIT_Y);
+    }
+  }
+
+  function drawShareTextOnCanvas(ctx, log, logs, logoBottomY) {
+    if (!ctx || !log) return;
+    drawShareHeaderOnCanvas(ctx, log, logs, null);
+    if (logoBottomY != null) {
+      /* full 캔버스 합본용 — 로고는 drawShareLogoTop 별도 호출 */
     }
   }
 
@@ -512,7 +539,77 @@
     return SHARE_LOGO_TOP_Y + logoH;
   }
 
-  /** SVG(코스) + Canvas 텍스트·로고 → PNG */
+  function canvasToPngBlob(canvas) {
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(
+        function (blob) {
+          if (blob) resolve(blob);
+          else reject(new Error('PNG 변환 실패'));
+        },
+        'image/png',
+        1
+      );
+    });
+  }
+
+  function renderHeaderOverlayBlob(log, logs, logoImg) {
+    var canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = SHARE_SPLIT_Y;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return Promise.reject(new Error('Canvas 2D unavailable'));
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawShareHeaderOnCanvas(ctx, log, logs, logoImg);
+    return canvasToPngBlob(canvas);
+  }
+
+  function renderBottomOverlayBlob(log, logs, svgImg) {
+    var canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = SHARE_BOTTOM_CANVAS_H;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return Promise.reject(new Error('Canvas 2D unavailable'));
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawShareBottomOnCanvas(ctx, log, logs, svgImg);
+    return canvasToPngBlob(canvas);
+  }
+
+  /** 상단(제목) + 하단(맵·통계) 투명 PNG 2장 */
+  async function createOverlayPngBlobs(log, opts) {
+    opts = opts || {};
+    if (log && log._logsForShare && !opts.logs) opts.logs = log._logsForShare;
+    if (opts.dailyRouteDoc == null && log && log._dailyRouteDoc) {
+      opts.dailyRouteDoc = log._dailyRouteDoc;
+    }
+    var svg = buildShareSvgMarkup(log, opts);
+    if (!svg) throw new Error('코스 데이터가 없어 공유 이미지를 만들 수 없습니다.');
+    var shareLogs = opts.logs || log._logsForShare || null;
+    var logoUrl = resolveStelvioLogoAssetUrl();
+    await ensureShareFontsLoaded();
+    var parts = await Promise.all([
+      loadSvgMarkupAsImage(svg),
+      loadRasterImage(logoUrl).catch(function () {
+        return null;
+      }),
+    ]);
+    var svgImg = parts[0];
+    var logoImg = parts[1];
+    var blobs = await Promise.all([
+      renderHeaderOverlayBlob(log, shareLogs, logoImg),
+      renderBottomOverlayBlob(log, shareLogs, svgImg),
+    ]);
+    return {
+      headerBlob: blobs[0],
+      bottomBlob: blobs[1],
+      splitMeta: {
+        fullW: 1080,
+        headerH: SHARE_SPLIT_Y,
+        bottomH: SHARE_BOTTOM_CANVAS_H,
+      },
+    };
+  }
+
+  /** SVG(코스) + Canvas 텍스트·로고 → PNG (단일, export용) */
   function svgToPngBlob(svgMarkup, _speedLineText, log, logs) {
     var logoUrl = resolveStelvioLogoAssetUrl();
     return ensureShareFontsLoaded().then(function () {
@@ -532,9 +629,8 @@
       if (!ctx) throw new Error('Canvas 2D unavailable');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(svgImg, 0, 0);
-      var logoBottomY = SHARE_LOGO_TOP_Y;
-      if (logoImg) logoBottomY = drawShareLogoTop(ctx, log, logoImg);
-      drawShareTextOnCanvas(ctx, log, logs, logoBottomY);
+      drawShareHeaderOnCanvas(ctx, log, logs, logoImg);
+      drawShareBottomOnCanvas(ctx, log, logs, svgImg);
       return new Promise(function (resolve, reject) {
         canvas.toBlob(
           function (blob) {
@@ -753,6 +849,72 @@
    * @param {HTMLImageElement} overlayImg
    * @param {{ stageW:number, stageH:number, overlayLeft:number, overlayTop:number, overlayW:number, overlayH:number }} layout
    */
+  /**
+   * 배경 + 상·하단 오버레이 2장 합성
+   */
+  function compositeShareDualToBlob(bgImg, headerImg, bottomImg, layout) {
+    var MAX_OUT = 2048;
+    var nw = bgImg.naturalWidth || bgImg.width;
+    var nh = bgImg.naturalHeight || bgImg.height;
+    var shrink = Math.min(1, MAX_OUT / Math.max(nw, nh, 1));
+    var outW = Math.max(1, Math.round(nw * shrink));
+    var outH = Math.max(1, Math.round(nh * shrink));
+
+    var stageW = layout.stageW;
+    var stageH = layout.stageH;
+    var contain = fitContainRect(nw, nh, stageW, stageH);
+
+    function mapRect(left, top, w, h) {
+      var relL = (left - contain.x) / contain.width;
+      var relT = (top - contain.y) / contain.height;
+      var relW = w / contain.width;
+      var relH = h / contain.height;
+      return {
+        x: relL * outW,
+        y: relT * outH,
+        w: relW * outW,
+        h: relH * outH,
+      };
+    }
+
+    var header = mapRect(
+      layout.headerLeft,
+      layout.headerTop,
+      layout.headerW,
+      layout.headerH
+    );
+    var bottom = mapRect(
+      layout.bottomLeft,
+      layout.bottomTop,
+      layout.bottomW,
+      layout.bottomH
+    );
+
+    var canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return Promise.reject(new Error('Canvas 2D unavailable'));
+    ctx.drawImage(bgImg, 0, 0, outW, outH);
+    if (headerImg && header.w > 0 && header.h > 0) {
+      ctx.drawImage(headerImg, header.x, header.y, header.w, header.h);
+    }
+    if (bottomImg && bottom.w > 0 && bottom.h > 0) {
+      ctx.drawImage(bottomImg, bottom.x, bottom.y, bottom.w, bottom.h);
+    }
+
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(
+        function (blob) {
+          if (blob) resolve(blob);
+          else reject(new Error('합성 PNG 변환 실패'));
+        },
+        'image/jpeg',
+        0.92
+      );
+    });
+  }
+
   function compositeShareToBlob(bgImg, overlayImg, layout) {
     var MAX_OUT = 2048;
     var nw = bgImg.naturalWidth || bgImg.width;
@@ -863,7 +1025,9 @@
     formatShareImageTitle: formatShareImageTitle,
     buildShareSvgMarkup: buildShareSvgMarkup,
     createOverlayPngBlob: createOverlayPngBlob,
+    createOverlayPngBlobs: createOverlayPngBlobs,
     compositeShareToBlob: compositeShareToBlob,
+    compositeShareDualToBlob: compositeShareDualToBlob,
     savePngBlob: savePngBlob,
     notifySaveResult: notifySaveResult,
     exportTransparentSharePng: exportTransparentSharePng,
