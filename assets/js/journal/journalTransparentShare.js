@@ -8,12 +8,21 @@
   var utils = global.stravaPolylineUtils;
   var KOR_WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
 
-  /** buildShareSvgMarkup 텍스트 배치와 동일 (로고 위치 계산용) */
-  var SHARE_TEXT_X = 60;
-  var SHARE_TITLE_Y = 80;
-  var SHARE_LINE_STEP = 52;
-  var SHARE_SUMMARY_LINE_COUNT = 5;
-  var SHARE_LOGO_GAP_BELOW_SPEED = 14;
+  /** NRC 스타일 오버레이 레이아웃 (1080×1350) */
+  var SHARE_PAD_X = 48;
+  var SHARE_SUB_Y = 76;
+  var SHARE_MAIN_TITLE_Y = 128;
+  var SHARE_COURSE_Y = 280;
+  var SHARE_COURSE_W = 984;
+  var SHARE_COURSE_H = 480;
+  var SHARE_STATS_LABEL_Y = 788;
+  var SHARE_STATS_VALUE_Y = 848;
+  var SHARE_LOGO_Y = 1180;
+  var SHARE_FONT_SUB = 28;
+  var SHARE_FONT_TITLE = 48;
+  var SHARE_FONT_LABEL = 26;
+  var SHARE_FONT_VALUE = 68;
+  var SHARE_FONT_UNIT = 26;
   var STELVIO_LOGO_ASSET = 'assets/img/STELVIO AI.png';
   /* Druk Wide: assets/fonts/DrukWide-Bold.woff2 배포 후 @font-face 추가 시 스택 맨 앞에 "Druk Wide" 삽입 */
   var FONT_LATIN_STACK = '"Bebas Neue", sans-serif';
@@ -92,7 +101,57 @@
     return titles || 'STELVIO Ride';
   }
 
-  function summaryLinesFromLog(log) {
+  function pad2(n) {
+    return (n < 10 ? '0' : '') + n;
+  }
+
+  function formatDurationClock(sec) {
+    if (sec == null || !isFinite(Number(sec)) || Number(sec) <= 0) {
+      return { value: '-', unit: '' };
+    }
+    var s = Math.floor(Number(sec));
+    var h = Math.floor(s / 3600);
+    var m = Math.floor((s % 3600) / 60);
+    var ss = s % 60;
+    if (h > 0) return { value: h + ':' + pad2(m) + ':' + pad2(ss), unit: '' };
+    return { value: m + ':' + pad2(ss), unit: '' };
+  }
+
+  function formatShareHeaderSub(log) {
+    var dateKey = log.date ? String(log.date) : '';
+    if (dateKey.length >= 10) {
+      var p = dateKey.split('-');
+      var y = parseInt(p[0], 10);
+      var mo = parseInt(p[1], 10);
+      var d = parseInt(p[2], 10);
+      if (isFinite(y) && isFinite(mo) && isFinite(d)) {
+        var dow = new Date(y, mo - 1, d).getDay();
+        return (
+          y +
+          '. ' +
+          (mo < 10 ? '0' : '') +
+          mo +
+          '. ' +
+          (d < 10 ? '0' : '') +
+          d +
+          ' (' +
+          KOR_WEEKDAY[dow] +
+          ')'
+        );
+      }
+    }
+    return '';
+  }
+
+  function formatShareHeaderTitle(log, logs) {
+    var shareLogs = logs && logs.length ? logs : log._logsForShare || [log];
+    var titles = stravaRideTitlesFromLogs(shareLogs);
+    if (!titles && log.title) titles = String(log.title).trim();
+    return (titles || 'STELVIO RIDE').slice(0, 64);
+  }
+
+  /** 맵 하단: 라벨(작게) + 값(크게) + 단위(작게) */
+  function shareStatCellsFromLog(log) {
     if (!log) return [];
     var dist = log.distance_km != null ? Number(log.distance_km) : 0;
     var sec =
@@ -103,13 +162,42 @@
     if ((!spd || spd <= 0) && dist > 0 && sec > 0) {
       spd = Math.round((dist / (sec / 3600)) * 10) / 10;
     }
+    var time = formatDurationClock(sec);
     return [
-      dist > 0 ? dist.toFixed(1) + ' km' : '-',
-      formatDuration(sec),
-      elev != null && elev > 0 ? Math.round(elev) + ' m ↑' : '-',
-      watts != null && watts > 0 ? Math.round(watts) + ' W' : '-',
-      spd != null && spd > 0 ? spd.toFixed(1) + ' km/h' : '-',
+      {
+        label: 'DISTANCE',
+        value: dist > 0 ? dist.toFixed(1) : '-',
+        unit: dist > 0 ? 'km' : '',
+      },
+      { label: 'TIME', value: time.value, unit: time.unit },
+      {
+        label: 'SPEED',
+        value: spd != null && spd > 0 ? spd.toFixed(1) : '-',
+        unit: spd != null && spd > 0 ? 'km/h' : '',
+      },
+      {
+        label: 'ELEVATION',
+        value: elev != null && elev > 0 ? String(Math.round(elev)) : '-',
+        unit: elev != null && elev > 0 ? 'm' : '',
+      },
+      {
+        label: 'WATTS',
+        value: watts != null && watts > 0 ? String(Math.round(watts)) : '-',
+        unit: watts != null && watts > 0 ? 'W' : '',
+      },
     ];
+  }
+
+  function summaryLinesFromLog(log) {
+    var cells = shareStatCellsFromLog(log);
+    var out = [];
+    var i;
+    for (i = 0; i < cells.length; i++) {
+      out.push(
+        cells[i].unit ? cells[i].value + ' ' + cells[i].unit : cells[i].value
+      );
+    }
+    return out;
   }
 
   /** 요약 지도와 동일 소스(logs + daily_route_profiles)로 코스 프로파일 계산 */
@@ -162,15 +250,18 @@
     if (!utils || !log) return '';
     var route = resolveRouteProfileForShare(log, opts);
     if (!route) return '';
-    var coursePaths = coursePathStringsFromRoute(route, w - 120, 520, 0.12);
+    var coursePaths = coursePathStringsFromRoute(route, SHARE_COURSE_W, SHARE_COURSE_H, 0.1);
+    var courseX = (w - SHARE_COURSE_W) / 2;
     var si;
     var shapes =
       '<defs><filter id="stelvioRouteShadow" x="-25%" y="-25%" width="150%" height="150%">' +
       '<feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#000000" flood-opacity="0.5"/></filter></defs>';
     for (si = 0; si < coursePaths.length; si++) {
       shapes +=
-        '<g transform="translate(60, ' +
-        (h - 780) +
+        '<g transform="translate(' +
+        courseX +
+        ', ' +
+        SHARE_COURSE_Y +
         ')" filter="url(#stelvioRouteShadow)"><path d="' +
         coursePaths[si] +
         '" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></g>';
@@ -218,7 +309,8 @@
             cj === ',' ||
             cj === '/' ||
             cj === '-' ||
-            cj === '+'
+            cj === '+' ||
+            cj === ':'
           ) {
             j++;
           } else break;
@@ -244,36 +336,94 @@
     return weight + ' ' + fontSize + 'px ' + stack;
   }
 
-  function drawCanvasTextLine(ctx, x, y, text, fontSize) {
-    var tokens = tokenizeShareText(text);
-    var cx = x;
-    var ti;
-    ctx.textBaseline = 'alphabetic';
+  function applyTextShadow(ctx) {
     ctx.shadowColor = 'rgba(0,0,0,0.55)';
     ctx.shadowBlur = 6;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 2;
     ctx.fillStyle = '#FFFFFF';
-    for (ti = 0; ti < tokens.length; ti++) {
-      ctx.font = canvasFontForToken(tokens[ti].kind, fontSize);
-      ctx.fillText(tokens[ti].text, cx, y);
-      cx += ctx.measureText(tokens[ti].text).width;
-    }
+  }
+
+  function clearTextShadow(ctx) {
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
   }
 
+  function drawCanvasTextLine(ctx, x, y, text, fontSize, align) {
+    var tokens = tokenizeShareText(text);
+    var ti;
+    var totalW = 0;
+    var parts = [];
+    ctx.textBaseline = 'alphabetic';
+    applyTextShadow(ctx);
+    for (ti = 0; ti < tokens.length; ti++) {
+      ctx.font = canvasFontForToken(tokens[ti].kind, fontSize);
+      parts.push({
+        text: tokens[ti].text,
+        w: ctx.measureText(tokens[ti].text).width,
+        kind: tokens[ti].kind,
+      });
+      totalW += parts[parts.length - 1].w;
+    }
+    var cx = align === 'center' ? x - totalW / 2 : x;
+    for (ti = 0; ti < parts.length; ti++) {
+      ctx.font = canvasFontForToken(parts[ti].kind, fontSize);
+      ctx.fillText(parts[ti].text, cx, y);
+      cx += parts[ti].w;
+    }
+    clearTextShadow(ctx);
+  }
+
+  function drawValueUnitCentered(ctx, cx, y, value, unit) {
+    applyTextShadow(ctx);
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = canvasFontForToken('lat', SHARE_FONT_VALUE);
+    var valueW = ctx.measureText(String(value || '-')).width;
+    var unitW = 0;
+    if (unit) {
+      ctx.font = canvasFontForToken('lat', SHARE_FONT_UNIT);
+      unitW = ctx.measureText(unit).width;
+    }
+    var gap = unit ? 5 : 0;
+    var totalW = valueW + gap + unitW;
+    var startX = cx - totalW / 2;
+    ctx.font = canvasFontForToken('lat', SHARE_FONT_VALUE);
+    ctx.fillText(String(value || '-'), startX, y);
+    if (unit) {
+      ctx.font = canvasFontForToken('lat', SHARE_FONT_UNIT);
+      ctx.fillText(unit, startX + valueW + gap, y - 8);
+    }
+    clearTextShadow(ctx);
+  }
+
+  function drawStatCellCentered(ctx, cx, cell) {
+    ctx.globalAlpha = 0.72;
+    drawCanvasTextLine(ctx, cx, SHARE_STATS_LABEL_Y, cell.label, SHARE_FONT_LABEL, 'center');
+    ctx.globalAlpha = 1;
+    drawValueUnitCentered(ctx, cx, SHARE_STATS_VALUE_Y, cell.value, cell.unit);
+  }
+
   function drawShareTextOnCanvas(ctx, log, logs) {
     if (!ctx || !log) return;
-    var title = formatShareImageTitle(log, logs).slice(0, 96);
-    var lines = summaryLinesFromLog(log);
-    var yText = SHARE_TITLE_Y;
-    drawCanvasTextLine(ctx, SHARE_TEXT_X, yText, title, 42);
-    var li;
-    for (li = 0; li < lines.length; li++) {
-      yText += SHARE_LINE_STEP;
-      drawCanvasTextLine(ctx, SHARE_TEXT_X, yText, lines[li], 36);
+    var canvasW = ctx.canvas.width || 1080;
+    var cx = canvasW / 2;
+    var sub = formatShareHeaderSub(log);
+    var title = formatShareHeaderTitle(log, logs);
+    if (sub) {
+      ctx.globalAlpha = 0.78;
+      drawCanvasTextLine(ctx, cx, SHARE_SUB_Y, sub, SHARE_FONT_SUB, 'center');
+      ctx.globalAlpha = 1;
+    }
+    drawCanvasTextLine(ctx, cx, SHARE_MAIN_TITLE_Y, title, SHARE_FONT_TITLE, 'center');
+
+    var cells = shareStatCellsFromLog(log);
+    var cols = cells.length;
+    var totalW = canvasW - SHARE_PAD_X * 2;
+    var colW = totalW / cols;
+    var i;
+    for (i = 0; i < cols; i++) {
+      drawStatCellCentered(ctx, SHARE_PAD_X + colW * i + colW / 2, cells[i]);
     }
   }
 
@@ -282,10 +432,10 @@
       return Promise.resolve();
     }
     return Promise.all([
-      global.document.fonts.load('700 42px ' + FONT_LATIN_STACK),
-      global.document.fonts.load('700 36px ' + FONT_LATIN_STACK),
-      global.document.fonts.load('600 42px ' + FONT_KOREAN_STACK),
-      global.document.fonts.load('600 36px ' + FONT_KOREAN_STACK),
+      global.document.fonts.load('700 ' + SHARE_FONT_VALUE + 'px ' + FONT_LATIN_STACK),
+      global.document.fonts.load('700 ' + SHARE_FONT_UNIT + 'px ' + FONT_LATIN_STACK),
+      global.document.fonts.load('600 ' + SHARE_FONT_TITLE + 'px ' + FONT_KOREAN_STACK),
+      global.document.fonts.load('600 ' + SHARE_FONT_SUB + 'px ' + FONT_KOREAN_STACK),
     ]).catch(function () {});
   }
 
@@ -298,12 +448,23 @@
     }
   }
 
-  function measureSummaryLineWidth(text) {
+  function measureStatGridMaxWidth(cells) {
     var c = document.createElement('canvas');
     var ctx = c.getContext('2d');
-    if (!ctx) return 200;
-    ctx.font = canvasFontForToken('lat', 36);
-    return ctx.measureText(String(text || '-')).width;
+    if (!ctx || !cells || !cells.length) return 160;
+    var maxW = 0;
+    var i;
+    for (i = 0; i < cells.length; i++) {
+      ctx.font = canvasFontForToken('lat', SHARE_FONT_VALUE);
+      var valueW = ctx.measureText(String(cells[i].value || '-')).width;
+      var unitW = 0;
+      if (cells[i].unit) {
+        ctx.font = canvasFontForToken('lat', SHARE_FONT_UNIT);
+        unitW = ctx.measureText(cells[i].unit).width;
+      }
+      maxW = Math.max(maxW, valueW + (cells[i].unit ? 5 + unitW : 0));
+    }
+    return maxW;
   }
 
   function loadRasterImage(src) {
@@ -337,19 +498,18 @@
     });
   }
 
-  function drawStelvioLogoOnCanvas(ctx, speedLineText, logoImg) {
+  function drawStelvioLogoOnCanvas(ctx, cells, logoImg) {
     if (!ctx || !logoImg || !logoImg.width) return;
-    var logoW = measureSummaryLineWidth(speedLineText);
-    if (!(logoW > 0)) return;
+    var logoW = Math.min(200, measureStatGridMaxWidth(cells) * 1.1);
+    if (!(logoW > 0)) logoW = 160;
     var logoH = (logoImg.height / logoImg.width) * logoW;
-    var logoX = SHARE_TEXT_X;
-    var speedBaselineY = SHARE_TITLE_Y + SHARE_SUMMARY_LINE_COUNT * SHARE_LINE_STEP;
-    var logoY = speedBaselineY + SHARE_LOGO_GAP_BELOW_SPEED;
-    ctx.drawImage(logoImg, logoX, logoY, logoW, logoH);
+    var canvasW = ctx.canvas.width || 1080;
+    var logoX = (canvasW - logoW) / 2;
+    ctx.drawImage(logoImg, logoX, SHARE_LOGO_Y, logoW, logoH);
   }
 
   /** SVG(코스) + Canvas 텍스트·로고 → PNG */
-  function svgToPngBlob(svgMarkup, speedLineText, log, logs) {
+  function svgToPngBlob(svgMarkup, _speedLineText, log, logs) {
     var logoUrl = resolveStelvioLogoAssetUrl();
     return ensureShareFontsLoaded().then(function () {
       return Promise.all([
@@ -369,7 +529,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(svgImg, 0, 0);
       drawShareTextOnCanvas(ctx, log, logs);
-      if (logoImg) drawStelvioLogoOnCanvas(ctx, speedLineText, logoImg);
+      if (logoImg) drawStelvioLogoOnCanvas(ctx, shareStatCellsFromLog(log), logoImg);
       return new Promise(function (resolve, reject) {
         canvas.toBlob(
           function (blob) {
