@@ -2270,6 +2270,37 @@
       border: 1px solid #475569;
       font-weight: 600;
     }
+    .journal-android-save-sheet__btn--secondary {
+      color: #e2e8f0;
+      background: rgba(51, 65, 85, 0.95);
+      border: 1px solid #64748b;
+      font-weight: 600;
+    }
+    .journal-android-longpress-view {
+      flex-direction: column;
+      padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 16px);
+      box-sizing: border-box;
+    }
+    .journal-android-longpress-view__img {
+      flex: 1 1 auto;
+      width: 100%;
+      max-height: calc(100dvh - 200px);
+      object-fit: contain;
+      border-radius: 10px;
+      background: #0f172a;
+      -webkit-touch-callout: default;
+      touch-action: manipulation;
+      user-select: none;
+    }
+    .journal-android-longpress-view__hint {
+      flex-shrink: 0;
+    }
+    .journal-android-save-sheet__preview {
+      -webkit-touch-callout: default;
+      touch-action: manipulation;
+      user-select: none;
+      cursor: pointer;
+    }
     #trainingJournalScreen .journal-bottom-sheet-body {
       position: relative;
     }
