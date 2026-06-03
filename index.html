@@ -1962,6 +1962,7 @@
     #trainingJournalScreen .journal-summary-map-with-share {
       position: relative;
       margin: 0 0 14px 0;
+      z-index: 2;
     }
     #trainingJournalScreen .journal-summary-map-with-share .journal-course-map-wrap {
       margin-bottom: 0;
@@ -1971,7 +1972,8 @@
       left: 50%;
       bottom: 12px;
       transform: translateX(-50%);
-      z-index: 5;
+      /* Leaflet pane z-index(400+)보다 위 */
+      z-index: 1000;
       margin-top: 0;
       display: flex;
       justify-content: center;
@@ -1981,16 +1983,19 @@
     }
     #trainingJournalScreen .journal-transparent-share-btn {
       font-size: 13px;
-      font-weight: 600;
-      color: #5b21b6;
-      background: rgba(255, 255, 255, 0.92);
-      border: 1px solid rgba(124, 58, 237, 0.35);
+      font-weight: 700;
+      color: #ffffff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: 1px solid rgba(255, 255, 255, 0.35);
       border-radius: 10px;
-      padding: 10px 14px;
+      padding: 10px 16px;
       cursor: pointer;
       pointer-events: auto;
-      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.35);
       white-space: nowrap;
+      opacity: 1;
+      -webkit-appearance: none;
+      appearance: none;
     }
     #trainingJournalScreen .journal-transparent-share-btn:disabled {
       opacity: 0.6;
