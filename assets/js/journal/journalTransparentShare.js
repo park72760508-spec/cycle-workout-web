@@ -15,7 +15,8 @@
   var SHARE_SUMMARY_LINE_COUNT = 5;
   var SHARE_LOGO_GAP_BELOW_SPEED = 14;
   var STELVIO_LOGO_ASSET = 'assets/img/STELVIO AI.png';
-  var FONT_LATIN_STACK = '"Druk Wide", "Bebas Neue", sans-serif';
+  /* Druk Wide: assets/fonts/DrukWide-Bold.woff2 배포 후 @font-face 추가 시 스택 맨 앞에 "Druk Wide" 삽입 */
+  var FONT_LATIN_STACK = '"Bebas Neue", sans-serif';
   var FONT_KOREAN_STACK = 'Pretendard, "Noto Sans KR", sans-serif';
 
   function escapeXml(s) {

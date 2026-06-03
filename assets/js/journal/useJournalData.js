@@ -223,7 +223,10 @@
           var data = typeof snap.data === 'function' ? snap.data() : null;
           return data || null;
         }).catch(function (e) {
-          console.warn('[useJournalData] daily_route_profiles(v9) 조회 실패:', e);
+          var code = e && (e.code || e.message || '');
+          if (String(code).indexOf('permission') === -1) {
+            console.warn('[useJournalData] daily_route_profiles(v9) 조회 실패:', e);
+          }
           return null;
         });
       }
@@ -238,7 +241,10 @@
             return snap && snap.exists ? snap.data() : null;
           })
           .catch(function (e2) {
-            console.warn('[useJournalData] daily_route_profiles(compat) 조회 실패:', e2);
+            var code2 = e2 && (e2.code || e2.message || '');
+            if (String(code2).indexOf('permission') === -1) {
+              console.warn('[useJournalData] daily_route_profiles(compat) 조회 실패:', e2);
+            }
             return null;
           });
       }
