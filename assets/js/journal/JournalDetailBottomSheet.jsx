@@ -637,7 +637,10 @@
         max_watts: log.max_watts,
         weight: log.weight,
         time_in_zones: log.time_in_zones,
-        source: log.source
+        source: log.source,
+        summary_polyline: log.summary_polyline,
+        elevation_profile: log.elevation_profile,
+        title: log.title
       };
     }
     var totalSec = 0, totalTSS = 0, totalDist = 0, totalKj = 0;
@@ -756,7 +759,14 @@
 
   function TabSummary(props) {
     var log = props.log;
-    if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
+    var onShareTransparent = props.onShareTransparent;
+    var _shareBusy = useState(false);
+    var shareBusy = _shareBusy[0];
+    var setShareBusy = _shareBusy[1];
+    if (!log) {
+      return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
+    }
+    var RouteBg = window.RidingCourseSvgBackground;
     var spd = log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
       ? Number(log.avg_speed_kmh)
       : avgSpeedKmhFromDistanceTime(log.distance_km, log.duration_sec);
@@ -771,7 +781,47 @@
       DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-', isPr: false })
     ];
     /* 영역별 누적 시간 그래프는 Power Profile / Heart Rate 탭으로 이동됨 */
-    return React.createElement('div', { className: 'journal-tab-content' }, rows);
+    return React.createElement(
+      'div',
+      { className: 'journal-tab-content journal-tab-content--summary-route' },
+      RouteBg
+        ? React.createElement(RouteBg, {
+            log: log,
+            opacity: 0.2,
+            variant: 'muted',
+            className: 'journal-summary-tab-route-bg'
+          })
+        : null,
+      React.createElement('div', { className: 'journal-tab-content-inner' }, rows),
+      typeof onShareTransparent === 'function' || (window.journalTransparentShare && window.journalTransparentShare.exportTransparentSharePng)
+        ? React.createElement(
+            'div',
+            { className: 'journal-transparent-share-actions' },
+            React.createElement('button', {
+              type: 'button',
+              className: 'journal-transparent-share-btn',
+              disabled: shareBusy,
+              onClick: function () {
+                if (shareBusy) return;
+                setShareBusy(true);
+                var p =
+                  typeof onShareTransparent === 'function'
+                    ? onShareTransparent(log)
+                    : window.journalTransparentShare.exportTransparentSharePng(log);
+                Promise.resolve(p)
+                  .catch(function (e) {
+                    var msg = e && e.message ? e.message : '저장 실패';
+                    if (typeof window.showToast === 'function') window.showToast(msg, 'error');
+                    else if (typeof alert === 'function') alert(msg);
+                  })
+                  .finally(function () {
+                    setShareBusy(false);
+                  });
+              }
+            }, shareBusy ? '저장 중…' : '투명 이미지 다운로드(공유)')
+          )
+        : null
+    );
   }
 
   function TabPower(props) {
@@ -915,8 +965,16 @@
         React.createElement('div', { className: 'journal-bottom-sheet-body' },
           tabs.map(function(t) {
             if (activeTab !== t.id) return null;
+            var routeLog = logs[0] || merged;
+            var summaryLog = merged
+              ? Object.assign({}, merged, {
+                  summary_polyline: routeLog.summary_polyline,
+                  elevation_profile: routeLog.elevation_profile,
+                  title: routeLog.title || merged.title
+                })
+              : routeLog;
             var p = t.id === 'summary'
-              ? { log: merged, userProfile: props.userProfile || {} }
+              ? { log: summaryLog, userProfile: props.userProfile || {} }
               : { log: merged, yearlyPeaks: yearlyPeaks, userWeight: userWeightForPr, userProfile: props.userProfile || {} };
             return React.createElement(t.C, Object.assign({ key: t.id }, p));
           })

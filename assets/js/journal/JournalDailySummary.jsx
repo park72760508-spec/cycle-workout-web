@@ -150,7 +150,18 @@
 
     var summary = mergeLogsForSummary(logs, userProfile);
 
-    return React.createElement('div', { className: 'card journal-daily-summary' },
+    var RouteBg = window.RidingCourseSvgBackground;
+    var routeLog = logs[0] || null;
+
+    return React.createElement('div', { className: 'card journal-daily-summary journal-daily-summary--with-route' },
+      RouteBg && routeLog
+        ? React.createElement(RouteBg, {
+            log: routeLog,
+            opacity: 0.22,
+            variant: 'muted',
+            className: 'journal-daily-summary-route-bg'
+          })
+        : null,
       React.createElement('div', { className: 'journal-daily-summary-header' },
         React.createElement('h3', { className: 'journal-daily-summary-title' }, formatDateKey(selectedDate) + ' 요약')
       ),
