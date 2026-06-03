@@ -53,8 +53,9 @@
     if (!utils || !log) return '';
     var route = utils.routeProfileFromLog(log);
     var course = route.hasRoute ? utils.latLngsToSvgPath(route.latlngs, w - 120, 520, 0.12) : null;
-    var elev =
-      route.hasElevation && utils.elevationToSvgPath(route.elevation, w - 120, 200, 0.1) : null;
+    var elev = route.hasElevation
+      ? utils.elevationToSvgPath(route.elevation, w - 120, 200, 0.1)
+      : null;
     var lines = summaryLinesFromLog(log);
     var title = log.title ? String(log.title).slice(0, 48) : 'STELVIO Ride';
     var yText = 80;
