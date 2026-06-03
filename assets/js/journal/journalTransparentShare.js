@@ -164,12 +164,14 @@
     if (!route) return '';
     var coursePaths = coursePathStringsFromRoute(route, w - 120, 520, 0.12);
     var si;
-    var shapes = '';
+    var shapes =
+      '<defs><filter id="stelvioRouteShadow" x="-25%" y="-25%" width="150%" height="150%">' +
+      '<feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#000000" flood-opacity="0.5"/></filter></defs>';
     for (si = 0; si < coursePaths.length; si++) {
       shapes +=
         '<g transform="translate(60, ' +
         (h - 780) +
-        ')"><path d="' +
+        ')" filter="url(#stelvioRouteShadow)"><path d="' +
         coursePaths[si] +
         '" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></g>';
     }
@@ -247,12 +249,19 @@
     var cx = x;
     var ti;
     ctx.textBaseline = 'alphabetic';
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
     ctx.fillStyle = '#FFFFFF';
     for (ti = 0; ti < tokens.length; ti++) {
       ctx.font = canvasFontForToken(tokens[ti].kind, fontSize);
       ctx.fillText(tokens[ti].text, cx, y);
       cx += ctx.measureText(tokens[ti].text).width;
     }
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
   }
 
   function drawShareTextOnCanvas(ctx, log, logs) {
