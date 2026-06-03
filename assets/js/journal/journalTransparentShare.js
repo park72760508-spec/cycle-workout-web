@@ -8,6 +8,15 @@
   var utils = global.stravaPolylineUtils;
   var KOR_WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
 
+  /** buildShareSvgMarkup 텍스트 배치와 동일 (로고 위치 계산용) */
+  var SHARE_TEXT_X = 60;
+  var SHARE_TITLE_Y = 80;
+  var SHARE_LINE_STEP = 52;
+  var SHARE_SUMMARY_LINE_COUNT = 5;
+  var SHARE_LINE_FONT = '600 36px system-ui, sans-serif';
+  var SHARE_LOGO_GAP_BELOW_SPEED = 14;
+  var STELVIO_LOGO_ASSET = 'assets/img/STELVIO AI.png';
+
   function escapeXml(s) {
     return String(s || '')
       .replace(/&/g, '&amp;')
@@ -179,39 +188,94 @@
     );
   }
 
-  function svgToPngBlob(svgMarkup) {
+  function resolveStelvioLogoAssetUrl() {
+    if (global.STELVIO_SHARE_LOGO_URL) return String(global.STELVIO_SHARE_LOGO_URL);
+    try {
+      return new URL(STELVIO_LOGO_ASSET, global.location.href).href;
+    } catch (e) {
+      return STELVIO_LOGO_ASSET;
+    }
+  }
+
+  function measureSummaryLineWidth(text) {
+    var c = document.createElement('canvas');
+    var ctx = c.getContext('2d');
+    if (!ctx) return 200;
+    ctx.font = SHARE_LINE_FONT;
+    return ctx.measureText(String(text || '-')).width;
+  }
+
+  function loadRasterImage(src) {
+    return new Promise(function (resolve, reject) {
+      var im = new Image();
+      im.crossOrigin = 'anonymous';
+      im.onload = function () {
+        resolve(im);
+      };
+      im.onerror = function () {
+        reject(new Error('로고 이미지 로드 실패'));
+      };
+      im.src = src;
+    });
+  }
+
+  function loadSvgMarkupAsImage(svgMarkup) {
     return new Promise(function (resolve, reject) {
       var svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
       var url = URL.createObjectURL(svgBlob);
       var img = new Image();
       img.onload = function () {
-        try {
-          var canvas = document.createElement('canvas');
-          canvas.width = img.width || 1080;
-          canvas.height = img.height || 1350;
-          var ctx = canvas.getContext('2d');
-          if (!ctx) throw new Error('Canvas 2D unavailable');
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
-          canvas.toBlob(
-            function (blob) {
-              URL.revokeObjectURL(url);
-              if (blob) resolve(blob);
-              else reject(new Error('PNG 변환 실패'));
-            },
-            'image/png',
-            1
-          );
-        } catch (e) {
-          URL.revokeObjectURL(url);
-          reject(e);
-        }
+        URL.revokeObjectURL(url);
+        resolve(img);
       };
       img.onerror = function () {
         URL.revokeObjectURL(url);
         reject(new Error('SVG 이미지 로드 실패'));
       };
       img.src = url;
+    });
+  }
+
+  function drawStelvioLogoOnCanvas(ctx, speedLineText, logoImg) {
+    if (!ctx || !logoImg || !logoImg.width) return;
+    var logoW = measureSummaryLineWidth(speedLineText);
+    if (!(logoW > 0)) return;
+    var logoH = (logoImg.height / logoImg.width) * logoW;
+    var logoX = SHARE_TEXT_X;
+    var speedBaselineY = SHARE_TITLE_Y + SHARE_SUMMARY_LINE_COUNT * SHARE_LINE_STEP;
+    var logoY = speedBaselineY + SHARE_LOGO_GAP_BELOW_SPEED;
+    ctx.drawImage(logoImg, logoX, logoY, logoW, logoH);
+  }
+
+  /** SVG 렌더 + 평균속도 줄 너비에 맞춘 STELVIO 로고 합성 */
+  function svgToPngBlob(svgMarkup, speedLineText) {
+    var logoUrl = resolveStelvioLogoAssetUrl();
+    return Promise.all([
+      loadSvgMarkupAsImage(svgMarkup),
+      loadRasterImage(logoUrl).catch(function () {
+        return null;
+      }),
+    ]).then(function (parts) {
+      var svgImg = parts[0];
+      var logoImg = parts[1];
+      var canvas = document.createElement('canvas');
+      canvas.width = svgImg.width || 1080;
+      canvas.height = svgImg.height || 1350;
+      var ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D unavailable');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(svgImg, 0, 0);
+      if (logoImg) drawStelvioLogoOnCanvas(ctx, speedLineText, logoImg);
+      return new Promise(function (resolve, reject) {
+        canvas.toBlob(
+          function (blob) {
+            if (blob) resolve(blob);
+            else reject(new Error('PNG 변환 실패'));
+          },
+          'image/png',
+          1
+        );
+      });
     });
   }
 
@@ -346,7 +410,9 @@
     if (log && log._logsForShare && !opts.logs) opts.logs = log._logsForShare;
     var svg = buildShareSvgMarkup(log, opts);
     if (!svg) throw new Error('코스 데이터가 없어 공유 이미지를 만들 수 없습니다.');
-    var blob = await svgToPngBlob(svg);
+    var summaryLines = summaryLinesFromLog(log);
+    var speedLineText = summaryLines[summaryLines.length - 1] || '-';
+    var blob = await svgToPngBlob(svg, speedLineText);
     var dateKey = log.date ? String(log.date).replace(/-/g, '') : 'ride';
     var fn = opts.filename || 'stelvio-ride-' + dateKey + '-transparent.png';
     var saveMethod = await savePngBlob(blob, fn);
