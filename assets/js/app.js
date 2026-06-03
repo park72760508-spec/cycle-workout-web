@@ -4997,6 +4997,7 @@ function togglePause() {
 (function protectSplashScreenImmediately() {
   // 즉시 실행하여 다른 코드보다 먼저 실행되도록 보장
   function protectSplash() {
+    if (window.__stelvioEarlyBootDone) return;
     const splashScreen = document.getElementById("splashScreen");
     if (splashScreen) {
       // 즉시 스플래시 화면 보호 설정
@@ -5144,8 +5145,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const skipSplashForDeviceSettings = !!window._openDeviceSettingsFromBluetooth || !!window._openDeviceSettingsOnly;
   const isSplashActive = !skipSplashForDeviceSettings && splashScreen && (splashScreen.classList.contains("active") || window.getComputedStyle(splashScreen).display !== "none");
   
-  // 스플래시 화면 보호 플래그 (전역) — 스플래시 스킵 모드에서는 이전 protectSplash의 true를 OR 하면 안 됨
-  if (skipSplashForDeviceSettings) {
+  // 스플래시 화면 보호 플래그 (전역) — stelvioBootEarly 완료 시 스플래시 재활성화 금지
+  if (window.__stelvioEarlyBootDone) {
+    window.isSplashActive = false;
+  } else if (skipSplashForDeviceSettings) {
     window.isSplashActive = false;
   } else {
     window.isSplashActive = !!isSplashActive || !!window.isSplashActive;
@@ -5170,8 +5173,8 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(openDeviceSettingsOverlayOnly, 250);
   }
   
-  // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
-  if (window.isSplashActive) {
+  // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지 (조기 부트 완료 시 스킵)
+  if (window.isSplashActive && !window.__stelvioEarlyBootDone) {
     // 즉시 다른 모든 화면 숨기기 - !important 사용
     document.querySelectorAll(".screen").forEach(screen => {
       if (screen.id !== 'splashScreen') {
@@ -5281,7 +5284,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   }
   
-  if (window.isSplashActive && splashScreen) {
+  if (window.__stelvioEarlyBootDone) {
+    console.log('[splash] stelvioBootEarly 완료 — 인증 화면 유지, 자동 로그인 라우팅');
+    if (typeof dismissSplashFully === 'function') {
+      dismissSplashFully();
+    }
+    if (typeof applyInitialAuthRouting === 'function') {
+      applyInitialAuthRouting();
+    }
+  } else if (window.isSplashActive && splashScreen) {
     // 즉시 다른 모든 화면 숨기기 (가장 먼저 실행) - 동기적으로 실행
     document.querySelectorAll(".screen").forEach(screen => {
       if (screen.id !== 'splashScreen') {
