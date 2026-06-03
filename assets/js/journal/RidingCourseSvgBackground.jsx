@@ -25,11 +25,12 @@
   function RidingCourseSvgBackground(props) {
     var opacity = props.opacity != null ? Number(props.opacity) : 0.22;
     var variant = props.variant === 'white' ? 'white' : 'muted';
-    var showElevation = props.showElevation !== false;
+    /* 라이딩 요약은 Leaflet 지도 사용 — SVG 고도 프로파일(고도표) 기본 비표시 */
+    var showElevation = props.showElevation === true;
     var className = props.className || '';
 
     var route = resolveRouteProfile(props);
-    if (!route || (!route.hasRoute && !route.hasElevation)) return null;
+    if (!route || !route.hasRoute) return null;
 
     var stroke = variant === 'white' ? '#FFFFFF' : '#7c3aed';
     var coursePaths = [];

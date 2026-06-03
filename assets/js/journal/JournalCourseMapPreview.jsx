@@ -183,13 +183,12 @@
     return R.createElement(
       'div',
       {
-        className:
-          'journal-course-map-wrap open-riding-gpx-map-wrap w-full max-w-full ' + className,
+        className: 'journal-course-map-wrap w-full max-w-full ' + className,
         'aria-hidden': true,
       },
       R.createElement('div', {
         ref: mapRef,
-        className: 'journal-course-map-inner open-riding-gpx-map-inner w-full h-full',
+        className: 'journal-course-map-inner w-full h-full',
         style: { height: mapHeight + 'px', minHeight: mapHeight + 'px' },
       })
     );
