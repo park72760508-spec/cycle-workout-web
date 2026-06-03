@@ -1080,19 +1080,16 @@
 
   function stickerDragBounds(contain, stickerW, stickerH, pad) {
     pad = pad != null ? pad : 20;
-    var minX = contain.x + contain.width - stickerW - pad;
-    var maxX = contain.x + pad;
-    var minY = contain.y + contain.height - stickerH - pad;
-    var maxY = contain.y + pad;
-    if (minX > maxX) {
-      var cx = contain.x + (contain.width - stickerW) / 2;
-      minX = maxX = cx;
-    }
-    if (minY > maxY) {
-      var cy = contain.y + (contain.height - stickerH) / 2;
-      minY = maxY = cy;
-    }
-    return { minX: minX, maxX: maxX, minY: minY, maxY: maxY };
+    var xLeft = contain.x + pad;
+    var xRight = contain.x + contain.width - stickerW - pad;
+    var yTop = contain.y + pad;
+    var yBottom = contain.y + contain.height - stickerH - pad;
+    return {
+      minX: Math.min(xLeft, xRight),
+      maxX: Math.max(xLeft, xRight),
+      minY: Math.min(yTop, yBottom),
+      maxY: Math.max(yTop, yBottom),
+    };
   }
 
   global.journalTransparentShare = {

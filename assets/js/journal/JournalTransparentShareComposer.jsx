@@ -234,8 +234,8 @@
         var contain = getBgContainRect();
         var headerBounds = getStickerBounds(contain, w, hH);
         var bottomBounds = getStickerBounds(contain, w, bH);
-        setPosHeader({ x: headerBounds.maxX, y: Math.max(headerBounds.maxY, stageSize.h * 0.04) });
-        setPosBottom({ x: bottomBounds.maxX, y: bottomBounds.minY });
+        setPosHeader({ x: headerBounds.minX, y: headerBounds.minY });
+        setPosBottom({ x: bottomBounds.minX, y: bottomBounds.maxY });
       },
       [stageSize.w, stageSize.h, overlayBaseW, scale, headerNat, bottomNat, shareApi]
     );
@@ -302,6 +302,7 @@
     function onStickerPointerMove(ev) {
       var d = dragRef.current;
       if (!d || d.pointerId !== ev.pointerId) return;
+      ev.preventDefault();
       var dx = ev.clientX - d.startX;
       var dy = ev.clientY - d.startY;
       var nx = d.origX + dx;
@@ -320,6 +321,16 @@
           y: clamp(ny, bb.minY, bb.maxY),
         });
       }
+    }
+
+    function onStagePointerMove(ev) {
+      if (dragRef.current) onStickerPointerMove(ev);
+    }
+
+    function onStagePointerUp(ev) {
+      var d = dragRef.current;
+      if (!d || d.pointerId !== ev.pointerId) return;
+      dragRef.current = null;
     }
 
     function onStickerPointerUp(ev) {
@@ -416,6 +427,14 @@
       });
     }
 
+    var stageProps = {
+      className: 'journal-share-composer-stage',
+      ref: stageRef,
+      onPointerMove: onStagePointerMove,
+      onPointerUp: onStagePointerUp,
+      onPointerCancel: onStagePointerUp,
+    };
+
     return R.createElement(
       'div',
       { className: 'journal-share-composer-overlay', role: 'dialog', 'aria-modal': 'true' },
@@ -505,7 +524,7 @@
           : null,
         R.createElement(
           'div',
-          { className: 'journal-share-composer-stage', ref: stageRef },
+          stageProps,
           bgUrl
             ? R.createElement('img', {
                 ref: bgImgRef,
