@@ -16,6 +16,9 @@ export const SHARE_LAYOUT = {
   courseGapAboveStats: 36,
   statsLabelY: 1070,
   statsValueY: 1130,
+  splitY: 520,
+  headerH: 520,
+  bottomH: 830,
   fontSub: 28,
   fontTitle: 48,
   fontLabel: 26,
@@ -111,15 +114,13 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-/** NRC TIME 스타일 (m:ss 또는 h:mm:ss) */
+/** TIME: 시·분 만 (예: 3:41, 0:52) */
 export function formatDurationClock(sec: number): { value: string; unit: string } {
   if (!sec || !isFinite(sec)) return { value: "-", unit: "" };
   const s = Math.floor(sec);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
-  const ss = s % 60;
-  if (h > 0) return { value: `${h}:${pad2(m)}:${pad2(ss)}`, unit: "" };
-  return { value: `${m}:${pad2(ss)}`, unit: "" };
+  return { value: `${h}:${pad2(m)}`, unit: "" };
 }
 
 export function formatDuration(sec: number): string {

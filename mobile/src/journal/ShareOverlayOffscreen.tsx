@@ -1,21 +1,28 @@
 /**
- * 오프스크린 ViewShot — 투명 PNG 오버레이 생성 (createOverlayPngBlob 대응)
+ * 오프스크린 ViewShot — 상단·하단 투명 PNG 2장
  */
 import React, { useEffect, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import ViewShot from "react-native-view-shot";
-import { ShareOverlayArtboard } from "./ShareOverlayArtboard";
+import { ShareOverlayBottomArtboard } from "./ShareOverlayBottomArtboard";
+import { ShareOverlayHeaderArtboard } from "./ShareOverlayHeaderArtboard";
 import { buildCoursePathsForOverlay } from "./journalShareRoute";
+import { SHARE_LAYOUT } from "./journalShareFormat";
 import type { ShareLog, ShareOverlayOpts } from "./journalShareTypes";
-import { OVERLAY_H, OVERLAY_W } from "./journalShareTypes";
 import { useShareFonts } from "./useShareFonts";
 import type { ImageSourcePropType } from "react-native";
+
+export type OverlayBlobPair = {
+  headerUri: string;
+  bottomUri: string;
+  splitMeta: { fullW: number; headerH: number; bottomH: number };
+};
 
 type Props = {
   log: ShareLog;
   opts?: ShareOverlayOpts;
   logoSource?: ImageSourcePropType;
-  onReady: (uri: string) => void;
+  onReady: (result: OverlayBlobPair) => void;
   onError: (message: string) => void;
 };
 
@@ -26,7 +33,8 @@ export function ShareOverlayOffscreen({
   onReady,
   onError,
 }: Props) {
-  const shotRef = useRef<ViewShot>(null);
+  const headerShotRef = useRef<ViewShot>(null);
+  const bottomShotRef = useRef<ViewShot>(null);
   const { fontsReady, usingSystemFallback } = useShareFonts();
   const firedRef = useRef(false);
 
@@ -36,12 +44,7 @@ export function ShareOverlayOffscreen({
 
   useEffect(() => {
     if (!fontsReady || firedRef.current) return;
-
-    const paths = buildCoursePathsForOverlay(log, {
-      ...opts,
-      width: OVERLAY_W,
-      height: OVERLAY_H,
-    });
+    const paths = buildCoursePathsForOverlay(log, opts);
     if (!paths.length) {
       onError("코스 데이터가 없어 공유 이미지를 만들 수 없습니다.");
       return;
@@ -49,14 +52,27 @@ export function ShareOverlayOffscreen({
 
     const timer = setTimeout(async () => {
       try {
-        const uri = await shotRef.current?.capture?.({
+        const headerUri = await headerShotRef.current?.capture?.({
           format: "png",
           quality: 1,
           result: "tmpfile",
         });
-        if (!uri) throw new Error("오버레이 캡처 실패");
+        const bottomUri = await bottomShotRef.current?.capture?.({
+          format: "png",
+          quality: 1,
+          result: "tmpfile",
+        });
+        if (!headerUri || !bottomUri) throw new Error("오버레이 캡처 실패");
         firedRef.current = true;
-        onReady(uri);
+        onReady({
+          headerUri,
+          bottomUri,
+          splitMeta: {
+            fullW: 1080,
+            headerH: SHARE_LAYOUT.headerH,
+            bottomH: SHARE_LAYOUT.bottomH,
+          },
+        });
       } catch (e: unknown) {
         onError(e instanceof Error ? e.message : "오버레이 생성 실패");
       }
@@ -69,17 +85,16 @@ export function ShareOverlayOffscreen({
 
   return (
     <View style={styles.offscreen} pointerEvents="none" collapsable={false}>
-      <ViewShot
-        ref={shotRef}
-        options={{ format: "png", quality: 1 }}
-        style={{ backgroundColor: "transparent" }}
-      >
-        <ShareOverlayArtboard
+      <ViewShot ref={headerShotRef} options={{ format: "png", quality: 1 }}>
+        <ShareOverlayHeaderArtboard
           log={log}
           opts={opts}
           logoSource={logoSource}
           usingSystemFallback={usingSystemFallback}
         />
+      </ViewShot>
+      <ViewShot ref={bottomShotRef} options={{ format: "png", quality: 1 }}>
+        <ShareOverlayBottomArtboard log={log} opts={opts} usingSystemFallback={usingSystemFallback} />
       </ViewShot>
     </View>
   );
@@ -90,8 +105,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: -20000,
     top: 0,
-    width: OVERLAY_W,
-    height: OVERLAY_H,
     opacity: 1,
   },
 });

@@ -3,7 +3,8 @@ export type {
   JournalTransparentShareComposerProps,
   ComposerCloseResult,
 } from "./JournalTransparentShareComposer";
-export { ShareOverlayArtboard } from "./ShareOverlayArtboard";
+export { ShareOverlayHeaderArtboard } from "./ShareOverlayHeaderArtboard";
+export { ShareOverlayBottomArtboard } from "./ShareOverlayBottomArtboard";
 export { ShareOverlayOffscreen } from "./ShareOverlayOffscreen";
 export type { ShareLog, ShareOverlayOpts, DailyRouteDoc } from "./journalShareTypes";
 export {

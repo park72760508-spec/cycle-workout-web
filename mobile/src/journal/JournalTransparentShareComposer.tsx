@@ -23,11 +23,8 @@ import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
 import ViewShot from "react-native-view-shot";
 import { ShareOverlayOffscreen } from "./ShareOverlayOffscreen";
-import {
-  OVERLAY_ASPECT,
-  type ShareLog,
-  type ShareOverlayOpts,
-} from "./journalShareTypes";
+import { SHARE_LAYOUT } from "./journalShareFormat";
+import type { ShareLog, ShareOverlayOpts } from "./journalShareTypes";
 
 const DEFAULT_SCALE = 1;
 const MIN_SCALE = 0.35;
@@ -59,65 +56,65 @@ export function JournalTransparentShareComposer({
 }: JournalTransparentShareComposerProps) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [overlayUri, setOverlayUri] = useState<string | null>(null);
+  const [overlayHeaderUri, setOverlayHeaderUri] = useState<string | null>(null);
+  const [overlayBottomUri, setOverlayBottomUri] = useState<string | null>(null);
   const [bgUri, setBgUri] = useState<string | null>(null);
   const [scale, setScale] = useState(DEFAULT_SCALE);
-  const [pos, setPos] = useState({ x: 24, y: 24 });
+  const [posHeader, setPosHeader] = useState({ x: 24, y: 16 });
+  const [posBottom, setPosBottom] = useState({ x: 24, y: 280 });
   const [saving, setSaving] = useState(false);
   const [stageSize, setStageSize] = useState({ w: 320, h: 480 });
 
   const stageShotRef = useRef<ViewShot>(null);
-  const overlayNatRef = useRef({ w: 0, h: 0 });
+  const headerNatRef = useRef({ w: 1080, h: SHARE_LAYOUT.headerH });
+  const bottomNatRef = useRef({ w: 1080, h: SHARE_LAYOUT.bottomH });
   const autoPickRef = useRef(false);
   const dragRef = useRef<{
+    kind: "header" | "bottom";
     startX: number;
     startY: number;
     origX: number;
     origY: number;
   } | null>(null);
-  const posRef = useRef(pos);
-  const scaleRef = useRef(scale);
-  const stageSizeRef = useRef(stageSize);
-  posRef.current = pos;
-  scaleRef.current = scale;
-  stageSizeRef.current = stageSize;
 
   const isAndroid = Platform.OS === "android";
   const overlayBaseW = stageSize.w * 0.88;
-  const overlayDispW = overlayBaseW * scale;
-  const overlayDispH =
-    overlayNatRef.current.w > 0
-      ? overlayDispW * (overlayNatRef.current.h / overlayNatRef.current.w)
-      : overlayDispW * OVERLAY_ASPECT;
-
-  function overlayLayout() {
-    const st = stageSizeRef.current;
-    const sc = scaleRef.current;
-    const nat = overlayNatRef.current;
-    const ow = st.w * 0.88 * sc;
-    const oh = nat.w > 0 ? ow * (nat.h / nat.w) : ow * OVERLAY_ASPECT;
-    return { ow, oh, maxX: st.w - ow + 20, maxY: st.h - oh + 20 };
-  }
+  const stickerW = overlayBaseW * scale;
+  const headerDispW = stickerW;
+  const headerDispH =
+    headerNatRef.current.w > 0
+      ? stickerW * (headerNatRef.current.h / headerNatRef.current.w)
+      : stickerW * (SHARE_LAYOUT.headerH / 1080);
+  const bottomDispW = stickerW;
+  const bottomDispH =
+    bottomNatRef.current.w > 0
+      ? stickerW * (bottomNatRef.current.h / bottomNatRef.current.w)
+      : stickerW * (SHARE_LAYOUT.bottomH / 1080);
 
   const placeOverlayDefault = useCallback(() => {
-    const ow = overlayBaseW * scale;
-    const oh =
-      overlayNatRef.current.w > 0
-        ? ow * (overlayNatRef.current.h / overlayNatRef.current.w)
-        : ow * OVERLAY_ASPECT;
-    setPos({
-      x: Math.max(8, (stageSize.w - ow) * 0.04),
-      y: Math.max(8, (stageSize.h - oh) * 0.06),
-    });
+    const w = overlayBaseW * scale;
+    const hH =
+      headerNatRef.current.w > 0
+        ? w * (headerNatRef.current.h / headerNatRef.current.w)
+        : w * (SHARE_LAYOUT.headerH / 1080);
+    const bH =
+      bottomNatRef.current.w > 0
+        ? w * (bottomNatRef.current.h / bottomNatRef.current.w)
+        : w * (SHARE_LAYOUT.bottomH / 1080);
+    const x = Math.max(8, (stageSize.w - w) * 0.04);
+    setPosHeader({ x, y: Math.max(8, stageSize.h * 0.04) });
+    setPosBottom({ x, y: Math.max(hH + 16, stageSize.h - bH - stageSize.h * 0.06) });
   }, [overlayBaseW, scale, stageSize.w, stageSize.h]);
 
   useEffect(() => {
     if (!visible) return;
     setLoading(true);
     setErr(null);
-    setOverlayUri(null);
+    setOverlayHeaderUri(null);
+    setOverlayBottomUri(null);
     setScale(DEFAULT_SCALE);
-    setPos({ x: 24, y: 24 });
+    setPosHeader({ x: 24, y: 16 });
+    setPosBottom({ x: 24, y: 280 });
     autoPickRef.current = false;
   }, [visible, log]);
 
@@ -127,11 +124,11 @@ export function JournalTransparentShareComposer({
   }, []);
 
   useEffect(() => {
-    if (bgUri && overlayUri && overlayNatRef.current.w > 0) {
+    if (bgUri && overlayHeaderUri && overlayBottomUri) {
       const t = setTimeout(placeOverlayDefault, 80);
       return () => clearTimeout(t);
     }
-  }, [bgUri, overlayUri, stageSize.w, stageSize.h, placeOverlayDefault]);
+  }, [bgUri, overlayHeaderUri, overlayBottomUri, stageSize.w, stageSize.h, placeOverlayDefault]);
 
   const pickBackground = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -158,28 +155,36 @@ export function JournalTransparentShareComposer({
     return () => clearTimeout(t);
   }, [visible, loading, bgUri, pickBackground]);
 
-  const panResponder = useRef(
-    PanResponder.create({
+  function makePan(kind: "header" | "bottom") {
+    return PanResponder.create({
       onStartShouldSetPanResponder: () => !!bgUri,
       onMoveShouldSetPanResponder: () => !!bgUri,
       onPanResponderGrant: (_, g) => {
+        const pos = kind === "header" ? posHeader : posBottom;
         dragRef.current = {
+          kind,
           startX: g.x0,
           startY: g.y0,
-          origX: posRef.current.x,
-          origY: posRef.current.y,
+          origX: pos.x,
+          origY: pos.y,
         };
       },
       onPanResponderMove: (_, g) => {
         const d = dragRef.current;
-        if (!d) return;
-        const { maxX, maxY } = overlayLayout();
+        if (!d || d.kind !== kind) return;
         const dx = g.moveX - d.startX;
         const dy = g.moveY - d.startY;
-        setPos({
-          x: clamp(d.origX + dx, -20, maxX),
-          y: clamp(d.origY + dy, -20, maxY),
-        });
+        if (kind === "header") {
+          setPosHeader({
+            x: clamp(d.origX + dx, -20, stageSize.w - headerDispW + 20),
+            y: clamp(d.origY + dy, -20, stageSize.h - headerDispH + 20),
+          });
+        } else {
+          setPosBottom({
+            x: clamp(d.origX + dx, -20, stageSize.w - bottomDispW + 20),
+            y: clamp(d.origY + dy, -20, stageSize.h - bottomDispH + 20),
+          });
+        }
       },
       onPanResponderRelease: () => {
         dragRef.current = null;
@@ -187,11 +192,14 @@ export function JournalTransparentShareComposer({
       onPanResponderTerminate: () => {
         dragRef.current = null;
       },
-    })
-  ).current;
+    });
+  }
+
+  const panHeader = useRef(makePan("header")).current;
+  const panBottom = useRef(makePan("bottom")).current;
 
   async function onSave() {
-    if (!bgUri || !overlayUri) return;
+    if (!bgUri || !overlayHeaderUri || !overlayBottomUri) return;
     setSaving(true);
     setErr(null);
     try {
@@ -231,8 +239,9 @@ export function JournalTransparentShareComposer({
         log={log}
         opts={opts}
         logoSource={logoSource}
-        onReady={(uri) => {
-          setOverlayUri(uri);
+        onReady={(pair) => {
+          setOverlayHeaderUri(pair.headerUri);
+          setOverlayBottomUri(pair.bottomUri);
           setLoading(false);
         }}
         onError={(message) => {
@@ -307,7 +316,7 @@ export function JournalTransparentShareComposer({
           </View>
 
           <Text style={styles.hint}>
-            배경 선택 후 오버레이를 드래그·크기 조절하여 맞추세요.
+            배경 선택 후 상단·하단 오버레이를 각각 드래그해 맞추세요. 크기는 두 영역이 같이 조절됩니다.
           </Text>
 
           {loading ? (
@@ -329,28 +338,56 @@ export function JournalTransparentShareComposer({
                 </View>
               )}
 
-              {overlayUri && !loading ? (
+              {overlayHeaderUri && !loading ? (
                 <View
-                  {...panResponder.panHandlers}
+                  {...panHeader.panHandlers}
                   style={[
                     styles.overlayImgWrap,
                     {
-                      width: overlayDispW,
-                      height: overlayDispH,
-                      left: pos.x,
-                      top: pos.y,
+                      width: headerDispW,
+                      height: headerDispH,
+                      left: posHeader.x,
+                      top: posHeader.y,
                       opacity: bgUri ? 1 : 0.45,
                     },
                   ]}
                 >
                   <Image
-                    source={{ uri: overlayUri }}
+                    source={{ uri: overlayHeaderUri }}
                     style={styles.overlayImage}
                     resizeMode="stretch"
                     onLoad={(e) => {
                       const { width, height } = e.nativeEvent.source;
                       if (width > 0 && height > 0) {
-                        overlayNatRef.current = { w: width, h: height };
+                        headerNatRef.current = { w: width, h: height };
+                        if (bgUri) placeOverlayDefault();
+                      }
+                    }}
+                  />
+                </View>
+              ) : null}
+              {overlayBottomUri && !loading ? (
+                <View
+                  {...panBottom.panHandlers}
+                  style={[
+                    styles.overlayImgWrap,
+                    {
+                      width: bottomDispW,
+                      height: bottomDispH,
+                      left: posBottom.x,
+                      top: posBottom.y,
+                      opacity: bgUri ? 1 : 0.45,
+                    },
+                  ]}
+                >
+                  <Image
+                    source={{ uri: overlayBottomUri }}
+                    style={styles.overlayImage}
+                    resizeMode="stretch"
+                    onLoad={(e) => {
+                      const { width, height } = e.nativeEvent.source;
+                      if (width > 0 && height > 0) {
+                        bottomNatRef.current = { w: width, h: height };
                         if (bgUri) placeOverlayDefault();
                       }
                     }}
