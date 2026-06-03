@@ -203,7 +203,7 @@ async function fetchUserRideLogsForMonth(firebaseUid, year, month) {
   const { data, error } = await supabase
     .from("rides")
     .select(
-      "activity_id, source, activity_type, title, ride_date, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, avg_cadence, avg_hr, max_hr, avg_watts, weighted_watts, max_watts, tss, intensity_factor, kilojoules, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_30min_watts, max_40min_watts, max_60min_watts"
+      "activity_id, source, activity_type, title, ride_date, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, avg_cadence, avg_hr, max_hr, avg_watts, weighted_watts, max_watts, tss, intensity_factor, kilojoules, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_30min_watts, max_40min_watts, max_60min_watts, summary_polyline, elevation_profile_json, route_profile_updated_at"
     )
     .eq("user_id", userUuid)
     .gte("ride_date", startStr)
@@ -238,6 +238,12 @@ async function fetchUserRideLogsForMonth(firebaseUid, year, month) {
     max_30min_watts: row.max_30min_watts != null ? Number(row.max_30min_watts) : null,
     max_40min_watts: row.max_40min_watts != null ? Number(row.max_40min_watts) : null,
     max_60min_watts: row.max_60min_watts != null ? Number(row.max_60min_watts) : null,
+    summary_polyline: row.summary_polyline != null ? String(row.summary_polyline) : null,
+    elevation_profile:
+      row.elevation_profile_json != null ? row.elevation_profile_json : null,
+    elevation_profile_json:
+      row.elevation_profile_json != null ? row.elevation_profile_json : null,
+    route_profile_updated_at: row.route_profile_updated_at || null,
     readBackend: "supabase",
   }));
 }

@@ -297,6 +297,14 @@ function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
     max_hr_40min: int(log.max_hr_40min, 0) || null,
     max_hr_60min: int(log.max_hr_60min, 0) || null,
     tss_applied: Boolean(log.tss_applied),
+    summary_polyline: str(log.summary_polyline),
+    elevation_profile_json:
+      log.elevation_profile != null
+        ? log.elevation_profile
+        : log.elevation_profile_json != null
+          ? log.elevation_profile_json
+          : null,
+    route_profile_updated_at: log.route_profile_updated_at || null,
   };
 }
 

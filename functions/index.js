@@ -1141,9 +1141,54 @@ async function fetchStravaActivityDetail(accessToken, activityId) {
   return { success: false, error: "Strava 429 retries exhausted" };
 }
 
-/** Strava Streams API 호출 (watts, heartrate). 429 시 최대 5회 재시도 */
+const MAX_STRAVA_ELEVATION_PROFILE_POINTS = 160;
+
+function downsampleNumericStreamArray(arr, maxN) {
+  if (!Array.isArray(arr) || !arr.length) return null;
+  if (arr.length <= maxN) {
+    return arr.map((v) => Math.round(Number(v) || 0));
+  }
+  const n = arr.length;
+  const step = Math.ceil(n / maxN);
+  const out = [];
+  for (let i = 0; i < n; i += step) out.push(Math.round(Number(arr[i]) || 0));
+  const last = Math.round(Number(arr[n - 1]) || 0);
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
+/** Strava activity + streams → Firestore/Supabase 라우트 프로파일 필드 */
+function buildStravaRouteProfileFields(activity, streamsRes) {
+  const polyRaw =
+    activity && activity.map && activity.map.summary_polyline
+      ? String(activity.map.summary_polyline).trim()
+      : activity && activity.summary_polyline
+        ? String(activity.summary_polyline).trim()
+        : "";
+  const summaryPolyline = polyRaw || null;
+  let elevationProfile = null;
+  if (
+    streamsRes &&
+    streamsRes.success &&
+    Array.isArray(streamsRes.altitude) &&
+    streamsRes.altitude.length > 0
+  ) {
+    elevationProfile = downsampleNumericStreamArray(
+      streamsRes.altitude,
+      MAX_STRAVA_ELEVATION_PROFILE_POINTS
+    );
+  }
+  if (!summaryPolyline && !elevationProfile) return null;
+  return {
+    summary_polyline: summaryPolyline,
+    elevation_profile: elevationProfile,
+    route_profile_updated_at: new Date().toISOString(),
+  };
+}
+
+/** Strava Streams API 호출 (watts, heartrate, altitude). 429 시 최대 5회 재시도 */
 async function fetchStravaStreams(accessToken, activityId) {
-  const url = `https://www.strava.com/api/v3/activities/${activityId}/streams/time,watts,heartrate`;
+  const url = `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,watts,heartrate,altitude&key_by_type=true`;
   const maxRetries = 5;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -1153,14 +1198,33 @@ async function fetchStravaStreams(accessToken, activityId) {
         await waitForStravaRateLimit(res);
         continue;
       }
-      if (!res.ok) return { success: false, status: res.status, watts: null, heartrate: null };
+      if (!res.ok) return { success: false, status: res.status, watts: null, heartrate: null, altitude: null };
       const raw = await res.json().catch(() => null);
-      const streamArray = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.data) ? raw.data : []);
-      const wattsStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "watts");
-      const heartrateStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "heartrate");
-      const wattsArray = wattsStream && Array.isArray(wattsStream.data) ? wattsStream.data : null;
-      const heartrateArray = heartrateStream && Array.isArray(heartrateStream.data) ? heartrateStream.data : null;
-      return { success: true, watts: wattsArray, heartrate: heartrateArray };
+      let wattsArray = null;
+      let heartrateArray = null;
+      let altitudeArray = null;
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        wattsArray = Array.isArray(raw.watts) ? raw.watts : (raw.watts && Array.isArray(raw.watts.data) ? raw.watts.data : null);
+        heartrateArray = Array.isArray(raw.heartrate)
+          ? raw.heartrate
+          : raw.heartrate && Array.isArray(raw.heartrate.data)
+            ? raw.heartrate.data
+            : null;
+        altitudeArray = Array.isArray(raw.altitude)
+          ? raw.altitude
+          : raw.altitude && Array.isArray(raw.altitude.data)
+            ? raw.altitude.data
+            : null;
+      } else {
+        const streamArray = Array.isArray(raw) ? raw : raw && Array.isArray(raw.data) ? raw.data : [];
+        const wattsStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "watts");
+        const heartrateStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "heartrate");
+        const altitudeStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "altitude");
+        wattsArray = wattsStream && Array.isArray(wattsStream.data) ? wattsStream.data : null;
+        heartrateArray = heartrateStream && Array.isArray(heartrateStream.data) ? heartrateStream.data : null;
+        altitudeArray = altitudeStream && Array.isArray(altitudeStream.data) ? altitudeStream.data : null;
+      }
+      return { success: true, watts: wattsArray, heartrate: heartrateArray, altitude: altitudeArray };
     } catch (e) {
       if (attempt === maxRetries) return { success: false, watts: null, heartrate: null };
     }
@@ -1425,6 +1489,13 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     if (hrPeaks.max_hr_40min != null) logDoc.max_hr_40min = hrPeaks.max_hr_40min;
     if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
     if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
+  }
+
+  const routeProfile = buildStravaRouteProfileFields(activity, streamsRes);
+  if (routeProfile) {
+    if (routeProfile.summary_polyline) logDoc.summary_polyline = routeProfile.summary_polyline;
+    if (routeProfile.elevation_profile) logDoc.elevation_profile = routeProfile.elevation_profile;
+    logDoc.route_profile_updated_at = routeProfile.route_profile_updated_at;
   }
 
   // Run/Swim/Walk/TrailRun/WeightTraining 등 비라이딩 활동은 라이딩 기록 컬렉션에 저장하지 않음
@@ -2134,7 +2205,8 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       const needsTimeInZones = !d.time_in_zones || !d.time_in_zones.power;
       const needsWeight = d.weight == null;
       const needsActivityType = !String(d.activity_type || "").trim();
-      if ((needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType) && entry) {
+      const needsRouteProfile = !String(d.summary_polyline || "").trim() || !d.elevation_profile;
+      if ((needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType || needsRouteProfile) && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         const updateData = {};
         if (needsActivityType) {
@@ -2180,6 +2252,17 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
             dateStr: d.date || "",
           });
           updateData.time_in_zones = timeInZones;
+        }
+        if (needsRouteProfile) {
+          let detailAct = act;
+          const detailResUp = await fetchStravaActivityDetail(accessToken, actId);
+          if (detailResUp.success && detailResUp.activity) detailAct = detailResUp.activity;
+          const routeUp = buildStravaRouteProfileFields(detailAct, streamsRes);
+          if (routeUp) {
+            if (routeUp.summary_polyline) updateData.summary_polyline = routeUp.summary_polyline;
+            if (routeUp.elevation_profile) updateData.elevation_profile = routeUp.elevation_profile;
+            updateData.route_profile_updated_at = routeUp.route_profile_updated_at;
+          }
         }
         if (Object.keys(updateData).length > 0) {
           const mergedLog = { ...d, ...updateData };
@@ -2298,6 +2381,12 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if (hrPeaks.max_hr_40min != null) logDoc.max_hr_40min = hrPeaks.max_hr_40min;
       if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
       if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
+    }
+    const routeProfileBatch = buildStravaRouteProfileFields(detailedActivity, streamsRes);
+    if (routeProfileBatch) {
+      if (routeProfileBatch.summary_polyline) logDoc.summary_polyline = routeProfileBatch.summary_polyline;
+      if (routeProfileBatch.elevation_profile) logDoc.elevation_profile = routeProfileBatch.elevation_profile;
+      logDoc.route_profile_updated_at = routeProfileBatch.route_profile_updated_at;
     }
     // Run/Swim/Walk/TrailRun/WeightTraining 등 비라이딩 활동은 저장하지 않음
     if (!isCyclingForMmp(mapped)) {
@@ -3265,6 +3354,137 @@ if (STRAVA_CLIENT_SECRET) {
     manualStravaSyncTodaySeoulOptions.secrets.push(STRAVA_CLIENT_SECRET);
   }
 }
+/**
+ * 기존 Strava 로그에 summary_polyline·고도 프로파일 백필 (수동·오늘 일지용)
+ * POST { date?: "YYYY-MM-DD", userId?: "firebaseUid" } — userId 생략 시 grade=1 관리자 본인만
+ */
+async function backfillStravaRouteProfileForUserDate(db, userId, dateStr) {
+  const userSnap = await db.collection("users").doc(userId).get();
+  if (!userSnap.exists) return { updated: 0, skipped: 0, errors: ["user not found"] };
+  const userData = userSnap.data() || {};
+  let accessToken = userData.strava_access_token || "";
+  const tokenExpiresAt = Number(userData.strava_expires_at || 0);
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (!accessToken || tokenExpiresAt < nowSec + 300) {
+    const tokenResult = await refreshStravaTokenForUser(db, userId);
+    accessToken = tokenResult.accessToken;
+  }
+  const logsRef = db.collection("users").doc(userId).collection("logs");
+  const snap = await logsRef.where("date", "==", dateStr).where("source", "==", "strava").get();
+  let updated = 0;
+  let skipped = 0;
+  const errors = [];
+  for (const doc of snap.docs) {
+    const d = doc.data() || {};
+    const actId = String(d.activity_id || doc.id || "");
+    if (!actId) {
+      skipped++;
+      continue;
+    }
+    if (String(d.summary_polyline || "").trim() && d.elevation_profile) {
+      skipped++;
+      continue;
+    }
+    try {
+      const [detailRes, streamsRes] = await Promise.all([
+        fetchStravaActivityDetail(accessToken, actId),
+        fetchStravaStreams(accessToken, actId),
+      ]);
+      if (!detailRes.success || !detailRes.activity) {
+        errors.push(`${actId}: detail fail`);
+        continue;
+      }
+      const routeUp = buildStravaRouteProfileFields(detailRes.activity, streamsRes);
+      if (!routeUp) {
+        skipped++;
+        continue;
+      }
+      const updateData = {};
+      if (routeUp.summary_polyline) updateData.summary_polyline = routeUp.summary_polyline;
+      if (routeUp.elevation_profile) updateData.elevation_profile = routeUp.elevation_profile;
+      updateData.route_profile_updated_at = routeUp.route_profile_updated_at;
+      const mergedLog = { ...d, ...updateData };
+      await stravaDualWrite.dualWriteStravaActivityLog(
+        admin,
+        userId,
+        actId,
+        mergedLog,
+        () => doc.ref.update(updateData)
+      );
+      updated++;
+    } catch (e) {
+      errors.push(`${actId}: ${e && e.message ? e.message : String(e)}`);
+    }
+  }
+  return { updated, skipped, errors };
+}
+
+const backfillStravaRouteProfileOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  region: "asia-northeast3",
+  cors: true,
+  timeoutSeconds: 540,
+});
+if (STRAVA_CLIENT_SECRET) {
+  backfillStravaRouteProfileOptions.secrets =
+    backfillStravaRouteProfileOptions.secrets || [];
+  if (!backfillStravaRouteProfileOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    backfillStravaRouteProfileOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
+}
+exports.backfillStravaRouteProfileForDate = onRequest(
+  backfillStravaRouteProfileOptions,
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Internal-Secret");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST only" });
+      return;
+    }
+    try {
+      const db = admin.firestore();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+      const dateStr = String(body.date || req.query.date || todayStr).slice(0, 10);
+      let targetUid = body.userId ? String(body.userId).trim() : "";
+      const rawSecret =
+        req.headers["x-internal-secret"] ||
+        req.headers["X-Internal-Secret"] ||
+        req.query.secret;
+      if (!targetUid) {
+        if (rawSecret === INTERNAL_SYNC_SECRET) {
+          res.status(400).json({ success: false, error: "userId required with internal secret" });
+          return;
+        }
+        const callerUid = await getUidFromRequest(req, res);
+        if (!callerUid) return;
+        targetUid = callerUid;
+      } else if (rawSecret !== INTERNAL_SYNC_SECRET) {
+        const callerUid = await getUidFromRequest(req, res);
+        if (!callerUid) return;
+        const callerSnap = await db.collection("users").doc(callerUid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        if (grade !== "1" && callerUid !== targetUid) {
+          res.status(403).json({ success: false, error: "권한 없음" });
+          return;
+        }
+      }
+      const result = await backfillStravaRouteProfileForUserDate(db, targetUid, dateStr);
+      res.status(200).json({ success: true, date: dateStr, userId: targetUid, ...result });
+    } catch (err) {
+      console.error("[backfillStravaRouteProfileForDate]", err);
+      res.status(500).json({
+        success: false,
+        error: err && err.message ? err.message : String(err),
+      });
+    }
+  }
+);
+
 exports.manualStravaSyncTodaySeoul = onRequest(
   manualStravaSyncTodaySeoulOptions,
   async (req, res) => {
