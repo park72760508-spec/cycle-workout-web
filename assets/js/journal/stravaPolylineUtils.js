@@ -188,17 +188,109 @@
     return next;
   }
 
-  /** 코스 polyline·고도가 있는 Strava 로그 우선 선택 (logs[0]만 쓰면 배경이 비어 보임) */
+  function logSortKeyForRouteMerge(log) {
+    if (!log) return 0;
+    var t = log.start_time || log.start_date_local || log.start_date;
+    if (t) {
+      var ms = Date.parse(String(t));
+      if (!isNaN(ms)) return ms;
+    }
+    var aid = Number(log.activity_id || 0);
+    return isFinite(aid) ? aid : 0;
+  }
+
+  function flattenRouteSegments(segments) {
+    var out = [];
+    var i, j;
+    if (!segments || !segments.length) return out;
+    for (i = 0; i < segments.length; i++) {
+      if (!segments[i] || segments[i].length < 2) continue;
+      for (j = 0; j < segments[i].length; j++) out.push(segments[i][j]);
+    }
+    return out;
+  }
+
+  /**
+   * 같은 날 Strava 로그 여러 건 → 구간별 코스(활동 사이 직선 연결 없음) + 고도 연결
+   * @param {Array<object>} logs
+   * @param {object} [dailyDoc] users/{uid}/daily_route_profiles/{date} 문서 (있으면 우선)
+   */
+  function routeProfileFromLogs(logs, dailyDoc) {
+    if (dailyDoc && (dailyDoc.route_segments || dailyDoc.merged_elevation_profile)) {
+      var segs = Array.isArray(dailyDoc.route_segments) ? dailyDoc.route_segments : [];
+      var elevDaily = downsampleElevation(dailyDoc.merged_elevation_profile, 200);
+      return {
+        segments: segs,
+        latlngs: downsampleLatLngs(flattenRouteSegments(segs), 900),
+        elevation: elevDaily,
+        hasRoute: segs.length > 0,
+        hasElevation: elevDaily.length >= 2,
+        activity_ids: dailyDoc.activity_ids || [],
+        segmentCount: segs.length,
+      };
+    }
+    if (!logs || !logs.length) {
+      return {
+        segments: [],
+        latlngs: [],
+        elevation: [],
+        hasRoute: false,
+        hasElevation: false,
+        activity_ids: [],
+        segmentCount: 0,
+      };
+    }
+    var sorted = logs.slice().sort(function (a, b) {
+      return logSortKeyForRouteMerge(a) - logSortKeyForRouteMerge(b);
+    });
+    var segments = [];
+    var activityIds = [];
+    var mergedElev = [];
+    var i, l, poly, pts, elevRaw, elevArr;
+    for (i = 0; i < sorted.length; i++) {
+      l = normalizeLogRouteFields(sorted[i]);
+      if (!l) continue;
+      poly = l.summary_polyline != null ? String(l.summary_polyline).trim() : '';
+      if (poly) {
+        pts = downsampleLatLngs(decodePolyline(poly), 320);
+        if (pts.length >= 2) {
+          segments.push(pts);
+          if (l.activity_id) activityIds.push(String(l.activity_id));
+        }
+      }
+      elevRaw = l.elevation_profile != null ? l.elevation_profile : l.elevation_profile_json;
+      elevArr = normalizeElevationProfile(elevRaw);
+      if (elevArr.length) mergedElev = mergedElev.concat(elevArr);
+    }
+    if (segments.length > 8) segments = segments.slice(0, 8);
+    mergedElev = downsampleElevation(mergedElev, 200);
+    return {
+      segments: segments,
+      latlngs: downsampleLatLngs(flattenRouteSegments(segments), 900),
+      elevation: mergedElev,
+      hasRoute: segments.length > 0,
+      hasElevation: mergedElev.length >= 2,
+      activity_ids: activityIds,
+      segmentCount: segments.length,
+    };
+  }
+
+  /** @deprecated 단일 로그 — 다중 활동일 때 routeProfileFromLogs 사용 */
   function pickRouteLogFromLogs(logs) {
     if (!logs || !logs.length) return null;
-    var i, l, route;
-    for (i = 0; i < logs.length; i++) {
-      l = normalizeLogRouteFields(logs[i]);
-      if (!l) continue;
-      route = routeProfileFromLog(l);
-      if (route.hasRoute || route.hasElevation) return l;
-    }
-    return normalizeLogRouteFields(logs[0]);
+    var merged = routeProfileFromLogs(logs);
+    if (!merged.hasRoute && !merged.hasElevation) return normalizeLogRouteFields(logs[0]);
+    return {
+      date: logs[0].date,
+      title:
+        merged.segmentCount > 1
+          ? logs[0].date + ' 라이딩 ' + merged.segmentCount + '회'
+          : logs[0].title || 'STELVIO Ride',
+      summary_polyline: logs[0].summary_polyline,
+      elevation_profile: merged.elevation,
+      _routeProfileMerged: merged,
+      activity_ids: merged.activity_ids,
+    };
   }
 
   function routeProfileFromLog(log) {
@@ -228,6 +320,8 @@
     elevationToSvgPath: elevationToSvgPath,
     normalizeLogRouteFields: normalizeLogRouteFields,
     pickRouteLogFromLogs: pickRouteLogFromLogs,
+    routeProfileFromLogs: routeProfileFromLogs,
     routeProfileFromLog: routeProfileFromLog,
+    flattenRouteSegments: flattenRouteSegments,
   };
 })(typeof window !== 'undefined' ? window : global);

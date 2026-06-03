@@ -11,26 +11,59 @@
   var R = window.React;
   var utils = window.stravaPolylineUtils;
 
+  function resolveRouteProfile(props) {
+    if (!utils) return null;
+    if (props.routeProfile) return props.routeProfile;
+    if (props.log && props.log._routeProfileMerged) return props.log._routeProfileMerged;
+    if (props.logs && props.logs.length && typeof utils.routeProfileFromLogs === 'function') {
+      return utils.routeProfileFromLogs(props.logs, props.dailyRouteDoc || null);
+    }
+    if (props.log) return utils.routeProfileFromLog(utils.normalizeLogRouteFields(props.log));
+    return null;
+  }
+
   function RidingCourseSvgBackground(props) {
-    var log = props.log;
     var opacity = props.opacity != null ? Number(props.opacity) : 0.22;
     var variant = props.variant === 'white' ? 'white' : 'muted';
     var showElevation = props.showElevation !== false;
     var className = props.className || '';
 
-    if (!utils || !log) return null;
-    log = utils.normalizeLogRouteFields ? utils.normalizeLogRouteFields(log) : log;
-    var route = utils.routeProfileFromLog(log);
-    if (!route.hasRoute && !route.hasElevation) return null;
+    var route = resolveRouteProfile(props);
+    if (!route || (!route.hasRoute && !route.hasElevation)) return null;
 
     var stroke = variant === 'white' ? '#FFFFFF' : '#7c3aed';
-    var coursePath = route.hasRoute
-      ? utils.latLngsToSvgPath(route.latlngs, 400, 160, 0.1)
-      : { pathD: '', viewW: 400, viewH: 160 };
+    var coursePaths = [];
+    var si, segPath, segList;
+
+    if (route.segments && route.segments.length) {
+      for (si = 0; si < route.segments.length; si++) {
+        segPath = utils.latLngsToSvgPath(route.segments[si], 400, 160, 0.1);
+        if (segPath.pathD) coursePaths.push(segPath.pathD);
+      }
+    } else if (route.hasRoute && route.latlngs && route.latlngs.length >= 2) {
+      segPath = utils.latLngsToSvgPath(route.latlngs, 400, 160, 0.1);
+      if (segPath.pathD) coursePaths.push(segPath.pathD);
+    }
+
     var elevPath =
       showElevation && route.hasElevation
         ? utils.elevationToSvgPath(route.elevation, 400, 56, 0.08)
         : { pathD: '', viewH: 56 };
+
+    segList = [];
+    for (si = 0; si < coursePaths.length; si++) {
+      segList.push(
+        R.createElement('path', {
+          key: 'course-' + si,
+          d: coursePaths[si],
+          fill: 'none',
+          stroke: stroke,
+          strokeWidth: variant === 'white' ? 3 : 2.5,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+        })
+      );
+    }
 
     return R.createElement(
       'div',
@@ -57,16 +90,7 @@
             opacity: opacity,
           },
         },
-        coursePath.pathD
-          ? R.createElement('path', {
-              d: coursePath.pathD,
-              fill: 'none',
-              stroke: stroke,
-              strokeWidth: variant === 'white' ? 3 : 2.5,
-              strokeLinecap: 'round',
-              strokeLinejoin: 'round',
-            })
-          : null,
+        segList,
         elevPath.pathD
           ? R.createElement('path', {
               d: elevPath.pathD,

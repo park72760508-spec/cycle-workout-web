@@ -51,8 +51,23 @@
     var w = opts.width || 1080;
     var h = opts.height || 1350;
     if (!utils || !log) return '';
-    var route = utils.routeProfileFromLog(log);
-    var course = route.hasRoute ? utils.latLngsToSvgPath(route.latlngs, w - 120, 520, 0.12) : null;
+    var logs = opts.logs || log._logsForShare || null;
+    var route =
+      log._routeProfileMerged ||
+      (logs && typeof utils.routeProfileFromLogs === 'function'
+        ? utils.routeProfileFromLogs(logs)
+        : utils.routeProfileFromLog(log));
+    var coursePaths = [];
+    var si, segPath;
+    if (route.segments && route.segments.length) {
+      for (si = 0; si < route.segments.length; si++) {
+        segPath = utils.latLngsToSvgPath(route.segments[si], w - 120, 520, 0.12);
+        if (segPath.pathD) coursePaths.push(segPath.pathD);
+      }
+    } else if (route.hasRoute && route.latlngs && route.latlngs.length >= 2) {
+      segPath = utils.latLngsToSvgPath(route.latlngs, w - 120, 520, 0.12);
+      if (segPath.pathD) coursePaths.push(segPath.pathD);
+    }
     var elev = route.hasElevation
       ? utils.elevationToSvgPath(route.elevation, w - 120, 200, 0.1)
       : null;
@@ -77,12 +92,12 @@
         '</text>';
     }
     var shapes = '';
-    if (course && course.pathD) {
+    for (si = 0; si < coursePaths.length; si++) {
       shapes +=
         '<g transform="translate(60, ' +
         (h - 780) +
         ')"><path d="' +
-        course.pathD +
+        coursePaths[si] +
         '" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></g>';
     }
     if (elev && elev.pathD) {
@@ -164,6 +179,7 @@
    */
   async function exportTransparentSharePng(log, opts) {
     opts = opts || {};
+    if (log && log._logsForShare && !opts.logs) opts.logs = log._logsForShare;
     var svg = buildShareSvgMarkup(log, opts);
     if (!svg) throw new Error('코스 데이터가 없어 공유 이미지를 만들 수 없습니다.');
     var blob = await svgToPngBlob(svg);

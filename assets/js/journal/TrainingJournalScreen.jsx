@@ -83,6 +83,7 @@
       DailySummary ? React.createElement(DailySummary, {
         selectedDate: selectedDate,
         logs: logsForSelectedDate,
+        dailyRouteDoc: data.dailyRouteDoc,
         onShowDetail: openDetailSheet,
         userProfile: data.userProfile
       }) : null,
@@ -97,6 +98,7 @@
         onClose: closeDetailSheet,
         logs: logsForSelectedDate,
         selectedDate: selectedDate,
+        dailyRouteDoc: data.dailyRouteDoc,
         yearlyPeaksByYear: data.yearlyPeaksByYear,
         userWeightForPr: data.userWeightForPr,
         userProfile: data.userProfile

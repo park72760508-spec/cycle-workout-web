@@ -54,6 +54,10 @@
     var detailSheetOpen = _useState9[0];
     var setDetailSheetOpen = _useState9[1];
 
+    var _useState10 = useState(null);
+    var dailyRouteDoc = _useState10[0];
+    var setDailyRouteDoc = _useState10[1];
+
     // 사용자 ID 획득
     function getCurrentUserId() {
       var currentUser = window.currentUser || (function() {
@@ -207,6 +211,74 @@
       });
     }, [loading, trainingLogs, currentYear, currentMonth]);
 
+    function fetchDailyRouteProfileDoc(userId, dateKey) {
+      if (!userId || !dateKey) return Promise.resolve(null);
+      var fns = window._firebaseFirestoreFns;
+      var db = window.firestoreV9;
+      if (db && fns && typeof fns.doc === 'function' && typeof fns.getDoc === 'function') {
+        var ref = fns.doc(db, 'users', String(userId), 'daily_route_profiles', String(dateKey));
+        return fns.getDoc(ref).then(function (snap) {
+          var exists = typeof snap.exists === 'function' ? snap.exists() : !!snap.exists;
+          if (!exists) return null;
+          var data = typeof snap.data === 'function' ? snap.data() : null;
+          return data || null;
+        }).catch(function (e) {
+          console.warn('[useJournalData] daily_route_profiles(v9) 조회 실패:', e);
+          return null;
+        });
+      }
+      if (window.firestore && typeof window.firestore.collection === 'function') {
+        return window.firestore
+          .collection('users')
+          .doc(String(userId))
+          .collection('daily_route_profiles')
+          .doc(String(dateKey))
+          .get()
+          .then(function (snap) {
+            return snap && snap.exists ? snap.data() : null;
+          })
+          .catch(function (e2) {
+            console.warn('[useJournalData] daily_route_profiles(compat) 조회 실패:', e2);
+            return null;
+          });
+      }
+      return Promise.resolve(null);
+    }
+
+    useEffect(function loadDailyRouteProfileForSelectedDate() {
+      if (!selectedDate) {
+        setDailyRouteDoc(null);
+        return;
+      }
+      var userId = getCurrentUserId();
+      if (!userId) {
+        setDailyRouteDoc(null);
+        return;
+      }
+      var cancelled = false;
+      fetchDailyRouteProfileDoc(userId, selectedDate).then(function (doc) {
+        if (!cancelled) setDailyRouteDoc(doc);
+      });
+      return function () {
+        cancelled = true;
+      };
+    }, [selectedDate]);
+
+    useEffect(function refreshDailyRouteOnJournalEvent() {
+      function onRefresh(ev) {
+        if (!selectedDate) return;
+        var userId = getCurrentUserId();
+        if (!userId) return;
+        fetchDailyRouteProfileDoc(userId, selectedDate).then(function (doc) {
+          setDailyRouteDoc(doc);
+        });
+      }
+      window.addEventListener('journal-training-logs-refresh', onRefresh);
+      return function () {
+        window.removeEventListener('journal-training-logs-refresh', onRefresh);
+      };
+    }, [selectedDate]);
+
     // 월별 네비게이션 (달 이동 시 서버 훈련 로그 재조회)
     var navigateMonth = useCallback(function(direction) {
       setCurrentMonth(function(prev) {
@@ -277,6 +349,7 @@
       userWeightForPr: userWeightForPr,
       userProfile: userProfile,
       logsForSelectedDate: logsForSelectedDate,
+      dailyRouteDoc: dailyRouteDoc,
       monthlyLogs: monthlyLogs,
       navigateMonth: navigateMonth,
       detailSheetOpen: detailSheetOpen,

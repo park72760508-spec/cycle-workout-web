@@ -152,27 +152,34 @@
 
     var CourseMap = window.JournalCourseMapPreview;
     var utils = window.stravaPolylineUtils;
-    var routeLog =
-      utils && typeof utils.pickRouteLogFromLogs === 'function'
-        ? utils.pickRouteLogFromLogs(logs)
-        : logs[0] || null;
-    var routeInfo =
-      utils && routeLog && typeof utils.routeProfileFromLog === 'function'
-        ? utils.routeProfileFromLog(routeLog)
-        : { hasRoute: false, hasElevation: false };
+    var dailyRouteDoc = props.dailyRouteDoc || null;
+    var routeProfile =
+      utils && typeof utils.routeProfileFromLogs === 'function'
+        ? utils.routeProfileFromLogs(logs, dailyRouteDoc)
+        : { hasRoute: false, hasElevation: false, segmentCount: 0 };
     var mapKey =
       (selectedDate || '') +
+      '-seg' +
+      (routeProfile.segmentCount || 0) +
       '-' +
-      (routeLog && routeLog.activity_id ? String(routeLog.activity_id) : 'none');
+      ((routeProfile.activity_ids || []).join(',') || 'none');
 
     return React.createElement('div', { className: 'card journal-daily-summary journal-daily-summary--with-route' },
       React.createElement('div', { className: 'journal-daily-summary-header' },
-        React.createElement('h3', { className: 'journal-daily-summary-title' }, formatDateKey(selectedDate) + ' 요약')
+        React.createElement('h3', { className: 'journal-daily-summary-title' },
+          formatDateKey(selectedDate) + ' 요약' +
+            (routeProfile.segmentCount > 1
+              ? ' · 라이딩 ' + routeProfile.segmentCount + '회'
+              : '')
+        )
       ),
-      CourseMap && routeLog && routeInfo.hasRoute
+      CourseMap && routeProfile.hasRoute
         ? React.createElement(CourseMap, {
             key: mapKey,
-            log: routeLog,
+            logs: logs,
+            dailyRouteDoc: dailyRouteDoc,
+            routeProfile: routeProfile,
+            dateKey: selectedDate,
             mapHeight: 200,
             className: 'journal-daily-summary-course-map'
           })

@@ -592,7 +592,7 @@
     return Math.round(Number(v)) + ' rpm';
   }
 
-  function mergeLogsForDetail(logs) {
+  function mergeLogsForDetail(logs, dailyRouteDoc) {
     if (!logs || logs.length === 0) return null;
     var log = logs[0];
     if (logs.length === 1) {
@@ -699,10 +699,10 @@
     } else if (logs[0].time_in_zones) {
       mergedTiz = logs[0].time_in_zones;
     }
-    var routeSrc =
-      window.stravaPolylineUtils && typeof window.stravaPolylineUtils.pickRouteLogFromLogs === 'function'
-        ? window.stravaPolylineUtils.pickRouteLogFromLogs(logs)
-        : logs[0];
+    var routeMerged =
+      window.stravaPolylineUtils && typeof window.stravaPolylineUtils.routeProfileFromLogs === 'function'
+        ? window.stravaPolylineUtils.routeProfileFromLogs(logs, dailyRouteDoc || null)
+        : null;
     return {
       date: logs[0].date,
       distance_km: totalDist,
@@ -741,13 +741,14 @@
       weight: logs[0].weight,
       time_in_zones: mergedTiz,
       source: logs[0].source,
-      summary_polyline: routeSrc ? routeSrc.summary_polyline : null,
-      elevation_profile: routeSrc
-        ? routeSrc.elevation_profile != null
-          ? routeSrc.elevation_profile
-          : routeSrc.elevation_profile_json
-        : null,
-      title: routeSrc && routeSrc.title ? routeSrc.title : logs[0].title
+      summary_polyline: logs.length === 1 && logs[0].summary_polyline ? logs[0].summary_polyline : null,
+      elevation_profile: routeMerged && routeMerged.hasElevation ? routeMerged.elevation : null,
+      title:
+        routeMerged && routeMerged.segmentCount > 1
+          ? (logs[0].date || '') + ' 라이딩 ' + routeMerged.segmentCount + '회'
+          : logs[0].title,
+      _routeProfileMerged: routeMerged,
+      _logsForShare: logs
     };
   }
 
@@ -770,6 +771,7 @@
 
   function TabSummary(props) {
     var log = props.log;
+    var dailyRouteDoc = props.dailyRouteDoc || null;
     var onShareTransparent = props.onShareTransparent;
     var _shareBusy = useState(false);
     var shareBusy = _shareBusy[0];
@@ -779,10 +781,15 @@
     }
     var CourseMap = window.JournalCourseMapPreview;
     var utils = window.stravaPolylineUtils;
+    var logsForRoute = log && log._logsForShare ? log._logsForShare : null;
     var routeInfo =
-      utils && log && typeof utils.routeProfileFromLog === 'function'
-        ? utils.routeProfileFromLog(log)
-        : { hasRoute: false, hasElevation: false };
+      log && log._routeProfileMerged
+        ? log._routeProfileMerged
+        : utils && logsForRoute && typeof utils.routeProfileFromLogs === 'function'
+          ? utils.routeProfileFromLogs(logsForRoute, dailyRouteDoc)
+          : utils && log && typeof utils.routeProfileFromLog === 'function'
+            ? utils.routeProfileFromLog(log)
+            : { hasRoute: false, hasElevation: false, segmentCount: 0 };
     var spd = log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
       ? Number(log.avg_speed_kmh)
       : avgSpeedKmhFromDistanceTime(log.distance_km, log.duration_sec);
@@ -802,8 +809,12 @@
       { className: 'journal-tab-content journal-tab-content--summary-route' },
       CourseMap && routeInfo.hasRoute
         ? React.createElement(CourseMap, {
-            key: String(log.activity_id || log.date || 'sheet-map'),
+            key: String((log.date || '') + '-seg-' + (routeInfo.segmentCount || 0)),
+            logs: logsForRoute,
             log: log,
+            routeProfile: routeInfo,
+            dailyRouteDoc: dailyRouteDoc,
+            dateKey: log.date,
             mapHeight: 200,
             className: 'journal-summary-sheet-course-map'
           })
@@ -939,6 +950,7 @@
     var selectedDate = props.selectedDate;
     var yearlyPeaksByYear = props.yearlyPeaksByYear || {};
     var userWeightForPr = props.userWeightForPr || 0;
+    var dailyRouteDoc = props.dailyRouteDoc || null;
 
     var _useState = useState('summary');
     var activeTab = _useState[0];
@@ -946,7 +958,7 @@
 
     if (!open) return null;
 
-    var merged = mergeLogsForDetail(logs);
+    var merged = mergeLogsForDetail(logs, dailyRouteDoc);
     var yearForPeaks = selectedDate && selectedDate.length >= 4 ? parseInt(selectedDate.substring(0, 4), 10) : new Date().getFullYear();
     var yearlyPeaks = yearlyPeaksByYear[yearForPeaks] || null;
     var tabs = [
@@ -983,23 +995,18 @@
         React.createElement('div', { className: 'journal-bottom-sheet-body' },
           tabs.map(function(t) {
             if (activeTab !== t.id) return null;
-            var routeLog =
-              window.stravaPolylineUtils && typeof window.stravaPolylineUtils.pickRouteLogFromLogs === 'function'
-                ? window.stravaPolylineUtils.pickRouteLogFromLogs(logs)
-                : logs[0] || merged;
-            var summaryLog = merged || routeLog;
-            if (routeLog && merged) {
-              summaryLog = Object.assign({}, merged, {
-                summary_polyline: routeLog.summary_polyline,
-                elevation_profile:
-                  routeLog.elevation_profile != null
-                    ? routeLog.elevation_profile
-                    : routeLog.elevation_profile_json,
-                title: routeLog.title || merged.title
-              });
-            }
+            var routeMergedTab =
+              window.stravaPolylineUtils && typeof window.stravaPolylineUtils.routeProfileFromLogs === 'function'
+                ? window.stravaPolylineUtils.routeProfileFromLogs(logs, dailyRouteDoc)
+                : null;
+            var summaryLog = merged
+              ? Object.assign({}, merged, {
+                  _routeProfileMerged: routeMergedTab || merged._routeProfileMerged,
+                  _logsForShare: logs
+                })
+              : logs[0] || null;
             var p = t.id === 'summary'
-              ? { log: summaryLog, userProfile: props.userProfile || {} }
+              ? { log: summaryLog, logs: logs, dailyRouteDoc: dailyRouteDoc, userProfile: props.userProfile || {} }
               : { log: merged, yearlyPeaks: yearlyPeaks, userWeight: userWeightForPr, userProfile: props.userProfile || {} };
             return React.createElement(t.C, Object.assign({ key: t.id }, p));
           })
