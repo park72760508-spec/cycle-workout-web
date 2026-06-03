@@ -1999,8 +1999,10 @@
       color: #f8fafc;
       display: flex;
       flex-direction: column;
-      min-height: 100%;
+      min-height: 0;
+      height: 100%;
       max-height: 100dvh;
+      overflow: hidden;
     }
     .journal-share-composer-header {
       display: flex;
@@ -2043,12 +2045,12 @@
     }
     .journal-share-composer-stage {
       position: relative;
-      flex: 1;
+      flex: 1 1 auto;
       margin: 0 12px;
       border-radius: 12px;
       overflow: hidden;
       background: repeating-conic-gradient(#1e293b 0% 25%, #0f172a 0% 50%) 50% / 20px 20px;
-      min-height: 280px;
+      min-height: 0;
       touch-action: none;
     }
     .journal-share-composer-bg {
@@ -2088,23 +2090,38 @@
       cursor: grabbing;
     }
     .journal-share-composer-controls {
+      flex: 0 0 auto;
       padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0));
       display: flex;
       flex-direction: column;
       gap: 10px;
       border-top: 1px solid rgba(148, 163, 184, 0.2);
+      background: #0f172a;
     }
-    .journal-share-composer-pick-btn {
+    .journal-share-composer-actions-row {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 10px;
+      width: 100%;
+    }
+    .journal-share-composer-action-btn {
+      flex: 1 1 0;
+      min-width: 0;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 12px 16px;
+      padding: 12px 10px;
       border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .journal-share-composer-pick-btn {
       background: rgba(124, 58, 237, 0.25);
       border: 1px solid rgba(167, 139, 250, 0.45);
       color: #ede9fe;
-      font-size: 14px;
-      font-weight: 600;
       cursor: pointer;
     }
     .journal-share-composer-file-input {
@@ -2147,16 +2164,13 @@
       min-width: 80px;
     }
     .journal-share-composer-save-btn {
-      width: 100%;
-      padding: 14px;
       border: none;
-      border-radius: 12px;
-      font-size: 15px;
-      font-weight: 700;
+      background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+      color: #fff;
       cursor: pointer;
     }
     .journal-share-composer-save-btn:disabled {
-      opacity: 0.5;
+      opacity: 0.45;
       cursor: not-allowed;
     }
     #trainingJournalScreen .journal-bottom-sheet-body {
@@ -2457,6 +2471,15 @@
     }
     @keyframes journalFadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes journalSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    /* Druk Wide Bold — assets/fonts/DrukWide-Bold.woff2 배포 시 적용 (없으면 Bebas Neue) */
+    @font-face {
+      font-family: 'Druk Wide';
+      src: url('assets/fonts/DrukWide-Bold.woff2') format('woff2'),
+           url('assets/fonts/DrukWide-Bold.otf') format('opentype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
   </style>
 
   <!-- 한/영/숫자 폰트 통일: Noto Sans KR (안드로이드 등에서 영문·숫자 궁서체 fallback 방지) -->
@@ -2464,6 +2487,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://us-central1-stelvio-ai.cloudfunctions.net" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- 투명 이미지 오버레이: Druk Wide(로컬 woff2) + Bebas Neue(영문·숫자 fallback) + Pretendard(한글) -->
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue:wght@700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css" />
