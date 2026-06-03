@@ -1574,6 +1574,16 @@ async function syncStravaDataWithMmp(months = 1, options) {
     if (typeof window.loadTrainingJournalCalendar === 'function') {
       try { window.loadTrainingJournalCalendar(); } catch (e) {}
     }
+    if (typeof window.backfillStravaRouteProfileForDateClient === 'function') {
+      window.backfillStravaRouteProfileForDateClient().catch(function (eBf) {
+        console.warn('[syncStravaDataWithMmp] 코스 프로파일 백필:', eBf && eBf.message ? eBf.message : eBf);
+      });
+    }
+    if (typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(
+        new CustomEvent('journal-training-logs-refresh', { detail: { force: true } })
+      );
+    }
     return data;
   } catch (err) {
     const msg = err.message || '알 수 없는 오류';
