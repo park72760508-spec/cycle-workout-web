@@ -138,6 +138,41 @@
     return key;
   }
 
+  function logSortKeyForTitle(log) {
+    if (!log) return 0;
+    var t = log.start_time || log.start_date_local || log.start_date;
+    if (t) {
+      var ms = Date.parse(String(t));
+      if (!isNaN(ms)) return ms;
+    }
+    var aid = Number(log.activity_id || 0);
+    return isFinite(aid) ? aid : 0;
+  }
+
+  /** Strava 활동 title — 시작 시각 순, 중복 제거 후 " · " 연결 */
+  function stravaRideTitlesFromLogs(logs) {
+    if (!logs || !logs.length) return '';
+    var sorted = logs.slice().sort(function (a, b) {
+      return logSortKeyForTitle(a) - logSortKeyForTitle(b);
+    });
+    var seen = {};
+    var parts = [];
+    var i, title;
+    for (i = 0; i < sorted.length; i++) {
+      title = sorted[i].title != null ? String(sorted[i].title).trim() : '';
+      if (!title || seen[title]) continue;
+      seen[title] = true;
+      parts.push(title);
+    }
+    return parts.join(' · ');
+  }
+
+  function formatDailySummaryHeading(selectedDate, logs) {
+    var base = formatDateKey(selectedDate) + ' 요약';
+    var titles = stravaRideTitlesFromLogs(logs);
+    return titles ? base + ' · ' + titles : base;
+  }
+
   function JournalDailySummary(props) {
     var selectedDate = props.selectedDate;
     var logs = props.logs || [];
@@ -167,10 +202,7 @@
     return React.createElement('div', { className: 'card journal-daily-summary journal-daily-summary--with-route' },
       React.createElement('div', { className: 'journal-daily-summary-header' },
         React.createElement('h3', { className: 'journal-daily-summary-title' },
-          formatDateKey(selectedDate) + ' 요약' +
-            (routeProfile.segmentCount > 1
-              ? ' · 라이딩 ' + routeProfile.segmentCount + '회'
-              : '')
+          formatDailySummaryHeading(selectedDate, logs)
         )
       ),
       CourseMap && routeProfile.hasRoute
