@@ -8,22 +8,23 @@
   var utils = global.stravaPolylineUtils;
   var KOR_WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
 
-  /** NRC 스타일 오버레이 레이아웃 (1080×1350) */
+  /** 오버레이 레이아웃 (1080×1350) — 상단 로고·제목, 하단 맵·통계 */
   var SHARE_PAD_X = 48;
-  var SHARE_SUB_Y = 76;
-  var SHARE_MAIN_TITLE_Y = 128;
-  var SHARE_COURSE_Y = 280;
+  var SHARE_LOGO_TOP_Y = 24;
+  var SHARE_LOGO_MEASURE_FONT = 36;
+  var SHARE_SUB_GAP_BELOW_LOGO = 14;
+  var SHARE_TITLE_GAP_BELOW_SUB = 44;
   var SHARE_COURSE_W = 984;
   var SHARE_COURSE_H = 480;
-  var SHARE_STATS_LABEL_Y = 788;
-  var SHARE_STATS_VALUE_Y = 848;
-  var SHARE_LOGO_Y = 1180;
+  var SHARE_COURSE_GAP_ABOVE_STATS = 36;
+  var SHARE_STATS_LABEL_Y = 1070;
+  var SHARE_STATS_VALUE_Y = 1130;
   var SHARE_FONT_SUB = 28;
   var SHARE_FONT_TITLE = 48;
   var SHARE_FONT_LABEL = 26;
   var SHARE_FONT_VALUE = 68;
   var SHARE_FONT_UNIT = 26;
-  var STELVIO_LOGO_ASSET = 'assets/img/STELVIO AI.png';
+  var STELVIO_LOGO_ASSET = 'assets/img/stelvio_w.png';
   /* Druk Wide: assets/fonts/DrukWide-Bold.woff2 배포 후 @font-face 추가 시 스택 맨 앞에 "Druk Wide" 삽입 */
   var FONT_LATIN_STACK = '"Bebas Neue", sans-serif';
   var FONT_KOREAN_STACK = 'Pretendard, "Noto Sans KR", sans-serif';
@@ -157,7 +158,6 @@
     var sec =
       Number(log.duration_sec != null ? log.duration_sec : log.time != null ? log.time : 0) || 0;
     var elev = log.elevation_gain != null ? Number(log.elevation_gain) : null;
-    var watts = log.avg_watts != null ? Number(log.avg_watts) : null;
     var spd = log.avg_speed_kmh != null ? Number(log.avg_speed_kmh) : null;
     if ((!spd || spd <= 0) && dist > 0 && sec > 0) {
       spd = Math.round((dist / (sec / 3600)) * 10) / 10;
@@ -180,12 +180,31 @@
         value: elev != null && elev > 0 ? String(Math.round(elev)) : '-',
         unit: elev != null && elev > 0 ? 'm' : '',
       },
-      {
-        label: 'WATTS',
-        value: watts != null && watts > 0 ? String(Math.round(watts)) : '-',
-        unit: watts != null && watts > 0 ? 'W' : '',
-      },
     ];
+  }
+
+  function speedLineTextFromLog(log) {
+    var cells = shareStatCellsFromLog(log);
+    var i;
+    for (i = 0; i < cells.length; i++) {
+      if (cells[i].label === 'SPEED') {
+        return cells[i].unit ? cells[i].value + ' ' + cells[i].unit : cells[i].value;
+      }
+    }
+    return '-';
+  }
+
+  /** 변경 전과 동일: 속도 요약 줄(36px Bebas) 너비로 로고 가로 크기 */
+  function measureShareLogoWidth(log) {
+    var c = document.createElement('canvas');
+    var ctx = c.getContext('2d');
+    if (!ctx) return 200;
+    ctx.font = canvasFontForToken('lat', SHARE_LOGO_MEASURE_FONT);
+    return ctx.measureText(speedLineTextFromLog(log)).width;
+  }
+
+  function shareCourseY() {
+    return SHARE_STATS_LABEL_Y - SHARE_COURSE_GAP_ABOVE_STATS - SHARE_COURSE_H;
   }
 
   function summaryLinesFromLog(log) {
@@ -261,7 +280,7 @@
         '<g transform="translate(' +
         courseX +
         ', ' +
-        SHARE_COURSE_Y +
+        shareCourseY() +
         ')" filter="url(#stelvioRouteShadow)"><path d="' +
         coursePaths[si] +
         '" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></g>';
@@ -404,18 +423,20 @@
     drawValueUnitCentered(ctx, cx, SHARE_STATS_VALUE_Y, cell.value, cell.unit);
   }
 
-  function drawShareTextOnCanvas(ctx, log, logs) {
+  function drawShareTextOnCanvas(ctx, log, logs, logoBottomY) {
     if (!ctx || !log) return;
     var canvasW = ctx.canvas.width || 1080;
     var cx = canvasW / 2;
     var sub = formatShareHeaderSub(log);
     var title = formatShareHeaderTitle(log, logs);
+    var subY = (logoBottomY != null ? logoBottomY : SHARE_LOGO_TOP_Y) + SHARE_SUB_GAP_BELOW_LOGO;
+    var titleY = subY + SHARE_TITLE_GAP_BELOW_SUB;
     if (sub) {
       ctx.globalAlpha = 0.78;
-      drawCanvasTextLine(ctx, cx, SHARE_SUB_Y, sub, SHARE_FONT_SUB, 'center');
+      drawCanvasTextLine(ctx, cx, subY, sub, SHARE_FONT_SUB, 'center');
       ctx.globalAlpha = 1;
     }
-    drawCanvasTextLine(ctx, cx, SHARE_MAIN_TITLE_Y, title, SHARE_FONT_TITLE, 'center');
+    drawCanvasTextLine(ctx, cx, titleY, title, SHARE_FONT_TITLE, 'center');
 
     var cells = shareStatCellsFromLog(log);
     var cols = cells.length;
@@ -446,25 +467,6 @@
     } catch (e) {
       return STELVIO_LOGO_ASSET;
     }
-  }
-
-  function measureStatGridMaxWidth(cells) {
-    var c = document.createElement('canvas');
-    var ctx = c.getContext('2d');
-    if (!ctx || !cells || !cells.length) return 160;
-    var maxW = 0;
-    var i;
-    for (i = 0; i < cells.length; i++) {
-      ctx.font = canvasFontForToken('lat', SHARE_FONT_VALUE);
-      var valueW = ctx.measureText(String(cells[i].value || '-')).width;
-      var unitW = 0;
-      if (cells[i].unit) {
-        ctx.font = canvasFontForToken('lat', SHARE_FONT_UNIT);
-        unitW = ctx.measureText(cells[i].unit).width;
-      }
-      maxW = Math.max(maxW, valueW + (cells[i].unit ? 5 + unitW : 0));
-    }
-    return maxW;
   }
 
   function loadRasterImage(src) {
@@ -498,14 +500,16 @@
     });
   }
 
-  function drawStelvioLogoOnCanvas(ctx, cells, logoImg) {
-    if (!ctx || !logoImg || !logoImg.width) return;
-    var logoW = Math.min(200, measureStatGridMaxWidth(cells) * 1.1);
-    if (!(logoW > 0)) logoW = 160;
+  /** 상단: 날짜 바로 위, 속도 줄 너비와 동일한 로고 크기 */
+  function drawShareLogoTop(ctx, log, logoImg) {
+    if (!ctx || !logoImg || !logoImg.width) return SHARE_LOGO_TOP_Y;
+    var logoW = measureShareLogoWidth(log);
+    if (!(logoW > 0)) logoW = 200;
     var logoH = (logoImg.height / logoImg.width) * logoW;
     var canvasW = ctx.canvas.width || 1080;
     var logoX = (canvasW - logoW) / 2;
-    ctx.drawImage(logoImg, logoX, SHARE_LOGO_Y, logoW, logoH);
+    ctx.drawImage(logoImg, logoX, SHARE_LOGO_TOP_Y, logoW, logoH);
+    return SHARE_LOGO_TOP_Y + logoH;
   }
 
   /** SVG(코스) + Canvas 텍스트·로고 → PNG */
@@ -528,8 +532,9 @@
       if (!ctx) throw new Error('Canvas 2D unavailable');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(svgImg, 0, 0);
-      drawShareTextOnCanvas(ctx, log, logs);
-      if (logoImg) drawStelvioLogoOnCanvas(ctx, shareStatCellsFromLog(log), logoImg);
+      var logoBottomY = SHARE_LOGO_TOP_Y;
+      if (logoImg) logoBottomY = drawShareLogoTop(ctx, log, logoImg);
+      drawShareTextOnCanvas(ctx, log, logs, logoBottomY);
       return new Promise(function (resolve, reject) {
         canvas.toBlob(
           function (blob) {
