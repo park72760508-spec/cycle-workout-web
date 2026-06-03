@@ -157,6 +157,14 @@ export function mapRideRow(
     duration_sec: duration,
     distance_km: num(d.distance_km),
     elevation_gain_m: num(d.elevation_gain),
+    summary_polyline: str(d.summary_polyline),
+    elevation_profile_json:
+      d.elevation_profile != null
+        ? d.elevation_profile
+        : d.elevation_profile_json != null
+          ? d.elevation_profile_json
+          : null,
+    route_profile_updated_at: d.route_profile_updated_at || null,
     avg_speed_kmh: num(d.avg_speed_kmh),
     weight_at_ride_kg: num(d.weight),
     ftp_at_time: num(d.ftp_at_time),
