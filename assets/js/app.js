@@ -868,6 +868,53 @@ function applyInitialAuthRouting() {
     return;
   }
 
+  function routeToAuthOrBasecampNow() {
+    dismissSplashFully();
+    try {
+      checkAuthStatus();
+    } catch (eChk) {
+      console.warn('[init] checkAuthStatus:', eChk);
+    }
+    if (window.currentUser) {
+      hideAllScreens();
+      const basecampScreen = document.getElementById('basecampScreen');
+      if (basecampScreen) {
+        basecampScreen.classList.add('active');
+        basecampScreen.style.display = 'block';
+        basecampScreen.style.opacity = '1';
+        basecampScreen.style.visibility = 'visible';
+        if (typeof applyScrollContainmentForScreen === 'function') {
+          applyScrollContainmentForScreen('basecampScreen');
+        }
+        window.__basecampShownAfterAuth = true;
+      } else {
+        const connectionScreen = document.getElementById('connectionScreen');
+        if (connectionScreen) {
+          connectionScreen.classList.add('active');
+          connectionScreen.style.display = 'block';
+          connectionScreen.style.opacity = '1';
+          connectionScreen.style.visibility = 'visible';
+        }
+      }
+    } else if (typeof showAuthScreen === 'function') {
+      showAuthScreen();
+    } else {
+      hideAllScreens();
+      const authScreen = document.getElementById('authScreen');
+      if (authScreen) {
+        authScreen.classList.add('active');
+        authScreen.style.removeProperty('position');
+        authScreen.style.removeProperty('z-index');
+        authScreen.style.setProperty('display', 'flex', 'important');
+        authScreen.style.setProperty('flex-direction', 'column', 'important');
+        authScreen.style.setProperty('justify-content', 'center', 'important');
+        authScreen.style.setProperty('align-items', 'center', 'important');
+        authScreen.style.setProperty('opacity', '1', 'important');
+        authScreen.style.setProperty('visibility', 'visible', 'important');
+      }
+    }
+  }
+
   (async function stelvioApplyInitialAuthRoutingBody() {
   document.body.style.setProperty('background-color', '#f6f8fa', 'important');
   document.body.style.setProperty('background-attachment', 'fixed', 'important');
@@ -878,7 +925,12 @@ function applyInitialAuthRouting() {
     console.warn('[init] checkAuthStatus:', e);
   }
 
-  /* iOS·PWA: IndexedDB 세션 복원이 로컬스토리지 프로필보다 늦을 수 있음 — 토큰 붙은 뒤 라우팅 */
+  /* 조기 부트가 UI를 이미 띄운 경우: Firebase 세션 복원만 백그라운드로 (화면 블로킹 없음) */
+  if (!window.__stelvioEarlyBootDone) {
+    routeToAuthOrBasecampNow();
+  }
+
+  /* iOS·PWA: IndexedDB 세션 복원 — 대기 상한 단축(6.5s→1.5s), UI는 이미 표시됨 */
   try {
     var hadProf =
       !!(window.currentUser && (window.currentUser.id != null || window.currentUser.uid != null));
@@ -888,7 +940,7 @@ function applyInitialAuthRouting() {
       await Promise.race([
         window.authV9.authStateReady(),
         new Promise(function (r) {
-          setTimeout(r, 6500);
+          setTimeout(r, 1500);
         })
       ]);
     }
@@ -939,6 +991,8 @@ function applyInitialAuthRouting() {
         connectionScreen.style.visibility = 'visible';
       }
     }
+  } else if (window.__stelvioEarlyAuthShown) {
+    /* 조기 부트로 인증 화면 이미 표시 — 깜빡임 방지 */
   } else if (typeof showAuthScreen === 'function') {
     showAuthScreen();
   } else {
@@ -4943,6 +4997,7 @@ function togglePause() {
 (function protectSplashScreenImmediately() {
   // 즉시 실행하여 다른 코드보다 먼저 실행되도록 보장
   function protectSplash() {
+    if (window.__stelvioEarlyBootDone) return;
     const splashScreen = document.getElementById("splashScreen");
     if (splashScreen) {
       // 즉시 스플래시 화면 보호 설정
@@ -5117,7 +5172,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
-  if (window.isSplashActive) {
+  if (window.__stelvioEarlyBootDone) {
+    window.isSplashActive = false;
+    if (typeof dismissSplashFully === 'function') {
+      dismissSplashFully();
+    }
+  } else if (window.isSplashActive) {
     // 즉시 다른 모든 화면 숨기기 - !important 사용
     document.querySelectorAll(".screen").forEach(screen => {
       if (screen.id !== 'splashScreen') {
@@ -5227,7 +5287,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   }
   
-  if (window.isSplashActive && splashScreen) {
+  if (window.__stelvioEarlyBootDone) {
+    window.isSplashActive = false;
+    if (typeof dismissSplashFully === 'function') {
+      dismissSplashFully();
+    }
+    if (typeof applyInitialAuthRouting === 'function') {
+      applyInitialAuthRouting();
+    }
+  } else if (window.isSplashActive && splashScreen) {
     // 즉시 다른 모든 화면 숨기기 (가장 먼저 실행) - 동기적으로 실행
     document.querySelectorAll(".screen").forEach(screen => {
       if (screen.id !== 'splashScreen') {
@@ -5248,6 +5316,7 @@ document.addEventListener("DOMContentLoaded", () => {
   
     // MutationObserver로 스플래시 화면 변경 감지 및 즉시 복구 (더 빠른 반응)
     const splashObserver = new MutationObserver((mutations) => {
+      if (window.__stelvioEarlyBootDone) return;
       if (window.isSplashActive && splashScreen) {
         // requestAnimationFrame으로 즉시 복구 (다음 프레임에서 실행)
         requestAnimationFrame(() => {
