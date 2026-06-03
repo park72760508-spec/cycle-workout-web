@@ -379,7 +379,11 @@
 
         var saveMethod;
         if (useAndroidSave && typeof shareApi.savePngBlobAndroid === 'function') {
-          saveMethod = await shareApi.savePngBlobAndroid(blob, fn);
+          saveMethod = await shareApi.savePngBlobAndroid(blob, fn, {
+            onPresent: function () {
+              setSaving(false);
+            },
+          });
         } else {
           saveMethod = await shareApi.savePngBlob(blob, fn);
         }
@@ -468,7 +472,7 @@
                 primeSaveBlob();
               },
               onClick: onSave,
-            }, saving ? '준비 중…' : isAndroidUa ? '저장·공유' : '저장')
+            }, saving ? '합성 중…' : isAndroidUa ? '저장·공유' : '저장')
           ),
           R.createElement('div', { className: 'journal-share-composer-scale-row' },
             R.createElement('span', { className: 'journal-share-composer-scale-label' }, '크기'),

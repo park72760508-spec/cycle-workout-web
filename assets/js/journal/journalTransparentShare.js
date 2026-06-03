@@ -689,20 +689,21 @@
   }
 
   /**
-   * ReactNativeWebView postMessage → 네이티브 갤러리 저장
-   * (App.tsx onMessage 에 SAVE_IMAGE_TO_GALLERY 핸들러 필요 — docs 참고)
+   * ReactNativeWebView → 네이티브 갤러리 저장 (짧은 대기, 기본 400ms)
+   * 앱에 핸들러 없으면 바로 false — 10초 대기로 UI 멈춤 방지
    */
-  function tryReactNativeSaveImage(blob, filename) {
+  function tryReactNativeSaveImage(blob, filename, maxWaitMs) {
     if (!global.ReactNativeWebView || typeof global.ReactNativeWebView.postMessage !== 'function') {
       return Promise.resolve(false);
     }
+    maxWaitMs = maxWaitMs != null ? maxWaitMs : 400;
     var mime = (blob && blob.type) || 'image/jpeg';
     return blobToDataUrl(blob)
       .then(function (dataUrl) {
         return new Promise(function (resolve) {
           var requestId =
             'saveImg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
-          var timer = setTimeout(cleanup, 10000);
+          var timer = setTimeout(cleanup, maxWaitMs);
 
           function onResponse(ev) {
             var d = ev && ev.detail;
@@ -1019,142 +1020,146 @@
   }
 
   /**
-   * Android 저장 보조 화면 — 공유 시트 실패 시에만 표시
-   * WebView에서는 <a download> 사용 금지(가짜 성공 방지), 길게 누르기 → 공유·저장 유도
+   * Android 저장 화면 — 합성 직후 즉시 표시, 공유는 사용자 탭에서만 (제스처 유지)
+   * @param {{ onPresent?: function }} [opts]
    * @returns {Promise<string>}
    */
-  function openAndroidImageSaveSheet(blob, filename) {
-    return blobToDataUrl(blob).then(function (dataUrl) {
-      return new Promise(function (resolve, reject) {
-        var doc = global.document;
-        if (!doc || !doc.body) {
-          reject(new Error('저장 화면을 표시할 수 없습니다.'));
+  function presentAndroidImageSave(blob, filename, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve, reject) {
+      var doc = global.document;
+      if (!doc || !doc.body) {
+        reject(new Error('저장 화면을 표시할 수 없습니다.'));
+        return;
+      }
+      var previewUrl = URL.createObjectURL(blob);
+      var inApp = isStelvioAppWebView();
+      var settled = false;
+
+      function revokePreview() {
+        try {
+          URL.revokeObjectURL(previewUrl);
+        } catch (eRev) {}
+      }
+
+      function finish(method) {
+        if (settled) return;
+        settled = true;
+        revokePreview();
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(method);
+      }
+
+      function finishCancel() {
+        if (settled) return;
+        settled = true;
+        revokePreview();
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        reject(Object.assign(new Error('저장 취소'), { name: 'AbortError' }));
+      }
+
+      var overlay = doc.createElement('div');
+      overlay.className = 'journal-android-save-sheet';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+
+      var panel = doc.createElement('div');
+      panel.className = 'journal-android-save-sheet__panel';
+
+      var title = doc.createElement('p');
+      title.className = 'journal-android-save-sheet__title';
+      title.textContent = '이미지 저장';
+
+      var img = doc.createElement('img');
+      img.className = 'journal-android-save-sheet__preview';
+      img.src = previewUrl;
+      img.alt = '저장할 라이딩 이미지';
+      img.draggable = false;
+
+      var hint = doc.createElement('p');
+      hint.className = 'journal-android-save-sheet__hint';
+      hint.textContent =
+        '「공유·저장」을 눌러 갤러리·Google 포토·파일 앱 등을 선택하세요.' +
+        (inApp ? ' 이미지를 길게 눌러도 같은 메뉴가 열립니다.' : '');
+
+      function shareFromUserTap() {
+        var file = blobToShareFile(blob, filename);
+
+        if (file && global.navigator && typeof global.navigator.share === 'function') {
+          shareFileWithUserPicker(file, {})
+            .then(function (shared) {
+              if (shared === 'share') {
+                finish('share-android');
+                return;
+              }
+              if (typeof global.showToast === 'function') {
+                global.showToast('공유 창이 열리지 않았습니다. 다시 시도해 주세요.', 'info');
+              }
+            })
+            .catch(function (eShare) {
+              if (eShare && eShare.name === 'AbortError') {
+                finishCancel();
+                return;
+              }
+              if (typeof global.showToast === 'function') {
+                global.showToast('공유·저장에 실패했습니다. 다시 시도해 주세요.', 'error');
+              }
+            });
           return;
         }
-        var inApp = isStelvioAppWebView();
-        var settled = false;
 
-        function finish(method) {
-          if (settled) return;
-          settled = true;
-          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-          resolve(method);
+        if (typeof global.showToast === 'function') {
+          global.showToast(
+            '이 기기에서는 「공유·저장」으로 갤러리 앱을 선택해 저장해 주세요.',
+            'info'
+          );
         }
+      }
 
-        function finishCancel() {
-          if (settled) return;
-          settled = true;
-          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-          reject(Object.assign(new Error('저장 취소'), { name: 'AbortError' }));
-        }
+      attachImageLongPressActions(img, shareFromUserTap);
 
-        var overlay = doc.createElement('div');
-        overlay.className = 'journal-android-save-sheet';
-        overlay.setAttribute('role', 'dialog');
-        overlay.setAttribute('aria-modal', 'true');
+      var shareBtn = doc.createElement('button');
+      shareBtn.type = 'button';
+      shareBtn.className =
+        'journal-android-save-sheet__btn journal-android-save-sheet__btn--primary';
+      shareBtn.textContent = '공유·저장';
+      shareBtn.addEventListener('click', shareFromUserTap);
 
-        var panel = doc.createElement('div');
-        panel.className = 'journal-android-save-sheet__panel';
-
-        var title = doc.createElement('p');
-        title.className = 'journal-android-save-sheet__title';
-        title.textContent = '이미지 저장';
-
-        var img = doc.createElement('img');
-        img.className = 'journal-android-save-sheet__preview';
-        img.src = dataUrl;
-        img.alt = '저장할 라이딩 이미지';
-        img.draggable = false;
-
-        var hint = doc.createElement('p');
-        hint.className = 'journal-android-save-sheet__hint';
-        hint.textContent = inApp
-          ? '「공유·저장」을 눌러 갤러리·Google 포토·파일 앱 등을 선택하세요. 이미지를 길게 눌러도 같은 메뉴가 열립니다.'
-          : '「공유·저장」을 누른 뒤 갤러리·파일·드라이브 등 원하는 앱을 선택하세요.';
-
-        function shareFromUserTap() {
-          var file = blobToShareFile(blob, filename);
-
-          if (file && global.navigator && typeof global.navigator.share === 'function') {
-            shareFileWithUserPickerWithTimeout(file, {}, 4500)
-              .then(function (shared) {
-                if (shared === 'share') {
-                  finish('share-android');
-                  return;
-                }
-                if (canUseAnchorDownload() && downloadDataUrl(dataUrl, filename)) {
-                  finish('download-android');
-                  return;
-                }
-                if (typeof global.showToast === 'function') {
-                  global.showToast(
-                    '공유 창이 열리지 않았습니다. 「크게 보기」에서 다시 시도해 주세요.',
-                    'info'
-                  );
-                }
-              })
-              .catch(function (eShare) {
-                if (eShare && eShare.name === 'AbortError') {
-                  finishCancel();
-                  return;
-                }
-                if (canUseAnchorDownload() && downloadDataUrl(dataUrl, filename)) {
-                  finish('download-android');
-                  return;
-                }
-                if (typeof global.showToast === 'function') {
-                  global.showToast('공유·저장에 실패했습니다. 다시 시도해 주세요.', 'error');
-                }
-              });
-            return;
-          }
-
-          if (canUseAnchorDownload() && downloadDataUrl(dataUrl, filename)) {
-            finish('download-android');
-            return;
-          }
-          if (typeof global.showToast === 'function') {
-            global.showToast(
-              '이 기기에서는 「공유·저장」으로 갤러리 앱을 선택해 저장해 주세요.',
-              'info'
-            );
-          }
-        }
-
-        attachImageLongPressActions(img, shareFromUserTap);
-
-        var shareBtn = doc.createElement('button');
-        shareBtn.type = 'button';
-        shareBtn.className =
-          'journal-android-save-sheet__btn journal-android-save-sheet__btn--primary';
-        shareBtn.textContent = '공유·저장';
-        shareBtn.addEventListener('click', shareFromUserTap);
-
-        var longPressBtn = doc.createElement('button');
-        longPressBtn.type = 'button';
-        longPressBtn.className =
-          'journal-android-save-sheet__btn journal-android-save-sheet__btn--secondary';
-        longPressBtn.textContent = '크게 보기';
-        longPressBtn.addEventListener('click', function () {
-          openAndroidLongPressView(dataUrl, filename, blob, shareFromUserTap);
-        });
-
-        var closeBtn = doc.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'journal-android-save-sheet__btn journal-android-save-sheet__btn--ghost';
-        closeBtn.textContent = '닫기';
-        closeBtn.addEventListener('click', finishCancel);
-
-        panel.appendChild(title);
-        panel.appendChild(img);
-        panel.appendChild(hint);
-        panel.appendChild(shareBtn);
-        if (inApp) panel.appendChild(longPressBtn);
-        panel.appendChild(closeBtn);
-        overlay.appendChild(panel);
-        doc.body.appendChild(overlay);
+      var longPressBtn = doc.createElement('button');
+      longPressBtn.type = 'button';
+      longPressBtn.className =
+        'journal-android-save-sheet__btn journal-android-save-sheet__btn--secondary';
+      longPressBtn.textContent = '크게 보기';
+      longPressBtn.addEventListener('click', function () {
+        openAndroidLongPressView(previewUrl, filename, blob, shareFromUserTap);
       });
+
+      var closeBtn = doc.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'journal-android-save-sheet__btn journal-android-save-sheet__btn--ghost';
+      closeBtn.textContent = '닫기';
+      closeBtn.addEventListener('click', finishCancel);
+
+      panel.appendChild(title);
+      panel.appendChild(img);
+      panel.appendChild(hint);
+      panel.appendChild(shareBtn);
+      if (inApp) panel.appendChild(longPressBtn);
+      panel.appendChild(closeBtn);
+      overlay.appendChild(panel);
+      doc.body.appendChild(overlay);
+
+      if (typeof opts.onPresent === 'function') {
+        try {
+          opts.onPresent();
+        } catch (ePresent) {}
+      }
     });
+  }
+
+  /** @deprecated presentAndroidImageSave */
+  function openAndroidImageSaveSheet(blob, filename, opts) {
+    return presentAndroidImageSave(blob, filename, opts);
   }
 
   function openBlobForAndroidView(blobUrl, filename) {
@@ -1274,26 +1279,20 @@
   }
 
   /**
-   * Android 전용: RN postMessage → JSInterface → Web Share(사용자 탭) → 저장 보조 화면
+   * Android: JSInterface(즉시) → 저장 화면(즉시) + RN postMessage(백그라운드)
+   * 공유는 저장 화면 「공유·저장」 탭에서만 (사용자 제스처 유지)
    */
-  function savePngBlobAndroid(blob, filename) {
-    return tryReactNativeSaveImage(blob, filename).then(function (rnOk) {
-      if (rnOk) return 'native-android';
-      return trySyncNativeSaveAndroid(blob, filename).then(function (syncOk) {
-        if (syncOk) return 'native-android';
-        var file = blobToShareFile(blob, filename);
-        if (file && global.navigator && typeof global.navigator.share === 'function') {
-          return shareFileWithUserPickerWithTimeout(file, {}, 4500)
-            .then(function (shared) {
-              if (shared === 'share') return 'share-android';
-              return openAndroidImageSaveSheet(blob, filename);
-            })
-            .catch(function (eShare) {
-              if (eShare && eShare.name === 'AbortError') return Promise.reject(eShare);
-              return openAndroidImageSaveSheet(blob, filename);
-            });
+  function savePngBlobAndroid(blob, filename, opts) {
+    opts = opts || {};
+    return trySyncNativeSaveAndroid(blob, filename).then(function (syncOk) {
+      if (syncOk) return 'native-android';
+      tryReactNativeSaveImage(blob, filename, 400).then(function (rnOk) {
+        if (rnOk && typeof global.showToast === 'function') {
+          global.showToast('사진 보관함에 저장했습니다.', 'success');
         }
-        return openAndroidImageSaveSheet(blob, filename);
+      });
+      return presentAndroidImageSave(blob, filename, {
+        onPresent: opts.onPresent,
       });
     });
   }
@@ -1568,6 +1567,7 @@
     writeBlobToSaveHandle: writeBlobToSaveHandle,
     savePngBlob: savePngBlob,
     savePngBlobAndroid: savePngBlobAndroid,
+    presentAndroidImageSave: presentAndroidImageSave,
     isAndroidDevice: isAndroidDevice,
     notifySaveResult: notifySaveResult,
     exportTransparentSharePng: exportTransparentSharePng,
