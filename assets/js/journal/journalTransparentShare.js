@@ -499,7 +499,10 @@
   function loadRasterImage(src) {
     return new Promise(function (resolve, reject) {
       var im = new Image();
-      im.crossOrigin = 'anonymous';
+      var u = String(src || '');
+      if (u.indexOf('blob:') !== 0 && u.indexOf('data:') !== 0) {
+        im.crossOrigin = 'anonymous';
+      }
       im.onload = function () {
         resolve(im);
       };
@@ -662,8 +665,19 @@
     return /Android/i.test((global.navigator && global.navigator.userAgent) || '');
   }
 
+  function canShareFiles(file) {
+    if (!file || !global.navigator || typeof global.navigator.canShare !== 'function') {
+      return false;
+    }
+    try {
+      return global.navigator.canShare({ files: [file] });
+    } catch (eCan) {
+      return false;
+    }
+  }
+
   /**
-   * Android: 시스템 공유 시트로 갤러리·드라이브 등 저장 위치 선택
+   * Android / iOS: 공유 시트 (파일만 — text 포함 시 일부 기기에서 무반응)
    * @returns {Promise<'share'|null>}
    */
   function shareFileWithUserPicker(file, meta) {
@@ -671,11 +685,15 @@
     if (!file || !global.navigator || typeof global.navigator.share !== 'function') {
       return Promise.resolve(null);
     }
-    var payload = {
-      files: [file],
-      title: meta.title || 'STELVIO Ride',
-    };
-    if (meta.text) payload.text = meta.text;
+    var payload = { files: [file] };
+    if (
+      global.navigator.canShare &&
+      typeof global.navigator.canShare === 'function' &&
+      !canShareFiles(file) &&
+      !isAndroidDevice()
+    ) {
+      return Promise.resolve(null);
+    }
     return global.navigator
       .share(payload)
       .then(function () {
@@ -730,15 +748,48 @@
 
   function downloadBlob(blob, filename) {
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    var url = URL.createObjectURL(blob);
+    a.href = url;
     a.download = filename;
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
     setTimeout(function () {
-      URL.revokeObjectURL(a.href);
+      URL.revokeObjectURL(url);
       if (a.parentNode) a.parentNode.removeChild(a);
-    }, 400);
+    }, 2000);
+  }
+
+  /** PC Chrome/Edge: 저장 위치 선택 */
+  function saveBlobWithFilePicker(blob, filename) {
+    if (!global.window || typeof global.window.showSaveFilePicker !== 'function') {
+      return Promise.resolve(null);
+    }
+    if (isMobileDevice()) return Promise.resolve(null);
+    return global.window
+      .showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            description: 'JPEG image',
+            accept: { 'image/jpeg': ['.jpg', '.jpeg'] },
+          },
+        ],
+      })
+      .then(function (handle) {
+        return handle.createWritable().then(function (writable) {
+          return writable.write(blob).then(function () {
+            return writable.close();
+          });
+        });
+      })
+      .then(function () {
+        return 'save-picker';
+      })
+      .catch(function (e) {
+        if (e && e.name === 'AbortError') return Promise.reject(e);
+        return null;
+      });
   }
 
   function notifySaveResult(result) {
@@ -757,6 +808,8 @@
         '이미지가 저장되었습니다. 갤러리·사진 앱에서 확인해 주세요.',
         'success'
       );
+    } else if (result === 'save-picker') {
+      global.showToast('선택한 위치에 저장했습니다.', 'success');
     } else if (result === 'download') {
       global.showToast('이미지가 다운로드되었습니다.', 'success');
     }
@@ -781,40 +834,44 @@
   }
 
   /**
-   * Android: 공유 시트로 저장 위치 선택 (갤러리·드라이브 등)
+   * Android: 공유 시트 → 실패 시 다운로드
    * iOS: savePngBlobIOS
-   * PC: 파일 다운로드
+   * PC: showSaveFilePicker → 실패 시 다운로드
    */
   function savePngBlob(blob, filename) {
-    var mime = (blob && blob.type) || 'image/png';
+    var mime = (blob && blob.type) || 'image/jpeg';
+    if (mime.indexOf('jpeg') < 0 && mime.indexOf('jpg') < 0) {
+      mime = 'image/jpeg';
+    }
     var file =
       typeof File !== 'undefined' ? new File([blob], filename, { type: mime }) : null;
 
-    if (isAndroidDevice() && file) {
-      return shareFileWithUserPicker(file, {
-        title: 'STELVIO 라이딩',
-        text: '갤러리·드라이브 등 저장할 앱을 선택하세요',
-      }).then(function (shared) {
-        if (shared === 'share') return 'share-android';
-        downloadBlob(blob, filename);
-        return 'download-android-fallback';
-      });
-    }
+    return saveBlobWithFilePicker(blob, filename).then(function (picked) {
+      if (picked === 'save-picker') return picked;
 
-    if (isIOSDevice()) {
-      return savePngBlobIOS(blob, filename, file);
-    }
+      if (isIOSDevice()) {
+        return savePngBlobIOS(blob, filename, file);
+      }
 
-    if (isMobileDevice() && file) {
-      return shareFileWithUserPicker(file, { title: 'STELVIO Ride' }).then(function (shared) {
-        if (shared === 'share') return 'share';
-        downloadBlob(blob, filename);
-        return 'download-mobile';
-      });
-    }
+      if (isAndroidDevice() && file) {
+        return shareFileWithUserPicker(file, {}).then(function (shared) {
+          if (shared === 'share') return 'share-android';
+          downloadBlob(blob, filename);
+          return 'download-android-fallback';
+        });
+      }
 
-    downloadBlob(blob, filename);
-    return Promise.resolve('download');
+      if (isMobileDevice() && file) {
+        return shareFileWithUserPicker(file, {}).then(function (shared) {
+          if (shared === 'share') return 'share';
+          downloadBlob(blob, filename);
+          return 'download-mobile';
+        });
+      }
+
+      downloadBlob(blob, filename);
+      return 'download';
+    });
   }
 
   /**
@@ -1021,6 +1078,23 @@
     });
   }
 
+  function stickerDragBounds(contain, stickerW, stickerH, pad) {
+    pad = pad != null ? pad : 20;
+    var minX = contain.x + contain.width - stickerW - pad;
+    var maxX = contain.x + pad;
+    var minY = contain.y + contain.height - stickerH - pad;
+    var maxY = contain.y + pad;
+    if (minX > maxX) {
+      var cx = contain.x + (contain.width - stickerW) / 2;
+      minX = maxX = cx;
+    }
+    if (minY > maxY) {
+      var cy = contain.y + (contain.height - stickerH) / 2;
+      minY = maxY = cy;
+    }
+    return { minX: minX, maxX: maxX, minY: minY, maxY: maxY };
+  }
+
   global.journalTransparentShare = {
     formatShareImageTitle: formatShareImageTitle,
     buildShareSvgMarkup: buildShareSvgMarkup,
@@ -1028,6 +1102,8 @@
     createOverlayPngBlobs: createOverlayPngBlobs,
     compositeShareToBlob: compositeShareToBlob,
     compositeShareDualToBlob: compositeShareDualToBlob,
+    fitContainRect: fitContainRect,
+    stickerDragBounds: stickerDragBounds,
     savePngBlob: savePngBlob,
     notifySaveResult: notifySaveResult,
     exportTransparentSharePng: exportTransparentSharePng,

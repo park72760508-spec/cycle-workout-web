@@ -26,7 +26,10 @@
   function loadImageFromUrl(url) {
     return new Promise(function (resolve, reject) {
       var im = new Image();
-      im.crossOrigin = 'anonymous';
+      var u = String(url || '');
+      if (u.indexOf('blob:') !== 0 && u.indexOf('data:') !== 0) {
+        im.crossOrigin = 'anonymous';
+      }
       im.onload = function () {
         resolve(im);
       };
@@ -100,8 +103,10 @@
     var fileInputRef = useRef(null);
     var headerImgRef = useRef(null);
     var bottomImgRef = useRef(null);
+    var bgImgRef = useRef(null);
     var dragRef = useRef(null);
     var autoPickDoneRef = useRef(false);
+    var pendingBlobRef = useRef(null);
 
     useEffect(function () {
       var prev = document.body.style.overflow;
@@ -226,15 +231,36 @@
           bottomNat && bottomNat.naturalWidth > 0
             ? w * (bottomNat.naturalHeight / bottomNat.naturalWidth)
             : w * (830 / 1080);
-        var x = Math.max(8, (stageSize.w - w) * 0.04);
-        setPosHeader({ x: x, y: Math.max(8, stageSize.h * 0.04) });
-        setPosBottom({
-          x: x,
-          y: Math.max(hH + 16, stageSize.h - bH - Math.max(12, stageSize.h * 0.06)),
-        });
+        var contain = getBgContainRect();
+        var headerBounds = getStickerBounds(contain, w, hH);
+        var bottomBounds = getStickerBounds(contain, w, bH);
+        setPosHeader({ x: headerBounds.maxX, y: Math.max(headerBounds.maxY, stageSize.h * 0.04) });
+        setPosBottom({ x: bottomBounds.maxX, y: bottomBounds.minY });
       },
-      [stageSize.w, stageSize.h, overlayBaseW, scale, headerNat, bottomNat]
+      [stageSize.w, stageSize.h, overlayBaseW, scale, headerNat, bottomNat, shareApi]
     );
+
+    function getBgContainRect() {
+      if (!shareApi || typeof shareApi.fitContainRect !== 'function') {
+        return { x: 0, y: 0, width: stageSize.w, height: stageSize.h };
+      }
+      var bg = bgImgRef.current;
+      var nw = bg && bg.naturalWidth > 0 ? bg.naturalWidth : stageSize.w;
+      var nh = bg && bg.naturalHeight > 0 ? bg.naturalHeight : stageSize.h;
+      return shareApi.fitContainRect(nw, nh, stageSize.w, stageSize.h);
+    }
+
+    function getStickerBounds(contain, stickerW, stickerH) {
+      if (shareApi && typeof shareApi.stickerDragBounds === 'function') {
+        return shareApi.stickerDragBounds(contain, stickerW, stickerH, 20);
+      }
+      return {
+        minX: contain.x + contain.width - stickerW - 20,
+        maxX: contain.x + 20,
+        minY: contain.y + contain.height - stickerH - 20,
+        maxY: contain.y + 20,
+      };
+    }
 
     function onStickerLoad(kind) {
       if (bgUrl) {
@@ -280,19 +306,18 @@
       var dy = ev.clientY - d.startY;
       var nx = d.origX + dx;
       var ny = d.origY + dy;
+      var contain = getBgContainRect();
       if (d.kind === 'header') {
-        var maxX = stageSize.w - headerDispW + 20;
-        var maxY = stageSize.h - headerDispH + 20;
+        var hb = getStickerBounds(contain, headerDispW, headerDispH);
         setPosHeader({
-          x: clamp(nx, -20, maxX),
-          y: clamp(ny, -20, maxY),
+          x: clamp(nx, hb.minX, hb.maxX),
+          y: clamp(ny, hb.minY, hb.maxY),
         });
       } else {
-        var maxXB = stageSize.w - bottomDispW + 20;
-        var maxYB = stageSize.h - bottomDispH + 20;
+        var bb = getStickerBounds(contain, bottomDispW, bottomDispH);
         setPosBottom({
-          x: clamp(nx, -20, maxXB),
-          y: clamp(ny, -20, maxYB),
+          x: clamp(nx, bb.minX, bb.maxX),
+          y: clamp(ny, bb.minY, bb.maxY),
         });
       }
     }
@@ -306,33 +331,51 @@
       } catch (e2) {}
     }
 
+    async function buildCompositeBlob() {
+      if (!bgUrl || !overlayHeaderUrl || !overlayBottomUrl || !shareApi) {
+        throw new Error('합성 준비가 되지 않았습니다.');
+      }
+      var bgImg = await loadImageFromUrl(bgUrl);
+      var headerImg = await loadImageFromUrl(overlayHeaderUrl);
+      var bottomImg = await loadImageFromUrl(overlayBottomUrl);
+      return shareApi.compositeShareDualToBlob(bgImg, headerImg, bottomImg, {
+        stageW: stageSize.w,
+        stageH: stageSize.h,
+        headerLeft: posHeader.x,
+        headerTop: posHeader.y,
+        headerW: headerDispW,
+        headerH: headerDispH,
+        bottomLeft: posBottom.x,
+        bottomTop: posBottom.y,
+        bottomW: bottomDispW,
+        bottomH: bottomDispH,
+      });
+    }
+
+    function primeSaveBlob() {
+      if (!bgUrl || loading || saving || !shareApi) return;
+      pendingBlobRef.current = buildCompositeBlob().catch(function () {
+        pendingBlobRef.current = null;
+        return null;
+      });
+    }
+
     async function onSave() {
       if (!bgUrl || !overlayHeaderUrl || !overlayBottomUrl || !shareApi) return;
       setSaving(true);
       setErr(null);
       try {
-        var bgImg = await loadImageFromUrl(bgUrl);
-        var headerImg = await loadImageFromUrl(overlayHeaderUrl);
-        var bottomImg = await loadImageFromUrl(overlayBottomUrl);
-        var blob = await shareApi.compositeShareDualToBlob(bgImg, headerImg, bottomImg, {
-          stageW: stageSize.w,
-          stageH: stageSize.h,
-          headerLeft: posHeader.x,
-          headerTop: posHeader.y,
-          headerW: headerDispW,
-          headerH: headerDispH,
-          bottomLeft: posBottom.x,
-          bottomTop: posBottom.y,
-          bottomW: bottomDispW,
-          bottomH: bottomDispH,
-        });
+        var blobPromise = pendingBlobRef.current || buildCompositeBlob();
+        pendingBlobRef.current = null;
+        var blob = await blobPromise;
+        if (!blob) {
+          blob = await buildCompositeBlob();
+        }
         var dateKey = log.date ? String(log.date).replace(/-/g, '') : 'ride';
         var fn = 'stelvio-ride-' + dateKey + '.jpg';
         var saveMethod = await shareApi.savePngBlob(blob, fn);
         shareApi.notifySaveResult(saveMethod);
-        if (saveMethod !== 'download-android-fallback') {
-          onClose({ saved: true, saveMethod: saveMethod });
-        }
+        onClose({ saved: true, saveMethod: saveMethod });
       } catch (e) {
         if (e && e.name === 'AbortError') return;
         var msg = (e && e.message) || '저장 실패';
@@ -340,6 +383,7 @@
         if (typeof window.showToast === 'function') window.showToast(msg, 'error');
       } finally {
         setSaving(false);
+        pendingBlobRef.current = null;
       }
     }
 
@@ -403,6 +447,9 @@
               type: 'button',
               className: 'journal-share-composer-action-btn journal-share-composer-save-btn',
               disabled: !bgUrl || loading || saving,
+              onPointerDown: function () {
+                primeSaveBlob();
+              },
               onClick: onSave,
             }, saving ? '준비 중…' : isAndroidUa ? '저장·공유' : '저장')
           ),
@@ -461,10 +508,14 @@
           { className: 'journal-share-composer-stage', ref: stageRef },
           bgUrl
             ? R.createElement('img', {
+                ref: bgImgRef,
                 className: 'journal-share-composer-bg',
                 src: bgUrl,
                 alt: '',
                 draggable: false,
+                onLoad: function () {
+                  setTimeout(placeOverlayDefault, 80);
+                },
               })
             : R.createElement('div', { className: 'journal-share-composer-bg-placeholder' },
                 '배경 사진을 선택하세요'
