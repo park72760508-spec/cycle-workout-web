@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
@@ -1934,13 +1934,6 @@
       padding: 0 4px;
       border-radius: 4px;
     }
-    /* 라이딩 요약: OSM 지도만 표시 — SVG/Chart.js 고도표는 숨김 */
-    #trainingJournalScreen .journal-course-preview-block,
-    #trainingJournalScreen .journal-route-svg-bg,
-    #trainingJournalScreen .open-riding-gpx-chart-wrap,
-    #trainingJournalScreen .journal-course-elevation-chart {
-      display: none !important;
-    }
     #trainingJournalScreen .journal-course-preview-empty {
       margin: 0 0 12px 0;
       padding: 12px 14px;
@@ -2248,8 +2241,6 @@
       object-fit: contain;
       border-radius: 10px;
       background: #0f172a;
-      -webkit-touch-callout: default;
-      touch-action: manipulation;
     }
     .journal-android-save-sheet__hint {
       margin: 0;
@@ -2273,41 +2264,11 @@
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
     }
-    .journal-android-save-sheet__btn--secondary {
-      color: #e2e8f0;
-      background: rgba(51, 65, 85, 0.95);
-      border: 1px solid #64748b;
-      font-weight: 600;
-    }
-    .journal-android-save-sheet__btn--done {
-      color: #fff;
-      background: linear-gradient(135deg, #059669 0%, #047857 100%);
-      font-weight: 700;
-    }
     .journal-android-save-sheet__btn--ghost {
       color: #94a3b8;
       background: transparent;
       border: 1px solid #475569;
       font-weight: 600;
-    }
-    .journal-android-longpress-view {
-      flex-direction: column;
-      gap: 16px;
-      z-index: 100070;
-    }
-    .journal-android-longpress-view__hint {
-      max-width: 360px;
-      color: #e2e8f0;
-    }
-    .journal-android-longpress-view__img {
-      width: 100%;
-      max-width: 420px;
-      max-height: 70vh;
-      object-fit: contain;
-      border-radius: 10px;
-      background: #0f172a;
-      -webkit-touch-callout: default;
-      touch-action: manipulation;
     }
     #trainingJournalScreen .journal-bottom-sheet-body {
       position: relative;
@@ -2957,6 +2918,9 @@
       </div>
     </div>
   </div>
+
+  <!-- 조기 부트: app.js 로드 전 스플래시→인증/베이스캠프 (Android·iOS 체감 로딩 단축) -->
+  <script src="assets/js/stelvioBootEarly.js"></script>
 
   
   <!-- 1) 연결 화면 -->
@@ -23946,8 +23910,199 @@
     console.log('✅ 훈련일지 화면용 미니 달력 스크립트 로드 완료');
   </script>
   
-  <!-- journal / openRiding Babel 번들: 인증 라우팅 후 stelvioDeferredModules.js 에서 지연 로드 (초기 파싱·Babel 부하 감소) -->
+  <!-- ========== 라이딩 일지 React 리팩터링 (useJournalData + JournalCalendarWidget + JournalDailySummary) ========== -->
+  <!-- defer: 헤더의 React(react.production.min.js)도 defer 이므로, 동기 로드 시 React 미준비 상태에서 훅이 먼저 실행되어 경고가 남 -->
+  <script defer src="assets/js/journal/stravaPolylineUtils.js"></script>
+  <script defer src="assets/js/journal/journalTransparentShare.js"></script>
+  <script src="assets/js/journal/JournalTransparentShareComposer.jsx" type="text/babel"></script>
+  <script defer src="assets/js/journal/useJournalData.js"></script>
+  <script src="assets/js/journal/JournalCalendarWidget.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/RidingCourseSvgBackground.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/JournalCourseMapPreview.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/JournalDailySummary.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/JournalDetailBottomSheet.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/JournalMonthlyDashboard.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/TrainingJournalScreen.jsx" type="text/babel"></script>
+  <script>
+    (function() {
+      var journalReactRootInstance = null;
+      function initTrainingJournalReact() {
+        var root = document.getElementById('journal-react-root');
+        var legacyCard = document.getElementById('journal-legacy-calendar-card');
+        if (!root || typeof ReactDOM === 'undefined' || typeof window.TrainingJournalScreen !== 'function') {
+          console.warn('[Journal React] 마운트 불가 - root 또는 React/TrainingJournalScreen 없음');
+          return;
+        }
+        if (legacyCard) legacyCard.style.display = 'none';
+        root.style.display = 'block';
+        var monthlyRoot = document.getElementById('monthly-analysis-dashboard-root');
+        if (monthlyRoot) monthlyRoot.style.display = 'none';
+        if (!root._journalRoot) {
+          root._journalRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
+          if (root._journalRoot) root._journalRoot.render(React.createElement(window.TrainingJournalScreen));
+          else if (typeof ReactDOM.render === 'function') ReactDOM.render(React.createElement(window.TrainingJournalScreen), root);
+        } else {
+          if (root._journalRoot.render) root._journalRoot.render(React.createElement(window.TrainingJournalScreen));
+        }
+      }
+      window.initTrainingJournalReact = initTrainingJournalReact;
+    })();
+  </script>
 
+  <!-- ========== 오픈 라이딩방 (Firestore 달력 + 목록 / 생성 / 상세) ========== -->
+  <!-- Babel이 아닌 일반 스크립트에서만 dynamic import (OpenRidingScreens.jsx의 import는 require로 바뀌어 깨짐 방지) -->
+  <script>
+    (function () {
+      if (window._firebaseStorageModReady) return;
+      window._firebaseStorageModReady = import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js')
+        .then(function (m) {
+          window.firebaseStorageModV9API = m;
+          return m;
+        })
+        .catch(function (e) {
+          console.warn('[오픈라이딩] firebase-storage 모듈 선로드 실패:', e && e.message ? e.message : e);
+          window.firebaseStorageModV9API = null;
+          throw e;
+        });
+    })();
+  </script>
+  <script src="assets/js/openRiding/openRidingGpx.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="assets/js/openRiding/OpenRidingScreens.jsx?v=open-riding-detail-nav-20260519" type="text/babel"></script>
+  <script>
+    (function() {
+      var openRidingReactRoot = null;
+      /** 라이딩벙 화면 이탈 시 호출: Leaflet·Chart·Firestore 훅이 display:none 뒤에서 계속 도는 것을 방지(iOS 발열 완화) */
+      window.destroyOpenRidingRoomReact = function () {
+        try {
+          if (openRidingReactRoot && typeof openRidingReactRoot.unmount === 'function') {
+            openRidingReactRoot.unmount();
+          } else if (typeof ReactDOM !== 'undefined' && typeof ReactDOM.unmountComponentAtNode === 'function') {
+            var rootElLegacy = document.getElementById('open-riding-react-root');
+            if (rootElLegacy) ReactDOM.unmountComponentAtNode(rootElLegacy);
+          }
+        } catch (eUnmount) {
+          console.warn('[OpenRiding] unmount:', eUnmount);
+        }
+        openRidingReactRoot = null;
+        var rootEl = document.getElementById('open-riding-react-root');
+        if (rootEl) rootEl.innerHTML = '';
+      };
+      function getOpenRidingUserId() {
+        try {
+          if (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) {
+            return String(window.authV9.currentUser.uid);
+          }
+          if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+            return String(window.auth.currentUser.uid);
+          }
+          var u = JSON.parse(localStorage.getItem('authUser') || 'null');
+          if (u && u.id != null) return String(u.id);
+        } catch (err) {}
+        return '';
+      }
+      window.getOpenRidingUserId = getOpenRidingUserId;
+
+      /** 모바일: 세션 복원 전 Firestore가 비인증으로 붙는 것 방지 */
+      async function waitOpenRidingAuthAndFirestore(maxMs) {
+        maxMs = maxMs || 12000;
+        var t0 = Date.now();
+        while (!window.firestoreV9 && Date.now() - t0 < Math.min(maxMs, 4000)) {
+          await new Promise(function (r) {
+            setTimeout(r, 80);
+          });
+        }
+        try {
+          if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
+            await Promise.race([
+              window.authV9.authStateReady(),
+              new Promise(function (r) {
+                setTimeout(r, maxMs);
+              })
+            ]);
+            return;
+          }
+        } catch (eA) {}
+        while (Date.now() - t0 < maxMs) {
+          if (window.authV9 && window.authV9.currentUser) return;
+          if (window.auth && window.auth.currentUser) return;
+          try {
+            var ju = JSON.parse(localStorage.getItem('authUser') || 'null');
+            if (ju && ju.id != null) return;
+          } catch (eB) {}
+          await new Promise(function (r) {
+            setTimeout(r, 120);
+          });
+        }
+      }
+      function getOpenRidingUserLabel() {
+        try {
+          var c = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+          if (c && c.name) return String(c.name);
+        } catch (err2) {}
+        return '라이더';
+      }
+      window.initOpenRidingRoomReact = async function () {
+        var rootEl = document.getElementById('open-riding-react-root');
+        if (!rootEl || typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+          console.warn('[OpenRiding] React 또는 root 없음');
+          return;
+        }
+        try {
+          await import('./assets/js/openRiding/openRidingBoot.js?v=korea-region-groups-ui-20260403');
+        } catch (bootErr) {
+          console.error('[OpenRiding] openRidingBoot 로드 실패:', bootErr);
+          rootEl.innerHTML = '<p class="text-sm text-red-700 px-2">오픈 라이딩 모듈을 불러오지 못했습니다.</p>';
+          return;
+        }
+        if (typeof window.OpenRidingRoomApp !== 'function') {
+          console.warn('[OpenRiding] OpenRidingRoomApp 없음');
+          return;
+        }
+        if (typeof window.useOpenRiding !== 'function') {
+          console.warn('[OpenRiding] useOpenRiding 없음 — boot 확인');
+          rootEl.innerHTML = '<p class="text-sm text-amber-800 px-2">오픈 라이딩 훅 로드 실패. 새로고침해 주세요.</p>';
+          return;
+        }
+        await waitOpenRidingAuthAndFirestore(12000);
+        var firestore = window.firestoreV9 || null;
+        var storage = window.firebaseStorageV9 || null;
+        var userId = getOpenRidingUserId();
+        var userLabel = getOpenRidingUserLabel();
+        var initialView = '';
+        try {
+          initialView = String(window.__openRidingInitialView || '').trim();
+          window.__openRidingInitialView = '';
+        } catch (eInitView) {
+          initialView = '';
+        }
+        var el = React.createElement(window.OpenRidingRoomApp, {
+          firestore: firestore,
+          storage: storage,
+          userId: userId,
+          userLabel: userLabel,
+          initialView: initialView
+        });
+        if (!openRidingReactRoot) {
+          openRidingReactRoot = ReactDOM.createRoot ? ReactDOM.createRoot(rootEl) : null;
+        }
+        if (openRidingReactRoot && openRidingReactRoot.render) {
+          openRidingReactRoot.render(el);
+        } else if (typeof ReactDOM.render === 'function') {
+          ReactDOM.render(el, rootEl);
+        }
+      };
+      window.navigateToClubHouseFromBasecamp = function () {
+        window.__openRidingInitialView = 'groups';
+        if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
+      };
+
+      /* 클럽 하우스 배지: app.js v8 Firestore 구독(refreshBasecampBadge)에서 처리 — 중복 v9 구독 제거 */
+      window.startBasecampClubHouseBadgeSubscription = function () {
+        if (typeof window.refreshBasecampBadge === 'function') window.refreshBasecampBadge();
+      };
+    })();
+  </script>
   
   <!-- ========== Monthly Training Analysis Dashboard (React) ========== -->
   <script type="text/babel">
@@ -28091,7 +28246,6 @@
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js"></script>
-  <script src="assets/js/stelvioDeferredModules.js"></script>
   <script src="assets/js/app.js"></script>
   <script src="assets/js/stelvioAnalytics.js"></script>
 
