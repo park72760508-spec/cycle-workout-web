@@ -1959,12 +1959,25 @@
       position: relative;
       z-index: 1;
     }
-    #trainingJournalScreen .journal-transparent-share-actions {
+    #trainingJournalScreen .journal-summary-map-with-share {
       position: relative;
-      z-index: 1;
-      margin-top: 14px;
+      margin: 0 0 14px 0;
+    }
+    #trainingJournalScreen .journal-summary-map-with-share .journal-course-map-wrap {
+      margin-bottom: 0;
+    }
+    #trainingJournalScreen .journal-transparent-share-actions {
+      position: absolute;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      z-index: 5;
+      margin-top: 0;
       display: flex;
-      justify-content: flex-end;
+      justify-content: center;
+      pointer-events: none;
+      width: calc(100% - 24px);
+      max-width: 100%;
     }
     #trainingJournalScreen .journal-transparent-share-btn {
       font-size: 13px;
@@ -1975,6 +1988,9 @@
       border-radius: 10px;
       padding: 10px 14px;
       cursor: pointer;
+      pointer-events: auto;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+      white-space: nowrap;
     }
     #trainingJournalScreen .journal-transparent-share-btn:disabled {
       opacity: 0.6;
@@ -2087,6 +2103,7 @@
       cursor: grab;
       user-select: none;
       -webkit-user-drag: none;
+      touch-action: none;
     }
     .journal-share-composer-overlay-img.is-dimmed {
       opacity: 0.55;
