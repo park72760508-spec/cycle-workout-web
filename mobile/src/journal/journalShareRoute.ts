@@ -158,5 +158,5 @@ export function buildCoursePathsForOverlay(
   const h = opts?.height || 1350;
   const route = resolveRouteProfileForShare(log, opts);
   if (!route?.hasRoute) return [];
-  return coursePathStringsFromRoute(route, w - 120, 520, 0.12);
+  return coursePathStringsFromRoute(route, w - 96, 480, 0.1);
 }

@@ -6,6 +6,12 @@ export type {
 export { ShareOverlayArtboard } from "./ShareOverlayArtboard";
 export { ShareOverlayOffscreen } from "./ShareOverlayOffscreen";
 export type { ShareLog, ShareOverlayOpts, DailyRouteDoc } from "./journalShareTypes";
-export { formatShareImageTitle, summaryLinesFromLog } from "./journalShareFormat";
+export {
+  formatShareImageTitle,
+  formatShareHeaderSub,
+  formatShareHeaderTitle,
+  buildShareStatCells,
+  SHARE_LAYOUT,
+} from "./journalShareFormat";
 export { buildCoursePathsForOverlay, resolveRouteProfileForShare } from "./journalShareRoute";
 export { useShareFonts, FONT_LATIN, FONT_KOREAN } from "./useShareFonts";

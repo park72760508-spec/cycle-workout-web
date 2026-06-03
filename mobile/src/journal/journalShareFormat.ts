@@ -2,7 +2,30 @@ import type { ShareLog } from "./journalShareTypes";
 
 const KOR_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 
-export type StatCell = { label: string; value: string; valueLatin: boolean };
+/** NRC 스타일 오버레이 레이아웃 (1080×1350 기준) */
+export const SHARE_LAYOUT = {
+  padX: 48,
+  subY: 76,
+  titleY: 128,
+  courseY: 280,
+  courseH: 480,
+  courseW: 984,
+  statsLabelY: 788,
+  statsValueY: 848,
+  logoY: 1180,
+  fontSub: 28,
+  fontTitle: 48,
+  fontLabel: 26,
+  fontValue: 68,
+  fontUnit: 26,
+} as const;
+
+export type ShareStatCell = {
+  label: string;
+  value: string;
+  unit: string;
+  valueIsLatin: boolean;
+};
 
 function logSortKey(log: ShareLog): number {
   const t = log.start_time || log.start_date_local || log.start_date;
@@ -27,26 +50,51 @@ function stravaRideTitlesFromLogs(logs: ShareLog[]): string {
   return parts.join(" · ");
 }
 
-/** 예: 2026년 6월 3일(수) · Morning Ride */
-export function formatShareImageTitle(log: ShareLog, logs?: ShareLog[] | null): string {
-  if (!log) return "STELVIO Ride";
-  const shareLogs = logs?.length ? logs : log._logsForShare?.length ? log._logsForShare! : [log];
-
+/** 상단 작은 줄 (날짜) */
+export function formatShareHeaderSub(log: ShareLog): string {
   const dateKey = log.date ? String(log.date) : "";
-  let datePart = "";
   if (dateKey.length >= 10) {
-    const [y, m, d] = dateKey.split("-").map((x) => parseInt(x, 10));
+    const parts = dateKey.split("-");
+    const y = parseInt(parts[0] ?? "", 10);
+    const m = parseInt(parts[1] ?? "", 10);
+    const d = parseInt(parts[2] ?? "", 10);
     if (isFinite(y) && isFinite(m) && isFinite(d)) {
-      const dow = new Date(y, m - 1, d).getDay();
-      datePart = `${y}년 ${m}월 ${d}일(${KOR_WEEKDAY[dow]})`;
+      const dow = KOR_WEEKDAY[new Date(y, m - 1, d).getDay()];
+      return `${y}. ${String(m).padStart(2, "0")}. ${String(d).padStart(2, "0")} (${dow})`;
     }
   }
+  return "";
+}
 
+/** 상단 큰 제목 (라이딩명) */
+export function formatShareHeaderTitle(log: ShareLog, logs?: ShareLog[] | null): string {
+  const shareLogs = logs?.length ? logs : log._logsForShare?.length ? log._logsForShare! : [log];
   let titles = stravaRideTitlesFromLogs(shareLogs);
   if (!titles && log.title) titles = String(log.title).trim();
-  if (datePart && titles) return `${datePart} · ${titles}`;
-  if (datePart) return datePart;
-  return titles || "STELVIO Ride";
+  return (titles || "STELVIO RIDE").slice(0, 64);
+}
+
+/** 예: 2026년 6월 3일(수) · Morning Ride — Composer 외 호환 */
+export function formatShareImageTitle(log: ShareLog, logs?: ShareLog[] | null): string {
+  const sub = formatShareHeaderSub(log);
+  const title = formatShareHeaderTitle(log, logs);
+  if (sub && title) return `${sub.replace(/ \(.+\)$/, "")} · ${title}`;
+  return title || sub || "STELVIO Ride";
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** NRC TIME 스타일 (m:ss 또는 h:mm:ss) */
+export function formatDurationClock(sec: number): { value: string; unit: string } {
+  if (!sec || !isFinite(sec)) return { value: "-", unit: "" };
+  const s = Math.floor(sec);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (h > 0) return { value: `${h}:${pad2(m)}:${pad2(ss)}`, unit: "" };
+  return { value: `${m}:${pad2(ss)}`, unit: "" };
 }
 
 export function formatDuration(sec: number): string {
@@ -59,8 +107,8 @@ export function formatDuration(sec: number): string {
   return `${m}분`;
 }
 
-/** 웹 summaryLinesFromLog — 세로 요약 5줄 (기능·순서 동일) */
-export function summaryLinesFromLog(log: ShareLog): string[] {
+/** 맵 하단 가로 그리드 — 라벨(작게) / 값(크게) / 단위(작게) */
+export function buildShareStatCells(log: ShareLog): ShareStatCell[] {
   const dist = log.distance_km != null ? Number(log.distance_km) : 0;
   const sec =
     Number(log.duration_sec != null ? log.duration_sec : log.time != null ? log.time : 0) ||
@@ -71,55 +119,47 @@ export function summaryLinesFromLog(log: ShareLog): string[] {
   if ((!spd || spd <= 0) && dist > 0 && sec > 0) {
     spd = Math.round((dist / (sec / 3600)) * 10) / 10;
   }
-  return [
-    dist > 0 ? `${dist.toFixed(1)} km` : "-",
-    formatDuration(sec),
-    elev != null && elev > 0 ? `${Math.round(elev)} m ↑` : "-",
-    watts != null && watts > 0 ? `${Math.round(watts)} W` : "-",
-    spd != null && spd > 0 ? `${spd.toFixed(1)} km/h` : "-",
-  ];
-}
-
-/** @deprecated 디자인 전용 그리드 — Composer 기능과 무관 */
-export function buildShareStatGrid(log: ShareLog): StatCell[] {
-  const dist = log.distance_km != null ? Number(log.distance_km) : 0;
-  const sec =
-    Number(log.duration_sec != null ? log.duration_sec : log.time != null ? log.time : 0) ||
-    0;
-  let elev = log.elevation_gain != null ? Number(log.elevation_gain) : null;
-  let watts = log.avg_watts != null ? Number(log.avg_watts) : null;
-  let spd = log.avg_speed_kmh != null ? Number(log.avg_speed_kmh) : null;
-  if ((!spd || spd <= 0) && dist > 0 && sec > 0) {
-    spd = Math.round((dist / (sec / 3600)) * 10) / 10;
-  }
+  const time = formatDurationClock(sec);
 
   return [
     {
       label: "DISTANCE",
-      value: dist > 0 ? `${dist.toFixed(1)} km` : "-",
-      valueLatin: true,
+      value: dist > 0 ? dist.toFixed(1) : "-",
+      unit: dist > 0 ? "km" : "",
+      valueIsLatin: true,
     },
     {
       label: "TIME",
-      value: sec > 0 ? formatDuration(sec) : "-",
-      valueLatin: false,
+      value: time.value,
+      unit: time.unit,
+      valueIsLatin: true,
     },
     {
       label: "SPEED",
-      value: spd != null && spd > 0 ? `${spd.toFixed(1)} km/h` : "-",
-      valueLatin: true,
+      value: spd != null && spd > 0 ? spd.toFixed(1) : "-",
+      unit: spd != null && spd > 0 ? "km/h" : "",
+      valueIsLatin: true,
     },
     {
       label: "ELEVATION",
-      value: elev != null && elev > 0 ? `${Math.round(elev)} m ↑` : "-",
-      valueLatin: true,
+      value: elev != null && elev > 0 ? String(Math.round(elev)) : "-",
+      unit: elev != null && elev > 0 ? "m" : "",
+      valueIsLatin: true,
     },
     {
       label: "WATTS",
-      value: watts != null && watts > 0 ? `${Math.round(watts)} W` : "-",
-      valueLatin: true,
+      value: watts != null && watts > 0 ? String(Math.round(watts)) : "-",
+      unit: watts != null && watts > 0 ? "W" : "",
+      valueIsLatin: true,
     },
   ];
+}
+
+/** @deprecated */
+export function summaryLinesFromLog(log: ShareLog): string[] {
+  return buildShareStatCells(log).map((c) =>
+    c.unit ? `${c.value} ${c.unit}`.trim() : c.value
+  );
 }
 
 export function isKoreanChar(ch: string): boolean {
@@ -152,7 +192,8 @@ export function tokenizeShareText(text: string): TextToken[] {
           cj === "," ||
           cj === "/" ||
           cj === "-" ||
-          cj === "+"
+          cj === "+" ||
+          cj === ":"
         ) {
           j++;
         } else break;

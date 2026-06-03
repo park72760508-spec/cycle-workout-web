@@ -1,5 +1,5 @@
 /**
- * 투명 PNG 오버레이 (1080×1350) — 웹 journalTransparentShare 레이아웃·기능 동일, 디자인만 보강
+ * 투명 PNG 오버레이 — NRC 레퍼런스: 상단 제목 / 중앙 맵 / 맵 하단 통계 그리드
  */
 import React, { useMemo } from "react";
 import {
@@ -11,9 +11,12 @@ import {
 } from "react-native";
 import Svg, { Defs, FeDropShadow, Filter, G, Path } from "react-native-svg";
 import {
-  formatShareImageTitle,
-  summaryLinesFromLog,
+  SHARE_LAYOUT,
+  buildShareStatCells,
+  formatShareHeaderSub,
+  formatShareHeaderTitle,
   tokenizeShareText,
+  type ShareStatCell,
   type TextToken,
 } from "./journalShareFormat";
 import { buildCoursePathsForOverlay } from "./journalShareRoute";
@@ -25,13 +28,8 @@ import {
 } from "./journalShareTypes";
 import { FONT_KOREAN, FONT_LATIN } from "./useShareFonts";
 
-const SHARE_TEXT_X = 60;
-const SHARE_TITLE_Y = 80;
-const SHARE_LINE_STEP = 52;
-const SHARE_LOGO_GAP_BELOW_SPEED = 14;
-const COURSE_OFFSET_Y = OVERLAY_H - 780;
-const COURSE_VIEW_W = OVERLAY_W - 120;
-const COURSE_VIEW_H = 520;
+const L = SHARE_LAYOUT;
+const COURSE_X = (OVERLAY_W - L.courseW) / 2;
 
 const TEXT_SHADOW = {
   textShadowColor: "rgba(0,0,0,0.55)",
@@ -49,28 +47,36 @@ type Props = {
 function fontForToken(
   kind: TextToken["kind"],
   usingSystemFallback: boolean
-): { family: string; weight?: "600" | "700" } {
+): { family: string; weight?: "600" | "700" | "800" } {
   if (usingSystemFallback) {
-    return { family: "System", weight: kind === "lat" ? "700" : "600" };
+    return { family: "System", weight: kind === "lat" ? "800" : "600" };
   }
-  return {
-    family: kind === "lat" ? FONT_LATIN : FONT_KOREAN,
-    weight: undefined,
-  };
+  return { family: kind === "lat" ? FONT_LATIN : FONT_KOREAN, weight: undefined };
 }
 
-function TokenizedLine({
+function CenteredText({
   text,
   fontSize,
+  opacity = 1,
   usingSystemFallback,
+  extraBold,
 }: {
   text: string;
   fontSize: number;
+  opacity?: number;
   usingSystemFallback: boolean;
+  extraBold?: boolean;
 }) {
   const tokens = tokenizeShareText(text);
   return (
-    <Text style={[overlayStyles.textBase, TEXT_SHADOW, { fontSize }]}>
+    <Text
+      style={[
+        overlayStyles.textCenter,
+        TEXT_SHADOW,
+        { fontSize, opacity },
+        extraBold && overlayStyles.titleWeight,
+      ]}
+    >
       {tokens.map((tok, i) => {
         const f = fontForToken(tok.kind, usingSystemFallback);
         return (
@@ -78,7 +84,7 @@ function TokenizedLine({
             key={`${i}-${tok.text}`}
             style={{
               fontFamily: f.family,
-              fontWeight: f.weight,
+              fontWeight: extraBold ? "800" : f.weight,
               color: "#FFFFFF",
             }}
           >
@@ -90,6 +96,59 @@ function TokenizedLine({
   );
 }
 
+function StatColumn({
+  cell,
+  usingSystemFallback,
+}: {
+  cell: ShareStatCell;
+  usingSystemFallback: boolean;
+}) {
+  const valueFont = usingSystemFallback ? "System" : FONT_LATIN;
+  const labelFont = usingSystemFallback ? "System" : FONT_KOREAN;
+  return (
+    <View style={overlayStyles.statCol}>
+      <Text
+        style={[
+          overlayStyles.statLabel,
+          TEXT_SHADOW,
+          { fontFamily: labelFont, fontSize: L.fontLabel },
+        ]}
+      >
+        {cell.label}
+      </Text>
+      <View style={overlayStyles.valueRow}>
+        <Text
+          style={[
+            overlayStyles.statValue,
+            TEXT_SHADOW,
+            {
+              fontFamily: valueFont,
+              fontSize: L.fontValue,
+              fontWeight: "800",
+            },
+          ]}
+        >
+          {cell.value}
+        </Text>
+        {cell.unit ? (
+          <Text
+            style={[
+              overlayStyles.statUnit,
+              TEXT_SHADOW,
+              {
+                fontFamily: valueFont,
+                fontSize: L.fontUnit,
+              },
+            ]}
+          >
+            {cell.unit}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 export function ShareOverlayArtboard({
   log,
   opts,
@@ -97,26 +156,47 @@ export function ShareOverlayArtboard({
   usingSystemFallback = false,
 }: Props) {
   const shareLogs = opts?.logs || log._logsForShare || null;
-  const title = formatShareImageTitle(log, shareLogs).slice(0, 96);
-  const lines = summaryLinesFromLog(log);
-  const speedLineText = lines[lines.length - 1] || "-";
+  const sub = formatShareHeaderSub(log);
+  const title = formatShareHeaderTitle(log, shareLogs);
+  const cells = buildShareStatCells(log);
   const pathDs = useMemo(
     () => buildCoursePathsForOverlay(log, { ...opts, width: OVERLAY_W, height: OVERLAY_H }),
     [log, opts]
   );
 
-  const logoTop =
-    SHARE_TITLE_Y + lines.length * SHARE_LINE_STEP + SHARE_LOGO_GAP_BELOW_SPEED;
-
   return (
     <View style={[overlayStyles.root, { width: OVERLAY_W, height: OVERLAY_H }]}>
+      <View style={[overlayStyles.header, { top: L.subY }]}>
+        {sub ? (
+          <CenteredText
+            text={sub}
+            fontSize={L.fontSub}
+            opacity={0.78}
+            usingSystemFallback={usingSystemFallback}
+          />
+        ) : null}
+        <View style={{ marginTop: sub ? 10 : 0 }}>
+          <CenteredText
+            text={title}
+            fontSize={L.fontTitle}
+            usingSystemFallback={usingSystemFallback}
+            extraBold
+          />
+        </View>
+      </View>
+
       <View
         style={[
           overlayStyles.courseWrap,
-          { left: SHARE_TEXT_X, top: COURSE_OFFSET_Y, width: COURSE_VIEW_W, height: COURSE_VIEW_H },
+          {
+            left: COURSE_X,
+            top: L.courseY,
+            width: L.courseW,
+            height: L.courseH,
+          },
         ]}
       >
-        <Svg width={COURSE_VIEW_W} height={COURSE_VIEW_H} viewBox={`0 0 ${COURSE_VIEW_W} ${COURSE_VIEW_H}`}>
+        <Svg width={L.courseW} height={L.courseH} viewBox={`0 0 ${L.courseW} ${L.courseH}`}>
           <Defs>
             <Filter id="courseShadow" x="-25%" y="-25%" width="150%" height="150%">
               <FeDropShadow
@@ -135,7 +215,7 @@ export function ShareOverlayArtboard({
                 d={d}
                 fill="none"
                 stroke="#FFFFFF"
-                strokeWidth={6}
+                strokeWidth={5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -144,30 +224,16 @@ export function ShareOverlayArtboard({
         </Svg>
       </View>
 
-      <View style={[overlayStyles.titleWrap, { left: SHARE_TEXT_X, top: SHARE_TITLE_Y }]}>
-        <TokenizedLine text={title} fontSize={42} usingSystemFallback={usingSystemFallback} />
+      <View style={[overlayStyles.statsRow, { top: L.statsLabelY }]}>
+        {cells.map((cell) => (
+          <StatColumn key={cell.label} cell={cell} usingSystemFallback={usingSystemFallback} />
+        ))}
       </View>
-
-      {lines.map((line, i) => (
-        <View
-          key={i}
-          style={{
-            position: "absolute",
-            left: SHARE_TEXT_X,
-            top: SHARE_TITLE_Y + (i + 1) * SHARE_LINE_STEP,
-          }}
-        >
-          <TokenizedLine text={line} fontSize={36} usingSystemFallback={usingSystemFallback} />
-        </View>
-      ))}
 
       {logoSource ? (
         <Image
           source={logoSource}
-          style={[
-            overlayStyles.logoImg,
-            { top: logoTop, width: speedLineText.length * 14 + 40 },
-          ]}
+          style={overlayStyles.logoImg}
           resizeMode="contain"
         />
       ) : (
@@ -175,7 +241,7 @@ export function ShareOverlayArtboard({
           style={[
             overlayStyles.logoText,
             TEXT_SHADOW,
-            { top: logoTop, fontFamily: usingSystemFallback ? "System" : FONT_LATIN },
+            { fontFamily: usingSystemFallback ? "System" : FONT_LATIN },
           ]}
         >
           STELVIO
@@ -190,27 +256,74 @@ const overlayStyles = StyleSheet.create({
     backgroundColor: "transparent",
     overflow: "hidden",
   },
+  header: {
+    position: "absolute",
+    left: L.padX,
+    right: L.padX,
+    alignItems: "center",
+  },
+  textCenter: {
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+  titleWeight: {
+    letterSpacing: 0.5,
+  },
   courseWrap: {
     position: "absolute",
   },
-  titleWrap: {
+  statsRow: {
     position: "absolute",
-    maxWidth: OVERLAY_W - SHARE_TEXT_X * 2,
+    left: L.padX,
+    right: L.padX,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
-  textBase: {
+  statCol: {
+    flex: 1,
+    alignItems: "center",
+    minWidth: 0,
+  },
+  statLabel: {
     color: "#FFFFFF",
+    opacity: 0.72,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  valueRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  statValue: {
+    color: "#FFFFFF",
+    lineHeight: L.fontValue * 1.02,
+  },
+  statUnit: {
+    color: "#FFFFFF",
+    opacity: 0.9,
+    marginLeft: 3,
+    marginBottom: 10,
+    letterSpacing: 0.2,
   },
   logoImg: {
     position: "absolute",
-    left: SHARE_TEXT_X,
-    height: 36,
+    alignSelf: "center",
+    left: OVERLAY_W / 2 - 80,
+    top: L.logoY,
+    width: 160,
+    height: 32,
     opacity: 0.95,
   },
   logoText: {
     position: "absolute",
-    left: SHARE_TEXT_X,
+    width: OVERLAY_W,
+    top: L.logoY,
+    textAlign: "center",
     color: "#FFFFFF",
-    fontSize: 28,
+    fontSize: 26,
     letterSpacing: 4,
   },
 });
