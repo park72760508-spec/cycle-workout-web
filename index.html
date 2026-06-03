@@ -2581,6 +2581,8 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css" />
+  <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
+  <link rel="preload" href="assets/img/stelvio.svg" as="image" type="image/svg+xml" />
   <!-- WebP를 assets/img에 배포한 뒤: 각 <picture> 안에 <source type="image/webp" srcset="..."> 추가 + (선택) 상단 preload 2개 -->
   <link rel="stylesheet" href="assets/css/group-training.css" />
 
@@ -2634,38 +2636,10 @@
         src="assets/img/stelvio.svg"
         alt="STELVIO"
         decoding="async"
+        fetchpriority="high"
       />
     </div>
   </div>
-
-  <!-- Performance Dashboard Dependencies: 스플래시 직후 로드 → head 대비 인증·첫 화면 노출이 빨라짐 -->
-  <script>
-    (function() {
-      if (typeof console === 'undefined' || !console.warn) return;
-      var orig = console.warn;
-      console.warn = function() {
-        var msg = (arguments[0] && String(arguments[0])) || '';
-        if (msg.indexOf('cdn.tailwindcss.com') !== -1 || msg.indexOf('Tailwind CSS') !== -1 && msg.indexOf('production') !== -1 ||
-            msg.indexOf('in-browser Babel') !== -1 || msg.indexOf('precompile your scripts') !== -1 || (msg.indexOf('Babel') !== -1 && msg.indexOf('production') !== -1) ||
-            msg.indexOf('BloomFilter') !== -1 || msg.indexOf('BloomFilterError') !== -1) {
-          return;
-        }
-        return orig.apply(console, arguments);
-      };
-    })();
-  </script>
-  <script defer src="https://cdn.tailwindcss.com"></script>
-  <script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script defer src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script defer src="assets/js/vo2maxCalculator.js"></script>
-  <script defer src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
-  <script defer src="assets/js/reactPropTypesBridge.js"></script>
-  <script defer src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
-  <script defer src="assets/js/useRiderAnalysis.js"></script>
-  <script defer src="assets/js/stelvio/stelvioOneHourAbility.js"></script>
-  <script defer src="assets/js/dynamicFtpCalculation.js"></script>
 
   <!-- 0) 사용자 인증 -->
 <!-- 🔐 인증 화면 (연결 화면 전에 추가) -->
@@ -2919,10 +2893,38 @@
     </div>
   </div>
 
-  <!-- 조기 부트: app.js 로드 전 스플래시→인증/베이스캠프 (Android·iOS 체감 로딩 단축) -->
+  <!-- 조기 부트: app.js 로드 전 로고(스플래시) → 인증 화면 (Android WebView HTML 파싱 대기 제거) -->
   <script src="assets/js/stelvioBootEarly.js"></script>
 
-  
+  <!-- Performance Dashboard Dependencies: 조기 부트 이후 로드 → 인증 화면 노출 우선 -->
+  <script>
+    (function() {
+      if (typeof console === 'undefined' || !console.warn) return;
+      var orig = console.warn;
+      console.warn = function() {
+        var msg = (arguments[0] && String(arguments[0])) || '';
+        if (msg.indexOf('cdn.tailwindcss.com') !== -1 || msg.indexOf('Tailwind CSS') !== -1 && msg.indexOf('production') !== -1 ||
+            msg.indexOf('in-browser Babel') !== -1 || msg.indexOf('precompile your scripts') !== -1 || (msg.indexOf('Babel') !== -1 && msg.indexOf('production') !== -1) ||
+            msg.indexOf('BloomFilter') !== -1 || msg.indexOf('BloomFilterError') !== -1) {
+          return;
+        }
+        return orig.apply(console, arguments);
+      };
+    })();
+  </script>
+  <script defer src="https://cdn.tailwindcss.com"></script>
+  <script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script defer src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script defer src="assets/js/vo2maxCalculator.js"></script>
+  <script defer src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script defer src="assets/js/reactPropTypesBridge.js"></script>
+  <script defer src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
+  <script defer src="assets/js/useRiderAnalysis.js"></script>
+  <script defer src="assets/js/stelvio/stelvioOneHourAbility.js"></script>
+  <script defer src="assets/js/dynamicFtpCalculation.js"></script>
+
   <!-- 1) 연결 화면 -->
   <div id="connectionScreen" class="screen active">
     <div class="connection-main-container">
