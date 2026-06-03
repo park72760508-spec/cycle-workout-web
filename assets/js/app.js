@@ -925,12 +925,9 @@ function applyInitialAuthRouting() {
     console.warn('[init] checkAuthStatus:', e);
   }
 
-  /* 조기 부트가 UI를 이미 띄운 경우: Firebase 세션 복원만 백그라운드로 (화면 블로킹 없음) */
-  if (!window.__stelvioEarlyBootDone) {
-    routeToAuthOrBasecampNow();
-  }
+  routeToAuthOrBasecampNow();
 
-  /* iOS·PWA: IndexedDB 세션 복원 — 대기 상한 단축(6.5s→1.5s), UI는 이미 표시됨 */
+  /* iOS·PWA: IndexedDB 세션 복원 대기 (자동 로그인 사용자) */
   try {
     var hadProf =
       !!(window.currentUser && (window.currentUser.id != null || window.currentUser.uid != null));
@@ -940,7 +937,7 @@ function applyInitialAuthRouting() {
       await Promise.race([
         window.authV9.authStateReady(),
         new Promise(function (r) {
-          setTimeout(r, 1500);
+          setTimeout(r, 6500);
         })
       ]);
     }
@@ -991,8 +988,6 @@ function applyInitialAuthRouting() {
         connectionScreen.style.visibility = 'visible';
       }
     }
-  } else if (window.__stelvioEarlyAuthShown) {
-    /* 조기 부트로 인증 화면 이미 표시 — 깜빡임 방지 */
   } else if (typeof showAuthScreen === 'function') {
     showAuthScreen();
   } else {
@@ -1012,6 +1007,11 @@ function applyInitialAuthRouting() {
   }
 
   function runPostAuthRoutingDeferred() {
+    if (typeof window.stelvioLoadDeferredModules === 'function') {
+      window.stelvioLoadDeferredModules().catch(function (deferredErr) {
+        console.warn('[init] stelvioLoadDeferredModules:', deferredErr);
+      });
+    }
     if (!window.currentUser && typeof initializeAuthenticationSystem === 'function') {
       try {
         initializeAuthenticationSystem();
@@ -4997,7 +4997,6 @@ function togglePause() {
 (function protectSplashScreenImmediately() {
   // 즉시 실행하여 다른 코드보다 먼저 실행되도록 보장
   function protectSplash() {
-    if (window.__stelvioEarlyBootDone) return;
     const splashScreen = document.getElementById("splashScreen");
     if (splashScreen) {
       // 즉시 스플래시 화면 보호 설정
@@ -5172,12 +5171,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
-  if (window.__stelvioEarlyBootDone) {
-    window.isSplashActive = false;
-    if (typeof dismissSplashFully === 'function') {
-      dismissSplashFully();
-    }
-  } else if (window.isSplashActive) {
+  if (window.isSplashActive) {
     // 즉시 다른 모든 화면 숨기기 - !important 사용
     document.querySelectorAll(".screen").forEach(screen => {
       if (screen.id !== 'splashScreen') {
@@ -5287,15 +5281,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   }
   
-  if (window.__stelvioEarlyBootDone) {
-    window.isSplashActive = false;
-    if (typeof dismissSplashFully === 'function') {
-      dismissSplashFully();
-    }
-    if (typeof applyInitialAuthRouting === 'function') {
-      applyInitialAuthRouting();
-    }
-  } else if (window.isSplashActive && splashScreen) {
+  if (window.isSplashActive && splashScreen) {
     // 즉시 다른 모든 화면 숨기기 (가장 먼저 실행) - 동기적으로 실행
     document.querySelectorAll(".screen").forEach(screen => {
       if (screen.id !== 'splashScreen') {
@@ -5316,7 +5302,6 @@ document.addEventListener("DOMContentLoaded", () => {
   
     // MutationObserver로 스플래시 화면 변경 감지 및 즉시 복구 (더 빠른 반응)
     const splashObserver = new MutationObserver((mutations) => {
-      if (window.__stelvioEarlyBootDone) return;
       if (window.isSplashActive && splashScreen) {
         // requestAnimationFrame으로 즉시 복구 (다음 프레임에서 실행)
         requestAnimationFrame(() => {
@@ -7157,13 +7142,23 @@ function initializeCurrentScreen(screenId) {
       break;
 
     case 'openRidingRoomScreen':
-      setTimeout(function () {
-        if (typeof window.initOpenRidingRoomReact === 'function') {
-          window.initOpenRidingRoomReact().catch(function (e) {
-            console.warn('[openRidingRoomScreen] init:', e);
+      (function () {
+        var loadThenInit = function () {
+          if (typeof window.initOpenRidingRoomReact === 'function') {
+            window.initOpenRidingRoomReact().catch(function (e) {
+              console.warn('[openRidingRoomScreen] init:', e);
+            });
+          }
+        };
+        if (typeof window.stelvioLoadDeferredModules === 'function') {
+          window.stelvioLoadDeferredModules().then(loadThenInit).catch(function (e) {
+            console.warn('[openRidingRoomScreen] deferred load:', e);
+            loadThenInit();
           });
+        } else {
+          setTimeout(loadThenInit, 0);
         }
-      }, 0);
+      })();
       break;
 
     case 'affiliateScreen':
@@ -7310,7 +7305,10 @@ function initializeCurrentScreen(screenId) {
           }, 100);
           return;
         }
-        if (retryCount < 20) {
+        if (retryCount === 0 && typeof window.stelvioLoadDeferredModules === 'function') {
+          window.stelvioLoadDeferredModules().catch(function () {});
+        }
+        if (retryCount < 40) {
           setTimeout(function() { tryInitReactJournal(retryCount + 1); }, 100);
         } else {
           console.warn('[Journal Init] initTrainingJournalReact 미로드, 레거시 사용');
