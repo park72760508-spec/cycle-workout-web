@@ -6,6 +6,7 @@
   'use strict';
 
   var utils = global.stravaPolylineUtils;
+  var KOR_WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
 
   function escapeXml(s) {
     return String(s || '')
@@ -24,6 +25,60 @@
     m = m % 60;
     if (h > 0) return h + '시간 ' + m + '분';
     return m + '분';
+  }
+
+  function logSortKeyForTitle(log) {
+    if (!log) return 0;
+    var t = log.start_time || log.start_date_local || log.start_date;
+    if (t) {
+      var ms = Date.parse(String(t));
+      if (!isNaN(ms)) return ms;
+    }
+    var aid = Number(log.activity_id || 0);
+    return isFinite(aid) ? aid : 0;
+  }
+
+  function stravaRideTitlesFromLogs(logs) {
+    if (!logs || !logs.length) return '';
+    var sorted = logs.slice().sort(function (a, b) {
+      return logSortKeyForTitle(a) - logSortKeyForTitle(b);
+    });
+    var seen = {};
+    var parts = [];
+    var i, title;
+    for (i = 0; i < sorted.length; i++) {
+      title = sorted[i].title != null ? String(sorted[i].title).trim() : '';
+      if (!title || seen[title]) continue;
+      seen[title] = true;
+      parts.push(title);
+    }
+    return parts.join(' · ');
+  }
+
+  /** 예: 2026년 6월 3일(수) · Morning Ride */
+  function formatShareImageTitle(log, logs) {
+    if (!log) return 'STELVIO Ride';
+    var shareLogs = logs || log._logsForShare || null;
+    if (!shareLogs || !shareLogs.length) shareLogs = [log];
+
+    var dateKey = log.date ? String(log.date) : '';
+    var datePart = '';
+    if (dateKey.length >= 10) {
+      var p = dateKey.split('-');
+      var y = parseInt(p[0], 10);
+      var m = parseInt(p[1], 10);
+      var d = parseInt(p[2], 10);
+      if (isFinite(y) && isFinite(m) && isFinite(d)) {
+        var dow = new Date(y, m - 1, d).getDay();
+        datePart = y + '년 ' + m + '월 ' + d + '일(' + KOR_WEEKDAY[dow] + ')';
+      }
+    }
+
+    var titles = stravaRideTitlesFromLogs(shareLogs);
+    if (!titles && log.title) titles = String(log.title).trim();
+    if (datePart && titles) return datePart + ' · ' + titles;
+    if (datePart) return datePart;
+    return titles || 'STELVIO Ride';
   }
 
   function summaryLinesFromLog(log) {
@@ -72,7 +127,7 @@
       ? utils.elevationToSvgPath(route.elevation, w - 120, 200, 0.1)
       : null;
     var lines = summaryLinesFromLog(log);
-    var title = log.title ? String(log.title).slice(0, 48) : 'STELVIO Ride';
+    var title = formatShareImageTitle(log, logs).slice(0, 96);
     var yText = 80;
     var textBlock = '';
     textBlock +=
@@ -160,6 +215,52 @@
     });
   }
 
+  function isMobileDevice() {
+    if (typeof global.isMobile === 'function' && global.isMobile()) return true;
+    return /Android|iPhone|iPad|iPod/i.test((global.navigator && global.navigator.userAgent) || '');
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        resolve(reader.result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  /** iOS/Android 네이티브 WebView 브릿지(있을 때만) */
+  function tryNativeSaveImageToGallery(blob, filename) {
+    var wh = global.webkit && global.webkit.messageHandlers;
+    if (!wh) return Promise.resolve(false);
+    var handlers = [
+      'saveImageToGallery',
+      'saveImage',
+      'saveToPhotos',
+      'stelvioSaveImage',
+    ];
+    return blobToDataUrl(blob).then(function (dataUrl) {
+      var i, name, h;
+      for (i = 0; i < handlers.length; i++) {
+        name = handlers[i];
+        h = wh[name];
+        if (!h || typeof h.postMessage !== 'function') continue;
+        try {
+          h.postMessage({ dataUrl: dataUrl, filename: filename, mimeType: 'image/png' });
+          return true;
+        } catch (e1) {
+          try {
+            h.postMessage(dataUrl);
+            return true;
+          } catch (e2) {}
+        }
+      }
+      return false;
+    });
+  }
+
   function downloadBlob(blob, filename) {
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -173,9 +274,72 @@
     }, 400);
   }
 
+  function notifySaveResult(result) {
+    if (typeof global.showToast !== 'function') return;
+    if (result === 'native' || result === 'share') {
+      global.showToast('사진 보관함에 저장했습니다.', 'success');
+    } else if (result === 'download-mobile') {
+      global.showToast(
+        '이미지가 저장되었습니다. 갤러리·사진 앱에서 확인해 주세요.',
+        'success'
+      );
+    } else if (result === 'download') {
+      global.showToast('이미지가 다운로드되었습니다.', 'success');
+    }
+  }
+
+  /**
+   * 모바일: 공유 시트 → 「사진에 저장」 / 갤러리 앱 선택
+   * PC: 파일 다운로드
+   */
+  function savePngBlob(blob, filename) {
+    var mobile = isMobileDevice();
+    var file =
+      typeof File !== 'undefined'
+        ? new File([blob], filename, { type: 'image/png' })
+        : null;
+
+    if (mobile) {
+      return tryNativeSaveImageToGallery(blob, filename).then(function (nativeOk) {
+        if (nativeOk) return 'native';
+
+        if (
+          file &&
+          global.navigator &&
+          typeof global.navigator.share === 'function' &&
+          typeof global.navigator.canShare === 'function'
+        ) {
+          try {
+            if (global.navigator.canShare({ files: [file] })) {
+              return global.navigator
+                .share({
+                  files: [file],
+                  title: 'STELVIO Ride',
+                })
+                .then(function () {
+                  return 'share';
+                });
+            }
+          } catch (shareErr) {
+            if (shareErr && shareErr.name === 'AbortError') {
+              return Promise.reject(shareErr);
+            }
+          }
+        }
+
+        downloadBlob(blob, filename);
+        return 'download-mobile';
+      });
+    }
+
+    downloadBlob(blob, filename);
+    return Promise.resolve('download');
+  }
+
   /**
    * @param {object} log
-   * @param {{ filename?: string }} [opts]
+   * @param {{ filename?: string, logs?: Array }} [opts]
+   * @returns {Promise<{ blob: Blob, saveMethod: string }>}
    */
   async function exportTransparentSharePng(log, opts) {
     opts = opts || {};
@@ -185,11 +349,13 @@
     var blob = await svgToPngBlob(svg);
     var dateKey = log.date ? String(log.date).replace(/-/g, '') : 'ride';
     var fn = opts.filename || 'stelvio-ride-' + dateKey + '-transparent.png';
-    downloadBlob(blob, fn);
-    return blob;
+    var saveMethod = await savePngBlob(blob, fn);
+    notifySaveResult(saveMethod);
+    return { blob: blob, saveMethod: saveMethod };
   }
 
   global.journalTransparentShare = {
+    formatShareImageTitle: formatShareImageTitle,
     buildShareSvgMarkup: buildShareSvgMarkup,
     exportTransparentSharePng: exportTransparentSharePng,
   };

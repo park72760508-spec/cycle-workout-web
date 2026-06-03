@@ -839,6 +839,7 @@
                     : window.journalTransparentShare.exportTransparentSharePng(log);
                 Promise.resolve(p)
                   .catch(function (e) {
+                    if (e && e.name === 'AbortError') return;
                     var msg = e && e.message ? e.message : '저장 실패';
                     if (typeof window.showToast === 'function') window.showToast(msg, 'error');
                     else if (typeof alert === 'function') alert(msg);
