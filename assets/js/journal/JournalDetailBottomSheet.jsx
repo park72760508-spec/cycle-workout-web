@@ -822,7 +822,10 @@
             '코스 지도 없음 — Strava MMP 동기화 후 다시 열어 주세요.'
           ),
       React.createElement('div', { className: 'journal-tab-content-inner' }, rows),
-      typeof onShareTransparent === 'function' || (window.journalTransparentShare && window.journalTransparentShare.exportTransparentSharePng)
+      typeof onShareTransparent === 'function' ||
+        (window.journalTransparentShare &&
+          (window.journalTransparentShare.openShareComposer ||
+            window.journalTransparentShare.exportTransparentSharePng))
         ? React.createElement(
             'div',
             { className: 'journal-transparent-share-actions' },
@@ -833,10 +836,13 @@
               onClick: function () {
                 if (shareBusy) return;
                 setShareBusy(true);
+                var shareApi = window.journalTransparentShare;
                 var p =
                   typeof onShareTransparent === 'function'
                     ? onShareTransparent(log)
-                    : window.journalTransparentShare.exportTransparentSharePng(log);
+                    : shareApi && typeof shareApi.openShareComposer === 'function'
+                      ? shareApi.openShareComposer(log)
+                      : shareApi.exportTransparentSharePng(log);
                 Promise.resolve(p)
                   .catch(function (e) {
                     if (e && e.name === 'AbortError') return;
@@ -848,7 +854,7 @@
                     setShareBusy(false);
                   });
               }
-            }, shareBusy ? '저장 중…' : '투명 이미지 다운로드(공유)')
+            }, shareBusy ? '준비 중…' : '투명 이미지 만들기')
           )
         : null
     );

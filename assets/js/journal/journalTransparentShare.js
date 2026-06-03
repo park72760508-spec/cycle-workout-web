@@ -358,10 +358,9 @@
    */
   function savePngBlob(blob, filename) {
     var mobile = isMobileDevice();
+    var mime = (blob && blob.type) || 'image/png';
     var file =
-      typeof File !== 'undefined'
-        ? new File([blob], filename, { type: 'image/png' })
-        : null;
+      typeof File !== 'undefined' ? new File([blob], filename, { type: mime }) : null;
 
     if (mobile) {
       return tryNativeSaveImageToGallery(blob, filename).then(function (nativeOk) {
@@ -405,14 +404,78 @@
    * @param {{ filename?: string, logs?: Array }} [opts]
    * @returns {Promise<{ blob: Blob, saveMethod: string }>}
    */
-  async function exportTransparentSharePng(log, opts) {
+  async function createOverlayPngBlob(log, opts) {
     opts = opts || {};
     if (log && log._logsForShare && !opts.logs) opts.logs = log._logsForShare;
     var svg = buildShareSvgMarkup(log, opts);
     if (!svg) throw new Error('코스 데이터가 없어 공유 이미지를 만들 수 없습니다.');
     var summaryLines = summaryLinesFromLog(log);
     var speedLineText = summaryLines[summaryLines.length - 1] || '-';
-    var blob = await svgToPngBlob(svg, speedLineText);
+    return svgToPngBlob(svg, speedLineText);
+  }
+
+  function fitContainRect(imgW, imgH, boxW, boxH) {
+    if (!(imgW > 0 && imgH > 0 && boxW > 0 && boxH > 0)) {
+      return { x: 0, y: 0, width: boxW, height: boxH };
+    }
+    var s = Math.min(boxW / imgW, boxH / imgH);
+    var w = imgW * s;
+    var h = imgH * s;
+    return { x: (boxW - w) / 2, y: (boxH - h) / 2, width: w, height: h };
+  }
+
+  /**
+   * @param {HTMLImageElement} bgImg
+   * @param {HTMLImageElement} overlayImg
+   * @param {{ stageW:number, stageH:number, overlayLeft:number, overlayTop:number, overlayW:number, overlayH:number }} layout
+   */
+  function compositeShareToBlob(bgImg, overlayImg, layout) {
+    var MAX_OUT = 2048;
+    var nw = bgImg.naturalWidth || bgImg.width;
+    var nh = bgImg.naturalHeight || bgImg.height;
+    var shrink = Math.min(1, MAX_OUT / Math.max(nw, nh, 1));
+    var outW = Math.max(1, Math.round(nw * shrink));
+    var outH = Math.max(1, Math.round(nh * shrink));
+
+    var stageW = layout.stageW;
+    var stageH = layout.stageH;
+    var contain = fitContainRect(nw, nh, stageW, stageH);
+
+    var relL = (layout.overlayLeft - contain.x) / contain.width;
+    var relT = (layout.overlayTop - contain.y) / contain.height;
+    var relW = layout.overlayW / contain.width;
+    var relH = layout.overlayH / contain.height;
+
+    var drawX = relL * outW;
+    var drawY = relT * outH;
+    var drawW = relW * outW;
+    var drawH = relH * outH;
+
+    var canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return Promise.reject(new Error('Canvas 2D unavailable'));
+    ctx.drawImage(bgImg, 0, 0, outW, outH);
+    if (overlayImg && drawW > 0 && drawH > 0) {
+      ctx.drawImage(overlayImg, drawX, drawY, drawW, drawH);
+    }
+
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(
+        function (blob) {
+          if (blob) resolve(blob);
+          else reject(new Error('합성 PNG 변환 실패'));
+        },
+        'image/jpeg',
+        0.92
+      );
+    });
+  }
+
+  async function exportTransparentSharePng(log, opts) {
+    opts = opts || {};
+    var blob = await createOverlayPngBlob(log, opts);
     var dateKey = log.date ? String(log.date).replace(/-/g, '') : 'ride';
     var fn = opts.filename || 'stelvio-ride-' + dateKey + '-transparent.png';
     var saveMethod = await savePngBlob(blob, fn);
@@ -420,9 +483,64 @@
     return { blob: blob, saveMethod: saveMethod };
   }
 
+  var composerRootEl = null;
+  var composerRootInstance = null;
+
+  function unmountShareComposer() {
+    if (!composerRootEl) return;
+    try {
+      if (composerRootInstance && composerRootInstance.unmount) composerRootInstance.unmount();
+      else if (global.ReactDOM && typeof global.ReactDOM.unmountComponentAtNode === 'function') {
+        global.ReactDOM.unmountComponentAtNode(composerRootEl);
+      }
+    } catch (eUnmount) {}
+    composerRootInstance = null;
+  }
+
+  function openShareComposer(log, opts) {
+    opts = opts || {};
+    var React = global.React;
+    var ReactDOM = global.ReactDOM;
+    var Composer = global.JournalTransparentShareComposer;
+    if (!log || !React || !ReactDOM || !Composer) {
+      return exportTransparentSharePng(log, opts);
+    }
+    return new Promise(function (resolve, reject) {
+      if (!composerRootEl) {
+        composerRootEl = document.createElement('div');
+        composerRootEl.id = 'journal-transparent-share-portal';
+        document.body.appendChild(composerRootEl);
+      }
+      function handleClose(result) {
+        unmountShareComposer();
+        if (result && result.error) reject(result.error);
+        else resolve(result || { cancelled: true });
+      }
+      var el = React.createElement(Composer, {
+        log: log,
+        opts: opts,
+        onClose: handleClose,
+      });
+      if (ReactDOM.createRoot) {
+        if (!composerRootInstance) composerRootInstance = ReactDOM.createRoot(composerRootEl);
+        composerRootInstance.render(el);
+      } else if (typeof ReactDOM.render === 'function') {
+        ReactDOM.render(el, composerRootEl);
+      } else {
+        reject(new Error('ReactDOM을 사용할 수 없습니다.'));
+      }
+    });
+  }
+
   global.journalTransparentShare = {
     formatShareImageTitle: formatShareImageTitle,
     buildShareSvgMarkup: buildShareSvgMarkup,
+    createOverlayPngBlob: createOverlayPngBlob,
+    compositeShareToBlob: compositeShareToBlob,
+    savePngBlob: savePngBlob,
+    notifySaveResult: notifySaveResult,
     exportTransparentSharePng: exportTransparentSharePng,
+    openShareComposer: openShareComposer,
+    unmountShareComposer: unmountShareComposer,
   };
 })(typeof window !== 'undefined' ? window : global);
