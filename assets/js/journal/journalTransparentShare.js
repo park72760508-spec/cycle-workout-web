@@ -747,25 +747,26 @@
   }
 
   function downloadBlob(blob, filename) {
-    var a = document.createElement('a');
     var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
     a.href = url;
     a.download = filename;
-    a.style.display = 'none';
+    a.rel = 'noopener';
+    a.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
     document.body.appendChild(a);
     a.click();
     setTimeout(function () {
       URL.revokeObjectURL(url);
       if (a.parentNode) a.parentNode.removeChild(a);
-    }, 2000);
+    }, 15000);
   }
 
-  /** PC Chrome/Edge: 저장 위치 선택 */
-  function saveBlobWithFilePicker(blob, filename) {
+  /** PC·Android Chrome: 저장 위치·파일명 선택 (클릭 직후 호출) */
+  function requestSaveFileHandle(filename) {
     if (!global.window || typeof global.window.showSaveFilePicker !== 'function') {
       return Promise.resolve(null);
     }
-    if (isMobileDevice()) return Promise.resolve(null);
+    if (isIOSDevice()) return Promise.resolve(null);
     return global.window
       .showSaveFilePicker({
         suggestedName: filename,
@@ -776,20 +777,29 @@
           },
         ],
       })
-      .then(function (handle) {
-        return handle.createWritable().then(function (writable) {
-          return writable.write(blob).then(function () {
-            return writable.close();
-          });
-        });
-      })
-      .then(function () {
-        return 'save-picker';
-      })
       .catch(function (e) {
         if (e && e.name === 'AbortError') return Promise.reject(e);
         return null;
       });
+  }
+
+  function writeBlobToSaveHandle(handle, blob) {
+    if (!handle) return Promise.reject(new Error('저장 위치가 선택되지 않았습니다.'));
+    return handle.createWritable().then(function (writable) {
+      return writable.write(blob).then(function () {
+        return writable.close();
+      });
+    });
+  }
+
+  /** @deprecated 내부 호환 — requestSaveFileHandle + writeBlobToSaveHandle 사용 */
+  function saveBlobWithFilePicker(blob, filename) {
+    return requestSaveFileHandle(filename).then(function (handle) {
+      if (!handle) return null;
+      return writeBlobToSaveHandle(handle, blob).then(function () {
+        return 'save-picker';
+      });
+    });
   }
 
   function notifySaveResult(result) {
@@ -797,19 +807,11 @@
     if (result === 'native' || result === 'share') {
       global.showToast('사진 보관함에 저장했습니다.', 'success');
     } else if (result === 'share-android') {
-      global.showToast('선택한 앱으로 저장·공유할 수 있습니다.', 'success');
-    } else if (result === 'download-android-fallback') {
-      global.showToast(
-        '다운로드 폴더에 저장했습니다. 갤러리에는 「공유」 메뉴에서 사진 앱을 선택해 주세요.',
-        'info'
-      );
-    } else if (result === 'download-mobile') {
-      global.showToast(
-        '이미지가 저장되었습니다. 갤러리·사진 앱에서 확인해 주세요.',
-        'success'
-      );
+      global.showToast('선택한 앱·폴더에 저장되었습니다.', 'success');
     } else if (result === 'save-picker') {
       global.showToast('선택한 위치에 저장했습니다.', 'success');
+    } else if (result === 'download-mobile') {
+      global.showToast('이미지가 저장되었습니다. 사진 앱에서 확인해 주세요.', 'success');
     } else if (result === 'download') {
       global.showToast('이미지가 다운로드되었습니다.', 'success');
     }
@@ -834,9 +836,9 @@
   }
 
   /**
-   * Android: 공유 시트 → 실패 시 다운로드
    * iOS: savePngBlobIOS
-   * PC: showSaveFilePicker → 실패 시 다운로드
+   * Android: 공유 시트(갤러리·파일 앱 선택)
+   * PC: download (저장 위치는 Composer에서 requestSaveFileHandle 선행)
    */
   function savePngBlob(blob, filename) {
     var mime = (blob && blob.type) || 'image/jpeg';
@@ -846,32 +848,33 @@
     var file =
       typeof File !== 'undefined' ? new File([blob], filename, { type: mime }) : null;
 
-    return saveBlobWithFilePicker(blob, filename).then(function (picked) {
-      if (picked === 'save-picker') return picked;
+    if (isIOSDevice()) {
+      return savePngBlobIOS(blob, filename, file);
+    }
 
-      if (isIOSDevice()) {
-        return savePngBlobIOS(blob, filename, file);
-      }
-
-      if (isAndroidDevice() && file) {
-        return shareFileWithUserPicker(file, {}).then(function (shared) {
-          if (shared === 'share') return 'share-android';
-          downloadBlob(blob, filename);
-          return 'download-android-fallback';
+    if (isAndroidDevice() && file) {
+      return shareFileWithUserPicker(file, {}).then(function (shared) {
+        if (shared === 'share') return 'share-android';
+        return saveBlobWithFilePicker(blob, filename).then(function (picked) {
+          if (picked === 'save-picker') return picked;
+          return Promise.reject(
+            new Error(
+              '저장·공유 창을 열 수 없습니다. 「저장·공유」를 다시 눌러 갤러리·파일 앱을 선택해 주세요.'
+            )
+          );
         });
-      }
+      });
+    }
 
-      if (isMobileDevice() && file) {
-        return shareFileWithUserPicker(file, {}).then(function (shared) {
-          if (shared === 'share') return 'share';
-          downloadBlob(blob, filename);
-          return 'download-mobile';
-        });
-      }
+    if (isMobileDevice() && file) {
+      return shareFileWithUserPicker(file, {}).then(function (shared) {
+        if (shared === 'share') return 'share';
+        return Promise.reject(new Error('공유·저장 창을 열 수 없습니다.'));
+      });
+    }
 
-      downloadBlob(blob, filename);
-      return 'download';
-    });
+    downloadBlob(blob, filename);
+    return Promise.resolve('download');
   }
 
   /**
@@ -1018,9 +1021,20 @@
 
   async function exportTransparentSharePng(log, opts) {
     opts = opts || {};
-    var blob = await createOverlayPngBlob(log, opts);
     var dateKey = log.date ? String(log.date).replace(/-/g, '') : 'ride';
     var fn = opts.filename || 'stelvio-ride-' + dateKey + '-transparent.png';
+    var saveHandle = null;
+    try {
+      saveHandle = await requestSaveFileHandle(fn);
+    } catch (ePick) {
+      if (ePick && ePick.name === 'AbortError') throw ePick;
+    }
+    var blob = await createOverlayPngBlob(log, opts);
+    if (saveHandle) {
+      await writeBlobToSaveHandle(saveHandle, blob);
+      notifySaveResult('save-picker');
+      return { blob: blob, saveMethod: 'save-picker' };
+    }
     var saveMethod = await savePngBlob(blob, fn);
     notifySaveResult(saveMethod);
     return { blob: blob, saveMethod: saveMethod };
@@ -1078,17 +1092,13 @@
     });
   }
 
-  function stickerDragBounds(contain, stickerW, stickerH, pad) {
-    pad = pad != null ? pad : 20;
-    var xLeft = contain.x + pad;
-    var xRight = contain.x + contain.width - stickerW - pad;
-    var yTop = contain.y + pad;
-    var yBottom = contain.y + contain.height - stickerH - pad;
+  function stageDragBounds(stageW, stageH, stickerW, stickerH) {
+    var pad = Math.max(stageW, stageH, 480);
     return {
-      minX: Math.min(xLeft, xRight),
-      maxX: Math.max(xLeft, xRight),
-      minY: Math.min(yTop, yBottom),
-      maxY: Math.max(yTop, yBottom),
+      minX: -pad,
+      maxX: stageW - stickerW + pad,
+      minY: -pad,
+      maxY: stageH - stickerH + pad,
     };
   }
 
@@ -1100,7 +1110,9 @@
     compositeShareToBlob: compositeShareToBlob,
     compositeShareDualToBlob: compositeShareDualToBlob,
     fitContainRect: fitContainRect,
-    stickerDragBounds: stickerDragBounds,
+    stickerDragBounds: stageDragBounds,
+    requestSaveFileHandle: requestSaveFileHandle,
+    writeBlobToSaveHandle: writeBlobToSaveHandle,
     savePngBlob: savePngBlob,
     notifySaveResult: notifySaveResult,
     exportTransparentSharePng: exportTransparentSharePng,

@@ -231,36 +231,15 @@
           bottomNat && bottomNat.naturalWidth > 0
             ? w * (bottomNat.naturalHeight / bottomNat.naturalWidth)
             : w * (830 / 1080);
-        var contain = getBgContainRect();
-        var headerBounds = getStickerBounds(contain, w, hH);
-        var bottomBounds = getStickerBounds(contain, w, bH);
-        setPosHeader({ x: headerBounds.minX, y: headerBounds.minY });
-        setPosBottom({ x: bottomBounds.minX, y: bottomBounds.maxY });
+        var x = Math.max(8, (stageSize.w - w) * 0.04);
+        setPosHeader({ x: x, y: Math.max(8, stageSize.h * 0.04) });
+        setPosBottom({
+          x: x,
+          y: Math.max(hH + 16, stageSize.h - bH - Math.max(12, stageSize.h * 0.06)),
+        });
       },
-      [stageSize.w, stageSize.h, overlayBaseW, scale, headerNat, bottomNat, shareApi]
+      [stageSize.w, stageSize.h, overlayBaseW, scale, headerNat, bottomNat]
     );
-
-    function getBgContainRect() {
-      if (!shareApi || typeof shareApi.fitContainRect !== 'function') {
-        return { x: 0, y: 0, width: stageSize.w, height: stageSize.h };
-      }
-      var bg = bgImgRef.current;
-      var nw = bg && bg.naturalWidth > 0 ? bg.naturalWidth : stageSize.w;
-      var nh = bg && bg.naturalHeight > 0 ? bg.naturalHeight : stageSize.h;
-      return shareApi.fitContainRect(nw, nh, stageSize.w, stageSize.h);
-    }
-
-    function getStickerBounds(contain, stickerW, stickerH) {
-      if (shareApi && typeof shareApi.stickerDragBounds === 'function') {
-        return shareApi.stickerDragBounds(contain, stickerW, stickerH, 20);
-      }
-      return {
-        minX: contain.x + contain.width - stickerW - 20,
-        maxX: contain.x + 20,
-        minY: contain.y + contain.height - stickerH - 20,
-        maxY: contain.y + 20,
-      };
-    }
 
     function onStickerLoad(kind) {
       if (bgUrl) {
@@ -307,19 +286,10 @@
       var dy = ev.clientY - d.startY;
       var nx = d.origX + dx;
       var ny = d.origY + dy;
-      var contain = getBgContainRect();
       if (d.kind === 'header') {
-        var hb = getStickerBounds(contain, headerDispW, headerDispH);
-        setPosHeader({
-          x: clamp(nx, hb.minX, hb.maxX),
-          y: clamp(ny, hb.minY, hb.maxY),
-        });
+        setPosHeader({ x: nx, y: ny });
       } else {
-        var bb = getStickerBounds(contain, bottomDispW, bottomDispH);
-        setPosBottom({
-          x: clamp(nx, bb.minX, bb.maxX),
-          y: clamp(ny, bb.minY, bb.maxY),
-        });
+        setPosBottom({ x: nx, y: ny });
       }
     }
 
@@ -376,14 +346,32 @@
       setSaving(true);
       setErr(null);
       try {
+        var dateKey = log.date ? String(log.date).replace(/-/g, '') : 'ride';
+        var fn = 'stelvio-ride-' + dateKey + '.jpg';
+        var saveHandle = null;
+
+        if (typeof shareApi.requestSaveFileHandle === 'function') {
+          try {
+            saveHandle = await shareApi.requestSaveFileHandle(fn);
+          } catch (ePick) {
+            if (ePick && ePick.name === 'AbortError') return;
+          }
+        }
+
         var blobPromise = pendingBlobRef.current || buildCompositeBlob();
         pendingBlobRef.current = null;
         var blob = await blobPromise;
         if (!blob) {
           blob = await buildCompositeBlob();
         }
-        var dateKey = log.date ? String(log.date).replace(/-/g, '') : 'ride';
-        var fn = 'stelvio-ride-' + dateKey + '.jpg';
+
+        if (saveHandle && typeof shareApi.writeBlobToSaveHandle === 'function') {
+          await shareApi.writeBlobToSaveHandle(saveHandle, blob);
+          shareApi.notifySaveResult('save-picker');
+          onClose({ saved: true, saveMethod: 'save-picker' });
+          return;
+        }
+
         var saveMethod = await shareApi.savePngBlob(blob, fn);
         shareApi.notifySaveResult(saveMethod);
         onClose({ saved: true, saveMethod: saveMethod });
