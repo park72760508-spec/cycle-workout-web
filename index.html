@@ -1899,18 +1899,40 @@
       position: relative;
       overflow: hidden;
     }
-    #trainingJournalScreen .journal-course-preview-block {
+    /* 일지 요약: 라이딩 모임 상세와 동일 OSM+Leaflet 코스 지도 */
+    #trainingJournalScreen .journal-course-map-wrap {
       position: relative;
-      height: 148px;
-      margin: 0 0 12px 0;
+      width: 100%;
+      margin: 0 0 14px 0;
       border-radius: 12px;
-      background: linear-gradient(180deg, rgba(124, 58, 237, 0.06) 0%, rgba(102, 126, 234, 0.02) 100%);
-      border: 1px solid rgba(124, 58, 237, 0.2);
       overflow: hidden;
+      border: 1px solid rgba(124, 58, 237, 0.35);
+      box-shadow: 0 4px 14px rgba(102, 126, 234, 0.12);
+      background: #e2e8f0;
     }
-    #trainingJournalScreen .journal-course-preview-block--sheet {
-      height: 180px;
-      margin-bottom: 14px;
+    #trainingJournalScreen .journal-course-map-inner {
+      width: 100%;
+      pointer-events: none;
+      touch-action: pan-y;
+    }
+    #trainingJournalScreen .journal-course-map-inner .leaflet-container {
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      font-family: inherit;
+      background: #e2e8f0;
+    }
+    #trainingJournalScreen .journal-course-map-inner .leaflet-control-zoom,
+    #trainingJournalScreen .journal-course-map-inner .leaflet-bar {
+      display: none;
+    }
+    #trainingJournalScreen .journal-course-map-inner .leaflet-control-attribution {
+      font-size: 9px;
+      opacity: 0.75;
+      background: rgba(255, 255, 255, 0.85);
+      margin: 2px 4px;
+      padding: 0 4px;
+      border-radius: 4px;
     }
     #trainingJournalScreen .journal-course-preview-empty {
       margin: 0 0 12px 0;
@@ -23599,6 +23621,7 @@
   <script defer src="assets/js/journal/useJournalData.js"></script>
   <script src="assets/js/journal/JournalCalendarWidget.jsx" type="text/babel"></script>
   <script src="assets/js/journal/RidingCourseSvgBackground.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/JournalCourseMapPreview.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalDailySummary.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalDetailBottomSheet.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalMonthlyDashboard.jsx" type="text/babel"></script>
