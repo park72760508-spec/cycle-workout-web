@@ -777,7 +777,7 @@
     if (!log) {
       return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     }
-    var RouteBg = window.RidingCourseSvgBackground;
+    var CourseMap = window.JournalCourseMapPreview;
     var utils = window.stravaPolylineUtils;
     var routeInfo =
       utils && log && typeof utils.routeProfileFromLog === 'function'
@@ -800,17 +800,15 @@
     return React.createElement(
       'div',
       { className: 'journal-tab-content journal-tab-content--summary-route' },
-      RouteBg && (routeInfo.hasRoute || routeInfo.hasElevation)
-        ? React.createElement('div', { className: 'journal-course-preview-block journal-course-preview-block--sheet' },
-            React.createElement(RouteBg, {
-              log: log,
-              opacity: 0.4,
-              variant: 'muted',
-              className: 'journal-summary-tab-route-bg'
-            })
-          )
+      CourseMap && routeInfo.hasRoute
+        ? React.createElement(CourseMap, {
+            key: String(log.activity_id || log.date || 'sheet-map'),
+            log: log,
+            mapHeight: 200,
+            className: 'journal-summary-sheet-course-map'
+          })
         : React.createElement('p', { className: 'journal-course-preview-empty' },
-            '코스·고도 데이터 없음 — Strava MMP 동기화 후 다시 열어 주세요.'
+            '코스 지도 없음 — Strava MMP 동기화 후 다시 열어 주세요.'
           ),
       React.createElement('div', { className: 'journal-tab-content-inner' }, rows),
       typeof onShareTransparent === 'function' || (window.journalTransparentShare && window.journalTransparentShare.exportTransparentSharePng)

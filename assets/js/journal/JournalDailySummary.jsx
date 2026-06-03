@@ -150,7 +150,7 @@
 
     var summary = mergeLogsForSummary(logs, userProfile);
 
-    var RouteBg = window.RidingCourseSvgBackground;
+    var CourseMap = window.JournalCourseMapPreview;
     var utils = window.stravaPolylineUtils;
     var routeLog =
       utils && typeof utils.pickRouteLogFromLogs === 'function'
@@ -160,23 +160,25 @@
       utils && routeLog && typeof utils.routeProfileFromLog === 'function'
         ? utils.routeProfileFromLog(routeLog)
         : { hasRoute: false, hasElevation: false };
+    var mapKey =
+      (selectedDate || '') +
+      '-' +
+      (routeLog && routeLog.activity_id ? String(routeLog.activity_id) : 'none');
 
     return React.createElement('div', { className: 'card journal-daily-summary journal-daily-summary--with-route' },
-      RouteBg && routeLog && (routeInfo.hasRoute || routeInfo.hasElevation)
-        ? React.createElement('div', { className: 'journal-course-preview-block', 'aria-hidden': true },
-            React.createElement(RouteBg, {
-              log: routeLog,
-              opacity: 0.42,
-              variant: 'muted',
-              className: 'journal-daily-summary-route-bg'
-            })
-          )
-        : React.createElement('p', { className: 'journal-course-preview-empty' },
-            '코스 라인 없음 — Strava 「MMP 포함」 동기화 후 달력을 새로고침하세요.'
-          ),
       React.createElement('div', { className: 'journal-daily-summary-header' },
         React.createElement('h3', { className: 'journal-daily-summary-title' }, formatDateKey(selectedDate) + ' 요약')
       ),
+      CourseMap && routeLog && routeInfo.hasRoute
+        ? React.createElement(CourseMap, {
+            key: mapKey,
+            log: routeLog,
+            mapHeight: 200,
+            className: 'journal-daily-summary-course-map'
+          })
+        : React.createElement('p', { className: 'journal-course-preview-empty' },
+            '코스 지도 없음 — Strava 「MMP 포함」 동기화 후 달력을 새로고침하세요.'
+          ),
       React.createElement('div', { className: 'journal-daily-summary-grid' },
         React.createElement('div', { className: 'journal-summary-item' },
           React.createElement('span', { className: 'journal-summary-label' }, '거리'),
