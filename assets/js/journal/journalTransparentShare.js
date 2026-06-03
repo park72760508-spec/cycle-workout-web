@@ -665,6 +665,15 @@
     return /Android/i.test((global.navigator && global.navigator.userAgent) || '');
   }
 
+  /** STELVIO 앱 WebView (ReactNativeWebView / StelvioInApp) */
+  function isStelvioAppWebView() {
+    return !!(
+      global.ReactNativeWebView ||
+      global.StelvioInApp ||
+      global.StelvioAppChannel === 'webview-native'
+    );
+  }
+
   function canShareFiles(file) {
     if (!file || !global.navigator || typeof global.navigator.canShare !== 'function') {
       return false;
@@ -703,6 +712,31 @@
         if (e && e.name === 'AbortError') return Promise.reject(e);
         return null;
       });
+  }
+
+  /** Android: share 호출이 무한 대기할 때 저장 시트로 넘기기 */
+  function shareFileWithUserPickerWithTimeout(file, meta, timeoutMs) {
+    timeoutMs = timeoutMs != null ? timeoutMs : 2800;
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      function finish(err, val) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (err) reject(err);
+        else resolve(val);
+      }
+      var timer = setTimeout(function () {
+        finish(null, null);
+      }, timeoutMs);
+      shareFileWithUserPicker(file, meta)
+        .then(function (v) {
+          finish(null, v);
+        })
+        .catch(function (e) {
+          finish(e);
+        });
+    });
   }
 
   function blobToDataUrl(blob) {
@@ -746,42 +780,47 @@
     });
   }
 
-  /** Android WebView: AndroidBridge / ReactNativeWebView (동기 호출 가능한 경우만) */
+  /** Android WebView: AndroidBridge / ReactNativeWebView */
   function tryNativeSaveImageAndroid(blob, filename) {
-    return blobToDataUrl(blob).then(function (dataUrl) {
-      try {
-        var and = global.AndroidBridge || global.Android || global.StelvioAndroid;
-        if (and && typeof and.saveImageToGallery === 'function') {
-          and.saveImageToGallery(dataUrl, filename);
-          return true;
-        }
-        if (and && typeof and.saveImage === 'function') {
-          and.saveImage(dataUrl, filename);
-          return true;
-        }
-        if (and && typeof and.saveImageToPhotos === 'function') {
-          and.saveImageToPhotos(dataUrl, filename);
-          return true;
-        }
-      } catch (eAnd) {}
-
-      if (
-        global.ReactNativeWebView &&
-        typeof global.ReactNativeWebView.postMessage === 'function'
-      ) {
+    return blobToDataUrl(blob)
+      .then(function (dataUrl) {
         try {
-          global.ReactNativeWebView.postMessage(
-            JSON.stringify({
-              type: 'SAVE_IMAGE',
-              dataUrl: dataUrl,
-              filename: filename,
-              mimeType: (blob && blob.type) || 'image/jpeg',
-            })
-          );
-        } catch (eRn) {}
-      }
-      return false;
-    });
+          var and = global.AndroidBridge || global.Android || global.StelvioAndroid;
+          if (and && typeof and.saveImageToGallery === 'function') {
+            and.saveImageToGallery(dataUrl, filename);
+            return true;
+          }
+          if (and && typeof and.saveImage === 'function') {
+            and.saveImage(dataUrl, filename);
+            return true;
+          }
+          if (and && typeof and.saveImageToPhotos === 'function') {
+            and.saveImageToPhotos(dataUrl, filename);
+            return true;
+          }
+        } catch (eAnd) {}
+
+        if (
+          global.ReactNativeWebView &&
+          typeof global.ReactNativeWebView.postMessage === 'function'
+        ) {
+          try {
+            global.ReactNativeWebView.postMessage(
+              JSON.stringify({
+                type: 'SAVE_IMAGE',
+                dataUrl: dataUrl,
+                filename: filename,
+                mimeType: (blob && blob.type) || 'image/jpeg',
+              })
+            );
+            return true;
+          } catch (eRn) {}
+        }
+        return false;
+      })
+      .catch(function () {
+        return false;
+      });
   }
 
   /**
@@ -818,9 +857,17 @@
       hint.textContent =
         '「공유·저장」을 누른 뒤 갤러리·파일·드라이브 등 원하는 앱을 선택하세요.';
 
-      function cleanup() {
-        URL.revokeObjectURL(url);
+      var cleaned = false;
+      function cleanup(revokeDelayMs) {
+        if (cleaned) return;
+        cleaned = true;
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        var delay = revokeDelayMs != null ? revokeDelayMs : 15000;
+        setTimeout(function () {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (eRev) {}
+        }, delay);
       }
 
       function shareFromUserTap() {
@@ -828,22 +875,31 @@
         var file =
           typeof File !== 'undefined' ? new File([blob], filename, { type: mime }) : null;
         if (file && global.navigator && typeof global.navigator.share === 'function') {
-          global.navigator
-            .share({ files: [file] })
-            .then(function () {
-              cleanup();
-              resolve('share-android');
+          shareFileWithUserPickerWithTimeout(file, {}, 3500)
+            .then(function (shared) {
+              if (shared === 'share') {
+                cleanup(0);
+                resolve('share-android');
+                return;
+              }
+              openBlobForAndroidView(url, filename);
+              cleanup(15000);
+              resolve('android-open');
             })
             .catch(function (eShare) {
-              if (eShare && eShare.name === 'AbortError') return;
+              if (eShare && eShare.name === 'AbortError') {
+                cleanup(0);
+                reject(Object.assign(new Error('저장 취소'), { name: 'AbortError' }));
+                return;
+              }
               openBlobForAndroidView(url, filename);
-              cleanup();
+              cleanup(15000);
               resolve('android-open');
             });
           return;
         }
         openBlobForAndroidView(url, filename);
-        cleanup();
+        cleanup(15000);
         resolve('android-open');
       }
 
@@ -858,7 +914,7 @@
       closeBtn.className = 'journal-android-save-sheet__btn journal-android-save-sheet__btn--ghost';
       closeBtn.textContent = '닫기';
       closeBtn.addEventListener('click', function () {
-        cleanup();
+        cleanup(0);
         reject(Object.assign(new Error('저장 취소'), { name: 'AbortError' }));
       });
 
@@ -952,7 +1008,9 @@
     if (typeof global.showToast !== 'function') return;
     if (result === 'native' || result === 'share') {
       global.showToast('사진 보관함에 저장했습니다.', 'success');
-    } else if (result === 'share-android' || result === 'native-android') {
+    } else if (result === 'native-android') {
+      global.showToast('사진 보관함에 저장했습니다.', 'success');
+    } else if (result === 'share-android') {
       global.showToast('선택한 앱·폴더에 저장되었습니다.', 'success');
     } else if (result === 'android-open') {
       global.showToast('이미지를 열었습니다. 갤러리·파일 앱으로 저장해 주세요.', 'info');
@@ -984,27 +1042,13 @@
   }
 
   /**
-   * Android 전용: 네이티브 → Web Share → 저장 시트(미리보기+공유 버튼)
+   * Android 전용: 네이티브(WebView) → 저장 시트(미리보기+공유·저장 버튼, 새 제스처)
+   * 비동기 합성 후 즉시 share()는 제스처 만료·WebView 무반응 — 시트 UI로 우회
    * iOS·PC는 savePngBlob 사용
    */
   function savePngBlobAndroid(blob, filename) {
-    var mime = (blob && blob.type) || 'image/jpeg';
-    if (mime.indexOf('jpeg') < 0 && mime.indexOf('jpg') < 0) {
-      mime = 'image/jpeg';
-    }
-    var file =
-      typeof File !== 'undefined' ? new File([blob], filename, { type: mime }) : null;
-
     return tryNativeSaveImageAndroid(blob, filename).then(function (nativeOk) {
       if (nativeOk) return 'native-android';
-
-      if (file && global.navigator && typeof global.navigator.share === 'function') {
-        return shareFileWithUserPicker(file, {}).then(function (shared) {
-          if (shared === 'share') return 'share-android';
-          return openAndroidImageSaveSheet(blob, filename);
-        });
-      }
-
       return openAndroidImageSaveSheet(blob, filename);
     });
   }
