@@ -1984,12 +1984,18 @@
     .journal-share-composer-overlay {
       position: fixed;
       inset: 0;
-      z-index: 12050;
+      /* 글로스 하단 네비(z-index 99999)보다 위 */
+      z-index: 100050;
       background: rgba(15, 23, 42, 0.72);
       display: flex;
       align-items: stretch;
       justify-content: center;
       padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+    }
+    html.journal-share-composer-open #globalHubBottomGlassNavRoot,
+    html.journal-share-composer-open #openRidingBottomGlassNavRoot {
+      visibility: hidden !important;
+      pointer-events: none !important;
     }
     .journal-share-composer-panel {
       width: 100%;
@@ -2028,10 +2034,11 @@
     }
     .journal-share-composer-hint {
       margin: 0;
-      padding: 8px 16px 10px;
-      font-size: 12px;
+      padding: 6px 16px 8px;
+      font-size: 11px;
       color: #94a3b8;
-      line-height: 1.45;
+      line-height: 1.4;
+      flex: 0 0 auto;
     }
     .journal-share-composer-loading {
       padding: 8px 16px;
@@ -2046,7 +2053,7 @@
     .journal-share-composer-stage {
       position: relative;
       flex: 1 1 auto;
-      margin: 0 12px;
+      margin: 0 12px 12px;
       border-radius: 12px;
       overflow: hidden;
       background: repeating-conic-gradient(#1e293b 0% 25%, #0f172a 0% 50%) 50% / 20px 20px;
@@ -2091,12 +2098,16 @@
     }
     .journal-share-composer-controls {
       flex: 0 0 auto;
-      padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0));
+      padding: 10px 16px 12px;
       display: flex;
       flex-direction: column;
       gap: 10px;
-      border-top: 1px solid rgba(148, 163, 184, 0.2);
       background: #0f172a;
+    }
+    .journal-share-composer-controls--top {
+      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      border-top: none;
+      padding-top: 8px;
     }
     .journal-share-composer-actions-row {
       display: flex;
@@ -2131,7 +2142,8 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      width: 100%;
     }
     .journal-share-composer-scale-label {
       font-size: 12px;
@@ -2150,9 +2162,10 @@
       cursor: pointer;
     }
     .journal-share-composer-reset-btn {
-      font-size: 12px;
-      padding: 0 10px;
-      margin-left: auto;
+      font-size: 11px;
+      padding: 0 8px;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
     .journal-share-composer-scale-btn:disabled,
     .journal-share-composer-reset-btn:disabled {
@@ -2471,15 +2484,6 @@
     }
     @keyframes journalFadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes journalSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-    /* Druk Wide Bold — assets/fonts/DrukWide-Bold.woff2 배포 시 적용 (없으면 Bebas Neue) */
-    @font-face {
-      font-family: 'Druk Wide';
-      src: url('assets/fonts/DrukWide-Bold.woff2') format('woff2'),
-           url('assets/fonts/DrukWide-Bold.otf') format('opentype');
-      font-weight: 700;
-      font-style: normal;
-      font-display: swap;
-    }
   </style>
 
   <!-- 한/영/숫자 폰트 통일: Noto Sans KR (안드로이드 등에서 영문·숫자 궁서체 fallback 방지) -->
