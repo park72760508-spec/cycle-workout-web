@@ -553,6 +553,9 @@
   var composerRootInstance = null;
 
   function unmountShareComposer() {
+    if (global.document && global.document.documentElement) {
+      global.document.documentElement.classList.remove('journal-share-composer-open');
+    }
     if (!composerRootEl) return;
     try {
       if (composerRootInstance && composerRootInstance.unmount) composerRootInstance.unmount();

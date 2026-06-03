@@ -110,8 +110,14 @@
     useEffect(function () {
       var prev = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
+      if (document.documentElement) {
+        document.documentElement.classList.add('journal-share-composer-open');
+      }
       return function () {
         document.body.style.overflow = prev;
+        if (document.documentElement) {
+          document.documentElement.classList.remove('journal-share-composer-open');
+        }
       };
     }, []);
 
@@ -323,51 +329,7 @@
             },
           }, '\u00D7')
         ),
-        R.createElement('p', { className: 'journal-share-composer-hint' },
-          '배경 사진을 고른 뒤, 투명 라이딩 정보를 드래그·크기 조절하여 맞추고 저장하세요.'
-        ),
-        loading
-          ? R.createElement('div', { className: 'journal-share-composer-loading' }, '라이딩 오버레이 준비 중…')
-          : null,
-        err
-          ? R.createElement('p', { className: 'journal-share-composer-error' }, err)
-          : null,
-        R.createElement(
-          'div',
-          { className: 'journal-share-composer-stage', ref: stageRef },
-          bgUrl
-            ? R.createElement('img', {
-                className: 'journal-share-composer-bg',
-                src: bgUrl,
-                alt: '',
-                draggable: false,
-              })
-            : R.createElement('div', { className: 'journal-share-composer-bg-placeholder' },
-                '배경 사진을 선택하세요'
-              ),
-          overlayUrl && !loading
-            ? R.createElement('img', {
-                ref: overlayImgRef,
-                className: 'journal-share-composer-overlay-img' + (bgUrl ? '' : ' is-dimmed'),
-                src: overlayUrl,
-                alt: '라이딩 오버레이',
-                draggable: false,
-                style: {
-                  width: overlayDispW + 'px',
-                  height: overlayDispH + 'px',
-                  left: pos.x + 'px',
-                  top: pos.y + 'px',
-                  touchAction: 'none',
-                },
-                onLoad: onOverlayImageLoad,
-                onPointerDown: onOverlayPointerDown,
-                onPointerMove: onOverlayPointerMove,
-                onPointerUp: onOverlayPointerUp,
-                onPointerCancel: onOverlayPointerUp,
-              })
-            : null
-        ),
-        R.createElement('div', { className: 'journal-share-composer-controls' },
+        R.createElement('div', { className: 'journal-share-composer-controls journal-share-composer-controls--top' },
           R.createElement('div', { className: 'journal-share-composer-actions-row' },
             R.createElement('label', { className: 'journal-share-composer-action-btn journal-share-composer-pick-btn' },
               '배경 사진 선택',
@@ -426,6 +388,50 @@
               onClick: placeOverlayDefault,
             }, '위치 초기화')
           )
+        ),
+        R.createElement('p', { className: 'journal-share-composer-hint' },
+          '배경 선택 후 오버레이를 드래그·크기 조절하여 맞추세요.'
+        ),
+        loading
+          ? R.createElement('div', { className: 'journal-share-composer-loading' }, '라이딩 오버레이 준비 중…')
+          : null,
+        err
+          ? R.createElement('p', { className: 'journal-share-composer-error' }, err)
+          : null,
+        R.createElement(
+          'div',
+          { className: 'journal-share-composer-stage', ref: stageRef },
+          bgUrl
+            ? R.createElement('img', {
+                className: 'journal-share-composer-bg',
+                src: bgUrl,
+                alt: '',
+                draggable: false,
+              })
+            : R.createElement('div', { className: 'journal-share-composer-bg-placeholder' },
+                '배경 사진을 선택하세요'
+              ),
+          overlayUrl && !loading
+            ? R.createElement('img', {
+                ref: overlayImgRef,
+                className: 'journal-share-composer-overlay-img' + (bgUrl ? '' : ' is-dimmed'),
+                src: overlayUrl,
+                alt: '라이딩 오버레이',
+                draggable: false,
+                style: {
+                  width: overlayDispW + 'px',
+                  height: overlayDispH + 'px',
+                  left: pos.x + 'px',
+                  top: pos.y + 'px',
+                  touchAction: 'none',
+                },
+                onLoad: onOverlayImageLoad,
+                onPointerDown: onOverlayPointerDown,
+                onPointerMove: onOverlayPointerMove,
+                onPointerUp: onOverlayPointerUp,
+                onPointerCancel: onOverlayPointerUp,
+              })
+            : null
         )
       )
     );
