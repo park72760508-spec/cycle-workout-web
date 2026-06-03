@@ -1,7 +1,7 @@
 /**
- * 투명 PNG 오버레이 — NRC 레퍼런스: 상단 제목 / 중앙 맵 / 맵 하단 통계 그리드
+ * 투명 PNG 오버레이 — 상단 로고·제목 / 하단 맵·통계(4항목)
  */
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Image,
   ImageSourcePropType,
@@ -13,8 +13,10 @@ import Svg, { Defs, FeDropShadow, Filter, G, Path } from "react-native-svg";
 import {
   SHARE_LAYOUT,
   buildShareStatCells,
+  estimateShareLogoWidth,
   formatShareHeaderSub,
   formatShareHeaderTitle,
+  shareCourseY,
   tokenizeShareText,
   type ShareStatCell,
   type TextToken,
@@ -30,6 +32,7 @@ import { FONT_KOREAN, FONT_LATIN } from "./useShareFonts";
 
 const L = SHARE_LAYOUT;
 const COURSE_X = (OVERLAY_W - L.courseW) / 2;
+const COURSE_Y = shareCourseY();
 
 const TEXT_SHADOW = {
   textShadowColor: "rgba(0,0,0,0.55)",
@@ -57,42 +60,46 @@ function fontForToken(
 function CenteredText({
   text,
   fontSize,
+  top,
   opacity = 1,
   usingSystemFallback,
   extraBold,
 }: {
   text: string;
   fontSize: number;
+  top: number;
   opacity?: number;
   usingSystemFallback: boolean;
   extraBold?: boolean;
 }) {
   const tokens = tokenizeShareText(text);
   return (
-    <Text
-      style={[
-        overlayStyles.textCenter,
-        TEXT_SHADOW,
-        { fontSize, opacity },
-        extraBold && overlayStyles.titleWeight,
-      ]}
-    >
-      {tokens.map((tok, i) => {
-        const f = fontForToken(tok.kind, usingSystemFallback);
-        return (
-          <Text
-            key={`${i}-${tok.text}`}
-            style={{
-              fontFamily: f.family,
-              fontWeight: extraBold ? "800" : f.weight,
-              color: "#FFFFFF",
-            }}
-          >
-            {tok.text}
-          </Text>
-        );
-      })}
-    </Text>
+    <View style={[overlayStyles.headerLine, { top }]}>
+      <Text
+        style={[
+          overlayStyles.textCenter,
+          TEXT_SHADOW,
+          { fontSize, opacity },
+          extraBold && overlayStyles.titleWeight,
+        ]}
+      >
+        {tokens.map((tok, i) => {
+          const f = fontForToken(tok.kind, usingSystemFallback);
+          return (
+            <Text
+              key={`${i}-${tok.text}`}
+              style={{
+                fontFamily: f.family,
+                fontWeight: extraBold ? "800" : f.weight,
+                color: "#FFFFFF",
+              }}
+            >
+              {tok.text}
+            </Text>
+          );
+        })}
+      </Text>
+    </View>
   );
 }
 
@@ -135,10 +142,7 @@ function StatColumn({
             style={[
               overlayStyles.statUnit,
               TEXT_SHADOW,
-              {
-                fontFamily: valueFont,
-                fontSize: L.fontUnit,
-              },
+              { fontFamily: valueFont, fontSize: L.fontUnit },
             ]}
           >
             {cell.unit}
@@ -164,33 +168,59 @@ export function ShareOverlayArtboard({
     [log, opts]
   );
 
+  const logoW = estimateShareLogoWidth(log);
+  const [logoH, setLogoH] = useState(Math.max(32, Math.round(logoW * 0.2)));
+  const subY = L.logoTop + logoH + L.subGapBelowLogo;
+  const titleY = subY + L.titleGapBelowSub;
+
   return (
     <View style={[overlayStyles.root, { width: OVERLAY_W, height: OVERLAY_H }]}>
-      <View style={[overlayStyles.header, { top: L.subY }]}>
-        {sub ? (
-          <CenteredText
-            text={sub}
-            fontSize={L.fontSub}
-            opacity={0.78}
-            usingSystemFallback={usingSystemFallback}
-          />
-        ) : null}
-        <View style={{ marginTop: sub ? 10 : 0 }}>
-          <CenteredText
-            text={title}
-            fontSize={L.fontTitle}
-            usingSystemFallback={usingSystemFallback}
-            extraBold
-          />
-        </View>
-      </View>
+      {logoSource ? (
+        <Image
+          source={logoSource}
+          style={[
+            overlayStyles.logoImg,
+            {
+              top: L.logoTop,
+              width: logoW,
+              height: logoH,
+              left: (OVERLAY_W - logoW) / 2,
+            },
+          ]}
+          resizeMode="contain"
+          onLoad={(e) => {
+            const { width, height } = e.nativeEvent.source;
+            if (width > 0 && height > 0) {
+              setLogoH(Math.round(logoW * (height / width)));
+            }
+          }}
+        />
+      ) : null}
+
+      {sub ? (
+        <CenteredText
+          text={sub}
+          fontSize={L.fontSub}
+          top={subY}
+          opacity={0.78}
+          usingSystemFallback={usingSystemFallback}
+        />
+      ) : null}
+
+      <CenteredText
+        text={title}
+        fontSize={L.fontTitle}
+        top={titleY}
+        usingSystemFallback={usingSystemFallback}
+        extraBold
+      />
 
       <View
         style={[
           overlayStyles.courseWrap,
           {
             left: COURSE_X,
-            top: L.courseY,
+            top: COURSE_Y,
             width: L.courseW,
             height: L.courseH,
           },
@@ -229,24 +259,6 @@ export function ShareOverlayArtboard({
           <StatColumn key={cell.label} cell={cell} usingSystemFallback={usingSystemFallback} />
         ))}
       </View>
-
-      {logoSource ? (
-        <Image
-          source={logoSource}
-          style={overlayStyles.logoImg}
-          resizeMode="contain"
-        />
-      ) : (
-        <Text
-          style={[
-            overlayStyles.logoText,
-            TEXT_SHADOW,
-            { fontFamily: usingSystemFallback ? "System" : FONT_LATIN },
-          ]}
-        >
-          STELVIO
-        </Text>
-      )}
     </View>
   );
 }
@@ -256,7 +268,11 @@ const overlayStyles = StyleSheet.create({
     backgroundColor: "transparent",
     overflow: "hidden",
   },
-  header: {
+  logoImg: {
+    position: "absolute",
+    opacity: 0.95,
+  },
+  headerLine: {
     position: "absolute",
     left: L.padX,
     right: L.padX,
@@ -307,23 +323,5 @@ const overlayStyles = StyleSheet.create({
     marginLeft: 3,
     marginBottom: 10,
     letterSpacing: 0.2,
-  },
-  logoImg: {
-    position: "absolute",
-    alignSelf: "center",
-    left: OVERLAY_W / 2 - 80,
-    top: L.logoY,
-    width: 160,
-    height: 32,
-    opacity: 0.95,
-  },
-  logoText: {
-    position: "absolute",
-    width: OVERLAY_W,
-    top: L.logoY,
-    textAlign: "center",
-    color: "#FFFFFF",
-    fontSize: 26,
-    letterSpacing: 4,
   },
 });

@@ -2,23 +2,48 @@ import type { ShareLog } from "./journalShareTypes";
 
 const KOR_WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 
-/** NRC 스타일 오버레이 레이아웃 (1080×1350 기준) */
+export const STELVIO_SHARE_LOGO_ASSET = "assets/img/stelvio_w.png";
+
+/** 오버레이 레이아웃 (1080×1350) — 상단 로고·제목, 하단 맵·통계 */
 export const SHARE_LAYOUT = {
   padX: 48,
-  subY: 76,
-  titleY: 128,
-  courseY: 280,
-  courseH: 480,
+  logoTop: 24,
+  logoMeasureFont: 36,
+  subGapBelowLogo: 14,
+  titleGapBelowSub: 44,
   courseW: 984,
-  statsLabelY: 788,
-  statsValueY: 848,
-  logoY: 1180,
+  courseH: 480,
+  courseGapAboveStats: 36,
+  statsLabelY: 1070,
+  statsValueY: 1130,
   fontSub: 28,
   fontTitle: 48,
   fontLabel: 26,
   fontValue: 68,
   fontUnit: 26,
 } as const;
+
+export function shareCourseY(): number {
+  return (
+    SHARE_LAYOUT.statsLabelY -
+    SHARE_LAYOUT.courseGapAboveStats -
+    SHARE_LAYOUT.courseH
+  );
+}
+
+/** 속도 요약 문자열 (로고 너비 산정용, 웹 measureShareLogoWidth 와 동일 기준) */
+export function speedLineTextForLogo(log: ShareLog): string {
+  const cells = buildShareStatCells(log);
+  const spd = cells.find((c) => c.label === "SPEED");
+  if (!spd) return "-";
+  return spd.unit ? `${spd.value} ${spd.unit}` : spd.value;
+}
+
+/** Bebas 36px 기준 로고 가로(px) — 웹 measureShareLogoWidth 근사 */
+export function estimateShareLogoWidth(log: ShareLog): number {
+  const text = speedLineTextForLogo(log);
+  return Math.max(120, Math.round(text.length * 17.2));
+}
 
 export type ShareStatCell = {
   label: string;
@@ -114,7 +139,6 @@ export function buildShareStatCells(log: ShareLog): ShareStatCell[] {
     Number(log.duration_sec != null ? log.duration_sec : log.time != null ? log.time : 0) ||
     0;
   const elev = log.elevation_gain != null ? Number(log.elevation_gain) : null;
-  const watts = log.avg_watts != null ? Number(log.avg_watts) : null;
   let spd = log.avg_speed_kmh != null ? Number(log.avg_speed_kmh) : null;
   if ((!spd || spd <= 0) && dist > 0 && sec > 0) {
     spd = Math.round((dist / (sec / 3600)) * 10) / 10;
@@ -144,12 +168,6 @@ export function buildShareStatCells(log: ShareLog): ShareStatCell[] {
       label: "ELEVATION",
       value: elev != null && elev > 0 ? String(Math.round(elev)) : "-",
       unit: elev != null && elev > 0 ? "m" : "",
-      valueIsLatin: true,
-    },
-    {
-      label: "WATTS",
-      value: watts != null && watts > 0 ? String(Math.round(watts)) : "-",
-      unit: watts != null && watts > 0 ? "W" : "",
       valueIsLatin: true,
     },
   ];
