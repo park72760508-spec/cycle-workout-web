@@ -1895,6 +1895,49 @@
       margin-top: 16px;
     }
     /* React Journal 리팩터링: Daily Summary 카드 (STELVIO 주간 마일리지 TOP10 모달 스타일 적용) */
+    #trainingJournalScreen .journal-daily-summary--with-route {
+      position: relative;
+      overflow: hidden;
+    }
+    #trainingJournalScreen .journal-daily-summary-header,
+    #trainingJournalScreen .journal-daily-summary-grid,
+    #trainingJournalScreen .journal-daily-summary-actions {
+      position: relative;
+      z-index: 1;
+    }
+    #trainingJournalScreen .journal-tab-content--summary-route {
+      position: relative;
+      overflow: hidden;
+      min-height: 220px;
+    }
+    #trainingJournalScreen .journal-tab-content-inner {
+      position: relative;
+      z-index: 1;
+    }
+    #trainingJournalScreen .journal-transparent-share-actions {
+      position: relative;
+      z-index: 1;
+      margin-top: 14px;
+      display: flex;
+      justify-content: flex-end;
+    }
+    #trainingJournalScreen .journal-transparent-share-btn {
+      font-size: 13px;
+      font-weight: 600;
+      color: #5b21b6;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(124, 58, 237, 0.35);
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    #trainingJournalScreen .journal-transparent-share-btn:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+    #trainingJournalScreen .journal-bottom-sheet-body {
+      position: relative;
+    }
     #trainingJournalScreen .journal-daily-summary {
       margin-top: 16px;
       padding: 16px;
@@ -23481,14 +23524,58 @@
     if (typeof fetchTrainingLogsForCalendarJournal !== 'undefined') {
       window.fetchTrainingLogsForCalendarJournal = fetchTrainingLogsForCalendarJournal;
     }
+
+    /** Strava 동기화 후 당일(서울) 로그에 summary_polyline·고도 프로파일 백필 */
+    window.backfillStravaRouteProfileForDateClient = async function (dateStr) {
+      var uid =
+        (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) ||
+        (window.auth && window.auth.currentUser && window.auth.currentUser.uid) ||
+        null;
+      if (!uid || typeof window.authV9 === 'undefined' || !window.authV9.currentUser) {
+        try {
+          var ju = JSON.parse(localStorage.getItem('authUser') || 'null');
+          if (ju && ju.id) uid = String(ju.id);
+        } catch (eAu) {}
+      }
+      if (!uid) throw new Error('로그인이 필요합니다.');
+      var todaySeoul = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+      var d = dateStr ? String(dateStr).slice(0, 10) : todaySeoul;
+      var token = await window.authV9.currentUser.getIdToken(true);
+      var res = await fetch(
+        'https://us-central1-stelvio-ai.cloudfunctions.net/backfillStravaRouteProfileForDate',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer ' + token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ date: d, userId: uid }),
+        }
+      );
+      var json = await res.json().catch(function () {
+        return {};
+      });
+      if (!res.ok || !json.success) {
+        throw new Error((json && json.error) || '백필 실패 HTTP ' + res.status);
+      }
+      if (typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(
+          new CustomEvent('journal-training-logs-refresh', { detail: { force: true } })
+        );
+      }
+      return json;
+    };
     
     console.log('✅ 훈련일지 화면용 미니 달력 스크립트 로드 완료');
   </script>
   
   <!-- ========== 라이딩 일지 React 리팩터링 (useJournalData + JournalCalendarWidget + JournalDailySummary) ========== -->
   <!-- defer: 헤더의 React(react.production.min.js)도 defer 이므로, 동기 로드 시 React 미준비 상태에서 훅이 먼저 실행되어 경고가 남 -->
+  <script defer src="assets/js/journal/stravaPolylineUtils.js"></script>
+  <script defer src="assets/js/journal/journalTransparentShare.js"></script>
   <script defer src="assets/js/journal/useJournalData.js"></script>
   <script src="assets/js/journal/JournalCalendarWidget.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/RidingCourseSvgBackground.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalDailySummary.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalDetailBottomSheet.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalMonthlyDashboard.jsx" type="text/babel"></script>
