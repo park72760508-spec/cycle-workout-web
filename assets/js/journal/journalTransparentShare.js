@@ -688,6 +688,71 @@
     return new File([blob], filename, { type: mime });
   }
 
+  /** WebView postMessage 안전 크기 (base64 ~700KB 이하 권장) */
+  var NATIVE_BRIDGE_MAX_BLOB_BYTES = 700000;
+
+  /**
+   * RN WebView postMessage 용량 제한 대응 — 갤러리 저장 전 JPEG 압축
+   * @param {Blob} blob
+   * @param {number} [maxBytes]
+   * @returns {Promise<Blob>}
+   */
+  function compressBlobForNativeBridge(blob, maxBytes) {
+    maxBytes = maxBytes != null ? maxBytes : NATIVE_BRIDGE_MAX_BLOB_BYTES;
+    if (!blob || blob.size <= maxBytes) {
+      return Promise.resolve(blob);
+    }
+    return new Promise(function (resolve) {
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var w = img.naturalWidth || img.width;
+        var h = img.naturalHeight || img.height;
+        if (!(w > 0 && h > 0)) {
+          resolve(blob);
+          return;
+        }
+        var maxDim = 1280;
+        var scale = Math.min(1, maxDim / Math.max(w, h));
+        var cw = Math.max(1, Math.round(w * scale));
+        var ch = Math.max(1, Math.round(h * scale));
+        var canvas = document.createElement('canvas');
+        canvas.width = cw;
+        canvas.height = ch;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(blob);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, cw, ch);
+        function tryQuality(q) {
+          canvas.toBlob(
+            function (b) {
+              if (!b) {
+                resolve(blob);
+                return;
+              }
+              if (b.size <= maxBytes || q <= 0.48) {
+                resolve(b);
+                return;
+              }
+              tryQuality(Math.max(0.48, q - 0.07));
+            },
+            'image/jpeg',
+            q
+          );
+        }
+        tryQuality(0.82);
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        resolve(blob);
+      };
+      img.src = url;
+    });
+  }
+
   /**
    * Stelvio WebView 앱 postMessage — App.tsx 는 type: SAVE_IMAGE 를 처리
    * requestId 가 있으면 stelvioNativeResponse 로 ok 수신 (앱 1.1+)
@@ -722,8 +787,16 @@
     }
     maxWaitMs = maxWaitMs != null ? maxWaitMs : 400;
     var mime = (blob && blob.type) || 'image/jpeg';
-    return blobToDataUrl(blob)
-      .then(function (dataUrl) {
+    return compressBlobForNativeBridge(blob)
+      .then(function (smallBlob) {
+        mime = (smallBlob && smallBlob.type) || mime;
+        if (mime.indexOf('jpeg') < 0 && mime.indexOf('jpg') < 0) mime = 'image/jpeg';
+        return blobToDataUrl(smallBlob).then(function (dataUrl) {
+          return { dataUrl: dataUrl, mime: mime };
+        });
+      })
+      .then(function (packed) {
+        if (!packed || !packed.dataUrl) return false;
         return new Promise(function (resolve) {
           var requestId =
             'saveImg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
@@ -748,7 +821,12 @@
           }
 
           global.addEventListener('stelvioNativeResponse', onResponse);
-          posted = postNativeSaveImageMessage(dataUrl, filename, mime, requestId);
+          posted = postNativeSaveImageMessage(
+            packed.dataUrl,
+            filename,
+            packed.mime,
+            requestId
+          );
           if (!posted) {
             cleanup();
             resolve(false);
@@ -788,13 +866,16 @@
       if (syncOk) return 'native-android';
 
       if (inApp) {
-        return tryReactNativeSaveImage(blob, filename, 2000).then(function (rnResult) {
-          if (rnResult === 'ok' || rnResult === 'sent') return 'native-android';
-          return tryWebShare().then(function (shared) {
-            if (shared === 'share') return 'share-android';
-            return tryDataUrlShare().then(function (sharedUrl) {
-              if (sharedUrl === 'share') return 'share-android';
-              return null;
+        return compressBlobForNativeBridge(blob).then(function (smallBlob) {
+          return tryReactNativeSaveImage(smallBlob, filename, 12000).then(function (rnResult) {
+            if (rnResult === 'ok') return 'native-android';
+            if (rnResult === 'sent') return 'native-android-pending';
+            return tryWebShare().then(function (shared) {
+              if (shared === 'share') return 'share-android';
+              return tryDataUrlShare().then(function (sharedUrl) {
+                if (sharedUrl === 'share') return 'share-android';
+                return null;
+              });
             });
           });
         });
@@ -1149,7 +1230,7 @@
       var hint = doc.createElement('p');
       hint.className = 'journal-android-save-sheet__hint';
       hint.textContent = inApp
-        ? '「사진첩 저장」을 누르면 사진 보관함(STELVIO 앨범)에 저장됩니다. 이미지를 길게 눌러도 동일합니다.'
+        ? '「사진첩 저장」을 누르면 갤러리 DCIM/STELVIO 폴더에 저장됩니다. 저장 후 갤러리 앱에서 확인하세요.'
         : '「공유·저장」을 눌러 갤러리·Google 포토·파일 앱 등을 선택하세요.';
 
       function shareBtnLabel() {
@@ -1167,6 +1248,16 @@
             shareBtn.textContent = shareBtnLabel();
             if (method === 'native-android' || method === 'share-android') {
               finish(method);
+              return;
+            }
+            if (method === 'native-android-pending') {
+              if (typeof global.showToast === 'function') {
+                global.showToast(
+                  '저장을 요청했습니다. 갤러리 → DCIM → STELVIO 또는 최근 사진에서 확인해 주세요.',
+                  'info'
+                );
+              }
+              finish('native-android-pending');
               return;
             }
             if (typeof global.showToast === 'function') {
@@ -1320,6 +1411,11 @@
       global.showToast('사진 보관함에 저장했습니다.', 'success');
     } else if (result === 'native-android') {
       global.showToast('사진 보관함에 저장했습니다.', 'success');
+    } else if (result === 'native-android-pending') {
+      global.showToast(
+        '저장을 요청했습니다. 갤러리 → DCIM → STELVIO 또는 최근 사진에서 확인해 주세요.',
+        'info'
+      );
     } else if (result === 'share-android') {
       global.showToast('선택한 앱·폴더에 저장되었습니다.', 'success');
     } else if (result === 'download-android') {
