@@ -7390,6 +7390,11 @@ body:has(#trainingDetailModal:not(.hidden)) {
   box-sizing: border-box;
   padding: 0 0 12px;
 }
+/* 참가자 분포 — 좌·우 끝 「나의 위치」 푯말 SVG 클립 방지 */
+#stelvioRankingScreen .stelvio-dist-card .recharts-wrapper,
+#stelvioRankingScreen .stelvio-dist-card .recharts-surface {
+  overflow: visible !important;
+}
 .stelvio-category-card {
   margin-bottom: 16px;
   border: 2px solid rgba(102, 126, 234, 0.25);
