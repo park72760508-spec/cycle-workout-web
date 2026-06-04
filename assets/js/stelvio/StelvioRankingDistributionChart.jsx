@@ -562,8 +562,8 @@
       if (!viewBox) return null;
       var lineX = viewBox.x;
       var half = BADGE_HALF_W;
+      var badgeW = half * 2;
       var edge = BADGE_EDGE_PAD;
-      var cx = lineX;
       var pv = lprops.parentViewBox;
       var areaLeft;
       var areaW;
@@ -576,30 +576,52 @@
         areaLeft = yAxisW;
         areaW = Math.max(0, chartContainerW - yAxisW - marginR);
       }
-      var minCenter = areaLeft + half + edge;
-      var maxCenter = areaLeft + areaW - half - edge;
-      if (areaW > 0 && maxCenter > minCenter) {
-        cx = Math.min(maxCenter, Math.max(minCenter, lineX));
+      var areaRight = areaLeft + areaW;
+      var minLeft = areaLeft + edge;
+      var maxRight = areaRight - edge;
+      var rectX;
+      var textX;
+
+      /* 좌·우 끝: 푯말 박스 끝을 차트 영역 안쪽에 맞춤 / 중간: 기준선 중앙(기존) */
+      var leftEdgeLine = areaLeft + half + edge;
+      var rightEdgeLine = areaRight - half - edge;
+      if (areaW > 0 && lineX <= leftEdgeLine) {
+        rectX = minLeft;
+        textX = rectX + half;
+      } else if (areaW > 0 && lineX >= rightEdgeLine) {
+        rectX = maxRight - badgeW;
+        textX = rectX + half;
+      } else {
+        rectX = lineX - half;
+        textX = lineX;
+        if (rectX < minLeft) {
+          rectX = minLeft;
+          textX = rectX + half;
+        } else if (rectX + badgeW > maxRight) {
+          rectX = maxRight - badgeW;
+          textX = rectX + half;
+        }
       }
+
       return (
         <g>
           <rect
-            x={cx - half}
+            x={rectX}
             y={6}
             rx="10"
             ry="10"
-            width={half * 2}
+            width={badgeW}
             height="36"
             fill="white"
             stroke={REF_LINE}
             strokeWidth="1.5"
             filter="url(#stelvio-dist-badge-shadow)"
           />
-          <text x={cx} y={22} textAnchor="middle" fill={REF_LINE} fontSize="10" fontWeight="700">
+          <text x={textX} y={22} textAnchor="middle" fill={REF_LINE} fontSize="10" fontWeight="700">
             {badgeMain}
           </text>
           {badgeSub ? (
-            <text x={cx} y={34} textAnchor="middle" fill="#64748b" fontSize="9">
+            <text x={textX} y={34} textAnchor="middle" fill="#64748b" fontSize="9">
               {badgeSub.length > 22 ? badgeSub.slice(0, 20) + '…' : badgeSub}
             </text>
           ) : null}
