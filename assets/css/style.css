@@ -5117,6 +5117,21 @@ button[aria-disabled="true"] {
   box-sizing: border-box; /* padding 포함 크기 계산 */
 }
 
+/* React 일지 달력 — iOS Safari에서 div 클릭 지연·오탭 방지 */
+button.mini-calendar-day {
+  border: none;
+  margin: 0;
+  background: transparent;
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
 .mini-calendar-day.other-month {
   color: #d1d5db;
   opacity: 0.5;
