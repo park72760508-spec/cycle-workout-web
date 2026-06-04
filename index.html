@@ -23,6 +23,8 @@
   <script>(function(){var ua=navigator.userAgent||'';if(/Android/i.test(ua)&&!/iPhone|iPad|iPod/i.test(ua)){document.documentElement.classList.add('is-android');}})();</script>
   <!-- 블루투스 훈련화면 연결버튼 → 센서연결 오버레이만 띄울 때: 초기로딩/인증/베이스캠프 없이 오버레이만 표시 -->
   <script>if (typeof location !== 'undefined' && location.search && location.search.indexOf('openDeviceSettingsOnly=1') !== -1) { window._openDeviceSettingsOnly = true; }</script>
+  <!-- Stelvio 앱 → Chrome 이미지 저장 (?journalSave=1) — SPA rewrite 시에도 동작 -->
+  <script src="assets/js/journal/journalSaveBridgeBoot.js"></script>
   <script>try { window.__CONFIG_LOADED__ = !!(window.__FIREBASE_CONFIG__ && window.__FIREBASE_CONFIG__.apiKey && window.__FIREBASE_CONFIG__.apiKey !== 'YOUR_FIREBASE_API_KEY'); } catch (e) { window.__CONFIG_LOADED__ = false; }</script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>라이딩 이미지 저장 – STELVIO</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Noto Sans KR", sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: env(safe-area-inset-top, 12px) 16px env(safe-area-inset-bottom, 16px);
+    }
+    h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 0 0 8px;
+      text-align: center;
+      color: #e9d5ff;
+    }
+    .hint {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #94a3b8;
+      text-align: center;
+      margin: 0 0 12px;
+    }
+    .preview-wrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .preview {
+      max-width: 100%;
+      max-height: calc(100dvh - 220px);
+      object-fit: contain;
+      border-radius: 10px;
+      background: #1e293b;
+    }
+    .btn {
+      width: 100%;
+      padding: 15px 16px;
+      font-size: 16px;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    .btn-primary {
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
+    }
+    .btn-secondary {
+      color: #e2e8f0;
+      background: rgba(51, 65, 85, 0.95);
+      border: 1px solid #64748b;
+    }
+    .btn:disabled { opacity: 0.55; }
+    .err {
+      color: #fca5a5;
+      text-align: center;
+      font-size: 13px;
+      margin: 8px 0;
+    }
+    .ok {
+      color: #86efac;
+      text-align: center;
+      font-size: 13px;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>라이딩 이미지 저장</h1>
+  <p class="hint" id="hint">
+    ① 「Google 포토·갤러리로 저장」을 누른 뒤<br />
+    <strong>Google 포토</strong> 또는 <strong>갤러리</strong>를 선택하세요.<br />
+    ② 안 되면 「파일로 다운로드」 후 갤러리·다운로드 폴더에서 확인하세요.
+  </p>
+  <div class="preview-wrap">
+    <img id="preview" class="preview" alt="저장할 라이딩 이미지" />
+  </div>
+  <p id="status" class="err" hidden></p>
+  <button type="button" id="btnShare" class="btn btn-primary" disabled>Google 포토·갤러리로 저장</button>
+  <button type="button" id="btnDownload" class="btn btn-secondary" disabled>파일로 다운로드</button>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var imgUrl = params.get('url') || '';
+      var fileName = params.get('name') || 'stelvio-ride.jpg';
+      if (!/\.(jpg|jpeg|png)$/i.test(fileName)) fileName += '.jpg';
+
+      var preview = document.getElementById('preview');
+      var btnShare = document.getElementById('btnShare');
+      var btnDownload = document.getElementById('btnDownload');
+      var statusEl = document.getElementById('status');
+
+      function setStatus(msg, ok) {
+        if (!msg) {
+          statusEl.hidden = true;
+          return;
+        }
+        statusEl.hidden = false;
+        statusEl.textContent = msg;
+        statusEl.className = ok ? 'ok' : 'err';
+      }
+
+      if (!imgUrl) {
+        setStatus('이미지 주소가 없습니다. STELVIO 앱에서 다시 시도해 주세요.', false);
+        return;
+      }
+
+      preview.src = imgUrl;
+      preview.onload = function () {
+        btnShare.disabled = false;
+        btnDownload.disabled = false;
+      };
+      preview.onerror = function () {
+        setStatus('이미지를 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.', false);
+      };
+
+      function blobFromImageUrl(url) {
+        return fetch(url, { mode: 'cors', cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('fetch failed');
+            return r.blob();
+          })
+          .catch(function () {
+            return new Promise(function (resolve, reject) {
+              var im = new Image();
+              im.crossOrigin = 'anonymous';
+              im.onload = function () {
+                try {
+                  var c = document.createElement('canvas');
+                  c.width = im.naturalWidth;
+                  c.height = im.naturalHeight;
+                  c.getContext('2d').drawImage(im, 0, 0);
+                  c.toBlob(
+                    function (b) {
+                      if (b) resolve(b);
+                      else reject(new Error('canvas blob failed'));
+                    },
+                    'image/jpeg',
+                    0.92
+                  );
+                } catch (e) {
+                  reject(e);
+                }
+              };
+              im.onerror = reject;
+              im.src = url;
+            });
+          });
+      }
+
+      function fileFromBlob(blob) {
+        var mime = blob.type || 'image/jpeg';
+        if (mime.indexOf('jpeg') < 0 && mime.indexOf('jpg') < 0) mime = 'image/jpeg';
+        return new File([blob], fileName, { type: mime });
+      }
+
+      btnShare.addEventListener('click', function () {
+        btnShare.disabled = true;
+        setStatus('준비 중…', false);
+        blobFromImageUrl(imgUrl)
+          .then(function (blob) {
+            var file = fileFromBlob(blob);
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+              return navigator.share({
+                files: [file],
+                title: 'STELVIO Ride',
+                text: 'STELVIO 라이딩 기록 이미지',
+              }).then(function () {
+                setStatus('공유가 완료되었습니다. Google 포토·갤러리 앱에서 저장·업로드를 확인하세요.', true);
+              });
+            }
+            var a = document.createElement('a');
+            var u = URL.createObjectURL(blob);
+            a.href = u;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function () {
+              URL.revokeObjectURL(u);
+              if (a.parentNode) a.parentNode.removeChild(a);
+            }, 3000);
+            setStatus('다운로드가 시작되었습니다. 알림창 또는 다운로드 폴더를 확인하세요.', true);
+          })
+          .catch(function (e) {
+            setStatus(
+              (e && e.name === 'AbortError')
+                ? '취소되었습니다.'
+                : '저장에 실패했습니다. 「파일로 다운로드」를 이용해 주세요.',
+              false
+            );
+          })
+          .finally(function () {
+            btnShare.disabled = false;
+          });
+      });
+
+      btnDownload.addEventListener('click', function () {
+        btnDownload.disabled = true;
+        blobFromImageUrl(imgUrl)
+          .then(function (blob) {
+            var a = document.createElement('a');
+            var u = URL.createObjectURL(blob);
+            a.href = u;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function () {
+              URL.revokeObjectURL(u);
+              if (a.parentNode) a.parentNode.removeChild(a);
+            }, 3000);
+            setStatus('다운로드가 시작되었습니다.', true);
+          })
+          .catch(function () {
+            setStatus('다운로드에 실패했습니다.', false);
+          })
+          .finally(function () {
+            btnDownload.disabled = false;
+          });
+      });
+    })();
+  </script>
+</body>
+</html>
