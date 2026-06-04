@@ -388,7 +388,13 @@
           saveMethod = await shareApi.savePngBlob(blob, fn);
         }
         shareApi.notifySaveResult(saveMethod);
-        onClose({ saved: true, saveMethod: saveMethod });
+        var actuallySaved =
+          saveMethod === 'native-android' ||
+          saveMethod === 'share-android' ||
+          saveMethod === 'save-picker' ||
+          saveMethod === 'download' ||
+          saveMethod === 'download-mobile';
+        onClose({ saved: actuallySaved, saveMethod: saveMethod });
       } catch (e) {
         if (e && e.name === 'AbortError') return;
         var msg = (e && e.message) || '저장 실패';
