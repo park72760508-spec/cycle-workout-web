@@ -10571,6 +10571,7 @@
       if (body.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(body)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
       if (ctx.wantGender && !stelvioRankingPayloadMatchesGenderFilter(body, ctx.wantGender)) return false;
+      if (ctx.duration && !stelvioRankingPayloadMatchesApiDuration(body, ctx.duration)) return false;
       var isGcBody = body.durationType === 'gc' || ctx.duration === 'gc';
       var isPeakBody =
         body.durationType === 'max' ||
@@ -11346,6 +11347,7 @@
       );
       var mem = stelvioRankingMemCacheGet(ck);
       if (!mem || !mem.body || !mem.body.success || !mem.body.byCategory) return false;
+      if (!stelvioRankingPayloadMatchesApiDuration(mem.body, apiDur)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(mem.body)) return false;
       if (apiDur === 'tss' && !stelvioTssBoardPayloadIsFullLeaderboard(mem.body)) return false;
       if (!stelvioRankingPayloadMatchesReadSource(mem.body)) return false;
@@ -14529,6 +14531,7 @@
         if (!stelvioWeeklyTssBoardPayloadMatchesWeek(lcEntry.data)) return false;
         if (!stelvioTssBoardPayloadIsFullLeaderboard(lcEntry.data)) return false;
       }
+      if (!stelvioRankingPayloadMatchesApiDuration(lcEntry.data, dur)) return false;
       return true;
     }
 
@@ -15686,6 +15689,16 @@
       return uiDuration || '';
     }
 
+    /** payload.durationType 이 요청·활성 탭 API duration 과 일치하는지 (TSS→거리 등 캐시 혼선 방지) */
+    function stelvioRankingPayloadMatchesApiDuration(payload, apiDur) {
+      if (!payload || !apiDur) return false;
+      var expected = stelvioResolveRankingBoardApiDuration(apiDur) || apiDur;
+      var got = payload.durationType || payload.duration || '';
+      if (!got) return false;
+      got = stelvioResolveRankingBoardApiDuration(got) || got;
+      return got === expected;
+    }
+
     function stelvioRankingPrefetchSkipsTab(tabDur, skipUiDur) {
       if (!tabDur || !skipUiDur) return false;
       if (tabDur === skipUiDur) return true;
@@ -16236,6 +16249,8 @@
       opts = opts || {};
       if (!duration || !payload || !payload.success || !payload.byCategory) return;
       if (!stelvioRankingPayloadMatchesReadSource(payload)) return;
+      var prApiDur = stelvioResolveRankingBoardApiDuration(duration);
+      if (prApiDur && !stelvioRankingPayloadMatchesApiDuration(payload, prApiDur)) return;
       if (duration === 'gc' && !stelvioRankingPayloadMatchesCurrentApiWindow(payload)) return;
       var view = stelvioRankingGetPreRenderView(duration);
       if (!view) return;
@@ -16374,6 +16389,11 @@
       if (view.getAttribute('data-prerender-swr-key') !== ck) return false;
       var mem = stelvioRankingMemCacheGet(ck);
       if (!mem || !mem.body || !mem.body.success || !mem.body.byCategory) return false;
+      if (!stelvioRankingPayloadMatchesApiDuration(mem.body, apiDur)) {
+        view.removeAttribute('data-prerender-ready');
+        view.removeAttribute('data-prerender-swr-key');
+        return false;
+      }
       if (
         stelvioRankingState &&
         stelvioRankingState.gender &&
@@ -18284,7 +18304,18 @@
             )
           : '';
       stelvioApplyRankMovementPipeline(data);
-      if (applyOpts.fastTabSwitch && applySwrKey && stelvioRankingLastPaintedSwrKey === applySwrKey) {
+      var tabUiDur =
+        stelvioRankingState &&
+        (stelvioRankingState.duration === 'group_dist'
+          ? stelvioGroupTabMetric || 'gc'
+          : stelvioRankingState.duration);
+      if (
+        applyOpts.fastTabSwitch &&
+        applySwrKey &&
+        stelvioRankingLastPaintedSwrKey === applySwrKey &&
+        tabUiDur &&
+        stelvioRankingPayloadMatchesApiDuration(data, tabUiDur)
+      ) {
         if (!applyOpts.keepLoading || stelvioRankingBoardReadyToHideLoading()) {
           stelvioHideRankingBoardLoadingUi();
         }
@@ -18692,6 +18723,9 @@
         var alignedGender = stelvioApplyRankingGenderFilterToPayload(working, genderParam);
         if (!alignedGender) return false;
         working = alignedGender;
+        if (opts.tabSwitch && apiDuration && !stelvioRankingPayloadMatchesApiDuration(working, apiDuration)) {
+          return false;
+        }
         if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
           stelvioApplyPublicRankingVisibilityToPayload(working);
         }
