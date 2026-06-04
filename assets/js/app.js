@@ -5208,23 +5208,41 @@ document.addEventListener("DOMContentLoaded", () => {
     return /Bluefy/i.test(ua);
   }
 
+  /** STELVIO 설치형 앱 WebView — 네이티브 BLE 브릿지 (Web Bluetooth API 없음) */
+  function isStelvioNativeApp() {
+    try {
+      return !!(
+        (typeof window.isAppEnvironment === "function" && window.isAppEnvironment()) ||
+        window.ReactNativeWebView ||
+        window.StelvioInApp ||
+        window.StelvioAppChannel === "webview-native"
+      );
+    } catch (eApp) {
+      return false;
+    }
+  }
+
+  /** Web Bluetooth · Bluefy · STELVIO 앱 네이티브 BLE 중 하나라도 사용 가능 */
+  function hasBluetoothCapability() {
+    return !!(navigator.bluetooth || isBluefy() || isStelvioNativeApp());
+  }
+  window.hasBluetoothCapability = hasBluetoothCapability;
+  window.isStelvioNativeApp = isStelvioNativeApp;
+
   function enableIOSMode() {
     const info = safeGetElement("iosInfo");
-    // Bluefy를 사용 중이거나 Web Bluetooth를 지원하면 iOS 안내 메시지 숨김
+    // Bluefy / Web Bluetooth / STELVIO 앱 네이티브 BLE → iOS Safari 안내 숨김
     if (info) {
-      if (isBluefy() || navigator.bluetooth) {
-        // Bluefy 사용 중이거나 Web Bluetooth 지원 → 안내 메시지 숨김
+      if (hasBluetoothCapability()) {
         info.classList.add("hidden");
-        console.log("✅ Bluefy 또는 Web Bluetooth 지원 브라우저 감지 - iOS 안내 메시지 숨김");
+        console.log("✅ BLE 사용 가능 환경 (Web Bluetooth · Bluefy · STELVIO 앱) - iOS 안내 메시지 숨김");
       } else {
-        // iOS Safari 등 Web Bluetooth 미지원 → 안내 메시지 표시
         info.classList.remove("hidden");
         console.log("⚠️ iOS Safari 감지 - Web Bluetooth 미지원 안내 메시지 표시");
       }
     }
 
-    // 블루투스 미지원 브라우저 확인 (navigator.bluetooth가 없으면 미지원)
-    if (!navigator.bluetooth) {
+    if (!hasBluetoothCapability()) {
       // 블루투스 미지원 브라우저(Safari, PC 구형 브라우저 등)인 경우
       ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
         const el = safeGetElement(id);
@@ -5267,21 +5285,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 브라우저 지원 확인 (스플래시 화면이 활성화되어 있으면 지연)
+  // 브라우저 지원 확인 (스플래시 종료 후 — STELVIO 앱 WebView는 네이티브 BLE 사용)
   if (!window.isSplashActive) {
-  if (!navigator.bluetooth) {
-    if (typeof showToast === "function") {
-      showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
+    if (!hasBluetoothCapability()) {
+      if (typeof showToast === "function") {
+        showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
+      }
+      console.error("Web Bluetooth not supported (not STELVIO app / Bluefy)");
     }
-    console.error("Web Bluetooth not supported");
-  }
-  
-  if (location.protocol !== "https:" && location.hostname !== "localhost") {
-    if (typeof showToast === "function") {
-      showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
+
+    if (
+      !isStelvioNativeApp() &&
+      location.protocol !== "https:" &&
+      location.hostname !== "localhost"
+    ) {
+      if (typeof showToast === "function") {
+        showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
+      }
+      console.warn("HTTPS required for BLE");
     }
-    console.warn("HTTPS required for BLE");
-  }
   }
   
   if (window.__stelvioEarlyBootDone) {

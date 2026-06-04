@@ -54,7 +54,9 @@ function isAppEnvironment() {
   try {
     return !!(
       typeof window !== 'undefined' &&
-      (window.ReactNativeWebView || window.StelvioInApp)
+      (window.ReactNativeWebView ||
+        window.StelvioInApp ||
+        window.StelvioAppChannel === 'webview-native')
     );
   } catch (e) {
     return false;
