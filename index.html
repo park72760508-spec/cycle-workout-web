@@ -10572,6 +10572,7 @@
       if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
       if (ctx.wantGender && !stelvioRankingPayloadMatchesGenderFilter(body, ctx.wantGender)) return false;
       if (ctx.duration && !stelvioRankingPayloadMatchesApiDuration(body, ctx.duration)) return false;
+      if (ctx.duration === 'personal_dist' && !stelvioRankingPayloadLooksLikeDistBoard(body)) return false;
       var isGcBody = body.durationType === 'gc' || ctx.duration === 'gc';
       var isPeakBody =
         body.durationType === 'max' ||
@@ -11348,6 +11349,7 @@
       var mem = stelvioRankingMemCacheGet(ck);
       if (!mem || !mem.body || !mem.body.success || !mem.body.byCategory) return false;
       if (!stelvioRankingPayloadMatchesApiDuration(mem.body, apiDur)) return false;
+      if (apiDur === 'personal_dist' && !stelvioRankingPayloadLooksLikeDistBoard(mem.body)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(mem.body)) return false;
       if (apiDur === 'tss' && !stelvioTssBoardPayloadIsFullLeaderboard(mem.body)) return false;
       if (!stelvioRankingPayloadMatchesReadSource(mem.body)) return false;
@@ -14532,6 +14534,7 @@
         if (!stelvioTssBoardPayloadIsFullLeaderboard(lcEntry.data)) return false;
       }
       if (!stelvioRankingPayloadMatchesApiDuration(lcEntry.data, dur)) return false;
+      if (dur === 'personal_dist' && !stelvioRankingPayloadLooksLikeDistBoard(lcEntry.data)) return false;
       return true;
     }
 
@@ -14846,6 +14849,7 @@
         listBody.innerHTML = '';
       }
       stelvioRankingLastPaintedSwrKey = '';
+      window.stelvioRankingLoadedDurationType = '';
     }
     window.stelvioBeginRankingTabSwitchUi = stelvioBeginRankingTabSwitchUi;
 
@@ -14889,6 +14893,7 @@
           tabs.forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           stelvioRankingState.duration = nextDur;
+          window.stelvioRankingLoadedDurationType = '';
           if (nextDur === 'group_dist' && stelvioRankingState.listFilter === 'interest') {
             stelvioRankingState.listFilter = 'all';
             stelvioSyncRankingListFilterToggleUi();
@@ -14913,6 +14918,16 @@
               instantTabOk = await stelvioInstantTabSwitchFromMemory(nextDur);
             } catch (eInstTab) {
               instantTabOk = false;
+            }
+          }
+          if (
+            instantTabOk &&
+            typeof stelvioRankingGlobalsMatchActiveTab === 'function' &&
+            !stelvioRankingGlobalsMatchActiveTab()
+          ) {
+            instantTabOk = false;
+            if (typeof stelvioBeginRankingTabSwitchUi === 'function') {
+              stelvioBeginRankingTabSwitchUi();
             }
           }
           function stelvioRankingTabSwitchListReady() {
@@ -14958,6 +14973,13 @@
           var debounceMs = instantTabOk ? 0 : (primed ? 0 : 1);
           /* 클럽 탭은 Firestore 소모임 구독 후 목록 표시 → backgroundOnly면 렌더 생략되어 iOS 등에서 스피너 무한 */
           var allowBackgroundOnly = !!(instantTabOk || primed) && nextDur !== 'group_dist';
+          if (
+            allowBackgroundOnly &&
+            typeof stelvioRankingGlobalsMatchActiveTab === 'function' &&
+            !stelvioRankingGlobalsMatchActiveTab()
+          ) {
+            allowBackgroundOnly = false;
+          }
           stelvioRankingTabSwitchTimer = setTimeout(function () {
             stelvioRankingTabSwitchTimer = null;
             if (stelvioRankingState.duration !== stelvioRankingTabSwitchPendingDur) return;
@@ -15699,6 +15721,70 @@
       return got === expected;
     }
 
+    function stelvioRankingResolveActiveTabApiDuration() {
+      if (typeof stelvioRankingState === 'undefined' || !stelvioRankingState) return '';
+      if (stelvioRankingState.duration === 'group_dist') {
+        return stelvioGroupTabMetric || 'gc';
+      }
+      return stelvioResolveRankingBoardApiDuration(stelvioRankingState.duration);
+    }
+
+    /** TSS payload가 거리 탭에 붙는 것 방지 — 상위 행에 totalKm(>0) 또는 TSS 전용 패턴 여부 */
+    function stelvioRankingPayloadLooksLikeDistBoard(payload) {
+      if (!payload || !payload.byCategory) return true;
+      var sup = payload.byCategory.Supremo || [];
+      if (!sup.length) return true;
+      var hasPositiveKm = false;
+      var allTssPattern = true;
+      for (var i = 0; i < Math.min(10, sup.length); i++) {
+        var row = sup[i];
+        if (!row) continue;
+        var km = row.totalKm != null ? Number(row.totalKm) : NaN;
+        var tss = row.totalTss != null ? Number(row.totalTss) : NaN;
+        if (isFinite(km) && km > 0) hasPositiveKm = true;
+        if (!isFinite(tss) || tss <= 0) allTssPattern = false;
+      }
+      return hasPositiveKm || !allTssPattern;
+    }
+
+    function stelvioRankingPayloadMatchesActiveTab(payload) {
+      var active = stelvioRankingResolveActiveTabApiDuration();
+      if (!payload || !active) return true;
+      if (!stelvioRankingPayloadMatchesApiDuration(payload, active)) return false;
+      if (active === 'personal_dist' && !stelvioRankingPayloadLooksLikeDistBoard(payload)) return false;
+      return true;
+    }
+
+    function stelvioRankingGlobalsMatchActiveTab() {
+      var active = stelvioRankingResolveActiveTabApiDuration();
+      var loaded =
+        typeof window.stelvioRankingLoadedDurationType === 'string'
+          ? window.stelvioRankingLoadedDurationType
+          : '';
+      if (!active || !loaded) return false;
+      return stelvioRankingPayloadMatchesApiDuration({ durationType: loaded }, active);
+    }
+
+    /** 전역 byCategory가 활성 탭 지표와 맞을 때만 목록 DOM 갱신 */
+    function stelvioRankingShouldRenderListForActiveTab() {
+      var active = stelvioRankingResolveActiveTabApiDuration();
+      if (!active || !stelvioRankingByCategory) return true;
+      var loaded =
+        typeof window.stelvioRankingLoadedDurationType === 'string'
+          ? window.stelvioRankingLoadedDurationType
+          : '';
+      if (loaded && !stelvioRankingPayloadMatchesApiDuration({ durationType: loaded }, active)) {
+        return false;
+      }
+      if (active === 'personal_dist') {
+        return stelvioRankingPayloadLooksLikeDistBoard({
+          byCategory: stelvioRankingByCategory,
+          durationType: 'personal_dist',
+        });
+      }
+      return true;
+    }
+
     function stelvioRankingPrefetchSkipsTab(tabDur, skipUiDur) {
       if (!tabDur || !skipUiDur) return false;
       if (tabDur === skipUiDur) return true;
@@ -16392,6 +16478,12 @@
       if (!stelvioRankingPayloadMatchesApiDuration(mem.body, apiDur)) {
         view.removeAttribute('data-prerender-ready');
         view.removeAttribute('data-prerender-swr-key');
+        return false;
+      }
+      if (apiDur === 'personal_dist' && !stelvioRankingPayloadLooksLikeDistBoard(mem.body)) {
+        view.removeAttribute('data-prerender-ready');
+        view.removeAttribute('data-prerender-swr-key');
+        view.innerHTML = '';
         return false;
       }
       if (
@@ -18209,6 +18301,7 @@
           typeof stelvioRankingState !== 'undefined' ? stelvioRankingState.period : 'monthly'
         );
       }
+      if (!stelvioRankingPayloadMatchesActiveTab(data)) return;
       /* 독주: 성별 필터 전에 동기 패치(패치가 행을 비운 뒤 필터가 null을 내는 순서 꼬임 방지) */
       if (
         typeof stelvioIsPersonalSpeedRanking === 'function' &&
@@ -18314,7 +18407,7 @@
         applySwrKey &&
         stelvioRankingLastPaintedSwrKey === applySwrKey &&
         tabUiDur &&
-        stelvioRankingPayloadMatchesApiDuration(data, tabUiDur)
+        stelvioRankingPayloadMatchesActiveTab(data)
       ) {
         if (!applyOpts.keepLoading || stelvioRankingBoardReadyToHideLoading()) {
           stelvioHideRankingBoardLoadingUi();
@@ -18342,11 +18435,8 @@
         }
         if (
           bodyEarly &&
-          data.durationType === 'tss' &&
-          typeof renderStelvioActiveCategory === 'function' &&
-          (stelvioRankingListBodyHasDataRows(bodyEarly) ||
-            (typeof stelvioPeakRankMovementPresentOnPayload === 'function' &&
-              stelvioPeakRankMovementPresentOnPayload(data)))
+          (tabUiDur === 'tss' || tabUiDur === 'personal_dist') &&
+          typeof renderStelvioActiveCategory === 'function'
         ) {
           stelvioRankingFastTabSwitchFlag = true;
           try {
@@ -18354,7 +18444,7 @@
           } finally {
             stelvioRankingFastTabSwitchFlag = false;
           }
-          if (typeof stelvioRankingRefreshTssTabRankChangeSlots === 'function') {
+          if (tabUiDur === 'tss' && typeof stelvioRankingRefreshTssTabRankChangeSlots === 'function') {
             stelvioRankingRefreshTssTabRankChangeSlots(bodyEarly);
           }
           if (typeof stelvioStripRankingListStrayLoadingNodes === 'function') {
@@ -18583,6 +18673,8 @@
         opts.tabSwitch &&
         swrKeyEarly &&
         stelvioRankingLastPaintedSwrKey === swrKeyEarly &&
+        typeof stelvioRankingGlobalsMatchActiveTab === 'function' &&
+        stelvioRankingGlobalsMatchActiveTab() &&
         stelvioRankingByCategory &&
         stelvioRankingPayloadHasVisibleRows({ success: true, byCategory: stelvioRankingByCategory })
       ) {
@@ -18723,7 +18815,7 @@
         var alignedGender = stelvioApplyRankingGenderFilterToPayload(working, genderParam);
         if (!alignedGender) return false;
         working = alignedGender;
-        if (opts.tabSwitch && apiDuration && !stelvioRankingPayloadMatchesApiDuration(working, apiDuration)) {
+        if (opts.tabSwitch && apiDuration && !stelvioRankingPayloadMatchesActiveTab(working)) {
           return false;
         }
         if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
@@ -20855,6 +20947,12 @@
       }
       stelvioSyncRankingListHeaderUi();
       if (!stelvioRankingByCategory) return;
+      if (
+        typeof stelvioRankingShouldRenderListForActiveTab === 'function' &&
+        !stelvioRankingShouldRenderListForActiveTab()
+      ) {
+        return;
+      }
       var cat = stelvioRankingState.activeCategory;
       var bodyEl = document.getElementById('stelvioRankingListBody');
       renderStelvioRankingOneCategory(
@@ -21067,6 +21165,7 @@
       stelvioRankingCurrentUserId = uid || null;
       if (typeof data.startStr === 'string') stelvioRankingApiStartStr = data.startStr;
       if (typeof data.endStr === 'string') stelvioRankingApiEndStr = data.endStr;
+      if (data.durationType) window.stelvioRankingLoadedDurationType = data.durationType;
     }
 
     function stelvioRankingListBodyHasDataRows(bodyEl) {
