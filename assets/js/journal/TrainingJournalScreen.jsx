@@ -26,7 +26,7 @@
 
     var data = useJournalData();
     var selectedDate = data.selectedDate;
-    var setSelectedDate = data.setSelectedDate;
+    var selectJournalDate = data.selectJournalDate || data.setSelectedDate;
     var trainingLogs = data.trainingLogs;
     var currentYear = data.currentYear;
     var currentMonth = data.currentMonth;
@@ -75,12 +75,13 @@
         currentYear: currentYear,
         currentMonth: currentMonth,
         onNavigate: navigateMonth,
-        onDateSelect: setSelectedDate,
+        onDateSelect: selectJournalDate,
         selectedDate: selectedDate,
         yearlyPeaksByYear: data.yearlyPeaksByYear,
         userWeightForPr: data.userWeightForPr
       }) : null,
       DailySummary ? React.createElement(DailySummary, {
+        key: data.journalSelectionKey || selectedDate || 'journal-summary',
         selectedDate: selectedDate,
         logs: logsForSelectedDate,
         dailyRouteDoc: data.dailyRouteDoc,

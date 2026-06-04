@@ -8,7 +8,7 @@
 
   if (typeof window === 'undefined') return;
   var React = window.React;
-  if (!React || !React.useState || !React.useEffect || !React.useCallback) {
+  if (!React || !React.useState || !React.useEffect || !React.useCallback || !React.useMemo) {
     console.warn('[useJournalData] React hooks not available');
     return;
   }
@@ -16,6 +16,7 @@
   var useState = React.useState;
   var useEffect = React.useEffect;
   var useCallback = React.useCallback;
+  var useMemo = React.useMemo;
 
   function useJournalData() {
     var _useState = useState(null);
@@ -57,6 +58,10 @@
     var _useState10 = useState(null);
     var dailyRouteDoc = _useState10[0];
     var setDailyRouteDoc = _useState10[1];
+
+    var _useState11 = useState(null);
+    var dailyRouteDocDate = _useState11[0];
+    var setDailyRouteDocDate = _useState11[1];
 
     // 사용자 ID 획득
     function getCurrentUserId() {
@@ -254,21 +259,34 @@
     useEffect(function loadDailyRouteProfileForSelectedDate() {
       if (!selectedDate) {
         setDailyRouteDoc(null);
+        setDailyRouteDocDate(null);
         return;
       }
       var userId = getCurrentUserId();
       if (!userId) {
         setDailyRouteDoc(null);
+        setDailyRouteDocDate(null);
         return;
       }
+      var fetchForDate = selectedDate;
       var cancelled = false;
-      fetchDailyRouteProfileDoc(userId, selectedDate).then(function (doc) {
-        if (!cancelled) setDailyRouteDoc(doc);
+      fetchDailyRouteProfileDoc(userId, fetchForDate).then(function (doc) {
+        if (!cancelled) {
+          setDailyRouteDoc(doc);
+          setDailyRouteDocDate(fetchForDate);
+        }
       });
       return function () {
         cancelled = true;
       };
     }, [selectedDate]);
+
+    /** iOS WebView — 날짜 탭 시 이전 날짜 경로·요약이 한 박자 남는 현상 방지 */
+    var selectJournalDate = useCallback(function (dateKey) {
+      setSelectedDate(dateKey);
+      setDailyRouteDoc(null);
+      setDailyRouteDocDate(null);
+    }, []);
 
     useEffect(function refreshDailyRouteOnJournalEvent() {
       function onRefresh(ev) {
@@ -277,6 +295,7 @@
         if (!userId) return;
         fetchDailyRouteProfileDoc(userId, selectedDate).then(function (doc) {
           setDailyRouteDoc(doc);
+          setDailyRouteDocDate(selectedDate);
         });
       }
       window.addEventListener('journal-training-logs-refresh', onRefresh);
@@ -304,8 +323,32 @@
       }, 0);
     }, [runTrainingLogsFetch]);
 
-    // 선택된 날짜의 로그
-    var logsForSelectedDate = selectedDate && trainingLogs[selectedDate] ? trainingLogs[selectedDate] : [];
+    // 선택된 날짜의 로그 (배열 복사 — iOS에서 참조 재사용 시 요약 수치가 늦게 갱신되는 문제 완화)
+    var logsForSelectedDate = useMemo(
+      function () {
+        if (!selectedDate || !trainingLogs) return [];
+        var raw = trainingLogs[selectedDate];
+        if (!raw || !raw.length) return [];
+        return raw.slice();
+      },
+      [selectedDate, trainingLogs]
+    );
+
+    var dailyRouteDocForSelectedDate =
+      dailyRouteDocDate === selectedDate ? dailyRouteDoc : null;
+
+    function buildJournalSelectionKey(date, logs) {
+      if (!date) return 'none';
+      if (!logs || !logs.length) return date + '-0';
+      var ids = [];
+      var i;
+      for (i = 0; i < logs.length; i++) {
+        ids.push(String(logs[i].activity_id != null ? logs[i].activity_id : logs[i].id || i));
+      }
+      return date + '-' + logs.length + '-' + ids.join(',');
+    }
+
+    var journalSelectionKey = buildJournalSelectionKey(selectedDate, logsForSelectedDate);
 
     // 월간 로그 (해당 월 날짜들의 로그)
     var monthlyLogs = (function() {
@@ -346,6 +389,7 @@
     return {
       selectedDate: selectedDate,
       setSelectedDate: setSelectedDate,
+      selectJournalDate: selectJournalDate,
       trainingLogs: trainingLogs,
       currentYear: currentYear,
       currentMonth: currentMonth,
@@ -355,7 +399,8 @@
       userWeightForPr: userWeightForPr,
       userProfile: userProfile,
       logsForSelectedDate: logsForSelectedDate,
-      dailyRouteDoc: dailyRouteDoc,
+      dailyRouteDoc: dailyRouteDocForSelectedDate,
+      journalSelectionKey: journalSelectionKey,
       monthlyLogs: monthlyLogs,
       navigateMonth: navigateMonth,
       detailSheetOpen: detailSheetOpen,

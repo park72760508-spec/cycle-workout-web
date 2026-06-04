@@ -175,7 +175,7 @@
           }
         }
       },
-      [routeKey, mapHeight]
+      [routeKey, mapHeight, segments.length]
     );
 
     if (!segments.length) return null;

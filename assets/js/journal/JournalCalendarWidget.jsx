@@ -179,10 +179,9 @@
       });
     }
 
-    function handleCellClick(cell) {
-      if (cell.hasTraining || cell.isOtherMonth) {
-        if (typeof onDateSelect === 'function') onDateSelect(cell.dateKey);
-      }
+    function handleDateSelect(dateKey) {
+      if (!dateKey || typeof onDateSelect !== 'function') return;
+      onDateSelect(dateKey);
     }
 
     function openStravaOrSettings() {
@@ -245,12 +244,23 @@
                   )
                 )
               : React.createElement('span', { className: 'day-number' }, cell.day);
+            if (cell.hasTraining || cell.isOtherMonth) {
+              return React.createElement('button', {
+                key: cell.key,
+                type: 'button',
+                className: 'mini-calendar-day ' + cell.className,
+                'data-date-key': cell.dateKey,
+                onClick: function (ev) {
+                  var dk =
+                    (ev.currentTarget && ev.currentTarget.getAttribute('data-date-key')) ||
+                    cell.dateKey;
+                  handleDateSelect(dk);
+                }
+              }, dayInner);
+            }
             return React.createElement('div', {
               key: cell.key,
-              className: 'mini-calendar-day ' + cell.className,
-              style: (cell.hasTraining || cell.isOtherMonth) ? { cursor: 'pointer' } : {},
-              onClick: function() { handleCellClick(cell); },
-              role: cell.hasTraining ? 'button' : undefined
+              className: 'mini-calendar-day ' + cell.className
             }, dayInner);
           })
         ),
