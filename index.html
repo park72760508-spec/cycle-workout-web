@@ -14894,6 +14894,8 @@
           btn.classList.add('active');
           stelvioRankingState.duration = nextDur;
           window.stelvioRankingLoadedDurationType = '';
+          /* TSS 탭 지연 rankMv·bg fetch가 2~3초 뒤 거리 탭 UI를 덮지 않도록 즉시 무효화 */
+          stelvioRankingFetchGen++;
           if (nextDur === 'group_dist' && stelvioRankingState.listFilter === 'interest') {
             stelvioRankingState.listFilter = 'all';
             stelvioSyncRankingListFilterToggleUi();
@@ -18668,6 +18670,8 @@
         );
         lcKeyEarly = stelvioPeakRankingLcKey(swrKeyEarly);
       }
+      /* 탭 전환 fetch는 silentRevalidate 조기 return 전에 gen 증가 — 이전 TSS 네트워크·rankMv 완료 차단 */
+      var myGen = ++stelvioRankingFetchGen;
       if (
         opts.silentRevalidate &&
         opts.tabSwitch &&
@@ -18687,7 +18691,6 @@
         }, 0);
         return;
       }
-      var myGen = ++stelvioRankingFetchGen;
 
       function stelvioShowRankingBoardLoading(dimContent) {
         stelvioShowRankingBoardLoadingUi(dimContent);
@@ -18958,6 +18961,13 @@
           );
           if (!dataFresh || !dataFresh.success || !dataFresh.byCategory) return;
           if (!stelvioRankingPayloadMatchesReadSource(dataFresh)) return;
+          if (myGen !== stelvioRankingFetchGen) return;
+          if (
+            typeof stelvioRankingPayloadMatchesActiveTab === 'function' &&
+            !stelvioRankingPayloadMatchesActiveTab(dataFresh)
+          ) {
+            return;
+          }
           await stelvioApplyPeakRankingFetchResultWithDashboardAlign(dataFresh, myGen, uid, {
             preserveExpandUi: true,
           });
@@ -18997,9 +19007,11 @@
 
       function scheduleRankMvIfNeeded() {
         if (!needsRankMv) return;
+        if (stelvioRankingResolveActiveTabApiDuration() !== apiDuration) return;
         if (apiDuration === 'tss') {
           (async function () {
             if (myGen !== stelvioRankingFetchGen) return;
+            if (stelvioRankingResolveActiveTabApiDuration() !== 'tss') return;
             var mvPayload = null;
             try {
               mvPayload = {
@@ -19027,6 +19039,8 @@
               if (typeof stelvioPersistTssBoardRankMovementCache === 'function') {
                 await stelvioPersistTssBoardRankMovementCache(mvPayload, uid);
               }
+              if (myGen !== stelvioRankingFetchGen) return;
+              if (stelvioRankingResolveActiveTabApiDuration() !== 'tss') return;
               if (typeof stelvioRankingSyncPayloadGlobals === 'function') {
                 stelvioRankingSyncPayloadGlobals(mvPayload, uid);
               }
@@ -19040,7 +19054,11 @@
               if (!tssMvOk) scheduleBgRefresh(true);
             }
             var bodyTssMv = document.getElementById('stelvioRankingListBody');
-            if (bodyTssMv && myGen === stelvioRankingFetchGen) {
+            if (
+              bodyTssMv &&
+              myGen === stelvioRankingFetchGen &&
+              stelvioRankingResolveActiveTabApiDuration() === 'tss'
+            ) {
               if (
                 tssMvOk &&
                 typeof renderStelvioActiveCategory === 'function'
@@ -19130,7 +19148,9 @@
           return;
         }
         setTimeout(function () {
-          if (myGen === stelvioRankingFetchGen) scheduleRankMvIfNeeded();
+          if (myGen !== stelvioRankingFetchGen) return;
+          if (stelvioRankingResolveActiveTabApiDuration() !== apiDuration) return;
+          scheduleRankMvIfNeeded();
         }, 2500);
       }
 
@@ -19223,7 +19243,13 @@
 
       /** 탭 전환·첫 진입(GC): 목록이 비어 있으면 스피너 유지 */
       if ((opts.tabSwitch || opts.initialOpen) && !forceGenderRefresh) {
-        stelvioShowRankingBoardLoading(true);
+        var tabAlreadyPainted =
+          opts.tabSwitch &&
+          typeof stelvioRankingGlobalsMatchActiveTab === 'function' &&
+          stelvioRankingGlobalsMatchActiveTab();
+        if (!tabAlreadyPainted) {
+          stelvioShowRankingBoardLoading(true);
+        }
         var memTabHit = stelvioRankingMemCacheGet(swrKey);
         if (!memTabHit) {
           try {
