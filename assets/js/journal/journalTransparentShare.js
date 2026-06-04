@@ -689,8 +689,32 @@
   }
 
   /**
-   * ReactNativeWebView → 네이티브 갤러리 저장 (짧은 대기, 기본 400ms)
-   * 앱에 핸들러 없으면 바로 false — 10초 대기로 UI 멈춤 방지
+   * Stelvio WebView 앱 postMessage — App.tsx 는 type: SAVE_IMAGE 를 처리
+   * requestId 가 있으면 stelvioNativeResponse 로 ok 수신 (앱 1.1+)
+   */
+  function postNativeSaveImageMessage(dataUrl, filename, mime, requestId) {
+    if (!global.ReactNativeWebView || typeof global.ReactNativeWebView.postMessage !== 'function') {
+      return false;
+    }
+    var payload = {
+      type: 'SAVE_IMAGE',
+      dataUrl: dataUrl,
+      filename: filename,
+      mimeType: mime || 'image/jpeg',
+    };
+    if (requestId) payload.requestId = requestId;
+    try {
+      global.ReactNativeWebView.postMessage(JSON.stringify(payload));
+      return true;
+    } catch (ePost) {
+      return false;
+    }
+  }
+
+  /**
+   * ReactNativeWebView → 네이티브 갤러리 저장
+   * @returns {Promise<'ok'|'sent'|false>} ok=앱 응답, sent=메시지 전송(구버전 앱), false=실패
+   * @param {number} [maxWaitMs] 백그라운드 400ms, 사용자 탭 12000ms 권장
    */
   function tryReactNativeSaveImage(blob, filename, maxWaitMs) {
     if (!global.ReactNativeWebView || typeof global.ReactNativeWebView.postMessage !== 'function') {
@@ -703,13 +727,17 @@
         return new Promise(function (resolve) {
           var requestId =
             'saveImg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
-          var timer = setTimeout(cleanup, maxWaitMs);
+          var posted = false;
+          var timer = setTimeout(function () {
+            cleanup();
+            resolve(posted ? 'sent' : false);
+          }, maxWaitMs);
 
           function onResponse(ev) {
             var d = ev && ev.detail;
             if (!d || d.requestId !== requestId) return;
             cleanup();
-            resolve(!!d.ok);
+            resolve(d.ok ? 'ok' : false);
           }
 
           function cleanup() {
@@ -720,17 +748,8 @@
           }
 
           global.addEventListener('stelvioNativeResponse', onResponse);
-          try {
-            global.ReactNativeWebView.postMessage(
-              JSON.stringify({
-                type: 'SAVE_IMAGE_TO_GALLERY',
-                requestId: requestId,
-                dataUrl: dataUrl,
-                filename: filename,
-                mimeType: mime,
-              })
-            );
-          } catch (ePost) {
+          posted = postNativeSaveImageMessage(dataUrl, filename, mime, requestId);
+          if (!posted) {
             cleanup();
             resolve(false);
           }
@@ -739,6 +758,56 @@
       .catch(function () {
         return false;
       });
+  }
+
+  /**
+   * Android WebView·Chrome 공통 — 사용자 탭(제스처)에서 저장·공유 시도
+   * Stelvio 앱: postMessage SAVE_IMAGE 우선 (navigator.share 는 WebView 에서 무반응)
+   */
+  function performAndroidShareOrSave(blob, filename) {
+    var file = blobToShareFile(blob, filename);
+    var inApp = isStelvioAppWebView();
+
+    function tryWebShare() {
+      if (!file || !global.navigator || typeof global.navigator.share !== 'function') {
+        return Promise.resolve(null);
+      }
+      return shareFileWithUserPickerWithTimeout(file, {}, 3000);
+    }
+
+    function tryDataUrlShare() {
+      if (!global.navigator || typeof global.navigator.share !== 'function') {
+        return Promise.resolve(null);
+      }
+      return blobToDataUrl(blob).then(function (dataUrl) {
+        return tryShareDataUrl(dataUrl, filename);
+      });
+    }
+
+    return trySyncNativeSaveAndroid(blob, filename).then(function (syncOk) {
+      if (syncOk) return 'native-android';
+
+      if (inApp) {
+        return tryReactNativeSaveImage(blob, filename, 2000).then(function (rnResult) {
+          if (rnResult === 'ok' || rnResult === 'sent') return 'native-android';
+          return tryWebShare().then(function (shared) {
+            if (shared === 'share') return 'share-android';
+            return tryDataUrlShare().then(function (sharedUrl) {
+              if (sharedUrl === 'share') return 'share-android';
+              return null;
+            });
+          });
+        });
+      }
+
+      return tryWebShare().then(function (shared) {
+        if (shared === 'share') return 'share-android';
+        return tryDataUrlShare().then(function (sharedUrl) {
+          if (sharedUrl === 'share') return 'share-android';
+          return null;
+        });
+      });
+    });
   }
 
   /** WebView에서 기본 「이미지 저장」 컨텍스트 메뉴가 막힐 때 대체 길게 누르기 */
@@ -982,8 +1051,9 @@
 
     var hint = doc.createElement('p');
     hint.className = 'journal-android-save-sheet__hint journal-android-longpress-view__hint';
-    hint.textContent =
-      '「공유·저장」을 누르거나, 아래 이미지를 길게 눌러 갤러리·Google 포토 등으로 저장하세요.';
+    hint.textContent = isStelvioAppWebView()
+      ? '「공유·저장」을 누르거나, 아래 이미지를 길게 눌러 사진 보관함에 저장하세요.'
+      : '「공유·저장」을 누르거나, 아래 이미지를 길게 눌러 갤러리·Google 포토 등으로 저장하세요.';
 
     var img = doc.createElement('img');
     img.className = 'journal-android-longpress-view__img';
@@ -1078,42 +1148,47 @@
 
       var hint = doc.createElement('p');
       hint.className = 'journal-android-save-sheet__hint';
-      hint.textContent =
-        '「공유·저장」을 눌러 갤러리·Google 포토·파일 앱 등을 선택하세요.' +
-        (inApp ? ' 이미지를 길게 눌러도 같은 메뉴가 열립니다.' : '');
+      hint.textContent = inApp
+        ? '「사진첩 저장」을 누르면 사진 보관함(STELVIO 앨범)에 저장됩니다. 이미지를 길게 눌러도 동일합니다.'
+        : '「공유·저장」을 눌러 갤러리·Google 포토·파일 앱 등을 선택하세요.';
+
+      function shareBtnLabel() {
+        return inApp ? '사진첩 저장' : '공유·저장';
+      }
 
       function shareFromUserTap() {
-        var file = blobToShareFile(blob, filename);
+        if (shareBtn.disabled) return;
+        shareBtn.disabled = true;
+        shareBtn.textContent = '저장 중…';
 
-        if (file && global.navigator && typeof global.navigator.share === 'function') {
-          shareFileWithUserPicker(file, {})
-            .then(function (shared) {
-              if (shared === 'share') {
-                finish('share-android');
-                return;
-              }
-              if (typeof global.showToast === 'function') {
-                global.showToast('공유 창이 열리지 않았습니다. 다시 시도해 주세요.', 'info');
-              }
-            })
-            .catch(function (eShare) {
-              if (eShare && eShare.name === 'AbortError') {
-                finishCancel();
-                return;
-              }
-              if (typeof global.showToast === 'function') {
-                global.showToast('공유·저장에 실패했습니다. 다시 시도해 주세요.', 'error');
-              }
-            });
-          return;
-        }
-
-        if (typeof global.showToast === 'function') {
-          global.showToast(
-            '이 기기에서는 「공유·저장」으로 갤러리 앱을 선택해 저장해 주세요.',
-            'info'
-          );
-        }
+        performAndroidShareOrSave(blob, filename)
+          .then(function (method) {
+            shareBtn.disabled = false;
+            shareBtn.textContent = shareBtnLabel();
+            if (method === 'native-android' || method === 'share-android') {
+              finish(method);
+              return;
+            }
+            if (typeof global.showToast === 'function') {
+              global.showToast(
+                inApp
+                  ? '저장에 실패했습니다. 앱을 최신 버전으로 업데이트한 뒤 다시 시도해 주세요.'
+                  : '공유 창이 열리지 않았습니다. 다시 시도해 주세요.',
+                inApp ? 'error' : 'info'
+              );
+            }
+          })
+          .catch(function (eShare) {
+            shareBtn.disabled = false;
+            shareBtn.textContent = shareBtnLabel();
+            if (eShare && eShare.name === 'AbortError') {
+              finishCancel();
+              return;
+            }
+            if (typeof global.showToast === 'function') {
+              global.showToast('공유·저장에 실패했습니다. 다시 시도해 주세요.', 'error');
+            }
+          });
       }
 
       attachImageLongPressActions(img, shareFromUserTap);
@@ -1122,7 +1197,7 @@
       shareBtn.type = 'button';
       shareBtn.className =
         'journal-android-save-sheet__btn journal-android-save-sheet__btn--primary';
-      shareBtn.textContent = '공유·저장';
+      shareBtn.textContent = shareBtnLabel();
       shareBtn.addEventListener('click', shareFromUserTap);
 
       var longPressBtn = doc.createElement('button');
@@ -1286,8 +1361,8 @@
     opts = opts || {};
     return trySyncNativeSaveAndroid(blob, filename).then(function (syncOk) {
       if (syncOk) return 'native-android';
-      tryReactNativeSaveImage(blob, filename, 400).then(function (rnOk) {
-        if (rnOk && typeof global.showToast === 'function') {
+      tryReactNativeSaveImage(blob, filename, 400).then(function (rnResult) {
+        if (rnResult === 'ok' && typeof global.showToast === 'function') {
           global.showToast('사진 보관함에 저장했습니다.', 'success');
         }
       });
