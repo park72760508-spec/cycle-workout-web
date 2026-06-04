@@ -674,6 +674,38 @@
     );
   }
 
+  /** Android 네이티브 저장 파일명 — JPEG blob 과 확장자 일치 */
+  function ensureAndroidNativeSaveFilename(filename) {
+    var base = String(filename || 'stelvio-ride.jpg').replace(/[^\w.-]+/g, '_');
+    if (/\.(jpg|jpeg)$/i.test(base)) return base.replace(/\.jpeg$/i, '.jpg');
+    if (/\.png$/i.test(base)) return base.replace(/\.png$/i, '.jpg');
+    if (/\.[^.]+$/.test(base)) return base.replace(/\.[^.]+$/, '') + '.jpg';
+    return base + '.jpg';
+  }
+
+  /** 단일 브릿지 탐지 — RN postMessage 우선, 구버전 sync JSInterface 폴백 */
+  function getStelvioNativeBridge() {
+    if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
+      return { kind: 'rn' };
+    }
+    var candidates = [global.AndroidBridge, global.Android, global.StelvioAndroid];
+    var i, b, saveFn;
+    for (i = 0; i < candidates.length; i++) {
+      b = candidates[i];
+      if (!b) continue;
+      if (typeof b.saveImage === 'function') saveFn = b.saveImage.bind(b);
+      else if (typeof b.saveImageToGallery === 'function') saveFn = b.saveImageToGallery.bind(b);
+      else if (typeof b.saveImageToPhotos === 'function') saveFn = b.saveImageToPhotos.bind(b);
+      else continue;
+      return { kind: 'sync', saveFn: saveFn };
+    }
+    return null;
+  }
+
+  function hasNativeSaveBridge() {
+    return !!getStelvioNativeBridge();
+  }
+
   /** WebView·모바일: <a download> 자동 저장은 대부분 실패·무반응 */
   function canUseAnchorDownload() {
     if (isStelvioAppWebView()) return false;
@@ -996,27 +1028,29 @@
     return tried;
   }
 
-  /** 앱 SAVE_IMAGE (AndroidBridge = 동일 postMessage, 중복 호출 금지) */
+  /** 앱 SAVE_IMAGE — getStelvioNativeBridge 단일 경로 */
   function postSaveImageToApp(dataUrl, filename, requestId) {
     if (!dataUrl || String(dataUrl).indexOf('data:image/') !== 0) return false;
+    var fn = ensureAndroidNativeSaveFilename(filename);
     var payload = {
       type: 'SAVE_IMAGE',
       dataUrl: dataUrl,
-      filename: filename || 'stelvio-ride.jpg',
+      filename: fn,
     };
     if (requestId) payload.requestId = requestId;
-    if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
+    var bridge = getStelvioNativeBridge();
+    if (!bridge) return false;
+    if (bridge.kind === 'rn') {
       try {
         global.ReactNativeWebView.postMessage(JSON.stringify(payload));
         return true;
       } catch (eRn) {}
+      return false;
     }
     try {
-      if (global.AndroidBridge && typeof global.AndroidBridge.saveImageToGallery === 'function') {
-        global.AndroidBridge.saveImageToGallery(payload.dataUrl, payload.filename);
-        return true;
-      }
-    } catch (eBr) {}
+      bridge.saveFn(payload.dataUrl, payload.filename, requestId);
+      return true;
+    } catch (eSync) {}
     return false;
   }
 
@@ -1038,7 +1072,7 @@
   function openJournalInlineSaveHelper(blob, filename) {
     return blobToNativeSaveDataUrl(blob).then(function (dataUrl) {
       if (!dataUrl) return Promise.reject(new Error('이미지를 준비하지 못했습니다.'));
-      mountJournalInlineSaveHelper(dataUrl, filename || 'stelvio-ride.jpg');
+      mountJournalInlineSaveHelper(dataUrl, ensureAndroidNativeSaveFilename(filename));
       return 'inline-save';
     });
   }
@@ -1089,9 +1123,40 @@
       statusLine.style.color = isError ? '#fca5a5' : '#86efac';
     }
 
+    function waitForNativeAck(requestId, maxWaitMs) {
+      return new Promise(function (resolve) {
+        var settled = false;
+        function cleanup() {
+          global.removeEventListener('stelvioNativeResponse', onResp);
+          if (global.document) {
+            global.document.removeEventListener('stelvioNativeResponse', onResp);
+          }
+        }
+        function done(val) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          cleanup();
+          resolve(val);
+        }
+        function onResp(ev) {
+          var d = ev && ev.detail;
+          if (!d || d.requestId !== requestId) return;
+          done(d.ok === true ? 'ok' : 'fail');
+        }
+        global.addEventListener('stelvioNativeResponse', onResp);
+        if (global.document) global.document.addEventListener('stelvioNativeResponse', onResp);
+        var timer = setTimeout(function () {
+          done('timeout');
+        }, maxWaitMs || 12000);
+      });
+    }
+
     function dispatchFromTap(mode) {
       try {
-        global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PREPARE_SAVE_IMAGE' }));
+        if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
+          global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PREPARE_SAVE_IMAGE' }));
+        }
       } catch (ePrep) {}
       var requestId =
         mode === 'gallery'
@@ -1103,18 +1168,32 @@
         return;
       }
       if (mode === 'gallery') {
-        setHelperStatus(
-          '저장을 요청했습니다. 잠시 후 갤러리 → 최근 사진·DCIM/STELVIO를 확인하세요.',
-          false
-        );
+        setHelperStatus('사진첩에 저장하는 중…', false);
+        waitForNativeAck(requestId, 12000).then(function (result) {
+          if (result === 'ok') {
+            setHelperStatus('사진 보관함에 저장했습니다. 갤러리 → 최근 사진에서 확인하세요.', false);
+            if (typeof global.showToast === 'function') {
+              global.showToast('사진 보관함에 저장했습니다.', 'success');
+            }
+            return;
+          }
+          if (result === 'timeout') {
+            setHelperStatus(
+              '앱 응답이 없습니다. STELVIO 앱을 최신 버전으로 업데이트한 뒤 다시 시도해 주세요.',
+              true
+            );
+            return;
+          }
+          setHelperStatus(
+            '저장에 실패했습니다. 「Google 포토·갤러리로 공유」를 이용해 주세요.',
+            true
+          );
+        });
       } else {
         setHelperStatus(
-          '공유·저장 창이 열리면 Google 포토 또는 갤러리를 선택하세요. (저장 실패 시 앱이 공유 창을 엽니다)',
+          '공유·저장 창이 열리면 Google 포토 또는 갤러리를 선택하세요.',
           false
         );
-      }
-      if (typeof global.showToast === 'function') {
-        global.showToast('앱에서 저장·공유 처리 중입니다. 갤러리 또는 공유 창을 확인하세요.', 'info');
       }
     }
 
@@ -1227,56 +1306,22 @@
   }
 
   /**
-   * Stelvio WebView — Storage 업로드 → Chrome 저장 페이지
-   * 앱 네이티브 SAVE_IMAGE → Chrome 브릿지 → data URL Chrome 순
+   * Android 모바일 브라우저 — Web Share / 다운로드 (인앱은 performAndroidNativeSave)
    */
   function performAndroidShareOrSave(blob, filename) {
-    var inApp = isStelvioAppWebView();
-
-    return prepareBlobForMobileShare(blob, !!inApp).then(function (smallBlob) {
-      var file = blobToShareFile(smallBlob, filename);
-
-      function tryWebShareFile() {
-        if (!file || !global.navigator || typeof global.navigator.share !== 'function') {
-          return Promise.resolve(null);
-        }
-        return shareFileWithUserPickerWithTimeout(file, {}, 4500);
+    if (isStelvioAppWebView()) {
+      return performAndroidNativeSave(blob, ensureAndroidNativeSaveFilename(filename));
+    }
+    var fn = ensureAndroidNativeSaveFilename(filename);
+    return prepareBlobForMobileShare(blob, false).then(function (smallBlob) {
+      var file = blobToShareFile(smallBlob, fn);
+      if (!file || !global.navigator || typeof global.navigator.share !== 'function') {
+        if (tryAnchorDownloadBlob(smallBlob, fn)) return 'download-android';
+        return null;
       }
-
-      function tryStorageBridgeSave() {
-        return uploadJournalShareToStorage(smallBlob, filename)
-          .then(function (downloadUrl) {
-            return openJournalSaveBridgePage(downloadUrl, filename);
-          })
-          .catch(function (eUp) {
-            if (typeof console !== 'undefined' && console.warn) {
-              console.warn('[journalShare] Storage upload failed', eUp);
-            }
-            return null;
-          });
-      }
-
-      if (inApp) {
-        return tryReactNativeSaveImage(smallBlob, filename, 14000).then(function (rnResult) {
-          if (rnResult === 'ok') return 'native-android';
-          return tryStorageBridgeSave().then(function (bridgeResult) {
-            if (bridgeResult === 'bridge-open') return 'bridge-open';
-            return tryWebShareFile().then(function (shared) {
-              if (shared === 'share') return 'share-android';
-              return openImageInSystemBrowserForSave(smallBlob, filename);
-            });
-          });
-        });
-      }
-
-      return tryWebShareFile().then(function (shared) {
+      return shareFileWithUserPickerWithTimeout(file, {}, 4500).then(function (shared) {
         if (shared === 'share') return 'share-android';
-        if (isAndroidDevice()) {
-          return tryStorageBridgeSave().then(function (bridgeResult) {
-            if (bridgeResult === 'bridge-open') return 'bridge-open';
-            return openImageInSystemBrowserForSave(smallBlob, filename);
-          });
-        }
+        if (tryAnchorDownloadBlob(smallBlob, fn)) return 'download-android';
         return null;
       });
     });
@@ -1440,13 +1485,8 @@
 
   /** Android 앱에 주입된 동기 JSInterface (구버전 앱 호환) */
   function hasSyncAndroidSaveBridge() {
-    var and = global.AndroidBridge || global.Android || global.StelvioAndroid;
-    if (!and) return false;
-    return (
-      typeof and.saveImageToGallery === 'function' ||
-      typeof and.saveImage === 'function' ||
-      typeof and.saveImageToPhotos === 'function'
-    );
+    var b = getStelvioNativeBridge();
+    return !!(b && b.kind === 'sync');
   }
 
   /** @deprecated 앱 네이티브 저장 — tryReactNativeSaveImage 사용 */
@@ -1456,16 +1496,14 @@
 
   /**
    * Stelvio WebView → SAVE_IMAGE (앱 MediaStore / DCIM 저장)
-   * @returns {Promise<'ok'|'sent'|'fail'>}
+   * @returns {Promise<'ok'|'fail'|'timeout'>}
    */
   function tryReactNativeSaveImage(blob, filename, maxWaitMs) {
-    if (
-      !global.ReactNativeWebView &&
-      !(global.AndroidBridge && global.AndroidBridge.saveImageToGallery)
-    ) {
+    if (!hasNativeSaveBridge()) {
       return Promise.resolve('fail');
     }
-    maxWaitMs = maxWaitMs != null ? maxWaitMs : 8000;
+    maxWaitMs = maxWaitMs != null ? maxWaitMs : 12000;
+    filename = ensureAndroidNativeSaveFilename(filename);
     try {
       if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
         global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PREPARE_SAVE_IMAGE' }));
@@ -1504,7 +1542,10 @@
           global.addEventListener('stelvioNativeResponse', onResp);
           if (global.document) global.document.addEventListener('stelvioNativeResponse', onResp);
           var timer = setTimeout(function () {
-            done('sent');
+            if (typeof console !== 'undefined' && console.warn) {
+              console.warn('[journalShare] SAVE_IMAGE ack timeout', requestId);
+            }
+            done('timeout');
           }, maxWaitMs);
         });
       })
@@ -1513,14 +1554,13 @@
       });
   }
 
-  /** Stelvio WebView — 사진첩 저장 (실패 시 저장 도우미) */
+  /** Stelvio WebView — 사진첩 저장 (ack 실패 시 호출측에서 폴백 UI) */
   function performAndroidNativeSave(blob, filename) {
-    return tryReactNativeSaveImage(blob, filename, 8000).then(function (rnResult) {
+    filename = ensureAndroidNativeSaveFilename(filename);
+    return tryReactNativeSaveImage(blob, filename, 12000).then(function (rnResult) {
       if (rnResult === 'ok') return 'native-android';
-      if (rnResult === 'sent') return 'native-android-sent';
-      return openJournalInlineSaveHelper(blob, filename).then(function () {
-        return 'inline-save';
-      });
+      if (rnResult === 'timeout') return 'native-android-timeout';
+      return 'native-android-fail';
     });
   }
 
@@ -1625,6 +1665,7 @@
       }
       var previewUrl = URL.createObjectURL(blob);
       var inApp = isStelvioAppWebView();
+      if (inApp) filename = ensureAndroidNativeSaveFilename(filename);
       var settled = false;
 
       function revokePreview() {
@@ -1670,7 +1711,7 @@
       var hint = doc.createElement('p');
       hint.className = 'journal-android-save-sheet__hint';
       hint.textContent = inApp
-        ? '① 「사진첩 저장」→ 갤러리·DCIM 확인\n② Google 포토는 「Google 포토·갤러리로 저장」→ 저장 도우미'
+        ? '「사진첩 저장」을 누르면 갤러리(DCIM/STELVIO)에 저장됩니다.'
         : '「공유·저장」을 눌러 갤러리·Google 포토·파일 앱 등을 선택하세요.';
 
       var statusLine = doc.createElement('p');
@@ -1695,6 +1736,11 @@
         return inApp ? '사진첩 저장' : '공유·저장';
       }
 
+      function revealFallbackButtons() {
+        if (googleBtn) googleBtn.hidden = false;
+        if (browserBtn) browserBtn.hidden = false;
+      }
+
       function setSaveButtonsDisabled(disabled) {
         shareBtn.disabled = disabled;
         if (googleBtn) googleBtn.disabled = disabled;
@@ -1704,7 +1750,6 @@
       function openBrowserSaveFromTap() {
         if (shareBtn.disabled) return;
         setSaveButtonsDisabled(true);
-        shareBtn.textContent = '업로드 중…';
         setStatus('저장 도우미를 여는 중…', false);
         performAndroidChromeBridgeSave(blob, filename)
           .then(function (method) {
@@ -1717,7 +1762,6 @@
               );
               return;
             }
-            if (method === 'bridge-open' || method === 'browser-open') { return; }
             setStatus('저장 도우미를 열 수 없습니다. 다시 시도해 주세요.', true);
           })
           .catch(function (eBridge) {
@@ -1726,7 +1770,7 @@
             var msg =
               eBridge && eBridge.message
                 ? String(eBridge.message)
-                : '이미지 업로드에 실패했습니다. 로그인·네트워크를 확인해 주세요.';
+                : '저장 도우미를 열 수 없습니다.';
             setStatus(msg, true);
             if (typeof global.showToast === 'function') {
               global.showToast(msg, 'error');
@@ -1753,25 +1797,39 @@
               finish('native-android');
               return;
             }
-            if (method === 'native-android-sent') {
-              setStatus(
-                '저장을 요청했습니다. 갤러리·DCIM을 확인하세요. 없으면 「Google 포토·갤러리로 저장」을 이용하세요.',
-                false
-              );
-              if (typeof global.showToast === 'function') {
-                global.showToast('앱에서 저장 처리 중입니다. 갤러리를 확인해 주세요.', 'info');
+            if (
+              method === 'native-android-fail' ||
+              method === 'native-android-timeout' ||
+              method === 'inline-save'
+            ) {
+              revealFallbackButtons();
+              if (method === 'native-android-timeout') {
+                setStatus(
+                  '앱에서 저장 응답이 없습니다. STELVIO 앱을 최신 버전으로 업데이트하거나 아래 버튼을 이용해 주세요.',
+                  true
+                );
+              } else if (method === 'native-android-fail') {
+                setStatus(
+                  '사진첩 저장에 실패했습니다. 아래 「Google 포토·갤러리로 저장」 또는 「저장 도우미 열기」를 이용해 주세요.',
+                  true
+                );
+              } else {
+                setStatus(
+                  '저장 도우미가 열렸습니다. 「사진첩 저장」 또는 「Google 포토·갤러리로 공유」를 눌러 주세요.',
+                  false
+                );
               }
-              return;
-            }
-            if (method === 'inline-save') {
-              setStatus('저장 도우미가 열렸습니다. 버튼을 눌러 저장을 완료해 주세요.', false);
               return;
             }
             if (method === 'share-android') {
               finish('share-android');
               return;
             }
-            if (inApp) { setStatus('저장 도우미에서 버튼을 눌러 저장을 완료해 주세요.', true); return; }
+            if (inApp) {
+              setStatus('저장에 실패했습니다. 아래 버튼으로 다시 시도해 주세요.', true);
+              revealFallbackButtons();
+              return;
+            }
             if (method === 'bridge-open' || method === 'browser-open') {
               setStatus('Chrome에서 저장을 완료해 주세요.', false);
               return;
@@ -1829,6 +1887,7 @@
         googleBtn.className =
           'journal-android-save-sheet__btn journal-android-save-sheet__btn--secondary';
         googleBtn.textContent = 'Google 포토·갤러리로 저장';
+        googleBtn.hidden = true;
         googleBtn.addEventListener('click', openBrowserSaveFromTap);
         panel.appendChild(googleBtn);
 
@@ -1837,6 +1896,7 @@
         browserBtn.className =
           'journal-android-save-sheet__btn journal-android-save-sheet__btn--secondary';
         browserBtn.textContent = '저장 도우미 열기';
+        browserBtn.hidden = true;
         browserBtn.addEventListener('click', openBrowserSaveFromTap);
         panel.appendChild(browserBtn);
         panel.appendChild(longPressBtn);
@@ -1944,10 +2004,12 @@
         '사진 보관함(DCIM/STELVIO)에 저장했습니다. 갤러리 → 최근 사진에서 확인하세요.',
         'success'
       );
-    } else if (result === 'native-android-sent') {
+    } else if (result === 'native-android-timeout' || result === 'native-android-fail') {
       global.showToast(
-        '저장을 요청했습니다. 갤러리 → DCIM → STELVIO 또는 최근 사진에서 확인해 주세요.',
-        'info'
+        result === 'native-android-timeout'
+          ? '앱 저장 응답이 없습니다. 앱 업데이트 후 다시 시도해 주세요.'
+          : '사진첩 저장에 실패했습니다. 저장 도우미를 이용해 주세요.',
+        'error'
       );
     } else if (result === 'inline-save') {
       global.showToast('저장 도우미에서 「사진첩 저장」 또는 「Google 포토·갤러리로 공유」를 눌러 주세요.', 'info');
