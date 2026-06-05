@@ -20930,11 +20930,13 @@
         }
       } else {
         var wkg = (cu.wkg != null ? Number(cu.wkg) : 0).toFixed(2);
+        var peakDurLabel =
+          stelvioRankingState.duration === 'max' ? 'Max(5초)' : durLabel;
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
-          msg = userNameEsc + '님은 ' + durLabel + ' 평균파워 전체 ' + globalRank + '위(' + wkg + ' W/kg)입니다.';
+          msg = userNameEsc + '님은 ' + peakDurLabel + ' 평균파워 전체 ' + globalRank + '위(' + wkg + ' W/kg)입니다.';
         } else {
           var catPart = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + wkg + ' W/kg)' : wkg + ' W/kg';
-          msg = userNameEsc + '님은 ' + durLabel + ' 평균파워 ' + catPart + ', 전체 ' + globalRank + '위입니다.';
+          msg = userNameEsc + '님은 ' + peakDurLabel + ' 평균파워 ' + catPart + ', 전체 ' + globalRank + '위입니다.';
         }
       }
       if (uidHero) {
