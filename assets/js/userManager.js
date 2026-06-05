@@ -100,6 +100,9 @@ async function signOutAllFirebaseAuth() {
   } catch (e2) {}
   window.currentUser = null;
   window.isPhoneAuthenticated = false;
+  if (typeof window.stelvioClearExplicitSessionLogin === 'function') {
+    window.stelvioClearExplicitSessionLogin();
+  }
   try {
     localStorage.removeItem('authUser');
     localStorage.removeItem('currentUser');
@@ -1879,15 +1882,32 @@ function initAuthStateListener() {
           return;
         }
 
-        window.isAuthReady = true;
+        if (isLoginJustCompleted && typeof window.stelvioMarkExplicitSessionLogin === 'function') {
+          window.stelvioMarkExplicitSessionLogin();
+        }
 
-        // [Event-Driven Auth Guard] React Dashboard에 Auth 준비 신호 전달
-        console.log('[Mobile Debug] [Auth] User restored. Signaling Dashboard...');
-        try {
-          window.dispatchEvent(new CustomEvent('stelvio-auth-ready', { detail: { user: firebaseUser } }));
-          console.log('[Mobile Debug] [Auth] stelvio-auth-ready event dispatched successfully');
-        } catch (e) {
-          console.warn('[Auth] dispatchEvent stelvio-auth-ready failed:', e);
+        var explicitSessionLogin =
+          isLoginJustCompleted ||
+          (typeof window.stelvioIsExplicitSessionLogin === 'function' &&
+            window.stelvioIsExplicitSessionLogin());
+
+        window.isAuthReady = explicitSessionLogin;
+
+        if (explicitSessionLogin) {
+          console.log('[Mobile Debug] [Auth] 명시 로그인 세션 — Dashboard·데이터 로드 신호 전달');
+          try {
+            window.dispatchEvent(
+              new CustomEvent('stelvio-auth-ready', {
+                detail: { user: firebaseUser, uid: firebaseUser.uid },
+              })
+            );
+          } catch (e) {
+            console.warn('[Auth] dispatchEvent stelvio-auth-ready failed:', e);
+          }
+        } else {
+          console.log(
+            '[Auth] Firebase 세션 복원됨 — 시작하기 전까지 라이딩·모임 데이터 로드 보류 (프로필만 유지)'
+          );
         }
 
         if (userData) {
@@ -1902,7 +1922,7 @@ function initAuthStateListener() {
           }
           
           if (isPhoneLogin && typeof window !== 'undefined') {
-            window.isPhoneAuthenticated = true;
+            window.isPhoneAuthenticated = explicitSessionLogin;
           }
           
           // 사용자 정보 상세 로그 (나이·성별 확인)
@@ -2016,6 +2036,9 @@ function initAuthStateListener() {
       window.currentUser = null;
       window.isAuthReady = false;
       if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
+      if (typeof window.stelvioClearExplicitSessionLogin === 'function') {
+        window.stelvioClearExplicitSessionLogin();
+      }
       localStorage.removeItem('currentUser');
       localStorage.removeItem('authUser');
       isLoginJustCompleted = false; // 플래그도 리셋

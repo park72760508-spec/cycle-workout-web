@@ -774,57 +774,123 @@ function checkAuthStatus() {
   }
 }
 
-/**
- * 화면 전환·가드용: Firebase 세션이 아직 복원되지 않았어도 로컬에 프로필이 있으면 인증된 것으로 본다(iOS Safari 지연 완화).
- * 호출 시 프로필만 있고 window.currentUser가 비어 있으면 checkAuthStatus로 한 번 맞춤.
- */
-function stelvioIsNavigationAuthenticated() {
-  if (window.auth && window.auth.currentUser) {
-    /* Firebase 세션은 onAuthStateChanged에서 탈퇴 검사 — 로컬 프로필만 탈퇴인 경우 차단 */
-    try {
-      var cuFb = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-      if (cuFb && typeof isUserWithdrawn === 'function' && isUserWithdrawn(cuFb)) {
-        return false;
-      }
-    } catch (eFbWd) {}
-    return true;
-  }
-  if (window.authV9 && window.authV9.currentUser) {
-    try {
-      var cuV9 = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-      if (cuV9 && typeof isUserWithdrawn === 'function' && isUserWithdrawn(cuV9)) {
-        return false;
-      }
-    } catch (eV9Wd) {}
-    return true;
-  }
-  if (window.currentUser != null && (window.currentUser.id != null || window.currentUser.uid != null)) {
-    if (typeof isUserWithdrawn === 'function' && isUserWithdrawn(window.currentUser)) {
-      return false;
-    }
-    return true;
-  }
+/** Firebase Auth 세션 존재 여부 (Firestore·라이딩 데이터 조회에 필수) */
+function stelvioHasFirebaseAuthSession() {
   try {
-    var au = JSON.parse(localStorage.getItem('authUser') || 'null');
-    var cu = JSON.parse(localStorage.getItem('currentUser') || 'null');
-    var su = au || cu;
-    if (su && (su.id != null || su.uid != null)) {
-      if (typeof isUserWithdrawn === 'function' && isUserWithdrawn(su)) {
-        if (typeof clearWithdrawnUserFromLocalSession === 'function') {
-          clearWithdrawnUserFromLocalSession();
-        }
-        return false;
-      }
-      try {
-        checkAuthStatus();
-      } catch (e) {}
-      return true;
-    }
-  } catch (e2) {}
-  if (window.isPhoneAuthenticated === true) return true;
-  if (typeof isPhoneAuthenticated !== 'undefined' && isPhoneAuthenticated) return true;
+    if (window.authV9 && window.authV9.currentUser) return true;
+    if (window.auth && window.auth.currentUser) return true;
+  } catch (e) {}
   return false;
 }
+
+/** 이번 탭에서 시작하기(또는 동등한 signIn)로 명시 인증 완료 여부 */
+function stelvioIsExplicitSessionLogin() {
+  try {
+    if (sessionStorage.getItem('stelvio_explicit_session_login') === '1') return true;
+  } catch (e) {}
+  return window.__stelvioExplicitSessionLogin === true;
+}
+
+function stelvioMarkExplicitSessionLogin() {
+  window.__stelvioExplicitSessionLogin = true;
+  try {
+    sessionStorage.setItem('stelvio_explicit_session_login', '1');
+  } catch (e) {}
+}
+
+function stelvioClearExplicitSessionLogin() {
+  window.__stelvioExplicitSessionLogin = false;
+  try {
+    sessionStorage.removeItem('stelvio_explicit_session_login');
+  } catch (e) {}
+}
+
+/** 베이스캠프·라이딩·모임 등 앱 셸 진입 가능 — Firebase 세션 + 명시 로그인 + 프로필 */
+function stelvioCanEnterAppShell() {
+  if (!stelvioHasFirebaseAuthSession() || !stelvioIsExplicitSessionLogin()) return false;
+  var cu = window.currentUser;
+  if (!cu) {
+    try {
+      cu = JSON.parse(localStorage.getItem('currentUser') || localStorage.getItem('authUser') || 'null');
+    } catch (e) {
+      cu = null;
+    }
+  }
+  if (!cu || (cu.id == null && cu.uid == null)) return false;
+  if (typeof isUserWithdrawn === 'function' && isUserWithdrawn(cu)) return false;
+  return true;
+}
+
+function stelvioPrefillAuthScreenFromProfile() {
+  try {
+    var phoneInput = document.getElementById('authPhoneInput');
+    if (!phoneInput || String(phoneInput.value || '').trim()) return;
+    var cu = window.currentUser;
+    if (!cu) {
+      try {
+        cu = JSON.parse(localStorage.getItem('currentUser') || localStorage.getItem('authUser') || 'null');
+      } catch (e) {
+        cu = null;
+      }
+    }
+    var contact = cu && cu.contact ? String(cu.contact).trim() : '';
+    if (!contact) return;
+    phoneInput.value =
+      typeof window.formatPhoneNumber === 'function' ? window.formatPhoneNumber(contact) : contact;
+  } catch (e2) {}
+}
+
+function stelvioShowAuthScreenForManualLogin() {
+  if (typeof showAuthScreen === 'function') {
+    showAuthScreen();
+  } else {
+    hideAllScreens();
+    var authScreen = document.getElementById('authScreen');
+    if (authScreen) {
+      authScreen.classList.add('active');
+      authScreen.style.removeProperty('position');
+      authScreen.style.removeProperty('z-index');
+      authScreen.style.setProperty('display', 'flex', 'important');
+      authScreen.style.setProperty('flex-direction', 'column', 'important');
+      authScreen.style.setProperty('justify-content', 'center', 'important');
+      authScreen.style.setProperty('align-items', 'center', 'important');
+      authScreen.style.setProperty('opacity', '1', 'important');
+      authScreen.style.setProperty('visibility', 'visible', 'important');
+    }
+  }
+  stelvioPrefillAuthScreenFromProfile();
+  if (typeof window.restoreAuthRememberCredentials === 'function') {
+    try {
+      window.restoreAuthRememberCredentials();
+    } catch (eR) {}
+  }
+}
+
+/**
+ * 화면 전환·가드용: localStorage 프로필만으로는 인증 처리하지 않음.
+ * Firebase 세션 + 이번 탭 명시 로그인(시작하기)이 있어야 라이딩·모임 데이터 조회 가능.
+ */
+function stelvioIsNavigationAuthenticated() {
+  if (!stelvioHasFirebaseAuthSession() || !stelvioIsExplicitSessionLogin()) {
+    return false;
+  }
+  try {
+    var cu =
+      window.currentUser ||
+      JSON.parse(localStorage.getItem('currentUser') || localStorage.getItem('authUser') || 'null');
+    if (cu && typeof isUserWithdrawn === 'function' && isUserWithdrawn(cu)) {
+      return false;
+    }
+  } catch (eWd) {}
+  return true;
+}
+window.stelvioHasFirebaseAuthSession = stelvioHasFirebaseAuthSession;
+window.stelvioIsExplicitSessionLogin = stelvioIsExplicitSessionLogin;
+window.stelvioMarkExplicitSessionLogin = stelvioMarkExplicitSessionLogin;
+window.stelvioClearExplicitSessionLogin = stelvioClearExplicitSessionLogin;
+window.stelvioCanEnterAppShell = stelvioCanEnterAppShell;
+window.stelvioPrefillAuthScreenFromProfile = stelvioPrefillAuthScreenFromProfile;
+window.stelvioShowAuthScreenForManualLogin = stelvioShowAuthScreenForManualLogin;
 window.stelvioIsNavigationAuthenticated = stelvioIsNavigationAuthenticated;
 
 /**
@@ -875,7 +941,7 @@ function applyInitialAuthRouting() {
     } catch (eChk) {
       console.warn('[init] checkAuthStatus:', eChk);
     }
-    if (window.currentUser) {
+    if (typeof stelvioCanEnterAppShell === 'function' && stelvioCanEnterAppShell()) {
       hideAllScreens();
       const basecampScreen = document.getElementById('basecampScreen');
       if (basecampScreen) {
@@ -896,6 +962,9 @@ function applyInitialAuthRouting() {
           connectionScreen.style.visibility = 'visible';
         }
       }
+    } else if (typeof stelvioShowAuthScreenForManualLogin === 'function') {
+      console.log('[init] 프로필만 복원됨 — 시작하기 인증 화면 표시 (Firebase 명시 로그인 필요)');
+      stelvioShowAuthScreenForManualLogin();
     } else if (typeof showAuthScreen === 'function') {
       showAuthScreen();
     } else {
@@ -946,7 +1015,7 @@ function applyInitialAuthRouting() {
     console.warn('[init] authStateReady 대기:', e2);
   }
 
-  if (window.currentUser) {
+  if (typeof stelvioCanEnterAppShell === 'function' && stelvioCanEnterAppShell()) {
     hideAllScreens();
     const basecampScreen = document.getElementById('basecampScreen');
     if (basecampScreen) {
@@ -957,7 +1026,6 @@ function applyInitialAuthRouting() {
       if (typeof applyScrollContainmentForScreen === 'function') {
         applyScrollContainmentForScreen('basecampScreen');
       }
-      // 자동 인증(캐시 세션 복구) 후에도 TOP10 팝업 표시
       window.__basecampShownAfterAuth = true;
       setTimeout(function tryShowTop10AfterAutoAuth() {
         if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return;
@@ -988,6 +1056,8 @@ function applyInitialAuthRouting() {
         connectionScreen.style.visibility = 'visible';
       }
     }
+  } else if (typeof stelvioShowAuthScreenForManualLogin === 'function') {
+    stelvioShowAuthScreenForManualLogin();
   } else if (typeof showAuthScreen === 'function') {
     showAuthScreen();
   } else {
@@ -6981,14 +7051,15 @@ window.showScreen = function(screenId) {
   window.__showScreenRedirectedToAuth = false;
 
   // Firebase / 로컬 프로필 / 전화 인증 (iOS는 세션 복원·스토리지 타이밍 차이 대비)
-  const isFirebaseAuthenticated =
+  const isAuthenticated =
     typeof stelvioIsNavigationAuthenticated === 'function'
       ? stelvioIsNavigationAuthenticated()
       : (window.auth?.currentUser != null ||
          window.authV9?.currentUser != null ||
-         window.currentUser != null);
+         window.isPhoneAuthenticated === true ||
+         (typeof isPhoneAuthenticated !== 'undefined' && isPhoneAuthenticated));
+  const isFirebaseAuthenticated = isAuthenticated;
   const phoneAuth = window.isPhoneAuthenticated === true || isPhoneAuthenticated;
-  const isAuthenticated = isFirebaseAuthenticated || phoneAuth;
 
   console.log('🔵 [Step 1-1] 화면 전환 요청:', screenId, '인증 상태:', isAuthenticated, '(Firebase:', isFirebaseAuthenticated, ', Phone:', phoneAuth, ')');
 
