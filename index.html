@@ -9648,7 +9648,7 @@
       if (stelvioNormalizeRankingGenderFilter(want) === 'all') return data;
       var aligned = stelvioApplyRankingGenderFilterToPayload(data, want);
       if (!aligned) return null;
-      stelvioRankingByCategory = aligned.byCategory;
+      stelvioPublishRankingByCategory(aligned.byCategory);
       stelvioRankingFullEntries =
         typeof stelvioResolveRankingFullEntries === 'function'
           ? stelvioResolveRankingFullEntries(aligned)
@@ -10057,6 +10057,33 @@
       }
       return out;
     }
+
+    /** GC·랭킹보드 목록과 동일 필터(관심·탈퇴 제외) 후 행 배열 — n= 표시·헵타곤 모수와 리스트 건수 일치 */
+    function stelvioBuildRankingCategoryDisplayRows(byCategory, cat) {
+      if (!byCategory || !cat) return [];
+      var arr = stelvioFilterRowsByListInterest(byCategory[cat] || []);
+      if (typeof stelvioFilterRankingRowsForPublicViewer === 'function') {
+        arr = stelvioFilterRankingRowsForPublicViewer(arr);
+      }
+      arr = stelvioInterestMergeGroupMembers(arr, byCategory, cat);
+      return arr;
+    }
+
+    function stelvioGcRankingCohortDisplayCount(byCategory, cat) {
+      return stelvioBuildRankingCategoryDisplayRows(byCategory, cat || 'Supremo').length;
+    }
+
+    /** GC·헵타곤 카드가 랭킹보드와 동일 byCategory(탈퇴·관심 필터)를 읽도록 window 동기화 */
+    function stelvioPublishRankingByCategory(byCat) {
+      stelvioRankingByCategory = byCat;
+      try {
+        window.stelvioRankingByCategory = byCat;
+      } catch (ePub) {}
+    }
+
+    window.stelvioBuildRankingCategoryDisplayRows = stelvioBuildRankingCategoryDisplayRows;
+    window.stelvioGcRankingCohortDisplayCount = stelvioGcRankingCohortDisplayCount;
+    window.stelvioPublishRankingByCategory = stelvioPublishRankingByCategory;
 
   /** 랭킹 API 페이로드 — 탈퇴 순위 숨김 */
     function stelvioApplyPublicRankingVisibilityToPayload(data) {
@@ -15798,7 +15825,7 @@
     window.stelvioRankingPayloadMatchesActiveBoardTab = stelvioRankingPayloadMatchesActiveBoardTab;
 
     function stelvioRankingClearDisplayedPayloadGlobals() {
-      stelvioRankingByCategory = null;
+      stelvioPublishRankingByCategory(null);
       stelvioRankingFullEntries = null;
       stelvioMyRankSupremo = null;
       stelvioCurrentUser = null;
@@ -17620,7 +17647,7 @@
       } else if (typeof stelvioApplyRankMovementPipeline === 'function') {
         stelvioApplyRankMovementPipeline(payload);
       }
-      stelvioRankingByCategory = payload.byCategory;
+      stelvioPublishRankingByCategory(payload.byCategory);
       if (payload.entries) stelvioRankingFullEntries = payload.entries;
       if (!opts.skipDom) {
         var bodyEl = document.getElementById('stelvioRankingListBody');
@@ -18512,7 +18539,7 @@
         data.durationType = 'gc';
       }
       stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
-      stelvioRankingByCategory = data.byCategory;
+      stelvioPublishRankingByCategory(data.byCategory);
       stelvioRankingApiStartStr = typeof data.startStr === 'string' ? data.startStr : '';
       stelvioRankingApiEndStr = typeof data.endStr === 'string' ? data.endStr : '';
       if (data.durationType === 'gc') {
@@ -19120,7 +19147,7 @@
             if (typeof stelvioRankingSyncPayloadGlobals === 'function') {
               stelvioRankingSyncPayloadGlobals(gcMvPayload, uidGcMv);
             } else {
-              stelvioRankingByCategory = gcMvPayload.byCategory;
+              stelvioPublishRankingByCategory(gcMvPayload.byCategory);
             }
             var bodyGcMv = document.getElementById('stelvioRankingListBody');
             if (bodyGcMv && typeof stelvioRankingRefreshListRankChangeSlots === 'function') {
@@ -21194,7 +21221,7 @@
       if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
         stelvioApplyPublicRankingVisibilityToPayload(data);
       }
-      stelvioRankingByCategory = data.byCategory;
+      stelvioPublishRankingByCategory(data.byCategory);
       stelvioRankingFullEntries =
         typeof stelvioResolveRankingFullEntries === 'function'
           ? stelvioResolveRankingFullEntries(data)
@@ -21343,12 +21370,7 @@
     function renderStelvioRankingOneCategory(cat, byCategory, currentUserId, myRankSupremo, bodyEl) {
       if (!bodyEl) return;
       var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
-      var arr = stelvioFilterRowsByListInterest(byCategory[cat] || []);
-      if (typeof stelvioFilterRankingRowsForPublicViewer === 'function') {
-        arr = stelvioFilterRankingRowsForPublicViewer(arr);
-      }
-      /* 관심 필터 ON 시 byCategory[cat]에 없는 그룹멤버를 Supremo 풀에서 보충 */
-      arr = stelvioInterestMergeGroupMembers(arr, byCategory, cat);
+      var arr = stelvioBuildRankingCategoryDisplayRows(byCategory, cat);
       /* 검색 FAB용 전체 배열 컨텍스트 노출 (grade=2,3 숨겨진 순위 ghost row 검색에 사용) */
       window._stelvioRankSearchCtx = {
         cat: cat,
