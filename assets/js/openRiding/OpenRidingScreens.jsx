@@ -511,6 +511,37 @@ function sortOpenRidingInviteRowsByDisplayNameKo(rows) {
   });
 }
 
+/** 클럽 상세 멤버 — 방장 1번, 나머지 표시명 가나다순 */
+function sortOpenRidingGroupMembersForDisplay(members, hostUid, getDisplayName) {
+  var list = Array.isArray(members) ? members.slice() : [];
+  if (!list.length) return [];
+  var host = null;
+  var rest = [];
+  var hostId = hostUid != null ? String(hostUid).trim() : '';
+  list.forEach(function (m) {
+    var uid = String(m.userId || '');
+    if (hostId && uid === hostId) {
+      host = m;
+    } else {
+      rest.push(m);
+    }
+  });
+  if (!host) {
+    var ownerIdx = rest.findIndex(function (m) {
+      return String(m.role || '') === 'owner';
+    });
+    if (ownerIdx >= 0) host = rest.splice(ownerIdx, 1)[0];
+  }
+  rest.sort(function (a, b) {
+    var na = typeof getDisplayName === 'function' ? getDisplayName(a) : '';
+    var nb = typeof getDisplayName === 'function' ? getDisplayName(b) : '';
+    var cmp = String(na).localeCompare(String(nb), 'ko', { sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return String(a.userId || '').localeCompare(String(b.userId || ''), 'ko');
+  });
+  return host ? [host].concat(rest) : rest;
+}
+
 /**
  * 상세 초대 명단 한 줄 표시명: inviteDisplayByPhone(주소록/users)의 users 측 → 조회 캐시 → 본인 → 폴백
  */
@@ -10005,6 +10036,9 @@ function OpenRidingGroupDetailView(props) {
   var _deleteConfirmOpen = useState(false);
   var deleteConfirmOpen = _deleteConfirmOpen[0];
   var setDeleteConfirmOpen = _deleteConfirmOpen[1];
+  var _avatarZoom = useState(null);
+  var avatarZoom = _avatarZoom[0];
+  var setAvatarZoom = _avatarZoom[1];
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
 
   function joinRequestApplicantUid(j) {
@@ -10239,6 +10273,66 @@ function OpenRidingGroupDetailView(props) {
     var mimg = m.profileImageUrl != null ? String(m.profileImageUrl).trim() : '';
     return mimg || openRidingDefaultProfileImg();
   }
+
+  var sortedMembersForDisplay = useMemo(
+    function () {
+      return sortOpenRidingGroupMembersForDisplay(members, createdByUid, displayNameForMember);
+    },
+    [members, memberProfiles, createdByUid]
+  );
+
+  function openGroupDetailAvatarZoom(src, name) {
+    var s = src != null ? String(src).trim() : '';
+    if (!s) return;
+    setAvatarZoom({ src: s, name: name != null ? String(name).trim() : '' });
+  }
+
+  function renderGroupDetailClickableAvatar(photo, displayName, btnClass) {
+    var src = photo != null ? String(photo).trim() : '';
+    if (!src) return null;
+    var nm = displayName != null ? String(displayName).trim() : '';
+    return (
+      <button
+        type="button"
+        className={
+          'open-riding-action-btn open-riding-group-avatar-btn stelvio-rank-avatar-btn shrink-0 ' +
+          (btnClass || 'inline-flex h-[30px] w-[30px]')
+        }
+        aria-label={nm ? nm + ' 프로필 사진 보기' : '프로필 사진 보기'}
+        onClick={function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          openGroupDetailAvatarZoom(src, nm);
+        }}
+      >
+        <img
+          className="stelvio-rank-avatar-img h-full w-full object-cover"
+          src={src}
+          alt=""
+          decoding="async"
+          onError={function (e) {
+            e.currentTarget.onerror = null;
+            var def = openRidingDefaultProfileImg();
+            if (e.currentTarget.src !== def) e.currentTarget.src = def;
+          }}
+        />
+      </button>
+    );
+  }
+
+  useEffect(
+    function () {
+      if (!avatarZoom) return undefined;
+      function onKey(ev) {
+        if (ev.key === 'Escape') setAvatarZoom(null);
+      }
+      document.addEventListener('keydown', onKey);
+      return function () {
+        document.removeEventListener('keydown', onKey);
+      };
+    },
+    [avatarZoom]
+  );
 
   function displayNameForJoinRequest(j) {
     var uid = joinRequestApplicantUid(j);
@@ -10608,7 +10702,11 @@ function OpenRidingGroupDetailView(props) {
           <div className="flex items-start gap-3">
             <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100">
               {grp.photoUrl ? (
-                <img src={String(grp.photoUrl)} alt="" className="h-full w-full object-cover" />
+                renderGroupDetailClickableAvatar(
+                  String(grp.photoUrl),
+                  grp.name != null ? String(grp.name) : '',
+                  'open-riding-group-detail-avatar-btn inline-flex h-16 w-16'
+                )
               ) : (
                 <span className="text-xl font-bold text-violet-700">{(grp.name || 'G').charAt(0)}</span>
               )}
@@ -10748,11 +10846,11 @@ function OpenRidingGroupDetailView(props) {
           <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
         </div>
         <div className="stelvio-category-body px-2 sm:px-3 py-1 open-riding-group-member-rank-list">
-          {members.length === 0 ? (
+          {sortedMembersForDisplay.length === 0 ? (
             <p className="text-sm text-slate-500 m-0 px-1 py-2">멤버 정보를 불러오는 중입니다.</p>
           ) : (
             <div className="space-y-0">
-              {members.map(function (m, idx) {
+              {sortedMembersForDisplay.map(function (m, idx) {
                 var uid = String(m.userId || '');
                 var self = uid && uid === String(userId);
                 var isRowOwner = String(m.role || '') === 'owner';
@@ -10772,19 +10870,7 @@ function OpenRidingGroupDetailView(props) {
                     <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank}</span>
                     <span className="stelvio-rank-name">
                       {photo ? (
-                        <span className="inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100">
-                          <img
-                            className="stelvio-rank-avatar-img"
-                            src={photo}
-                            alt=""
-                            decoding="async"
-                            onError={function(e) {
-                              e.currentTarget.onerror = null;
-                              var def = openRidingDefaultProfileImg();
-                              if (e.currentTarget.src !== def) e.currentTarget.src = def;
-                            }}
-                          />
-                        </span>
+                        renderGroupDetailClickableAvatar(photo, nm)
                       ) : (
                         <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
                           {initial}
@@ -10907,19 +10993,7 @@ function OpenRidingGroupDetailView(props) {
                       <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank}</span>
                       <span className="stelvio-rank-name">
                         {photo ? (
-                          <span className="inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100">
-                            <img
-                              className="stelvio-rank-avatar-img"
-                              src={photo}
-                              alt=""
-                              decoding="async"
-                              onError={function(e) {
-                                e.currentTarget.onerror = null;
-                                var def = openRidingDefaultProfileImg();
-                                if (e.currentTarget.src !== def) e.currentTarget.src = def;
-                              }}
-                            />
-                          </span>
+                          renderGroupDetailClickableAvatar(photo, nm)
                         ) : (
                           <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-amber-50 to-slate-100 text-[10px] font-bold text-amber-900">
                             {initial}
@@ -11144,6 +11218,38 @@ function OpenRidingGroupDetailView(props) {
               >
                 {busy ? '처리 중…' : joinActionConfirm.action === 'reject' ? '거절' : '수락'}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {avatarZoom ? (
+        <div
+          className="open-riding-avatar-zoom-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label={avatarZoom.name ? avatarZoom.name + ' 프로필 사진' : '프로필 사진'}
+          onClick={function () {
+            setAvatarZoom(null);
+          }}
+        >
+          <div
+            className="open-riding-avatar-zoom-card"
+            onClick={function (e) {
+              e.stopPropagation();
+            }}
+          >
+            <div className="open-riding-avatar-zoom-inner">
+              <img
+                className="open-riding-avatar-zoom-img"
+                src={avatarZoom.src}
+                alt=""
+                decoding="async"
+                onError={function (e) {
+                  e.currentTarget.onerror = null;
+                  var def = openRidingDefaultProfileImg();
+                  if (e.currentTarget.src !== def) e.currentTarget.src = def;
+                }}
+              />
             </div>
           </div>
         </div>
