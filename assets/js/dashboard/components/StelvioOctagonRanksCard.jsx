@@ -80,23 +80,62 @@
   }
 
   /** 동일 조건 표 n → 표 rows 산출 → ovl nTotal(집계·가상) 순(카테고리 필터) */
-  function heptagonEffectiveCohortNFromBoardAndOvl(boardState, ovl) {
+  function gcRankingCohortNFromPayload(gcData, filterCategory) {
+    var cat = filterCategory != null ? String(filterCategory) : 'Supremo';
+    if (typeof window !== 'undefined' && typeof window.stelvioGcRankingCohortDisplayCount === 'function') {
+      if (window.stelvioRankingByCategory) {
+        var nBoard = window.stelvioGcRankingCohortDisplayCount(window.stelvioRankingByCategory, cat);
+        if (nBoard >= 1) {
+          return nBoard;
+        }
+      }
+      if (gcData && gcData.byCategory) {
+        var nApi = window.stelvioGcRankingCohortDisplayCount(gcData.byCategory, cat);
+        if (nApi >= 1) {
+          return nApi;
+        }
+      }
+    }
+    return heptagonCohortItemsFromGcApi(gcData, cat).length;
+  }
+
+  function heptagonOvlNTotalAlignedWithGcList(nTotalRaw, filterCategory) {
+    var nDisp = gcRankingCohortNFromPayload(null, filterCategory);
+    if (nDisp >= 1) {
+      return nDisp;
+    }
+    return nTotalRaw != null && isFinite(nTotalRaw) ? Math.max(0, Math.floor(Number(nTotalRaw))) : 0;
+  }
+
+  function heptagonEffectiveCohortNFromBoardAndOvl(boardState, ovl, gcData, filterCategory) {
+    var nGc = gcRankingCohortNFromPayload(gcData, filterCategory);
+    if (nGc >= 1) {
+      return nGc;
+    }
     if (!boardState || boardState.err) {
       if (ovl && !ovl.loading && ovl.nTotal != null && isFinite(ovl.nTotal) && (ovl.nTotal | 0) >= 1) {
-        return ovl.nTotal | 0;
+        return heptagonOvlNTotalAlignedWithGcList(ovl.nTotal | 0, filterCategory);
       }
       return 0;
     }
     var b = boardState.nCohort | 0;
     if (b >= 1) {
-      return b;
+      var nBoardGc = gcRankingCohortNFromPayload(gcData, filterCategory);
+      if (nBoardGc >= 1) {
+        return nBoardGc;
+      }
+      return heptagonOvlNTotalAlignedWithGcList(b, filterCategory);
     }
     b = nCohortFromHeptagonBoardRows(boardState);
     if (b >= 1) {
-      return b;
+      var nRowsGc = gcRankingCohortNFromPayload(gcData, filterCategory);
+      if (nRowsGc >= 1) {
+        return nRowsGc;
+      }
+      return heptagonOvlNTotalAlignedWithGcList(b, filterCategory);
     }
     if (ovl && !ovl.loading && ovl.nTotal != null && isFinite(ovl.nTotal) && (ovl.nTotal | 0) >= 1) {
-      return ovl.nTotal | 0;
+      return heptagonOvlNTotalAlignedWithGcList(ovl.nTotal | 0, filterCategory);
     }
     return 0;
   }
@@ -920,7 +959,10 @@
       return tierAfterOvl;
     }
     var catArr = gcData.byCategory && gcData.byCategory[filterCategory] ? gcData.byCategory[filterCategory] : [];
-    var nGc = catArr.length | 0;
+    var nGc = gcRankingCohortNFromPayload(gcData, filterCategory);
+    if (nGc < 1) {
+      nGc = catArr.length | 0;
+    }
     if (nGc < 1) {
       return tierAfterOvl;
     }
@@ -1415,12 +1457,16 @@
   /** 랭킹보드 목록과 동일한 rankChange — Firestore 행에 없으면 stelvioRankingByCategory 보강 */
   function rankChangeBadgeFromRankingBoard(categoryKey, userId) {
     if (userId == null || userId === '') return null;
+    var cat = categoryKey || 'Supremo';
+    if (typeof window.stelvioResolveRankChangeLookupCategory === 'function') {
+      cat = window.stelvioResolveRankChangeLookupCategory(cat, userId);
+    }
     if (typeof window.stelvioRankChangeBadgeHtmlForUser === 'function') {
-      var html = window.stelvioRankChangeBadgeHtmlForUser(categoryKey, userId);
+      var html = window.stelvioRankChangeBadgeHtmlForUser(cat, userId);
       if (html) return html;
     }
     if (typeof window.stelvioFindRankingRowForUser === 'function' && typeof window.stelvioServerRankChangeBadgeHtml === 'function') {
-      var row = window.stelvioFindRankingRowForUser(categoryKey, userId);
+      var row = window.stelvioFindRankingRowForUser(cat, userId);
       if (row && row.rankChange != null && row.previousBoardRank != null) {
         return window.stelvioServerRankChangeBadgeHtml(row.rankChange, row.previousBoardRank);
       }
@@ -1430,10 +1476,30 @@
 
   function overlayRankMovementFromRankingBoard(row, categoryKey) {
     if (!row || row.userId == null) return row;
-    if (row.rankChange != null && row.previousBoardRank != null) return row;
     if (typeof window.stelvioFindRankingRowForUser !== 'function') return row;
-    var src = window.stelvioFindRankingRowForUser(categoryKey, row.userId);
+    var cat = categoryKey || 'Supremo';
+    if (typeof window.stelvioResolveRankChangeLookupCategory === 'function') {
+      cat = window.stelvioResolveRankChangeLookupCategory(cat, row.userId);
+    }
+    var src = window.stelvioFindRankingRowForUser(cat, row.userId);
     if (!src || src.rankChange == null || src.previousBoardRank == null) return row;
+    if (row.rankChange != null && row.previousBoardRank != null) {
+      var currRank =
+        row.boardRank != null && isFinite(Number(row.boardRank)) ? Math.floor(Number(row.boardRank)) : null;
+      if (
+        typeof window.stelvioRankMovementRowMatchesCurrentRank === 'function' &&
+        window.stelvioRankMovementRowMatchesCurrentRank(row, currRank) &&
+        window.stelvioRankMovementRowMatchesCurrentRank(src, currRank)
+      ) {
+        return row;
+      }
+      if (
+        row.rankChange === src.rankChange &&
+        row.previousBoardRank === src.previousBoardRank
+      ) {
+        return row;
+      }
+    }
     return Object.assign({}, row, {
       rankChange: src.rankChange,
       previousBoardRank: src.previousBoardRank
@@ -1579,7 +1645,10 @@
       myDS = myDS ? Object.assign({}, myDS, { sumPositionScores: sv }) : { sumPositionScores: sv, displayName: '—' };
     }
     var built = buildHeptagonModalBoardRows(gcItems, uidIn, myD, myDS);
-    var nCohort = Math.max(gcItems.length, nCohortFromHeptagonBoardRows({ rows: built.rows, nCohort: 0, err: null }));
+    var nCohort = gcRankingCohortNFromPayload(gcApiData, cIn);
+    if (nCohort < 1) {
+      nCohort = Math.max(gcItems.length, nCohortFromHeptagonBoardRows({ rows: built.rows, nCohort: 0, err: null }));
+    }
     return { rows: built.rows, meInList: built.meInList, nCohort: nCohort | 0 };
   }
 
@@ -1826,6 +1895,7 @@
           var ce = pair[0];
           var cn = pair[1];
           var nTotal = cn && cn.ok && cn.nTotal > 0 ? Math.floor(cn.nTotal) : 0;
+          nTotal = heptagonOvlNTotalAlignedWithGcList(nTotal, category);
           if (nTotal < 1) {
             return { ok: true, skip: true, nTotal: 0 };
           }
@@ -1878,6 +1948,7 @@
         var nFromQ = cn && cn.ok && cn.nTotal > 0 ? Math.floor(cn.nTotal) : 0;
         var itemsRaw = res && res.ok ? res.items || [] : [];
         var nRec = reconcileHeptagonCohortNFromList(nFromQ, itemsRaw);
+        nRec = heptagonOvlNTotalAlignedWithGcList(nRec, category);
         if (nRec < 1) {
           return { ok: true, skip: true, nTotal: 0 };
         }
@@ -2011,7 +2082,12 @@
         }
       }
     }
-    var nEffModal = heptagonEffectiveCohortNFromBoardAndOvl(boardState, null);
+    var nEffModal = heptagonEffectiveCohortNFromBoardAndOvl(
+      boardState,
+      null,
+      props.gcRankingPayload,
+      boardC
+    );
     var isVirtModal =
       summary.heptagonBoardVirtualCohort === true
         ? true
@@ -3434,7 +3510,7 @@
           var mineBRCoh = getMyRankFromHeptagonBoardRows(heptagonCardBoard);
           if (mineBRCoh && mineBRCoh.boardRank != null && mineBRCoh.boardRank >= 1) {
             var ovlCo = stelvioCohortOvl;
-            var nEffCo = heptagonEffectiveCohortNFromBoardAndOvl(heptagonCardBoard, ovlCo);
+            var nEffCo = heptagonEffectiveCohortNFromBoardAndOvl(heptagonCardBoard, ovlCo, gcRankingApi.data, category);
             var isVCo;
             if (ovlCo && !ovlCo.loading && ovlCo.skip !== true && ovlCo.isVirtualCohort != null) {
               isVCo = ovlCo.isVirtualCohort === true;
@@ -3499,8 +3575,7 @@
         if (uid && gcRankingApi.data && gcRankingApi.data.success) {
           var rGc0 = computeDisplayRankLikeDistribution(gcRankingApi.data, uid, category, 'gc');
           if (rGc0 != null && isFinite(Number(rGc0)) && Number(rGc0) >= 1) {
-            var catArrGc0 = gcRankingApi.data.byCategory[category] || [];
-            var nGcAp0 = catArrGc0.length | 0;
+            var nGcAp0 = gcRankingCohortNFromPayload(gcRankingApi.data, category);
             if (nGcAp0 >= 1) {
               var isVirtGc0 =
                 category !== 'Supremo' &&
@@ -3524,6 +3599,10 @@
           }
           var ovlE = stelvioOvlBoardRankNForDisplay(stelvioCohortOvl, category, viewerAc);
           if (ovlE) {
+            var nGcOvl = gcRankingCohortNFromPayload(gcRankingApi.data, category);
+            if (nGcOvl >= 1) {
+              ovlE = Object.assign({}, ovlE, { nTot: nGcOvl });
+            }
             var pE = heptagonLevelPercentForRankN(ovlE.br, ovlE.nTot, ovlE.isVirt, category, viewerAc);
             return {
               kind: 'ok',
@@ -3918,7 +3997,8 @@
             var nRe2 = reconcileHeptagonCohortNFromList(nTot2, items2);
             var built2 = buildHeptagonModalBoardRows(items2, uidIn, myD, myDS);
             var nReFromRows = nCohortFromHeptagonBoardRows({ rows: built2.rows, nCohort: 0, err: null });
-            var nReFinal = Math.max(nRe2, nReFromRows);
+            var nGcDisp = gcRankingCohortNFromPayload(gcApiData, cIn);
+            var nReFinal = nGcDisp >= 1 ? nGcDisp : Math.max(nRe2, nReFromRows);
             setBoard({ loading: false, err: null, rows: built2.rows, meInList: built2.meInList, nCohort: nReFinal | 0 });
           } else {
             setBoard({
@@ -4358,6 +4438,7 @@
           viewerUserId={uid}
           viewerGrade={userProfile && userProfile.grade != null ? String(userProfile.grade) : '2'}
           viewerAgeCategory={viewerAc}
+          gcRankingPayload={gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null}
         />
       ) : null;
 
