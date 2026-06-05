@@ -385,18 +385,20 @@
       var st = flag && flag.account_status ? String(flag.account_status).trim().toLowerCase() : '';
       var withdrawn = st === 'withdrawn' || (flag && flag.withdrawn === true);
 
-      /* login_account_flags가 withdrawn이라도 users/{uid}가 active이면 재가입 완료로 판단
-         (login_account_flags 업데이트 실패·지연 시 발생하는 오탐 방지) */
+      /* login_account_flags가 withdrawn일 때:
+         - users/{uid} 읽기 성공 + active → 재가입 완료(stale flag)로 보정
+         - users 읽기 실패(미인증) → 차단하지 않음. Firebase 로그인 후 users 문서로 최종 판단 */
       if (withdrawn && flag && flag.uid && firestoreV9 && docFn && getDocFn && collectionFn) {
+        var _usersReadOk = false;
         try {
           var _userSnap = await getDocFn(docFn(collectionFn(firestoreV9, 'users'), String(flag.uid)));
           if (_userSnap && (typeof _userSnap.exists === 'function' ? _userSnap.exists() : _userSnap.exists)) {
+            _usersReadOk = true;
             var _ud = _userSnap.data ? _userSnap.data() : {};
             var _actualStatus = String(_ud.account_status || '').trim().toLowerCase();
             if (_ud.is_active === true || _actualStatus === 'active') {
               console.log('[Preflight] login_account_flags=withdrawn이나 users 문서=active → 탈퇴 아님으로 보정');
               withdrawn = false;
-              /* login_account_flags 비동기 자가 수복 (다음 로그인부터는 정상) */
               try {
                 var _nowStr = new Date().toISOString();
                 setDocFn(
@@ -407,7 +409,13 @@
               } catch(_) {}
             }
           }
-        } catch (_crossErr) { /* users read 권한 없으면 무시 */ }
+        } catch (_crossErr) {
+          _usersReadOk = false;
+        }
+        if (!_usersReadOk) {
+          console.log('[Preflight] users read 불가 — login_account_flags만으로 차단하지 않음 (인증 후 최종 판단)');
+          withdrawn = false;
+        }
       }
 
       var hasRegisteredFlag = !!flag && !withdrawn;
@@ -26262,17 +26270,16 @@
               loginError.code === 'auth/invalid-credential'
             ) {
               var phoneDigitsErr = String(phone || '').replace(/\D/g, '');
-              var flagOnErr = null;
-              if (typeof window.stelvioLookupLoginAccountFlag === 'function') {
+              var preflightOnErr = { withdrawn: false, hasRegisteredFlag: false };
+              if (typeof window.stelvioPreflightPhoneLogin === 'function') {
                 try {
-                  flagOnErr = await window.stelvioLookupLoginAccountFlag(phoneDigitsErr);
+                  preflightOnErr = await window.stelvioPreflightPhoneLogin(phone);
                 } catch (eFlagErr) {
-                  flagOnErr = null;
+                  preflightOnErr = { withdrawn: false, hasRegisteredFlag: false };
                 }
               }
-              var stErr = flagOnErr && flagOnErr.account_status ? String(flagOnErr.account_status).trim().toLowerCase() : '';
-              var withdrawnOnErr = stErr === 'withdrawn' || (flagOnErr && flagOnErr.withdrawn === true);
-              var knownRegistered = !!flagOnErr && !withdrawnOnErr;
+              var withdrawnOnErr = !!preflightOnErr.withdrawn;
+              var knownRegistered = !!preflightOnErr.hasRegisteredFlag;
 
               if (submitBtn) {
                 submitBtn.disabled = false;
