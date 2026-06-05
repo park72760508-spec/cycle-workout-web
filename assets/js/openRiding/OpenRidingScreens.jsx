@@ -9455,7 +9455,18 @@ function OpenRidingGroupsList(props) {
                     ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-semibold text-slate-900 truncate text-[15px]">{name || '이름 없음'}</span>
+                    <span className="flex items-center gap-1 min-w-0 font-semibold text-slate-900 text-[15px]">
+                      <span className="truncate min-w-0 flex-1">{name || '이름 없음'}</span>
+                      {!groupIsPublic ? (
+                        <img
+                          src="assets/img/private.svg"
+                          alt=""
+                          className="open-riding-group-private-badge shrink-0 object-contain"
+                          aria-hidden="true"
+                          decoding="async"
+                        />
+                      ) : null}
+                    </span>
                     <span className="block text-xs text-slate-500 mt-0.5 truncate">
                       {regionLine(g.regions)}
                       <span className="text-slate-300 mx-1">·</span>
