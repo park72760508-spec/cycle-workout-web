@@ -26217,6 +26217,10 @@
                   console.warn('[Login] localStorage 비밀번호 보조키 저장 실패:', eLS1 && eLS1.message);
                 }
                 window.isPhoneAuthenticated = true;
+                if (typeof window.stelvioMarkExplicitSessionLogin === 'function') {
+                  window.stelvioMarkExplicitSessionLogin();
+                }
+                window.isAuthReady = true;
                 
                 console.log('✅ 사용자 정보 로드 완료:', { name: userData.name, uid: user.uid });
                 
@@ -27178,6 +27182,11 @@
         } catch (eRegSave) {}
         
         showRegisterStatus('✅ 회원가입 성공!', 'success');
+        if (typeof window.stelvioMarkExplicitSessionLogin === 'function') {
+          window.stelvioMarkExplicitSessionLogin();
+        }
+        window.isPhoneAuthenticated = true;
+        window.isAuthReady = true;
         if (ftpUsedMin && typeof showToast === 'function') {
           showToast('FTP가 최소입력값(몸무게의 1.8배)으로 설정되었습니다.');
         }
