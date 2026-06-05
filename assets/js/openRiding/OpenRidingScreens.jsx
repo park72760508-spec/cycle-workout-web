@@ -10291,13 +10291,16 @@ function OpenRidingGroupDetailView(props) {
     var src = photo != null ? String(photo).trim() : '';
     if (!src) return null;
     var nm = displayName != null ? String(displayName).trim() : '';
+    var isHeader =
+      btnClass && String(btnClass).indexOf('open-riding-group-detail-avatar-btn') >= 0;
+    var btnCls = isHeader
+      ? 'open-riding-action-btn open-riding-group-avatar-btn open-riding-group-detail-avatar-btn stelvio-rank-avatar-btn shrink-0 ' +
+        btnClass
+      : 'open-riding-action-btn open-riding-group-member-avatar-btn inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100';
     return (
       <button
         type="button"
-        className={
-          'open-riding-action-btn open-riding-group-avatar-btn stelvio-rank-avatar-btn shrink-0 ' +
-          (btnClass || 'inline-flex h-[30px] w-[30px]')
-        }
+        className={btnCls}
         aria-label={nm ? nm + ' 프로필 사진 보기' : '프로필 사진 보기'}
         onClick={function (e) {
           e.preventDefault();
@@ -10306,7 +10309,7 @@ function OpenRidingGroupDetailView(props) {
         }}
       >
         <img
-          className="stelvio-rank-avatar-img h-full w-full object-cover"
+          className="stelvio-rank-avatar-img"
           src={src}
           alt=""
           decoding="async"
