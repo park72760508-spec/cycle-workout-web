@@ -2466,8 +2466,24 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   width: auto;
 }
 /* 클럽 상세: 아바타 클릭 확대 */
-#openRidingRoomScreen button.open-riding-group-avatar-btn.stelvio-rank-avatar-btn {
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
+#openRidingRoomScreen button.open-riding-group-member-avatar-btn {
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  line-height: 0;
+  box-sizing: border-box;
+}
+#openRidingRoomScreen button.open-riding-group-member-avatar-btn .stelvio-rank-avatar-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 #openRidingRoomScreen button.open-riding-group-detail-avatar-btn.stelvio-rank-avatar-btn {
   width: 4rem;
