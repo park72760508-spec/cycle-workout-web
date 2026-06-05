@@ -9669,7 +9669,7 @@
     /** GC·피크(28일) 등 API 기간이 오늘 기준 창과 맞는지 */
     function stelvioRankingPayloadMatchesCurrentApiWindow(data) {
       if (!data || data.startStr == null || data.endStr == null) return true;
-      if (data.durationType === 'tss' || (typeof stelvioIsTssRankingMode === 'function' && stelvioIsTssRankingMode())) {
+      if (data.durationType === 'tss') {
         if (data.prevWeekFallback === true && data.displayStartStr != null && data.displayEndStr != null) {
           return weeklyTop10PayloadMatchesWeek(
             { startStr: data.displayStartStr, endStr: data.displayEndStr },
@@ -10537,6 +10537,11 @@
      */
     function stelvioRankingMemCacheSet(swrKey, body, meta) {
       if (!swrKey || !body || !body.success || !body.byCategory) return;
+      try {
+        var fpMem = new URLSearchParams(swrKey);
+        var keyDurMem = fpMem.get('duration');
+        if (keyDurMem && !stelvioRankingPayloadMatchesBoardDuration(body, keyDurMem)) return;
+      } catch (eMemDur) {}
       meta = meta || {};
       if (!stelvioRankingMemCacheMap[swrKey]) {
         stelvioRankingMemCacheOrder.push(swrKey);
@@ -10571,6 +10576,12 @@
       if (body.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(body)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(body)) return false;
       if (ctx.wantGender && !stelvioRankingPayloadMatchesGenderFilter(body, ctx.wantGender)) return false;
+      if (
+        ctx.duration &&
+        !stelvioRankingPayloadMatchesBoardDuration(body, ctx.duration)
+      ) {
+        return false;
+      }
       var isGcBody = body.durationType === 'gc' || ctx.duration === 'gc';
       var isPeakBody =
         body.durationType === 'max' ||
@@ -10582,8 +10593,8 @@
         body.durationType === '60min';
       if ((isGcBody || isPeakBody) && stelvioRankingPayloadHasPrivatePlaceholderName(body)) return false;
       if (isGcBody && !stelvioGcPayloadMatchesDisplayWindow(body)) return false;
-      var isTssBody = body.durationType === 'tss' || ctx.duration === 'tss';
-      if (isTssBody) {
+      if (ctx.duration === 'tss' || body.durationType === 'tss') {
+        if (!stelvioRankingPayloadMatchesBoardDuration(body, 'tss')) return false;
         if (!stelvioWeeklyTssBoardPayloadMatchesWeek(body)) return false;
         if (!stelvioTssBoardPayloadIsFullLeaderboard(body)) return false;
       }
@@ -11346,6 +11357,7 @@
       );
       var mem = stelvioRankingMemCacheGet(ck);
       if (!mem || !mem.body || !mem.body.success || !mem.body.byCategory) return false;
+      if (!stelvioRankingPayloadMatchesBoardDuration(mem.body, apiDur)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(mem.body)) return false;
       if (apiDur === 'tss' && !stelvioTssBoardPayloadIsFullLeaderboard(mem.body)) return false;
       if (!stelvioRankingPayloadMatchesReadSource(mem.body)) return false;
@@ -14471,6 +14483,13 @@
 
     function stelvioRankingNormalizePrefetchPayload(dur, gender, data) {
       if (!data || !data.byCategory) return data;
+      if (
+        data.durationType &&
+        dur &&
+        !stelvioRankingPayloadMatchesBoardDuration(data, dur)
+      ) {
+        return null;
+      }
       data.durationType = dur;
       data.period = stelvioResolveRankingBoardPeriod(dur, data.period || null);
       if (dur === 'gc') {
@@ -14487,6 +14506,7 @@
       if (!lcEntry || !lcEntry.data || !lcEntry.data.success || !lcEntry.data.byCategory) return false;
       if (!stelvioRankingPayloadMatchesReadSource(lcEntry.data)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(lcEntry.data)) return false;
+      if (dur && !stelvioRankingPayloadMatchesBoardDuration(lcEntry.data, dur)) return false;
       if (!stelvioRankingPayloadMatchesCurrentApiWindow(lcEntry.data)) return false;
       if (lcEntry.expiresAt && Date.now() >= lcEntry.expiresAt) return false;
       if (dur !== 'gc') {
@@ -14509,6 +14529,7 @@
     function stelvioRankingEntryRenderableForFastTab(lcEntry, dur) {
       if (!lcEntry || !lcEntry.data || !lcEntry.data.success || !lcEntry.data.byCategory) return false;
       if (!stelvioRankingPayloadMatchesReadSource(lcEntry.data)) return false;
+      if (dur && !stelvioRankingPayloadMatchesBoardDuration(lcEntry.data, dur)) return false;
       if (lcEntry.data.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(lcEntry.data)) return false;
       if (!stelvioRankingPayloadHasVisibleRows(lcEntry.data)) return false;
       var wantGender =
@@ -14524,8 +14545,9 @@
         }
         if (!stelvioRankingPayloadMatchesCurrentApiWindow(lcEntry.data)) return false;
       }
-      var isTssEntry = dur === 'tss' || lcEntry.data.durationType === 'tss';
+      var isTssEntry = dur === 'tss';
       if (isTssEntry) {
+        if (!stelvioRankingPayloadMatchesBoardDuration(lcEntry.data, 'tss')) return false;
         if (!stelvioWeeklyTssBoardPayloadMatchesWeek(lcEntry.data)) return false;
         if (!stelvioTssBoardPayloadIsFullLeaderboard(lcEntry.data)) return false;
       }
@@ -14535,6 +14557,13 @@
     /** 순위 payload — IndexedDB(1순위) 저장 후 메모리·등락 인덱스 동기화 */
     async function stelvioRankingPersistPeakPayload(lcKey, swrKey, data) {
       if (!data || !lcKey) return;
+      if (swrKey) {
+        try {
+          var fpSave = new URLSearchParams(swrKey);
+          var keyDurSave = fpSave.get('duration');
+          if (keyDurSave && !stelvioRankingPayloadMatchesBoardDuration(data, keyDurSave)) return;
+        } catch (eDurSave) {}
+      }
       if (
         data.durationType === 'tss' &&
         typeof stelvioTssBoardPayloadIsFullLeaderboard === 'function' &&
@@ -14593,6 +14622,7 @@
           if (!data || !data.success || !data.byCategory) return false;
           if (!stelvioRankingPayloadMatchesReadSource(data)) return false;
           data = stelvioRankingNormalizePrefetchPayload(apiDur, gender, data);
+          if (!data || !data.byCategory) return false;
           if (
             apiDur === 'personal_speed' &&
             typeof stelvioApplyPersonalSpeedPayloadSyncPatches === 'function'
@@ -15686,6 +15716,15 @@
       return uiDuration || '';
     }
 
+    /** 캐시·즉시 탭 전환: payload.durationType 이 요청 탭(apiDuration)과 일치해야 함 */
+    function stelvioRankingPayloadMatchesBoardDuration(body, apiDuration) {
+      if (!body || !apiDuration) return false;
+      var bodyDur = body.durationType || body.duration || '';
+      if (!bodyDur) return false;
+      return String(bodyDur) === String(apiDuration);
+    }
+    window.stelvioRankingPayloadMatchesBoardDuration = stelvioRankingPayloadMatchesBoardDuration;
+
     function stelvioRankingPrefetchSkipsTab(tabDur, skipUiDur) {
       if (!tabDur || !skipUiDur) return false;
       if (tabDur === skipUiDur) return true;
@@ -16374,6 +16413,7 @@
       if (view.getAttribute('data-prerender-swr-key') !== ck) return false;
       var mem = stelvioRankingMemCacheGet(ck);
       if (!mem || !mem.body || !mem.body.success || !mem.body.byCategory) return false;
+      if (!stelvioRankingPayloadMatchesBoardDuration(mem.body, apiDur)) return false;
       if (
         stelvioRankingState &&
         stelvioRankingState.gender &&
@@ -18157,6 +18197,25 @@
         stelvioHideRankingBoardLoadingUi();
         return;
       }
+      var expectedBoardDur =
+        typeof stelvioIsGroupDistanceRanking === 'function' &&
+        stelvioIsGroupDistanceRanking() &&
+        stelvioGroupTabMetric
+          ? stelvioGroupTabMetric
+          : stelvioRankingState && stelvioRankingState.duration
+            ? stelvioRankingState.duration
+            : '';
+      var resolvedPayloadDur = data.durationType || stelvioResolveRankMovementDurationType(data);
+      if (
+        expectedBoardDur &&
+        resolvedPayloadDur &&
+        String(resolvedPayloadDur) !== String(expectedBoardDur)
+      ) {
+        if (myGen === stelvioRankingFetchGen) {
+          fetchStelvioPeakPowerRanking({ tabSwitch: true, skipMemHydrate: true }).catch(function () {});
+        }
+        return;
+      }
       stelvioLogRankingReadBackend('rankingBoard', data, {
         duration: data.durationType || (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.duration),
         groupTabMetric:
@@ -18603,6 +18662,7 @@
 
       function saveFreshPeakData(data) {
         if (!data || !stelvioRankingPayloadHasVisibleRows(data)) return;
+        if (!stelvioRankingPayloadMatchesBoardDuration(data, apiDuration)) return;
         if (
           apiDuration === 'tss' &&
           typeof stelvioTssBoardPayloadIsFullLeaderboard === 'function' &&
@@ -18648,6 +18708,7 @@
       /** 캐시 히트 시 항속 로그 재조회 생략(사전집계·신선 메모리 캐시) */
       function stelvioRankingCacheAllowsInstantApply(body) {
         if (!body || !body.success || !body.byCategory) return false;
+        if (!stelvioRankingPayloadMatchesBoardDuration(body, apiDuration)) return false;
         if (
           genderParam &&
           genderParam !== 'all' &&
@@ -18663,7 +18724,7 @@
             stelvioWeeklyTssBoardPayloadMatchesWeek(body) && stelvioTssBoardPayloadIsFullLeaderboard(body)
           );
         }
-        if (body && body.durationType === 'tss') {
+        if (apiDuration === 'tss' && body.durationType === 'tss') {
           return (
             stelvioWeeklyTssBoardPayloadMatchesWeek(body) && stelvioTssBoardPayloadIsFullLeaderboard(body)
           );
@@ -18761,6 +18822,7 @@
         if (!stelvioRankingPayloadMatchesGenderFilter(soft.data, genderParam)) return false;
         if (soft.data.pendingAggregate && !stelvioRankingPayloadHasVisibleRows(soft.data)) return false;
         if (!stelvioRankingPayloadHasVisibleRows(soft.data)) return false;
+        if (!stelvioRankingPayloadMatchesBoardDuration(soft.data, apiDuration)) return false;
         if (
           apiDuration === 'tss' &&
           !stelvioTssBoardPayloadIsFullLeaderboard(soft.data)
