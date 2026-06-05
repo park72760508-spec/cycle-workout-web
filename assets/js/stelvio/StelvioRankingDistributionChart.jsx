@@ -15,6 +15,8 @@
 
   var BADGE_HALF_W = 52;
   var BADGE_EDGE_PAD = 6;
+  var DIST_Y_AXIS_W = 28;
+  var DIST_CHART_MARGIN_R = 8;
 
   var BRONZE = '#b87333';
   var BRONZE_MUTED = 'rgba(184, 115, 51, 0.35)';
@@ -247,7 +249,7 @@
           window.removeEventListener('resize', measure);
         };
       },
-      []
+      [activeCategory, duration]
     );
 
     var cohort = useMemo(
@@ -557,77 +559,56 @@
       );
     }
 
-    function MeBadge(lprops) {
-      var viewBox = lprops.viewBox;
-      if (!viewBox) return null;
-      var lineX = viewBox.x;
+    function distPlotMetrics() {
+      var areaLeft = DIST_Y_AXIS_W;
+      var areaW = Math.max(0, chartContainerW - DIST_Y_AXIS_W - DIST_CHART_MARGIN_R);
+      return {
+        areaLeft: areaLeft,
+        areaW: areaW,
+        areaRight: areaLeft + areaW,
+      };
+    }
+
+    /** Recharts viewBox.x는 모바일·초기 렌더에서 플롯 좌표와 어긋날 수 있어 myX 비율로 픽셀 위치 계산 */
+    function distLinePixelX(metricVal) {
+      if (metricVal == null || isNaN(metricVal) || xMax <= xMin) return null;
+      var pm = distPlotMetrics();
+      if (!(pm.areaW > 0)) return null;
+      var t = (metricVal - xMin) / (xMax - xMin);
+      if (t < 0) t = 0;
+      if (t > 1) t = 1;
+      return pm.areaLeft + t * pm.areaW;
+    }
+
+    function distBadgeLayout(lineX) {
       var half = BADGE_HALF_W;
       var badgeW = half * 2;
       var edge = BADGE_EDGE_PAD;
-      var pv = lprops.parentViewBox;
-      var areaLeft;
-      var areaW;
-      if (pv && typeof pv.width === 'number' && pv.width > 0 && typeof pv.x === 'number') {
-        areaLeft = pv.x;
-        areaW = pv.width;
-      } else {
-        var yAxisW = 28;
-        var marginR = 8;
-        areaLeft = yAxisW;
-        areaW = Math.max(0, chartContainerW - yAxisW - marginR);
-      }
-      var areaRight = areaLeft + areaW;
+      var pm = distPlotMetrics();
+      var areaLeft = pm.areaLeft;
+      var areaW = pm.areaW;
+      var areaRight = pm.areaRight;
       var minLeft = areaLeft + edge;
       var maxRight = areaRight - edge;
       var rectX;
-      var textX;
-
-      /* 좌·우 끝: 푯말 박스 끝을 차트 영역 안쪽에 맞춤 / 중간: 기준선 중앙(기존) */
       var leftEdgeLine = areaLeft + half + edge;
       var rightEdgeLine = areaRight - half - edge;
       if (areaW > 0 && lineX <= leftEdgeLine) {
         rectX = minLeft;
-        textX = rectX + half;
       } else if (areaW > 0 && lineX >= rightEdgeLine) {
         rectX = maxRight - badgeW;
-        textX = rectX + half;
       } else {
         rectX = lineX - half;
-        textX = lineX;
-        if (rectX < minLeft) {
-          rectX = minLeft;
-          textX = rectX + half;
-        } else if (rectX + badgeW > maxRight) {
-          rectX = maxRight - badgeW;
-          textX = rectX + half;
-        }
+        if (rectX < minLeft) rectX = minLeft;
+        else if (rectX + badgeW > maxRight) rectX = maxRight - badgeW;
       }
-
-      return (
-        <g>
-          <rect
-            x={rectX}
-            y={6}
-            rx="10"
-            ry="10"
-            width={badgeW}
-            height="36"
-            fill="white"
-            stroke={REF_LINE}
-            strokeWidth="1.5"
-            filter="url(#stelvio-dist-badge-shadow)"
-          />
-          <text x={textX} y={22} textAnchor="middle" fill={REF_LINE} fontSize="10" fontWeight="700">
-            {badgeMain}
-          </text>
-          {badgeSub ? (
-            <text x={textX} y={34} textAnchor="middle" fill="#64748b" fontSize="9">
-              {badgeSub.length > 22 ? badgeSub.slice(0, 20) + '…' : badgeSub}
-            </text>
-          ) : null}
-        </g>
-      );
+      return { rectX: rectX, badgeW: badgeW };
     }
+
+    var myLinePixelX = myX != null ? distLinePixelX(myX) : null;
+    var myBadgeLayout = myLinePixelX != null ? distBadgeLayout(myLinePixelX) : null;
+    var myLinePct =
+      myX != null && xMax > xMin ? Math.max(0, Math.min(100, ((myX - xMin) / (xMax - xMin)) * 100)) : 0;
 
     if (!RechartsLib || !AreaChart || !cohort.length || chartRows.length < 2) {
       return (
@@ -673,9 +654,6 @@
                     <stop offset="55%" stopColor={ACCENT_END} stopOpacity={0.18} />
                     <stop offset="100%" stopColor={ACCENT_END} stopOpacity={0} />
                   </linearGradient>
-                  <filter id="stelvio-dist-badge-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.12" />
-                  </filter>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis
@@ -736,11 +714,47 @@
                     stroke={REF_LINE}
                     strokeWidth={3}
                     strokeDasharray="6 4"
-                    label={<MeBadge />}
                   />
                 ) : null}
               </AreaChart>
             </ResponsiveContainer>
+            {myX != null ? (
+              <div
+                className="absolute top-[6px] z-[2] pointer-events-none box-border flex h-9 flex-col items-center justify-center rounded-[10px] border-[1.5px] bg-white px-1 text-center leading-tight"
+                style={
+                  myBadgeLayout
+                    ? {
+                        left: myBadgeLayout.rectX + 'px',
+                        width: myBadgeLayout.badgeW + 'px',
+                        borderColor: REF_LINE,
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                      }
+                    : {
+                        left:
+                          'calc(' +
+                          DIST_Y_AXIS_W +
+                          'px + (100% - ' +
+                          (DIST_Y_AXIS_W + DIST_CHART_MARGIN_R) +
+                          'px) * ' +
+                          myLinePct +
+                          ' / 100)',
+                        width: BADGE_HALF_W * 2 + 'px',
+                        transform: 'translateX(-50%)',
+                        borderColor: REF_LINE,
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                      }
+                }
+              >
+                <span className="text-[10px] font-bold" style={{ color: REF_LINE }}>
+                  {badgeMain}
+                </span>
+                {badgeSub ? (
+                  <span className="text-[9px] text-slate-500 truncate max-w-full px-0.5">
+                    {badgeSub.length > 22 ? badgeSub.slice(0, 20) + '…' : badgeSub}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           {openRidingTierBandSegments.length > 0 ? (
             <div
