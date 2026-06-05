@@ -2460,6 +2460,11 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #openRidingRoomScreen .open-riding-list-title-private-black {
   color: #0f172a;
 }
+/* 클럽 목록: 비공개 배지 — 제목 높이(1em)의 1.2배 */
+#openRidingRoomScreen .open-riding-group-private-badge {
+  height: 1.2em;
+  width: auto;
+}
 /* 라이딩 목록: 내가 올린 라이딩(미폭파) — 제목 보라 */
 #openRidingRoomScreen .open-riding-list-title-mine {
   color: #6d28d9;
