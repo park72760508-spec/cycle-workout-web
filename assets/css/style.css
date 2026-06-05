@@ -7240,6 +7240,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   display: none;
 }
 .stelvio-hero-expand-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(102, 126, 234, 0.25);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -7406,6 +7408,10 @@ body:has(#trainingDetailModal:not(.hidden)) {
   justify-content: center;
   padding: 32px 16px;
   gap: 12px;
+  pointer-events: none;
+}
+.stelvio-ranking-loading.hidden {
+  display: none !important;
 }
 .stelvio-ranking-loading p {
   margin: 0;
@@ -8302,6 +8308,11 @@ button.stelvio-rank-avatar-btn:focus-visible {
 }
 .stelvio-rank-expand-hit {
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(255, 107, 53, 0.2);
+}
+.stelvio-rank-expand-row.stelvio-rank-expand-hit {
+  touch-action: manipulation;
 }
 .stelvio-rank-expand-hit:hover {
   opacity: 0.85;
