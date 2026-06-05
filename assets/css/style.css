@@ -5826,28 +5826,48 @@ body:has(#trainingDetailModal:not(.hidden)) {
   gap: 6px;
 }
 #weeklyTop10Modal .weekly-rank-name-text {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
   max-width: 100%;
+  line-height: 1.25;
+}
+#weeklyTop10Modal .weekly-rank-name-label {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  vertical-align: middle;
-}
-#weeklyTop10Modal .weekly-rank-name-label {
-  display: inline;
+  line-height: 1.25;
 }
 #weeklyTop10Modal .weekly-rank-change-slot {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
   white-space: nowrap;
-  vertical-align: middle;
+  line-height: 1;
 }
 #weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
 #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change,
 #weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   vertical-align: middle;
   white-space: nowrap;
+  line-height: 1;
+  margin-left: 0;
+  margin-right: 0;
+}
+#weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight {
+  font-size: 0.68rem;
+}
+#weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight {
+  padding: 1px 6px;
+  font-size: 0.68rem;
+  line-height: 1.2;
 }
 #weeklyTop10Modal .weekly-rank-tss {
   flex: 0 0 auto;
@@ -5858,9 +5878,20 @@ body:has(#trainingDetailModal:not(.hidden)) {
     flex: 0 1 auto;
     max-width: calc(100% - 5rem);
   }
+  #weeklyTop10Modal .weekly-rank-name-text {
+    gap: 3px;
+  }
+  #weeklyTop10Modal .weekly-rank-change-slot {
+    gap: 3px;
+  }
   #weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
-  #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change {
+  #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change,
+  #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight {
     font-size: 0.74rem;
+  }
+  #weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight {
+    font-size: 0.72rem;
+    padding: 1px 5px;
   }
 }
 /* 주간 TOP10 아바타: 28px 소형 */
