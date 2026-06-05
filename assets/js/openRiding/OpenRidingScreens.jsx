@@ -2864,7 +2864,7 @@ function OpenRidingBottomGlassNav(props) {
           aria-label="라이딩 모임 달력"
         >
           {iconMoim()}
-          <span className="open-riding-bottom-glass-nav__label">모임</span>
+          <span className="open-riding-bottom-glass-nav__label">라이딩</span>
         </button>
       </OpenRidingGlassNavSlot>
       {renderGroupsButton(groupsActive)}
@@ -9455,17 +9455,19 @@ function OpenRidingGroupsList(props) {
                     ) : null}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1 min-w-0 font-semibold text-slate-900 text-[15px]">
-                      <span className="truncate min-w-0 flex-1">{name || '이름 없음'}</span>
-                      {!groupIsPublic ? (
-                        <img
-                          src="assets/img/private.svg"
-                          alt=""
-                          className="open-riding-group-private-badge shrink-0 object-contain"
-                          aria-hidden="true"
-                          decoding="async"
-                        />
-                      ) : null}
+                    <span className="block font-semibold text-slate-900 text-[15px] min-w-0">
+                      <span className="inline-flex items-center gap-0.5 max-w-full min-w-0 align-middle">
+                        <span className="truncate min-w-0">{name || '이름 없음'}</span>
+                        {!groupIsPublic ? (
+                          <img
+                            src="assets/img/private.svg"
+                            alt=""
+                            className="open-riding-group-private-badge shrink-0 object-contain"
+                            aria-hidden="true"
+                            decoding="async"
+                          />
+                        ) : null}
+                      </span>
                     </span>
                     <span className="block text-xs text-slate-500 mt-0.5 truncate">
                       {regionLine(g.regions)}
