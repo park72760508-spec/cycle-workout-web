@@ -284,12 +284,15 @@ async function fetchWithdrawnUserProfileByPhone(phone) {
       }
     }
 
-    /* ③ 탈퇴 여부 최종 판단 */
+    /* ③ 탈퇴 여부 최종 판단 — users 문서가 활성이면 login_account_flags stale로 간주 */
     if (userData) {
-      var isWithdrawnByData =
-        userData.is_active === false ||
-        String(userData.account_status || '').trim().toLowerCase() === 'withdrawn';
-      return (isWithdrawnByFlag || isWithdrawnByData) ? userData : null;
+      if (isUserAccountActive(userData)) {
+        if (isWithdrawnByFlag) {
+          syncLoginAccountFlagForUser(uid, ACCOUNT_STATUS_ACTIVE).catch(function () {});
+        }
+        return null;
+      }
+      return userData;
     }
 
     /* ④ users read 실패해도 flag가 'withdrawn'이면 최소 객체 반환 (자동 입력 일부 미지원) */
@@ -372,8 +375,13 @@ async function findDeletedUserByPhoneAndBirthYear(phone, birthYear) {
       }
     }
 
-    /* ③ users 읽기 성공 → 클라이언트 생년 검증 */
+    /* ③ users 읽기 성공 → 활성 계정이면 stale flag 보정 후 탈퇴 아님 */
     if (userData) {
+      if (isUserAccountActive(userData)) {
+        console.log('[findDeletedUserByPhoneAndBirthYear] users 문서=active → 탈퇴 아님 (stale login_account_flags)');
+        syncLoginAccountFlagForUser(uid, ACCOUNT_STATUS_ACTIVE).catch(function () {});
+        return null;
+      }
       if (Number(userData.birth_year) !== birthYearInt) {
         console.warn('[findDeletedUserByPhoneAndBirthYear] 생년 불일치 (입력:', birthYearInt, '/ DB:', userData.birth_year, ')');
         return null;
@@ -2607,6 +2615,14 @@ async function apiUpdateUser(id, userData) {
       userData.account_status != null
     ) {
       triggerSupabaseUserProvisionAfterProfile();
+    }
+
+    var becameActive =
+      (userData.account_status != null && String(userData.account_status).trim().toLowerCase() === ACCOUNT_STATUS_ACTIVE) ||
+      userData.is_active === true ||
+      (userData.withdrawn_at != null && !String(userData.withdrawn_at).trim());
+    if (becameActive) {
+      await syncLoginAccountFlagForUser(id, ACCOUNT_STATUS_ACTIVE);
     }
     
     return { success: true };
@@ -4906,6 +4922,7 @@ async function completeUserInfo() {
       const existingRes = await apiGetUser(currentUser.uid);
       if (existingRes && existingRes.success && existingRes.item && isUserWithdrawn(existingRes.item)) {
         updateData.account_status = ACCOUNT_STATUS_ACTIVE;
+        updateData.is_active = true;
         updateData.reactivated_at = new Date().toISOString();
         updateData.withdrawn_at = '';
       }
