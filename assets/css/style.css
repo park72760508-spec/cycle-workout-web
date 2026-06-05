@@ -2465,6 +2465,53 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   height: 1.44em;
   width: auto;
 }
+/* 클럽 상세: 아바타 클릭 확대 */
+#openRidingRoomScreen button.open-riding-group-avatar-btn.stelvio-rank-avatar-btn {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
+}
+#openRidingRoomScreen button.open-riding-group-detail-avatar-btn.stelvio-rank-avatar-btn {
+  width: 4rem;
+  height: 4rem;
+  min-width: 4rem;
+  min-height: 4rem;
+  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.55);
+}
+#openRidingRoomScreen .open-riding-avatar-zoom-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: rgba(11, 13, 18, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#openRidingRoomScreen .open-riding-avatar-zoom-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+}
+#openRidingRoomScreen .open-riding-avatar-zoom-inner {
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.4),
+    0 14px 40px rgba(0, 0, 0, 0.55);
+}
+#openRidingRoomScreen .open-riding-avatar-zoom-img {
+  width: min(72vw, 320px);
+  height: min(72vw, 320px);
+  max-width: 320px;
+  max-height: 320px;
+  object-fit: cover;
+  display: block;
+  background: #edf0f4;
+}
 /* 라이딩 목록: 내가 올린 라이딩(미폭파) — 제목 보라 */
 #openRidingRoomScreen .open-riding-list-title-mine {
   color: #6d28d9;
