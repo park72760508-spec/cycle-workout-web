@@ -4960,6 +4960,27 @@ button[aria-disabled="true"] {
   border-radius: 4px;
   vertical-align: middle;
 }
+
+#profileScreen .profile-subtitle-link {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  color: #7c3aed;
+  font: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+#profileScreen .profile-subtitle-link:hover,
+#profileScreen .profile-subtitle-link:focus-visible {
+  color: #6d28d9;
+}
+
+#profileScreenSubtitle strong {
+  font-weight: 700;
+}
 /* 훈련 등급 범례 컨테이너 */
 .challenge-legend-container {
   display: flex;
