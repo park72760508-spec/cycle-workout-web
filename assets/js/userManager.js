@@ -534,6 +534,151 @@ function filterActiveUsers(users) {
   });
 }
 
+/** 프로필 선택 화면 목록 표시 대상 — id·이름 없거나 literal "undefined" 제외 */
+function isProfileListDisplayableUser(user) {
+  if (!user || typeof user !== 'object') return false;
+  var id = user.id != null ? String(user.id).trim() : '';
+  if (!id || id === 'undefined' || id === 'null') return false;
+  var name = user.name != null ? String(user.name).trim() : '';
+  if (!name || name === 'undefined' || name === 'null') return false;
+  return true;
+}
+
+function filterProfileListDisplayableUsers(users) {
+  return (Array.isArray(users) ? users : []).filter(isProfileListDisplayableUser);
+}
+
+var PROFILE_LIST_MODE_ALL = 'all';
+var PROFILE_LIST_MODE_WITHDRAWN = 'withdrawn';
+
+function getProfileScreenListMode() {
+  return window._profileScreenListMode === PROFILE_LIST_MODE_WITHDRAWN
+    ? PROFILE_LIST_MODE_WITHDRAWN
+    : PROFILE_LIST_MODE_ALL;
+}
+
+function setProfileScreenListMode(mode) {
+  window._profileScreenListMode =
+    mode === PROFILE_LIST_MODE_WITHDRAWN ? PROFILE_LIST_MODE_WITHDRAWN : PROFILE_LIST_MODE_ALL;
+}
+
+function getProfileScreenUsersForListMode(baseUsers) {
+  var base = Array.isArray(baseUsers) ? baseUsers : window._profileScreenUsersBase || [];
+  if (getProfileScreenListMode() === PROFILE_LIST_MODE_WITHDRAWN) {
+    return base.filter(function (u) {
+      return isUserWithdrawn(u);
+    });
+  }
+  return base.slice();
+}
+
+function renderProfileScreenSubtitle(stats) {
+  stats = stats || {};
+  var el = document.getElementById('profileScreenSubtitle');
+  if (!el) return;
+  var activeCount = Number(stats.activeCount) || 0;
+  var listCount = Number(stats.listCount) || 0;
+  var withdrawnCount = Number(stats.withdrawnCount) || 0;
+  var mode = getProfileScreenListMode();
+
+  if (mode === PROFILE_LIST_MODE_WITHDRAWN) {
+    el.innerHTML =
+      '탈퇴 명단 <strong>' +
+      withdrawnCount +
+      '</strong>명 · <button type="button" class="profile-subtitle-link" data-profile-list-mode="' +
+      PROFILE_LIST_MODE_ALL +
+      '">전체 목록 보기</button>';
+  } else {
+    var html = '현재 가입자 수(활성) : ' + activeCount + ' 명 · 목록 ' + listCount + '명';
+    if (withdrawnCount > 0) {
+      html +=
+        '(<button type="button" class="profile-subtitle-link" data-profile-list-mode="' +
+        PROFILE_LIST_MODE_WITHDRAWN +
+        '">탈퇴 ' +
+        withdrawnCount +
+        '명</button> 포함)';
+    }
+    el.innerHTML = html;
+  }
+  el.style.display = '';
+}
+
+function bindProfileScreenSubtitleActions() {
+  var el = document.getElementById('profileScreenSubtitle');
+  if (!el || el._profileSubtitleBound) return;
+  el._profileSubtitleBound = true;
+  el.addEventListener('click', function (ev) {
+    var btn =
+      ev.target && typeof ev.target.closest === 'function'
+        ? ev.target.closest('[data-profile-list-mode]')
+        : null;
+    if (!btn) return;
+    ev.preventDefault();
+    var mode = btn.getAttribute('data-profile-list-mode');
+    setProfileScreenListMode(mode);
+    if (typeof refreshProfileScreenUserList === 'function') {
+      refreshProfileScreenUserList();
+    }
+  });
+}
+
+/** 관리자 프로필 목록 — 탈퇴 필터·검색어 반영 후 재렌더 */
+function refreshProfileScreenUserList() {
+  var userList = document.getElementById('userList');
+  var ctx = window._profileScreenContext;
+  if (!userList || !ctx) return;
+
+  var modeUsers = getProfileScreenUsersForListMode();
+  window._profileScreenAllUsers = modeUsers.slice();
+
+  var nameInput = document.getElementById('profileSearchName');
+  var contactInput = document.getElementById('profileSearchContact');
+  var nameRaw = nameInput && nameInput.value ? String(nameInput.value).trim() : '';
+  var contactRaw = contactInput && contactInput.value ? String(contactInput.value).trim() : '';
+  var nameQuery = nameRaw.toLowerCase();
+  var contactDigits = (contactRaw || '').replace(/\D/g, '');
+
+  var filtered = modeUsers;
+  if (nameQuery || contactDigits) {
+    filtered = modeUsers.filter(function (u) {
+      var nameMatch = !nameQuery || (u.name && String(u.name).toLowerCase().includes(nameQuery));
+      var uContact = (u.contact || '').replace(/\D/g, '');
+      var contactMatch = !contactDigits || (uContact && uContact.includes(contactDigits));
+      return nameMatch && contactMatch;
+    });
+  }
+
+  if (filtered.length === 0) {
+    var emptyTitle =
+      getProfileScreenListMode() === PROFILE_LIST_MODE_WITHDRAWN
+        ? '탈퇴 사용자가 없습니다'
+        : nameQuery || contactDigits
+          ? '검색 결과가 없습니다'
+          : '등록된 사용자가 없습니다';
+    userList.innerHTML =
+      '<div class="empty-state"><div class="empty-state-icon">👤</div><div class="empty-state-title">' +
+      emptyTitle +
+      '</div></div>';
+  } else {
+    renderProfileUserCards(filtered, ctx.viewerGrade, ctx.viewerId);
+    if (typeof window.refreshProfileMaxHrAndRerender === 'function') {
+      window.refreshProfileMaxHrAndRerender(filtered, ctx.viewerGrade, ctx.viewerId).catch(function () {});
+    }
+  }
+
+  if (typeof setProfileSearchUserCountText === 'function') {
+    setProfileSearchUserCountText(filtered);
+  }
+  if (window._profileScreenStats) {
+    renderProfileScreenSubtitle(window._profileScreenStats);
+  }
+}
+
+window.isProfileListDisplayableUser = isProfileListDisplayableUser;
+window.filterProfileListDisplayableUsers = filterProfileListDisplayableUsers;
+window.refreshProfileScreenUserList = refreshProfileScreenUserList;
+window.bindProfileScreenSubtitleActions = bindProfileScreenSubtitleActions;
+
 /** 로그인 계정 등급 — 프로필 선택으로 currentUser가 바뀌어도 로그인 UID 기준. authUser.grade는 오래된 값일 수 있어 users 목록(Firestore 동기화)을 최우선 */
 function getLoginUserGrade() {
   try {
@@ -3424,6 +3569,7 @@ function stelvioEscapeHtmlAttr(str) {
 function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
   const userList = document.getElementById('userList');
   if (!userList) return;
+  usersToRender = filterProfileListDisplayableUsers(usersToRender);
   let hasAiKeyLocal = false;
   try {
     const key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
@@ -3582,30 +3728,18 @@ function searchProfileUsers() {
     if (typeof loadUsers === 'function') loadUsers();
     return;
   }
-  const nameInput = document.getElementById('profileSearchName');
-  const contactInput = document.getElementById('profileSearchContact');
-  const nameRaw = (nameInput && nameInput.value) ? String(nameInput.value).trim() : '';
-  const contactRaw = (contactInput && contactInput.value) ? String(contactInput.value).trim() : '';
-  const nameQuery = nameRaw.toLowerCase();
-  const contactDigits = (contactRaw || '').replace(/\D/g, '');
-  let filtered = allUsers;
-  if (nameQuery || contactDigits) {
-    filtered = allUsers.filter(u => {
-      const nameMatch = !nameQuery || (u.name && String(u.name).toLowerCase().includes(nameQuery));
-      const uContact = (u.contact || '').replace(/\D/g, '');
-      const contactMatch = !contactDigits || (uContact && uContact.includes(contactDigits));
-      return nameMatch && contactMatch;
-    });
-  }
-  renderProfileUserCards(filtered, ctx.viewerGrade, ctx.viewerId);
-  if (filtered.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
-    window.refreshProfileMaxHrAndRerender(filtered, ctx.viewerGrade, ctx.viewerId).catch(() => {});
-  }
-  if (typeof setProfileSearchUserCountText === 'function') {
-    setProfileSearchUserCountText(filtered);
-  }
-  if (typeof showToast === 'function') {
-    showToast(nameQuery || contactDigits ? `검색 결과 ${filtered.length}명` : `전체 ${filtered.length}명`);
+  if (typeof refreshProfileScreenUserList === 'function') {
+    refreshProfileScreenUserList();
+    if (typeof showToast === 'function') {
+      var nameInput = document.getElementById('profileSearchName');
+      var contactInput = document.getElementById('profileSearchContact');
+      var nameRaw = nameInput && nameInput.value ? String(nameInput.value).trim() : '';
+      var contactRaw = contactInput && contactInput.value ? String(contactInput.value).trim() : '';
+      var countEl = document.getElementById('userList');
+      var cardCount = countEl ? countEl.querySelectorAll('.user-card').length : allUsers.length;
+      showToast(nameRaw || contactRaw ? '검색 결과 ' + cardCount + '명' : '전체 ' + cardCount + '명');
+    }
+    return;
   }
 }
 
@@ -3640,7 +3774,7 @@ function addMonthsToExpiry(dateValue, months) {
  * 관리자(grade=1) 전용: 모든 사용자 만료일 일괄 연장 (적용 전 확인 메시지)
  */
 async function bulkExtendExpiry() {
-  const allUsers = window._profileScreenAllUsers;
+  const allUsers = window._profileScreenUsersBase || window._profileScreenAllUsers;
   const ctx = window._profileScreenContext;
   if (!Array.isArray(allUsers) || !ctx || ctx.viewerGrade !== '1') {
     if (typeof showToast === 'function') showToast('권한이 없거나 사용자 목록이 없습니다.', 'warning');
@@ -3726,6 +3860,10 @@ async function loadUsers() {
     }
 
     const rawUsers = Array.isArray(result.items) ? result.items : [];
+    const displayableUsers = filterProfileListDisplayableUsers(rawUsers);
+    if (displayableUsers.length !== rawUsers.length) {
+      console.log('[loadUsers] 표시 제외( id/이름 없음 ):', rawUsers.length - displayableUsers.length, '건');
+    }
     let viewerEarly = null;
     let authUserEarly = null;
     try { viewerEarly = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (_) {}
@@ -3740,9 +3878,9 @@ async function loadUsers() {
       isTempAdminEarly ||
       (typeof isStelvioAdminGrade === 'function' && isStelvioAdminGrade(loginGradeEarly));
 
-    const users = isLoginAdminEarly ? rawUsers : filterActiveUsers(rawUsers);
-    const activeCount = filterActiveUsers(rawUsers).length;
-    const withdrawnCount = rawUsers.length - activeCount;
+    const users = isLoginAdminEarly ? displayableUsers : filterActiveUsers(displayableUsers);
+    const activeCount = filterActiveUsers(displayableUsers).length;
+    const withdrawnCount = displayableUsers.length - activeCount;
 
     console.log('[loadUsers] 👥 사용자 목록:', {
       totalUsers: users.length,
@@ -3781,8 +3919,7 @@ async function loadUsers() {
               ? getLoginUserGrade()
               : '2';
         if (typeof isStelvioAdminGrade === 'function' ? isStelvioAdminGrade(_lg) : String(_lg).trim() === '1') {
-          profileSubtitleEmpty.textContent = '현재 가입자 수(활성) : 0 명';
-          profileSubtitleEmpty.style.display = '';
+          renderProfileScreenSubtitle({ activeCount: 0, listCount: 0, withdrawnCount: 0 });
         } else {
           profileSubtitleEmpty.textContent = '';
           profileSubtitleEmpty.style.display = 'none';
@@ -3834,48 +3971,58 @@ async function loadUsers() {
 
     visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
-    const totalMemberCountForAdmin = isLoginAdmin ? activeCount : visibleUsers.length;
-
     // 로그인 관리자일 때만 검색 섹션 표시 및 전체 목록 저장 (검색 시 사용)
     const searchSection = document.getElementById('profileSearchSection');
     if (searchSection) {
       if (isLoginAdmin) {
         searchSection.style.display = 'block';
-        window._profileScreenAllUsers = visibleUsers.slice();
+        window._profileScreenUsersBase = users.slice();
+        window._profileScreenStats = {
+          activeCount: activeCount,
+          listCount: users.length,
+          withdrawnCount: withdrawnCount,
+        };
+        setProfileScreenListMode(PROFILE_LIST_MODE_ALL);
+        bindProfileScreenSubtitleActions();
+        var modeUsers = getProfileScreenUsersForListMode();
+        window._profileScreenAllUsers = modeUsers.slice();
         window._profileScreenContext = { viewerGrade: profileCardGrade, viewerId };
         const nameInput = document.getElementById('profileSearchName');
         const contactInput = document.getElementById('profileSearchContact');
         if (nameInput) nameInput.value = '';
         if (contactInput) contactInput.value = '';
         if (typeof setProfileSearchUserCountText === 'function') {
-          setProfileSearchUserCountText(visibleUsers);
+          setProfileSearchUserCountText(modeUsers);
         }
       } else {
         searchSection.style.display = 'none';
         window._profileScreenAllUsers = null;
+        window._profileScreenUsersBase = null;
+        window._profileScreenStats = null;
         window._profileScreenContext = null;
       }
     }
 
-    renderProfileUserCards(visibleUsers, profileCardGrade, viewerId);
+    renderProfileUserCards(
+      isLoginAdmin ? getProfileScreenUsersForListMode() : visibleUsers,
+      profileCardGrade,
+      viewerId
+    );
     const profileSubtitle = document.getElementById('profileScreenSubtitle');
     if (profileSubtitle) {
       if (isLoginAdmin) {
-        var subtitleText = '현재 가입자 수(활성) : ' + totalMemberCountForAdmin + ' 명';
-        if (withdrawnCount > 0) {
-          subtitleText += ' · 목록 ' + users.length + '명(탈퇴 ' + withdrawnCount + '명 포함)';
-        } else {
-          subtitleText += ' · 목록 ' + users.length + '명';
-        }
-        profileSubtitle.textContent = subtitleText;
-        profileSubtitle.style.display = '';
+        renderProfileScreenSubtitle(window._profileScreenStats);
       } else {
         profileSubtitle.textContent = '';
         profileSubtitle.style.display = 'none';
       }
     }
     if (visibleUsers.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
-      window.refreshProfileMaxHrAndRerender(visibleUsers, profileCardGrade, viewerId).catch(() => {});
+      window.refreshProfileMaxHrAndRerender(
+        isLoginAdmin ? getProfileScreenUsersForListMode() : visibleUsers,
+        profileCardGrade,
+        viewerId
+      ).catch(() => {});
     }
 
     const profileScreen = document.getElementById('profileScreen');
