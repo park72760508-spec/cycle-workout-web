@@ -10296,7 +10296,7 @@ function OpenRidingGroupDetailView(props) {
     var btnCls = isHeader
       ? 'open-riding-action-btn open-riding-group-avatar-btn open-riding-group-detail-avatar-btn stelvio-rank-avatar-btn shrink-0 ' +
         btnClass
-      : 'open-riding-action-btn open-riding-group-member-avatar-btn inline-flex h-[30px] w-[30px] shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100';
+      : 'open-riding-action-btn open-riding-group-member-avatar-btn inline-flex shrink-0 rounded-full overflow-hidden ring-1 ring-indigo-300/90 bg-slate-100';
     return (
       <button
         type="button"
@@ -10875,7 +10875,7 @@ function OpenRidingGroupDetailView(props) {
                       {photo ? (
                         renderGroupDetailClickableAvatar(photo, nm)
                       ) : (
-                        <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
+                        <span className="open-riding-group-member-avatar-fallback inline-flex shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
                           {initial}
                         </span>
                       )}
@@ -10998,7 +10998,7 @@ function OpenRidingGroupDetailView(props) {
                         {photo ? (
                           renderGroupDetailClickableAvatar(photo, nm)
                         ) : (
-                          <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-amber-50 to-slate-100 text-[10px] font-bold text-amber-900">
+                          <span className="open-riding-group-member-avatar-fallback inline-flex shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-amber-50 to-slate-100 text-[10px] font-bold text-amber-900">
                             {initial}
                           </span>
                         )}
