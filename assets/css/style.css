@@ -1881,6 +1881,7 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 }
 
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-row {
+  --open-riding-group-member-avatar-size: 36px;
   border-bottom: 1px solid #f3f4f6;
 }
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-row:last-child {
@@ -2078,7 +2079,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   max-width: calc(100vw - max(20px, env(safe-area-inset-left, 0px)) - max(20px, env(safe-area-inset-right, 0px)));
 }
 
-#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-action-btn {
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-action-btn:not(.open-riding-group-member-avatar-btn) {
   pointer-events: auto;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -2466,7 +2467,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   width: auto;
 }
 /* 클럽 상세: 아바타 클릭 확대 */
-#openRidingRoomScreen button.open-riding-group-member-avatar-btn {
+#openRidingRoomScreen .open-riding-group-member-rank-list button.open-riding-group-member-avatar-btn.open-riding-action-btn {
   padding: 0;
   margin: 0;
   border: none;
@@ -2478,12 +2479,34 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   touch-action: manipulation;
   line-height: 0;
   box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  width: var(--open-riding-group-member-avatar-size, 36px);
+  height: var(--open-riding-group-member-avatar-size, 36px);
+  max-width: var(--open-riding-group-member-avatar-size, 36px);
+  max-height: var(--open-riding-group-member-avatar-size, 36px);
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  align-self: center;
+}
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-member-avatar-fallback {
+  width: var(--open-riding-group-member-avatar-size, 36px);
+  height: var(--open-riding-group-member-avatar-size, 36px);
+  min-width: var(--open-riding-group-member-avatar-size, 36px);
+  min-height: var(--open-riding-group-member-avatar-size, 36px);
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  align-self: center;
 }
 #openRidingRoomScreen button.open-riding-group-member-avatar-btn .stelvio-rank-avatar-img {
   width: 100%;
   height: 100%;
   display: block;
   object-fit: cover;
+  border-radius: 50%;
+  aspect-ratio: 1;
 }
 #openRidingRoomScreen button.open-riding-group-detail-avatar-btn.stelvio-rank-avatar-btn {
   width: 4rem;
