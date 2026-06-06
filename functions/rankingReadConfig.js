@@ -176,6 +176,26 @@ async function shouldReadRankingFromSupabase(admin, requestFirebaseUid) {
 }
 
 /**
+ * Supabase Read 모드일 때 onUserLogWritten 의 Firebase 증분 rollup
+ * (ranking_day_totals · peak_28d · personal_speed_28d) 을 생략할지 판단.
+ * 설정 조회 실패 시 fail-open — Firebase Read 사용자 랭킹 누락 방지.
+ * @param {import('firebase-admin')} admin
+ * @param {string|null|undefined} userId
+ */
+async function shouldBypassFirebaseIncrementalRankingRollup(admin, userId) {
+  try {
+    const route = await shouldReadRankingFromSupabase(admin, userId);
+    return route.route === "supabase";
+  } catch (err) {
+    console.warn(
+      "[rankingReadConfig] shouldBypassFirebaseIncrementalRankingRollup fail-open:",
+      err && err.message ? err.message : err
+    );
+    return false;
+  }
+}
+
+/**
  * 관리자 UI — appConfig/supabase_read_routing 갱신 (랭킹·집계 Read DB 전환).
  * @param {import('firebase-admin')} admin
  * @param {{ useSupabaseGlobal: boolean, parityFallbackToFirebase?: boolean, updatedBy?: string }} patch
@@ -254,6 +274,7 @@ module.exports = {
   refreshRankingReadConfig,
   getRankingReadConfig,
   shouldReadRankingFromSupabase,
+  shouldBypassFirebaseIncrementalRankingRollup,
   isFirebaseRankingReadAllowed,
   safeIsFirebaseRankingReadAllowed,
   parseUidList,

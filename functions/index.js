@@ -11137,7 +11137,23 @@ exports.onUserLogWritten = functions
 
     const affectsRanking = rankingDayRollup.userLogWriteAffectsRankingAggregates(change);
 
+    let bypassFirebaseIncrementalRollup = false;
     if (affectsRanking) {
+      try {
+        bypassFirebaseIncrementalRollup =
+          await rankingReadConfig.shouldBypassFirebaseIncrementalRankingRollup(admin, userId);
+      } catch (eRollupGate) {
+        console.warn(
+          "[onUserLogWritten] incremental rollup bypass gate failed; running Firebase rollup:",
+          userId,
+          logId,
+          eRollupGate && eRollupGate.message ? eRollupGate.message : eRollupGate
+        );
+        bypassFirebaseIncrementalRollup = false;
+      }
+    }
+
+    if (affectsRanking && !bypassFirebaseIncrementalRollup) {
       try {
         await rankingDayRollup.reconcileRankingDayTotalsOnLogWrite(db, userId, userData, change);
       } catch (e) {
