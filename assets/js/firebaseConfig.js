@@ -148,3 +148,34 @@ console.log("🔥 [Firebase Config] window.SESSION_ID:", window.SESSION_ID);
     supabaseOver && typeof supabaseOver === 'object' ? supabaseOver : {}
   );
 })();
+
+/* GPS 위치 추적 — Supabase/Firestore 스위치 (USE_SUPABASE_FOR_TRACKING) */
+(function () {
+  var trackingDefaults = {
+    useSupabaseForTracking: false,
+    batchIntervalMs: 45000,
+    maxBufferSize: 120,
+    geolocationOptions: {
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 15000,
+    },
+    supabaseRequestTimeoutMs: 20000,
+  };
+  var trackingOver =
+    typeof window !== 'undefined' && window.__STELVIO_TRACKING__;
+  window.STELVIO_TRACKING_CONFIG = Object.assign(
+    {},
+    trackingDefaults,
+    trackingOver && typeof trackingOver === 'object' ? trackingOver : {}
+  );
+  window.stelvioParseTrackingBool = function (raw, fallback) {
+    if (raw === true || raw === 1) return true;
+    if (raw === false || raw === 0) return false;
+    if (raw == null || raw === '') return fallback;
+    var s = String(raw).trim().toLowerCase();
+    if (s === 'true' || s === '1' || s === 'yes' || s === 'on') return true;
+    if (s === 'false' || s === '0' || s === 'no' || s === 'off') return false;
+    return fallback;
+  };
+})();
