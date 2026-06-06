@@ -262,6 +262,57 @@ function bucketRef(db, userId, ymd) {
   return db.collection("users").doc(userId).collection(coll).doc(ymd);
 }
 
+/** onUserLogWritten Guard — reconcileUserRankingDayBucket·rollup과 동일 신호 필드 */
+const RANKING_LOG_SIGNAL_FIELDS = [
+  "date",
+  "source",
+  "activity_type",
+  "tss",
+  "distance_km",
+  "distance",
+  "weight",
+  "max_hr",
+  "max_hr_5sec",
+  "max_heartrate",
+  ...Object.values(DURATION_FIELDS),
+  ...Object.values(DURATION_HR_FIELDS),
+];
+
+function normRankingLogField(v) {
+  if (v === undefined || v === null || v === "") return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") return v.trim();
+  return v;
+}
+
+function rankingLogSignalEqual(before, after) {
+  const b = before || {};
+  const a = after || {};
+  for (let i = 0; i < RANKING_LOG_SIGNAL_FIELDS.length; i++) {
+    const f = RANKING_LOG_SIGNAL_FIELDS[i];
+    if (normRankingLogField(b[f]) !== normRankingLogField(a[f])) return false;
+  }
+  return true;
+}
+
+/**
+ * 로그 write가 일별 랭킹·Peak28d·personal_speed rollup에 영향을 주는지 판별.
+ * - 생성/삭제: 항상 true
+ * - tss_applied·tss_applied_at 등 메타만 변경: false
+ * @param {FirebaseFirestore.Change<FirebaseFirestore.DocumentSnapshot>} change
+ */
+function userLogWriteAffectsRankingAggregates(change) {
+  if (!change) return false;
+  const beforeExists = change.before && change.before.exists;
+  const afterExists = change.after && change.after.exists;
+  if (!beforeExists && afterExists) return true;
+  if (beforeExists && !afterExists) return true;
+  if (!beforeExists && !afterExists) return false;
+  const before = change.before.data() || {};
+  const after = change.after.data() || {};
+  return !rankingLogSignalEqual(before, after);
+}
+
 /**
  * 해당 일(day) 사용자 로그만 읽어 일 버킹 문서 재작성(삭제/수정 포함 정확 재현).
  */
@@ -1547,6 +1598,8 @@ exports.peak28dRollupNeedsInvalidate = peak28dRollupNeedsInvalidate;
 exports.snapshotUserMetaForPeakRollup = snapshotUserMetaForPeakRollup;
 exports.rebuildPeak28dRollupsChunk = rebuildPeak28dRollupsChunk;
 exports.reconcileRankingDayTotalsOnLogWrite = reconcileRankingDayTotalsOnLogWrite;
+exports.userLogWriteAffectsRankingAggregates = userLogWriteAffectsRankingAggregates;
+exports.rankingLogSignalEqual = rankingLogSignalEqual;
 exports.reconcileUserRankingDayBucket = reconcileUserRankingDayBucket;
 exports.ensureRankingBucketsFilledForRange = ensureRankingBucketsFilledForRange;
 exports.listInclusiveYmdsSeoul = listInclusiveYmdsSeoul;

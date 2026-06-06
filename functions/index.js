@@ -11134,15 +11134,22 @@ exports.onUserLogWritten = functions
     const userSnap = await db.collection("users").doc(userId).get();
     if (!userSnap.exists) return;
     const userData = userSnap.data();
-    try {
-      await rankingDayRollup.reconcileRankingDayTotalsOnLogWrite(db, userId, userData, change);
-    } catch (e) {
-      console.warn("[onUserLogWritten] ranking_day_totals 버킹 실패:", userId, logId, e.message);
+
+    const affectsRanking = rankingDayRollup.userLogWriteAffectsRankingAggregates(change);
+
+    if (affectsRanking) {
+      try {
+        await rankingDayRollup.reconcileRankingDayTotalsOnLogWrite(db, userId, userData, change);
+      } catch (e) {
+        console.warn("[onUserLogWritten] ranking_day_totals 버킹 실패:", userId, logId, e.message);
+      }
     }
+
     const snap = change.after;
     if (!snap || !snap.exists) return;
     const logData = snap.data();
-    if (String(logData.source || "").toLowerCase() === "strava") {
+
+    if (affectsRanking && String(logData.source || "").toLowerCase() === "strava") {
       try {
         await supabaseDualWriteServer.runSecondaryAfterStravaLogSave(
           admin,
@@ -11155,15 +11162,25 @@ exports.onUserLogWritten = functions
         console.warn("[onUserLogWritten] Strava Supabase rides 동기화 실패:", userId, logId, e.message);
       }
     }
-    try {
-      await upsertYearlyPeakFromLog(db, userId, userData, logData, logId);
-    } catch (e) {
-      console.warn("[onUserLogWritten] upsertYearlyPeakFromLog 실패:", userId, logId, e.message);
+
+    if (affectsRanking) {
+      try {
+        await upsertYearlyPeakFromLog(db, userId, userData, logData, logId);
+      } catch (e) {
+        console.warn("[onUserLogWritten] upsertYearlyPeakFromLog 실패:", userId, logId, e.message);
+      }
     }
-    try {
-      await syncOpenRidingParticipantDistanceByLog(db, userId, logData);
-    } catch (e) {
-      console.warn("[onUserLogWritten] syncOpenRidingParticipantDistanceByLog 실패:", userId, logId, e.message);
+
+    if (
+      affectsRanking &&
+      String(logData.source || "").toLowerCase() === "strava" &&
+      isCyclingForMmp(logData)
+    ) {
+      try {
+        await syncOpenRidingParticipantDistanceByLog(db, userId, logData);
+      } catch (e) {
+        console.warn("[onUserLogWritten] syncOpenRidingParticipantDistanceByLog 실패:", userId, logId, e.message);
+      }
     }
   });
 
