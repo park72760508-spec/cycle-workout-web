@@ -258,9 +258,12 @@ async function invokeStravaSupabaseSecondary(userId, logDocId, trainingLog) {
 /**
  * 스트라바 활동 저장 (Firebase Firestore)
  * Subcollection 구조: users/{userId}/logs/{logId}
- * 확장된 필드 구조로 저장 (Target Schema 기반)
+ * @param {object} activity
+ * @param {{ markTssApplied?: boolean }} [options] — true면 최초 저장 시 tss_applied 포함(별도 update Commit 방지)
  */
-async function saveStravaActivityToFirebase(activity) {
+async function saveStravaActivityToFirebase(activity, options) {
+  options = options || {};
+  const markTssApplied = options.markTssApplied === true;
   try {
     console.log('[saveStravaActivityToFirebase] 저장 시작:', activity);
     
@@ -382,8 +385,9 @@ async function saveStravaActivityToFirebase(activity) {
       earned_points: Number(activity.earned_points || 0),
       workout_id: activity.workout_id || null,
       
-      // TSS 포인트 적립 여부 추적 (중복 적립 방지)
-      tss_applied: false,
+      // TSS 포인트 적립 여부 추적 (중복 적립 방지) — markTssApplied 시 1회 저장에 포함
+      tss_applied: markTssApplied,
+      ...(markTssApplied ? { tss_applied_at: new Date().toISOString() } : {}),
       created_at: activity.created_at || new Date().toISOString()
     };
     
@@ -577,6 +581,10 @@ async function markStravaActivityTssApplied(userId, activityId) {
     }
     
     const doc = querySnapshot.docs[0];
+    const existing = doc.data() || {};
+    if (existing.tss_applied === true) {
+      return { success: true, skipped: true };
+    }
     await doc.ref.update({
       tss_applied: true,
       tss_applied_at: new Date().toISOString()

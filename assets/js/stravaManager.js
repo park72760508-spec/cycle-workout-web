@@ -791,7 +791,9 @@ async function fetchAndProcessStravaData(options = {}) {
               tss: mappedActivity.tss
             });
             
-            const saveResult = await window.saveStravaActivityToFirebase(mappedActivity);
+            const saveResult = await window.saveStravaActivityToFirebase(mappedActivity, {
+              markTssApplied: true
+            });
 
             console.log(`[fetchAndProcessStravaData] 저장 결과:`, saveResult);
 
@@ -816,16 +818,6 @@ async function fetchAndProcessStravaData(options = {}) {
               if (shouldAccumulateTss) {
                 totalTss += activityTss;
                 console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 및 TSS 누적: ${actId} (TSS: ${activityTss}, 날짜: ${dateStr}, 거리: ${distanceKm}km, 생성일: ${userCreatedDate || '미설정'})`);
-                
-                // TSS 적립 완료 표시
-                if (typeof window.markStravaActivityTssApplied === 'function') {
-                  try {
-                    await window.markStravaActivityTssApplied(userId, actId);
-                  } catch (markError) {
-                    console.warn(`[fetchAndProcessStravaData] TSS 적립 표시 실패 (${actId}):`, markError);
-                    // 표시 실패해도 계속 진행
-                  }
-                }
               } else {
                 if (!isAfterCreatedDate) {
                   console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - 가입일 이전): ${actId} (${dateStr} < ${userCreatedDate})`);
@@ -838,14 +830,6 @@ async function fetchAndProcessStravaData(options = {}) {
                   console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS는 차액 적립 대상으로 합산): ${actId} (${dateStr})`);
                 } else if (isStravaSource && distanceKm === 0) {
                   console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - source가 'strava'이고 distance_km이 0): ${actId} (거리: ${distanceKm}km)`);
-                }
-                // TSS를 적립하지 않으므로 tss_applied를 true로 표시 (중복 체크 방지)
-                if (typeof window.markStravaActivityTssApplied === 'function') {
-                  try {
-                    await window.markStravaActivityTssApplied(userId, actId);
-                  } catch (markError) {
-                    console.warn(`[fetchAndProcessStravaData] TSS 적립 표시 실패 (${actId}):`, markError);
-                  }
                 }
               }
             } else {
