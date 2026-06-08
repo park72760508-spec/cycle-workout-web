@@ -280,6 +280,7 @@ function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
     earned_points: int(log.earned_points, 0),
     avg_hr: int(log.avg_hr, 0) || null,
     max_hr: int(log.max_hr, 0) || null,
+    max_hr_5sec: int(log.max_hr_5sec, 0) || null,
     avg_cadence: int(log.avg_cadence, 0) || null,
     efficiency_factor: num(log.efficiency_factor),
     rpe: int(log.rpe, 0) || null,
