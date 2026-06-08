@@ -8,6 +8,23 @@ import {
   sendAlimtalkUnified,
 } from "./aligoAlimtalkUnified";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const supabaseIndoorWriteServer = require("../supabaseIndoorWriteServer.js") as {
+  refreshIndoorWriteFromRemoteConfig: (
+    adminApp: typeof admin,
+    force?: boolean
+  ) => Promise<unknown>;
+  evaluateIndoorSupabasePrimary: (uid: string) => { usePrimary: boolean };
+  mirrorPointHistoryFromFirestoreDoc: (
+    uid: string,
+    doc: Record<string, unknown>
+  ) => Promise<void>;
+  syncUserPoints: (
+    uid: string,
+    patch: Record<string, unknown>
+  ) => Promise<void>;
+};
+
 /** Strava 웹훅 등 VPC 비적용 진입점에서 미션 알림만 NAT 고정 출구 HTTPS 릴레이로 전달할 때 사용 */
 export interface PointRewardMissionAlimVpcRelay {
   url: string;
@@ -299,6 +316,25 @@ export class PointRewardService {
     private readonly opts?: PointRewardServiceOptions
   ) {}
 
+  private async mirrorIndoorRewardToSupabaseIfEnabled(
+    userId: string,
+    pointDoc: Record<string, unknown>,
+    userPatch?: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      await supabaseIndoorWriteServer.refreshIndoorWriteFromRemoteConfig(admin, true);
+      if (!supabaseIndoorWriteServer.evaluateIndoorSupabasePrimary(userId).usePrimary) {
+        return;
+      }
+      await supabaseIndoorWriteServer.mirrorPointHistoryFromFirestoreDoc(userId, pointDoc);
+      if (userPatch && Object.keys(userPatch).length > 0) {
+        await supabaseIndoorWriteServer.syncUserPoints(userId, userPatch);
+      }
+    } catch (err) {
+      console.warn("[PointReward] Supabase indoor mirror 실패:", userId, err);
+    }
+  }
+
   /**
    * 라이딩 미션 달성·구독 연장 알림톡(UH_2120 계열 tpl_code).
    * @see aligoAlimtalkUnified.ts
@@ -452,6 +488,31 @@ export class PointRewardService {
       };
     });
 
+    await this.mirrorIndoorRewardToSupabaseIfEnabled(
+      userId,
+      {
+        is_strava: isStrava,
+        source: isStrava ? "strava" : "indoor",
+        tss,
+        earned_points: txResult.result.earnedPoints,
+        points_before: txResult.result.pointsBefore,
+        points_after: txResult.result.pointsAfter,
+        points_used_for_subscription: txResult.result.pointsUsed,
+        subscription_threshold: SUBSCRIPTION_POINT_THRESHOLD,
+        extension_count: txResult.result.extensionCount,
+        extended_days: txResult.result.extendedDays,
+        expiry_date_before: txResult.result.expiryDateBefore || null,
+        expiry_date_after: txResult.result.expiryDateAfter || null,
+        firebase_log_id: txResult.result.historyId,
+      },
+      {
+        rem_points: txResult.result.pointsAfter,
+        acc_points: undefined,
+        expiry_date:
+          txResult.result.extendedDays > 0 ? txResult.result.expiryDateAfter : undefined,
+      }
+    );
+
     let alimtalkSent = false;
     let alimtalkSkip: string | null =
       txResult.result.extendedDays > 0 ? null : "no_subscription_extension";
@@ -543,30 +604,33 @@ export class PointRewardService {
 
     const historyDocId = `stelvio_mileage_${userId}_${trainingLogId}`.replace(/[/#]/g, "_");
     const pointHistoryRef = this.db.collection(POINT_HISTORY_COLLECTION).doc(historyDocId);
-    await pointHistoryRef.set(
-      {
-        user_id: userId,
-        source: "indoor",
-        is_strava: false,
-        client_mileage_from_stelvio_log: true,
-        users_training_log_id: trainingLogId,
-        tss,
-        earned_points: earnedPoints,
-        points_before: pointsBefore,
-        points_after: pointsAfter,
-        points_used_for_subscription: pointsUsed,
-        subscription_threshold: SUBSCRIPTION_POINT_THRESHOLD,
-        extension_count: extendedDays,
-        extended_days: extendedDays,
-        expiry_date_before: expiryDateBefore || null,
-        expiry_date_after: expiryDateAfter || null,
-        subscription_extended_days: extendedDays,
-        subscription_expiry_date_before: expiryDateBefore || null,
-        subscription_expiry_date_after: expiryDateAfter || null,
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const pointDoc = {
+      user_id: userId,
+      source: "indoor",
+      is_strava: false,
+      client_mileage_from_stelvio_log: true,
+      users_training_log_id: trainingLogId,
+      tss,
+      earned_points: earnedPoints,
+      points_before: pointsBefore,
+      points_after: pointsAfter,
+      points_used_for_subscription: pointsUsed,
+      subscription_threshold: SUBSCRIPTION_POINT_THRESHOLD,
+      extension_count: extendedDays,
+      extended_days: extendedDays,
+      expiry_date_before: expiryDateBefore || null,
+      expiry_date_after: expiryDateAfter || null,
+      subscription_extended_days: extendedDays,
+      subscription_expiry_date_before: expiryDateBefore || null,
+      subscription_expiry_date_after: expiryDateAfter || null,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await pointHistoryRef.set(pointDoc, { merge: true });
+
+    await this.mirrorIndoorRewardToSupabaseIfEnabled(userId, {
+      ...pointDoc,
+      firebase_log_id: trainingLogId,
+    });
 
     const alimtalkPayload: StelvioIndoorAlimtalkPayload | null =
       extendedDays > 0
