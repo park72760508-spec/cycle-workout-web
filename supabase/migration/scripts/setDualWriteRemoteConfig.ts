@@ -18,18 +18,26 @@ const root = resolve(__dirname, "..");
 loadDotenv({ path: join(root, ".env") });
 
 const KEY_STATUS = "dual_write_status";
+const KEY_INDOOR_STATUS = "indoor_write_status";
 const ALLOWED = new Set(["OFF", "SHADOW", "CANARY", "FULL"]);
 
 function parseArgs() {
   const dryRun = process.argv.includes("--dry-run");
   const statusArg = process.argv.find((a) => a.startsWith("--status="));
+  const indoorArg = process.argv.find((a) => a.startsWith("--indoor-status="));
   const status = String(statusArg?.split("=")[1] || "FULL")
     .trim()
     .toUpperCase();
+  const indoorStatus = indoorArg
+    ? String(indoorArg.split("=")[1] || "OFF").trim().toUpperCase()
+    : null;
   if (!ALLOWED.has(status)) {
     throw new Error(`--status must be one of ${[...ALLOWED].join(", ")}`);
   }
-  return { dryRun, status };
+  if (indoorStatus && !ALLOWED.has(indoorStatus)) {
+    throw new Error(`--indoor-status must be one of ${[...ALLOWED].join(", ")}`);
+  }
+  return { dryRun, status, indoorStatus };
 }
 
 function initFirebase() {
@@ -59,7 +67,7 @@ function readParamValue(
 }
 
 async function main() {
-  const { dryRun, status } = parseArgs();
+  const { dryRun, status, indoorStatus } = parseArgs();
   initFirebase();
   const rc = getRemoteConfig();
   const before = await rc.getTemplate();
@@ -67,7 +75,9 @@ async function main() {
 
   for (const key of [
     KEY_STATUS,
+    KEY_INDOOR_STATUS,
     "dual_write_canary_percent",
+    "indoor_write_canary_percent",
     "dual_write_shadow_uids",
   ]) {
     console.log(`[remote-config] ${key}=${readParamValue(before, key) ?? "(missing)"}`);
@@ -78,17 +88,30 @@ async function main() {
 
   console.log(`[remote-config] before ${KEY_STATUS}=${prev}`);
 
-  if (String(prev).toUpperCase() === status) {
-    console.log(`[remote-config] already ${status} — publish skipped`);
-    return;
-  }
-
+  let changed = String(prev).toUpperCase() !== status;
   if (!before.parameters) before.parameters = {};
+
   const existing = before.parameters[KEY_STATUS];
   before.parameters[KEY_STATUS] = {
     ...existing,
     defaultValue: { value: status },
   };
+
+  if (indoorStatus) {
+    const prevIndoor = readParamValue(before, KEY_INDOOR_STATUS) ?? "(missing)";
+    console.log(`[remote-config] before ${KEY_INDOOR_STATUS}=${prevIndoor}`);
+    if (String(prevIndoor).toUpperCase() !== indoorStatus) changed = true;
+    const existingIndoor = before.parameters[KEY_INDOOR_STATUS];
+    before.parameters[KEY_INDOOR_STATUS] = {
+      ...existingIndoor,
+      defaultValue: { value: indoorStatus },
+    };
+  }
+
+  if (!changed) {
+    console.log(`[remote-config] already target status — publish skipped`);
+    return;
+  }
 
   if (dryRun) {
     console.log(`[remote-config] dry-run — would publish ${KEY_STATUS}=${status}`);
