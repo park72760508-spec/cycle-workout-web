@@ -1,14 +1,14 @@
 /**
- * Cloud Functions — Firestore Primary 후 Supabase rides Secondary (Strangler Fig 1단계).
+ * Cloud Functions — Strava ingest Dual-Write (Phase 3: Supabase Primary Canary 지원).
  * Service Role로 RLS 우회 upsert (Webhook·배치 Strava 동기화용).
  *
  * Secret: SUPABASE_SERVICE_ROLE_KEY
  * Params: SUPABASE_URL, STELVIO_UID_NAMESPACE, STELVIO_UID_UUID_MODE
  *
- * @see docs/DUAL_RUN_REMOTE_CONFIG.md, assets/js/supabaseDualWrite.js
+ * @see docs/DUAL_RUN_REMOTE_CONFIG.md, functions/stravaDualWrite.js
  *
- * 쓰기(ingest): dual_write_status !== OFF → **전 사용자** Supabase rides upsert.
- * 읽기(랭킹): rankingReadConfig — SUPABASE_WHITELIST_UIDS / USE_SUPABASE_GLOBAL 만 적용.
+ * Phase 3 쓰기 순서: dual_write_status·canary_percent 로 Supabase Primary / Firestore Shadow 결정.
+ * 롤백: dual_write_status=OFF 또는 DUAL_WRITE_SUPABASE_PRIMARY=false
  */
 const { v5: uuidv5 } = require("uuid");
 const { defineSecret, defineString } = require("firebase-functions/params");
@@ -31,6 +31,9 @@ const REMOTE_CONFIG_KEY_CANARY_PERCENT = "dual_write_canary_percent";
 
 const DEFAULT_SHADOW_WHITELIST = ["Ys8GQZYyf3ZoEunSVGKnWNbtSkv2"];
 const DEFAULT_CANARY_PERCENT = 10;
+/** Phase 3-3: 이 비율 이상 CANARY 시 onUserLogWritten ④⑤ Supabase 트리거에 위임 */
+const DEFAULT_FIREBASE_SIDE_EFFECTS_OFF_CANARY_PERCENT = 50;
+const SHADOW_TTL_DAYS = 30;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -98,6 +101,112 @@ function isUidInCanaryPercent(firebaseUid, percent) {
   return hash % 100 < clamped;
 }
 
+function parseIngestBool(raw) {
+  if (raw === true || raw === 1) return true;
+  const s = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "on";
+}
+
+function isSupabasePrimaryIngestEnvDisabled() {
+  const raw = process.env.DUAL_WRITE_SUPABASE_PRIMARY;
+  if (raw == null || String(raw).trim() === "") return false;
+  return !parseIngestBool(raw);
+}
+
+function getFirebaseSideEffectsOffCanaryPercent() {
+  const raw = process.env.FIREBASE_LOG_SIDE_EFFECTS_OFF_CANARY_PERCENT;
+  if (raw != null && String(raw).trim() !== "") {
+    const n = Math.trunc(Number(raw));
+    if (Number.isFinite(n)) return Math.min(100, Math.max(0, n));
+  }
+  return DEFAULT_FIREBASE_SIDE_EFFECTS_OFF_CANARY_PERCENT;
+}
+
+function isFirestoreShadowWriteEnabled() {
+  if (parseIngestBool(process.env.FIRESTORE_SHADOW_WRITE) === false) return false;
+  if (String(process.env.FIRESTORE_SHADOW_WRITE || "").trim().toLowerCase() === "false") {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Phase 3 — Supabase Primary ingest 대상 UID (CANARY·SHADOW·FULL).
+ * OFF 이면 Firestore Primary(레거시) 유지.
+ */
+function evaluateSupabasePrimaryIngest(firebaseUid) {
+  if (isSupabasePrimaryIngestEnvDisabled()) {
+    return { usePrimary: false, reason: "DUAL_WRITE_SUPABASE_PRIMARY=false" };
+  }
+  if (process.env.SUPABASE_INGEST_DUAL_WRITE === "false") {
+    return { usePrimary: false, reason: "SUPABASE_INGEST_DUAL_WRITE=false" };
+  }
+
+  const status = dualRunCache.status;
+  const uid = String(firebaseUid || "").trim();
+
+  if (status === "OFF") {
+    return { usePrimary: false, reason: "dual_write_status=OFF" };
+  }
+  if (status === "FULL") {
+    return { usePrimary: true, reason: "dual_write_status=FULL", status };
+  }
+  if (status === "SHADOW") {
+    const inShadow =
+      dualRunCache.shadowUids.includes(uid) ||
+      DEFAULT_SHADOW_WHITELIST.includes(uid);
+    return {
+      usePrimary: inShadow,
+      reason: inShadow ? "dual_write_status=SHADOW(uid)" : "dual_write_status=SHADOW(skip)",
+      status,
+    };
+  }
+  if (status === "CANARY") {
+    const inCanary = isUidInCanaryPercent(uid, dualRunCache.canaryPercent);
+    return {
+      usePrimary: inCanary,
+      reason: inCanary
+        ? `dual_write_status=CANARY(${dualRunCache.canaryPercent}%)`
+        : `dual_write_status=CANARY(skip_${dualRunCache.canaryPercent}%)`,
+      status,
+      canaryPercent: dualRunCache.canaryPercent,
+    };
+  }
+
+  return { usePrimary: false, reason: `dual_write_status=${status || "unknown"}` };
+}
+
+/**
+ * onUserLogWritten ③ Supabase upsert 생략 — Primary 경로에서 이미 rides upsert 됨.
+ */
+function shouldSkipOnUserLogWrittenSupabaseUpsert(firebaseUid) {
+  return evaluateSupabasePrimaryIngest(firebaseUid).usePrimary === true;
+}
+
+/**
+ * onUserLogWritten ④⑤ 생략 — Supabase PG 트리거(yearly_peaks·open_ride)에 위임.
+ * CANARY ≥50% 또는 FULL/SHADOW(primary UID) 에서 Primary ingest 사용자만.
+ */
+function shouldSkipFirebaseLogSideEffects(firebaseUid) {
+  const primary = evaluateSupabasePrimaryIngest(firebaseUid);
+  if (!primary.usePrimary) return false;
+
+  const status = dualRunCache.status;
+  if (status === "FULL" || status === "SHADOW") return true;
+  if (status === "CANARY") {
+    return dualRunCache.canaryPercent >= getFirebaseSideEffectsOffCanaryPercent();
+  }
+  return false;
+}
+
+function getShadowTtlDays() {
+  const raw = process.env.FIRESTORE_SHADOW_TTL_DAYS;
+  const n = raw != null ? Math.trunc(Number(raw)) : SHADOW_TTL_DAYS;
+  return Number.isFinite(n) && n > 0 ? n : SHADOW_TTL_DAYS;
+}
+
 /**
  * Secondary **쓰기**(Strava·훈련 ingest) — 전 사용자 대상.
  * SHADOW/CANARY/FULL 은 “Secondary 기록 켜짐” 의미만 가지며, UID별 쓰기 제한은 하지 않음.
@@ -158,11 +267,20 @@ async function refreshDualRunFromRemoteConfig(admin, force = false) {
     return dualRunCache;
   }
 
-  const envStatus = parseDualWriteStatus(process.env.DUAL_WRITE_STATUS);
-  if (envStatus !== "OFF") {
+  const envRaw = process.env.DUAL_WRITE_STATUS;
+  const envStatus = parseDualWriteStatus(envRaw);
+  if (envRaw != null && String(envRaw).trim() !== "") {
     dualRunCache.status = envStatus;
+    const envCanary = Number(process.env.DUAL_WRITE_CANARY_PERCENT);
+    if (Number.isFinite(envCanary) && envCanary >= 0) {
+      dualRunCache.canaryPercent = Math.min(100, Math.trunc(envCanary));
+    }
     dualRunCache.lastFetchAt = now;
     console.log("[supabaseDualWriteServer] DUAL_WRITE_STATUS env", envStatus);
+    return dualRunCache;
+  }
+
+  if (!admin || !admin.remoteConfig) {
     return dualRunCache;
   }
 
@@ -484,8 +602,14 @@ module.exports = {
   mapTrainingLogToRideRow,
   resolveRideUserIdForFirebaseUid,
   evaluateSecondaryIngestWrite,
+  evaluateSupabasePrimaryIngest,
+  shouldSkipOnUserLogWrittenSupabaseUpsert,
+  shouldSkipFirebaseLogSideEffects,
+  isFirestoreShadowWriteEnabled,
+  getShadowTtlDays,
   evaluateSupabaseDualWrite,
   refreshDualRunFromRemoteConfig,
   resolveUserUuid,
   getSupabaseAdminClient,
+  isUidInCanaryPercent,
 };

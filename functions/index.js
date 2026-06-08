@@ -11166,7 +11166,17 @@ exports.onUserLogWritten = functions
     if (!snap || !snap.exists) return;
     const logData = snap.data();
 
-    if (affectsRanking && String(logData.source || "").toLowerCase() === "strava") {
+    await supabaseDualWriteServer.refreshDualRunFromRemoteConfig(admin, false);
+    const skipSupabaseUpsertOnTrigger =
+      supabaseDualWriteServer.shouldSkipOnUserLogWrittenSupabaseUpsert(userId);
+    const skipFirebaseLogSideEffects =
+      supabaseDualWriteServer.shouldSkipFirebaseLogSideEffects(userId);
+
+    if (
+      affectsRanking &&
+      String(logData.source || "").toLowerCase() === "strava" &&
+      !skipSupabaseUpsertOnTrigger
+    ) {
       try {
         await supabaseDualWriteServer.runSecondaryAfterStravaLogSave(
           admin,
@@ -11180,7 +11190,7 @@ exports.onUserLogWritten = functions
       }
     }
 
-    if (affectsRanking) {
+    if (affectsRanking && !skipFirebaseLogSideEffects) {
       try {
         await upsertYearlyPeakFromLog(db, userId, userData, logData, logId);
       } catch (e) {
@@ -11189,6 +11199,7 @@ exports.onUserLogWritten = functions
     }
 
     if (
+      !skipFirebaseLogSideEffects &&
       isOpenRidingParticipantStravaSyncEnabled() &&
       affectsRanking &&
       String(logData.source || "").toLowerCase() === "strava" &&
