@@ -32,6 +32,9 @@
     "remote-config:full": "tsx scripts/setDualWriteRemoteConfig.ts --status=FULL",
     "verify:phase5": "tsx scripts/verifyPhase5GoNoGo.ts",
     "verify:phase6": "tsx scripts/verifyPhase6GoNoGo.ts",
+    "verify:read-gap": "tsx scripts/verifyReadGapDiagnostic.ts",
+    "logs-read:enable": "tsx scripts/setLogsReadRouting.ts --enable",
+    "logs-read:disable": "tsx scripts/setLogsReadRouting.ts --disable",
     "archive:firestore-logs:dry": "tsx scripts/archiveFirestoreLogs30d.ts --dry-run",
     "archive:firestore-logs": "tsx scripts/archiveFirestoreLogs30d.ts --execute"
   },
