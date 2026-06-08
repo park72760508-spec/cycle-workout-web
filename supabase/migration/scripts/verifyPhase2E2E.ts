@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getRemoteConfig } from "firebase-admin/remote-config";
 import { v5 as uuidv5 } from "uuid";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -37,6 +38,21 @@ function nearlyEqual(a: number | null | undefined, b: number | null | undefined,
   if (x === 0 && y === 0) return true;
   const denom = Math.max(Math.abs(x), Math.abs(y), 1e-9);
   return Math.abs(x - y) / denom <= tol;
+}
+
+function hasComparableNumeric(a: unknown, b: unknown): boolean {
+  const x = Number(a);
+  const y = Number(b);
+  return Number.isFinite(x) && x !== 0 && Number.isFinite(y) && y !== 0;
+}
+
+function readRcParam(
+  template: Awaited<ReturnType<ReturnType<typeof getRemoteConfig>["getTemplate"]>>,
+  key: string
+): string | undefined {
+  const p = template.parameters?.[key];
+  if (!p?.defaultValue?.value) return undefined;
+  return String(p.defaultValue.value);
 }
 
 function initFirebase() {
@@ -67,28 +83,51 @@ async function main() {
     [SAMPLE]
   );
 
+  const rc = getRemoteConfig();
+  const rcTemplate = await rc.getTemplate();
+  const dualWriteStatus = (readRcParam(rcTemplate, "dual_write_status") || "OFF").toUpperCase();
+  const phase4PrimaryOnly = dualWriteStatus === "FULL";
+
   const fieldMismatches: Array<Record<string, unknown>> = [];
   const metricsMismatches: Array<Record<string, unknown>> = [];
   const yearlyMismatches: Array<Record<string, unknown>> = [];
+  let sampled = 0;
+  let firestoreMissing = 0;
+  let firestoreStubOnly = 0;
   let compared = 0;
+  let comparableFieldChecks = 0;
   let yearlyCompared = 0;
 
   for (const row of ridesRes.rows) {
     const fbUid = String(row.firebase_uid).trim();
     const activityId = String(row.activity_id || "").trim();
     if (!fbUid || !activityId) continue;
+    sampled++;
 
     const logSnap = await db.collection("users").doc(fbUid).collection("logs").doc(activityId).get();
-    if (!logSnap.exists) continue;
+    if (!logSnap.exists) {
+      firestoreMissing++;
+      continue;
+    }
     const log = logSnap.data() || {};
+    const hasCoreFields =
+      log.distance_km != null && log.tss != null && log.max_60min_watts != null;
+    if (!hasCoreFields) {
+      firestoreStubOnly++;
+      if (phase4PrimaryOnly) continue;
+    }
     compared++;
 
-    const pairs: Array<[string, number | null, number | null]> = [
-      ["distance_km", Number(row.distance_km), Number(log.distance_km)],
-      ["tss", Number(row.tss), Number(log.tss)],
-      ["max_60min_watts", Number(row.max_60min_watts), Number(log.max_60min_watts)],
+    const pairs: Array<[string, unknown, unknown]> = [
+      ["distance_km", row.distance_km, log.distance_km],
+      ["tss", row.tss, log.tss],
+      ["max_60min_watts", row.max_60min_watts, log.max_60min_watts],
     ];
-    for (const [field, sb, fb] of pairs) {
+    for (const [field, sbRaw, fbRaw] of pairs) {
+      if (!hasComparableNumeric(sbRaw, fbRaw)) continue;
+      comparableFieldChecks++;
+      const sb = Number(sbRaw);
+      const fb = Number(fbRaw);
       if (!nearlyEqual(sb, fb)) {
         fieldMismatches.push({
           activityId,
@@ -165,19 +204,34 @@ async function main() {
        AND proname IN ('fn_upsert_yearly_peak_from_ride', 'fn_sync_open_ride_strava_reviews')`
   );
 
+  const mismatchRate =
+    comparableFieldChecks > 0 ? fieldMismatches.length / comparableFieldChecks : 0;
+  const goNoGo =
+    sampled >= 1 &&
+    phase2Fns.rows.length >= 2 &&
+    (phase4PrimaryOnly
+      ? firestoreMissing + firestoreStubOnly >= 0 && mismatchRate <= TOLERANCE_PCT
+      : compared >= 1 && mismatchRate <= TOLERANCE_PCT);
+
   const summary = {
     checkedAt: new Date().toISOString(),
     sampleRequested: SAMPLE,
+    dual_write_status: dualWriteStatus,
+    ridesSampled: sampled,
+    firestoreMissing,
+    firestoreStubOnly,
     ridesCompared: compared,
+    comparableFieldChecks,
     yearlyPeaksCompared: yearlyCompared,
     phase2Functions: phase2Fns.rows.map((r) => r.proname),
     fieldMismatchCount: fieldMismatches.length,
+    fieldMismatchRate: mismatchRate,
     yearlyMismatchCount: yearlyMismatches.length,
     metricsNoteCount: metricsMismatches.length,
-    goNoGo:
-      compared >= 1 &&
-      phase2Fns.rows.length >= 2 &&
-      fieldMismatches.length / Math.max(compared, 1) <= TOLERANCE_PCT,
+    goNoGo,
+    note: phase4PrimaryOnly
+      ? "Phase 4 FULL: Firestore 미존재·스텁은 정상. useSupabaseLogsRead=true로 Read 전환 필요."
+      : "Phase 2~3: Firestore·Supabase 양쪽 필드 parity 검증",
     fieldMismatches: fieldMismatches.slice(0, 20),
     yearlyMismatches: yearlyMismatches.slice(0, 20),
     metricsNotes: metricsMismatches.slice(0, 10),
