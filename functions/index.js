@@ -6105,6 +6105,17 @@ async function getUserStravaDistanceKmForRideDate(db, userId, ymd, rideData) {
 }
 
 /**
+ * onUserLogWritten 오픈라이딩 Strava 거리 sync — Phase 1 기본 OFF (rides 복합 인덱스 오류·Supabase 이관 전).
+ * 활성화: OPEN_RIDING_PARTICIPANT_STRAVA_SYNC_ENABLED=1
+ */
+function isOpenRidingParticipantStravaSyncEnabled() {
+  const raw = process.env.OPEN_RIDING_PARTICIPANT_STRAVA_SYNC_ENABLED;
+  if (raw == null || String(raw).trim() === "") return false;
+  const s = String(raw).trim().toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "on";
+}
+
+/**
  * users/{uid}/logs 쓰기 시 오픈 라이딩 합산용 participantStravaReview 자동 동기화.
  * 앱 로그인/상세 진입 여부와 무관하게 서버(Admin SDK)에서 반영.
  */
@@ -11139,18 +11150,8 @@ exports.onUserLogWritten = functions
 
     let bypassFirebaseIncrementalRollup = false;
     if (affectsRanking) {
-      try {
-        bypassFirebaseIncrementalRollup =
-          await rankingReadConfig.shouldBypassFirebaseIncrementalRankingRollup(admin, userId);
-      } catch (eRollupGate) {
-        console.warn(
-          "[onUserLogWritten] incremental rollup bypass gate failed; running Firebase rollup:",
-          userId,
-          logId,
-          eRollupGate && eRollupGate.message ? eRollupGate.message : eRollupGate
-        );
-        bypassFirebaseIncrementalRollup = false;
-      }
+      bypassFirebaseIncrementalRollup =
+        await rankingReadConfig.shouldBypassFirebaseIncrementalRankingRollup(admin, userId);
     }
 
     if (affectsRanking && !bypassFirebaseIncrementalRollup) {
@@ -11188,6 +11189,7 @@ exports.onUserLogWritten = functions
     }
 
     if (
+      isOpenRidingParticipantStravaSyncEnabled() &&
       affectsRanking &&
       String(logData.source || "").toLowerCase() === "strava" &&
       isCyclingForMmp(logData)

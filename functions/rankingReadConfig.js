@@ -148,6 +148,19 @@ function isFirebaseRankingReadAllowed() {
   return parseBool(process.env.RANKING_READ_FORCE_FIREBASE) === true;
 }
 
+/**
+ * onUserLogWritten Firebase 증분 rollup(ranking_day_totals) 강제 실행.
+ * Phase 1 기본 OFF — 롤백 시 env=true 또는 useSupabaseGlobal=false.
+ */
+function isFirebaseIncrementalRankingRollupEnabled() {
+  return parseBool(process.env.FIREBASE_INCREMENTAL_RANKING_ROLLUP_ENABLED) === true;
+}
+
+/** Supabase Read cutover(100%) 시 per-log 라우팅 조회 없이 rollup 생략 가능 */
+function isSupabaseRankingReadCutover() {
+  return !safeIsFirebaseRankingReadAllowed();
+}
+
 /** 배포 버전 불일치·구버전 rankingReadConfig 대비 */
 function safeIsFirebaseRankingReadAllowed() {
   if (typeof isFirebaseRankingReadAllowed === "function") {
@@ -178,17 +191,48 @@ async function shouldReadRankingFromSupabase(admin, requestFirebaseUid) {
 /**
  * Supabase Read 모드일 때 onUserLogWritten 의 Firebase 증분 rollup
  * (ranking_day_totals · peak_28d · personal_speed_28d) 을 생략할지 판단.
- * 설정 조회 실패 시 fail-open — Firebase Read 사용자 랭킹 누락 방지.
+ *
+ * Phase 1 fail-closed: Supabase cutover 시 설정 조회 실패해도 rollup 생략(Commit 절감).
+ * 롤백: FIREBASE_INCREMENTAL_RANKING_ROLLUP_ENABLED=true 또는 useSupabaseGlobal=false.
+ *
  * @param {import('firebase-admin')} admin
  * @param {string|null|undefined} userId
  */
 async function shouldBypassFirebaseIncrementalRankingRollup(admin, userId) {
+  if (isFirebaseIncrementalRankingRollupEnabled()) {
+    return false;
+  }
+
+  let cfg;
+  try {
+    cfg = await refreshRankingReadConfig(admin, false);
+  } catch (err) {
+    const globalOn = cache.useSupabaseGlobal !== false;
+    if (!globalOn || safeIsFirebaseRankingReadAllowed()) {
+      console.warn(
+        "[rankingReadConfig] config load failed; running Firebase rollup:",
+        err && err.message ? err.message : err
+      );
+      return false;
+    }
+    console.warn(
+      "[rankingReadConfig] bypass gate fail-closed; skipping Firebase rollup:",
+      err && err.message ? err.message : err
+    );
+    return true;
+  }
+
+  // Phase 1 전면 bypass: useSupabaseGlobal=true (Phase 0 기본·롤백 시 false 로 해제)
+  if (cfg.useSupabaseGlobal) {
+    return true;
+  }
+
   try {
     const route = await shouldReadRankingFromSupabase(admin, userId);
     return route.route === "supabase";
   } catch (err) {
     console.warn(
-      "[rankingReadConfig] shouldBypassFirebaseIncrementalRankingRollup fail-open:",
+      "[rankingReadConfig] per-uid route failed; running Firebase rollup:",
       err && err.message ? err.message : err
     );
     return false;
@@ -260,11 +304,20 @@ async function getRankingReadRoutingDocMeta(admin) {
 
 function buildReadRoutingStatus(cfg, meta) {
   const useSupabaseGlobal = !!cfg.useSupabaseGlobal;
+  const rollupForced = isFirebaseIncrementalRankingRollupEnabled();
+  const cutover = isSupabaseRankingReadCutover();
   return {
     readSource: useSupabaseGlobal ? "supabase" : "firebase",
     useSupabaseGlobal,
     parityFallbackToFirebase: cfg.parityFallbackToFirebase === true,
     whitelistCount: Array.isArray(cfg.whitelistUids) ? cfg.whitelistUids.length : 0,
+    /** Phase 1: onUserLogWritten ranking_day_totals 증분 — bypassed | enabled | per_uid */
+    firebaseIncrementalRankingRollup: rollupForced
+      ? "enabled"
+      : useSupabaseGlobal
+        ? "bypassed"
+        : "per_uid",
+    rankingReadCutover: cutover,
     updatedAt: meta.updatedAt,
     updatedBy: meta.updatedBy,
   };
@@ -276,6 +329,8 @@ module.exports = {
   shouldReadRankingFromSupabase,
   shouldBypassFirebaseIncrementalRankingRollup,
   isFirebaseRankingReadAllowed,
+  isFirebaseIncrementalRankingRollupEnabled,
+  isSupabaseRankingReadCutover,
   safeIsFirebaseRankingReadAllowed,
   parseUidList,
   persistRankingReadRouting,

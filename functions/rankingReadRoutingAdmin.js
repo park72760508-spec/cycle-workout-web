@@ -38,7 +38,7 @@ async function handleAdminSupabaseReadRouting(admin, req, method, adminUid) {
       ...status,
       docPath: "appConfig/supabase_read_routing",
       note:
-        "랭킹·집계 Read Router(getPeakPowerRanking, getWeeklyRanking)만 전환됩니다. Firestore 직접 조회 화면은 변경되지 않습니다.",
+        "랭킹·집계 Read Router(getPeakPowerRanking, getWeeklyRanking)만 전환됩니다. Phase 1 rollup 롤백: appConfig useSupabaseGlobal=false, 또는 FIREBASE_INCREMENTAL_RANKING_ROLLUP_ENABLED=true.",
     };
   }
 
