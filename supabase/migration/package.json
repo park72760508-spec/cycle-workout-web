@@ -22,7 +22,11 @@
     "sync:user-gender:dry": "tsx scripts/syncUserGenderBackfill.ts --dry-run",
     "sync:user-gender:refresh": "tsx scripts/syncUserGenderBackfill.ts --refresh-mv",
     "rebuild:heptagon": "tsx scripts/rebuildHeptagonCohortRanks.ts",
-    "verify:rankings": "node ../../scripts/compare-ranking-firestore-supabase.mjs"
+    "verify:rankings": "node ../../scripts/compare-ranking-firestore-supabase.mjs",
+    "verify:phase2": "tsx scripts/verifyPhase2E2E.ts",
+    "verify:phase2:sample": "tsx scripts/verifyPhase2E2E.ts --sample=100",
+    "backfill:yearly-peaks": "tsx scripts/backfillYearlyPeaksFromRides.ts",
+    "backfill:yearly-peaks:dry": "tsx scripts/backfillYearlyPeaksFromRides.ts --dry-run"
   },
   "engines": {
     "node": ">=20"
