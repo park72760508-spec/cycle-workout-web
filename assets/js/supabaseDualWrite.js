@@ -6,6 +6,8 @@
 const REMOTE_CONFIG_KEY_STATUS = 'dual_write_status';
 const REMOTE_CONFIG_KEY_SHADOW_UIDS = 'dual_write_shadow_uids';
 const REMOTE_CONFIG_KEY_CANARY_PERCENT = 'dual_write_canary_percent';
+const REMOTE_CONFIG_KEY_INDOOR_STATUS = 'indoor_write_status';
+const REMOTE_CONFIG_KEY_INDOOR_CANARY = 'indoor_write_canary_percent';
 
 const DEFAULT_SHADOW_WHITELIST = ['Ys8GQZYyf3ZoEunSVGKnWNbtSkv2'];
 const DEFAULT_CANARY_PERCENT = 10;
@@ -15,6 +17,13 @@ const UID_NAMESPACE_DEFAULT = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 let dualRunCache = {
   status: 'OFF',
   shadowUids: DEFAULT_SHADOW_WHITELIST.slice(),
+  canaryPercent: DEFAULT_CANARY_PERCENT,
+  lastFetchAt: 0,
+};
+
+/** @type {{ status: string, canaryPercent: number, lastFetchAt: number }} */
+let indoorWriteCache = {
+  status: 'OFF',
   canaryPercent: DEFAULT_CANARY_PERCENT,
   lastFetchAt: 0,
 };
@@ -605,6 +614,118 @@ export async function runSecondaryAfterTrainingSave(
  */
 export async function runSecondaryAfterStravaSave(userId, logDocId, trainingLog) {
   return runSecondaryRideUpsert(userId, logDocId, trainingLog, 'strava');
+}
+
+export function evaluateIndoorPrimaryWrite(firebaseUid) {
+  const status = indoorWriteCache.status;
+  const uid = String(firebaseUid || '').trim();
+  if (status === 'OFF') {
+    return { usePrimary: false, reason: 'indoor_write_status=OFF' };
+  }
+  if (status === 'FULL') {
+    return { usePrimary: true, reason: 'indoor_write_status=FULL', status };
+  }
+  if (status === 'CANARY') {
+    const inCanary = isUidInCanaryPercent(uid, indoorWriteCache.canaryPercent);
+    return {
+      usePrimary: inCanary,
+      reason: inCanary
+        ? 'indoor_write_status=CANARY(' + indoorWriteCache.canaryPercent + '%)'
+        : 'indoor_write_status=CANARY(skip)',
+      status,
+    };
+  }
+  return { usePrimary: false, reason: 'indoor_write_status=' + status };
+}
+
+export async function refreshIndoorWriteFromRemoteConfig(force = false) {
+  const minInterval = 5 * 60 * 1000;
+  const now = Date.now();
+  if (!force && now - indoorWriteCache.lastFetchAt < minInterval) {
+    return indoorWriteCache;
+  }
+  try {
+    const appMod = await import(
+      'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'
+    );
+    const rcMod = await import(
+      'https://www.gstatic.com/firebasejs/10.14.1/firebase-remote-config.js'
+    );
+    const getApp = appMod.getApp;
+    const getRemoteConfig = rcMod.getRemoteConfig;
+    const fetchAndActivate = rcMod.fetchAndActivate;
+    const getValue = rcMod.getValue;
+    let app;
+    try {
+      app = getApp('authV9');
+    } catch (_) {
+      const apps = appMod.getApps && appMod.getApps();
+      app = apps && apps[0];
+    }
+    if (!app) return indoorWriteCache;
+    const rc = getRemoteConfig(app);
+    rc.settings.minimumFetchIntervalMillis = force ? 0 : 300000;
+    await fetchAndActivate(rc);
+    const status = parseDualWriteStatus(
+      getValue(rc, REMOTE_CONFIG_KEY_INDOOR_STATUS).asString()
+    );
+    let canaryPercent = getValue(rc, REMOTE_CONFIG_KEY_INDOOR_CANARY).asNumber();
+    if (!Number.isFinite(canaryPercent) || canaryPercent <= 0) {
+      canaryPercent = DEFAULT_CANARY_PERCENT;
+    }
+    indoorWriteCache = {
+      status,
+      canaryPercent: Math.min(100, Math.max(0, Math.trunc(canaryPercent))),
+      lastFetchAt: now,
+    };
+    console.log('[supabaseDualWrite] indoor Remote Config', indoorWriteCache);
+  } catch (err) {
+    console.warn('[supabaseDualWrite] indoor Remote Config fetch 실패:', err);
+  }
+  return indoorWriteCache;
+}
+
+/**
+ * Phase 5 — 실내 훈련 Supabase Primary (rides + users.points).
+ * point_history는 onIndoorLogCreatedReward → PointRewardService가 기록.
+ */
+export async function runPrimaryIndoorTrainingSave(userId, trainingData, txResult) {
+  const decision = evaluateIndoorPrimaryWrite(userId);
+  if (!decision.usePrimary) {
+    return { skipped: true, reason: decision.reason };
+  }
+  const logDocId = txResult && txResult.trainingLogId;
+  const log =
+    (txResult && txResult.trainingLogData) ||
+    buildFallbackLogFromTrainingData(trainingData, txResult);
+  await syncSupabaseSessionFromBridge();
+  const cfg = getConfig();
+  const row = await mapTrainingLogToRideRow(userId, logDocId, log, cfg.uidNamespace);
+  if (!row) {
+    return { skipped: true, reason: 'map failed' };
+  }
+  await writeRideToSupabase(row);
+
+  const supabase = await getSupabaseClient();
+  const userUuid = await resolveUserUuid(userId, cfg.uidNamespace);
+  const patch = {
+    rem_points: txResult.userUpdateData && txResult.userUpdateData.rem_points,
+    acc_points: txResult.userUpdateData && txResult.userUpdateData.acc_points,
+    expiry_date:
+      txResult.userUpdateData && txResult.userUpdateData.expiry_date
+        ? String(txResult.userUpdateData.expiry_date).slice(0, 10)
+        : null,
+    last_training_date: log && log.date ? String(log.date).slice(0, 10) : null,
+  };
+  const { error } = await supabase.from('users').update(patch).eq('id', userUuid);
+  if (error) throw error;
+  console.log('[supabaseDualWrite] indoor primary OK', {
+    userId,
+    userUuid,
+    activity_id: row.activity_id,
+    reason: decision.reason,
+  });
+  return { skipped: false, reason: decision.reason, activity_id: row.activity_id };
 }
 
 function buildFallbackLogFromTrainingData(trainingData, txResult) {

@@ -701,10 +701,16 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
 
     try {
       const dualMod = await import('./supabaseDualWrite.js');
-      await dualMod.runSecondaryAfterTrainingSave(userId, trainingData, result);
+      await dualMod.refreshIndoorWriteFromRemoteConfig(true);
+      const indoorPrimary = dualMod.evaluateIndoorPrimaryWrite(userId).usePrimary;
+      if (indoorPrimary) {
+        await dualMod.runPrimaryIndoorTrainingSave(userId, trainingData, result);
+      } else {
+        await dualMod.runSecondaryAfterTrainingSave(userId, trainingData, result);
+      }
     } catch (dualErr) {
       console.warn(
-        '[saveTrainingSession] Supabase secondary (Primary 유지):',
+        '[saveTrainingSession] Supabase indoor write:',
         dualErr && dualErr.message ? dualErr.message : dualErr
       );
     }
