@@ -555,13 +555,84 @@
     });
   }
 
-  /** 슬라이더 0 = 흰색, 1–360 = 색상(HSL) */
+  /** 흰색 → 다채 색상 → 검정 (슬라이더 0–360과 동일 스톱) */
+  var OVERLAY_COLOR_STOPS = [
+    { t: 0, color: '#FFFFFF' },
+    { t: 0.12, color: '#FF3B30' },
+    { t: 0.24, color: '#FF9500' },
+    { t: 0.36, color: '#FFCC00' },
+    { t: 0.48, color: '#34C759' },
+    { t: 0.6, color: '#007AFF' },
+    { t: 0.72, color: '#AF52DE' },
+    { t: 0.86, color: '#FF2D55' },
+    { t: 1, color: '#1A1A1A' },
+  ];
+
+  function hexToRgb(hex) {
+    var h = String(hex || '').replace('#', '');
+    if (h.length === 3) {
+      h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+    }
+    return {
+      r: parseInt(h.slice(0, 2), 16) || 0,
+      g: parseInt(h.slice(2, 4), 16) || 0,
+      b: parseInt(h.slice(4, 6), 16) || 0,
+    };
+  }
+
+  function rgbToHex(r, g, b) {
+    function part(v) {
+      var s = Math.max(0, Math.min(255, Math.round(v))).toString(16);
+      return s.length < 2 ? '0' + s : s;
+    }
+    return '#' + part(r) + part(g) + part(b);
+  }
+
+  function lerpHexColor(c1, c2, f) {
+    var a = hexToRgb(c1);
+    var b = hexToRgb(c2);
+    return rgbToHex(a.r + (b.r - a.r) * f, a.g + (b.g - a.g) * f, a.b + (b.b - a.b) * f);
+  }
+
+  /** 슬라이더 0 = 흰색, 1–360 = 다채 그라데이션 색상 */
   function overlayColorFromHue(hue) {
-    var h = Math.round(Number(hue) || 0);
-    while (h < 0) h += 360;
-    h = h % 360;
+    var h = Math.max(0, Math.min(360, Number(hue) || 0));
     if (h === 0) return '#FFFFFF';
-    return 'hsl(' + h + ', 78%, 94%)';
+    var t = h / 360;
+    var i;
+    for (i = 1; i < OVERLAY_COLOR_STOPS.length; i++) {
+      if (t <= OVERLAY_COLOR_STOPS[i].t) {
+        var t0 = OVERLAY_COLOR_STOPS[i - 1].t;
+        var t1 = OVERLAY_COLOR_STOPS[i].t;
+        var f = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+        return lerpHexColor(OVERLAY_COLOR_STOPS[i - 1].color, OVERLAY_COLOR_STOPS[i].color, f);
+      }
+    }
+    return OVERLAY_COLOR_STOPS[OVERLAY_COLOR_STOPS.length - 1].color;
+  }
+
+  function overlayStrokeColorForFill(fillColor) {
+    var c = String(fillColor || '').toLowerCase();
+    if (!c || c === '#ffffff' || c === '#fff') return null;
+    var rgb = hexToRgb(c);
+    var lum = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+    if (lum < 0.35) return '#F8FAFC';
+    return '#0A0A0A';
+  }
+
+  function buildTintedSilhouette(img, fillColor) {
+    var w = img.naturalWidth || img.width;
+    var h = img.naturalHeight || img.height;
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = fillColor || '#FFFFFF';
+    ctx.fillRect(0, 0, w, h);
+    return canvas;
   }
 
   function tintImageToColor(img, color) {
@@ -570,16 +641,49 @@
     if (!(w > 0 && h > 0)) {
       return Promise.reject(new Error('이미지 크기를 알 수 없습니다.'));
     }
-    var canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    var ctx = canvas.getContext('2d');
+    var fillColor = color || '#FFFFFF';
+    var strokeColor = overlayStrokeColorForFill(fillColor);
+    var fillLayer = buildTintedSilhouette(img, fillColor);
+    if (!fillLayer) return Promise.reject(new Error('Canvas 2D unavailable'));
+
+    var out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    var ctx = out.getContext('2d');
     if (!ctx) return Promise.reject(new Error('Canvas 2D unavailable'));
-    ctx.drawImage(img, 0, 0, w, h);
-    ctx.globalCompositeOperation = 'source-in';
-    ctx.fillStyle = color || '#FFFFFF';
-    ctx.fillRect(0, 0, w, h);
-    return canvasToPngBlob(canvas);
+
+    if (strokeColor) {
+      var strokeLayer = buildTintedSilhouette(img, strokeColor);
+      var strokeW = Math.max(2, Math.round(Math.min(w, h) * 0.0028));
+      var ring2 = Math.max(strokeW + 1, Math.round(strokeW * 1.55));
+      var dirs = [];
+      var a;
+      for (a = 0; a < 16; a++) {
+        var ang = (a / 16) * Math.PI * 2;
+        dirs.push([Math.round(Math.cos(ang) * strokeW), Math.round(Math.sin(ang) * strokeW)]);
+      }
+      for (a = 0; a < 8; a++) {
+        var ang2 = (a / 8) * Math.PI * 2 + Math.PI / 8;
+        dirs.push([Math.round(Math.cos(ang2) * ring2), Math.round(Math.sin(ang2) * ring2)]);
+      }
+      var di;
+      for (di = 0; di < dirs.length; di++) {
+        ctx.drawImage(strokeLayer, dirs[di][0], dirs[di][1]);
+      }
+    }
+
+    ctx.drawImage(fillLayer, 0, 0);
+
+    if (strokeColor) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.shadowColor = fillColor;
+      ctx.shadowBlur = Math.max(3, Math.round(Math.min(w, h) * 0.004));
+      ctx.drawImage(fillLayer, 0, 0);
+      ctx.restore();
+    }
+
+    return canvasToPngBlob(out);
   }
 
   function tintPngBlob(blob, color) {

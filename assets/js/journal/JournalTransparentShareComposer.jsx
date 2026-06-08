@@ -178,7 +178,7 @@
 
     useEffect(
       function () {
-        if (loading || !shareApi || typeof shareApi.tintPngBlob !== 'function') return;
+        if (!shareApi || typeof shareApi.tintPngBlob !== 'function') return;
         var headerBlob = rawHeaderBlobRef.current;
         var bottomBlob = rawBottomBlobRef.current;
         if (!headerBlob || !bottomBlob) return;
@@ -199,6 +199,11 @@
           setOverlayBottomUrl(bUrl);
         }
 
+        if (overlayHue === DEFAULT_OVERLAY_HUE) {
+          applyUrls(headerBlob, bottomBlob);
+          return;
+        }
+
         Promise.all([
           shareApi.tintPngBlob(headerBlob, color),
           shareApi.tintPngBlob(bottomBlob, color),
@@ -210,6 +215,12 @@
       },
       [overlayHue]
     );
+
+    var overlayPickColor =
+      shareApi && typeof shareApi.overlayColorFromHue === 'function'
+        ? shareApi.overlayColorFromHue(overlayHue)
+        : '#FFFFFF';
+    var overlayColored = overlayHue > DEFAULT_OVERLAY_HUE;
 
     useEffect(
       function () {
@@ -459,7 +470,8 @@
         ref: imgRef,
         className:
           'journal-share-composer-overlay-img journal-share-composer-overlay-img--' + kind +
-          (bgUrl ? '' : ' is-dimmed'),
+          (bgUrl ? '' : ' is-dimmed') +
+          (overlayColored ? ' is-colored' : ''),
         src: url,
         alt: kind === 'header' ? '상단 오버레이' : '하단 오버레이',
         draggable: false,
@@ -469,6 +481,7 @@
           left: pos.x + 'px',
           top: pos.y + 'px',
           touchAction: 'none',
+          '--overlay-pick-color': overlayPickColor,
         },
         onLoad: function () {
           onStickerLoad(kind);
@@ -567,18 +580,18 @@
               onClick: placeOverlayDefault,
             }, '위치 초기화')
           ),
-          R.createElement('div', { className: 'journal-share-composer-scale-row journal-share-composer-color-row' },
+          R.createElement('div', {
+            className: 'journal-share-composer-scale-row journal-share-composer-color-row',
+            style: { '--overlay-pick-color': overlayPickColor },
+          },
             R.createElement('span', { className: 'journal-share-composer-scale-label' }, '색상'),
             R.createElement('span', {
               className: 'journal-share-composer-color-swatch',
-              style: {
-                background:
-                  shareApi && typeof shareApi.overlayColorFromHue === 'function'
-                    ? shareApi.overlayColorFromHue(overlayHue)
-                    : '#FFFFFF',
-              },
+              style: { '--overlay-pick-color': overlayPickColor },
               'aria-hidden': 'true',
-            }),
+            },
+              R.createElement('span', { className: 'journal-share-composer-color-swatch-core' })
+            ),
             R.createElement('input', {
               type: 'range',
               min: String(MIN_OVERLAY_HUE),
@@ -586,6 +599,9 @@
               value: overlayHue,
               disabled: !bgUrl,
               className: 'journal-share-composer-range journal-share-composer-range--hue',
+              onInput: function (e) {
+                setOverlayHue(Number(e.target.value));
+              },
               onChange: function (e) {
                 setOverlayHue(Number(e.target.value));
               },
@@ -601,7 +617,7 @@
           )
         ),
         R.createElement('p', { className: 'journal-share-composer-hint' },
-          '배경 선택 후 상단·하단 오버레이를 각각 드래그해 맞추세요. 크기·색상은 두 영역에 같이 적용됩니다.'
+          '배경 선택 후 오버레이를 드래그해 맞추세요. 색상 슬라이더는 흰색에서 다채 색상으로 변하며, 아래 미리보기·저장 이미지에 테두리 효과와 함께 적용됩니다.'
         ),
         loading
           ? R.createElement('div', { className: 'journal-share-composer-loading' }, '라이딩 오버레이 준비 중…')
