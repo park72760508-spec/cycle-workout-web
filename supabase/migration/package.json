@@ -30,7 +30,10 @@
     "verify:phase4": "tsx scripts/verifyPhase4GoNoGo.ts",
     "monitor:firestore-commits": "tsx scripts/monitorFirestoreCommits.ts",
     "remote-config:full": "tsx scripts/setDualWriteRemoteConfig.ts --status=FULL",
-    "verify:phase5": "tsx scripts/verifyPhase5GoNoGo.ts"
+    "verify:phase5": "tsx scripts/verifyPhase5GoNoGo.ts",
+    "verify:phase6": "tsx scripts/verifyPhase6GoNoGo.ts",
+    "archive:firestore-logs:dry": "tsx scripts/archiveFirestoreLogs30d.ts --dry-run",
+    "archive:firestore-logs": "tsx scripts/archiveFirestoreLogs30d.ts --execute"
   },
   "engines": {
     "node": ">=20"
