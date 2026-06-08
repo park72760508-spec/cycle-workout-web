@@ -26,7 +26,10 @@
     "verify:phase2": "tsx scripts/verifyPhase2E2E.ts",
     "verify:phase2:sample": "tsx scripts/verifyPhase2E2E.ts --sample=100",
     "backfill:yearly-peaks": "tsx scripts/backfillYearlyPeaksFromRides.ts",
-    "backfill:yearly-peaks:dry": "tsx scripts/backfillYearlyPeaksFromRides.ts --dry-run"
+    "backfill:yearly-peaks:dry": "tsx scripts/backfillYearlyPeaksFromRides.ts --dry-run",
+    "verify:phase4": "tsx scripts/verifyPhase4GoNoGo.ts",
+    "monitor:firestore-commits": "tsx scripts/monitorFirestoreCommits.ts",
+    "remote-config:full": "tsx scripts/setDualWriteRemoteConfig.ts --status=FULL"
   },
   "engines": {
     "node": ">=20"
