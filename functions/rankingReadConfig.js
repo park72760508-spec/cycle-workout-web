@@ -10,9 +10,11 @@
  */
 const FIRESTORE_DOC_PATH = { collection: "appConfig", doc: "supabase_read_routing" };
 
-/** @type {{ useSupabaseGlobal: boolean, whitelistUids: string[], loadedAt: number }} */
+/** @type {{ useSupabaseGlobal: boolean, useSupabaseLogsRead: boolean, whitelistUids: string[], loadedAt: number }} */
 let cache = {
   useSupabaseGlobal: true,
+  /** Phase 6: 훈련 로그 Read — Supabase rides (기본 false, cutover 시 true) */
+  useSupabaseLogsRead: false,
   whitelistUids: [],
   /** Supabase Read 기본: parity 불일치 시 Firebase 전체 집계 폴백 금지(트래픽 폭주 방지) */
   parityFallbackToFirebase: false,
@@ -70,6 +72,7 @@ async function refreshRankingReadConfig(admin, force = false) {
 
   /** Firestore 문서 없을 때 기본 Supabase Read (관리자가 Firebase로 명시 전환 시에만 false) */
   let useSupabaseGlobal = true;
+  let useSupabaseLogsRead = false;
   let whitelistUids = [];
   let parityFallbackToFirebase = false;
 
@@ -90,6 +93,9 @@ async function refreshRankingReadConfig(admin, force = false) {
         const d = snap.data() || {};
         if (d.useSupabaseGlobal != null) {
           useSupabaseGlobal = parseBool(d.useSupabaseGlobal);
+        }
+        if (d.useSupabaseLogsRead != null) {
+          useSupabaseLogsRead = parseBool(d.useSupabaseLogsRead);
         }
         if (d.whitelistUids != null) {
           whitelistUids = parseUidList(d.whitelistUids);
@@ -118,8 +124,13 @@ async function refreshRankingReadConfig(admin, force = false) {
     parityFallbackToFirebase = false;
   }
 
+  if (process.env.USE_SUPABASE_LOGS_READ != null && String(process.env.USE_SUPABASE_LOGS_READ).trim() !== "") {
+    useSupabaseLogsRead = parseBool(process.env.USE_SUPABASE_LOGS_READ);
+  }
+
   cache = {
     useSupabaseGlobal,
+    useSupabaseLogsRead,
     whitelistUids,
     parityFallbackToFirebase,
     loadedAt: now,
@@ -130,6 +141,7 @@ async function refreshRankingReadConfig(admin, force = false) {
 function getRankingReadConfig() {
   return {
     useSupabaseGlobal: cache.useSupabaseGlobal,
+    useSupabaseLogsRead: cache.useSupabaseLogsRead === true,
     whitelistUids: cache.whitelistUids.slice(),
     /** true: 긴급 Canary 시에만 — 기본 false(Supabase Read 시 Firebase ranking_aggregates·집계 스캔 금지) */
     parityFallbackToFirebase: cache.parityFallbackToFirebase === true,
@@ -257,6 +269,9 @@ async function persistRankingReadRouting(admin, patch) {
     useSupabaseGlobal: !!patch.useSupabaseGlobal,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
+  if (patch.useSupabaseLogsRead != null) {
+    payload.useSupabaseLogsRead = !!patch.useSupabaseLogsRead;
+  }
   if (patch.updatedBy) {
     payload.updatedBy = String(patch.updatedBy).trim();
   }
@@ -309,6 +324,7 @@ function buildReadRoutingStatus(cfg, meta) {
   return {
     readSource: useSupabaseGlobal ? "supabase" : "firebase",
     useSupabaseGlobal,
+    useSupabaseLogsRead: cfg.useSupabaseLogsRead === true,
     parityFallbackToFirebase: cfg.parityFallbackToFirebase === true,
     whitelistCount: Array.isArray(cfg.whitelistUids) ? cfg.whitelistUids.length : 0,
     /** Phase 1: onUserLogWritten ranking_day_totals 증분 — bypassed | enabled | per_uid */

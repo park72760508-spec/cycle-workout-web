@@ -45,6 +45,7 @@ const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
 const rankingReadRoutingPublic = require("./rankingReadRoutingPublic");
 const groupReadRouter = require("./groupReadRouter");
 const groupReadRoutingPublic = require("./groupReadRoutingPublic");
+const logsReadRoutingPublic = require("./logsReadRoutingPublic");
 const groupDualWriteTriggers = require("./groupDualWriteTriggers");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
 const supabaseGroupReader = require("./supabaseGroupReader");
@@ -8812,6 +8813,34 @@ exports.getRankingBuildMetaPublic = onRequest(
       });
     } catch (e) {
       console.warn("[getRankingBuildMetaPublic]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * Phase 6 — 훈련 로그 Read DB (Firebase logs vs Supabase rides) 공개 조회.
+ */
+exports.getLogsReadRoutingPublic = onRequest(
+  { cors: true, timeoutSeconds: 15 },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+    res.set("Cache-Control", "public, max-age=60, s-maxage=60");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    try {
+      const payload = await logsReadRoutingPublic.getPublicLogsReadRouting(admin);
+      res.status(200).json(payload);
+    } catch (e) {
+      console.warn("[getLogsReadRoutingPublic]", e.message || e);
       res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }
