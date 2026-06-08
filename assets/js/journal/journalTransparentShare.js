@@ -555,6 +555,51 @@
     });
   }
 
+  /** 슬라이더 0 = 흰색, 1–360 = 색상(HSL) */
+  function overlayColorFromHue(hue) {
+    var h = Math.round(Number(hue) || 0);
+    while (h < 0) h += 360;
+    h = h % 360;
+    if (h === 0) return '#FFFFFF';
+    return 'hsl(' + h + ', 78%, 94%)';
+  }
+
+  function tintImageToColor(img, color) {
+    var w = img.naturalWidth || img.width;
+    var h = img.naturalHeight || img.height;
+    if (!(w > 0 && h > 0)) {
+      return Promise.reject(new Error('이미지 크기를 알 수 없습니다.'));
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return Promise.reject(new Error('Canvas 2D unavailable'));
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = color || '#FFFFFF';
+    ctx.fillRect(0, 0, w, h);
+    return canvasToPngBlob(canvas);
+  }
+
+  function tintPngBlob(blob, color) {
+    if (!blob) return Promise.reject(new Error('이미지가 없습니다.'));
+    var c = String(color || '#FFFFFF').trim();
+    if (!c || /^#fff(?:fff)?$/i.test(c)) return Promise.resolve(blob);
+    var url = URL.createObjectURL(blob);
+    return loadRasterImage(url)
+      .then(function (img) {
+        URL.revokeObjectURL(url);
+        return tintImageToColor(img, c);
+      })
+      .catch(function (e) {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (eRev) {}
+        throw e;
+      });
+  }
+
   function renderHeaderOverlayBlob(log, logs, logoImg) {
     var canvas = document.createElement('canvas');
     canvas.width = 1080;
@@ -2330,6 +2375,8 @@
     createOverlayPngBlobs: createOverlayPngBlobs,
     compositeShareToBlob: compositeShareToBlob,
     compositeShareDualToBlob: compositeShareDualToBlob,
+    overlayColorFromHue: overlayColorFromHue,
+    tintPngBlob: tintPngBlob,
     fitContainRect: fitContainRect,
     stickerDragBounds: stageDragBounds,
     requestSaveFileHandle: requestSaveFileHandle,

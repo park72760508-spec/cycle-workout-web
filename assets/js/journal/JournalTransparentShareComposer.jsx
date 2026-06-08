@@ -22,6 +22,9 @@
   var DEFAULT_SCALE = 1;
   var MIN_SCALE = 0.35;
   var MAX_SCALE = 1.6;
+  var DEFAULT_OVERLAY_HUE = 0;
+  var MIN_OVERLAY_HUE = 0;
+  var MAX_OVERLAY_HUE = 360;
 
   function loadImageFromUrl(url) {
     return new Promise(function (resolve, reject) {
@@ -83,6 +86,10 @@
     var scale = _scale[0];
     var setScale = _scale[1];
 
+    var _overlayHue = useState(DEFAULT_OVERLAY_HUE);
+    var overlayHue = _overlayHue[0];
+    var setOverlayHue = _overlayHue[1];
+
     var _posHeader = useState({ x: 24, y: 16 });
     var posHeader = _posHeader[0];
     var setPosHeader = _posHeader[1];
@@ -107,6 +114,9 @@
     var dragRef = useRef(null);
     var autoPickDoneRef = useRef(false);
     var pendingBlobRef = useRef(null);
+    var rawHeaderBlobRef = useRef(null);
+    var rawBottomBlobRef = useRef(null);
+    var tintGenRef = useRef(0);
 
     useEffect(function () {
       var prev = document.body.style.overflow;
@@ -135,6 +145,8 @@
         .createOverlayPngBlobs(log, props.opts || {})
         .then(function (result) {
           if (cancelled) return;
+          rawHeaderBlobRef.current = result.headerBlob;
+          rawBottomBlobRef.current = result.bottomBlob;
           setOverlayHeaderUrl(URL.createObjectURL(result.headerBlob));
           setOverlayBottomUrl(URL.createObjectURL(result.bottomBlob));
           setLoading(false);
@@ -163,6 +175,41 @@
         revokeUrl(bgUrlRef.current);
       };
     }, []);
+
+    useEffect(
+      function () {
+        if (loading || !shareApi || typeof shareApi.tintPngBlob !== 'function') return;
+        var headerBlob = rawHeaderBlobRef.current;
+        var bottomBlob = rawBottomBlobRef.current;
+        if (!headerBlob || !bottomBlob) return;
+
+        var gen = ++tintGenRef.current;
+        var color =
+          typeof shareApi.overlayColorFromHue === 'function'
+            ? shareApi.overlayColorFromHue(overlayHue)
+            : '#FFFFFF';
+
+        function applyUrls(hBlob, bBlob) {
+          if (gen !== tintGenRef.current) return;
+          revokeUrl(headerUrlRef.current);
+          revokeUrl(bottomUrlRef.current);
+          var hUrl = URL.createObjectURL(hBlob);
+          var bUrl = URL.createObjectURL(bBlob);
+          setOverlayHeaderUrl(hUrl);
+          setOverlayBottomUrl(bUrl);
+        }
+
+        Promise.all([
+          shareApi.tintPngBlob(headerBlob, color),
+          shareApi.tintPngBlob(bottomBlob, color),
+        ])
+          .then(function (blobs) {
+            applyUrls(blobs[0], blobs[1]);
+          })
+          .catch(function () {});
+      },
+      [overlayHue]
+    );
 
     useEffect(
       function () {
@@ -519,10 +566,42 @@
               disabled: !bgUrl,
               onClick: placeOverlayDefault,
             }, '위치 초기화')
+          ),
+          R.createElement('div', { className: 'journal-share-composer-scale-row journal-share-composer-color-row' },
+            R.createElement('span', { className: 'journal-share-composer-scale-label' }, '색상'),
+            R.createElement('span', {
+              className: 'journal-share-composer-color-swatch',
+              style: {
+                background:
+                  shareApi && typeof shareApi.overlayColorFromHue === 'function'
+                    ? shareApi.overlayColorFromHue(overlayHue)
+                    : '#FFFFFF',
+              },
+              'aria-hidden': 'true',
+            }),
+            R.createElement('input', {
+              type: 'range',
+              min: String(MIN_OVERLAY_HUE),
+              max: String(MAX_OVERLAY_HUE),
+              value: overlayHue,
+              disabled: !bgUrl,
+              className: 'journal-share-composer-range journal-share-composer-range--hue',
+              onChange: function (e) {
+                setOverlayHue(Number(e.target.value));
+              },
+            }),
+            R.createElement('button', {
+              type: 'button',
+              className: 'journal-share-composer-reset-btn',
+              disabled: !bgUrl || overlayHue === DEFAULT_OVERLAY_HUE,
+              onClick: function () {
+                setOverlayHue(DEFAULT_OVERLAY_HUE);
+              },
+            }, '흰색')
           )
         ),
         R.createElement('p', { className: 'journal-share-composer-hint' },
-          '배경 선택 후 상단·하단 오버레이를 각각 드래그해 맞추세요. 크기는 두 영역이 같이 조절됩니다.'
+          '배경 선택 후 상단·하단 오버레이를 각각 드래그해 맞추세요. 크기·색상은 두 영역에 같이 적용됩니다.'
         ),
         loading
           ? R.createElement('div', { className: 'journal-share-composer-loading' }, '라이딩 오버레이 준비 중…')
