@@ -1786,6 +1786,13 @@ async function getTotalTssForDate(db, userId, dateStr) {
       if (isStrava) strava += tss;
       else stelvio += tss;
     });
+    if (supabaseDualWriteServer.isPhase4FirestoreLogShadowStopped()) {
+      try {
+        strava = await supabaseDualWriteServer.fetchStravaTssSumForDate(userId, dateStr);
+      } catch (sbErr) {
+        console.warn("[getTotalTssForDate] supabase strava TSS 조회 실패:", dateStr, sbErr.message);
+      }
+    }
     return strava > 0 ? strava : stelvio;
   } catch (e) {
     console.warn("[getTotalTssForDate]", dateStr, e.message);
@@ -1826,6 +1833,14 @@ async function getExistingStravaActivityIds(db, userId) {
     const data = doc.data();
     if (data.activity_id) ids.add(String(data.activity_id));
   });
+  if (supabaseDualWriteServer.isPhase4FirestoreLogShadowStopped()) {
+    try {
+      const sbIds = await supabaseDualWriteServer.fetchStravaActivityIdsForUser(userId, cutoffStr);
+      sbIds.forEach((id) => ids.add(id));
+    } catch (sbErr) {
+      console.warn("[getExistingStravaActivityIds] supabase 조회 실패:", userId, sbErr.message);
+    }
+  }
   return ids;
 }
 
@@ -11132,12 +11147,9 @@ exports.getOvertakeAnalysis = onRequest(
   }
 );
 
-/** 사용자 로그 생성/갱신 시 연간 최고 기록(yearly_peaks) 업서트. 검증 실패 시 suspicious_power_records에 Pending 저장.
- *  1st gen 트리거 사용 (Eventarc 권한 이슈 회피) */
-exports.onUserLogWritten = functions
-  .runWith({ timeoutSeconds: 120, secrets: ["SUPABASE_SERVICE_ROLE_KEY"] })
-  .firestore.document("users/{userId}/logs/{logId}")
-  .onWrite(async (change, context) => {
+/** Phase 4-1: onUserLogWritten 비활성화 (기본). 롤백: ON_USER_LOG_WRITTEN_ENABLED=true 재배포.
+ *  onIndoorLogCreatedReward(Phase 5)는 별도 트리거로 유지. */
+const onUserLogWrittenHandler = async (change, context) => {
     const userId = context.params.userId;
     const logId = context.params.logId;
     if (!userId || !logId) return;
@@ -11211,7 +11223,18 @@ exports.onUserLogWritten = functions
         console.warn("[onUserLogWritten] syncOpenRidingParticipantDistanceByLog 실패:", userId, logId, e.message);
       }
     }
-  });
+};
+
+if (supabaseDualWriteServer.isOnUserLogWrittenEnabled()) {
+  exports.onUserLogWritten = functions
+    .runWith({ timeoutSeconds: 120, secrets: ["SUPABASE_SERVICE_ROLE_KEY"] })
+    .firestore.document("users/{userId}/logs/{logId}")
+    .onWrite(onUserLogWrittenHandler);
+} else {
+  console.log(
+    "[index] Phase 4: onUserLogWritten export skipped — rollback: ON_USER_LOG_WRITTEN_ENABLED=true"
+  );
+}
 
 /** 기존 로그에 사용자 현재 몸무게(weight) 일괄 적용. weight 필드가 없거나 사용자 몸무게로 갱신 */
 exports.backfillWeightToLogs = onRequest(

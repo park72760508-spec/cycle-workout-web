@@ -124,12 +124,39 @@ function getFirebaseSideEffectsOffCanaryPercent() {
   return DEFAULT_FIREBASE_SIDE_EFFECTS_OFF_CANARY_PERCENT;
 }
 
+/**
+ * Phase 4-2: FULL + Primary 성공 시 users/logs shadow 중단 (기본 ON).
+ * 롤백: FIRESTORE_SHADOW_WRITE=true
+ */
+function isPhase4FirestoreLogShadowStopped() {
+  if (parseIngestBool(process.env.FIRESTORE_SHADOW_WRITE) === true) return false;
+  const raw = process.env.PHASE4_STOP_FIRESTORE_LOG_SHADOW;
+  if (raw != null && String(raw).trim() !== "") {
+    return parseIngestBool(raw);
+  }
+  return true;
+}
+
 function isFirestoreShadowWriteEnabled() {
   if (parseIngestBool(process.env.FIRESTORE_SHADOW_WRITE) === false) return false;
   if (String(process.env.FIRESTORE_SHADOW_WRITE || "").trim().toLowerCase() === "false") {
     return false;
   }
+  if (
+    isPhase4FirestoreLogShadowStopped() &&
+    dualRunCache.status === "FULL"
+  ) {
+    return false;
+  }
   return true;
+}
+
+function isOnUserLogWrittenEnabled() {
+  const raw = process.env.ON_USER_LOG_WRITTEN_ENABLED;
+  if (raw != null && String(raw).trim() !== "") {
+    return parseIngestBool(raw);
+  }
+  return false;
 }
 
 /**
@@ -458,6 +485,64 @@ async function writeRideToSupabase(rideRow) {
   }
 }
 
+/** Phase 4 — shadow 중단 시 Strava activity_id 중복·TSS 조회용 */
+async function fetchStravaActivityIdsForUser(firebaseUid, sinceDateStr) {
+  const uidConfig = {
+    uidNamespace: String(uidNamespaceParam.value() || "").trim(),
+    uidMode: String(uidModeParam.value() || "v5").trim(),
+  };
+  const userId = resolveUserUuid(firebaseUid, uidConfig.uidNamespace, uidConfig.uidMode);
+  if (!userId) return new Set();
+
+  const supabase = getSupabaseAdminClient();
+  let query = supabase
+    .from("rides")
+    .select("activity_id")
+    .eq("user_id", userId)
+    .eq("source", "strava");
+  if (sinceDateStr) {
+    query = query.gte("ride_date", sinceDateStr);
+  }
+  const { data, error } = await query.limit(5000);
+  if (error) throw error;
+
+  const ids = new Set();
+  for (const row of data || []) {
+    const id = str(row.activity_id);
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+async function fetchStravaTssSumForDate(firebaseUid, dateStr) {
+  const uidConfig = {
+    uidNamespace: String(uidNamespaceParam.value() || "").trim(),
+    uidMode: String(uidModeParam.value() || "v5").trim(),
+  };
+  const userId = resolveUserUuid(firebaseUid, uidConfig.uidNamespace, uidConfig.uidMode);
+  if (!userId || !dateStr) return 0;
+
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("rides")
+    .select("tss, activity_type, distance_km")
+    .eq("user_id", userId)
+    .eq("source", "strava")
+    .eq("ride_date", dateStr);
+  if (error) throw error;
+
+  const excluded = new Set(["run", "swim", "walk", "trailrun", "weighttraining"]);
+  let sum = 0;
+  for (const row of data || []) {
+    const activityType = str(row.activity_type);
+    if (activityType && excluded.has(activityType.toLowerCase())) continue;
+    const dist = num(row.distance_km, 0) || 0;
+    if (dist <= 0) continue;
+    sum += num(row.tss, 0) || 0;
+  }
+  return sum;
+}
+
 function isSupabaseForeignKeyUserError(error) {
   if (!error) return false;
   const code = String(error.code || "");
@@ -606,10 +691,14 @@ module.exports = {
   shouldSkipOnUserLogWrittenSupabaseUpsert,
   shouldSkipFirebaseLogSideEffects,
   isFirestoreShadowWriteEnabled,
+  isPhase4FirestoreLogShadowStopped,
+  isOnUserLogWrittenEnabled,
   getShadowTtlDays,
   evaluateSupabaseDualWrite,
   refreshDualRunFromRemoteConfig,
   resolveUserUuid,
   getSupabaseAdminClient,
   isUidInCanaryPercent,
+  fetchStravaActivityIdsForUser,
+  fetchStravaTssSumForDate,
 };

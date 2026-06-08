@@ -103,6 +103,7 @@ async function dualWriteStravaActivityLog(
       userId,
       logDocId,
       reason: primaryDecision.reason,
+      phase4ShadowStopped: supabaseDualWriteServer.isPhase4FirestoreLogShadowStopped(),
     });
     return { supabasePrimary: true, shadowSkipped: true };
   }
