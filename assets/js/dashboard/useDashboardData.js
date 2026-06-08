@@ -396,14 +396,15 @@
         setLogsLoading(true);
         setLogsLoadError(null);
         try {
+          // Phase 6: getUserTrainingLogs → logsReadRouter(Supabase rides | Firestore logs)
           var raw = [];
-          if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
+          if (typeof window.getUserTrainingLogs === 'function') {
             try {
               raw = await window.getUserTrainingLogs(userProfile.id, { limit: 400 });
               raw = Array.isArray(raw) ? raw : [];
             } catch (e) { raw = []; }
           }
-          if (raw.length === 0 && window.firestore) {
+          if (raw.length === 0 && window.firestore && (!window.getLogsReadSourceSync || window.getLogsReadSourceSync() !== 'supabase')) {
             try {
               var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
               snap.docs.forEach(function(doc) {
