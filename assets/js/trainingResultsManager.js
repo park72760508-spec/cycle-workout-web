@@ -131,15 +131,55 @@ async function saveScheduleResultToFirebase(data) {
  * [users/{userId}/logs 중심] users/{userId}/logs 서브컬렉션에서 조회 후
  * 기존 training_results 스키마 형태로 매핑하여 반환 (호환성 유지).
  */
+function mapLogToTrainingResultItem(userId, logId, log) {
+  let dateStr = '';
+  if (log.date) {
+    if (typeof log.date === 'string') dateStr = log.date;
+    else if (log.date.toDate) dateStr = log.date.toDate().toISOString().split('T')[0];
+    else if (log.date instanceof Date) dateStr = log.date.toISOString().split('T')[0];
+  }
+  if (!dateStr) return null;
+  return {
+    id: logId,
+    user_id: userId,
+    started_at: dateStr,
+    completed_at: dateStr,
+    avg_power: log.avg_watts != null ? Number(log.avg_watts) : null,
+    np: log.weighted_watts != null ? Number(log.weighted_watts) : null,
+    tss: log.tss != null ? Number(log.tss) : 0,
+    duration_min: log.duration_sec != null ? Math.round(Number(log.duration_sec) / 60) : null,
+    hr_avg: log.avg_hr != null ? Number(log.avg_hr) : null,
+    notes: log.title || ''
+  };
+}
+
 async function getTrainingResultsFromFirebase(userId, startDate, endDate) {
   try {
-    if (!window.firestore) {
-      console.warn('[getTrainingResultsFromFirebase] Firestore가 초기화되지 않았습니다.');
-      return { success: false, error: 'Firestore not initialized', items: [] };
-    }
     if (!userId) {
       console.warn('[getTrainingResultsFromFirebase] userId가 없습니다.');
       return { success: true, items: [] };
+    }
+
+    if (typeof window.getUserTrainingLogs === 'function') {
+      try {
+        const logs = await window.getUserTrainingLogs(userId, { limit: 500 });
+        const items = [];
+        (logs || []).forEach(function (log) {
+          const item = mapLogToTrainingResultItem(userId, log.id, log);
+          if (!item) return;
+          if (startDate && item.started_at < startDate) return;
+          if (endDate && item.started_at > endDate) return;
+          items.push(item);
+        });
+        return { success: true, items, readBackend: window.getLogsReadSourceSync ? window.getLogsReadSourceSync() : 'router' };
+      } catch (routeErr) {
+        console.warn('[getTrainingResultsFromFirebase] getUserTrainingLogs 실패:', routeErr && routeErr.message);
+      }
+    }
+
+    if (!window.firestore) {
+      console.warn('[getTrainingResultsFromFirebase] Firestore가 초기화되지 않았습니다.');
+      return { success: false, error: 'Firestore not initialized', items: [] };
     }
 
     const userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
@@ -148,30 +188,11 @@ async function getTrainingResultsFromFirebase(userId, startDate, endDate) {
     const items = [];
     querySnapshot.docs.forEach(docSnap => {
       const log = docSnap.data();
-      let dateStr = '';
-      if (log.date) {
-        if (typeof log.date === 'string') dateStr = log.date;
-        else if (log.date.toDate) dateStr = log.date.toDate().toISOString().split('T')[0];
-        else if (log.date instanceof Date) dateStr = log.date.toISOString().split('T')[0];
-      }
-      if (!dateStr) return;
-
-      if (startDate && dateStr < startDate) return;
-      if (endDate && dateStr > endDate) return;
-
-      // 기존 training_results 스키마 형태로 매핑 (호환성)
-      items.push({
-        id: docSnap.id,
-        user_id: userId,
-        started_at: dateStr,
-        completed_at: dateStr,
-        avg_power: log.avg_watts != null ? Number(log.avg_watts) : null,
-        np: log.weighted_watts != null ? Number(log.weighted_watts) : null,
-        tss: log.tss != null ? Number(log.tss) : 0,
-        duration_min: log.duration_sec != null ? Math.round(Number(log.duration_sec) / 60) : null,
-        hr_avg: log.avg_hr != null ? Number(log.avg_hr) : null,
-        notes: log.title || ''
-      });
+      const item = mapLogToTrainingResultItem(userId, docSnap.id, log);
+      if (!item) return;
+      if (startDate && item.started_at < startDate) return;
+      if (endDate && item.started_at > endDate) return;
+      items.push(item);
     });
 
     return { success: true, items };

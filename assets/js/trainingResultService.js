@@ -773,7 +773,18 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
   if (!userId) {
     throw new Error('userId는 필수입니다.');
   }
-  
+
+  try {
+    const routerMod = await import('./logsReadRouter.js');
+    const useSupabase = await routerMod.shouldReadTrainingLogsFromSupabase();
+    if (useSupabase) {
+      const sbMod = await import('./supabaseRidesReadClient.js');
+      return await sbMod.getUserTrainingLogsFromSupabase(userId, options);
+    }
+  } catch (sbErr) {
+    console.warn('[getUserTrainingLogs] Supabase Read 실패 → Firestore 폴백:', sbErr && sbErr.message);
+  }
+
   const db = firestoreInstance || window.firestoreV9;
   if (!db) {
     throw new Error('Firestore 인스턴스가 없습니다. window.firestoreV9를 확인하세요.');
@@ -829,6 +840,17 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
 export async function getTrainingLogsByDateRange(userId, year, month, firestoreInstance = null) {
   if (!userId) {
     throw new Error('userId는 필수입니다.');
+  }
+
+  try {
+    const routerMod = await import('./logsReadRouter.js');
+    const useSupabase = await routerMod.shouldReadTrainingLogsFromSupabase();
+    if (useSupabase) {
+      const sbMod = await import('./supabaseRidesReadClient.js');
+      return await sbMod.getTrainingLogsByDateRangeFromSupabase(userId, year, month);
+    }
+  } catch (sbErr) {
+    console.warn('[getTrainingLogsByDateRange] Supabase Read 실패 → Firestore 폴백:', sbErr && sbErr.message);
   }
 
   const db = firestoreInstance || window.firestoreV9;

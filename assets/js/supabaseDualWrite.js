@@ -474,7 +474,7 @@ export async function fetchSupabaseSessionFromBridge(authBridgeUrl, firebaseIdTo
   return body.session;
 }
 
-async function getSupabaseClient() {
+export async function getSupabaseClient() {
   const cfg = getConfig();
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
     throw new Error(
