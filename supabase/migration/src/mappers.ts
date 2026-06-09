@@ -187,6 +187,7 @@ export function mapRideRow(
     max_30min_watts: num(d.max_30min_watts),
     max_40min_watts: num(d.max_40min_watts),
     max_60min_watts: num(d.max_60min_watts),
+    max_hr_5sec: int(d.max_hr_5sec, 0) || int(d.max_hr ?? d.max_heartrate, 0) || null,
     max_hr_1min: int(d.max_hr_1min, 0) || null,
     max_hr_5min: int(d.max_hr_5min, 0) || null,
     max_hr_10min: int(d.max_hr_10min, 0) || null,
