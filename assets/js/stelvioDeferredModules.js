@@ -224,6 +224,7 @@
   async function loadJournalBundle() {
     await waitForGlobal('Babel');
     await appendScript('assets/js/journal/stravaPolylineUtils.js');
+    await appendScript('assets/js/journal/enrichLogHrPeaks.js');
     await appendScript('assets/js/journal/journalTransparentShare.js');
     await appendScript('assets/js/journal/JournalTransparentShareComposer.jsx', 'text/babel');
     await appendScript('assets/js/journal/useJournalData.js');
