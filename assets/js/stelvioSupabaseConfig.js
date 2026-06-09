@@ -9,6 +9,8 @@
     supabaseAnonKey: 'sb_publishable_H4woEe6KlAnkz9jGoVbjOQ_cyUHk8v4',
     authBridgeUrl:
       'https://us-central1-stelvio-ai.cloudfunctions.net/mintSupabaseSessionHttp',
+    trainingLogsReadUrl:
+      'https://us-central1-stelvio-ai.cloudfunctions.net/getTrainingLogsForRead',
     provisionUserAfterProfileUrl:
       'https://us-central1-stelvio-ai.cloudfunctions.net/provisionSupabaseUserAfterProfileHttp',
     uidNamespace: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
