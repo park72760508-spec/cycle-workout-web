@@ -37,6 +37,7 @@ const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const stravaDualWrite = require("./stravaDualWrite");
 const stravaRouteMerge = require("./stravaRouteMerge");
+const stravaSyncRetry = require("./stravaSyncRetry");
 const rankingReadRouter = require("./rankingReadRouter");
 const rankingReadConfig = require("./rankingReadConfig");
 const supabaseRankingReader = require("./supabaseRankingReader");
@@ -1248,7 +1249,7 @@ async function fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, pag
   const url =
     `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}` +
     `&per_page=${perPage || 200}&page=${page || 1}`;
-  const maxRetries = 5;
+  const maxRetries = 8;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       if (attempt > 0) await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
@@ -2178,16 +2179,27 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     }
     if (page === 1) firstPageStatus = pageRes.status || 0;
     if (!pageRes.success) {
+      const failStatus = pageRes.status || 0;
       await recordStravaActivityFetchDiagnostic(db, userId, {
         afterUnix,
         beforeUnix,
         dateFrom,
         dateTo,
-        status: pageRes.status || 0,
+        status: failStatus,
         count: activities.length,
         pages: page,
         error: `활동 조회 실패: ${pageRes.status || pageRes.error}`,
       });
+      if (failStatus === 429) {
+        await stravaSyncRetry.markStravaSyncRetryPending(db, userId, {
+          dateFrom,
+          dateTo,
+          afterUnix,
+          beforeUnix,
+          reason: "429",
+          status: 429,
+        });
+      }
       return { userId, processed: 0, newActivities: 0, userTss: 0, error: `활동 조회 실패: ${pageRes.status || pageRes.error}` };
     }
     activities.push(...pageRes.activities);
@@ -2464,6 +2476,9 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       console.log(`[processOneUserStravaSync] 차액 추가 적립: ${userId} ${dateStr} Stelvio ${stelvioPoints} + Strava합 ${stravaSum} → 추가 ${diff}`);
     }
   }
+  await stravaSyncRetry.clearStravaSyncRetryPending(db, userId, {
+    count: newActivities,
+  });
   return { userId, processed: 1, newActivities, userTss, error: null };
 }
 
@@ -2493,8 +2508,9 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
     return;
   }
 
-  for (let i = 0; i < docs.length; i += STRAVA_SYNC_CONCURRENCY) {
-    const batch = docs.slice(i, i + STRAVA_SYNC_CONCURRENCY);
+  const concurrency = stravaSyncRetry.STRAVA_SYNC_CONCURRENCY_SAFE;
+  for (let i = 0; i < docs.length; i += concurrency) {
+    const batch = docs.slice(i, i + concurrency);
     const settled = await Promise.allSettled(
       batch.map((doc) => processOneUserStravaSync(db, doc.id, doc.data(), { afterUnix, beforeUnix, dateFrom, dateTo }))
     );
@@ -2514,6 +2530,9 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
       if (r.processed) processed += 1;
       newActivitiesTotal += r.newActivities || 0;
       if (r.userTss > 0) totalTssByUser[r.userId] = (totalTssByUser[r.userId] || 0) + r.userTss;
+    }
+    if (i + concurrency < docs.length) {
+      await new Promise((r) => setTimeout(r, stravaSyncRetry.STRAVA_USER_BATCH_DELAY_MS));
     }
   }
 
@@ -3337,9 +3356,11 @@ async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
     chunks.push(userIds.slice(i, i + STRAVA_SYNC_CHUNK_SIZE));
   }
   const { dateFrom, dateTo, afterUnix, beforeUnix } = range;
-  const results = await Promise.all(
-    chunks.map((userIdsChunk) =>
-      fetch(chunkUrl, {
+  const failed = [];
+  for (let ci = 0; ci < chunks.length; ci++) {
+    const userIdsChunk = chunks[ci];
+    try {
+      const res = await fetch(chunkUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -3352,14 +3373,19 @@ async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
           dateTo,
           userIds: userIdsChunk,
         }),
-      })
-    )
-  );
-  const failed = results.filter((r) => !r.ok);
-  if (failed.length) {
-    console.warn(`${logPrefix} 청크 실패 ${failed.length}/${chunks.length}`, failed.map((r) => r.status));
+      });
+      if (!res.ok) failed.push(res.status);
+    } catch (fetchErr) {
+      failed.push(fetchErr && fetchErr.message ? fetchErr.message : "fetch_error");
+    }
+    if (ci < chunks.length - 1) {
+      await new Promise((r) => setTimeout(r, stravaSyncRetry.STRAVA_CHUNK_FANOUT_DELAY_MS));
+    }
   }
-  console.log(`${logPrefix} 팬아웃 완료`, { chunks: chunks.length, totalUsers: userIds.length });
+  if (failed.length) {
+    console.warn(`${logPrefix} 청크 실패 ${failed.length}/${chunks.length}`, failed);
+  }
+  console.log(`${logPrefix} 팬아웃 완료(순차)`, { chunks: chunks.length, totalUsers: userIds.length });
 }
 
 /**
@@ -3575,6 +3601,131 @@ exports.backfillStravaRouteProfileForDate = onRequest(
         error: err && err.message ? err.message : String(err),
       });
     }
+  }
+);
+
+/**
+ * 429 등으로 실패한 Strava 동기화 재수집 (저동시성 순차).
+ * POST body/query: dateFrom, dateTo (YYYY-MM-DD, 기본=오늘 서울)
+ * 인증: X-Internal-Secret 또는 관리자(grade=1) Bearer
+ */
+const stravaSync429RetryOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  region: "asia-northeast3",
+  cors: false,
+  timeoutSeconds: 3600,
+  memory: "1GiB",
+});
+if (STRAVA_CLIENT_SECRET) {
+  stravaSync429RetryOptions.secrets = stravaSync429RetryOptions.secrets || [];
+  if (!stravaSync429RetryOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    stravaSync429RetryOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
+}
+
+async function runStrava429RetryJob(db, dateFrom, dateTo, logPrefix) {
+  const range = stravaSyncRetry.ymdRangeToUnix({ dateFrom, dateTo });
+  const userIds = await stravaSyncRetry.listUsersNeedingStravaSyncRetry(db, {
+    dateFrom: range.dateFrom,
+    dateTo: range.dateTo,
+    maxUsers: 500,
+  });
+  if (userIds.length === 0) {
+    console.log(`${logPrefix} 재시도 대상 없음`, range);
+    return { userIds: [], ok: 0, fail: 0, total: 0, results: [] };
+  }
+  return stravaSyncRetry.runStravaSyncRetrySequential(
+    db,
+    range,
+    userIds,
+    logPrefix,
+    processOneUserStravaSync
+  );
+}
+
+exports.runStravaSync429Retry = onRequest(stravaSync429RetryOptions, async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST only" });
+    return;
+  }
+  try {
+    const db = admin.firestore();
+    const rawSecret =
+      req.headers["x-internal-secret"] ||
+      req.headers["X-Internal-Secret"] ||
+      req.query.secret;
+    let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+    if (!authorized) {
+      const uid = await getUidFromRequest(req, res);
+      if (!uid) return;
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      if (grade !== "1") {
+        res.status(403).json({
+          success: false,
+          error: "관리자(grade=1) 또는 X-Internal-Secret 헤더가 필요합니다.",
+        });
+        return;
+      }
+      authorized = true;
+    }
+
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const today = getTodayAfterBefore();
+    const dateFrom = String(body.dateFrom || req.query.dateFrom || today.dateFrom).slice(0, 10);
+    const dateTo = String(body.dateTo || req.query.dateTo || dateFrom).slice(0, 10);
+    const summary = await runStrava429RetryJob(db, dateFrom, dateTo, "[runStravaSync429Retry]");
+    res.status(200).json({
+      success: true,
+      dateFrom,
+      dateTo,
+      retriedUsers: summary.total,
+      ok: summary.ok,
+      fail: summary.fail,
+      results: (summary.results || []).map((r) => ({
+        userId: r.userId,
+        newActivities: r.newActivities,
+        error: r.error || null,
+      })),
+    });
+  } catch (err) {
+    console.error("[runStravaSync429Retry]", err);
+    res.status(500).json({
+      success: false,
+      error: err && err.message ? err.message : String(err),
+    });
+  }
+});
+
+/** 429 실패 사용자 자동 재수집 — 매일 03:30·06:30·09:30(서울), 전날+당일 구간 */
+const stravaSync429RetryScheduleOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  schedule: "30 3,6,9 * * *",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 1800,
+  memory: "1GiB",
+});
+if (STRAVA_CLIENT_SECRET) {
+  stravaSync429RetryScheduleOptions.secrets =
+    stravaSync429RetryScheduleOptions.secrets || [];
+  if (!stravaSync429RetryScheduleOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    stravaSync429RetryScheduleOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
+}
+exports.stravaSync429RetrySchedule = onSchedule(
+  stravaSync429RetryScheduleOptions,
+  async () => {
+    const db = admin.firestore();
+    const yesterday = getYesterdayAfterBefore();
+    const today = getTodayAfterBefore();
+    console.log("[stravaSync429RetrySchedule] 시작", {
+      yesterday: yesterday.dateFrom,
+      today: today.dateFrom,
+    });
+    await runStrava429RetryJob(db, yesterday.dateFrom, yesterday.dateTo, "[stravaSync429RetrySchedule:yesterday]");
+    await runStrava429RetryJob(db, today.dateFrom, today.dateTo, "[stravaSync429RetrySchedule:today]");
   }
 );
 
@@ -12234,6 +12385,7 @@ exports.migrateStelvioLogActivityType = onRequest(
 
 // ---------- Strava Webhook 비동기 처리 (processStravaActivity는 lib에서 호출) ----------
 exports.processStravaActivity = processStravaActivity;
+exports.processOneUserStravaSync = processOneUserStravaSync;
 
 // ---------- VO₂max 연령·성별 Stelvio 실제 평균 집계 (샘플 기여 → 일별 롤링 통계) ----------
 const { rebuildVo2StelvioRollingStats } = require("./vo2DemographicStats");
