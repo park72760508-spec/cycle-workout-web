@@ -3,6 +3,7 @@
  *
  * Phase 1-2 (레거시): Firestore Primary → Supabase Secondary
  * Phase 3 (Canary):    Supabase Primary → Firestore Shadow (실패 시 Firestore fallback)
+ * Phase 4+: Strava ingest는 Supabase Primary 성공 시에도 Firestore users/logs 항상 기록 (Dual-Write)
  *
  * 롤백: dual_write_status=OFF 또는 DUAL_WRITE_SUPABASE_PRIMARY=false
  */
@@ -95,35 +96,36 @@ async function dualWriteStravaActivityLog(
     });
   }
 
+  // Strava: Phase 4 shadow 중단과 무관하게 users/{uid}/logs 항상 기록 (Dual-Write 계약)
   const shadowEnabled = supabaseDualWriteServer.isFirestoreShadowWriteEnabled();
-  const mustWriteFirestore = !supabaseOk || shadowEnabled;
 
-  if (!mustWriteFirestore) {
-    console.log("[stravaDualWrite] Supabase primary OK, Firestore shadow skipped", {
-      userId,
-      logDocId,
-      reason: primaryDecision.reason,
-      phase4ShadowStopped: supabaseDualWriteServer.isPhase4FirestoreLogShadowStopped(),
-    });
-    return { supabasePrimary: true, shadowSkipped: true };
+  if (!supabaseOk) {
+    Object.assign(
+      logDoc,
+      buildFirestoreShadowFields(admin, logDoc, {
+        supabasePrimaryOk: false,
+        fallback: true,
+      })
+    );
+  } else if (shadowEnabled) {
+    Object.assign(
+      logDoc,
+      buildFirestoreShadowFields(admin, logDoc, {
+        supabasePrimaryOk: true,
+        fallback: false,
+      })
+    );
   }
-
-  Object.assign(
-    logDoc,
-    buildFirestoreShadowFields(admin, logDoc, {
-      supabasePrimaryOk: supabaseOk,
-      fallback: !supabaseOk,
-    })
-  );
 
   try {
     const firestoreResult = await Promise.resolve().then(() => writePrimaryAsync());
-    console.log("[stravaDualWrite] Firestore shadow/fallback OK", {
+    console.log("[stravaDualWrite] Firestore mirror OK (Strava dual-write)", {
       userId,
       logDocId,
       supabasePrimaryOk: supabaseOk,
+      supabaseSkipped,
       fallback: !supabaseOk,
-      shadow: shadowEnabled && supabaseOk,
+      shadowMeta: shadowEnabled && supabaseOk,
       reason: primaryDecision.reason,
     });
     return firestoreResult;
