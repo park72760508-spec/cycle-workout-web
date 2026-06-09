@@ -92,7 +92,9 @@ export function mapRideRowToTrainingLog(row) {
     activity_type: row.activity_type || null,
     title: row.title || '',
     date: row.ride_date || '',
+    workout_id: row.workout_id || null,
     duration_sec: Number(row.duration_sec) || 0,
+    time: Number(row.duration_sec) || 0,
     distance_km: row.distance_km != null ? Number(row.distance_km) : null,
     elevation_gain:
       row.elevation_gain_m != null
@@ -101,9 +103,23 @@ export function mapRideRowToTrainingLog(row) {
           ? Number(row.elevation_gain)
           : null,
     avg_speed_kmh: row.avg_speed_kmh != null ? Number(row.avg_speed_kmh) : null,
+    weight:
+      row.weight_at_ride_kg != null
+        ? Number(row.weight_at_ride_kg)
+        : row.weight != null
+          ? Number(row.weight)
+          : null,
+    ftp_at_time: row.ftp_at_time != null ? Number(row.ftp_at_time) : null,
     avg_cadence: row.avg_cadence != null ? Number(row.avg_cadence) : null,
     avg_hr: row.avg_hr != null ? Number(row.avg_hr) : null,
     max_hr: row.max_hr != null ? Number(row.max_hr) : null,
+    max_hr_5sec: row.max_hr_5sec != null ? Number(row.max_hr_5sec) : null,
+    max_hr_1min: row.max_hr_1min != null ? Number(row.max_hr_1min) : null,
+    max_hr_5min: row.max_hr_5min != null ? Number(row.max_hr_5min) : null,
+    max_hr_10min: row.max_hr_10min != null ? Number(row.max_hr_10min) : null,
+    max_hr_20min: row.max_hr_20min != null ? Number(row.max_hr_20min) : null,
+    max_hr_40min: row.max_hr_40min != null ? Number(row.max_hr_40min) : null,
+    max_hr_60min: row.max_hr_60min != null ? Number(row.max_hr_60min) : null,
     avg_watts: row.avg_watts != null ? Number(row.avg_watts) : null,
     weighted_watts: row.weighted_watts != null ? Number(row.weighted_watts) : null,
     max_watts: row.max_watts != null ? Number(row.max_watts) : null,
@@ -111,6 +127,10 @@ export function mapRideRowToTrainingLog(row) {
     if: row.intensity_factor != null ? Number(row.intensity_factor) : null,
     kilojoules: row.kilojoules != null ? Number(row.kilojoules) : null,
     earned_points: row.earned_points != null ? Number(row.earned_points) : null,
+    efficiency_factor:
+      row.efficiency_factor != null ? Number(row.efficiency_factor) : null,
+    rpe: row.rpe != null ? Number(row.rpe) : null,
+    tss_applied: row.tss_applied === true,
     max_1min_watts: row.max_1min_watts != null ? Number(row.max_1min_watts) : null,
     max_5min_watts: row.max_5min_watts != null ? Number(row.max_5min_watts) : null,
     max_10min_watts: row.max_10min_watts != null ? Number(row.max_10min_watts) : null,
@@ -125,8 +145,9 @@ export function mapRideRowToTrainingLog(row) {
   };
 }
 
+/** Firestore users/logs 호환 — JournalDetail Heart Rate·Power Profile 필드 포함 */
 const RIDE_SELECT =
-  'activity_id, source, activity_type, title, ride_date, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, avg_cadence, avg_hr, max_hr, avg_watts, weighted_watts, max_watts, tss, intensity_factor, kilojoules, earned_points, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_30min_watts, max_40min_watts, max_60min_watts, summary_polyline, elevation_profile_json, route_profile_updated_at';
+  'activity_id, source, activity_type, title, ride_date, workout_id, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, weight_at_ride_kg, ftp_at_time, avg_cadence, avg_hr, max_hr, max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min, avg_watts, weighted_watts, max_watts, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_30min_watts, max_40min_watts, max_60min_watts, tss, intensity_factor, kilojoules, earned_points, efficiency_factor, rpe, tss_applied, summary_polyline, elevation_profile_json, route_profile_updated_at';
 
 export async function getUserTrainingLogsFromSupabase(userId, options = {}) {
   if (!userId) throw new Error('userId는 필수입니다.');
