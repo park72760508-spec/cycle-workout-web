@@ -211,7 +211,32 @@ async function fetchUserRideLogsForMonth(firebaseUid, year, month) {
     .order("ride_date", { ascending: true });
   if (error) throw error;
 
-  return (data || []).map((row) => ({
+  return mapRideRowsToTrainingLogs(data);
+}
+
+const RIDE_LOG_SELECT =
+  "activity_id, source, activity_type, title, ride_date, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, avg_cadence, avg_hr, max_hr, avg_watts, weighted_watts, max_watts, tss, intensity_factor, kilojoules, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_30min_watts, max_40min_watts, max_60min_watts, summary_polyline, elevation_profile_json, route_profile_updated_at";
+
+const STRAVA_EXCLUDED_ACTIVITY_TYPES = new Set([
+  "run",
+  "swim",
+  "walk",
+  "trailrun",
+  "weighttraining",
+]);
+
+function isRidingRideRow(row) {
+  const src = String((row && row.source) || "").toLowerCase();
+  if (src !== "strava") return true;
+  const act = String((row && row.activity_type) || "")
+    .trim()
+    .toLowerCase();
+  if (!act) return true;
+  return !STRAVA_EXCLUDED_ACTIVITY_TYPES.has(act);
+}
+
+function mapRideRowsToTrainingLogs(rows) {
+  return (rows || []).filter(isRidingRideRow).map((row) => ({
     id: row.activity_id || `${row.source || "ride"}:${row.ride_date || ""}`,
     activity_id: row.activity_id || null,
     source: row.source || "strava",
@@ -248,11 +273,40 @@ async function fetchUserRideLogsForMonth(firebaseUid, year, month) {
   }));
 }
 
+/**
+ * 훈련일지 달력 — 최근 N건 (Service Role, Auth Bridge 불필요).
+ * @param {string} firebaseUid
+ * @param {number} [limit=200]
+ */
+async function fetchUserRideLogsRecent(firebaseUid, limit = 200) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return [];
+  const uid = String(firebaseUid || "").trim();
+  if (!uid) return [];
+
+  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
+  const mode =
+    supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  const userUuid = supabaseDualWriteServer.resolveUserUuid(uid, ns, mode);
+  if (!userUuid) return [];
+
+  const cap = Math.min(1000, Math.max(1, Number(limit) || 200));
+  const { data, error } = await supabase
+    .from("rides")
+    .select(RIDE_LOG_SELECT)
+    .eq("user_id", userUuid)
+    .order("ride_date", { ascending: false })
+    .limit(cap);
+  if (error) throw error;
+  return mapRideRowsToTrainingLogs(data);
+}
+
 module.exports = {
   fetchOpenRideByFirestoreId,
   fetchOpenRidesInDateRange,
   fetchRidingGroupByFirestoreId,
   fetchApprovedRidingGroups,
   fetchUserRideLogsForMonth,
+  fetchUserRideLogsRecent,
   getUuidToFirebaseMap,
 };

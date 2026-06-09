@@ -8972,6 +8972,72 @@ exports.getOpenRidesInDateRangeForRead = onRequest(
 );
 
 /**
+ * 훈련일지 달력 Read — Supabase rides (Service Role relay, Auth Bridge 불필요).
+ * GET ?uid=&limit=200  또는  ?uid=&year=&month=
+ */
+exports.getTrainingLogsForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+
+    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
+    if (!requestedUid) {
+      res.status(400).json({ success: false, error: "uid 필요" });
+      return;
+    }
+
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 라이딩 로그만 조회할 수 있습니다." });
+      return;
+    }
+
+    const yearRaw = req.query.year;
+    const monthRaw = req.query.month;
+    const hasMonth =
+      yearRaw != null &&
+      String(yearRaw).trim() !== "" &&
+      monthRaw != null &&
+      String(monthRaw).trim() !== "";
+
+    try {
+      let logs;
+      if (hasMonth) {
+        logs = await supabaseGroupReader.fetchUserRideLogsForMonth(
+          requestedUid,
+          Number(yearRaw),
+          Number(monthRaw)
+        );
+      } else {
+        const limit = Number(req.query.limit) || 200;
+        logs = await supabaseGroupReader.fetchUserRideLogsRecent(requestedUid, limit);
+      }
+      res.status(200).json({
+        success: true,
+        logs,
+        readBackend: "supabase",
+        readSource: "supabase",
+        via: "service_role_relay",
+      });
+    } catch (e) {
+      console.warn("[getTrainingLogsForRead]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
  * 후기 전용 월별 라이딩 로그 Read — Firestore 훈련일지 반영 지연 시 Supabase rides에서 보강.
  * 요청자는 본인 로그만 조회 가능.
  */
