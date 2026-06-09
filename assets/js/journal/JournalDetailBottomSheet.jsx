@@ -109,6 +109,17 @@
     return c.replace('0.7)', '1)').replace('0.55)', '1)');
   }
 
+  /** max_hr_5sec 누락(Supabase 이전 데이터) 시 max_hr 폴백 */
+  function resolveMaxHr5Sec(log) {
+    if (typeof window.resolveMaxHr5Sec === 'function') {
+      return window.resolveMaxHr5Sec(log);
+    }
+    if (!log) return 0;
+    var v5 = Number(log.max_hr_5sec) || 0;
+    if (v5 > 0) return v5;
+    return Number(log.max_hr || log.max_heartrate) || 0;
+  }
+
   /**
    * Heart Rate 막대 PR: 구간 필드 PR 또는
    * 최대심박(max_hr) PR인데 5초 값이 최대심박과 동일한 경우 5초 막대에 PR 표시
@@ -118,7 +129,7 @@
     if (prFn(row.field)) return true;
     if (row.field !== 'max_hr_5sec' || !(row.val > 0)) return false;
     var maxHr = Number(log.max_hr) || 0;
-    var hr5 = Number(log.max_hr_5sec) || 0;
+    var hr5 = resolveMaxHr5Sec(log);
     if (maxHr <= 0 || hr5 <= 0) return false;
     if (Math.round(maxHr) !== Math.round(hr5)) return false;
     return prFn('max_hr');
@@ -166,7 +177,7 @@
       peakParts.join(','),
       log.avg_hr,
       log.max_hr,
-      log.max_hr_5sec,
+      resolveMaxHr5Sec(log),
       log.max_hr_1min,
       log.max_hr_5min,
       log.max_hr_10min,
@@ -391,7 +402,7 @@
       var ctx = chartRef.current && chartRef.current.getContext('2d');
       if (!ctx) return;
       var rows = [
-        { label: '5초', shortLabel: '5초', field: 'max_hr_5sec', val: Number(log.max_hr_5sec) || 0 },
+        { label: '5초', shortLabel: '5초', field: 'max_hr_5sec', val: resolveMaxHr5Sec(log) },
         { label: '1분', shortLabel: '1분', field: 'max_hr_1min', val: Number(log.max_hr_1min) || 0 },
         { label: '5분', shortLabel: '5분', field: 'max_hr_5min', val: Number(log.max_hr_5min) || 0 },
         { label: '10분', shortLabel: '10', field: 'max_hr_10min', val: Number(log.max_hr_10min) || 0 },
@@ -542,7 +553,7 @@
 
     if (!log) return null;
     var hv = [
-      Number(log.max_hr_5sec) || 0,
+      resolveMaxHr5Sec(log),
       Number(log.max_hr_1min) || 0,
       Number(log.max_hr_5min) || 0,
       Number(log.max_hr_10min) || 0,
@@ -618,7 +629,7 @@
         avg_hr: log.avg_hr,
         max_hr: log.max_hr,
         max_heartrate: log.max_heartrate,
-        max_hr_5sec: log.max_hr_5sec,
+        max_hr_5sec: resolveMaxHr5Sec(log) || log.max_hr_5sec,
         max_hr_1min: log.max_hr_1min,
         max_hr_5min: log.max_hr_5min,
         max_hr_10min: log.max_hr_10min,
@@ -670,7 +681,7 @@
       sumApSec += ap * s;
       sumHrSec += hr * s;
       maxHr = Math.max(maxHr, Number(l.max_hr || 0));
-      maxHr5 = Math.max(maxHr5, Number(l.max_hr_5sec || 0));
+      maxHr5 = Math.max(maxHr5, resolveMaxHr5Sec(l));
       maxHr1 = Math.max(maxHr1, Number(l.max_hr_1min || 0));
       maxHr5m = Math.max(maxHr5m, Number(l.max_hr_5min || 0));
       maxHr10 = Math.max(maxHr10, Number(l.max_hr_10min || 0));

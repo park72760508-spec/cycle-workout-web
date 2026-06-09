@@ -334,6 +334,35 @@
       [selectedDate, trainingLogs]
     );
 
+    var _enrichedLogsState = useState([]);
+    var enrichedLogsForSelectedDate = _enrichedLogsState[0];
+    var setEnrichedLogsForSelectedDate = _enrichedLogsState[1];
+
+    useEffect(function enrichHrPeaksForSelectedDate() {
+      if (!logsForSelectedDate.length) {
+        setEnrichedLogsForSelectedDate([]);
+        return;
+      }
+      setEnrichedLogsForSelectedDate(logsForSelectedDate);
+      var userId = getCurrentUserId();
+      var enrichFn = window.enrichLogsHrPeaksFromFirestore;
+      if (!userId || typeof enrichFn !== 'function') return;
+      var cancelled = false;
+      enrichFn(userId, logsForSelectedDate).then(function (enriched) {
+        if (!cancelled && enriched && enriched.length) {
+          setEnrichedLogsForSelectedDate(enriched);
+        }
+      }).catch(function () { /* keep raw copy */ });
+      return function () {
+        cancelled = true;
+      };
+    }, [logsForSelectedDate, selectedDate]);
+
+    var displayLogsForSelectedDate =
+      enrichedLogsForSelectedDate && enrichedLogsForSelectedDate.length
+        ? enrichedLogsForSelectedDate
+        : logsForSelectedDate;
+
     var dailyRouteDocForSelectedDate =
       dailyRouteDocDate === selectedDate ? dailyRouteDoc : null;
 
@@ -348,7 +377,7 @@
       return date + '-' + logs.length + '-' + ids.join(',');
     }
 
-    var journalSelectionKey = buildJournalSelectionKey(selectedDate, logsForSelectedDate);
+    var journalSelectionKey = buildJournalSelectionKey(selectedDate, displayLogsForSelectedDate);
 
     // 월간 로그 (해당 월 날짜들의 로그)
     var monthlyLogs = (function() {
@@ -398,7 +427,7 @@
       yearlyPeaksByYear: yearlyPeaksByYear,
       userWeightForPr: userWeightForPr,
       userProfile: userProfile,
-      logsForSelectedDate: logsForSelectedDate,
+      logsForSelectedDate: displayLogsForSelectedDate,
       dailyRouteDoc: dailyRouteDocForSelectedDate,
       journalSelectionKey: journalSelectionKey,
       monthlyLogs: monthlyLogs,
