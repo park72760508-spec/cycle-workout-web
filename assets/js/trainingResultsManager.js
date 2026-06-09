@@ -262,6 +262,86 @@ async function getStelvioLogDatesFromUserLogs(userId) {
 }
 
 /**
+ * Strava 저장용 Auth — authV9(compat) 모두 지원.
+ */
+function getStravaSaveAuthUser() {
+  if (typeof window.getCurrentUserForTrainingRooms === 'function') {
+    var fromHelper = window.getCurrentUserForTrainingRooms();
+    if (fromHelper) return fromHelper;
+  }
+  if (window.authV9 && window.authV9.currentUser) return window.authV9.currentUser;
+  if (window.firebase && typeof window.firebase.auth === 'function') {
+    var compat = window.firebase.auth().currentUser;
+    if (compat) return compat;
+  }
+  if (window.auth && window.auth.currentUser) return window.auth.currentUser;
+  return null;
+}
+
+/**
+ * users/{userId}/logs 에 activity_id 문서가 있는지 조회.
+ * @returns {Promise<{ id: string, path: string, data: object }|null>}
+ */
+async function findExistingStravaLogInFirestore(userId, activityId) {
+  var logId = String(activityId);
+
+  if (window.firestore) {
+    var userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
+    var byIdRef = userLogsRef.doc(logId);
+    var byIdSnap = await byIdRef.get();
+    if (byIdSnap.exists) {
+      return { id: logId, path: byIdRef.path, data: byIdSnap.data() };
+    }
+    var existingQuery = await userLogsRef.where('activity_id', '==', logId).limit(1).get();
+    if (!existingQuery.empty) {
+      var existingDoc = existingQuery.docs[0];
+      return {
+        id: existingDoc.id,
+        path: existingDoc.ref.path,
+        data: existingDoc.data(),
+      };
+    }
+    return null;
+  }
+
+  if (window.firestoreV9 && window._firebaseFirestoreFns) {
+    var fns = window._firebaseFirestoreFns;
+    var db = window.firestoreV9;
+    var docRef = fns.doc(db, 'users', userId, 'logs', logId);
+    var snap = await fns.getDoc(docRef);
+    if (snap.exists()) {
+      return { id: logId, path: 'users/' + userId + '/logs/' + logId, data: snap.data() };
+    }
+    return null;
+  }
+
+  throw new Error('Firestore가 초기화되지 않았습니다. (window.firestore 또는 window.firestoreV9)');
+}
+
+/**
+ * users/{userId}/logs/{activityId} 저장 (compat v8 또는 modular v9).
+ * @returns {Promise<{ id: string, path: string, isNew: boolean }>}
+ */
+async function persistStravaLogToFirestore(userId, activityId, trainingLog) {
+  var logId = String(activityId);
+
+  if (window.firestore) {
+    var byIdRef = window.firestore.collection('users').doc(userId).collection('logs').doc(logId);
+    await byIdRef.set(trainingLog, { merge: true });
+    return { id: logId, path: byIdRef.path, isNew: true };
+  }
+
+  if (window.firestoreV9 && window._firebaseFirestoreFns) {
+    var fns = window._firebaseFirestoreFns;
+    var docRef = fns.doc(window.firestoreV9, 'users', userId, 'logs', logId);
+    await fns.setDoc(docRef, trainingLog, { merge: true });
+    return { id: logId, path: 'users/' + userId + '/logs/' + logId, isNew: true };
+  }
+
+  throw new Error('Firestore가 초기화되지 않았습니다. (window.firestore 또는 window.firestoreV9)');
+}
+
+/**
  * Strava Firestore Primary 성공 후 Supabase Secondary (실패해도 Primary 유지).
  */
 async function invokeStravaSupabaseSecondary(userId, logDocId, trainingLog) {
@@ -292,47 +372,34 @@ async function saveStravaActivityToFirebase(activity, options) {
     if (!userId) {
       throw new Error('user_id가 필요합니다.');
     }
-    
-    // Firestore 초기화 확인
-    if (!window.firestore) {
-      throw new Error('Firestore가 초기화되지 않았습니다.');
-    }
-    
-    // 현재 로그인한 사용자 확인
-    const currentUser = window.firebase?.auth()?.currentUser;
+
+    const currentUser = getStravaSaveAuthUser();
     if (!currentUser) {
       throw new Error('로그인한 사용자가 없습니다.');
     }
-    
+
     console.log('[saveStravaActivityToFirebase] 사용자 정보:', {
       targetUserId: userId,
       currentUserId: currentUser.uid,
       isSameUser: currentUser.uid === userId
     });
-    
-    // users/{userId}/logs 서브컬렉션 참조
-    const userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
+
     const activityId = String(activity.activity_id || activity.id);
-    
+
     if (!activityId) {
       throw new Error('activity_id가 필요합니다.');
     }
-    
+
     console.log('[saveStravaActivityToFirebase] 중복 확인 시작:', { userId, activityId });
-    
-    // 중복 확인 (activity_id로 검색)
-    const existingQuery = await userLogsRef
-      .where('activity_id', '==', activityId)
-      .limit(1)
-      .get();
-    
-    if (!existingQuery.empty) {
-      const existingDoc = existingQuery.docs[0];
+
+    var priorSave = await findExistingStravaLogInFirestore(userId, activityId);
+
+    if (priorSave) {
       console.log('[saveStravaActivityToFirebase] ⚠️ 이미 존재하는 활동:', activityId);
-      await invokeStravaSupabaseSecondary(userId, existingDoc.id, existingDoc.data());
+      await invokeStravaSupabaseSecondary(userId, priorSave.id, priorSave.data);
       return {
         success: true,
-        id: existingDoc.id,
+        id: priorSave.id,
         activityId: activityId,
         isNew: false,
       };
@@ -414,20 +481,19 @@ async function saveStravaActivityToFirebase(activity, options) {
     
     console.log('[saveStravaActivityToFirebase] 저장할 데이터:', trainingLog);
     console.log('[saveStravaActivityToFirebase] Firestore 저장 시도...');
-    
-    // Firestore에 저장 (자동 생성된 문서 ID 사용)
-    const docRef = await userLogsRef.add(trainingLog);
-    
-    console.log('[saveStravaActivityToFirebase] ✅ 저장 완료:', { 
-      userId, 
-      activityId, 
-      logId: docRef.id,
-      path: docRef.path
+
+    var saveResult = await persistStravaLogToFirestore(userId, activityId, trainingLog);
+
+    console.log('[saveStravaActivityToFirebase] ✅ 저장 완료:', {
+      userId,
+      activityId,
+      logId: saveResult.id,
+      path: saveResult.path
     });
 
-    await invokeStravaSupabaseSecondary(userId, docRef.id, trainingLog);
-    
-    return { success: true, id: docRef.id, activityId: activityId, isNew: true };
+    await invokeStravaSupabaseSecondary(userId, saveResult.id, trainingLog);
+
+    return { success: true, id: saveResult.id, activityId: activityId, isNew: true };
   } catch (error) {
     console.error('[saveStravaActivityToFirebase] ❌ 저장 실패:', error);
     console.error('[saveStravaActivityToFirebase] 에러 상세:', {

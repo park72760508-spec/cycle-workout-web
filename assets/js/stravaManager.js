@@ -16,12 +16,49 @@ function sleep(ms) {
   return new Promise(function (resolve) { setTimeout(resolve, ms); });
 }
 
-// Firestore users 컬렉션 참조
-function getUsersCollection() {
-  if (!window.firestore) {
-    throw new Error('Firestore가 초기화되지 않았습니다. firebaseConfig.js가 먼저 로드되어야 합니다.');
+// Firestore users 컬렉션 참조 (compat v8 우선, v9 doc 조회 폴백)
+function getStravaAuthUser() {
+  if (typeof window.getCurrentUserForTrainingRooms === 'function') {
+    var fromHelper = window.getCurrentUserForTrainingRooms();
+    if (fromHelper) return fromHelper;
   }
-  return window.firestore.collection('users');
+  if (window.authV9 && window.authV9.currentUser) return window.authV9.currentUser;
+  if (window.firebase && typeof window.firebase.auth === 'function') {
+    var compat = window.firebase.auth().currentUser;
+    if (compat) return compat;
+  }
+  if (window.auth && window.auth.currentUser) return window.auth.currentUser;
+  return null;
+}
+
+function getUsersCollection() {
+  if (window.firestore) {
+    return window.firestore.collection('users');
+  }
+  if (window.firestoreV9 && window._firebaseFirestoreFns) {
+    var fns = window._firebaseFirestoreFns;
+    var db = window.firestoreV9;
+    return {
+      doc: function (id) {
+        var ref = fns.doc(db, 'users', id);
+        return {
+          get: function () {
+            return fns.getDoc(ref).then(function (snap) {
+              return {
+                exists: snap.exists(),
+                id: snap.id,
+                data: function () { return snap.data(); },
+              };
+            });
+          },
+        };
+      },
+      where: function () {
+        throw new Error('Firestore v9 bulk query는 compat(window.firestore)가 필요합니다. (관리자 MMP)');
+      },
+    };
+  }
+  throw new Error('Firestore가 초기화되지 않았습니다. firebaseConfig.js가 먼저 로드되어야 합니다.');
 }
 
 /**
@@ -467,8 +504,8 @@ async function fetchAndProcessStravaData(options = {}) {
   const totalTssByUser = {};
 
   try {
-    // 현재 로그인한 사용자 확인
-    const currentAuthUser = window.firebase?.auth()?.currentUser || window.auth?.currentUser;
+    // 현재 로그인한 사용자 확인 (authV9 + compat)
+    const currentAuthUser = getStravaAuthUser();
     const currentUserId = currentAuthUser?.uid || window.currentUser?.id;
     
     if (!currentUserId) {
