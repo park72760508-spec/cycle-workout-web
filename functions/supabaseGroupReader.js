@@ -263,7 +263,12 @@ function mapRideRowToFirestoreTrainingLog(row) {
     avg_cadence: row.avg_cadence != null ? Number(row.avg_cadence) : null,
     avg_hr: row.avg_hr != null ? Number(row.avg_hr) : null,
     max_hr: row.max_hr != null ? Number(row.max_hr) : null,
-    max_hr_5sec: row.max_hr_5sec != null ? Number(row.max_hr_5sec) : null,
+    max_hr_5sec: (function () {
+      const v5 = row.max_hr_5sec != null ? Number(row.max_hr_5sec) : 0;
+      if (v5 > 0) return v5;
+      const mh = row.max_hr != null ? Number(row.max_hr) : 0;
+      return mh > 0 ? mh : null;
+    })(),
     max_hr_1min: row.max_hr_1min != null ? Number(row.max_hr_1min) : null,
     max_hr_5min: row.max_hr_5min != null ? Number(row.max_hr_5min) : null,
     max_hr_10min: row.max_hr_10min != null ? Number(row.max_hr_10min) : null,
