@@ -760,6 +760,63 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
 /** Strava 비라이딩 활동 타입 제외 목록 (Cloud Function EXCLUDED_ACTIVITY_TYPES와 동일) */
 const STRAVA_EXCLUDED_ACTIVITY_TYPES = new Set(['run', 'swim', 'walk', 'trailrun', 'weighttraining']);
 
+function parseLogDateStrForTiz(date) {
+  if (!date) return null;
+  if (date.toDate && typeof date.toDate === 'function') return date.toDate().toISOString().slice(0, 10);
+  if (typeof date === 'string') return date.slice(0, 10);
+  if (date instanceof Date) return date.toISOString().slice(0, 10);
+  return null;
+}
+
+function logNeedsTimeInZones(log) {
+  var tiz = log && log.time_in_zones;
+  if (!tiz || typeof tiz !== 'object') return true;
+  var p = tiz.power;
+  var h = tiz.hr;
+  var hasPower = p && typeof p === 'object' && ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].some(function(k) {
+    return Number(p[k]) > 0;
+  });
+  var hasHr = h && typeof h === 'object' && ['z1', 'z2', 'z3', 'z4', 'z5'].some(function(k) {
+    return Number(h[k]) > 0;
+  });
+  return !hasPower && !hasHr;
+}
+
+/**
+ * Supabase Read 시 time_in_zones 미포함 로그를 Firestore에서 보강 (기존 데이터·마이그레이션 전 호환).
+ */
+async function enrichLogsWithTimeInZonesFromFirestore(userId, logs, db) {
+  if (!logs || !logs.length) return logs;
+  if (!logs.some(logNeedsTimeInZones)) return logs;
+  if (!db) return logs;
+  try {
+    var userLogsRef = collection(db, 'users', userId, 'logs');
+    var q = query(userLogsRef, orderBy('date', 'desc'), limit(500));
+    var snap = await getDocs(q);
+    var byActivityId = new Map();
+    var byDate = new Map();
+    snap.forEach(function(docSnap) {
+      var d = docSnap.data() || {};
+      var tiz = d.time_in_zones;
+      if (!tiz || typeof tiz !== 'object') return;
+      var aid = d.activity_id ? String(d.activity_id) : String(docSnap.id);
+      var ds = parseLogDateStrForTiz(d.date);
+      byActivityId.set(aid, tiz);
+      if (ds) byDate.set(ds, tiz);
+    });
+    return logs.map(function(log) {
+      if (!logNeedsTimeInZones(log)) return log;
+      var aid = log.activity_id ? String(log.activity_id) : (log.id ? String(log.id) : '');
+      var ds = parseLogDateStrForTiz(log.date) || (typeof log.date === 'string' ? log.date.slice(0, 10) : '');
+      var tiz = (aid && byActivityId.get(aid)) || (ds && byDate.get(ds)) || null;
+      return tiz ? Object.assign({}, log, { time_in_zones: tiz }) : log;
+    });
+  } catch (e) {
+    console.warn('[getUserTrainingLogs] Firestore time_in_zones 보강 실패:', e && e.message);
+    return logs;
+  }
+}
+
 /** Strava 로그가 라이딩 기록에 반영해야 하는 대상인지 판별 */
 function isRidingLog(logData) {
   var src = String(logData.source || '').toLowerCase();
@@ -779,7 +836,9 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
     const useSupabase = await routerMod.shouldReadTrainingLogsFromSupabase();
     if (useSupabase) {
       const sbMod = await import('./supabaseRidesReadClient.js');
-      return await sbMod.getUserTrainingLogsFromSupabase(userId, options);
+      var sbLogs = await sbMod.getUserTrainingLogsFromSupabase(userId, options);
+      var dbForTiz = firestoreInstance || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      return await enrichLogsWithTimeInZonesFromFirestore(userId, sbLogs, dbForTiz);
     }
   } catch (sbErr) {
     console.warn('[getUserTrainingLogs] Supabase Read 실패 → Firestore 폴백:', sbErr && sbErr.message);
@@ -847,7 +906,9 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
     const useSupabase = await routerMod.shouldReadTrainingLogsFromSupabase();
     if (useSupabase) {
       const sbMod = await import('./supabaseRidesReadClient.js');
-      return await sbMod.getTrainingLogsByDateRangeFromSupabase(userId, year, month);
+      var sbMonthLogs = await sbMod.getTrainingLogsByDateRangeFromSupabase(userId, year, month);
+      var dbMonth = firestoreInstance || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      return await enrichLogsWithTimeInZonesFromFirestore(userId, sbMonthLogs, dbMonth);
     }
   } catch (sbErr) {
     console.warn('[getTrainingLogsByDateRange] Supabase Read 실패 → Firestore 폴백:', sbErr && sbErr.message);

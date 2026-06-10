@@ -443,6 +443,10 @@ async function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidNamespace)
           ? log.elevation_profile_json
           : null,
     route_profile_updated_at: log.route_profile_updated_at || null,
+    time_in_zones_json:
+      log.time_in_zones && typeof log.time_in_zones === 'object'
+        ? log.time_in_zones
+        : null,
   };
 }
 
