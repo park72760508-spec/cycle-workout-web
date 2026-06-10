@@ -675,6 +675,56 @@ async function markWebhookStravaSyncRetryPending(
   });
 }
 
+/**
+ * Webhook POST 라우터 — create 시 type 분기만 추가.
+ *
+ * [사이클 영향 검토 — 2026-06-10]
+ * - aspect_type !== 'create' → 기존 processStravaActivityAsync 그대로
+ * - create + 비러닝 type → processRunningActivity (Supabase activities만)
+ * - create + Ride/VirtualRide 등 → processStravaActivityAsync (기존 사이클 파이프라인)
+ * - index.js processStravaActivity 본문·isCyclingForMmp·dualWriteStravaActivityLog: 미호출/미수정
+ */
+async function routeStravaWebhookActivityAsync(
+  db: admin.firestore.Firestore,
+  ownerId: number,
+  objectId: number,
+  aspectType: string
+): Promise<void> {
+  const aspect = String(aspectType || "").toLowerCase();
+  if (aspect === "create") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const runningModule = require("../processRunningActivity") as {
+      fetchStravaActivityDetailForOwner: (
+        db: admin.firestore.Firestore,
+        ownerId: number,
+        objectId: number
+      ) => Promise<{
+        success: boolean;
+        activity?: { type?: string };
+        userId?: string;
+        error?: string;
+        status?: number;
+      }>;
+      isRunningStravaActivityType: (type: unknown) => boolean;
+      processRunningActivity: (
+        db: admin.firestore.Firestore,
+        ownerId: number,
+        objectId: number,
+        activityPrefetched?: { type?: string }
+      ) => Promise<unknown>;
+    };
+
+    const preview = await runningModule.fetchStravaActivityDetailForOwner(db, ownerId, objectId);
+    const activityType = preview.activity?.type;
+    if (preview.success && preview.activity && runningModule.isRunningStravaActivityType(activityType)) {
+      await runningModule.processRunningActivity(db, ownerId, objectId, preview.activity);
+      return;
+    }
+  }
+
+  await processStravaActivityAsync(db, ownerId, objectId);
+}
+
 async function processStravaActivityAsync(
   db: admin.firestore.Firestore,
   ownerId: number,
@@ -841,7 +891,8 @@ export const stravaWebhook = onRequest(
 
       if (shouldFetchActivity) {
         // 비동기 처리: await 없이 백그라운드에서 실행 (2초 제한 회피)
-        processStravaActivityAsync(db, ownerId, objectId).catch((err) => {
+        // create → type 확인 후 Run/Walk는 processRunningActivity, 그 외는 기존 사이클 파이프라인
+        routeStravaWebhookActivityAsync(db, ownerId, objectId, aspectType).catch((err) => {
           console.error("[Strava Webhook] Strava 활동 처리 실패:", err);
         });
       } else {
