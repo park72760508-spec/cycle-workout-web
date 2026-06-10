@@ -36,24 +36,84 @@ UPDATE public.run_activity_efforts
 SET updated_at = COALESCE(updated_at, created_at, now())
 WHERE updated_at IS NULL;
 
--- activity_id: legacy bigint → text (activities.activity_id·Strava id와 동일)
+-- activity_id: legacy bigint(activities.id FK) → text(Strava activity_id)
 DO $$
 DECLARE
   col_type text;
+  fk_rec record;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'run_activity_efforts'
+  ) THEN
+    RETURN;
+  END IF;
+
   SELECT c.data_type INTO col_type
   FROM information_schema.columns c
   WHERE c.table_schema = 'public'
     AND c.table_name = 'run_activity_efforts'
     AND c.column_name = 'activity_id';
 
+  -- activity_id 컬럼을 묶는 모든 FK 제거 (run_activity_efforts_activity_id_fkey 등)
+  FOR fk_rec IN
+    SELECT con.conname AS cname
+    FROM pg_constraint con
+    WHERE con.conrelid = 'public.run_activity_efforts'::regclass
+      AND con.contype = 'f'
+      AND EXISTS (
+        SELECT 1
+        FROM unnest(con.conkey) AS k(attnum)
+        JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
+        WHERE a.attname = 'activity_id'
+      )
+  LOOP
+    EXECUTE format(
+      'ALTER TABLE public.run_activity_efforts DROP CONSTRAINT IF EXISTS %I',
+      fk_rec.cname
+    );
+  END LOOP;
+
+  ALTER TABLE public.run_activity_efforts
+    DROP CONSTRAINT IF EXISTS run_activity_efforts_activity_fkey;
+  ALTER TABLE public.run_activity_efforts
+    DROP CONSTRAINT IF EXISTS run_activity_efforts_user_activity_unique;
+
   IF col_type = 'bigint' THEN
-    ALTER TABLE public.run_activity_efforts
-      DROP CONSTRAINT IF EXISTS run_activity_efforts_activity_fkey;
-    ALTER TABLE public.run_activity_efforts
-      DROP CONSTRAINT IF EXISTS run_activity_efforts_user_activity_unique;
-    ALTER TABLE public.run_activity_efforts
-      ALTER COLUMN activity_id TYPE text USING activity_id::text;
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'activities'
+        AND column_name = 'activity_id'
+    ) AND EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'activities'
+        AND column_name = 'id'
+    ) THEN
+      -- legacy: activity_id = activities.id(bigint) → Strava activity_id(text)로 매핑
+      ALTER TABLE public.run_activity_efforts
+        ADD COLUMN IF NOT EXISTS _activity_id_str text;
+
+      UPDATE public.run_activity_efforts rae
+      SET _activity_id_str = a.activity_id
+      FROM public.activities a
+      WHERE a.id = rae.activity_id;
+
+      UPDATE public.run_activity_efforts
+      SET _activity_id_str = activity_id::text
+      WHERE _activity_id_str IS NULL;
+
+      DELETE FROM public.run_activity_efforts
+      WHERE _activity_id_str IS NULL OR btrim(_activity_id_str) = '';
+
+      ALTER TABLE public.run_activity_efforts DROP COLUMN activity_id;
+      ALTER TABLE public.run_activity_efforts
+        RENAME COLUMN _activity_id_str TO activity_id;
+      ALTER TABLE public.run_activity_efforts
+        ALTER COLUMN activity_id SET NOT NULL;
+    ELSE
+      ALTER TABLE public.run_activity_efforts
+        ALTER COLUMN activity_id TYPE text USING activity_id::text;
+    END IF;
   ELSIF col_type IS NULL THEN
     ALTER TABLE public.run_activity_efforts
       ADD COLUMN IF NOT EXISTS activity_id text;
