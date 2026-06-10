@@ -700,23 +700,28 @@ async function routeStravaWebhookActivityAsync(
         objectId: number
       ) => Promise<{
         success: boolean;
-        activity?: { type?: string };
+        activity?: { type?: string; sport_type?: string };
         userId?: string;
         error?: string;
         status?: number;
       }>;
-      isRunningStravaActivityType: (type: unknown) => boolean;
+      isRunningStravaActivityType: (type: unknown, sportType?: unknown) => boolean;
       processRunningActivity: (
         db: admin.firestore.Firestore,
         ownerId: number,
         objectId: number,
-        activityPrefetched?: { type?: string }
+        activityPrefetched?: { type?: string; sport_type?: string }
       ) => Promise<unknown>;
     };
 
     const preview = await runningModule.fetchStravaActivityDetailForOwner(db, ownerId, objectId);
     const activityType = preview.activity?.type;
-    if (preview.success && preview.activity && runningModule.isRunningStravaActivityType(activityType)) {
+    const sportType = preview.activity?.sport_type;
+    if (
+      preview.success &&
+      preview.activity &&
+      runningModule.isRunningStravaActivityType(activityType, sportType)
+    ) {
       await runningModule.processRunningActivity(db, ownerId, objectId, preview.activity);
       return;
     }
