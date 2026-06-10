@@ -569,19 +569,117 @@ export const naverSubscriptionSyncTest = onRequest(
 );
 
 /** Strava Webhook: index.js의 processStravaActivity 호출 (순환 참조 방지를 위해 런타임 require) */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const stravaSyncRetry = require("../stravaSyncRetry") as {
+  markStravaSyncRetryPending: (
+    db: admin.firestore.Firestore,
+    userId: string,
+    meta: {
+      dateFrom: string;
+      dateTo: string;
+      reason?: string;
+      status?: number;
+      activityId?: string | number;
+    }
+  ) => Promise<void>;
+  resolveStravaRetryDateRange: (activityDateYmd?: string | null) => { dateFrom: string; dateTo: string };
+  getYesterdayTodayYmdSeoul: () => { dateFrom: string; dateTo: string };
+};
+
+type ProcessStravaActivityResult = {
+  userId?: string | null;
+  activityId?: string;
+  userTss?: number;
+  isNew?: boolean;
+  error?: string;
+  status?: number;
+  activityDate?: string | null;
+};
+
+function inferWebhookRetryReason(status: number, errorText: string): string {
+  if (status === 401) return "401";
+  if (status === 429 || errorText.includes("429")) return "429";
+  if (errorText.includes("dual-write")) return "processing";
+  return "webhook";
+}
+
+async function markWebhookStravaSyncRetryPending(
+  db: admin.firestore.Firestore,
+  ownerId: number,
+  objectId: number,
+  legacyResult: ProcessStravaActivityResult | null | undefined,
+  caughtError?: unknown
+): Promise<void> {
+  const activityId = String(legacyResult?.activityId || objectId || "").trim();
+  if (!activityId) return;
+
+  let userId = String(legacyResult?.userId || "").trim();
+  if (!userId) {
+    const ownerIdNum = Number(ownerId);
+    if (!ownerIdNum) return;
+    const usersSnap = await db.collection("users").where("strava_athlete_id", "==", ownerIdNum).limit(1).get();
+    if (usersSnap.empty) return;
+    userId = usersSnap.docs[0].id;
+  }
+
+  const errorText =
+    String(legacyResult?.error || "") ||
+    (caughtError instanceof Error ? caughtError.message : caughtError ? String(caughtError) : "webhook processing failed");
+  const failStatus = Number(legacyResult?.status) || (errorText.includes("429") ? 429 : errorText.includes("401") ? 401 : 0);
+  // 단건 재시도(activityId)는 날짜와 무관 — 스케줄(전날·당일)에서 pending 유저를 잡기 위해 어제~오늘 구간 사용
+  const dateRange = stravaSyncRetry.getYesterdayTodayYmdSeoul();
+
+  await stravaSyncRetry.markStravaSyncRetryPending(db, userId, {
+    dateFrom: dateRange.dateFrom,
+    dateTo: dateRange.dateTo,
+    reason: inferWebhookRetryReason(failStatus, errorText),
+    status: failStatus || 500,
+    activityId,
+  });
+  console.warn("[Strava Webhook] 재시도 pending 등록:", {
+    userId,
+    activityId,
+    reason: inferWebhookRetryReason(failStatus, errorText),
+    status: failStatus || 500,
+    dateFrom: dateRange.dateFrom,
+    dateTo: dateRange.dateTo,
+    error: errorText,
+  });
+}
+
 async function processStravaActivityAsync(
   db: admin.firestore.Firestore,
   ownerId: number,
   objectId: number
 ): Promise<void> {
   injectAligoEnv();
-  const mainModule = require("../index.js");
-  const legacyResult = await mainModule.processStravaActivity(db, ownerId, objectId, {
-    skipPointUpdate: true,
-  });
-  const userId = String(legacyResult?.userId || "").trim();
-  const userTss = Number(legacyResult?.userTss || 0);
-  const activityId = String(legacyResult?.activityId || objectId || "").trim();
+  const mainModule = require("../index.js") as {
+    processStravaActivity: (
+      db: admin.firestore.Firestore,
+      ownerId: number,
+      objectId: number,
+      options?: { skipPointUpdate?: boolean }
+    ) => Promise<ProcessStravaActivityResult>;
+  };
+
+  let legacyResult: ProcessStravaActivityResult | null = null;
+  try {
+    legacyResult = await mainModule.processStravaActivity(db, ownerId, objectId, {
+      skipPointUpdate: true,
+    });
+  } catch (err) {
+    await markWebhookStravaSyncRetryPending(db, ownerId, objectId, null, err);
+    return;
+  }
+
+  if (!legacyResult || legacyResult.error) {
+    await markWebhookStravaSyncRetryPending(db, ownerId, objectId, legacyResult);
+    return;
+  }
+
+  const userId = String(legacyResult.userId || "").trim();
+  const userTss = Number(legacyResult.userTss || 0);
+  const activityId = String(legacyResult.activityId || objectId || "").trim();
 
   if (!userId || !activityId || userTss <= 0) {
     return;
@@ -634,6 +732,14 @@ async function processStravaActivityAsync(
     );
   } catch (rewardErr) {
     console.error("[Strava Webhook] 로그 저장은 완료됨. 포인트/알림톡 처리 실패:", rewardErr);
+    await markWebhookStravaSyncRetryPending(db, ownerId, objectId, {
+      userId,
+      activityId,
+      userTss,
+      error: rewardErr instanceof Error ? rewardErr.message : String(rewardErr),
+      status: 500,
+      activityDate: legacyResult.activityDate || null,
+    });
   }
 }
 
