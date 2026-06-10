@@ -30,12 +30,13 @@ function rangeOverlapsYmd(rangeFrom, rangeTo, targetFrom, targetTo) {
 /**
  * @param {import('firebase-admin').firestore.Firestore} db
  * @param {string} userId
- * @param {{ dateFrom: string, dateTo: string, afterUnix?: number, beforeUnix?: number, reason?: string, status?: number }} meta
+ * @param {{ dateFrom: string, dateTo: string, afterUnix?: number, beforeUnix?: number, reason?: string, status?: number, activityId?: string|number }} meta
  */
 async function markStravaSyncRetryPending(db, userId, meta) {
   if (!db || !userId) return;
   const dateFrom = String(meta.dateFrom || "").slice(0, 10);
   const dateTo = String(meta.dateTo || "").slice(0, 10);
+  const activityId = meta.activityId != null ? String(meta.activityId).trim() : "";
   const update = {
     strava_sync_retry_pending: true,
     strava_sync_retry_date_from: dateFrom || null,
@@ -45,12 +46,16 @@ async function markStravaSyncRetryPending(db, userId, meta) {
       dateTo: dateTo || null,
       afterUnix: meta.afterUnix != null ? Number(meta.afterUnix) : null,
       beforeUnix: meta.beforeUnix != null ? Number(meta.beforeUnix) : null,
+      activityId: activityId || null,
     },
     strava_sync_retry_reason: String(meta.reason || "429").slice(0, 40),
     strava_sync_retry_status: Number(meta.status) || 429,
     strava_sync_retry_requested_at: new Date().toISOString(),
     strava_sync_retry_attempts: admin.firestore.FieldValue.increment(1),
   };
+  if (activityId) {
+    update.strava_sync_retry_activity_id = activityId;
+  }
   try {
     await db.collection("users").doc(userId).update(update);
   } catch (e) {
@@ -68,6 +73,7 @@ async function clearStravaSyncRetryPending(db, userId, successMeta) {
       strava_sync_retry_cleared_at: new Date().toISOString(),
       strava_sync_retry_reason: admin.firestore.FieldValue.delete(),
       strava_sync_retry_status: admin.firestore.FieldValue.delete(),
+      strava_sync_retry_activity_id: admin.firestore.FieldValue.delete(),
       strava_last_activity_fetch_status: 200,
       strava_last_activity_fetch_error: admin.firestore.FieldValue.delete(),
       strava_last_activity_fetch_empty:
@@ -95,9 +101,10 @@ async function listUsersNeedingStravaSyncRetry(db, options = {}) {
     const d = doc.data() || {};
     if (d.strava_sync_retry_pending === false && d.strava_sync_retry_cleared_at) continue;
     const pending = d.strava_sync_retry_pending === true;
+    const hasActivityRetry = Boolean(String(d.strava_sync_retry_activity_id || "").trim());
     const status429 = Number(d.strava_last_activity_fetch_status) === 429;
     const retryStatus429 = Number(d.strava_sync_retry_status) === 429;
-    if (!pending && !status429 && !retryStatus429) continue;
+    if (!pending && !hasActivityRetry && !status429 && !retryStatus429) continue;
 
     const range =
       d.strava_sync_retry_range ||
@@ -113,16 +120,94 @@ async function listUsersNeedingStravaSyncRetry(db, options = {}) {
   return out;
 }
 
+function extractRetryStatusFromResult(result, userData) {
+  if (result && Number(result.status) > 0) return Number(result.status);
+  const errText = String(result && result.error ? result.error : "");
+  const m = errText.match(/\b(401|429|5\d{2})\b/);
+  if (m) return Number(m[1]);
+  return Number(userData && userData.strava_sync_retry_status) || 0;
+}
+
+function inferRetryReasonFromResult(result, userData) {
+  const existing = String(userData && userData.strava_sync_retry_reason ? userData.strava_sync_retry_reason : "").trim();
+  if (existing) return existing.slice(0, 40);
+  const status = extractRetryStatusFromResult(result, userData);
+  if (status === 401) return "401";
+  if (status === 429) return "429";
+  return "processing";
+}
+
 /**
- * 429 복구용 — 유저당 순차 처리 + 간격.
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {string} userId
+ * @param {object} userData
+ * @param {string} activityId
+ * @param {Function} processStravaActivityFn
+ */
+async function retrySingleStravaActivity(db, userId, userData, activityId, processStravaActivityFn) {
+  const athleteId = Number(userData && userData.strava_athlete_id);
+  if (!athleteId || !activityId) {
+    return {
+      userId,
+      processed: 0,
+      newActivities: 0,
+      userTss: 0,
+      error: !athleteId ? "strava_athlete_id 없음" : "activity_id 없음",
+    };
+  }
+  try {
+    const legacyResult = await processStravaActivityFn(db, athleteId, activityId);
+    if (!legacyResult || legacyResult.error) {
+      return {
+        userId,
+        processed: 0,
+        newActivities: 0,
+        userTss: 0,
+        error: (legacyResult && legacyResult.error) || "processStravaActivity 실패",
+        status: legacyResult && legacyResult.status ? legacyResult.status : 0,
+        mode: "single_activity",
+        activityId,
+      };
+    }
+    return {
+      userId,
+      processed: 1,
+      newActivities: legacyResult.isNew ? 1 : 0,
+      userTss: Number(legacyResult.userTss) || 0,
+      mode: "single_activity",
+      activityId,
+    };
+  } catch (e) {
+    return {
+      userId,
+      processed: 0,
+      newActivities: 0,
+      userTss: 0,
+      error: e && e.message ? e.message : String(e),
+      mode: "single_activity",
+      activityId,
+    };
+  }
+}
+
+/**
+ * pending 재시도 — 유저당 순차 처리 + 간격. activityId 있으면 단건 processStravaActivity 우선.
  * @param {import('firebase-admin').firestore.Firestore} db
  * @param {{ afterUnix: number, beforeUnix: number, dateFrom: string, dateTo: string }} range
  * @param {string[]} userIds
  * @param {string} logPrefix
  * @param {Function} processOneUserStravaSync
+ * @param {Function|null} [processStravaActivityFn]
  */
-async function runStravaSyncRetrySequential(db, range, userIds, logPrefix, processOneUserStravaSync) {
-  const prefix = logPrefix || "[stravaSync429Retry]";
+async function runStravaSyncRetrySequential(
+  db,
+  range,
+  userIds,
+  logPrefix,
+  processOneUserStravaSync,
+  processStravaActivityFn
+) {
+  const prefix = logPrefix || "[stravaSyncRetry]";
   const results = [];
   console.log(`${prefix} 시작`, {
     dateFrom: range.dateFrom,
@@ -137,9 +222,15 @@ async function runStravaSyncRetrySequential(db, range, userIds, logPrefix, proce
       results.push({ userId: uid, skipped: true, reason: "user_not_found" });
       continue;
     }
+    const userData = userSnap.data() || {};
+    const retryActivityId = String(userData.strava_sync_retry_activity_id || "").trim();
     let result;
     try {
-      result = await processOneUserStravaSync(db, uid, userSnap.data(), range);
+      if (retryActivityId && typeof processStravaActivityFn === "function") {
+        result = await retrySingleStravaActivity(db, uid, userData, retryActivityId, processStravaActivityFn);
+      } else {
+        result = await processOneUserStravaSync(db, uid, userData, range);
+      }
     } catch (e) {
       result = {
         userId: uid,
@@ -150,24 +241,26 @@ async function runStravaSyncRetrySequential(db, range, userIds, logPrefix, proce
       };
     }
 
-    const errText = String(result && result.error ? result.error : "");
-    const is429 = errText.includes("429");
     if (!result.error) {
       await clearStravaSyncRetryPending(db, uid, {
         count: result.newActivities,
       });
-    } else if (is429) {
+    } else {
+      const failStatus = extractRetryStatusFromResult(result, userData);
       await markStravaSyncRetryPending(db, uid, {
         dateFrom: range.dateFrom,
         dateTo: range.dateTo,
         afterUnix: range.afterUnix,
         beforeUnix: range.beforeUnix,
-        reason: "429",
-        status: 429,
+        reason: inferRetryReasonFromResult(result, userData),
+        status: failStatus || 429,
+        activityId: retryActivityId || null,
       });
     }
     results.push(result);
     console.log(`${prefix} [${i + 1}/${userIds.length}]`, uid, {
+      mode: result.mode || "range_sync",
+      activityId: result.activityId || retryActivityId || null,
       newActivities: result.newActivities,
       error: result.error || null,
     });
@@ -180,6 +273,28 @@ async function runStravaSyncRetrySequential(db, range, userIds, logPrefix, proce
   const fail = results.filter((r) => r && r.error).length;
   console.log(`${prefix} 완료`, { ok, fail, total: userIds.length });
   return { results, ok, fail, total: userIds.length };
+}
+
+/** 서울 기준 어제~오늘 YYYY-MM-DD (웹훅 재시도 기본 구간) */
+function getYesterdayTodayYmdSeoul() {
+  const now = new Date();
+  const todaySeoulStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const [y, m, d] = todaySeoulStr.split("-").map(Number);
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateTo = `${y}-${pad(m)}-${pad(d)}`;
+  const yesterday = new Date(y, m - 1, d);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dateFrom = `${yesterday.getFullYear()}-${pad(yesterday.getMonth() + 1)}-${pad(yesterday.getDate())}`;
+  return { dateFrom, dateTo };
+}
+
+/** 활동 날짜가 있으면 해당 일, 없으면 어제~오늘 */
+function resolveStravaRetryDateRange(activityDateYmd) {
+  const activityDate = String(activityDateYmd || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(activityDate)) {
+    return { dateFrom: activityDate, dateTo: activityDate };
+  }
+  return getYesterdayTodayYmdSeoul();
 }
 
 function ymdRangeToUnix(range) {
@@ -204,6 +319,9 @@ module.exports = {
   clearStravaSyncRetryPending,
   listUsersNeedingStravaSyncRetry,
   runStravaSyncRetrySequential,
+  retrySingleStravaActivity,
   rangeOverlapsYmd,
+  getYesterdayTodayYmdSeoul,
+  resolveStravaRetryDateRange,
   ymdRangeToUnix,
 };
