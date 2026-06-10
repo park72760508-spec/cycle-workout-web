@@ -48,7 +48,8 @@ const index = require('../index.js');
     range,
     userIds,
     '[local-429-retry]',
-    index.processOneUserStravaSync
+    index.processOneUserStravaSync,
+    index.processStravaActivity
   );
   console.log('[429-retry] done', {
     total: summary.total,
