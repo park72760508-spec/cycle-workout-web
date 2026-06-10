@@ -1,7 +1,7 @@
 /**
  * 관리자 비밀번호 초기화 Callable Function (v2)
  * Strava 토큰 교환/갱신 Callable (v2) - Client Secret은 서버에서만 사용
- * Strava 전날 로그 동기화 스케줄 함수 (Firebase 기반, 매일 새벽 2시 Asia/Seoul)
+ * Strava 전날 갭 탐지 동기화 스케줄 함수 (Firebase 기반, 매일 00:10 Asia/Seoul)
  */
 const { onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -38,6 +38,7 @@ const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const stravaDualWrite = require("./stravaDualWrite");
 const stravaRouteMerge = require("./stravaRouteMerge");
 const stravaSyncRetry = require("./stravaSyncRetry");
+const stravaGapDetect = require("./stravaGapDetect");
 const rankingReadRouter = require("./rankingReadRouter");
 const rankingReadConfig = require("./rankingReadConfig");
 const supabaseRankingReader = require("./supabaseRankingReader");
@@ -3425,13 +3426,17 @@ async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
 }
 
 /**
- * 매일 새벽 2시(Asia/Seoul)에 전날 Strava 활동 수집. 1000명 대비 청크 팬아웃.
- * 각 활동: Firebase Primary + Supabase rides Secondary (stravaDualWrite, 전 사용자 ingest).
+ * 매일 00:10(Asia/Seoul) 갭 탐지형 Strava 동기화.
+ * - A: strava_sync_retry_pending
+ * - B: strava_webhook_retries 큐
+ * - C: 어제~오늘 API 1페이지 vs Firestore diff → 누락만 processStravaActivity
+ * (구 02:00 전체 스캔 runStravaSyncWithFanOut 대체)
  */
 const stravaSyncScheduleOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  schedule: "0 2 * * *",
+  schedule: "10 0 * * *",
   timeZone: "Asia/Seoul",
-  timeoutSeconds: 540,
+  timeoutSeconds: 1800,
+  memory: "1GiB",
 });
 if (STRAVA_CLIENT_SECRET) {
   stravaSyncScheduleOptions.secrets = stravaSyncScheduleOptions.secrets || [];
@@ -3439,16 +3444,32 @@ if (STRAVA_CLIENT_SECRET) {
     stravaSyncScheduleOptions.secrets.push(STRAVA_CLIENT_SECRET);
   }
 }
+
+async function runStravaGapDetectPreviousDayJob(db, logPrefix) {
+  const yesterday = getYesterdayAfterBefore();
+  const today = getTodayAfterBefore();
+  const range = stravaSyncRetry.ymdRangeToUnix({
+    dateFrom: yesterday.dateFrom,
+    dateTo: today.dateTo,
+  });
+  return stravaGapDetect.runGapDetectSyncJob(
+    db,
+    range,
+    {
+      refreshStravaTokenForUser,
+      fetchStravaActivitiesPage,
+      processStravaActivity,
+    },
+    logPrefix || "[stravaSyncPreviousDay]",
+    { includeGapScanAllUsers: true }
+  );
+}
+
 exports.stravaSyncPreviousDay = onSchedule(
   stravaSyncScheduleOptions,
-  async (event) => {
+  async () => {
     const db = admin.firestore();
-    const range = getYesterdayAfterBefore();
-    const getChunkUrl = async () => {
-      const snap = await db.collection("appConfig").doc("sync").get();
-      return snap.exists ? snap.data().runStravaSyncChunkUrl || null : null;
-    };
-    await runStravaSyncWithFanOut(db, range, "[stravaSyncPreviousDay]", getChunkUrl);
+    await runStravaGapDetectPreviousDayJob(db, "[stravaSyncPreviousDay]");
   }
 );
 
@@ -8383,7 +8404,7 @@ exports.scheduledWeeklyTssMidnightRefresh = onSchedule(
 );
 
 /**
- * KST 02:50 — Strava 02:00 동기화 직후 peak_28d rollup → 피크 보드(21) → 헵타곤 GC.
+ * KST 02:50 — Strava 00:10 갭 탐지 직후 peak_28d rollup → 피크 보드(21) → 헵타곤 GC.
  * 23:00 마스터 타임아웃·고착 시에도 Max~60분·7축이 당일 갱신되도록 분리.
  */
 /** KST 02:50 — 28일 피크 보드만 (헵타곤은 03:20 별도 스케줄, 9분 한도 회피) */
@@ -8551,7 +8572,7 @@ exports.scheduledPeak28dHeptagonOnly = onSchedule(
 );
 
 /**
- * KST 03:40 — Strava 02:00·Supabase 03:15 집계 후 Firebase vs Supabase 랭킹 정합성 리포트.
+ * KST 03:40 — Strava 00:10·Supabase 03:15 집계 후 Firebase vs Supabase 랭킹 정합성 리포트.
  * ranking_meta/supabase_parity_audit 에 저장 (네이버 결제·Strava 스케줄 본체는 변경 없음).
  */
 const scheduledRankingParityAuditOptions =
