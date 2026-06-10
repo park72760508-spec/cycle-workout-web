@@ -74,8 +74,47 @@
     return '';
   }
 
+  function mapFirestoreDocsToDateLogs(docs, dateKey) {
+    var out = [];
+    (docs || []).forEach(function (docSnap) {
+      var d =
+        docSnap && typeof docSnap.data === 'function'
+          ? docSnap.data() || {}
+          : docSnap && docSnap.data
+            ? docSnap.data
+            : {};
+      var dk = parseLogDateKey(d.date);
+      if (dk !== dateKey) return;
+      var o = { id: docSnap.id };
+      var k;
+      for (k in d) {
+        if (Object.prototype.hasOwnProperty.call(d, k)) o[k] = d[k];
+      }
+      out.push(o);
+    });
+    return out;
+  }
+
   async function fetchFirestoreLogsForDate(userId, dateKey) {
     if (!userId || !dateKey) return [];
+
+    // 1) Compat Firestore (라이딩 일지에서 가장 안정적)
+    if (window.firestore && typeof window.firestore.collection === 'function') {
+      try {
+        var compatSnap = await window.firestore
+          .collection('users')
+          .doc(String(userId))
+          .collection('logs')
+          .orderBy('date', 'desc')
+          .limit(300)
+          .get();
+        return mapFirestoreDocsToDateLogs(compatSnap.docs || [], dateKey);
+      } catch (compatErr) {
+        console.warn('[journalWorkoutGraph] compat Firestore 조회 실패:', compatErr && compatErr.message);
+      }
+    }
+
+    // 2) Firestore v9 — index.html 의 _firebaseFirestoreFns 사용 (limit 없으면 생략)
     var db = window.firestoreV9;
     var fns = window._firebaseFirestoreFns;
     if (!db || !fns || typeof fns.collection !== 'function' || typeof fns.getDocs !== 'function') {
@@ -83,21 +122,23 @@
     }
     try {
       var ref = fns.collection(db, 'users', String(userId), 'logs');
-      var q = fns.query(ref, fns.orderBy('date', 'desc'), fns.limit(300));
+      var constraints = [];
+      if (typeof fns.orderBy === 'function') {
+        constraints.push(fns.orderBy('date', 'desc'));
+      }
+      if (typeof fns.limit === 'function') {
+        constraints.push(fns.limit(300));
+      }
+      var q = ref;
+      if (typeof fns.query === 'function' && constraints.length) {
+        q = fns.query.apply(null, [ref].concat(constraints));
+      }
       var snap = await fns.getDocs(q);
-      var out = [];
+      var list = [];
       snap.forEach(function (docSnap) {
-        var d = docSnap.data() || {};
-        var dk = parseLogDateKey(d.date);
-        if (dk !== dateKey) return;
-        var o = { id: docSnap.id };
-        var k;
-        for (k in d) {
-          if (Object.prototype.hasOwnProperty.call(d, k)) o[k] = d[k];
-        }
-        out.push(o);
+        list.push(docSnap);
       });
-      return out;
+      return mapFirestoreDocsToDateLogs(list, dateKey);
     } catch (e) {
       console.warn('[journalWorkoutGraph] Firestore 날짜 로그 조회 실패:', e && e.message);
       return [];
@@ -150,19 +191,31 @@
       } catch (e) { /* cache miss */ }
     }
 
+    var workoutTitle = '';
     if (typeof window.apiGetWorkout === 'function') {
       try {
         var res = await window.apiGetWorkout(wid);
         if (res && res.success) {
           var item = res.item || res.workout || res;
-          var segs = item && item.segments;
-          return {
-            segments: Array.isArray(segs) ? segs : [],
-            title: String((item && (item.title || item.name)) || '').trim()
-          };
+          workoutTitle = String((item && (item.title || item.name)) || res.title || '').trim();
+          var segs = (item && item.segments) || res.segments || [];
+          if (Array.isArray(segs) && segs.length) {
+            return { segments: segs, title: workoutTitle };
+          }
         }
       } catch (e) {
         console.warn('[journalWorkoutGraph] apiGetWorkout 실패:', wid, e && e.message);
+      }
+    }
+
+    if (typeof window.apiGetWorkoutSegments === 'function') {
+      try {
+        var segArr = await window.apiGetWorkoutSegments(wid);
+        if (Array.isArray(segArr) && segArr.length) {
+          return { segments: segArr, title: workoutTitle };
+        }
+      } catch (e2) {
+        console.warn('[journalWorkoutGraph] apiGetWorkoutSegments 실패:', wid, e2 && e2.message);
       }
     }
 

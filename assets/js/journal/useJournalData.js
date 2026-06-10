@@ -392,7 +392,17 @@
       for (i = 0; i < logs.length; i++) {
         ids.push(String(logs[i].activity_id != null ? logs[i].activity_id : logs[i].id || i));
       }
-      return date + '-' + logs.length + '-' + ids.join(',');
+      var woKey = '';
+      if (
+        window.journalWorkoutGraphUtils &&
+        typeof window.journalWorkoutGraphUtils.resolveWorkoutIdFromLogs === 'function'
+      ) {
+        var wid = window.journalWorkoutGraphUtils.resolveWorkoutIdFromLogs(null, logs);
+        if (wid) woKey = '-wo' + wid;
+      }
+      var comp = logs._companionStelvioLogs;
+      if (comp && comp.length) woKey += '-sc' + comp.length;
+      return date + '-' + logs.length + '-' + ids.join(',') + woKey;
     }
 
     var journalSelectionKey = buildJournalSelectionKey(selectedDate, displayLogsForSelectedDate);
