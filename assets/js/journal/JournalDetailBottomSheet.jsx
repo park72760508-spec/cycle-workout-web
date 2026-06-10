@@ -649,6 +649,7 @@
         weight: log.weight,
         time_in_zones: log.time_in_zones,
         source: log.source,
+        workout_id: log.workout_id || null,
         summary_polyline: log.summary_polyline,
         elevation_profile: log.elevation_profile,
         title: log.title
@@ -752,6 +753,13 @@
       weight: logs[0].weight,
       time_in_zones: mergedTiz,
       source: logs[0].source,
+      workout_id: (function () {
+        for (var wi = 0; wi < logs.length; wi++) {
+          var w0 = logs[wi] && logs[wi].workout_id;
+          if (w0 != null && String(w0).trim() !== '') return String(w0).trim();
+        }
+        return null;
+      })(),
       summary_polyline: logs.length === 1 && logs[0].summary_polyline ? logs[0].summary_polyline : null,
       elevation_profile: routeMerged && routeMerged.hasElevation ? routeMerged.elevation : null,
       title:
@@ -792,6 +800,8 @@
       return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     }
     var CourseMap = window.JournalCourseMapPreview;
+    var WorkoutGraph = window.JournalWorkoutGraphPreview;
+    var graphUtils = window.journalWorkoutGraphUtils;
     var utils = window.stravaPolylineUtils;
     var logsForRoute = log && log._logsForShare ? log._logsForShare : null;
     var routeInfo =
@@ -802,6 +812,12 @@
           : utils && log && typeof utils.routeProfileFromLog === 'function'
             ? utils.routeProfileFromLog(log)
             : { hasRoute: false, hasElevation: false, segmentCount: 0 };
+    var workoutId =
+      graphUtils && typeof graphUtils.resolveWorkoutIdFromLogs === 'function'
+        ? graphUtils.resolveWorkoutIdFromLogs(log, logsForRoute)
+        : (log.workout_id != null ? String(log.workout_id).trim() : '');
+    var showWorkoutGraph =
+      !routeInfo.hasRoute && !!workoutId && WorkoutGraph;
     var spd = log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
       ? Number(log.avg_speed_kmh)
       : avgSpeedKmhFromDistanceTime(log.distance_km, log.duration_sec);
@@ -878,9 +894,16 @@
             }),
             shareBtnEl
           )
-        : React.createElement('p', { className: 'journal-course-preview-empty' },
-            '코스 지도 없음 — Strava MMP 동기화 후 다시 열어 주세요.'
-          ),
+        : showWorkoutGraph
+          ? React.createElement(WorkoutGraph, {
+              key: 'wo-' + workoutId + '-' + (log.date || ''),
+              workoutId: workoutId,
+              maxHeight: 200,
+              className: 'journal-summary-sheet-workout-graph'
+            })
+          : React.createElement('p', { className: 'journal-course-preview-empty' },
+              '코스 지도 없음 — Strava MMP 동기화 후 다시 열어 주세요.'
+            ),
       React.createElement('div', { className: 'journal-tab-content-inner' }, rows)
     );
   }

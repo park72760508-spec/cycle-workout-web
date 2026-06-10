@@ -186,12 +186,19 @@
     var summary = mergeLogsForSummary(logs, userProfile);
 
     var CourseMap = window.JournalCourseMapPreview;
+    var WorkoutGraph = window.JournalWorkoutGraphPreview;
+    var graphUtils = window.journalWorkoutGraphUtils;
     var utils = window.stravaPolylineUtils;
     var dailyRouteDoc = props.dailyRouteDoc || null;
     var routeProfile =
       utils && typeof utils.routeProfileFromLogs === 'function'
         ? utils.routeProfileFromLogs(logs, dailyRouteDoc)
         : { hasRoute: false, hasElevation: false, segmentCount: 0 };
+    var workoutId =
+      graphUtils && typeof graphUtils.resolveWorkoutIdFromLogs === 'function'
+        ? graphUtils.resolveWorkoutIdFromLogs(null, logs)
+        : '';
+    var showWorkoutGraph = !routeProfile.hasRoute && !!workoutId && WorkoutGraph;
     var mapKey =
       (selectedDate || '') +
       '-seg' +
@@ -215,9 +222,16 @@
             mapHeight: 200,
             className: 'journal-daily-summary-course-map'
           })
-        : React.createElement('p', { className: 'journal-course-preview-empty' },
-            '코스 지도 없음 — Strava 「MMP 포함」 동기화 후 달력을 새로고침하세요.'
-          ),
+        : showWorkoutGraph
+          ? React.createElement(WorkoutGraph, {
+              key: 'wo-' + workoutId + '-' + (selectedDate || ''),
+              workoutId: workoutId,
+              maxHeight: 200,
+              className: 'journal-daily-summary-workout-graph'
+            })
+          : React.createElement('p', { className: 'journal-course-preview-empty' },
+              '코스 지도 없음 — Strava 「MMP 포함」 동기화 후 달력을 새로고침하세요.'
+            ),
       React.createElement('div', { className: 'journal-daily-summary-grid' },
         React.createElement('div', { className: 'journal-summary-item' },
           React.createElement('span', { className: 'journal-summary-label' }, '거리'),
