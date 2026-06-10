@@ -76,6 +76,21 @@ function buildLightweightSplitsMetric(splitsMetric) {
   return out.length > 0 ? out : null;
 }
 
+/** Strava suffer_score 우선, 없으면 fn_running_activity_tss 와 동일 HR·시간 추정 */
+function estimateRunningTss(activity, durationSec, avgHr) {
+  const suffer = num(activity.suffer_score);
+  if (suffer != null && suffer > 0) {
+    return Math.round(suffer * 10) / 10;
+  }
+  const sec = Number(durationSec) || 0;
+  const hr = Number(avgHr) || 0;
+  if (sec > 0 && hr > 0) {
+    const ifVal = hr / 180;
+    return Math.round((sec / 3600) * ifVal * ifVal * 100 * 10) / 10;
+  }
+  return 0;
+}
+
 function mapStravaRunningToActivityRow(activity, firebaseUid) {
   const uidConfig = {
     uidNamespace: String(supabaseDualWriteServer.uidNamespaceParam.value() || "").trim(),
@@ -92,6 +107,7 @@ function mapStravaRunningToActivityRow(activity, firebaseUid) {
   const distanceM = Number(activity.distance) || 0;
   const distanceKm = Math.round((distanceM / 1000) * 1000) / 1000;
   const durationSec = Math.round(Number(activity.moving_time) || Number(activity.elapsed_time) || 0);
+  const avgHr = int(activity.average_heartrate, null);
   let avgSpeedKmh = num(activity.average_speed);
   if (avgSpeedKmh != null) {
     avgSpeedKmh = Math.round(avgSpeedKmh * 3.6 * 100) / 100;
@@ -108,8 +124,9 @@ function mapStravaRunningToActivityRow(activity, firebaseUid) {
     distance_km: distanceKm > 0 ? distanceKm : null,
     elevation_gain_m: num(activity.total_elevation_gain),
     avg_speed_kmh: avgSpeedKmh,
-    avg_hr: int(activity.average_heartrate, null),
+    avg_hr: avgHr,
     max_hr: int(activity.max_heartrate, null),
+    tss: estimateRunningTss(activity, durationSec, avgHr),
     splits_metric: buildLightweightSplitsMetric(activity.splits_metric),
     updated_at: new Date().toISOString(),
   };
