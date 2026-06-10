@@ -570,6 +570,26 @@ export const naverSubscriptionSyncTest = onRequest(
 
 /** Strava Webhook: index.js의 processStravaActivity 호출 (순환 참조 방지를 위해 런타임 require) */
 // eslint-disable-next-line @typescript-eslint/no-require-imports
+const stravaGapDetect = require("../stravaGapDetect") as {
+  enqueueStravaWebhookRetry: (
+    db: admin.firestore.Firestore,
+    entry: {
+      ownerId: number;
+      objectId: number;
+      userId?: string | null;
+      reason?: string;
+      status?: number;
+      error?: string;
+    }
+  ) => Promise<void>;
+  markStravaWebhookRetryDone: (
+    db: admin.firestore.Firestore,
+    ownerId: number,
+    objectId: number
+  ) => Promise<void>;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const stravaSyncRetry = require("../stravaSyncRetry") as {
   markStravaSyncRetryPending: (
     db: admin.firestore.Firestore,
@@ -636,6 +656,14 @@ async function markWebhookStravaSyncRetryPending(
     status: failStatus || 500,
     activityId,
   });
+  await stravaGapDetect.enqueueStravaWebhookRetry(db, {
+    ownerId: Number(ownerId),
+    objectId: Number(objectId),
+    userId,
+    reason: inferWebhookRetryReason(failStatus, errorText),
+    status: failStatus || 500,
+    error: errorText,
+  });
   console.warn("[Strava Webhook] 재시도 pending 등록:", {
     userId,
     activityId,
@@ -676,6 +704,8 @@ async function processStravaActivityAsync(
     await markWebhookStravaSyncRetryPending(db, ownerId, objectId, legacyResult);
     return;
   }
+
+  await stravaGapDetect.markStravaWebhookRetryDone(db, ownerId, objectId);
 
   const userId = String(legacyResult.userId || "").trim();
   const userTss = Number(legacyResult.userTss || 0);
@@ -1260,5 +1290,5 @@ export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
 /** 라이딩 모임 참석 검증 (Strava 스트림 + 집결지 반경 200m, 모임 시각 ±1h) — 방장 전용 Callable */
 export const verifyMeetingAttendance = createVerifyMeetingAttendance(stravaClientSecret);
 
-/** 서울 새벽 3:30: 전날 Strava 배치(02:00) 이후 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
+/** 서울 새벽 3:30: stravaSyncPreviousDay(00:10 갭 탐지) 이후 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
 export const scheduledRideAttendanceVerification = createScheduledRideAttendanceVerification(stravaClientSecret);
