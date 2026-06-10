@@ -1954,6 +1954,37 @@
       border: 1px dashed rgba(124, 58, 237, 0.25);
       border-radius: 10px;
     }
+    #trainingJournalScreen .journal-workout-graph-wrap {
+      margin: 0 0 14px 0;
+      padding: 12px 14px 14px;
+      border-radius: 12px;
+      background: #ffffff;
+      border: 1px solid rgba(124, 58, 237, 0.12);
+      box-shadow: 0 4px 14px rgba(102, 126, 234, 0.08);
+    }
+    #trainingJournalScreen .journal-workout-graph-title {
+      margin: 0 0 10px 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      line-height: 1.35;
+    }
+    #trainingJournalScreen .journal-workout-graph-inner.workout-card__graph {
+      width: 100%;
+      min-height: 120px;
+    }
+    #trainingJournalScreen .journal-workout-graph-inner .segmented-workout-graph {
+      width: 100%;
+      min-height: 120px;
+      max-height: 200px;
+    }
+    #trainingJournalScreen .journal-workout-graph-status {
+      margin: 0;
+      padding: 24px 12px;
+      text-align: center;
+      font-size: 12px;
+      color: #6b7280;
+    }
     #trainingJournalScreen .journal-daily-summary-header,
     #trainingJournalScreen .journal-daily-summary-grid,
     #trainingJournalScreen .journal-daily-summary-actions {
@@ -24698,6 +24729,8 @@
   <script src="assets/js/journal/JournalCalendarWidget.jsx" type="text/babel"></script>
   <script src="assets/js/journal/RidingCourseSvgBackground.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalCourseMapPreview.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/journalWorkoutGraphUtils.js"></script>
+  <script src="assets/js/journal/JournalWorkoutGraphPreview.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalDailySummary.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalDetailBottomSheet.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalMonthlyDashboard.jsx" type="text/babel"></script>
