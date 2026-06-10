@@ -12474,6 +12474,9 @@ exports.migrateStelvioLogActivityType = onRequest(
 // ---------- Strava Webhook 비동기 처리 (processStravaActivity는 lib에서 호출) ----------
 exports.processStravaActivity = processStravaActivity;
 exports.processOneUserStravaSync = processOneUserStravaSync;
+/** 러닝 Webhook 라우팅·processRunningActivity 전용 — 사이클 함수 본문 변경 없음 */
+exports.refreshStravaTokenForUser = refreshStravaTokenForUser;
+exports.fetchStravaActivityDetail = fetchStravaActivityDetail;
 
 // ---------- VO₂max 연령·성별 Stelvio 실제 평균 집계 (샘플 기여 → 일별 롤링 통계) ----------
 const { rebuildVo2StelvioRollingStats } = require("./vo2DemographicStats");
