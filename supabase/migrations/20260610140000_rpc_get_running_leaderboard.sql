@@ -1,8 +1,24 @@
 -- 러닝 랭킹보드: 모든 연산·보간·JSON 조립은 PostgreSQL RPC 내부에서 처리
 -- Firebase Functions는 get_running_leaderboard RPC thin wrapper만 호출
 
-CREATE INDEX IF NOT EXISTS idx_run_activity_efforts_updated_at
-  ON public.run_activity_efforts (updated_at DESC);
+-- run_activity_efforts 스키마 보강 (기존 테이블에 updated_at/created_at 없을 수 있음)
+ALTER TABLE public.run_activity_efforts ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE public.run_activity_efforts ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+UPDATE public.run_activity_efforts
+SET updated_at = COALESCE(updated_at, created_at, now())
+WHERE updated_at IS NULL;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'run_activity_efforts' AND column_name = 'updated_at'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_run_activity_efforts_updated_at
+      ON public.run_activity_efforts (updated_at DESC);
+  END IF;
+END $$;
 
 /** m/s → sec/km */
 CREATE OR REPLACE FUNCTION public.fn_running_pace_sec_per_km(p_speed_mps double precision)
@@ -68,7 +84,12 @@ AS $$
   WITH filtered AS (
     SELECT r.*
     FROM public.run_activity_efforts r
-    WHERE r.updated_at >= (now() AT TIME ZONE 'Asia/Seoul') - interval '30 days'
+    LEFT JOIN public.activities a
+      ON a.user_id = r.user_id AND a.activity_id = r.activity_id
+    WHERE COALESCE(
+      a.activity_date,
+      (COALESCE(r.updated_at, r.created_at, now()) AT TIME ZONE 'Asia/Seoul')::date
+    ) >= ((now() AT TIME ZONE 'Asia/Seoul')::date - interval '30 days')::date
   ),
   best_1k AS (
     SELECT DISTINCT ON (f.user_id)
