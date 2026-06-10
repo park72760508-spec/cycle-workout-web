@@ -10,11 +10,20 @@
 const admin = require("firebase-admin");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 
-/** Webhook create 라우팅 대상 (Detailed Activity API `type` 필드) */
+/** Webhook create 라우팅 대상 — 소문자 Set, 비교 시 normalize (Run·VirtualRun 등 대소문자 무관) */
 const RUNNING_STRAVA_TYPES = new Set(["run", "virtualrun", "trailrun", "walk"]);
 
-function isRunningStravaActivityType(type) {
-  return RUNNING_STRAVA_TYPES.has(String(type || "").trim().toLowerCase());
+function normalizeStravaActivityTypeToken(type) {
+  return String(type || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+}
+
+/** @param {unknown} type Detailed Activity `type` (예: Run, VirtualRun) @param {unknown} [sportType] */
+function isRunningStravaActivityType(type, sportType) {
+  const candidates = [type, sportType].map(normalizeStravaActivityTypeToken).filter(Boolean);
+  return candidates.some((t) => RUNNING_STRAVA_TYPES.has(t));
 }
 
 function num(v, fallback = null) {
@@ -160,7 +169,7 @@ async function fetchStravaActivityDetailForOwner(db, ownerId, objectId) {
       status: detailRes && detailRes.status ? detailRes.status : 0,
     };
   }
-  return { success: true, userId, activity: detailRes.activity };
+  return { success: true, userId, activity: detailRes.activity, accessToken };
 }
 
 async function upsertRunningActivityToSupabase(firebaseUid, row) {
@@ -226,11 +235,12 @@ async function processRunningActivity(db, ownerId, objectId, activityPrefetched)
     userId = resolved.userId;
   }
 
-  if (!isRunningStravaActivityType(activity.type)) {
+  if (!isRunningStravaActivityType(activity.type, activity.sport_type)) {
     return {
       skipped: true,
       reason: "not_running_type",
       activityType: activity.type,
+      sportType: activity.sport_type,
       userId,
       activityId: String(objectId),
     };
@@ -249,11 +259,25 @@ async function processRunningActivity(db, ownerId, objectId, activityPrefetched)
     splits: Array.isArray(row.splits_metric) ? row.splits_metric.length : 0,
   });
 
+  let effortsResult = null;
+  try {
+    const calculateAndSaveRunEfforts = require("./calculateAndSaveRunEfforts");
+    effortsResult = await calculateAndSaveRunEfforts.calculateAndSaveRunEfforts(
+      db,
+      userId,
+      activity,
+      null
+    );
+  } catch (effortsErr) {
+    console.error("[processRunningActivity] calculateAndSaveRunEfforts 실패:", effortsErr);
+  }
+
   return {
     userId,
     activityId: row.activity_id,
     activityType: row.activity_type,
     upserted: true,
+    efforts: effortsResult && effortsResult.efforts ? effortsResult.efforts : null,
   };
 }
 
