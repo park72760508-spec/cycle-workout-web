@@ -23016,14 +23016,24 @@
           logsByDate[dateKey].push(log);
         }
       });
-      // Strava 우선 필터링: Strava TSS 합이 > 0이면 Strava만, TSS=0이면 Stelvio도 보존
+      // Strava 우선(TSS): Strava TSS>0이면 표시·합산은 Strava만, 단 Stelvio 동반 로그는 workout_id·인도어 그래프용으로 보존
+      function isStelvioCompanionLog(l) {
+        if (!l) return false;
+        if (String(l.activity_type || '').trim().toLowerCase() === 'stelvio') return true;
+        return String(l.source || '').trim().toLowerCase() === 'stelvio';
+      }
       Object.keys(logsByDate).forEach(function(dateKey) {
         var arr = logsByDate[dateKey];
         var stravaLogs = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
         if (stravaLogs.length > 0) {
           var stravaTssSum = stravaLogs.reduce(function(s, l) { return s + (Number(l.tss) || 0); }, 0);
           if (stravaTssSum > 0) {
-            logsByDate[dateKey] = stravaLogs;
+            var stelvioCompanions = arr.filter(isStelvioCompanionLog);
+            var kept = stravaLogs.slice();
+            if (stelvioCompanions.length > 0) {
+              kept._companionStelvioLogs = stelvioCompanions;
+            }
+            logsByDate[dateKey] = kept;
           }
           // Strava TSS=0이면 원본(Strava+Stelvio 모두) 유지 — Stelvio TSS로 계산 가능하도록
         }
