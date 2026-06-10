@@ -196,6 +196,10 @@ export function mapRideRow(
     max_hr_60min: int(d.max_hr_60min, 0) || null,
     tss_applied: Boolean(d.tss_applied),
     tss_applied_at: toTimestamptz(d.tss_applied_at),
+    time_in_zones_json:
+      d.time_in_zones && typeof d.time_in_zones === "object"
+        ? d.time_in_zones
+        : null,
     created_at: toTimestamptz(d.created_at) ?? new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
