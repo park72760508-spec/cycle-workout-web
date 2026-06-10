@@ -1963,6 +1963,27 @@
       border: 1px solid rgba(124, 58, 237, 0.12);
       box-shadow: 0 4px 14px rgba(102, 126, 234, 0.08);
     }
+    /* 워크아웃 그래프: 세부 정보와 간격 축소 (코스 지도 margin·min-height 는 유지) */
+    #trainingJournalScreen .journal-summary-sheet-workout-graph.journal-workout-graph-wrap,
+    #trainingJournalScreen .journal-daily-summary-workout-graph.journal-workout-graph-wrap {
+      margin-bottom: 0;
+      padding-bottom: 8px;
+    }
+    #trainingJournalScreen .journal-summary-sheet-workout-graph .journal-workout-graph-title,
+    #trainingJournalScreen .journal-daily-summary-workout-graph .journal-workout-graph-title {
+      margin-bottom: 6px;
+    }
+    #trainingJournalScreen .journal-summary-sheet-workout-graph .journal-workout-graph-inner.workout-card__graph,
+    #trainingJournalScreen .journal-daily-summary-workout-graph .journal-workout-graph-inner.workout-card__graph {
+      min-height: 0;
+      padding: 0;
+    }
+    #trainingJournalScreen .journal-tab-content--summary-workout {
+      min-height: 0;
+    }
+    #trainingJournalScreen .journal-daily-summary--with-workout-graph .journal-daily-summary-grid {
+      margin-top: 0;
+    }
     #trainingJournalScreen .journal-workout-graph-title {
       margin: 0 0 10px 0;
       font-size: 13px;
@@ -1976,7 +1997,8 @@
     }
     #trainingJournalScreen .journal-workout-graph-inner .segmented-workout-graph {
       width: 100%;
-      min-height: 120px;
+      min-height: 80px;
+      height: 120px;
       max-height: 200px;
     }
     #trainingJournalScreen .journal-workout-graph-status {
