@@ -649,7 +649,11 @@
         weight: log.weight,
         time_in_zones: log.time_in_zones,
         source: log.source,
-        workout_id: log.workout_id || null,
+        activity_type: log.activity_type || null,
+        workout_id:
+          String(log.activity_type || '').trim().toLowerCase() === 'stelvio' && log.workout_id != null
+            ? String(log.workout_id).trim() || null
+            : null,
         summary_polyline: log.summary_polyline,
         elevation_profile: log.elevation_profile,
         title: log.title
@@ -753,9 +757,25 @@
       weight: logs[0].weight,
       time_in_zones: mergedTiz,
       source: logs[0].source,
+      activity_type: (function () {
+        for (var ai = 0; ai < logs.length; ai++) {
+          var a0 = logs[ai] && logs[ai].activity_type;
+          if (String(a0 || '').trim().toLowerCase() === 'stelvio') return a0;
+        }
+        return logs[0].activity_type || null;
+      })(),
       workout_id: (function () {
+        var isStelvio =
+          window.journalWorkoutGraphUtils &&
+          typeof window.journalWorkoutGraphUtils.isStelvioActivityLog === 'function'
+            ? window.journalWorkoutGraphUtils.isStelvioActivityLog
+            : function (l) {
+                return String(l && l.activity_type || '').trim().toLowerCase() === 'stelvio';
+              };
         for (var wi = 0; wi < logs.length; wi++) {
-          var w0 = logs[wi] && logs[wi].workout_id;
+          var lw = logs[wi];
+          if (!isStelvio(lw)) continue;
+          var w0 = lw && lw.workout_id;
           if (w0 != null && String(w0).trim() !== '') return String(w0).trim();
         }
         return null;
