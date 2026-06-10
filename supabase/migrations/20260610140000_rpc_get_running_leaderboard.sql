@@ -50,7 +50,10 @@ AS $$
         0::numeric,
         LEAST(
           100::numeric,
-          ((p_novice_sec - p_pace_sec) / (p_novice_sec - p_elite_sec)::double precision) * 100.0
+          (
+            (p_novice_sec::numeric - p_pace_sec::numeric)
+            / NULLIF((p_novice_sec - p_elite_sec)::numeric, 0)
+          ) * 100
         )
       ),
       1
