@@ -9058,6 +9058,49 @@ exports.getRankingBuildMetaPublic = onRequest(
 );
 
 /**
+ * 러닝 랭킹보드 — Supabase RPC thin gateway (연산 없음).
+ *
+ * [사이클 영향 검토 — 2026-06-10]
+ * - getWeeklyRanking / getPeakPowerRanking / rankingReadRouter: 미수정
+ * - Firestore users/logs·rides·랭킹 집계: 미접촉
+ * - Supabase public.rides·daily_summaries·MV: 미접촉
+ * - 오직 supabase.rpc('get_running_leaderboard') 호출만 수행
+ */
+exports.getRunningLeaderboard = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.set("Cache-Control", "public, max-age=300, s-maxage=300");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    try {
+      await supabaseDualWriteServer.refreshDualRunFromRemoteConfig(admin, true);
+      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+      const { data, error } = await supabase.rpc("get_running_leaderboard");
+      if (error) {
+        console.error("[getRunningLeaderboard]", error);
+        return res.status(500).json({ success: false, error: error.message });
+      }
+      return res.status(200).json({ success: true, leaderboard: data });
+    } catch (e) {
+      console.error("[getRunningLeaderboard]", e);
+      return res.status(500).json({
+        success: false,
+        error: e && e.message ? e.message : String(e),
+      });
+    }
+  }
+);
+
+/**
  * Phase 6 — 훈련 로그 Read DB (Firebase logs vs Supabase rides) 공개 조회.
  */
 exports.getLogsReadRoutingPublic = onRequest(
