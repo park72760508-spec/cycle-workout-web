@@ -57,6 +57,7 @@ ALTER TABLE public.activities ADD COLUMN IF NOT EXISTS avg_speed_kmh numeric(6,2
 ALTER TABLE public.activities ADD COLUMN IF NOT EXISTS avg_hr smallint;
 ALTER TABLE public.activities ADD COLUMN IF NOT EXISTS max_hr smallint;
 ALTER TABLE public.activities ADD COLUMN IF NOT EXISTS splits_metric jsonb;
+ALTER TABLE public.activities ADD COLUMN IF NOT EXISTS tss numeric(8,2) NOT NULL DEFAULT 0;
 ALTER TABLE public.activities ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE public.activities ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
