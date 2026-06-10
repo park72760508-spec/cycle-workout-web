@@ -514,6 +514,38 @@ async function fetchStravaActivityIdsForUser(firebaseUid, sinceDateStr) {
   return ids;
 }
 
+/** Phase 4 — shadow 중단 시 특정 activity_id 존재 여부 (range query 대신 in 필터) */
+async function fetchStravaActivityIdsExistForUser(firebaseUid, activityIds) {
+  const uidConfig = {
+    uidNamespace: String(uidNamespaceParam.value() || "").trim(),
+    uidMode: String(uidModeParam.value() || "v5").trim(),
+  };
+  const userId = resolveUserUuid(firebaseUid, uidConfig.uidNamespace, uidConfig.uidMode);
+  if (!userId) return new Set();
+
+  const list = [...new Set((activityIds || []).map((id) => str(id)).filter(Boolean))];
+  if (list.length === 0) return new Set();
+
+  const supabase = getSupabaseAdminClient();
+  const ids = new Set();
+  const chunkSize = 100;
+  for (let i = 0; i < list.length; i += chunkSize) {
+    const chunk = list.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("rides")
+      .select("activity_id")
+      .eq("user_id", userId)
+      .eq("source", "strava")
+      .in("activity_id", chunk);
+    if (error) throw error;
+    for (const row of data || []) {
+      const id = str(row.activity_id);
+      if (id) ids.add(id);
+    }
+  }
+  return ids;
+}
+
 async function fetchStravaTssSumForDate(firebaseUid, dateStr) {
   const uidConfig = {
     uidNamespace: String(uidNamespaceParam.value() || "").trim(),
@@ -700,5 +732,6 @@ module.exports = {
   getSupabaseAdminClient,
   isUidInCanaryPercent,
   fetchStravaActivityIdsForUser,
+  fetchStravaActivityIdsExistForUser,
   fetchStravaTssSumForDate,
 };

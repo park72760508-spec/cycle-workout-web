@@ -6,6 +6,7 @@
  */
 const admin = require("firebase-admin");
 const stravaSyncRetry = require("./stravaSyncRetry");
+const stravaLogRead = require("./stravaLogRead");
 
 const STRAVA_GAP_DETECT_PAGE_SIZE = 30;
 const STRAVA_WEBHOOK_RETRIES_COLLECTION = "strava_webhook_retries";
@@ -125,9 +126,20 @@ async function resolveUserIdByAthleteId(db, athleteId) {
 /**
  * @param {import('firebase-admin').firestore.Firestore} db
  * @param {string} userId
- * @param {string} dateFrom
- * @param {string} dateTo
+ * @param {string[]} activityIds
+ * @param {{ supabaseDualWriteServer?: object }} [options]
  */
+async function getExistingStravaActivityIdsForActivityList(db, userId, activityIds, options = {}) {
+  const { ids, readCount } = await stravaLogRead.getExistingStravaLogDocsByActivityIds(
+    db,
+    userId,
+    activityIds,
+    options
+  );
+  return { ids, readCount };
+}
+
+/** @deprecated date range query — gap detect는 getExistingStravaActivityIdsForActivityList 사용 */
 async function getExistingStravaActivityIdsForDateRange(db, userId, dateFrom, dateTo) {
   const ids = new Set();
   const from = String(dateFrom || "").slice(0, 10);
@@ -271,9 +283,14 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
     return { missingIds: [], apiCount: 1, listCount: 0 };
   }
 
-  const existingIds = await getExistingStravaActivityIdsForDateRange(db, userId, range.dateFrom, range.dateTo);
+  const { ids: existingIds, readCount } = await getExistingStravaActivityIdsForActivityList(
+    db,
+    userId,
+    listIds,
+    deps && deps.supabaseDualWriteServer ? { supabaseDualWriteServer: deps.supabaseDualWriteServer } : {}
+  );
   const missingIds = listIds.filter((id) => !existingIds.has(id));
-  return { missingIds, apiCount: 1, listCount: listIds.length };
+  return { missingIds, apiCount: 1, listCount: listIds.length, logReadCount: readCount };
 }
 
 /**
@@ -445,6 +462,7 @@ module.exports = {
   listPendingRetryUserIds,
   buildGapDetectWorklist,
   detectMissingActivityIdsForUser,
+  getExistingStravaActivityIdsForActivityList,
   getExistingStravaActivityIdsForDateRange,
   runGapDetectSyncJob,
 };

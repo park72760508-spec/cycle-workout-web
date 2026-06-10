@@ -39,6 +39,7 @@ const stravaDualWrite = require("./stravaDualWrite");
 const stravaRouteMerge = require("./stravaRouteMerge");
 const stravaSyncRetry = require("./stravaSyncRetry");
 const stravaGapDetect = require("./stravaGapDetect");
+const stravaLogRead = require("./stravaLogRead");
 const rankingReadRouter = require("./rankingReadRouter");
 const rankingReadConfig = require("./rankingReadConfig");
 const supabaseRankingReader = require("./supabaseRankingReader");
@@ -1544,8 +1545,9 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     return { userId, activityId, userTss: 0, isNew: false };
   }
 
-  const existingIds = await getExistingStravaActivityIds(db, userId);
-  const isNew = !existingIds.has(activityId);
+  const isNew = !(await stravaLogRead.hasStravaActivityLog(db, userId, activityId, {
+    supabaseDualWriteServer,
+  }));
 
   const logsRef = db.collection("users").doc(userId).collection("logs");
   try {
@@ -1858,9 +1860,15 @@ async function getStelvioPointsForDate(db, userId, dateStr) {
   }
 }
 
-async function getExistingStravaActivityIds(db, userId) {
+async function getExistingStravaActivityIds(db, userId, activityIds) {
+  if (Array.isArray(activityIds) && activityIds.length > 0) {
+    const { ids } = await stravaLogRead.getExistingStravaLogDocsByActivityIds(db, userId, activityIds, {
+      supabaseDualWriteServer,
+    });
+    return ids;
+  }
   const ids = new Set();
-  // [비용절감] 최근 1년치 Strava 로그만 조회 (중복 체크는 최근 데이터만 필요)
+  // legacy: activityIds 미지정 시 1년 range query
   const cutoffDate = new Date();
   cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
   const cutoffStr = cutoffDate.toISOString().split("T")[0];
@@ -1883,11 +1891,20 @@ async function getExistingStravaActivityIds(db, userId) {
   return ids;
 }
 
-/** 기존 Strava 로그 조회 (activity_id → { ref, data }). MMP 보완용. */
-async function getExistingStravaLogsMap(db, userId) {
+/** activityIds 있으면 doc.getAll, 없으면 legacy 1년 range query */
+async function getExistingStravaLogsMap(db, userId, activityIds) {
+  if (Array.isArray(activityIds) && activityIds.length > 0) {
+    const { ids, docMap, readCount } = await stravaLogRead.getExistingStravaLogDocsByActivityIds(
+      db,
+      userId,
+      activityIds,
+      { supabaseDualWriteServer }
+    );
+    return { ids, docMap, readCount };
+  }
   const ids = new Set();
   const docMap = new Map();
-  // [비용절감] 최근 1년치 Strava 로그만 조회 (MMP 보완도 최근 데이터 위주)
+  // legacy: activityIds 미지정 시 1년 range query
   const cutoffDate = new Date();
   cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
   const cutoffStr = cutoffDate.toISOString().split("T")[0];
@@ -1903,7 +1920,7 @@ async function getExistingStravaLogsMap(db, userId) {
       docMap.set(actId, { ref: doc.ref, data });
     }
   });
-  return { ids, docMap };
+  return { ids, docMap, readCount: snapshot.size };
 }
 
 async function refreshStravaTokenForUser(db, userId) {
@@ -2259,7 +2276,14 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       hint: buildEmptyStravaFetchHint(diagnosticBase, actCount, firstPageStatus),
     });
   }
-  const { ids: existingIds, docMap: existingDocMap } = await getExistingStravaLogsMap(db, userId);
+  const syncActivityIds = (Array.isArray(activities) ? activities : [])
+    .map((act) => (act && act.id != null ? String(act.id) : ""))
+    .filter(Boolean);
+  const { ids: existingIds, docMap: existingDocMap, readCount: existingLogReadCount } =
+    await getExistingStravaLogsMap(db, userId, syncActivityIds);
+  if (syncActivityIds.length > 0) {
+    console.log(`[stravaSync] userId=${userId} existingLogReads=${existingLogReadCount}/${syncActivityIds.length}`);
+  }
   const stelvioDates = await getStelvioLogDates(db, userId);
   const logsRef = db.collection("users").doc(userId).collection("logs");
   /** 같은 날 Stelvio가 있는 날짜별 Strava TSS 합산 → 차액만 추가 적립 */
@@ -3459,6 +3483,7 @@ async function runStravaGapDetectPreviousDayJob(db, logPrefix) {
       refreshStravaTokenForUser,
       fetchStravaActivitiesPage,
       processStravaActivity,
+      supabaseDualWriteServer,
     },
     logPrefix || "[stravaSyncPreviousDay]",
     { includeGapScanAllUsers: true }
