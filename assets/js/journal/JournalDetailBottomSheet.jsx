@@ -907,7 +907,11 @@
       : null;
     return React.createElement(
       'div',
-      { className: 'journal-tab-content journal-tab-content--summary-route' },
+      {
+        className:
+          'journal-tab-content journal-tab-content--summary-route' +
+          (showWorkoutGraph ? ' journal-tab-content--summary-workout' : '')
+      },
       CourseMap && routeInfo.hasRoute
         ? React.createElement(
             'div',

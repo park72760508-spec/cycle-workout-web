@@ -210,7 +210,11 @@
       '-' +
       ((routeProfile.activity_ids || []).join(',') || 'none');
 
-    return React.createElement('div', { className: 'card journal-daily-summary journal-daily-summary--with-route' },
+    return React.createElement('div', {
+      className:
+        'card journal-daily-summary journal-daily-summary--with-route' +
+        (showWorkoutGraph ? ' journal-daily-summary--with-workout-graph' : '')
+    },
       React.createElement('div', { className: 'journal-daily-summary-header' },
         React.createElement('h3', { className: 'journal-daily-summary-title' },
           formatDailySummaryHeading(selectedDate, logs)

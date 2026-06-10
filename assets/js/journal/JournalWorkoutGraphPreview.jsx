@@ -110,8 +110,7 @@
         : React.createElement('p', { className: 'journal-workout-graph-title' }, '인도어 훈련 워크아웃'),
       React.createElement('div', {
         className: 'journal-workout-graph-inner workout-card__graph',
-        ref: graphRef,
-        style: { minHeight: Math.min(maxHeight, 200) + 'px' }
+        ref: graphRef
       })
     );
   }
