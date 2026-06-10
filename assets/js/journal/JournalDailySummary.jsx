@@ -194,9 +194,13 @@
       utils && typeof utils.routeProfileFromLogs === 'function'
         ? utils.routeProfileFromLogs(logs, dailyRouteDoc)
         : { hasRoute: false, hasElevation: false, segmentCount: 0 };
+    var logsExpanded =
+      graphUtils && typeof graphUtils.expandLogsWithStelvioCompanions === 'function'
+        ? graphUtils.expandLogsWithStelvioCompanions(logs || [])
+        : logs || [];
     var workoutId =
       graphUtils && typeof graphUtils.resolveWorkoutIdFromLogs === 'function'
-        ? graphUtils.resolveWorkoutIdFromLogs(null, logs)
+        ? graphUtils.resolveWorkoutIdFromLogs(null, logsExpanded)
         : '';
     var showWorkoutGraph = !routeProfile.hasRoute && !!workoutId && WorkoutGraph;
     var mapKey =

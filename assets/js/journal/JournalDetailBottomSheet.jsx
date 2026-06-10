@@ -650,10 +650,16 @@
         time_in_zones: log.time_in_zones,
         source: log.source,
         activity_type: log.activity_type || null,
-        workout_id:
-          String(log.activity_type || '').trim().toLowerCase() === 'stelvio' && log.workout_id != null
-            ? String(log.workout_id).trim() || null
-            : null,
+        workout_id: (function () {
+        var isSt =
+          window.journalWorkoutGraphUtils &&
+          typeof window.journalWorkoutGraphUtils.isStelvioActivityLog === 'function'
+            ? window.journalWorkoutGraphUtils.isStelvioActivityLog(log)
+            : String(log.activity_type || '').trim().toLowerCase() === 'stelvio' ||
+              String(log.source || '').trim().toLowerCase() === 'stelvio';
+        if (!isSt || log.workout_id == null) return null;
+        return String(log.workout_id).trim() || null;
+      })(),
         summary_polyline: log.summary_polyline,
         elevation_profile: log.elevation_profile,
         title: log.title
@@ -823,7 +829,11 @@
     var WorkoutGraph = window.JournalWorkoutGraphPreview;
     var graphUtils = window.journalWorkoutGraphUtils;
     var utils = window.stravaPolylineUtils;
-    var logsForRoute = log && log._logsForShare ? log._logsForShare : null;
+    var logsForRouteRaw = log && log._logsForShare ? log._logsForShare : null;
+    var logsForRoute =
+      graphUtils && typeof graphUtils.expandLogsWithStelvioCompanions === 'function'
+        ? graphUtils.expandLogsWithStelvioCompanions(logsForRouteRaw || [])
+        : logsForRouteRaw;
     var routeInfo =
       log && log._routeProfileMerged
         ? log._routeProfileMerged

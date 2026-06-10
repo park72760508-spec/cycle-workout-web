@@ -345,14 +345,32 @@
       }
       setEnrichedLogsForSelectedDate(logsForSelectedDate);
       var userId = getCurrentUserId();
-      var enrichFn = window.enrichLogsHrPeaksFromFirestore;
-      if (!userId || typeof enrichFn !== 'function') return;
+      var enrichHrFn = window.enrichLogsHrPeaksFromFirestore;
+      var enrichWoFn =
+        window.journalWorkoutGraphUtils &&
+        typeof window.journalWorkoutGraphUtils.enrichLogsWithStelvioWorkoutFromFirestore === 'function'
+          ? window.journalWorkoutGraphUtils.enrichLogsWithStelvioWorkoutFromFirestore
+          : null;
+      if (!userId) return;
       var cancelled = false;
-      enrichFn(userId, logsForSelectedDate).then(function (enriched) {
-        if (!cancelled && enriched && enriched.length) {
-          setEnrichedLogsForSelectedDate(enriched);
-        }
-      }).catch(function () { /* keep raw copy */ });
+      var chain = Promise.resolve(logsForSelectedDate.slice());
+      if (typeof enrichHrFn === 'function') {
+        chain = chain.then(function (base) {
+          return enrichHrFn(userId, base);
+        });
+      }
+      if (enrichWoFn) {
+        chain = chain.then(function (base) {
+          return enrichWoFn(userId, base, selectedDate);
+        });
+      }
+      chain
+        .then(function (enriched) {
+          if (!cancelled && enriched && enriched.length) {
+            setEnrichedLogsForSelectedDate(enriched);
+          }
+        })
+        .catch(function () { /* keep raw copy */ });
       return function () {
         cancelled = true;
       };
