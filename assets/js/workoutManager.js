@@ -6722,6 +6722,7 @@ window.updateTrainingProgressGrouped = updateTrainingProgressGrouped;
 window.apiCreateWorkoutWithSegments = apiCreateWorkoutWithSegments;
 window.apiGetWorkouts = apiGetWorkouts;
 window.apiGetWorkout = apiGetWorkout;
+window.apiGetWorkoutSegments = apiGetWorkoutSegments;
 window.apiUpdateWorkout = apiUpdateWorkout;
 window.apiDeleteWorkout = apiDeleteWorkout;
 
