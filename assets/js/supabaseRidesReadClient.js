@@ -1,9 +1,10 @@
 /**
  * Phase 6 — 훈련 로그 Read (Supabase public.rides → Firestore logs 호환 형태).
- * Auth Bridge 실패 시 getTrainingLogsForRead relay(Service Role) 폴백.
+ * 기본: Firebase ID 토큰 + getTrainingLogsForRead relay (Service Role, Auth Bridge 불필요).
+ * 보조: 이미 유효한 Supabase 클라이언트 세션이 있을 때만 direct RLS 조회 (Bridge setSession 호출 안 함).
  * @see functions/supabaseGroupReader.js fetchUserRideLogsRecent
  */
-import { syncSupabaseSessionFromBridge, getSupabaseClient } from './supabaseDualWrite.js';
+import { getSupabaseClient } from './supabaseDualWrite.js';
 
 const TRAINING_LOGS_READ_RELAY_DEFAULT =
   'https://us-central1-stelvio-ai.cloudfunctions.net/getTrainingLogsForRead';
@@ -175,83 +176,83 @@ export function mapRideRowToTrainingLog(row) {
 const RIDE_SELECT =
   'activity_id, source, activity_type, title, ride_date, workout_id, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, weight_at_ride_kg, ftp_at_time, avg_cadence, avg_hr, max_hr, max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min, avg_watts, weighted_watts, max_watts, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_30min_watts, max_40min_watts, max_60min_watts, tss, intensity_factor, kilojoules, earned_points, efficiency_factor, rpe, tss_applied, summary_polyline, elevation_profile_json, route_profile_updated_at, time_in_zones_json';
 
+/** localStorage에 남은 만료/무효 세션으로 /auth/v1/user 403이 반복되지 않도록 검사 */
+function hasFreshSupabaseClientSession(session) {
+  if (!session || !session.user || !session.user.id) return false;
+  if (!session.expires_at) return true;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return session.expires_at > nowSec + 120;
+}
+
+function rowsToTrainingLogs(rows) {
+  const logs = [];
+  for (const row of rows || []) {
+    if (!isRidingRideRow(row)) continue;
+    logs.push(mapRideRowToTrainingLog(row));
+  }
+  return logs;
+}
+
+/** Auth Bridge(setSession) 없이 — 기존 유효 세션만 사용 */
+async function tryDirectRidesRead(queryBuilder) {
+  try {
+    const supabase = await getSupabaseClient();
+    const { data: sess } = await supabase.auth.getSession();
+    if (!hasFreshSupabaseClientSession(sess.session)) return null;
+    const userUuid = sess.session.user.id;
+    const { data, error } = await queryBuilder(supabase, userUuid);
+    if (error) throw error;
+    return rowsToTrainingLogs(data);
+  } catch (e) {
+    return null;
+  }
+}
+
 export async function getUserTrainingLogsFromSupabase(userId, options = {}) {
   if (!userId) throw new Error('userId는 필수입니다.');
   const limitValue = Math.min(1000, Math.max(1, Number(options.limit) || 50));
 
-  try {
-    await syncSupabaseSessionFromBridge();
-    const supabase = await getSupabaseClient();
-    const { data: sess } = await supabase.auth.getSession();
-    if (!sess.session?.user?.id) {
-      throw new Error('Supabase auth session 없음');
-    }
-
-    const { data, error } = await supabase
+  const direct = await tryDirectRidesRead(function (supabase, userUuid) {
+    return supabase
       .from('rides')
       .select(RIDE_SELECT)
-      .eq('user_id', sess.session.user.id)
+      .eq('user_id', userUuid)
       .order('ride_date', { ascending: false })
       .limit(limitValue);
-    if (error) throw error;
-
-    const logs = [];
-    for (const row of data || []) {
-      if (!isRidingRideRow(row)) continue;
-      logs.push(mapRideRowToTrainingLog(row));
-    }
-    console.log('[supabaseRidesRead] getUserTrainingLogs (direct)', { userId, count: logs.length });
-    return logs;
-  } catch (directErr) {
-    console.warn(
-      '[supabaseRidesRead] direct read 실패 → relay 폴백:',
-      directErr && directErr.message ? directErr.message : directErr
-    );
-    return fetchTrainingLogsViaReadRelay(userId, { limit: limitValue });
+  });
+  if (direct) {
+    console.log('[supabaseRidesRead] getUserTrainingLogs (direct)', { userId, count: direct.length });
+    return direct;
   }
+
+  return fetchTrainingLogsViaReadRelay(userId, { limit: limitValue });
 }
 
 export async function getTrainingLogsByDateRangeFromSupabase(userId, year, month) {
   if (!userId) throw new Error('userId는 필수입니다.');
 
-  try {
-    const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month + 1, 0);
-    const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+  const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const endDate = new Date(year, month + 1, 0);
+  const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-    await syncSupabaseSessionFromBridge();
-    const supabase = await getSupabaseClient();
-    const { data: sess } = await supabase.auth.getSession();
-    if (!sess.session?.user?.id) {
-      throw new Error('Supabase auth session 없음');
-    }
-
-    const { data, error } = await supabase
+  const direct = await tryDirectRidesRead(function (supabase, userUuid) {
+    return supabase
       .from('rides')
       .select(RIDE_SELECT)
-      .eq('user_id', sess.session.user.id)
+      .eq('user_id', userUuid)
       .gte('ride_date', startStr)
       .lte('ride_date', endStr)
       .order('ride_date', { ascending: true });
-    if (error) throw error;
-
-    const logs = [];
-    for (const row of data || []) {
-      if (!isRidingRideRow(row)) continue;
-      logs.push(mapRideRowToTrainingLog(row));
-    }
+  });
+  if (direct) {
     console.log('[supabaseRidesRead] getTrainingLogsByDateRange (direct)', {
       userId,
       year,
       month: month + 1,
-      count: logs.length,
+      count: direct.length,
     });
-    return logs;
-  } catch (directErr) {
-    console.warn(
-      '[supabaseRidesRead] direct month read 실패 → relay 폴백:',
-      directErr && directErr.message ? directErr.message : directErr
-    );
-    return fetchTrainingLogsViaReadRelay(userId, { year, month });
+    return direct;
   }
+
+  return fetchTrainingLogsViaReadRelay(userId, { year, month });
 }
