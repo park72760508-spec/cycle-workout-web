@@ -6503,7 +6503,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen .stelvio-period-dropdown,
 #stelvioRankingScreen .stelvio-metric-dropdown,
 #stelvioRankingScreen .stelvio-gender-dropdown,
-#stelvioRankingScreen .stelvio-category-dropdown {
+#stelvioRankingScreen .stelvio-category-dropdown,
+#runningRankingScreen .stelvio-gender-dropdown,
+#runningRankingScreen .stelvio-category-dropdown {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -6515,10 +6517,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.14);
   min-width: 70px;
 }
-#stelvioRankingScreen .stelvio-category-dropdown {
+#stelvioRankingScreen .stelvio-category-dropdown,
+#runningRankingScreen .stelvio-category-dropdown {
   min-width: 108px;
 }
-#stelvioRankingScreen .stelvio-dropdown-caption {
+#stelvioRankingScreen .stelvio-dropdown-caption,
+#runningRankingScreen .stelvio-dropdown-caption {
   font-size: 0.72rem;
   font-weight: 700;
   color: #374151;
@@ -6526,17 +6530,20 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-shrink: 0;
   line-height: 1.2;
 }
-#stelvioRankingScreen .stelvio-dropdown-label {
+#stelvioRankingScreen .stelvio-dropdown-label,
+#runningRankingScreen .stelvio-dropdown-label {
   font-size: 0.9rem;
   font-weight: 700;
   color: #374151;
   margin-right: 2px;
 }
-#stelvioRankingScreen .stelvio-dropdown-chevron {
+#stelvioRankingScreen .stelvio-dropdown-chevron,
+#runningRankingScreen .stelvio-dropdown-chevron {
   font-size: 0.75em;
   color: #374151;
 }
-#stelvioRankingScreen .stelvio-dropdown-select {
+#stelvioRankingScreen .stelvio-dropdown-select,
+#runningRankingScreen .stelvio-dropdown-select {
   position: absolute;
   left: 0;
   top: 0;
@@ -8820,7 +8827,9 @@ tr.stelvio-dashboard-current-grade td:last-child {
  * 차트: 목록과 동일하게 양축 팬 허용
  */
 #stelvioRankingScreen .stelvio-duration-chips-wrap,
-#stelvioRankingScreen .stelvio-filter-bar-wrap {
+#stelvioRankingScreen .stelvio-filter-bar-wrap,
+#runningRankingScreen .stelvio-duration-chips-wrap,
+#runningRankingScreen .stelvio-filter-bar-wrap {
   touch-action: pan-x pan-y;
 }
 #stelvioRankingScreen .recharts-responsive-container,
@@ -27481,19 +27490,6 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 }
 .running-ranking-pace-filter {
   margin-bottom: 8px;
-}
-.running-ranking-gender-dropdown {
-  min-width: 88px;
-}
-#runningRankingScreen .stelvio-gender-dropdown {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  padding: 8px 14px;
-  background: #fff;
-  border: 1.5px solid #7c3aed;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.14);
 }
 .running-ranking-list-card {
   margin-bottom: 12px;
