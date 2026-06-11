@@ -15511,6 +15511,24 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   transform: translateY(0);
 }
 
+/* 러닝 서비스 오픈 전 안내 (카테고리 RUN, STELVIO 스타일) */
+.run-service-coming-soon-modal:not(.hidden) {
+  display: flex !important;
+}
+.run-service-coming-soon-content {
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.15);
+}
+.run-service-coming-soon-message {
+  margin-bottom: 20px;
+}
+.run-service-coming-soon-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
 /* Gemini API 미등록 알림 팝업 (iOS 안내 팝업 디자인, STELVIO 스타일) */
 .open-riding-grade2-notice-modal:not(.hidden) {
   display: flex !important;
