@@ -10,8 +10,29 @@ const fs = require('fs');
 
 const PROJECT_ID = 'stelvio-ai';
 const DEFAULT_KEY_PATH = path.join(__dirname, 'serviceAccountKey.json');
+const ENV_PATH = path.join(__dirname, '..', '.env.stelvio-ai');
 const uid = process.argv[2];
 const dateYmd = (process.argv[3] || '').slice(0, 10);
+
+function loadLocalEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  for (const line of fs.readFileSync(filePath, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim();
+    if (key && process.env[key] == null) process.env[key] = val;
+  }
+}
+
+loadLocalEnvFile(ENV_PATH);
+process.env.STELVIO_UID_NAMESPACE =
+  process.env.STELVIO_UID_NAMESPACE || '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+process.env.STELVIO_UID_UUID_MODE = process.env.STELVIO_UID_UUID_MODE || 'v5';
+process.env.SUPABASE_URL =
+  process.env.SUPABASE_URL || 'https://eacrwhtbdqanaxpicqsm.supabase.co';
 
 if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
   console.error('Usage: node scripts/sync-strava-user-date.js <uid> <YYYY-MM-DD>');
