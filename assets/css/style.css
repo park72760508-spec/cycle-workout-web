@@ -1607,7 +1607,8 @@ html.global-hub-glass-nav-active.global-hub-glass-nav-ios-phone {
       (var(--hub-glass-nav-inner-h) * 0.5)
   );
 }
-html.global-hub-glass-nav-active #stelvioRankingScrollArea {
+html.global-hub-glass-nav-active #stelvioRankingScrollArea,
+html.global-hub-glass-nav-active #runningRankingScrollArea {
   padding-bottom: var(--hub-glass-nav-scroll-pad);
   box-sizing: border-box;
 }
@@ -1781,7 +1782,8 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-monthly-dashboa
 html.global-hub-glass-nav-active .global-back-to-top-btn.global-back-to-top-active {
   bottom: calc(24px + 48px * 1.5 + env(safe-area-inset-bottom, 0px));
 }
-#stelvioRankingScreen.active .stelvio-back-to-top-btn {
+#stelvioRankingScreen.active .stelvio-back-to-top-btn,
+#runningRankingScreen.active .stelvio-back-to-top-btn {
   bottom: calc(24px + 48px * 1.5 + env(safe-area-inset-bottom, 0px));
 }
 
@@ -27460,9 +27462,6 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 }
 #runningRankingScreen .stelvio-ranking-screen-scroll::-webkit-scrollbar {
   display: none;
-}
-#runningRankingScreen.active .stelvio-back-to-top-btn {
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-fixed-height, 58px) + 8px);
 }
 .running-ranking-body {
   padding: 0 10px 16px;
