@@ -325,7 +325,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시·성과 대시보드 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
 /* 화면이 뷰포트 전체로 확장 — 하단 구분 영역 없이 넓게 사용 (min-height로 확장, -webkit-fill-available로 Safari 대응) */
 /* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
-.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#authScreen):not(#stelvioRankingScreen) {
+.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen) {
   /* iOS/Bluefy: position fixed + inset 0으로 뷰포트 전체 채움 (하단 회색 바 근본 해결) */
   position: fixed !important;
   top: 0 !important;
@@ -2956,7 +2956,9 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
  *   transform: translate(50%,-50%) → 배지 중심점을 해당 좌표에 정렬
  * 위치 보정 시: top / right 두 값만 수정 */
 #basecampRidingNotiBadge,
-#basecampClubHouseNotiBadge {
+#basecampClubHouseNotiBadge,
+#runBasecampRidingNotiBadge,
+#runBasecampClubHouseNotiBadge {
   /* 표시 제어 */
   display: none !important;
   /* 절대 위치 — 부모 button의 position:relative 기준 */
@@ -27259,4 +27261,307 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   color: #64748b;
   margin: 0;
   line-height: 1.45;
+}
+
+/* ── 러닝 랭킹보드 (사이클 랭킹보드 디자인 계승) ── */
+#runningRankingScreen.stelvio-ranking-screen-root,
+#runningRankingScreen.running-ranking-screen-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: #fff;
+}
+#runningRankingScreen.screen.active {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  min-height: 100dvh !important;
+  max-height: 100dvh !important;
+  padding-top: max(20px, env(safe-area-inset-top, 0px)) !important;
+  padding-bottom: 0 !important;
+  padding-left: max(4px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(4px, env(safe-area-inset-right, 0px)) !important;
+  box-sizing: border-box !important;
+  touch-action: pan-y;
+}
+#runningRankingScreen .stelvio-ranking-screen-scroll {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  scrollbar-width: none;
+}
+#runningRankingScreen .stelvio-ranking-screen-scroll::-webkit-scrollbar {
+  display: none;
+}
+#runningRankingScreen.active .stelvio-back-to-top-btn {
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-fixed-height, 58px) + 8px);
+}
+.running-ranking-body {
+  padding: 0 10px 16px;
+  touch-action: pan-y;
+}
+.running-ranking-subtitle {
+  margin: 0 0 10px;
+  padding: 0 4px;
+  font-size: 0.72rem;
+  color: #6b7280;
+  line-height: 1.35;
+}
+.running-ranking-stale-hint {
+  margin: 0 0 8px;
+  font-size: 0.7rem;
+  color: #b45309;
+}
+.running-ranking-pace-filter {
+  margin-bottom: 8px;
+}
+.running-ranking-gender-dropdown {
+  min-width: 88px;
+}
+#runningRankingScreen .stelvio-gender-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  background: #fff;
+  border: 1.5px solid #7c3aed;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.14);
+}
+.running-ranking-list-card {
+  margin-bottom: 12px;
+}
+.running-ranking-virtual-list {
+  max-height: min(62vh, 520px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.running-ranking-virtual-window {
+  will-change: transform;
+}
+#runningRankingScreen .stelvio-rank-row.running-ranking-row {
+  flex-wrap: wrap;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 8px 6px;
+}
+#runningRankingScreen .stelvio-rank-row.stelvio-rank-current {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.08) 100%);
+  border-radius: 8px;
+}
+.running-ranking-value--pace {
+  font-size: 1.05rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.02em;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+.running-ranking-segments {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  padding-left: 52px;
+}
+.running-ranking-segment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+.running-ranking-segment-label {
+  color: #64748b;
+  font-weight: 600;
+}
+.running-ranking-segment-score {
+  color: #334155;
+  font-weight: 700;
+}
+.running-ranking-crew-meta {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+.running-ranking-skeleton {
+  padding: 16px 8px;
+  text-align: center;
+}
+.running-ranking-loading-text {
+  margin: 8px 0 16px;
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+.running-ranking-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 6px;
+  margin-bottom: 6px;
+}
+.running-ranking-skeleton-block {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e5e7eb 0%, #f3f4f6 50%, #e5e7eb 100%);
+  background-size: 200% 100%;
+  animation: runningRankingShimmer 1.2s ease-in-out infinite;
+}
+.running-ranking-skeleton-pos { width: 36px; height: 14px; }
+.running-ranking-skeleton-avatar { width: 32px; height: 32px; border-radius: 50%; }
+.running-ranking-skeleton-name { flex: 1; height: 14px; }
+.running-ranking-skeleton-value { width: 48px; height: 16px; }
+@keyframes runningRankingShimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+.running-ranking-retry-btn {
+  margin-top: 12px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+}
+/* ── 스포츠 카테고리 · RUN 베이스캠프 ── */
+#sportCategoryScreen .sport-category-grid,
+#runBasecampScreen .run-basecamp-path-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+#sportCategoryScreen .sport-category-btn {
+  border: 2px solid rgba(135, 206, 235, 0.6) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  position: relative;
+  overflow: hidden;
+  min-height: 0 !important;
+  padding: 0 !important;
+}
+#sportCategoryScreen .sport-category-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(135, 206, 235, 0.3) !important;
+  z-index: 1;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+#sportCategoryScreen .sport-category-btn:hover:not(:disabled)::before {
+  opacity: 0.55;
+}
+#sportCategoryScreen .sport-category-btn--cycle {
+  background-image: url('../img/cycle.svg') !important;
+}
+#sportCategoryScreen .sport-category-btn--run {
+  background-image: url('../img/run.svg') !important;
+}
+#sportCategoryScreen,
+#runBasecampScreen {
+  position: relative;
+  min-height: 100dvh;
+}
+#sportCategoryScreen .connection-device-section.basecamp-device-section .basecamp-path-grid,
+#runBasecampScreen .connection-device-section.basecamp-device-section .basecamp-path-grid {
+  gap: 3.75px;
+}
+#runBasecampScreen .btn-device.basecamp-btn-career,
+#runBasecampScreen .basecamp-btn-career {
+  background-image: url('https://stelvio.ai.kr/assets/img/b(03).svg') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+#runBasecampScreen .btn-device.basecamp-btn-ranking,
+#runBasecampScreen .basecamp-btn-ranking {
+  background-image: url('https://stelvio.ai.kr/assets/img/m(01).svg') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+#runBasecampScreen .btn-device.basecamp-btn-manual,
+#runBasecampScreen .basecamp-btn-manual {
+  background-image: url('https://stelvio.ai.kr/assets/img/b(04).svg') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  overflow: visible !important;
+}
+#runBasecampScreen .btn-device.basecamp-btn-riding-group-entry,
+#runBasecampScreen .basecamp-btn-riding-group-entry {
+  background-image: url('https://stelvio.ai.kr/assets/img/s(05).svg') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  overflow: visible !important;
+}
+#runBasecampScreen .btn-device.basecamp-btn-affiliate-entry,
+#runBasecampScreen .basecamp-btn-affiliate-entry {
+  background-image: url('https://stelvio.ai.kr/assets/img/s(06).svg') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+#runBasecampScreen .basecamp-path-grid .basecamp-btn > span:not(#runBasecampRidingNotiBadge):not(#runBasecampClubHouseNotiBadge) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+#sportCategoryScreen .sport-category-btn span {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+#sportCategoryScreen .connection-device-section.basecamp-device-section .sport-category-grid {
+  --basecamp-cell: calc((100% - 8px) / 2);
+  width: 90% !important;
+  max-width: 90% !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
+  grid-template-rows: 1fr !important;
+  gap: 8px !important;
+  margin: 0 5% !important;
+  aspect-ratio: 2 / 1 !important;
+}
+#runBasecampScreen .connection-device-section.basecamp-device-section .run-basecamp-path-grid {
+  --basecamp-cell: calc((100% - 3.75px) / 2);
+  width: 90% !important;
+  max-width: 90% !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
+  grid-template-rows: repeat(3, 1fr) !important;
+  gap: 3.75px !important;
+  margin: 0 5% !important;
+  aspect-ratio: 2 / 3 !important;
+}
+#sportCategoryScreen .connection-device-section .grid-2 .sport-category-btn,
+#runBasecampScreen .connection-device-section .grid-2 .basecamp-btn {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  aspect-ratio: 1 !important;
+  box-sizing: border-box !important;
 }
