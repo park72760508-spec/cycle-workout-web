@@ -3759,7 +3759,7 @@ if (!window.showScreen) {
           hideAuthScreen();
         }
         // flex 레이아웃이 필요한 화면 (Coach 대시보드: 헤더·전광판·그리드·목록 세로 배치)
-        if (id === 'mobileDashboardScreen' || id === 'workoutScreen' || id === 'bluetoothTrainingCoachScreen' || id === 'stelvioRankingScreen' || id === 'openRidingRoomScreen') {
+        if (id === 'mobileDashboardScreen' || id === 'workoutScreen' || id === 'bluetoothTrainingCoachScreen' || id === 'stelvioRankingScreen' || id === 'runningRankingScreen' || id === 'openRidingRoomScreen') {
           el.style.display = "flex";
         } else {
           el.style.display = "block";
@@ -7168,7 +7168,7 @@ window.showScreen = function(screenId) {
   const targetScreen = document.getElementById(screenId);
   if (targetScreen) {
     // flex 레이아웃이 필요한 화면 (Coach 대시보드, 모바일 대시보드, 워크아웃 화면)
-    const flexScreens = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen', 'stelvioRankingScreen', 'openRidingRoomScreen', 'authScreen', 'affiliateScreen'];
+    const flexScreens = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen', 'stelvioRankingScreen', 'runningRankingScreen', 'openRidingRoomScreen', 'authScreen', 'affiliateScreen'];
     targetScreen.style.display = flexScreens.includes(screenId) ? 'flex' : 'block';
     targetScreen.classList.add('active');
     targetScreen.style.opacity = '1';
@@ -7598,6 +7598,19 @@ function initializeCurrentScreen(screenId) {
         if (typeof window.initMiniCalendarJournal !== 'function') checkAndInit(0);
       }, 250);
           })();
+        }
+      })(0);
+      break;
+
+      case 'runningRankingScreen':
+      (function tryInitRunningRanking(retryCount) {
+        retryCount = retryCount || 0;
+        if (typeof window.initRunningRankingReact === 'function') {
+          setTimeout(function () { window.initRunningRankingReact(); }, 80);
+          return;
+        }
+        if (retryCount < 30) {
+          setTimeout(function () { tryInitRunningRanking(retryCount + 1); }, 100);
         }
       })(0);
       break;
@@ -15562,6 +15575,7 @@ function openSettingsModal() {
     if (
       [
         'stelvioRankingScreen',
+        'runningRankingScreen',
         'performanceDashboardScreen',
         'trainingJournalScreen',
         'profileScreen',
@@ -18874,6 +18888,7 @@ function openSubscribeOverlay() {
     if (
       [
         'stelvioRankingScreen',
+        'runningRankingScreen',
         'performanceDashboardScreen',
         'trainingJournalScreen',
         'profileScreen',
