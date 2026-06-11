@@ -570,7 +570,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   overscroll-behavior: contain;
   padding: 20px;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
-  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)) !important;
   box-sizing: border-box;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
@@ -27643,7 +27643,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   overflow: hidden !important;
   padding: 20px;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
-  padding-bottom: 0 !important;
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)) !important;
   box-sizing: border-box;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
