@@ -3394,10 +3394,10 @@
               <button type="button" class="btn btn-device basecamp-btn sport-category-btn sport-category-btn--cycle" id="btnSportCategoryCycle" onclick="if(typeof enterCycleBasecamp==='function')enterCycleBasecamp();" aria-label="CYCLE"></button>
               <button type="button" class="btn btn-device basecamp-btn sport-category-btn sport-category-btn--run" id="btnSportCategoryRun" onclick="if(typeof enterRunBasecamp==='function')enterRunBasecamp();" aria-label="RUN"></button>
             </div>
-            <div id="categoryAuthBar" class="sport-shell-auth-bar" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 0; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
-              <div id="categoryAuthBarLeft" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;">
-                <button type="button" class="category-auth-login-btn" onclick="if(typeof handleLogin==='function')handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
-                <span id="categoryAuthBarWarning" style="font-size: 13px; color: #0c4a6e; display: inline-flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.35;">
+            <div id="categoryAuthBar">
+              <div id="categoryAuthBarLeft">
+                <button type="button" id="btnCategoryAuthLogin" onclick="if(typeof handleLogin==='function')handleLogin();">로그인</button>
+                <span id="categoryAuthBarWarning">
                   <span>더 나은 경험을 위해</span>
                   <span>로그인해 주세요.</span>
                 </span>
@@ -3409,8 +3409,8 @@
                   <span id="categoryAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
                 </div>
                 <div class="basecamp-auth-bar-logout-wrap">
-                  <button type="button" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout==='function')handleLogout();" aria-label="로그아웃" title="로그아웃">
-                    <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
+                  <button type="button" id="btnCategoryAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout==='function')handleLogout();" aria-label="로그아웃" title="로그아웃">
+                    <img src="assets/img/out.png" alt="" width="24" height="24" decoding="async" />
                   </button>
                 </div>
               </div>
@@ -3484,8 +3484,8 @@
                   <span id="authBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
                 </div>
                 <div class="basecamp-auth-bar-logout-wrap">
-                  <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
-                    <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
+                  <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn basecamp-home-to-category-btn" onclick="if(typeof showSportCategoryScreen==='function')showSportCategoryScreen();else if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="카테고리 화면" title="카테고리">
+                    <img src="assets/img/home.svg" alt="" width="24" height="24" decoding="async" />
                   </button>
                 </div>
               </div>
@@ -3542,10 +3542,10 @@
                 <span>제휴 할인</span>
               </button>
             </div>
-            <div id="runAuthBar" class="sport-shell-auth-bar" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 0; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
-              <div id="runAuthBarLeft" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;">
-                <button type="button" onclick="if(typeof handleLogin==='function')handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
-                <span id="runAuthBarWarning" style="font-size: 13px; color: #0c4a6e; display: inline-flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.35;">
+            <div id="runAuthBar">
+              <div id="runAuthBarLeft">
+                <button type="button" id="btnRunAuthLogin" onclick="if(typeof handleLogin==='function')handleLogin();">로그인</button>
+                <span id="runAuthBarWarning">
                   <span>더 나은 경험을 위해</span>
                   <span>로그인해 주세요.</span>
                 </span>
@@ -3557,8 +3557,8 @@
                   <span id="runAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
                 </div>
                 <div class="basecamp-auth-bar-logout-wrap">
-                  <button type="button" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout==='function')handleLogout();" aria-label="로그아웃" title="로그아웃">
-                    <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
+                  <button type="button" id="btnRunAuthHome" class="bluetooth-session-exit-btn basecamp-home-to-category-btn" onclick="if(typeof showSportCategoryScreen==='function')showSportCategoryScreen();else if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="카테고리 화면" title="카테고리">
+                    <img src="assets/img/home.svg" alt="" width="24" height="24" decoding="async" />
                   </button>
                 </div>
               </div>
