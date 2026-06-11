@@ -34,7 +34,42 @@
     if (typeof showScreen === 'function') showScreen('basecampScreen');
   }
 
+  function isRunBasecampAllowed() {
+    if (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true) return true;
+    var g =
+      typeof getLoginUserGrade === 'function'
+        ? getLoginUserGrade()
+        : typeof getViewerGrade === 'function'
+          ? getViewerGrade()
+          : '2';
+    return typeof isStelvioAdminGrade === 'function'
+      ? isStelvioAdminGrade(g)
+      : String(g).trim() === '1' || Number(g) === 1;
+  }
+
+  function showRunServiceComingSoonModal() {
+    var modal = document.getElementById('runServiceComingSoonModal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  function closeRunServiceComingSoonModal() {
+    var modal = document.getElementById('runServiceComingSoonModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
+    document.body.style.overflow = '';
+  }
+
   function enterRunBasecamp() {
+    if (!isRunBasecampAllowed()) {
+      showRunServiceComingSoonModal();
+      return;
+    }
     setActiveSport('run');
     if (typeof showScreen === 'function') showScreen('runBasecampScreen');
   }
@@ -70,4 +105,6 @@
   window.showSportCategoryScreen = showSportCategoryScreen;
   window.routeAfterAuth = routeAfterAuth;
   window.goHomeBasecamp = goHomeBasecamp;
+  window.showRunServiceComingSoonModal = showRunServiceComingSoonModal;
+  window.closeRunServiceComingSoonModal = closeRunServiceComingSoonModal;
 })();
