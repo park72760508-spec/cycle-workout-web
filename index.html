@@ -35574,7 +35574,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         
         // 대상 화면 표시
         targetScreen.classList.add('active');
-        var flexScreenIds = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen', 'stelvioRankingScreen', 'openRidingRoomScreen'];
+        var flexScreenIds = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen', 'stelvioRankingScreen', 'runningRankingScreen', 'openRidingRoomScreen'];
         targetScreen.style.display = flexScreenIds.indexOf(screenId) >= 0 ? 'flex' : 'block';
         targetScreen.style.opacity = '1';
         targetScreen.style.visibility = 'visible';
@@ -36909,6 +36909,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     (function () {
       var HUB_NAV_MAP = {
         stelvioRankingScreen: 'ranking',
+        runningRankingScreen: 'ranking',
         performanceDashboardScreen: 'analysis',
         trainingJournalScreen: 'journal',
         profileScreen: 'profile',
@@ -36918,6 +36919,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       };
       var HUB_NAV_SCREEN_IDS = [
         'stelvioRankingScreen',
+        'runningRankingScreen',
         'performanceDashboardScreen',
         'trainingJournalScreen',
         'profileScreen',
