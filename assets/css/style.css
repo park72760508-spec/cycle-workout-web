@@ -27660,6 +27660,42 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runBasecampScreen .connection-device-section.basecamp-device-section .basecamp-path-grid {
   gap: 3.75px;
 }
+/* RUN 베이스캠프: 모든 타일에 투명 하늘색 오버레이·테두리 (스포츠 카테고리·베이스캠프 MY CAREER와 동일) */
+#runBasecampScreen .run-basecamp-path-grid .basecamp-btn {
+  border: 2px solid rgba(135, 206, 235, 0.6) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  position: relative;
+  overflow: hidden;
+  min-height: 0 !important;
+  padding: 0 !important;
+}
+#runBasecampScreen .run-basecamp-path-grid .basecamp-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(135, 206, 235, 0.3) !important;
+  z-index: 1;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+#runBasecampScreen .run-basecamp-path-grid .basecamp-btn:hover:not(:disabled)::before {
+  opacity: 0.55;
+}
+#runBasecampScreen .run-basecamp-path-grid .basecamp-btn:hover:not(:disabled) {
+  border-color: rgba(135, 206, 235, 0.9) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(135, 206, 235, 0.4);
+}
+#runBasecampScreen .run-basecamp-path-grid .basecamp-btn-manual,
+#runBasecampScreen .run-basecamp-path-grid .basecamp-btn-riding-group-entry {
+  overflow: visible !important;
+}
 #runBasecampScreen .btn-device.basecamp-btn-career,
 #runBasecampScreen .basecamp-btn-career {
   background-image: url('../img/runh.svg') !important;
