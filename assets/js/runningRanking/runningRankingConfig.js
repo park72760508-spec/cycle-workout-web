@@ -43,13 +43,39 @@
     { value: 'F', label: '여성' }
   ];
 
+  /** CYCLE 랭킹보드와 동일 카테고리 */
+  var CATEGORY_LABELS = {
+    Supremo: '전체',
+    Assoluto: '선수부',
+    Bianco: '30대 이하',
+    Rosa: '40대',
+    Infinito: '50대',
+    Leggenda: '60대 이상'
+  };
+
+  var CATEGORY_TITLES = {
+    Supremo: 'Supremo (전체)',
+    Assoluto: 'Assoluto (Elite/Pro선수)',
+    Bianco: 'Bianco (30대 이하)',
+    Rosa: 'Rosa (40대)',
+    Infinito: 'Infinito (50대)',
+    Leggenda: 'Leggenda (60대 이상)'
+  };
+
+  var CATEGORY_OPTIONS = [
+    { value: 'Supremo', label: '전체' },
+    { value: 'Assoluto', label: '선수부' },
+    { value: 'Bianco', label: '30대 이하' },
+    { value: 'Rosa', label: '40대' },
+    { value: 'Infinito', label: '50대' },
+    { value: 'Leggenda', label: '60대 이상' }
+  ];
+
   var SCREEN_ID = 'runningRankingScreen';
 
-  /** 진입점 — 라우트 키별 액션 (허브·베이스캠프·프로그램 호출) */
+  /** 진입점 — RUN 베이스캠프 랭킹보드 버튼 */
   var ROUTE_ENTRIES = {
-    hub: { screenId: SCREEN_ID, hubNavKey: 'running' },
-    basecamp: { screenId: SCREEN_ID, buttonId: 'btnBasecampRunningRanking' },
-    career: { screenId: SCREEN_ID, buttonId: 'btnCareerRunningRanking' }
+    runBasecamp: { screenId: SCREEN_ID, buttonId: 'btnRunBasecampRanking' }
   };
 
   window.runningRankingConfig = {
@@ -58,6 +84,10 @@
     OVERALL_SEGMENTS: OVERALL_SEGMENTS,
     PACE_DISTANCES: PACE_DISTANCES,
     GENDER_OPTIONS: GENDER_OPTIONS,
+    CATEGORY_LABELS: CATEGORY_LABELS,
+    CATEGORY_TITLES: CATEGORY_TITLES,
+    CATEGORY_OPTIONS: CATEGORY_OPTIONS,
+    DEFAULT_CATEGORY: 'Supremo',
     SCREEN_ID: SCREEN_ID,
     ROUTE_ENTRIES: ROUTE_ENTRIES,
     CACHE_TTL_MS: 5 * 60 * 1000,

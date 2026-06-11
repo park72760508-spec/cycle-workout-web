@@ -36,6 +36,12 @@
     return fmt().normalizeGender ? fmt().normalizeGender(ui && ui.gender) : '';
   }
 
+  function rowAgeCategory(row) {
+    var ui = row && row.user_info;
+    var cat = ui && (ui.age_category != null ? ui.age_category : ui.ageCategory);
+    return cat != null ? String(cat).trim() : '';
+  }
+
   function isPrivateRow(row) {
     var ui = row && row.user_info;
     return !!(ui && (ui.is_private === true || ui.is_private === 'true' || ui.is_private === 1));
@@ -61,14 +67,21 @@
     return rows.filter(function (r) { return rowGender(r) === gender; });
   }
 
+  function filterByCategory(rows, category) {
+    var cat = category || 'Supremo';
+    if (!cat || cat === 'Supremo') return rows.slice();
+    return rows.filter(function (r) { return rowAgeCategory(r) === cat; });
+  }
+
   /**
    * @param {object[]} rows
    * @param {string} tabId
-   * @param {{ paceDistance?: string, gender?: string }} opts
+   * @param {{ paceDistance?: string, gender?: string, category?: string }} opts
    */
   function buildRankedList(rows, tabId, opts) {
     opts = opts || {};
     var filtered = filterByGender(rows || [], opts.gender || 'all');
+    filtered = filterByCategory(filtered, opts.category || 'Supremo');
     var list = [];
 
     if (tabId === 'overall') {
