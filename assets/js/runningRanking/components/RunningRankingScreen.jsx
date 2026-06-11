@@ -33,6 +33,10 @@
     var gender = _gender[0];
     var setGender = _gender[1];
 
+    var _category = useState((cfg().DEFAULT_CATEGORY) || 'Supremo');
+    var activeCategory = _category[0];
+    var setActiveCategory = _category[1];
+
     var _loading = useState(true);
     var loading = _loading[0];
     var setLoading = _loading[1];
@@ -136,6 +140,21 @@
       };
     }, [loadLeaderboard, subscribeCrewGroups]);
 
+    function scrollRankingToTop() {
+      var scrollEl = document.getElementById('runningRankingScrollArea');
+      if (!scrollEl) return;
+      try {
+        scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (e) {
+        scrollEl.scrollTop = 0;
+      }
+    }
+
+    useEffect(function () {
+      if (activeTab === 'crew') return;
+      scrollRankingToTop();
+    }, [gender, activeCategory, activeTab, paceDistance]);
+
     var rankedList = useMemo(function () {
       if (activeTab === 'crew') {
         return dataApi().buildCrewRankedList
@@ -143,9 +162,13 @@
           : [];
       }
       return dataApi().buildRankedList
-        ? dataApi().buildRankedList(rawRows, activeTab, { paceDistance: paceDistance, gender: gender })
+        ? dataApi().buildRankedList(rawRows, activeTab, {
+          paceDistance: paceDistance,
+          gender: gender,
+          category: activeCategory
+        })
         : [];
-    }, [rawRows, activeTab, paceDistance, gender, crewGroups, crewEnriched]);
+    }, [rawRows, activeTab, paceDistance, gender, activeCategory, crewGroups, crewEnriched]);
 
     var unitLabel = useMemo(function () {
       var tabs = cfg().TABS || [];
@@ -155,20 +178,18 @@
       return '';
     }, [activeTab]);
 
-    var subtitle = useMemo(function () {
-      if (activeTab === 'tss') return dataApi().getVolumeWindowLabel ? dataApi().getVolumeWindowLabel(rawRows) : '주간 누적 TSS';
-      if (activeTab === 'distance') return dataApi().getDistanceWindowLabel ? dataApi().getDistanceWindowLabel(rawRows) : '최근 30일 누적';
-      if (activeTab === 'pace') return '개인 최고 페이스 · 빠른 순';
-      if (activeTab === 'overall') return '1K~20K 구간 점수 합산';
-      if (activeTab === 'crew') return '크루 멤버 종합 점수 평균';
-      return '';
-    }, [activeTab, rawRows]);
+    var listCategoryTitle = useMemo(function () {
+      var titles = cfg().CATEGORY_TITLES || {};
+      var labels = cfg().CATEGORY_LABELS || {};
+      return titles[activeCategory]
+        || ((labels[activeCategory] || activeCategory) + ' 순위');
+    }, [activeCategory]);
 
     var rowHeight = activeTab === 'overall'
       ? (cfg().LIST_ROW_HEIGHT_OVERALL || 78)
       : (cfg().LIST_ROW_HEIGHT || 56);
 
-    var listKey = activeTab + '-' + paceDistance + '-' + gender;
+    var listKey = activeTab + '-' + paceDistance + '-' + gender + '-' + activeCategory;
 
     var Skeleton = window.RunningRankingSkeleton;
     var VirtualList = window.RunningRankingVirtualList;
@@ -197,22 +218,24 @@
         )
       : null;
 
+    function findOptionLabel(options, value, fallback) {
+      for (var i = 0; i < options.length; i++) {
+        if (options[i].value === value) return options[i].label;
+      }
+      return fallback || '';
+    }
+
     var genderSelect = activeTab !== 'crew'
-      ? React.createElement('div', { className: 'stelvio-gender-dropdown running-ranking-gender-dropdown' },
+      ? React.createElement('div', { className: 'stelvio-gender-dropdown' },
           React.createElement('span', { className: 'stelvio-dropdown-caption' }, '성별'),
           React.createElement('span', { className: 'stelvio-dropdown-label' },
-            (function () {
-              var opts = cfg().GENDER_OPTIONS || [];
-              for (var i = 0; i < opts.length; i++) {
-                if (opts[i].value === gender) return opts[i].label;
-              }
-              return '전체';
-            })()
+            findOptionLabel(cfg().GENDER_OPTIONS || [], gender, '전체')
           ),
           React.createElement('span', { className: 'stelvio-dropdown-chevron' }, '▾'),
           React.createElement('select', {
             className: 'stelvio-dropdown-select',
             value: gender,
+            'aria-label': '성별 필터',
             onChange: function (e) { setGender(e.target.value); }
           },
             (cfg().GENDER_OPTIONS || []).map(function (g) {
@@ -222,10 +245,30 @@
         )
       : null;
 
+    var categorySelect = activeTab !== 'crew'
+      ? React.createElement('div', { className: 'stelvio-category-dropdown' },
+          React.createElement('span', { className: 'stelvio-dropdown-caption' }, '카테고리'),
+          React.createElement('span', { className: 'stelvio-dropdown-label' },
+            findOptionLabel(cfg().CATEGORY_OPTIONS || [], activeCategory, '전체')
+          ),
+          React.createElement('span', { className: 'stelvio-dropdown-chevron' }, '▾'),
+          React.createElement('select', {
+            className: 'stelvio-dropdown-select',
+            value: activeCategory,
+            'aria-label': '카테고리 필터',
+            onChange: function (e) { setActiveCategory(e.target.value); }
+          },
+            (cfg().CATEGORY_OPTIONS || []).map(function (c) {
+              return React.createElement('option', { key: c.value, value: c.value }, c.label);
+            })
+          )
+        )
+      : null;
+
     var listBody;
     if (loading && !rawRows.length) {
       listBody = Skeleton
-        ? React.createElement(Skeleton, { message: '러닝 랭킹 불러오는 중...' })
+        ? React.createElement(Skeleton, { message: '랭킹 불러오는 중...' })
         : React.createElement('p', { className: 'stelvio-ranking-empty' }, '불러오는 중...');
     } else if (error && !rawRows.length) {
       listBody = React.createElement('div', { className: 'running-ranking-error' },
@@ -265,11 +308,10 @@
           React.createElement('div', { className: 'stelvio-duration-chips', role: 'tablist' }, tabButtons)
         ),
         paceChips,
-        React.createElement('div', { className: 'stelvio-filter-bar-wrap' },
-          React.createElement('div', { className: 'stelvio-filter-bar running-ranking-filter-bar' }, genderSelect)
-        ),
-        subtitle
-          ? React.createElement('p', { className: 'running-ranking-subtitle' }, subtitle)
+        activeTab !== 'crew'
+          ? React.createElement('div', { className: 'stelvio-filter-bar-wrap' },
+              React.createElement('div', { className: 'stelvio-filter-bar' }, genderSelect, categorySelect)
+            )
           : null,
         stale && error
           ? React.createElement('p', { className: 'running-ranking-stale-hint' }, '캐시 표시 · ' + error)
@@ -279,9 +321,9 @@
         React.createElement('div', { className: 'stelvio-category-card stelvio-ranking-list-card running-ranking-list-card' },
           React.createElement('div', { className: 'stelvio-category-header' },
             React.createElement('span', { className: 'stelvio-category-header-title' },
-              activeTab === 'pace'
-                ? ((cfg().PACE_DISTANCES || []).filter(function (d) { return d.key === paceDistance; })[0] || {}).label || '페이스'
-                : ((cfg().TABS || []).filter(function (t) { return t.id === activeTab; })[0] || {}).label || '랭킹'
+              activeTab === 'crew'
+                ? '크루 랭킹'
+                : listCategoryTitle
             ),
             React.createElement('span', { className: 'stelvio-category-header-unit' }, unitLabel)
           ),
