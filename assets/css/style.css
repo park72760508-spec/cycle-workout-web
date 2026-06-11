@@ -27678,7 +27678,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 }
 #runBasecampScreen .btn-device.basecamp-btn-manual,
 #runBasecampScreen .basecamp-btn-manual {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(04).svg') !important;
+  background-image: url('../img/rcrew.svg') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
   background-size: 90% !important;
   background-position: center center !important;
@@ -27687,7 +27687,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 }
 #runBasecampScreen .btn-device.basecamp-btn-riding-group-entry,
 #runBasecampScreen .basecamp-btn-riding-group-entry {
-  background-image: url('https://stelvio.ai.kr/assets/img/s(05).svg') !important;
+  background-image: url('../img/crewh.svg') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
   background-size: 90% !important;
   background-position: center center !important;
