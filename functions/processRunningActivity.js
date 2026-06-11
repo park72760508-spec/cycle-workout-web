@@ -107,20 +107,29 @@ function mapStravaRunningToActivityRow(activity, firebaseUid) {
   const distanceM = Number(activity.distance) || 0;
   const distanceKm = Math.round((distanceM / 1000) * 1000) / 1000;
   const durationSec = Math.round(Number(activity.moving_time) || Number(activity.elapsed_time) || 0);
+  const elapsedSec = Math.round(Number(activity.elapsed_time) || durationSec || 0);
   const avgHr = int(activity.average_heartrate, null);
   let avgSpeedKmh = num(activity.average_speed);
   if (avgSpeedKmh != null) {
     avgSpeedKmh = Math.round(avgSpeedKmh * 3.6 * 100) / 100;
   }
+  const title = activity.name ? String(activity.name) : "Run";
+  const startDateRaw = activity.start_date_local || activity.start_date || null;
 
   return {
     user_id: userId,
     source: "strava",
     activity_id: String(activity.id),
     activity_type: String(activity.type || activity.sport_type || "").trim(),
-    title: activity.name ? String(activity.name) : null,
+    title,
+    // legacy activities 테이블 NOT NULL 컬럼 (프로덕션 스키마 호환)
+    name: title,
     activity_date: activityDate,
+    start_date: startDateRaw,
     duration_sec: durationSec,
+    moving_time: durationSec,
+    elapsed_time: elapsedSec,
+    distance: distanceKm > 0 ? distanceKm : 0,
     distance_km: distanceKm > 0 ? distanceKm : null,
     elevation_gain_m: num(activity.total_elevation_gain),
     avg_speed_kmh: avgSpeedKmh,
@@ -198,10 +207,34 @@ async function upsertRunningActivityToSupabase(firebaseUid, row) {
   };
 
   async function writeOnce() {
-    const { error } = await supabase.from("activities").upsert(row, {
-      onConflict: "user_id,activity_id",
-      ignoreDuplicates: false,
-    });
+    const { data: existing, error: readErr } = await supabase
+      .from("activities")
+      .select("id")
+      .eq("user_id", row.user_id)
+      .eq("activity_id", row.activity_id)
+      .maybeSingle();
+    if (readErr) throw readErr;
+
+    if (existing && existing.id != null) {
+      const { id: _omit, ...updateRow } = row;
+      const { error } = await supabase
+        .from("activities")
+        .update(updateRow)
+        .eq("user_id", row.user_id)
+        .eq("activity_id", row.activity_id);
+      if (error) throw error;
+      return;
+    }
+
+    const { data: maxRow, error: maxErr } = await supabase
+      .from("activities")
+      .select("id")
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (maxErr) throw maxErr;
+    const nextId = (maxRow && maxRow.id != null ? Number(maxRow.id) : 0) + 1;
+    const { error } = await supabase.from("activities").insert({ ...row, id: nextId });
     if (error) throw error;
   }
 

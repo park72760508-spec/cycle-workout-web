@@ -278,7 +278,16 @@ async function computeRunEffortsFromActivity(activity, accessToken) {
   return out;
 }
 
-async function upsertRunEffortsToSupabase(firebaseUid, activityId, effortsRow) {
+function toActivityDate(raw) {
+  if (raw == null || raw === "") return null;
+  const s = String(raw);
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+async function upsertRunEffortsToSupabase(firebaseUid, activityId, effortsRow, activityDate) {
   await supabaseDualWriteServer.refreshDualRunFromRemoteConfig(admin, true);
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   const uidConfig = {
@@ -295,6 +304,7 @@ async function upsertRunEffortsToSupabase(firebaseUid, activityId, effortsRow) {
   const row = {
     user_id: userId,
     activity_id: String(activityId),
+    activity_date: activityDate,
     ...effortsRow,
     updated_at: new Date().toISOString(),
   };
@@ -311,7 +321,7 @@ async function upsertRunEffortsToSupabase(firebaseUid, activityId, effortsRow) {
     await writeOnce();
   } catch (error) {
     const msg = error && error.message ? error.message : String(error);
-    if (!/run_activity_efforts|activities|users.*fkey|23503/i.test(msg)) {
+    if (!/23503|foreign key|users.*fkey|activities_user_id_fkey/i.test(msg)) {
       throw error;
     }
     const supabaseUserProvision = require("./supabaseUserProvision");
@@ -353,7 +363,9 @@ async function calculateAndSaveRunEfforts(db, firebaseUid, activity, accessToken
   }
 
   const efforts = await computeRunEffortsFromActivity(activity, token);
-  await upsertRunEffortsToSupabase(firebaseUid, activity.id, efforts);
+  const activityDate = toActivityDate(activity.start_date_local || activity.start_date);
+  if (!activityDate) throw new Error("calculateAndSaveRunEfforts: activity_date 없음");
+  await upsertRunEffortsToSupabase(firebaseUid, activity.id, efforts, activityDate);
 
   console.log("[calculateAndSaveRunEfforts] upsert OK", {
     userId: firebaseUid,
