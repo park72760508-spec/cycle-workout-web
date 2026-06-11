@@ -2292,9 +2292,21 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   const dateOnlyStravaTss = new Map();
   let userTss = 0;
   let newActivities = 0;
+  const processRunningActivity = require("./processRunningActivity");
   for (const act of Array.isArray(activities) ? activities : []) {
     const actId = String(act.id);
     try {
+    if (processRunningActivity.isRunningStravaActivityType(act.type, act.sport_type)) {
+      let detailedRun = act;
+      const runDetailRes = await fetchStravaActivityDetail(accessToken, actId);
+      if (runDetailRes.success && runDetailRes.activity) detailedRun = runDetailRes.activity;
+      const ownerId = Number(userData.strava_athlete_id);
+      if (ownerId) {
+        await processRunningActivity.processRunningActivity(db, ownerId, actId, detailedRun);
+        newActivities += 1;
+      }
+      continue;
+    }
     if (existingIds.has(actId)) {
       const entry = existingDocMap.get(actId);
       const d = entry ? entry.data : {};

@@ -8,21 +8,29 @@
 const admin = require("firebase-admin");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 
-const EFFORT_DISTANCE_TARGETS = {
+/** Strava best_efforts 에서 직접 매핑 */
+const BEST_EFFORT_DISTANCE_TARGETS = {
   "1k": 1000,
   "5k": 5000,
   "10k": 10000,
 };
 
-const EFFORT_NAME_ALIASES = {
-  "1k": ["1k", "1km", "1 kilometer", "1 kilometres"],
-  "5k": ["5k", "5km", "5 kilometer", "5 kilometres"],
-  "10k": ["10k", "10km", "10 kilometer", "10 kilometres"],
+/** Streams 슬라이딩 윈도우로 계산 */
+const STREAM_DISTANCE_TARGETS = {
+  "3k": 3000,
+  "7k": 7000,
+  "20k": 20000,
+  "42k": 42000,
 };
 
-const STREAM_DISTANCE_TARGETS = {
-  "15k": 15000,
-  "20k": 20000,
+const EFFORT_NAME_ALIASES = {
+  "1k": ["1k", "1km", "1 kilometer", "1 kilometres"],
+  "3k": ["3k", "3km", "3 kilometer", "3 kilometres"],
+  "5k": ["5k", "5km", "5 kilometer", "5 kilometres"],
+  "7k": ["7k", "7km", "7 kilometer", "7 kilometres"],
+  "10k": ["10k", "10km", "10 kilometer", "10 kilometres"],
+  "20k": ["20k", "20km", "20 kilometer", "20 kilometres"],
+  "42k": ["42k", "42km", "42 kilometer", "42 kilometres", "marathon", "fullmarathon"],
 };
 
 const STRAVA_CALL_DELAY_MS = 9000;
@@ -57,10 +65,10 @@ function effortNameMatches(label, effortName) {
 
 /**
  * @param {object[]} bestEfforts Strava best_efforts
- * @param {string} label '1k'|'5k'|'10k'
+ * @param {string} label '1k'|'5k'|'10k' 등
  */
 function findBestEffortByLabel(bestEfforts, label) {
-  const targetM = EFFORT_DISTANCE_TARGETS[label];
+  const targetM = BEST_EFFORT_DISTANCE_TARGETS[label];
   if (!Array.isArray(bestEfforts) || !targetM) return null;
   for (const effort of bestEfforts) {
     if (!effort || typeof effort !== "object") continue;
@@ -204,16 +212,26 @@ function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM)
 function buildEmptyEffortsRow() {
   return {
     speed_1k: null,
+    speed_3k: null,
     speed_5k: null,
+    speed_7k: null,
     speed_10k: null,
-    speed_15k: null,
     speed_20k: null,
+    speed_42k: null,
     hr_1k: null,
+    hr_3k: null,
     hr_5k: null,
+    hr_7k: null,
     hr_10k: null,
-    hr_15k: null,
     hr_20k: null,
+    hr_42k: null,
   };
+}
+
+function minStreamDistanceNeeded(totalDistanceM) {
+  const targets = Object.values(STREAM_DISTANCE_TARGETS);
+  const eligible = targets.filter((m) => totalDistanceM >= m);
+  return eligible.length > 0 ? Math.min(...eligible) : null;
 }
 
 /**
@@ -226,14 +244,15 @@ async function computeRunEffortsFromActivity(activity, accessToken) {
   const bestEfforts = Array.isArray(activity.best_efforts) ? activity.best_efforts : [];
   const totalDistanceM = num(activity.distance) || 0;
 
-  for (const label of ["1k", "5k", "10k"]) {
+  for (const label of Object.keys(BEST_EFFORT_DISTANCE_TARGETS)) {
     const effort = findBestEffortByLabel(bestEfforts, label);
     const { speed, hr } = extractSpeedAndHrFromBestEffort(effort, fallbackHr);
     out[`speed_${label}`] = speed;
     out[`hr_${label}`] = hr;
   }
 
-  if (totalDistanceM >= 15000 && accessToken) {
+  const streamThresholdM = minStreamDistanceNeeded(totalDistanceM);
+  if (streamThresholdM != null && accessToken) {
     const streams = await fetchStravaRunStreams(accessToken, String(activity.id));
     if (streams.success) {
       for (const [label, targetM] of Object.entries(STREAM_DISTANCE_TARGETS)) {
@@ -340,17 +359,20 @@ async function calculateAndSaveRunEfforts(db, firebaseUid, activity, accessToken
     userId: firebaseUid,
     activityId: String(activity.id),
     speed_1k: efforts.speed_1k,
+    speed_3k: efforts.speed_3k,
     speed_5k: efforts.speed_5k,
+    speed_7k: efforts.speed_7k,
     speed_10k: efforts.speed_10k,
-    speed_15k: efforts.speed_15k,
     speed_20k: efforts.speed_20k,
+    speed_42k: efforts.speed_42k,
   });
 
   return { efforts, activityId: String(activity.id) };
 }
 
 module.exports = {
-  EFFORT_DISTANCE_TARGETS,
+  BEST_EFFORT_DISTANCE_TARGETS,
+  STREAM_DISTANCE_TARGETS,
   findBestEffortByLabel,
   findFastestDistanceWindow,
   fetchStravaRunStreams,

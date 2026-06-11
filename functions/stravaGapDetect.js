@@ -381,9 +381,21 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
 
     let userIngested = 0;
     let lastError = gapError || null;
+    const runningModule = require("./processRunningActivity");
     for (const activityId of activityIds) {
       let legacyResult;
       try {
+        const preview = await runningModule.fetchStravaActivityDetailForOwner(db, athleteId, activityId);
+        if (
+          preview.success &&
+          preview.activity &&
+          runningModule.isRunningStravaActivityType(preview.activity.type, preview.activity.sport_type)
+        ) {
+          await runningModule.processRunningActivity(db, athleteId, activityId, preview.activity);
+          userIngested += 1;
+          await markStravaWebhookRetryDone(db, athleteId, activityId);
+          continue;
+        }
         legacyResult = await deps.processStravaActivity(db, athleteId, activityId);
       } catch (e) {
         lastError = e && e.message ? e.message : String(e);
