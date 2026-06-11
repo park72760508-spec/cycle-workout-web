@@ -943,23 +943,35 @@ function applyInitialAuthRouting() {
     }
     if (typeof stelvioCanEnterAppShell === 'function' && stelvioCanEnterAppShell()) {
       hideAllScreens();
-      const basecampScreen = document.getElementById('basecampScreen');
-      if (basecampScreen) {
-        basecampScreen.classList.add('active');
-        basecampScreen.style.display = 'block';
-        basecampScreen.style.opacity = '1';
-        basecampScreen.style.visibility = 'visible';
+      const categoryScreen = document.getElementById('sportCategoryScreen');
+      if (categoryScreen) {
+        categoryScreen.classList.add('active');
+        categoryScreen.style.display = 'block';
+        categoryScreen.style.opacity = '1';
+        categoryScreen.style.visibility = 'visible';
         if (typeof applyScrollContainmentForScreen === 'function') {
-          applyScrollContainmentForScreen('basecampScreen');
+          applyScrollContainmentForScreen('sportCategoryScreen');
         }
         window.__basecampShownAfterAuth = true;
       } else {
-        const connectionScreen = document.getElementById('connectionScreen');
-        if (connectionScreen) {
-          connectionScreen.classList.add('active');
-          connectionScreen.style.display = 'block';
-          connectionScreen.style.opacity = '1';
-          connectionScreen.style.visibility = 'visible';
+        const basecampScreen = document.getElementById('basecampScreen');
+        if (basecampScreen) {
+          basecampScreen.classList.add('active');
+          basecampScreen.style.display = 'block';
+          basecampScreen.style.opacity = '1';
+          basecampScreen.style.visibility = 'visible';
+          if (typeof applyScrollContainmentForScreen === 'function') {
+            applyScrollContainmentForScreen('basecampScreen');
+          }
+          window.__basecampShownAfterAuth = true;
+        } else {
+          const connectionScreen = document.getElementById('connectionScreen');
+          if (connectionScreen) {
+            connectionScreen.classList.add('active');
+            connectionScreen.style.display = 'block';
+            connectionScreen.style.opacity = '1';
+            connectionScreen.style.visibility = 'visible';
+          }
         }
       }
     } else if (typeof stelvioShowAuthScreenForManualLogin === 'function') {
@@ -1017,14 +1029,15 @@ function applyInitialAuthRouting() {
 
   if (typeof stelvioCanEnterAppShell === 'function' && stelvioCanEnterAppShell()) {
     hideAllScreens();
-    const basecampScreen = document.getElementById('basecampScreen');
-    if (basecampScreen) {
-      basecampScreen.classList.add('active');
-      basecampScreen.style.display = 'block';
-      basecampScreen.style.opacity = '1';
-      basecampScreen.style.visibility = 'visible';
+    const categoryScreenLate = document.getElementById('sportCategoryScreen');
+    const shellTarget = categoryScreenLate || document.getElementById('basecampScreen');
+    if (shellTarget) {
+      shellTarget.classList.add('active');
+      shellTarget.style.display = 'block';
+      shellTarget.style.opacity = '1';
+      shellTarget.style.visibility = 'visible';
       if (typeof applyScrollContainmentForScreen === 'function') {
-        applyScrollContainmentForScreen('basecampScreen');
+        applyScrollContainmentForScreen(shellTarget.id);
       }
       window.__basecampShownAfterAuth = true;
       setTimeout(function tryShowTop10AfterAutoAuth() {
@@ -1032,7 +1045,8 @@ function applyInitialAuthRouting() {
         if (window.__showScreenRedirectedToAuth === true) return;
         if (window.__basecampShownAfterAuth !== true) return;
         var bc = document.getElementById('basecampScreen');
-        if (!bc || !bc.classList.contains('active')) return;
+        var rc = document.getElementById('runBasecampScreen');
+        if ((!bc || !bc.classList.contains('active')) && (!rc || !rc.classList.contains('active'))) return;
         var cur = window.currentUser;
         if (typeof window.userNeedsMandatoryIntegratedSetup === 'function' && cur && window.userNeedsMandatoryIntegratedSetup(cur)) {
           window.__deferWeeklyTop10UntilIntegratedDismiss = true;
@@ -7242,6 +7256,10 @@ function initializeCurrentScreen(screenId) {
       // }
       break;
 
+    case 'sportCategoryScreen':
+    case 'runBasecampScreen':
+      break;
+
     case 'indoorTrainingSubScreen':
       break;
 
@@ -8696,8 +8714,12 @@ async function authenticatePhone() {
         try {
           if (typeof window.showScreen === 'function') {
             window.__basecampShownAfterAuth = true;
-            window.showScreen('basecampScreen');
-            console.log('✅ 다음 화면 표시 완료: basecampScreen');
+            if (typeof window.routeAfterAuth === 'function') {
+              window.routeAfterAuth();
+            } else {
+              window.showScreen('sportCategoryScreen');
+            }
+            console.log('✅ 다음 화면 표시 완료: sportCategoryScreen');
             // [주석처리] 다른 FTP 감시 로직 비활성화 — 나의 기록 로딩 완료 후 동적 FTP 산출만 구동
             // if (typeof window.checkFtpSuggestionAndShow === 'function') {
             //   setTimeout(function () { window.checkFtpSuggestionAndShow(); }, 1500);
@@ -9193,8 +9215,12 @@ async function handleNewUserRegistered(userData) {
            
            if (typeof window.showScreen === 'function') {
              window.__basecampShownAfterAuth = true;
-             window.showScreen('basecampScreen');
-             console.log('✅ basecampScreen 표시 완료');
+             if (typeof window.routeAfterAuth === 'function') {
+               window.routeAfterAuth();
+             } else {
+               window.showScreen('sportCategoryScreen');
+             }
+             console.log('✅ sportCategoryScreen 표시 완료');
              return;
            }
            
@@ -21876,6 +21902,8 @@ if (originalCleanupMobileDashboard) {
     /* 클럽 가입신청은 클럽 하우스 전용 — 라이딩 모임과 중복 표시하지 않음 */
     _applyCountBadge('basecampRidingNotiBadge', _counts.rides + _counts.friends);
     _applyCountBadge('basecampClubHouseNotiBadge', _counts.groups);
+    _applyCountBadge('runBasecampRidingNotiBadge', _counts.rides + _counts.friends);
+    _applyCountBadge('runBasecampClubHouseNotiBadge', _counts.groups);
   }
 
   /* ── 구독 전체 정리 ── */
