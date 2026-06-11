@@ -3764,6 +3764,17 @@
     </div>
   </div>
 
+  <!-- 러닝 서비스 오픈 전 안내 (카테고리 RUN — 일반 사용자, STELVIO 스타일) -->
+  <div id="runServiceComingSoonModal" class="stelvio-coming-soon-modal run-service-coming-soon-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 200027;" aria-modal="true" role="dialog" aria-labelledby="runServiceComingSoonTitle">
+    <div class="stelvio-coming-soon-overlay run-service-coming-soon-overlay" onclick="if(typeof closeRunServiceComingSoonModal==='function')closeRunServiceComingSoonModal();"></div>
+    <div class="stelvio-coming-soon-content run-service-coming-soon-content">
+      <p id="runServiceComingSoonTitle" class="stelvio-coming-soon-message run-service-coming-soon-message">러닝 서비스는 현재 오픈 전입니다.<br>정식 오픈 후 이용하실 수 있습니다.</p>
+      <div class="run-service-coming-soon-buttons">
+        <button type="button" class="stelvio-coming-soon-btn run-service-coming-soon-btn-ok" onclick="if(typeof closeRunServiceComingSoonModal==='function')closeRunServiceComingSoonModal();">확인</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 오픈 라이딩방 등급 2 사용자 안내 (STELVIO 스타일) -->
   <div id="openRidingGrade2NoticeModal" class="stelvio-coming-soon-modal open-riding-grade2-notice-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 200026;">
     <div class="stelvio-coming-soon-overlay open-riding-grade2-notice-overlay" onclick="if(typeof closeOpenRidingGrade2NoticeModal==='function')closeOpenRidingGrade2NoticeModal();"></div>
