@@ -169,8 +169,8 @@
     return setCache(key, { recommendationData: recommendationData, workoutDetails: workoutDetails });
   };
 
-  /** 3: TSS 제외, 피크 W/kg 7축만 / 4: 월간·년간 7축 W/kg(축마다) 포함 / 5: Supremo cu.rank null 시 byCategory.Supremo 폴백 수정 / 7: 피크 등락 파이프라인(Max~60분 탭 동일) */
-  var OCTAGON_CACHE_PAYLOAD_V = 7;
+  /** 3: TSS 제외, 피크 W/kg 7축만 / 4: 월간·년간 7축 W/kg / 7: 피크 등락 파이프라인 / 8: 랭킹보드 캐시·부문·표시순위 동기화 */
+  var OCTAGON_CACHE_PAYLOAD_V = 8;
 
   /**
    * STELVIO 헵타곤 — 7축 ranks+코호트 + (v4) monthly/hof 7축 W/kg. norm은 클라이언트에서 heptagonRadarDisplayNorms로 재계산.
