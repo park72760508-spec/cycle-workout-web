@@ -7380,6 +7380,17 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border: 1px solid rgba(100, 116, 139, 0.2);
 }
 
+/* 헵타곤 7축 순위 라벨 등락 — 순위표와 동일 톤, SVG 축 라벨용 */
+.stelvio-heptagon-axis-rank-change--up {
+  fill: #c97070;
+}
+.stelvio-heptagon-axis-rank-change--down {
+  fill: #7a9fbf;
+}
+.stelvio-heptagon-axis-rank-change--flat {
+  fill: #9ca3af;
+}
+
 /* 순위 등락 배지 */
 .stelvio-rank-change {
   display: inline-block;
