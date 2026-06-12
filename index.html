@@ -25269,6 +25269,9 @@
         if (window.runningRankingSocial && typeof window.runningRankingSocial.ensureUiListeners === 'function') {
           window.runningRankingSocial.ensureUiListeners();
         }
+        if (typeof window.initRunningRankAvatarOverlay === 'function') {
+          window.initRunningRankAvatarOverlay();
+        }
         var scrollEl = document.getElementById('runningRankingScrollArea');
         var topBtn = document.getElementById('runningRankingBackToTopBtn');
         if (scrollEl && topBtn && !scrollEl._runningTopBound) {
