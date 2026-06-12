@@ -27779,6 +27779,10 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   flex-shrink: 0;
   overflow: visible;
 }
+#runningRankingScreen #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
+  position: fixed;
+  z-index: 2147483001;
+}
 @media (max-width: 600px) {
   #runningRankingScreen .stelvio-rank-row .stelvio-rank-name {
     flex-wrap: wrap;
