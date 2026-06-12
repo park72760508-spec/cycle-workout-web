@@ -27692,9 +27692,11 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   color: #64748b;
   font-weight: 600;
 }
-.running-ranking-segment-score {
+.running-ranking-segment-score,
+.running-ranking-segment-pace {
   color: #334155;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .running-ranking-crew-meta {
   font-size: 0.72rem;
