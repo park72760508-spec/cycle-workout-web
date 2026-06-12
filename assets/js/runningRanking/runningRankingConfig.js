@@ -16,25 +16,25 @@
     { id: 'crew', label: '크루', unit: 'pt', sortKey: 'crew_score', sortDir: 'desc' }
   ];
 
-  /** 종합 탭 구간 (1k~20k) */
+  /** 종합 탭 구간 (1k~20k) — runDistanceZoneColors.ZONES 와 키 동기화 */
   var OVERALL_SEGMENTS = [
-    { key: '1k', label: '1k' },
-    { key: '3k', label: '3k' },
-    { key: '5k', label: '5k' },
-    { key: '7k', label: '7k' },
-    { key: '10k', label: '10k' },
-    { key: '20k', label: '20k' }
+    { key: '1k', label: '1k', zone: 'Z7' },
+    { key: '3k', label: '3k', zone: 'Z6' },
+    { key: '5k', label: '5k', zone: 'Z5' },
+    { key: '7k', label: '7k', zone: 'Z4' },
+    { key: '10k', label: '10k', zone: 'Z3' },
+    { key: '20k', label: '20k', zone: 'Z2' }
   ];
 
-  /** 페이스 탭 거리 선택 */
+  /** 페이스 탭 거리 선택 (42k = Z1) */
   var PACE_DISTANCES = [
-    { key: '1k', label: '1k' },
-    { key: '3k', label: '3k' },
-    { key: '5k', label: '5k' },
-    { key: '7k', label: '7k' },
-    { key: '10k', label: '10k' },
-    { key: '20k', label: '20k' },
-    { key: '42k', label: '42k' }
+    { key: '1k', label: '1k', zone: 'Z7' },
+    { key: '3k', label: '3k', zone: 'Z6' },
+    { key: '5k', label: '5k', zone: 'Z5' },
+    { key: '7k', label: '7k', zone: 'Z4' },
+    { key: '10k', label: '10k', zone: 'Z3' },
+    { key: '20k', label: '20k', zone: 'Z2' },
+    { key: '42k', label: '42k', zone: 'Z1' }
   ];
 
   var GENDER_OPTIONS = [
@@ -94,6 +94,9 @@
     GC_SCORING_VERSION: 2,
     LIST_ROW_HEIGHT: 48,
     LIST_ROW_HEIGHT_OVERALL: 78,
-    MEDAL_SRC: ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg']
+    MEDAL_SRC: ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'],
+    DISTANCE_ZONE_COLORS: typeof window.runDistanceZoneColors !== 'undefined'
+      ? window.runDistanceZoneColors
+      : null
   };
 })();
