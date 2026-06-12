@@ -169,8 +169,8 @@
     return setCache(key, { recommendationData: recommendationData, workoutDetails: workoutDetails });
   };
 
-  /** 3: TSS 제외 / 7: 피크 등락 파이프라인 / 8: 랭킹보드 캐시 동기화 / 9: 부문별 등락·기본 전체(Supremo) */
-  var OCTAGON_CACHE_PAYLOAD_V = 9;
+  /** 3: TSS 제외 / 9: 기본 전체 / 10: 부문별 baseline 등락·카테고리 즉시 재계산 */
+  var OCTAGON_CACHE_PAYLOAD_V = 10;
 
   /**
    * STELVIO 헵타곤 — 7축 ranks+코호트 + (v4) monthly/hof 7축 W/kg. norm은 클라이언트에서 heptagonRadarDisplayNorms로 재계산.
