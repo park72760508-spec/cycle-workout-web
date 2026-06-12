@@ -1,18 +1,22 @@
 /**
- * getRunningLeaderboard API — fetch + 메모리 캐시
+ * getRunningLeaderboard API — fetch + 메모리 캐시 (일 1회 스냅샷)
  */
 (function () {
   'use strict';
 
-  var _cache = { at: 0, rows: null, rankMovementByKey: null, rankMovementAsOfSeoul: '', error: null };
+  var _cache = {
+    at: 0,
+    rows: null,
+    rankMovementByKey: null,
+    rankMovementAsOfSeoul: '',
+    leaderboardSource: '',
+    leaderboardAsOfSeoul: '',
+    error: null
+  };
   var _inflight = null;
 
   function getConfig() {
-    return window.runningRankingConfig || { API_URL: '', CACHE_TTL_MS: 300000 };
-  }
-
-  function getFormat() {
-    return window.runningRankingFormat || {};
+    return window.runningRankingConfig || { API_URL: '', CACHE_TTL_MS: 3600000 };
   }
 
   /**
@@ -27,7 +31,9 @@
         success: true,
         rows: _cache.rows.slice(),
         rankMovementByKey: _cache.rankMovementByKey || {},
-        rankMovementAsOfSeoul: _cache.rankMovementAsOfSeoul || ''
+        rankMovementAsOfSeoul: _cache.rankMovementAsOfSeoul || '',
+        leaderboardSource: _cache.leaderboardSource || '',
+        leaderboardAsOfSeoul: _cache.leaderboardAsOfSeoul || ''
       });
     }
     if (_inflight && !opts.force) return _inflight;
@@ -45,18 +51,24 @@
             ? body.rankMovementByKey
             : {};
           var rankMovementAsOfSeoul = body.rankMovementAsOfSeoul ? String(body.rankMovementAsOfSeoul) : '';
+          var leaderboardSource = body.leaderboardSource ? String(body.leaderboardSource) : '';
+          var leaderboardAsOfSeoul = body.leaderboardAsOfSeoul ? String(body.leaderboardAsOfSeoul) : '';
           _cache = {
             at: Date.now(),
             rows: rows,
             rankMovementByKey: rankMovementByKey,
             rankMovementAsOfSeoul: rankMovementAsOfSeoul,
+            leaderboardSource: leaderboardSource,
+            leaderboardAsOfSeoul: leaderboardAsOfSeoul,
             error: null
           };
           return {
             success: true,
             rows: rows.slice(),
             rankMovementByKey: rankMovementByKey,
-            rankMovementAsOfSeoul: rankMovementAsOfSeoul
+            rankMovementAsOfSeoul: rankMovementAsOfSeoul,
+            leaderboardSource: leaderboardSource,
+            leaderboardAsOfSeoul: leaderboardAsOfSeoul
           };
         });
       })
@@ -68,6 +80,8 @@
             rows: _cache.rows.slice(),
             rankMovementByKey: _cache.rankMovementByKey || {},
             rankMovementAsOfSeoul: _cache.rankMovementAsOfSeoul || '',
+            leaderboardSource: _cache.leaderboardSource || '',
+            leaderboardAsOfSeoul: _cache.leaderboardAsOfSeoul || '',
             stale: true,
             error: msg
           };
@@ -82,7 +96,15 @@
   }
 
   function invalidateCache() {
-    _cache = { at: 0, rows: null, rankMovementByKey: null, rankMovementAsOfSeoul: '', error: null };
+    _cache = {
+      at: 0,
+      rows: null,
+      rankMovementByKey: null,
+      rankMovementAsOfSeoul: '',
+      leaderboardSource: '',
+      leaderboardAsOfSeoul: '',
+      error: null
+    };
   }
 
   window.runningRankingApi = {
