@@ -1,5 +1,6 @@
 /**
  * 러닝 랭킹보드 — 메인 화면 (5탭: 종합·페이스·TSS·거리·크루)
+ * 종합 탭: CYCLE 랭킹보드 GC 탭과 동일 UI (히어로·전체/관심·범례·분포도)
  */
 /* global React, useState, useEffect, useMemo, useCallback, useRef */
 (function () {
@@ -16,9 +17,48 @@
   var useCallback = React.useCallback;
   var useRef = React.useRef;
 
+  var STAR_PATH =
+    'M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z';
+
   function cfg() { return window.runningRankingConfig || {}; }
   function dataApi() { return window.runningRankingData || {}; }
   function fetchApi() { return window.runningRankingApi || {}; }
+  function socialApi() { return window.runningRankingSocial || {}; }
+
+  function legendStarSvg(className) {
+    return React.createElement('span', { className: className, 'aria-hidden': true },
+      React.createElement('svg', {
+        className: 'stelvio-legend-star-svg',
+        xmlns: 'http://www.w3.org/2000/svg',
+        viewBox: '0 0 20 20',
+        width: '1.05em',
+        height: '1.05em'
+      },
+        React.createElement('path', { fill: 'currentColor', d: STAR_PATH })
+      )
+    );
+  }
+
+  function RunningRankingStarLegend() {
+    return React.createElement('div', {
+      className: 'stelvio-ranking-star-legend',
+      role: 'note',
+      'aria-label': '순위 목록 별 표시 설명'
+    },
+      React.createElement('span', { className: 'stelvio-ranking-star-legend-item' },
+        legendStarSvg('stelvio-legend-star stelvio-legend-star--friend'),
+        React.createElement('span', null, '친구')
+      ),
+      React.createElement('span', { className: 'stelvio-ranking-star-legend-item' },
+        legendStarSvg('stelvio-legend-star stelvio-legend-star--group'),
+        React.createElement('span', null, '그룹멤버')
+      ),
+      React.createElement('span', { className: 'stelvio-ranking-star-legend-item' },
+        legendStarSvg('stelvio-legend-star stelvio-legend-star--interest'),
+        React.createElement('span', null, '관심')
+      )
+    );
+  }
 
   function RunningRankingScreen() {
     var _tab = useState('overall');
@@ -36,6 +76,10 @@
     var _category = useState((cfg().DEFAULT_CATEGORY) || 'Supremo');
     var activeCategory = _category[0];
     var setActiveCategory = _category[1];
+
+    var _listFilter = useState('all');
+    var listFilter = _listFilter[0];
+    var setListFilter = _listFilter[1];
 
     var _loading = useState(true);
     var loading = _loading[0];
@@ -82,6 +126,7 @@
     var setSocialVer = _socialVer[1];
 
     var crewUnsubRef = useRef(null);
+    var isOverallTab = activeTab === 'overall';
 
     var currentUserId = useMemo(function () {
       return dataApi().getCurrentUserId ? dataApi().getCurrentUserId() : null;
@@ -157,7 +202,7 @@
     useEffect(function () {
       loadLeaderboard({});
       subscribeCrewGroups();
-      var socialMod = window.runningRankingSocial;
+      var socialMod = socialApi();
       if (socialMod) {
         if (typeof socialMod.ensureUiListeners === 'function') socialMod.ensureUiListeners();
         if (typeof socialMod.bootstrapSocial === 'function') {
@@ -165,6 +210,11 @@
             setSocialVer(function (v) { return v + 1; });
             if (typeof socialMod.refreshStarSlots === 'function') socialMod.refreshStarSlots();
           }).catch(function () {});
+        }
+        if (typeof socialMod.bindStarChangeListener === 'function') {
+          socialMod.bindStarChangeListener(function () {
+            setSocialVer(function (v) { return v + 1; });
+          });
         }
       }
       return function () {
@@ -187,23 +237,34 @@
     useEffect(function () {
       if (activeTab === 'crew') return;
       scrollRankingToTop();
-    }, [gender, activeCategory, activeTab, paceDistance]);
+    }, [gender, activeCategory, activeTab, paceDistance, listFilter]);
 
-    var rankedList = useMemo(function () {
-      var list;
+    var baseRankedList = useMemo(function () {
       if (activeTab === 'crew') {
-        list = dataApi().buildCrewRankedList
+        return dataApi().buildCrewRankedList
           ? dataApi().buildCrewRankedList(rawRows, crewEnriched.length ? crewEnriched : crewGroups)
           : [];
-      } else {
-        list = dataApi().buildRankedList
-          ? dataApi().buildRankedList(rawRows, activeTab, {
-            paceDistance: paceDistance,
-            gender: gender,
-            category: activeCategory
-          })
-          : [];
       }
+      return dataApi().buildRankedList
+        ? dataApi().buildRankedList(rawRows, activeTab, {
+          paceDistance: paceDistance,
+          gender: gender,
+          category: activeCategory
+        })
+        : [];
+    }, [rawRows, activeTab, paceDistance, gender, activeCategory, crewGroups, crewEnriched]);
+
+    var rankedList = useMemo(function () {
+      var list = baseRankedList.slice();
+      if (isOverallTab && listFilter === 'interest') {
+        var soc = socialApi();
+        if (soc && typeof soc.filterRowsByListInterest === 'function') {
+          list = soc.filterRowsByListInterest(list, listFilter, currentUserId);
+        }
+      }
+      list = list.map(function (item, idx) {
+        return Object.assign({}, item, { rank: idx + 1 });
+      });
       var moveMod = window.runningRankingMovement;
       if (moveMod && typeof moveMod.applyRankMovement === 'function') {
         moveMod.applyRankMovement(list, activeTab, {
@@ -213,7 +274,42 @@
         }, rankMovementByKey);
       }
       return list;
-    }, [rawRows, activeTab, paceDistance, gender, activeCategory, crewGroups, crewEnriched, socialVer, rankMovementByKey]);
+    }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, socialVer]);
+
+    var overallHeroMessage = useMemo(function () {
+      if (!isOverallTab || !dataApi().buildOverallHeroMessage) return null;
+      return dataApi().buildOverallHeroMessage(rawRows, {
+        gender: gender,
+        category: activeCategory
+      });
+    }, [isOverallTab, rawRows, gender, activeCategory]);
+
+    useEffect(function () {
+      if (!isOverallTab || loading) return;
+      if (typeof window.refreshStelvioDistributionChart !== 'function') return;
+      if (!dataApi().buildDistributionPayload) return;
+      var payload = dataApi().buildDistributionPayload(rawRows, {
+        gender: gender,
+        category: activeCategory
+      });
+      if (listFilter === 'interest') {
+        var soc = socialApi();
+        if (soc && typeof soc.filterRowsByListInterest === 'function') {
+          var filt = function (rows) {
+            return soc.filterRowsByListInterest(rows, 'interest', currentUserId);
+          };
+          if (payload.byCategory) {
+            var bc = {};
+            Object.keys(payload.byCategory).forEach(function (k) {
+              bc[k] = filt(payload.byCategory[k]);
+            });
+            payload.byCategory = bc;
+          }
+          if (Array.isArray(payload.entries)) payload.entries = filt(payload.entries);
+        }
+      }
+      window.refreshStelvioDistributionChart(payload, 'running-ranking-distribution-chart-root');
+    }, [isOverallTab, rawRows, gender, activeCategory, listFilter, currentUserId, loading, socialVer]);
 
     var unitLabel = useMemo(function () {
       var tabs = cfg().TABS || [];
@@ -230,21 +326,25 @@
         || ((labels[activeCategory] || activeCategory) + ' 순위');
     }, [activeCategory]);
 
-    var rowHeight = activeTab === 'overall'
+    var rowHeight = isOverallTab
       ? (cfg().LIST_ROW_HEIGHT_OVERALL || 78)
       : (cfg().LIST_ROW_HEIGHT || 56);
 
-    var listKey = activeTab + '-' + paceDistance + '-' + gender + '-' + activeCategory;
+    var listKey = activeTab + '-' + paceDistance + '-' + gender + '-' + activeCategory + '-' + listFilter;
 
     var Skeleton = window.RunningRankingSkeleton;
     var VirtualList = window.RunningRankingVirtualList;
+    var Row = window.RunningRankingRow;
 
     var tabButtons = (cfg().TABS || []).map(function (t) {
       return React.createElement('button', {
         key: t.id,
         type: 'button',
         className: 'stelvio-duration-tab' + (activeTab === t.id ? ' active' : ''),
-        onClick: function () { setActiveTab(t.id); }
+        onClick: function () {
+          setActiveTab(t.id);
+          if (t.id !== 'overall') setListFilter('all');
+        }
       }, t.label);
     });
 
@@ -310,6 +410,27 @@
         )
       : null;
 
+    var listFilterToggle = isOverallTab
+      ? React.createElement('div', {
+          className: 'stelvio-ranking-list-filter-toggle',
+          role: 'group',
+          'aria-label': '순위 목록 보기'
+        },
+          React.createElement('button', {
+            type: 'button',
+            className: 'stelvio-ranking-filter-chip' + (listFilter === 'all' ? ' stelvio-ranking-filter-chip--active' : ''),
+            'aria-pressed': listFilter === 'all',
+            onClick: function () { setListFilter('all'); }
+          }, '전체'),
+          React.createElement('button', {
+            type: 'button',
+            className: 'stelvio-ranking-filter-chip' + (listFilter === 'interest' ? ' stelvio-ranking-filter-chip--active' : ''),
+            'aria-pressed': listFilter === 'interest',
+            onClick: function () { setListFilter('interest'); }
+          }, '관심')
+        )
+      : null;
+
     var listBody;
     if (loading && !rawRows.length) {
       listBody = Skeleton
@@ -334,6 +455,28 @@
         React.createElement('br'),
         '라이딩 모임에서 그룹(소모임)에 가입해 보세요.'
       );
+    } else if (!rankedList.length) {
+      listBody = React.createElement('p', { className: 'stelvio-ranking-empty' },
+        listFilter === 'interest'
+          ? '관심·친구·그룹멤버에 해당하는 랭킹이 없습니다.'
+          : (activeTab === 'crew' ? '집계 가능한 크루가 없습니다.' : '해당 조건의 랭킹이 없습니다.')
+      );
+    } else if (isOverallTab && Row) {
+      listBody = React.createElement('div', {
+        className: 'running-ranking-plain-list',
+        role: 'list',
+        'aria-label': '러닝 종합 랭킹 목록'
+      },
+        rankedList.map(function (item) {
+          return React.createElement(Row, {
+            key: (item.crewId || item.userId || '') + '-' + item.rank + '-' + socialVer,
+            item: item,
+            tabId: activeTab,
+            currentUserId: currentUserId,
+            socialVer: socialVer
+          });
+        })
+      );
     } else {
       listBody = VirtualList
         ? React.createElement(VirtualList, {
@@ -348,40 +491,64 @@
         : null;
     }
 
-    return React.createElement('div', { className: 'running-ranking-body', id: 'running-ranking-react-root' },
+    var movementHintText = leaderboardSource === 'live'
+      ? '집계 대기 중 · 점수·순위는 실시간 미리보기입니다. 매일 23:00(KST) 집계 후 고정됩니다.'
+      : (leaderboardAsOfSeoul
+        ? ('점수·순위·등락은 매일 23:00(KST) 집계 기준 · 집계일 ' + leaderboardAsOfSeoul)
+        : '점수·순위·등락은 매일 23:00(KST) 집계 후 고정·전일 대비로 표시됩니다.');
+
+    var rootClass = 'running-ranking-body' +
+      (isOverallTab ? ' running-ranking-body--overall' : '');
+
+    return React.createElement('div', { className: rootClass, id: 'running-ranking-react-root' },
       React.createElement('div', { className: 'stelvio-ranking-sticky running-ranking-sticky' },
         React.createElement('div', { className: 'stelvio-duration-chips-wrap' },
           React.createElement('div', { className: 'stelvio-duration-chips', role: 'tablist' }, tabButtons)
         ),
         paceChips,
         activeTab !== 'crew'
-          ? React.createElement('div', { className: 'stelvio-filter-bar-wrap' },
+          ? React.createElement('div', { className: 'stelvio-filter-bar-wrap running-ranking-filter-wrap' },
               React.createElement('div', { className: 'stelvio-filter-bar' }, genderSelect, categorySelect)
+            )
+          : null,
+        isOverallTab
+          ? React.createElement('div', { className: 'running-ranking-filter-divider', 'aria-hidden': true })
+          : null,
+        isOverallTab && overallHeroMessage
+          ? React.createElement('div', { className: 'stelvio-hero-card running-ranking-hero-card' },
+              React.createElement('p', { className: 'stelvio-hero-text' }, overallHeroMessage)
             )
           : null,
         stale && error
           ? React.createElement('p', { className: 'running-ranking-stale-hint' }, '캐시 표시 · ' + error)
           : null,
-        React.createElement('p', { className: 'running-ranking-movement-hint' },
-          leaderboardSource === 'live'
-            ? '집계 대기 중 · 점수·순위는 실시간 미리보기입니다. 매일 23:00(KST) 집계 후 고정됩니다.'
-            : (leaderboardAsOfSeoul
-              ? ('점수·순위·등락은 매일 23:00(KST) 집계 기준 · 집계일 ' + leaderboardAsOfSeoul)
-              : '점수·순위·등락은 매일 23:00(KST) 집계 후 고정·전일 대비로 표시됩니다.')
-        )
+        React.createElement('p', { className: 'running-ranking-movement-hint' }, movementHintText)
       ),
       React.createElement('div', { className: 'stelvio-ranking-content running-ranking-content' },
-        React.createElement('div', { className: 'stelvio-category-card stelvio-ranking-list-card running-ranking-list-card' },
+        React.createElement('div', {
+          className: 'stelvio-category-card stelvio-ranking-list-card running-ranking-list-card' +
+            (isOverallTab ? ' running-ranking-list-card--overall' : '')
+        },
           React.createElement('div', { className: 'stelvio-category-header' },
             React.createElement('span', { className: 'stelvio-category-header-title' },
-              activeTab === 'crew'
-                ? '크루 랭킹'
-                : listCategoryTitle
+              activeTab === 'crew' ? '크루 랭킹' : listCategoryTitle
             ),
+            listFilterToggle,
             React.createElement('span', { className: 'stelvio-category-header-unit' }, unitLabel)
           ),
-          React.createElement('div', { className: 'stelvio-category-body running-ranking-list-body' }, listBody)
-        )
+          React.createElement('div', {
+            className: 'stelvio-category-body running-ranking-list-body' +
+              (isOverallTab ? ' running-ranking-list-body--overall' : '')
+          }, listBody)
+        ),
+        isOverallTab ? React.createElement(RunningRankingStarLegend) : null,
+        isOverallTab
+          ? React.createElement('div', {
+              id: 'running-ranking-distribution-chart-root',
+              className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
+              'aria-live': 'polite'
+            })
+          : null
       )
     );
   }
