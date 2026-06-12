@@ -170,7 +170,7 @@
   };
 
   /** 3: TSS 제외, 피크 W/kg 7축만 / 4: 월간·년간 7축 W/kg(축마다) 포함 / 5: Supremo cu.rank null 시 byCategory.Supremo 폴백 수정 후 기존 오류 캐시 무효화 */
-  var OCTAGON_CACHE_PAYLOAD_V = 5;
+  var OCTAGON_CACHE_PAYLOAD_V = 6;
 
   /**
    * STELVIO 헵타곤 — 7축 ranks+코호트 + (v4) monthly/hof 7축 W/kg. norm은 클라이언트에서 heptagonRadarDisplayNorms로 재계산.
@@ -209,6 +209,19 @@
     return out;
   }
 
+  function pad7OptionalInts(arr) {
+    var out = [];
+    var i;
+    for (i = 0; i < 7; i++) {
+      if (arr && arr[i] != null && isFinite(Number(arr[i]))) {
+        out.push(Math.round(Number(arr[i])));
+      } else {
+        out.push(null);
+      }
+    }
+    return out;
+  }
+
   window.setStelvioOctagonRanksCache = function(
     userId,
     gender,
@@ -218,7 +231,9 @@
     cohortSizePerAxis,
     hofRanks,
     monthlyWkgs,
-    hofWkgs
+    hofWkgs,
+    monthlyRankChanges,
+    monthlyPreviousBoardRanks
   ) {
     if (!userId) return false;
     var g = gender == null || gender === '' ? 'all' : String(gender);
@@ -230,7 +245,9 @@
       monthly: {
         ranks: monthlyRanks,
         cohortSizePerAxis: cohortSizePerAxis,
-        wkgs: pad7Wkgs(Array.isArray(monthlyWkgs) ? monthlyWkgs : null)
+        wkgs: pad7Wkgs(Array.isArray(monthlyWkgs) ? monthlyWkgs : null),
+        rankChanges: pad7OptionalInts(Array.isArray(monthlyRankChanges) ? monthlyRankChanges : null),
+        previousBoardRanks: pad7OptionalInts(Array.isArray(monthlyPreviousBoardRanks) ? monthlyPreviousBoardRanks : null)
       },
       hof: {
         ranks: hofRanks,
