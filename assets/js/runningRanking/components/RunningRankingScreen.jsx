@@ -200,6 +200,14 @@
     }, [activeTab, crewGroups]);
 
     useEffect(function () {
+      window.runningRankingUiState = {
+        gender: gender,
+        activeCategory: activeCategory,
+        activeTab: activeTab
+      };
+    }, [gender, activeCategory, activeTab]);
+
+    useEffect(function () {
       loadLeaderboard({});
       subscribeCrewGroups();
       var socialMod = socialApi();
