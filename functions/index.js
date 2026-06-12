@@ -9076,7 +9076,7 @@ exports.getRankingBuildMetaPublic = onRequest(
  * - getWeeklyRanking / getPeakPowerRanking / rankingReadRouter: 미수정
  * - Firestore users/logs·rides·랭킹 집계: 미접촉
  * - Supabase public.rides·daily_summaries·MV: 미접촉
- * - 오직 supabase.rpc('get_running_leaderboard') 호출만 수행
+ * - supabase.rpc('get_running_leaderboard_published') — 일 1회(23:00 KST) 스냅샷 우선
  */
 exports.getRunningLeaderboard = onRequest(
   supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60 }),
@@ -9084,7 +9084,7 @@ exports.getRunningLeaderboard = onRequest(
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.set("Cache-Control", "public, max-age=300, s-maxage=300");
+    res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
     if (req.method === "OPTIONS") {
       res.status(204).send("");
       return;
@@ -9098,7 +9098,7 @@ exports.getRunningLeaderboard = onRequest(
       const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
       const runningRankingMovement = require("./runningRankingMovement");
       const [lbRes, snapRes] = await Promise.all([
-        supabase.rpc("get_running_leaderboard"),
+        supabase.rpc("get_running_leaderboard_published"),
         runningRankingMovement.fetchAllRunRankSnapshots(),
       ]);
       const { data, error } = lbRes;
@@ -9106,11 +9106,21 @@ exports.getRunningLeaderboard = onRequest(
         console.error("[getRunningLeaderboard]", error);
         return res.status(500).json({ success: false, error: error.message });
       }
+      const published =
+        data && typeof data === "object" && !Array.isArray(data) ? data : {};
+      const leaderboard = Array.isArray(published.leaderboard)
+        ? published.leaderboard
+        : Array.isArray(data)
+          ? data
+          : [];
       return res.status(200).json({
         success: true,
-        leaderboard: data,
+        leaderboard,
+        leaderboardSource: published.source || "snapshot",
+        leaderboardAsOfSeoul: published.as_of_seoul || "",
+        leaderboardAggregatedAt: published.aggregated_at || "",
         rankMovementSource: "supabase",
-        rankMovementAsOfSeoul: snapRes.asOfSeoul || "",
+        rankMovementAsOfSeoul: snapRes.asOfSeoul || published.as_of_seoul || "",
         rankMovementByKey: snapRes.byKey || {},
       });
     } catch (e) {
