@@ -1,5 +1,5 @@
 /**
- * Strava 러닝·워킹 Webhook 전용 처리.
+ * Strava 러닝 Webhook 전용 처리 (Run / VirtualRun / TrailRun — Walk 제외).
  *
  * [사이클 영향 검토 — 2026-06-10]
  * - index.js processStravaActivity / processOneUserStravaSync / isCyclingForMmp: 미수정
@@ -10,8 +10,8 @@
 const admin = require("firebase-admin");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 
-/** Webhook create 라우팅 대상 — 소문자 Set, 비교 시 normalize (Run·VirtualRun 등 대소문자 무관) */
-const RUNNING_STRAVA_TYPES = new Set(["run", "virtualrun", "trailrun", "walk"]);
+/** Webhook create 라우팅 대상 — Walk 제외 (RUN 랭킹은 Run 계열만) */
+const RUNNING_STRAVA_TYPES = new Set(["run", "virtualrun", "trailrun"]);
 
 function normalizeStravaActivityTypeToken(type) {
   return String(type || "")
@@ -257,7 +257,7 @@ async function upsertRunningActivityToSupabase(firebaseUid, row) {
 }
 
 /**
- * Strava Run/Walk 활동 → Supabase activities upsert.
+ * Strava Run 활동 → Supabase activities upsert.
  * @param {import('firebase-admin').firestore.Firestore} db
  * @param {number} ownerId Strava athlete id
  * @param {number|string} objectId Strava activity id
