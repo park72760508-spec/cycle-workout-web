@@ -438,16 +438,45 @@
    * 동일 GET URL에 대한 진행 중 요청 통합(Connection 수·실제 패킷 절약). 순위 계산 결과는 불변(getPeak 단일 응답).
    */
   var rankingPayloadInflight = Object.create(null);
+  var peakPayloadStoreRef = { current: Object.create(null) };
+
+  function rememberPeakPayloadForHeptagon(duration, data) {
+    if (!duration || !data || !data.success || !data.byCategory) return;
+    peakPayloadStoreRef.current[String(duration)] = data;
+  }
+
+  function heptagonRowsFromStoredPeakPayloads(uid, category, period, gender) {
+    var out = [];
+    var di;
+    for (di = 0; di < DURATIONS.length; di++) {
+      var d = DURATIONS[di];
+      var data = peakPayloadStoreRef.current[d];
+      if (!data) return null;
+      out.push(axisStatsFromRankingPayload(data, uid, category, d));
+    }
+    return out.length === DURATIONS.length ? out : null;
+  }
+
   function fetchRankingPayloadDedup(uid, duration, period, gender) {
     var u = uid != null ? String(uid) : '';
     var g = gender == null || gender === '' ? 'all' : String(gender);
     var per = duration !== 'tss' ? period || 'monthly' : period || 'weekly';
     var pk = String(duration) + '\n' + per + '\n' + g + '\n' + u;
     var cur = rankingPayloadInflight[pk];
-    if (cur) return cur;
-    cur = fetchRankingPayload(uid, duration, period, gender).finally(function() {
-      if (rankingPayloadInflight[pk] === cur) delete rankingPayloadInflight[pk];
-    });
+    if (cur) {
+      return cur.then(function(data) {
+        rememberPeakPayloadForHeptagon(duration, data);
+        return data;
+      });
+    }
+    cur = fetchRankingPayload(uid, duration, period, gender)
+      .then(function(data) {
+        rememberPeakPayloadForHeptagon(duration, data);
+        return data;
+      })
+      .finally(function() {
+        if (rankingPayloadInflight[pk] === cur) delete rankingPayloadInflight[pk];
+      });
     rankingPayloadInflight[pk] = cur;
     return cur;
   }
@@ -586,47 +615,35 @@
     };
   }
 
-  /** getPeakPowerRanking 행·currentUser에서 축별 등락 추출 — 랭킹보드 Max~60분 탭과 동일 검증·baseline */
+  /** 선택 부문 baseline(전일 순위) → 등락. 전체(Supremo) 등락을 부문 행에 섞지 않음 */
+  function peakRankMovementBaselineForCategory(data, category) {
+    if (!data || !category) return null;
+    if (data.rankMovementCompareBaselineByCategory && data.rankMovementCompareBaselineByCategory[category]) {
+      return data.rankMovementCompareBaselineByCategory[category];
+    }
+    if (data.rankMovementPrevDayByCategory && data.rankMovementPrevDayByCategory[category]) {
+      return data.rankMovementPrevDayByCategory[category];
+    }
+    return null;
+  }
+
+  function movementFromCategoryBaseline(data, uid, category, catRank) {
+    if (catRank == null || catRank < 1) return null;
+    var baseline = peakRankMovementBaselineForCategory(data, category);
+    if (!baseline || baseline[String(uid)] == null) return null;
+    var prev = Math.floor(Number(baseline[String(uid)]));
+    if (!isFinite(prev) || prev < 1) return null;
+    return { rankChange: prev - catRank, previousBoardRank: prev };
+  }
+
+  /** getPeakPowerRanking — 선택 부문 순위·baseline 기준 등락(랭킹보드 부문 리스트와 동일) */
   function axisRankMovementFromRankingPayload(data, uid, category) {
     var empty = { rankChange: null, previousBoardRank: null };
-    if (!data || !data.success || !uid) return empty;
+    if (!data || !data.success || !uid || !category) return empty;
     var byCategory = data.byCategory || {};
-    var cu = data.currentUser;
-    var cuValid = cu && String(cu.userId) === String(uid);
     var catRank = categoryRankInPayloadList(data, uid, category);
-
-    function movementFromBaseline() {
-      if (catRank == null || catRank < 1) return null;
-      var baseline = null;
-      if (data.rankMovementCompareBaselineByCategory && data.rankMovementCompareBaselineByCategory[category]) {
-        baseline = data.rankMovementCompareBaselineByCategory[category];
-      } else if (data.rankMovementPrevDayByCategory && data.rankMovementPrevDayByCategory[category]) {
-        baseline = data.rankMovementPrevDayByCategory[category];
-      }
-      if (!baseline || baseline[String(uid)] == null) return null;
-      var prev = Math.floor(Number(baseline[String(uid)]));
-      if (!isFinite(prev) || prev < 1) return null;
-      return { rankChange: prev - catRank, previousBoardRank: prev };
-    }
-
-    function extractFromRow(row) {
-      if (!row) return null;
-      if (typeof window.stelvioNormalizeRankMovementOnRow === 'function') {
-        window.stelvioNormalizeRankMovementOnRow(row, catRank);
-      }
-      if (row.rankChange == null || row.previousBoardRank == null) return movementFromBaseline();
-      if (
-        typeof window.stelvioRankMovementRowMatchesCurrentRank === 'function' &&
-        catRank != null &&
-        !window.stelvioRankMovementRowMatchesCurrentRank(row, catRank)
-      ) {
-        return movementFromBaseline();
-      }
-      var rc = Math.round(Number(row.rankChange));
-      var pb = Math.floor(Number(row.previousBoardRank));
-      if (!isFinite(rc) || !isFinite(pb) || pb < 1) return movementFromBaseline();
-      return { rankChange: rc, previousBoardRank: pb };
-    }
+    var fromBaseline = movementFromCategoryBaseline(data, uid, category, catRank);
+    if (fromBaseline) return fromBaseline;
 
     function findRowInArr(arr) {
       if (!arr || !arr.length) return null;
@@ -636,16 +653,25 @@
       return null;
     }
 
-    var catRow = findRowInArr(byCategory[category] || []);
-    var catHit = extractFromRow(catRow);
-    if (catHit) return catHit;
-
-    if (category === 'Supremo' && cuValid) {
-      var cuHit = extractFromRow(cu);
-      if (cuHit) return cuHit;
+    var row = findRowInArr(byCategory[category] || []);
+    if (!row && category === 'Supremo' && data.currentUser && String(data.currentUser.userId) === String(uid)) {
+      row = data.currentUser;
+    }
+    if (row && row.rankChange != null && row.previousBoardRank != null) {
+      if (
+        catRank == null ||
+        typeof window.stelvioRankMovementRowMatchesCurrentRank !== 'function' ||
+        window.stelvioRankMovementRowMatchesCurrentRank(row, catRank)
+      ) {
+        var rc = Math.round(Number(row.rankChange));
+        var pb = Math.floor(Number(row.previousBoardRank));
+        if (isFinite(rc) && isFinite(pb) && pb >= 1) {
+          return { rankChange: rc, previousBoardRank: pb };
+        }
+      }
     }
 
-    return movementFromBaseline() || empty;
+    return empty;
   }
 
   var HEPTAGON_AXIS_RANK_CHANGE_FILL = {
@@ -3567,6 +3593,12 @@
                 );
               })();
 
+        var quickRows = heptagonRowsFromStoredPeakPayloads(uid, category, 'monthly', gender);
+        if (quickRows) {
+          var quickSup = heptagonRowsFromStoredPeakPayloads(uid, 'Supremo', 'monthly', gender);
+          setState(stateFromApiRows(quickRows, quickRows, quickSup));
+        }
+
         if (typeof window.getStelvioOctagonRanksCache === 'function') {
           var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
           if (cached && cached.monthly) {
@@ -3612,7 +3644,9 @@
         var peakReqId = octagonPeakReqRef.current;
 
         /** 월간(28일) 7축 getPeak만 사용 — 명예의 전당(365d) API 호출 제거 */
-        setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
+        if (!quickRows) {
+          setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
+        }
         fetchTwinCategoryPeakAxisRows(uid, 'monthly', gender, category)
           .then(function(pair) {
             if (peakReqId !== octagonPeakReqRef.current) {
@@ -3674,6 +3708,27 @@
           });
       },
       [uid, gender, category, gcRankingApi.data]
+    );
+
+    useEffect(
+      function() {
+        peakPayloadStoreRef.current = Object.create(null);
+      },
+      [uid, gender]
+    );
+
+    useEffect(
+      function() {
+        if (!uid || !category) return;
+        var mRows = heptagonRowsFromStoredPeakPayloads(uid, category, 'monthly', gender);
+        if (!mRows) return;
+        var sRows = heptagonRowsFromStoredPeakPayloads(uid, 'Supremo', 'monthly', gender);
+        setState(function(prev) {
+          if (!prev || prev.loading) return prev;
+          return stateFromApiRows(mRows, mRows, sRows);
+        });
+      },
+      [uid, category, gender]
     );
 
     useEffect(
