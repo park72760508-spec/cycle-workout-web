@@ -831,15 +831,16 @@
 
   global.StelvioRankingDistributionChart = StelvioRankingDistributionChart;
 
-  var _distRoot = null;
-  global.refreshStelvioDistributionChart = function (chartProps) {
-    var el = document.getElementById('stelvio-distribution-chart-root');
+  var _distRoots = Object.create(null);
+  global.refreshStelvioDistributionChart = function (chartProps, rootId) {
+    var mountId = rootId || 'stelvio-distribution-chart-root';
+    var el = document.getElementById(mountId);
     if (!el || !global.React || !global.ReactDOM || !global.StelvioRankingDistributionChart) return;
     var p = chartProps || {};
     var elem = global.React.createElement(global.StelvioRankingDistributionChart, p);
     if (global.ReactDOM.createRoot) {
-      if (!_distRoot) _distRoot = global.ReactDOM.createRoot(el);
-      _distRoot.render(elem);
+      if (!_distRoots[mountId]) _distRoots[mountId] = global.ReactDOM.createRoot(el);
+      _distRoots[mountId].render(elem);
     } else if (typeof global.ReactDOM.render === 'function') {
       global.ReactDOM.render(elem, el);
     }
