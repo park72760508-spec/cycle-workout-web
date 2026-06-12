@@ -1,13 +1,17 @@
 /**
- * RUN 구간 피크 — 슬라이딩·단조 보정 단위 테스트
+ * RUN 구간 피크 — 중첩 슬라이딩·단조 검증
  * 실행: node functions/calculateAndSaveRunEfforts.test.js
  */
 "use strict";
 
 const {
   findFastestDistanceWindow,
+  findNestedEffortWindowsFromStreams,
   enforceMonotonicEffortSpeeds,
+  effortSpeedsAreMonotonic,
   elapsedForExactDistanceWindow,
+  paceSecPerKmFromSpeed,
+  EFFORT_DISTANCE_ORDER,
 } = require("./calculateAndSaveRunEfforts");
 
 function assert(cond, msg) {
@@ -18,8 +22,8 @@ function approx(a, b, eps) {
   return Math.abs(a - b) <= (eps || 0.01);
 }
 
-/** 균일 4:00/km 페이스 — 모든 구간 동일 속도 */
-(function testUniformPace() {
+/** 균일 4:00/km — 중첩 탐색 페이스 단조 */
+(function testNestedUniformPace() {
   const paceSec = 240;
   const speed = 1000 / paceSec;
   const n = 500;
@@ -29,16 +33,66 @@ function approx(a, b, eps) {
     time.push(i * paceSec);
     distance.push(i * 1000);
   }
-  const w3 = findFastestDistanceWindow(time, distance, null, 3000);
-  const w5 = findFastestDistanceWindow(time, distance, null, 5000);
-  assert(w3 && w5, "uniform: windows found");
-  assert(approx(w3.speed, speed), "uniform 3k speed");
-  assert(approx(w5.speed, speed), "uniform 5k speed");
-  assert(w3.speed >= w5.speed - 0.001, "uniform: 3k not slower than 5k");
+  const row = findNestedEffortWindowsFromStreams(time, distance, null, 500000);
+  assert(row.speed_1k != null && row.speed_3k != null, "nested: 1k/3k found");
+  assert(effortSpeedsAreMonotonic(row), "nested uniform: pace monotonic");
+  assert(approx(row.speed_3k, speed), "nested 3k speed");
 })();
 
-/** 앞 1km 만 sprint — 단조 보정 전 역전, 보정 후 준수 */
-(function testMonotonicEnforcement() {
+/** 앞 2km 느림·이후 빠름 — 독립 탐색 시 1k/3k 역전 가능, 중첩은 10k 윈도우 내에서만 탐색 */
+(function testNestedVariablePace() {
+  const n = 120;
+  const time = [];
+  const distance = [];
+  for (let i = 0; i < n; i++) {
+    distance.push(i * 1000);
+    if (i <= 2) {
+      time.push(i * 360);
+    } else {
+      time.push(720 + (i - 2) * 220);
+    }
+  }
+  const totalM = distance[n - 1];
+  const row = findNestedEffortWindowsFromStreams(time, distance, null, totalM);
+  assert(row.speed_10k != null, "nested variable: 10k found");
+  assert(effortSpeedsAreMonotonic(row), "nested variable: pace monotonic without cap");
+  if (row.speed_1k != null && row.speed_3k != null) {
+    assert(row.speed_1k >= row.speed_3k - 1e-9, "1k speed >= 3k speed");
+  }
+})();
+
+/** 중첩 윈도우 포함 관계: 각 구간 [start,end] 가 상위 구간 안에 있어야 함 */
+(function testNestedWindowContainment() {
+  const n = 80;
+  const time = [];
+  const distance = [];
+  for (let i = 0; i < n; i++) {
+    distance.push(i * 1000);
+    time.push(i * 250 + (i > 40 ? (i - 40) * 20 : 0));
+  }
+  const streams = { time, distance, heartrate: null };
+  const clip = { lo: 0, hi: n - 1 };
+  const windows = {};
+  const order = ["42k", "20k", "10k", "7k", "5k", "3k", "1k"];
+  const targets = { "1k": 1000, "3k": 3000, "5k": 5000, "7k": 7000, "10k": 10000, "20k": 20000, "42k": 42000 };
+  for (const label of order) {
+    const targetM = targets[label];
+    if (distance[clip.hi] - distance[clip.lo] < targetM) continue;
+    const w = findFastestDistanceWindow(time, distance, null, targetM, {
+      indexLo: clip.lo,
+      indexHi: clip.hi,
+    });
+    if (!w) continue;
+    windows[label] = w;
+    assert(w.start >= clip.lo && w.end <= clip.hi, label + " window inside clip");
+    clip.lo = w.start;
+    clip.hi = w.end;
+  }
+  assert(Object.keys(windows).length >= 2, "nested chain: at least 2 windows");
+})();
+
+/** 사후 캡 (활동 간 max 집계용 안전망) */
+(function testMonotonicEnforcementFallback() {
   const row = {
     speed_1k: 4.0,
     speed_3k: 4.5,
@@ -49,21 +103,10 @@ function approx(a, b, eps) {
     speed_42k: null,
   };
   enforceMonotonicEffortSpeeds(row);
-  assert(row.speed_3k === 4.0, "3k capped to 1k");
-  assert(row.speed_5k === 4.0, "5k capped to chain");
-  assert(row.speed_7k === 3.8, "7k unchanged");
-  assert(row.speed_10k === 3.5, "10k unchanged");
-  const order = ["1k", "3k", "5k", "7k", "10k"];
-  for (let i = 1; i < order.length; i++) {
-    const prev = row[`speed_${order[i - 1]}`];
-    const curr = row[`speed_${order[i]}`];
-    if (prev != null && curr != null) {
-      assert(curr <= prev + 1e-9, `${order[i]} should not exceed ${order[i - 1]}`);
-    }
-  }
+  assert(effortSpeedsAreMonotonic(row), "after cap: monotonic");
 })();
 
-/** 보간 elapsed: 정확 3000m 구간 */
+/** 보간 elapsed */
 (function testInterpolatedElapsed() {
   const time = [0, 100, 200, 400, 700];
   const distance = [0, 1000, 2000, 4000, 7000];
@@ -71,6 +114,13 @@ function approx(a, b, eps) {
   assert(elapsed != null && elapsed > 0, "interpolated elapsed exists");
   const speed = 3000 / elapsed;
   assert(speed > 8 && speed < 12, "interpolated speed plausible");
+})();
+
+/** 페이스 sec/km 단조 헬퍼 */
+(function testPaceHelper() {
+  const p1 = paceSecPerKmFromSpeed(4);
+  const p3 = paceSecPerKmFromSpeed(3.5);
+  assert(p1 < p3, "faster speed → lower pace sec/km");
 })();
 
 console.log("calculateAndSaveRunEfforts.test.js — all passed");

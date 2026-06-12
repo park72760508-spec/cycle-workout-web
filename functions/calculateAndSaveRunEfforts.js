@@ -29,6 +29,9 @@ const STREAM_DISTANCE_TARGETS = {
 /** 짧은 거리일수록 빠르거나 같아야 함: speed_1k >= speed_3k >= … >= speed_42k (m/s) */
 const EFFORT_DISTANCE_ORDER = ["1k", "3k", "5k", "7k", "10k", "20k", "42k"];
 
+/** 중첩 탐색 순서: 긴 거리 최적 윈도우 → 그 안에서 짧은 거리 */
+const NESTED_EFFORT_DISTANCE_ORDER = ["42k", "20k", "10k", "7k", "5k", "3k", "1k"];
+
 const EFFORT_NAME_ALIASES = {
   "1k": ["1k", "1km", "1 kilometer", "1 kilometres"],
   "3k": ["3k", "3km", "3 kilometer", "3 kilometres"],
@@ -208,18 +211,25 @@ function elapsedForExactDistanceWindow(timeArr, distanceArr, startIdx, endIdx, t
 
 /**
  * 거리 차이 >= targetDistanceM 인 윈도우 중 정확 target 구간 elapsed 최소.
+ * @param {{ indexLo?: number, indexHi?: number }} [opts] 탐색 허용 인덱스 (중첩 탐색용 클립)
  * @returns {{ speed: number, hr: number|null, start: number, end: number }|null}
  */
-function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM) {
+function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM, opts) {
+  opts = opts || {};
   const n = Math.min(timeArr.length, distanceArr.length);
   if (n < 2 || targetDistanceM <= 0) return null;
+
+  const indexLo = Math.max(0, int(opts.indexLo, 0) ?? 0);
+  const indexHi = Math.min(n - 1, int(opts.indexHi, n - 1) ?? n - 1);
+  if (indexHi <= indexLo) return null;
+  if (distanceArr[indexHi] - distanceArr[indexLo] < targetDistanceM) return null;
 
   let bestElapsed = null;
   let bestStart = -1;
   let bestEnd = -1;
 
-  let left = 0;
-  for (let right = 1; right < n; right++) {
+  let left = indexLo;
+  for (let right = indexLo + 1; right <= indexHi; right++) {
     while (left < right && distanceArr[right] - distanceArr[left] >= targetDistanceM) {
       const elapsed = elapsedForExactDistanceWindow(timeArr, distanceArr, left, right, targetDistanceM);
       if (elapsed != null && (bestElapsed == null || elapsed < bestElapsed)) {
@@ -228,6 +238,7 @@ function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM)
         bestEnd = right;
       }
       left += 1;
+      if (left < indexLo) left = indexLo;
     }
   }
 
@@ -248,6 +259,61 @@ function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM)
     if (found) hr = maxHr;
   }
   return { speed, hr, start: bestStart, end: bestEnd };
+}
+
+/**
+ * GPS Streams 중첩 슬라이딩 윈도우: 42k→20k→…→1k
+ * 긴 거리 최적 [start,end] 확정 후 그 인덱스 범위 안에서만 짧은 거리 탐색 → 포함 관계·페이스 단조.
+ */
+function findNestedEffortWindowsFromStreams(timeArr, distanceArr, hrArr, totalDistanceM) {
+  const out = buildEmptyEffortsRow();
+  const n = Math.min(timeArr.length, distanceArr.length);
+  if (n < 2) return out;
+
+  let clipLo = 0;
+  let clipHi = n - 1;
+
+  for (const label of NESTED_EFFORT_DISTANCE_ORDER) {
+    const targetM = STREAM_DISTANCE_TARGETS[label];
+    if (!targetM || totalDistanceM < targetM) continue;
+    if (distanceArr[clipHi] - distanceArr[clipLo] < targetM) continue;
+
+    const window = findFastestDistanceWindow(
+      timeArr,
+      distanceArr,
+      hrArr,
+      targetM,
+      { indexLo: clipLo, indexHi: clipHi }
+    );
+    if (!window) continue;
+
+    out[`speed_${label}`] = window.speed;
+    if (window.hr != null) out[`hr_${label}`] = window.hr;
+    clipLo = window.start;
+    clipHi = window.end;
+  }
+
+  return out;
+}
+
+/** m/s → sec/km (페이스 단조 검증용) */
+function paceSecPerKmFromSpeed(speedMps) {
+  const s = num(speedMps, null);
+  if (s == null || s <= 0) return null;
+  return 1000 / s;
+}
+
+/** pace(1k) <= pace(3k) <= … (sec/km) 준수 여부 */
+function effortSpeedsAreMonotonic(row) {
+  if (!row) return true;
+  let prevPace = null;
+  for (const label of EFFORT_DISTANCE_ORDER) {
+    const pace = paceSecPerKmFromSpeed(row[`speed_${label}`]);
+    if (pace == null) continue;
+    if (prevPace != null && pace + 1e-6 < prevPace) return false;
+    prevPace = pace;
+  }
+  return true;
 }
 
 /**
@@ -313,32 +379,29 @@ async function computeRunEffortsFromActivity(activity, accessToken) {
     out[`hr_${label}`] = hr;
   }
 
-  /** 2) Streams 로 1k~42k 통일 계산 (best_efforts 덮어씀) */
+  /** 2) Streams — 중첩 슬라이딩 윈도우 (42k→…→1k, 포함 관계) */
   const streamThresholdM = minStreamDistanceNeeded(totalDistanceM);
   if (streamThresholdM != null && accessToken) {
     const streams = await fetchStravaRunStreams(accessToken, String(activity.id));
     if (streams.success) {
-      for (const [label, targetM] of Object.entries(STREAM_DISTANCE_TARGETS)) {
-        if (totalDistanceM < targetM) continue;
-        const maxDist = streams.distance[streams.distance.length - 1] - streams.distance[0];
-        if (maxDist < targetM) continue;
-        const window = findFastestDistanceWindow(
-          streams.time,
-          streams.distance,
-          streams.heartrate,
-          targetM
-        );
-        if (window) {
-          out[`speed_${label}`] = window.speed;
-          if (window.hr != null) out[`hr_${label}`] = window.hr;
-        }
+      const nested = findNestedEffortWindowsFromStreams(
+        streams.time,
+        streams.distance,
+        streams.heartrate,
+        totalDistanceM
+      );
+      for (const label of EFFORT_DISTANCE_ORDER) {
+        const sk = `speed_${label}`;
+        const hk = `hr_${label}`;
+        if (nested[sk] != null) out[sk] = nested[sk];
+        if (nested[hk] != null) out[hk] = nested[hk];
       }
     } else {
       console.warn("[calculateAndSaveRunEfforts] streams 조회 실패:", streams.error || streams.status);
     }
   }
 
-  /** 3) 페이스 단조: pace(1k) <= pace(3k) <= … (m/s 는 거리 증가 시 비증가) */
+  /** 3) GPS 노이즈·활동 간 max 대비 안전망 (중첩 탐색 후에도 역전 시 캡) */
   enforceMonotonicEffortSpeeds(out);
 
   return out;
@@ -452,10 +515,14 @@ module.exports = {
   BEST_EFFORT_DISTANCE_TARGETS,
   STREAM_DISTANCE_TARGETS,
   EFFORT_DISTANCE_ORDER,
+  NESTED_EFFORT_DISTANCE_ORDER,
   findBestEffortByLabel,
   interpolateTimeAtDistance,
   elapsedForExactDistanceWindow,
   findFastestDistanceWindow,
+  findNestedEffortWindowsFromStreams,
+  paceSecPerKmFromSpeed,
+  effortSpeedsAreMonotonic,
   enforceMonotonicEffortSpeeds,
   fetchStravaRunStreams,
   computeRunEffortsFromActivity,
