@@ -8,6 +8,7 @@ const {
   findFastestDistanceWindow,
   findNestedEffortWindowsFromStreams,
   enforceMonotonicEffortSpeeds,
+  fillMissingShorterEffortsFromLonger,
   effortSpeedsAreMonotonic,
   elapsedForExactDistanceWindow,
   paceSecPerKmFromSpeed,
@@ -121,6 +122,36 @@ function approx(a, b, eps) {
   const p1 = paceSecPerKmFromSpeed(4);
   const p3 = paceSecPerKmFromSpeed(3.5);
   assert(p1 < p3, "faster speed → lower pace sec/km");
+})();
+
+/** 3k만 있고 1k 없을 때 보간 */
+(function testImpute3kOnly() {
+  const row = {
+    speed_1k: null,
+    speed_3k: 1000 / 355,
+    speed_5k: null,
+    speed_7k: null,
+    speed_10k: null,
+    speed_20k: null,
+    speed_42k: null,
+  };
+  fillMissingShorterEffortsFromLonger(row);
+  assert(row.speed_1k != null && row.speed_1k > 0, "3k only: 1k imputed");
+  assert(row.speed_1k >= row.speed_3k - 1e-9, "1k speed >= 3k speed");
+})();
+
+/** 3k 윈도우 내 1k GPS 보간 */
+(function testImputeFromParentWindow() {
+  const n = 40;
+  const time = [];
+  const distance = [];
+  for (let i = 0; i < n; i++) {
+    distance.push(i * 1000);
+    time.push(i * 355);
+  }
+  const row = findNestedEffortWindowsFromStreams(time, distance, null, 40000);
+  assert(row.speed_3k != null, "parent window: 3k");
+  assert(row.speed_1k != null, "parent window: 1k imputed");
 })();
 
 console.log("calculateAndSaveRunEfforts.test.js — all passed");

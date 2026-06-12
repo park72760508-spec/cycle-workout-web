@@ -272,6 +272,7 @@ function findNestedEffortWindowsFromStreams(timeArr, distanceArr, hrArr, totalDi
 
   let clipLo = 0;
   let clipHi = n - 1;
+  const windows = {};
 
   for (const label of NESTED_EFFORT_DISTANCE_ORDER) {
     const targetM = STREAM_DISTANCE_TARGETS[label];
@@ -289,11 +290,69 @@ function findNestedEffortWindowsFromStreams(timeArr, distanceArr, hrArr, totalDi
 
     out[`speed_${label}`] = window.speed;
     if (window.hr != null) out[`hr_${label}`] = window.hr;
+    windows[label] = window;
     clipLo = window.start;
     clipHi = window.end;
   }
 
+  imputeMissingShorterFromWindows(timeArr, distanceArr, hrArr, out, windows);
+  fillMissingShorterEffortsFromLonger(out);
   return out;
+}
+
+/**
+ * 중첩 윈도우 내 GPS로 짧은 거리 보간 (3k 윈도우 있으면 1k elapsed 산출)
+ */
+function imputeMissingShorterFromWindows(timeArr, distanceArr, hrArr, out, windows) {
+  const chain = ["42k", "20k", "10k", "7k", "5k", "3k", "1k"];
+  for (let i = chain.length - 1; i >= 1; i--) {
+    const shortLabel = chain[i];
+    const shortKey = `speed_${shortLabel}`;
+    if (out[shortKey] != null && out[shortKey] > 0) continue;
+
+    const targetM = STREAM_DISTANCE_TARGETS[shortLabel];
+    if (!targetM) continue;
+
+    for (let j = i - 1; j >= 0; j--) {
+      const longLabel = chain[j];
+      const parent = windows[longLabel];
+      if (!parent) continue;
+
+      const elapsed = elapsedForExactDistanceWindow(
+        timeArr,
+        distanceArr,
+        parent.start,
+        parent.end,
+        targetM
+      );
+      if (elapsed == null || elapsed <= 0) continue;
+
+      out[shortKey] = targetM / elapsed;
+      if (out[`hr_${shortLabel}`] == null && parent.hr != null) {
+        out[`hr_${shortLabel}`] = parent.hr;
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * 긴 거리 speed 가 있으면 짧은 거리 누락 시 동일 speed 로 채움 (중첩 불변식)
+ */
+function fillMissingShorterEffortsFromLonger(row) {
+  if (!row || typeof row !== "object") return row;
+  const chain = ["42k", "20k", "10k", "7k", "5k", "3k", "1k"];
+  let anchor = null;
+  for (let i = 0; i < chain.length; i++) {
+    const key = `speed_${chain[i]}`;
+    const raw = num(row[key], null);
+    if (raw != null && raw > 0) {
+      anchor = raw;
+      continue;
+    }
+    if (anchor != null) row[key] = anchor;
+  }
+  return row;
 }
 
 /** m/s → sec/km (페이스 단조 검증용) */
@@ -403,6 +462,7 @@ async function computeRunEffortsFromActivity(activity, accessToken) {
 
   /** 3) GPS 노이즈·활동 간 max 대비 안전망 (중첩 탐색 후에도 역전 시 캡) */
   enforceMonotonicEffortSpeeds(out);
+  fillMissingShorterEffortsFromLonger(out);
 
   return out;
 }
@@ -521,6 +581,8 @@ module.exports = {
   elapsedForExactDistanceWindow,
   findFastestDistanceWindow,
   findNestedEffortWindowsFromStreams,
+  imputeMissingShorterFromWindows,
+  fillMissingShorterEffortsFromLonger,
   paceSecPerKmFromSpeed,
   effortSpeedsAreMonotonic,
   enforceMonotonicEffortSpeeds,
