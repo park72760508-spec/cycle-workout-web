@@ -50,7 +50,8 @@
     var isCurrent = !!(currentUserId && item.userId && String(item.userId) === String(currentUserId));
     var rowClass = 'stelvio-rank-row running-ranking-row' +
       (isCurrent ? ' stelvio-rank-current' : '') +
-      (item.isCrew ? ' running-ranking-row--crew' : '');
+      (item.isCrew ? ' running-ranking-row--crew' : '') +
+      (tabId === 'overall' && !props.showSegments ? ' running-ranking-row--compact' : '');
 
     var valueClass = 'stelvio-rank-wkg running-ranking-value' +
       (tabId === 'pace' ? ' running-ranking-value--pace' : '');
@@ -82,7 +83,7 @@
       React.createElement('span', { key: 'val', className: valueClass }, item.valueLabel)
     ];
 
-    if (tabId === 'overall' && Array.isArray(item.segments) && item.segments.length) {
+    if (tabId === 'overall' && props.showSegments && Array.isArray(item.segments) && item.segments.length) {
       children.push(
         React.createElement('div', { key: 'seg', className: 'running-ranking-segments' },
           item.segments.map(function (seg) {

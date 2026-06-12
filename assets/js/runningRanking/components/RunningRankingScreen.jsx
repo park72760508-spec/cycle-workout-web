@@ -125,6 +125,10 @@
     var socialVer = _socialVer[0];
     var setSocialVer = _socialVer[1];
 
+    var _showOverallSegments = useState(false);
+    var showOverallSegments = _showOverallSegments[0];
+    var setShowOverallSegments = _showOverallSegments[1];
+
     var crewUnsubRef = useRef(null);
     var isOverallTab = activeTab === 'overall';
 
@@ -200,12 +204,13 @@
     }, [activeTab, crewGroups]);
 
     useEffect(function () {
+      window.runningRankingLeaderboardRows = rawRows && rawRows.length ? rawRows.slice() : [];
       window.runningRankingUiState = {
         gender: gender,
         activeCategory: activeCategory,
         activeTab: activeTab
       };
-    }, [gender, activeCategory, activeTab]);
+    }, [rawRows, gender, activeCategory, activeTab]);
 
     useEffect(function () {
       loadLeaderboard({});
@@ -339,7 +344,9 @@
     }, [activeCategory]);
 
     var rowHeight = isOverallTab
-      ? (cfg().LIST_ROW_HEIGHT_OVERALL || 78)
+      ? (showOverallSegments
+        ? (cfg().LIST_ROW_HEIGHT_OVERALL || 78)
+        : (cfg().LIST_ROW_HEIGHT || 56))
       : (cfg().LIST_ROW_HEIGHT || 56);
 
     var listKey = activeTab + '-' + paceDistance + '-' + gender + '-' + activeCategory + '-' + listFilter;
@@ -422,6 +429,29 @@
         )
       : null;
 
+    var segmentToggle = isOverallTab
+      ? React.createElement('span', {
+          className: 'running-ranking-segment-toggle',
+          role: 'group',
+          'aria-label': '구간 페이스 표시'
+        },
+          React.createElement('button', {
+            type: 'button',
+            className: 'running-ranking-segment-toggle-btn' + (showOverallSegments ? ' running-ranking-segment-toggle-btn--active' : ''),
+            'aria-pressed': showOverallSegments,
+            title: '구간 페이스 표시',
+            onClick: function () { setShowOverallSegments(true); }
+          }, '+'),
+          React.createElement('button', {
+            type: 'button',
+            className: 'running-ranking-segment-toggle-btn' + (!showOverallSegments ? ' running-ranking-segment-toggle-btn--active' : ''),
+            'aria-pressed': !showOverallSegments,
+            title: '구간 페이스 숨김',
+            onClick: function () { setShowOverallSegments(false); }
+          }, '−')
+        )
+      : null;
+
     var listFilterToggle = isOverallTab
       ? React.createElement('div', {
           className: 'stelvio-ranking-list-filter-toggle',
@@ -481,11 +511,12 @@
       },
         rankedList.map(function (item) {
           return React.createElement(Row, {
-            key: (item.crewId || item.userId || '') + '-' + item.rank + '-' + socialVer,
+            key: (item.crewId || item.userId || '') + '-' + item.rank + '-' + socialVer + (showOverallSegments ? '-seg' : ''),
             item: item,
             tabId: activeTab,
             currentUserId: currentUserId,
             listCategory: activeCategory,
+            showSegments: showOverallSegments,
             socialVer: socialVer
           });
         })
@@ -545,14 +576,16 @@
         },
           React.createElement('div', { className: 'stelvio-category-header' },
             React.createElement('span', { className: 'stelvio-category-header-title' },
-              activeTab === 'crew' ? '크루 랭킹' : listCategoryTitle
+              activeTab === 'crew' ? '크루 랭킹' : listCategoryTitle,
+              segmentToggle
             ),
             listFilterToggle,
             React.createElement('span', { className: 'stelvio-category-header-unit' }, unitLabel)
           ),
           React.createElement('div', {
             className: 'stelvio-category-body running-ranking-list-body' +
-              (isOverallTab ? ' running-ranking-list-body--overall' : '')
+              (isOverallTab ? ' running-ranking-list-body--overall' : '') +
+              (isOverallTab && showOverallSegments ? ' running-ranking-list-body--segments-on' : ' running-ranking-list-body--segments-off')
           }, listBody)
         ),
         isOverallTab ? React.createElement(RunningRankingStarLegend) : null,
