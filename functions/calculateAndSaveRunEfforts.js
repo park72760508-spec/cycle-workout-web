@@ -8,20 +8,26 @@
 const admin = require("firebase-admin");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 
-/** Strava best_efforts 에서 직접 매핑 */
+/** Strava best_efforts — Streams 미사용 시 폴백 */
 const BEST_EFFORT_DISTANCE_TARGETS = {
   "1k": 1000,
   "5k": 5000,
   "10k": 10000,
 };
 
-/** Streams 슬라이딩 윈도우로 계산 */
+/** GPS Streams 슬라이딩 윈도우 (1k~42k 통일 산출 — best_efforts 와 혼용 시 페이스 역전 방지) */
 const STREAM_DISTANCE_TARGETS = {
+  "1k": 1000,
   "3k": 3000,
+  "5k": 5000,
   "7k": 7000,
+  "10k": 10000,
   "20k": 20000,
   "42k": 42000,
 };
+
+/** 짧은 거리일수록 빠르거나 같아야 함: speed_1k >= speed_3k >= … >= speed_42k (m/s) */
+const EFFORT_DISTANCE_ORDER = ["1k", "3k", "5k", "7k", "10k", "20k", "42k"];
 
 const EFFORT_NAME_ALIASES = {
   "1k": ["1k", "1km", "1 kilometer", "1 kilometres"],
@@ -166,8 +172,43 @@ async function fetchStravaRunStreams(accessToken, activityId) {
 }
 
 /**
- * 거리 차이 >= targetDistanceM 인 윈도우 중 elapsed(time) 최소 구간.
- * @returns {{ speed: number, hr: number|null }|null} speed m/s, hr = 구간 최고 심박
+ * distanceArr 구간 [fromIdx, toIdx] 안에서 targetDist 지점의 time 선형 보간.
+ */
+function interpolateTimeAtDistance(timeArr, distanceArr, targetDist, fromIdx, toIdx) {
+  const lo = Math.max(0, fromIdx);
+  const hi = Math.min(timeArr.length - 1, toIdx);
+  if (lo >= hi) return timeArr[lo] ?? null;
+  if (targetDist <= distanceArr[lo]) return timeArr[lo];
+  if (targetDist >= distanceArr[hi]) return timeArr[hi];
+  for (let i = lo; i < hi; i++) {
+    const d0 = distanceArr[i];
+    const d1 = distanceArr[i + 1];
+    if (d0 <= targetDist && d1 >= targetDist) {
+      if (d1 <= d0) return timeArr[i];
+      const ratio = (targetDist - d0) / (d1 - d0);
+      return timeArr[i] + ratio * (timeArr[i + 1] - timeArr[i]);
+    }
+  }
+  return timeArr[hi];
+}
+
+/**
+ * 정확히 targetDistanceM 구간의 elapsed — GPS 샘플 경계 보간.
+ */
+function elapsedForExactDistanceWindow(timeArr, distanceArr, startIdx, endIdx, targetDistanceM) {
+  const startDist = distanceArr[startIdx];
+  const endDistExact = startDist + targetDistanceM;
+  if (endDistExact > distanceArr[endIdx]) return null;
+  const tStart = timeArr[startIdx];
+  const tEnd = interpolateTimeAtDistance(timeArr, distanceArr, endDistExact, startIdx, endIdx);
+  if (tStart == null || tEnd == null) return null;
+  const elapsed = tEnd - tStart;
+  return elapsed > 0 ? elapsed : null;
+}
+
+/**
+ * 거리 차이 >= targetDistanceM 인 윈도우 중 정확 target 구간 elapsed 최소.
+ * @returns {{ speed: number, hr: number|null, start: number, end: number }|null}
  */
 function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM) {
   const n = Math.min(timeArr.length, distanceArr.length);
@@ -180,8 +221,8 @@ function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM)
   let left = 0;
   for (let right = 1; right < n; right++) {
     while (left < right && distanceArr[right] - distanceArr[left] >= targetDistanceM) {
-      const elapsed = timeArr[right] - timeArr[left];
-      if (elapsed > 0 && (bestElapsed == null || elapsed < bestElapsed)) {
+      const elapsed = elapsedForExactDistanceWindow(timeArr, distanceArr, left, right, targetDistanceM);
+      if (elapsed != null && (bestElapsed == null || elapsed < bestElapsed)) {
         bestElapsed = elapsed;
         bestStart = left;
         bestEnd = right;
@@ -206,7 +247,27 @@ function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM)
     }
     if (found) hr = maxHr;
   }
-  return { speed, hr };
+  return { speed, hr, start: bestStart, end: bestEnd };
+}
+
+/**
+ * 짧은 거리일수록 빠르거나 같도록 speed(m/s) 단조 감소 보정.
+ * 긴 거리가 더 빠르게 나온 경우(슬라이딩 윈도우·활동 간 max 혼합) 상위 구간 속도로 캡.
+ */
+function enforceMonotonicEffortSpeeds(row) {
+  if (!row || typeof row !== "object") return row;
+  let capSpeed = null;
+  for (const label of EFFORT_DISTANCE_ORDER) {
+    const key = `speed_${label}`;
+    const raw = num(row[key], null);
+    if (raw == null || raw <= 0) continue;
+    if (capSpeed != null && raw > capSpeed) {
+      row[key] = capSpeed;
+    } else {
+      capSpeed = raw;
+    }
+  }
+  return row;
 }
 
 function buildEmptyEffortsRow() {
@@ -244,6 +305,7 @@ async function computeRunEffortsFromActivity(activity, accessToken) {
   const bestEfforts = Array.isArray(activity.best_efforts) ? activity.best_efforts : [];
   const totalDistanceM = num(activity.distance) || 0;
 
+  /** 1) best_efforts 폴백 (Streams 없을 때만 최종 사용) */
   for (const label of Object.keys(BEST_EFFORT_DISTANCE_TARGETS)) {
     const effort = findBestEffortByLabel(bestEfforts, label);
     const { speed, hr } = extractSpeedAndHrFromBestEffort(effort, fallbackHr);
@@ -251,6 +313,7 @@ async function computeRunEffortsFromActivity(activity, accessToken) {
     out[`hr_${label}`] = hr;
   }
 
+  /** 2) Streams 로 1k~42k 통일 계산 (best_efforts 덮어씀) */
   const streamThresholdM = minStreamDistanceNeeded(totalDistanceM);
   if (streamThresholdM != null && accessToken) {
     const streams = await fetchStravaRunStreams(accessToken, String(activity.id));
@@ -267,13 +330,16 @@ async function computeRunEffortsFromActivity(activity, accessToken) {
         );
         if (window) {
           out[`speed_${label}`] = window.speed;
-          out[`hr_${label}`] = window.hr;
+          if (window.hr != null) out[`hr_${label}`] = window.hr;
         }
       }
     } else {
       console.warn("[calculateAndSaveRunEfforts] streams 조회 실패:", streams.error || streams.status);
     }
   }
+
+  /** 3) 페이스 단조: pace(1k) <= pace(3k) <= … (m/s 는 거리 증가 시 비증가) */
+  enforceMonotonicEffortSpeeds(out);
 
   return out;
 }
@@ -385,8 +451,12 @@ async function calculateAndSaveRunEfforts(db, firebaseUid, activity, accessToken
 module.exports = {
   BEST_EFFORT_DISTANCE_TARGETS,
   STREAM_DISTANCE_TARGETS,
+  EFFORT_DISTANCE_ORDER,
   findBestEffortByLabel,
+  interpolateTimeAtDistance,
+  elapsedForExactDistanceWindow,
   findFastestDistanceWindow,
+  enforceMonotonicEffortSpeeds,
   fetchStravaRunStreams,
   computeRunEffortsFromActivity,
   calculateAndSaveRunEfforts,
