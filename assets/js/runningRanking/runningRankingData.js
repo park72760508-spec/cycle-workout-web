@@ -671,7 +671,7 @@
     opts = opts || {};
     if (!userId || !rows || !rows.length) return null;
 
-    var uid = String(userId);
+    var uid = String(userId).trim();
     var gender = opts.gender || 'all';
     var ageCategory = opts.ageCategory ? String(opts.ageCategory).trim() : 'Supremo';
     var displayName = opts.displayName != null ? String(opts.displayName).trim() : '';
@@ -679,8 +679,11 @@
     var row = null;
     var i;
     for (i = 0; i < rows.length; i++) {
-      if (rowUserId(rows[i]) === uid) {
+      var rid = rowUserId(rows[i]);
+      if (!rid) continue;
+      if (rid === uid || rid.toLowerCase() === uid.toLowerCase()) {
         row = rows[i];
+        uid = rid;
         break;
       }
     }

@@ -42,6 +42,9 @@
   }
 
   function getRows() {
+    if (window.runningRankingLeaderboardRows && window.runningRankingLeaderboardRows.length) {
+      return window.runningRankingLeaderboardRows.slice();
+    }
     if (window.runningRankingApi && typeof window.runningRankingApi.getCachedRows === 'function') {
       var cached = window.runningRankingApi.getCachedRows();
       if (cached && cached.length) return cached;
@@ -49,74 +52,124 @@
     return [];
   }
 
+  function bindBackdropListeners() {
+    var backdrop = el(BACKDROP_ID);
+    if (!backdrop) return false;
+
+    if (!backdrop._runningRankAvatarZoomBound) {
+      backdrop._runningRankAvatarZoomBound = true;
+      backdrop.addEventListener('click', function (evBd) {
+        if (!evBd.target.closest('.stelvio-rank-avatar-zoom-card')) {
+          closeRunningRankAvatarZoom();
+        }
+      });
+      backdrop.addEventListener('touchstart', function (evTs) {
+        if (!evTs.target.closest('.stelvio-rank-avatar-zoom-card')) {
+          closeRunningRankAvatarZoom();
+        }
+      }, { passive: true });
+
+      var zoomCard = backdrop.querySelector('.stelvio-rank-avatar-zoom-card');
+      if (zoomCard) {
+        zoomCard.addEventListener('click', function (evIn) {
+          evIn.stopPropagation();
+        });
+      }
+    }
+    return true;
+  }
+
+  function ensureOverlayDom() {
+    var backdrop = el(BACKDROP_ID);
+    if (!backdrop) return false;
+    if (backdrop.parentElement && backdrop.parentElement !== document.body) {
+      document.body.appendChild(backdrop);
+    }
+    bindBackdropListeners();
+    return !!(el(BACKDROP_ID) && el(LINE_IDS[0]) && el(LINE_IDS[1]) && el(LINE_IDS[2]));
+  }
+
+  function buildProfileLines(userId, rows, displayName, ageCategory) {
+    var dataMod = window.runningRankingData;
+    if (!dataMod || typeof dataMod.buildAvatarOverlayProfile !== 'function') return null;
+    var ui = resolveUiState();
+    try {
+      return dataMod.buildAvatarOverlayProfile(userId, rows, {
+        gender: ui.gender,
+        ageCategory: ageCategory || ui.ageCategory,
+        displayName: displayName
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+
   function loadProfilePanels(userId, displayName, ageCategory, gen) {
     var backdrop = el(BACKDROP_ID);
     var l1 = el(LINE_IDS[0]);
     var l2 = el(LINE_IDS[1]);
     var l3 = el(LINE_IDS[2]);
-    if (!backdrop || !l1 || !l2 || !l3) return;
+    if (!backdrop || !l1 || !l2 || !l3) {
+      setSpinner(false);
+      return;
+    }
 
     function isStale() {
       return !backdrop.classList.contains('hidden')
         && Number(backdrop.getAttribute('data-running-rank-zoom-gen')) === Number(gen);
     }
 
-    setSpinner(true);
-
-    function finish(lines) {
+    function finish(lines, errMsg) {
       if (!isStale()) return;
+      var name = displayName || backdrop.getAttribute('data-running-rank-overlay-name') || '';
       if (lines) {
-        l1.textContent = lines.line1 || '';
+        l1.textContent = lines.line1 || name || '';
         l2.textContent = lines.line2 || '';
         l3.textContent = lines.line3 || '';
       } else {
-        l2.textContent = '순위 정보를 불러오지 못했습니다. 다시 시도해 주세요.';
+        l1.textContent = name
+          ? name + ' · ' + (errMsg || '순위 정보 없음')
+          : (errMsg || '순위 정보 없음');
+        l2.textContent = '';
         l3.textContent = '';
       }
       setSpinner(false);
     }
 
-    var rows = getRows();
-    var ui = resolveUiState();
-    var dataMod = window.runningRankingData;
+    setSpinner(true);
 
-    if (!rows.length) {
-      var fetchFn = window.runningRankingApi && window.runningRankingApi.fetchLeaderboard;
-      if (typeof fetchFn !== 'function') {
-        finish(null);
+    function applyRows(rows) {
+      if (!isStale()) return;
+      var lines = buildProfileLines(userId, rows, displayName, ageCategory);
+      if (lines) {
+        finish(lines);
         return;
       }
-      fetchFn({}).then(function (res) {
-        if (!isStale()) return;
-        rows = (res && res.rows) || getRows();
-        if (!dataMod || typeof dataMod.buildAvatarOverlayProfile !== 'function') {
-          finish(null);
-          return;
-        }
-        finish(dataMod.buildAvatarOverlayProfile(userId, rows, {
-          gender: ui.gender,
-          ageCategory: ageCategory || ui.ageCategory,
-          displayName: displayName
-        }));
-      }).catch(function () {
-        finish(null);
-      });
+      finish(null, '순위 정보를 불러오지 못했습니다.');
+    }
+
+    var rows = getRows();
+    if (rows.length) {
+      setTimeout(function () { applyRows(rows); }, 0);
       return;
     }
 
-    if (!dataMod || typeof dataMod.buildAvatarOverlayProfile !== 'function') {
-      finish(null);
+    var fetchFn = window.runningRankingApi && window.runningRankingApi.fetchLeaderboard;
+    if (typeof fetchFn !== 'function') {
+      finish(null, '랭킹 데이터가 없습니다.');
       return;
     }
 
-    finish(dataMod.buildAvatarOverlayProfile(userId, rows, {
-      gender: ui.gender,
-      ageCategory: ageCategory || ui.ageCategory,
-      displayName: displayName
-    }));
+    fetchFn({}).then(function (res) {
+      applyRows((res && res.rows) || getRows());
+    }).catch(function () {
+      finish(null, '순위 정보를 불러오지 못했습니다.');
+    });
   }
 
   function openRunningRankAvatarZoom(imageSrc, meta) {
+    if (!ensureOverlayDom()) return;
+
     var backdrop = el(BACKDROP_ID);
     var img = el(IMG_ID);
     var profWrap = el(PROFILE_ID);
@@ -162,6 +215,7 @@
 
     backdrop.classList.remove('hidden');
     backdrop.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('running-rank-avatar-zoom-open');
 
     if (backdrop._runningRankAvatarZoomEscKey) {
       document.removeEventListener('keydown', backdrop._runningRankAvatarZoomEscKey);
@@ -179,6 +233,7 @@
     if (!backdrop) return;
     backdrop.classList.add('hidden');
     backdrop.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('running-rank-avatar-zoom-open');
     if (backdrop._runningRankAvatarZoomEscKey) {
       document.removeEventListener('keydown', backdrop._runningRankAvatarZoomEscKey);
       backdrop._runningRankAvatarZoomEscKey = null;
@@ -215,28 +270,18 @@
     });
   }
 
-  function bindBackdropListeners() {
-    var backdrop = el(BACKDROP_ID);
-    if (!backdrop || backdrop._runningRankAvatarZoomBound) return;
-    backdrop._runningRankAvatarZoomBound = true;
-
-    backdrop.addEventListener('click', function (evBd) {
-      if (!evBd.target.closest('.stelvio-rank-avatar-zoom-card')) {
-        closeRunningRankAvatarZoom();
-      }
-    });
-
-    var zoomCard = backdrop.querySelector('.stelvio-rank-avatar-zoom-card');
-    if (zoomCard) {
-      zoomCard.addEventListener('click', function (evIn) {
-        evIn.stopPropagation();
-      });
-    }
+  function initOverlay() {
+    ensureOverlayDom();
   }
 
-  bindBackdropListeners();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initOverlay);
+  } else {
+    initOverlay();
+  }
 
   window.runningRankingAvatarZoomHandler = runningRankingAvatarZoomHandler;
   window.openRunningRankAvatarZoom = openRunningRankAvatarZoom;
   window.closeRunningRankAvatarZoom = closeRunningRankAvatarZoom;
+  window.initRunningRankAvatarOverlay = initOverlay;
 })();
