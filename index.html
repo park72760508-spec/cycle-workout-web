@@ -17634,6 +17634,20 @@
       return ranks;
     }
 
+    function stelvioPeakRankUidMapsEqual(a, b) {
+      if (!a || typeof a !== 'object') a = {};
+      if (!b || typeof b !== 'object') b = {};
+      var keysA = Object.keys(a);
+      var keysB = Object.keys(b);
+      if (keysA.length !== keysB.length || !keysA.length) return false;
+      for (var ei = 0; ei < keysA.length; ei++) {
+        var k = keysA[ei];
+        if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+        if (Math.floor(Number(a[k])) !== Math.floor(Number(b[k]))) return false;
+      }
+      return true;
+    }
+
     function stelvioEnsurePeakPowerRankMovementOnPayload(data) {
       if (!data || !data.byCategory || typeof data.byCategory !== 'object') return;
       var dt = stelvioResolveRankMovementDurationType(data);
@@ -17886,7 +17900,43 @@
           if (bucket && typeof bucket === 'object' && Object.keys(bucket).length > 0) return true;
         }
       }
+      return stelvioPeakRankSnapshotHasYesterdayRanksBaseline(data, storedNorm);
+    }
+
+    /** localStorage에 전일(또는 이전 as_of) ranks만 있어도 등락 재계산 기준으로 사용 */
+    function stelvioPeakRankSnapshotHasYesterdayRanksBaseline(data, storedNormOpt) {
+      var storedNorm = storedNormOpt;
+      if (!storedNorm) {
+        var snapKey = stelvioPeakRankSnapshotStorageKey(data);
+        storedNorm = stelvioNormalizePeakRankSnapshotStored(stelvioReadPeakRankSnapshot(snapKey, data));
+      }
+      if (!storedNorm || !storedNorm.ranksByCategory) return false;
+      var today = stelvioSeoulYmd();
+      if (!storedNorm.asOfSeoul || storedNorm.asOfSeoul === today) return false;
+      var rankCats = Object.keys(storedNorm.ranksByCategory);
+      for (var yi = 0; yi < rankCats.length; yi++) {
+        var rb = storedNorm.ranksByCategory[rankCats[yi]];
+        if (rb && typeof rb === 'object' && Object.keys(rb).length > 0) return true;
+      }
       return false;
+    }
+
+    /** 서버·캐시가 전원 rankChange=0(보합)만 내려준 경우 — 당일 ranks 자기비교 오류 의심 */
+    function stelvioPeakRankMovementIsAllFlat(data) {
+      if (!data || !data.byCategory) return false;
+      var withMv = 0;
+      var flatOnly = 0;
+      var ci, ri, r;
+      for (ci = 0; ci < STELVIO_RANK_BOARD_CATS.length; ci++) {
+        var rows = data.byCategory[STELVIO_RANK_BOARD_CATS[ci]] || [];
+        for (ri = 0; ri < rows.length; ri++) {
+          r = rows[ri];
+          if (!r || r.rankChange == null || r.previousBoardRank == null) continue;
+          withMv++;
+          if (Number(r.rankChange) === 0) flatOnly++;
+        }
+      }
+      return withMv >= 3 && withMv === flatOnly;
     }
 
     function stelvioRowCurrentBoardRankForMovement(row, data, catKey) {
@@ -18397,13 +18447,22 @@
       }
       var serverMvSnap = stelvioExtractRankMovementFromPayload(data);
       stelvioSyncPeakRankMovementFromEntries(data);
+      var hasPrevBaseline = stelvioPeakRankSnapshotHasPrevDayBaseline(data);
+      if (
+        hasPrevBaseline &&
+        stelvioPeakRankMovementIsAllFlat(data)
+      ) {
+        stelvioClearPeakRankMovementOnPayload(data);
+      }
       var rankMvFromSupabase =
         data.readBackend === 'supabase' ||
         data.readSource === 'supabase' ||
         data.rankMovementSource === 'supabase';
       var needsClientMv =
         stelvioSupportsRankMovementDuration(duration) &&
-        (!rankMvFromSupabase || !stelvioPeakRankMovementPresentOnPayload(data));
+        (hasPrevBaseline ||
+          !rankMvFromSupabase ||
+          !stelvioPeakRankMovementPresentOnPayload(data));
       if (needsClientMv) {
         stelvioApplyClientPeakRankMovementFromSnapshot(data);
       }
@@ -18552,6 +18611,8 @@
           if (row.rankChange != null && row.previousBoardRank != null) continue;
           var pk = sm[String(row.userId)];
           if (!pk) continue;
+          var pkRc = Number(pk.rankChange);
+          if (pkRc === 0 && stelvioPeakRankSnapshotHasPrevDayBaseline(data)) continue;
           row.rankChange = pk.rankChange;
           row.previousBoardRank = pk.previousBoardRank;
         }
@@ -18569,6 +18630,16 @@
       }
       if (storedNorm && storedNorm.prevDayRanksByCategory && storedNorm.prevDayRanksByCategory[catKey]) {
         mergeMap(storedNorm.prevDayRanksByCategory[catKey]);
+      }
+      if (
+        !Object.keys(baseline).length &&
+        storedNorm &&
+        storedNorm.asOfSeoul &&
+        storedNorm.asOfSeoul !== today &&
+        storedNorm.ranksByCategory &&
+        storedNorm.ranksByCategory[catKey]
+      ) {
+        mergeMap(storedNorm.ranksByCategory[catKey]);
       }
       return baseline;
     }
@@ -18650,20 +18721,45 @@
       return stelvioBuildPeakRankMapForCategory(byCategory, 'Supremo');
     }
 
+    function stelvioPeakRankSnapshotPrevDayLooksCorrupt(storedNorm) {
+      if (!storedNorm || !storedNorm.prevDayRanksByCategory || !storedNorm.ranksByCategory) return false;
+      var catKeys = Object.keys(storedNorm.ranksByCategory);
+      for (var ci = 0; ci < catKeys.length; ci++) {
+        var ck = catKeys[ci];
+        var rk = storedNorm.ranksByCategory[ck] || {};
+        var pd = storedNorm.prevDayRanksByCategory[ck] || {};
+        var rkKeys = Object.keys(rk);
+        if (rkKeys.length < 3) continue;
+        var match = 0;
+        for (var ri = 0; ri < rkKeys.length; ri++) {
+          var uid = rkKeys[ri];
+          if (pd[uid] != null && Math.floor(Number(pd[uid])) === Math.floor(Number(rk[uid]))) match++;
+        }
+        if (match === rkKeys.length) return true;
+      }
+      return false;
+    }
+
     function stelvioNormalizePeakRankSnapshotStored(stored) {
       if (!stored) return null;
+      var out;
       if (stored.ranksByCategory && typeof stored.ranksByCategory === 'object') {
-        if (!stored.prevDayRanksByCategory) stored.prevDayRanksByCategory = {};
-        return stored;
+        out = stored;
+        if (!out.prevDayRanksByCategory) out.prevDayRanksByCategory = {};
+      } else {
+        out = {
+          asOfSeoul: stored.asOfSeoul,
+          ranksByCategory: stored.ranks ? { Supremo: stored.ranks } : {},
+          prevDayRanksByCategory: stored.prevDayRanks ? { Supremo: stored.prevDayRanks } : {},
+          rankChangesByCategory: stored.rankChanges ? { Supremo: stored.rankChanges } : {},
+          previousRanksByCategory: stored.previousRanks ? { Supremo: stored.previousRanks } : {},
+          savedAt: stored.savedAt,
+        };
       }
-      return {
-        asOfSeoul: stored.asOfSeoul,
-        ranksByCategory: stored.ranks ? { Supremo: stored.ranks } : {},
-        prevDayRanksByCategory: stored.prevDayRanks ? { Supremo: stored.prevDayRanks } : {},
-        rankChangesByCategory: stored.rankChanges ? { Supremo: stored.rankChanges } : {},
-        previousRanksByCategory: stored.previousRanks ? { Supremo: stored.previousRanks } : {},
-        savedAt: stored.savedAt,
-      };
+      if (stelvioPeakRankSnapshotPrevDayLooksCorrupt(out)) {
+        out.prevDayRanksByCategory = {};
+      }
+      return out;
     }
 
     /**
@@ -18759,12 +18855,19 @@
         var serverCatMv =
           duration === 'tss' ? {} : serverMvSnapshot[catKey] || {};
 
-        if (Object.keys(compareBaseline).length) {
+        if (
+          Object.keys(compareBaseline).length &&
+          !stelvioPeakRankUidMapsEqual(compareBaseline, currCatRanks)
+        ) {
           for (var sri = 0; sri < snapRows.length; sri++) {
             var row = snapRows[sri];
             if (!row || row.userId == null) continue;
             var uid = String(row.userId);
-            if (serverCatMv[uid]) continue;
+            var serverRowMv = serverCatMv[uid];
+            if (serverRowMv) {
+              var srvRc = Number(serverRowMv.rankChange);
+              if (srvRc !== 0 && isFinite(srvRc)) continue;
+            }
             var curr = currCatRanks[uid] != null ? currCatRanks[uid] : null;
             stelvioApplyPeakRankChangeToRow(row, uid, curr, compareBaseline, chCat, prCat);
           }
