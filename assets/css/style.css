@@ -27779,7 +27779,50 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   flex-shrink: 0;
   overflow: visible;
 }
-#runningRankingScreen #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
+#runningRankingScreen .stelvio-category-header-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.running-ranking-segment-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.running-ranking-segment-toggle-btn {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #6b7280;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.running-ranking-segment-toggle-btn:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+.running-ranking-segment-toggle-btn--active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+  color: #fff;
+}
+#runningRankingScreen .running-ranking-list-body--segments-off .stelvio-rank-row.running-ranking-row {
+  flex-wrap: nowrap;
+  padding: 6px 0;
+}
+#runningRankingScreen .running-ranking-row--compact .running-ranking-segments {
+  display: none;
+}
+#runningRankingScreen #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop,
+body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   position: fixed;
   z-index: 2147483001;
 }
