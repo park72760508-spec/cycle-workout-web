@@ -18,23 +18,23 @@
 
   /** 종합 탭 구간 (1k~20k) */
   var OVERALL_SEGMENTS = [
-    { key: '1k', label: '1K' },
-    { key: '3k', label: '3K' },
-    { key: '5k', label: '5K' },
-    { key: '7k', label: '7K' },
-    { key: '10k', label: '10K' },
-    { key: '20k', label: '20K' }
+    { key: '1k', label: '1k' },
+    { key: '3k', label: '3k' },
+    { key: '5k', label: '5k' },
+    { key: '7k', label: '7k' },
+    { key: '10k', label: '10k' },
+    { key: '20k', label: '20k' }
   ];
 
   /** 페이스 탭 거리 선택 */
   var PACE_DISTANCES = [
-    { key: '1k', label: '1K' },
-    { key: '3k', label: '3K' },
-    { key: '5k', label: '5K' },
-    { key: '7k', label: '7K' },
-    { key: '10k', label: '10K' },
-    { key: '20k', label: '하프' },
-    { key: '42k', label: '풀' }
+    { key: '1k', label: '1k' },
+    { key: '3k', label: '3k' },
+    { key: '5k', label: '5k' },
+    { key: '7k', label: '7k' },
+    { key: '10k', label: '10k' },
+    { key: '20k', label: '20k' },
+    { key: '42k', label: '42k' }
   ];
 
   var GENDER_OPTIONS = [
