@@ -1,5 +1,5 @@
 /**
- * RUN 랭킹 — 전일 대비 순위 등락 (로컬 스냅샷, KST 일자 기준)
+ * RUN 랭킹 — 전일 대비 순위 등락 (서버 스냅샷 우선, KST 23:00 일 1회 집계)
  */
 (function () {
   'use strict';
@@ -28,6 +28,15 @@
     ].join('|');
   }
 
+  function historyKey(tabId, opts) {
+    opts = opts || {};
+    var tab = tabId || 'overall';
+    var g = opts.gender || 'all';
+    if (tab === 'crew') return 'run_crew_' + g;
+    if (tab === 'pace') return 'run_pace_' + (opts.paceDistance || '5k') + '_' + g;
+    return 'run_' + tab + '_' + g;
+  }
+
   function loadSnap(key) {
     try {
       var raw = localStorage.getItem(LS_PREFIX + key);
@@ -43,11 +52,60 @@
     } catch (e) {}
   }
 
+  function applyFromServerSnap(list, tabId, opts, rankMovementByKey) {
+    if (!list || !list.length || !rankMovementByKey) return false;
+
+    var hk = historyKey(tabId, opts);
+    var snap = rankMovementByKey[hk];
+    if (!snap) return false;
+
+    var cat = opts.category || 'Supremo';
+    var changes = (snap.rankChangesByCategory && snap.rankChangesByCategory[cat]) || {};
+    var previous = (snap.previousRanksByCategory && snap.previousRanksByCategory[cat]) || {};
+    var hasAny = false;
+
+    list.forEach(function (item) {
+      if (!item) return;
+      item.rankChange = null;
+      item.previousBoardRank = null;
+
+      var id = tabId === 'crew'
+        ? (item.crewId != null ? String(item.crewId) : '')
+        : (item.userId != null ? String(item.userId) : '');
+      if (!id) return;
+
+      if (previous[id] != null) {
+        var prev = Math.floor(Number(previous[id]));
+        var curr = Math.floor(Number(item.rank));
+        if (prev >= 1 && curr >= 1) {
+          item.rankChange = prev - curr;
+          item.previousBoardRank = prev;
+          hasAny = true;
+        }
+      } else if (changes[id] != null && item.rank != null) {
+        var ch = Number(changes[id]);
+        var currRank = Math.floor(Number(item.rank));
+        if (isFinite(ch) && currRank >= 1) {
+          item.rankChange = ch;
+          item.previousBoardRank = currRank - ch;
+          hasAny = true;
+        }
+      }
+    });
+
+    return hasAny || !!(snap.asOfSeoul);
+  }
+
   /**
    * @param {object[]} list — rank 필드가 채워진 목록 (in-place 수정)
+   * @param {object} [rankMovementByKey] — API rankMovementByKey
    */
-  function applyRankMovement(list, tabId, opts) {
-    if (!list || !list.length || tabId === 'crew') return list;
+  function applyRankMovement(list, tabId, opts, rankMovementByKey) {
+    if (!list || !list.length) return list;
+
+    if (applyFromServerSnap(list, tabId, opts, rankMovementByKey)) {
+      return list;
+    }
 
     var key = boardKey(tabId, opts);
     var today = seoulToday();
@@ -59,10 +117,13 @@
     }
 
     list.forEach(function (item) {
-      if (!item || item.isCrew || !item.userId) return;
+      if (!item) return;
+      if (tabId !== 'crew' && (item.isCrew || !item.userId)) return;
+      if (tabId === 'crew' && !item.crewId) return;
+
       item.rankChange = null;
       item.previousBoardRank = null;
-      var uid = String(item.userId);
+      var uid = tabId === 'crew' ? String(item.crewId) : String(item.userId);
       if (prevRanks && prevRanks[uid] != null) {
         var prev = Math.floor(Number(prevRanks[uid]));
         var curr = Math.floor(Number(item.rank));
@@ -75,7 +136,10 @@
 
     var ranks = {};
     list.forEach(function (item) {
-      if (item && item.userId && !item.isCrew && item.rank != null) {
+      if (!item || item.rank == null) return;
+      if (tabId === 'crew') {
+        if (item.crewId) ranks[String(item.crewId)] = Math.floor(Number(item.rank));
+      } else if (item.userId && !item.isCrew) {
         ranks[String(item.userId)] = Math.floor(Number(item.rank));
       }
     });
@@ -96,6 +160,7 @@
   }
 
   window.runningRankingMovement = {
-    applyRankMovement: applyRankMovement
+    applyRankMovement: applyRankMovement,
+    historyKey: historyKey
   };
 })();
