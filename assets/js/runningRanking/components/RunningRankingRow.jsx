@@ -84,14 +84,17 @@
       children.push(
         React.createElement('div', { key: 'seg', className: 'running-ranking-segments' },
           item.segments.map(function (seg) {
+            var paceLabel = seg.pace && seg.pace !== '—' ? seg.pace : '—';
+            var titleParts = [seg.label + ' 페이스 ' + paceLabel];
+            if (seg.score != null) titleParts.push('순위점수 ' + seg.score + 'pt');
             return React.createElement('span', {
               key: seg.key,
               className: 'running-ranking-segment-chip',
-              title: seg.label + ' 페이스 ' + seg.pace
+              title: titleParts.join(' · ')
             },
               React.createElement('span', { className: 'running-ranking-segment-label' }, seg.label),
-              React.createElement('span', { className: 'running-ranking-segment-score' },
-                seg.score != null ? seg.score : '—'
+              React.createElement('span', { className: 'running-ranking-segment-score running-ranking-segment-pace' },
+                paceLabel
               )
             );
           })
