@@ -50,7 +50,9 @@ function buildPeakBoardRankMapForCategoryRows(rows) {
     const r = rows[i];
     const uid = r && r.userId != null ? String(r.userId).trim() : "";
     if (!uid) continue;
-    ranks[uid] = i + 1;
+    const explicit =
+      r.rank != null && isFinite(Number(r.rank)) ? Math.floor(Number(r.rank)) : null;
+    ranks[uid] = explicit != null && explicit >= 1 ? explicit : i + 1;
   }
   return ranks;
 }
@@ -108,11 +110,26 @@ function resolveOfficialPeakRankBaseline(prevNorm, prevRanksCat, prevDayRanksCat
   if (Object.keys(prevDay).length > 0) return prevDay;
   const isNewOfficialDay = !!(prevNorm.asOfSeoul && prevNorm.asOfSeoul < todayYmd);
   if (isNewOfficialDay && Object.keys(prevRanksCat).length > 0) return prevRanksCat;
+  /* 당일 재집계: prev_day 비어 있으면 당일 ranks로 비교하지 않음(전원 보합 오표시 방지) */
   return {};
 }
 
 function seoulTodayYmd() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
+function peakRankUidRankMapsEqual(a, b) {
+  if (!a || typeof a !== "object") a = {};
+  if (!b || typeof b !== "object") b = {};
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (let i = 0; i < keysA.length; i++) {
+    const k = keysA[i];
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (Math.floor(Number(a[k])) !== Math.floor(Number(b[k]))) return false;
+  }
+  return keysA.length > 0;
 }
 
 /**
@@ -151,6 +168,9 @@ function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
       frozenPrevDay,
       today
     );
+    const sameDaySelfBaseline =
+      prevNorm.asOfSeoul === today &&
+      peakRankUidRankMapsEqual(compareBaseline, currRanks);
 
     newRanksByCategory[cat] = currRanks;
     newPrevDayRanksByCategory[cat] = frozenPrevDay;
@@ -167,7 +187,7 @@ function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
       delete e.rankChange;
       delete e.previousBoardRank;
 
-      if (compareBaseline[uid] != null) {
+      if (!sameDaySelfBaseline && compareBaseline[uid] != null) {
         const prev = Math.floor(Number(compareBaseline[uid]));
         if (isFinite(prev) && prev >= 1) {
           e.rankChange = prev - curr;
