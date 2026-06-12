@@ -10102,9 +10102,10 @@
     var _stelvioWithdrawnUserIdUnsub = null;
     var _stelvioWithdrawnByStatusUnsub = null;
     var _stelvioWithdrawnByLoginFlagUnsub = null;
-    var _withdrawnSetByFlag = new Set();       // users is_active===false
-    var _withdrawnSetByStatus = new Set();     // users account_status==='withdrawn'
+    var _withdrawnSetByFlag = new Set();       // users is_active===false (관리자만 Firestore 조회)
+    var _withdrawnSetByStatus = new Set();     // users account_status==='withdrawn' (관리자만)
     var _withdrawnSetByLoginFlag = new Set();  // login_account_flags account_status==='withdrawn' → uid
+    var _stelvioWithdrawnUsersFsDenied = false; // 일반 사용자 users 컬렉션 쿼리 권한 없음(규칙상 정상)
 
     function _hydrateWithdrawnSetFromLocalStorage() {
       try {
@@ -10181,18 +10182,28 @@
       }
     }
 
+    function _stelvioWithdrawnFsPermissionDenied(err) {
+      var msg = err && err.message ? String(err.message) : '';
+      return (
+        err &&
+        (err.code === 'permission-denied' ||
+          msg.indexOf('Missing or insufficient permissions') >= 0 ||
+          msg.indexOf('insufficient permissions') >= 0)
+      );
+    }
+
+    function _stelvioCanQueryWithdrawnUsersCollection() {
+      return typeof stelvioRankingLoginIsAdmin === 'function' && stelvioRankingLoginIsAdmin();
+    }
+
     /**
      * Firestore 구독 + getDocs 부트스트랩:
-     * - users account_status==='withdrawn' (is_active 없는 구형 탈퇴 — 곽동호 등)
-     * - users is_active===false (신규 탈퇴)
-     * - login_account_flags account_status==='withdrawn' (uid 매핑)
+     * - login_account_flags account_status==='withdrawn' (uid 매핑, 공개 read)
+     * - users 탈퇴 쿼리는 관리자(grade=1)만 — 일반 사용자는 규칙상 거부(콘솔 경고 없음)
+     * Supabase 랭킹 API는 서버에서 account_status<>active 이미 제외.
      */
     function stelvioSubscribeWithdrawnUserIds() {
-      if (
-        _stelvioWithdrawnUserIdUnsub &&
-        _stelvioWithdrawnByStatusUnsub &&
-        _stelvioWithdrawnByLoginFlagUnsub
-      ) {
+      if (_stelvioWithdrawnByLoginFlagUnsub) {
         return;
       }
       function attach() {
@@ -10205,27 +10216,51 @@
             var onSnap = mod.onSnapshot;
             var getDocs = mod.getDocs;
             if (!coll || !qFn || !wh || !onSnap) return;
-            var usersRef = coll(window.firestoreV9, 'users');
             var flagsRef = coll(window.firestoreV9, 'login_account_flags');
-            var qInactive = qFn(usersRef, wh('is_active', '==', false));
-            var qWithdrawn = qFn(usersRef, wh('account_status', '==', 'withdrawn'));
             var qFlagWithdrawn = qFn(flagsRef, wh('account_status', '==', 'withdrawn'));
+            var canQueryUsers = _stelvioCanQueryWithdrawnUsersCollection();
+            var usersRef;
+            var qInactive;
+            var qWithdrawn;
 
-            /* onSnapshot 전 getDocs — 모바일 IndexedDB 즉시 표시 전 탈퇴 ID 확보 */
+            function onUsersFsDenied(err, label) {
+              if (_stelvioWithdrawnFsPermissionDenied(err)) {
+                _stelvioWithdrawnUsersFsDenied = true;
+                return;
+              }
+              console.warn('[stelvioRanking] ' + label + ' 실패:', err && err.message);
+            }
+
+            if (canQueryUsers) {
+              usersRef = coll(window.firestoreV9, 'users');
+              qInactive = qFn(usersRef, wh('is_active', '==', false));
+              qWithdrawn = qFn(usersRef, wh('account_status', '==', 'withdrawn'));
+            }
+
             if (getDocs) {
-              Promise.all([getDocs(qInactive), getDocs(qWithdrawn), getDocs(qFlagWithdrawn)])
+              var bootTasks = [getDocs(qFlagWithdrawn)];
+              if (canQueryUsers && qInactive && qWithdrawn) {
+                bootTasks.push(getDocs(qInactive), getDocs(qWithdrawn));
+              }
+              Promise.all(bootTasks)
                 .then(function (snaps) {
-                  _withdrawnSetByFlag = _ingestWithdrawnUserDocSnap(snaps[0]);
-                  _withdrawnSetByStatus = _ingestWithdrawnUserDocSnap(snaps[1]);
-                  _withdrawnSetByLoginFlag = _ingestWithdrawnLoginFlagSnap(snaps[2]);
+                  _withdrawnSetByLoginFlag = _ingestWithdrawnLoginFlagSnap(snaps[0]);
+                  if (canQueryUsers && snaps.length >= 3) {
+                    _withdrawnSetByFlag = _ingestWithdrawnUserDocSnap(snaps[1]);
+                    _withdrawnSetByStatus = _ingestWithdrawnUserDocSnap(snaps[2]);
+                  }
                   _rebuildWithdrawnSet();
                 })
                 .catch(function (errBoot) {
+                  if (_stelvioWithdrawnFsPermissionDenied(errBoot)) {
+                    _stelvioWithdrawnUsersFsDenied = true;
+                    return;
+                  }
                   console.warn('[stelvioRanking] 탈퇴 ID bootstrap 실패:', errBoot && errBoot.message);
                 });
             }
 
-            if (!_stelvioWithdrawnUserIdUnsub) {
+            if (canQueryUsers && qInactive && !_stelvioWithdrawnUserIdUnsub) {
               _stelvioWithdrawnUserIdUnsub = onSnap(
                 qInactive,
                 function (snap) {
@@ -10233,12 +10268,12 @@
                   _rebuildWithdrawnSet();
                 },
                 function (err) {
-                  console.warn('[stelvioRanking] is_active 구독 실패:', err && err.message);
+                  onUsersFsDenied(err, 'is_active 구독');
                 }
               );
             }
 
-            if (!_stelvioWithdrawnByStatusUnsub) {
+            if (canQueryUsers && qWithdrawn && !_stelvioWithdrawnByStatusUnsub) {
               _stelvioWithdrawnByStatusUnsub = onSnap(
                 qWithdrawn,
                 function (snap) {
@@ -10246,7 +10281,7 @@
                   _rebuildWithdrawnSet();
                 },
                 function (err) {
-                  console.warn('[stelvioRanking] account_status 구독 실패:', err && err.message);
+                  onUsersFsDenied(err, 'account_status 구독');
                 }
               );
             }
@@ -10259,7 +10294,9 @@
                   _rebuildWithdrawnSet();
                 },
                 function (err) {
-                  console.warn('[stelvioRanking] login_account_flags 구독 실패:', err && err.message);
+                  if (!_stelvioWithdrawnFsPermissionDenied(err)) {
+                    console.warn('[stelvioRanking] login_account_flags 구독 실패:', err && err.message);
+                  }
                 }
               );
             }
