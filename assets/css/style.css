@@ -28,6 +28,35 @@
   --zone-5: #E67E22;  /* Z5 VO2max */
   --zone-6: #E74C3C;  /* Z6 */
   --zone-7: #9B59B6;  /* Z7 */
+  /* RUN 거리·에너지존 (Z7 1k → Z1 42k) — 톤다운 서피스, 칩·배지 공통 */
+  --run-dist-1k-base: #E53935;
+  --run-dist-1k-bg: #FBE9E9;
+  --run-dist-1k-border: rgba(229, 57, 53, 0.22);
+  --run-dist-1k-label: #B85C5A;
+  --run-dist-3k-base: #FF5722;
+  --run-dist-3k-bg: #FFEDE6;
+  --run-dist-3k-border: rgba(255, 87, 34, 0.20);
+  --run-dist-3k-label: #C4684F;
+  --run-dist-5k-base: #FF9800;
+  --run-dist-5k-bg: #FFF3E3;
+  --run-dist-5k-border: rgba(255, 152, 0, 0.22);
+  --run-dist-5k-label: #B87A2E;
+  --run-dist-7k-base: #FDD835;
+  --run-dist-7k-bg: #FDF8E5;
+  --run-dist-7k-border: rgba(253, 216, 53, 0.35);
+  --run-dist-7k-label: #9A8724;
+  --run-dist-10k-base: #4CAF50;
+  --run-dist-10k-bg: #E9F5EB;
+  --run-dist-10k-border: rgba(76, 175, 80, 0.22);
+  --run-dist-10k-label: #3D8B45;
+  --run-dist-20k-base: #2196F3;
+  --run-dist-20k-bg: #E6F3FD;
+  --run-dist-20k-border: rgba(33, 150, 243, 0.20);
+  --run-dist-20k-label: #1A7ABD;
+  --run-dist-42k-base: #3F51B5;
+  --run-dist-42k-bg: #EAECF6;
+  --run-dist-42k-border: rgba(63, 81, 181, 0.20);
+  --run-dist-42k-label: #3A4899;
   /* 다크 모드 배경 (워크아웃 화면 등) */
   --bg-main: #1a1d21;
   --bg-card: #252a30;
@@ -27756,8 +27785,58 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   padding: 2px 6px;
   border-radius: 6px;
   background: #f1f5f9;
+  border: 1px solid transparent;
   font-size: 0.65rem;
   line-height: 1.2;
+}
+.running-ranking-segment-chip--1k {
+  background: var(--run-dist-1k-bg);
+  border-color: var(--run-dist-1k-border);
+}
+.running-ranking-segment-chip--1k .running-ranking-segment-label {
+  color: var(--run-dist-1k-label);
+}
+.running-ranking-segment-chip--3k {
+  background: var(--run-dist-3k-bg);
+  border-color: var(--run-dist-3k-border);
+}
+.running-ranking-segment-chip--3k .running-ranking-segment-label {
+  color: var(--run-dist-3k-label);
+}
+.running-ranking-segment-chip--5k {
+  background: var(--run-dist-5k-bg);
+  border-color: var(--run-dist-5k-border);
+}
+.running-ranking-segment-chip--5k .running-ranking-segment-label {
+  color: var(--run-dist-5k-label);
+}
+.running-ranking-segment-chip--7k {
+  background: var(--run-dist-7k-bg);
+  border-color: var(--run-dist-7k-border);
+}
+.running-ranking-segment-chip--7k .running-ranking-segment-label {
+  color: var(--run-dist-7k-label);
+}
+.running-ranking-segment-chip--10k {
+  background: var(--run-dist-10k-bg);
+  border-color: var(--run-dist-10k-border);
+}
+.running-ranking-segment-chip--10k .running-ranking-segment-label {
+  color: var(--run-dist-10k-label);
+}
+.running-ranking-segment-chip--20k {
+  background: var(--run-dist-20k-bg);
+  border-color: var(--run-dist-20k-border);
+}
+.running-ranking-segment-chip--20k .running-ranking-segment-label {
+  color: var(--run-dist-20k-label);
+}
+.running-ranking-segment-chip--42k {
+  background: var(--run-dist-42k-bg);
+  border-color: var(--run-dist-42k-border);
+}
+.running-ranking-segment-chip--42k .running-ranking-segment-label {
+  color: var(--run-dist-42k-label);
 }
 .running-ranking-segment-label {
   color: #64748b;
