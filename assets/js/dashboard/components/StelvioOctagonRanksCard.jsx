@@ -340,12 +340,44 @@
     return null;
   }
 
+  /** Max~60분 탭과 동일: 서버 baseline·로컬 스냅샷으로 rankChange 재계산 후 검증 */
+  function hydratePeakRankingPayloadForMovement(data, duration, period, gender) {
+    if (!data || !data.success || !data.byCategory) return data;
+    if (!data.durationType && duration) data.durationType = duration;
+    if (!data.period && period) data.period = period;
+    if (data.gender == null || data.gender === '') {
+      data.gender = gender == null || gender === '' ? 'all' : String(gender);
+    }
+    if (typeof window.stelvioApplyRankMovementPipeline === 'function') {
+      window.stelvioApplyRankMovementPipeline(data);
+    } else if (typeof window.stelvioValidatePeakRankMovementOnPayload === 'function') {
+      window.stelvioValidatePeakRankMovementOnPayload(data);
+    }
+    return data;
+  }
+
+  function categoryRankInPayloadList(data, uid, category) {
+    if (!data || !data.byCategory || !uid) return null;
+    if (typeof window.stelvioCategoryRankInFullList === 'function') {
+      var fromList = window.stelvioCategoryRankInFullList(data.byCategory, category, uid);
+      if (fromList != null && isFinite(fromList) && fromList >= 1) return Math.floor(Number(fromList));
+    }
+    var arr = data.byCategory[category] || [];
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] && String(arr[i].userId) === String(uid)) return i + 1;
+    }
+    return null;
+  }
+
   function fetchRankingPayload(uid, duration, period, gender) {
     return fetch(buildRankingUrl(uid, duration, period, gender), { method: 'GET', mode: 'cors' })
       .then(function(res) {
         return res.json().catch(function() {
           return { success: false };
         });
+      })
+      .then(function(data) {
+        return hydratePeakRankingPayloadForMovement(data, duration, period, gender);
       });
   }
 
@@ -497,56 +529,74 @@
     };
   }
 
-  /** getPeakPowerRanking 행·currentUser에서 축별 등락 추출 */
+  /** getPeakPowerRanking 행·currentUser에서 축별 등락 추출 — 랭킹보드 Max~60분 탭과 동일 검증·baseline */
   function axisRankMovementFromRankingPayload(data, uid, category) {
-    if (!data || !data.success || !uid) {
-      return { rankChange: null, previousBoardRank: null };
-    }
+    var empty = { rankChange: null, previousBoardRank: null };
+    if (!data || !data.success || !uid) return empty;
     var byCategory = data.byCategory || {};
     var cu = data.currentUser;
     var cuValid = cu && String(cu.userId) === String(uid);
+    var catRank = categoryRankInPayloadList(data, uid, category);
 
-    function pickFromRow(row) {
-      if (!row) return null;
-      var rc =
-        row.rankChange != null && isFinite(Number(row.rankChange)) ? Math.round(Number(row.rankChange)) : null;
-      var pb =
-        row.previousBoardRank != null && isFinite(Number(row.previousBoardRank))
-          ? Math.floor(Number(row.previousBoardRank))
-          : null;
-      if (rc != null && pb != null && pb >= 1) {
-        return { rankChange: rc, previousBoardRank: pb };
+    function movementFromBaseline() {
+      if (catRank == null || catRank < 1) return null;
+      var baseline = null;
+      if (data.rankMovementCompareBaselineByCategory && data.rankMovementCompareBaselineByCategory[category]) {
+        baseline = data.rankMovementCompareBaselineByCategory[category];
+      } else if (data.rankMovementPrevDayByCategory && data.rankMovementPrevDayByCategory[category]) {
+        baseline = data.rankMovementPrevDayByCategory[category];
       }
-      return null;
+      if (!baseline || baseline[String(uid)] == null) return null;
+      var prev = Math.floor(Number(baseline[String(uid)]));
+      if (!isFinite(prev) || prev < 1) return null;
+      return { rankChange: prev - catRank, previousBoardRank: prev };
     }
 
-    function findInArr(arr) {
+    function extractFromRow(row) {
+      if (!row) return null;
+      if (typeof window.stelvioNormalizeRankMovementOnRow === 'function') {
+        window.stelvioNormalizeRankMovementOnRow(row, catRank);
+      }
+      if (row.rankChange == null || row.previousBoardRank == null) return movementFromBaseline();
+      if (
+        typeof window.stelvioRankMovementRowMatchesCurrentRank === 'function' &&
+        catRank != null &&
+        !window.stelvioRankMovementRowMatchesCurrentRank(row, catRank)
+      ) {
+        return movementFromBaseline();
+      }
+      var rc = Math.round(Number(row.rankChange));
+      var pb = Math.floor(Number(row.previousBoardRank));
+      if (!isFinite(rc) || !isFinite(pb) || pb < 1) return movementFromBaseline();
+      return { rankChange: rc, previousBoardRank: pb };
+    }
+
+    function findRowInArr(arr) {
       if (!arr || !arr.length) return null;
       for (var i = 0; i < arr.length; i++) {
-        if (arr[i] && String(arr[i].userId) === String(uid)) {
-          var hit = pickFromRow(arr[i]);
-          if (hit) return hit;
-        }
+        if (arr[i] && String(arr[i].userId) === String(uid)) return arr[i];
       }
       return null;
     }
 
-    var catHit = findInArr(byCategory[category] || []);
+    var catRow = findRowInArr(byCategory[category] || []);
+    var catHit = extractFromRow(catRow);
     if (catHit) return catHit;
 
     if (category === 'Supremo' && cuValid) {
-      var cuHit = pickFromRow(cu);
+      var cuHit = extractFromRow(cu);
       if (cuHit) return cuHit;
     }
 
     if (cuValid && cu.ageCategory) {
-      var ageHit = findInArr(byCategory[cu.ageCategory] || []);
+      var ageRow = findRowInArr(byCategory[cu.ageCategory] || []);
+      var ageHit = extractFromRow(ageRow);
       if (ageHit) return ageHit;
-      var cuHit2 = pickFromRow(cu);
+      var cuHit2 = extractFromRow(cu);
       if (cuHit2) return cuHit2;
     }
 
-    return { rankChange: null, previousBoardRank: null };
+    return movementFromBaseline() || empty;
   }
 
   var HEPTAGON_AXIS_RANK_CHANGE_FILL = {
