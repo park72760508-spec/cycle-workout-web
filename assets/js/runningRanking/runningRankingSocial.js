@@ -151,10 +151,58 @@
     return '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
   }
 
+  function resolveViewerUserId() {
+    var fn = callFn('stelvioResolveRankingViewerUserId');
+    if (fn) return fn();
+    var u = window.currentUser;
+    if (u && (u.id || u.uid)) return String(u.id || u.uid);
+    try {
+      var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      return ls && (ls.id || ls.uid) ? String(ls.id || ls.uid) : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /** CYCLE 랭킹보드 관심 필터와 동일: 관심·친구·그룹멤버·본인 */
+  function filterRowsByListInterest(items, listFilter, currentUserId) {
+    if (listFilter !== 'interest') return (items || []).slice();
+    var myId = currentUserId ? String(currentUserId) : resolveViewerUserId();
+    var favSet = window.stelvioRankingFavoriteUserSet;
+    var friendSet = window.stelvioRankingFriendUserSet;
+    var groupSet = window.stelvioRankingGroupContactSet;
+    return (items || []).filter(function (item) {
+      if (!item || !item.userId) return false;
+      var uid = String(item.userId);
+      if (myId && uid === myId) return true;
+      if (favSet && typeof favSet.has === 'function' && favSet.has(uid)) return true;
+      if (friendSet && typeof friendSet.has === 'function' && friendSet.has(uid)) return true;
+      if (groupSet && typeof groupSet.has === 'function' && groupSet.has(uid)) return true;
+      return false;
+    });
+  }
+
+  function bindStarChangeListener(onChange) {
+    var root = getRunningRoot();
+    if (!root || root._runningRankStarChangeBound) return;
+    root._runningRankStarChangeBound = true;
+    var closest = callFn('stelvioClosestRankStarButton');
+    root.addEventListener('click', function (ev) {
+      var btn = closest ? closest(ev.target) : null;
+      if (!btn) return;
+      if (typeof onChange === 'function') {
+        setTimeout(onChange, 0);
+        setTimeout(onChange, 120);
+      }
+    }, true);
+  }
+
   window.runningRankingSocial = {
     bootstrapSocial: bootstrapSocial,
     ensureUiListeners: ensureUiListeners,
     refreshStarSlots: refreshStarSlots,
+    bindStarChangeListener: bindStarChangeListener,
+    filterRowsByListInterest: filterRowsByListInterest,
     resolveDisplayName: resolveDisplayName,
     resolveRawName: resolveRawName,
     getAvatarHtml: getAvatarHtml,
