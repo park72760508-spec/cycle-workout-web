@@ -61,6 +61,10 @@
     var stale = _stale[0];
     var setStale = _stale[1];
 
+    var _socialVer = useState(0);
+    var socialVer = _socialVer[0];
+    var setSocialVer = _socialVer[1];
+
     var crewUnsubRef = useRef(null);
 
     var currentUserId = useMemo(function () {
@@ -133,6 +137,16 @@
     useEffect(function () {
       loadLeaderboard({});
       subscribeCrewGroups();
+      var socialMod = window.runningRankingSocial;
+      if (socialMod) {
+        if (typeof socialMod.ensureUiListeners === 'function') socialMod.ensureUiListeners();
+        if (typeof socialMod.bootstrapSocial === 'function') {
+          socialMod.bootstrapSocial().then(function () {
+            setSocialVer(function (v) { return v + 1; });
+            if (typeof socialMod.refreshStarSlots === 'function') socialMod.refreshStarSlots();
+          }).catch(function () {});
+        }
+      }
       return function () {
         if (crewUnsubRef.current) {
           try { crewUnsubRef.current(); } catch (e) {}
@@ -156,19 +170,30 @@
     }, [gender, activeCategory, activeTab, paceDistance]);
 
     var rankedList = useMemo(function () {
+      var list;
       if (activeTab === 'crew') {
-        return dataApi().buildCrewRankedList
+        list = dataApi().buildCrewRankedList
           ? dataApi().buildCrewRankedList(rawRows, crewEnriched.length ? crewEnriched : crewGroups)
           : [];
+      } else {
+        list = dataApi().buildRankedList
+          ? dataApi().buildRankedList(rawRows, activeTab, {
+            paceDistance: paceDistance,
+            gender: gender,
+            category: activeCategory
+          })
+          : [];
+        var moveMod = window.runningRankingMovement;
+        if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+          moveMod.applyRankMovement(list, activeTab, {
+            paceDistance: paceDistance,
+            gender: gender,
+            category: activeCategory
+          });
+        }
       }
-      return dataApi().buildRankedList
-        ? dataApi().buildRankedList(rawRows, activeTab, {
-          paceDistance: paceDistance,
-          gender: gender,
-          category: activeCategory
-        })
-        : [];
-    }, [rawRows, activeTab, paceDistance, gender, activeCategory, crewGroups, crewEnriched]);
+      return list;
+    }, [rawRows, activeTab, paceDistance, gender, activeCategory, crewGroups, crewEnriched, socialVer]);
 
     var unitLabel = useMemo(function () {
       var tabs = cfg().TABS || [];
@@ -297,6 +322,7 @@
             currentUserId: currentUserId,
             rowHeight: rowHeight,
             listKey: listKey,
+            socialVer: socialVer,
             emptyMessage: activeTab === 'crew' ? '집계 가능한 크루가 없습니다.' : '해당 조건의 랭킹이 없습니다.'
           })
         : null;

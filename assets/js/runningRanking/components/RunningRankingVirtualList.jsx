@@ -20,6 +20,7 @@
     var rowHeight = props.rowHeight || 56;
     var tabId = props.tabId;
     var currentUserId = props.currentUserId;
+    var socialVer = props.socialVer || 0;
     var emptyMessage = props.emptyMessage || '랭킹 데이터가 없습니다.';
     var Row = window.RunningRankingRow;
 
@@ -94,7 +95,8 @@
                   key: (item.crewId || item.userId || '') + '-' + item.rank,
                   item: item,
                   tabId: tabId,
-                  currentUserId: currentUserId
+                  currentUserId: currentUserId,
+                  socialVer: socialVer
                 })
               : null;
           })
