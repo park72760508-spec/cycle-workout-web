@@ -42,7 +42,9 @@
     var displayName = soc.resolveDisplayName ? soc.resolveDisplayName(item, currentUserId) : (item.name || '');
     var avatarHtml = soc.getAvatarHtml ? soc.getAvatarHtml(item, displayName, currentUserId) : '';
     var starHtml = soc.getStarHtml ? soc.getStarHtml(item) : '';
-    var rankChangeHtml = soc.getRankChangeHtml ? soc.getRankChangeHtml(item) : '';
+    var rankChangeHtml = soc.getRankChangeHtml
+      ? soc.getRankChangeHtml(item, props.listCategory || 'Supremo')
+      : '';
     var privateBadgeHtml = soc.getPrivateBadgeHtml ? soc.getPrivateBadgeHtml(item, currentUserId) : '';
 
     var isCurrent = !!(currentUserId && item.userId && String(item.userId) === String(currentUserId));

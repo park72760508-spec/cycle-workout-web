@@ -266,7 +266,11 @@
         return Object.assign({}, item, { rank: idx + 1 });
       });
       var moveMod = window.runningRankingMovement;
-      if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+      if (
+        listFilter === 'all'
+        && moveMod
+        && typeof moveMod.applyRankMovement === 'function'
+      ) {
         moveMod.applyRankMovement(list, activeTab, {
           paceDistance: paceDistance,
           gender: gender,
@@ -473,6 +477,7 @@
             item: item,
             tabId: activeTab,
             currentUserId: currentUserId,
+            listCategory: activeCategory,
             socialVer: socialVer
           });
         })
@@ -483,6 +488,7 @@
             items: rankedList,
             tabId: activeTab,
             currentUserId: currentUserId,
+            listCategory: activeCategory,
             rowHeight: rowHeight,
             listKey: listKey,
             socialVer: socialVer,

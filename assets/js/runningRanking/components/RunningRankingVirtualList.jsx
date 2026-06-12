@@ -96,6 +96,7 @@
                   item: item,
                   tabId: tabId,
                   currentUserId: currentUserId,
+                  listCategory: props.listCategory || 'Supremo',
                   socialVer: socialVer
                 })
               : null;
