@@ -167,7 +167,7 @@
     if (typeof window.stelvioGetRankingReadSourceSync === 'function') {
       p.set('readDb', window.stelvioGetRankingReadSourceSync());
     }
-    p.set('gfVer', '6');
+    p.set('gfVer', '7');
     return RANKING_BASE + '?' + p.toString();
   }
 
@@ -643,14 +643,6 @@
     if (category === 'Supremo' && cuValid) {
       var cuHit = extractFromRow(cu);
       if (cuHit) return cuHit;
-    }
-
-    if (cuValid && cu.ageCategory) {
-      var ageRow = findRowInArr(byCategory[cu.ageCategory] || []);
-      var ageHit = extractFromRow(ageRow);
-      if (ageHit) return ageHit;
-      var cuHit2 = extractFromRow(cu);
-      if (cuHit2) return cuHit2;
     }
 
     return movementFromBaseline() || empty;
@@ -1665,7 +1657,10 @@
   function rankChangeBadgeFromRankingBoard(categoryKey, userId) {
     if (userId == null || userId === '') return null;
     var cat = categoryKey || 'Supremo';
-    if (typeof window.stelvioResolveRankChangeLookupCategory === 'function') {
+    if (
+      cat === 'Supremo' &&
+      typeof window.stelvioResolveRankChangeLookupCategory === 'function'
+    ) {
       cat = window.stelvioResolveRankChangeLookupCategory(cat, userId);
     }
     if (typeof window.stelvioRankChangeBadgeHtmlForUser === 'function') {
@@ -1685,7 +1680,10 @@
     if (!row || row.userId == null) return row;
     if (typeof window.stelvioFindRankingRowForUser !== 'function') return row;
     var cat = categoryKey || 'Supremo';
-    if (typeof window.stelvioResolveRankChangeLookupCategory === 'function') {
+    if (
+      cat === 'Supremo' &&
+      typeof window.stelvioResolveRankChangeLookupCategory === 'function'
+    ) {
       cat = window.stelvioResolveRankChangeLookupCategory(cat, row.userId);
     }
     var src = window.stelvioFindRankingRowForUser(cat, row.userId);
@@ -3231,31 +3229,9 @@
     var _g = useState('all');
     var gender = _g[0];
     var setGender = _g[1];
-    var _c = useState(function() {
-      var fromBoard =
-        initialGcRankingPayload &&
-        typeof window !== 'undefined' &&
-        window.stelvioRankingState &&
-        window.stelvioRankingState.activeCategory
-          ? String(window.stelvioRankingState.activeCategory)
-          : '';
-      if (fromBoard && fromBoard !== 'Supremo') return fromBoard;
-      var myCat = categoryValueMatchingUserAge(userProfile);
-      return myCat || 'Supremo';
-    });
+    var _c = useState('Supremo');
     var category = _c[0];
     var setCategory = _c[1];
-
-    useEffect(
-      function() {
-        if (!viewerAc || viewerAc === 'Supremo') return;
-        setCategory(function(prev) {
-          if (prev === 'Supremo') return viewerAc;
-          return prev;
-        });
-      },
-      [viewerAc]
-    );
 
     var _s = useState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
     var state = _s[0];
