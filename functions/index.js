@@ -9096,12 +9096,23 @@ exports.getRunningLeaderboard = onRequest(
     try {
       await supabaseDualWriteServer.refreshDualRunFromRemoteConfig(admin, true);
       const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-      const { data, error } = await supabase.rpc("get_running_leaderboard");
+      const runningRankingMovement = require("./runningRankingMovement");
+      const [lbRes, snapRes] = await Promise.all([
+        supabase.rpc("get_running_leaderboard"),
+        runningRankingMovement.fetchAllRunRankSnapshots(),
+      ]);
+      const { data, error } = lbRes;
       if (error) {
         console.error("[getRunningLeaderboard]", error);
         return res.status(500).json({ success: false, error: error.message });
       }
-      return res.status(200).json({ success: true, leaderboard: data });
+      return res.status(200).json({
+        success: true,
+        leaderboard: data,
+        rankMovementSource: "supabase",
+        rankMovementAsOfSeoul: snapRes.asOfSeoul || "",
+        rankMovementByKey: snapRes.byKey || {},
+      });
     } catch (e) {
       console.error("[getRunningLeaderboard]", e);
       return res.status(500).json({
