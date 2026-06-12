@@ -15,8 +15,8 @@
       src: src,
       alt: rank + '위',
       className: 'stelvio-rank-crown-img',
-      width: 28,
-      height: 28,
+      width: 18,
+      height: 18,
       decoding: 'async'
     });
   }
@@ -46,6 +46,10 @@
       ? soc.getRankChangeHtml(item, props.listCategory || 'Supremo')
       : '';
     var privateBadgeHtml = soc.getPrivateBadgeHtml ? soc.getPrivateBadgeHtml(item, currentUserId) : '';
+    var valueLabel = soc.formatValueLabel
+      ? soc.formatValueLabel(item)
+      : (item.valueLabel || '—');
+    var socialUid = soc.socialUserId ? soc.socialUserId(item) : (item.userId || '');
 
     var isCurrent = !!(currentUserId && item.userId && String(item.userId) === String(currentUserId));
     var rowClass = 'stelvio-rank-row running-ranking-row' +
@@ -63,7 +67,7 @@
         className: 'stelvio-rank-name-text',
         title: rawName
       }, displayName),
-      htmlSpan('rank-change-' + socialVer, null, rankChangeHtml),
+      htmlSpan('rank-change-' + socialVer, 'stelvio-rank-change-slot', rankChangeHtml),
       htmlSpan('star-' + socialVer, 'stelvio-rank-star-slot', starHtml),
       htmlSpan('private-' + socialVer, null, privateBadgeHtml)
     ].filter(Boolean);
@@ -80,7 +84,7 @@
       React.createElement('span', { key: 'crown', className: 'stelvio-rank-crown' }, medalHtml(item.rank)),
       React.createElement('span', { key: 'pos', className: 'stelvio-rank-pos' }, item.rank + '위'),
       React.createElement('span', { key: 'name', className: 'stelvio-rank-name' }, nameChildren),
-      React.createElement('span', { key: 'val', className: valueClass }, item.valueLabel)
+      React.createElement('span', { key: 'val', className: valueClass }, valueLabel)
     ];
 
     if (tabId === 'overall' && props.showSegments && Array.isArray(item.segments) && item.segments.length) {
@@ -105,7 +109,12 @@
       );
     }
 
-    return React.createElement('div', { className: rowClass, 'data-rank': item.rank }, children);
+    return React.createElement('div', {
+      className: rowClass,
+      'data-rank': item.rank,
+      'data-social-uid': socialUid || undefined,
+      'data-board-uid': item.userId || undefined
+    }, children);
   }
 
   window.RunningRankingRow = RunningRankingRow;

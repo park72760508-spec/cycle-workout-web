@@ -229,6 +229,11 @@
             setSocialVer(function (v) { return v + 1; });
           });
         }
+        if (typeof socialMod.hookSocialStarUiRefresh === 'function') {
+          socialMod.hookSocialStarUiRefresh(function () {
+            setSocialVer(function (v) { return v + 1; });
+          });
+        }
       }
       return function () {
         if (crewUnsubRef.current) {
@@ -278,17 +283,15 @@
       list = list.map(function (item, idx) {
         return Object.assign({}, item, { rank: idx + 1 });
       });
-      var moveMod = window.runningRankingMovement;
-      if (
-        listFilter === 'all'
-        && moveMod
-        && typeof moveMod.applyRankMovement === 'function'
-      ) {
-        moveMod.applyRankMovement(list, activeTab, {
-          paceDistance: paceDistance,
-          gender: gender,
-          category: activeCategory
-        }, rankMovementByKey);
+      if (listFilter === 'all') {
+        var moveMod = window.runningRankingMovement;
+        if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+          moveMod.applyRankMovement(list, activeTab, {
+            paceDistance: paceDistance,
+            gender: gender,
+            category: activeCategory
+          }, rankMovementByKey);
+        }
       }
       return list;
     }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, socialVer]);
@@ -328,6 +331,14 @@
       window.refreshStelvioDistributionChart(payload, 'running-ranking-distribution-chart-root');
     }, [isOverallTab, rawRows, gender, activeCategory, listFilter, currentUserId, loading, socialVer]);
 
+    useEffect(function () {
+      if (loading) return;
+      var soc = socialApi();
+      if (soc && typeof soc.refreshStarSlots === 'function') {
+        soc.refreshStarSlots();
+      }
+    }, [rankedList.length, socialVer, loading, activeTab, listFilter]);
+
     var unitLabel = useMemo(function () {
       var tabs = cfg().TABS || [];
       for (var i = 0; i < tabs.length; i++) {
@@ -343,11 +354,9 @@
         || ((labels[activeCategory] || activeCategory) + ' 순위');
     }, [activeCategory]);
 
-    var rowHeight = isOverallTab
-      ? (showOverallSegments
-        ? (cfg().LIST_ROW_HEIGHT_OVERALL || 78)
-        : (cfg().LIST_ROW_HEIGHT || 56))
-      : (cfg().LIST_ROW_HEIGHT || 56);
+    var rowHeight = isOverallTab && showOverallSegments
+      ? (cfg().LIST_ROW_HEIGHT_OVERALL || 78)
+      : (cfg().LIST_ROW_HEIGHT || 48);
 
     var listKey = activeTab + '-' + paceDistance + '-' + gender + '-' + activeCategory + '-' + listFilter;
 
