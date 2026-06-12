@@ -27640,14 +27640,6 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .stelvio-rank-row.running-ranking-row:last-child {
   border-bottom: none;
 }
-#runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
-#runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change-slot .stelvio-rank-change {
-  flex-shrink: 0;
-  overflow: visible;
-  font-size: 0.68rem;
-  font-weight: 600;
-  margin-left: 4px;
-}
 @media (max-width: 600px) {
   #runningRankingScreen .stelvio-rank-row.running-ranking-row .stelvio-rank-name {
     flex-wrap: wrap;
@@ -27932,15 +27924,15 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   gap: 6px;
   min-width: 0;
 }
-#runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change {
+#runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
+#runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change-slot .stelvio-rank-change {
   flex-shrink: 0;
   overflow: visible;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-#runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change {
-  flex-shrink: 0;
-  overflow: visible;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  margin-left: 4px;
 }
 #runningRankingScreen .stelvio-category-header-title {
   display: inline-flex;
@@ -27979,7 +27971,12 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 }
 #runningRankingScreen .running-ranking-list-body--segments-off .stelvio-rank-row.running-ranking-row {
   flex-wrap: nowrap;
-  padding: 6px 0;
+  padding: 3px 0;
+  contain-intrinsic-size: auto 48px;
+}
+#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-off .stelvio-rank-row.running-ranking-row {
+  flex-wrap: nowrap;
+  padding: 3px 0;
 }
 #runningRankingScreen .running-ranking-row--compact .running-ranking-segments {
   display: none;
