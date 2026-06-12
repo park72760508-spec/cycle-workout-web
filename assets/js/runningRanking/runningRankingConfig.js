@@ -92,7 +92,7 @@
     ROUTE_ENTRIES: ROUTE_ENTRIES,
     CACHE_TTL_MS: 60 * 60 * 1000,
     GC_SCORING_VERSION: 2,
-    LIST_ROW_HEIGHT: 56,
+    LIST_ROW_HEIGHT: 48,
     LIST_ROW_HEIGHT_OVERALL: 78,
     MEDAL_SRC: ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg']
   };

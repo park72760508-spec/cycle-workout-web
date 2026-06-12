@@ -52,6 +52,24 @@
     } catch (e) {}
   }
 
+  function mapHasEntries(m) {
+    return m && typeof m === 'object' && Object.keys(m).length > 0;
+  }
+
+  function lookupSnapVal(map, id) {
+    if (!map || id == null) return null;
+    var s = String(id).trim();
+    if (!s) return null;
+    if (map[s] != null) return map[s];
+    var lower = s.toLowerCase();
+    var keys = Object.keys(map);
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === lower) return map[keys[i]];
+    }
+    return null;
+  }
+
   function applyFromServerSnap(list, tabId, opts, rankMovementByKey) {
     if (!list || !list.length || !rankMovementByKey) return false;
 
@@ -74,28 +92,34 @@
         : (item.userId != null ? String(item.userId) : '');
       if (!id) return;
 
-      if (previous[id] != null) {
-        var prev = Math.floor(Number(previous[id]));
+      var prevVal = lookupSnapVal(previous, id);
+      if (prevVal != null) {
+        var prev = Math.floor(Number(prevVal));
         var curr = Math.floor(Number(item.rank));
         if (prev >= 1 && curr >= 1) {
           item.rankChange = prev - curr;
           item.previousBoardRank = prev;
           hasAny = true;
         }
-      } else if (changes[id] != null && item.rank != null) {
-        var ch = Number(changes[id]);
-        var currRank = Math.floor(Number(item.rank));
-        if (isFinite(ch) && currRank >= 1) {
-          item.rankChange = ch;
-          item.previousBoardRank = currRank - ch;
-          hasAny = true;
+      } else {
+        var chVal = lookupSnapVal(changes, id);
+        if (chVal != null && item.rank != null) {
+          var ch = Number(chVal);
+          var currRank = Math.floor(Number(item.rank));
+          if (isFinite(ch) && currRank >= 1) {
+            item.rankChange = ch;
+            item.previousBoardRank = currRank - ch;
+            hasAny = true;
+          }
         }
       }
     });
 
     normalizeListRankMovement(list);
 
-    return hasAny || !!(snap.asOfSeoul);
+    if (hasAny) return true;
+    if (mapHasEntries(previous) || mapHasEntries(changes)) return true;
+    return false;
   }
 
   function normalizeListRankMovement(list) {
@@ -107,6 +131,10 @@
     list.forEach(function (item) {
       if (!item || item.rankChange == null) return;
       normalizeFn(item, item.rank);
+      if (item.rankChange == null || item.previousBoardRank == null) return;
+      if (item.previousBoardRank - item.rankChange !== item.rank) {
+        item.rankChange = item.previousBoardRank - item.rank;
+      }
     });
   }
 

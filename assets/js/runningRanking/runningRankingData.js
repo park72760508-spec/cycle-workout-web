@@ -42,9 +42,41 @@
     return cat != null ? String(cat).trim() : '';
   }
 
+  function rowFirebaseUid(row) {
+    var ui = row && row.user_info;
+    var fb = ui && (ui.firebase_uid != null ? ui.firebase_uid : ui.firebaseUid);
+    return fb != null && String(fb).trim() ? String(fb).trim() : '';
+  }
+
+  function rowSocialUserId(row) {
+    var fb = rowFirebaseUid(row);
+    var uid = rowUserId(row);
+    return fb || uid;
+  }
+
   function isPrivateRow(row) {
     var ui = row && row.user_info;
+    if (typeof window.stelvioRankingIsPrivateRow === 'function') {
+      return window.stelvioRankingIsPrivateRow({
+        is_private: ui && ui.is_private,
+        userId: rowUserId(row),
+        name: rowDisplayName(row)
+      });
+    }
     return !!(ui && (ui.is_private === true || ui.is_private === 'true' || ui.is_private === 1));
+  }
+
+  function pushListItem(list, r, fields) {
+    list.push(Object.assign({
+      userId: rowUserId(r),
+      firebaseUid: rowFirebaseUid(r),
+      socialUserId: rowSocialUserId(r),
+      name: rowDisplayName(r),
+      profileUrl: rowProfileUrl(r),
+      isPrivate: isPrivateRow(r),
+      ageCategory: rowAgeCategory(r),
+      raw: r
+    }, fields || {}));
   }
 
   var GC_SCORING_VERSION = 2;
@@ -310,13 +342,7 @@
       filtered.forEach(function (r) {
         var score = getOverallTotalScore(r, genderKey, categoryKey);
         if (score == null || score <= 0) return;
-        list.push({
-          userId: rowUserId(r),
-          name: rowDisplayName(r),
-          profileUrl: rowProfileUrl(r),
-          isPrivate: isPrivateRow(r),
-          ageCategory: rowAgeCategory(r),
-          raw: r,
+        pushListItem(list, r, {
           value: score,
           valueLabel: fmt().formatScore(score),
           segments: (cfg().OVERALL_SEGMENTS || []).map(function (seg) {
@@ -337,13 +363,7 @@
       filtered.forEach(function (r) {
         var pace = getPaceForDistance(r, dk);
         if (pace.paceSec == null) return;
-        list.push({
-          userId: rowUserId(r),
-          name: rowDisplayName(r),
-          profileUrl: rowProfileUrl(r),
-          isPrivate: isPrivateRow(r),
-          ageCategory: rowAgeCategory(r),
-          raw: r,
+        pushListItem(list, r, {
           value: pace.paceSec,
           valueLabel: pace.paceStr
         });
@@ -353,13 +373,7 @@
       filtered.forEach(function (r) {
         var tss = Number(r.weekly_tss);
         if (!isFinite(tss) || tss <= 0) return;
-        list.push({
-          userId: rowUserId(r),
-          name: rowDisplayName(r),
-          profileUrl: rowProfileUrl(r),
-          isPrivate: isPrivateRow(r),
-          ageCategory: rowAgeCategory(r),
-          raw: r,
+        pushListItem(list, r, {
           value: tss,
           valueLabel: fmt().formatTss(tss)
         });
@@ -369,13 +383,7 @@
       filtered.forEach(function (r) {
         var km = Number(r.distance_30d_km);
         if (!isFinite(km) || km <= 0) return;
-        list.push({
-          userId: rowUserId(r),
-          name: rowDisplayName(r),
-          profileUrl: rowProfileUrl(r),
-          isPrivate: isPrivateRow(r),
-          ageCategory: rowAgeCategory(r),
-          raw: r,
+        pushListItem(list, r, {
           value: km,
           valueLabel: fmt().formatDistanceKm(km) + 'km'
         });
@@ -748,6 +756,7 @@
     getVolumeWindowLabel: getVolumeWindowLabel,
     getDistanceWindowLabel: getDistanceWindowLabel,
     rowUserId: rowUserId,
+    rowFirebaseUid: rowFirebaseUid,
     isPrivateRow: isPrivateRow
   };
 })();
