@@ -211,6 +211,9 @@ async function hydratePeakRankMovementOnPayload(payload, historyKey, opts) {
   payload.rankMovementSource = "supabase";
   payload.rankMovementHistoryKey = historyKey;
   payload.rankMovementHydrated = peakMovement.payloadHasRankMovement(payload);
+  payload.rankMovementAsOfSeoul = snapFields.asOfSeoul || todayYmd;
+  payload.rankMovementPrevDayByCategory = snapFields.newPrevDayRanksByCategory || {};
+  payload.rankMovementCompareBaselineByCategory = snapFields.compareBaselineByCategory || {};
 
   if (
     opts.persistSnapshot !== false &&

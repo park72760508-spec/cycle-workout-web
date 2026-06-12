@@ -43,6 +43,10 @@ function resolvePeakRankHistoryKey(durationType, period, gender) {
   return buildPeakRankHistoryKey(dt, p, g);
 }
 
+/**
+ * 부문 목록 내 표시 순위(1..N) — item.rank(전체 Supremo 순위)와 혼용하지 않음.
+ * 클라이언트 stelvioCategoryRankInFullList / stelvioBuildPeakRankMapForCategory 와 동일.
+ */
 function buildPeakBoardRankMapForCategoryRows(rows) {
   const ranks = {};
   if (!Array.isArray(rows)) return ranks;
@@ -50,9 +54,7 @@ function buildPeakBoardRankMapForCategoryRows(rows) {
     const r = rows[i];
     const uid = r && r.userId != null ? String(r.userId).trim() : "";
     if (!uid) continue;
-    const explicit =
-      r.rank != null && isFinite(Number(r.rank)) ? Math.floor(Number(r.rank)) : null;
-    ranks[uid] = explicit != null && explicit >= 1 ? explicit : i + 1;
+    ranks[uid] = i + 1;
   }
   return ranks;
 }
@@ -145,6 +147,7 @@ function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
   const newRankChangesByCategory = {};
   const newPreviousRanksByCategory = {};
   const newPrevDayRanksByCategory = {};
+  const compareBaselineByCategory = {};
 
   for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
     const rows = byCategory[cat];
@@ -171,6 +174,10 @@ function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
     const sameDaySelfBaseline =
       prevNorm.asOfSeoul === today &&
       peakRankUidRankMapsEqual(compareBaseline, currRanks);
+
+    if (compareBaseline && Object.keys(compareBaseline).length) {
+      compareBaselineByCategory[cat] = compareBaseline;
+    }
 
     newRanksByCategory[cat] = currRanks;
     newPrevDayRanksByCategory[cat] = frozenPrevDay;
@@ -205,6 +212,7 @@ function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
     newRankChangesByCategory,
     newPreviousRanksByCategory,
     newPrevDayRanksByCategory,
+    compareBaselineByCategory,
   };
 }
 
