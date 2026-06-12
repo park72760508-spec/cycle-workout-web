@@ -93,6 +93,7 @@
           name: rowDisplayName(r),
           profileUrl: rowProfileUrl(r),
           isPrivate: isPrivateRow(r),
+          ageCategory: rowAgeCategory(r),
           raw: r,
           value: score,
           valueLabel: fmt().formatScore(score),
@@ -119,6 +120,7 @@
           name: rowDisplayName(r),
           profileUrl: rowProfileUrl(r),
           isPrivate: isPrivateRow(r),
+          ageCategory: rowAgeCategory(r),
           raw: r,
           value: pace.paceSec,
           valueLabel: pace.paceStr
@@ -134,6 +136,7 @@
           name: rowDisplayName(r),
           profileUrl: rowProfileUrl(r),
           isPrivate: isPrivateRow(r),
+          ageCategory: rowAgeCategory(r),
           raw: r,
           value: tss,
           valueLabel: fmt().formatTss(tss)
@@ -149,6 +152,7 @@
           name: rowDisplayName(r),
           profileUrl: rowProfileUrl(r),
           isPrivate: isPrivateRow(r),
+          ageCategory: rowAgeCategory(r),
           raw: r,
           value: km,
           valueLabel: fmt().formatDistanceKm(km) + 'km'

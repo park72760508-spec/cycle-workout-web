@@ -14,6 +14,9 @@
     if (typeof showScreen === 'function') {
       showScreen(sid);
     }
+    if (typeof window.stelvioBootstrapRankingSocialSets === 'function') {
+      window.stelvioBootstrapRankingSocialSets({ forceFirestore: true, subscribeGroups: true }).catch(function () {});
+    }
     if (typeof window.initRunningRankingReact === 'function') {
       setTimeout(function () { window.initRunningRankingReact({ forceRefresh: true }); }, 50);
     }
@@ -23,15 +26,19 @@
     var sid = getScreenId();
     var el = document.getElementById(sid);
     if (el && el.classList.contains('active')) {
-      if (typeof showScreen === 'function') showScreen('myCareerScreen', true);
+      if (typeof showScreen === 'function') {
+        if (typeof window.goHomeBasecamp === 'function') window.goHomeBasecamp();
+        else showScreen('runBasecampScreen', true);
+      }
     }
   }
 
   /** 허브 네비·베이스캠프 등 외부에서 등록할 진입 핸들러 */
   function registerRouteHandlers() {
     var entries = (window.runningRankingConfig && window.runningRankingConfig.ROUTE_ENTRIES) || {};
-    if (entries.basecamp && entries.basecamp.buttonId) {
-      var btn = document.getElementById(entries.basecamp.buttonId);
+    var runEntry = entries.runBasecamp || entries.basecamp;
+    if (runEntry && runEntry.buttonId) {
+      var btn = document.getElementById(runEntry.buttonId);
       if (btn && !btn.getAttribute('data-running-route-bound')) {
         btn.setAttribute('data-running-route-bound', '1');
         btn.addEventListener('click', function (e) {
