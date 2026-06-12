@@ -72,9 +72,18 @@
     return s;
   }
 
+  function formatPaceMmSs(secPerKm) {
+    if (secPerKm == null || !isFinite(secPerKm) || secPerKm <= 0) return '—';
+    var min = Math.floor(secPerKm / 60);
+    var sec = Math.round(secPerKm % 60);
+    if (sec === 60) { min += 1; sec = 0; }
+    return min + ':' + (sec < 10 ? '0' : '') + sec;
+  }
+
   window.runningRankingFormat = {
     parsePaceToSecPerKm: parsePaceToSecPerKm,
     formatPaceSecPerKm: formatPaceSecPerKm,
+    formatPaceMmSs: formatPaceMmSs,
     speedToPaceSecPerKm: speedToPaceSecPerKm,
     formatDistanceKm: formatDistanceKm,
     formatScore: formatScore,

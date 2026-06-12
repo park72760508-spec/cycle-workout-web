@@ -96,6 +96,36 @@
     return speeds;
   }
 
+  function fillShorterSpeedsFromLonger(speeds) {
+    var i;
+    var j;
+    for (i = 0; i < GC_AXES.length; i++) {
+      var key = GC_AXES[i];
+      if (speeds[key] > 0) continue;
+      for (j = i + 1; j < GC_AXES.length; j++) {
+        var longerKey = GC_AXES[j];
+        if (speeds[longerKey] > 0) {
+          speeds[key] = speeds[longerKey];
+          break;
+        }
+      }
+    }
+    return speeds;
+  }
+
+  function getOverallPaceForDistance(row, distKey) {
+    var speeds = buildProfileSpeeds(row);
+    var sp = speeds[distKey];
+    if (sp == null || sp <= 0) {
+      return getPaceForDistance(row, distKey, { forOverall: true });
+    }
+    var sec = 1000 / sp;
+    var paceStr = fmt().formatPaceMmSs
+      ? fmt().formatPaceMmSs(sec)
+      : (fmt().formatPaceSecPerKm ? fmt().formatPaceSecPerKm(sec) : '—');
+    return { paceStr: paceStr, paceSec: sec };
+  }
+
   function buildProfileSpeeds(row) {
     var speeds = {};
     var i;
@@ -104,6 +134,7 @@
       var sp = getSpeedForDistance(row, key, true);
       if (sp != null && sp > 0) speeds[key] = sp;
     }
+    fillShorterSpeedsFromLonger(speeds);
     return enforceMonotonicSpeeds(speeds);
   }
 
@@ -290,7 +321,7 @@
           valueLabel: fmt().formatScore(score),
           segments: (cfg().OVERALL_SEGMENTS || []).map(function (seg) {
             var sc = getSegmentScore(r, seg.key, genderKey, categoryKey);
-            var pace = getPaceForDistance(r, seg.key, { forOverall: true });
+            var pace = getOverallPaceForDistance(r, seg.key);
             return {
               key: seg.key,
               label: seg.label,
