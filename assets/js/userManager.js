@@ -555,12 +555,46 @@ function filterActiveUsers(users) {
 }
 
 /** 프로필 선택 화면 목록 표시 대상 — id·이름 없거나 literal "undefined" 제외 */
+function getProfileUserDisplayName(user) {
+  if (!user || typeof user !== 'object') return '';
+  var candidates = [user.name, user.display_name, user.displayName, user.user_name];
+  for (var i = 0; i < candidates.length; i++) {
+    var v = candidates[i] != null ? String(candidates[i]).trim() : '';
+    if (v && v !== 'undefined' && v !== 'null') return v;
+  }
+  return '';
+}
+
+function normalizeProfileSearchText(text) {
+  var s = String(text || '').trim();
+  if (!s) return '';
+  try {
+    if (typeof s.normalize === 'function') s = s.normalize('NFC');
+  } catch (_e) {}
+  return s.toLowerCase();
+}
+
+function getProfileUserContactDigits(user) {
+  if (!user || typeof user !== 'object') return '';
+  var raw = user.contact || user.phone || user.phoneNumber || user.tel || '';
+  return String(raw).replace(/\D/g, '');
+}
+
+function matchesProfileUserSearch(user, nameQuery, contactDigits) {
+  var nameNorm = normalizeProfileSearchText(getProfileUserDisplayName(user));
+  var qName = normalizeProfileSearchText(nameQuery);
+  var nameMatch = !qName || (nameNorm && nameNorm.indexOf(qName) !== -1);
+  var uDigits = getProfileUserContactDigits(user);
+  var contactMatch = !contactDigits || (uDigits && uDigits.indexOf(contactDigits) !== -1);
+  return nameMatch && contactMatch;
+}
+
 function isProfileListDisplayableUser(user) {
   if (!user || typeof user !== 'object') return false;
   var id = user.id != null ? String(user.id).trim() : '';
   if (!id || id === 'undefined' || id === 'null') return false;
-  var name = user.name != null ? String(user.name).trim() : '';
-  if (!name || name === 'undefined' || name === 'null') return false;
+  var name = getProfileUserDisplayName(user);
+  if (!name) return false;
   return true;
 }
 
@@ -642,6 +676,38 @@ function bindProfileScreenSubtitleActions() {
   });
 }
 
+function bindProfileSearchInputs() {
+  var nameInput = document.getElementById('profileSearchName');
+  var contactInput = document.getElementById('profileSearchContact');
+  if (!nameInput && !contactInput) return;
+  if (nameInput && !nameInput._profileSearchBound) {
+    nameInput._profileSearchBound = true;
+    nameInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        if (typeof searchProfileUsers === 'function') searchProfileUsers();
+      }
+    });
+    nameInput.addEventListener('input', function () {
+      if (typeof refreshProfileScreenUserList === 'function') refreshProfileScreenUserList();
+    });
+  }
+  if (contactInput && !contactInput._profileSearchBound) {
+    contactInput._profileSearchBound = true;
+    contactInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        if (typeof searchProfileUsers === 'function') searchProfileUsers();
+      }
+    });
+    contactInput.addEventListener('input', function () {
+      if (typeof refreshProfileScreenUserList === 'function') refreshProfileScreenUserList();
+    });
+  }
+}
+
+window.bindProfileSearchInputs = bindProfileSearchInputs;
+
 /** 관리자 프로필 목록 — 탈퇴 필터·검색어 반영 후 재렌더 */
 function refreshProfileScreenUserList() {
   var userList = document.getElementById('userList');
@@ -655,25 +721,28 @@ function refreshProfileScreenUserList() {
   var contactInput = document.getElementById('profileSearchContact');
   var nameRaw = nameInput && nameInput.value ? String(nameInput.value).trim() : '';
   var contactRaw = contactInput && contactInput.value ? String(contactInput.value).trim() : '';
-  var nameQuery = nameRaw.toLowerCase();
+  var nameQuery = nameRaw;
   var contactDigits = (contactRaw || '').replace(/\D/g, '');
 
-  var filtered = modeUsers;
+  /* 검색어가 있으면 탈퇴/전체 모드와 무관하게 전체 사용자 풀에서 검색 */
+  var searchPool =
+    nameQuery || contactDigits
+      ? (window._profileScreenUsersBase || modeUsers)
+      : modeUsers;
+
+  var filtered = searchPool;
   if (nameQuery || contactDigits) {
-    filtered = modeUsers.filter(function (u) {
-      var nameMatch = !nameQuery || (u.name && String(u.name).toLowerCase().includes(nameQuery));
-      var uContact = (u.contact || '').replace(/\D/g, '');
-      var contactMatch = !contactDigits || (uContact && uContact.includes(contactDigits));
-      return nameMatch && contactMatch;
+    filtered = searchPool.filter(function (u) {
+      return matchesProfileUserSearch(u, nameQuery, contactDigits);
     });
   }
 
   if (filtered.length === 0) {
     var emptyTitle =
-      getProfileScreenListMode() === PROFILE_LIST_MODE_WITHDRAWN
-        ? '탈퇴 사용자가 없습니다'
-        : nameQuery || contactDigits
-          ? '검색 결과가 없습니다'
+      nameQuery || contactDigits
+        ? '검색 결과가 없습니다'
+        : getProfileScreenListMode() === PROFILE_LIST_MODE_WITHDRAWN
+          ? '탈퇴 사용자가 없습니다'
           : '등록된 사용자가 없습니다';
     userList.innerHTML =
       '<div class="empty-state"><div class="empty-state-icon">👤</div><div class="empty-state-title">' +
@@ -695,6 +764,8 @@ function refreshProfileScreenUserList() {
 }
 
 window.isProfileListDisplayableUser = isProfileListDisplayableUser;
+window.getProfileUserDisplayName = getProfileUserDisplayName;
+window.matchesProfileUserSearch = matchesProfileUserSearch;
 window.filterProfileListDisplayableUsers = filterProfileListDisplayableUsers;
 window.refreshProfileScreenUserList = refreshProfileScreenUserList;
 window.bindProfileScreenSubtitleActions = bindProfileScreenSubtitleActions;
@@ -3651,8 +3722,11 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
   };
   const canTogglePrivacyFor = (u) => viewerId && String(u.id) === viewerId; // 본인만 비공개 설정
   const showDashboardBtn = (viewerGrade === '1'); // grade=1만 대시보드 버튼 표시
-  const sorted = [...usersToRender].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+  const sorted = [...usersToRender].sort((a, b) =>
+    getProfileUserDisplayName(a).localeCompare(getProfileUserDisplayName(b), 'ko')
+  );
   userList.innerHTML = sorted.map(user => {
+    const displayName = getProfileUserDisplayName(user);
     const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
     const expRaw = user.expiry_date;
     let expiryText = '미설정';
@@ -3727,7 +3801,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
           <div class="user-row1">
             <div class="user-name-wrapper">
               <div class="user-name user-name-with-indicators">
-                <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}${withdrawnBadgeHtml}</span>
+                <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${displayName}${withdrawnBadgeHtml}</span>
                 <span class="user-name-badges" title="AI 페어링 / Strava 연결">
                   <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링" aria-label="AI 페어링"></span>
                   <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결" aria-label="Strava 연결"></span>
@@ -4030,7 +4104,9 @@ async function loadUsers() {
       }
     }
 
-    visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+    visibleUsers.sort((a, b) =>
+      getProfileUserDisplayName(a).localeCompare(getProfileUserDisplayName(b), 'ko')
+    );
 
     // 로그인 관리자일 때만 검색 섹션 표시 및 전체 목록 저장 (검색 시 사용)
     const searchSection = document.getElementById('profileSearchSection');
@@ -4045,6 +4121,7 @@ async function loadUsers() {
         };
         setProfileScreenListMode(PROFILE_LIST_MODE_ALL);
         bindProfileScreenSubtitleActions();
+        bindProfileSearchInputs();
         var modeUsers = getProfileScreenUsersForListMode();
         window._profileScreenAllUsers = modeUsers.slice();
         window._profileScreenContext = { viewerGrade: profileCardGrade, viewerId };
