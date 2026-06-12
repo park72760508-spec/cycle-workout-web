@@ -609,12 +609,138 @@
     return userName + '님은 RUN 종합 랭킹 전체 ' + globalRank + '위(' + scoreLabel + ')입니다.';
   }
 
+  function formatRankLabel(rankNum) {
+    return rankNum != null && Number(rankNum) >= 1
+      ? Math.floor(Number(rankNum)) + '위'
+      : '—';
+  }
+
+  function buildOverallRankMap(rows, gender, category) {
+    var list = buildRankedList(rows, 'overall', { gender: gender, category: category });
+    var map = {};
+    list.forEach(function (item) {
+      if (item && item.userId != null) map[String(item.userId)] = item.rank;
+    });
+    return map;
+  }
+
+  function buildSegmentRankMaps(rows, gender) {
+    var filtered = filterByGender(rows || [], gender || 'all');
+    var segments = cfg().OVERALL_SEGMENTS || [];
+    var maps = {};
+    var si;
+
+    for (si = 0; si < segments.length; si++) {
+      var key = segments[si].key;
+      var cohort = [];
+      filtered.forEach(function (r) {
+        var uid = rowUserId(r);
+        if (!uid) return;
+        var pace = getOverallPaceForDistance(r, key);
+        if (pace.paceSec == null) return;
+        cohort.push({
+          userId: uid,
+          paceSec: pace.paceSec,
+          paceStr: fmt().formatPaceOverlayMmSs
+            ? fmt().formatPaceOverlayMmSs(pace.paceSec)
+            : (pace.paceStr || '—')
+        });
+      });
+      cohort.sort(function (a, b) {
+        if (a.paceSec !== b.paceSec) return a.paceSec - b.paceSec;
+        return String(a.userId).localeCompare(String(b.userId));
+      });
+      var rankMap = {};
+      var ri;
+      for (ri = 0; ri < cohort.length; ri++) {
+        rankMap[cohort[ri].userId] = {
+          rank: ri + 1,
+          pace: cohort[ri].paceStr
+        };
+      }
+      maps[key] = rankMap;
+    }
+    return maps;
+  }
+
+  /**
+   * 아바타 오버레이 3줄 텍스트 (CYCLE 랭킹보드 프로필 카드와 동일 형식)
+   * @returns {{ line1: string, line2: string, line3: string }|null}
+   */
+  function buildAvatarOverlayProfile(userId, rows, opts) {
+    opts = opts || {};
+    if (!userId || !rows || !rows.length) return null;
+
+    var uid = String(userId);
+    var gender = opts.gender || 'all';
+    var ageCategory = opts.ageCategory ? String(opts.ageCategory).trim() : 'Supremo';
+    var displayName = opts.displayName != null ? String(opts.displayName).trim() : '';
+
+    var row = null;
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (rowUserId(rows[i]) === uid) {
+        row = rows[i];
+        break;
+      }
+    }
+    if (!row) return null;
+
+    if (!displayName) displayName = rowDisplayName(row);
+
+    var supremoRanks = buildOverallRankMap(rows, gender, 'Supremo');
+    var catRanks = ageCategory && ageCategory !== 'Supremo'
+      ? buildOverallRankMap(rows, gender, ageCategory)
+      : null;
+    var segmentMaps = buildSegmentRankMaps(rows, gender);
+
+    var catLab = (cfg().CATEGORY_LABELS || {})[ageCategory] || ageCategory;
+    var gcSupRank = supremoRanks[uid];
+    var gcCatRank = catRanks ? catRanks[uid] : null;
+
+    var p1Mid = gcSupRank != null
+      ? 'GC 전체 ' + formatRankLabel(gcSupRank)
+      : 'GC 전체 —';
+    var p1Cat = ageCategory && ageCategory !== 'Supremo' && gcCatRank != null
+      ? '(' + (catLab || ageCategory) + ' ' + formatRankLabel(gcCatRank) + ')'
+      : '';
+
+    var line2Parts = [];
+    var segments = cfg().OVERALL_SEGMENTS || [];
+    for (i = 0; i < segments.length; i++) {
+      var seg = segments[i];
+      var segMap = segmentMaps[seg.key] || {};
+      var segInfo = segMap[uid];
+      if (!segInfo || segInfo.rank == null) {
+        line2Parts.push(seg.label + '(—)');
+      } else {
+        var rankPart = formatRankLabel(segInfo.rank);
+        var pacePart = segInfo.pace && segInfo.pace !== '—' ? segInfo.pace : '—';
+        line2Parts.push(seg.label + '(' + rankPart + '/' + pacePart + ')');
+      }
+    }
+
+    var tss = Number(row.weekly_tss);
+    var tssTxt = isFinite(tss) && tss > 0 ? fmt().formatTss(tss) : '—';
+    var km = Number(row.distance_30d_km);
+    var distTxt = isFinite(km) && km > 0 ? fmt().formatDistanceKm(km) + 'km' : '—';
+
+    return {
+      line1: displayName
+        ? displayName + ' · ' + p1Mid + (p1Cat ? ' ' + p1Cat : '')
+        : p1Mid + (p1Cat ? ' ' + p1Cat : ''),
+      line2: line2Parts.join(' · '),
+      line3: '주간 TSS: ' + tssTxt + ' · 최근 30일 거리: ' + distTxt
+    };
+  }
+
   window.runningRankingData = {
     getCurrentUserId: getCurrentUserId,
     buildRankedList: buildRankedList,
     buildCrewRankedList: buildCrewRankedList,
     buildDistributionPayload: buildDistributionPayload,
     buildOverallHeroMessage: buildOverallHeroMessage,
+    buildAvatarOverlayProfile: buildAvatarOverlayProfile,
     normalizeLeaderboardRows: normalizeLeaderboardRows,
     getVolumeWindowLabel: getVolumeWindowLabel,
     getDistanceWindowLabel: getDistanceWindowLabel,

@@ -23,6 +23,9 @@
   }
 
   function closeRunningRankingBoard() {
+    if (typeof window.closeRunningRankAvatarZoom === 'function') {
+      window.closeRunningRankAvatarZoom();
+    }
     var sid = getScreenId();
     var el = document.getElementById(sid);
     if (el && el.classList.contains('active')) {

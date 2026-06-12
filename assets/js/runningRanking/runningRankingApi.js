@@ -114,8 +114,13 @@
     };
   }
 
+  function getCachedRows() {
+    return _cache.rows && _cache.rows.length ? _cache.rows.slice() : [];
+  }
+
   window.runningRankingApi = {
     fetchLeaderboard: fetchLeaderboard,
-    invalidateCache: invalidateCache
+    invalidateCache: invalidateCache,
+    getCachedRows: getCachedRows
   };
 })();

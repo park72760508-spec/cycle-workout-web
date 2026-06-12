@@ -80,10 +80,22 @@
     return min + ':' + (sec < 10 ? '0' : '') + sec;
   }
 
+  /** 아바타 오버레이용 — 05:10 형식 */
+  function formatPaceOverlayMmSs(secPerKm) {
+    if (secPerKm == null || !isFinite(secPerKm) || secPerKm <= 0) return '—';
+    var min = Math.floor(secPerKm / 60);
+    var sec = Math.round(secPerKm % 60);
+    if (sec === 60) { min += 1; sec = 0; }
+    var minStr = min < 10 ? '0' + min : String(min);
+    var secStr = sec < 10 ? '0' + sec : String(sec);
+    return minStr + ':' + secStr;
+  }
+
   window.runningRankingFormat = {
     parsePaceToSecPerKm: parsePaceToSecPerKm,
     formatPaceSecPerKm: formatPaceSecPerKm,
     formatPaceMmSs: formatPaceMmSs,
+    formatPaceOverlayMmSs: formatPaceOverlayMmSs,
     speedToPaceSecPerKm: speedToPaceSecPerKm,
     formatDistanceKm: formatDistanceKm,
     formatScore: formatScore,

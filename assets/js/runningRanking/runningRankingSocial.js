@@ -34,7 +34,7 @@
       root.addEventListener('click', starHandler, true);
     }
 
-    var avatarHandler = callFn('stelvioRankingAvatarZoomHandler') || callFn('stelvioRankingListBodyAvatarZoomHandler');
+    var avatarHandler = callFn('runningRankingAvatarZoomHandler');
     if (avatarHandler) {
       root.addEventListener('click', avatarHandler);
     }
