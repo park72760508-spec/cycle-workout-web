@@ -93,7 +93,21 @@
       }
     });
 
+    normalizeListRankMovement(list);
+
     return hasAny || !!(snap.asOfSeoul);
+  }
+
+  function normalizeListRankMovement(list) {
+    if (!list || !list.length) return;
+    var normalizeFn = typeof window.stelvioNormalizeRankMovementOnRow === 'function'
+      ? window.stelvioNormalizeRankMovementOnRow
+      : null;
+    if (!normalizeFn) return;
+    list.forEach(function (item) {
+      if (!item || item.rankChange == null) return;
+      normalizeFn(item, item.rank);
+    });
   }
 
   /**
@@ -133,6 +147,8 @@
         }
       }
     });
+
+    normalizeListRankMovement(list);
 
     var ranks = {};
     list.forEach(function (item) {

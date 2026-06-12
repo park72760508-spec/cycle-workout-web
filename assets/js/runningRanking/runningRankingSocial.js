@@ -135,13 +135,22 @@
     return starFn ? starFn(String(item.userId)) : '';
   }
 
-  function getRankChangeHtml(item) {
+  function getRankChangeHtml(item, listCategoryKey) {
     if (!item || item.isCrew) return '';
-    var listItemFn = callFn('stelvioRankChangeBadgeHtmlForListItem');
-    if (listItemFn) {
-      return listItemFn(item, item.ageCategory || 'Supremo');
+    var cat = listCategoryKey || 'Supremo';
+    var normalizeFn = callFn('stelvioNormalizeRankMovementOnRow');
+    if (normalizeFn && item.rank != null) {
+      normalizeFn(item, item.rank);
     }
     var badgeFn = callFn('stelvioServerRankChangeBadgeHtml');
+    if (badgeFn && item.rankChange != null && item.previousBoardRank != null) {
+      var directHtml = badgeFn(item.rankChange, item.previousBoardRank);
+      if (directHtml) return directHtml;
+    }
+    var listItemFn = callFn('stelvioRankChangeBadgeHtmlForListItem');
+    if (listItemFn) {
+      return listItemFn(item, cat);
+    }
     return badgeFn ? badgeFn(item.rankChange, item.previousBoardRank) : '';
   }
 
