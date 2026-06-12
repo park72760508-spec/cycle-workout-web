@@ -61,6 +61,14 @@
     var stale = _stale[0];
     var setStale = _stale[1];
 
+    var _rankMovement = useState({});
+    var rankMovementByKey = _rankMovement[0];
+    var setRankMovementByKey = _rankMovement[1];
+
+    var _rankMovementAsOf = useState('');
+    var rankMovementAsOfSeoul = _rankMovementAsOf[0];
+    var setRankMovementAsOfSeoul = _rankMovementAsOf[1];
+
     var _socialVer = useState(0);
     var socialVer = _socialVer[0];
     var setSocialVer = _socialVer[1];
@@ -81,6 +89,8 @@
           setRawRows([]);
         } else {
           setRawRows(res.rows || []);
+          setRankMovementByKey(res.rankMovementByKey || {});
+          setRankMovementAsOfSeoul(res.rankMovementAsOfSeoul || '');
           setStale(!!res.stale);
           if (res.stale && res.error) setError(res.error);
         }
@@ -183,17 +193,17 @@
             category: activeCategory
           })
           : [];
-        var moveMod = window.runningRankingMovement;
-        if (moveMod && typeof moveMod.applyRankMovement === 'function') {
-          moveMod.applyRankMovement(list, activeTab, {
-            paceDistance: paceDistance,
-            gender: gender,
-            category: activeCategory
-          });
-        }
+      }
+      var moveMod = window.runningRankingMovement;
+      if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+        moveMod.applyRankMovement(list, activeTab, {
+          paceDistance: paceDistance,
+          gender: gender,
+          category: activeCategory
+        }, rankMovementByKey);
       }
       return list;
-    }, [rawRows, activeTab, paceDistance, gender, activeCategory, crewGroups, crewEnriched, socialVer]);
+    }, [rawRows, activeTab, paceDistance, gender, activeCategory, crewGroups, crewEnriched, socialVer, rankMovementByKey]);
 
     var unitLabel = useMemo(function () {
       var tabs = cfg().TABS || [];
@@ -341,7 +351,12 @@
           : null,
         stale && error
           ? React.createElement('p', { className: 'running-ranking-stale-hint' }, '캐시 표시 · ' + error)
-          : null
+          : null,
+        React.createElement('p', { className: 'running-ranking-movement-hint' },
+          rankMovementAsOfSeoul
+            ? ('순위 등락은 매일 23:00(KST) 집계 기준 · 반영일 ' + rankMovementAsOfSeoul)
+            : '순위 등락은 매일 23:00(KST) 집계 후 전일 대비로 표시됩니다.'
+        )
       ),
       React.createElement('div', { className: 'stelvio-ranking-content running-ranking-content' },
         React.createElement('div', { className: 'stelvio-category-card stelvio-ranking-list-card running-ranking-list-card' },
