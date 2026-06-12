@@ -13005,7 +13005,13 @@
 
     /** 친구·그룹·관심 Set 갱신 후 별 UI 일괄 반영(관심 필터 ON 시 목록 재렌더) */
     function stelvioRankingApplySocialStarUi() {
-      if (!stelvioRankingByCategory) return;
+      if (!stelvioRankingByCategory) {
+        var runRootEarly = document.getElementById('running-ranking-react-root');
+        if (runRootEarly && typeof stelvioRankingRefreshListStarSlots === 'function') {
+          stelvioRankingRefreshListStarSlots(runRootEarly);
+        }
+        return;
+      }
       if (stelvioRankingState.listFilter === 'interest' && typeof renderStelvioActiveCategory === 'function') {
         renderStelvioActiveCategory();
         return;
@@ -13013,6 +13019,10 @@
       var body = document.getElementById('stelvioRankingListBody');
       if (body && typeof stelvioRankingRefreshListStarSlots === 'function') {
         stelvioRankingRefreshListStarSlots(body);
+      }
+      var runRoot = document.getElementById('running-ranking-react-root');
+      if (runRoot && typeof stelvioRankingRefreshListStarSlots === 'function') {
+        stelvioRankingRefreshListStarSlots(runRoot);
       }
     }
     window.stelvioRankingApplySocialStarUi = stelvioRankingApplySocialStarUi;
@@ -13499,6 +13509,24 @@
       );
     }
 
+    function stelvioRankingCanViewerSeeUserFull(uid) {
+      var id = uid != null ? String(uid).trim() : '';
+      if (!id) return false;
+      var myId = stelvioResolveRankingViewerUserId();
+      if (myId && id === myId) return true;
+      if (stelvioRankingViewerCanSeePrivateNames()) return true;
+      if (stelvioRankingFriendUserSet.has(id)) return true;
+      if (stelvioRankingGroupContactSet.has(id)) return true;
+      return false;
+    }
+    window.stelvioRankingCanViewerSeeUserFull = stelvioRankingCanViewerSeeUserFull;
+    window.stelvioRankingAvatarHtml = stelvioRankingAvatarHtml;
+    window.stelvioRankingStarButtonHtml = stelvioRankingStarButtonHtml;
+    window.stelvioRankingResolveRowRawName = stelvioRankingResolveRowRawName;
+    window.stelvioRankingPrivateMaskedDisplayName = stelvioRankingPrivateMaskedDisplayName;
+    window.stelvioRankingIsPrivateRow = stelvioRankingIsPrivateRow;
+    window.stelvioRankingProfileImageUrlForDisplay = stelvioRankingProfileImageUrlForDisplay;
+
     function stelvioRankingRowVisibleInInterestFilter(uid) {
       var id = uid != null ? String(uid).trim() : '';
       if (!id) return false;
@@ -13827,6 +13855,7 @@
         if (dec && typeof stelvioToggleRankingFavorite === 'function') stelvioToggleRankingFavorite(dec);
       } catch (eStar) {}
     }
+    window.stelvioRankingListBodyStarClickHandler = stelvioRankingListBodyStarClickHandler;
     /** DOM 순서·초기화 타이밍 대비: 랭킹 목록·헤더 토글 이벤트 1회만 연결 */
     function stelvioEnsureRankingFavoriteUiListeners() {
       if (typeof stelvioEnsureRankingExpandUiListeners === 'function') {
@@ -13876,7 +13905,16 @@
       var listAv = document.getElementById('stelvioRankingListBody');
       if (listAv && !listAv._stelvioAvatarZoomDelegated) {
         listAv._stelvioAvatarZoomDelegated = true;
-        listAv.addEventListener('click', stelvioRankingListBodyAvatarZoomHandler);
+        listAv.addEventListener('click', stelvioRankingAvatarZoomHandler);
+      }
+      var runRankRoot = document.getElementById('running-ranking-react-root');
+      if (runRankRoot && !runRankRoot._stelvioStarDelegated) {
+        runRankRoot._stelvioStarDelegated = true;
+        runRankRoot.addEventListener('click', stelvioRankingListBodyStarClickHandler, true);
+      }
+      if (runRankRoot && !runRankRoot._stelvioAvatarZoomDelegated) {
+        runRankRoot._stelvioAvatarZoomDelegated = true;
+        runRankRoot.addEventListener('click', stelvioRankingAvatarZoomHandler);
       }
       var bdZ = document.getElementById('stelvioRankAvatarZoomBackdrop');
       if (bdZ && !bdZ._stelvioAvatarZoomBackdropBound) {
@@ -13897,13 +13935,17 @@
     }
     window.stelvioEnsureRankingFavoriteUiListeners = stelvioEnsureRankingFavoriteUiListeners;
 
-    function stelvioRankingListBodyAvatarZoomHandler(ev) {
+    function stelvioRankingAvatarZoomHandler(ev) {
       var t = ev.target;
       var btn =
         typeof t.closest === 'function' ? t.closest('.stelvio-rank-avatar-btn') : null;
       if (!btn) return;
+      var allowed = false;
       var listBody = document.getElementById('stelvioRankingListBody');
-      if (!listBody || !listBody.contains(btn)) return;
+      var runRoot = document.getElementById('running-ranking-react-root');
+      if (listBody && listBody.contains(btn)) allowed = true;
+      if (runRoot && runRoot.contains(btn)) allowed = true;
+      if (!allowed) return;
       ev.preventDefault();
       ev.stopPropagation();
       var srcAttr = btn.getAttribute('data-stelvio-rank-zoom-src');
@@ -13919,6 +13961,11 @@
           ageCategory: oage != null ? String(oage) : ''
         });
       }
+    }
+    window.stelvioRankingAvatarZoomHandler = stelvioRankingAvatarZoomHandler;
+
+    function stelvioRankingListBodyAvatarZoomHandler(ev) {
+      stelvioRankingAvatarZoomHandler(ev);
     }
 
     async function stelvioRankProfileFetchPayload(period, duration, gender) {
@@ -24912,6 +24959,8 @@
   <script src="assets/js/runningRanking/runningRankingFormat.js"></script>
   <script src="assets/js/runningRanking/runningRankingApi.js"></script>
   <script src="assets/js/runningRanking/runningRankingData.js"></script>
+  <script src="assets/js/runningRanking/runningRankingMovement.js"></script>
+  <script src="assets/js/runningRanking/runningRankingSocial.js"></script>
   <script src="assets/js/runningRanking/runningRankingCrew.js"></script>
   <script src="assets/js/runningRanking/runningRankingRoutes.js"></script>
   <script src="assets/js/runningRanking/components/RunningRankingSkeleton.jsx" type="text/babel"></script>
@@ -24938,6 +24987,9 @@
           }
         } else if (root._runningRankingRoot.render) {
           root._runningRankingRoot.render(React.createElement(window.RunningRankingScreen));
+        }
+        if (window.runningRankingSocial && typeof window.runningRankingSocial.ensureUiListeners === 'function') {
+          window.runningRankingSocial.ensureUiListeners();
         }
         var scrollEl = document.getElementById('runningRankingScrollArea');
         var topBtn = document.getElementById('runningRankingBackToTopBtn');
