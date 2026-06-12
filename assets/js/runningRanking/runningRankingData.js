@@ -55,8 +55,29 @@
     return { paceStr: paceStr || '—', paceSec: sec };
   }
 
-  function getSegmentScore(row, distKey) {
-    var ss = row && row.segment_scores;
+  function getGcBoard(row, gender, category) {
+    var gc = row && row.gc_scores;
+    if (!gc || typeof gc !== 'object') return null;
+    var g = gender || 'all';
+    var c = category || 'Supremo';
+    var board = gc[g] && gc[g][c];
+    if (!board) return null;
+    return board;
+  }
+
+  function getOverallTotalScore(row, gender, category) {
+    var board = getGcBoard(row, gender, category);
+    if (board && board.total_score != null) {
+      var fromBoard = Number(board.total_score);
+      if (isFinite(fromBoard)) return fromBoard;
+    }
+    var fallback = Number(row && row.total_score);
+    return isFinite(fallback) ? fallback : null;
+  }
+
+  function getSegmentScore(row, distKey, gender, category) {
+    var board = getGcBoard(row, gender, category);
+    var ss = (board && board.segment_scores) || (row && row.segment_scores);
     if (!ss || ss[distKey] == null) return null;
     var n = Number(ss[distKey]);
     return isFinite(n) ? n : null;
@@ -85,9 +106,11 @@
     var list = [];
 
     if (tabId === 'overall') {
+      var genderKey = opts.gender || 'all';
+      var categoryKey = opts.category || 'Supremo';
       filtered.forEach(function (r) {
-        var score = Number(r.total_score);
-        if (!isFinite(score)) return;
+        var score = getOverallTotalScore(r, genderKey, categoryKey);
+        if (score == null || score <= 0) return;
         list.push({
           userId: rowUserId(r),
           name: rowDisplayName(r),
@@ -98,7 +121,7 @@
           value: score,
           valueLabel: fmt().formatScore(score),
           segments: (cfg().OVERALL_SEGMENTS || []).map(function (seg) {
-            var sc = getSegmentScore(r, seg.key);
+            var sc = getSegmentScore(r, seg.key, genderKey, categoryKey);
             var pace = getPaceForDistance(r, seg.key);
             return {
               key: seg.key,
@@ -242,9 +265,9 @@
   var CHART_CATEGORIES = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
 
   /** StelvioRankingDistributionChart gc 모드용 엔트리 */
-  function rowToChartEntry(row) {
-    var score = Number(row && row.total_score);
-    if (!isFinite(score)) return null;
+  function rowToChartEntry(row, gender, category) {
+    var score = getOverallTotalScore(row, gender, category);
+    if (score == null || score <= 0) return null;
     return {
       userId: rowUserId(row),
       name: rowDisplayName(row),
@@ -269,12 +292,14 @@
       byCategory[CHART_CATEGORIES[i]] = [];
     }
     filtered.forEach(function (r) {
-      var entry = rowToChartEntry(r);
-      if (!entry) return;
-      byCategory.Supremo.push(entry);
-      var cat = entry.ageCategory;
-      if (cat && cat !== 'Supremo' && byCategory[cat]) {
-        byCategory[cat].push(entry);
+      var i;
+      for (i = 0; i < CHART_CATEGORIES.length; i++) {
+        var chartCat = CHART_CATEGORIES[i];
+        var entry = rowToChartEntry(r, gender, chartCat);
+        if (!entry) continue;
+        if (chartCat === 'Supremo' || entry.ageCategory === chartCat) {
+          byCategory[chartCat].push(entry);
+        }
       }
     });
     CHART_CATEGORIES.forEach(function (cat) {
@@ -323,8 +348,8 @@
     var filtered = filterByGender(rows || [], gender);
     var list = [];
     filtered.forEach(function (r) {
-      var score = Number(r.total_score);
-      if (!isFinite(score)) return;
+      var score = getOverallTotalScore(r, gender, 'Supremo');
+      if (score == null || score <= 0) return;
       list.push({
         userId: rowUserId(r),
         name: rowDisplayName(r),
@@ -344,6 +369,14 @@
       }
     }
     if (!myRow) return null;
+    var myBoardScore = getOverallTotalScore(
+      (rows || []).find(function (r) { return String(rowUserId(r)) === String(uid); }),
+      gender,
+      activeCategory
+    );
+    if (myBoardScore != null && myBoardScore > 0) {
+      myRow = Object.assign({}, myRow, { score: myBoardScore });
+    }
     var userName = (window.currentUser && window.currentUser.name) || myRow.name || '러너';
     try {
       var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
@@ -353,7 +386,13 @@
     var labels = cfg().CATEGORY_LABELS || {};
     var ageLabel = labels[myRow.ageCategory] || '';
     if (activeCategory !== 'Supremo') {
-      var catList = list.filter(function (x) { return x.ageCategory === activeCategory; });
+      var catList = [];
+      filtered.forEach(function (r) {
+        if (rowAgeCategory(r) !== activeCategory) return;
+        var catScore = getOverallTotalScore(r, gender, activeCategory);
+        if (catScore == null || catScore <= 0) return;
+        catList.push({ userId: rowUserId(r), score: catScore });
+      });
       catList.sort(function (a, b) { return b.score - a.score; });
       for (var j = 0; j < catList.length; j++) {
         if (String(catList[j].userId) === String(uid)) {
