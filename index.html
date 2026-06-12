@@ -3251,6 +3251,15 @@
           
           <!-- 사용자 등록 폼 -->
           <div class="phone-auth-section">
+            <!-- 카테고리 선택 -->
+            <div class="auth-input-group">
+              <label for="registerCategoryInput" class="auth-label-left">카테고리 *</label>
+              <select id="registerCategoryInput" data-form-key="register" required onchange="if(typeof onUserCategoryChange==='function')onUserCategoryChange(this);">
+                <option value="CYCLE" selected>CYCLE (사이클)</option>
+                <option value="RUN">RUN (러닝)</option>
+              </select>
+            </div>
+
             <!-- 이름 입력 -->
             <div class="auth-input-group">
               <label for="registerNameInput" class="auth-label-left">이름 *</label>
@@ -3315,8 +3324,8 @@
               <input 
                 type="number" 
                 id="registerWeightInput" 
-                placeholder="70.0" 
-                min="40"
+                placeholder="0" 
+                min="0"
                 max="150"
                 step="0.1"
                 required
@@ -3330,7 +3339,7 @@
               <input 
                 type="text" 
                 id="registerBirthYearInput" 
-                placeholder="1972" 
+                placeholder="1900" 
                 maxlength="4"
                 pattern="[0-9]{4}"
                 inputmode="numeric"
@@ -4163,6 +4172,15 @@
                        style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
               </div>
               
+              <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">카테고리 *</label>
+                <select id="completeUserCategory" data-form-key="completeUser" required onchange="if(typeof onUserCategoryChange==='function')onUserCategoryChange(this);"
+                        style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                  <option value="CYCLE" selected>CYCLE (사이클)</option>
+                  <option value="RUN">RUN (러닝)</option>
+                </select>
+              </div>
+
               <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
                 <div class="form-group">
                   <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">FTP (W) *</label>
@@ -4171,7 +4189,7 @@
                 </div>
                 <div class="form-group">
                   <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">몸무게 (kg) *</label>
-                  <input type="number" id="completeUserWeight" placeholder="70.0" min="30" max="200" step="0.1" required 
+                  <input type="number" id="completeUserWeight" placeholder="0" min="0" max="200" step="0.1" required 
                          oninput="if(typeof syncFtpFromWeight==='function')syncFtpFromWeight('completeUserFTP','completeUserWeight');"
                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
                 </div>
@@ -4180,7 +4198,7 @@
               <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
                 <div class="form-group">
                   <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">생년 *</label>
-                  <input type="number" id="completeUserBirthYear" placeholder="1990" min="1900" required 
+                  <input type="number" id="completeUserBirthYear" placeholder="1900" min="1900" required 
                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
                 </div>
                 <div class="form-group">
@@ -4342,6 +4360,15 @@
                 </button>
               </div>
               
+              <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">카테고리 *</label>
+                <select id="editUserCategory" data-form-key="editUser" required onchange="if(typeof onUserCategoryChange==='function')onUserCategoryChange(this);"
+                        style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                  <option value="CYCLE" selected>CYCLE (사이클)</option>
+                  <option value="RUN">RUN (러닝)</option>
+                </select>
+              </div>
+
               <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
                 <div class="form-group">
                   <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">FTP (W) *</label>
@@ -4350,7 +4377,7 @@
                 </div>
                 <div class="form-group">
                   <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">몸무게 (kg) *</label>
-                  <input type="number" id="editUserWeight" placeholder="70.0" min="30" max="200" step="0.1" required 
+                  <input type="number" id="editUserWeight" placeholder="0" min="0" max="200" step="0.1" required 
                          oninput="if(typeof syncFtpFromWeight==='function')syncFtpFromWeight('editUserFTP','editUserWeight');"
                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
                 </div>
@@ -4359,7 +4386,7 @@
               <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
                 <div class="form-group">
                   <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">생년 *</label>
-                  <input type="number" id="editUserBirthYear" placeholder="1972" min="1900" required 
+                  <input type="number" id="editUserBirthYear" placeholder="1900" min="1900" required 
                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
                 </div>
                 <div class="form-group">
@@ -4535,6 +4562,15 @@
                    style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
           </div>
           
+          <div class="form-group" style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">카테고리 *</label>
+            <select id="userCategory" data-form-key="user" required onchange="if(typeof onUserCategoryChange==='function')onUserCategoryChange(this);"
+                    style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+              <option value="CYCLE" selected>CYCLE (사이클)</option>
+              <option value="RUN">RUN (러닝)</option>
+            </select>
+          </div>
+
           <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
             <div class="form-group">
               <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">FTP (W) *</label>
@@ -4543,7 +4579,7 @@
             </div>
             <div class="form-group">
               <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">몸무게 (kg) *</label>
-              <input type="number" id="userWeight" placeholder="70.0" min="30" max="200" step="0.1" required 
+              <input type="number" id="userWeight" placeholder="0" min="0" max="200" step="0.1" required 
                      style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
             </div>
           </div>
@@ -4551,7 +4587,7 @@
           <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
             <div class="form-group">
               <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">생년 *</label>
-              <input type="number" id="userBirthYear" placeholder="1972" min="1900" required 
+              <input type="number" id="userBirthYear" placeholder="1900" min="1900" required 
                      style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
             </div>
             <div class="form-group">
@@ -27534,6 +27570,11 @@
         
         // 스크롤을 맨 위로
         window.scrollTo(0, 0);
+
+        if (typeof applyUserCategoryFormState === 'function') {
+          var regCatEl = document.getElementById('registerCategoryInput');
+          applyUserCategoryFormState('register', (regCatEl && regCatEl.value) || 'CYCLE');
+        }
         
         // 첫 번째 입력 필드에 포커스
         setTimeout(() => {
@@ -27580,10 +27621,19 @@
           var el = document.getElementById(id);
           if (el) { el.readOnly = false; el.style.background = ''; el.value = ''; }
         });
-        ['registerGenderInput','registerChallengeInput'].forEach(function(id) {
+        ['registerGenderInput','registerChallengeInput','registerCategoryInput'].forEach(function(id) {
           var el = document.getElementById(id);
-          if (el) { el.disabled = false; el.style.background = ''; el.value = el.id === 'registerChallengeInput' ? 'Fitness' : ''; }
+          if (el) {
+            el.disabled = false;
+            el.style.background = '';
+            if (el.id === 'registerChallengeInput') el.value = 'Fitness';
+            else if (el.id === 'registerCategoryInput') el.value = 'CYCLE';
+            else el.value = '';
+          }
         });
+        if (typeof applyUserCategoryFormState === 'function') {
+          applyUserCategoryFormState('register', 'CYCLE', 'Fitness');
+        }
         ['registerPasswordInput','registerBirthYearInput'].forEach(function(id) {
           var el = document.getElementById(id);
           if (el) el.value = '';
@@ -27643,6 +27693,7 @@
       const weightInput = document.getElementById('registerWeightInput');
       const birthYearInput = document.getElementById('registerBirthYearInput');
       const genderInput = document.getElementById('registerGenderInput');
+      const categoryInput = document.getElementById('registerCategoryInput');
       const challengeInput = document.getElementById('registerChallengeInput');
       const submitBtn = document.getElementById('registerSubmitBtn');
       
@@ -27654,6 +27705,12 @@
       const weight = parseFloat(weightInput.value);
       const birthYear = parseInt(birthYearInput.value);
       const gender = genderInput.value;
+      const category = (typeof normalizeUserSportCategory === 'function')
+        ? normalizeUserSportCategory(categoryInput ? categoryInput.value : 'CYCLE')
+        : String((categoryInput && categoryInput.value) || 'CYCLE').toUpperCase();
+      const isRunCategory = (typeof isRunSportCategory === 'function')
+        ? isRunSportCategory(category)
+        : category === 'RUN';
       const challenge = challengeInput.value;
       
       // ─── 재가입 여부 사전 판단 (검증 전에 먼저 확인) ───
@@ -27697,7 +27754,13 @@
           nameInput.focus();
           return;
         }
-        if (!weight || weight < 40 || weight > 150) {
+        if (isRunCategory) {
+          if (weight == null || isNaN(weight) || weight < 0 || weight > 150) {
+            showRegisterStatus('체중은 0~150kg 사이의 값이어야 합니다.', 'error');
+            weightInput.focus();
+            return;
+          }
+        } else if (!weight || weight < 40 || weight > 150) {
           showRegisterStatus('체중은 40~150kg 사이의 값이어야 합니다.', 'error');
           weightInput.focus();
           return;
@@ -27709,9 +27772,9 @@
         }
       }
       var minFtp = typeof getFtpMinFromWeight === 'function' ? getFtpMinFromWeight(weight) : 50;
-      var ftpToUse = ftp;
+      var ftpToUse = isRunCategory ? 0 : ftp;
       var ftpUsedMin = false;
-      if (!_isRejoinMode) {
+      if (!_isRejoinMode && !isRunCategory) {
         if (ftp < minFtp) {
           ftpToUse = minFtp;
           ftpUsedMin = true;
@@ -27886,10 +27949,13 @@
               var el = document.getElementById(id);
               if (el) { el.readOnly = false; el.style.background = ''; }
             });
-            ['registerGenderInput','registerChallengeInput'].forEach(function(id) {
+            ['registerGenderInput','registerChallengeInput','registerCategoryInput'].forEach(function(id) {
               var el = document.getElementById(id);
               if (el) { el.disabled = false; el.style.background = ''; }
             });
+            if (typeof applyUserCategoryFormState === 'function') {
+              applyUserCategoryFormState('register', 'CYCLE', 'Fitness');
+            }
             /* 헤더/설명 복원 */
             var hdr = document.querySelector('#registerScreen h3');
             if (hdr) hdr.textContent = '사용자 등록';
@@ -27940,6 +28006,7 @@
           weight: weight,
           birth_year: birthYear,
           gender: gender,
+          category: category,
           challenge: challenge,
           grade: '2',
           created_at: now,
