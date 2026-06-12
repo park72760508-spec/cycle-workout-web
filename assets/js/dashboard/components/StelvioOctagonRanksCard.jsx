@@ -487,11 +487,86 @@
         }
       }
     }
+    var mv = axisRankMovementFromRankingPayload(data, uid, category);
     return {
       rank: computeDisplayRankLikeDistribution(data, uid, category, duration),
       n: cohortSizeForCategory(data, category),
-      wkg: wk
+      wkg: wk,
+      rankChange: mv.rankChange,
+      previousBoardRank: mv.previousBoardRank
     };
+  }
+
+  /** getPeakPowerRanking 행·currentUser에서 축별 등락 추출 */
+  function axisRankMovementFromRankingPayload(data, uid, category) {
+    if (!data || !data.success || !uid) {
+      return { rankChange: null, previousBoardRank: null };
+    }
+    var byCategory = data.byCategory || {};
+    var cu = data.currentUser;
+    var cuValid = cu && String(cu.userId) === String(uid);
+
+    function pickFromRow(row) {
+      if (!row) return null;
+      var rc =
+        row.rankChange != null && isFinite(Number(row.rankChange)) ? Math.round(Number(row.rankChange)) : null;
+      var pb =
+        row.previousBoardRank != null && isFinite(Number(row.previousBoardRank))
+          ? Math.floor(Number(row.previousBoardRank))
+          : null;
+      if (rc != null && pb != null && pb >= 1) {
+        return { rankChange: rc, previousBoardRank: pb };
+      }
+      return null;
+    }
+
+    function findInArr(arr) {
+      if (!arr || !arr.length) return null;
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && String(arr[i].userId) === String(uid)) {
+          var hit = pickFromRow(arr[i]);
+          if (hit) return hit;
+        }
+      }
+      return null;
+    }
+
+    var catHit = findInArr(byCategory[category] || []);
+    if (catHit) return catHit;
+
+    if (category === 'Supremo' && cuValid) {
+      var cuHit = pickFromRow(cu);
+      if (cuHit) return cuHit;
+    }
+
+    if (cuValid && cu.ageCategory) {
+      var ageHit = findInArr(byCategory[cu.ageCategory] || []);
+      if (ageHit) return ageHit;
+      var cuHit2 = pickFromRow(cu);
+      if (cuHit2) return cuHit2;
+    }
+
+    return { rankChange: null, previousBoardRank: null };
+  }
+
+  var HEPTAGON_AXIS_RANK_CHANGE_FILL = {
+    up: '#c97070',
+    down: '#7a9fbf',
+    flat: '#9ca3af'
+  };
+
+  function heptagonAxisRankChangeSuffix(rankChange, previousBoardRank) {
+    if (rankChange == null || previousBoardRank == null) return null;
+    var rcN = Number(rankChange);
+    var prevN = Math.floor(Number(previousBoardRank));
+    if (!isFinite(rcN) || !isFinite(prevN) || prevN < 1) return null;
+    if (rcN > 0) {
+      return { text: '(↑' + rcN + ')', kind: 'up', title: '전날 ' + prevN + '위' };
+    }
+    if (rcN < 0) {
+      return { text: '(↓' + Math.abs(rcN) + ')', kind: 'down', title: '전날 ' + prevN + '위' };
+    }
+    return { text: '(-)', kind: 'flat', title: '전날 ' + prevN + '위' };
   }
 
   /**
@@ -555,8 +630,18 @@
     return { m: outM, h: outH };
   }
 
-  /** N_WKG_AXES 축(피크 W/kg) rank + 코호트 n + (선택) w/kg 축 → 차트 norm */
-  function stateFromRanksArray(monthlyRanks, cohortSizePerAxis, hofRanks, supremoRanks, supremoCohortNPerAxis, monthlyWkgs, hofWkgs) {
+  /** N_WKG_AXES 축(피크 W/kg) rank + 코호트 n + (선택) w/kg·등락 축 → 차트 norm */
+  function stateFromRanksArray(
+    monthlyRanks,
+    cohortSizePerAxis,
+    hofRanks,
+    supremoRanks,
+    supremoCohortNPerAxis,
+    monthlyWkgs,
+    hofWkgs,
+    monthlyRankChanges,
+    monthlyPreviousBoardRanks
+  ) {
     var pair = heptagonRadarDisplayNorms(monthlyRanks, hofRanks, monthlyWkgs, hofWkgs);
     var supremoMonthly = null;
     if (
@@ -570,7 +655,14 @@
     return {
       loading: false,
       err: null,
-      monthly: { ranks: monthlyRanks, norm: pair.m, cohortSizePerAxis: cohortSizePerAxis, wkg: monthlyWkgs || null },
+      monthly: {
+        ranks: monthlyRanks,
+        rankChanges: monthlyRankChanges || null,
+        previousBoardRanks: monthlyPreviousBoardRanks || null,
+        norm: pair.m,
+        cohortSizePerAxis: cohortSizePerAxis,
+        wkg: monthlyWkgs || null
+      },
       hof: { ranks: hofRanks, norm: pair.h, wkg: hofWkgs || null },
       supremoMonthly: supremoMonthly
     };
@@ -606,7 +698,15 @@
       sr,
       sc,
       mw,
-      hw
+      hw,
+      mRows.map(function(x) {
+        return x.rankChange != null && isFinite(Number(x.rankChange)) ? Math.round(Number(x.rankChange)) : null;
+      }),
+      mRows.map(function(x) {
+        return x.previousBoardRank != null && isFinite(Number(x.previousBoardRank))
+          ? Math.floor(Number(x.previousBoardRank))
+          : null;
+      })
     );
   }
 
@@ -3375,7 +3475,9 @@
                 null,
                 null,
                 cached.monthly.wkgs,
-                hofWkgsCache
+                hofWkgsCache,
+                cached.monthly.rankChanges || null,
+                cached.monthly.previousBoardRanks || null
               )
             );
             fetchRanksSet(uid, 'monthly', gender, 'Supremo')
@@ -3422,6 +3524,14 @@
                 var cohortSizePerAxis = mRows.map(function(x) {
                   return x.n;
                 });
+                var monthlyRankChanges = mRows.map(function(x) {
+                  return x.rankChange != null && isFinite(Number(x.rankChange)) ? Math.round(Number(x.rankChange)) : null;
+                });
+                var monthlyPreviousBoardRanks = mRows.map(function(x) {
+                  return x.previousBoardRank != null && isFinite(Number(x.previousBoardRank))
+                    ? Math.floor(Number(x.previousBoardRank))
+                    : null;
+                });
                 var mwForCache = mRows.map(function(x) {
                   return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
                 });
@@ -3434,7 +3544,9 @@
                   cohortSizePerAxis,
                   monthlyRanks,
                   mwForCache,
-                  mwForCache
+                  mwForCache,
+                  monthlyRankChanges,
+                  monthlyPreviousBoardRanks
                 );
               } catch (e) {
                 console.warn('[StelvioOctagon] cache write failed:', e && e.message);
@@ -4286,6 +4398,9 @@
               var lx = cx + rLabel * Math.cos(t);
               var ly = cy + rLabel * Math.sin(t);
               var mr = state.monthly.ranks[i];
+              var rankChanges = state.monthly.rankChanges || [];
+              var prevRanks = state.monthly.previousBoardRanks || [];
+              var changeSuffix = heptagonAxisRankChangeSuffix(rankChanges[i], prevRanks[i]);
               return (
                 <text
                   key={ax.key + '-lbl'}
@@ -4294,11 +4409,20 @@
                   textAnchor="middle"
                   className="fill-slate-800"
                 >
+                  {changeSuffix ? <title>{changeSuffix.title}</title> : null}
                   <tspan x={lx} dy="0" style={{ fontSize: '9.5px', fontWeight: 600 }}>
                     {ax.label}
                   </tspan>
                   <tspan x={lx} dy="11" style={{ fontSize: '7.5px', fill: '#64748b' }}>
                     {mr != null ? mr + '위' : '—'}
+                    {changeSuffix ? (
+                      <tspan
+                        fill={HEPTAGON_AXIS_RANK_CHANGE_FILL[changeSuffix.kind]}
+                        style={{ fontSize: '7px', fontWeight: 600 }}
+                      >
+                        {changeSuffix.text}
+                      </tspan>
+                    ) : null}
                   </tspan>
                 </text>
               );
