@@ -26,7 +26,11 @@
     opts = opts || {};
     var cfg = getConfig();
     var now = Date.now();
-    if (!opts.force && _cache.rows && now - _cache.at < cfg.CACHE_TTL_MS) {
+    var minScoringVersion = cfg.GC_SCORING_VERSION || 2;
+    var cacheScoringOk = _cache.rows
+      && _cache.rows.length
+      && Number(_cache.rows[0].scoring_version) >= minScoringVersion;
+    if (!opts.force && _cache.rows && cacheScoringOk && now - _cache.at < cfg.CACHE_TTL_MS) {
       return Promise.resolve({
         success: true,
         rows: _cache.rows.slice(),
@@ -47,6 +51,9 @@
           }
           var raw = body.leaderboard;
           var rows = Array.isArray(raw) ? raw : [];
+          if (window.runningRankingData && typeof window.runningRankingData.normalizeLeaderboardRows === 'function') {
+            rows = window.runningRankingData.normalizeLeaderboardRows(rows);
+          }
           var rankMovementByKey = (body.rankMovementByKey && typeof body.rankMovementByKey === 'object')
             ? body.rankMovementByKey
             : {};

@@ -47,8 +47,176 @@
     return !!(ui && (ui.is_private === true || ui.is_private === 'true' || ui.is_private === 1));
   }
 
-  function getPaceForDistance(row, distKey) {
-    var pp = row && row.peak_performances;
+  var GC_SCORING_VERSION = 2;
+  var GC_AXES = ['1k', '3k', '5k', '7k', '10k', '20k'];
+  var GC_GENDERS = ['all', 'M', 'F'];
+  var GC_CATEGORIES = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+
+  function positionScore100(rank, n) {
+    var ni = Number(n);
+    var r = Math.floor(Number(rank));
+    if (!isFinite(ni) || ni < 1) return 0;
+    if (!isFinite(r) || r < 1) return 0;
+    if (r > ni) r = ni;
+    if (ni === 1) return 100;
+    return Math.round((100 * (ni - r) / (ni - 1)) * 10) / 10;
+  }
+
+  function paceSecToSpeed(paceSec) {
+    var p = Number(paceSec);
+    if (!isFinite(p) || p <= 0) return null;
+    return 1000 / p;
+  }
+
+  function getPeakPerformancesSource(row, forOverall) {
+    if (forOverall && row && row.profile_peak_performances) {
+      return row.profile_peak_performances;
+    }
+    return row && row.peak_performances;
+  }
+
+  function getSpeedForDistance(row, distKey, forOverall) {
+    var pp = getPeakPerformancesSource(row, forOverall);
+    var seg = pp && pp[distKey];
+    var paceStr = seg && seg.pace ? String(seg.pace) : '';
+    var sec = fmt().parsePaceToSecPerKm ? fmt().parsePaceToSecPerKm(paceStr) : null;
+    return paceSecToSpeed(sec);
+  }
+
+  function enforceMonotonicSpeeds(speeds) {
+    var cap = null;
+    var i;
+    for (i = 0; i < GC_AXES.length; i++) {
+      var key = GC_AXES[i];
+      var s = speeds[key];
+      if (s == null || s <= 0) continue;
+      if (cap != null && s > cap) speeds[key] = cap;
+      else cap = s;
+    }
+    return speeds;
+  }
+
+  function buildProfileSpeeds(row) {
+    var speeds = {};
+    var i;
+    for (i = 0; i < GC_AXES.length; i++) {
+      var key = GC_AXES[i];
+      var sp = getSpeedForDistance(row, key, true);
+      if (sp != null && sp > 0) speeds[key] = sp;
+    }
+    return enforceMonotonicSpeeds(speeds);
+  }
+
+  function isLegacyScoringRow(row) {
+    if (!row) return true;
+    if (Number(row.scoring_version) >= GC_SCORING_VERSION) return false;
+    if (row.gc_scores && typeof row.gc_scores === 'object' && Object.keys(row.gc_scores).length) {
+      return false;
+    }
+    var total = Number(row.total_score);
+    if (isFinite(total) && total > 150) return false;
+    return true;
+  }
+
+  function needsClientGcScoring(rows) {
+    if (!rows || !rows.length) return false;
+    if (Number(rows[0].scoring_version) >= GC_SCORING_VERSION) return false;
+    return rows.some(isLegacyScoringRow);
+  }
+
+  function buildClientGcScores(rows) {
+    var entries = (rows || []).filter(function (r) {
+      return !isPrivateRow(r) && rowUserId(r);
+    }).map(function (r) {
+      return {
+        row: r,
+        userId: rowUserId(r),
+        gender: rowGender(r),
+        ageCategory: rowAgeCategory(r) || 'Supremo',
+        speeds: buildProfileSpeeds(r)
+      };
+    });
+
+    var gcByUser = {};
+    var gi;
+    var ci;
+    var ai;
+
+    for (gi = 0; gi < GC_GENDERS.length; gi++) {
+      var gKey = GC_GENDERS[gi];
+      for (ci = 0; ci < GC_CATEGORIES.length; ci++) {
+        var cKey = GC_CATEGORIES[ci];
+        var cohort = entries.filter(function (e) {
+          if (gKey === 'M' && e.gender !== 'M') return false;
+          if (gKey === 'F' && e.gender !== 'F') return false;
+          if (cKey !== 'Supremo' && e.ageCategory !== cKey) return false;
+          return true;
+        });
+        if (!cohort.length) continue;
+
+        for (ai = 0; ai < GC_AXES.length; ai++) {
+          var axis = GC_AXES[ai];
+          var ranked = cohort
+            .filter(function (e) { return e.speeds[axis] > 0; })
+            .sort(function (a, b) {
+              if (b.speeds[axis] !== a.speeds[axis]) return b.speeds[axis] - a.speeds[axis];
+              return String(a.userId).localeCompare(String(b.userId));
+            });
+          var n = ranked.length;
+          var ri;
+          for (ri = 0; ri < n; ri++) {
+            var uid = ranked[ri].userId;
+            if (!gcByUser[uid]) gcByUser[uid] = {};
+            if (!gcByUser[uid][gKey]) gcByUser[uid][gKey] = {};
+            if (!gcByUser[uid][gKey][cKey]) {
+              gcByUser[uid][gKey][cKey] = { total_score: 0, segment_scores: {} };
+            }
+            var sc = positionScore100(ri + 1, n);
+            gcByUser[uid][gKey][cKey].segment_scores[axis] = sc;
+            gcByUser[uid][gKey][cKey].total_score += sc;
+          }
+        }
+
+        Object.keys(gcByUser).forEach(function (uid) {
+          var board = gcByUser[uid][gKey] && gcByUser[uid][gKey][cKey];
+          if (board) board.total_score = Math.round(board.total_score * 10) / 10;
+        });
+      }
+    }
+
+    return gcByUser;
+  }
+
+  /**
+   * 구 스냅샷·평균 점수 응답을 GC v2 형식으로 보정
+   * @param {object[]} rows
+   * @returns {object[]}
+   */
+  function normalizeLeaderboardRows(rows) {
+    if (!rows || !rows.length) return rows || [];
+    if (!needsClientGcScoring(rows)) return rows;
+
+    var gcByUser = buildClientGcScores(rows);
+    return rows.map(function (r) {
+      var uid = rowUserId(r);
+      var gc = gcByUser[uid];
+      if (!gc) return r;
+      var merged = Object.assign({}, r, {
+        scoring_version: GC_SCORING_VERSION,
+        gc_scores: gc
+      });
+      var supremo = gc.all && gc.all.Supremo;
+      if (supremo) {
+        merged.total_score = supremo.total_score;
+        merged.segment_scores = supremo.segment_scores;
+      }
+      return merged;
+    });
+  }
+
+  function getPaceForDistance(row, distKey, opts) {
+    opts = opts || {};
+    var pp = getPeakPerformancesSource(row, !!opts.forOverall);
     var seg = pp && pp[distKey];
     var paceStr = seg && seg.pace ? String(seg.pace) : '';
     var sec = fmt().parsePaceToSecPerKm ? fmt().parsePaceToSecPerKm(paceStr) : null;
@@ -122,7 +290,7 @@
           valueLabel: fmt().formatScore(score),
           segments: (cfg().OVERALL_SEGMENTS || []).map(function (seg) {
             var sc = getSegmentScore(r, seg.key, genderKey, categoryKey);
-            var pace = getPaceForDistance(r, seg.key);
+            var pace = getPaceForDistance(r, seg.key, { forOverall: true });
             return {
               key: seg.key,
               label: seg.label,
@@ -416,6 +584,7 @@
     buildCrewRankedList: buildCrewRankedList,
     buildDistributionPayload: buildDistributionPayload,
     buildOverallHeroMessage: buildOverallHeroMessage,
+    normalizeLeaderboardRows: normalizeLeaderboardRows,
     getVolumeWindowLabel: getVolumeWindowLabel,
     getDistanceWindowLabel: getDistanceWindowLabel,
     rowUserId: rowUserId,
