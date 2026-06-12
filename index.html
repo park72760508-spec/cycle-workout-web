@@ -17750,6 +17750,7 @@
     window.stelvioServerRankChangeBadgeHtml = stelvioServerRankChangeBadgeHtml;
     window.stelvioResolveRankChangeLookupCategory = stelvioResolveRankChangeLookupCategory;
     window.stelvioRankMovementRowMatchesCurrentRank = stelvioRankMovementRowMatchesCurrentRank;
+    window.stelvioResolvePreviousPeakRanksBaselineForCategory = stelvioResolvePreviousPeakRanksBaselineForCategory;
     var STELVIO_RANK_BOARD_CATS = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
 
     function stelvioPeakBoardRankMapsEqual(a, b) {
@@ -19026,6 +19027,15 @@
         );
         if (!Object.keys(compareBaseline).length && Object.keys(frozenPrevDay).length) {
           compareBaseline = frozenPrevDay;
+        }
+
+        if (!data.rankMovementCompareBaselineByCategory) data.rankMovementCompareBaselineByCategory = {};
+        if (!data.rankMovementPrevDayByCategory) data.rankMovementPrevDayByCategory = {};
+        if (Object.keys(compareBaseline).length) {
+          data.rankMovementCompareBaselineByCategory[catKey] = compareBaseline;
+        }
+        if (Object.keys(frozenPrevDay).length) {
+          data.rankMovementPrevDayByCategory[catKey] = frozenPrevDay;
         }
 
         if (
