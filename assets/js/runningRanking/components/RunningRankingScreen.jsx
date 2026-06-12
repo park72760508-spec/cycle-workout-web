@@ -69,6 +69,14 @@
     var rankMovementAsOfSeoul = _rankMovementAsOf[0];
     var setRankMovementAsOfSeoul = _rankMovementAsOf[1];
 
+    var _leaderboardSource = useState('');
+    var leaderboardSource = _leaderboardSource[0];
+    var setLeaderboardSource = _leaderboardSource[1];
+
+    var _leaderboardAsOf = useState('');
+    var leaderboardAsOfSeoul = _leaderboardAsOf[0];
+    var setLeaderboardAsOfSeoul = _leaderboardAsOf[1];
+
     var _socialVer = useState(0);
     var socialVer = _socialVer[0];
     var setSocialVer = _socialVer[1];
@@ -91,6 +99,8 @@
           setRawRows(res.rows || []);
           setRankMovementByKey(res.rankMovementByKey || {});
           setRankMovementAsOfSeoul(res.rankMovementAsOfSeoul || '');
+          setLeaderboardSource(res.leaderboardSource || '');
+          setLeaderboardAsOfSeoul(res.leaderboardAsOfSeoul || '');
           setStale(!!res.stale);
           if (res.stale && res.error) setError(res.error);
         }
@@ -353,9 +363,11 @@
           ? React.createElement('p', { className: 'running-ranking-stale-hint' }, '캐시 표시 · ' + error)
           : null,
         React.createElement('p', { className: 'running-ranking-movement-hint' },
-          rankMovementAsOfSeoul
-            ? ('순위 등락은 매일 23:00(KST) 집계 기준 · 반영일 ' + rankMovementAsOfSeoul)
-            : '순위 등락은 매일 23:00(KST) 집계 후 전일 대비로 표시됩니다.'
+          leaderboardSource === 'live'
+            ? '집계 대기 중 · 점수·순위는 실시간 미리보기입니다. 매일 23:00(KST) 집계 후 고정됩니다.'
+            : (leaderboardAsOfSeoul
+              ? ('점수·순위·등락은 매일 23:00(KST) 집계 기준 · 집계일 ' + leaderboardAsOfSeoul)
+              : '점수·순위·등락은 매일 23:00(KST) 집계 후 고정·전일 대비로 표시됩니다.')
         )
       ),
       React.createElement('div', { className: 'stelvio-ranking-content running-ranking-content' },
