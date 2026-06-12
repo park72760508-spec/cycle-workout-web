@@ -6,6 +6,7 @@
   var React = window.React;
   var cfg = function () { return window.runningRankingConfig || {}; };
   var social = function () { return window.runningRankingSocial || {}; };
+  var zoneColors = function () { return window.runDistanceZoneColors || {}; };
 
   function medalHtml(rank) {
     if (rank < 1 || rank > 3) return null;
@@ -92,11 +93,18 @@
         React.createElement('div', { key: 'seg', className: 'running-ranking-segments' },
           item.segments.map(function (seg) {
             var paceLabel = seg.pace && seg.pace !== '—' ? seg.pace : '—';
-            var titleParts = [seg.label + ' 페이스 ' + paceLabel];
+            var zc = zoneColors();
+            var titlePrefix = zc.segmentTitlePrefix
+              ? zc.segmentTitlePrefix(seg.key)
+              : seg.label;
+            var titleParts = [titlePrefix + ' · 페이스 ' + paceLabel];
             if (seg.score != null) titleParts.push('순위점수 ' + seg.score + 'pt');
+            var chipClass = zc.segmentChipClass
+              ? zc.segmentChipClass(seg.key)
+              : ('running-ranking-segment-chip running-ranking-segment-chip--' + seg.key);
             return React.createElement('span', {
               key: seg.key,
-              className: 'running-ranking-segment-chip',
+              className: chipClass,
               title: titleParts.join(' · ')
             },
               React.createElement('span', { className: 'running-ranking-segment-label' }, seg.label),
