@@ -27769,6 +27769,12 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   gap: 6px;
   min-width: 0;
 }
+#runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change {
+  flex-shrink: 0;
+  overflow: visible;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
 #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change {
   flex-shrink: 0;
   overflow: visible;
