@@ -10401,6 +10401,7 @@
       if (data.myRankSupremo && stelvioRankingIsWithdrawnRow(data.myRankSupremo)) data.myRankSupremo = null;
       return data;
     }
+    window.stelvioApplyPublicRankingVisibilityToPayload = stelvioApplyPublicRankingVisibilityToPayload;
     window.stelvioRankingLoginIsAdmin = stelvioRankingLoginIsAdmin;
     window.stelvioRankingViewerCanSeePrivateNames = stelvioRankingViewerCanSeePrivateNames;
     window.stelvioFilterRankingRowsForPublicViewer = stelvioFilterRankingRowsForPublicViewer;
@@ -10987,7 +10988,7 @@
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
     /** peak IndexedDB 키 접두사 — 사전집계 gender(GC 동일) 신뢰(v13) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v21:';
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v22:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
@@ -11396,6 +11397,7 @@
       );
     }
     window.stelvioRankingMemCacheHydrateBoardTabs = stelvioRankingMemCacheHydrateBoardTabs;
+    window.stelvioRankingMemCacheGet = stelvioRankingMemCacheGet;
 
     /** IndexedDB → 메모리 hydrate (병렬 탭 우선, 레거시 키만 getAllRecords) */
     function stelvioRankingMemCacheHydrateFromPersistent() {
@@ -12012,6 +12014,46 @@
       stelvioRankingMemCacheOrder = [];
       stelvioRankingSwrCache = { key: '', body: null, ts: 0, expiresAt: 0 };
     }
+
+    var STELVIO_PEAK_RANK_MOVEMENT_LOGIC_VER = 3;
+    var STELVIO_PEAK_RANK_MOVEMENT_VER_KEY = 'stelvio_peak_rank_mv_logic:v';
+
+    async function stelvioInvalidatePeakRankMovementCachesIfLogicStale() {
+      var needDbClear = false;
+      try {
+        var stored = localStorage.getItem(STELVIO_PEAK_RANK_MOVEMENT_VER_KEY);
+        if (stored && Number(stored) >= STELVIO_PEAK_RANK_MOVEMENT_LOGIC_VER) {
+          return;
+        }
+        var rm = [];
+        var i;
+        for (i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (!k) continue;
+          if (
+            k.indexOf('stelvio_peak_rank_snap:') === 0 ||
+            k.indexOf('stelvio_rank_sess_base:') === 0
+          ) {
+            rm.push(k);
+          }
+        }
+        for (i = 0; i < rm.length; i++) {
+          localStorage.removeItem(rm[i]);
+        }
+        localStorage.setItem(STELVIO_PEAK_RANK_MOVEMENT_VER_KEY, String(STELVIO_PEAK_RANK_MOVEMENT_LOGIC_VER));
+        needDbClear = true;
+        console.log('[StelvioRanking] 피크 등락 로직 갱신 — 로컬·IndexedDB 랭킹 캐시 무효화');
+      } catch (ePeakMvInv) {}
+      if (needDbClear) {
+        stelvioRankingClearMemCaches();
+        if (stelvioRankingPersistentCache && typeof stelvioRankingPersistentCache.clearAll === 'function') {
+          try {
+            await stelvioRankingPersistentCache.clearAll();
+          } catch (ePeakDb) {}
+        }
+      }
+    }
+    window.stelvioInvalidatePeakRankMovementCachesIfLogicStale = stelvioInvalidatePeakRankMovementCachesIfLogicStale;
 
     function stelvioRankingHasAuthUser() {
       try {
@@ -13343,6 +13385,8 @@
       }
       return fallbackRank;
     }
+    window.stelvioRankDisplayNumber = stelvioRankDisplayNumber;
+    window.stelvioCategoryRankInFullList = stelvioCategoryRankInFullList;
     function stelvioResolveRankingViewerUserId() {
       var uid = stelvioRankingCurrentUserId;
       if (!uid && window.currentUser && window.currentUser.id) uid = window.currentUser.id;
@@ -14461,6 +14505,9 @@
         stelvioSubscribeWithdrawnUserIds();
       }
       (async function () {
+        if (typeof stelvioInvalidatePeakRankMovementCachesIfLogicStale === 'function') {
+          await stelvioInvalidatePeakRankMovementCachesIfLogicStale();
+        }
         var hydrateP =
           typeof stelvioRankingMemCacheHydrateFromPersistent === 'function'
             ? stelvioRankingMemCacheHydrateFromPersistent()
@@ -15050,6 +15097,7 @@
       stelvioApplyRankMovementPipeline(data);
       return data;
     }
+    window.stelvioRankingNormalizePrefetchPayload = stelvioRankingNormalizePrefetchPayload;
 
     /** IndexedDB·롤오버·API 기간 창 기준 — 전날 집계 후 다음날 집계 전까지 재다운로드 불필요 */
     function stelvioRankingLocalEntryStillFresh(lcEntry, dur) {
@@ -16556,7 +16604,7 @@
         duration: apiDuration,
         gender: genderParam || 'all',
         readDb: stelvioGetRankingReadSourceSync(),
-        gfVer: '6',
+        gfVer: '7',
       });
       if (uid) p.set('uid', uid);
       if (apiDuration === 'personal_speed') {
@@ -16570,6 +16618,7 @@
       }
       return p.toString();
     }
+    window.stelvioBuildRankingBoardCacheKey = stelvioBuildRankingBoardCacheKey;
 
     function stelvioBuildRankingBoardFetchUrl(cacheKeyStr, withRankMv, needsRankMv) {
       var p = new URLSearchParams(cacheKeyStr || '');
@@ -17400,13 +17449,14 @@
       return prev - rc === Math.floor(Number(currRank));
     }
 
-    /** GC·클럽과 동일: 본인 등락은 Supremo(전체) 행 기준 */
+    /** GC·클럽: 본인 등락 기본 Supremo — 호출측이 전체 외 부문을 명시하면 그 부문 유지(헵타곤·부문 리스트) */
     function stelvioResolveRankChangeLookupCategory(categoryKey, userId) {
       var cat =
         categoryKey ||
         (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.activeCategory) ||
         'Supremo';
       if (userId == null || userId === '') return cat;
+      if (cat && cat !== 'Supremo') return cat;
       if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
         var viewerUid =
           typeof stelvioResolveRankingViewerUserId === 'function' ? stelvioResolveRankingViewerUserId() : '';
@@ -17609,10 +17659,27 @@
         var serverFirst = stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
         if (serverFirst) return serverFirst;
       }
-      var directHtml = stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
+      var listCat = listCategoryKey || 'Supremo';
+      var listCatRank =
+        stelvioRankingByCategory && item.userId != null
+          ? stelvioCategoryRankInFullList(stelvioRankingByCategory, listCat, item.userId)
+          : null;
+      if (typeof stelvioNormalizeRankMovementOnRow === 'function') {
+        stelvioNormalizeRankMovementOnRow(item, listCatRank);
+      }
+      var directHtml = '';
+      if (item.rankChange != null && item.previousBoardRank != null) {
+        if (
+          listCatRank == null ||
+          typeof stelvioRankMovementRowMatchesCurrentRank !== 'function' ||
+          stelvioRankMovementRowMatchesCurrentRank(item, listCatRank)
+        ) {
+          directHtml = stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
+        }
+      }
       if (directHtml) return directHtml;
       if (typeof stelvioRankChangeBadgeHtmlForUser === 'function') {
-        var html = stelvioRankChangeBadgeHtmlForUser(listCategoryKey || 'Supremo', item.userId);
+        var html = stelvioRankChangeBadgeHtmlForUser(listCat, item.userId);
         if (html) return html;
       }
       return '';
@@ -18517,19 +18584,16 @@
         stelvioApplyTssWeeklyRankMovementPipeline(data);
         return;
       }
-      var hasPrevBaseline = stelvioPeakRankSnapshotHasPrevDayBaseline(data);
-      if (hasPrevBaseline || stelvioPeakRankMovementIsAllFlat(data)) {
-        stelvioClearPeakRankMovementOnPayload(data);
-      }
       if (stelvioSupportsRankMovementDuration(duration)) {
+        stelvioClearPeakRankMovementOnPayload(data);
         stelvioApplyClientPeakRankMovementFromSnapshot(data);
       }
       stelvioValidatePeakRankMovementOnPayload(data);
       stelvioEnsurePeakPowerRankMovementOnPayload(data);
     }
 
-    var STELVIO_PEAK_RANK_SNAPSHOT_PREFIX = 'stelvio_peak_rank_snap:v5:';
-    var STELVIO_RANK_SESSION_BASE_PREFIX = 'stelvio_rank_sess_base:v1:';
+    var STELVIO_PEAK_RANK_SNAPSHOT_PREFIX = 'stelvio_peak_rank_snap:v6:';
+    var STELVIO_RANK_SESSION_BASE_PREFIX = 'stelvio_rank_sess_base:v2:';
     /** 당일 랭킹 캐시를 baseline 으로 쓸 최소 경과(ms) — 방금 저장한 캐시와 구분 */
     var STELVIO_RANK_INTRA_DAY_BASELINE_MIN_MS = 90000;
 
@@ -35961,6 +36025,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         if (screenId === 'stelvioRankingScreen' && !window.__stelvioRankingOpening) {
           if (typeof stelvioBeginRankingTabSwitchUi === 'function') stelvioBeginRankingTabSwitchUi();
           (async function () {
+            if (typeof stelvioInvalidatePeakRankMovementCachesIfLogicStale === 'function') {
+              await stelvioInvalidatePeakRankMovementCachesIfLogicStale();
+            }
             var hydrateP2 =
               typeof stelvioRankingMemCacheHydrateFromPersistent === 'function'
                 ? stelvioRankingMemCacheHydrateFromPersistent()
