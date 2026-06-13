@@ -2022,6 +2022,14 @@ function initAuthStateListener() {
               storageErr && storageErr.message
             );
           }
+
+          if (typeof window.updateAuthBarUI === 'function') {
+            try {
+              window.updateAuthBarUI(firebaseUser);
+            } catch (authBarErr) {
+              console.warn('[Auth] updateAuthBarUI 실패:', authBarErr && authBarErr.message);
+            }
+          }
           
           if (isPhoneLogin && typeof window !== 'undefined') {
             window.isPhoneAuthenticated = explicitSessionLogin;
