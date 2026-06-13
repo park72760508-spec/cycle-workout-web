@@ -2864,10 +2864,13 @@
   <!-- 인증·자동 로그인 → 카테고리 전환 중 흰 화면 대신 녹색 스피너 -->
   <div id="authTransitionOverlay" class="auth-transition-overlay hidden" aria-hidden="true" aria-live="polite">
     <div class="auth-transition-overlay__inner">
-      <div class="ai-loading-spinner-wrap ai-loading-spinner-wrap--large auth-transition-spinner-wrap">
-        <div class="ai-loading-spinner-bg"></div>
-        <div class="ai-loading-spinner auth-transition-spinner" role="status" aria-label="로딩 중"></div>
+      <div class="auth-transition-spinner-stage" role="status" aria-label="사용자 정보 로딩 중">
+        <div class="auth-transition-spinner-glow" aria-hidden="true"></div>
+        <div class="auth-transition-spinner-ring auth-transition-spinner-ring--track" aria-hidden="true"></div>
+        <div class="auth-transition-spinner-ring auth-transition-spinner-ring--spin" aria-hidden="true"></div>
+        <div class="auth-transition-spinner-ring auth-transition-spinner-ring--inner" aria-hidden="true"></div>
       </div>
+      <p class="auth-transition-message">사용자 정보 로딩 중......</p>
     </div>
   </div>
   <script>
