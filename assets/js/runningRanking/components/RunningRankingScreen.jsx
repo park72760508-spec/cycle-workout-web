@@ -113,6 +113,10 @@
     var rankMovementAsOfSeoul = _rankMovementAsOf[0];
     var setRankMovementAsOfSeoul = _rankMovementAsOf[1];
 
+    var _rankMovementSource = useState('');
+    var rankMovementSource = _rankMovementSource[0];
+    var setRankMovementSource = _rankMovementSource[1];
+
     var _leaderboardSource = useState('');
     var leaderboardSource = _leaderboardSource[0];
     var setLeaderboardSource = _leaderboardSource[1];
@@ -148,6 +152,7 @@
           setRawRows(res.rows || []);
           setRankMovementByKey(res.rankMovementByKey || {});
           setRankMovementAsOfSeoul(res.rankMovementAsOfSeoul || '');
+          setRankMovementSource(res.rankMovementSource || '');
           setLeaderboardSource(res.leaderboardSource || '');
           setLeaderboardAsOfSeoul(res.leaderboardAsOfSeoul || '');
           setStale(!!res.stale);
@@ -274,27 +279,28 @@
 
     var rankedList = useMemo(function () {
       var list = baseRankedList.slice();
+      var moveMod = window.runningRankingMovement;
+      if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+        moveMod.applyRankMovement(list, activeTab, {
+          paceDistance: paceDistance,
+          gender: gender,
+          category: activeCategory,
+          rankMovementSource: rankMovementSource
+        }, rankMovementByKey);
+      }
       if (isOverallTab && listFilter === 'interest') {
         var soc = socialApi();
         if (soc && typeof soc.filterRowsByListInterest === 'function') {
           list = soc.filterRowsByListInterest(list, listFilter, currentUserId);
         }
       }
-      list = list.map(function (item, idx) {
-        return Object.assign({}, item, { rank: idx + 1 });
-      });
-      if (listFilter === 'all') {
-        var moveMod = window.runningRankingMovement;
-        if (moveMod && typeof moveMod.applyRankMovement === 'function') {
-          moveMod.applyRankMovement(list, activeTab, {
-            paceDistance: paceDistance,
-            gender: gender,
-            category: activeCategory
-          }, rankMovementByKey);
-        }
+      if (isOverallTab && listFilter === 'interest') {
+        list = list.map(function (item, idx) {
+          return Object.assign({}, item, { rank: idx + 1 });
+        });
       }
       return list;
-    }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, socialVer]);
+    }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, socialVer]);
 
     var overallHeroMessage = useMemo(function () {
       if (!isOverallTab || !dataApi().buildOverallHeroMessage) return null;
