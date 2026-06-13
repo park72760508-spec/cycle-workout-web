@@ -6539,10 +6539,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding-bottom: 4px;
   box-sizing: border-box;
 }
-#stelvioRankingScreen .stelvio-period-dropdown,
 #stelvioRankingScreen .stelvio-metric-dropdown,
-#stelvioRankingScreen .stelvio-gender-dropdown,
-#stelvioRankingScreen .stelvio-category-dropdown,
 #runningRankingScreen .stelvio-gender-dropdown,
 #runningRankingScreen .stelvio-category-dropdown {
   position: relative;
@@ -6556,11 +6553,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.14);
   min-width: 70px;
 }
-#stelvioRankingScreen .stelvio-category-dropdown,
 #runningRankingScreen .stelvio-category-dropdown {
   min-width: 108px;
 }
-#stelvioRankingScreen .stelvio-dropdown-caption,
 #runningRankingScreen .stelvio-dropdown-caption {
   font-size: 0.72rem;
   font-weight: 700;
@@ -6569,14 +6564,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-shrink: 0;
   line-height: 1.2;
 }
-#stelvioRankingScreen .stelvio-dropdown-label,
 #runningRankingScreen .stelvio-dropdown-label {
   font-size: 0.9rem;
   font-weight: 700;
   color: #374151;
   margin-right: 2px;
 }
-#stelvioRankingScreen .stelvio-dropdown-chevron,
 #runningRankingScreen .stelvio-dropdown-chevron {
   font-size: 0.75em;
   color: #374151;
@@ -8711,6 +8704,88 @@ button.stelvio-rank-avatar-btn:focus-visible {
 #stelvioRankingScreen .stelvio-group-metric-filter {
   padding-left: 4px;
   padding-right: 4px;
+}
+/* CYCLE 랭킹: RUN과 동일 컴팩트 보조 필터(기간·항목·성별·카테고리) */
+#stelvioRankingScreen .stelvio-duration-chips-wrap {
+  display: flex;
+  justify-content: center;
+}
+#stelvioRankingScreen .stelvio-duration-chips {
+  justify-content: center;
+  width: max-content;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+#stelvioRankingScreen .stelvio-filter-bar-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 2px;
+}
+#stelvioRankingScreen .stelvio-filter-bar-wrap .stelvio-filter-bar {
+  justify-content: center;
+  min-width: 0;
+  width: max-content;
+  gap: 6px;
+  padding-bottom: 2px;
+}
+#stelvioRankingScreen .stelvio-period-dropdown,
+#stelvioRankingScreen .stelvio-metric-dropdown,
+#stelvioRankingScreen .stelvio-gender-dropdown,
+#stelvioRankingScreen .stelvio-category-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: none;
+  background: #f3f4f6;
+  min-width: 0;
+}
+#stelvioRankingScreen .stelvio-category-dropdown {
+  min-width: 0;
+}
+#stelvioRankingScreen .stelvio-dropdown-caption {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #9ca3af;
+  margin-right: 3px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+#stelvioRankingScreen .stelvio-dropdown-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #4b5563;
+  margin-right: 2px;
+}
+#stelvioRankingScreen .stelvio-dropdown-chevron {
+  font-size: 0.6em;
+  color: #9ca3af;
+  margin-left: 1px;
+}
+#stelvioRankingScreen .stelvio-overtake-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 6px;
+}
+#stelvioRankingScreen .stelvio-ranking-filter-chip--interest {
+  position: relative;
+  padding-right: 18px;
+}
+#stelvioRankingScreen .stelvio-ranking-filter-star {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8px;
+  font-weight: 400;
+  line-height: 1;
+  pointer-events: none;
 }
 #stelvioRankingScreen .stelvio-ranking-spinner {
   border-top-color: #00d4aa;
