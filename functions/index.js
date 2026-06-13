@@ -2211,7 +2211,15 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   let page = 1;
   let firstPageStatus = 0;
   while (page <= 10) {
-    let pageRes = await fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, page, 200);
+    let pageRes = await stravaSyncRetry.fetchActivitiesPageWithOuter429Retry(
+      fetchStravaActivitiesPage,
+      accessToken,
+      afterUnix,
+      beforeUnix,
+      page,
+      200,
+      `stravaSync:${userId}`
+    );
     if (!pageRes.success && pageRes.status === 401) {
       try {
         const tokenResult = await refreshStravaTokenForUser(db, userId);
@@ -3495,6 +3503,7 @@ async function runStravaGapDetectPreviousDayJob(db, logPrefix) {
       refreshStravaTokenForUser,
       fetchStravaActivitiesPage,
       processStravaActivity,
+      processOneUserStravaSync,
       supabaseDualWriteServer,
     },
     logPrefix || "[stravaSyncPreviousDay]",
@@ -3539,6 +3548,7 @@ async function runStravaGapDetectTodayJob(db, logPrefix) {
       refreshStravaTokenForUser,
       fetchStravaActivitiesPage,
       processStravaActivity,
+      processOneUserStravaSync,
       supabaseDualWriteServer,
     },
     logPrefix || "[stravaSyncTodayGap]",

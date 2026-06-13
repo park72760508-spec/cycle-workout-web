@@ -7,6 +7,10 @@ const admin = require("firebase-admin");
 
 /** 429 복구 시 유저 간 간격 (전역 한도 회복) */
 const STRAVA_RETRY_USER_DELAY_MS = 12000;
+/** API 내부 재시도(최대 8회) 소진 후 1회 추가 대기 재시도 — Strava 15분 윈도우 회복용 */
+const STRAVA_429_OUTER_RETRY_DELAY_MS = 90000;
+/** 갭 탐지 429 2차 패스 최대 인원 (Functions 타임아웃 방지) */
+const STRAVA_429_GAP_SECOND_PASS_MAX = 40;
 /** 팬아웃 청크 간 대기 (동시 청크 폭주 방지) */
 const STRAVA_CHUNK_FANOUT_DELAY_MS = 45000;
 /** 일반 배치 동시 처리 수 (10→3, 429 예방) */
@@ -16,6 +20,37 @@ const STRAVA_USER_BATCH_DELAY_MS = 3000;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function is429StatusOrError(status, errorText) {
+  const s = Number(status) || 0;
+  if (s === 429) return true;
+  return String(errorText || "").includes("429");
+}
+
+/**
+ * fetchStravaActivitiesPage 내부 재시도(최대 8회) 후에도 429면 90초 대기 후 1회 추가 시도.
+ * @param {Function} fetchPageFn fetchStravaActivitiesPage
+ */
+async function fetchActivitiesPageWithOuter429Retry(
+  fetchPageFn,
+  accessToken,
+  afterUnix,
+  beforeUnix,
+  page,
+  perPage,
+  logContext
+) {
+  let pageRes = await fetchPageFn(accessToken, afterUnix, beforeUnix, page, perPage);
+  if (pageRes && pageRes.success) return pageRes;
+  if (!is429StatusOrError(pageRes && pageRes.status, pageRes && pageRes.error)) return pageRes;
+  const ctx = logContext ? String(logContext) : "stravaSync";
+  console.log(`[${ctx}] 429 외부 재시도 대기 ${STRAVA_429_OUTER_RETRY_DELAY_MS / 1000}s`, {
+    page: page || 1,
+  });
+  await sleep(STRAVA_429_OUTER_RETRY_DELAY_MS);
+  pageRes = await fetchPageFn(accessToken, afterUnix, beforeUnix, page, perPage);
+  return pageRes;
 }
 
 function rangeOverlapsYmd(rangeFrom, rangeTo, targetFrom, targetTo) {
@@ -322,6 +357,8 @@ function ymdRangeToUnix(range) {
 
 module.exports = {
   STRAVA_RETRY_USER_DELAY_MS,
+  STRAVA_429_OUTER_RETRY_DELAY_MS,
+  STRAVA_429_GAP_SECOND_PASS_MAX,
   STRAVA_CHUNK_FANOUT_DELAY_MS,
   STRAVA_SYNC_CONCURRENCY_SAFE,
   STRAVA_USER_BATCH_DELAY_MS,
@@ -331,6 +368,8 @@ module.exports = {
   runStravaSyncRetrySequential,
   retrySingleStravaActivity,
   rangeOverlapsYmd,
+  is429StatusOrError,
+  fetchActivitiesPageWithOuter429Retry,
   getYesterdayTodayYmdSeoul,
   resolveStravaRetryDateRange,
   ymdRangeToUnix,

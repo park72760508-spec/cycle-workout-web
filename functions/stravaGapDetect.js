@@ -239,12 +239,14 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
     accessToken = tokenResult.accessToken;
   }
 
-  let pageRes = await deps.fetchStravaActivitiesPage(
+  let pageRes = await stravaSyncRetry.fetchActivitiesPageWithOuter429Retry(
+    deps.fetchStravaActivitiesPage,
     accessToken,
     range.afterUnix,
     range.beforeUnix,
     1,
-    STRAVA_GAP_DETECT_PAGE_SIZE
+    STRAVA_GAP_DETECT_PAGE_SIZE,
+    `stravaGapDetect:${userId}`
   );
   if (!pageRes.success && pageRes.status === 401) {
     const tokenResult = await deps.refreshStravaTokenForUser(db, userId);
@@ -353,7 +355,7 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
           reason: gapStatus === 429 ? "429" : "processing",
           status: gapStatus || 500,
         });
-        return { userId: entry.userId, sources: Array.from(entry.sources), error: gapError, ingested: 0 };
+        return { userId: entry.userId, sources: Array.from(entry.sources), error: gapError, ingested: 0, gapStatus };
       }
       if (entry.sources.has("A_pending") && !gapError) {
         await stravaSyncRetry.clearStravaSyncRetryPending(db, entry.userId, { count: 0 });
@@ -365,6 +367,7 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
         gapListCount: 0,
         note: gapError ? "gap_scan_failed_no_ids" : "no_missing_ids",
         error: gapError || null,
+        gapStatus: gapStatus || 0,
       };
     }
 
@@ -455,6 +458,41 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
   }
 
   console.log(`${prefix} 완료`, { users: userEntries.length, ok, fail, ingested, apiCalls });
+
+  // 429 갭 스캔 실패 유저 — 90초+ 순차 2차 패스 (당일 누락 즉시 보완, 타임아웃 방지로 상한 적용)
+  const gap429UserIds = results
+    .filter(
+      (r) =>
+        r &&
+        r.error &&
+        stravaSyncRetry.is429StatusOrError(r.gapStatus, r.error) &&
+        !r.skipped
+    )
+    .map((r) => r.userId)
+    .filter(Boolean);
+  const unique429 = Array.from(new Set(gap429UserIds)).slice(
+    0,
+    stravaSyncRetry.STRAVA_429_GAP_SECOND_PASS_MAX
+  );
+  if (unique429.length > 0 && typeof deps.processOneUserStravaSync === "function") {
+    console.log(`${prefix} 429 2차 패스 시작`, { users: unique429.length });
+    const secondPass = await stravaSyncRetry.runStravaSyncRetrySequential(
+      db,
+      range,
+      unique429,
+      `${prefix}:429-second-pass`,
+      deps.processOneUserStravaSync,
+      deps.processStravaActivity
+    );
+    ingested += (secondPass.results || []).reduce(
+      (s, r) => s + (Number(r && r.newActivities) || Number(r && r.ingested) || 0),
+      0
+    );
+    ok += Number(secondPass.ok) || 0;
+    fail = Math.max(0, fail - (Number(secondPass.ok) || 0));
+    results.push(...(secondPass.results || []).map((r) => ({ ...r, secondPass429: true })));
+  }
+
   return { users: userEntries.length, ok, fail, ingested, apiCalls, results };
 }
 
