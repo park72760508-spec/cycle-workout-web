@@ -7867,6 +7867,71 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen .stelvio-rank-row .stelvio-rank-wkg {
   font-weight: 500;
 }
+/* CYCLE 랭킹: 아바타 기준 — 메달+순위(오른쪽 정렬) | 아바타 | 이름·등락·별·배지(왼쪽 정렬) */
+#stelvioRankingScreen .stelvio-rank-row:not(.stelvio-rank-dots-row):not(.stelvio-rank-expand-row):not(.stelvio-group-pick-row) {
+  display: flex;
+  align-items: center;
+}
+#stelvioRankingScreen .stelvio-rank-ranklead {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 3.85rem;
+  width: 3.85rem;
+  max-width: 3.85rem;
+  min-width: 3.85rem;
+  gap: 4px;
+  margin-right: 6px;
+  box-sizing: border-box;
+}
+#stelvioRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin-right: 0;
+  flex-shrink: 0;
+}
+#stelvioRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown--placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+#stelvioRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown img {
+  width: 18px;
+  height: 18px;
+}
+#stelvioRankingScreen .stelvio-rank-ranklead .stelvio-rank-pos {
+  min-width: 0;
+  margin-right: 0;
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-avatar-btn,
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > button.stelvio-rank-avatar-btn {
+  flex-shrink: 0;
+}
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-name-text {
+  min-width: 0;
+  flex-shrink: 1;
+}
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-change,
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-change-slot,
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-star-slot,
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-star-btn,
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > .ranking-private-badge,
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-friend-star,
+#stelvioRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-group-star {
+  flex-shrink: 0;
+}
 #stelvioRankingScreen .stelvio-rank-crown {
   width: 18px;
   height: 18px;
@@ -8512,10 +8577,17 @@ button.stelvio-rank-avatar-btn:focus-visible {
   padding-right: 4px;
   gap: 8px;
 }
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-dots-row .stelvio-rank-ranklead {
+  flex: 0 0 3.85rem;
+  width: 3.85rem;
+  min-width: 3.85rem;
+  max-width: 3.85rem;
+  margin-right: 6px;
+}
 #stelvioRankingScreen .stelvio-rank-row.stelvio-rank-dots-row .stelvio-rank-crown {
-  flex: 0 0 2.25rem;
-  width: 2.25rem;
-  min-width: 2.25rem;
+  flex: 0 0 18px;
+  width: 18px;
+  min-width: 18px;
   margin-right: 0;
 }
 #stelvioRankingScreen .stelvio-rank-row.stelvio-rank-dots-row .stelvio-rank-pos {
