@@ -17394,7 +17394,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f6f8fa;
+  background: linear-gradient(180deg, #f8fafb 0%, #f0f4f8 100%);
   pointer-events: auto;
 }
 .auth-transition-overlay.hidden {
@@ -17405,16 +17405,66 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 24px;
 }
-.auth-transition-spinner-wrap {
-  width: 128px;
-  height: 128px;
-  margin-bottom: 0;
+.auth-transition-spinner-stage {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  margin-bottom: 28px;
 }
-.auth-transition-spinner {
-  border-width: 6px;
+.auth-transition-spinner-glow {
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.22) 0%, rgba(34, 197, 94, 0) 68%);
+  animation: authTransitionGlow 2s ease-in-out infinite;
+}
+.auth-transition-spinner-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.auth-transition-spinner-ring--track {
+  border: 5px solid rgba(34, 197, 94, 0.14);
+}
+.auth-transition-spinner-ring--spin {
+  border: 5px solid transparent;
   border-top-color: #22c55e;
-  box-shadow: 0 0 24px rgba(34, 197, 94, 0.55), 0 0 48px rgba(34, 197, 94, 0.28);
+  border-right-color: rgba(34, 197, 94, 0.55);
+  animation: authTransitionSpin 0.9s cubic-bezier(0.4, 0.15, 0.6, 0.85) infinite;
+  filter: drop-shadow(0 0 10px rgba(34, 197, 94, 0.4));
+}
+.auth-transition-spinner-ring--inner {
+  inset: 16px;
+  border: 4px solid transparent;
+  border-bottom-color: #16a34a;
+  border-left-color: rgba(22, 163, 74, 0.4);
+  animation: authTransitionSpin 1.35s cubic-bezier(0.4, 0.15, 0.6, 0.85) infinite reverse;
+  opacity: 0.9;
+}
+.auth-transition-message {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #15803d;
+  letter-spacing: -0.02em;
+  text-align: center;
+  line-height: 1.5;
+  animation: authTransitionMsgPulse 1.8s ease-in-out infinite;
+}
+@keyframes authTransitionSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes authTransitionGlow {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+@keyframes authTransitionMsgPulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
 }
 .schedule-start-training-overlay .ai-loading-spinner {
   border-top-color: #22c55e;
