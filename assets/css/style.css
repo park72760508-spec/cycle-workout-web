@@ -27719,21 +27719,29 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .running-ranking-list-body--overall .running-ranking-segments {
   flex: 1 1 100%;
   width: 100%;
+  max-width: 100%;
   display: flex;
   flex-wrap: nowrap;
   justify-content: flex-end;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
+  gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 1px 0 3px;
   min-width: 0;
   box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+#runningRankingScreen .running-ranking-list-body--overall .running-ranking-segments::-webkit-scrollbar {
+  display: none;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .stelvio-rank-row.running-ranking-row {
   flex-wrap: wrap;
-  padding: 3px 0;
+  padding: 4px 0;
   align-items: center;
-  row-gap: 2px;
+  row-gap: 3px;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .stelvio-rank-row .stelvio-rank-name {
   flex: 1 1 0;
@@ -27745,13 +27753,82 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   white-space: nowrap;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip {
+  flex: 0 0 auto;
   flex-shrink: 0;
-  padding: 1px 5px;
-  font-size: 0.62rem;
-  gap: 2px;
-  white-space: nowrap;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 3px 5px;
+  margin: 0 3px;
+  border-radius: 6px;
   border: none !important;
   box-shadow: none;
+  gap: 1px;
+  box-sizing: border-box;
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-dist {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-pace {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #333333;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--1k {
+  background: var(--run-dist-1k-bg);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--1k .running-ranking-segment-dist {
+  color: var(--run-dist-1k-base);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--3k {
+  background: var(--run-dist-3k-bg);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--3k .running-ranking-segment-dist {
+  color: var(--run-dist-3k-base);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--5k {
+  background: var(--run-dist-5k-bg);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--5k .running-ranking-segment-dist {
+  color: var(--run-dist-5k-base);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--7k {
+  background: var(--run-dist-7k-bg);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--7k .running-ranking-segment-dist {
+  color: #C9A800;
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--10k {
+  background: var(--run-dist-10k-bg);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--10k .running-ranking-segment-dist {
+  color: var(--run-dist-10k-base);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--20k {
+  background: var(--run-dist-20k-bg);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--20k .running-ranking-segment-dist {
+  color: var(--run-dist-20k-base);
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--empty {
+  background: rgba(0, 0, 0, 0.03) !important;
+  opacity: 0.38;
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--empty .running-ranking-segment-dist {
+  color: #BDBDBD !important;
+  font-weight: 600;
+}
+#runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--empty .running-ranking-segment-pace {
+  color: #E0E0E0 !important;
+  font-weight: 500;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .stelvio-rank-wkg {
   flex-shrink: 0;
@@ -27834,77 +27911,115 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 .running-ranking-segments {
   flex: 1 1 100%;
   width: 100%;
+  max-width: 100%;
   display: flex;
   flex-wrap: nowrap;
   justify-content: flex-end;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
+  gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 1px 0 3px;
   min-width: 0;
   box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.running-ranking-segments::-webkit-scrollbar {
+  display: none;
 }
 .running-ranking-segment-chip {
+  flex: 0 0 auto;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 3px 5px;
+  margin: 0 3px;
   border-radius: 6px;
-  background: #f1f5f9;
+  background: #f5f5f5;
   border: none;
-  font-size: 0.65rem;
+  gap: 1px;
+  box-sizing: border-box;
+}
+.running-ranking-segment-dist {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+}
+.running-ranking-segment-pace {
+  font-size: 0.6875rem;
+  font-weight: 700;
   line-height: 1.2;
+  color: #333333;
+  font-variant-numeric: tabular-nums;
 }
 .running-ranking-segment-chip--1k {
   background: var(--run-dist-1k-bg);
 }
-.running-ranking-segment-chip--1k .running-ranking-segment-label {
-  color: var(--run-dist-1k-label);
+.running-ranking-segment-chip--1k .running-ranking-segment-dist {
+  color: var(--run-dist-1k-base);
 }
 .running-ranking-segment-chip--3k {
   background: var(--run-dist-3k-bg);
 }
-.running-ranking-segment-chip--3k .running-ranking-segment-label {
-  color: var(--run-dist-3k-label);
+.running-ranking-segment-chip--3k .running-ranking-segment-dist {
+  color: var(--run-dist-3k-base);
 }
 .running-ranking-segment-chip--5k {
   background: var(--run-dist-5k-bg);
 }
-.running-ranking-segment-chip--5k .running-ranking-segment-label {
-  color: var(--run-dist-5k-label);
+.running-ranking-segment-chip--5k .running-ranking-segment-dist {
+  color: var(--run-dist-5k-base);
 }
 .running-ranking-segment-chip--7k {
   background: var(--run-dist-7k-bg);
 }
-.running-ranking-segment-chip--7k .running-ranking-segment-label {
-  color: var(--run-dist-7k-label);
+.running-ranking-segment-chip--7k .running-ranking-segment-dist {
+  color: #C9A800;
 }
 .running-ranking-segment-chip--10k {
   background: var(--run-dist-10k-bg);
 }
-.running-ranking-segment-chip--10k .running-ranking-segment-label {
-  color: var(--run-dist-10k-label);
+.running-ranking-segment-chip--10k .running-ranking-segment-dist {
+  color: var(--run-dist-10k-base);
 }
 .running-ranking-segment-chip--20k {
   background: var(--run-dist-20k-bg);
 }
-.running-ranking-segment-chip--20k .running-ranking-segment-label {
-  color: var(--run-dist-20k-label);
+.running-ranking-segment-chip--20k .running-ranking-segment-dist {
+  color: var(--run-dist-20k-base);
 }
 .running-ranking-segment-chip--42k {
   background: var(--run-dist-42k-bg);
 }
-.running-ranking-segment-chip--42k .running-ranking-segment-label {
-  color: var(--run-dist-42k-label);
+.running-ranking-segment-chip--42k .running-ranking-segment-dist {
+  color: var(--run-dist-42k-base);
 }
-.running-ranking-segment-label {
-  color: #64748b;
+.running-ranking-segment-chip--empty {
+  background: rgba(0, 0, 0, 0.03) !important;
+  opacity: 0.38;
+}
+.running-ranking-segment-chip--empty .running-ranking-segment-dist {
+  color: #BDBDBD !important;
   font-weight: 600;
 }
-.running-ranking-segment-score,
-.running-ranking-segment-pace {
-  color: #334155;
+.running-ranking-segment-chip--empty .running-ranking-segment-pace {
+  color: #E0E0E0 !important;
+  font-weight: 500;
+}
+/* 레거시 클래스 호환 */
+.running-ranking-segment-label {
+  font-size: 0.5625rem;
   font-weight: 700;
+}
+.running-ranking-segment-score {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #333333;
   font-variant-numeric: tabular-nums;
 }
 .running-ranking-crew-meta {
