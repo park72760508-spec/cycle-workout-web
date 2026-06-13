@@ -66,6 +66,7 @@
   --run-overall-20k-bg: #F8F5FF;
   --run-overall-seg-dist: #A78BFA;
   --run-overall-seg-pace: #6D28D9;
+  --run-overall-seg-chip-width: 2.875rem;
   /* 다크 모드 배경 (워크아웃 화면 등) */
   --bg-main: #1a1d21;
   --bg-card: #252a30;
@@ -27871,6 +27872,25 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   color: #333333;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
+}
+#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip {
+  flex: 0 0 var(--run-overall-seg-chip-width);
+  width: var(--run-overall-seg-chip-width);
+  min-width: var(--run-overall-seg-chip-width);
+  max-width: var(--run-overall-seg-chip-width);
+  padding: 3px 2px;
+}
+#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-dist {
+  width: 100%;
+  text-align: center;
+  white-space: nowrap;
+}
+#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-pace {
+  width: 100%;
+  min-width: 5ch;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--1k {
   background: var(--run-overall-1k-bg);
