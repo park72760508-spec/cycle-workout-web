@@ -27866,6 +27866,77 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .stelvio-rank-row.running-ranking-row .stelvio-rank-wkg {
   font-weight: 500;
 }
+/* RUN 랭킹: 아바타 기준 — 메달+순위(오른쪽 정렬) | 아바타 | 이름·등락·별·배지(왼쪽 정렬) */
+#runningRankingScreen .stelvio-rank-row.running-ranking-row {
+  display: flex;
+  align-items: center;
+}
+#runningRankingScreen .stelvio-rank-ranklead {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 3.85rem;
+  width: 3.85rem;
+  max-width: 3.85rem;
+  min-width: 3.85rem;
+  gap: 4px;
+  margin-right: 6px;
+  box-sizing: border-box;
+}
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin-right: 0;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown--placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown img,
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown .stelvio-rank-crown-img {
+  width: 18px;
+  height: 18px;
+}
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-pos {
+  min-width: 0;
+  margin-right: 0;
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-avatar-slot,
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-avatar-btn,
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > button.stelvio-rank-avatar-btn {
+  flex-shrink: 0;
+}
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-name-text {
+  min-width: 0;
+  flex-shrink: 1;
+}
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-change,
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-change-slot,
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-star-slot,
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-star-btn,
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .ranking-private-badge,
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .running-ranking-crew-meta,
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-friend-star,
+#runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-group-star {
+  flex-shrink: 0;
+}
 #runningRankingScreen .stelvio-rank-row.running-ranking-row .stelvio-rank-crown {
   width: 18px;
   height: 18px;
@@ -27885,9 +27956,8 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   border-bottom: none;
 }
 @media (max-width: 600px) {
-  #runningRankingScreen .stelvio-rank-row.running-ranking-row .stelvio-rank-name {
-    flex-wrap: wrap;
-    row-gap: 2px;
+  #runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name {
+    flex-wrap: nowrap;
   }
   #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
   #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change-slot .stelvio-rank-change {
@@ -27927,20 +27997,21 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   color: #374151;
   font-weight: 400;
 }
-#runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-row .stelvio-rank-pos {
-  font-weight: 500;
-  min-width: 2em;
-  margin-right: 6px;
-}
 #runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-row .stelvio-rank-wkg {
   font-weight: 500;
 }
-#runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-crown {
+#runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-ranklead .stelvio-rank-pos {
+  font-weight: 500;
+  min-width: 0;
+  margin-right: 0;
+}
+#runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-ranklead .stelvio-rank-crown {
   width: 18px;
   height: 18px;
-  margin-right: 6px;
+  margin-right: 0;
 }
-#runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-crown img {
+#runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-ranklead .stelvio-rank-crown img,
+#runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-ranklead .stelvio-rank-crown .stelvio-rank-crown-img {
   width: 18px;
   height: 18px;
 }
@@ -28376,10 +28447,6 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   margin-left: 2px;
 }
 #runningRankingScreen .stelvio-rank-name {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 6px;
   min-width: 0;
 }
 #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
