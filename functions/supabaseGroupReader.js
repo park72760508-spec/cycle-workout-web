@@ -351,6 +351,63 @@ async function fetchUserRideLogsRecent(firebaseUid, limit = 200) {
   return mapRideRowsToTrainingLogs(data);
 }
 
+/** Supabase yearly_peaks → Firestore users/yearly_peaks/{year} 호환 객체 */
+function mapYearlyPeaksRowToFirestoreDoc(row) {
+  if (!row) return null;
+  return {
+    year: row.year != null ? Number(row.year) : null,
+    weight: row.weight_kg != null ? Number(row.weight_kg) : null,
+    max_hr: row.max_hr != null ? Number(row.max_hr) : null,
+    max_hr_date: row.max_hr_date || null,
+    max_1min_watts: row.max_1min_watts != null ? Number(row.max_1min_watts) : null,
+    max_1min_wkg: row.max_1min_wkg != null ? Number(row.max_1min_wkg) : null,
+    max_5min_watts: row.max_5min_watts != null ? Number(row.max_5min_watts) : null,
+    max_5min_wkg: row.max_5min_wkg != null ? Number(row.max_5min_wkg) : null,
+    max_10min_watts: row.max_10min_watts != null ? Number(row.max_10min_watts) : null,
+    max_10min_wkg: row.max_10min_wkg != null ? Number(row.max_10min_wkg) : null,
+    max_20min_watts: row.max_20min_watts != null ? Number(row.max_20min_watts) : null,
+    max_20min_wkg: row.max_20min_wkg != null ? Number(row.max_20min_wkg) : null,
+    max_40min_watts: row.max_40min_watts != null ? Number(row.max_40min_watts) : null,
+    max_40min_wkg: row.max_40min_wkg != null ? Number(row.max_40min_wkg) : null,
+    max_60min_watts: row.max_60min_watts != null ? Number(row.max_60min_watts) : null,
+    max_60min_wkg: row.max_60min_wkg != null ? Number(row.max_60min_wkg) : null,
+    max_watts: row.max_watts != null ? Number(row.max_watts) : null,
+    max_wkg: row.max_wkg != null ? Number(row.max_wkg) : null,
+    updated_at: row.updated_at || null,
+    readBackend: "supabase",
+  };
+}
+
+/**
+ * PR 표시용 yearly_peaks (Service Role relay).
+ * @param {string} firebaseUid
+ * @param {number|string} year
+ */
+async function fetchYearlyPeaksForYear(firebaseUid, year) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return null;
+  const uid = String(firebaseUid || "").trim();
+  const yearNum = Number(year);
+  if (!uid || !Number.isFinite(yearNum)) return null;
+
+  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
+  const mode =
+    supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  const userUuid = supabaseDualWriteServer.resolveUserUuid(uid, ns, mode);
+  if (!userUuid) return null;
+
+  const { data, error } = await supabase
+    .from("yearly_peaks")
+    .select(
+      "year, weight_kg, max_hr, max_hr_date, max_1min_watts, max_1min_wkg, max_5min_watts, max_5min_wkg, max_10min_watts, max_10min_wkg, max_20min_watts, max_20min_wkg, max_40min_watts, max_40min_wkg, max_60min_watts, max_60min_wkg, max_watts, max_wkg, updated_at"
+    )
+    .eq("user_id", userUuid)
+    .eq("year", yearNum)
+    .maybeSingle();
+  if (error) throw error;
+  return mapYearlyPeaksRowToFirestoreDoc(data);
+}
+
 module.exports = {
   fetchOpenRideByFirestoreId,
   fetchOpenRidesInDateRange,
@@ -358,6 +415,8 @@ module.exports = {
   fetchApprovedRidingGroups,
   fetchUserRideLogsForMonth,
   fetchUserRideLogsRecent,
+  fetchYearlyPeaksForYear,
+  mapYearlyPeaksRowToFirestoreDoc,
   mapRideRowToFirestoreTrainingLog,
   RIDE_LOG_SELECT,
   getUuidToFirebaseMap,

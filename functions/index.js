@@ -9396,6 +9396,145 @@ exports.getTrainingLogsForRead = onRequest(
 );
 
 /**
+ * PR 표시용 yearly_peaks Read — Supabase (Service Role relay).
+ * GET ?uid=&year=2026
+ */
+exports.getYearlyPeaksForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+
+    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
+    const yearRaw = req.query.year;
+    const yearNum = Number(yearRaw);
+    if (!requestedUid || !Number.isFinite(yearNum)) {
+      res.status(400).json({ success: false, error: "uid, year 필요" });
+      return;
+    }
+
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 yearly_peaks만 조회할 수 있습니다." });
+      return;
+    }
+
+    try {
+      const peaks = await supabaseGroupReader.fetchYearlyPeaksForYear(requestedUid, yearNum);
+      res.status(200).json({
+        success: true,
+        year: yearNum,
+        peaks: peaks || null,
+        readBackend: "supabase",
+        via: "service_role_relay",
+      });
+    } catch (e) {
+      console.warn("[getYearlyPeaksForRead]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * Firestore users/logs → Supabase rides 백필 (Dual-Write 누락 보정).
+ * POST { userId?, date?: "YYYY-MM-DD" } — userId 생략 시 호출자 본인, date 생략 시 오늘(서울)
+ */
+exports.backfillFirestoreRidesToSupabase = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 120 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST only" });
+      return;
+    }
+
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+
+    const db = admin.firestore();
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const today = getTodayAfterBefore();
+    const targetUid = String(body.userId || callerUid).trim();
+    const dateYmd = String(body.date || today.dateFrom).slice(0, 10);
+
+    if (targetUid !== String(callerUid).trim()) {
+      const callerSnap = await db.collection("users").doc(callerUid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      if (grade !== "1") {
+        res.status(403).json({ success: false, error: "다른 사용자 백필은 관리자(grade=1)만 가능합니다." });
+        return;
+      }
+    }
+
+    try {
+      try {
+        const provision = require("./supabaseUserProvision");
+        await provision.provisionSupabaseUserAfterProfile(admin, targetUid);
+      } catch (provErr) {
+        console.warn("[backfillFirestoreRidesToSupabase] provision skip:", provErr.message || provErr);
+      }
+
+      const logsSnap = await db
+        .collection("users")
+        .doc(targetUid)
+        .collection("logs")
+        .where("date", "==", dateYmd)
+        .where("source", "==", "strava")
+        .get();
+
+      const results = [];
+      for (const doc of logsSnap.docs) {
+        const data = doc.data() || {};
+        const actType = String(data.activity_type || "").trim().toLowerCase();
+        if (["run", "swim", "walk", "trailrun", "weighttraining"].includes(actType)) {
+          results.push({ id: doc.id, skipped: true, reason: "non_cycling" });
+          continue;
+        }
+        try {
+          const r = await supabaseDualWriteServer.runSecondaryAfterStravaLogSave(
+            admin,
+            targetUid,
+            doc.id,
+            data,
+            { force: true }
+          );
+          results.push({ id: doc.id, ok: true, result: r });
+        } catch (e) {
+          results.push({ id: doc.id, ok: false, error: e.message || String(e) });
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        userId: targetUid,
+        date: dateYmd,
+        processed: results.length,
+        results,
+      });
+    } catch (e) {
+      console.warn("[backfillFirestoreRidesToSupabase]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
  * 후기 전용 월별 라이딩 로그 Read — Firestore 훈련일지 반영 지연 시 Supabase rides에서 보강.
  * 요청자는 본인 로그만 조회 가능.
  */
