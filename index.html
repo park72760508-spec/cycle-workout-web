@@ -18015,8 +18015,20 @@
       var priorMaps = priorAsOf ? stelvioReadGcRankBaseline(monthKey, gender, priorAsOf) : null;
       var currMaps = stelvioGcRankMapsFromPayloadByCategory(data);
       var recomputed = false;
+      var hasServerGcMv = false;
+      var serverMvCatKeys = Object.keys(serverMvSnap || {});
+      for (var smvi = 0; smvi < serverMvCatKeys.length; smvi++) {
+        if (serverMvSnap[serverMvCatKeys[smvi]] && Object.keys(serverMvSnap[serverMvCatKeys[smvi]]).length) {
+          hasServerGcMv = true;
+          break;
+        }
+      }
+      var serverGcRankMovementAuthoritative =
+        hasServerGcMv ||
+        data.gcRankMovementPresent === true ||
+        data.rankMovementSource === 'supabase_gc_cohort';
 
-      if (priorMaps && typeof priorMaps === 'object') {
+      if (!serverGcRankMovementAuthoritative && priorMaps && typeof priorMaps === 'object') {
         for (var gci = 0; gci < STELVIO_RANK_BOARD_CATS.length; gci++) {
           var catG = STELVIO_RANK_BOARD_CATS[gci];
           var rowsG = data.byCategory[catG] || [];
