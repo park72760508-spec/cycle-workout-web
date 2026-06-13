@@ -27643,6 +27643,47 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   margin-left: auto;
   margin-right: auto;
 }
+/* 성별·카테고리 — 메인 탭(종합~크루)보다 작은 보조 필터 */
+#runningRankingScreen .running-ranking-filter-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 2px;
+}
+#runningRankingScreen .running-ranking-filter-wrap .stelvio-filter-bar {
+  justify-content: center;
+  min-width: 0;
+  width: max-content;
+  gap: 6px;
+  padding-bottom: 2px;
+}
+#runningRankingScreen .stelvio-gender-dropdown,
+#runningRankingScreen .stelvio-category-dropdown {
+  padding: 3px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: none;
+  background: #f3f4f6;
+  min-width: 0;
+}
+#runningRankingScreen .stelvio-category-dropdown {
+  min-width: 0;
+}
+#runningRankingScreen .stelvio-dropdown-caption {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #9ca3af;
+  margin-right: 3px;
+}
+#runningRankingScreen .stelvio-dropdown-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+#runningRankingScreen .stelvio-dropdown-chevron {
+  font-size: 0.6em;
+  color: #9ca3af;
+  margin-left: 1px;
+}
 .running-ranking-filter-divider {
   height: 0;
   border: none;
@@ -28269,17 +28310,17 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   flex-wrap: wrap;
 }
 .running-ranking-segment-toggle-btn {
-  min-width: 28px;
-  width: 28px;
-  height: 28px;
+  min-width: 22px;
+  width: 22px;
+  height: 22px;
   margin-left: 4px;
   padding: 0;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #fff;
   color: #475569;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.62rem;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
