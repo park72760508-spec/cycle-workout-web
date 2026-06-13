@@ -27838,8 +27838,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .stelvio-rank-row.running-ranking-row {
   flex-wrap: wrap;
   align-items: center;
-  row-gap: 1px;
-  padding: 2px 0;
+  row-gap: 2px;
 }
 #runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-row.stelvio-rank-current {
   margin: 1px -2px;
@@ -27883,7 +27882,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   align-items: stretch;
   gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 1px 0 3px;
   min-width: 0;
   box-sizing: border-box;
   overflow-x: auto;
@@ -27944,8 +27943,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   width: var(--run-overall-seg-chip-width);
   min-width: var(--run-overall-seg-chip-width);
   max-width: var(--run-overall-seg-chip-width);
-  padding: 1px 2px;
-  gap: 0;
+  padding: 3px 2px;
 }
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-dist {
   width: 100%;
