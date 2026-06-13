@@ -28237,34 +28237,34 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   gap: 8px;
   flex-wrap: wrap;
 }
-.running-ranking-segment-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 4px;
-  vertical-align: middle;
-}
 .running-ranking-segment-toggle-btn {
-  min-width: 26px;
-  height: 24px;
-  padding: 0 6px;
-  border: 1px solid #d1d5db;
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #fff;
-  color: #6b7280;
-  font-size: 0.95rem;
+  color: #475569;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .running-ranking-segment-toggle-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: #c4b5fd;
+  color: #7c3aed;
 }
-.running-ranking-segment-toggle-btn--active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-color: transparent;
-  color: #fff;
+.running-ranking-segment-toggle-btn[aria-pressed="true"] {
+  color: #7c3aed;
+  border-color: #ddd6fe;
 }
 #runningRankingScreen .running-ranking-list-body--segments-off .stelvio-rank-row.running-ranking-row {
   flex-wrap: nowrap;
