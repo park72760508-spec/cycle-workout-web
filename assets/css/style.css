@@ -8705,17 +8705,38 @@ button.stelvio-rank-avatar-btn:focus-visible {
   padding-left: 4px;
   padding-right: 4px;
 }
-/* CYCLE 랭킹: RUN과 동일 컴팩트 보조 필터(기간·항목·성별·카테고리) */
+#stelvioRankingScreen .stelvio-ranking-sticky {
+  touch-action: pan-x pan-y;
+  overflow: visible;
+}
+/* CYCLE 랭킹: 상단 탭(GC~60분) — 좌측부터 스크롤, 초기 GC 노출 */
 #stelvioRankingScreen .stelvio-duration-chips-wrap {
-  display: flex;
-  justify-content: center;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-left: 4px;
+  scroll-padding-right: 4px;
+  touch-action: pan-x pan-y;
 }
 #stelvioRankingScreen .stelvio-duration-chips {
-  justify-content: center;
+  display: inline-flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: nowrap;
   width: max-content;
-  max-width: 100%;
-  margin-left: auto;
-  margin-right: auto;
+  min-width: min(100%, max-content);
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 2px;
+  padding-right: 2px;
+  gap: 8px;
+  box-sizing: border-box;
+}
+#stelvioRankingScreen .stelvio-duration-chips .stelvio-duration-tab {
+  flex-shrink: 0;
 }
 #stelvioRankingScreen .stelvio-filter-bar-wrap {
   display: flex;
