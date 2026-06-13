@@ -982,9 +982,9 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
       const sbMod = await import('./supabaseRidesReadClient.js');
       var sbMonthLogs = await sbMod.getTrainingLogsByDateRangeFromSupabase(userId, year, month);
       var dbMonth = firestoreInstance || (typeof window !== 'undefined' ? window.firestoreV9 : null);
-      var endDate = new Date(year, month + 1, 0);
+      var sbEndDate = new Date(year, month + 1, 0);
       var monthStartStr = year + '-' + String(month + 1).padStart(2, '0') + '-01';
-      var monthEndStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(endDate.getDate()).padStart(2, '0');
+      var monthEndStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(sbEndDate.getDate()).padStart(2, '0');
       var mergedMonthLogs = await mergeSupabaseLogsWithFirestoreShadow(userId, sbMonthLogs, {
         startYmd: monthStartStr,
         endYmd: monthEndStr,

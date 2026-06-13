@@ -1936,10 +1936,32 @@ function initAuthStateListener() {
       try {
         let userData = null;
 
+        /* localStorage 프로필 즉시 복원 — Firestore 대기 없이 UI 응답성 확보 */
+        try {
+          var cachedRaw = localStorage.getItem('currentUser');
+          if (cachedRaw) {
+            var cachedUser = JSON.parse(cachedRaw);
+            if (
+              cachedUser &&
+              String(cachedUser.id || cachedUser.uid || '') === String(firebaseUser.uid)
+            ) {
+              userData = cachedUser;
+            }
+          }
+        } catch (cacheErr) {}
+
+        if (isAuthV9 && typeof window.authV9.authStateReady === 'function') {
+          await Promise.race([
+            window.authV9.authStateReady(),
+            new Promise(function (r) { setTimeout(r, 1200); })
+          ]).catch(function () {});
+        }
+
         // authV9인 경우 firestoreV9 사용, 그 외에는 compat firestore 사용
         if (isAuthV9 && typeof window.getUserByUid === 'function') {
-          userData = await window.getUserByUid(firebaseUser.uid);
-        } else {
+          var freshUserData = await window.getUserByUid(firebaseUser.uid);
+          if (freshUserData) userData = freshUserData;
+        } else if (!userData) {
           const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
           if (userDoc.exists) {
             var docData3 = userDoc.data() || {};

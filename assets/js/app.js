@@ -1018,7 +1018,7 @@ function applyInitialAuthRouting() {
       await Promise.race([
         window.authV9.authStateReady(),
         new Promise(function (r) {
-          setTimeout(r, 6500);
+          setTimeout(r, 2200);
         })
       ]);
     }
