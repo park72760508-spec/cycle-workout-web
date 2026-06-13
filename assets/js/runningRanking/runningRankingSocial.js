@@ -206,10 +206,12 @@
 
   function getRankChangeHtml(item, listCategoryKey) {
     if (!item || item.isCrew) return '';
-    var cat = listCategoryKey || 'Supremo';
-    var normalizeFn = callFn('stelvioNormalizeRankMovementOnRow');
-    if (normalizeFn && item.rank != null) {
-      normalizeFn(item, item.rank);
+    var boardRank = item.boardRank != null && isFinite(Number(item.boardRank))
+      ? Math.floor(Number(item.boardRank))
+      : (item.rank != null && isFinite(Number(item.rank)) ? Math.floor(Number(item.rank)) : null);
+    var matchesFn = callFn('stelvioRankMovementRowMatchesCurrentRank');
+    if (matchesFn && boardRank != null && boardRank >= 1) {
+      if (!matchesFn(item, boardRank)) return '';
     }
     var badgeFn = callFn('stelvioServerRankChangeBadgeHtml');
     if (badgeFn && item.rankChange != null && item.previousBoardRank != null) {

@@ -52,10 +52,6 @@
     } catch (e) {}
   }
 
-  function mapHasEntries(m) {
-    return m && typeof m === 'object' && Object.keys(m).length > 0;
-  }
-
   function lookupSnapVal(map, id) {
     if (!map || id == null) return null;
     var s = String(id).trim();
@@ -70,6 +66,30 @@
     return null;
   }
 
+  function stampBoardRanks(list) {
+    if (!list || !list.length) return;
+    list.forEach(function (item) {
+      if (!item || item.rank == null) return;
+      item.boardRank = Math.floor(Number(item.rank));
+    });
+  }
+
+  function clearRankMovementFields(list) {
+    if (!list || !list.length) return;
+    list.forEach(function (item) {
+      if (!item) return;
+      item.rankChange = null;
+      item.previousBoardRank = null;
+    });
+  }
+
+  function hasServerRankMovementPayload(rankMovementByKey, opts) {
+    opts = opts || {};
+    if (opts.rankMovementSource === 'supabase') return true;
+    if (!rankMovementByKey || typeof rankMovementByKey !== 'object') return false;
+    return Object.keys(rankMovementByKey).length > 0;
+  }
+
   function applyFromServerSnap(list, tabId, opts, rankMovementByKey) {
     if (!list || !list.length || !rankMovementByKey) return false;
 
@@ -80,7 +100,6 @@
     var cat = opts.category || 'Supremo';
     var changes = (snap.rankChangesByCategory && snap.rankChangesByCategory[cat]) || {};
     var previous = (snap.previousRanksByCategory && snap.previousRanksByCategory[cat]) || {};
-    var hasAny = false;
 
     list.forEach(function (item) {
       if (!item) return;
@@ -99,7 +118,6 @@
         if (prev >= 1 && curr >= 1) {
           item.rankChange = prev - curr;
           item.previousBoardRank = prev;
-          hasAny = true;
         }
       } else {
         var chVal = lookupSnapVal(changes, id);
@@ -109,17 +127,14 @@
           if (isFinite(ch) && currRank >= 1) {
             item.rankChange = ch;
             item.previousBoardRank = currRank - ch;
-            hasAny = true;
           }
         }
       }
     });
 
     normalizeListRankMovement(list);
-
-    if (hasAny) return true;
-    if (mapHasEntries(previous) || mapHasEntries(changes)) return true;
-    return false;
+    /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */
+    return true;
   }
 
   function normalizeListRankMovement(list) {
@@ -143,9 +158,16 @@
    * @param {object} [rankMovementByKey] — API rankMovementByKey
    */
   function applyRankMovement(list, tabId, opts, rankMovementByKey) {
+    opts = opts || {};
     if (!list || !list.length) return list;
 
-    if (applyFromServerSnap(list, tabId, opts, rankMovementByKey)) {
+    if (hasServerRankMovementPayload(rankMovementByKey, opts)) {
+      if (applyFromServerSnap(list, tabId, opts, rankMovementByKey)) {
+        stampBoardRanks(list);
+        return list;
+      }
+      clearRankMovementFields(list);
+      stampBoardRanks(list);
       return list;
     }
 
@@ -200,6 +222,7 @@
     }
 
     saveSnap(key, next);
+    stampBoardRanks(list);
     return list;
   }
 

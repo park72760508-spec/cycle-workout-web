@@ -9,6 +9,7 @@
     rows: null,
     rankMovementByKey: null,
     rankMovementAsOfSeoul: '',
+    rankMovementSource: '',
     leaderboardSource: '',
     leaderboardAsOfSeoul: '',
     error: null
@@ -36,6 +37,7 @@
         rows: _cache.rows.slice(),
         rankMovementByKey: _cache.rankMovementByKey || {},
         rankMovementAsOfSeoul: _cache.rankMovementAsOfSeoul || '',
+        rankMovementSource: _cache.rankMovementSource || '',
         leaderboardSource: _cache.leaderboardSource || '',
         leaderboardAsOfSeoul: _cache.leaderboardAsOfSeoul || ''
       });
@@ -60,11 +62,13 @@
           var rankMovementAsOfSeoul = body.rankMovementAsOfSeoul ? String(body.rankMovementAsOfSeoul) : '';
           var leaderboardSource = body.leaderboardSource ? String(body.leaderboardSource) : '';
           var leaderboardAsOfSeoul = body.leaderboardAsOfSeoul ? String(body.leaderboardAsOfSeoul) : '';
+          var rankMovementSource = body.rankMovementSource ? String(body.rankMovementSource) : '';
           _cache = {
             at: Date.now(),
             rows: rows,
             rankMovementByKey: rankMovementByKey,
             rankMovementAsOfSeoul: rankMovementAsOfSeoul,
+            rankMovementSource: rankMovementSource,
             leaderboardSource: leaderboardSource,
             leaderboardAsOfSeoul: leaderboardAsOfSeoul,
             error: null
@@ -74,6 +78,7 @@
             rows: rows.slice(),
             rankMovementByKey: rankMovementByKey,
             rankMovementAsOfSeoul: rankMovementAsOfSeoul,
+            rankMovementSource: rankMovementSource,
             leaderboardSource: leaderboardSource,
             leaderboardAsOfSeoul: leaderboardAsOfSeoul
           };
@@ -87,6 +92,7 @@
             rows: _cache.rows.slice(),
             rankMovementByKey: _cache.rankMovementByKey || {},
             rankMovementAsOfSeoul: _cache.rankMovementAsOfSeoul || '',
+            rankMovementSource: _cache.rankMovementSource || '',
             leaderboardSource: _cache.leaderboardSource || '',
             leaderboardAsOfSeoul: _cache.leaderboardAsOfSeoul || '',
             stale: true,
@@ -108,6 +114,7 @@
       rows: null,
       rankMovementByKey: null,
       rankMovementAsOfSeoul: '',
+      rankMovementSource: '',
       leaderboardSource: '',
       leaderboardAsOfSeoul: '',
       error: null
