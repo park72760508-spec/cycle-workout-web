@@ -832,14 +832,38 @@
   global.StelvioRankingDistributionChart = StelvioRankingDistributionChart;
 
   var _distRoots = Object.create(null);
+
+  function disposeStelvioDistributionChartRoot(mountId) {
+    var cached = _distRoots[mountId];
+    if (!cached) return;
+    try {
+      if (typeof cached.unmount === 'function') cached.unmount();
+    } catch (e) {}
+    delete _distRoots[mountId];
+  }
+
+  global.disposeStelvioDistributionChart = function (rootId) {
+    disposeStelvioDistributionChartRoot(rootId || 'stelvio-distribution-chart-root');
+  };
+
   global.refreshStelvioDistributionChart = function (chartProps, rootId) {
     var mountId = rootId || 'stelvio-distribution-chart-root';
     var el = document.getElementById(mountId);
     if (!el || !global.React || !global.ReactDOM || !global.StelvioRankingDistributionChart) return;
+
+    var cached = _distRoots[mountId];
+    if (cached && cached._container !== el) {
+      disposeStelvioDistributionChartRoot(mountId);
+      cached = null;
+    }
+
     var p = chartProps || {};
     var elem = global.React.createElement(global.StelvioRankingDistributionChart, p);
     if (global.ReactDOM.createRoot) {
-      if (!_distRoots[mountId]) _distRoots[mountId] = global.ReactDOM.createRoot(el);
+      if (!_distRoots[mountId]) {
+        _distRoots[mountId] = global.ReactDOM.createRoot(el);
+        _distRoots[mountId]._container = el;
+      }
       _distRoots[mountId].render(elem);
     } else if (typeof global.ReactDOM.render === 'function') {
       global.ReactDOM.render(elem, el);
