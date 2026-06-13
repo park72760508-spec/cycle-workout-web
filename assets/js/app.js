@@ -893,6 +893,54 @@ window.stelvioPrefillAuthScreenFromProfile = stelvioPrefillAuthScreenFromProfile
 window.stelvioShowAuthScreenForManualLogin = stelvioShowAuthScreenForManualLogin;
 window.stelvioIsNavigationAuthenticated = stelvioIsNavigationAuthenticated;
 
+/** 인증·자동 로그인 → 카테고리 전환 중 녹색 스피너 (index.html 인라인 정의 덮어씀) */
+function showAuthTransitionOverlay() {
+  var el = document.getElementById('authTransitionOverlay');
+  if (!el) return;
+  el.classList.remove('hidden');
+  el.style.display = 'flex';
+  el.setAttribute('aria-hidden', 'false');
+  window.__authTransitionOverlayActive = true;
+}
+
+function hideAuthTransitionOverlay() {
+  var el = document.getElementById('authTransitionOverlay');
+  if (!el) return;
+  el.classList.add('hidden');
+  el.style.display = 'none';
+  el.setAttribute('aria-hidden', 'true');
+  window.__authTransitionOverlayActive = false;
+}
+
+function hideAuthTransitionOverlayWhenShellReady() {
+  function shellVisible() {
+    var cat = document.getElementById('sportCategoryScreen');
+    var bc = document.getElementById('basecampScreen');
+    function vis(node) {
+      return node && (node.classList.contains('active') || window.getComputedStyle(node).display !== 'none');
+    }
+    return vis(cat) || vis(bc);
+  }
+  if (shellVisible()) {
+    hideAuthTransitionOverlay();
+    return;
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (shellVisible()) hideAuthTransitionOverlay();
+        else setTimeout(hideAuthTransitionOverlay, 120);
+      });
+    });
+  } else {
+    setTimeout(hideAuthTransitionOverlay, 120);
+  }
+}
+
+window.showAuthTransitionOverlay = showAuthTransitionOverlay;
+window.hideAuthTransitionOverlay = hideAuthTransitionOverlay;
+window.hideAuthTransitionOverlayWhenShellReady = hideAuthTransitionOverlayWhenShellReady;
+
 /**
  * 스플래시 DOM에 남은 !important·MutationObserver가 인증/베이스캠프 전환을 막는 경우가 있어
  * 한 곳에서 완전히 내립니다.
@@ -942,6 +990,7 @@ function applyInitialAuthRouting() {
       console.warn('[init] checkAuthStatus:', eChk);
     }
     if (typeof stelvioCanEnterAppShell === 'function' && stelvioCanEnterAppShell()) {
+      showAuthTransitionOverlay();
       hideAllScreens();
       const categoryScreen = document.getElementById('sportCategoryScreen');
       if (categoryScreen) {
@@ -953,6 +1002,7 @@ function applyInitialAuthRouting() {
           applyScrollContainmentForScreen('sportCategoryScreen');
         }
         window.__basecampShownAfterAuth = true;
+        hideAuthTransitionOverlayWhenShellReady();
       } else {
         const basecampScreen = document.getElementById('basecampScreen');
         if (basecampScreen) {
@@ -964,6 +1014,7 @@ function applyInitialAuthRouting() {
             applyScrollContainmentForScreen('basecampScreen');
           }
           window.__basecampShownAfterAuth = true;
+          hideAuthTransitionOverlayWhenShellReady();
         } else {
           const connectionScreen = document.getElementById('connectionScreen');
           if (connectionScreen) {
@@ -971,15 +1022,19 @@ function applyInitialAuthRouting() {
             connectionScreen.style.display = 'block';
             connectionScreen.style.opacity = '1';
             connectionScreen.style.visibility = 'visible';
+            hideAuthTransitionOverlay();
           }
         }
       }
     } else if (typeof stelvioShowAuthScreenForManualLogin === 'function') {
+      hideAuthTransitionOverlay();
       console.log('[init] 프로필만 복원됨 — 시작하기 인증 화면 표시 (Firebase 명시 로그인 필요)');
       stelvioShowAuthScreenForManualLogin();
     } else if (typeof showAuthScreen === 'function') {
+      hideAuthTransitionOverlay();
       showAuthScreen();
     } else {
+      hideAuthTransitionOverlay();
       hideAllScreens();
       const authScreen = document.getElementById('authScreen');
       if (authScreen) {
@@ -1015,6 +1070,7 @@ function applyInitialAuthRouting() {
     var hadTok =
       !!(window.authV9 && window.authV9.currentUser) || !!(window.auth && window.auth.currentUser);
     if (hadProf && !hadTok && window.authV9 && typeof window.authV9.authStateReady === 'function') {
+      showAuthTransitionOverlay();
       await Promise.race([
         window.authV9.authStateReady(),
         new Promise(function (r) {
@@ -1028,6 +1084,7 @@ function applyInitialAuthRouting() {
   }
 
   if (typeof stelvioCanEnterAppShell === 'function' && stelvioCanEnterAppShell()) {
+    showAuthTransitionOverlay();
     hideAllScreens();
     const categoryScreenLate = document.getElementById('sportCategoryScreen');
     const shellTarget = categoryScreenLate || document.getElementById('basecampScreen');
@@ -1040,6 +1097,7 @@ function applyInitialAuthRouting() {
         applyScrollContainmentForScreen(shellTarget.id);
       }
       window.__basecampShownAfterAuth = true;
+      hideAuthTransitionOverlayWhenShellReady();
       setTimeout(function tryShowTop10AfterAutoAuth() {
         if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return;
         if (window.__showScreenRedirectedToAuth === true) return;
@@ -1068,13 +1126,17 @@ function applyInitialAuthRouting() {
         connectionScreen.style.display = 'block';
         connectionScreen.style.opacity = '1';
         connectionScreen.style.visibility = 'visible';
+        hideAuthTransitionOverlay();
       }
     }
   } else if (typeof stelvioShowAuthScreenForManualLogin === 'function') {
+    hideAuthTransitionOverlay();
     stelvioShowAuthScreenForManualLogin();
   } else if (typeof showAuthScreen === 'function') {
+    hideAuthTransitionOverlay();
     showAuthScreen();
   } else {
+    hideAuthTransitionOverlay();
     hideAllScreens();
     const authScreen = document.getElementById('authScreen');
     if (authScreen) {
