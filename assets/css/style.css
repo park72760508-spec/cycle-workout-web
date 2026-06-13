@@ -27875,6 +27875,21 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 .running-ranking-pace-filter {
   margin-bottom: 8px;
 }
+/* 페이스 탭: 1k~42k 거리 칩 중앙 정렬 */
+#runningRankingScreen .running-ranking-pace-filter {
+  display: flex;
+  justify-content: center;
+  padding-left: 4px;
+  padding-right: 4px;
+  border-bottom: none;
+  background: transparent;
+}
+#runningRankingScreen .running-ranking-pace-filter .stelvio-group-metric-chips {
+  justify-content: center;
+  margin-left: auto;
+  margin-right: auto;
+  flex-wrap: wrap;
+}
 .running-ranking-list-card {
   margin-bottom: 12px;
 }
@@ -28320,11 +28335,26 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   border-radius: 8px;
 }
 .running-ranking-value--pace {
-  font-size: 1.05rem !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.02em;
-  color: #1e293b;
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  color: #374151;
+  line-height: 1.5;
   font-variant-numeric: tabular-nums;
+}
+#runningRankingScreen .stelvio-rank-row.running-ranking-row .running-ranking-value--pace {
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+  letter-spacing: normal;
+  color: #374151;
+  line-height: 1.5;
+}
+/* 거리 탭: 순위 목록 스크롤바 숨김 */
+#runningRankingScreen .running-ranking-list-body--distance .running-ranking-virtual-list {
+  scrollbar-width: none;
+}
+#runningRankingScreen .running-ranking-list-body--distance .running-ranking-virtual-list::-webkit-scrollbar {
+  display: none;
 }
 .running-ranking-segments {
   flex: 1 1 100%;
