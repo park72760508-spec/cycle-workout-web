@@ -123,25 +123,13 @@
         firestoreV9 = initFirestore(appV9, { experimentalForceLongPolling: true });
         if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Firestore 초기화');
         else console.log('✅ Firebase v9 Firestore 초기화');
-        try {
-          var storageModMain = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js');
-          if (storageModMain && typeof storageModMain.getStorage === 'function') {
-            window.firebaseStorageV9 = storageModMain.getStorage(appV9);
-            if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Storage 초기화 (오픈 라이딩 GPX 등)');
-            else console.log('✅ Firebase v9 Storage 초기화 (오픈 라이딩 GPX 등)');
-          } else {
-            window.firebaseStorageV9 = null;
-            if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] getStorage 없음');
-            else console.warn('[Firebase v9] getStorage 없음');
-          }
-        } catch (se) {
-          if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] Storage 로드 실패:', se && se.message ? se.message : se);
-          else console.warn('[Firebase v9] Storage 로드 실패:', se && se.message ? se.message : se);
-          window.firebaseStorageV9 = null;
-        }
+
+        collectionFn = firestoreMod.collection;
+        docFn = firestoreMod.doc;
+        setDocFn = firestoreMod.setDoc;
+        getDocFn = firestoreMod.getDoc;
         window.authV9 = authV9;
         window.firestoreV9 = firestoreV9;
-        /* AffiliateScreens.jsx 등 Babel 스크립트에서 사용할 Firestore v9 함수 전역 노출 */
         window._firebaseFirestoreFns = {
           collection:      firestoreMod.collection,
           doc:             firestoreMod.doc,
@@ -160,18 +148,6 @@
           serverTimestamp: firestoreMod.serverTimestamp,
           increment:       firestoreMod.increment
         };
-        /* Storage v9 함수도 전역 노출 (이미지 업로드용) */
-        try {
-          var _storageMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js');
-          if (_storageMod) {
-            window._firebaseStorageFns = {
-              ref:            _storageMod.ref,
-              uploadBytes:    _storageMod.uploadBytes,
-              getDownloadURL: _storageMod.getDownloadURL,
-              deleteObject:   _storageMod.deleteObject
-            };
-          }
-        } catch(_se) { window._firebaseStorageFns = {}; }
         if (authMod.signInWithEmailAndPassword) window.signInWithEmailAndPasswordV9 = authMod.signInWithEmailAndPassword;
         if (authMod.createUserWithEmailAndPassword) window.createUserWithEmailAndPasswordV9 = authMod.createUserWithEmailAndPassword;
         if (authMod.updateProfile) window.updateProfileV9 = authMod.updateProfile;
@@ -179,27 +155,78 @@
         if (authMod.updatePassword) window.updatePasswordV9 = authMod.updatePassword;
         if (authMod.reauthenticateWithCredential) window.reauthenticateWithCredentialV9 = authMod.reauthenticateWithCredential;
         if (authMod.EmailAuthProvider) window.EmailAuthProviderV9 = authMod.EmailAuthProvider;
-        try {
-          var funcMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js');
-          if (funcMod && funcMod.getFunctions && funcMod.httpsCallable) {
-            window.functionsV9 = funcMod.getFunctions(appV9);
-            try {
-              window.functionsAsiaNortheast3V9 = funcMod.getFunctions(appV9, 'asia-northeast3');
-            } catch (regErr) {
-              window.functionsAsiaNortheast3V9 = window.functionsV9;
-              if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] getFunctions(region) 실패, 기본 리전 사용:', regErr && regErr.message);
-              else console.warn('[Firebase v9] getFunctions(region) 실패:', regErr);
-            }
-            window.httpsCallableV9 = funcMod.httpsCallable;
+
+        window.stelvioDocSnapExists = window.stelvioDocSnapExists || function (snap) {
+          if (!snap) return false;
+          if (typeof snap.exists === 'boolean') return snap.exists;
+          if (typeof snap.exists === 'function') return snap.exists();
+          return false;
+        };
+        window.getUserByUid = window.getUserByUid || async function (uid) {
+          if (!firestoreV9 || !collectionFn || !docFn || !getDocFn) throw new Error('Firestore V9가 초기화되지 않았습니다.');
+          var usersRef = collectionFn(firestoreV9, 'users');
+          var userDocRef = docFn(usersRef, uid);
+          var userDoc = await getDocFn(userDocRef);
+          if (window.stelvioDocSnapExists(userDoc)) {
+            var data = userDoc.data ? userDoc.data() : {};
+            var out = { id: uid };
+            for (var k in data) { if (data.hasOwnProperty(k)) out[k] = data[k]; }
+            return out;
           }
-        } catch (fe) {
-          if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('Firebase Functions 미로드:', fe && fe.message);
-          else console.warn('Firebase Functions 미로드:', fe && fe.message);
-        }
-        if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 SDK 초기화 완료');
-        else console.log('✅ Firebase v9 SDK 초기화 완료');
-        /* firestoreV9 준비 완료 이벤트 — DOMContentLoaded 이후 탈퇴 사용자 구독 훅에서 수신 */
-        try { window.dispatchEvent(new CustomEvent('stelvio-firestoreV9-ready')); } catch(e) {}
+          return null;
+        };
+
+        if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 핵심 API 준비 (로그인·프로필)');
+        else console.log('✅ Firebase v9 핵심 API 준비 (로그인·프로필)');
+        try { window.dispatchEvent(new CustomEvent('stelvio-firestoreV9-ready')); } catch (eFsReady) {}
+        try { window.dispatchEvent(new CustomEvent('stelvio-v9-firebase-user-api-ready')); } catch (eApiReady) {}
+
+        /* Storage·Functions는 로그인 경로와 분리 — 백그라운드 로드 */
+        (function stelvioLoadFirebaseExtrasDeferred() {
+          (async function () {
+            try {
+              var storageModMain = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js');
+              if (storageModMain && typeof storageModMain.getStorage === 'function') {
+                window.firebaseStorageV9 = storageModMain.getStorage(appV9);
+                window._firebaseStorageFns = {
+                  ref:            storageModMain.ref,
+                  uploadBytes:    storageModMain.uploadBytes,
+                  getDownloadURL: storageModMain.getDownloadURL,
+                  deleteObject:   storageModMain.deleteObject
+                };
+                if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Storage 초기화 (오픈 라이딩 GPX 등)');
+                else console.log('✅ Firebase v9 Storage 초기화 (오픈 라이딩 GPX 등)');
+              } else {
+                window.firebaseStorageV9 = null;
+                window._firebaseStorageFns = window._firebaseStorageFns || {};
+              }
+            } catch (se) {
+              window.firebaseStorageV9 = null;
+              window._firebaseStorageFns = window._firebaseStorageFns || {};
+              if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] Storage 로드 실패:', se && se.message ? se.message : se);
+              else console.warn('[Firebase v9] Storage 로드 실패:', se && se.message ? se.message : se);
+            }
+            try {
+              var funcMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js');
+              if (funcMod && funcMod.getFunctions && funcMod.httpsCallable) {
+                window.functionsV9 = funcMod.getFunctions(appV9);
+                try {
+                  window.functionsAsiaNortheast3V9 = funcMod.getFunctions(appV9, 'asia-northeast3');
+                } catch (regErr) {
+                  window.functionsAsiaNortheast3V9 = window.functionsV9;
+                  if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] getFunctions(region) 실패, 기본 리전 사용:', regErr && regErr.message);
+                  else console.warn('[Firebase v9] getFunctions(region) 실패:', regErr);
+                }
+                window.httpsCallableV9 = funcMod.httpsCallable;
+              }
+            } catch (fe) {
+              if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('Firebase Functions 미로드:', fe && fe.message);
+              else console.warn('Firebase Functions 미로드:', fe && fe.message);
+            }
+            if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 SDK 초기화 완료');
+            else console.log('✅ Firebase v9 SDK 초기화 완료');
+          })();
+        })();
       } catch (error) {
         console.error('❌ Firebase v9 초기화 실패:', error);
       }
@@ -8274,18 +8301,8 @@
           getTrainingLogsByDateRange = mod.getTrainingLogsByDateRange;
         }
       } catch (e1) {
-        try {
-          var mod2 = await import('./trainingResultService.js');
-          if (mod2 && typeof mod2 === 'object') {
-            saveTrainingSession = mod2.saveTrainingSession;
-            getUserTrainingLogs = mod2.getUserTrainingLogs;
-            getTrainingLogsByDateRange = mod2.getTrainingLogsByDateRange;
-          }
-          console.log('✅ 훈련 결과 저장 서비스 로드 (루트 경로)');
-        } catch (e2) {
-          console.error('❌ trainingResultService.js 로드 실패:', e1.message || e1, e2.message || e2);
-          return;
-        }
+        console.error('❌ trainingResultService.js 로드 실패:', e1.message || e1);
+        return;
       }
       if (!saveTrainingSession || !getUserTrainingLogs || !getTrainingLogsByDateRange) {
         console.error('❌ trainingResultService에서 필요한 함수를 불러오지 못했습니다.');
@@ -27236,9 +27253,9 @@
             /* Firestore 프로필 읽기 전에 Auth 준비 + ID 토큰 강제 갱신 */
             // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱). iPhone: 재시도
             try {
-              /** Firestore 모듈·getUserByUid 부착까지: 이벤트 + 짧은 폴링(기존 300ms×15=최대 4.5초 간헐 지연 완화) */
+              /** Firestore 모듈·getUserByUid 부착까지: 이벤트 + 짧은 폴링 */
               async function waitForGetUserByUidReady(maxMs) {
-                var ms = maxMs != null ? maxMs : 3200;
+                var ms = maxMs != null ? maxMs : 1400;
                 function apiReady() {
                   return !!(typeof window.getUserByUid === 'function' && window.firestoreV9);
                 }
@@ -27265,7 +27282,7 @@
                   var iv = setInterval(function () {
                     if (apiReady()) settle(true);
                     else if (Date.now() >= deadline) settle(false);
-                  }, 40);
+                  }, 25);
                   var to = setTimeout(function () {
                     settle(apiReady());
                   }, ms);
@@ -27274,7 +27291,10 @@
               async function stelvioRefreshV9IdToken(force) {
                 try {
                   if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
-                    await window.authV9.authStateReady().catch(function () {});
+                    await Promise.race([
+                      window.authV9.authStateReady(),
+                      new Promise(function (r) { setTimeout(r, 1200); })
+                    ]);
                   }
                 } catch (e0) {}
                 try {
@@ -27284,26 +27304,22 @@
                   }
                 } catch (e1) {}
               }
-              try {
-                await waitForGetUserByUidReady(3500);
-              } catch (eWait0) {
-                await new Promise(function (r) { setTimeout(r, 200); });
-                await waitForGetUserByUidReady(2500);
-              }
-              await stelvioRefreshV9IdToken(false);
+              await Promise.all([
+                waitForGetUserByUidReady(1400).catch(function () {
+                  return waitForGetUserByUidReady(900);
+                }),
+                stelvioRefreshV9IdToken(false)
+              ]);
 
               var getUserByUidFn = window.getUserByUid;
               if (typeof getUserByUidFn !== 'function') {
                 throw new Error('시스템 초기화 중입니다. 잠시 후 다시 시도해주세요.');
               }
               var userData = null;
-              for (var _attempt = 0; _attempt < 6; _attempt++) {
-                await stelvioRefreshV9IdToken(_attempt > 0);
+              for (var _attempt = 0; _attempt < 3; _attempt++) {
                 if (_attempt > 0) {
-                  await new Promise(function (r) { setTimeout(r, 280 + _attempt * 100); });
-                  await waitForGetUserByUidReady(1200);
-                  getUserByUidFn = window.getUserByUid;
-                  if (typeof getUserByUidFn !== 'function') continue;
+                  await stelvioRefreshV9IdToken(true);
+                  await new Promise(function (r) { setTimeout(r, 180 + _attempt * 80); });
                 }
                 try {
                   userData = await getUserByUidFn(user.uid);
