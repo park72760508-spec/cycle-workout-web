@@ -13635,9 +13635,15 @@
       if (!userId) return '';
       opts = opts || {};
       var uid = String(userId);
-      var fav         = stelvioRankingFavoriteUserSet.has(uid);
-      var friend      = stelvioRankingFriendUserSet.has(uid);
-      var groupMember = !opts.omitGroupMember && stelvioRankingGroupContactSet.has(uid);
+      var altUid = opts.altUid != null ? String(opts.altUid).trim() : '';
+      function stelvioRankingSocialSetHas(set) {
+        if (!set || typeof set.has !== 'function') return false;
+        if (set.has(uid)) return true;
+        return !!(altUid && altUid !== uid && set.has(altUid));
+      }
+      var fav         = stelvioRankingSocialSetHas(stelvioRankingFavoriteUserSet);
+      var friend      = stelvioRankingSocialSetHas(stelvioRankingFriendUserSet);
+      var groupMember = !opts.omitGroupMember && stelvioRankingSocialSetHas(stelvioRankingGroupContactSet);
       /* 친구 우선 */
       var friendTitle = '\ub77c\uc774\ub529 \ubaa8\uc784 \uce5c\uad6c (\uad00\uc2ec \ud1a0\uae00\uc740 \uce5c\uad6c \ubaa9\ub85d\uc5d0\uc11c \uc0ad\uc81c \ud6c4 \uac00\ub2a5)';
       if (friend) {
@@ -16365,6 +16371,20 @@
     /** 이미 그려진 목록 행의 별(친구·그룹·관심)만 갱신 — 캐시·프리렌더 복원 후 보정 */
     function stelvioRankingRefreshListStarSlots(bodyEl) {
       if (!bodyEl || typeof stelvioRankingStarButtonHtml !== 'function') return;
+      /* RUN 랭킹(React): social/board uid 이중 키 + .stelvio-rank-star-slot 직접 갱신 */
+      var runRows = bodyEl.querySelectorAll('.running-ranking-row[data-social-uid], .running-ranking-row[data-board-uid]');
+      for (var rri = 0; rri < runRows.length; rri++) {
+        var runRow = runRows[rri];
+        var socialUid = runRow.getAttribute('data-social-uid') || '';
+        var boardUid = runRow.getAttribute('data-board-uid') || '';
+        var primaryUid = socialUid || boardUid;
+        if (!primaryUid) continue;
+        var runStarSlot = runRow.querySelector('.stelvio-rank-star-slot');
+        if (!runStarSlot) continue;
+        var runStarOpts = {};
+        if (socialUid && boardUid && socialUid !== boardUid) runStarOpts.altUid = boardUid;
+        runStarSlot.innerHTML = stelvioRankingStarButtonHtml(primaryUid, runStarOpts) || '';
+      }
       var avatarBtns = bodyEl.querySelectorAll('.stelvio-rank-avatar-btn[data-stelvio-rank-user-id]');
       for (var si = 0; si < avatarBtns.length; si++) {
         var avBtn = avatarBtns[si];
@@ -16372,6 +16392,8 @@
         if (!uid) continue;
         var nameWrap = avBtn.closest ? avBtn.closest('.stelvio-rank-name') : null;
         if (!nameWrap) continue;
+        var runRowParent = nameWrap.closest ? nameWrap.closest('.running-ranking-row') : null;
+        if (runRowParent && runRowParent.querySelector('.stelvio-rank-star-slot')) continue;
         /* 그룹 멤버 행은 .stelvio-rank-star-slot 안에서 별을 관리:
            슬롯 밖으로 이동하면 patchOneMemberRow 재호출 시 중복 표시됨 */
         var _starGrpRow = nameWrap.closest ? nameWrap.closest('.stelvio-group-member-row') : null;
