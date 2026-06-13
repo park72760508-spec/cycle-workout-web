@@ -437,26 +437,14 @@
       : null;
 
     var segmentToggle = isOverallTab
-      ? React.createElement('span', {
-          className: 'running-ranking-segment-toggle',
-          role: 'group',
-          'aria-label': '구간 페이스 표시'
-        },
-          React.createElement('button', {
-            type: 'button',
-            className: 'running-ranking-segment-toggle-btn' + (showOverallSegments ? ' running-ranking-segment-toggle-btn--active' : ''),
-            'aria-pressed': showOverallSegments,
-            title: '구간 페이스 표시',
-            onClick: function () { setShowOverallSegments(true); }
-          }, '+'),
-          React.createElement('button', {
-            type: 'button',
-            className: 'running-ranking-segment-toggle-btn' + (!showOverallSegments ? ' running-ranking-segment-toggle-btn--active' : ''),
-            'aria-pressed': !showOverallSegments,
-            title: '구간 페이스 숨김',
-            onClick: function () { setShowOverallSegments(false); }
-          }, '−')
-        )
+      ? React.createElement('button', {
+          type: 'button',
+          className: 'running-ranking-segment-toggle-btn',
+          'aria-pressed': showOverallSegments,
+          'aria-label': showOverallSegments ? '구간 페이스 접기' : '구간 페이스 펼치기',
+          title: showOverallSegments ? '구간 페이스 접기' : '구간 페이스 펼치기',
+          onClick: function () { setShowOverallSegments(function (prev) { return !prev; }); }
+        }, showOverallSegments ? '−' : '+')
       : null;
 
     var listFilterToggle = isOverallTab
