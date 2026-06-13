@@ -53,10 +53,11 @@
     var socialUid = soc.socialUserId ? soc.socialUserId(item) : (item.userId || '');
 
     var isCurrent = !!(currentUserId && item.userId && String(item.userId) === String(currentUserId));
+    var isSingleLineRow = !(tabId === 'overall' && props.showSegments);
     var rowClass = 'stelvio-rank-row running-ranking-row' +
       (isCurrent ? ' stelvio-rank-current' : '') +
       (item.isCrew ? ' running-ranking-row--crew' : '') +
-      (tabId === 'overall' && !props.showSegments ? ' running-ranking-row--compact' : '');
+      (isSingleLineRow ? ' running-ranking-row--compact' : '');
 
     var valueClass = 'stelvio-rank-wkg running-ranking-value' +
       (tabId === 'pace' ? ' running-ranking-value--pace' : '');

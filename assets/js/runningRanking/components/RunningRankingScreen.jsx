@@ -615,8 +615,8 @@
             React.createElement('span', { className: 'stelvio-category-header-unit' }, unitLabel)
           ),
           React.createElement('div', {
-            className: 'stelvio-category-body running-ranking-list-body' +
-              (isOverallTab ? ' running-ranking-list-body--overall' : '') +
+            className: 'stelvio-category-body running-ranking-list-body running-ranking-list-body--avatar-align' +
+              (isOverallTab ? ' running-ranking-list-body--overall' : ' running-ranking-list-body--virtual') +
               (isOverallTab && showOverallSegments ? ' running-ranking-list-body--segments-on' : ' running-ranking-list-body--segments-off')
           }, listBody)
         ),
