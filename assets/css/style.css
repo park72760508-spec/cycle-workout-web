@@ -27684,6 +27684,19 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   color: #9ca3af;
   margin-left: 1px;
 }
+#runningRankingScreen .running-ranking-filter-chip--interest {
+  position: relative;
+}
+#runningRankingScreen .running-ranking-filter-star {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8px;
+  font-weight: 400;
+  line-height: 1;
+  pointer-events: none;
+}
 .running-ranking-filter-divider {
   height: 0;
   border: none;
