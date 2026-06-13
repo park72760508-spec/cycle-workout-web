@@ -1626,7 +1626,7 @@ async function syncStravaDataWithMmp(months = 1, options) {
 /**
  * Strava 동기화 날짜 선택 모달 열기
  * grade=1: 관리자용 - 2개 버튼(모든 사용자 MMP, 관리자 MMP), 시작일/종료일 적용
- * grade=2,3: MMP 포함(최근 3개월·최신 30개 활동) 버튼만, 기간 선택 숨김
+ * grade=2,3: 일괄 수집(최대 10개) + 선택 날짜 1일 수집
  */
 function openStravaSyncModal() {
   const modal = document.getElementById('stravaSyncModal');
@@ -1641,33 +1641,44 @@ function openStravaSyncModal() {
 
     var isGrade1 = (grade === '1');
     var dateRangeSection = document.getElementById('stravaSyncDateRangeSection');
+    var singleDateSection = document.getElementById('stravaSyncSingleDateSection');
+    var adminFooter = document.getElementById('stravaSyncAdminFooter');
+    var userFooter = document.getElementById('stravaSyncUserFooter');
     var descEl = document.getElementById('stravaSyncDesc');
     var btnAllUsers = document.getElementById('btnStravaMmpAllUsers');
     var btnAdmin = document.getElementById('btnStravaMmpAdmin');
+    var btnBulk10 = document.getElementById('btnStravaMmpBulk10');
+    var btnSingleDay = document.getElementById('btnStravaMmpSingleDay');
     var adminHint = document.getElementById('stravaMmpAdminHint');
 
     if (isGrade1) {
       if (dateRangeSection) dateRangeSection.style.display = '';
+      if (singleDateSection) singleDateSection.style.display = 'none';
+      if (adminFooter) adminFooter.style.display = 'flex';
+      if (userFooter) userFooter.style.display = 'none';
       if (descEl) descEl.textContent = '동기화할 기간을 선택하세요. MMP 포함 Strava 로그를 일단위로 수집합니다.';
       if (btnAllUsers) { btnAllUsers.style.display = ''; btnAllUsers.textContent = '모든 사용자(MMP)'; btnAllUsers.disabled = false; }
       if (btnAdmin) { btnAdmin.style.display = ''; btnAdmin.textContent = '관리자 MMP'; btnAdmin.disabled = false; }
       if (adminHint) adminHint.style.display = '';
     } else {
       if (dateRangeSection) dateRangeSection.style.display = 'none';
+      if (singleDateSection) singleDateSection.style.display = '';
+      if (adminFooter) adminFooter.style.display = 'none';
+      if (userFooter) userFooter.style.display = 'flex';
       if (descEl) {
         descEl.textContent =
-          '최근 3개월 이내 Strava 활동 중 최신 30개(일 수가 아닌 활동 개수)까지 MMP와 함께 가져옵니다. 3개월 안에 활동이 30개 미만이면 있는 만큼만 수집합니다.';
+          '최근 3개월 이내 Strava 활동을 MMP와 함께 가져옵니다. 일괄 수집은 최대 10개까지 처리하며, 실패한 날짜는 아래에서 날짜를 지정해 1일씩 다시 수집할 수 있습니다.';
+      }
+      if (btnBulk10) {
+        btnBulk10.disabled = false;
+        btnBulk10.textContent = '일괄 수집 (최근 3개월·최대 10개)';
+      }
+      if (btnSingleDay) {
+        btnSingleDay.disabled = false;
+        btnSingleDay.textContent = '선택 날짜 수집 (1일)';
       }
       if (btnAllUsers) btnAllUsers.style.display = 'none';
-      if (btnAdmin) {
-        btnAdmin.style.display = '';
-        btnAdmin.textContent = 'MMP 포함 (최신 30개·3개월)';
-        btnAdmin.onclick = function () {
-          if (typeof syncStravaDataWithMmp === 'function') {
-            syncStravaDataWithMmp(0, { maxActivities: 30, windowMonths: 3 });
-          }
-        };
-      }
+      if (btnAdmin) btnAdmin.style.display = 'none';
       if (adminHint) adminHint.style.display = 'none';
     }
 
@@ -1700,6 +1711,17 @@ function openStravaSyncModal() {
         }
         startDateInput.max = endDateInput.value || todayStr;
       };
+    }
+
+    // 단일 날짜 입력 초기화 (grade=2,3 일반 사용자용)
+    var singleDateInput = document.getElementById('stravaSyncSingleDate');
+    if (singleDateInput) {
+      var todayForSingle = new Date();
+      var todayForSingleStr = todayForSingle.toISOString().split('T')[0];
+      var minDateForSingleStr = (new Date(todayForSingle.getFullYear() - 5, 0, 1)).toISOString().split('T')[0];
+      if (!singleDateInput.value) singleDateInput.value = todayForSingleStr;
+      singleDateInput.min = minDateForSingleStr;
+      singleDateInput.max = todayForSingleStr;
     }
   }
 }
@@ -1789,6 +1811,44 @@ function startStravaSyncTodayAll() {
   const endDate = new Date(y, m, d, 23, 59, 59, 999);
   closeStravaSyncModal();
   syncStravaData(startDate, endDate, { todayOnlyCurrentUser: false, todayAll: true });
+}
+
+/**
+ * 일반 사용자 MMP 일괄 수집 (grade=2,3)
+ * 최근 3개월 이내 최신 활동 최대 10개
+ */
+function syncStravaMmpUserBulk10() {
+  closeStravaSyncModal();
+  syncStravaDataWithMmp(0, {
+    maxActivities: 10,
+    windowMonths: 3,
+    btnId: 'btnStravaMmpBulk10',
+    progressMessage: 'MMP 일괄 수집 중 (최대 10개, 장시간 소요될 수 있습니다)'
+  });
+}
+
+/**
+ * 일반 사용자 MMP 단일 날짜 수집 (grade=2,3)
+ * 선택한 1일 구간만 수집 (일괄 수집 실패 시 개별 재시도용)
+ */
+function syncStravaMmpUserSingleDay() {
+  var dateEl = document.getElementById('stravaSyncSingleDate');
+  if (!dateEl) {
+    (window.showToast || alert)('수집 날짜를 선택해 주세요.');
+    return;
+  }
+  var dateStr = (dateEl.value || '').trim();
+  if (!dateStr) {
+    (window.showToast || alert)('수집 날짜를 선택해 주세요.');
+    return;
+  }
+  closeStravaSyncModal();
+  syncStravaDataWithMmp(0, {
+    startDate: dateStr,
+    endDate: dateStr,
+    btnId: 'btnStravaMmpSingleDay',
+    progressMessage: dateStr + ' MMP 수집 중 (1일)'
+  });
 }
 
 /**
@@ -1899,3 +1959,7 @@ window.startStravaSyncToday = startStravaSyncToday;
 window.startStravaSyncTodayAll = startStravaSyncTodayAll;
 window.confirmStravaSync = confirmStravaSync;
 window.syncStravaDataWithMmp = syncStravaDataWithMmp;
+window.syncStravaMmpUserBulk10 = syncStravaMmpUserBulk10;
+window.syncStravaMmpUserSingleDay = syncStravaMmpUserSingleDay;
+window.syncStravaMmpAllUsers = syncStravaMmpAllUsers;
+window.syncStravaMmpAdminOnly = syncStravaMmpAdminOnly;
