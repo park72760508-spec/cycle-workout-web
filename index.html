@@ -13970,6 +13970,44 @@
     var stelvioBackToTopScrollHandler = null;
     /** 탭 전환 후 apply/render 완료 시 한 번 더 맨 위로 (캐시 즉시 표시 경로) */
     var stelvioRankingTabScrollAfterApply = false;
+    /** CYCLE 랭킹 상단 탭 스크롤 — GC 등 좌측 탭 노출·좌우 이동 */
+    function stelvioScrollDurationTabIntoView(tabEl, align) {
+      var wrap = document.querySelector('#stelvioRankingScreen .stelvio-duration-chips-wrap');
+      if (!wrap || !tabEl) return;
+      var tabLeft = tabEl.offsetLeft;
+      var tabWidth = tabEl.offsetWidth;
+      var wrapWidth = wrap.clientWidth;
+      var maxScroll = Math.max(0, wrap.scrollWidth - wrapWidth);
+      var pad = 4;
+      var nextScroll = wrap.scrollLeft;
+      if (align === 'start') {
+        nextScroll = tabLeft - pad;
+      } else if (align === 'center') {
+        nextScroll = tabLeft - (wrapWidth - tabWidth) / 2;
+      } else {
+        if (tabLeft < wrap.scrollLeft + pad) nextScroll = tabLeft - pad;
+        else if (tabLeft + tabWidth > wrap.scrollLeft + wrapWidth - pad) {
+          nextScroll = tabLeft + tabWidth - wrapWidth + pad;
+        }
+      }
+      wrap.scrollLeft = Math.max(0, Math.min(maxScroll, nextScroll));
+    }
+    function stelvioEnsureDurationTabsScrollVisible(opts) {
+      opts = opts || {};
+      var chips = document.getElementById('stelvioDurationTabs');
+      var wrap = document.querySelector('#stelvioRankingScreen .stelvio-duration-chips-wrap');
+      if (!chips || !wrap) return;
+      var gcTab = chips.querySelector('.stelvio-duration-tab[data-duration="gc"]');
+      var activeTab = chips.querySelector('.stelvio-duration-tab.active');
+      if (opts.resetToGc && gcTab) {
+        wrap.scrollLeft = 0;
+        stelvioScrollDurationTabIntoView(gcTab, 'start');
+        return;
+      }
+      if (activeTab) stelvioScrollDurationTabIntoView(activeTab, opts.align || 'nearest');
+    }
+    window.stelvioEnsureDurationTabsScrollVisible = stelvioEnsureDurationTabsScrollVisible;
+
     /** 랭킹보드 내부 스크롤 영역 맨 위로 — 탭 전환·필터 변경 시 즉시 + 레이아웃 안정 후 재시도 */
     function stelvioScrollRankingBoardToTopSmooth() {
       function scrollNow() {
@@ -13982,11 +14020,8 @@
             s.scrollTop = 0;
           }
         }
-        var activeTab = document.querySelector('#stelvioDurationTabs .stelvio-duration-tab.active');
-        if (activeTab && typeof activeTab.scrollIntoView === 'function') {
-          try {
-            activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
-          } catch (eTab) {}
+        if (typeof stelvioEnsureDurationTabsScrollVisible === 'function') {
+          stelvioEnsureDurationTabsScrollVisible({ align: 'nearest' });
         }
       }
       scrollNow();
@@ -14590,6 +14625,9 @@
       if (typeof stelvioEnsureRankingTabViewActive === 'function') {
         stelvioEnsureRankingTabViewActive('gc');
       }
+      if (typeof stelvioEnsureDurationTabsScrollVisible === 'function') {
+        stelvioEnsureDurationTabsScrollVisible({ resetToGc: true });
+      }
       if (stelvioRankingByCategory) {
         var durCheck =
           stelvioRankingDisplayedApiDuration || stelvioRankingByCategoryDuration || '';
@@ -14627,6 +14665,9 @@
       requestAnimationFrame(function () {
         var s = document.getElementById('stelvioRankingScrollArea');
         if (s) s.scrollTop = 0;
+        if (typeof stelvioEnsureDurationTabsScrollVisible === 'function') {
+          stelvioEnsureDurationTabsScrollVisible({ resetToGc: true });
+        }
       });
       /* 탈퇴 사용자 ID 실시간 구독 시작 (랭킹 목록에서 즉시 제외) */
       if (typeof stelvioSubscribeWithdrawnUserIds === 'function') {
@@ -15820,6 +15861,9 @@
           btn.classList.add('active');
           stelvioRankingFetchGen++;
           stelvioRankingState.duration = nextDur;
+          if (typeof stelvioScrollDurationTabIntoView === 'function') {
+            stelvioScrollDurationTabIntoView(btn, 'nearest');
+          }
           stelvioRankingInvalidatePreRenderViewsExcept(nextDur);
           stelvioResetRankingListExpansionForNewTab();
           stelvioApplyDurationModeUi();
@@ -36291,6 +36335,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         
         /* 랭킹: openStelvioRankingBoardModal 외 경로(showScreen만) 진입 시에도 IDB 즉시 표시 + 백그라운드 동기화 */
         if (screenId === 'stelvioRankingScreen' && !window.__stelvioRankingOpening) {
+          if (typeof stelvioEnsureDurationTabsScrollVisible === 'function') {
+            requestAnimationFrame(function () {
+              stelvioEnsureDurationTabsScrollVisible({ resetToGc: !stelvioRankingState || stelvioRankingState.duration === 'gc', align: 'nearest' });
+            });
+          }
           if (typeof stelvioBeginRankingTabSwitchUi === 'function') stelvioBeginRankingTabSwitchUi();
           (async function () {
             if (typeof stelvioInvalidatePeakRankMovementCachesIfLogicStale === 'function') {
