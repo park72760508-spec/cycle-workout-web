@@ -385,7 +385,7 @@
         if (!isFinite(km) || km <= 0) return;
         pushListItem(list, r, {
           value: km,
-          valueLabel: fmt().formatDistanceKm(km) + 'km'
+          valueLabel: fmt().formatDistanceKm(km)
         });
       });
       list.sort(function (a, b) { return b.value - a.value; });

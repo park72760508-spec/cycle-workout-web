@@ -10,7 +10,7 @@
 
   var TABS = [
     { id: 'overall', label: '종합', unit: 'pt', sortKey: 'total_score', sortDir: 'desc' },
-    { id: 'pace', label: '페이스', unit: '/km', sortKey: 'pace', sortDir: 'asc' },
+    { id: 'pace', label: '페이스', unit: 'min/km', sortKey: 'pace', sortDir: 'asc' },
     { id: 'tss', label: 'TSS', unit: 'TSS', sortKey: 'weekly_tss', sortDir: 'desc' },
     { id: 'distance', label: '거리', unit: 'km', sortKey: 'distance_30d_km', sortDir: 'desc' },
     { id: 'crew', label: '크루', unit: 'pt', sortKey: 'crew_score', sortDir: 'desc' }
