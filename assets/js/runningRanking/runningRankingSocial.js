@@ -53,7 +53,20 @@
     return boot(Object.assign({ forceFirestore: true, subscribeGroups: true }, opts || {}));
   }
 
-  function insertStarHtml(nameWrap, starHtml) {
+  function starButtonOptsForRow(socialUid, boardUid) {
+    var opts = {};
+    if (socialUid && boardUid && socialUid !== boardUid) opts.altUid = boardUid;
+    return opts;
+  }
+
+  function updateRowStarSlot(rowEl, starHtml) {
+    if (!rowEl) return;
+    var slot = rowEl.querySelector('.stelvio-rank-star-slot');
+    if (slot) {
+      slot.innerHTML = starHtml || '';
+      return;
+    }
+    var nameWrap = rowEl.querySelector('.stelvio-rank-name');
     if (!nameWrap || !starHtml) return;
     var oldStars = nameWrap.querySelectorAll('.stelvio-rank-stars-wrap');
     var oi;
@@ -77,15 +90,18 @@
     var starFn = callFn('stelvioRankingStarButtonHtml');
     if (!starFn) return;
 
-    var rows = root.querySelectorAll('.running-ranking-row[data-social-uid]');
+    var rows = root.querySelectorAll('.running-ranking-row[data-social-uid], .running-ranking-row[data-board-uid]');
     var ri;
     for (ri = 0; ri < rows.length; ri++) {
       var rowEl = rows[ri];
-      var uid = rowEl.getAttribute('data-social-uid');
-      if (!uid) continue;
-      var nameWrap = rowEl.querySelector('.stelvio-rank-name');
-      if (!nameWrap) continue;
-      insertStarHtml(nameWrap, starFn(uid));
+      var socialUid = rowEl.getAttribute('data-social-uid') || '';
+      var boardUid = rowEl.getAttribute('data-board-uid') || '';
+      var primaryUid = socialUid || boardUid;
+      if (!primaryUid) continue;
+      updateRowStarSlot(
+        rowEl,
+        starFn(primaryUid, starButtonOptsForRow(socialUid, boardUid))
+      );
     }
 
     var refresh = callFn('stelvioRankingRefreshListStarSlots');
@@ -198,10 +214,15 @@
 
   function getStarHtml(item) {
     if (!item || item.isCrew) return '';
-    var uid = socialUserId(item);
-    if (!uid) return '';
+    var socialUid = socialUserId(item);
+    var boardUid = item.userId != null ? String(item.userId) : '';
+    if (!socialUid && !boardUid) return '';
     var starFn = callFn('stelvioRankingStarButtonHtml');
-    return starFn ? starFn(uid) : '';
+    if (!starFn) return '';
+    return starFn(
+      socialUid || boardUid,
+      starButtonOptsForRow(socialUid, boardUid)
+    );
   }
 
   function getRankChangeHtml(item, listCategoryKey) {
