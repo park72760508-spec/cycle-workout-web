@@ -3511,6 +3511,49 @@ exports.stravaSyncPreviousDay = onSchedule(
 );
 
 /**
+ * 당일(서울) Strava 갭 탐지 — 웹훅·새벽 배치 누락 보완.
+ * 점심·저녁에 당일 활동이 이미 올라온 뒤 누락분만 processStravaActivity.
+ */
+const stravaSyncTodayGapOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  schedule: "0 12,20 * * *",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 1800,
+  memory: "1GiB",
+});
+if (STRAVA_CLIENT_SECRET) {
+  stravaSyncTodayGapOptions.secrets = stravaSyncTodayGapOptions.secrets || [];
+  if (!stravaSyncTodayGapOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    stravaSyncTodayGapOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
+}
+async function runStravaGapDetectTodayJob(db, logPrefix) {
+  const today = getTodayAfterBefore();
+  const range = stravaSyncRetry.ymdRangeToUnix({
+    dateFrom: today.dateFrom,
+    dateTo: today.dateTo,
+  });
+  return stravaGapDetect.runGapDetectSyncJob(
+    db,
+    range,
+    {
+      refreshStravaTokenForUser,
+      fetchStravaActivitiesPage,
+      processStravaActivity,
+      supabaseDualWriteServer,
+    },
+    logPrefix || "[stravaSyncTodayGap]",
+    { includeGapScanAllUsers: true }
+  );
+}
+exports.stravaSyncTodayGap = onSchedule(
+  stravaSyncTodayGapOptions,
+  async () => {
+    const db = admin.firestore();
+    await runStravaGapDetectTodayJob(db, "[stravaSyncTodayGap]");
+  }
+);
+
+/**
  * 일요일 19시(Asia/Seoul)에 당일(일요일) Strava 로그 수집. 1000명 대비 청크 팬아웃.
  */
 const stravaSyncSundayOptions = supabaseDualWriteServer.appendServiceRoleSecret({

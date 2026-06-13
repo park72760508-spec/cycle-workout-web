@@ -112,7 +112,17 @@ async function listUsersNeedingStravaSyncRetry(db, options = {}) {
       {};
     const rFrom = String(range.dateFrom || d.strava_sync_retry_date_from || "").slice(0, 10);
     const rTo = String(range.dateTo || d.strava_sync_retry_date_to || "").slice(0, 10);
-    if (dateFrom && dateTo && !rangeOverlapsYmd(rFrom, rTo, dateFrom, dateTo)) continue;
+    // pending·429·단건 activityId 재시도는 저장된 구간이 과거여도 현재 job 구간으로 재수집해야 함
+    const forceRetryRegardlessOfRange =
+      pending || hasActivityRetry || status429 || retryStatus429;
+    if (
+      !forceRetryRegardlessOfRange &&
+      dateFrom &&
+      dateTo &&
+      !rangeOverlapsYmd(rFrom, rTo, dateFrom, dateTo)
+    ) {
+      continue;
+    }
 
     out.push(doc.id);
     if (out.length >= maxUsers) break;

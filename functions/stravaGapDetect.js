@@ -100,13 +100,6 @@ async function listPendingRetryUserIds(db, rangeOpts = {}) {
   const snap = await db.collection("users").where("strava_sync_retry_pending", "==", true).limit(maxUsers).get();
   const out = [];
   for (const doc of snap.docs) {
-    const d = doc.data() || {};
-    const range = d.strava_sync_retry_range || {};
-    const rFrom = String(range.dateFrom || d.strava_sync_retry_date_from || "").slice(0, 10);
-    const rTo = String(range.dateTo || d.strava_sync_retry_date_to || "").slice(0, 10);
-    if (dateFrom && dateTo && rFrom && rTo && !stravaSyncRetry.rangeOverlapsYmd(rFrom, rTo, dateFrom, dateTo)) {
-      continue;
-    }
     out.push(doc.id);
   }
   return out;
@@ -351,7 +344,7 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
     }
 
     if (activityIds.size === 0) {
-      if (gapError && entry.sources.has("A_pending")) {
+      if (gapError) {
         await stravaSyncRetry.markStravaSyncRetryPending(db, entry.userId, {
           dateFrom: range.dateFrom,
           dateTo: range.dateTo,
