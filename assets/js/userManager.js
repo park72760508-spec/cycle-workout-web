@@ -580,6 +580,146 @@ function getProfileUserContactDigits(user) {
   return String(raw).replace(/\D/g, '');
 }
 
+/** auth 바 환영 문구 — 전화번호 형태 제외 */
+function isPhoneLikeAuthDisplayName(val) {
+  var s = String(val || '').trim();
+  if (!s) return false;
+  var digits = s.replace(/\D/g, '');
+  if (!digits || digits.length < 10 || digits.length > 11 || !/^01/.test(digits)) return false;
+  var stripped = s.replace(/[\s\-+()]/g, '');
+  return /^\d+$/.test(stripped);
+}
+
+function isStelvioAuthPhoneEmail(email) {
+  var em = String(email || '').trim().toLowerCase();
+  if (!em.endsWith('@stelvio.ai')) return false;
+  var local = em.split('@')[0] || '';
+  return /^\d{10,11}$/.test(local);
+}
+
+function pickAuthBarDisplayNameFromProfile(user) {
+  if (!user || typeof user !== 'object') return '';
+  var name = getProfileUserDisplayName(user);
+  if (name && !isPhoneLikeAuthDisplayName(name)) return name;
+  return '';
+}
+
+function profilesForAuthBarDisplayName(authUser) {
+  var out = [];
+  var seen = {};
+  function push(p) {
+    if (!p || typeof p !== 'object') return;
+    var pid = String(p.id || p.uid || '').trim();
+    var key = pid || ('obj_' + out.length);
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push(p);
+  }
+  if (typeof window !== 'undefined') {
+    if (window.currentUser) push(window.currentUser);
+    try {
+      var rawCu = localStorage.getItem('currentUser');
+      if (rawCu) push(JSON.parse(rawCu));
+      var rawAu = localStorage.getItem('authUser');
+      if (rawAu) push(JSON.parse(rawAu));
+    } catch (_eLs) {}
+    var uid = authUser && authUser.uid ? String(authUser.uid) : '';
+    if (!uid && window.currentUser) {
+      uid = String(window.currentUser.id || window.currentUser.uid || '');
+    }
+    if (uid) {
+      var pools = [window.users, window.userProfiles];
+      for (var pi = 0; pi < pools.length; pi++) {
+        var pool = pools[pi];
+        if (!Array.isArray(pool)) continue;
+        for (var i = 0; i < pool.length; i++) {
+          var row = pool[i];
+          if (!row) continue;
+          var rid = String(row.id || row.uid || '').trim();
+          if (rid && rid === uid) push(row);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** 카테고리·베이스캠프 auth 바 — Firestore 프로필·users 목록·localStorage에서 표시 이름 조회 */
+function resolveAuthBarDisplayName(authUser) {
+  var authUid = authUser && authUser.uid ? String(authUser.uid) : '';
+  if (!authUid && typeof window !== 'undefined' && window.currentUser) {
+    authUid = String(window.currentUser.id || window.currentUser.uid || '');
+  }
+  var profiles = profilesForAuthBarDisplayName(authUser);
+  var fallbackName = '';
+  for (var i = 0; i < profiles.length; i++) {
+    var p = profiles[i];
+    var pid = String(p.id || p.uid || '').trim();
+    var name = pickAuthBarDisplayNameFromProfile(p);
+    if (!name) continue;
+    if (!authUid || !pid || pid === authUid) return name;
+    if (!fallbackName) fallbackName = name;
+  }
+  if (fallbackName) return fallbackName;
+  if (authUser && authUser.displayName) {
+    var dn = String(authUser.displayName).trim();
+    if (dn && !isPhoneLikeAuthDisplayName(dn)) return dn;
+  }
+  if (authUser && authUser.email && !isStelvioAuthPhoneEmail(authUser.email)) {
+    var localPart = authUser.email.split('@')[0];
+    if (localPart && !isPhoneLikeAuthDisplayName(localPart)) return localPart;
+  }
+  return '사용자';
+}
+
+var _authBarNameHydrateInflight = {};
+
+/** 이름이 아직 없을 때 Firestore users/{uid} 재조회 후 auth 바 갱신 */
+async function hydrateAuthBarDisplayNameIfNeeded(authUser) {
+  var uid = authUser && authUser.uid ? String(authUser.uid) : '';
+  if (!uid && typeof window !== 'undefined' && window.currentUser) {
+    uid = String(window.currentUser.id || window.currentUser.uid || '');
+  }
+  if (!uid) return resolveAuthBarDisplayName(authUser);
+  var syncName = resolveAuthBarDisplayName(authUser);
+  if (syncName && syncName !== '사용자') return syncName;
+  if (_authBarNameHydrateInflight[uid]) {
+    try {
+      return await _authBarNameHydrateInflight[uid];
+    } catch (_eWait) {
+      return syncName;
+    }
+  }
+  var job = (async function () {
+    if (typeof window.getUserByUid !== 'function') return syncName;
+    var fresh = await window.getUserByUid(uid);
+    if (fresh && typeof fresh === 'object') {
+      window.currentUser = fresh;
+      if (typeof persistStelvioUserToLocalStorage === 'function') {
+        persistStelvioUserToLocalStorage(fresh);
+      }
+      var name = resolveAuthBarDisplayName(authUser || { uid: uid });
+      if (typeof window.updateAuthBarUI === 'function') {
+        var au = authUser;
+        if (!au || !au.uid) {
+          au = (window.authV9 && window.authV9.currentUser) ||
+            (window.auth && window.auth.currentUser) ||
+            { uid: uid };
+        }
+        window.updateAuthBarUI(au);
+      }
+      return name;
+    }
+    return syncName;
+  })();
+  _authBarNameHydrateInflight[uid] = job;
+  try {
+    return await job;
+  } finally {
+    delete _authBarNameHydrateInflight[uid];
+  }
+}
+
 function matchesProfileUserSearch(user, nameQuery, contactDigits) {
   var nameNorm = normalizeProfileSearchText(getProfileUserDisplayName(user));
   var qName = normalizeProfileSearchText(nameQuery);
@@ -765,6 +905,9 @@ function refreshProfileScreenUserList() {
 
 window.isProfileListDisplayableUser = isProfileListDisplayableUser;
 window.getProfileUserDisplayName = getProfileUserDisplayName;
+window.isPhoneLikeAuthDisplayName = isPhoneLikeAuthDisplayName;
+window.resolveAuthBarDisplayName = resolveAuthBarDisplayName;
+window.hydrateAuthBarDisplayNameIfNeeded = hydrateAuthBarDisplayNameIfNeeded;
 window.matchesProfileUserSearch = matchesProfileUserSearch;
 window.filterProfileListDisplayableUsers = filterProfileListDisplayableUsers;
 window.refreshProfileScreenUserList = refreshProfileScreenUserList;
@@ -839,7 +982,8 @@ if (typeof window !== 'undefined') {
 
 /** localStorage용 — Firestore 전체 문서 대신 필수 필드만 (QuotaExceeded 방지) */
 var STELVIO_USER_LS_SNAPSHOT_KEYS = [
-  'id', 'uid', 'name', 'contact', 'phone', 'phoneNumber', 'tel',
+  'id', 'uid', 'name', 'display_name', 'displayName', 'user_name',
+  'contact', 'phone', 'phoneNumber', 'tel',
   'ftp', 'ftp_watts', 'FTP', 'weight', 'weightKg', 'weight_kg',
   'birth_year', 'birthYear', 'gender', 'sex', 'challenge', 'category', 'grade',
   'expiry_date', 'is_private', 'profileImageUrl', 'profile_image_url',
@@ -4291,6 +4435,18 @@ async function loadUsers() {
       try {
         window.updateSettingsGeminiApiStatusLine();
       } catch (_) {}
+    }
+
+    if (typeof window.updateAuthBarUI === 'function') {
+      try {
+        var authForBar = (window.authV9 && window.authV9.currentUser) ||
+          (window.auth && window.auth.currentUser) ||
+          null;
+        if (!authForBar && window.currentUser && (window.currentUser.id || window.currentUser.uid)) {
+          authForBar = { uid: String(window.currentUser.id || window.currentUser.uid) };
+        }
+        window.updateAuthBarUI(authForBar);
+      } catch (_eBar) {}
     }
 
     console.log('[loadUsers] ✅ 사용자 목록 렌더링 완료:', { 
