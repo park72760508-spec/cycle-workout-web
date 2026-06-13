@@ -461,10 +461,14 @@
           }, '전체'),
           React.createElement('button', {
             type: 'button',
-            className: 'stelvio-ranking-filter-chip' + (listFilter === 'interest' ? ' stelvio-ranking-filter-chip--active' : ''),
+            className: 'stelvio-ranking-filter-chip running-ranking-filter-chip--interest' +
+              (listFilter === 'interest' ? ' stelvio-ranking-filter-chip--active' : ''),
             'aria-pressed': listFilter === 'interest',
             onClick: function () { setListFilter('interest'); }
-          }, '관심')
+          },
+            '관심',
+            React.createElement('span', { className: 'running-ranking-filter-star', 'aria-hidden': true }, '☆')
+          )
         )
       : null;
 
