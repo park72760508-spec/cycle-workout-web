@@ -27492,6 +27492,10 @@
                 window.isAuthReady = true;
                 
                 console.log('✅ 사용자 정보 로드 완료:', { name: userData.name, uid: user.uid });
+
+                if (typeof updateAuthBarUI === 'function') {
+                  updateAuthBarUI(user);
+                }
                 
                 if (typeof showToast === 'function') {
                   showToast(userData.name + '님, 로그인되었습니다.');
@@ -27922,6 +27926,61 @@
       });
     }
     
+    /** 전화번호 형태 문자열 여부 (환영 문구에 노출 금지) */
+    function isPhoneLikeAuthDisplayName(val) {
+      var s = String(val || '').trim();
+      if (!s) return false;
+      var digits = s.replace(/\D/g, '');
+      if (!digits || digits.length < 10 || digits.length > 11 || !/^01/.test(digits)) return false;
+      var stripped = s.replace(/[\s\-+()]/g, '');
+      return /^\d+$/.test(stripped);
+    }
+
+    function isStelvioAuthPhoneEmail(email) {
+      var em = String(email || '').trim().toLowerCase();
+      if (!em.endsWith('@stelvio.ai')) return false;
+      var local = em.split('@')[0] || '';
+      return /^\d{10,11}$/.test(local);
+    }
+
+    /** auth 바 환영 문구용 표시 이름 — Firestore 프로필 우선, 전화번호·@stelvio.ai 이메일 로컬파트 제외 */
+    function resolveAuthBarUserName(authUser) {
+      var profiles = [];
+      try {
+        if (window.currentUser) profiles.push(window.currentUser);
+        var rawCu = localStorage.getItem('currentUser');
+        if (rawCu) profiles.push(JSON.parse(rawCu));
+        var rawAu = localStorage.getItem('authUser');
+        if (rawAu) profiles.push(JSON.parse(rawAu));
+      } catch (e) {}
+
+      var authUid = authUser && authUser.uid ? String(authUser.uid) : '';
+      for (var i = 0; i < profiles.length; i++) {
+        var p = profiles[i];
+        if (!p || typeof p !== 'object') continue;
+        if (authUid) {
+          var pid = String(p.id || p.uid || '').trim();
+          if (pid && pid !== authUid) continue;
+        }
+        var name = (typeof window.getProfileUserDisplayName === 'function')
+          ? window.getProfileUserDisplayName(p)
+          : String(p.name || '').trim();
+        if (name && name !== 'undefined' && name !== 'null' && !isPhoneLikeAuthDisplayName(name)) {
+          return name;
+        }
+      }
+
+      if (authUser && authUser.displayName) {
+        var dn = String(authUser.displayName).trim();
+        if (dn && !isPhoneLikeAuthDisplayName(dn)) return dn;
+      }
+      if (authUser && authUser.email && !isStelvioAuthPhoneEmail(authUser.email)) {
+        var localPart = authUser.email.split('@')[0];
+        if (localPart && !isPhoneLikeAuthDisplayName(localPart)) return localPart;
+      }
+      return '사용자';
+    }
+
     /**
      * auth 바 UI 갱신: 로그인 시 환영합니다. 사용자명님 + 로그아웃, 비로그인 시 로그인 버튼 + 안내
      */
@@ -27952,16 +28011,8 @@
       const subRight = document.getElementById('indoorSubAuthBarRight');
       const subWarning = document.getElementById('indoorSubAuthBarWarning');
       if (!left || !right) return;
-      var loggedIn = !!(user && user.email);
-      var userName = '사용자';
-      if (loggedIn) {
-        try {
-          var cu = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-          if (cu && cu.name) userName = cu.name;
-          else if (user.displayName) userName = user.displayName;
-          else if (user.email) userName = user.email.split('@')[0];
-        } catch (e) {}
-      }
+      var loggedIn = !!(user && (user.uid || user.email));
+      var userName = loggedIn ? resolveAuthBarUserName(user) : '사용자';
       _syncAuthBarPair('authBarLeft', 'authBarRight', 'authBarWarning', 'authBarWelcomeLine1', 'authBarWelcomeLine2', user, userName, loggedIn);
       _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn);
       _syncAuthBarPair('runAuthBarLeft', 'runAuthBarRight', 'runAuthBarWarning', 'runAuthBarWelcomeLine1', 'runAuthBarWelcomeLine2', user, userName, loggedIn);
@@ -28023,6 +28074,12 @@
         if (typeof updateAuthBarUI === 'function') updateAuthBarUI(user);
       });
       if (auth.currentUser && typeof updateAuthBarUI === 'function') updateAuthBarUI(auth.currentUser);
+      document.addEventListener('stelvio-auth-ready', function () {
+        var a = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+        if (typeof updateAuthBarUI === 'function') {
+          updateAuthBarUI(a && a.currentUser ? a.currentUser : null);
+        }
+      });
     })();
     
     /**
