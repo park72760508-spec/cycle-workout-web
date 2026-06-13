@@ -27632,6 +27632,17 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 .running-ranking-body--overall {
   padding: 0 4px 12px;
 }
+#runningRankingScreen .stelvio-duration-chips-wrap {
+  display: flex;
+  justify-content: center;
+}
+#runningRankingScreen .stelvio-duration-chips {
+  justify-content: center;
+  width: max-content;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
 .running-ranking-filter-divider {
   height: 0;
   border: none;
