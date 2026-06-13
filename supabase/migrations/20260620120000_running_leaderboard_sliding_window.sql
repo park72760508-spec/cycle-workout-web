@@ -1,7 +1,7 @@
--- RUN 랭킹 v3: 거리별 슬라이딩 윈도우 + 중·장거리 30% 페널티(기록 1건)
+-- RUN 랭킹 v4: 왜곡 방지형 슬라이딩 윈도우 (구간별 최고 피크 → 상위 2구간 평균)
 -- 기존 테이블 ALTER 없음 — 헬퍼 함수·get_running_leaderboard() 교체만
+-- 날짜: activities.activity_date 우선, 없으면 run_activity_efforts.updated_at/created_at (서울)
 
--- 슬라이딩 윈도우 조회 성능 (user_id + 활동일/갱신일)
 CREATE INDEX IF NOT EXISTS idx_run_activity_efforts_user_updated_at
   ON public.run_activity_efforts (user_id, updated_at DESC);
 
@@ -45,7 +45,24 @@ $$;
 COMMENT ON FUNCTION public.fn_running_speed_from_avg_paces(double precision, double precision) IS
   '두 페이스(sec/km)의 산술 평균에 해당하는 속도(m/s). p_pace2 NULL이면 p_pace1만 사용';
 
--- 구간별 슬라이딩 피크 집계 (단거리=최고 1개, 중·장거리=top2 평균 또는 1건 30% 페널티)
+-- 중·장거리 1구간만 기록 시 30% 페널티 가상기록 반영 속도
+CREATE OR REPLACE FUNCTION public.fn_running_penalty_speed_from_best(
+  p_best_speed double precision
+)
+RETURNS double precision
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT public.fn_running_speed_from_avg_paces(
+    public.fn_running_pace_sec_per_km(p_best_speed),
+    public.fn_running_pace_sec_per_km(p_best_speed) * 1.30
+  );
+$$;
+
+COMMENT ON FUNCTION public.fn_running_penalty_speed_from_best(double precision) IS
+  '기록 1구간만 존재 시: 최종 페이스 = (최고 페이스 + 최고×1.30) / 2 에 해당하는 m/s';
+
+-- 레거시 호환: 구간별 top-N 평균 (v3) — v4에서는 버킷 집계로 대체, 시그니처 유지
 CREATE OR REPLACE FUNCTION public.fn_running_sliding_axis_speed(
   p_axis text,
   p_best_speed double precision,
@@ -60,10 +77,7 @@ AS $$
     WHEN p_peak_count IS NULL OR p_peak_count <= 0 THEN NULL
     WHEN p_peak_count = 1
       AND lower(btrim(COALESCE(p_axis, ''))) IN ('5k', '7k', '10k', '20k', '42k') THEN
-      public.fn_running_speed_from_avg_paces(
-        public.fn_running_pace_sec_per_km(p_best_speed),
-        public.fn_running_pace_sec_per_km(p_best_speed) * 1.30
-      )
+      public.fn_running_penalty_speed_from_best(p_best_speed)
     WHEN p_peak_count >= 2
       AND lower(btrim(COALESCE(p_axis, ''))) IN ('5k', '7k', '10k', '20k', '42k') THEN
       public.fn_running_speed_from_avg_paces(
@@ -75,7 +89,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.fn_running_sliding_axis_speed(text, double precision, double precision, integer) IS
-  '슬라이딩 윈도우 구간 피크: 단거리 MAX(speed), 중·장거리 top2 페이스 평균, 1건 시 페이스×1.30 가상기록 반영';
+  '레거시 헬퍼 — v4 랭킹은 get_running_leaderboard 내부 버킷 집계 사용';
 
 CREATE OR REPLACE FUNCTION public.get_running_leaderboard()
 RETURNS jsonb
@@ -150,8 +164,7 @@ AS $$
       am.act_date,
       v.axis,
       v.speed,
-      v.hr,
-      public.fn_running_sliding_window_days(v.axis) AS window_days
+      v.hr
     FROM activity_mono am
     CROSS JOIN LATERAL (
       VALUES
@@ -165,64 +178,169 @@ AS $$
     ) AS v(axis, speed, hr)
     WHERE v.speed IS NOT NULL AND v.speed > 0
   ),
-  axis_in_window AS (
-    SELECT ap.*
+  axis_peaks_bucketed AS (
+    SELECT
+      ap.user_id,
+      ap.activity_id,
+      ap.axis,
+      ap.speed,
+      ap.hr,
+      CASE
+        WHEN ap.act_date >= (st.today - interval '30 days')::date THEN 1
+        WHEN ap.act_date >= (st.today - interval '60 days')::date THEN 2
+        WHEN ap.act_date >= (st.today - interval '90 days')::date THEN 3
+        ELSE NULL
+      END AS time_bucket
     FROM axis_activity_peaks ap
     CROSS JOIN seoul_today st
-    WHERE ap.act_date >= (st.today - (ap.window_days || ' days')::interval)::date
-      AND ap.act_date <= st.today
+    WHERE ap.act_date <= st.today
   ),
-  ranked_axis_peaks AS (
+  axis_bucket_filtered AS (
+    SELECT *
+    FROM axis_peaks_bucketed apb
+    WHERE apb.time_bucket IS NOT NULL
+      AND (
+        (apb.axis IN ('1k', '3k') AND apb.time_bucket = 1)
+        OR (apb.axis IN ('5k', '7k') AND apb.time_bucket IN (1, 2))
+        OR (apb.axis IN ('10k', '20k', '42k') AND apb.time_bucket IN (1, 2, 3))
+      )
+  ),
+  bucket_best AS (
     SELECT
-      aiw.*,
+      abf.user_id,
+      abf.axis,
+      abf.time_bucket,
+      MAX(abf.speed) AS bucket_speed,
+      (array_agg(abf.hr ORDER BY abf.speed DESC, abf.activity_id))[1] AS bucket_hr
+    FROM axis_bucket_filtered abf
+    GROUP BY abf.user_id, abf.axis, abf.time_bucket
+  ),
+  short_sliding AS (
+    SELECT
+      bb.user_id,
+      bb.axis,
+      MAX(bb.bucket_speed) AS agg_speed,
+      (array_agg(bb.bucket_hr ORDER BY bb.bucket_speed DESC))[1] AS best_hr,
+      false AS is_penalty_applied
+    FROM bucket_best bb
+    WHERE bb.axis IN ('1k', '3k')
+    GROUP BY bb.user_id, bb.axis
+    HAVING MAX(bb.bucket_speed) > 0
+  ),
+  medium_bucket_pivot AS (
+    SELECT
+      bb.user_id,
+      bb.axis,
+      MAX(bb.bucket_speed) FILTER (WHERE bb.time_bucket = 1) AS b1_speed,
+      MAX(bb.bucket_hr) FILTER (WHERE bb.time_bucket = 1) AS b1_hr,
+      MAX(bb.bucket_speed) FILTER (WHERE bb.time_bucket = 2) AS b2_speed,
+      MAX(bb.bucket_hr) FILTER (WHERE bb.time_bucket = 2) AS b2_hr
+    FROM bucket_best bb
+    WHERE bb.axis IN ('5k', '7k')
+    GROUP BY bb.user_id, bb.axis
+  ),
+  medium_sliding AS (
+    SELECT
+      mbp.user_id,
+      mbp.axis,
+      CASE
+        WHEN mbp.b1_speed IS NULL AND mbp.b2_speed IS NULL THEN NULL
+        WHEN mbp.b1_speed IS NOT NULL AND mbp.b2_speed IS NOT NULL THEN
+          public.fn_running_speed_from_avg_paces(
+            public.fn_running_pace_sec_per_km(mbp.b1_speed),
+            public.fn_running_pace_sec_per_km(mbp.b2_speed)
+          )
+        WHEN mbp.b1_speed IS NOT NULL THEN
+          public.fn_running_penalty_speed_from_best(mbp.b1_speed)
+        ELSE
+          public.fn_running_penalty_speed_from_best(mbp.b2_speed)
+      END AS agg_speed,
+      CASE
+        WHEN mbp.b1_speed IS NOT NULL AND mbp.b2_speed IS NULL THEN mbp.b1_hr
+        WHEN mbp.b1_speed IS NULL AND mbp.b2_speed IS NOT NULL THEN mbp.b2_hr
+        WHEN mbp.b1_speed >= mbp.b2_speed THEN mbp.b1_hr
+        ELSE mbp.b2_hr
+      END AS best_hr,
+      (
+        (mbp.b1_speed IS NOT NULL AND mbp.b2_speed IS NULL)
+        OR (mbp.b1_speed IS NULL AND mbp.b2_speed IS NOT NULL)
+      ) AS is_penalty_applied
+    FROM medium_bucket_pivot mbp
+    WHERE mbp.b1_speed IS NOT NULL OR mbp.b2_speed IS NOT NULL
+  ),
+  long_bucket_ranked AS (
+    SELECT
+      bb.user_id,
+      bb.axis,
+      bb.time_bucket,
+      bb.bucket_speed,
+      bb.bucket_hr,
       ROW_NUMBER() OVER (
-        PARTITION BY aiw.user_id, aiw.axis
-        ORDER BY aiw.speed DESC, aiw.activity_id
-      ) AS rn
-    FROM axis_in_window aiw
+        PARTITION BY bb.user_id, bb.axis
+        ORDER BY bb.bucket_speed DESC, bb.time_bucket
+      ) AS bucket_rank,
+      COUNT(*) OVER (
+        PARTITION BY bb.user_id, bb.axis
+      )::integer AS bucket_cnt
+    FROM bucket_best bb
+    WHERE bb.axis IN ('10k', '20k', '42k')
   ),
-  axis_best AS (
+  long_sliding AS (
     SELECT
-      rap.user_id,
-      rap.axis,
-      COUNT(*)::integer AS peak_cnt,
-      MAX(rap.speed) FILTER (WHERE rap.rn = 1) AS best_speed,
-      MAX(rap.speed) FILTER (WHERE rap.rn = 2) AS second_speed,
-      MAX(rap.hr) FILTER (WHERE rap.rn = 1) AS best_hr
-    FROM ranked_axis_peaks rap
-    GROUP BY rap.user_id, rap.axis
+      lbr.user_id,
+      lbr.axis,
+      CASE
+        WHEN MAX(lbr.bucket_cnt) = 1 THEN
+          public.fn_running_penalty_speed_from_best(
+            MAX(lbr.bucket_speed) FILTER (WHERE lbr.bucket_rank = 1)
+          )
+        ELSE
+          public.fn_running_speed_from_avg_paces(
+            public.fn_running_pace_sec_per_km(
+              MAX(lbr.bucket_speed) FILTER (WHERE lbr.bucket_rank = 1)
+            ),
+            public.fn_running_pace_sec_per_km(
+              MAX(lbr.bucket_speed) FILTER (WHERE lbr.bucket_rank = 2)
+            )
+          )
+      END AS agg_speed,
+      (array_agg(lbr.bucket_hr ORDER BY lbr.bucket_rank))[1] AS best_hr,
+      (MAX(lbr.bucket_cnt) = 1) AS is_penalty_applied
+    FROM long_bucket_ranked lbr
+    GROUP BY lbr.user_id, lbr.axis
+    HAVING MAX(lbr.bucket_speed) > 0
   ),
   sliding_peaks AS (
-    SELECT
-      ab.user_id,
-      ab.axis,
-      ab.best_hr,
-      public.fn_running_sliding_axis_speed(
-        ab.axis,
-        ab.best_speed,
-        ab.second_speed,
-        ab.peak_cnt
-      ) AS agg_speed
-    FROM axis_best ab
-    WHERE ab.peak_cnt > 0
+    SELECT user_id, axis, agg_speed, best_hr, is_penalty_applied FROM short_sliding
+    UNION ALL
+    SELECT user_id, axis, agg_speed, best_hr, is_penalty_applied FROM medium_sliding
+    UNION ALL
+    SELECT user_id, axis, agg_speed, best_hr, is_penalty_applied FROM long_sliding
   ),
   sliding_pivot AS (
     SELECT
       sp.user_id,
       MAX(sp.agg_speed) FILTER (WHERE sp.axis = '1k') AS raw_1k,
       MAX(sp.best_hr) FILTER (WHERE sp.axis = '1k') AS hr_1k,
+      BOOL_OR(sp.is_penalty_applied) FILTER (WHERE sp.axis = '1k') AS penalty_1k,
       MAX(sp.agg_speed) FILTER (WHERE sp.axis = '3k') AS raw_3k,
       MAX(sp.best_hr) FILTER (WHERE sp.axis = '3k') AS hr_3k,
+      BOOL_OR(sp.is_penalty_applied) FILTER (WHERE sp.axis = '3k') AS penalty_3k,
       MAX(sp.agg_speed) FILTER (WHERE sp.axis = '5k') AS raw_5k,
       MAX(sp.best_hr) FILTER (WHERE sp.axis = '5k') AS hr_5k,
+      BOOL_OR(sp.is_penalty_applied) FILTER (WHERE sp.axis = '5k') AS penalty_5k,
       MAX(sp.agg_speed) FILTER (WHERE sp.axis = '7k') AS raw_7k,
       MAX(sp.best_hr) FILTER (WHERE sp.axis = '7k') AS hr_7k,
+      BOOL_OR(sp.is_penalty_applied) FILTER (WHERE sp.axis = '7k') AS penalty_7k,
       MAX(sp.agg_speed) FILTER (WHERE sp.axis = '10k') AS raw_10k,
       MAX(sp.best_hr) FILTER (WHERE sp.axis = '10k') AS hr_10k,
+      BOOL_OR(sp.is_penalty_applied) FILTER (WHERE sp.axis = '10k') AS penalty_10k,
       MAX(sp.agg_speed) FILTER (WHERE sp.axis = '20k') AS raw_20k,
       MAX(sp.best_hr) FILTER (WHERE sp.axis = '20k') AS hr_20k,
+      BOOL_OR(sp.is_penalty_applied) FILTER (WHERE sp.axis = '20k') AS penalty_20k,
       MAX(sp.agg_speed) FILTER (WHERE sp.axis = '42k') AS raw_42k,
-      MAX(sp.best_hr) FILTER (WHERE sp.axis = '42k') AS hr_42k
+      MAX(sp.best_hr) FILTER (WHERE sp.axis = '42k') AS hr_42k,
+      BOOL_OR(sp.is_penalty_applied) FILTER (WHERE sp.axis = '42k') AS penalty_42k
     FROM sliding_peaks sp
     GROUP BY sp.user_id
   ),
@@ -236,6 +354,13 @@ AS $$
       sp.hr_10k,
       sp.hr_20k,
       sp.hr_42k,
+      sp.penalty_1k,
+      sp.penalty_3k,
+      sp.penalty_5k,
+      sp.penalty_7k,
+      sp.penalty_10k,
+      sp.penalty_20k,
+      sp.penalty_42k,
       im.speed_1k,
       im.speed_3k,
       im.speed_5k,
@@ -316,6 +441,13 @@ AS $$
       gp.hr_10k,
       gp.hr_20k,
       gp.hr_42k,
+      gp.penalty_1k,
+      gp.penalty_3k,
+      gp.penalty_5k,
+      gp.penalty_7k,
+      gp.penalty_10k,
+      gp.penalty_20k,
+      gp.penalty_42k,
       pp.speed_1k AS pace_speed_1k,
       pp.speed_3k AS pace_speed_3k,
       pp.speed_5k AS pace_speed_5k,
@@ -329,7 +461,14 @@ AS $$
       pp.hr_7k AS pace_hr_7k,
       pp.hr_10k AS pace_hr_10k,
       pp.hr_20k AS pace_hr_20k,
-      pp.hr_42k AS pace_hr_42k
+      pp.hr_42k AS pace_hr_42k,
+      pp.penalty_1k AS pace_penalty_1k,
+      pp.penalty_3k AS pace_penalty_3k,
+      pp.penalty_5k AS pace_penalty_5k,
+      pp.penalty_7k AS pace_penalty_7k,
+      pp.penalty_10k AS pace_penalty_10k,
+      pp.penalty_20k AS pace_penalty_20k,
+      pp.penalty_42k AS pace_penalty_42k
     FROM all_users u
     LEFT JOIN gc_profile gp ON gp.user_id = u.user_id
     LEFT JOIN pace_peaks pp ON pp.user_id = u.user_id
@@ -473,11 +612,23 @@ AS $$
       ) AS segment_scores
     FROM adjusted a
     LEFT JOIN gc_scores g ON g.user_id = a.user_id
+  ),
+  ranked_rows AS (
+    SELECT
+      w.*,
+      ROW_NUMBER() OVER (
+        ORDER BY w.total_score DESC NULLS LAST, w.user_id
+      )::integer AS ranking
+    FROM with_gc w
+    JOIN public.v_user_public_profile p ON p.id = w.user_id
+    WHERE p.is_private = false
+      AND w.total_score > 0
   )
   SELECT COALESCE(
     jsonb_agg(
       jsonb_build_object(
-        'scoring_version', 3,
+        'scoring_version', 4,
+        'ranking', w.ranking,
         'user_info', jsonb_build_object(
           'user_id', w.user_id,
           'firebase_uid', p.firebase_uid,
@@ -499,82 +650,117 @@ AS $$
           'distance_to', st.today
         ),
         'segment_scores', w.segment_scores,
+        'segment_penalties', jsonb_build_object(
+          '1k', COALESCE(w.penalty_1k, false),
+          '3k', COALESCE(w.penalty_3k, false),
+          '5k', COALESCE(w.penalty_5k, false),
+          '7k', COALESCE(w.penalty_7k, false),
+          '10k', COALESCE(w.penalty_10k, false),
+          '20k', COALESCE(w.penalty_20k, false),
+          '42k', COALESCE(w.penalty_42k, false)
+        ),
         'profile_peak_performances', jsonb_build_object(
           '1k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_1k)),
-            'hr', w.hr_1k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_1k)),
+            'hr', w.hr_1k,
+            'is_penalty_applied', COALESCE(w.penalty_1k, false)
           ),
           '3k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_3k)),
-            'hr', w.hr_3k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_3k)),
+            'hr', w.hr_3k,
+            'is_penalty_applied', COALESCE(w.penalty_3k, false)
           ),
           '5k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_5k)),
-            'hr', w.hr_5k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_5k)),
+            'hr', w.hr_5k,
+            'is_penalty_applied', COALESCE(w.penalty_5k, false)
           ),
           '7k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_7k)),
-            'hr', w.hr_7k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_7k)),
+            'hr', w.hr_7k,
+            'is_penalty_applied', COALESCE(w.penalty_7k, false)
           ),
           '10k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_10k)),
-            'hr', w.hr_10k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_10k)),
+            'hr', w.hr_10k,
+            'is_penalty_applied', COALESCE(w.penalty_10k, false)
           ),
           '20k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_20k)),
-            'hr', w.hr_20k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_20k)),
+            'hr', w.hr_20k,
+            'is_penalty_applied', COALESCE(w.penalty_20k, false)
           ),
           '42k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_42k)),
-            'hr', w.hr_42k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.speed_42k)),
+            'hr', w.hr_42k,
+            'is_penalty_applied', COALESCE(w.penalty_42k, false)
           )
         ),
         'peak_performances', jsonb_build_object(
           '1k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_1k)),
-            'hr', w.pace_hr_1k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_1k)),
+            'hr', w.pace_hr_1k,
+            'is_penalty_applied', COALESCE(w.pace_penalty_1k, false)
           ),
           '3k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_3k)),
-            'hr', w.pace_hr_3k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_3k)),
+            'hr', w.pace_hr_3k,
+            'is_penalty_applied', COALESCE(w.pace_penalty_3k, false)
           ),
           '5k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_5k)),
-            'hr', w.pace_hr_5k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_5k)),
+            'hr', w.pace_hr_5k,
+            'is_penalty_applied', COALESCE(w.pace_penalty_5k, false)
           ),
           '7k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_7k)),
-            'hr', w.pace_hr_7k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_7k)),
+            'hr', w.pace_hr_7k,
+            'is_penalty_applied', COALESCE(w.pace_penalty_7k, false)
           ),
           '10k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_10k)),
-            'hr', w.pace_hr_10k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_10k)),
+            'hr', w.pace_hr_10k,
+            'is_penalty_applied', COALESCE(w.pace_penalty_10k, false)
           ),
           '20k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_20k)),
-            'hr', w.pace_hr_20k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_20k)),
+            'hr', w.pace_hr_20k,
+            'is_penalty_applied', COALESCE(w.pace_penalty_20k, false)
           ),
           '42k', jsonb_build_object(
             'pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_42k)),
-            'hr', w.pace_hr_42k
+            'calculated_pace', public.fn_format_running_pace_mmss(public.fn_running_pace_sec_per_km(w.pace_speed_42k)),
+            'hr', w.pace_hr_42k,
+            'is_penalty_applied', COALESCE(w.pace_penalty_42k, false)
           )
         )
       )
-      ORDER BY w.total_score DESC NULLS LAST, w.user_id
+      ORDER BY w.ranking
     ),
     '[]'::jsonb
   )
-  FROM with_gc w
+  FROM ranked_rows w
   JOIN public.v_user_public_profile p ON p.id = w.user_id
   LEFT JOIN running_volume rv ON rv.user_id = w.user_id
   CROSS JOIN week_bounds wb
-  CROSS JOIN seoul_today st
-  WHERE p.is_private = false
-    AND w.total_score > 0;
+  CROSS JOIN seoul_today st;
 $$;
 
 COMMENT ON FUNCTION public.get_running_leaderboard() IS
-  'RUN v3: 슬라이딩 윈도우(1k/3k=30d, 5k/7k=60d, 10k/20k=90d) + 중·장거리 1건 30% 페널티 + GC 6축';
+  'RUN v4: 왜곡 방지 버킷 피크(1k/3k=30d 단일, 5k/7k=2버킷평균, 10k/20k=3버킷 top2평균) + 30% 페널티 + GC 6축';
 
 GRANT EXECUTE ON FUNCTION public.get_running_leaderboard() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_running_leaderboard() TO service_role;
@@ -583,5 +769,7 @@ GRANT EXECUTE ON FUNCTION public.fn_running_sliding_window_days(text) TO authent
 GRANT EXECUTE ON FUNCTION public.fn_running_sliding_window_days(text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_running_speed_from_avg_paces(double precision, double precision) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_running_speed_from_avg_paces(double precision, double precision) TO service_role;
+GRANT EXECUTE ON FUNCTION public.fn_running_penalty_speed_from_best(double precision) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_running_penalty_speed_from_best(double precision) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fn_running_sliding_axis_speed(text, double precision, double precision, integer) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_running_sliding_axis_speed(text, double precision, double precision, integer) TO service_role;
