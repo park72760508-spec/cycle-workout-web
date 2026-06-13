@@ -90,27 +90,27 @@
 
     if (tabId === 'overall' && props.showSegments && Array.isArray(item.segments) && item.segments.length) {
       children.push(
-        React.createElement('div', { key: 'seg', className: 'running-ranking-segments' },
+        React.createElement('div', { key: 'seg', className: 'running-ranking-segments', role: 'group', 'aria-label': '거리별 페이스' },
           item.segments.map(function (seg) {
-            var paceLabel = seg.pace && seg.pace !== '—' ? seg.pace : '—';
+            var paceLabel = seg.pace && String(seg.pace).trim() ? String(seg.pace).trim() : '—';
+            var hasPace = paceLabel !== '—' && paceLabel !== '-' && paceLabel.toLowerCase() !== 'null';
             var zc = zoneColors();
             var titlePrefix = zc.segmentTitlePrefix
               ? zc.segmentTitlePrefix(seg.key)
               : seg.label;
             var titleParts = [titlePrefix + ' · 페이스 ' + paceLabel];
             if (seg.score != null) titleParts.push('순위점수 ' + seg.score + 'pt');
-            var chipClass = zc.segmentChipClass
+            var chipClass = (zc.segmentChipClass
               ? zc.segmentChipClass(seg.key)
-              : ('running-ranking-segment-chip running-ranking-segment-chip--' + seg.key);
+              : ('running-ranking-segment-chip running-ranking-segment-chip--' + seg.key)) +
+              (hasPace ? '' : ' running-ranking-segment-chip--empty');
             return React.createElement('span', {
               key: seg.key,
               className: chipClass,
               title: titleParts.join(' · ')
             },
-              React.createElement('span', { className: 'running-ranking-segment-label' }, seg.label),
-              React.createElement('span', { className: 'running-ranking-segment-score running-ranking-segment-pace' },
-                paceLabel
-              )
+              React.createElement('span', { className: 'running-ranking-segment-dist' }, seg.label),
+              React.createElement('span', { className: 'running-ranking-segment-pace' }, paceLabel)
             );
           })
         )
