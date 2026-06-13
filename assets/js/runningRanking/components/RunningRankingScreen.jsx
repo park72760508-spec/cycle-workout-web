@@ -311,9 +311,16 @@
     }, [isOverallTab, rawRows, gender, activeCategory]);
 
     useEffect(function () {
-      if (!isOverallTab || loading) return;
+      if (!isOverallTab) {
+        if (typeof window.disposeStelvioDistributionChart === 'function') {
+          window.disposeStelvioDistributionChart('running-ranking-distribution-chart-root');
+        }
+        return;
+      }
+      if (loading) return;
       if (typeof window.refreshStelvioDistributionChart !== 'function') return;
       if (!dataApi().buildDistributionPayload) return;
+      var mountId = 'running-ranking-distribution-chart-root';
       var payload = dataApi().buildDistributionPayload(rawRows, {
         gender: gender,
         category: activeCategory
@@ -334,8 +341,15 @@
           if (Array.isArray(payload.entries)) payload.entries = filt(payload.entries);
         }
       }
-      window.refreshStelvioDistributionChart(payload, 'running-ranking-distribution-chart-root');
-    }, [isOverallTab, rawRows, gender, activeCategory, listFilter, currentUserId, loading, socialVer]);
+      var rafId = requestAnimationFrame(function () {
+        var el = document.getElementById(mountId);
+        if (!el) return;
+        window.refreshStelvioDistributionChart(payload, mountId);
+      });
+      return function () {
+        cancelAnimationFrame(rafId);
+      };
+    }, [isOverallTab, activeTab, rawRows, gender, activeCategory, listFilter, currentUserId, loading, socialVer]);
 
     useEffect(function () {
       if (loading) return;
