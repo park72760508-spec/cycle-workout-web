@@ -61,6 +61,24 @@
     var valueClass = 'stelvio-rank-wkg running-ranking-value' +
       (tabId === 'pace' ? ' running-ranking-value--pace' : '');
 
+    var rank = Math.floor(Number(item.rank));
+    if (!isFinite(rank) || rank < 1) rank = 0;
+
+    var crownChild = medalHtml(rank)
+      ? React.createElement('span', { key: 'crown', className: 'stelvio-rank-crown' }, medalHtml(rank))
+      : React.createElement('span', {
+          key: 'crown-ph',
+          className: 'stelvio-rank-crown stelvio-rank-crown--placeholder',
+          'aria-hidden': true
+        });
+
+    var rankLead = React.createElement(
+      'span',
+      { key: 'ranklead', className: 'stelvio-rank-ranklead' },
+      crownChild,
+      React.createElement('span', { key: 'pos', className: 'stelvio-rank-pos' }, (rank > 0 ? rank : item.rank) + '위')
+    );
+
     var nameChildren = [
       htmlSpan('avatar-' + socialVer, 'stelvio-rank-avatar-slot', avatarHtml),
       React.createElement('span', {
@@ -82,8 +100,7 @@
     }
 
     var children = [
-      React.createElement('span', { key: 'crown', className: 'stelvio-rank-crown' }, medalHtml(item.rank)),
-      React.createElement('span', { key: 'pos', className: 'stelvio-rank-pos' }, item.rank + '위'),
+      rankLead,
       React.createElement('span', { key: 'name', className: 'stelvio-rank-name' }, nameChildren),
       React.createElement('span', { key: 'val', className: valueClass }, valueLabel)
     ];
