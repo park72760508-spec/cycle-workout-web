@@ -2861,6 +2861,63 @@
     </div>
   </div>
 
+  <!-- 인증·자동 로그인 → 카테고리 전환 중 흰 화면 대신 녹색 스피너 -->
+  <div id="authTransitionOverlay" class="auth-transition-overlay hidden" aria-hidden="true" aria-live="polite">
+    <div class="auth-transition-overlay__inner">
+      <div class="ai-loading-spinner-wrap ai-loading-spinner-wrap--large auth-transition-spinner-wrap">
+        <div class="ai-loading-spinner-bg"></div>
+        <div class="ai-loading-spinner auth-transition-spinner" role="status" aria-label="로딩 중"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function () {
+    function authTransitionEl() {
+      return document.getElementById('authTransitionOverlay');
+    }
+    window.showAuthTransitionOverlay = function showAuthTransitionOverlay() {
+      var el = authTransitionEl();
+      if (!el) return;
+      el.classList.remove('hidden');
+      el.style.display = 'flex';
+      el.setAttribute('aria-hidden', 'false');
+      window.__authTransitionOverlayActive = true;
+    };
+    window.hideAuthTransitionOverlay = function hideAuthTransitionOverlay() {
+      var el = authTransitionEl();
+      if (!el) return;
+      el.classList.add('hidden');
+      el.style.display = 'none';
+      el.setAttribute('aria-hidden', 'true');
+      window.__authTransitionOverlayActive = false;
+    };
+    window.hideAuthTransitionOverlayWhenShellReady = function hideAuthTransitionOverlayWhenShellReady() {
+      function shellVisible() {
+        var cat = document.getElementById('sportCategoryScreen');
+        var bc = document.getElementById('basecampScreen');
+        function vis(node) {
+          return node && (node.classList.contains('active') || window.getComputedStyle(node).display !== 'none');
+        }
+        return vis(cat) || vis(bc);
+      }
+      if (shellVisible()) {
+        window.hideAuthTransitionOverlay();
+        return;
+      }
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            if (shellVisible()) window.hideAuthTransitionOverlay();
+            else setTimeout(window.hideAuthTransitionOverlay, 120);
+          });
+        });
+      } else {
+        setTimeout(window.hideAuthTransitionOverlay, 120);
+      }
+    };
+  })();
+  </script>
+
   <!-- 0) 사용자 인증 -->
 <!-- 🔐 인증 화면 (연결 화면 전에 추가) -->
   <div id="authScreen" class="screen" style="display: none;">
@@ -27097,6 +27154,9 @@
       
       // 상태 메시지
       showAuthStatus('로그인 중...', 'info');
+      if (typeof window.showAuthTransitionOverlay === 'function') {
+        window.showAuthTransitionOverlay();
+      }
       
       try {
         /* Android 등: compat script가 늦게 붙어도 authV9만 있으면 로그인 가능 — 짧게 대기·signIn 함수 보강 */
@@ -27482,10 +27542,16 @@
                 } else if (typeof alert === 'function') {
                   alert('탈퇴처리된 사용자입니다.\n\n정상 사용을 위해 재가입을 통해 이용이 가능합니다.\n\n감사합니다.');
                 }
+                if (typeof window.hideAuthTransitionOverlay === 'function') {
+                  window.hideAuthTransitionOverlay();
+                }
                 return;
               }
               if (!knownRegistered) {
                 window.__stelvioPhoneAuthBusy = false;
+                if (typeof window.hideAuthTransitionOverlay === 'function') {
+                  window.hideAuthTransitionOverlay();
+                }
                 handleRegisterClick();
                 return;
               }
@@ -27493,6 +27559,9 @@
               showAuthStatus('❌ 비밀번호 입력이 잘못되었습니다.', 'error');
               if (typeof showToast === 'function') {
                 showToast('비밀번호 입력이 잘못되었습니다.');
+              }
+              if (typeof window.hideAuthTransitionOverlay === 'function') {
+                window.hideAuthTransitionOverlay();
               }
               window.__stelvioPhoneAuthBusy = false;
               return;
@@ -27547,6 +27616,9 @@
         // 카테고리 화면으로 이동 (CYCLE / RUN 선택)
         const switchToBasecamp = () => {
           console.log('🔄 화면 전환 시작: authScreen -> sportCategoryScreen');
+          if (typeof window.showAuthTransitionOverlay === 'function') {
+            window.showAuthTransitionOverlay();
+          }
           
           const authScreen = document.getElementById('authScreen');
           const categoryScreen = document.getElementById('sportCategoryScreen');
@@ -27602,6 +27674,11 @@
               else updateAuthBarUI(null);
             }
             window.scrollTo(0, 0);
+            if (typeof window.hideAuthTransitionOverlayWhenShellReady === 'function') {
+              window.hideAuthTransitionOverlayWhenShellReady();
+            } else if (typeof window.hideAuthTransitionOverlay === 'function') {
+              window.hideAuthTransitionOverlay();
+            }
           }
           
           // showScreen 함수가 있으면 사용 (우선) — 인증 완료 후 카테고리 진입
@@ -27627,6 +27704,11 @@
                   if (a && a.currentUser) updateAuthBarUI(a.currentUser);
                   else updateAuthBarUI(null);
                 }
+                if (typeof window.hideAuthTransitionOverlayWhenShellReady === 'function') {
+                  window.hideAuthTransitionOverlayWhenShellReady();
+                } else if (typeof window.hideAuthTransitionOverlay === 'function') {
+                  window.hideAuthTransitionOverlay();
+                }
               }, 100);
             } catch (err) {
               console.warn('⚠️ showScreen 함수 실행 중 오류, 직접 전환 시도:', err);
@@ -27642,6 +27724,9 @@
         setTimeout(switchToBasecamp, 450);
         } else {
           console.warn('[Login] Firestore 프로필 없음 — 베이스캠프 이동 생략');
+          if (typeof window.hideAuthTransitionOverlay === 'function') {
+            window.hideAuthTransitionOverlay();
+          }
           showAuthStatus('❌ 회원 정보를 불러오지 못했습니다. 네트워크 확인 후 다시 시도해 주세요.', 'error');
           if (typeof showToast === 'function') {
             showToast('회원 정보를 불러오지 못했습니다.');
@@ -27649,6 +27734,9 @@
         }
         
       } catch (error) {
+        if (typeof window.hideAuthTransitionOverlay === 'function') {
+          window.hideAuthTransitionOverlay();
+        }
         console.error('인증 오류:', error);
         var err = error || {};
         var errMsg = String(err.message || '');
