@@ -27672,12 +27672,17 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   flex-wrap: nowrap;
   align-items: center;
 }
-/* 종합 탭: CYCLE GC 탭과 동일 행·폰트·여백 */
+/* 종합 탭: CYCLE GC 탭과 동일 행·폰트·여백 (1줄: 순위·이름·점수) */
 #runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-row.running-ranking-row {
   padding: 3px 0;
   border-bottom: 1px solid #f3f4f6;
   flex-wrap: nowrap;
   align-items: center;
+}
+#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .stelvio-rank-row.running-ranking-row {
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 2px;
 }
 #runningRankingScreen .running-ranking-list-body--overall .stelvio-rank-row.stelvio-rank-current {
   margin: 1px -2px;
@@ -27712,28 +27717,27 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   height: 18px;
 }
 #runningRankingScreen .running-ranking-list-body--overall .running-ranking-segments {
-  flex: 0 1 auto;
+  flex: 1 1 100%;
+  width: 100%;
   display: flex;
   flex-wrap: nowrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 3px;
-  margin: 0 4px 0 auto;
+  gap: 4px;
+  margin: 0;
   padding: 0;
   min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
+  box-sizing: border-box;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .stelvio-rank-row.running-ranking-row {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   padding: 3px 0;
   align-items: center;
-  gap: 0;
+  row-gap: 2px;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .stelvio-rank-row .stelvio-rank-name {
   flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .stelvio-rank-row .stelvio-rank-name-text {
   overflow: hidden;
@@ -27742,14 +27746,16 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip {
   flex-shrink: 0;
-  padding: 1px 4px;
-  font-size: 0.58rem;
+  padding: 1px 5px;
+  font-size: 0.62rem;
   gap: 2px;
   white-space: nowrap;
+  border: none !important;
+  box-shadow: none;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .stelvio-rank-wkg {
   flex-shrink: 0;
-  margin-left: 2px;
+  margin-left: 0;
 }
 #runningRankingScreen .running-ranking-entry-loading {
   flex: 1 1 auto;
@@ -27826,15 +27832,17 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   font-variant-numeric: tabular-nums;
 }
 .running-ranking-segments {
-  flex: 0 1 auto;
+  flex: 1 1 100%;
+  width: 100%;
   display: flex;
   flex-wrap: nowrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   min-width: 0;
+  box-sizing: border-box;
 }
 .running-ranking-segment-chip {
   display: inline-flex;
@@ -27843,55 +27851,48 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   padding: 2px 6px;
   border-radius: 6px;
   background: #f1f5f9;
-  border: 1px solid transparent;
+  border: none;
   font-size: 0.65rem;
   line-height: 1.2;
 }
 .running-ranking-segment-chip--1k {
   background: var(--run-dist-1k-bg);
-  border-color: var(--run-dist-1k-border);
 }
 .running-ranking-segment-chip--1k .running-ranking-segment-label {
   color: var(--run-dist-1k-label);
 }
 .running-ranking-segment-chip--3k {
   background: var(--run-dist-3k-bg);
-  border-color: var(--run-dist-3k-border);
 }
 .running-ranking-segment-chip--3k .running-ranking-segment-label {
   color: var(--run-dist-3k-label);
 }
 .running-ranking-segment-chip--5k {
   background: var(--run-dist-5k-bg);
-  border-color: var(--run-dist-5k-border);
 }
 .running-ranking-segment-chip--5k .running-ranking-segment-label {
   color: var(--run-dist-5k-label);
 }
 .running-ranking-segment-chip--7k {
   background: var(--run-dist-7k-bg);
-  border-color: var(--run-dist-7k-border);
 }
 .running-ranking-segment-chip--7k .running-ranking-segment-label {
   color: var(--run-dist-7k-label);
 }
 .running-ranking-segment-chip--10k {
   background: var(--run-dist-10k-bg);
-  border-color: var(--run-dist-10k-border);
 }
 .running-ranking-segment-chip--10k .running-ranking-segment-label {
   color: var(--run-dist-10k-label);
 }
 .running-ranking-segment-chip--20k {
   background: var(--run-dist-20k-bg);
-  border-color: var(--run-dist-20k-border);
 }
 .running-ranking-segment-chip--20k .running-ranking-segment-label {
   color: var(--run-dist-20k-label);
 }
 .running-ranking-segment-chip--42k {
   background: var(--run-dist-42k-bg);
-  border-color: var(--run-dist-42k-border);
 }
 .running-ranking-segment-chip--42k .running-ranking-segment-label {
   color: var(--run-dist-42k-label);
