@@ -84,8 +84,7 @@
     var children = [
       React.createElement('span', { key: 'crown', className: 'stelvio-rank-crown' }, medalHtml(item.rank)),
       React.createElement('span', { key: 'pos', className: 'stelvio-rank-pos' }, item.rank + '위'),
-      React.createElement('span', { key: 'name', className: 'stelvio-rank-name' }, nameChildren),
-      React.createElement('span', { key: 'val', className: valueClass }, valueLabel)
+      React.createElement('span', { key: 'name', className: 'stelvio-rank-name' }, nameChildren)
     ];
 
     if (tabId === 'overall' && props.showSegments && Array.isArray(item.segments) && item.segments.length) {
@@ -116,6 +115,10 @@
         )
       );
     }
+
+    children.push(
+      React.createElement('span', { key: 'val', className: valueClass }, valueLabel)
+    );
 
     return React.createElement('div', {
       className: rowClass,

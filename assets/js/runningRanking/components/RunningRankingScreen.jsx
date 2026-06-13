@@ -354,13 +354,11 @@
         || ((labels[activeCategory] || activeCategory) + ' 순위');
     }, [activeCategory]);
 
-    var rowHeight = isOverallTab && showOverallSegments
-      ? (cfg().LIST_ROW_HEIGHT_OVERALL || 78)
-      : (cfg().LIST_ROW_HEIGHT || 48);
+    var rowHeight = cfg().LIST_ROW_HEIGHT || 48;
+    var initialLoading = loading && !rawRows.length;
 
     var listKey = activeTab + '-' + paceDistance + '-' + gender + '-' + activeCategory + '-' + listFilter;
 
-    var Skeleton = window.RunningRankingSkeleton;
     var VirtualList = window.RunningRankingVirtualList;
     var Row = window.RunningRankingRow;
 
@@ -483,10 +481,8 @@
       : null;
 
     var listBody;
-    if (loading && !rawRows.length) {
-      listBody = Skeleton
-        ? React.createElement(Skeleton, { message: '랭킹 불러오는 중...' })
-        : React.createElement('p', { className: 'stelvio-ranking-empty' }, '불러오는 중...');
+    if (initialLoading) {
+      listBody = null;
     } else if (error && !rawRows.length) {
       listBody = React.createElement('div', { className: 'running-ranking-error' },
         React.createElement('p', { className: 'stelvio-ranking-empty' }, error),
@@ -552,7 +548,8 @@
         : '점수·순위·등락은 매일 23:00(KST) 집계 후 고정·전일 대비로 표시됩니다.');
 
     var rootClass = 'running-ranking-body' +
-      (isOverallTab ? ' running-ranking-body--overall' : '');
+      (isOverallTab ? ' running-ranking-body--overall' : '') +
+      (initialLoading ? ' running-ranking-body--loading' : '');
 
     return React.createElement('div', { className: rootClass, id: 'running-ranking-react-root' },
       React.createElement('div', { className: 'stelvio-ranking-sticky running-ranking-sticky' },
@@ -578,7 +575,21 @@
           : null,
         React.createElement('p', { className: 'running-ranking-movement-hint' }, movementHintText)
       ),
-      React.createElement('div', { className: 'stelvio-ranking-content running-ranking-content' },
+      initialLoading
+        ? React.createElement('div', {
+            className: 'stelvio-ranking-loading running-ranking-entry-loading',
+            role: 'status',
+            'aria-live': 'polite',
+            'aria-label': '랭킹 불러오는 중'
+          },
+            React.createElement('div', { className: 'stelvio-ranking-spinner' }),
+            React.createElement('p', null, '랭킹 불러오는 중...')
+          )
+        : null,
+      React.createElement('div', {
+        className: 'stelvio-ranking-content running-ranking-content',
+        style: initialLoading ? { opacity: 0.5 } : undefined
+      },
         React.createElement('div', {
           className: 'stelvio-category-card stelvio-ranking-list-card running-ranking-list-card' +
             (isOverallTab ? ' running-ranking-list-card--overall' : '')
