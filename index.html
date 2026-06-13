@@ -13933,7 +13933,12 @@
       }
       stelvioSyncRankingListFilterToggleUi();
       stelvioWithRankingListScrollPreserved(function () {
-        if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+        if (typeof stelvioIsGroupDistanceRanking === 'function' && stelvioIsGroupDistanceRanking()) {
+          var bel = document.getElementById('stelvioRankingListBody');
+          if (bel && typeof stelvioRenderGroupTabRankingList === 'function') stelvioRenderGroupTabRankingList(bel);
+        } else if (typeof renderStelvioActiveCategory === 'function') {
+          renderStelvioActiveCategory();
+        }
       });
     }
     window.stelvioOnRankingListFilterChange = stelvioOnRankingListFilterChange;
@@ -15816,10 +15821,6 @@
           stelvioRankingFetchGen++;
           stelvioRankingState.duration = nextDur;
           stelvioRankingInvalidatePreRenderViewsExcept(nextDur);
-          if (nextDur === 'group_dist' && stelvioRankingState.listFilter === 'interest') {
-            stelvioRankingState.listFilter = 'all';
-            stelvioSyncRankingListFilterToggleUi();
-          }
           stelvioResetRankingListExpansionForNewTab();
           stelvioApplyDurationModeUi();
           if (typeof stelvioSyncRankingListHeaderUi === 'function') stelvioSyncRankingListHeaderUi();
@@ -21461,6 +21462,9 @@
           if (sb !== sa) return sb - sa;
           return String(a.name || '').localeCompare(String(b.name || ''));
         });
+        if (stelvioRankingState.listFilter === 'interest') {
+          merged = stelvioFilterRowsByListInterest(merged);
+        }
         return { mode: 'list', merged: merged };
       }
       function stelvioMedalImgSetIfChanged(img, medalUrl) {
@@ -21503,7 +21507,9 @@
           epEmpty.className = 'stelvio-ranking-empty';
           epEmpty.style.margin = '10px 0 12px 20px';
           epEmpty.style.fontSize = '12px';
-          epEmpty.textContent = '등록된 멤버가 없습니다.';
+          epEmpty.textContent = stelvioRankingState.listFilter === 'interest'
+            ? '관심·친구·그룹멤버에 해당하는 멤버가 없습니다.'
+            : '등록된 멤버가 없습니다.';
           block.appendChild(epEmpty);
           return;
         }
@@ -22079,16 +22085,12 @@
       if (bodyElEarly && typeof stelvioRankingCancelListChunkJob === 'function') {
         stelvioRankingCancelListChunkJob(bodyElEarly);
       }
-      /* 그룹탭 전환 시 전체/관심 토글 버튼 숨김, 다른 탭으로 전환 시 다시 표시 */
+      /* 그룹탭: 전체/관심 토글 유지 (관심 시 소모임 멤버 목록 필터) */
       var _filterToggleWrap = document.querySelector('.stelvio-ranking-list-filter-toggle');
-      if (_filterToggleWrap) _filterToggleWrap.style.display = stelvioIsGroupDistanceRanking() ? 'none' : '';
+      if (_filterToggleWrap) _filterToggleWrap.style.display = '';
       if (stelvioIsGroupDistanceRanking()) {
         if (typeof stelvioEnsureRankingTabViewActive === 'function') {
           stelvioEnsureRankingTabViewActive('group_dist');
-        }
-        if (stelvioRankingState.listFilter === 'interest') {
-          stelvioRankingState.listFilter = 'all';
-          stelvioSyncRankingListFilterToggleUi();
         }
         var bodyElG2 = document.getElementById('stelvioRankingListBody');
         stelvioSyncRankingListHeaderUi();
@@ -36953,6 +36955,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-filter-bar">
             <!-- 기간 필터: 그룹 탭 외 표시 -->
             <div class="stelvio-period-dropdown">
+              <span class="stelvio-dropdown-caption">기간</span>
               <span id="stelvioPeriodLabel" class="stelvio-dropdown-label">월간</span>
               <span class="stelvio-dropdown-chevron">▾</span>
               <select id="stelvioPeriodSelect" class="stelvio-dropdown-select" onchange="stelvioOnPeriodChange(this.value);">
@@ -37030,7 +37033,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <span class="stelvio-category-header-title" id="stelvioListCategoryTitle">Supremo (전체)</span>
               <div class="stelvio-ranking-list-filter-toggle" role="group" aria-label="순위 목록 보기">
                 <button type="button" id="stelvioRankingListFilterAll" class="stelvio-ranking-filter-chip stelvio-ranking-filter-chip--active" aria-pressed="true">전체</button>
-                <button type="button" id="stelvioRankingListFilterInterest" class="stelvio-ranking-filter-chip" aria-pressed="false">관심</button>
+                <button type="button" id="stelvioRankingListFilterInterest" class="stelvio-ranking-filter-chip stelvio-ranking-filter-chip--interest" aria-pressed="false">관심<span class="stelvio-ranking-filter-star" aria-hidden="true">☆</span></button>
               </div>
               <span class="stelvio-category-header-unit">W/kg</span>
             </div>
