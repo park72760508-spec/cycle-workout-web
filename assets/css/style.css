@@ -17385,6 +17385,37 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   height: 120px;
   margin-bottom: 24px;
 }
+
+/* 인증 → 카테고리 전환 오버레이 (흰 화면 플래시 방지) */
+.auth-transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 15000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f6f8fa;
+  pointer-events: auto;
+}
+.auth-transition-overlay.hidden {
+  display: none !important;
+}
+.auth-transition-overlay__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.auth-transition-spinner-wrap {
+  width: 128px;
+  height: 128px;
+  margin-bottom: 0;
+}
+.auth-transition-spinner {
+  border-width: 6px;
+  border-top-color: #22c55e;
+  box-shadow: 0 0 24px rgba(34, 197, 94, 0.55), 0 0 48px rgba(34, 197, 94, 0.28);
+}
 .schedule-start-training-overlay .ai-loading-spinner {
   border-top-color: #22c55e;
   box-shadow: 0 0 20px rgba(34, 197, 94, 0.5), 0 0 40px rgba(34, 197, 94, 0.25);
