@@ -3433,6 +3433,22 @@ if (typeof window !== 'undefined') {
  */
 async function fetchYearlyPeaksForYear(userId, year) {
   if (!userId || year == null) return null;
+  var yearStr = String(year);
+
+  // Phase 6: Supabase Read 시 yearly_peaks는 rides 트리거로 Supabase에 갱신됨
+  try {
+    if (typeof window.refreshLogsReadRouting === 'function') {
+      var useSb = await window.refreshLogsReadRouting(false);
+      if (useSb) {
+        var sbMod = await import('./supabaseRidesReadClient.js');
+        var sbPeaks = await sbMod.fetchYearlyPeaksForYearFromSupabase(userId, year);
+        if (sbPeaks) return sbPeaks;
+      }
+    }
+  } catch (sbErr) {
+    console.warn('[UserManager] fetchYearlyPeaksForYear Supabase 실패 → Firestore:', userId, year, sbErr);
+  }
+
   var db = window.firestoreV9 || (window.firestore && window.firestore);
   if (!db) return null;
   try {
@@ -3513,9 +3529,9 @@ function logHasAnyPr(log, yearlyPeaks, userWeight) {
       } else {
         peakWkg = toWkg2Decimals(Number(peakVal), weightKg);
       }
-      if (peakWkg != null && logWkg === peakWkg) return true;
+      if (peakWkg != null && logWkg >= peakWkg) return true;
     } else {
-      if (Math.round(Number(logVal)) === Math.round(Number(peakVal))) return true;
+      if (Math.round(Number(logVal)) >= Math.round(Number(peakVal))) return true;
     }
   }
   return false;
@@ -3551,9 +3567,9 @@ function isPrField(log, yearlyPeaks, field, userWeight) {
     } else {
       peakWkg = toWkg2Decimals(Number(peakVal), weightKg);
     }
-    return peakWkg != null && logWkg === peakWkg;
+    return peakWkg != null && logWkg >= peakWkg;
   }
-  return Math.round(Number(logVal)) === Math.round(Number(peakVal));
+  return Math.round(Number(logVal)) >= Math.round(Number(peakVal));
 }
 if (typeof window !== 'undefined') window.isPrField = isPrField;
 

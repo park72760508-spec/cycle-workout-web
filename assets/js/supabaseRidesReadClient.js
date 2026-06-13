@@ -9,10 +9,19 @@ import { getSupabaseClient } from './supabaseDualWrite.js';
 const TRAINING_LOGS_READ_RELAY_DEFAULT =
   'https://us-central1-stelvio-ai.cloudfunctions.net/getTrainingLogsForRead';
 
+const YEARLY_PEAKS_READ_RELAY_DEFAULT =
+  'https://us-central1-stelvio-ai.cloudfunctions.net/getYearlyPeaksForRead';
+
 function getReadRelayUrl() {
   const c =
     (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
   return String(c.trainingLogsReadUrl || TRAINING_LOGS_READ_RELAY_DEFAULT).trim();
+}
+
+function getYearlyPeaksReadRelayUrl() {
+  const c =
+    (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
+  return String(c.yearlyPeaksReadUrl || YEARLY_PEAKS_READ_RELAY_DEFAULT).trim();
 }
 
 async function getFirebaseIdTokenForReadRelay() {
@@ -255,4 +264,31 @@ export async function getTrainingLogsByDateRangeFromSupabase(userId, year, month
   }
 
   return fetchTrainingLogsViaReadRelay(userId, { year, month });
+}
+
+/** PR 표시 — Supabase yearly_peaks relay (Auth Bridge 불필요) */
+export async function fetchYearlyPeaksForYearFromSupabase(userId, year) {
+  if (!userId || year == null) return null;
+  const url = new URL(getYearlyPeaksReadRelayUrl());
+  url.searchParams.set('uid', String(userId).trim());
+  url.searchParams.set('year', String(year));
+  const token = await getFirebaseIdTokenForReadRelay();
+  const res = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+  });
+  const json = await res.json().catch(function () {
+    return {};
+  });
+  if (!res.ok || !json.success) {
+    const msg =
+      (json.error && (json.error.message || json.error)) ||
+      'Yearly peaks relay HTTP ' + res.status;
+    throw new Error(msg);
+  }
+  return json.peaks || null;
 }

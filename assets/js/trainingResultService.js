@@ -826,6 +826,79 @@ function isRidingLog(logData) {
   return !STRAVA_EXCLUDED_ACTIVITY_TYPES.has(actType);
 }
 
+/** Supabase·Firestore 병합 시 동일 로그 식별 키 */
+function logReadMergeKey(log) {
+  if (!log) return '';
+  var aid = log.activity_id != null ? String(log.activity_id).trim() : '';
+  if (aid) return 'a:' + aid;
+  var ds = parseLogDateStrForTiz(log.date) || '';
+  return 'd:' + ds + ':' + String(log.source || '') + ':' + String(log.id || log.title || '');
+}
+
+function compareLogsByDateDesc(a, b) {
+  var da = parseLogDateStrForTiz(a && a.date) || '';
+  var db = parseLogDateStrForTiz(b && b.date) || '';
+  if (da !== db) return db.localeCompare(da);
+  return String(b && b.id || '').localeCompare(String(a && a.id || ''));
+}
+
+/**
+ * Dual-Write 지연·로컬 수집 등으로 Supabase rides에 아직 없는 Firestore shadow 로그를 Read에 병합.
+ */
+async function mergeSupabaseLogsWithFirestoreShadow(userId, supabaseLogs, options, db) {
+  var primary = Array.isArray(supabaseLogs) ? supabaseLogs.slice() : [];
+  if (!db || !userId) return primary;
+
+  var shadowDays = Math.max(7, Math.min(60, Number(options && options.shadowDays) || 30));
+  var start = new Date();
+  start.setDate(start.getDate() - shadowDays);
+  var startStr = start.toISOString().slice(0, 10);
+  var endStr = options && options.endYmd ? String(options.endYmd).slice(0, 10) : null;
+  var startYmd = options && options.startYmd ? String(options.startYmd).slice(0, 10) : startStr;
+
+  try {
+    var userLogsRef = collection(db, 'users', userId, 'logs');
+    var q = query(
+      userLogsRef,
+      where('date', '>=', startYmd),
+      orderBy('date', 'desc'),
+      limit(Math.max(50, Number(options && options.shadowLimit) || 120))
+    );
+    var snap = await getDocs(q);
+    var keys = new Set(primary.map(logReadMergeKey));
+    var added = 0;
+    snap.forEach(function(docSnap) {
+      var dd = docSnap.data() || {};
+      if (!isRidingLog(dd)) return;
+      var ds = parseLogDateStrForTiz(dd.date) || '';
+      if (endStr && ds && ds > endStr) return;
+      var o = { id: docSnap.id, readBackend: 'firestore_shadow' };
+      if (dd && typeof dd === 'object') {
+        for (var k in dd) {
+          if (dd.hasOwnProperty(k)) o[k] = dd[k];
+        }
+      }
+      var mk = logReadMergeKey(o);
+      if (keys.has(mk)) return;
+      keys.add(mk);
+      primary.push(o);
+      added += 1;
+    });
+    if (added > 0) {
+      console.log('[getUserTrainingLogs] Firestore shadow 병합:', { userId, added, since: startYmd });
+    }
+  } catch (e) {
+    console.warn('[getUserTrainingLogs] Firestore shadow 병합 실패(무시):', e && e.message ? e.message : e);
+  }
+
+  primary.sort(compareLogsByDateDesc);
+  var limitValue = options && options.limit != null ? Number(options.limit) : 0;
+  if (limitValue > 0 && primary.length > limitValue) {
+    primary = primary.slice(0, limitValue);
+  }
+  return primary;
+}
+
 export async function getUserTrainingLogs(userId, options = {}, firestoreInstance = null) {
   if (!userId) {
     throw new Error('userId는 필수입니다.');
@@ -838,7 +911,8 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
       const sbMod = await import('./supabaseRidesReadClient.js');
       var sbLogs = await sbMod.getUserTrainingLogsFromSupabase(userId, options);
       var dbForTiz = firestoreInstance || (typeof window !== 'undefined' ? window.firestoreV9 : null);
-      return await enrichLogsWithTimeInZonesFromFirestore(userId, sbLogs, dbForTiz);
+      var mergedLogs = await mergeSupabaseLogsWithFirestoreShadow(userId, sbLogs, options, dbForTiz);
+      return await enrichLogsWithTimeInZonesFromFirestore(userId, mergedLogs, dbForTiz);
     }
   } catch (sbErr) {
     console.warn('[getUserTrainingLogs] Supabase Read 실패 → Firestore 폴백:', sbErr && sbErr.message);
@@ -908,7 +982,16 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
       const sbMod = await import('./supabaseRidesReadClient.js');
       var sbMonthLogs = await sbMod.getTrainingLogsByDateRangeFromSupabase(userId, year, month);
       var dbMonth = firestoreInstance || (typeof window !== 'undefined' ? window.firestoreV9 : null);
-      return await enrichLogsWithTimeInZonesFromFirestore(userId, sbMonthLogs, dbMonth);
+      var endDate = new Date(year, month + 1, 0);
+      var monthStartStr = year + '-' + String(month + 1).padStart(2, '0') + '-01';
+      var monthEndStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(endDate.getDate()).padStart(2, '0');
+      var mergedMonthLogs = await mergeSupabaseLogsWithFirestoreShadow(userId, sbMonthLogs, {
+        startYmd: monthStartStr,
+        endYmd: monthEndStr,
+        shadowDays: 0,
+        shadowLimit: 80,
+      }, dbMonth);
+      return await enrichLogsWithTimeInZonesFromFirestore(userId, mergedMonthLogs, dbMonth);
     }
   } catch (sbErr) {
     console.warn('[getTrainingLogsByDateRange] Supabase Read 실패 → Firestore 폴백:', sbErr && sbErr.message);
