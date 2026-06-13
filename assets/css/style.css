@@ -57,25 +57,15 @@
   --run-dist-42k-bg: #EAECF6;
   --run-dist-42k-border: rgba(63, 81, 181, 0.20);
   --run-dist-42k-label: #3A4899;
-  /* RUN 종합탭 1k→20k 보라 그라데이션 (전체/관심 토글 #7c3aed 기준, 1k 최진·20k 최연) */
+  /* RUN 종합탭 1k→20k 보라 그라데이션 (배경만 구간별, 글자는 통일 톤) */
   --run-overall-1k-bg: #E8DEFF;
-  --run-overall-1k-dist: #5B21B6;
-  --run-overall-1k-pace: #4C1D95;
   --run-overall-3k-bg: #EDE7FF;
-  --run-overall-3k-dist: #6D28D9;
-  --run-overall-3k-pace: #5B21B6;
   --run-overall-5k-bg: #F0EBFF;
-  --run-overall-5k-dist: #7C3AED;
-  --run-overall-5k-pace: #6D28D9;
   --run-overall-7k-bg: #F3EFFF;
-  --run-overall-7k-dist: #8B5CF6;
-  --run-overall-7k-pace: #7C3AED;
   --run-overall-10k-bg: #F5F1FF;
-  --run-overall-10k-dist: #9333EA;
-  --run-overall-10k-pace: #8B5CF6;
   --run-overall-20k-bg: #F8F5FF;
-  --run-overall-20k-dist: #A78BFA;
-  --run-overall-20k-pace: #9333EA;
+  --run-overall-seg-dist: #A78BFA;
+  --run-overall-seg-pace: #6D28D9;
   /* 다크 모드 배경 (워크아웃 화면 등) */
   --bg-main: #1a1d21;
   --bg-card: #252a30;
@@ -27885,56 +27875,27 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--1k {
   background: var(--run-overall-1k-bg);
 }
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--1k .running-ranking-segment-dist {
-  color: var(--run-overall-1k-dist);
-}
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--1k .running-ranking-segment-pace {
-  color: var(--run-overall-1k-pace);
-}
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--3k {
   background: var(--run-overall-3k-bg);
-}
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--3k .running-ranking-segment-dist {
-  color: var(--run-overall-3k-dist);
-}
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--3k .running-ranking-segment-pace {
-  color: var(--run-overall-3k-pace);
 }
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--5k {
   background: var(--run-overall-5k-bg);
 }
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--5k .running-ranking-segment-dist {
-  color: var(--run-overall-5k-dist);
-}
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--5k .running-ranking-segment-pace {
-  color: var(--run-overall-5k-pace);
-}
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--7k {
   background: var(--run-overall-7k-bg);
-}
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--7k .running-ranking-segment-dist {
-  color: var(--run-overall-7k-dist);
-}
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--7k .running-ranking-segment-pace {
-  color: var(--run-overall-7k-pace);
 }
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--10k {
   background: var(--run-overall-10k-bg);
 }
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--10k .running-ranking-segment-dist {
-  color: var(--run-overall-10k-dist);
-}
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--10k .running-ranking-segment-pace {
-  color: var(--run-overall-10k-pace);
-}
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--20k {
   background: var(--run-overall-20k-bg);
 }
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--20k .running-ranking-segment-dist {
-  color: var(--run-overall-20k-dist);
+#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip:not(.running-ranking-segment-chip--empty) .running-ranking-segment-dist {
+  color: var(--run-overall-seg-dist);
+  font-weight: 600;
 }
-#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip--20k .running-ranking-segment-pace {
-  color: var(--run-overall-20k-pace);
+#runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-on .running-ranking-segment-chip:not(.running-ranking-segment-chip--empty) .running-ranking-segment-pace {
+  color: var(--run-overall-seg-pace);
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-chip--1k {
   background: var(--run-dist-1k-bg);
