@@ -444,7 +444,7 @@
           'aria-label': showOverallSegments ? '구간 페이스 접기' : '구간 페이스 펼치기',
           title: showOverallSegments ? '구간 페이스 접기' : '구간 페이스 펼치기',
           onClick: function () { setShowOverallSegments(function (prev) { return !prev; }); }
-        }, showOverallSegments ? '−' : '+')
+        }, showOverallSegments ? '▲' : '▼')
       : null;
 
     var listFilterToggle = isOverallTab
