@@ -27926,59 +27926,52 @@
       });
     }
     
-    /** 전화번호 형태 문자열 여부 (환영 문구에 노출 금지) */
-    function isPhoneLikeAuthDisplayName(val) {
-      var s = String(val || '').trim();
-      if (!s) return false;
-      var digits = s.replace(/\D/g, '');
-      if (!digits || digits.length < 10 || digits.length > 11 || !/^01/.test(digits)) return false;
-      var stripped = s.replace(/[\s\-+()]/g, '');
-      return /^\d+$/.test(stripped);
-    }
-
-    function isStelvioAuthPhoneEmail(email) {
-      var em = String(email || '').trim().toLowerCase();
-      if (!em.endsWith('@stelvio.ai')) return false;
-      var local = em.split('@')[0] || '';
-      return /^\d{10,11}$/.test(local);
-    }
-
-    /** auth 바 환영 문구용 표시 이름 — Firestore 프로필 우선, 전화번호·@stelvio.ai 이메일 로컬파트 제외 */
+    /** auth 바 환영 문구용 표시 이름 (userManager.resolveAuthBarDisplayName 위임) */
     function resolveAuthBarUserName(authUser) {
-      var profiles = [];
+      if (typeof window.resolveAuthBarDisplayName === 'function') {
+        return window.resolveAuthBarDisplayName(authUser);
+      }
       try {
-        if (window.currentUser) profiles.push(window.currentUser);
-        var rawCu = localStorage.getItem('currentUser');
-        if (rawCu) profiles.push(JSON.parse(rawCu));
-        var rawAu = localStorage.getItem('authUser');
-        if (rawAu) profiles.push(JSON.parse(rawAu));
+        var cu = window.currentUser;
+        if (!cu) {
+          var raw = localStorage.getItem('currentUser') || localStorage.getItem('authUser');
+          if (raw) cu = JSON.parse(raw);
+        }
+        if (cu && cu.name && String(cu.name).trim()) {
+          return String(cu.name).trim();
+        }
       } catch (e) {}
-
-      var authUid = authUser && authUser.uid ? String(authUser.uid) : '';
-      for (var i = 0; i < profiles.length; i++) {
-        var p = profiles[i];
-        if (!p || typeof p !== 'object') continue;
-        if (authUid) {
-          var pid = String(p.id || p.uid || '').trim();
-          if (pid && pid !== authUid) continue;
-        }
-        var name = (typeof window.getProfileUserDisplayName === 'function')
-          ? window.getProfileUserDisplayName(p)
-          : String(p.name || '').trim();
-        if (name && name !== 'undefined' && name !== 'null' && !isPhoneLikeAuthDisplayName(name)) {
-          return name;
-        }
-      }
-
-      if (authUser && authUser.displayName) {
-        var dn = String(authUser.displayName).trim();
-        if (dn && !isPhoneLikeAuthDisplayName(dn)) return dn;
-      }
-      if (authUser && authUser.email && !isStelvioAuthPhoneEmail(authUser.email)) {
-        var localPart = authUser.email.split('@')[0];
-        if (localPart && !isPhoneLikeAuthDisplayName(localPart)) return localPart;
-      }
       return '사용자';
+    }
+
+    function resolveAuthBarAuthUser(user) {
+      if (user && (user.uid || user.email)) return user;
+      if (window.isPhoneAuthenticated || window.isAuthReady) {
+        try {
+          var cu = window.currentUser;
+          if (!cu) {
+            var raw = localStorage.getItem('currentUser') || localStorage.getItem('authUser');
+            if (raw) cu = JSON.parse(raw);
+          }
+          if (cu && (cu.id || cu.uid)) {
+            return { uid: String(cu.id || cu.uid) };
+          }
+        } catch (e) {}
+      }
+      var auth = window.authV9 || window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+      if (auth && auth.currentUser) return auth.currentUser;
+      return user || null;
+    }
+
+    function isAuthBarLoggedIn(authUser) {
+      if (authUser && (authUser.uid || authUser.email)) return true;
+      if (window.isPhoneAuthenticated || window.isAuthReady) {
+        try {
+          if (window.currentUser) return true;
+          if (localStorage.getItem('currentUser') || localStorage.getItem('authUser')) return true;
+        } catch (e) {}
+      }
+      return false;
     }
 
     /**
@@ -28011,8 +28004,9 @@
       const subRight = document.getElementById('indoorSubAuthBarRight');
       const subWarning = document.getElementById('indoorSubAuthBarWarning');
       if (!left || !right) return;
-      var loggedIn = !!(user && (user.uid || user.email));
-      var userName = loggedIn ? resolveAuthBarUserName(user) : '사용자';
+      var authUser = resolveAuthBarAuthUser(user);
+      var loggedIn = isAuthBarLoggedIn(authUser);
+      var userName = loggedIn ? resolveAuthBarUserName(authUser) : '사용자';
       _syncAuthBarPair('authBarLeft', 'authBarRight', 'authBarWarning', 'authBarWelcomeLine1', 'authBarWelcomeLine2', user, userName, loggedIn);
       _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn);
       _syncAuthBarPair('runAuthBarLeft', 'runAuthBarRight', 'runAuthBarWarning', 'runAuthBarWelcomeLine1', 'runAuthBarWelcomeLine2', user, userName, loggedIn);
@@ -28028,6 +28022,9 @@
         if (subLeft) subLeft.style.display = 'flex';
         if (subRight) subRight.style.display = 'none';
         if (subWarning) subWarning.style.display = 'inline-flex';
+      }
+      if (loggedIn && userName === '사용자' && typeof window.hydrateAuthBarDisplayNameIfNeeded === 'function') {
+        window.hydrateAuthBarDisplayNameIfNeeded(authUser).catch(function () {});
       }
     }
     
@@ -28068,17 +28065,26 @@
     window.closeIndoorRacePcOnlyModal = closeIndoorRacePcOnlyModal;
     
     (function initAuthBar() {
-      var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-      if (!auth) return;
-      auth.onAuthStateChanged(function(user) {
-        if (typeof updateAuthBarUI === 'function') updateAuthBarUI(user);
-      });
-      if (auth.currentUser && typeof updateAuthBarUI === 'function') updateAuthBarUI(auth.currentUser);
-      document.addEventListener('stelvio-auth-ready', function () {
-        var a = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+      function refreshAuthBarFromSession() {
+        var a = window.authV9 || window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
         if (typeof updateAuthBarUI === 'function') {
           updateAuthBarUI(a && a.currentUser ? a.currentUser : null);
         }
+      }
+      var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+      if (auth) {
+        auth.onAuthStateChanged(function(user) {
+          refreshAuthBarFromSession();
+        });
+      }
+      if (window.authV9 && window.authV9 !== auth && typeof window.authV9.onAuthStateChanged === 'function') {
+        window.authV9.onAuthStateChanged(function() {
+          refreshAuthBarFromSession();
+        });
+      }
+      refreshAuthBarFromSession();
+      document.addEventListener('stelvio-auth-ready', function () {
+        refreshAuthBarFromSession();
       });
     })();
     
@@ -36230,10 +36236,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         }
         
         // Profile Screen: 미니달력 제거됨 - initMiniCalendar 호출 생략
-        // Choose Your Path(베이스캠프) 입장 시 Welcome 문구 갱신 + 주간 마일리지 TOP10 팝업 표시
-        if (screenId === 'basecampScreen' || screenId === 'indoorTrainingSubScreen') {
+        // Choose Your Path(베이스캠프)·카테고리·RUN 베이스캠프 입장 시 Welcome 문구 갱신
+        if (screenId === 'basecampScreen' || screenId === 'indoorTrainingSubScreen' ||
+            screenId === 'sportCategoryScreen' || screenId === 'runBasecampScreen') {
           var authForBar = window.authV9 || window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-          if (typeof updateAuthBarUI === 'function' && authForBar && authForBar.currentUser) updateAuthBarUI(authForBar.currentUser);
+          if (typeof updateAuthBarUI === 'function') {
+            updateAuthBarUI(authForBar && authForBar.currentUser ? authForBar.currentUser : null);
+          }
         }
         if (screenId === 'basecampScreen') {
           function tryShowWeeklyTop10() {
