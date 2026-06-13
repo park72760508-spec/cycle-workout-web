@@ -17121,6 +17121,20 @@
       );
     }
 
+    /** 메달+순위 — 아바타 왼쪽, 아바타 기준 오른쪽 정렬 */
+    function stelvioRankingRankLeadHtml(dispRank) {
+      var r = Math.floor(Number(dispRank));
+      if (!isFinite(r) || r < 1) r = 0;
+      var inner = '';
+      if (r >= 1 && r <= 3) {
+        inner += stelvioRankingMedalCrownHtml(r - 1);
+      } else {
+        inner += '<span class="stelvio-rank-crown stelvio-rank-crown--placeholder" aria-hidden="true"></span>';
+      }
+      inner += '<span class="stelvio-rank-pos">' + (r >= 1 ? r : '') + '위</span>';
+      return '<span class="stelvio-rank-ranklead">' + inner + '</span>';
+    }
+
     function stelvioRankingPaintListFromCacheIfAny(bodyEl, cat) {
       if (!bodyEl || !cat) return false;
       if (!stelvioRankingByCategory && !stelvioTryRestoreRankingByCategoryFromPinned()) return false;
@@ -21496,17 +21510,9 @@
         var strayEmpty = block.querySelector(':scope > p.stelvio-ranking-empty:not(.stelvio-ranking-loading-local)');
         if (strayEmpty) strayEmpty.remove();
         function memberRowMarkup(itRow, rkIn, rkRaw, nmRow, profRow, valS, bdge) {
-          var crownH = '';
-          if (rkIn <= 3) {
-            crownH =
-              '<span class="stelvio-rank-crown"><img alt="" width="24" height="24" decoding="async" fetchpriority="low" /></span>';
-          }
           var rankMetaG = stelvioGroupTabMemberNameRankMetaHtml(itRow);
           return (
-            crownH +
-            '<span class="stelvio-rank-pos">' +
-            rkIn +
-            '위</span>' +
+            stelvioRankingRankLeadHtml(rkIn) +
             '<span class="stelvio-rank-name">' +
             stelvioRankingAvatarHtml(profRow, { userId: itRow.userId, overlayName: nmRow, ageCategory: itRow.ageCategory }) +
             '<span class="stelvio-rank-name-text" title="' +
@@ -21528,9 +21534,18 @@
         function patchOneMemberRow(rowEl, it, rankInGroup, rawNm, prv, isCur, canFull, nm, prof, valStr, badgeP, rkSrc) {
           var rowClsP = 'stelvio-rank-row stelvio-rank-row--group-member' + (isCur ? ' stelvio-rank-current' : '');
           rowEl.className = rowClsP + ' stelvio-group-member-row';
-          var crownEl = rowEl.querySelector(':scope > .stelvio-rank-crown');
+          var rankLead = rowEl.querySelector(':scope > .stelvio-rank-ranklead');
+          var crownEl = rankLead
+            ? rankLead.querySelector('.stelvio-rank-crown')
+            : rowEl.querySelector(':scope > .stelvio-rank-crown');
           if (rankInGroup <= 3) {
             if (!crownEl) {
+              if (!rankLead) {
+                rankLead = document.createElement('span');
+                rankLead.className = 'stelvio-rank-ranklead';
+                var posRef = rowEl.querySelector(':scope > .stelvio-rank-pos');
+                rowEl.insertBefore(rankLead, posRef || rowEl.firstChild);
+              }
               crownEl = document.createElement('span');
               crownEl.className = 'stelvio-rank-crown';
               var medals = document.createElement('img');
@@ -21540,15 +21555,22 @@
               medals.decoding = 'async';
               medals.setAttribute('fetchpriority', 'low');
               crownEl.appendChild(medals);
-              var posRef = rowEl.querySelector(':scope > .stelvio-rank-pos');
-              if (posRef) rowEl.insertBefore(crownEl, posRef);
-              else rowEl.insertBefore(crownEl, rowEl.firstChild);
+              var posInLead = rankLead.querySelector('.stelvio-rank-pos');
+              if (posInLead) rankLead.insertBefore(crownEl, posInLead);
+              else rankLead.appendChild(crownEl);
+            } else {
+              crownEl.classList.remove('stelvio-rank-crown--placeholder');
+              crownEl.removeAttribute('aria-hidden');
             }
             stelvioMedalImgSetIfChanged(crownEl.querySelector('img'), rkSrc[rankInGroup - 1]);
           } else if (crownEl) {
-            crownEl.parentNode.removeChild(crownEl);
+            crownEl.className = 'stelvio-rank-crown stelvio-rank-crown--placeholder';
+            crownEl.innerHTML = '';
+            crownEl.setAttribute('aria-hidden', 'true');
           }
-          var posN = rowEl.querySelector(':scope > .stelvio-rank-pos');
+          var posN = rankLead
+            ? rankLead.querySelector('.stelvio-rank-pos')
+            : rowEl.querySelector(':scope > .stelvio-rank-pos');
           if (posN) {
             posN.textContent = rankInGroup + '위';
             var rankChBesidePos = posN.nextElementSibling;
@@ -21573,7 +21595,8 @@
               stelvioRankImgSetSrcIfChanged(imgFresh, pkFresh);
             }
             if (rankInGroup <= 3) {
-              var cr = rowEl.querySelector(':scope > .stelvio-rank-crown img');
+              var cr = rowEl.querySelector('.stelvio-rank-ranklead .stelvio-rank-crown img') ||
+                rowEl.querySelector(':scope > .stelvio-rank-crown img');
               stelvioMedalImgSetIfChanged(cr, rkSrc[rankInGroup - 1]);
             }
             return;
@@ -21676,7 +21699,7 @@
               stelvioRankImgSetSrcIfChanged(imgN, pkNew);
             }
             if (rkIn <= 3)
-              stelvioMedalImgSetIfChanged(row.querySelector(':scope > .stelvio-rank-crown img'), rankMedalSrc[rkIn - 1]);
+              stelvioMedalImgSetIfChanged(row.querySelector('.stelvio-rank-ranklead .stelvio-rank-crown img'), rankMedalSrc[rkIn - 1]);
           } else {
             patchOneMemberRow(row, it, rkIn, rawNm, prv, isCur, canFull, nm, prof, valStr, badgeP, rankMedalSrc);
           }
@@ -22610,10 +22633,7 @@
             extraRowClass;
           var dispR = stelvioRankDisplayNumber(item, categoryRank, 'Supremo', byCategory);
           var h = '<div class="' + rowClass + '">';
-          if (dispR <= 3) {
-            h += stelvioRankingMedalCrownHtml(dispR - 1);
-          }
-          h += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
+          h += stelvioRankingRankLeadHtml(dispR);
           h +=
             '<span class="stelvio-rank-name">' +
             stelvioRankingAvatarHtml(
@@ -22639,7 +22659,7 @@
           return h;
         }
         function dotsRowS() {
-          return '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span><span class="stelvio-rank-wkg"></span></div>';
+          return '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-ranklead"><span class="stelvio-rank-crown stelvio-rank-crown--placeholder" aria-hidden="true"></span><span class="stelvio-rank-pos"></span></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span><span class="stelvio-rank-wkg"></span></div>';
         }
         function expandGapRowS(key, forCollapsedState) {
           if (!canSupremoGapControls) return '';
@@ -22900,7 +22920,7 @@
       var canCatGapControls = stelvioViewerCanRankingGapControls();
 
       function dotsRowCat() {
-        return '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span><span class="stelvio-rank-wkg"></span></div>';
+        return '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-ranklead"><span class="stelvio-rank-crown stelvio-rank-crown--placeholder" aria-hidden="true"></span><span class="stelvio-rank-pos"></span></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span><span class="stelvio-rank-wkg"></span></div>';
       }
       function expandGapRowCat(forCollapsedState) {
         if (!canCatGapControls) return '';
@@ -22975,8 +22995,7 @@
           (groupUnjoinedCat ? ' stelvio-rank-group-unjoined' : '') +
           extraRowClass;
         var h = '<div class="' + rowClass + '">';
-        if (dispR <= 3) h += stelvioRankingMedalCrownHtml(dispR - 1);
-        h += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
+        h += stelvioRankingRankLeadHtml(dispR);
         h +=
           '<span class="stelvio-rank-name">' +
           stelvioRankingAvatarHtml(
