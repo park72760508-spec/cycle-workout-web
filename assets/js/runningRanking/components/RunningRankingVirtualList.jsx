@@ -92,7 +92,7 @@
           slice.map(function (item) {
             return Row
               ? React.createElement(Row, {
-                  key: (item.crewId || item.userId || '') + '-' + item.rank,
+                  key: (item.crewId || item.userId || '') + '-' + item.rank + '-' + socialVer,
                   item: item,
                   tabId: tabId,
                   currentUserId: currentUserId,

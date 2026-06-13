@@ -226,7 +226,14 @@
         if (typeof socialMod.bootstrapSocial === 'function') {
           socialMod.bootstrapSocial().then(function () {
             setSocialVer(function (v) { return v + 1; });
-            if (typeof socialMod.refreshStarSlots === 'function') socialMod.refreshStarSlots();
+            if (typeof socialMod.refreshStarSlots === 'function') {
+              requestAnimationFrame(function () {
+                socialMod.refreshStarSlots();
+                requestAnimationFrame(function () {
+                  socialMod.refreshStarSlots();
+                });
+              });
+            }
           }).catch(function () {});
         }
         if (typeof socialMod.bindStarChangeListener === 'function') {
@@ -354,10 +361,15 @@
     useEffect(function () {
       if (loading) return;
       var soc = socialApi();
-      if (soc && typeof soc.refreshStarSlots === 'function') {
+      if (!soc || typeof soc.refreshStarSlots !== 'function') return;
+      var raf1 = requestAnimationFrame(function () {
         soc.refreshStarSlots();
-      }
-    }, [rankedList.length, socialVer, loading, activeTab, listFilter]);
+        requestAnimationFrame(function () {
+          soc.refreshStarSlots();
+        });
+      });
+      return function () { cancelAnimationFrame(raf1); };
+    }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments]);
 
     var unitLabel = useMemo(function () {
       var tabs = cfg().TABS || [];
