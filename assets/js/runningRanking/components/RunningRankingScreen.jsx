@@ -633,8 +633,7 @@
           : null,
         stale && error
           ? React.createElement('p', { className: 'running-ranking-stale-hint' }, '캐시 표시 · ' + error)
-          : null,
-        React.createElement('p', { className: 'running-ranking-movement-hint' }, movementHintText)
+          : null
       ),
       initialLoading
         ? React.createElement('div', {
@@ -697,7 +696,10 @@
               className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
               'aria-live': 'polite'
             })
-          : null
+          : null,
+        React.createElement('p', {
+          className: 'running-ranking-movement-hint running-ranking-movement-hint--footer'
+        }, movementHintText)
       )
     );
   }
