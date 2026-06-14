@@ -1,9 +1,7 @@
 /**
- * RunDailyQuickStats - 오늘의 핵심 지표 위젯 카드 (Strava/Garmin 수준 프리미엄 UI)
- * Card 1: 역치 페이스 & 체중 (TP, W/kg, 번개 아이콘, 타이포그래피 계층)
- * Card 2: 주간 훈련 목표 (원형 프로그레스/도넛, 애니메이션, 동적 색상)
- *
- * TP 산출: 기존 window.calculateDynamicFtp(logs) + setFtpModalOpen(true) 연동
+ * RunDailyQuickStats - 오늘의 핵심 지표 위젯 카드
+ * Card 1: 10k 역치 페이스(90일 peak·유추) & 체중
+ * Card 2: 주간 RUN rTSS 목표
  */
 /* global React, useState, useEffect, window */
 
@@ -19,11 +17,6 @@
   var useState = React.useState;
   var useEffect = React.useEffect;
 
-  /**
-   * 주간 목표 원형 프로그레스 (Donut Chart)
-   * - 마운트 시 0% → 목표% 부드러운 애니메이션
-   * - 진행률별 동적 색상: 50% 미만 주황, 50~80% 파랑, 80% 이상 녹색
-   */
   function CircularWeeklyGoal(props) {
     var targetPct = Math.min(100, Math.max(0, Number(props.value) || 0));
     var size = props.size || 110;
@@ -85,19 +78,38 @@
     );
   }
 
+  function formatWeeklyTssValue(v) {
+    var n = Number(v) || 0;
+    return n % 1 === 0 ? String(n) : n.toFixed(1);
+  }
+
   function RunDailyQuickStats(props) {
     var p = props || {};
-    var stats = p.stats || { thresholdPace: 0, weightKg: 0, weight: 0, weeklyRtssGoal: 175, weeklyRtssProgress: 0 };
+    var stats = p.stats || {
+      thresholdPaceDisplay: null,
+      thresholdPaceUnavailable: true,
+      thresholdPaceInferred: false,
+      thresholdPaceInferredFrom: null,
+      weight: 0,
+      weeklyRtssGoal: 175,
+      weeklyRtssProgress: 0
+    };
     var logsLoading = p.logsLoading;
     var logsLoadError = p.logsLoadError;
     var retryLogsRef = p.retryLogsRef;
 
-    var ftp = Number(stats.thresholdPace) || 0;
-    var wkg = stats.wkg != null ? Number(stats.wkg) : (stats.weight > 0 && ftp > 0 ? (ftp / stats.weight) : 0);
+    var paceDisplay = stats.thresholdPaceDisplay;
+    var paceUnavailable = stats.thresholdPaceUnavailable !== false && !paceDisplay;
+    var paceInferred = !!stats.thresholdPaceInferred;
+    var paceInferredFrom = stats.thresholdPaceInferredFrom;
     var weight = Number(stats.weight) || 0;
     var weeklyGoal = Number(stats.weeklyRtssGoal) || 175;
     var weeklyProgress = Math.min(Number(stats.weeklyRtssProgress) || 0, 9999);
     var pct = weeklyGoal > 0 ? Math.min(100, Math.round((weeklyProgress / weeklyGoal) * 100)) : 0;
+
+    var inferredNote = '';
+    if (paceInferred && paceInferredFrom === '5k') inferredNote = '5k 페이스 +15초 유추';
+    else if (paceInferred && paceInferredFrom === '3k') inferredNote = '3k 페이스 +35초 유추';
 
     var cardStyle = {
       borderRadius: '16px',
@@ -105,32 +117,9 @@
       border: '1px solid rgba(0,0,0,0.05)'
     };
 
-    function handleFtpCalc() {
-      if (ftpCalcLoading || !userProfile || !userProfile.id) return;
-      if (typeof setFtpCalcLoading === 'function') setFtpCalcLoading(true);
-      if (typeof setFtpCalcResult === 'function') setFtpCalcResult(null);
-      (async function() {
-        try {
-          var logs = [];
-          if (typeof window.getUserTrainingLogs === 'function') {
-            logs = await window.getUserTrainingLogs(userProfile.id, { limit: 400 }) || [];
-          }
-          var result = window.calculateDynamicFtp ? window.calculateDynamicFtp(logs) : { success: false, error: 'TP 산출 함수를 불러올 수 없습니다.' };
-          if (typeof setFtpCalcResult === 'function') setFtpCalcResult(result);
-          if (typeof setFtpModalOpen === 'function') setFtpModalOpen(true);
-        } catch (e) {
-          if (typeof setFtpCalcResult === 'function') setFtpCalcResult({ success: false, error: (e && e.message) || '오류가 발생했습니다.' });
-          if (typeof setFtpModalOpen === 'function') setFtpModalOpen(true);
-        } finally {
-          if (typeof setFtpCalcLoading === 'function') setFtpCalcLoading(false);
-        }
-      })();
-    }
-
     return React.createElement(
       'div',
       { className: 'grid grid-cols-2 gap-4' },
-      // Card 1: 역치 페이스 & 체중
       React.createElement(
         'div',
         {
@@ -139,35 +128,43 @@
         },
         React.createElement('div', { className: 'flex items-center justify-between mb-4' },
           React.createElement('span', { className: 'text-xs font-semibold text-amber-600 uppercase tracking-wider' }, '역치 페이스 & 체중'),
-          React.createElement('span', { className: 'text-amber-500', title: 'FTP·W/kg' },
-            React.createElement('svg', { className: 'w-5 h-5', fill: 'currentColor', viewBox: '0 0 24 24' },
-              React.createElement('path', { d: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z' })
+          React.createElement('span', { className: 'text-amber-500', title: '90일 최고 페이스' },
+            React.createElement('svg', { className: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+              React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M13 10V3L4 14h7v7l9-11h-7z' })
             )
           )
         ),
-        React.createElement('div', { className: 'space-y-3 pt-1' },
-          React.createElement('div', { className: 'flex items-baseline gap-1' },
-            React.createElement('span', { className: 'text-3xl font-bold text-gray-900 tabular-nums tracking-tight' }, ftp),
-            React.createElement('span', { className: 'text-base font-medium text-gray-400 align-baseline' }, 'W')
+        logsLoading ? React.createElement(
+          'div',
+          { className: 'flex flex-col items-center justify-center py-6' },
+          React.createElement('div', { className: 'w-8 h-8 border-2 border-amber-200 border-t-amber-500 rounded-full animate-spin mb-2' }),
+          React.createElement('span', { className: 'text-xs text-gray-500' }, '로딩 중')
+        ) : React.createElement('div', { className: 'space-y-3 pt-1' },
+          React.createElement('div', null,
+            React.createElement('div', { className: 'text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1' }, '10k'),
+            paceUnavailable
+              ? React.createElement('div', { className: 'text-lg font-semibold text-gray-400' }, '산출 불가')
+              : React.createElement('div', { className: 'text-2xl font-bold text-gray-900 tabular-nums tracking-tight leading-tight' }, paceDisplay),
+            inferredNote
+              ? React.createElement('div', { className: 'text-[10px] text-gray-400 mt-1' }, inferredNote)
+              : null
           ),
-          React.createElement('div', { className: 'flex items-baseline gap-1' },
-            React.createElement('span', { className: 'text-2xl font-bold text-gray-800 tabular-nums' }, (typeof wkg === 'number' ? wkg.toFixed(2) : wkg) || '-'),
-            React.createElement('span', { className: 'text-sm font-medium text-gray-400' }, 'W/kg')
-          ),
-          weight > 0 && React.createElement('div', { className: 'text-sm font-medium text-gray-500' },
-            React.createElement('span', { className: 'tabular-nums' }, weight),
-            React.createElement('span', { className: 'text-gray-400 ml-0.5' }, 'kg')
-          )
+          weight > 0
+            ? React.createElement('div', { className: 'text-sm font-medium text-gray-600 pt-1 border-t border-gray-100' },
+                React.createElement('span', { className: 'tabular-nums text-base font-bold text-gray-800' }, weight),
+                React.createElement('span', { className: 'text-gray-500 ml-0.5' }, 'kg')
+              )
+            : React.createElement('div', { className: 'text-sm text-gray-400 pt-1 border-t border-gray-100' }, '체중 미등록')
         )
       ),
-      // Card 2: 주간 목표
       React.createElement(
         'div',
         {
           className: 'rounded-2xl p-5 bg-white overflow-hidden',
           style: cardStyle
         },
-        React.createElement('div', { className: 'text-xs font-semibold text-blue-600 uppercase tracking-wider mb-4' }, '주간 목표'),
+        React.createElement('div', { className: 'text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1' }, '주간 목표'),
+        React.createElement('div', { className: 'text-[10px] text-gray-400 mb-3' }, 'RUN 활동 rTSS'),
         logsLoading ? React.createElement(
           'div',
           { className: 'flex flex-col items-center justify-center py-8' },
@@ -187,9 +184,9 @@
           { className: 'flex flex-col items-center' },
           React.createElement(CircularWeeklyGoal, { value: pct, size: 100, strokeWidth: 10 }),
           React.createElement('div', { className: 'mt-3 text-center' },
-            React.createElement('span', { className: 'font-bold text-gray-800 tabular-nums' }, weeklyProgress),
+            React.createElement('span', { className: 'font-bold text-gray-800 tabular-nums' }, formatWeeklyTssValue(weeklyProgress)),
             React.createElement('span', { className: 'text-gray-500' }, ' / '),
-            React.createElement('span', { className: 'text-gray-600' }, weeklyGoal),
+            React.createElement('span', { className: 'text-gray-600 tabular-nums' }, formatWeeklyTssValue(weeklyGoal)),
             React.createElement('span', { className: 'text-gray-500 text-xs ml-0.5' }, ' rTSS')
           )
         )
