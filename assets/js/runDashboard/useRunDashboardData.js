@@ -114,7 +114,7 @@
       weight: 0,
       totalPoints: 0,
       currentPoints: 0,
-      weeklyRtssGoal: 225,
+      weeklyRtssGoal: 175,
       weeklyRtssProgress: 0
     });
     var stats = _useState2[0];
@@ -252,9 +252,9 @@
         var weight = Number(selectedUser.weight) || 0;
         var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
         var challenge = selectedUser.challenge || 'Fitness';
-        var weeklyTarget = 225;
-        if (typeof window.getWeeklyTargetTSS === 'function') {
-          var ti = window.getWeeklyTargetTSS(challenge);
+        var weeklyTarget = 175;
+        if (typeof window.getWeeklyTargetRtss === 'function') {
+          var ti = window.getWeeklyTargetRtss(challenge);
           if (ti && ti.target != null) weeklyTarget = ti.target;
         }
 
@@ -298,9 +298,9 @@
             var w = Number(d.weight) || 0;
             var wk = w > 0 ? (f / w).toFixed(2) : 0;
             var ch = d.challenge || 'Fitness';
-            var wt = 225;
-            if (typeof window.getWeeklyTargetTSS === 'function') {
-              var tInfo = window.getWeeklyTargetTSS(ch);
+            var wt = 175;
+            if (typeof window.getWeeklyTargetRtss === 'function') {
+              var tInfo = window.getWeeklyTargetRtss(ch);
               if (tInfo && tInfo.target != null) wt = tInfo.target;
             }
             setUserProfile({
@@ -458,9 +458,9 @@
             var stelvioSum = day.stelvio.reduce(function(s, t) { return s + t; }, 0);
             weeklyTss += stravaSum > 0 ? stravaSum : stelvioSum;
           });
-          var weeklyTarget = 225;
-          if (typeof window.getWeeklyTargetTSS === 'function') {
-            var tInfo = window.getWeeklyTargetTSS(userProfile.challenge || 'Fitness');
+          var weeklyTarget = 175;
+          if (typeof window.getWeeklyTargetRtss === 'function') {
+            var tInfo = window.getWeeklyTargetRtss(userProfile.challenge || 'Fitness');
             if (tInfo && tInfo.target != null) weeklyTarget = tInfo.target;
           }
           if (isMounted) {

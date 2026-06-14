@@ -122,7 +122,7 @@
     var data = typeof window.useRunDashboardData === 'function' ? window.useRunDashboardData() : {};
 
     var userProfile = data.userProfile || null;
-    var stats = data.stats || { thresholdPace: 0, weightKg: 0, weight: 0, weeklyRtssGoal: 225, weeklyRtssProgress: 0, totalPoints: 0, currentPoints: 0 };
+    var stats = data.stats || { thresholdPace: 0, weightKg: 0, weight: 0, weeklyRtssGoal: 175, weeklyRtssProgress: 0, totalPoints: 0, currentPoints: 0 };
     var coachData = data.coachData || null;
     var loading = data.loading;
     var aiLoading = data.aiLoading;
@@ -322,9 +322,9 @@
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                 <h3 className="text-sm font-semibold text-gray-600 mb-2">주간 목표</h3>
                 <div className="text-2xl font-bold text-gray-900">
-                  {logsLoading ? '...' : Math.min(Math.round((stats.weeklyRtssProgress / (stats.weeklyRtssGoal || 225)) * 100), 100)}%
+                  {logsLoading ? '...' : Math.min(Math.round((stats.weeklyRtssProgress / (stats.weeklyRtssGoal || 175)) * 100), 100)}%
                 </div>
-                <div className="text-sm text-gray-600">{stats.weeklyRtssProgress}/{stats.weeklyRtssGoal || 225} rTSS</div>
+                <div className="text-sm text-gray-600">{stats.weeklyRtssProgress}/{stats.weeklyRtssGoal || 175} rTSS</div>
               </div>
             </div>
           )}
