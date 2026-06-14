@@ -275,6 +275,7 @@
               setRunConditionAnalysis: setRunConditionAnalysis,
               setRetryCoach: data.setRetryCoach,
               userProfile: userProfile,
+              stats: stats,
               CircularProgress: CircularProgress
             })
           ) : (
@@ -287,13 +288,13 @@
                   <button
                     type="button"
                     onClick={function() {
-                      if (typeof window.runDashboardAIWorkoutRecommendation === 'function') {
-                        window.runDashboardAIWorkoutRecommendation(userProfile, coachData);
+                      if (typeof window.showRunWorkoutGuideModal === 'function') {
+                        window.showRunWorkoutGuideModal(userProfile, coachData, stats);
                       }
                     }}
                     className="mt-4 w-full py-3 bg-blue-500 text-white font-semibold rounded-xl"
                   >
-                    추천: {coachData.recommended_workout || 'Active Recovery (Z1)'}
+                    추천: {coachData.recommended_workout || 'Recovery Jog (Z1)'}
                   </button>
                 </div>
               )}
