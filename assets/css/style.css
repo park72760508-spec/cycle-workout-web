@@ -27875,10 +27875,62 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   pointer-events: none;
 }
 .running-ranking-filter-divider {
-  height: 0;
-  border: none;
-  border-top: 1px solid #e5e7eb;
-  margin: 10px 0 0;
+  display: none;
+}
+#runningRankingScreen .running-ranking-hero-card--list-top {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+#runningRankingScreen .running-ranking-hero-card--list-top .stelvio-hero-expand-toggle-row {
+  margin-top: 10px;
+}
+.running-hexagon-center-wrap {
+  pointer-events: none;
+}
+.running-hexagon-center-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 3.5rem;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1.5px solid rgba(109, 40, 217, 0.35);
+  box-shadow: 0 1px 6px rgba(91, 33, 182, 0.12);
+}
+.running-hexagon-center-rank {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #5b21b6;
+  line-height: 1.1;
+}
+.running-hexagon-center-score {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #6b7280;
+  line-height: 1.1;
+}
+.running-hexagon-axis-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+.running-hexagon-axis-table th,
+.running-hexagon-axis-table td {
+  padding: 5px 6px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+.running-hexagon-axis-table th {
+  font-weight: 600;
+  color: #6b7280;
+  background: #f9fafb;
+}
+.running-hexagon-axis-table td:first-child {
+  font-weight: 600;
+  color: #374151;
 }
 .running-ranking-movement-hint {
   margin: 8px 0 0;
