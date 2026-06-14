@@ -405,12 +405,8 @@
         || ((labels[activeCategory] || activeCategory) + ' 순위');
     }, [activeCategory]);
 
-    var rowHeight = cfg().LIST_ROW_HEIGHT || 48;
     var initialLoading = loading && !rawRows.length;
 
-    var listKey = activeTab + '-' + paceDistance + '-' + gender + '-' + activeCategory + '-' + listFilter;
-
-    var VirtualList = window.RunningRankingVirtualList;
     var Row = window.RunningRankingRow;
 
     var tabButtons = (cfg().TABS || []).map(function (t) {
@@ -551,11 +547,13 @@
           ? '관심·친구·그룹멤버에 해당하는 랭킹이 없습니다.'
           : (activeTab === 'crew' ? '집계 가능한 크루가 없습니다.' : '해당 조건의 랭킹이 없습니다.')
       );
-    } else if (isOverallTab && Row) {
+    } else if (Row) {
       listBody = React.createElement('div', {
         className: 'running-ranking-plain-list',
         role: 'list',
-        'aria-label': '러닝 종합 랭킹 목록'
+        'aria-label': activeTab === 'crew'
+          ? '러닝 크루 랭킹 목록'
+          : ('러닝 ' + (activeTab === 'overall' ? '종합' : activeTab) + ' 랭킹 목록')
       },
         rankedList.map(function (item) {
           return React.createElement(Row, {
@@ -570,18 +568,7 @@
         })
       );
     } else {
-      listBody = VirtualList
-        ? React.createElement(VirtualList, {
-            items: rankedList,
-            tabId: activeTab,
-            currentUserId: currentUserId,
-            listCategory: activeCategory,
-            rowHeight: rowHeight,
-            listKey: listKey,
-            socialVer: socialVer,
-            emptyMessage: activeTab === 'crew' ? '집계 가능한 크루가 없습니다.' : '해당 조건의 랭킹이 없습니다.'
-          })
-        : null;
+      listBody = null;
     }
 
     var movementHintText = leaderboardSource === 'live'
@@ -647,8 +634,7 @@
             React.createElement('span', { className: 'stelvio-category-header-unit' }, unitLabel)
           ),
           React.createElement('div', {
-            className: 'stelvio-category-body running-ranking-list-body running-ranking-list-body--avatar-align' +
-              (isOverallTab ? ' running-ranking-list-body--overall' : ' running-ranking-list-body--virtual') +
+            className: 'stelvio-category-body running-ranking-list-body running-ranking-list-body--avatar-align running-ranking-list-body--overall' +
               (activeTab === 'distance' ? ' running-ranking-list-body--distance' : '') +
               (isOverallTab && showOverallSegments ? ' running-ranking-list-body--segments-on' : ' running-ranking-list-body--segments-off')
           }, listBody)
