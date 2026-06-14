@@ -4534,11 +4534,19 @@ var CYCLE_CHALLENGE_OPTIONS = [
 ];
 
 var RUN_CHALLENGE_OPTIONS = [
-  { value: 'Fitness', label: 'Fitness (일반 피트니스/다이어트)' },
-  { value: 'PR', label: '개인 기록 갱신(PR)' },
-  { value: 'MastersRace', label: '아마추어 대회 참가(Masters Race)' },
-  { value: 'Elite', label: 'Elite (엘리트 선수)' }
+  { value: 'Fitness', label: 'Fitness (기초 체력)' },
+  { value: 'CityRunner', label: 'City Runner (중거리 완주)' },
+  { value: 'Challenger', label: 'Challenger (풀코스 마라톤)' },
+  { value: 'Sub3Club', label: 'Sub-3 Club (서브쓰리 입상권)' },
+  { value: 'Elite', label: 'Elite (선수 등록, 실업 준비)' },
+  { value: 'PRO', label: 'PRO (국가대표, 프로 선수)' }
 ];
+
+/** 이전 RUN 운동 목적 — 기존 사용자 프로필 표시용 */
+var RUN_CHALLENGE_LEGACY_LABELS = {
+  PR: '개인 기록 갱신(PR)',
+  MastersRace: '아마추어 대회 참가(Masters Race)'
+};
 
 var USER_CATEGORY_FORM_IDS = {
   register: { category: 'registerCategoryInput', ftp: 'registerFTPInput', challenge: 'registerChallengeInput', weight: 'registerWeightInput' },
@@ -4563,6 +4571,16 @@ function populateChallengeSelectForCategory(selectEl, category, selectedValue) {
   var pick = selectedValue && opts.some(function (o) { return o.value === selectedValue; })
     ? selectedValue
     : 'Fitness';
+  if (
+    selectedValue &&
+    pick === 'Fitness' &&
+    selectedValue !== 'Fitness' &&
+    normalizeUserSportCategory(category) === USER_SPORT_CATEGORY_RUN &&
+    RUN_CHALLENGE_LEGACY_LABELS[selectedValue]
+  ) {
+    selectEl.innerHTML += '<option value="' + selectedValue + '">' + RUN_CHALLENGE_LEGACY_LABELS[selectedValue] + ' (이전)</option>';
+    pick = selectedValue;
+  }
   selectEl.value = pick;
 }
 
