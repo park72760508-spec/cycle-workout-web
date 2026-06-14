@@ -578,7 +578,7 @@ Output Format (JSON Only):
   "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 현재 추정 VO2 Max는 {{calculatedVO2Max}}로, 컨디션과 잘 맞습니다. 오늘은 가벼운 리커버리로 조절하세요.",
   "recommended_workout": "VO2 Max (Z5)"
 }
-`;
+`);
 
   // 프롬프트에 데이터 삽입
   const userName = userProfile?.name || '사용자';
