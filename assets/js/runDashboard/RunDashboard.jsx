@@ -2,7 +2,7 @@
  * RunDashboard - RUN 전용 Performance Dashboard (CYCLE PerformanceDashboard 복제·1차 치환)
  * Level 1: RunAICoachHeroCard (Hero)
  * Level 2: RunDailyQuickStats (역치 페이스·체중 / 주간 rTSS)
- * Level 3: RunDashboardDetailTabs (헥사곤 6축 · 성장 · rTSS 트렌드)
+ * Level 3: DashboardDetailTabs (헥사곤 6축 · 성장 · rTSS 트렌드)
  *
  * @see assets/js/runDashboard/index.js
  */
@@ -193,7 +193,7 @@
 
     var RunAICoachHeroCard = window.RunAICoachHeroCard;
     var RunDailyQuickStats = window.RunDailyQuickStats;
-    var RunDashboardDetailTabs = window.RunDashboardDetailTabs;
+    var DashboardDetailTabs = window.DashboardDetailTabs;
     var CircularProgress = window.DashboardCircularProgress;
     var WkgGradeIndicator = window.WkgGradeIndicator;
     var DashboardCard = window.DashboardCard;
@@ -420,10 +420,11 @@
           ))}
         </section>
 
-        {/* Level 3: Deep Dive - RunDashboardDetailTabs */}
+        {/* Level 3: Deep Dive - DashboardDetailTabs (RUN) */}
         <section className="px-4 py-6 pb-32">
-          {RunDashboardDetailTabs ? (
-            React.createElement(RunDashboardDetailTabs, {
+          {DashboardDetailTabs ? (
+            React.createElement(DashboardDetailTabs, {
+              sportCategory: 'run',
               userProfile: userProfile,
               recentLogs: recentLogs,
               fitnessData: fitnessData,
@@ -439,7 +440,7 @@
             })
           ) : (
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <div className="text-center text-gray-500 text-sm">RunDashboardDetailTabs (구현 예정)</div>
+              <div className="text-center text-gray-500 text-sm">DashboardDetailTabs (구현 예정)</div>
               <div className="mt-4 text-xs text-gray-400">
                 Tab 1: 나의 성향 | Tab 2: 최근 훈련 | Tab 3: 성장 추이
               </div>

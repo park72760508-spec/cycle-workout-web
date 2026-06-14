@@ -10,7 +10,7 @@
  * 3. components/RunAICoachHeroCard.jsx
  * 4. components/RunDailyQuickStats.jsx
  * 5. components/StelvioHexagonRanksCard.jsx
- * 6. components/RunDashboardDetailTabs.jsx
+ * 6. DashboardDetailTabs.jsx (공통 — dashboard/ 에서 로드)
  * 7. stelvioHexagonRankLog.js
  * 8. RunDashboard.jsx
  *
@@ -24,7 +24,7 @@
     components: {
       hero: 'RunAICoachHeroCard',
       quickStats: 'RunDailyQuickStats',
-      detailTabs: 'RunDashboardDetailTabs',
+      detailTabs: 'DashboardDetailTabs',
       hexagon: 'StelvioHexagonRanksCard'
     },
     cache: 'runDashboardAICache',
