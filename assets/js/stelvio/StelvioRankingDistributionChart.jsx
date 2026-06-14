@@ -47,21 +47,15 @@
     Leggenda: '60대 이상',
   };
 
-  function paceChartValueFromSec(paceSec) {
+  function paceChartMetricFromSec(paceSec) {
     var p = Number(paceSec);
     if (!isFinite(p) || p <= 0) return NaN;
-    return -p;
+    return p;
   }
 
-  function paceSecFromChartValue(chartVal) {
-    var v = Number(chartVal);
-    if (!isFinite(v)) return null;
-    return -v;
-  }
-
-  function formatPaceChartAxis(chartVal) {
-    var sec = paceSecFromChartValue(chartVal);
-    if (sec == null || sec <= 0) return '—';
+  function formatPaceChartAxis(secPerKm) {
+    var sec = Number(secPerKm);
+    if (!isFinite(sec) || sec <= 0) return '—';
     var fmt = global.runningRankingFormat;
     if (fmt && typeof fmt.formatPaceMmSs === 'function') return fmt.formatPaceMmSs(sec);
     var min = Math.floor(sec / 60);
@@ -304,7 +298,7 @@
           if (isSpeedMode) return Number(e.speedKmh);
           if (isKmMode) return Number(e.totalKm);
           if (isGcMode) return Number(e.gcScore);
-          if (isPaceMode) return paceChartValueFromSec(e.paceSec);
+          if (isPaceMode) return paceChartMetricFromSec(e.paceSec);
           return Number(e.wkg);
         });
       },
@@ -387,7 +381,7 @@
               : isGcMode
                 ? Number(mine.gcScore)
                 : isPaceMode
-                  ? paceChartValueFromSec(mine.paceSec)
+                  ? paceChartMetricFromSec(mine.paceSec)
                   : Number(mine.wkg);
       }
     }
@@ -401,7 +395,7 @@
             : isGcMode
               ? Number(myRankSupremo.gcScore)
               : isPaceMode
-                ? paceChartValueFromSec(myRankSupremo.paceSec)
+                ? paceChartMetricFromSec(myRankSupremo.paceSec)
                 : Number(myRankSupremo.wkg);
     }
     if ((myRaw == null || isNaN(myRaw)) && currentUser && currentUser.userId === currentUserId) {
@@ -414,7 +408,7 @@
             : isGcMode
               ? Number(currentUser.gcScore)
               : isPaceMode
-                ? paceChartValueFromSec(currentUser.paceSec)
+                ? paceChartMetricFromSec(currentUser.paceSec)
                 : Number(currentUser.wkg);
     }
     if (
@@ -444,7 +438,7 @@
       if (isSpeedMode) return Number(e.speedKmh);
       if (isKmMode) return Number(e.totalKm);
       if (isGcMode) return Number(e.gcScore);
-      if (isPaceMode) return paceChartValueFromSec(e.paceSec);
+      if (isPaceMode) return paceChartMetricFromSec(e.paceSec);
       return Number(e.wkg);
     }
 
@@ -508,7 +502,11 @@
           var gt = 0;
           for (var gj = 0; gj < catArrR.length; gj++) {
             var rv = rowMetricForRank(catArrR[gj]);
-            if (isFinite(rv) && rv > myRaw + epsR) gt++;
+            if (isPaceMode) {
+              if (isFinite(rv) && rv < myRaw - epsR) gt++;
+            } else if (isFinite(rv) && rv > myRaw + epsR) {
+              gt++;
+            }
           }
           displayRank = gt + 1;
         }
