@@ -5,6 +5,75 @@
   'use strict';
 
   var RUN_ACTIVITY_TYPES = { run: 1, trailrun: 1, virtualrun: 1 };
+  var HEXAGON_AXES = ['1k', '3k', '5k', '7k', '10k', '20k'];
+
+  function isMissingPaceValue(paceStr) {
+    if (paceStr == null) return true;
+    var s = String(paceStr).trim();
+    return !s || s === '—' || s === '-' || s === 'null';
+  }
+
+  /**
+   * 90일 랭킹 row → 6축 헥사곤 페이스 컨텍스트 (AI·규칙 엔진용)
+   * @returns {{ hexagon: object, missingAxes: string[] }}
+   */
+  function extractHexagonPaceContext(leaderboardRow) {
+    var peaks = leaderboardRow && leaderboardRow.peak_performances;
+    var penalties = leaderboardRow && leaderboardRow.segment_penalties;
+    var hexagon = {};
+    var missingAxes = [];
+    HEXAGON_AXES.forEach(function (key) {
+      var seg = peaks && peaks[key];
+      var pace = seg && (seg.pace || seg.calculated_pace);
+      var penalized = !!(penalties && penalties[key]) || !!(seg && seg.is_penalty_applied);
+      var missing = isMissingPaceValue(pace) || penalized;
+      hexagon[key] = {
+        pace: isMissingPaceValue(pace) ? null : String(pace),
+        calculated_pace: isMissingPaceValue(pace) ? null : String(pace),
+        is_penalty_applied: penalized,
+        missing: missing
+      };
+      if (missing) missingAxes.push(key);
+    });
+    return { hexagon: hexagon, missingAxes: missingAxes };
+  }
+
+  /**
+   * 역치 페이스(초/km) 기반 VO2max 추정 (러닝, ml/kg/min)
+   * 임계 페이스 ≈ VO2max의 88% 가정
+   */
+  function computeRunVo2maxFromThresholdPace(secPerKm) {
+    var sec = Number(secPerKm);
+    if (!isFinite(sec) || sec <= 0) return 40;
+    var vMmin = 60000 / sec;
+    var vo2AtThreshold = 3.5 + 0.2 * vMmin;
+    return Math.max(20, Math.min(85, Math.round(vo2AtThreshold / 0.88)));
+  }
+
+  async function fetchRunLeaderboardCoachContext(userId) {
+    var empty = {
+      thresholdPace: computeThresholdPaceFromPeaks(null),
+      hexagonContext: extractHexagonPaceContext(null),
+      leaderboardRow: null
+    };
+    if (!userId || !window.runningRankingApi || typeof window.runningRankingApi.fetchLeaderboard !== 'function') {
+      return empty;
+    }
+    try {
+      var lb = await window.runningRankingApi.fetchLeaderboard();
+      if (!lb || !lb.success || !Array.isArray(lb.rows)) return empty;
+      var row = findLeaderboardRowForUser(lb.rows, userId);
+      if (!row) return empty;
+      return {
+        thresholdPace: computeThresholdPaceFromPeaks(row.peak_performances),
+        hexagonContext: extractHexagonPaceContext(row),
+        leaderboardRow: row
+      };
+    } catch (e) {
+      console.warn('[runDashboardPace] fetchRunLeaderboardCoachContext failed:', e);
+      return empty;
+    }
+  }
 
   function parsePaceToSecPerKm(paceStr) {
     if (window.runningRankingFormat && typeof window.runningRankingFormat.parsePaceToSecPerKm === 'function') {
@@ -103,9 +172,13 @@
   }
 
   window.runDashboardPace = {
+    HEXAGON_AXES: HEXAGON_AXES,
     parsePaceToSecPerKm: parsePaceToSecPerKm,
     formatPaceMinPerKm: formatPaceMinPerKm,
     computeThresholdPaceFromPeaks: computeThresholdPaceFromPeaks,
+    extractHexagonPaceContext: extractHexagonPaceContext,
+    computeRunVo2maxFromThresholdPace: computeRunVo2maxFromThresholdPace,
+    fetchRunLeaderboardCoachContext: fetchRunLeaderboardCoachContext,
     findLeaderboardRowForUser: findLeaderboardRowForUser,
     isRunTrainingLog: isRunTrainingLog
   };

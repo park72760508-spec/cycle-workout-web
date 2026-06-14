@@ -68,6 +68,7 @@
       String(thirtyDaysAgo.getDate()).padStart(2, '0');
     var logsToSend = recentLogs
       .filter(function(log) {
+        if (!isRunLogForWeeklyTss(log)) return false;
         var ds = parseDateForCoachAnalysis(log.date);
         return ds && ds >= thirtyStr && ds <= todayStr;
       })
@@ -121,24 +122,17 @@
     return next;
   }
 
-  async function fetchThresholdPaceForUser(userId) {
-    var unavailable = { secPerKm: null, display: null, inferred: false, inferredFrom: null, unavailable: true };
-    if (!userId || !window.runningRankingApi || typeof window.runningRankingApi.fetchLeaderboard !== 'function') {
-      return unavailable;
+  async function fetchRunCoachLeaderboardContext(userId) {
+    var emptyPace = { secPerKm: null, display: null, inferred: false, inferredFrom: null, unavailable: true };
+    var empty = { thresholdPace: emptyPace, hexagonContext: null };
+    if (window.runDashboardPace && typeof window.runDashboardPace.fetchRunLeaderboardCoachContext === 'function') {
+      try {
+        return await window.runDashboardPace.fetchRunLeaderboardCoachContext(userId);
+      } catch (e) {
+        console.warn('[useRunDashboardData] fetchRunLeaderboardCoachContext failed:', e);
+      }
     }
-    if (!window.runDashboardPace || typeof window.runDashboardPace.computeThresholdPaceFromPeaks !== 'function') {
-      return unavailable;
-    }
-    try {
-      var lb = await window.runningRankingApi.fetchLeaderboard();
-      if (!lb || !lb.success || !Array.isArray(lb.rows)) return unavailable;
-      var row = window.runDashboardPace.findLeaderboardRowForUser(lb.rows, userId);
-      if (!row || !row.peak_performances) return unavailable;
-      return window.runDashboardPace.computeThresholdPaceFromPeaks(row.peak_performances);
-    } catch (e) {
-      console.warn('[useRunDashboardData] threshold pace fetch failed:', e);
-      return unavailable;
-    }
+    return empty;
   }
 
   function useRunDashboardData() {
@@ -239,6 +233,14 @@
     var ftpCalcResult = _useState20[0];
     var setFtpCalcResult = _useState20[1];
 
+    var _useState21 = useState(null);
+    var hexagonCoachContext = _useState21[0];
+    var setHexagonCoachContext = _useState21[1];
+
+    var _useState22 = useState(false);
+    var runLeaderboardCoachReady = _useState22[0];
+    var setRunLeaderboardCoachReady = _useState22[1];
+
     var retryLogsRef = useRef(null);
     var aiAnalysisInProgressRef = useRef(false);
 
@@ -247,13 +249,17 @@
       function() {
         var uid = userProfile && userProfile.id;
         if (!uid) return '';
-        if (!logsLoaded || logsLoading) return 'loading';
+        if (!logsLoaded || logsLoading || !runLeaderboardCoachReady) return 'loading';
         if (logsLoadError) return 'err|' + String(uid);
-        if (!recentLogs || !recentLogs.length) return 'nologs|' + String(uid);
+        var runLogs = (recentLogs || []).filter(isRunLogForWeeklyTss);
+        var hexSig = hexagonCoachContext && hexagonCoachContext.missingAxes
+          ? hexagonCoachContext.missingAxes.join(',')
+          : 'none';
+        if (!runLogs.length && !hexagonCoachContext) return 'nologs|' + String(uid);
         var ctx0 = buildCoachContextForCoachAnalysis(recentLogs);
-        return String(uid) + '|' + ctx0.todayStr + '|' + ctx0.logsSignature;
+        return String(uid) + '|' + ctx0.todayStr + '|' + ctx0.logsSignature + '|' + hexSig;
       },
-      [userProfile && userProfile.id, logsLoaded, logsLoading, logsLoadError, recentLogs]
+      [userProfile && userProfile.id, logsLoaded, logsLoading, logsLoadError, recentLogs, hexagonCoachContext, runLeaderboardCoachReady]
     );
 
     // --- Profile Load ---
@@ -438,6 +444,7 @@
       async function loadRecentLogs() {
         setLogsLoading(true);
         setLogsLoadError(null);
+        setRunLeaderboardCoachReady(false);
         try {
           // Phase 6: getUserTrainingLogs → logsReadRouter(Supabase rides | Firestore logs)
           var raw = [];
@@ -507,7 +514,8 @@
             var tInfo = window.getWeeklyTargetRtss(userProfile.challenge || 'Fitness');
             if (tInfo && tInfo.target != null) weeklyTarget = tInfo.target;
           }
-          var paceInfo = await fetchThresholdPaceForUser(userProfile.id);
+          var lbCoachCtx = await fetchRunCoachLeaderboardContext(userProfile.id);
+          var paceInfo = (lbCoachCtx && lbCoachCtx.thresholdPace) || {};
           if (isMounted) {
             setStats(function(prev) {
               var next = Object.assign({}, prev);
@@ -515,6 +523,8 @@
               next.weeklyRtssProgress = Math.min(Math.round(weeklyTss * 10) / 10, 9999);
               return applyThresholdPaceToStats(next, paceInfo);
             });
+            setHexagonCoachContext(lbCoachCtx && lbCoachCtx.hexagonContext ? lbCoachCtx.hexagonContext : null);
+            setRunLeaderboardCoachReady(true);
           }
 
           var GROWTH_SLOT_FIELDS = [
@@ -788,6 +798,7 @@
             setLogsLoaded(true);
             setRecentLogs([]);
             setWeeklyTssTrendData([]);
+            setRunLeaderboardCoachReady(true);
           }
         } finally {
           if (isMounted) setLogsLoading(false);
@@ -804,17 +815,23 @@
 
     // --- AI Coach Analysis ---
     useEffect(function coachAnalysisEffect() {
-      if (!userProfile || !logsLoaded || logsLoading || !recentLogs.length) {
+      var runRecentLogs = (recentLogs || []).filter(isRunLogForWeeklyTss);
+      var hasHexagonData = !!(hexagonCoachContext && hexagonCoachContext.hexagon);
+      if (!userProfile || !logsLoaded || logsLoading || !runLeaderboardCoachReady) {
+        if (logsLoaded && !logsLoading && runLeaderboardCoachReady) setAiLoading(false);
+        return;
+      }
+      if (!runRecentLogs.length && !hasHexagonData) {
         if (logsLoaded && !logsLoading) setAiLoading(false);
         return;
       }
       if (logsLoadError) {
         setCoachData({
           condition_score: 50,
-          training_status: 'Building Base',
+          training_status: '기초 강화',
           vo2max_estimate: 40,
           coach_comment: (userProfile.name || '사용자') + '님, 훈련 데이터를 불러오지 못했습니다.',
-          recommended_workout: 'Active Recovery (Z1)',
+          recommended_workout: 'Recovery Jog (Z1)',
           error_reason: logsLoadError
         });
         setAiLoading(false);
@@ -870,16 +887,19 @@
                 if (dv && dv.toDate) ds = dv.toDate().toISOString().split('T')[0];
                 else if (dv) ds = String(dv).slice(0, 10);
                 if (!ds || ds < startStr || ds > endStr) return;
+                if (!isRunLogForWeeklyTss(log)) return;
                 var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
                 if (sec < 60) return;
                 fireLogs.push({
                   completed_at: ds + 'T12:00:00.000Z',
+                  date: ds,
                   duration_min: Math.round(sec / 60),
                   duration_sec: sec,
                   avg_power: Math.round(log.avg_watts ?? log.avg_power ?? 0),
                   np: Math.round(log.weighted_watts ?? log.np ?? log.avg_watts ?? 0),
                   tss: Math.round(log.tss ?? 0),
                   avg_hr: log.avg_hr != null ? Math.round(Number(log.avg_hr)) : 0,
+                  activity_type: log.activity_type || log.sport_type || 'run',
                   source: (log.source || '').toLowerCase()
                 });
               });
@@ -937,14 +957,22 @@
         } else if (cleanLogs.length === 0) {
           cleanLogs = logsToSend;
         }
+        cleanLogs = cleanLogs.filter(isRunLogForWeeklyTss);
         try {
+          var userProfileForCoach = Object.assign({}, userProfile, {
+            sport_category: 'RUN',
+            category: 'RUN',
+            threshold_pace: stats.thresholdPaceDisplay || null,
+            threshold_pace_sec: stats.thresholdPaceSec != null ? stats.thresholdPaceSec : null,
+            weight: userProfile.weight || stats.weight || 0
+          });
           if (typeof window.callGeminiCoach !== 'function') {
             setCoachData({
               condition_score: 50,
-              training_status: 'Building Base',
+              training_status: '기초 강화',
               vo2max_estimate: 40,
               coach_comment: 'AI 분석 함수를 불러올 수 없습니다.',
-              recommended_workout: 'Active Recovery (Z1)',
+              recommended_workout: 'Recovery Jog (Z1)',
               error_reason: 'callGeminiCoach 함수 없음'
             });
             setAiLoading(false);
@@ -957,11 +985,15 @@
             typeof window.getGeminiQuotaCooldownRemainingSec === 'function'
               ? window.getGeminiQuotaCooldownRemainingSec()
               : 0;
-          var analysis = await window.callGeminiCoach(userProfile, cleanLogs, last7Rtss, {
+          var analysis = await window.callGeminiCoach(userProfileForCoach, cleanLogs, last7Rtss, {
             timeoutMs: 120000,
             maxRetries: 2,
             useStreaming: quotaCooldownSec <= 0,
             forceApi: retryCoach > 0,
+            sportCategory: 'run',
+            hexagonContext: hexagonCoachContext,
+            weeklyRtssGoal: stats.weeklyRtssGoal,
+            thresholdPaceDisplay: stats.thresholdPaceDisplay,
             onChunk: function(delta, fullText) {
               try {
                 var match = fullText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)/);
@@ -975,7 +1007,15 @@
 
           if (analysis && typeof window.computeConditionScore === 'function') {
             try {
-              var userForScore = { age: userProfile.age, gender: userProfile.gender, challenge: userProfile.challenge, ftp: userProfile.ftp, weight: userProfile.weight };
+              var userForScore = {
+                age: userProfile.age,
+                gender: userProfile.gender,
+                challenge: userProfile.challenge,
+                ftp: userProfile.ftp,
+                weight: userProfile.weight,
+                sportCategory: 'run',
+                category: 'RUN'
+              };
               var logsForScore = cleanLogs.length ? cleanLogs.slice() : logsToSend.slice();
               var deduped = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
               var csResult = window.computeConditionScore(userForScore, deduped, todayStr);
@@ -992,10 +1032,10 @@
           console.error('[Dashboard] AI analysis error:', e);
           setCoachData({
             condition_score: 50,
-            training_status: 'Building Base',
+            training_status: '기초 강화',
             vo2max_estimate: 40,
             coach_comment: (userProfile.name || '사용자') + '님, AI 분석 중 오류가 발생했습니다.',
-            recommended_workout: 'Active Recovery (Z1)',
+            recommended_workout: 'Recovery Jog (Z1)',
             error_reason: (e && e.message) || '분석 실패'
           });
         } finally {
@@ -1005,7 +1045,7 @@
           setRetryCoach(0);
         }
       })();
-    }, [coachAnalysisTriggerKey, runConditionAnalysis, retryCoach, userProfile && userProfile.id]);
+    }, [coachAnalysisTriggerKey, runConditionAnalysis, retryCoach, userProfile && userProfile.id, hexagonCoachContext, stats.thresholdPaceDisplay, stats.weeklyRtssGoal, runLeaderboardCoachReady]);
 
     return {
       userProfile,
