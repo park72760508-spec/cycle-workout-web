@@ -27939,10 +27939,9 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   overflow: visible !important;
 }
 .running-ranking-virtual-list {
-  max-height: min(62vh, 520px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
 }
 .running-ranking-virtual-window {
   will-change: transform;
