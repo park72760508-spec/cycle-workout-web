@@ -27803,6 +27803,12 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 .running-ranking-body--pace {
   padding: 0 4px 12px;
 }
+.running-ranking-body--tss {
+  padding: 0 4px 12px;
+}
+.running-ranking-body--distance {
+  padding: 0 4px 12px;
+}
 #runningRankingScreen .stelvio-duration-chips-wrap {
   display: flex;
   justify-content: center;
