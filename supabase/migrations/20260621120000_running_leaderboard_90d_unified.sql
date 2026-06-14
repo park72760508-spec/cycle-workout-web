@@ -1,11 +1,13 @@
--- RUN 랭킹 v5: 전 구간 90일 슬라이딩 윈도우 + 결측 0점(NULL) + Top3/Top2 페널티
+-- RUN 랭킹 v5: 슬라이딩 윈도우 + 결측 0점(NULL) + Top3/Top2/단일최고
 -- 기존 테이블 ALTER 없음 — 헬퍼 함수·get_running_leaderboard() 교체만
 -- 날짜: activities.activity_date 우선, 없으면 run_activity_efforts.updated_at/created_at (서울)
 -- 규칙:
---   · 1k~20k(42k 포함) 모두 최근 90일
+--   · 1k/3k/5k/7k/10k: 최근 90일
+--   · 20k/42k: 최근 180일
 --   · 동일 유저·동일 날짜·동일 거리 → 당일 최고 페이스(MIN pace = MAX speed) 1건만
 --   · 1k/3k/5k/7k: 서로 다른 날 Top3 산술 평균 (1~2건은 30% 가상기록 페널티)
---   · 10k/20k/42k: 서로 다른 날 Top2 산술 평균 (1건은 30% 가상기록 페널티)
+--   · 10k: 서로 다른 날 Top2 산술 평균 (1건은 30% 가상기록 페널티)
+--   · 20k/42k: 180일 내 일별 dedup 후 단일 최고 기록 (페널티 없음)
 --   · 0건: 가상기록 없이 NULL — 순위·GC 집계에서 제외
 
 CREATE OR REPLACE FUNCTION public.fn_running_sliding_window_days(p_axis text)
@@ -19,14 +21,14 @@ AS $$
     WHEN '5k' THEN 90
     WHEN '7k' THEN 90
     WHEN '10k' THEN 90
-    WHEN '20k' THEN 90
-    WHEN '42k' THEN 90
+    WHEN '20k' THEN 180
+    WHEN '42k' THEN 180
     ELSE 90
   END;
 $$;
 
 COMMENT ON FUNCTION public.fn_running_sliding_window_days(text) IS
-  'RUN 슬라이딩 윈도우 일수: 1k~42k 전 구간 90일 통일';
+  'RUN 슬라이딩 윈도우 일수: 1k~10k=90, 20k/42k=180';
 
 -- 페이스(sec/km) 3개 산술 평균 → 대표 속도(m/s)
 CREATE OR REPLACE FUNCTION public.fn_running_speed_from_avg_paces_3(
@@ -109,7 +111,7 @@ AS $$
           public.fn_running_top3_penalty_speed_1record(p_best_speed)
         ELSE NULL
       END
-    WHEN lower(btrim(COALESCE(p_axis, ''))) IN ('10k', '20k', '42k') THEN
+    WHEN lower(btrim(COALESCE(p_axis, ''))) = '10k' THEN
       CASE
         WHEN p_peak_count = 1 THEN
           public.fn_running_penalty_speed_from_best(p_best_speed)
@@ -118,6 +120,11 @@ AS $$
             public.fn_running_pace_sec_per_km(p_best_speed),
             public.fn_running_pace_sec_per_km(p_second_speed)
           )
+        ELSE NULL
+      END
+    WHEN lower(btrim(COALESCE(p_axis, ''))) IN ('20k', '42k') THEN
+      CASE
+        WHEN p_peak_count >= 1 THEN p_best_speed
         ELSE NULL
       END
     ELSE p_best_speed
@@ -157,7 +164,7 @@ AS $$
       AND COALESCE(
         a.activity_date,
         (COALESCE(r.updated_at, r.created_at, now()) AT TIME ZONE 'Asia/Seoul')::date
-      ) >= (st.today - interval '90 days')::date
+      ) >= (st.today - interval '180 days')::date
       AND COALESCE(
         a.activity_date,
         (COALESCE(r.updated_at, r.created_at, now()) AT TIME ZONE 'Asia/Seoul')::date
@@ -211,6 +218,7 @@ AS $$
       v.speed,
       v.hr
     FROM activity_mono am
+    CROSS JOIN seoul_today st
     CROSS JOIN LATERAL (
       VALUES
         ('1k', am.speed_1k, am.hr_1k),
@@ -222,6 +230,13 @@ AS $$
         ('42k', am.speed_42k, am.hr_42k)
     ) AS v(axis, speed, hr)
     WHERE v.speed IS NOT NULL AND v.speed > 0
+      AND am.act_date <= st.today
+      AND (
+        (v.axis IN ('1k', '3k', '5k', '7k', '10k')
+          AND am.act_date >= (st.today - interval '90 days')::date)
+        OR (v.axis IN ('20k', '42k')
+          AND am.act_date >= (st.today - interval '180 days')::date)
+      )
   ),
   axis_daily_best AS (
     SELECT
@@ -297,14 +312,28 @@ AS $$
       (array_agg(adr.day_hr ORDER BY adr.day_rank))[1] AS best_hr,
       (MAX(adr.day_count) = 1) AS is_penalty_applied
     FROM axis_daily_ranked adr
-    WHERE adr.axis IN ('10k', '20k', '42k')
+    WHERE adr.axis = '10k'
     GROUP BY adr.user_id, adr.axis
     HAVING MAX(adr.day_count) >= 1
+  ),
+  ultra_best_sliding AS (
+    SELECT
+      adb.user_id,
+      adb.axis,
+      MAX(adb.day_speed) AS agg_speed,
+      (array_agg(adb.day_hr ORDER BY adb.day_speed DESC, adb.act_date DESC))[1] AS best_hr,
+      false AS is_penalty_applied
+    FROM axis_daily_best adb
+    WHERE adb.axis IN ('20k', '42k')
+    GROUP BY adb.user_id, adb.axis
+    HAVING MAX(adb.day_speed) > 0
   ),
   sliding_peaks AS (
     SELECT user_id, axis, agg_speed, best_hr, is_penalty_applied FROM short_sliding
     UNION ALL
     SELECT user_id, axis, agg_speed, best_hr, is_penalty_applied FROM long_sliding
+    UNION ALL
+    SELECT user_id, axis, agg_speed, best_hr, is_penalty_applied FROM ultra_best_sliding
   ),
   sliding_pivot AS (
     SELECT
@@ -638,7 +667,10 @@ AS $$
           'distance_from', (st.today - interval '30 days')::date,
           'distance_to', st.today,
           'analysis_from', (st.today - interval '90 days')::date,
-          'analysis_to', st.today
+          'analysis_to', st.today,
+          'ultra_from', (st.today - interval '180 days')::date,
+          'ultra_to', st.today,
+          'ultra_axes', jsonb_build_array('20k', '42k')
         ),
         'segment_scores', w.segment_scores,
         'segment_penalties', jsonb_build_object(
@@ -751,7 +783,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.get_running_leaderboard() IS
-  'RUN v5: 90일 통일 슬라이딩 + 일별 dedup + Top3(1k~7k)/Top2(10k~42k) 평균 + 30% 페널티 + 결측 NULL + GC 6축';
+  'RUN v5: 90일(1k~10k)/180일(20k·42k) + 일별 dedup + Top3/Top2/단일최고 + 결측 NULL + GC 6축';
 
 GRANT EXECUTE ON FUNCTION public.get_running_leaderboard() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_running_leaderboard() TO service_role;
