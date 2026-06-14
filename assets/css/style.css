@@ -368,7 +368,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시·성과 대시보드 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
 /* 화면이 뷰포트 전체로 확장 — 하단 구분 영역 없이 넓게 사용 (min-height로 확장, -webkit-fill-available로 Safari 대응) */
 /* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
-.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen) {
+.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#runDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen) {
   /* iOS/Bluefy: position fixed + inset 0으로 뷰포트 전체 채움 (하단 회색 바 근본 해결) */
   position: fixed !important;
   top: 0 !important;
@@ -453,6 +453,33 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 /* 대시보드 활성 시 다른 screen 완전 숨김 (흰색 화면 덮임 방지) - body 클래스로 제어 */
 body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#splashScreen) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+}
+
+#runDashboardScreen,
+#runDashboardScreen.active {
+  padding: 0 !important;
+}
+#runDashboardScreen.active {
+  overflow: hidden !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box;
+  position: relative !important;
+  z-index: 1001 !important;
+}
+body.run-dashboard-active .screen:not(#runDashboardScreen):not(#splashScreen) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
