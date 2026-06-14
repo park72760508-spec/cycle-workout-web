@@ -133,6 +133,10 @@
     var showOverallSegments = _showOverallSegments[0];
     var setShowOverallSegments = _showOverallSegments[1];
 
+    var _heroExpanded = useState(false);
+    var heroExpanded = _heroExpanded[0];
+    var setHeroExpanded = _heroExpanded[1];
+
     var crewUnsubRef = useRef(null);
     var isOverallTab = activeTab === 'overall';
     var isPaceTab = activeTab === 'pace';
@@ -278,6 +282,7 @@
     useEffect(function () {
       if (activeTab === 'crew') return;
       scrollRankingToTop();
+      setHeroExpanded(false);
     }, [gender, activeCategory, activeTab, paceDistance, listFilter]);
 
     var baseRankedList = useMemo(function () {
@@ -320,13 +325,25 @@
       return list;
     }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, socialVer]);
 
-    var overallHeroMessage = useMemo(function () {
-      if (!isOverallTab || !dataApi().buildOverallHeroMessage) return null;
-      return dataApi().buildOverallHeroMessage(rawRows, {
+    var myViewerItem = useMemo(function () {
+      if (!currentUserId || !isOverallTab) return null;
+      var i;
+      for (i = 0; i < rankedList.length; i++) {
+        if (rankedList[i] && String(rankedList[i].userId) === String(currentUserId)) {
+          return rankedList[i];
+        }
+      }
+      return null;
+    }, [rankedList, currentUserId, isOverallTab]);
+
+    var overallHeroPayload = useMemo(function () {
+      if (!isOverallTab || !dataApi().buildOverallHeroPayload) return null;
+      return dataApi().buildOverallHeroPayload(rawRows, {
         gender: gender,
-        category: activeCategory
+        category: activeCategory,
+        viewerItem: myViewerItem
       });
-    }, [isOverallTab, rawRows, gender, activeCategory]);
+    }, [isOverallTab, rawRows, gender, activeCategory, myViewerItem]);
 
     useEffect(function () {
       var dispose = window.disposeStelvioDistributionChart;
@@ -623,14 +640,6 @@
               React.createElement('div', { className: 'stelvio-filter-bar' }, genderSelect, categorySelect)
             )
           : null,
-        isOverallTab
-          ? React.createElement('div', { className: 'running-ranking-filter-divider', 'aria-hidden': true })
-          : null,
-        isOverallTab && overallHeroMessage
-          ? React.createElement('div', { className: 'stelvio-hero-card running-ranking-hero-card' },
-              React.createElement('p', { className: 'stelvio-hero-text' }, overallHeroMessage)
-            )
-          : null,
         stale && error
           ? React.createElement('p', { className: 'running-ranking-stale-hint' }, '캐시 표시 · ' + error)
           : null
@@ -650,6 +659,36 @@
         className: 'stelvio-ranking-content running-ranking-content',
         style: initialLoading ? { opacity: 0.5 } : undefined
       },
+        isOverallTab && overallHeroPayload
+          ? React.createElement('div', { className: 'stelvio-hero-card running-ranking-hero-card running-ranking-hero-card--list-top' },
+              React.createElement('p', {
+                className: 'stelvio-hero-text',
+                dangerouslySetInnerHTML: { __html: overallHeroPayload.html }
+              }),
+              React.createElement('div', { className: 'stelvio-hero-expand-toggle-row' },
+                React.createElement('button', {
+                  type: 'button',
+                  className: 'stelvio-hero-expand-btn',
+                  'aria-expanded': heroExpanded,
+                  onClick: function () { setHeroExpanded(function (prev) { return !prev; }); }
+                },
+                  React.createElement('span', { className: 'stelvio-hero-expand-btn-icon' }, heroExpanded ? '−' : '+'),
+                  React.createElement('span', null, heroExpanded ? '접어보기' : '펼쳐보기')
+                )
+              ),
+              React.createElement('div', {
+                className: 'stelvio-hero-expand-area' + (heroExpanded ? ' stelvio-hero-expand-area--open' : '')
+              },
+                heroExpanded && window.RunningHexagonRanksCard
+                  ? React.createElement(window.RunningHexagonRanksCard, {
+                      rows: rawRows,
+                      gender: gender,
+                      category: activeCategory
+                    })
+                  : null
+              )
+            )
+          : null,
         React.createElement('div', {
           className: 'stelvio-category-card stelvio-ranking-list-card running-ranking-list-card' +
             (isOverallTab ? ' running-ranking-list-card--overall' : '')
