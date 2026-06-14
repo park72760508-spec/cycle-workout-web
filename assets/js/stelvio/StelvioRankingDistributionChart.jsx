@@ -47,6 +47,32 @@
     Leggenda: '60대 이상',
   };
 
+  function paceChartValueFromSec(paceSec) {
+    var p = Number(paceSec);
+    if (!isFinite(p) || p <= 0) return NaN;
+    return -p;
+  }
+
+  function paceSecFromChartValue(chartVal) {
+    var v = Number(chartVal);
+    if (!isFinite(v)) return null;
+    return -v;
+  }
+
+  function formatPaceChartAxis(chartVal) {
+    var sec = paceSecFromChartValue(chartVal);
+    if (sec == null || sec <= 0) return '—';
+    var fmt = global.runningRankingFormat;
+    if (fmt && typeof fmt.formatPaceMmSs === 'function') return fmt.formatPaceMmSs(sec);
+    var min = Math.floor(sec / 60);
+    var s = Math.floor(sec % 60);
+    return min + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function formatPaceChartRange(x0, x1) {
+    return formatPaceChartAxis(x0) + ' ~ ' + formatPaceChartAxis(x1) + ' /km';
+  }
+
   var _gid = 0;
   function nextGradientId() {
     return 'stelvio-dist-' + (++_gid);
@@ -199,7 +225,8 @@
     var isKmMode = duration === 'personal_dist' || duration === 'group_dist';
     var isSpeedMode = duration === 'personal_speed';
     var isGcMode = duration === 'gc';
-    var isHistLike = isTss || isKmMode || isSpeedMode || isGcMode;
+    var isPaceMode = duration === 'run_pace';
+    var isHistLike = isTss || isKmMode || isSpeedMode || isGcMode || isPaceMode;
     var durLabel = isTss
       ? '주간 TSS'
       : isSpeedMode
@@ -208,7 +235,9 @@
           ? (duration === 'group_dist' ? '그룹 30일 거리' : '거리 30일')
           : isGcMode
             ? 'GC 환산 점수'
-            : STELVIO_DURATION_LABELS[duration] || duration;
+            : isPaceMode
+              ? ((p.paceDistanceLabel || '페이스') + '/km')
+              : STELVIO_DURATION_LABELS[duration] || duration;
     /* 그룹 탭에서 overrideDisplayRank는 메트릭에 관계없이 그룹 내 순위로 사용 */
     var hasGroupRankOverride =
       typeof p.overrideDisplayRank === 'number' &&
@@ -216,7 +245,9 @@
       p.overrideDisplayRank >= 1;
     /** 오픈 라이딩 등: 랭킹 행과 무관하게 프로필 FTP 기준 W/kg으로 세로 기준선만 고정 */
     var overrideMyWkg =
-      !isTss && !isKmMode && !isSpeedMode && !isGcMode && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
+      !isTss && !isKmMode && !isSpeedMode && !isGcMode && !isPaceMode && p.overrideMyWkg != null
+        ? Number(p.overrideMyWkg)
+        : null;
     if (overrideMyWkg != null && (isNaN(overrideMyWkg) || !isFinite(overrideMyWkg))) overrideMyWkg = null;
 
     var chartRankOverrideRaw = p.overrideDisplayRank;
@@ -273,10 +304,11 @@
           if (isSpeedMode) return Number(e.speedKmh);
           if (isKmMode) return Number(e.totalKm);
           if (isGcMode) return Number(e.gcScore);
+          if (isPaceMode) return paceChartValueFromSec(e.paceSec);
           return Number(e.wkg);
         });
       },
-      [cohortForHistogram, isTss, isSpeedMode, isKmMode, isGcMode]
+      [cohortForHistogram, isTss, isSpeedMode, isKmMode, isGcMode, isPaceMode]
     );
 
     var binPack = useMemo(
@@ -302,6 +334,7 @@
       !isKmMode &&
       !isSpeedMode &&
       !isGcMode &&
+      !isPaceMode &&
       p.openRidingTierBandWeightKg != null &&
       isFinite(Number(p.openRidingTierBandWeightKg)) &&
       Number(p.openRidingTierBandWeightKg) > 0
@@ -334,7 +367,7 @@
     var openRidingTierStripOverlapPx = openRidingTierBandWeightKg && openRidingTierBandSegments.length > 0 ? 15 : 0;
 
     var myRaw = null;
-    if (overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode) {
+    if (overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode && !isPaceMode) {
       myRaw = overrideMyWkg;
     }
     if (myRaw == null && currentUserId && cohort.length) {
@@ -353,7 +386,9 @@
               ? Number(mine.totalKm)
               : isGcMode
                 ? Number(mine.gcScore)
-                : Number(mine.wkg);
+                : isPaceMode
+                  ? paceChartValueFromSec(mine.paceSec)
+                  : Number(mine.wkg);
       }
     }
     if ((myRaw == null || isNaN(myRaw)) && currentUserId && myRankSupremo && myRankSupremo.userId === currentUserId) {
@@ -365,7 +400,9 @@
             ? Number(myRankSupremo.totalKm)
             : isGcMode
               ? Number(myRankSupremo.gcScore)
-              : Number(myRankSupremo.wkg);
+              : isPaceMode
+                ? paceChartValueFromSec(myRankSupremo.paceSec)
+                : Number(myRankSupremo.wkg);
     }
     if ((myRaw == null || isNaN(myRaw)) && currentUser && currentUser.userId === currentUserId) {
       myRaw = isTss
@@ -376,7 +413,9 @@
             ? Number(currentUser.totalKm)
             : isGcMode
               ? Number(currentUser.gcScore)
-              : Number(currentUser.wkg);
+              : isPaceMode
+                ? paceChartValueFromSec(currentUser.paceSec)
+                : Number(currentUser.wkg);
     }
     if (
       (myRaw == null || isNaN(myRaw)) &&
@@ -405,6 +444,7 @@
       if (isSpeedMode) return Number(e.speedKmh);
       if (isKmMode) return Number(e.totalKm);
       if (isGcMode) return Number(e.gcScore);
+      if (isPaceMode) return paceChartValueFromSec(e.paceSec);
       return Number(e.wkg);
     }
 
@@ -413,7 +453,7 @@
 
     if (chartRankOverride != null) {
       displayRank = chartRankOverride;
-    } else if (overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode) {
+    } else if (overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode && !isPaceMode) {
       displayRank = null;
     } else if (currentUserId) {
       if (activeCategory === 'Supremo') {
@@ -464,7 +504,7 @@
             displayRank = catIdx + 1;
           }
         } else if (myRaw != null && !isNaN(myRaw) && catArrR.length) {
-          var epsR = isTss || isKmMode || isSpeedMode || isGcMode ? 1e-6 : 1e-9;
+          var epsR = isTss || isKmMode || isSpeedMode || isGcMode || isPaceMode ? 1e-6 : 1e-9;
           var gt = 0;
           for (var gj = 0; gj < catArrR.length; gj++) {
             var rv = rowMetricForRank(catArrR[gj]);
@@ -485,7 +525,9 @@
               ? myRaw.toFixed(1) + ' km'
               : isGcMode
                 ? myRaw.toFixed(1) + ' 점'
-                : myRaw.toFixed(2) + ' W/kg'
+                : isPaceMode
+                  ? formatPaceChartAxis(myRaw) + '/km'
+                  : myRaw.toFixed(2) + ' W/kg'
         : '';
 
     var refBadgeTitle = typeof p.overrideReferenceBadgeTitle === 'string' && p.overrideReferenceBadgeTitle.trim()
@@ -500,9 +542,11 @@
       var rankChRaw = global.stelvioRankChangeBadgeHtmlForUser(activeCategory, currentUserId);
       rankChHtml = rankChRaw ? String(rankChRaw).replace(/<[^>]+>/g, '') : '';
     }
-    var badgeMain = overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode ? refBadgeTitle : '나의 위치';
+    var badgeMain = overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode && !isPaceMode
+      ? refBadgeTitle
+      : '나의 위치';
     var badgeSub =
-      overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode && valueFmt
+      overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode && !isPaceMode && valueFmt
         ? '· ' + valueFmt + (refValueNote || '')
         : displayRank != null && valueFmt
         ? '· ' + displayRank + '위' + rankChHtml + ' · ' + valueFmt
@@ -545,7 +589,9 @@
             ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' km'
             : isGcMode
               ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' 점'
-              : x0.toFixed(2) + ' ~ ' + x1.toFixed(2) + ' W/kg';
+              : isPaceMode
+                ? formatPaceChartRange(x0, x1)
+                : x0.toFixed(2) + ' ~ ' + x1.toFixed(2) + ' W/kg';
       return (
         <div className="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2 shadow-lg shadow-indigo-500/10 text-xs z-50">
           <div className="font-semibold text-slate-700 mb-0.5">{rng}</div>
@@ -678,6 +724,7 @@
                     openRidingTierBandWeightKg
                       ? undefined
                       : function (v) {
+                          if (isPaceMode) return formatPaceChartAxis(v);
                           return isTss ? String(Number(v).toFixed(0)) : Number(v).toFixed(1);
                         }
                   }
