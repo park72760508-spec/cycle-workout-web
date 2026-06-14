@@ -252,7 +252,9 @@
             onClick: function(e) {
               if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
               if (e && typeof e.preventDefault === 'function') e.preventDefault();
-              if (typeof window.runDashboardAIWorkoutRecommendation === 'function') {
+              if (typeof window.showRunWorkoutGuideModal === 'function') {
+                window.showRunWorkoutGuideModal(userProfile, coachData, p.stats || {});
+              } else if (typeof window.runDashboardAIWorkoutRecommendation === 'function') {
                 window.runDashboardAIWorkoutRecommendation(userProfile, coachData);
               }
             },
