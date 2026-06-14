@@ -315,9 +315,10 @@
           ) : (
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-600 mb-2">역치 페이스</h3>
-                <div className="text-2xl font-bold text-gray-900">{stats.thresholdPace}W</div>
-                <div className="text-sm text-gray-600">{stats.wkg} W/kg</div>
+                <h3 className="text-sm font-semibold text-gray-600 mb-2">역치 페이스 & 체중</h3>
+                <div className="text-xs text-gray-500 mb-1">10k</div>
+                <div className="text-xl font-bold text-gray-900">{stats.thresholdPaceDisplay || '산출 불가'}</div>
+                <div className="text-sm text-gray-600 mt-2">{stats.weight ? stats.weight + 'kg' : '체중 미등록'}</div>
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                 <h3 className="text-sm font-semibold text-gray-600 mb-2">주간 목표</h3>

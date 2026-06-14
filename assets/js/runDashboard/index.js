@@ -25,6 +25,7 @@
       hero: 'RunAICoachHeroCard',
       quickStats: 'RunDailyQuickStats',
       detailTabs: 'DashboardDetailTabs',
+      pace: 'runDashboardPace'
       hexagon: 'StelvioHexagonRanksCard'
     },
     cache: 'runDashboardAICache',

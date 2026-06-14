@@ -103,6 +103,44 @@
     return out;
   }
 
+  function isRunLogForWeeklyTss(log) {
+    if (typeof window.isRunTrainingLog === 'function') return window.isRunTrainingLog(log);
+    var type = String(log && log.activity_type || '').trim().toLowerCase();
+    return type === 'run' || type === 'trailrun' || type === 'virtualrun';
+  }
+
+  function applyThresholdPaceToStats(prev, paceInfo) {
+    var next = Object.assign({}, prev);
+    var info = paceInfo || {};
+    next.thresholdPaceSec = info.secPerKm != null ? info.secPerKm : null;
+    next.thresholdPaceDisplay = info.display || null;
+    next.thresholdPaceInferred = !!info.inferred;
+    next.thresholdPaceInferredFrom = info.inferredFrom || null;
+    next.thresholdPaceUnavailable = !!info.unavailable;
+    next.thresholdPace = info.secPerKm != null ? Math.round(info.secPerKm) : 0;
+    return next;
+  }
+
+  async function fetchThresholdPaceForUser(userId) {
+    var unavailable = { secPerKm: null, display: null, inferred: false, inferredFrom: null, unavailable: true };
+    if (!userId || !window.runningRankingApi || typeof window.runningRankingApi.fetchLeaderboard !== 'function') {
+      return unavailable;
+    }
+    if (!window.runDashboardPace || typeof window.runDashboardPace.computeThresholdPaceFromPeaks !== 'function') {
+      return unavailable;
+    }
+    try {
+      var lb = await window.runningRankingApi.fetchLeaderboard();
+      if (!lb || !lb.success || !Array.isArray(lb.rows)) return unavailable;
+      var row = window.runDashboardPace.findLeaderboardRowForUser(lb.rows, userId);
+      if (!row || !row.peak_performances) return unavailable;
+      return window.runDashboardPace.computeThresholdPaceFromPeaks(row.peak_performances);
+    } catch (e) {
+      console.warn('[useRunDashboardData] threshold pace fetch failed:', e);
+      return unavailable;
+    }
+  }
+
   function useRunDashboardData() {
     var _useState = useState(null);
     var userProfile = _useState[0];
@@ -110,6 +148,11 @@
 
     var _useState2 = useState({
       thresholdPace: 0,
+      thresholdPaceSec: null,
+      thresholdPaceDisplay: null,
+      thresholdPaceInferred: false,
+      thresholdPaceInferredFrom: null,
+      thresholdPaceUnavailable: true,
       weightKg: 0,
       weight: 0,
       totalPoints: 0,
@@ -440,7 +483,7 @@
           var weekStartStr = weeklyStart.getFullYear() + '-' + pad2(weeklyStart.getMonth() + 1) + '-' + pad2(weeklyStart.getDate());
           var logsInWeek = logsDeduped.filter(function(log) {
             var ds = parseDate(log.date);
-            return ds && ds >= weekStartStr && ds <= todayStr;
+            return ds && ds >= weekStartStr && ds <= todayStr && isRunLogForWeeklyTss(log);
           });
           var byDate = {};
           logsInWeek.forEach(function(log) {
@@ -458,17 +501,19 @@
             var stelvioSum = day.stelvio.reduce(function(s, t) { return s + t; }, 0);
             weeklyTss += stravaSum > 0 ? stravaSum : stelvioSum;
           });
+          weeklyTss = Math.round(weeklyTss * 10) / 10;
           var weeklyTarget = 175;
           if (typeof window.getWeeklyTargetRtss === 'function') {
             var tInfo = window.getWeeklyTargetRtss(userProfile.challenge || 'Fitness');
             if (tInfo && tInfo.target != null) weeklyTarget = tInfo.target;
           }
+          var paceInfo = await fetchThresholdPaceForUser(userProfile.id);
           if (isMounted) {
             setStats(function(prev) {
               var next = Object.assign({}, prev);
               next.weeklyRtssGoal = weeklyTarget;
-              next.weeklyRtssProgress = Math.min(Math.round(weeklyTss), 9999);
-              return next;
+              next.weeklyRtssProgress = Math.min(Math.round(weeklyTss * 10) / 10, 9999);
+              return applyThresholdPaceToStats(next, paceInfo);
             });
           }
 
