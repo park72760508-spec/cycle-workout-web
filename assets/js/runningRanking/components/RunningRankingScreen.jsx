@@ -135,6 +135,7 @@
 
     var crewUnsubRef = useRef(null);
     var isOverallTab = activeTab === 'overall';
+    var isPaceTab = activeTab === 'pace';
 
     var currentUserId = useMemo(function () {
       return dataApi().getCurrentUserId ? dataApi().getCurrentUserId() : null;
@@ -318,21 +319,39 @@
     }, [isOverallTab, rawRows, gender, activeCategory]);
 
     useEffect(function () {
-      if (!isOverallTab) {
+      if (!isOverallTab && !isPaceTab) {
         if (typeof window.disposeStelvioDistributionChart === 'function') {
           window.disposeStelvioDistributionChart('running-ranking-distribution-chart-root');
+          window.disposeStelvioDistributionChart('running-ranking-pace-distribution-chart-root');
         }
         return;
       }
       if (loading) return;
       if (typeof window.refreshStelvioDistributionChart !== 'function') return;
-      if (!dataApi().buildDistributionPayload) return;
-      var mountId = 'running-ranking-distribution-chart-root';
-      var payload = dataApi().buildDistributionPayload(rawRows, {
-        gender: gender,
-        category: activeCategory
-      });
-      if (listFilter === 'interest') {
+      var mountId = isOverallTab
+        ? 'running-ranking-distribution-chart-root'
+        : 'running-ranking-pace-distribution-chart-root';
+      if (isOverallTab && !isPaceTab && typeof window.disposeStelvioDistributionChart === 'function') {
+        window.disposeStelvioDistributionChart('running-ranking-pace-distribution-chart-root');
+      }
+      if (isPaceTab && !isOverallTab && typeof window.disposeStelvioDistributionChart === 'function') {
+        window.disposeStelvioDistributionChart('running-ranking-distribution-chart-root');
+      }
+      var payload = null;
+      if (isOverallTab && dataApi().buildDistributionPayload) {
+        payload = dataApi().buildDistributionPayload(rawRows, {
+          gender: gender,
+          category: activeCategory
+        });
+      } else if (isPaceTab && dataApi().buildPaceDistributionPayload) {
+        payload = dataApi().buildPaceDistributionPayload(rawRows, {
+          gender: gender,
+          category: activeCategory,
+          paceDistance: paceDistance
+        });
+      }
+      if (!payload) return;
+      if (isOverallTab && listFilter === 'interest') {
         var soc = socialApi();
         if (soc && typeof soc.filterRowsByListInterest === 'function') {
           var filt = function (rows) {
@@ -356,7 +375,7 @@
       return function () {
         cancelAnimationFrame(rafId);
       };
-    }, [isOverallTab, activeTab, rawRows, gender, activeCategory, listFilter, currentUserId, loading, socialVer]);
+    }, [isOverallTab, isPaceTab, activeTab, rawRows, gender, activeCategory, paceDistance, listFilter, currentUserId, loading, socialVer]);
 
     useEffect(function () {
       if (loading) return;
@@ -573,6 +592,7 @@
 
     var rootClass = 'running-ranking-body' +
       (isOverallTab ? ' running-ranking-body--overall' : '') +
+      (isPaceTab ? ' running-ranking-body--pace' : '') +
       (initialLoading ? ' running-ranking-body--loading' : '');
 
     return React.createElement('div', { className: rootClass, id: 'running-ranking-react-root' },
@@ -637,6 +657,13 @@
         isOverallTab
           ? React.createElement('div', {
               id: 'running-ranking-distribution-chart-root',
+              className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
+              'aria-live': 'polite'
+            })
+          : null,
+        isPaceTab
+          ? React.createElement('div', {
+              id: 'running-ranking-pace-distribution-chart-root',
               className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
               'aria-live': 'polite'
             })
