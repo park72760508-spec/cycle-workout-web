@@ -87,7 +87,7 @@
 
   function RunDailyQuickStats(props) {
     var p = props || {};
-    var stats = p.stats || { thresholdPace: 0, weightKg: 0, weight: 0, weeklyRtssGoal: 225, weeklyRtssProgress: 0 };
+    var stats = p.stats || { thresholdPace: 0, weightKg: 0, weight: 0, weeklyRtssGoal: 175, weeklyRtssProgress: 0 };
     var logsLoading = p.logsLoading;
     var logsLoadError = p.logsLoadError;
     var retryLogsRef = p.retryLogsRef;
@@ -95,7 +95,7 @@
     var ftp = Number(stats.thresholdPace) || 0;
     var wkg = stats.wkg != null ? Number(stats.wkg) : (stats.weight > 0 && ftp > 0 ? (ftp / stats.weight) : 0);
     var weight = Number(stats.weight) || 0;
-    var weeklyGoal = Number(stats.weeklyRtssGoal) || 225;
+    var weeklyGoal = Number(stats.weeklyRtssGoal) || 175;
     var weeklyProgress = Math.min(Number(stats.weeklyRtssProgress) || 0, 9999);
     var pct = weeklyGoal > 0 ? Math.min(100, Math.round((weeklyProgress / weeklyGoal) * 100)) : 0;
 
