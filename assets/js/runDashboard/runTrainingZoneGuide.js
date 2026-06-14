@@ -115,7 +115,7 @@
       allowedWorkouts: ['Long Run (Z2)', 'Easy Run (Z2)'],
       recommendedWorkout: 'Long Run (Z2)',
       reason:
-        '최근 90일간 10k/20k 장거리 구간의 기록이 비어 있어 헥사곤 그래프의 균형이 깨져 있습니다. 이번 주에는 미토콘드리아 밀도를 높이고 지구력 베이스를 다질 수 있도록 **Z2 등급의 Long Run(LSD)** 세션을 수행하여 빈 기록을 채워보세요!'
+        '최근 90일간 10k/20k 장거리 마일리지 기록이 비어 있어 헥사곤 그래프의 유산소 베이스 축이 무너져 있습니다. 이번 주에는 미토콘드리아 밀도를 높이고 초지구력을 보완할 수 있도록 Z2 등급의 장거리 지속주를 통해 프로필을 확장해 보세요.'
     },
     short_speed_gap: {
       category: 'high_intensity',
@@ -123,7 +123,7 @@
       allowedWorkouts: ['VO₂max Intervals (Z5)'],
       recommendedWorkout: 'VO₂max Intervals (Z5)',
       reason:
-        '단거리(1k/3k) 스피드 축의 보완이 필요합니다. 최대산소섭취량을 확대하고 심폐 한계를 극복할 수 있도록 내일은 **Z5 등급의 VO₂max Intervals** 고강도 인터벌 훈련을 제안합니다.'
+        '현재 6축 헥사곤 프로필 중 단거리(1k/3k) 스피드 영역의 데이터가 공백 상태입니다. 장거리 지구력과 밸런스를 맞추기 위해, 향후 컨디션이 회복되는 대로 최대산소섭취량(VO₂max) 자극을 위한 단거리 피크 기록 갱신을 추천합니다.'
     },
     threshold_pace: {
       category: 'high_intensity',
@@ -131,7 +131,7 @@
       allowedWorkouts: ['Threshold Intervals (Z4)'],
       recommendedWorkout: 'Threshold Intervals (Z4)',
       reason:
-        '회원님의 메인 역치 페이스(Threshold Pace)를 직접적으로 끌어올릴 타이밍입니다. 신체가 젖산을 축적하지 않고 버티는 한계를 확장하기 위해 **Z4 등급의 Threshold Intervals(크루즈 인터벌)** 훈련을 추천합니다.'
+        '회원님의 메인 역치 페이스(Threshold Pace)를 직접적으로 끌어올릴 타이밍입니다. 신체가 젖산을 축적하지 않고 버티는 한계를 확장하기 위해 Z4 등급의 Threshold Intervals(크루즈 인터벌) 훈련을 추천합니다.'
     }
   };
 
@@ -143,11 +143,16 @@
 
   function analyzeRunHexagonGaps(hexagonContext) {
     var hex = (hexagonContext && hexagonContext.hexagon) || {};
+    var missingAxes = [];
+    HEXAGON_AXES.forEach(function (key) {
+      if (isHexSegmentMissing(hex, key)) missingAxes.push(key);
+    });
     return {
       missingLong: isHexSegmentMissing(hex, '10k') || isHexSegmentMissing(hex, '20k'),
       missingShort: isHexSegmentMissing(hex, '1k') || isHexSegmentMissing(hex, '3k'),
       missingMid: isHexSegmentMissing(hex, '5k') || isHexSegmentMissing(hex, '7k'),
-      missingAxes: (hexagonContext && hexagonContext.missingAxes) || []
+      missingAxes: missingAxes,
+      missingCount: missingAxes.length
     };
   }
 
@@ -181,13 +186,86 @@
     return null;
   }
 
+  /**
+   * 3단계 통합 헥사곤 진단 문장 (결측 4+ / 1~3 / rTSS 연동)
+   * @param {{ hexagonContext?: object, last7DaysRtss?: number, weeklyRtssGoal?: number, baseReason?: string, hexagonOverride?: string, conditionScore?: number }} opts
+   * @returns {string}
+   */
+  function buildIntegratedRunWorkoutReason(opts) {
+    opts = opts || {};
+    var gaps = analyzeRunHexagonGaps(opts.hexagonContext || {});
+    var missingCount = gaps.missingCount || 0;
+    var parts = [];
+    var hexDiag = '';
+
+    if (missingCount >= 4) {
+      hexDiag =
+        '현재 최근 90일 슬라이딩 윈도우 내에 수행된 러닝 데이터가 부족하여, 6축 헥사곤(Hexagon) 기량 프로필이 전반적으로 비활성화된 상태입니다. ' +
+        '현재 회원님의 정확한 역치 페이스(Threshold Pace)와 맞춤형 트레이닝 존을 정밀 측정하기 위해, 이번 주에는 신체 부담이 적은 Z1 회복 조깅으로 컨디션을 조율한 뒤 ' +
+        '가벼운 거리별 베이스라인 테스트(Baseline Test)를 수행하여 헥사곤 프로필을 하나씩 채워보시는 것을 강력히 추천합니다.';
+    } else if (missingCount >= 1 && missingCount <= 3) {
+      if (opts.hexagonOverride === 'long_distance_gap' || gaps.missingLong) {
+        hexDiag = HEXAGON_PRESCRIPTION.long_distance_gap.reason;
+      } else if (opts.hexagonOverride === 'short_speed_gap' || gaps.missingShort) {
+        hexDiag = HEXAGON_PRESCRIPTION.short_speed_gap.reason;
+      } else if (opts.hexagonOverride === 'threshold_pace' || gaps.missingMid) {
+        hexDiag = HEXAGON_PRESCRIPTION.threshold_pace.reason;
+      }
+    }
+
+    if (hexDiag) {
+      parts.push(hexDiag);
+    } else if (opts.baseReason) {
+      parts.push(String(opts.baseReason).trim());
+    }
+
+    var weeklyGoal = Number(opts.weeklyRtssGoal) || 0;
+    var currentRtss = Math.round(Number(opts.last7DaysRtss) || 0);
+    if (weeklyGoal > 0 && currentRtss < weeklyGoal) {
+      if (currentRtss < weeklyGoal * 0.7) {
+        parts.push(
+          '현재 주간 rTSS 목표량(' + weeklyGoal + '점) 대비 누적 스코어가 ' + currentRtss +
+          '점으로 절대적으로 부족한 상태이므로, 부상 위험을 최소화하면서 주간 마일리지를 점진적으로 쌓아 올릴 수 있는 Z1/Z2 기반의 유산소 볼륨 빌드업이 시급합니다.'
+        );
+      } else {
+        parts.push(
+          '주간 rTSS 목표(' + weeklyGoal + '점) 대비 현재 ' + currentRtss +
+          '점으로, Jack Daniels 훈련 부하 곡선에 맞춰 유산소 볼륨을 점진적으로 보강하시면 대사 시스템 밸런스 유지에 도움이 됩니다.'
+        );
+      }
+    }
+
+    return parts.filter(function (p) { return p && String(p).trim(); }).join(' ');
+  }
+
+  /** @deprecated — buildIntegratedRunWorkoutReason 사용 */
   function buildMissingAxesNote(missingAxes) {
     if (!missingAxes || !missingAxes.length) return '';
-    return missingAxes
-      .map(function (k) {
-        return '최근 90일 내 ' + k + ' 구간의 기록이 부족합니다. 헥사곤 프로필을 채우기 위해 해당 거리 훈련을 추천합니다.';
-      })
-      .join(' ');
+    if (missingAxes.length >= 4) {
+      return buildIntegratedRunWorkoutReason({ hexagonContext: { hexagon: {}, missingAxes: missingAxes } });
+    }
+    return buildIntegratedRunWorkoutReason({
+      hexagonContext: {
+        hexagon: (function () {
+          var h = {};
+          missingAxes.forEach(function (k) {
+            h[k] = { missing: true, calculated_pace: null };
+          });
+          return h;
+        })()
+      }
+    });
+  }
+
+  function logRunCoachReasonVerification(result, gaps) {
+    if (!gaps || gaps.missingCount < 6) return;
+    if (typeof console === 'undefined' || !console.log) return;
+    console.log('[STELVIO RUN Coach] ===== 6축 전체 결측 검증 샘플 =====');
+    console.log('[STELVIO RUN Coach] missing_count:', gaps.missingCount);
+    console.log('[STELVIO RUN Coach] workout_category:', result && result.category);
+    console.log('[STELVIO RUN Coach] recommended_workout:', result && result.recommendedWorkout);
+    console.log('[STELVIO RUN Coach] workoutCategoryReason:\n', result && result.reason);
+    console.log('[STELVIO RUN Coach] ===================================');
   }
 
   function parseRunWorkoutZone(workoutName) {
@@ -416,6 +494,8 @@
     analyzeRunHexagonGaps: analyzeRunHexagonGaps,
     resolveRunHexagonPrescription: resolveRunHexagonPrescription,
     buildMissingAxesNote: buildMissingAxesNote,
+    buildIntegratedRunWorkoutReason: buildIntegratedRunWorkoutReason,
+    logRunCoachReasonVerification: logRunCoachReasonVerification,
     parseRunWorkoutZone: parseRunWorkoutZone,
     getRunZoneGuide: getRunZoneGuide,
     pickDeterministicRunRecommendedWorkout: pickDeterministicRunRecommendedWorkout,
@@ -426,4 +506,5 @@
   window.parseRunWorkoutZone = parseRunWorkoutZone;
   window.pickDeterministicRunRecommendedWorkout = pickDeterministicRunRecommendedWorkout;
   window.finalizeRunWorkoutDecision = finalizeRunWorkoutDecision;
+  window.buildIntegratedRunWorkoutReason = buildIntegratedRunWorkoutReason;
 })();
