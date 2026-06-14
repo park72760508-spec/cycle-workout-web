@@ -65,7 +65,7 @@
     var activeTab = _tab[0];
     var setActiveTab = _tab[1];
 
-    var _paceDist = useState('5k');
+    var _paceDist = useState('1k');
     var paceDistance = _paceDist[0];
     var setPaceDistance = _paceDist[1];
 
