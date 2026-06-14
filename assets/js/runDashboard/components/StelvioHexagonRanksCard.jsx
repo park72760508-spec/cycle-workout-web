@@ -1,0 +1,4927 @@
+/**
+ * STELVIO 헥사곤(6축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
+ * **그래프(면도)**: 축마다 30d·365d W/kg가 있으면 **동일 축** 정규화(롤링 365d≥30d)로 반지름; 없으면 순위→반지름 + 365d≥30d `max` 보정(순위만으로는 기간·코호트가 달라 보라·녹 역전 가능).
+ * **집계 순위·레벨%·중앙 배지·환산 합(0~700)**: 랭킹보드 GC 탭과 동일한 `getPeakPowerRanking?duration=gc`(성별·부문) 응답을 우선 적용. 없을 때만 `heptagon_cohort_ranks`·6축 합 병합. 6각형 W/kg 레이더는 **건드리지 않음**.
+ * **레벨%** / **n 표기**: `heptagonUseNeffNPlusOne` — **가상·타 연령 부문**에만 Neff=n+1. **전체(Supremo)**·**본인 부문**은 집계 n만. Neff·n≥100 / Neff·n<100 식, r 1‥Neff.
+ * **6축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별, duration≠gc).
+ * Firestore: `hexagon_rank_log/{uid}` (동기화). 팝업: 성별·부문 `heptagon_cohort_ranks` 순위표.
+ */
+/* global React, useState, useEffect, useMemo, window */
+(function() {
+  'use strict';
+  if (!window.React) return;
+  var React = window.React;
+  var useState = React.useState;
+  var useEffect = React.useEffect;
+  var useMemo = React.useMemo;
+  var useRef = React.useRef;
+
+  var RANKING_BASE = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
+
+  /** index.html 랭킹보드 #stelvioGenderSelect / #stelvioCategorySelect 와 동일 */
+  var GENDER_OPTIONS = [
+    { value: 'all', label: '전체' },
+    { value: 'M', label: '남성' },
+    { value: 'F', label: '여성' }
+  ];
+  var CATEGORY_OPTIONS = [
+    { value: 'Supremo', label: '전체' },
+    { value: 'Assoluto', label: '선수부' },
+    { value: 'Bianco', label: '30대 이하' },
+    { value: 'Rosa', label: '40대' },
+    { value: 'Infinito', label: '50대' },
+    { value: 'Leggenda', label: '60대 이상' }
+  ];
+
+  function labelForGender(v) {
+    for (var i = 0; i < GENDER_OPTIONS.length; i++) {
+      if (GENDER_OPTIONS[i].value === v) return GENDER_OPTIONS[i].label;
+    }
+    return '전체';
+  }
+  function labelForCategory(v) {
+    for (var j = 0; j < CATEGORY_OPTIONS.length; j++) {
+      if (CATEGORY_OPTIONS[j].value === v) return CATEGORY_OPTIONS[j].label;
+    }
+    return '전체';
+  }
+
+  /** 프로필 `ageCategory`가 카드 부문 옵션과 일치할 때만 (나의 순위가 실집계로 묶이는 부문) */
+  function categoryValueMatchingUserAge(userProfile) {
+    if (!userProfile || userProfile.ageCategory == null) return null;
+    var ac = String(userProfile.ageCategory).trim();
+    if (!ac) return null;
+    for (var ci = 0; ci < CATEGORY_OPTIONS.length; ci++) {
+      if (CATEGORY_OPTIONS[ci].value === ac) return ac;
+    }
+    return null;
+  }
+
+  /**
+   * 필터된 동일 조건 표 `rows`만으로도 모수 추정: max(boardRank) vs 행 수 중 큰 값(쿼리 n 실패·500명 밖 본인 삽입 등).
+   */
+  function nCohortFromHexagonBoardRows(boardState) {
+    if (!boardState || boardState.err) {
+      return 0;
+    }
+    var rows = boardState.rows;
+    if (!rows || !rows.length) {
+      return 0;
+    }
+    var maxR = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var br = rows[i] && rows[i].boardRank != null && isFinite(rows[i].boardRank) ? Math.floor(Number(rows[i].boardRank)) : 0;
+      if (br > maxR) {
+        maxR = br;
+      }
+    }
+    var nList = rows.length;
+    return Math.max(maxR, nList) | 0;
+  }
+
+  /** 동일 조건 표 n → 표 rows 산출 → ovl nTotal(집계·가상) 순(카테고리 필터) */
+  function gcRankingCohortNFromPayload(gcData, filterCategory) {
+    var cat = filterCategory != null ? String(filterCategory) : 'Supremo';
+    if (typeof window !== 'undefined' && typeof window.stelvioGcRankingCohortDisplayCount === 'function') {
+      if (window.stelvioRankingByCategory) {
+        var nBoard = window.stelvioGcRankingCohortDisplayCount(window.stelvioRankingByCategory, cat);
+        if (nBoard >= 1) {
+          return nBoard;
+        }
+      }
+      if (gcData && gcData.byCategory) {
+        var nApi = window.stelvioGcRankingCohortDisplayCount(gcData.byCategory, cat);
+        if (nApi >= 1) {
+          return nApi;
+        }
+      }
+    }
+    return heptagonCohortItemsFromGcApi(gcData, cat).length;
+  }
+
+  function heptagonOvlNTotalAlignedWithGcList(nTotalRaw, filterCategory) {
+    var nDisp = gcRankingCohortNFromPayload(null, filterCategory);
+    if (nDisp >= 1) {
+      return nDisp;
+    }
+    return nTotalRaw != null && isFinite(nTotalRaw) ? Math.max(0, Math.floor(Number(nTotalRaw))) : 0;
+  }
+
+  function heptagonEffectiveCohortNFromBoardAndOvl(boardState, ovl, gcData, filterCategory) {
+    var nGc = gcRankingCohortNFromPayload(gcData, filterCategory);
+    if (nGc >= 1) {
+      return nGc;
+    }
+    if (!boardState || boardState.err) {
+      if (ovl && !ovl.loading && ovl.nTotal != null && isFinite(ovl.nTotal) && (ovl.nTotal | 0) >= 1) {
+        return heptagonOvlNTotalAlignedWithGcList(ovl.nTotal | 0, filterCategory);
+      }
+      return 0;
+    }
+    var b = boardState.nCohort | 0;
+    if (b >= 1) {
+      var nBoardGc = gcRankingCohortNFromPayload(gcData, filterCategory);
+      if (nBoardGc >= 1) {
+        return nBoardGc;
+      }
+      return heptagonOvlNTotalAlignedWithGcList(b, filterCategory);
+    }
+    b = nCohortFromHexagonBoardRows(boardState);
+    if (b >= 1) {
+      var nRowsGc = gcRankingCohortNFromPayload(gcData, filterCategory);
+      if (nRowsGc >= 1) {
+        return nRowsGc;
+      }
+      return heptagonOvlNTotalAlignedWithGcList(b, filterCategory);
+    }
+    if (ovl && !ovl.loading && ovl.nTotal != null && isFinite(ovl.nTotal) && (ovl.nTotal | 0) >= 1) {
+      return heptagonOvlNTotalAlignedWithGcList(ovl.nTotal | 0, filterCategory);
+    }
+    return 0;
+  }
+
+  /**
+   * getPeakPowerRanking 피크 파워: **W/kg만** (TSS·주간 적산 제외 — 순위 왜곡 방지)
+   * 12시=Max, 시계방향 Max → 1·5·10·20·40·60분
+   */
+  var AXES = [
+    { key: 'max', label: 'Max' },
+    { key: '1min', label: '1분' },
+    { key: '5min', label: '5분' },
+    { key: '10min', label: '10분' },
+    { key: '20min', label: '20분' },
+    { key: '40min', label: '40분' },
+    { key: '60min', label: '60분' }
+  ];
+  var DURATIONS = AXES.map(function(a) {
+    return a.key;
+  });
+  var N_WKG_AXES = DURATIONS.length;
+
+  function buildRankingUrl(uid, duration, periodForPeak, gender) {
+    var p = new URLSearchParams();
+    p.set('gender', gender == null || gender === '' ? 'all' : gender);
+    p.set('duration', duration);
+    if (uid) p.set('uid', String(uid));
+    if (duration !== 'tss') p.set('period', periodForPeak || 'monthly');
+    if (typeof window.stelvioGetRankingReadSourceSync === 'function') {
+      p.set('readDb', window.stelvioGetRankingReadSourceSync());
+    }
+    p.set('gfVer', '7');
+    return RANKING_BASE + '?' + p.toString();
+  }
+
+  function tryPeakPayloadFromRankingBoardCache(uid, duration, period, gender) {
+    if (typeof window.stelvioBuildRankingBoardCacheKey !== 'function') return null;
+    if (typeof window.stelvioRankingMemCacheGet !== 'function') return null;
+    var g = gender == null || gender === '' ? 'all' : String(gender);
+    var keys = [];
+    if (uid) {
+      keys.push(window.stelvioBuildRankingBoardCacheKey(duration, g, String(uid), period));
+    }
+    keys.push(window.stelvioBuildRankingBoardCacheKey(duration, g, null, period));
+    for (var ki = 0; ki < keys.length; ki++) {
+      var mem = window.stelvioRankingMemCacheGet(keys[ki]);
+      if (mem && mem.body && mem.body.success && mem.body.byCategory) {
+        return mem.body;
+      }
+    }
+    return null;
+  }
+
+  function findUserRowInCategoryPayload(data, uid, category) {
+    if (!data || !data.byCategory || !uid) return null;
+    var arr = data.byCategory[category] || [];
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] && String(arr[i].userId) === String(uid)) return arr[i];
+    }
+    if (data.currentUser && String(data.currentUser.userId) === String(uid)) {
+      return data.currentUser;
+    }
+    return null;
+  }
+
+  /** 랭킹보드 목록 `stelvioRankDisplayNumber`와 동일한 표시 순위 */
+  function resolveUserDisplayRankLikeRankingBoard(data, uid, category, duration) {
+    if (!data || !data.success || !data.byCategory || !uid) return null;
+    var row = findUserRowInCategoryPayload(data, uid, category);
+    var catRank = categoryRankInPayloadList(data, uid, category);
+    if (row && typeof window.stelvioRankDisplayNumber === 'function') {
+      var disp = window.stelvioRankDisplayNumber(row, catRank, category, data.byCategory);
+      if (disp != null && isFinite(Number(disp)) && Number(disp) >= 1) {
+        return Math.floor(Number(disp));
+      }
+    }
+    return computeDisplayRankLikeDistribution(data, uid, category, duration);
+  }
+
+  /** Supabase heptagon_cohort_ranks 6축 — 피크 7회 API 실패 시 GC 응답으로 레이더 복구 */
+  function stateFromGcViewerHexagonAxis(gcData) {
+    if (!gcData || !gcData.success) return null;
+    var axis = gcData.viewerHexagonAxis;
+    var cu = gcData.currentUser;
+    var ranks = (axis && axis.ranks) || (cu && cu.heptagonRanks);
+    var nPer = (axis && axis.cohortSizePerAxis) || (cu && cu.heptagonCohortNPerAxis);
+    if (!ranks || !ranks.length || ranks.length !== 7) return null;
+    if (!nPer || nPer.length !== 7) {
+      nPer = ranks.map(function() {
+        return 100;
+      });
+    }
+    return stateFromRanksArray(ranks, nPer, ranks, null, null, null, null);
+  }
+
+  function safeFloorRank(n) {
+    var r = Number(n);
+    return isFinite(r) && r >= 1 ? Math.floor(r) : null;
+  }
+
+  /** StelvioRankingDistributionChart와 동일: 2위 표기만 3으로(차트 뱃지) */
+  function rankDisplayForChart(n) {
+    var r = Number(n);
+    if (r !== 2) return r;
+    return 3;
+  }
+
+  function rowMetricValue(row, duration) {
+    if (!row) return NaN;
+    if (duration === 'tss') return Number(row.totalTss);
+    if (duration === 'personal_dist' || duration === 'group_dist') return Number(row.totalKm);
+    if (duration === 'gc') return Number(row.gcScore);
+    return Number(row.wkg);
+  }
+
+  /**
+   * StelvioRankingDistributionChart `displayRank`와 동일
+   * - Supremo: currentUser.rank(전체 정렬 기준)
+   * - 나의 ageCategory === 선택: 해당 부문 배열에서 findIndex+1
+   * - 그 외(다른 부문 열람): 값 기준 rankInCategoryByValue(동점은 엄밀한 비교)
+   */
+  function rankInCategoryByValue(categoryRows, myVal, duration) {
+    if (!categoryRows || !categoryRows.length || myVal == null || isNaN(myVal) || !isFinite(myVal)) return null;
+    var eps = duration === 'tss' || duration === 'personal_dist' || duration === 'group_dist' || duration === 'gc' ? 1e-6 : 1e-9;
+    var strictlyGreater = 0;
+    for (var i = 0; i < categoryRows.length; i++) {
+      var row = categoryRows[i];
+      if (!row) continue;
+      var v = rowMetricValue(row, duration);
+      if (isFinite(v) && v > myVal + eps) strictlyGreater++;
+    }
+    return strictlyGreater + 1;
+  }
+
+  function computeDisplayRankLikeDistribution(data, uid, category, duration) {
+    if (!data || !data.success || !data.byCategory || !uid) return null;
+    var cu = data.currentUser;
+    var byCategory = data.byCategory;
+    var cuValid = cu && String(cu.userId) === String(uid);
+    var userAgeCat = cuValid ? cu.ageCategory : null;
+
+    if (category === 'Supremo') {
+      var supArr = byCategory.Supremo || [];
+
+      /* [1] cu.rank — API가 사용자를 찾아 돌려준 Supremo 순위(가장 정확) */
+      if (cuValid && cu.rank != null) {
+        var supremoRank = safeFloorRank(cu.rank);
+        if (supremoRank != null) return supremoRank;
+      }
+
+      /* [2] byCategory.Supremo 배열에서 userId 직접 검색
+       *     → API lookup order 이슈나 cuValid 불일치 시에도 동작 */
+      var supIdx = supArr.findIndex(function(e) {
+        return e && String(e.userId) === String(uid);
+      });
+      if (supIdx >= 0) return supIdx + 1;
+
+      /* [3] cu.wkg 값을 Supremo 배열과 비교해 순위 추정
+       *     byCategory.Supremo는 전체 참가자 목록이므로 추정이 아닌 실제 순위
+       *     cu.rank가 null이어도 wkg가 있으면(=데이터는 있으나 API rank 미반영) 사용 */
+      if (cuValid && supArr.length > 0) {
+        var myWkg = rowMetricValue(cu, duration);
+        if (myWkg != null && isFinite(myWkg) && myWkg > 0) {
+          var estRank = rankInCategoryByValue(supArr, myWkg, duration);
+          if (estRank != null) return estRank;
+        }
+      }
+
+      /* [4] cu가 없더라도(userId 불일치·API 미반환) 해당 duration에 age-category 배열에서
+       *     userId를 찾을 수 있으면 그 entry의 wkg로 Supremo 위치를 추정 */
+      if (!cuValid && supArr.length > 0) {
+        var ageCats = Object.keys(byCategory);
+        for (var ai = 0; ai < ageCats.length; ai++) {
+          var ac = ageCats[ai];
+          if (ac === 'Supremo') continue;
+          var acArr = byCategory[ac] || [];
+          var acEntry = null;
+          for (var aj = 0; aj < acArr.length; aj++) {
+            if (acArr[aj] && String(acArr[aj].userId) === String(uid)) {
+              acEntry = acArr[aj];
+              break;
+            }
+          }
+          if (acEntry) {
+            /* entry.rank = Supremo 배열 내 순위(서버가 부여) */
+            if (acEntry.rank != null) {
+              var aer = safeFloorRank(acEntry.rank);
+              if (aer != null) return aer;
+            }
+            var acWkg = rowMetricValue(acEntry, duration);
+            if (acWkg != null && isFinite(acWkg) && acWkg > 0) {
+              var acEst = rankInCategoryByValue(supArr, acWkg, duration);
+              if (acEst != null) return acEst;
+            }
+            break;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    /* ── Supremo 외 부문 ── */
+    if (!cuValid) {
+      /* cuValid 실패 시에도 byCategory에서 uid 검색 후 rank 반환 */
+      var acCats2 = Object.keys(byCategory);
+      for (var bi = 0; bi < acCats2.length; bi++) {
+        var bc = acCats2[bi];
+        var bcArr = byCategory[bc] || [];
+        for (var bj = 0; bj < bcArr.length; bj++) {
+          if (bcArr[bj] && String(bcArr[bj].userId) === String(uid)) {
+            var bcEntry = bcArr[bj];
+            /* 요청 category의 배열인 경우에만 위치 순위 사용 */
+            if (bc === category) return bj + 1;
+            /* category 배열에서 wkg 비교로 추정 */
+            var catArr = byCategory[category] || [];
+            var bcWkg = rowMetricValue(bcEntry, duration);
+            if (bcWkg != null && isFinite(bcWkg) && bcWkg > 0 && catArr.length > 0) {
+              var bcEst = rankInCategoryByValue(catArr, bcWkg, duration);
+              if (bcEst != null) return rankDisplayForChart(bcEst);
+            }
+            break;
+          }
+        }
+      }
+      return null;
+    }
+
+    if (userAgeCat && category === userAgeCat) {
+      var heroArr = byCategory[category] || [];
+      var heroIdx = heroArr.findIndex(function(e) {
+        if (!e) return false;
+        if (duration === 'group_dist') {
+          return e.userId === uid || e.currentUserParticipated === true;
+        }
+        return String(e.userId) === String(uid);
+      });
+      if (heroIdx >= 0) return heroIdx + 1;
+      return null;
+    }
+
+    var compareArr = byCategory[category] || [];
+    var myRaw = rowMetricValue(cu, duration);
+    var rawRank = rankInCategoryByValue(compareArr, myRaw, duration);
+    if (rawRank != null) return rankDisplayForChart(rawRank);
+    return null;
+  }
+
+  /** Max~60분 탭과 동일: 탈퇴 필터·prefetch 정규화·등락 파이프라인 */
+  function hydratePeakRankingPayloadForMovement(data, duration, period, gender) {
+    if (!data || !data.success || !data.byCategory) return data;
+    if (!data.durationType && duration) data.durationType = duration;
+    if (!data.period && period) data.period = period;
+    if (data.gender == null || data.gender === '') {
+      data.gender = gender == null || gender === '' ? 'all' : String(gender);
+    }
+    if (typeof window.stelvioApplyPublicRankingVisibilityToPayload === 'function') {
+      window.stelvioApplyPublicRankingVisibilityToPayload(data);
+    }
+    if (typeof window.stelvioRankingNormalizePrefetchPayload === 'function') {
+      window.stelvioRankingNormalizePrefetchPayload(duration, gender, data);
+    } else if (typeof window.stelvioApplyRankMovementPipeline === 'function') {
+      window.stelvioApplyRankMovementPipeline(data);
+    } else if (typeof window.stelvioValidatePeakRankMovementOnPayload === 'function') {
+      window.stelvioValidatePeakRankMovementOnPayload(data);
+    }
+    return data;
+  }
+
+  function categoryRankInPayloadList(data, uid, category) {
+    if (!data || !data.byCategory || !uid) return null;
+    if (typeof window.stelvioCategoryRankInFullList === 'function') {
+      var fromList = window.stelvioCategoryRankInFullList(data.byCategory, category, uid);
+      if (fromList != null && isFinite(fromList) && fromList >= 1) return Math.floor(Number(fromList));
+    }
+    var arr = data.byCategory[category] || [];
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] && String(arr[i].userId) === String(uid)) return i + 1;
+    }
+    return null;
+  }
+
+  function fetchRankingPayload(uid, duration, period, gender) {
+    var cached = tryPeakPayloadFromRankingBoardCache(uid, duration, period, gender);
+    if (cached) {
+      return Promise.resolve(hydratePeakRankingPayloadForMovement(cached, duration, period, gender));
+    }
+    return fetch(buildRankingUrl(uid, duration, period, gender), { method: 'GET', mode: 'cors' })
+      .then(function(res) {
+        return res.json().catch(function() {
+          return { success: false };
+        });
+      })
+      .then(function(data) {
+        return hydratePeakRankingPayloadForMovement(data, duration, period, gender);
+      });
+  }
+
+  /**
+   * 동일 GET URL에 대한 진행 중 요청 통합(Connection 수·실제 패킷 절약). 순위 계산 결과는 불변(getPeak 단일 응답).
+   */
+  var rankingPayloadInflight = Object.create(null);
+  var peakPayloadStoreRef = { current: Object.create(null) };
+
+  function rememberPeakPayloadForHexagon(duration, data) {
+    if (!duration || !data || !data.success || !data.byCategory) return;
+    peakPayloadStoreRef.current[String(duration)] = data;
+  }
+
+  function heptagonRowsFromStoredPeakPayloads(uid, category, period, gender) {
+    var out = [];
+    var di;
+    for (di = 0; di < DURATIONS.length; di++) {
+      var d = DURATIONS[di];
+      var data = peakPayloadStoreRef.current[d];
+      if (!data) return null;
+      out.push(axisStatsFromRankingPayload(data, uid, category, d));
+    }
+    return out.length === DURATIONS.length ? out : null;
+  }
+
+  function fetchRankingPayloadDedup(uid, duration, period, gender) {
+    var u = uid != null ? String(uid) : '';
+    var g = gender == null || gender === '' ? 'all' : String(gender);
+    var per = duration !== 'tss' ? period || 'monthly' : period || 'weekly';
+    var pk = String(duration) + '\n' + per + '\n' + g + '\n' + u;
+    var cur = rankingPayloadInflight[pk];
+    if (cur) {
+      return cur.then(function(data) {
+        rememberPeakPayloadForHexagon(duration, data);
+        return data;
+      });
+    }
+    cur = fetchRankingPayload(uid, duration, period, gender)
+      .then(function(data) {
+        rememberPeakPayloadForHexagon(duration, data);
+        return data;
+      })
+      .finally(function() {
+        if (rankingPayloadInflight[pk] === cur) delete rankingPayloadInflight[pk];
+      });
+    rankingPayloadInflight[pk] = cur;
+    return cur;
+  }
+
+  /** 랭킹 API에서 나의 ageCategory(부문) 등 */
+  function fetchRankingUserMeta(uid, gender) {
+    return fetchRankingPayloadDedup(uid, 'max', 'monthly', gender).then(function(data) {
+      var cu = data && data.currentUser;
+      if (!cu) return { ageCategory: '', displayName: '' };
+      return {
+        ageCategory: cu.ageCategory != null ? String(cu.ageCategory) : '',
+        displayName: cu.name != null ? String(cu.name) : ''
+      };
+    });
+  }
+
+  function cohortSizeForCategory(data, category) {
+    if (!data || !data.success || !data.byCategory) return 0;
+    if (typeof window.stelvioBuildRankingCategoryDisplayRows === 'function') {
+      var displayRows = window.stelvioBuildRankingCategoryDisplayRows(data.byCategory, category);
+      if (displayRows && displayRows.length > 0) return displayRows.length;
+    }
+    var arr = data.byCategory[category];
+    return Array.isArray(arr) ? arr.length : 0;
+  }
+
+  /**
+   * `heptagon_cohort_ranks` / 랭킹과 동일: 사용자가 선택 부문·코호트에 “소속”되는지(전체 Supremo는 항상 true).
+   */
+  function isUserInCohortForFilter(filterCategory, userAgeCategory) {
+    var f = String(filterCategory != null ? filterCategory : 'Supremo');
+    var ac = String(userAgeCategory != null ? userAgeCategory : '');
+    if (f === 'Supremo') {
+      return true;
+    }
+    if (f === 'Assoluto') {
+      return ac === 'Assoluto';
+    }
+    if (!ac) {
+      return false;
+    }
+    return ac === f;
+  }
+
+  /**
+   * Neff=n+1: API `isVirtualCohort`가 true이고(타 부문 가상) **전체(Supremo) 아님**이며,
+   * **프로필/랭킹으로 확인되는 연령 부문이 필터와 같으면(본인 부문)** → 절대 +1 하지 않음.
+   */
+  function heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirtualCohort) {
+    if (isVirtualCohort !== true) {
+      return false;
+    }
+    var f = String(filterCategory != null ? filterCategory : 'Supremo');
+    if (f === 'Supremo') {
+      return false;
+    }
+    var ac = userAgeCategory != null ? String(userAgeCategory).trim() : '';
+    if (ac && isUserInCohortForFilter(f, ac)) {
+      return false;
+    }
+    return true;
+  }
+
+  function heptagonCohortNDisplay(nRaw, filterCategory, userAgeCategory, isVirtualCohort) {
+    var n = nRaw | 0;
+    if (n < 1) {
+      return 0;
+    }
+    if (heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirtualCohort)) {
+      return n + 1;
+    }
+    return n;
+  }
+
+  /**
+   * 항목별 **포지션 점수** 0~100: 1등=100, 꼴등=0, 중간=선형 (등수 n명 기준, r=1..n).
+   * positionRatio = (n - r) / (n - 1) (n>1), n===1 → 100.
+   */
+  function positionScore100FromRank(rank, n) {
+    var ni = n | 0;
+    if (ni < 1) return 0;
+    if (rank == null || !isFinite(rank) || rank < 1) return 0;
+    var r = Math.floor(Number(rank));
+    if (r < 1) r = 1;
+    if (r > ni) r = ni;
+    if (ni === 1) return 100;
+    return (100 * (ni - r)) / (ni - 1);
+  }
+
+  /**
+   * @deprecated 테이블·레벨엔 `positionScore100FromRank` 사용. (구) 순위/인원 비
+   */
+  function itemPercentileFromRankAndN(rank, n) {
+    var nn = n | 0;
+    if (nn < 1) return 100;
+    if (rank == null || !isFinite(rank) || rank < 1) return 100;
+    return (Number(rank) / nn) * 100;
+  }
+
+  /** 해당 축에서 부동 순위 → 리스트 끄트머리(상대 비율 산정용) */
+  function effectiveRankForAverage(rank, n) {
+    var nn = n | 0;
+    if (nn < 1) return null;
+    if (rank == null || !isFinite(rank) || rank < 1) return nn;
+    var r = Math.floor(Number(rank));
+    if (r < 1) r = 1;
+    if (r > nn) r = nn;
+    return r;
+  }
+
+  /** 한 축 JSON에서 부문별 { rank, n, wkg } — fetchRanksSet·트윈 요청 공통(getPeak 결과 불변). */
+  function axisStatsFromRankingPayload(data, uid, category, duration) {
+    var cu = data && data.currentUser;
+    var cuValid = cu && String(cu.userId) === String(uid);
+    var wk = cuValid && cu.wkg != null && isFinite(Number(cu.wkg)) ? Number(cu.wkg) : null;
+    if (wk == null && data && data.byCategory) {
+      var allCats = Object.keys(data.byCategory);
+      for (var ci = 0; ci < allCats.length && wk == null; ci++) {
+        var catArr3 = data.byCategory[allCats[ci]] || [];
+        for (var cj = 0; cj < catArr3.length; cj++) {
+          var ce = catArr3[cj];
+          if (ce && String(ce.userId) === String(uid) && ce.wkg != null && isFinite(Number(ce.wkg))) {
+            wk = Number(ce.wkg);
+            break;
+          }
+        }
+      }
+    }
+    var mv = axisRankMovementFromRankingPayload(data, uid, category);
+    return {
+      rank: resolveUserDisplayRankLikeRankingBoard(data, uid, category, duration),
+      n: cohortSizeForCategory(data, category),
+      wkg: wk,
+      rankChange: mv.rankChange,
+      previousBoardRank: mv.previousBoardRank
+    };
+  }
+
+  /** 선택 부문 baseline(전일 순위) → 등락. 전체(Supremo) 등락을 부문 행에 섞지 않음 */
+  function peakRankMovementBaselineForCategory(data, category) {
+    if (!data || !category) return null;
+    if (data.rankMovementCompareBaselineByCategory && data.rankMovementCompareBaselineByCategory[category]) {
+      return data.rankMovementCompareBaselineByCategory[category];
+    }
+    if (data.rankMovementPrevDayByCategory && data.rankMovementPrevDayByCategory[category]) {
+      return data.rankMovementPrevDayByCategory[category];
+    }
+    return null;
+  }
+
+  function movementFromCategoryBaseline(data, uid, category, catRank) {
+    if (catRank == null || catRank < 1) return null;
+    var baseline = peakRankMovementBaselineForCategory(data, category);
+    if (!baseline || baseline[String(uid)] == null) return null;
+    var prev = Math.floor(Number(baseline[String(uid)]));
+    if (!isFinite(prev) || prev < 1) return null;
+    return { rankChange: prev - catRank, previousBoardRank: prev };
+  }
+
+  /** getPeakPowerRanking — 선택 부문 순위·baseline 기준 등락(랭킹보드 부문 리스트와 동일) */
+  function axisRankMovementFromRankingPayload(data, uid, category) {
+    var empty = { rankChange: null, previousBoardRank: null };
+    if (!data || !data.success || !uid || !category) return empty;
+    var byCategory = data.byCategory || {};
+    var catRank = categoryRankInPayloadList(data, uid, category);
+    var fromBaseline = movementFromCategoryBaseline(data, uid, category, catRank);
+    if (fromBaseline) return fromBaseline;
+
+    function findRowInArr(arr) {
+      if (!arr || !arr.length) return null;
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && String(arr[i].userId) === String(uid)) return arr[i];
+      }
+      return null;
+    }
+
+    var row = findRowInArr(byCategory[category] || []);
+    if (!row && category === 'Supremo' && data.currentUser && String(data.currentUser.userId) === String(uid)) {
+      row = data.currentUser;
+    }
+    if (row && row.rankChange != null && row.previousBoardRank != null) {
+      if (
+        catRank == null ||
+        typeof window.stelvioRankMovementRowMatchesCurrentRank !== 'function' ||
+        window.stelvioRankMovementRowMatchesCurrentRank(row, catRank)
+      ) {
+        var rc = Math.round(Number(row.rankChange));
+        var pb = Math.floor(Number(row.previousBoardRank));
+        if (isFinite(rc) && isFinite(pb) && pb >= 1) {
+          return { rankChange: rc, previousBoardRank: pb };
+        }
+      }
+    }
+
+    return empty;
+  }
+
+  var HEPTAGON_AXIS_RANK_CHANGE_FILL = {
+    up: '#c97070',
+    down: '#7a9fbf',
+    flat: '#9ca3af'
+  };
+
+  function heptagonAxisRankChangeSuffix(rankChange, previousBoardRank) {
+    if (rankChange == null || previousBoardRank == null) return null;
+    var rcN = Number(rankChange);
+    var prevN = Math.floor(Number(previousBoardRank));
+    if (!isFinite(rcN) || !isFinite(prevN) || prevN < 1) return null;
+    if (rcN > 0) {
+      return { text: '(↑' + rcN + ')', kind: 'up', title: '전날 ' + prevN + '위' };
+    }
+    if (rcN < 0) {
+      return { text: '(↓' + Math.abs(rcN) + ')', kind: 'down', title: '전날 ' + prevN + '위' };
+    }
+    return { text: '(-)', kind: 'flat', title: '전날 ' + prevN + '위' };
+  }
+
+  /**
+   * getPeak 단일 응답으로 부문 무관 동일 순위표 → 카테고리·Supremo를 한 번의 7요청으로 파생(기존 병렬 14요청과 동일 수치).
+   */
+  function fetchTwinCategoryPeakAxisRows(uid, period, gender, categoryMain) {
+    return Promise.all(
+      DURATIONS.map(function(d) {
+        return fetchRankingPayloadDedup(uid, d, period, gender).then(function(data) {
+          return {
+            main: axisStatsFromRankingPayload(data, uid, categoryMain, d),
+            supr: axisStatsFromRankingPayload(data, uid, 'Supremo', d)
+          };
+        });
+      })
+    ).then(function(pairs) {
+      return {
+        mRows: pairs.map(function(p) {
+          return p.main;
+        }),
+        sRows: pairs.map(function(p) {
+          return p.supr;
+        })
+      };
+    });
+  }
+
+  function fetchRanksSet(uid, period, gender, category) {
+    return Promise.all(
+      DURATIONS.map(function(d) {
+        return fetchRankingPayloadDedup(uid, d, period, gender).then(function(data) {
+          return axisStatsFromRankingPayload(data, uid, category, d);
+        });
+      })
+    );
+  }
+
+  /**
+   * 30d(보라) vs 365d(녹) 레이더: W/kg이 있으면 **동일 축** max 기준으로 스케일(365≥30 물리 정합);
+   * 없을 때(캐시·구버전)는 순위 반지름에 축마다 `max(년, 월)` — 순위만 쓰면 기간·코호트 차로 역전 가능.
+   */
+  function heptagonRadarDisplayNorms(monthlyRanks, hofRanks, monthlyWkgs, hofWkgs) {
+    var outM = [];
+    var outH = [];
+    for (var i = 0; i < N_WKG_AXES; i++) {
+      var rm = monthlyRanks && monthlyRanks[i];
+      var ry = hofRanks && hofRanks[i];
+      var wm = monthlyWkgs && monthlyWkgs[i] != null && isFinite(Number(monthlyWkgs[i])) ? Number(monthlyWkgs[i]) : null;
+      var wy = hofWkgs && hofWkgs[i] != null && isFinite(Number(hofWkgs[i])) ? Number(hofWkgs[i]) : null;
+      if (wm != null && wy != null) {
+        var wmc = wm >= 0 ? wm : 0;
+        var wyc = Math.max(wmc, wy);
+        var denom = Math.max(wmc, wyc, 1e-9);
+        outM[i] = Math.min(0.99, Math.max(0.08, 0.08 + 0.91 * (wmc / denom)));
+        outH[i] = Math.min(0.99, Math.max(0.08, 0.08 + 0.91 * (wyc / denom)));
+      } else {
+        outM[i] = rankToRadiusNorm(rm);
+        outH[i] = Math.max(rankToRadiusNorm(ry), outM[i]);
+      }
+    }
+    return { m: outM, h: outH };
+  }
+
+  /** N_WKG_AXES 축(피크 W/kg) rank + 코호트 n + (선택) w/kg·등락 축 → 차트 norm */
+  function stateFromRanksArray(
+    monthlyRanks,
+    cohortSizePerAxis,
+    hofRanks,
+    supremoRanks,
+    supremoCohortNPerAxis,
+    monthlyWkgs,
+    hofWkgs,
+    monthlyRankChanges,
+    monthlyPreviousBoardRanks
+  ) {
+    var pair = heptagonRadarDisplayNorms(monthlyRanks, hofRanks, monthlyWkgs, hofWkgs);
+    var supremoMonthly = null;
+    if (
+      supremoRanks &&
+      supremoCohortNPerAxis &&
+      supremoRanks.length === supremoCohortNPerAxis.length &&
+      supremoRanks.length > 0
+    ) {
+      supremoMonthly = { ranks: supremoRanks, cohortSizePerAxis: supremoCohortNPerAxis };
+    }
+    return {
+      loading: false,
+      err: null,
+      monthly: {
+        ranks: monthlyRanks,
+        rankChanges: monthlyRankChanges || null,
+        previousBoardRanks: monthlyPreviousBoardRanks || null,
+        norm: pair.m,
+        cohortSizePerAxis: cohortSizePerAxis,
+        wkg: monthlyWkgs || null
+      },
+      hof: { ranks: hofRanks, norm: pair.h, wkg: hofWkgs || null },
+      supremoMonthly: supremoMonthly
+    };
+  }
+
+  function stateFromApiRows(mRows, hRows, sRows) {
+    var sr = sRows
+      ? sRows.map(function(x) {
+          return x.rank;
+        })
+      : null;
+    var sc = sRows
+      ? sRows.map(function(x) {
+          return x.n;
+        })
+      : null;
+    var mw = mRows.map(function(x) {
+      return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+    });
+    var hw = hRows.map(function(x) {
+      return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+    });
+    return stateFromRanksArray(
+      mRows.map(function(x) {
+        return x.rank;
+      }),
+      mRows.map(function(x) {
+        return x.n;
+      }),
+      hRows.map(function(x) {
+        return x.rank;
+      }),
+      sr,
+      sc,
+      mw,
+      hw,
+      mRows.map(function(x) {
+        return x.rankChange != null && isFinite(Number(x.rankChange)) ? Math.round(Number(x.rankChange)) : null;
+      }),
+      mRows.map(function(x) {
+        return x.previousBoardRank != null && isFinite(Number(x.previousBoardRank))
+          ? Math.floor(Number(x.previousBoardRank))
+          : null;
+      })
+    );
+  }
+
+  /** 순위(1=최고) → 반지름 비율 0.06~0.98 (가운데=뒤쪽 순위) */
+  function rankToRadiusNorm(rank) {
+    if (rank == null || !isFinite(rank) || rank < 1) return 0.12;
+    var r = 1 - Math.log(rank + 0.2) / Math.log(5000);
+    if (r < 0.08) r = 0.08;
+    if (r > 0.99) r = 0.99;
+    return r;
+  }
+
+  /**
+   * i=0 → 12시(위), n각형: 축마다 360/n ° 시계방향
+   */
+  function axisAngle(i, n) {
+    return -Math.PI / 2 + (i * 2 * Math.PI) / n;
+  }
+
+  function radarPolygonPoints(ratioArr, cx, cy, rMax) {
+    var n = ratioArr && ratioArr.length > 0 ? ratioArr.length : 0;
+    var pts = [];
+    for (var i = 0; i < n; i++) {
+      var t = axisAngle(i, n);
+      var ri = (ratioArr[i] != null ? ratioArr[i] : 0.1) * rMax;
+      pts.push([cx + ri * Math.cos(t), cy + ri * Math.sin(t)]);
+    }
+    return pts;
+  }
+
+  function pathFromPoints(pts) {
+    if (!pts.length) return '';
+    var s = 'M ' + pts[0][0].toFixed(2) + ' ' + pts[0][1].toFixed(2);
+    for (var j = 1; j < pts.length; j++) s += ' L ' + pts[j][0].toFixed(2) + ' ' + pts[j][1].toFixed(2);
+    return s + ' Z';
+  }
+
+  /** 닫힌 다각형 면적(좌표 단위²), 시계/반시계 무관 */
+  function shoelaceAreaXY(pts) {
+    if (!pts || pts.length < 3) return 0;
+    var n = pts.length;
+    var s = 0;
+    for (var i = 0; i < n; i++) {
+      var j = (i + 1) % n;
+      s += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1];
+    }
+    return Math.abs(s) / 2;
+  }
+
+  function polygonAreaFromNormRatios(ratioArr, rMax) {
+    var cx = 100;
+    var cy = 100;
+    var pts = radarPolygonPoints(ratioArr, cx, cy, rMax);
+    return shoelaceAreaXY(pts);
+  }
+
+  /**
+   * 레이더 꼭짓점(norm = 각 축 rankToRadiusNorm)으로 다각형 면적 A만 산출(차트/참고).
+   * 종합 N위·% 표시는 **6축 유효순위 산술평균**을 사용하며, 이 면적 보간값은 **표시·종합순위에 쓰지 않음** (과거엔 rSynth로 nRef 꼴찌가 나올 수 있음).
+   */
+  function comprehensivePercentFromDisplayNorm(norm, nRef) {
+    if (!norm || norm.length < 3 || nRef < 1) return null;
+    var nVert = norm.length;
+    var rMax = 1;
+    var A = polygonAreaFromNormRatios(norm, rMax);
+    if (!isFinite(A)) return null;
+    var r1 = rankToRadiusNorm(1);
+    var rW = rankToRadiusNorm(nRef);
+    var allBest = [];
+    var allWorst = [];
+    for (var z = 0; z < nVert; z++) {
+      allBest.push(r1);
+      allWorst.push(rW);
+    }
+    var aMax = polygonAreaFromNormRatios(allBest, rMax);
+    var aMin = polygonAreaFromNormRatios(allWorst, rMax);
+    if (!(aMax > aMin) || !isFinite(aMax) || !isFinite(aMin)) return null;
+    var t = (A - aMin) / (aMax - aMin);
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    var rSynth = 1 + (1 - t) * (nRef - 1);
+    if (rSynth < 1) rSynth = 1;
+    if (rSynth > nRef) rSynth = nRef;
+    return {
+      area: A,
+      aMax: aMax,
+      aMin: aMin,
+      rSynthetic: rSynth,
+      pComprehensive: (rSynth / nRef) * 100
+    };
+  }
+
+  /**
+   * 소집단(N<100) 100분위 보정: K = 1 + (100−N)/(100+N). 예) N=40 → K=1+60/140≈1.4286. N≥100이면 large 분기·K=1
+   */
+  function stelvioOctagonSmallGroupK(n) {
+    var N = n | 0;
+    if (N < 1) N = 1;
+    if (N >= 100) return 1;
+    return 1 + (100 - N) / (100 + N);
+  }
+
+  /**
+   * 6개 상한(%) = 레벨1~7 구간(레벨1=HC) 기준. 이후 잔여=레벨7.
+   * N≥100: 5,10,20,40,60,80. N<100: max(min(100, B·K), (B/5)·(100/N)) 뒤 단조 증가.
+   */
+  function stelvioOctagonPercentCutoffs(nRef) {
+    var N = nRef | 0;
+    if (N < 1) N = 1;
+    if (N >= 100) {
+      return { k: 1, isLarge: true, cutoffs: [5, 10, 20, 40, 60, 80] };
+    }
+    var k = stelvioOctagonSmallGroupK(N);
+    var bases = [5, 10, 20, 40, 60, 80];
+    var cut = [];
+    for (var i = 0; i < bases.length; i++) {
+      var B = bases[i];
+      var sc = B * k;
+      if (sc > 100) sc = 100;
+      var fl = (B / 5) * (100 / N);
+      var v = Math.max(sc, fl);
+      if (v > 100) v = 100;
+      if (i > 0) {
+        if (v <= cut[i - 1]) v = cut[i - 1] + 0.0001;
+        if (v > 100) v = 100;
+        if (v <= cut[i - 1]) v = 100;
+      }
+      cut.push(v);
+    }
+    return { k: k, isLarge: false, cutoffs: cut };
+  }
+
+  function tierIdFromPAndPercentCutoffs(pTotal, co) {
+    if (pTotal <= co[0]) {
+      return { id: 'HC', text: 'HC', labelShort: 'HC' };
+    }
+    if (pTotal <= co[1]) {
+      return { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' };
+    }
+    if (pTotal <= co[2]) {
+      return { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' };
+    }
+    if (pTotal <= co[3]) {
+      return { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' };
+    }
+    if (pTotal <= co[4]) {
+      return { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' };
+    }
+    if (pTotal <= co[5]) {
+      return { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' };
+    }
+    return { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
+  }
+
+  /**
+   * 집계 레벨%: `n`은 **실집계 코호트 인원**. `heptagonUseNeffNPlusOne`일 때만 Neff=n+1(가상·타 부문). 전체·본인 부문은 n.
+   * Neff≥100 → (r÷Neff)×100, Neff<100 → n₂=100÷Neff, ((r÷Neff)÷n₂)×100. 등급(동물)은 `heptagonBoardTierIdFromLevelPercent`.
+   */
+  var HEPTAGON_BOARD_PCT_CUTS = [5, 10, 20, 40, 60, 80];
+
+  function heptagonLevelPercentForRankN(boardRank, n, isVirtualCohort, filterCategory, userAgeCategory) {
+    var Nc = n | 0;
+    if (Nc < 1) return 0;
+    var useNeff = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirtualCohort);
+    var r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
+    if (r < 1) r = 1;
+    var Neff = useNeff ? Nc + 1 : Nc;
+    if (r > Neff) r = Neff;
+    var p;
+    if (Neff >= 100) {
+      p = (r / Neff) * 100;
+    } else {
+      var n2 = 100 / Neff;
+      p = ((r / Neff) / n2) * 100;
+    }
+    if (!isFinite(p) || p < 0) p = 0;
+    if (p > 100) p = 100;
+    return p;
+  }
+
+  function heptagonBoardTierIdFromLevelPercent(p) {
+    if (!isFinite(p)) {
+      return { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
+    }
+    if (p <= 5) {
+      return { id: 'HC', text: 'HC', labelShort: 'HC' };
+    }
+    if (p <= 10) {
+      return { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' };
+    }
+    if (p <= 20) {
+      return { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' };
+    }
+    if (p <= 40) {
+      return { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' };
+    }
+    if (p <= 60) {
+      return { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' };
+    }
+    if (p <= 80) {
+      return { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' };
+    }
+    return { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
+  }
+
+  function heptagonBoardTierObjectFromRankN(boardRank, n, isVirtualCohort, filterCategory, userAgeCategory) {
+    var Nc = n | 0;
+    if (Nc < 1) {
+      return { tier: { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' }, mode: 'none', pRank: 0, upperRankBounds: null };
+    }
+    var p = heptagonLevelPercentForRankN(boardRank, Nc, isVirtualCohort, filterCategory, userAgeCategory);
+    return { tier: heptagonBoardTierIdFromLevelPercent(p), mode: 'percent', pRank: p, upperRankBounds: null };
+  }
+
+  /**
+   * `heptagon_cohort_ranks` 집계(월·필터): 전면 환산 합 기준 집계 순위, 레벨%·레벨은 `heptagonBoardTierObjectFromRankN`.
+   * @param {object|null} tierBase 6축·합산(포지션 점수) 기반 요약
+   * @param {{ loading?: boolean, skip?: boolean, err?: boolean, nTotal?: number, boardRank?: number, cohortData?: object, isVirtualCohort?: boolean }} ovl
+   *         `isVirtualCohort`: 타 부문 열람(가상)만 true, Supremo·본인 부문 실문서는 false. 레벨% → `heptagonLevelPercentForRankN`.
+   */
+  function applyCohortBoardMerge(tierBase, ovl, filterCategory, userAgeCategory) {
+    if (!tierBase) {
+      return null;
+    }
+    if (!ovl || ovl.loading) {
+      return tierBase;
+    }
+    if (ovl.err) {
+      return tierBase;
+    }
+    if (ovl.skip) {
+      return tierBase;
+    }
+    var nTot = ovl.nTotal != null && isFinite(ovl.nTotal) ? Math.max(0, Math.floor(Number(ovl.nTotal))) : 0;
+    if (nTot < 1) {
+      return tierBase;
+    }
+    var br = ovl.boardRank;
+    if (br == null && ovl.cohortData) {
+      var d0 = ovl.cohortData;
+      br = d0.boardRank;
+      if (br == null && d0.comprehensiveRank != null) {
+        br = d0.comprehensiveRank;
+      }
+    }
+    if (br == null || !isFinite(br)) {
+      return tierBase;
+    }
+    var isVirt = ovl.isVirtualCohort === true;
+    var useNeff = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirt);
+    var brMax = useNeff ? nTot + 1 : nTot;
+    if (!isVirt) {
+      br = Math.max(1, Math.min(nTot, Math.floor(Number(br))));
+    } else {
+      br = Math.max(1, Math.min(brMax, Math.floor(Number(br))));
+    }
+    var hb = heptagonBoardTierObjectFromRankN(br, nTot, isVirt, filterCategory, userAgeCategory);
+    var pRank = hb.pRank;
+    var out = Object.assign({}, tierBase);
+    out.pTier = pRank;
+    out.pTotal = pRank;
+    out.pComprehensive = pRank;
+    out.comprehensiveRank = br;
+    out.rankAverage = br;
+    out.cohortN = nTot;
+    out.heptagonBoardVirtualCohort = isVirt;
+    out.tier = hb.tier;
+    out.tierPercentCutoffs = HEPTAGON_BOARD_PCT_CUTS;
+    out.kAdjust = 1;
+    out.isLargeCohort = (useNeff ? nTot + 1 : nTot) >= 100;
+    out.heptagonBoardTierMode = hb.mode;
+    out.heptagonBoardUpperRankBounds = hb.upperRankBounds;
+    var d = ovl.cohortData;
+    if (d) {
+      if (d.sumPositionScores != null && isFinite(Number(d.sumPositionScores))) {
+        out.sumPositionScores = Number(d.sumPositionScores);
+      }
+      if (d.avgPositionScore != null && isFinite(Number(d.avgPositionScore))) {
+        out.avgPositionScore = Number(d.avgPositionScore);
+      }
+    }
+    out.heptagonCohortBoardRankApplied = true;
+    out.heptagonCohortBoardRank = br;
+    return out;
+  }
+
+  /**
+   * 랭킹보드 GC·`getPeakPowerRanking`(duration=gc) 응답에서 본인 `gcScore`(= 환산점수 합, 서버·스냅샷과 동일).
+   */
+  function gcScoreFromPeakApi(gcData, uid) {
+    if (!gcData || !gcData.success || !uid) {
+      return null;
+    }
+    var cu = gcData.currentUser;
+    if (cu && String(cu.userId) === String(uid) && cu.gcScore != null && isFinite(Number(cu.gcScore))) {
+      return Number(cu.gcScore);
+    }
+    var cats = gcData.byCategory || {};
+    var keys = Object.keys(cats);
+    for (var i = 0; i < keys.length; i++) {
+      var arr = cats[keys[i]] || [];
+      for (var j = 0; j < arr.length; j++) {
+        var row = arr[j];
+        if (row && String(row.userId) === String(uid) && row.gcScore != null && isFinite(Number(row.gcScore))) {
+          return Number(row.gcScore);
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 랭킹보드 GC 탭과 동일 산출: 순위(`computeDisplayRankLikeDistribution`·gc)·모수 n·레벨%·`gcScore`·등급.
+   * 6축 레이더용 `positionScores100` 등은 `tierAfterOvl`에서 유지.
+   */
+  function gcHexagonPayloadUsable(data) {
+    if (typeof window.stelvioGcPayloadUsableForHexagonGraph === 'function') {
+      return window.stelvioGcPayloadUsableForHexagonGraph(data);
+    }
+    if (!data || !data.success || !data.byCategory) {
+      return false;
+    }
+    return heptagonCohortItemsFromGcApi(data, 'Supremo').length > 0;
+  }
+
+  function resolveGcRankingSeedForOctagon(uidIn, genderIn) {
+    if (typeof window.stelvioResolveGcRankingSeedFromRankingBoard === 'function') {
+      return window.stelvioResolveGcRankingSeedFromRankingBoard(uidIn, genderIn);
+    }
+    return null;
+  }
+
+  function gcHexagonShowingStaleSnapshot(data) {
+    if (!data || !data.success) {
+      return false;
+    }
+    if (typeof window.stelvioGcIsHexagonBatchCompleteForMinYmd === 'function' && typeof window.stelvioGcMinAcceptableSnapshotYmd === 'function') {
+      return !window.stelvioGcIsHexagonBatchCompleteForMinYmd(data, window.stelvioGcMinAcceptableSnapshotYmd());
+    }
+    return data.gcSnapshotStale === true;
+  }
+
+  function applyGcRankingBoardMerge(tierAfterOvl, gcData, uid, filterCategory, userAgeCategory) {
+    if (!tierAfterOvl || !gcData || !gcData.success || !uid) {
+      return tierAfterOvl;
+    }
+    var gcs = gcScoreFromPeakApi(gcData, uid);
+    var rGc = computeDisplayRankLikeDistribution(gcData, uid, filterCategory, 'gc');
+    if (gcs == null || !isFinite(gcs) || rGc == null || !isFinite(rGc) || rGc < 1) {
+      return tierAfterOvl;
+    }
+    var catArr = gcData.byCategory && gcData.byCategory[filterCategory] ? gcData.byCategory[filterCategory] : [];
+    var nGc = gcRankingCohortNFromPayload(gcData, filterCategory);
+    if (nGc < 1) {
+      nGc = catArr.length | 0;
+    }
+    if (nGc < 1) {
+      return tierAfterOvl;
+    }
+    var isVirt =
+      filterCategory !== 'Supremo' &&
+      userAgeCategory &&
+      String(filterCategory).trim() !== String(userAgeCategory).trim();
+    var rI = Math.floor(Number(rGc));
+    var pGc = heptagonLevelPercentForRankN(rI, nGc, isVirt, filterCategory, userAgeCategory);
+    var tierGcObj = heptagonBoardTierIdFromLevelPercent(pGc);
+    var useNeff = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirt);
+    var out = Object.assign({}, tierAfterOvl);
+    out.sumPositionScores = gcs;
+    out.avgPositionScore = gcs / 7;
+    out.pTier = pGc;
+    out.pTotal = pGc;
+    out.pComprehensive = pGc;
+    out.comprehensiveRank = rI;
+    out.rankAverage = rI;
+    out.cohortN = nGc;
+    out.heptagonBoardVirtualCohort = isVirt;
+    out.tier = tierGcObj;
+    out.heptagonCohortBoardRankApplied = true;
+    out.heptagonCohortBoardRank = rI;
+    out.gcRankingBoardAligned = true;
+    out.isLargeCohort = (useNeff ? nGc + 1 : nGc) >= 100;
+    return out;
+  }
+
+  /**
+   * `loadStelvioCohortOvlData` / 동일 집계(카드 ovl)에서 순위·n — 리스트에 본인 행이 없어도 표·툴팁에 반영.
+   * `applyCohortBoardMerge`와 동일한 rank·n·가상 여부(클램프) 사용.
+   */
+  function stelvioOvlBoardRankNForDisplay(ovl, filterCategory, userAgeCategory) {
+    if (!ovl || ovl.loading || ovl.err || ovl.skip) {
+      return null;
+    }
+    var nTot = ovl.nTotal != null && isFinite(ovl.nTotal) ? Math.max(0, Math.floor(Number(ovl.nTotal))) : 0;
+    if (nTot < 1) {
+      return null;
+    }
+    var br = ovl.boardRank;
+    if (br == null && ovl.cohortData) {
+      var d0 = ovl.cohortData;
+      br = d0.boardRank;
+      if (br == null && d0.comprehensiveRank != null) {
+        br = d0.comprehensiveRank;
+      }
+    }
+    if (br == null || !isFinite(br)) {
+      return null;
+    }
+    var isVirt = ovl.isVirtualCohort === true;
+    var useNeff = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirt);
+    var brMax = useNeff ? nTot + 1 : nTot;
+    if (!isVirt) {
+      br = Math.max(1, Math.min(nTot, Math.floor(Number(br))));
+    } else {
+      br = Math.max(1, Math.min(brMax, Math.floor(Number(br))));
+    }
+    return { br: br, nTot: nTot, isVirt: isVirt };
+  }
+
+  /**
+   * 레벨: 6축 **포지션 점수** 합(0~700)·평균(0~100) → `pTier = 100 - 평균` (낮을수록 상위) + 구간(소수 n은 K·상한).
+   * **종합 N위** `comprehensiveRank` = 6축 100분위(포지션) **합 S**·`0~700` → 동일 nRef 띠에서
+   * `1 + (1 - S/700)(nRef-1)` (S↑ → 1위에 가깝게). `pComprehensive` = (그 값 / nRef)·100. 면적과 독립.
+   * 그래프 `displayNorm`는 기존 log 스케일.
+   */
+  function comprehensiveRankFromSumPosition100(sum0to700, nRef) {
+    var n = nRef | 0;
+    if (n < 1) return NaN;
+    var s = Number(sum0to700);
+    if (!isFinite(s)) return NaN;
+    if (s < 0) s = 0;
+    if (s > 700) s = 700;
+    if (n === 1) {
+      return 1;
+    }
+    var r = 1 + (1 - s / 700) * (n - 1);
+    if (r < 1) r = 1;
+    if (r > n) r = n;
+    return r;
+  }
+
+  function computePTotalAndTier(ranks, cohortNPerAxis) {
+    if (!ranks || !cohortNPerAxis || ranks.length !== N_WKG_AXES || cohortNPerAxis.length !== N_WKG_AXES) {
+      return null;
+    }
+    var nRef = 0;
+    for (var k = 0; k < N_WKG_AXES; k++) {
+      var nk0 = cohortNPerAxis[k] | 0;
+      if (nk0 > nRef) nRef = nk0;
+    }
+    if (nRef < 1) return null;
+
+    var posScores = [];
+    var allOk = true;
+    var displayNorm = [];
+    for (var i = 0; i < N_WKG_AXES; i++) {
+      var ni = (cohortNPerAxis[i] | 0) > 0 ? cohortNPerAxis[i] : nRef;
+      var er = effectiveRankForAverage(ranks[i], ni);
+      if (er == null) {
+        allOk = false;
+        break;
+      }
+      posScores.push(positionScore100FromRank(ranks[i], ni));
+      displayNorm.push(rankToRadiusNorm(ranks[i]));
+    }
+    if (!allOk) return null;
+
+    var sumPos = 0;
+    for (var j = 0; j < posScores.length; j++) sumPos += posScores[j];
+    var avgPos = sumPos / N_WKG_AXES;
+    if (!isFinite(avgPos)) avgPos = 0;
+    if (avgPos < 0) avgPos = 0;
+    if (avgPos > 100) avgPos = 100;
+
+    /** ‘상위%’ 티어 매핑(낮을수록 상위): 평균 포지션이 높을수록 pTier 낮음 */
+    var pTier = 100 - avgPos;
+    if (!isFinite(pTier)) pTier = 100;
+    if (pTier < 0) pTier = 0;
+    if (pTier > 100) pTier = 100;
+
+    var cspec = stelvioOctagonPercentCutoffs(nRef);
+    var tier = tierIdFromPAndPercentCutoffs(pTier, cspec.cutoffs);
+
+    var comp = comprehensivePercentFromDisplayNorm(displayNorm, nRef);
+    var rFromSumPos = comprehensiveRankFromSumPosition100(sumPos, nRef);
+    if (!isFinite(rFromSumPos)) {
+      return null;
+    }
+    var pComprehensive = nRef >= 1 ? (rFromSumPos / nRef) * 100 : pTier;
+    var rAvg = Math.max(1, Math.min(nRef, Math.round(rFromSumPos)));
+
+    return {
+      itemP: posScores,
+      positionScores100: posScores,
+      sumPositionScores: sumPos,
+      avgPositionScore: avgPos,
+      pTotal: pTier,
+      pTier: pTier,
+      /** 6축 100분위(포지션) 합 → 동일 nRef 띠 대응값 / nRef · 100 */
+      pLegacyRankAvg: pComprehensive,
+      /** `comprehensiveRank` 정수에 가깝게(폴백) */
+      rankAverage: rAvg,
+      cohortN: nRef,
+      tier: tier,
+      kAdjust: cspec.k,
+      isLargeCohort: cspec.isLarge,
+      tierPercentCutoffs: cspec.cutoffs,
+      displayNorm: displayNorm,
+      octagonArea: comp ? comp.area : null,
+      octagonAreaMax: comp ? comp.aMax : null,
+      octagonAreaMin: comp ? comp.aMin : null,
+      /** 0~700 합 S 기준 nRef 띠 상 동급순위(실수) — 툴팁 N위·Firestore는 반올림/클램프 */
+      comprehensiveRank: rFromSumPos,
+      pComprehensive: pComprehensive
+    };
+  }
+
+  function currentMonthKeyKst() {
+    var t = new Date();
+    return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
+  }
+
+  function tierObjectFromStelvioId(id) {
+    var m = {
+      HC: { id: 'HC', text: 'HC', labelShort: 'HC' },
+      C1: { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' },
+      C2: { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' },
+      C3: { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' },
+      C4: { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' },
+      C5: { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' },
+      C6: { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' }
+    };
+    return m[id] || m.C6;
+  }
+
+  /**
+   * 툴팁 N위(정수)와 동일. 저장·Firestore `comprehensiveRank`에 사용.
+   * (6축 `comprehensiveRank` 실수·폴백 — heptagon 집계-only 표시는 `heptagonCardRankFromSummary` 사용)
+   */
+  function comprehensiveRankUiFromTierSummary(ts, filterCategory, userAgeCategory) {
+    if (!ts) return null;
+    var nC = ts.cohortN != null && isFinite(Number(ts.cohortN)) ? Math.max(0, Math.floor(Number(ts.cohortN))) : 0;
+    var isV = ts.heptagonBoardVirtualCohort === true;
+    var useN = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isV);
+    var cap = nC > 0 ? (useN ? nC + 1 : nC) : 0;
+    var rSynth = ts.comprehensiveRank != null && isFinite(Number(ts.comprehensiveRank)) ? Number(ts.comprehensiveRank) : NaN;
+    if (isNaN(rSynth) && ts.rankAverage != null && isFinite(Number(ts.rankAverage))) {
+      rSynth = Number(ts.rankAverage);
+    }
+    if (isNaN(rSynth)) return null;
+    return Math.max(1, cap > 0 ? Math.min(cap, Math.round(rSynth)) : Math.max(1, Math.round(rSynth)));
+  }
+
+  /**
+   * 카드·모달: 성별+카테고리 `heptagon_cohort_ranks` 집계(동일 조건·월(환산) 점수)로만 N위. 병합 전(6축) 값은 쓰지 않음.
+   */
+  function heptagonCardRankFromSummary(ts, filterCategory, userAgeCategory) {
+    if (!ts || ts.heptagonCohortBoardRankApplied !== true) {
+      return null;
+    }
+    var br0 = ts.heptagonCohortBoardRank;
+    if (br0 == null && ts.comprehensiveRank != null && isFinite(Number(ts.comprehensiveRank))) {
+      br0 = Number(ts.comprehensiveRank);
+    }
+    if (br0 == null || !isFinite(br0)) {
+      return null;
+    }
+    var nC = ts.cohortN != null && isFinite(Number(ts.cohortN)) ? Math.max(0, Math.floor(Number(ts.cohortN))) : 0;
+    var isV = ts.heptagonBoardVirtualCohort === true;
+    var useN = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isV);
+    var cap = nC > 0 ? (useN ? nC + 1 : nC) : 0;
+    var r = Math.floor(Number(br0));
+    if (cap > 0) {
+      r = Math.max(1, Math.min(cap, r));
+    } else {
+      r = Math.max(1, r);
+    }
+    return r;
+  }
+
+  /**
+   * GC 배지: 기본은 **랭킹보드 GC 탭** `getPeakPowerRanking`(duration=gc) 순위.
+   * 부문·성별 **전체+전체(Supremo·all)** 에서만 툴팁과 같은 순위를 쓰면 코호트·GC 표기 불일치가 사라짐.
+   */
+  function gcHexagonRankForBadge(uid, ovl, toolTip, tierSummary, filterCategory, userAgeCategory, gcPeakData, filterGender) {
+    var isSupremoGenderAll =
+      String(filterCategory || '').trim() === 'Supremo' &&
+      String(filterGender != null ? filterGender : '').trim() === 'all';
+    if (isSupremoGenderAll) {
+      if (
+        toolTip &&
+        (toolTip.kind === 'ok' || toolTip.kind === 'board_partial') &&
+        toolTip.rank != null &&
+        isFinite(Number(toolTip.rank)) &&
+        Number(toolTip.rank) >= 1
+      ) {
+        return Math.floor(Number(toolTip.rank));
+      }
+    }
+    if (uid && gcPeakData && gcPeakData.success) {
+      var rApi = computeDisplayRankLikeDistribution(gcPeakData, uid, filterCategory, 'gc');
+      if (rApi != null && isFinite(Number(rApi)) && Number(rApi) >= 1) {
+        return Math.floor(Number(rApi));
+      }
+    }
+    if (tierSummary && tierSummary.gcRankingBoardAligned === true) {
+      var rAligned = heptagonCardRankFromSummary(tierSummary, filterCategory, userAgeCategory);
+      if (rAligned != null && isFinite(Number(rAligned)) && Number(rAligned) >= 1) {
+        return Math.floor(Number(rAligned));
+      }
+    }
+    if (!tierSummary) {
+      return null;
+    }
+    if (
+      toolTip &&
+      (toolTip.kind === 'ok' || toolTip.kind === 'board_partial') &&
+      toolTip.source === 'board' &&
+      toolTip.rank != null &&
+      isFinite(Number(toolTip.rank)) &&
+      Number(toolTip.rank) >= 1
+    ) {
+      return Math.floor(Number(toolTip.rank));
+    }
+    var merged = heptagonCardRankFromSummary(tierSummary, filterCategory, userAgeCategory);
+    if (merged != null) {
+      return merged;
+    }
+    var ovr = stelvioOvlBoardRankNForDisplay(ovl, filterCategory, userAgeCategory);
+    if (ovr && ovr.br != null && isFinite(Number(ovr.br)) && Number(ovr.br) >= 1) {
+      return Math.floor(Number(ovr.br));
+    }
+    if (
+      toolTip &&
+      (toolTip.kind === 'ok' || toolTip.kind === 'board_partial') &&
+      toolTip.rank != null &&
+      isFinite(Number(toolTip.rank)) &&
+      Number(toolTip.rank) >= 1 &&
+      toolTip.source !== 'board'
+    ) {
+      return Math.floor(Number(toolTip.rank));
+    }
+    if (ovl && ovl.loading === true) {
+      return null;
+    }
+    if (
+      toolTip &&
+      (toolTip.kind === 'ok' || toolTip.kind === 'board_partial') &&
+      toolTip.rank != null &&
+      isFinite(Number(toolTip.rank)) &&
+      Number(toolTip.rank) >= 1
+    ) {
+      return Math.floor(Number(toolTip.rank));
+    }
+    return null;
+  }
+
+  /**
+   * 동일 조건·월(환산) 점수 집계: 순위·대상자 모수 n·가상 여부 → `heptagonLevelPercentForRankN` 레벨% (툴팁·힌트).
+   */
+  function heptagonCohortTooltipFromSummary(s, filterCategory, userAgeCategory) {
+    if (!s || s.heptagonCohortBoardRankApplied !== true) {
+      return { ok: false, rank: null, nCohort: 0, pPct: -1, isVirtual: false };
+    }
+    var nC = s.cohortN != null && isFinite(Number(s.cohortN)) ? Math.max(0, Math.floor(Number(s.cohortN))) : 0;
+    var isV = s.heptagonBoardVirtualCohort === true;
+    if (nC < 1) {
+      return { ok: false, rank: heptagonCardRankFromSummary(s, filterCategory, userAgeCategory), nCohort: 0, pPct: -1, isVirtual: isV };
+    }
+    var br0 = s.heptagonCohortBoardRank;
+    if (br0 == null && s.comprehensiveRank != null && isFinite(Number(s.comprehensiveRank))) {
+      br0 = Number(s.comprehensiveRank);
+    }
+    if (br0 == null || !isFinite(br0)) {
+      return { ok: false, rank: null, nCohort: heptagonCohortNDisplay(nC, filterCategory, userAgeCategory, isV), pPct: -1, isVirtual: isV };
+    }
+    var pPct = heptagonLevelPercentForRankN(br0, nC, isV, filterCategory, userAgeCategory);
+    var rankU = heptagonCardRankFromSummary(s, filterCategory, userAgeCategory);
+    if (rankU == null) {
+      return { ok: false, rank: null, nCohort: heptagonCohortNDisplay(nC, filterCategory, userAgeCategory, isV), pPct: pPct, isVirtual: isV };
+    }
+    return { ok: true, rank: rankU, nCohort: heptagonCohortNDisplay(nC, filterCategory, userAgeCategory, isV), pPct: pPct, isVirtual: isV };
+  }
+
+  /**
+   * `동일 조건·월(환산) 점수 순위` 표(카드 필터)에서 본인 행 `boardRank` + 모수 n.
+   */
+  function getMyRankFromHexagonBoardRows(boardState) {
+    if (!boardState || boardState.err) {
+      return null;
+    }
+    var rows = boardState.rows || [];
+    for (var ri = 0; ri < rows.length; ri++) {
+      if (rows[ri].isMe && rows[ri].boardRank != null && isFinite(rows[ri].boardRank)) {
+        return {
+          boardRank: Math.floor(Number(rows[ri].boardRank)),
+          nCohort: (boardState.nCohort | 0) > 0 ? boardState.nCohort | 0 : 0
+        };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 월·필터가 일치하고 `comprehensiveRank`·`tierId`가 있을 때만 중앙 오버레이용 요약(로딩 스텁).
+   */
+  function summaryFromHexagonRankLogIfMatch(d, nowMonthKey, g, c) {
+    if (!d || d.monthKey !== nowMonthKey || d.filterGender !== g || d.filterCategory !== c) {
+      return null;
+    }
+    if (d.comprehensiveRank == null || !isFinite(Number(d.comprehensiveRank)) || d.tierId == null) {
+      return null;
+    }
+    var nRef = d.nRef != null && isFinite(Number(d.nRef)) ? Math.max(0, Math.floor(Number(d.nRef))) : 0;
+    var pTier =
+      d.pTier != null && isFinite(Number(d.pTier))
+        ? Number(d.pTier)
+        : d.pComprehensive != null && isFinite(Number(d.pComprehensive))
+          ? Number(d.pComprehensive)
+          : -1;
+    if (pTier < 0) {
+      return null;
+    }
+    var pC =
+      d.pComprehensive != null && isFinite(Number(d.pComprehensive)) ? Number(d.pComprehensive) : pTier;
+    return {
+      itemP: d.positionScores100,
+      positionScores100: d.positionScores100,
+      sumPositionScores: d.sumPositionScores,
+      avgPositionScore: d.avgPositionScore,
+      pTotal: pTier,
+      pTier: pTier,
+      pComprehensive: pC,
+      rankAverage: d.comprehensiveRank,
+      cohortN: nRef,
+      tier: tierObjectFromStelvioId(String(d.tierId)),
+      kAdjust: 1,
+      isLargeCohort: nRef >= 100,
+      tierPercentCutoffs: null,
+      displayNorm: null,
+      octagonArea: null,
+      octagonAreaMax: null,
+      octagonAreaMin: null,
+      comprehensiveRank: Number(d.comprehensiveRank)
+    };
+  }
+
+  /** 카드·레벨바·가로 트랙 공통 (레벨 A~G 표시 색) */
+  var HEPTAGON_TIER_FACE_HEX = {
+    HC: '#8B5CF6',
+    C1: '#EF4444',
+    C2: '#F97316',
+    C3: '#EAB308',
+    C4: '#22C55E',
+    C5: '#3B82F6',
+    C6: '#9CA3AF'
+  };
+
+  var TIER_STYLE = {
+    HC: { color: HEPTAGON_TIER_FACE_HEX.HC, shadow: '0 0 14px rgba(139,92,246,0.55), 0 0 26px rgba(139,92,246,0.25)' },
+    C1: { color: HEPTAGON_TIER_FACE_HEX.C1, shadow: '0 0 12px rgba(239,68,68,0.5), 0 0 22px rgba(239,68,68,0.2)' },
+    C2: { color: HEPTAGON_TIER_FACE_HEX.C2, shadow: '0 0 12px rgba(249,115,22,0.5), 0 0 22px rgba(249,115,22,0.22)' },
+    C3: { color: HEPTAGON_TIER_FACE_HEX.C3, shadow: '0 0 10px rgba(234,179,8,0.45), 0 0 18px rgba(234,179,8,0.2)' },
+    C4: { color: HEPTAGON_TIER_FACE_HEX.C4, shadow: '0 0 10px rgba(34,197,94,0.45), 0 0 18px rgba(34,197,94,0.2)' },
+    C5: { color: HEPTAGON_TIER_FACE_HEX.C5, shadow: '0 0 10px rgba(59,130,246,0.45), 0 0 18px rgba(59,130,246,0.2)' },
+    C6: { color: HEPTAGON_TIER_FACE_HEX.C6, shadow: '0 0 8px rgba(156,163,175,0.5), 0 0 14px rgba(100,116,139,0.25)' }
+  };
+
+  function tierStyleForId(id) {
+    return TIER_STYLE[id] || TIER_STYLE.C6;
+  }
+
+  function tierBadgeImageSrc(tierId) {
+    var m = { HC: 'A.svg', C1: 'B.svg', C2: 'C.svg', C3: 'D.svg', C4: 'E.svg', C5: 'F.svg', C6: 'G.svg' };
+    return 'assets/img/' + (m[tierId] || 'G.svg');
+  }
+
+  /** 존(티어) ID → 등급 레벨 문자 (HC=A … C6=G), 리스트 배지용 */
+  function heptagonTierIdToGradeLetter(tierId) {
+    var m = { HC: 'A', C1: 'B', C2: 'C', C3: 'D', C4: 'E', C5: 'F', C6: 'G' };
+    return m[tierId] || 'G';
+  }
+
+  /** 헥사곤 중앙 이미지 하단 표기용(레벨A=HC) */
+  function tierLevelDisplayName(tierId) {
+    var m = { HC: '레벨A', C1: '레벨B', C2: '레벨C', C3: '레벨D', C4: '레벨E', C5: '레벨F', C6: '레벨G' };
+    return m[tierId] || '레벨G';
+  }
+
+  /** STELVIO 헥사곤 카드 하단 등급 범례(이미지 1행 + 레벨·순위% 문구 1행). HC=A … C6=G */
+  var HEPTAGON_CARD_TIER_LEGEND_IDS = ['HC', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
+
+  function heptagonCardTierLegendCaption(tierId) {
+    var m = {
+      HC: '~5%',
+      C1: '~10%',
+      C2: '~20%',
+      C3: '~40%',
+      C4: '~60%',
+      C5: '~80%',
+      C6: '~100%'
+    };
+    return m[tierId] || m.C6;
+  }
+
+  /**
+   * index.html 랭킹 `buildSupremoRow` 와 동일: 비공개 + grade2 → 첫 글자** , grade1(관리자) → 풀명(길이 제한) + [비] 뱃지
+   */
+  /** HexagonRankDetailModal — 코호트 랭킹(점수 합) 조회 오류 문구(인덱스 대기 / 미배포 구분) */
+  function stelvioHexagonRankListErrorMessage(err) {
+    if (err == null) {
+      return '순위표를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.';
+    }
+    var s = String(err).toLowerCase();
+    if (s.indexOf('building') >= 0 || s.indexOf('cannot be used yet') >= 0) {
+      return '복합 인덱스가 Firestore에 아직 구축 중입니다. 콘솔 → Firestore → 인덱스에서 해당 인덱스가 Enabled(준비됨)으로 바뀐 뒤(수 분~십수 분) 다시 열어 주세요.';
+    }
+    if (s.indexOf('index') >= 0) {
+      return '복합 인덱스가 아직 없거나 쿼리와 맞지 않습니다. `firestore.indexes.json` 배포 후 인덱스가 완성될 때까지 기다리거나, 콘솔 오류에 나온 링크로 인덱스를 생성하세요.';
+    }
+    return '순위표를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.';
+  }
+
+  function stelvioNeighborNameParts(rawName, isPrivate, rowUserId, viewerUserId, viewerGrade) {
+    var maxNameLenS = 12;
+    var raw = rawName == null || String(rawName).trim() === '' ? '(이름 없음)' : String(rawName);
+    var vg = viewerGrade != null ? String(viewerGrade) : '2';
+    var isAdmin = vg === '1' || Number(vg) === 1;
+    var isCurrent = viewerUserId && rowUserId && String(viewerUserId) === String(rowUserId);
+    var canSeeFull = isCurrent || isAdmin;
+    if (isPrivate) {
+      if (canSeeFull) {
+        return {
+          text: raw.length > maxNameLenS ? raw.substring(0, maxNameLenS - 2) + '..' : raw,
+          showPrivateBadge: true,
+          title: raw
+        };
+      }
+      return { text: raw.length >= 2 ? raw.charAt(0) + '**' : '**', showPrivateBadge: false, title: '' };
+    }
+    return {
+      text: raw.length > maxNameLenS ? raw.substring(0, maxNameLenS - 2) + '..' : raw,
+      showPrivateBadge: false,
+      title: raw
+    };
+  }
+
+  /** 랭킹보드 목록과 동일한 rankChange — Firestore 행에 없으면 stelvioRankingByCategory 보강 */
+  function rankChangeBadgeFromRankingBoard(categoryKey, userId) {
+    if (userId == null || userId === '') return null;
+    var cat = categoryKey || 'Supremo';
+    if (
+      cat === 'Supremo' &&
+      typeof window.stelvioResolveRankChangeLookupCategory === 'function'
+    ) {
+      cat = window.stelvioResolveRankChangeLookupCategory(cat, userId);
+    }
+    if (typeof window.stelvioRankChangeBadgeHtmlForUser === 'function') {
+      var html = window.stelvioRankChangeBadgeHtmlForUser(cat, userId);
+      if (html) return html;
+    }
+    if (typeof window.stelvioFindRankingRowForUser === 'function' && typeof window.stelvioServerRankChangeBadgeHtml === 'function') {
+      var row = window.stelvioFindRankingRowForUser(cat, userId);
+      if (row && row.rankChange != null && row.previousBoardRank != null) {
+        return window.stelvioServerRankChangeBadgeHtml(row.rankChange, row.previousBoardRank);
+      }
+    }
+    return null;
+  }
+
+  function overlayRankMovementFromRankingBoard(row, categoryKey) {
+    if (!row || row.userId == null) return row;
+    if (typeof window.stelvioFindRankingRowForUser !== 'function') return row;
+    var cat = categoryKey || 'Supremo';
+    if (
+      cat === 'Supremo' &&
+      typeof window.stelvioResolveRankChangeLookupCategory === 'function'
+    ) {
+      cat = window.stelvioResolveRankChangeLookupCategory(cat, row.userId);
+    }
+    var src = window.stelvioFindRankingRowForUser(cat, row.userId);
+    if (!src || src.rankChange == null || src.previousBoardRank == null) return row;
+    if (row.rankChange != null && row.previousBoardRank != null) {
+      var currRank =
+        row.boardRank != null && isFinite(Number(row.boardRank)) ? Math.floor(Number(row.boardRank)) : null;
+      if (
+        typeof window.stelvioRankMovementRowMatchesCurrentRank === 'function' &&
+        window.stelvioRankMovementRowMatchesCurrentRank(row, currRank) &&
+        window.stelvioRankMovementRowMatchesCurrentRank(src, currRank)
+      ) {
+        return row;
+      }
+      if (
+        row.rankChange === src.rankChange &&
+        row.previousBoardRank === src.previousBoardRank
+      ) {
+        return row;
+      }
+    }
+    return Object.assign({}, row, {
+      rankChange: src.rankChange,
+      previousBoardRank: src.previousBoardRank
+    });
+  }
+
+  function rankChangeBadgeJsxFromRankingBoard(categoryKey, userId) {
+    var html = rankChangeBadgeFromRankingBoard(categoryKey, userId);
+    if (!html) return null;
+    return <span className="stelvio-rank-change-inline" dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+
+  /**
+   * 랭킹보드 GC API(`getPeakPowerRanking?duration=gc`) → 코호트 목록 형식.
+   * 서버 스냅샷+라이브 병합 결과이므로 모든 사용자 화면에서 동일 인원이 보인다.
+   */
+  function heptagonCohortItemsFromGcApi(gcData, filterCategory) {
+    if (!gcData || !gcData.success || !gcData.byCategory) {
+      return [];
+    }
+    var arr = gcData.byCategory[filterCategory] || [];
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var row = arr[i];
+      if (!row || row.userId == null) {
+        continue;
+      }
+      var sc = row.gcScore != null && isFinite(Number(row.gcScore)) ? Number(row.gcScore) : null;
+      if (sc == null) {
+        continue;
+      }
+      out.push({
+        userId: String(row.userId),
+        displayName: (row.name && String(row.name).trim()) || '(이름 없음)',
+        sumPositionScores: sc,
+        boardRank: row.rank != null && isFinite(Number(row.rank)) ? Math.floor(Number(row.rank)) : null,
+        ageCategory: row.ageCategory != null ? String(row.ageCategory) : '',
+        is_private: row.is_private === true,
+        rankChange: row.rankChange != null && isFinite(Number(row.rankChange)) ? Math.round(Number(row.rankChange)) : null,
+        previousBoardRank:
+          row.previousBoardRank != null && isFinite(Number(row.previousBoardRank))
+            ? Math.floor(Number(row.previousBoardRank))
+            : null
+      });
+    }
+    return out;
+  }
+
+  /** Firestore 코호트 + GC API(공유) 병합 — GC에만 있는 신규·미스냅샷 사용자를 타인 화면에도 표시 */
+  function mergeHexagonCohortFirestoreWithGc(fsItems, gcItems) {
+    var gc = gcItems || [];
+    if (!gc.length) {
+      return (fsItems || []).slice();
+    }
+    var byId = Object.create(null);
+    var fs = fsItems || [];
+    var fi;
+    for (fi = 0; fi < fs.length; fi++) {
+      var f = fs[fi];
+      if (!f || f.userId == null) {
+        continue;
+      }
+      byId[String(f.userId)] = Object.assign({}, f);
+    }
+    for (var gi = 0; gi < gc.length; gi++) {
+      var g = gc[gi];
+      if (!g || g.userId == null) {
+        continue;
+      }
+      var uid = String(g.userId);
+      var prev = byId[uid];
+      if (prev) {
+        byId[uid] = Object.assign({}, prev, g, {
+          sumPositionScores:
+            g.sumPositionScores != null && isFinite(Number(g.sumPositionScores))
+              ? Number(g.sumPositionScores)
+              : prev.sumPositionScores,
+          displayName:
+            g.displayName && String(g.displayName).trim() && String(g.displayName).trim() !== '—'
+              ? String(g.displayName).trim()
+              : prev.displayName
+        });
+      } else {
+        byId[uid] = Object.assign({}, g);
+      }
+    }
+    var merged = [];
+    var keys = Object.keys(byId);
+    for (var ki = 0; ki < keys.length; ki++) {
+      merged.push(byId[keys[ki]]);
+    }
+    merged.sort(function(a, b) {
+      var sa =
+        a.sumPositionScores != null && isFinite(Number(a.sumPositionScores)) ? Number(a.sumPositionScores) : 0;
+      var sb =
+        b.sumPositionScores != null && isFinite(Number(b.sumPositionScores)) ? Number(b.sumPositionScores) : 0;
+      if (sb !== sa) {
+        return sb - sa;
+      }
+      return String(a.userId).localeCompare(String(b.userId));
+    });
+    for (var ri = 0; ri < merged.length; ri++) {
+      merged[ri].boardRank = ri + 1;
+    }
+    return merged;
+  }
+
+  function heptagonFindGcCohortItemByUid(items, uid) {
+    if (!items || !uid) {
+      return null;
+    }
+    for (var hi = 0; hi < items.length; hi++) {
+      if (items[hi] && String(items[hi].userId) === String(uid)) {
+        return items[hi];
+      }
+    }
+    return null;
+  }
+
+  /** 랭킹보드 GC API 응답만으로 함목별 순위 표 구성 — Firestore 6회 조회 생략(속도) */
+  function heptagonBoardFromGcApiOnly(uidIn, gIn, cIn, chartSupremoSumForVirtual, gcApiData) {
+    if (!gcApiData || !gcApiData.success) {
+      return null;
+    }
+    var gcItems = heptagonCohortItemsFromGcApi(gcApiData, cIn);
+    if (!gcItems.length) {
+      return null;
+    }
+    var myD = heptagonFindGcCohortItemByUid(gcItems, uidIn);
+    var supGc = heptagonCohortItemsFromGcApi(gcApiData, 'Supremo');
+    var myDS = heptagonFindGcCohortItemByUid(supGc, uidIn);
+    if (
+      chartSupremoSumForVirtual != null &&
+      isFinite(Number(chartSupremoSumForVirtual)) &&
+      Number(chartSupremoSumForVirtual) > 0
+    ) {
+      var sv = Number(chartSupremoSumForVirtual);
+      if (gIn === 'M' || gIn === 'F') {
+        if (myD == null || myD.sumPositionScores == null || !isFinite(Number(myD.sumPositionScores)) || Number(myD.sumPositionScores) === 0) {
+          myD = myD ? Object.assign({}, myD, { sumPositionScores: sv }) : { sumPositionScores: sv, displayName: '—' };
+        }
+      }
+      myDS = myDS ? Object.assign({}, myDS, { sumPositionScores: sv }) : { sumPositionScores: sv, displayName: '—' };
+    }
+    var built = buildHexagonModalBoardRows(gcItems, uidIn, myD, myDS);
+    var nCohort = gcRankingCohortNFromPayload(gcApiData, cIn);
+    if (nCohort < 1) {
+      nCohort = Math.max(gcItems.length, nCohortFromHexagonBoardRows({ rows: built.rows, nCohort: 0, err: null }));
+    }
+    return { rows: built.rows, meInList: built.meInList, nCohort: nCohort | 0 };
+  }
+
+  function mapHexagonCohortToBoardRow(d, myUid) {
+    var rc = d.rankChange != null && isFinite(Number(d.rankChange)) ? Math.round(Number(d.rankChange)) : null;
+    var pb = d.previousBoardRank != null && isFinite(Number(d.previousBoardRank)) ? Math.floor(Number(d.previousBoardRank)) : null;
+    return {
+      userId: d.userId != null ? String(d.userId) : '',
+      displayName: (d.displayName && String(d.displayName).trim()) || '—',
+      boardRank: d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : null,
+      sumPositionScores: d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : null,
+      isPrivate: d.is_private === true,
+      isMe: !!(myUid && d.userId != null && String(d.userId) === String(myUid)),
+      isInserted: false,
+      rankChange: rc,
+      previousBoardRank: pb
+    };
+  }
+
+  /**
+   * `queryStelvioHexagonCohortBoardN` max(boardRank)가 인덱스/목록(500건)과 어긋날 수 있어,
+   * 목록에서 보이는 max(boardRank)와 length로 상한을 맞춘다.
+   */
+  function reconcileHexagonCohortNFromList(nFromQuery, items) {
+    var nQ = nFromQuery | 0;
+    if (!items || !items.length) {
+      return nQ;
+    }
+    var maxR = 0;
+    for (var i = 0; i < items.length; i++) {
+      var x = items[i];
+      var b = x && x.boardRank != null && isFinite(x.boardRank) ? Math.floor(Number(x.boardRank)) : 0;
+      if (b > maxR) maxR = b;
+    }
+    var nList = items.length;
+    var listN = Math.max(maxR, nList);
+    if (listN < 1) {
+      return nQ;
+    }
+    if (nQ > 0 && nQ > listN) {
+      return listN;
+    }
+    if (nQ >= 1) {
+      return nQ;
+    }
+    return listN;
+  }
+
+  /**
+   * 본인 환산 합(필터 문서·없으면 전면)으로 전면과 동일한 점수 순 정렬, 표시 순위 = 1..N, sum 없으면 집계 boardRank 삽입 방식.
+   * @param {object|null} myCohortDataFilter 현재 필터 getEntry
+   * @param {object|null} myCohortDataSupr 전면 getEntry(환산 합)
+   */
+  function buildHexagonModalBoardRows(leadersRaw, myUid, myCohortDataFilter, myCohortDataSupr) {
+    myCohortDataSupr = myCohortDataSupr || null;
+    var mySum = null;
+    if (myCohortDataFilter && myCohortDataFilter.sumPositionScores != null && isFinite(Number(myCohortDataFilter.sumPositionScores))) {
+      mySum = Number(myCohortDataFilter.sumPositionScores);
+    } else if (myCohortDataSupr && myCohortDataSupr.sumPositionScores != null && isFinite(Number(myCohortDataSupr.sumPositionScores))) {
+      mySum = Number(myCohortDataSupr.sumPositionScores);
+    }
+    if (
+      mySum === 0 &&
+      myCohortDataSupr &&
+      myCohortDataSupr.sumPositionScores != null &&
+      isFinite(Number(myCohortDataSupr.sumPositionScores))
+    ) {
+      var supNonZero = Number(myCohortDataSupr.sumPositionScores);
+      if (supNonZero > 0) {
+        mySum = supNonZero;
+      }
+    }
+    if (mySum == null || !isFinite(mySum)) {
+      return buildHexagonModalBoardRowsByBoardRankOnly(
+        leadersRaw,
+        myUid,
+        myCohortDataFilter != null ? myCohortDataFilter : myCohortDataSupr
+      );
+    }
+    var leaders = (leadersRaw || []).map(function(d) {
+      return mapHexagonCohortToBoardRow(d, myUid);
+    });
+    if (!myUid) {
+      return renumberHexagonBoardDisplayRanksOnly(leaders);
+    }
+    var wasInRaw = false;
+    for (var w = 0; w < (leadersRaw || []).length; w++) {
+      var u0 = leadersRaw[w].userId != null ? String(leadersRaw[w].userId) : '';
+      if (u0 === String(myUid)) {
+        wasInRaw = true;
+        break;
+      }
+    }
+    var work = [];
+    for (var j = 0; j < leaders.length; j++) {
+      if (leaders[j].isMe) continue;
+      work.push(leaders[j]);
+    }
+    var dispName = '—';
+    if (myCohortDataFilter && myCohortDataFilter.displayName) {
+      dispName = String(myCohortDataFilter.displayName).trim() || '—';
+    } else if (myCohortDataSupr && myCohortDataSupr.displayName) {
+      dispName = String(myCohortDataSupr.displayName).trim() || '—';
+    }
+    var meRow = {
+      userId: String(myUid),
+      displayName: dispName,
+      boardRank:
+        myCohortDataFilter && myCohortDataFilter.boardRank != null && isFinite(myCohortDataFilter.boardRank)
+          ? Math.floor(Number(myCohortDataFilter.boardRank))
+          : null,
+      sumPositionScores: mySum,
+      isPrivate: (myCohortDataFilter && myCohortDataFilter.is_private === true) || (myCohortDataSupr && myCohortDataSupr.is_private === true),
+      isMe: true,
+      isInserted: !wasInRaw
+    };
+    work.push(meRow);
+    work.sort(function(a, b) {
+      var sa = a.sumPositionScores;
+      var sb = b.sumPositionScores;
+      if (sa == null && sb == null) {
+        return String(a.userId).localeCompare(String(b.userId));
+      }
+      if (sa == null) return 1;
+      if (sb == null) return -1;
+      if (sb !== sa) return sb - sa;
+      return String(a.userId).localeCompare(String(b.userId));
+    });
+    /* Firestore boardRank는 스냅샷 값일 수 있음. 정렬 후 표시 순위는 1..N으로 통일(랭킹보드 GC `getPeakPowerRanking` 의 seq 규약과 동일). */
+    for (var k = 0; k < work.length; k++) {
+      work[k].boardRank = k + 1;
+    }
+    return { rows: work, meInList: true };
+  }
+
+  function renumberHexagonBoardDisplayRanksOnly(rowsIn) {
+    var rows = (rowsIn || []).slice();
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].boardRank == null || !isFinite(rows[i].boardRank)) {
+        rows[i].boardRank = i + 1;
+      }
+    }
+    return { rows: rows, meInList: false };
+  }
+
+  function buildHexagonModalBoardRowsByBoardRankOnly(leadersRaw, myUid, myCohortData) {
+    var leaders = (leadersRaw || []).map(function(d) {
+      return mapHexagonCohortToBoardRow(d, myUid);
+    });
+    if (!myUid) {
+      return renumberHexagonBoardDisplayRanksOnly(leaders);
+    }
+    for (var j2 = 0; j2 < leaders.length; j2++) {
+      if (leaders[j2].isMe) {
+        return renumberHexagonBoardDisplayRanksOnly(leaders);
+      }
+    }
+    if (!myCohortData) {
+      return renumberHexagonBoardDisplayRanksOnly(leaders);
+    }
+    var myR =
+      myCohortData.boardRank != null && isFinite(Number(myCohortData.boardRank)) ? Math.max(1, Math.floor(Number(myCohortData.boardRank))) : 0;
+    if (!myR) {
+      return renumberHexagonBoardDisplayRanksOnly(leaders);
+    }
+    var meRow2 = {
+      userId: String(myUid),
+      displayName: (myCohortData.displayName && String(myCohortData.displayName).trim()) || '—',
+      boardRank: myR,
+      sumPositionScores:
+        myCohortData.sumPositionScores != null && isFinite(Number(myCohortData.sumPositionScores)) ? Number(myCohortData.sumPositionScores) : null,
+      isPrivate: myCohortData.is_private === true,
+      isMe: true,
+      isInserted: true
+    };
+    var out2 = [];
+    var ins2 = false;
+    for (var i2 = 0; i2 < leaders.length; i2++) {
+      var br2 = leaders[i2].boardRank != null && isFinite(Number(leaders[i2].boardRank)) ? leaders[i2].boardRank : 999999;
+      if (!ins2 && br2 > myR) {
+        out2.push(meRow2);
+        ins2 = true;
+      }
+      out2.push(leaders[i2]);
+    }
+    if (!ins2) {
+      out2.push(meRow2);
+    }
+    for (var k2 = 0; k2 < out2.length; k2++) {
+      if (out2[k2].boardRank == null || !isFinite(out2[k2].boardRank)) {
+        out2[k2].boardRank = k2 + 1;
+      }
+    }
+    return { rows: out2, meInList: false };
+  }
+
+  /**
+   * 본인 부문 외(가상): 대시보드 **전체(Supremo) 6축**에서 계산한 환산 합(전체랭킹)을 우선 비교에 쓰고, 없을 때 `heptagon_cohort_ranks` Supremo 문서의 합.
+   * @param {number|null|undefined} chartSupremoSum `computePTotalAndTier` 를 `fetchRanksSet(..., 'Supremo')` 로 얻은 합
+   * @param {object|null} crSData Firestore getEntry(Supremo)
+   * @returns {number|null}
+   */
+  function heptagonVirtualCompareSumFromSources(chartSupremoSum, crSData) {
+    if (chartSupremoSum != null && isFinite(Number(chartSupremoSum))) {
+      return Number(chartSupremoSum);
+    }
+    if (crSData && crSData.sumPositionScores != null && isFinite(Number(crSData.sumPositionScores))) {
+      return Number(crSData.sumPositionScores);
+    }
+    return null;
+  }
+
+  /**
+   * 대시보드·모달 공통: 선택 gender·category 로 “동일 조건·환산 점수” 코호트 집계 또는 Supremo+삽입 가상 순위.
+   * @param {number|null|undefined} chartSupremoSum — 가상(타 부문)일 때: 전체(Supremo) 랭킹 기준 환산 합(우선)
+   * @returns {Promise<{ ok: boolean, skip?: boolean, nTotal?: number, boardRank?: number, cohortData?: object, isVirtualCohort?: boolean }>}
+   */
+  function loadStelvioCohortOvlData(uid, monthKey, gender, category, ageCategoryHint, chartSupremoSum) {
+    var getE = window.getStelvioHexagonCohortEntry;
+    var qN = window.queryStelvioHexagonCohortBoardN;
+    var qList = window.queryStelvioHexagonCohortBySumDesc;
+    if (typeof getE !== 'function' || typeof qN !== 'function') {
+      return Promise.resolve({ ok: false, skip: true });
+    }
+    return fetchRankingUserMeta(uid, gender).then(function(meta) {
+      var ac = ageCategoryHint != null && String(ageCategoryHint).trim() !== '' ? String(ageCategoryHint) : '';
+      if ((!ac || ac === '') && meta && meta.ageCategory) {
+        ac = String(meta.ageCategory);
+      }
+      if (isUserInCohortForFilter(category, ac)) {
+        return Promise.all([
+          getE({
+            userId: uid,
+            monthKey: monthKey,
+            filterCategory: category,
+            filterGender: gender
+          }),
+          qN({
+            monthKey: monthKey,
+            filterCategory: category,
+            filterGender: gender
+          })
+        ]).then(function(pair) {
+          var ce = pair[0];
+          var cn = pair[1];
+          var nTotal = cn && cn.ok && cn.nTotal > 0 ? Math.floor(cn.nTotal) : 0;
+          nTotal = heptagonOvlNTotalAlignedWithGcList(nTotal, category);
+          if (nTotal < 1) {
+            return { ok: true, skip: true, nTotal: 0 };
+          }
+          if (!ce || !ce.ok || !ce.exists || !ce.data) {
+            return { ok: true, skip: true, nTotal: nTotal };
+          }
+          var d = ce.data;
+          var br = d.boardRank;
+          if (br == null && d.comprehensiveRank != null) {
+            br = d.comprehensiveRank;
+          }
+          if (br == null || !isFinite(br)) {
+            return { ok: true, skip: true, nTotal: nTotal };
+          }
+          return {
+            ok: true,
+            skip: false,
+            nTotal: nTotal,
+            boardRank: br,
+            cohortData: d,
+            isVirtualCohort: false
+          };
+        });
+      }
+      if (typeof qList !== 'function') {
+        return { ok: false, skip: true };
+      }
+      return Promise.all([
+        getE({
+          userId: uid,
+          monthKey: monthKey,
+          filterCategory: 'Supremo',
+          filterGender: gender
+        }),
+        qN({
+          monthKey: monthKey,
+          filterCategory: category,
+          filterGender: gender
+        }),
+        qList({
+          monthKey: monthKey,
+          filterCategory: category,
+          filterGender: gender,
+          limit: 10000
+        })
+      ]).then(function(triple) {
+        var crS = triple[0];
+        var cn = triple[1];
+        var res = triple[2];
+        var nFromQ = cn && cn.ok && cn.nTotal > 0 ? Math.floor(cn.nTotal) : 0;
+        var itemsRaw = res && res.ok ? res.items || [] : [];
+        var nRec = reconcileHexagonCohortNFromList(nFromQ, itemsRaw);
+        nRec = heptagonOvlNTotalAlignedWithGcList(nRec, category);
+        if (nRec < 1) {
+          return { ok: true, skip: true, nTotal: 0 };
+        }
+        if (!res || !res.ok) {
+          return { ok: true, skip: true, nTotal: nRec };
+        }
+        var hasCrS = crS && crS.ok && crS.exists && crS.data;
+        var dSup = hasCrS ? crS.data : null;
+        var sumForVirtual = heptagonVirtualCompareSumFromSources(chartSupremoSum, dSup);
+        if (sumForVirtual == null || !isFinite(sumForVirtual)) {
+          if (dSup) {
+            var brFb0 =
+              dSup.boardRank != null && isFinite(dSup.boardRank)
+                ? Math.floor(Number(dSup.boardRank))
+                : dSup.comprehensiveRank != null && isFinite(dSup.comprehensiveRank)
+                  ? Math.floor(Number(dSup.comprehensiveRank))
+                  : null;
+            if (brFb0 != null && brFb0 >= 1) {
+              return {
+                ok: true,
+                skip: false,
+                nTotal: nRec,
+                boardRank: brFb0,
+                cohortData: dSup,
+                isVirtualCohort: true
+              };
+            }
+          }
+          return { ok: true, skip: true, nTotal: nRec };
+        }
+        var mergedData = dSup
+          ? Object.assign({}, dSup, { sumPositionScores: sumForVirtual })
+          : { sumPositionScores: sumForVirtual, displayName: '—' };
+        var built = buildHexagonModalBoardRows(itemsRaw, uid, null, mergedData);
+        var dr = null;
+        for (var hi = 0; hi < (built.rows || []).length; hi++) {
+          if (built.rows[hi].isMe && built.rows[hi].boardRank != null && isFinite(built.rows[hi].boardRank)) {
+            dr = Math.floor(Number(built.rows[hi].boardRank));
+            break;
+          }
+        }
+        if (dr == null) {
+          var brFb2 = dSup
+            ? dSup.boardRank != null && isFinite(dSup.boardRank)
+              ? Math.floor(Number(dSup.boardRank))
+              : dSup.comprehensiveRank != null && isFinite(dSup.comprehensiveRank)
+                ? Math.floor(Number(dSup.comprehensiveRank))
+                : null
+            : null;
+          if (brFb2 != null && brFb2 >= 1) {
+            dr = brFb2;
+          }
+        }
+        if (dr == null) {
+          return { ok: true, skip: true, nTotal: nRec };
+        }
+        return {
+          ok: true,
+          skip: false,
+          nTotal: nRec,
+          boardRank: dr,
+          cohortData: dSup
+            ? Object.assign({}, dSup, { sumPositionScores: sumForVirtual })
+            : { sumPositionScores: sumForVirtual },
+          isVirtualCohort: true
+        };
+      });
+    });
+  }
+
+  function HexagonRankDetailModal(props) {
+    var onClose = props.onClose;
+    var genderLabel = props.genderLabel;
+    var categoryLabel = props.categoryLabel;
+    var periodLabel = props.periodLabel;
+    var summary = props.tierSummary;
+    var boardState = props.boardState || { loading: false, err: null, rows: [] };
+    var onBoardFilterChange = props.onBoardFilterChange;
+    var boardG = props.boardFilterGender != null ? props.boardFilterGender : 'all';
+    var boardC = props.boardFilterCategory != null ? props.boardFilterCategory : 'Supremo';
+    var myDisplayName = (props.myDisplayName && String(props.myDisplayName).trim()) || '나';
+    var viewerUserId = props.viewerUserId != null ? String(props.viewerUserId) : '';
+    var viewerGrade = props.viewerGrade != null ? props.viewerGrade : '2';
+    useEffect(
+      function() {
+        if (!onClose) return;
+        var h = function(e) {
+          if (e.key === 'Escape') {
+            onClose();
+          }
+        };
+        window.addEventListener('keydown', h);
+        return function() {
+          window.removeEventListener('keydown', h);
+        };
+      },
+      [onClose]
+    );
+    if (!summary || !summary.tier) {
+      return null;
+    }
+    var isBoardSupremoAll = String(boardG) === 'all' && String(boardC) === 'Supremo';
+    var viewerAgeCategory = props.viewerAgeCategory != null ? String(props.viewerAgeCategory) : '';
+    var ttModal = heptagonCohortTooltipFromSummary(summary, boardC, viewerAgeCategory);
+    /**
+     * GC·랭킹보드 병합 요약 표시용. 단, 아래「동일 조건·월」표에 본인 행이 있으면 **표·집계(sum)가 단일 기준**이 되도록
+     * Firestore 행을 우선(상단 요약·환산합·레벨% 불일치 방지). 표에 본인이 없을 때만 GC 요약을 쓴다.
+     */
+    var useGcAlignedSummaryUi =
+      summary &&
+      summary.gcRankingBoardAligned === true &&
+      summary.heptagonCohortBoardRankApplied === true;
+    var rUi;
+    var pT = null;
+    var sumP =
+      summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores))
+        ? Number(summary.sumPositionScores)
+        : null;
+    var avgP =
+      summary.avgPositionScore != null && isFinite(Number(summary.avgPositionScore))
+        ? Number(summary.avgPositionScore)
+        : null;
+    var tidLevel = summary.tier.id;
+    var myBoardRow = null;
+    if (boardState && !boardState.loading && !boardState.err && boardState.rows && boardState.rows.length) {
+      for (var ri = 0; ri < boardState.rows.length; ri++) {
+        var rw = boardState.rows[ri];
+        if (rw && rw.isMe && rw.boardRank != null && isFinite(rw.boardRank)) {
+          myBoardRow = rw;
+          break;
+        }
+      }
+    }
+    var nEffModal = heptagonEffectiveCohortNFromBoardAndOvl(
+      boardState,
+      null,
+      props.gcRankingPayload,
+      boardC
+    );
+    var isVirtModal =
+      summary.heptagonBoardVirtualCohort === true
+        ? true
+        : summary.heptagonBoardVirtualCohort === false
+          ? false
+          : !!(viewerAgeCategory && !isUserInCohortForFilter(boardC, viewerAgeCategory));
+    var usedFirestoreBoardSummary =
+      !!myBoardRow &&
+      myBoardRow.boardRank != null &&
+      isFinite(Number(myBoardRow.boardRank)) &&
+      Number(myBoardRow.boardRank) >= 1;
+    if (usedFirestoreBoardSummary) {
+      var brMBoard = Math.floor(Number(myBoardRow.boardRank));
+      rUi = brMBoard;
+      if (myBoardRow.sumPositionScores != null && isFinite(myBoardRow.sumPositionScores)) {
+        sumP = Number(myBoardRow.sumPositionScores);
+        avgP = sumP / 7;
+      }
+      if (nEffModal >= 1) {
+        pT = heptagonLevelPercentForRankN(brMBoard, nEffModal, isVirtModal, boardC, viewerAgeCategory);
+      }
+    } else if (useGcAlignedSummaryUi) {
+      var rGcUi = heptagonCardRankFromSummary(summary, boardC, viewerAgeCategory);
+      if (rGcUi != null && isFinite(rGcUi) && rGcUi >= 1) {
+        rUi = rGcUi;
+      } else if (summary.heptagonCohortBoardRank != null && isFinite(Number(summary.heptagonCohortBoardRank))) {
+        rUi = Math.floor(Number(summary.heptagonCohortBoardRank));
+      } else {
+        rUi = '—';
+      }
+      if (summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores))) {
+        sumP = Number(summary.sumPositionScores);
+        avgP = sumP / 7;
+      }
+      if (summary.pTier != null && isFinite(Number(summary.pTier))) {
+        pT = Number(summary.pTier);
+      }
+      if (summary.tier && summary.tier.id) {
+        tidLevel = summary.tier.id;
+      }
+    } else if (myBoardRow) {
+      var brM = Math.floor(Number(myBoardRow.boardRank));
+      rUi = brM;
+      if (myBoardRow.sumPositionScores != null && isFinite(myBoardRow.sumPositionScores)) {
+        sumP = Number(myBoardRow.sumPositionScores);
+        avgP = sumP / 7;
+      }
+      if (nEffModal >= 1) {
+        pT = heptagonLevelPercentForRankN(brM, nEffModal, isVirtModal, boardC, viewerAgeCategory);
+      }
+    } else {
+      rUi = ttModal.ok && ttModal.rank != null ? ttModal.rank : '—';
+      if (ttModal.ok && ttModal.pPct >= 0 && isFinite(ttModal.pPct)) {
+        pT = ttModal.pPct;
+      }
+    }
+    if (pT == null && ttModal.ok && ttModal.pPct >= 0 && isFinite(ttModal.pPct)) {
+      pT = ttModal.pPct;
+    }
+    if (pT != null && isFinite(pT) && pT >= 0 && (usedFirestoreBoardSummary || !useGcAlignedSummaryUi)) {
+      var tierObjL = heptagonBoardTierIdFromLevelPercent(pT);
+      if (tierObjL && tierObjL.id) {
+        tidLevel = tierObjL.id;
+      }
+    }
+    var isVirtPct = usedFirestoreBoardSummary
+      ? isVirtModal
+      : useGcAlignedSummaryUi
+        ? summary.heptagonBoardVirtualCohort === true
+        : myBoardRow
+          ? isVirtModal
+          : ttModal.isVirtual === true;
+    return (
+      <div
+        className="stelvio-heptagon-detail-modal"
+        style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
+        onClick={function(e) {
+          if (e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
+        role="presentation"
+      >
+        <div
+          className="stelvio-heptagon-detail-modal__panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="stelvio-heptagon-detail-title"
+          onClick={function(e) {
+            e.stopPropagation();
+          }}
+        >
+          <div className="stelvio-heptagon-detail-modal__head">
+            <div className="stelvio-heptagon-detail-modal__head-block">
+              <div className="stelvio-heptagon-detail-modal__title-row">
+                <h3 className="stelvio-heptagon-detail-modal__title" id="stelvio-heptagon-detail-title">STELVIO 헥사곤 · 항목별 순위</h3>
+                <button
+                  type="button"
+                  className="stelvio-heptagon-detail-modal__close"
+                  aria-label="닫기"
+                  onClick={onClose}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="stelvio-heptagon-detail-modal__meta">
+                <span>
+                  부문(카테고리): {categoryLabel} · 성별: {genderLabel} · {periodLabel}
+                </span>
+              </p>
+            </div>
+          </div>
+          <div className="stelvio-heptagon-detail-modal__summary">
+            <div
+              className="stelvio-heptagon-detail-modal__summary-row"
+              title="카드·이 표와 동일 필터의 집계 순위%로 산출한 등급(레벨 1~7). 순위표 본인 행이 있으면 그 boardRank·n·가상(타 부문) 여부로 계산"
+            >
+              <span>레벨</span>
+              <strong>{tierLevelDisplayName(tidLevel)}</strong>
+            </div>
+            <div
+              className="stelvio-heptagon-detail-modal__summary-row"
+              title={
+                isBoardSupremoAll
+                  ? '다른 필터: 동일한 환산 합(전면)으로 전·후면(종합) 집계 순위'
+                  : '선택 부문·성별에서 동일한 환산 합(전면)으로 코호트 내 순위 — 본인 부문이면 본인 집계 순위'
+              }
+            >
+              <span>{isBoardSupremoAll ? '종합(환산) 순위' : '집계 순위 (필터)'}</span>
+              <strong>
+                {rUi !== '—' && rUi != null ? String(rUi) + '위' : '—'}
+                {rankChangeBadgeJsxFromRankingBoard(boardC, viewerUserId)}
+              </strong>
+            </div>
+            {pT != null ? (
+              <div
+                className="stelvio-heptagon-detail-modal__summary-row"
+                title={
+                  heptagonUseNeffNPlusOne(boardC, viewerAgeCategory, isVirtPct)
+                    ? '가상·타 연령 부문: 전면(Supremo) 환산 합으로 삽입 순위, Neff=n+1·레벨%·n 표기'
+                    : '전체·본인 부문: 집계 n — n(또는 Neff)≥100 (r÷n)×100, 미만 n₂=100÷n, ((r÷n)÷n₂)×100(상한 100)'
+                }
+              >
+                <span>레벨 % {isVirtPct ? '(가상, 순위~n+1)' : '(실집계, 1~n)'}</span>
+                <strong>{pT.toFixed(2)}%</strong>
+              </div>
+            ) : null}
+            {sumP != null ? (
+              <div
+                className="stelvio-heptagon-detail-modal__summary-row"
+                title={
+                  myBoardRow
+                    ? '이 표(동일 조건·월 환산) 본인 행의 환산점수 합 — 카드 카테고리 필터 순위표와 동일'
+                    : '요약 캐시·6축 합산값(표 본인 행이 아직 없을 때)'
+                }
+              >
+                <span>6축 점수 합 (0~700)</span>
+                <strong>
+                  {sumP.toFixed(1)}
+                  {avgP != null ? ' (평균 ' + avgP.toFixed(2) + ')' : ''}
+                </strong>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="stelvio-heptagon-detail-modal__boardbody">
+          <div className="stelvio-heptagon-detail-modal__boardhead">
+            <p className="stelvio-heptagon-detail-modal__boardhead-t m-0 mb-2 text-center w-full">동일 조건·월(환산) 점수 순위</p>
+            <div
+              className="stelvio-octagon-filters stelvio-heptagon-detail-modal__board-oct-filters w-full max-w-full justify-center"
+              role="group"
+              aria-label="순위표 부문·성별"
+            >
+              <div className="stelvio-octagon-filter-joined">
+                <div className="stelvio-octagon-filter-cell stelvio-octagon-gender">
+                  <span className="stelvio-octagon-filter-cap">성별</span>
+                  <span className="stelvio-octagon-filter-val">{labelForGender(boardG)}</span>
+                  <span className="stelvio-octagon-filter-chev" aria-hidden="true" />
+                  <select
+                    className="stelvio-octagon-filter-select"
+                    value={boardG}
+                    onChange={function(e) {
+                      if (typeof onBoardFilterChange === 'function') {
+                        onBoardFilterChange(e.target.value, boardC);
+                      }
+                    }}
+                    aria-label="성별"
+                  >
+                    {GENDER_OPTIONS.map(function(o) {
+                      return (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+                <div className="stelvio-octagon-filter-cell stelvio-octagon-category">
+                  <span className="stelvio-octagon-filter-cap">카테고리</span>
+                  <span className="stelvio-octagon-filter-val">{labelForCategory(boardC)}</span>
+                  <span className="stelvio-octagon-filter-chev" aria-hidden="true" />
+                  <select
+                    className="stelvio-octagon-filter-select"
+                    value={boardC}
+                    onChange={function(e) {
+                      if (typeof onBoardFilterChange === 'function') {
+                        onBoardFilterChange(boardG, e.target.value);
+                      }
+                    }}
+                    aria-label="카테고리"
+                  >
+                    {CATEGORY_OPTIONS.map(function(o) {
+                      return (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          {boardState.loading ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">순위표를 불러오는 중…</p>
+          ) : null}
+          {!boardState.loading && boardState.err && boardState.err !== 'no-sum' && boardState.err !== 'no-fn' ? (
+            <p className="stelvio-heptagon-detail-modal__neighboreq">{stelvioHexagonRankListErrorMessage(boardState.err)}</p>
+          ) : null}
+          {!boardState.loading && boardState.err === 'no-sum' ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">6축 점수 합이 없어 순위표를 표시할 수 없습니다.</p>
+          ) : null}
+          {!boardState.loading && boardState.err === 'no-fn' ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">코호트 랭킹 모듈이 로드되지 않았습니다.</p>
+          ) : null}
+          {!boardState.loading && sumP != null && !boardState.err ? (
+            <div className="stelvio-heptagon-detail-modal__tablewrap stelvio-heptagon-detail-modal__tablewrap--neighbor">
+              <table className="stelvio-heptagon-detail-modal__table" role="grid">
+                <caption className="stelvio-heptagon-detail-modal__caption">
+                  {categoryLabel} · {genderLabel} — 환산점수 합(0~700)이 높은 순(랭킹보드 GC API·
+                  <code>heptagon_cohort_ranks</code> 병합 — 모든 사용자 동일 목록, 본인만 스냅샷 밖이면 점수 기준 삽입)
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
+                      순위
+                    </th>
+                    <th scope="col">이름</th>
+                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
+                      환산점수 합계
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(boardState.rows || []).map(function(row, idx) {
+                    row = overlayRankMovementFromRankingBoard(row, boardC);
+                    var npb = stelvioNeighborNameParts(
+                      row.isMe ? myDisplayName : row.displayName,
+                      row.isPrivate === true,
+                      row.userId,
+                      viewerUserId,
+                      viewerGrade
+                    );
+                    var rankCell =
+                      row.boardRank != null && isFinite(row.boardRank)
+                        ? String(Math.floor(Number(row.boardRank))) + '위'
+                        : '—';
+                    var rankChangeBadge = rankChangeBadgeJsxFromRankingBoard(boardC, row.userId);
+                    var gradeLetterBadge = null;
+                    if (row.boardRank != null && isFinite(row.boardRank) && nEffModal >= 1) {
+                      var pRow = heptagonLevelPercentForRankN(
+                        Math.floor(Number(row.boardRank)),
+                        nEffModal,
+                        isVirtModal,
+                        boardC,
+                        viewerAgeCategory
+                      );
+                      var tierRowObj = heptagonBoardTierIdFromLevelPercent(pRow);
+                      var gLet = heptagonTierIdToGradeLetter(tierRowObj && tierRowObj.id);
+                      gradeLetterBadge = (
+                        <span
+                          className={'stelvio-hept-grade stelvio-hept-grade--' + gLet.toLowerCase()}
+                          title={
+                            '동일 조건·월(환산) 집계 등급 레벨 ' +
+                            gLet +
+                            ' · 상대 순위% 약 ' +
+                            (typeof pRow === 'number' && isFinite(pRow) ? pRow.toFixed(1) : '—') +
+                            '%'
+                          }
+                          aria-label={'등급 ' + gLet}
+                        >
+                          {gLet}
+                        </span>
+                      );
+                    }
+                    return (
+                      <tr
+                        key={row.isMe && row.isInserted ? 'me-ins' : 'br-' + (row.userId || idx)}
+                        className={row.isMe ? 'stelvio-heptagon-detail-modal__tr--me' : ''}
+                      >
+                        <td className="stelvio-heptagon-detail-modal__tdnum">{rankCell}</td>
+                        <td>
+                          {row.isMe ? (
+                            <strong>
+                              <span className="stelvio-heptagon-detail-modal__namecell" title={npb.title || undefined}>
+                                {npb.text}
+                              </span>
+                            </strong>
+                          ) : (
+                            <span>
+                              <span className="stelvio-heptagon-detail-modal__namecell" title={npb.title || undefined}>
+                                {npb.text}
+                              </span>
+                            </span>
+                          )}
+                          {rankChangeBadge || gradeLetterBadge ? (
+                            <span className="stelvio-heptagon-detail-modal__rank-meta">
+                              {rankChangeBadge}
+                              {gradeLetterBadge}
+                            </span>
+                          ) : null}
+                          {npb.showPrivateBadge ? (
+                            <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">
+                              비
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="stelvio-heptagon-detail-modal__tdnum">
+                          {row.sumPositionScores != null && isFinite(row.sumPositionScores) ? (
+                            row.isMe ? (
+                              <strong>{row.sumPositionScores.toFixed(1)}</strong>
+                            ) : (
+                              row.sumPositionScores.toFixed(1)
+                            )
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {sumP != null && !boardState.loading && !boardState.err && (!boardState.rows || !boardState.rows.length) ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">표시할 순위가 없습니다. (동일 조건·집계 기준)</p>
+          ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /** 중앙 배지·사이드 레벨 pill·힌트가 동일한 tid/문구를 쓰도록 묶음 */
+  function deriveOctagonTierUiForCard(summary, hct) {
+    hct = hct || { kind: 'none' };
+    var rankForUi = null;
+    var pShow = -1;
+    var nCohortHint = null;
+    var virtLabel = '';
+    var nCohortLine = '';
+    if (hct.kind === 'ok') {
+      rankForUi = hct.rank != null ? hct.rank : null;
+      pShow = hct.pPct >= 0 && isFinite(hct.pPct) ? hct.pPct : -1;
+      nCohortHint = hct.nCohort > 0 ? hct.nCohort : null;
+      nCohortLine = nCohortHint != null ? String(nCohortHint) : '—';
+      virtLabel = hct.isVirtual
+        ? '가상(전면 환산 합·타 부문 삽입, Neff=n+1은 해당 열람에만)'
+        : '실집계(1~n, 집계 모수 n)';
+    } else if (hct.kind === 'board_partial') {
+      rankForUi = hct.rank != null ? hct.rank : null;
+      nCohortHint = hct.nCohort > 0 ? hct.nCohort : null;
+      pShow = -1;
+      nCohortLine = nCohortHint != null ? String(nCohortHint) : '…';
+      virtLabel = '집계 동기화 중(%)';
+    }
+    if (!summary || !summary.tier) {
+      return null;
+    }
+    var useCohortRankTier = hct.kind === 'ok' && pShow >= 0 && isFinite(pShow);
+    var cohortTierIdObj = useCohortRankTier ? heptagonBoardTierIdFromLevelPercent(pShow) : null;
+    var tid = cohortTierIdObj ? cohortTierIdObj.id : summary.tier.id;
+    var label = cohortTierIdObj
+      ? cohortTierIdObj.labelShort || cohortTierIdObj.text
+      : summary.tier.labelShort || summary.tier.text;
+    var levelName = tierLevelDisplayName(tid);
+    return {
+      rankForUi: rankForUi,
+      pShow: pShow,
+      nCohortHint: nCohortHint,
+      virtLabel: virtLabel,
+      nCohortLine: nCohortLine,
+      tid: tid,
+      label: label,
+      levelName: levelName,
+      cohortTierIdObj: cohortTierIdObj
+    };
+  }
+
+  /** 세로 레벨바 상단: 보라 pill(1줄) — 클릭 시 중앙 힌트 토글과 동기화 */
+  function OctagonTierLevelPillSidebar(props) {
+    var summary = props.summary;
+    var hct = props.heptagonCardTooltip || { kind: 'none' };
+    var filterGenderLabel =
+      props.filterGenderLabel != null && String(props.filterGenderLabel).trim() !== '' ? String(props.filterGenderLabel).trim() : '';
+    var filterCategoryLabel =
+      props.filterCategoryLabel != null && String(props.filterCategoryLabel).trim() !== '' ? String(props.filterCategoryLabel).trim() : '';
+    var showPct = props.showPct;
+    var setShowPct = props.setShowPct;
+    var du = deriveOctagonTierUiForCard(summary, hct);
+    if (!du) {
+      return null;
+    }
+    var filterContext =
+      filterGenderLabel && filterCategoryLabel
+        ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
+        : '';
+    var rankForUi = du.rankForUi;
+    var pShow = du.pShow;
+    var nCohortLine = du.nCohortLine;
+    var virtLabel = du.virtLabel;
+    var levelName = du.levelName;
+    return (
+      <button
+        type="button"
+        className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--leveltag stelvio-octagon-tier-btn--leveltag-sidebar"
+        aria-pressed={showPct}
+        aria-label={
+          filterContext +
+          (rankForUi != null
+            ? levelName + ', ' + String(rankForUi) + '위, 집계 모수 n=' + nCohortLine + ', ' + virtLabel + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
+            : levelName + ', 동일 조건·월(환산) 점수 표(팝업과 동일) 로딩·동기화 후 표시. ') + '클릭: 힌트'
+        }
+        title={filterContext + '동일 조건·월(환산) 점수 순위·n·레벨% (카드 필터 = 모달「동일 조건」) — 클릭: 힌트'}
+        onClick={function(e) {
+          e.stopPropagation();
+          setShowPct(!showPct);
+        }}
+      >
+        <span className="stelvio-octagon-tier-level-name stelvio-octagon-tier-level-name--sidebar-neon">{levelName}</span>
+      </button>
+    );
+  }
+
+  function OctagonTierCenterOverlay(props) {
+    var summary = props.summary;
+    var onOpenDetail = props.onOpenDetail;
+    var hct = props.heptagonCardTooltip || { kind: 'none' };
+    var filterGenderLabel = props.filterGenderLabel != null && String(props.filterGenderLabel).trim() !== '' ? String(props.filterGenderLabel).trim() : '';
+    var filterCategoryLabel = props.filterCategoryLabel != null && String(props.filterCategoryLabel).trim() !== '' ? String(props.filterCategoryLabel).trim() : '';
+    var detachedLevelPill = props.detachedLevelPill === true;
+    var controlledPct = props.pctHintOpen != null && typeof props.setPctHintOpen === 'function';
+    var _pct = useState(false);
+    var showPct = controlledPct ? props.pctHintOpen : _pct[0];
+    var setShowPct = controlledPct ? props.setPctHintOpen : _pct[1];
+    var _img = useState(false);
+    var imgError = _img[0];
+    var setImgError = _img[1];
+    var du = deriveOctagonTierUiForCard(summary, hct);
+    var filterContext =
+      filterGenderLabel && filterCategoryLabel
+        ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
+        : '';
+    var cohortOvlLoading = props.cohortOvlLoading === true || hct.kind === 'board_loading';
+    var gcRank = props.gcRank;
+    var showGcBadge = gcRank !== undefined;
+    var filterCategoryKey = props.filterCategoryKey != null ? String(props.filterCategoryKey) : 'Supremo';
+    var viewerUserId = props.viewerUserId != null ? String(props.viewerUserId) : '';
+    useEffect(
+      function() {
+        setImgError(false);
+      },
+      [du ? du.tid : '', du ? du.pShow : NaN, du ? du.rankForUi : NaN, du ? du.nCohortHint : null, hct.kind]
+    );
+    if (!du) {
+      return null;
+    }
+    var rankForUi = du.rankForUi;
+    var pShow = du.pShow;
+    var nCohortHint = du.nCohortHint;
+    var virtLabel = du.virtLabel;
+    var nCohortLine = du.nCohortLine;
+    var tid = du.tid;
+    var label = du.label;
+    var levelName = du.levelName;
+    var st = tierStyleForId(tid);
+    var src = tierBadgeImageSrc(tid);
+
+    return (
+      <div className="stelvio-octagon-tier-wrap" aria-hidden={false}>
+        <div className="stelvio-octagon-tier-inner stelvio-octagon-tier-inner--img">
+          <div className="stelvio-octagon-tier-btn-stack">
+            <button
+              type="button"
+              className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--beast"
+              aria-label={levelName + ' 배지 · 클릭 시 항목별 순위·환산 점수 팝업'}
+              title={filterContext + 'STELVIO 헥사곤 · 동일 조건·월(환산) 점수 순위 (클릭: 상세)'}
+              onClick={function(e) {
+                e.stopPropagation();
+                if (typeof onOpenDetail === 'function') {
+                  onOpenDetail();
+                }
+              }}
+            >
+              {!imgError ? (
+                <img
+                  className="stelvio-octagon-tier-img"
+                  src={src}
+                  alt=""
+                  draggable={false}
+                  decoding="async"
+                  onError={function() {
+                    setImgError(true);
+                  }}
+                />
+              ) : (
+                <span
+                  className={'stelvio-octagon-tier-fallback stelvio-octagon-tier-btn--' + tid + (tid === 'HC' ? ' stelvio-octagon-tier--hc' : '')}
+                  style={tid === 'HC' ? { textShadow: st.shadow } : { color: st.color, textShadow: st.shadow }}
+                >
+                  {label}
+                </span>
+              )}
+            </button>
+            {!detachedLevelPill ? (
+              <button
+                type="button"
+                className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--leveltag"
+                aria-pressed={showPct}
+                aria-label={
+                  filterContext +
+                  (rankForUi != null
+                    ? levelName + ', ' + String(rankForUi) + '위, 집계 모수 n=' + nCohortLine + ', ' + virtLabel + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
+                    : levelName + ', 동일 조건·월(환산) 점수 표(팝업과 동일) 로딩·동기화 후 표시. ') + '클릭: 툴팁'
+                }
+                title={filterContext + '동일 조건·월(환산) 점수 순위·n·레벨% (카드 필터 = 모달「동일 조건」) — 클릭: 힌트'}
+                onClick={function(e) {
+                  e.stopPropagation();
+                  setShowPct(!showPct);
+                }}
+              >
+                <span className="stelvio-octagon-tier-level-name">{levelName}</span>
+              </button>
+            ) : null}
+          </div>
+          {showGcBadge ? (
+            <div
+              className="stelvio-octagon-tier-gc"
+              aria-label={'GC 종합 순위 ' + (gcRank != null ? gcRank + '위' : '없음')}
+            >
+              <span className="stelvio-octagon-tier-gc__pill inline-flex items-baseline gap-1 rounded-full border border-slate-200/90 bg-white/90 px-2 py-0.5 text-[10px] text-slate-700 shadow-sm whitespace-nowrap">
+                <span className="font-bold tracking-tight text-violet-800">GC</span>
+                <span className="tabular-nums text-slate-600">
+                  {gcRank != null ? gcRank + '위' : '—'}
+                  {viewerUserId ? rankChangeBadgeJsxFromRankingBoard('Supremo', viewerUserId) : null}
+                </span>
+              </span>
+            </div>
+          ) : null}
+          <div
+            className={
+              'stelvio-octagon-tier-hint ' +
+              (rankForUi != null ? 'stelvio-octagon-tier-hint--split ' : '') +
+              (showPct ? 'stelvio-octagon-tier-hint--visible' : '')
+            }
+            role="status"
+          >
+            {rankForUi != null ? (
+              <span className="stelvio-octagon-tier-hint-split stelvio-octagon-tier-hint-split--cohort" title={virtLabel + ' · 집계 대상자 수 n(카드=팝업 동일 조건 표)'}>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-rank">
+                  {String(rankForUi) + '위'}
+                  {viewerUserId ? rankChangeBadgeJsxFromRankingBoard(filterCategoryKey, viewerUserId) : null}
+                </span>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-nref">n={nCohortLine}</span>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-pct">
+                  {pShow >= 0 && isFinite(pShow) ? pShow.toFixed(2) : hct.kind === 'board_partial' ? '…' : '—'}%
+                </span>
+              </span>
+            ) : (
+              <span
+                className="stelvio-octagon-tier-hint-pending"
+                title={
+                  cohortOvlLoading
+                    ? '동일 조건·월(환산) 점수 순위표(카드 필터) 로딩'
+                    : '동일 조건·월(환산) 점수 집계를 쓰려면 랭킹/코호트 동기화가 필요하거나, 필터·월 문서를 확인하세요'
+                }
+              >
+                {cohortOvlLoading ? '집계 동기화…' : hct.kind === 'board_err' ? '표 조회 실패' : '— · — · —'}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+   * LevelProgressBar – 현재 레벨(1~7) × 세부 단계(10칸) 세로 막대
+   * 채움: (pCeil − p) / (pCeil − pFloor) × 10 반올림 · 0~10(아래부터).
+   * pFloor=해당 등급에 처음 들어오는 순위의 집계%(코호트·부문 반영). 1위·1.0%(레벨A)도 10칸까지 올라가게 함.
+   * `pPctForBar`(툴팁 레벨%) 우선; `barContext`로 코호트 n·가상 여부·부문 전달.
+   * ────────────────────────────────────────────────────────────── */
+  var LEVEL_BAR_DEFS = [
+    { id: 'HC', lower: 0, upper: 5, color: HEPTAGON_TIER_FACE_HEX.HC, bg: 'rgba(139,92,246,0.22)' },
+    { id: 'C1', lower: 5, upper: 10, color: HEPTAGON_TIER_FACE_HEX.C1, bg: 'rgba(239,68,68,0.2)' },
+    { id: 'C2', lower: 10, upper: 20, color: HEPTAGON_TIER_FACE_HEX.C2, bg: 'rgba(249,115,22,0.22)' },
+    { id: 'C3', lower: 20, upper: 40, color: HEPTAGON_TIER_FACE_HEX.C3, bg: 'rgba(234,179,8,0.22)' },
+    { id: 'C4', lower: 40, upper: 60, color: HEPTAGON_TIER_FACE_HEX.C4, bg: 'rgba(34,197,94,0.2)' },
+    { id: 'C5', lower: 60, upper: 80, color: HEPTAGON_TIER_FACE_HEX.C5, bg: 'rgba(59,130,246,0.2)' },
+    { id: 'C6', lower: 80, upper: 100, color: HEPTAGON_TIER_FACE_HEX.C6, bg: 'rgba(156,163,175,0.25)' }
+  ];
+
+  /**
+   * 집계 레벨%는 순위에 대해 단조(낮은 순위일수록 작은 %)이므로, tid 등급에 처음 진입하는 순위의 % = 해당 등급에서 이론상 최저(최상) %.
+   * 이 값을 바닥으로 두면 레벨A 1위·1.0%에서 10단계가 꽉 참.
+   */
+  function levelBarMinPercentForTierOnBoard(tierIdTarget, cohortNRaw, isVirtualCohort, filterCategory, userAgeCategory) {
+    var nC = cohortNRaw | 0;
+    if (nC < 1 || !tierIdTarget) {
+      return null;
+    }
+    var isVirt = isVirtualCohort === true;
+    var useNeff = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirt);
+    var Neff = useNeff ? nC + 1 : nC;
+    if (Neff < 1) return null;
+    var rCap = Math.max(1, Neff | 0);
+    for (var rLoop = 1; rLoop <= rCap; rLoop++) {
+      var pr = heptagonLevelPercentForRankN(rLoop, nC, isVirt, filterCategory, userAgeCategory);
+      var oid = (heptagonBoardTierIdFromLevelPercent(pr) || {}).id;
+      if (oid === tierIdTarget) {
+        return pr;
+      }
+    }
+    return null;
+  }
+
+  function computeLevelBarStep(summary, overrideTierId, pPctOverride, barCtx) {
+    if (!summary || !summary.tier) return { lv: LEVEL_BAR_DEFS[6], lvIdx: 6, step: 0 };
+    /* overrideTierId: OctagonTierCenterOverlay·툴팁과 동일한 tid를 외부에서 주입 */
+    var tid = overrideTierId || summary.tier.id;
+    var p = null;
+    if (pPctOverride != null && isFinite(Number(pPctOverride)) && Number(pPctOverride) >= 0) {
+      p = Number(pPctOverride);
+      if (p > 100) p = 100;
+    } else if (summary.pTotal != null && isFinite(summary.pTotal)) {
+      p = summary.pTotal;
+    } else if (summary.pComprehensive != null && isFinite(summary.pComprehensive)) {
+      p = summary.pComprehensive;
+    }
+    var lvIdx = LEVEL_BAR_DEFS.findIndex(function(l) { return l.id === tid; });
+    if (lvIdx < 0) lvIdx = 6;
+    var lv = LEVEL_BAR_DEFS[lvIdx];
+    var step = 0;
+    if (p != null) {
+      var pCeil = lv.upper;
+      var pFloor = lv.lower;
+      var nTot = summary.cohortN != null && isFinite(summary.cohortN) ? summary.cohortN | 0 : 0;
+      var vmin = null;
+      if (barCtx && nTot >= 1 && tid) {
+        vmin = levelBarMinPercentForTierOnBoard(
+          tid,
+          nTot,
+          !!barCtx.isVirtualCohort,
+          barCtx.filterCategory,
+          barCtx.viewerAgeCategory != null ? String(barCtx.viewerAgeCategory) : ''
+        );
+      }
+      if (vmin != null && isFinite(vmin) && vmin < pCeil) {
+        pFloor = Math.max(lv.lower, Math.min(pCeil - 1e-6, vmin));
+      }
+      var span = pCeil - pFloor;
+      if (!(span > 0) || !isFinite(span)) {
+        var spanFb = lv.upper - lv.lower;
+        if (spanFb > 0 && isFinite(spanFb)) {
+          var rfb = (pCeil - p) / spanFb;
+          rfb = Math.max(0, Math.min(1, rfb));
+          step = Math.max(0, Math.min(10, Math.round(rfb * 10)));
+        } else {
+          step = 0;
+        }
+      } else {
+        var ratio = (pCeil - p) / span;
+        ratio = Math.max(0, Math.min(1, ratio));
+        step = Math.max(0, Math.min(10, Math.round(ratio * 10)));
+      }
+    }
+    return { lv: lv, lvIdx: lvIdx, step: step };
+  }
+
+  /**
+   * 범례 이미지 행 아래: 단일 높이의 색상 막대 안에 레벨별 세로 구간선 · 구간 %(칸 우측=구분선 직좌측 표기)·세로 중앙 정렬.
+   * 채움 그라데이션은 우측 기준 폭 증가(왼쪽으로 진행). 그라데이션: 등급색 → 흰색(to right).
+   */
+  function HexagonTierHorizontalGradientBar(props) {
+    var summary = props.summary;
+    var tierId = props.tierId;
+    var pPctForBar = props.pPctForBar;
+    var barContext = props.barContext;
+    if (!summary || !summary.tier) return null;
+    var computed = computeLevelBarStep(summary, tierId, pPctForBar, barContext);
+    var tid = computed.lv.id;
+    var uIdx = HEPTAGON_CARD_TIER_LEGEND_IDS.indexOf(tid);
+    if (uIdx < 0) uIdx = 6;
+    var stepFrac = Math.max(0, Math.min(1, (computed.step | 0) / 10));
+    var segW = 100 / 7;
+    var widthPct = (6 - uIdx + stepFrac) * segW;
+    var tierHex = HEPTAGON_TIER_FACE_HEX[tid] || HEPTAGON_TIER_FACE_HEX.C6;
+    var gradient = 'linear-gradient(to right, ' + tierHex + ' 0%, #ffffff 100%)';
+
+    return (
+      <div
+        className="stelvio-heptagon-tier-hbar mx-auto mt-1 w-full max-w-xl px-1"
+        role="img"
+        aria-label={
+          '레벨 구간별 %는 막대 세로중앙·구분선 우측 칸 표기. 본인 ' +
+          tierLevelDisplayName(tid) +
+          ' 진행 채움 단계 약 ' +
+          Math.round(stepFrac * 100) +
+          '%'
+        }
+      >
+        <div className="relative w-full overflow-hidden rounded-md border border-slate-200/85 shadow-inner h-[2.125rem] sm:h-[2.25rem]">
+          <div className="pointer-events-none absolute inset-0 bg-slate-100/90 z-0" aria-hidden />
+          <div
+            className="pointer-events-none absolute top-0 bottom-0 right-0 z-[1] rounded-l-sm transition-[width] duration-500 ease-out"
+            style={{ width: String(Math.max(0, Math.min(100, widthPct))) + '%', background: gradient }}
+          />
+          <div className="relative z-[2] flex h-full w-full min-h-0">
+            {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tidCap) {
+              return (
+                <div
+                  key={'hbar-seg-' + tidCap}
+                  className="flex min-w-0 flex-1 items-center justify-end border-r border-slate-400/55 pl-0.5 pr-0.5 sm:pr-1 last:border-r-0"
+                >
+                  <span className="tabular-nums text-[9.6px] sm:text-[10.8px] font-medium leading-none text-slate-800 [text-shadow:0_0_6px_rgba(255,255,255,0.95),0_0_2px_rgba(255,255,255,0.9)]">
+                    {heptagonCardTierLegendCaption(tidCap)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * 세로 레벨바 빈 칸: tier tint 배경의 알파를 절반으로(현재보다 50% 더 연하게).
+   */
+  function levelBarFadedEmptyBackground(tierBgCss) {
+    var s = tierBgCss != null ? String(tierBgCss).replace(/\s/g, '') : '';
+    var m =
+      /^rgba\(([\d.]+),([\d.]+),([\d.]+),([\d.]+)\)$/i.exec(s) ||
+      /^rgb\(([\d.]+),([\d.]+),([\d.]+)\)$/i.exec(s);
+    if (m) {
+      var rr = m[1];
+      var gg = m[2];
+      var bb = m[3];
+      var aa = m[4] != null ? parseFloat(m[4]) : 1;
+      if (!isFinite(aa)) aa = 1;
+      aa = Math.min(1, Math.max(0, aa * 0.5));
+      return 'rgba(' + rr + ',' + gg + ',' + bb + ',' + aa.toFixed(3) + ')';
+    }
+    return tierBgCss;
+  }
+
+  function LevelProgressBar(props) {
+    var summary = props.summary;
+    var tierId = props.tierId; /* 배지와 동일한 effective tier ID (선택적) */
+    var pPctForBar = props.pPctForBar;
+    var barContext = props.barContext;
+    var hasSummary = !!(summary && summary.tier);
+    var result = hasSummary ? computeLevelBarStep(summary, tierId, pPctForBar, barContext) : { lv: LEVEL_BAR_DEFS[6], lvIdx: 6, step: 0 };
+    var lv = result.lv;
+    var step = result.step;
+
+    var _animF = useState(0);
+    var animFilled = _animF[0];
+    var setAnimFilled = _animF[1];
+    var _blinkBi = useState(null);
+    var blinkBi = _blinkBi[0];
+    var setBlinkBi = _blinkBi[1];
+
+    var barCtxSig = '';
+    if (barContext && typeof barContext === 'object') {
+      barCtxSig =
+        String(barContext.filterCategory != null ? barContext.filterCategory : '') +
+        '|' +
+        String(barContext.viewerAgeCategory != null ? barContext.viewerAgeCategory : '') +
+        '|' +
+        String(barContext.isVirtualCohort === true ? '1' : '0');
+    }
+
+    var barAnimTimerRef = useRef(null);
+    var barBlinkClearRef = useRef(null);
+
+    useEffect(
+      function() {
+        if (barAnimTimerRef.current != null) {
+          clearInterval(barAnimTimerRef.current);
+          barAnimTimerRef.current = null;
+        }
+        if (barBlinkClearRef.current != null) {
+          clearTimeout(barBlinkClearRef.current);
+          barBlinkClearRef.current = null;
+        }
+        setBlinkBi(null);
+        if (!hasSummary) {
+          setAnimFilled(0);
+          return undefined;
+        }
+        var targetStep = step | 0;
+        setAnimFilled(0);
+        if (targetStep < 1) {
+          return undefined;
+        }
+        var tick = 0;
+        barAnimTimerRef.current = window.setInterval(function() {
+          tick += 1;
+          if (tick <= targetStep) {
+            setAnimFilled(tick);
+          }
+          if (tick >= targetStep) {
+            if (barAnimTimerRef.current != null) {
+              clearInterval(barAnimTimerRef.current);
+              barAnimTimerRef.current = null;
+            }
+            var topBiLast = 10 - targetStep;
+            setBlinkBi(topBiLast);
+            barBlinkClearRef.current = window.setTimeout(function() {
+              setBlinkBi(null);
+              barBlinkClearRef.current = null;
+            }, 1580);
+          }
+        }, 220);
+        return function() {
+          if (barAnimTimerRef.current != null) {
+            clearInterval(barAnimTimerRef.current);
+            barAnimTimerRef.current = null;
+          }
+          if (barBlinkClearRef.current != null) {
+            clearTimeout(barBlinkClearRef.current);
+            barBlinkClearRef.current = null;
+          }
+        };
+      },
+      [hasSummary, lv.id, step, tierId, pPctForBar, barCtxSig]
+    );
+
+    if (!hasSummary) {
+      return null;
+    }
+
+    var blocks = [];
+    for (var bi = 0; bi < 10; bi++) {
+      /* bi=0 → 최상단, bi=9 → 최하단(먼저 채움); animFilled 단계부터 아래쪽만 채움 */
+      var filled = bi >= (10 - animFilled);
+      var blockOpacity = filled ? (0.5 + ((9 - bi) / 9) * 0.5) : 1;
+      var blinkOn = blinkBi === bi && filled;
+      blocks.push(
+        <div
+          key={bi}
+          className={blinkOn ? 'stelvio-level-bar-cell stelvio-level-bar-cell--blink' : 'stelvio-level-bar-cell'}
+          style={{
+            width: '28px',
+            height: '18px',
+            borderRadius: '4px',
+            background: filled ? lv.color : levelBarFadedEmptyBackground(lv.bg),
+            border: filled ? '1px solid ' + lv.color : '1px solid rgba(148,163,184,0.19)',
+            opacity: blockOpacity,
+            transition: blinkOn ? 'none' : 'background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease'
+          }}
+        />
+      );
+    }
+    var tierLabelMuted = '#334155';
+    var hideTopTierLabel = props.hideTopTierLabel === true;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '38px', minHeight: '260px', paddingTop: hideTopTierLabel ? '0px' : '4px', paddingBottom: '4px', gap: 0 }}>
+        {!hideTopTierLabel ? (
+          <div style={{ fontSize: '9px', fontWeight: 700, color: tierLabelMuted, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+            {tierLevelDisplayName(lv.id)}
+          </div>
+        ) : null}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, justifyContent: 'center' }}>
+          {blocks}
+        </div>
+        <div style={{ fontSize: '9px', color: tierLabelMuted, marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
+          {animFilled}<span style={{ color: tierLabelMuted, opacity: 0.6 }}>/10</span>
+        </div>
+      </div>
+    );
+  }
+
+  function StelvioHexagonRanksCard(props) {
+    var p = props || {};
+    var userProfile = p.userProfile;
+    var DashboardCard = p.DashboardCard;
+    var initialGcRankingPayload = p.initialGcRankingPayload;
+    var uid = userProfile && userProfile.id != null ? String(userProfile.id) : null;
+    var userAgeCatStr = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
+
+    var _rankMeta = useState({ ageCategory: '', loaded: false });
+    var rankingMeta = _rankMeta[0];
+    var setRankingMeta = _rankMeta[1];
+    useEffect(
+      function() {
+        if (!uid) {
+          setRankingMeta({ ageCategory: '', loaded: true });
+          return;
+        }
+        fetchRankingUserMeta(uid, gender)
+          .then(function(m) {
+            setRankingMeta({
+              ageCategory: m && m.ageCategory != null ? String(m.ageCategory) : '',
+              loaded: true
+            });
+          })
+          .catch(function() {
+            setRankingMeta({ ageCategory: '', loaded: true });
+          });
+      },
+      [uid, gender]
+    );
+    var viewerAc = useMemo(
+      function() {
+        var fromM = rankingMeta.ageCategory != null && String(rankingMeta.ageCategory).trim() !== '' ? String(rankingMeta.ageCategory).trim() : '';
+        return fromM || userAgeCatStr;
+      },
+      [rankingMeta.ageCategory, userAgeCatStr]
+    );
+
+    var _g = useState('all');
+    var gender = _g[0];
+    var setGender = _g[1];
+    var _c = useState('Supremo');
+    var category = _c[0];
+    var setCategory = _c[1];
+
+    var _s = useState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
+    var state = _s[0];
+    var setState = _s[1];
+    var saveKeyRef = useRef('');
+    var heptagonLogReqRef = useRef(0);
+    var stelvioOvlReqRef = useRef(0);
+    var stelvioOvlModalReqRef = useRef(0);
+    var _hLog = useState(null);
+    var heptagonRankLog = _hLog[0];
+    var setHexagonRankLog = _hLog[1];
+    var _dOpen = useState(false);
+    var heptagonDetailOpen = _dOpen[0];
+    var setHexagonDetailOpen = _dOpen[1];
+    var _hcb = useState({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
+    var heptagonCardBoard = _hcb[0];
+    var setHexagonCardBoard = _hcb[1];
+    var _hmb = useState(null);
+    var heptagonModalBoard = _hmb[0];
+    var setHexagonModalBoard = _hmb[1];
+    var _stOvl = useState({ loading: true });
+    var stelvioCohortOvl = _stOvl[0];
+    var setStelvioCohortOvl = _stOvl[1];
+    var _stOvlM = useState({ loading: true });
+    var stelvioCohortOvlModal = _stOvlM[0];
+    var setStelvioCohortOvlModal = _stOvlM[1];
+    var _hmg = useState('all');
+    var heptagonModalGender = _hmg[0];
+    var setHexagonModalGender = _hmg[1];
+    var _hmc = useState('Supremo');
+    var heptagonModalCategory = _hmc[0];
+    var setHexagonModalCategory = _hmc[1];
+    var _hmr = useState(null);
+    var heptagonModalRanks = _hmr[0];
+    var setHexagonModalRanks = _hmr[1];
+    var heptagonPrevOpenRef = useRef(false);
+    /** `state.loading` 구간에 chart 가 null로 바뀌어도 직전 유효 합을 코호트 표 보정에 재사용 */
+    var chartSupremoSumStableRef = useRef(null);
+    /** 모달용(카드와 동일 성별 또는 가상 Supremo 합) 직전 유효값 */
+    var chartSupremoModalStableRef = useRef(null);
+    var heptagonCardBoardFetchSeqRef = useRef(0);
+    var heptagonModalBoardFetchSeqRef = useRef(0);
+    /** 성별·부문 변경 시 이전 헥사곤 피크 랭킹 패치 결과가 늦게 도착해도 무시 */
+    var octagonPeakReqRef = useRef(0);
+    /** 보라 레벨 pill(세로바 상단) ↔ 중앙 힌트 토글 공유 */
+    var _tierPctHint = useState(false);
+    var tierPctHintOpen = _tierPctHint[0];
+    var setTierPctHintOpen = _tierPctHint[1];
+    /** 랭킹보드 GC 탭과 동일 API(`getPeakPowerRanking`, duration=gc, monthly) */
+    var _gcApi = useState({ loading: false, data: null, err: null });
+    var gcRankingApi = _gcApi[0];
+    var setGcRankingApi = _gcApi[1];
+    /** GC 패치 세대(성별·uid 변경 후 이전 응답 무시) */
+    var gcFetchSeqRef = useRef(0);
+    /** 마지막 성공 GC 응답(fetch 실패·집계 공백 시 직전 스냅샷 복원) */
+    var lastGcSuccessRef = useRef(null);
+    if (initialGcRankingPayload && gcHexagonPayloadUsable(initialGcRankingPayload) && !lastGcSuccessRef.current) {
+      lastGcSuccessRef.current = {
+        payload: initialGcRankingPayload,
+        uid: userProfile && userProfile.id ? String(userProfile.id) : '',
+        gender: 'all',
+      };
+    }
+
+    /** 전체(Supremo) 랭킹 6축·환산 합 — 본인 부문 외(가상) 순위 비교의 1순위(전체랭킹·대시보드 `fetchRanksSet` Supremo) */
+    var chartSupremoSumFromGlobalRanking = useMemo(
+      function() {
+        if (state.loading || !state.supremoMonthly) {
+          return null;
+        }
+        var t0 = computePTotalAndTier(state.supremoMonthly.ranks, state.supremoMonthly.cohortSizePerAxis);
+        if (!t0 || t0.sumPositionScores == null || !isFinite(t0.sumPositionScores)) {
+          return null;
+        }
+        return Number(t0.sumPositionScores);
+      },
+      [state.loading, state.supremoMonthly]
+    );
+
+    useEffect(
+      function() {
+        if (!uid) {
+          gcFetchSeqRef.current += 1;
+          lastGcSuccessRef.current = null;
+          setGcRankingApi({ loading: false, data: null, err: null });
+          return;
+        }
+        var seq = gcFetchSeqRef.current + 1;
+        gcFetchSeqRef.current = seq;
+        var uidStr = String(uid);
+        var seedPayload = resolveGcRankingSeedForOctagon(uidStr, gender);
+        if (seedPayload && gcHexagonPayloadUsable(seedPayload)) {
+          lastGcSuccessRef.current = { payload: seedPayload, uid: uidStr, gender: gender };
+        }
+        var ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        setGcRankingApi(function(prev) {
+          var keep =
+            prev && prev.data && gcHexagonPayloadUsable(prev.data)
+              ? prev.data
+              : lastGcSuccessRef.current &&
+                  lastGcSuccessRef.current.uid === uidStr &&
+                  lastGcSuccessRef.current.gender === gender &&
+                  gcHexagonPayloadUsable(lastGcSuccessRef.current.payload)
+                ? lastGcSuccessRef.current.payload
+                : seedPayload && gcHexagonPayloadUsable(seedPayload)
+                  ? seedPayload
+                  : null;
+          return { loading: true, data: keep, err: null };
+        });
+        var url = buildRankingUrl(uid, 'gc', 'monthly', gender);
+        fetch(url, ac && ac.signal ? { method: 'GET', mode: 'cors', cache: 'no-store', signal: ac.signal } : { method: 'GET', mode: 'cors', cache: 'no-store' })
+          .then(function(res) {
+            return res.json();
+          })
+          .then(function(data) {
+            if (seq !== gcFetchSeqRef.current) {
+              return;
+            }
+            if (data && data.success && gcHexagonPayloadUsable(data)) {
+              lastGcSuccessRef.current = { payload: data, uid: uidStr, gender: gender };
+              setGcRankingApi({ loading: false, data: data, err: null });
+              return;
+            }
+            setGcRankingApi(function(prev) {
+              var keep =
+                prev && prev.data && gcHexagonPayloadUsable(prev.data)
+                  ? prev.data
+                  : lastGcSuccessRef.current &&
+                      lastGcSuccessRef.current.uid === uidStr &&
+                      lastGcSuccessRef.current.gender === gender &&
+                      gcHexagonPayloadUsable(lastGcSuccessRef.current.payload)
+                    ? lastGcSuccessRef.current.payload
+                    : null;
+              return { loading: false, data: keep, err: data && data.success ? 'empty' : 'api' };
+            });
+          })
+          .catch(function(e) {
+            if (seq !== gcFetchSeqRef.current) {
+              return;
+            }
+            var isAbort =
+              e &&
+              (e.name === 'AbortError' ||
+                (typeof e.message === 'string' && e.message.indexOf('aborted') >= 0));
+            setGcRankingApi(function(prev) {
+              var keep =
+                prev && prev.data && gcHexagonPayloadUsable(prev.data)
+                  ? prev.data
+                  : lastGcSuccessRef.current &&
+                      lastGcSuccessRef.current.uid === uidStr &&
+                      lastGcSuccessRef.current.gender === gender &&
+                      gcHexagonPayloadUsable(lastGcSuccessRef.current.payload)
+                    ? lastGcSuccessRef.current.payload
+                    : null;
+              return { loading: false, data: keep, err: isAbort ? null : 'fetch' };
+            });
+          });
+        return function() {
+          if (ac) {
+            try {
+              ac.abort();
+            } catch (eab) {}
+          }
+        };
+      },
+      [uid, gender]
+    );
+
+    var gcHexagonStaleSnapshot =
+      gcRankingApi.data && gcHexagonPayloadUsable(gcRankingApi.data) && gcHexagonShowingStaleSnapshot(gcRankingApi.data);
+
+    /**
+     * 코호트 표 삽입·OVL에 쓰는 환산 합: **GC API 점수 우선**(랭킹보드와 동일), 없으면 6축 Supremo 합.
+     */
+    var heptagonGcSumForSync = useMemo(
+      function() {
+        var g = uid && gcRankingApi.data && gcRankingApi.data.success ? gcScoreFromPeakApi(gcRankingApi.data, uid) : null;
+        if (g != null && isFinite(g) && g > 0) {
+          return g;
+        }
+        return chartSupremoSumFromGlobalRanking;
+      },
+      [uid, gcRankingApi.data, chartSupremoSumFromGlobalRanking]
+    );
+
+    /** 팝업이 카드와 다른 **성별**이면, 해당 성별 `fetchRanksSet(..., 'Supremo')` 기준 환산 합 */
+    var chartSupremoSumForModalVirtualOvl = useMemo(
+      function() {
+        if (heptagonModalGender === gender) {
+          return chartSupremoSumFromGlobalRanking;
+        }
+        if (heptagonModalRanks && heptagonModalRanks.tierSupremoForVirtual) {
+          var ts = heptagonModalRanks.tierSupremoForVirtual;
+          if (ts && ts.sumPositionScores != null && isFinite(ts.sumPositionScores)) {
+            return Number(ts.sumPositionScores);
+          }
+        }
+        return null;
+      },
+      [heptagonModalGender, gender, chartSupremoSumFromGlobalRanking, heptagonModalRanks]
+    );
+
+    if (heptagonGcSumForSync != null && isFinite(Number(heptagonGcSumForSync))) {
+      chartSupremoSumStableRef.current = Number(heptagonGcSumForSync);
+    } else if (chartSupremoSumFromGlobalRanking != null && isFinite(Number(chartSupremoSumFromGlobalRanking))) {
+      chartSupremoSumStableRef.current = Number(chartSupremoSumFromGlobalRanking);
+    }
+    if (chartSupremoSumForModalVirtualOvl != null && isFinite(Number(chartSupremoSumForModalVirtualOvl))) {
+      chartSupremoModalStableRef.current = Number(chartSupremoSumForModalVirtualOvl);
+    }
+
+    useEffect(
+      function() {
+        chartSupremoSumStableRef.current = null;
+        chartSupremoModalStableRef.current = null;
+      },
+      [uid]
+    );
+
+    useEffect(
+      function() {
+        setTierPctHintOpen(false);
+      },
+      [uid, gender, category]
+    );
+
+    useEffect(
+      function() {
+        if (!uid) {
+          setHexagonRankLog(null);
+          return;
+        }
+        if (typeof window.getStelvioHexagonRankLog !== 'function') {
+          setHexagonRankLog(null);
+          return;
+        }
+        heptagonLogReqRef.current = heptagonLogReqRef.current + 1;
+        var myRid = heptagonLogReqRef.current;
+        window.getStelvioHexagonRankLog(uid).then(function(res) {
+          if (heptagonLogReqRef.current !== myRid) {
+            return;
+          }
+          if (res && res.ok) {
+            setHexagonRankLog(res.exists && res.data ? res.data : null);
+          } else {
+            setHexagonRankLog(null);
+          }
+        });
+      },
+      [uid, gender, category]
+    );
+
+    useEffect(
+      function() {
+        if (!uid) {
+          setStelvioCohortOvl({ loading: false, skip: true });
+          return;
+        }
+        if (typeof window.getStelvioHexagonCohortEntry !== 'function' || typeof window.queryStelvioHexagonCohortBoardN !== 'function') {
+          setStelvioCohortOvl({ loading: false, skip: true });
+          return;
+        }
+        var del = setTimeout(function() {
+          stelvioOvlReqRef.current = stelvioOvlReqRef.current + 1;
+          var reqId = stelvioOvlReqRef.current;
+          setStelvioCohortOvl({ loading: true });
+          var mk = currentMonthKeyKst();
+          var chartEffOvl =
+            heptagonGcSumForSync != null && isFinite(Number(heptagonGcSumForSync)) && Number(heptagonGcSumForSync) > 0
+              ? Number(heptagonGcSumForSync)
+              : chartSupremoSumFromGlobalRanking;
+          if (
+            (chartEffOvl == null || !isFinite(Number(chartEffOvl))) &&
+            chartSupremoSumStableRef.current != null &&
+            isFinite(Number(chartSupremoSumStableRef.current)) &&
+            Number(chartSupremoSumStableRef.current) > 0
+          ) {
+            chartEffOvl = Number(chartSupremoSumStableRef.current);
+          }
+          loadStelvioCohortOvlData(uid, mk, gender, category, viewerAc, chartEffOvl)
+            .then(function(result) {
+              if (stelvioOvlReqRef.current !== reqId) {
+                return;
+              }
+              if (!result || !result.ok) {
+                setStelvioCohortOvl({ loading: false, skip: true });
+                return;
+              }
+              if (result.skip) {
+                setStelvioCohortOvl({
+                  loading: false,
+                  skip: true,
+                  nTotal: result.nTotal != null ? result.nTotal : 0
+                });
+                return;
+              }
+              setStelvioCohortOvl({
+                loading: false,
+                nTotal: result.nTotal,
+                boardRank: result.boardRank,
+                cohortData: result.cohortData,
+                skip: false,
+                isVirtualCohort: result.isVirtualCohort === true
+              });
+            })
+            .catch(function() {
+              if (stelvioOvlReqRef.current !== reqId) {
+                return;
+              }
+              setStelvioCohortOvl({ loading: false, err: true, skip: true });
+            });
+        }, 56);
+        return function() {
+          clearTimeout(del);
+        };
+      },
+      [uid, gender, category, viewerAc, heptagonGcSumForSync]
+    );
+
+    useEffect(
+      function() {
+        if (!uid) {
+          setState({ loading: false, err: 'noUser', monthly: null, hof: null, supremoMonthly: null });
+          return;
+        }
+        var todayStr =
+          typeof window.getTodayStrForCache === 'function'
+            ? window.getTodayStrForCache()
+            : (function() {
+                var t = new Date();
+                return (
+                  t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')
+                );
+              })();
+
+        var quickRows = heptagonRowsFromStoredPeakPayloads(uid, category, 'monthly', gender);
+        if (quickRows) {
+          var quickSup = heptagonRowsFromStoredPeakPayloads(uid, 'Supremo', 'monthly', gender);
+          setState(stateFromApiRows(quickRows, quickRows, quickSup));
+        }
+
+        if (typeof window.getStelvioHexagonRanksCache === 'function') {
+          var cached = window.getStelvioHexagonRanksCache(uid, gender, category, todayStr);
+          if (cached && cached.monthly) {
+            var hofRanksCache = (cached.hof && cached.hof.ranks) || cached.monthly.ranks;
+            var hofWkgsCache = (cached.hof && cached.hof.wkgs) || cached.monthly.wkgs;
+            setState(
+              stateFromRanksArray(
+                cached.monthly.ranks,
+                cached.monthly.cohortSizePerAxis,
+                hofRanksCache,
+                null,
+                null,
+                cached.monthly.wkgs,
+                hofWkgsCache,
+                cached.monthly.rankChanges || null,
+                cached.monthly.previousBoardRanks || null
+              )
+            );
+            fetchRanksSet(uid, 'monthly', gender, 'Supremo')
+              .then(function(sRows) {
+                setState(function(prev) {
+                  if (!prev || !prev.monthly) {
+                    return prev;
+                  }
+                  return Object.assign({}, prev, {
+                    supremoMonthly: {
+                      ranks: sRows.map(function(x) {
+                        return x.rank;
+                      }),
+                      cohortSizePerAxis: sRows.map(function(x) {
+                        return x.n;
+                      })
+                    }
+                  });
+                });
+              })
+              .catch(function() {});
+            return;
+          }
+        }
+
+        octagonPeakReqRef.current += 1;
+        var peakReqId = octagonPeakReqRef.current;
+
+        /** 월간(28일) 6축 getPeak만 사용 — 명예의 전당(365d) API 호출 제거 */
+        if (!quickRows) {
+          setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
+        }
+        fetchTwinCategoryPeakAxisRows(uid, 'monthly', gender, category)
+          .then(function(pair) {
+            if (peakReqId !== octagonPeakReqRef.current) {
+              return;
+            }
+            var mRows = pair.mRows;
+            var sRows = pair.sRows;
+            setState(stateFromApiRows(mRows, mRows, sRows));
+            if (typeof window.setStelvioHexagonRanksCache === 'function') {
+              try {
+                var monthlyRanks = mRows.map(function(x) {
+                  return x.rank;
+                });
+                var cohortSizePerAxis = mRows.map(function(x) {
+                  return x.n;
+                });
+                var monthlyRankChanges = mRows.map(function(x) {
+                  return x.rankChange != null && isFinite(Number(x.rankChange)) ? Math.round(Number(x.rankChange)) : null;
+                });
+                var monthlyPreviousBoardRanks = mRows.map(function(x) {
+                  return x.previousBoardRank != null && isFinite(Number(x.previousBoardRank))
+                    ? Math.floor(Number(x.previousBoardRank))
+                    : null;
+                });
+                var mwForCache = mRows.map(function(x) {
+                  return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+                });
+                window.setStelvioHexagonRanksCache(
+                  uid,
+                  gender,
+                  category,
+                  todayStr,
+                  monthlyRanks,
+                  cohortSizePerAxis,
+                  monthlyRanks,
+                  mwForCache,
+                  mwForCache,
+                  monthlyRankChanges,
+                  monthlyPreviousBoardRanks
+                );
+              } catch (e) {
+                console.warn('[StelvioOctagon] cache write failed:', e && e.message);
+              }
+            }
+          })
+          .catch(function() {
+            if (peakReqId !== octagonPeakReqRef.current) {
+              return;
+            }
+            var fromGcAxis =
+              gcRankingApi.data && gcRankingApi.data.success
+                ? stateFromGcViewerHexagonAxis(gcRankingApi.data)
+                : null;
+            if (fromGcAxis) {
+              setState(fromGcAxis);
+              return;
+            }
+            setState({ loading: false, err: 'fetch', monthly: null, hof: null, supremoMonthly: null });
+          });
+      },
+      [uid, gender, category, gcRankingApi.data]
+    );
+
+    useEffect(
+      function() {
+        peakPayloadStoreRef.current = Object.create(null);
+      },
+      [uid, gender]
+    );
+
+    useEffect(
+      function() {
+        if (!uid || !category) return;
+        var mRows = heptagonRowsFromStoredPeakPayloads(uid, category, 'monthly', gender);
+        if (!mRows) return;
+        var sRows = heptagonRowsFromStoredPeakPayloads(uid, 'Supremo', 'monthly', gender);
+        setState(function(prev) {
+          if (!prev || prev.loading) return prev;
+          return stateFromApiRows(mRows, mRows, sRows);
+        });
+      },
+      [uid, category, gender]
+    );
+
+    useEffect(
+      function() {
+        if (!uid || state.loading || state.err !== 'fetch') return;
+        var fromGc =
+          gcRankingApi.data && gcRankingApi.data.success
+            ? stateFromGcViewerHexagonAxis(gcRankingApi.data)
+            : null;
+        if (fromGc) setState(fromGc);
+      },
+      [uid, state.loading, state.err, gcRankingApi.data]
+    );
+
+    var heptagonSummaryCache = useMemo(
+      function() {
+        if (!heptagonRankLog) {
+          return null;
+        }
+        return summaryFromHexagonRankLogIfMatch(heptagonRankLog, currentMonthKeyKst(), gender, category);
+      },
+      [heptagonRankLog, gender, category]
+    );
+
+    var tierSummaryComputed = useMemo(
+      function() {
+        if (state.loading || !state.monthly || !state.monthly.cohortSizePerAxis) return null;
+        return computePTotalAndTier(state.monthly.ranks, state.monthly.cohortSizePerAxis);
+      },
+      [state.loading, state.monthly]
+    );
+
+    var tierForCard = useMemo(
+      function() {
+        if (!tierSummaryComputed) {
+          return null;
+        }
+        var merged = applyCohortBoardMerge(tierSummaryComputed, stelvioCohortOvl, category, viewerAc);
+        return applyGcRankingBoardMerge(merged, gcRankingApi.data, uid, category, viewerAc);
+      },
+      [tierSummaryComputed, stelvioCohortOvl, category, viewerAc, gcRankingApi.data, uid]
+    );
+
+    /** 카드 필터 —「동일 조건·월(환산)」표(Firestore)가 있으면 그 순위·환산합·n이 단일 기준, 그다음 GC 병합/랭킹 API/OVL */
+    var stelvioCardTooltip = useMemo(
+      function() {
+        if (uid) {
+          if (heptagonCardBoard && heptagonCardBoard.loading) {
+            return { kind: 'board_loading' };
+          }
+          var mineBRCoh = getMyRankFromHexagonBoardRows(heptagonCardBoard);
+          if (mineBRCoh && mineBRCoh.boardRank != null && mineBRCoh.boardRank >= 1) {
+            var ovlCo = stelvioCohortOvl;
+            var nEffCo = heptagonEffectiveCohortNFromBoardAndOvl(heptagonCardBoard, ovlCo, gcRankingApi.data, category);
+            var isVCo;
+            if (ovlCo && !ovlCo.loading && ovlCo.skip !== true && ovlCo.isVirtualCohort != null) {
+              isVCo = ovlCo.isVirtualCohort === true;
+            } else {
+              isVCo = viewerAc ? !isUserInCohortForFilter(category, viewerAc) : false;
+            }
+            if (ovlCo && ovlCo.loading && nEffCo < 1) {
+              return {
+                kind: 'board_partial',
+                source: 'board',
+                rank: mineBRCoh.boardRank,
+                nCohort: 0,
+                pPct: -1,
+                isVirtual: isVCo
+              };
+            }
+            if (nEffCo < 1) {
+              if (heptagonCardBoard && heptagonCardBoard.err) {
+                return { kind: 'board_err' };
+              }
+              return {
+                kind: 'board_partial',
+                source: 'board',
+                rank: mineBRCoh.boardRank,
+                nCohort: 0,
+                pPct: -1,
+                isVirtual: isVCo
+              };
+            }
+            var pCo = heptagonLevelPercentForRankN(mineBRCoh.boardRank, nEffCo, isVCo, category, viewerAc);
+            return {
+              kind: 'ok',
+              source: 'board',
+              rank: mineBRCoh.boardRank,
+              nCohort: heptagonCohortNDisplay(nEffCo, category, viewerAc, isVCo),
+              pPct: pCo,
+              isVirtual: isVCo
+            };
+          }
+        }
+        if (uid && tierForCard && tierForCard.gcRankingBoardAligned === true) {
+          var rTierGc = heptagonCardRankFromSummary(tierForCard, category, viewerAc);
+          if (
+            rTierGc != null &&
+            tierForCard.cohortN != null &&
+            (tierForCard.cohortN | 0) >= 1 &&
+            tierForCard.pTier != null &&
+            isFinite(Number(tierForCard.pTier))
+          ) {
+            var nCof = tierForCard.cohortN | 0;
+            var isVcf = tierForCard.heptagonBoardVirtualCohort === true;
+            return {
+              kind: 'ok',
+              source: 'gc_tier',
+              rank: rTierGc,
+              nCohort: heptagonCohortNDisplay(nCof, category, viewerAc, isVcf),
+              pPct: Number(tierForCard.pTier),
+              isVirtual: isVcf
+            };
+          }
+        }
+        if (uid && gcRankingApi.data && gcRankingApi.data.success) {
+          var rGc0 = computeDisplayRankLikeDistribution(gcRankingApi.data, uid, category, 'gc');
+          if (rGc0 != null && isFinite(Number(rGc0)) && Number(rGc0) >= 1) {
+            var nGcAp0 = gcRankingCohortNFromPayload(gcRankingApi.data, category);
+            if (nGcAp0 >= 1) {
+              var isVirtGc0 =
+                category !== 'Supremo' &&
+                viewerAc &&
+                String(category).trim() !== String(viewerAc).trim();
+              var pGcAp0 = heptagonLevelPercentForRankN(Math.floor(Number(rGc0)), nGcAp0, isVirtGc0, category, viewerAc);
+              return {
+                kind: 'ok',
+                source: 'gc_api',
+                rank: Math.floor(Number(rGc0)),
+                nCohort: heptagonCohortNDisplay(nGcAp0, category, viewerAc, isVirtGc0),
+                pPct: pGcAp0,
+                isVirtual: isVirtGc0
+              };
+            }
+          }
+        }
+        if (uid) {
+          if (heptagonCardBoard && heptagonCardBoard.err) {
+            return { kind: 'board_err' };
+          }
+          var ovlE = stelvioOvlBoardRankNForDisplay(stelvioCohortOvl, category, viewerAc);
+          if (ovlE) {
+            var nGcOvl = gcRankingCohortNFromPayload(gcRankingApi.data, category);
+            if (nGcOvl >= 1) {
+              ovlE = Object.assign({}, ovlE, { nTot: nGcOvl });
+            }
+            var pE = heptagonLevelPercentForRankN(ovlE.br, ovlE.nTot, ovlE.isVirt, category, viewerAc);
+            return {
+              kind: 'ok',
+              source: 'cohort_ovl',
+              rank: ovlE.br,
+              nCohort: heptagonCohortNDisplay(ovlE.nTot, category, viewerAc, ovlE.isVirt),
+              pPct: pE,
+              isVirtual: ovlE.isVirt
+            };
+          }
+          if (stelvioCohortOvl && stelvioCohortOvl.loading) {
+            return { kind: 'board_loading' };
+          }
+        }
+        var ttF = heptagonCohortTooltipFromSummary(tierForCard, category, viewerAc);
+        if (ttF && ttF.ok) {
+          return {
+            kind: 'ok',
+            source: 'summary',
+            rank: ttF.rank,
+            nCohort: ttF.nCohort,
+            pPct: ttF.pPct,
+            isVirtual: ttF.isVirtual
+          };
+        }
+        if (heptagonCardBoard && heptagonCardBoard.loading) {
+          return { kind: 'board_loading' };
+        }
+        return { kind: 'none' };
+      },
+      [uid, gcRankingApi.data, heptagonCardBoard, stelvioCohortOvl, tierForCard, userProfile, category, viewerAc]
+    );
+
+    var heptagonSummaryCacheMerged = useMemo(
+      function() {
+        if (!heptagonSummaryCache) {
+          return null;
+        }
+        var m = applyCohortBoardMerge(heptagonSummaryCache, stelvioCohortOvl, category, viewerAc);
+        return applyGcRankingBoardMerge(m, gcRankingApi.data, uid, category, viewerAc);
+      },
+      [heptagonSummaryCache, stelvioCohortOvl, category, viewerAc, gcRankingApi.data, uid]
+    );
+
+    var heptagonModalSummary =
+      state.monthly && tierForCard
+        ? tierForCard
+        : heptagonSummaryCacheMerged;
+
+    var heptagonModalBaseTier = useMemo(
+      function() {
+        if (heptagonModalGender === gender && heptagonModalCategory === category) {
+          return tierSummaryComputed || heptagonSummaryCache;
+        }
+        if (heptagonModalRanks && heptagonModalRanks.tierUnmerged) {
+          return heptagonModalRanks.tierUnmerged;
+        }
+        return tierSummaryComputed || heptagonSummaryCache;
+      },
+      [heptagonModalGender, heptagonModalCategory, gender, category, tierSummaryComputed, heptagonSummaryCache, heptagonModalRanks]
+    );
+
+    var heptCohortOvlForModalHeader = useMemo(
+      function() {
+        if (!heptagonDetailOpen) {
+          return stelvioCohortOvl;
+        }
+        if (heptagonModalGender === gender && heptagonModalCategory === category) {
+          return stelvioCohortOvl;
+        }
+        return stelvioCohortOvlModal;
+      },
+      [heptagonDetailOpen, heptagonModalGender, heptagonModalCategory, gender, category, stelvioCohortOvl, stelvioCohortOvlModal]
+    );
+
+    var heptagonModalHeaderSummary = useMemo(
+      function() {
+        if (!heptagonModalBaseTier) {
+          return null;
+        }
+        var m = applyCohortBoardMerge(heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, viewerAc);
+        if (heptagonModalGender !== gender) {
+          return m;
+        }
+        return applyGcRankingBoardMerge(m, gcRankingApi.data, uid, heptagonModalCategory, viewerAc);
+      },
+      [heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, viewerAc, heptagonModalGender, gender, gcRankingApi.data, uid]
+    );
+
+    var heptagonModalShowSummary = useMemo(
+      function() {
+        if (heptagonModalGender === gender && heptagonModalCategory === category && tierForCard) {
+          return tierForCard;
+        }
+        return heptagonModalHeaderSummary || heptagonModalSummary;
+      },
+      [
+        heptagonModalGender,
+        heptagonModalCategory,
+        gender,
+        category,
+        tierForCard,
+        heptagonModalHeaderSummary,
+        heptagonModalSummary
+      ]
+    );
+
+    useEffect(
+      function() {
+        setHexagonDetailOpen(false);
+      },
+      [gender, category, uid]
+    );
+
+    useEffect(
+      function() {
+        if (heptagonDetailOpen && !heptagonPrevOpenRef.current) {
+          setHexagonModalGender(gender);
+          setHexagonModalCategory(category);
+        }
+        heptagonPrevOpenRef.current = heptagonDetailOpen;
+      },
+      [heptagonDetailOpen, gender, category]
+    );
+
+    useEffect(
+      function() {
+        if (!heptagonDetailOpen || !uid) {
+          return;
+        }
+        if (heptagonModalGender === gender && heptagonModalCategory === category) {
+          setStelvioCohortOvlModal({ useCard: true, loading: false });
+          return;
+        }
+        if (typeof window.getStelvioHexagonCohortEntry !== 'function' || typeof window.queryStelvioHexagonCohortBoardN !== 'function') {
+          setStelvioCohortOvlModal({ loading: false, skip: true });
+          return;
+        }
+        stelvioOvlModalReqRef.current = stelvioOvlModalReqRef.current + 1;
+        var mReq = stelvioOvlModalReqRef.current;
+        setStelvioCohortOvlModal({ loading: true });
+        var mk = currentMonthKeyKst();
+        loadStelvioCohortOvlData(uid, mk, heptagonModalGender, heptagonModalCategory, viewerAc, chartSupremoSumForModalVirtualOvl)
+          .then(function(result) {
+            if (stelvioOvlModalReqRef.current !== mReq) {
+              return;
+            }
+            if (!result || !result.ok) {
+              setStelvioCohortOvlModal({ loading: false, skip: true, useCard: false });
+              return;
+            }
+            if (result.skip) {
+              setStelvioCohortOvlModal({
+                loading: false,
+                skip: true,
+                nTotal: result.nTotal != null ? result.nTotal : 0,
+                useCard: false
+              });
+              return;
+            }
+            setStelvioCohortOvlModal({
+              loading: false,
+              nTotal: result.nTotal,
+              boardRank: result.boardRank,
+              cohortData: result.cohortData,
+              skip: false,
+              isVirtualCohort: result.isVirtualCohort === true,
+              useCard: false
+            });
+          })
+          .catch(function() {
+            if (stelvioOvlModalReqRef.current !== mReq) {
+              return;
+            }
+            setStelvioCohortOvlModal({ loading: false, err: true, skip: true, useCard: false });
+          });
+      },
+      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category, viewerAc, chartSupremoSumForModalVirtualOvl]
+    );
+
+    useEffect(
+      function() {
+        if (!heptagonDetailOpen || !uid) {
+          return;
+        }
+        if (heptagonModalGender === gender && heptagonModalCategory === category) {
+          setHexagonModalRanks(null);
+          return;
+        }
+        setHexagonModalRanks({ loading: true });
+        fetchTwinCategoryPeakAxisRows(uid, 'monthly', heptagonModalGender, heptagonModalCategory)
+          .then(function(pair) {
+            var mRows = pair.mRows;
+            var sRows = pair.sRows;
+            var monthlyRanks = mRows.map(function(x) {
+              return x.rank;
+            });
+            var cohortSizePerAxis = mRows.map(function(x) {
+              return x.n;
+            });
+            var mRat = monthlyRanks.map(rankToRadiusNorm);
+            var monthly = { ranks: monthlyRanks, norm: mRat, cohortSizePerAxis: cohortSizePerAxis };
+            var tUn = computePTotalAndTier(monthlyRanks, cohortSizePerAxis);
+            var sR = sRows.map(function(x) {
+              return x.rank;
+            });
+            var sN = sRows.map(function(x) {
+              return x.n;
+            });
+            var tSup = computePTotalAndTier(sR, sN);
+            setHexagonModalRanks({ loading: false, monthly: monthly, tierUnmerged: tUn, tierSupremoForVirtual: tSup });
+          })
+          .catch(function() {
+            setHexagonModalRanks({ loading: false, err: true });
+          });
+      },
+      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category]
+    );
+
+    function runHexagonCohortBoardFetch(uidIn, gIn, cIn, setBoard, chartSupremoSumForVirtual, boardKind, gcApiData) {
+      if (!uidIn) {
+        setBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
+        return;
+      }
+      if (typeof window.queryStelvioHexagonCohortBySumDesc !== 'function') {
+        setBoard({ loading: false, err: 'no-fn', rows: [], nCohort: 0, meInList: false });
+        return;
+      }
+      var seqRef = boardKind === 'modal' ? heptagonModalBoardFetchSeqRef : heptagonCardBoardFetchSeqRef;
+      seqRef.current += 1;
+      var fetchSeq = seqRef.current;
+      setBoard({ loading: true, err: null, rows: [], nCohort: 0, meInList: false });
+      var gcDataEff = gcApiData;
+      if (
+        !gcHexagonPayloadUsable(gcDataEff) &&
+        lastGcSuccessRef.current &&
+        gcHexagonPayloadUsable(lastGcSuccessRef.current.payload)
+      ) {
+        gcDataEff = lastGcSuccessRef.current.payload;
+      }
+      var gcOnly = heptagonBoardFromGcApiOnly(uidIn, gIn, cIn, chartSupremoSumForVirtual, gcDataEff);
+      if (gcOnly) {
+        setBoard({
+          loading: false,
+          err: null,
+          rows: gcOnly.rows,
+          meInList: gcOnly.meInList,
+          nCohort: gcOnly.nCohort
+        });
+        return;
+      }
+      var mk2 = currentMonthKeyKst();
+      var prB = window.queryStelvioHexagonCohortBySumDesc({
+        monthKey: mk2,
+        filterCategory: cIn,
+        filterGender: gIn,
+        limit: 10000
+      });
+      var prCo =
+        typeof window.getStelvioHexagonCohortEntry === 'function'
+          ? window.getStelvioHexagonCohortEntry({
+              userId: uidIn,
+              monthKey: mk2,
+              filterCategory: cIn,
+              filterGender: gIn
+            })
+          : Promise.resolve({ ok: false, exists: false, data: null });
+      var prCoS =
+        typeof window.getStelvioHexagonCohortEntry === 'function'
+          ? window.getStelvioHexagonCohortEntry({
+              userId: uidIn,
+              monthKey: mk2,
+              filterCategory: 'Supremo',
+              filterGender: gIn
+            })
+          : Promise.resolve({ ok: false, exists: false, data: null });
+      var prN2 =
+        typeof window.queryStelvioHexagonCohortBoardN === 'function'
+          ? window.queryStelvioHexagonCohortBoardN({
+              monthKey: mk2,
+              filterCategory: cIn,
+              filterGender: gIn
+            })
+          : Promise.resolve({ ok: false, nTotal: 0 });
+      /** 성별 M/F일 때 표시·정렬용 환산 합은 Supremo·전체(all) 문서와 동일(성별 전용 재환산 없음). */
+      var prSupAll =
+        gIn === 'M' || gIn === 'F'
+          ? window.queryStelvioHexagonCohortBySumDesc({
+              monthKey: mk2,
+              filterCategory: 'Supremo',
+              filterGender: 'all',
+              limit: 10000
+            })
+          : Promise.resolve({ ok: false, items: [] });
+      var prCoSAll =
+        (gIn === 'M' || gIn === 'F') && typeof window.getStelvioHexagonCohortEntry === 'function'
+          ? window.getStelvioHexagonCohortEntry({
+              userId: uidIn,
+              monthKey: mk2,
+              filterCategory: 'Supremo',
+              filterGender: 'all'
+            })
+          : Promise.resolve({ ok: false, exists: false, data: null });
+      Promise.all([prCo, prCoS, prB, prN2, prSupAll, prCoSAll])
+        .then(function(quad) {
+          if (fetchSeq !== seqRef.current) {
+            return;
+          }
+          var crA = quad[0];
+          var crSA = quad[1];
+          var resA = quad[2];
+          var nResA = quad[3];
+          var resSupAll = quad[4];
+          var crSAll = quad[5];
+          var nTot2 = nResA && nResA.ok && nResA.nTotal > 0 ? Math.floor(nResA.nTotal) : 0;
+          if (resA && resA.ok) {
+            var myD = crA && crA.ok && crA.exists && crA.data ? crA.data : null;
+            var myDS = crSA && crSA.ok && crSA.exists && crSA.data ? crSA.data : null;
+            var supAllSumByUid = {};
+            if ((gIn === 'M' || gIn === 'F') && resSupAll && resSupAll.ok && resSupAll.items && resSupAll.items.length) {
+              for (var sxi = 0; sxi < resSupAll.items.length; sxi++) {
+                var sx = resSupAll.items[sxi];
+                if (!sx || sx.userId == null) {
+                  continue;
+                }
+                if (sx.sumPositionScores != null && isFinite(Number(sx.sumPositionScores))) {
+                  supAllSumByUid[String(sx.userId)] = Number(sx.sumPositionScores);
+                }
+              }
+            }
+            var items2 = resA.items || [];
+            if ((gIn === 'M' || gIn === 'F') && Object.keys(supAllSumByUid).length) {
+              items2 = items2.map(function(it) {
+                if (!it || it.userId == null) {
+                  return it;
+                }
+                var sAll = supAllSumByUid[String(it.userId)];
+                if (sAll == null || !isFinite(sAll)) {
+                  return it;
+                }
+                return Object.assign({}, it, { sumPositionScores: sAll });
+              });
+            }
+            /** 본인: 코호트 목록 상한(500) 밖이어도 Supremo·all 단건 문서로 전체 순위 환산 합 확보 */
+            var mySupAllSum = null;
+            if (gIn === 'M' || gIn === 'F') {
+              if (crSAll && crSAll.ok && crSAll.exists && crSAll.data && crSAll.data.sumPositionScores != null && isFinite(Number(crSAll.data.sumPositionScores))) {
+                var rawAll = Number(crSAll.data.sumPositionScores);
+                if (rawAll > 0) {
+                  mySupAllSum = rawAll;
+                }
+              }
+              if (mySupAllSum == null) {
+                var sMeMap = supAllSumByUid[String(uidIn)];
+                if (sMeMap != null && isFinite(sMeMap) && sMeMap > 0) {
+                  mySupAllSum = sMeMap;
+                }
+              }
+              if (mySupAllSum != null && isFinite(mySupAllSum)) {
+                if (myD) {
+                  myD = Object.assign({}, myD, { sumPositionScores: mySupAllSum });
+                }
+                if (myDS) {
+                  myDS = Object.assign({}, myDS, { sumPositionScores: mySupAllSum });
+                } else {
+                  myDS = { sumPositionScores: mySupAllSum, displayName: '—' };
+                }
+              }
+            }
+            if (chartSupremoSumForVirtual != null && isFinite(Number(chartSupremoSumForVirtual)) && Number(chartSupremoSumForVirtual) > 0) {
+              var sv = Number(chartSupremoSumForVirtual);
+              if (gIn === 'M' || gIn === 'F') {
+                var dSum0 = myD && myD.sumPositionScores != null ? Number(myD.sumPositionScores) : NaN;
+                if (myD == null || !isFinite(dSum0) || dSum0 === 0) {
+                  if (myD) {
+                    myD = Object.assign({}, myD, { sumPositionScores: sv });
+                  } else {
+                    myD = { sumPositionScores: sv, displayName: '—' };
+                  }
+                }
+              }
+              if (myDS) {
+                myDS = Object.assign({}, myDS, { sumPositionScores: sv });
+              } else {
+                myDS = { sumPositionScores: sv, displayName: '—' };
+              }
+            }
+            var gcItems = heptagonCohortItemsFromGcApi(gcApiData, cIn);
+            if (gcItems.length) {
+              items2 = mergeHexagonCohortFirestoreWithGc(items2, gcItems);
+            }
+            var nRe2 = reconcileHexagonCohortNFromList(nTot2, items2);
+            var built2 = buildHexagonModalBoardRows(items2, uidIn, myD, myDS);
+            var nReFromRows = nCohortFromHexagonBoardRows({ rows: built2.rows, nCohort: 0, err: null });
+            var nGcDisp = gcRankingCohortNFromPayload(gcApiData, cIn);
+            var nReFinal = nGcDisp >= 1 ? nGcDisp : Math.max(nRe2, nReFromRows);
+            setBoard({ loading: false, err: null, rows: built2.rows, meInList: built2.meInList, nCohort: nReFinal | 0 });
+          } else {
+            setBoard({
+              loading: false,
+              err: (resA && resA.error) || 'fetch',
+              rows: [],
+              nCohort: 0,
+              meInList: false
+            });
+          }
+        })
+        .catch(function() {
+          if (fetchSeq !== seqRef.current) {
+            return;
+          }
+          setBoard({ loading: false, err: 'catch', rows: [], nCohort: 0, meInList: false });
+        });
+    }
+
+    useEffect(
+      function() {
+        if (!uid) {
+          setHexagonCardBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
+          return;
+        }
+        var delB = setTimeout(function() {
+          var chartEff =
+            heptagonGcSumForSync != null && isFinite(Number(heptagonGcSumForSync)) && Number(heptagonGcSumForSync) > 0
+              ? Number(heptagonGcSumForSync)
+              : chartSupremoSumFromGlobalRanking;
+          if (
+            (chartEff == null || !isFinite(Number(chartEff))) &&
+            chartSupremoSumStableRef.current != null &&
+            isFinite(Number(chartSupremoSumStableRef.current)) &&
+            Number(chartSupremoSumStableRef.current) > 0
+          ) {
+            chartEff = Number(chartSupremoSumStableRef.current);
+          }
+          runHexagonCohortBoardFetch(
+            uid,
+            gender,
+            category,
+            setHexagonCardBoard,
+            chartEff,
+            'card',
+            gcRankingApi.data
+          );
+        }, 56);
+        return function() {
+          clearTimeout(delB);
+        };
+      },
+      [uid, gender, category, heptagonGcSumForSync, gcRankingApi.data]
+    );
+
+    useEffect(
+      function() {
+        if (!heptagonDetailOpen) {
+          setHexagonModalBoard(null);
+          return;
+        }
+        if (heptagonModalGender === gender && heptagonModalCategory === category) {
+          setHexagonModalBoard(null);
+          return;
+        }
+        if (!uid) {
+          setHexagonModalBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
+          return;
+        }
+        var chartS = chartSupremoSumForModalVirtualOvl;
+        if (
+          (chartS == null || !isFinite(Number(chartS))) &&
+          chartSupremoModalStableRef.current != null &&
+          isFinite(Number(chartSupremoModalStableRef.current)) &&
+          Number(chartSupremoModalStableRef.current) > 0
+        ) {
+          chartS = chartSupremoModalStableRef.current;
+        }
+        runHexagonCohortBoardFetch(
+          uid,
+          heptagonModalGender,
+          heptagonModalCategory,
+          setHexagonModalBoard,
+          chartS,
+          'modal',
+          gcRankingApi.data
+        );
+      },
+      [
+        heptagonDetailOpen,
+        uid,
+        heptagonModalCategory,
+        heptagonModalGender,
+        gender,
+        category,
+        chartSupremoSumForModalVirtualOvl,
+        gcRankingApi.data
+      ]
+    );
+
+    useEffect(
+      function() {
+        if (state.loading || !uid || !tierForCard || !state.monthly) return;
+        if (state.err) return;
+        if (typeof window.saveStelvioHexagonRankLog !== 'function') return;
+        var sk =
+          uid +
+          '|' +
+          gender +
+          '|' +
+          category +
+          '|' +
+          (state.monthly.ranks
+            ? state.monthly.ranks.join(',')
+            : '') +
+          '|' +
+          (tierForCard.pTier != null ? String(tierForCard.pTier) : '');
+        if (sk === saveKeyRef.current) return;
+        saveKeyRef.current = sk;
+        var monthKeyKst = currentMonthKeyKst();
+        var rankForSave = heptagonCardRankFromSummary(tierForCard, category, viewerAc);
+        if (rankForSave == null) {
+          rankForSave = comprehensiveRankUiFromTierSummary(tierForCard, category, viewerAc);
+        }
+        var disp =
+          (userProfile && (userProfile.name || userProfile.displayName)) != null
+            ? String(userProfile.name || userProfile.displayName)
+            : '';
+        fetchRankingUserMeta(uid, gender)
+          .then(function(meta) {
+            return window.saveStelvioHexagonRankLog({
+              userId: uid,
+              displayName: disp || (meta && meta.displayName) || '',
+              filterGender: gender,
+              filterCategory: category,
+              ageCategory: (meta && meta.ageCategory) || (userProfile && userProfile.ageCategory) || '',
+              period: 'monthly',
+              monthKey: monthKeyKst,
+              ranks: state.monthly.ranks || [],
+              cohortNPerAxis: state.monthly.cohortSizePerAxis || [],
+              positionScores100: tierForCard.positionScores100 || tierForCard.itemP || [],
+              sumPositionScores: tierForCard.sumPositionScores,
+              avgPositionScore: tierForCard.avgPositionScore,
+              pTier: tierForCard.pTier,
+              tierId: tierForCard.tier && tierForCard.tier.id,
+              nRef: tierForCard.cohortN,
+              pComprehensive: tierForCard.pComprehensive,
+              comprehensiveRank: rankForSave,
+              isPrivate: userProfile && userProfile.is_private === true
+            });
+          })
+          .catch(function() {
+            return window.saveStelvioHexagonRankLog({
+              userId: uid,
+              displayName: disp,
+              filterGender: gender,
+              filterCategory: category,
+              ageCategory: (userProfile && userProfile.ageCategory) || '',
+              period: 'monthly',
+              monthKey: monthKeyKst,
+              ranks: state.monthly.ranks || [],
+              cohortNPerAxis: state.monthly.cohortSizePerAxis || [],
+              positionScores100: tierForCard.positionScores100 || tierForCard.itemP || [],
+              sumPositionScores: tierForCard.sumPositionScores,
+              avgPositionScore: tierForCard.avgPositionScore,
+              pTier: tierForCard.pTier,
+              tierId: tierForCard.tier && tierForCard.tier.id,
+              nRef: tierForCard.cohortN,
+              pComprehensive: tierForCard.pComprehensive,
+              comprehensiveRank: rankForSave,
+              isPrivate: userProfile && userProfile.is_private === true
+            });
+          });
+      },
+      [state.loading, state.err, state.monthly, tierForCard, uid, gender, category, userProfile, viewerAc]
+    );
+
+    var svg = useMemo(
+      function() {
+        if (state.loading || !state.monthly) return null;
+        var cx = 100;
+        var cy = 100;
+        var rLabel = 88;
+        var rMax = 70;
+        var nAxis = N_WKG_AXES;
+
+        /* ── 모수(n) 결정 ──────────────────────────────────────────────────────
+         * 툴팁에 표시되는 모수와 동일한 값을 사용한다.
+         * 우선순위: tierForCard.cohortN(Firestore 집계 or API max) > max(cohortSizePerAxis) > 1
+         * ──────────────────────────────────────────────────────────────────── */
+        var nRef = (tierForCard && tierForCard.cohortN != null && (tierForCard.cohortN | 0) > 0)
+          ? (tierForCard.cohortN | 0)
+          : 0;
+        if (nRef < 1) {
+          var perAxis = state.monthly.cohortSizePerAxis || [];
+          for (var pi = 0; pi < perAxis.length; pi++) {
+            var pn = (perAxis[pi] | 0);
+            if (pn > nRef) nRef = pn;
+          }
+        }
+        if (nRef < 1) nRef = 1;
+
+        /* 순위 비율 직접 계산: (nRef - rank + 1) / nRef
+         * rank 1위 → 0.99(최대), 꼴찌 → ~0.08(최소), 데이터 없음(null) → 0.08 */
+        var rankNorms = [];
+        var ranks = state.monthly.ranks || [];
+        for (var ni = 0; ni < nAxis; ni++) {
+          var r = ranks[ni];
+          var norm;
+          if (r == null || !isFinite(r) || r < 1) {
+            norm = 0.08;
+          } else {
+            var rr = Math.floor(Number(r));
+            if (rr < 1) rr = 1;
+            if (rr > nRef) rr = nRef;
+            norm = (nRef - rr + 1) / nRef;
+            if (norm > 0.99) norm = 0.99;
+            if (norm < 0.08) norm = 0.08;
+          }
+          rankNorms.push(norm);
+        }
+
+        var mPts = pathFromPoints(radarPolygonPoints(rankNorms, cx, cy, rMax));
+        var grid = [0.25, 0.5, 0.75, 1].map(function(g) {
+          var gr = [];
+          for (var gi = 0; gi < nAxis; gi++) gr.push(g);
+          return pathFromPoints(radarPolygonPoints(gr, cx, cy, rMax));
+        });
+        var fillGradId = 'stelvio-hept-fill-rad-' + String(uid || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48);
+        if (!fillGradId || fillGradId === 'stelvio-hept-fill-rad_-') {
+          fillGradId = 'stelvio-hept-fill-rad-def';
+        }
+        return (
+          <svg viewBox="0 0 200 200" className="w-full h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 파워 6축 헥사곤 레벨 포지션">
+            <defs>
+              <radialGradient
+                id={fillGradId}
+                gradientUnits="userSpaceOnUse"
+                cx={cx}
+                cy={cy}
+                r={rMax * 1.02}
+                fx={cx}
+                fy={cy}
+              >
+                <stop offset="0%" stopColor="rgb(245, 243, 255)" stopOpacity={0.95} />
+                <stop offset="38%" stopColor="rgb(196, 181, 253)" stopOpacity={0.72} />
+                <stop offset="72%" stopColor="rgb(139, 92, 246)" stopOpacity={0.62} />
+                <stop offset="100%" stopColor="rgb(91, 33, 182)" stopOpacity={0.78} />
+              </radialGradient>
+            </defs>
+            {grid.map(function(d, idx) {
+              return (
+                <path
+                  key={idx}
+                  d={d}
+                  fill="none"
+                  stroke="rgba(148, 163, 184, 0.35)"
+                  strokeWidth="0.6"
+                />
+              );
+            })}
+            {AXES.map(function(ax, i) {
+              var t = axisAngle(i, nAxis);
+              return (
+                <line
+                  key={ax.key}
+                  x1={cx}
+                  y1={cy}
+                  x2={cx + rLabel * 1.05 * Math.cos(t)}
+                  y2={cy + rLabel * 1.05 * Math.sin(t)}
+                  stroke="rgba(148, 163, 184, 0.45)"
+                  strokeWidth="0.5"
+                />
+              );
+            })}
+            <path
+              d={mPts}
+              fill={'url(#' + fillGradId + ')'}
+              stroke="rgb(109, 40, 217)"
+              strokeWidth="2.2"
+              strokeLinejoin="round"
+            />
+            {AXES.map(function(ax, i) {
+              var t = axisAngle(i, nAxis);
+              var lx = cx + rLabel * Math.cos(t);
+              var ly = cy + rLabel * Math.sin(t);
+              var mr = state.monthly.ranks[i];
+              var rankChanges = state.monthly.rankChanges || [];
+              var prevRanks = state.monthly.previousBoardRanks || [];
+              var changeSuffix = heptagonAxisRankChangeSuffix(rankChanges[i], prevRanks[i]);
+              return (
+                <text
+                  key={ax.key + '-lbl'}
+                  x={lx}
+                  y={ly}
+                  textAnchor="middle"
+                  className="fill-slate-800"
+                >
+                  {changeSuffix ? <title>{changeSuffix.title}</title> : null}
+                  <tspan x={lx} dy="0" style={{ fontSize: '9.5px', fontWeight: 600 }}>
+                    {ax.label}
+                  </tspan>
+                  <tspan x={lx} dy="11" style={{ fontSize: '7.5px', fill: '#64748b' }}>
+                    {mr != null ? mr + '위' : '—'}
+                    {changeSuffix ? (
+                      <tspan
+                        fill={HEPTAGON_AXIS_RANK_CHANGE_FILL[changeSuffix.kind]}
+                        style={{ fontSize: '7px', fontWeight: 600 }}
+                      >
+                        {changeSuffix.text}
+                      </tspan>
+                    ) : null}
+                  </tspan>
+                </text>
+              );
+            })}
+          </svg>
+        );
+      },
+      [state, tierForCard, uid]
+    );
+
+    var filterRow = null;
+    if (uid) {
+      filterRow = (
+        <div
+          className="stelvio-octagon-filters"
+          role="group"
+          aria-label="랭킹 기준(성별·부문) 선택"
+        >
+          <div className="stelvio-octagon-filter-joined">
+            <div className="stelvio-octagon-filter-cell stelvio-octagon-gender">
+              <span className="stelvio-octagon-filter-cap">성별</span>
+              <span className="stelvio-octagon-filter-val">{labelForGender(gender)}</span>
+              <span className="stelvio-octagon-filter-chev" aria-hidden="true" />
+              <select
+                className="stelvio-octagon-filter-select"
+                value={gender}
+                onChange={function(e) {
+                  setGender(e.target.value);
+                }}
+                aria-label="성별"
+              >
+                {GENDER_OPTIONS.map(function(o) {
+                  return (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="stelvio-octagon-filter-cell stelvio-octagon-category">
+              <span className="stelvio-octagon-filter-cap">카테고리</span>
+              <span className="stelvio-octagon-filter-val">{labelForCategory(category)}</span>
+              <span className="stelvio-octagon-filter-chev" aria-hidden="true" />
+              <select
+                className="stelvio-octagon-filter-select"
+                value={category}
+                onChange={function(e) {
+                  setCategory(e.target.value);
+                }}
+                aria-label="카테고리"
+              >
+                {CATEGORY_OPTIONS.map(function(o) {
+                  return (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+          {(() => {
+            var myCat = categoryValueMatchingUserAge(userProfile);
+            if (!myCat) {
+              return null;
+            }
+            return (
+              <div className="stelvio-octagon-filter-verify mt-1.5 flex flex-wrap items-center justify-center gap-2 text-[11px] text-slate-600">
+                {category !== myCat ? (
+                  <button
+                    type="button"
+                    className="px-2.5 py-1 rounded-lg border border-violet-200 bg-violet-50/90 text-violet-900 font-medium hover:bg-violet-100 shadow-sm"
+                    onClick={function() {
+                      setCategory(myCat);
+                    }}
+                  >
+                    나의 부문(검증): {labelForCategory(myCat)}
+                  </button>
+                ) : (
+                  <span className="px-1 text-center leading-snug">
+                    동일 조건·월(환산) 순위: <strong>나의 부문</strong>({labelForCategory(myCat)}) — 리스트·툴팁과 동기
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      );
+    }
+
+    var onHexagonOpenDetail = function() {
+      if (heptagonModalBaseTier || heptagonModalSummary) {
+        setHexagonDetailOpen(true);
+      }
+    };
+
+    /** 팝업:「동일 조건」표 — 카드 필터와 같으면 카드에서 이미 로드한 표 재사용, 아니면 모달 전용 조회 */
+    var heptagonBoardForModal = useMemo(
+      function() {
+        if (!heptagonDetailOpen) {
+          return { loading: false, err: null, rows: [], nCohort: 0, meInList: false };
+        }
+        if (heptagonModalGender === gender && heptagonModalCategory === category) {
+          return heptagonCardBoard;
+        }
+        if (heptagonModalBoard == null) {
+          return { loading: true, err: null, rows: [], nCohort: 0, meInList: false };
+        }
+        return heptagonModalBoard;
+      },
+      [heptagonDetailOpen, gender, category, heptagonModalGender, heptagonModalCategory, heptagonCardBoard, heptagonModalBoard]
+    );
+
+    var heptagonDetailModal =
+      heptagonDetailOpen && heptagonModalShowSummary ? (
+        <HexagonRankDetailModal
+          onClose={function() {
+            setHexagonDetailOpen(false);
+          }}
+          tierSummary={heptagonModalShowSummary}
+          genderLabel={labelForGender(heptagonModalGender)}
+          categoryLabel={labelForCategory(heptagonModalCategory)}
+          periodLabel="최근 4주 최고 기록(월)"
+          boardState={heptagonBoardForModal}
+          boardFilterGender={heptagonModalGender}
+          boardFilterCategory={heptagonModalCategory}
+          onBoardFilterChange={function(nextG, nextC) {
+            setHexagonModalGender(nextG);
+            setHexagonModalCategory(nextC);
+          }}
+          myDisplayName={
+            userProfile && (userProfile.name || userProfile.displayName) != null
+              ? String(userProfile.name || userProfile.displayName)
+              : ''
+          }
+          viewerUserId={uid}
+          viewerGrade={userProfile && userProfile.grade != null ? String(userProfile.grade) : '2'}
+          viewerAgeCategory={viewerAc}
+          gcRankingPayload={gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null}
+        />
+      ) : null;
+
+    var body = null;
+    if (!uid) {
+      body = (
+        <div className="h-[200px] flex items-center justify-center text-gray-500 text-sm text-center px-2">
+          사용자 ID가 없으면 순위를 불러올 수 없습니다.
+        </div>
+      );
+    } else if (state.loading) {
+      if (heptagonSummaryCache) {
+        body = (
+          <div className="h-[220px] flex flex-col items-center justify-center">
+            <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px] flex items-center justify-center min-h-[200px]">
+              <OctagonTierCenterOverlay
+                summary={heptagonSummaryCacheMerged != null ? heptagonSummaryCacheMerged : heptagonSummaryCache}
+                onOpenDetail={onHexagonOpenDetail}
+                heptagonCardTooltip={stelvioCardTooltip}
+                filterGenderLabel={labelForGender(gender)}
+                filterCategoryLabel={labelForCategory(category)}
+                filterCategoryKey={category}
+                viewerUserId={uid}
+                cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
+                gcRank={
+                  uid
+                    ? gcHexagonRankForBadge(
+                        uid,
+                        stelvioCohortOvl,
+                        stelvioCardTooltip,
+                        heptagonSummaryCacheMerged != null ? heptagonSummaryCacheMerged : heptagonSummaryCache,
+                        category,
+                        viewerAc,
+                        gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null,
+                        gender
+                      )
+                    : undefined
+                }
+              />
+            </div>
+            <p className="text-xs text-center text-slate-500 mt-0 px-2">최신 헥사곤 순위를 동기화하는 중… (직전 저장값 표시)</p>
+            <div
+              className="w-8 h-8 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin mt-2"
+              aria-hidden="true"
+            />
+          </div>
+        );
+      } else {
+        body = (
+          <div className="h-[220px] flex flex-col items-center justify-center">
+            <div className="w-10 h-10 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin mb-3" />
+            <span className="text-sm text-gray-500">헥사곤 로딩…</span>
+          </div>
+        );
+      }
+    } else if (state.err === 'fetch') {
+      body = (
+        <div className="h-[180px] flex items-center justify-center text-gray-500 text-sm">랭킹을 불러오지 못했습니다. 네트워크를 확인해 주세요.</div>
+      );
+    } else {
+      var barTierIdForBar = null;
+      var pShowForBar = -1;
+      var barCtxForBar = null;
+      if (tierForCard) {
+        var hctBar0 = stelvioCardTooltip || {};
+        pShowForBar =
+          hctBar0.kind === 'ok' && hctBar0.pPct != null && isFinite(hctBar0.pPct) && hctBar0.pPct >= 0 ? hctBar0.pPct : -1;
+        barTierIdForBar =
+          pShowForBar >= 0
+            ? (heptagonBoardTierIdFromLevelPercent(pShowForBar) || {}).id || tierForCard.tier.id
+            : tierForCard.tier.id;
+        barCtxForBar = {
+          isVirtualCohort: tierForCard.heptagonBoardVirtualCohort === true,
+          filterCategory: category,
+          viewerAgeCategory: viewerAc
+        };
+      }
+      body = (
+        <div>
+          <div className="flex items-center justify-center gap-1 w-full max-w-[420px] mx-auto">
+            <div className="stelvio-octagon-chart-shell relative flex-1 h-[260px]">
+              {svg}
+              {tierForCard ? (
+                <OctagonTierCenterOverlay
+                  summary={tierForCard}
+                  onOpenDetail={onHexagonOpenDetail}
+                  heptagonCardTooltip={stelvioCardTooltip}
+                  filterGenderLabel={labelForGender(gender)}
+                  filterCategoryLabel={labelForCategory(category)}
+                  filterCategoryKey={category}
+                  viewerUserId={uid}
+                  cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
+                  detachedLevelPill={true}
+                  pctHintOpen={tierPctHintOpen}
+                  setPctHintOpen={setTierPctHintOpen}
+                  gcRank={
+                    uid
+                      ? gcHexagonRankForBadge(
+                          uid,
+                          stelvioCohortOvl,
+                          stelvioCardTooltip,
+                          tierForCard,
+                          category,
+                          viewerAc,
+                          gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null,
+                          gender
+                        )
+                      : undefined
+                  }
+                />
+              ) : null}
+            </div>
+            {tierForCard && barTierIdForBar && barCtxForBar ? (
+              <div className="stelvio-octagon-sidebar-col">
+                <OctagonTierLevelPillSidebar
+                  summary={tierForCard}
+                  heptagonCardTooltip={stelvioCardTooltip}
+                  filterGenderLabel={labelForGender(gender)}
+                  filterCategoryLabel={labelForCategory(category)}
+                  showPct={tierPctHintOpen}
+                  setShowPct={setTierPctHintOpen}
+                />
+                <LevelProgressBar
+                  summary={tierForCard}
+                  tierId={barTierIdForBar}
+                  pPctForBar={pShowForBar >= 0 ? pShowForBar : undefined}
+                  hideTopTierLabel={true}
+                  barContext={barCtxForBar}
+                />
+              </div>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(124, 58, 237, 0.45)', border: '1px solid #6d28d9' }} />
+              <span>최근 4주 최고 기록</span>
+            </div>
+          </div>
+          <div
+            className="stelvio-heptagon-tier-legend mt-2 mb-1 px-1 w-full max-w-xl mx-auto"
+            role="group"
+            aria-label="등급 A~G 및 순위 적용 % 범례"
+          >
+            <div className="grid grid-cols-7 gap-x-0.5 sm:gap-x-1 gap-y-1.5 justify-items-center items-end text-[10px] text-gray-600">
+              {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tLegendId) {
+                return (
+                  <div
+                    key={'leg-img-' + tLegendId}
+                    className="stelvio-heptagon-tier-legend__img-wrap stelvio-heptagon-tier-legend__img-wrap--focus flex items-end justify-center w-full pt-0.5"
+                  >
+                    <img
+                      src={tierBadgeImageSrc(tLegendId)}
+                      alt=""
+                      className="stelvio-heptagon-tier-legend__img max-w-none object-contain object-bottom pointer-events-none w-[calc(24px*1.56)] h-[calc(16px*1.56)]"
+                      decoding="async"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            {tierForCard && barTierIdForBar && barCtxForBar ? (
+              <HexagonTierHorizontalGradientBar
+                summary={tierForCard}
+                tierId={barTierIdForBar}
+                pPctForBar={pShowForBar >= 0 ? pShowForBar : undefined}
+                barContext={barCtxForBar}
+              />
+            ) : null}
+          </div>
+        </div>
+      );
+    }
+
+    var gcHexagonStaleCaption = gcHexagonStaleSnapshot ? (
+      <p className="weekly-top10-week-caption text-center mb-2 px-2" role="status">
+        ※ 직전 헥사곤 스냅샷 기준 표시 (03:20 집계 갱신 대기 중)
+      </p>
+    ) : null;
+
+    if (DashboardCard) {
+      return (
+        <DashboardCard title="STELVIO 헥사곤 (레벨 포지션)">
+          {filterRow}
+          {gcHexagonStaleCaption}
+          {body}
+          {heptagonDetailModal}
+        </DashboardCard>
+      );
+    }
+    return (
+      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 헥사곤 (레벨 포지션)</h3>
+        {filterRow}
+        {gcHexagonStaleCaption}
+        {body}
+        {heptagonDetailModal}
+      </div>
+    );
+  }
+
+  window.StelvioHexagonRanksCard = StelvioHexagonRanksCard;
+})();
