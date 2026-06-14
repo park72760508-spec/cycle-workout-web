@@ -78,6 +78,7 @@ const GEMINI_RUN_COACH_SYSTEM_PROMPT = `
 - 카테고리: {{determinedWorkoutCategory}}
 - 처방 근거: {{workoutCategoryReason}}
 - 허용 워크아웃: {{allowedWorkoutTypes}}
+- **시스템 확정 추천 워크아웃 (JSON recommended_workout에 반드시 이 값만 사용):** {{determinedRecommendedWorkout}}
 
 [RUN 5단계 트레이닝 존 — 코멘트에 반드시 해당 존과 생리학적 목표를 명시]
 - **Z1 Recovery Jog**: 젖산 제거·혈류 회복. 20~30분, HRmax 60% 이하.
@@ -91,7 +92,7 @@ const GEMINI_RUN_COACH_SYSTEM_PROMPT = `
 2. FTP·와트·즉위프트·사이클 용어 절대 금지. 페이스·rTSS·심박·존만 사용.
 3. {{workoutCategoryReason}}을 핵심 뼈대로 삼아, **어느 Z1~Z5 존인지**와 **생리학적 목표(미토콘드리아, LT, VO₂max 등)**를 러닝 전문 용어로 3~4문장 경어체 설명.
 4. 헥사곤 결측·페널티 구간이 있으면 해당 거리 훈련 권고를 포함.
-5. recommended_workout은 허용 목록 중 정확히 1개.
+5. recommended_workout은 **{{determinedRecommendedWorkout}}** 와 정확히 동일한 문자열만 출력 (목록 중 선택 금지, 임의 변경 금지).
 
 [출력 JSON]
 {
@@ -99,7 +100,7 @@ const GEMINI_RUN_COACH_SYSTEM_PROMPT = `
   "training_status": "준비 완료",
   "vo2max_estimate": {{calculatedVO2Max}},
   "coach_comment": "…",
-  "recommended_workout": "Easy Run (Z2)"
+  "recommended_workout": "{{determinedRecommendedWorkout}}"
 }
 `;
 

@@ -233,7 +233,15 @@ function determineDeterministicRunWorkoutCategory(conditionScore, last7DaysRtss,
       : 'Z2';
     result.primaryZone = pz;
   }
-  result.training_zone = result.primaryZone;
+  if (typeof window.finalizeRunWorkoutDecision === 'function') {
+    result = window.finalizeRunWorkoutDecision(result);
+  } else if (typeof window.pickDeterministicRunRecommendedWorkout === 'function') {
+    result.recommendedWorkout = window.pickDeterministicRunRecommendedWorkout(result);
+    result.training_zone = window.parseRunWorkoutZone
+      ? window.parseRunWorkoutZone(result.recommendedWorkout)
+      : result.primaryZone;
+    result.primaryZone = result.training_zone;
+  }
   return result;
 }
 
@@ -279,12 +287,25 @@ function normalizeCoachRecommendedWorkout(aiValue, workoutDecision) {
   return raw;
 }
 
+/** RUN: AI 선택 무시, 규칙 엔진이 확정한 워크아웃만 사용 (동일 조건 → 동일 추천) */
+function resolveRunRecommendedWorkout(workoutDecision, aiValue) {
+  if (workoutDecision && workoutDecision.recommendedWorkout) {
+    return workoutDecision.recommendedWorkout;
+  }
+  if (typeof window.pickDeterministicRunRecommendedWorkout === 'function') {
+    return window.pickDeterministicRunRecommendedWorkout(workoutDecision);
+  }
+  return normalizeCoachRecommendedWorkout(aiValue, workoutDecision);
+}
+
 /** RUN 코치 응답에 규칙 엔진 메타데이터 부착 (팝업·캐시용) */
 function attachCoachWorkoutMetadata(response, workoutDecision, isRun) {
   if (!response || !workoutDecision || !isRun) return response;
   response.workout_category = workoutDecision.category;
   response.workout_category_reason = workoutDecision.reason;
   response.training_zone = workoutDecision.training_zone || workoutDecision.primaryZone || null;
+  response.hexagon_override = workoutDecision.hexagonOverride || null;
+  response.recommended_workout = resolveRunRecommendedWorkout(workoutDecision, response.recommended_workout);
   response.sport_category = 'run';
   return response;
 }
@@ -384,7 +405,9 @@ function buildDeterministicCoachResponse(ctx) {
     allowedWorkouts: defaultWorkouts,
     reason: isRun ? '오늘 컨디션에 맞는 지구력 러닝을 권장합니다.' : '오늘 컨디션에 맞는 지구력 훈련을 권장합니다.'
   };
-  var recommended = normalizeCoachRecommendedWorkout(workoutDecision.allowedWorkouts[0], workoutDecision);
+  var recommended = isRun
+    ? resolveRunRecommendedWorkout(workoutDecision, workoutDecision.allowedWorkouts && workoutDecision.allowedWorkouts[0])
+    : normalizeCoachRecommendedWorkout(workoutDecision.allowedWorkouts[0], workoutDecision);
   var loadLabel = isRun ? 'rTSS' : 'TSS';
   var comment =
     userName +
@@ -646,6 +669,7 @@ Output Format (JSON Only):
     .replace(/\{\{calculatedVO2Max\}\}/g, String(calculatedVO2Max))
     .replace(/\{\{determinedWorkoutCategory\}\}/g, workoutDecision.category)
     .replace(/\{\{workoutCategoryReason\}\}/g, workoutDecision.reason)
+    .replace(/\{\{determinedRecommendedWorkout\}\}/g, workoutDecision.recommendedWorkout || (workoutDecision.allowedWorkouts && workoutDecision.allowedWorkouts[0]) || 'Recovery Jog (Z1)')
     .replace(/\{\{allowedWorkoutTypes\}\}/g, workoutDecision.allowedWorkouts.map(function(w){ return '"' + w + '"'; }).join(', '));
 
   // 모델 설정
@@ -934,10 +958,9 @@ Output Format (JSON Only):
             training_status: result.training_status || statusFnTrunc(workoutDecision.category),
             vo2max_estimate: calculatedVO2Max,
             coach_comment: result.coach_comment,
-            recommended_workout: normalizeCoachRecommendedWorkout(
-              result.recommended_workout,
-              workoutDecision
-            ),
+            recommended_workout: isRun
+              ? resolveRunRecommendedWorkout(workoutDecision, result.recommended_workout)
+              : normalizeCoachRecommendedWorkout(result.recommended_workout, workoutDecision),
           }, workoutDecision, isRun);
         }
         lastError = new Error('응답이 잘렸거나 코멘트가 불완전합니다.');
@@ -955,10 +978,9 @@ Output Format (JSON Only):
         training_status: result.training_status || trainingStatusFn(workoutDecision.category),
         vo2max_estimate: calculatedVO2Max,
         coach_comment: result.coach_comment || (userName + '님, 오늘도 화이팅하세요!'),
-        recommended_workout: normalizeCoachRecommendedWorkout(
-          result.recommended_workout,
-          workoutDecision
-        ),
+        recommended_workout: isRun
+          ? resolveRunRecommendedWorkout(workoutDecision, result.recommended_workout)
+          : normalizeCoachRecommendedWorkout(result.recommended_workout, workoutDecision),
       }, workoutDecision, isRun);
     } catch (err) {
       lastError = err;
