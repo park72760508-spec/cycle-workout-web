@@ -704,15 +704,51 @@
     };
   }
 
+  function escapeHeroHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function buildHeroRankDeltaHtml(viewerItem) {
+    if (!viewerItem) return '';
+    var badgeFn = typeof window.stelvioServerRankChangeBadgeHtml === 'function'
+      ? window.stelvioServerRankChangeBadgeHtml
+      : (typeof window.stelvioRankDeltaBadgeHtml === 'function' ? window.stelvioRankDeltaBadgeHtml : null);
+    if (!badgeFn) return '';
+    if (viewerItem.rankChange != null && viewerItem.previousBoardRank != null) {
+      return badgeFn(viewerItem.rankChange, viewerItem.previousBoardRank);
+    }
+    if (viewerItem.previousBoardRank != null && viewerItem.rank != null) {
+      return badgeFn(viewerItem.previousBoardRank, viewerItem.rank);
+    }
+    return '';
+  }
+
+  function injectHeroRankDelta(msg, rankNum, deltaHtml) {
+    if (!msg || !deltaHtml || rankNum == null || rankNum < 1) return msg;
+    if (typeof window.stelvioInjectRankDeltaAfterPrimaryRank === 'function') {
+      return window.stelvioInjectRankDeltaAfterPrimaryRank(msg, rankNum, ' ' + deltaHtml);
+    }
+    if (typeof window.stelvioInjectRankDeltaAfterRankInText === 'function') {
+      return window.stelvioInjectRankDeltaAfterRankInText(msg, rankNum, ' ' + deltaHtml);
+    }
+    return msg + deltaHtml;
+  }
+
   /**
-   * 종합 탭 한줄 히어로 코멘트 (CYCLE GC 탭 stelvioHeroText와 동일 톤)
+   * 종합 탭 히어로 코멘트 (CYCLE GC 탭 stelvioHeroText와 동일 톤·등락 표시)
+   * @returns {{ text: string, html: string }|null}
    */
-  function buildOverallHeroMessage(rows, opts) {
+  function buildOverallHeroPayload(rows, opts) {
     opts = opts || {};
     var uid = getCurrentUserId();
     if (!uid) return null;
     var gender = opts.gender || 'all';
     var activeCategory = opts.category || 'Supremo';
+    var viewerItem = opts.viewerItem || null;
     var filtered = filterByGender(rows || [], gender);
     var list = [];
     filtered.forEach(function (r) {
@@ -737,11 +773,8 @@
       }
     }
     if (!myRow) return null;
-    var myBoardScore = getOverallTotalScore(
-      (rows || []).find(function (r) { return String(rowUserId(r)) === String(uid); }),
-      gender,
-      activeCategory
-    );
+    var rawMy = (rows || []).find(function (r) { return String(rowUserId(r)) === String(uid); });
+    var myBoardScore = getOverallTotalScore(rawMy, gender, activeCategory);
     if (myBoardScore != null && myBoardScore > 0) {
       myRow = Object.assign({}, myRow, { score: myBoardScore });
     }
@@ -750,9 +783,10 @@
       var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
       if (ls && ls.name) userName = ls.name;
     } catch (e) {}
-    var scoreLabel = fmt().formatScore(myRow.score) + 'pt';
+    var userNameEsc = escapeHeroHtml(userName);
+    var scoreLabel = fmt().formatScore(myRow.score) + '점';
     var labels = cfg().CATEGORY_LABELS || {};
-    var ageLabel = labels[myRow.ageCategory] || '';
+    var catLabel = labels[activeCategory] || '';
     if (activeCategory !== 'Supremo') {
       var catList = [];
       filtered.forEach(function (r) {
@@ -769,13 +803,86 @@
         }
       }
     }
-    if (activeCategory === 'Supremo' || !ageLabel || myRow.ageCategory === 'Supremo') {
-      return userName + '님은 RUN 종합 랭킹 전체 ' + globalRank + '위(' + scoreLabel + ')입니다.';
+    var msg;
+    if (activeCategory === 'Supremo' || !catLabel) {
+      msg = userNameEsc + '님은 종합랭킹 전체 ' + globalRank + '위(' + scoreLabel + ')입니다.';
+    } else if (categoryRank > 0) {
+      msg = userNameEsc + '님은 종합랭킹 ' + catLabel + ' 부문에서 ' + categoryRank + '위(' + scoreLabel + '), 전체 ' + globalRank + '위입니다.';
+    } else {
+      msg = userNameEsc + '님은 종합랭킹 전체 ' + globalRank + '위(' + scoreLabel + ')입니다.';
     }
-    if (categoryRank > 0) {
-      return userName + '님은 RUN 종합 랭킹 ' + ageLabel + ' 부문에서 ' + categoryRank + '위(' + scoreLabel + '), 전체 ' + globalRank + '위입니다.';
+    var supBadge = buildHeroRankDeltaHtml(viewerItem);
+    if (globalRank >= 1 && supBadge) {
+      msg = injectHeroRankDelta(msg, globalRank, supBadge);
     }
-    return userName + '님은 RUN 종합 랭킹 전체 ' + globalRank + '위(' + scoreLabel + ')입니다.';
+    return { text: msg.replace(/<[^>]+>/g, ''), html: msg };
+  }
+
+  function buildOverallHeroMessage(rows, opts) {
+    var payload = buildOverallHeroPayload(rows, opts);
+    return payload ? payload.text : null;
+  }
+
+  /**
+   * RUN 6축 헥사곤 — 구간별 페이스 순위 (CYCLE 헵타곤 rank→반지름 로직 동일)
+   */
+  function buildRunningHexagonState(rows, opts) {
+    opts = opts || {};
+    var uid = getCurrentUserId();
+    if (!uid) return null;
+    var gender = opts.gender || 'all';
+    var activeCategory = opts.category || 'Supremo';
+    var segmentMaps = buildSegmentRankMaps(rows, gender);
+    var segments = cfg().OVERALL_SEGMENTS || [];
+    var axes = [];
+    var nRef = 1;
+    var si;
+
+    for (si = 0; si < segments.length; si++) {
+      var seg = segments[si];
+      var map = segmentMaps[seg.key] || {};
+      var cohortN = 0;
+      var keys = Object.keys(map);
+      var ki;
+      for (ki = 0; ki < keys.length; ki++) {
+        if (map[keys[ki]] && map[keys[ki]].rank != null) cohortN += 1;
+      }
+      if (cohortN > nRef) nRef = cohortN;
+      var info = map[uid] || map[String(uid).toLowerCase()] || null;
+      if (!info) {
+        for (ki = 0; ki < keys.length; ki++) {
+          if (keys[ki].toLowerCase() === String(uid).toLowerCase()) {
+            info = map[keys[ki]];
+            break;
+          }
+        }
+      }
+      axes.push({
+        key: seg.key,
+        label: seg.label,
+        rank: info && info.rank != null ? info.rank : null,
+        pace: info && info.pace ? info.pace : '—',
+        cohortN: cohortN
+      });
+    }
+
+    var supremoRanks = buildOverallRankMap(rows, gender, 'Supremo');
+    var catRanks = activeCategory !== 'Supremo'
+      ? buildOverallRankMap(rows, gender, activeCategory)
+      : null;
+    var rawMy = (rows || []).find(function (r) { return String(rowUserId(r)) === String(uid); });
+    var score = rawMy ? getOverallTotalScore(rawMy, gender, activeCategory) : null;
+
+    return {
+      userId: uid,
+      axes: axes,
+      nRef: nRef < 1 ? 1 : nRef,
+      overallRank: supremoRanks[uid],
+      categoryRank: catRanks ? catRanks[uid] : null,
+      score: score,
+      activeCategory: activeCategory,
+      gender: gender
+    };
   }
 
   function formatRankLabel(rankNum) {
@@ -915,6 +1022,9 @@
     buildTssDistributionPayload: buildTssDistributionPayload,
     buildDistanceDistributionPayload: buildDistanceDistributionPayload,
     buildOverallHeroMessage: buildOverallHeroMessage,
+    buildOverallHeroPayload: buildOverallHeroPayload,
+    buildRunningHexagonState: buildRunningHexagonState,
+    buildSegmentRankMaps: buildSegmentRankMaps,
     buildAvatarOverlayProfile: buildAvatarOverlayProfile,
     normalizeLeaderboardRows: normalizeLeaderboardRows,
     getVolumeWindowLabel: getVolumeWindowLabel,
