@@ -136,6 +136,16 @@
     var crewUnsubRef = useRef(null);
     var isOverallTab = activeTab === 'overall';
     var isPaceTab = activeTab === 'pace';
+    var isTssTab = activeTab === 'tss';
+    var isDistanceTab = activeTab === 'distance';
+    var hasDistributionChart = isOverallTab || isPaceTab || isTssTab || isDistanceTab;
+
+    var RUN_DIST_CHART_ROOTS = {
+      overall: 'running-ranking-distribution-chart-root',
+      pace: 'running-ranking-pace-distribution-chart-root',
+      tss: 'running-ranking-tss-distribution-chart-root',
+      distance: 'running-ranking-distance-distribution-chart-root'
+    };
 
     var currentUserId = useMemo(function () {
       return dataApi().getCurrentUserId ? dataApi().getCurrentUserId() : null;
@@ -319,38 +329,43 @@
     }, [isOverallTab, rawRows, gender, activeCategory]);
 
     useEffect(function () {
-      if (!isOverallTab && !isPaceTab) {
-        if (typeof window.disposeStelvioDistributionChart === 'function') {
-          window.disposeStelvioDistributionChart('running-ranking-distribution-chart-root');
-          window.disposeStelvioDistributionChart('running-ranking-pace-distribution-chart-root');
+      var dispose = window.disposeStelvioDistributionChart;
+      if (!hasDistributionChart) {
+        if (typeof dispose === 'function') {
+          Object.keys(RUN_DIST_CHART_ROOTS).forEach(function (tabKey) {
+            dispose(RUN_DIST_CHART_ROOTS[tabKey]);
+          });
         }
         return;
       }
       if (loading) return;
       if (typeof window.refreshStelvioDistributionChart !== 'function') return;
-      var mountId = isOverallTab
-        ? 'running-ranking-distribution-chart-root'
-        : 'running-ranking-pace-distribution-chart-root';
-      if (isOverallTab && !isPaceTab && typeof window.disposeStelvioDistributionChart === 'function') {
-        window.disposeStelvioDistributionChart('running-ranking-pace-distribution-chart-root');
-      }
-      if (isPaceTab && !isOverallTab && typeof window.disposeStelvioDistributionChart === 'function') {
-        window.disposeStelvioDistributionChart('running-ranking-distribution-chart-root');
-      }
+
+      Object.keys(RUN_DIST_CHART_ROOTS).forEach(function (tabKey) {
+        if (tabKey !== activeTab && typeof dispose === 'function') {
+          dispose(RUN_DIST_CHART_ROOTS[tabKey]);
+        }
+      });
+
+      var mountId = RUN_DIST_CHART_ROOTS[activeTab];
+      if (!mountId) return;
+
+      var api = dataApi();
       var payload = null;
-      if (isOverallTab && dataApi().buildDistributionPayload) {
-        payload = dataApi().buildDistributionPayload(rawRows, {
-          gender: gender,
-          category: activeCategory
-        });
-      } else if (isPaceTab && dataApi().buildPaceDistributionPayload) {
-        payload = dataApi().buildPaceDistributionPayload(rawRows, {
-          gender: gender,
-          category: activeCategory,
+      var chartOpts = { gender: gender, category: activeCategory };
+      if (activeTab === 'overall' && api.buildDistributionPayload) {
+        payload = api.buildDistributionPayload(rawRows, chartOpts);
+      } else if (activeTab === 'pace' && api.buildPaceDistributionPayload) {
+        payload = api.buildPaceDistributionPayload(rawRows, Object.assign({}, chartOpts, {
           paceDistance: paceDistance
-        });
+        }));
+      } else if (activeTab === 'tss' && api.buildTssDistributionPayload) {
+        payload = api.buildTssDistributionPayload(rawRows, chartOpts);
+      } else if (activeTab === 'distance' && api.buildDistanceDistributionPayload) {
+        payload = api.buildDistanceDistributionPayload(rawRows, chartOpts);
       }
       if (!payload) return;
+
       if (isOverallTab && listFilter === 'interest') {
         var soc = socialApi();
         if (soc && typeof soc.filterRowsByListInterest === 'function') {
@@ -367,6 +382,7 @@
           if (Array.isArray(payload.entries)) payload.entries = filt(payload.entries);
         }
       }
+
       var rafId = requestAnimationFrame(function () {
         var el = document.getElementById(mountId);
         if (!el) return;
@@ -375,7 +391,19 @@
       return function () {
         cancelAnimationFrame(rafId);
       };
-    }, [isOverallTab, isPaceTab, activeTab, rawRows, gender, activeCategory, paceDistance, listFilter, currentUserId, loading, socialVer]);
+    }, [
+      hasDistributionChart,
+      activeTab,
+      rawRows,
+      gender,
+      activeCategory,
+      paceDistance,
+      listFilter,
+      currentUserId,
+      loading,
+      socialVer,
+      isOverallTab
+    ]);
 
     useEffect(function () {
       if (loading) return;
@@ -580,6 +608,8 @@
     var rootClass = 'running-ranking-body' +
       (isOverallTab ? ' running-ranking-body--overall' : '') +
       (isPaceTab ? ' running-ranking-body--pace' : '') +
+      (isTssTab ? ' running-ranking-body--tss' : '') +
+      (isDistanceTab ? ' running-ranking-body--distance' : '') +
       (initialLoading ? ' running-ranking-body--loading' : '');
 
     return React.createElement('div', { className: rootClass, id: 'running-ranking-react-root' },
@@ -642,14 +672,28 @@
         isOverallTab ? React.createElement(RunningRankingStarLegend) : null,
         isOverallTab
           ? React.createElement('div', {
-              id: 'running-ranking-distribution-chart-root',
+              id: RUN_DIST_CHART_ROOTS.overall,
               className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
               'aria-live': 'polite'
             })
           : null,
         isPaceTab
           ? React.createElement('div', {
-              id: 'running-ranking-pace-distribution-chart-root',
+              id: RUN_DIST_CHART_ROOTS.pace,
+              className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
+              'aria-live': 'polite'
+            })
+          : null,
+        isTssTab
+          ? React.createElement('div', {
+              id: RUN_DIST_CHART_ROOTS.tss,
+              className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
+              'aria-live': 'polite'
+            })
+          : null,
+        isDistanceTab
+          ? React.createElement('div', {
+              id: RUN_DIST_CHART_ROOTS.distance,
               className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
               'aria-live': 'polite'
             })
