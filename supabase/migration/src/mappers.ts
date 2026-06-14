@@ -31,7 +31,10 @@ export function mapGender(raw: unknown): "male" | "female" | "unknown" {
 
 export function mapChallenge(raw: unknown): string {
   const s = str(raw);
-  const allowed = ["Fitness", "GranFondo", "Racing", "Elite", "PRO", "PR", "MastersRace"];
+  const allowed = [
+    "Fitness", "GranFondo", "IronMan", "Racing", "Elite", "PRO",
+    "PR", "MastersRace", "CityRunner", "Challenger", "Sub3Club", "other"
+  ];
   if (s && allowed.includes(s)) return s;
   return "Fitness";
 }
