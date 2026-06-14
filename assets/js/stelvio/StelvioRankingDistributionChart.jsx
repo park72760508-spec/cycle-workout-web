@@ -47,14 +47,16 @@
     Leggenda: '60대 이상',
   };
 
+  /** 페이스 차트 X: -sec/km → 빠를수록(작은 시간) 오른쪽, 느릴수록 왼쪽 */
   function paceChartMetricFromSec(paceSec) {
     var p = Number(paceSec);
     if (!isFinite(p) || p <= 0) return NaN;
-    return p;
+    return -p;
   }
 
-  function formatPaceChartAxis(secPerKm) {
-    var sec = Number(secPerKm);
+  /** chartVal(음수) → M:SS 페이스 라벨 */
+  function formatPaceChartAxis(chartVal) {
+    var sec = -Number(chartVal);
     if (!isFinite(sec) || sec <= 0) return '—';
     var fmt = global.runningRankingFormat;
     if (fmt && typeof fmt.formatPaceMmSs === 'function') return fmt.formatPaceMmSs(sec);
@@ -63,8 +65,8 @@
     return min + ':' + (s < 10 ? '0' : '') + s;
   }
 
-  function formatPaceChartRange(x0, x1) {
-    return formatPaceChartAxis(x0) + ' ~ ' + formatPaceChartAxis(x1) + ' /km';
+  function formatPaceChartRange(chartX0, chartX1) {
+    return formatPaceChartAxis(chartX0) + ' ~ ' + formatPaceChartAxis(chartX1) + ' /km';
   }
 
   var _gid = 0;
@@ -162,9 +164,11 @@
     });
   }
 
-  function buildBins(rawValues, isTss) {
+  function buildBins(rawValues, isTss, isPaceMode) {
     var values = rawValues.filter(function (v) {
-      return v != null && !isNaN(v) && isFinite(v) && v >= 0;
+      if (v == null || isNaN(v) || !isFinite(v)) return false;
+      if (isPaceMode) return true;
+      return v >= 0;
     });
     if (!values.length) {
       return { rows: [], xMin: 0, xMax: 1, maxY: 1 };
@@ -307,9 +311,9 @@
 
     var binPack = useMemo(
       function () {
-        return buildBins(values, isTss);
+        return buildBins(values, isTss, isPaceMode);
       },
-      [values, isTss]
+      [values, isTss, isPaceMode]
     );
 
     var gid = useMemo(
@@ -502,11 +506,7 @@
           var gt = 0;
           for (var gj = 0; gj < catArrR.length; gj++) {
             var rv = rowMetricForRank(catArrR[gj]);
-            if (isPaceMode) {
-              if (isFinite(rv) && rv < myRaw - epsR) gt++;
-            } else if (isFinite(rv) && rv > myRaw + epsR) {
-              gt++;
-            }
+            if (isFinite(rv) && rv > myRaw + epsR) gt++;
           }
           displayRank = gt + 1;
         }
