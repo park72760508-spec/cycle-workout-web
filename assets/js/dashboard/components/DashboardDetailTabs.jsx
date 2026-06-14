@@ -21,12 +21,45 @@
   var useEffect = React.useEffect;
   var useRef = React.useRef;
 
-  var TABS = [
-    { id: 'tendency', label: '나의 성향' },
-    { id: 'training', label: '최근 훈련' },
-    { id: 'growth', label: '성장 추이' },
-    { id: 'wkgGuide', label: '라이딩 지표' }
+  var CYCLE_CHALLENGE_GUIDE_ROWS = [
+    { key: 'Fitness', label: 'Fitness', desc: '건강 유지, 기초 체력', goalRange: '225' },
+    { key: 'GranFondo', label: 'GranFondo', desc: '중장거리 완주', goalRange: '400' },
+    { key: 'Racing', label: 'Racing', desc: 'MCT/아마 레이스 입상권', goalRange: '600' },
+    { key: 'IronMan', label: 'IronMan', desc: '극한의 초장거리 지구력 한계 극복 및 철인 완주', goalRange: '700' },
+    { key: 'Elite', label: 'Elite', desc: '최상위 동호인, 선수 준비', goalRange: '800' },
+    { key: 'PRO', label: 'PRO', desc: '프로 선수', goalRange: '1050' }
   ];
+
+  /** RUN 훈련 등급(challenge) · 주간 목표 rTSS (trainingManager.RUN_TRAINING_LEVELS와 동일) */
+  var RUN_CHALLENGE_GUIDE_ROWS = [
+    { key: 'Fitness', label: 'Fitness', desc: '기초 체력 형성(5~10k 완주)', goalRange: '150 ~ 200' },
+    { key: 'CityRunner', label: 'City Runner', desc: '10k 페이스 단축 및 하프 마라톤(20k) 완주 목표', goalRange: '300 ~ 350' },
+    { key: 'Challenger', label: 'Challenger', desc: '풀마라톤(42k) Sub-4(4시간 이내) 달성', goalRange: '450 ~ 550' },
+    { key: 'Sub3Club', label: 'Sub-3 Club', desc: "마라톤 꿈의 기록 'Sub-3' 달성 및 최상위 동호인 (마스터즈 입상권)", goalRange: '600 ~ 700' },
+    { key: 'Elite', label: 'Elite', desc: '대학/실업 육상 선수 및 전문 엘리트 러너 수준', goalRange: '750 ~ 850' },
+    { key: 'PRO', label: 'PRO', desc: '프로 마라토너 및 국가대표 수준', goalRange: '900 +' }
+  ];
+
+  function resolveDashboardSportCategory(props, userProfile) {
+    var explicit = props && props.sportCategory;
+    if (explicit) {
+      var s = String(explicit).trim().toLowerCase();
+      if (s === 'run') return 'run';
+      if (s === 'cycle') return 'cycle';
+    }
+    var cat = userProfile && (userProfile.category || userProfile.sport_category);
+    if (cat && String(cat).trim().toUpperCase() === 'RUN') return 'run';
+    return 'cycle';
+  }
+
+  function getDashboardTabs(isRun) {
+    return [
+      { id: 'tendency', label: '나의 성향' },
+      { id: 'training', label: '최근 훈련' },
+      { id: 'growth', label: '성장 추이' },
+      { id: 'wkgGuide', label: isRun ? '러닝 지표' : '라이딩 지표' }
+    ];
+  }
 
   /** STELVIO 헵타곤(랭킹 상대%) — 등급은 7축 **포지션 점수**(1등=100…꼴등=0) 평균 → pTier(100-평균) + 아래. N≥100. N<100은 K·모수(코드: `stelvioOctagonPercentCutoffs`) */
   var STELVIO_OCTAGON_TIER_GUIDE_ROWS = [
@@ -39,11 +72,12 @@
     { key: 'c6', label: '레벨G', range: '80% 초과', src: 'assets/img/G.svg' }
   ];
 
-  /** 프로필 카드에 있던 FTP/심박 존 테이블 — 대시보드「라이딩 지표」탭 상단 */
-  function RidingMetricsZoneTables(props) {
+  /** 프로필 카드 FTP/TP·심박 존 테이블 — 대시보드「라이딩/러닝 지표」탭 상단 */
+  function MetricsZoneTables(props) {
     var userProfile = props.userProfile;
     var stats = props.stats || {};
     var standalone = !!props.standalone;
+    var isRun = !!props.isRun;
     var _hr = useState(undefined);
     var hrPeak = _hr[0];
     var setHrPeak = _hr[1];
@@ -73,7 +107,9 @@
       [userProfile]
     );
 
-    var ftp = Number(stats.ftp) || (userProfile && Number(userProfile.ftp)) || 0;
+    var ftp = isRun
+      ? (Number(stats.thresholdPace) || (userProfile && Number(userProfile.ftp)) || 0)
+      : (Number(stats.ftp) || (userProfile && Number(userProfile.ftp)) || 0);
     var build = typeof window.buildProfileZoneTableHtml === 'function' ? window.buildProfileZoneTableHtml : null;
     if (!build) return null;
 
@@ -97,16 +133,33 @@
     html += hrHtml;
     if (!html) return null;
     var wrapClass =
-      'dashboard-riding-metrics-zones profile-zone-tables-wrap' +
-      (standalone ? ' dashboard-riding-metrics-zones-standalone' : '');
+      (isRun ? 'dashboard-running-metrics-zones' : 'dashboard-riding-metrics-zones') +
+      ' profile-zone-tables-wrap' +
+      (standalone ? (isRun ? ' dashboard-running-metrics-zones-standalone' : ' dashboard-riding-metrics-zones-standalone') : '');
     return React.createElement('div', {
       className: wrapClass,
       dangerouslySetInnerHTML: { __html: html }
     });
   }
 
-  /** 프로필 challenge → 표 시 행 키 (trainingManager.getWeeklyTargetTSS 키와 동일 계열) */
-  function normalizeDashboardChallengeKey(challenge) {
+  /** 프로필 challenge → 표 시 행 키 */
+  function normalizeDashboardChallengeKey(challenge, isRun) {
+    if (isRun) {
+      var runKeys = ['Fitness', 'CityRunner', 'Challenger', 'Sub3Club', 'Elite', 'PRO'];
+      var legacyMap = {
+        GranFondo: 'CityRunner',
+        Racing: 'Challenger',
+        IronMan: 'Sub3Club',
+        PR: 'Fitness',
+        MastersRace: 'Challenger'
+      };
+      var chRun = String(challenge || 'Fitness').trim();
+      for (var r = 0; r < runKeys.length; r++) {
+        if (runKeys[r].toLowerCase() === chRun.toLowerCase()) return runKeys[r];
+      }
+      if (legacyMap[chRun]) return legacyMap[chRun];
+      return 'Fitness';
+    }
     var keys = ['Fitness', 'GranFondo', 'Racing', 'IronMan', 'Elite', 'PRO'];
     var ch = String(challenge || 'Fitness').trim();
     for (var i = 0; i < keys.length; i++) {
@@ -148,6 +201,13 @@
     var DashboardCard = p.DashboardCard;
     var stats = p.stats || {};
     var userWeight = stats.weight || (userProfile && userProfile.weight) || 0;
+    var isRun = resolveDashboardSportCategory(p, userProfile) === 'run';
+    var tabs = getDashboardTabs(isRun);
+    var loadLabel = isRun ? 'rTSS' : 'TSS';
+    var defaultWeeklyGoal = isRun ? 175 : 225;
+    var weeklyGoalValue = isRun
+      ? (Number(stats.weeklyRtssGoal) > 0 ? Number(stats.weeklyRtssGoal) : defaultWeeklyGoal)
+      : (Number(stats.weeklyGoal) > 0 ? Number(stats.weeklyGoal) : defaultWeeklyGoal);
 
     var _useState = useState(0);
     var activeIndex = _useState[0];
@@ -184,6 +244,8 @@
     var YearlyPowerPrChart = window.YearlyPowerPrChart;
     var WkgGradeIndicator = window.WkgGradeIndicator;
     var StelvioOctagonRanksCard = window.StelvioOctagonRanksCard;
+    var StelvioHexagonRanksCard = window.StelvioHexagonRanksCard;
+    var RankPolygonCard = isRun ? StelvioHexagonRanksCard : StelvioOctagonRanksCard;
 
     function renderTabContent() {
       if (showSkeleton) return React.createElement(TabSkeleton);
@@ -208,18 +270,18 @@
           /* 훈련 부하 트렌드 (TSS) — 최근 훈련 탭 최상단 */
           logsLoading ? React.createElement(
             DashboardCard,
-            { title: '훈련 부하 트렌드 (TSS)' },
+            { title: '훈련 부하 트렌드 (' + loadLabel + ')' },
             React.createElement('div', { className: 'h-[200px] flex flex-col items-center justify-center' },
               React.createElement('div', { className: 'w-10 h-10 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3' }),
               React.createElement('span', { className: 'text-sm text-gray-500' }, '로딩 중...')
             )
           ) : logsLoadError ? React.createElement(
             DashboardCard,
-            { title: '훈련 부하 트렌드 (TSS)' },
+            { title: '훈련 부하 트렌드 (' + loadLabel + ')' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
           ) : TrainingLoadTssTrendChart && React.createElement(TrainingLoadTssTrendChart, {
             data: weeklyTssTrendData,
-            weeklyGoalTss: Number(stats.weeklyGoal) > 0 ? Number(stats.weeklyGoal) : 225
+            weeklyGoalTss: weeklyGoalValue
           }),
           logsLoading ? React.createElement(
             DashboardCard,
@@ -257,8 +319,8 @@
         return React.createElement(
           'div',
           { className: 'space-y-6' },
-          StelvioOctagonRanksCard &&
-            React.createElement(StelvioOctagonRanksCard, { userProfile: userProfile, DashboardCard: DashboardCard }),
+          RankPolygonCard &&
+            React.createElement(RankPolygonCard, { userProfile: userProfile, DashboardCard: DashboardCard }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: '나의 성장 트렌드' },
@@ -303,27 +365,38 @@
           typeof window.getWkgGradeInfo === 'function'
             ? window.getWkgGradeInfo(stats.wkg).grade
             : 'novice';
-        var myChallengeKey = normalizeDashboardChallengeKey(userProfile && userProfile.challenge);
+        var myChallengeKey = normalizeDashboardChallengeKey(userProfile && userProfile.challenge, isRun);
+        var challengeGuideRows = isRun ? RUN_CHALLENGE_GUIDE_ROWS : CYCLE_CHALLENGE_GUIDE_ROWS;
+        var challengeGoalHeader = isRun ? '주간 목표 rTSS' : '목표 TSS';
+        var challengeSectionTitle = isRun ? '훈련 등급(challenge) · 주간 목표 rTSS' : '훈련 등급(challenge) · 주간 목표 TSS';
+        var challengeSectionDesc = isRun
+          ? '회원가입/프로필에서 선택. 주간 목표 rTSS · RPE 보정 · 목표 조절 범위에 사용'
+          : '회원가입/프로필에서 선택. 주간 목표 TSS · RPE 보정 · 목표 조절 범위에 사용';
+        var polygonTierTitle = isRun ? 'STELVIO 헥사곤 등급표' : 'STELVIO 헵타곤 등급표';
+        var polygonTierDesc = isRun
+          ? '성장 추이 헥사곤: 지표는 항목별 (n−순위)/(n−1)×100(1등=100)의 **평균**을 100에서 뺀 pTier%로 등급합니다. n≥100이면 5/10/20/40/60/80% 컷, n<100이면 K·상한 보정. 종합 순위표는 heptagon_rank_log(성별·부문·avgPositionScore)로 쿼리하세요.'
+          : '성장 추이 헵타곤: 지표는 항목별 (n−순위)/(n−1)×100(1등=100)의 **평균**을 100에서 뺀 pTier%로 등급합니다. n≥100이면 5/10/20/40/60/80% 컷, n<100이면 K·상한 보정. 종합 순위표는 heptagon_rank_log(성별·부문·avgPositionScore)로 쿼리하세요.';
         return React.createElement(
           'div',
           { className: 'space-y-6' },
-          React.createElement(RidingMetricsZoneTables, {
+          React.createElement(MetricsZoneTables, {
             userProfile: userProfile,
             stats: stats,
-            standalone: true
+            standalone: true,
+            isRun: isRun
           }),
           React.createElement(
             'div',
             { className: 'rounded-xl border border-gray-200 bg-white overflow-hidden' },
             React.createElement('div', { className: 'px-4 pb-4 pt-1 space-y-4 text-xs text-gray-600 border-t-0' },
-              React.createElement('section', null,
+              !isRun ? React.createElement('section', null,
                 React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, 'W/kg 표시 기준'),
                 React.createElement('ul', { className: 'space-y-1 pl-4 list-disc' },
                   React.createElement('li', null, React.createElement('strong', null, '계산식'), ': W/kg = FTP(와트) ÷ 체중(kg) — 소수점 둘째자리'),
                   React.createElement('li', null, '대시보드 "파워" 카드에 ', React.createElement('code', { className: 'bg-gray-100 px-1 rounded' }, wkgVal + ' W/kg'), ' 로 표시')
                 )
-              ),
-              React.createElement('section', null,
+              ) : null,
+              !isRun ? React.createElement('section', null,
                 React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, 'W/kg 기반 등급 (네온/패널용)'),
                 React.createElement('table', { className: 'w-full text-left border-collapse' },
                   React.createElement('thead', null,
@@ -384,25 +457,30 @@
                     )
                   )
                 )
-              ),
+              ) : null,
               React.createElement('section', null,
-                React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, '훈련 등급(challenge) · 주간 목표 TSS'),
-                React.createElement('p', { className: 'mb-2' }, '회원가입/프로필에서 선택. 주간 목표 TSS · RPE 보정 · 목표 조절 범위에 사용'),
+                React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, challengeSectionTitle),
+                React.createElement('p', { className: 'mb-2' }, challengeSectionDesc),
                 React.createElement('table', { className: 'w-full text-left border-collapse' },
                   React.createElement('thead', null,
                     React.createElement('tr', { className: 'border-b border-gray-200' },
                       React.createElement('th', { className: 'py-1 pr-2' }, '등급'),
                       React.createElement('th', { className: 'py-1' }, '설명'),
-                      React.createElement('th', { className: 'py-1' }, '목표 TSS')
+                      React.createElement('th', { className: 'py-1' }, challengeGoalHeader)
                     )
                   ),
                   React.createElement('tbody', null,
-                    React.createElement('tr', { className: 'border-b border-gray-100' + (myChallengeKey === 'Fitness' ? ' stelvio-dashboard-current-grade' : '') }, React.createElement('td', { className: 'py-1 pr-2' }, 'Fitness'), React.createElement('td', null, '건강 유지, 기초 체력'), React.createElement('td', null, '225')),
-                    React.createElement('tr', { className: 'border-b border-gray-100' + (myChallengeKey === 'GranFondo' ? ' stelvio-dashboard-current-grade' : '') }, React.createElement('td', { className: 'py-1 pr-2' }, 'GranFondo'), React.createElement('td', null, '중장거리 완주'), React.createElement('td', null, '400')),
-                    React.createElement('tr', { className: 'border-b border-gray-100' + (myChallengeKey === 'Racing' ? ' stelvio-dashboard-current-grade' : '') }, React.createElement('td', { className: 'py-1 pr-2' }, 'Racing'), React.createElement('td', null, 'MCT/아마 레이스 입상권'), React.createElement('td', null, '600')),
-                    React.createElement('tr', { className: 'border-b border-gray-100' + (myChallengeKey === 'IronMan' ? ' stelvio-dashboard-current-grade' : '') }, React.createElement('td', { className: 'py-1 pr-2' }, 'IronMan'), React.createElement('td', null, '극한의 초장거리 지구력 한계 극복 및 철인 완주'), React.createElement('td', null, '700')),
-                    React.createElement('tr', { className: 'border-b border-gray-100' + (myChallengeKey === 'Elite' ? ' stelvio-dashboard-current-grade' : '') }, React.createElement('td', { className: 'py-1 pr-2' }, 'Elite'), React.createElement('td', null, '최상위 동호인, 선수 준비'), React.createElement('td', null, '800')),
-                    React.createElement('tr', { className: (myChallengeKey === 'PRO' ? 'stelvio-dashboard-current-grade' : '') }, React.createElement('td', { className: 'py-1 pr-2' }, 'PRO'), React.createElement('td', null, '프로 선수'), React.createElement('td', null, '1050'))
+                    challengeGuideRows.map(function(row, idx) {
+                      var rowClass = (idx < challengeGuideRows.length - 1 ? 'border-b border-gray-100' : '') +
+                        (myChallengeKey === row.key ? ' stelvio-dashboard-current-grade' : '');
+                      return React.createElement(
+                        'tr',
+                        { key: 'challenge-guide-' + row.key, className: rowClass },
+                        React.createElement('td', { className: 'py-1 pr-2' }, row.label),
+                        React.createElement('td', null, row.desc),
+                        React.createElement('td', null, row.goalRange)
+                      );
+                    })
                   )
                 )
               ),
@@ -422,11 +500,11 @@
               className: 'rounded-xl border border-gray-200 bg-white overflow-hidden'
             },
             React.createElement('div', { className: 'px-4 py-3 text-xs text-gray-600' },
-              React.createElement('div', { className: 'font-semibold text-gray-800 mb-1' }, 'STELVIO 헵타곤 등급표'),
+              React.createElement('div', { className: 'font-semibold text-gray-800 mb-1' }, polygonTierTitle),
               React.createElement(
                 'p',
                 { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
-                '성장 추이 헵타곤: 지표는 항목별 (n−순위)/(n−1)×100(1등=100)의 **평균**을 100에서 뺀 pTier%로 등급합니다. n≥100이면 5/10/20/40/60/80% 컷, n<100이면 K·상한 보정. 종합 순위표는 heptagon_rank_log(성별·부문·avgPositionScore)로 쿼리하세요.'
+                polygonTierDesc
               ),
               React.createElement('table', { className: 'w-full text-left border-collapse' },
                 React.createElement('thead', null,
@@ -478,7 +556,7 @@
           className: 'sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pb-3 -mt-1 flex gap-2 overflow-x-auto scrollbar-hide items-center',
           style: { scrollbarWidth: 'none', msOverflowStyle: 'none' }
         },
-        TABS.map(function(tab, i) {
+        tabs.map(function(tab, i) {
           var isActive = activeIndex === i;
           return React.createElement(
             'button',
