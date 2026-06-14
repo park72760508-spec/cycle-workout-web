@@ -27887,6 +27887,15 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   color: #6b7280;
   line-height: 1.35;
 }
+.running-ranking-movement-hint--footer {
+  margin: 0;
+  padding: 0 8px 12px 4px;
+  text-align: right;
+}
+#runningRankingScreen .running-ranking-movement-hint--footer {
+  width: 100%;
+  box-sizing: border-box;
+}
 .running-ranking-hero-card {
   margin: 10px 0 0;
 }
