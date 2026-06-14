@@ -125,7 +125,7 @@
     var score = Number(coachData.condition_score) || 50;
     var colors = getScoreColor(score);
     var commentText = streamingComment || coachData.coach_comment || '';
-    var workoutType = coachData.recommended_workout || 'Active Recovery (Z1)';
+    var workoutType = coachData.recommended_workout || 'Recovery Jog (Z1)';
     var isQuotaInfo =
       coachData.gemini_quota_exceeded === true || coachData.analysis_source === 'deterministic_quota';
     var hasError = !!(coachData.error_reason) && !isQuotaInfo;
@@ -178,7 +178,7 @@
               className: 'inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full border-none cursor-pointer transition-opacity hover:opacity-70 active:scale-95',
               style: { backgroundColor: colors.bg, color: colors.fill }
             },
-              coachData.training_status || 'Building Base',
+              coachData.training_status || '기초 강화',
               React.createElement('svg', {
                 xmlns: 'http://www.w3.org/2000/svg',
                 viewBox: '0 0 16 16',
