@@ -484,6 +484,92 @@
     };
   }
 
+  function resolvePaceDistanceLabel(distKey) {
+    var key = distKey || '5k';
+    var dists = cfg().PACE_DISTANCES || [];
+    var i;
+    for (i = 0; i < dists.length; i++) {
+      if (dists[i].key === key) return dists[i].label || key;
+    }
+    return key;
+  }
+
+  /** StelvioRankingDistributionChart run_pace 모드용 엔트리 */
+  function rowToPaceChartEntry(row, distKey) {
+    var pace = getPaceForDistance(row, distKey);
+    if (pace.paceSec == null || pace.paceSec <= 0) return null;
+    return {
+      userId: rowUserId(row),
+      name: rowDisplayName(row),
+      paceSec: pace.paceSec,
+      ageCategory: rowAgeCategory(row) || 'Supremo',
+      is_private: isPrivateRow(row)
+    };
+  }
+
+  /**
+   * 페이스 탭 분포 차트 payload (종합 탭 buildDistributionPayload 와 동일 props 형식)
+   * @param {object[]} rows
+   * @param {{ gender?: string, category?: string, paceDistance?: string }} opts
+   */
+  function buildPaceDistributionPayload(rows, opts) {
+    opts = opts || {};
+    var gender = opts.gender || 'all';
+    var distKey = opts.paceDistance || '5k';
+    var filtered = filterByGender(rows || [], gender);
+    var byCategory = {};
+    var i;
+    for (i = 0; i < CHART_CATEGORIES.length; i++) {
+      byCategory[CHART_CATEGORIES[i]] = [];
+    }
+    filtered.forEach(function (r) {
+      var ci;
+      for (ci = 0; ci < CHART_CATEGORIES.length; ci++) {
+        var chartCat = CHART_CATEGORIES[ci];
+        var entry = rowToPaceChartEntry(r, distKey);
+        if (!entry) continue;
+        if (chartCat === 'Supremo' || entry.ageCategory === chartCat) {
+          byCategory[chartCat].push(entry);
+        }
+      }
+    });
+    CHART_CATEGORIES.forEach(function (cat) {
+      byCategory[cat].sort(function (a, b) { return a.paceSec - b.paceSec; });
+      byCategory[cat].forEach(function (e, idx) { e.rank = idx + 1; });
+    });
+    var uid = getCurrentUserId();
+    var myRankSupremo = null;
+    var currentUser = null;
+    if (uid) {
+      var sup = byCategory.Supremo || [];
+      for (i = 0; i < sup.length; i++) {
+        if (sup[i] && String(sup[i].userId) === String(uid)) {
+          myRankSupremo = sup[i];
+          currentUser = sup[i];
+          break;
+        }
+      }
+    }
+    var catKey = opts.category || 'Supremo';
+    var catLabel = (cfg().CATEGORY_LABELS || {})[catKey] || catKey;
+    var distLabel = resolvePaceDistanceLabel(distKey);
+    return {
+      entries: byCategory.Supremo || [],
+      byCategory: byCategory,
+      activeCategory: catKey,
+      duration: 'run_pace',
+      paceDistance: distKey,
+      paceDistanceLabel: distLabel,
+      currentUserId: uid,
+      currentUser: currentUser,
+      myRankSupremo: myRankSupremo,
+      viewerIsAdmin: typeof window.getViewerGrade === 'function' && window.getViewerGrade() === '1',
+      titleOverride: '참가자 분포',
+      pillLabelOverride: catLabel + ' · ' + distLabel + ' 페이스',
+      chartSubNoteOverride: '구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.'
+    };
+  }
+
   /**
    * 종합 탭 분포 차트 payload (CYCLE GC 탭과 동일 props 형식)
    * @param {object[]} rows
@@ -750,6 +836,7 @@
     buildRankedList: buildRankedList,
     buildCrewRankedList: buildCrewRankedList,
     buildDistributionPayload: buildDistributionPayload,
+    buildPaceDistributionPayload: buildPaceDistributionPayload,
     buildOverallHeroMessage: buildOverallHeroMessage,
     buildAvatarOverlayProfile: buildAvatarOverlayProfile,
     normalizeLeaderboardRows: normalizeLeaderboardRows,
