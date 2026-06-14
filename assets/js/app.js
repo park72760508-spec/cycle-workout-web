@@ -15286,6 +15286,13 @@ async function selectRecommendedWorkout(workoutId, date) {
 // coachData.recommended_workout(예: Active Recovery (Z1)) 기반 + 훈련목적·등급 가중 적용
 async function runDashboardAIWorkoutRecommendation(userProfile, coachData) {
   try {
+    var isRun =
+      (userProfile && (String(userProfile.sport_category || '').toUpperCase() === 'RUN' || String(userProfile.category || '').toUpperCase() === 'RUN')) ||
+      (coachData && coachData.sport_category === 'run');
+    if (isRun && typeof window.showRunWorkoutGuideModal === 'function') {
+      window.showRunWorkoutGuideModal(userProfile, coachData, {});
+      return;
+    }
     const apiKey = (localStorage.getItem('geminiApiKey') || '').trim();
     const user = userProfile || window.currentUser || (() => {
       try {

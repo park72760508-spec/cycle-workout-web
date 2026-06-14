@@ -132,13 +132,15 @@ function determineDeterministicWorkoutCategory(conditionScore, last7DaysTSS, wee
  */
 function determineDeterministicRunWorkoutCategory(conditionScore, last7DaysRtss, weeklyRtss, hexagonContext, recentLogs, weeklyRtssGoal) {
   hexagonContext = hexagonContext || {};
-  var missingAxes = hexagonContext.missingAxes || [];
-  var missingNote = '';
-  if (missingAxes.length > 0) {
-    missingNote = missingAxes.map(function (k) {
-      return '최근 90일 내 ' + k + ' 구간의 기록이 부족합니다. 헥사곤 프로필을 채우기 위해 해당 거리 훈련을 추천합니다.';
-    }).join(' ');
-  }
+  var guide = typeof window !== 'undefined' && window.RUN_TRAINING_ZONE_GUIDE;
+  var analyzeGaps = guide && guide.analyzeRunHexagonGaps;
+  var resolvePrescription = guide && guide.resolveRunHexagonPrescription;
+  var buildMissingNote = guide && guide.buildMissingAxesNote;
+  var categoryDefaults = (guide && guide.CATEGORY_DEFAULTS) || {};
+
+  var gaps = analyzeGaps ? analyzeGaps(hexagonContext) : { missingLong: false, missingShort: false, missingMid: false, missingAxes: hexagonContext.missingAxes || [] };
+  var missingAxes = gaps.missingAxes || hexagonContext.missingAxes || [];
+  var missingNote = buildMissingNote ? buildMissingNote(missingAxes) : '';
 
   var recentHighIntensityCount = 0;
   if (recentLogs && recentLogs.length > 0) {
@@ -169,40 +171,69 @@ function determineDeterministicRunWorkoutCategory(conditionScore, last7DaysRtss,
   }
 
   var tssLoadRatio = weeklyRtss > 0 ? last7DaysRtss / weeklyRtss : 1.0;
+  var baseCategory;
   var result;
 
   if (conditionScore < 62 || tssLoadRatio > 1.35 || recentHighIntensityCount >= 2) {
-    result = {
+    baseCategory = 'recovery';
+    result = Object.assign({}, categoryDefaults.recovery || {
       category: 'recovery',
+      primaryZone: 'Z1',
       allowedWorkouts: ['Recovery Jog (Z1)', 'Easy Run (Z2)'],
-      reason: '컨디션 점수(' + conditionScore + '점) 또는 최근 RUN 부하(7일 rTSS ' + last7DaysRtss + '점)를 고려해 회복 러닝을 권장합니다.'
-    };
+      reason: '컨디션 점수(' + conditionScore + '점) 또는 최근 RUN 부하(7일 rTSS ' + last7DaysRtss + '점)를 고려해 Z1 회복 조깅을 권장합니다.'
+    });
+    result.reason = '컨디션 점수(' + conditionScore + '점) 또는 최근 RUN 부하(7일 rTSS ' + last7DaysRtss + '점)를 고려해 Z1 회복 조깅을 권장합니다.';
   } else if (conditionScore < 73 || tssLoadRatio > 1.10) {
-    result = {
+    baseCategory = 'endurance';
+    result = Object.assign({}, categoryDefaults.endurance || {
       category: 'endurance',
-      allowedWorkouts: ['Easy Run (Z2)', 'Long Run (Z2)', 'Tempo Run (Z3)'],
-      reason: '중간 수준의 컨디션(' + conditionScore + '점)에 알맞은 지구력 러닝을 권장합니다.'
-    };
+      primaryZone: 'Z2',
+      allowedWorkouts: ['Easy Run (Z2)', 'Long Run (Z2)'],
+      reason: '중간 수준의 컨디션(' + conditionScore + '점)에 알맞은 Z2 지구력 러닝을 권장합니다.'
+    });
+    result.reason = '중간 수준의 컨디션(' + conditionScore + '점)에 알맞은 Z2 지구력 러닝을 권장합니다.';
   } else if (conditionScore >= 82 && tssLoadRatio <= 0.80) {
-    result = {
+    baseCategory = 'high_intensity';
+    result = Object.assign({}, categoryDefaults.high_intensity || {
       category: 'high_intensity',
+      primaryZone: 'Z4',
       allowedWorkouts: ['Threshold Intervals (Z4)', 'VO₂max Intervals (Z5)'],
-      reason: '컨디션이 우수(' + conditionScore + '점)하고 rTSS 부하에 여유가 있어 고강도 러닝을 권장합니다.'
-    };
+      reason: '컨디션이 우수(' + conditionScore + '점)하고 rTSS 부하에 여유가 있어 Z4~Z5 고강도 러닝을 권장합니다.'
+    });
+    result.reason = '컨디션이 우수(' + conditionScore + '점)하고 rTSS 부하에 여유가 있어 Z4~Z5 고강도 러닝을 권장합니다.';
   } else {
-    result = {
+    baseCategory = 'tempo';
+    result = Object.assign({}, categoryDefaults.tempo || {
       category: 'tempo',
-      allowedWorkouts: ['Tempo Run (Z3)', 'Threshold Intervals (Z4)'],
-      reason: '안정적인 컨디션(' + conditionScore + '점)으로 템포·역치 러닝이 적합합니다.'
-    };
+      primaryZone: 'Z3',
+      allowedWorkouts: ['Steady Run (Z3)', 'Tempo Run (Z3)'],
+      reason: '안정적인 컨디션(' + conditionScore + '점)으로 Z3 템포·역치 러닝이 적합합니다.'
+    });
+    result.reason = '안정적인 컨디션(' + conditionScore + '점)으로 Z3 템포·역치 러닝이 적합합니다.';
   }
 
-  if (missingNote) {
+  // Task B: 6축 헥사곤 공백 맞춤 처방 (컨디션·부하 기본 분기 이후 적용)
+  if (resolvePrescription) {
+    var prescription = resolvePrescription(gaps, conditionScore, baseCategory);
+    if (prescription) {
+      result = Object.assign({}, result, prescription);
+    }
+  }
+
+  if (missingNote && !result.hexagonOverride) {
     result.reason = result.reason + ' ' + missingNote;
   }
   if (weeklyRtssGoal > 0 && last7DaysRtss < weeklyRtssGoal * 0.7) {
     result.reason += ' 주간 rTSS 목표(' + weeklyRtssGoal + '점) 대비 현재 ' + last7DaysRtss + '점으로 부족합니다.';
   }
+
+  if (!result.primaryZone && result.allowedWorkouts && result.allowedWorkouts.length) {
+    var pz = typeof window.parseRunWorkoutZone === 'function'
+      ? window.parseRunWorkoutZone(result.allowedWorkouts[0])
+      : 'Z2';
+    result.primaryZone = pz;
+  }
+  result.training_zone = result.primaryZone;
   return result;
 }
 
@@ -228,7 +259,8 @@ function trainingStatusFromRunWorkoutCategory(category) {
 /** AI recommended_workout → Zone 포함 표준 문자열 (예: "VO2 Max" → "VO2 Max (Z5)") */
 function normalizeCoachRecommendedWorkout(aiValue, workoutDecision) {
   var raw = String(aiValue || '').trim();
-  if (!raw) raw = 'Active Recovery (Z1)';
+  var isRunDecision = workoutDecision && (workoutDecision.training_zone || workoutDecision.primaryZone);
+  if (!raw) raw = isRunDecision ? 'Recovery Jog (Z1)' : 'Active Recovery (Z1)';
   if (typeof window.stelvioParseCoachBasisRecommendedWorkout === 'function') {
     var parsed = window.stelvioParseCoachBasisRecommendedWorkout(raw);
     if (parsed.label) return parsed.label;
@@ -245,6 +277,16 @@ function normalizeCoachRecommendedWorkout(aiValue, workoutDecision) {
   }
   if (allowed.length > 0) return allowed[0];
   return raw;
+}
+
+/** RUN 코치 응답에 규칙 엔진 메타데이터 부착 (팝업·캐시용) */
+function attachCoachWorkoutMetadata(response, workoutDecision, isRun) {
+  if (!response || !workoutDecision || !isRun) return response;
+  response.workout_category = workoutDecision.category;
+  response.workout_category_reason = workoutDecision.reason;
+  response.training_zone = workoutDecision.training_zone || workoutDecision.primaryZone || null;
+  response.sport_category = 'run';
+  return response;
 }
 
 var STELVIO_GEMINI_QUOTA_LS_KEY = 'stelvio_gemini_quota_until';
@@ -364,6 +406,10 @@ function buildDeterministicCoachResponse(ctx) {
     vo2max_estimate: ctx.calculatedVO2Max != null ? ctx.calculatedVO2Max : 40,
     coach_comment: comment,
     recommended_workout: recommended,
+    workout_category: workoutDecision.category,
+    workout_category_reason: workoutDecision.reason,
+    training_zone: workoutDecision.training_zone || workoutDecision.primaryZone || null,
+    sport_category: isRun ? 'run' : undefined,
     analysis_source: ctx.quotaExceeded ? 'deterministic_quota' : 'deterministic'
   };
   if (ctx.quotaExceeded) {
@@ -882,16 +928,17 @@ Output Format (JSON Only):
       if (responseWasTruncated || isCommentTruncated(result.coach_comment)) {
         if (result.coach_comment && result.coach_comment.trim().length >= 30 && attempt >= maxRetries - 1) {
           result.coach_comment = result.coach_comment.trim() + ' (응답이 길어 일부 잘렸을 수 있습니다.)';
-          return {
+          var statusFnTrunc = isRun ? trainingStatusFromRunWorkoutCategory : trainingStatusFromWorkoutCategory;
+          return attachCoachWorkoutMetadata({
             condition_score: conditionScoreForPrompt,
-            training_status: result.training_status || 'Building Base',
+            training_status: result.training_status || statusFnTrunc(workoutDecision.category),
             vo2max_estimate: calculatedVO2Max,
             coach_comment: result.coach_comment,
             recommended_workout: normalizeCoachRecommendedWorkout(
               result.recommended_workout,
               workoutDecision
             ),
-          };
+          }, workoutDecision, isRun);
         }
         lastError = new Error('응답이 잘렸거나 코멘트가 불완전합니다.');
         continue;
@@ -903,7 +950,7 @@ Output Format (JSON Only):
       var conditionScore = conditionScoreForPrompt;
       // VO2 Max: AI 응답에 의존하지 않고, 프롬프트 생성 전 산출한 STELVIO 자체 값으로 확정
       var trainingStatusFn = isRun ? trainingStatusFromRunWorkoutCategory : function(c) { return trainingStatusFromWorkoutCategory(c); };
-      return {
+      return attachCoachWorkoutMetadata({
         condition_score: conditionScore,
         training_status: result.training_status || trainingStatusFn(workoutDecision.category),
         vo2max_estimate: calculatedVO2Max,
@@ -912,7 +959,7 @@ Output Format (JSON Only):
           result.recommended_workout,
           workoutDecision
         ),
-      };
+      }, workoutDecision, isRun);
     } catch (err) {
       lastError = err;
       if (attempt < maxRetries) {
