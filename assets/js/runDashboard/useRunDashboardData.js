@@ -135,6 +135,22 @@
     return empty;
   }
 
+  function normalizeRunCoachAnalysis(analysis) {
+    if (!analysis || typeof window.pickDeterministicRunRecommendedWorkout !== 'function') return analysis;
+    var next = Object.assign({}, analysis);
+    next.recommended_workout = window.pickDeterministicRunRecommendedWorkout({
+      category: next.workout_category,
+      primaryZone: next.training_zone,
+      hexagonOverride: next.hexagon_override,
+      recommendedWorkout: next.recommended_workout
+    });
+    if (typeof window.parseRunWorkoutZone === 'function') {
+      next.training_zone = window.parseRunWorkoutZone(next.recommended_workout);
+    }
+    next.sport_category = 'run';
+    return next;
+  }
+
   function useRunDashboardData() {
     var _useState = useState(null);
     var userProfile = _useState[0];
@@ -850,7 +866,7 @@
       if (!runConditionAnalysis && retryCoach === 0 && typeof window.getDashboardCoachCache === 'function') {
         var cached = window.getDashboardCoachCache(userProfile.id, todayStr, logsSignature);
         if (cached && cached.condition_score != null && !cached.error_reason) {
-          setCoachData(cached);
+          setCoachData(normalizeRunCoachAnalysis(cached));
           setAiLoading(false);
           return;
         }
@@ -1005,7 +1021,7 @@
             }
           });
 
-          if (analysis && typeof window.computeConditionScore === 'function') {
+          if (analysis && typeof window.computeConditionScore === 'function' && !analysis.sport_category) {
             try {
               var userForScore = {
                 age: userProfile.age,
@@ -1023,10 +1039,14 @@
             } catch (e) {}
           }
 
+          if (analysis && typeof window.pickDeterministicRunRecommendedWorkout === 'function') {
+            analysis = normalizeRunCoachAnalysis(analysis);
+          }
+
           setCoachData(analysis);
           setStreamingComment(null);
           if (analysis && !analysis.error_reason && typeof window.setDashboardCoachCache === 'function') {
-            window.setDashboardCoachCache(userProfile.id, todayStr, logsSignature, analysis);
+            window.setDashboardCoachCache(userProfile.id, todayStr, logsSignature, normalizeRunCoachAnalysis(analysis));
           }
         } catch (e) {
           console.error('[Dashboard] AI analysis error:', e);

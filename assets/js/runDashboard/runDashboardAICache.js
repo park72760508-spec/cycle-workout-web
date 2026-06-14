@@ -8,7 +8,7 @@
   'use strict';
 
   var CACHE_PREFIX = 'stelvio_run_dashboard_ai_';
-  var CACHE_VERSION = '2'; // 2: 로그 시그니처에 30일/7일 TSS 모두 반영(이전 v1 캐시 자동 미사용)
+  var CACHE_VERSION = '3'; // 3: RUN 추천 워크아웃 규칙 엔진 단일 확정(recommendedWorkout)
 
   /**
    * 로그 날짜 → 로컬 YYYY-MM-DD (useDashboardData / 코치와 동일 기준)

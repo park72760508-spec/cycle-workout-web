@@ -113,6 +113,7 @@
       category: 'endurance',
       primaryZone: 'Z2',
       allowedWorkouts: ['Long Run (Z2)', 'Easy Run (Z2)'],
+      recommendedWorkout: 'Long Run (Z2)',
       reason:
         '최근 90일간 10k/20k 장거리 구간의 기록이 비어 있어 헥사곤 그래프의 균형이 깨져 있습니다. 이번 주에는 미토콘드리아 밀도를 높이고 지구력 베이스를 다질 수 있도록 **Z2 등급의 Long Run(LSD)** 세션을 수행하여 빈 기록을 채워보세요!'
     },
@@ -120,6 +121,7 @@
       category: 'high_intensity',
       primaryZone: 'Z5',
       allowedWorkouts: ['VO₂max Intervals (Z5)'],
+      recommendedWorkout: 'VO₂max Intervals (Z5)',
       reason:
         '단거리(1k/3k) 스피드 축의 보완이 필요합니다. 최대산소섭취량을 확대하고 심폐 한계를 극복할 수 있도록 내일은 **Z5 등급의 VO₂max Intervals** 고강도 인터벌 훈련을 제안합니다.'
     },
@@ -127,6 +129,7 @@
       category: 'high_intensity',
       primaryZone: 'Z4',
       allowedWorkouts: ['Threshold Intervals (Z4)'],
+      recommendedWorkout: 'Threshold Intervals (Z4)',
       reason:
         '회원님의 메인 역치 페이스(Threshold Pace)를 직접적으로 끌어올릴 타이밍입니다. 신체가 젖산을 축적하지 않고 버티는 한계를 확장하기 위해 **Z4 등급의 Threshold Intervals(크루즈 인터벌)** 훈련을 추천합니다.'
     }
@@ -171,6 +174,7 @@
         category: 'tempo',
         primaryZone: 'Z4',
         allowedWorkouts: ['Threshold Intervals (Z4)', 'Tempo Run (Z3)'],
+        recommendedWorkout: 'Threshold Intervals (Z4)',
         reason: HEXAGON_PRESCRIPTION.threshold_pace.reason
       };
     }
@@ -200,6 +204,48 @@
 
   function getRunZoneGuide(zoneKey) {
     return RUN_TRAINING_ZONES[zoneKey] || RUN_TRAINING_ZONES.Z2;
+  }
+
+  /**
+   * 동일 입력 → 동일 출력. 허용 목록 중 AI·UI·팝업이 항상 같은 1개를 쓰도록 확정.
+   * @param {{ category?: string, primaryZone?: string, training_zone?: string, hexagonOverride?: string, allowedWorkouts?: string[], recommendedWorkout?: string }} workoutDecision
+   * @returns {string}
+   */
+  function pickDeterministicRunRecommendedWorkout(workoutDecision) {
+    workoutDecision = workoutDecision || {};
+    if (workoutDecision.recommendedWorkout) {
+      return String(workoutDecision.recommendedWorkout);
+    }
+
+    var override = workoutDecision.hexagonOverride;
+    if (override === 'long_distance_gap') return 'Long Run (Z2)';
+    if (override === 'short_speed_gap') return 'VO₂max Intervals (Z5)';
+    if (override === 'threshold_pace') return 'Threshold Intervals (Z4)';
+
+    var category = workoutDecision.category;
+    var zone = workoutDecision.primaryZone || workoutDecision.training_zone;
+
+    if (category === 'recovery') return 'Recovery Jog (Z1)';
+    if (category === 'endurance') return 'Easy Run (Z2)';
+    if (category === 'tempo') return 'Tempo Run (Z3)';
+    if (category === 'high_intensity') {
+      if (zone === 'Z5') return 'VO₂max Intervals (Z5)';
+      return 'Threshold Intervals (Z4)';
+    }
+
+    if (workoutDecision.allowedWorkouts && workoutDecision.allowedWorkouts.length) {
+      return workoutDecision.allowedWorkouts[0];
+    }
+    return 'Recovery Jog (Z1)';
+  }
+
+  function finalizeRunWorkoutDecision(workoutDecision) {
+    workoutDecision = workoutDecision || {};
+    var workout = pickDeterministicRunRecommendedWorkout(workoutDecision);
+    workoutDecision.recommendedWorkout = workout;
+    workoutDecision.training_zone = parseRunWorkoutZone(workout);
+    workoutDecision.primaryZone = workoutDecision.training_zone;
+    return workoutDecision;
   }
 
   function zoneIllustrationSvg(zoneKey) {
@@ -322,10 +368,16 @@
     stats = stats || {};
     userProfile = userProfile || {};
 
-    var workoutName = coachData.recommended_workout || 'Recovery Jog (Z1)';
-    var zoneKey =
-      coachData.training_zone ||
-      parseRunWorkoutZone(workoutName);
+    var workoutName =
+      coachData.recommended_workout ||
+      (typeof pickDeterministicRunRecommendedWorkout === 'function'
+        ? pickDeterministicRunRecommendedWorkout({
+            category: coachData.workout_category,
+            primaryZone: coachData.training_zone,
+            hexagonOverride: coachData.hexagon_override
+          })
+        : 'Recovery Jog (Z1)');
+    var zoneKey = parseRunWorkoutZone(workoutName);
     var reason =
       coachData.workout_category_reason ||
       coachData.coach_comment ||
@@ -365,9 +417,13 @@
     resolveRunHexagonPrescription: resolveRunHexagonPrescription,
     buildMissingAxesNote: buildMissingAxesNote,
     parseRunWorkoutZone: parseRunWorkoutZone,
-    getRunZoneGuide: getRunZoneGuide
+    getRunZoneGuide: getRunZoneGuide,
+    pickDeterministicRunRecommendedWorkout: pickDeterministicRunRecommendedWorkout,
+    finalizeRunWorkoutDecision: finalizeRunWorkoutDecision
   };
   window.showRunWorkoutGuideModal = showRunWorkoutGuideModal;
   window.closeRunWorkoutGuideModal = closeRunWorkoutGuideModal;
   window.parseRunWorkoutZone = parseRunWorkoutZone;
+  window.pickDeterministicRunRecommendedWorkout = pickDeterministicRunRecommendedWorkout;
+  window.finalizeRunWorkoutDecision = finalizeRunWorkoutDecision;
 })();
