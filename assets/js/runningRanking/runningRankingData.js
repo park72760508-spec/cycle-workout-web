@@ -508,14 +508,15 @@
   }
 
   /**
-   * 페이스 탭 분포 차트 payload (종합 탭 buildDistributionPayload 와 동일 props 형식)
+   * RUN 랭킹 탭별 분포 차트 공통 payload (종합·페이스·TSS·거리)
    * @param {object[]} rows
-   * @param {{ gender?: string, category?: string, paceDistance?: string }} opts
+   * @param {{ gender?: string, category?: string }} opts
+   * @param {{ makeEntry: function, sortFn: function, pillMetricLabel: string, duration: string, extra?: object }} spec
    */
-  function buildPaceDistributionPayload(rows, opts) {
+  function buildMetricDistributionPayload(rows, opts, spec) {
     opts = opts || {};
+    spec = spec || {};
     var gender = opts.gender || 'all';
-    var distKey = opts.paceDistance || '5k';
     var filtered = filterByGender(rows || [], gender);
     var byCategory = {};
     var i;
@@ -524,17 +525,17 @@
     }
     filtered.forEach(function (r) {
       var ci;
+      var base = spec.makeEntry ? spec.makeEntry(r) : null;
+      if (!base) return;
       for (ci = 0; ci < CHART_CATEGORIES.length; ci++) {
         var chartCat = CHART_CATEGORIES[ci];
-        var entry = rowToPaceChartEntry(r, distKey);
-        if (!entry) continue;
-        if (chartCat === 'Supremo' || entry.ageCategory === chartCat) {
-          byCategory[chartCat].push(entry);
+        if (chartCat === 'Supremo' || base.ageCategory === chartCat) {
+          byCategory[chartCat].push(base);
         }
       }
     });
     CHART_CATEGORIES.forEach(function (cat) {
-      byCategory[cat].sort(function (a, b) { return a.paceSec - b.paceSec; });
+      byCategory[cat].sort(spec.sortFn);
       byCategory[cat].forEach(function (e, idx) { e.rank = idx + 1; });
     });
     var uid = getCurrentUserId();
@@ -552,22 +553,96 @@
     }
     var catKey = opts.category || 'Supremo';
     var catLabel = (cfg().CATEGORY_LABELS || {})[catKey] || catKey;
-    var distLabel = resolvePaceDistanceLabel(distKey);
-    return {
+    var out = {
       entries: byCategory.Supremo || [],
       byCategory: byCategory,
       activeCategory: catKey,
-      duration: 'run_pace',
-      paceDistance: distKey,
-      paceDistanceLabel: distLabel,
+      duration: spec.duration || 'gc',
       currentUserId: uid,
       currentUser: currentUser,
       myRankSupremo: myRankSupremo,
       viewerIsAdmin: typeof window.getViewerGrade === 'function' && window.getViewerGrade() === '1',
       titleOverride: '참가자 분포',
-      pillLabelOverride: catLabel + ' · ' + distLabel + ' 페이스',
+      pillLabelOverride: catLabel + ' · ' + (spec.pillMetricLabel || ''),
       chartSubNoteOverride: '구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.'
     };
+    if (spec.extra && typeof spec.extra === 'object') {
+      Object.keys(spec.extra).forEach(function (k) {
+        out[k] = spec.extra[k];
+      });
+    }
+    return out;
+  }
+
+  /**
+   * 페이스 탭 분포 차트 payload (종합 탭 buildDistributionPayload 와 동일 props 형식)
+   * @param {object[]} rows
+   * @param {{ gender?: string, category?: string, paceDistance?: string }} opts
+   */
+  function buildPaceDistributionPayload(rows, opts) {
+    opts = opts || {};
+    var distKey = opts.paceDistance || '5k';
+    var distLabel = resolvePaceDistanceLabel(distKey);
+    return buildMetricDistributionPayload(rows, opts, {
+      makeEntry: function (r) {
+        return rowToPaceChartEntry(r, distKey);
+      },
+      sortFn: function (a, b) { return a.paceSec - b.paceSec; },
+      pillMetricLabel: distLabel + ' 페이스',
+      duration: 'run_pace',
+      extra: {
+        paceDistance: distKey,
+        paceDistanceLabel: distLabel
+      }
+    });
+  }
+
+  /**
+   * TSS 탭 분포 차트 payload
+   * @param {object[]} rows
+   * @param {{ gender?: string, category?: string }} opts
+   */
+  function buildTssDistributionPayload(rows, opts) {
+    return buildMetricDistributionPayload(rows, opts, {
+      makeEntry: function (r) {
+        var tss = Number(r.weekly_tss);
+        if (!isFinite(tss) || tss <= 0) return null;
+        return {
+          userId: rowUserId(r),
+          name: rowDisplayName(r),
+          totalTss: tss,
+          ageCategory: rowAgeCategory(r) || 'Supremo',
+          is_private: isPrivateRow(r)
+        };
+      },
+      sortFn: function (a, b) { return Number(b.totalTss) - Number(a.totalTss); },
+      pillMetricLabel: '주간 TSS',
+      duration: 'tss'
+    });
+  }
+
+  /**
+   * 거리 탭 분포 차트 payload
+   * @param {object[]} rows
+   * @param {{ gender?: string, category?: string }} opts
+   */
+  function buildDistanceDistributionPayload(rows, opts) {
+    return buildMetricDistributionPayload(rows, opts, {
+      makeEntry: function (r) {
+        var km = Number(r.distance_30d_km);
+        if (!isFinite(km) || km <= 0) return null;
+        return {
+          userId: rowUserId(r),
+          name: rowDisplayName(r),
+          totalKm: km,
+          ageCategory: rowAgeCategory(r) || 'Supremo',
+          is_private: isPrivateRow(r)
+        };
+      },
+      sortFn: function (a, b) { return Number(b.totalKm) - Number(a.totalKm); },
+      pillMetricLabel: '최근 30일 거리',
+      duration: 'personal_dist'
+    });
   }
 
   /**
@@ -837,6 +912,8 @@
     buildCrewRankedList: buildCrewRankedList,
     buildDistributionPayload: buildDistributionPayload,
     buildPaceDistributionPayload: buildPaceDistributionPayload,
+    buildTssDistributionPayload: buildTssDistributionPayload,
+    buildDistanceDistributionPayload: buildDistanceDistributionPayload,
     buildOverallHeroMessage: buildOverallHeroMessage,
     buildAvatarOverlayProfile: buildAvatarOverlayProfile,
     normalizeLeaderboardRows: normalizeLeaderboardRows,
