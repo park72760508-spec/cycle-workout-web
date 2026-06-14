@@ -180,8 +180,18 @@
     // 이렇게 하면 'racing'/'Racing'/'RACING' 모두 동일한 loadOptimal 구간 적용
     var challengeRaw = (user.challenge && String(user.challenge).trim()) || '';
     var challengeLower = challengeRaw.toLowerCase();
+    var isRunSport =
+      (user.sportCategory && String(user.sportCategory).toLowerCase() === 'run') ||
+      (user.category && String(user.category).trim().toUpperCase() === 'RUN');
     var challenge;
-    if (challengeLower === 'pro') challenge = 'PRO';
+    if (isRunSport) {
+      if (challengeLower === 'pro') challenge = 'PRO';
+      else if (challengeLower === 'elite') challenge = 'Elite';
+      else if (challengeLower === 'sub3club' || challengeLower === 'sub-3 club') challenge = 'Sub3Club';
+      else if (challengeLower === 'challenger') challenge = 'Challenger';
+      else if (challengeLower === 'cityrunner' || challengeLower === 'city runner') challenge = 'CityRunner';
+      else challenge = 'Fitness';
+    } else if (challengeLower === 'pro') challenge = 'PRO';
     else if (challengeLower === 'elite') challenge = 'Elite';
     else if (challengeLower === 'racing') challenge = 'Racing';
     else if (challengeLower === 'granfondo') challenge = 'GranFondo';
@@ -198,11 +208,17 @@
     else if (sessionsPerWeek > 7) consistencyScore = 6;
     else if (totalSessions > 0) consistencyScore = 3;
 
-    // --- 2. 부하 적정성 (0~12): 주간 TSS (목적별 참고)
+    // --- 2. 부하 적정성 (0~12): 주간 TSS/rTSS (목적별 참고)
     var loadScore = 0;
     var loadOptimalLow = 100;
     var loadOptimalHigh = 400;
-    if (challenge === 'PRO' || challenge === 'Elite') {
+    if (isRunSport && typeof window !== 'undefined' && window.RUN_TRAINING_LEVELS) {
+      var runLevel = window.RUN_TRAINING_LEVELS[challenge] || window.RUN_TRAINING_LEVELS.Fitness;
+      if (runLevel) {
+        loadOptimalLow = runLevel.min;
+        loadOptimalHigh = runLevel.max;
+      }
+    } else if (challenge === 'PRO' || challenge === 'Elite') {
       loadOptimalLow = 200;
       loadOptimalHigh = 600;
     } else if (challenge === 'Racing') {

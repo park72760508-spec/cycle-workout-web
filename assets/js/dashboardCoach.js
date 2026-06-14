@@ -121,6 +121,110 @@ function determineDeterministicWorkoutCategory(conditionScore, last7DaysTSS, wee
   };
 }
 
+/**
+ * RUN 전용 — 6축 헥사곤 페이스·rTSS·컨디션 기반 워크아웃 카테고리 선결정
+ * @param {number} conditionScore
+ * @param {number} last7DaysRtss
+ * @param {number} weeklyRtss - 30일 평균 주간 rTSS
+ * @param {{ hexagon?: object, missingAxes?: string[] }} hexagonContext
+ * @param {Array} recentLogs
+ * @param {number} [weeklyRtssGoal]
+ */
+function determineDeterministicRunWorkoutCategory(conditionScore, last7DaysRtss, weeklyRtss, hexagonContext, recentLogs, weeklyRtssGoal) {
+  hexagonContext = hexagonContext || {};
+  var missingAxes = hexagonContext.missingAxes || [];
+  var missingNote = '';
+  if (missingAxes.length > 0) {
+    missingNote = missingAxes.map(function (k) {
+      return '최근 90일 내 ' + k + ' 구간의 기록이 부족합니다. 헥사곤 프로필을 채우기 위해 해당 거리 훈련을 추천합니다.';
+    }).join(' ');
+  }
+
+  var recentHighIntensityCount = 0;
+  if (recentLogs && recentLogs.length > 0) {
+    var now = new Date();
+    var cutoffDates = [];
+    for (var di = 1; di <= 2; di++) {
+      var dd = new Date(now);
+      dd.setDate(dd.getDate() - di);
+      cutoffDates.push(
+        dd.getFullYear() + '-' +
+        String(dd.getMonth() + 1).padStart(2, '0') + '-' +
+        String(dd.getDate()).padStart(2, '0')
+      );
+    }
+    for (var li = 0; li < recentLogs.length; li++) {
+      var log = recentLogs[li];
+      var logDate = '';
+      if (log.completed_at) logDate = String(log.completed_at).split('T')[0];
+      else if (log.date) {
+        var ld = log.date;
+        if (ld && typeof ld.toDate === 'function') ld = ld.toDate();
+        logDate = ld ? String(ld instanceof Date ? ld.toISOString() : ld).split('T')[0] : '';
+      }
+      if (cutoffDates.indexOf(logDate) !== -1 && (Number(log.tss) || 0) >= 80) {
+        recentHighIntensityCount++;
+      }
+    }
+  }
+
+  var tssLoadRatio = weeklyRtss > 0 ? last7DaysRtss / weeklyRtss : 1.0;
+  var result;
+
+  if (conditionScore < 62 || tssLoadRatio > 1.35 || recentHighIntensityCount >= 2) {
+    result = {
+      category: 'recovery',
+      allowedWorkouts: ['Recovery Jog (Z1)', 'Easy Run (Z2)'],
+      reason: '컨디션 점수(' + conditionScore + '점) 또는 최근 RUN 부하(7일 rTSS ' + last7DaysRtss + '점)를 고려해 회복 러닝을 권장합니다.'
+    };
+  } else if (conditionScore < 73 || tssLoadRatio > 1.10) {
+    result = {
+      category: 'endurance',
+      allowedWorkouts: ['Easy Run (Z2)', 'Long Run (Z2)', 'Tempo Run (Z3)'],
+      reason: '중간 수준의 컨디션(' + conditionScore + '점)에 알맞은 지구력 러닝을 권장합니다.'
+    };
+  } else if (conditionScore >= 82 && tssLoadRatio <= 0.80) {
+    result = {
+      category: 'high_intensity',
+      allowedWorkouts: ['Threshold Intervals (Z4)', 'VO₂max Intervals (Z5)'],
+      reason: '컨디션이 우수(' + conditionScore + '점)하고 rTSS 부하에 여유가 있어 고강도 러닝을 권장합니다.'
+    };
+  } else {
+    result = {
+      category: 'tempo',
+      allowedWorkouts: ['Tempo Run (Z3)', 'Threshold Intervals (Z4)'],
+      reason: '안정적인 컨디션(' + conditionScore + '점)으로 템포·역치 러닝이 적합합니다.'
+    };
+  }
+
+  if (missingNote) {
+    result.reason = result.reason + ' ' + missingNote;
+  }
+  if (weeklyRtssGoal > 0 && last7DaysRtss < weeklyRtssGoal * 0.7) {
+    result.reason += ' 주간 rTSS 목표(' + weeklyRtssGoal + '점) 대비 현재 ' + last7DaysRtss + '점으로 부족합니다.';
+  }
+  return result;
+}
+
+function resolveCoachSportCategory(userProfile, opts) {
+  opts = opts || {};
+  if (opts.sportCategory === 'run' || opts.sportCategory === 'RUN') return 'run';
+  if (opts.sportCategory === 'cycle' || opts.sportCategory === 'CYCLE') return 'cycle';
+  var cat = userProfile && (userProfile.sport_category || userProfile.category);
+  if (cat && String(cat).trim().toUpperCase() === 'RUN') return 'run';
+  return 'cycle';
+}
+
+function trainingStatusFromRunWorkoutCategory(category) {
+  var map = {
+    recovery: '회복 필요',
+    endurance: '기초 강화',
+    tempo: '준비 완료',
+    high_intensity: '최적'
+  };
+  return map[category] || '준비 완료';
+}
+
 /** AI recommended_workout → Zone 포함 표준 문자열 (예: "VO2 Max" → "VO2 Max (Z5)") */
 function normalizeCoachRecommendedWorkout(aiValue, workoutDecision) {
   var raw = String(aiValue || '').trim();
@@ -143,6 +247,136 @@ function normalizeCoachRecommendedWorkout(aiValue, workoutDecision) {
   return raw;
 }
 
+var STELVIO_GEMINI_QUOTA_LS_KEY = 'stelvio_gemini_quota_until';
+
+function getGeminiQuotaCooldownUntilMs() {
+  try {
+    var v = Number(localStorage.getItem(STELVIO_GEMINI_QUOTA_LS_KEY) || 0);
+    return v > Date.now() ? v : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function getGeminiQuotaCooldownRemainingSec() {
+  var until = getGeminiQuotaCooldownUntilMs();
+  if (!until) return 0;
+  return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+}
+
+function setGeminiQuotaCooldown(retryAfterSec) {
+  var sec = Math.max(5, Math.min(600, Math.ceil(Number(retryAfterSec) || 30)));
+  try {
+    localStorage.setItem(STELVIO_GEMINI_QUOTA_LS_KEY, String(Date.now() + sec * 1000));
+  } catch (e) {}
+}
+
+/** Gemini 오류 본문 파싱 — 429 할당량·retry-after(초) */
+function parseGeminiApiError(text, httpStatus) {
+  var msg = '';
+  try {
+    var data = typeof text === 'string' ? JSON.parse(text) : text;
+    msg = (data && data.error && data.error.message) || '';
+  } catch (e) {
+    msg = String(text || '');
+  }
+  var retrySec = 0;
+  var m = msg.match(/retry in (\d+(?:\.\d+)?)\s*s/i);
+  if (m) retrySec = Math.ceil(parseFloat(m[1]));
+  var isQuotaExceeded =
+    httpStatus === 429 &&
+    (/quota exceeded|free_tier|free tier|generate_content_free_tier/i.test(msg) ||
+      /limit:\s*20/i.test(msg));
+  return {
+    message: msg,
+    retryAfterSec: retrySec,
+    isQuotaExceeded: isQuotaExceeded,
+    isRateLimited: httpStatus === 429,
+    status: httpStatus,
+  };
+}
+
+function trainingStatusFromWorkoutCategory(category) {
+  var map = {
+    recovery: 'Recovery Needed',
+    endurance: 'Building Base',
+    tempo: 'Ready to Race',
+    high_intensity: 'Peaking',
+  };
+  return map[category] || 'Building Base';
+}
+
+/** 429 할당량 소진 시 사용자 안내 문구 (오류가 아님을 명시) */
+function buildGeminiQuotaUserNotice(retryAfterSec) {
+  var sec =
+    retryAfterSec != null ? Math.max(0, Math.ceil(Number(retryAfterSec))) : getGeminiQuotaCooldownRemainingSec();
+  var waitLine =
+    sec > 0
+      ? '약 ' +
+        sec +
+        '초 후 「훈련 상태」 옆 새로고침을 누르시면 AI 코멘트 생성을 다시 시도합니다. (같은 날 무료 한도가 남아 있을 때만 성공합니다.)'
+      : 'Google AI Studio 무료 한도는 보통 자정(미국 태평양 기준)에 초기화됩니다. 유료 플랜·다른 API 키를 쓰시면 한도가 늘어납니다.';
+  return {
+    gemini_quota_exceeded: true,
+    quota_notice_title: 'AI 코멘트 안내 — 분석 오류가 아닙니다',
+    quota_notice:
+      'Gemini API 무료 한도(일 20회, gemini-2.5-flash)가 모두 사용되어, 지금은 AI가 작성하는 코멘트 대신 훈련 로그·컨디션 점수 기반 안내 문구를 표시합니다.',
+    quota_notice_detail:
+      '아래 컨디션 점수·VO₂max·추천 워크아웃은 정상적으로 계산된 값입니다. ' + waitLine,
+    quota_retry_after_sec: sec,
+  };
+}
+
+/**
+ * Gemini 없이 컨디션·TSS·규칙 엔진만으로 코치 카드 데이터 생성 (할당량 초과·API 실패 시)
+ */
+function buildDeterministicCoachResponse(ctx) {
+  ctx = ctx || {};
+  var isRun = ctx.sportCategory === 'run';
+  var userName = (ctx.userProfile && ctx.userProfile.name) || '사용자';
+  var defaultWorkouts = isRun
+    ? ['Easy Run (Z2)']
+    : ['Endurance (Z2)'];
+  var workoutDecision = ctx.workoutDecision || {
+    category: isRun ? 'endurance' : 'endurance',
+    allowedWorkouts: defaultWorkouts,
+    reason: isRun ? '오늘 컨디션에 맞는 지구력 러닝을 권장합니다.' : '오늘 컨디션에 맞는 지구력 훈련을 권장합니다.'
+  };
+  var recommended = normalizeCoachRecommendedWorkout(workoutDecision.allowedWorkouts[0], workoutDecision);
+  var loadLabel = isRun ? 'rTSS' : 'TSS';
+  var comment =
+    userName +
+    '님, 최근 7일 ' + loadLabel + ' ' +
+    (ctx.last7DaysTSS != null ? ctx.last7DaysTSS : 0) +
+    '점·주간 평균 ' +
+    (ctx.weeklyTSS != null ? ctx.weeklyTSS : 0) +
+    '점·컨디션 ' +
+    (ctx.conditionScore != null ? ctx.conditionScore : 50) +
+    '점입니다. ' +
+    workoutDecision.reason;
+  if (isRun && ctx.thresholdPace) {
+    comment = userName + '님, 역치 페이스 ' + ctx.thresholdPace + ' 기준으로 ' + comment.replace(/^[^,]+님, /, '');
+  }
+  var trainingStatusFn = isRun ? trainingStatusFromRunWorkoutCategory : trainingStatusFromWorkoutCategory;
+  var out = {
+    condition_score: ctx.conditionScore != null ? ctx.conditionScore : 50,
+    training_status: trainingStatusFn(workoutDecision.category),
+    vo2max_estimate: ctx.calculatedVO2Max != null ? ctx.calculatedVO2Max : 40,
+    coach_comment: comment,
+    recommended_workout: recommended,
+    analysis_source: ctx.quotaExceeded ? 'deterministic_quota' : 'deterministic'
+  };
+  if (ctx.quotaExceeded) {
+    var quotaUi = buildGeminiQuotaUserNotice(ctx.retryAfterSec);
+    Object.keys(quotaUi).forEach(function (k) {
+      out[k] = quotaUi[k];
+    });
+  } else if (ctx.apiFailed) {
+    out.coach_comment += ' (AI 서버 연결이 잠시 불안정하여 규칙 기반 안내로 표시합니다.)';
+  }
+  return out;
+}
+
 /** 저사양/모바일 감지: 타임아웃·재시도 연장용 */
 function isLowSpecOrMobile() {
   if (typeof window !== 'undefined' && typeof window.isMobile === 'function' && window.isMobile()) return true;
@@ -157,19 +391,24 @@ function isLowSpecOrMobile() {
 
 async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboard, options) {
   var opts = options || {};
+  var isRun = resolveCoachSportCategory(userProfile, opts) === 'run';
   var isLowSpec = isLowSpecOrMobile();
   var timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : (isLowSpec ? 150000 : 60000);
-  var maxRetries = opts.maxRetries != null ? opts.maxRetries : (isLowSpec ? 6 : 5);
+  var maxRetries = opts.maxRetries != null ? opts.maxRetries : (isLowSpec ? 3 : 2);
   const apiKey = localStorage.getItem('geminiApiKey');
   
   if (!apiKey) {
     throw new Error('Gemini API 키가 설정되지 않았습니다. 환경 설정에서 API 키를 입력해주세요.');
   }
 
-  // 훈련 횟수·TSS: 같은 날 Strava 있으면 Strava만, 없으면 Stelvio만 (TSS 규칙과 동일)
+  // 훈련 횟수·TSS/rTSS: 같은 날 Strava 있으면 Strava만, 없으면 Stelvio만
   recentLogs = (typeof window.buildHistoryWithTSSRuleByDate === 'function')
     ? window.buildHistoryWithTSSRuleByDate(recentLogs || [])
     : oneLogPerDayPreferStravaForCoach(recentLogs || []);
+
+  if (isRun && typeof window.isRunTrainingLog === 'function') {
+    recentLogs = recentLogs.filter(window.isRunTrainingLog);
+  }
 
   // 최근 7일 TSS: 대시보드에서 전달한 주간 실적이 있으면 그대로 사용(화면과 코멘트 일치), 없으면 여기서 계산
   var today = new Date(); // 컨디션 점수(todayStrScore)에서 항상 사용하므로 if 밖에서 정의
@@ -209,7 +448,15 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
   // 컨디션 점수: API 호출 전에 공통 모듈로 산출해 프롬프트에 주입 — 코멘트에 표시되는 점수와 화면 표시(93점)가 일치하도록
   var conditionScoreForPrompt = 50;
   if (typeof window.computeConditionScore === 'function') {
-    var userForScore = { age: userProfile?.age, gender: userProfile?.gender, challenge: userProfile?.challenge, ftp: userProfile?.ftp, weight: userProfile?.weight };
+    var userForScore = {
+      age: userProfile?.age,
+      gender: userProfile?.gender,
+      challenge: userProfile?.challenge,
+      ftp: userProfile?.ftp,
+      weight: userProfile?.weight,
+      sportCategory: isRun ? 'run' : 'cycle',
+      category: isRun ? 'RUN' : (userProfile?.category || 'CYCLE')
+    };
     var logsForScore = (recentLogs || []).slice();
     var deduped = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
     var todayStrScore = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
@@ -217,34 +464,85 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
     conditionScoreForPrompt = Math.max(50, Math.min(100, csResult.score));
   }
 
-  // VO2 Max: STELVIO 자체 산출값으로 확정 — 대시보드 표시 및 AI 코멘트에 동일 값 반영
-  var vo2FromLogs =
-    typeof window.calculateStelvioVO2Max === 'function' ? window.calculateStelvioVO2Max(userProfile, recentLogs) : null;
-  var calculatedVO2Max =
-    vo2FromLogs != null
-      ? vo2FromLogs
-      : typeof window.computeVo2maxEstimate === 'function'
-        ? window.computeVo2maxEstimate(userProfile)
-        : 40;
-
-  // ── 규칙 기반 워크아웃 카테고리 선결정 ─────────────────────────
-  // AI가 자유롭게 카테고리를 선택하지 못하도록 클라이언트 측에서 먼저 결정
-  var workoutDecision;
-  try {
-    workoutDecision = determineDeterministicWorkoutCategory(
-      conditionScoreForPrompt, last7DaysTSS, weeklyTSS, recentLogs
-    );
-  } catch (wdErr) {
-    console.warn('[callGeminiCoach] determineDeterministicWorkoutCategory 오류 (기본값 사용):', wdErr);
-    workoutDecision = {
-      category: 'endurance',
-      allowedWorkouts: ['Endurance (Z2)', 'Sweet Spot (Low)', 'Tempo (Z3)'],
-      reason: '카테고리 결정 중 오류가 발생하여 기본 지구력 훈련을 권장합니다.'
-    };
+  var calculatedVO2Max = 40;
+  if (isRun) {
+    var tpSec = userProfile && (userProfile.threshold_pace_sec != null
+      ? Number(userProfile.threshold_pace_sec)
+      : null);
+    if (tpSec == null && userProfile && userProfile.threshold_pace) {
+      if (window.runDashboardPace && typeof window.runDashboardPace.parsePaceToSecPerKm === 'function') {
+        var disp = String(userProfile.threshold_pace).replace(/\s*min\/1km\s*$/i, '').trim();
+        tpSec = window.runDashboardPace.parsePaceToSecPerKm(disp);
+      }
+    }
+    if (window.runDashboardPace && typeof window.runDashboardPace.computeRunVo2maxFromThresholdPace === 'function') {
+      calculatedVO2Max = window.runDashboardPace.computeRunVo2maxFromThresholdPace(tpSec);
+    }
+  } else {
+    var vo2FromLogs =
+      typeof window.calculateStelvioVO2Max === 'function' ? window.calculateStelvioVO2Max(userProfile, recentLogs) : null;
+    calculatedVO2Max =
+      vo2FromLogs != null
+        ? vo2FromLogs
+        : typeof window.computeVo2maxEstimate === 'function'
+          ? window.computeVo2maxEstimate(userProfile)
+          : 40;
   }
 
-  // 시스템 프롬프트 가져오기
-  const systemPrompt = window.GEMINI_COACH_SYSTEM_PROMPT || `
+  var weeklyRtssGoal = opts.weeklyRtssGoal != null ? Number(opts.weeklyRtssGoal) : 0;
+  if (!weeklyRtssGoal && isRun && typeof window.getWeeklyTargetRtss === 'function') {
+    var rtssInfo = window.getWeeklyTargetRtss(userProfile?.challenge || 'Fitness');
+    if (rtssInfo && rtssInfo.target != null) weeklyRtssGoal = rtssInfo.target;
+  }
+  var hexagonContext = opts.hexagonContext || null;
+  var thresholdPaceDisplay = (userProfile && userProfile.threshold_pace) ||
+    (opts.thresholdPaceDisplay) || '산출 불가';
+
+  var workoutDecision;
+  try {
+    if (isRun) {
+      workoutDecision = determineDeterministicRunWorkoutCategory(
+        conditionScoreForPrompt, last7DaysTSS, weeklyTSS, hexagonContext, recentLogs, weeklyRtssGoal
+      );
+    } else {
+      workoutDecision = determineDeterministicWorkoutCategory(
+        conditionScoreForPrompt, last7DaysTSS, weeklyTSS, recentLogs
+      );
+    }
+  } catch (wdErr) {
+    console.warn('[callGeminiCoach] workout category 오류 (기본값 사용):', wdErr);
+    workoutDecision = isRun
+      ? { category: 'endurance', allowedWorkouts: ['Easy Run (Z2)'], reason: '기본 지구력 러닝을 권장합니다.' }
+      : { category: 'endurance', allowedWorkouts: ['Endurance (Z2)'], reason: '카테고리 결정 중 오류가 발생하여 기본 지구력 훈련을 권장합니다.' };
+  }
+
+  var deterministicCtx = {
+    userProfile: userProfile,
+    workoutDecision: workoutDecision,
+    last7DaysTSS: last7DaysTSS,
+    weeklyTSS: weeklyTSS,
+    conditionScore: conditionScoreForPrompt,
+    calculatedVO2Max: calculatedVO2Max,
+    sportCategory: isRun ? 'run' : 'cycle',
+    thresholdPace: thresholdPaceDisplay,
+    weeklyRtssGoal: weeklyRtssGoal
+  };
+
+  var quotaRemainSec = getGeminiQuotaCooldownRemainingSec();
+  if (quotaRemainSec > 0 && opts.forceApi !== true) {
+    console.warn('[callGeminiCoach] Gemini 할당량 쿨다운 중 — 규칙 기반 분석으로 표시 (' + quotaRemainSec + 's)');
+    return buildDeterministicCoachResponse(
+      Object.assign({}, deterministicCtx, {
+        quotaExceeded: true,
+        retryAfterSec: quotaRemainSec,
+      })
+    );
+  }
+
+  // 시스템 프롬프트
+  var systemPrompt = isRun
+    ? (window.GEMINI_RUN_COACH_SYSTEM_PROMPT || window.GEMINI_COACH_SYSTEM_PROMPT)
+    : (window.GEMINI_COACH_SYSTEM_PROMPT || `
 Role: 당신은 'Stelvio AI'의 수석 사이클링 코치이자 데이터 분석가입니다.
 Context: 사용자의 프로필({{userProfile}})과 최근 30일간의 훈련 로그({{recentLogs}})를 분석하여 JSON 형식으로 인사이트를 제공해야 합니다.
 훈련 로그는 날짜별로 **Strava 로그를 우선** 사용하고, 해당 날짜에 Strava가 없으면 **Stelvio 로그**를 사용한 결과입니다.
@@ -284,12 +582,20 @@ Output Format (JSON Only):
 
   // 프롬프트에 데이터 삽입
   const userName = userProfile?.name || '사용자';
+  var hexagonJson = hexagonContext
+    ? JSON.stringify(hexagonContext.hexagon || hexagonContext, null, 2)
+    : '{}';
   const prompt = systemPrompt
     .replace('{{userProfile}}', JSON.stringify(userProfile, null, 2))
     .replace('{{recentLogs}}', JSON.stringify(recentLogs, null, 2))
     .replace('{{userName}}', userName)
     .replace(/\{\{last7DaysTSS\}\}/g, String(last7DaysTSS))
+    .replace(/\{\{last7DaysRTSS\}\}/g, String(last7DaysTSS))
     .replace(/\{\{weeklyTSS\}\}/g, String(weeklyTSS))
+    .replace(/\{\{weeklyRTSS\}\}/g, String(weeklyTSS))
+    .replace(/\{\{weeklyRtssGoal\}\}/g, String(weeklyRtssGoal || 0))
+    .replace(/\{\{thresholdPace\}\}/g, String(thresholdPaceDisplay))
+    .replace(/\{\{hexagonPaceData\}\}/g, hexagonJson)
     .replace(/\{\{conditionScore\}\}/g, String(conditionScoreForPrompt))
     .replace(/\{\{calculatedVO2Max\}\}/g, String(calculatedVO2Max))
     .replace(/\{\{determinedWorkoutCategory\}\}/g, workoutDecision.category)
@@ -323,13 +629,16 @@ Output Format (JSON Only):
   }
 
   var lastError = null;
-  var RETRYABLE_STATUS = [429, 503, 500, 502]; // Rate limit, Service Unavailable, Server errors
+  var lastErrInfo = null;
+  var RETRYABLE_STATUS = [503, 500, 502];
   var hasAbortController = typeof AbortController !== 'undefined';
 
   for (var attempt = 1; attempt <= maxRetries; attempt++) {
     if (attempt > 1) {
-      var backoffMs = Math.min(1500 * Math.pow(2, attempt - 2), 20000);
-      console.warn('[callGeminiCoach] 재시도 ' + attempt + '/' + maxRetries + ' (' + backoffMs + 'ms 대기, 저사양:' + isLowSpec + ')');
+      var backoffMs = lastErrInfo && lastErrInfo.isQuotaExceeded && lastErrInfo.retryAfterSec
+        ? Math.min((lastErrInfo.retryAfterSec + 2) * 1000, 120000)
+        : Math.min(1500 * Math.pow(2, attempt - 2), 20000);
+      console.warn('[callGeminiCoach] 재시도 ' + attempt + '/' + maxRetries + ' (' + backoffMs + 'ms 대기)');
       await new Promise(function (r) { setTimeout(r, backoffMs); });
     }
     try {
@@ -377,7 +686,28 @@ Output Format (JSON Only):
           });
           if (timeoutId) clearTimeout(timeoutId);
 
-          if (streamRes.ok && streamRes.body) {
+          if (!streamRes.ok) {
+            var streamErrText = await streamRes.text().catch(function () {
+              return '';
+            });
+            var streamErrInfo = parseGeminiApiError(streamErrText, streamRes.status);
+            lastErrInfo = streamErrInfo;
+            if (streamErrInfo.isQuotaExceeded) {
+              setGeminiQuotaCooldown(streamErrInfo.retryAfterSec || 30);
+              console.warn('[callGeminiCoach] 스트리밍 429 할당량 초과 — REST 추가 호출 없이 규칙 기반 폴백');
+              return buildDeterministicCoachResponse(
+                Object.assign({}, deterministicCtx, {
+                  quotaExceeded: true,
+                  retryAfterSec: streamErrInfo.retryAfterSec || getGeminiQuotaCooldownRemainingSec(),
+                })
+              );
+            }
+            if (streamRes.status === 429 && streamErrInfo.retryAfterSec > 0 && attempt < maxRetries) {
+              lastError = new Error('Gemini API rate limit: ' + streamErrInfo.message);
+              continue;
+            }
+            console.warn('[callGeminiCoach] 스트리밍 HTTP ' + streamRes.status + ', REST 폴백 시도');
+          } else if (streamRes.ok && streamRes.body) {
             usedStreaming = true;
             var reader = streamRes.body.getReader();
             var decoder = new TextDecoder();
@@ -466,17 +796,33 @@ Output Format (JSON Only):
         if (timeoutId) clearTimeout(timeoutId);
 
         if (!response.ok) {
-          var errorText = await response.text();
-          var errorMessage = '';
-          try {
-            var errorData = JSON.parse(errorText);
-            errorMessage = errorData.error?.message || errorText;
-          } catch (e) {
-            errorMessage = errorText;
+          var errorText = await response.text().catch(function () {
+            return '';
+          });
+          var errInfo = parseGeminiApiError(errorText, response.status);
+          lastErrInfo = errInfo;
+          lastError = new Error('Gemini API 오류: ' + (errInfo.message || errorText));
+          if (errInfo.isQuotaExceeded) {
+            setGeminiQuotaCooldown(errInfo.retryAfterSec || 30);
+            console.warn('[callGeminiCoach] REST 429 할당량 초과 — 규칙 기반 폴백');
+            return buildDeterministicCoachResponse(
+              Object.assign({}, deterministicCtx, {
+                quotaExceeded: true,
+                retryAfterSec: errInfo.retryAfterSec || getGeminiQuotaCooldownRemainingSec(),
+              })
+            );
           }
-          lastError = new Error('Gemini API 오류: ' + errorMessage);
+          if (
+            errInfo.isRateLimited &&
+            errInfo.retryAfterSec > 0 &&
+            errInfo.retryAfterSec <= 90 &&
+            attempt < maxRetries
+          ) {
+            console.warn('[callGeminiCoach] 429 rate limit, ' + errInfo.retryAfterSec + '초 후 1회 재시도');
+            continue;
+          }
           if (RETRYABLE_STATUS.indexOf(response.status) !== -1 && attempt < maxRetries) {
-            console.warn('[callGeminiCoach] 서버 과부하/일시 오류(' + response.status + '), 재시도 예정:', errorMessage);
+            console.warn('[callGeminiCoach] 서버 일시 오류(' + response.status + '), 재시도 예정');
             continue;
           }
           break;
@@ -556,9 +902,10 @@ Output Format (JSON Only):
 
       var conditionScore = conditionScoreForPrompt;
       // VO2 Max: AI 응답에 의존하지 않고, 프롬프트 생성 전 산출한 STELVIO 자체 값으로 확정
+      var trainingStatusFn = isRun ? trainingStatusFromRunWorkoutCategory : function(c) { return trainingStatusFromWorkoutCategory(c); };
       return {
         condition_score: conditionScore,
-        training_status: result.training_status || 'Building Base',
+        training_status: result.training_status || trainingStatusFn(workoutDecision.category),
         vo2max_estimate: calculatedVO2Max,
         coach_comment: result.coach_comment || (userName + '님, 오늘도 화이팅하세요!'),
         recommended_workout: normalizeCoachRecommendedWorkout(
@@ -578,27 +925,27 @@ Output Format (JSON Only):
   if (lastError) {
     console.error('Gemini Coach API 오류 (재시도 ' + maxRetries + '회 후 실패):', lastError);
   }
-  var vo2Fb = typeof window.calculateStelvioVO2Max === 'function' ? window.calculateStelvioVO2Max(userProfile, recentLogs) : null;
-  var fallbackVo2 =
-    vo2Fb != null
-      ? vo2Fb
-      : typeof window.computeVo2maxEstimate === 'function'
-        ? window.computeVo2maxEstimate(userProfile)
-        : 40;
-  var conditionScoreFallback = conditionScoreForPrompt;
-  var dataRichFallback = userName + '님, 최근 7일 TSS ' + last7DaysTSS + '점, 주간 평균 ' + weeklyTSS + '점, 컨디션 ' + conditionScoreFallback + '점입니다. AI 분석이 일시적으로 지연되고 있습니다. 아래 \'다시 분석\' 버튼을 눌러 재시도해 주세요.';
-  return {
-    condition_score: conditionScoreFallback,
-    training_status: 'Building Base',
-    vo2max_estimate: fallbackVo2,
-    coach_comment: dataRichFallback,
-    recommended_workout: 'Active Recovery (Z1)',
-    error_reason: '분석이 완료되지 않았습니다. "다시 분석"을 눌러 재시도해 주세요.'
-  };
+  return buildDeterministicCoachResponse(
+    Object.assign({}, deterministicCtx, {
+      apiFailed: true,
+      quotaExceeded: !!(lastErrInfo && lastErrInfo.isQuotaExceeded),
+      retryAfterSec:
+        lastErrInfo && lastErrInfo.retryAfterSec
+          ? lastErrInfo.retryAfterSec
+          : getGeminiQuotaCooldownRemainingSec(),
+    })
+  );
 }
+
+window.determineDeterministicWorkoutCategory = determineDeterministicWorkoutCategory;
+window.buildDeterministicCoachResponse = buildDeterministicCoachResponse;
+window.buildGeminiQuotaUserNotice = buildGeminiQuotaUserNotice;
+window.getGeminiQuotaCooldownRemainingSec = getGeminiQuotaCooldownRemainingSec;
 
 // 전역으로 노출
 if (typeof window !== 'undefined') {
   window.callGeminiCoach = callGeminiCoach;
   window.determineDeterministicWorkoutCategory = determineDeterministicWorkoutCategory;
+  window.determineDeterministicRunWorkoutCategory = determineDeterministicRunWorkoutCategory;
+  window.resolveCoachSportCategory = resolveCoachSportCategory;
 }
