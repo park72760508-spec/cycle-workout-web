@@ -126,6 +126,14 @@
     var colors = getScoreColor(score);
     var commentText = streamingComment || coachData.coach_comment || '';
     var workoutType = coachData.recommended_workout || 'Recovery Jog (Z1)';
+    if (typeof window.pickDeterministicRunRecommendedWorkout === 'function') {
+      workoutType = window.pickDeterministicRunRecommendedWorkout({
+        category: coachData.workout_category,
+        primaryZone: coachData.training_zone,
+        hexagonOverride: coachData.hexagon_override,
+        recommendedWorkout: workoutType
+      });
+    }
     var isQuotaInfo =
       coachData.gemini_quota_exceeded === true || coachData.analysis_source === 'deterministic_quota';
     var hasError = !!(coachData.error_reason) && !isQuotaInfo;
