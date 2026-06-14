@@ -135,12 +135,13 @@ function determineDeterministicRunWorkoutCategory(conditionScore, last7DaysRtss,
   var guide = typeof window !== 'undefined' && window.RUN_TRAINING_ZONE_GUIDE;
   var analyzeGaps = guide && guide.analyzeRunHexagonGaps;
   var resolvePrescription = guide && guide.resolveRunHexagonPrescription;
-  var buildMissingNote = guide && guide.buildMissingAxesNote;
+  var buildIntegratedReason = guide && guide.buildIntegratedRunWorkoutReason;
+  var logReasonVerification = guide && guide.logRunCoachReasonVerification;
   var categoryDefaults = (guide && guide.CATEGORY_DEFAULTS) || {};
 
-  var gaps = analyzeGaps ? analyzeGaps(hexagonContext) : { missingLong: false, missingShort: false, missingMid: false, missingAxes: hexagonContext.missingAxes || [] };
-  var missingAxes = gaps.missingAxes || hexagonContext.missingAxes || [];
-  var missingNote = buildMissingNote ? buildMissingNote(missingAxes) : '';
+  var gaps = analyzeGaps ? analyzeGaps(hexagonContext) : { missingLong: false, missingShort: false, missingMid: false, missingAxes: hexagonContext.missingAxes || [], missingCount: 0 };
+  var missingCount = gaps.missingCount != null ? gaps.missingCount : (gaps.missingAxes ? gaps.missingAxes.length : 0);
+  var hexagonSeverelyInactive = missingCount >= 4;
 
   var recentHighIntensityCount = 0;
   if (recentLogs && recentLogs.length > 0) {
@@ -174,7 +175,16 @@ function determineDeterministicRunWorkoutCategory(conditionScore, last7DaysRtss,
   var baseCategory;
   var result;
 
-  if (conditionScore < 62 || tssLoadRatio > 1.35 || recentHighIntensityCount >= 2) {
+  if (hexagonSeverelyInactive && conditionScore >= 62) {
+    baseCategory = 'recovery';
+    result = Object.assign({}, categoryDefaults.recovery || {
+      category: 'recovery',
+      primaryZone: 'Z1',
+      allowedWorkouts: ['Recovery Jog (Z1)', 'Easy Run (Z2)'],
+      reason: ''
+    });
+    result.hexagonOverride = 'profile_inactive';
+  } else if (conditionScore < 62 || tssLoadRatio > 1.35 || recentHighIntensityCount >= 2) {
     baseCategory = 'recovery';
     result = Object.assign({}, categoryDefaults.recovery || {
       category: 'recovery',
@@ -212,19 +222,23 @@ function determineDeterministicRunWorkoutCategory(conditionScore, last7DaysRtss,
     result.reason = '안정적인 컨디션(' + conditionScore + '점)으로 Z3 템포·역치 러닝이 적합합니다.';
   }
 
-  // Task B: 6축 헥사곤 공백 맞춤 처방 (컨디션·부하 기본 분기 이후 적용)
-  if (resolvePrescription) {
+  // 6축 헥사곤 공백 맞춤 처방 (결측 4+는 프로필 미활성화 진단으로 통합, 개별 처방 스킵)
+  if (resolvePrescription && !hexagonSeverelyInactive) {
     var prescription = resolvePrescription(gaps, conditionScore, baseCategory);
     if (prescription) {
       result = Object.assign({}, result, prescription);
     }
   }
 
-  if (missingNote && !result.hexagonOverride) {
-    result.reason = result.reason + ' ' + missingNote;
-  }
-  if (weeklyRtssGoal > 0 && last7DaysRtss < weeklyRtssGoal * 0.7) {
-    result.reason += ' 주간 rTSS 목표(' + weeklyRtssGoal + '점) 대비 현재 ' + last7DaysRtss + '점으로 부족합니다.';
+  if (buildIntegratedReason) {
+    result.reason = buildIntegratedReason({
+      hexagonContext: hexagonContext,
+      last7DaysRtss: last7DaysRtss,
+      weeklyRtssGoal: weeklyRtssGoal,
+      baseReason: hexagonSeverelyInactive ? '' : result.reason,
+      hexagonOverride: result.hexagonOverride,
+      conditionScore: conditionScore
+    });
   }
 
   if (!result.primaryZone && result.allowedWorkouts && result.allowedWorkouts.length) {
@@ -241,6 +255,10 @@ function determineDeterministicRunWorkoutCategory(conditionScore, last7DaysRtss,
       ? window.parseRunWorkoutZone(result.recommendedWorkout)
       : result.primaryZone;
     result.primaryZone = result.training_zone;
+  }
+
+  if (logReasonVerification) {
+    logReasonVerification(result, gaps);
   }
   return result;
 }
