@@ -16,42 +16,69 @@ const TRAINING_LEVELS = {
   'PRO':       { min: 900, max: 1200, desc: "프로 선수 레벨", target: 1050 }
 };
 
+/** RUN 훈련 등급별 주간 권장 rTSS 범위 (회원가입/프로필 challenge) */
+const RUN_TRAINING_LEVELS = {
+  'Fitness':    { min: 150, max: 200, desc: '기초 체력 형성(5~10k 완주)', target: 175, rangeLabel: '150 ~ 200' },
+  'CityRunner': { min: 300, max: 350, desc: '10k 페이스 단축 및 하프 마라톤(20k) 완주 목표', target: 325, rangeLabel: '300 ~ 350' },
+  'Challenger': { min: 450, max: 550, desc: '풀마라톤(42k) Sub-4(4시간 이내) 달성', target: 500, rangeLabel: '450 ~ 550' },
+  'Sub3Club':   { min: 600, max: 700, desc: "마라톤 꿈의 기록 'Sub-3' 달성 및 최상위 동호인 (마스터즈 입상권)", target: 650, rangeLabel: '600 ~ 700' },
+  'Elite':      { min: 750, max: 850, desc: '대학/실업 육상 선수 및 전문 엘리트 러너 수준', target: 800, rangeLabel: '750 ~ 850' },
+  'PRO':        { min: 900, max: 1200, desc: '프로 마라토너 및 국가대표 수준', target: 975, rangeLabel: '900 +' }
+};
+
 /**
  * 사용자의 훈련 등급에 따른 주간 목표 TSS 계산
  * @param {string} challenge - 사용자의 훈련 등급 ('Fitness', 'GranFondo', 'Racing', 'Elite', 'PRO')
  * @param {number} [customTarget] - 사용자 지정 목표 (선택사항, 없으면 등급별 기본 target 사용)
  * @returns {Object} { target: number, min: number, max: number, desc: string }
  */
-function getWeeklyTargetTSS(challenge, customTarget) {
-  // challenge 정규화 (대소문자 무시, 공백 제거)
-  const normalizedChallenge = String(challenge || 'Fitness').trim();
-  
-  // 대소문자 무시하여 키 찾기
+function resolveTrainingLevel(levelsMap, challenge, logPrefix) {
+  var normalizedChallenge = String(challenge || 'Fitness').trim();
   var level = null;
   var levelKey = null;
-  for (var key in TRAINING_LEVELS) {
+  for (var key in levelsMap) {
     if (key.toLowerCase() === normalizedChallenge.toLowerCase()) {
-      level = TRAINING_LEVELS[key];
+      level = levelsMap[key];
       levelKey = key;
       break;
     }
   }
-  
-  // 매칭되지 않으면 기본값 사용
   if (!level) {
-    console.warn('[getWeeklyTargetTSS] Challenge not found:', normalizedChallenge, 'Using default: Fitness');
-    level = TRAINING_LEVELS['Fitness'];
+    console.warn('[' + logPrefix + '] Challenge not found:', normalizedChallenge, 'Using default: Fitness');
+    level = levelsMap['Fitness'];
     levelKey = 'Fitness';
   }
-  
-  // 사용자 지정 목표가 있으면 사용, 없으면 등급별 기본 target 사용
-  const target = customTarget && customTarget > 0 ? customTarget : level.target;
-  
+  return { level: level, levelKey: levelKey };
+}
+
+function getWeeklyTargetTSS(challenge, customTarget) {
+  var resolved = resolveTrainingLevel(TRAINING_LEVELS, challenge, 'getWeeklyTargetTSS');
+  var level = resolved.level;
+  var target = customTarget && customTarget > 0 ? customTarget : level.target;
   return {
-    target: Math.max(level.min, Math.min(level.max, target)), // min~max 범위 내로 제한
+    target: Math.max(level.min, Math.min(level.max, target)),
     min: level.min,
     max: level.max,
     desc: level.desc
+  };
+}
+
+/**
+ * RUN 사용자의 훈련 등급에 따른 주간 목표 rTSS 계산
+ * @param {string} challenge - Fitness, CityRunner, Challenger, Sub3Club, Elite, PRO
+ * @param {number} [customTarget]
+ * @returns {Object} { target, min, max, desc, rangeLabel }
+ */
+function getWeeklyTargetRtss(challenge, customTarget) {
+  var resolved = resolveTrainingLevel(RUN_TRAINING_LEVELS, challenge, 'getWeeklyTargetRtss');
+  var level = resolved.level;
+  var target = customTarget && customTarget > 0 ? customTarget : level.target;
+  return {
+    target: Math.max(level.min, Math.min(level.max, target)),
+    min: level.min,
+    max: level.max,
+    desc: level.desc,
+    rangeLabel: level.rangeLabel || (level.min + ' ~ ' + level.max)
   };
 }
 
@@ -158,7 +185,9 @@ async function saveLaptopTrainingResultAtEnd() {
 // 전역으로 노출
 if (typeof window !== 'undefined') {
   window.TRAINING_LEVELS = TRAINING_LEVELS;
+  window.RUN_TRAINING_LEVELS = RUN_TRAINING_LEVELS;
   window.getWeeklyTargetTSS = getWeeklyTargetTSS;
+  window.getWeeklyTargetRtss = getWeeklyTargetRtss;
   window.calculateWeeklyProgress = calculateWeeklyProgress;
   window.saveLaptopTrainingResultAtEnd = saveLaptopTrainingResultAtEnd;
 }
