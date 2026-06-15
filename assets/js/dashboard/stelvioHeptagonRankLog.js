@@ -59,6 +59,21 @@
     return ac === f;
   }
 
+  /** heptagon_cohort_ranks 행 — 탈퇴·비활성 제외(랭킹보드·헵타곤 목록과 동일) */
+  function stelvioHeptagonCohortRowIsWithdrawn(cohortData) {
+    if (!cohortData || cohortData.userId == null) return true;
+    if (typeof window.stelvioRankingIsWithdrawnRow === 'function') {
+      return window.stelvioRankingIsWithdrawnRow({
+        userId: cohortData.userId,
+        account_status: cohortData.account_status,
+        isWithdrawn: cohortData.isWithdrawn
+      });
+    }
+    if (cohortData.isWithdrawn === true) return true;
+    var s = String(cohortData.account_status || '').trim().toLowerCase();
+    return s === 'withdrawn' || s === 'suspended' || s === 'inactive' || s === 'deleted';
+  }
+
   function heptagonCohortDocId(monthKey, filterCategory, filterGender, userId) {
     var m = String(monthKey || '');
     var c = String(filterCategory != null ? filterCategory : 'Supremo');
@@ -233,6 +248,9 @@
           if (!x || !stelvioCohortRowMatchesFilter(x, filterCategory)) {
             return;
           }
+          if (stelvioHeptagonCohortRowIsWithdrawn(x)) {
+            return;
+          }
           x._id = d.id;
           items.push(x);
         });
@@ -292,6 +310,9 @@
           if (!x || !stelvioCohortRowMatchesFilter(x, filterCategory)) {
             return;
           }
+          if (stelvioHeptagonCohortRowIsWithdrawn(x)) {
+            return;
+          }
           x._id = d.id;
           items.push(x);
         });
@@ -346,6 +367,9 @@
         qs.forEach(function (d) {
           var x = d.data();
           if (!x || !stelvioCohortRowMatchesFilter(x, filterCategory)) {
+            return;
+          }
+          if (stelvioHeptagonCohortRowIsWithdrawn(x)) {
             return;
           }
           var b = x.boardRank;
