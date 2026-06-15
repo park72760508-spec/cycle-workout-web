@@ -540,6 +540,17 @@
       var rankChRaw = global.stelvioRankChangeBadgeHtmlForUser(activeCategory, currentUserId);
       rankChHtml = rankChRaw ? String(rankChRaw).replace(/<[^>]+>/g, '') : '';
     }
+    if (
+      !rankChHtml &&
+      currentUser &&
+      currentUser.rankChange != null &&
+      isFinite(Number(currentUser.rankChange))
+    ) {
+      var rcPlain = Math.round(Number(currentUser.rankChange));
+      if (rcPlain > 0) rankChHtml = '(↑' + rcPlain + ')';
+      else if (rcPlain < 0) rankChHtml = '(↓' + Math.abs(rcPlain) + ')';
+      else rankChHtml = '(-)';
+    }
     var badgeMain = overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode && !isPaceMode
       ? refBadgeTitle
       : '나의 위치';
