@@ -159,6 +159,12 @@
       return dataApi().getCurrentUserId ? dataApi().getCurrentUserId() : null;
     }, [loading, rawRows.length]);
 
+    var viewerIdentity = useMemo(function () {
+      return dataApi().getViewerIdentity
+        ? dataApi().getViewerIdentity(rawRows)
+        : { firebaseId: currentUserId, boardUserId: null };
+    }, [rawRows, currentUserId, loading]);
+
     var loadLeaderboard = useCallback(function (opts) {
       setLoading(true);
       setError(null);
@@ -341,27 +347,36 @@
 
     var myViewerItem = useMemo(function () {
       if (activeTab === 'crew') return null;
-      if (!currentUserId) return null;
+      if (!currentUserId && !viewerIdentity.boardUserId) return null;
+      var match = dataApi().listItemMatchesViewer;
       var i;
       for (i = 0; i < rankedList.length; i++) {
-        if (rankedList[i] && String(rankedList[i].userId) === String(currentUserId)) {
+        if (rankedList[i] && match && match(rankedList[i], viewerIdentity)) {
+          return rankedList[i];
+        }
+        if (
+          rankedList[i] &&
+          viewerIdentity.boardUserId &&
+          String(rankedList[i].userId) === String(viewerIdentity.boardUserId)
+        ) {
           return rankedList[i];
         }
       }
       return null;
-    }, [rankedList, currentUserId, activeTab]);
+    }, [rankedList, currentUserId, viewerIdentity, activeTab]);
 
     var orphanViewerItem = useMemo(function () {
-      if (!currentUserId || activeTab === 'crew') return null;
+      if ((!currentUserId && !viewerIdentity.boardUserId) || activeTab === 'crew') return null;
       if (myViewerItem) return null;
+      var match = dataApi().listItemMatchesViewer;
       var i;
       for (i = 0; i < baseRankedList.length; i++) {
-        if (baseRankedList[i] && String(baseRankedList[i].userId) === String(currentUserId)) {
+        if (baseRankedList[i] && match && match(baseRankedList[i], viewerIdentity)) {
           return baseRankedList[i];
         }
       }
       return null;
-    }, [baseRankedList, currentUserId, myViewerItem, activeTab]);
+    }, [baseRankedList, currentUserId, viewerIdentity, myViewerItem, activeTab]);
 
     var overallHeroPayload = useMemo(function () {
       if (!isOverallTab || !dataApi().buildOverallHeroPayload) return null;
@@ -480,6 +495,7 @@
     var initialLoading = loading && !rawRows.length;
 
     var CollapsibleList = window.RunningRankingCollapsibleList;
+    var Row = window.RunningRankingRow;
     var listView = window.runningRankingListView || {};
     var skipListCollapse = isOverallTab && listFilter === 'interest';
     var gapScopeKey = listView.gapScopeKey
@@ -638,6 +654,7 @@
         items: rankedList,
         tabId: activeTab,
         currentUserId: currentUserId,
+        viewerIdentity: viewerIdentity,
         myCrewIds: activeTab === 'crew' ? myCrewIds : null,
         listCategory: activeCategory,
         socialVer: socialVer,
@@ -647,6 +664,26 @@
         onExpandChange: handleListExpandChange,
         orphanViewerItem: orphanViewerItem
       });
+    } else if (Row) {
+      listBody = React.createElement('div', {
+        className: 'running-ranking-plain-list',
+        role: 'list',
+        'aria-label': '러닝 랭킹 목록'
+      },
+        rankedList.map(function (item) {
+          return React.createElement(Row, {
+            key: (item.crewId || item.userId || '') + '-' + item.rank + '-' + socialVer + (showOverallSegments ? '-seg' : ''),
+            item: item,
+            tabId: activeTab,
+            currentUserId: currentUserId,
+            viewerIdentity: viewerIdentity,
+            myCrewIds: activeTab === 'crew' ? myCrewIds : null,
+            listCategory: activeCategory,
+            showSegments: showOverallSegments,
+            socialVer: socialVer
+          });
+        })
+      );
     } else {
       listBody = null;
     }

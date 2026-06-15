@@ -34,6 +34,7 @@
   function RunningRankingRow(props) {
     var item = props.item;
     var currentUserId = props.currentUserId;
+    var viewerIdentity = props.viewerIdentity || null;
     var tabId = props.tabId;
     var socialVer = props.socialVer;
     if (!item) return null;
@@ -59,9 +60,13 @@
       props.myCrewIds.has(String(item.crewId))
     );
     var isCurrent = isCrewCurrent || !!(
-      currentUserId &&
-      item.userId &&
-      String(item.userId) === String(currentUserId)
+      soc.isViewerListItem
+        ? soc.isViewerListItem(item, viewerIdentity || currentUserId)
+        : (
+          currentUserId &&
+          item.userId &&
+          String(item.userId) === String(currentUserId)
+        )
     );
     var isSingleLineRow = !(tabId === 'overall' && props.showSegments);
     var rowClass = 'stelvio-rank-row running-ranking-row' +
@@ -150,7 +155,8 @@
       className: rowClass,
       'data-rank': item.rank,
       'data-social-uid': socialUid || undefined,
-      'data-board-uid': item.userId || undefined
+      'data-board-uid': item.userId || undefined,
+      'data-viewer-current': isCurrent ? '1' : undefined
     }, children);
   }
 

@@ -88,6 +88,7 @@
     var items = props.items || [];
     var tabId = props.tabId;
     var currentUserId = props.currentUserId;
+    var viewerIdentity = props.viewerIdentity || null;
     var myCrewIds = props.myCrewIds || null;
     var listCategory = props.listCategory || 'Supremo';
     var socialVer = props.socialVer || 0;
@@ -99,6 +100,8 @@
 
     var Row = window.RunningRankingRow;
 
+    var dataApi = window.runningRankingData || {};
+
     var matchFn = useMemo(function () {
       if (tabId === 'crew') {
         return function (item) {
@@ -106,9 +109,12 @@
         };
       }
       return function (item) {
+        if (dataApi.listItemMatchesViewer && viewerIdentity) {
+          return dataApi.listItemMatchesViewer(item, viewerIdentity);
+        }
         return !!(currentUserId && item && item.userId && String(item.userId) === String(currentUserId));
       };
-    }, [tabId, currentUserId, myCrewIds]);
+    }, [tabId, currentUserId, viewerIdentity, myCrewIds]);
 
     var userIdx = useMemo(function () {
       return lv().findUserIdx ? lv().findUserIdx(items, matchFn) : -1;
@@ -220,6 +226,7 @@
         item: item,
         tabId: tabId,
         currentUserId: currentUserId,
+        viewerIdentity: viewerIdentity,
         myCrewIds: myCrewIds,
         listCategory: listCategory,
         showSegments: showSegments,
@@ -262,6 +269,10 @@
         if (tabId === 'crew') {
           return myCrewIds && it.crewId && myCrewIds.has(String(it.crewId)) &&
             String(it.crewId) === String(orphanViewerItem.crewId || '');
+        }
+        if (dataApi.listItemMatchesViewer && viewerIdentity) {
+          return dataApi.listItemMatchesViewer(it, viewerIdentity) &&
+            dataApi.listItemMatchesViewer(orphanViewerItem, viewerIdentity);
         }
         return String(it.userId || '') === String(orphanViewerItem.userId || '');
       });
