@@ -559,6 +559,66 @@ async function fetchUserRunWeeklyTss(firebaseUid) {
   };
 }
 
+const RUN_ACTIVITY_LOG_SELECT =
+  "activity_id, source, activity_type, title, activity_date, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, avg_hr, max_hr, tss";
+
+function mapActivityRowToTrainingLog(row) {
+  const dateStr = row.activity_date ? String(row.activity_date).slice(0, 10) : "";
+  return {
+    id: row.activity_id ? String(row.activity_id) : dateStr,
+    activity_id: row.activity_id ? String(row.activity_id) : null,
+    source: row.source || "strava",
+    activity_type: row.activity_type || "Run",
+    title: row.title || "",
+    date: dateStr,
+    duration_sec: Number(row.duration_sec) || 0,
+    time: Number(row.duration_sec) || 0,
+    distance_km: row.distance_km != null ? Number(row.distance_km) : null,
+    elevation_gain:
+      row.elevation_gain_m != null ? Number(row.elevation_gain_m) : null,
+    avg_speed_kmh: row.avg_speed_kmh != null ? Number(row.avg_speed_kmh) : null,
+    avg_hr: row.avg_hr != null ? Number(row.avg_hr) : null,
+    max_hr: row.max_hr != null ? Number(row.max_hr) : null,
+    tss: row.tss != null ? Number(row.tss) : null,
+    readBackend: "supabase",
+    sport_category: "run",
+  };
+}
+
+/**
+ * RUN 훈련 로그 — Supabase activities (최근 6개월, Run 계열)
+ * @param {string} firebaseUid
+ * @param {number} [limit=400]
+ */
+async function fetchUserRunActivitiesRecent(firebaseUid, limit = 400) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return [];
+  const uid = String(firebaseUid || "").trim();
+  if (!uid) return [];
+
+  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
+  const mode =
+    supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  const userUuid = supabaseDualWriteServer.resolveUserUuid(uid, ns, mode);
+  if (!userUuid) return [];
+
+  const cap = Math.min(1000, Math.max(1, Number(limit) || 400));
+  const fromYmd = shiftYmd(seoulTodayYmd(), -180);
+
+  const { data, error } = await supabase
+    .from("activities")
+    .select(RUN_ACTIVITY_LOG_SELECT)
+    .eq("user_id", userUuid)
+    .gte("activity_date", fromYmd)
+    .order("activity_date", { ascending: false })
+    .limit(cap);
+  if (error) throw error;
+
+  return (data || [])
+    .filter((row) => isRunningActivityType(row.activity_type))
+    .map(mapActivityRowToTrainingLog);
+}
+
 module.exports = {
   fetchOpenRideByFirestoreId,
   fetchOpenRidesInDateRange,
@@ -567,6 +627,7 @@ module.exports = {
   fetchUserRideLogsForMonth,
   fetchUserRideLogsRecent,
   fetchUserRunEffortsRecent,
+  fetchUserRunActivitiesRecent,
   fetchUserRunWeeklyTss,
   fetchYearlyPeaksForYear,
   mapYearlyPeaksRowToFirestoreDoc,
