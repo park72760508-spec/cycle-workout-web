@@ -1250,6 +1250,7 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
         const fbUid = uidMap.get(String(row.user_id));
         if (!fbUid) continue;
         const profile = profileMap.get(String(row.user_id));
+        if (!isSupabaseRankingEligibleProfile(profile)) continue;
         if (!profileGenderMatches(profile, fg)) continue;
         const gcScore =
           row.sum_position_scores != null && isFinite(Number(row.sum_position_scores))

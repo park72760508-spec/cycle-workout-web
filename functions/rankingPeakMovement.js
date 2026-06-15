@@ -59,6 +59,111 @@ function buildPeakBoardRankMapForCategoryRows(rows) {
   return ranks;
 }
 
+/**
+ * 탈퇴·목록 이탈자를 제외한 생존 코호트 기준 전일 순위 대비 등락.
+ * 전일 336위·오늘 331위(꼴창)처럼 절대 순위만 비교하면 탈퇴로 인한 허위 상승이 난다.
+ * @param {any[]} rows 현재 필터·정렬된 행(표시 순서 = 현재 순위)
+ * @param {Record<string, number>} baseline uid → 전일(공식) 순위
+ */
+function computeSurvivorAwareRankMovementForRows(rows, baseline) {
+  const rankChanges = {};
+  const previousRanks = {};
+  if (!Array.isArray(rows) || !rows.length || !baseline || typeof baseline !== "object") {
+    return { rankChanges, previousRanks };
+  }
+
+  const survivorUids = [];
+  for (let i = 0; i < rows.length; i++) {
+    const e = rows[i];
+    const uid = e && e.userId != null ? String(e.userId).trim() : "";
+    if (!uid || baseline[uid] == null) continue;
+    const prevRaw = Math.floor(Number(baseline[uid]));
+    if (!isFinite(prevRaw) || prevRaw < 1) continue;
+    survivorUids.push(uid);
+  }
+  if (!survivorUids.length) return { rankChanges, previousRanks };
+
+  const yesterdayOrderAsc = survivorUids
+    .slice()
+    .sort((a, b) => Math.floor(Number(baseline[a])) - Math.floor(Number(baseline[b])));
+
+  const prevAmongSurvivors = {};
+  for (let i = 0; i < yesterdayOrderAsc.length; i++) {
+    prevAmongSurvivors[yesterdayOrderAsc[i]] = i + 1;
+  }
+
+  const currAmongSurvivors = {};
+  let si = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const e = rows[i];
+    const uid = e && e.userId != null ? String(e.userId).trim() : "";
+    if (!uid || prevAmongSurvivors[uid] == null) continue;
+    si++;
+    currAmongSurvivors[uid] = si;
+  }
+
+  for (let i = 0; i < survivorUids.length; i++) {
+    const uid = survivorUids[i];
+    const prev = prevAmongSurvivors[uid];
+    const curr = currAmongSurvivors[uid];
+    if (prev == null || curr == null) continue;
+    rankChanges[uid] = prev - curr;
+    previousRanks[uid] = prev;
+  }
+
+  return { rankChanges, previousRanks };
+}
+
+/**
+ * 탈퇴 필터·재정렬 후 payload 등락 재계산(서버 res.json·클라이언트 공통).
+ */
+function recomputePeakRankMovementAfterEligibleFilter(payload) {
+  if (!payload || !payload.byCategory || typeof payload.byCategory !== "object") return payload;
+
+  for (let ci = 0; ci < PEAK_RANK_BOARD_CATEGORIES.length; ci++) {
+    const cat = PEAK_RANK_BOARD_CATEGORIES[ci];
+    const rows = payload.byCategory[cat];
+    if (!Array.isArray(rows) || !rows.length) continue;
+
+    let baseline = null;
+    const compare =
+      payload.rankMovementCompareBaselineByCategory &&
+      payload.rankMovementCompareBaselineByCategory[cat];
+    const prevDay =
+      payload.rankMovementPrevDayByCategory && payload.rankMovementPrevDayByCategory[cat];
+    if (compare && typeof compare === "object" && Object.keys(compare).length) {
+      baseline = compare;
+    } else if (prevDay && typeof prevDay === "object" && Object.keys(prevDay).length) {
+      baseline = prevDay;
+    } else {
+      baseline = {};
+      for (let ri = 0; ri < rows.length; ri++) {
+        const r = rows[ri];
+        if (!r || r.userId == null || r.previousBoardRank == null) continue;
+        const pr = Math.floor(Number(r.previousBoardRank));
+        if (isFinite(pr) && pr >= 1) baseline[String(r.userId)] = pr;
+      }
+    }
+    if (!baseline || !Object.keys(baseline).length) continue;
+
+    const { rankChanges, previousRanks } = computeSurvivorAwareRankMovementForRows(rows, baseline);
+    for (let ri = 0; ri < rows.length; ri++) {
+      const row = rows[ri];
+      if (!row || row.userId == null) continue;
+      const uid = String(row.userId);
+      if (rankChanges[uid] == null || previousRanks[uid] == null) {
+        delete row.rankChange;
+        delete row.previousBoardRank;
+        continue;
+      }
+      row.rankChange = rankChanges[uid];
+      row.previousBoardRank = previousRanks[uid];
+    }
+  }
+
+  return payload;
+}
+
 function normalizePeakRankHistoryDoc(d) {
   if (!d || typeof d !== "object") {
     return {
@@ -184,24 +289,26 @@ function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
     newRankChangesByCategory[cat] = {};
     newPreviousRanksByCategory[cat] = {};
 
-    for (let i = 0; i < rows.length; i++) {
-      const e = rows[i];
-      const uid = e && e.userId != null ? String(e.userId).trim() : "";
-      if (!uid) continue;
-      const curr = currRanks[uid];
-      if (curr == null) continue;
-
-      delete e.rankChange;
-      delete e.previousBoardRank;
-
-      if (!sameDaySelfBaseline && compareBaseline[uid] != null) {
-        const prev = Math.floor(Number(compareBaseline[uid]));
-        if (isFinite(prev) && prev >= 1) {
-          e.rankChange = prev - curr;
-          e.previousBoardRank = prev;
-          newRankChangesByCategory[cat][uid] = e.rankChange;
-          newPreviousRanksByCategory[cat][uid] = prev;
-        }
+    if (!sameDaySelfBaseline && compareBaseline && Object.keys(compareBaseline).length) {
+      const survivorMv = computeSurvivorAwareRankMovementForRows(rows, compareBaseline);
+      for (let i = 0; i < rows.length; i++) {
+        const e = rows[i];
+        const uid = e && e.userId != null ? String(e.userId).trim() : "";
+        if (!uid) continue;
+        delete e.rankChange;
+        delete e.previousBoardRank;
+        if (survivorMv.rankChanges[uid] == null || survivorMv.previousRanks[uid] == null) continue;
+        e.rankChange = survivorMv.rankChanges[uid];
+        e.previousBoardRank = survivorMv.previousRanks[uid];
+        newRankChangesByCategory[cat][uid] = e.rankChange;
+        newPreviousRanksByCategory[cat][uid] = e.previousBoardRank;
+      }
+    } else {
+      for (let i = 0; i < rows.length; i++) {
+        const e = rows[i];
+        if (!e) continue;
+        delete e.rankChange;
+        delete e.previousBoardRank;
       }
     }
   }
@@ -234,6 +341,8 @@ module.exports = {
   resolveRankingBoardPeriod,
   resolvePeakRankHistoryKey,
   buildPeakBoardRankMapForCategoryRows,
+  computeSurvivorAwareRankMovementForRows,
+  recomputePeakRankMovementAfterEligibleFilter,
   normalizePeakRankHistoryDoc,
   computePeakRankMovementFields,
   payloadHasRankMovement,

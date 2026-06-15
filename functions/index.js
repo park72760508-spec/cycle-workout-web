@@ -104,6 +104,17 @@ function filterWithdrawnUsersFromRankingPayload(payload) {
   if (payload.currentUser && !isRankingEligibleUserData(payload.currentUser)) {
     payload.currentUser = null;
   }
+  try {
+    const peakMovement = require("./rankingPeakMovement");
+    if (typeof peakMovement.recomputePeakRankMovementAfterEligibleFilter === "function") {
+      peakMovement.recomputePeakRankMovementAfterEligibleFilter(payload);
+    }
+  } catch (eReMv) {
+    console.warn(
+      "[filterWithdrawnUsersFromRankingPayload] rank movement recompute skipped:",
+      eReMv && eReMv.message ? eReMv.message : eReMv
+    );
+  }
   return payload;
 }
 

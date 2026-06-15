@@ -1021,17 +1021,45 @@ function filterLatestGcDocsWithRankMovement(docs) {
   });
 }
 
-/** GC 보드 표시 순위 — 환산 합 내림차순 후 1..N */
+/** GC 보드 표시 순위 — 환산 합 내림차순 후 1..N, 등락은 생존 코호트 기준 재산출 */
 function rerankGcBoardRows(rows) {
+  const peakMovement = require("./rankingPeakMovement");
   const sorted = (rows || []).slice().sort((a, b) => {
     const sb = b.gcScore != null && isFinite(Number(b.gcScore)) ? Number(b.gcScore) : 0;
     const sa = a.gcScore != null && isFinite(Number(a.gcScore)) ? Number(a.gcScore) : 0;
     if (sb !== sa) return sb - sa;
     return String(a.userId || "").localeCompare(String(b.userId || ""));
   });
+
+  const baseline = {};
+  for (let i = 0; i < sorted.length; i++) {
+    const r = sorted[i];
+    if (!r || r.userId == null) continue;
+    const pr =
+      r.previousBoardRank != null && isFinite(Number(r.previousBoardRank))
+        ? Math.floor(Number(r.previousBoardRank))
+        : null;
+    if (pr != null && pr >= 1) baseline[String(r.userId)] = pr;
+  }
+
   for (let i = 0; i < sorted.length; i++) {
     sorted[i].rank = i + 1;
+    delete sorted[i].rankChange;
+    delete sorted[i].previousBoardRank;
   }
+
+  if (Object.keys(baseline).length && typeof peakMovement.computeSurvivorAwareRankMovementForRows === "function") {
+    const mv = peakMovement.computeSurvivorAwareRankMovementForRows(sorted, baseline);
+    for (let j = 0; j < sorted.length; j++) {
+      const row = sorted[j];
+      if (!row || row.userId == null) continue;
+      const uid = String(row.userId);
+      if (mv.rankChanges[uid] == null || mv.previousRanks[uid] == null) continue;
+      row.rankChange = mv.rankChanges[uid];
+      row.previousBoardRank = mv.previousRanks[uid];
+    }
+  }
+
   return sorted;
 }
 
