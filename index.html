@@ -10344,6 +10344,9 @@
         _stelvioWithdrawnUserIdSet.add(id);
       });
       _persistWithdrawnSetToLocalStorage();
+      try {
+        window.dispatchEvent(new CustomEvent('stelvio-withdrawn-set-changed'));
+      } catch (eWdEv) {}
       /* 프리렌더·탭 즉시 전환 캐시 무효화 — 탈퇴 목록 갱신 후 DOM 재생성 */
       if (typeof stelvioRankingLastPaintedSwrKey !== 'undefined') stelvioRankingLastPaintedSwrKey = '';
       if (typeof stelvioCleanupPreRenderedRankingViews === 'function') {
@@ -10364,6 +10367,18 @@
           try {
             renderStelvioActiveCategory();
           } catch (e) {}
+        }
+      }
+      if (
+        typeof stelvioGcPinnedRankingPayload !== 'undefined' &&
+        stelvioGcPinnedRankingPayload &&
+        stelvioGcPinnedRankingPayload.byCategory
+      ) {
+        if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
+          stelvioApplyPublicRankingVisibilityToPayload(stelvioGcPinnedRankingPayload);
+        }
+        if (typeof stelvioApplyGcRankMovementPipeline === 'function') {
+          stelvioApplyGcRankMovementPipeline(stelvioGcPinnedRankingPayload);
         }
       }
     }
@@ -10622,7 +10637,7 @@
       if (Array.isArray(data.fullEntries)) data.fullEntries = stelvioFilterRankingRowsForPublicViewer(data.fullEntries);
       if (Array.isArray(data.ranking)) data.ranking = stelvioFilterRankingRowsForPublicViewer(data.ranking);
       if (data.myRankSupremo && stelvioRankingIsWithdrawnRow(data.myRankSupremo)) data.myRankSupremo = null;
-      /* Max~60분만 survivor 재계산 — TSS·GC 등락 파이프라인과 분리(요청 없는 전역 recompute 부작용 방지) */
+      /* Max~60분: survivor 재계산. GC는 stelvioApplyGcRankMovementPipeline 종료 시 재계산(TSS와 분리). */
       if (
         typeof stelvioRecomputeRankMovementAfterEligibleFilter === 'function' &&
         typeof stelvioIsPeakPowerDurationForRankChange === 'function' &&
@@ -10636,6 +10651,7 @@
     window.stelvioRankingLoginIsAdmin = stelvioRankingLoginIsAdmin;
     window.stelvioRankingViewerCanSeePrivateNames = stelvioRankingViewerCanSeePrivateNames;
     window.stelvioFilterRankingRowsForPublicViewer = stelvioFilterRankingRowsForPublicViewer;
+    window.stelvioRankingIsWithdrawnRow = stelvioRankingIsWithdrawnRow;
 
     /**
      * 주간 마일리지 TOP10 조회 후 모달 표시 (Choose Your Path 입장 시 호출)
@@ -18389,6 +18405,10 @@
       stelvioNormalizeRankMovementOnPayload(data);
       stelvioSyncPeakRankMovementFromEntries(data);
       stelvioEnsurePeakPowerRankMovementOnPayload(data);
+      /* 탈퇴자 제외 후 GC·헵타곤 등락 모수 재산정(전일 baseline에 탈퇴자가 남아 있어도 survivor 기준) */
+      if (typeof stelvioRecomputeRankMovementAfterEligibleFilter === 'function') {
+        stelvioRecomputeRankMovementAfterEligibleFilter(data);
+      }
     }
 
     /** payload·entries·currentUser 등에 붙은 rankChange/previousBoardRank 제거 */
