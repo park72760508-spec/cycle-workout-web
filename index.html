@@ -31569,6 +31569,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       'rgba(168, 85, 247, 0.7)'     // 60분 = Z7
     ];
     var GROWTH_PR_CIRCLE_LABELS = ['Max', '1분', '5분', '10분', '20분', '40분', '60분'];
+    /** 나의 성장 트렌드: 원형 버튼·정보 판넬 톤 (40분 보라색 일괄) */
+    var GROWTH_BTN_ACTIVE = '#a855f7';
+    var GROWTH_BTN_INACTIVE = '#9ca3af';
+    var GROWTH_PANEL_TINT_RGBA = 'rgba(168, 85, 247, 0.7)';
     /** 나의 성장 트렌드 범례 표시 순서: 1분~60분 후 Max(슬롯 인덱스는 그대로) */
     var GROWTH_PR_LEGEND_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
     /** 원형 구간색(rgba) → 정보 판넬용 아주 연한 틴트 */
@@ -33128,7 +33132,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             {GROWTH_PR_LEGEND_DISPLAY_ORDER.map(function (i) {
               var lab = GROWTH_PR_CIRCLE_LABELS[i];
               var active = selectedSlot === i;
-              var bg = YEARLY_PR_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
+              var bg = active ? GROWTH_BTN_ACTIVE : GROWTH_BTN_INACTIVE;
               return (
                 <button
                   key={i}
@@ -33137,10 +33141,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     setSelectedSlot(i);
                   }}
                   className={
-                    'relative flex items-center justify-center rounded-full min-w-[1.88rem] h-[1.8rem] px-0.5 text-[10px] font-bold text-gray-800 shadow-sm border transition ' +
-                    (active ? 'ring-2 ring-blue-600 ring-offset-1 border-blue-500' : 'border-gray-200/80 hover:border-gray-400')
+                    'relative flex items-center justify-center rounded-full min-w-[1.88rem] h-[1.8rem] px-0.5 text-[10px] font-bold text-white shadow-sm border transition ' +
+                    (active ? 'ring-2 ring-purple-600 ring-offset-1 border-purple-500' : 'border-transparent hover:brightness-95 opacity-90')
                   }
-                  style={{ backgroundColor: bg.replace('0.7)', '0.95)').replace('0.55)', '0.95)') }}
+                  style={{ backgroundColor: bg }}
                   title={(lab || '') + ' 구간'}
                 >
                   {lab}
@@ -33162,12 +33166,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var gDate = (gRow && (gRow.dateLabel || gRow.monthLabel)) || '—';
             var gSub = gLab + ' | ' + gDate;
             if (gSub.length > 22) gSub = gSub.slice(0, 20) + '…';
-            var gZoneTint = YEARLY_PR_ZONE_COLORS[selectedSlot] || 'rgba(156,163,175,0.7)';
             var gPanelBg =
               'linear-gradient(180deg, ' +
-              growthPanelTintFromZoneColor(gZoneTint, 0.12) +
+              growthPanelTintFromZoneColor(GROWTH_PANEL_TINT_RGBA, 0.12) +
               ' 0%, ' +
-              growthPanelTintFromZoneColor(gZoneTint, 0.06) +
+              growthPanelTintFromZoneColor(GROWTH_PANEL_TINT_RGBA, 0.06) +
               ' 100%), #fff';
             return React.createElement(
               'div',
