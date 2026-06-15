@@ -511,6 +511,99 @@
 
   var CHART_CATEGORIES = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
 
+  /**
+   * 분포 차트 currentUserId — CYCLE 랭킹보드와 동일하게 byCategory 행의 userId(보드 UUID) 사용.
+   * 로그인 Firebase UID만 넘기면 나의 위치·배지가 표시되지 않음.
+   */
+  function resolveChartBoardUserId(rows) {
+    var identity = getViewerIdentity(rows);
+    if (identity.boardUserId) return String(identity.boardUserId);
+    if (identity.firebaseId) return String(identity.firebaseId);
+    var fb = getCurrentUserId();
+    return fb ? String(fb) : '';
+  }
+
+  function findViewerChartEntries(byCategory, boardUid) {
+    var currentUser = null;
+    var myRankSupremo = null;
+    if (!boardUid || !byCategory) {
+      return { currentUser: currentUser, myRankSupremo: myRankSupremo };
+    }
+    var uid = String(boardUid);
+    var sup = byCategory.Supremo || [];
+    var i;
+    for (i = 0; i < sup.length; i++) {
+      if (sup[i] && String(sup[i].userId) === uid) {
+        myRankSupremo = sup[i];
+        currentUser = sup[i];
+        break;
+      }
+    }
+    return { currentUser: currentUser, myRankSupremo: myRankSupremo };
+  }
+
+  function findViewerChartEntryInCategory(byCategory, boardUid, category) {
+    if (!boardUid || !byCategory || !category) return null;
+    var arr = byCategory[category] || [];
+    var uid = String(boardUid);
+    var i;
+    for (i = 0; i < arr.length; i++) {
+      if (arr[i] && String(arr[i].userId) === uid) return arr[i];
+    }
+    return null;
+  }
+
+  /**
+   * 목록 행(등락·순위)을 분포 차트 props에 병합 — CYCLE overrideDisplayRank·등락 배지와 동일.
+   */
+  function enrichChartPayloadWithViewerItem(payload, viewerItem, rows) {
+    if (!payload || !viewerItem) return payload;
+    var boardUid = resolveChartBoardUserId(rows || []);
+    if (!boardUid && viewerItem.userId != null) {
+      boardUid = String(viewerItem.userId);
+    }
+    if (!boardUid) return payload;
+
+    payload.currentUserId = boardUid;
+    if (viewerItem.rank != null && isFinite(Number(viewerItem.rank)) && Number(viewerItem.rank) >= 1) {
+      payload.overrideDisplayRank = Math.floor(Number(viewerItem.rank));
+    }
+
+    var found = findViewerChartEntries(payload.byCategory, boardUid);
+    if (found.myRankSupremo) payload.myRankSupremo = found.myRankSupremo;
+
+    var activeCat = payload.activeCategory || 'Supremo';
+    var catEntry = findViewerChartEntryInCategory(payload.byCategory, boardUid, activeCat);
+    var base = catEntry
+      ? Object.assign({}, catEntry)
+      : found.currentUser
+        ? Object.assign({}, found.currentUser)
+        : { userId: boardUid };
+    if (viewerItem.rankChange != null && isFinite(Number(viewerItem.rankChange))) {
+      base.rankChange = Math.round(Number(viewerItem.rankChange));
+    }
+    if (viewerItem.previousBoardRank != null && isFinite(Number(viewerItem.previousBoardRank))) {
+      base.previousBoardRank = Math.floor(Number(viewerItem.previousBoardRank));
+    }
+    if (viewerItem.rank != null && isFinite(Number(viewerItem.rank))) {
+      base.rank = Math.floor(Number(viewerItem.rank));
+    }
+    if (payload.duration === 'gc' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
+      base.gcScore = Number(viewerItem.value);
+    }
+    if (payload.duration === 'tss' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
+      base.totalTss = Number(viewerItem.value);
+    }
+    if (payload.duration === 'personal_dist' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
+      base.totalKm = Number(viewerItem.value);
+    }
+    if (payload.duration === 'run_pace' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
+      base.paceSec = Number(viewerItem.value);
+    }
+    payload.currentUser = base;
+    return payload;
+  }
+
   /** StelvioRankingDistributionChart gc 모드용 엔트리 */
   function rowToChartEntry(row, gender, category) {
     var score = getOverallTotalScore(row, gender, category);
@@ -578,19 +671,8 @@
       byCategory[cat].sort(spec.sortFn);
       byCategory[cat].forEach(function (e, idx) { e.rank = idx + 1; });
     });
-    var uid = getCurrentUserId();
-    var myRankSupremo = null;
-    var currentUser = null;
-    if (uid) {
-      var sup = byCategory.Supremo || [];
-      for (i = 0; i < sup.length; i++) {
-        if (sup[i] && String(sup[i].userId) === String(uid)) {
-          myRankSupremo = sup[i];
-          currentUser = sup[i];
-          break;
-        }
-      }
-    }
+    var boardUid = resolveChartBoardUserId(filtered);
+    var viewerChart = findViewerChartEntries(byCategory, boardUid);
     var catKey = opts.category || 'Supremo';
     var catLabel = (cfg().CATEGORY_LABELS || {})[catKey] || catKey;
     var out = {
@@ -598,9 +680,9 @@
       byCategory: byCategory,
       activeCategory: catKey,
       duration: spec.duration || 'gc',
-      currentUserId: uid,
-      currentUser: currentUser,
-      myRankSupremo: myRankSupremo,
+      currentUserId: boardUid || null,
+      currentUser: viewerChart.currentUser,
+      myRankSupremo: viewerChart.myRankSupremo,
       viewerIsAdmin: typeof window.getViewerGrade === 'function' && window.getViewerGrade() === '1',
       titleOverride: '참가자 분포',
       pillLabelOverride: catLabel + ' · ' + (spec.pillMetricLabel || ''),
@@ -714,19 +796,8 @@
       byCategory[cat].sort(function (a, b) { return Number(b.gcScore) - Number(a.gcScore); });
       byCategory[cat].forEach(function (e, idx) { e.rank = idx + 1; });
     });
-    var uid = getCurrentUserId();
-    var myRankSupremo = null;
-    var currentUser = null;
-    if (uid) {
-      var sup = byCategory.Supremo || [];
-      for (i = 0; i < sup.length; i++) {
-        if (sup[i] && String(sup[i].userId) === String(uid)) {
-          myRankSupremo = sup[i];
-          currentUser = sup[i];
-          break;
-        }
-      }
-    }
+    var boardUid = resolveChartBoardUserId(filtered);
+    var viewerChart = findViewerChartEntries(byCategory, boardUid);
     var catKey = opts.category || 'Supremo';
     var catLabel = (cfg().CATEGORY_LABELS || {})[catKey] || catKey;
     return {
@@ -734,9 +805,9 @@
       byCategory: byCategory,
       activeCategory: catKey,
       duration: 'gc',
-      currentUserId: uid,
-      currentUser: currentUser,
-      myRankSupremo: myRankSupremo,
+      currentUserId: boardUid || null,
+      currentUser: viewerChart.currentUser,
+      myRankSupremo: viewerChart.myRankSupremo,
       viewerIsAdmin: typeof window.getViewerGrade === 'function' && window.getViewerGrade() === '1',
       titleOverride: '참가자 분포',
       pillLabelOverride: catLabel + ' · 종합 점수',
@@ -1059,6 +1130,8 @@
     listItemMatchesViewer: listItemMatchesViewer,
     buildRankedList: buildRankedList,
     buildCrewRankedList: buildCrewRankedList,
+    resolveChartBoardUserId: resolveChartBoardUserId,
+    enrichChartPayloadWithViewerItem: enrichChartPayloadWithViewerItem,
     buildDistributionPayload: buildDistributionPayload,
     buildPaceDistributionPayload: buildPaceDistributionPayload,
     buildTssDistributionPayload: buildTssDistributionPayload,
