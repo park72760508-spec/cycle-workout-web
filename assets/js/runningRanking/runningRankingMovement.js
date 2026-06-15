@@ -18,6 +18,38 @@
     }
   }
 
+  /** RUN 23:00 집계일 — 캘린더 오늘이 아닌 published leaderboard as_of */
+  function resolveLeaderboardAsOfDate(opts) {
+    opts = opts || {};
+    var lb = opts.leaderboardAsOfSeoul != null ? String(opts.leaderboardAsOfSeoul).trim().slice(0, 10) : '';
+    if (lb) return lb;
+    var mv = opts.rankMovementAsOfSeoul != null ? String(opts.rankMovementAsOfSeoul).trim().slice(0, 10) : '';
+    if (mv) return mv;
+    return seoulToday();
+  }
+
+  function ymdAddDays(ymd, delta) {
+    if (!ymd || !delta) return '';
+    try {
+      var p = String(ymd).trim().slice(0, 10).split('-');
+      if (p.length !== 3) return '';
+      var dt = new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2])));
+      dt.setUTCDate(dt.getUTCDate() + delta);
+      return dt.toISOString().slice(0, 10);
+    } catch (eYmd) {
+      return '';
+    }
+  }
+
+  function serverSnapMatchesLeaderboardDate(snap, opts) {
+    if (!snap) return false;
+    var lb = resolveLeaderboardAsOfDate(opts);
+    if (!lb) return true;
+    var snapAsOf = snap.asOfSeoul != null ? String(snap.asOfSeoul).trim().slice(0, 10) : '';
+    if (!snapAsOf) return false;
+    return snapAsOf === lb;
+  }
+
   function boardKey(tabId, opts) {
     opts = opts || {};
     return [
@@ -96,6 +128,7 @@
     var hk = historyKey(tabId, opts);
     var snap = rankMovementByKey[hk];
     if (!snap) return false;
+    if (!serverSnapMatchesLeaderboardDate(snap, opts)) return false;
 
     var cat = opts.category || 'Supremo';
     var changes = (snap.rankChangesByCategory && snap.rankChangesByCategory[cat]) || {};
@@ -166,17 +199,19 @@
         stampBoardRanks(list);
         return list;
       }
-      clearRankMovementFields(list);
-      stampBoardRanks(list);
-      return list;
     }
 
     var key = boardKey(tabId, opts);
-    var today = seoulToday();
+    var leaderboardDate = resolveLeaderboardAsOfDate(opts);
+    var compareDate = ymdAddDays(leaderboardDate, -1);
     var stored = loadSnap(key) || {};
-    var prevRanks = stored.prevDayRanks || null;
+    var prevRanks = null;
 
-    if (!prevRanks && stored.date && stored.date !== today && stored.ranks) {
+    if (stored.date === leaderboardDate && stored.prevDayRanks) {
+      prevRanks = stored.prevDayRanks;
+    } else if (stored.date === compareDate && stored.ranks) {
+      prevRanks = stored.ranks;
+    } else if (!prevRanks && stored.date && stored.date !== leaderboardDate && stored.ranks) {
       prevRanks = stored.ranks;
     }
 
@@ -211,14 +246,17 @@
     });
 
     var next = {
-      date: today,
+      date: leaderboardDate,
       ranks: ranks,
-      prevDayRanks: stored.date === today ? (stored.prevDayRanks || null) : null
+      prevDayRanks: null,
+      compareDate: compareDate
     };
-    if (stored.date && stored.date !== today) {
-      next.prevDayRanks = stored.ranks || stored.prevDayRanks || null;
-    } else if (stored.prevDayRanks) {
+    if (stored.date === leaderboardDate && stored.prevDayRanks) {
       next.prevDayRanks = stored.prevDayRanks;
+    } else if (stored.date === compareDate && stored.ranks) {
+      next.prevDayRanks = stored.ranks;
+    } else if (stored.date && stored.date !== leaderboardDate) {
+      next.prevDayRanks = stored.ranks || stored.prevDayRanks || null;
     }
 
     saveSnap(key, next);
