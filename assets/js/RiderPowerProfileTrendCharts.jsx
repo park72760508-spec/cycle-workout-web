@@ -94,14 +94,17 @@ function buildMonthPowerCurveData(intervalMMP, intervalHR) {
   });
 }
 
-/** 최근 1개월 파워 그래프: 구간별 색·API키·dataKey (랭킹 평균 W/kg은 동일 api 키 사용) */
+/** 최근 1개월 파워 그래프: 구간별 API키·dataKey (그래프·선택 버튼 톤은 40분 보라색 일괄) */
+var MONTH_POWER_CHART_COLOR = '#a855f7';
+var MONTH_POWER_BTN_ACTIVE = '#a855f7';
+var MONTH_POWER_BTN_INACTIVE = '#9ca3af';
 var MONTH_POWER_CURVE_ITEMS = [
-  { api: '1min', dataKey: 'power1min', label: '1분', color: '#ef4444' },
-  { api: '5min', dataKey: 'power5min', label: '5분', color: '#f97316' },
-  { api: '10min', dataKey: 'power10min', label: '10분', color: '#ca8a04' },
-  { api: '20min', dataKey: 'power20min', label: '20분', color: '#3b82f6' },
-  { api: '40min', dataKey: 'power40min', label: '40분', color: '#a855f7' },
-  { api: '60min', dataKey: 'power60min', label: '60분', color: '#22c55e' }
+  { api: '1min', dataKey: 'power1min', label: '1분' },
+  { api: '5min', dataKey: 'power5min', label: '5분' },
+  { api: '10min', dataKey: 'power10min', label: '10분' },
+  { api: '20min', dataKey: 'power20min', label: '20분' },
+  { api: '40min', dataKey: 'power40min', label: '40분' },
+  { api: '60min', dataKey: 'power60min', label: '60분' }
 ];
 
 /**
@@ -321,7 +324,7 @@ function PowerProfileMonthCurveChart(props) {
     }
   }
   var dataKey = selItem.dataKey;
-  var selColor = selItem.color;
+  var selColor = MONTH_POWER_CHART_COLOR;
   var hrKeyForApi = 'hr' + selectedApi;
 
   var hasAnyWeek = data.length > 0 && data.some(function(r) {
@@ -397,7 +400,7 @@ function PowerProfileMonthCurveChart(props) {
   }
 
   var fillGradId = cid + '-fillSel';
-  var activeRing = 'ring-2 ring-blue-600 ring-offset-1 border-blue-500';
+  var activeRing = 'ring-2 ring-purple-600 ring-offset-1 border-purple-500';
   var refXVal =
     selectedXIndex != null && data[selectedXIndex] && data[selectedXIndex].name != null
       ? data[selectedXIndex].name
@@ -478,7 +481,7 @@ function PowerProfileMonthCurveChart(props) {
         <div className="flex flex-wrap justify-center gap-1.5 mt-2 px-1">
           {MONTH_POWER_CURVE_ITEMS.map(function(it) {
             var active = selectedApi === it.api;
-            var bg = it.color;
+            var bg = active ? MONTH_POWER_BTN_ACTIVE : MONTH_POWER_BTN_INACTIVE;
             return (
               <button
                 key={it.api}
@@ -486,7 +489,7 @@ function PowerProfileMonthCurveChart(props) {
                 onClick={function() { setSelectedApi(it.api); }}
                 className={
                   'relative flex items-center justify-center rounded-full min-w-[1.75rem] h-7 px-0.5 text-[9px] sm:text-[10px] font-bold text-white shadow-sm border transition ' +
-                  (active ? activeRing : 'border-white/30 hover:brightness-95')
+                  (active ? activeRing : 'border-transparent hover:brightness-95 opacity-90')
                 }
                 style={{ backgroundColor: bg }}
                 title={it.label + ' 최대 파워'}
