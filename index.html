@@ -10528,6 +10528,9 @@
       if (Array.isArray(data.fullEntries)) data.fullEntries = stelvioFilterRankingRowsForPublicViewer(data.fullEntries);
       if (Array.isArray(data.ranking)) data.ranking = stelvioFilterRankingRowsForPublicViewer(data.ranking);
       if (data.myRankSupremo && stelvioRankingIsWithdrawnRow(data.myRankSupremo)) data.myRankSupremo = null;
+      if (typeof stelvioRecomputeRankMovementAfterEligibleFilter === 'function') {
+        stelvioRecomputeRankMovementAfterEligibleFilter(data);
+      }
       return data;
     }
     window.stelvioApplyPublicRankingVisibilityToPayload = stelvioApplyPublicRankingVisibilityToPayload;
@@ -17923,6 +17926,103 @@
     window.stelvioResolvePreviousPeakRanksBaselineForCategory = stelvioResolvePreviousPeakRanksBaselineForCategory;
     var STELVIO_RANK_BOARD_CATS = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
 
+    /**
+     * 탈퇴·목록 이탈자 제외 생존 코호트 기준 등락 — rankingPeakMovement.js 와 동일.
+     * 전일 꼴창(336)이 오늘 꼴창(331)인데 탈퇴 5명만 빠진 경우 허위 상승 방지.
+     */
+    function stelvioComputeSurvivorAwareRankMovementForRows(rows, baseline) {
+      var rankChanges = {};
+      var previousRanks = {};
+      if (!rows || !rows.length || !baseline || typeof baseline !== 'object') {
+        return { rankChanges: rankChanges, previousRanks: previousRanks };
+      }
+      var survivorUids = [];
+      var i;
+      for (i = 0; i < rows.length; i++) {
+        var e = rows[i];
+        var uid = e && e.userId != null ? String(e.userId).trim() : '';
+        if (!uid || baseline[uid] == null) continue;
+        var prevRaw = Math.floor(Number(baseline[uid]));
+        if (!isFinite(prevRaw) || prevRaw < 1) continue;
+        survivorUids.push(uid);
+      }
+      if (!survivorUids.length) return { rankChanges: rankChanges, previousRanks: previousRanks };
+
+      var yesterdayOrderAsc = survivorUids.slice().sort(function (a, b) {
+        return Math.floor(Number(baseline[a])) - Math.floor(Number(baseline[b]));
+      });
+      var prevAmongSurvivors = {};
+      for (i = 0; i < yesterdayOrderAsc.length; i++) {
+        prevAmongSurvivors[yesterdayOrderAsc[i]] = i + 1;
+      }
+      var currAmongSurvivors = {};
+      var si = 0;
+      for (i = 0; i < rows.length; i++) {
+        var e2 = rows[i];
+        var uid2 = e2 && e2.userId != null ? String(e2.userId).trim() : '';
+        if (!uid2 || prevAmongSurvivors[uid2] == null) continue;
+        si++;
+        currAmongSurvivors[uid2] = si;
+      }
+      for (i = 0; i < survivorUids.length; i++) {
+        var suid = survivorUids[i];
+        var prevN = prevAmongSurvivors[suid];
+        var currN = currAmongSurvivors[suid];
+        if (prevN == null || currN == null) continue;
+        rankChanges[suid] = prevN - currN;
+        previousRanks[suid] = prevN;
+      }
+      return { rankChanges: rankChanges, previousRanks: previousRanks };
+    }
+
+    /** 탈퇴 필터·재정렬 직후 등락 재계산(서버 filterWithdrawnUsersFromRankingPayload 와 동일) */
+    function stelvioRecomputeRankMovementAfterEligibleFilter(data) {
+      if (!data || !data.byCategory) return data;
+      var ci, ri, cat, rows, baseline, uid, mv;
+      for (ci = 0; ci < STELVIO_RANK_BOARD_CATS.length; ci++) {
+        cat = STELVIO_RANK_BOARD_CATS[ci];
+        rows = data.byCategory[cat];
+        if (!rows || !rows.length) continue;
+        baseline = null;
+        if (
+          data.rankMovementCompareBaselineByCategory &&
+          data.rankMovementCompareBaselineByCategory[cat] &&
+          Object.keys(data.rankMovementCompareBaselineByCategory[cat]).length
+        ) {
+          baseline = data.rankMovementCompareBaselineByCategory[cat];
+        } else if (
+          data.rankMovementPrevDayByCategory &&
+          data.rankMovementPrevDayByCategory[cat] &&
+          Object.keys(data.rankMovementPrevDayByCategory[cat]).length
+        ) {
+          baseline = data.rankMovementPrevDayByCategory[cat];
+        } else {
+          baseline = {};
+          for (ri = 0; ri < rows.length; ri++) {
+            if (!rows[ri] || rows[ri].userId == null || rows[ri].previousBoardRank == null) continue;
+            var pr = Math.floor(Number(rows[ri].previousBoardRank));
+            if (isFinite(pr) && pr >= 1) baseline[String(rows[ri].userId)] = pr;
+          }
+        }
+        if (!baseline || !Object.keys(baseline).length) continue;
+        mv = stelvioComputeSurvivorAwareRankMovementForRows(rows, baseline);
+        for (ri = 0; ri < rows.length; ri++) {
+          if (!rows[ri] || rows[ri].userId == null) continue;
+          uid = String(rows[ri].userId);
+          if (mv.rankChanges[uid] == null || mv.previousRanks[uid] == null) {
+            delete rows[ri].rankChange;
+            delete rows[ri].previousBoardRank;
+            continue;
+          }
+          rows[ri].rankChange = mv.rankChanges[uid];
+          rows[ri].previousBoardRank = mv.previousRanks[uid];
+        }
+      }
+      return data;
+    }
+    window.stelvioRecomputeRankMovementAfterEligibleFilter = stelvioRecomputeRankMovementAfterEligibleFilter;
+    window.stelvioComputeSurvivorAwareRankMovementForRows = stelvioComputeSurvivorAwareRankMovementForRows;
+
     function stelvioPeakBoardRankMapsEqual(a, b) {
       if (!a || typeof a !== 'object') a = {};
       if (!b || typeof b !== 'object') b = {};
@@ -18992,16 +19092,17 @@
       return baseline;
     }
 
-    function stelvioApplyPeakRankChangeToRow(row, uid, curr, baseline, outChanges, outPrevious) {
+    function stelvioApplyPeakRankChangeToRow(row, uid, curr, baseline, outChanges, outPrevious, rowsForSurvivor) {
       if (!row || curr == null || curr < 1) return;
       if (row.rankChange != null && row.previousBoardRank != null) {
         if (stelvioRankMovementRowMatchesCurrentRank(row, curr)) return;
       }
-      if (baseline[uid] == null) return;
-      var prev = Math.floor(Number(baseline[uid]));
-      if (!isFinite(prev) || prev < 1) return;
-      row.rankChange = prev - curr;
-      row.previousBoardRank = prev;
+      if (!baseline || typeof baseline !== 'object' || !Object.keys(baseline).length) return;
+      var list = Array.isArray(rowsForSurvivor) && rowsForSurvivor.length ? rowsForSurvivor : [row];
+      var mv = stelvioComputeSurvivorAwareRankMovementForRows(list, baseline);
+      if (mv.rankChanges[uid] == null || mv.previousRanks[uid] == null) return;
+      row.rankChange = mv.rankChanges[uid];
+      row.previousBoardRank = mv.previousRanks[uid];
       if (typeof stelvioNormalizeRankMovementOnRow === 'function') {
         stelvioNormalizeRankMovementOnRow(row, curr);
       }
@@ -19224,12 +19325,20 @@
           Object.keys(compareBaseline).length &&
           !stelvioPeakRankUidMapsEqual(compareBaseline, currCatRanks)
         ) {
+          var survivorMv = stelvioComputeSurvivorAwareRankMovementForRows(snapRows, compareBaseline);
           for (var sri = 0; sri < snapRows.length; sri++) {
             var row = snapRows[sri];
             if (!row || row.userId == null) continue;
             var uid = String(row.userId);
-            var curr = currCatRanks[uid] != null ? currCatRanks[uid] : null;
-            stelvioApplyPeakRankChangeToRow(row, uid, curr, compareBaseline, chCat, prCat);
+            if (survivorMv.rankChanges[uid] == null || survivorMv.previousRanks[uid] == null) {
+              delete row.rankChange;
+              delete row.previousBoardRank;
+              continue;
+            }
+            row.rankChange = survivorMv.rankChanges[uid];
+            row.previousBoardRank = survivorMv.previousRanks[uid];
+            chCat[uid] = row.rankChange;
+            prCat[uid] = row.previousBoardRank;
           }
         }
 
@@ -19600,6 +19709,9 @@
               data.period || stelvioRankingState.period
             )
           : '';
+      if (typeof stelvioApplyPublicRankingVisibilityToPayload === 'function') {
+        stelvioApplyPublicRankingVisibilityToPayload(data);
+      }
       stelvioApplyRankMovementPipeline(data);
       if (applyOpts.fastTabSwitch && applySwrKey && stelvioRankingLastPaintedSwrKey === applySwrKey) {
         if (!applyOpts.keepLoading || stelvioRankingBoardReadyToHideLoading()) {
