@@ -10870,6 +10870,12 @@ exports.getPeakPowerRanking = onRequest(
           out.motivationMessage = buildMotivationMessage(current, nextUser);
         }
       }
+      const tssEntries = Array.isArray(entries) ? entries : byCategory.Supremo || [];
+      await hydratePeakRankMovementOnPayload(db, byCategory, tssEntries, `peak_tss_weekly_${gender}`);
+      out.byCategory = byCategory;
+      if (!out.entries && Array.isArray(byCategory.Supremo)) {
+        out.entries = byCategory.Supremo.slice();
+      }
       await finalizeRankingProfileUrls(out);
       return res.status(200).json(out);
     }
