@@ -512,6 +512,53 @@ async function fetchUserRunEffortsRecent(firebaseUid, limit = 400) {
   return merged;
 }
 
+/**
+ * RUN 주간 TSS — Supabase activities.tss (오늘 포함 최근 7일, 서울 기준)
+ * @param {string} firebaseUid
+ * @returns {Promise<{ totalTss: number, fromYmd: string, toYmd: string, activityCount: number }>}
+ */
+async function fetchUserRunWeeklyTss(firebaseUid) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const empty = { totalTss: 0, fromYmd: "", toYmd: "", activityCount: 0 };
+  if (!supabase) return empty;
+  const uid = String(firebaseUid || "").trim();
+  if (!uid) return empty;
+
+  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
+  const mode =
+    supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  const userUuid = supabaseDualWriteServer.resolveUserUuid(uid, ns, mode);
+  if (!userUuid) return empty;
+
+  const toYmd = seoulTodayYmd();
+  const fromYmd = shiftYmd(toYmd, -6);
+
+  const { data, error } = await supabase
+    .from("activities")
+    .select("tss, activity_date, activity_type")
+    .eq("user_id", userUuid)
+    .gte("activity_date", fromYmd)
+    .lte("activity_date", toYmd);
+  if (error) throw error;
+
+  let totalTss = 0;
+  let activityCount = 0;
+  for (const row of data || []) {
+    if (!isRunningActivityType(row.activity_type)) continue;
+    const tss = Number(row.tss);
+    if (!Number.isFinite(tss) || tss <= 0 || tss >= 1200) continue;
+    totalTss += tss;
+    activityCount += 1;
+  }
+
+  return {
+    totalTss: Math.round(totalTss * 10) / 10,
+    fromYmd,
+    toYmd,
+    activityCount,
+  };
+}
+
 module.exports = {
   fetchOpenRideByFirestoreId,
   fetchOpenRidesInDateRange,
@@ -520,6 +567,7 @@ module.exports = {
   fetchUserRideLogsForMonth,
   fetchUserRideLogsRecent,
   fetchUserRunEffortsRecent,
+  fetchUserRunWeeklyTss,
   fetchYearlyPeaksForYear,
   mapYearlyPeaksRowToFirestoreDoc,
   mapRideRowToFirestoreTrainingLog,
