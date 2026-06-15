@@ -466,24 +466,15 @@
         setLogsLoadError(null);
         setRunLeaderboardCoachReady(false);
         try {
-          // Phase 6: getUserTrainingLogs → logsReadRouter(Supabase rides | Firestore logs)
           var raw = [];
-          if (typeof window.getUserTrainingLogs === 'function') {
-            try {
-              raw = await window.getUserTrainingLogs(userProfile.id, { limit: 400 });
-              raw = Array.isArray(raw) ? raw : [];
-            } catch (e) { raw = []; }
+          if (typeof window.getUserRunTrainingLogs === 'function') {
+            raw = await window.getUserRunTrainingLogs(userProfile.id, { limit: 400 });
+            raw = Array.isArray(raw) ? raw : [];
+          } else {
+            throw new Error('RUN 활동 로그 모듈을 불러올 수 없습니다.');
           }
-          if (raw.length === 0 && window.firestore && (!window.getLogsReadSourceSync || window.getLogsReadSourceSync() !== 'supabase')) {
-            try {
-              var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
-              snap.docs.forEach(function(doc) {
-                var dd = doc.data();
-                var o = { id: doc.id };
-                if (dd) for (var k in dd) if (dd.hasOwnProperty(k)) o[k] = dd[k];
-                raw.push(o);
-              });
-            } catch (e) { raw = []; }
+          if (!raw.length) {
+            console.warn('[useRunDashboardData] Supabase activities RUN 로그 없음');
           }
 
           var logs = raw.filter(function(log) {
@@ -496,9 +487,7 @@
             return db.localeCompare(da);
           });
 
-          var logsDeduped = typeof window.dedupeTrainingLogsByDateStravaFirst === 'function'
-            ? window.dedupeTrainingLogsByDateStravaFirst(logs)
-            : logs;
+          var logsDeduped = logs.filter(isRunLogForWeeklyTss);
 
           if (isMounted) {
             setRecentLogs(logsDeduped);
@@ -867,106 +856,24 @@
 
       (async function() {
         var cleanLogs = [];
-        if (typeof window.getTrainingLogsByDateRange === 'function') {
-          try {
-            var startForFetch = new Date(today);
-            startForFetch.setDate(today.getDate() - 29);
-            var startStr = startForFetch.getFullYear() + '-' + String(startForFetch.getMonth() + 1).padStart(2, '0') + '-' + String(startForFetch.getDate()).padStart(2, '0');
-            var endStr = todayStr;
-            var months = [];
-            var dM = new Date(startForFetch.getFullYear(), startForFetch.getMonth(), 1);
-            var endM = new Date(today.getFullYear(), today.getMonth(), 1);
-            while (dM <= endM) {
-              months.push({ year: dM.getFullYear(), month: dM.getMonth() });
-              dM.setMonth(dM.getMonth() + 1);
-            }
-            var fireLogs = [];
-            for (var mi = 0; mi < months.length; mi++) {
-              var ym = months[mi];
-              var ml = await window.getTrainingLogsByDateRange(userProfile.id, ym.year, ym.month);
-              if (!Array.isArray(ml)) continue;
-              ml.forEach(function(log) {
-                var dv = log.date;
-                var ds = null;
-                if (dv && dv.toDate) ds = dv.toDate().toISOString().split('T')[0];
-                else if (dv) ds = String(dv).slice(0, 10);
-                if (!ds || ds < startStr || ds > endStr) return;
-                if (!isRunLogForWeeklyTss(log)) return;
-                var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
-                if (sec < 60) return;
-                fireLogs.push({
-                  completed_at: ds + 'T12:00:00.000Z',
-                  date: ds,
-                  duration_min: Math.round(sec / 60),
-                  duration_sec: sec,
-                  avg_power: Math.round(log.avg_watts ?? log.avg_power ?? 0),
-                  np: Math.round(log.weighted_watts ?? log.np ?? log.avg_watts ?? 0),
-                  tss: Math.round(log.tss ?? 0),
-                  avg_hr: log.avg_hr != null ? Math.round(Number(log.avg_hr)) : 0,
-                  activity_type: log.activity_type || log.sport_type || 'run',
-                  source: (log.source || '').toLowerCase()
-                });
-              });
-            }
-            if (fireLogs.length > 0) {
-              var byDateC = {};
-              fireLogs.forEach(function(h) {
-                var d = (h.completed_at || '').split('T')[0];
-                if (!d) return;
-                if (!byDateC[d]) byDateC[d] = [];
-                byDateC[d].push(h);
-              });
-              var merged = [];
-              Object.keys(byDateC).sort().forEach(function(dk) {
-                var arr = byDateC[dk];
-                var strava = arr.filter(function(h) { return h.source === 'strava'; });
-                var chosen = strava.length > 0 ? strava : arr;
-                if (chosen.length === 0) return;
-                var totalMin = 0, totalTss = 0, sumNp = 0, sumAp = 0, sumHr = 0;
-                chosen.forEach(function(h) {
-                  var m = Number(h.duration_min) || 0;
-                  totalMin += m;
-                  totalTss += sanitizeRtss(h.tss);
-                  sumNp += (Number(h.np) || 0) * m;
-                  sumAp += (Number(h.avg_power) || 0) * m;
-                  sumHr += (Number(h.avg_hr) || 0) * m;
-                });
-                merged.push({
-                  completed_at: dk + 'T12:00:00.000Z',
-                  duration_min: Math.round(totalMin),
-                  duration_sec: totalMin * 60,
-                  avg_power: totalMin > 0 ? Math.round(sumAp / totalMin) : 0,
-                  np: totalMin > 0 ? Math.round(sumNp / totalMin) : 0,
-                  tss: Math.round(totalTss),
-                  avg_hr: totalMin > 0 ? Math.round(sumHr / totalMin) : 0,
-                  source: chosen[0].source
-                });
-              });
-              fireLogs = merged;
-            }
-            if (typeof window.dedupeLogsForConditionScore === 'function') {
-              cleanLogs = window.dedupeLogsForConditionScore(fireLogs);
-            } else {
-              cleanLogs = fireLogs;
-            }
-          } catch (e) {
-            console.warn('[AI] getTrainingLogsByDateRange failed:', e);
-          }
+        if (typeof window.buildRunCoachCleanLogs === 'function') {
+          cleanLogs = window.buildRunCoachCleanLogs(logsToSend);
+        } else {
+          cleanLogs = logsToSend.slice();
         }
-        if (cleanLogs.length === 0 && typeof window.sanitizeLogs === 'function') {
-          cleanLogs = window.sanitizeLogs(logsToSend);
-          if (typeof window.dedupeLogsForConditionScore === 'function') {
-            cleanLogs = window.dedupeLogsForConditionScore(cleanLogs);
-          }
-        } else if (cleanLogs.length === 0) {
-          cleanLogs = logsToSend;
+        if (typeof window.dedupeLogsForConditionScore === 'function') {
+          cleanLogs = window.dedupeLogsForConditionScore(cleanLogs);
         }
         cleanLogs = cleanLogs.filter(isRunLogForWeeklyTss);
+        var last7RtssForCoach = last7Rtss;
+        if (stats && typeof stats.weeklyRtssProgress === 'number') {
+          last7RtssForCoach = Math.round(stats.weeklyRtssProgress);
+        }
         try {
           var userProfileForCoach = Object.assign({}, userProfile, {
             sport_category: 'RUN',
             category: 'RUN',
-            threshold_pace: stats.thresholdPaceDisplay || null,
+            threshold_pace: stats.thresholdPaceValue || stats.thresholdPaceDisplay || null,
             threshold_pace_sec: stats.thresholdPaceSec != null ? stats.thresholdPaceSec : null,
             weight: userProfile.weight || stats.weight || 0
           });
@@ -989,7 +896,7 @@
             typeof window.getGeminiQuotaCooldownRemainingSec === 'function'
               ? window.getGeminiQuotaCooldownRemainingSec()
               : 0;
-          var analysis = await window.callGeminiCoach(userProfileForCoach, cleanLogs, last7Rtss, {
+          var analysis = await window.callGeminiCoach(userProfileForCoach, cleanLogs, last7RtssForCoach, {
             timeoutMs: 120000,
             maxRetries: 2,
             useStreaming: quotaCooldownSec <= 0,
@@ -1053,7 +960,7 @@
           setRetryCoach(0);
         }
       })();
-    }, [coachAnalysisTriggerKey, runConditionAnalysis, retryCoach, userProfile && userProfile.id, hexagonCoachContext, stats.thresholdPaceDisplay, stats.weeklyRtssGoal, runLeaderboardCoachReady]);
+    }, [coachAnalysisTriggerKey, runConditionAnalysis, retryCoach, userProfile && userProfile.id, hexagonCoachContext, stats.thresholdPaceDisplay, stats.thresholdPaceValue, stats.weeklyRtssGoal, stats.weeklyRtssProgress, runLeaderboardCoachReady]);
 
     return {
       userProfile,
