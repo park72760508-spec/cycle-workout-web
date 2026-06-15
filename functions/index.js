@@ -9194,14 +9194,17 @@ exports.getRunningLeaderboard = onRequest(
         : Array.isArray(data)
           ? data
           : [];
+      const leaderboardAsOfSeoul = published.as_of_seoul
+        ? String(published.as_of_seoul).trim().slice(0, 10)
+        : "";
       return res.status(200).json({
         success: true,
         leaderboard,
         leaderboardSource: published.source || "snapshot",
-        leaderboardAsOfSeoul: published.as_of_seoul || "",
+        leaderboardAsOfSeoul,
         leaderboardAggregatedAt: published.aggregated_at || "",
         rankMovementSource: "supabase",
-        rankMovementAsOfSeoul: snapRes.asOfSeoul || published.as_of_seoul || "",
+        rankMovementAsOfSeoul: leaderboardAsOfSeoul || snapRes.asOfSeoul || "",
         rankMovementByKey: snapRes.byKey || {},
       });
     } catch (e) {
