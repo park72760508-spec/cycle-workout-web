@@ -18907,10 +18907,21 @@
         return;
       }
       if (stelvioSupportsRankMovementDuration(duration)) {
+        var serverMvBeforeClear = stelvioExtractRankMovementFromPayload(data);
         stelvioClearPeakRankMovementOnPayload(data);
-        stelvioApplyClientPeakRankMovementFromSnapshot(data);
+        stelvioApplyClientPeakRankMovementFromSnapshot(data, serverMvBeforeClear);
       }
       stelvioValidatePeakRankMovementOnPayload(data);
+      if (
+        duration !== 'gc' &&
+        stelvioSupportsRankMovementDuration(duration) &&
+        typeof stelvioRecomputeRankMovementAfterEligibleFilter === 'function' &&
+        data.rankMovementCompareBaselineByCategory &&
+        typeof data.rankMovementCompareBaselineByCategory === 'object' &&
+        Object.keys(data.rankMovementCompareBaselineByCategory).length
+      ) {
+        stelvioRecomputeRankMovementAfterEligibleFilter(data);
+      }
       stelvioEnsurePeakPowerRankMovementOnPayload(data);
     }
 
@@ -19221,7 +19232,7 @@
      * Peak·TSS·거리 등: 등락 비교 기준은 전일 04:00 마스터 정규 스냅샷(prevDay) — 피크·헵타곤은 02:50·03:20.
      * 당일 수동 집계로 ranks만 바뀌어도 prevDay는 다음 23시 집계 전까지 고정.
      */
-    function stelvioApplyClientPeakRankMovementFromSnapshot(data) {
+    function stelvioApplyClientPeakRankMovementFromSnapshot(data, serverMvSnapshotOpt) {
       if (!data || !data.byCategory) return;
       var duration = stelvioResolveRankMovementDurationType(data);
       if (!stelvioSupportsRankMovementDuration(duration)) return;
@@ -19233,7 +19244,10 @@
         data.gender = stelvioRankingState.gender;
       }
 
-      var serverMvSnapshot = stelvioExtractRankMovementFromPayload(data);
+      var serverMvSnapshot =
+        serverMvSnapshotOpt && typeof serverMvSnapshotOpt === 'object'
+          ? serverMvSnapshotOpt
+          : stelvioExtractRankMovementFromPayload(data);
       if (duration !== 'tss') {
         stelvioSyncPeakRankMovementFromEntries(data);
       }
@@ -19276,6 +19290,7 @@
       }
 
       var csi;
+      var survivorRecomputeApplied = false;
       for (csi = 0; csi < STELVIO_RANK_BOARD_CATS.length; csi++) {
         var catKey = STELVIO_RANK_BOARD_CATS[csi];
         var snapRows = data.byCategory[catKey];
@@ -19324,9 +19339,9 @@
         }
 
         if (
-          Object.keys(compareBaseline).length &&
-          !stelvioPeakRankUidMapsEqual(compareBaseline, currCatRanks)
+          Object.keys(compareBaseline).length
         ) {
+          survivorRecomputeApplied = true;
           var survivorMv = stelvioComputeSurvivorAwareRankMovementForRows(snapRows, compareBaseline);
           for (var sri = 0; sri < snapRows.length; sri++) {
             var row = snapRows[sri];
@@ -19383,7 +19398,7 @@
         }
       }
 
-      if (duration !== 'tss') {
+      if (duration !== 'tss' && !survivorRecomputeApplied) {
         stelvioRestoreRankMovementWhereMissing(data, serverMvSnapshot);
       }
 
