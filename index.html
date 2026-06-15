@@ -9173,6 +9173,14 @@
         target.success = merged.success !== false;
         delete target.seededFromWeeklyTop10;
         if (merged.rankMovementSource) target.rankMovementSource = merged.rankMovementSource;
+        if (merged.rankMovementHistoryKey) target.rankMovementHistoryKey = merged.rankMovementHistoryKey;
+        if (merged.rankMovementPrevDayByCategory) {
+          target.rankMovementPrevDayByCategory = merged.rankMovementPrevDayByCategory;
+        }
+        if (merged.rankMovementCompareBaselineByCategory) {
+          target.rankMovementCompareBaselineByCategory = merged.rankMovementCompareBaselineByCategory;
+        }
+        if (merged.rankMovementAsOfSeoul) target.rankMovementAsOfSeoul = merged.rankMovementAsOfSeoul;
         if (merged.readBackend || merged.readSource) {
           target.readBackend = merged.readBackend || merged.readSource;
           target.readSource = merged.readSource || merged.readBackend;
@@ -9234,13 +9242,99 @@
         out.myRankSupremo = top10Data.myRank;
         out.currentUser = top10Data.myRank;
       }
+      if (top10Data.rankMovementCompareBaselineByCategory) {
+        out.rankMovementCompareBaselineByCategory = top10Data.rankMovementCompareBaselineByCategory;
+      }
+      if (top10Data.rankMovementPrevDayByCategory) {
+        out.rankMovementPrevDayByCategory = top10Data.rankMovementPrevDayByCategory;
+      }
+      if (top10Data.rankMovementSource) out.rankMovementSource = top10Data.rankMovementSource;
+      if (top10Data.rankMovementHistoryKey) out.rankMovementHistoryKey = top10Data.rankMovementHistoryKey;
+      if (top10Data._weeklyTop10ServerRankMv === true) out._tssWeeklyServerRankMv = true;
       return out;
+    }
+
+    /** TSS·TOP10 — 서버가 내려준 전일(전주) baseline 메타가 있는지 */
+    function stelvioPayloadHasTssWeeklyRankMovementBaselines(data) {
+      if (!data) return false;
+      var bucket;
+      if (data.rankMovementCompareBaselineByCategory && typeof data.rankMovementCompareBaselineByCategory === 'object') {
+        var ckeys = Object.keys(data.rankMovementCompareBaselineByCategory);
+        for (var ci = 0; ci < ckeys.length; ci++) {
+          bucket = data.rankMovementCompareBaselineByCategory[ckeys[ci]];
+          if (bucket && typeof bucket === 'object' && Object.keys(bucket).length > 0) return true;
+        }
+      }
+      if (data.rankMovementPrevDayByCategory && typeof data.rankMovementPrevDayByCategory === 'object') {
+        var pkeys = Object.keys(data.rankMovementPrevDayByCategory);
+        for (var pi = 0; pi < pkeys.length; pi++) {
+          bucket = data.rankMovementPrevDayByCategory[pkeys[pi]];
+          if (bucket && typeof bucket === 'object' && Object.keys(bucket).length > 0) return true;
+        }
+      }
+      return false;
+    }
+
+    /** 전일 마지막 순위 baseline(서버 hydrate 메타)으로 TSS 등락 재계산 */
+    function stelvioApplyWeeklyTssRankMovementFromPayloadBaselines(data) {
+      if (!data || !data.byCategory) return data;
+      if (data.prevWeekFallback === true || data._isPrevWeek === true) return data;
+      if (!stelvioPayloadHasTssWeeklyRankMovementBaselines(data)) return data;
+      if (typeof stelvioRecomputeRankMovementAfterEligibleFilter === 'function') {
+        stelvioRecomputeRankMovementAfterEligibleFilter(data);
+      }
+      return data;
+    }
+
+    /** 주간 TOP10 ranking[] — byCategory baseline 재계산 후 행에 등락 복사 */
+    function stelvioApplyWeeklyTssRankMovementToTop10Data(top10Data) {
+      if (!top10Data || !Array.isArray(top10Data.ranking) || !top10Data.ranking.length) return top10Data;
+      if (top10Data.prevWeekFallback === true || top10Data._isPrevWeek === true) return top10Data;
+      if (!stelvioPayloadHasTssWeeklyRankMovementBaselines(top10Data)) return top10Data;
+      var payload = stelvioWeeklyTop10PayloadToTssBoardPayload(top10Data);
+      if (!payload || !payload.byCategory) return top10Data;
+      var serverSnap =
+        typeof stelvioExtractRankMovementSnapFromTop10Data === 'function'
+          ? stelvioExtractRankMovementSnapFromTop10Data(top10Data)
+          : null;
+      stelvioApplyWeeklyTssRankMovementFromPayloadBaselines(payload);
+      var rows = payload.byCategory.Supremo || [];
+      var byUid = Object.create(null);
+      var ri;
+      for (ri = 0; ri < rows.length; ri++) {
+        if (rows[ri] && rows[ri].userId != null) byUid[String(rows[ri].userId)] = rows[ri];
+      }
+      top10Data.ranking.forEach(function (item) {
+        if (!item || item.userId == null) return;
+        var pk = byUid[String(item.userId)];
+        if (!pk || pk.rankChange == null || pk.previousBoardRank == null) {
+          delete item.rankChange;
+          delete item.previousBoardRank;
+          return;
+        }
+        item.rankChange = pk.rankChange;
+        item.previousBoardRank = pk.previousBoardRank;
+      });
+      if (top10Data.myRank && top10Data.myRank.userId) {
+        var myPk = byUid[String(top10Data.myRank.userId)];
+        if (myPk && myPk.rankChange != null && myPk.previousBoardRank != null) {
+          top10Data.myRank.rankChange = myPk.rankChange;
+          top10Data.myRank.previousBoardRank = myPk.previousBoardRank;
+        }
+      }
+      if (typeof stelvioRestoreRankMovementOnTop10Data === 'function' && serverSnap) {
+        stelvioRestoreRankMovementOnTop10Data(top10Data, serverSnap);
+      }
+      return top10Data;
     }
 
     /** TOP10: 전날 마지막 순위(prevDay) 기준으로 등락 재계산 (로컬 prevDay 있을 때만) */
     function stelvioRehydrateWeeklyTop10RankingRankChanges(top10Data) {
       if (!top10Data || !Array.isArray(top10Data.ranking) || !top10Data.ranking.length) return top10Data;
       if (top10Data.prevWeekFallback === true || top10Data._isPrevWeek === true) return top10Data;
+      if (stelvioPayloadHasTssWeeklyRankMovementBaselines(top10Data)) {
+        return stelvioApplyWeeklyTssRankMovementToTop10Data(top10Data);
+      }
       var serverSnap =
         typeof stelvioExtractRankMovementSnapFromTop10Data === 'function'
           ? stelvioExtractRankMovementSnapFromTop10Data(top10Data)
@@ -18729,6 +18823,25 @@
         if (stelvioPayloadHasUsableRankMovementRows(top10Data.ranking)) return top10Data;
       }
       if (stelvioPayloadHasUsableRankMovementRows(top10Data.ranking)) return top10Data;
+      if (stelvioPayloadHasTssWeeklyRankMovementBaselines(top10Data)) {
+        top10Data = stelvioApplyWeeklyTssRankMovementToTop10Data(top10Data);
+        if (stelvioPayloadHasUsableRankMovementRows(top10Data.ranking)) {
+          if (typeof stelvioPersistWeeklyTop10RankMovementCache === 'function') {
+            var uidTop10Baseline =
+              (window.currentUser && window.currentUser.id) ||
+              (function () {
+                try {
+                  var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+                  return u && u.id ? u.id : null;
+                } catch (eUidB) {
+                  return null;
+                }
+              })();
+            await stelvioPersistWeeklyTop10RankMovementCache(top10Data, uidTop10Baseline);
+          }
+          return top10Data;
+        }
+      }
       var mvPayload = stelvioWeeklyTop10PayloadToTssBoardPayload(top10Data);
       if (
         mvPayload &&
@@ -18843,7 +18956,9 @@
       if (payload.entries) stelvioRankingFullEntries = payload.entries;
       if (!opts.skipDom) {
         var bodyEl = document.getElementById('stelvioRankingListBody');
-        if (bodyEl && typeof stelvioRankingRefreshListRankChangeSlots === 'function') {
+        if (bodyEl && typeof stelvioRankingRefreshRankChangeSlotsForActiveTab === 'function') {
+          stelvioRankingRefreshRankChangeSlotsForActiveTab(bodyEl);
+        } else if (bodyEl && typeof stelvioRankingRefreshListRankChangeSlots === 'function') {
           stelvioRankingRefreshListRankChangeSlots(bodyEl);
         }
         if (opts.refreshHero !== false && typeof renderStelvioHeroCard === 'function') {
@@ -18878,6 +18993,19 @@
         }
         stelvioEnsurePeakPowerRankMovementOnPayload(data);
         return;
+      }
+      if (stelvioPayloadHasTssWeeklyRankMovementBaselines(data)) {
+        stelvioApplyWeeklyTssRankMovementFromPayloadBaselines(data);
+        if (typeof stelvioRestoreRankMovementWhereMissing === 'function') {
+          stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
+        }
+        if (typeof stelvioNormalizeRankMovementOnPayload === 'function') {
+          stelvioNormalizeRankMovementOnPayload(data);
+        }
+        if (stelvioPeakRankMovementPresentOnPayload(data)) {
+          stelvioEnsurePeakPowerRankMovementOnPayload(data);
+          return;
+        }
       }
       if (
         typeof stelvioPeakRankSnapshotHasPrevDayBaseline === 'function' &&
