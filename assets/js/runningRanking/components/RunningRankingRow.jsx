@@ -52,10 +52,21 @@
       : (item.valueLabel || '—');
     var socialUid = soc.socialUserId ? soc.socialUserId(item) : (item.userId || '');
 
-    var isCurrent = !!(currentUserId && item.userId && String(item.userId) === String(currentUserId));
+    var isCrewCurrent = !!(
+      item.isCrew &&
+      props.myCrewIds &&
+      item.crewId &&
+      props.myCrewIds.has(String(item.crewId))
+    );
+    var isCurrent = isCrewCurrent || !!(
+      currentUserId &&
+      item.userId &&
+      String(item.userId) === String(currentUserId)
+    );
     var isSingleLineRow = !(tabId === 'overall' && props.showSegments);
     var rowClass = 'stelvio-rank-row running-ranking-row' +
       (isCurrent ? ' stelvio-rank-current' : '') +
+      (props.extraRowClass || '') +
       (item.isCrew ? ' running-ranking-row--crew' : '') +
       (isSingleLineRow ? ' running-ranking-row--compact' : '');
 

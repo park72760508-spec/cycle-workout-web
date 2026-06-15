@@ -1,5 +1,5 @@
 /**
- * 러닝 랭킹보드 — 메인 화면 (5탭: 종합·페이스·TSS·거리·크루)
+ * 러닝 랭킹보드 — 메인 화면 (5탭: 종합·구간·TSS·거리·크루)
  * 종합 탭: CYCLE 랭킹보드 GC 탭과 동일 UI (히어로·전체/관심·범례·분포도)
  */
 /* global React, useState, useEffect, useMemo, useCallback, useRef */
@@ -136,6 +136,10 @@
     var _heroExpanded = useState(false);
     var heroExpanded = _heroExpanded[0];
     var setHeroExpanded = _heroExpanded[1];
+
+    var _gapState = useState({});
+    var gapState = _gapState[0];
+    var setGapState = _gapState[1];
 
     var crewUnsubRef = useRef(null);
     var isOverallTab = activeTab === 'overall';
@@ -325,8 +329,19 @@
       return list;
     }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, socialVer]);
 
+    var myCrewIds = useMemo(function () {
+      var set = new Set();
+      var groups = crewEnriched.length ? crewEnriched : crewGroups;
+      (groups || []).forEach(function (gr) {
+        var gid = gr && (gr.groupId || gr.id) ? String(gr.groupId || gr.id) : '';
+        if (gid) set.add(gid);
+      });
+      return set;
+    }, [crewGroups, crewEnriched]);
+
     var myViewerItem = useMemo(function () {
-      if (!currentUserId || !isOverallTab) return null;
+      if (activeTab === 'crew') return null;
+      if (!currentUserId) return null;
       var i;
       for (i = 0; i < rankedList.length; i++) {
         if (rankedList[i] && String(rankedList[i].userId) === String(currentUserId)) {
@@ -334,7 +349,19 @@
         }
       }
       return null;
-    }, [rankedList, currentUserId, isOverallTab]);
+    }, [rankedList, currentUserId, activeTab]);
+
+    var orphanViewerItem = useMemo(function () {
+      if (!currentUserId || activeTab === 'crew') return null;
+      if (myViewerItem) return null;
+      var i;
+      for (i = 0; i < baseRankedList.length; i++) {
+        if (baseRankedList[i] && String(baseRankedList[i].userId) === String(currentUserId)) {
+          return baseRankedList[i];
+        }
+      }
+      return null;
+    }, [baseRankedList, currentUserId, myViewerItem, activeTab]);
 
     var overallHeroPayload = useMemo(function () {
       if (!isOverallTab || !dataApi().buildOverallHeroPayload) return null;
@@ -452,7 +479,21 @@
 
     var initialLoading = loading && !rawRows.length;
 
-    var Row = window.RunningRankingRow;
+    var CollapsibleList = window.RunningRankingCollapsibleList;
+    var listView = window.runningRankingListView || {};
+    var skipListCollapse = isOverallTab && listFilter === 'interest';
+    var gapScopeKey = listView.gapScopeKey
+      ? listView.gapScopeKey(activeTab, activeCategory)
+      : (activeTab + ':' + activeCategory);
+    var listExpanded = !!(gapState[gapScopeKey] && gapState[gapScopeKey].expanded);
+
+    function handleListExpandChange(nextExpanded) {
+      setGapState(function (prev) {
+        var next = Object.assign({}, prev);
+        next[gapScopeKey] = Object.assign({}, prev[gapScopeKey] || {}, { expanded: !!nextExpanded });
+        return next;
+      });
+    }
 
     var tabButtons = (cfg().TABS || []).map(function (t) {
       return React.createElement('button', {
@@ -592,26 +633,20 @@
           ? '관심·친구·그룹멤버에 해당하는 랭킹이 없습니다.'
           : (activeTab === 'crew' ? '집계 가능한 크루가 없습니다.' : '해당 조건의 랭킹이 없습니다.')
       );
-    } else if (Row) {
-      listBody = React.createElement('div', {
-        className: 'running-ranking-plain-list',
-        role: 'list',
-        'aria-label': activeTab === 'crew'
-          ? '러닝 크루 랭킹 목록'
-          : ('러닝 ' + (activeTab === 'overall' ? '종합' : activeTab) + ' 랭킹 목록')
-      },
-        rankedList.map(function (item) {
-          return React.createElement(Row, {
-            key: (item.crewId || item.userId || '') + '-' + item.rank + '-' + socialVer + (showOverallSegments ? '-seg' : ''),
-            item: item,
-            tabId: activeTab,
-            currentUserId: currentUserId,
-            listCategory: activeCategory,
-            showSegments: showOverallSegments,
-            socialVer: socialVer
-          });
-        })
-      );
+    } else if (CollapsibleList) {
+      listBody = React.createElement(CollapsibleList, {
+        items: rankedList,
+        tabId: activeTab,
+        currentUserId: currentUserId,
+        myCrewIds: activeTab === 'crew' ? myCrewIds : null,
+        listCategory: activeCategory,
+        socialVer: socialVer,
+        showSegments: showOverallSegments,
+        skipCollapse: skipListCollapse,
+        expanded: listExpanded,
+        onExpandChange: handleListExpandChange,
+        orphanViewerItem: orphanViewerItem
+      });
     } else {
       listBody = null;
     }
