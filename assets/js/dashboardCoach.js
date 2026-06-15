@@ -558,7 +558,7 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
       : null);
     if (tpSec == null && userProfile && userProfile.threshold_pace) {
       if (window.runDashboardPace && typeof window.runDashboardPace.parsePaceToSecPerKm === 'function') {
-        var disp = String(userProfile.threshold_pace).replace(/\s*min\/1km\s*$/i, '').trim();
+        var disp = String(userProfile.threshold_pace).replace(/\s*min\/1?km\s*$/i, '').trim();
         tpSec = window.runDashboardPace.parsePaceToSecPerKm(disp);
       }
     }
