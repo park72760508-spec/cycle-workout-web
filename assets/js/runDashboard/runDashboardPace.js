@@ -39,15 +39,18 @@
   }
 
   /**
-   * 역치 페이스(초/km) 기반 VO2max 추정 (러닝, ml/kg/min)
-   * 임계 페이스 ≈ VO2max의 88% 가정
+   * 역치 페이스(초/km) 기반 VO2max 추정 — runVo2maxCalculator 위임
    */
   function computeRunVo2maxFromThresholdPace(secPerKm) {
+    if (typeof window.vo2maxFromRunThresholdPaceSec === 'function') {
+      var v = window.vo2maxFromRunThresholdPaceSec(secPerKm);
+      return v != null ? Math.max(20, Math.min(85, Math.round(v))) : 40;
+    }
     var sec = Number(secPerKm);
     if (!isFinite(sec) || sec <= 0) return 40;
     var vMmin = 60000 / sec;
-    var vo2AtThreshold = 3.5 + 0.2 * vMmin;
-    return Math.max(20, Math.min(85, Math.round(vo2AtThreshold / 0.88)));
+    var vo2AtThreshold = -4.6 + 0.182258 * vMmin + 0.000104 * vMmin * vMmin;
+    return Math.max(20, Math.min(85, Math.round(vo2AtThreshold / 0.86)));
   }
 
   async function fetchRunLeaderboardCoachContext(userId) {

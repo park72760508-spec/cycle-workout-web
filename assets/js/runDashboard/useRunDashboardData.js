@@ -124,6 +124,25 @@
     return next;
   }
 
+  function computeRunVo2Estimate(userProfile, runLogs, thresholdPaceSec) {
+    if (typeof window.calculateStelvioRunVO2Max !== 'function') return null;
+    return window.calculateStelvioRunVO2Max(userProfile, runLogs, {
+      thresholdPaceSec: thresholdPaceSec,
+    });
+  }
+
+  function applyRunVo2ToStats(prev, vo2Result) {
+    var next = Object.assign({}, prev);
+    if (!vo2Result) {
+      next.vo2maxEstimate = null;
+      return next;
+    }
+    next.vo2maxEstimate = vo2Result.vo2max;
+    next.vo2maxMethod = vo2Result.method || null;
+    next.vo2maxComponents = vo2Result.components || null;
+    return next;
+  }
+
   async function fetchRunCoachLeaderboardContext(userId) {
     var emptyPace = { secPerKm: null, display: null, inferred: false, inferredFrom: null, unavailable: true };
     var empty = { thresholdPace: emptyPace, hexagonContext: null };
@@ -172,7 +191,8 @@
       totalPoints: 0,
       currentPoints: 0,
       weeklyRtssGoal: 175,
-      weeklyRtssProgress: 0
+      weeklyRtssProgress: 0,
+      vo2maxEstimate: null
     });
     var stats = _useState2[0];
     var setStats = _useState2[1];
@@ -509,12 +529,18 @@
           }
           var lbCoachCtx = await fetchRunCoachLeaderboardContext(userProfile.id);
           var paceInfo = (lbCoachCtx && lbCoachCtx.thresholdPace) || {};
+          var vo2Result = computeRunVo2Estimate(
+            userProfile,
+            logsDeduped,
+            paceInfo.secPerKm != null ? paceInfo.secPerKm : null
+          );
           if (isMounted) {
             setStats(function(prev) {
               var next = Object.assign({}, prev);
               next.weeklyRtssGoal = weeklyTarget;
               next.weeklyRtssProgress = Math.min(Math.round(weeklyTss * 10) / 10, 9999);
-              return applyThresholdPaceToStats(next, paceInfo);
+              next = applyThresholdPaceToStats(next, paceInfo);
+              return applyRunVo2ToStats(next, vo2Result);
             });
             setHexagonCoachContext(lbCoachCtx && lbCoachCtx.hexagonContext ? lbCoachCtx.hexagonContext : null);
             setRunLeaderboardCoachReady(true);
@@ -661,23 +687,32 @@
               var strava = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
               var chosen = strava.length > 0 ? strava : arr;
               if (chosen.length === 0) return;
-              var totalSec = 0, totalTss = 0, sumNp = 0, sumHr = 0;
+              var totalSec = 0, totalTss = 0, totalDist = 0, sumHr = 0;
               chosen.forEach(function(l) {
                 var sec = Number(l.duration_sec ?? l.time ?? l.duration ?? 0) || (Number(l.duration_min) || 0) * 60;
+                var dist = Number(l.distance_km ?? l.distance ?? 0);
                 totalSec += sec;
+                totalDist += dist > 0 && dist < 200 ? dist : 0;
                 totalTss += sanitizeRtss(l.tss);
-                sumNp += (Number(l.weighted_watts ?? l.np ?? l.avg_watts ?? 0)) * sec;
                 sumHr += (Number(l.avg_hr ?? 0)) * sec;
               });
               merged.push({
                 date: dk,
                 duration_sec: totalSec,
+                distance_km: totalDist > 0 ? Math.round(totalDist * 1000) / 1000 : null,
                 tss: Math.round(totalTss),
-                np: totalSec > 0 ? Math.round(sumNp / totalSec) : 0,
-                avg_hr: totalSec > 0 ? Math.round(sumHr / totalSec) : 0
+                avg_hr: totalSec > 0 ? Math.round(sumHr / totalSec) : 0,
+                activity_type: 'Run',
+                source: chosen[0].source || 'strava'
               });
             });
-            var vo2Val = (typeof window.calculateStelvioVO2Max === 'function') ? window.calculateStelvioVO2Max(userProfile, merged) : null;
+            var monthTpSec = mOff === 0 && paceInfo && paceInfo.secPerKm != null ? paceInfo.secPerKm : null;
+            var vo2Val = null;
+            if (typeof window.calculateStelvioRunVO2Max === 'function') {
+              vo2Val = window.calculateStelvioRunVO2Max(userProfile, inMonth.length ? inMonth : merged, {
+                thresholdPaceSec: monthTpSec,
+              }).vo2max;
+            }
             vo2Rows.push({ monthLabel: m + '월' + (mOff === 0 ? '(현재)' : ''), vo2: vo2Val != null ? vo2Val : null, sortKey: y + '-' + pad2(m) });
           }
           vo2Rows.sort(function(a, b) { return a.sortKey.localeCompare(b.sortKey); });
@@ -875,6 +910,7 @@
             category: 'RUN',
             threshold_pace: stats.thresholdPaceValue || stats.thresholdPaceDisplay || null,
             threshold_pace_sec: stats.thresholdPaceSec != null ? stats.thresholdPaceSec : null,
+            vo2max_estimate: stats.vo2maxEstimate != null ? stats.vo2maxEstimate : null,
             weight: userProfile.weight || stats.weight || 0
           });
           if (typeof window.callGeminiCoach !== 'function') {

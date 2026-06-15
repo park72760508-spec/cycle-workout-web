@@ -25,10 +25,11 @@
       hero: 'RunAICoachHeroCard',
       quickStats: 'RunDailyQuickStats',
       detailTabs: 'DashboardDetailTabs',
-      pace: 'runDashboardPace'
+      pace: 'runDashboardPace',
       hexagon: 'StelvioHexagonRanksCard'
     },
     cache: 'runDashboardAICache',
-    hexagonLog: 'stelvioHexagonRankLog'
+    hexagonLog: 'stelvioHexagonRankLog',
+    vo2: 'runVo2maxCalculator'
   };
 })();
