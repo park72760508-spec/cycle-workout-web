@@ -83,6 +83,19 @@
     return n % 1 === 0 ? String(n) : n.toFixed(1);
   }
 
+  function splitPaceDisplay(stats) {
+    var value = stats.thresholdPaceValue || stats.thresholdPaceDisplay;
+    var unit = stats.thresholdPaceUnit || 'min/km';
+    if (!value) return { value: null, unit: unit };
+    var raw = String(value).trim();
+    var legacy = raw.match(/^(\d+:\d{2})\s*(.+)?$/);
+    if (legacy) {
+      var legacyUnit = (legacy[2] || unit).replace(/min\/1km/i, 'min/km');
+      return { value: legacy[1], unit: legacyUnit };
+    }
+    return { value: raw, unit: unit };
+  }
+
   function RunDailyQuickStats(props) {
     var p = props || {};
     var stats = p.stats || {
@@ -98,8 +111,10 @@
     var logsLoadError = p.logsLoadError;
     var retryLogsRef = p.retryLogsRef;
 
-    var paceDisplay = stats.thresholdPaceDisplay;
-    var paceUnavailable = stats.thresholdPaceUnavailable !== false && !paceDisplay;
+    var paceParts = splitPaceDisplay(stats);
+    var paceValue = paceParts.value;
+    var paceUnit = paceParts.unit;
+    var paceUnavailable = stats.thresholdPaceUnavailable !== false && !paceValue;
     var paceInferred = !!stats.thresholdPaceInferred;
     var paceInferredFrom = stats.thresholdPaceInferredFrom;
     var weight = Number(stats.weight) || 0;
@@ -144,7 +159,10 @@
             React.createElement('div', { className: 'text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1' }, '10k'),
             paceUnavailable
               ? React.createElement('div', { className: 'text-lg font-semibold text-gray-400' }, '산출 불가')
-              : React.createElement('div', { className: 'text-2xl font-bold text-gray-900 tabular-nums tracking-tight leading-tight' }, paceDisplay),
+              : React.createElement('div', { className: 'flex items-baseline gap-1' },
+                  React.createElement('span', { className: 'text-2xl font-bold text-gray-900 tabular-nums tracking-tight leading-tight' }, paceValue),
+                  React.createElement('span', { className: 'text-xs text-gray-400 font-medium' }, paceUnit)
+                ),
             inferredNote
               ? React.createElement('div', { className: 'text-[10px] text-gray-400 mt-1' }, inferredNote)
               : null
@@ -164,7 +182,7 @@
           style: cardStyle
         },
         React.createElement('div', { className: 'text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1' }, '주간 목표'),
-        React.createElement('div', { className: 'text-[10px] text-gray-400 mb-3' }, 'RUN 활동 rTSS'),
+        React.createElement('div', { className: 'text-[10px] text-gray-400 mb-3' }, '최근 7일 RUN TSS'),
         logsLoading ? React.createElement(
           'div',
           { className: 'flex flex-col items-center justify-center py-8' },
