@@ -339,8 +339,11 @@ async function getPublicProfileMapForSupabaseUsers(supabase, userIds) {
     for (const userRow of userRows || []) {
       if (!userRow || !userRow.id) continue;
       const accountStatus = String(userRow.account_status || "active").trim().toLowerCase();
-      if (accountStatus !== "active") continue;
       const key = String(userRow.id);
+      if (accountStatus !== "active") {
+        map.delete(key);
+        continue;
+      }
       const prev = map.get(key) || {};
       map.set(key, {
         ...prev,
@@ -1150,6 +1153,14 @@ function resolveGcEntryGender(filterGender, profile, row) {
 function mapGcRowToEntry(row, fbUid, filterGender, gcScore, profile) {
   const g = resolveGcEntryGender(filterGender, profile, row);
   const name = resolveRankingEntryName(profile || row, row.display_name);
+  const statusFields =
+    profile && typeof profile === "object"
+      ? {
+          account_status: String(profile.account_status || "active").trim() || "active",
+          isWithdrawn:
+            String(profile.account_status || "active").trim().toLowerCase() !== "active",
+        }
+      : { account_status: "active", isWithdrawn: false };
   return {
     userId: fbUid,
     name,
@@ -1159,6 +1170,8 @@ function mapGcRowToEntry(row, fbUid, filterGender, gcScore, profile) {
     gender: g,
     is_private: row.is_private === true || (profile && profile.is_private === true),
     profileImageUrl: (profile && profile.profile_image_url) || null,
+    account_status: statusFields.account_status,
+    isWithdrawn: statusFields.isWithdrawn === true,
     gcScore,
     rankChange:
       row.rank_change != null && isFinite(Number(row.rank_change))
@@ -1271,6 +1284,16 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
       byCategory[cat] = heptagonCohortRanks.rerankGcBoardRows(rows);
     })
   );
+
+  try {
+    const rankingEligibility = require("./rankingEligibility");
+    if (typeof rankingEligibility.filterEligibleByCategory === "function") {
+      const filtered = rankingEligibility.filterEligibleByCategory(byCategory);
+      for (const cat of Object.keys(filtered)) {
+        byCategory[cat] = filtered[cat];
+      }
+    }
+  } catch (_eGcSb) {}
 
   const entries = (byCategory.Supremo || []).slice();
   if (!entries.length) {

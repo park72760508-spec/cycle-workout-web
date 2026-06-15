@@ -65,7 +65,9 @@ function isRankingEligibleUserData(data) {
   if (!data || typeof data !== "object") return false;
   if (data.is_active === false) return false;
   const accountStatus = String(data.account_status || "").trim().toLowerCase();
-  if (accountStatus === "withdrawn") return false;
+  if (accountStatus === "withdrawn" || accountStatus === "suspended" || accountStatus === "inactive" || accountStatus === "deleted") {
+    return false;
+  }
   const legacyStatus = String(data.status || "").trim().toLowerCase();
   if (legacyStatus === "withdrawn" || legacyStatus === "inactive" || legacyStatus === "deleted") {
     return false;
@@ -207,6 +209,7 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
 
   const privMap = new Map();
   const nameMap = new Map();
+  const userDataMap = new Map();
   const FieldPath = admin.firestore.FieldPath;
   const CHUNK = 30;
   for (let i = 0; i < ids.length; i += CHUNK) {
@@ -216,6 +219,7 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
       const qSnap = await db.collection("users").where(FieldPath.documentId(), "in", chunk).get();
       qSnap.forEach((doc) => {
         const data = doc.data() || {};
+        userDataMap.set(doc.id, data);
         privMap.set(doc.id, privacyFlagFromFirestoreDoc(data));
         const nm =
           (data.name && String(data.name).trim()) ||
@@ -236,6 +240,12 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
     r.is_private = privMap.get(id);
     if (nameMap.has(id)) {
       r.name = nameMap.get(id);
+    }
+    const userData = userDataMap.get(id);
+    if (userData) {
+      const statusFields = rankingUserStatusFieldsFromData(userData);
+      r.account_status = statusFields.account_status;
+      r.isWithdrawn = statusFields.isWithdrawn;
     }
   };
   for (const k of Object.keys(byCategory)) {
@@ -7094,7 +7104,14 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
   if (!db || !historyKey || !byCategory || typeof byCategory !== "object") return;
   const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const prevNorm = await readPeakRankHistoryNorm(db, historyKey);
-  const snapFields = computePeakRankMovementFields(byCategory, prevNorm, todayYmd);
+  let eligibleByCategory = byCategory;
+  try {
+    const rankingEligibility = require("./rankingEligibility");
+    if (typeof rankingEligibility.filterEligibleByCategory === "function") {
+      eligibleByCategory = rankingEligibility.filterEligibleByCategory(byCategory);
+    }
+  } catch (_eElig) {}
+  const snapFields = computePeakRankMovementFields(eligibleByCategory, prevNorm, todayYmd);
 
   try {
     await db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey).set({
@@ -10616,6 +10633,26 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
   await hydrateRankingBoardProfileImages(db, byCategory);
   const entries = (byCategory.Supremo || []).slice();
   await hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries);
+  try {
+    const rankingEligibility = require("./rankingEligibility");
+    if (typeof rankingEligibility.filterEligibleByCategory === "function") {
+      const filtered = rankingEligibility.filterEligibleByCategory(byCategory);
+      for (const cat of Object.keys(filtered)) {
+        byCategory[cat] = filtered[cat];
+      }
+      const filteredEntries = rankingEligibility.filterEligibleRankingRows(entries).map((r, i) => ({
+        ...r,
+        rank: i + 1,
+      }));
+      entries.length = 0;
+      filteredEntries.forEach((r) => entries.push(r));
+    }
+  } catch (eGcFilter) {
+    console.warn(
+      "[buildStelvioGcRankingPayload] withdrawn filter skipped:",
+      eGcFilter && eGcFilter.message ? eGcFilter.message : eGcFilter
+    );
+  }
   return { byCategory, entries, snapshotRangeStart, snapshotRangeEnd, snapshotAsOfSeoul };
 }
 

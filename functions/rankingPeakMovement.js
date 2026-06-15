@@ -61,7 +61,7 @@ function buildPeakBoardRankMapForCategoryRows(rows) {
 
 /**
  * 탈퇴·목록 이탈자를 제외한 생존 코호트 기준 전일 순위 대비 등락.
- * 전일 336위·오늘 331위(꼴창)처럼 절대 순위만 비교하면 탈퇴로 인한 허위 상승이 난다.
+ * 전일 스냅샷 모수에 탈퇴자가 남아 있으면 survivor rank 로 재산정 후 절대 비교.
  * @param {any[]} rows 현재 필터·정렬된 행(표시 순서 = 현재 순위)
  * @param {Record<string, number>} baseline uid → 전일(공식) 순위
  */

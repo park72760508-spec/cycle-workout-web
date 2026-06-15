@@ -236,11 +236,19 @@ async function applyPeakRankChangesSupabase(byCategory, historyKey, opts) {
   if (!key || !byCategory || typeof byCategory !== "object") return;
 
   const todayYmd = peakMovement.seoulTodayYmd();
+  let eligibleByCategory = byCategory;
+  try {
+    const rankingEligibility = require("./rankingEligibility");
+    if (typeof rankingEligibility.filterEligibleByCategory === "function") {
+      eligibleByCategory = rankingEligibility.filterEligibleByCategory(byCategory);
+    }
+  } catch (_eElig) {}
+
   let prevNorm = await readPeakRankSnapshotSupabase(key);
   if (opts.admin) {
     prevNorm = await ensurePrevDayBaselineForTssWeekly(opts.admin, prevNorm, key, todayYmd);
   }
-  const snapFields = peakMovement.computePeakRankMovementFields(byCategory, prevNorm, todayYmd);
+  const snapFields = peakMovement.computePeakRankMovementFields(eligibleByCategory, prevNorm, todayYmd);
   await writePeakRankSnapshotSupabase(key, snapFields);
 }
 

@@ -10,6 +10,7 @@ const HEPTAGON_GENDERS = ["all", "M", "F"];
 const HEPTAGON_CATEGORIES = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
 const N_AXIS = 7;
 const HEPTAGON_COHORT_COL = "heptagon_cohort_ranks";
+const { isRankingEligibleUserData } = require("./rankingEligibility");
 
 /** 랭킹보드 월간 피크 집계 키와 동일 — getPeakPowerRanking / rebuildRankingAggregates (28일 롤링) */
 function peakMonthlyAggregateDocKey(durationType, gender, startStr, endStr) {
@@ -442,6 +443,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
   const userMeta = new Map();
   for (const doc of usersSnap.docs) {
     const data = doc.data();
+    if (!isRankingEligibleUserData(data)) continue;
     const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
     const challenge = data.challenge || "Fitness";
     const leagueCategory = getLeagueCategory(challenge, birthYear);
@@ -731,6 +733,7 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
   const userMeta = new Map();
   for (const doc of usersSnap.docs) {
     const data = doc.data();
+    if (!isRankingEligibleUserData(data)) continue;
     const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
     const challenge = data.challenge || "Fitness";
     const leagueCategory = getLeagueCategory(challenge, birthYear);
