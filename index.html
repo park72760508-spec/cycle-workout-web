@@ -33002,7 +33002,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   order: 1,
                   label: '전체 사용자 평균 파워',
                   data: refWArr,
-                  borderColor: '#16a34a',
+                  borderColor: '#9ca3af',
                   borderWidth: 2,
                   borderDash: [5, 5],
                   backgroundColor: 'transparent',
@@ -33061,7 +33061,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              layout: { padding: { top: 16, left: 6, right: 8, bottom: 2 } },
+              layout: { padding: { top: 16, left: 0, right: 4, bottom: 2 } },
               interaction: { mode: 'index', intersect: false },
               onHover: function (event, elements, chart) {
                 var lastIx = Math.max(0, data.length - 1);
@@ -33095,11 +33095,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     font: { size: 10 },
                     color: '#6b7280',
                     maxTicksLimit: 6,
-                    callback: function (value, index, ticks) {
-                      var tlen = ticks && ticks.length ? ticks.length : 0;
-                      if (tlen === 0) return value;
-                      if (index === 0) return Math.round(value) + ' bpm';
-                      if (index === tlen - 1) return Math.round(value) + ' W';
+                    padding: 2,
+                    callback: function (value) {
                       return Math.round(value);
                     }
                   }
@@ -33269,8 +33266,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: GROWTH_LINE_HR }}></span>
               심박
             </span>
-            <span className="inline-flex items-center gap-1 text-green-700">
-              <span className="inline-block w-4 border-t-2 border-dashed border-green-600"></span>
+            <span className="inline-flex items-center gap-1 text-gray-600">
+              <span className="inline-block w-4 border-t-2 border-dashed border-gray-400"></span>
               전체 사용자 평균 파워
             </span>
             <span className="inline-flex items-center gap-1 text-orange-700">
