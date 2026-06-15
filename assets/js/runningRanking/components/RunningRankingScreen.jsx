@@ -427,6 +427,10 @@
       }
       if (!payload) return;
 
+      if (myViewerItem && api.enrichChartPayloadWithViewerItem) {
+        payload = api.enrichChartPayloadWithViewerItem(payload, myViewerItem, rawRows);
+      }
+
       if (isOverallTab && listFilter === 'interest') {
         var soc = socialApi();
         if (soc && typeof soc.filterRowsByListInterest === 'function') {
@@ -463,7 +467,8 @@
       currentUserId,
       loading,
       socialVer,
-      isOverallTab
+      isOverallTab,
+      myViewerItem
     ]);
 
     useEffect(function () {
