@@ -179,6 +179,15 @@
         ? oneHourAbility.start6mYmd + ' ~ ' + oneHourAbility.end6mYmd
         : '';
 
+    function closeEtpModal() {
+      var cb = document.getElementById('dynamicEtpDontShow10DaysReact');
+      if (cb && cb.checked && userProfile && userProfile.id && typeof window.setDynamicFtpCooldown === 'function') {
+        window.setDynamicFtpCooldown(userProfile.id);
+      }
+      setTpModalOpen(false);
+      setTpCalcResult(null);
+    }
+
     // 스크롤 초기화: useLayoutEffect로 DOM 마운트 직후 1회 실행 (기존 setTimeout 4회 폐기)
     useLayoutEffect(function() {
       var container = document.getElementById('run-dashboard-container');
@@ -341,11 +350,11 @@
             React.createElement('ul', { className: 'text-xs text-gray-600 space-y-1.5 mb-4' },
               React.createElement('li', { className: 'flex items-start gap-2' },
                 React.createElement('img', { src: 'assets/img/clock.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
-                React.createElement('span', null, '6개 구간(1, 5, 10, 20, 40, 60분) PR 역치 페이스 데이터 종합')
+                React.createElement('span', null, '6개 구간(1k, 3k, 5k, 7k, 10k, 20k) PR 페이스 데이터 종합')
               ),
               React.createElement('li', { className: 'flex items-start gap-2' },
                 React.createElement('img', { src: 'assets/img/statistics.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
-                React.createElement('span', null, '구간별 생리학적 신뢰도 반영 (20분 역치 페이스 비중 최대)')
+                React.createElement('span', null, '구간별 생리학적 신뢰도 반영 (10k 역치 페이스 비중 최대)')
               ),
               React.createElement('li', { className: 'flex items-start gap-2' },
                 React.createElement('img', { src: 'assets/img/calendar.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
@@ -359,26 +368,17 @@
                 setTpCalcLoading(true);
                 setTpCalcResult(null);
                 try {
-                  var logs = [];
-                  if (typeof window.getUserTrainingLogs === 'function') {
-                    logs = await window.getUserTrainingLogs(userProfile.id, { limit: 400 }) || [];
+                  var efforts = [];
+                  if (typeof window.getUserRunEfforts === 'function') {
+                    efforts = await window.getUserRunEfforts(userProfile.id, { limit: 400 }) || [];
                   }
-                  if (logs.length === 0 && window.firestore) {
-                    try {
-                      var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
-                      snap.docs.forEach(function(d) {
-                        var dd = d.data();
-                        var o = { id: d.id };
-                        if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
-                        logs.push(o);
-                      });
-                    } catch (e2) {}
-                  }
-                  var result = window.calculateDynamicFtp ? window.calculateDynamicFtp(logs) : { success: false, error: 'FTP 산출 함수를 불러올 수 없습니다.' };
+                  var result = window.calculateDynamicEtp
+                    ? window.calculateDynamicEtp(efforts)
+                    : { success: false, error: 'eTP 산출 함수를 불러올 수 없습니다.' };
                   setTpCalcResult(result);
                   setTpModalOpen(true);
                 } catch (e) {
-                  setTpCalcResult({ success: false, error: (e && e.message) || 'FTP 산출 중 오류가 발생했습니다.' });
+                  setTpCalcResult({ success: false, error: (e && e.message) || 'eTP 산출 중 오류가 발생했습니다.' });
                   setTpModalOpen(true);
                 } finally {
                   setTpCalcLoading(false);
@@ -390,7 +390,7 @@
             }, tpCalcLoading ? React.createElement('span', { className: 'flex items-center justify-center gap-2' },
               React.createElement('span', { className: 'w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin' }),
               '산출 중...'
-            ) : 'FTP 산출하기')
+            ) : 'eTP 산출하기')
           ))}
         </section>
 
@@ -450,116 +450,78 @@
           )}
         </section>
 
-        {/* FTP 산출 결과 모달 (기존 로직 연동) */}
+        {/* eTP 산출 결과 모달 */}
         {tpModalOpen && tpCalcResult && React.createElement(
           'div',
           {
             className: 'fixed inset-0 z-[10001] flex items-center justify-center p-4 overflow-y-auto',
             style: { background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' },
-            onClick: function(e) { if (e.target === e.currentTarget) setTpModalOpen(false); }
+            onClick: function(e) { if (e.target === e.currentTarget) closeEtpModal(); }
           },
           React.createElement(
             'div',
             {
-              className: 'w-full max-w-md my-4 bg-white rounded-2xl overflow-hidden shadow-xl border border-purple-100',
-              style: { padding: '24px 28px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' },
+              className: 'w-full max-w-lg my-4 bg-white rounded-2xl overflow-hidden shadow-xl border border-purple-100',
+              style: { padding: '20px 24px 24px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' },
               onClick: function(e) { e.stopPropagation(); }
             },
+            React.createElement('div', { className: 'flex items-start justify-between gap-3 mb-2', style: { borderBottom: '2px solid #667eea', paddingBottom: '10px' } },
+              React.createElement('h3', { className: 'text-lg font-semibold text-gray-800 m-0' }, '역치 페이스(TP) 산출 결과'),
+              React.createElement('button', {
+                type: 'button',
+                onClick: closeEtpModal,
+                className: 'shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors',
+                'aria-label': '닫기'
+              }, React.createElement('svg', { className: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+                React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M6 18L18 6M6 6l12 12' })
+              ))
+            ),
             React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
-              React.createElement('h3', { className: 'text-lg font-semibold mb-2 text-gray-800', style: { borderBottom: '2px solid #667eea', paddingBottom: '10px' } }, '역치 페이스(TP) 산출 결과'),
               React.createElement('label', { className: 'flex items-center gap-2 mb-3 text-sm text-gray-600 cursor-pointer' },
-                React.createElement('input', { type: 'checkbox', id: 'dynamicFtpDontShow10DaysReact' }),
+                React.createElement('input', { type: 'checkbox', id: 'dynamicEtpDontShow10DaysReact' }),
                 React.createElement('span', null, '10일 동안 보이지 않음')
               ),
               tpCalcResult.success ? React.createElement(React.Fragment, null,
                 React.createElement('div', { className: 'mb-4 overflow-x-auto text-xs' },
-                  React.createElement('table', { className: 'w-full', style: { borderCollapse: 'collapse' } },
+                  React.createElement('table', { className: 'w-full', style: { borderCollapse: 'collapse', minWidth: '520px' } },
                     React.createElement('thead', null,
                       React.createElement('tr', { style: { borderBottom: '2px solid #e2e8f0' } },
-                        React.createElement('th', { style: { padding: '8px 6px', textAlign: 'left', color: '#64748b', fontWeight: 600 } }, '구간'),
-                        React.createElement('th', { style: { padding: '8px 6px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'PR(W)'),
-                        React.createElement('th', { style: { padding: '8px 6px', textAlign: 'center', color: '#64748b', fontWeight: 600 } }, '달성일'),
-                        React.createElement('th', { style: { padding: '8px 6px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'eFTP'),
-                        React.createElement('th', { style: { padding: '8px 6px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'W'),
-                        React.createElement('th', { style: { padding: '8px 6px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'D'),
-                        React.createElement('th', { style: { padding: '8px 6px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'W×D')
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'left', color: '#64748b', fontWeight: 600 } }, '구간'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'center', color: '#64748b', fontWeight: 600 } }, '달성일'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, '기록 페이스'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'P(초)'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'C'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, '보정 페이스'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'W'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'D'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'W×D')
                       )
                     ),
                     React.createElement('tbody', null,
                       (tpCalcResult.details || []).map(function(row, idx) {
-                        var appliedW = (row.weight || 0) * (row.timeDecay || 0);
                         var dateFmt = row.dateStr ? row.dateStr.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3') : '-';
                         return React.createElement('tr', { key: idx, style: { borderBottom: '1px solid #f1f5f9', opacity: row.used ? 1 : 0.5 } },
-                          React.createElement('td', { style: { padding: '6px', color: '#334155' } }, row.minutes + '분'),
-                          React.createElement('td', { style: { padding: '6px', textAlign: 'right', color: row.used ? '#667eea' : '#94a3b8' } }, row.power > 0 ? row.power : '-'),
-                          React.createElement('td', { style: { padding: '6px', textAlign: 'center', color: '#64748b', fontSize: '11px' } }, dateFmt),
-                          React.createElement('td', { style: { padding: '6px', textAlign: 'right', color: row.used ? '#334155' : '#94a3b8' } }, row.used ? row.eFtp : '-'),
-                          React.createElement('td', { style: { padding: '6px', textAlign: 'right', color: '#64748b' } }, row.weight),
-                          React.createElement('td', { style: { padding: '6px', textAlign: 'right', color: '#64748b' } }, row.used ? row.timeDecay : '-'),
-                          React.createElement('td', { style: { padding: '6px', textAlign: 'right', color: row.used ? '#667eea' : '#94a3b8', fontWeight: 600 } }, row.used ? appliedW.toFixed(2) : '-')
+                          React.createElement('td', { style: { padding: '6px 4px', color: '#334155', fontWeight: 600 } }, row.label),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'center', color: '#64748b', fontSize: '11px' } }, dateFmt),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: row.used ? '#667eea' : '#94a3b8' } }, row.used ? row.paceDisplay : '-'),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: '#64748b' } }, row.used ? row.paceSec : '-'),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: '#64748b' } }, row.convertFactor),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: row.used ? '#334155' : '#94a3b8' } }, row.used ? row.adjustedPaceDisplay : '-'),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: '#64748b' } }, row.weight),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: '#64748b' } }, row.used ? row.timeDecay : '-'),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: row.used ? '#667eea' : '#94a3b8', fontWeight: 600 } }, row.used ? row.appliedWeight.toFixed(2) : '-')
                         );
                       })
                     )
                   ),
-                  React.createElement('p', { className: 'text-xs mt-2', style: { color: '#94a3b8' } }, 'W: 신뢰도 가중치 · D: 시간감쇠(최신 우대) · W×D: 최종 적용 가중치')
+                  React.createElement('p', { className: 'text-xs mt-2', style: { color: '#94a3b8' } }, 'P: 페이스(초/km) · C: 10k 역치 환산계수 · W: 신뢰도 · D: 시간감쇠(최신 우대) · W×D: 최종 적용 가중치')
                 ),
-                React.createElement('p', { className: 'text-sm mb-5', style: { color: '#475569', lineHeight: 1.6 } },
-                  '새롭게 산출된 예상 FTP는 ',
-                  React.createElement('strong', { style: { color: '#667eea', fontSize: '1.1em' } }, tpCalcResult.newFtp + 'W'),
-                  ' 입니다. 이 값을 현재 나의 FTP로 업데이트 하시겠습니까?'
+                React.createElement('p', { className: 'text-sm mb-2', style: { color: '#475569', lineHeight: 1.6 } },
+                  '새롭게 산출된 예상 10k 역치 페이스(eTP)는 ',
+                  React.createElement('strong', { style: { color: '#667eea', fontSize: '1.1em' } }, tpCalcResult.newEtpSummary || tpCalcResult.newEtpDisplay),
+                  ' 입니다.'
                 )
-              ) : React.createElement('p', { className: 'text-red-600 mb-5', style: { fontSize: '15px', lineHeight: 1.5 } }, tpCalcResult.error)
-            ),
-            React.createElement('div', { className: 'flex gap-3 mt-4 pt-4 border-t border-gray-200' },
-              tpCalcResult.success ? React.createElement(React.Fragment, null,
-                React.createElement('button', {
-                  type: 'button',
-                  onClick: function() {
-                    var cb = document.getElementById('dynamicFtpDontShow10DaysReact');
-                    if (cb && cb.checked && userProfile && userProfile.id && typeof window.setDynamicFtpCooldown === 'function') window.setDynamicFtpCooldown(userProfile.id);
-                    setTpModalOpen(false);
-                    setTpCalcResult(null);
-                  },
-                  className: 'flex-1 py-3 px-4 text-sm font-semibold rounded-xl bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 transition-colors'
-                }, '취소'),
-                React.createElement('button', {
-                  type: 'button',
-                  onClick: async function() {
-                    if (!userProfile || !userProfile.id || !tpCalcResult.newFtp) return;
-                    try {
-                      var res = await (window.apiUpdateUser || function() { return Promise.resolve({ success: false, error: '함수 없음' }); })(userProfile.id, { ftp: tpCalcResult.newFtp });
-                      if (res && res.success) {
-                        var cb = document.getElementById('dynamicFtpDontShow10DaysReact');
-                        if (cb && cb.checked && typeof window.setDynamicFtpCooldown === 'function') window.setDynamicFtpCooldown(userProfile.id);
-                        if (typeof setUserProfile === 'function') setUserProfile(function(prev) { return prev ? Object.assign({}, prev, { ftp: tpCalcResult.newFtp }) : prev; });
-                        if (typeof setStats === 'function') setStats(function(prev) { return prev ? Object.assign({}, prev, { ftp: tpCalcResult.newFtp }) : prev; });
-                        setTpModalOpen(false);
-                        setTpCalcResult(null);
-                        var cur = window.currentUser;
-                        if (cur) { cur.ftp = tpCalcResult.newFtp; try { localStorage.setItem('currentUser', JSON.stringify(cur)); } catch (e) {} }
-                        if (typeof window.userFTP !== 'undefined') window.userFTP = tpCalcResult.newFtp;
-                        if (typeof showToast === 'function') showToast('성공적으로 반영되었습니다', 'success');
-                      } else {
-                        alert((res && res.error) || '업데이트에 실패했습니다.');
-                      }
-                    } catch (e) {
-                      alert((e && e.message) || '업데이트 중 오류가 발생했습니다.');
-                    }
-                  },
-                  className: 'flex-1 py-3 px-4 text-sm font-semibold rounded-xl text-white',
-                  style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
-                }, 'FTP 업데이트')
-              ) : React.createElement('button', {
-                type: 'button',
-                onClick: function() {
-                  var cb = document.getElementById('dynamicFtpDontShow10DaysReact');
-                  if (cb && cb.checked && userProfile && userProfile.id && typeof window.setDynamicFtpCooldown === 'function') window.setDynamicFtpCooldown(userProfile.id);
-                  setTpModalOpen(false);
-                  setTpCalcResult(null);
-                },
-                className: 'w-full py-3 px-4 text-sm font-semibold rounded-xl text-white',
-                style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
-              }, '확인')
+              ) : React.createElement('p', { className: 'text-red-600 mb-2', style: { fontSize: '15px', lineHeight: 1.5 } }, tpCalcResult.error)
             )
           )
         )}
