@@ -26,14 +26,17 @@ function monthHrApiToGrowthSlot(api) {
   return 1;
 }
 
-/** 최근 1개월 심박: 구간별 색·dataKey (파워 매트릭스와 동일 팔레트) */
+/** 최근 1개월 심박: 구간별 dataKey (그래프·선택 버튼 톤은 40분 보라색 일괄) */
+var MONTH_HR_CHART_COLOR = '#a855f7';
+var MONTH_HR_BTN_ACTIVE = '#a855f7';
+var MONTH_HR_BTN_INACTIVE = '#9ca3af';
 var MONTH_HR_CURVE_ITEMS = [
-  { api: '1min', dataKey: 'hr1min', label: '1분', color: '#ef4444' },
-  { api: '5min', dataKey: 'hr5min', label: '5분', color: '#f97316' },
-  { api: '10min', dataKey: 'hr10min', label: '10분', color: '#ca8a04' },
-  { api: '20min', dataKey: 'hr20min', label: '20분', color: '#3b82f6' },
-  { api: '40min', dataKey: 'hr40min', label: '40분', color: '#a855f7' },
-  { api: '60min', dataKey: 'hr60min', label: '60분', color: '#22c55e' }
+  { api: '1min', dataKey: 'hr1min', label: '1분' },
+  { api: '5min', dataKey: 'hr5min', label: '5분' },
+  { api: '10min', dataKey: 'hr10min', label: '10분' },
+  { api: '20min', dataKey: 'hr20min', label: '20분' },
+  { api: '40min', dataKey: 'hr40min', label: '40분' },
+  { api: '60min', dataKey: 'hr60min', label: '60분' }
 ];
 
 /** PR 큰 점 + bpm — 좌/우/상단 끝 잘림 방지 (최근 1개월 파워와 동일 로직) */
@@ -289,7 +292,7 @@ function HeartRateProfileMonthCurveChart(props) {
     }
   }
   var dataKey = selItem.dataKey;
-  var selColor = selItem.color;
+  var selColor = MONTH_HR_CHART_COLOR;
 
   var hasData = data.length > 0 && data.some(function(r) { return (r.hr1min || r.hr5min || r.hr10min || r.hr20min || r.hr40min || r.hr60min) > 0; });
 
@@ -358,7 +361,7 @@ function HeartRateProfileMonthCurveChart(props) {
   }
 
   var fillGradId = cid + '-fillSel';
-  var activeRing = 'ring-2 ring-blue-600 ring-offset-1 border-blue-500';
+  var activeRing = 'ring-2 ring-purple-600 ring-offset-1 border-purple-500';
   var refXVal =
     selectedXIndex != null && data[selectedXIndex] && data[selectedXIndex].name != null
       ? data[selectedXIndex].name
@@ -437,6 +440,7 @@ function HeartRateProfileMonthCurveChart(props) {
         <div className="flex flex-wrap justify-center gap-1.5 mt-2 px-1">
           {MONTH_HR_CURVE_ITEMS.map(function(it) {
             var active = selectedApi === it.api;
+            var bg = active ? MONTH_HR_BTN_ACTIVE : MONTH_HR_BTN_INACTIVE;
             return (
               <button
                 key={it.api}
@@ -444,9 +448,9 @@ function HeartRateProfileMonthCurveChart(props) {
                 onClick={function() { setSelectedApi(it.api); }}
                 className={
                   'relative flex items-center justify-center rounded-full min-w-[1.75rem] h-7 px-0.5 text-[9px] sm:text-[10px] font-bold text-white shadow-sm border transition ' +
-                  (active ? activeRing : 'border-white/30 hover:brightness-95')
+                  (active ? activeRing : 'border-transparent hover:brightness-95 opacity-90')
                 }
-                style={{ backgroundColor: it.color }}
+                style={{ backgroundColor: bg }}
                 title={it.label + ' 최대 심박'}
               >
                 {it.label}
