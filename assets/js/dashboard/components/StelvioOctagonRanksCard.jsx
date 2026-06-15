@@ -631,19 +631,29 @@
     if (catRank == null || catRank < 1) return null;
     var baseline = peakRankMovementBaselineForCategory(data, category);
     if (!baseline || baseline[String(uid)] == null) return null;
+    var rows = (data && data.byCategory && data.byCategory[category]) || [];
+    if (
+      typeof window.stelvioComputeSurvivorAwareRankMovementForRows === 'function' &&
+      rows.length
+    ) {
+      var mv = window.stelvioComputeSurvivorAwareRankMovementForRows(rows, baseline);
+      var suid = String(uid);
+      if (mv.rankChanges[suid] != null && mv.previousRanks[suid] != null) {
+        return { rankChange: mv.rankChanges[suid], previousBoardRank: mv.previousRanks[suid] };
+      }
+      return null;
+    }
     var prev = Math.floor(Number(baseline[String(uid)]));
     if (!isFinite(prev) || prev < 1) return null;
     return { rankChange: prev - catRank, previousBoardRank: prev };
   }
 
-  /** getPeakPowerRanking — 선택 부문 순위·baseline 기준 등락(랭킹보드 부문 리스트와 동일) */
+  /** getPeak 단일 응답 — 선택 부문 순위·baseline 기준 등락(랭킹보드 Max~60분 탭 행과 동일 우선) */
   function axisRankMovementFromRankingPayload(data, uid, category) {
     var empty = { rankChange: null, previousBoardRank: null };
     if (!data || !data.success || !uid || !category) return empty;
     var byCategory = data.byCategory || {};
     var catRank = categoryRankInPayloadList(data, uid, category);
-    var fromBaseline = movementFromCategoryBaseline(data, uid, category, catRank);
-    if (fromBaseline) return fromBaseline;
 
     function findRowInArr(arr) {
       if (!arr || !arr.length) return null;
@@ -657,18 +667,24 @@
     if (!row && category === 'Supremo' && data.currentUser && String(data.currentUser.userId) === String(uid)) {
       row = data.currentUser;
     }
+
     if (row && row.rankChange != null && row.previousBoardRank != null) {
       if (
         catRank == null ||
         typeof window.stelvioRankMovementRowMatchesCurrentRank !== 'function' ||
         window.stelvioRankMovementRowMatchesCurrentRank(row, catRank)
       ) {
-        var rc = Math.round(Number(row.rankChange));
-        var pb = Math.floor(Number(row.previousBoardRank));
-        if (isFinite(rc) && isFinite(pb) && pb >= 1) {
-          return { rankChange: rc, previousBoardRank: pb };
+        var rcRow = Math.round(Number(row.rankChange));
+        var pbRow = Math.floor(Number(row.previousBoardRank));
+        if (isFinite(rcRow) && isFinite(pbRow) && pbRow >= 1) {
+          return { rankChange: rcRow, previousBoardRank: pbRow };
         }
       }
+    }
+
+    var fromBaseline = movementFromCategoryBaseline(data, uid, category, catRank);
+    if (fromBaseline && fromBaseline.rankChange != null && fromBaseline.previousBoardRank != null) {
+      return fromBaseline;
     }
 
     return empty;
@@ -3601,7 +3617,7 @@
 
         if (typeof window.getStelvioOctagonRanksCache === 'function') {
           var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
-          if (cached && cached.monthly) {
+          if (cached && cached.monthly && !quickRows) {
             var hofRanksCache = (cached.hof && cached.hof.ranks) || cached.monthly.ranks;
             var hofWkgsCache = (cached.hof && cached.hof.wkgs) || cached.monthly.wkgs;
             setState(
