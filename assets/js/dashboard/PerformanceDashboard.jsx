@@ -415,7 +415,7 @@
               type: 'button',
               onClick: function() { setOneHourAbilityModalOpen(true); },
               className: 'w-full py-3.5 px-4 text-white font-semibold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all text-base border-none cursor-pointer',
-              style: { background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', boxShadow: '0 2px 8px rgba(79, 70, 229, 0.35)' }
+              style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
             }, '1시간 항속능력 산출하기')
           ))}
         </section>
