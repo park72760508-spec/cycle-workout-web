@@ -318,7 +318,9 @@
           paceDistance: paceDistance,
           gender: gender,
           category: activeCategory,
-          rankMovementSource: rankMovementSource
+          rankMovementSource: rankMovementSource,
+          leaderboardAsOfSeoul: leaderboardAsOfSeoul,
+          rankMovementAsOfSeoul: rankMovementAsOfSeoul
         }, rankMovementByKey);
       }
       if (isOverallTab && listFilter === 'interest') {
@@ -333,7 +335,7 @@
         });
       }
       return list;
-    }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, socialVer]);
+    }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, leaderboardAsOfSeoul, rankMovementAsOfSeoul, socialVer]);
 
     var myCrewIds = useMemo(function () {
       var set = new Set();
