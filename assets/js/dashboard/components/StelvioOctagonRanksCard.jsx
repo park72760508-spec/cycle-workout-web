@@ -405,6 +405,53 @@
     return data;
   }
 
+  /** 헵타곤·항목별 순위 GC 응답 — 탈퇴 제외·등락 survivor 재계산(랭킹보드 GC 탭과 동일) */
+  function heptagonIsWithdrawnCohortItem(item) {
+    if (!item || item.userId == null) return true;
+    if (typeof window.stelvioRankingIsWithdrawnRow === 'function') {
+      return window.stelvioRankingIsWithdrawnRow({
+        userId: item.userId,
+        account_status: item.account_status,
+        isWithdrawn: item.isWithdrawn
+      });
+    }
+    if (item.isWithdrawn === true) return true;
+    var s = String(item.account_status || '').trim().toLowerCase();
+    return s === 'withdrawn' || s === 'suspended' || s === 'inactive' || s === 'deleted';
+  }
+
+  function heptagonFilterWithdrawnCohortItems(items) {
+    if (!items || !items.length) return [];
+    var out = [];
+    for (var fi = 0; fi < items.length; fi++) {
+      if (!heptagonIsWithdrawnCohortItem(items[fi])) {
+        out.push(items[fi]);
+      }
+    }
+    return out;
+  }
+
+  function hydrateGcRankingPayloadForHeptagon(data) {
+    if (!data || !data.success || !data.byCategory) return data;
+    var working = data;
+    try {
+      working = JSON.parse(JSON.stringify(data));
+    } catch (eGcClone) {
+      working = data;
+    }
+    if (!working.durationType) working.durationType = 'gc';
+    if (working.gender == null || working.gender === '') working.gender = 'all';
+    if (typeof window.stelvioApplyPublicRankingVisibilityToPayload === 'function') {
+      window.stelvioApplyPublicRankingVisibilityToPayload(working);
+    }
+    if (typeof window.stelvioApplyGcRankMovementPipeline === 'function') {
+      window.stelvioApplyGcRankMovementPipeline(working);
+    } else if (typeof window.stelvioRecomputeRankMovementAfterEligibleFilter === 'function') {
+      window.stelvioRecomputeRankMovementAfterEligibleFilter(working);
+    }
+    return working;
+  }
+
   function categoryRankInPayloadList(data, uid, category) {
     if (!data || !data.byCategory || !uid) return null;
     if (typeof window.stelvioCategoryRankInFullList === 'function') {
@@ -1774,6 +1821,9 @@
       if (!row || row.userId == null) {
         continue;
       }
+      if (heptagonIsWithdrawnCohortItem(row)) {
+        continue;
+      }
       var sc = row.gcScore != null && isFinite(Number(row.gcScore)) ? Number(row.gcScore) : null;
       if (sc == null) {
         continue;
@@ -1951,6 +2001,7 @@
    */
   function buildHeptagonModalBoardRows(leadersRaw, myUid, myCohortDataFilter, myCohortDataSupr) {
     myCohortDataSupr = myCohortDataSupr || null;
+    leadersRaw = heptagonFilterWithdrawnCohortItems(leadersRaw || []);
     var mySum = null;
     if (myCohortDataFilter && myCohortDataFilter.sumPositionScores != null && isFinite(Number(myCohortDataFilter.sumPositionScores))) {
       mySum = Number(myCohortDataFilter.sumPositionScores);
@@ -2042,6 +2093,7 @@
   }
 
   function buildHeptagonModalBoardRowsByBoardRankOnly(leadersRaw, myUid, myCohortData) {
+    leadersRaw = heptagonFilterWithdrawnCohortItems(leadersRaw || []);
     var leaders = (leadersRaw || []).map(function(d) {
       return mapHeptagonCohortToBoardRow(d, myUid);
     });
@@ -3331,12 +3383,51 @@
     /** 마지막 성공 GC 응답(fetch 실패·집계 공백 시 직전 스냅샷 복원) */
     var lastGcSuccessRef = useRef(null);
     if (initialGcRankingPayload && gcHeptagonPayloadUsable(initialGcRankingPayload) && !lastGcSuccessRef.current) {
+      var initHydrated = hydrateGcRankingPayloadForHeptagon(initialGcRankingPayload);
       lastGcSuccessRef.current = {
-        payload: initialGcRankingPayload,
+        payload: initHydrated,
         uid: userProfile && userProfile.id ? String(userProfile.id) : '',
         gender: 'all',
       };
     }
+    var _wdTick = useState(0);
+    var withdrawnFilterTick = _wdTick[0];
+    var setWithdrawnFilterTick = _wdTick[1];
+
+    useEffect(
+      function() {
+        function onWithdrawnSetChanged() {
+          setWithdrawnFilterTick(function(t) {
+            return t + 1;
+          });
+        }
+        if (typeof window !== 'undefined' && window.addEventListener) {
+          window.addEventListener('stelvio-withdrawn-set-changed', onWithdrawnSetChanged);
+        }
+        return function() {
+          if (typeof window !== 'undefined' && window.removeEventListener) {
+            window.removeEventListener('stelvio-withdrawn-set-changed', onWithdrawnSetChanged);
+          }
+        };
+      },
+      []
+    );
+
+    useEffect(
+      function() {
+        if (!withdrawnFilterTick || !gcRankingApi.data || !gcHeptagonPayloadUsable(gcRankingApi.data)) {
+          return;
+        }
+        var rehydrated = hydrateGcRankingPayloadForHeptagon(gcRankingApi.data);
+        setGcRankingApi(function(prev) {
+          if (!prev || !prev.data) {
+            return prev;
+          }
+          return { loading: prev.loading, data: rehydrated, err: prev.err };
+        });
+      },
+      [withdrawnFilterTick]
+    );
 
     /** 전체(Supremo) 랭킹 7축·환산 합 — 본인 부문 외(가상) 순위 비교의 1순위(전체랭킹·대시보드 `fetchRanksSet` Supremo) */
     var chartSupremoSumFromGlobalRanking = useMemo(
@@ -3366,6 +3457,7 @@
         var uidStr = String(uid);
         var seedPayload = resolveGcRankingSeedForOctagon(uidStr, gender);
         if (seedPayload && gcHeptagonPayloadUsable(seedPayload)) {
+          seedPayload = hydrateGcRankingPayloadForHeptagon(seedPayload);
           lastGcSuccessRef.current = { payload: seedPayload, uid: uidStr, gender: gender };
         }
         var ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -3393,8 +3485,9 @@
               return;
             }
             if (data && data.success && gcHeptagonPayloadUsable(data)) {
-              lastGcSuccessRef.current = { payload: data, uid: uidStr, gender: gender };
-              setGcRankingApi({ loading: false, data: data, err: null });
+              var hydratedGc = hydrateGcRankingPayloadForHeptagon(data);
+              lastGcSuccessRef.current = { payload: hydratedGc, uid: uidStr, gender: gender };
+              setGcRankingApi({ loading: false, data: hydratedGc, err: null });
               return;
             }
             setGcRankingApi(function(prev) {
@@ -4216,12 +4309,15 @@
                 if (!sx || sx.userId == null) {
                   continue;
                 }
+                if (heptagonIsWithdrawnCohortItem(sx)) {
+                  continue;
+                }
                 if (sx.sumPositionScores != null && isFinite(Number(sx.sumPositionScores))) {
                   supAllSumByUid[String(sx.userId)] = Number(sx.sumPositionScores);
                 }
               }
             }
-            var items2 = resA.items || [];
+            var items2 = heptagonFilterWithdrawnCohortItems(resA.items || []);
             if ((gIn === 'M' || gIn === 'F') && Object.keys(supAllSumByUid).length) {
               items2 = items2.map(function(it) {
                 if (!it || it.userId == null) {
@@ -4339,7 +4435,7 @@
           clearTimeout(delB);
         };
       },
-      [uid, gender, category, heptagonGcSumForSync, gcRankingApi.data]
+      [uid, gender, category, heptagonGcSumForSync, gcRankingApi.data, withdrawnFilterTick]
     );
 
     useEffect(
@@ -4383,7 +4479,8 @@
         gender,
         category,
         chartSupremoSumForModalVirtualOvl,
-        gcRankingApi.data
+        gcRankingApi.data,
+        withdrawnFilterTick
       ]
     );
 
