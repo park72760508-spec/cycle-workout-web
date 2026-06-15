@@ -10428,7 +10428,7 @@
       if (!item) return false;
       if (item.isWithdrawn === true) return true;
       var s = String(item.account_status || '').trim().toLowerCase();
-      if (s === 'withdrawn') return true;
+      if (s === 'withdrawn' || s === 'suspended' || s === 'inactive' || s === 'deleted') return true;
       if (item.userId && _stelvioWithdrawnUserIdSet.has(String(item.userId))) return true;
       return false;
     }
@@ -17926,10 +17926,12 @@
     window.stelvioResolvePreviousPeakRanksBaselineForCategory = stelvioResolvePreviousPeakRanksBaselineForCategory;
     var STELVIO_RANK_BOARD_CATS = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
 
-    /**
-     * 탈퇴·목록 이탈자 제외 생존 코호트 기준 등락 — rankingPeakMovement.js 와 동일.
-     * 전일 꼴창(336)이 오늘 꼴창(331)인데 탈퇴 5명만 빠진 경우 허위 상승 방지.
-     */
+/**
+ * 탈퇴·목록 이탈자 제외 생존 코호트 기준 등락 — rankingPeakMovement.js 와 동일.
+ * 전일 스냅샷에 탈퇴자가 포함돼 있어도, 오늘 목록에 남은 사용자만 모수로 재산정한 뒤
+ * 절대순위(전일 survivor rank − 오늘 rank)로 등락을 계산한다.
+ * 양일 모두 탈퇴 제외 스냅샷이면 일반적인 (↑n)(↓n) 과 동일하다.
+ */
     function stelvioComputeSurvivorAwareRankMovementForRows(rows, baseline) {
       var rankChanges = {};
       var previousRanks = {};
