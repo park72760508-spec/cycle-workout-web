@@ -562,7 +562,11 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
         tpSec = window.runDashboardPace.parsePaceToSecPerKm(disp);
       }
     }
-    if (window.runDashboardPace && typeof window.runDashboardPace.computeRunVo2maxFromThresholdPace === 'function') {
+    if (typeof window.calculateStelvioRunVO2Max === 'function') {
+      calculatedVO2Max = window.calculateStelvioRunVO2Max(userProfile, recentLogs, {
+        thresholdPaceSec: tpSec,
+      }).vo2max;
+    } else if (window.runDashboardPace && typeof window.runDashboardPace.computeRunVo2maxFromThresholdPace === 'function') {
       calculatedVO2Max = window.runDashboardPace.computeRunVo2maxFromThresholdPace(tpSec);
     }
   } else {
