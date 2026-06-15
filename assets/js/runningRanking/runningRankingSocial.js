@@ -139,15 +139,32 @@
     return item.name ? String(item.name).trim() : '(이름 없음)';
   }
 
+  function isViewerListItem(item, viewerIdentityOrId) {
+    if (!item) return false;
+    if (item.isCrew) return false;
+    var dataApi = window.runningRankingData || {};
+    if (
+      viewerIdentityOrId &&
+      typeof viewerIdentityOrId === 'object' &&
+      dataApi.listItemMatchesViewer
+    ) {
+      return dataApi.listItemMatchesViewer(item, viewerIdentityOrId);
+    }
+    var viewerId = viewerIdentityOrId != null ? String(viewerIdentityOrId) : resolveViewerUserId();
+    if (!viewerId) return false;
+    var sid = socialUserId(item);
+    var boardUid = item.userId != null ? String(item.userId) : '';
+    if (sid && sid === viewerId) return true;
+    if (boardUid && boardUid === viewerId) return true;
+    return false;
+  }
+
   function canSeeFull(item, currentUserId) {
     if (!item || item.isCrew) return true;
+    if (isViewerListItem(item, currentUserId || resolveViewerUserId())) return true;
     var sid = socialUserId(item);
     var boardUid = item.userId != null ? String(item.userId) : '';
     if (!sid && !boardUid) return false;
-    if (currentUserId) {
-      if (sid && sid === String(currentUserId)) return true;
-      if (boardUid && boardUid === String(currentUserId)) return true;
-    }
     var canSee = callFn('stelvioRankingCanViewerSeeUserFull');
     if (canSee) {
       if (sid && canSee(sid)) return true;
@@ -336,6 +353,7 @@
     getPrivateBadgeHtml: getPrivateBadgeHtml,
     formatValueLabel: formatValueLabel,
     canSeeFull: canSeeFull,
+    isViewerListItem: isViewerListItem,
     socialUserId: socialUserId,
     rowFirebaseUid: rowFirebaseUid
   };

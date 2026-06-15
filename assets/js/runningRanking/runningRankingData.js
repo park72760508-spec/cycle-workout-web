@@ -8,12 +8,52 @@
   function fmt() { return window.runningRankingFormat || {}; }
 
   function getCurrentUserId() {
+    if (typeof window.stelvioResolveRankingViewerUserId === 'function') {
+      var resolved = window.stelvioResolveRankingViewerUserId();
+      if (resolved) return String(resolved);
+    }
     var u = window.currentUser;
     if (u && (u.id || u.uid)) return String(u.id || u.uid);
     try {
       var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
       return ls && (ls.id || ls.uid) ? String(ls.id || ls.uid) : null;
     } catch (e) { return null; }
+  }
+
+  /** 로그인 사용자 — Firebase UID + RUN 랭킹 보드 user_info.user_id(Supabase UUID) */
+  function getViewerIdentity(rows) {
+    var firebaseId = getCurrentUserId();
+    var boardUserId = null;
+    var i;
+    if (firebaseId && rows && rows.length) {
+      for (i = 0; i < rows.length; i++) {
+        var fb = rowFirebaseUid(rows[i]);
+        if (fb && String(fb) === String(firebaseId)) {
+          var bid = rowUserId(rows[i]);
+          if (bid) boardUserId = String(bid);
+          break;
+        }
+      }
+    }
+    return {
+      firebaseId: firebaseId || null,
+      boardUserId: boardUserId
+    };
+  }
+
+  /** 목록 행이 접속 사용자 본인인지 — CYCLE 소셜 행 매칭과 동일( Firebase·보드 UUID 모두 ) */
+  function listItemMatchesViewer(item, identity) {
+    if (!item || !identity) return false;
+    if (item.isCrew) return false;
+    var fid = identity.firebaseId ? String(identity.firebaseId) : '';
+    var bid = identity.boardUserId ? String(identity.boardUserId) : '';
+    var boardUid = item.userId != null ? String(item.userId) : '';
+    var sid = item.socialUserId || item.firebaseUid || '';
+    if (sid) sid = String(sid);
+    if (bid && boardUid && boardUid === bid) return true;
+    if (fid && sid && sid === fid) return true;
+    if (fid && boardUid && boardUid === fid) return true;
+    return false;
   }
 
   function rowUserId(row) {
@@ -1015,6 +1055,8 @@
 
   window.runningRankingData = {
     getCurrentUserId: getCurrentUserId,
+    getViewerIdentity: getViewerIdentity,
+    listItemMatchesViewer: listItemMatchesViewer,
     buildRankedList: buildRankedList,
     buildCrewRankedList: buildCrewRankedList,
     buildDistributionPayload: buildDistributionPayload,
