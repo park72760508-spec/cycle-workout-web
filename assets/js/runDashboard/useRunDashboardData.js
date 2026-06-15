@@ -114,7 +114,9 @@
     var next = Object.assign({}, prev);
     var info = paceInfo || {};
     next.thresholdPaceSec = info.secPerKm != null ? info.secPerKm : null;
-    next.thresholdPaceDisplay = info.display || null;
+    next.thresholdPaceDisplay = info.display || info.paceValue || null;
+    next.thresholdPaceValue = info.paceValue || info.display || null;
+    next.thresholdPaceUnit = info.paceUnit || 'min/km';
     next.thresholdPaceInferred = !!info.inferred;
     next.thresholdPaceInferredFrom = info.inferredFrom || null;
     next.thresholdPaceUnavailable = !!info.unavailable;
@@ -160,6 +162,8 @@
       thresholdPace: 0,
       thresholdPaceSec: null,
       thresholdPaceDisplay: null,
+      thresholdPaceValue: null,
+      thresholdPaceUnit: 'min/km',
       thresholdPaceInferred: false,
       thresholdPaceInferredFrom: null,
       thresholdPaceUnavailable: true,
@@ -501,30 +505,14 @@
             setLogsLoaded(true);
           }
 
-          var weeklyStart = new Date(today);
-          weeklyStart.setDate(today.getDate() - 6);
-          var weekStartStr = weeklyStart.getFullYear() + '-' + pad2(weeklyStart.getMonth() + 1) + '-' + pad2(weeklyStart.getDate());
-          var logsInWeek = logsDeduped.filter(function(log) {
-            var ds = parseDate(log.date);
-            return ds && ds >= weekStartStr && ds <= todayStr && isRunLogForWeeklyTss(log);
-          });
-          var byDate = {};
-          logsInWeek.forEach(function(log) {
-            var ds = parseDate(log.date);
-            if (!ds) return;
-            if (!byDate[ds]) byDate[ds] = { strava: [], stelvio: [] };
-            var src = String(log.source || '').toLowerCase();
-            var tss = sanitizeRtss(log.tss);
-            if (src === 'strava') byDate[ds].strava.push(tss); else byDate[ds].stelvio.push(tss);
-          });
           var weeklyTss = 0;
-          Object.keys(byDate).forEach(function(ds) {
-            var day = byDate[ds];
-            var stravaSum = day.strava.reduce(function(s, t) { return s + t; }, 0);
-            var stelvioSum = day.stelvio.reduce(function(s, t) { return s + t; }, 0);
-            weeklyTss += stravaSum > 0 ? stravaSum : stelvioSum;
-          });
-          weeklyTss = Math.round(weeklyTss * 10) / 10;
+          if (typeof window.getUserRunWeeklyTss === 'function') {
+            try {
+              weeklyTss = await window.getUserRunWeeklyTss(userProfile.id);
+            } catch (weeklyErr) {
+              console.warn('[useRunDashboardData] getUserRunWeeklyTss failed:', weeklyErr && weeklyErr.message);
+            }
+          }
           var weeklyTarget = 175;
           if (typeof window.getWeeklyTargetRtss === 'function') {
             var tInfo = window.getWeeklyTargetRtss(userProfile.challenge || 'Fitness');

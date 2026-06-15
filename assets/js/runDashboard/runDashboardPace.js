@@ -93,7 +93,13 @@
     var min = Math.floor(secPerKm / 60);
     var sec = Math.round(secPerKm % 60);
     if (sec === 60) { min += 1; sec = 0; }
-    return min + ':' + (sec < 10 ? '0' : '') + sec + ' min/1km';
+    return min + ':' + (sec < 10 ? '0' : '') + sec;
+  }
+
+  function formatPaceDisplayParts(secPerKm) {
+    var value = formatPaceMinPerKm(secPerKm);
+    if (!value) return { value: null, unit: 'min/km', display: null };
+    return { value: value, unit: 'min/km', display: value };
   }
 
   function getPaceSecFromPeakSegment(seg) {
@@ -113,9 +119,12 @@
     var pp = peakPerformances || {};
     var sec10k = getPaceSecFromPeakSegment(pp['10k']);
     if (sec10k != null) {
+      var parts10k = formatPaceDisplayParts(sec10k);
       return {
         secPerKm: sec10k,
-        display: formatPaceMinPerKm(sec10k),
+        display: parts10k.display,
+        paceValue: parts10k.value,
+        paceUnit: parts10k.unit,
         inferred: false,
         inferredFrom: '10k',
         unavailable: false
@@ -124,9 +133,12 @@
     var sec5k = getPaceSecFromPeakSegment(pp['5k']);
     if (sec5k != null) {
       var from5k = sec5k + 15;
+      var parts5k = formatPaceDisplayParts(from5k);
       return {
         secPerKm: from5k,
-        display: formatPaceMinPerKm(from5k),
+        display: parts5k.display,
+        paceValue: parts5k.value,
+        paceUnit: parts5k.unit,
         inferred: true,
         inferredFrom: '5k',
         unavailable: false
@@ -135,9 +147,12 @@
     var sec3k = getPaceSecFromPeakSegment(pp['3k']);
     if (sec3k != null) {
       var from3k = sec3k + 35;
+      var parts3k = formatPaceDisplayParts(from3k);
       return {
         secPerKm: from3k,
-        display: formatPaceMinPerKm(from3k),
+        display: parts3k.display,
+        paceValue: parts3k.value,
+        paceUnit: parts3k.unit,
         inferred: true,
         inferredFrom: '3k',
         unavailable: false
@@ -175,6 +190,7 @@
     HEXAGON_AXES: HEXAGON_AXES,
     parsePaceToSecPerKm: parsePaceToSecPerKm,
     formatPaceMinPerKm: formatPaceMinPerKm,
+    formatPaceDisplayParts: formatPaceDisplayParts,
     computeThresholdPaceFromPeaks: computeThresholdPaceFromPeaks,
     extractHexagonPaceContext: extractHexagonPaceContext,
     computeRunVo2maxFromThresholdPace: computeRunVo2maxFromThresholdPace,
