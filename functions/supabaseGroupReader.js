@@ -408,6 +408,110 @@ async function fetchYearlyPeaksForYear(firebaseUid, year) {
   return mapYearlyPeaksRowToFirestoreDoc(data);
 }
 
+const RUN_EFFORT_SELECT =
+  "activity_id, speed_1k, speed_3k, speed_5k, speed_7k, speed_10k, speed_20k, updated_at, created_at";
+const RUN_ACTIVITY_SELECT = "activity_id, activity_date, activity_type, source";
+
+function isRunningActivityType(type) {
+  const t = String(type || "").trim().toLowerCase();
+  return t === "run" || t === "virtualrun" || t === "trailrun";
+}
+
+function seoulTodayYmd() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function shiftYmd(ymd, deltaDays) {
+  const m = String(ymd || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  d.setDate(d.getDate() + Number(deltaDays || 0));
+  return (
+    d.getFullYear() +
+    "-" +
+    String(d.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
+}
+
+/**
+ * RUN eTP — 최근 6개월 run_activity_efforts + activities.activity_date
+ * @param {string} firebaseUid
+ * @param {number} [limit=400]
+ */
+async function fetchUserRunEffortsRecent(firebaseUid, limit = 400) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return [];
+  const uid = String(firebaseUid || "").trim();
+  if (!uid) return [];
+
+  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
+  const mode =
+    supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  const userUuid = supabaseDualWriteServer.resolveUserUuid(uid, ns, mode);
+  if (!userUuid) return [];
+
+  const cap = Math.min(1000, Math.max(1, Number(limit) || 400));
+  const fromYmd = shiftYmd(seoulTodayYmd(), -180);
+
+  const { data: efforts, error: effErr } = await supabase
+    .from("run_activity_efforts")
+    .select(RUN_EFFORT_SELECT)
+    .eq("user_id", userUuid)
+    .order("updated_at", { ascending: false })
+    .limit(cap);
+  if (effErr) throw effErr;
+  if (!efforts || !efforts.length) return [];
+
+  const activityIds = [
+    ...new Set(efforts.map((e) => String(e.activity_id || "").trim()).filter(Boolean)),
+  ];
+  if (!activityIds.length) return [];
+
+  const { data: acts, error: actErr } = await supabase
+    .from("activities")
+    .select(RUN_ACTIVITY_SELECT)
+    .eq("user_id", userUuid)
+    .in("activity_id", activityIds);
+  if (actErr) throw actErr;
+
+  const actMap = new Map();
+  for (const a of acts || []) {
+    if (!isRunningActivityType(a.activity_type)) continue;
+    actMap.set(String(a.activity_id), a);
+  }
+
+  const merged = [];
+  for (const e of efforts) {
+    const act = actMap.get(String(e.activity_id));
+    if (!act) continue;
+    const activityDate = act.activity_date || null;
+    if (activityDate && String(activityDate).slice(0, 10) < fromYmd) continue;
+    merged.push({
+      activity_id: e.activity_id,
+      activity_date: activityDate,
+      activity_type: act.activity_type,
+      source: act.source,
+      speed_1k: e.speed_1k,
+      speed_3k: e.speed_3k,
+      speed_5k: e.speed_5k,
+      speed_7k: e.speed_7k,
+      speed_10k: e.speed_10k,
+      speed_20k: e.speed_20k,
+      updated_at: e.updated_at,
+      created_at: e.created_at,
+      readBackend: "supabase",
+    });
+  }
+  return merged;
+}
+
 module.exports = {
   fetchOpenRideByFirestoreId,
   fetchOpenRidesInDateRange,
@@ -415,6 +519,7 @@ module.exports = {
   fetchApprovedRidingGroups,
   fetchUserRideLogsForMonth,
   fetchUserRideLogsRecent,
+  fetchUserRunEffortsRecent,
   fetchYearlyPeaksForYear,
   mapYearlyPeaksRowToFirestoreDoc,
   mapRideRowToFirestoreTrainingLog,

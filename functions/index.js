@@ -9406,6 +9406,55 @@ exports.getTrainingLogsForRead = onRequest(
 );
 
 /**
+ * RUN 구간 피크 Read — Supabase run_activity_efforts (Service Role relay).
+ * GET ?uid=&limit=400
+ */
+exports.getRunEffortsForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+
+    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
+    if (!requestedUid) {
+      res.status(400).json({ success: false, error: "uid 필요" });
+      return;
+    }
+
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 러닝 구간 기록만 조회할 수 있습니다." });
+      return;
+    }
+
+    try {
+      const limit = Number(req.query.limit) || 400;
+      const efforts = await supabaseGroupReader.fetchUserRunEffortsRecent(requestedUid, limit);
+      res.status(200).json({
+        success: true,
+        efforts,
+        readBackend: "supabase",
+        readSource: "supabase",
+        via: "service_role_relay",
+      });
+    } catch (e) {
+      console.warn("[getRunEffortsForRead]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
  * PR 표시용 yearly_peaks Read — Supabase (Service Role relay).
  * GET ?uid=&year=2026
  */
