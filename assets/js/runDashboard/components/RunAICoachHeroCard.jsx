@@ -84,7 +84,12 @@
     var setRunConditionAnalysis = p.setRunConditionAnalysis;
     var setRetryCoach = p.setRetryCoach;
     var userProfile = p.userProfile || {};
+    var stats = p.stats || {};
     var CircularProgress = p.CircularProgress;
+
+    var vo2Display = (coachData && coachData.vo2max_estimate != null && coachData.vo2max_estimate > 0)
+      ? coachData.vo2max_estimate
+      : (stats.vo2maxEstimate != null && stats.vo2maxEstimate > 0 ? stats.vo2maxEstimate : null);
 
     if (aiLoading) {
       return React.createElement(
@@ -95,7 +100,12 @@
             className: 'w-20 h-20 mx-auto mb-4 rounded-full border-4 border-emerald-200 border-t-emerald-500 animate-spin'
           }),
           React.createElement('div', { className: 'text-base font-semibold text-gray-700' }, 'AI가 컨디션을 분석하고 있습니다'),
-          React.createElement('div', { className: 'text-sm text-gray-500 mt-1' }, '잠시만 기다려 주세요...')
+          React.createElement('div', { className: 'text-sm text-gray-500 mt-1' }, '잠시만 기다려 주세요...'),
+          vo2Display != null && React.createElement('div', { className: 'text-xs text-gray-500 mt-4' },
+            'VO₂max 추정: ',
+            React.createElement('span', { className: 'font-semibold text-gray-700 tabular-nums' }, vo2Display),
+            React.createElement('span', { className: 'text-gray-400 ml-0.5' }, ' ml/kg/min')
+          )
         )
       );
     }
@@ -201,8 +211,10 @@
               )
             )
           ),
-          (coachData.vo2max_estimate != null && coachData.vo2max_estimate > 0) && React.createElement('div', { className: 'text-xs text-gray-500 mb-6' },
-            'VO₂max 추정: ' + coachData.vo2max_estimate + ' ml/kg/min'
+          (vo2Display != null && vo2Display > 0) && React.createElement('div', { className: 'text-xs text-gray-500 mb-6' },
+            'VO₂max 추정: ',
+            React.createElement('span', { className: 'font-semibold text-gray-700 tabular-nums' }, vo2Display),
+            React.createElement('span', { className: 'text-gray-400 ml-0.5' }, ' ml/kg/min')
           )
         ),
         React.createElement(
