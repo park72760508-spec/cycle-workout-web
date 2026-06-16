@@ -45,9 +45,9 @@
       var effort = { activity_id: log.activity_id, speed_1k: log.speed_1k, speed_3k: log.speed_3k, speed_5k: log.speed_5k, speed_7k: log.speed_7k, speed_10k: log.speed_10k, speed_20k: log.speed_20k, speed_42k: log.speed_42k };
       var isPr = pr().isAxisPrForEffort(effort, axis, yearlyBest);
       var hr = log['hr_' + axis];
-      var val = pr().formatPaceFromSpeed(sp);
+      var val = pr().formatPaceWithSpeed(sp);
       if (hr != null && Number(hr) > 0) val += ' · ' + Math.round(Number(hr)) + ' bpm';
-      return DetailRow(axis.toUpperCase() + ' 페이스', val, isPr);
+      return DetailRow(axis + ' 페이스', val, isPr);
     }).filter(Boolean);
   }
 

@@ -24,6 +24,19 @@
     return m + ':' + (s < 10 ? '0' : '') + s + '/km';
   }
 
+  function formatSpeedKmhFromMs(speedMs) {
+    var sp = Number(speedMs);
+    if (!isFinite(sp) || sp <= 0) return null;
+    return Math.round(sp * 3.6) + 'km/h';
+  }
+
+  function formatPaceWithSpeed(speedMs) {
+    var pace = formatPaceFromSpeed(speedMs);
+    var kmh = formatSpeedKmhFromMs(speedMs);
+    if (pace === '—' || !kmh) return pace;
+    return pace + '(' + kmh + ')';
+  }
+
   function effortSpeed(effort, axis) {
     if (!effort) return null;
     var v = Number(effort['speed_' + axis]);
@@ -135,6 +148,8 @@
     PR_BADGE_BG: PR_BADGE_BG,
     speedMsToPaceSec: speedMsToPaceSec,
     formatPaceFromSpeed: formatPaceFromSpeed,
+    formatSpeedKmhFromMs: formatSpeedKmhFromMs,
+    formatPaceWithSpeed: formatPaceWithSpeed,
     buildYearlyPacePrByAxis: buildYearlyPacePrByAxis,
     isAxisPrForEffort: isAxisPrForEffort,
     effortHasAnyPr: effortHasAnyPr,
