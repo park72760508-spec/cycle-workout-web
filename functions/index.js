@@ -138,6 +138,8 @@ function weeklyTop10RowFromEntry(e, index) {
     is_private: e.is_private === true,
     account_status: e.account_status || "active",
     isWithdrawn: e.isWithdrawn === true,
+    rankChange: e.rankChange,
+    previousBoardRank: e.previousBoardRank,
   };
 }
 
@@ -4359,6 +4361,8 @@ async function persistWeeklyTssBoardsAndTop10(db, wStart, wEnd, boardsByGender) 
         name: e.name,
         totalTss: e.totalTss,
         is_private: e.is_private === true,
+        rankChange: e.rankChange,
+        previousBoardRank: e.previousBoardRank,
       }));
     }
     const keyTss = `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`;
@@ -6838,19 +6842,8 @@ const PEAK_RANK_HISTORY_COL = "peak_rank_history";
 
 /** GC 헵타곤 cohort 와 동일: 부문별 보드 순위 기준 등락 (전체 Supremo 순위와 분리) */
 const PEAK_RANK_BOARD_CATEGORIES = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
-
-/** 부문 배열 내 표시 순위(1..N). item.rank 는 전체(Supremo) 순위일 수 있어 인덱스 사용 */
-function buildPeakBoardRankMapForCategoryRows(rows) {
-  const ranks = {};
-  if (!Array.isArray(rows)) return ranks;
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const uid = r && r.userId != null ? String(r.userId).trim() : "";
-    if (!uid) continue;
-    ranks[uid] = i + 1;
-  }
-  return ranks;
-}
+const peakRankMovementCore = require("./rankingPeakMovement");
+const { normalizePeakRankHistoryDoc, computePeakRankMovementFields } = peakRankMovementCore;
 
 function parseRankingAggregationBool(raw, fallback) {
   if (raw == null || raw === "") return fallback;
@@ -6932,126 +6925,6 @@ function peakRankChangesAllZero(chMap) {
   return vals.every((v) => Number(v) === 0);
 }
 
-function normalizePeakRankHistoryDoc(d) {
-  if (!d || typeof d !== "object") {
-    return {
-      asOfSeoul: "",
-      ranksByCategory: {},
-      rankChangesByCategory: {},
-      previousRanksByCategory: {},
-      prevDayRanksByCategory: {},
-    };
-  }
-  if (d.ranksByCategory && typeof d.ranksByCategory === "object") {
-    return {
-      asOfSeoul: d.asOfSeoul || "",
-      ranksByCategory: d.ranksByCategory,
-      rankChangesByCategory:
-        d.rankChangesByCategory && typeof d.rankChangesByCategory === "object" ? d.rankChangesByCategory : {},
-      previousRanksByCategory:
-        d.previousRanksByCategory && typeof d.previousRanksByCategory === "object"
-          ? d.previousRanksByCategory
-          : {},
-      prevDayRanksByCategory:
-        d.prevDayRanksByCategory && typeof d.prevDayRanksByCategory === "object"
-          ? d.prevDayRanksByCategory
-          : {},
-    };
-  }
-  return {
-    asOfSeoul: d.asOfSeoul || "",
-    ranksByCategory: d.ranks && typeof d.ranks === "object" ? { Supremo: d.ranks } : {},
-    rankChangesByCategory:
-      d.rankChanges && typeof d.rankChanges === "object" ? { Supremo: d.rankChanges } : {},
-    previousRanksByCategory:
-      d.previousRanks && typeof d.previousRanks === "object" ? { Supremo: d.previousRanks } : {},
-    prevDayRanksByCategory: {},
-  };
-}
-
-/**
- * 전일 23:00 정규 집계 시점의 공식 순위 맵(prevDay)을 등락 비교 기준으로 고정한다.
- * 당일 수동 집계로 ranksByCategory만 바뀌어도 prevDay는 다음 정규 집계 전까지 유지된다.
- */
-function resolveOfficialPeakRankBaseline(prevNorm, prevRanksCat, prevDayRanksCat, todayYmd) {
-  const prevDay =
-    prevDayRanksCat && typeof prevDayRanksCat === "object" ? prevDayRanksCat : {};
-  if (Object.keys(prevDay).length > 0) return prevDay;
-  const isNewOfficialDay = !!(prevNorm.asOfSeoul && prevNorm.asOfSeoul < todayYmd);
-  if (isNewOfficialDay && Object.keys(prevRanksCat).length > 0) return prevRanksCat;
-  return {};
-}
-
-function freezeOfficialPrevDayRanks(prevNorm, prevRanksCat, prevDayRanksCat, todayYmd) {
-  const isNewOfficialDay = !prevNorm.asOfSeoul || prevNorm.asOfSeoul < todayYmd;
-  if (isNewOfficialDay && Object.keys(prevRanksCat).length > 0) {
-    return prevRanksCat;
-  }
-  return prevDayRanksCat && typeof prevDayRanksCat === "object" ? prevDayRanksCat : {};
-}
-
-/**
- * peak_rank_history / HTTP 응답 공통: 전일 정규 스냅샷 대비 등락을 행에 주입.
- * @returns {{ newRanksByCategory, newRankChangesByCategory, newPreviousRanksByCategory, newPrevDayRanksByCategory }}
- */
-function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
-  const newRanksByCategory = {};
-  const newRankChangesByCategory = {};
-  const newPreviousRanksByCategory = {};
-  const newPrevDayRanksByCategory = {};
-
-  for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
-    const rows = byCategory[cat];
-    if (!Array.isArray(rows) || !rows.length) continue;
-
-    const currRanks = buildPeakBoardRankMapForCategoryRows(rows);
-    const prevRanksCat =
-      prevNorm.ranksByCategory[cat] && typeof prevNorm.ranksByCategory[cat] === "object"
-        ? prevNorm.ranksByCategory[cat]
-        : {};
-    const prevDayIn =
-      prevNorm.prevDayRanksByCategory[cat] && typeof prevNorm.prevDayRanksByCategory[cat] === "object"
-        ? prevNorm.prevDayRanksByCategory[cat]
-        : {};
-
-    const frozenPrevDay = freezeOfficialPrevDayRanks(prevNorm, prevRanksCat, prevDayIn, todayYmd);
-    const compareBaseline = resolveOfficialPeakRankBaseline(prevNorm, prevRanksCat, frozenPrevDay, todayYmd);
-
-    newRanksByCategory[cat] = currRanks;
-    newPrevDayRanksByCategory[cat] = frozenPrevDay;
-    newRankChangesByCategory[cat] = {};
-    newPreviousRanksByCategory[cat] = {};
-
-    for (let i = 0; i < rows.length; i++) {
-      const e = rows[i];
-      const uid = e && e.userId != null ? String(e.userId).trim() : "";
-      if (!uid) continue;
-      const curr = currRanks[uid];
-      if (curr == null) continue;
-
-      delete e.rankChange;
-      delete e.previousBoardRank;
-
-      if (compareBaseline[uid] != null) {
-        const prev = Math.floor(Number(compareBaseline[uid]));
-        if (isFinite(prev) && prev >= 1) {
-          e.rankChange = prev - curr;
-          e.previousBoardRank = prev;
-          newRankChangesByCategory[cat][uid] = e.rankChange;
-          newPreviousRanksByCategory[cat][uid] = prev;
-        }
-      }
-    }
-  }
-
-  return {
-    newRanksByCategory,
-    newRankChangesByCategory,
-    newPreviousRanksByCategory,
-    newPrevDayRanksByCategory,
-  };
-}
-
 async function readPeakRankHistoryNorm(db, historyKey) {
   let prevNorm = normalizePeakRankHistoryDoc(null);
   if (!db || !historyKey) return prevNorm;
@@ -7069,6 +6942,23 @@ async function readPeakRankHistoryNorm(db, historyKey) {
  */
 async function hydratePeakRankMovementFromHistory(db, byCategory, historyKey) {
   if (!db || !historyKey || !byCategory || typeof byCategory !== "object") return;
+  try {
+    const route = await rankingReadConfig.shouldReadRankingFromSupabase(admin, null);
+    if (route.route === "supabase") {
+      const peakMovementSupabase = require("./rankingPeakMovementSupabase");
+      await peakMovementSupabase.hydratePeakRankMovementOnPayload(
+        { byCategory },
+        historyKey,
+        { admin, persistSnapshot: false }
+      );
+      return;
+    }
+  } catch (eSbHydr) {
+    console.warn(
+      "[hydratePeakRankMovementFromHistory] Supabase hydrate skipped:",
+      eSbHydr && eSbHydr.message ? eSbHydr.message : eSbHydr
+    );
+  }
   const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const prevNorm = await readPeakRankHistoryNorm(db, historyKey);
   computePeakRankMovementFields(byCategory, prevNorm, todayYmd);
@@ -7099,8 +6989,8 @@ async function hydrateWeeklyRankingEntriesRankMovement(db, entries) {
 }
 
 /**
- * 23:00 마스터·수동 full 집계 후 peak_rank_history 저장.
- * 당일 중간 집계는 ranksByCategory만 갱신하고 prevDayRanksByCategory(전일 23시 공식 순위)는 유지.
+ * 03:00(마스터 03:40) 공식 집계·수동 full 집계 후 peak_rank_history 저장.
+ * 당일 중간 집계는 ranksByCategory만 갱신하고 prevDayRanksByCategory(전일 03:00 공식 순위)는 유지.
  */
 async function applyPeakRankChanges(db, byCategory, historyKey) {
   if (!db || !historyKey || !byCategory || typeof byCategory !== "object") return;
@@ -7122,7 +7012,7 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
       rankChangesByCategory: snapFields.newRankChangesByCategory,
       previousRanksByCategory: snapFields.newPreviousRanksByCategory,
       prevDayRanksByCategory: snapFields.newPrevDayRanksByCategory,
-      officialBaselineLabel: "prev_day_23h_kst",
+      officialBaselineLabel: "prev_day_03h_kst",
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   } catch (eWrite) {
@@ -7996,6 +7886,10 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
       gender,
       sharedUsersSnap
     );
+    const tssBoard = boardsByGender[gender];
+    if (tssBoard && tssBoard.byCategory) {
+      await applyPeakRankChanges(db, tssBoard.byCategory, `peak_tss_weekly_${gender}`);
+    }
   }
   await persistWeeklyTssBoardsAndTop10(db, wStart, wEnd, boardsByGender);
 
@@ -8118,6 +8012,8 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
         name: e.name,
         totalTss: e.totalTss,
         is_private: e.is_private === true,
+        rankChange: e.rankChange,
+        previousBoardRank: e.previousBoardRank,
       }));
     }
     const keyTss = `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`;

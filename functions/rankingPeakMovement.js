@@ -203,12 +203,42 @@ function normalizePeakRankHistoryDoc(d) {
   };
 }
 
+function seoulTodayYmd() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
+function seoulYesterdayYmd(todayYmd) {
+  const today = String(todayYmd || seoulTodayYmd()).trim();
+  const parts = today.split("-").map(Number);
+  if (parts.length < 3 || !parts[0]) return today;
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  d.setDate(d.getDate() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function freezeOfficialPrevDayRanks(prevNorm, prevRanksCat, prevDayRanksCat, todayYmd) {
-  const isNewOfficialDay = !prevNorm.asOfSeoul || prevNorm.asOfSeoul < todayYmd;
+  const today = todayYmd || seoulTodayYmd();
+  const yesterday = seoulYesterdayYmd(today);
+  const asOf = String(prevNorm.asOfSeoul || "").trim();
+  const prevDay =
+    prevDayRanksCat && typeof prevDayRanksCat === "object" ? prevDayRanksCat : {};
+
+  /* 전일 03:00 공식 집계(as_of = today-1) 순위 */
+  if (asOf === yesterday && Object.keys(prevRanksCat).length > 0) {
+    return prevRanksCat;
+  }
+  /* 당일 재집계: 저장된 전일 baseline 유지 */
+  if (asOf === today && Object.keys(prevDay).length > 0) {
+    return prevDay;
+  }
+  const isNewOfficialDay = !asOf || asOf < today;
   if (isNewOfficialDay && Object.keys(prevRanksCat).length > 0) {
     return prevRanksCat;
   }
-  return prevDayRanksCat && typeof prevDayRanksCat === "object" ? prevDayRanksCat : {};
+  return prevDay;
 }
 
 function resolveOfficialPeakRankBaseline(prevNorm, prevRanksCat, prevDayRanksCat, todayYmd) {
@@ -219,10 +249,6 @@ function resolveOfficialPeakRankBaseline(prevNorm, prevRanksCat, prevDayRanksCat
   if (isNewOfficialDay && Object.keys(prevRanksCat).length > 0) return prevRanksCat;
   /* 당일 재집계: prev_day 비어 있으면 당일 ranks로 비교하지 않음(전원 보합 오표시 방지) */
   return {};
-}
-
-function seoulTodayYmd() {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
 }
 
 function peakRankUidRankMapsEqual(a, b) {
@@ -347,4 +373,5 @@ module.exports = {
   computePeakRankMovementFields,
   payloadHasRankMovement,
   seoulTodayYmd,
+  seoulYesterdayYmd,
 };
