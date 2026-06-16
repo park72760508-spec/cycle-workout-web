@@ -7707,20 +7707,24 @@ function initializeCurrentScreen(screenId) {
       (function tryInitRunJournal(retryCount) {
         retryCount = retryCount || 0;
         if (typeof window.updateRunJournalSubtitle === 'function') window.updateRunJournalSubtitle('( )');
-        if (typeof window.stelvioLoadDeferredModules === 'function' && retryCount === 0) {
+        if (retryCount === 0 && typeof window.stelvioLoadDeferredModules === 'function') {
           window.stelvioLoadDeferredModules().catch(function () {});
         }
-        if (typeof window.initRunTrainingJournalReact === 'function') {
-          setTimeout(function () {
-            window.initRunTrainingJournalReact();
-            window.dispatchEvent(new CustomEvent('run-journal-refresh'));
-          }, 100);
+        var mounted = typeof window.initRunTrainingJournalReact === 'function'
+          && window.initRunTrainingJournalReact() === true;
+        if (mounted) {
+          window.dispatchEvent(new CustomEvent('run-journal-refresh'));
           return;
         }
-        if (retryCount < 40) {
-          setTimeout(function () { tryInitRunJournal(retryCount + 1); }, 100);
+        if (retryCount < 60) {
+          setTimeout(function () { tryInitRunJournal(retryCount + 1); }, 120);
         } else {
-          console.warn('[RunJournal Init] initRunTrainingJournalReact 미로드');
+          console.warn('[RunJournal Init] RunTrainingJournalScreen 로드 실패');
+          var root = document.getElementById('run-journal-react-root');
+          if (root) {
+            root.style.display = 'block';
+            root.innerHTML = '<div class="journal-error-wrap"><p class="journal-error-msg">RUN 기록 화면을 불러오지 못했습니다. 페이지를 새로고침해 주세요.</p><button type="button" class="journal-retry-btn" onclick="location.reload()">새로고침</button></div>';
+          }
         }
       })(0);
       break;

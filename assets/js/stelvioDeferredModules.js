@@ -238,25 +238,7 @@
   }
 
   function registerRunJournalInit() {
-    if (typeof window.initRunTrainingJournalReact === 'function') return;
-    window.initRunTrainingJournalReact = function initRunTrainingJournalReact() {
-      var root = document.getElementById('run-journal-react-root');
-      if (!root || typeof ReactDOM === 'undefined' || typeof window.RunTrainingJournalScreen !== 'function') {
-        console.warn('[RunJournal React] 마운트 불가');
-        return;
-      }
-      root.style.display = 'block';
-      if (!root._runJournalRoot) {
-        root._runJournalRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
-        if (root._runJournalRoot) {
-          root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
-        } else if (typeof ReactDOM.render === 'function') {
-          ReactDOM.render(React.createElement(window.RunTrainingJournalScreen), root);
-        }
-      } else if (root._runJournalRoot.render) {
-        root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
-      }
-    };
+    /* index.html 인라인 initRunTrainingJournalReact 사용 — 중복 정의 방지 */
   }
 
   async function loadJournalBundle() {
