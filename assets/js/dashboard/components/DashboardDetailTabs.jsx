@@ -48,6 +48,15 @@
       if (s === 'cycle') return 'cycle';
     }
     var cat = userProfile && (userProfile.category || userProfile.sport_category);
+    var normalized = typeof window.normalizeUserSportCategory === 'function'
+      ? window.normalizeUserSportCategory(cat)
+      : String(cat || '').trim().toUpperCase();
+    if (normalized === 'CYCLE+RUN') {
+      if (typeof window.sportCategoryRoutes !== 'undefined' && typeof window.sportCategoryRoutes.getActiveSport === 'function') {
+        return window.sportCategoryRoutes.getActiveSport() === 'run' ? 'run' : 'cycle';
+      }
+      return 'cycle';
+    }
     if (cat && String(cat).trim().toUpperCase() === 'RUN') return 'run';
     return 'cycle';
   }
@@ -365,7 +374,10 @@
           typeof window.getWkgGradeInfo === 'function'
             ? window.getWkgGradeInfo(stats.wkg).grade
             : 'novice';
-        var myChallengeKey = normalizeDashboardChallengeKey(userProfile && userProfile.challenge, isRun);
+        var activeChallenge = (typeof window.resolveChallengeForSport === 'function')
+          ? window.resolveChallengeForSport(userProfile, isRun ? 'run' : 'cycle')
+          : (userProfile && userProfile.challenge);
+        var myChallengeKey = normalizeDashboardChallengeKey(activeChallenge, isRun);
         var challengeGuideRows = isRun ? RUN_CHALLENGE_GUIDE_ROWS : CYCLE_CHALLENGE_GUIDE_ROWS;
         var challengeGoalHeader = isRun ? '주간 목표 rTSS' : '목표 TSS';
         var challengeSectionTitle = isRun ? '훈련 등급(challenge) · 주간 목표 rTSS' : '훈련 등급(challenge) · 주간 목표 TSS';
