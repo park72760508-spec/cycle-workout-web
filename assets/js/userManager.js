@@ -4637,6 +4637,47 @@ function needsFtpForCategory(category) {
   return cat === USER_SPORT_CATEGORY_CYCLE || cat === USER_SPORT_CATEGORY_DUAL;
 }
 
+var RUN_CHALLENGE_KEYS_FALLBACK = ['fitness', 'cityrunner', 'challenger', 'sub3club', 'elite', 'pro'];
+var CYCLE_CHALLENGE_KEYS_FALLBACK = ['fitness', 'granfondo', 'ironman', 'racing', 'elite', 'pro'];
+
+function isRunChallengeKey(challenge) {
+  if (typeof window !== 'undefined' && typeof window.isKnownRunChallenge === 'function') {
+    return window.isKnownRunChallenge(challenge);
+  }
+  var n = String(challenge || '').trim().toLowerCase();
+  return RUN_CHALLENGE_KEYS_FALLBACK.indexOf(n) >= 0;
+}
+
+function isCycleChallengeKey(challenge) {
+  if (typeof window !== 'undefined' && typeof window.isKnownCycleChallenge === 'function') {
+    return window.isKnownCycleChallenge(challenge);
+  }
+  var n = String(challenge || '').trim().toLowerCase();
+  return CYCLE_CHALLENGE_KEYS_FALLBACK.indexOf(n) >= 0;
+}
+
+/**
+ * RUN 운동 목적 값 해석 — CYCLE 전용 값(Racing 등)은 RUN 맵에 없으면 제외
+ */
+function resolveRunChallengeValue(profile) {
+  var p = profile || {};
+  var runCh = String(p.run_challenge || '').trim();
+  if (runCh && isRunChallengeKey(runCh)) return runCh;
+  var legacy = String(p.challenge || '').trim();
+  if (legacy && isRunChallengeKey(legacy)) return legacy;
+  return 'Fitness';
+}
+
+/**
+ * CYCLE 운동 목적 값 해석
+ */
+function resolveCycleChallengeValue(profile) {
+  var p = profile || {};
+  var cycleCh = String(p.challenge || '').trim();
+  if (cycleCh && isCycleChallengeKey(cycleCh)) return cycleCh;
+  return 'Fitness';
+}
+
 /**
  * 활성 스포츠(cycle|run)에 맞는 운동 목적 — 주간 TSS·AI 분석용
  * @param {object} profile
@@ -4655,14 +4696,14 @@ function resolveChallengeForSport(profile, sport) {
   }
   if (cat === USER_SPORT_CATEGORY_DUAL) {
     if (activeSport === 'run') {
-      return String(p.run_challenge || p.challenge || 'Fitness').trim() || 'Fitness';
+      return resolveRunChallengeValue(p);
     }
-    return String(p.challenge || 'Fitness').trim() || 'Fitness';
+    return resolveCycleChallengeValue(p);
   }
   if (cat === USER_SPORT_CATEGORY_RUN) {
-    return String(p.run_challenge || p.challenge || 'Fitness').trim() || 'Fitness';
+    return resolveRunChallengeValue(p);
   }
-  return String(p.challenge || 'Fitness').trim() || 'Fitness';
+  return resolveCycleChallengeValue(p);
 }
 
 function readChallengeFieldsFromForm(formKey) {

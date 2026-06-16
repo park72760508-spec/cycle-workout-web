@@ -51,6 +51,23 @@ function resolveTrainingLevel(levelsMap, challenge, logPrefix) {
   return { level: level, levelKey: levelKey };
 }
 
+function isKnownChallengeInMap(levelsMap, challenge) {
+  var normalized = String(challenge || '').trim().toLowerCase();
+  if (!normalized) return false;
+  for (var key in levelsMap) {
+    if (key.toLowerCase() === normalized) return true;
+  }
+  return false;
+}
+
+function isKnownRunChallenge(challenge) {
+  return isKnownChallengeInMap(RUN_TRAINING_LEVELS, challenge);
+}
+
+function isKnownCycleChallenge(challenge) {
+  return isKnownChallengeInMap(TRAINING_LEVELS, challenge);
+}
+
 function getWeeklyTargetTSS(challenge, customTarget) {
   var resolved = resolveTrainingLevel(TRAINING_LEVELS, challenge, 'getWeeklyTargetTSS');
   var level = resolved.level;
@@ -189,5 +206,7 @@ if (typeof window !== 'undefined') {
   window.getWeeklyTargetTSS = getWeeklyTargetTSS;
   window.getWeeklyTargetRtss = getWeeklyTargetRtss;
   window.calculateWeeklyProgress = calculateWeeklyProgress;
+  window.isKnownRunChallenge = isKnownRunChallenge;
+  window.isKnownCycleChallenge = isKnownCycleChallenge;
   window.saveLaptopTrainingResultAtEnd = saveLaptopTrainingResultAtEnd;
 }
