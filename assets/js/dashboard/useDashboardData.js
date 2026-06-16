@@ -392,10 +392,112 @@
       sixMonthsAgo.setDate(1);
       var sixMonthsStr = sixMonthsAgo.getFullYear() + '-' + pad2(sixMonthsAgo.getMonth() + 1) + '-' + pad2(sixMonthsAgo.getDate());
 
-      async function loadRecentLogs() {
+      function formatPrDateMmDd(ds) {
+        if (!ds) return null;
+        var parts = String(ds).split('-');
+        if (parts.length >= 3) {
+          return parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10);
+        }
+        return null;
+      }
+
+      /** yearly_peaks 피크와 동일한 로그인지 (W/kg·반올림 허용) */
+      function logMatchesYearlyPeak(log, field, peaks, userWeight) {
+        if (!log || !peaks || !field) return false;
+        var peakWatts = Math.round(Number(peaks[field]) || 0);
+        if (peakWatts <= 0) return false;
+        var logWatts = Math.round(Number(log[field]) || 0);
+        if (logWatts <= 0) return false;
+        if (logWatts === peakWatts) return true;
+        if (field.indexOf('_watts') < 0) return false;
+        var peakWkg = peaks[field.replace('_watts', '_wkg')];
+        var weightKg = typeof window.getWeightForPr === 'function'
+          ? window.getWeightForPr(log, userWeight)
+          : (Number(userWeight) || 0);
+        if (weightKg <= 0 || peakWkg == null || peakWkg === '') return false;
+        var logWkg = typeof window.toWkg2Decimals === 'function'
+          ? window.toWkg2Decimals(logWatts, weightKg)
+          : Math.round((logWatts / weightKg) * 100) / 100;
+        peakWkg = Math.round(Number(peakWkg) * 100) / 100;
+        return logWkg != null && logWkg === peakWkg;
+      }
+
+      function findYearlyPrAchievedDate(logs, field, peaks, userWeight) {
+        if (!Array.isArray(logs) || !peaks || !field) return null;
+        var bestDate = null;
+        for (var li = 0; li < logs.length; li++) {
+          if (!logMatchesYearlyPeak(logs[li], field, peaks, userWeight)) continue;
+          var ds = parseDate(logs[li].date);
+          if (ds && (!bestDate || ds > bestDate)) bestDate = ds;
+        }
+        return formatPrDateMmDd(bestDate);
+      }
+
+      async function fetchLogsForCurrentYear(userId, year, todayStr) {
+        var yearStart = year + '-01-01';
+        var merged = [];
+        if (typeof window.getTrainingLogsByDateRange === 'function') {
+          var endMonth = new Date(todayStr + 'T00:00:00');
+          var dM = new Date(year, 0, 1);
+          var endBound = new Date(endMonth.getFullYear(), endMonth.getMonth(), 1);
+          while (dM <= endBound) {
+            try {
+              var monthLogs = await window.getTrainingLogsByDateRange(userId, dM.getFullYear(), dM.getMonth());
+              if (Array.isArray(monthLogs)) merged = merged.concat(monthLogs);
+            } catch (e) {}
+            dM.setMonth(dM.getMonth() + 1);
+          }
+        }
+        merged = merged.filter(function(log) {
+          var ds = parseDate(log.date);
+          return ds && ds >= yearStart && ds <= todayStr;
+        });
+        if (typeof window.dedupeTrainingLogsByDateStravaFirst === 'function') {
+          merged = window.dedupeTrainingLogsByDateStravaFirst(merged);
+        }
+        return merged;
+      }
+
+      async function loadYearlyPowerPrData(userId, userWeight, todayStr, fallbackLogs) {
+        var currentYear = today.getFullYear();
+        var prConfig = [
+          { field: 'max_watts', label: 'Max' },
+          { field: 'max_1min_watts', label: '1분' },
+          { field: 'max_5min_watts', label: '5분' },
+          { field: 'max_10min_watts', label: '10분' },
+          { field: 'max_20min_watts', label: '20분' },
+          { field: 'max_40min_watts', label: '40분' },
+          { field: 'max_60min_watts', label: '60분' }
+        ];
+        var peaksPromise = (typeof window.fetchYearlyPeaksForYear === 'function')
+          ? window.fetchYearlyPeaksForYear(userId, currentYear).catch(function() { return null; })
+          : Promise.resolve(null);
+        var logsPromise = fetchLogsForCurrentYear(userId, currentYear, todayStr);
+        var peaks = await peaksPromise;
+        var logsYear = await logsPromise;
+        if ((!logsYear || !logsYear.length) && fallbackLogs && fallbackLogs.length) {
+          logsYear = fallbackLogs;
+        }
+        var userW = Number(userWeight) || 0;
+        return prConfig.map(function(cfg) {
+          var pw = peaks ? (Number(peaks[cfg.field]) || 0) : 0;
+          var pk = peaks && peaks[cfg.field.replace('_watts', '_wkg')] != null
+            ? Math.round(Number(peaks[cfg.field.replace('_watts', '_wkg')]) * 100) / 100
+            : (userW > 0 && pw > 0 ? Math.round((pw / userW) * 100) / 100 : 0);
+          var dateStr = peaks
+            ? findYearlyPrAchievedDate(logsYear, cfg.field, peaks, userW)
+            : null;
+          return { label: cfg.label, watts: pw, wkg: pk > 0 ? pk : null, dateStr: dateStr || null };
+        });
+      }
+
+      async function loadRecentLogs(forceRefresh) {
         setLogsLoading(true);
         setLogsLoadError(null);
         try {
+          if (forceRefresh && typeof window.refreshLogsReadRouting === 'function') {
+            try { await window.refreshLogsReadRouting(true); } catch (e) {}
+          }
           // Phase 6: getUserTrainingLogs → logsReadRouter(Supabase rides | Firestore logs)
           var raw = [];
           if (typeof window.getUserTrainingLogs === 'function') {
@@ -519,13 +621,21 @@
             }
             var monthW = [0, 0, 0, 0, 0, 0, 0];
             var monthH = [0, 0, 0, 0, 0, 0, 0];
+            var monthPeakDateW = [null, null, null, null, null, null, null];
+            var monthPeakDateH = [null, null, null, null, null, null, null];
             Object.keys(byDateGrowth).forEach(function(ds) {
               if (ds < startStr || ds > endStr) return;
               var day = byDateGrowth[ds];
               var si2;
               for (si2 = 0; si2 < 7; si2++) {
-                if (day.w[si2] > monthW[si2]) monthW[si2] = day.w[si2];
-                if (day.h[si2] > monthH[si2]) monthH[si2] = day.h[si2];
+                if (day.w[si2] > monthW[si2]) {
+                  monthW[si2] = day.w[si2];
+                  monthPeakDateW[si2] = ds;
+                }
+                if (day.h[si2] > monthH[si2]) {
+                  monthH[si2] = day.h[si2];
+                  monthPeakDateH[si2] = ds;
+                }
               }
             });
             var monthLabel = m + '월';
@@ -533,8 +643,12 @@
             growthRows.push({
               monthLabel: monthLabel,
               sortKey: y + '-' + pad2(m),
+              startStr: startStr,
+              endStr: endStr,
               growthWattsSlots: monthW.map(function(v) { return v > 0 ? v : null; }),
               growthHrSlots: monthH.map(function(v) { return v > 0 ? v : null; }),
+              growthWattsPeakDates: monthPeakDateW.slice(),
+              growthHrPeakDates: monthPeakDateH.slice(),
               max20minWatts: monthW[4] > 0 ? monthW[4] : null,
               maxHr20min: monthH[4] > 0 ? monthH[4] : null
             });
@@ -689,51 +803,21 @@
             window.persistWeeklyTssDemographicSampleAsync(userProfile, weeklyTssRows).catch(function () {});
           }
 
-          var currentYear = today.getFullYear();
-          var yearStart = currentYear + '-01-01';
-          var logsYear = raw.filter(function(log) {
+          var yearStart = today.getFullYear() + '-01-01';
+          var logsYearFallback = raw.filter(function(log) {
             var ds = parseDate(log.date);
             return ds && ds >= yearStart && ds <= todayStr;
           });
           if (typeof window.dedupeTrainingLogsByDateStravaFirst === 'function') {
-            logsYear = window.dedupeTrainingLogsByDateStravaFirst(logsYear);
+            logsYearFallback = window.dedupeTrainingLogsByDateStravaFirst(logsYearFallback);
           }
-          var prConfig = [
-            { field: 'max_watts', label: 'Max' },
-            { field: 'max_1min_watts', label: '1분' },
-            { field: 'max_5min_watts', label: '5분' },
-            { field: 'max_10min_watts', label: '10분' },
-            { field: 'max_20min_watts', label: '20분' },
-            { field: 'max_40min_watts', label: '40분' },
-            { field: 'max_60min_watts', label: '60분' }
-          ];
-          (async function() {
-            var peaks = null;
-            if (typeof window.fetchYearlyPeaksForYear === 'function') {
-              try { peaks = await window.fetchYearlyPeaksForYear(userProfile.id, currentYear); } catch (e) {}
-            }
-            var userW = Number(userProfile.weight) || 0;
-            var prRows = prConfig.map(function(cfg) {
-              var pw = peaks ? (Number(peaks[cfg.field]) || 0) : 0;
-              var pk = peaks && peaks[cfg.field.replace('_watts', '_wkg')] != null
-                ? Math.round(Number(peaks[cfg.field.replace('_watts', '_wkg')]) * 100) / 100
-                : (userW > 0 && pw > 0 ? Math.round((pw / userW) * 100) / 100 : 0);
-              var dateStr = null;
-              for (var li = 0; li < logsYear.length; li++) {
-                var log = logsYear[li];
-                if ((Number(log[cfg.field]) || 0) === pw) {
-                  var ds = parseDate(log.date);
-                  if (ds) {
-                    var parts = ds.split('-');
-                    dateStr = (parts[1] && parts[2]) ? parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10) : null;
-                  }
-                  break;
-                }
-              }
-              return { label: cfg.label, watts: pw, wkg: pk > 0 ? pk : null, dateStr: dateStr || null };
+          loadYearlyPowerPrData(userProfile.id, userProfile.weight, todayStr, logsYearFallback)
+            .then(function(prRows) {
+              if (isMounted) setYearlyPowerPrData(prRows);
+            })
+            .catch(function(e) {
+              console.warn('[Dashboard] yearly PR load failed:', e);
             });
-            if (isMounted) setYearlyPowerPrData(prRows);
-          })();
 
           retryLogsRef.current = loadRecentLogs;
         } catch (e) {
@@ -756,6 +840,18 @@
         retryLogsRef.current = null;
       };
     }, [userProfile]);
+
+    // Strava 동기화·저널 갱신 시 yearly_peaks·로그 재조회 (저널과 동일 이벤트)
+    useEffect(function dashboardLogsRefreshSubscribe() {
+      function onRefresh(ev) {
+        var force = !(ev && ev.detail && ev.detail.force === false);
+        if (retryLogsRef.current) retryLogsRef.current(force);
+      }
+      window.addEventListener('journal-training-logs-refresh', onRefresh);
+      return function() {
+        window.removeEventListener('journal-training-logs-refresh', onRefresh);
+      };
+    }, []);
 
     // --- AI Coach Analysis ---
     useEffect(function coachAnalysisEffect() {
