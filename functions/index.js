@@ -6740,8 +6740,10 @@ const ALLOW_RANKING_HTTP_LIVE_REBUILD = process.env.ALLOW_RANKING_HTTP_LIVE_REBU
 const RANKING_HTTP_STALE_FALLBACK_MS = 14 * 24 * 60 * 60 * 1000;
 /** 동일 cacheKey HTTP 라이브 재집계 동시 실행 방지(23~01시 접속 폭주 시 users 전체 스캔 중복 억제) */
 const RANKING_HTTP_LIVE_REBUILD_LOCK_MS = 10 * 60 * 1000;
-/** A안: 15~22시 시간별 TSS 보강 — 집계가 이 시간보다 오래됐을 때만 전체 스캔 */
+/** (레거시) stale 판정용 — 일 2회(03:40·09:00) 집계로 대체, 수동 호출 시에만 사용 */
 const RANKING_HOURLY_TSS_REFRESH_MIN_AGE_MS = 90 * 60 * 1000;
+/** KST 09:00 — 주간 마일리지 TOP10·TSS 보드 낮 1회 전체 재집계 */
+const WEEKLY_MILEAGE_TOP10_DAYTIME_CRON = "0 9 * * *";
 const RANKING_MASTER_REBUILD_META_DOC = "master_daily_rebuild";
 /** 수동 부분 집계(피크·독주·거리) 진행 상태 */
 const RANKING_PHASE_REBUILD_META_DOC = "manual_ranking_phase_rebuild";
@@ -7969,7 +7971,7 @@ async function applyGroupRankingParticipationForViewer(db, byCategory, entries, 
 }
 
 /**
- * 주간 TSS·TOP10 전체 스캔 집계 (수동·마스터 23:00·90분 초과 시 시간별 보강).
+ * 주간 TSS·TOP10 전체 스캔 집계 (수동·마스터 03:40·09:00 스케줄).
  * @param {FirebaseFirestore.Firestore} db
  */
 async function refreshWeeklyMileageTop10AggregatesOnly(db) {
@@ -8041,7 +8043,7 @@ async function refreshWeeklyTssMidnightIncremental(db) {
 }
 
 /**
- * A안 15~22시 — 집계가 90분 이상 지났을 때만 전체 TSS 스캔 (23:00 마스터 직후 중복 방지).
+ * (레거시) 집계가 minAgeMs 이상 지났을 때만 전체 TSS 스캔 — 일 2회 스케줄로 대체됨.
  */
 async function refreshWeeklyMileageTop10IfStale(db, minAgeMs) {
   const maxAge = minAgeMs != null ? minAgeMs : RANKING_HOURLY_TSS_REFRESH_MIN_AGE_MS;
@@ -8479,10 +8481,10 @@ exports.manualRebuildRankingPhase = onRequest(
   }
 );
 
-/** KST 15~22시 매 정시 — 집계가 90분↑ 지났을 때만 TSS·TOP10 전체 스캔 (A안) */
+/** KST 09:00 — 주간 마일리지 TOP10·TSS 보드 전체 재집계 (낮 1회, 03:40 마스터와 별도) */
 exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   {
-    schedule: "0 15-22 * * *",
+    schedule: WEEKLY_MILEAGE_TOP10_DAYTIME_CRON,
     timeZone: "Asia/Seoul",
     memory: "1GiB",
     timeoutSeconds: 540,
@@ -8491,8 +8493,8 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
     const db = admin.firestore();
     try {
       if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledWeeklyTop10PeakRefresh"))) return;
-      const r = await refreshWeeklyMileageTop10IfStale(db);
-      console.log("[scheduledWeeklyTop10PeakRefresh]", r);
+      const r = await refreshWeeklyMileageTop10AggregatesOnly(db);
+      console.log("[scheduledWeeklyTop10PeakRefresh] 09:00 KST TOP10 refresh", r);
     } catch (e) {
       console.error("[scheduledWeeklyTop10PeakRefresh]", e && e.message ? e.message : e);
       throw e;
@@ -8500,26 +8502,7 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   }
 );
 
-/** KST 00:05 — endStr 롤오버 증분 집계 (전일 캐시 + 오늘 1일 버킷, A안) */
-exports.scheduledWeeklyTssMidnightRefresh = onSchedule(
-  {
-    schedule: "5 0 * * *",
-    timeZone: "Asia/Seoul",
-    memory: "1GiB",
-    timeoutSeconds: 540,
-  },
-  async () => {
-    const db = admin.firestore();
-    try {
-      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledWeeklyTssMidnightRefresh"))) return;
-      const r = await refreshWeeklyTssMidnightIncremental(db);
-      console.log("[scheduledWeeklyTssMidnightRefresh] ok", r);
-    } catch (e) {
-      console.error("[scheduledWeeklyTssMidnightRefresh]", e && e.message ? e.message : e);
-      throw e;
-    }
-  }
-);
+/** @deprecated KST 00:05 증분 스케줄 제거 — TOP10은 03:40 마스터 + 09:00 2회만 갱신. refreshWeeklyTssMidnightIncremental()은 수동용 유지 */
 
 /**
  * KST 02:50 — Strava 00:10 갭 탐지 직후 peak_28d rollup → 피크 보드(21) → 헵타곤 GC.
