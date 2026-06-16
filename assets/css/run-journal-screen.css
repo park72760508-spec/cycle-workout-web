@@ -19,6 +19,17 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+#runTrainingJournalScreen .journal-calendar-widget.card .mini-calendar-month-year {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day .mini-calendar-day-num {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 #runTrainingJournalScreen button.mini-calendar-day.run-journal-day {
   flex-direction: column;
   justify-content: center;
