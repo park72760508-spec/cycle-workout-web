@@ -73,7 +73,11 @@ try {
     // Firestore 초기화 (WebChannel 400 오류 방지: Long Polling 강제)
     firestore = firebase.firestore();
     try {
-        firestore.settings({ experimentalForceLongPolling: true, merge: true });
+        firestore.settings({
+          experimentalForceLongPolling: true,
+          useFetchStreams: false,
+          merge: true
+        });
         console.log("🔥 Firestore Long Polling 적용 (WebChannel 400 방지)");
     } catch (e) {
         if (e.message && (e.message.indexOf('already been started') !== -1 || e.message.indexOf('settings can no longer be changed') !== -1)) {
