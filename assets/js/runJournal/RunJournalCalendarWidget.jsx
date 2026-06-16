@@ -15,6 +15,21 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
+  function isHoliday(year, month, day) {
+    var date = new Date(year, month, day);
+    if (date.getDay() === 0) return false;
+    var fixed = [
+      { month: 0, day: 1 }, { month: 2, day: 1 }, { month: 4, day: 5 },
+      { month: 5, day: 6 }, { month: 7, day: 15 }, { month: 9, day: 3 },
+      { month: 9, day: 9 }, { month: 11, day: 25 }
+    ];
+    if (month === 4 && day === 15) return true;
+    for (var i = 0; i < fixed.length; i++) {
+      if (month === fixed[i].month && day === fixed[i].day) return true;
+    }
+    return false;
+  }
+
   function isOutdoorLog(log) {
     var eg = log && log.elevation_gain;
     return eg != null && eg !== '' && !Number.isNaN(Number(eg)) && Number(eg) > 0;
@@ -48,7 +63,7 @@
     var daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     var todayKey = getDateKey(new Date());
     var cells = [];
-    var i, day, key, logs, hasPr, hasI, hasO;
+    var i, day, key, logs, hasPr, hasI, hasO, d, dow, dayCls;
 
     for (i = 0; i < startDow; i++) {
       cells.push(R.createElement('div', { key: 'e' + i, className: 'mini-calendar-day empty' }));
@@ -59,10 +74,16 @@
       hasPr = logs.length > 0 && pr().logsHaveAnyPr(logs, props.effortsByActivityId, yearlyPacePrByYear);
       hasI = logs.length > 0 && hasIndoor(logs);
       hasO = logs.length > 0 && hasOutdoor(logs);
+      d = new Date(currentYear, currentMonth, day);
+      dow = d.getDay();
+      dayCls = '';
+      if (dow === 0) dayCls = ' sunday';
+      else if (isHoliday(currentYear, currentMonth, day)) dayCls = ' holiday';
+      else if (dow === 6) dayCls = ' saturday';
       cells.push(R.createElement('button', {
         key: key,
         type: 'button',
-        className: 'mini-calendar-day run-journal-day' +
+        className: 'mini-calendar-day run-journal-day' + dayCls +
           (logs.length ? ' has-training' : '') +
           (key === todayKey ? ' today' : '') +
           (selectedDate === key ? ' selected' : '') +
@@ -102,19 +123,7 @@
           return R.createElement('div', { key: w, className: 'mini-calendar-weekday' }, w);
         })
       ),
-      R.createElement('div', { className: 'mini-calendar-grid' }, cells),
-      R.createElement('div', { className: 'journal-strava-legend-row run-journal-legend' },
-        R.createElement('div', { className: 'journal-legend' },
-          R.createElement('span', { className: 'legend-row' },
-            R.createElement('span', { className: 'legend-dot run-legend-dot run-legend-dot-outdoor' }),
-            R.createElement('span', null, 'Outdoor')
-          ),
-          R.createElement('span', { className: 'legend-row' },
-            R.createElement('span', { className: 'legend-dot run-legend-dot run-legend-dot-indoor' }),
-            R.createElement('span', null, 'Indoor')
-          )
-        )
-      )
+      R.createElement('div', { className: 'mini-calendar-grid' }, cells)
     );
   }
 
