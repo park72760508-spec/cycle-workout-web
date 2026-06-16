@@ -6737,7 +6737,12 @@
         window.updateRunJournalSubtitle = updateRunJournalSubtitle;
       })();
     </script>
-    <div id="run-journal-react-root" style="display: none; margin-top: 0;"></div>
+    <div id="run-journal-react-root" style="display: block; margin-top: 0;">
+      <div class="journal-loading-wrap" aria-live="polite">
+        <div class="journal-loading-spinner"></div>
+        <p class="journal-loading-text">RUN 로그 불러오는 중...</p>
+      </div>
+    </div>
   </div>
 
   <!-- Strava 동기화 모달 (grade=1 관리자용, STELVIO 디자인): MMP 수집만, 2개 버튼 -->
@@ -25760,6 +25765,13 @@
   <script src="assets/js/journal/JournalDetailBottomSheet.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalMonthlyDashboard.jsx" type="text/babel"></script>
   <script src="assets/js/journal/TrainingJournalScreen.jsx" type="text/babel"></script>
+  <!-- RUN 기록 일지 (CYCLE 라이딩 기록과 분리) -->
+  <script defer src="assets/js/runJournal/runJournalPrUtils.js"></script>
+  <script defer src="assets/js/runJournal/useRunJournalData.js"></script>
+  <script src="assets/js/runJournal/RunJournalCalendarWidget.jsx" type="text/babel"></script>
+  <script src="assets/js/runJournal/RunJournalDailySummary.jsx" type="text/babel"></script>
+  <script src="assets/js/runJournal/RunJournalDetailBottomSheet.jsx" type="text/babel"></script>
+  <script src="assets/js/runJournal/RunTrainingJournalScreen.jsx" type="text/babel"></script>
   <!-- 러닝 랭킹보드 -->
   <script src="assets/js/runDistanceZoneColors.js"></script>
   <script src="assets/js/runningRanking/runningRankingConfig.js"></script>
@@ -25848,9 +25860,15 @@
     (function() {
       function initRunTrainingJournalReact() {
         var root = document.getElementById('run-journal-react-root');
-        if (!root || typeof ReactDOM === 'undefined' || typeof window.RunTrainingJournalScreen !== 'function') {
-          console.warn('[RunJournal React] 마운트 불가');
-          return;
+        if (!root) {
+          console.warn('[RunJournal React] root 없음');
+          return false;
+        }
+        if (typeof ReactDOM === 'undefined' || typeof React === 'undefined') {
+          return false;
+        }
+        if (typeof window.RunTrainingJournalScreen !== 'function') {
+          return false;
         }
         root.style.display = 'block';
         if (!root._runJournalRoot) {
@@ -25860,6 +25878,7 @@
         } else if (root._runJournalRoot.render) {
           root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
         }
+        return true;
       }
       window.initRunTrainingJournalReact = initRunTrainingJournalReact;
     })();
