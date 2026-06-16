@@ -401,36 +401,33 @@
         return null;
       }
 
-      /** yearly_peaks 피크와 동일한 로그인지 (W/kg·반올림 허용) */
-      function logMatchesYearlyPeak(log, field, peaks, userWeight) {
-        if (!log || !peaks || !field) return false;
-        var peakWatts = Math.round(Number(peaks[field]) || 0);
-        if (peakWatts <= 0) return false;
-        var logWatts = Math.round(Number(log[field]) || 0);
-        if (logWatts <= 0) return false;
-        if (logWatts === peakWatts) return true;
-        if (field.indexOf('_watts') < 0) return false;
-        var peakWkg = peaks[field.replace('_watts', '_wkg')];
-        var weightKg = typeof window.getWeightForPr === 'function'
-          ? window.getWeightForPr(log, userWeight)
-          : (Number(userWeight) || 0);
-        if (weightKg <= 0 || peakWkg == null || peakWkg === '') return false;
-        var logWkg = typeof window.toWkg2Decimals === 'function'
-          ? window.toWkg2Decimals(logWatts, weightKg)
-          : Math.round((logWatts / weightKg) * 100) / 100;
-        peakWkg = Math.round(Number(peakWkg) * 100) / 100;
-        return logWkg != null && logWkg === peakWkg;
-      }
-
-      function findYearlyPrAchievedDate(logs, field, peaks, userWeight) {
-        if (!Array.isArray(logs) || !peaks || !field) return null;
+      /** yearly_peaks 값과 일치하는 로그 중 최신 달성일 (dedupe 없이 전 로그 스캔) */
+      function findLatestLogDateForPeakWatts(logs, field, peakWatts, userWeight) {
+        if (!Array.isArray(logs) || !field || peakWatts <= 0) return null;
+        var targetW = Math.round(Number(peakWatts) || 0);
         var bestDate = null;
         for (var li = 0; li < logs.length; li++) {
-          if (!logMatchesYearlyPeak(logs[li], field, peaks, userWeight)) continue;
-          var ds = parseDate(logs[li].date);
+          var log = logs[li];
+          var logW = Math.round(Number(log[field]) || 0);
+          if (logW <= 0) continue;
+          var match = logW === targetW;
+          if (!match && field.indexOf('_watts') >= 0) {
+            var peakWkg = null;
+            var weightKg = typeof window.getWeightForPr === 'function'
+              ? window.getWeightForPr(log, userWeight)
+              : (Number(userWeight) || 0);
+            if (weightKg > 0 && typeof window.toWkg2Decimals === 'function') {
+              var logWkg = window.toWkg2Decimals(logW, weightKg);
+              if (logWkg != null && logWkg === Math.round((targetW / Math.max(weightKg, 45)) * 100) / 100) {
+                match = true;
+              }
+            }
+          }
+          if (!match) continue;
+          var ds = parseDate(log.date);
           if (ds && (!bestDate || ds > bestDate)) bestDate = ds;
         }
-        return formatPrDateMmDd(bestDate);
+        return bestDate;
       }
 
       async function fetchLogsForCurrentYear(userId, year, todayStr) {
@@ -448,17 +445,13 @@
             dM.setMonth(dM.getMonth() + 1);
           }
         }
-        merged = merged.filter(function(log) {
+        return merged.filter(function(log) {
           var ds = parseDate(log.date);
           return ds && ds >= yearStart && ds <= todayStr;
         });
-        if (typeof window.dedupeTrainingLogsByDateStravaFirst === 'function') {
-          merged = window.dedupeTrainingLogsByDateStravaFirst(merged);
-        }
-        return merged;
       }
 
-      async function loadYearlyPowerPrData(userId, userWeight, todayStr, fallbackLogs) {
+      async function loadYearlyPowerPrData(userId, userWeight, todayStr) {
         var currentYear = today.getFullYear();
         var prConfig = [
           { field: 'max_watts', label: 'Max' },
@@ -475,19 +468,31 @@
         var logsPromise = fetchLogsForCurrentYear(userId, currentYear, todayStr);
         var peaks = await peaksPromise;
         var logsYear = await logsPromise;
-        if ((!logsYear || !logsYear.length) && fallbackLogs && fallbackLogs.length) {
-          logsYear = fallbackLogs;
-        }
         var userW = Number(userWeight) || 0;
+        var fromLogs = typeof window.aggregateYearlyPrWithDatesFromLogs === 'function'
+          ? window.aggregateYearlyPrWithDatesFromLogs(logsYear, userW)
+          : {};
         return prConfig.map(function(cfg) {
-          var pw = peaks ? (Number(peaks[cfg.field]) || 0) : 0;
-          var pk = peaks && peaks[cfg.field.replace('_watts', '_wkg')] != null
+          var logPr = fromLogs[cfg.field] || { watts: 0, wkg: null, dateYmd: null };
+          var peakW = peaks ? Math.round(Number(peaks[cfg.field]) || 0) : 0;
+          var peakWkg = peaks && peaks[cfg.field.replace('_watts', '_wkg')] != null
             ? Math.round(Number(peaks[cfg.field.replace('_watts', '_wkg')]) * 100) / 100
-            : (userW > 0 && pw > 0 ? Math.round((pw / userW) * 100) / 100 : 0);
-          var dateStr = peaks
-            ? findYearlyPrAchievedDate(logsYear, cfg.field, peaks, userW)
             : null;
-          return { label: cfg.label, watts: pw, wkg: pk > 0 ? pk : null, dateStr: dateStr || null };
+          var watts = logPr.watts || 0;
+          var wkg = logPr.wkg;
+          var dateYmd = logPr.dateYmd;
+          if (peakW > watts) {
+            watts = peakW;
+            wkg = peakWkg != null ? peakWkg : (userW > 0 && watts > 0 ? Math.round((watts / userW) * 100) / 100 : null);
+            var peakDate = findLatestLogDateForPeakWatts(logsYear, cfg.field, peakW, userW);
+            if (peakDate) dateYmd = peakDate;
+          }
+          return {
+            label: cfg.label,
+            watts: watts,
+            wkg: wkg != null && wkg > 0 ? wkg : (userW > 0 && watts > 0 ? Math.round((watts / userW) * 100) / 100 : null),
+            dateStr: formatPrDateMmDd(dateYmd) || null
+          };
         });
       }
 
@@ -803,15 +808,7 @@
             window.persistWeeklyTssDemographicSampleAsync(userProfile, weeklyTssRows).catch(function () {});
           }
 
-          var yearStart = today.getFullYear() + '-01-01';
-          var logsYearFallback = raw.filter(function(log) {
-            var ds = parseDate(log.date);
-            return ds && ds >= yearStart && ds <= todayStr;
-          });
-          if (typeof window.dedupeTrainingLogsByDateStravaFirst === 'function') {
-            logsYearFallback = window.dedupeTrainingLogsByDateStravaFirst(logsYearFallback);
-          }
-          loadYearlyPowerPrData(userProfile.id, userProfile.weight, todayStr, logsYearFallback)
+          loadYearlyPowerPrData(userProfile.id, userProfile.weight, todayStr)
             .then(function(prRows) {
               if (isMounted) setYearlyPowerPrData(prRows);
             })
