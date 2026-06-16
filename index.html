@@ -33054,6 +33054,21 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       if (slot === 4 && d.maxHr20min != null && d.maxHr20min > 0) return d.maxHr20min;
       return null;
     }
+    /** 선택 구간 피크 달성일 → MM-DD (최근 1개월 파워 그래프 monthPowerBadgeMmDd와 동일 형식) */
+    function growthTrendGetPeakDateLabel(d, slot) {
+      if (!d) return '—';
+      var ds = d.growthWattsPeakDates && d.growthWattsPeakDates[slot];
+      if (!ds || String(ds).length < 8) {
+        ds = d.growthHrPeakDates && d.growthHrPeakDates[slot];
+      }
+      if (ds && String(ds).length >= 8) {
+        var p = String(ds).split('-');
+        if (p.length >= 3) {
+          return String(p[1]).padStart(2, '0') + '-' + String(p[2]).padStart(2, '0');
+        }
+      }
+      return '—';
+    }
     function GrowthTrendChart(props) {
       var p = props || {};
       var data = p.data;
@@ -33464,7 +33479,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               ' / ' +
               (gH != null && gH > 0 ? Math.round(gH) + ' bpm' : '— bpm');
             var gLab = GROWTH_PR_CIRCLE_LABELS[selectedSlot] || '';
-            var gDate = (gRow && (gRow.dateLabel || gRow.monthLabel)) || '—';
+            var gDate = growthTrendGetPeakDateLabel(gRow, selectedSlot);
             var gSub = gLab + ' | ' + gDate;
             if (gSub.length > 22) gSub = gSub.slice(0, 20) + '…';
             var gPanelBg =
