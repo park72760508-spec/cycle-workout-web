@@ -342,7 +342,7 @@
         var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
         var challenge = (typeof window.resolveChallengeForSport === 'function')
           ? window.resolveChallengeForSport(selectedUser, 'run')
-          : (selectedUser.challenge || 'Fitness');
+          : (selectedUser.run_challenge || selectedUser.challenge || 'Fitness');
         var weeklyTarget = 175;
         if (typeof window.getWeeklyTargetRtss === 'function') {
           var ti = window.getWeeklyTargetRtss(challenge);
