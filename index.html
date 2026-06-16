@@ -2801,6 +2801,7 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css" />
+  <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
   <link rel="preload" href="assets/img/stelvio.svg" as="image" type="image/svg+xml" />
   <!-- WebP를 assets/img에 배포한 뒤: 각 <picture> 안에 <source type="image/webp" srcset="..."> 추가 + (선택) 상단 preload 2개 -->
@@ -4117,7 +4118,7 @@
                   </picture>
                 </div>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-journal my-career-icon-btn" id="btnCareerJournal" onclick="if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }" title="라이딩 기록">
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-journal my-career-icon-btn" id="btnCareerJournal" onclick="if (typeof openJournalForActiveSport === 'function') { openJournalForActiveSport(); } else if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }" title="라이딩 기록">
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
@@ -6715,6 +6716,28 @@
     
     <!-- Monthly Training Analysis Dashboard (React, below calendar) -->
     <div id="monthly-analysis-dashboard-root" style="width: 100%; box-sizing: border-box;"></div>
+  </div>
+
+  <!-- RUN 기록 화면 (CYCLE 라이딩 기록과 분리) -->
+  <div id="runTrainingJournalScreen" class="screen">
+    <div class="header" style="display: flex; align-items: center; justify-content: space-between;">
+      <span style="width: 2.5em; flex-shrink: 0;" aria-hidden="true"></span>
+      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> Run 기록</h1>
+      <span style="width: 2.5em; flex-shrink: 0;"></span>
+    </div>
+    <p class="subtitle" style="margin-top: 0; margin-bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+      <span>나의 Run 기록을 확인하세요 <span id="runJournalSubtitleCount" aria-live="polite">( )</span></span>
+    </p>
+    <script>
+      (function() {
+        function updateRunJournalSubtitle(text) {
+          var el = document.getElementById('runJournalSubtitleCount');
+          if (el) el.textContent = text || '( )';
+        }
+        window.updateRunJournalSubtitle = updateRunJournalSubtitle;
+      })();
+    </script>
+    <div id="run-journal-react-root" style="display: none; margin-top: 0;"></div>
   </div>
 
   <!-- Strava 동기화 모달 (grade=1 관리자용, STELVIO 디자인): MMP 수집만, 2개 버튼 -->
@@ -17974,9 +17997,12 @@
         badgeOpts.isWeeklyTop10 === true ||
         (typeof stelvioIsTssRankingMode === 'function' && stelvioIsTssRankingMode());
       if (tssWeeklyScoped) {
-        if (typeof stelvioNormalizeRankMovementOnRow === 'function') stelvioNormalizeRankMovementOnRow(item);
         var serverFirst = stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
         if (serverFirst) return serverFirst;
+        if (typeof stelvioNormalizeRankMovementOnRow === 'function') {
+          stelvioNormalizeRankMovementOnRow(item, listCategoryKey ? stelvioCategoryRankInFullList(stelvioRankingByCategory, listCategoryKey || 'Supremo', item.userId) : null);
+        }
+        return stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
       }
       var listCat = listCategoryKey || 'Supremo';
       var listCatRank =
@@ -18606,6 +18632,16 @@
       if (target.myRank) applyRows([target.myRank]);
       if (target.myRankSupremo) applyRows([target.myRankSupremo]);
       if (target.currentUser) applyRows([target.currentUser]);
+      if (source.rankMovementSource) target.rankMovementSource = source.rankMovementSource;
+      if (source.rankMovementHistoryKey) target.rankMovementHistoryKey = source.rankMovementHistoryKey;
+      if (source.rankMovementAsOfSeoul) target.rankMovementAsOfSeoul = source.rankMovementAsOfSeoul;
+      if (source.rankMovementPrevDayByCategory) {
+        target.rankMovementPrevDayByCategory = source.rankMovementPrevDayByCategory;
+      }
+      if (source.rankMovementCompareBaselineByCategory) {
+        target.rankMovementCompareBaselineByCategory = source.rankMovementCompareBaselineByCategory;
+      }
+      if (source.rankMovementHydrated != null) target.rankMovementHydrated = source.rankMovementHydrated;
     }
 
     /**
@@ -18640,6 +18676,15 @@
           stelvioMergeRankMovementIntoPayload(data, json);
         }
         if (json.rankMovementSource) data.rankMovementSource = json.rankMovementSource;
+        if (json.rankMovementHistoryKey) data.rankMovementHistoryKey = json.rankMovementHistoryKey;
+        if (json.rankMovementAsOfSeoul) data.rankMovementAsOfSeoul = json.rankMovementAsOfSeoul;
+        if (json.rankMovementPrevDayByCategory) {
+          data.rankMovementPrevDayByCategory = json.rankMovementPrevDayByCategory;
+        }
+        if (json.rankMovementCompareBaselineByCategory) {
+          data.rankMovementCompareBaselineByCategory = json.rankMovementCompareBaselineByCategory;
+        }
+        if (json.rankMovementHydrated != null) data.rankMovementHydrated = json.rankMovementHydrated;
         if (json.readBackend || json.readSource) {
           data.readBackend = json.readBackend || json.readSource;
           data.readSource = json.readSource || json.readBackend;
@@ -19008,9 +19053,7 @@
         if (typeof stelvioRestoreRankMovementWhereMissing === 'function') {
           stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
         }
-        if (typeof stelvioNormalizeRankMovementOnPayload === 'function') {
-          stelvioNormalizeRankMovementOnPayload(data);
-        }
+        /* 서버가 주입한 TSS 등락은 normalize로 삭제하지 않음 */
         stelvioEnsurePeakPowerRankMovementOnPayload(data);
         return;
       }
@@ -25799,6 +25842,26 @@
         }
       }
       window.initTrainingJournalReact = initTrainingJournalReact;
+    })();
+  </script>
+  <script>
+    (function() {
+      function initRunTrainingJournalReact() {
+        var root = document.getElementById('run-journal-react-root');
+        if (!root || typeof ReactDOM === 'undefined' || typeof window.RunTrainingJournalScreen !== 'function') {
+          console.warn('[RunJournal React] 마운트 불가');
+          return;
+        }
+        root.style.display = 'block';
+        if (!root._runJournalRoot) {
+          root._runJournalRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
+          if (root._runJournalRoot) root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
+          else if (typeof ReactDOM.render === 'function') ReactDOM.render(React.createElement(window.RunTrainingJournalScreen), root);
+        } else if (root._runJournalRoot.render) {
+          root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
+        }
+      }
+      window.initRunTrainingJournalReact = initRunTrainingJournalReact;
     })();
   </script>
 
@@ -36884,6 +36947,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
           }, 100);
         }
+
+        if (screenId === 'runTrainingJournalScreen') {
+          setTimeout(function() {
+            if (typeof initializeCurrentScreen === 'function') {
+              try { initializeCurrentScreen(screenId); } catch (e) { console.error(e); }
+            }
+          }, 100);
+        }
         
         // Performance / RUN Dashboard 화면 초기화
         if (screenId === 'performanceDashboardScreen') {
@@ -38015,6 +38086,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         performanceDashboardScreen: 'analysis',
         runDashboardScreen: 'analysis',
         trainingJournalScreen: 'journal',
+        runTrainingJournalScreen: 'journal',
         profileScreen: 'profile',
         workoutScreen: 'train',
         aiScheduleScreen: 'plan',
@@ -38026,6 +38098,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         'performanceDashboardScreen',
         'runDashboardScreen',
         'trainingJournalScreen',
+        'runTrainingJournalScreen',
         'profileScreen',
         'workoutScreen',
         'aiScheduleScreen',
@@ -38190,7 +38263,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               showScreen('performanceDashboardScreen');
             }
           }
-          else if (key === 'journal' && typeof showScreen === 'function') showScreen('trainingJournalScreen');
+          else if (key === 'journal' && typeof showScreen === 'function') {
+            if (typeof window.openJournalForActiveSport === 'function') window.openJournalForActiveSport();
+            else showScreen('trainingJournalScreen');
+          }
           else if (key === 'profile' && typeof showScreen === 'function') showScreen('profileScreen');
         });
       }
