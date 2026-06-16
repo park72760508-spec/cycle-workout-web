@@ -9044,7 +9044,6 @@ exports.getRunningLeaderboard = onRequest(
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
     if (req.method === "OPTIONS") {
       res.status(204).send("");
       return;
@@ -9057,25 +9056,44 @@ exports.getRunningLeaderboard = onRequest(
       await supabaseDualWriteServer.refreshDualRunFromRemoteConfig(admin, true);
       const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
       const runningRankingMovement = require("./runningRankingMovement");
+      const peakMovement = require("./rankingPeakMovement");
       const [lbRes, snapRes] = await Promise.all([
         supabase.rpc("get_running_leaderboard_published"),
         runningRankingMovement.fetchAllRunRankSnapshots(),
       ]);
-      const { data, error } = lbRes;
+      let { data, error } = lbRes;
       if (error) {
         console.error("[getRunningLeaderboard]", error);
         return res.status(500).json({ success: false, error: error.message });
       }
-      const published =
+      let published =
         data && typeof data === "object" && !Array.isArray(data) ? data : {};
-      const leaderboard = Array.isArray(published.leaderboard)
+      let leaderboard = Array.isArray(published.leaderboard)
         ? published.leaderboard
         : Array.isArray(data)
           ? data
           : [];
-      const leaderboardAsOfSeoul = published.as_of_seoul
+      let leaderboardAsOfSeoul = published.as_of_seoul
         ? String(published.as_of_seoul).trim().slice(0, 10)
         : "";
+      const todayKst = peakMovement.seoulTodayYmd();
+      if (
+        (published.source === "snapshot" || !published.source) &&
+        leaderboardAsOfSeoul &&
+        leaderboardAsOfSeoul < todayKst
+      ) {
+        const liveRes = await supabase.rpc("get_running_leaderboard");
+        if (!liveRes.error && Array.isArray(liveRes.data)) {
+          leaderboard = liveRes.data;
+          leaderboardAsOfSeoul = todayKst;
+          published = {
+            source: "live",
+            aggregated_at: new Date().toISOString(),
+          };
+        }
+      }
+      const cacheMaxAge = published.source === "live" ? 300 : 3600;
+      res.set("Cache-Control", `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}`);
       return res.status(200).json({
         success: true,
         leaderboard,
