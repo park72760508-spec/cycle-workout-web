@@ -53,7 +53,16 @@ async function backfillGender(gender, historyKey) {
     console.warn("[backfill] skip empty payload", historyKey);
     return;
   }
-  await peakMv.applyPeakRankChangesSupabase(payload.byCategory, historyKey, { admin });
+  const todayYmd = peakMovement.seoulTodayYmd();
+  let prevNorm = await peakMv.readPeakRankNormForHydrate(admin, historyKey, todayYmd);
+  prevNorm = await peakMv.ensurePrevDayBaselineForTssWeekly(admin, prevNorm, historyKey, todayYmd);
+  const snapFields = peakMovement.computePeakRankMovementFields(
+    payload.byCategory,
+    prevNorm,
+    todayYmd
+  );
+  await peakMv.writePeakRankSnapshotSupabase(historyKey, snapFields);
+  peakMovement.computePeakRankMovementFields(payload.byCategory, prevNorm, todayYmd);
   let withRc = 0;
   for (const cat of peakMovement.PEAK_RANK_BOARD_CATEGORIES) {
     for (const row of payload.byCategory[cat] || []) {
