@@ -1,8 +1,14 @@
 /* RUN 기록 화면 — CYCLE 라이딩 기록(#trainingJournalScreen) 스타일 공유 클래스 */
 
 #runTrainingJournalScreen .journal-screen-content {
-  padding: 0 12px 24px;
-  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  padding: 0 12px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+#runTrainingJournalScreen.active {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 #runTrainingJournalScreen .journal-calendar-widget.card {
@@ -39,6 +45,24 @@
   border: 2px solid rgba(102, 126, 234, 0.85) !important;
   box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.15);
   box-sizing: border-box;
+}
+
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.sunday .mini-calendar-day-num,
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.holiday .mini-calendar-day-num {
+  color: #dc2626;
+}
+
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.saturday .mini-calendar-day-num {
+  color: #2563eb;
+}
+
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.sunday,
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.holiday {
+  color: #dc2626;
+}
+
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.saturday {
+  color: #2563eb;
 }
 
 #runTrainingJournalScreen .run-journal-day-inner {
@@ -83,16 +107,9 @@
   line-height: 1.3;
 }
 
-#runTrainingJournalScreen .legend-dot.run-legend-dot-indoor {
-  background: #16a34a;
-}
-
-#runTrainingJournalScreen .legend-dot.run-legend-dot-outdoor {
-  background: #f97316;
-}
-
 #runTrainingJournalScreen .journal-daily-summary {
   margin-top: 16px;
+  margin-bottom: 8px;
   padding: 16px;
   border-radius: 12px;
   background: #fff;
@@ -118,6 +135,7 @@
 
 #runTrainingJournalScreen .journal-daily-summary-actions {
   margin-top: 16px;
+  margin-bottom: 12px;
   display: flex;
   justify-content: center;
 }
@@ -283,7 +301,12 @@
 }
 
 html.global-hub-glass-nav-active #runTrainingJournalScreen.active {
-  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 24px);
+  padding-bottom: 0;
+  box-sizing: border-box;
+}
+
+html.global-hub-glass-nav-active #runTrainingJournalScreen .journal-screen-content {
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 56px);
   box-sizing: border-box;
 }
 
