@@ -340,7 +340,9 @@
         var ftp = Number(selectedUser.ftp) || 0;
         var weight = Number(selectedUser.weight) || 0;
         var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
-        var challenge = selectedUser.challenge || 'Fitness';
+        var challenge = (typeof window.resolveChallengeForSport === 'function')
+          ? window.resolveChallengeForSport(selectedUser, 'run')
+          : (selectedUser.challenge || 'Fitness');
         var weeklyTarget = 175;
         if (typeof window.getWeeklyTargetRtss === 'function') {
           var ti = window.getWeeklyTargetRtss(challenge);
@@ -354,6 +356,8 @@
           weight: weight,
           grade: selectedUser.grade || '2',
           challenge: challenge,
+          run_challenge: selectedUser.run_challenge || '',
+          category: selectedUser.category || selectedUser.sport_category || 'RUN',
           acc_points: selectedUser.acc_points || 0,
           rem_points: selectedUser.rem_points || 0,
           strava_refresh_token: selectedUser.strava_refresh_token,
@@ -386,7 +390,9 @@
             var f = Number(d.ftp) || 0;
             var w = Number(d.weight) || 0;
             var wk = w > 0 ? (f / w).toFixed(2) : 0;
-            var ch = d.challenge || 'Fitness';
+            var ch = (typeof window.resolveChallengeForSport === 'function')
+              ? window.resolveChallengeForSport(d, 'run')
+              : (d.challenge || 'Fitness');
             var wt = 175;
             if (typeof window.getWeeklyTargetRtss === 'function') {
               var tInfo = window.getWeeklyTargetRtss(ch);
@@ -399,6 +405,8 @@
               weight: w,
               grade: d.grade || '2',
               challenge: ch,
+              run_challenge: d.run_challenge || '',
+              category: d.category || d.sport_category || 'RUN',
               acc_points: d.acc_points || 0,
               rem_points: d.rem_points || 0,
               is_private: d.is_private === true
@@ -523,8 +531,11 @@
             }
           }
           var weeklyTarget = 175;
+          var runChallenge = (typeof window.resolveChallengeForSport === 'function')
+            ? window.resolveChallengeForSport(userProfile, 'run')
+            : (userProfile.challenge || 'Fitness');
           if (typeof window.getWeeklyTargetRtss === 'function') {
-            var tInfo = window.getWeeklyTargetRtss(userProfile.challenge || 'Fitness');
+            var tInfo = window.getWeeklyTargetRtss(runChallenge);
             if (tInfo && tInfo.target != null) weeklyTarget = tInfo.target;
           }
           var lbCoachCtx = await fetchRunCoachLeaderboardContext(userProfile.id);
@@ -957,7 +968,9 @@
               var userForScore = {
                 age: userProfile.age,
                 gender: userProfile.gender,
-                challenge: userProfile.challenge,
+                challenge: (typeof window.resolveChallengeForSport === 'function')
+                  ? window.resolveChallengeForSport(userProfile, 'run')
+                  : userProfile.challenge,
                 ftp: userProfile.ftp,
                 weight: userProfile.weight,
                 sportCategory: 'run',
