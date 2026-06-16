@@ -115,6 +115,12 @@ function mapStravaRunningToActivityRow(activity, firebaseUid) {
   }
   const title = activity.name ? String(activity.name) : "Run";
   const startDateRaw = activity.start_date_local || activity.start_date || null;
+  const summaryPolyline =
+    activity && activity.map && activity.map.summary_polyline
+      ? String(activity.map.summary_polyline).trim()
+      : activity && activity.summary_polyline
+        ? String(activity.summary_polyline).trim()
+        : "";
 
   return {
     user_id: userId,
@@ -137,6 +143,7 @@ function mapStravaRunningToActivityRow(activity, firebaseUid) {
     max_hr: int(activity.max_heartrate, null),
     tss: estimateRunningTss(activity, durationSec, avgHr),
     splits_metric: buildLightweightSplitsMetric(activity.splits_metric),
+    summary_polyline: summaryPolyline || null,
     updated_at: new Date().toISOString(),
   };
 }

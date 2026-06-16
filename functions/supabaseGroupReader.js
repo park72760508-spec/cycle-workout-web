@@ -409,7 +409,7 @@ async function fetchYearlyPeaksForYear(firebaseUid, year) {
 }
 
 const RUN_EFFORT_SELECT =
-  "activity_id, speed_1k, speed_3k, speed_5k, speed_7k, speed_10k, speed_20k, updated_at, created_at";
+  "activity_id, speed_1k, speed_3k, speed_5k, speed_7k, speed_10k, speed_20k, speed_42k, hr_1k, hr_3k, hr_5k, hr_7k, hr_10k, hr_20k, hr_42k, updated_at, created_at";
 const RUN_ACTIVITY_SELECT = "activity_id, activity_date, activity_type, source";
 
 function isRunningActivityType(type) {
@@ -504,6 +504,14 @@ async function fetchUserRunEffortsRecent(firebaseUid, limit = 400) {
       speed_7k: e.speed_7k,
       speed_10k: e.speed_10k,
       speed_20k: e.speed_20k,
+      speed_42k: e.speed_42k,
+      hr_1k: e.hr_1k,
+      hr_3k: e.hr_3k,
+      hr_5k: e.hr_5k,
+      hr_7k: e.hr_7k,
+      hr_10k: e.hr_10k,
+      hr_20k: e.hr_20k,
+      hr_42k: e.hr_42k,
       updated_at: e.updated_at,
       created_at: e.created_at,
       readBackend: "supabase",
@@ -560,7 +568,7 @@ async function fetchUserRunWeeklyTss(firebaseUid) {
 }
 
 const RUN_ACTIVITY_LOG_SELECT =
-  "activity_id, source, activity_type, title, activity_date, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, avg_hr, max_hr, tss";
+  "activity_id, source, activity_type, title, activity_date, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, avg_hr, max_hr, tss, summary_polyline";
 
 function mapActivityRowToTrainingLog(row) {
   const dateStr = row.activity_date ? String(row.activity_date).slice(0, 10) : "";
@@ -580,6 +588,7 @@ function mapActivityRowToTrainingLog(row) {
     avg_hr: row.avg_hr != null ? Number(row.avg_hr) : null,
     max_hr: row.max_hr != null ? Number(row.max_hr) : null,
     tss: row.tss != null ? Number(row.tss) : null,
+    summary_polyline: row.summary_polyline ? String(row.summary_polyline).trim() : "",
     readBackend: "supabase",
     sport_category: "run",
   };
