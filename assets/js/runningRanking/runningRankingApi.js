@@ -20,6 +20,24 @@
     return window.runningRankingConfig || { API_URL: '', CACHE_TTL_MS: 3600000 };
   }
 
+  function seoulTodayYmd() {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+    } catch (e) {
+      var d = new Date();
+      var m = d.getMonth() + 1;
+      var day = d.getDate();
+      return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+    }
+  }
+
+  function isStaleLeaderboardCache(cache) {
+    if (!cache || !cache.leaderboardAsOfSeoul) return false;
+    var asOf = String(cache.leaderboardAsOfSeoul).trim().slice(0, 10);
+    if (!asOf) return false;
+    return asOf < seoulTodayYmd();
+  }
+
   /**
    * @returns {Promise<{ success: boolean, rows: object[], error?: string }>}
    */
@@ -27,11 +45,12 @@
     opts = opts || {};
     var cfg = getConfig();
     var now = Date.now();
-    var minScoringVersion = cfg.GC_SCORING_VERSION || 2;
+    var minScoringVersion = cfg.LEADERBOARD_SCORING_VERSION || cfg.GC_SCORING_VERSION || 2;
     var cacheScoringOk = _cache.rows
       && _cache.rows.length
       && Number(_cache.rows[0].scoring_version) >= minScoringVersion;
-    if (!opts.force && _cache.rows && cacheScoringOk && now - _cache.at < cfg.CACHE_TTL_MS) {
+    var cacheFresh = !isStaleLeaderboardCache(_cache);
+    if (!opts.force && _cache.rows && cacheScoringOk && cacheFresh && now - _cache.at < cfg.CACHE_TTL_MS) {
       return Promise.resolve({
         success: true,
         rows: _cache.rows.slice(),

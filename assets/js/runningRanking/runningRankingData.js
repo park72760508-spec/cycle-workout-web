@@ -295,12 +295,25 @@
    * @param {object[]} rows
    * @returns {object[]}
    */
+  function parseWeeklyTss(row) {
+    if (!row) return 0;
+    var v = row.weekly_tss;
+    if (v == null || v === '') return 0;
+    var n = Number(v);
+    return isFinite(n) ? n : 0;
+  }
+
   function normalizeLeaderboardRows(rows) {
     if (!rows || !rows.length) return rows || [];
-    if (!needsClientGcScoring(rows)) return rows;
+    var normalized = rows.map(function (r) {
+      if (!r || typeof r !== 'object') return r;
+      var tss = parseWeeklyTss(r);
+      return Object.assign({}, r, { weekly_tss: tss });
+    });
+    if (!needsClientGcScoring(normalized)) return normalized;
 
-    var gcByUser = buildClientGcScores(rows);
-    return rows.map(function (r) {
+    var gcByUser = buildClientGcScores(normalized);
+    return normalized.map(function (r) {
       var uid = rowUserId(r);
       var gc = gcByUser[uid];
       if (!gc) return r;
@@ -411,14 +424,20 @@
       list.sort(function (a, b) { return a.value - b.value; });
     } else if (tabId === 'tss') {
       filtered.forEach(function (r) {
-        var tss = Number(r.weekly_tss);
-        if (!isFinite(tss) || tss <= 0) return;
+        var tss = parseWeeklyTss(r);
+        if (tss <= 0) return;
         pushListItem(list, r, {
           value: tss,
           valueLabel: fmt().formatTss(tss)
         });
       });
-      list.sort(function (a, b) { return b.value - a.value; });
+      list.sort(function (a, b) {
+        var diff = b.value - a.value;
+        if (diff !== 0) return diff;
+        var au = a.userId != null ? String(a.userId) : '';
+        var bu = b.userId != null ? String(b.userId) : '';
+        return au < bu ? -1 : au > bu ? 1 : 0;
+      });
     } else if (tabId === 'distance') {
       filtered.forEach(function (r) {
         var km = Number(r.distance_30d_km);
@@ -494,6 +513,10 @@
     var vw = rows[0] && rows[0].volume_window;
     if (!vw) return '';
     if (vw.week_start && vw.week_end) {
+      var sumAsOf = vw.week_sum_as_of || vw.week_end;
+      if (sumAsOf && sumAsOf < vw.week_end) {
+        return '주간 TSS: ' + vw.week_start + ' ~ ' + vw.week_end + ' (누계 ~' + sumAsOf + ')';
+      }
       return '주간 TSS: ' + vw.week_start + ' ~ ' + vw.week_end;
     }
     return '';
@@ -727,8 +750,8 @@
   function buildTssDistributionPayload(rows, opts) {
     return buildMetricDistributionPayload(rows, opts, {
       makeEntry: function (r) {
-        var tss = Number(r.weekly_tss);
-        if (!isFinite(tss) || tss <= 0) return null;
+        var tss = parseWeeklyTss(r);
+        if (tss <= 0) return null;
         return {
           userId: rowUserId(r),
           name: rowDisplayName(r),
