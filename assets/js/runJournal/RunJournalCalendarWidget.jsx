@@ -40,15 +40,17 @@
       cells.push(R.createElement('button', {
         key: key,
         type: 'button',
-        className: 'mini-calendar-day' +
+        className: 'mini-calendar-day run-journal-day' +
           (logs.length ? ' has-training' : '') +
           (selectedDate === key ? ' selected' : '') +
           (hasPr ? ' has-pr' : ''),
         onClick: function (dk) { return function () { if (onDateSelect) onDateSelect(dk); }; }(key),
         'aria-label': key + (logs.length ? ' RUN ' + logs.length + '건' : '')
       },
-        R.createElement('span', { className: 'mini-calendar-day-num' }, day),
-        logs.length ? R.createElement('span', { className: 'mini-calendar-dot run-dot' }) : null,
+        R.createElement('span', { className: 'run-journal-day-inner' },
+          logs.length ? R.createElement('span', { className: 'mini-calendar-dot run-dot', 'aria-hidden': true }) : null,
+          R.createElement('span', { className: 'mini-calendar-day-num' }, day)
+        ),
         hasPr ? R.createElement('span', { className: 'mini-calendar-pr-badge', title: 'PR' }, 'PR') : null
       ));
     }
@@ -82,10 +84,6 @@
           R.createElement('span', { className: 'legend-row' },
             R.createElement('span', { className: 'legend-dot run-legend-dot' }),
             R.createElement('span', null, 'Run')
-          ),
-          R.createElement('span', { className: 'legend-row' },
-            R.createElement('span', { className: 'mini-calendar-pr-badge inline-pr' }, 'PR'),
-            R.createElement('span', null, '구간 PR')
           )
         )
       )

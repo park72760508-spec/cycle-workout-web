@@ -98,9 +98,8 @@
 
     if (!open) return null;
 
-    return R.createElement('div', { className: 'journal-bottom-sheet-overlay', onClick: onClose },
-      R.createElement('div', { className: 'journal-bottom-sheet', onClick: function (e) { e.stopPropagation(); } },
-        R.createElement('div', { className: 'journal-bottom-sheet-handle' }),
+    return R.createElement('div', { className: 'journal-bottom-sheet-overlay run-journal-detail-overlay', onClick: onClose },
+      R.createElement('div', { className: 'journal-bottom-sheet run-journal-detail-panel', onClick: function (e) { e.stopPropagation(); } },
         R.createElement('div', { className: 'journal-bottom-sheet-header' },
           R.createElement('h3', { className: 'journal-bottom-sheet-title' }, 'RUN 상세 기록'),
           R.createElement('button', { type: 'button', className: 'journal-bottom-sheet-close', onClick: onClose, 'aria-label': '닫기' }, '×')
