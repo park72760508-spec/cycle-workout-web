@@ -89,6 +89,15 @@
     return getActiveSport() === 'run' ? 'runBasecampScreen' : 'basecampScreen';
   }
 
+  /** CYCLE: 라이딩 기록 / RUN: Run 기록 */
+  function openJournalForActiveSport() {
+    if (getActiveSport() === 'run') {
+      if (typeof showScreen === 'function') showScreen('runTrainingJournalScreen');
+    } else if (typeof showScreen === 'function') {
+      showScreen('trainingJournalScreen');
+    }
+  }
+
   window.sportCategoryRoutes = {
     getActiveSport: getActiveSport,
     setActiveSport: setActiveSport,
@@ -97,7 +106,8 @@
     enterRunBasecamp: enterRunBasecamp,
     goHomeBasecamp: goHomeBasecamp,
     routeAfterAuth: routeAfterAuth,
-    getHomeScreenId: getHomeScreenId
+    getHomeScreenId: getHomeScreenId,
+    openJournalForActiveSport: openJournalForActiveSport
   };
 
   window.enterCycleBasecamp = enterCycleBasecamp;
@@ -105,6 +115,7 @@
   window.showSportCategoryScreen = showSportCategoryScreen;
   window.routeAfterAuth = routeAfterAuth;
   window.goHomeBasecamp = goHomeBasecamp;
+  window.openJournalForActiveSport = openJournalForActiveSport;
   window.showRunServiceComingSoonModal = showRunServiceComingSoonModal;
   window.closeRunServiceComingSoonModal = closeRunServiceComingSoonModal;
 })();

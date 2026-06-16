@@ -221,6 +221,44 @@
       });
   }
 
+  async function loadRunJournalBundle() {
+    await waitForGlobal('Babel');
+    if (typeof window.L === 'undefined') {
+      await appendScript('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js');
+    }
+    await appendScript('assets/js/journal/stravaPolylineUtils.js');
+    await appendScript('assets/js/journal/JournalCourseMapPreview.jsx', 'text/babel');
+    await appendScript('assets/js/runJournal/runJournalPrUtils.js');
+    await appendScript('assets/js/runJournal/useRunJournalData.js');
+    await appendScript('assets/js/runJournal/RunJournalCalendarWidget.jsx', 'text/babel');
+    await appendScript('assets/js/runJournal/RunJournalDailySummary.jsx', 'text/babel');
+    await appendScript('assets/js/runJournal/RunJournalDetailBottomSheet.jsx', 'text/babel');
+    await appendScript('assets/js/runJournal/RunTrainingJournalScreen.jsx', 'text/babel');
+    registerRunJournalInit();
+  }
+
+  function registerRunJournalInit() {
+    if (typeof window.initRunTrainingJournalReact === 'function') return;
+    window.initRunTrainingJournalReact = function initRunTrainingJournalReact() {
+      var root = document.getElementById('run-journal-react-root');
+      if (!root || typeof ReactDOM === 'undefined' || typeof window.RunTrainingJournalScreen !== 'function') {
+        console.warn('[RunJournal React] 마운트 불가');
+        return;
+      }
+      root.style.display = 'block';
+      if (!root._runJournalRoot) {
+        root._runJournalRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
+        if (root._runJournalRoot) {
+          root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
+        } else if (typeof ReactDOM.render === 'function') {
+          ReactDOM.render(React.createElement(window.RunTrainingJournalScreen), root);
+        }
+      } else if (root._runJournalRoot.render) {
+        root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
+      }
+    };
+  }
+
   async function loadJournalBundle() {
     await waitForGlobal('Babel');
     await appendScript('assets/js/journal/stravaPolylineUtils.js');
@@ -231,6 +269,8 @@
     await appendScript('assets/js/journal/JournalCalendarWidget.jsx', 'text/babel');
     await appendScript('assets/js/journal/RidingCourseSvgBackground.jsx', 'text/babel');
     await appendScript('assets/js/journal/JournalCourseMapPreview.jsx', 'text/babel');
+    await appendScript('assets/js/journal/journalWorkoutGraphUtils.js');
+    await appendScript('assets/js/journal/JournalWorkoutGraphPreview.jsx', 'text/babel');
     await appendScript('assets/js/journal/JournalDailySummary.jsx', 'text/babel');
     await appendScript('assets/js/journal/JournalDetailBottomSheet.jsx', 'text/babel');
     await appendScript('assets/js/journal/JournalMonthlyDashboard.jsx', 'text/babel');
@@ -257,7 +297,7 @@
 
     loadPromise = (async function () {
       try {
-        await Promise.all([loadJournalBundle(), loadOpenRidingBundle()]);
+        await Promise.all([loadJournalBundle(), loadOpenRidingBundle(), loadRunJournalBundle()]);
         window.__stelvioDeferredModulesLoaded = true;
       } catch (e) {
         loadPromise = null;

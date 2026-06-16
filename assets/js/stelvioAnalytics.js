@@ -78,6 +78,7 @@
     openRidingRoomScreen: '라이딩 벙',
     workoutScreen: '워크아웃',
     trainingJournalScreen: '라이딩 기록',
+    runTrainingJournalScreen: 'Run 기록',
     scheduleListScreen: '훈련 스케줄',
     performanceDashboardScreen: '대시보드',
     stelvioRankingScreen: '랭킹보드',

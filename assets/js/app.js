@@ -7452,6 +7452,14 @@ function initializeCurrentScreen(screenId) {
       if (typeof window.applyMyCareerScreenLayoutByGrade === 'function') {
         window.applyMyCareerScreenLayoutByGrade();
       }
+      (function updateCareerJournalBtn() {
+        var btn = document.getElementById('btnCareerJournal');
+        if (!btn) return;
+        var isRun = typeof window.sportCategoryRoutes !== 'undefined'
+          && window.sportCategoryRoutes.getActiveSport
+          && window.sportCategoryRoutes.getActiveSport() === 'run';
+        btn.title = isRun ? 'Run 기록' : '라이딩 기록';
+      })();
       if (typeof window.checkAndShowDynamicFtpForMyCareer === 'function') {
         setTimeout(window.checkAndShowDynamicFtpForMyCareer, 1000);
       } else {
@@ -7691,6 +7699,28 @@ function initializeCurrentScreen(screenId) {
         }
         if (retryCount < 30) {
           setTimeout(function () { tryInitRunningRanking(retryCount + 1); }, 100);
+        }
+      })(0);
+      break;
+
+    case 'runTrainingJournalScreen':
+      (function tryInitRunJournal(retryCount) {
+        retryCount = retryCount || 0;
+        if (typeof window.updateRunJournalSubtitle === 'function') window.updateRunJournalSubtitle('( )');
+        if (typeof window.stelvioLoadDeferredModules === 'function' && retryCount === 0) {
+          window.stelvioLoadDeferredModules().catch(function () {});
+        }
+        if (typeof window.initRunTrainingJournalReact === 'function') {
+          setTimeout(function () {
+            window.initRunTrainingJournalReact();
+            window.dispatchEvent(new CustomEvent('run-journal-refresh'));
+          }, 100);
+          return;
+        }
+        if (retryCount < 40) {
+          setTimeout(function () { tryInitRunJournal(retryCount + 1); }, 100);
+        } else {
+          console.warn('[RunJournal Init] initRunTrainingJournalReact 미로드');
         }
       })(0);
       break;
