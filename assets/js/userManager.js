@@ -3617,6 +3617,8 @@ async function fetchYearlyPeaksForYear(userId, year) {
         var sbMod = await import('./supabaseRidesReadClient.js');
         var sbPeaks = await sbMod.fetchYearlyPeaksForYearFromSupabase(userId, year);
         if (sbPeaks) return sbPeaks;
+        // Supabase Read 모드: Firestore yearly_peaks는 마이그레이션 잔재로 stale — null 반환 후 로그 집계 사용
+        return null;
       }
     }
   } catch (sbErr) {

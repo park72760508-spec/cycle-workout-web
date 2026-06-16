@@ -87,6 +87,53 @@ function aggregateMMPFromLogs(logs, fromDate, toDate) {
   return { max_watts, max_1min_watts: max_1min, max_5min_watts: max_5min, max_10min_watts: max_10min, max_20min_watts: max_20min, max_40min_watts: max_40min, max_60min_watts: max_60min };
 }
 
+/** 년간 파워 PR 차트 — 구간별 필드 */
+var YEARLY_PR_POWER_FIELDS = [
+  'max_watts',
+  'max_1min_watts',
+  'max_5min_watts',
+  'max_10min_watts',
+  'max_20min_watts',
+  'max_40min_watts',
+  'max_60min_watts'
+];
+
+/**
+ * 연간 PR 차트용 — Strava 우선 dedupe 없이 전 로그에서 구간별 최대 W + 달성일.
+ * 같은 와트면 최신 날짜. (동일 날 Strava MMP 미갱신·Stelvio PR 누락 방지)
+ * @param {Array} logs
+ * @param {number} [userWeight]
+ * @returns {Record<string, { watts: number, wkg: number|null, dateYmd: string|null }>}
+ */
+function aggregateYearlyPrWithDatesFromLogs(logs, userWeight) {
+  var bests = {};
+  YEARLY_PR_POWER_FIELDS.forEach(function(field) {
+    bests[field] = { watts: 0, wkg: null, dateYmd: null };
+  });
+  (logs || []).forEach(function(log) {
+    var ds = parseTrainingLogDate(log);
+    if (!ds) return;
+    var weightKg = typeof window.getWeightForPr === 'function'
+      ? window.getWeightForPr(log, userWeight)
+      : (Number(userWeight) || 0);
+    YEARLY_PR_POWER_FIELDS.forEach(function(field) {
+      var w = Math.round(Number(log[field]) || 0);
+      if (w <= 0) return;
+      var wkg = weightKg > 0
+        ? (typeof window.toWkg2Decimals === 'function'
+          ? window.toWkg2Decimals(w, weightKg)
+          : Math.round((w / weightKg) * 100) / 100)
+        : null;
+      var cur = bests[field];
+      var newerSame = w === cur.watts && ds && cur.dateYmd && ds > cur.dateYmd;
+      if (w > cur.watts || newerSame) {
+        bests[field] = { watts: w, wkg: wkg, dateYmd: ds };
+      }
+    });
+  });
+  return bests;
+}
+
 /**
  * 로그 배열에서 기간별 심박(HR) 집계 (각 duration별 최대값)
  * @param {Array} logs - 훈련 로그 배열
@@ -540,6 +587,7 @@ if (typeof window !== 'undefined') {
   window.dedupeTrainingLogsByDateStravaFirst = dedupeTrainingLogsByDateStravaFirst;
   window.calculateRiderScores = calculateRiderScores;
   window.aggregateMMPFromLogs = aggregateMMPFromLogs;
+  window.aggregateYearlyPrWithDatesFromLogs = aggregateYearlyPrWithDatesFromLogs;
   window.aggregateHRFromLogs = aggregateHRFromLogs;
   window.aggregateTimeInZonesFromLogs = aggregateTimeInZonesFromLogs;
   window.getWeeklyMMPFromLogs = getWeeklyMMPFromLogs;
