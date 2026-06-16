@@ -151,7 +151,8 @@
   justify-content: center;
 }
 
-#runTrainingJournalScreen .journal-course-map-wrap {
+#runTrainingJournalScreen .journal-course-map-wrap,
+.run-journal-detail-panel .journal-course-map-wrap {
   margin-top: 12px;
   border-radius: 10px;
   overflow: hidden;
@@ -159,7 +160,8 @@
 }
 
 #runTrainingJournalScreen .journal-bottom-sheet-overlay,
-#runTrainingJournalScreen .run-journal-detail-overlay {
+#runTrainingJournalScreen .run-journal-detail-overlay,
+.run-journal-detail-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
@@ -170,10 +172,13 @@
   padding: 8px 12px;
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 
 #runTrainingJournalScreen .journal-bottom-sheet,
-#runTrainingJournalScreen .run-journal-detail-panel {
+#runTrainingJournalScreen .run-journal-detail-panel,
+.run-journal-detail-panel {
   width: 100%;
   max-width: 560px;
   max-height: min(92vh, calc(100dvh - 40px - env(safe-area-inset-bottom, 0px)));
@@ -183,9 +188,11 @@
   flex-direction: column;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
   overflow: hidden;
+  touch-action: auto;
 }
 
-#runTrainingJournalScreen .journal-bottom-sheet-header {
+#runTrainingJournalScreen .journal-bottom-sheet-header,
+.run-journal-detail-panel .journal-bottom-sheet-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -193,14 +200,16 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
-#runTrainingJournalScreen .journal-bottom-sheet-title {
+#runTrainingJournalScreen .journal-bottom-sheet-title,
+.run-journal-detail-panel .journal-bottom-sheet-title {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
   color: #4c51bf;
 }
 
-#runTrainingJournalScreen .journal-bottom-sheet-close {
+#runTrainingJournalScreen .journal-bottom-sheet-close,
+.run-journal-detail-panel .journal-bottom-sheet-close {
   background: none;
   border: none;
   font-size: 24px;
@@ -210,23 +219,29 @@
 }
 
 #runTrainingJournalScreen .journal-bottom-sheet-body,
-#runTrainingJournalScreen .run-journal-detail-body {
+#runTrainingJournalScreen .run-journal-detail-body,
+.run-journal-detail-body {
   padding: 16px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
-#runTrainingJournalScreen .run-journal-detail-body::-webkit-scrollbar {
+#runTrainingJournalScreen .run-journal-detail-body::-webkit-scrollbar,
+.run-journal-detail-body::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
 }
 
 #runTrainingJournalScreen .journal-bottom-sheet-footer,
-#runTrainingJournalScreen .run-journal-detail-footer {
+#runTrainingJournalScreen .run-journal-detail-footer,
+.run-journal-detail-footer {
   flex-shrink: 0;
   padding: 6px 12px 10px;
   display: flex;
@@ -235,7 +250,8 @@
   border-top: 1px solid #f3f4f6;
 }
 
-#runTrainingJournalScreen .run-journal-strava-logo {
+#runTrainingJournalScreen .run-journal-strava-logo,
+.run-journal-detail-footer .run-journal-strava-logo {
   display: block;
   height: 12px;
   width: auto;
@@ -243,7 +259,8 @@
   object-fit: contain;
 }
 
-#runTrainingJournalScreen .journal-detail-row {
+#runTrainingJournalScreen .journal-detail-row,
+.run-journal-detail-panel .journal-detail-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -252,24 +269,37 @@
   gap: 8px;
 }
 
-#runTrainingJournalScreen .journal-detail-label { color: #6b7280; font-size: 13px; }
-#runTrainingJournalScreen .journal-detail-value-wrap { display: inline-flex; align-items: center; gap: 6px; }
-#runTrainingJournalScreen .journal-detail-value { font-weight: 600; font-size: 14px; }
+#runTrainingJournalScreen .journal-detail-label,
+.run-journal-detail-panel .journal-detail-label { color: #6b7280; font-size: 13px; }
+#runTrainingJournalScreen .journal-detail-value-wrap,
+.run-journal-detail-panel .journal-detail-value-wrap { display: inline-flex; align-items: center; gap: 6px; }
+#runTrainingJournalScreen .journal-detail-value,
+.run-journal-detail-panel .journal-detail-value { font-weight: 600; font-size: 14px; }
 
-#runTrainingJournalScreen .run-journal-log-card {
+#runTrainingJournalScreen .run-journal-pace-speed-suffix,
+.run-journal-detail-panel .run-journal-pace-speed-suffix {
+  font-weight: 400;
+  font-size: 14px;
+  color: inherit;
+}
+
+#runTrainingJournalScreen .run-journal-log-card,
+.run-journal-detail-panel .run-journal-log-card {
   margin-bottom: 20px;
   padding-bottom: 16px;
   border-bottom: 2px solid #e5e7eb;
 }
 
-#runTrainingJournalScreen .run-journal-log-title {
+#runTrainingJournalScreen .run-journal-log-title,
+.run-journal-detail-panel .run-journal-log-title {
   margin: 0 0 10px;
   font-size: 15px;
   font-weight: 600;
   color: #111827;
 }
 
-#runTrainingJournalScreen .run-journal-pace-heading {
+#runTrainingJournalScreen .run-journal-pace-heading,
+.run-journal-detail-panel .run-journal-pace-heading {
   margin: 12px 0 4px;
   font-size: 13px;
   font-weight: 600;
@@ -322,11 +352,25 @@ html.global-hub-glass-nav-active #runTrainingJournalScreen .journal-screen-conte
 }
 
 html.global-hub-glass-nav-active #runTrainingJournalScreen .journal-bottom-sheet-overlay,
-html.global-hub-glass-nav-active #runTrainingJournalScreen .run-journal-detail-overlay {
+html.global-hub-glass-nav-active #runTrainingJournalScreen .run-journal-detail-overlay,
+html.global-hub-glass-nav-active .run-journal-detail-overlay {
   padding-bottom: var(--hub-glass-nav-scroll-pad);
 }
 
 html.global-hub-glass-nav-active #runTrainingJournalScreen .journal-bottom-sheet,
-html.global-hub-glass-nav-active #runTrainingJournalScreen .run-journal-detail-panel {
+html.global-hub-glass-nav-active #runTrainingJournalScreen .run-journal-detail-panel,
+html.global-hub-glass-nav-active .run-journal-detail-panel {
   max-height: min(92vh, calc(100dvh - var(--hub-glass-nav-scroll-pad) - 12px));
+}
+
+/* RUN 상세 오버레이 열림: 배경 화면 스크롤 잠금 */
+html.run-journal-detail-open,
+body.run-journal-detail-open {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+#runTrainingJournalScreen.run-journal-detail-open {
+  overflow: hidden !important;
+  touch-action: none;
 }
