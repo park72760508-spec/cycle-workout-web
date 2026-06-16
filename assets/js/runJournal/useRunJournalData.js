@@ -81,16 +81,22 @@
         setLoading(false);
         return Promise.resolve();
       }
-      if (!window.runEffortsReadClient) {
-        setError('RUN 기록 모듈을 불러오지 못했습니다.');
+      var fetchLogs = typeof window.getUserRunTrainingLogs === 'function'
+        ? window.getUserRunTrainingLogs
+        : (window.runEffortsReadClient && window.runEffortsReadClient.getUserRunTrainingLogs);
+      var fetchEfforts = typeof window.getUserRunEfforts === 'function'
+        ? window.getUserRunEfforts
+        : (window.runEffortsReadClient && window.runEffortsReadClient.getUserRunEfforts);
+      if (typeof fetchLogs !== 'function' || typeof fetchEfforts !== 'function') {
+        setError('RUN 기록 API를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
         setLoading(false);
         return Promise.resolve();
       }
       setLoading(true);
       setError(null);
       return Promise.all([
-        window.runEffortsReadClient.getUserRunTrainingLogs(userId, { limit: 500 }),
-        window.runEffortsReadClient.getUserRunEfforts(userId, { limit: 500 }),
+        fetchLogs(userId, { limit: 500 }),
+        fetchEfforts(userId, { limit: 500 }),
       ])
         .then(function (res) {
           var logs = res[0] || [];
@@ -111,7 +117,22 @@
     }, []);
 
     useEffect(function () {
-      loadData();
+      var cancelled = false;
+      function tryLoad(attempt) {
+        if (cancelled) return;
+        if (typeof window.getUserRunTrainingLogs === 'function') {
+          loadData();
+          return;
+        }
+        if (attempt < 30) {
+          setTimeout(function () { tryLoad(attempt + 1); }, 120);
+        } else {
+          setError('RUN 기록 API를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+          setLoading(false);
+        }
+      }
+      tryLoad(0);
+      return function () { cancelled = true; };
     }, [loadData]);
 
     useEffect(function () {
