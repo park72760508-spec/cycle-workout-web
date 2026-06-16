@@ -1,15 +1,21 @@
 /**
  * RunJournalDetailBottomSheet — RUN 상세 (요약 + 지도 + 1k~42k 구간 PR)
  */
-/* global React */
+/* global React, ReactDOM */
 
 (function () {
   'use strict';
   if (!window.React) return;
 
   var R = window.React;
-  var useState = R.useState;
+  var useEffect = R.useEffect;
   var pr = function () { return window.runJournalPrUtils; };
+
+  function getReactDom() {
+    if (typeof ReactDOM !== 'undefined') return ReactDOM;
+    if (typeof window !== 'undefined' && window.ReactDOM) return window.ReactDOM;
+    return null;
+  }
 
   function formatDuration(sec) {
     var s = Math.floor(Number(sec) || 0);
@@ -38,6 +44,21 @@
     );
   }
 
+  function PaceDetailRow(label, speedMs, hr, isPr) {
+    var pace = pr().formatPaceFromSpeed(speedMs);
+    var kmh = pr().formatSpeedKmhFromMs(speedMs);
+    var hrText = hr != null && Number(hr) > 0 ? ' · ' + Math.round(Number(hr)) + ' bpm' : '';
+    return R.createElement('div', { className: 'journal-detail-row' },
+      R.createElement('span', { className: 'journal-detail-label' }, label),
+      R.createElement('span', { className: 'journal-detail-value-wrap' },
+        isPr ? R.createElement(PrBadge) : null,
+        R.createElement('span', { className: 'journal-detail-value' }, pace),
+        kmh ? R.createElement('span', { className: 'run-journal-pace-speed-suffix' }, '(' + kmh + ')') : null,
+        hrText ? R.createElement('span', { className: 'journal-detail-value' }, hrText) : null
+      )
+    );
+  }
+
   function paceRowsForLog(log, yearlyBest) {
     return pr().PACE_AXES.map(function (axis) {
       var sp = log['speed_' + axis];
@@ -45,9 +66,7 @@
       var effort = { activity_id: log.activity_id, speed_1k: log.speed_1k, speed_3k: log.speed_3k, speed_5k: log.speed_5k, speed_7k: log.speed_7k, speed_10k: log.speed_10k, speed_20k: log.speed_20k, speed_42k: log.speed_42k };
       var isPr = pr().isAxisPrForEffort(effort, axis, yearlyBest);
       var hr = log['hr_' + axis];
-      var val = pr().formatPaceWithSpeed(sp);
-      if (hr != null && Number(hr) > 0) val += ' · ' + Math.round(Number(hr)) + ' bpm';
-      return DetailRow(axis + ' 페이스', val, isPr);
+      return PaceDetailRow(axis + ' 페이스', sp, hr, isPr);
     }).filter(Boolean);
   }
 
@@ -99,9 +118,28 @@
       return String(log && log.source != null ? log.source : 'strava').toLowerCase() === 'strava';
     });
 
+    useEffect(function () {
+      if (!open) return undefined;
+      var screen = document.getElementById('runTrainingJournalScreen');
+      var scrollY = screen ? screen.scrollTop : 0;
+      var html = document.documentElement;
+      var body = document.body;
+      html.classList.add('run-journal-detail-open');
+      body.classList.add('run-journal-detail-open');
+      if (screen) screen.classList.add('run-journal-detail-open');
+      return function () {
+        html.classList.remove('run-journal-detail-open');
+        body.classList.remove('run-journal-detail-open');
+        if (screen) {
+          screen.classList.remove('run-journal-detail-open');
+          screen.scrollTop = scrollY;
+        }
+      };
+    }, [open]);
+
     if (!open) return null;
 
-    return R.createElement('div', { className: 'journal-bottom-sheet-overlay run-journal-detail-overlay', onClick: onClose },
+    var sheetEl = R.createElement('div', { className: 'journal-bottom-sheet-overlay run-journal-detail-overlay', onClick: onClose },
       R.createElement('div', { className: 'journal-bottom-sheet run-journal-detail-panel', onClick: function (e) { e.stopPropagation(); } },
         R.createElement('div', { className: 'journal-bottom-sheet-header' },
           R.createElement('h3', { className: 'journal-bottom-sheet-title' }, 'RUN 상세 기록'),
@@ -125,6 +163,12 @@
           : null
       )
     );
+
+    var rd = getReactDom();
+    if (typeof document !== 'undefined' && rd && typeof rd.createPortal === 'function') {
+      return rd.createPortal(sheetEl, document.body);
+    }
+    return sheetEl;
   }
 
   window.RunJournalDetailBottomSheet = RunJournalDetailBottomSheet;
