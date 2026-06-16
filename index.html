@@ -3347,6 +3347,7 @@
               <select id="registerCategoryInput" data-form-key="register" required onchange="if(typeof onUserCategoryChange==='function')onUserCategoryChange(this);">
                 <option value="CYCLE" selected>CYCLE (사이클)</option>
                 <option value="RUN">RUN (러닝)</option>
+                <option value="CYCLE+RUN">CYCLE+RUN (사이클·러닝)</option>
               </select>
             </div>
 
@@ -3448,7 +3449,7 @@
             </div>
             
             <!-- 운동목적 선택 -->
-            <div class="auth-input-group">
+            <div id="registerChallengeSingleWrap" class="auth-input-group">
               <label for="registerChallengeInput" class="auth-label-left">운동 목적 *</label>
               <select id="registerChallengeInput" required>
                 <option value="Fitness" selected>Fitness (일반 피트니스/다이어트)</option>
@@ -3458,6 +3459,30 @@
                 <option value="Elite">Elite (엘리트 선수)</option>
                 <option value="PRO">PRO (프로 선수)</option>
               </select>
+            </div>
+            <div id="registerChallengeDualWrap" class="hidden" style="display: none;">
+              <div class="auth-input-group">
+                <label for="registerCycleChallengeInput" class="auth-label-left">CYCLE 운동 목적 *</label>
+                <select id="registerCycleChallengeInput">
+                  <option value="Fitness" selected>Fitness (일반 피트니스/다이어트)</option>
+                  <option value="GranFondo">GranFondo (그란폰도)</option>
+                  <option value="IronMan">IronMan (아이언맨)</option>
+                  <option value="Racing">Racing (레이싱)</option>
+                  <option value="Elite">Elite (엘리트 선수)</option>
+                  <option value="PRO">PRO (프로 선수)</option>
+                </select>
+              </div>
+              <div class="auth-input-group">
+                <label for="registerRunChallengeInput" class="auth-label-left">RUN 운동 목적 *</label>
+                <select id="registerRunChallengeInput">
+                  <option value="Fitness" selected>Fitness (기초 체력)</option>
+                  <option value="CityRunner">City Runner (중거리 완주)</option>
+                  <option value="Challenger">Challenger (풀코스 마라톤)</option>
+                  <option value="Sub3Club">Sub-3 Club (서브쓰리 입상권)</option>
+                  <option value="Elite">Elite (선수 등록, 실업 준비)</option>
+                  <option value="PRO">PRO (국가대표, 프로 선수)</option>
+                </select>
+              </div>
             </div>
             
             <!-- 제출 버튼 -->
@@ -4268,6 +4293,7 @@
                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
                   <option value="CYCLE" selected>CYCLE (사이클)</option>
                   <option value="RUN">RUN (러닝)</option>
+                  <option value="CYCLE+RUN">CYCLE+RUN (사이클·러닝)</option>
                 </select>
               </div>
 
@@ -4302,7 +4328,7 @@
                 </div>
               </div>
               
-              <div class="form-group" style="margin-bottom: 15px;">
+              <div id="completeUserChallengeSingleWrap" class="form-group" style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">운동 목적 *</label>
                 <select id="completeUserChallenge" required 
                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
@@ -4313,6 +4339,32 @@
                   <option value="Elite">Elite (엘리트 선수)</option>
                   <option value="PRO">PRO (프로 선수)</option>
                 </select>
+              </div>
+              <div id="completeUserChallengeDualWrap" class="hidden" style="display: none; margin-bottom: 15px;">
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">CYCLE 운동 목적 *</label>
+                  <select id="completeUserCycleChallengeInput"
+                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                    <option value="Fitness" selected>Fitness (일반 피트니스/다이어트)</option>
+                    <option value="GranFondo">GranFondo (그란폰도)</option>
+                    <option value="IronMan">IronMan (아이언맨)</option>
+                    <option value="Racing">Racing (레이싱)</option>
+                    <option value="Elite">Elite (엘리트 선수)</option>
+                    <option value="PRO">PRO (프로 선수)</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">RUN 운동 목적 *</label>
+                  <select id="completeUserRunChallengeInput"
+                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                    <option value="Fitness" selected>Fitness (기초 체력)</option>
+                    <option value="CityRunner">City Runner (중거리 완주)</option>
+                    <option value="Challenger">Challenger (풀코스 마라톤)</option>
+                    <option value="Sub3Club">Sub-3 Club (서브쓰리 입상권)</option>
+                    <option value="Elite">Elite (선수 등록, 실업 준비)</option>
+                    <option value="PRO">PRO (국가대표, 프로 선수)</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -4456,6 +4508,7 @@
                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
                   <option value="CYCLE" selected>CYCLE (사이클)</option>
                   <option value="RUN">RUN (러닝)</option>
+                  <option value="CYCLE+RUN">CYCLE+RUN (사이클·러닝)</option>
                 </select>
               </div>
 
@@ -4490,7 +4543,7 @@
                 </div>
               </div>
               
-              <div class="form-group" style="margin-bottom: 15px;">
+              <div id="editUserChallengeSingleWrap" class="form-group" style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">운동 목적 *</label>
                 <select id="editUserChallenge" required 
                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
@@ -4501,6 +4554,32 @@
                   <option value="Elite">Elite (엘리트 선수)</option>
                   <option value="PRO">PRO (프로 선수)</option>
                 </select>
+              </div>
+              <div id="editUserChallengeDualWrap" class="hidden" style="display: none; margin-bottom: 15px;">
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">CYCLE 운동 목적 *</label>
+                  <select id="editUserCycleChallengeInput"
+                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                    <option value="Fitness" selected>Fitness (일반 피트니스/다이어트)</option>
+                    <option value="GranFondo">GranFondo (그란폰도)</option>
+                    <option value="IronMan">IronMan (아이언맨)</option>
+                    <option value="Racing">Racing (레이싱)</option>
+                    <option value="Elite">Elite (엘리트 선수)</option>
+                    <option value="PRO">PRO (프로 선수)</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">RUN 운동 목적 *</label>
+                  <select id="editUserRunChallengeInput"
+                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                    <option value="Fitness" selected>Fitness (기초 체력)</option>
+                    <option value="CityRunner">City Runner (중거리 완주)</option>
+                    <option value="Challenger">Challenger (풀코스 마라톤)</option>
+                    <option value="Sub3Club">Sub-3 Club (서브쓰리 입상권)</option>
+                    <option value="Elite">Elite (선수 등록, 실업 준비)</option>
+                    <option value="PRO">PRO (국가대표, 프로 선수)</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -4658,6 +4737,7 @@
                     style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
               <option value="CYCLE" selected>CYCLE (사이클)</option>
               <option value="RUN">RUN (러닝)</option>
+              <option value="CYCLE+RUN">CYCLE+RUN (사이클·러닝)</option>
             </select>
           </div>
 
@@ -4691,7 +4771,7 @@
             </div>
           </div>
           
-          <div class="form-group" style="margin-bottom: 15px;">
+          <div id="userChallengeSingleWrap" class="form-group" style="margin-bottom: 15px;">
             <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">운동 목적 *</label>
             <select id="userChallenge" required 
                     style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
@@ -4702,6 +4782,32 @@
               <option value="Elite">Elite (엘리트 선수)</option>
               <option value="PRO">PRO (프로 선수)</option>
             </select>
+          </div>
+          <div id="userChallengeDualWrap" class="hidden" style="display: none; margin-bottom: 15px;">
+            <div class="form-group" style="margin-bottom: 15px;">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">CYCLE 운동 목적 *</label>
+              <select id="userCycleChallengeInput"
+                      style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                <option value="Fitness" selected>Fitness (일반 피트니스/다이어트)</option>
+                <option value="GranFondo">GranFondo (그란폰도)</option>
+                <option value="IronMan">IronMan (아이언맨)</option>
+                <option value="Racing">Racing (레이싱)</option>
+                <option value="Elite">Elite (엘리트 선수)</option>
+                <option value="PRO">PRO (프로 선수)</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">RUN 운동 목적 *</label>
+              <select id="userRunChallengeInput"
+                      style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                <option value="Fitness" selected>Fitness (기초 체력)</option>
+                <option value="CityRunner">City Runner (중거리 완주)</option>
+                <option value="Challenger">Challenger (풀코스 마라톤)</option>
+                <option value="Sub3Club">Sub-3 Club (서브쓰리 입상권)</option>
+                <option value="Elite">Elite (선수 등록, 실업 준비)</option>
+                <option value="PRO">PRO (국가대표, 프로 선수)</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -28709,7 +28815,13 @@
       const isRunCategory = (typeof isRunSportCategory === 'function')
         ? isRunSportCategory(category)
         : category === 'RUN';
-      const challenge = challengeInput.value;
+      const needsFtpCategory = (typeof needsFtpForCategory === 'function')
+        ? needsFtpForCategory(category)
+        : !isRunCategory;
+      const challengeFields = (typeof readChallengeFieldsFromForm === 'function')
+        ? readChallengeFieldsFromForm('register')
+        : { category: category, challenge: challengeInput ? challengeInput.value : 'Fitness' };
+      const challenge = challengeFields.challenge;
       
       // ─── 재가입 여부 사전 판단 (검증 전에 먼저 확인) ───
       // _stelvioWithdrawnAuthPhone 또는 _stelvioWithdrawnUserProfile 중 하나라도 있고
@@ -28770,9 +28882,9 @@
         }
       }
       var minFtp = typeof getFtpMinFromWeight === 'function' ? getFtpMinFromWeight(weight) : 50;
-      var ftpToUse = isRunCategory ? 0 : ftp;
+      var ftpToUse = needsFtpCategory ? ftp : 0;
       var ftpUsedMin = false;
-      if (!_isRejoinMode && !isRunCategory) {
+      if (!_isRejoinMode && needsFtpCategory) {
         if (ftp < minFtp) {
           ftpToUse = minFtp;
           ftpUsedMin = true;
@@ -29004,8 +29116,9 @@
           weight: weight,
           birth_year: birthYear,
           gender: gender,
-          category: category,
-          challenge: challenge,
+          category: challengeFields.category || category,
+          challenge: challengeFields.challenge || challenge,
+          run_challenge: challengeFields.run_challenge || '',
           grade: '2',
           created_at: now,
           expiry_date: defaultExpiryDate,
