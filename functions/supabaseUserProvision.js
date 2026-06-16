@@ -53,14 +53,19 @@ function mapGender(raw) {
 
 function mapChallenge(raw) {
   const s = str(raw);
-  const allowed = ["Fitness", "GranFondo", "Racing", "Elite", "PRO", "PR", "MastersRace"];
+  const allowed = [
+    "Fitness", "GranFondo", "IronMan", "Racing", "Elite", "PRO",
+    "PR", "MastersRace", "CityRunner", "Challenger", "Sub3Club",
+  ];
   if (s && allowed.includes(s)) return s;
   return "Fitness";
 }
 
 function mapSportCategory(raw) {
-  const s = str(raw)?.toUpperCase();
-  return s === "RUN" ? "RUN" : "CYCLE";
+  const s = str(raw)?.toUpperCase()?.replace(/\s+/g, "");
+  if (s === "RUN") return "RUN";
+  if (s === "CYCLE+RUN" || s === "CYCLE_RUN" || s === "CYCLERUN") return "CYCLE_RUN";
+  return "CYCLE";
 }
 
 function mapGrade(raw) {
@@ -149,6 +154,7 @@ function mapFirestoreUserToRow(firebaseUid, d, uidConfig) {
     birth_year: int(d.birth_year ?? d.birthYear, 0) || null,
     gender: mapGender(d.gender ?? d.sex),
     challenge: mapChallenge(d.challenge),
+    run_challenge: d.run_challenge != null ? mapChallenge(d.run_challenge) : null,
     sport_category: mapSportCategory(d.category ?? d.sport_category),
     grade: mapGrade(d.grade),
     account_status: mapAccountStatus(d.account_status),
