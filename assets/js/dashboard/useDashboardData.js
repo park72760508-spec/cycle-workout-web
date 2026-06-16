@@ -251,7 +251,9 @@
         var ftp = Number(selectedUser.ftp) || 0;
         var weight = Number(selectedUser.weight) || 0;
         var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
-        var challenge = selectedUser.challenge || 'Fitness';
+        var challenge = (typeof window.resolveChallengeForSport === 'function')
+          ? window.resolveChallengeForSport(selectedUser, 'cycle')
+          : (selectedUser.challenge || 'Fitness');
         var weeklyTarget = 225;
         if (typeof window.getWeeklyTargetTSS === 'function') {
           var ti = window.getWeeklyTargetTSS(challenge);
@@ -265,6 +267,8 @@
           weight: weight,
           grade: selectedUser.grade || '2',
           challenge: challenge,
+          run_challenge: selectedUser.run_challenge || '',
+          category: selectedUser.category || selectedUser.sport_category || 'CYCLE',
           acc_points: selectedUser.acc_points || 0,
           rem_points: selectedUser.rem_points || 0,
           strava_refresh_token: selectedUser.strava_refresh_token,
@@ -297,7 +301,9 @@
             var f = Number(d.ftp) || 0;
             var w = Number(d.weight) || 0;
             var wk = w > 0 ? (f / w).toFixed(2) : 0;
-            var ch = d.challenge || 'Fitness';
+            var ch = (typeof window.resolveChallengeForSport === 'function')
+              ? window.resolveChallengeForSport(d, 'cycle')
+              : (d.challenge || 'Fitness');
             var wt = 225;
             if (typeof window.getWeeklyTargetTSS === 'function') {
               var tInfo = window.getWeeklyTargetTSS(ch);
@@ -310,6 +316,8 @@
               weight: w,
               grade: d.grade || '2',
               challenge: ch,
+              run_challenge: d.run_challenge || '',
+              category: d.category || d.sport_category || 'CYCLE',
               acc_points: d.acc_points || 0,
               rem_points: d.rem_points || 0,
               is_private: d.is_private === true
@@ -566,8 +574,11 @@
             weeklyTss += stravaSum > 0 ? stravaSum : stelvioSum;
           });
           var weeklyTarget = 225;
+          var cycleChallenge = (typeof window.resolveChallengeForSport === 'function')
+            ? window.resolveChallengeForSport(userProfile, 'cycle')
+            : (userProfile.challenge || 'Fitness');
           if (typeof window.getWeeklyTargetTSS === 'function') {
-            var tInfo = window.getWeeklyTargetTSS(userProfile.challenge || 'Fitness');
+            var tInfo = window.getWeeklyTargetTSS(cycleChallenge);
             if (tInfo && tInfo.target != null) weeklyTarget = tInfo.target;
           }
           if (isMounted) {
@@ -1023,7 +1034,15 @@
 
           if (analysis && typeof window.computeConditionScore === 'function') {
             try {
-              var userForScore = { age: userProfile.age, gender: userProfile.gender, challenge: userProfile.challenge, ftp: userProfile.ftp, weight: userProfile.weight };
+              var userForScore = {
+                age: userProfile.age,
+                gender: userProfile.gender,
+                challenge: (typeof window.resolveChallengeForSport === 'function')
+                  ? window.resolveChallengeForSport(userProfile, 'cycle')
+                  : userProfile.challenge,
+                ftp: userProfile.ftp,
+                weight: userProfile.weight
+              };
               var logsForScore = cleanLogs.length ? cleanLogs.slice() : logsToSend.slice();
               var deduped = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
               var csResult = window.computeConditionScore(userForScore, deduped, todayStr);
