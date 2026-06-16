@@ -138,8 +138,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 12px;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -147,12 +147,13 @@
 #runTrainingJournalScreen .run-journal-detail-panel {
   width: 100%;
   max-width: 560px;
-  max-height: min(75vh, calc(100vh - 112px - env(safe-area-inset-bottom, 0px)));
+  max-height: min(92vh, calc(100dvh - 40px - env(safe-area-inset-bottom, 0px)));
   background: #fff;
   border-radius: 16px;
   display: flex;
   flex-direction: column;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
 }
 
 #runTrainingJournalScreen .journal-bottom-sheet-header {
@@ -179,10 +180,38 @@
   color: #6b7280;
 }
 
-#runTrainingJournalScreen .journal-bottom-sheet-body {
+#runTrainingJournalScreen .journal-bottom-sheet-body,
+#runTrainingJournalScreen .run-journal-detail-body {
   padding: 16px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#runTrainingJournalScreen .run-journal-detail-body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+#runTrainingJournalScreen .journal-bottom-sheet-footer,
+#runTrainingJournalScreen .run-journal-detail-footer {
+  flex-shrink: 0;
+  padding: 6px 12px 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-top: 1px solid #f3f4f6;
+}
+
+#runTrainingJournalScreen .run-journal-strava-logo {
+  display: block;
+  height: 12px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
 }
 
 #runTrainingJournalScreen .journal-detail-row {
@@ -265,5 +294,5 @@ html.global-hub-glass-nav-active #runTrainingJournalScreen .run-journal-detail-o
 
 html.global-hub-glass-nav-active #runTrainingJournalScreen .journal-bottom-sheet,
 html.global-hub-glass-nav-active #runTrainingJournalScreen .run-journal-detail-panel {
-  max-height: min(75vh, calc(100dvh - var(--hub-glass-nav-scroll-pad) - 48px));
+  max-height: min(92vh, calc(100dvh - var(--hub-glass-nav-scroll-pad) - 12px));
 }
