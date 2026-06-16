@@ -59,7 +59,7 @@ const GEMINI_RUN_COACH_SYSTEM_PROMPT = `
 [유저 프로필]
 {{userProfile}}
 
-[최근 30일 RUN 훈련 로그 (사이클·파워 데이터 제외)]
+[최근 90일 RUN 훈련 로그 (사이클·파워 데이터 제외)]
 {{recentLogs}}
 
 [90일 6축 헥사곤 페이스 (1k·3k·5k·7k·10k·20k)]

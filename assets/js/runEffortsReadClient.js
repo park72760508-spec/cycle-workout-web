@@ -164,8 +164,113 @@
     return Math.round((Number(json.weeklyTss) || 0) * 10) / 10;
   }
 
+  var RUN_HEXAGON_AXIS_SPEED = {
+    '1k': 'speed_1k',
+    '3k': 'speed_3k',
+    '5k': 'speed_5k',
+    '7k': 'speed_7k',
+    '10k': 'speed_10k',
+    '20k': 'speed_20k',
+  };
+  var RUN_HEXAGON_AXIS_WINDOW_DAYS = {
+    '1k': 90,
+    '3k': 90,
+    '5k': 90,
+    '7k': 90,
+    '10k': 90,
+    '20k': 180,
+  };
+
+  function localYmdFromDate(d) {
+    return (
+      d.getFullYear() +
+      '-' +
+      String(d.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(d.getDate()).padStart(2, '0')
+    );
+  }
+
+  function formatPeakPaceFromSpeedMps(speedMps) {
+    if (speedMps == null || !isFinite(speedMps) || speedMps <= 0) return null;
+    var secPerKm = null;
+    if (
+      window.runningRankingFormat &&
+      typeof window.runningRankingFormat.speedToPaceSecPerKm === 'function'
+    ) {
+      secPerKm = window.runningRankingFormat.speedToPaceSecPerKm(speedMps, true);
+    } else {
+      secPerKm = 1000 / speedMps;
+    }
+    if (secPerKm == null || !isFinite(secPerKm) || secPerKm <= 0) return null;
+    if (
+      window.runningRankingFormat &&
+      typeof window.runningRankingFormat.formatPaceMmSs === 'function'
+    ) {
+      return window.runningRankingFormat.formatPaceMmSs(secPerKm);
+    }
+    if (window.runDashboardPace && typeof window.runDashboardPace.formatPaceMinPerKm === 'function') {
+      return window.runDashboardPace.formatPaceMinPerKm(secPerKm);
+    }
+    return null;
+  }
+
+  /**
+   * Supabase run_activity_efforts → 90일(20k는 180일) 구간 최고 속도 기반 peak_performances
+   * 랭킹 스냅샷·슬라이딩 페널티와 무관하게 AI·역치 페이스용 보조 데이터
+   * @param {object[]} efforts
+   * @returns {object}
+   */
+  function buildPeakPerformancesFromRunEfforts(efforts) {
+    var peaks = {};
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var todayStr = localYmdFromDate(today);
+
+    Object.keys(RUN_HEXAGON_AXIS_SPEED).forEach(function (axis) {
+      var speedField = RUN_HEXAGON_AXIS_SPEED[axis];
+      var hrField = speedField.replace('speed_', 'hr_');
+      var windowDays = RUN_HEXAGON_AXIS_WINDOW_DAYS[axis] || 90;
+      var cutoff = new Date(today);
+      cutoff.setDate(cutoff.getDate() - windowDays);
+      var cutoffStr = localYmdFromDate(cutoff);
+      var bestSpeed = 0;
+      var bestHr = null;
+
+      (efforts || []).forEach(function (eff) {
+        var ymd = String(eff.activity_date || '').slice(0, 10);
+        if (!ymd || ymd < cutoffStr || ymd > todayStr) return;
+        var spd = Number(eff[speedField]);
+        if (!isFinite(spd) || spd <= 0) return;
+        if (spd > bestSpeed) {
+          bestSpeed = spd;
+          bestHr = eff[hrField] != null ? Number(eff[hrField]) : null;
+        }
+      });
+
+      var paceStr = formatPeakPaceFromSpeedMps(bestSpeed);
+      if (paceStr) {
+        peaks[axis] = {
+          pace: paceStr,
+          calculated_pace: paceStr,
+          hr: bestHr,
+          is_penalty_applied: false,
+        };
+      }
+    });
+    return peaks;
+  }
+
   window.getUserRunEfforts = getUserRunEfforts;
   window.getUserRunTrainingLogs = getUserRunTrainingLogs;
   window.getUserRunWeeklyTss = getUserRunWeeklyTss;
   window.buildRunCoachCleanLogs = buildRunCoachCleanLogs;
+  window.buildPeakPerformancesFromRunEfforts = buildPeakPerformancesFromRunEfforts;
+  window.runEffortsReadClient = {
+    getUserRunEfforts: getUserRunEfforts,
+    getUserRunTrainingLogs: getUserRunTrainingLogs,
+    getUserRunWeeklyTss: getUserRunWeeklyTss,
+    buildRunCoachCleanLogs: buildRunCoachCleanLogs,
+    buildPeakPerformancesFromRunEfforts: buildPeakPerformancesFromRunEfforts,
+  };
 })();

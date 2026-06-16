@@ -539,9 +539,32 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
       var t = Number(l.tss) || 0; return sum + ((t > 0 && t < 1200) ? t : 0);
     }, 0));
   }
-  var totalTSS = Math.round((recentLogs || []).reduce(function (sum, l) {
-    var t = Number(l.tss) || 0; return sum + ((t > 0 && t < 1200) ? t : 0);
-  }, 0));
+  var totalTSS = Math.round((function () {
+    var logsForWeekly = recentLogs || [];
+    if (isRun) {
+      var thirtyAgo = new Date(today);
+      thirtyAgo.setDate(today.getDate() - 29);
+      var thirtyStr = thirtyAgo.getFullYear() + '-' + String(thirtyAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyAgo.getDate()).padStart(2, '0');
+      var todayStrWeekly = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      logsForWeekly = logsForWeekly.filter(function (log) {
+        var d = '';
+        if (log.completed_at) {
+          d = String(log.completed_at).split('T')[0];
+        } else if (log.date) {
+          var raw = log.date;
+          if (raw && typeof raw.toDate === 'function') raw = raw.toDate();
+          d = raw instanceof Date
+            ? raw.getFullYear() + '-' + String(raw.getMonth() + 1).padStart(2, '0') + '-' + String(raw.getDate()).padStart(2, '0')
+            : String(raw).slice(0, 10);
+        }
+        return d && d >= thirtyStr && d <= todayStrWeekly;
+      });
+    }
+    return logsForWeekly.reduce(function (sum, l) {
+      var t = Number(l.tss) || 0;
+      return sum + ((t > 0 && t < 1200) ? t : 0);
+    }, 0);
+  })());
   var weeklyTSS = Math.round(totalTSS / 4.3);
 
   // 컨디션 점수: API 호출 전에 공통 모듈로 산출해 프롬프트에 주입 — 코멘트에 표시되는 점수와 화면 표시(93점)가 일치하도록
