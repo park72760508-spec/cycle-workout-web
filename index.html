@@ -28,12 +28,13 @@
   <script>try { window.__CONFIG_LOADED__ = !!(window.__FIREBASE_CONFIG__ && window.__FIREBASE_CONFIG__.apiKey && window.__FIREBASE_CONFIG__.apiKey !== 'YOUR_FIREBASE_API_KEY'); } catch (e) { window.__CONFIG_LOADED__ = false; }</script>
   <!-- Firebase·랭킹 캐시 등이 localStorage를 채우기 전 용량 정리 (QuotaExceededError 방지) -->
   <script src="assets/js/stelvioLocalStorageQuotaGuard.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="assets/js/firebaseConfig.js"></script>
+  <script src="assets/js/stelvioFirestoreReconnect.js"></script>
   <!-- 랭킹보드 성능: DOM diff + Worker fetch (기능 동일, 렌더/파싱 분리) -->
   <script src="https://cdn.jsdelivr.net/npm/morphdom@2.7.4/dist/morphdom-umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/stelvioRankingPerf.js"></script>
@@ -125,7 +126,10 @@
         }
         if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Auth 초기화');
         else console.log('✅ Firebase v9 Auth 초기화');
-        firestoreV9 = initFirestore(appV9, { experimentalForceLongPolling: true });
+        firestoreV9 = initFirestore(appV9, {
+          experimentalForceLongPolling: true,
+          useFetchStreams: false
+        });
         if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Firestore 초기화');
         else console.log('✅ Firebase v9 Firestore 초기화');
 
