@@ -138,7 +138,9 @@
   function isHexSegmentMissing(hexagon, key) {
     var seg = hexagon && hexagon[key];
     if (!seg) return true;
-    return !!(seg.missing || seg.is_penalty_applied || seg.calculated_pace == null || seg.calculated_pace === '');
+    if (seg.missing === true) return true;
+    var pace = seg.pace || seg.calculated_pace;
+    return pace == null || pace === '' || pace === '—' || pace === '-';
   }
 
   function analyzeRunHexagonGaps(hexagonContext) {

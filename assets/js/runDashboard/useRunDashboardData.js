@@ -58,19 +58,19 @@
     if (!recentLogs || !Array.isArray(recentLogs) || !recentLogs.length) {
       return out;
     }
-    var thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 29);
-    var thirtyStr =
-      thirtyDaysAgo.getFullYear() +
+    var ninetyDaysAgo = new Date(today);
+    ninetyDaysAgo.setDate(today.getDate() - 89);
+    var ninetyStr =
+      ninetyDaysAgo.getFullYear() +
       '-' +
-      String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') +
+      String(ninetyDaysAgo.getMonth() + 1).padStart(2, '0') +
       '-' +
-      String(thirtyDaysAgo.getDate()).padStart(2, '0');
+      String(ninetyDaysAgo.getDate()).padStart(2, '0');
     var logsToSend = recentLogs
       .filter(function(log) {
         if (!isRunLogForWeeklyTss(log)) return false;
         var ds = parseDateForCoachAnalysis(log.date);
-        return ds && ds >= thirtyStr && ds <= todayStr;
+        return ds && ds >= ninetyStr && ds <= todayStr;
       })
       .sort(function(a, b) {
         return (parseDateForCoachAnalysis(a.date) || '').localeCompare(parseDateForCoachAnalysis(b.date) || '');

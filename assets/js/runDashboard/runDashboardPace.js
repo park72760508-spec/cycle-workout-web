@@ -26,7 +26,7 @@
       var seg = peaks && peaks[key];
       var pace = seg && (seg.pace || seg.calculated_pace);
       var penalized = !!(penalties && penalties[key]) || !!(seg && seg.is_penalty_applied);
-      var missing = isMissingPaceValue(pace) || penalized;
+      var missing = isMissingPaceValue(pace);
       hexagon[key] = {
         pace: isMissingPaceValue(pace) ? null : String(pace),
         calculated_pace: isMissingPaceValue(pace) ? null : String(pace),
@@ -53,29 +53,94 @@
     return Math.max(20, Math.min(85, Math.round(vo2AtThreshold / 0.86)));
   }
 
-  async function fetchRunLeaderboardCoachContext(userId) {
-    var empty = {
-      thresholdPace: computeThresholdPaceFromPeaks(null),
-      hexagonContext: extractHexagonPaceContext(null),
-      leaderboardRow: null
-    };
-    if (!userId || !window.runningRankingApi || typeof window.runningRankingApi.fetchLeaderboard !== 'function') {
-      return empty;
-    }
+  function hexagonMissingCount(hexCtx) {
+    return hexCtx && hexCtx.missingAxes ? hexCtx.missingAxes.length : HEXAGON_AXES.length;
+  }
+
+  function buildHexagonFromPeakMap(peakMap, penalties) {
+    return extractHexagonPaceContext({
+      peak_performances: peakMap || null,
+      segment_penalties: penalties || null,
+    });
+  }
+
+  function pickBetterHexagonContext(ctxA, ctxB) {
+    if (!ctxA || !ctxA.hexagon) return ctxB || ctxA;
+    if (!ctxB || !ctxB.hexagon) return ctxA;
+    return hexagonMissingCount(ctxA) <= hexagonMissingCount(ctxB) ? ctxA : ctxB;
+  }
+
+  async function fetchSupabaseHexagonCoachContext(userId) {
+    if (!userId || typeof window.getUserRunEfforts !== 'function') return null;
+    if (typeof window.buildPeakPerformancesFromRunEfforts !== 'function') return null;
     try {
-      var lb = await window.runningRankingApi.fetchLeaderboard();
-      if (!lb || !lb.success || !Array.isArray(lb.rows)) return empty;
-      var row = findLeaderboardRowForUser(lb.rows, userId);
-      if (!row) return empty;
+      var efforts = await window.getUserRunEfforts(userId, { limit: 600 });
+      if (!efforts || !efforts.length) return null;
+      var peaks = window.buildPeakPerformancesFromRunEfforts(efforts);
       return {
-        thresholdPace: computeThresholdPaceFromPeaks(row.peak_performances),
-        hexagonContext: extractHexagonPaceContext(row),
-        leaderboardRow: row
+        peakMap: peaks,
+        hexagonContext: buildHexagonFromPeakMap(peaks, null),
+        source: 'supabase_efforts',
       };
-    } catch (e) {
-      console.warn('[runDashboardPace] fetchRunLeaderboardCoachContext failed:', e);
-      return empty;
+    } catch (eSup) {
+      console.warn('[runDashboardPace] Supabase efforts hexagon fallback failed:', eSup);
+      return null;
     }
+  }
+
+  async function fetchRunLeaderboardCoachContext(userId) {
+    var bestPeaks = null;
+    var bestHex = extractHexagonPaceContext(null);
+    var leaderboardRow = null;
+
+    if (userId && window.runningRankingApi && typeof window.runningRankingApi.fetchLeaderboard === 'function') {
+      try {
+        var lb = await window.runningRankingApi.fetchLeaderboard();
+        if (lb && lb.success && Array.isArray(lb.rows)) {
+          leaderboardRow = findLeaderboardRowForUser(lb.rows, userId);
+          if (leaderboardRow) {
+            var peakCtx = buildHexagonFromPeakMap(
+              leaderboardRow.peak_performances,
+              leaderboardRow.segment_penalties
+            );
+            var profileCtx = leaderboardRow.profile_peak_performances
+              ? buildHexagonFromPeakMap(leaderboardRow.profile_peak_performances, null)
+              : null;
+            bestHex = profileCtx ? pickBetterHexagonContext(peakCtx, profileCtx) : peakCtx;
+            bestPeaks =
+              profileCtx && hexagonMissingCount(profileCtx) < hexagonMissingCount(peakCtx)
+                ? leaderboardRow.profile_peak_performances
+                : leaderboardRow.peak_performances;
+          }
+        }
+      } catch (eLb) {
+        console.warn('[runDashboardPace] fetchRunLeaderboardCoachContext leaderboard failed:', eLb);
+      }
+    }
+
+    if (userId) {
+      var supa = await fetchSupabaseHexagonCoachContext(userId);
+      if (supa && supa.peakMap) {
+        var mergedPeaks = Object.assign({}, supa.peakMap, bestPeaks || {});
+        HEXAGON_AXES.forEach(function (axis) {
+          var fromLb = bestPeaks && bestPeaks[axis];
+          var lbPace = fromLb && (fromLb.pace || fromLb.calculated_pace);
+          if (!isMissingPaceValue(lbPace)) {
+            mergedPeaks[axis] = fromLb;
+          } else if (supa.peakMap[axis]) {
+            mergedPeaks[axis] = supa.peakMap[axis];
+          }
+        });
+        bestPeaks = mergedPeaks;
+        bestHex = buildHexagonFromPeakMap(mergedPeaks, null);
+      }
+    }
+
+    return {
+      thresholdPace: computeThresholdPaceFromPeaks(bestPeaks),
+      hexagonContext: bestHex,
+      leaderboardRow: leaderboardRow,
+    };
   }
 
   function parsePaceToSecPerKm(paceStr) {
