@@ -268,6 +268,15 @@ function resolveCoachSportCategory(userProfile, opts) {
   if (opts.sportCategory === 'run' || opts.sportCategory === 'RUN') return 'run';
   if (opts.sportCategory === 'cycle' || opts.sportCategory === 'CYCLE') return 'cycle';
   var cat = userProfile && (userProfile.sport_category || userProfile.category);
+  var normalized = typeof window.normalizeUserSportCategory === 'function'
+    ? window.normalizeUserSportCategory(cat)
+    : String(cat || '').trim().toUpperCase();
+  if (normalized === 'CYCLE+RUN' || normalized === 'CYCLE_RUN') {
+    if (typeof window.sportCategoryRoutes !== 'undefined' && typeof window.sportCategoryRoutes.getActiveSport === 'function') {
+      return window.sportCategoryRoutes.getActiveSport() === 'run' ? 'run' : 'cycle';
+    }
+    return 'cycle';
+  }
   if (cat && String(cat).trim().toUpperCase() === 'RUN') return 'run';
   return 'cycle';
 }
@@ -479,6 +488,9 @@ function isLowSpecOrMobile() {
 async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboard, options) {
   var opts = options || {};
   var isRun = resolveCoachSportCategory(userProfile, opts) === 'run';
+  var activeChallenge = typeof window.resolveChallengeForSport === 'function'
+    ? window.resolveChallengeForSport(userProfile, isRun ? 'run' : 'cycle')
+    : (userProfile && userProfile.challenge) || 'Fitness';
   var isLowSpec = isLowSpecOrMobile();
   var timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : (isLowSpec ? 150000 : 60000);
   var maxRetries = opts.maxRetries != null ? opts.maxRetries : (isLowSpec ? 3 : 2);
@@ -538,7 +550,7 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
     var userForScore = {
       age: userProfile?.age,
       gender: userProfile?.gender,
-      challenge: userProfile?.challenge,
+      challenge: activeChallenge,
       ftp: userProfile?.ftp,
       weight: userProfile?.weight,
       sportCategory: isRun ? 'run' : 'cycle',
@@ -582,7 +594,7 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
 
   var weeklyRtssGoal = opts.weeklyRtssGoal != null ? Number(opts.weeklyRtssGoal) : 0;
   if (!weeklyRtssGoal && isRun && typeof window.getWeeklyTargetRtss === 'function') {
-    var rtssInfo = window.getWeeklyTargetRtss(userProfile?.challenge || 'Fitness');
+    var rtssInfo = window.getWeeklyTargetRtss(activeChallenge);
     if (rtssInfo && rtssInfo.target != null) weeklyRtssGoal = rtssInfo.target;
   }
   var hexagonContext = opts.hexagonContext || null;

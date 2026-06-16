@@ -538,7 +538,7 @@ async function startWithdrawnUserRejoinFlow() {
         categoryInput.value = profileCategory;
         categoryInput.disabled = true;
         categoryInput.style.background = '#f0f0f0';
-        applyUserCategoryFormState('register', profileCategory, profile.challenge || 'Fitness');
+        applyUserCategoryFormState('register', profileCategory, profile.challenge || 'Fitness', profile.run_challenge);
       }
     }
 
@@ -2684,6 +2684,7 @@ async function apiReactivateUser(id, userData) {
       grade: String(userData.grade || '2'),
       expiry_date: normalizeExpiryDate(userData.expiry_date) || defaultExpiryDate,
       challenge: String(userData.challenge || 'Fitness'),
+      run_challenge: userData.run_challenge != null ? String(userData.run_challenge) : undefined,
       category: normalizeUserSportCategory(userData.category)
     };
     const res = await apiUpdateUser(id, reactivatePayload);
@@ -2783,6 +2784,7 @@ async function apiCreateUser(userData) {
       grade: String(userData.grade || '2'), // 기본값: "2"
       expiry_date: normalizeExpiryDate(userData.expiry_date) || defaultExpiryDate,
       challenge: String(userData.challenge || 'Fitness'), // 기본값: "Fitness"
+      run_challenge: userData.run_challenge != null ? String(userData.run_challenge) : '',
       category: normalizeUserSportCategory(userData.category),
       acc_points: 0, // 기본값: 0
       rem_points: 0, // 기본값: 0
@@ -2850,6 +2852,7 @@ async function apiUpdateUser(id, userData) {
       updateData.expiry_date = normalizedDate ? String(normalizedDate) : '';
     }
     if (userData.challenge != null) updateData.challenge = String(userData.challenge);
+    if (userData.run_challenge != null) updateData.run_challenge = String(userData.run_challenge);
     if (userData.category != null) updateData.category = normalizeUserSportCategory(userData.category);
     if (userData.acc_points != null) updateData.acc_points = parseFloat(userData.acc_points);
     if (userData.rem_points != null) updateData.rem_points = parseFloat(userData.rem_points);
@@ -3018,13 +3021,14 @@ window.apiDeleteUser = window.apiDeleteUser || apiDeleteUser;
 
 function createUserFromAuth(authFormData) {
   const category = normalizeUserSportCategory(authFormData.category);
-  const isRun = isRunSportCategory(category);
+  const needsFtp = needsFtpForCategory(category);
   const userData = {
     name: authFormData.name || '',
     contact: formatPhoneForDB(authFormData.contact || ''),
-    ftp: isRun ? 0 : (parseInt(authFormData.ftp) || 0),
+    ftp: needsFtp ? (parseInt(authFormData.ftp) || 0) : 0,
     weight: parseFloat(authFormData.weight) || 0,
     challenge: authFormData.challenge || 'Fitness',
+    run_challenge: authFormData.run_challenge || undefined,
     category: category,
     grade: '2',
     expiry_date: ''
@@ -3096,11 +3100,17 @@ function onUserRegistrationError(error, source = 'auth') {
 async function unifiedCreateUser(userData, source = 'profile') {
   try {
     const category = normalizeUserSportCategory(userData.category);
-    const isRun = isRunSportCategory(category);
+    const needsFtp = needsFtpForCategory(category);
     if (!userData.name) {
       throw new Error('필수 필드가 누락되었습니다');
     }
-    if (!isRun && (!userData.ftp || !userData.weight)) {
+    if (needsFtp && (!userData.ftp || !userData.weight)) {
+      throw new Error('필수 필드가 누락되었습니다');
+    }
+    if (!needsFtp && !isRunSportCategory(category) && !userData.weight) {
+      throw new Error('필수 필드가 누락되었습니다');
+    }
+    if (isRunSportCategory(category) && userData.weight == null) {
       throw new Error('필수 필드가 누락되었습니다');
     }
     userData.category = category;
@@ -4525,6 +4535,7 @@ async function selectUser(userId) {
 
 var USER_SPORT_CATEGORY_CYCLE = 'CYCLE';
 var USER_SPORT_CATEGORY_RUN = 'RUN';
+var USER_SPORT_CATEGORY_DUAL = 'CYCLE+RUN';
 
 var CYCLE_CHALLENGE_OPTIONS = [
   { value: 'Fitness', label: 'Fitness (일반 피트니스/다이어트)' },
@@ -4551,15 +4562,108 @@ var RUN_CHALLENGE_LEGACY_LABELS = {
 };
 
 var USER_CATEGORY_FORM_IDS = {
-  register: { category: 'registerCategoryInput', ftp: 'registerFTPInput', challenge: 'registerChallengeInput', weight: 'registerWeightInput' },
-  user: { category: 'userCategory', ftp: 'userFTP', challenge: 'userChallenge', weight: 'userWeight' },
-  editUser: { category: 'editUserCategory', ftp: 'editUserFTP', challenge: 'editUserChallenge', weight: 'editUserWeight' },
-  completeUser: { category: 'completeUserCategory', ftp: 'completeUserFTP', challenge: 'completeUserChallenge', weight: 'completeUserWeight' }
+  register: {
+    category: 'registerCategoryInput',
+    ftp: 'registerFTPInput',
+    challenge: 'registerChallengeInput',
+    cycleChallenge: 'registerCycleChallengeInput',
+    runChallenge: 'registerRunChallengeInput',
+    challengeSingleWrap: 'registerChallengeSingleWrap',
+    challengeDualWrap: 'registerChallengeDualWrap',
+    weight: 'registerWeightInput'
+  },
+  user: {
+    category: 'userCategory',
+    ftp: 'userFTP',
+    challenge: 'userChallenge',
+    cycleChallenge: 'userCycleChallengeInput',
+    runChallenge: 'userRunChallengeInput',
+    challengeSingleWrap: 'userChallengeSingleWrap',
+    challengeDualWrap: 'userChallengeDualWrap',
+    weight: 'userWeight'
+  },
+  editUser: {
+    category: 'editUserCategory',
+    ftp: 'editUserFTP',
+    challenge: 'editUserChallenge',
+    cycleChallenge: 'editUserCycleChallengeInput',
+    runChallenge: 'editUserRunChallengeInput',
+    challengeSingleWrap: 'editUserChallengeSingleWrap',
+    challengeDualWrap: 'editUserChallengeDualWrap',
+    weight: 'editUserWeight'
+  },
+  completeUser: {
+    category: 'completeUserCategory',
+    ftp: 'completeUserFTP',
+    challenge: 'completeUserChallenge',
+    cycleChallenge: 'completeUserCycleChallengeInput',
+    runChallenge: 'completeUserRunChallengeInput',
+    challengeSingleWrap: 'completeUserChallengeSingleWrap',
+    challengeDualWrap: 'completeUserChallengeDualWrap',
+    weight: 'completeUserWeight'
+  }
 };
 
 function normalizeUserSportCategory(raw) {
-  var s = String(raw || USER_SPORT_CATEGORY_CYCLE).trim().toUpperCase();
-  return s === USER_SPORT_CATEGORY_RUN ? USER_SPORT_CATEGORY_RUN : USER_SPORT_CATEGORY_CYCLE;
+  var s = String(raw || USER_SPORT_CATEGORY_CYCLE).trim().toUpperCase().replace(/\s+/g, '');
+  if (s === 'CYCLE+RUN' || s === 'CYCLE_RUN' || s === 'CYCLERUN' || s === 'BOTH') {
+    return USER_SPORT_CATEGORY_DUAL;
+  }
+  if (s === USER_SPORT_CATEGORY_RUN) return USER_SPORT_CATEGORY_RUN;
+  return USER_SPORT_CATEGORY_CYCLE;
+}
+
+function isDualSportCategory(category) {
+  return normalizeUserSportCategory(category) === USER_SPORT_CATEGORY_DUAL;
+}
+
+function needsFtpForCategory(category) {
+  var cat = normalizeUserSportCategory(category);
+  return cat === USER_SPORT_CATEGORY_CYCLE || cat === USER_SPORT_CATEGORY_DUAL;
+}
+
+/**
+ * 활성 스포츠(cycle|run)에 맞는 운동 목적 — 주간 TSS·AI 분석용
+ * @param {object} profile
+ * @param {'cycle'|'run'} [sport]
+ */
+function resolveChallengeForSport(profile, sport) {
+  var p = profile || {};
+  var cat = normalizeUserSportCategory(p.category || p.sport_category);
+  var activeSport = sport;
+  if (!activeSport || (activeSport !== 'run' && activeSport !== 'cycle')) {
+    if (typeof window !== 'undefined' && window.sportCategoryRoutes && typeof window.sportCategoryRoutes.getActiveSport === 'function') {
+      activeSport = window.sportCategoryRoutes.getActiveSport();
+    } else {
+      activeSport = 'cycle';
+    }
+  }
+  if (cat === USER_SPORT_CATEGORY_DUAL) {
+    if (activeSport === 'run') {
+      return String(p.run_challenge || p.challenge || 'Fitness').trim() || 'Fitness';
+    }
+    return String(p.challenge || 'Fitness').trim() || 'Fitness';
+  }
+  if (cat === USER_SPORT_CATEGORY_RUN) {
+    return String(p.run_challenge || p.challenge || 'Fitness').trim() || 'Fitness';
+  }
+  return String(p.challenge || 'Fitness').trim() || 'Fitness';
+}
+
+function readChallengeFieldsFromForm(formKey) {
+  var ids = USER_CATEGORY_FORM_IDS[formKey];
+  if (!ids) return { category: USER_SPORT_CATEGORY_CYCLE, challenge: 'Fitness' };
+  var cat = normalizeUserSportCategory(document.getElementById(ids.category) && document.getElementById(ids.category).value);
+  if (isDualSportCategory(cat)) {
+    var cycleCh = (document.getElementById(ids.cycleChallenge) && document.getElementById(ids.cycleChallenge).value) || 'Fitness';
+    var runCh = (document.getElementById(ids.runChallenge) && document.getElementById(ids.runChallenge).value) || 'Fitness';
+    return { category: cat, challenge: cycleCh, run_challenge: runCh };
+  }
+  var ch = (document.getElementById(ids.challenge) && document.getElementById(ids.challenge).value) || 'Fitness';
+  if (isRunSportCategory(cat)) {
+    return { category: cat, challenge: ch, run_challenge: ch };
+  }
+  return { category: cat, challenge: ch };
 }
 
 function populateChallengeSelectForCategory(selectEl, category, selectedValue) {
@@ -4586,21 +4690,54 @@ function populateChallengeSelectForCategory(selectEl, category, selectedValue) {
   selectEl.value = pick;
 }
 
-function applyUserCategoryFormState(formKey, category, selectedChallenge) {
+function applyUserCategoryFormState(formKey, category, selectedChallenge, selectedRunChallenge) {
   var ids = USER_CATEGORY_FORM_IDS[formKey];
   if (!ids) return;
   var cat = normalizeUserSportCategory(category);
-  var isRun = cat === USER_SPORT_CATEGORY_RUN;
+  var isRun = isRunSportCategory(cat);
+  var isDual = isDualSportCategory(cat);
+  var needsFtp = needsFtpForCategory(cat);
   var categoryEl = document.getElementById(ids.category);
   var ftpEl = document.getElementById(ids.ftp);
   var challengeEl = document.getElementById(ids.challenge);
+  var cycleChallengeEl = document.getElementById(ids.cycleChallenge);
+  var runChallengeEl = document.getElementById(ids.runChallenge);
+  var singleWrap = document.getElementById(ids.challengeSingleWrap);
+  var dualWrap = document.getElementById(ids.challengeDualWrap);
   var weightEl = document.getElementById(ids.weight);
 
   if (categoryEl && categoryEl.value !== cat) categoryEl.value = cat;
-  populateChallengeSelectForCategory(challengeEl, cat, selectedChallenge);
+
+  if (singleWrap) {
+    singleWrap.style.display = isDual ? 'none' : '';
+    if (isDual) singleWrap.classList.add('hidden');
+    else singleWrap.classList.remove('hidden');
+  }
+  if (dualWrap) {
+    dualWrap.style.display = isDual ? 'block' : 'none';
+    if (isDual) dualWrap.classList.remove('hidden');
+    else dualWrap.classList.add('hidden');
+  }
+
+  if (isDual) {
+    populateChallengeSelectForCategory(cycleChallengeEl, USER_SPORT_CATEGORY_CYCLE, selectedChallenge || 'Fitness');
+    populateChallengeSelectForCategory(
+      runChallengeEl,
+      USER_SPORT_CATEGORY_RUN,
+      selectedRunChallenge || selectedChallenge || 'Fitness'
+    );
+    if (challengeEl) challengeEl.removeAttribute('required');
+    if (cycleChallengeEl) cycleChallengeEl.setAttribute('required', 'required');
+    if (runChallengeEl) runChallengeEl.setAttribute('required', 'required');
+  } else {
+    populateChallengeSelectForCategory(challengeEl, cat, selectedChallenge);
+    if (challengeEl) challengeEl.setAttribute('required', 'required');
+    if (cycleChallengeEl) cycleChallengeEl.removeAttribute('required');
+    if (runChallengeEl) runChallengeEl.removeAttribute('required');
+  }
 
   if (ftpEl) {
-    if (isRun) {
+    if (!needsFtp) {
       ftpEl.value = '0';
       ftpEl.disabled = true;
       ftpEl.removeAttribute('required');
@@ -4633,6 +4770,11 @@ if (typeof window !== 'undefined') {
   window.onUserCategoryChange = onUserCategoryChange;
   window.normalizeUserSportCategory = normalizeUserSportCategory;
   window.isRunSportCategory = isRunSportCategory;
+  window.isDualSportCategory = isDualSportCategory;
+  window.needsFtpForCategory = needsFtpForCategory;
+  window.resolveChallengeForSport = resolveChallengeForSport;
+  window.readChallengeFieldsFromForm = readChallengeFieldsFromForm;
+  window.USER_SPORT_CATEGORY_DUAL = USER_SPORT_CATEGORY_DUAL;
 }
 
 function showAddUserForm(clearForm = true) {
@@ -4751,11 +4893,12 @@ async function saveUser() {
   const birthYear = parseInt(document.getElementById('userBirthYear').value);
   const gender = document.getElementById('userGender')?.value;
   const category = normalizeUserSportCategory(document.getElementById('userCategory')?.value);
-  const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
+  const challengeFields = readChallengeFieldsFromForm('user');
   const isRun = isRunSportCategory(category);
+  const needsFtp = needsFtpForCategory(category);
 
   if (!name) { showToast('이름을 입력해주세요.'); return; }
-  if (!isRun && (!ftp || ftp < 50 || ftp > 600)) { showToast('올바른 FTP 값을 입력해주세요. (50-600W)'); return; }
+  if (!isRun && needsFtp && (!ftp || ftp < 50 || ftp > 600)) { showToast('올바른 FTP 값을 입력해주세요. (50-600W)'); return; }
   if (isRun) {
     if (weight == null || weight < 0 || weight > 200) { showToast('올바른 체중을 입력해주세요. (0-200kg)'); return; }
   } else if (!weight || weight < 30 || weight > 200) {
@@ -4769,12 +4912,13 @@ async function saveUser() {
     const userData = { 
       name, 
       contact: contactDB, 
-      ftp: isRun ? 0 : ftp, 
+      ftp: needsFtp ? ftp : 0, 
       weight,
       birth_year: birthYear,
       gender: gender,
-      category,
-      challenge 
+      category: challengeFields.category,
+      challenge: challengeFields.challenge,
+      run_challenge: challengeFields.run_challenge
     };
 
     // 관리자 전용 필드 (관리자인 경우에만 포함)
@@ -4959,7 +5103,7 @@ async function editUser(userId) {
       if (genderEl) genderEl.value = user.gender || '';
       var userCategory = normalizeUserSportCategory(user.category || user.sport_category);
       if (categoryEl) categoryEl.value = userCategory;
-      applyUserCategoryFormState('editUser', userCategory, user.challenge || 'Fitness');
+      applyUserCategoryFormState('editUser', userCategory, user.challenge || 'Fitness', user.run_challenge);
       
       // 관리자 전용 필드
       if (gradeEl) gradeEl.value = String(user.grade || '2');
@@ -5087,12 +5231,13 @@ async function performUpdateFromModal() {
   const birthYear = parseInt(document.getElementById('editUserBirthYear')?.value);
   const gender = document.getElementById('editUserGender')?.value;
   const category = normalizeUserSportCategory(document.getElementById('editUserCategory')?.value);
-  const challenge = document.getElementById('editUserChallenge')?.value || 'Fitness';
+  const challengeFields = readChallengeFieldsFromForm('editUser');
   const isRun = isRunSportCategory(category);
+  const needsFtp = needsFtpForCategory(category);
 
-  // FTP 최소값 적용 (몸무게의 1.8배) — CYCLE만
+  // FTP 최소값 적용 (몸무게의 1.8배) — CYCLE·CYCLE+RUN
   let ftpUsedMin = false;
-  if (!isRun && weight && typeof getFtpMinFromWeight === 'function') {
+  if (needsFtp && weight && typeof getFtpMinFromWeight === 'function') {
     const minFtp = getFtpMinFromWeight(weight);
     if (ftp < minFtp) {
       ftp = minFtp;
@@ -5115,7 +5260,13 @@ async function performUpdateFromModal() {
       showToast('올바른 체중을 입력해주세요.');
       return;
     }
-  } else if (!ftp || !weight) {
+  } else if (needsFtp && (!ftp || !weight)) {
+    if (savingOverlay) {
+      savingOverlay.classList.add('hidden');
+    }
+    showToast('모든 필수 필드를 입력해주세요.');
+    return;
+  } else if (!weight) {
     if (savingOverlay) {
       savingOverlay.classList.add('hidden');
     }
@@ -5128,12 +5279,13 @@ async function performUpdateFromModal() {
     const userData = {
       name,
       contact: contactDB,
-      ftp: isRun ? 0 : ftp,
+      ftp: needsFtp ? ftp : 0,
       weight,
       birth_year: birthYear,
       gender: gender,
-      category,
-      challenge
+      category: challengeFields.category,
+      challenge: challengeFields.challenge,
+      run_challenge: challengeFields.run_challenge
     };
 
     // 관리자 전용 필드 업데이트 (grade=1만 관리자 권한)
@@ -5253,7 +5405,7 @@ function showCompleteUserInfoModal(userData) {
   var completeCategory = normalizeUserSportCategory(userData.category || userData.sport_category);
   var completeCategoryEl = document.getElementById('completeUserCategory');
   if (completeCategoryEl) completeCategoryEl.value = completeCategory;
-  applyUserCategoryFormState('completeUser', completeCategory, userData.challenge || 'Fitness');
+  applyUserCategoryFormState('completeUser', completeCategory, userData.challenge || 'Fitness', userData.run_challenge);
   
   // 모달을 body의 직접 자식으로 이동 (z-index 문제 방지)
   if (modal.parentElement !== document.body) {
@@ -5334,8 +5486,9 @@ async function completeUserInfo() {
   const birthYear = parseInt(document.getElementById('completeUserBirthYear')?.value);
   const gender = document.getElementById('completeUserGender')?.value?.trim();
   const category = normalizeUserSportCategory(document.getElementById('completeUserCategory')?.value);
-  const challenge = document.getElementById('completeUserChallenge')?.value;
+  const challengeFields = readChallengeFieldsFromForm('completeUser');
   const isRun = isRunSportCategory(category);
+  const needsFtp = needsFtpForCategory(category);
   
   if (!contactRaw) {
     showToast('전화번호를 입력해주세요.');
@@ -5358,9 +5511,9 @@ async function completeUserInfo() {
     showToast('올바른 체중을 입력해주세요. (30-200kg)');
     return;
   }
-  let ftpToUse = isRun ? 0 : ftp;
+  let ftpToUse = needsFtp ? ftp : 0;
   let ftpUsedMin = false;
-  if (!isRun) {
+  if (needsFtp) {
     const minFtp = getFtpMinFromWeight(weight);
     if (!ftpToUse || ftpToUse < minFtp) {
       ftpToUse = minFtp;
@@ -5371,8 +5524,12 @@ async function completeUserInfo() {
       return;
     }
   }
-  if (!challenge) {
+  if (!challengeFields.challenge) {
     showToast('운동 목적을 선택해주세요.');
+    return;
+  }
+  if (isDualSportCategory(category) && !challengeFields.run_challenge) {
+    showToast('RUN 운동 목적을 선택해주세요.');
     return;
   }
   
@@ -5393,8 +5550,9 @@ async function completeUserInfo() {
       weight: weight,
       birth_year: birthYear,
       gender: gender,
-      category: category,
-      challenge: challenge,
+      category: challengeFields.category,
+      challenge: challengeFields.challenge,
+      run_challenge: challengeFields.run_challenge,
       expiry_date: normalizeExpiryDate(extendedExpiryDate) // 6개월 무료 연장 적용
     };
 
