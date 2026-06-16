@@ -95,6 +95,9 @@
     var MapPreview = window.JournalCourseMapPreview;
     var year = selectedDate ? String(selectedDate).slice(0, 4) : String(new Date().getFullYear());
     var yearlyBest = yearlyPacePrByYear[year] || {};
+    var showStravaFooter = logs.some(function (log) {
+      return String(log && log.source != null ? log.source : 'strava').toLowerCase() === 'strava';
+    });
 
     if (!open) return null;
 
@@ -104,13 +107,22 @@
           R.createElement('h3', { className: 'journal-bottom-sheet-title' }, 'RUN 상세 기록'),
           R.createElement('button', { type: 'button', className: 'journal-bottom-sheet-close', onClick: onClose, 'aria-label': '닫기' }, '×')
         ),
-        R.createElement('div', { className: 'journal-bottom-sheet-body' },
+        R.createElement('div', { className: 'journal-bottom-sheet-body run-journal-detail-body' },
           !logs.length
             ? R.createElement('p', null, '표시할 기록이 없습니다.')
             : logs.map(function (log) {
               return RunLogCard(log, yearlyBest, MapPreview);
             })
-        )
+        ),
+        showStravaFooter
+          ? R.createElement('div', { className: 'journal-bottom-sheet-footer run-journal-detail-footer' },
+            R.createElement('img', {
+              src: 'assets/img/api_strava.png',
+              alt: 'Powered by Strava',
+              className: 'run-journal-strava-logo'
+            })
+          )
+          : null
       )
     );
   }
