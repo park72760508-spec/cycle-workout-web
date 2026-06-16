@@ -26,6 +26,8 @@
   <!-- Stelvio 앱 → Chrome 이미지 저장 (?journalSave=1) — SPA rewrite 시에도 동작 -->
   <script src="assets/js/journal/journalSaveBridgeBoot.js"></script>
   <script>try { window.__CONFIG_LOADED__ = !!(window.__FIREBASE_CONFIG__ && window.__FIREBASE_CONFIG__.apiKey && window.__FIREBASE_CONFIG__.apiKey !== 'YOUR_FIREBASE_API_KEY'); } catch (e) { window.__CONFIG_LOADED__ = false; }</script>
+  <!-- Firebase·랭킹 캐시 등이 localStorage를 채우기 전 용량 정리 (QuotaExceededError 방지) -->
+  <script src="assets/js/stelvioLocalStorageQuotaGuard.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
@@ -78,6 +80,9 @@
   <!-- Firebase v9 Modular SDK (전화번호 인증용) - iPhone 8/Safari iOS 호환: 동적 import, 구조분해 제거 -->
   <script type="module">
     (async function initFirebaseV9() {
+      if (typeof window.pruneStelvioLocalStorageForQuota === 'function') {
+        try { window.pruneStelvioLocalStorageForQuota(); } catch (_prune) {}
+      }
       var firebaseConfig = (window.__FIREBASE_CONFIG__ && typeof window.__FIREBASE_CONFIG__ === 'object') ? window.__FIREBASE_CONFIG__ : {
       apiKey: "YOUR_FIREBASE_API_KEY",
       authDomain: "your-project.firebaseapp.com",
