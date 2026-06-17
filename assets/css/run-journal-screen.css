@@ -24,13 +24,13 @@
   font-weight: 700;
 }
 
-#runTrainingJournalScreen .mini-calendar-day.run-journal-day .mini-calendar-day-num {
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day .day-number {
   font-size: 14px;
   font-weight: 400;
   line-height: 1;
 }
 
-#runTrainingJournalScreen .mini-calendar-day.run-journal-day.has-training .mini-calendar-day-num {
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.has-training .day-number {
   font-weight: 700;
 }
 
@@ -48,7 +48,7 @@
   display: none;
 }
 
-#runTrainingJournalScreen .mini-calendar-day.run-journal-day.today .mini-calendar-day-num {
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.today .day-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -66,12 +66,12 @@
   box-sizing: border-box;
 }
 
-#runTrainingJournalScreen .mini-calendar-day.run-journal-day.sunday .mini-calendar-day-num,
-#runTrainingJournalScreen .mini-calendar-day.run-journal-day.holiday .mini-calendar-day-num {
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.sunday .day-number,
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.holiday .day-number {
   color: #dc2626;
 }
 
-#runTrainingJournalScreen .mini-calendar-day.run-journal-day.saturday .mini-calendar-day-num {
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.saturday .day-number {
   color: #2563eb;
 }
 
@@ -84,19 +84,55 @@
   color: #2563eb;
 }
 
-#runTrainingJournalScreen .mini-calendar-day.has-pr .mini-calendar-pr-badge {
+/* PR 코너 배지 — 라이딩 기록(#trainingJournalScreen)과 동일 */
+#runTrainingJournalScreen .mini-calendar-day.journal-has-pr .day-number-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#runTrainingJournalScreen .mini-calendar-day.has-training .day-number-wrap .day-number {
+  position: relative;
+  z-index: 1;
+}
+
+#runTrainingJournalScreen .journal-pr-corner-badge {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  display: inline-block;
-  font-size: 8px;
-  font-weight: 700;
-  color: #fff;
+  z-index: 2;
+  box-sizing: border-box;
+  width: 17px;
+  height: 17px;
+  min-width: 15px;
+  min-height: 15px;
+  padding: 0;
+  border-radius: 50%;
   background: #dc2626;
-  border-radius: 3px;
-  padding: 0 3px;
-  margin: 0;
-  line-height: 1.3;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(185, 28, 28, 0.45);
+  pointer-events: none;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) translate(11px, -11px);
+}
+
+@media (min-width: 380px) {
+  #runTrainingJournalScreen .journal-pr-corner-badge {
+    width: 18px;
+    height: 18px;
+    min-width: 16px;
+    min-height: 16px;
+    font-size: 7.5px;
+    transform: translate(-50%, -50%) translate(12px, -12px);
+  }
 }
 
 #runTrainingJournalScreen .journal-daily-summary {
