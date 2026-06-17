@@ -184,10 +184,42 @@
       onDateSelect(dateKey);
     }
 
+    function getJournalCurrentUser() {
+      try {
+        var cu = window.currentUser ? Object.assign({}, window.currentUser) : null;
+        var uid = cu && (cu.id || cu.uid) ? String(cu.id || cu.uid) : '';
+        if (uid && Array.isArray(window.users)) {
+          var row = window.users.find(function (u) {
+            return u && String(u.id || u.uid || '') === uid;
+          });
+          if (row) cu = Object.assign({}, cu || {}, row);
+        }
+        try {
+          var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
+          if (ls && typeof ls === 'object') cu = Object.assign({}, ls, cu || {});
+        } catch (e) {}
+        return cu;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function isJournalStravaConnected(user) {
+      if (typeof window.userHasStravaConnected === 'function') {
+        return window.userHasStravaConnected(user);
+      }
+      if (!user) return false;
+      if (user.strava_refresh_token || user.strava_access_token) return true;
+      if (user.strava_connected === true || user.strava_connected === 'true' || user.strava_connected === 1) return true;
+      if (user.has_strava === true || user.has_strava === 'true' || user.has_strava === 1) return true;
+      var athleteId = user.strava_athlete_id != null ? String(user.strava_athlete_id).trim() : '';
+      return !!athleteId;
+    }
+
     function openStravaOrSettings() {
       try {
-        var user = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser')||'null'); } catch(e){ return null; } })();
-        var connected = user && (user.strava_refresh_token || user.strava_access_token);
+        var user = getJournalCurrentUser();
+        var connected = isJournalStravaConnected(user);
         if (connected) {
           if (typeof window.openStravaSyncModal === 'function') window.openStravaSyncModal();
           else {
