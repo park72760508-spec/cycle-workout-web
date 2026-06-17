@@ -9436,24 +9436,166 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   width: 100%;
 }
 
-/* 환경설정 모달 — RUN 일반 회원 프로필 카드 */
+/* 환경설정 모달 — RUN 본인 프로필 (카드 없이 바로 표시) */
 #settingsModal .settings-profile-section {
-  margin-bottom: 0;
+  margin: 0 0 16px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid #e5e7eb;
 }
-#settingsModal #settingsUserList {
-  display: block;
+#settingsModal .settings-profile-section__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+#settingsModal .settings-profile-section__head-icon {
+  height: 1.5em;
+  width: auto;
+  vertical-align: middle;
+}
+#settingsModal .settings-profile-section__head-title {
+  font-size: 0.9em;
+  font-weight: 700;
+  color: inherit;
+}
+#settingsModal .settings-profile-panel-host {
   width: 100%;
   margin: 0;
 }
-#settingsModal #settingsUserList .user-card {
-  background: var(--card-bg, #fff);
-  border: 1px solid var(--card-border, #e5e7eb);
-  border-radius: 14px;
-  padding: 14px;
-  color: var(--text, #111827);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+#settingsModal .settings-profile-panel__empty {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+  padding: 8px 0;
+}
+#settingsModal .settings-profile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   width: 100%;
+}
+#settingsModal .settings-profile-panel__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+#settingsModal .settings-profile-panel__avatar-wrap {
+  flex-shrink: 0;
+}
+#settingsModal .settings-profile-panel__identity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#settingsModal .settings-profile-panel__name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.35;
+}
+#settingsModal .settings-profile-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+#settingsModal .settings-profile-panel__points-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+#settingsModal .settings-profile-panel__stats.user-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 13px;
+  color: #374151;
+}
+#settingsModal .settings-profile-panel__meta.user-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+#settingsModal .settings-profile-panel .point-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+#settingsModal .settings-profile-panel .point-badge.point-accumulated {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+#settingsModal .settings-profile-panel .point-badge.point-remaining {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+#settingsModal .settings-profile-panel .expiry.is-expired {
+  color: #dc2626;
+  font-weight: 600;
+}
+#settingsModal .settings-profile-panel .expiry.is-soon {
+  color: #d97706;
+  font-weight: 600;
+}
+#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-btn {
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-ring {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(46, 116, 232, 0.38);
   box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  display: block;
+}
+#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-camera {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(26, 29, 33, 0.88)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%23fff' viewBox='0 0 24 24'%3E%3Cpath d='M9 3L7 5H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V7a2 2 0 00-2-2h-3l-2-2H9zm3 16a5 5 0 110-10 5 5 0 010 10z'/%3E%3C/svg%3E")
+    center / 14px no-repeat;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-readonly .stelvio-profile-card-avatar-ring {
+  border-color: rgba(100, 116, 139, 0.35);
 }
 
 /* 사용자 카드 - 화면 크기에 따라 넓이 조정 */
