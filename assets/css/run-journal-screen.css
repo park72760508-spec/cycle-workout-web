@@ -26,8 +26,16 @@
 
 #runTrainingJournalScreen .mini-calendar-day.run-journal-day .mini-calendar-day-num {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1;
+}
+
+#runTrainingJournalScreen .mini-calendar-day.run-journal-day.has-training .mini-calendar-day-num {
+  font-weight: 700;
+}
+
+#runTrainingJournalScreen .mini-calendar-weekday {
+  font-weight: 700;
 }
 
 #runTrainingJournalScreen button.mini-calendar-day.run-journal-day {
