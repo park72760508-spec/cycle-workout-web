@@ -55,6 +55,7 @@
         key: data.journalSelectionKey || data.selectedDate || 'run-summary',
         selectedDate: data.selectedDate,
         logs: data.logsForSelectedDate,
+        dailyRouteDoc: data.dailyRouteDoc,
         onShowDetail: data.openDetailSheet
       }) : null,
       Sheet ? R.createElement(Sheet, {

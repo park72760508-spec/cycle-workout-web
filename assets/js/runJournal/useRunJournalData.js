@@ -61,6 +61,14 @@
     var detailSheetOpen = _sheet[0];
     var setDetailSheetOpen = _sheet[1];
 
+    var _dailyRoute = useState(null);
+    var dailyRouteDoc = _dailyRoute[0];
+    var setDailyRouteDoc = _dailyRoute[1];
+
+    var _dailyRouteDate = useState(null);
+    var dailyRouteDocDate = _dailyRouteDate[0];
+    var setDailyRouteDocDate = _dailyRouteDate[1];
+
     var effortsByActivityId = useMemo(function () {
       return pr().indexEffortsByActivityId(efforts);
     }, [efforts]);
@@ -141,6 +149,63 @@
       return function () { window.removeEventListener('run-journal-refresh', onRefresh); };
     }, [loadData]);
 
+    function fetchDailyRouteProfileDoc(userId, dateKey) {
+      if (!userId || !dateKey) return Promise.resolve(null);
+      var fns = window._firebaseFirestoreFns;
+      var db = window.firestoreV9;
+      if (db && fns && typeof fns.doc === 'function' && typeof fns.getDoc === 'function') {
+        var ref = fns.doc(db, 'users', String(userId), 'daily_route_profiles', String(dateKey));
+        return fns.getDoc(ref).then(function (snap) {
+          var exists = typeof snap.exists === 'function' ? snap.exists() : !!snap.exists;
+          if (!exists) return null;
+          var data = typeof snap.data === 'function' ? snap.data() : null;
+          return data || null;
+        }).catch(function () {
+          return null;
+        });
+      }
+      if (window.firestore && typeof window.firestore.collection === 'function') {
+        return window.firestore
+          .collection('users')
+          .doc(String(userId))
+          .collection('daily_route_profiles')
+          .doc(String(dateKey))
+          .get()
+          .then(function (snap) {
+            return snap && snap.exists ? snap.data() : null;
+          })
+          .catch(function () {
+            return null;
+          });
+      }
+      return Promise.resolve(null);
+    }
+
+    useEffect(function loadDailyRouteProfileForSelectedDate() {
+      if (!selectedDate) {
+        setDailyRouteDoc(null);
+        setDailyRouteDocDate(null);
+        return;
+      }
+      var userId = getCurrentUserId();
+      if (!userId) {
+        setDailyRouteDoc(null);
+        setDailyRouteDocDate(null);
+        return;
+      }
+      var fetchForDate = selectedDate;
+      var cancelled = false;
+      fetchDailyRouteProfileDoc(userId, fetchForDate).then(function (doc) {
+        if (!cancelled) {
+          setDailyRouteDoc(doc);
+          setDailyRouteDocDate(fetchForDate);
+        }
+      });
+      return function () {
+        cancelled = true;
+      };
+    }, [selectedDate]);
+
     var logsForSelectedDate = useMemo(function () {
       if (!selectedDate) return [];
       var raw = trainingLogs[selectedDate] || [];
@@ -168,6 +233,9 @@
       });
     }, []);
 
+    var dailyRouteDocForSelectedDate =
+      dailyRouteDocDate === selectedDate ? dailyRouteDoc : null;
+
     return {
       selectedDate: selectedDate,
       selectJournalDate: selectJournalDate,
@@ -178,6 +246,7 @@
       loading: loading,
       error: error,
       logsForSelectedDate: logsForSelectedDate,
+      dailyRouteDoc: dailyRouteDocForSelectedDate,
       navigateMonth: navigateMonth,
       openDetailSheet: function () { setDetailSheetOpen(true); },
       closeDetailSheet: function () { setDetailSheetOpen(false); },

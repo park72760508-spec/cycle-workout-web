@@ -58,7 +58,9 @@
     var selectedDate = props.selectedDate;
     var logs = props.logs || [];
     var onShowDetail = props.onShowDetail;
-    var MapPreview = window.JournalCourseMapPreview;
+    var dailyRouteDoc = props.dailyRouteDoc || null;
+    var CourseMap = window.JournalCourseMapPreview;
+    var utils = window.stravaPolylineUtils;
     var summary = mergeDay(logs);
 
     if (!selectedDate) {
@@ -68,20 +70,37 @@
       return R.createElement('p', { className: 'journal-empty-hint' }, '이 날짜에 RUN 기록이 없습니다.');
     }
 
-    var hasRoute = logs.some(function (l) { return l.summary_polyline && String(l.summary_polyline).trim(); });
+    var routeProfile =
+      utils && typeof utils.routeProfileFromLogs === 'function'
+        ? utils.routeProfileFromLogs(logs, dailyRouteDoc)
+        : { hasRoute: false, hasElevation: false, segmentCount: 0, activity_ids: [] };
+    var mapKey =
+      (selectedDate || '') +
+      '-seg' +
+      (routeProfile.segmentCount || 0) +
+      '-' +
+      ((routeProfile.activity_ids || []).join(',') || 'none');
     var paceLabel = summary.paceSec != null ? pr().formatPaceFromSpeed(1000 / summary.paceSec) : '—';
 
     return R.createElement('div', {
-      className: 'journal-daily-summary' + (hasRoute ? ' journal-daily-summary--with-route' : '')
+      className: 'card journal-daily-summary journal-daily-summary--with-route'
     },
       R.createElement('div', { className: 'journal-daily-summary-header' },
         R.createElement('h3', { className: 'journal-daily-summary-title' }, formatDateHeading(selectedDate, logs))
       ),
-      hasRoute && MapPreview
-        ? R.createElement('div', { className: 'journal-course-map-wrap journal-daily-summary-map' },
-          R.createElement(MapPreview, { logs: logs, dateKey: selectedDate, mapHeight: 180 })
-        )
-        : null,
+      CourseMap && routeProfile.hasRoute
+        ? R.createElement(CourseMap, {
+            key: mapKey,
+            logs: logs,
+            dailyRouteDoc: dailyRouteDoc,
+            routeProfile: routeProfile,
+            dateKey: selectedDate,
+            mapHeight: 200,
+            className: 'journal-daily-summary-course-map'
+          })
+        : R.createElement('p', { className: 'journal-course-preview-empty' },
+            '코스 지도 없음 — Strava RUN 로그 동기화 후 달력을 새로고침하세요.'
+          ),
       R.createElement('div', { className: 'journal-daily-summary-grid' },
         R.createElement('div', { className: 'journal-summary-item' },
           R.createElement('span', { className: 'journal-summary-label' }, '활동'),
