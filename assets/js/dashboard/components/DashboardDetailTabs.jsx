@@ -81,6 +81,17 @@
     { key: 'c6', label: '레벨G', range: '80% 초과', src: 'assets/img/G.svg' }
   ];
 
+  /** STELVIO 헥사곤(RUN) — 10km 완주 기록·평균 페이스(min/km) 기준 7단계 */
+  var STELVIO_HEXAGON_TIER_GUIDE_ROWS = [
+    { key: 'hc', label: '레벨A', range: '4분00초 이내 / ~ 40분', src: 'assets/img/A.svg' },
+    { key: 'c1', label: '레벨B', range: '4분30초 이내 / ~ 45분', src: 'assets/img/B.svg' },
+    { key: 'c2', label: '레벨C', range: '5분00초 이내 / ~ 50분', src: 'assets/img/C.svg' },
+    { key: 'c3', label: '레벨D', range: '6분00초 이내 / ~ 60분', src: 'assets/img/D.svg' },
+    { key: 'c4', label: '레벨E', range: '7분00초 이내 / ~ 70분', src: 'assets/img/E.svg' },
+    { key: 'c5', label: '레벨F', range: '8분00초 이내 / ~ 80분', src: 'assets/img/F.svg' },
+    { key: 'c6', label: '레벨G', range: '9분00초 초과 / 90분 ~', src: 'assets/img/G.svg' }
+  ];
+
   /** 프로필 카드 FTP/TP·심박 존 테이블 — 대시보드「라이딩/러닝 지표」탭 상단 */
   function MetricsZoneTables(props) {
     var userProfile = props.userProfile;
@@ -385,9 +396,9 @@
           ? '회원가입/프로필에서 선택. 주간 목표 rTSS · RPE 보정 · 목표 조절 범위에 사용'
           : '회원가입/프로필에서 선택. 주간 목표 TSS · RPE 보정 · 목표 조절 범위에 사용';
         var polygonTierTitle = isRun ? 'STELVIO 헥사곤 등급표' : 'STELVIO 헵타곤 등급표';
-        var polygonTierDesc = isRun
-          ? '성장 추이 헥사곤: 지표는 항목별 (n−순위)/(n−1)×100(1등=100)의 **평균**을 100에서 뺀 pTier%로 등급합니다. n≥100이면 5/10/20/40/60/80% 컷, n<100이면 K·상한 보정. 종합 순위표는 heptagon_rank_log(성별·부문·avgPositionScore)로 쿼리하세요.'
-          : '성장 추이 헵타곤: 지표는 항목별 (n−순위)/(n−1)×100(1등=100)의 **평균**을 100에서 뺀 pTier%로 등급합니다. n≥100이면 5/10/20/40/60/80% 컷, n<100이면 K·상한 보정. 종합 순위표는 heptagon_rank_log(성별·부문·avgPositionScore)로 쿼리하세요.';
+        var polygonTierDesc = '성장 추이 헵타곤: 지표는 항목별 (n−순위)/(n−1)×100(1등=100)의 **평균**을 100에서 뺀 pTier%로 등급합니다. n≥100이면 5/10/20/40/60/80% 컷, n<100이면 K·상한 보정. 종합 순위표는 heptagon_rank_log(성별·부문·avgPositionScore)로 쿼리하세요.';
+        var polygonTierGuideRows = isRun ? STELVIO_HEXAGON_TIER_GUIDE_ROWS : STELVIO_OCTAGON_TIER_GUIDE_ROWS;
+        var polygonTierRangeHeader = isRun ? '10k 페이스 / 기록' : '범위(%)';
         return React.createElement(
           'div',
           { className: 'space-y-6' },
@@ -513,23 +524,30 @@
             },
             React.createElement('div', { className: 'px-4 py-3 text-xs text-gray-600' },
               React.createElement('div', { className: 'font-semibold text-gray-800 mb-1' }, polygonTierTitle),
-              React.createElement(
-                'p',
-                { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
-                polygonTierDesc
-              ),
+              isRun
+                ? React.createElement(
+                    'div',
+                    { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed space-y-1' },
+                    React.createElement('p', { className: 'm-0' }, '러닝 등급은 10km 완주 기록과 평균 페이스(min/km)를 기준으로 입문부터 프로까지 총 7단계로 세분화되었습니다.'),
+                    React.createElement('p', { className: 'm-0' }, '자신의 10km 기록을 바탕으로 현재 속한 레벨을 직접 확인하고, 앞으로의 러닝 목표를 세워보세요!')
+                  )
+                : React.createElement(
+                    'p',
+                    { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
+                    polygonTierDesc
+                  ),
               React.createElement('table', { className: 'w-full text-left border-collapse' },
                 React.createElement('thead', null,
                   React.createElement('tr', { className: 'border-b border-gray-200' },
                     React.createElement('th', { className: 'py-1.5 pr-2 w-[22%]' }, '구분'),
-                    React.createElement('th', { className: 'py-1.5' }, '범위(%)'),
+                    React.createElement('th', { className: 'py-1.5' }, polygonTierRangeHeader),
                     React.createElement('th', { className: 'py-1.5 pl-2 w-[88px]' }, '표시')
                   )
                 ),
                 React.createElement(
                   'tbody',
                   null,
-                  STELVIO_OCTAGON_TIER_GUIDE_ROWS.map(function(row) {
+                  polygonTierGuideRows.map(function(row) {
                     return React.createElement(
                       'tr',
                       { key: 'stelvio-octagon-tier-card-' + row.key, className: 'border-b border-gray-100' },
