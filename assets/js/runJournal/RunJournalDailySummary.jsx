@@ -103,12 +103,9 @@
           ),
       R.createElement('div', { className: 'journal-daily-summary-grid' },
         R.createElement('div', { className: 'journal-summary-item' },
-          R.createElement('span', { className: 'journal-summary-label' }, '활동'),
-          R.createElement('span', { className: 'journal-summary-value' }, summary.count + '건')
-        ),
-        R.createElement('div', { className: 'journal-summary-item' },
           R.createElement('span', { className: 'journal-summary-label' }, '거리'),
-          R.createElement('span', { className: 'journal-summary-value' }, (Math.round(summary.distanceKm * 100) / 100) + ' km')
+          R.createElement('span', { className: 'journal-summary-value' },
+            summary.distanceKm > 0 ? (Math.round(summary.distanceKm * 100) / 100) + ' km' : '—')
         ),
         R.createElement('div', { className: 'journal-summary-item' },
           R.createElement('span', { className: 'journal-summary-label' }, '시간'),
@@ -119,21 +116,22 @@
           R.createElement('span', { className: 'journal-summary-value' }, paceLabel)
         ),
         R.createElement('div', { className: 'journal-summary-item' },
-          R.createElement('span', { className: 'journal-summary-label' }, 'TSS'),
-          R.createElement('span', { className: 'journal-summary-value' }, summary.tss)
+          R.createElement('span', { className: 'journal-summary-label' }, '평균 심박'),
+          R.createElement('span', { className: 'journal-summary-value' },
+            summary.avgHr != null && summary.avgHr > 0 ? summary.avgHr + ' bpm' : '—')
         ),
-        summary.avgHr
-          ? R.createElement('div', { className: 'journal-summary-item' },
-            R.createElement('span', { className: 'journal-summary-label' }, '평균 심박'),
-            R.createElement('span', { className: 'journal-summary-value' }, summary.avgHr + ' bpm')
-          )
-          : null,
-        summary.elevationGain
-          ? R.createElement('div', { className: 'journal-summary-item' },
-            R.createElement('span', { className: 'journal-summary-label' }, '고도 상승'),
-            R.createElement('span', { className: 'journal-summary-value' }, Math.round(summary.elevationGain) + ' m')
-          )
-          : null
+        R.createElement('div', { className: 'journal-summary-item' },
+          R.createElement('span', { className: 'journal-summary-label' }, 'TSS'),
+          R.createElement('span', { className: 'journal-summary-value' },
+            summary.tss != null && summary.tss > 0 ? summary.tss : '—')
+        ),
+        R.createElement('div', { className: 'journal-summary-item' },
+          R.createElement('span', { className: 'journal-summary-label' }, '고도 상승'),
+          R.createElement('span', { className: 'journal-summary-value' },
+            summary.elevationGain != null && summary.elevationGain > 0
+              ? Math.round(summary.elevationGain) + ' m'
+              : '—')
+        )
       ),
       R.createElement('div', { className: 'journal-daily-summary-actions' },
         R.createElement('button', {
