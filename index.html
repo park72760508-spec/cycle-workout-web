@@ -3630,7 +3630,7 @@
     </div>
   </div>
 
-  <!-- RUN 베이스캠프 (구조 동일, 메뉴 5개) -->
+  <!-- RUN 베이스캠프 (2×2 메뉴 4개) -->
   <div id="runBasecampScreen" class="screen">
     <div class="basecamp-background-image"></div>
     <div class="connection-main-container">
@@ -3645,15 +3645,11 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-ranking" id="btnRunBasecampRanking" onclick="if(typeof openRunningRankingBoard==='function')openRunningRankingBoard();" aria-label="랭킹보드">
                 <span>랭킹보드</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnRunBasecampCareer" onclick="if(typeof handleMyCareerClick==='function'){handleMyCareerClick();}else if(typeof showMyCareerScreenWithLoading==='function'){showMyCareerScreenWithLoading();}else if(typeof showScreen==='function'){showScreen('myCareerScreen');}" aria-label="나의 기록">
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnRunBasecampCareer" onclick="if(typeof showScreen==='function')showScreen('runTrainingJournalScreen');" aria-label="나의 기록">
                 <span>나의 기록</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-group-entry" id="btnRunBasecampClubHouse" onclick="if(typeof navigateToClubHouseFromBasecamp==='function')navigateToClubHouseFromBasecamp();else{window.__openRidingInitialView='groups';if(typeof showScreen==='function')showScreen('openRidingRoomScreen');}" aria-label="크루 하우스">
-                <span>크루 하우스</span>
-                <span id="runBasecampClubHouseNotiBadge" aria-label="크루 가입 신청 건수"></span>
-              </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnRunBasecampCrewMoim" onclick="if(typeof navigateToRidingMoimFromBasecamp==='function')navigateToRidingMoimFromBasecamp();else if(typeof showScreen==='function')showScreen('openRidingRoomScreen');" aria-label="크루 모임">
-                <span>크루 모임</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnRunBasecampCrewMoim" onclick="if(typeof navigateToRidingMoimFromBasecamp==='function')navigateToRidingMoimFromBasecamp();else if(typeof showScreen==='function')showScreen('openRidingRoomScreen');" aria-label="러닝 크루">
+                <span>러닝 크루</span>
                 <span id="runBasecampRidingNotiBadge" aria-label="알림 건수"></span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-affiliate-entry" id="btnRunBasecampAffiliate" onclick="if(typeof window.onAffiliateButtonClick==='function')window.onAffiliateButtonClick();else if(typeof showScreen==='function')showScreen('affiliateScreen');" aria-label="제휴 할인">
@@ -38246,7 +38242,30 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         'aiScheduleScreen',
         'affiliateScreen'
       ];
+      /** RUN 화면 하단 네비에서 숨길 메뉴 (훈련·계획·구독) */
+      var HUB_NAV_KEYS_HIDDEN_ON_RUN = { train: true, plan: true, subscribe: true };
       window.__hubNavModalTab = window.__hubNavModalTab || null;
+      function hubNavIsRunMode() {
+        return (
+          typeof window.sportCategoryRoutes !== 'undefined' &&
+          typeof window.sportCategoryRoutes.getActiveSport === 'function' &&
+          window.sportCategoryRoutes.getActiveSport() === 'run'
+        );
+      }
+      function hubNavApplySportMenuVisibility(root) {
+        if (!root) return;
+        var isRun = hubNavIsRunMode();
+        var slots = root.querySelectorAll('.open-riding-bottom-glass-nav__slot');
+        for (var s = 0; s < slots.length; s++) {
+          var slot = slots[s];
+          var btn = slot.querySelector('[data-hub-nav]');
+          if (!btn) continue;
+          var key = btn.getAttribute('data-hub-nav');
+          var hide = isRun && !!HUB_NAV_KEYS_HIDDEN_ON_RUN[key];
+          slot.style.display = hide ? 'none' : '';
+          slot.setAttribute('aria-hidden', hide ? 'true' : 'false');
+        }
+      }
       function hubNavShowsForScreen(screenId) {
         return HUB_NAV_SCREEN_IDS.indexOf(screenId) >= 0;
       }
@@ -38417,6 +38436,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var docEl = document.documentElement;
         if (!root) return;
         bindHubGlassNav();
+        hubNavApplySportMenuVisibility(root);
         var visible = hubNavShowsForScreen(screenId);
         if (!visible) {
           try {
