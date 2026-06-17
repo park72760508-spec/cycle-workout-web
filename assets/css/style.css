@@ -9438,15 +9438,16 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 
 /* 환경설정 모달 — RUN 본인 프로필 (카드 없이 바로 표시) */
 #settingsModal .settings-profile-section {
-  margin: 0 0 16px;
-  padding: 0 0 14px;
+  margin: 0 0 12px;
+  padding: 0 0 12px;
   border-bottom: 1px solid #e5e7eb;
 }
 #settingsModal .settings-profile-section__head {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+  padding: 0 2px;
   text-align: left;
 }
 #settingsModal .settings-profile-section__head-icon {
@@ -9462,6 +9463,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 #settingsModal .settings-profile-panel-host {
   width: 100%;
   margin: 0;
+  padding: 0;
 }
 #settingsModal .settings-profile-panel__empty {
   margin: 0;
@@ -9469,6 +9471,15 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   color: #6b7280;
   text-align: center;
   padding: 8px 0;
+}
+
+#settingsModal .profile-user-card-scope .user-card .btn-dashboard {
+  display: none !important;
+}
+
+#settingsModal .profile-user-card-scope .user-card {
+  min-width: 0;
+  padding: 12px 10px;
 }
 
 /* 사용자 카드 - 화면 크기에 따라 넓이 조정 */
@@ -21073,14 +21084,17 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   text-align: center;
 }
 
-#settingsModal .modal-body {
-  padding: 24px;
+#settingsModal .modal-body,
+#settingsModal .settings-modal-body {
+  padding: 14px 8px;
 }
 
 /* 환경설정 블럭 구분 강화 (Gemini API, STRAVA, 사용자 메뉴얼, 스트라바 신규 가입) */
 #settingsModal .settings-block {
-  margin-top: 16px !important;
-  padding: 18px !important;
+  margin-top: 12px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 14px 10px !important;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
