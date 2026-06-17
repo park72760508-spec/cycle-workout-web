@@ -5240,7 +5240,7 @@ button[aria-disabled="true"] {
   padding-bottom: 100px; /* 나가기 버튼을 위한 여백 */
 }
 
-#profileScreen .user-card--withdrawn {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card--withdrawn {
   opacity: 0.88;
   border-color: #d1d5db;
   background: #f9fafb;
@@ -9302,7 +9302,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* 사용자 카드 대시보드 버튼 - 반투명 효과 */
-#profileScreen .user-card .btn-dashboard {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard {
   background: rgba(102, 126, 234, 0.6) !important; /* 반투명 효과 */
   color: white !important;
   border: 1px solid rgba(102, 126, 234, 0.3) !important;
@@ -9318,13 +9318,13 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   box-shadow: 0 2px 4px rgba(102, 126, 234, 0.15);
 }
 
-#profileScreen .user-card .btn-dashboard:hover {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard:hover {
   background: rgba(102, 126, 234, 0.75) !important;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(102, 126, 234, 0.25);
 }
 
-#profileScreen .user-card .btn-dashboard:active {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard:active {
   transform: translateY(0);
   background: rgba(102, 126, 234, 0.5) !important;
   box-shadow: 0 1px 2px rgba(102, 126, 234, 0.2);
@@ -9470,136 +9470,9 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   text-align: center;
   padding: 8px 0;
 }
-#settingsModal .settings-profile-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-}
-#settingsModal .settings-profile-panel__header {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-#settingsModal .settings-profile-panel__avatar-wrap {
-  flex-shrink: 0;
-}
-#settingsModal .settings-profile-panel__identity {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-#settingsModal .settings-profile-panel__name-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  font-size: 15px;
-  line-height: 1.35;
-}
-#settingsModal .settings-profile-panel__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-#settingsModal .settings-profile-panel__points-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 0;
-}
-#settingsModal .settings-profile-panel__stats.user-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-  font-size: 13px;
-  color: #374151;
-}
-#settingsModal .settings-profile-panel__meta.user-meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px 12px;
-  font-size: 12px;
-  color: #6b7280;
-}
-#settingsModal .settings-profile-panel .point-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-#settingsModal .settings-profile-panel .point-badge.point-accumulated {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-#settingsModal .settings-profile-panel .point-badge.point-remaining {
-  background: rgba(59, 130, 246, 0.15);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-}
-#settingsModal .settings-profile-panel .expiry.is-expired {
-  color: #dc2626;
-  font-weight: 600;
-}
-#settingsModal .settings-profile-panel .expiry.is-soon {
-  color: #d97706;
-  font-weight: 600;
-}
-#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-btn {
-  padding: 0;
-  margin: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  flex-shrink: 0;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-ring {
-  position: relative;
-  display: block;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 2px solid rgba(46, 116, 232, 0.38);
-  box-sizing: border-box;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-img {
-  width: 72px;
-  height: 72px;
-  object-fit: cover;
-  display: block;
-}
-#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-camera {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(26, 29, 33, 0.88)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%23fff' viewBox='0 0 24 24'%3E%3Cpath d='M9 3L7 5H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V7a2 2 0 00-2-2h-3l-2-2H9zm3 16a5 5 0 110-10 5 5 0 010 10z'/%3E%3C/svg%3E")
-    center / 14px no-repeat;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  pointer-events: none;
-}
-#settingsModal .settings-profile-panel .stelvio-profile-card-avatar-readonly .stelvio-profile-card-avatar-ring {
-  border-color: rgba(100, 116, 139, 0.35);
-}
 
 /* 사용자 카드 - 화면 크기에 따라 넓이 조정 */
-#profileScreen .user-card{
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card{
   background:var(--card-bg); 
   border:1px solid var(--card-border); 
   border-radius:14px;
@@ -9619,7 +9492,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
     grid-template-columns: 1fr;
     gap: 12px;
   }
-  #profileScreen .user-card {
+  :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card {
     width: 100%;
     max-width: 100%;
   }
@@ -9632,14 +9505,14 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   }
 }
 
-#profileScreen .user-card:hover{ 
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card:hover{ 
   transform:translateY(-2px); 
   box-shadow:0 10px 24px rgba(0,0,0,.08); 
   border-color:#d1d5db; 
 }
 
 /* ── 1줄~4줄 수직 스택 컨테이너 ── */
-#profileScreen .user-card .user-header {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-header {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -9647,7 +9520,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* 1줄: 2분할 (좌: 이름·등급, 우: 버튼) */
-#profileScreen .user-card .user-row1 {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-row1 {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
@@ -9656,20 +9529,20 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   gap: 8px;
 }
 
-#profileScreen .user-card .user-name-wrapper {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-name-wrapper {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-#profileScreen .user-card .user-actions {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-actions {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
 }
 
-#profileScreen .user-card .user-name{ 
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-name{ 
   font-weight:700; 
   font-size:16px; 
   color:var(--text-strong); 
@@ -9680,30 +9553,30 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* 프로필 선택: 이름과 같은 줄 우측 표시등 (A: AI 페어링, S: Strava) */
-#profileScreen .user-card .user-name.user-name-with-indicators {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-name.user-name-with-indicators {
   justify-content: space-between;
   width: 100%;
 }
-#profileScreen .user-card .user-name-with-indicators .user-name-text {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-name-with-indicators .user-name-text {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
-#profileScreen .user-card .user-name-badges {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-name-badges {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
-#profileScreen .user-card .profile-indicator-dot {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-indicator-dot {
   display: inline-block;
   flex-shrink: 0;
 }
 
 /* ── 2줄: 4등분 레이아웃 전체 너비 (테두리·구분선 없음) ── */
 /* 아바타(1/4) │ 누적포인트(1/4) │ 보유포인트(1/4) │ 공개/비공개(1/4) */
-#profileScreen .stelvio-user-points-with-avatar {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -9716,8 +9589,8 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* 아바타 섹션 – flex:1 (1/4), 중앙정렬 */
-#profileScreen .stelvio-user-points-with-avatar > .stelvio-profile-card-avatar-btn,
-#profileScreen .stelvio-user-points-with-avatar > .stelvio-profile-card-avatar-readonly {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar > .stelvio-profile-card-avatar-btn,
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar > .stelvio-profile-card-avatar-readonly {
   flex: 1 1 0;
   display: flex;
   align-items: center;
@@ -9726,7 +9599,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* 포인트 배지 직접 자식 – 각 flex:1 (1/4), 중앙정렬 */
-#profileScreen .stelvio-user-points-with-avatar > .point-badge {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar > .point-badge {
   flex: 1 1 0;
   display: flex;
   align-items: center;
@@ -9737,14 +9610,14 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* 숫자 잘림 없음 */
-#profileScreen .stelvio-user-points-with-avatar .point-value {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar .point-value {
   white-space: nowrap;
   overflow: visible;
   text-overflow: clip;
   max-width: none;
 }
 
-#profileScreen .stelvio-profile-card-avatar-btn {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-profile-card-avatar-btn {
   padding: 0;
   margin: 0;
   border: none;
@@ -9755,7 +9628,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   touch-action: manipulation;
 }
 
-#profileScreen .stelvio-profile-card-avatar-ring {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-profile-card-avatar-ring {
   position: relative;
   display: block;
   width: 60px;
@@ -9767,7 +9640,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-#profileScreen .stelvio-profile-card-avatar-img {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-profile-card-avatar-img {
   width: 60px;
   height: 60px;
   object-fit: cover;
@@ -9775,7 +9648,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* 카메라 아이콘 (SVG data URL) */
-#profileScreen .stelvio-profile-card-avatar-camera {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-profile-card-avatar-camera {
   position: absolute;
   right: 0;
   bottom: 0;
@@ -9789,19 +9662,19 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   pointer-events: none;
 }
 
-#profileScreen .stelvio-profile-card-avatar-readonly .stelvio-profile-card-avatar-ring {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-profile-card-avatar-readonly .stelvio-profile-card-avatar-ring {
   border-color: rgba(100, 116, 139, 0.35);
 }
 
 /* 포인트 배지 기본: 1행 nowrap (.stelvio-user-points-with-avatar 안에서도 동일) */
-#profileScreen .user-card .user-points {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-points {
   display: flex;
   gap: 4px;
   flex-wrap: nowrap;
   align-items: center;
 }
 
-#profileScreen .user-card .point-badge {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .point-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -9815,31 +9688,31 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-#profileScreen .user-card .point-badge:hover {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .point-badge:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* 누적 포인트 - 붉은 계열 투명 상자 */
-#profileScreen .user-card .point-badge.point-accumulated {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .point-badge.point-accumulated {
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.3);
   color: #dc2626;
 }
 
-#profileScreen .user-card .point-badge.point-accumulated .point-icon {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .point-badge.point-accumulated .point-icon {
   font-size: 14px;
   filter: drop-shadow(0 1px 2px rgba(239, 68, 68, 0.3));
 }
 
 /* 보유 포인트 - 민트색 투명 상자 */
-#profileScreen .user-card .point-badge.point-remaining {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .point-badge.point-remaining {
   background: rgba(16, 185, 129, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.3);
   color: #059669;
 }
 
-#profileScreen .user-card .point-badge.point-remaining .point-icon {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .point-badge.point-remaining .point-icon {
   font-size: 14px;
   filter: drop-shadow(0 1px 2px rgba(16, 185, 129, 0.3));
 }
@@ -9921,15 +9794,15 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* 아이콘·라벨 – 2/3 축소 컨텍스트 */
-#profileScreen .stelvio-user-points-with-avatar > .stelvio-affiliate-btn .stelvio-affiliate-btn-icon {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar > .stelvio-affiliate-btn .stelvio-affiliate-btn-icon {
   font-size: 0.9rem;
 }
-#profileScreen .stelvio-user-points-with-avatar > .stelvio-affiliate-btn .stelvio-affiliate-btn-label {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar > .stelvio-affiliate-btn .stelvio-affiliate-btn-label {
   font-size: 0.5rem;
 }
 
 /* 공개/비공개 토글 – 4번째 컬럼 1/4 균등 */
-#profileScreen .stelvio-user-points-with-avatar > .avatar-row-privacy {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar > .avatar-row-privacy {
   flex: 1 1 0;
   display: flex;
   align-items: center;
@@ -9937,13 +9810,13 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   min-width: 0;
 }
 
-#profileScreen .user-card .point-icon {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .point-icon {
   display: inline-flex;
   align-items: center;
   line-height: 1;
 }
 
-#profileScreen .user-card .point-value {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .point-value {
   font-weight: 700;
   letter-spacing: -0.3px;
 }
@@ -9956,7 +9829,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   flex-shrink: 0; /* 아이콘 크기 고정 */
 }
 /* 4줄: 1행(연락처 | 만료일) */
-#profileScreen .user-card .user-meta {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-meta {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -9965,7 +9838,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   color: var(--text-muted);
   font-size: 13px;
 }
-#profileScreen .user-card .user-meta .contact {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-meta .contact {
   flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
@@ -9973,30 +9846,30 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   white-space: nowrap;
 }
 /* 만료일: 연락처와 같은 줄, 우측 정렬 */
-#profileScreen .user-card .user-meta .expiry {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-meta .expiry {
   flex: 0 0 auto;
   text-align: right;
   white-space: nowrap;
 }
 
 /* 비공개 토글 (avatar-row 4번째 칸) */
-#profileScreen .user-card .user-privacy-toggle-inline {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-privacy-toggle-inline {
   margin-left: 0;
   display: inline-flex;
   align-items: center;
 }
 /* avatar-row-privacy 안의 토글 레이블 – 크기 축소하여 칸에 맞춤 */
-#profileScreen .stelvio-user-points-with-avatar > .avatar-row-privacy .privacy-toggle-label {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar > .avatar-row-privacy .privacy-toggle-label {
   gap: 4px;
   font-size: 11px;
 }
-#profileScreen .user-card .user-stats {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-stats {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 0;
 }
-#profileScreen .user-card .privacy-toggle-label {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .privacy-toggle-label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -10005,10 +9878,10 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   color: var(--text-muted);
   user-select: none;
 }
-#profileScreen .user-card .privacy-toggle-input {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .privacy-toggle-input {
   display: none;
 }
-#profileScreen .user-card .privacy-toggle-slider {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .privacy-toggle-slider {
   position: relative;
   width: 40px;
   height: 22px;
@@ -10016,7 +9889,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   border-radius: 11px;
   transition: background 0.2s;
 }
-#profileScreen .user-card .privacy-toggle-slider::after {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .privacy-toggle-slider::after {
   content: '';
   position: absolute;
   width: 18px;
@@ -10028,20 +9901,20 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   transition: transform 0.2s;
 }
-#profileScreen .user-card .privacy-toggle-input:checked + .privacy-toggle-slider {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .privacy-toggle-input:checked + .privacy-toggle-slider {
   background: #ef4444;
 }
-#profileScreen .user-card .privacy-toggle-input:checked + .privacy-toggle-slider::after {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .privacy-toggle-input:checked + .privacy-toggle-slider::after {
   transform: translateX(18px);
 }
-#profileScreen .user-card .privacy-toggle-text {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .privacy-toggle-text {
   font-weight: 500;
   color: #374151;
 }
 
 /* 프로필 카드: 수정/삭제 버튼 (이미지 버튼) */
-#profileScreen .user-card .btn-edit,
-#profileScreen .user-card .btn-delete {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-edit,
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-delete {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -10052,39 +9925,39 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   background: transparent;
   transition: all 0.2s ease;
 }
-#profileScreen .user-card .btn-edit:hover {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-edit:hover {
   background: rgba(59, 130, 246, 0.15);
   border-color: rgba(59, 130, 246, 0.3);
 }
-#profileScreen .user-card .btn-delete:hover:not(.disabled):not(:disabled) {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-delete:hover:not(.disabled):not(:disabled) {
   background: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.3);
 }
 
 /* 프로필 카드: FTP 파워 영역 / 심박 영역 */
-#profileScreen .user-card .profile-zone-section {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-section {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
-#profileScreen .user-card .profile-zone-title {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-title {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   margin-bottom: 6px;
 }
-#profileScreen .user-card .profile-zone-chips {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
-#profileScreen .user-card .profile-zone-chip {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-chip {
   font-size: 10px;
   padding: 2px 6px;
   border-radius: 4px;
   white-space: nowrap;
 }
-#profileScreen .user-card .profile-hr-loading {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-hr-loading {
   font-size: 11px;
   color: var(--text-muted);
 }
@@ -10279,29 +10152,29 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 
 /* 사용자 카드 내 Zone 테이블 (컴팩트) */
-#profileScreen .user-card .profile-zone-table-in-card {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-table-in-card {
   margin-top: 10px;
   margin-bottom: 8px;
 }
-#profileScreen .user-card .profile-zone-table-in-card:first-child {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-table-in-card:first-child {
   margin-top: 0;
 }
-#profileScreen .user-card .profile-zone-table-in-card .profile-zone-table-header {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-table-in-card .profile-zone-table-header {
   padding: 8px 10px;
   font-size: 12px;
 }
-#profileScreen .user-card .profile-zone-table-in-card .profile-zone-table th,
-#profileScreen .user-card .profile-zone-table-in-card .profile-zone-table td {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-table-in-card .profile-zone-table th,
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-table-in-card .profile-zone-table td {
   padding: 6px 8px;
   font-size: 11px;
 }
-#profileScreen .user-card .profile-zone-table-in-card .profile-zone-badge {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-table-in-card .profile-zone-badge {
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
   font-size: 10px;
 }
-#profileScreen .user-card .profile-zone-table-in-card .profile-zone-caption {
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .profile-zone-table-in-card .profile-zone-caption {
   padding: 6px 10px;
   font-size: 11px;
 }
@@ -10334,8 +10207,8 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   filter: none;
   transform: none;
 }
-#profileScreen .user-card:focus-within,
-#profileScreen .user-card:has(.btn:focus){ border-color:var(--brand); box-shadow:0 0 0 3px rgba(46,116,232,.18); }
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card:focus-within,
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card:has(.btn:focus){ border-color:var(--brand); box-shadow:0 0 0 3px rgba(46,116,232,.18); }
 
 #profileScreen #cardAddUser{
   background:#fff; border:1px dashed var(--card-border); border-radius:14px;
