@@ -30,25 +30,6 @@
     return false;
   }
 
-  function isOutdoorLog(log) {
-    var eg = log && log.elevation_gain;
-    return eg != null && eg !== '' && !Number.isNaN(Number(eg)) && Number(eg) > 0;
-  }
-
-  function hasOutdoor(logs) {
-    for (var i = 0; i < logs.length; i++) {
-      if (isOutdoorLog(logs[i])) return true;
-    }
-    return false;
-  }
-
-  function hasIndoor(logs) {
-    for (var i = 0; i < logs.length; i++) {
-      if (!isOutdoorLog(logs[i])) return true;
-    }
-    return false;
-  }
-
   function RunJournalCalendarWidget(props) {
     var trainingLogs = props.trainingLogs || {};
     var currentYear = props.currentYear;
@@ -63,7 +44,7 @@
     var daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     var todayKey = getDateKey(new Date());
     var cells = [];
-    var i, day, key, logs, hasPr, hasI, hasO, d, dow, dayCls;
+    var i, day, key, logs, hasPr, d, dow, dayCls;
 
     for (i = 0; i < startDow; i++) {
       cells.push(R.createElement('div', { key: 'e' + i, className: 'mini-calendar-day empty' }));
@@ -72,8 +53,6 @@
       key = currentYear + '-' + String(currentMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
       logs = trainingLogs[key] || [];
       hasPr = logs.length > 0 && pr().logsHaveAnyPr(logs, props.effortsByActivityId, yearlyPacePrByYear);
-      hasI = logs.length > 0 && hasIndoor(logs);
-      hasO = logs.length > 0 && hasOutdoor(logs);
       d = new Date(currentYear, currentMonth, day);
       dow = d.getDay();
       dayCls = '';
@@ -91,11 +70,7 @@
         onClick: function (dk) { return function () { if (onDateSelect) onDateSelect(dk); }; }(key),
         'aria-label': key + (logs.length ? ' RUN ' + logs.length + '건' : '') + (key === todayKey ? ' 오늘' : '')
       },
-        R.createElement('span', { className: 'run-journal-day-inner' },
-          hasO ? R.createElement('span', { className: 'mini-calendar-dot run-dot run-dot-outdoor', 'aria-hidden': true }) : null,
-          hasI ? R.createElement('span', { className: 'mini-calendar-dot run-dot run-dot-indoor', 'aria-hidden': true }) : null,
-          R.createElement('span', { className: 'mini-calendar-day-num' }, day)
-        ),
+        R.createElement('span', { className: 'mini-calendar-day-num' }, day),
         hasPr ? R.createElement('span', { className: 'mini-calendar-pr-badge', title: 'PR' }, 'PR') : null
       ));
     }
