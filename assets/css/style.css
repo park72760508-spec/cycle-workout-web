@@ -3163,8 +3163,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
  * 위치 보정 시: top / right 두 값만 수정 */
 #basecampRidingNotiBadge,
 #basecampClubHouseNotiBadge,
-#runBasecampRidingNotiBadge,
-#runBasecampClubHouseNotiBadge {
+#runBasecampRidingNotiBadge {
   /* 표시 제어 */
   display: none !important;
   /* 절대 위치 — 부모 button의 position:relative 기준 */
@@ -28967,7 +28966,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
-#runBasecampScreen .basecamp-path-grid .basecamp-btn > span:not(#runBasecampRidingNotiBadge):not(#runBasecampClubHouseNotiBadge) {
+#runBasecampScreen .basecamp-path-grid .basecamp-btn > span:not(#runBasecampRidingNotiBadge) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -28994,10 +28993,10 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   max-width: 90% !important;
   display: grid !important;
   grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
-  grid-template-rows: repeat(3, 1fr) !important;
+  grid-template-rows: repeat(2, 1fr) !important;
   gap: 3.75px !important;
   margin: 0 5% !important;
-  aspect-ratio: 2 / 3 !important;
+  aspect-ratio: 1 / 1 !important;
 }
 #sportCategoryScreen .connection-device-section .grid-2 .sport-category-btn,
 #runBasecampScreen .connection-device-section .grid-2 .basecamp-btn {
