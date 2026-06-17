@@ -7148,6 +7148,14 @@
         <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
       </div>
       <div class="modal-body settings-modal-body">
+        <!-- RUN 일반 회원(grade 2·3): 프로필 선택 카드 — 환경설정 상단 -->
+        <div id="settingsProfileSection" class="card settings-block settings-profile-section" style="display: none; margin-top: 0;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; text-align: left;">
+            <img src="assets/img/add-user3.gif" alt="" style="height: 1.5em; width: auto; vertical-align: middle;" />
+            <span style="font-size: 0.9em; font-weight: bold; color: inherit;">내 프로필</span>
+          </div>
+          <div id="settingsUserList" class="settings-profile-user-list user-list-with-legend"></div>
+        </div>
         <!-- Gemini API 키 입력 블럭 -->
         <div class="card settings-block" style="margin-top: 0;">
           <div class="form-group" style="margin-bottom: 0;">
@@ -38252,18 +38260,35 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           window.sportCategoryRoutes.getActiveSport() === 'run'
         );
       }
+      function hubNavIsAdminUser() {
+        var g =
+          typeof getLoginUserGrade === 'function'
+            ? String(getLoginUserGrade())
+            : typeof getViewerGrade === 'function'
+              ? String(getViewerGrade())
+              : '2';
+        return typeof window.isStelvioAdminGrade === 'function'
+          ? window.isStelvioAdminGrade(g)
+          : String(g).trim() === '1' || Number(g) === 1;
+      }
       function hubNavApplySportMenuVisibility(root) {
         if (!root) return;
         var isRun = hubNavIsRunMode();
+        var hideProfileOnRun = isRun && !hubNavIsAdminUser();
         var slots = root.querySelectorAll('.open-riding-bottom-glass-nav__slot');
         for (var s = 0; s < slots.length; s++) {
           var slot = slots[s];
           var btn = slot.querySelector('[data-hub-nav]');
           if (!btn) continue;
           var key = btn.getAttribute('data-hub-nav');
-          var hide = isRun && !!HUB_NAV_KEYS_HIDDEN_ON_RUN[key];
+          var hide =
+            (isRun && !!HUB_NAV_KEYS_HIDDEN_ON_RUN[key]) ||
+            (hideProfileOnRun && key === 'profile');
           slot.style.display = hide ? 'none' : '';
           slot.setAttribute('aria-hidden', hide ? 'true' : 'false');
+        }
+        if (typeof window.syncSettingsProfileSectionVisibility === 'function') {
+          window.syncSettingsProfileSectionVisibility();
         }
       }
       function hubNavShowsForScreen(screenId) {
