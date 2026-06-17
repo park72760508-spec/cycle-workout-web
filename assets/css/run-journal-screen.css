@@ -76,33 +76,6 @@
   color: #2563eb;
 }
 
-#runTrainingJournalScreen .run-journal-day-inner {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-#runTrainingJournalScreen .mini-calendar-day.has-training .mini-calendar-dot.run-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  margin: 0;
-  flex-shrink: 0;
-}
-
-#runTrainingJournalScreen .mini-calendar-day.has-training .mini-calendar-dot.run-dot-indoor {
-  background: #16a34a;
-  box-shadow: 0 0 0 1.5px rgba(22, 163, 74, 0.28);
-}
-
-#runTrainingJournalScreen .mini-calendar-day.has-training .mini-calendar-dot.run-dot-outdoor {
-  background: #f97316;
-  box-shadow: 0 0 0 1.5px rgba(249, 115, 22, 0.32);
-}
-
 #runTrainingJournalScreen .mini-calendar-day.has-pr .mini-calendar-pr-badge {
   position: absolute;
   top: 2px;
