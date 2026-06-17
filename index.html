@@ -7148,13 +7148,13 @@
         <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
       </div>
       <div class="modal-body settings-modal-body">
-        <!-- RUN: 환경설정 상단 본인 프로필 카드 (관리자·일반 회원) -->
-        <div id="settingsProfileSection" class="card settings-block settings-profile-section" style="display: none; margin-top: 0;">
-          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; text-align: left;">
-            <img src="assets/img/add-user3.gif" alt="" style="height: 1.5em; width: auto; vertical-align: middle;" />
-            <span style="font-size: 0.9em; font-weight: bold; color: inherit;">내 프로필</span>
+        <!-- RUN: 환경설정 상단 본인 프로필 (카드 없이 바로 표시) -->
+        <div id="settingsProfileSection" class="settings-profile-section" style="display: none;">
+          <div class="settings-profile-section__head">
+            <img src="assets/img/add-user3.gif" alt="" class="settings-profile-section__head-icon" decoding="async" />
+            <span class="settings-profile-section__head-title">내 프로필</span>
           </div>
-          <div id="settingsUserList" class="settings-profile-user-list user-list-with-legend"></div>
+          <div id="settingsUserList" class="settings-profile-panel-host"></div>
         </div>
         <!-- Gemini API 키 입력 블럭 -->
         <div class="card settings-block" style="margin-top: 0;">
