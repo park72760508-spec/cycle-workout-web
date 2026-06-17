@@ -3913,11 +3913,43 @@ function stelvioEscapeHtmlAttr(str) {
  * @param {Array} usersToRender - 렌더할 사용자 배열
  * @param {string} viewerGrade - 뷰어 등급
  * @param {string|null} viewerId - 뷰어 ID
- * @param {Object} [maxHrByUser] - userId -> maxHr 맵 (훈련로그 기반, 비동기 채움)
+ * @param {string[]} [targetIds] - 렌더 대상 컨테이너 id (기본: userList + RUN 일반 회원 settingsUserList)
  */
-function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
-  const userList = document.getElementById('userList');
-  if (!userList) return;
+function shouldEmbedProfileInSettingsModal() {
+  return (
+    typeof window.shouldShowSettingsProfileCard === 'function' &&
+    window.shouldShowSettingsProfileCard()
+  );
+}
+
+function syncSettingsProfileSectionVisibility() {
+  const section = document.getElementById('settingsProfileSection');
+  if (!section) return;
+  section.style.display = shouldEmbedProfileInSettingsModal() ? 'block' : 'none';
+}
+
+function getProfileUserListTargetIds() {
+  syncSettingsProfileSectionVisibility();
+  const ids = [];
+  if (document.getElementById('userList')) ids.push('userList');
+  if (shouldEmbedProfileInSettingsModal() && document.getElementById('settingsUserList')) {
+    ids.push('settingsUserList');
+  }
+  return ids;
+}
+
+function setProfileUserListContainersHtml(html, targetIds) {
+  const ids = Array.isArray(targetIds) && targetIds.length ? targetIds : getProfileUserListTargetIds();
+  ids.forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
+}
+
+function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds) {
+  const ids = Array.isArray(targetIds) && targetIds.length ? targetIds : getProfileUserListTargetIds();
+  const containers = ids.map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (!containers.length) return;
   usersToRender = filterProfileListDisplayableUsers(usersToRender);
   let hasAiKeyLocal = false;
   try {
@@ -3942,7 +3974,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
   const sorted = [...usersToRender].sort((a, b) =>
     getProfileUserDisplayName(a).localeCompare(getProfileUserDisplayName(b), 'ko')
   );
-  userList.innerHTML = sorted.map(user => {
+  const cardsHtml = sorted.map(user => {
     const displayName = getProfileUserDisplayName(user);
     const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
     const expRaw = user.expiry_date;
@@ -4059,6 +4091,9 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
       </div>
     `;
   }).join('');
+  containers.forEach(function (container) {
+    container.innerHTML = cardsHtml;
+  });
 }
 
 /**
@@ -4170,25 +4205,25 @@ async function bulkExtendExpiry() {
 window.bulkExtendExpiry = bulkExtendExpiry;
 
 async function loadUsers() {
-  const userList = document.getElementById('userList');
-  if (!userList) {
+  const targetIds = getProfileUserListTargetIds();
+  if (!targetIds.length) {
     // callback.html이나 iframe에서는 userList가 없을 수 있음 (정상)
     const isCallbackPage = typeof window !== 'undefined' && 
       (window.location.pathname.includes('callback.html') || 
        window.location.href.includes('callback.html'));
     if (window === window.top && !isCallbackPage) {
-      console.warn('[loadUsers] userList 요소를 찾을 수 없습니다. 함수를 종료합니다.');
+      console.warn('[loadUsers] 프로필 목록 컨테이너를 찾을 수 없습니다. 함수를 종료합니다.');
     }
-    return; // callback.html 또는 iframe(대시보드 등)에서는 userList 없음 → 로그 생략 후 종료
+    return;
   }
 
   try {
-    userList.innerHTML = `
+    setProfileUserListContainersHtml(`
       <div class="loading-container">
         <div class="dots-loader"><div></div><div></div><div></div></div>
         <div style="color:#666;font-size:14px;">사용자 목록을 불러오는 중...</div>
       </div>
-    `;
+    `, targetIds);
 
     console.log('[loadUsers] 🚀 사용자 목록 로드 시작');
     const result = await apiGetUsers();
@@ -4200,14 +4235,14 @@ async function loadUsers() {
     
     if (!result || !result.success) {
       console.error('[loadUsers] ❌ 사용자 목록 로드 실패:', result?.error);
-      userList.innerHTML = `
+      setProfileUserListContainersHtml(`
         <div class="error-state">
           <div class="error-state-icon">⚠️</div>
           <div class="error-state-title">사용자 목록을 불러올 수 없습니다</div>
           <div class="error-state-description">오류: ${result?.error || 'Unknown'}</div>
           <button class="retry-button" onclick="loadUsers()">다시 시도</button>
         </div>
-      `;
+      `, targetIds);
       return;
     }
 
@@ -4246,7 +4281,7 @@ async function loadUsers() {
 
     if (users.length === 0) {
       console.warn('[loadUsers] ⚠️ 등록된 사용자가 없습니다.');
-      userList.innerHTML = `
+      setProfileUserListContainersHtml(`
         <div class="empty-state">
           <div class="empty-state-icon">👤</div>
           <div class="empty-state-title">등록된 사용자가 없습니다</div>
@@ -4258,7 +4293,7 @@ async function loadUsers() {
             <button class="btn btn-primary" onclick="showAddUserForm(true)">➕ 첫 번째 사용자 등록</button>
           </div>
         </div>
-      `;
+      `, targetIds);
       if (typeof setProfileSearchUserCountText === 'function') {
         setProfileSearchUserCountText([]);
       }
@@ -4361,7 +4396,8 @@ async function loadUsers() {
     renderProfileUserCards(
       isLoginAdmin ? getProfileScreenUsersForListMode() : visibleUsers,
       profileCardGrade,
-      viewerId
+      viewerId,
+      targetIds
     );
     const profileSubtitle = document.getElementById('profileScreenSubtitle');
     if (profileSubtitle) {
@@ -4483,11 +4519,15 @@ async function loadUsers() {
     });
     
     if (typeof showToast === 'function') {
-      showToast('사용자 정보를 불러왔습니다.');
+      const profileScreen = document.getElementById('profileScreen');
+      const isProfileScreenActive = profileScreen && profileScreen.classList.contains('active');
+      if (isProfileScreenActive) {
+        showToast('사용자 정보를 불러왔습니다.');
+      }
     }
   } catch (error) {
     console.error('사용자 목록 로드 실패:', error);
-    userList.innerHTML = `
+    setProfileUserListContainersHtml(`
       <div class="error-state">
         <div class="error-state-icon">🌐</div>
         <div class="error-state-title">연결 오류</div>
@@ -4496,7 +4536,7 @@ async function loadUsers() {
         </div>
         <button class="retry-button" onclick="loadUsers()">다시 시도</button>
       </div>
-    `;
+    `, targetIds);
   }
 }
 
@@ -5925,6 +5965,7 @@ function closeExpiryWarningModal() {
 
 // 전역 함수로 등록
 window.loadUsers = loadUsers;
+window.syncSettingsProfileSectionVisibility = syncSettingsProfileSectionVisibility;
 window.selectUser = selectUser;
 window.editUser = editUser;
 

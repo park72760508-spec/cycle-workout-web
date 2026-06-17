@@ -15688,6 +15688,16 @@ function openSettingsModal() {
     // 저장된 API 키 로드
     loadGeminiApiKeyToSettings();
   }
+  if (typeof window.syncSettingsProfileSectionVisibility === 'function') {
+    window.syncSettingsProfileSectionVisibility();
+  }
+  if (
+    typeof window.shouldShowSettingsProfileCard === 'function' &&
+    window.shouldShowSettingsProfileCard() &&
+    typeof window.loadUsers === 'function'
+  ) {
+    window.loadUsers();
+  }
   const accessRow = document.getElementById('settingsAccessStatsRow');
   if (accessRow) {
     const g = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : (typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2');
@@ -15706,7 +15716,9 @@ function openSettingsModal() {
         'stelvioRankingScreen',
         'runningRankingScreen',
         'performanceDashboardScreen',
+        'runDashboardScreen',
         'trainingJournalScreen',
+        'runTrainingJournalScreen',
         'profileScreen',
         'workoutScreen',
         'aiScheduleScreen'
@@ -15729,6 +15741,9 @@ function refreshSettingsModalAdminExtras() {
     const disp = modal.style.display;
     const cs = window.getComputedStyle(modal);
     if ((disp === 'none' || !disp) && cs.display === 'none') return;
+    if (typeof window.syncSettingsProfileSectionVisibility === 'function') {
+      window.syncSettingsProfileSectionVisibility();
+    }
     const accessRow = document.getElementById('settingsAccessStatsRow');
     if (accessRow) {
       const g = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : '2';
