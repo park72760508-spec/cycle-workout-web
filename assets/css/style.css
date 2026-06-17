@@ -9436,6 +9436,26 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   width: 100%;
 }
 
+/* 환경설정 모달 — RUN 일반 회원 프로필 카드 */
+#settingsModal .settings-profile-section {
+  margin-bottom: 0;
+}
+#settingsModal #settingsUserList {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+#settingsModal #settingsUserList .user-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--card-border, #e5e7eb);
+  border-radius: 14px;
+  padding: 14px;
+  color: var(--text, #111827);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* 사용자 카드 - 화면 크기에 따라 넓이 조정 */
 #profileScreen .user-card{
   background:var(--card-bg); 
