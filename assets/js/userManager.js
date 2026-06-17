@@ -3946,6 +3946,35 @@ function setProfileUserListContainersHtml(html, targetIds) {
   });
 }
 
+/** 환경설정 상단 — 로그인 본인 프로필만 (관리자 포함) */
+function getSettingsProfileUsers(allUsers, viewerId) {
+  if (!viewerId || !Array.isArray(allUsers)) return [];
+  return allUsers.filter(function (u) {
+    return u && u.id != null && String(u.id) === String(viewerId);
+  });
+}
+
+/** 프로필 화면·환경설정 모달 각각 다른 사용자 목록으로 렌더 */
+function renderProfileUserListsForTargets(isLoginAdmin, visibleUsers, allUsers, profileCardGrade, viewerId, targetIds) {
+  const ids = Array.isArray(targetIds) && targetIds.length ? targetIds : getProfileUserListTargetIds();
+  if (ids.indexOf('userList') >= 0) {
+    renderProfileUserCards(
+      isLoginAdmin ? getProfileScreenUsersForListMode() : visibleUsers,
+      profileCardGrade,
+      viewerId,
+      ['userList']
+    );
+  }
+  if (ids.indexOf('settingsUserList') >= 0 && shouldEmbedProfileInSettingsModal()) {
+    renderProfileUserCards(
+      getSettingsProfileUsers(allUsers, viewerId),
+      profileCardGrade,
+      viewerId,
+      ['settingsUserList']
+    );
+  }
+}
+
 function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds) {
   const ids = Array.isArray(targetIds) && targetIds.length ? targetIds : getProfileUserListTargetIds();
   const containers = ids.map(function (id) { return document.getElementById(id); }).filter(Boolean);
@@ -4100,7 +4129,18 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds)
  * 프로필 화면: 사용자별 Max HR 비동기 조회 후 카드 재렌더링
  * yearly_peaks에서 조회 (MMP 업데이트 시 max_hr도 반영됨, 로그 스캔 대비 효율적)
  */
-async function refreshProfileMaxHrAndRerender(usersToRender, viewerGrade, viewerId) {
+async function refreshProfileMaxHrAndRerender(usersToRender, viewerGrade, viewerId, renderOptions) {
+  if (renderOptions && typeof renderOptions === 'object') {
+    renderProfileUserListsForTargets(
+      !!renderOptions.isLoginAdmin,
+      renderOptions.visibleUsers || usersToRender,
+      renderOptions.allUsers || usersToRender,
+      viewerGrade,
+      viewerId,
+      renderOptions.targetIds
+    );
+    return;
+  }
   renderProfileUserCards(usersToRender, viewerGrade, viewerId);
 }
 
@@ -4393,8 +4433,10 @@ async function loadUsers() {
       }
     }
 
-    renderProfileUserCards(
-      isLoginAdmin ? getProfileScreenUsersForListMode() : visibleUsers,
+    renderProfileUserListsForTargets(
+      isLoginAdmin,
+      visibleUsers,
+      users,
       profileCardGrade,
       viewerId,
       targetIds
@@ -4412,7 +4454,13 @@ async function loadUsers() {
       window.refreshProfileMaxHrAndRerender(
         isLoginAdmin ? getProfileScreenUsersForListMode() : visibleUsers,
         profileCardGrade,
-        viewerId
+        viewerId,
+        {
+          isLoginAdmin: isLoginAdmin,
+          visibleUsers: visibleUsers,
+          allUsers: users,
+          targetIds: targetIds
+        }
       ).catch(() => {});
     }
 

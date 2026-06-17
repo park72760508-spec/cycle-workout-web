@@ -98,18 +98,9 @@
     }
   }
 
-  /** RUN + 일반 회원(grade≠1): 하단 네비「마이」대신 환경설정 상단에 프로필 카드 표시 */
+  /** RUN 모드: 환경설정 상단에 로그인 본인 프로필 카드 표시 (관리자·일반 회원 공통) */
   function shouldShowSettingsProfileCard() {
-    if (getActiveSport() !== 'run') return false;
-    var g =
-      typeof getLoginUserGrade === 'function'
-        ? String(getLoginUserGrade())
-        : typeof getViewerGrade === 'function'
-          ? String(getViewerGrade())
-          : '2';
-    return typeof window.isStelvioAdminGrade === 'function'
-      ? !window.isStelvioAdminGrade(g)
-      : String(g).trim() !== '1' && Number(g) !== 1;
+    return getActiveSport() === 'run';
   }
 
   window.sportCategoryRoutes = {
