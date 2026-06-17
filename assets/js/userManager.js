@@ -3966,17 +3966,42 @@ function renderProfileUserListsForTargets(isLoginAdmin, visibleUsers, allUsers, 
     );
   }
   if (ids.indexOf('settingsUserList') >= 0 && shouldEmbedProfileInSettingsModal()) {
-    renderProfileUserCards(
+    renderSettingsProfilePanel(
       getSettingsProfileUsers(allUsers, viewerId),
       profileCardGrade,
-      viewerId,
-      ['settingsUserList']
+      viewerId
     );
   }
 }
 
-function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds) {
-  const ids = Array.isArray(targetIds) && targetIds.length ? targetIds : getProfileUserListTargetIds();
+/** 환경설정 상단 — 프로필 선택 화면과 동일 user-card 레이아웃 (대시보드 버튼 제외) */
+function renderSettingsProfilePanel(usersToRender, viewerGrade, viewerId) {
+  const container = document.getElementById('settingsUserList');
+  if (!container || !shouldEmbedProfileInSettingsModal()) return;
+  container.classList.add('profile-user-card-scope');
+  const users = filterProfileListDisplayableUsers(usersToRender || []);
+  if (!users.length) {
+    container.innerHTML =
+      '<p class="settings-profile-panel__empty">프로필 정보를 불러올 수 없습니다.</p>';
+    return;
+  }
+  renderProfileUserCards(users, viewerGrade, viewerId, ['settingsUserList'], {
+    hideDashboard: true,
+    noSelectClick: true,
+    settingsOnly: true
+  });
+}
+
+function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds, renderOpts) {
+  renderOpts = renderOpts || {};
+  const hideDashboard = !!renderOpts.hideDashboard;
+  const noSelectClick = !!renderOpts.noSelectClick;
+  const settingsOnly = !!renderOpts.settingsOnly;
+  let ids = Array.isArray(targetIds) && targetIds.length ? targetIds.slice() : getProfileUserListTargetIds();
+  if (!settingsOnly && ids.indexOf('settingsUserList') >= 0 && shouldEmbedProfileInSettingsModal()) {
+    renderSettingsProfilePanel(usersToRender, viewerGrade, viewerId);
+    ids = ids.filter(function (id) { return id !== 'settingsUserList'; });
+  }
   const containers = ids.map(function (id) { return document.getElementById(id); }).filter(Boolean);
   if (!containers.length) return;
   usersToRender = filterProfileListDisplayableUsers(usersToRender);
@@ -3999,7 +4024,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds)
     return false;
   };
   const canTogglePrivacyFor = (u) => viewerId && String(u.id) === viewerId; // 본인만 비공개 설정
-  const showDashboardBtn = (viewerGrade === '1'); // grade=1만 대시보드 버튼 표시
+  const showDashboardBtn = hideDashboard ? false : viewerGrade === '1'; // grade=1만 대시보드 버튼 표시
   const sorted = [...usersToRender].sort((a, b) =>
     getProfileUserDisplayName(a).localeCompare(getProfileUserDisplayName(b), 'ko')
   );
@@ -4071,8 +4096,12 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds)
               <img class="stelvio-profile-card-avatar-img" src="${profileUrl}" alt="" width="60" height="60" loading="lazy" decoding="async" />
             </span></span>`;
 
+    const cardClickAttrs = noSelectClick
+      ? ''
+      : ' data-user-id="' + user.id + '" onclick="selectUser(\'' + user.id + '\')" style="cursor: pointer;"';
+
     return `
-      <div class="user-card${isWithdrawnUser ? ' user-card--withdrawn' : ''}" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
+      <div class="user-card${isWithdrawnUser ? ' user-card--withdrawn' : ''}"${cardClickAttrs}>
         <div class="user-header">
 
           <!-- 1줄: 2분할 (좌: 등급+이름+연결표시, 우: 대시보드·수정·삭제) -->
@@ -4141,7 +4170,15 @@ async function refreshProfileMaxHrAndRerender(usersToRender, viewerGrade, viewer
     );
     return;
   }
-  renderProfileUserCards(usersToRender, viewerGrade, viewerId);
+  renderProfileUserCards(
+    usersToRender,
+    viewerGrade,
+    viewerId,
+    getProfileUserListTargetIds().filter(function (id) { return id !== 'settingsUserList'; })
+  );
+  if (shouldEmbedProfileInSettingsModal() && document.getElementById('settingsUserList')) {
+    renderSettingsProfilePanel(usersToRender, viewerGrade, viewerId);
+  }
 }
 
 /**
