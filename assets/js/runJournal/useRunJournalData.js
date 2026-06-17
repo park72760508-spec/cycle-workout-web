@@ -149,6 +149,29 @@
       return function () { window.removeEventListener('run-journal-refresh', onRefresh); };
     }, [loadData]);
 
+    useEffect(function autoSelectLatestRunLogDate() {
+      if (loading) return;
+      if (selectedDate != null) return;
+      var tl = trainingLogs || {};
+      var keys = Object.keys(tl);
+      if (keys.length === 0) return;
+      var sorted = keys.slice().sort(function (a, b) {
+        return b.localeCompare(a);
+      });
+      var latest = sorted[0];
+      if (!latest) return;
+      var parts = latest.split('-');
+      if (parts.length >= 3) {
+        var y = Number(parts[0]);
+        var mo = Number(parts[1]) - 1;
+        if (isFinite(y) && isFinite(mo)) {
+          setCurrentYear(y);
+          setCurrentMonth(mo);
+        }
+      }
+      setSelectedDate(latest);
+    }, [loading, trainingLogs, selectedDate]);
+
     function fetchDailyRouteProfileDoc(userId, dateKey) {
       if (!userId || !dateKey) return Promise.resolve(null);
       var fns = window._firebaseFirestoreFns;
