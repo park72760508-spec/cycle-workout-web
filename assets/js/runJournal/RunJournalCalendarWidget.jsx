@@ -66,12 +66,18 @@
           (logs.length ? ' has-training' : '') +
           (key === todayKey ? ' today' : '') +
           (selectedDate === key ? ' selected' : '') +
-          (hasPr ? ' has-pr' : ''),
+          (hasPr ? ' journal-has-pr' : ''),
         onClick: function (dk) { return function () { if (onDateSelect) onDateSelect(dk); }; }(key),
-        'aria-label': key + (logs.length ? ' RUN ' + logs.length + '건' : '') + (key === todayKey ? ' 오늘' : '')
+        'aria-label': key + (logs.length ? ' RUN ' + logs.length + '건' : '') + (hasPr ? ' PR' : '') + (key === todayKey ? ' 오늘' : '')
       },
-        R.createElement('span', { className: 'mini-calendar-day-num' }, day),
-        hasPr ? R.createElement('span', { className: 'mini-calendar-pr-badge', title: 'PR' }, 'PR') : null
+        hasPr
+          ? R.createElement(
+              'span',
+              { className: 'day-number-wrap' },
+              R.createElement('span', { className: 'day-number' }, day),
+              R.createElement('span', { className: 'journal-pr-corner-badge', 'aria-label': 'PR' }, 'PR')
+            )
+          : R.createElement('span', { className: 'day-number' }, day)
       ));
     }
 
