@@ -22006,7 +22006,6 @@ if (originalCleanupMobileDashboard) {
     _applyCountBadge('basecampRidingNotiBadge', _counts.rides + _counts.friends);
     _applyCountBadge('basecampClubHouseNotiBadge', _counts.groups);
     _applyCountBadge('runBasecampRidingNotiBadge', _counts.rides + _counts.friends);
-    _applyCountBadge('runBasecampClubHouseNotiBadge', _counts.groups);
   }
 
   /* ── 구독 전체 정리 ── */
