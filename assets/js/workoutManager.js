@@ -6622,8 +6622,157 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
   `;
 }
 
+/**
+ * 투명 이미지 공유 — 워크아웃 막대 외곽선 + FTP 가이드선 + 케이던스 라인
+ * @param {Array} segments
+ * @param {number} viewW
+ * @param {number} viewH
+ * @param {number} [padRatio]
+ * @returns {Array<{pathD:string, strokeWidth?:number, dashArray?:string, opacity?:number}>}
+ */
+function buildWorkoutProfilePathsForShare(segments, viewW, viewH, padRatio) {
+  if (!segments || !segments.length || !(viewW > 0 && viewH > 0)) return [];
+  const totalSeconds = segments.reduce((s, seg) => s + (seg.duration_sec || seg.duration || 0), 0);
+  if (totalSeconds <= 0) return [];
+
+  const pad = padRatio != null ? padRatio : 0.1;
+  const padX = viewW * pad;
+  const padY = viewH * pad;
+  const innerW = viewW - padX * 2;
+  const innerH = viewH - padY * 2;
+  const baselineY = padY + innerH;
+  const topYBound = padY;
+
+  const zoneFtp100 = getZoneFromFtpPercentValue(100);
+  const ftpLineBottomPercent = (zoneFtp100 / 7) * 100;
+  const ftpGuideY = baselineY - (ftpLineBottomPercent / 100) * innerH;
+
+  function ftpPercentToBarHeight(ftpPercent) {
+    if (ftpPercent == null || isNaN(ftpPercent)) return 0;
+    const pct = Math.max(0, Number(ftpPercent));
+    if (pct <= 0) return 0;
+    const h = (pct / 100) * ftpLineBottomPercent;
+    return Math.min(100, h);
+  }
+
+  function getRpmFromSegment(seg) {
+    const r = getSegmentRpmForPreview(seg);
+    if (r > 0) return r;
+    if (seg.target_type === 'cadence_rpm') return Number(seg.target_value) || 0;
+    return 0;
+  }
+
+  const bars = segments
+    .map((seg) => {
+      const duration = seg.duration_sec || seg.duration || 0;
+      if (duration <= 0) return null;
+      const targetType = seg.target_type || 'ftp_pct';
+      let heightPercent;
+      let isCadence = false;
+      let isDual = false;
+      let cadenceRpm = 0;
+      let cadenceLineBottom = 0;
+      if (targetType === 'cadence_rpm') {
+        isCadence = true;
+        cadenceRpm = getRpmFromSegment(seg);
+        cadenceLineBottom = 50;
+        heightPercent = 100;
+      } else if (targetType === 'dual') {
+        isDual = true;
+        cadenceRpm = getRpmFromSegment(seg);
+        cadenceLineBottom = 100;
+        heightPercent = ftpPercentToBarHeight(getSegmentFtpPercentForBarHeight(seg));
+      } else {
+        heightPercent = ftpPercentToBarHeight(getSegmentFtpPercentForBarHeight(seg));
+      }
+      return {
+        duration,
+        heightPercent,
+        isCadence,
+        isDual,
+        cadenceRpm,
+        cadenceLineBottom,
+      };
+    })
+    .filter(Boolean);
+
+  const paths = [];
+
+  paths.push({
+    pathD: 'M ' + padX + ' ' + ftpGuideY + ' L ' + (padX + innerW) + ' ' + ftpGuideY,
+    strokeWidth: 3,
+    dashArray: '18 12',
+    opacity: 0.82,
+  });
+
+  paths.push({
+    pathD: 'M ' + padX + ' ' + baselineY + ' L ' + (padX + innerW) + ' ' + baselineY,
+    strokeWidth: 3,
+    opacity: 0.45,
+  });
+
+  let x = padX;
+  bars.forEach((bar) => {
+    const w = (bar.duration / totalSeconds) * innerW;
+    if (!(w > 0)) return;
+
+    if (bar.isCadence) {
+      const cadenceY = baselineY - (bar.cadenceLineBottom / 100) * innerH;
+      paths.push({
+        pathD: 'M ' + x + ' ' + cadenceY + ' L ' + (x + w) + ' ' + cadenceY,
+        strokeWidth: 5,
+      });
+      paths.push({
+        pathD:
+          'M ' + x + ' ' + topYBound + ' L ' + x + ' ' + baselineY + ' M ' + (x + w) + ' ' + topYBound + ' L ' + (x + w) + ' ' + baselineY,
+        strokeWidth: 2,
+        opacity: 0.38,
+      });
+    } else {
+      const barTopY = baselineY - (bar.heightPercent / 100) * innerH;
+      paths.push({
+        pathD:
+          'M ' +
+          x +
+          ' ' +
+          baselineY +
+          ' L ' +
+          x +
+          ' ' +
+          barTopY +
+          ' L ' +
+          (x + w) +
+          ' ' +
+          barTopY +
+          ' L ' +
+          (x + w) +
+          ' ' +
+          baselineY,
+        strokeWidth: 5,
+      });
+      if (bar.isDual && bar.cadenceRpm > 0) {
+        paths.push({
+          pathD: 'M ' + x + ' ' + barTopY + ' L ' + (x + w) + ' ' + barTopY,
+          strokeWidth: 4,
+          opacity: 0.95,
+        });
+      }
+    }
+    x += w;
+  });
+
+  return paths;
+}
+
+/** @deprecated buildWorkoutProfilePathsForShare 사용 */
+function buildWorkoutProfilePathForShare(segments, viewW, viewH, padRatio) {
+  return buildWorkoutProfilePathsForShare(segments, viewW, viewH, padRatio);
+}
+
 // 전역 노출
 window.renderSegmentedWorkoutGraph = renderSegmentedWorkoutGraph;
+window.buildWorkoutProfilePathsForShare = buildWorkoutProfilePathsForShare;
+window.buildWorkoutProfilePathForShare = buildWorkoutProfilePathForShare;
 window.getSegmentZoneFromFtpPercent = getSegmentZoneFromFtpPercent;
 window.getWorkoutDominantZone = getWorkoutDominantZone;
 window.getWorkoutCategoryId = getWorkoutCategoryId;
