@@ -8,7 +8,9 @@
   if (!window.React) return;
 
   var R = window.React;
+  var useState = R.useState;
   var pr = function () { return window.runJournalPrUtils; };
+  var PHOTO_ICON_SRC = 'assets/img/photo.svg';
 
   function formatDuration(sec) {
     var s = Math.floor(Number(sec) || 0);
@@ -54,6 +56,45 @@
     return base + ' · ' + titles.join(' · ');
   }
 
+  function mergeLogsForShare(logs, dailyRouteDoc, selectedDate) {
+    if (!logs || !logs.length) return null;
+    var totalSec = 0;
+    var totalDist = 0;
+    var sumElev = 0;
+    logs.forEach(function (l) {
+      totalSec += Number(l.duration_sec != null ? l.duration_sec : l.time) || 0;
+      totalDist += Number(l.distance_km) || 0;
+      sumElev += Number(l.elevation_gain) || 0;
+    });
+    var utils = window.stravaPolylineUtils;
+    var routeMerged =
+      utils && typeof utils.routeProfileFromLogs === 'function'
+        ? utils.routeProfileFromLogs(logs, dailyRouteDoc || null)
+        : null;
+    return {
+      date: selectedDate || logs[0].date,
+      distance_km: totalDist,
+      duration_sec: totalSec,
+      elevation_gain: sumElev > 0 ? sumElev : null,
+      avg_speed_kmh:
+        totalDist > 0 && totalSec > 0
+          ? Math.round((totalDist / (totalSec / 3600)) * 10) / 10
+          : null,
+      title:
+        routeMerged && routeMerged.segmentCount > 1
+          ? (selectedDate || logs[0].date || '') + ' RUN ' + routeMerged.segmentCount + '회'
+          : (logs
+              .map(function (l) {
+                return l.title;
+              })
+              .filter(Boolean)
+              .join(' · ') || logs[0].title),
+      _routeProfileMerged: routeMerged,
+      _logsForShare: logs,
+      _dailyRouteDoc: dailyRouteDoc || null
+    };
+  }
+
   function RunJournalDailySummary(props) {
     var selectedDate = props.selectedDate;
     var logs = props.logs || [];
@@ -62,6 +103,10 @@
     var CourseMap = window.JournalCourseMapPreview;
     var utils = window.stravaPolylineUtils;
     var summary = mergeDay(logs);
+
+    var _shareBusy = useState(false);
+    var shareBusy = _shareBusy[0];
+    var setShareBusy = _shareBusy[1];
 
     if (!selectedDate) {
       return R.createElement('p', { className: 'journal-empty-hint' }, '달력에서 날짜를 선택하세요.');
@@ -82,11 +127,60 @@
       ((routeProfile.activity_ids || []).join(',') || 'none');
     var paceLabel = summary.paceSec != null ? pr().formatPaceFromSpeed(1000 / summary.paceSec) : '—';
 
+    var canShareTransparent =
+      routeProfile.hasRoute &&
+      window.journalTransparentShare &&
+      (window.journalTransparentShare.openShareComposer ||
+        window.journalTransparentShare.exportTransparentSharePng);
+    var shareLog = mergeLogsForShare(logs, dailyRouteDoc, selectedDate);
+
     return R.createElement('div', {
       className: 'card journal-daily-summary journal-daily-summary--with-route'
     },
       R.createElement('div', { className: 'journal-daily-summary-header' },
-        R.createElement('h3', { className: 'journal-daily-summary-title' }, formatDateHeading(selectedDate, logs))
+        R.createElement('h3', { className: 'journal-daily-summary-title' }, formatDateHeading(selectedDate, logs)),
+        R.createElement('button', {
+          type: 'button',
+          className:
+            'journal-daily-summary-photo-btn' + (canShareTransparent ? '' : ' is-disabled'),
+          disabled: !canShareTransparent || shareBusy,
+          'aria-label': canShareTransparent
+            ? '투명 이미지 만들기'
+            : '코스 지도 없음 — 투명 이미지 만들기 불가',
+          onClick: function () {
+            if (!canShareTransparent || shareBusy || !shareLog) return;
+            setShareBusy(true);
+            var shareApi = window.journalTransparentShare;
+            var p =
+              shareApi && typeof shareApi.openShareComposer === 'function'
+                ? shareApi.openShareComposer(shareLog, {
+                    logs: logs,
+                    dailyRouteDoc: dailyRouteDoc
+                  })
+                : shareApi.exportTransparentSharePng(shareLog, {
+                    logs: logs,
+                    dailyRouteDoc: dailyRouteDoc
+                  });
+            Promise.resolve(p)
+              .catch(function (e) {
+                if (e && e.name === 'AbortError') return;
+                var msg = e && e.message ? e.message : '저장 실패';
+                if (typeof window.showToast === 'function') window.showToast(msg, 'error');
+                else if (typeof alert === 'function') alert(msg);
+              })
+              .finally(function () {
+                setShareBusy(false);
+              });
+          }
+        },
+          R.createElement('img', {
+            src: PHOTO_ICON_SRC,
+            alt: '',
+            className: 'journal-daily-summary-photo-icon',
+            draggable: false,
+            'aria-hidden': true
+          })
+        )
       ),
       CourseMap && routeProfile.hasRoute
         ? R.createElement(CourseMap, {
