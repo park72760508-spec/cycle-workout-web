@@ -128,6 +128,7 @@
         else console.log('✅ Firebase v9 Auth 초기화');
         firestoreV9 = initFirestore(appV9, {
           experimentalForceLongPolling: true,
+          experimentalAutoDetectLongPolling: false,
           useFetchStreams: false
         });
         if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Firestore 초기화');
