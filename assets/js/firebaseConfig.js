@@ -75,6 +75,7 @@ try {
     try {
         firestore.settings({
           experimentalForceLongPolling: true,
+          experimentalAutoDetectLongPolling: false,
           useFetchStreams: false,
           merge: true
         });

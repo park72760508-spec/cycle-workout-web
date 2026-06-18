@@ -312,7 +312,11 @@ async function waitForFirestore(maxWaitMs = null) {
   const applyLongPollingIfTablet = (firestoreDb) => {
     if (!isTablet || !firestoreDb || typeof firestoreDb.settings !== 'function') return;
     try {
-      firestoreDb.settings({ experimentalForceLongPolling: true, merge: true });
+      firestoreDb.settings({
+        experimentalForceLongPolling: true,
+        experimentalAutoDetectLongPolling: false,
+        merge: true
+      });
       console.log('[Firestore] Force Long Polling applied for High-Res Tablet.');
     } catch (e) {
       const msg = e?.message || String(e);
@@ -398,7 +402,11 @@ async function ensureFirestoreV9ReadyForJournal(maxWaitMs = 12000) {
     if (window.firestoreV9) {
       if (isTablet && window.firestoreV9 && typeof window.firestoreV9.settings === 'function') {
         try {
-          window.firestoreV9.settings({ experimentalForceLongPolling: true, merge: true });
+          window.firestoreV9.settings({
+            experimentalForceLongPolling: true,
+            experimentalAutoDetectLongPolling: false,
+            merge: true
+          });
           console.log('[Journal] Firestore V9 Long Polling 적용 (태블릿).');
         } catch (e) {
           console.warn('[Journal] Firestore V9 long polling 실패:', e?.message);
@@ -773,7 +781,11 @@ async function loadTrainingRooms() {
     }
     if (isTablet && db && typeof db.settings === 'function') {
       try {
-        db.settings({ experimentalForceLongPolling: true, merge: true });
+        db.settings({
+          experimentalForceLongPolling: true,
+          experimentalAutoDetectLongPolling: false,
+          merge: true
+        });
         console.log('[Training Room] Galaxy Tab: Forcing Long Polling for stability.');
       } catch (settingsErr) {
         const msg = settingsErr?.message || String(settingsErr);
