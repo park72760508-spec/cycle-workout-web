@@ -139,6 +139,8 @@
       if (sp != null) merged['speed_' + axis] = sp;
       var hr = effort['hr_' + axis];
       if (hr != null) merged['hr_' + axis] = hr;
+      var cad = effort['cadence_' + axis];
+      if (cad != null) merged['cadence_' + axis] = cad;
     });
     return merged;
   }

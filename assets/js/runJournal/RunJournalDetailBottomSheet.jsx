@@ -44,9 +44,12 @@
     );
   }
 
-  function PaceDetailRow(label, speedMs, hr, isPr) {
+  function PaceDetailRow(label, speedMs, hr, cadence, isPr) {
     var pace = pr().formatPaceFromSpeed(speedMs);
     var kmh = pr().formatSpeedKmhFromMs(speedMs);
+    var cadText = '';
+    var c = Math.round(Number(cadence) || 0);
+    if (c > 0) cadText = ' · ' + c + ' rpm';
     var hrText = hr != null && Number(hr) > 0 ? ' · ' + Math.round(Number(hr)) + ' bpm' : '';
     return R.createElement('div', { className: 'journal-detail-row' },
       R.createElement('span', { className: 'journal-detail-label' }, label),
@@ -54,6 +57,7 @@
         isPr ? R.createElement(PrBadge) : null,
         R.createElement('span', { className: 'journal-detail-value' }, pace),
         kmh ? R.createElement('span', { className: 'run-journal-pace-speed-suffix' }, '(' + kmh + ')') : null,
+        cadText ? R.createElement('span', { className: 'journal-detail-value' }, cadText) : null,
         hrText ? R.createElement('span', { className: 'journal-detail-value' }, hrText) : null
       )
     );
@@ -66,7 +70,8 @@
       var effort = { activity_id: log.activity_id, speed_1k: log.speed_1k, speed_3k: log.speed_3k, speed_5k: log.speed_5k, speed_7k: log.speed_7k, speed_10k: log.speed_10k, speed_20k: log.speed_20k, speed_42k: log.speed_42k };
       var isPr = pr().isAxisPrForEffort(effort, axis, yearlyBest);
       var hr = log['hr_' + axis];
-      return PaceDetailRow(axis + ' 페이스', sp, hr, isPr);
+      var cadence = log['cadence_' + axis];
+      return PaceDetailRow(axis + ' 페이스', sp, hr, cadence, isPr);
     }).filter(Boolean);
   }
 
