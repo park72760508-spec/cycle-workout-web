@@ -21,6 +21,40 @@
   var useLayoutEffect = ReactObj.useLayoutEffect || ReactObj.useEffect;
   var useEffect = ReactObj.useEffect;
 
+  function renderRunHeaderTierBadge(stats, size) {
+    var badge = { badgeSrc: 'assets/img/G.svg', levelName: '등급', unavailable: true };
+    if (window.runDashboardPace && typeof window.runDashboardPace.resolveRunHexagonTierBadge === 'function') {
+      badge = window.runDashboardPace.resolveRunHexagonTierBadge(stats);
+    } else if (stats && stats.hexagonTierBadgeSrc) {
+      badge = {
+        badgeSrc: stats.hexagonTierBadgeSrc,
+        levelName: stats.hexagonTierLevelName || '등급',
+        unavailable: false
+      };
+    }
+    var s = size || 40;
+    var paceDisplay = stats && (stats.thresholdPaceDisplay || stats.thresholdPaceValue);
+    var title = badge.levelName;
+    if (paceDisplay) {
+      title += ' · 10k ' + paceDisplay + ' min/km (90일)';
+    } else if (badge.unavailable) {
+      title = '10k 페이스 기록 없음';
+    }
+    return ReactObj.createElement('img', {
+      key: badge.badgeSrc + '-' + (stats && stats.thresholdPaceSec),
+      src: badge.badgeSrc,
+      alt: badge.levelName,
+      title: title,
+      className: 'object-contain shrink-0' + (badge.unavailable ? ' opacity-50' : ''),
+      style: { width: s + 'px', height: s + 'px' },
+      width: s,
+      height: s,
+      loading: 'lazy',
+      decoding: 'async',
+      draggable: false
+    });
+  }
+
   function formatPoints(points) {
     var num = Math.round(Number(points) || 0);
     if (num >= 1000) {
@@ -204,20 +238,10 @@
     var RunDailyQuickStats = window.RunDailyQuickStats;
     var DashboardDetailTabs = window.DashboardDetailTabs;
     var CircularProgress = window.DashboardCircularProgress;
-    var RunPaceGradeIndicator = window.RunPaceGradeIndicator;
     var DashboardCard = window.DashboardCard;
     if (!DashboardCard) {
       DashboardCard = function(p) {
         return React.createElement('div', { className: 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100' + (p.className ? ' ' + p.className : '') }, p.title && React.createElement('h3', { className: 'text-sm font-semibold text-gray-600 mb-3' }, p.title), p.children);
-      };
-    }
-    if (!RunPaceGradeIndicator) {
-      RunPaceGradeIndicator = function(p) {
-        var st = p.stats || {};
-        return React.createElement('div', {
-          className: 'rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs font-bold',
-          style: { width: p.size || 40, height: p.size || 40 }
-        }, st.hexagonTierLevelName ? String(st.hexagonTierLevelName).replace('레벨', '') : '-');
       };
     }
 
@@ -256,10 +280,7 @@
           <div className="flex items-center justify-between">
             <span className="w-10 shrink-0" aria-hidden="true" />
             <div className="flex items-center gap-3 flex-1 justify-center">
-              {RunPaceGradeIndicator && React.createElement(RunPaceGradeIndicator, {
-                stats: stats,
-                size: 40
-              })}
+              {renderRunHeaderTierBadge(stats, 40)}
               <div>
                 <div className="font-semibold text-gray-900">{userProfile.name || '사용자'}</div>
                 <div className="text-xs text-gray-500">{getGradeBadge(userProfile.grade)}</div>

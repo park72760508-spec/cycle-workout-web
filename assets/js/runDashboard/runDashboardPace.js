@@ -277,6 +277,36 @@
   }
 
   /**
+   * 대시보드 헤더 등급 배지 — stats 또는 10k 페이스(초/km)에서 SVG 경로 반환
+   */
+  function resolveRunHexagonTierBadge(stats) {
+    var s = stats || {};
+    if (s.hexagonTierBadgeSrc) {
+      return {
+        badgeSrc: s.hexagonTierBadgeSrc,
+        levelName: s.hexagonTierLevelName || s.hexagonTierLabel || '등급',
+        unavailable: !!s.thresholdPaceUnavailable && !s.thresholdPaceDisplay
+      };
+    }
+    var sec = s.thresholdPaceSec != null ? Number(s.thresholdPaceSec) : null;
+    if (sec != null && isFinite(sec) && sec > 0) {
+      var tier = getRunHexagonTierFromPaceSec(sec);
+      if (tier) {
+        return {
+          badgeSrc: tier.badgeSrc,
+          levelName: tier.levelName,
+          unavailable: false
+        };
+      }
+    }
+    return {
+      badgeSrc: 'assets/img/G.svg',
+      levelName: '등급',
+      unavailable: true
+    };
+  }
+
+  /**
    * 최근 90일 peak_performances → 역치 페이스(10k 표기)
    * 10k 직접 기록 우선, 없으면 7k·5k·3k 리겔 예측 + 가중치(50/35/15%) 합산
    * @param {object} peakPerformances
@@ -334,6 +364,7 @@
     formatPaceMinPerKm: formatPaceMinPerKm,
     formatPaceDisplayParts: formatPaceDisplayParts,
     getRunHexagonTierFromPaceSec: getRunHexagonTierFromPaceSec,
+    resolveRunHexagonTierBadge: resolveRunHexagonTierBadge,
     riegelPredictTotalSec: riegelPredictTotalSec,
     infer10kPaceSecWeightedFromShorterDistances: infer10kPaceSecWeightedFromShorterDistances,
     computeThresholdPaceFromPeaks: computeThresholdPaceFromPeaks,
