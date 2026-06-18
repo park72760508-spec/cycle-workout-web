@@ -459,7 +459,9 @@
   padding: 24px 12px;
 }
 
-#runTrainingJournalScreen .stelvio-ranking-board-entry-btn {
+#runTrainingJournalScreen .stelvio-ranking-board-entry-btn,
+#runDashboardScreen .stelvio-ranking-board-entry-btn,
+#run-dashboard-container .stelvio-ranking-board-entry-btn {
   padding: 10px 20px;
   border-radius: 10px;
   border: 1px solid rgba(102, 126, 234, 0.35);
@@ -467,6 +469,18 @@
   color: #4c51bf;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: none;
+}
+
+#runDashboardScreen .stelvio-ranking-board-entry-btn:hover,
+#run-dashboard-container .stelvio-ranking-board-entry-btn:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12), rgba(118, 75, 162, 0.1));
+}
+
+#runDashboardScreen .stelvio-ranking-board-entry-btn:disabled,
+#run-dashboard-container .stelvio-ranking-board-entry-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 html.global-hub-glass-nav-active #runTrainingJournalScreen.active {
