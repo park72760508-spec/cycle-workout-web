@@ -1,5 +1,5 @@
 /**
- * RunPaceGradeIndicator — 90일 10k 페이스 기준 STELVIO 헥사곤 등급 배지
+ * RunPaceGradeIndicator — 90일 10k 페이스 기준 STELVIO 헥사곤 등급 배지 (A.svg~G.svg)
  */
 /* global React, window */
 
@@ -13,32 +13,40 @@
 
   var React = window.React;
 
+  function resolveBadge(props) {
+    var p = props || {};
+    if (p.badgeSrc) {
+      return {
+        badgeSrc: p.badgeSrc,
+        levelName: p.levelName || '등급',
+        unavailable: false
+      };
+    }
+    if (window.runDashboardPace && typeof window.runDashboardPace.resolveRunHexagonTierBadge === 'function') {
+      return window.runDashboardPace.resolveRunHexagonTierBadge(p.stats);
+    }
+    return { badgeSrc: 'assets/img/G.svg', levelName: '등급', unavailable: true };
+  }
+
   function RunPaceGradeIndicator(props) {
     var p = props || {};
     var size = Number(p.size) || 40;
-    var badgeSrc = p.badgeSrc || (p.stats && p.stats.hexagonTierBadgeSrc) || null;
-    var levelName = p.levelName || (p.stats && p.stats.hexagonTierLevelName) || '등급';
-    var paceDisplay = p.paceDisplay || (p.stats && p.stats.thresholdPaceDisplay) || null;
-    var unavailable = p.unavailable != null
-      ? p.unavailable
-      : !!(p.stats && p.stats.thresholdPaceUnavailable !== false && !paceDisplay);
+    var badge = resolveBadge(p);
+    var paceDisplay = p.paceDisplay || (p.stats && (p.stats.thresholdPaceDisplay || p.stats.thresholdPaceValue)) || null;
 
-    if (!badgeSrc) {
-      badgeSrc = 'assets/img/G.svg';
-    }
-
-    var title = levelName;
+    var title = badge.levelName;
     if (paceDisplay) {
       title += ' · 10k ' + paceDisplay + ' min/km (90일)';
-    } else if (unavailable) {
+    } else if (badge.unavailable) {
       title = '10k 페이스 기록 없음';
     }
 
     return React.createElement('img', {
-      src: badgeSrc,
-      alt: levelName,
+      src: badge.badgeSrc,
+      alt: badge.levelName,
       title: title,
-      className: 'object-contain shrink-0' + (unavailable ? ' opacity-40' : ''),
+      className: 'object-contain shrink-0' + (badge.unavailable ? ' opacity-50' : ''),
+      style: { width: size + 'px', height: size + 'px' },
       width: size,
       height: size,
       loading: 'lazy',
