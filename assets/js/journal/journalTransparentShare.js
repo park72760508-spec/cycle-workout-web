@@ -153,9 +153,65 @@
     return (titles || 'STELVIO RIDE').slice(0, 64);
   }
 
-  /** 맵 하단: 라벨(작게) + 값(크게) + 단위(작게) */
-  function shareStatCellsFromLog(log) {
+  function resolveShareMode(log, opts) {
+    opts = opts || {};
+    if (opts.shareMode === 'run') return 'run';
+    if (log && log._shareMode === 'run') return 'run';
+    return 'ride';
+  }
+
+  function formatRunPaceCell(distKm, durSec) {
+    if (!(distKm > 0 && durSec > 0)) return { value: '-', unit: '' };
+    var paceSec = durSec / distKm;
+    var runUtils = global.runJournalPrUtils;
+    if (runUtils && typeof runUtils.formatPaceFromSpeed === 'function') {
+      var paceStr = runUtils.formatPaceFromSpeed(1000 / paceSec);
+      if (paceStr && paceStr !== '—') {
+        var slash = paceStr.indexOf('/');
+        if (slash >= 0) {
+          return { value: paceStr.slice(0, slash), unit: paceStr.slice(slash + 1) };
+        }
+        return { value: paceStr, unit: '' };
+      }
+    }
+    var m = Math.floor(paceSec / 60);
+    var s = Math.round(paceSec % 60);
+    return { value: m + ':' + (s < 10 ? '0' : '') + s, unit: 'km' };
+  }
+
+  function shareStatCellsFromLogForRun(log) {
     if (!log) return [];
+    var dist = log.distance_km != null ? Number(log.distance_km) : 0;
+    var sec =
+      Number(log.duration_sec != null ? log.duration_sec : log.time != null ? log.time : 0) || 0;
+    var spd = log.avg_speed_kmh != null ? Number(log.avg_speed_kmh) : null;
+    if ((!spd || spd <= 0) && dist > 0 && sec > 0) {
+      spd = Math.round((dist / (sec / 3600)) * 10) / 10;
+    }
+    var time = formatDurationClock(sec);
+    var pace = formatRunPaceCell(dist, sec);
+    return [
+      {
+        label: '거리',
+        value: dist > 0 ? dist.toFixed(1) : '-',
+        unit: dist > 0 ? 'km' : '',
+      },
+      { label: '시간', value: time.value, unit: time.unit },
+      { label: '평균 페이스', value: pace.value, unit: pace.unit },
+      {
+        label: '평균 속도',
+        value: spd != null && spd > 0 ? spd.toFixed(1) : '-',
+        unit: spd != null && spd > 0 ? 'km/h' : '',
+      },
+    ];
+  }
+
+  /** 맵 하단: 라벨(작게) + 값(크게) + 단위(작게) */
+  function shareStatCellsFromLog(log, opts) {
+    if (!log) return [];
+    if (resolveShareMode(log, opts) === 'run') {
+      return shareStatCellsFromLogForRun(log);
+    }
     var dist = log.distance_km != null ? Number(log.distance_km) : 0;
     var sec =
       Number(log.duration_sec != null ? log.duration_sec : log.time != null ? log.time : 0) || 0;
@@ -185,11 +241,13 @@
     ];
   }
 
-  function speedLineTextFromLog(log) {
-    var cells = shareStatCellsFromLog(log);
+  function speedLineTextFromLog(log, opts) {
+    var cells = shareStatCellsFromLog(log, opts);
     var i;
+    var mode = resolveShareMode(log, opts);
+    var speedLabel = mode === 'run' ? '평균 속도' : 'SPEED';
     for (i = 0; i < cells.length; i++) {
-      if (cells[i].label === 'SPEED') {
+      if (cells[i].label === speedLabel) {
         return cells[i].unit ? cells[i].value + ' ' + cells[i].unit : cells[i].value;
       }
     }
@@ -197,20 +255,20 @@
   }
 
   /** 변경 전과 동일: 속도 요약 줄(36px Bebas) 너비로 로고 가로 크기 */
-  function measureShareLogoWidth(log) {
+  function measureShareLogoWidth(log, opts) {
     var c = document.createElement('canvas');
     var ctx = c.getContext('2d');
     if (!ctx) return 200;
     ctx.font = canvasFontForToken('lat', SHARE_LOGO_MEASURE_FONT);
-    return ctx.measureText(speedLineTextFromLog(log)).width;
+    return ctx.measureText(speedLineTextFromLog(log, opts)).width;
   }
 
   function shareCourseY() {
     return SHARE_STATS_LABEL_Y - SHARE_COURSE_GAP_ABOVE_STATS - SHARE_COURSE_H;
   }
 
-  function summaryLinesFromLog(log) {
-    var cells = shareStatCellsFromLog(log);
+  function summaryLinesFromLog(log, opts) {
+    var cells = shareStatCellsFromLog(log, opts);
     var out = [];
     var i;
     for (i = 0; i < cells.length; i++) {
@@ -433,14 +491,14 @@
     drawValueUnitCentered(ctx, cx, SHARE_STATS_VALUE_Y - yOffset, cell.value, cell.unit);
   }
 
-  function drawShareHeaderOnCanvas(ctx, log, logs, logoImg) {
+  function drawShareHeaderOnCanvas(ctx, log, logs, logoImg, opts) {
     if (!ctx || !log) return;
     var canvasW = ctx.canvas.width || 1080;
     var cx = canvasW / 2;
     var sub = formatShareHeaderSub(log);
     var title = formatShareHeaderTitle(log, logs);
     var logoBottomY = SHARE_LOGO_TOP_Y;
-    if (logoImg) logoBottomY = drawShareLogoTop(ctx, log, logoImg);
+    if (logoImg) logoBottomY = drawShareLogoTop(ctx, log, logoImg, opts);
     var subY = logoBottomY + SHARE_SUB_GAP_BELOW_LOGO;
     var titleY = subY + SHARE_TITLE_GAP_BELOW_SUB;
     if (sub) {
@@ -451,13 +509,13 @@
     drawCanvasTextLine(ctx, cx, titleY, title, SHARE_FONT_TITLE, 'center');
   }
 
-  function drawShareBottomOnCanvas(ctx, log, logs, svgImg) {
+  function drawShareBottomOnCanvas(ctx, log, logs, svgImg, opts) {
     if (!ctx || !log) return;
     var canvasW = ctx.canvas.width || 1080;
     if (svgImg) {
       ctx.drawImage(svgImg, 0, -SHARE_SPLIT_Y, canvasW, 1350);
     }
-    var cells = shareStatCellsFromLog(log);
+    var cells = shareStatCellsFromLog(log, opts);
     var cols = cells.length;
     var totalW = canvasW - SHARE_PAD_X * 2;
     var colW = totalW / cols;
@@ -531,9 +589,9 @@
   }
 
   /** 상단: 날짜 바로 위, 속도 줄 너비와 동일한 로고 크기 */
-  function drawShareLogoTop(ctx, log, logoImg) {
+  function drawShareLogoTop(ctx, log, logoImg, opts) {
     if (!ctx || !logoImg || !logoImg.width) return SHARE_LOGO_TOP_Y;
-    var logoW = measureShareLogoWidth(log);
+    var logoW = measureShareLogoWidth(log, opts);
     if (!(logoW > 0)) logoW = 200;
     var logoH = (logoImg.height / logoImg.width) * logoW;
     var canvasW = ctx.canvas.width || 1080;
@@ -704,25 +762,25 @@
       });
   }
 
-  function renderHeaderOverlayBlob(log, logs, logoImg) {
+  function renderHeaderOverlayBlob(log, logs, logoImg, opts) {
     var canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = SHARE_SPLIT_Y;
     var ctx = canvas.getContext('2d');
     if (!ctx) return Promise.reject(new Error('Canvas 2D unavailable'));
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawShareHeaderOnCanvas(ctx, log, logs, logoImg);
+    drawShareHeaderOnCanvas(ctx, log, logs, logoImg, opts);
     return canvasToPngBlob(canvas);
   }
 
-  function renderBottomOverlayBlob(log, logs, svgImg) {
+  function renderBottomOverlayBlob(log, logs, svgImg, opts) {
     var canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = SHARE_BOTTOM_CANVAS_H;
     var ctx = canvas.getContext('2d');
     if (!ctx) return Promise.reject(new Error('Canvas 2D unavailable'));
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawShareBottomOnCanvas(ctx, log, logs, svgImg);
+    drawShareBottomOnCanvas(ctx, log, logs, svgImg, opts);
     return canvasToPngBlob(canvas);
   }
 
@@ -747,8 +805,8 @@
     var svgImg = parts[0];
     var logoImg = parts[1];
     var blobs = await Promise.all([
-      renderHeaderOverlayBlob(log, shareLogs, logoImg),
-      renderBottomOverlayBlob(log, shareLogs, svgImg),
+      renderHeaderOverlayBlob(log, shareLogs, logoImg, opts),
+      renderBottomOverlayBlob(log, shareLogs, svgImg, opts),
     ]);
     return {
       headerBlob: blobs[0],
@@ -762,7 +820,7 @@
   }
 
   /** SVG(코스) + Canvas 텍스트·로고 → PNG (단일, export용) */
-  function svgToPngBlob(svgMarkup, _speedLineText, log, logs) {
+  function svgToPngBlob(svgMarkup, _speedLineText, log, logs, opts) {
     var logoUrl = resolveStelvioLogoAssetUrl();
     return ensureShareFontsLoaded().then(function () {
       return Promise.all([
@@ -781,8 +839,8 @@
       if (!ctx) throw new Error('Canvas 2D unavailable');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(svgImg, 0, 0);
-      drawShareHeaderOnCanvas(ctx, log, logs, logoImg);
-      drawShareBottomOnCanvas(ctx, log, logs, svgImg);
+      drawShareHeaderOnCanvas(ctx, log, logs, logoImg, opts);
+      drawShareBottomOnCanvas(ctx, log, logs, svgImg, opts);
       return new Promise(function (resolve, reject) {
         canvas.toBlob(
           function (blob) {
@@ -2258,10 +2316,10 @@
     if (opts.dailyRouteDoc == null && log && log._dailyRouteDoc) opts.dailyRouteDoc = log._dailyRouteDoc;
     var svg = buildShareSvgMarkup(log, opts);
     if (!svg) throw new Error('코스 데이터가 없어 공유 이미지를 만들 수 없습니다.');
-    var summaryLines = summaryLinesFromLog(log);
+    var summaryLines = summaryLinesFromLog(log, opts);
     var speedLineText = summaryLines[summaryLines.length - 1] || '-';
     var shareLogs = opts.logs || log._logsForShare || null;
-    return svgToPngBlob(svg, speedLineText, log, shareLogs);
+    return svgToPngBlob(svg, speedLineText, log, shareLogs, opts);
   }
 
   function fitContainRect(imgW, imgH, boxW, boxH) {
