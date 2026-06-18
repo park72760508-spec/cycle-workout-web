@@ -278,11 +278,7 @@
                 window.runDashboardAIWorkoutRecommendation(userProfile, coachData);
               }
             },
-            className: 'flex-1 py-3.5 px-4 rounded-xl font-semibold text-white text-center transition-all active:scale-[0.98] min-h-[52px] flex items-center justify-center gap-2.5 shadow-md hover:shadow-lg border-none cursor-pointer',
-            style: {
-              background: hasError ? 'linear-gradient(135deg, #64748b 0%, #475569 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              boxShadow: hasError ? '0 4px 12px rgba(100,116,139,0.25)' : '0 2px 8px rgba(102, 126, 234, 0.35)'
-            }
+            className: 'stelvio-ranking-board-entry-btn flex-1 min-h-[52px]'
           },
             React.createElement('span', { className: 'flex flex-col items-center leading-tight text-center' },
               React.createElement('span', { className: 'text-sm' }, '추천 워크 아웃'),
