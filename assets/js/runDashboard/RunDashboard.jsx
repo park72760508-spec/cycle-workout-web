@@ -204,16 +204,20 @@
     var RunDailyQuickStats = window.RunDailyQuickStats;
     var DashboardDetailTabs = window.DashboardDetailTabs;
     var CircularProgress = window.DashboardCircularProgress;
-    var WkgGradeIndicator = window.WkgGradeIndicator;
+    var RunPaceGradeIndicator = window.RunPaceGradeIndicator;
     var DashboardCard = window.DashboardCard;
     if (!DashboardCard) {
       DashboardCard = function(p) {
         return React.createElement('div', { className: 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100' + (p.className ? ' ' + p.className : '') }, p.title && React.createElement('h3', { className: 'text-sm font-semibold text-gray-600 mb-3' }, p.title), p.children);
       };
     }
-    if (!WkgGradeIndicator) {
-      WkgGradeIndicator = function(p) {
-        return React.createElement('div', { className: 'rounded-full bg-gray-200 flex items-center justify-center', style: { width: p.size || 40, height: p.size || 40 } }, React.createElement('span', { className: 'text-gray-600 font-bold' }, p.letter || '-'));
+    if (!RunPaceGradeIndicator) {
+      RunPaceGradeIndicator = function(p) {
+        var st = p.stats || {};
+        return React.createElement('div', {
+          className: 'rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs font-bold',
+          style: { width: p.size || 40, height: p.size || 40 }
+        }, st.hexagonTierLevelName ? String(st.hexagonTierLevelName).replace('레벨', '') : '-');
       };
     }
 
@@ -252,10 +256,9 @@
           <div className="flex items-center justify-between">
             <span className="w-10 shrink-0" aria-hidden="true" />
             <div className="flex items-center gap-3 flex-1 justify-center">
-              {WkgGradeIndicator && React.createElement(WkgGradeIndicator, {
-                wkg: stats.wkg,
-                size: 40,
-                letter: (stats.wkg != null && stats.wkg !== '') ? Number(stats.wkg).toFixed(2) : '-'
+              {RunPaceGradeIndicator && React.createElement(RunPaceGradeIndicator, {
+                stats: stats,
+                size: 40
               })}
               <div>
                 <div className="font-semibold text-gray-900">{userProfile.name || '사용자'}</div>

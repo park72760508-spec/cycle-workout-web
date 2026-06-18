@@ -170,6 +170,105 @@
     return { value: value, unit: 'min/km', display: value };
   }
 
+  var RIEGEL_FATIGUE = 1.06;
+  var INFER_WEIGHTS = { '7k': 0.5, '5k': 0.35, '3k': 0.15 };
+  var INFER_DIST_KM = { '7k': 7, '5k': 5, '3k': 3 };
+
+  /** STELVIO 헥사곤 등급표 — 10k 페이스(min/km) 기준 7단계 */
+  var RUN_HEXAGON_PACE_TIER_CUTOFFS = [
+    { tierId: 'HC', key: 'hc', label: '레벨A', levelName: '레벨A', badgeSrc: 'assets/img/A.svg', maxSecPerKm: 240 },
+    { tierId: 'C1', key: 'c1', label: '레벨B', levelName: '레벨B', badgeSrc: 'assets/img/B.svg', maxSecPerKm: 270 },
+    { tierId: 'C2', key: 'c2', label: '레벨C', levelName: '레벨C', badgeSrc: 'assets/img/C.svg', maxSecPerKm: 300 },
+    { tierId: 'C3', key: 'c3', label: '레벨D', levelName: '레벨D', badgeSrc: 'assets/img/D.svg', maxSecPerKm: 360 },
+    { tierId: 'C4', key: 'c4', label: '레벨E', levelName: '레벨E', badgeSrc: 'assets/img/E.svg', maxSecPerKm: 420 },
+    { tierId: 'C5', key: 'c5', label: '레벨F', levelName: '레벨F', badgeSrc: 'assets/img/F.svg', maxSecPerKm: 480 },
+    { tierId: 'C6', key: 'c6', label: '레벨G', levelName: '레벨G', badgeSrc: 'assets/img/G.svg', maxSecPerKm: Infinity }
+  ];
+
+  /**
+   * 10k 페이스(초/km) → STELVIO 헥사곤 등급 (빠를수록 상위)
+   * @param {number|null} secPerKm
+   * @returns {{ tierId: string, key: string, label: string, levelName: string, badgeSrc: string }|null}
+   */
+  function getRunHexagonTierFromPaceSec(secPerKm) {
+    var sec = Number(secPerKm);
+    if (!isFinite(sec) || sec <= 0) return null;
+    for (var i = 0; i < RUN_HEXAGON_PACE_TIER_CUTOFFS.length; i++) {
+      var row = RUN_HEXAGON_PACE_TIER_CUTOFFS[i];
+      if (sec <= row.maxSecPerKm) {
+        return {
+          tierId: row.tierId,
+          key: row.key,
+          label: row.label,
+          levelName: row.levelName,
+          badgeSrc: row.badgeSrc
+        };
+      }
+    }
+    var last = RUN_HEXAGON_PACE_TIER_CUTOFFS[RUN_HEXAGON_PACE_TIER_CUTOFFS.length - 1];
+    return {
+      tierId: last.tierId,
+      key: last.key,
+      label: last.label,
+      levelName: last.levelName,
+      badgeSrc: last.badgeSrc
+    };
+  }
+
+  /** 피터 리겔: T2 = T1 × (D2/D1)^1.06 */
+  function riegelPredictTotalSec(timeSec, fromDistKm, toDistKm) {
+    if (!isFinite(timeSec) || timeSec <= 0 || !fromDistKm || !toDistKm) return null;
+    return timeSec * Math.pow(toDistKm / fromDistKm, RIEGEL_FATIGUE);
+  }
+
+  /**
+   * 3k/5k/7k 페이스 → 리겔 예측 + 가중치(7k 50%, 5k 35%, 3k 15%) 합산 10k 페이스
+   * @returns {{ secPerKm: number, inferredFrom: string, weightsUsed: object[] }|null}
+   */
+  function infer10kPaceSecWeightedFromShorterDistances(peakPerformances) {
+    var pp = peakPerformances || {};
+    var parts = [];
+    ['7k', '5k', '3k'].forEach(function(distKey) {
+      var paceSec = getPaceSecFromPeakSegment(pp[distKey]);
+      var distKm = INFER_DIST_KM[distKey];
+      if (paceSec == null || !distKm) return;
+      var totalSec = paceSec * distKm;
+      var predicted10kSec = riegelPredictTotalSec(totalSec, distKm, 10);
+      if (predicted10kSec == null || !isFinite(predicted10kSec) || predicted10kSec <= 0) return;
+      parts.push({
+        dist: distKey,
+        weight: INFER_WEIGHTS[distKey],
+        predicted10kSec: predicted10kSec
+      });
+    });
+    if (!parts.length) return null;
+    var weightSum = parts.reduce(function(s, p) { return s + p.weight; }, 0);
+    var t10 = parts.reduce(function(s, p) {
+      return s + p.predicted10kSec * (p.weight / weightSum);
+    }, 0);
+    return {
+      secPerKm: t10 / 10,
+      inferredFrom: parts.map(function(p) { return p.dist; }).join('+'),
+      weightsUsed: parts
+    };
+  }
+
+  function buildPaceResult(secPerKm, opts) {
+    var o = opts || {};
+    var parts = formatPaceDisplayParts(secPerKm);
+    var tier = getRunHexagonTierFromPaceSec(secPerKm);
+    return {
+      secPerKm: secPerKm,
+      display: parts.display,
+      paceValue: parts.value,
+      paceUnit: parts.unit,
+      inferred: !!o.inferred,
+      inferredFrom: o.inferredFrom || null,
+      unavailable: false,
+      hexagonTier: tier
+    };
+  }
+
   function getPaceSecFromPeakSegment(seg) {
     if (!seg || typeof seg !== 'object') return null;
     var paceStr = seg.pace || seg.calculated_pace || '';
@@ -179,59 +278,32 @@
 
   /**
    * 최근 90일 peak_performances → 역치 페이스(10k 표기)
-   * 10k 없으면 5k+15초, 3k만 있으면 3k+35초
+   * 10k 직접 기록 우선, 없으면 7k·5k·3k 리겔 예측 + 가중치(50/35/15%) 합산
    * @param {object} peakPerformances
-   * @returns {{ secPerKm: number|null, display: string|null, inferred: boolean, inferredFrom: string|null, unavailable: boolean }}
+   * @returns {{ secPerKm: number|null, display: string|null, inferred: boolean, inferredFrom: string|null, unavailable: boolean, hexagonTier: object|null }}
    */
   function computeThresholdPaceFromPeaks(peakPerformances) {
     var pp = peakPerformances || {};
     var sec10k = getPaceSecFromPeakSegment(pp['10k']);
     if (sec10k != null) {
-      var parts10k = formatPaceDisplayParts(sec10k);
-      return {
-        secPerKm: sec10k,
-        display: parts10k.display,
-        paceValue: parts10k.value,
-        paceUnit: parts10k.unit,
-        inferred: false,
-        inferredFrom: '10k',
-        unavailable: false
-      };
+      return buildPaceResult(sec10k, { inferred: false, inferredFrom: '10k' });
     }
-    var sec5k = getPaceSecFromPeakSegment(pp['5k']);
-    if (sec5k != null) {
-      var from5k = sec5k + 15;
-      var parts5k = formatPaceDisplayParts(from5k);
-      return {
-        secPerKm: from5k,
-        display: parts5k.display,
-        paceValue: parts5k.value,
-        paceUnit: parts5k.unit,
+    var weighted = infer10kPaceSecWeightedFromShorterDistances(pp);
+    if (weighted && weighted.secPerKm != null) {
+      return buildPaceResult(weighted.secPerKm, {
         inferred: true,
-        inferredFrom: '5k',
-        unavailable: false
-      };
-    }
-    var sec3k = getPaceSecFromPeakSegment(pp['3k']);
-    if (sec3k != null) {
-      var from3k = sec3k + 35;
-      var parts3k = formatPaceDisplayParts(from3k);
-      return {
-        secPerKm: from3k,
-        display: parts3k.display,
-        paceValue: parts3k.value,
-        paceUnit: parts3k.unit,
-        inferred: true,
-        inferredFrom: '3k',
-        unavailable: false
-      };
+        inferredFrom: weighted.inferredFrom
+      });
     }
     return {
       secPerKm: null,
       display: null,
+      paceValue: null,
+      paceUnit: 'min/km',
       inferred: false,
       inferredFrom: null,
-      unavailable: true
+      unavailable: true,
+      hexagonTier: null
     };
   }
 
@@ -256,9 +328,14 @@
 
   window.runDashboardPace = {
     HEXAGON_AXES: HEXAGON_AXES,
+    RIEGEL_FATIGUE: RIEGEL_FATIGUE,
+    RUN_HEXAGON_PACE_TIER_CUTOFFS: RUN_HEXAGON_PACE_TIER_CUTOFFS,
     parsePaceToSecPerKm: parsePaceToSecPerKm,
     formatPaceMinPerKm: formatPaceMinPerKm,
     formatPaceDisplayParts: formatPaceDisplayParts,
+    getRunHexagonTierFromPaceSec: getRunHexagonTierFromPaceSec,
+    riegelPredictTotalSec: riegelPredictTotalSec,
+    infer10kPaceSecWeightedFromShorterDistances: infer10kPaceSecWeightedFromShorterDistances,
     computeThresholdPaceFromPeaks: computeThresholdPaceFromPeaks,
     extractHexagonPaceContext: extractHexagonPaceContext,
     computeRunVo2maxFromThresholdPace: computeRunVo2maxFromThresholdPace,

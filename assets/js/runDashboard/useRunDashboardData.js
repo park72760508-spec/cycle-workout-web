@@ -121,6 +121,14 @@
     next.thresholdPaceInferredFrom = info.inferredFrom || null;
     next.thresholdPaceUnavailable = !!info.unavailable;
     next.thresholdPace = info.secPerKm != null ? Math.round(info.secPerKm) : 0;
+    var tier = info.hexagonTier || null;
+    if (!tier && info.secPerKm != null && window.runDashboardPace && typeof window.runDashboardPace.getRunHexagonTierFromPaceSec === 'function') {
+      tier = window.runDashboardPace.getRunHexagonTierFromPaceSec(info.secPerKm);
+    }
+    next.hexagonTierId = tier ? tier.tierId : null;
+    next.hexagonTierLabel = tier ? tier.label : null;
+    next.hexagonTierLevelName = tier ? tier.levelName : null;
+    next.hexagonTierBadgeSrc = tier ? tier.badgeSrc : null;
     return next;
   }
 
