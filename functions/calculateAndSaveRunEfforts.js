@@ -119,11 +119,11 @@ async function waitForStravaRateLimit(res) {
   await new Promise((r) => setTimeout(r, waitMs));
 }
 
-/** Strava Streams — time, distance, heartrate (러닝 구간 슬라이딩용) */
+/** Strava Streams — time, distance, heartrate, cadence (러닝 구간 슬라이딩용) */
 async function fetchStravaRunStreams(accessToken, activityId) {
   const url =
     `https://www.strava.com/api/v3/activities/${activityId}/streams` +
-    `?keys=time,distance,heartrate&key_by_type=true`;
+    `?keys=time,distance,heartrate,cadence&key_by_type=true`;
   const maxRetries = 5;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -147,12 +147,14 @@ async function fetchStravaRunStreams(accessToken, activityId) {
       let time = extractData("time");
       let distance = extractData("distance");
       let heartrate = extractData("heartrate");
+      let cadence = extractData("cadence");
       if ((!time || !distance) && Array.isArray(raw)) {
         for (const s of raw) {
           const t = String(s && s.type ? s.type : "").toLowerCase();
           if (t === "time" && Array.isArray(s.data)) time = s.data;
           if (t === "distance" && Array.isArray(s.data)) distance = s.data;
           if (t === "heartrate" && Array.isArray(s.data)) heartrate = s.data;
+          if (t === "cadence" && Array.isArray(s.data)) cadence = s.data;
         }
       }
       if (!time || !distance || time.length < 2 || distance.length < 2) {
@@ -164,6 +166,7 @@ async function fetchStravaRunStreams(accessToken, activityId) {
         time: time.slice(0, n).map((v) => Number(v) || 0),
         distance: distance.slice(0, n).map((v) => Number(v) || 0),
         heartrate: heartrate ? heartrate.slice(0, n).map((v) => Number(v) || 0) : null,
+        cadence: cadence ? cadence.slice(0, n).map((v) => Number(v) || 0) : null,
       };
     } catch (e) {
       if (attempt === maxRetries) {
@@ -212,9 +215,9 @@ function elapsedForExactDistanceWindow(timeArr, distanceArr, startIdx, endIdx, t
 /**
  * 거리 차이 >= targetDistanceM 인 윈도우 중 정확 target 구간 elapsed 최소.
  * @param {{ indexLo?: number, indexHi?: number }} [opts] 탐색 허용 인덱스 (중첩 탐색용 클립)
- * @returns {{ speed: number, hr: number|null, start: number, end: number }|null}
+ * @returns {{ speed: number, hr: number|null, cadence: number|null, start: number, end: number }|null}
  */
-function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM, opts) {
+function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM, opts, cadenceArr) {
   opts = opts || {};
   const n = Math.min(timeArr.length, distanceArr.length);
   if (n < 2 || targetDistanceM <= 0) return null;
@@ -258,14 +261,27 @@ function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM,
     }
     if (found) hr = maxHr;
   }
-  return { speed, hr, start: bestStart, end: bestEnd };
+  let cadence = null;
+  if (cadenceArr && cadenceArr.length > bestEnd) {
+    let sumCad = 0;
+    let cadCount = 0;
+    for (let i = bestStart; i <= bestEnd; i++) {
+      const c = int(cadenceArr[i], 0) || 0;
+      if (c > 0) {
+        sumCad += c;
+        cadCount += 1;
+      }
+    }
+    if (cadCount > 0) cadence = Math.round(sumCad / cadCount);
+  }
+  return { speed, hr, cadence, start: bestStart, end: bestEnd };
 }
 
 /**
  * GPS Streams 중첩 슬라이딩 윈도우: 42k→20k→…→1k
  * 긴 거리 최적 [start,end] 확정 후 그 인덱스 범위 안에서만 짧은 거리 탐색 → 포함 관계·페이스 단조.
  */
-function findNestedEffortWindowsFromStreams(timeArr, distanceArr, hrArr, totalDistanceM) {
+function findNestedEffortWindowsFromStreams(timeArr, distanceArr, hrArr, totalDistanceM, cadenceArr) {
   const out = buildEmptyEffortsRow();
   const n = Math.min(timeArr.length, distanceArr.length);
   if (n < 2) return out;
@@ -284,18 +300,20 @@ function findNestedEffortWindowsFromStreams(timeArr, distanceArr, hrArr, totalDi
       distanceArr,
       hrArr,
       targetM,
-      { indexLo: clipLo, indexHi: clipHi }
+      { indexLo: clipLo, indexHi: clipHi },
+      cadenceArr
     );
     if (!window) continue;
 
     out[`speed_${label}`] = window.speed;
     if (window.hr != null) out[`hr_${label}`] = window.hr;
+    if (window.cadence != null) out[`cadence_${label}`] = window.cadence;
     windows[label] = window;
     clipLo = window.start;
     clipHi = window.end;
   }
 
-  imputeMissingShorterFromWindows(timeArr, distanceArr, hrArr, out, windows);
+  imputeMissingShorterFromWindows(timeArr, distanceArr, hrArr, cadenceArr, out, windows);
   fillMissingShorterEffortsFromLonger(out);
   return out;
 }
@@ -303,7 +321,7 @@ function findNestedEffortWindowsFromStreams(timeArr, distanceArr, hrArr, totalDi
 /**
  * 중첩 윈도우 내 GPS로 짧은 거리 보간 (3k 윈도우 있으면 1k elapsed 산출)
  */
-function imputeMissingShorterFromWindows(timeArr, distanceArr, hrArr, out, windows) {
+function imputeMissingShorterFromWindows(timeArr, distanceArr, hrArr, cadenceArr, out, windows) {
   const chain = ["42k", "20k", "10k", "7k", "5k", "3k", "1k"];
   for (let i = chain.length - 1; i >= 1; i--) {
     const shortLabel = chain[i];
@@ -330,6 +348,20 @@ function imputeMissingShorterFromWindows(timeArr, distanceArr, hrArr, out, windo
       out[shortKey] = targetM / elapsed;
       if (out[`hr_${shortLabel}`] == null && parent.hr != null) {
         out[`hr_${shortLabel}`] = parent.hr;
+      }
+      if (out[`cadence_${shortLabel}`] == null && parent.cadence != null) {
+        out[`cadence_${shortLabel}`] = parent.cadence;
+      } else if (out[`cadence_${shortLabel}`] == null && cadenceArr && cadenceArr.length > parent.end) {
+        let sumCad = 0;
+        let cadCount = 0;
+        for (let k = parent.start; k <= parent.end; k++) {
+          const c = int(cadenceArr[k], 0) || 0;
+          if (c > 0) {
+            sumCad += c;
+            cadCount += 1;
+          }
+        }
+        if (cadCount > 0) out[`cadence_${shortLabel}`] = Math.round(sumCad / cadCount);
       }
       break;
     }
@@ -411,6 +443,13 @@ function buildEmptyEffortsRow() {
     hr_10k: null,
     hr_20k: null,
     hr_42k: null,
+    cadence_1k: null,
+    cadence_3k: null,
+    cadence_5k: null,
+    cadence_7k: null,
+    cadence_10k: null,
+    cadence_20k: null,
+    cadence_42k: null,
   };
 }
 
@@ -447,13 +486,16 @@ async function computeRunEffortsFromActivity(activity, accessToken) {
         streams.time,
         streams.distance,
         streams.heartrate,
-        totalDistanceM
+        totalDistanceM,
+        streams.cadence
       );
       for (const label of EFFORT_DISTANCE_ORDER) {
         const sk = `speed_${label}`;
         const hk = `hr_${label}`;
+        const ck = `cadence_${label}`;
         if (nested[sk] != null) out[sk] = nested[sk];
         if (nested[hk] != null) out[hk] = nested[hk];
+        if (nested[ck] != null) out[ck] = nested[ck];
       }
     } else {
       console.warn("[calculateAndSaveRunEfforts] streams 조회 실패:", streams.error || streams.status);
@@ -566,6 +608,9 @@ async function calculateAndSaveRunEfforts(db, firebaseUid, activity, accessToken
     speed_10k: efforts.speed_10k,
     speed_20k: efforts.speed_20k,
     speed_42k: efforts.speed_42k,
+    cadence_1k: efforts.cadence_1k,
+    cadence_5k: efforts.cadence_5k,
+    cadence_10k: efforts.cadence_10k,
   });
 
   return { efforts, activityId: String(activity.id) };

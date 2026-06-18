@@ -409,7 +409,7 @@ async function fetchYearlyPeaksForYear(firebaseUid, year) {
 }
 
 const RUN_EFFORT_SELECT =
-  "activity_id, speed_1k, speed_3k, speed_5k, speed_7k, speed_10k, speed_20k, speed_42k, hr_1k, hr_3k, hr_5k, hr_7k, hr_10k, hr_20k, hr_42k, updated_at, created_at";
+  "activity_id, speed_1k, speed_3k, speed_5k, speed_7k, speed_10k, speed_20k, speed_42k, hr_1k, hr_3k, hr_5k, hr_7k, hr_10k, hr_20k, hr_42k, cadence_1k, cadence_3k, cadence_5k, cadence_7k, cadence_10k, cadence_20k, cadence_42k, updated_at, created_at";
 const RUN_ACTIVITY_SELECT = "activity_id, activity_date, activity_type, source";
 
 function isRunningActivityType(type) {
@@ -512,6 +512,13 @@ async function fetchUserRunEffortsRecent(firebaseUid, limit = 400) {
       hr_10k: e.hr_10k,
       hr_20k: e.hr_20k,
       hr_42k: e.hr_42k,
+      cadence_1k: e.cadence_1k,
+      cadence_3k: e.cadence_3k,
+      cadence_5k: e.cadence_5k,
+      cadence_7k: e.cadence_7k,
+      cadence_10k: e.cadence_10k,
+      cadence_20k: e.cadence_20k,
+      cadence_42k: e.cadence_42k,
       updated_at: e.updated_at,
       created_at: e.created_at,
       readBackend: "supabase",
