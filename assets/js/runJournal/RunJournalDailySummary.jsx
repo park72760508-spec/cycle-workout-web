@@ -91,7 +91,8 @@
               .join(' · ') || logs[0].title),
       _routeProfileMerged: routeMerged,
       _logsForShare: logs,
-      _dailyRouteDoc: dailyRouteDoc || null
+      _dailyRouteDoc: dailyRouteDoc || null,
+      _shareMode: 'run'
     };
   }
 
@@ -155,11 +156,13 @@
               shareApi && typeof shareApi.openShareComposer === 'function'
                 ? shareApi.openShareComposer(shareLog, {
                     logs: logs,
-                    dailyRouteDoc: dailyRouteDoc
+                    dailyRouteDoc: dailyRouteDoc,
+                    shareMode: 'run'
                   })
                 : shareApi.exportTransparentSharePng(shareLog, {
                     logs: logs,
-                    dailyRouteDoc: dailyRouteDoc
+                    dailyRouteDoc: dailyRouteDoc,
+                    shareMode: 'run'
                   });
             Promise.resolve(p)
               .catch(function (e) {
