@@ -434,9 +434,55 @@
     return '';
   }
 
+  async function loadWorkoutSegmentsForShare(log, opts) {
+    var workoutId = resolveWorkoutIdForShare(log, opts);
+    if (!workoutId) return [];
+    var loadFn =
+      global.journalWorkoutGraphUtils &&
+      typeof global.journalWorkoutGraphUtils.loadWorkoutSegmentsForJournal === 'function'
+        ? global.journalWorkoutGraphUtils.loadWorkoutSegmentsForJournal
+        : null;
+    if (!loadFn) return [];
+    var result = await loadFn(workoutId);
+    return (result && result.segments) || [];
+  }
+
+  async function paintShareWorkoutGraphOnCtx(ctx, log, opts, originX, originY) {
+    if (!ctx || typeof global.drawWorkoutProfileOnCanvas !== 'function') return false;
+    var segs = await loadWorkoutSegmentsForShare(log, opts);
+    if (!segs.length) return false;
+    ctx.save();
+    ctx.translate(originX, originY);
+    global.drawWorkoutProfileOnCanvas(ctx, segs, SHARE_COURSE_W, SHARE_COURSE_H, 0.1);
+    ctx.restore();
+    return true;
+  }
+
   async function resolveShareCoursePaths(log, opts) {
     opts = opts || {};
     if (!log) return [];
+
+    if (resolveShareVisualKind(log, opts) === 'workout') {
+      var workoutId = resolveWorkoutIdForShare(log, opts);
+      if (!workoutId) return [];
+      var loadFn =
+        global.journalWorkoutGraphUtils &&
+        typeof global.journalWorkoutGraphUtils.loadWorkoutSegmentsForJournal === 'function'
+          ? global.journalWorkoutGraphUtils.loadWorkoutSegmentsForJournal
+          : null;
+      var buildPath =
+        typeof global.buildWorkoutProfilePathsForShare === 'function'
+          ? global.buildWorkoutProfilePathsForShare
+          : typeof global.buildWorkoutProfilePathForShare === 'function'
+            ? global.buildWorkoutProfilePathForShare
+            : null;
+      if (!loadFn || !buildPath) return [];
+      var woResult = await loadFn(workoutId);
+      var woSegs = (woResult && woResult.segments) || [];
+      if (!woSegs.length) return [];
+      return buildPath(woSegs, SHARE_COURSE_W, SHARE_COURSE_H, 0.1);
+    }
+
     var route = resolveRouteProfileForShare(log, opts);
     var coursePaths =
       route && typeof coursePathStringsFromRoute === 'function'
@@ -444,26 +490,26 @@
         : [];
     if (coursePaths.length) return coursePaths;
 
-    var workoutId = resolveWorkoutIdForShare(log, opts);
-    if (!workoutId) return [];
+    var fallbackWorkoutId = resolveWorkoutIdForShare(log, opts);
+    if (!fallbackWorkoutId) return [];
 
-    var loadFn =
+    var fallbackLoadFn =
       global.journalWorkoutGraphUtils &&
       typeof global.journalWorkoutGraphUtils.loadWorkoutSegmentsForJournal === 'function'
         ? global.journalWorkoutGraphUtils.loadWorkoutSegmentsForJournal
         : null;
-    var buildPath =
+    var fallbackBuildPath =
       typeof global.buildWorkoutProfilePathsForShare === 'function'
         ? global.buildWorkoutProfilePathsForShare
         : typeof global.buildWorkoutProfilePathForShare === 'function'
           ? global.buildWorkoutProfilePathForShare
           : null;
-    if (!loadFn || !buildPath) return [];
+    if (!fallbackLoadFn || !fallbackBuildPath) return [];
 
-    var result = await loadFn(workoutId);
-    var segs = (result && result.segments) || [];
-    if (!segs.length) return [];
-    return buildPath(segs, SHARE_COURSE_W, SHARE_COURSE_H, 0.1);
+    var fallbackResult = await fallbackLoadFn(fallbackWorkoutId);
+    var fallbackSegs = (fallbackResult && fallbackResult.segments) || [];
+    if (!fallbackSegs.length) return [];
+    return fallbackBuildPath(fallbackSegs, SHARE_COURSE_W, SHARE_COURSE_H, 0.1);
   }
 
   async function resolveShareSvgMarkup(log, opts) {
@@ -631,12 +677,9 @@
     drawCanvasTextLine(ctx, cx, titleY, title, SHARE_FONT_TITLE, 'center');
   }
 
-  function drawShareBottomOnCanvas(ctx, log, logs, svgImg, opts) {
+  function drawShareStatsOnBottomCanvas(ctx, log, opts) {
     if (!ctx || !log) return;
     var canvasW = ctx.canvas.width || 1080;
-    if (svgImg) {
-      ctx.drawImage(svgImg, 0, -SHARE_SPLIT_Y, canvasW, 1350);
-    }
     var cells = shareStatCellsFromLog(log, opts);
     var cols = cells.length;
     var totalW = canvasW - SHARE_PAD_X * 2;
@@ -645,6 +688,30 @@
     for (i = 0; i < cols; i++) {
       drawStatCellCentered(ctx, SHARE_PAD_X + colW * i + colW / 2, cells[i], SHARE_SPLIT_Y);
     }
+  }
+
+  function drawShareBottomOnCanvas(ctx, log, logs, svgImg, opts) {
+    if (!ctx || !log) return;
+    var canvasW = ctx.canvas.width || 1080;
+    if (svgImg) {
+      ctx.drawImage(svgImg, 0, -SHARE_SPLIT_Y, canvasW, 1350);
+    }
+    drawShareStatsOnBottomCanvas(ctx, log, opts);
+  }
+
+  async function drawShareBottomOnCanvasAsync(ctx, log, logs, svgImg, opts) {
+    if (!ctx || !log) return;
+    var canvasW = ctx.canvas.width || 1080;
+    var paintedWorkout = false;
+    if (resolveShareVisualKind(log, opts) === 'workout') {
+      var courseX = (canvasW - SHARE_COURSE_W) / 2;
+      var courseY = shareCourseY() - SHARE_SPLIT_Y;
+      paintedWorkout = await paintShareWorkoutGraphOnCtx(ctx, log, opts, courseX, courseY);
+    }
+    if (!paintedWorkout && svgImg) {
+      ctx.drawImage(svgImg, 0, -SHARE_SPLIT_Y, canvasW, 1350);
+    }
+    drawShareStatsOnBottomCanvas(ctx, log, opts);
   }
 
   function drawShareTextOnCanvas(ctx, log, logs, logoBottomY) {
@@ -895,14 +962,14 @@
     return canvasToPngBlob(canvas);
   }
 
-  function renderBottomOverlayBlob(log, logs, svgImg, opts) {
+  async function renderBottomOverlayBlob(log, logs, svgImg, opts) {
     var canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = SHARE_BOTTOM_CANVAS_H;
     var ctx = canvas.getContext('2d');
     if (!ctx) return Promise.reject(new Error('Canvas 2D unavailable'));
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawShareBottomOnCanvas(ctx, log, logs, svgImg, opts);
+    await drawShareBottomOnCanvasAsync(ctx, log, logs, svgImg, opts);
     return canvasToPngBlob(canvas);
   }
 
@@ -913,19 +980,27 @@
     if (opts.dailyRouteDoc == null && log && log._dailyRouteDoc) {
       opts.dailyRouteDoc = log._dailyRouteDoc;
     }
-    var svg = await resolveShareSvgMarkup(log, opts);
-    if (!svg) throw new Error('공유 이미지를 만들 수 없습니다. 코스·워크아웃 데이터를 확인해 주세요.');
+    var isWorkoutShare = resolveShareVisualKind(log, opts) === 'workout';
+    var svgImg = null;
+    if (isWorkoutShare) {
+      var woSegs = await loadWorkoutSegmentsForShare(log, opts);
+      if (!woSegs.length) {
+        throw new Error('워크아웃 세그먼트를 불러올 수 없습니다.');
+      }
+      if (typeof global.drawWorkoutProfileOnCanvas !== 'function') {
+        throw new Error('워크아웃 그래프 렌더 모듈을 불러올 수 없습니다.');
+      }
+    } else {
+      var svg = await resolveShareSvgMarkup(log, opts);
+      if (!svg) throw new Error('공유 이미지를 만들 수 없습니다. 코스·워크아웃 데이터를 확인해 주세요.');
+      svgImg = await loadSvgMarkupAsImage(svg);
+    }
     var shareLogs = opts.logs || log._logsForShare || null;
     var logoUrl = resolveStelvioLogoAssetUrl();
     await ensureShareFontsLoaded();
-    var parts = await Promise.all([
-      loadSvgMarkupAsImage(svg),
-      loadRasterImage(logoUrl).catch(function () {
-        return null;
-      }),
-    ]);
-    var svgImg = parts[0];
-    var logoImg = parts[1];
+    var logoImg = await loadRasterImage(logoUrl).catch(function () {
+      return null;
+    });
     var blobs = await Promise.all([
       renderHeaderOverlayBlob(log, shareLogs, logoImg, opts),
       renderBottomOverlayBlob(log, shareLogs, svgImg, opts),
