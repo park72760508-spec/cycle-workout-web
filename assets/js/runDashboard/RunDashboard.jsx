@@ -361,36 +361,37 @@
                 React.createElement('span', null, '최신 기록 우대 (오래된 기록일수록 반영 비율 감소)')
               )
             ),
-            React.createElement('button', {
-              type: 'button',
-              onClick: async function() {
-                if (tpCalcLoading || !userProfile || !userProfile.id) return;
-                setTpCalcLoading(true);
-                setTpCalcResult(null);
-                try {
-                  var efforts = [];
-                  if (typeof window.getUserRunEfforts === 'function') {
-                    efforts = await window.getUserRunEfforts(userProfile.id, { limit: 400 }) || [];
+            React.createElement('div', { className: 'flex justify-center' },
+              React.createElement('button', {
+                type: 'button',
+                onClick: async function() {
+                  if (tpCalcLoading || !userProfile || !userProfile.id) return;
+                  setTpCalcLoading(true);
+                  setTpCalcResult(null);
+                  try {
+                    var efforts = [];
+                    if (typeof window.getUserRunEfforts === 'function') {
+                      efforts = await window.getUserRunEfforts(userProfile.id, { limit: 400 }) || [];
+                    }
+                    var result = window.calculateDynamicEtp
+                      ? window.calculateDynamicEtp(efforts)
+                      : { success: false, error: 'eTP 산출 함수를 불러올 수 없습니다.' };
+                    setTpCalcResult(result);
+                    setTpModalOpen(true);
+                  } catch (e) {
+                    setTpCalcResult({ success: false, error: (e && e.message) || 'eTP 산출 중 오류가 발생했습니다.' });
+                    setTpModalOpen(true);
+                  } finally {
+                    setTpCalcLoading(false);
                   }
-                  var result = window.calculateDynamicEtp
-                    ? window.calculateDynamicEtp(efforts)
-                    : { success: false, error: 'eTP 산출 함수를 불러올 수 없습니다.' };
-                  setTpCalcResult(result);
-                  setTpModalOpen(true);
-                } catch (e) {
-                  setTpCalcResult({ success: false, error: (e && e.message) || 'eTP 산출 중 오류가 발생했습니다.' });
-                  setTpModalOpen(true);
-                } finally {
-                  setTpCalcLoading(false);
-                }
-              },
-              disabled: tpCalcLoading,
-              className: ('w-full py-3.5 px-4 text-white font-semibold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all text-base border-none ') + (tpCalcLoading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'),
-              style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
-            }, tpCalcLoading ? React.createElement('span', { className: 'flex items-center justify-center gap-2' },
-              React.createElement('span', { className: 'w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin' }),
-              '산출 중...'
-            ) : 'eTP 산출하기')
+                },
+                disabled: tpCalcLoading,
+                className: 'stelvio-ranking-board-entry-btn'
+              }, tpCalcLoading ? React.createElement('span', { className: 'flex items-center justify-center gap-2' },
+                React.createElement('span', { className: 'w-5 h-5 border-2 border-[#667eea] border-t-transparent rounded-full animate-spin' }),
+                '산출 중...'
+              ) : 'eTP 산출하기')
+            )
           ))}
         </section>
 
