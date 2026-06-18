@@ -123,8 +123,15 @@
     var pct = weeklyGoal > 0 ? Math.min(100, Math.round((weeklyProgress / weeklyGoal) * 100)) : 0;
 
     var inferredNote = '';
-    if (paceInferred && paceInferredFrom === '5k') inferredNote = '5k 페이스 +15초 유추';
-    else if (paceInferred && paceInferredFrom === '3k') inferredNote = '3k 페이스 +35초 유추';
+    if (paceInferred && paceInferredFrom) {
+      if (paceInferredFrom === '10k') {
+        inferredNote = '';
+      } else if (paceInferredFrom.indexOf('+') !== -1) {
+        inferredNote = paceInferredFrom.replace(/\+/g, '·') + ' 리겔 가중 유추';
+      } else {
+        inferredNote = paceInferredFrom + ' 리겔 유추';
+      }
+    }
 
     var cardStyle = {
       borderRadius: '16px',

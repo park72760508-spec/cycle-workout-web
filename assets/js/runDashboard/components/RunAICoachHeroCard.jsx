@@ -118,16 +118,17 @@
           React.createElement('div', { className: 'text-5xl mb-4' }, '🧠'),
           React.createElement('div', { className: 'text-lg font-semibold text-gray-800 mb-2' }, '컨디션 분석하기'),
           React.createElement('p', { className: 'text-sm text-gray-500 mb-6 max-w-xs mx-auto' }, '훈련 데이터를 분석해 오늘의 추천 워크아웃을 알려드립니다'),
-          React.createElement('button', {
-            type: 'button',
-            onClick: function(e) {
-              if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-              if (e && typeof e.preventDefault === 'function') e.preventDefault();
-              if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
-            },
-            className: 'px-6 py-3.5 rounded-xl font-semibold text-white transition-all active:scale-[0.98] shadow-md hover:shadow-lg border-none cursor-pointer',
-            style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
-          }, '컨디션 분석 하기')
+          React.createElement('div', { className: 'flex justify-center' },
+            React.createElement('button', {
+              type: 'button',
+              onClick: function(e) {
+                if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (e && typeof e.preventDefault === 'function') e.preventDefault();
+                if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
+              },
+              className: 'stelvio-ranking-board-entry-btn'
+            }, '컨디션 분석 하기')
+          )
         )
       );
     }
@@ -266,23 +267,25 @@
           (String(coachData.error_reason || '').indexOf('API 키') !== -1 || String(coachData.error_reason || '').indexOf('geminiApiKey') !== -1) &&
           React.createElement('p', { className: 'text-xs text-gray-600 mt-1' }, '환경 설정에서 Gemini API 키를 입력한 뒤 "다시 분석"을 눌러 주세요.')
         ),
-        React.createElement('div', { className: 'flex flex-col sm:flex-row gap-3' },
-          React.createElement('button', {
-            type: 'button',
-            onClick: function(e) {
-              if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
-              if (e && typeof e.preventDefault === 'function') e.preventDefault();
-              if (typeof window.showRunWorkoutGuideModal === 'function') {
-                window.showRunWorkoutGuideModal(userProfile, coachData, p.stats || {});
-              } else if (typeof window.runDashboardAIWorkoutRecommendation === 'function') {
-                window.runDashboardAIWorkoutRecommendation(userProfile, coachData);
-              }
+        React.createElement('div', { className: 'flex flex-col items-center gap-3' },
+          React.createElement('div', { className: 'flex justify-center w-full' },
+            React.createElement('button', {
+              type: 'button',
+              onClick: function(e) {
+                if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (e && typeof e.preventDefault === 'function') e.preventDefault();
+                if (typeof window.showRunWorkoutGuideModal === 'function') {
+                  window.showRunWorkoutGuideModal(userProfile, coachData, p.stats || {});
+                } else if (typeof window.runDashboardAIWorkoutRecommendation === 'function') {
+                  window.runDashboardAIWorkoutRecommendation(userProfile, coachData);
+                }
+              },
+              className: 'stelvio-ranking-board-entry-btn min-h-[52px]'
             },
-            className: 'stelvio-ranking-board-entry-btn flex-1 min-h-[52px]'
-          },
-            React.createElement('span', { className: 'flex flex-col items-center leading-tight text-center' },
-              React.createElement('span', { className: 'text-sm' }, '추천 워크 아웃'),
-              React.createElement('span', { className: 'text-base font-bold' }, workoutType)
+              React.createElement('span', { className: 'flex flex-col items-center leading-tight text-center' },
+                React.createElement('span', { className: 'text-sm' }, '추천 워크 아웃'),
+                React.createElement('span', { className: 'text-base font-bold' }, workoutType)
+              )
             )
           ),
           (hasError || isQuotaInfo) &&
