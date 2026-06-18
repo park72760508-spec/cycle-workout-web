@@ -6623,7 +6623,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
 }
 
 /**
- * 투명 이미지 공유 — 워크아웃 막대 외곽선 + FTP 가이드선 + 케이던스 라인
+ * 투명 이미지 공유 — X/Y축 + FTP 점선 가이드 + 워크아웃 막대 외곽선 + 케이던스 라인
  * @param {Array} segments
  * @param {number} viewW
  * @param {number} viewH
@@ -6698,17 +6698,24 @@ function buildWorkoutProfilePathsForShare(segments, viewW, viewH, padRatio) {
 
   const paths = [];
 
+  /* Y축 (좌측) + X축 (하단) — 차트 프레임 */
+  paths.push({
+    pathD: 'M ' + padX + ' ' + topYBound + ' L ' + padX + ' ' + baselineY,
+    strokeWidth: 4,
+    opacity: 0.88,
+  });
+  paths.push({
+    pathD: 'M ' + padX + ' ' + baselineY + ' L ' + (padX + innerW) + ' ' + baselineY,
+    strokeWidth: 4,
+    opacity: 0.88,
+  });
+
+  /* FTP 100% 점선 가이드 */
   paths.push({
     pathD: 'M ' + padX + ' ' + ftpGuideY + ' L ' + (padX + innerW) + ' ' + ftpGuideY,
     strokeWidth: 3,
     dashArray: '18 12',
     opacity: 0.82,
-  });
-
-  paths.push({
-    pathD: 'M ' + padX + ' ' + baselineY + ' L ' + (padX + innerW) + ' ' + baselineY,
-    strokeWidth: 3,
-    opacity: 0.45,
   });
 
   let x = padX;
