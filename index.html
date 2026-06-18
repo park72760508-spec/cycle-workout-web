@@ -2512,11 +2512,54 @@
       box-shadow: 0 12px 40px rgba(102, 126, 234, 0.15), 0 4px 16px rgba(0, 0, 0, 0.05);
     }
     #trainingJournalScreen .journal-daily-summary-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
       margin-bottom: 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid rgba(102, 126, 234, 0.2);
     }
-    #trainingJournalScreen .journal-daily-summary-title { margin: 0; font-size: 1rem; font-weight: 600; color: #4c51bf; }
+    #trainingJournalScreen .journal-daily-summary-title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #4c51bf;
+      flex: 1;
+      min-width: 0;
+    }
+    #trainingJournalScreen .journal-daily-summary-photo-btn {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 6px;
+      margin: -4px -4px 0 0;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 8px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    #trainingJournalScreen .journal-daily-summary-photo-btn:not(.is-disabled):active {
+      background: rgba(102, 126, 234, 0.16);
+    }
+    #trainingJournalScreen .journal-daily-summary-photo-btn.is-disabled {
+      cursor: default;
+      pointer-events: none;
+    }
+    #trainingJournalScreen .journal-daily-summary-photo-icon {
+      width: 24px;
+      height: 24px;
+      display: block;
+    }
+    #trainingJournalScreen .journal-daily-summary-photo-btn.is-disabled .journal-daily-summary-photo-icon {
+      opacity: 0.32;
+      filter: grayscale(0.5) blur(0.6px);
+    }
     #trainingJournalScreen .journal-daily-summary-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
