@@ -206,11 +206,53 @@
     ];
   }
 
+  function resolveShareVisualKind(log, opts) {
+    opts = opts || {};
+    if (opts.shareVisualKind === 'workout') return 'workout';
+    if (log && log._shareVisualKind === 'workout') return 'workout';
+    if (opts.shareVisualKind === 'route' || (log && log._shareVisualKind === 'route')) return 'route';
+    var route = resolveRouteProfileForShare(log, opts);
+    if (route && route.hasRoute) return 'route';
+    if (resolveWorkoutIdForShare(log, opts)) return 'workout';
+    return 'route';
+  }
+
+  function shareStatCellsFromLogForWorkout(log) {
+    if (!log) return [];
+    var sec =
+      Number(log.duration_sec != null ? log.duration_sec : log.time != null ? log.time : 0) || 0;
+    var ap = log.avg_watts != null ? Number(log.avg_watts) : null;
+    var hr = log.avg_hr != null ? Number(log.avg_hr) : null;
+    var tss = log.tss != null ? Number(log.tss) : null;
+    var time = formatDurationClock(sec);
+    return [
+      { label: '시간', value: time.value, unit: time.unit },
+      {
+        label: '평균 파워',
+        value: ap != null && ap > 0 ? String(Math.round(ap)) : '-',
+        unit: ap != null && ap > 0 ? 'W' : '',
+      },
+      {
+        label: '평균 심박',
+        value: hr != null && hr > 0 ? String(Math.round(hr)) : '-',
+        unit: hr != null && hr > 0 ? 'bpm' : '',
+      },
+      {
+        label: 'TSS',
+        value: tss != null && tss > 0 ? String(Math.round(tss)) : '-',
+        unit: '',
+      },
+    ];
+  }
+
   /** 맵 하단: 라벨(작게) + 값(크게) + 단위(작게) */
   function shareStatCellsFromLog(log, opts) {
     if (!log) return [];
     if (resolveShareMode(log, opts) === 'run') {
       return shareStatCellsFromLogForRun(log);
+    }
+    if (resolveShareVisualKind(log, opts) === 'workout') {
+      return shareStatCellsFromLogForWorkout(log);
     }
     var dist = log.distance_km != null ? Number(log.distance_km) : 0;
     var sec =
@@ -245,9 +287,12 @@
     var cells = shareStatCellsFromLog(log, opts);
     var i;
     var mode = resolveShareMode(log, opts);
-    var speedLabel = mode === 'run' ? '평균 속도' : 'SPEED';
+    var visualKind = resolveShareVisualKind(log, opts);
+    var refLabel = 'SPEED';
+    if (mode === 'run') refLabel = '평균 속도';
+    else if (visualKind === 'workout') refLabel = '평균 파워';
     for (i = 0; i < cells.length; i++) {
-      if (cells[i].label === speedLabel) {
+      if (cells[i].label === refLabel) {
         return cells[i].unit ? cells[i].value + ' ' + cells[i].unit : cells[i].value;
       }
     }
@@ -322,14 +367,10 @@
     return out;
   }
 
-  function buildShareSvgMarkup(log, opts) {
+  function buildShareSvgMarkupFromPaths(coursePaths, opts) {
     opts = opts || {};
     var w = opts.width || 1080;
-    var h = opts.height || 1350;
-    if (!utils || !log) return '';
-    var route = resolveRouteProfileForShare(log, opts);
-    if (!route) return '';
-    var coursePaths = coursePathStringsFromRoute(route, SHARE_COURSE_W, SHARE_COURSE_H, 0.1);
+    if (!coursePaths || !coursePaths.length) return '';
     var courseX = (w - SHARE_COURSE_W) / 2;
     var si;
     var shapes =
@@ -349,15 +390,72 @@
       '<svg xmlns="http://www.w3.org/2000/svg" width="' +
       w +
       '" height="' +
-      h +
+      (opts.height || 1350) +
       '" viewBox="0 0 ' +
       w +
       ' ' +
-      h +
+      (opts.height || 1350) +
       '">' +
       shapes +
       '</svg>'
     );
+  }
+
+  function resolveWorkoutIdForShare(log, opts) {
+    opts = opts || {};
+    if (opts.workoutId) return String(opts.workoutId).trim();
+    if (log && log._shareWorkoutId) return String(log._shareWorkoutId).trim();
+    var graphUtils = global.journalWorkoutGraphUtils;
+    if (graphUtils && typeof graphUtils.resolveWorkoutIdFromLogs === 'function') {
+      return graphUtils.resolveWorkoutIdFromLogs(log, opts.logs || (log && log._logsForShare) || null);
+    }
+    return '';
+  }
+
+  async function resolveShareCoursePaths(log, opts) {
+    opts = opts || {};
+    if (!log) return [];
+    var route = resolveRouteProfileForShare(log, opts);
+    var coursePaths =
+      route && typeof coursePathStringsFromRoute === 'function'
+        ? coursePathStringsFromRoute(route, SHARE_COURSE_W, SHARE_COURSE_H, 0.1)
+        : [];
+    if (coursePaths.length) return coursePaths;
+
+    var workoutId = resolveWorkoutIdForShare(log, opts);
+    if (!workoutId) return [];
+
+    var loadFn =
+      global.journalWorkoutGraphUtils &&
+      typeof global.journalWorkoutGraphUtils.loadWorkoutSegmentsForJournal === 'function'
+        ? global.journalWorkoutGraphUtils.loadWorkoutSegmentsForJournal
+        : null;
+    var buildPath =
+      typeof global.buildWorkoutProfilePathForShare === 'function'
+        ? global.buildWorkoutProfilePathForShare
+        : null;
+    if (!loadFn || !buildPath) return [];
+
+    var result = await loadFn(workoutId);
+    var segs = (result && result.segments) || [];
+    if (!segs.length) return [];
+    return buildPath(segs, SHARE_COURSE_W, SHARE_COURSE_H, 0.1);
+  }
+
+  async function resolveShareSvgMarkup(log, opts) {
+    var coursePaths = await resolveShareCoursePaths(log, opts);
+    return buildShareSvgMarkupFromPaths(coursePaths, opts);
+  }
+
+  function buildShareSvgMarkup(log, opts) {
+    opts = opts || {};
+    var w = opts.width || 1080;
+    var h = opts.height || 1350;
+    if (!utils || !log) return '';
+    var route = resolveRouteProfileForShare(log, opts);
+    if (!route) return '';
+    var coursePaths = coursePathStringsFromRoute(route, SHARE_COURSE_W, SHARE_COURSE_H, 0.1);
+    return buildShareSvgMarkupFromPaths(coursePaths, { width: w, height: h });
   }
 
   function isKoreanChar(ch) {
@@ -791,8 +889,8 @@
     if (opts.dailyRouteDoc == null && log && log._dailyRouteDoc) {
       opts.dailyRouteDoc = log._dailyRouteDoc;
     }
-    var svg = buildShareSvgMarkup(log, opts);
-    if (!svg) throw new Error('코스 데이터가 없어 공유 이미지를 만들 수 없습니다.');
+    var svg = await resolveShareSvgMarkup(log, opts);
+    if (!svg) throw new Error('공유 이미지를 만들 수 없습니다. 코스·워크아웃 데이터를 확인해 주세요.');
     var shareLogs = opts.logs || log._logsForShare || null;
     var logoUrl = resolveStelvioLogoAssetUrl();
     await ensureShareFontsLoaded();
@@ -2314,8 +2412,8 @@
     opts = opts || {};
     if (log && log._logsForShare && !opts.logs) opts.logs = log._logsForShare;
     if (opts.dailyRouteDoc == null && log && log._dailyRouteDoc) opts.dailyRouteDoc = log._dailyRouteDoc;
-    var svg = buildShareSvgMarkup(log, opts);
-    if (!svg) throw new Error('코스 데이터가 없어 공유 이미지를 만들 수 없습니다.');
+    var svg = await resolveShareSvgMarkup(log, opts);
+    if (!svg) throw new Error('공유 이미지를 만들 수 없습니다. 코스·워크아웃 데이터를 확인해 주세요.');
     var summaryLines = summaryLinesFromLog(log, opts);
     var speedLineText = summaryLines[summaryLines.length - 1] || '-';
     var shareLogs = opts.logs || log._logsForShare || null;
@@ -2532,6 +2630,7 @@
 
   global.journalTransparentShare = {
     formatShareImageTitle: formatShareImageTitle,
+    resolveShareSvgMarkup: resolveShareSvgMarkup,
     buildShareSvgMarkup: buildShareSvgMarkup,
     createOverlayPngBlob: createOverlayPngBlob,
     createOverlayPngBlobs: createOverlayPngBlobs,

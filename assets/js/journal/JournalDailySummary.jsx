@@ -13,6 +13,8 @@
   }
 
   var ReactObj = window.React;
+  var useState = ReactObj.useState;
+  var PHOTO_ICON_SRC = 'assets/img/photo.svg';
 
   function formatDuration(sec) {
     if (sec == null || sec === '' || Number.isNaN(Number(sec))) return '-';
@@ -173,11 +175,70 @@
     return titles ? base + ' · ' + titles : base;
   }
 
+  function mergeLogsForShare(logs, dailyRouteDoc, selectedDate, userProfile) {
+    if (!logs || !logs.length) return null;
+    var totalSec = 0;
+    var totalDist = 0;
+    var sumElev = 0;
+    var sumApSec = 0;
+    var sumHrSec = 0;
+    var totalTss = 0;
+    var i;
+    for (i = 0; i < logs.length; i++) {
+      var l = logs[i];
+      var s = Number(l.duration_sec != null ? l.duration_sec : (l.time != null ? l.time : l.duration)) || 0;
+      totalSec += s;
+      totalDist += Number(l.distance_km || 0);
+      sumElev += Number(l.elevation_gain || 0);
+      sumApSec += (Number(l.avg_watts) || 0) * s;
+      sumHrSec += (Number(l.avg_hr) || 0) * s;
+      totalTss += getEffectiveTss(l, userProfile);
+    }
+    var utils = window.stravaPolylineUtils;
+    var routeMerged =
+      utils && typeof utils.routeProfileFromLogs === 'function'
+        ? utils.routeProfileFromLogs(logs, dailyRouteDoc || null)
+        : null;
+    var graphUtils = window.journalWorkoutGraphUtils;
+    var logsExpanded =
+      graphUtils && typeof graphUtils.expandLogsWithStelvioCompanions === 'function'
+        ? graphUtils.expandLogsWithStelvioCompanions(logs)
+        : logs;
+    var workoutId =
+      graphUtils && typeof graphUtils.resolveWorkoutIdFromLogs === 'function'
+        ? graphUtils.resolveWorkoutIdFromLogs(null, logsExpanded)
+        : '';
+    var hasRoute = !!(routeMerged && routeMerged.hasRoute);
+    return {
+      date: selectedDate || logs[0].date,
+      distance_km: totalDist,
+      duration_sec: totalSec,
+      elevation_gain: sumElev > 0 ? sumElev : null,
+      avg_speed_kmh: avgSpeedKmhFromDistanceTime(totalDist, totalSec),
+      avg_watts: totalSec > 0 ? sumApSec / totalSec : null,
+      avg_hr: totalSec > 0 ? sumHrSec / totalSec : null,
+      tss: totalTss > 0 ? totalTss : null,
+      title:
+        routeMerged && routeMerged.segmentCount > 1
+          ? (selectedDate || logs[0].date || '') + ' 라이딩 ' + routeMerged.segmentCount + '회'
+          : stravaRideTitlesFromLogs(logs) || logs[0].title,
+      _routeProfileMerged: routeMerged,
+      _logsForShare: logs,
+      _dailyRouteDoc: dailyRouteDoc || null,
+      _shareWorkoutId: workoutId || null,
+      _shareVisualKind: hasRoute ? 'route' : workoutId ? 'workout' : 'route'
+    };
+  }
+
   function JournalDailySummary(props) {
     var selectedDate = props.selectedDate;
     var logs = props.logs || [];
     var onShowDetail = props.onShowDetail;
     var userProfile = props.userProfile || null;
+
+    var _shareBusy = useState(false);
+    var shareBusy = _shareBusy[0];
+    var setShareBusy = _shareBusy[1];
 
     if (!selectedDate || logs.length === 0) {
       return null;
@@ -210,6 +271,13 @@
       '-' +
       ((routeProfile.activity_ids || []).join(',') || 'none');
 
+    var canShareTransparent =
+      (routeProfile.hasRoute || showWorkoutGraph) &&
+      window.journalTransparentShare &&
+      (window.journalTransparentShare.openShareComposer ||
+        window.journalTransparentShare.exportTransparentSharePng);
+    var shareLog = mergeLogsForShare(logs, dailyRouteDoc, selectedDate, userProfile);
+
     return React.createElement('div', {
       className:
         'card journal-daily-summary journal-daily-summary--with-route' +
@@ -218,6 +286,48 @@
       React.createElement('div', { className: 'journal-daily-summary-header' },
         React.createElement('h3', { className: 'journal-daily-summary-title' },
           formatDailySummaryHeading(selectedDate, logs)
+        ),
+        React.createElement('button', {
+          type: 'button',
+          className:
+            'journal-daily-summary-photo-btn' + (canShareTransparent ? '' : ' is-disabled'),
+          disabled: !canShareTransparent || shareBusy,
+          'aria-label': canShareTransparent
+            ? '투명 이미지 만들기'
+            : '코스 지도·워크아웃 그래프 없음 — 투명 이미지 만들기 불가',
+          onClick: function () {
+            if (!canShareTransparent || shareBusy || !shareLog) return;
+            setShareBusy(true);
+            var shareApi = window.journalTransparentShare;
+            var shareOpts = {
+              logs: logs,
+              dailyRouteDoc: dailyRouteDoc,
+              workoutId: showWorkoutGraph ? workoutId : '',
+              shareVisualKind: showWorkoutGraph ? 'workout' : 'route'
+            };
+            var p =
+              shareApi && typeof shareApi.openShareComposer === 'function'
+                ? shareApi.openShareComposer(shareLog, shareOpts)
+                : shareApi.exportTransparentSharePng(shareLog, shareOpts);
+            Promise.resolve(p)
+              .catch(function (e) {
+                if (e && e.name === 'AbortError') return;
+                var msg = e && e.message ? e.message : '저장 실패';
+                if (typeof window.showToast === 'function') window.showToast(msg, 'error');
+                else if (typeof alert === 'function') alert(msg);
+              })
+              .finally(function () {
+                setShareBusy(false);
+              });
+          }
+        },
+          React.createElement('img', {
+            src: PHOTO_ICON_SRC,
+            alt: '',
+            className: 'journal-daily-summary-photo-icon',
+            draggable: false,
+            'aria-hidden': true
+          })
         )
       ),
       CourseMap && routeProfile.hasRoute

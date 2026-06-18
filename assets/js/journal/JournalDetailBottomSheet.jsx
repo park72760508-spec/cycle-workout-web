@@ -818,10 +818,6 @@
   function TabSummary(props) {
     var log = props.log;
     var dailyRouteDoc = props.dailyRouteDoc || null;
-    var onShareTransparent = props.onShareTransparent;
-    var _shareBusy = useState(false);
-    var shareBusy = _shareBusy[0];
-    var setShareBusy = _shareBusy[1];
     if (!log) {
       return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     }
@@ -862,49 +858,6 @@
       DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-', isPr: false })
     ];
     /* 영역별 누적 시간 그래프는 Power Profile / Heart Rate 탭으로 이동됨 */
-    var canShareTransparent =
-      typeof onShareTransparent === 'function' ||
-      (window.journalTransparentShare &&
-        (window.journalTransparentShare.openShareComposer ||
-          window.journalTransparentShare.exportTransparentSharePng));
-    var shareBtnEl = canShareTransparent
-      ? React.createElement(
-          'div',
-          { className: 'journal-transparent-share-actions' },
-          React.createElement('button', {
-            type: 'button',
-            className: 'journal-transparent-share-btn',
-            disabled: shareBusy,
-            onClick: function () {
-              if (shareBusy) return;
-              setShareBusy(true);
-              var shareApi = window.journalTransparentShare;
-              var p =
-                typeof onShareTransparent === 'function'
-                  ? onShareTransparent(log)
-                  : shareApi && typeof shareApi.openShareComposer === 'function'
-                    ? shareApi.openShareComposer(log, {
-                        logs: log._logsForShare || props.logs,
-                        dailyRouteDoc: props.dailyRouteDoc || log._dailyRouteDoc || null
-                      })
-                    : shareApi.exportTransparentSharePng(log, {
-                        logs: log._logsForShare || props.logs,
-                        dailyRouteDoc: props.dailyRouteDoc || log._dailyRouteDoc || null
-                      });
-              Promise.resolve(p)
-                .catch(function (e) {
-                  if (e && e.name === 'AbortError') return;
-                  var msg = e && e.message ? e.message : '저장 실패';
-                  if (typeof window.showToast === 'function') window.showToast(msg, 'error');
-                  else if (typeof alert === 'function') alert(msg);
-                })
-                .finally(function () {
-                  setShareBusy(false);
-                });
-            }
-          }, shareBusy ? '준비 중…' : '투명 이미지 만들기')
-        )
-      : null;
     return React.createElement(
       'div',
       {
@@ -913,21 +866,16 @@
           (showWorkoutGraph ? ' journal-tab-content--summary-workout' : '')
       },
       CourseMap && routeInfo.hasRoute
-        ? React.createElement(
-            'div',
-            { className: 'journal-summary-map-with-share' },
-            React.createElement(CourseMap, {
-              key: String((log.date || '') + '-seg-' + (routeInfo.segmentCount || 0)),
-              logs: logsForRoute,
-              log: log,
-              routeProfile: routeInfo,
-              dailyRouteDoc: dailyRouteDoc,
-              dateKey: log.date,
-              mapHeight: 200,
-              className: 'journal-summary-sheet-course-map'
-            }),
-            shareBtnEl
-          )
+        ? React.createElement(CourseMap, {
+            key: String((log.date || '') + '-seg-' + (routeInfo.segmentCount || 0)),
+            logs: logsForRoute,
+            log: log,
+            routeProfile: routeInfo,
+            dailyRouteDoc: dailyRouteDoc,
+            dateKey: log.date,
+            mapHeight: 200,
+            className: 'journal-summary-sheet-course-map'
+          })
         : showWorkoutGraph
           ? React.createElement(WorkoutGraph, {
               key: 'wo-' + workoutId + '-' + (log.date || ''),
