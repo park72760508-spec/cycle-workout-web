@@ -6771,6 +6771,61 @@ function buildWorkoutProfilePathsForShare(segments, viewW, viewH, padRatio) {
   return paths;
 }
 
+/**
+ * 투명 이미지 공유 — Canvas 2D 직접 렌더 (SVG→Image 변환 이슈 회피)
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Array} segments
+ * @param {number} viewW
+ * @param {number} viewH
+ * @param {number} [padRatio]
+ */
+function drawWorkoutProfileOnCanvas(ctx, segments, viewW, viewH, padRatio) {
+  const specs = buildWorkoutProfilePathsForShare(segments, viewW, viewH, padRatio);
+  if (!ctx || !specs.length) return;
+  specs.forEach((spec) => {
+    if (!spec || !spec.pathD) return;
+    ctx.save();
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = spec.strokeWidth != null ? spec.strokeWidth : 5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = spec.opacity != null ? spec.opacity : 1;
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
+    if (spec.dashArray) {
+      ctx.setLineDash(
+        String(spec.dashArray)
+          .split(/\s+/)
+          .map((n) => Number(n) || 0)
+      );
+    } else {
+      ctx.setLineDash([]);
+    }
+    try {
+      ctx.stroke(new Path2D(spec.pathD));
+    } catch (ePath) {
+      const tokens = String(spec.pathD).trim().split(/\s+/);
+      ctx.beginPath();
+      let ti = 0;
+      while (ti < tokens.length) {
+        if (tokens[ti] === 'M' || tokens[ti] === 'L') {
+          const px = Number(tokens[ti + 1]);
+          const py = Number(tokens[ti + 2]);
+          if (tokens[ti] === 'M') ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+          ti += 3;
+        } else {
+          ti += 1;
+        }
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+}
+
 /** @deprecated buildWorkoutProfilePathsForShare 사용 */
 function buildWorkoutProfilePathForShare(segments, viewW, viewH, padRatio) {
   return buildWorkoutProfilePathsForShare(segments, viewW, viewH, padRatio);
@@ -6780,6 +6835,7 @@ function buildWorkoutProfilePathForShare(segments, viewW, viewH, padRatio) {
 window.renderSegmentedWorkoutGraph = renderSegmentedWorkoutGraph;
 window.buildWorkoutProfilePathsForShare = buildWorkoutProfilePathsForShare;
 window.buildWorkoutProfilePathForShare = buildWorkoutProfilePathForShare;
+window.drawWorkoutProfileOnCanvas = drawWorkoutProfileOnCanvas;
 window.getSegmentZoneFromFtpPercent = getSegmentZoneFromFtpPercent;
 window.getWorkoutDominantZone = getWorkoutDominantZone;
 window.getWorkoutCategoryId = getWorkoutCategoryId;
