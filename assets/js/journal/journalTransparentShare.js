@@ -367,6 +367,18 @@
     return out;
   }
 
+  function normalizeSharePathSpec(item) {
+    if (typeof item === 'string') {
+      return { pathD: item, strokeWidth: 6, dashArray: '', opacity: 1 };
+    }
+    return {
+      pathD: item && item.pathD ? String(item.pathD) : '',
+      strokeWidth: item && item.strokeWidth != null ? item.strokeWidth : 5,
+      dashArray: item && item.dashArray ? String(item.dashArray) : '',
+      opacity: item && item.opacity != null ? item.opacity : 1,
+    };
+  }
+
   function buildShareSvgMarkupFromPaths(coursePaths, opts) {
     opts = opts || {};
     var w = opts.width || 1080;
@@ -377,15 +389,25 @@
       '<defs><filter id="stelvioRouteShadow" x="-25%" y="-25%" width="150%" height="150%">' +
       '<feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#000000" flood-opacity="0.5"/></filter></defs>';
     for (si = 0; si < coursePaths.length; si++) {
+      var spec = normalizeSharePathSpec(coursePaths[si]);
+      if (!spec.pathD) continue;
+      var dashAttr = spec.dashArray ? ' stroke-dasharray="' + spec.dashArray + '"' : '';
+      var opAttr = spec.opacity < 1 ? ' stroke-opacity="' + spec.opacity + '"' : '';
       shapes +=
         '<g transform="translate(' +
         courseX +
         ', ' +
         shareCourseY() +
         ')" filter="url(#stelvioRouteShadow)"><path d="' +
-        coursePaths[si] +
-        '" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></g>';
+        spec.pathD +
+        '" fill="none" stroke="#FFFFFF" stroke-width="' +
+        spec.strokeWidth +
+        '"' +
+        dashAttr +
+        opAttr +
+        ' stroke-linecap="round" stroke-linejoin="round"/></g>';
     }
+    if (shapes.indexOf('<path ') < 0) return '';
     return (
       '<svg xmlns="http://www.w3.org/2000/svg" width="' +
       w +
@@ -431,9 +453,11 @@
         ? global.journalWorkoutGraphUtils.loadWorkoutSegmentsForJournal
         : null;
     var buildPath =
-      typeof global.buildWorkoutProfilePathForShare === 'function'
-        ? global.buildWorkoutProfilePathForShare
-        : null;
+      typeof global.buildWorkoutProfilePathsForShare === 'function'
+        ? global.buildWorkoutProfilePathsForShare
+        : typeof global.buildWorkoutProfilePathForShare === 'function'
+          ? global.buildWorkoutProfilePathForShare
+          : null;
     if (!loadFn || !buildPath) return [];
 
     var result = await loadFn(workoutId);
