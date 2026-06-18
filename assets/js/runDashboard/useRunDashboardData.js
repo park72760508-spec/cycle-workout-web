@@ -893,14 +893,23 @@
       var last7Rtss = ctx.last7Rtss;
       var logsSignature = ctx.logsSignature;
 
-      /* 캐시: 같은 local 날짜 + 동일 logsSignature(로그/7일TSS/30일TSS)일 때만. 수동 재분석(runConditionAnalysis)은 스킵 */
-      if (!runConditionAnalysis && retryCoach === 0 && typeof window.getDashboardCoachCache === 'function') {
-        var cached = window.getDashboardCoachCache(userProfile.id, todayStr, logsSignature);
+      /* 캐시: 오늘 이미 분석한 결과가 있으면 재구동 시에도 표시. API 자동 호출은 수동 분석 클릭 시에만 */
+      if (!runConditionAnalysis && retryCoach === 0) {
+        var cached = null;
+        if (typeof window.getDashboardCoachCache === 'function') {
+          cached = window.getDashboardCoachCache(userProfile.id, todayStr, logsSignature);
+        }
+        if ((!cached || cached.condition_score == null || cached.error_reason) &&
+            typeof window.getDashboardCoachDailyCache === 'function') {
+          cached = window.getDashboardCoachDailyCache(userProfile.id, todayStr);
+        }
         if (cached && cached.condition_score != null && !cached.error_reason) {
           setCoachData(normalizeRunCoachAnalysis(cached));
           setAiLoading(false);
           return;
         }
+        setAiLoading(false);
+        return;
       }
       if (aiAnalysisInProgressRef.current) return;
 
@@ -997,8 +1006,13 @@
 
           setCoachData(analysis);
           setStreamingComment(null);
-          if (analysis && !analysis.error_reason && typeof window.setDashboardCoachCache === 'function') {
-            window.setDashboardCoachCache(userProfile.id, todayStr, logsSignature, normalizeRunCoachAnalysis(analysis));
+          if (analysis && !analysis.error_reason) {
+            var normalizedAnalysis = normalizeRunCoachAnalysis(analysis);
+            if (typeof window.setDashboardCoachCache === 'function') {
+              window.setDashboardCoachCache(userProfile.id, todayStr, logsSignature, normalizedAnalysis);
+            } else if (typeof window.setDashboardCoachDailyCache === 'function') {
+              window.setDashboardCoachDailyCache(userProfile.id, todayStr, normalizedAnalysis);
+            }
           }
         } catch (e) {
           console.error('[Dashboard] AI analysis error:', e);

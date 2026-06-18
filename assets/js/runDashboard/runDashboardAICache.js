@@ -130,8 +130,21 @@
     return true;
   }
 
+  function removeCached(key) {
+    if (!key) return;
+    try {
+      delete _readThroughMemory[key];
+    } catch (e) {}
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {}
+    try {
+      sessionStorage.removeItem(key);
+    } catch (e) {}
+  }
+
   /**
-   * 컨디션 분석(Coach) 캐시
+   * 컨디션 분석(Coach) 캐시 — 로그 시그니처별(동일 데이터 재호출 방지)
    */
   window.getDashboardCoachCache = function(userId, todayStr, logsSignature) {
     var key = getCacheKey('coach', userId, todayStr + '_' + (logsSignature || ''));
@@ -140,7 +153,95 @@
 
   window.setDashboardCoachCache = function(userId, todayStr, logsSignature, coachData) {
     var key = getCacheKey('coach', userId, todayStr + '_' + (logsSignature || ''));
-    return setCache(key, coachData);
+    var ok = setCache(key, coachData);
+    if (coachData && todayStr) {
+      setCache(getCacheKey('coach_daily', userId, todayStr), coachData);
+    }
+    return ok;
+  };
+
+  /** 오늘(local) 날짜 기준 일별 컨디션 캐시 — 프로그램 재구동 시 수동 분석 없이 복원 */
+  window.getDashboardCoachDailyCache = function(userId, todayStr) {
+    if (!userId || !todayStr) return null;
+    var daily = getCached(getCacheKey('coach_daily', userId, todayStr));
+    if (daily && daily.condition_score != null && !daily.error_reason) return daily;
+    return findLatestCoachCacheForDate(userId, todayStr);
+  };
+
+  /** coach_daily 도입 전 저장된 시그니처 캐시 중 오늘 날짜 항목 폴백 */
+  function findLatestCoachCacheForDate(userId, todayStr) {
+    var uid = String(userId || '');
+    if (!uid || !todayStr) return null;
+    var dateMarker = '_' + uid + '_' + todayStr + '_';
+    var best = null;
+    var bestAt = '';
+    function considerKey(key) {
+      if (!key || key.indexOf(CACHE_PREFIX + 'coach') !== 0) return;
+      if (key.indexOf('coach_daily') !== -1) return;
+      if (key.indexOf(dateMarker) === -1) return;
+      var payload = null;
+      try {
+        if (_readThroughMemory[key]) payload = _readThroughMemory[key];
+      } catch (e) {}
+      if (!payload) {
+        try {
+          var raw = localStorage.getItem(key);
+          if (raw) payload = JSON.parse(raw);
+        } catch (e2) {}
+      }
+      if (!payload || !payload.data || payload.data.condition_score == null || payload.data.error_reason) return;
+      var at = payload.cachedAt || '';
+      if (!best || at >= bestAt) {
+        best = payload.data;
+        bestAt = at;
+      }
+    }
+    try {
+      Object.keys(_readThroughMemory).forEach(considerKey);
+    } catch (e) {}
+    try {
+      Object.keys(localStorage).forEach(considerKey);
+    } catch (e2) {}
+    try {
+      Object.keys(sessionStorage).forEach(considerKey);
+    } catch (e3) {}
+    if (best) {
+      setCache(getCacheKey('coach_daily', userId, todayStr), best);
+    }
+    return best;
+  }
+
+  window.setDashboardCoachDailyCache = function(userId, todayStr, coachData) {
+    if (!userId || !todayStr) return false;
+    return setCache(getCacheKey('coach_daily', userId, todayStr), coachData);
+  };
+
+  /** 수동 재분석 시 해당 사용자 RUN 컨디션 캐시 전체 삭제 */
+  window.clearDashboardCoachCacheForUser = function(userId) {
+    if (!userId) return;
+    var uid = String(userId);
+    var marker = '_' + uid + '_';
+    var memKeys = Object.keys(_readThroughMemory);
+    for (var mi = 0; mi < memKeys.length; mi++) {
+      var mk = memKeys[mi];
+      if (mk.indexOf(CACHE_PREFIX + 'coach') === 0 && mk.indexOf(marker) !== -1) {
+        removeCached(mk);
+      }
+    }
+    try {
+      Object.keys(localStorage).forEach(function(k) {
+        if (k.indexOf(CACHE_PREFIX + 'coach') === 0 && k.indexOf(marker) !== -1) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch (e) {}
+    try {
+      Object.keys(sessionStorage).forEach(function(k) {
+        if (k.indexOf(CACHE_PREFIX + 'coach') === 0 && k.indexOf(marker) !== -1) {
+          sessionStorage.removeItem(k);
+        }
+      });
+    } catch (e) {}
   };
 
   /**
