@@ -183,12 +183,8 @@
                 if (e && typeof e.preventDefault === 'function') e.preventDefault();
                 try {
                   var uid = String((userProfile && userProfile.id) || '');
-                  if (uid) {
-                    Object.keys(localStorage).forEach(function(k) {
-                      if (k.indexOf('stelvio_dashboard_ai_coach_') === 0 && k.indexOf('_' + uid + '_') !== -1) {
-                        localStorage.removeItem(k);
-                      }
-                    });
+                  if (uid && typeof window.clearDashboardCoachCacheForUser === 'function') {
+                    window.clearDashboardCoachCacheForUser(uid);
                   }
                 } catch (e2) {}
                 if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
@@ -296,12 +292,8 @@
                 if (e && typeof e.preventDefault === 'function') e.preventDefault();
                 try {
                   var uid = String(userProfile.id || '');
-                  if (uid) {
-                    Object.keys(localStorage).forEach(function(k) {
-                      if (k.indexOf('stelvio_dashboard_ai_coach_') === 0 && k.indexOf('_' + uid + '_') !== -1) {
-                        localStorage.removeItem(k);
-                      }
-                    });
+                  if (uid && typeof window.clearDashboardCoachCacheForUser === 'function') {
+                    window.clearDashboardCoachCacheForUser(uid);
                   }
                 } catch (e2) {}
                 if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
