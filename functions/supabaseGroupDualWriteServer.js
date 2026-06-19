@@ -328,6 +328,10 @@ function mapFirestoreRidingGroupToRow(firestoreDocId, d) {
     is_public: Boolean(d.isPublic),
     join_password: str(d.joinPassword) || "",
     photo_url: str(d.photoUrl),
+    category: (function () {
+      const raw = str(d.category)?.toUpperCase();
+      return raw === "RUN" ? "RUN" : "CYCLE";
+    })(),
     photo_storage_path:
       str(d.photoStoragePath) || inferStoragePathFromFirebaseUrl(d.photoUrl),
     cover_content_type: str(d.coverContentType) || "image/jpeg",

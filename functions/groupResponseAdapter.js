@@ -123,6 +123,9 @@ function adaptRidingGroupToFirestoreDoc(row, members, joinRequests) {
     ? row.ranking_notice
     : {};
 
+  const categoryRaw = str(row.category)?.toUpperCase();
+  const category = categoryRaw === "RUN" ? "RUN" : "CYCLE";
+
   return {
     id: firestoreId,
     name: str(row.name) || "",
@@ -131,6 +134,7 @@ function adaptRidingGroupToFirestoreDoc(row, members, joinRequests) {
     isPublic: Boolean(row.is_public),
     joinPassword: str(row.join_password) || "",
     photoUrl: str(row.photo_url),
+    category,
     status: str(row.status) || "PENDING",
     createdBy: row.createdByFirebaseUid || row.created_by || "",
     memberCount: num(row.member_count, 0),
