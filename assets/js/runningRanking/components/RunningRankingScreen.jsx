@@ -406,10 +406,12 @@
       var api = dataApi();
       if (activeTab === 'crew' || !api.buildTabHeroPayload) return null;
       if (activeTab === 'overall' || activeTab === 'pace' || activeTab === 'tss' || activeTab === 'distance') {
-        return api.buildTabHeroPayload(rawRows, activeTab, heroOpts);
+        return api.buildTabHeroPayload(rawRows, activeTab, Object.assign({}, heroOpts, {
+          viewerItem: myViewerItem
+        }));
       }
       return null;
-    }, [activeTab, rawRows, heroOpts]);
+    }, [activeTab, rawRows, heroOpts, myViewerItem]);
 
     var heroUserProfile = useMemo(function () {
       var u = window.currentUser;
@@ -810,6 +812,7 @@
                       ? React.createElement(window.StelvioHexagonRanksCard, {
                           userProfile: heroUserProfile,
                           stats: (window.runDashboardData && window.runDashboardData.stats) || {},
+                          leaderboardRows: rawRows,
                           initialGender: gender,
                           initialCategory: activeCategory
                         })
