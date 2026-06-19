@@ -6,7 +6,6 @@ import {
   evaluateSecondaryIngestWrite,
   refreshDualRunFromRemoteConfig,
   shouldRunSupabaseDualWrite,
-  syncSupabaseSessionFromBridge,
 } from './supabaseDualWrite.js';
 
 const OPEN_RIDE_DUAL_WRITE_RELAY =
@@ -35,13 +34,6 @@ function serializeRideDataForRelay(data) {
   return out;
 }
 
-function getConfig() {
-  const c = (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
-  return {
-    authBridgeUrl: String(c.authBridgeUrl || '').trim(),
-  };
-}
-
 /**
  * Firestore rides/{id} 저장 후 Secondary — Primary 실패 시 호출하지 않음.
  * @param {string} actorUid
@@ -61,15 +53,7 @@ export async function runSecondaryAfterOpenRideSave(actorUid, firestoreDocId, ri
 
   const payload = serializeRideDataForRelay(rideData);
 
-  try {
-    await syncSupabaseSessionFromBridge();
-  } catch (bridgeErr) {
-    console.warn(
-      '[openRidingDualWrite] Auth Bridge 스킵(relay는 서버 service role):',
-      bridgeErr && bridgeErr.message ? bridgeErr.message : bridgeErr
-    );
-  }
-
+  // 클라이언트 Supabase 세션 불필요 — relay가 Firebase ID 토큰 검증 후 service role로 upsert
   try {
     const token =
       typeof window !== 'undefined' &&
