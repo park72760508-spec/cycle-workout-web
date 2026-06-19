@@ -672,14 +672,7 @@
                 >
                   <div
                     xmlns="http://www.w3.org/1999/xhtml"
-                    style={{
-                      fontSize: '7.5px',
-                      fontWeight: 600,
-                      color: '#64748b',
-                      textAlign: 'center',
-                      lineHeight: '11px',
-                      whiteSpace: 'nowrap'
-                    }}
+                    className="stelvio-hexagon-axis-rank"
                     dangerouslySetInnerHTML={{ __html: rankHtml }}
                   />
                 </foreignObject>
