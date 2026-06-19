@@ -621,17 +621,27 @@
         )}
 
         {/* fTP 풀코스 예측 결과 모달 */}
-        {runFtpModalOpen && runFtpCalcResult && React.createElement(
+        {runFtpModalOpen && runFtpCalcResult && (function () {
+          var ftpAgeLabel = runFtpCalcResult.appliedAge != null
+            ? String(runFtpCalcResult.appliedAge)
+            : (window.resolveRunFtpProfileAge && userProfile
+              ? (function () { var a = window.resolveRunFtpProfileAge(userProfile); return a != null ? String(a) : '미등록'; })()
+              : '미등록');
+          var ftpGenderLabel = runFtpCalcResult.appliedGenderLabel
+            || (window.resolveRunFtpProfileGenderLabel && userProfile
+              ? window.resolveRunFtpProfileGenderLabel(userProfile)
+              : '미등록');
+          return React.createElement(
           'div',
           {
-            className: 'fixed inset-0 z-[10001] flex items-center justify-center p-4 overflow-y-auto',
+            className: 'fixed inset-0 z-[10001] flex items-center justify-center p-4 overflow-y-auto run-ftp-modal-overlay',
             style: { background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' },
             onClick: function (e) { if (e.target === e.currentTarget) closeRunFtpModal(); }
           },
           React.createElement(
             'div',
             {
-              className: 'w-full max-w-lg my-4 bg-white rounded-2xl overflow-hidden shadow-xl border border-emerald-100',
+              className: 'w-full max-w-lg my-4 bg-white rounded-2xl overflow-hidden shadow-xl border border-emerald-100 run-ftp-modal-panel',
               style: { padding: '20px 24px 24px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' },
               onClick: function (e) { e.stopPropagation(); }
             },
@@ -662,9 +672,9 @@
                   )
                 : null
             ),
-            React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
+            React.createElement('div', { className: 'run-ftp-modal-body', style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
               runFtpCalcResult.success ? React.createElement(React.Fragment, null,
-                React.createElement('div', { className: 'mb-4 overflow-x-auto text-xs' },
+                React.createElement('div', { className: 'mb-4 overflow-x-auto text-xs run-ftp-modal-table-scroll' },
                   React.createElement('table', { className: 'w-full', style: { borderCollapse: 'collapse', minWidth: '640px' } },
                     React.createElement('thead', null,
                       React.createElement('tr', { style: { borderBottom: '2px solid #e2e8f0' } },
@@ -697,7 +707,7 @@
                     )
                   ),
                   React.createElement('p', { className: 'text-xs mt-2', style: { color: '#94a3b8' } },
-                    'W: 원 가중치 · Wₙ: Valid_W_Sum 기준 재분배 · D: 시간감쇠 · 지수: Riegel(1.06)+연령·성별+패널티 · 예측 풀코스: 42.195km'
+                    'W: 원 가중치 · Wₙ: Valid_W_Sum 기준 재분배 · D: 시간감쇠 · 지수: Riegel(1.06)+연령(' + ftpAgeLabel + ')·성별(' + ftpGenderLabel + ')+패널티 · 예측 풀코스: 42.195km'
                   ),
                   runFtpCalcResult.validWSum != null && runFtpCalcResult.validWSum < 1
                     ? React.createElement('p', { className: 'text-xs mt-1', style: { color: '#64748b' } },
@@ -719,7 +729,8 @@
               ) : React.createElement('p', { className: 'text-red-600 mb-2', style: { fontSize: '15px', lineHeight: 1.5 } }, runFtpCalcResult.error)
             )
           )
-        )}
+        );
+        })()}
 
         {oneHourAbilityModalOpen && React.createElement(
           'div',
