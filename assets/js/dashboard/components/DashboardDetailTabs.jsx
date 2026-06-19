@@ -275,7 +275,7 @@
           'div',
           { className: 'space-y-6' },
           RiderDashboardProfile && React.createElement(RiderDashboardProfile, { userProfile: userProfile }),
-          RiderPowerProfileTrendCharts && React.createElement(RiderPowerProfileTrendCharts, {
+          !isRun && RiderPowerProfileTrendCharts && React.createElement(RiderPowerProfileTrendCharts, {
             DashboardCard: DashboardCard,
             userProfile: userProfile,
             recentLogs: recentLogs
@@ -322,12 +322,12 @@
               }, '다시 시도')
             )
           ) : TrainingTrendChart && React.createElement(TrainingTrendChart, { data: fitnessData }),
-          RiderHeartRateProfileTrendCharts && React.createElement(RiderHeartRateProfileTrendCharts, {
+          !isRun && RiderHeartRateProfileTrendCharts && React.createElement(RiderHeartRateProfileTrendCharts, {
             DashboardCard: DashboardCard,
             userProfile: userProfile,
             recentLogs: recentLogs
           }),
-          RiderTimeInZonesCharts && React.createElement(RiderTimeInZonesCharts, {
+          !isRun && RiderTimeInZonesCharts && React.createElement(RiderTimeInZonesCharts, {
             DashboardCard: DashboardCard,
             userProfile: userProfile,
             recentLogs: recentLogs
@@ -365,14 +365,14 @@
             { title: 'VO₂max 트렌드' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
           ) : Vo2MaxTrendChart && React.createElement(Vo2MaxTrendChart, { data: vo2TrendData, userProfile: userProfile }),
-          logsLoading ? React.createElement(
+          !isRun && logsLoading ? React.createElement(
             DashboardCard,
             { title: '년간 파워PR 그래프' },
             React.createElement('div', { className: 'h-[240px] flex flex-col items-center justify-center' },
               React.createElement('div', { className: 'w-10 h-10 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3' }),
               React.createElement('span', { className: 'text-sm text-gray-500' }, '로딩 중...')
             )
-          ) : YearlyPowerPrChart && React.createElement(YearlyPowerPrChart, {
+          ) : !isRun && YearlyPowerPrChart && React.createElement(YearlyPowerPrChart, {
             data: yearlyPowerPrData,
             userWeight: userWeight
           })
