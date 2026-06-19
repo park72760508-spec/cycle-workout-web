@@ -135,6 +135,38 @@
   }
 
   /**
+   * @param {object|null} userProfile
+   * @returns {number|null}
+   */
+  function resolveRunFtpProfileAge(userProfile) {
+    if (!userProfile) return null;
+    var age = Number(userProfile.age);
+    if (!isFinite(age) || age <= 0) {
+      var birthYear = userProfile.birth_year != null ? userProfile.birth_year : userProfile.birthYear;
+      if (birthYear != null && isFinite(Number(birthYear))) {
+        age = new Date().getFullYear() - Number(birthYear);
+      } else {
+        return null;
+      }
+    }
+    return isFinite(age) && age > 0 && age < 120 ? Math.round(age) : null;
+  }
+
+  /**
+   * @param {object|null} userProfile
+   * @returns {string}
+   */
+  function resolveRunFtpProfileGenderLabel(userProfile) {
+    if (!userProfile) return '미등록';
+    var g = String(userProfile.gender || userProfile.sex || '').trim();
+    if (!g) return '미등록';
+    var gl = g.toLowerCase();
+    if (g === '남' || gl === 'male' || gl === 'm' || gl === 'man') return '남';
+    if (g === '여' || gl === 'female' || gl === 'f' || gl === 'woman') return '여';
+    return g;
+  }
+
+  /**
    * 연령·성별에 따른 Riegel 지수 미세 보정 (±0.02 이내)
    * @param {object|null} userProfile
    * @returns {number}
@@ -142,14 +174,11 @@
   function getAgeGenderRiegelFactor(userProfile) {
     if (!userProfile) return 0;
     var factor = 0;
-    var g = String(userProfile.gender || userProfile.sex || '').trim().toLowerCase();
-    if (g === 'female' || g === 'f' || g === '여' || g === 'woman') factor += 0.005;
-    var age = Number(userProfile.age);
-    if (!isFinite(age) && userProfile.birth_year) {
-      age = new Date().getFullYear() - Number(userProfile.birth_year);
-    }
-    if (isFinite(age) && age >= 50) factor += 0.005;
-    if (isFinite(age) && age >= 60) factor += 0.01;
+    var genderLabel = resolveRunFtpProfileGenderLabel(userProfile);
+    if (genderLabel === '여') factor += 0.005;
+    var age = resolveRunFtpProfileAge(userProfile);
+    if (age != null && age >= 50) factor += 0.005;
+    if (age != null && age >= 60) factor += 0.01;
     return Math.min(Math.max(factor, 0), 0.02);
   }
 
@@ -243,6 +272,8 @@
     }
 
     var penaltyCtx = resolveFatiguePenaltyContext(prRows);
+    var appliedAge = resolveRunFtpProfileAge(userProfile);
+    var appliedGenderLabel = resolveRunFtpProfileGenderLabel(userProfile);
     var ageGenderFactor = getAgeGenderRiegelFactor(userProfile);
     var validRows = prRows.filter(function (r) { return r.paceSec != null && r.paceSec > 0; });
     var validWSum = validRows.reduce(function (s, r) { return s + r.weight; }, 0);
@@ -340,6 +371,8 @@
       penaltyCase: penaltyCtx.caseId,
       penaltyValue: penaltyCtx.penalty,
       ageGenderFactor: ageGenderFactor,
+      appliedAge: appliedAge,
+      appliedGenderLabel: appliedGenderLabel,
       hasRecommended1kTo10k: hasRecommended1kTo10kBand(prRows),
       guidanceMessages: guidanceMessages,
       guidanceRecommended: FTP_GUIDANCE_RECOMMENDED,
@@ -354,5 +387,7 @@
     window.RUN_FTP_GUIDANCE_RECOMMENDED = FTP_GUIDANCE_RECOMMENDED;
     window.resolveRunFtpFatiguePenalty = resolveFatiguePenaltyContext;
     window.getRunFtpAgeGenderRiegelFactor = getAgeGenderRiegelFactor;
+    window.resolveRunFtpProfileAge = resolveRunFtpProfileAge;
+    window.resolveRunFtpProfileGenderLabel = resolveRunFtpProfileGenderLabel;
   }
 })();
