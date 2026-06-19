@@ -34,6 +34,55 @@
     return (n > 0 && n < 1200) ? n : 0;
   }
 
+  /** currentUser / Firestore / localStorage 공통 — 생년·성별·연령 추출 */
+  function pickDemographicsFromUser(source) {
+    if (!source) {
+      return { birth_year: null, birthYear: null, gender: '', sex: '', age: null };
+    }
+    var birthYear = source.birth_year != null ? source.birth_year : source.birthYear;
+    if (birthYear == null && source.birth && source.birth.year != null) {
+      birthYear = source.birth.year;
+    }
+    var genderRaw = source.gender != null && String(source.gender).trim() !== ''
+      ? source.gender
+      : (source.sex != null ? source.sex : '');
+    var age = source.age != null ? Number(source.age) : null;
+    if ((!isFinite(age) || age <= 0) && birthYear != null && isFinite(Number(birthYear))) {
+      age = new Date().getFullYear() - Number(birthYear);
+    }
+    return {
+      birth_year: birthYear != null && isFinite(Number(birthYear)) ? Number(birthYear) : null,
+      birthYear: birthYear != null && isFinite(Number(birthYear)) ? Number(birthYear) : null,
+      gender: String(genderRaw || ''),
+      sex: String(source.sex || source.gender || ''),
+      age: isFinite(age) && age > 0 && age < 120 ? Math.round(age) : null
+    };
+  }
+
+  function buildRunDashboardUserProfile(base) {
+    var demo = pickDemographicsFromUser(base);
+    return {
+      id: base.id,
+      name: base.name || '사용자',
+      ftp: Number(base.ftp) || 0,
+      weight: Number(base.weight) || 0,
+      grade: base.grade || '2',
+      challenge: base.challenge || 'Fitness',
+      run_challenge: base.run_challenge || '',
+      category: base.category || base.sport_category || 'RUN',
+      acc_points: base.acc_points || 0,
+      rem_points: base.rem_points || 0,
+      strava_refresh_token: base.strava_refresh_token,
+      strava_last_sync: base.strava_last_sync,
+      is_private: base.is_private === true,
+      birth_year: demo.birth_year,
+      birthYear: demo.birthYear,
+      gender: demo.gender,
+      sex: demo.sex,
+      age: demo.age
+    };
+  }
+
   function parseDateForCoachAnalysis(date) {
     if (!date) return null;
     var d = null;
@@ -357,7 +406,7 @@
           if (ti && ti.target != null) weeklyTarget = ti.target;
         }
 
-        setUserProfile({
+        setUserProfile(buildRunDashboardUserProfile(Object.assign({}, selectedUser, {
           id: userId,
           name: userName,
           ftp: ftp,
@@ -371,7 +420,7 @@
           strava_refresh_token: selectedUser.strava_refresh_token,
           strava_last_sync: selectedUser.strava_last_sync,
           is_private: selectedUser.is_private === true
-        });
+        })));
         setStats({
           ftp: ftp,
           wkg: parseFloat(wkg),
@@ -406,7 +455,7 @@
               var tInfo = window.getWeeklyTargetRtss(ch);
               if (tInfo && tInfo.target != null) wt = tInfo.target;
             }
-            setUserProfile({
+            setUserProfile(buildRunDashboardUserProfile(Object.assign({}, d, {
               id: userId,
               name: d.name || userName,
               ftp: f,
@@ -418,7 +467,7 @@
               acc_points: d.acc_points || 0,
               rem_points: d.rem_points || 0,
               is_private: d.is_private === true
-            });
+            })));
             setStats(function(prev) {
               var next = Object.assign({}, prev);
               next.ftp = f;

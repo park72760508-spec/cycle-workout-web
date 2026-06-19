@@ -466,8 +466,11 @@
                     if (typeof window.getUserRunEfforts === 'function') {
                       efforts = await window.getUserRunEfforts(userProfile.id, { limit: 400 }) || [];
                     }
+                    var ftpProfile = window.enrichRunFtpUserProfile
+                      ? window.enrichRunFtpUserProfile(userProfile)
+                      : userProfile;
                     var result = window.calculateDynamicRunFtp
-                      ? window.calculateDynamicRunFtp(efforts, userProfile)
+                      ? window.calculateDynamicRunFtp(efforts, ftpProfile)
                       : { success: false, error: 'fTP 산출 함수를 불러올 수 없습니다.' };
                     setRunFtpCalcResult(result);
                     setRunFtpModalOpen(true);
@@ -622,14 +625,19 @@
 
         {/* fTP 풀코스 예측 결과 모달 */}
         {runFtpModalOpen && runFtpCalcResult && (function () {
+          var ftpProfile = window.enrichRunFtpUserProfile
+            ? window.enrichRunFtpUserProfile(userProfile)
+            : userProfile;
           var ftpAgeLabel = runFtpCalcResult.appliedAge != null
             ? String(runFtpCalcResult.appliedAge)
-            : (window.resolveRunFtpProfileAge && userProfile
-              ? (function () { var a = window.resolveRunFtpProfileAge(userProfile); return a != null ? String(a) : '미등록'; })()
+            : (window.resolveRunFtpProfileAge && ftpProfile
+              ? (function () { var a = window.resolveRunFtpProfileAge(ftpProfile); return a != null ? String(a) : '미등록'; })()
               : '미등록');
           var ftpGenderLabel = runFtpCalcResult.appliedGenderLabel
-            || (window.resolveRunFtpProfileGenderLabel && userProfile
-              ? window.resolveRunFtpProfileGenderLabel(userProfile)
+            && runFtpCalcResult.appliedGenderLabel !== '미등록'
+            ? runFtpCalcResult.appliedGenderLabel
+            : (window.resolveRunFtpProfileGenderLabel && ftpProfile
+              ? window.resolveRunFtpProfileGenderLabel(ftpProfile)
               : '미등록');
           return React.createElement(
           'div',
