@@ -1019,6 +1019,133 @@
     };
   }
 
+  function findViewerListItem(list, identity) {
+    if (!list || !list.length || !identity) return null;
+    var i;
+    for (i = 0; i < list.length; i++) {
+      if (listItemMatchesViewer(list[i], identity)) return list[i];
+    }
+    return null;
+  }
+
+  /** 순위 → 백분위(1위=0%, 꼴찌=100%) — 헥사곤 가로바 색상 구간용 */
+  function rankToPercentile(rank, n) {
+    var nn = n | 0;
+    if (rank == null || !isFinite(rank) || nn < 2) return 50;
+    var r = Math.max(1, Math.min(nn, Math.floor(Number(rank))));
+    return ((r - 1) / (nn - 1)) * 100;
+  }
+
+  /** 상위 점유 % (1위≈100%, 꼴찌≈0%) — 가로바 채움 폭용 */
+  function rankToTopSharePercent(rank, n) {
+    var nn = n | 0;
+    if (rank == null || !isFinite(rank) || nn < 1) return 0;
+    var r = Math.max(1, Math.min(nn, Math.floor(Number(rank))));
+    return ((nn - r + 1) / nn) * 100;
+  }
+
+  /** 백분위 → STELVIO 헥사곤 등급 ID (n≥100 컷과 동일) */
+  function tierIdFromPercentile(p) {
+    var v = Number(p);
+    if (!isFinite(v)) return 'C6';
+    if (v <= 5) return 'HC';
+    if (v <= 10) return 'C1';
+    if (v <= 20) return 'C2';
+    if (v <= 40) return 'C3';
+    if (v <= 60) return 'C4';
+    if (v <= 80) return 'C5';
+    return 'C6';
+  }
+
+  /**
+   * RUN 대시보드 헥사곤 — 랭킹보드 구간·종합 탭과 동일 순위·등락
+   * @param {object[]} rows
+   * @param {{ gender?: string, category?: string, rankMovementByKey?: object, rankMovementSource?: string, leaderboardAsOfSeoul?: string, rankMovementAsOfSeoul?: string }} opts
+   */
+  function buildRunDashboardHexagonState(rows, opts) {
+    opts = opts || {};
+    var identity = getViewerIdentity(rows);
+    if (!identity.firebaseId && !identity.boardUserId) return null;
+
+    var gender = opts.gender || 'all';
+    var category = opts.category || 'Supremo';
+    var segments = cfg().OVERALL_SEGMENTS || [];
+    var moveMod = window.runningRankingMovement;
+    var rankMovementByKey = opts.rankMovementByKey || {};
+    var movementOpts = {
+      gender: gender,
+      category: category,
+      rankMovementSource: opts.rankMovementSource || '',
+      leaderboardAsOfSeoul: opts.leaderboardAsOfSeoul || '',
+      rankMovementAsOfSeoul: opts.rankMovementAsOfSeoul || ''
+    };
+
+    var axes = [];
+    var nRef = 1;
+    var si;
+
+    for (si = 0; si < segments.length; si++) {
+      var seg = segments[si];
+      var paceList = buildRankedList(rows, 'pace', {
+        paceDistance: seg.key,
+        gender: gender,
+        category: category
+      });
+      if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+        moveMod.applyRankMovement(
+          paceList,
+          'pace',
+          Object.assign({ paceDistance: seg.key }, movementOpts),
+          rankMovementByKey
+        );
+      }
+      var cohortN = paceList.length;
+      if (cohortN > nRef) nRef = cohortN;
+      var viewerItem = findViewerListItem(paceList, identity);
+      axes.push({
+        key: seg.key,
+        label: seg.label,
+        rank: viewerItem && viewerItem.rank != null ? viewerItem.rank : null,
+        rankChange: viewerItem && viewerItem.rankChange != null ? viewerItem.rankChange : null,
+        previousBoardRank: viewerItem && viewerItem.previousBoardRank != null ? viewerItem.previousBoardRank : null,
+        pace: viewerItem && viewerItem.valueLabel ? viewerItem.valueLabel : '—',
+        cohortN: cohortN
+      });
+    }
+
+    var overallList = buildRankedList(rows, 'overall', { gender: gender, category: category });
+    if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+      moveMod.applyRankMovement(overallList, 'overall', movementOpts, rankMovementByKey);
+    }
+    var overallViewer = findViewerListItem(overallList, identity);
+    var overallN = overallList.length;
+    var overallRank = overallViewer && overallViewer.rank != null ? overallViewer.rank : null;
+    var overallRankChange = overallViewer && overallViewer.rankChange != null ? overallViewer.rankChange : null;
+    var overallPrevRank = overallViewer && overallViewer.previousBoardRank != null ? overallViewer.previousBoardRank : null;
+    var overallScore = overallViewer && overallViewer.value != null ? overallViewer.value : null;
+
+    var pPercentile = overallRank != null && overallN >= 1 ? rankToPercentile(overallRank, overallN) : null;
+    var topSharePercent = overallRank != null && overallN >= 1 ? rankToTopSharePercent(overallRank, overallN) : 0;
+    var tierIdFromRank = pPercentile != null ? tierIdFromPercentile(pPercentile) : 'C6';
+
+    return {
+      userId: identity.boardUserId || identity.firebaseId,
+      viewerIdentity: identity,
+      axes: axes,
+      nRef: nRef < 1 ? 1 : nRef,
+      overallRank: overallRank,
+      overallRankChange: overallRankChange,
+      overallPreviousBoardRank: overallPrevRank,
+      overallCohortN: overallN,
+      overallScore: overallScore,
+      pPercentile: pPercentile,
+      topSharePercent: topSharePercent,
+      tierIdFromRank: tierIdFromRank,
+      activeCategory: category,
+      gender: gender
+    };
+  }
+
   function formatRankLabel(rankNum) {
     return rankNum != null && Number(rankNum) >= 1
       ? Math.floor(Number(rankNum)) + '위'
@@ -1162,6 +1289,10 @@
     buildOverallHeroMessage: buildOverallHeroMessage,
     buildOverallHeroPayload: buildOverallHeroPayload,
     buildRunningHexagonState: buildRunningHexagonState,
+    buildRunDashboardHexagonState: buildRunDashboardHexagonState,
+    rankToPercentile: rankToPercentile,
+    rankToTopSharePercent: rankToTopSharePercent,
+    tierIdFromPercentile: tierIdFromPercentile,
     buildSegmentRankMaps: buildSegmentRankMaps,
     buildAvatarOverlayProfile: buildAvatarOverlayProfile,
     normalizeLeaderboardRows: normalizeLeaderboardRows,
