@@ -7710,10 +7710,14 @@ function initializeCurrentScreen(screenId) {
         if (retryCount === 0 && typeof window.stelvioLoadDeferredModules === 'function') {
           window.stelvioLoadDeferredModules().catch(function () {});
         }
+        var journalRoot = document.getElementById('run-journal-react-root');
+        var journalWasMounted = !!(journalRoot && journalRoot._runJournalRoot);
         var mounted = typeof window.initRunTrainingJournalReact === 'function'
           && window.initRunTrainingJournalReact() === true;
         if (mounted) {
-          window.dispatchEvent(new CustomEvent('run-journal-refresh'));
+          if (journalWasMounted) {
+            window.dispatchEvent(new CustomEvent('run-journal-refresh'));
+          }
           return;
         }
         if (retryCount < 60) {
