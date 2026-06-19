@@ -1770,7 +1770,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 10001;
+      z-index: 10100250; /* 환경설정 모달(.modal-overlay 10100200) 위 */
       background: rgba(0, 0, 0, 0.5);
       backdrop-filter: blur(4px);
     }
@@ -4955,7 +4955,7 @@
   <input type="file" id="stelvioProfileAvatarHiddenFile" accept="image/*" class="hidden" tabindex="-1" aria-hidden="true" />
 
   <!-- Privacy Policy 모달 (화면 밖 배치 - 훈련일지/프로필 등 어디서든 팝업 표시, 팝업창은 오버레이 위에 표시) -->
-  <div id="privacyPolicyModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; z-index: 11000;">
+  <div id="privacyPolicyModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; z-index: 10100250;">
     <div class="modal-overlay" onclick="closePrivacyPolicyModal()" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); z-index: 1;"></div>
     <div class="modal-content" style="position: relative; z-index: 2; max-width: 800px; max-height: 90vh; padding: 0; display: flex; flex-direction: column; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); overflow: hidden; width: 90%;">
       <div class="modal-header" style="margin-bottom: 0; padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
@@ -7237,7 +7237,7 @@
             </button>
           </div>
           <p style="text-align: center; font-size: 12px; color: #6b7280; margin: 12px 0 0 0; padding: 0;">
-            By connecting, you agree to our <a href="#" onclick="event.preventDefault(); openPrivacyPolicyModal(); return false;" style="color: #6b7280; text-decoration: underline; cursor: pointer;">Privacy Policy</a>
+            By connecting, you agree to our <a href="/privacy.html" onclick="event.preventDefault(); openPrivacyPolicyModal(); return false;" style="color: #6b7280; text-decoration: underline; cursor: pointer;">Privacy Policy</a>
           </p>
         </div>
         <!-- 사용자 메뉴얼 블럭 -->
