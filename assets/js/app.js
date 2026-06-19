@@ -15964,6 +15964,7 @@ window.openGeminiApiSettingsFromModal = openGeminiApiSettingsFromModal;
 // Privacy Policy — 앱 스토어·배포용 공개 URL (stelvio.ai.kr 기준)
 const STELVIO_PRIVACY_POLICY_URL = 'https://stelvio.ai.kr/privacy.html';
 const STELVIO_PRIVACY_POLICY_PATH = '/privacy.html';
+const STELVIO_ACCOUNT_DELETION_URL = 'https://stelvio.ai.kr/delete-account.html';
 
 // Privacy Policy 모달 관련 함수
 async function openPrivacyPolicyModal() {
@@ -16023,6 +16024,7 @@ function closePrivacyPolicyModal() {
 
 // 전역 함수로 등록
 window.STELVIO_PRIVACY_POLICY_URL = STELVIO_PRIVACY_POLICY_URL;
+window.STELVIO_ACCOUNT_DELETION_URL = STELVIO_ACCOUNT_DELETION_URL;
 window.openPrivacyPolicyModal = openPrivacyPolicyModal;
 window.closePrivacyPolicyModal = closePrivacyPolicyModal;
 

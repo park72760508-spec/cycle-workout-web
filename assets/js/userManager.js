@@ -5911,9 +5911,9 @@ async function deleteUser(userId) {
     return;
   }
   
-  // 본인 계정 삭제 시 경고 메시지
+  // 본인 계정 삭제 시 — 앱 스토어 대응 영구 삭제 (관리자 타인 계정은 비활성 탈퇴 유지)
   const confirmMessage = isOwnAccount
-    ? '정말로 탈퇴하시겠습니까?\n\n탈퇴 후 로그아웃되며, 동일한 전화번호와 생년으로 재가입 시 기존 정보를 복원할 수 있습니다.'
+    ? '본인 계정과 연동 데이터를 영구 삭제합니다.\n\n환경설정의 「계정 및 데이터 삭제」와 동일한 절차로 진행됩니다.'
     : '정말로 이 사용자를 탈퇴 처리하시겠습니까?\n\n해당 계정은 비활성화되며 랭킹 및 화면에서 제외됩니다.';
   
   if (!confirm(confirmMessage)) {
@@ -5921,6 +5921,18 @@ async function deleteUser(userId) {
   }
 
   try {
+    if (isOwnAccount && typeof window.requestAccountAndDataDeletion === 'function') {
+      const permResult = await window.requestAccountAndDataDeletion();
+      if (permResult.success) {
+        return;
+      }
+      if (permResult.error === 'cancelled') {
+        return;
+      }
+      showToast(permResult.error || '계정 삭제에 실패했습니다.', 'error');
+      return;
+    }
+
     const result = await apiDeleteUser(userId);
     
     if (result.success) {
