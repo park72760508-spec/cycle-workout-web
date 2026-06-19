@@ -194,6 +194,61 @@
     { tierId: 'C6', key: 'c6', label: '레벨G', levelName: '레벨G', badgeSrc: 'assets/img/G.svg', maxSecPerKm: Infinity }
   ];
 
+  var RUN_PACE_LEVEL_BAR_COLORS = {
+    HC: { color: '#8B5CF6', bg: 'rgba(139,92,246,0.22)' },
+    C1: { color: '#EF4444', bg: 'rgba(239,68,68,0.2)' },
+    C2: { color: '#F97316', bg: 'rgba(249,115,22,0.22)' },
+    C3: { color: '#EAB308', bg: 'rgba(234,179,8,0.22)' },
+    C4: { color: '#22C55E', bg: 'rgba(34,197,94,0.2)' },
+    C5: { color: '#3B82F6', bg: 'rgba(59,130,246,0.2)' },
+    C6: { color: '#9CA3AF', bg: 'rgba(156,163,175,0.25)' }
+  };
+
+  /**
+   * 10k 페이스(초/km)가 속한 등급 구간(상·하) 내 포지션 → 세로 레벨바 0~10칸
+   * 상(빠른 경계)=이전 등급 maxSec, 하(느린 경계)=현재 등급 maxSec
+   */
+  function computeRunPaceLevelBarStep(secPerKm) {
+    var sec = Number(secPerKm);
+    var fallback = { tierId: 'C6', step: 0, levelName: '레벨G', color: RUN_PACE_LEVEL_BAR_COLORS.C6.color, bg: RUN_PACE_LEVEL_BAR_COLORS.C6.bg };
+    if (!isFinite(sec) || sec <= 0) return fallback;
+
+    var tier = getRunHexagonTierFromPaceSec(sec);
+    if (!tier) return fallback;
+
+    var tierIndex = -1;
+    var i;
+    for (i = 0; i < RUN_HEXAGON_PACE_TIER_CUTOFFS.length; i++) {
+      if (RUN_HEXAGON_PACE_TIER_CUTOFFS[i].tierId === tier.tierId) {
+        tierIndex = i;
+        break;
+      }
+    }
+    if (tierIndex < 0) tierIndex = RUN_HEXAGON_PACE_TIER_CUTOFFS.length - 1;
+
+    var tierUpper = tierIndex > 0
+      ? RUN_HEXAGON_PACE_TIER_CUTOFFS[tierIndex - 1].maxSecPerKm
+      : Math.max(120, Math.round(RUN_HEXAGON_PACE_TIER_CUTOFFS[0].maxSecPerKm * 0.625));
+    var tierLower = RUN_HEXAGON_PACE_TIER_CUTOFFS[tierIndex].maxSecPerKm;
+    if (!isFinite(tierLower)) {
+      tierLower = RUN_HEXAGON_PACE_TIER_CUTOFFS[tierIndex - 1].maxSecPerKm + 120;
+    }
+
+    var span = tierLower - tierUpper;
+    var ratio = span > 0 ? (tierLower - sec) / span : 0;
+    ratio = Math.max(0, Math.min(1, ratio));
+    var step = Math.max(0, Math.min(10, Math.round(ratio * 10)));
+    var palette = RUN_PACE_LEVEL_BAR_COLORS[tier.tierId] || RUN_PACE_LEVEL_BAR_COLORS.C6;
+
+    return {
+      tierId: tier.tierId,
+      levelName: tier.levelName,
+      step: step,
+      color: palette.color,
+      bg: palette.bg
+    };
+  }
+
   /**
    * 10k 페이스(초/km) → STELVIO 헥사곤 등급 (빠를수록 상위)
    * @param {number|null} secPerKm
@@ -373,6 +428,7 @@
     formatPaceMinPerKm: formatPaceMinPerKm,
     formatPaceDisplayParts: formatPaceDisplayParts,
     getRunHexagonTierFromPaceSec: getRunHexagonTierFromPaceSec,
+    computeRunPaceLevelBarStep: computeRunPaceLevelBarStep,
     resolveRunHexagonTierBadge: resolveRunHexagonTierBadge,
     riegelPredictTotalSec: riegelPredictTotalSec,
     infer10kPaceSecWeightedFromShorterDistances: infer10kPaceSecWeightedFromShorterDistances,
