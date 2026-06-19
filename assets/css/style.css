@@ -29063,3 +29063,18 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   aspect-ratio: 1 !important;
   box-sizing: border-box !important;
 }
+
+/* RUN fTP 예측 모달 — 스크롤바 숨김 (스크롤 동작 유지) */
+.run-ftp-modal-overlay,
+.run-ftp-modal-body,
+.run-ftp-modal-table-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.run-ftp-modal-overlay::-webkit-scrollbar,
+.run-ftp-modal-body::-webkit-scrollbar,
+.run-ftp-modal-table-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
