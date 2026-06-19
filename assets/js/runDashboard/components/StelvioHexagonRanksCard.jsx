@@ -11,6 +11,7 @@
   var useState = React.useState;
   var useEffect = React.useEffect;
   var useMemo = React.useMemo;
+  var useRef = React.useRef;
 
   var RUN_AXES = [
     { key: '1k', label: '1k' },
@@ -470,7 +471,13 @@
     var stats = p.stats || {};
     var seedLeaderboardRows = Array.isArray(p.leaderboardRows) ? p.leaderboardRows : null;
     var DashboardCard = p.DashboardCard;
+    var embedded = !!p.embedded;
     var uid = userProfile && userProfile.id != null ? String(userProfile.id) : null;
+    var hexSvgInstanceRef = useRef(null);
+    if (!hexSvgInstanceRef.current) {
+      hexSvgInstanceRef.current =
+        'hx' + String(Date.now().toString(36)) + Math.random().toString(36).slice(2, 8);
+    }
 
     var _g = useState(p.initialGender || 'all');
     var gender = _g[0];
@@ -622,12 +629,26 @@
         return pathFromPoints(radarPolygonPoints(gr, cx, cy, rMax));
       });
       var uidSafe = String(hexState.userId || 'run').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48);
-      var fillGradId = 'run-hex-fill-rad-' + (uidSafe || 'def');
+      var fillGradId =
+        'run-hex-fill-rad-' + (uidSafe || 'def') + '-' + String(hexSvgInstanceRef.current || 'inst');
 
       return (
-        <svg viewBox="0 0 200 200" className="w-full h-[260px] touch-manipulation" role="img" aria-label="RUN 구간별 페이스 6축 헥사곤">
+        <svg
+          viewBox="0 0 200 200"
+          className="w-full h-[260px] touch-manipulation stelvio-run-hexagon-radar-svg"
+          role="img"
+          aria-label="RUN 구간별 페이스 6축 헥사곤"
+        >
           <defs>
-            <radialGradient id={fillGradId} gradientUnits="userSpaceOnUse" cx={cx} cy={cy} r={rMax * 1.02} fx={cx} fy={cy}>
+            <radialGradient
+              id={fillGradId}
+              gradientUnits="userSpaceOnUse"
+              cx={cx}
+              cy={cy}
+              r={rMax * 1.02}
+              fx={cx}
+              fy={cy}
+            >
               <stop offset="0%" stopColor="rgb(245, 243, 255)" stopOpacity={0.95} />
               <stop offset="38%" stopColor="rgb(196, 181, 253)" stopOpacity={0.72} />
               <stop offset="72%" stopColor="rgb(139, 92, 246)" stopOpacity={0.62} />
@@ -651,7 +672,14 @@
               />
             );
           })}
-          <path d={mPts} fill={'url(#' + fillGradId + ')'} stroke="rgb(109, 40, 217)" strokeWidth="2.2" strokeLinejoin="round" />
+          <path
+            d={mPts}
+            className="stelvio-run-hexagon-radar-fill"
+            fill={'url(#' + fillGradId + ')'}
+            stroke="rgb(109, 40, 217)"
+            strokeWidth="2.2"
+            strokeLinejoin="round"
+          />
           {hexState.axes.map(function(ax, ai) {
             var t = axisAngle(ai, N_AXES);
             var lx = cx + rLabel * Math.cos(t);
@@ -804,6 +832,14 @@
           {filterRow}
           {body}
         </DashboardCard>
+      );
+    }
+    if (embedded) {
+      return (
+        <div className="stelvio-hexagon-ranks-embed">
+          {filterRow}
+          {body}
+        </div>
       );
     }
     return (
