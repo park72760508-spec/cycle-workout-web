@@ -137,6 +137,18 @@
     var heroExpanded = _heroExpanded[0];
     var setHeroExpanded = _heroExpanded[1];
 
+    var heroOpts = useMemo(function () {
+      return {
+        gender: gender,
+        category: activeCategory,
+        paceDistance: paceDistance,
+        rankMovementByKey: rankMovementByKey,
+        rankMovementSource: rankMovementSource,
+        leaderboardAsOfSeoul: leaderboardAsOfSeoul,
+        rankMovementAsOfSeoul: rankMovementAsOfSeoul
+      };
+    }, [gender, activeCategory, paceDistance, rankMovementByKey, rankMovementSource, leaderboardAsOfSeoul, rankMovementAsOfSeoul]);
+
     var _gapState = useState({});
     var gapState = _gapState[0];
     var setGapState = _gapState[1];
@@ -390,14 +402,22 @@
       return null;
     }, [baseRankedList, currentUserId, viewerIdentity, myViewerItem, activeTab]);
 
-    var overallHeroPayload = useMemo(function () {
-      if (!isOverallTab || !dataApi().buildOverallHeroPayload) return null;
-      return dataApi().buildOverallHeroPayload(rawRows, {
-        gender: gender,
-        category: activeCategory,
-        viewerItem: myViewerItem
-      });
-    }, [isOverallTab, rawRows, gender, activeCategory, myViewerItem]);
+    var tabHeroPayload = useMemo(function () {
+      var api = dataApi();
+      if (activeTab === 'crew' || !api.buildTabHeroPayload) return null;
+      if (activeTab === 'overall' || activeTab === 'pace' || activeTab === 'tss' || activeTab === 'distance') {
+        return api.buildTabHeroPayload(rawRows, activeTab, heroOpts);
+      }
+      return null;
+    }, [activeTab, rawRows, heroOpts]);
+
+    var heroUserProfile = useMemo(function () {
+      var u = window.currentUser;
+      if (!u) {
+        try { u = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { u = null; }
+      }
+      return u;
+    }, [currentUserId, loading]);
 
     var chartPayloadBase = useMemo(function () {
       var api = dataApi();
@@ -761,34 +781,47 @@
         className: 'stelvio-ranking-content running-ranking-content',
         style: initialLoading ? { opacity: 0.5 } : undefined
       },
-        isOverallTab && overallHeroPayload
-          ? React.createElement('div', { className: 'stelvio-hero-card running-ranking-hero-card running-ranking-hero-card--list-top' },
+        tabHeroPayload
+          ? React.createElement('div', {
+              className: 'stelvio-hero-card running-ranking-hero-card running-ranking-hero-card--list-top'
+            },
               React.createElement('p', {
                 className: 'stelvio-hero-text',
-                dangerouslySetInnerHTML: { __html: overallHeroPayload.html }
+                dangerouslySetInnerHTML: { __html: tabHeroPayload.html }
               }),
-              React.createElement('div', { className: 'stelvio-hero-expand-toggle-row' },
-                React.createElement('button', {
-                  type: 'button',
-                  className: 'stelvio-hero-expand-btn',
-                  'aria-expanded': heroExpanded,
-                  onClick: function () { setHeroExpanded(function (prev) { return !prev; }); }
-                },
-                  React.createElement('span', { className: 'stelvio-hero-expand-btn-icon' }, heroExpanded ? '−' : '+'),
-                  React.createElement('span', null, heroExpanded ? '접어보기' : '펼쳐보기')
-                )
-              ),
-              React.createElement('div', {
-                className: 'stelvio-hero-expand-area' + (heroExpanded ? ' stelvio-hero-expand-area--open' : '')
-              },
-                heroExpanded && window.RunningHexagonRanksCard
-                  ? React.createElement(window.RunningHexagonRanksCard, {
-                      rows: rawRows,
-                      gender: gender,
-                      category: activeCategory
-                    })
-                  : null
-              )
+              isOverallTab
+                ? React.createElement('div', { className: 'stelvio-hero-expand-toggle-row' },
+                    React.createElement('button', {
+                      type: 'button',
+                      className: 'stelvio-hero-expand-btn',
+                      'aria-expanded': heroExpanded,
+                      onClick: function () { setHeroExpanded(function (prev) { return !prev; }); }
+                    },
+                      React.createElement('span', { className: 'stelvio-hero-expand-btn-icon' }, heroExpanded ? '−' : '+'),
+                      React.createElement('span', null, heroExpanded ? '접어보기' : '펼쳐보기')
+                    )
+                  )
+                : null,
+              isOverallTab
+                ? React.createElement('div', {
+                    className: 'stelvio-hero-expand-area' + (heroExpanded ? ' stelvio-hero-expand-area--open' : '')
+                  },
+                    heroExpanded && window.StelvioHexagonRanksCard
+                      ? React.createElement(window.StelvioHexagonRanksCard, {
+                          userProfile: heroUserProfile,
+                          stats: (window.runDashboardData && window.runDashboardData.stats) || {},
+                          initialGender: gender,
+                          initialCategory: activeCategory
+                        })
+                      : (heroExpanded && window.RunningHexagonRanksCard
+                        ? React.createElement(window.RunningHexagonRanksCard, {
+                            rows: rawRows,
+                            gender: gender,
+                            category: activeCategory
+                          })
+                        : null)
+                  )
+                : null
             )
           : null,
         React.createElement('div', {
