@@ -15961,6 +15961,10 @@ window.showOpenRidingGrade2NoticeModal = showOpenRidingGrade2NoticeModal;
 window.closeOpenRidingGrade2NoticeModal = closeOpenRidingGrade2NoticeModal;
 window.openGeminiApiSettingsFromModal = openGeminiApiSettingsFromModal;
 
+// Privacy Policy — 앱 스토어·배포용 공개 URL (stelvio.ai.kr 기준)
+const STELVIO_PRIVACY_POLICY_URL = 'https://stelvio.ai.kr/privacy.html';
+const STELVIO_PRIVACY_POLICY_PATH = '/privacy.html';
+
 // Privacy Policy 모달 관련 함수
 async function openPrivacyPolicyModal() {
   const modal = document.getElementById('privacyPolicyModal');
@@ -15970,13 +15974,18 @@ async function openPrivacyPolicyModal() {
     console.error('Privacy Policy 모달을 찾을 수 없습니다.');
     return;
   }
-  
-  // 모달 표시
+
+  // 환경설정 등 고 z-index 오버레이 위에 표시 (forgotPasswordModal과 동일 패턴)
+  if (modal.parentNode !== document.body) {
+    document.body.appendChild(modal);
+  }
+  modal.style.zIndex = '10100250';
+  modal.style.display = 'flex';
   modal.classList.remove('hidden');
   
   // privacy.html 내용 로드
   try {
-    const response = await fetch('/privacy.html');
+    const response = await fetch(STELVIO_PRIVACY_POLICY_PATH);
     if (!response.ok) {
       throw new Error('Privacy Policy 파일을 불러올 수 없습니다.');
     }
@@ -16008,10 +16017,12 @@ function closePrivacyPolicyModal() {
   const modal = document.getElementById('privacyPolicyModal');
   if (modal) {
     modal.classList.add('hidden');
+    modal.style.display = '';
   }
 }
 
 // 전역 함수로 등록
+window.STELVIO_PRIVACY_POLICY_URL = STELVIO_PRIVACY_POLICY_URL;
 window.openPrivacyPolicyModal = openPrivacyPolicyModal;
 window.closePrivacyPolicyModal = closePrivacyPolicyModal;
 
