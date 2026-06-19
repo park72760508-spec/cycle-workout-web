@@ -800,6 +800,96 @@ export async function mergeInviteDisplayByPhoneForHost(db, rideId, hostUserId, p
   scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
 }
 
+/** @param {Record<string, unknown>} data */
+function collectJoinRefundTargetUids(data) {
+  const refundTargets = new Set();
+  const hostUid = String(data.hostUserId || '').trim();
+  asStringArray(data.participants).forEach((uidRaw) => {
+    const uid = String(uidRaw != null ? uidRaw : '').trim();
+    if (!uid || uid === hostUid) return;
+    refundTargets.add(uid);
+  });
+  asStringArray(data.waitlist).forEach((uidRaw) => {
+    const uid = String(uidRaw != null ? uidRaw : '').trim();
+    if (!uid || uid === hostUid) return;
+    refundTargets.add(uid);
+  });
+  return refundTargets;
+}
+
+/** @param {Record<string, unknown>} data */
+function shouldRefundHostPointsOnCancel(data) {
+  return (
+    data.hostPointCharged === true &&
+    data.hostPointRefunded !== true &&
+    Number(data.hostPointChargeSp != null ? data.hostPointChargeSp : HOST_CREATE_CHARGE_SP) > 0
+  );
+}
+
+/**
+ * 트랜잭션 내 환불 대상 users 문서를 모두 읽은 뒤, 호출 측에서 write 단계로 진행.
+ * @param {import('firebase/firestore').Transaction} transaction
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {Record<string, unknown>} data
+ * @param {string} hostUserId
+ */
+async function readRideHostRefundUserSnaps(transaction, db, data, hostUserId) {
+  const joinRefundSp =
+    Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
+  const shouldRefundHost = shouldRefundHostPointsOnCancel(data);
+  /** @type {Array<{ ref: import('firebase/firestore').DocumentReference, acc: number }>} */
+  const participantRefunds = [];
+
+  if (joinRefundSp > 0) {
+    for (const uid of collectJoinRefundTargetUids(data)) {
+      const userRef = doc(db, 'users', uid);
+      const userSnap = await transaction.get(userRef);
+      if (!userSnap.exists()) continue;
+      const userData = userSnap.data() || {};
+      const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
+      participantRefunds.push({ ref: userRef, acc: userAcc });
+    }
+  }
+
+  /** @type {{ ref: import('firebase/firestore').DocumentReference, acc: number, amount: number } | null} */
+  let hostRefund = null;
+  if (shouldRefundHost) {
+    const hostRef = doc(db, 'users', String(hostUserId).trim());
+    const hostSnap = await transaction.get(hostRef);
+    if (hostSnap.exists()) {
+      const hostData = hostSnap.data() || {};
+      const hostAcc = Number(hostData.acc_points != null ? hostData.acc_points : 0) || 0;
+      const refundSp = Number(data.hostPointChargeSp != null ? data.hostPointChargeSp : HOST_CREATE_CHARGE_SP) || 0;
+      hostRefund = { ref: hostRef, acc: hostAcc, amount: refundSp };
+    }
+  }
+
+  return { joinRefundSp, participantRefunds, hostRefund, shouldRefundHost };
+}
+
+/**
+ * @param {import('firebase/firestore').Transaction} transaction
+ * @param {number} joinRefundSp
+ * @param {Array<{ ref: import('firebase/firestore').DocumentReference, acc: number }>} participantRefunds
+ * @param {{ ref: import('firebase/firestore').DocumentReference, acc: number, amount: number } | null} hostRefund
+ */
+function applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund) {
+  if (joinRefundSp > 0) {
+    for (const { ref, acc } of participantRefunds) {
+      transaction.update(ref, {
+        acc_points: acc + joinRefundSp,
+        openRidingPointUpdatedAt: serverTimestamp()
+      });
+    }
+  }
+  if (hostRefund) {
+    transaction.update(hostRefund.ref, {
+      acc_points: hostRefund.acc + hostRefund.amount,
+      openRidingPointUpdatedAt: serverTimestamp()
+    });
+  }
+}
+
 /**
  * 방장 폭파(취소)
  * - 참석 확정(participants) 0명: 문서 삭제
@@ -816,50 +906,15 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
     if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
-    const joinRefundSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
-    if (joinRefundSp > 0) {
-      const refundTargets = new Set();
-      asStringArray(data.participants).forEach((uidRaw) => {
-        const uid = String(uidRaw != null ? uidRaw : '').trim();
-        if (!uid) return;
-        if (uid === String(data.hostUserId || '').trim()) return;
-        refundTargets.add(uid);
-      });
-      asStringArray(data.waitlist).forEach((uidRaw) => {
-        const uid = String(uidRaw != null ? uidRaw : '').trim();
-        if (!uid) return;
-        if (uid === String(data.hostUserId || '').trim()) return;
-        refundTargets.add(uid);
-      });
-      for (const uid of refundTargets) {
-        const userRef = doc(db, 'users', uid);
-        const userSnap = await transaction.get(userRef);
-        if (!userSnap.exists()) continue;
-        const userData = userSnap.data() || {};
-        const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
-        transaction.update(userRef, {
-          acc_points: userAcc + joinRefundSp,
-          openRidingPointUpdatedAt: serverTimestamp()
-        });
-      }
-    }
-    const shouldRefundHost =
-      data.hostPointCharged === true &&
-      data.hostPointRefunded !== true &&
-      Number(data.hostPointChargeSp != null ? data.hostPointChargeSp : HOST_CREATE_CHARGE_SP) > 0;
-    if (shouldRefundHost) {
-      const hostRef = doc(db, 'users', String(hostUserId).trim());
-      const hostSnap = await transaction.get(hostRef);
-      if (hostSnap.exists()) {
-        const hostData = hostSnap.data() || {};
-        const hostAcc = Number(hostData.acc_points != null ? hostData.acc_points : 0) || 0;
-        const refundSp = Number(data.hostPointChargeSp != null ? data.hostPointChargeSp : HOST_CREATE_CHARGE_SP) || 0;
-        transaction.update(hostRef, {
-          acc_points: hostAcc + refundSp,
-          openRidingPointUpdatedAt: serverTimestamp()
-        });
-      }
-    }
+
+    const { joinRefundSp, participantRefunds, hostRefund, shouldRefundHost } = await readRideHostRefundUserSnaps(
+      transaction,
+      db,
+      data,
+      hostUserId
+    );
+    applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
+
     const parts = Array.isArray(data.participants) ? data.participants : [];
     if (parts.length === 0) {
       transaction.delete(rideRef);
@@ -894,50 +949,14 @@ export async function deleteRideByHost(db, rideId, hostUserId) {
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
     if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
-    const joinRefundSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
-    if (joinRefundSp > 0) {
-      const refundTargets = new Set();
-      asStringArray(data.participants).forEach((uidRaw) => {
-        const uid = String(uidRaw != null ? uidRaw : '').trim();
-        if (!uid) return;
-        if (uid === String(data.hostUserId || '').trim()) return;
-        refundTargets.add(uid);
-      });
-      asStringArray(data.waitlist).forEach((uidRaw) => {
-        const uid = String(uidRaw != null ? uidRaw : '').trim();
-        if (!uid) return;
-        if (uid === String(data.hostUserId || '').trim()) return;
-        refundTargets.add(uid);
-      });
-      for (const uid of refundTargets) {
-        const userRef = doc(db, 'users', uid);
-        const userSnap = await transaction.get(userRef);
-        if (!userSnap.exists()) continue;
-        const userData = userSnap.data() || {};
-        const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
-        transaction.update(userRef, {
-          acc_points: userAcc + joinRefundSp,
-          openRidingPointUpdatedAt: serverTimestamp()
-        });
-      }
-    }
-    const shouldRefundHost =
-      data.hostPointCharged === true &&
-      data.hostPointRefunded !== true &&
-      Number(data.hostPointChargeSp != null ? data.hostPointChargeSp : HOST_CREATE_CHARGE_SP) > 0;
-    if (shouldRefundHost) {
-      const hostRef = doc(db, 'users', String(hostUserId).trim());
-      const hostSnap = await transaction.get(hostRef);
-      if (hostSnap.exists()) {
-        const hostData = hostSnap.data() || {};
-        const hostAcc = Number(hostData.acc_points != null ? hostData.acc_points : 0) || 0;
-        const refundSp = Number(data.hostPointChargeSp != null ? data.hostPointChargeSp : HOST_CREATE_CHARGE_SP) || 0;
-        transaction.update(hostRef, {
-          acc_points: hostAcc + refundSp,
-          openRidingPointUpdatedAt: serverTimestamp()
-        });
-      }
-    }
+
+    const { joinRefundSp, participantRefunds, hostRefund } = await readRideHostRefundUserSnaps(
+      transaction,
+      db,
+      data,
+      hostUserId
+    );
+    applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
     transaction.delete(rideRef);
   });
   return { deleted: true };

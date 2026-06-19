@@ -7213,6 +7213,11 @@ function OpenRidingDetail(props) {
       } else if (typeof reload === 'function') {
         await reload();
       }
+    } catch (err) {
+      console.warn('[openRiding] cancelRideByHost', err);
+      if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+        window.showToast('라이딩 폭파에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      }
     } finally {
       setCancelBusy(false);
     }
