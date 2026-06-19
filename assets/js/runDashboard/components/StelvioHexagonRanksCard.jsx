@@ -422,12 +422,20 @@
     var DashboardCard = p.DashboardCard;
     var uid = userProfile && userProfile.id != null ? String(userProfile.id) : null;
 
-    var _g = useState('all');
+    var _g = useState(p.initialGender || 'all');
     var gender = _g[0];
     var setGender = _g[1];
-    var _c = useState('Supremo');
+    var _c = useState(p.initialCategory || 'Supremo');
     var category = _c[0];
     var setCategory = _c[1];
+
+    useEffect(function () {
+      if (p.initialGender) setGender(p.initialGender);
+    }, [p.initialGender]);
+
+    useEffect(function () {
+      if (p.initialCategory) setCategory(p.initialCategory);
+    }, [p.initialCategory]);
 
     var _tierPctHint = useState(false);
     var tierPctHintOpen = _tierPctHint[0];
