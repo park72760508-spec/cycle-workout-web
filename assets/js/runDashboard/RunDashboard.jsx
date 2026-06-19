@@ -184,6 +184,15 @@
     var _aero = useState(false);
     var oneHourAbilityModalOpen = _aero[0];
     var setOneHourAbilityModalOpen = _aero[1];
+    var _ftpCalc = useState(false);
+    var runFtpCalcLoading = _ftpCalc[0];
+    var setRunFtpCalcLoading = _ftpCalc[1];
+    var _ftpModal = useState(false);
+    var runFtpModalOpen = _ftpModal[0];
+    var setRunFtpModalOpen = _ftpModal[1];
+    var _ftpResult = useState(null);
+    var runFtpCalcResult = _ftpResult[0];
+    var setRunFtpCalcResult = _ftpResult[1];
 
     var ftpVal = Number(
       stats && stats.thresholdPace != null ? stats.thresholdPace :
@@ -222,6 +231,11 @@
       }
       setTpModalOpen(false);
       setTpCalcResult(null);
+    }
+
+    function closeRunFtpModal() {
+      setRunFtpModalOpen(false);
+      setRunFtpCalcResult(null);
     }
 
     // 스크롤 초기화: useLayoutEffect로 DOM 마운트 직후 1회 실행 (기존 setTimeout 4회 폐기)
@@ -423,6 +437,59 @@
 
         <section className="px-4 pt-4">
           {DashboardCard && React.createElement(DashboardCard, {
+            title: '나의 풀코스(fTP) 예측',
+            className: 'mt-0'
+          }, React.createElement(React.Fragment, null,
+            React.createElement('ul', { className: 'text-xs text-gray-600 space-y-1.5 mb-4' },
+              React.createElement('li', { className: 'flex items-start gap-2' },
+                React.createElement('img', { src: 'assets/img/clock.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
+                React.createElement('span', null, '6개 구간(1k~20k) PR 페이스 → Riegel 공식으로 42.195km 예측')
+              ),
+              React.createElement('li', { className: 'flex items-start gap-2' },
+                React.createElement('img', { src: 'assets/img/statistics.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
+                React.createElement('span', null, '20k·10k 누락 시 유산소 지구력 패널티 지수 자동 가산')
+              ),
+              React.createElement('li', { className: 'flex items-start gap-2' },
+                React.createElement('img', { src: 'assets/img/calendar.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
+                React.createElement('span', null, '누락 구간 가중치 제외 후 Valid_W_Sum 기준 재분배(Normalized)')
+              )
+            ),
+            React.createElement('div', { className: 'flex justify-center' },
+              React.createElement('button', {
+                type: 'button',
+                onClick: async function () {
+                  if (runFtpCalcLoading || !userProfile || !userProfile.id) return;
+                  setRunFtpCalcLoading(true);
+                  setRunFtpCalcResult(null);
+                  try {
+                    var efforts = [];
+                    if (typeof window.getUserRunEfforts === 'function') {
+                      efforts = await window.getUserRunEfforts(userProfile.id, { limit: 400 }) || [];
+                    }
+                    var result = window.calculateDynamicRunFtp
+                      ? window.calculateDynamicRunFtp(efforts, userProfile)
+                      : { success: false, error: 'fTP 산출 함수를 불러올 수 없습니다.' };
+                    setRunFtpCalcResult(result);
+                    setRunFtpModalOpen(true);
+                  } catch (e) {
+                    setRunFtpCalcResult({ success: false, error: (e && e.message) || 'fTP 산출 중 오류가 발생했습니다.' });
+                    setRunFtpModalOpen(true);
+                  } finally {
+                    setRunFtpCalcLoading(false);
+                  }
+                },
+                disabled: runFtpCalcLoading,
+                className: 'stelvio-ranking-board-entry-btn'
+              }, runFtpCalcLoading ? React.createElement('span', { className: 'flex items-center justify-center gap-2' },
+                React.createElement('span', { className: 'w-5 h-5 border-2 border-[#667eea] border-t-transparent rounded-full animate-spin' }),
+                '예측 중...'
+              ) : 'fTP 풀코스 예측하기')
+            )
+          ))}
+        </section>
+
+        <section className="px-4 pt-4">
+          {DashboardCard && React.createElement(DashboardCard, {
             title: '나의 1시간 항속 능력 산출',
             className: 'mt-0'
           }, React.createElement(React.Fragment, null,
@@ -549,6 +616,107 @@
                   ' 입니다.'
                 )
               ) : React.createElement('p', { className: 'text-red-600 mb-2', style: { fontSize: '15px', lineHeight: 1.5 } }, tpCalcResult.error)
+            )
+          )
+        )}
+
+        {/* fTP 풀코스 예측 결과 모달 */}
+        {runFtpModalOpen && runFtpCalcResult && React.createElement(
+          'div',
+          {
+            className: 'fixed inset-0 z-[10001] flex items-center justify-center p-4 overflow-y-auto',
+            style: { background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' },
+            onClick: function (e) { if (e.target === e.currentTarget) closeRunFtpModal(); }
+          },
+          React.createElement(
+            'div',
+            {
+              className: 'w-full max-w-lg my-4 bg-white rounded-2xl overflow-hidden shadow-xl border border-emerald-100',
+              style: { padding: '20px 24px 24px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' },
+              onClick: function (e) { e.stopPropagation(); }
+            },
+            React.createElement('div', { className: 'flex items-start justify-between gap-3 mb-2', style: { borderBottom: '2px solid #059669', paddingBottom: '10px' } },
+              React.createElement('h3', { className: 'text-lg font-semibold text-gray-800 m-0' }, '풀코스(fTP) 예측 결과'),
+              React.createElement('button', {
+                type: 'button',
+                onClick: closeRunFtpModal,
+                className: 'shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors',
+                'aria-label': '닫기'
+              }, React.createElement('svg', { className: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+                React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M6 18L18 6M6 6l12 12' })
+              ))
+            ),
+            React.createElement('div', {
+              className: 'rounded-lg px-3 py-2.5 mb-3 text-xs leading-relaxed',
+              style: { background: 'linear-gradient(135deg, rgba(5,150,105,0.08) 0%, rgba(16,185,129,0.06) 100%)', border: '1px solid rgba(5,150,105,0.25)', color: '#065f46' },
+              role: 'note'
+            },
+              React.createElement('strong', { className: 'block mb-1 text-[11px]' }, '안내'),
+              runFtpCalcResult.guidanceRecommended ||
+                (window.RUN_FTP_GUIDANCE_RECOMMENDED || '보다 정확한 풀코스 산출을 위해서는 1k~10k 기록이 반드시 존재해야 합니다.'),
+              (runFtpCalcResult.success && runFtpCalcResult.guidanceMessages && runFtpCalcResult.guidanceMessages.length > 1)
+                ? React.createElement('ul', { className: 'mt-2 mb-0 pl-4 space-y-1 list-disc' },
+                    runFtpCalcResult.guidanceMessages.slice(1).map(function (msg, gi) {
+                      return React.createElement('li', { key: 'g-' + gi }, msg);
+                    })
+                  )
+                : null
+            ),
+            React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
+              runFtpCalcResult.success ? React.createElement(React.Fragment, null,
+                React.createElement('div', { className: 'mb-4 overflow-x-auto text-xs' },
+                  React.createElement('table', { className: 'w-full', style: { borderCollapse: 'collapse', minWidth: '640px' } },
+                    React.createElement('thead', null,
+                      React.createElement('tr', { style: { borderBottom: '2px solid #e2e8f0' } },
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'left', color: '#64748b', fontWeight: 600 } }, '구간'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'center', color: '#64748b', fontWeight: 600 } }, '달성일'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, '기록 페이스'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, '예측 풀코스'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'W'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'Wₙ'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, 'D'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, '지수'),
+                        React.createElement('th', { style: { padding: '8px 4px', textAlign: 'right', color: '#64748b', fontWeight: 600 } }, '패널티')
+                      )
+                    ),
+                    React.createElement('tbody', null,
+                      (runFtpCalcResult.details || []).map(function (row, idx) {
+                        var dateFmt = row.dateStr ? row.dateStr.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3') : '-';
+                        return React.createElement('tr', { key: idx, style: { borderBottom: '1px solid #f1f5f9', opacity: row.used ? 1 : 0.5 } },
+                          React.createElement('td', { style: { padding: '6px 4px', color: '#334155', fontWeight: 600 } }, row.label),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'center', color: '#64748b', fontSize: '11px' } }, dateFmt),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: row.used ? '#059669' : '#94a3b8' } }, row.used ? row.paceDisplay : '-'),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: row.used ? '#334155' : '#94a3b8', fontWeight: 600 } }, row.used ? row.predictedMarathonDisplay : '-'),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: '#64748b' } }, row.weight),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: '#64748b' } }, row.used ? row.normalizedWeight : '-'),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: '#64748b' } }, row.used ? row.timeDecay : '-'),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: '#64748b' } }, row.used ? row.finalExponent : '-'),
+                          React.createElement('td', { style: { padding: '6px 4px', textAlign: 'right', color: row.fatiguePenalty > 0 ? '#b45309' : '#94a3b8' } }, row.used && row.fatiguePenalty > 0 ? '+' + row.fatiguePenalty.toFixed(2) : '-')
+                        );
+                      })
+                    )
+                  ),
+                  React.createElement('p', { className: 'text-xs mt-2', style: { color: '#94a3b8' } },
+                    'W: 원 가중치 · Wₙ: Valid_W_Sum 기준 재분배 · D: 시간감쇠 · 지수: Riegel(1.06)+연령·성별+패널티 · 예측 풀코스: 42.195km'
+                  ),
+                  runFtpCalcResult.validWSum != null && runFtpCalcResult.validWSum < 1
+                    ? React.createElement('p', { className: 'text-xs mt-1', style: { color: '#64748b' } },
+                        '유효 가중치 합(Valid_W_Sum): ',
+                        React.createElement('strong', null, Math.round(runFtpCalcResult.validWSum * 100) + '%'),
+                        runFtpCalcResult.renormalized ? ' · 누락 구간 제외 후 Normalized 적용' : ''
+                      )
+                    : null
+                ),
+                React.createElement('p', { className: 'text-sm mb-1', style: { color: '#475569', lineHeight: 1.6 } },
+                  '예상 풀코스(42.195km) 완주 시간은 ',
+                  React.createElement('strong', { style: { color: '#059669', fontSize: '1.15em' } }, runFtpCalcResult.marathonDisplay),
+                  ' 입니다.'
+                ),
+                React.createElement('p', { className: 'text-sm mb-2', style: { color: '#475569', lineHeight: 1.6 } },
+                  '예상 평균 페이스: ',
+                  React.createElement('strong', { style: { color: '#059669' } }, runFtpCalcResult.marathonPaceSummary || runFtpCalcResult.marathonPaceDisplay)
+                )
+              ) : React.createElement('p', { className: 'text-red-600 mb-2', style: { fontSize: '15px', lineHeight: 1.5 } }, runFtpCalcResult.error)
             )
           )
         )}
