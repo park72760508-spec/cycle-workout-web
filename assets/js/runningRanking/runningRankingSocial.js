@@ -259,7 +259,29 @@
     return '';
   }
 
-  function getPrivateBadgeHtml(item, currentUserId) {
+  function getRankChangeSuffix(item, listCategoryKey) {
+    var html = getRankChangeHtml(item, listCategoryKey);
+    if (!html) return null;
+    var titleM = html.match(/title="([^"]+)"/);
+    var title = titleM ? titleM[1] : '';
+    if (html.indexOf('stelvio-rank-change--up') >= 0) {
+      var upM = html.match(/\(↑(\d+)\)/);
+      return { text: upM ? '(↑' + upM[1] + ')' : '(↑)', kind: 'up', title: title, html: html };
+    }
+    if (html.indexOf('stelvio-rank-change--down') >= 0) {
+      var dnM = html.match(/\(↓(\d+)\)/);
+      return { text: dnM ? '(↓' + dnM[1] + ')' : '(↓)', kind: 'down', title: title, html: html };
+    }
+    if (html.indexOf('stelvio-rank-change--flat') >= 0) {
+      return { text: '(-)', kind: 'flat', title: title, html: html };
+    }
+    return null;
+  }
+
+  function getRankChangeHtmlForHexagonAxis(item, listCategoryKey) {
+    return getRankChangeHtml(item, listCategoryKey) || '';
+  }
+
     if (!item || item.isCrew || !isPrivateItem(item)) return '';
     if (!canSeeFull(item, currentUserId)) return '';
     return '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
@@ -350,6 +372,8 @@
     getAvatarHtml: getAvatarHtml,
     getStarHtml: getStarHtml,
     getRankChangeHtml: getRankChangeHtml,
+    getRankChangeSuffix: getRankChangeSuffix,
+    getRankChangeHtmlForHexagonAxis: getRankChangeHtmlForHexagonAxis,
     getPrivateBadgeHtml: getPrivateBadgeHtml,
     formatValueLabel: formatValueLabel,
     canSeeFull: canSeeFull,

@@ -1021,11 +1021,87 @@
 
   function findViewerListItem(list, identity) {
     if (!list || !list.length || !identity) return null;
+    var soc = window.runningRankingSocial;
     var i;
+    if (soc && typeof soc.isViewerListItem === 'function') {
+      for (i = 0; i < list.length; i++) {
+        if (soc.isViewerListItem(list[i], identity)) return list[i];
+      }
+    }
     for (i = 0; i < list.length; i++) {
       if (listItemMatchesViewer(list[i], identity)) return list[i];
     }
+    if (identity.boardUserId) {
+      for (i = 0; i < list.length; i++) {
+        if (list[i] && String(list[i].userId) === String(identity.boardUserId)) return list[i];
+      }
+    }
     return null;
+  }
+
+  /** 랭킹보드 구간탭과 동일: buildRankedList + applyRankMovement */
+  function buildPaceTabRankedListWithMovement(rows, opts) {
+    opts = opts || {};
+    var list = buildRankedList(rows, 'pace', {
+      paceDistance: opts.paceDistance,
+      gender: opts.gender || 'all',
+      category: opts.category || 'Supremo'
+    });
+    var moveMod = window.runningRankingMovement;
+    if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+      moveMod.applyRankMovement(
+        list,
+        'pace',
+        {
+          paceDistance: opts.paceDistance,
+          gender: opts.gender || 'all',
+          category: opts.category || 'Supremo',
+          rankMovementSource: opts.rankMovementSource || '',
+          leaderboardAsOfSeoul: opts.leaderboardAsOfSeoul || '',
+          rankMovementAsOfSeoul: opts.rankMovementAsOfSeoul || ''
+        },
+        opts.rankMovementByKey || {}
+      );
+    }
+    return list;
+  }
+
+  function buildOverallTabRankedListWithMovement(rows, opts) {
+    opts = opts || {};
+    var list = buildRankedList(rows, 'overall', {
+      gender: opts.gender || 'all',
+      category: opts.category || 'Supremo'
+    });
+    var moveMod = window.runningRankingMovement;
+    if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+      moveMod.applyRankMovement(
+        list,
+        'overall',
+        {
+          gender: opts.gender || 'all',
+          category: opts.category || 'Supremo',
+          rankMovementSource: opts.rankMovementSource || '',
+          leaderboardAsOfSeoul: opts.leaderboardAsOfSeoul || '',
+          rankMovementAsOfSeoul: opts.rankMovementAsOfSeoul || ''
+        },
+        opts.rankMovementByKey || {}
+      );
+    }
+    return list;
+  }
+
+  function resolveAxisRankChangeFromSocial(item, category) {
+    var soc = window.runningRankingSocial;
+    if (!item || !soc) return { suffix: null, html: '' };
+    if (typeof soc.getRankChangeSuffix === 'function') {
+      return {
+        suffix: soc.getRankChangeSuffix(item, category),
+        html: typeof soc.getRankChangeHtmlForHexagonAxis === 'function'
+          ? soc.getRankChangeHtmlForHexagonAxis(item, category)
+          : (typeof soc.getRankChangeHtml === 'function' ? soc.getRankChangeHtml(item, category) : '')
+      };
+    }
+    return { suffix: resolveListItemRankChangeSuffix(item), html: '' };
   }
 
   /** 순위 → 백분위(1위=0%, 꼴찌=100%) — 헥사곤 가로바 색상 구간용 */
@@ -1105,7 +1181,6 @@
     var gender = opts.gender || 'all';
     var category = opts.category || 'Supremo';
     var segments = cfg().OVERALL_SEGMENTS || [];
-    var moveMod = window.runningRankingMovement;
     var rankMovementByKey = opts.rankMovementByKey || {};
     var movementOpts = {
       gender: gender,
@@ -1121,45 +1196,37 @@
 
     for (si = 0; si < segments.length; si++) {
       var seg = segments[si];
-      var paceList = buildRankedList(rows, 'pace', {
-        paceDistance: seg.key,
-        gender: gender,
-        category: category
-      });
-      if (moveMod && typeof moveMod.applyRankMovement === 'function') {
-        moveMod.applyRankMovement(
-          paceList,
-          'pace',
-          Object.assign({ paceDistance: seg.key }, movementOpts),
-          rankMovementByKey
-        );
-      }
+      var paceList = buildPaceTabRankedListWithMovement(rows, Object.assign({ paceDistance: seg.key }, movementOpts, {
+        rankMovementByKey: rankMovementByKey
+      }));
       var cohortN = paceList.length;
       if (cohortN > nRef) nRef = cohortN;
       var viewerItem = findViewerListItem(paceList, identity);
-      var axisRankChange = viewerItem ? resolveListItemRankChangeSuffix(viewerItem) : null;
+      var axisRc = resolveAxisRankChangeFromSocial(viewerItem, category);
       axes.push({
         key: seg.key,
         label: seg.label,
         rank: viewerItem && viewerItem.rank != null ? viewerItem.rank : null,
         rankChange: viewerItem && viewerItem.rankChange != null ? viewerItem.rankChange : null,
         previousBoardRank: viewerItem && viewerItem.previousBoardRank != null ? viewerItem.previousBoardRank : null,
-        rankChangeSuffix: axisRankChange,
+        rankChangeSuffix: axisRc.suffix,
+        rankChangeHtml: axisRc.html,
         pace: viewerItem && viewerItem.valueLabel ? viewerItem.valueLabel : '—',
         cohortN: cohortN
       });
     }
 
-    var overallList = buildRankedList(rows, 'overall', { gender: gender, category: category });
-    if (moveMod && typeof moveMod.applyRankMovement === 'function') {
-      moveMod.applyRankMovement(overallList, 'overall', movementOpts, rankMovementByKey);
-    }
+    var overallList = buildOverallTabRankedListWithMovement(rows, Object.assign({}, movementOpts, {
+      rankMovementByKey: rankMovementByKey
+    }));
     var overallViewer = findViewerListItem(overallList, identity);
     var overallN = overallList.length;
     var overallRank = overallViewer && overallViewer.rank != null ? overallViewer.rank : null;
     var overallRankChange = overallViewer && overallViewer.rankChange != null ? overallViewer.rankChange : null;
     var overallPrevRank = overallViewer && overallViewer.previousBoardRank != null ? overallViewer.previousBoardRank : null;
-    var overallRankChangeSuffix = overallViewer ? resolveListItemRankChangeSuffix(overallViewer) : null;
+    var overallRc = overallViewer ? resolveAxisRankChangeFromSocial(overallViewer, category) : { suffix: null, html: '' };
+    var overallRankChangeSuffix = overallRc.suffix;
+    var overallRankChangeHtml = overallRc.html;
     var overallScore = overallViewer && overallViewer.value != null ? overallViewer.value : null;
 
     var pPercentile = overallRank != null && overallN >= 1 ? rankToPercentile(overallRank, overallN) : null;
@@ -1175,6 +1242,7 @@
       overallRankChange: overallRankChange,
       overallPreviousBoardRank: overallPrevRank,
       overallRankChangeSuffix: overallRankChangeSuffix,
+      overallRankChangeHtml: overallRankChangeHtml,
       overallCohortN: overallN,
       overallScore: overallScore,
       pPercentile: pPercentile,
@@ -1329,6 +1397,8 @@
     buildOverallHeroPayload: buildOverallHeroPayload,
     buildRunningHexagonState: buildRunningHexagonState,
     buildRunDashboardHexagonState: buildRunDashboardHexagonState,
+    buildPaceTabRankedListWithMovement: buildPaceTabRankedListWithMovement,
+    buildOverallTabRankedListWithMovement: buildOverallTabRankedListWithMovement,
     rankToPercentile: rankToPercentile,
     rankToTopSharePercent: rankToTopSharePercent,
     resolveListItemRankChangeSuffix: resolveListItemRankChangeSuffix,
