@@ -47,12 +47,6 @@
   };
   var HEPTAGON_CARD_TIER_LEGEND_IDS = ['HC', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
 
-  var AXIS_RANK_CHANGE_FILL = {
-    up: '#c97070',
-    down: '#7a9fbf',
-    flat: '#9ca3af'
-  };
-
   function labelForGender(v) {
     for (var i = 0; i < GENDER_OPTIONS.length; i++) {
       if (GENDER_OPTIONS[i].value === v) return GENDER_OPTIONS[i].label;
@@ -146,6 +140,14 @@
 
   function RankChangeInline(props) {
     var suffix = props.suffix;
+    if (suffix && suffix.html) {
+      return (
+        <span
+          className="stelvio-rank-change-slot-inline"
+          dangerouslySetInnerHTML={{ __html: suffix.html }}
+        />
+      );
+    }
     if (!suffix) return null;
     return (
       <span
@@ -373,20 +375,26 @@
     var topShare = props.topSharePercent != null && isFinite(props.topSharePercent) ? Number(props.topSharePercent) : 0;
     var tierId = props.tierId || 'C6';
     var tierHex = HEPTAGON_TIER_FACE_HEX[tierId] || HEPTAGON_TIER_FACE_HEX.C6;
-    var widthPct = Math.max(0, Math.min(100, topShare));
+    /* 좌측 topShare% 비움 · 나머지 우측 끝까지 채움 (1위/39 → 좌 2.56% + 채움 97.44%) */
+    var emptyLeftPct = Math.max(0, Math.min(100, topShare));
+    var fillWidthPct = Math.max(0, 100 - emptyLeftPct);
     var gradient = 'linear-gradient(to right, ' + tierHex + ' 0%, #ffffff 100%)';
 
     return (
       <div
         className="stelvio-heptagon-tier-hbar mx-auto mt-1 w-full max-w-xl px-1"
         role="img"
-        aria-label={'종합 상위 ' + widthPct.toFixed(1) + '% 점유'}
+        aria-label={'종합 상위 ' + emptyLeftPct.toFixed(2) + '% · 채움 ' + fillWidthPct.toFixed(2) + '%'}
       >
         <div className="relative w-full overflow-hidden rounded-md border border-slate-200/85 shadow-inner h-[2.125rem] sm:h-[2.25rem]">
           <div className="pointer-events-none absolute inset-0 bg-slate-100/90 z-0" aria-hidden />
           <div
-            className="pointer-events-none absolute top-0 bottom-0 right-0 z-[1] rounded-l-sm transition-[width] duration-500 ease-out"
-            style={{ width: String(widthPct) + '%', background: gradient }}
+            className="pointer-events-none absolute top-0 bottom-0 z-[1] rounded-r-sm transition-[left,width] duration-500 ease-out"
+            style={{
+              left: String(emptyLeftPct) + '%',
+              width: String(fillWidthPct) + '%',
+              background: gradient
+            }}
           />
           <div className="relative z-[2] flex h-full w-full min-h-0">
             {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tidCap) {
@@ -573,20 +581,34 @@
             var t = axisAngle(ai, N_AXES);
             var lx = cx + rLabel * Math.cos(t);
             var ly = cy + rLabel * Math.sin(t);
-            var changeSuffix = ax.rankChangeSuffix || null;
+            var rankBase = ax.rank != null ? Math.floor(Number(ax.rank)) + '위' : '—';
+            var rankHtml = rankBase + (ax.rankChangeHtml || '');
             return (
-              <text key={ax.key + '-lbl'} x={lx} y={ly} textAnchor="middle" className="fill-slate-800">
-                {changeSuffix ? <title>{changeSuffix.title}</title> : null}
-                <tspan x={lx} dy="0" style={{ fontSize: '9.5px', fontWeight: 600 }}>{ax.label}</tspan>
-                <tspan x={lx} dy="11" style={{ fontSize: '7.5px', fill: '#64748b', fontWeight: 600 }}>
-                  {ax.rank != null ? Math.floor(Number(ax.rank)) + '위' : '—'}
-                  {changeSuffix ? (
-                    <tspan fill={AXIS_RANK_CHANGE_FILL[changeSuffix.kind]} style={{ fontSize: '7px', fontWeight: 700 }}>
-                      {changeSuffix.text}
-                    </tspan>
-                  ) : null}
-                </tspan>
-              </text>
+              <g key={ax.key + '-lbl'}>
+                <text x={lx} y={ly} textAnchor="middle" className="fill-slate-800">
+                  <tspan x={lx} dy="0" style={{ fontSize: '9.5px', fontWeight: 600 }}>{ax.label}</tspan>
+                </text>
+                <foreignObject
+                  x={lx - 34}
+                  y={ly + 2}
+                  width={68}
+                  height={16}
+                  style={{ overflow: 'visible', pointerEvents: 'none' }}
+                >
+                  <div
+                    xmlns="http://www.w3.org/1999/xhtml"
+                    style={{
+                      fontSize: '7.5px',
+                      fontWeight: 600,
+                      color: '#64748b',
+                      textAlign: 'center',
+                      lineHeight: '11px',
+                      whiteSpace: 'nowrap'
+                    }}
+                    dangerouslySetInnerHTML={{ __html: rankHtml }}
+                  />
+                </foreignObject>
+              </g>
             );
           })}
         </svg>
