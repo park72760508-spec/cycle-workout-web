@@ -113,11 +113,18 @@
     return norm;
   }
 
-  function axisRankChangeSuffix(rankChange, previousBoardRank) {
-    if (rankChange == null || previousBoardRank == null) return null;
+  function axisRankChangeSuffix(rankChange, previousBoardRank, currentRank) {
+    if (rankChange == null) return null;
     var rcN = Number(rankChange);
-    var prevN = Math.floor(Number(previousBoardRank));
-    if (!isFinite(rcN) || !isFinite(prevN) || prevN < 1) return null;
+    if (!isFinite(rcN)) return null;
+    var prevN =
+      previousBoardRank != null && isFinite(previousBoardRank)
+        ? Math.floor(Number(previousBoardRank))
+        : null;
+    if ((prevN == null || prevN < 1) && currentRank != null && isFinite(currentRank)) {
+      prevN = Math.floor(Number(currentRank)) + rcN;
+    }
+    if (prevN == null || prevN < 1) return null;
     if (rcN > 0) {
       return { text: '(↑' + rcN + ')', kind: 'up', title: '전날 ' + prevN + '위' };
     }
@@ -139,12 +146,61 @@
     return { badgeSrc: 'assets/img/G.svg', levelName: '등급', unavailable: true };
   }
 
+  function tierLevelDisplayName(tierId) {
+    var m = { HC: '레벨A', C1: '레벨B', C2: '레벨C', C3: '레벨D', C4: '레벨E', C5: '레벨F', C6: '레벨G' };
+    return m[tierId] || '레벨G';
+  }
+
+  function formatAxisRankLine(rank, rankChange, previousBoardRank) {
+    if (rank == null || !isFinite(rank)) return '—';
+    var line = Math.floor(Number(rank)) + '위';
+    var changeSuffix = axisRankChangeSuffix(rankChange, previousBoardRank, rank);
+    if (changeSuffix) line += changeSuffix.text;
+    return line;
+  }
+
+  function levelBarFadedEmptyBackground(tierBgCss) {
+    var s = tierBgCss != null ? String(tierBgCss).replace(/\s/g, '') : '';
+    var m =
+      /^rgba\(([\d.]+),([\d.]+),([\d.]+),([\d.]+)\)$/i.exec(s) ||
+      /^rgb\(([\d.]+),([\d.]+),([\d.]+)\)$/i.exec(s);
+    if (m) {
+      var aa = m[4] != null ? parseFloat(m[4]) : 1;
+      if (!isFinite(aa)) aa = 1;
+      aa = Math.min(1, Math.max(0, aa * 0.5));
+      return 'rgba(' + m[1] + ',' + m[2] + ',' + m[3] + ',' + aa.toFixed(3) + ')';
+    }
+    return tierBgCss;
+  }
+
+  function RankChangeInline(props) {
+    var rankChange = props.rankChange;
+    var previousBoardRank = props.previousBoardRank;
+    var currentRank = props.currentRank;
+    var changeSuffix = axisRankChangeSuffix(rankChange, previousBoardRank, currentRank);
+    if (!changeSuffix) return null;
+    return (
+      <span
+        className="stelvio-rank-change"
+        style={{ color: AXIS_RANK_CHANGE_FILL[changeSuffix.kind], fontSize: 'inherit', fontWeight: 600 }}
+        title={changeSuffix.title}
+      >
+        {changeSuffix.text}
+      </span>
+    );
+  }
+
   function RunHexagonCenterOverlay(props) {
     var badge = props.badge || {};
-    var overallRank = props.overallRank;
-    var rankChange = props.overallRankChange;
-    var prevRank = props.overallPreviousBoardRank;
-    var changeSuffix = axisRankChangeSuffix(rankChange, prevRank);
+    var hexState = props.hexState || {};
+    var showPct = props.showPct === true;
+    var filterGenderLabel = props.filterGenderLabel || '';
+    var filterCategoryLabel = props.filterCategoryLabel || '';
+    var overallRank = hexState.overallRank;
+    var rankChange = hexState.overallRankChange;
+    var prevRank = hexState.overallPreviousBoardRank;
+    var nCohort = hexState.overallCohortN;
+    var topShare = hexState.topSharePercent;
     var _imgErr = useState(false);
     var imgError = _imgErr[0];
     var setImgError = _imgErr[1];
@@ -153,8 +209,13 @@
       setImgError(false);
     }, [badge.badgeSrc]);
 
+    var filterContext =
+      filterGenderLabel && filterCategoryLabel
+        ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
+        : '';
+
     return (
-      <div className="stelvio-octagon-tier-wrap" aria-hidden="true">
+      <div className="stelvio-octagon-tier-wrap" aria-hidden={false}>
         <div className="stelvio-octagon-tier-inner stelvio-octagon-tier-inner--img">
           <div className="stelvio-octagon-tier-btn-stack">
             <div className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--image">
@@ -177,51 +238,165 @@
               <span className="font-bold tracking-tight text-violet-800">종합</span>
               <span className="tabular-nums text-slate-600">
                 {overallRank != null ? overallRank + '위' : '—'}
-                {changeSuffix ? (
-                  <span style={{ color: AXIS_RANK_CHANGE_FILL[changeSuffix.kind], fontSize: '9px', fontWeight: 600 }}>
-                    {changeSuffix.text}
-                  </span>
-                ) : null}
+                <RankChangeInline rankChange={rankChange} previousBoardRank={prevRank} currentRank={overallRank} />
               </span>
             </span>
+          </div>
+          <div
+            className={
+              'stelvio-octagon-tier-hint ' +
+              (overallRank != null ? 'stelvio-octagon-tier-hint--split ' : '') +
+              (showPct ? 'stelvio-octagon-tier-hint--visible' : '')
+            }
+            role="status"
+          >
+            {overallRank != null ? (
+              <span className="stelvio-octagon-tier-hint-split stelvio-octagon-tier-hint-split--cohort" title={filterContext + '종합 랭킹 집계 모수 n'}>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-rank">
+                  {String(overallRank) + '위'}
+                  <RankChangeInline rankChange={rankChange} previousBoardRank={prevRank} currentRank={overallRank} />
+                </span>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-nref">
+                  n={nCohort != null && nCohort > 0 ? String(nCohort) : '—'}
+                </span>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-pct">
+                  {topShare != null && isFinite(topShare) ? '상위 ' + Number(topShare).toFixed(2) : '—'}%
+                </span>
+              </span>
+            ) : (
+              <span className="stelvio-octagon-tier-hint-pending" title="종합 랭킹 데이터 없음">
+                — · — · —
+              </span>
+            )}
           </div>
         </div>
       </div>
     );
   }
 
+  function RunHexagonLevelPillSidebar(props) {
+    var bar = props.bar || {};
+    var hexState = props.hexState || {};
+    var showPct = props.showPct;
+    var setShowPct = props.setShowPct;
+    var filterGenderLabel = props.filterGenderLabel || '';
+    var filterCategoryLabel = props.filterCategoryLabel || '';
+    var levelName = bar.levelName || tierLevelDisplayName(bar.tierId || 'C6');
+    var overallRank = hexState.overallRank;
+    var nCohort = hexState.overallCohortN;
+    var topShare = hexState.topSharePercent;
+    var filterContext =
+      filterGenderLabel && filterCategoryLabel
+        ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
+        : '';
+
+    return (
+      <button
+        type="button"
+        className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--leveltag stelvio-octagon-tier-btn--leveltag-sidebar"
+        aria-pressed={showPct}
+        aria-label={
+          filterContext +
+          (overallRank != null
+            ? levelName + ', 종합 ' + String(overallRank) + '위, n=' + (nCohort || '—') + ', 상위 ' + (topShare != null && isFinite(topShare) ? Number(topShare).toFixed(2) : '—') + '%. '
+            : levelName + ', 종합 순위 로딩 후 표시. ') + '클릭: 툴팁'
+        }
+        title={filterContext + '종합 순위·n·상위% — 클릭: 힌트'}
+        onClick={function(e) {
+          e.stopPropagation();
+          setShowPct(!showPct);
+        }}
+      >
+        <span className="stelvio-octagon-tier-level-name stelvio-octagon-tier-level-name--sidebar-neon">{levelName}</span>
+      </button>
+    );
+  }
+
   function RunPaceLevelProgressBar(props) {
     var bar = props.bar || {};
-    var step = bar.step != null ? (bar.step | 0) : 0;
+    var stepTarget = bar.step != null ? (bar.step | 0) : 0;
     var color = bar.color || HEPTAGON_TIER_FACE_HEX.C6;
     var bg = bar.bg || 'rgba(156,163,175,0.25)';
+    var tierId = bar.tierId || 'C6';
+
+    var _animF = useState(0);
+    var animFilled = _animF[0];
+    var setAnimFilled = _animF[1];
+    var _blinkBi = useState(null);
+    var blinkBi = _blinkBi[0];
+    var setBlinkBi = _blinkBi[1];
+    var barAnimTimerRef = React.useRef(null);
+    var barBlinkClearRef = React.useRef(null);
+
+    useEffect(function() {
+      if (barAnimTimerRef.current != null) {
+        clearInterval(barAnimTimerRef.current);
+        barAnimTimerRef.current = null;
+      }
+      if (barBlinkClearRef.current != null) {
+        clearTimeout(barBlinkClearRef.current);
+        barBlinkClearRef.current = null;
+      }
+      setBlinkBi(null);
+      var targetStep = stepTarget | 0;
+      setAnimFilled(0);
+      if (targetStep < 1) return undefined;
+      var tick = 0;
+      barAnimTimerRef.current = window.setInterval(function() {
+        tick += 1;
+        if (tick <= targetStep) setAnimFilled(tick);
+        if (tick >= targetStep) {
+          if (barAnimTimerRef.current != null) {
+            clearInterval(barAnimTimerRef.current);
+            barAnimTimerRef.current = null;
+          }
+          var topBiLast = 10 - targetStep;
+          setBlinkBi(topBiLast);
+          barBlinkClearRef.current = window.setTimeout(function() {
+            setBlinkBi(null);
+            barBlinkClearRef.current = null;
+          }, 1580);
+        }
+      }, 220);
+      return function() {
+        if (barAnimTimerRef.current != null) clearInterval(barAnimTimerRef.current);
+        if (barBlinkClearRef.current != null) clearTimeout(barBlinkClearRef.current);
+      };
+    }, [stepTarget, tierId]);
+
     var blocks = [];
-    var i;
-    for (i = 0; i < 10; i++) {
-      var filled = i < step;
+    var bi;
+    for (bi = 0; bi < 10; bi++) {
+      /* bi=0 최상단, bi=9 최하단 — 아래부터 채움 */
+      var filled = bi >= (10 - animFilled);
+      var blockOpacity = filled ? (0.5 + ((9 - bi) / 9) * 0.5) : 1;
+      var blinkOn = blinkBi === bi && filled;
+      var fillDelay = filled ? String((9 - bi) * 28) + 'ms' : '0s';
       blocks.push(
         <div
-          key={'lv-' + i}
-          className="stelvio-level-bar-cell"
+          key={'lv-' + bi}
+          className={blinkOn ? 'stelvio-level-bar-cell stelvio-level-bar-cell--blink' : 'stelvio-level-bar-cell'}
           style={{
             width: '28px',
             height: '18px',
             borderRadius: '4px',
-            background: filled ? color : bg,
+            background: filled ? color : levelBarFadedEmptyBackground(bg),
             border: filled ? '1px solid ' + color : '1px solid rgba(148,163,184,0.19)',
-            opacity: filled ? 1 : 0.55,
-            transition: 'background 0.28s ease, border-color 0.28s ease, opacity 0.28s ease'
+            opacity: blockOpacity,
+            transition: blinkOn ? 'none' : 'background 0.28s ease, border-color 0.28s ease, opacity 0.28s ease',
+            transitionDelay: blinkOn ? '0s' : fillDelay
           }}
         />
       );
     }
+
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '38px', minHeight: '260px', paddingTop: '0', paddingBottom: '4px', gap: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '38px', minHeight: '260px', paddingTop: '4px', paddingBottom: '4px', gap: 0 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, justifyContent: 'center' }}>
           {blocks}
         </div>
         <div style={{ fontSize: '9px', color: '#334155', marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
-          {step}<span style={{ opacity: 0.6 }}>/10</span>
+          {animFilled}<span style={{ opacity: 0.6 }}>/10</span>
         </div>
       </div>
     );
@@ -278,6 +453,10 @@
     var _c = useState('Supremo');
     var category = _c[0];
     var setCategory = _c[1];
+
+    var _tierPctHint = useState(false);
+    var tierPctHintOpen = _tierPctHint[0];
+    var setTierPctHintOpen = _tierPctHint[1];
 
     var _lb = useState({ loading: true, err: null, rows: [], rankMovementByKey: {}, rankMovementSource: '', leaderboardAsOfSeoul: '', rankMovementAsOfSeoul: '' });
     var lbState = _lb[0];
@@ -416,16 +595,15 @@
             var t = axisAngle(ai, N_AXES);
             var lx = cx + rLabel * Math.cos(t);
             var ly = cy + rLabel * Math.sin(t);
-            var mr = ax.rank;
-            var changeSuffix = axisRankChangeSuffix(ax.rankChange, ax.previousBoardRank);
+            var changeSuffix = axisRankChangeSuffix(ax.rankChange, ax.previousBoardRank, ax.rank);
             return (
               <text key={ax.key + '-lbl'} x={lx} y={ly} textAnchor="middle" className="fill-slate-800">
                 {changeSuffix ? <title>{changeSuffix.title}</title> : null}
                 <tspan x={lx} dy="0" style={{ fontSize: '9.5px', fontWeight: 600 }}>{ax.label}</tspan>
-                <tspan x={lx} dy="11" style={{ fontSize: '7.5px', fill: '#64748b' }}>
-                  {mr != null ? mr + '위' : '—'}
+                <tspan x={lx} dy="11" style={{ fontSize: '7.5px', fill: '#64748b', fontWeight: 600 }}>
+                  {ax.rank != null ? Math.floor(Number(ax.rank)) + '위' : '—'}
                   {changeSuffix ? (
-                    <tspan fill={AXIS_RANK_CHANGE_FILL[changeSuffix.kind]} style={{ fontSize: '7px', fontWeight: 600 }}>
+                    <tspan fill={AXIS_RANK_CHANGE_FILL[changeSuffix.kind]} style={{ fontSize: '7px', fontWeight: 700 }}>
                       {changeSuffix.text}
                     </tspan>
                   ) : null}
@@ -518,12 +696,21 @@
               {svg}
               <RunHexagonCenterOverlay
                 badge={tierBadge}
-                overallRank={hexState.overallRank}
-                overallRankChange={hexState.overallRankChange}
-                overallPreviousBoardRank={hexState.overallPreviousBoardRank}
+                hexState={hexState}
+                showPct={tierPctHintOpen}
+                filterGenderLabel={labelForGender(gender)}
+                filterCategoryLabel={labelForCategory(category)}
               />
             </div>
             <div className="stelvio-octagon-sidebar-col">
+              <RunHexagonLevelPillSidebar
+                bar={paceLevelBar}
+                hexState={hexState}
+                showPct={tierPctHintOpen}
+                setShowPct={setTierPctHintOpen}
+                filterGenderLabel={labelForGender(gender)}
+                filterCategoryLabel={labelForCategory(category)}
+              />
               <RunPaceLevelProgressBar bar={paceLevelBar} />
             </div>
           </div>
