@@ -20,7 +20,6 @@
   var useState = ReactObj.useState;
   var useLayoutEffect = ReactObj.useLayoutEffect || ReactObj.useEffect;
   var useEffect = ReactObj.useEffect;
-  var useMemo = ReactObj.useMemo;
 
   function renderRunHeaderTierBadge(stats, size) {
     var badge = { badgeSrc: 'assets/img/G.svg', levelName: '등급', unavailable: true };
@@ -127,32 +126,6 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
-  function calculateSpeedOnFlatFallback(power, weight) {
-    var P = Number(power);
-    var m = Number(weight);
-    if (!isFinite(P) || P <= 0 || !isFinite(m) || m <= 0) return 0;
-    var rho = 1.225;
-    var g = 9.81;
-    var crr = 0.0045;
-    var cda = 0.328 + (m - 70) * 0.0012;
-    if (cda < 0.22) cda = 0.22;
-    if (cda > 0.42) cda = 0.42;
-    function powerAt(vMs) {
-      var aero = 0.5 * rho * cda * vMs * vMs * vMs;
-      var roll = crr * m * g * vMs;
-      return aero + roll;
-    }
-    var lo = 0.1;
-    var hi = 40;
-    var i;
-    for (i = 0; i < 55; i++) {
-      var mid = (lo + hi) / 2;
-      if (powerAt(mid) < P) lo = mid;
-      else hi = mid;
-    }
-    return ((lo + hi) / 2) * 3.6;
-  }
-
   function RunDashboard() {
     var data = typeof window.useRunDashboardData === 'function' ? window.useRunDashboardData() : {};
 
@@ -181,9 +154,6 @@
     var setTpCalcResult = data.setTpCalcResult;
     var setUserProfile = data.setUserProfile;
     var setStats = data.setStats;
-    var _aero = useState(false);
-    var oneHourAbilityModalOpen = _aero[0];
-    var setOneHourAbilityModalOpen = _aero[1];
     var _ftpCalc = useState(false);
     var runFtpCalcLoading = _ftpCalc[0];
     var setRunFtpCalcLoading = _ftpCalc[1];
@@ -193,36 +163,6 @@
     var _ftpResult = useState(null);
     var runFtpCalcResult = _ftpResult[0];
     var setRunFtpCalcResult = _ftpResult[1];
-
-    var ftpVal = Number(
-      stats && stats.thresholdPace != null ? stats.thresholdPace :
-      userProfile && userProfile.ftp != null ? userProfile.ftp :
-      userProfile && userProfile.ftp_watts != null ? userProfile.ftp_watts :
-      0
-    ) || 0;
-    var weightVal = Number(
-      stats && stats.weight != null ? stats.weight :
-      userProfile && userProfile.weight != null ? userProfile.weight :
-      userProfile && userProfile.weightKg != null ? userProfile.weightKg :
-      userProfile && userProfile.weight_kg != null ? userProfile.weight_kg :
-      0
-    ) || 0;
-    var oneHourAbility = useMemo(function () {
-      return typeof window.stelvioComputeOneHourAbilityFromLogs === 'function'
-        ? window.stelvioComputeOneHourAbilityFromLogs(recentLogs, { ftp: ftpVal, weight: weightVal })
-        : null;
-    }, [recentLogs, ftpVal, weightVal]);
-    var soloSpeed = oneHourAbility && oneHourAbility.speedKmh > 0 ? oneHourAbility.speedKmh : 0;
-    var referenceWatts = oneHourAbility ? oneHourAbility.referenceWatts : 0;
-    var last6mPeak60Watts = oneHourAbility ? oneHourAbility.peak60minWatts : 0;
-    var last6mPeakDate = oneHourAbility ? oneHourAbility.peak60Ymd : '';
-    var useFallbackFtp93 = !(last6mPeak60Watts > 0) && ftpVal > 0;
-    var estimatedGroupSpeed = soloSpeed > 0 ? Math.round(soloSpeed * 1.2 * 10) / 10 : 0;
-    var referenceWkg = referenceWatts > 0 && weightVal > 0 ? Math.round((referenceWatts / weightVal) * 100) / 100 : 0;
-    var oneHourAbilityRangeLabel =
-      oneHourAbility && oneHourAbility.start6mYmd && oneHourAbility.end6mYmd
-        ? oneHourAbility.start6mYmd + ' ~ ' + oneHourAbility.end6mYmd
-        : '';
 
     function closeEtpModal() {
       var cb = document.getElementById('dynamicEtpDontShow10DaysReact');
@@ -491,34 +431,6 @@
           ))}
         </section>
 
-        <section className="px-4 pt-4">
-          {DashboardCard && React.createElement(DashboardCard, {
-            title: '나의 1시간 항속 능력 산출',
-            className: 'mt-0'
-          }, React.createElement(React.Fragment, null,
-            React.createElement('ul', { className: 'text-xs text-gray-600 space-y-1.5 mb-4' },
-              React.createElement('li', { className: 'flex items-start gap-2' },
-                React.createElement('img', { src: 'assets/img/statistics.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
-                React.createElement('span', null, '산출 기준: 항속')
-              ),
-              React.createElement('li', { className: 'flex items-start gap-2' },
-                React.createElement('img', { src: 'assets/img/calendar.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
-                React.createElement('span', null, '현실 지표: 최근 6개월 · 60분 최대 평균 역치 페이스 · 체중 반영')
-              ),
-              React.createElement('li', { className: 'flex items-start gap-2' },
-                React.createElement('img', { src: 'assets/img/clock.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
-                React.createElement('span', null, '60분 피크가 없으면 FTP 기반 평속에 93%를 반영해 표기')
-              )
-            ),
-            React.createElement('button', {
-              type: 'button',
-              onClick: function() { setOneHourAbilityModalOpen(true); },
-              className: 'w-full py-3.5 px-4 text-white font-semibold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all text-base border-none cursor-pointer',
-              style: { background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', boxShadow: '0 2px 8px rgba(79, 70, 229, 0.35)' }
-            }, '1시간 항속능력 산출하기')
-          ))}
-        </section>
-
         {/* Level 3: Deep Dive - DashboardDetailTabs (RUN) */}
         <section className="px-4 py-6 pb-32">
           {DashboardDetailTabs ? (
@@ -739,80 +651,6 @@
           )
         );
         })()}
-
-        {oneHourAbilityModalOpen && React.createElement(
-          'div',
-          {
-            className: 'fixed inset-0 z-[10002] flex items-center justify-center p-4 overflow-y-auto',
-            style: { background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' },
-            onClick: function(e) { if (e.target === e.currentTarget) setOneHourAbilityModalOpen(false); }
-          },
-          React.createElement(
-            'div',
-            {
-              className: 'w-full max-w-md my-4 bg-white rounded-2xl overflow-hidden shadow-xl border border-violet-100',
-              style: { padding: '24px 20px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' },
-              onClick: function(e) { e.stopPropagation(); }
-            },
-            React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
-              React.createElement('h3', { className: 'text-lg font-semibold mb-2 text-gray-800', style: { borderBottom: '2px solid #7c3aed', paddingBottom: '10px' } }, '나의 1시간 항속 능력 산출'),
-              React.createElement('p', { className: 'text-[11px] text-slate-600 mt-0 mb-3 leading-relaxed' },
-                '최근 6개월 로그의 60분 MMP(max_60min_watts) 최댓값으로 산출합니다. 60분 피크가 없을 때만 FTP×93%를 사용하며, 랭킹보드 독주는 FTP 폴백 없이 60분 피크만 반영합니다.'
-              ),
-              React.createElement('p', { className: 'text-[10px] font-semibold text-slate-800 m-0 pb-2 border-b border-violet-100/80' },
-                '현실 지표 (최근 6개월 · 60분 최고 평균 역치 페이스·체중)',
-                oneHourAbilityRangeLabel ? React.createElement('span', { className: 'font-normal text-slate-500' }, ' · ' + oneHourAbilityRangeLabel) : null
-              ),
-              weightVal > 0 && (last6mPeak60Watts > 0 || ftpVal > 0) ? React.createElement(
-                'div',
-                { className: 'grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs mt-3' },
-                React.createElement('div', { className: 'rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5' },
-                  React.createElement('div', { className: 'text-slate-500 text-[10px]' }, useFallbackFtp93 ? '기준 역치 페이스 (FTP×93%)' : '60분 최고 평균 역치 페이스'),
-                  React.createElement('div', { className: 'font-semibold text-slate-800 tabular-nums' }, referenceWatts > 0 ? referenceWatts + ' W' : '-')
-                ),
-                React.createElement('div', { className: 'rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5' },
-                  React.createElement('div', { className: 'text-slate-500 text-[10px]' }, '체중 (프로필)'),
-                  React.createElement('div', { className: 'font-semibold text-slate-800 tabular-nums' }, weightVal + ' kg')
-                ),
-                React.createElement('div', { className: 'rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-1' },
-                  React.createElement('div', { className: 'text-slate-500 text-[10px]' }, useFallbackFtp93 ? 'W/kg (FTP×93%)' : 'W/kg (60분 피크)'),
-                  React.createElement('div', { className: 'font-semibold text-indigo-700 tabular-nums' }, referenceWkg > 0 ? referenceWkg.toFixed(2) : '-')
-                ),
-                React.createElement('div', {
-                  className: 'rounded-xl border px-3 py-3 col-span-2 sm:col-span-3 open-riding-filter-realistic-solo-highlight',
-                  style: {
-                    background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(124,58,237,0.08) 100%)',
-                    borderColor: 'rgba(99,102,241,0.35)',
-                    boxShadow: '0 8px 20px rgba(99,102,241,0.12)'
-                  }
-                },
-                  React.createElement('div', { className: 'text-indigo-900 text-[11px] font-semibold' }, useFallbackFtp93 ? '평지 개인 평속 (FTP×93% 투입) — 현실 지표 핵심' : '평지 개인 평속 (60분 피크 투입) — 현실 지표 핵심'),
-                  React.createElement('div', { className: 'font-extrabold text-indigo-950 tabular-nums text-4xl leading-none mt-1 tracking-tight' }, soloSpeed > 0 ? soloSpeed.toFixed(1) : '-'),
-                  React.createElement('div', { className: 'text-indigo-800 text-sm font-bold mt-1' }, 'km/h')
-                ),
-                React.createElement('div', { className: 'rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-3' },
-                  React.createElement('div', { className: 'text-slate-500 text-[10px]' }, '예상 그룹 평속 (×1.2)'),
-                  React.createElement('div', { className: 'font-semibold text-slate-800 tabular-nums' }, estimatedGroupSpeed > 0 ? estimatedGroupSpeed + ' km/h' : '-')
-                ),
-                useFallbackFtp93 ? React.createElement('p', { className: 'col-span-2 sm:col-span-3 text-[10px] text-slate-500 m-0 leading-snug' },
-                  '최근 6개월 60분 피크가 없어 최대 능력치(프로필 FTP·체중)를 사용했고, 맞춤 필터 기준과 동일하게 FTP 기반 평속의 93%를 반영했습니다.'
-                ) : React.createElement('p', { className: 'col-span-2 sm:col-span-3 text-[10px] text-slate-500 m-0 leading-snug' },
-                  last6mPeakDate ? ('60분 피크 반영일: ' + last6mPeakDate) : '최근 6개월 60분 피크를 반영했습니다.'
-                )
-              ) : React.createElement('p', { className: 'text-[11px] text-slate-500 m-0 leading-snug mt-3' },
-                '프로필에 FTP·체중을 저장하면 1시간 항속 현실 지표를 계산해 표시합니다.'
-              )
-            ),
-            React.createElement('div', { className: 'mt-4 pt-4 border-t border-gray-200' },
-              React.createElement('button', {
-                type: 'button',
-                onClick: function() { setOneHourAbilityModalOpen(false); },
-                className: 'w-full py-3 px-4 text-sm font-semibold rounded-xl text-white',
-                style: { background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', boxShadow: '0 2px 8px rgba(79, 70, 229, 0.35)' }
-              }, '확인')
-            )
-          )
-        )}
       </div>
     );
   }
