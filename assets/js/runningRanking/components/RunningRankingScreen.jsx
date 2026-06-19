@@ -814,7 +814,8 @@
                           stats: (window.runDashboardData && window.runDashboardData.stats) || {},
                           leaderboardRows: rawRows,
                           initialGender: gender,
-                          initialCategory: activeCategory
+                          initialCategory: activeCategory,
+                          embedded: true
                         })
                       : (heroExpanded && window.RunningHexagonRanksCard
                         ? React.createElement(window.RunningHexagonRanksCard, {

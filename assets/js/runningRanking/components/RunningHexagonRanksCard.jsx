@@ -9,6 +9,7 @@
 
   var React = window.React;
   var useMemo = React.useMemo;
+  var useRef = React.useRef;
 
   function axisAngle(i, n) {
     return -Math.PI / 2 + (i * 2 * Math.PI) / n;
@@ -59,6 +60,11 @@
     var rows = props.rows || [];
     var gender = props.gender || 'all';
     var category = props.category || 'Supremo';
+    var hexSvgInstanceRef = useRef(null);
+    if (!hexSvgInstanceRef.current) {
+      hexSvgInstanceRef.current =
+        'rhx' + String(Date.now().toString(36)) + Math.random().toString(36).slice(2, 8);
+    }
 
     var state = useMemo(function () {
       var api = window.runningRankingData;
@@ -87,11 +93,12 @@
         return pathFromPoints(radarPolygonPoints(gr, cx, cy, rMax));
       });
       var uidSafe = String(state.userId || 'run').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48);
-      var fillGradId = 'running-hex-fill-rad-' + (uidSafe || 'def');
+      var fillGradId =
+        'running-hex-fill-rad-' + (uidSafe || 'def') + '-' + String(hexSvgInstanceRef.current || 'inst');
 
       return React.createElement('svg', {
         viewBox: '0 0 200 200',
-        className: 'w-full h-[260px] touch-manipulation running-hexagon-radar-svg',
+        className: 'w-full h-[260px] touch-manipulation running-hexagon-radar-svg stelvio-run-hexagon-radar-svg',
         role: 'img',
         'aria-label': 'RUN 구간별 페이스 6축 헥사곤'
       },
@@ -134,6 +141,7 @@
         }),
         React.createElement('path', {
           d: mPts,
+          className: 'stelvio-run-hexagon-radar-fill',
           fill: 'url(#' + fillGradId + ')',
           stroke: 'rgb(109, 40, 217)',
           strokeWidth: '2.2',
