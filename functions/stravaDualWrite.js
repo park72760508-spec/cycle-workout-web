@@ -3,9 +3,9 @@
  *
  * Phase 1-2 (레거시): Firestore Primary → Supabase Secondary
  * Phase 3 (Canary):    Supabase Primary → Firestore Shadow (실패 시 Firestore fallback)
- * Phase 4+: Strava ingest는 Supabase Primary 성공 시에도 Firestore users/logs 항상 기록 (Dual-Write)
+ * Phase 4-3:           Supabase Primary 성공 시 Firestore mirror 중단 (실패 시에만 fallback)
  *
- * 롤백: dual_write_status=OFF 또는 DUAL_WRITE_SUPABASE_PRIMARY=false
+ * 롤백: dual_write_status=OFF | STRAVA_FIRESTORE_MIRROR=true | FIRESTORE_SHADOW_WRITE=true
  */
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 
@@ -96,7 +96,19 @@ async function dualWriteStravaActivityLog(
     });
   }
 
-  // Strava: Phase 4 shadow 중단과 무관하게 users/{uid}/logs 항상 기록 (Dual-Write 계약)
+  if (
+    supabaseOk &&
+    !supabaseDualWriteServer.shouldMirrorStravaLogToFirestoreAfterSupabaseOk(true)
+  ) {
+    console.log("[stravaDualWrite] Supabase primary OK — Firestore mirror skipped", {
+      userId,
+      logDocId,
+      supabaseSkipped,
+      reason: primaryDecision.reason,
+    });
+    return { supabasePrimary: true, firestoreMirrorSkipped: true };
+  }
+
   const shadowEnabled = supabaseDualWriteServer.isFirestoreShadowWriteEnabled();
 
   if (!supabaseOk) {
@@ -119,7 +131,7 @@ async function dualWriteStravaActivityLog(
 
   try {
     const firestoreResult = await Promise.resolve().then(() => writePrimaryAsync());
-    console.log("[stravaDualWrite] Firestore mirror OK (Strava dual-write)", {
+    console.log("[stravaDualWrite] Firestore mirror OK (Strava fallback/shadow)", {
       userId,
       logDocId,
       supabasePrimaryOk: supabaseOk,
@@ -132,12 +144,12 @@ async function dualWriteStravaActivityLog(
   } catch (e) {
     if (supabaseOk) {
       console.warn(
-        "[stravaDualWrite] Firestore shadow failed but Supabase primary OK:",
+        "[stravaDualWrite] Firestore mirror failed but Supabase primary OK:",
         userId,
         logDocId,
         e && e.message ? e.message : e
       );
-      return { supabasePrimary: true, firestoreShadowFailed: true };
+      return { supabasePrimary: true, firestoreMirrorFailed: true };
     }
     throw e;
   }

@@ -2340,7 +2340,10 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     }
     if (existingIds.has(actId)) {
       const entry = existingDocMap.get(actId);
-      const d = entry ? entry.data : {};
+      if (!entry) {
+        continue;
+      }
+      const d = entry.data;
       const powerFields = ['max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_30min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
       const hrFields = ['max_hr_5sec', 'max_hr_1min', 'max_hr_5min', 'max_hr_10min', 'max_hr_20min', 'max_hr_40min', 'max_hr_60min', 'max_hr'];
       const needsMmp = powerFields.some((f) => isEmptyMmpValue(d[f]));
@@ -3098,10 +3101,15 @@ exports.manualStravaSyncWithMmp = onRequest(
           logSnap = qSnap.docs[0];
         }
       }
-      const exists = logSnap.exists;
+      let exists = logSnap.exists;
+      if (!exists) {
+        exists = await stravaLogRead.hasStravaActivityLog(db, uid, actId, {
+          supabaseDualWriteServer,
+        });
+      }
 
       if (exists) {
-        const existingData = logSnap.data();
+        const existingData = logSnap.exists ? logSnap.data() : {};
         const powerFields = ['max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_30min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
         const hrFields = ['max_hr_5sec', 'max_hr_1min', 'max_hr_5min', 'max_hr_10min', 'max_hr_20min', 'max_hr_40min', 'max_hr_60min', 'max_hr'];
         const needsMmp = powerFields.some((f) => isEmptyMmpValue(existingData[f]));
@@ -3185,14 +3193,26 @@ exports.manualStravaSyncWithMmp = onRequest(
               uid,
               actId,
               mergedLog,
-              () => logDocRef.update(updateData)
+              function () {
+                if (logSnap.exists) {
+                  return logDocRef.update(updateData);
+                }
+                return logDocRef.set(mergedLog, { merge: true });
+              }
             );
             updatedCount += 1;
-          } else {
+          } else if (logSnap.exists) {
             await ensureExistingStravaLogMirroredToSupabase(
               uid,
               actId,
               existingData,
+              "manualStravaSyncWithMmp"
+            );
+          } else {
+            await ensureExistingStravaLogMirroredToSupabase(
+              uid,
+              actId,
+              Object.assign({ activity_id: actId, source: "strava" }, existingData),
               "manualStravaSyncWithMmp"
             );
           }

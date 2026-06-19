@@ -151,6 +151,17 @@ function isFirestoreShadowWriteEnabled() {
   return true;
 }
 
+/**
+ * Phase 4-3: Supabase Primary ingest 성공 후 Firestore users/logs mirror 여부.
+ * 기본 false — Primary OK면 mirror 생략, 실패 시에만 fallback write.
+ * 롤백: STRAVA_FIRESTORE_MIRROR=true
+ * @param {boolean} supabaseOk
+ */
+function shouldMirrorStravaLogToFirestoreAfterSupabaseOk(supabaseOk) {
+  if (!supabaseOk) return true;
+  return parseIngestBool(process.env.STRAVA_FIRESTORE_MIRROR) === true;
+}
+
 function isOnUserLogWrittenEnabled() {
   const raw = process.env.ON_USER_LOG_WRITTEN_ENABLED;
   if (raw != null && String(raw).trim() !== "") {
@@ -727,6 +738,7 @@ module.exports = {
   shouldSkipOnUserLogWrittenSupabaseUpsert,
   shouldSkipFirebaseLogSideEffects,
   isFirestoreShadowWriteEnabled,
+  shouldMirrorStravaLogToFirestoreAfterSupabaseOk,
   isPhase4FirestoreLogShadowStopped,
   isOnUserLogWrittenEnabled,
   getShadowTtlDays,
