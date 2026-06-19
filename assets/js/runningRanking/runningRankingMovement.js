@@ -98,6 +98,21 @@
     return null;
   }
 
+  /** 보드 UUID · Firebase UID 등 목록 행 식별자로 스냅샷 조회 */
+  function lookupSnapValForListItem(map, item) {
+    if (!map || !item) return null;
+    var ids = [];
+    if (item.userId != null && String(item.userId).trim()) ids.push(String(item.userId).trim());
+    if (item.socialUserId != null && String(item.socialUserId).trim()) ids.push(String(item.socialUserId).trim());
+    if (item.firebaseUid != null && String(item.firebaseUid).trim()) ids.push(String(item.firebaseUid).trim());
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      var v = lookupSnapVal(map, ids[i]);
+      if (v != null) return v;
+    }
+    return null;
+  }
+
   function stampBoardRanks(list) {
     if (!list || !list.length) return;
     list.forEach(function (item) {
@@ -139,12 +154,15 @@
       item.rankChange = null;
       item.previousBoardRank = null;
 
-      var id = tabId === 'crew'
-        ? (item.crewId != null ? String(item.crewId) : '')
-        : (item.userId != null ? String(item.userId) : '');
-      if (!id) return;
+      if (tabId === 'crew') {
+        if (!item.crewId) return;
+      } else if (!item.userId && !item.socialUserId && !item.firebaseUid) {
+        return;
+      }
 
-      var prevVal = lookupSnapVal(previous, id);
+      var prevVal = tabId === 'crew'
+        ? lookupSnapVal(previous, String(item.crewId))
+        : lookupSnapValForListItem(previous, item);
       if (prevVal != null) {
         var prev = Math.floor(Number(prevVal));
         var curr = Math.floor(Number(item.rank));
@@ -153,7 +171,9 @@
           item.previousBoardRank = prev;
         }
       } else {
-        var chVal = lookupSnapVal(changes, id);
+        var chVal = tabId === 'crew'
+          ? lookupSnapVal(changes, String(item.crewId))
+          : lookupSnapValForListItem(changes, item);
         if (chVal != null && item.rank != null) {
           var ch = Number(chVal);
           var currRank = Math.floor(Number(item.rank));
@@ -223,8 +243,13 @@
       item.rankChange = null;
       item.previousBoardRank = null;
       var uid = tabId === 'crew' ? String(item.crewId) : String(item.userId);
-      if (prevRanks && prevRanks[uid] != null) {
-        var prev = Math.floor(Number(prevRanks[uid]));
+      var prevVal = null;
+      if (prevRanks) {
+        prevVal = lookupSnapVal(prevRanks, uid);
+        if (prevVal == null) prevVal = lookupSnapValForListItem(prevRanks, item);
+      }
+      if (prevVal != null) {
+        var prev = Math.floor(Number(prevVal));
         var curr = Math.floor(Number(item.rank));
         if (prev >= 1 && curr >= 1) {
           item.rankChange = prev - curr;

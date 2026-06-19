@@ -144,9 +144,22 @@
     return _cache.rows && _cache.rows.length ? _cache.rows.slice() : [];
   }
 
+  function getCachedSnapshot() {
+    if (!_cache.rows || !_cache.rows.length) return null;
+    return {
+      rows: _cache.rows.slice(),
+      rankMovementByKey: _cache.rankMovementByKey || {},
+      rankMovementAsOfSeoul: _cache.rankMovementAsOfSeoul || '',
+      rankMovementSource: _cache.rankMovementSource || '',
+      leaderboardSource: _cache.leaderboardSource || '',
+      leaderboardAsOfSeoul: _cache.leaderboardAsOfSeoul || ''
+    };
+  }
+
   window.runningRankingApi = {
     fetchLeaderboard: fetchLeaderboard,
     invalidateCache: invalidateCache,
-    getCachedRows: getCachedRows
+    getCachedRows: getCachedRows,
+    getCachedSnapshot: getCachedSnapshot
   };
 })();

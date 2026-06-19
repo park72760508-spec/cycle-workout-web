@@ -1036,12 +1036,47 @@
     return ((r - 1) / (nn - 1)) * 100;
   }
 
-  /** 상위 점유 % (1위≈100%, 꼴찌≈0%) — 가로바 채움 폭용 */
+  /**
+   * 상위 점유 % — rank/n×100 (1위/39≈2.56%, 꼴찌=100%)
+   * 랭킹보드·헥사곤 툴팁·가로바 폭 공통
+   */
   function rankToTopSharePercent(rank, n) {
     var nn = n | 0;
     if (rank == null || !isFinite(rank) || nn < 1) return 0;
     var r = Math.max(1, Math.min(nn, Math.floor(Number(rank))));
-    return ((nn - r + 1) / nn) * 100;
+    return Math.round((r / nn) * 10000) / 100;
+  }
+
+  /**
+   * 랭킹보드 구간·종합 탭과 동일 등락 표기 (stelvioRankMovementRowMatchesCurrentRank + badge 규칙)
+   * @returns {{ text: string, kind: string, title: string }|null}
+   */
+  function resolveListItemRankChangeSuffix(item) {
+    if (!item || item.isCrew) return null;
+    var boardRank =
+      item.boardRank != null && isFinite(Number(item.boardRank))
+        ? Math.floor(Number(item.boardRank))
+        : item.rank != null && isFinite(Number(item.rank))
+          ? Math.floor(Number(item.rank))
+          : null;
+    var matchesFn =
+      typeof window.stelvioRankMovementRowMatchesCurrentRank === 'function'
+        ? window.stelvioRankMovementRowMatchesCurrentRank
+        : null;
+    if (matchesFn && boardRank != null && boardRank >= 1) {
+      if (!matchesFn(item, boardRank)) return null;
+    }
+    if (item.rankChange == null || item.previousBoardRank == null) return null;
+    var rcN = Number(item.rankChange);
+    var prevN = Math.floor(Number(item.previousBoardRank));
+    if (!isFinite(rcN) || !isFinite(prevN) || prevN < 1) return null;
+    if (rcN > 0) {
+      return { text: '(↑' + rcN + ')', kind: 'up', title: '전날 ' + prevN + '위' };
+    }
+    if (rcN < 0) {
+      return { text: '(↓' + Math.abs(rcN) + ')', kind: 'down', title: '전날 ' + prevN + '위' };
+    }
+    return { text: '(-)', kind: 'flat', title: '전날 ' + prevN + '위' };
   }
 
   /** 백분위 → STELVIO 헥사곤 등급 ID (n≥100 컷과 동일) */
@@ -1102,12 +1137,14 @@
       var cohortN = paceList.length;
       if (cohortN > nRef) nRef = cohortN;
       var viewerItem = findViewerListItem(paceList, identity);
+      var axisRankChange = viewerItem ? resolveListItemRankChangeSuffix(viewerItem) : null;
       axes.push({
         key: seg.key,
         label: seg.label,
         rank: viewerItem && viewerItem.rank != null ? viewerItem.rank : null,
         rankChange: viewerItem && viewerItem.rankChange != null ? viewerItem.rankChange : null,
         previousBoardRank: viewerItem && viewerItem.previousBoardRank != null ? viewerItem.previousBoardRank : null,
+        rankChangeSuffix: axisRankChange,
         pace: viewerItem && viewerItem.valueLabel ? viewerItem.valueLabel : '—',
         cohortN: cohortN
       });
@@ -1122,6 +1159,7 @@
     var overallRank = overallViewer && overallViewer.rank != null ? overallViewer.rank : null;
     var overallRankChange = overallViewer && overallViewer.rankChange != null ? overallViewer.rankChange : null;
     var overallPrevRank = overallViewer && overallViewer.previousBoardRank != null ? overallViewer.previousBoardRank : null;
+    var overallRankChangeSuffix = overallViewer ? resolveListItemRankChangeSuffix(overallViewer) : null;
     var overallScore = overallViewer && overallViewer.value != null ? overallViewer.value : null;
 
     var pPercentile = overallRank != null && overallN >= 1 ? rankToPercentile(overallRank, overallN) : null;
@@ -1136,6 +1174,7 @@
       overallRank: overallRank,
       overallRankChange: overallRankChange,
       overallPreviousBoardRank: overallPrevRank,
+      overallRankChangeSuffix: overallRankChangeSuffix,
       overallCohortN: overallN,
       overallScore: overallScore,
       pPercentile: pPercentile,
@@ -1292,6 +1331,7 @@
     buildRunDashboardHexagonState: buildRunDashboardHexagonState,
     rankToPercentile: rankToPercentile,
     rankToTopSharePercent: rankToTopSharePercent,
+    resolveListItemRankChangeSuffix: resolveListItemRankChangeSuffix,
     tierIdFromPercentile: tierIdFromPercentile,
     buildSegmentRankMaps: buildSegmentRankMaps,
     buildAvatarOverlayProfile: buildAvatarOverlayProfile,
