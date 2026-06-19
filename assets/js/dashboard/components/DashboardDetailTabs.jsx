@@ -340,7 +340,11 @@
           'div',
           { className: 'space-y-6' },
           RankPolygonCard &&
-            React.createElement(RankPolygonCard, { userProfile: userProfile, DashboardCard: DashboardCard }),
+            React.createElement(RankPolygonCard, {
+              userProfile: userProfile,
+              DashboardCard: DashboardCard,
+              stats: isRun ? stats : undefined
+            }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: '나의 성장 트렌드' },
