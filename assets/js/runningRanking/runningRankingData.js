@@ -856,7 +856,11 @@
       return badgeFn(viewerItem.rankChange, viewerItem.previousBoardRank);
     }
     if (viewerItem.previousBoardRank != null && viewerItem.rank != null) {
-      return badgeFn(viewerItem.previousBoardRank, viewerItem.rank);
+      var prev = Math.floor(Number(viewerItem.previousBoardRank));
+      var curr = Math.floor(Number(viewerItem.rank));
+      if (prev >= 1 && curr >= 1) {
+        return badgeFn(prev - curr, prev);
+      }
     }
     return '';
   }
@@ -896,6 +900,33 @@
     return null;
   }
 
+  /** CYCLE renderStelvioHeroCard — 본인 age_category 기준 부문 (필터 Supremo여도 표시) */
+  function resolveViewerAgeCategory(rows, identity, hintItem) {
+    var ageCat = hintItem && hintItem.ageCategory ? String(hintItem.ageCategory).trim() : '';
+    if (ageCat && ageCat !== 'Supremo') return ageCat;
+    var i;
+    for (i = 0; i < (rows || []).length; i++) {
+      var r = rows[i];
+      if (identity && identity.boardUserId && String(rowUserId(r)) === String(identity.boardUserId)) {
+        var ac = rowAgeCategory(r);
+        if (ac) return ac;
+      }
+      if (identity && identity.firebaseId) {
+        var fb = rowFirebaseUid(r);
+        if (fb && String(fb) === String(identity.firebaseId)) {
+          ac = rowAgeCategory(r);
+          if (ac) return ac;
+        }
+      }
+    }
+    try {
+      var u = window.currentUser;
+      if (!u) u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (u && u.ageCategory) return String(u.ageCategory).trim();
+    } catch (e) {}
+    return 'Supremo';
+  }
+
   function heroMovementMeta(opts) {
     opts = opts || {};
     return {
@@ -932,7 +963,11 @@
 
   function injectHeroDualRankDelta(msg, categoryRank, globalRank, catBadge, supBadge) {
     if (categoryRank > 0 && catBadge) {
-      msg = injectHeroRankDelta(msg, categoryRank, catBadge);
+      if (typeof window.stelvioInjectRankDeltaAfterRankInText === 'function') {
+        msg = window.stelvioInjectRankDeltaAfterRankInText(msg, categoryRank, ' ' + catBadge);
+      } else {
+        msg = injectHeroRankDelta(msg, categoryRank, catBadge);
+      }
     }
     if (globalRank >= 1 && supBadge) {
       msg = injectHeroRankDelta(msg, globalRank, supBadge);
@@ -979,16 +1014,23 @@
     var globalRank = globalFound.rank;
     var metricItem = globalFound.item;
     var categoryRank = 0;
+    var catFound = null;
     var labels = cfg().CATEGORY_LABELS || {};
-    var catLabel = labels[activeCategory] || '';
+    var viewerAgeCategory = resolveViewerAgeCategory(rows, identity, metricItem);
+    var heroCategory = viewerAgeCategory !== 'Supremo'
+      ? viewerAgeCategory
+      : (activeCategory !== 'Supremo' ? activeCategory : 'Supremo');
+    var catLabel = labels[heroCategory] || '';
 
-    if (activeCategory !== 'Supremo' && catLabel) {
-      var catList = getRankedListWithMovement(rows, tabId, {
-        gender: gender,
-        category: activeCategory,
-        paceDistance: paceDistance
-      }, Object.assign({}, movementMeta, { category: activeCategory }), rankMovementByKey);
-      var catFound = findViewerInRankedList(catList, identity);
+    if (heroCategory !== 'Supremo' && catLabel) {
+      catFound = findViewerInRankedList(
+        getRankedListWithMovement(rows, tabId, {
+          gender: gender,
+          category: heroCategory,
+          paceDistance: paceDistance
+        }, Object.assign({}, movementMeta, { category: heroCategory }), rankMovementByKey),
+        identity
+      );
       if (catFound) {
         categoryRank = catFound.rank;
         metricItem = catFound.item;
@@ -1019,25 +1061,17 @@
       userNameEsc,
       tabLabel,
       metricPart,
-      activeCategory === 'Supremo' ? '' : catLabel,
+      heroCategory === 'Supremo' ? '' : catLabel,
       categoryRank,
       globalRank
     );
 
-    var supBadge = buildHeroRankDeltaForBoard(
-      rows, identity, tabId,
-      { gender: gender, category: 'Supremo', paceDistance: paceDistance },
-      Object.assign({}, movementMeta, { category: 'Supremo' }),
-      rankMovementByKey
-    );
-    var catBadge = activeCategory !== 'Supremo'
-      ? buildHeroRankDeltaForBoard(
-        rows, identity, tabId,
-        { gender: gender, category: activeCategory, paceDistance: paceDistance },
-        Object.assign({}, movementMeta, { category: activeCategory }),
-        rankMovementByKey
-      )
-      : '';
+    var supBadge = buildHeroRankDeltaHtml(globalFound.item);
+    var catBadge = catFound && catFound.item ? buildHeroRankDeltaHtml(catFound.item) : '';
+
+    if (!supBadge && opts.viewerItem && activeCategory === 'Supremo') {
+      supBadge = buildHeroRankDeltaHtml(opts.viewerItem);
+    }
 
     msg = injectHeroDualRankDelta(msg, categoryRank, globalRank, catBadge, supBadge);
     return finalizeHeroPayload(msg);
