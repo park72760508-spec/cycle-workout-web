@@ -113,27 +113,6 @@
     return norm;
   }
 
-  function axisRankChangeSuffix(rankChange, previousBoardRank, currentRank) {
-    if (rankChange == null) return null;
-    var rcN = Number(rankChange);
-    if (!isFinite(rcN)) return null;
-    var prevN =
-      previousBoardRank != null && isFinite(previousBoardRank)
-        ? Math.floor(Number(previousBoardRank))
-        : null;
-    if ((prevN == null || prevN < 1) && currentRank != null && isFinite(currentRank)) {
-      prevN = Math.floor(Number(currentRank)) + rcN;
-    }
-    if (prevN == null || prevN < 1) return null;
-    if (rcN > 0) {
-      return { text: '(↑' + rcN + ')', kind: 'up', title: '전날 ' + prevN + '위' };
-    }
-    if (rcN < 0) {
-      return { text: '(↓' + Math.abs(rcN) + ')', kind: 'down', title: '전날 ' + prevN + '위' };
-    }
-    return { text: '(-)', kind: 'flat', title: '전날 ' + prevN + '위' };
-  }
-
   function heptagonCardTierLegendCaption(tierId) {
     var m = { HC: '~5%', C1: '~10%', C2: '~20%', C3: '~40%', C4: '~60%', C5: '~80%', C6: '~100%' };
     return m[tierId] || m.C6;
@@ -151,14 +130,6 @@
     return m[tierId] || '레벨G';
   }
 
-  function formatAxisRankLine(rank, rankChange, previousBoardRank) {
-    if (rank == null || !isFinite(rank)) return '—';
-    var line = Math.floor(Number(rank)) + '위';
-    var changeSuffix = axisRankChangeSuffix(rankChange, previousBoardRank, rank);
-    if (changeSuffix) line += changeSuffix.text;
-    return line;
-  }
-
   function levelBarFadedEmptyBackground(tierBgCss) {
     var s = tierBgCss != null ? String(tierBgCss).replace(/\s/g, '') : '';
     var m =
@@ -174,18 +145,15 @@
   }
 
   function RankChangeInline(props) {
-    var rankChange = props.rankChange;
-    var previousBoardRank = props.previousBoardRank;
-    var currentRank = props.currentRank;
-    var changeSuffix = axisRankChangeSuffix(rankChange, previousBoardRank, currentRank);
-    if (!changeSuffix) return null;
+    var suffix = props.suffix;
+    if (!suffix) return null;
     return (
       <span
-        className="stelvio-rank-change"
-        style={{ color: AXIS_RANK_CHANGE_FILL[changeSuffix.kind], fontSize: 'inherit', fontWeight: 600 }}
-        title={changeSuffix.title}
+        className={'stelvio-rank-change stelvio-rank-change--' + suffix.kind}
+        style={{ fontSize: 'inherit', fontWeight: 600 }}
+        title={suffix.title}
       >
-        {changeSuffix.text}
+        {suffix.text}
       </span>
     );
   }
@@ -197,8 +165,7 @@
     var filterGenderLabel = props.filterGenderLabel || '';
     var filterCategoryLabel = props.filterCategoryLabel || '';
     var overallRank = hexState.overallRank;
-    var rankChange = hexState.overallRankChange;
-    var prevRank = hexState.overallPreviousBoardRank;
+    var overallSuffix = hexState.overallRankChangeSuffix;
     var nCohort = hexState.overallCohortN;
     var topShare = hexState.topSharePercent;
     var _imgErr = useState(false);
@@ -238,7 +205,7 @@
               <span className="font-bold tracking-tight text-violet-800">종합</span>
               <span className="tabular-nums text-slate-600">
                 {overallRank != null ? overallRank + '위' : '—'}
-                <RankChangeInline rankChange={rankChange} previousBoardRank={prevRank} currentRank={overallRank} />
+                <RankChangeInline suffix={overallSuffix} />
               </span>
             </span>
           </div>
@@ -254,7 +221,7 @@
               <span className="stelvio-octagon-tier-hint-split stelvio-octagon-tier-hint-split--cohort" title={filterContext + '종합 랭킹 집계 모수 n'}>
                 <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-rank">
                   {String(overallRank) + '위'}
-                  <RankChangeInline rankChange={rankChange} previousBoardRank={prevRank} currentRank={overallRank} />
+                  <RankChangeInline suffix={overallSuffix} />
                 </span>
                 <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-nref">
                   n={nCohort != null && nCohort > 0 ? String(nCohort) : '—'}
@@ -493,10 +460,21 @@
           rankMovementAsOfSeoul: res.rankMovementAsOfSeoul || ''
         });
       }
-      var cached = typeof api.getCachedRows === 'function' ? api.getCachedRows() : null;
-      if (cached && cached.length) {
-        setLbState(function(prev) {
-          return Object.assign({}, prev, { loading: true, err: null, rows: cached });
+      var cachedSnap = typeof api.getCachedSnapshot === 'function' ? api.getCachedSnapshot() : null;
+      var cached = cachedSnap && cachedSnap.rows && cachedSnap.rows.length
+        ? cachedSnap
+        : (typeof api.getCachedRows === 'function' && api.getCachedRows().length
+          ? { rows: api.getCachedRows(), rankMovementByKey: {}, rankMovementSource: '', leaderboardAsOfSeoul: '', rankMovementAsOfSeoul: '' }
+          : null);
+      if (cached && cached.rows && cached.rows.length) {
+        setLbState({
+          loading: true,
+          err: null,
+          rows: cached.rows,
+          rankMovementByKey: cached.rankMovementByKey || {},
+          rankMovementSource: cached.rankMovementSource || '',
+          leaderboardAsOfSeoul: cached.leaderboardAsOfSeoul || '',
+          rankMovementAsOfSeoul: cached.rankMovementAsOfSeoul || ''
         });
       } else {
         setLbState(function(prev) {
@@ -595,7 +573,7 @@
             var t = axisAngle(ai, N_AXES);
             var lx = cx + rLabel * Math.cos(t);
             var ly = cy + rLabel * Math.sin(t);
-            var changeSuffix = axisRankChangeSuffix(ax.rankChange, ax.previousBoardRank, ax.rank);
+            var changeSuffix = ax.rankChangeSuffix || null;
             return (
               <text key={ax.key + '-lbl'} x={lx} y={ly} textAnchor="middle" className="fill-slate-800">
                 {changeSuffix ? <title>{changeSuffix.title}</title> : null}
