@@ -14,11 +14,12 @@
     if (typeof showScreen === 'function') {
       showScreen(sid);
     }
-    if (typeof window.stelvioBootstrapRankingSocialSets === 'function') {
-      window.stelvioBootstrapRankingSocialSets({ forceFirestore: true, subscribeGroups: true }).catch(function () {});
+    if (typeof window.stelvioBootstrapRankingSocialSets === 'function' && !window._runningRankingSocialBootstrapped) {
+      window._runningRankingSocialBootstrapped = true;
+      window.stelvioBootstrapRankingSocialSets({ forceFirestore: false, subscribeGroups: true }).catch(function () {});
     }
     if (typeof window.initRunningRankingReact === 'function') {
-      setTimeout(function () { window.initRunningRankingReact({ forceRefresh: true }); }, 50);
+      setTimeout(function () { window.initRunningRankingReact({}); }, 50);
     }
   }
 
