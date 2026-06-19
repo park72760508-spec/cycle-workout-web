@@ -614,39 +614,43 @@
             setRunLeaderboardCoachReady(true);
           }
 
-          var GROWTH_SLOT_FIELDS = [
-            { w: 'max_watts', h: 'max_hr' },
-            { w: 'max_1min_watts', h: 'max_hr_1min' },
-            { w: 'max_5min_watts', h: 'max_hr_5min' },
-            { w: 'max_10min_watts', h: 'max_hr_10min' },
-            { w: 'max_20min_watts', h: 'max_hr_20min' },
-            { w: 'max_40min_watts', h: 'max_hr_40min' },
-            { w: 'max_60min_watts', h: 'max_hr_60min' }
-          ];
-          function emptyGrowthDay() {
-            return { w: [0, 0, 0, 0, 0, 0, 0], h: [0, 0, 0, 0, 0, 0, 0] };
+          var RUN_GROWTH_SPEED_FIELDS = ['speed_1k', 'speed_3k', 'speed_5k', 'speed_7k', 'speed_10k', 'speed_20k'];
+          var RUN_GROWTH_HR_FIELDS = ['hr_1k', 'hr_3k', 'hr_5k', 'hr_7k', 'hr_10k', 'hr_20k'];
+          var RUN_GROWTH_SLOT_COUNT = 6;
+          function emptyRunGrowthDay() {
+            return {
+              w: [0, 0, 0, 0, 0, 0],
+              h: [0, 0, 0, 0, 0, 0],
+              wDate: [null, null, null, null, null, null],
+              hDate: [null, null, null, null, null, null]
+            };
           }
-          var rawSixMonthsForGrowth = raw.filter(function(log) {
-            var ds = parseDate(log.date);
-            return ds && ds >= sixMonthsStr && ds <= todayStr;
-          });
-          var logsForGrowth = typeof window.dedupeTrainingLogsByDateStravaFirst === 'function'
-            ? window.dedupeTrainingLogsByDateStravaFirst(rawSixMonthsForGrowth)
-            : rawSixMonthsForGrowth;
+          var effortsForGrowth = [];
+          if (typeof window.getUserRunEfforts === 'function') {
+            try {
+              effortsForGrowth = await window.getUserRunEfforts(userProfile.id, { limit: 600 }) || [];
+            } catch (growthEffErr) {
+              console.warn('[useRunDashboardData] growth efforts:', growthEffErr && growthEffErr.message);
+            }
+          }
           var byDateGrowth = {};
-          logsForGrowth.forEach(function(log) {
-            var ds = parseDate(log.date);
-            if (!ds) return;
-            if (!byDateGrowth[ds]) byDateGrowth[ds] = emptyGrowthDay();
+          effortsForGrowth.forEach(function(eff) {
+            var ds = String(eff.activity_date || '').slice(0, 10);
+            if (!ds || ds < sixMonthsStr || ds > todayStr) return;
+            if (!byDateGrowth[ds]) byDateGrowth[ds] = emptyRunGrowthDay();
             var d = byDateGrowth[ds];
             var si;
-            for (si = 0; si < GROWTH_SLOT_FIELDS.length; si++) {
-              var wf = GROWTH_SLOT_FIELDS[si].w;
-              var hf = GROWTH_SLOT_FIELDS[si].h;
-              var wv = Number(log[wf]) || 0;
-              var hv = Number(log[hf]) || 0;
-              if (wv > d.w[si]) d.w[si] = wv;
-              if (hv > d.h[si]) d.h[si] = hv;
+            for (si = 0; si < RUN_GROWTH_SLOT_COUNT; si++) {
+              var wv = Number(eff[RUN_GROWTH_SPEED_FIELDS[si]]) || 0;
+              var hv = Number(eff[RUN_GROWTH_HR_FIELDS[si]]) || 0;
+              if (wv > d.w[si]) {
+                d.w[si] = wv;
+                d.wDate[si] = ds;
+              }
+              if (hv > d.h[si]) {
+                d.h[si] = hv;
+                d.hDate[si] = ds;
+              }
             }
           });
           var growthRows = [];
@@ -659,15 +663,23 @@
             if (mOff === 0) {
               endStr = todayStr;
             }
-            var monthW = [0, 0, 0, 0, 0, 0, 0];
-            var monthH = [0, 0, 0, 0, 0, 0, 0];
+            var monthW = [0, 0, 0, 0, 0, 0];
+            var monthH = [0, 0, 0, 0, 0, 0];
+            var monthPeakDateW = [null, null, null, null, null, null];
+            var monthPeakDateH = [null, null, null, null, null, null];
             Object.keys(byDateGrowth).forEach(function(ds) {
               if (ds < startStr || ds > endStr) return;
               var day = byDateGrowth[ds];
               var si2;
-              for (si2 = 0; si2 < 7; si2++) {
-                if (day.w[si2] > monthW[si2]) monthW[si2] = day.w[si2];
-                if (day.h[si2] > monthH[si2]) monthH[si2] = day.h[si2];
+              for (si2 = 0; si2 < RUN_GROWTH_SLOT_COUNT; si2++) {
+                if (day.w[si2] > monthW[si2]) {
+                  monthW[si2] = day.w[si2];
+                  monthPeakDateW[si2] = day.wDate[si2] || ds;
+                }
+                if (day.h[si2] > monthH[si2]) {
+                  monthH[si2] = day.h[si2];
+                  monthPeakDateH[si2] = day.hDate[si2] || ds;
+                }
               }
             });
             var monthLabel = m + '월';
@@ -675,8 +687,11 @@
             growthRows.push({
               monthLabel: monthLabel,
               sortKey: y + '-' + pad2(m),
+              growthSport: 'run',
               growthWattsSlots: monthW.map(function(v) { return v > 0 ? v : null; }),
               growthHrSlots: monthH.map(function(v) { return v > 0 ? v : null; }),
+              growthWattsPeakDates: monthPeakDateW.slice(),
+              growthHrPeakDates: monthPeakDateH.slice(),
               max20minWatts: monthW[4] > 0 ? monthW[4] : null,
               maxHr20min: monthH[4] > 0 ? monthH[4] : null
             });
