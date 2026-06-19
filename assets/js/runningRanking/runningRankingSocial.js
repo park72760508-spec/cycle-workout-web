@@ -282,6 +282,7 @@
     return getRankChangeHtml(item, listCategoryKey) || '';
   }
 
+  function getPrivateBadgeHtml(item, currentUserId) {
     if (!item || item.isCrew || !isPrivateItem(item)) return '';
     if (!canSeeFull(item, currentUserId)) return '';
     return '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
