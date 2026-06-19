@@ -7275,6 +7275,22 @@
             </button>
           </div>
         </div>
+        <!-- 계정 및 데이터 삭제 (앱 스토어·개인정보보호법) -->
+        <div class="card settings-block settings-block--account-deletion">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; text-align: left;">
+            <span style="font-size: 1.1em; line-height: 1;" aria-hidden="true">🗑️</span>
+            <span style="font-size: 0.9em; font-weight: bold; color: inherit;">계정 및 데이터 삭제</span>
+          </div>
+          <p style="font-size: 12px; color: #6b7280; margin: 0 0 12px 0; line-height: 1.5; text-align: left;">
+            계정과 Strava 연동·훈련 기록 등 개인정보를 <strong>영구 삭제</strong>합니다. 삭제 후 복구할 수 없습니다.
+            <a href="/delete-account.html" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: underline;">삭제 안내</a>
+          </p>
+          <div style="display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <button type="button" class="btn btn-default-style" id="btnDeleteAccountAndData" onclick="if(typeof requestAccountAndDataDeletion==='function'){requestAccountAndDataDeletion().then(function(r){if(r&&!r.success&&r.error&&r.error!=='cancelled'&&typeof showToast==='function')showToast(r.error,'error');});}else{alert('계정 삭제 기능을 불러오지 못했습니다.');}" style="min-width: 200px; padding: 10px 16px; cursor: pointer; font-weight: 600; border-radius: 8px; color: #b91c1c; border-color: #fecaca;">
+              계정 및 데이터 삭제
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -7377,6 +7393,7 @@
 <script src="assets/js/workoutManager.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
+  <script src="assets/js/accountDeletion.js"></script>
   <script src="assets/js/userManager.js"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
