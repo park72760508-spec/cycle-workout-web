@@ -119,6 +119,55 @@
     return { badgeSrc: 'assets/img/G.svg', levelName: '등급', unavailable: true };
   }
 
+  /** 랭킹보드 펼쳐보기 — 대시보드와 동일하게 peak_performances에서 역치·등급 배지 산출 */
+  function resolveHexagonStatsFromLeaderboard(rows, userProfile, baseStats) {
+    var pace = window.runDashboardPace;
+    if (!pace || !rows || !rows.length || typeof pace.computeThresholdPaceFromPeaks !== 'function') {
+      return baseStats || {};
+    }
+    var row = null;
+    if (userProfile && userProfile.id != null && typeof pace.findLeaderboardRowForUser === 'function') {
+      row = pace.findLeaderboardRowForUser(rows, userProfile.id);
+    }
+    if (!row) {
+      var dataApi = window.runningRankingData;
+      if (dataApi && typeof dataApi.getViewerIdentity === 'function' && typeof dataApi.rowUserId === 'function') {
+        var identity = dataApi.getViewerIdentity(rows);
+        var i;
+        for (i = 0; i < rows.length; i++) {
+          var r = rows[i];
+          if (identity.boardUserId && String(dataApi.rowUserId(r)) === String(identity.boardUserId)) {
+            row = r;
+            break;
+          }
+        }
+      }
+    }
+    if (!row) return baseStats || {};
+
+    var thresholdPace = pace.computeThresholdPaceFromPeaks(row.peak_performances);
+    if (row.profile_peak_performances) {
+      var profilePace = pace.computeThresholdPaceFromPeaks(row.profile_peak_performances);
+      if (
+        profilePace &&
+        profilePace.secPerKm != null &&
+        (thresholdPace.secPerKm == null || profilePace.secPerKm < thresholdPace.secPerKm)
+      ) {
+        thresholdPace = profilePace;
+      }
+    }
+    var tier = thresholdPace.hexagonTier;
+    return Object.assign({}, baseStats || {}, {
+      thresholdPaceSec: thresholdPace.secPerKm,
+      thresholdPaceDisplay: thresholdPace.display || thresholdPace.paceValue,
+      thresholdPaceValue: thresholdPace.paceValue,
+      thresholdPaceUnavailable: thresholdPace.unavailable,
+      hexagonTierId: tier ? tier.tierId : null,
+      hexagonTierLevelName: tier ? tier.levelName : null,
+      hexagonTierBadgeSrc: tier ? tier.badgeSrc : null
+    });
+  }
+
   function tierLevelDisplayName(tierId) {
     var m = { HC: '레벨A', C1: '레벨B', C2: '레벨C', C3: '레벨D', C4: '레벨E', C5: '레벨F', C6: '레벨G' };
     return m[tierId] || '레벨G';
@@ -419,6 +468,7 @@
     var p = props || {};
     var userProfile = p.userProfile;
     var stats = p.stats || {};
+    var seedLeaderboardRows = Array.isArray(p.leaderboardRows) ? p.leaderboardRows : null;
     var DashboardCard = p.DashboardCard;
     var uid = userProfile && userProfile.id != null ? String(userProfile.id) : null;
 
@@ -477,11 +527,19 @@
         });
       }
       var cachedSnap = typeof api.getCachedSnapshot === 'function' ? api.getCachedSnapshot() : null;
-      var cached = cachedSnap && cachedSnap.rows && cachedSnap.rows.length
-        ? cachedSnap
-        : (typeof api.getCachedRows === 'function' && api.getCachedRows().length
-          ? { rows: api.getCachedRows(), rankMovementByKey: {}, rankMovementSource: '', leaderboardAsOfSeoul: '', rankMovementAsOfSeoul: '' }
-          : null);
+      var cached = seedLeaderboardRows && seedLeaderboardRows.length
+        ? {
+            rows: seedLeaderboardRows,
+            rankMovementByKey: (cachedSnap && cachedSnap.rankMovementByKey) || {},
+            rankMovementSource: (cachedSnap && cachedSnap.rankMovementSource) || '',
+            leaderboardAsOfSeoul: (cachedSnap && cachedSnap.leaderboardAsOfSeoul) || '',
+            rankMovementAsOfSeoul: (cachedSnap && cachedSnap.rankMovementAsOfSeoul) || ''
+          }
+        : (cachedSnap && cachedSnap.rows && cachedSnap.rows.length
+          ? cachedSnap
+          : (typeof api.getCachedRows === 'function' && api.getCachedRows().length
+            ? { rows: api.getCachedRows(), rankMovementByKey: {}, rankMovementSource: '', leaderboardAsOfSeoul: '', rankMovementAsOfSeoul: '' }
+            : null));
       if (cached && cached.rows && cached.rows.length) {
         setLbState({
           loading: true,
@@ -506,7 +564,16 @@
         }
       });
       return function() { cancelled = true; };
-    }, [gender, category]);
+    }, [gender, category, seedLeaderboardRows]);
+
+    var effectiveStats = useMemo(function() {
+      if (stats && stats.hexagonTierBadgeSrc) return stats;
+      if (stats && stats.thresholdPaceSec != null && Number(stats.thresholdPaceSec) > 0) return stats;
+      var rows = (lbState.rows && lbState.rows.length)
+        ? lbState.rows
+        : (seedLeaderboardRows && seedLeaderboardRows.length ? seedLeaderboardRows : []);
+      return resolveHexagonStatsFromLeaderboard(rows, userProfile, stats);
+    }, [stats, lbState.rows, seedLeaderboardRows, userProfile]);
 
     var hexState = useMemo(function() {
       var dataApi = window.runningRankingData;
@@ -523,16 +590,16 @@
     }, [lbState.rows, lbState.rankMovementByKey, lbState.rankMovementSource, lbState.leaderboardAsOfSeoul, lbState.rankMovementAsOfSeoul, gender, category]);
 
     var tierBadge = useMemo(function() {
-      return resolveTierBadge(stats);
-    }, [stats]);
+      return resolveTierBadge(effectiveStats);
+    }, [effectiveStats]);
 
     var paceLevelBar = useMemo(function() {
-      var sec = stats.thresholdPaceSec != null ? Number(stats.thresholdPaceSec) : null;
+      var sec = effectiveStats.thresholdPaceSec != null ? Number(effectiveStats.thresholdPaceSec) : null;
       if (window.runDashboardPace && typeof window.runDashboardPace.computeRunPaceLevelBarStep === 'function') {
         return window.runDashboardPace.computeRunPaceLevelBarStep(sec);
       }
       return { tierId: 'C6', step: 0, color: HEPTAGON_TIER_FACE_HEX.C6, bg: 'rgba(156,163,175,0.25)' };
-    }, [stats.thresholdPaceSec]);
+    }, [effectiveStats.thresholdPaceSec]);
 
     var svg = useMemo(function() {
       if (!hexState || !hexState.axes || !hexState.axes.length) return null;
