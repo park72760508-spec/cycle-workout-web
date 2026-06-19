@@ -25972,7 +25972,7 @@
           } else if (typeof ReactDOM.render === 'function') {
             ReactDOM.render(React.createElement(window.RunningRankingScreen), root);
           }
-        } else if (root._runningRankingRoot.render) {
+        } else if (opts.forceRemount && root._runningRankingRoot.render) {
           root._runningRankingRoot.render(React.createElement(window.RunningRankingScreen));
         }
         if (window.runningRankingSocial && typeof window.runningRankingSocial.ensureUiListeners === 'function') {
@@ -26039,8 +26039,6 @@
           root._runJournalRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
           if (root._runJournalRoot) root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
           else if (typeof ReactDOM.render === 'function') ReactDOM.render(React.createElement(window.RunTrainingJournalScreen), root);
-        } else if (root._runJournalRoot.render) {
-          root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
         }
         return true;
       }
@@ -36766,16 +36764,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var container = document.getElementById('run-dashboard-container');
         if (container) { container.scrollTop = 0; container.scrollTo(0, 0); }
         if (runDashboardRootInstance) {
-          try {
-            if (ReactDOM.createRoot && runDashboardRootInstance.unmount) {
-              runDashboardRootInstance.unmount();
-            } else if (ReactDOM.unmountComponentAtNode) {
-              ReactDOM.unmountComponentAtNode(rootElement);
-            }
-          } catch (eUn) {
-            console.warn('[RunDashboard] Error unmounting previous instance:', eUn);
-          }
-          runDashboardRootInstance = null;
+          setTimeout(function () {
+            var c = document.getElementById('run-dashboard-container');
+            if (c) { c.scrollTop = 0; c.scrollTo(0, 0); }
+          }, 0);
+          return;
         }
         if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
           rootElement.innerHTML = '<div style="padding: 40px; text-align: center;"><p style="color: #666;">RUN 대시보드를 불러올 수 없습니다. 페이지를 새로고침해주세요.</p></div>';
@@ -38773,6 +38766,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/runDashboard/runDashboardPace.js"></script>
   <script defer src="assets/js/runDashboard/useRunDashboardData.js"></script>
   <script src="assets/js/runDashboard/components/RunAICoachHeroCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/runDashboard/components/RunPaceGradeIndicator.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runDashboard/components/RunDailyQuickStats.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runDashboard/stelvioHexagonRankLog.js"></script>
   <script src="assets/js/runDashboard/components/StelvioHexagonRanksCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
