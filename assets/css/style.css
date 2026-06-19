@@ -7470,6 +7470,23 @@ body:has(#trainingDetailModal:not(.hidden)) {
   vertical-align: baseline;
 }
 
+/* RUN 헥사곤 레이더 — 대시보드·랭킹보드 동일 보라 radial fill */
+.stelvio-run-hexagon-radar-svg .stelvio-run-hexagon-radar-fill {
+  stroke: rgb(109, 40, 217);
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+#runningRankingScreen .stelvio-hexagon-ranks-embed {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+#runningRankingScreen .stelvio-hero-expand-area--open .stelvio-hexagon-ranks-embed .stelvio-octagon-chart-shell {
+  width: 100%;
+}
+
 /* 헥사곤 중앙 종합 순위 pill·힌트 — 등락 배지가 순위와 동일 크기·폰트 */
 .stelvio-octagon-tier-gc__pill .stelvio-rank-change,
 .stelvio-octagon-tier-gc__pill .stelvio-rank-change-slot-inline .stelvio-rank-change {
