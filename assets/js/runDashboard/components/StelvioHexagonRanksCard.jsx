@@ -631,6 +631,18 @@
     if (catRank == null || catRank < 1) return null;
     var baseline = peakRankMovementBaselineForCategory(data, category);
     if (!baseline || baseline[String(uid)] == null) return null;
+    var rows = (data && data.byCategory && data.byCategory[category]) || [];
+    if (
+      typeof window.stelvioComputeSurvivorAwareRankMovementForRows === 'function' &&
+      rows.length
+    ) {
+      var mv = window.stelvioComputeSurvivorAwareRankMovementForRows(rows, baseline);
+      var suid = String(uid);
+      if (mv.rankChanges[suid] != null && mv.previousRanks[suid] != null) {
+        return { rankChange: mv.rankChanges[suid], previousBoardRank: mv.previousRanks[suid] };
+      }
+      return null;
+    }
     var prev = Math.floor(Number(baseline[String(uid)]));
     if (!isFinite(prev) || prev < 1) return null;
     return { rankChange: prev - catRank, previousBoardRank: prev };
@@ -3113,15 +3125,10 @@
         String(barContext.isVirtualCohort === true ? '1' : '0');
     }
 
-    var barAnimTimerRef = useRef(null);
     var barBlinkClearRef = useRef(null);
 
     useEffect(
       function() {
-        if (barAnimTimerRef.current != null) {
-          clearInterval(barAnimTimerRef.current);
-          barAnimTimerRef.current = null;
-        }
         if (barBlinkClearRef.current != null) {
           clearTimeout(barBlinkClearRef.current);
           barBlinkClearRef.current = null;
@@ -3136,30 +3143,17 @@
         if (targetStep < 1) {
           return undefined;
         }
-        var tick = 0;
-        barAnimTimerRef.current = window.setInterval(function() {
-          tick += 1;
-          if (tick <= targetStep) {
-            setAnimFilled(tick);
-          }
-          if (tick >= targetStep) {
-            if (barAnimTimerRef.current != null) {
-              clearInterval(barAnimTimerRef.current);
-              barAnimTimerRef.current = null;
-            }
-            var topBiLast = 10 - targetStep;
-            setBlinkBi(topBiLast);
-            barBlinkClearRef.current = window.setTimeout(function() {
-              setBlinkBi(null);
-              barBlinkClearRef.current = null;
-            }, 1580);
-          }
-        }, 220);
+        var rafId = requestAnimationFrame(function() {
+          setAnimFilled(targetStep);
+          var topBiLast = 10 - targetStep;
+          setBlinkBi(topBiLast);
+          barBlinkClearRef.current = window.setTimeout(function() {
+            setBlinkBi(null);
+            barBlinkClearRef.current = null;
+          }, 1580 + targetStep * 55);
+        });
         return function() {
-          if (barAnimTimerRef.current != null) {
-            clearInterval(barAnimTimerRef.current);
-            barAnimTimerRef.current = null;
-          }
+          cancelAnimationFrame(rafId);
           if (barBlinkClearRef.current != null) {
             clearTimeout(barBlinkClearRef.current);
             barBlinkClearRef.current = null;
@@ -3179,6 +3173,7 @@
       var filled = bi >= (10 - animFilled);
       var blockOpacity = filled ? (0.5 + ((9 - bi) / 9) * 0.5) : 1;
       var blinkOn = blinkBi === bi && filled;
+      var fillDelay = filled && animFilled > 0 ? ((9 - bi) * 0.055) + 's' : '0s';
       blocks.push(
         <div
           key={bi}
@@ -3190,7 +3185,8 @@
             background: filled ? lv.color : levelBarFadedEmptyBackground(lv.bg),
             border: filled ? '1px solid ' + lv.color : '1px solid rgba(148,163,184,0.19)',
             opacity: blockOpacity,
-            transition: blinkOn ? 'none' : 'background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease'
+            transition: blinkOn ? 'none' : 'background 0.28s ease, border-color 0.28s ease, opacity 0.28s ease',
+            transitionDelay: blinkOn ? '0s' : fillDelay
           }}
         />
       );
