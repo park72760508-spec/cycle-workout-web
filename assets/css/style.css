@@ -28241,6 +28241,8 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .stelvio-rank-row.running-ranking-row {
   flex-wrap: nowrap;
   align-items: center;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
 }
 /* 종합 탭: CYCLE GC 탭과 동일 행·폰트·여백 (1줄: 순위·이름·점수) */
 #runningRankingScreen .running-ranking-list-body--overall.running-ranking-list-body--segments-off .stelvio-rank-row.running-ranking-row {
