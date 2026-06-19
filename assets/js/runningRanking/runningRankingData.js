@@ -872,84 +872,195 @@
     return msg + deltaHtml;
   }
 
+  function resolveHeroUserName(fallbackName) {
+    var userName = fallbackName || '러너';
+    if (window.currentUser && window.currentUser.name) userName = window.currentUser.name;
+    try {
+      var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (ls && ls.name) userName = ls.name;
+    } catch (e) {}
+    return escapeHeroHtml(userName);
+  }
+
+  function findViewerInRankedList(list, identity) {
+    if (!list || !identity) return null;
+    var i;
+    for (i = 0; i < list.length; i++) {
+      if (listItemMatchesViewer(list[i], identity)) {
+        return {
+          rank: list[i].rank != null ? list[i].rank : (i + 1),
+          item: list[i]
+        };
+      }
+    }
+    return null;
+  }
+
+  function heroMovementMeta(opts) {
+    opts = opts || {};
+    return {
+      gender: opts.gender || 'all',
+      category: opts.category || 'Supremo',
+      paceDistance: opts.paceDistance,
+      rankMovementSource: opts.rankMovementSource,
+      leaderboardAsOfSeoul: opts.leaderboardAsOfSeoul,
+      rankMovementAsOfSeoul: opts.rankMovementAsOfSeoul
+    };
+  }
+
+  function getRankedListWithMovement(rows, tabId, listOpts, movementMeta, rankMovementByKey) {
+    var list = buildRankedList(rows, tabId, listOpts);
+    var moveMod = window.runningRankingMovement;
+    if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+      moveMod.applyRankMovement(list, tabId, movementMeta || {}, rankMovementByKey || {});
+    }
+    return list;
+  }
+
+  function buildHeroRankDeltaForBoard(rows, identity, tabId, listOpts, movementMeta, rankMovementByKey) {
+    var list = getRankedListWithMovement(rows, tabId, listOpts, movementMeta, rankMovementByKey);
+    var found = findViewerInRankedList(list, identity);
+    return buildHeroRankDeltaHtml(found ? found.item : null);
+  }
+
+  function buildCategoryHeroMessage(userNameEsc, tabLabel, metricPart, catLabel, categoryRank, globalRank) {
+    if (!catLabel || categoryRank <= 0) {
+      return userNameEsc + '님은 ' + tabLabel + ' 전체 ' + globalRank + '위(' + metricPart + ')입니다.';
+    }
+    return userNameEsc + '님은 ' + tabLabel + ' ' + catLabel + ' 부문에서 ' + categoryRank + '위(' + metricPart + '), 전체 ' + globalRank + '위입니다.';
+  }
+
+  function injectHeroDualRankDelta(msg, categoryRank, globalRank, catBadge, supBadge) {
+    if (categoryRank > 0 && catBadge) {
+      msg = injectHeroRankDelta(msg, categoryRank, catBadge);
+    }
+    if (globalRank >= 1 && supBadge) {
+      msg = injectHeroRankDelta(msg, globalRank, supBadge);
+    }
+    return msg;
+  }
+
+  function paceDistanceLabel(dk) {
+    var dists = cfg().PACE_DISTANCES || [];
+    var i;
+    for (i = 0; i < dists.length; i++) {
+      if (dists[i].key === dk) return dists[i].label;
+    }
+    return dk || '5k';
+  }
+
+  function finalizeHeroPayload(msg) {
+    return { text: msg.replace(/<[^>]+>/g, ''), html: msg };
+  }
+
+  /**
+   * 탭별 히어로 코멘트 공통 — CYCLE renderStelvioHeroCard와 동일 톤·부문/전체·등락
+   * @returns {{ text: string, html: string }|null}
+   */
+  function buildTabHeroPayload(rows, tabId, opts) {
+    opts = opts || {};
+    var identity = getViewerIdentity(rows);
+    if (!identity.firebaseId && !identity.boardUserId) return null;
+
+    var gender = opts.gender || 'all';
+    var activeCategory = opts.category || 'Supremo';
+    var paceDistance = opts.paceDistance || '5k';
+    var movementMeta = heroMovementMeta(opts);
+    var rankMovementByKey = opts.rankMovementByKey || {};
+
+    var globalList = getRankedListWithMovement(rows, tabId, {
+      gender: gender,
+      category: 'Supremo',
+      paceDistance: paceDistance
+    }, Object.assign({}, movementMeta, { category: 'Supremo' }), rankMovementByKey);
+    var globalFound = findViewerInRankedList(globalList, identity);
+    if (!globalFound) return null;
+
+    var globalRank = globalFound.rank;
+    var metricItem = globalFound.item;
+    var categoryRank = 0;
+    var labels = cfg().CATEGORY_LABELS || {};
+    var catLabel = labels[activeCategory] || '';
+
+    if (activeCategory !== 'Supremo' && catLabel) {
+      var catList = getRankedListWithMovement(rows, tabId, {
+        gender: gender,
+        category: activeCategory,
+        paceDistance: paceDistance
+      }, Object.assign({}, movementMeta, { category: activeCategory }), rankMovementByKey);
+      var catFound = findViewerInRankedList(catList, identity);
+      if (catFound) {
+        categoryRank = catFound.rank;
+        metricItem = catFound.item;
+      }
+    }
+
+    var userNameEsc = resolveHeroUserName(metricItem && metricItem.name);
+    var tabLabel;
+    var metricPart;
+
+    if (tabId === 'overall') {
+      tabLabel = '종합 랭킹';
+      metricPart = fmt().formatScore(metricItem.value) + '점';
+    } else if (tabId === 'pace') {
+      tabLabel = paceDistanceLabel(paceDistance) + ' 구간 페이스';
+      metricPart = metricItem.valueLabel || '—';
+    } else if (tabId === 'tss') {
+      tabLabel = '주간 TSS';
+      metricPart = metricItem.valueLabel || fmt().formatTss(metricItem.value) + ' TSS';
+    } else if (tabId === 'distance') {
+      tabLabel = '최근 30일 거리';
+      metricPart = metricItem.valueLabel || fmt().formatDistanceKm(metricItem.value) + ' km';
+    } else {
+      return null;
+    }
+
+    var msg = buildCategoryHeroMessage(
+      userNameEsc,
+      tabLabel,
+      metricPart,
+      activeCategory === 'Supremo' ? '' : catLabel,
+      categoryRank,
+      globalRank
+    );
+
+    var supBadge = buildHeroRankDeltaForBoard(
+      rows, identity, tabId,
+      { gender: gender, category: 'Supremo', paceDistance: paceDistance },
+      Object.assign({}, movementMeta, { category: 'Supremo' }),
+      rankMovementByKey
+    );
+    var catBadge = activeCategory !== 'Supremo'
+      ? buildHeroRankDeltaForBoard(
+        rows, identity, tabId,
+        { gender: gender, category: activeCategory, paceDistance: paceDistance },
+        Object.assign({}, movementMeta, { category: activeCategory }),
+        rankMovementByKey
+      )
+      : '';
+
+    msg = injectHeroDualRankDelta(msg, categoryRank, globalRank, catBadge, supBadge);
+    return finalizeHeroPayload(msg);
+  }
+
   /**
    * 종합 탭 히어로 코멘트 (CYCLE GC 탭 stelvioHeroText와 동일 톤·등락 표시)
    * @returns {{ text: string, html: string }|null}
    */
   function buildOverallHeroPayload(rows, opts) {
-    opts = opts || {};
-    var uid = getCurrentUserId();
-    if (!uid) return null;
-    var gender = opts.gender || 'all';
-    var activeCategory = opts.category || 'Supremo';
-    var viewerItem = opts.viewerItem || null;
-    var filtered = filterByGender(rows || [], gender);
-    var list = [];
-    filtered.forEach(function (r) {
-      var score = getOverallTotalScore(r, gender, 'Supremo');
-      if (score == null || score <= 0) return;
-      list.push({
-        userId: rowUserId(r),
-        name: rowDisplayName(r),
-        score: score,
-        ageCategory: rowAgeCategory(r)
-      });
-    });
-    list.sort(function (a, b) { return b.score - a.score; });
-    var globalRank = 0;
-    var categoryRank = 0;
-    var myRow = null;
-    for (var i = 0; i < list.length; i++) {
-      if (String(list[i].userId) === String(uid)) {
-        globalRank = i + 1;
-        myRow = list[i];
-        break;
-      }
-    }
-    if (!myRow) return null;
-    var rawMy = (rows || []).find(function (r) { return String(rowUserId(r)) === String(uid); });
-    var myBoardScore = getOverallTotalScore(rawMy, gender, activeCategory);
-    if (myBoardScore != null && myBoardScore > 0) {
-      myRow = Object.assign({}, myRow, { score: myBoardScore });
-    }
-    var userName = (window.currentUser && window.currentUser.name) || myRow.name || '러너';
-    try {
-      var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
-      if (ls && ls.name) userName = ls.name;
-    } catch (e) {}
-    var userNameEsc = escapeHeroHtml(userName);
-    var scoreLabel = fmt().formatScore(myRow.score) + '점';
-    var labels = cfg().CATEGORY_LABELS || {};
-    var catLabel = labels[activeCategory] || '';
-    if (activeCategory !== 'Supremo') {
-      var catList = [];
-      filtered.forEach(function (r) {
-        if (rowAgeCategory(r) !== activeCategory) return;
-        var catScore = getOverallTotalScore(r, gender, activeCategory);
-        if (catScore == null || catScore <= 0) return;
-        catList.push({ userId: rowUserId(r), score: catScore });
-      });
-      catList.sort(function (a, b) { return b.score - a.score; });
-      for (var j = 0; j < catList.length; j++) {
-        if (String(catList[j].userId) === String(uid)) {
-          categoryRank = j + 1;
-          break;
-        }
-      }
-    }
-    var msg;
-    if (activeCategory === 'Supremo' || !catLabel) {
-      msg = userNameEsc + '님은 종합랭킹 전체 ' + globalRank + '위(' + scoreLabel + ')입니다.';
-    } else if (categoryRank > 0) {
-      msg = userNameEsc + '님은 종합랭킹 ' + catLabel + ' 부문에서 ' + categoryRank + '위(' + scoreLabel + '), 전체 ' + globalRank + '위입니다.';
-    } else {
-      msg = userNameEsc + '님은 종합랭킹 전체 ' + globalRank + '위(' + scoreLabel + ')입니다.';
-    }
-    var supBadge = buildHeroRankDeltaHtml(viewerItem);
-    if (globalRank >= 1 && supBadge) {
-      msg = injectHeroRankDelta(msg, globalRank, supBadge);
-    }
-    return { text: msg.replace(/<[^>]+>/g, ''), html: msg };
+    return buildTabHeroPayload(rows, 'overall', opts);
+  }
+
+  function buildPaceHeroPayload(rows, opts) {
+    return buildTabHeroPayload(rows, 'pace', opts);
+  }
+
+  function buildTssHeroPayload(rows, opts) {
+    return buildTabHeroPayload(rows, 'tss', opts);
+  }
+
+  function buildDistanceHeroPayload(rows, opts) {
+    return buildTabHeroPayload(rows, 'distance', opts);
   }
 
   function buildOverallHeroMessage(rows, opts) {
@@ -1395,6 +1506,10 @@
     buildDistanceDistributionPayload: buildDistanceDistributionPayload,
     buildOverallHeroMessage: buildOverallHeroMessage,
     buildOverallHeroPayload: buildOverallHeroPayload,
+    buildPaceHeroPayload: buildPaceHeroPayload,
+    buildTssHeroPayload: buildTssHeroPayload,
+    buildDistanceHeroPayload: buildDistanceHeroPayload,
+    buildTabHeroPayload: buildTabHeroPayload,
     buildRunningHexagonState: buildRunningHexagonState,
     buildRunDashboardHexagonState: buildRunDashboardHexagonState,
     buildPaceTabRankedListWithMovement: buildPaceTabRankedListWithMovement,
