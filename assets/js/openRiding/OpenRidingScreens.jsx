@@ -8044,15 +8044,17 @@ function OpenRidingDetail(props) {
           <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 mt-2 space-y-2 text-left">
             <h3 className="text-xs font-bold text-slate-800 m-0 tracking-tight">[안전 및 주의사항 (필독)]</h3>
             <p className="text-xs text-slate-600 m-0 leading-relaxed">
-              스텔비오 모임은 자발적인 친목 모임으로, 라이딩 중 발생하는 모든 사고 및 자전거 손상에 대한 책임은 참석자 본인에게 있습니다.
+              스텔비오 모임은 자발적인 친목 모임으로, 활동(라이딩 및 러닝) 중 발생하는 모든 사고, 부상 및 장비 손상에 대한 책임은 참석자 본인에게 있습니다.
             </p>
             <p className="text-xs text-slate-600 m-0 leading-relaxed">
               참석 신청을 하시는 것은 위 면책 조항에 동의하는 것으로 간주합니다.
             </p>
             <p className="text-xs text-slate-600 m-0 leading-relaxed">
-              그룹 라이딩 수신호를 반드시 숙지하시고, 선두의 지시에 잘 따라주시기 바랍니다.
+              그룹 활동 안전 수칙(라이딩 수신호 및 러닝 매너 등)을 반드시 숙지하시고, 선두 및 진행자의 지시에 잘 따라주시기 바랍니다.
             </p>
-            <p className="text-xs text-slate-600 m-0 leading-relaxed">개인 자전거 보험 가입을 적극 권장합니다.</p>
+            <p className="text-xs text-slate-600 m-0 leading-relaxed">
+              개인 자전거 보험 또는 스포츠·레저 보험 가입을 적극 권장합니다.
+            </p>
           </div>
         </div>
       ) : null}
