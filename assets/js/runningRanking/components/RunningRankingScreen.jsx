@@ -142,6 +142,7 @@
     var setGapState = _gapState[1];
 
     var crewUnsubRef = useRef(null);
+    var starRefreshTimerRef = useRef(null);
     var isOverallTab = activeTab === 'overall';
     var isPaceTab = activeTab === 'pace';
     var isTssTab = activeTab === 'tss';
@@ -244,21 +245,12 @@
 
     useEffect(function () {
       loadLeaderboard({});
-      subscribeCrewGroups();
       var socialMod = socialApi();
       if (socialMod) {
         if (typeof socialMod.ensureUiListeners === 'function') socialMod.ensureUiListeners();
         if (typeof socialMod.bootstrapSocial === 'function') {
           socialMod.bootstrapSocial().then(function () {
             setSocialVer(function (v) { return v + 1; });
-            if (typeof socialMod.refreshStarSlots === 'function') {
-              requestAnimationFrame(function () {
-                socialMod.refreshStarSlots();
-                requestAnimationFrame(function () {
-                  socialMod.refreshStarSlots();
-                });
-              });
-            }
           }).catch(function () {});
         }
         if (typeof socialMod.bindStarChangeListener === 'function') {
@@ -275,9 +267,27 @@
       return function () {
         if (crewUnsubRef.current) {
           try { crewUnsubRef.current(); } catch (e) {}
+          crewUnsubRef.current = null;
         }
       };
-    }, [loadLeaderboard, subscribeCrewGroups]);
+    }, [loadLeaderboard]);
+
+    useEffect(function () {
+      if (activeTab !== 'crew') {
+        if (crewUnsubRef.current) {
+          try { crewUnsubRef.current(); } catch (e) {}
+          crewUnsubRef.current = null;
+        }
+        return;
+      }
+      subscribeCrewGroups();
+      return function () {
+        if (crewUnsubRef.current) {
+          try { crewUnsubRef.current(); } catch (e) {}
+          crewUnsubRef.current = null;
+        }
+      };
+    }, [activeTab, subscribeCrewGroups]);
 
     function scrollRankingToTop() {
       var scrollEl = document.getElementById('runningRankingScrollArea');
@@ -389,6 +399,26 @@
       });
     }, [isOverallTab, rawRows, gender, activeCategory, myViewerItem]);
 
+    var chartPayloadBase = useMemo(function () {
+      var api = dataApi();
+      var chartOpts = { gender: gender, category: activeCategory };
+      if (activeTab === 'overall' && api.buildDistributionPayload) {
+        return api.buildDistributionPayload(rawRows, chartOpts);
+      }
+      if (activeTab === 'pace' && api.buildPaceDistributionPayload) {
+        return api.buildPaceDistributionPayload(rawRows, Object.assign({}, chartOpts, {
+          paceDistance: paceDistance
+        }));
+      }
+      if (activeTab === 'tss' && api.buildTssDistributionPayload) {
+        return api.buildTssDistributionPayload(rawRows, chartOpts);
+      }
+      if (activeTab === 'distance' && api.buildDistanceDistributionPayload) {
+        return api.buildDistanceDistributionPayload(rawRows, chartOpts);
+      }
+      return null;
+    }, [activeTab, rawRows, gender, activeCategory, paceDistance]);
+
     useEffect(function () {
       var dispose = window.disposeStelvioDistributionChart;
       if (!hasDistributionChart) {
@@ -409,24 +439,13 @@
       });
 
       var mountId = RUN_DIST_CHART_ROOTS[activeTab];
-      if (!mountId) return;
+      if (!mountId || !chartPayloadBase) return;
 
       var api = dataApi();
-      var payload = null;
-      var chartOpts = { gender: gender, category: activeCategory };
-      if (activeTab === 'overall' && api.buildDistributionPayload) {
-        payload = api.buildDistributionPayload(rawRows, chartOpts);
-      } else if (activeTab === 'pace' && api.buildPaceDistributionPayload) {
-        payload = api.buildPaceDistributionPayload(rawRows, Object.assign({}, chartOpts, {
-          paceDistance: paceDistance
-        }));
-      } else if (activeTab === 'tss' && api.buildTssDistributionPayload) {
-        payload = api.buildTssDistributionPayload(rawRows, chartOpts);
-      } else if (activeTab === 'distance' && api.buildDistanceDistributionPayload) {
-        payload = api.buildDistanceDistributionPayload(rawRows, chartOpts);
+      var payload = chartPayloadBase;
+      if (typeof structuredClone === 'function') {
+        try { payload = structuredClone(chartPayloadBase); } catch (eClone) { payload = chartPayloadBase; }
       }
-      if (!payload) return;
-
       if (myViewerItem && api.enrichChartPayloadWithViewerItem) {
         payload = api.enrichChartPayloadWithViewerItem(payload, myViewerItem, rawRows);
       }
@@ -459,29 +478,33 @@
     }, [
       hasDistributionChart,
       activeTab,
-      rawRows,
-      gender,
-      activeCategory,
-      paceDistance,
+      chartPayloadBase,
       listFilter,
       currentUserId,
       loading,
       socialVer,
       isOverallTab,
-      myViewerItem
+      myViewerItem,
+      rawRows
     ]);
 
     useEffect(function () {
       if (loading) return;
       var soc = socialApi();
       if (!soc || typeof soc.refreshStarSlots !== 'function') return;
-      var raf1 = requestAnimationFrame(function () {
-        soc.refreshStarSlots();
+      if (starRefreshTimerRef.current) clearTimeout(starRefreshTimerRef.current);
+      starRefreshTimerRef.current = setTimeout(function () {
+        starRefreshTimerRef.current = null;
         requestAnimationFrame(function () {
           soc.refreshStarSlots();
         });
-      });
-      return function () { cancelAnimationFrame(raf1); };
+      }, 80);
+      return function () {
+        if (starRefreshTimerRef.current) {
+          clearTimeout(starRefreshTimerRef.current);
+          starRefreshTimerRef.current = null;
+        }
+      };
     }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments]);
 
     var unitLabel = useMemo(function () {
