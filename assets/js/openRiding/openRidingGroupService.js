@@ -49,6 +49,45 @@ export const GROUP_STATUS = {
   REJECTED: 'REJECTED'
 };
 
+/** 클럽 카테고리 — NULL·미지정은 CYCLE */
+export const RIDING_GROUP_CATEGORY = {
+  CYCLE: 'CYCLE',
+  RUN: 'RUN'
+};
+
+/** @param {unknown} raw */
+export function normalizeRidingGroupCategory(raw) {
+  var c = raw != null ? String(raw).trim().toUpperCase() : '';
+  return c === RIDING_GROUP_CATEGORY.RUN ? RIDING_GROUP_CATEGORY.RUN : RIDING_GROUP_CATEGORY.CYCLE;
+}
+
+/** @param {{ category?: unknown }|null|undefined} group @param {unknown} category */
+export function ridingGroupMatchesCategory(group, category) {
+  return normalizeRidingGroupCategory(group && group.category) === normalizeRidingGroupCategory(category);
+}
+
+/** @param {unknown[]} rows @param {unknown} category @param {boolean} [isAdmin] */
+export function filterRidingGroupsByCategory(rows, category, isAdmin) {
+  if (isAdmin) return Array.isArray(rows) ? rows.slice() : [];
+  var want = normalizeRidingGroupCategory(category);
+  return (rows || []).filter(function (g) {
+    return ridingGroupMatchesCategory(g, want);
+  });
+}
+
+/** 활성 스포츠 화면 → 클럽 카테고리 */
+export function resolveRidingGroupCategoryFromActiveSport() {
+  if (
+    typeof window !== 'undefined' &&
+    window.sportCategoryRoutes &&
+    typeof window.sportCategoryRoutes.getActiveSport === 'function' &&
+    window.sportCategoryRoutes.getActiveSport() === 'run'
+  ) {
+    return RIDING_GROUP_CATEGORY.RUN;
+  }
+  return RIDING_GROUP_CATEGORY.CYCLE;
+}
+
 /** @param {unknown} v */
 function trimLen(v, max) {
   var t = String(v != null ? v : '').trim();
@@ -310,7 +349,7 @@ export function subscribeRidingGroupMyJoinRequest(db, groupId, uid, cb) {
 /**
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} uid
- * @param {{ name: string; regions: string[]; intro: string; isPublic: boolean; joinPassword?: string; photoUrl?: string|null }} payload
+ * @param {{ name: string; regions: string[]; intro: string; isPublic: boolean; joinPassword?: string; photoUrl?: string|null; category?: string }} payload
  */
 export async function createRidingGroupPending(db, uid, payload) {
   if (!db || !uid) throw new Error('로그인이 필요합니다.');
@@ -334,6 +373,7 @@ export async function createRidingGroupPending(db, uid, payload) {
     isPublic,
     joinPassword: isPublic ? '' : joinPassword,
     photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
+    category: normalizeRidingGroupCategory(payload.category),
     status: GROUP_STATUS.PENDING,
     createdBy: u,
     memberCount: 1,
@@ -356,7 +396,7 @@ export async function createRidingGroupPending(db, uid, payload) {
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} uid
  * @param {string} groupId
- * @param {{ name: string; regions: string[]; intro: string; isPublic: boolean; joinPassword?: string; photoUrl?: string|null }} payload
+ * @param {{ name: string; regions: string[]; intro: string; isPublic: boolean; joinPassword?: string; photoUrl?: string|null; category?: string }} payload
  */
 export async function updateRidingGroupByOwner(db, uid, groupId, payload) {
   if (!db || !uid || !groupId) throw new Error('요청이 올바르지 않습니다.');
@@ -386,6 +426,7 @@ export async function updateRidingGroupByOwner(db, uid, groupId, payload) {
     isPublic,
     joinPassword: isPublic ? '' : joinPassword,
     photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
+    category: normalizeRidingGroupCategory(payload.category),
     updatedAt: serverTimestamp()
   });
   scheduleRidingGroupDualWriteFromFirestore(db, groupId, uid, { syncMembers: true });
@@ -611,7 +652,7 @@ export async function deleteRidingGroupByOwner(db, uid, groupId) {
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} adminUid
  * @param {string} groupId
- * @param {{ name: string; regions: string[]; intro: string; isPublic: boolean; joinPassword?: string; photoUrl?: string|null }} payload
+ * @param {{ name: string; regions: string[]; intro: string; isPublic: boolean; joinPassword?: string; photoUrl?: string|null; category?: string }} payload
  */
 export async function updateRidingGroupByAdmin(db, adminUid, groupId, payload) {
   if (!db || !adminUid || !groupId) throw new Error('요청이 올바르지 않습니다.');
@@ -637,6 +678,7 @@ export async function updateRidingGroupByAdmin(db, adminUid, groupId, payload) {
     isPublic,
     joinPassword: isPublic ? '' : joinPassword,
     photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
+    category: normalizeRidingGroupCategory(payload.category),
     updatedAt: serverTimestamp()
   });
   scheduleRidingGroupDualWriteFromFirestore(db, groupId, adminUid, { syncMembers: true });
@@ -956,6 +998,11 @@ if (typeof window !== 'undefined') {
     RIDING_GROUP_COLLECTION,
     RIDING_GROUP_JOIN_REQUESTS_SUB,
     GROUP_STATUS,
+    RIDING_GROUP_CATEGORY,
+    normalizeRidingGroupCategory,
+    ridingGroupMatchesCategory,
+    filterRidingGroupsByCategory,
+    resolveRidingGroupCategoryFromActiveSport,
     subscribeMyRidingGroupsAsMember,
     subscribeRidingGroups,
     subscribeRidingGroupDetail,

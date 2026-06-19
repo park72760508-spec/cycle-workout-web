@@ -9220,6 +9220,7 @@ function openRidingGroupsIsAdminGrade() {
 function OpenRidingGroupsList(props) {
   var firestore = props.firestore;
   var userId = props.userId || '';
+  var clubCategory = props.clubCategory || 'CYCLE';
   var joinRequestCountMap = props.joinRequestCountMap || {};
   var onOpenDetail = props.onOpenDetail || function () {};
   var onCreate = props.onCreate || function () {};
@@ -9294,11 +9295,21 @@ function OpenRidingGroupsList(props) {
 
   var filteredRows = useMemo(
     function () {
+      var base = rows;
+      if (typeof gs.filterRidingGroupsByCategory === 'function') {
+        base = gs.filterRidingGroupsByCategory(rows, clubCategory, isAdmin);
+      } else if (!isAdmin) {
+        var want = String(clubCategory || 'CYCLE').toUpperCase() === 'RUN' ? 'RUN' : 'CYCLE';
+        base = (rows || []).filter(function (g) {
+          var gc = g && g.category != null ? String(g.category).trim().toUpperCase() : 'CYCLE';
+          return (gc || 'CYCLE') === want;
+        });
+      }
       var q = String(filterText || '')
         .trim()
         .toLowerCase();
-      if (!q) return rows;
-      return rows.filter(function (g) {
+      if (!q) return base;
+      return base.filter(function (g) {
         if (String(g.name || '').toLowerCase().indexOf(q) >= 0) return true;
         var ouid = String(g.createdBy || '').toLowerCase();
         if (ouid.indexOf(q) >= 0) return true;
@@ -9307,7 +9318,7 @@ function OpenRidingGroupsList(props) {
         return oname.indexOf(q) >= 0;
       });
     },
-    [rows, filterText, ownerProfiles]
+    [rows, filterText, ownerProfiles, clubCategory, isAdmin, gs]
   );
 
   useEffect(
@@ -9567,10 +9578,23 @@ function OpenRidingGroupForm(props) {
   var storage = props.storage;
   var userId = props.userId || '';
   var editGroupId = props.editGroupId || '';
+  var clubCategoryProp = props.clubCategory || '';
   var onCancel = props.onCancel || function () {};
   var onSaved = props.onSaved || function () {};
   var isEdit = !!editGroupId;
   var koreaList = getKoreaRegionGroupsResolved();
+  var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+  var defaultCategory =
+    typeof gs.normalizeRidingGroupCategory === 'function'
+      ? gs.normalizeRidingGroupCategory(clubCategoryProp)
+      : String(clubCategoryProp || '').toUpperCase() === 'RUN'
+        ? 'RUN'
+        : typeof gs.resolveRidingGroupCategoryFromActiveSport === 'function'
+          ? gs.resolveRidingGroupCategoryFromActiveSport()
+          : 'CYCLE';
+  var _cat = useState(defaultCategory);
+  var category = _cat[0];
+  var setCategory = _cat[1];
   var _sido = useState('');
   var sidoPick = _sido[0];
   var setSidoPick = _sido[1];
@@ -9610,7 +9634,15 @@ function OpenRidingGroupForm(props) {
   var _editCreatedBy = useState('');
   var editGroupCreatedBy = _editCreatedBy[0];
   var setEditGroupCreatedBy = _editCreatedBy[1];
-  var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+
+  useEffect(
+    function () {
+      if (!isEdit) {
+        setCategory(defaultCategory);
+      }
+    },
+    [defaultCategory, isEdit]
+  );
 
   var districtsForSido = useMemo(
     function () {
@@ -9661,6 +9693,13 @@ function OpenRidingGroupForm(props) {
           setRegions(Array.isArray(doc.regions) ? doc.regions.map(function (x) { return String(x); }) : []);
           setPhotoUrl(doc.photoUrl != null ? String(doc.photoUrl) : '');
           setPhotoFile(null);
+          setCategory(
+            typeof gs.normalizeRidingGroupCategory === 'function'
+              ? gs.normalizeRidingGroupCategory(doc.category)
+              : doc.category != null && String(doc.category).trim().toUpperCase() === 'RUN'
+                ? 'RUN'
+                : 'CYCLE'
+          );
           setEditGroupCreatedBy(doc.createdBy != null ? String(doc.createdBy) : '');
         })
         .catch(function () {})
@@ -9701,7 +9740,13 @@ function OpenRidingGroupForm(props) {
       intro: intro.trim(),
       isPublic: isPublic,
       joinPassword: joinPw,
-      photoUrl: url || null
+      photoUrl: url || null,
+      category:
+        typeof gs.normalizeRidingGroupCategory === 'function'
+          ? gs.normalizeRidingGroupCategory(category)
+          : String(category || 'CYCLE').toUpperCase() === 'RUN'
+            ? 'RUN'
+            : 'CYCLE'
     };
   }
 
@@ -9791,6 +9836,33 @@ function OpenRidingGroupForm(props) {
             setName(e.target.value);
           }}
         />
+      </div>
+      <div>
+        <label className="text-xs text-slate-500 block mb-1">카테고리</label>
+        <div className="flex gap-2" role="radiogroup" aria-label="클럽 카테고리">
+          {['CYCLE', 'RUN'].map(function (cat) {
+            var active = category === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                className={
+                  'flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ' +
+                  (active
+                    ? 'border-violet-500 bg-violet-50 text-violet-800 shadow-sm'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200')
+                }
+                onClick={function () {
+                  setCategory(cat);
+                }}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div>
         <label className="text-xs text-slate-500 block mb-1">활동 지역</label>
@@ -11278,6 +11350,30 @@ function OpenRidingRoomApp(props) {
   var firestore = props.firestore;
   var storage = props.storage;
   var userLabel = props.userLabel || '라이더';
+  var gsEarly = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+  var clubCategory = useMemo(
+    function () {
+      if (props.clubCategory) {
+        return typeof gsEarly.normalizeRidingGroupCategory === 'function'
+          ? gsEarly.normalizeRidingGroupCategory(props.clubCategory)
+          : String(props.clubCategory).toUpperCase() === 'RUN'
+            ? 'RUN'
+            : 'CYCLE';
+      }
+      if (typeof gsEarly.resolveRidingGroupCategoryFromActiveSport === 'function') {
+        return gsEarly.resolveRidingGroupCategoryFromActiveSport();
+      }
+      if (
+        typeof window !== 'undefined' &&
+        window.sportCategoryRoutes &&
+        typeof window.sportCategoryRoutes.getActiveSport === 'function'
+      ) {
+        return window.sportCategoryRoutes.getActiveSport() === 'run' ? 'RUN' : 'CYCLE';
+      }
+      return 'CYCLE';
+    },
+    [props.clubCategory]
+  );
 
   /** PC/모바일: Firebase 세션 복원 전에는 Firestore가 permission-denied — UID를 auth와 동기화 */
   var _uidEff = useState(function () {
@@ -11477,6 +11573,7 @@ function OpenRidingRoomApp(props) {
         storage={storage}
         userId={effectiveUserId}
         editGroupId={detailGroupId}
+        clubCategory={clubCategory}
         onCancel={function () {
           setView('groupDetail');
         }}
@@ -11491,6 +11588,7 @@ function OpenRidingRoomApp(props) {
         firestore={firestore}
         storage={storage}
         userId={effectiveUserId}
+        clubCategory={clubCategory}
         onCancel={function () {
           setView('groups');
         }}
@@ -11504,6 +11602,7 @@ function OpenRidingRoomApp(props) {
       <OpenRidingGroupsList
         firestore={firestore}
         userId={effectiveUserId}
+        clubCategory={clubCategory}
         joinRequestCountMap={groupJoinCountMap}
         onOpenDetail={function (id) {
           setDetailGroupId(id);
