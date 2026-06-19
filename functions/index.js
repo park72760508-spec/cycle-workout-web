@@ -13044,6 +13044,7 @@ exports.fixStravaTssBatch = functions
 // ---------- Supabase Auth Bridge (Firebase ID Token → Custom JWT) ----------
 const supabaseAuthBridge = require("./supabaseAuthBridge");
 const supabaseUserProvision = require("./supabaseUserProvision");
+const deleteUserAccount = require("./deleteUserAccount");
 
 const mintSupabaseSessionConfig = {
   cors: CORS_ORIGINS,
@@ -13076,6 +13077,19 @@ exports.provisionSupabaseUserAfterProfileHttp = onRequest(
       admin,
       setCorsHeaders
     );
+  }
+);
+
+const deleteUserAccountConfig = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: CORS_ORIGINS,
+  timeoutSeconds: 120,
+  memory: "512MiB",
+});
+
+exports.deleteUserAccountHttp = onRequest(
+  deleteUserAccountConfig,
+  async (req, res) => {
+    await deleteUserAccount.handleDeleteUserAccountHttp(req, res, admin, setCorsHeaders);
   }
 );
 
