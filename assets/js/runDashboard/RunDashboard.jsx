@@ -20,6 +20,7 @@
   var useState = ReactObj.useState;
   var useLayoutEffect = ReactObj.useLayoutEffect || ReactObj.useEffect;
   var useEffect = ReactObj.useEffect;
+  var useMemo = ReactObj.useMemo;
 
   function renderRunHeaderTierBadge(stats, size) {
     var badge = { badgeSrc: 'assets/img/G.svg', levelName: '등급', unavailable: true };
@@ -197,10 +198,11 @@
       userProfile && userProfile.weight_kg != null ? userProfile.weight_kg :
       0
     ) || 0;
-    var oneHourAbility =
-      typeof window.stelvioComputeOneHourAbilityFromLogs === 'function'
+    var oneHourAbility = useMemo(function () {
+      return typeof window.stelvioComputeOneHourAbilityFromLogs === 'function'
         ? window.stelvioComputeOneHourAbilityFromLogs(recentLogs, { ftp: ftpVal, weight: weightVal })
         : null;
+    }, [recentLogs, ftpVal, weightVal]);
     var soloSpeed = oneHourAbility && oneHourAbility.speedKmh > 0 ? oneHourAbility.speedKmh : 0;
     var referenceWatts = oneHourAbility ? oneHourAbility.referenceWatts : 0;
     var last6mPeak60Watts = oneHourAbility ? oneHourAbility.peak60minWatts : 0;

@@ -93,11 +93,20 @@
     var bestHex = extractHexagonPaceContext(null);
     var leaderboardRow = null;
 
-    if (userId && window.runningRankingApi && typeof window.runningRankingApi.fetchLeaderboard === 'function') {
+    if (userId && window.runningRankingApi) {
       try {
-        var lb = await window.runningRankingApi.fetchLeaderboard();
-        if (lb && lb.success && Array.isArray(lb.rows)) {
-          leaderboardRow = findLeaderboardRowForUser(lb.rows, userId);
+        var lbRows = null;
+        if (typeof window.runningRankingApi.getCachedRows === 'function') {
+          lbRows = window.runningRankingApi.getCachedRows();
+        }
+        if ((!lbRows || !lbRows.length) && typeof window.runningRankingApi.fetchLeaderboard === 'function') {
+          var lb = await window.runningRankingApi.fetchLeaderboard();
+          if (lb && lb.success && Array.isArray(lb.rows)) {
+            lbRows = lb.rows;
+          }
+        }
+        if (lbRows && lbRows.length) {
+          leaderboardRow = findLeaderboardRowForUser(lbRows, userId);
           if (leaderboardRow) {
             var peakCtx = buildHexagonFromPeakMap(
               leaderboardRow.peak_performances,
