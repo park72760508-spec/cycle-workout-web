@@ -11,6 +11,7 @@
   var useEffect = React.useEffect;
   var useCallback = React.useCallback;
   var useMemo = React.useMemo;
+  var useRef = React.useRef;
   var pr = function () { return window.runJournalPrUtils; };
 
   function getCurrentUserId() {
@@ -82,7 +83,18 @@
       return out;
     }, [efforts, currentYear]);
 
-    var loadData = useCallback(function () {
+    var loadInflightRef = useRef(null);
+    var lastLoadAtRef = useRef(0);
+
+    var loadData = useCallback(function (opts) {
+      opts = opts || {};
+      var minIntervalMs = 45000;
+      if (!opts.force && loadInflightRef.current) {
+        return loadInflightRef.current;
+      }
+      if (!opts.force && lastLoadAtRef.current && (Date.now() - lastLoadAtRef.current) < minIntervalMs) {
+        return Promise.resolve();
+      }
       var userId = getCurrentUserId();
       if (!userId) {
         setError('로그인이 필요합니다.');
@@ -102,7 +114,7 @@
       }
       setLoading(true);
       setError(null);
-      return Promise.all([
+      var fetchPromise = Promise.all([
         fetchLogs(userId, { limit: 500 }),
         fetchEfforts(userId, { limit: 500 }),
       ])
@@ -121,7 +133,11 @@
         })
         .finally(function () {
           setLoading(false);
+          lastLoadAtRef.current = Date.now();
+          loadInflightRef.current = null;
         });
+      loadInflightRef.current = fetchPromise;
+      return fetchPromise;
     }, []);
 
     useEffect(function () {
@@ -144,7 +160,7 @@
     }, [loadData]);
 
     useEffect(function () {
-      function onRefresh() { loadData(); }
+      function onRefresh() { loadData({ force: true }); }
       window.addEventListener('run-journal-refresh', onRefresh);
       return function () { window.removeEventListener('run-journal-refresh', onRefresh); };
     }, [loadData]);
@@ -274,7 +290,7 @@
       openDetailSheet: function () { setDetailSheetOpen(true); },
       closeDetailSheet: function () { setDetailSheetOpen(false); },
       detailSheetOpen: detailSheetOpen,
-      retryLoad: loadData,
+      retryLoad: function () { return loadData({ force: true }); },
       effortsByActivityId: effortsByActivityId,
       yearlyPacePrByYear: yearlyPacePrByYear,
       journalSelectionKey: selectedDate,

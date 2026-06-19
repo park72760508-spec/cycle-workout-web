@@ -8,6 +8,7 @@
   if (!window.React) return;
 
   var R = window.React;
+  var useMemo = R.useMemo;
   var pr = function () { return window.runJournalPrUtils; };
 
   function getDateKey(d) {
@@ -38,6 +39,19 @@
     var onDateSelect = props.onDateSelect;
     var selectedDate = props.selectedDate;
     var yearlyPacePrByYear = props.yearlyPacePrByYear || {};
+    var effortsByActivityId = props.effortsByActivityId || {};
+
+    var prByDateKey = useMemo(function () {
+      var out = {};
+      var daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      var day;
+      for (day = 1; day <= daysInMonth; day++) {
+        var key = currentYear + '-' + String(currentMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        var logs = trainingLogs[key] || [];
+        out[key] = logs.length > 0 && pr().logsHaveAnyPr(logs, effortsByActivityId, yearlyPacePrByYear);
+      }
+      return out;
+    }, [trainingLogs, effortsByActivityId, yearlyPacePrByYear, currentYear, currentMonth]);
 
     var firstDay = new Date(currentYear, currentMonth, 1);
     var startDow = firstDay.getDay();
@@ -52,7 +66,7 @@
     for (day = 1; day <= daysInMonth; day++) {
       key = currentYear + '-' + String(currentMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
       logs = trainingLogs[key] || [];
-      hasPr = logs.length > 0 && pr().logsHaveAnyPr(logs, props.effortsByActivityId, yearlyPacePrByYear);
+      hasPr = !!prByDateKey[key];
       d = new Date(currentYear, currentMonth, day);
       dow = d.getDay();
       dayCls = '';
