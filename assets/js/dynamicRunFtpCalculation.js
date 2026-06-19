@@ -250,11 +250,44 @@
   }
 
   /**
+   * userProfile + window.currentUser + localStorage 에서 생년·성별 보강
+   * @param {object|null} userProfile
+   * @returns {object|null}
+   */
+  function enrichRunFtpUserProfile(userProfile) {
+    var p = userProfile ? Object.assign({}, userProfile) : {};
+    var sources = [];
+    if (window.currentUser && window.currentUser.id) sources.push(window.currentUser);
+    try {
+      var stored = localStorage.getItem('currentUser');
+      if (stored) {
+        var parsed = JSON.parse(stored);
+        if (parsed && parsed.id) sources.push(parsed);
+      }
+    } catch (e) {}
+    var i;
+    for (i = 0; i < sources.length; i++) {
+      var src = sources[i];
+      if (p.birth_year == null && src.birth_year != null) p.birth_year = src.birth_year;
+      if (p.birthYear == null && src.birthYear != null) p.birthYear = src.birthYear;
+      if (p.birth_year == null && src.birth && src.birth.year != null) p.birth_year = src.birth.year;
+      if ((!p.gender || String(p.gender).trim() === '') && src.gender) p.gender = src.gender;
+      if ((!p.sex || String(p.sex).trim() === '') && src.sex) p.sex = src.sex;
+      if (p.age == null && src.age != null) p.age = src.age;
+    }
+    if (p.age == null && p.birth_year != null && isFinite(Number(p.birth_year))) {
+      p.age = new Date().getFullYear() - Number(p.birth_year);
+    }
+    return p;
+  }
+
+  /**
    * @param {Array} efforts
    * @param {object|null} [userProfile]
    * @returns {object}
    */
   function calculateDynamicRunFtp(efforts, userProfile) {
+    userProfile = enrichRunFtpUserProfile(userProfile);
     if (!Array.isArray(efforts) || efforts.length === 0) {
       return { success: false, error: '러닝 구간 기록이 없습니다. Strava 러닝 활동을 먼저 동기화해 주세요.' };
     }
@@ -389,5 +422,6 @@
     window.getRunFtpAgeGenderRiegelFactor = getAgeGenderRiegelFactor;
     window.resolveRunFtpProfileAge = resolveRunFtpProfileAge;
     window.resolveRunFtpProfileGenderLabel = resolveRunFtpProfileGenderLabel;
+    window.enrichRunFtpUserProfile = enrichRunFtpUserProfile;
   }
 })();
