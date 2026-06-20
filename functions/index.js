@@ -12890,7 +12890,7 @@ exports.rebuildVo2StelvioRollingStats = onSchedule(
 );
 
 // ---------- 훈련 트렌드 Fitness(Fitness) 전 사용자 평균 (샘플 → stats_fitness_stelvio_rolling) ----------
-const { rebuildFitnessStelvioRollingStats } = require("./fitnessDemographicStats");
+const { rebuildFitnessStelvioRollingStats, rebuildRunFitnessStelvioRollingStats } = require("./fitnessDemographicStats");
 exports.rebuildFitnessStelvioRollingStats = onSchedule(
   {
     schedule: "30 4 * * *",
@@ -12903,6 +12903,8 @@ exports.rebuildFitnessStelvioRollingStats = onSchedule(
     try {
       const r = await rebuildFitnessStelvioRollingStats(db);
       console.log("[rebuildFitnessStelvioRollingStats] ok", r);
+      const rRun = await rebuildRunFitnessStelvioRollingStats(db);
+      console.log("[rebuildRunFitnessStelvioRollingStats] ok", rRun);
     } catch (e) {
       console.error("[rebuildFitnessStelvioRollingStats]", e && e.message ? e.message : e);
       throw e;

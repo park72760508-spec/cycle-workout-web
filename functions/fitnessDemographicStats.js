@@ -69,4 +69,66 @@ async function rebuildFitnessStelvioRollingStats(db) {
   return { userCount: count, minSamplesMet: count >= MIN_SAMPLES };
 }
 
-module.exports = { rebuildFitnessStelvioRollingStats, MIN_SAMPLES };
+async function rebuildRunFitnessStelvioRollingStats(db) {
+  const globalAll = { sum: 0, count: 0 };
+  const col = db.collection("run_fitness_demographic_samples");
+  let lastDoc = null;
+  const pageSize = 400;
+
+  for (;;) {
+    let q = col.orderBy(admin.firestore.FieldPath.documentId()).limit(pageSize);
+    if (lastDoc) q = q.startAfter(lastDoc);
+    const snap = await q.get();
+    if (snap.empty) break;
+
+    snap.docs.forEach((doc) => {
+      const d = doc.data() || {};
+      const v = Number(d.avgTrendFitness);
+      if (!Number.isFinite(v) || v < 0 || v > 50000) return;
+      globalAll.sum += v;
+      globalAll.count += 1;
+    });
+
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (snap.size < pageSize) break;
+  }
+
+  const statsCol = db.collection("stats_fitness_run_stelvio_rolling");
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const ref = statsCol.doc("all_all");
+  const { sum, count } = globalAll;
+  const batch = db.batch();
+
+  if (count >= MIN_SAMPLES) {
+    batch.set(
+      ref,
+      {
+        avgFitness: Math.round((sum / count) * 10) / 10,
+        userCount: count,
+        minSamplesMet: true,
+        source: "run_fitness_demographic_samples",
+        sport: "run",
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+  } else {
+    batch.set(
+      ref,
+      {
+        avgFitness: null,
+        userCount: count,
+        minSamplesMet: false,
+        source: "run_fitness_demographic_samples",
+        sport: "run",
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+  }
+
+  await batch.commit();
+  return { userCount: count, minSamplesMet: count >= MIN_SAMPLES };
+}
+
+module.exports = { rebuildFitnessStelvioRollingStats, rebuildRunFitnessStelvioRollingStats, MIN_SAMPLES };
