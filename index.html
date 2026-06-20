@@ -32409,6 +32409,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     function TrainingTrendChart(props) {
       var p = props || {};
       var data = p.data;
+      var isRun = !!p.isRun;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
       const [fitnessVisible, setFitnessVisible] = useState(true);
@@ -32417,19 +32418,26 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       
       useEffect(
         function () {
-          if (typeof window.fetchStelvioRollingFitnessStatsGlobal !== 'function') {
+          var fetchFn = isRun
+            ? (typeof window.fetchStelvioRollingRunFitnessStatsGlobal === 'function'
+                ? window.fetchStelvioRollingRunFitnessStatsGlobal
+                : null)
+            : (typeof window.fetchStelvioRollingFitnessStatsGlobal === 'function'
+                ? window.fetchStelvioRollingFitnessStatsGlobal
+                : null);
+          if (!fetchFn) {
             setStelvioRollingFitnessGlobal(null);
             return;
           }
           var cancelled = false;
-          window.fetchStelvioRollingFitnessStatsGlobal().then(function (row) {
+          fetchFn().then(function (row) {
             if (!cancelled) setStelvioRollingFitnessGlobal(row);
           });
           return function () {
             cancelled = true;
           };
         },
-        []
+        [isRun]
       );
       
       useEffect(() => {
@@ -32476,7 +32484,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             ];
         if (avgFitnessGlobal != null) {
           datasets.push({
-                label: '전체 사용자 평균',
+                label: isRun ? 'RUN 사용자 평균' : '전체 사용자 평균',
                 data: data.map(function () { return avgFitnessGlobal; }),
                 borderColor: 'rgba(59, 130, 246, 0.45)',
                 backgroundColor: 'transparent',
@@ -32528,7 +32536,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             chartInstanceRef.current = null;
           }
         };
-      }, [data, stelvioRollingFitnessGlobal]);
+      }, [data, stelvioRollingFitnessGlobal, isRun]);
       
       useEffect(function syncVisibility() {
         var ch = chartInstanceRef.current;
@@ -32593,11 +32601,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600">
               <span className="inline-block w-8 flex-shrink-0 border-t-2 border-dashed" style={{ borderColor: 'rgba(59, 130, 246, 0.5)' }} aria-hidden></span>
               <span>
-                전체 사용자 평균
+                {isRun ? 'RUN 사용자 평균' : '전체 사용자 평균'}
                 {stelvioRollingFitnessGlobal && typeof stelvioRollingFitnessGlobal.avgFitness === 'number' && stelvioRollingFitnessGlobal.avgFitness > 0 ? (
                   <span className="text-gray-500 tabular-nums"> ({stelvioRollingFitnessGlobal.avgFitness})</span>
                 ) : null}
               </span>
+              {isRun ? (
+                <span className="text-gray-400"> · RUN rTSS 기반 Fitness(42일 반감기)</span>
+              ) : null}
             </div>
           </div>
         </DashboardCard>
@@ -38952,6 +38963,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/dashboard/components/DashboardDetailTabs.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/dashboard/PerformanceDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <!-- RUN Dashboard (러닝 분석) -->
+  <script src="assets/js/runDashboard/runFitnessTrend.js"></script>
   <script src="assets/js/runDashboard/runDashboardAICache.js"></script>
   <script src="assets/js/runDashboard/runVo2maxCalculator.js"></script>
   <script src="assets/js/runDashboard/runDashboardPace.js"></script>
