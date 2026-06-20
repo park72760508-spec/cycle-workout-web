@@ -265,6 +265,7 @@
     var WkgGradeIndicator = window.WkgGradeIndicator;
     var StelvioOctagonRanksCard = window.StelvioOctagonRanksCard;
     var StelvioHexagonRanksCard = window.StelvioHexagonRanksCard;
+    var RunHexagonTendencyCard = window.RunHexagonTendencyCard;
     var RankPolygonCard = isRun ? StelvioHexagonRanksCard : StelvioOctagonRanksCard;
 
     function renderTabContent() {
@@ -274,6 +275,10 @@
         return React.createElement(
           'div',
           { className: 'space-y-6' },
+          isRun && RunHexagonTendencyCard && React.createElement(RunHexagonTendencyCard, {
+            hexagonContext: p.hexagonCoachContext,
+            DashboardCard: DashboardCard
+          }),
           RiderDashboardProfile && React.createElement(RiderDashboardProfile, { userProfile: userProfile }),
           !isRun && RiderPowerProfileTrendCharts && React.createElement(RiderPowerProfileTrendCharts, {
             DashboardCard: DashboardCard,
