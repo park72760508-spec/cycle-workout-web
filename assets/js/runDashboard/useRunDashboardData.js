@@ -732,10 +732,41 @@
               ? window.buildRunFitnessTrendChartData(logsDeduped, {
                   today: today,
                   parseDate: parseDate,
-                  windowDays: 60
+                  windowDays: 60,
+                  chartDays: 30,
+                  profile: {
+                    threshold_pace_sec: paceInfo.secPerKm != null ? paceInfo.secPerKm : null,
+                    threshold_pace: paceInfo.display || paceInfo.paceValue || userProfile.threshold_pace || null,
+                    lthr: userProfile.lthr != null ? userProfile.lthr : userProfile.threshold_hr,
+                    threshold_hr: userProfile.threshold_hr,
+                    max_hr: userProfile.max_hr != null ? userProfile.max_hr : userProfile.maxHr,
+                    peak_performances: (lbCoachCtx && lbCoachCtx.peakMap) || null
+                  }
                 })
               : [];
           if (isMounted) setFitnessData(chartData);
+          if (isMounted && typeof window.buildRunPmcTrendPayload === 'function') {
+            var pmcPayload = window.buildRunPmcTrendPayload(logsDeduped, {
+              today: today,
+              chartDays: 30,
+              profile: {
+                threshold_pace_sec: paceInfo.secPerKm != null ? paceInfo.secPerKm : null,
+                threshold_pace: paceInfo.display || paceInfo.paceValue || userProfile.threshold_pace || null,
+                lthr: userProfile.lthr != null ? userProfile.lthr : userProfile.threshold_hr,
+                threshold_hr: userProfile.threshold_hr,
+                max_hr: userProfile.max_hr != null ? userProfile.max_hr : userProfile.maxHr,
+                peak_performances: (lbCoachCtx && lbCoachCtx.peakMap) || null
+              }
+            });
+            if (pmcPayload && pmcPayload.tsbFeedback) {
+              setStats(function(prev) {
+                return Object.assign({}, prev, {
+                  pmcTsbFeedback: pmcPayload.tsbFeedback,
+                  pmcLatestTsb: pmcPayload.latestTsb
+                });
+              });
+            }
+          }
           if (isMounted && userProfile) {
             var persistRun =
               typeof window.persistRunFitnessDemographicSampleAsync === 'function'
