@@ -146,6 +146,7 @@
     var growthTrendData = data.growthTrendData || [];
     var yearlyPowerPrData = data.yearlyPowerPrData || [];
     var recentLogs = data.recentLogs || [];
+    var hexagonCoachContext = data.hexagonCoachContext || null;
     var tpCalcLoading = data.tpCalcLoading;
     var setTpCalcLoading = data.setTpCalcLoading;
     var tpModalOpen = data.tpModalOpen;
@@ -447,6 +448,7 @@
               logsLoading: logsLoading,
               logsLoadError: logsLoadError,
               retryLogsRef: retryLogsRef,
+              hexagonCoachContext: hexagonCoachContext,
               DashboardCard: DashboardCard
             })
           ) : (

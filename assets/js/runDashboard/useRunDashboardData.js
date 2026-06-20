@@ -1126,7 +1126,8 @@
       setTpModalOpen: setFtpModalOpen,
       tpCalcResult: ftpCalcResult,
       setTpCalcResult: setFtpCalcResult,
-      retryLogsRef
+      retryLogsRef,
+      hexagonCoachContext
     };
   }
 

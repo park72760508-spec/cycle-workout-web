@@ -26,7 +26,9 @@
       quickStats: 'RunDailyQuickStats',
       detailTabs: 'DashboardDetailTabs',
       pace: 'runDashboardPace',
-      hexagon: 'StelvioHexagonRanksCard'
+      hexagon: 'StelvioHexagonRanksCard',
+      hexagonAnalysis: 'analyzeStelvioHexagon',
+      hexagonTendency: 'RunHexagonTendencyCard'
     },
     cache: 'runDashboardAICache',
     hexagonLog: 'stelvioHexagonRankLog',
