@@ -80,8 +80,12 @@ function openRidingPackRulesFormDefaults() {
   };
 }
 
-/** 수정 폼: ride 문서 → 폼 필드 */
+/** 수정 폼: ride 문서 → 폼 필드 (카테고리별 팩 룰) */
 function openRidingApplyPackRulesFromRide(ride) {
+  var mc = typeof window !== 'undefined' ? window.openRidingMoimCategory : null;
+  if (mc && typeof mc.applyPackRulesToFormFromRide === 'function') {
+    return mc.applyPackRulesToFormFromRide(ride, {});
+  }
   var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
   var n =
     typeof svc.normalizePackRidingRules === 'function'
@@ -112,26 +116,48 @@ function openRidingApplyPackRulesFromRide(ride) {
 }
 
 /** 상세·폼 공통: packRidingRules 정규화 객체 → 표시용 문구 */
-function openRidingPackRulesDisplay(prNorm) {
+function openRidingPackRulesDisplay(prNorm, category) {
   var pr = prNorm || {};
+  var cat =
+    typeof window !== 'undefined' &&
+    window.openRidingMoimCategory &&
+    typeof window.openRidingMoimCategory.normalizeMoimCategory === 'function'
+      ? window.openRidingMoimCategory.normalizeMoimCategory(category)
+      : String(category || 'CYCLE').toUpperCase() === 'RUN'
+        ? 'RUN'
+        : 'CYCLE';
   var rot =
     pr.rotation === 'maalseon'
       ? '방장 말선'
       : pr.rotation === 'rotation'
         ? '순환 로테이션(가능한 사람에 한함)'
-        : '';
+        : cat === 'RUN' && window.openRidingMoimCategory && typeof window.openRidingMoimCategory.runRotationLabel === 'function'
+          ? window.openRidingMoimCategory.runRotationLabel(pr.rotation)
+          : '';
   var nd =
     pr.nodrop === 'together'
-      ? '끝까지 챙겨서 가기'
+      ? cat === 'RUN'
+        ? '끝까지 함께 달리기'
+        : '끝까지 챙겨서 가기'
       : pr.nodrop === 'ownpace'
-        ? '각자 페이스대로 타고 목적지에 도착'
+        ? cat === 'RUN'
+          ? '각자 페이스로 목적지 합류'
+          : '각자 페이스대로 타고 목적지에 도착'
         : '';
   var g = pr.gear && typeof pr.gear === 'object' ? pr.gear : {};
   var gearLines = [];
-  if (g.helmet) gearLines.push('헬멧(미착용 참석 불가)');
-  if (g.lights) gearLines.push('전/후미등');
-  if (g.puncture) gearLines.push('펑크 대비 용품');
-  if (g.water) gearLines.push('식수/개인용(파워젤 및 보급)');
+  if (cat === 'RUN') {
+    if (g.runningShoes) gearLines.push('러닝화 필수 착용');
+    if (g.nightSafety) gearLines.push('야간 안전 용품');
+    if (g.personalSupply) gearLines.push('개인 식수 및 보급식');
+    if (g.capSunglasses) gearLines.push('캡 모자 및 선글라스');
+    if (g.spareClothes) gearLines.push('여벌 옷/수건');
+  } else {
+    if (g.helmet) gearLines.push('헬멧(미착용 참석 불가)');
+    if (g.lights) gearLines.push('전/후미등');
+    if (g.puncture) gearLines.push('펑크 대비 용품');
+    if (g.water) gearLines.push('식수/개인용(파워젤 및 보급)');
+  }
   var minors =
     pr.minorsAllowed === 'yes' ? '예' : pr.minorsAllowed === 'no' ? '아니오' : '';
   return {
@@ -4642,14 +4668,23 @@ function OpenRidingCreateForm(props) {
   var onEditNavDetail = props.onEditNavDetail;
   var onEditNavDelete = props.onEditNavDelete;
   var onCopyCancel = props.onCopyCancel || function () {};
+  var moimCategoryProp = props.moimCategory || '';
+  var moimCatApi = typeof window !== 'undefined' ? window.openRidingMoimCategory || {} : {};
+  var initialFormCategory =
+    typeof moimCatApi.resolveInitialMoimCategory === 'function'
+      ? moimCatApi.resolveInitialMoimCategory({ moimCategory: moimCategoryProp })
+      : 'CYCLE';
 
   var formRef = useRef(null);
   var initialInviteAppliedRef = useRef(false);
 
   var st = useState(function () {
     var prof = getOpenRidingProfileDefaults();
+    var runPack =
+      typeof moimCatApi.runPackFormDefaults === 'function' ? moimCatApi.runPackFormDefaults() : {};
     return Object.assign(
       {
+        category: initialFormCategory,
         title: '',
         date: getTodaySeoulYmd(),
         departureTime: '07:00',
@@ -4668,11 +4703,29 @@ function OpenRidingCreateForm(props) {
         inviteSelected: [],
         rideJoinPassword: ''
       },
-      openRidingPackRulesFormDefaults()
+      openRidingPackRulesFormDefaults(),
+      runPack
     );
   });
   var form = st[0];
   var setForm = st[1];
+  var formCategory =
+    typeof moimCatApi.normalizeMoimCategory === 'function'
+      ? moimCatApi.normalizeMoimCategory(form.category)
+      : String(form.category || 'CYCLE').toUpperCase() === 'RUN'
+        ? 'RUN'
+        : 'CYCLE';
+  var isRunMoimForm = formCategory === 'RUN';
+  var RUN_LEVEL_OPTIONS =
+    moimCatApi.RUN_LEVEL_OPTIONS && moimCatApi.RUN_LEVEL_OPTIONS.length
+      ? moimCatApi.RUN_LEVEL_OPTIONS
+      : [];
+  var RUN_ROTATION_OPTIONS =
+    moimCatApi.RUN_ROTATION_OPTIONS && moimCatApi.RUN_ROTATION_OPTIONS.length
+      ? moimCatApi.RUN_ROTATION_OPTIONS
+      : [];
+  var RUN_GEAR_FIELDS =
+    moimCatApi.RUN_GEAR_FIELDS && moimCatApi.RUN_GEAR_FIELDS.length ? moimCatApi.RUN_GEAR_FIELDS : [];
   var _busy = useState(false);
   var isBusy = _busy[0];
   var setBusy = _busy[1];
@@ -4962,6 +5015,10 @@ function OpenRidingCreateForm(props) {
           setForm(
             Object.assign(
               {
+                category:
+                  typeof moimCatApi.normalizeMoimCategory === 'function'
+                    ? moimCatApi.normalizeMoimCategory(ride.category)
+                    : 'CYCLE',
                 title: String(ride.title || ''),
                 date: isCopyMode ? '' : ymd,
                 departureTime: isCopyMode ? '07:00' : String(ride.departureTime || '07:00'),
@@ -5005,6 +5062,10 @@ function OpenRidingCreateForm(props) {
 
   useEffect(
     function () {
+      if (isRunMoimForm) {
+        setCreateFormPeakHint(null);
+        return undefined;
+      }
       if (!hostUserId) {
         setCreateFormPeakHint(null);
         return undefined;
@@ -5077,7 +5138,7 @@ function OpenRidingCreateForm(props) {
         cancelled = true;
       };
     },
-    [hostUserId, RIDING_LEVEL_OPTIONS.length]
+    [hostUserId, RIDING_LEVEL_OPTIONS.length, isRunMoimForm]
   );
 
   var createFormPeakHintLoading =
@@ -5219,6 +5280,12 @@ function OpenRidingCreateForm(props) {
     if (!String(form.contactInfo || '').trim()) {
       checkList.push('연락처가 없습니다. 프로필에서 휴대폰 번호를 등록해 주세요.');
     }
+    if (
+      typeof moimCatApi.isValidLevelForCategory === 'function' &&
+      !moimCatApi.isValidLevelForCategory(form.level, formCategory)
+    ) {
+      checkList.push(isRunMoimForm ? '러닝 레벨을 선택해 주세요.' : '레벨을 선택해 주세요.');
+    }
     if (checkList.length) {
       showFormValidationMessages(checkList);
       return;
@@ -5243,23 +5310,25 @@ function OpenRidingCreateForm(props) {
         gpxUrl = await uploadRideGpx(storage, form.gpxFile, draftId);
       }
       var d = new Date(form.date + 'T12:00:00+09:00');
-      var packRidingRulesPayload = {
-        rotation: form.packRotation,
-        nodrop: form.packNodrop,
-        gear: {
-          helmet: !!form.packGearHelmet,
-          lights: !!form.packGearLights,
-          puncture: !!form.packGearPuncture,
-          water: !!form.packGearWater
-        },
-        minorsAllowed: form.packMinorsAllowed,
-        openSectionText: form.packOpenSectionText,
-        supplySectionText: form.packSupplySectionText,
-        feeText: form.packFeeText,
-        cancelConditionText: form.packCancelConditionText
-      };
-      if (editRideId && typeof updateRideByHost === 'function') {
-        await updateRideByHost(firestore, editRideId, hostUserId, {
+      var packRidingRulesPayload =
+        typeof moimCatApi.buildPackRidingRulesPayloadFromForm === 'function'
+          ? moimCatApi.buildPackRidingRulesPayloadFromForm(form, formCategory)
+          : {
+              rotation: form.packRotation,
+              nodrop: form.packNodrop,
+              gear: {
+                helmet: !!form.packGearHelmet,
+                lights: !!form.packGearLights,
+                puncture: !!form.packGearPuncture,
+                water: !!form.packGearWater
+              },
+              minorsAllowed: form.packMinorsAllowed,
+              openSectionText: form.packOpenSectionText,
+              supplySectionText: form.packSupplySectionText,
+              feeText: form.packFeeText,
+              cancelConditionText: form.packCancelConditionText
+            };
+      var ridePayloadBase = {
           title: form.title,
           date: d,
           departureTime: form.departureTime,
@@ -5278,8 +5347,11 @@ function OpenRidingCreateForm(props) {
           inviteDisplayByPhone: buildOpenRidingInviteDisplayMap(form.inviteSelected),
           inviteFriendUidByPhone: buildOpenRidingInviteFriendUidMap(form.inviteSelected),
           rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : '',
-          packRidingRules: packRidingRulesPayload
-        });
+          packRidingRules: packRidingRulesPayload,
+          category: formCategory
+        };
+      if (editRideId && typeof updateRideByHost === 'function') {
+        await updateRideByHost(firestore, editRideId, hostUserId, ridePayloadBase);
         try {
           var svcEn0 = typeof window !== 'undefined' ? window.openRidingService || {} : {};
           if (
@@ -5298,29 +5370,10 @@ function OpenRidingCreateForm(props) {
         showFormValidationMessages(['라이딩 저장 기능을 불러오지 못했습니다. 페이지를 새로고침해 주세요.']);
         return;
       }
-      var rideId = await createRide(firestore, hostUserId, {
-        title: form.title,
-        date: d,
-        departureTime: form.departureTime,
-        departureLocation: form.departureLocation,
-        distance: distParsed,
-        course: form.course,
-        level: form.level,
-        maxParticipants: Math.max(1, Math.floor(maxParsed)),
-        hostName: form.hostName,
-        contactInfo: form.contactInfo,
-        isContactPublic: false,
-        region: form.region,
-        gpxUrl: gpxUrl,
-        isPrivate: !!form.isPrivate,
-        invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
-        inviteDisplayByPhone: buildOpenRidingInviteDisplayMap(form.inviteSelected),
-        inviteFriendUidByPhone: buildOpenRidingInviteFriendUidMap(form.inviteSelected),
-        rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : '',
-        packRidingRules: packRidingRulesPayload,
+      var rideId = await createRide(firestore, hostUserId, Object.assign({}, ridePayloadBase, {
         /** createRide 내부와 동일하게 명시(캐시·구버전 서비스 대비) */
         participants: hostUserId ? [String(hostUserId).trim()] : []
-      });
+      }));
       /** 생성 직후 방장을 참석 확정으로 한 번 더 보장(Transaction, 비공개 방도 hostUid 예외) */
       if (rideId && hostUserId) {
         var svcJoin = typeof window !== 'undefined' ? window.openRidingService || {} : {};
@@ -5414,6 +5467,47 @@ function OpenRidingCreateForm(props) {
         </p>
       ) : null}
       <label className="block font-medium text-slate-700">모임명<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} /></label>
+
+      <fieldset className="border border-slate-200 rounded-xl p-3 space-y-2" disabled={!!editRideId}>
+        <legend className="text-sm font-semibold text-slate-800 px-1">카테고리 *</legend>
+        <div className="flex flex-wrap gap-2">
+          <label className={'inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm cursor-pointer ' + (formCategory === 'CYCLE' ? 'border-violet-500 bg-violet-50 text-violet-900 font-semibold' : 'border-slate-200 bg-white text-slate-700') + (editRideId ? ' opacity-80 cursor-not-allowed' : '')}>
+            <input
+              type="radio"
+              name="openRidingMoimCategory"
+              className="shrink-0 accent-violet-600"
+              checked={formCategory === 'CYCLE'}
+              disabled={!!editRideId}
+              onChange={function () {
+                if (editRideId) return;
+                setForm(function (prev) {
+                  return Object.assign({}, prev, { category: 'CYCLE', level: '중급' });
+                });
+              }}
+            />
+            <span>CYCLE</span>
+          </label>
+          <label className={'inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm cursor-pointer ' + (formCategory === 'RUN' ? 'border-violet-500 bg-violet-50 text-violet-900 font-semibold' : 'border-slate-200 bg-white text-slate-700') + (editRideId ? ' opacity-80 cursor-not-allowed' : '')}>
+            <input
+              type="radio"
+              name="openRidingMoimCategory"
+              className="shrink-0 accent-violet-600"
+              checked={formCategory === 'RUN'}
+              disabled={!!editRideId}
+              onChange={function () {
+                if (editRideId) return;
+                setForm(function (prev) {
+                  return Object.assign({}, prev, { category: 'RUN', level: '중급' });
+                });
+              }}
+            />
+            <span>RUN</span>
+          </label>
+        </div>
+        {editRideId ? (
+          <p className="text-[11px] text-slate-500 m-0 leading-snug">저장된 모임 카테고리는 수정할 수 없습니다.</p>
+        ) : null}
+      </fieldset>
 
       <div className="block font-medium text-slate-700">
         <span className="block mb-1">지역</span>
@@ -5772,6 +5866,7 @@ function OpenRidingCreateForm(props) {
         ) : null}
       </div>
 
+      {!isRunMoimForm ? (
       <fieldset className="border border-slate-200 rounded-xl p-3 space-y-2">
         <legend className="text-sm font-semibold text-slate-800 px-1">레벨</legend>
         {RIDING_LEVEL_OPTIONS.map(function (opt) {
@@ -5841,15 +5936,53 @@ function OpenRidingCreateForm(props) {
           </p>
         ) : null}
       </fieldset>
+      ) : (
+      <fieldset className="border border-slate-200 rounded-xl p-3 space-y-2">
+        <legend className="text-sm font-semibold text-slate-800 px-1">레벨 *</legend>
+        {RUN_LEVEL_OPTIONS.map(function (opt) {
+          return (
+            <label key={'run-lv-' + opt.value} className="flex items-center gap-2 cursor-pointer py-1 rounded-lg hover:bg-slate-50 text-sm">
+              <input type="radio" name="runLvl" className="shrink-0" value={opt.value} checked={form.level === opt.value} onChange={function () { set('level', opt.value); }} />
+              <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0 leading-snug">
+                <span className="font-medium text-slate-800">{opt.value}</span>
+                <span className="text-xs text-slate-500">({opt.hint})</span>
+              </span>
+            </label>
+          );
+        })}
+        {function () {
+          var tp =
+            typeof moimCatApi.readRunThresholdPaceDisplay === 'function'
+              ? moimCatApi.readRunThresholdPaceDisplay()
+              : null;
+          if (!tp) {
+            return (
+              <p className="m-0 mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500 leading-snug">
+                프로필에 10k 역치 페이스 기록을 저장하면 개인 목표 페이스가 표시됩니다.
+              </p>
+            );
+          }
+          return (
+            <div className="open-riding-create-level-peak-hint mt-2 rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 text-[11px] sm:text-xs text-emerald-900 leading-snug">
+              <p className="m-0 font-semibold">
+                개인 목표 역치 페이스 (10k 역치) —{' '}
+                <span className="tabular-nums font-bold text-emerald-950">{tp}</span> /km
+              </p>
+            </div>
+          );
+        }()}
+      </fieldset>
+      )}
 
       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800 m-0">운영 방식 (팩 라이딩 룰)</h3>
+          <h3 className="text-sm font-semibold text-slate-800 m-0">{isRunMoimForm ? '운영 방식 (그룹 러닝 룰)' : '운영 방식 (팩 라이딩 룰)'}</h3>
           <p className="text-xs text-slate-500 m-0 mt-1 leading-relaxed">
             아래 운영 방식은 필수 조건은 아니며 옵션 조건으로 빈 값 허용 됩니다.
           </p>
         </div>
 
+        {!isRunMoimForm ? (
         <div className="space-y-2">
           <span className="text-xs font-semibold text-slate-700 block">로테이션 방식</span>
           <label className="flex items-start gap-2 cursor-pointer text-sm">
@@ -5883,9 +6016,38 @@ function OpenRidingCreateForm(props) {
             <span>순환 로테이션(가능한 사람에 한함)</span>
           </label>
         </div>
+        ) : (
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-slate-700 block">그룹 러닝 방식</span>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackRunRot"
+              className="mt-0.5 shrink-0"
+              checked={form.packRunRotation === ''}
+              onChange={function () { set('packRunRotation', ''); }}
+            />
+            <span>선택 안 함</span>
+          </label>
+          {RUN_ROTATION_OPTIONS.map(function (opt) {
+            return (
+              <label key={opt.value} className="flex items-start gap-2 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  name="openRidingPackRunRot"
+                  className="mt-0.5 shrink-0"
+                  checked={form.packRunRotation === opt.value}
+                  onChange={function () { set('packRunRotation', opt.value); }}
+                />
+                <span>{opt.label}</span>
+              </label>
+            );
+          })}
+        </div>
+        )}
 
         <div className="space-y-2">
-          <span className="text-xs font-semibold text-slate-700 block">노드랍 팩라이딩</span>
+          <span className="text-xs font-semibold text-slate-700 block">{isRunMoimForm ? '노드랍 팩런 여부' : '노드랍 팩라이딩'}</span>
           <label className="flex items-start gap-2 cursor-pointer text-sm">
             <input
               type="radio"
@@ -5904,7 +6066,7 @@ function OpenRidingCreateForm(props) {
               checked={form.packNodrop === 'together'}
               onChange={function () { set('packNodrop', 'together'); }}
             />
-            <span>끝까지 챙겨서 가기</span>
+            <span>{isRunMoimForm ? '끝까지 함께 달리기' : '끝까지 챙겨서 가기'}</span>
           </label>
           <label className="flex items-start gap-2 cursor-pointer text-sm">
             <input
@@ -5914,7 +6076,7 @@ function OpenRidingCreateForm(props) {
               checked={form.packNodrop === 'ownpace'}
               onChange={function () { set('packNodrop', 'ownpace'); }}
             />
-            <span>각자 페이스대로 타고 목적지에 도착</span>
+            <span>{isRunMoimForm ? '각자 페이스로 목적지 합류' : '각자 페이스대로 타고 목적지에 도착'}</span>
           </label>
         </div>
 
@@ -5949,6 +6111,7 @@ function OpenRidingCreateForm(props) {
           />
         </label>
 
+        {!isRunMoimForm ? (
         <div className="space-y-2">
           <span className="text-xs font-semibold text-slate-700 block">필수 준비물 (체크)</span>
           <label className="flex items-center gap-2 cursor-pointer text-sm">
@@ -5988,6 +6151,24 @@ function OpenRidingCreateForm(props) {
             <span>식수/개인용(파워젤 및 보급)</span>
           </label>
         </div>
+        ) : (
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-slate-700 block">필수 준비물 (체크)</span>
+          {RUN_GEAR_FIELDS.map(function (gf) {
+            return (
+              <label key={gf.key} className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 accent-violet-600"
+                  checked={!!form[gf.key]}
+                  onChange={function (e) { set(gf.key, e.target.checked); }}
+                />
+                <span>{gf.label}</span>
+              </label>
+            );
+          })}
+        </div>
+        )}
 
         <label className="block text-xs font-semibold text-slate-700">
           모임 취소 조건
@@ -7041,9 +7222,10 @@ function OpenRidingDetail(props) {
 
   var packRulesDisp = useMemo(
     function () {
-      return packRulesNorm ? openRidingPackRulesDisplay(packRulesNorm) : null;
+      var cat = ride && ride.category != null ? ride.category : 'CYCLE';
+      return packRulesNorm ? openRidingPackRulesDisplay(packRulesNorm, cat) : null;
     },
-    [packRulesNorm]
+    [packRulesNorm, ride && ride.category]
   );
 
   var _invLab = useState({});
@@ -11560,9 +11742,13 @@ function OpenRidingRoomApp(props) {
 
   var headerTitle =
     view === 'create' || view === 'copy'
-      ? '라이딩 생성'
+      ? clubCategory === 'RUN'
+        ? '러닝 모임 생성'
+        : '라이딩 생성'
       : view === 'edit'
-        ? '라이딩 수정'
+        ? clubCategory === 'RUN'
+          ? '러닝 모임 수정'
+          : '라이딩 수정'
         : view === 'detail'
           ? '세부 내용'
           : view === 'filter'
@@ -11675,6 +11861,7 @@ function OpenRidingRoomApp(props) {
         firestore={firestore}
         storage={storage}
         hostUserId={effectiveUserId}
+        moimCategory={clubCategory}
         initialInviteSelected={groupInviteSeed}
         onCreated={function () {
           setGroupInviteSeed(null);
@@ -11688,6 +11875,7 @@ function OpenRidingRoomApp(props) {
         firestore={firestore}
         storage={storage}
         hostUserId={effectiveUserId}
+        moimCategory={clubCategory}
         copyFromRideId={copyFromRideId}
         onCreated={function () {
           setCopyFromRideId(null);
@@ -11705,6 +11893,7 @@ function OpenRidingRoomApp(props) {
         firestore={firestore}
         storage={storage}
         hostUserId={effectiveUserId}
+        moimCategory={clubCategory}
         editRideId={detailRideId}
         onCreated={function () { setView('main'); }}
         onEditSaved={function () { setView('detail'); }}

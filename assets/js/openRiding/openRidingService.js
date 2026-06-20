@@ -55,7 +55,9 @@ export function normalizePackRidingRules(input) {
   const src = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const gearIn = src.gear && typeof src.gear === 'object' && !Array.isArray(src.gear) ? src.gear : {};
   const rot = String(src.rotation || '');
-  const rotation = rot === 'maalseon' || rot === 'rotation' ? rot : '';
+  const cycleRot = rot === 'maalseon' || rot === 'rotation' ? rot : '';
+  const runRot = rot === 'pacer_fixed' || rot === 'group_pack' || rot === 'free_run' ? rot : '';
+  const rotation = cycleRot || runRot;
   const nd = String(src.nodrop || '');
   const nodrop = nd === 'together' || nd === 'ownpace' ? nd : '';
   const minors = String(src.minorsAllowed || '');
@@ -67,7 +69,12 @@ export function normalizePackRidingRules(input) {
       helmet: !!gearIn.helmet,
       lights: !!gearIn.lights,
       puncture: !!gearIn.puncture,
-      water: !!gearIn.water
+      water: !!gearIn.water,
+      runningShoes: !!gearIn.runningShoes,
+      nightSafety: !!gearIn.nightSafety,
+      personalSupply: !!gearIn.personalSupply,
+      capSunglasses: !!gearIn.capSunglasses,
+      spareClothes: !!gearIn.spareClothes
     },
     minorsAllowed,
     openSectionText: trimPackText(src.openSectionText, 1000),
@@ -75,6 +82,12 @@ export function normalizePackRidingRules(input) {
     feeText: trimPackText(src.feeText, 500),
     cancelConditionText: trimPackText(src.cancelConditionText, 1000)
   };
+}
+
+/** @param {unknown} raw */
+export function normalizeOpenRideCategory(raw) {
+  const c = raw != null ? String(raw).trim().toUpperCase() : '';
+  return c === 'RUN' ? 'RUN' : 'CYCLE';
 }
 
 /** 전화번호 비교용 정규화 (숫자만, +82 → 0) */
@@ -689,6 +702,7 @@ export async function createRide(db, hostUserId, input) {
     participantDisplay,
     hostUserId: hostKey || hostUserId,
     packRidingRules: normalizePackRidingRules(input.packRidingRules),
+    category: normalizeOpenRideCategory(input.category),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     rideStatus: 'active',
@@ -771,6 +785,7 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     inviteFriendUidByPhone,
     rideJoinPassword: isPrivate && rideJoinPassword.length === 4 ? rideJoinPassword : '',
     packRidingRules: normalizePackRidingRules(input.packRidingRules),
+    category: normalizeOpenRideCategory(input.category != null ? input.category : data.category),
     updatedAt: serverTimestamp()
   };
   await updateDoc(rideRef, patch);
@@ -1632,6 +1647,7 @@ if (typeof window !== 'undefined') {
     normalizePhoneDigits,
     isUserPhoneInvitedToRide,
     normalizePackRidingRules,
+    normalizeOpenRideCategory,
     isRideJoinClosedBySchedule,
     isOpenRidingScheduleEnded,
     isRideScheduleDatePastSeoul,
