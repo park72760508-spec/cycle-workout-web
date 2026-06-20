@@ -96,7 +96,7 @@
     }
   }
 
-  function appendRankChangeHtml(parentEl, rcHtml, insertBefore, locationClass) {
+  function appendRankChangeHtml(parentEl, rcHtml, insertBefore) {
     if (!parentEl || !rcHtml) return;
     var holder = document.createElement('span');
     holder.innerHTML = rcHtml;
@@ -104,7 +104,6 @@
       var node = holder.firstChild;
       if (node.nodeType === 1 && node.classList) {
         node.classList.add('stelvio-rank-change--run-sync');
-        if (locationClass) node.classList.add(locationClass);
       }
       if (insertBefore && insertBefore.parentNode === parentEl) {
         parentEl.insertBefore(node, insertBefore);
@@ -134,14 +133,7 @@
         sib = sib.nextSibling;
       }
     }
-    appendRankChangeHtml(nameWrap, rcHtml, insertBefore, 'stelvio-rank-change--run-name');
-  }
-
-  function insertRankChangeBesidePos(rowEl, rcHtml) {
-    if (!rowEl || !rcHtml) return;
-    var posEl = rowEl.querySelector('.stelvio-rank-ranklead .stelvio-rank-pos');
-    if (!posEl) return;
-    appendRankChangeHtml(posEl, rcHtml, null, 'stelvio-rank-change--run-pos');
+    appendRankChangeHtml(nameWrap, rcHtml, insertBefore);
   }
 
   function resolveItemForRowEl(rowEl, rowByUid) {
@@ -165,15 +157,12 @@
   function syncRowRankChange(rowEl, item, listCat) {
     if (!rowEl || !item) return false;
     var rcHtml = badgeHtmlForListItem(item, listCat);
+    var posEl = rowEl.querySelector('.stelvio-rank-ranklead .stelvio-rank-pos');
+    if (posEl) removeRankChangeNodes(posEl);
     var nameWrap = rowEl.querySelector('.stelvio-rank-name');
     if (nameWrap) {
       removeRankChangeNodes(nameWrap);
       if (rcHtml) insertRankChangeAfterName(nameWrap, rcHtml);
-    }
-    var posEl = rowEl.querySelector('.stelvio-rank-ranklead .stelvio-rank-pos');
-    if (posEl) {
-      removeRankChangeNodes(posEl);
-      if (rcHtml) insertRankChangeBesidePos(rowEl, rcHtml);
     }
     return !!rcHtml;
   }
