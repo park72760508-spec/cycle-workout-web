@@ -954,11 +954,41 @@
     return buildHeroRankDeltaHtml(found ? found.item : null);
   }
 
-  function buildCategoryHeroMessage(userNameEsc, tabLabel, metricPart, catLabel, categoryRank, globalRank) {
+  function buildCategoryHeroMessage(userNameEsc, tabLabel, catLabel, categoryRank, globalRank) {
     if (!catLabel || categoryRank <= 0) {
-      return userNameEsc + '님은 ' + tabLabel + ' 전체 ' + globalRank + '위(' + metricPart + ')입니다.';
+      return userNameEsc + '님은 ' + tabLabel + ' 전체 ' + globalRank + '위입니다.';
     }
-    return userNameEsc + '님은 ' + tabLabel + ' ' + catLabel + ' 부문에서 ' + categoryRank + '위(' + metricPart + '), 전체 ' + globalRank + '위입니다.';
+    return userNameEsc + '님은 ' + tabLabel + ' ' + catLabel + ' 부문에서 ' + categoryRank + '위, 전체 ' + globalRank + '위입니다.';
+  }
+
+  function formatHeroMetricWithUnit(item, tabId, paceDistance) {
+    if (!item) return '—';
+    if (tabId === 'overall') {
+      return fmt().formatScore(item.value) + '점';
+    }
+    if (tabId === 'pace') {
+      return item.valueLabel || '—';
+    }
+    if (tabId === 'tss') {
+      var tssTxt = item.valueLabel || fmt().formatTss(item.value);
+      if (!tssTxt || tssTxt === '—') return '—';
+      return String(tssTxt).indexOf('TSS') >= 0 ? String(tssTxt) : tssTxt + ' TSS';
+    }
+    if (tabId === 'distance') {
+      var kmTxt = item.valueLabel || fmt().formatDistanceKm(item.value);
+      if (!kmTxt || kmTxt === '—') return '—';
+      return String(kmTxt).indexOf('km') >= 0 ? String(kmTxt) : kmTxt + 'km';
+    }
+    return item.valueLabel != null ? String(item.valueLabel) : '—';
+  }
+
+  function appendGlobalHeroMetric(msg, metricPart) {
+    if (!msg || !metricPart || metricPart === '—') return msg;
+    var safeMetric = escapeHeroHtml(metricPart);
+    if (/입니다\.?\s*$/.test(msg)) {
+      return msg.replace(/입니다\.?\s*$/, ' (' + safeMetric + ')입니다.');
+    }
+    return msg + ' (' + safeMetric + ')';
   }
 
   function injectHeroDualRankDelta(msg, categoryRank, globalRank, catBadge, supBadge) {
@@ -1012,11 +1042,10 @@
     if (!globalFound) return null;
 
     var globalRank = globalFound.rank;
-    var metricItem = globalFound.item;
     var categoryRank = 0;
     var catFound = null;
     var labels = cfg().CATEGORY_LABELS || {};
-    var viewerAgeCategory = resolveViewerAgeCategory(rows, identity, metricItem);
+    var viewerAgeCategory = resolveViewerAgeCategory(rows, identity, globalFound.item);
     var heroCategory = viewerAgeCategory !== 'Supremo'
       ? viewerAgeCategory
       : (activeCategory !== 'Supremo' ? activeCategory : 'Supremo');
@@ -1033,26 +1062,21 @@
       );
       if (catFound) {
         categoryRank = catFound.rank;
-        metricItem = catFound.item;
       }
     }
 
-    var userNameEsc = resolveHeroUserName(metricItem && metricItem.name);
+    var userNameEsc = resolveHeroUserName(globalFound.item && globalFound.item.name);
     var tabLabel;
-    var metricPart;
+    var globalMetricPart = formatHeroMetricWithUnit(globalFound.item, tabId, paceDistance);
 
     if (tabId === 'overall') {
       tabLabel = '종합 랭킹';
-      metricPart = fmt().formatScore(metricItem.value) + '점';
     } else if (tabId === 'pace') {
       tabLabel = paceDistanceLabel(paceDistance) + ' 구간 페이스';
-      metricPart = metricItem.valueLabel || '—';
     } else if (tabId === 'tss') {
       tabLabel = '주간 TSS';
-      metricPart = metricItem.valueLabel || fmt().formatTss(metricItem.value) + ' TSS';
     } else if (tabId === 'distance') {
       tabLabel = '최근 30일 거리';
-      metricPart = metricItem.valueLabel || fmt().formatDistanceKm(metricItem.value) + ' km';
     } else {
       return null;
     }
@@ -1060,7 +1084,6 @@
     var msg = buildCategoryHeroMessage(
       userNameEsc,
       tabLabel,
-      metricPart,
       heroCategory === 'Supremo' ? '' : catLabel,
       categoryRank,
       globalRank
@@ -1074,6 +1097,7 @@
     }
 
     msg = injectHeroDualRankDelta(msg, categoryRank, globalRank, catBadge, supBadge);
+    msg = appendGlobalHeroMetric(msg, globalMetricPart);
     return finalizeHeroPayload(msg);
   }
 
