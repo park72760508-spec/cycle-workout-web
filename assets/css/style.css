@@ -7550,6 +7550,15 @@ body:has(#trainingDetailModal:not(.hidden)) {
     white-space: nowrap;
     display: inline-block;
   }
+  #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
+  #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change-slot .stelvio-rank-change {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    margin-left: 2px;
+    line-height: 1.2;
+    white-space: nowrap;
+    display: inline-block;
+  }
 }
 
 /* ② 내 랭킹 요약 Hero 카드 */
@@ -28249,6 +28258,8 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .running-ranking-list-body--virtual .stelvio-rank-row.running-ranking-row {
   width: 100%;
   box-sizing: border-box;
+  content-visibility: visible;
+  contain-intrinsic-size: auto 48px;
 }
 #runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name {
   flex: 1 1 0;
@@ -28256,8 +28267,9 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
+  row-gap: 2px;
 }
 #runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-avatar-slot,
 #runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name > .stelvio-rank-avatar-btn,
