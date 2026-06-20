@@ -32,7 +32,7 @@ export function computePmcTrendState(
   const chartSeries = buildPmcChartData(logs ?? [], profile ?? null, opts);
   const latest = chartSeries.length ? chartSeries[chartSeries.length - 1]! : null;
   const feedback = latest != null ? getTsbTrainingStatusFeedback(latest.form_tsb) : null;
-  const legacyChartData = toLegacyFitnessTrendRows(chartSeries, opts?.endDate ?? new Date());
+  const legacyChartData = toLegacyFitnessTrendRows(chartSeries);
   return {
     chartSeries,
     latest,
