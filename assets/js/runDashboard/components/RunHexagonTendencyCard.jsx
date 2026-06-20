@@ -2,13 +2,15 @@
  * RUN 나의 성향 — STELVIO 헥사곤(역량·주주 성향) 분석 카드
  * analyzeStelvioHexagon 엔진 결과 시각화
  */
-/* global React, useMemo, window */
+/* global React, useMemo, useState, useEffect, window */
 (function () {
   'use strict';
   if (!window.React) return;
 
   var React = window.React;
   var useMemo = React.useMemo;
+  var useState = React.useState;
+  var useEffect = React.useEffect;
 
   function axisAngle(i, n) {
     return -Math.PI / 2 + (i * 2 * Math.PI) / n;
@@ -40,7 +42,22 @@
     var p = props || {};
     var hexagonContext = p.hexagonContext;
     var peakPerformances = p.peakPerformances;
+    var userProfile = p.userProfile;
+    var stats = p.stats || {};
     var DashboardCard = p.DashboardCard;
+
+    var _ai = useState('');
+    var aiComment = _ai[0];
+    var setAiComment = _ai[1];
+    var _aiLoad = useState(false);
+    var aiLoading = _aiLoad[0];
+    var setAiLoading = _aiLoad[1];
+    var _aiErr = useState(false);
+    var aiError = _aiErr[0];
+    var setAiError = _aiErr[1];
+    var _runAi = useState(false);
+    var runAICommentAnalysis = _runAi[0];
+    var setRunAICommentAnalysis = _runAi[1];
 
     var analysis = useMemo(function () {
       if (typeof window.analyzeStelvioHexagon !== 'function') return null;
@@ -53,6 +70,91 @@
       if (!paceInput) return null;
       return window.analyzeStelvioHexagon(paceInput);
     }, [hexagonContext, peakPerformances]);
+
+    useEffect(
+      function fetchRunInsightComment() {
+        if (!analysis || analysis.runnerTypeId === 'insufficient_data' || !userProfile || !userProfile.id) return;
+        var isMounted = true;
+        var todayStr =
+          typeof window.getTodayStrForCache === 'function'
+            ? window.getTodayStrForCache()
+            : (function () {
+                var d = new Date();
+                return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+              })();
+        var hexSig =
+          typeof window.buildRunHexagonInsightSignature === 'function'
+            ? window.buildRunHexagonInsightSignature(analysis)
+            : '';
+
+        if (!runAICommentAnalysis) {
+          var cached =
+            typeof window.getDashboardAIRunningInsightCache === 'function'
+              ? window.getDashboardAIRunningInsightCache(userProfile.id, todayStr, hexSig)
+              : null;
+          if (cached && cached.text) {
+            setAiComment(cached.text);
+            setAiError(false);
+          }
+          return function () {
+            isMounted = false;
+          };
+        }
+
+        setAiLoading(true);
+        setAiError(false);
+        (async function () {
+          try {
+            var cachedHit =
+              typeof window.getDashboardAIRunningInsightCache === 'function'
+                ? window.getDashboardAIRunningInsightCache(userProfile.id, todayStr, hexSig)
+                : null;
+            if (cachedHit && cachedHit.text) {
+              if (isMounted) {
+                setAiComment(cachedHit.text);
+                setAiError(false);
+              }
+            } else {
+              var profileForAi = Object.assign({}, userProfile, {
+                threshold_pace: stats.thresholdPaceDisplay || stats.thresholdPaceValue || userProfile.threshold_pace,
+                vo2max_estimate: stats.vo2maxEstimate != null ? stats.vo2maxEstimate : userProfile.vo2max_estimate
+              });
+              var fetchFn = window.fetchRunProfileInsightAnalysis;
+              if (typeof fetchFn !== 'function') {
+                throw new Error('fetchRunProfileInsightAnalysis 없음');
+              }
+              var text = await fetchFn(analysis, profileForAi, { timeoutMs: 12000, maxRetries: 2 });
+              if (isMounted) {
+                setAiComment(text);
+                setAiError(false);
+                if (typeof window.setDashboardAIRunningInsightCache === 'function') {
+                  window.setDashboardAIRunningInsightCache(userProfile.id, todayStr, hexSig, text);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[RunHexagonTendencyCard] AI 인사이트 실패:', e);
+            if (isMounted) {
+              var fallback =
+                typeof window.buildDeterministicRunInsight === 'function'
+                  ? window.buildDeterministicRunInsight(analysis, userProfile)
+                  : window.FALLBACK_RUN_INSIGHT || '분석을 불러올 수 없습니다.';
+              setAiComment(fallback);
+              setAiError(true);
+            }
+          } finally {
+            if (isMounted) {
+              setAiLoading(false);
+              setRunAICommentAnalysis(false);
+            }
+          }
+        })();
+        return function () {
+          isMounted = false;
+        };
+      },
+      [analysis, runAICommentAnalysis, userProfile, stats.thresholdPaceDisplay, stats.thresholdPaceValue, stats.vo2maxEstimate]
+    );
 
     var svg = useMemo(function () {
       if (!analysis || !analysis.radarScoreNorms || !analysis.radarScoreNorms.length) return null;
@@ -163,19 +265,126 @@
       );
     }
 
-    if (DashboardCard) {
-      return (
-        <DashboardCard title="STELVIO 헥사곤 (나의 성향)">
-          <p className="text-xs text-gray-500 mb-3 px-0.5">최근 90일 Peak 페이스 · Riegel p 지수 · 6축 역량 점수(0~100)</p>
-          {body}
-        </DashboardCard>
-      );
-    }
-    return (
-      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 헥사곤 (나의 성향)</h3>
-        {body}
-      </div>
+    var aiCoachBlock =
+      analysis && analysis.runnerTypeId !== 'insufficient_data'
+        ? React.createElement(
+            'div',
+            {
+              className: 'rounded-xl border border-gray-200 bg-white p-4 shadow-sm',
+              style: { backgroundColor: 'rgba(249, 250, 251, 0.95)', minHeight: '80px' }
+            },
+            React.createElement(
+              'div',
+              { className: 'flex items-center gap-2 mb-3' },
+              React.createElement(
+                'span',
+                {
+                  className:
+                    'inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white text-sm font-semibold'
+                },
+                'AI'
+              ),
+              React.createElement('span', { className: 'text-sm font-semibold text-gray-700' }, 'AI Coach')
+            ),
+            aiLoading
+              ? React.createElement(
+                  'div',
+                  { className: 'text-center py-8' },
+                  React.createElement('div', {
+                    className: 'relative w-28 h-28 mx-auto mb-4'
+                  },
+                    React.createElement('div', {
+                      className: 'absolute inset-0 rounded-full',
+                      style: { border: '8px solid #bbf7d0' }
+                    }),
+                    React.createElement('div', {
+                      className: 'absolute inset-0 rounded-full border-t-transparent animate-spin',
+                      style: { border: '8px solid #22c55e', borderTopColor: 'transparent' }
+                    })
+                  ),
+                  React.createElement('div', { className: 'text-base font-semibold text-gray-800' }, 'AI 러닝 인사이트 분석 중...')
+                )
+              : !aiComment
+                ? React.createElement(
+                    'div',
+                    { className: 'text-center py-4' },
+                    React.createElement(
+                      'div',
+                      { className: 'flex justify-center' },
+                      React.createElement(
+                        'button',
+                        {
+                          type: 'button',
+                          onClick: function () {
+                            setRunAICommentAnalysis(true);
+                          },
+                          className: 'stelvio-ranking-board-entry-btn'
+                        },
+                        'AI 러닝 인사이트 분석'
+                      )
+                    ),
+                    React.createElement(
+                      'p',
+                      { className: 'mt-3 text-xs leading-relaxed px-2', style: { color: '#374151' } },
+                      'Riegel p·6축 Peak 페이스 기반 러닝 성향·훈련 처방을 AI가 해석합니다.'
+                    )
+                  )
+                : React.createElement(
+                    'div',
+                    null,
+                    React.createElement(
+                      'p',
+                      {
+                        className: 'text-sm text-gray-700 leading-relaxed whitespace-pre-wrap',
+                        style: { overflow: 'visible', wordBreak: 'keep-all' }
+                      },
+                      aiComment
+                    ),
+                    aiError
+                      ? React.createElement(
+                          'div',
+                          { className: 'mt-3 flex justify-center' },
+                          React.createElement(
+                            'button',
+                            {
+                              type: 'button',
+                              onClick: function () {
+                                setAiComment('');
+                                setRunAICommentAnalysis(true);
+                              },
+                              className: 'stelvio-ranking-board-entry-btn'
+                            },
+                            'AI 러닝 인사이트 분석'
+                          )
+                        )
+                      : null
+                  )
+          )
+        : null;
+
+    var mainCard = DashboardCard
+      ? React.createElement(
+          DashboardCard,
+          { title: 'STELVIO 헥사곤 (나의 성향)' },
+          React.createElement(
+            'p',
+            { className: 'text-xs text-gray-500 mb-3 px-0.5' },
+            '최근 90일 Peak 페이스 · Riegel p 지수 · 6축 역량 점수(0~100)'
+          ),
+          body
+        )
+      : React.createElement(
+          'div',
+          { className: 'rounded-2xl border border-gray-100 bg-white p-4 shadow-sm' },
+          React.createElement('h3', { className: 'text-sm font-bold text-gray-800 mb-2' }, 'STELVIO 헥사곤 (나의 성향)'),
+          body
+        );
+
+    return React.createElement(
+      'div',
+      { className: 'space-y-4' },
+      mainCard,
+      aiCoachBlock
     );
   }
 
