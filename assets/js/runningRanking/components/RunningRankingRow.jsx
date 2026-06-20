@@ -43,12 +43,12 @@
     return null;
   }
 
-  function renderRankChangeSpan(item, listCategory, key, extraClass) {
+  function renderRankChangeSpan(item, listCategory, key) {
     var suffix = resolveRankChangeSuffix(item, listCategory);
     if (!suffix || !suffix.text) return null;
     return React.createElement('span', {
       key: key,
-      className: 'stelvio-rank-change stelvio-rank-change--' + suffix.kind + (extraClass ? ' ' + extraClass : ''),
+      className: 'stelvio-rank-change stelvio-rank-change--' + suffix.kind,
       title: suffix.title || ''
     }, suffix.text);
   }
@@ -67,17 +67,10 @@
     var displayName = soc.resolveDisplayName ? soc.resolveDisplayName(item, currentUserId) : (item.name || '');
     var avatarHtml = soc.getAvatarHtml ? soc.getAvatarHtml(item, displayName, currentUserId) : '';
     var starHtml = soc.getStarHtml ? soc.getStarHtml(item) : '';
-    var rankChangeInName = renderRankChangeSpan(
+    var rankChangeEl = renderRankChangeSpan(
       item,
       listCategory,
-      'rank-change-name-' + (socialVer != null ? socialVer : '0'),
-      'stelvio-rank-change--run-name'
-    );
-    var rankChangeBesidePos = renderRankChangeSpan(
-      item,
-      listCategory,
-      'rank-change-pos-' + (socialVer != null ? socialVer : '0'),
-      'stelvio-rank-change--run-pos'
+      'rank-change-' + (socialVer != null ? socialVer : '0')
     );
     var privateBadgeHtml = soc.getPrivateBadgeHtml ? soc.getPrivateBadgeHtml(item, currentUserId) : '';
     var valueLabel = soc.formatValueLabel
@@ -125,12 +118,7 @@
       'span',
       { key: 'ranklead', className: 'stelvio-rank-ranklead' },
       crownChild,
-      React.createElement(
-        'span',
-        { key: 'pos', className: 'stelvio-rank-pos' },
-        (rank > 0 ? rank : item.rank) + '위',
-        rankChangeBesidePos
-      )
+      React.createElement('span', { key: 'pos', className: 'stelvio-rank-pos' }, (rank > 0 ? rank : item.rank) + '위')
     );
 
     var nameChildren = [
@@ -140,7 +128,7 @@
         className: 'stelvio-rank-name-text',
         title: rawName
       }, displayName),
-      rankChangeInName,
+      rankChangeEl,
       htmlSpan('star-' + socialVer, 'stelvio-rank-star-slot', starHtml),
       htmlSpan('private-' + socialVer, null, privateBadgeHtml)
     ].filter(Boolean);
