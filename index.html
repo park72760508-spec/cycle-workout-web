@@ -32407,6 +32407,369 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
+    /** PMC 훈련 트렌드 — 그래프 해석 가이드 모달 */
+    function PmcTrendGuideModal(props) {
+      var p = props || {};
+      var open = !!p.open;
+      var onClose = p.onClose || function () {};
+      var isRun = !!p.isRun;
+      var ACCENT = '#7c3aed';
+      var ACCENT_LIGHT = 'rgba(124,58,237,0.1)';
+      var tsbZones = [
+        { range: '+5 초과', label: '회복 · Freshness', guide: '레이스·고강도 세션에 유리', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+        { range: '-10 ~ +5', label: '균형 · Optimal', guide: '계획대로 훈련 유지', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+        { range: '-30 ~ -10', label: '과부하 · Overreaching', guide: '강도·볼륨 줄이고 회복 러닝', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+        { range: '-30 미만', label: '위험 · Overtraining', guide: '강도 훈련 중단, 회복 우선', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' }
+      ];
+      var trendCards = [
+        { icon: '↗', title: 'CTL 우상향', desc: '한 달 동안 체력이 서서히 올라감', sub: '훈련량·강도 유지 또는 증가', color: '#3b82f6' },
+        { icon: '→', title: 'CTL 평평', desc: '유지 훈련 — 체력 수준 유지', sub: '현재 페이스를 그대로 이어가도 OK', color: '#64748b' },
+        { icon: '↘', title: 'CTL 하향', desc: '훈련량 감소·휴식기', sub: '의도적 taper(테이퍼)면 정상', color: '#94a3b8' }
+      ];
+      var spikeCards = [
+        { title: 'ATL만 급등', desc: '지난 1주 장거리·고강도·연속 훈련', dot: '#ef4444' },
+        { title: 'CTL도 천천히 상승', desc: '그 부하가 체력으로 전환 중', dot: '#3b82f6' },
+        { title: 'ATL 급등 · CTL 정체', desc: '단기 과부하 — 회복 필요 신호', dot: '#f59e0b' }
+      ];
+      var examples = [
+        { pattern: 'CTL ↗  ATL ↗', note: 'ATL이 더 가파름', result: '훈련량 증가 중. TSB가 -10 아래면 회복일 추가.', border: '#3b82f6' },
+        { pattern: 'CTL →  ATL ↘', note: '테이퍼·회복 주', result: '레이스 1~2주 전에 자주 보이는 패턴.', border: '#10b981' },
+        { pattern: 'CTL ↘  ATL ↘', note: 'ATL이 더 빠르게 하락', result: '휴식·부상·공백. 복귀 시 ATL부터 다시 상승.', border: '#64748b' },
+        {
+          pattern: isRun ? '파란선 ≈ RUN 평균' : '파란선 ≈ 전체 평균',
+          note: '점선 기준선',
+          result: isRun ? '같은 기간 RUN 사용자 대비 체력(CTL) 수준 비교.' : '전체 사용자 대비 체력(CTL) 수준 비교.',
+          border: 'rgba(59,130,246,0.55)'
+        }
+      ];
+
+      useEffect(function () {
+        if (!open) return;
+        function onKey(e) {
+          if (e.key === 'Escape') onClose();
+        }
+        document.addEventListener('keydown', onKey);
+        var prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return function () {
+          document.removeEventListener('keydown', onKey);
+          document.body.style.overflow = prev;
+        };
+      }, [open]);
+
+      if (!open) return null;
+
+      function sectionTitle(num, text) {
+        return React.createElement(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, marginTop: num === '1' ? 0 : 18 } },
+          React.createElement(
+            'span',
+            {
+              style: {
+                width: 22,
+                height: 22,
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, ' + ACCENT + ', #9333ea)',
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 2px 6px rgba(124,58,237,0.35)'
+              }
+            },
+            num
+          ),
+          React.createElement('span', { style: { fontSize: 14, fontWeight: 700, color: '#1e293b', letterSpacing: '-0.02em' } }, text)
+        );
+      }
+
+      return React.createElement(
+        'div',
+        {
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'pmcGuideTitle',
+          className: 'fixed inset-0 z-[10002] flex items-end sm:items-center justify-center p-0 sm:p-4',
+          style: { background: 'rgba(15,23,42,0.52)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' },
+          onClick: function (e) {
+            if (e.target === e.currentTarget) onClose();
+          }
+        },
+        React.createElement(
+          'div',
+          {
+            style: {
+              width: '100%',
+              maxWidth: 440,
+              maxHeight: 'min(92vh, 720px)',
+              background: '#fff',
+              borderRadius: '20px 20px 0 0',
+              boxShadow: '0 -8px 40px rgba(124,58,237,0.18), 0 24px 64px rgba(15,23,42,0.22)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              fontFamily: 'ui-sans-serif, system-ui, sans-serif'
+            },
+            className: 'sm:rounded-[20px]',
+            onClick: function (e) {
+              e.stopPropagation();
+            }
+          },
+          React.createElement(
+            'div',
+            {
+              style: {
+                padding: '18px 20px 14px',
+                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 50%, #5b21b6 100%)',
+                color: '#fff',
+                position: 'relative',
+                flexShrink: 0
+              }
+            },
+            React.createElement('div', { className: 'sm:hidden', style: { width: 36, height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.35)', margin: '0 auto 12px' } }),
+            React.createElement(
+              'button',
+              {
+                type: 'button',
+                'aria-label': '닫기',
+                onClick: onClose,
+                style: {
+                  position: 'absolute',
+                  top: 14,
+                  right: 14,
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.18)',
+                  color: '#fff',
+                  fontSize: 18,
+                  lineHeight: 1,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }
+              },
+              '×'
+            ),
+            React.createElement('h2', { id: 'pmcGuideTitle', style: { margin: 0, fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em' } }, '그래프 분석 가이드'),
+            React.createElement(
+              'p',
+              { style: { margin: '6px 0 0', fontSize: 12, opacity: 0.9, lineHeight: 1.45 } },
+              React.createElement('span', { style: { color: '#93c5fd', fontWeight: 600 } }, 'Fitness (CTL)'),
+              ' · ',
+              React.createElement('span', { style: { color: '#fca5a5', fontWeight: 600 } }, 'Fatigue (ATL)'),
+              ' — 최근 1개월 트렌드 읽는 법'
+            )
+          ),
+          React.createElement(
+            'div',
+            { style: { flex: '1 1 auto', overflowY: 'auto', padding: '16px 18px 8px', WebkitOverflowScrolling: 'touch' } },
+            sectionTitle('1', '전체 방향 (트렌드)'),
+            React.createElement(
+              'div',
+              { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+              trendCards.map(function (card, ci) {
+                return React.createElement(
+                  'div',
+                  {
+                    key: 't' + ci,
+                    style: {
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 12,
+                      padding: '11px 13px',
+                      borderRadius: 12,
+                      border: '1px solid #e2e8f0',
+                      background: '#fafafa'
+                    }
+                  },
+                  React.createElement(
+                    'span',
+                    {
+                      style: {
+                        width: 32,
+                        height: 32,
+                        borderRadius: 10,
+                        background: card.color + '18',
+                        color: card.color,
+                        fontSize: 16,
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }
+                    },
+                    card.icon
+                  ),
+                  React.createElement(
+                    'div',
+                    null,
+                    React.createElement('div', { style: { fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 2 } }, card.title),
+                    React.createElement('div', { style: { fontSize: 12, color: '#475569', lineHeight: 1.45 } }, card.desc),
+                    React.createElement('div', { style: { fontSize: 11, color: '#94a3b8', marginTop: 3 } }, card.sub)
+                  )
+                );
+              })
+            ),
+            sectionTitle('2', '두 선의 간격 (형태 = TSB)'),
+            React.createElement(
+              'div',
+              {
+                style: {
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  background: ACCENT_LIGHT,
+                  border: '1px solid rgba(124,58,237,0.2)',
+                  marginBottom: 10,
+                  fontSize: 12,
+                  color: '#5b21b6',
+                  fontWeight: 600,
+                  textAlign: 'center'
+                }
+              },
+              '호버 패널 TSB = CTL − ATL · 곡선 간격과 동일'
+            ),
+            React.createElement(
+              'div',
+              { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+              tsbZones.map(function (z, zi) {
+                return React.createElement(
+                  'div',
+                  {
+                    key: 'z' + zi,
+                    style: {
+                      display: 'grid',
+                      gridTemplateColumns: '72px 1fr',
+                      gap: 8,
+                      alignItems: 'center',
+                      padding: '9px 11px',
+                      borderRadius: 11,
+                      background: z.bg,
+                      border: '1px solid ' + z.color + '33'
+                    }
+                  },
+                  React.createElement(
+                    'span',
+                    { style: { fontSize: 11, fontWeight: 800, color: z.color, fontVariantNumeric: 'tabular-nums' } },
+                    z.range
+                  ),
+                  React.createElement(
+                    'div',
+                    null,
+                    React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: '#334155' } }, z.label),
+                    React.createElement('div', { style: { fontSize: 11, color: '#64748b', marginTop: 1 } }, z.guide)
+                  )
+                );
+              })
+            ),
+            React.createElement(
+              'div',
+              { style: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 } },
+              React.createElement(
+                'div',
+                { style: { fontSize: 11, padding: '8px 11px', borderRadius: 9, background: 'rgba(239,68,68,0.08)', borderLeft: '3px solid #ef4444', color: '#475569', lineHeight: 1.45 } },
+                React.createElement('strong', { style: { color: '#dc2626' } }, 'ATL > CTL'),
+                ' (빨간선 위) → 최근 부하가 체력보다 큼 · 피로 누적'
+              ),
+              React.createElement(
+                'div',
+                { style: { fontSize: 11, padding: '8px 11px', borderRadius: 9, background: 'rgba(59,130,246,0.08)', borderLeft: '3px solid #3b82f6', color: '#475569', lineHeight: 1.45 } },
+                React.createElement('strong', { style: { color: '#2563eb' } }, 'CTL > ATL'),
+                ' (파란선 위) → 회복·테이퍼 구간에 가까움'
+              )
+            ),
+            sectionTitle('3', '급격한 변화 (스파이크)'),
+            React.createElement(
+              'div',
+              { style: { display: 'flex', flexDirection: 'column', gap: 7 } },
+              spikeCards.map(function (sc, si) {
+                return React.createElement(
+                  'div',
+                  {
+                    key: 's' + si,
+                    style: { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: '1px solid #f1f5f9', background: '#fff' }
+                  },
+                  React.createElement('span', { style: { width: 8, height: 8, borderRadius: '50%', background: sc.dot, flexShrink: 0 } }),
+                  React.createElement(
+                    'div',
+                    null,
+                    React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: '#334155' } }, sc.title),
+                    React.createElement('div', { style: { fontSize: 11, color: '#64748b', marginTop: 1 } }, sc.desc)
+                  )
+                );
+              })
+            ),
+            sectionTitle('4', '실전 읽기 예시'),
+            React.createElement(
+              'div',
+              { style: { display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 4 } },
+              examples.map(function (ex, ei) {
+                return React.createElement(
+                  'div',
+                  {
+                    key: 'e' + ei,
+                    style: {
+                      padding: '11px 13px 11px 14px',
+                      borderRadius: 12,
+                      border: '1px solid #e2e8f0',
+                      borderLeft: '4px solid ' + ex.border,
+                      background: 'linear-gradient(90deg, rgba(248,250,252,0.9), #fff)'
+                    }
+                  },
+                  React.createElement(
+                    'div',
+                    { style: { fontSize: 13, fontWeight: 800, color: '#1e293b', fontFamily: 'ui-monospace, monospace', letterSpacing: '-0.02em' } },
+                    ex.pattern
+                  ),
+                  React.createElement('div', { style: { fontSize: 10, color: '#94a3b8', marginTop: 2, fontWeight: 600 } }, ex.note),
+                  React.createElement('div', { style: { fontSize: 12, color: '#475569', marginTop: 5, lineHeight: 1.5 } }, ex.result)
+                );
+              })
+            )
+          ),
+          React.createElement(
+            'div',
+            {
+              style: {
+                flexShrink: 0,
+                padding: '12px 18px calc(12px + env(safe-area-inset-bottom, 0px))',
+                borderTop: '1px solid #f1f5f9',
+                background: '#fafafa'
+              }
+            },
+            React.createElement(
+              'button',
+              {
+                type: 'button',
+                onClick: onClose,
+                style: {
+                  width: '100%',
+                  minHeight: 46,
+                  border: 'none',
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                  color: '#fff',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(124,58,237,0.35)',
+                  touchAction: 'manipulation'
+                }
+              },
+              '확인'
+            )
+          )
+        )
+      );
+    }
+
     // Training Trend Chart 컴포넌트 (TSS 트렌드와 동일 UX: 매끄러운 라인 · M/D X축 · 호버 패널)
     function TrainingTrendChart(props) {
       var p = props || {};
@@ -32419,6 +32782,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       const chartInstanceRef = useRef(null);
       const pmcPanelIndexRef = useRef(0);
       const [stelvioRollingFitnessGlobal, setStelvioRollingFitnessGlobal] = useState(null);
+      const [guideOpen, setGuideOpen] = useState(false);
+      const [fitnessVisible, setFitnessVisible] = useState(true);
+      const [fatigueVisible, setFatigueVisible] = useState(true);
       const _hoverState = useState(0);
       var pmcHoverIdx = _hoverState[0];
       var setPmcHoverIdx = _hoverState[1];
@@ -32589,42 +32955,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               } catch (e2) {}
             },
             plugins: {
-              legend: {
-                display: true,
-                position: 'bottom',
-                labels: {
-                  usePointStyle: true,
-                  boxWidth: 8,
-                  boxHeight: 8,
-                  padding: 10,
-                  font: { size: 9 },
-                  color: '#475569',
-                  generateLabels: function (chart) {
-                    var datasetsInner = chart.data.datasets;
-                    if (!datasetsInner || !datasetsInner.length) return [];
-                    var legColor = '#475569';
-                    var out = [];
-                    var di;
-                    for (di = 0; di < datasetsInner.length; di++) {
-                      var ds = datasetsInner[di];
-                      var hidden = typeof chart.isDatasetVisible === 'function' ? !chart.isDatasetVisible(di) : false;
-                      var isRefLine = ds.borderDash && ds.borderDash.length;
-                      out.push({
-                        text: ds.label || '',
-                        fontColor: legColor,
-                        fillStyle: isRefLine ? ds.borderColor : (ds.pointHoverBackgroundColor || ds.borderColor),
-                        strokeStyle: isRefLine ? ds.borderColor : (ds.pointBorderColor || '#ffffff'),
-                        lineWidth: isRefLine ? (ds.borderWidth != null ? ds.borderWidth : 2) : (ds.pointBorderWidth != null ? ds.pointBorderWidth : 2),
-                        lineDash: isRefLine && ds.borderDash ? ds.borderDash.slice() : [],
-                        pointStyle: isRefLine ? 'line' : 'circle',
-                        hidden: hidden,
-                        datasetIndex: di
-                      });
-                    }
-                    return out;
-                  }
-                }
-              },
+              legend: { display: false },
               tooltip: { enabled: false }
             },
             scales: {
@@ -32659,6 +32990,185 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         };
       }, [data, stelvioRollingFitnessGlobal, isRun]);
 
+      useEffect(function syncPmcLegendVisibility() {
+        var ch = chartInstanceRef.current;
+        if (!ch) return;
+        var meta0 = ch.getDatasetMeta(0);
+        var meta1 = ch.getDatasetMeta(1);
+        var changed = false;
+        if (meta0 && meta0.hidden !== !fitnessVisible) {
+          ch.setDatasetVisibility(0, fitnessVisible);
+          changed = true;
+        }
+        if (meta1 && meta1.hidden !== !fatigueVisible) {
+          ch.setDatasetVisibility(1, fatigueVisible);
+          changed = true;
+        }
+        if (changed) ch.update();
+      }, [fitnessVisible, fatigueVisible, data, stelvioRollingFitnessGlobal]);
+
+      function pmcInfoButton(extraStyle) {
+        return React.createElement(
+          'button',
+          {
+            type: 'button',
+            'aria-label': '그래프 분석 가이드',
+            title: '그래프 분석 가이드',
+            onClick: function (e) {
+              e.stopPropagation();
+              setGuideOpen(true);
+            },
+            style: Object.assign(
+              {
+                width: 22,
+                height: 22,
+                minWidth: 22,
+                borderRadius: '50%',
+                border: '1.5px solid ' + PMC_PANEL_REF_LINE,
+                background: 'linear-gradient(135deg, rgba(124,58,237,0.14), rgba(124,58,237,0.06))',
+                color: PMC_PANEL_REF_LINE,
+                fontSize: 12,
+                fontWeight: 800,
+                fontStyle: 'italic',
+                fontFamily: 'Georgia, "Times New Roman", serif',
+                lineHeight: 1,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 1px 4px rgba(124,58,237,0.2)',
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+              },
+              extraStyle || {}
+            ),
+            onMouseDown: function (e) {
+              e.currentTarget.style.transform = 'scale(0.92)';
+            },
+            onMouseUp: function (e) {
+              e.currentTarget.style.transform = 'scale(1)';
+            },
+            onMouseLeave: function (e) {
+              e.currentTarget.style.transform = 'scale(1)';
+            }
+          },
+          'i'
+        );
+      }
+
+      function pmcCustomLegend() {
+        var avgFitnessGlobal =
+          stelvioRollingFitnessGlobal &&
+          typeof stelvioRollingFitnessGlobal.avgFitness === 'number' &&
+          isFinite(stelvioRollingFitnessGlobal.avgFitness) &&
+          stelvioRollingFitnessGlobal.avgFitness > 0
+            ? stelvioRollingFitnessGlobal.avgFitness
+            : null;
+        function legChip(opts) {
+          var visible = opts.visible !== false;
+          return React.createElement(
+            'button',
+            {
+              type: 'button',
+              onClick: opts.onClick,
+              style: {
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 8px 4px 6px',
+                borderRadius: 999,
+                border: '1px solid ' + (visible ? '#e2e8f0' : '#f1f5f9'),
+                background: visible ? '#fff' : '#f8fafc',
+                opacity: visible ? 1 : 0.45,
+                cursor: 'pointer',
+                fontSize: 10,
+                fontWeight: 600,
+                color: '#475569',
+                touchAction: 'manipulation'
+              }
+            },
+            opts.icon,
+            React.createElement('span', null, opts.label)
+          );
+        }
+        return React.createElement(
+          'div',
+          {
+            className: 'flex flex-wrap items-center justify-center gap-x-2 gap-y-2 mt-2 px-1',
+            style: { minHeight: 28 }
+          },
+          legChip({
+            visible: fitnessVisible,
+            label: 'Fitness (CTL)',
+            onClick: function () {
+              setFitnessVisible(function (v) {
+                return !v;
+              });
+            },
+            icon: React.createElement('span', {
+              style: {
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#3b82f6',
+                boxShadow: '0 0 0 2px #fff, 0 0 0 3px rgba(59,130,246,0.35)',
+                flexShrink: 0
+              }
+            })
+          }),
+          legChip({
+            visible: fatigueVisible,
+            label: 'Fatigue (ATL)',
+            onClick: function () {
+              setFatigueVisible(function (v) {
+                return !v;
+              });
+            },
+            icon: React.createElement('span', {
+              style: {
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#ef4444',
+                boxShadow: '0 0 0 2px #fff, 0 0 0 3px rgba(239,68,68,0.35)',
+                flexShrink: 0
+              }
+            })
+          }),
+          avgFitnessGlobal != null
+            ? React.createElement(
+                'span',
+                {
+                  style: {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 8px 4px 6px',
+                    borderRadius: 999,
+                    border: '1px solid #e2e8f0',
+                    background: '#fff',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: '#475569'
+                  }
+                },
+                React.createElement('span', {
+                  style: {
+                    width: 14,
+                    height: 0,
+                    borderTop: '2px dashed rgba(59,130,246,0.55)',
+                    flexShrink: 0
+                  }
+                }),
+                isRun ? 'RUN 사용자 평균' : '전체 사용자 평균'
+              )
+            : null,
+          pmcInfoButton({ marginLeft: avgFitnessGlobal != null ? 0 : 2 })
+        );
+      }
+
       function pmcHeaderAndPanel() {
         return React.createElement(
           React.Fragment,
@@ -32666,7 +33176,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           React.createElement(
             'div',
             { className: 'flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0' },
-            React.createElement('h3', { className: 'text-sm font-semibold text-gray-600 truncate' }, '훈련 트렌드 (최근 1개월)')
+            React.createElement(
+              'div',
+              { className: 'flex items-center gap-2 min-w-0' },
+              React.createElement('h3', { className: 'text-sm font-semibold text-gray-600 truncate' }, '훈련 트렌드 (최근 1개월)'),
+              pmcInfoButton()
+            )
           ),
           function () {
             if (!data || data.length === 0) return null;
@@ -32761,6 +33276,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
               데이터가 없습니다
             </div>
+            {pmcCustomLegend()}
+            <PmcTrendGuideModal open={guideOpen} onClose={function () { setGuideOpen(false); }} isRun={isRun} />
           </DashboardCard>
         );
       }
@@ -32776,6 +33293,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <canvas ref={chartRef}></canvas>
             </div>
           </div>
+          {pmcCustomLegend()}
+          <PmcTrendGuideModal open={guideOpen} onClose={function () { setGuideOpen(false); }} isRun={isRun} />
         </DashboardCard>
       );
     }
