@@ -7523,12 +7523,22 @@ body:has(#trainingDetailModal:not(.hidden)) {
 
 /* 모바일(iOS·WebView): 등락 배지가 이름 영역에 잘리지 않도록 */
 @media (max-width: 600px) {
-  /* content-visibility:auto 는 Safari에서 행 내부 텍스트·배지가 비거나 보합만 보이는 현상 유발 */
+  /* content-visibility:auto 는 Safari·Android Chrome에서 행 내부 텍스트·배지가 비는 현상 유발 */
   #stelvioRankingListBody .stelvio-rank-row {
     content-visibility: visible;
     contain-intrinsic-size: auto;
   }
+  #runningRankingScreen .stelvio-rank-row.running-ranking-row,
+  #runningRankingScreen .running-ranking-collapsible-list .stelvio-rank-row {
+    content-visibility: visible;
+    contain-intrinsic-size: auto;
+  }
   #stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  #runningRankingScreen .stelvio-rank-row .stelvio-rank-name,
+  #runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name {
     flex-wrap: wrap;
     row-gap: 2px;
   }
@@ -28288,19 +28298,23 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 }
 @media (max-width: 600px) {
   #runningRankingScreen .stelvio-rank-row.running-ranking-row > .stelvio-rank-name {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    row-gap: 2px;
   }
   #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
   #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change-slot .stelvio-rank-change {
+    flex-shrink: 0;
     font-size: 0.72rem;
     margin-left: 2px;
     line-height: 1.2;
+    white-space: nowrap;
+    display: inline-block;
   }
 }
 #runningRankingScreen .stelvio-rank-row.running-ranking-row {
   flex-wrap: nowrap;
   align-items: center;
-  content-visibility: auto;
+  content-visibility: visible;
   contain-intrinsic-size: auto 48px;
 }
 /* 종합 탭: CYCLE GC 탭과 동일 행·폰트·여백 (1줄: 순위·이름·점수) */
@@ -28884,8 +28898,8 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 }
 @media (max-width: 600px) {
   #runningRankingScreen .running-ranking-list-body--avatar-align .stelvio-rank-row.running-ranking-row > .stelvio-rank-name {
-    flex-wrap: nowrap;
-    row-gap: 0;
+    flex-wrap: wrap;
+    row-gap: 2px;
   }
 }
 
