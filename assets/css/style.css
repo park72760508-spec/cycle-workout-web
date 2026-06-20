@@ -28323,6 +28323,28 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
     display: inline-block;
   }
 }
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-pos .stelvio-rank-change {
+  flex-shrink: 0;
+  margin-left: 2px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+#runningRankingScreen .stelvio-rank-change--run-pos {
+  display: none;
+}
+@media (max-width: 600px), ((hover: none) and (pointer: coarse)) {
+  #runningRankingScreen .stelvio-rank-change--run-name {
+    display: none !important;
+  }
+  #runningRankingScreen .stelvio-rank-change--run-pos {
+    display: inline !important;
+  }
+  #runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-pos {
+    white-space: nowrap;
+  }
+}
 #runningRankingScreen .stelvio-rank-row.running-ranking-row {
   flex-wrap: nowrap;
   align-items: center;
