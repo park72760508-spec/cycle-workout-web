@@ -563,6 +563,49 @@
       });
     }
 
+    var searchExpanded = skipListCollapse || listExpanded;
+
+    useEffect(function () {
+      if (typeof window.runningRankingSearchSetContext !== 'function') return;
+      if (activeTab === 'crew') {
+        window.runningRankingSearchSetContext(null);
+        return;
+      }
+      var soc = socialApi();
+      var api = dataApi();
+      window.runningRankingSearchSetContext({
+        arr: rankedList,
+        currentUserId: currentUserId,
+        isAdmin:
+          typeof window.stelvioRankingViewerCanSeePrivateNames === 'function'
+            ? window.stelvioRankingViewerCanSeePrivateNames()
+            : typeof window.stelvioRankingLoginIsAdmin === 'function' && window.stelvioRankingLoginIsAdmin(),
+        formatValue: soc.formatValueLabel
+          ? function (item) { return soc.formatValueLabel(item); }
+          : undefined,
+        isPrivate: function (item) {
+          if (item && item.isPrivate != null) return !!item.isPrivate;
+          return api.isPrivateRow ? api.isPrivateRow(item) : false;
+        },
+        friendSet: typeof window.stelvioRankingFriendUserSet !== 'undefined' ? window.stelvioRankingFriendUserSet : null,
+        groupContactSet:
+          typeof window.stelvioRankingGroupContactSet !== 'undefined' ? window.stelvioRankingGroupContactSet : null
+      });
+    }, [rankedList, activeTab, currentUserId, socialVer]);
+
+    useEffect(function () {
+      if (typeof window.runningRankingSearchSetUiState !== 'function') return;
+      var searchableTab = activeTab === 'overall' || activeTab === 'pace' || activeTab === 'tss' || activeTab === 'distance';
+      window.runningRankingSearchSetUiState({
+        enabled: searchableTab && rankedList.length > 0,
+        expanded: searchableTab && searchExpanded && rankedList.length > 0,
+        tab: activeTab
+      });
+      if (window._runningRankingSearchFab && typeof window._runningRankingSearchFab.update === 'function') {
+        window._runningRankingSearchFab.update();
+      }
+    }, [searchExpanded, activeTab, rankedList.length, skipListCollapse, listExpanded]);
+
     var tabButtons = (cfg().TABS || []).map(function (t) {
       return React.createElement('button', {
         key: t.id,
@@ -841,6 +884,7 @@
             React.createElement('span', { className: 'stelvio-category-header-unit' }, unitLabel)
           ),
           React.createElement('div', {
+            id: 'runningRankingListBody',
             className: 'stelvio-category-body running-ranking-list-body running-ranking-list-body--avatar-align running-ranking-list-body--overall' +
               (activeTab === 'distance' ? ' running-ranking-list-body--distance' : '') +
               (isOverallTab && showOverallSegments ? ' running-ranking-list-body--segments-on' : ' running-ranking-list-body--segments-off')
