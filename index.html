@@ -32407,16 +32407,21 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // Training Trend Chart 컴포넌트
+    // Training Trend Chart 컴포넌트 (TSS 트렌드와 동일 UX: 매끄러운 라인 · M/D X축 · 호버 패널)
     function TrainingTrendChart(props) {
       var p = props || {};
       var data = p.data;
       var isRun = !!p.isRun;
+      var PMC_PANEL_REF_LINE = '#7c3aed';
+      var PMC_PANEL_BADGE_W = 132;
+      var PMC_PANEL_SUB = '#64748b';
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
-      const [fitnessVisible, setFitnessVisible] = useState(true);
-      const [fatigueVisible, setFatigueVisible] = useState(true);
+      const pmcPanelIndexRef = useRef(0);
       const [stelvioRollingFitnessGlobal, setStelvioRollingFitnessGlobal] = useState(null);
+      const _hoverState = useState(0);
+      var pmcHoverIdx = _hoverState[0];
+      var setPmcHoverIdx = _hoverState[1];
       
       useEffect(
         function () {
@@ -32446,11 +32451,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         if (!data || data.length === 0) return;
         
         const ctx = chartRef.current?.getContext('2d');
-        if (!ctx) return;
+        if (!ctx || typeof Chart === 'undefined') return;
         
         if (chartInstanceRef.current) {
           chartInstanceRef.current.destroy();
+          chartInstanceRef.current = null;
         }
+
+        var chartRows = data;
+        var n = chartRows.length;
+        var lastIx = Math.max(0, n - 1);
+        pmcPanelIndexRef.current = lastIx;
+        setPmcHoverIdx(lastIx);
         
         var avgFitnessGlobal =
           stelvioRollingFitnessGlobal &&
@@ -32459,77 +32471,184 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           stelvioRollingFitnessGlobal.avgFitness > 0
             ? stelvioRollingFitnessGlobal.avgFitness
             : null;
+
+        var fitnessSeries = chartRows.map(function (d) { return Number(d.fitness) || 0; });
+        var fatigueSeries = chartRows.map(function (d) { return Number(d.fatigue) || 0; });
+        var allVals = fitnessSeries.concat(fatigueSeries);
+        if (avgFitnessGlobal != null) allVals.push(avgFitnessGlobal);
+        var validV = allVals.filter(function (v) { return typeof v === 'number' && !isNaN(v) && v >= 0; });
+        var dataMin = validV.length > 0 ? Math.min.apply(null, validV) : 0;
+        var dataMax = validV.length > 0 ? Math.max.apply(null, validV) : 0;
+        var yPad = Math.max(3, Math.round((dataMax - dataMin) * 0.08) || 5);
+        var yMin = Math.max(0, Math.floor(dataMin - yPad));
+        var yMax = Math.ceil(dataMax + yPad);
+        if (!(yMax > yMin)) {
+          yMin = 0;
+          yMax = Math.max(50, dataMax + 10);
+        }
         
         var datasets = [
               {
-                label: 'Fitness',
-                data: data.map(d => d.fitness),
+                order: 0,
+                label: 'Fitness (CTL)',
+                data: fitnessSeries,
                 borderColor: '#3b82f6',
+                borderWidth: 2.5,
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.4,
-                fill: false,
-                pointRadius: 4,
-                pointBackgroundColor: '#3b82f6',
-                order: 1
+                tension: n <= 12 ? 0.35 : 0.45,
+                cubicInterpolationMode: 'monotone',
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: '#3b82f6',
+                pointHitRadius: 10,
+                pointBackgroundColor: 'transparent',
+                pointBorderWidth: 0
               },
               {
-                label: 'Fatigue',
-                data: data.map(d => d.fatigue),
+                order: 0,
+                label: 'Fatigue (ATL)',
+                data: fatigueSeries,
                 borderColor: '#ef4444',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                tension: 0.4,
-                fill: false,
-                pointRadius: 4,
-                pointBackgroundColor: '#ef4444',
-                order: 1
+                borderWidth: 2.5,
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                tension: n <= 12 ? 0.35 : 0.45,
+                cubicInterpolationMode: 'monotone',
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: '#ef4444',
+                pointHitRadius: 10,
+                pointBackgroundColor: 'transparent',
+                pointBorderWidth: 0
               }
             ];
         if (avgFitnessGlobal != null) {
           datasets.push({
+                order: 1,
                 label: isRun ? 'RUN 사용자 평균' : '전체 사용자 평균',
-                data: data.map(function () { return avgFitnessGlobal; }),
+                data: chartRows.map(function () { return avgFitnessGlobal; }),
                 borderColor: 'rgba(59, 130, 246, 0.45)',
                 backgroundColor: 'transparent',
                 tension: 0,
                 fill: false,
                 pointRadius: 0,
-                borderDash: [6, 5],
+                pointHoverRadius: 0,
+                borderDash: [6, 4],
                 borderWidth: 2,
-                spanGaps: true,
-                order: 2
+                spanGaps: true
               });
         }
+
+        var pmcPurpleVertPlugin = {
+          id: 'pmcTrendPurpleVert',
+          afterDraw: function (chart) {
+            var idx = pmcPanelIndexRef.current;
+            if (typeof idx !== 'number' || idx < 0 || !chart.chartArea) return;
+            var meta = chart.getDatasetMeta(0);
+            if (!meta || !meta.data || idx >= meta.data.length) return;
+            var pt = meta.data[idx];
+            if (!pt || pt.x == null) return;
+            var x = pt.x;
+            var top = chart.chartArea.top;
+            var bottom = chart.chartArea.bottom;
+            var c2 = chart.ctx;
+            c2.save();
+            c2.beginPath();
+            c2.setLineDash([6, 4]);
+            c2.strokeStyle = PMC_PANEL_REF_LINE;
+            c2.lineWidth = 3;
+            c2.moveTo(x, top);
+            c2.lineTo(x, bottom);
+            c2.stroke();
+            c2.setLineDash([]);
+            c2.restore();
+          }
+        };
         
         chartInstanceRef.current = new Chart(ctx, {
           type: 'line',
           data: {
-            labels: data.map(d => d.date),
+            labels: chartRows.map(function (d) { return d.date || ''; }),
             datasets: datasets
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: { padding: { top: 8, left: 4, right: 6, bottom: 2 } },
+            interaction: { mode: 'index', intersect: false },
+            onHover: function (event, elements, chart) {
+              var lastI = Math.max(0, chartRows.length - 1);
+              var ix = elements && elements.length > 0 && elements[0].index != null ? elements[0].index : lastI;
+              pmcPanelIndexRef.current = ix;
+              setPmcHoverIdx(function (prev) {
+                return prev === ix ? prev : ix;
+              });
+              try {
+                chart.update('none');
+              } catch (e2) {}
+            },
             plugins: {
-              legend: { display: false },
+              legend: {
+                display: true,
+                position: 'bottom',
+                labels: {
+                  usePointStyle: true,
+                  boxWidth: 8,
+                  boxHeight: 8,
+                  padding: 10,
+                  font: { size: 9 },
+                  color: '#475569',
+                  generateLabels: function (chart) {
+                    var datasetsInner = chart.data.datasets;
+                    if (!datasetsInner || !datasetsInner.length) return [];
+                    var legColor = '#475569';
+                    var out = [];
+                    var di;
+                    for (di = 0; di < datasetsInner.length; di++) {
+                      var ds = datasetsInner[di];
+                      var hidden = typeof chart.isDatasetVisible === 'function' ? !chart.isDatasetVisible(di) : false;
+                      var isRefLine = ds.borderDash && ds.borderDash.length;
+                      out.push({
+                        text: ds.label || '',
+                        fontColor: legColor,
+                        fillStyle: isRefLine ? ds.borderColor : (ds.pointHoverBackgroundColor || ds.borderColor),
+                        strokeStyle: isRefLine ? ds.borderColor : (ds.pointBorderColor || '#ffffff'),
+                        lineWidth: isRefLine ? (ds.borderWidth != null ? ds.borderWidth : 2) : (ds.pointBorderWidth != null ? ds.pointBorderWidth : 2),
+                        lineDash: isRefLine && ds.borderDash ? ds.borderDash.slice() : [],
+                        pointStyle: isRefLine ? 'line' : 'circle',
+                        hidden: hidden,
+                        datasetIndex: di
+                      });
+                    }
+                    return out;
+                  }
+                }
+              },
               tooltip: { enabled: false }
             },
             scales: {
               x: {
                 grid: { display: true, color: '#e5e7eb', drawBorder: false },
                 ticks: { 
-                  font: { size: 11 }, 
+                  font: { size: 10 }, 
                   color: '#6b7280',
                   maxRotation: 0,
-                  minRotation: 0
+                  minRotation: 0,
+                  autoSkip: true,
+                  maxTicksLimit: 8
                 }
               },
               y: {
                 grid: { display: true, color: '#e5e7eb', drawBorder: false },
                 ticks: { font: { size: 11 }, color: '#6b7280' },
-                beginAtZero: true
+                min: yMin,
+                max: yMax,
+                beginAtZero: false
               }
             }
-          }
+          },
+          plugins: [pmcPurpleVertPlugin]
         });
         
         return () => {
@@ -32539,34 +32658,106 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }
         };
       }, [data, stelvioRollingFitnessGlobal, isRun]);
-      
-      useEffect(function syncVisibility() {
-        var ch = chartInstanceRef.current;
-        if (!ch) return;
-        var meta0 = ch.getDatasetMeta(0);
-        var meta1 = ch.getDatasetMeta(1);
-        var changed = false;
-        if (meta0 && meta0.hidden !== !fitnessVisible) {
-          ch.setDatasetVisibility(0, fitnessVisible);
-          changed = true;
-        }
-        if (meta1 && meta1.hidden !== !fatigueVisible) {
-          ch.setDatasetVisibility(1, fatigueVisible);
-          changed = true;
-        }
-        if (changed) ch.update();
-      }, [fitnessVisible, fatigueVisible, data, stelvioRollingFitnessGlobal]);
-      
-      function toggleFitness() {
-        setFitnessVisible(function(v) { return !v; });
-      }
-      function toggleFatigue() {
-        setFatigueVisible(function(v) { return !v; });
+
+      function pmcHeaderAndPanel() {
+        return React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(
+            'div',
+            { className: 'flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0' },
+            React.createElement('h3', { className: 'text-sm font-semibold text-gray-600 truncate' }, '훈련 트렌드 (최근 1개월)')
+          ),
+          function () {
+            if (!data || data.length === 0) return null;
+            var gi = pmcHoverIdx;
+            if (gi == null || gi < 0 || gi >= data.length) gi = Math.max(0, data.length - 1);
+            var row = data[gi];
+            var ctlVal = Number(row.fitness);
+            var atlVal = Number(row.fatigue);
+            var tsbVal = row.form_tsb != null ? Number(row.form_tsb) : ctlVal - atlVal;
+            var dateLabel = row.date || '—';
+            var panelBg =
+              'linear-gradient(180deg, rgba(124,58,237,0.11) 0%, rgba(124,58,237,0.05) 100%), #fff';
+            var ctlText = isFinite(ctlVal) ? ctlVal.toFixed(1) : '—';
+            var subText = dateLabel + ' · ATL ' + (isFinite(atlVal) ? atlVal.toFixed(1) : '—');
+            if (isFinite(tsbVal)) subText += ' · TSB ' + (tsbVal >= 0 ? '+' : '') + tsbVal.toFixed(1);
+            if (subText.length > 28) subText = subText.slice(0, 26) + '…';
+            return React.createElement(
+              'div',
+              {
+                style: {
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
+                  paddingBottom: 4,
+                  pointerEvents: 'none'
+                }
+              },
+              React.createElement(
+                'div',
+                {
+                  style: {
+                    width: PMC_PANEL_BADGE_W,
+                    minHeight: 36,
+                    boxSizing: 'border-box',
+                    background: panelBg,
+                    border: '1.5px solid ' + PMC_PANEL_REF_LINE,
+                    borderRadius: 10,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                    padding: '4px 6px 5px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: 'ui-sans-serif, system-ui, sans-serif'
+                  }
+                },
+                React.createElement(
+                  'div',
+                  {
+                    style: {
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: PMC_PANEL_REF_LINE,
+                      lineHeight: 1.15,
+                      WebkitFontSmoothing: 'antialiased',
+                      textAlign: 'center',
+                      maxWidth: '100%',
+                      fontVariantNumeric: 'tabular-nums'
+                    }
+                  },
+                  'CTL ' + ctlText
+                ),
+                React.createElement(
+                  'div',
+                  {
+                    style: {
+                      fontSize: 9,
+                      fontWeight: 400,
+                      color: PMC_PANEL_SUB,
+                      lineHeight: 1.2,
+                      marginTop: 2,
+                      textAlign: 'center',
+                      maxWidth: '100%',
+                      wordBreak: 'break-all'
+                    }
+                  },
+                  subText
+                )
+              )
+            );
+          }()
+        );
       }
       
       if (!data || data.length === 0) {
         return (
-          <DashboardCard title="훈련 트렌드 (최근 1개월)">
+          <DashboardCard>
+            {pmcHeaderAndPanel()}
             <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
               데이터가 없습니다
             </div>
@@ -32575,42 +32766,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       }
       
       return (
-        <DashboardCard title="훈련 트렌드 (최근 1개월)">
-          <div className="h-[200px]">
-            <canvas ref={chartRef}></canvas>
-          </div>
-          <div className="mt-2 px-2 pb-1 text-xs text-gray-500 leading-relaxed">
-            <div
-              className={"flex items-start gap-2 mb-1 cursor-pointer select-none rounded p-1 -m-1 hover:bg-gray-100 active:opacity-80 " + (fitnessVisible ? "" : "opacity-50")}
-              onClick={toggleFitness}
-              role="button"
-              tabIndex={0}
-              onKeyDown={function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFitness(); } }}
-            >
-              <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0 bg-blue-500 mt-0.5" style={{ backgroundColor: fitnessVisible ? '#3b82f6' : '#9ca3af' }}></span>
-              <span><strong className="text-gray-700">Fitness (체력)</strong>: 42일 반감기로 계산된 장기 체력 (지난 6주간의 훈련 누적, 높을수록 좋음) · 클릭 시 표시/숨김</span>
-            </div>
-            <div
-              className={"flex items-start gap-2 cursor-pointer select-none rounded p-1 -m-1 hover:bg-gray-100 active:opacity-80 " + (fatigueVisible ? "" : "opacity-50")}
-              onClick={toggleFatigue}
-              role="button"
-              tabIndex={0}
-              onKeyDown={function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFatigue(); } }}
-            >
-              <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0 bg-red-500 mt-0.5" style={{ backgroundColor: fatigueVisible ? '#ef4444' : '#9ca3af' }}></span>
-              <span><strong className="text-gray-700">Fatigue (피로도)</strong>: 7일 반감기로 계산된 단기 피로 (최근 7일간의 훈련 누적, 높으면 휴식 필요) · 클릭 시 표시/숨김</span>
-            </div>
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600">
-              <span className="inline-block w-8 flex-shrink-0 border-t-2 border-dashed" style={{ borderColor: 'rgba(59, 130, 246, 0.5)' }} aria-hidden></span>
-              <span>
-                {isRun ? 'RUN 사용자 평균' : '전체 사용자 평균'}
-                {stelvioRollingFitnessGlobal && typeof stelvioRollingFitnessGlobal.avgFitness === 'number' && stelvioRollingFitnessGlobal.avgFitness > 0 ? (
-                  <span className="text-gray-500 tabular-nums"> ({stelvioRollingFitnessGlobal.avgFitness})</span>
-                ) : null}
-              </span>
-              {isRun ? (
-                <span className="text-gray-400"> · RUN rTSS 기반 Fitness(42일 반감기)</span>
-              ) : null}
+        <DashboardCard>
+          {pmcHeaderAndPanel()}
+          <div
+            className="min-h-0 w-full"
+            style={{ display: 'flex', flexDirection: 'column', minHeight: 200, height: 'min(200px, 45vw)' }}
+          >
+            <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1, touchAction: 'none' }}>
+              <canvas ref={chartRef}></canvas>
             </div>
           </div>
         </DashboardCard>
