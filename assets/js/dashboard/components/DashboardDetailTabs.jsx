@@ -277,9 +277,11 @@
           { className: 'space-y-6' },
           isRun && RunHexagonTendencyCard && React.createElement(RunHexagonTendencyCard, {
             hexagonContext: p.hexagonCoachContext,
+            userProfile: userProfile,
+            stats: stats,
             DashboardCard: DashboardCard
           }),
-          RiderDashboardProfile && React.createElement(RiderDashboardProfile, { userProfile: userProfile }),
+          !isRun && RiderDashboardProfile && React.createElement(RiderDashboardProfile, { userProfile: userProfile }),
           !isRun && RiderPowerProfileTrendCharts && React.createElement(RiderPowerProfileTrendCharts, {
             DashboardCard: DashboardCard,
             userProfile: userProfile,
