@@ -32487,14 +32487,23 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         );
       }
 
-      return React.createElement(
+      if (!open) return null;
+
+      var dialogEl = React.createElement(
         'div',
         {
           role: 'dialog',
           'aria-modal': 'true',
           'aria-labelledby': 'pmcGuideTitle',
-          className: 'fixed inset-0 z-[10002] flex items-end sm:items-center justify-center p-0 sm:p-4',
-          style: { background: 'rgba(15,23,42,0.52)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' },
+          className: 'fixed inset-0 flex items-center justify-center',
+          style: {
+            zIndex: 100101,
+            background: 'rgba(15,23,42,0.52)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px))',
+            boxSizing: 'border-box'
+          },
           onClick: function (e) {
             if (e.target === e.currentTarget) onClose();
           }
@@ -32505,16 +32514,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             style: {
               width: '100%',
               maxWidth: 440,
-              maxHeight: 'min(92vh, 720px)',
+              maxHeight: 'min(88vh, 720px)',
               background: '#fff',
-              borderRadius: '20px 20px 0 0',
-              boxShadow: '0 -8px 40px rgba(124,58,237,0.18), 0 24px 64px rgba(15,23,42,0.22)',
+              borderRadius: 20,
+              boxShadow: '0 24px 64px rgba(15,23,42,0.22), 0 8px 40px rgba(124,58,237,0.18)',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
               fontFamily: 'ui-sans-serif, system-ui, sans-serif'
             },
-            className: 'sm:rounded-[20px]',
             onClick: function (e) {
               e.stopPropagation();
             }
@@ -32530,7 +32538,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 flexShrink: 0
               }
             },
-            React.createElement('div', { className: 'sm:hidden', style: { width: 36, height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.35)', margin: '0 auto 12px' } }),
             React.createElement(
               'button',
               {
@@ -32768,6 +32775,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           )
         )
       );
+
+      if (typeof ReactDOM !== 'undefined' && typeof ReactDOM.createPortal === 'function' && typeof document !== 'undefined') {
+        return ReactDOM.createPortal(dialogEl, document.body);
+      }
+      return dialogEl;
     }
 
     // Training Trend Chart 컴포넌트 (TSS 트렌드와 동일 UX: 매끄러운 라인 · M/D X축 · 호버 패널)
