@@ -1005,14 +1005,19 @@
             vo2max_estimate: stats.vo2maxEstimate != null ? stats.vo2maxEstimate : null,
             weight: userProfile.weight || stats.weight || 0
           });
-          if (typeof window.callGeminiCoach !== 'function') {
+          var callCoachFn =
+            typeof window.callRunGeminiCoach === 'function'
+              ? window.callRunGeminiCoach
+              : (typeof window.callGeminiCoach === 'function' ? window.callGeminiCoach : null);
+          if (!callCoachFn) {
             setCoachData({
               condition_score: 50,
               training_status: '기초 강화',
               vo2max_estimate: 40,
               coach_comment: 'AI 분석 함수를 불러올 수 없습니다.',
               recommended_workout: 'Recovery Jog (Z1)',
-              error_reason: 'callGeminiCoach 함수 없음'
+              error_reason: 'callRunGeminiCoach 함수 없음',
+              sport_category: 'run'
             });
             setAiLoading(false);
             aiAnalysisInProgressRef.current = false;
@@ -1024,7 +1029,7 @@
             typeof window.getGeminiQuotaCooldownRemainingSec === 'function'
               ? window.getGeminiQuotaCooldownRemainingSec()
               : 0;
-          var analysis = await window.callGeminiCoach(userProfileForCoach, cleanLogs, last7RtssForCoach, {
+          var analysis = await callCoachFn(userProfileForCoach, cleanLogs, last7RtssForCoach, {
             timeoutMs: 120000,
             maxRetries: 2,
             useStreaming: quotaCooldownSec <= 0,
@@ -1080,14 +1085,15 @@
           }
         } catch (e) {
           console.error('[Dashboard] AI analysis error:', e);
-          setCoachData({
+          setCoachData(normalizeRunCoachAnalysis({
             condition_score: 50,
             training_status: '기초 강화',
-            vo2max_estimate: 40,
+            vo2max_estimate: stats.vo2maxEstimate != null ? stats.vo2maxEstimate : 40,
             coach_comment: (userProfile.name || '사용자') + '님, AI 분석 중 오류가 발생했습니다.',
             recommended_workout: 'Recovery Jog (Z1)',
-            error_reason: (e && e.message) || '분석 실패'
-          });
+            error_reason: (e && e.message) || '분석 실패',
+            sport_category: 'run'
+          }));
         } finally {
           setAiLoading(false);
           aiAnalysisInProgressRef.current = false;

@@ -31,6 +31,8 @@
       hexagonTendency: 'RunHexagonTendencyCard'
     },
     cache: 'runDashboardAICache',
+    coach: 'runDashboardCoach',
+    runInsight: 'runProfileInsightAnalysis',
     hexagonLog: 'stelvioHexagonRankLog',
     vo2: 'runVo2maxCalculator'
   };

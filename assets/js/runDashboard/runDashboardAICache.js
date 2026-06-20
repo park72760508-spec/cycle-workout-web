@@ -245,7 +245,7 @@
   };
 
   /**
-   * AI 라이딩 인사이트 캐시
+   * AI 라이딩 인사이트 캐시 (CYCLE — RSPT/TSPT 등)
    */
   window.getDashboardAIRidingInsightCache = function(userId, todayStr, scoresSignature) {
     var key = getCacheKey('riding', userId, todayStr + '_' + (scoresSignature || ''));
@@ -254,6 +254,19 @@
 
   window.setDashboardAIRidingInsightCache = function(userId, todayStr, scoresSignature, aiComment) {
     var key = getCacheKey('riding', userId, todayStr + '_' + (scoresSignature || ''));
+    return setCache(key, { text: aiComment });
+  };
+
+  /**
+   * AI 러닝 인사이트 캐시 (RUN — STELVIO 헥사곤 6축 + Riegel p)
+   */
+  window.getDashboardAIRunningInsightCache = function(userId, todayStr, hexSig) {
+    var key = getCacheKey('running_insight', userId, todayStr + '_' + (hexSig || ''));
+    return getCached(key);
+  };
+
+  window.setDashboardAIRunningInsightCache = function(userId, todayStr, hexSig, aiComment) {
+    var key = getCacheKey('running_insight', userId, todayStr + '_' + (hexSig || ''));
     return setCache(key, { text: aiComment });
   };
 
