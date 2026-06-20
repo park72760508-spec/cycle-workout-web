@@ -328,7 +328,7 @@
                 className: 'px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg'
               }, '다시 시도')
             )
-          ) : TrainingTrendChart && React.createElement(TrainingTrendChart, { data: fitnessData }),
+          ) : TrainingTrendChart && React.createElement(TrainingTrendChart, { data: fitnessData, isRun: isRun }),
           !isRun && RiderHeartRateProfileTrendCharts && React.createElement(RiderHeartRateProfileTrendCharts, {
             DashboardCard: DashboardCard,
             userProfile: userProfile,
