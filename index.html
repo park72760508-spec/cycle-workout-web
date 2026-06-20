@@ -3693,7 +3693,7 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnRunBasecampCareer" onclick="if(typeof showScreen==='function')showScreen('runTrainingJournalScreen');" aria-label="나의 기록">
                 <span>나의 기록</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnRunBasecampCrewMoim" onclick="if(typeof navigateToRidingMoimFromBasecamp==='function')navigateToRidingMoimFromBasecamp();else if(typeof showScreen==='function')showScreen('openRidingRoomScreen');" aria-label="러닝 크루">
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnRunBasecampCrewMoim" onclick="if(typeof navigateToRunCrewFromBasecamp==='function')navigateToRunCrewFromBasecamp();else if(typeof showScreen==='function')showScreen('openRidingRoomScreen');" aria-label="러닝 크루">
                 <span>러닝 크루</span>
                 <span id="runBasecampRidingNotiBadge" aria-label="알림 건수"></span>
               </button>
@@ -26193,12 +26193,26 @@
         } catch (eInitView) {
           initialView = '';
         }
+        var clubCategory = '';
+        try {
+          if (typeof window.resolveOpenRidingMoimCategory === 'function') {
+            clubCategory = window.resolveOpenRidingMoimCategory();
+          } else if (
+            window.sportCategoryRoutes &&
+            typeof window.sportCategoryRoutes.getActiveSport === 'function'
+          ) {
+            clubCategory = window.sportCategoryRoutes.getActiveSport() === 'run' ? 'RUN' : 'CYCLE';
+          }
+        } catch (eClubCat) {
+          clubCategory = '';
+        }
         var el = React.createElement(window.OpenRidingRoomApp, {
           firestore: firestore,
           storage: storage,
           userId: userId,
           userLabel: userLabel,
-          initialView: initialView
+          initialView: initialView,
+          clubCategory: clubCategory
         });
         if (!openRidingReactRoot) {
           openRidingReactRoot = ReactDOM.createRoot ? ReactDOM.createRoot(rootEl) : null;
@@ -26210,6 +26224,9 @@
         }
       };
       window.navigateToClubHouseFromBasecamp = function () {
+        if (typeof window.setOpenRidingMoimCategory === 'function') {
+          window.setOpenRidingMoimCategory('CYCLE');
+        }
         window.__openRidingInitialView = 'groups';
         if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
       };
