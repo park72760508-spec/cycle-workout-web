@@ -28,6 +28,32 @@ function getOpenRidingServiceFns() {
   };
 }
 
+/** CYCLE 라이딩 모임 / RUN 러닝 크루 — 화면 문구 (베이스캠프 진입 카테고리 기준) */
+function getOpenRidingMoimCopy(category) {
+  var isRun = String(category || 'CYCLE').trim().toUpperCase() === 'RUN';
+  return {
+    isRun: isRun,
+    screenTitle: isRun ? '러닝 크루' : '라이딩 모임',
+    mySectionTitle: isRun ? '나의 러닝' : '나의 라이딩',
+    mileageNote: isRun
+      ? '* 러닝 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트 사용'
+      : '* 라이딩 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트 사용',
+    navMoimLabel: isRun ? '러닝' : '라이딩',
+    navMoimAria: isRun ? '러닝 크루 달력' : '라이딩 모임 달력',
+    navHomeAria: isRun ? '홈 — RUN 베이스캠프' : '홈 — 베이스캠프',
+    navMenuAria: isRun ? '러닝 크루 하단 메뉴' : '라이딩 모임 하단 메뉴',
+    homeScreenId: isRun ? 'runBasecampScreen' : 'basecampScreen'
+  };
+}
+
+function goOpenRidingMoimHomeScreen() {
+  if (typeof window.goOpenRidingMoimHomeBasecamp === 'function') {
+    window.goOpenRidingMoimHomeBasecamp();
+    return;
+  }
+  if (typeof showScreen === 'function') showScreen('basecampScreen');
+}
+
 /** 팩 라이딩 룰 — 텍스트 필드 placeholder(가이드, 입력 비필수) */
 var OPEN_RIDING_PACK_TEXT_PLACEHOLDERS = {
   openSection: '업힐 구간만 오픈 후 정상 대기',
@@ -2776,6 +2802,11 @@ function OpenRidingBottomGlassNav(props) {
   var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
   var pendingGroupJoinCount = typeof props.pendingGroupJoinCount === 'number' ? props.pendingGroupJoinCount : 0;
   var userId = props.userId || '';
+  var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
+  var navMoimLabel = moimCopy.navMoimLabel || '라이딩';
+  var navMoimAria = moimCopy.navMoimAria || '라이딩 모임 달력';
+  var navHomeAria = moimCopy.navHomeAria || '홈 — 베이스캠프';
+  var navMenuAria = moimCopy.navMenuAria || '라이딩 모임 하단 메뉴';
 
   function iconHome() {
     return (
@@ -2881,7 +2912,7 @@ function OpenRidingBottomGlassNav(props) {
   var innerContent = (
     <>
       <OpenRidingGlassNavSlot>
-        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label={navHomeAria}>
           {iconHome()}
           <span className="open-riding-bottom-glass-nav__label">홈</span>
         </button>
@@ -2892,10 +2923,10 @@ function OpenRidingBottomGlassNav(props) {
           className={openRidingGlassNavBtnClass(moimActive)}
           onClick={onMoim}
           aria-current={moimActive ? 'page' : undefined}
-          aria-label="라이딩 모임 달력"
+          aria-label={navMoimAria}
         >
           {iconMoim()}
-          <span className="open-riding-bottom-glass-nav__label">라이딩</span>
+          <span className="open-riding-bottom-glass-nav__label">{navMoimLabel}</span>
         </button>
       </OpenRidingGlassNavSlot>
       {renderGroupsButton(groupsActive)}
@@ -2912,7 +2943,7 @@ function OpenRidingBottomGlassNav(props) {
   return (
     <OpenRidingGlassNavPortal
       innerContent={innerContent}
-      ariaLabel="라이딩 모임 하단 메뉴"
+      ariaLabel={navMenuAria}
       enableScrollStrip={true}
       scrollSyncKey={navVariant}
     />
@@ -3183,6 +3214,7 @@ function OpenRidingCalendarMain(props) {
   var filterPageOpen = !!props.filterPageOpen;
   var onOpenFilterPage = props.onOpenFilterPage || function () {};
   var onCloseFilterPage = props.onCloseFilterPage || function () {};
+  var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
 
   var _m = useState(function () { return new Date(); });
   var viewMonth = _m[0];
@@ -4287,11 +4319,15 @@ function OpenRidingCalendarMain(props) {
               aria-level={2}
               className="text-xs font-bold px-3 py-1.5 rounded-xl border border-violet-200 bg-white text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-my-rides-title-pill"
             >
-              [나의 라이딩]
+              [{moimCopy.mySectionTitle}]
             </span>
           </div>
           {!userId ? (
-            <p className="text-sm text-slate-400 m-0">로그인 후 나의 라이딩(주최·초대·참석 확정)을 확인할 수 있습니다.</p>
+            <p className="text-sm text-slate-400 m-0">
+              {moimCopy.isRun
+                ? '로그인 후 나의 러닝(주최·초대·참석 확정)을 확인할 수 있습니다.'
+                : '로그인 후 나의 라이딩(주최·초대·참석 확정)을 확인할 수 있습니다.'}
+            </p>
           ) : (
             <>
               {phoneMissing ? (
@@ -4300,7 +4336,9 @@ function OpenRidingCalendarMain(props) {
                 </p>
               ) : null}
               {myRidesUnifiedRows.length === 0 ? (
-                <p className="text-sm text-slate-400 m-0">이번 달 표시할 나의 라이딩이 없습니다.</p>
+                <p className="text-sm text-slate-400 m-0">
+                  {moimCopy.isRun ? '이번 달 표시할 나의 러닝이 없습니다.' : '이번 달 표시할 나의 라이딩이 없습니다.'}
+                </p>
               ) : (
                 <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
                   {myRidesUnifiedRows.map(function (row) {
@@ -4351,7 +4389,7 @@ function OpenRidingCalendarMain(props) {
           </div>
         </section>
         <p className="mt-1.5 ml-1 text-[11px] sm:text-xs text-slate-500 leading-snug">
-          * 라이딩 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트 사용
+          {moimCopy.mileageNote}
         </p>
       </>
     );
@@ -4385,7 +4423,7 @@ function OpenRidingCalendarMain(props) {
       {!compact ? (
       <header className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="open-riding-main-screen-title">라이딩 모임</h1>
+          <h1 className="open-riding-main-screen-title">{moimCopy.screenTitle}</h1>
           <p className="text-sm text-slate-500">지역·레벨 맞춤 모임 — {userLabel}</p>
         </div>
         <button
@@ -11365,6 +11403,12 @@ function OpenRidingRoomApp(props) {
             ? 'RUN'
             : 'CYCLE';
       }
+      if (
+        typeof window !== 'undefined' &&
+        typeof window.resolveOpenRidingMoimCategory === 'function'
+      ) {
+        return window.resolveOpenRidingMoimCategory();
+      }
       if (typeof gsEarly.resolveRidingGroupCategoryFromActiveSport === 'function') {
         return gsEarly.resolveRidingGroupCategoryFromActiveSport();
       }
@@ -11378,6 +11422,13 @@ function OpenRidingRoomApp(props) {
       return 'CYCLE';
     },
     [props.clubCategory]
+  );
+
+  var moimCopy = useMemo(
+    function () {
+      return getOpenRidingMoimCopy(clubCategory);
+    },
+    [clubCategory]
   );
 
   /** PC/모바일: Firebase 세션 복원 전에는 Firestore가 permission-denied — UID를 auth와 동기화 */
@@ -11526,7 +11577,7 @@ function OpenRidingRoomApp(props) {
                     ? '클럽 수정'
                     : view === 'groupDetail'
                       ? '클럽 상세'
-                      : '라이딩 모임';
+                      : moimCopy.screenTitle;
 
   var useGlassBottomNavSpacer = !!(
     firestore &&
@@ -11675,9 +11726,7 @@ function OpenRidingRoomApp(props) {
           setCopyFromRideId(detailRideId);
           setView('copy');
         }}
-        onHome={function () {
-          if (typeof showScreen === 'function') showScreen('basecampScreen');
-        }}
+        onHome={goOpenRidingMoimHomeScreen}
       />
     );
   } else if (view === 'friends') {
@@ -11708,6 +11757,7 @@ function OpenRidingRoomApp(props) {
           setDetailRideId(id);
           setView('detail');
         }}
+        moimCopy={moimCopy}
       />
     );
   }
@@ -11878,9 +11928,7 @@ function OpenRidingRoomApp(props) {
                   ? 'groups'
                   : 'main'
           }
-          onHome={function () {
-            if (typeof showScreen === 'function') showScreen('basecampScreen');
-          }}
+          onHome={goOpenRidingMoimHomeScreen}
           onMoim={function () {
             setDetailGroupId(null);
             setDetailRideId(null);
@@ -11906,6 +11954,7 @@ function OpenRidingRoomApp(props) {
           pendingIncomingCount={pendingIncomingCount}
           pendingGroupJoinCount={pendingGroupJoinCount}
           userId={effectiveUserId}
+          moimCopy={moimCopy}
         />
       ) : null}
     </div>
