@@ -398,7 +398,7 @@
       '.run-workout-guide-title{font-size:22px;font-weight:800;color:#0f172a;margin:0 0 4px;line-height:1.25}' +
       '.run-workout-guide-subtitle{font-size:14px;color:#64748b;margin:0 0 16px}' +
       '.run-zone-guide-svg{width:120px;height:96px;margin:0 auto;display:block}' +
-      '.run-workout-guide-body{padding:0 24px 24px}' +
+      '.run-workout-guide-body{padding:20px 24px 24px}' +
       '.run-workout-guide-card{border-radius:16px;padding:16px;margin-bottom:12px;background:#f8fafc;border:1px solid #e2e8f0}' +
       '.run-workout-guide-card h4{margin:0 0 8px;font-size:13px;font-weight:700;color:#334155;display:flex;align-items:center;gap:6px}' +
       '.run-workout-guide-card p{margin:0;font-size:13px;line-height:1.65;color:#475569}' +
