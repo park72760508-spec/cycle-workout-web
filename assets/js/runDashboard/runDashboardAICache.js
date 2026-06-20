@@ -8,7 +8,7 @@
   'use strict';
 
   var CACHE_PREFIX = 'stelvio_run_dashboard_ai_';
-  var CACHE_VERSION = '3'; // 3: RUN 추천 워크아웃 규칙 엔진 단일 확정(recommendedWorkout)
+  var CACHE_VERSION = '4'; // 4: RUN 전용 coach 캐시·CYCLE 혼입 거부
 
   /**
    * 로그 날짜 → 로컬 YYYY-MM-DD (useDashboardData / 코치와 동일 기준)

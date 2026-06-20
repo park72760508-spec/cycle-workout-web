@@ -17,6 +17,40 @@
     return false;
   }
 
+  function isRunInsightCommentTruncated(str) {
+    if (!str || typeof str !== 'string') return true;
+    var t = str.trim();
+    if (t.length < 20) return true;
+    if (/(세요|습니다|니다|합니다|해요|네요|죠|조|요|다|함|입니다|보세요|추천)[.!?~]*\s*$/.test(t)) return false;
+    if (/[가-힣]{2,}[.!?]$/.test(t)) return false;
+    return true;
+  }
+
+  function mergeInsightWithDeterministicTail(apiText, analysis, userProfile) {
+    var t = String(apiText || '').trim();
+    if (!isRunInsightCommentTruncated(t)) return t;
+    var tail = buildDeterministicRunInsight(analysis, userProfile);
+    if (!tail) return t;
+    if (!t) return tail;
+    if (tail.indexOf(t.slice(0, Math.min(40, t.length))) >= 0) return tail;
+    return t + '\n\n' + tail;
+  }
+
+  function extractGeminiText(data) {
+    var candidate = data && data.candidates && data.candidates[0];
+    if (!candidate) return { text: '', finishReason: '', truncated: true };
+    var parts = candidate.content && candidate.content.parts;
+    var fullText = '';
+    if (parts && parts.length) {
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i] && parts[i].text) fullText += parts[i].text;
+      }
+    }
+    var finishReason = String(candidate.finishReason || '');
+    var truncated = finishReason === 'MAX_TOKENS' || isRunInsightCommentTruncated(fullText);
+    return { text: fullText.trim(), finishReason: finishReason, truncated: truncated };
+  }
+
   function buildRunInsightSignature(analysis) {
     if (!analysis || !analysis.scores) return '';
     var s = analysis.scores;
@@ -137,7 +171,7 @@
     var body = {
       contents: [{ role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }],
       generationConfig: {
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
         temperature: 0.35,
         topP: 0.92,
         topK: 40
@@ -146,7 +180,8 @@
 
     var lastErr = null;
     var attempt;
-    for (attempt = 0; attempt <= maxRetries; attempt++) {
+    var maxAttempts = maxRetries + 1;
+    for (attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         var controller = new AbortController();
         var timeoutId = setTimeout(function () {
@@ -167,19 +202,16 @@
         }
 
         var data = await res.json();
-        var candidate = data && data.candidates && data.candidates[0];
-        var parts = candidate && candidate.content && candidate.content.parts;
-        var fullText = '';
-        if (parts && parts.length) {
-          for (var i = 0; i < parts.length; i++) {
-            if (parts[i] && parts[i].text) fullText += parts[i].text;
-          }
+        var parsed = extractGeminiText(data);
+        if (!parsed.text) throw new Error('빈 응답');
+        if (!parsed.truncated) return parsed.text;
+        if (attempt >= maxAttempts - 1) {
+          return mergeInsightWithDeterministicTail(parsed.text, analysis, userProfile);
         }
-        if (!fullText.trim()) throw new Error('빈 응답');
-        return fullText.trim();
+        lastErr = new Error('응답 잘림(' + (parsed.finishReason || 'incomplete') + ')');
       } catch (err) {
         lastErr = err;
-        if (attempt < maxRetries) {
+        if (attempt < maxAttempts - 1) {
           await new Promise(function (r) {
             setTimeout(r, isLowSpec ? 1500 * (attempt + 1) : 800 * (attempt + 1));
           });
@@ -192,6 +224,7 @@
   }
 
   window.FALLBACK_RUN_INSIGHT = FALLBACK_RUN_INSIGHT;
+  window.isRunInsightCommentTruncated = isRunInsightCommentTruncated;
   window.buildRunHexagonInsightSignature = buildRunInsightSignature;
   window.buildDeterministicRunInsight = buildDeterministicRunInsight;
   window.fetchRunProfileInsightAnalysis = fetchRunProfileInsightAnalysis;

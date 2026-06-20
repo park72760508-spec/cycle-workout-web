@@ -61,15 +61,20 @@
 
   function buildRunDashboardUserProfile(base) {
     var demo = pickDemographicsFromUser(base);
+    var runChallenge =
+      typeof window.resolveChallengeForSport === 'function'
+        ? window.resolveChallengeForSport(base, 'run')
+        : base.run_challenge || base.challenge || 'Fitness';
     return {
       id: base.id,
       name: base.name || '사용자',
       ftp: Number(base.ftp) || 0,
       weight: Number(base.weight) || 0,
       grade: base.grade || '2',
-      challenge: base.challenge || 'Fitness',
-      run_challenge: base.run_challenge || '',
-      category: base.category || base.sport_category || 'RUN',
+      challenge: runChallenge,
+      run_challenge: base.run_challenge || runChallenge || '',
+      category: 'RUN',
+      sport_category: 'RUN',
       acc_points: base.acc_points || 0,
       rem_points: base.rem_points || 0,
       strava_refresh_token: base.strava_refresh_token,
@@ -214,6 +219,9 @@
   }
 
   function normalizeRunCoachAnalysis(analysis) {
+    if (typeof window.normalizeRunCoachPayload === 'function') {
+      return window.normalizeRunCoachPayload(analysis);
+    }
     if (!analysis || typeof window.pickDeterministicRunRecommendedWorkout !== 'function') return analysis;
     var next = Object.assign({}, analysis);
     next.recommended_workout = window.pickDeterministicRunRecommendedWorkout({
@@ -227,6 +235,16 @@
     }
     next.sport_category = 'run';
     return next;
+  }
+
+  function isAcceptableRunCoachCache(cached) {
+    if (!cached || cached.condition_score == null || cached.error_reason) return false;
+    var normalized = normalizeRunCoachAnalysis(Object.assign({}, cached));
+    if (normalized.sport_category !== 'run') return false;
+    if (typeof window.isRunWorkoutLabel === 'function') {
+      return window.isRunWorkoutLabel(normalized.recommended_workout);
+    }
+    return true;
   }
 
   function useRunDashboardData() {
@@ -340,6 +358,17 @@
 
     var retryLogsRef = useRef(null);
     var aiAnalysisInProgressRef = useRef(false);
+    var statsRef = useRef(stats);
+    var lastCoachTriggerKeyRef = useRef('');
+    var coachDataRef = useRef(null);
+
+    useEffect(function syncStatsRef() {
+      statsRef.current = stats;
+    }, [stats]);
+
+    useEffect(function syncCoachDataRef() {
+      coachDataRef.current = coachData;
+    }, [coachData]);
 
     /** effect 의존성에 recentLogs 배열 ref 대신 'uid|날짜|로그시그니처'만 두어, 데이터 동일 시 재실행·재분석을 막는다. */
     var coachAnalysisTriggerKey = useMemo(
@@ -462,8 +491,7 @@
               weight: w,
               grade: d.grade || '2',
               challenge: ch,
-              run_challenge: d.run_challenge || '',
-              category: d.category || d.sport_category || 'RUN',
+              run_challenge: d.run_challenge || ch || '',
               acc_points: d.acc_points || 0,
               rem_points: d.rem_points || 0,
               is_private: d.is_private === true
@@ -959,6 +987,13 @@
 
       /* 캐시: 오늘 이미 분석한 결과가 있으면 재구동 시에도 표시. API 자동 호출은 수동 분석 클릭 시에만 */
       if (!runConditionAnalysis && retryCoach === 0) {
+        if (
+          lastCoachTriggerKeyRef.current === coachAnalysisTriggerKey &&
+          coachDataRef.current &&
+          coachDataRef.current.sport_category === 'run'
+        ) {
+          return;
+        }
         var cached = null;
         if (typeof window.getDashboardCoachCache === 'function') {
           cached = window.getDashboardCoachCache(userProfile.id, todayStr, logsSignature);
@@ -967,7 +1002,8 @@
             typeof window.getDashboardCoachDailyCache === 'function') {
           cached = window.getDashboardCoachDailyCache(userProfile.id, todayStr);
         }
-        if (cached && cached.condition_score != null && !cached.error_reason) {
+        lastCoachTriggerKeyRef.current = coachAnalysisTriggerKey;
+        if (cached && isAcceptableRunCoachCache(cached)) {
           setCoachData(normalizeRunCoachAnalysis(cached));
           setAiLoading(false);
           return;
@@ -992,18 +1028,19 @@
           cleanLogs = window.dedupeLogsForConditionScore(cleanLogs);
         }
         cleanLogs = cleanLogs.filter(isRunLogForWeeklyTss);
+        var currentStats = statsRef.current || stats || {};
         var last7RtssForCoach = last7Rtss;
-        if (stats && typeof stats.weeklyRtssProgress === 'number') {
-          last7RtssForCoach = Math.round(stats.weeklyRtssProgress);
+        if (currentStats && typeof currentStats.weeklyRtssProgress === 'number') {
+          last7RtssForCoach = Math.round(currentStats.weeklyRtssProgress);
         }
         try {
           var userProfileForCoach = Object.assign({}, userProfile, {
             sport_category: 'RUN',
             category: 'RUN',
-            threshold_pace: stats.thresholdPaceValue || stats.thresholdPaceDisplay || null,
-            threshold_pace_sec: stats.thresholdPaceSec != null ? stats.thresholdPaceSec : null,
-            vo2max_estimate: stats.vo2maxEstimate != null ? stats.vo2maxEstimate : null,
-            weight: userProfile.weight || stats.weight || 0
+            threshold_pace: currentStats.thresholdPaceValue || currentStats.thresholdPaceDisplay || null,
+            threshold_pace_sec: currentStats.thresholdPaceSec != null ? currentStats.thresholdPaceSec : null,
+            vo2max_estimate: currentStats.vo2maxEstimate != null ? currentStats.vo2maxEstimate : null,
+            weight: userProfile.weight || currentStats.weight || 0
           });
           var callCoachFn =
             typeof window.callRunGeminiCoach === 'function'
@@ -1036,8 +1073,8 @@
             forceApi: retryCoach > 0,
             sportCategory: 'run',
             hexagonContext: hexagonCoachContext,
-            weeklyRtssGoal: stats.weeklyRtssGoal,
-            thresholdPaceDisplay: stats.thresholdPaceDisplay,
+            weeklyRtssGoal: currentStats.weeklyRtssGoal,
+            thresholdPaceDisplay: currentStats.thresholdPaceDisplay,
             onChunk: function(delta, fullText) {
               try {
                 var match = fullText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)/);
@@ -1075,6 +1112,7 @@
 
           setCoachData(analysis);
           setStreamingComment(null);
+          lastCoachTriggerKeyRef.current = coachAnalysisTriggerKey;
           if (analysis && !analysis.error_reason) {
             var normalizedAnalysis = normalizeRunCoachAnalysis(analysis);
             if (typeof window.setDashboardCoachCache === 'function') {
@@ -1101,7 +1139,7 @@
           setRetryCoach(0);
         }
       })();
-    }, [coachAnalysisTriggerKey, runConditionAnalysis, retryCoach, userProfile && userProfile.id, hexagonCoachContext, stats.thresholdPaceDisplay, stats.thresholdPaceValue, stats.weeklyRtssGoal, stats.weeklyRtssProgress, runLeaderboardCoachReady]);
+    }, [coachAnalysisTriggerKey, runConditionAnalysis, retryCoach, userProfile && userProfile.id, runLeaderboardCoachReady]);
 
     return {
       userProfile,

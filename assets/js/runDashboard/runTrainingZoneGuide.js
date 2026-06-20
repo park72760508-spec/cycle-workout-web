@@ -286,6 +286,39 @@
     return RUN_TRAINING_ZONES[zoneKey] || RUN_TRAINING_ZONES.Z2;
   }
 
+  var CYCLE_TO_RUN_WORKOUT_MAP = {
+    'Active Recovery (Z1)': 'Recovery Jog (Z1)',
+    'Endurance (Z2)': 'Easy Run (Z2)',
+    'Tempo (Z3)': 'Tempo Run (Z3)',
+    'Sweet Spot (Z3)': 'Tempo Run (Z3)',
+    'Threshold (Z4)': 'Threshold Intervals (Z4)',
+    'VO2 Max (Z5)': 'VO₂max Intervals (Z5)',
+    'VO2 Max Intervals (Z5)': 'VO₂max Intervals (Z5)',
+    'VO₂ Max (Z5)': 'VO₂max Intervals (Z5)'
+  };
+
+  function isRunWorkoutLabel(label) {
+    var s = String(label || '').trim();
+    if (!s) return false;
+    if (CYCLE_TO_RUN_WORKOUT_MAP[s]) return false;
+    return /Recovery Jog|Easy Run|Long Run|Steady Run|Tempo Run|Threshold Intervals|VO₂max Intervals|VO2 Max Intervals/i.test(s);
+  }
+
+  /** CYCLE 대시보드 캐시·Gemini 혼입 워크아웃명 → RUN 표준명 */
+  function mapCycleWorkoutLabelToRun(label) {
+    var s = String(label || '').trim();
+    if (!s) return null;
+    if (CYCLE_TO_RUN_WORKOUT_MAP[s]) return CYCLE_TO_RUN_WORKOUT_MAP[s];
+    if (isRunWorkoutLabel(s)) return s;
+    if (/Active Recovery/i.test(s)) return 'Recovery Jog (Z1)';
+    if (/Sweet Spot/i.test(s)) return 'Tempo Run (Z3)';
+    if (/Endurance/i.test(s)) return 'Easy Run (Z2)';
+    if (/Threshold/i.test(s) && !/Intervals/i.test(s)) return 'Threshold Intervals (Z4)';
+    if (/VO2|VO₂/i.test(s)) return 'VO₂max Intervals (Z5)';
+    if (/Tempo/i.test(s)) return 'Tempo Run (Z3)';
+    return null;
+  }
+
   /**
    * 동일 입력 → 동일 출력. 허용 목록 중 AI·UI·팝업이 항상 같은 1개를 쓰도록 확정.
    * @param {{ category?: string, primaryZone?: string, training_zone?: string, hexagonOverride?: string, allowedWorkouts?: string[], recommendedWorkout?: string }} workoutDecision
@@ -294,7 +327,11 @@
   function pickDeterministicRunRecommendedWorkout(workoutDecision) {
     workoutDecision = workoutDecision || {};
     if (workoutDecision.recommendedWorkout) {
-      return String(workoutDecision.recommendedWorkout);
+      var mapped = mapCycleWorkoutLabelToRun(workoutDecision.recommendedWorkout);
+      if (mapped) return mapped;
+      if (isRunWorkoutLabel(workoutDecision.recommendedWorkout)) {
+        return String(workoutDecision.recommendedWorkout);
+      }
     }
 
     var override = workoutDecision.hexagonOverride;
@@ -507,6 +544,8 @@
   window.closeRunWorkoutGuideModal = closeRunWorkoutGuideModal;
   window.parseRunWorkoutZone = parseRunWorkoutZone;
   window.pickDeterministicRunRecommendedWorkout = pickDeterministicRunRecommendedWorkout;
+  window.mapCycleWorkoutLabelToRun = mapCycleWorkoutLabelToRun;
+  window.isRunWorkoutLabel = isRunWorkoutLabel;
   window.finalizeRunWorkoutDecision = finalizeRunWorkoutDecision;
   window.buildIntegratedRunWorkoutReason = buildIntegratedRunWorkoutReason;
 })();

@@ -5,6 +5,49 @@
 (function () {
   'use strict';
 
+  function isRunCoachPayload(data) {
+    if (!data || data.condition_score == null) return false;
+    if (data.sport_category === 'run') return true;
+    if (data.error_reason) return false;
+    var rw = String(data.recommended_workout || '');
+    if (typeof window.isRunWorkoutLabel === 'function' && window.isRunWorkoutLabel(rw)) return true;
+    if (typeof window.mapCycleWorkoutLabelToRun === 'function' && window.mapCycleWorkoutLabelToRun(rw)) {
+      return false;
+    }
+    var cat = String(data.workout_category || '');
+    if (cat === 'recovery' || cat === 'endurance' || cat === 'tempo' || cat === 'high_intensity') {
+      return true;
+    }
+    return false;
+  }
+
+  function normalizeRunCoachPayload(analysis) {
+    if (!analysis) return analysis;
+    var next = Object.assign({}, analysis);
+    next.sport_category = 'run';
+    if (typeof window.pickDeterministicRunRecommendedWorkout === 'function') {
+      next.recommended_workout = window.pickDeterministicRunRecommendedWorkout({
+        category: next.workout_category,
+        primaryZone: next.training_zone,
+        hexagonOverride: next.hexagon_override,
+        recommendedWorkout: next.recommended_workout
+      });
+    }
+    if (typeof window.parseRunWorkoutZone === 'function') {
+      next.training_zone = window.parseRunWorkoutZone(next.recommended_workout);
+    }
+    if (next.coach_comment && typeof next.coach_comment === 'string') {
+      next.coach_comment = next.coach_comment
+        .replace(/\brTSS\b/g, '__RTSS__')
+        .replace(/\bTSS\b/g, 'rTSS')
+        .replace(/__RTSS__/g, 'rTSS');
+    }
+    if (next.training_status === 'Building Base') {
+      next.training_status = '기초 강화';
+    }
+    return next;
+  }
+
   async function callRunGeminiCoach(userProfile, recentLogs, last7DaysRtss, options) {
     if (typeof window.callGeminiCoach !== 'function') {
       throw new Error('callGeminiCoach 함수 없음');
@@ -15,17 +58,10 @@
     });
     var opts = Object.assign({}, options || {}, { sportCategory: 'run' });
     var result = await window.callGeminiCoach(profile, recentLogs, last7DaysRtss, opts);
-    if (result && typeof window.pickDeterministicRunRecommendedWorkout === 'function') {
-      result.sport_category = 'run';
-      result.recommended_workout = window.pickDeterministicRunRecommendedWorkout({
-        category: result.workout_category,
-        primaryZone: result.training_zone,
-        hexagonOverride: result.hexagon_override,
-        recommendedWorkout: result.recommended_workout
-      });
-    }
-    return result;
+    return normalizeRunCoachPayload(result);
   }
 
   window.callRunGeminiCoach = callRunGeminiCoach;
+  window.normalizeRunCoachPayload = normalizeRunCoachPayload;
+  window.isRunCoachPayload = isRunCoachPayload;
 })();
