@@ -9121,7 +9121,7 @@ exports.getRunningLeaderboard = onRequest(
         leaderboardAsOfSeoul,
         leaderboardAggregatedAt: published.aggregated_at || "",
         rankMovementSource: "supabase",
-        rankMovementAsOfSeoul: leaderboardAsOfSeoul || snapRes.asOfSeoul || "",
+        rankMovementAsOfSeoul: snapRes.asOfSeoul || leaderboardAsOfSeoul || "",
         rankMovementByKey: snapRes.byKey || {},
       });
     } catch (e) {
