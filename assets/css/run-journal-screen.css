@@ -297,8 +297,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
-  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 12px calc(16px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   overscroll-behavior: contain;
   touch-action: none;
@@ -496,7 +495,7 @@ html.global-hub-glass-nav-active #runTrainingJournalScreen .journal-screen-conte
 html.global-hub-glass-nav-active #runTrainingJournalScreen .journal-bottom-sheet-overlay,
 html.global-hub-glass-nav-active #runTrainingJournalScreen .run-journal-detail-overlay,
 html.global-hub-glass-nav-active .run-journal-detail-overlay {
-  padding-bottom: var(--hub-glass-nav-scroll-pad);
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 12px calc(16px + env(safe-area-inset-bottom, 0px));
 }
 
 html.global-hub-glass-nav-active #runTrainingJournalScreen .journal-bottom-sheet,
