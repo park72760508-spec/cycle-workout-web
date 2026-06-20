@@ -408,23 +408,29 @@ export function getTsbTrainingStatusFeedback(tsb: number): TsbTrainingFeedback {
   };
 }
 
+function formatYmdMdLabel(ymd: string): string {
+  if (!ymd || ymd.length < 10) return '';
+  const p = ymd.split('-');
+  return `${parseInt(p[1]!, 10)}/${parseInt(p[2]!, 10)}`;
+}
+
 /** 기존 Chart.js TrainingTrendChart 호환 { date, fitness, fatigue } */
 export function toLegacyFitnessTrendRows(
   pmcRows: PmcChartPoint[],
-  today: Date = new Date(),
-): { date: string; fitness: number; fatigue: number; form_tsb?: number; daily_tss?: number }[] {
-  const todayYmd = toSeoulYmd(today);
-  const todayMs = new Date(`${todayYmd}T00:00:00`).getTime();
-  return pmcRows.map((row) => {
-    const rowMs = new Date(`${row.date}T00:00:00`).getTime();
-    const daysDiff = Math.round((todayMs - rowMs) / 86400000);
-    const label = daysDiff === 0 ? '오늘' : `-${daysDiff}일`;
-    return {
-      date: label,
-      fitness: row.fitness_ctl,
-      fatigue: row.fatigue_atl,
-      form_tsb: row.form_tsb,
-      daily_tss: row.daily_tss,
-    };
-  });
+): {
+  date: string;
+  dateYmd?: string;
+  fitness: number;
+  fatigue: number;
+  form_tsb?: number;
+  daily_tss?: number;
+}[] {
+  return pmcRows.map((row) => ({
+    date: formatYmdMdLabel(row.date),
+    dateYmd: row.date,
+    fitness: row.fitness_ctl,
+    fatigue: row.fatigue_atl,
+    form_tsb: row.form_tsb,
+    daily_tss: row.daily_tss,
+  }));
 }

@@ -79,8 +79,9 @@ const chart = buildPmcChartData(
 assert(chart.length === 2, 'chart 2 days');
 assert(chart.every((r) => Number.isFinite(r.fitness_ctl)), 'ctl finite');
 
-const legacy = toLegacyFitnessTrendRows(chart, new Date('2026-06-02'));
-assert(legacy[1]!.date === '오늘', 'legacy today label');
+const legacy = toLegacyFitnessTrendRows(chart);
+assert(legacy[1]!.date === '6/2', 'legacy md label');
+assert(legacy[1]!.dateYmd === '2026-06-02', 'legacy ymd preserved');
 
 const fresh = getTsbTrainingStatusFeedback(8);
 assert(fresh.zone === 'freshness', 'fresh zone');
