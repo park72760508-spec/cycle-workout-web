@@ -1297,6 +1297,10 @@
    * @returns {{ text: string, kind: string, title: string }|null}
    */
   function resolveListItemRankChangeSuffix(item) {
+    var rc = typeof window !== 'undefined' ? window.runningRankingRankChange : null;
+    if (rc && typeof rc.suffixForListItem === 'function') {
+      return rc.suffixForListItem(item, 'Supremo');
+    }
     if (!item || item.isCrew) return null;
     var boardRank =
       item.boardRank != null && isFinite(Number(item.boardRank))

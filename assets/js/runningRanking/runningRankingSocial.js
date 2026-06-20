@@ -243,23 +243,34 @@
   }
 
   function getRankChangeHtml(item, listCategoryKey) {
+    var rc = window.runningRankingRankChange;
+    if (rc && typeof rc.badgeHtmlForListItem === 'function') {
+      return rc.badgeHtmlForListItem(item, listCategoryKey || 'Supremo') || '';
+    }
     if (!item || item.isCrew) return '';
     var boardRank = item.boardRank != null && isFinite(Number(item.boardRank))
       ? Math.floor(Number(item.boardRank))
       : (item.rank != null && isFinite(Number(item.rank)) ? Math.floor(Number(item.rank)) : null);
+    var normalizeFn = callFn('stelvioNormalizeRankMovementOnRow');
+    if (normalizeFn) normalizeFn(item, boardRank);
     var matchesFn = callFn('stelvioRankMovementRowMatchesCurrentRank');
-    if (matchesFn && boardRank != null && boardRank >= 1) {
-      if (!matchesFn(item, boardRank)) return '';
-    }
-    var badgeFn = callFn('stelvioServerRankChangeBadgeHtml');
-    if (badgeFn && item.rankChange != null && item.previousBoardRank != null) {
-      var directHtml = badgeFn(item.rankChange, item.previousBoardRank);
-      if (directHtml) return directHtml;
+    if (item.rankChange != null && item.previousBoardRank != null) {
+      if (boardRank == null || !matchesFn || matchesFn(item, boardRank)) {
+        var badgeFn = callFn('stelvioServerRankChangeBadgeHtml');
+        if (badgeFn) {
+          var directHtml = badgeFn(item.rankChange, item.previousBoardRank);
+          if (directHtml) return directHtml;
+        }
+      }
     }
     return '';
   }
 
   function getRankChangeSuffix(item, listCategoryKey) {
+    var rc = window.runningRankingRankChange;
+    if (rc && typeof rc.suffixForListItem === 'function') {
+      return rc.suffixForListItem(item, listCategoryKey || 'Supremo');
+    }
     var html = getRankChangeHtml(item, listCategoryKey);
     if (!html) return null;
     var titleM = html.match(/title="([^"]+)"/);
