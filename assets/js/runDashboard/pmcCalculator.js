@@ -285,16 +285,17 @@
     };
   }
 
-  function toLegacyFitnessTrendRows(pmcRows, today) {
-    today = today || new Date();
-    var todayYmd = toSeoulYmd(today);
-    var todayMs = new Date(todayYmd + 'T00:00:00').getTime();
+  function formatYmdMdLabel(ymd) {
+    if (!ymd || String(ymd).length < 10) return '';
+    var p = String(ymd).split('-');
+    return parseInt(p[1], 10) + '/' + parseInt(p[2], 10);
+  }
+
+  function toLegacyFitnessTrendRows(pmcRows) {
     return (pmcRows || []).map(function (row) {
-      var rowMs = new Date(row.date + 'T00:00:00').getTime();
-      var daysDiff = Math.round((todayMs - rowMs) / 86400000);
-      var label = daysDiff === 0 ? '오늘' : '-' + daysDiff + '일';
       return {
-        date: label,
+        date: formatYmdMdLabel(row.date),
+        dateYmd: row.date,
         fitness: row.fitness_ctl,
         fatigue: row.fatigue_atl,
         form_tsb: row.form_tsb,

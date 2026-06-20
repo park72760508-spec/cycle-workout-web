@@ -80,7 +80,7 @@
       endDate: today
     });
     var chartRows = typeof pmc.toLegacyFitnessTrendRows === 'function'
-      ? pmc.toLegacyFitnessTrendRows(pmcSeries, today)
+      ? pmc.toLegacyFitnessTrendRows(pmcSeries)
       : pmcSeries.map(function (row) {
           return { date: row.date, fitness: row.fitness_ctl, fatigue: row.fatigue_atl };
         });
@@ -150,10 +150,9 @@
 
     return xAxisDates.map(function (ds) {
       var res = calcFitnessFatigueAt(byDateChart, ds);
-      var logD = new Date(ds + 'T00:00:00');
-      var daysDiff = Math.floor((today.getTime() - logD.getTime()) / (1000 * 60 * 60 * 24));
-      var label = daysDiff === 0 ? '오늘' : '-' + daysDiff + '일';
-      return { date: label, fitness: res.fitness, fatigue: res.fatigue };
+      var p = ds.split('-');
+      var label = parseInt(p[1], 10) + '/' + parseInt(p[2], 10);
+      return { date: label, dateYmd: ds, fitness: res.fitness, fatigue: res.fatigue };
     });
   }
 
