@@ -529,6 +529,20 @@
       };
     }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments]);
 
+    useEffect(function () {
+      if (loading) return;
+      var rc = window.runningRankingRankChange;
+      if (!rc || typeof rc.refreshListRankChangeSlots !== 'function') return;
+      var bodyEl = document.getElementById('runningRankingListBody');
+      if (!bodyEl || !rankedList.length) return;
+      var timer = setTimeout(function () {
+        requestAnimationFrame(function () {
+          rc.refreshListRankChangeSlots(bodyEl, rankedList, activeCategory, { retryIfMissing: true });
+        });
+      }, 80);
+      return function () { clearTimeout(timer); };
+    }, [rankedList, activeCategory, activeTab, socialVer, loading, listFilter, showOverallSegments]);
+
     var unitLabel = useMemo(function () {
       var tabs = cfg().TABS || [];
       for (var i = 0; i < tabs.length; i++) {

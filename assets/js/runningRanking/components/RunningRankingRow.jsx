@@ -31,15 +31,14 @@
     });
   }
 
-  function renderRankChangeBadge(item, listCategory) {
+  function renderRankChangeBadge(item, listCategory, socialVer) {
     var soc = social();
-    if (!soc.getRankChangeSuffix) return null;
-    var suffix = soc.getRankChangeSuffix(item, listCategory || 'Supremo');
-    if (!suffix || !suffix.text) return null;
-    return React.createElement('span', {
-      className: 'stelvio-rank-change stelvio-rank-change--' + suffix.kind,
-      title: suffix.title || ''
-    }, suffix.text);
+    if (!soc.getRankChangeHtml) return null;
+    return htmlSpan(
+      'rank-change-' + (socialVer != null ? socialVer : '0'),
+      'stelvio-rank-change-slot',
+      soc.getRankChangeHtml(item, listCategory || 'Supremo')
+    );
   }
 
   function RunningRankingRow(props) {
@@ -55,10 +54,7 @@
     var displayName = soc.resolveDisplayName ? soc.resolveDisplayName(item, currentUserId) : (item.name || '');
     var avatarHtml = soc.getAvatarHtml ? soc.getAvatarHtml(item, displayName, currentUserId) : '';
     var starHtml = soc.getStarHtml ? soc.getStarHtml(item) : '';
-    var rankChangeHtml = soc.getRankChangeHtml
-      ? soc.getRankChangeHtml(item, props.listCategory || 'Supremo')
-      : '';
-    var rankChangeEl = renderRankChangeBadge(item, props.listCategory || 'Supremo');
+    var rankChangeEl = renderRankChangeBadge(item, props.listCategory || 'Supremo', socialVer);
     var privateBadgeHtml = soc.getPrivateBadgeHtml ? soc.getPrivateBadgeHtml(item, currentUserId) : '';
     var valueLabel = soc.formatValueLabel
       ? soc.formatValueLabel(item)
@@ -115,7 +111,7 @@
         className: 'stelvio-rank-name-text',
         title: rawName
       }, displayName),
-      rankChangeEl || htmlSpan('rank-change-' + socialVer, 'stelvio-rank-change-slot', rankChangeHtml),
+      rankChangeEl || null,
       htmlSpan('star-' + socialVer, 'stelvio-rank-star-slot', starHtml),
       htmlSpan('private-' + socialVer, null, privateBadgeHtml)
     ].filter(Boolean);
