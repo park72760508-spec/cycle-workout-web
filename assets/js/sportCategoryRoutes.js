@@ -34,19 +34,6 @@
     if (typeof showScreen === 'function') showScreen('basecampScreen');
   }
 
-  function isRunBasecampAllowed() {
-    if (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true) return true;
-    var g =
-      typeof getLoginUserGrade === 'function'
-        ? getLoginUserGrade()
-        : typeof getViewerGrade === 'function'
-          ? getViewerGrade()
-          : '2';
-    return typeof isStelvioAdminGrade === 'function'
-      ? isStelvioAdminGrade(g)
-      : String(g).trim() === '1' || Number(g) === 1;
-  }
-
   function showRunServiceComingSoonModal() {
     var modal = document.getElementById('runServiceComingSoonModal');
     if (modal) {
@@ -66,10 +53,6 @@
   }
 
   function enterRunBasecamp() {
-    if (!isRunBasecampAllowed()) {
-      showRunServiceComingSoonModal();
-      return;
-    }
     setActiveSport('run');
     if (typeof showScreen === 'function') showScreen('runBasecampScreen');
   }
