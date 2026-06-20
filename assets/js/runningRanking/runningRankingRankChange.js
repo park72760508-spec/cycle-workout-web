@@ -21,52 +21,59 @@
     return ids;
   }
 
-  function listCategoryRankForItem(item) {
+  function currentRankForItem(item) {
     if (!item) return null;
-    if (item.boardRank != null && isFinite(Number(item.boardRank))) {
-      return Math.floor(Number(item.boardRank));
-    }
     if (item.rank != null && isFinite(Number(item.rank))) {
       return Math.floor(Number(item.rank));
+    }
+    if (item.boardRank != null && isFinite(Number(item.boardRank))) {
+      return Math.floor(Number(item.boardRank));
     }
     return null;
   }
 
-  /**
-   * CYCLE stelvioRankChangeBadgeHtmlForListItem — normalize 후 badge HTML
-   */
-  function badgeHtmlForListItem(item, listCategoryKey) {
-    if (!item || item.isCrew) return '';
-    var listCatRank = listCategoryRankForItem(item);
-    var normalizeFn = callFn('stelvioNormalizeRankMovementOnRow');
-    if (normalizeFn) normalizeFn(item, listCatRank);
+  function resolveRankMovementFields(item) {
+    if (!item || item.isCrew) return null;
+    if (item.rankChange == null || item.previousBoardRank == null) return null;
 
-    var badgeFn = callFn('stelvioServerRankChangeBadgeHtml');
-    if (!badgeFn) return '';
+    var rcN = Math.round(Number(item.rankChange));
+    var prevN = Math.floor(Number(item.previousBoardRank));
+    var currN = currentRankForItem(item);
+    if (!isFinite(rcN) || !isFinite(prevN) || prevN < 1) return null;
 
-    if (item.rankChange != null && item.previousBoardRank != null) {
-      var matchesFn = callFn('stelvioRankMovementRowMatchesCurrentRank');
-      if (listCatRank == null || !matchesFn || matchesFn(item, listCatRank)) {
-        var html = badgeFn(item.rankChange, item.previousBoardRank);
-        if (html) return html;
+    var matchesFn = callFn('stelvioRankMovementRowMatchesCurrentRank');
+    if (matchesFn && currN != null && currN >= 1 && !matchesFn(item, currN)) {
+      if (prevN >= 1 && currN >= 1) {
+        rcN = prevN - currN;
+      } else {
+        return null;
       }
     }
-    return '';
+
+    return { rc: rcN, prev: prevN };
+  }
+
+  /**
+   * applyRankMovement 이후 필드만 사용 — normalize 재호출 시 Android·live에서 필드가 지워지는 것 방지
+   */
+  function badgeHtmlForListItem(item, listCategoryKey) {
+    var mv = resolveRankMovementFields(item);
+    if (!mv) return '';
+    var badgeFn = callFn('stelvioServerRankChangeBadgeHtml');
+    return badgeFn ? (badgeFn(mv.rc, mv.prev) || '') : '';
   }
 
   function suffixForListItem(item, listCategoryKey) {
+    var mv = resolveRankMovementFields(item);
+    if (!mv) return null;
     var html = badgeHtmlForListItem(item, listCategoryKey);
-    if (!html) return null;
-    var rcN = Number(item.rankChange);
-    var prevN = Math.floor(Number(item.previousBoardRank));
-    if (!isFinite(rcN) || !isFinite(prevN) || prevN < 1) return null;
-    if (rcN > 0) {
-      return { text: '(↑' + rcN + ')', kind: 'up', title: '전날 ' + prevN + '위', html: html };
+    if (mv.rc > 0) {
+      return { text: '(↑' + mv.rc + ')', kind: 'up', title: '전날 ' + mv.prev + '위', html: html };
     }
-    if (rcN < 0) {
-      return { text: '(↓' + Math.abs(rcN) + ')', kind: 'down', title: '전날 ' + prevN + '위', html: html };
+    if (mv.rc < 0) {
+      return { text: '(↓' + Math.abs(mv.rc) + ')', kind: 'down', title: '전날 ' + mv.prev + '위', html: html };
     }
-    return { text: '(-)', kind: 'flat', title: '전날 ' + prevN + '위', html: html };
+    return { text: '(-)', kind: 'flat', title: '전날 ' + mv.prev + '위', html: html };
   }
 
   function buildRowLookup(rankedList) {
@@ -80,12 +87,30 @@
     return rowByUid;
   }
 
-  function removeRankChangeNodes(nameWrap) {
-    if (!nameWrap) return;
-    var nodes = nameWrap.querySelectorAll('.stelvio-rank-change, .stelvio-rank-change-slot');
+  function removeRankChangeNodes(rootEl) {
+    if (!rootEl) return;
+    var nodes = rootEl.querySelectorAll('.stelvio-rank-change, .stelvio-rank-change-slot--run-sync');
     for (var i = nodes.length - 1; i >= 0; i--) {
       var node = nodes[i];
-      if (node.parentNode === nameWrap) node.parentNode.removeChild(node);
+      if (node.parentNode) node.parentNode.removeChild(node);
+    }
+  }
+
+  function appendRankChangeHtml(parentEl, rcHtml, insertBefore, locationClass) {
+    if (!parentEl || !rcHtml) return;
+    var holder = document.createElement('span');
+    holder.innerHTML = rcHtml;
+    while (holder.firstChild) {
+      var node = holder.firstChild;
+      if (node.nodeType === 1 && node.classList) {
+        node.classList.add('stelvio-rank-change--run-sync');
+        if (locationClass) node.classList.add(locationClass);
+      }
+      if (insertBefore && insertBefore.parentNode === parentEl) {
+        parentEl.insertBefore(node, insertBefore);
+      } else {
+        parentEl.appendChild(node);
+      }
     }
   }
 
@@ -109,19 +134,14 @@
         sib = sib.nextSibling;
       }
     }
-    var holder = document.createElement('span');
-    holder.innerHTML = rcHtml;
-    while (holder.firstChild) {
-      if (insertBefore) {
-        nameWrap.insertBefore(holder.firstChild, insertBefore);
-      } else if (nameText && nameText.nextSibling) {
-        nameWrap.insertBefore(holder.firstChild, nameText.nextSibling);
-      } else if (nameText) {
-        nameWrap.appendChild(holder.firstChild);
-      } else {
-        nameWrap.appendChild(holder.firstChild);
-      }
-    }
+    appendRankChangeHtml(nameWrap, rcHtml, insertBefore, 'stelvio-rank-change--run-name');
+  }
+
+  function insertRankChangeBesidePos(rowEl, rcHtml) {
+    if (!rowEl || !rcHtml) return;
+    var posEl = rowEl.querySelector('.stelvio-rank-ranklead .stelvio-rank-pos');
+    if (!posEl) return;
+    appendRankChangeHtml(posEl, rcHtml, null, 'stelvio-rank-change--run-pos');
   }
 
   function resolveItemForRowEl(rowEl, rowByUid) {
@@ -142,6 +162,22 @@
     return null;
   }
 
+  function syncRowRankChange(rowEl, item, listCat) {
+    if (!rowEl || !item) return false;
+    var rcHtml = badgeHtmlForListItem(item, listCat);
+    var nameWrap = rowEl.querySelector('.stelvio-rank-name');
+    if (nameWrap) {
+      removeRankChangeNodes(nameWrap);
+      if (rcHtml) insertRankChangeAfterName(nameWrap, rcHtml);
+    }
+    var posEl = rowEl.querySelector('.stelvio-rank-ranklead .stelvio-rank-pos');
+    if (posEl) {
+      removeRankChangeNodes(posEl);
+      if (rcHtml) insertRankChangeBesidePos(rowEl, rcHtml);
+    }
+    return !!rcHtml;
+  }
+
   /**
    * CYCLE stelvioRankingRefreshListRankChangeSlots — React 목록·캐시 복원 후 등락 DOM 동기화
    */
@@ -156,15 +192,12 @@
 
     function syncNameWrap(nameWrap, item) {
       if (!nameWrap || !item) return;
+      var rowEl = nameWrap.closest ? nameWrap.closest('.running-ranking-row') : null;
+      if (!rowEl) return;
       var key = itemLookupIds(item).join('|');
       if (processed[key]) return;
       processed[key] = true;
-
-      var rcHtml = badgeHtmlForListItem(item, listCat);
-      removeRankChangeNodes(nameWrap);
-      if (!rcHtml) return;
-
-      insertRankChangeAfterName(nameWrap, rcHtml);
+      syncRowRankChange(rowEl, item, listCat);
     }
 
     var rows = rootEl.querySelectorAll('.running-ranking-row, .stelvio-rank-row.running-ranking-row');
@@ -173,7 +206,8 @@
       var rowEl = rows[ri];
       var item = resolveItemForRowEl(rowEl, rowByUid);
       if (!item) continue;
-      syncNameWrap(rowEl.querySelector('.stelvio-rank-name'), item);
+      syncRowRankChange(rowEl, item, listCat);
+      processed[itemLookupIds(item).join('|')] = true;
     }
 
     var avatarBtns = rootEl.querySelectorAll('.stelvio-rank-avatar-btn[data-stelvio-rank-user-id]');
@@ -184,15 +218,13 @@
       if (wrap) syncNameWrap(wrap, rowByUid[uid]);
     }
 
-    if (refreshOpts.retryIfMissing && (refreshOpts._retry || 0) < 4) {
-      var missing = rootEl.querySelectorAll('.stelvio-rank-name');
+    if (refreshOpts.retryIfMissing && (refreshOpts._retry || 0) < 8) {
       var needRetry = false;
-      for (ri = 0; ri < missing.length; ri++) {
-        var wrap2 = missing[ri];
-        var row2 = wrap2.closest ? wrap2.closest('.running-ranking-row') : null;
-        var it2 = resolveItemForRowEl(row2, rowByUid);
-        if (!it2 || it2.rankChange == null) continue;
-        if (!wrap2.querySelector('.stelvio-rank-change')) {
+      for (ri = 0; ri < rows.length; ri++) {
+        var rowCheck = rows[ri];
+        var itCheck = resolveItemForRowEl(rowCheck, rowByUid);
+        if (!itCheck || resolveRankMovementFields(itCheck) == null) continue;
+        if (!rowCheck.querySelector('.stelvio-rank-change')) {
           needRetry = true;
           break;
         }
@@ -205,7 +237,7 @@
         }
         nextOpts._retry = (refreshOpts._retry || 0) + 1;
         nextOpts.retryIfMissing = true;
-        var delay = nextOpts._retry < 3 ? 0 : 120;
+        var delay = nextOpts._retry < 4 ? 0 : (nextOpts._retry < 6 ? 120 : 320);
         if (delay) {
           setTimeout(function () {
             refreshListRankChangeSlots(rootEl, rankedList, listCategoryKey, nextOpts);
@@ -224,6 +256,7 @@
   global.runningRankingRankChange = {
     badgeHtmlForListItem: badgeHtmlForListItem,
     suffixForListItem: suffixForListItem,
+    resolveRankMovementFields: resolveRankMovementFields,
     refreshListRankChangeSlots: refreshListRankChangeSlots
   };
 })(typeof window !== 'undefined' ? window : global);

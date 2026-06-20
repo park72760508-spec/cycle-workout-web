@@ -41,13 +41,37 @@
     }
   }
 
-  function serverSnapMatchesLeaderboardDate(snap, opts) {
+  function snapHasMovementPayload(snap) {
     if (!snap) return false;
-    var lb = resolveLeaderboardAsOfDate(opts);
-    if (!lb) return true;
+    var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+    var i;
+    for (i = 0; i < cats.length; i++) {
+      var ch = snap.rankChangesByCategory && snap.rankChangesByCategory[cats[i]];
+      var pr = snap.previousRanksByCategory && snap.previousRanksByCategory[cats[i]];
+      if (ch && Object.keys(ch).length) return true;
+      if (pr && Object.keys(pr).length) return true;
+    }
+    return false;
+  }
+
+  /**
+   * live 미리보기(오늘) + Supabase 스냅샷(전일 23:00 집계) 날짜가 달라도 등락 적용
+   * — CYCLE stelvioApplyClientPeakRankMovementFromSnapshot 과 동일하게 공식 스냅샷 우선
+   */
+  function serverSnapUsableForMovement(snap, opts) {
+    if (!snap || !snapHasMovementPayload(snap)) return false;
+    opts = opts || {};
     var snapAsOf = snap.asOfSeoul != null ? String(snap.asOfSeoul).trim().slice(0, 10) : '';
     if (!snapAsOf) return false;
-    return snapAsOf === lb;
+    if (opts.rankMovementSource === 'supabase') return true;
+    var lb = resolveLeaderboardAsOfDate(opts);
+    if (!lb) return true;
+    if (snapAsOf === lb) return true;
+    if (opts.leaderboardSource === 'live') {
+      var yesterday = ymdAddDays(lb, -1);
+      return snapAsOf === yesterday || snapAsOf <= lb;
+    }
+    return snapAsOf <= lb;
   }
 
   function boardKey(tabId, opts) {
@@ -143,7 +167,7 @@
     var hk = historyKey(tabId, opts);
     var snap = rankMovementByKey[hk];
     if (!snap) return false;
-    if (!serverSnapMatchesLeaderboardDate(snap, opts)) return false;
+    if (!serverSnapUsableForMovement(snap, opts)) return false;
 
     var cat = opts.category || 'Supremo';
     var changes = (snap.rankChangesByCategory && snap.rankChangesByCategory[cat]) || {};
