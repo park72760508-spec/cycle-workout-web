@@ -341,6 +341,7 @@
           gender: gender,
           category: activeCategory,
           rankMovementSource: rankMovementSource,
+          leaderboardSource: leaderboardSource,
           leaderboardAsOfSeoul: leaderboardAsOfSeoul,
           rankMovementAsOfSeoul: rankMovementAsOfSeoul
         }, rankMovementByKey);
@@ -353,11 +354,12 @@
       }
       if (isOverallTab && listFilter === 'interest') {
         list = list.map(function (item, idx) {
-          return Object.assign({}, item, { rank: idx + 1 });
+          var r = idx + 1;
+          return Object.assign({}, item, { rank: r, boardRank: r });
         });
       }
       return list;
-    }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, leaderboardAsOfSeoul, rankMovementAsOfSeoul, socialVer]);
+    }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, leaderboardSource, leaderboardAsOfSeoul, rankMovementAsOfSeoul, socialVer]);
 
     var myCrewIds = useMemo(function () {
       var set = new Set();
@@ -529,20 +531,6 @@
       };
     }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments]);
 
-    useEffect(function () {
-      if (loading) return;
-      var rc = window.runningRankingRankChange;
-      if (!rc || typeof rc.refreshListRankChangeSlots !== 'function') return;
-      var bodyEl = document.getElementById('runningRankingListBody');
-      if (!bodyEl || !rankedList.length) return;
-      var timer = setTimeout(function () {
-        requestAnimationFrame(function () {
-          rc.refreshListRankChangeSlots(bodyEl, rankedList, activeCategory, { retryIfMissing: true });
-        });
-      }, 80);
-      return function () { clearTimeout(timer); };
-    }, [rankedList, activeCategory, activeTab, socialVer, loading, listFilter, showOverallSegments]);
-
     var unitLabel = useMemo(function () {
       var tabs = cfg().TABS || [];
       for (var i = 0; i < tabs.length; i++) {
@@ -578,6 +566,30 @@
     }
 
     var searchExpanded = skipListCollapse || listExpanded;
+
+    useEffect(function () {
+      if (loading) return;
+      var rc = window.runningRankingRankChange;
+      if (!rc || typeof rc.refreshListRankChangeSlots !== 'function') return;
+      var bodyEl = document.getElementById('runningRankingListBody');
+      if (!bodyEl || !rankedList.length) return;
+      var cancelled = false;
+      function runRefresh() {
+        if (cancelled) return;
+        rc.refreshListRankChangeSlots(bodyEl, rankedList, activeCategory, { retryIfMissing: true });
+      }
+      var t1 = setTimeout(function () {
+        requestAnimationFrame(runRefresh);
+      }, 80);
+      var t2 = setTimeout(runRefresh, 280);
+      var t3 = setTimeout(runRefresh, 720);
+      return function () {
+        cancelled = true;
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }, [rankedList, activeCategory, activeTab, socialVer, loading, listFilter, showOverallSegments, listExpanded]);
 
     useEffect(function () {
       if (typeof window.runningRankingSearchSetContext !== 'function') return;

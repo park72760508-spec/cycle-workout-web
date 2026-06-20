@@ -8,6 +8,10 @@
   var social = function () { return window.runningRankingSocial || {}; };
   var zoneColors = function () { return window.runDistanceZoneColors || {}; };
 
+  function rankChangeApi() {
+    return window.runningRankingRankChange || {};
+  }
+
   function medalHtml(rank) {
     if (rank < 1 || rank > 3) return null;
     var src = (cfg().MEDAL_SRC || [])[rank - 1];
@@ -31,14 +35,22 @@
     });
   }
 
-  function renderRankChangeBadge(item, listCategory, socialVer) {
+  function resolveRankChangeSuffix(item, listCategory) {
+    var rc = rankChangeApi();
+    if (rc.suffixForListItem) return rc.suffixForListItem(item, listCategory || 'Supremo');
     var soc = social();
-    if (!soc.getRankChangeHtml) return null;
-    return htmlSpan(
-      'rank-change-' + (socialVer != null ? socialVer : '0'),
-      'stelvio-rank-change-slot',
-      soc.getRankChangeHtml(item, listCategory || 'Supremo')
-    );
+    if (soc.getRankChangeSuffix) return soc.getRankChangeSuffix(item, listCategory || 'Supremo');
+    return null;
+  }
+
+  function renderRankChangeSpan(item, listCategory, key, extraClass) {
+    var suffix = resolveRankChangeSuffix(item, listCategory);
+    if (!suffix || !suffix.text) return null;
+    return React.createElement('span', {
+      key: key,
+      className: 'stelvio-rank-change stelvio-rank-change--' + suffix.kind + (extraClass ? ' ' + extraClass : ''),
+      title: suffix.title || ''
+    }, suffix.text);
   }
 
   function RunningRankingRow(props) {
@@ -50,11 +62,23 @@
     if (!item) return null;
 
     var soc = social();
+    var listCategory = props.listCategory || 'Supremo';
     var rawName = soc.resolveRawName ? soc.resolveRawName(item) : (item.name || '');
     var displayName = soc.resolveDisplayName ? soc.resolveDisplayName(item, currentUserId) : (item.name || '');
     var avatarHtml = soc.getAvatarHtml ? soc.getAvatarHtml(item, displayName, currentUserId) : '';
     var starHtml = soc.getStarHtml ? soc.getStarHtml(item) : '';
-    var rankChangeEl = renderRankChangeBadge(item, props.listCategory || 'Supremo', socialVer);
+    var rankChangeInName = renderRankChangeSpan(
+      item,
+      listCategory,
+      'rank-change-name-' + (socialVer != null ? socialVer : '0'),
+      'stelvio-rank-change--run-name'
+    );
+    var rankChangeBesidePos = renderRankChangeSpan(
+      item,
+      listCategory,
+      'rank-change-pos-' + (socialVer != null ? socialVer : '0'),
+      'stelvio-rank-change--run-pos'
+    );
     var privateBadgeHtml = soc.getPrivateBadgeHtml ? soc.getPrivateBadgeHtml(item, currentUserId) : '';
     var valueLabel = soc.formatValueLabel
       ? soc.formatValueLabel(item)
@@ -101,7 +125,12 @@
       'span',
       { key: 'ranklead', className: 'stelvio-rank-ranklead' },
       crownChild,
-      React.createElement('span', { key: 'pos', className: 'stelvio-rank-pos' }, (rank > 0 ? rank : item.rank) + '위')
+      React.createElement(
+        'span',
+        { key: 'pos', className: 'stelvio-rank-pos' },
+        (rank > 0 ? rank : item.rank) + '위',
+        rankChangeBesidePos
+      )
     );
 
     var nameChildren = [
@@ -111,7 +140,7 @@
         className: 'stelvio-rank-name-text',
         title: rawName
       }, displayName),
-      rankChangeEl || null,
+      rankChangeInName,
       htmlSpan('star-' + socialVer, 'stelvio-rank-star-slot', starHtml),
       htmlSpan('private-' + socialVer, null, privateBadgeHtml)
     ].filter(Boolean);
