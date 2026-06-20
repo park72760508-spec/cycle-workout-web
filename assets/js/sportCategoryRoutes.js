@@ -98,6 +98,44 @@
     }
   }
 
+  /** 오픈 라이딩·러닝 크루 — 베이스캠프 진입 카테고리 (세션 유지) */
+  function setOpenRidingMoimCategory(category) {
+    var c = String(category || '').trim().toUpperCase() === 'RUN' ? 'RUN' : 'CYCLE';
+    window.__openRidingMoimCategory = c;
+    if (c === 'RUN') setActiveSport('run');
+    else setActiveSport('cycle');
+    return c;
+  }
+
+  function resolveOpenRidingMoimCategory() {
+    try {
+      var pinned = String(window.__openRidingMoimCategory || '').trim().toUpperCase();
+      if (pinned === 'RUN' || pinned === 'CYCLE') return pinned;
+    } catch (ePin) {}
+    return getActiveSport() === 'run' ? 'RUN' : 'CYCLE';
+  }
+
+  /** CYCLE 베이스캠프 → 라이딩 모임 */
+  function navigateToRidingMoimFromBasecamp() {
+    setOpenRidingMoimCategory('CYCLE');
+    try {
+      window.__rideMoimIntroFromBasecampPending = true;
+    } catch (eIntro) {}
+    if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
+  }
+
+  /** RUN 베이스캠프 → 러닝 크루 (동일 화면, RUN UI) */
+  function navigateToRunCrewFromBasecamp() {
+    setOpenRidingMoimCategory('RUN');
+    if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
+  }
+
+  /** 모임 화면 홈 버튼 — 진입 카테고리 기준 베이스캠프 */
+  function goOpenRidingMoimHomeBasecamp() {
+    if (resolveOpenRidingMoimCategory() === 'RUN') enterRunBasecamp();
+    else enterCycleBasecamp();
+  }
+
   /** RUN 모드: 환경설정 상단에 로그인 본인 프로필 카드 표시 (관리자·일반 회원 공통) */
   function shouldShowSettingsProfileCard() {
     return getActiveSport() === 'run';
@@ -113,6 +151,11 @@
     routeAfterAuth: routeAfterAuth,
     getHomeScreenId: getHomeScreenId,
     openJournalForActiveSport: openJournalForActiveSport,
+    setOpenRidingMoimCategory: setOpenRidingMoimCategory,
+    resolveOpenRidingMoimCategory: resolveOpenRidingMoimCategory,
+    navigateToRidingMoimFromBasecamp: navigateToRidingMoimFromBasecamp,
+    navigateToRunCrewFromBasecamp: navigateToRunCrewFromBasecamp,
+    goOpenRidingMoimHomeBasecamp: goOpenRidingMoimHomeBasecamp,
     shouldShowSettingsProfileCard: shouldShowSettingsProfileCard
   };
 
@@ -122,6 +165,11 @@
   window.routeAfterAuth = routeAfterAuth;
   window.goHomeBasecamp = goHomeBasecamp;
   window.openJournalForActiveSport = openJournalForActiveSport;
+  window.setOpenRidingMoimCategory = setOpenRidingMoimCategory;
+  window.resolveOpenRidingMoimCategory = resolveOpenRidingMoimCategory;
+  window.navigateToRidingMoimFromBasecamp = navigateToRidingMoimFromBasecamp;
+  window.navigateToRunCrewFromBasecamp = navigateToRunCrewFromBasecamp;
+  window.goOpenRidingMoimHomeBasecamp = goOpenRidingMoimHomeBasecamp;
   window.shouldShowSettingsProfileCard = shouldShowSettingsProfileCard;
   window.showRunServiceComingSoonModal = showRunServiceComingSoonModal;
   window.closeRunServiceComingSoonModal = closeRunServiceComingSoonModal;
