@@ -188,17 +188,15 @@
     return tierBgCss;
   }
 
+  var HEXAGON_AXIS_RANK_CHANGE_FILL = {
+    up: '#c97070',
+    down: '#7a9fbf',
+    flat: '#9ca3af'
+  };
+
   function RankChangeInline(props) {
     var suffix = props.suffix;
-    if (suffix && suffix.html) {
-      return (
-        <span
-          className="stelvio-rank-change-slot-inline"
-          dangerouslySetInnerHTML={{ __html: suffix.html }}
-        />
-      );
-    }
-    if (!suffix) return null;
+    if (!suffix || !suffix.text) return null;
     return (
       <span
         className={'stelvio-rank-change stelvio-rank-change--' + suffix.kind}
@@ -684,27 +682,29 @@
             var t = axisAngle(ai, N_AXES);
             var lx = cx + rLabel * Math.cos(t);
             var ly = cy + rLabel * Math.sin(t);
-            var rankBase = ax.rank != null ? Math.floor(Number(ax.rank)) + '위' : '—';
-            var rankHtml = rankBase + (ax.rankChangeHtml || '');
+            var changeSuffix = ax.rankChangeSuffix;
             return (
-              <g key={ax.key + '-lbl'}>
-                <text x={lx} y={ly} textAnchor="middle" className="fill-slate-800">
-                  <tspan x={lx} dy="0" style={{ fontSize: '9.5px', fontWeight: 600 }}>{ax.label}</tspan>
-                </text>
-                <foreignObject
-                  x={lx - 34}
-                  y={ly + 2}
-                  width={68}
-                  height={16}
-                  style={{ overflow: 'visible', pointerEvents: 'none' }}
-                >
-                  <div
-                    xmlns="http://www.w3.org/1999/xhtml"
-                    className="stelvio-hexagon-axis-rank"
-                    dangerouslySetInnerHTML={{ __html: rankHtml }}
-                  />
-                </foreignObject>
-              </g>
+              <text
+                key={ax.key + '-lbl'}
+                x={lx}
+                y={ly}
+                textAnchor="middle"
+                className="fill-slate-800"
+              >
+                {changeSuffix ? <title>{changeSuffix.title}</title> : null}
+                <tspan x={lx} dy="0" style={{ fontSize: '9.5px', fontWeight: 600 }}>{ax.label}</tspan>
+                <tspan x={lx} dy="11" style={{ fontSize: '7.5px', fill: '#64748b' }}>
+                  {ax.rank != null ? Math.floor(Number(ax.rank)) + '위' : '—'}
+                  {changeSuffix ? (
+                    <tspan
+                      fill={HEXAGON_AXIS_RANK_CHANGE_FILL[changeSuffix.kind]}
+                      style={{ fontSize: '7px', fontWeight: 600 }}
+                    >
+                      {changeSuffix.text}
+                    </tspan>
+                  ) : null}
+                </tspan>
+              </text>
             );
           })}
         </svg>
