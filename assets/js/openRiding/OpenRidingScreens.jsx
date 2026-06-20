@@ -274,6 +274,40 @@ function formatOpenRidingLevelDetailValue(levelStr) {
   return display + ' (' + hint + ')';
 }
 
+/** 상세 패널(RUN): 레벨명 + 페이스(hint) 괄호 표기 */
+function formatOpenRidingRunLevelDetailValue(levelStr) {
+  if (levelStr == null || String(levelStr).trim() === '') return '-';
+  var s = String(levelStr).trim();
+  var opts =
+    typeof window !== 'undefined' &&
+    window.openRidingMoimCategory &&
+    window.openRidingMoimCategory.RUN_LEVEL_OPTIONS
+      ? window.openRidingMoimCategory.RUN_LEVEL_OPTIONS
+      : [];
+  var hint = '';
+  var i;
+  for (i = 0; i < opts.length; i++) {
+    if (opts[i].value === s) {
+      hint = opts[i].hint != null ? String(opts[i].hint) : '';
+      break;
+    }
+  }
+  if (!hint) return s;
+  return s + ' (' + hint + ')';
+}
+
+/** 상세(RUN): packRidingRules.gear → 5종 준비물 체크 상태 */
+function openRidingRunGearDetailItems(gearObj) {
+  var g = gearObj && typeof gearObj === 'object' ? gearObj : {};
+  return [
+    { key: 'runningShoes', label: '러닝화 필수 착용', checked: !!g.runningShoes },
+    { key: 'nightSafety', label: '야간 안전 용품', checked: !!g.nightSafety },
+    { key: 'personalSupply', label: '개인 식수 및 보급식', checked: !!g.personalSupply },
+    { key: 'capSunglasses', label: '캡 모자 및 선글라스', checked: !!g.capSunglasses },
+    { key: 'spareClothes', label: '여벌 옷/수건', checked: !!g.spareClothes }
+  ];
+}
+
 /** 상세: 지역 + 출발 장소 한 줄 (지역 우선, 공백으로 구분) */
 function formatOpenRidingDepartureRegionDisplay(ride) {
   if (!ride) return '-';
@@ -7097,6 +7131,20 @@ function OpenRidingDetail(props) {
         setLevelAnalysisLoading(false);
         return undefined;
       }
+      var rideCatNorm =
+        typeof window !== 'undefined' &&
+        window.openRidingMoimCategory &&
+        typeof window.openRidingMoimCategory.normalizeMoimCategory === 'function'
+          ? window.openRidingMoimCategory.normalizeMoimCategory(ride.category)
+          : String(ride.category || 'CYCLE').trim().toUpperCase() === 'RUN'
+            ? 'RUN'
+            : 'CYCLE';
+      if (rideCatNorm === 'RUN') {
+        setLevelParticipation(null);
+        setDetailLevelPeakHint(null);
+        setLevelAnalysisLoading(false);
+        return undefined;
+      }
       setLevelAnalysisLoading(true);
       var cancelled = false;
       var prof = readOpenRidingProfileFtpWeight();
@@ -7176,7 +7224,7 @@ function OpenRidingDetail(props) {
         cancelled = true;
       };
     },
-    [rideId, userId, ride && ride.level]
+    [rideId, userId, ride && ride.level, ride && ride.category]
   );
 
   var inviteRows = useMemo(
@@ -7507,6 +7555,25 @@ function OpenRidingDetail(props) {
   var ts = ride.date != null ? openRidingCoerceRideDateToDate(ride.date) : null;
   var dateStr = ts ? ts.toLocaleDateString('ko-KR') : '';
 
+  var moimCatApiDetail =
+    typeof window !== 'undefined' && window.openRidingMoimCategory ? window.openRidingMoimCategory : {};
+  var detailCategory =
+    typeof moimCatApiDetail.normalizeMoimCategory === 'function'
+      ? moimCatApiDetail.normalizeMoimCategory(ride.category)
+      : String(ride.category || 'CYCLE').trim().toUpperCase() === 'RUN'
+        ? 'RUN'
+        : 'CYCLE';
+  var isRunDetail = detailCategory === 'RUN';
+  var detailMoimCopy = getOpenRidingMoimCopy(detailCategory);
+  var runThresholdPaceDetail =
+    isRunDetail && typeof moimCatApiDetail.readRunThresholdPaceDisplay === 'function'
+      ? moimCatApiDetail.readRunThresholdPaceDisplay()
+      : null;
+  var runGearDetailItems =
+    isRunDetail && packRulesNorm
+      ? openRidingRunGearDetailItems(packRulesNorm.gear)
+      : [];
+
   var isCancelled = String(ride.rideStatus || 'active') === 'cancelled';
   var hasApplied = role === 'participant' || (role && typeof role === 'object' && role.type === 'waitlist');
   /** 초대 명단·인원 수: 방장 또는 참석/대기 신청한 사용자만 열람 */
@@ -7618,6 +7685,16 @@ function OpenRidingDetail(props) {
       ) : null}
 
       <div className={'open-riding-detail-stat-panel rounded-xl overflow-hidden' + detailMuted}>
+        {isRunDetail ? (
+          <div className="px-3 pt-2.5 pb-0 border-b border-slate-100/90">
+            <span className="inline-flex items-center rounded-lg border border-emerald-200/90 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 tracking-tight">
+              {detailMoimCopy.screenTitle || '러닝 크루'}
+            </span>
+            <span className="ml-1.5 inline-flex items-center rounded-md border border-emerald-300/80 bg-white px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 tabular-nums tracking-wide">
+              RUN
+            </span>
+          </div>
+        ) : null}
         {statRow(
           '모임명',
           <span className={'font-bold text-slate-900 block min-w-0 break-words text-sm leading-[1.25rem] text-left ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
@@ -7632,6 +7709,23 @@ function OpenRidingDetail(props) {
         {statRow('출발 지역', formatOpenRidingDepartureRegionDisplay(ride))}
         {statRow(
           '레벨',
+          isRunDetail ? (
+            <div className="min-w-0 w-full space-y-1.5 text-right">
+              <div>{formatOpenRidingRunLevelDetailValue(ride.level)}</div>
+              {userId && runThresholdPaceDetail ? (
+                <div className="open-riding-create-level-peak-hint mt-1 w-full max-w-[17rem] ml-auto rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug text-right">
+                  <p className="m-0 font-semibold">
+                    개인 목표 역치 페이스 (10k 역치) —{' '}
+                    <span className="tabular-nums font-bold text-emerald-950">{runThresholdPaceDetail}</span> /km
+                  </p>
+                </div>
+              ) : userId ? (
+                <p className="m-0 text-[11px] text-slate-500 leading-snug text-right">
+                  프로필에 10k 역치 페이스 기록을 저장하면 개인 목표 페이스가 표시됩니다.
+                </p>
+              ) : null}
+            </div>
+          ) : (
           <div className="min-w-0 w-full space-y-1.5 text-right">
             <div>{formatOpenRidingLevelDetailValue(ride.level)}</div>
             {userId && levelAnalysisLoading ? (
@@ -7701,6 +7795,7 @@ function OpenRidingDetail(props) {
               </p>
             ) : null}
           </div>
+          )
         )}
         {statRow(
           '거리',
@@ -7948,7 +8043,9 @@ function OpenRidingDetail(props) {
                 </button>
               </span>
               <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
-                <span className="text-xs text-slate-500 leading-tight font-medium">팩 라이딩 룰</span>
+                <span className="text-xs text-slate-500 leading-tight font-medium">
+                  {isRunDetail ? '그룹 러닝 룰' : '팩 라이딩 룰'}
+                </span>
               </div>
             </div>
             {operationRulesExpanded && packRulesDisp ? (
@@ -7962,7 +8059,7 @@ function OpenRidingDetail(props) {
                     {packRulesDisp.rot ? (
                       <div className="px-3 py-3.5 sm:px-4 sm:py-4">
                         <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
-                          로테이션 방식
+                          {isRunDetail ? '그룹 러닝 방식' : '로테이션 방식'}
                         </p>
                         <div className="ml-1 border-l-[3px] border-violet-400/85 pl-3.5 pr-1">
                           <p className="text-sm text-slate-800 m-0 leading-relaxed font-medium">{packRulesDisp.rot}</p>
@@ -7972,13 +8069,14 @@ function OpenRidingDetail(props) {
                     {packRulesDisp.nodrop ? (
                       <div className="px-3 py-3.5 sm:px-4 sm:py-4">
                         <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
-                          노드랍 팩라이딩
+                          {isRunDetail ? '노드랍 팩런 여부' : '노드랍 팩라이딩'}
                         </p>
                         <div className="ml-1 border-l-[3px] border-violet-400/85 pl-3.5 pr-1">
                           <p className="text-sm text-slate-800 m-0 leading-relaxed font-medium">{packRulesDisp.nodrop}</p>
                         </div>
                       </div>
                     ) : null}
+                    {isRunDetail && !packRulesDisp.openSectionText ? null : (
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
                       <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         오픈(Open) 구간
@@ -7987,10 +8085,12 @@ function OpenRidingDetail(props) {
                         {packRulesDisp.openSectionText ? (
                           <p className="text-sm text-slate-700 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.openSectionText}</p>
                         ) : (
-                          <p className="text-xs text-slate-400 m-0 italic">입력 없음</p>
+                          <p className="text-xs text-slate-400 m-0 italic">{isRunDetail ? '선택 안 함' : '입력 없음'}</p>
                         )}
                       </div>
                     </div>
+                    )}
+                    {isRunDetail && !packRulesDisp.supplySectionText ? null : (
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
                       <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         보급 구간
@@ -7999,10 +8099,12 @@ function OpenRidingDetail(props) {
                         {packRulesDisp.supplySectionText ? (
                           <p className="text-sm text-slate-700 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.supplySectionText}</p>
                         ) : (
-                          <p className="text-xs text-slate-400 m-0 italic">입력 없음</p>
+                          <p className="text-xs text-slate-400 m-0 italic">{isRunDetail ? '선택 안 함' : '입력 없음'}</p>
                         )}
                       </div>
                     </div>
+                    )}
+                    {isRunDetail && !packRulesDisp.feeText ? null : (
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
                       <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         회비
@@ -8011,16 +8113,40 @@ function OpenRidingDetail(props) {
                         {packRulesDisp.feeText ? (
                           <p className="text-sm text-slate-700 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.feeText}</p>
                         ) : (
-                          <p className="text-xs text-slate-400 m-0 italic">입력 없음</p>
+                          <p className="text-xs text-slate-400 m-0 italic">{isRunDetail ? '없음' : '입력 없음'}</p>
                         )}
                       </div>
                     </div>
+                    )}
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
                       <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         필수 준비물
                       </p>
                       <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
-                        {packRulesDisp.gearLines.length ? (
+                        {isRunDetail ? (
+                          <ul className="m-0 pl-0 list-none space-y-1.5 text-sm leading-snug">
+                            {runGearDetailItems.map(function (item) {
+                              return (
+                                <li key={item.key} className="flex gap-2 items-start">
+                                  <span
+                                    className={
+                                      'mt-0.5 shrink-0 inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] font-bold leading-none ' +
+                                      (item.checked
+                                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                        : 'border-slate-200 bg-slate-50 text-slate-400')
+                                    }
+                                    aria-hidden
+                                  >
+                                    {item.checked ? '✓' : '—'}
+                                  </span>
+                                  <span className={'min-w-0 flex-1 ' + (item.checked ? 'text-slate-700' : 'text-slate-400')}>
+                                    {item.label}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : packRulesDisp.gearLines.length ? (
                           <ul className="m-0 pl-0 list-none space-y-1.5 text-sm text-slate-700 leading-snug">
                             {packRulesDisp.gearLines.map(function (line, ix) {
                               return (
@@ -8039,6 +8165,7 @@ function OpenRidingDetail(props) {
                         )}
                       </div>
                     </div>
+                    {isRunDetail && !packRulesDisp.cancelConditionText ? null : (
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
                       <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         모임 취소 조건
@@ -8047,10 +8174,11 @@ function OpenRidingDetail(props) {
                         {packRulesDisp.cancelConditionText ? (
                           <p className="text-sm text-slate-700 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.cancelConditionText}</p>
                         ) : (
-                          <p className="text-xs text-slate-400 m-0 italic">입력 없음</p>
+                          <p className="text-xs text-slate-400 m-0 italic">{isRunDetail ? '선택 안 함' : '입력 없음'}</p>
                         )}
                       </div>
                     </div>
+                    )}
                     {packRulesDisp.minors ? (
                       <div className="px-3 py-3.5 sm:px-4 sm:py-4 bg-violet-50/40">
                         <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
