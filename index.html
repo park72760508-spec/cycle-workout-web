@@ -34237,7 +34237,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // 나의 성장 트렌드: 구간 선택(Max~60분) · 좌측 통합 Y축 · 참고선: 본인 연중(차트 구간) 파워·심박 PR
+    // 나의 성장 트렌드: 구간 선택(Max~60분) · 좌측 통합 Y축 · 참고선: 본인 최근 12개월 연중 파워·심박 PR
     function growthTrendGetWattAt(d, slot) {
       if (!d) return null;
       if (d.growthWattsSlots && d.growthWattsSlots[slot] != null && d.growthWattsSlots[slot] > 0) return d.growthWattsSlots[slot];
@@ -35974,10 +35974,23 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               window.persistVo2DemographicSampleAsync(userProfile, vo2TrendRows).catch(function() {});
             }
 
-            // 나의 성장 트렌드: 월단위 PR 슬롯·max_20min 등 (VO2max 트렌드와 동일 주기)
-            var logs6MonthsForGrowth = typeof window.dedupeTrainingLogsByDateStravaFirst === 'function'
-              ? window.dedupeTrainingLogsByDateStravaFirst(logs6Months)
-              : logs6Months;
+    // 나의 성장 트렌드: 월단위 PR 슬롯·max_20min 등 (최근 12개월)
+            var twelveMonthsAgoForGrowth = new Date(today);
+            twelveMonthsAgoForGrowth.setMonth(twelveMonthsAgoForGrowth.getMonth() - 11);
+            twelveMonthsAgoForGrowth.setDate(1);
+            var twelveMonthsAgoStrForGrowth =
+              twelveMonthsAgoForGrowth.getFullYear() +
+              '-' +
+              String(twelveMonthsAgoForGrowth.getMonth() + 1).padStart(2, '0') +
+              '-' +
+              String(twelveMonthsAgoForGrowth.getDate()).padStart(2, '0');
+            var logsTwelveMonthsForGrowth = raw.filter(function(log) {
+              var dateStr = parseDateForDashboard(log.date);
+              return dateStr && dateStr >= twelveMonthsAgoStrForGrowth && dateStr <= todayFormattedForFilter;
+            });
+            logsTwelveMonthsForGrowth = typeof window.dedupeTrainingLogsByDateStravaFirst === 'function'
+              ? window.dedupeTrainingLogsByDateStravaFirst(logsTwelveMonthsForGrowth)
+              : logsTwelveMonthsForGrowth;
             var GROWTH_SLOT_FIELDS_DASH = [
               { w: 'max_watts', h: 'max_hr' },
               { w: 'max_1min_watts', h: 'max_hr_1min' },
@@ -35991,7 +36004,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               return { w: [0, 0, 0, 0, 0, 0, 0], h: [0, 0, 0, 0, 0, 0, 0] };
             }
             var byDateGrowth = {};
-            logs6MonthsForGrowth.forEach(function(log) {
+            logsTwelveMonthsForGrowth.forEach(function(log) {
               var dateStr = parseDateForDashboard(log.date);
               if (!dateStr) return;
               if (!byDateGrowth[dateStr]) byDateGrowth[dateStr] = emptyGrowthDayDash();
@@ -36007,7 +36020,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               }
             });
             var growthTrendRows = [];
-            for (var mOff = 5; mOff >= 0; mOff--) {
+            for (var mOff = 11; mOff >= 0; mOff--) {
               var dMonth = new Date(today.getFullYear(), today.getMonth() - mOff, 1);
               var y = dMonth.getFullYear();
               var m = dMonth.getMonth() + 1;
