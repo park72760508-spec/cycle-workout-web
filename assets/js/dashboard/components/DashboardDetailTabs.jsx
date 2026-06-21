@@ -607,12 +607,14 @@
 
     return React.createElement(
       'div',
-      { className: 'DashboardDetailTabs', ref: containerRef },
+      { className: 'DashboardDetailTabs' + (isRun ? ' DashboardDetailTabs--run' : ''), ref: containerRef },
       React.createElement(
         'div',
         {
-          className: 'sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pb-3 -mt-1 flex gap-2 overflow-x-auto scrollbar-hide items-center',
-          style: { scrollbarWidth: 'none', msOverflowStyle: 'none' }
+          className: isRun
+            ? 'sticky top-0 z-10 bg-gray-50 pb-3 pt-0 w-full grid grid-cols-4 gap-2 items-stretch stelvio-run-detail-tabs'
+            : 'sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pb-3 -mt-1 flex gap-2 overflow-x-auto scrollbar-hide items-center',
+          style: isRun ? undefined : { scrollbarWidth: 'none', msOverflowStyle: 'none' }
         },
         tabs.map(function(tab, i) {
           var isActive = activeIndex === i;
@@ -628,15 +630,17 @@
                 return function() {
                   setActiveIndex(clickedI);
                   setTimeout(function() {
-                    /* 탭 버튼 가로 스크롤 */
-                    var refs = tabRefs.current;
-                    if (refs && Array.isArray(refs)) {
-                      var targetIdx = clickedI <= 1 ? 0 : 3;
-                      var el = refs[targetIdx];
-                      if (el && typeof el.scrollIntoView === 'function') {
-                        try {
-                          el.scrollIntoView({ inline: targetIdx === 0 ? 'start' : 'end', block: 'nearest', behavior: 'smooth' });
-                        } catch (e) { el.scrollIntoView(false); }
+                    if (!isRun) {
+                      /* 탭 버튼 가로 스크롤 (CYCLE) */
+                      var refs = tabRefs.current;
+                      if (refs && Array.isArray(refs)) {
+                        var targetIdx = clickedI <= 1 ? 0 : 3;
+                        var el = refs[targetIdx];
+                        if (el && typeof el.scrollIntoView === 'function') {
+                          try {
+                            el.scrollIntoView({ inline: targetIdx === 0 ? 'start' : 'end', block: 'nearest', behavior: 'smooth' });
+                          } catch (e) { el.scrollIntoView(false); }
+                        }
                       }
                     }
                     /* 세로 스크롤: 탭 컨테이너 상단 — iOS/Android 호환 */
@@ -668,11 +672,15 @@
                   }, 80);
                 };
               })(i),
-              className:
-                'flex-shrink-0 px-4 py-2.5 text-sm transition-all duration-200 rounded-[10px] ' +
-                (isActive
-                  ? 'font-bold bg-white text-[#7c3aed] border-[1.5px] border-[#7c3aed] shadow-[0_2px_8px_rgba(124,58,237,0.14)]'
-                  : 'font-semibold text-gray-700 bg-gray-200 border-0 shadow-none hover:bg-gray-300 hover:text-gray-900')
+              className: isRun
+                ? 'stelvio-run-detail-tab-btn w-full min-w-0 px-1 py-2.5 text-[11px] sm:text-xs text-center leading-tight transition-all duration-200 rounded-[10px] ' +
+                  (isActive
+                    ? 'font-bold bg-white text-[#7c3aed] border-[1.5px] border-[#7c3aed] shadow-[0_2px_8px_rgba(124,58,237,0.14)]'
+                    : 'font-semibold text-gray-700 bg-gray-200 border-0 shadow-none hover:bg-gray-300 hover:text-gray-900')
+                : 'flex-shrink-0 px-4 py-2.5 text-sm transition-all duration-200 rounded-[10px] ' +
+                  (isActive
+                    ? 'font-bold bg-white text-[#7c3aed] border-[1.5px] border-[#7c3aed] shadow-[0_2px_8px_rgba(124,58,237,0.14)]'
+                    : 'font-semibold text-gray-700 bg-gray-200 border-0 shadow-none hover:bg-gray-300 hover:text-gray-900')
             },
             tab.label
           );
