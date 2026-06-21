@@ -7206,40 +7206,37 @@ function OpenRidingDetail(props) {
           typeof window !== 'undefined' && typeof window.getOpenRidingRunTierLevelLabelFromPaceSec === 'function'
             ? window.getOpenRidingRunTierLevelLabelFromPaceSec
             : null;
-        var paceFromSpeedFn =
-          typeof window !== 'undefined' && typeof window.runPaceSecPerKmFromSpeedMps === 'function'
-            ? window.runPaceSecPerKmFromSpeedMps
-            : null;
-        var paceFmtFn =
-          typeof window !== 'undefined' && typeof window.formatOpenRidingRunPaceDisplayFromSec === 'function'
-            ? window.formatOpenRidingRunPaceDisplayFromSec
+        var resolvePaceFn =
+          typeof window !== 'undefined' &&
+          window.runDashboardPace &&
+          typeof window.runDashboardPace.resolveRunCrewLevelPaceFromEfforts === 'function'
+            ? window.runDashboardPace.resolveRunCrewLevelPaceFromEfforts
             : null;
 
-        function finishRunPeak(maxSpeedMps) {
-          var paceSec =
-            maxSpeedMps > 0 && paceFromSpeedFn ? paceFromSpeedFn(maxSpeedMps) : null;
+        function finishRunPaceResolved(paceResult) {
+          var res = paceResult || {};
+          var paceSec = res.secPerKm != null && res.secPerKm > 0 ? res.secPerKm : null;
           var part =
-            runClsFn && paceSec != null && paceSec > 0 && levelStrRun
-              ? runClsFn(paceSec, levelStrRun)
-              : null;
-          var myTier =
-            runTierFn && paceSec != null && paceSec > 0 ? runTierFn(paceSec) : null;
-          var paceDisplay =
-            paceFmtFn && paceSec != null && paceSec > 0 ? paceFmtFn(paceSec) : null;
+            runClsFn && paceSec != null && levelStrRun ? runClsFn(paceSec, levelStrRun) : null;
+          var myTier = runTierFn && paceSec != null ? runTierFn(paceSec) : null;
           if (!cancelledRun) {
             setLevelParticipation(part);
             setDetailLevelPeakHint({
               peak10kPaceSec: paceSec,
-              peak10kPaceDisplay: paceDisplay,
+              peak10kPaceDisplay: res.display || null,
+              paceSource: res.source || null,
+              paceLabel: res.paceLabel || null,
+              referenceNote: res.referenceNote || null,
+              inferred: !!res.inferred,
               myTierLabel: myTier,
-              usedPeak: !!(maxSpeedMps > 0 && paceSec != null && paceSec > 0)
+              usedPeak: paceSec != null
             });
             setLevelAnalysisLoading(false);
           }
         }
 
-        if (typeof window.getUserRunEfforts !== 'function') {
-          finishRunPeak(0);
+        if (typeof window.getUserRunEfforts !== 'function' || !resolvePaceFn) {
+          finishRunPaceResolved(null);
           return function () {
             cancelledRun = true;
           };
@@ -7260,17 +7257,10 @@ function OpenRidingDetail(props) {
           .getUserRunEfforts(uidRun, { limit: 600 })
           .then(function (efforts) {
             if (cancelledRun) return;
-            var maxSpeed = 0;
-            (efforts || []).forEach(function (eff) {
-              var ds = String(eff.activity_date || '').slice(0, 10);
-              if (!ds || ds < cutoffRunStr) return;
-              var sp = Number(eff.speed_10k) || 0;
-              if (sp > maxSpeed) maxSpeed = sp;
-            });
-            finishRunPeak(maxSpeed);
+            finishRunPaceResolved(resolvePaceFn(efforts, cutoffRunStr));
           })
           .catch(function () {
-            if (!cancelledRun) finishRunPeak(0);
+            if (!cancelledRun) finishRunPaceResolved(null);
           });
 
         return function () {
@@ -7875,7 +7865,7 @@ function OpenRidingDetail(props) {
                   {detailLevelPeakHint && detailLevelPeakHint.peak10kPaceDisplay ? (
                     <div className="open-riding-create-level-peak-hint mt-1 w-full max-w-[17rem] ml-auto rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug text-right">
                       <p className="m-0 font-semibold">
-                        나의 10k 피크 페이스 (최근 90일) :{' '}
+                        {(detailLevelPeakHint.paceLabel || '나의 10k 피크 페이스 (최근 90일)') + ' : '}
                         <span className="tabular-nums font-bold text-emerald-950">
                           {detailLevelPeakHint.peak10kPaceDisplay}
                         </span>
@@ -7886,9 +7876,9 @@ function OpenRidingDetail(props) {
                           <strong className="text-emerald-950">{detailLevelPeakHint.myTierLabel}</strong>
                         </p>
                       ) : null}
-                      {detailLevelPeakHint.usedPeak ? (
+                      {detailLevelPeakHint.referenceNote ? (
                         <p className="m-0 text-[10px] text-emerald-800/90">
-                          참조: 최근 90일 10k 구간 최고 페이스
+                          {detailLevelPeakHint.referenceNote}
                         </p>
                       ) : null}
                     </div>
@@ -7896,7 +7886,7 @@ function OpenRidingDetail(props) {
                 </div>
               ) : userId ? (
                 <p className="m-0 text-[11px] text-slate-500 leading-snug text-right">
-                  최근 90일 10k 페이스 기록이 있으면 개인 피크 페이스·참석 가능 여부가 표시됩니다.
+                  최근 90일 10k·7k·5k 페이스 기록이 있으면 피크/역치(TP) 페이스와 참석 가능 여부가 표시됩니다.
                 </p>
               ) : null}
             </div>
