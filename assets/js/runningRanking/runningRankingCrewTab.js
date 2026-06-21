@@ -43,6 +43,8 @@
 
   /**
    * 확장된 크루 내 멤버 순위 (성별·카테고리·항목 필터 적용)
+   * — Firestore members/{firebaseUid} 와 RUN 보드 user_info.user_id 이중 매칭
+   * — 집계 점수 없어도 멤버 행 표시 (값 '—')
    * @param {object[]} leaderboardRows
    * @param {object[]} memberRows — subscribeRidingGroupMembers 결과
    * @param {{ metric?: string, gender?: string, category?: string, paceDistance?: string }} opts
@@ -54,28 +56,142 @@
     if (!dataApi || typeof dataApi.buildRankedList !== 'function') return [];
 
     var tabId = metricToTabId(opts.metric);
-    var listOpts = {
-      gender: opts.gender || 'all',
-      category: opts.category || 'Supremo',
-      paceDistance: opts.paceDistance || '5k'
-    };
-    var fullList = dataApi.buildRankedList(leaderboardRows || [], tabId, listOpts);
-    var byUid = {};
-    fullList.forEach(function (item) {
-      if (item && item.userId != null) byUid[String(item.userId)] = item;
+    var gender = opts.gender || 'all';
+    var category = opts.category || 'Supremo';
+    var paceDistance = opts.paceDistance || '5k';
+    var rowUserId = dataApi.rowUserId;
+    var rowFirebaseUid = dataApi.rowFirebaseUid;
+    var fmtApi = window.runningRankingFormat || {};
+    var rows = leaderboardRows || [];
+
+    function rowGender(r) {
+      var ui = r && r.user_info;
+      return fmtApi.normalizeGender ? fmtApi.normalizeGender(ui && ui.gender) : '';
+    }
+
+    function rowAgeCategory(r) {
+      var ui = r && r.user_info;
+      var cat = ui && (ui.age_category != null ? ui.age_category : ui.ageCategory);
+      return cat != null ? String(cat).trim() : '';
+    }
+
+    function rowDisplayName(r) {
+      var ui = r && r.user_info;
+      return (ui && ui.display_name) ? String(ui.display_name) : '';
+    }
+
+    function rowProfileUrl(r) {
+      var ui = r && r.user_info;
+      return (ui && ui.profile_image_url) ? String(ui.profile_image_url) : '';
+    }
+
+    function genderOk(r) {
+      if (!gender || gender === 'all') return true;
+      return rowGender(r) === gender;
+    }
+
+    function categoryOk(r) {
+      if (!category || category === 'Supremo') return true;
+      return rowAgeCategory(r) === category;
+    }
+
+    function findRawRow(memUid) {
+      var i;
+      var r;
+      var board;
+      var fb;
+      for (i = 0; i < rows.length; i++) {
+        r = rows[i];
+        if (!r) continue;
+        board = rowUserId(r);
+        fb = rowFirebaseUid(r);
+        if (board !== memUid && fb !== memUid) continue;
+        if (!genderOk(r)) return null;
+        if (!categoryOk(r)) return null;
+        return r;
+      }
+      return null;
+    }
+
+    var fullList = dataApi.buildRankedList(rows, tabId, {
+      gender: gender,
+      category: category,
+      paceDistance: paceDistance
     });
+    var rankedById = {};
+    function indexRanked(item) {
+      if (!item) return;
+      var board = item.userId != null ? String(item.userId) : '';
+      var fb = item.firebaseUid || item.socialUserId || '';
+      if (board) rankedById[board] = item;
+      if (fb) rankedById[fb] = item;
+    }
+    fullList.forEach(indexRanked);
+
+    function memName(mem, raw) {
+      if (mem && mem.displayName != null && String(mem.displayName).trim()) {
+        return String(mem.displayName).trim();
+      }
+      if (mem && mem.name != null && String(mem.name).trim()) {
+        return String(mem.name).trim();
+      }
+      var dn = raw ? rowDisplayName(raw) : '';
+      return dn || '(이름 없음)';
+    }
+
+    function memProfile(mem, raw) {
+      if (mem && mem.profileImageUrl) return String(mem.profileImageUrl);
+      if (mem && mem.photoUrl) return String(mem.photoUrl);
+      return raw ? rowProfileUrl(raw) : '';
+    }
+
+    function placeholderItem(mem, raw, memUid) {
+      var board = raw ? rowUserId(raw) : '';
+      var fb = raw ? rowFirebaseUid(raw) : '';
+      return {
+        userId: board || memUid,
+        firebaseUid: fb || memUid,
+        socialUserId: fb || board || memUid,
+        name: memName(mem, raw),
+        profileUrl: memProfile(mem, raw),
+        value: -1,
+        valueLabel: '—',
+        _groupRole: mem.role || 'member'
+      };
+    }
 
     var merged = [];
     (memberRows || []).forEach(function (mem) {
-      var uid = mem && (mem.userId || mem.uid || mem.id) ? String(mem.userId || mem.uid || mem.id) : '';
-      if (!uid) return;
-      var row = byUid[uid];
-      if (!row) return;
-      merged.push(Object.assign({}, row, { _groupRole: mem.role || 'member' }));
+      var memUid = mem && (mem.userId || mem.uid || mem.id)
+        ? String(mem.userId || mem.uid || mem.id)
+        : '';
+      if (!memUid) return;
+
+      var raw = findRawRow(memUid);
+      var ranked =
+        rankedById[memUid] ||
+        (raw ? rankedById[rowUserId(raw)] || rankedById[rowFirebaseUid(raw)] : null);
+
+      if (ranked) {
+        merged.push(Object.assign({}, ranked, { _groupRole: mem.role || 'member' }));
+        return;
+      }
+
+      if (raw) {
+        merged.push(placeholderItem(mem, raw, memUid));
+        return;
+      }
+
+      /* 랭킹 API에 없어도 승인 멤버는 표시 (방장 단독 크루 등) */
+      merged.push(placeholderItem(mem, null, memUid));
     });
 
     merged.sort(function (a, b) {
-      var diff = tabId === 'pace' ? a.value - b.value : b.value - a.value;
+      var av = Number(a.value);
+      var bv = Number(b.value);
+      if (!isFinite(av)) av = -1;
+      if (!isFinite(bv)) bv = -1;
+      var diff = tabId === 'pace' ? av - bv : bv - av;
       if (diff !== 0) return diff;
       var au = a.userId != null ? String(a.userId) : '';
       var bu = b.userId != null ? String(b.userId) : '';
@@ -107,8 +223,12 @@
         category: 'Supremo'
       });
       var uid = String(item.userId);
+      var itemFb = item.firebaseUid || item.socialUserId || '';
       for (var i = 0; i < supList.length; i++) {
-        if (supList[i] && String(supList[i].userId) === uid) {
+        if (!supList[i]) continue;
+        var su = supList[i].userId != null ? String(supList[i].userId) : '';
+        var sf = supList[i].firebaseUid || supList[i].socialUserId || '';
+        if (su === uid || (itemFb && sf === String(itemFb)) || (sf && sf === uid)) {
           overallRank = i + 1;
           break;
         }
