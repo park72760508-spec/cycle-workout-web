@@ -12897,6 +12897,14 @@
     var stelvioGroupTabMembersSubForId = null;
     /** 그룹 탭 내 선택된 지표 (기본: 'gc') */
     var stelvioGroupTabMetric = 'gc';
+    /** CYCLE 랭킹 클럽 탭 — RUN 카테고리 소모임 제외 (라이딩/CYCLE만) */
+    function stelvioFilterClubTabMyGroups(rows) {
+      if (!rows || !rows.length) return [];
+      return rows.filter(function (gr) {
+        var c = gr && gr.category != null ? String(gr.category).trim().toUpperCase() : '';
+        return c !== 'RUN';
+      });
+    }
     /** `users/{uid}`에서 보강한 멤버 표시명 (방장 등 members 문서에 이름 비어 있음) */
     var stelvioGroupTabUserNameCache = {};
     /** users/{uid} 읽기 실패·이름 없음 — 동일 세션에서 반복 호출 방지 */
@@ -21539,7 +21547,7 @@
 
       /* 그룹명 */
       var groupName = '';
-      var grpRows = stelvioLastMyGroupsFireRows || [];
+      var grpRows = stelvioFilterClubTabMyGroups(stelvioLastMyGroupsFireRows || []);
       for (var gi2 = 0; gi2 < grpRows.length; gi2++) {
         var gr2 = grpRows[gi2];
         if (gr2 && String(gr2.groupId || gr2.id || '') === String(expGid)) {
@@ -21890,7 +21898,7 @@
         return;
       }
       var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
-      var grpRows = stelvioLastMyGroupsFireRows || [];
+      var grpRows = stelvioFilterClubTabMyGroups(stelvioLastMyGroupsFireRows || []);
       if (!grpRows.length && !stelvioMyGroupsRankUnsub) {
         bodyEl.innerHTML = '<p class="stelvio-ranking-empty">목록 불러오는 중…</p>';
         if (typeof stelvioHideRankingBoardLoadingUiIfReady === 'function') stelvioHideRankingBoardLoadingUiIfReady();
@@ -25965,6 +25973,7 @@
   <script src="assets/js/runningRanking/runningRankingAvatarOverlay.js"></script>
   <script src="assets/js/runningRanking/runningRankingSocial.js"></script>
   <script src="assets/js/runningRanking/runningRankingCrew.js"></script>
+  <script src="assets/js/runningRanking/runningRankingCrewTab.js"></script>
   <script src="assets/js/runningRanking/runningRankingRoutes.js"></script>
   <script src="assets/js/runningRanking/runningRankingListView.js"></script>
   <script src="assets/js/runningRanking/runningRankingSearch.js"></script>
@@ -25973,6 +25982,7 @@
   <script src="assets/js/runningRanking/components/RunningRankingCollapsibleList.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runningRanking/components/RunningRankingVirtualList.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runningRanking/components/RunningHexagonRanksCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/runningRanking/components/RunningRankingCrewTab.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runningRanking/components/RunningRankingScreen.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script>
     (function () {
