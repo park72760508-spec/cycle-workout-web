@@ -229,7 +229,23 @@
         if (!window.firestoreV9) return;
         try {
           crewUnsubRef.current = svc.subscribeMyRidingGroupsAsMember(window.firestoreV9, uid, function (rows) {
-            setCrewGroups(rows && rows.length ? rows.slice() : []);
+            var list = rows && rows.length ? rows.slice() : [];
+            var enrich =
+              window.ridingGroupCategory &&
+              typeof window.ridingGroupCategory.enrichRidingGroupsWithOwnerCategory === 'function'
+                ? window.ridingGroupCategory.enrichRidingGroupsWithOwnerCategory
+                : null;
+            if (!enrich) {
+              setCrewGroups(list);
+              return;
+            }
+            enrich(list)
+              .then(function (enriched) {
+                setCrewGroups(enriched && enriched.length ? enriched : list);
+              })
+              .catch(function () {
+                setCrewGroups(list);
+              });
           });
         } catch (e) {}
       }
