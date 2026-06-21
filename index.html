@@ -12899,11 +12899,36 @@
     var stelvioGroupTabMetric = 'gc';
     /** CYCLE 랭킹 클럽 탭 — RUN 카테고리 소모임 제외 (라이딩/CYCLE만) */
     function stelvioFilterClubTabMyGroups(rows) {
+      if (
+        window.ridingGroupCategory &&
+        typeof window.ridingGroupCategory.filterRidingGroupsByBoardCategory === 'function'
+      ) {
+        return window.ridingGroupCategory.filterRidingGroupsByBoardCategory(rows, 'CYCLE');
+      }
       if (!rows || !rows.length) return [];
       return rows.filter(function (gr) {
         var c = gr && gr.category != null ? String(gr.category).trim().toUpperCase() : '';
         return c !== 'RUN';
       });
+    }
+    function stelvioApplyMyGroupsCategoryEnrichment(rows, cb) {
+      var list = rows && rows.length ? rows.slice() : [];
+      var enrich =
+        window.ridingGroupCategory &&
+        typeof window.ridingGroupCategory.enrichRidingGroupsWithOwnerCategory === 'function'
+          ? window.ridingGroupCategory.enrichRidingGroupsWithOwnerCategory
+          : null;
+      if (!enrich) {
+        cb(list);
+        return;
+      }
+      enrich(list)
+        .then(function (enriched) {
+          cb(enriched && enriched.length ? enriched : list);
+        })
+        .catch(function () {
+          cb(list);
+        });
     }
     /** `users/{uid}`에서 보강한 멤버 표시명 (방장 등 members 문서에 이름 비어 있음) */
     var stelvioGroupTabUserNameCache = {};
@@ -21432,7 +21457,8 @@
         if (!svcOk) return;
         try {
           stelvioMyGroupsRankUnsub = window.openRidingGroupService.subscribeMyRidingGroupsAsMember(window.firestoreV9, uid, function (rows) {
-            stelvioLastMyGroupsFireRows = rows && rows.length ? rows.slice() : [];
+            stelvioApplyMyGroupsCategoryEnrichment(rows, function (enrichedRows) {
+            stelvioLastMyGroupsFireRows = enrichedRows && enrichedRows.length ? enrichedRows.slice() : [];
             stelvioRefreshGroupContactSetFromFirestore().then(function () {
               if (typeof stelvioRankingApplySocialStarUi === 'function') {
                 stelvioRankingApplySocialStarUi();
@@ -21458,6 +21484,7 @@
               stelvioHideRankingBoardLoadingUiIfReady();
             }
             refreshStelvioDistributionChartMounted();
+            });
           });
         } catch (eSb) {
           console.warn('[StelvioRanking] 나의 소모임 구독 오류:', eSb);
@@ -25963,6 +25990,7 @@
   <script src="assets/js/runJournal/RunJournalDetailBottomSheet.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runJournal/RunTrainingJournalScreen.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <!-- 러닝 랭킹보드 -->
+  <script src="assets/js/openRiding/ridingGroupCategory.js"></script>
   <script src="assets/js/runDistanceZoneColors.js"></script>
   <script src="assets/js/runningRanking/runningRankingConfig.js"></script>
   <script src="assets/js/runningRanking/runningRankingFormat.js"></script>
