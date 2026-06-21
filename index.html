@@ -32435,7 +32435,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       var ctl1 = Number(last.fitness) || 0;
       var atl0 = Number(first.fatigue) || 0;
       var atl1 = Number(last.fatigue) || 0;
-      var tsb1 = last.form_tsb != null ? Number(last.form_tsb) : ctl1 - atl1;
+      var tsb1 =
+        isFinite(ctl1) && isFinite(atl1)
+          ? Math.round((ctl1 - atl1) * 10) / 10
+          : last.form_tsb != null
+            ? Number(last.form_tsb)
+            : 0;
 
       var tsbZoneId = 'optimal';
       if (tsb1 > 5) tsbZoneId = 'freshness';
@@ -33409,7 +33414,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var row = data[gi];
             var ctlVal = Number(row.fitness);
             var atlVal = Number(row.fatigue);
-            var tsbVal = row.form_tsb != null ? Number(row.form_tsb) : ctlVal - atlVal;
+            var tsbVal =
+              isFinite(ctlVal) && isFinite(atlVal)
+                ? Math.round((ctlVal - atlVal) * 10) / 10
+                : row.form_tsb != null
+                  ? Number(row.form_tsb)
+                  : NaN;
             var dateLabel = row.date || '—';
             var panelBg =
               'linear-gradient(180deg, rgba(124,58,237,0.11) 0%, rgba(124,58,237,0.05) 100%), #fff';
