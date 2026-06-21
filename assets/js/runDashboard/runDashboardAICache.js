@@ -8,7 +8,7 @@
   'use strict';
 
   var CACHE_PREFIX = 'stelvio_run_dashboard_ai_';
-  var CACHE_VERSION = '4'; // 4: RUN 전용 coach 캐시·CYCLE 혼입 거부
+  var CACHE_VERSION = '5'; // 5: CYCLE 혼입 캐시 무효화·전역 API 분리
 
   /**
    * 로그 날짜 → 로컬 YYYY-MM-DD (useDashboardData / 코치와 동일 기준)
@@ -143,29 +143,52 @@
     } catch (e) {}
   }
 
+  function tagRunCoachPayload(coachData) {
+    return coachData && typeof coachData === 'object'
+      ? Object.assign({}, coachData, { sport_category: 'run' })
+      : coachData;
+  }
+
+  /** RUN 캐시만 허용 — CYCLE 라벨·태그 거부 (normalize 전 원본 기준) */
+  function isStoredRunCoachPayload(data) {
+    if (!data || data.condition_score == null || data.error_reason) return false;
+    var sc = String(data.sport_category || '').toLowerCase();
+    if (sc === 'cycle') return false;
+    var rw = String(data.recommended_workout || '').trim();
+    if (typeof window.isRunWorkoutLabel === 'function') {
+      if (!window.isRunWorkoutLabel(rw)) return false;
+    } else if (/Active Recovery \(Z1\)|Endurance \(Z2\)|Sweet Spot|VO2 Max \(Z5\)/i.test(rw)) {
+      return false;
+    }
+    return sc === 'run' || sc === '';
+  }
+
   /**
-   * 컨디션 분석(Coach) 캐시 — 로그 시그니처별(동일 데이터 재호출 방지)
+   * 컨디션 분석(Coach) 캐시 — RUN 전용 (CYCLE getDashboardCoachCache와 분리)
    */
-  window.getDashboardCoachCache = function(userId, todayStr, logsSignature) {
+  window.getRunDashboardCoachCache = function(userId, todayStr, logsSignature) {
     var key = getCacheKey('coach', userId, todayStr + '_' + (logsSignature || ''));
-    return getCached(key);
+    var data = getCached(key);
+    return isStoredRunCoachPayload(data) ? data : null;
   };
 
-  window.setDashboardCoachCache = function(userId, todayStr, logsSignature, coachData) {
+  window.setRunDashboardCoachCache = function(userId, todayStr, logsSignature, coachData) {
     var key = getCacheKey('coach', userId, todayStr + '_' + (logsSignature || ''));
-    var ok = setCache(key, coachData);
-    if (coachData && todayStr) {
-      setCache(getCacheKey('coach_daily', userId, todayStr), coachData);
+    var payload = tagRunCoachPayload(coachData);
+    var ok = setCache(key, payload);
+    if (payload && todayStr) {
+      setCache(getCacheKey('coach_daily', userId, todayStr), payload);
     }
     return ok;
   };
 
   /** 오늘(local) 날짜 기준 일별 컨디션 캐시 — 프로그램 재구동 시 수동 분석 없이 복원 */
-  window.getDashboardCoachDailyCache = function(userId, todayStr) {
+  window.getRunDashboardCoachDailyCache = function(userId, todayStr) {
     if (!userId || !todayStr) return null;
     var daily = getCached(getCacheKey('coach_daily', userId, todayStr));
-    if (daily && daily.condition_score != null && !daily.error_reason) return daily;
-    return findLatestCoachCacheForDate(userId, todayStr);
+    if (daily && isStoredRunCoachPayload(daily)) return daily;
+    var fallback = findLatestCoachCacheForDate(userId, todayStr);
+    return isStoredRunCoachPayload(fallback) ? fallback : null;
   };
 
   /** coach_daily 도입 전 저장된 시그니처 캐시 중 오늘 날짜 항목 폴백 */
@@ -189,7 +212,7 @@
           if (raw) payload = JSON.parse(raw);
         } catch (e2) {}
       }
-      if (!payload || !payload.data || payload.data.condition_score == null || payload.data.error_reason) return;
+      if (!payload || !payload.data || !isStoredRunCoachPayload(payload.data)) return;
       var at = payload.cachedAt || '';
       if (!best || at >= bestAt) {
         best = payload.data;
@@ -211,13 +234,13 @@
     return best;
   }
 
-  window.setDashboardCoachDailyCache = function(userId, todayStr, coachData) {
+  window.setRunDashboardCoachDailyCache = function(userId, todayStr, coachData) {
     if (!userId || !todayStr) return false;
-    return setCache(getCacheKey('coach_daily', userId, todayStr), coachData);
+    return setCache(getCacheKey('coach_daily', userId, todayStr), tagRunCoachPayload(coachData));
   };
 
   /** 수동 재분석 시 해당 사용자 RUN 컨디션 캐시 전체 삭제 */
-  window.clearDashboardCoachCacheForUser = function(userId) {
+  window.clearRunDashboardCoachCacheForUser = function(userId) {
     if (!userId) return;
     var uid = String(userId);
     var marker = '_' + uid + '_';
@@ -268,19 +291,6 @@
   window.setDashboardAIRunningInsightCache = function(userId, todayStr, hexSig, aiComment) {
     var key = getCacheKey('running_insight', userId, todayStr + '_' + (hexSig || ''));
     return setCache(key, { text: aiComment });
-  };
-
-  /**
-   * 추천 워크아웃 캐시
-   */
-  window.getDashboardWorkoutRecommendationCache = function(userId, dateStr, logsSignature) {
-    var key = getCacheKey('workout', userId, dateStr + '_' + (logsSignature || ''));
-    return getCached(key);
-  };
-
-  window.setDashboardWorkoutRecommendationCache = function(userId, dateStr, logsSignature, recommendationData, workoutDetails) {
-    var key = getCacheKey('workout', userId, dateStr + '_' + (logsSignature || ''));
-    return setCache(key, { recommendationData: recommendationData, workoutDetails: workoutDetails });
   };
 
   /** 3: TSS 제외 / 9: 기본 전체 / 10: 부문별 baseline 등락·카테고리 즉시 재계산 */
@@ -371,7 +381,7 @@
     return setCache(key, payload);
   };
 
-  window.buildLogsSignatureForCache = buildLogsSignature;
-  window.buildScoresSignatureForCache = buildScoresSignature;
-  window.getTodayStrForCache = getTodayStr;
+  window.buildRunLogsSignatureForCache = buildLogsSignature;
+  window.buildRunScoresSignatureForCache = buildScoresSignature;
+  window.getRunTodayStrForCache = getTodayStr;
 })();

@@ -152,9 +152,11 @@
     last7Rtss = Math.round(last7Rtss);
     out.last7Rtss = last7Rtss;
     out.logsSignature =
-      typeof window.buildLogsSignatureForCache === 'function'
-        ? window.buildLogsSignatureForCache(logsToSend, last7Rtss)
-        : logsToSend.length + '_' + last7Rtss;
+      typeof window.buildRunLogsSignatureForCache === 'function'
+        ? window.buildRunLogsSignatureForCache(logsToSend, last7Rtss)
+        : (typeof window.buildLogsSignatureForCache === 'function'
+          ? window.buildLogsSignatureForCache(logsToSend, last7Rtss)
+          : logsToSend.length + '_' + last7Rtss);
     return out;
   }
 
@@ -239,12 +241,15 @@
 
   function isAcceptableRunCoachCache(cached) {
     if (!cached || cached.condition_score == null || cached.error_reason) return false;
-    var normalized = normalizeRunCoachAnalysis(Object.assign({}, cached));
-    if (normalized.sport_category !== 'run') return false;
+    var sc = String(cached.sport_category || '').toLowerCase();
+    if (sc === 'cycle') return false;
+    var rw = String(cached.recommended_workout || '').trim();
     if (typeof window.isRunWorkoutLabel === 'function') {
-      return window.isRunWorkoutLabel(normalized.recommended_workout);
+      if (!window.isRunWorkoutLabel(rw)) return false;
+    } else if (/Active Recovery \(Z1\)|Endurance \(Z2\)|Sweet Spot|VO2 Max \(Z5\)/i.test(rw)) {
+      return false;
     }
-    return true;
+    return sc === 'run' || sc === '';
   }
 
   function useRunDashboardData() {
@@ -999,12 +1004,12 @@
           return;
         }
         var cached = null;
-        if (typeof window.getDashboardCoachCache === 'function') {
-          cached = window.getDashboardCoachCache(userProfile.id, todayStr, logsSignature);
+        if (typeof window.getRunDashboardCoachCache === 'function') {
+          cached = window.getRunDashboardCoachCache(userProfile.id, todayStr, logsSignature);
         }
         if ((!cached || cached.condition_score == null || cached.error_reason) &&
-            typeof window.getDashboardCoachDailyCache === 'function') {
-          cached = window.getDashboardCoachDailyCache(userProfile.id, todayStr);
+            typeof window.getRunDashboardCoachDailyCache === 'function') {
+          cached = window.getRunDashboardCoachDailyCache(userProfile.id, todayStr);
         }
         lastCoachTriggerKeyRef.current = coachAnalysisTriggerKey;
         if (cached && isAcceptableRunCoachCache(cached)) {
@@ -1047,9 +1052,7 @@
             weight: userProfile.weight || currentStats.weight || 0
           });
           var callCoachFn =
-            typeof window.callRunGeminiCoach === 'function'
-              ? window.callRunGeminiCoach
-              : (typeof window.callGeminiCoach === 'function' ? window.callGeminiCoach : null);
+            typeof window.callRunGeminiCoach === 'function' ? window.callRunGeminiCoach : null;
           if (!callCoachFn) {
             setCoachData({
               condition_score: 50,
@@ -1119,10 +1122,10 @@
           lastCoachTriggerKeyRef.current = coachAnalysisTriggerKey;
           if (analysis && !analysis.error_reason) {
             var normalizedAnalysis = normalizeRunCoachAnalysis(analysis);
-            if (typeof window.setDashboardCoachCache === 'function') {
-              window.setDashboardCoachCache(userProfile.id, todayStr, logsSignature, normalizedAnalysis);
-            } else if (typeof window.setDashboardCoachDailyCache === 'function') {
-              window.setDashboardCoachDailyCache(userProfile.id, todayStr, normalizedAnalysis);
+            if (typeof window.setRunDashboardCoachCache === 'function') {
+              window.setRunDashboardCoachCache(userProfile.id, todayStr, logsSignature, normalizedAnalysis);
+            } else if (typeof window.setRunDashboardCoachDailyCache === 'function') {
+              window.setRunDashboardCoachDailyCache(userProfile.id, todayStr, normalizedAnalysis);
             }
           }
         } catch (e) {
