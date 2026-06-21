@@ -34,6 +34,17 @@
     return (n > 0 && n < 1200) ? n : 0;
   }
 
+  /** CYCLE 캐시만 허용 — RUN 태그·러닝 워크아웃명 거부 */
+  function isAcceptableCycleCoachCache(cached) {
+    if (!cached || cached.condition_score == null || cached.error_reason) return false;
+    var sc = String(cached.sport_category || '').toLowerCase();
+    if (sc === 'run') return false;
+    var rw = String(cached.recommended_workout || '').trim();
+    if (typeof window.isRunWorkoutLabel === 'function' && window.isRunWorkoutLabel(rw)) return false;
+    if (/Recovery Jog|Easy Run|Long Run|Threshold Intervals \(Z4\)|VO₂max Intervals/i.test(rw)) return false;
+    return true;
+  }
+
   function parseDateForCoachAnalysis(date) {
     if (!date) return null;
     var d = null;
@@ -941,13 +952,19 @@
       var last7TSS = ctx.last7TSS;
       var logsSignature = ctx.logsSignature;
 
-      /* 캐시: 같은 local 날짜 + 동일 logsSignature(로그/7일TSS/30일TSS)일 때만. 수동 재분석(runConditionAnalysis)은 스킵 */
-      if (!runConditionAnalysis && retryCoach === 0 && typeof window.getDashboardCoachCache === 'function') {
-        var cached = window.getDashboardCoachCache(userProfile.id, todayStr, logsSignature);
-        if (cached && cached.condition_score != null && !cached.error_reason) {
-          setCoachData(cached);
-          setAiLoading(false);
-          return;
+      /* 캐시: CYCLE 전용 키·API. RUN 대시보드 캐시와 혼용 금지 */
+      if (!runConditionAnalysis && retryCoach === 0) {
+        var getCycleCoachCache =
+          typeof window.getCycleDashboardCoachCache === 'function'
+            ? window.getCycleDashboardCoachCache
+            : (typeof window.getDashboardCoachCache === 'function' ? window.getDashboardCoachCache : null);
+        if (getCycleCoachCache) {
+          var cached = getCycleCoachCache(userProfile.id, todayStr, logsSignature);
+          if (cached && isAcceptableCycleCoachCache(cached)) {
+            setCoachData(Object.assign({}, cached, { sport_category: 'cycle' }));
+            setAiLoading(false);
+            return;
+          }
         }
       }
       if (aiAnalysisInProgressRef.current) return;
@@ -1103,10 +1120,15 @@
             } catch (e) {}
           }
 
-          setCoachData(analysis);
+          setCoachData(Object.assign({}, analysis, { sport_category: 'cycle' }));
           setStreamingComment(null);
-          if (analysis && !analysis.error_reason && typeof window.setDashboardCoachCache === 'function') {
-            window.setDashboardCoachCache(userProfile.id, todayStr, logsSignature, analysis);
+          if (analysis && !analysis.error_reason) {
+            var cyclePayload = Object.assign({}, analysis, { sport_category: 'cycle' });
+            if (typeof window.setCycleDashboardCoachCache === 'function') {
+              window.setCycleDashboardCoachCache(userProfile.id, todayStr, logsSignature, cyclePayload);
+            } else if (typeof window.setDashboardCoachCache === 'function') {
+              window.setDashboardCoachCache(userProfile.id, todayStr, logsSignature, cyclePayload);
+            }
           }
         } catch (e) {
           console.error('[Dashboard] AI analysis error:', e);

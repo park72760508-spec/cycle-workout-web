@@ -131,17 +131,24 @@
   }
 
   /**
-   * 컨디션 분석(Coach) 캐시
+   * 컨디션 분석(Coach) 캐시 — CYCLE 전용 (RUN과 키·전역 API 분리)
    */
-  window.getDashboardCoachCache = function(userId, todayStr, logsSignature) {
+  window.getCycleDashboardCoachCache = function(userId, todayStr, logsSignature) {
     var key = getCacheKey('coach', userId, todayStr + '_' + (logsSignature || ''));
     return getCached(key);
   };
 
-  window.setDashboardCoachCache = function(userId, todayStr, logsSignature, coachData) {
+  window.setCycleDashboardCoachCache = function(userId, todayStr, logsSignature, coachData) {
     var key = getCacheKey('coach', userId, todayStr + '_' + (logsSignature || ''));
-    return setCache(key, coachData);
+    var payload = coachData && typeof coachData === 'object'
+      ? Object.assign({}, coachData, { sport_category: 'cycle' })
+      : coachData;
+    return setCache(key, payload);
   };
+
+  /** @deprecated CYCLE 대시보드 호환 — RUN 캐시와 혼용 금지 */
+  window.getDashboardCoachCache = window.getCycleDashboardCoachCache;
+  window.setDashboardCoachCache = window.setCycleDashboardCoachCache;
 
   /**
    * AI 라이딩 인사이트 캐시
