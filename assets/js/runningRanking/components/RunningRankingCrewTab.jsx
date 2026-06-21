@@ -315,9 +315,11 @@
               React.createElement('p', {
                 className: 'stelvio-ranking-empty',
                 style: { margin: '10px 0 12px 20px', fontSize: '12px' }
-              }, listFilter === 'interest'
-                ? '관심·친구·그룹멤버에 해당하는 멤버가 없습니다.'
-                : '해당 조건에 집계된 멤버가 없습니다.')
+              }, !members.length
+                ? '등록된 멤버가 없습니다.'
+                : (listFilter === 'interest'
+                  ? '관심·친구·그룹멤버에 해당하는 멤버가 없습니다.'
+                  : '해당 조건에 집계된 멤버가 없습니다.'))
             );
           } else if (GroupMemberRow) {
             memberBlock = React.createElement('div', {
