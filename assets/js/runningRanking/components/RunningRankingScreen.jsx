@@ -77,6 +77,10 @@
     var activeCategory = _category[0];
     var setActiveCategory = _category[1];
 
+    var _crewMetric = useState('overall');
+    var crewMetric = _crewMetric[0];
+    var setCrewMetric = _crewMetric[1];
+
     var _listFilter = useState('all');
     var listFilter = _listFilter[0];
     var setListFilter = _listFilter[1];
@@ -159,6 +163,7 @@
     var isPaceTab = activeTab === 'pace';
     var isTssTab = activeTab === 'tss';
     var isDistanceTab = activeTab === 'distance';
+    var isCrewTab = activeTab === 'crew';
     var hasDistributionChart = isOverallTab || isPaceTab || isTssTab || isDistanceTab;
 
     var RUN_DIST_CHART_ROOTS = {
@@ -171,6 +176,14 @@
     var currentUserId = useMemo(function () {
       return dataApi().getCurrentUserId ? dataApi().getCurrentUserId() : null;
     }, [loading, rawRows.length]);
+
+    var filteredCrewGroups = useMemo(function () {
+      var mod = window.runningRankingCrewTab;
+      if (mod && typeof mod.filterRunCrewGroups === 'function') {
+        return mod.filterRunCrewGroups(crewGroups);
+      }
+      return crewGroups;
+    }, [crewGroups]);
 
     var viewerIdentity = useMemo(function () {
       return dataApi().getViewerIdentity
@@ -230,21 +243,21 @@
     }, []);
 
     useEffect(function () {
-      if (activeTab !== 'crew' || !crewGroups.length) {
+      if (activeTab !== 'crew' || !filteredCrewGroups.length) {
         setCrewEnriched([]);
         return;
       }
       var crewMod = window.runningRankingCrew;
       if (!crewMod || typeof crewMod.enrichGroupsWithMemberIds !== 'function') {
-        setCrewEnriched(crewGroups);
+        setCrewEnriched(filteredCrewGroups);
         return;
       }
       var cancelled = false;
-      crewMod.enrichGroupsWithMemberIds(crewGroups).then(function (enriched) {
+      crewMod.enrichGroupsWithMemberIds(filteredCrewGroups).then(function (enriched) {
         if (!cancelled) setCrewEnriched(enriched || []);
       });
       return function () { cancelled = true; };
-    }, [activeTab, crewGroups]);
+    }, [activeTab, filteredCrewGroups]);
 
     useEffect(function () {
       window.runningRankingLeaderboardRows = rawRows && rawRows.length ? rawRows.slice() : [];
@@ -315,14 +328,10 @@
       if (activeTab === 'crew') return;
       scrollRankingToTop();
       setHeroExpanded(false);
-    }, [gender, activeCategory, activeTab, paceDistance, listFilter]);
+    }, [gender, activeCategory, activeTab, paceDistance, listFilter, crewMetric]);
 
     var baseRankedList = useMemo(function () {
-      if (activeTab === 'crew') {
-        return dataApi().buildCrewRankedList
-          ? dataApi().buildCrewRankedList(rawRows, crewEnriched.length ? crewEnriched : crewGroups)
-          : [];
-      }
+      if (activeTab === 'crew') return [];
       return dataApi().buildRankedList
         ? dataApi().buildRankedList(rawRows, activeTab, {
           paceDistance: paceDistance,
@@ -330,7 +339,7 @@
           category: activeCategory
         })
         : [];
-    }, [rawRows, activeTab, paceDistance, gender, activeCategory, crewGroups, crewEnriched]);
+    }, [rawRows, activeTab, paceDistance, gender, activeCategory]);
 
     var rankedList = useMemo(function () {
       var list = baseRankedList.slice();
@@ -363,13 +372,12 @@
 
     var myCrewIds = useMemo(function () {
       var set = new Set();
-      var groups = crewEnriched.length ? crewEnriched : crewGroups;
-      (groups || []).forEach(function (gr) {
+      (filteredCrewGroups || []).forEach(function (gr) {
         var gid = gr && (gr.groupId || gr.id) ? String(gr.groupId || gr.id) : '';
         if (gid) set.add(gid);
       });
       return set;
-    }, [crewGroups, crewEnriched]);
+    }, [filteredCrewGroups]);
 
     var myViewerItem = useMemo(function () {
       if (activeTab === 'crew') return null;
@@ -532,12 +540,16 @@
     }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments]);
 
     var unitLabel = useMemo(function () {
+      if (isCrewTab) {
+        var ct = window.runningRankingCrewTab;
+        return ct && ct.crewMetricUnit ? ct.crewMetricUnit(crewMetric) : 'pt';
+      }
       var tabs = cfg().TABS || [];
       for (var i = 0; i < tabs.length; i++) {
         if (tabs[i].id === activeTab) return tabs[i].unit || '';
       }
       return '';
-    }, [activeTab]);
+    }, [activeTab, isCrewTab, crewMetric]);
 
     var listCategoryTitle = useMemo(function () {
       var titles = cfg().CATEGORY_TITLES || {};
@@ -639,12 +651,12 @@
         className: 'stelvio-duration-tab' + (activeTab === t.id ? ' active' : ''),
         onClick: function () {
           setActiveTab(t.id);
-          if (t.id !== 'overall') setListFilter('all');
+          if (t.id !== 'overall' && t.id !== 'crew') setListFilter('all');
         }
       }, t.label);
     });
 
-    var paceChips = activeTab === 'pace'
+    var paceChips = (activeTab === 'pace' || (isCrewTab && crewMetric === 'pace'))
       ? React.createElement('div', { className: 'stelvio-group-metric-filter running-ranking-pace-filter' },
           React.createElement('div', { className: 'stelvio-group-metric-chips' },
             (cfg().PACE_DISTANCES || []).map(function (d) {
@@ -666,8 +678,7 @@
       return fallback || '';
     }
 
-    var genderSelect = activeTab !== 'crew'
-      ? React.createElement('div', { className: 'stelvio-gender-dropdown' },
+    var genderSelect = React.createElement('div', { className: 'stelvio-gender-dropdown' },
           React.createElement('span', { className: 'stelvio-dropdown-caption' }, '성별'),
           React.createElement('span', { className: 'stelvio-dropdown-label' },
             findOptionLabel(cfg().GENDER_OPTIONS || [], gender, '전체')
@@ -683,11 +694,9 @@
               return React.createElement('option', { key: g.value, value: g.value }, g.label);
             })
           )
-        )
-      : null;
+        );
 
-    var categorySelect = activeTab !== 'crew'
-      ? React.createElement('div', { className: 'stelvio-category-dropdown' },
+    var categorySelect = React.createElement('div', { className: 'stelvio-category-dropdown' },
           React.createElement('span', { className: 'stelvio-dropdown-caption' }, '카테고리'),
           React.createElement('span', { className: 'stelvio-dropdown-label' },
             findOptionLabel(cfg().CATEGORY_OPTIONS || [], activeCategory, '전체')
@@ -701,6 +710,25 @@
           },
             (cfg().CATEGORY_OPTIONS || []).map(function (c) {
               return React.createElement('option', { key: c.value, value: c.value }, c.label);
+            })
+          )
+        );
+
+    var crewMetricSelect = isCrewTab
+      ? React.createElement('div', { className: 'stelvio-metric-dropdown' },
+          React.createElement('span', { className: 'stelvio-dropdown-caption' }, '항목'),
+          React.createElement('span', { className: 'stelvio-dropdown-label' },
+            findOptionLabel(cfg().CREW_METRIC_OPTIONS || [], crewMetric, '종합')
+          ),
+          React.createElement('span', { className: 'stelvio-dropdown-chevron' }, '▾'),
+          React.createElement('select', {
+            className: 'stelvio-dropdown-select',
+            value: crewMetric,
+            'aria-label': '크루 탭 항목 필터',
+            onChange: function (e) { setCrewMetric(e.target.value); }
+          },
+            (cfg().CREW_METRIC_OPTIONS || []).map(function (m) {
+              return React.createElement('option', { key: m.value, value: m.value }, m.label);
             })
           )
         )
@@ -717,7 +745,7 @@
         }, showOverallSegments ? '▲' : '▼')
       : null;
 
-    var listFilterToggle = isOverallTab
+    var listFilterToggle = (isOverallTab || isCrewTab)
       ? React.createElement('div', {
           className: 'stelvio-ranking-list-filter-toggle',
           role: 'group',
@@ -754,15 +782,26 @@
           onClick: function () { loadLeaderboard({ force: true }); }
         }, '다시 시도')
       );
-    } else if (activeTab === 'crew' && !currentUserId) {
+    } else if (isCrewTab && !currentUserId) {
       listBody = React.createElement('p', { className: 'stelvio-ranking-empty' },
         '로그인 후 나의 크루(소모임) 랭킹을 확인할 수 있습니다.'
       );
-    } else if (activeTab === 'crew' && !crewGroups.length) {
-      listBody = React.createElement('p', { className: 'stelvio-ranking-empty stelvio-ranking-empty--group' },
-        '가입된 승인 소모임이 없습니다.',
-        React.createElement('br'),
-        '라이딩 모임에서 그룹(소모임)에 가입해 보세요.'
+    } else if (isCrewTab && window.RunningRankingCrewTab) {
+      listBody = React.createElement(window.RunningRankingCrewTab, {
+        groups: filteredCrewGroups,
+        leaderboardRows: rawRows,
+        currentUserId: currentUserId,
+        viewerIdentity: viewerIdentity,
+        gender: gender,
+        category: activeCategory,
+        crewMetric: crewMetric,
+        paceDistance: paceDistance,
+        listFilter: listFilter,
+        socialVer: socialVer
+      });
+    } else if (isCrewTab) {
+      listBody = React.createElement('p', { className: 'stelvio-ranking-empty' },
+        '크루 목록을 불러올 수 없습니다.'
       );
     } else if (!rankedList.length) {
       listBody = React.createElement('p', { className: 'stelvio-ranking-empty' },
@@ -828,11 +867,13 @@
           React.createElement('div', { className: 'stelvio-duration-chips', role: 'tablist' }, tabButtons)
         ),
         paceChips,
-        activeTab !== 'crew'
-          ? React.createElement('div', { className: 'stelvio-filter-bar-wrap running-ranking-filter-wrap' },
-              React.createElement('div', { className: 'stelvio-filter-bar' }, genderSelect, categorySelect)
-            )
-          : null,
+        React.createElement('div', { className: 'stelvio-filter-bar-wrap running-ranking-filter-wrap' },
+          React.createElement('div', { className: 'stelvio-filter-bar' },
+            crewMetricSelect,
+            genderSelect,
+            categorySelect
+          )
+        ),
         stale && error
           ? React.createElement('p', { className: 'running-ranking-stale-hint' }, '캐시 표시 · ' + error)
           : null
@@ -903,7 +944,7 @@
         },
           React.createElement('div', { className: 'stelvio-category-header' },
             React.createElement('span', { className: 'stelvio-category-header-title' },
-              activeTab === 'crew' ? '크루 랭킹' : listCategoryTitle,
+              isCrewTab ? '나의 크루' : listCategoryTitle,
               segmentToggle
             ),
             listFilterToggle,

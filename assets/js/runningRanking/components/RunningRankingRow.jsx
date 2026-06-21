@@ -140,6 +140,15 @@
         )
       );
     }
+    if (props.groupRole === 'owner') {
+      nameChildren.push(
+        React.createElement('span', {
+          key: 'owner-badge',
+          className: 'stelvio-rank-owner-badge',
+          title: '방장'
+        }, '방장')
+      );
+    }
 
     var children = [
       rankLead,
