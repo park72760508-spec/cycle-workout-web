@@ -1,10 +1,33 @@
 /**
  * fitness_demographic_samples → stats_fitness_stelvio_rolling 집계
- * 대시보드 훈련 트렌드: 사용자별 최근 1개월 차트에서 7일 버킷별 Fitness 값의 산술평균(avgTrendFitness)을 전체 평균.
+ * CYCLE PMC(Coggan CTL): latestCtl 우선 · 레거시 decay 합산(>200) 제외
  */
 const admin = require("firebase-admin");
 
 const MIN_SAMPLES = 5;
+const MAX_PLAUSIBLE_CYCLE_CTL = 200;
+
+/**
+ * @param {Record<string, unknown>} d
+ * @returns {number|null}
+ */
+function readCycleCtlSampleForAggregate(d) {
+  if (!d || typeof d !== "object") return null;
+  if (d.pmcModel === "coggan_ctl") {
+    const latest = Number(d.latestCtl);
+    if (Number.isFinite(latest) && latest >= 0 && latest <= MAX_PLAUSIBLE_CYCLE_CTL) {
+      return latest;
+    }
+    const avgCtl = Number(d.avgTrendCtl);
+    if (Number.isFinite(avgCtl) && avgCtl >= 0 && avgCtl <= MAX_PLAUSIBLE_CYCLE_CTL) {
+      return avgCtl;
+    }
+    return null;
+  }
+  const legacy = Number(d.avgTrendFitness);
+  if (!Number.isFinite(legacy) || legacy < 0 || legacy > MAX_PLAUSIBLE_CYCLE_CTL) return null;
+  return legacy;
+}
 
 /**
  * @param {FirebaseFirestore.Firestore} db
@@ -23,8 +46,8 @@ async function rebuildFitnessStelvioRollingStats(db) {
 
     snap.docs.forEach((doc) => {
       const d = doc.data() || {};
-      const v = Number(d.avgTrendFitness);
-      if (!Number.isFinite(v) || v < 0 || v > 50000) return;
+      const v = readCycleCtlSampleForAggregate(d);
+      if (v == null) return;
       globalAll.sum += v;
       globalAll.count += 1;
     });
@@ -44,8 +67,10 @@ async function rebuildFitnessStelvioRollingStats(db) {
       ref,
       {
         avgFitness: Math.round((sum / count) * 10) / 10,
+        avgCtl: Math.round((sum / count) * 10) / 10,
         userCount: count,
         minSamplesMet: true,
+        pmcModel: "coggan_ctl",
         source: "fitness_demographic_samples",
         updatedAt: now,
       },
@@ -56,8 +81,10 @@ async function rebuildFitnessStelvioRollingStats(db) {
       ref,
       {
         avgFitness: null,
+        avgCtl: null,
         userCount: count,
         minSamplesMet: false,
+        pmcModel: "coggan_ctl",
         source: "fitness_demographic_samples",
         updatedAt: now,
       },
