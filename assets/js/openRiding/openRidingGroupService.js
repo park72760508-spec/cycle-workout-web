@@ -61,6 +61,16 @@ export function normalizeRidingGroupCategory(raw) {
   return c === RIDING_GROUP_CATEGORY.RUN ? RIDING_GROUP_CATEGORY.RUN : RIDING_GROUP_CATEGORY.CYCLE;
 }
 
+/** @param {Record<string, unknown>|null|undefined} d */
+function extractRidingGroupCategoryRawFromDoc(d) {
+  if (!d || typeof d !== 'object') return null;
+  if (d.category != null && String(d.category).trim() !== '') return d.category;
+  if (d.sportCategory != null && String(d.sportCategory).trim() !== '') return d.sportCategory;
+  if (d.sport_category != null && String(d.sport_category).trim() !== '') return d.sport_category;
+  if (d.moimCategory != null && String(d.moimCategory).trim() !== '') return d.moimCategory;
+  return null;
+}
+
 /** @param {{ category?: unknown }|null|undefined} group @param {unknown} category */
 export function ridingGroupMatchesCategory(group, category) {
   return normalizeRidingGroupCategory(group && group.category) === normalizeRidingGroupCategory(category);
@@ -69,6 +79,13 @@ export function ridingGroupMatchesCategory(group, category) {
 /** @param {unknown[]} rows @param {unknown} category @param {boolean} [isAdmin] */
 export function filterRidingGroupsByCategory(rows, category, isAdmin) {
   if (isAdmin) return Array.isArray(rows) ? rows.slice() : [];
+  var rgCat =
+    typeof window !== 'undefined' &&
+    window.ridingGroupCategory &&
+    typeof window.ridingGroupCategory.filterRidingGroupsByBoardCategory === 'function';
+  if (rgCat) {
+    return window.ridingGroupCategory.filterRidingGroupsByBoardCategory(rows, category);
+  }
   var want = normalizeRidingGroupCategory(category);
   return (rows || []).filter(function (g) {
     return ridingGroupMatchesCategory(g, want);
@@ -231,6 +248,8 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
           updatedBy: rnRaw.updatedBy != null ? String(rnRaw.updatedBy) : ''
         };
       }
+      var catRaw = extractRidingGroupCategoryRawFromDoc(gd);
+      var catNorm = normalizeRidingGroupCategory(catRaw);
       metaByGid[gid] = {
         id: gid,
         groupId: gid,
@@ -238,6 +257,9 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
         photoUrl: gd.photoUrl != null ? String(gd.photoUrl).trim() : '',
         memberCount: gd.memberCount != null ? Number(gd.memberCount) : null,
         createdBy: gd.createdBy != null ? String(gd.createdBy) : '',
+        category: catNorm,
+        resolvedCategory: catNorm,
+        categoryExplicit: catRaw != null,
         regions: gd.regions != null ? gd.regions : null,
         isPublic: gd.isPublic !== false,
         rankingNotice: rankingNotice
