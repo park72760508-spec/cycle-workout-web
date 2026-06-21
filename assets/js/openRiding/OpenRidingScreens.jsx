@@ -46,6 +46,25 @@ function getOpenRidingMoimCopy(category) {
   };
 }
 
+function openRidingNormalizeMoimCategoryRaw(raw) {
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  if (typeof svc.normalizeOpenRideCategory === 'function') {
+    return svc.normalizeOpenRideCategory(raw);
+  }
+  if (
+    typeof window !== 'undefined' &&
+    window.openRidingMoimCategory &&
+    typeof window.openRidingMoimCategory.normalizeMoimCategory === 'function'
+  ) {
+    return window.openRidingMoimCategory.normalizeMoimCategory(raw);
+  }
+  return String(raw || 'CYCLE').trim().toUpperCase() === 'RUN' ? 'RUN' : 'CYCLE';
+}
+
+function openRidingRideMatchesMoimCategory(ride, moimCategory) {
+  return openRidingNormalizeMoimCategoryRaw(ride && ride.category) === openRidingNormalizeMoimCategoryRaw(moimCategory);
+}
+
 function goOpenRidingMoimHomeScreen() {
   if (typeof window.goOpenRidingMoimHomeBasecamp === 'function') {
     window.goOpenRidingMoimHomeBasecamp();
@@ -3275,6 +3294,7 @@ function OpenRidingCalendarMain(props) {
   var onOpenFilterPage = props.onOpenFilterPage || function () {};
   var onCloseFilterPage = props.onCloseFilterPage || function () {};
   var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
+  var moimCategory = props.moimCategory || 'CYCLE';
 
   var _m = useState(function () { return new Date(); });
   var viewMonth = _m[0];
@@ -3293,11 +3313,45 @@ function OpenRidingCalendarMain(props) {
   var hook = useOpenRidingFn(firestore, userId || null, viewMonth);
   var prefs = hook.prefs;
   var savePrefs = hook.savePrefs;
-  var matchingDateKeys = hook.matchingDateKeys;
-  var hostDateKeys = hook.hostDateKeys || new Set();
-  var ridesMonth = hook.ridesMonth;
-  var ridesMyList = hook.ridesMyList || [];
+  var ridesMonthRaw = hook.ridesMonth;
+  var ridesMyListRaw = hook.ridesMyList || [];
   var loadingRides = hook.loadingRides;
+  var ridesMonth = useMemo(
+    function () {
+      return (ridesMonthRaw || []).filter(function (r) {
+        return openRidingRideMatchesMoimCategory(r, moimCategory);
+      });
+    },
+    [ridesMonthRaw, moimCategory]
+  );
+  var ridesMyList = useMemo(
+    function () {
+      return (ridesMyListRaw || []).filter(function (r) {
+        return openRidingRideMatchesMoimCategory(r, moimCategory);
+      });
+    },
+    [ridesMyListRaw, moimCategory]
+  );
+  var matchingDateKeys = useMemo(
+    function () {
+      var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      if (typeof svc.computeMatchingRideDates === 'function') {
+        return svc.computeMatchingRideDates(ridesMonth, prefs);
+      }
+      return hook.matchingDateKeys;
+    },
+    [ridesMonth, prefs, hook.matchingDateKeys]
+  );
+  var hostDateKeys = useMemo(
+    function () {
+      var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      if (typeof svc.computeHostRideDateKeys === 'function') {
+        return svc.computeHostRideDateKeys(ridesMonth, userId);
+      }
+      return hook.hostDateKeys || new Set();
+    },
+    [ridesMonth, userId, hook.hostDateKeys]
+  );
 
   var _invitePh = useState('');
   var inviteCheckPhone = _invitePh[0];
@@ -7140,10 +7194,88 @@ function OpenRidingDetail(props) {
             ? 'RUN'
             : 'CYCLE';
       if (rideCatNorm === 'RUN') {
-        setLevelParticipation(null);
-        setDetailLevelPeakHint(null);
-        setLevelAnalysisLoading(false);
-        return undefined;
+        setLevelAnalysisLoading(true);
+        var cancelledRun = false;
+        var levelStrRun = ride.level != null ? String(ride.level) : '';
+        var uidRun = String(userId);
+        var runClsFn =
+          typeof window !== 'undefined' && typeof window.classifyOpenRidingRunLevelFilter === 'function'
+            ? window.classifyOpenRidingRunLevelFilter
+            : null;
+        var runTierFn =
+          typeof window !== 'undefined' && typeof window.getOpenRidingRunTierLevelLabelFromPaceSec === 'function'
+            ? window.getOpenRidingRunTierLevelLabelFromPaceSec
+            : null;
+        var paceFromSpeedFn =
+          typeof window !== 'undefined' && typeof window.runPaceSecPerKmFromSpeedMps === 'function'
+            ? window.runPaceSecPerKmFromSpeedMps
+            : null;
+        var paceFmtFn =
+          typeof window !== 'undefined' && typeof window.formatOpenRidingRunPaceDisplayFromSec === 'function'
+            ? window.formatOpenRidingRunPaceDisplayFromSec
+            : null;
+
+        function finishRunPeak(maxSpeedMps) {
+          var paceSec =
+            maxSpeedMps > 0 && paceFromSpeedFn ? paceFromSpeedFn(maxSpeedMps) : null;
+          var part =
+            runClsFn && paceSec != null && paceSec > 0 && levelStrRun
+              ? runClsFn(paceSec, levelStrRun)
+              : null;
+          var myTier =
+            runTierFn && paceSec != null && paceSec > 0 ? runTierFn(paceSec) : null;
+          var paceDisplay =
+            paceFmtFn && paceSec != null && paceSec > 0 ? paceFmtFn(paceSec) : null;
+          if (!cancelledRun) {
+            setLevelParticipation(part);
+            setDetailLevelPeakHint({
+              peak10kPaceSec: paceSec,
+              peak10kPaceDisplay: paceDisplay,
+              myTierLabel: myTier,
+              usedPeak: !!(maxSpeedMps > 0 && paceSec != null && paceSec > 0)
+            });
+            setLevelAnalysisLoading(false);
+          }
+        }
+
+        if (typeof window.getUserRunEfforts !== 'function') {
+          finishRunPeak(0);
+          return function () {
+            cancelledRun = true;
+          };
+        }
+
+        var todayRun = new Date();
+        todayRun.setHours(0, 0, 0, 0);
+        var cutoffRun = new Date(todayRun);
+        cutoffRun.setDate(cutoffRun.getDate() - 90);
+        var cutoffRunStr =
+          cutoffRun.getFullYear() +
+          '-' +
+          String(cutoffRun.getMonth() + 1).padStart(2, '0') +
+          '-' +
+          String(cutoffRun.getDate()).padStart(2, '0');
+
+        window
+          .getUserRunEfforts(uidRun, { limit: 600 })
+          .then(function (efforts) {
+            if (cancelledRun) return;
+            var maxSpeed = 0;
+            (efforts || []).forEach(function (eff) {
+              var ds = String(eff.activity_date || '').slice(0, 10);
+              if (!ds || ds < cutoffRunStr) return;
+              var sp = Number(eff.speed_10k) || 0;
+              if (sp > maxSpeed) maxSpeed = sp;
+            });
+            finishRunPeak(maxSpeed);
+          })
+          .catch(function () {
+            if (!cancelledRun) finishRunPeak(0);
+          });
+
+        return function () {
+          cancelledRun = true;
+        };
       }
       setLevelAnalysisLoading(true);
       var cancelled = false;
@@ -7565,10 +7697,6 @@ function OpenRidingDetail(props) {
         : 'CYCLE';
   var isRunDetail = detailCategory === 'RUN';
   var detailMoimCopy = getOpenRidingMoimCopy(detailCategory);
-  var runThresholdPaceDetail =
-    isRunDetail && typeof moimCatApiDetail.readRunThresholdPaceDisplay === 'function'
-      ? moimCatApiDetail.readRunThresholdPaceDisplay()
-      : null;
   var runGearDetailItems =
     isRunDetail && packRulesNorm
       ? openRidingRunGearDetailItems(packRulesNorm.gear)
@@ -7712,16 +7840,63 @@ function OpenRidingDetail(props) {
           isRunDetail ? (
             <div className="min-w-0 w-full space-y-1.5 text-right">
               <div>{formatOpenRidingRunLevelDetailValue(ride.level)}</div>
-              {userId && runThresholdPaceDetail ? (
-                <div className="open-riding-create-level-peak-hint mt-1 w-full max-w-[17rem] ml-auto rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug text-right">
-                  <p className="m-0 font-semibold">
-                    개인 목표 역치 페이스 (10k 역치) —{' '}
-                    <span className="tabular-nums font-bold text-emerald-950">{runThresholdPaceDetail}</span> /km
-                  </p>
+              {userId && levelAnalysisLoading ? (
+                <div
+                  className="mt-1 flex w-full max-w-[17rem] flex-col items-end gap-1.5 self-end text-left"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="레벨 분석 중"
+                >
+                  <span
+                    className="inline-block h-4 w-4 shrink-0 rounded-full border-2 border-emerald-200 border-t-emerald-600 animate-spin motion-reduce:animate-none"
+                    aria-hidden
+                  />
+                  <span className="text-[11px] font-medium text-emerald-800">레벨 분석 중 ...</span>
+                </div>
+              ) : levelParticipation ||
+                (detailLevelPeakHint &&
+                  detailLevelPeakHint.peak10kPaceDisplay) ? (
+                <div
+                  className={
+                    'open-riding-level-participation-hint' +
+                    (levelParticipation
+                      ? ' open-riding-level-participation-hint--' + levelParticipation.tier
+                      : '')
+                  }
+                >
+                  {levelParticipation ? (
+                    <span
+                      className="open-riding-level-participation-label"
+                      title={levelParticipation.comment || ''}
+                    >
+                      {levelParticipation.label}
+                    </span>
+                  ) : null}
+                  {detailLevelPeakHint && detailLevelPeakHint.peak10kPaceDisplay ? (
+                    <div className="open-riding-create-level-peak-hint mt-1 w-full max-w-[17rem] ml-auto rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug text-right">
+                      <p className="m-0 font-semibold">
+                        나의 10k 피크 페이스 (최근 90일) :{' '}
+                        <span className="tabular-nums font-bold text-emerald-950">
+                          {detailLevelPeakHint.peak10kPaceDisplay}
+                        </span>
+                      </p>
+                      {detailLevelPeakHint.myTierLabel ? (
+                        <p className="m-0 text-emerald-900">
+                          나의 레벨 :{' '}
+                          <strong className="text-emerald-950">{detailLevelPeakHint.myTierLabel}</strong>
+                        </p>
+                      ) : null}
+                      {detailLevelPeakHint.usedPeak ? (
+                        <p className="m-0 text-[10px] text-emerald-800/90">
+                          참조: 최근 90일 10k 구간 최고 페이스
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ) : userId ? (
                 <p className="m-0 text-[11px] text-slate-500 leading-snug text-right">
-                  프로필에 10k 역치 페이스 기록을 저장하면 개인 목표 페이스가 표시됩니다.
+                  최근 90일 10k 페이스 기록이 있으면 개인 피크 페이스·참석 가능 여부가 표시됩니다.
                 </p>
               ) : null}
             </div>
@@ -12075,6 +12250,7 @@ function OpenRidingRoomApp(props) {
           setView('detail');
         }}
         moimCopy={moimCopy}
+        moimCategory={clubCategory}
       />
     );
   }

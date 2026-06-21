@@ -401,6 +401,104 @@ export function getMaxRidingLevelsForPeakParticipation(powerW, weightKg, levelVa
   return { maxGoLevel: maxGo, maxCautionLevel: maxCaution };
 }
 
+var OPEN_RIDING_RUN_LEVEL_ORDER = ['입문', '초급', '중급', '중상급', '상급'];
+
+/** 페이스(sec/km) — 빠를수록(초↓) 상위 티어 */
+function runPaceSecPerKmToTierIndex(secPerKm) {
+  var sec = Number(secPerKm);
+  if (!isFinite(sec) || sec <= 0) return 0;
+  if (sec >= 480) return 0;
+  if (sec >= 360) return 1;
+  if (sec >= 300) return 2;
+  if (sec >= 270) return 3;
+  return 4;
+}
+
+function runLevelValueToTierIndex(levelValue) {
+  var k = String(levelValue || '').trim();
+  var i = OPEN_RIDING_RUN_LEVEL_ORDER.indexOf(k);
+  return i >= 0 ? i : -1;
+}
+
+/**
+ * 러닝 크루 레벨 — 10k 피크 페이스(sec/km) vs 모임 레벨 참석 가능 여부
+ * @param {number} userPaceSecPerKm
+ * @param {string} levelValue
+ * @returns {{ tier: string, label: string, comment: string, margin: number } | null}
+ */
+export function classifyOpenRidingRunLevelFilter(userPaceSecPerKm, levelValue) {
+  var needIdx = runLevelValueToTierIndex(levelValue);
+  if (needIdx < 0) return null;
+  var sec = Number(userPaceSecPerKm);
+  if (!isFinite(sec) || sec <= 0) return null;
+  var userIdx = runPaceSecPerKmToTierIndex(sec);
+  var marginTier = userIdx - needIdx;
+  if (userIdx >= needIdx) {
+    return {
+      tier: 'go',
+      label: '참석 가능',
+      comment:
+        '최근 90일 10k 피크 페이스 기준, 이 크루 레벨과 같거나 상위 난이도에 맞습니다.',
+      margin: marginTier
+    };
+  }
+  if (userIdx === needIdx - 1) {
+    return {
+      tier: 'caution',
+      label: '주의',
+      comment: '피크 페이스가 바로 아래 구간에 가깝습니다. 컨디션·페이스 조절이 필요할 수 있습니다.',
+      margin: marginTier
+    };
+  }
+  return {
+    tier: 'stop',
+    label: '불가',
+    comment: '피크 페이스 기준으로는 이 크루 레벨보다 낮은 구간에 가깝습니다. 하위 레벨을 권장합니다.',
+    margin: marginTier
+  };
+}
+
+/**
+ * @param {number} userPaceSecPerKm
+ * @returns {string}
+ */
+export function getOpenRidingRunTierLevelLabelFromPaceSec(userPaceSecPerKm) {
+  var idx = runPaceSecPerKmToTierIndex(userPaceSecPerKm);
+  return OPEN_RIDING_RUN_LEVEL_ORDER[idx] || '입문';
+}
+
+/**
+ * @param {number} speedMps
+ * @returns {number|null} sec/km
+ */
+export function runPaceSecPerKmFromSpeedMps(speedMps) {
+  var mps = Number(speedMps);
+  if (!isFinite(mps) || mps <= 0) return null;
+  if (typeof window !== 'undefined' && window.runningRankingFormat && typeof window.runningRankingFormat.speedToPaceSecPerKm === 'function') {
+    return window.runningRankingFormat.speedToPaceSecPerKm(mps, true);
+  }
+  return 1000 / mps;
+}
+
+/**
+ * @param {number} secPerKm
+ * @returns {string|null} mm:ss/km
+ */
+export function formatOpenRidingRunPaceDisplayFromSec(secPerKm) {
+  var sec = Number(secPerKm);
+  if (!isFinite(sec) || sec <= 0) return null;
+  if (typeof window !== 'undefined' && window.runningRankingFormat && typeof window.runningRankingFormat.formatPaceMmSs === 'function') {
+    return window.runningRankingFormat.formatPaceMmSs(sec) + '/km';
+  }
+  var min = Math.floor(sec / 60);
+  var s = Math.round(sec % 60);
+  if (s === 60) {
+    min += 1;
+    s = 0;
+  }
+  return min + ':' + (s < 10 ? '0' : '') + s + '/km';
+}
+
 if (typeof window !== 'undefined') {
   window.calculateSpeedOnFlat = calculateSpeedOnFlat;
   window.evaluateGroupRideEligibility = evaluateGroupRideEligibility;
@@ -412,4 +510,8 @@ if (typeof window !== 'undefined') {
   window.wkgForOpenRidingSoloSpeedKmH = wkgForOpenRidingSoloSpeedKmH;
   window.classifyOpenRidingParticipation = classifyOpenRidingParticipation;
   window.getMaxRidingLevelsForPeakParticipation = getMaxRidingLevelsForPeakParticipation;
+  window.classifyOpenRidingRunLevelFilter = classifyOpenRidingRunLevelFilter;
+  window.getOpenRidingRunTierLevelLabelFromPaceSec = getOpenRidingRunTierLevelLabelFromPaceSec;
+  window.runPaceSecPerKmFromSpeedMps = runPaceSecPerKmFromSpeedMps;
+  window.formatOpenRidingRunPaceDisplayFromSec = formatOpenRidingRunPaceDisplayFromSec;
 }
