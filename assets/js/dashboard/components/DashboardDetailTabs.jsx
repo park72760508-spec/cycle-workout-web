@@ -108,12 +108,28 @@
           setHrPeak(null);
           return;
         }
+        setHrPeak(undefined);
+        if (isRun) {
+          var fetchRunPeak =
+            typeof window.fetchRunPeakMaxHrFromLogs === 'function'
+              ? window.fetchRunPeakMaxHrFromLogs
+              : window.runEffortsReadClient && window.runEffortsReadClient.fetchRunPeakMaxHrFromLogs;
+          if (typeof fetchRunPeak === 'function') {
+            fetchRunPeak(userProfile.id).then(function (res) {
+              setHrPeak(res != null ? res : { maxHr: 0 });
+            }).catch(function () {
+              setHrPeak({ maxHr: 0 });
+            });
+          } else {
+            setHrPeak({ maxHr: 0 });
+          }
+          return;
+        }
         var ph = Number(userProfile.max_hr);
         if (ph >= 50 && ph <= 230) {
           setHrPeak({ maxHr: ph, maxHrDate: null });
           return;
         }
-        setHrPeak(undefined);
         if (typeof window.fetchMaxHrFromYearlyPeaks === 'function') {
           window.fetchMaxHrFromYearlyPeaks(userProfile.id).then(function (res) {
             setHrPeak(res != null ? res : { maxHr: 0 });
@@ -124,11 +140,11 @@
           setHrPeak({ maxHr: 0 });
         }
       },
-      [userProfile]
+      [userProfile, isRun]
     );
 
     var ftp = isRun
-      ? (Number(stats.thresholdPace) || (userProfile && Number(userProfile.ftp)) || 0)
+      ? 0
       : (Number(stats.ftp) || (userProfile && Number(userProfile.ftp)) || 0);
     var build = typeof window.buildProfileZoneTableHtml === 'function' ? window.buildProfileZoneTableHtml : null;
     if (!build) return null;
@@ -149,7 +165,7 @@
       hrHtml = z && z.hrHtml ? z.hrHtml : '';
     }
     var html = '';
-    if (ftpHtml) html += ftpHtml;
+    if (!isRun && ftpHtml) html += ftpHtml;
     html += hrHtml;
     if (!html) return null;
     var wrapClass =
