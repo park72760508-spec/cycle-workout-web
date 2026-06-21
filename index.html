@@ -32873,16 +32873,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         pmcPanelIndexRef.current = lastIx;
         setPmcHoverIdx(lastIx);
         
-        var avgFitnessGlobal =
-          stelvioRollingFitnessGlobal &&
-          typeof stelvioRollingFitnessGlobal.avgFitness === 'number' &&
-          isFinite(stelvioRollingFitnessGlobal.avgFitness) &&
-          stelvioRollingFitnessGlobal.avgFitness > 0
-            ? stelvioRollingFitnessGlobal.avgFitness
-            : null;
-
         var fitnessSeries = chartRows.map(function (d) { return Number(d.fitness) || 0; });
         var fatigueSeries = chartRows.map(function (d) { return Number(d.fatigue) || 0; });
+        var avgFitnessGlobal =
+          typeof window.resolvePmcGlobalAvgFitnessRef === 'function'
+            ? window.resolvePmcGlobalAvgFitnessRef(stelvioRollingFitnessGlobal, fitnessSeries, isRun)
+            : stelvioRollingFitnessGlobal &&
+                typeof stelvioRollingFitnessGlobal.avgFitness === 'number' &&
+                isFinite(stelvioRollingFitnessGlobal.avgFitness) &&
+                stelvioRollingFitnessGlobal.avgFitness > 0
+              ? stelvioRollingFitnessGlobal.avgFitness
+              : null;
         var allVals = fitnessSeries.concat(fatigueSeries);
         if (avgFitnessGlobal != null) allVals.push(avgFitnessGlobal);
         var validV = allVals.filter(function (v) { return typeof v === 'number' && !isNaN(v) && v >= 0; });
@@ -33102,13 +33103,16 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       }
 
       function pmcCustomLegend() {
+        var fitnessSeriesForLeg = (data || []).map(function (d) { return Number(d.fitness) || 0; });
         var avgFitnessGlobal =
-          stelvioRollingFitnessGlobal &&
-          typeof stelvioRollingFitnessGlobal.avgFitness === 'number' &&
-          isFinite(stelvioRollingFitnessGlobal.avgFitness) &&
-          stelvioRollingFitnessGlobal.avgFitness > 0
-            ? stelvioRollingFitnessGlobal.avgFitness
-            : null;
+          typeof window.resolvePmcGlobalAvgFitnessRef === 'function'
+            ? window.resolvePmcGlobalAvgFitnessRef(stelvioRollingFitnessGlobal, fitnessSeriesForLeg, isRun)
+            : stelvioRollingFitnessGlobal &&
+                typeof stelvioRollingFitnessGlobal.avgFitness === 'number' &&
+                isFinite(stelvioRollingFitnessGlobal.avgFitness) &&
+                stelvioRollingFitnessGlobal.avgFitness > 0
+              ? stelvioRollingFitnessGlobal.avgFitness
+              : null;
         function legChip(opts) {
           var visible = opts.visible !== false;
           return React.createElement(
@@ -33207,8 +33211,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 }),
                 isRun ? 'RUN 사용자 평균' : '전체 사용자 평균'
               )
-            : null,
-          pmcInfoButton({ marginLeft: avgFitnessGlobal != null ? 0 : 2 })
+            : null
         );
       }
 
