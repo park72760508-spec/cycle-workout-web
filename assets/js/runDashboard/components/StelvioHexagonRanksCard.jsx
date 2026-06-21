@@ -108,6 +108,19 @@
     return norm;
   }
 
+  /** 종합 순위 ÷ n × 100 (1위/42 → 2.38%) — 랭킹보드 rankToTopSharePercent와 동일 */
+  function formatRankTopSharePercent(overallRank, nCohort) {
+    if (overallRank == null || !isFinite(overallRank)) return null;
+    var nn = nCohort != null ? Math.floor(Number(nCohort)) : 0;
+    if (nn < 1) return null;
+    var dataApi = window.runningRankingData;
+    if (dataApi && typeof dataApi.rankToTopSharePercent === 'function') {
+      return dataApi.rankToTopSharePercent(overallRank, nn);
+    }
+    var r = Math.max(1, Math.min(nn, Math.floor(Number(overallRank))));
+    return Math.round((r / nn) * 10000) / 100;
+  }
+
   function heptagonCardTierLegendCaption(tierId) {
     var m = { HC: '~5%', C1: '~10%', C2: '~20%', C3: '~40%', C4: '~60%', C5: '~80%', C6: '~100%' };
     return m[tierId] || m.C6;
@@ -217,7 +230,7 @@
     var overallRank = hexState.overallRank;
     var overallSuffix = hexState.overallRankChangeSuffix;
     var nCohort = hexState.overallCohortN;
-    var topShare = hexState.topSharePercent;
+    var rankSharePct = formatRankTopSharePercent(overallRank, nCohort);
     var _imgErr = useState(false);
     var imgError = _imgErr[0];
     var setImgError = _imgErr[1];
@@ -277,7 +290,7 @@
                   n={nCohort != null && nCohort > 0 ? String(nCohort) : '—'}
                 </span>
                 <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-pct">
-                  {topShare != null && isFinite(topShare) ? '상위 ' + Number(topShare).toFixed(2) : '—'}%
+                  {rankSharePct != null && isFinite(rankSharePct) ? Number(rankSharePct).toFixed(2) : '—'}%
                 </span>
               </span>
             ) : (
@@ -301,7 +314,7 @@
     var levelName = bar.levelName || tierLevelDisplayName(bar.tierId || 'C6');
     var overallRank = hexState.overallRank;
     var nCohort = hexState.overallCohortN;
-    var topShare = hexState.topSharePercent;
+    var rankSharePct = formatRankTopSharePercent(overallRank, nCohort);
     var filterContext =
       filterGenderLabel && filterCategoryLabel
         ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
@@ -315,10 +328,10 @@
         aria-label={
           filterContext +
           (overallRank != null
-            ? levelName + ', 종합 ' + String(overallRank) + '위, n=' + (nCohort || '—') + ', 상위 ' + (topShare != null && isFinite(topShare) ? Number(topShare).toFixed(2) : '—') + '%. '
+            ? levelName + ', 종합 ' + String(overallRank) + '위, n=' + (nCohort || '—') + ', ' + (rankSharePct != null && isFinite(rankSharePct) ? Number(rankSharePct).toFixed(2) : '—') + '%. '
             : levelName + ', 종합 순위 로딩 후 표시. ') + '클릭: 툴팁'
         }
-        title={filterContext + '종합 순위·n·상위% — 클릭: 힌트'}
+        title={filterContext + '종합 순위·n·순위/n×100% — 클릭: 힌트'}
         onClick={function(e) {
           e.stopPropagation();
           setShowPct(!showPct);
