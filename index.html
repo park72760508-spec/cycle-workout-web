@@ -32425,48 +32425,155 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
+    /** PMC 훈련 트렌드 가이드 — 차트 최신값 기준 «나의 상태» 마킹 */
+    function computePmcGuideMarkers(data, avgFitnessGlobal) {
+      if (!data || !data.length) return null;
+      var n = data.length;
+      var first = data[0];
+      var last = data[n - 1];
+      var ctl0 = Number(first.fitness) || 0;
+      var ctl1 = Number(last.fitness) || 0;
+      var atl0 = Number(first.fatigue) || 0;
+      var atl1 = Number(last.fatigue) || 0;
+      var tsb1 = last.form_tsb != null ? Number(last.form_tsb) : ctl1 - atl1;
+
+      var tsbZoneId = 'optimal';
+      if (tsb1 > 5) tsbZoneId = 'freshness';
+      else if (tsb1 >= -10) tsbZoneId = 'optimal';
+      else if (tsb1 >= -30) tsbZoneId = 'overreaching';
+      else tsbZoneId = 'overtraining';
+
+      var ctlDelta = ctl1 - ctl0;
+      var ctlThreshold = Math.max(2, ctl0 * 0.04);
+      var ctlTrendId = 'flat';
+      if (ctlDelta >= ctlThreshold) ctlTrendId = 'up';
+      else if (ctlDelta <= -ctlThreshold) ctlTrendId = 'down';
+
+      var atlVsCtlId = atl1 > ctl1 ? 'atl_above' : 'ctl_above';
+
+      var weekIdx = Math.max(0, n - 1 - Math.min(7, n - 1));
+      var weekRow = data[weekIdx];
+      var atlWeekDelta = atl1 - (Number(weekRow.fatigue) || 0);
+      var ctlWeekDelta = ctl1 - (Number(weekRow.fitness) || 0);
+      var atlMonthDelta = atl1 - atl0;
+      var spikeThreshold = Math.max(5, atl1 * 0.08);
+
+      var spikeId = null;
+      if (atlWeekDelta >= spikeThreshold) {
+        if (ctlWeekDelta >= 2) spikeId = 'ctl_rise';
+        else if (Math.abs(ctlWeekDelta) < 2) spikeId = 'atl_spike_flat';
+        else spikeId = 'atl_only';
+      }
+
+      var exampleId = null;
+      if (ctlTrendId === 'up' && atlMonthDelta >= Math.max(2, ctlThreshold * 0.4)) exampleId = 'ex1';
+      else if (ctlTrendId === 'flat' && atlMonthDelta <= -2) exampleId = 'ex2';
+      else if (ctlTrendId === 'down' && atlMonthDelta <= -Math.max(2, ctlThreshold * 0.4)) exampleId = 'ex3';
+      else if (avgFitnessGlobal != null && isFinite(avgFitnessGlobal)) exampleId = 'ex4';
+
+      return {
+        tsbZoneId: tsbZoneId,
+        ctlTrendId: ctlTrendId,
+        atlVsCtlId: atlVsCtlId,
+        spikeId: spikeId,
+        exampleId: exampleId,
+        snapshot: { ctl: ctl1, atl: atl1, tsb: tsb1 }
+      };
+    }
+
+    function pmcGuideMarkedCardStyle(isActive, baseStyle) {
+      if (!isActive) return baseStyle;
+      return Object.assign({}, baseStyle, {
+        border: '2px solid #667eea',
+        background: 'linear-gradient(135deg, rgba(102,126,234,0.11), rgba(118,75,162,0.07))',
+        boxShadow: '0 0 0 3px rgba(102,126,234,0.1)',
+        position: 'relative'
+      });
+    }
+
+    function pmcGuideActiveBadgeEl() {
+      return React.createElement(
+        'span',
+        {
+          style: {
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            fontSize: 10,
+            fontWeight: 700,
+            color: '#4c51bf',
+            background: 'rgba(102,126,234,0.14)',
+            border: '1px solid rgba(102,126,234,0.35)',
+            borderRadius: 999,
+            padding: '2px 8px',
+            lineHeight: 1.3,
+            letterSpacing: '-0.02em'
+          }
+        },
+        '나의 상태'
+      );
+    }
+
+    var PMC_GUIDE_SOFT_BTN = {
+      width: '100%',
+      minHeight: 46,
+      padding: '12px 20px',
+      borderRadius: 10,
+      border: '1px solid rgba(102, 126, 234, 0.35)',
+      background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.06))',
+      color: '#4c51bf',
+      fontSize: 15,
+      fontWeight: 600,
+      cursor: 'pointer',
+      boxShadow: 'none',
+      touchAction: 'manipulation',
+      WebkitTapHighlightColor: 'transparent'
+    };
+
     /** PMC 훈련 트렌드 — 그래프 해석 가이드 모달 */
     function PmcTrendGuideModal(props) {
       var p = props || {};
       var open = !!p.open;
       var onClose = p.onClose || function () {};
       var isRun = !!p.isRun;
-      var ACCENT = '#7c3aed';
-      var ACCENT_LIGHT = 'rgba(124,58,237,0.1)';
+      var markers = p.guideState || null;
+      var ACCENT = '#667eea';
+      var ACCENT_LIGHT = 'rgba(102,126,234,0.1)';
       var tsbZones = isRun
         ? [
-            { range: '+5 초과', label: '회복 · Freshness', guide: '레이스·고강도 세션에 유리', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-            { range: '-10 ~ +5', label: '균형 · Optimal', guide: '계획대로 훈련 유지', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-            { range: '-30 ~ -10', label: '과부하 · Overreaching', guide: '강도·볼륨 줄이고 회복 러닝', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-            { range: '-30 미만', label: '위험 · Overtraining', guide: '강도 훈련 중단, 회복 우선', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' }
+            { id: 'freshness', range: '+5 초과', label: '회복 · Freshness', guide: '레이스·고강도 세션에 유리', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+            { id: 'optimal', range: '-10 ~ +5', label: '균형 · Optimal', guide: '계획대로 훈련 유지', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+            { id: 'overreaching', range: '-30 ~ -10', label: '과부하 · Overreaching', guide: '강도·볼륨 줄이고 회복 러닝', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+            { id: 'overtraining', range: '-30 미만', label: '위험 · Overtraining', guide: '강도 훈련 중단, 회복 우선', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' }
           ]
         : [
-            { range: '+5 초과', label: '회복 · Freshness', guide: '레이스·FTP 테스트·VO₂max 세션에 유리', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-            { range: '-10 ~ +5', label: '균형 · Optimal', guide: 'Sweet Spot·Tempo 등 계획 훈련 유지', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-            { range: '-30 ~ -10', label: 'Functional Overreaching', guide: 'Z1~Z2 회복 라이딩·강도 빈도 축소', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-            { range: '-30 미만', label: 'Non-functional OR', guide: 'HIIT·레이스 페이스 중단, 회복 우선', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' }
+            { id: 'freshness', range: '+5 초과', label: '회복 · Freshness', guide: '레이스·FTP 테스트·VO₂max 세션에 유리', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+            { id: 'optimal', range: '-10 ~ +5', label: '균형 · Optimal', guide: 'Sweet Spot·Tempo 등 계획 훈련 유지', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+            { id: 'overreaching', range: '-30 ~ -10', label: 'Functional Overreaching', guide: 'Z1~Z2 회복 라이딩·강도 빈도 축소', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+            { id: 'overtraining', range: '-30 미만', label: 'Non-functional OR', guide: 'HIIT·레이스 페이스 중단, 회복 우선', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' }
           ];
       var trendCards = [
-        { icon: '↗', title: 'CTL 우상향', desc: '한 달 동안 체력이 서서히 올라감', sub: '훈련량·강도 유지 또는 증가', color: '#3b82f6' },
-        { icon: '→', title: 'CTL 평평', desc: '유지 훈련 — 체력 수준 유지', sub: '현재 페이스를 그대로 이어가도 OK', color: '#64748b' },
-        { icon: '↘', title: 'CTL 하향', desc: '훈련량 감소·휴식기', sub: '의도적 taper(테이퍼)면 정상', color: '#94a3b8' }
+        { id: 'up', icon: '↗', title: 'CTL 우상향', desc: '한 달 동안 체력이 서서히 올라감', sub: '훈련량·강도 유지 또는 증가', color: '#3b82f6' },
+        { id: 'flat', icon: '→', title: 'CTL 평평', desc: '유지 훈련 — 체력 수준 유지', sub: '현재 페이스를 그대로 이어가도 OK', color: '#64748b' },
+        { id: 'down', icon: '↘', title: 'CTL 하향', desc: '훈련량 감소·휴식기', sub: '의도적 taper(테이퍼)면 정상', color: '#94a3b8' }
       ];
       var spikeCards = isRun
         ? [
-            { title: 'ATL만 급등', desc: '지난 1주 장거리·고강도·연속 훈련', dot: '#ef4444' },
-            { title: 'CTL도 천천히 상승', desc: '그 부하가 체력으로 전환 중', dot: '#3b82f6' },
-            { title: 'ATL 급등 · CTL 정체', desc: '단기 과부하 — 회복 필요 신호', dot: '#f59e0b' }
+            { id: 'atl_only', title: 'ATL만 급등', desc: '지난 1주 장거리·고강도·연속 훈련', dot: '#ef4444' },
+            { id: 'ctl_rise', title: 'CTL도 천천히 상승', desc: '그 부하가 체력으로 전환 중', dot: '#3b82f6' },
+            { id: 'atl_spike_flat', title: 'ATL 급등 · CTL 정체', desc: '단기 과부하 — 회복 필요 신호', dot: '#f59e0b' }
           ]
         : [
-            { title: 'ATL만 급등', desc: '지난 1주 장거리·Sweet Spot·연속 라이딩', dot: '#ef4444' },
-            { title: 'CTL도 천천히 상승', desc: '훈련 부하가 CTL(체력)으로 전환 중', dot: '#3b82f6' },
-            { title: 'ATL 급등 · CTL 정체', desc: '단기 과부하 — Z1~Z2 회복 라이딩 권장', dot: '#f59e0b' }
+            { id: 'atl_only', title: 'ATL만 급등', desc: '지난 1주 장거리·Sweet Spot·연속 라이딩', dot: '#ef4444' },
+            { id: 'ctl_rise', title: 'CTL도 천천히 상승', desc: '훈련 부하가 CTL(체력)으로 전환 중', dot: '#3b82f6' },
+            { id: 'atl_spike_flat', title: 'ATL 급등 · CTL 정체', desc: '단기 과부하 — Z1~Z2 회복 라이딩 권장', dot: '#f59e0b' }
           ];
       var examples = [
-        { pattern: 'CTL ↗  ATL ↗', note: 'ATL이 더 가파름', result: '훈련량 증가 중. TSB가 -10 아래면 회복일 추가.', border: '#3b82f6' },
-        { pattern: 'CTL →  ATL ↘', note: '테이퍼·회복 주', result: '레이스 1~2주 전에 자주 보이는 패턴.', border: '#10b981' },
-        { pattern: 'CTL ↘  ATL ↘', note: 'ATL이 더 빠르게 하락', result: '휴식·부상·공백. 복귀 시 ATL부터 다시 상승.', border: '#64748b' },
+        { id: 'ex1', pattern: 'CTL ↗  ATL ↗', note: 'ATL이 더 가파름', result: '훈련량 증가 중. TSB가 -10 아래면 회복일 추가.', border: '#3b82f6' },
+        { id: 'ex2', pattern: 'CTL →  ATL ↘', note: '테이퍼·회복 주', result: '레이스 1~2주 전에 자주 보이는 패턴.', border: '#10b981' },
+        { id: 'ex3', pattern: 'CTL ↘  ATL ↘', note: 'ATL이 더 빠르게 하락', result: '휴식·부상·공백. 복귀 시 ATL부터 다시 상승.', border: '#64748b' },
         {
+          id: 'ex4',
           pattern: isRun ? '파란선 ≈ RUN 평균' : '파란선 ≈ 전체 평균',
           note: '점선 기준선',
           result: isRun ? '같은 기간 RUN 사용자 대비 체력(CTL) 수준 비교.' : '전체 사용자 대비 체력(CTL) 수준 비교.',
@@ -32501,15 +32608,16 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 width: 22,
                 height: 22,
                 borderRadius: 8,
-                background: 'linear-gradient(135deg, ' + ACCENT + ', #9333ea)',
-                color: '#fff',
+                background: 'linear-gradient(135deg, rgba(102,126,234,0.18), rgba(118,75,162,0.12))',
+                color: '#4c51bf',
                 fontSize: 11,
                 fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
-                boxShadow: '0 2px 6px rgba(124,58,237,0.35)'
+                boxShadow: 'none',
+                border: '1px solid rgba(102,126,234,0.25)'
               }
             },
             num
@@ -32563,8 +32671,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             {
               style: {
                 padding: '18px 20px 14px',
-                background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 50%, #5b21b6 100%)',
-                color: '#fff',
+                background: 'linear-gradient(135deg, rgba(102,126,234,0.08), rgba(118,75,162,0.06))',
+                borderBottom: '1px solid rgba(102,126,234,0.2)',
+                color: '#4c51bf',
                 position: 'relative',
                 flexShrink: 0
               }
@@ -32583,8 +32692,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   height: 32,
                   borderRadius: '50%',
                   border: 'none',
-                  background: 'rgba(255,255,255,0.18)',
-                  color: '#fff',
+                  background: 'rgba(102,126,234,0.12)',
+                  color: '#4c51bf',
                   fontSize: 18,
                   lineHeight: 1,
                   cursor: 'pointer',
@@ -32595,14 +32704,28 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               },
               '×'
             ),
-            React.createElement('h2', { id: 'pmcGuideTitle', style: { margin: 0, fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em' } }, '그래프 분석 가이드'),
+            React.createElement('h2', { id: 'pmcGuideTitle', style: { margin: 0, fontSize: 17, fontWeight: 800, letterSpacing: '-0.03em', color: '#4c51bf' } }, '그래프 분석 가이드'),
             React.createElement(
               'p',
-              { style: { margin: '6px 0 0', fontSize: 12, opacity: 0.9, lineHeight: 1.45 } },
-              React.createElement('span', { style: { color: '#93c5fd', fontWeight: 600 } }, 'Fitness (CTL)'),
+              { style: { margin: '6px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.45 } },
+              React.createElement('span', { style: { color: '#2563eb', fontWeight: 600 } }, 'Fitness (CTL)'),
               ' · ',
-              React.createElement('span', { style: { color: '#fca5a5', fontWeight: 600 } }, 'Fatigue (ATL)'),
-              ' — 최근 1개월 트렌드 읽는 법'
+              React.createElement('span', { style: { color: '#dc2626', fontWeight: 600 } }, 'Fatigue (ATL)'),
+              ' — 최근 1개월 트렌드 읽는 법',
+              markers && markers.snapshot
+                ? React.createElement(
+                    'span',
+                    { style: { display: 'block', marginTop: 6, fontSize: 11, color: '#4c51bf', fontWeight: 600 } },
+                    '현재 CTL ' +
+                      (isFinite(markers.snapshot.ctl) ? markers.snapshot.ctl.toFixed(1) : '—') +
+                      ' · ATL ' +
+                      (isFinite(markers.snapshot.atl) ? markers.snapshot.atl.toFixed(1) : '—') +
+                      ' · TSB ' +
+                      (isFinite(markers.snapshot.tsb)
+                        ? (markers.snapshot.tsb >= 0 ? '+' : '') + markers.snapshot.tsb.toFixed(1)
+                        : '—')
+                  )
+                : null
             )
           ),
           React.createElement(
@@ -32613,11 +32736,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               'div',
               { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
               trendCards.map(function (card, ci) {
+                var isActive = markers && markers.ctlTrendId === card.id;
                 return React.createElement(
                   'div',
                   {
                     key: 't' + ci,
-                    style: {
+                    style: pmcGuideMarkedCardStyle(isActive, {
                       display: 'flex',
                       alignItems: 'flex-start',
                       gap: 12,
@@ -32625,8 +32749,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       borderRadius: 12,
                       border: '1px solid #e2e8f0',
                       background: '#fafafa'
-                    }
+                    })
                   },
+                  isActive ? pmcGuideActiveBadgeEl() : null,
                   React.createElement(
                     'span',
                     {
@@ -32664,10 +32789,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   padding: '10px 12px',
                   borderRadius: 10,
                   background: ACCENT_LIGHT,
-                  border: '1px solid rgba(124,58,237,0.2)',
+                  border: '1px solid rgba(102,126,234,0.2)',
                   marginBottom: 10,
                   fontSize: 12,
-                  color: '#5b21b6',
+                  color: '#4c51bf',
                   fontWeight: 600,
                   textAlign: 'center'
                 }
@@ -32678,31 +32803,36 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               'div',
               { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
               tsbZones.map(function (z, zi) {
+                var isActive = markers && markers.tsbZoneId === z.id;
                 return React.createElement(
                   'div',
-                  {
-                    key: 'z' + zi,
-                    style: {
-                      display: 'grid',
-                      gridTemplateColumns: '72px 1fr',
-                      gap: 8,
-                      alignItems: 'center',
-                      padding: '9px 11px',
-                      borderRadius: 11,
-                      background: z.bg,
-                      border: '1px solid ' + z.color + '33'
-                    }
-                  },
-                  React.createElement(
-                    'span',
-                    { style: { fontSize: 11, fontWeight: 800, color: z.color, fontVariantNumeric: 'tabular-nums' } },
-                    z.range
-                  ),
+                  { key: 'z' + zi, style: { position: 'relative' } },
+                  isActive ? pmcGuideActiveBadgeEl() : null,
                   React.createElement(
                     'div',
-                    null,
-                    React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: '#334155' } }, z.label),
-                    React.createElement('div', { style: { fontSize: 11, color: '#64748b', marginTop: 1 } }, z.guide)
+                    {
+                      style: pmcGuideMarkedCardStyle(isActive, {
+                        display: 'grid',
+                        gridTemplateColumns: '72px 1fr',
+                        gap: 8,
+                        alignItems: 'center',
+                        padding: '9px 11px',
+                        borderRadius: 11,
+                        background: z.bg,
+                        border: '1px solid ' + z.color + '33'
+                      })
+                    },
+                    React.createElement(
+                      'span',
+                      { style: { fontSize: 11, fontWeight: 800, color: z.color, fontVariantNumeric: 'tabular-nums' } },
+                      z.range
+                    ),
+                    React.createElement(
+                      'div',
+                      null,
+                      React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: '#334155' } }, z.label),
+                      React.createElement('div', { style: { fontSize: 11, color: '#64748b', marginTop: 1 } }, z.guide)
+                    )
                   )
                 );
               })
@@ -32712,13 +32842,37 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               { style: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 } },
               React.createElement(
                 'div',
-                { style: { fontSize: 11, padding: '8px 11px', borderRadius: 9, background: 'rgba(239,68,68,0.08)', borderLeft: '3px solid #ef4444', color: '#475569', lineHeight: 1.45 } },
+                {
+                  style: pmcGuideMarkedCardStyle(markers && markers.atlVsCtlId === 'atl_above', {
+                    fontSize: 11,
+                    padding: '8px 11px',
+                    borderRadius: 9,
+                    background: 'rgba(239,68,68,0.08)',
+                    borderLeft: '3px solid #ef4444',
+                    color: '#475569',
+                    lineHeight: 1.45,
+                    position: 'relative'
+                  })
+                },
+                markers && markers.atlVsCtlId === 'atl_above' ? pmcGuideActiveBadgeEl() : null,
                 React.createElement('strong', { style: { color: '#dc2626' } }, 'ATL > CTL'),
                 ' (빨간선 위) → 최근 부하가 체력보다 큼 · 피로 누적'
               ),
               React.createElement(
                 'div',
-                { style: { fontSize: 11, padding: '8px 11px', borderRadius: 9, background: 'rgba(59,130,246,0.08)', borderLeft: '3px solid #3b82f6', color: '#475569', lineHeight: 1.45 } },
+                {
+                  style: pmcGuideMarkedCardStyle(markers && markers.atlVsCtlId === 'ctl_above', {
+                    fontSize: 11,
+                    padding: '8px 11px',
+                    borderRadius: 9,
+                    background: 'rgba(59,130,246,0.08)',
+                    borderLeft: '3px solid #3b82f6',
+                    color: '#475569',
+                    lineHeight: 1.45,
+                    position: 'relative'
+                  })
+                },
+                markers && markers.atlVsCtlId === 'ctl_above' ? pmcGuideActiveBadgeEl() : null,
                 React.createElement('strong', { style: { color: '#2563eb' } }, 'CTL > ATL'),
                 ' (파란선 위) → 회복·테이퍼 구간에 가까움'
               )
@@ -32728,12 +32882,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               'div',
               { style: { display: 'flex', flexDirection: 'column', gap: 7 } },
               spikeCards.map(function (sc, si) {
+                var isActive = markers && markers.spikeId === sc.id;
                 return React.createElement(
                   'div',
                   {
                     key: 's' + si,
-                    style: { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: '1px solid #f1f5f9', background: '#fff' }
+                    style: pmcGuideMarkedCardStyle(isActive, {
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '9px 12px',
+                      borderRadius: 10,
+                      border: '1px solid #f1f5f9',
+                      background: '#fff'
+                    })
                   },
+                  isActive ? pmcGuideActiveBadgeEl() : null,
                   React.createElement('span', { style: { width: 8, height: 8, borderRadius: '50%', background: sc.dot, flexShrink: 0 } }),
                   React.createElement(
                     'div',
@@ -32749,18 +32913,20 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               'div',
               { style: { display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 4 } },
               examples.map(function (ex, ei) {
+                var isActive = markers && markers.exampleId === ex.id;
                 return React.createElement(
                   'div',
                   {
                     key: 'e' + ei,
-                    style: {
+                    style: pmcGuideMarkedCardStyle(isActive, {
                       padding: '11px 13px 11px 14px',
                       borderRadius: 12,
                       border: '1px solid #e2e8f0',
                       borderLeft: '4px solid ' + ex.border,
                       background: 'linear-gradient(90deg, rgba(248,250,252,0.9), #fff)'
-                    }
+                    })
                   },
+                  isActive ? pmcGuideActiveBadgeEl() : null,
                   React.createElement(
                     'div',
                     { style: { fontSize: 13, fontWeight: 800, color: '#1e293b', fontFamily: 'ui-monospace, monospace', letterSpacing: '-0.02em' } },
@@ -32787,19 +32953,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               {
                 type: 'button',
                 onClick: onClose,
-                style: {
-                  width: '100%',
-                  minHeight: 46,
-                  border: 'none',
-                  borderRadius: 12,
-                  background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                  color: '#fff',
-                  fontSize: 15,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(124,58,237,0.35)',
-                  touchAction: 'manipulation'
-                }
+                style: PMC_GUIDE_SOFT_BTN
               },
               '확인'
             )
@@ -32831,6 +32985,25 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       const _hoverState = useState(0);
       var pmcHoverIdx = _hoverState[0];
       var setPmcHoverIdx = _hoverState[1];
+
+      var pmcGuideState = useMemo
+        ? useMemo(function () {
+            if (!data || !data.length) return null;
+            var fitnessSeriesForGuide = data.map(function (d) {
+              return Number(d.fitness) || 0;
+            });
+            var avgFitnessForGuide =
+              typeof window.resolvePmcGlobalAvgFitnessRef === 'function'
+                ? window.resolvePmcGlobalAvgFitnessRef(stelvioRollingFitnessGlobal, fitnessSeriesForGuide, isRun)
+                : stelvioRollingFitnessGlobal &&
+                    typeof stelvioRollingFitnessGlobal.avgFitness === 'number' &&
+                    isFinite(stelvioRollingFitnessGlobal.avgFitness) &&
+                    stelvioRollingFitnessGlobal.avgFitness > 0
+                  ? stelvioRollingFitnessGlobal.avgFitness
+                  : null;
+            return computePmcGuideMarkers(data, avgFitnessForGuide);
+          }, [data, stelvioRollingFitnessGlobal, isRun])
+        : computePmcGuideMarkers(data, null);
       
       useEffect(
         function () {
@@ -33323,7 +33496,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               데이터가 없습니다
             </div>
             {pmcCustomLegend()}
-            <PmcTrendGuideModal open={guideOpen} onClose={function () { setGuideOpen(false); }} isRun={isRun} />
+            <PmcTrendGuideModal open={guideOpen} onClose={function () { setGuideOpen(false); }} isRun={isRun} guideState={pmcGuideState} />
           </DashboardCard>
         );
       }
@@ -33340,7 +33513,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </div>
           </div>
           {pmcCustomLegend()}
-          <PmcTrendGuideModal open={guideOpen} onClose={function () { setGuideOpen(false); }} isRun={isRun} />
+          <PmcTrendGuideModal open={guideOpen} onClose={function () { setGuideOpen(false); }} isRun={isRun} guideState={pmcGuideState} />
         </DashboardCard>
       );
     }
