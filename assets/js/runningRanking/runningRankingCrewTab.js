@@ -96,6 +96,62 @@
     return 500;
   }
 
+  /** CYCLE stelvioGroupTabMemberNameRankMetaHtml — (전체순위/등락) */
+  function buildGroupMemberRankMetaHtml(item, leaderboardRows, listCategory) {
+    if (!item || item.userId == null) return '';
+    var dataApi = window.runningRankingData;
+    var overallRank = null;
+    if (dataApi && typeof dataApi.buildRankedList === 'function') {
+      var supList = dataApi.buildRankedList(leaderboardRows || [], 'overall', {
+        gender: 'all',
+        category: 'Supremo'
+      });
+      var uid = String(item.userId);
+      for (var i = 0; i < supList.length; i++) {
+        if (supList[i] && String(supList[i].userId) === uid) {
+          overallRank = i + 1;
+          break;
+        }
+      }
+    }
+    var rc = item.rankChange;
+    var prevR = item.previousBoardRank;
+    var inlineFn = typeof window.stelvioRankChangeInlineSpanHtml === 'function'
+      ? window.stelvioRankChangeInlineSpanHtml
+      : null;
+    var badgeFn = typeof window.stelvioServerRankChangeBadgeHtml === 'function'
+      ? window.stelvioServerRankChangeBadgeHtml
+      : null;
+    var changeInline = inlineFn ? inlineFn(rc, prevR) : '';
+    var changeOnly = badgeFn ? badgeFn(rc, prevR) : '';
+    var overallPart =
+      overallRank != null && isFinite(overallRank) && overallRank >= 1
+        ? '<span class="stelvio-rank-overall" title="전체 순위(Supremo)">' + overallRank + '위</span>'
+        : '';
+    if (!overallPart && !changeOnly) return '';
+    if (overallPart && changeInline) {
+      var prevNT =
+        prevR != null && isFinite(Number(prevR)) ? Math.floor(Number(prevR)) : '';
+      return (
+        '<span class="stelvio-rank-name-meta" title="전체 순위' +
+        (prevNT ? ', 전일 ' + prevNT + '위 대비' : '') +
+        '">(' +
+        overallPart +
+        '<span class="stelvio-rank-meta-sep" aria-hidden="true">/</span>' +
+        changeInline +
+        ')</span>'
+      );
+    }
+    if (overallPart) {
+      return (
+        '<span class="stelvio-rank-name-meta" title="전체 순위(Supremo)">(' +
+        overallPart +
+        ')</span>'
+      );
+    }
+    return changeOnly;
+  }
+
   function formatNoticeDate(ts) {
     if (!ts) return '';
     var d = null;
@@ -118,6 +174,7 @@
     crewMetricLabel: crewMetricLabel,
     crewMetricUnit: crewMetricUnit,
     buildCrewMemberRankedList: buildCrewMemberRankedList,
+    buildGroupMemberRankMetaHtml: buildGroupMemberRankMetaHtml,
     rankingNoticeMaxLen: rankingNoticeMaxLen,
     formatNoticeDate: formatNoticeDate
   };

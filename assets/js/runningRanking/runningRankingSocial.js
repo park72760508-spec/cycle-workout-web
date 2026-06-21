@@ -90,7 +90,10 @@
     var starFn = callFn('stelvioRankingStarButtonHtml');
     if (!starFn) return;
 
-    var rows = root.querySelectorAll('.running-ranking-row[data-social-uid], .running-ranking-row[data-board-uid]');
+    var rows = root.querySelectorAll(
+      '.running-ranking-row[data-social-uid], .running-ranking-row[data-board-uid], ' +
+      '.stelvio-group-member-row[data-social-uid], .stelvio-group-member-row[data-board-uid]'
+    );
     var ri;
     for (ri = 0; ri < rows.length; ri++) {
       var rowEl = rows[ri];
@@ -98,9 +101,13 @@
       var boardUid = rowEl.getAttribute('data-board-uid') || '';
       var primaryUid = socialUid || boardUid;
       if (!primaryUid) continue;
+      var starOpts = starButtonOptsForRow(socialUid, boardUid);
+      if (rowEl.classList && rowEl.classList.contains('stelvio-group-member-row')) {
+        starOpts.omitGroupMember = true;
+      }
       updateRowStarSlot(
         rowEl,
-        starFn(primaryUid, starButtonOptsForRow(socialUid, boardUid))
+        starFn(primaryUid, starOpts)
       );
     }
 
