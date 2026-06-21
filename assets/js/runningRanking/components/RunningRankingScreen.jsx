@@ -553,7 +553,7 @@
           starRefreshTimerRef.current = null;
         }
       };
-    }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments, isCrewTab, filteredCrewGroups.length, crewMetric, gender, category]);
+    }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments, isCrewTab, filteredCrewGroups.length, crewMetric, gender, activeCategory]);
 
     var unitLabel = useMemo(function () {
       if (isCrewTab) {
