@@ -183,8 +183,8 @@
                 if (e && typeof e.preventDefault === 'function') e.preventDefault();
                 try {
                   var uid = String((userProfile && userProfile.id) || '');
-                  if (uid && typeof window.clearDashboardCoachCacheForUser === 'function') {
-                    window.clearDashboardCoachCacheForUser(uid);
+                  if (uid && typeof window.clearRunDashboardCoachCacheForUser === 'function') {
+                    window.clearRunDashboardCoachCacheForUser(uid);
                   }
                 } catch (e2) {}
                 if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
@@ -292,8 +292,8 @@
                 if (e && typeof e.preventDefault === 'function') e.preventDefault();
                 try {
                   var uid = String(userProfile.id || '');
-                  if (uid && typeof window.clearDashboardCoachCacheForUser === 'function') {
-                    window.clearDashboardCoachCacheForUser(uid);
+                  if (uid && typeof window.clearRunDashboardCoachCacheForUser === 'function') {
+                    window.clearRunDashboardCoachCacheForUser(uid);
                   }
                 } catch (e2) {}
                 if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
