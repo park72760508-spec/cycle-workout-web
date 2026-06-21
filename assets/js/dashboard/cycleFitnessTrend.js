@@ -142,6 +142,102 @@
     return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
   }
 
+  /** CYCLE PMC 차트 → 코호트 기여용 CTL (최신·기간 평균) */
+  var MAX_PLAUSIBLE_CYCLE_CTL = 200;
+
+  function round1(n) {
+    return Math.round(n * 10) / 10;
+  }
+
+  function resolveCycleCtlSampleFromChartRows(chartRows) {
+    if (!Array.isArray(chartRows) || chartRows.length === 0) return null;
+    var vals = [];
+    var i;
+    for (i = 0; i < chartRows.length; i++) {
+      var v = Number(chartRows[i].fitness);
+      if (isFinite(v) && v >= 0) vals.push(v);
+    }
+    if (!vals.length) return null;
+    var latestCtl = Number(chartRows[chartRows.length - 1].fitness);
+    if (!isFinite(latestCtl) || latestCtl < 0) latestCtl = vals[vals.length - 1];
+    var avgTrendCtl = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    return {
+      latestCtl: round1(latestCtl),
+      avgTrendCtl: round1(avgTrendCtl)
+    };
+  }
+
+  /**
+   * CYCLE 전체 사용자 평균 참조선 — 레거시(구 decay 합산) 과대값 필터
+   * @param {{ avgFitness?: number, pmcModel?: string }|null} globalRow
+   * @param {number[]} fitnessSeries
+   * @param {boolean} isRunMode
+   */
+  function resolvePmcGlobalAvgFitnessRef(globalRow, fitnessSeries, isRunMode) {
+    if (!globalRow || typeof globalRow.avgFitness !== 'number') return null;
+    var avg = globalRow.avgFitness;
+    if (!isFinite(avg) || avg <= 0) return null;
+    if (isRunMode) return avg;
+    if (globalRow.pmcModel === 'coggan_ctl') {
+      return avg <= MAX_PLAUSIBLE_CYCLE_CTL + 50 ? avg : null;
+    }
+    var chartMax = 0;
+    var j;
+    for (j = 0; j < (fitnessSeries || []).length; j++) {
+      if (fitnessSeries[j] > chartMax) chartMax = fitnessSeries[j];
+    }
+    if (avg > MAX_PLAUSIBLE_CYCLE_CTL) return null;
+    if (chartMax > 0 && avg > Math.max(120, chartMax * 2.2)) return null;
+    return avg;
+  }
+
+  var FIRESTORE_MOD_CYCLE_FITNESS = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+  var firestoreModCycleFitnessPromise = null;
+  function getFirestoreModCycleFitness() {
+    if (typeof global.getFirestoreModVo2Stats === 'function') {
+      return global.getFirestoreModVo2Stats();
+    }
+    if (!firestoreModCycleFitnessPromise) {
+      firestoreModCycleFitnessPromise = import(FIRESTORE_MOD_CYCLE_FITNESS);
+    }
+    return firestoreModCycleFitnessPromise;
+  }
+
+  function docSnapExists(snap) {
+    if (!snap) return false;
+    return typeof snap.exists === 'function' ? snap.exists() : snap.exists === true;
+  }
+
+  /** CYCLE: Coggan CTL 기준 fitness_demographic_samples 기여 */
+  function persistCycleFitnessDemographicSampleAsync(userProfile, fitnessChartRows) {
+    var uid = userProfile && userProfile.id;
+    var db = global.firestoreV9;
+    if (!uid || !db || !Array.isArray(fitnessChartRows) || fitnessChartRows.length === 0) {
+      return Promise.resolve();
+    }
+    var sample = resolveCycleCtlSampleFromChartRows(fitnessChartRows);
+    if (!sample || sample.latestCtl == null) return Promise.resolve();
+    return getFirestoreModCycleFitness()
+      .then(function (mod) {
+        if (!mod) return;
+        return mod.setDoc(
+          mod.doc(db, 'fitness_demographic_samples', uid),
+          {
+            pmcModel: 'coggan_ctl',
+            latestCtl: sample.latestCtl,
+            avgTrendCtl: sample.avgTrendCtl,
+            avgTrendFitness: sample.latestCtl,
+            updatedAt: mod.serverTimestamp()
+          },
+          { merge: true }
+        );
+      })
+      .catch(function () {});
+  }
+
   global.buildCycleFitnessTrendChartData = buildCycleFitnessTrendChartData;
   global.buildCyclePmcTrendPayload = buildCyclePmcTrendPayload;
+  global.resolveCycleCtlSampleFromChartRows = resolveCycleCtlSampleFromChartRows;
+  global.resolvePmcGlobalAvgFitnessRef = resolvePmcGlobalAvgFitnessRef;
+  global.persistCycleFitnessDemographicSampleAsync = persistCycleFitnessDemographicSampleAsync;
 })(typeof window !== 'undefined' ? window : global);

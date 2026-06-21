@@ -759,8 +759,14 @@
               });
             }
           }
-          if (isMounted && userProfile && typeof window.persistFitnessDemographicSampleAsync === 'function') {
-            window.persistFitnessDemographicSampleAsync(userProfile, chartData).catch(function() {});
+          if (isMounted && userProfile) {
+            var persistCycle =
+              typeof window.persistCycleFitnessDemographicSampleAsync === 'function'
+                ? window.persistCycleFitnessDemographicSampleAsync
+                : typeof window.persistFitnessDemographicSampleAsync === 'function'
+                  ? window.persistFitnessDemographicSampleAsync
+                  : null;
+            if (persistCycle) persistCycle(userProfile, chartData).catch(function () {});
           }
 
           var vo2Rows = [];
