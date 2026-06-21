@@ -47,7 +47,7 @@
    * — 집계 점수 없어도 멤버 행 표시 (값 '—')
    * @param {object[]} leaderboardRows
    * @param {object[]} memberRows — subscribeRidingGroupMembers 결과
-   * @param {{ metric?: string, gender?: string, category?: string, paceDistance?: string }} opts
+   * @param {{ metric?: string, gender?: string, category?: string, paceDistance?: string, movement?: object }} opts
    * @returns {object[]}
    */
   function buildCrewMemberRankedList(leaderboardRows, memberRows, opts) {
@@ -118,6 +118,19 @@
       category: category,
       paceDistance: paceDistance
     });
+    var movementOpts = opts.movement || {};
+    var moveMod = window.runningRankingMovement;
+    if (moveMod && typeof moveMod.applyRankMovement === 'function') {
+      moveMod.applyRankMovement(fullList, tabId, {
+        gender: gender,
+        category: category,
+        paceDistance: paceDistance,
+        rankMovementSource: movementOpts.rankMovementSource || '',
+        leaderboardSource: movementOpts.leaderboardSource || '',
+        leaderboardAsOfSeoul: movementOpts.leaderboardAsOfSeoul || '',
+        rankMovementAsOfSeoul: movementOpts.rankMovementAsOfSeoul || ''
+      }, movementOpts.rankMovementByKey || {});
+    }
     var rankedById = {};
     function indexRanked(item) {
       if (!item) return;
@@ -183,22 +196,38 @@
       if (!memUid) return;
 
       var raw = findRawRow(memUid);
-      var ranked =
+      var globalItem =
         rankedById[memUid] ||
         (raw ? rankedById[rowUserId(raw)] || rankedById[rowFirebaseUid(raw)] : null);
+      var fromRaw = raw && dataApi.buildListItemFromRawRow
+        ? dataApi.buildListItemFromRawRow(raw, tabId, {
+          gender: gender,
+          category: category,
+          paceDistance: paceDistance
+        })
+        : null;
 
-      if (ranked) {
-        merged.push(Object.assign({}, ranked, { _groupRole: mem.role || 'member' }));
-        return;
+      var item;
+      if (fromRaw) {
+        item = Object.assign({}, fromRaw, {
+          name: memName(mem, raw) || fromRaw.name,
+          profileUrl: memProfile(mem, raw) || fromRaw.profileUrl,
+          _groupRole: mem.role || 'member'
+        });
+        if (globalItem) {
+          item.rankChange = globalItem.rankChange;
+          item.previousBoardRank = globalItem.previousBoardRank;
+        }
+      } else if (globalItem) {
+        item = Object.assign({}, globalItem, {
+          name: memName(mem, raw) || globalItem.name,
+          profileUrl: memProfile(mem, raw) || globalItem.profileUrl,
+          _groupRole: mem.role || 'member'
+        });
+      } else {
+        item = placeholderItem(mem, raw, memUid);
       }
-
-      if (raw) {
-        merged.push(placeholderItem(mem, raw, memUid));
-        return;
-      }
-
-      /* 랭킹 API에 없어도 승인 멤버는 표시 (방장 단독 크루 등) */
-      merged.push(placeholderItem(mem, null, memUid));
+      merged.push(item);
     });
 
     merged.sort(function (a, b) {
@@ -227,64 +256,40 @@
     return 500;
   }
 
-  /** CYCLE stelvioGroupTabMemberNameRankMetaHtml — (전체순위/등락) */
-  function buildGroupMemberRankMetaHtml(item, leaderboardRows, listCategory) {
-    if (!item || item.userId == null) return '';
-    var dataApi = window.runningRankingData;
-    var overallRank = null;
-    if (dataApi && typeof dataApi.buildRankedList === 'function') {
-      var supList = dataApi.buildRankedList(leaderboardRows || [], 'overall', {
-        gender: 'all',
-        category: 'Supremo'
-      });
-      var uid = String(item.userId);
-      var itemFb = item.firebaseUid || item.socialUserId || '';
-      for (var i = 0; i < supList.length; i++) {
-        if (!supList[i]) continue;
-        var su = supList[i].userId != null ? String(supList[i].userId) : '';
-        var sf = supList[i].firebaseUid || supList[i].socialUserId || '';
-        if (su === uid || (itemFb && sf === String(itemFb)) || (sf && sf === uid)) {
-          overallRank = i + 1;
-          break;
-        }
-      }
-    }
-    var rc = item.rankChange;
-    var prevR = item.previousBoardRank;
+  /** 크루 멤버 이름 옆 — (크루내순위/등락) 예: (2위/-) */
+  function buildCrewMemberRankMetaHtml(item) {
+    if (!item || item.rank == null) return '';
+    var crewRank = Math.floor(Number(item.rank));
+    if (!isFinite(crewRank) || crewRank < 1) return '';
+
     var inlineFn = typeof window.stelvioRankChangeInlineSpanHtml === 'function'
       ? window.stelvioRankChangeInlineSpanHtml
       : null;
-    var badgeFn = typeof window.stelvioServerRankChangeBadgeHtml === 'function'
-      ? window.stelvioServerRankChangeBadgeHtml
-      : null;
+    var rc = item.rankChange;
+    var prevR = item.previousBoardRank;
     var changeInline = inlineFn ? inlineFn(rc, prevR) : '';
-    var changeOnly = badgeFn ? badgeFn(rc, prevR) : '';
-    var overallPart =
-      overallRank != null && isFinite(overallRank) && overallRank >= 1
-        ? '<span class="stelvio-rank-overall" title="전체 순위(Supremo)">' + overallRank + '위</span>'
-        : '';
-    if (!overallPart && !changeOnly) return '';
-    if (overallPart && changeInline) {
-      var prevNT =
-        prevR != null && isFinite(Number(prevR)) ? Math.floor(Number(prevR)) : '';
-      return (
-        '<span class="stelvio-rank-name-meta" title="전체 순위' +
-        (prevNT ? ', 전일 ' + prevNT + '위 대비' : '') +
-        '">(' +
-        overallPart +
-        '<span class="stelvio-rank-meta-sep" aria-hidden="true">/</span>' +
-        changeInline +
-        ')</span>'
-      );
+    if (!changeInline) {
+      changeInline =
+        '<span class="stelvio-rank-change stelvio-rank-change--inline stelvio-rank-change--flat" title="전날 대비">-</span>';
     }
-    if (overallPart) {
-      return (
-        '<span class="stelvio-rank-name-meta" title="전체 순위(Supremo)">(' +
-        overallPart +
-        ')</span>'
-      );
-    }
-    return changeOnly;
+    var rankPart =
+      '<span class="stelvio-rank-overall" title="크루 내 순위">' + crewRank + '위</span>';
+    var prevNT =
+      prevR != null && isFinite(Number(prevR)) ? Math.floor(Number(prevR)) : '';
+    return (
+      '<span class="stelvio-rank-name-meta" title="크루 내 순위' +
+      (prevNT ? ', 전일 보드 ' + prevNT + '위 대비' : '') +
+      '">(' +
+      rankPart +
+      '<span class="stelvio-rank-meta-sep" aria-hidden="true">/</span>' +
+      changeInline +
+      ')</span>'
+    );
+  }
+
+  /** @deprecated buildCrewMemberRankMetaHtml 사용 */
+  function buildGroupMemberRankMetaHtml(item, leaderboardRows, listCategory) {
+    return buildCrewMemberRankMetaHtml(item);
   }
 
   function formatNoticeDate(ts) {
@@ -309,6 +314,7 @@
     crewMetricLabel: crewMetricLabel,
     crewMetricUnit: crewMetricUnit,
     buildCrewMemberRankedList: buildCrewMemberRankedList,
+    buildCrewMemberRankMetaHtml: buildCrewMemberRankMetaHtml,
     buildGroupMemberRankMetaHtml: buildGroupMemberRankMetaHtml,
     rankingNoticeMaxLen: rankingNoticeMaxLen,
     formatNoticeDate: formatNoticeDate
