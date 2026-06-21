@@ -4,22 +4,19 @@
 (function () {
   'use strict';
 
-  var RUN = 'RUN';
-
-  function normalizeGroupCategory(raw) {
-    var svc = window.openRidingGroupService;
-    if (svc && typeof svc.normalizeRidingGroupCategory === 'function') {
-      return svc.normalizeRidingGroupCategory(raw);
-    }
-    var c = raw != null ? String(raw).trim().toUpperCase() : '';
-    return c === RUN ? RUN : 'CYCLE';
+  function rgCatApi() {
+    return window.ridingGroupCategory || {};
   }
 
-  /** RUN 크루 탭 — category=RUN 소모임만 */
+  /** RUN 크루 탭 — category=RUN 소모임만 (레거시는 방장 RUN 프로필 추론) */
   function filterRunCrewGroups(rows) {
-    if (!rows || !rows.length) return [];
-    return rows.filter(function (gr) {
-      return normalizeGroupCategory(gr && gr.category) === RUN;
+    var api = rgCatApi();
+    if (typeof api.filterRidingGroupsByBoardCategory === 'function') {
+      return api.filterRidingGroupsByBoardCategory(rows, 'RUN');
+    }
+    return (rows || []).filter(function (gr) {
+      var c = gr && gr.category != null ? String(gr.category).trim().toUpperCase() : '';
+      return c === 'RUN';
     });
   }
 
