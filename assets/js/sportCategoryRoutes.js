@@ -113,6 +113,12 @@
     if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
   }
 
+  /** RUN 베이스캠프 → 대시보드(분석) */
+  function openRunDashboardFromBasecamp() {
+    setActiveSport('run');
+    if (typeof showScreen === 'function') showScreen('runDashboardScreen');
+  }
+
   /** 모임 화면 홈 버튼 — 진입 카테고리 기준 베이스캠프 */
   function goOpenRidingMoimHomeBasecamp() {
     if (resolveOpenRidingMoimCategory() === 'RUN') enterRunBasecamp();
@@ -138,6 +144,7 @@
     resolveOpenRidingMoimCategory: resolveOpenRidingMoimCategory,
     navigateToRidingMoimFromBasecamp: navigateToRidingMoimFromBasecamp,
     navigateToRunCrewFromBasecamp: navigateToRunCrewFromBasecamp,
+    openRunDashboardFromBasecamp: openRunDashboardFromBasecamp,
     goOpenRidingMoimHomeBasecamp: goOpenRidingMoimHomeBasecamp,
     shouldShowSettingsProfileCard: shouldShowSettingsProfileCard
   };
@@ -152,6 +159,7 @@
   window.resolveOpenRidingMoimCategory = resolveOpenRidingMoimCategory;
   window.navigateToRidingMoimFromBasecamp = navigateToRidingMoimFromBasecamp;
   window.navigateToRunCrewFromBasecamp = navigateToRunCrewFromBasecamp;
+  window.openRunDashboardFromBasecamp = openRunDashboardFromBasecamp;
   window.goOpenRidingMoimHomeBasecamp = goOpenRidingMoimHomeBasecamp;
   window.shouldShowSettingsProfileCard = shouldShowSettingsProfileCard;
   window.showRunServiceComingSoonModal = showRunServiceComingSoonModal;
