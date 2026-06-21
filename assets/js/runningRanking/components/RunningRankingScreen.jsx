@@ -876,6 +876,7 @@
       (isTssTab ? ' running-ranking-body--tss' : '') +
       (isDistanceTab ? ' running-ranking-body--distance' : '') +
       (isCrewTab ? ' running-ranking-body--crew' : '') +
+      (isCrewTab && crewMetric === 'pace' ? ' running-ranking-body--crew-pace' : '') +
       (initialLoading ? ' running-ranking-body--loading' : '');
 
     return React.createElement('div', { className: rootClass, id: 'running-ranking-react-root' },
