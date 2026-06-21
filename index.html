@@ -32433,22 +32433,35 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       var isRun = !!p.isRun;
       var ACCENT = '#7c3aed';
       var ACCENT_LIGHT = 'rgba(124,58,237,0.1)';
-      var tsbZones = [
-        { range: '+5 초과', label: '회복 · Freshness', guide: '레이스·고강도 세션에 유리', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-        { range: '-10 ~ +5', label: '균형 · Optimal', guide: '계획대로 훈련 유지', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-        { range: '-30 ~ -10', label: '과부하 · Overreaching', guide: '강도·볼륨 줄이고 회복 러닝', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-        { range: '-30 미만', label: '위험 · Overtraining', guide: '강도 훈련 중단, 회복 우선', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' }
-      ];
+      var tsbZones = isRun
+        ? [
+            { range: '+5 초과', label: '회복 · Freshness', guide: '레이스·고강도 세션에 유리', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+            { range: '-10 ~ +5', label: '균형 · Optimal', guide: '계획대로 훈련 유지', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+            { range: '-30 ~ -10', label: '과부하 · Overreaching', guide: '강도·볼륨 줄이고 회복 러닝', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+            { range: '-30 미만', label: '위험 · Overtraining', guide: '강도 훈련 중단, 회복 우선', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' }
+          ]
+        : [
+            { range: '+5 초과', label: '회복 · Freshness', guide: '레이스·FTP 테스트·VO₂max 세션에 유리', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+            { range: '-10 ~ +5', label: '균형 · Optimal', guide: 'Sweet Spot·Tempo 등 계획 훈련 유지', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+            { range: '-30 ~ -10', label: 'Functional Overreaching', guide: 'Z1~Z2 회복 라이딩·강도 빈도 축소', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+            { range: '-30 미만', label: 'Non-functional OR', guide: 'HIIT·레이스 페이스 중단, 회복 우선', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' }
+          ];
       var trendCards = [
         { icon: '↗', title: 'CTL 우상향', desc: '한 달 동안 체력이 서서히 올라감', sub: '훈련량·강도 유지 또는 증가', color: '#3b82f6' },
         { icon: '→', title: 'CTL 평평', desc: '유지 훈련 — 체력 수준 유지', sub: '현재 페이스를 그대로 이어가도 OK', color: '#64748b' },
         { icon: '↘', title: 'CTL 하향', desc: '훈련량 감소·휴식기', sub: '의도적 taper(테이퍼)면 정상', color: '#94a3b8' }
       ];
-      var spikeCards = [
-        { title: 'ATL만 급등', desc: '지난 1주 장거리·고강도·연속 훈련', dot: '#ef4444' },
-        { title: 'CTL도 천천히 상승', desc: '그 부하가 체력으로 전환 중', dot: '#3b82f6' },
-        { title: 'ATL 급등 · CTL 정체', desc: '단기 과부하 — 회복 필요 신호', dot: '#f59e0b' }
-      ];
+      var spikeCards = isRun
+        ? [
+            { title: 'ATL만 급등', desc: '지난 1주 장거리·고강도·연속 훈련', dot: '#ef4444' },
+            { title: 'CTL도 천천히 상승', desc: '그 부하가 체력으로 전환 중', dot: '#3b82f6' },
+            { title: 'ATL 급등 · CTL 정체', desc: '단기 과부하 — 회복 필요 신호', dot: '#f59e0b' }
+          ]
+        : [
+            { title: 'ATL만 급등', desc: '지난 1주 장거리·Sweet Spot·연속 라이딩', dot: '#ef4444' },
+            { title: 'CTL도 천천히 상승', desc: '훈련 부하가 CTL(체력)으로 전환 중', dot: '#3b82f6' },
+            { title: 'ATL 급등 · CTL 정체', desc: '단기 과부하 — Z1~Z2 회복 라이딩 권장', dot: '#f59e0b' }
+          ];
       var examples = [
         { pattern: 'CTL ↗  ATL ↗', note: 'ATL이 더 가파름', result: '훈련량 증가 중. TSB가 -10 아래면 회복일 추가.', border: '#3b82f6' },
         { pattern: 'CTL →  ATL ↘', note: '테이퍼·회복 주', result: '레이스 1~2주 전에 자주 보이는 패턴.', border: '#10b981' },
@@ -35962,18 +35975,40 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               });
             }
 
-            // 훈련 트렌드(최근 1개월): 오늘 포함 30일 전까지 조회, X축은 7일 단위로 표시
+            // 훈련 트렌드(최근 1개월): Coggan PMC(CTL/ATL) — cycleFitnessTrend.js 우선
             var todayForChart = new Date();
             todayForChart.setHours(0, 0, 0, 0);
+            var todayStr = todayForChart.getFullYear() + '-' +
+              String(todayForChart.getMonth() + 1).padStart(2, '0') + '-' +
+              String(todayForChart.getDate()).padStart(2, '0');
+            var cycleLogsInline = logsDeduped;
+            if (typeof window.isRunTrainingLog === 'function') {
+              cycleLogsInline = logsDeduped.filter(function (log) {
+                return !window.isRunTrainingLog(log);
+              });
+            }
+            if (typeof window.buildCycleFitnessTrendChartData === 'function') {
+              var pmcChartData = window.buildCycleFitnessTrendChartData(cycleLogsInline, {
+                today: todayForChart,
+                parseDate: parseDateForDashboard,
+                chartDays: 30,
+                profile: {
+                  ftp: userProfile && userProfile.ftp,
+                  lthr: userProfile && (userProfile.lthr != null ? userProfile.lthr : userProfile.threshold_hr),
+                  threshold_hr: userProfile && userProfile.threshold_hr,
+                  max_hr: userProfile && (userProfile.max_hr != null ? userProfile.max_hr : userProfile.maxHr),
+                  peak_performances: userProfile && userProfile.peak_performances
+                }
+              });
+              if (isMounted) setFitnessData(pmcChartData || []);
+              if (isMounted && userProfile && typeof window.persistFitnessDemographicSampleAsync === 'function') {
+                window.persistFitnessDemographicSampleAsync(userProfile, pmcChartData || []).catch(function () {});
+              }
+            } else {
             var thirtyDaysAgoForChart = new Date(todayForChart);
             thirtyDaysAgoForChart.setDate(todayForChart.getDate() - 30);
-            
-            // 날짜 범위 문자열 생성 (parseDateForDashboard와 동일한 형식 사용)
-            var todayStr = todayForChart.getFullYear() + '-' + 
-              String(todayForChart.getMonth() + 1).padStart(2, '0') + '-' + 
-              String(todayForChart.getDate()).padStart(2, '0');
-            var thirtyDaysAgoStr = thirtyDaysAgoForChart.getFullYear() + '-' + 
-              String(thirtyDaysAgoForChart.getMonth() + 1).padStart(2, '0') + '-' + 
+            var thirtyDaysAgoStr = thirtyDaysAgoForChart.getFullYear() + '-' +
+              String(thirtyDaysAgoForChart.getMonth() + 1).padStart(2, '0') + '-' +
               String(thirtyDaysAgoForChart.getDate()).padStart(2, '0');
             
             // 🔒 날짜별 TSS 합산 (날짜 파싱 함수 사용)
@@ -36110,6 +36145,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (isMounted) setFitnessData(chartData);
             if (isMounted && userProfile && typeof window.persistFitnessDemographicSampleAsync === 'function') {
               window.persistFitnessDemographicSampleAsync(userProfile, chartData).catch(function() {});
+            }
             }
 
             if (isMounted) {
@@ -39680,6 +39716,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/dashboard/dashboardAICache.js"></script>
   <!-- Dashboard 리팩터링: 반드시 마지막에 로드하여 window.PerformanceDashboard 덮어쓰기 -->
   <!-- defer: React(react.production.min.js)가 defer이므로 동기 로드 시 훅 초기화가 먼저 돌아 경고 발생 -->
+  <!-- CYCLE PMC (CTL/ATL/TSB) — RUN pmcCalculator와 분리 -->
+  <script src="assets/js/dashboard/cyclePmcCalculator.js"></script>
+  <script src="assets/js/dashboard/cycleFitnessTrend.js"></script>
   <script defer src="assets/js/dashboard/useDashboardData.js"></script>
   <script src="assets/js/dashboard/components/AICoachHeroCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/dashboard/components/DailyQuickStats.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
