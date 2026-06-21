@@ -64,9 +64,16 @@ const series = computePmcSeries(daily, {
   endDate: new Date('2026-06-02T12:00:00'),
 });
 assert(series.length === 2, 'series length');
-assert(series[0]!.form_tsb === 0, 'day1 TSB before load');
 assert(series[0]!.daily_tss === 100, 'day1 TSS');
+assert(
+  Math.abs(series[0]!.form_tsb - (series[0]!.fitness_ctl - series[0]!.fatigue_atl)) < 0.05,
+  'day1 TSB equals CTL-ATL after load',
+);
 assert(series[1]!.form_tsb < 0, 'day2 TSB negative after load');
+assert(
+  Math.abs(series[1]!.form_tsb - (series[1]!.fitness_ctl - series[1]!.fatigue_atl)) < 0.05,
+  'day2 TSB equals CTL-ATL',
+);
 
 const chart = buildPmcChartData(
   [

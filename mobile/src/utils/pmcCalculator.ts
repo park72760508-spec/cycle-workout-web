@@ -344,10 +344,10 @@ export function computePmcSeries(
   const series: PmcChartPoint[] = [];
 
   for (const ymd of dates) {
-    const tsb = round1(ctl - atl);
     const tssToday = round1(dailyTss[ymd] ?? 0);
     ctl = round1(ctl + (tssToday - ctl) / ctlTau);
     atl = round1(atl + (tssToday - atl) / atlTau);
+    const tsb = round1(ctl - atl);
     series.push({
       date: ymd,
       fitness_ctl: ctl,
