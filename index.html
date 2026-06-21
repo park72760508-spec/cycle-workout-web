@@ -3690,7 +3690,7 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-ranking" id="btnRunBasecampRanking" onclick="if(typeof openRunningRankingBoard==='function')openRunningRankingBoard();" aria-label="랭킹보드">
                 <span>랭킹보드</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnRunBasecampCareer" onclick="if(typeof showScreen==='function')showScreen('runTrainingJournalScreen');" aria-label="나의 기록">
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnRunBasecampCareer" onclick="if(typeof openRunDashboardFromBasecamp==='function')openRunDashboardFromBasecamp();else if(typeof showScreen==='function')showScreen('runDashboardScreen');" aria-label="나의 기록">
                 <span>나의 기록</span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnRunBasecampCrewMoim" onclick="if(typeof navigateToRunCrewFromBasecamp==='function')navigateToRunCrewFromBasecamp();else if(typeof showScreen==='function')showScreen('openRidingRoomScreen');" aria-label="러닝 크루">
