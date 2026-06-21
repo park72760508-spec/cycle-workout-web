@@ -285,6 +285,97 @@
     return timeSec * Math.pow(toDistKm / fromDistKm, RIEGEL_FATIGUE);
   }
 
+  function speedMpsToPaceSecPerKm(speedMps) {
+    var mps = Number(speedMps);
+    if (!isFinite(mps) || mps <= 0) return null;
+    if (window.runningRankingFormat && typeof window.runningRankingFormat.speedToPaceSecPerKm === 'function') {
+      return window.runningRankingFormat.speedToPaceSecPerKm(mps, true);
+    }
+    return 1000 / mps;
+  }
+
+  /** 단일 구간(7k·5k) 피크 페이스 → 리겔 예측 10k 페이스(sec/km) */
+  function infer10kPaceSecFromShorterDistancePeak(paceSecAtDist, fromDistKm) {
+    var pace = Number(paceSecAtDist);
+    var distKm = Number(fromDistKm);
+    if (!isFinite(pace) || pace <= 0 || !isFinite(distKm) || distKm <= 0) return null;
+    var totalSec = pace * distKm;
+    var predicted10kSec = riegelPredictTotalSec(totalSec, distKm, 10);
+    if (predicted10kSec == null || !isFinite(predicted10kSec) || predicted10kSec <= 0) return null;
+    return predicted10kSec / 10;
+  }
+
+  /**
+   * 러닝 크루 레벨 판단 — 최근 90일 efforts 기준
+   * 1순위 10k 피크 → 2순위 7k 피크 TP → 3순위 5k 피크 TP
+   * @param {object[]} efforts
+   * @param {string} cutoffYmd YYYY-MM-DD (포함)
+   */
+  function resolveRunCrewLevelPaceFromEfforts(efforts, cutoffYmd) {
+    var max10 = 0;
+    var max7 = 0;
+    var max5 = 0;
+    (efforts || []).forEach(function (eff) {
+      var ds = String(eff.activity_date || '').slice(0, 10);
+      if (!ds || (cutoffYmd && ds < cutoffYmd)) return;
+      var s10 = Number(eff.speed_10k) || 0;
+      var s7 = Number(eff.speed_7k) || 0;
+      var s5 = Number(eff.speed_5k) || 0;
+      if (s10 > max10) max10 = s10;
+      if (s7 > max7) max7 = s7;
+      if (s5 > max5) max5 = s5;
+    });
+
+    var paceSec = null;
+    var source = null;
+    var inferred = false;
+    var referenceNote = null;
+    var paceLabel = null;
+
+    if (max10 > 0) {
+      paceSec = speedMpsToPaceSecPerKm(max10);
+      source = '10k';
+      inferred = false;
+      paceLabel = '나의 10k 피크 페이스 (최근 90일)';
+      referenceNote = '참조: 최근 90일 10k 구간 최고 페이스';
+    } else if (max7 > 0) {
+      var pace7 = speedMpsToPaceSecPerKm(max7);
+      paceSec = infer10kPaceSecFromShorterDistancePeak(pace7, 7);
+      source = '7k_tp';
+      inferred = true;
+      paceLabel = '나의 10k 역치 페이스 (TP)';
+      referenceNote = '참조: 7k 피크 페이스 기반 10k 역치(TP) 유추';
+    } else if (max5 > 0) {
+      var pace5 = speedMpsToPaceSecPerKm(max5);
+      paceSec = infer10kPaceSecFromShorterDistancePeak(pace5, 5);
+      source = '5k_tp';
+      inferred = true;
+      paceLabel = '나의 10k 역치 페이스 (TP)';
+      referenceNote = '참조: 5k 피크 페이스 기반 10k 역치(TP) 유추';
+    }
+
+    if (paceSec == null || !isFinite(paceSec) || paceSec <= 0) {
+      return {
+        secPerKm: null,
+        display: null,
+        source: null,
+        inferred: false,
+        paceLabel: null,
+        referenceNote: null
+      };
+    }
+
+    var parts = formatPaceDisplayParts(paceSec);
+    return {
+      secPerKm: paceSec,
+      display: parts.display ? parts.display + '/km' : null,
+      source: source,
+      inferred: inferred,
+      paceLabel: paceLabel,
+      referenceNote: referenceNote
+    };
+  }
+
   /**
    * 3k/5k/7k 페이스 → 리겔 예측 + 가중치(7k 50%, 5k 35%, 3k 15%) 합산 10k 페이스
    * @returns {{ secPerKm: number, inferredFrom: string, weightsUsed: object[] }|null}
@@ -431,6 +522,8 @@
     computeRunPaceLevelBarStep: computeRunPaceLevelBarStep,
     resolveRunHexagonTierBadge: resolveRunHexagonTierBadge,
     riegelPredictTotalSec: riegelPredictTotalSec,
+    infer10kPaceSecFromShorterDistancePeak: infer10kPaceSecFromShorterDistancePeak,
+    resolveRunCrewLevelPaceFromEfforts: resolveRunCrewLevelPaceFromEfforts,
     infer10kPaceSecWeightedFromShorterDistances: infer10kPaceSecWeightedFromShorterDistances,
     computeThresholdPaceFromPeaks: computeThresholdPaceFromPeaks,
     extractHexagonPaceContext: extractHexagonPaceContext,
