@@ -553,7 +553,7 @@
           starRefreshTimerRef.current = null;
         }
       };
-    }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments]);
+    }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments, isCrewTab, filteredCrewGroups.length, crewMetric, gender, category]);
 
     var unitLabel = useMemo(function () {
       if (isCrewTab) {
@@ -875,6 +875,7 @@
       (isPaceTab ? ' running-ranking-body--pace' : '') +
       (isTssTab ? ' running-ranking-body--tss' : '') +
       (isDistanceTab ? ' running-ranking-body--distance' : '') +
+      (isCrewTab ? ' running-ranking-body--crew' : '') +
       (initialLoading ? ' running-ranking-body--loading' : '');
 
     return React.createElement('div', { className: rootClass, id: 'running-ranking-react-root' },
@@ -968,9 +969,11 @@
           ),
           React.createElement('div', {
             id: 'runningRankingListBody',
-            className: 'stelvio-category-body running-ranking-list-body running-ranking-list-body--avatar-align running-ranking-list-body--overall' +
+            className: 'stelvio-category-body running-ranking-list-body running-ranking-list-body--avatar-align' +
+              (isCrewTab ? ' stelvio-ranking-list-body--group-tab' : ' running-ranking-list-body--overall') +
               (activeTab === 'distance' ? ' running-ranking-list-body--distance' : '') +
-              (isOverallTab && showOverallSegments ? ' running-ranking-list-body--segments-on' : ' running-ranking-list-body--segments-off')
+              (isOverallTab && showOverallSegments ? ' running-ranking-list-body--segments-on' : '') +
+              (!isCrewTab && !showOverallSegments ? ' running-ranking-list-body--segments-off' : '')
           }, listBody)
         ),
         isOverallTab ? React.createElement(RunningRankingStarLegend) : null,

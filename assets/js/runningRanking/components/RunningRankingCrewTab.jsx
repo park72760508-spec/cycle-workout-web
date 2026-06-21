@@ -155,8 +155,9 @@
     var setMembersLoading = _membersLoading[1];
 
     var membersUnsubRef = useRef(null);
-    var Row = window.RunningRankingRow;
+    var GroupMemberRow = window.RunningRankingGroupMemberRow;
     var memberTabId = crewApi().metricToTabId ? crewApi().metricToTabId(crewMetric) : 'overall';
+    var memberMetricLabel = crewApi().crewMetricLabel ? crewApi().crewMetricLabel(crewMetric) : '';
 
     var stopMembersSub = useCallback(function () {
       if (membersUnsubRef.current) {
@@ -236,6 +237,17 @@
       return list;
     }, [expandedId, members, leaderboardRows, crewMetric, gender, category, paceDistance, listFilter, currentUserId]);
 
+    useEffect(function () {
+      if (!expandedId || membersLoading || !memberRankedList.length) return;
+      var raf = requestAnimationFrame(function () {
+        var soc = window.runningRankingSocial;
+        if (soc && typeof soc.refreshStarSlots === 'function') {
+          soc.refreshStarSlots();
+        }
+      });
+      return function () { cancelAnimationFrame(raf); };
+    }, [expandedId, membersLoading, memberRankedList, socialVer, crewMetric, gender, category, listFilter]);
+
     function toggleGroup(gid) {
       var g = gid != null ? String(gid).trim() : '';
       if (!g) return;
@@ -280,34 +292,51 @@
 
         var memberBlock = null;
         if (isExp) {
+          var membersAriaLabel =
+            '선택 크루 멤버 ' + memberMetricLabel + ' 순위' +
+            (membersLoading ? ' 로딩' : '');
           if (membersLoading) {
-            memberBlock = React.createElement('p', {
-              className: 'stelvio-ranking-empty stelvio-ranking-loading-local',
-              style: { margin: '10px 0 10px 12px' }
-            }, '멤버 불러오는 중…');
-          } else if (!memberRankedList.length) {
-            memberBlock = React.createElement('p', {
-              className: 'stelvio-ranking-empty',
-              style: { margin: '10px 0 12px 20px', fontSize: '12px' }
-            }, listFilter === 'interest'
-              ? '관심·친구·그룹멤버에 해당하는 멤버가 없습니다.'
-              : '해당 조건에 집계된 멤버가 없습니다.');
-          } else if (Row) {
             memberBlock = React.createElement('div', {
               className: 'stelvio-group-members-block',
               role: 'region',
-              'aria-label': '선택 크루 멤버 ' + (crewApi().crewMetricLabel ? crewApi().crewMetricLabel(crewMetric) : '') + ' 순위'
+              'aria-label': membersAriaLabel
+            },
+              React.createElement('p', {
+                className: 'stelvio-ranking-empty stelvio-ranking-loading-local',
+                style: { margin: '10px 0 10px 12px' }
+              }, '멤버 불러오는 중…')
+            );
+          } else if (!memberRankedList.length) {
+            memberBlock = React.createElement('div', {
+              className: 'stelvio-group-members-block',
+              role: 'region',
+              'aria-label': membersAriaLabel
+            },
+              React.createElement('p', {
+                className: 'stelvio-ranking-empty',
+                style: { margin: '10px 0 12px 20px', fontSize: '12px' }
+              }, listFilter === 'interest'
+                ? '관심·친구·그룹멤버에 해당하는 멤버가 없습니다.'
+                : '해당 조건에 집계된 멤버가 없습니다.')
+            );
+          } else if (GroupMemberRow) {
+            memberBlock = React.createElement('div', {
+              className: 'stelvio-group-members-block',
+              role: 'region',
+              'aria-label': membersAriaLabel
             },
               memberRankedList.map(function (item) {
-                return React.createElement(Row, {
+                var rankMetaHtml = crewApi().buildGroupMemberRankMetaHtml
+                  ? crewApi().buildGroupMemberRankMetaHtml(item, leaderboardRows, category)
+                  : '';
+                return React.createElement(GroupMemberRow, {
                   key: String(item.userId) + '-' + item.rank + '-' + socialVer,
                   item: item,
                   tabId: memberTabId,
                   currentUserId: currentUserId,
                   viewerIdentity: viewerIdentity,
                   listCategory: category,
-                  socialVer: socialVer,
-                  extraRowClass: ' stelvio-rank-row--group-member stelvio-group-member-row',
+                  rankMetaHtml: rankMetaHtml,
                   groupRole: item._groupRole
                 });
               })
