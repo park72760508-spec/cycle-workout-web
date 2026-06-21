@@ -441,7 +441,7 @@ function shiftYmd(ymd, deltaDays) {
 }
 
 /**
- * RUN eTP — 최근 6개월 run_activity_efforts + activities.activity_date
+ * RUN eTP — 최근 12개월 run_activity_efforts + activities.activity_date
  * @param {string} firebaseUid
  * @param {number} [limit=400]
  */
@@ -458,7 +458,7 @@ async function fetchUserRunEffortsRecent(firebaseUid, limit = 400) {
   if (!userUuid) return [];
 
   const cap = Math.min(1000, Math.max(1, Number(limit) || 400));
-  const fromYmd = shiftYmd(seoulTodayYmd(), -180);
+  const fromYmd = shiftYmd(seoulTodayYmd(), -365);
 
   const { data: efforts, error: effErr } = await supabase
     .from("run_activity_efforts")
@@ -602,7 +602,7 @@ function mapActivityRowToTrainingLog(row) {
 }
 
 /**
- * RUN 훈련 로그 — Supabase activities (최근 6개월, Run 계열)
+ * RUN 훈련 로그 — Supabase activities (최근 12개월, Run 계열)
  * @param {string} firebaseUid
  * @param {number} [limit=400]
  */
@@ -619,7 +619,7 @@ async function fetchUserRunActivitiesRecent(firebaseUid, limit = 400) {
   if (!userUuid) return [];
 
   const cap = Math.min(1000, Math.max(1, Number(limit) || 400));
-  const fromYmd = shiftYmd(seoulTodayYmd(), -180);
+  const fromYmd = shiftYmd(seoulTodayYmd(), -365);
 
   const { data, error } = await supabase
     .from("activities")
