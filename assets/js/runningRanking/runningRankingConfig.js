@@ -71,6 +71,14 @@
     { value: 'Leggenda', label: '60대 이상' }
   ];
 
+  /** 크루 탭 항목 — CYCLE 클럽 탭 GC·TSS·거리·독주와 동일 역할 */
+  var CREW_METRIC_OPTIONS = [
+    { value: 'overall', label: '종합' },
+    { value: 'pace', label: '구간' },
+    { value: 'tss', label: 'TSS' },
+    { value: 'distance', label: '거리' }
+  ];
+
   var SCREEN_ID = 'runningRankingScreen';
 
   /** 진입점 — RUN 베이스캠프 랭킹보드 버튼 */
@@ -87,6 +95,7 @@
     CATEGORY_LABELS: CATEGORY_LABELS,
     CATEGORY_TITLES: CATEGORY_TITLES,
     CATEGORY_OPTIONS: CATEGORY_OPTIONS,
+    CREW_METRIC_OPTIONS: CREW_METRIC_OPTIONS,
     DEFAULT_CATEGORY: 'Supremo',
     SCREEN_ID: SCREEN_ID,
     ROUTE_ENTRIES: ROUTE_ENTRIES,
