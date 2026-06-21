@@ -34237,7 +34237,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // 나의 성장 트렌드: 구간 선택(Max~60분) · 좌측 통합 Y축 · 참고선: 전 성별·연령 코호트 피크 평균
+    // 나의 성장 트렌드: 구간 선택(Max~60분) · 좌측 통합 Y축 · 참고선: 본인 연중(차트 구간) 파워·심박 PR
     function growthTrendGetWattAt(d, slot) {
       if (!d) return null;
       if (d.growthWattsSlots && d.growthWattsSlots[slot] != null && d.growthWattsSlots[slot] > 0) return d.growthWattsSlots[slot];
@@ -34362,17 +34362,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var hrData = data.map(function (d) {
             return growthTrendGetHrAt(d, slot);
           });
-          var ref =
-            !isRun &&
-            typeof window.getGrowthStelvioReferencePowerHr === 'function'
-              ? window.getGrowthStelvioReferencePowerHr(slot, userProfile || null)
-              : { watts: 200, hr: 150, cohortAvgWkg: 4.5, cohortAvgPeakHrBpm: 165, growthAgeBracket: 'global' };
           var validW = wattsData.filter(function (v) {
             return v != null && !isNaN(v) && v > 0;
           });
           var validH = hrData.filter(function (v) {
             return v != null && !isNaN(v) && v > 0;
           });
+          var prW = validW.length ? Math.max.apply(null, validW) : null;
+          var prH = validH.length ? Math.max.apply(null, validH) : null;
           var yDomainMin = 0;
           var yDomainMax = 400;
           var ySpeedMin = 0;
@@ -34384,9 +34381,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               ySpeedMin = Math.max(0, Math.min.apply(null, validW) - 0.15);
               ySpeedMax = Math.max.apply(null, validW) + 0.2;
             }
+            if (prW != null) {
+              ySpeedMin = Math.min(ySpeedMin, Math.max(0, prW - 0.15));
+              ySpeedMax = Math.max(ySpeedMax, prW + 0.2);
+            }
             if (validH.length) {
               yHrMin = Math.max(60, Math.min.apply(null, validH) - 8);
               yHrMax = Math.max.apply(null, validH) + 12;
+            }
+            if (prH != null) {
+              yHrMin = Math.min(yHrMin, Math.max(60, prH - 8));
+              yHrMax = Math.max(yHrMax, prH + 12);
             }
             if (ySpeedMax <= ySpeedMin) {
               ySpeedMin = 2;
@@ -34397,7 +34402,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               yHrMax = 190;
             }
           } else {
-            var cand = [ref.watts, ref.hr];
+            var cand = [];
+            if (prW != null) cand.push(prW);
+            if (prH != null) cand.push(prH);
             validW.forEach(function (v) {
               cand.push(v);
             });
@@ -34416,8 +34423,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var refHArr = [];
           var ri;
           for (ri = 0; ri < n; ri++) {
-            refWArr.push(ref.watts);
-            refHArr.push(ref.hr);
+            refWArr.push(prW);
+            refHArr.push(prH);
           }
           var growthPrPlugin = {
             id: 'growthTrendPrMarkers',
@@ -34600,9 +34607,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               datasets: [
                 {
                   order: 1,
-                  label: isRun ? '전체 사용자 평균 속도' : '전체 사용자 평균 파워',
+                  label: isRun ? '연중 페이스 PR' : '연중 파워 PR',
                   data: refWArr,
-                  borderColor: '#9ca3af',
+                  borderColor: GROWTH_PANEL_REF_LINE,
                   borderWidth: 2,
                   borderDash: [5, 5],
                   backgroundColor: 'transparent',
@@ -34610,14 +34617,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   fill: false,
                   pointRadius: 0,
                   spanGaps: true,
-                  hidden: !!isRun,
+                  hidden: prW == null,
                   yAxisID: isRun ? 'ySpeed' : 'yUnified'
                 },
                 {
                   order: 2,
-                  label: '전체 사용자 평균 심박',
+                  label: '연중 심박 PR',
                   data: refHArr,
-                  borderColor: '#ea580c',
+                  borderColor: GROWTH_LINE_HR,
                   borderWidth: 2,
                   borderDash: [4, 4],
                   backgroundColor: 'transparent',
@@ -34625,7 +34632,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   fill: false,
                   pointRadius: 0,
                   spanGaps: true,
-                  hidden: !!isRun,
+                  hidden: prH == null,
                   yAxisID: isRun ? 'yHr' : 'yUnified'
                 },
                 {
@@ -34938,18 +34945,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: GROWTH_LINE_HR }}></span>
               심박
             </span>
-            {!isRun ? (
-              <>
-            <span className="inline-flex items-center gap-1 text-gray-600">
-              <span className="inline-block w-4 border-t-2 border-dashed border-gray-400"></span>
-              전체 사용자 평균 파워
+            <span className="inline-flex items-center gap-1" style={{ color: GROWTH_PANEL_REF_LINE }}>
+              <span className="inline-block w-4 border-t-2 border-dashed" style={{ borderColor: GROWTH_PANEL_REF_LINE }}></span>
+              {isRun ? '연중 페이스 PR' : '연중 파워 PR'}
             </span>
-            <span className="inline-flex items-center gap-1 text-orange-700">
-              <span className="inline-block w-4 border-t-2 border-dashed border-orange-500"></span>
-              전체 사용자 평균 심박
+            <span className="inline-flex items-center gap-1 text-red-600">
+              <span className="inline-block w-4 border-t-2 border-dashed border-red-600"></span>
+              연중 심박 PR
             </span>
-              </>
-            ) : null}
           </div>
         </DashboardCard>
       );
