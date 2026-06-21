@@ -141,6 +141,11 @@
     var paceDistance = props.paceDistance || '5k';
     var listFilter = props.listFilter || 'all';
     var socialVer = props.socialVer || 0;
+    var rankMovementByKey = props.rankMovementByKey || {};
+    var rankMovementSource = props.rankMovementSource || '';
+    var rankMovementAsOfSeoul = props.rankMovementAsOfSeoul || '';
+    var leaderboardSource = props.leaderboardSource || '';
+    var leaderboardAsOfSeoul = props.leaderboardAsOfSeoul || '';
 
     var _expanded = useState(null);
     var expandedId = _expanded[0];
@@ -222,7 +227,14 @@
           metric: crewMetric,
           gender: gender,
           category: category,
-          paceDistance: paceDistance
+          paceDistance: paceDistance,
+          movement: {
+            rankMovementByKey: rankMovementByKey,
+            rankMovementSource: rankMovementSource,
+            rankMovementAsOfSeoul: rankMovementAsOfSeoul,
+            leaderboardSource: leaderboardSource,
+            leaderboardAsOfSeoul: leaderboardAsOfSeoul
+          }
         })
         : [];
       if (listFilter === 'interest') {
@@ -235,7 +247,11 @@
         }
       }
       return list;
-    }, [expandedId, members, leaderboardRows, crewMetric, gender, category, paceDistance, listFilter, currentUserId]);
+    }, [
+      expandedId, members, leaderboardRows, crewMetric, gender, category, paceDistance,
+      listFilter, currentUserId, rankMovementByKey, rankMovementSource, rankMovementAsOfSeoul,
+      leaderboardSource, leaderboardAsOfSeoul
+    ]);
 
     useEffect(function () {
       if (!expandedId || membersLoading || !memberRankedList.length) return;
@@ -328,11 +344,14 @@
               'aria-label': membersAriaLabel
             },
               memberRankedList.map(function (item) {
-                var rankMetaHtml = crewApi().buildGroupMemberRankMetaHtml
-                  ? crewApi().buildGroupMemberRankMetaHtml(item, leaderboardRows, category)
-                  : '';
+                var rankMetaHtml = crewApi().buildCrewMemberRankMetaHtml
+                  ? crewApi().buildCrewMemberRankMetaHtml(item)
+                  : (crewApi().buildGroupMemberRankMetaHtml
+                    ? crewApi().buildGroupMemberRankMetaHtml(item, leaderboardRows, category)
+                    : '');
                 return React.createElement(GroupMemberRow, {
-                  key: String(item.userId) + '-' + item.rank + '-' + socialVer,
+                  key: String(item.userId) + '-' + item.rank + '-' + crewMetric + '-' +
+                    paceDistance + '-' + (item.valueLabel || '') + '-' + socialVer,
                   item: item,
                   tabId: memberTabId,
                   currentUserId: currentUserId,

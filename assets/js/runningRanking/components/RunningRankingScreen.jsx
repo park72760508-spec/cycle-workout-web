@@ -813,7 +813,12 @@
         crewMetric: crewMetric,
         paceDistance: paceDistance,
         listFilter: listFilter,
-        socialVer: socialVer
+        socialVer: socialVer,
+        rankMovementByKey: rankMovementByKey,
+        rankMovementSource: rankMovementSource,
+        rankMovementAsOfSeoul: rankMovementAsOfSeoul,
+        leaderboardSource: leaderboardSource,
+        leaderboardAsOfSeoul: leaderboardAsOfSeoul
       });
     } else if (isCrewTab) {
       listBody = React.createElement('p', { className: 'stelvio-ranking-empty' },
