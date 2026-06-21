@@ -6566,6 +6566,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   box-sizing: border-box;
 }
 #stelvioRankingScreen .stelvio-metric-dropdown,
+#runningRankingScreen .stelvio-metric-dropdown,
 #runningRankingScreen .stelvio-gender-dropdown,
 #runningRankingScreen .stelvio-category-dropdown {
   position: relative;
@@ -27986,14 +27987,22 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   gap: 6px;
   padding-bottom: 2px;
 }
+#runningRankingScreen .stelvio-metric-dropdown,
 #runningRankingScreen .stelvio-gender-dropdown,
 #runningRankingScreen .stelvio-category-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
   padding: 3px 8px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   box-shadow: none;
   background: #f3f4f6;
   min-width: 0;
+}
+#runningRankingScreen .stelvio-metric-dropdown {
+  min-width: 64px;
 }
 #runningRankingScreen .stelvio-category-dropdown {
   min-width: 0;
@@ -28133,6 +28142,11 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   margin-left: auto;
   margin-right: auto;
   flex-wrap: wrap;
+}
+#runningRankingScreen .running-ranking-body--crew-pace .running-ranking-pace-filter {
+  display: flex;
+  margin-top: 4px;
+  margin-bottom: 4px;
 }
 .running-ranking-list-card {
   margin-bottom: 12px;
