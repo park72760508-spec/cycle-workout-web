@@ -111,6 +111,60 @@
     return Array.isArray(json.efforts) ? json.efforts : [];
   }
 
+  var RUN_PEAK_MAX_HR_BPM = 220;
+  var RUN_PEAK_MIN_HR_BPM = 50;
+
+  function extractRunLogDateYmd(log) {
+    if (!log) return '';
+    if (log.date != null && typeof log.date === 'string') {
+      return String(log.date).trim().slice(0, 10);
+    }
+    if (log.completed_at) return String(log.completed_at).slice(0, 10);
+    return '';
+  }
+
+  function extractRunLogPeakHr(log) {
+    var d = log || {};
+    return Math.max(
+      Number(d.max_hr) || 0,
+      Number(d.max_heartrate) || 0,
+      Number(d.max_hr_5sec) || 0
+    );
+  }
+
+  /**
+   * RUN activities(Supabase) 수집 심박 중 피크 max_hr
+   * @param {string} userId Firebase UID
+   * @param {{ limit?: number }} [options]
+   * @returns {Promise<{ maxHr: number, maxHrDate?: string|null }|null>}
+   */
+  async function fetchRunPeakMaxHrFromLogs(userId, options) {
+    options = options || {};
+    if (!userId) return null;
+    try {
+      var logs = await getUserRunTrainingLogs(userId, {
+        limit: options.limit || 1000,
+      });
+      logs = Array.isArray(logs) ? logs : [];
+      var bestHr = 0;
+      var bestDate = null;
+      logs.forEach(function (log) {
+        if (typeof window.isRunTrainingLog === 'function' && !window.isRunTrainingLog(log)) return;
+        var hr = extractRunLogPeakHr(log);
+        if (hr >= RUN_PEAK_MIN_HR_BPM && hr <= RUN_PEAK_MAX_HR_BPM && hr > bestHr) {
+          bestHr = hr;
+          bestDate = extractRunLogDateYmd(log) || null;
+        }
+      });
+      return bestHr > 0 ? { maxHr: bestHr, maxHrDate: bestDate } : null;
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[runEffortsReadClient] fetchRunPeakMaxHrFromLogs failed:', userId, e);
+      }
+      return null;
+    }
+  }
+
   /**
    * RUN 훈련 로그 — Supabase activities (최근 12개월)
    * @param {string} userId Firebase UID
@@ -264,12 +318,14 @@
   window.getUserRunEfforts = getUserRunEfforts;
   window.getUserRunTrainingLogs = getUserRunTrainingLogs;
   window.getUserRunWeeklyTss = getUserRunWeeklyTss;
+  window.fetchRunPeakMaxHrFromLogs = fetchRunPeakMaxHrFromLogs;
   window.buildRunCoachCleanLogs = buildRunCoachCleanLogs;
   window.buildPeakPerformancesFromRunEfforts = buildPeakPerformancesFromRunEfforts;
   window.runEffortsReadClient = {
     getUserRunEfforts: getUserRunEfforts,
     getUserRunTrainingLogs: getUserRunTrainingLogs,
     getUserRunWeeklyTss: getUserRunWeeklyTss,
+    fetchRunPeakMaxHrFromLogs: fetchRunPeakMaxHrFromLogs,
     buildRunCoachCleanLogs: buildRunCoachCleanLogs,
     buildPeakPerformancesFromRunEfforts: buildPeakPerformancesFromRunEfforts,
   };
