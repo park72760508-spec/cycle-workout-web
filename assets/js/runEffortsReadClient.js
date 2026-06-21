@@ -112,7 +112,7 @@
   }
 
   /**
-   * RUN 훈련 로그 — Supabase activities (최근 6개월)
+   * RUN 훈련 로그 — Supabase activities (최근 12개월)
    * @param {string} userId Firebase UID
    * @param {{ limit?: number }} [options]
    * @returns {Promise<object[]>}
