@@ -672,46 +672,93 @@
           growthRows.sort(function(a, b) { return (a.sortKey || '').localeCompare(b.sortKey || ''); });
           if (isMounted) setGrowthTrendData(growthRows);
 
-          var byDateChart = {};
-          logsDeduped.forEach(function(log) {
-            var ds = parseDate(log.date);
-            if (!ds || ds < sixtyDaysStr || ds > todayStr) return;
-            if (!byDateChart[ds]) byDateChart[ds] = { tss: 0 };
-            byDateChart[ds].tss += sanitizeTss(log.tss);
-          });
-          var xAxisDates = [];
-          for (var i = 30; i >= 0; i -= 7) {
-            var d = new Date(today);
-            d.setDate(today.getDate() - i);
-            d.setHours(0, 0, 0, 0);
-            xAxisDates.push(d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()));
+          var cycleLogsForTrend = logsDeduped;
+          if (typeof window.isRunTrainingLog === 'function') {
+            cycleLogsForTrend = logsDeduped.filter(function (log) {
+              return !window.isRunTrainingLog(log);
+            });
           }
-          if (xAxisDates[xAxisDates.length - 1] !== todayStr) xAxisDates.push(todayStr);
-          var fitnessDecay = Math.pow(0.5, 1 / 42);
-          var fatigueDecay = Math.pow(0.5, 1 / 7);
-          function calcFF(targetStr) {
-            var fit = 0, fat = 0;
-            var sorted = Object.keys(byDateChart).sort().filter(function(d) { return d <= targetStr; });
-            for (var idx = sorted.length - 1; idx >= 0; idx--) {
-              var logStr = sorted[idx];
-              var logDate = new Date(logStr + 'T00:00:00');
-              var targetDate = new Date(targetStr + 'T00:00:00');
-              var daysAgo = Math.floor((targetDate.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
-              if (daysAgo < 0) continue;
-              var tss = byDateChart[logStr].tss || 0;
-              fit += tss * Math.pow(fitnessDecay, daysAgo);
-              if (daysAgo <= 7) fat += tss * Math.pow(fatigueDecay, daysAgo);
-            }
-            return { fitness: Math.round(fit * 10) / 10, fatigue: Math.round(fat * 10) / 10 };
-          }
-          var chartData = xAxisDates.map(function(ds) {
-            var res = calcFF(ds);
-            var logD = new Date(ds + 'T00:00:00');
-            var daysDiff = Math.floor((today.getTime() - logD.getTime()) / (1000 * 60 * 60 * 24));
-            var label = daysDiff === 0 ? '오늘' : '-' + daysDiff + '일';
-            return { date: label, fitness: res.fitness, fatigue: res.fatigue };
-          });
+          var chartData =
+            typeof window.buildCycleFitnessTrendChartData === 'function'
+              ? window.buildCycleFitnessTrendChartData(cycleLogsForTrend, {
+                  today: today,
+                  parseDate: parseDate,
+                  chartDays: 30,
+                  profile: {
+                    ftp: userProfile.ftp,
+                    lthr: userProfile.lthr != null ? userProfile.lthr : userProfile.threshold_hr,
+                    threshold_hr: userProfile.threshold_hr,
+                    max_hr: userProfile.max_hr != null ? userProfile.max_hr : userProfile.maxHr,
+                    peak_performances: userProfile.peak_performances || null
+                  }
+                })
+              : (function () {
+                  var byDateChart = {};
+                  cycleLogsForTrend.forEach(function (log) {
+                    var ds = parseDate(log.date);
+                    if (!ds || ds < sixtyDaysStr || ds > todayStr) return;
+                    if (!byDateChart[ds]) byDateChart[ds] = { tss: 0 };
+                    byDateChart[ds].tss += sanitizeTss(log.tss);
+                  });
+                  var xAxisDates = [];
+                  for (var i = 30; i >= 0; i -= 7) {
+                    var d = new Date(today);
+                    d.setDate(today.getDate() - i);
+                    d.setHours(0, 0, 0, 0);
+                    xAxisDates.push(d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()));
+                  }
+                  if (xAxisDates[xAxisDates.length - 1] !== todayStr) xAxisDates.push(todayStr);
+                  var fitnessDecay = Math.pow(0.5, 1 / 42);
+                  var fatigueDecay = Math.pow(0.5, 1 / 7);
+                  function calcFF(targetStr) {
+                    var fit = 0,
+                      fat = 0;
+                    var sorted = Object.keys(byDateChart)
+                      .sort()
+                      .filter(function (d) {
+                        return d <= targetStr;
+                      });
+                    for (var idx = sorted.length - 1; idx >= 0; idx--) {
+                      var logStr = sorted[idx];
+                      var logDate = new Date(logStr + 'T00:00:00');
+                      var targetDate = new Date(targetStr + 'T00:00:00');
+                      var daysAgo = Math.floor((targetDate.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
+                      if (daysAgo < 0) continue;
+                      var tss = byDateChart[logStr].tss || 0;
+                      fit += tss * Math.pow(fitnessDecay, daysAgo);
+                      if (daysAgo <= 7) fat += tss * Math.pow(fatigueDecay, daysAgo);
+                    }
+                    return { fitness: Math.round(fit * 10) / 10, fatigue: Math.round(fat * 10) / 10 };
+                  }
+                  return xAxisDates.map(function (ds) {
+                    var res = calcFF(ds);
+                    var p = ds.split('-');
+                    var label = parseInt(p[1], 10) + '/' + parseInt(p[2], 10);
+                    return { date: label, dateYmd: ds, fitness: res.fitness, fatigue: res.fatigue };
+                  });
+                })();
           if (isMounted) setFitnessData(chartData);
+          if (isMounted && typeof window.buildCyclePmcTrendPayload === 'function') {
+            var cyclePmcPayload = window.buildCyclePmcTrendPayload(cycleLogsForTrend, {
+              today: today,
+              chartDays: 30,
+              profile: {
+                ftp: userProfile.ftp,
+                lthr: userProfile.lthr != null ? userProfile.lthr : userProfile.threshold_hr,
+                threshold_hr: userProfile.threshold_hr,
+                max_hr: userProfile.max_hr != null ? userProfile.max_hr : userProfile.maxHr,
+                peak_performances: userProfile.peak_performances || null
+              }
+            });
+            if (cyclePmcPayload && cyclePmcPayload.tsbFeedback) {
+              setStats(function (prev) {
+                return Object.assign({}, prev, {
+                  pmcTsbFeedback: cyclePmcPayload.tsbFeedback,
+                  pmcLatestTsb: cyclePmcPayload.latestTsb
+                });
+              });
+            }
+          }
           if (isMounted && userProfile && typeof window.persistFitnessDemographicSampleAsync === 'function') {
             window.persistFitnessDemographicSampleAsync(userProfile, chartData).catch(function() {});
           }
