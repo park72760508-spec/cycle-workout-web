@@ -70,7 +70,7 @@
     }
     var privateBadgeHtml = s.getPrivateBadgeHtml ? s.getPrivateBadgeHtml(item, currentUserId) : '';
 
-    var rank = Math.floor(Number(item.rank));
+    var rank = Math.floor(Number(item.boardRank != null ? item.boardRank : item.rank));
     if (!isFinite(rank) || rank < 1) rank = 0;
 
     var isCurrent = !!(
@@ -128,7 +128,7 @@
     },
       React.createElement('span', { className: 'stelvio-rank-ranklead' },
         crownChild,
-        React.createElement('span', { className: 'stelvio-rank-pos' }, (rank > 0 ? rank : item.rank) + '위')
+        React.createElement('span', { className: 'stelvio-rank-pos' }, rank > 0 ? (rank + '위') : '—')
       ),
       React.createElement('span', { className: 'stelvio-rank-name' }, nameChildren),
       React.createElement('span', { className: 'stelvio-rank-wkg' }, item.valueLabel || '—')

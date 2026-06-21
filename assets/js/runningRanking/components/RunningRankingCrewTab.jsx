@@ -241,9 +241,6 @@
         var soc = window.runningRankingSocial;
         if (soc && typeof soc.filterRowsByListInterest === 'function') {
           list = soc.filterRowsByListInterest(list, 'interest', currentUserId);
-          list = list.map(function (item, idx) {
-            return Object.assign({}, item, { rank: idx + 1, boardRank: idx + 1 });
-          });
         }
       }
       return list;
@@ -350,8 +347,8 @@
                     ? crewApi().buildGroupMemberRankMetaHtml(item, leaderboardRows, category)
                     : '');
                 return React.createElement(GroupMemberRow, {
-                  key: String(item.userId) + '-' + item.rank + '-' + crewMetric + '-' +
-                    paceDistance + '-' + (item.valueLabel || '') + '-' + socialVer,
+                  key: String(item.userId) + '-br' + (item.boardRank != null ? item.boardRank : item.rank) +
+                    '-' + crewMetric + '-' + paceDistance + '-' + (item.valueLabel || '') + '-' + socialVer,
                   item: item,
                   tabId: memberTabId,
                   currentUserId: currentUserId,
