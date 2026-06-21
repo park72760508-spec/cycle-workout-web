@@ -479,6 +479,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   position: relative !important;
   z-index: 1001 !important;
 }
+#run-dashboard-container {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#run-dashboard-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 body.run-dashboard-active .screen:not(#runDashboardScreen):not(#splashScreen) {
   display: none !important;
   visibility: hidden !important;
@@ -10230,6 +10239,19 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
     font-size: 12px;
     line-height: 1.45;
   }
+}
+/* RUN 분석: 4탭 — fTP 예측 블록과 동일 좌우 폭 · 동일 너비 */
+#run-dashboard-container .DashboardDetailTabs--run .stelvio-run-detail-tabs {
+  width: 100%;
+  max-width: 100%;
+}
+#run-dashboard-container .DashboardDetailTabs--run .stelvio-run-detail-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .profile-zone-table-block {
   margin-bottom: 20px;
