@@ -333,6 +333,10 @@
     var growthTrendData = _useState15[0];
     var setGrowthTrendData = _useState15[1];
 
+    var _useState15b = useState(null);
+    var growthYearlyPr = _useState15b[0];
+    var setGrowthYearlyPr = _useState15b[1];
+
     var _useState16 = useState([]);
     var yearlyPowerPrData = _useState16[0];
     var setYearlyPowerPrData = _useState16[1];
@@ -578,6 +582,11 @@
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
       sixMonthsAgo.setDate(1);
       var sixMonthsStr = sixMonthsAgo.getFullYear() + '-' + pad2(sixMonthsAgo.getMonth() + 1) + '-' + pad2(sixMonthsAgo.getDate());
+      var twelveMonthsAgo = new Date(today);
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+      twelveMonthsAgo.setDate(1);
+      var twelveMonthsStr =
+        twelveMonthsAgo.getFullYear() + '-' + pad2(twelveMonthsAgo.getMonth() + 1) + '-' + pad2(twelveMonthsAgo.getDate());
 
       async function loadRecentLogs() {
         setLogsLoading(true);
@@ -669,7 +678,7 @@
           var byDateGrowth = {};
           effortsForGrowth.forEach(function(eff) {
             var ds = String(eff.activity_date || '').slice(0, 10);
-            if (!ds || ds < sixMonthsStr || ds > todayStr) return;
+            if (!ds || ds < twelveMonthsStr || ds > todayStr) return;
             if (!byDateGrowth[ds]) byDateGrowth[ds] = emptyRunGrowthDay();
             var d = byDateGrowth[ds];
             var si;
@@ -686,6 +695,27 @@
               }
             }
           });
+          var yearlyGrowthPrPayload = (function () {
+            var wattsBySlot = [];
+            var hrBySlot = [];
+            var siY;
+            for (siY = 0; siY < RUN_GROWTH_SLOT_COUNT; siY++) {
+              wattsBySlot[siY] = null;
+              hrBySlot[siY] = null;
+            }
+            Object.keys(byDateGrowth).forEach(function (dsY) {
+              var dayY = byDateGrowth[dsY];
+              for (siY = 0; siY < RUN_GROWTH_SLOT_COUNT; siY++) {
+                if (dayY.w[siY] > 0 && (wattsBySlot[siY] == null || dayY.w[siY] > wattsBySlot[siY])) {
+                  wattsBySlot[siY] = dayY.w[siY];
+                }
+                if (dayY.h[siY] > 0 && (hrBySlot[siY] == null || dayY.h[siY] > hrBySlot[siY])) {
+                  hrBySlot[siY] = dayY.h[siY];
+                }
+              }
+            });
+            return { wattsBySlot: wattsBySlot, hrBySlot: hrBySlot };
+          })();
           var growthRows = [];
           for (var mOff = 5; mOff >= 0; mOff--) {
             var dMonth = new Date(today.getFullYear(), today.getMonth() - mOff, 1);
@@ -730,7 +760,10 @@
             });
           }
           growthRows.sort(function(a, b) { return (a.sortKey || '').localeCompare(b.sortKey || ''); });
-          if (isMounted) setGrowthTrendData(growthRows);
+          if (isMounted) {
+            setGrowthTrendData(growthRows);
+            setGrowthYearlyPr(yearlyGrowthPrPayload);
+          }
 
           var chartData =
             typeof window.buildRunFitnessTrendChartData === 'function'
@@ -1169,6 +1202,7 @@
       vo2TrendData,
       weeklyTssTrendData,
       growthTrendData,
+      growthYearlyPr,
       yearlyPowerPrData,
       stravaStatus,
       tpCalcLoading: ftpCalcLoading,
