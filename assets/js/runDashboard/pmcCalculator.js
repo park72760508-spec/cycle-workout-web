@@ -224,10 +224,10 @@
     var atl = 0;
     var series = [];
     dates.forEach(function (ymd) {
-      var tsb = round1(ctl - atl);
       var tssToday = round1(dailyTss[ymd] || 0);
       ctl = round1(ctl + (tssToday - ctl) / ctlTau);
       atl = round1(atl + (tssToday - atl) / atlTau);
+      var tsb = round1(ctl - atl);
       series.push({
         date: ymd,
         fitness_ctl: ctl,
