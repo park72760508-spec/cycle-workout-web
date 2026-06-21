@@ -1,0 +1,289 @@
+/**
+ * RUN 랭킹보드 > 크루 탭 — CYCLE 랭킹보드 > 클럽 탭 그룹 UI와 동일 스타일
+ * (#stelvioRankingScreen 그룹 탭 규칙 미러)
+ */
+#runningRankingScreen .stelvio-rank-row:not(.stelvio-rank-dots-row):not(.stelvio-rank-expand-row):not(.stelvio-group-pick-row) {
+  display: flex;
+  align-items: center;
+}
+#runningRankingScreen .stelvio-rank-ranklead {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 3.85rem;
+  width: 3.85rem;
+  max-width: 3.85rem;
+  min-width: 3.85rem;
+  gap: 4px;
+  margin-right: 6px;
+  box-sizing: border-box;
+}
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin-right: 0;
+  flex-shrink: 0;
+}
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown--placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-crown img {
+  width: 18px;
+  height: 18px;
+}
+#runningRankingScreen .stelvio-rank-ranklead .stelvio-rank-pos {
+  min-width: 0;
+  margin-right: 0;
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-avatar-btn,
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > button.stelvio-rank-avatar-btn {
+  flex-shrink: 0;
+}
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-name-text {
+  min-width: 0;
+  flex-shrink: 1;
+}
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-change,
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-change-slot,
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-star-slot,
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-star-btn,
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .ranking-private-badge,
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-friend-star,
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-group-star,
+#runningRankingScreen .stelvio-rank-row > .stelvio-rank-name > .stelvio-rank-owner-badge {
+  flex-shrink: 0;
+}
+#runningRankingScreen button.stelvio-group-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  color: inherit;
+  margin: 6px -4px 4px -4px;
+  padding: 12px 10px 12px 12px;
+  background: rgba(102, 126, 234, 0.05);
+  border: none;
+  border-left: 3px solid #667eea;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+#runningRankingScreen button.stelvio-group-pick-row:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.65);
+  outline-offset: 2px;
+}
+#runningRankingScreen button.stelvio-group-pick-row--open {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.1) 0%, rgba(102, 126, 234, 0.035) 100%);
+}
+#runningRankingScreen .stelvio-group-pick-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#runningRankingScreen .stelvio-group-pick-main .stelvio-rank-name-text {
+  font-weight: 700;
+  color: #1f2937;
+}
+#runningRankingScreen .stelvio-group-members-block {
+  margin: 0 -4px 10px -4px;
+  padding: 8px 8px 6px 10px;
+  background: rgba(248, 250, 252, 0.97);
+  border-left: 3px solid #cbd5e1;
+  border-radius: 0 10px 10px 8px;
+  box-sizing: border-box;
+}
+#runningRankingScreen .stelvio-group-members-block > .stelvio-ranking-empty {
+  margin: 10px 0 10px 4px !important;
+}
+#runningRankingScreen .stelvio-group-member-row.stelvio-rank-row {
+  justify-content: flex-start !important;
+  margin: 1px -2px !important;
+  padding: 3px 4px !important;
+  border-bottom: 1px solid #eef2f7 !important;
+  border-radius: 6px !important;
+}
+#runningRankingScreen .stelvio-group-member-row.stelvio-rank-row:last-child {
+  border-bottom: none !important;
+}
+#runningRankingScreen .stelvio-group-member-row .stelvio-rank-name-text .stelvio-rank-name-meta {
+  margin-left: 2px;
+  font-size: 0.88em;
+  font-weight: 600;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+#runningRankingScreen .stelvio-group-member-row .stelvio-rank-name-text .stelvio-rank-overall {
+  color: #475569;
+}
+#runningRankingScreen .stelvio-group-member-row .stelvio-rank-name-text .stelvio-rank-meta-sep {
+  margin: 0 1px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+#runningRankingScreen .stelvio-group-member-row .stelvio-rank-name-text .stelvio-rank-change {
+  margin-left: 0;
+  font-size: 0.92em;
+  vertical-align: baseline;
+}
+#runningRankingScreen .stelvio-group-member-row .stelvio-rank-name-text .stelvio-rank-change--inline {
+  margin-left: 0;
+}
+#runningRankingScreen .stelvio-group-pick-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+#runningRankingScreen .stelvio-group-pick-meta {
+  font-size: 0.9em;
+  color: #64748b;
+  flex-shrink: 0;
+}
+#runningRankingScreen .stelvio-group-pick-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #7c3aed;
+  white-space: nowrap;
+}
+#runningRankingScreen .stelvio-group-pick-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35em;
+  min-width: 1.35em;
+  font-size: 1.05em;
+  line-height: 1;
+  font-weight: 800;
+}
+#runningRankingScreen button.stelvio-group-pick-row--open .stelvio-group-pick-toggle {
+  color: #5b21b6;
+}
+#runningRankingScreen .stelvio-group-notice-slot.hidden {
+  display: none;
+}
+#runningRankingScreen .stelvio-group-notice-block {
+  margin: 0 -4px 6px -4px;
+  padding: 10px 10px 10px 12px;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  border-radius: 0 10px 10px 8px;
+  box-sizing: border-box;
+}
+#runningRankingScreen .stelvio-group-notice-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin-bottom: 8px;
+}
+#runningRankingScreen .stelvio-group-notice-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #92400e;
+}
+#runningRankingScreen .stelvio-group-notice-date {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b45309;
+}
+#runningRankingScreen .stelvio-group-notice-date--muted {
+  color: #a8a29e;
+  font-weight: 500;
+}
+#runningRankingScreen .stelvio-group-notice-body {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #44403c;
+  word-break: break-word;
+}
+#runningRankingScreen .stelvio-group-notice-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #1f2937;
+  background: #fff;
+  resize: vertical;
+  min-height: 72px;
+}
+#runningRankingScreen .stelvio-group-notice-input:focus {
+  outline: 2px solid rgba(124, 58, 237, 0.35);
+  border-color: #a78bfa;
+}
+#runningRankingScreen .stelvio-group-notice-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#runningRankingScreen .stelvio-group-notice-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #78716c;
+}
+#runningRankingScreen .stelvio-group-notice-save {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: 8px;
+  min-height: 34px;
+}
+#runningRankingScreen .stelvio-group-list-avatar-slot {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
+  line-height: 0;
+}
+#runningRankingScreen .stelvio-group-member-row .stelvio-rank-ranklead .stelvio-rank-crown,
+#runningRankingScreen .stelvio-group-member-row .stelvio-rank-ranklead .stelvio-rank-crown img {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+}
+#runningRankingScreen .stelvio-ranking-list-body--group-tab {
+  padding-top: 4px;
+}
+#runningRankingScreen .stelvio-ranking-empty--group {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #64748b;
+}
