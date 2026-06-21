@@ -410,6 +410,11 @@
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
       sixMonthsAgo.setDate(1);
       var sixMonthsStr = sixMonthsAgo.getFullYear() + '-' + pad2(sixMonthsAgo.getMonth() + 1) + '-' + pad2(sixMonthsAgo.getDate());
+      var twelveMonthsAgo = new Date(today);
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+      twelveMonthsAgo.setDate(1);
+      var twelveMonthsStr =
+        twelveMonthsAgo.getFullYear() + '-' + pad2(twelveMonthsAgo.getMonth() + 1) + '-' + pad2(twelveMonthsAgo.getDate());
 
       function formatPrDateMmDd(ds) {
         if (!ds) return null;
@@ -613,13 +618,13 @@
           function emptyGrowthDay() {
             return { w: [0, 0, 0, 0, 0, 0, 0], h: [0, 0, 0, 0, 0, 0, 0] };
           }
-          var rawSixMonthsForGrowth = raw.filter(function(log) {
+          var rawTwelveMonthsForGrowth = raw.filter(function(log) {
             var ds = parseDate(log.date);
-            return ds && ds >= sixMonthsStr && ds <= todayStr;
+            return ds && ds >= twelveMonthsStr && ds <= todayStr;
           });
           var logsForGrowth = typeof window.dedupeTrainingLogsByDateStravaFirst === 'function'
-            ? window.dedupeTrainingLogsByDateStravaFirst(rawSixMonthsForGrowth)
-            : rawSixMonthsForGrowth;
+            ? window.dedupeTrainingLogsByDateStravaFirst(rawTwelveMonthsForGrowth)
+            : rawTwelveMonthsForGrowth;
           var byDateGrowth = {};
           logsForGrowth.forEach(function(log) {
             var ds = parseDate(log.date);
@@ -637,7 +642,7 @@
             }
           });
           var growthRows = [];
-          for (var mOff = 5; mOff >= 0; mOff--) {
+          for (var mOff = 11; mOff >= 0; mOff--) {
             var dMonth = new Date(today.getFullYear(), today.getMonth() - mOff, 1);
             var y = dMonth.getFullYear();
             var m = dMonth.getMonth() + 1;
