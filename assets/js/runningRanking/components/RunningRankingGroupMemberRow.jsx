@@ -70,8 +70,8 @@
     }
     var privateBadgeHtml = s.getPrivateBadgeHtml ? s.getPrivateBadgeHtml(item, currentUserId) : '';
 
-    var rank = Math.floor(Number(item.boardRank != null ? item.boardRank : item.rank));
-    if (!isFinite(rank) || rank < 1) rank = 0;
+    var listRank = Math.floor(Number(item._crewRank));
+    if (!isFinite(listRank) || listRank < 1) listRank = 0;
 
     var isCurrent = !!(
       s.isViewerListItem
@@ -83,8 +83,8 @@
       'stelvio-rank-row stelvio-rank-row--group-member stelvio-group-member-row' +
       (isCurrent ? ' stelvio-rank-current' : '');
 
-    var crownChild = rank >= 1 && rank <= 3 && medalImg(rank)
-      ? React.createElement('span', { key: 'crown', className: 'stelvio-rank-crown' }, medalImg(rank))
+    var crownChild = listRank >= 1 && listRank <= 3 && medalImg(listRank)
+      ? React.createElement('span', { key: 'crown', className: 'stelvio-rank-crown' }, medalImg(listRank))
       : React.createElement('span', {
           key: 'crown-ph',
           className: 'stelvio-rank-crown stelvio-rank-crown--placeholder',
@@ -128,7 +128,7 @@
     },
       React.createElement('span', { className: 'stelvio-rank-ranklead' },
         crownChild,
-        React.createElement('span', { className: 'stelvio-rank-pos' }, rank > 0 ? (rank + '위') : '—')
+        React.createElement('span', { className: 'stelvio-rank-pos' }, listRank > 0 ? (listRank + '위') : '—')
       ),
       React.createElement('span', { className: 'stelvio-rank-name' }, nameChildren),
       React.createElement('span', { className: 'stelvio-rank-wkg' }, item.valueLabel || '—')

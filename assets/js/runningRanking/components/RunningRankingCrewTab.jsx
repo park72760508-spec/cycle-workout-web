@@ -243,6 +243,9 @@
           list = soc.filterRowsByListInterest(list, 'interest', currentUserId);
         }
       }
+      list = list.map(function (item, idx) {
+        return Object.assign({}, item, { _crewRank: idx + 1 });
+      });
       return list;
     }, [
       expandedId, members, leaderboardRows, crewMetric, gender, category, paceDistance,
@@ -347,8 +350,9 @@
                     ? crewApi().buildGroupMemberRankMetaHtml(item, leaderboardRows, category)
                     : '');
                 return React.createElement(GroupMemberRow, {
-                  key: String(item.userId) + '-br' + (item.boardRank != null ? item.boardRank : item.rank) +
-                    '-' + crewMetric + '-' + paceDistance + '-' + (item.valueLabel || '') + '-' + socialVer,
+                  key: String(item.userId) + '-cr' + (item._crewRank != null ? item._crewRank : '') +
+                    '-br' + (item.boardRank != null ? item.boardRank : item.rank) +
+                    '-' + crewMetric + '-' + paceDistance + '-' + socialVer,
                   item: item,
                   tabId: memberTabId,
                   currentUserId: currentUserId,
