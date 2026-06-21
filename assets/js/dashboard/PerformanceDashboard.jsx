@@ -136,6 +136,7 @@
     var vo2TrendData = data.vo2TrendData || [];
     var weeklyTssTrendData = data.weeklyTssTrendData || [];
     var growthTrendData = data.growthTrendData || [];
+    var growthYearlyPr = data.growthYearlyPr || null;
     var yearlyPowerPrData = data.yearlyPowerPrData || [];
     var recentLogs = data.recentLogs || [];
     var ftpCalcLoading = data.ftpCalcLoading;
@@ -430,6 +431,7 @@
               vo2TrendData: vo2TrendData,
               weeklyTssTrendData: weeklyTssTrendData,
               growthTrendData: growthTrendData,
+              growthYearlyPr: growthYearlyPr,
               yearlyPowerPrData: yearlyPowerPrData,
               stats: stats,
               logsLoading: logsLoading,

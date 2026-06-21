@@ -187,6 +187,10 @@
     var growthTrendData = _useState15[0];
     var setGrowthTrendData = _useState15[1];
 
+    var _useState15b = useState(null);
+    var growthYearlyPr = _useState15b[0];
+    var setGrowthYearlyPr = _useState15b[1];
+
     var _useState16 = useState([]);
     var yearlyPowerPrData = _useState16[0];
     var setYearlyPowerPrData = _useState16[1];
@@ -641,8 +645,29 @@
               if (hv > d.h[si]) d.h[si] = hv;
             }
           });
+          var yearlyGrowthPrPayload = (function () {
+            var wattsBySlot = [];
+            var hrBySlot = [];
+            var siY;
+            for (siY = 0; siY < 7; siY++) {
+              wattsBySlot[siY] = null;
+              hrBySlot[siY] = null;
+            }
+            Object.keys(byDateGrowth).forEach(function (dsY) {
+              var dayY = byDateGrowth[dsY];
+              for (siY = 0; siY < 7; siY++) {
+                if (dayY.w[siY] > 0 && (wattsBySlot[siY] == null || dayY.w[siY] > wattsBySlot[siY])) {
+                  wattsBySlot[siY] = dayY.w[siY];
+                }
+                if (dayY.h[siY] > 0 && (hrBySlot[siY] == null || dayY.h[siY] > hrBySlot[siY])) {
+                  hrBySlot[siY] = dayY.h[siY];
+                }
+              }
+            });
+            return { wattsBySlot: wattsBySlot, hrBySlot: hrBySlot };
+          })();
           var growthRows = [];
-          for (var mOff = 11; mOff >= 0; mOff--) {
+          for (var mOff = 5; mOff >= 0; mOff--) {
             var dMonth = new Date(today.getFullYear(), today.getMonth() - mOff, 1);
             var y = dMonth.getFullYear();
             var m = dMonth.getMonth() + 1;
@@ -686,7 +711,10 @@
             });
           }
           growthRows.sort(function(a, b) { return (a.sortKey || '').localeCompare(b.sortKey || ''); });
-          if (isMounted) setGrowthTrendData(growthRows);
+          if (isMounted) {
+            setGrowthTrendData(growthRows);
+            setGrowthYearlyPr(yearlyGrowthPrPayload);
+          }
 
           var cycleLogsForTrend = logsDeduped;
           if (typeof window.isRunTrainingLog === 'function') {
@@ -1175,6 +1203,7 @@
       vo2TrendData,
       weeklyTssTrendData,
       growthTrendData,
+      growthYearlyPr,
       yearlyPowerPrData,
       stravaStatus,
       ftpCalcLoading,
