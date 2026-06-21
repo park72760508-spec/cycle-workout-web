@@ -256,6 +256,9 @@
    * @returns {Promise<void>}
    */
   function persistFitnessDemographicSampleAsync(userProfile, fitnessChartRows) {
+    if (typeof global.persistCycleFitnessDemographicSampleAsync === 'function') {
+      return global.persistCycleFitnessDemographicSampleAsync(userProfile, fitnessChartRows);
+    }
     var uid = userProfile && userProfile.id;
     var db = global.firestoreV9;
     if (!uid || !db || !Array.isArray(fitnessChartRows) || fitnessChartRows.length === 0) {
@@ -300,11 +303,15 @@
         if (!docSnapExists(snap)) return null;
         var d = snap.data();
         if (!d || d.minSamplesMet !== true) return null;
-        var avg = Number(d.avgFitness);
+        var avg = Number(d.avgFitness != null ? d.avgFitness : d.avgCtl);
         if (!isFinite(avg) || avg < 0) return null;
+        var pmcModel = d.pmcModel != null ? String(d.pmcModel) : '';
+        if (pmcModel !== 'coggan_ctl' && avg > 200) return null;
+        if (avg > 250) return null;
         return {
           avgFitness: Math.round(avg * 10) / 10,
           userCount: Math.max(0, Math.floor(Number(d.userCount) || 0)),
+          pmcModel: pmcModel || undefined
         };
       })
       .catch(function () {
