@@ -214,6 +214,7 @@
     var vo2TrendData = p.vo2TrendData || [];
     var weeklyTssTrendData = p.weeklyTssTrendData || [];
     var growthTrendData = p.growthTrendData || [];
+    var growthYearlyPr = p.growthYearlyPr || null;
     var yearlyPowerPrData = p.yearlyPowerPrData || [];
     var logsLoading = p.logsLoading;
     var logsLoadError = p.logsLoadError;
@@ -363,7 +364,7 @@
             DashboardCard,
             { title: '나의 성장 트렌드' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
-          ) : GrowthTrendChart && React.createElement(GrowthTrendChart, { data: growthTrendData, userProfile: userProfile, isRun: isRun }),
+          ) : GrowthTrendChart && React.createElement(GrowthTrendChart, { data: growthTrendData, yearlyGrowthPr: growthYearlyPr, userProfile: userProfile, isRun: isRun }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: 'VO₂max 트렌드' },
