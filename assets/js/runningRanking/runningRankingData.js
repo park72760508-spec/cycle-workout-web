@@ -378,6 +378,40 @@
     return rows.filter(function (r) { return rowAgeCategory(r) === cat; });
   }
 
+  function buildListItemFromRawRow(raw, tabId, opts) {
+    if (!raw) return null;
+    opts = opts || {};
+    var list = [];
+    if (tabId === 'overall') {
+      var genderKey = opts.gender || 'all';
+      var categoryKey = opts.category || 'Supremo';
+      var score = getOverallTotalScore(raw, genderKey, categoryKey);
+      pushListItem(list, raw, {
+        value: score != null && isFinite(score) && score > 0 ? score : -1,
+        valueLabel: score != null && isFinite(score) && score > 0 ? fmt().formatScore(score) : '—'
+      });
+    } else if (tabId === 'pace') {
+      var pace = getPaceForDistance(raw, opts.paceDistance || '5k');
+      pushListItem(list, raw, {
+        value: pace.paceSec != null ? pace.paceSec : -1,
+        valueLabel: pace.paceStr || '—'
+      });
+    } else if (tabId === 'tss') {
+      var tss = parseWeeklyTss(raw);
+      pushListItem(list, raw, {
+        value: tss > 0 ? tss : -1,
+        valueLabel: tss > 0 ? fmt().formatTss(tss) : '—'
+      });
+    } else if (tabId === 'distance') {
+      var km = Number(raw.distance_30d_km);
+      pushListItem(list, raw, {
+        value: isFinite(km) && km > 0 ? km : -1,
+        valueLabel: isFinite(km) && km > 0 ? fmt().formatDistanceKm(km) : '—'
+      });
+    }
+    return list.length ? list[0] : null;
+  }
+
   /**
    * @param {object[]} rows
    * @param {string} tabId
@@ -1559,6 +1593,8 @@
     getViewerIdentity: getViewerIdentity,
     listItemMatchesViewer: listItemMatchesViewer,
     buildRankedList: buildRankedList,
+    buildListItemFromRawRow: buildListItemFromRawRow,
+    getPaceForDistance: getPaceForDistance,
     buildCrewRankedList: buildCrewRankedList,
     resolveChartBoardUserId: resolveChartBoardUserId,
     enrichChartPayloadWithViewerItem: enrichChartPayloadWithViewerItem,

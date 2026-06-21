@@ -148,7 +148,7 @@
     function placeholderItem(mem, raw, memUid) {
       var board = raw ? rowUserId(raw) : '';
       var fb = raw ? rowFirebaseUid(raw) : '';
-      return {
+      var base = {
         userId: board || memUid,
         firebaseUid: fb || memUid,
         socialUserId: fb || board || memUid,
@@ -158,6 +158,21 @@
         valueLabel: '—',
         _groupRole: mem.role || 'member'
       };
+      if (raw && dataApi.buildListItemFromRawRow) {
+        var fromRaw = dataApi.buildListItemFromRawRow(raw, tabId, {
+          gender: gender,
+          category: category,
+          paceDistance: paceDistance
+        });
+        if (fromRaw) {
+          return Object.assign({}, fromRaw, {
+            name: memName(mem, raw) || fromRaw.name,
+            profileUrl: memProfile(mem, raw) || fromRaw.profileUrl,
+            _groupRole: mem.role || 'member'
+          });
+        }
+      }
+      return base;
     }
 
     var merged = [];
