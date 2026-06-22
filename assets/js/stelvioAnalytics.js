@@ -524,9 +524,14 @@
       });
   }
 
+  var lastRecordedScreen = { id: '', at: 0 };
+
   function recordScreenVisit(screenId) {
     screenId = resolveAnalyticsScreenId(screenId);
     if (!screenId || !TRACKED_SCREENS[screenId]) return;
+    var now = Date.now();
+    if (lastRecordedScreen.id === screenId && now - lastRecordedScreen.at < 400) return;
+    lastRecordedScreen = { id: screenId, at: now };
     var dateKey = getLocalDateKey();
     if (screenId === 'basecampScreen') {
       ensureBasecampUniqueForUser();
@@ -538,6 +543,12 @@
   global.stelvioAnalyticsOnScreenChange = function (screenId) {
     try {
       recordScreenVisit(screenId);
+    } catch (e) {}
+  };
+
+  global.stelvioAnalyticsFlushNow = function (reason) {
+    try {
+      flushPendingToFirestore(reason || 'manual');
     } catch (e) {}
   };
 
@@ -652,6 +663,9 @@
 
   /** 접속 통계 화면 UI (미니 달력 + 카드) */
   global.renderAccessStatsView = function () {
+    if (typeof global.stelvioAnalyticsFlushNow === 'function') {
+      global.stelvioAnalyticsFlushNow('access-stats-view');
+    }
     if (!global._accessStatsSelectedYMD) global._accessStatsSelectedYMD = getLocalDateKey();
     var d0 = parseYMD(global._accessStatsSelectedYMD);
     accessStatsViewMonth = new Date(d0.getFullYear(), d0.getMonth(), 1);
@@ -795,6 +809,7 @@
     body.innerHTML =
       '<div style="text-align:center;padding:24px;color:#64748b;">불러오는 중…</div>';
 
+    function loadDoc() {
     if (global.authV9 && global.authV9.currentUser && global.firestoreV9) {
       getFirestoreMod()
         .then(function (mod) {
@@ -832,6 +847,14 @@
           (e && e.message ? e.message : '오류') +
           ')</div>';
       });
+    }
+
+    if (typeof global.stelvioAnalyticsFlushNow === 'function') {
+      global.stelvioAnalyticsFlushNow('access-stats-fetch');
+      global.setTimeout(loadDoc, 350);
+    } else {
+      loadDoc();
+    }
   }
 
   global.renderAccessStatsCalendar = function (host) {
