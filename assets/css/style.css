@@ -629,7 +629,7 @@ body.run-dashboard-active .screen:not(#runDashboardScreen):not(#splashScreen) {
   display: flex !important;
   flex-direction: column;
   align-items: stretch;
-  justify-content: flex-start;
+  justify-content: center;
   /* 화면 확장: max-height 제거, safe-area 포함하여 하단 회색 바 제거 */
   min-height: 100vh;
   min-height: 100dvh;
@@ -1036,7 +1036,21 @@ body.run-dashboard-active .screen:not(#runDashboardScreen):not(#splashScreen) {
   min-height: 0;
   flex-shrink: 0;
 }
-#basecampScreen.active > .connection-main-container,
+#basecampScreen.active > .connection-main-container {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  width: 100%;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  align-self: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+}
 #indoorTrainingSubScreen.active > .connection-main-container {
   flex: 1 1 auto;
   min-height: 0;
