@@ -68,7 +68,11 @@
     bluetoothIndividualScreen: true,
     affiliateScreen: true,
     profileScreen: true,
-    openRidingRoomScreen: true
+    openRidingRoomScreen: true,
+    runningRankingScreen: true,
+    runDashboardScreen: true,
+    runTrainingJournalScreen: true,
+    runCrewScreen: true
   };
 
   global.STELVIO_ANALYTICS_LABELS = {
@@ -78,17 +82,41 @@
     openRidingRoomScreen: '라이딩 벙',
     workoutScreen: '워크아웃',
     trainingJournalScreen: '라이딩 기록',
-    runTrainingJournalScreen: 'Run 기록',
+    runTrainingJournalScreen: 'RUN > RUN 기록',
     scheduleListScreen: '훈련 스케줄',
     performanceDashboardScreen: '대시보드',
     stelvioRankingScreen: '랭킹보드',
     stelvioRankingBoardModal: '랭킹보드(레거시)',
+    runningRankingScreen: 'RUN > 랭킹보드',
+    runDashboardScreen: 'RUN > 대시보드',
+    runCrewScreen: 'RUN > 러닝 크루',
     mobileDashboardScreen: '훈련 화면 (모바일)',
     trainingScreen: '훈련 화면 (태블릿)',
     bluetoothIndividualScreen: '훈련 화면 (그룹)',
     affiliateScreen: '제휴사 목록',
     profileScreen: '사용자 정보'
   };
+
+  /** openRidingRoomScreen — RUN 모드면 러닝 크루로 별도 집계 */
+  function resolveAnalyticsScreenId(screenId) {
+    if (screenId !== 'openRidingRoomScreen') return screenId;
+    var cat = 'CYCLE';
+    try {
+      if (typeof global.resolveOpenRidingMoimCategory === 'function') {
+        cat = global.resolveOpenRidingMoimCategory();
+      } else if (
+        global.sportCategoryRoutes &&
+        typeof global.sportCategoryRoutes.resolveOpenRidingMoimCategory === 'function'
+      ) {
+        cat = global.sportCategoryRoutes.resolveOpenRidingMoimCategory();
+      } else if (global.__openRidingMoimCategory) {
+        cat = String(global.__openRidingMoimCategory).trim().toUpperCase();
+      } else if (global.__stelvioActiveSport === 'run') {
+        cat = 'RUN';
+      }
+    } catch (e) {}
+    return String(cat).trim().toUpperCase() === 'RUN' ? 'runCrewScreen' : screenId;
+  }
 
   function getLocalDateKey(d) {
     d = d || new Date();
@@ -497,6 +525,7 @@
   }
 
   function recordScreenVisit(screenId) {
+    screenId = resolveAnalyticsScreenId(screenId);
     if (!screenId || !TRACKED_SCREENS[screenId]) return;
     var dateKey = getLocalDateKey();
     if (screenId === 'basecampScreen') {
@@ -720,6 +749,10 @@
             ? screens.stelvioRankingScreen
             : screens.stelvioRankingBoardModal
       },
+      { key: 'runningRankingScreen', val: screens.runningRankingScreen },
+      { key: 'runDashboardScreen', val: screens.runDashboardScreen },
+      { key: 'runTrainingJournalScreen', val: screens.runTrainingJournalScreen },
+      { key: 'runCrewScreen', val: screens.runCrewScreen },
       { key: 'mobileDashboardScreen', val: screens.mobileDashboardScreen },
       { key: 'trainingScreen', val: screens.trainingScreen },
       { key: 'bluetoothIndividualScreen', val: screens.bluetoothIndividualScreen },
