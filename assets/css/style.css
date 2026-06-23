@@ -7912,19 +7912,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 /* 랭킹 본문: 대시보드 AI 컨디션 코멘트와 동일 톤(text-sm/text-gray-700), 행 높이 최소화 */
 #stelvioRankingScreen .stelvio-ranking-star-legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-  margin: 6px 0 10px;
-  padding: 6px 8px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: #64748b;
-  line-height: 1.4;
+  display: none !important;
 }
 #stelvioRankingScreen .stelvio-ranking-star-legend-item {
   display: inline-flex;
@@ -8953,15 +8941,27 @@ button.stelvio-rank-avatar-btn:focus-visible {
   gap: 6px 8px;
   align-items: center;
 }
-.stelvio-ranking-list-filter-toggle {
-  display: flex;
+.stelvio-category-header-rank-col {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 3.85rem;
+  width: 3.85rem;
+  max-width: 3.85rem;
+  min-width: 3.85rem;
+  margin-right: 6px;
+  box-sizing: border-box;
   flex-shrink: 0;
-  align-items: stretch;
-  border-radius: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.95);
-  overflow: hidden;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+#stelvioRankingScreen .stelvio-category-header .stelvio-ranking-list-filter-star,
+#runningRankingScreen .stelvio-category-header .stelvio-ranking-list-filter-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+.stelvio-ranking-list-filter-toggle {
+  display: none;
 }
 .stelvio-ranking-filter-chip {
   border: none;
@@ -9020,7 +9020,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
 #stelvioRankingScreen .stelvio-rank-star-svg {
   display: block;
 }
-/* 친구 별: 부모 .stelvio-rank-row .stelvio-rank-name 의 color 상속 → 검정/회색처럼 보임 방지 */
+/* 친구·그룹·관심 별 — 관심 별과 동일 보라 톤 */
 #stelvioRankingScreen .stelvio-rank-friend-star,
 #stelvioRankingScreen .stelvio-rank-name .stelvio-rank-friend-star {
   display: inline-flex;
@@ -9028,9 +9028,9 @@ button.stelvio-rank-avatar-btn:focus-visible {
   justify-content: center;
   font-size: 1rem;
   line-height: 1;
-  color: #22c55e !important;
-  -webkit-text-fill-color: #22c55e;
-  text-shadow: 0 0 1px rgba(34, 197, 94, 0.28);
+  color: #c084fc !important;
+  -webkit-text-fill-color: #c084fc;
+  text-shadow: 0 0 1px rgba(192, 132, 252, 0.28);
   flex-shrink: 0;
   pointer-events: none;
   user-select: none;
@@ -9039,7 +9039,6 @@ button.stelvio-rank-avatar-btn:focus-visible {
   min-width: 1.25em;
   text-align: center;
 }
-/* 그룹멤버 별: 진하지 않은 주황색 */
 #stelvioRankingScreen .stelvio-rank-group-star,
 #stelvioRankingScreen .stelvio-rank-name .stelvio-rank-group-star {
   display: inline-flex;
@@ -9047,9 +9046,9 @@ button.stelvio-rank-avatar-btn:focus-visible {
   justify-content: center;
   font-size: 1rem;
   line-height: 1;
-  color: #fb923c !important;
-  -webkit-text-fill-color: #fb923c;
-  text-shadow: 0 0 1px rgba(251, 146, 60, 0.28);
+  color: #c084fc !important;
+  -webkit-text-fill-color: #c084fc;
+  text-shadow: 0 0 1px rgba(192, 132, 252, 0.28);
   flex-shrink: 0;
   pointer-events: none;
   user-select: none;
@@ -28690,19 +28689,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   color: #764ba2;
 }
 #runningRankingScreen .stelvio-ranking-star-legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-  margin: 6px 0 10px;
-  padding: 6px 8px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: #64748b;
-  line-height: 1.4;
+  display: none !important;
 }
 #runningRankingScreen .stelvio-ranking-star-legend-item {
   display: inline-flex;
@@ -28958,8 +28945,9 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   justify-content: center;
   font-size: 1rem;
   line-height: 1;
-  color: #22c55e !important;
-  -webkit-text-fill-color: #22c55e;
+  color: #c084fc !important;
+  -webkit-text-fill-color: #c084fc;
+  text-shadow: 0 0 1px rgba(192, 132, 252, 0.28);
   flex-shrink: 0;
   pointer-events: none;
   user-select: none;
@@ -28971,8 +28959,9 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   justify-content: center;
   font-size: 1rem;
   line-height: 1;
-  color: #fb923c !important;
-  -webkit-text-fill-color: #fb923c;
+  color: #c084fc !important;
+  -webkit-text-fill-color: #c084fc;
+  text-shadow: 0 0 1px rgba(192, 132, 252, 0.28);
   flex-shrink: 0;
   pointer-events: none;
   user-select: none;
