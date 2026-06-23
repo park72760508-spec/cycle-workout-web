@@ -61,7 +61,7 @@
 
   function RunningRankingListFilterStar(props) {
     var interestOn = props.listFilter === 'interest';
-    return React.createElement('span', { className: 'stelvio-category-header-rank-col' },
+    return React.createElement('span', { className: 'stelvio-category-header-filter-star' },
       React.createElement('button', {
         type: 'button',
         className: 'stelvio-ranking-list-filter-star stelvio-rank-star-btn' +
@@ -971,9 +971,11 @@
             ((isOverallTab || isCrewOverallMetric) ? ' running-ranking-list-card--overall' : '')
         },
           React.createElement('div', { className: 'stelvio-category-header' },
-            listFilterStar,
             React.createElement('span', { className: 'stelvio-category-header-title' },
-              isCrewTab ? '나의 크루' : listCategoryTitle,
+              React.createElement('span', { className: 'stelvio-category-header-title-text' },
+                isCrewTab ? '나의 크루' : listCategoryTitle
+              ),
+              listFilterStar,
               segmentToggle
             ),
             React.createElement('span', { className: 'stelvio-category-header-unit' }, unitLabel)
