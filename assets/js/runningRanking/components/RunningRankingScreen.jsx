@@ -676,8 +676,11 @@
       }, t.label);
     });
 
-    var paceChips = (activeTab === 'pace' || (isCrewTab && crewMetric === 'pace'))
-      ? React.createElement('div', { className: 'stelvio-group-metric-filter running-ranking-pace-filter' },
+    var paceChipsEl = (activeTab === 'pace' || (isCrewTab && crewMetric === 'pace'))
+      ? React.createElement('div', {
+          className: 'stelvio-group-metric-filter running-ranking-pace-filter' +
+            (isCrewTab ? ' running-ranking-pace-filter--crew' : '')
+        },
           React.createElement('div', { className: 'stelvio-group-metric-chips' },
             (cfg().PACE_DISTANCES || []).map(function (d) {
               return React.createElement('button', {
@@ -690,6 +693,8 @@
           )
         )
       : null;
+    var paceChipsAbove = activeTab === 'pace' ? paceChipsEl : null;
+    var paceChipsBelow = isCrewTab && crewMetric === 'pace' ? paceChipsEl : null;
 
     function findOptionLabel(options, value, fallback) {
       for (var i = 0; i < options.length; i++) {
@@ -894,7 +899,7 @@
         React.createElement('div', { className: 'stelvio-duration-chips-wrap' },
           React.createElement('div', { className: 'stelvio-duration-chips', role: 'tablist' }, tabButtons)
         ),
-        paceChips,
+        paceChipsAbove,
         React.createElement('div', { className: 'stelvio-filter-bar-wrap running-ranking-filter-wrap' },
           React.createElement('div', { className: 'stelvio-filter-bar' },
             crewMetricSelect,
@@ -902,6 +907,7 @@
             categorySelect
           )
         ),
+        paceChipsBelow,
         stale && error
           ? React.createElement('p', { className: 'running-ranking-stale-hint' }, '캐시 표시 · ' + error)
           : null
