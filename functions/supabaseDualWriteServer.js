@@ -13,6 +13,7 @@
 const { v5: uuidv5 } = require("uuid");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const { createClient } = require("@supabase/supabase-js");
+const { sanitizePeakPowerWattsOnRow } = require("./peakPowerMonotonic");
 
 const supabaseServiceRoleKey = defineSecret("SUPABASE_SERVICE_ROLE_KEY");
 const supabaseUrlParam = defineString("SUPABASE_URL", {
@@ -412,8 +413,9 @@ function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
   }
 
   const duration = int(log.duration_sec) || int(log.time) || 0;
+  const weightForPeaks = num(log.weight) || num(log.weight_at_ride_kg) || null;
 
-  return {
+  const row = {
     user_id: userId,
     source,
     activity_id: activityId,
@@ -467,6 +469,10 @@ function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
         ? log.time_in_zones
         : null,
   };
+  if (weightForPeaks != null && weightForPeaks > 0) {
+    sanitizePeakPowerWattsOnRow(row, weightForPeaks);
+  }
+  return row;
 }
 
 function getSupabaseAdminClient() {

@@ -5,6 +5,7 @@
  */
 
 const admin = require("firebase-admin");
+const { capPeakWkgMonotonicInPlace } = require("./peakPowerMonotonic");
 
 const EXCLUDED_ACTIVITY_TYPES = new Set(["run", "swim", "walk", "trailrun", "weighttraining"]);
 
@@ -656,6 +657,20 @@ function computeUserPeaksFourWeekOnePeakFromBucketSnaps(userData, bucketSnaps, s
     };
   }
 
+  if (Object.keys(peaks).length) {
+    const wkgMap = {};
+    Object.keys(peaks).forEach((dt) => {
+      wkgMap[dt] = peaks[dt].wkg;
+    });
+    capPeakWkgMonotonicInPlace(wkgMap);
+    Object.keys(peaks).forEach((dt) => {
+      if (wkgMap[dt] !== peaks[dt].wkg) {
+        peaks[dt].wkg = wkgMap[dt];
+        peaks[dt].watts = Math.round(wkgMap[dt] * weightKg);
+      }
+    });
+  }
+
   return Object.keys(peaks).length
     ? { weightKg, peaks, peakMethod: exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK }
     : null;
@@ -697,6 +712,19 @@ function computeUserPeaksAllDurationsFromBucketSnaps(userData, bucketSnaps, star
       const wkg = Math.round((mw / weightKg) * 100) / 100;
       peaks[dt] = { watts: mw, wkg, weightKg };
     }
+  }
+  if (Object.keys(peaks).length) {
+    const wkgMap = {};
+    Object.keys(peaks).forEach((dt) => {
+      wkgMap[dt] = peaks[dt].wkg;
+    });
+    capPeakWkgMonotonicInPlace(wkgMap);
+    Object.keys(peaks).forEach((dt) => {
+      if (wkgMap[dt] !== peaks[dt].wkg) {
+        peaks[dt].wkg = wkgMap[dt];
+        peaks[dt].watts = Math.round(wkgMap[dt] * weightKg);
+      }
+    });
   }
   return Object.keys(peaks).length ? { weightKg, peaks } : null;
 }

@@ -33,6 +33,7 @@ if (!admin.apps.length) {
 }
 
 const rankingDayRollup = require("./rankingDayRollup");
+const { sanitizePeakPowerWattsOnRow } = require("./peakPowerMonotonic");
 const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const stravaDualWrite = require("./stravaDualWrite");
@@ -1544,6 +1545,9 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
   if (max40minWatts != null) logDoc.max_40min_watts = max40minWatts;
   if (max60minWatts != null) logDoc.max_60min_watts = max60minWatts;
+  if (userWeight != null && userWeight > 0) {
+    sanitizePeakPowerWattsOnRow(logDoc, userWeight);
+  }
   if (hrPeaks) {
     if (hrPeaks.max_hr_5sec != null) logDoc.max_hr_5sec = hrPeaks.max_hr_5sec;
     if (hrPeaks.max_hr_1min != null) logDoc.max_hr_1min = hrPeaks.max_hr_1min;
@@ -3314,6 +3318,9 @@ exports.manualStravaSyncWithMmp = onRequest(
           max_40min_watts: max40minWatts,
           max_60min_watts: max60minWatts,
         };
+        if (userWeight != null && userWeight > 0) {
+          sanitizePeakPowerWattsOnRow(logDoc, userWeight);
+        }
         if (hrPeaks) {
           if (hrPeaks.max_hr_5sec != null) logDoc.max_hr_5sec = hrPeaks.max_hr_5sec;
           if (hrPeaks.max_hr_1min != null) logDoc.max_hr_1min = hrPeaks.max_hr_1min;
