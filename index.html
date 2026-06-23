@@ -10872,6 +10872,16 @@
      * @param {boolean} [force] - true면 '오늘 그만 보기' 무시 (나의 기록 랭킹보드 버튼 등)
      */
     async function fetchAndShowWeeklyTop10Modal(force) {
+      if (
+        !force &&
+        typeof window.stelvioShouldAutoShowCycleWeeklyTop10Modal === 'function' &&
+        !window.stelvioShouldAutoShowCycleWeeklyTop10Modal()
+      ) {
+        if (typeof window.finalizeMandatoryIntegratedWeeklyTop10Dismiss === 'function') {
+          window.finalizeMandatoryIntegratedWeeklyTop10Dismiss();
+        }
+        return;
+      }
       if (!force && isWeeklyTop10SuppressActive()) {
         if (typeof window.finalizeMandatoryIntegratedWeeklyTop10Dismiss === 'function') {
           window.finalizeMandatoryIntegratedWeeklyTop10Dismiss();
@@ -38289,6 +38299,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return false;
             if (window.__showScreenRedirectedToAuth === true) return false;
             if (window.__basecampShownAfterAuth !== true) return false;
+            if (
+              typeof window.stelvioShouldAutoShowCycleWeeklyTop10Modal === 'function' &&
+              !window.stelvioShouldAutoShowCycleWeeklyTop10Modal()
+            ) {
+              window.__basecampShownAfterAuth = false;
+              return false;
+            }
             var authScreen = document.getElementById('authScreen');
             var authActive = authScreen && (authScreen.classList.contains('active') || window.getComputedStyle(authScreen).display !== 'none');
             if (authActive) return false;
