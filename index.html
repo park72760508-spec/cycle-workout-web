@@ -12898,6 +12898,8 @@
     var stelvioGroupTabMembersSubForId = null;
     /** 그룹 탭 내 선택된 지표 (기본: 'gc') */
     var stelvioGroupTabMetric = 'gc';
+    /** 구간 탭 내 선택된 피크 duration (Max·1분·…·60분) */
+    var stelvioPeakSegmentLastDuration = 'max';
     /** CYCLE 랭킹 클럽 탭 — RUN 카테고리 소모임 제외 (라이딩/CYCLE만) */
     function stelvioFilterClubTabMyGroups(rows) {
       if (
@@ -14979,10 +14981,10 @@
       stelvioRankingState.duration = 'gc';
       stelvioRankingState.gender = 'all';
       stelvioRankingState.activeCategory = 'Supremo';
-      var tabs = document.querySelectorAll('#stelvioDurationTabs .stelvio-duration-tab');
-      tabs.forEach(function(btn) {
-        btn.classList.toggle('active', btn.getAttribute('data-duration') === 'gc');
-      });
+      stelvioPeakSegmentLastDuration = 'max';
+      if (typeof stelvioSyncDurationTabActiveUi === 'function') {
+        stelvioSyncDurationTabActiveUi();
+      }
       var gSel = document.getElementById('stelvioGenderSelect');
       if (gSel) gSel.value = 'all';
       var gLab = document.getElementById('stelvioGenderLabel');
@@ -15367,6 +15369,7 @@
       var mLblD = document.getElementById('stelvioGroupMetricLabel');
       if (mLblD) mLblD.textContent = stelvioGroupTabCurrentMetricLabel();
       stelvioUpdateGroupRankingFilterUi();
+      if (typeof stelvioSyncPeakSegmentFilterUi === 'function') stelvioSyncPeakSegmentFilterUi();
       var rankScreen = document.getElementById('stelvioRankingScreen');
       if (rankScreen) {
         rankScreen.classList.toggle(
@@ -16157,6 +16160,7 @@
     function stelvioFinalizeRankingBoardInteractiveUi() {
       stelvioTryRestoreRankingByCategoryFromPinned();
       stelvioHideRankingBoardLoadingUi();
+      if (typeof stelvioSyncDurationTabActiveUi === 'function') stelvioSyncDurationTabActiveUi();
       if (typeof stelvioEnsureRankingExpandUiListeners === 'function') {
         stelvioEnsureRankingExpandUiListeners();
       }
@@ -16199,6 +16203,145 @@
     }
     window.stelvioResetRankingListExpansionForNewTab = stelvioResetRankingListExpansionForNewTab;
 
+    /** 구간 탭 UI duration → 실제 fetch duration (Max·1분·…·60분) */
+    function stelvioResolvePeakSegmentTabDuration(uiDur) {
+      if (uiDur === 'peak_segment') {
+        return stelvioPeakSegmentLastDuration || 'max';
+      }
+      return uiDur;
+    }
+    function stelvioSyncPeakSegmentFilterUi() {
+      var filterEl = document.getElementById('stelvioPeakSegmentFilter');
+      if (!filterEl) return;
+      var isPeak =
+        typeof stelvioIsPeakPowerDurationRankingMode === 'function' &&
+        stelvioIsPeakPowerDurationRankingMode();
+      filterEl.classList.toggle('hidden', !isPeak);
+      if (!isPeak || !stelvioRankingState) return;
+      var cur = stelvioRankingState.duration;
+      var chips = filterEl.querySelectorAll('.stelvio-group-metric-chip[data-peak-duration]');
+      for (var ci = 0; ci < chips.length; ci++) {
+        var chip = chips[ci];
+        chip.classList.toggle('active', chip.getAttribute('data-peak-duration') === cur);
+      }
+    }
+    /** 상단 duration 탭 active — 구간 탭은 Max·1분·…·60분 전체에 대해 하나로 표시 */
+    function stelvioSyncDurationTabActiveUi() {
+      var dur = stelvioRankingState && stelvioRankingState.duration;
+      var tabs = document.querySelectorAll('#stelvioDurationTabs .stelvio-duration-tab');
+      for (var ti = 0; ti < tabs.length; ti++) {
+        var btn = tabs[ti];
+        var tabDur = btn.getAttribute('data-duration');
+        var isActive = false;
+        if (tabDur === 'peak_segment') {
+          isActive =
+            typeof stelvioIsPeakPowerDurationRankingMode === 'function' &&
+            stelvioIsPeakPowerDurationRankingMode();
+        } else {
+          isActive = tabDur === dur;
+        }
+        btn.classList.toggle('active', isActive);
+      }
+      stelvioSyncPeakSegmentFilterUi();
+    }
+    window.stelvioSyncDurationTabActiveUi = stelvioSyncDurationTabActiveUi;
+
+    async function stelvioSwitchRankingBoardDuration(nextDur, opts) {
+      opts = opts || {};
+      if (!nextDur || !stelvioRankingState) return;
+      if (stelvioIsPeakPowerDurationForRankChange(nextDur)) {
+        stelvioPeakSegmentLastDuration = nextDur;
+      }
+      if (nextDur === stelvioRankingState.duration) {
+        stelvioScrollRankingBoardToTopSmooth();
+        stelvioSyncDurationTabActiveUi();
+        return;
+      }
+      stelvioRankingFetchGen++;
+      stelvioRankingState.duration = nextDur;
+      stelvioSyncDurationTabActiveUi();
+      var scrollBtn = opts.scrollTabBtn;
+      if (scrollBtn && typeof stelvioScrollDurationTabIntoView === 'function') {
+        stelvioScrollDurationTabIntoView(scrollBtn, 'nearest');
+      }
+      stelvioRankingInvalidatePreRenderViewsExcept(nextDur);
+      stelvioResetRankingListExpansionForNewTab();
+      stelvioApplyDurationModeUi();
+      if (typeof stelvioSyncRankingListHeaderUi === 'function') stelvioSyncRankingListHeaderUi();
+      stelvioScheduleRankingBoardScrollAfterTabApply();
+      if (typeof stelvioEnsureRankingTabViewActive === 'function') {
+        stelvioEnsureRankingTabViewActive(nextDur);
+      }
+      stelvioBeginRankingTabSwitchUi();
+
+      /*
+       * 탭 전환 체감 지연의 핵심 방지:
+       * 이전 구조는 IDB 조회를 시작하자마자 16ms 뒤 네트워크 fetch를 병렬로 열어,
+       * IDB가 조금만 늦어도 fetch 경로가 화면 적용을 선점했다. 이제 RAM/IDB가 먼저 끝난 뒤에만 네트워크로 간다.
+       */
+      var instantTabOk = false;
+      var primed = false;
+      if (typeof stelvioInstantTabSwitchFromMemory === 'function') {
+        try {
+          instantTabOk = await stelvioInstantTabSwitchFromMemory(nextDur);
+        } catch (eInstTab) {
+          instantTabOk = false;
+        }
+      }
+      function stelvioRankingTabSwitchListReady() {
+        return (
+          (typeof stelvioRankingBoardReadyToHideLoading === 'function' &&
+            stelvioRankingBoardReadyToHideLoading()) ||
+          (typeof stelvioRankingListBodyHasDataRows === 'function' &&
+            stelvioRankingListBodyHasDataRows(document.getElementById('stelvioRankingListBody')))
+        );
+      }
+      if (instantTabOk && stelvioRankingTabSwitchListReady()) {
+        stelvioHideRankingBoardLoadingUi();
+      } else {
+        if (typeof stelvioPrimeTabSwitchFromIndexedDb === 'function') {
+          try {
+            primed = await stelvioPrimeTabSwitchFromIndexedDb(nextDur);
+          } catch (ePrimeTab) {
+            primed = false;
+          }
+          if (primed && stelvioRankingTabSwitchListReady()) {
+            stelvioHideRankingBoardLoadingUi();
+          }
+        }
+        /* 클럽 탭: 소모임 목록 플레이스홀더(전역 payload 비움 상태) */
+        if (
+          nextDur === 'group_dist' &&
+          typeof renderStelvioActiveCategory === 'function'
+        ) {
+          renderStelvioActiveCategory();
+          if (stelvioRankingTabSwitchListReady()) {
+            stelvioHideRankingBoardLoadingUi();
+          }
+        }
+      }
+      if (stelvioRankingState.duration !== nextDur) return;
+      if (stelvioRankingTabSwitchTimer) {
+        clearTimeout(stelvioRankingTabSwitchTimer);
+        stelvioRankingTabSwitchTimer = null;
+      }
+      stelvioRankingTabSwitchPendingDur = nextDur;
+      var debounceMs = instantTabOk ? 0 : (primed ? 0 : 1);
+      /* 클럽 탭은 Firestore 소모임 구독 후 목록 표시 → backgroundOnly면 렌더 생략되어 iOS 등에서 스피너 무한 */
+      var allowBackgroundOnly = !!(instantTabOk || primed) && nextDur !== 'group_dist';
+      stelvioRankingTabSwitchTimer = setTimeout(function () {
+        stelvioRankingTabSwitchTimer = null;
+        if (stelvioRankingState.duration !== stelvioRankingTabSwitchPendingDur) return;
+        fetchStelvioPeakPowerRanking({
+          tabSwitch: true,
+          skipMemHydrate: true,
+          silentRevalidate: allowBackgroundOnly,
+          backgroundOnly: allowBackgroundOnly,
+        });
+      }, debounceMs);
+    }
+    window.stelvioSwitchRankingBoardDuration = stelvioSwitchRankingBoardDuration;
+
     function bindStelvioRankingEvents() {
       var chips = document.getElementById('stelvioDurationTabs');
       if (chips && !chips._stelvioDurationTabsDelegated) {
@@ -16215,95 +16358,30 @@
             el = el.parentElement;
           }
           if (!btn || !chips.contains(btn)) return;
-          var nextDur = btn.getAttribute('data-duration');
-          if (!nextDur) return;
-          if (nextDur === stelvioRankingState.duration) {
-            stelvioScrollRankingBoardToTopSmooth();
-            return;
-          }
-          var tabs = chips.querySelectorAll('.stelvio-duration-tab');
-          tabs.forEach(function (b) { b.classList.remove('active'); });
-          btn.classList.add('active');
-          stelvioRankingFetchGen++;
-          stelvioRankingState.duration = nextDur;
-          if (typeof stelvioScrollDurationTabIntoView === 'function') {
-            stelvioScrollDurationTabIntoView(btn, 'nearest');
-          }
-          stelvioRankingInvalidatePreRenderViewsExcept(nextDur);
-          stelvioResetRankingListExpansionForNewTab();
-          stelvioApplyDurationModeUi();
-          if (typeof stelvioSyncRankingListHeaderUi === 'function') stelvioSyncRankingListHeaderUi();
-          stelvioScheduleRankingBoardScrollAfterTabApply();
-          if (typeof stelvioEnsureRankingTabViewActive === 'function') {
-            stelvioEnsureRankingTabViewActive(nextDur);
-          }
-          stelvioBeginRankingTabSwitchUi();
-
-          /*
-           * 탭 전환 체감 지연의 핵심 방지:
-           * 이전 구조는 IDB 조회를 시작하자마자 16ms 뒤 네트워크 fetch를 병렬로 열어,
-           * IDB가 조금만 늦어도 fetch 경로가 화면 적용을 선점했다. 이제 RAM/IDB가 먼저 끝난 뒤에만 네트워크로 간다.
-           */
-          var instantTabOk = false;
-          var primed = false;
-          if (typeof stelvioInstantTabSwitchFromMemory === 'function') {
-            try {
-              instantTabOk = await stelvioInstantTabSwitchFromMemory(nextDur);
-            } catch (eInstTab) {
-              instantTabOk = false;
+          var uiDur = btn.getAttribute('data-duration');
+          if (!uiDur) return;
+          var nextDur = stelvioResolvePeakSegmentTabDuration(uiDur);
+          await stelvioSwitchRankingBoardDuration(nextDur, { scrollTabBtn: btn });
+        });
+      }
+      var peakFilter = document.getElementById('stelvioPeakSegmentFilter');
+      if (peakFilter && !peakFilter._stelvioPeakSegmentDelegated) {
+        peakFilter._stelvioPeakSegmentDelegated = true;
+        peakFilter.addEventListener('click', async function (ev) {
+          var el = ev.target;
+          var chip = null;
+          var j;
+          for (j = 0; j < 8 && el != null; j++) {
+            if (el.nodeType === 1 && el.classList && el.classList.contains('stelvio-group-metric-chip')) {
+              chip = el;
+              break;
             }
+            el = el.parentElement;
           }
-          function stelvioRankingTabSwitchListReady() {
-            return (
-              (typeof stelvioRankingBoardReadyToHideLoading === 'function' &&
-                stelvioRankingBoardReadyToHideLoading()) ||
-              (typeof stelvioRankingListBodyHasDataRows === 'function' &&
-                stelvioRankingListBodyHasDataRows(document.getElementById('stelvioRankingListBody')))
-            );
-          }
-          if (instantTabOk && stelvioRankingTabSwitchListReady()) {
-            stelvioHideRankingBoardLoadingUi();
-          } else {
-            if (typeof stelvioPrimeTabSwitchFromIndexedDb === 'function') {
-              try {
-                primed = await stelvioPrimeTabSwitchFromIndexedDb(nextDur);
-              } catch (ePrimeTab) {
-                primed = false;
-              }
-              if (primed && stelvioRankingTabSwitchListReady()) {
-                stelvioHideRankingBoardLoadingUi();
-              }
-            }
-            /* 클럽 탭: 소모임 목록 플레이스홀더(전역 payload 비움 상태) */
-            if (
-              nextDur === 'group_dist' &&
-              typeof renderStelvioActiveCategory === 'function'
-            ) {
-              renderStelvioActiveCategory();
-              if (stelvioRankingTabSwitchListReady()) {
-                stelvioHideRankingBoardLoadingUi();
-              }
-            }
-          }
-          if (stelvioRankingState.duration !== nextDur) return;
-          if (stelvioRankingTabSwitchTimer) {
-            clearTimeout(stelvioRankingTabSwitchTimer);
-            stelvioRankingTabSwitchTimer = null;
-          }
-          stelvioRankingTabSwitchPendingDur = nextDur;
-          var debounceMs = instantTabOk ? 0 : (primed ? 0 : 1);
-          /* 클럽 탭은 Firestore 소모임 구독 후 목록 표시 → backgroundOnly면 렌더 생략되어 iOS 등에서 스피너 무한 */
-          var allowBackgroundOnly = !!(instantTabOk || primed) && nextDur !== 'group_dist';
-          stelvioRankingTabSwitchTimer = setTimeout(function () {
-            stelvioRankingTabSwitchTimer = null;
-            if (stelvioRankingState.duration !== stelvioRankingTabSwitchPendingDur) return;
-            fetchStelvioPeakPowerRanking({
-              tabSwitch: true,
-              skipMemHydrate: true,
-              silentRevalidate: allowBackgroundOnly,
-              backgroundOnly: allowBackgroundOnly,
-            });
-          }, debounceMs);
+          if (!chip || !peakFilter.contains(chip)) return;
+          var peakDur = chip.getAttribute('data-peak-duration');
+          if (!peakDur) return;
+          await stelvioSwitchRankingBoardDuration(peakDur);
         });
       }
       stelvioEnsureRankingFavoriteUiListeners();
@@ -38917,17 +38995,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-duration-chips-wrap">
             <div class="stelvio-duration-chips" id="stelvioDurationTabs">
               <button type="button" class="stelvio-duration-tab active" data-duration="gc">GC</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="peak_segment">구간</button>
               <button type="button" class="stelvio-duration-tab" data-duration="personal_speed">독주</button>
               <button type="button" class="stelvio-duration-tab" data-duration="tss">TSS</button>
               <button type="button" class="stelvio-duration-tab" data-duration="personal_dist">거리</button>
               <button type="button" class="stelvio-duration-tab" data-duration="group_dist">클럽</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="max">Max</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="1min">1분</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="5min">5분</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="10min">10분</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="20min">20분</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="40min">40분</button>
-              <button type="button" class="stelvio-duration-tab" data-duration="60min">60분</button>
+            </div>
+          </div>
+          <div id="stelvioPeakSegmentFilter" class="stelvio-group-metric-filter stelvio-peak-segment-filter hidden" role="group" aria-label="구간 선택">
+            <div class="stelvio-group-metric-chips">
+              <button type="button" class="stelvio-group-metric-chip" data-peak-duration="max">Max</button>
+              <button type="button" class="stelvio-group-metric-chip" data-peak-duration="1min">1분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-peak-duration="5min">5분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-peak-duration="10min">10분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-peak-duration="20min">20분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-peak-duration="40min">40분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-peak-duration="60min">60분</button>
             </div>
           </div>
           <div class="stelvio-filter-bar-wrap">
