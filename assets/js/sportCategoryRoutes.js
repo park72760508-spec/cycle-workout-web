@@ -25,6 +25,15 @@
     } catch (e2) {}
   }
 
+  function isCycleSportActive() {
+    return getActiveSport() === 'cycle';
+  }
+
+  /** CYCLE 주간 마일리지 TOP10 — RUN 베이스캠프·카테고리 화면에서는 자동 표시하지 않음 */
+  function shouldAutoShowCycleWeeklyTop10Modal() {
+    return isCycleSportActive();
+  }
+
   function showSportCategoryScreen() {
     if (typeof showScreen === 'function') showScreen('sportCategoryScreen');
   }
@@ -54,6 +63,10 @@
 
   function enterRunBasecamp() {
     setActiveSport('run');
+    try {
+      window.__basecampShownAfterAuth = false;
+      window.__deferWeeklyTop10UntilIntegratedDismiss = false;
+    } catch (eRunTop) {}
     if (typeof showScreen === 'function') showScreen('runBasecampScreen');
   }
 
@@ -133,6 +146,8 @@
   window.sportCategoryRoutes = {
     getActiveSport: getActiveSport,
     setActiveSport: setActiveSport,
+    isCycleSportActive: isCycleSportActive,
+    shouldAutoShowCycleWeeklyTop10Modal: shouldAutoShowCycleWeeklyTop10Modal,
     showSportCategoryScreen: showSportCategoryScreen,
     enterCycleBasecamp: enterCycleBasecamp,
     enterRunBasecamp: enterRunBasecamp,
@@ -152,6 +167,7 @@
   window.enterCycleBasecamp = enterCycleBasecamp;
   window.enterRunBasecamp = enterRunBasecamp;
   window.showSportCategoryScreen = showSportCategoryScreen;
+  window.stelvioShouldAutoShowCycleWeeklyTop10Modal = shouldAutoShowCycleWeeklyTop10Modal;
   window.routeAfterAuth = routeAfterAuth;
   window.goHomeBasecamp = goHomeBasecamp;
   window.openJournalForActiveSport = openJournalForActiveSport;

@@ -1102,9 +1102,15 @@ function applyInitialAuthRouting() {
         if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return;
         if (window.__showScreenRedirectedToAuth === true) return;
         if (window.__basecampShownAfterAuth !== true) return;
+        if (
+          typeof window.stelvioShouldAutoShowCycleWeeklyTop10Modal === 'function' &&
+          !window.stelvioShouldAutoShowCycleWeeklyTop10Modal()
+        ) {
+          window.__basecampShownAfterAuth = false;
+          return;
+        }
         var bc = document.getElementById('basecampScreen');
-        var rc = document.getElementById('runBasecampScreen');
-        if ((!bc || !bc.classList.contains('active')) && (!rc || !rc.classList.contains('active'))) return;
+        if (!bc || !bc.classList.contains('active')) return;
         var cur = window.currentUser;
         if (typeof window.userNeedsMandatoryIntegratedSetup === 'function' && cur && window.userNeedsMandatoryIntegratedSetup(cur)) {
           window.__deferWeeklyTop10UntilIntegratedDismiss = true;
@@ -15783,6 +15789,12 @@ function enqueueWeeklyTop10AfterMandatoryIntegratedDismiss() {
       if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return false;
       if (window.__showScreenRedirectedToAuth === true) return false;
       if (window.__basecampShownAfterAuth !== true) return false;
+      if (
+        typeof window.stelvioShouldAutoShowCycleWeeklyTop10Modal === 'function' &&
+        !window.stelvioShouldAutoShowCycleWeeklyTop10Modal()
+      ) {
+        return false;
+      }
       var authScreen = document.getElementById('authScreen');
       var authActive =
         authScreen && (authScreen.classList.contains('active') || window.getComputedStyle(authScreen).display !== 'none');
