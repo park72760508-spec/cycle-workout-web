@@ -28268,6 +28268,24 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   margin-top: 4px;
   margin-bottom: 4px;
 }
+/* CYCLE 랭킹: 구간 탭 — Max~60분 서브 칩 (RUN 구간탭 1k~42k와 동일 스타일) */
+.stelvio-peak-segment-filter {
+  margin-bottom: 8px;
+}
+#stelvioRankingScreen .stelvio-peak-segment-filter:not(.hidden) {
+  display: flex;
+  justify-content: center;
+  padding-left: 4px;
+  padding-right: 4px;
+  border-bottom: none;
+  background: transparent;
+}
+#stelvioRankingScreen .stelvio-peak-segment-filter .stelvio-group-metric-chips {
+  justify-content: center;
+  margin-left: auto;
+  margin-right: auto;
+  flex-wrap: wrap;
+}
 .running-ranking-list-card {
   margin-bottom: 12px;
 }
