@@ -231,12 +231,18 @@
       merged.push(item);
     });
 
+    function crewSortValue(item) {
+      var v = Number(item && item.value);
+      if (!isFinite(v) || v <= 0) {
+        return tabId === 'pace' ? Number.POSITIVE_INFINITY : -1;
+      }
+      return v;
+    }
+
     /* 크루 내 표시 순서만 value 기준 정렬 — rank/boardRank/rankChange는 보드 값 유지 */
     merged.sort(function (a, b) {
-      var av = Number(a.value);
-      var bv = Number(b.value);
-      if (!isFinite(av)) av = -1;
-      if (!isFinite(bv)) bv = -1;
+      var av = crewSortValue(a);
+      var bv = crewSortValue(b);
       var diff = tabId === 'pace' ? av - bv : bv - av;
       if (diff !== 0) return diff;
       var au = a.userId != null ? String(a.userId) : '';
