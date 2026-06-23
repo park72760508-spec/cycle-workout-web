@@ -146,6 +146,7 @@
     var rankMovementAsOfSeoul = props.rankMovementAsOfSeoul || '';
     var leaderboardSource = props.leaderboardSource || '';
     var leaderboardAsOfSeoul = props.leaderboardAsOfSeoul || '';
+    var showSegments = !!props.showSegments;
 
     var _expanded = useState(null);
     var expandedId = _expanded[0];
@@ -352,14 +353,16 @@
                 return React.createElement(GroupMemberRow, {
                   key: String(item.userId) + '-cr' + (item._crewRank != null ? item._crewRank : '') +
                     '-br' + (item.boardRank != null ? item.boardRank : item.rank) +
-                    '-' + crewMetric + '-' + paceDistance + '-' + socialVer,
+                    '-' + crewMetric + '-' + paceDistance + '-' + socialVer +
+                    (showSegments ? '-seg' : ''),
                   item: item,
                   tabId: memberTabId,
                   currentUserId: currentUserId,
                   viewerIdentity: viewerIdentity,
                   listCategory: category,
                   rankMetaHtml: rankMetaHtml,
-                  groupRole: item._groupRole
+                  groupRole: item._groupRole,
+                  showSegments: showSegments
                 });
               })
             );

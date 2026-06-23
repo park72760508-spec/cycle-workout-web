@@ -164,6 +164,10 @@
     var isTssTab = activeTab === 'tss';
     var isDistanceTab = activeTab === 'distance';
     var isCrewTab = activeTab === 'crew';
+    var isCrewOverallMetric = isCrewTab && crewMetric === 'overall';
+    var showSegmentFeatures = isOverallTab || isCrewOverallMetric;
+    var segmentsListOn = showSegmentFeatures && showOverallSegments;
+    var segmentsListOff = !segmentsListOn && (showSegmentFeatures || (!isCrewTab && !isOverallTab));
     var hasDistributionChart = isOverallTab || isPaceTab || isTssTab || isDistanceTab;
 
     var RUN_DIST_CHART_ROOTS = {
@@ -750,7 +754,7 @@
         )
       : null;
 
-    var segmentToggle = isOverallTab
+    var segmentToggle = showSegmentFeatures
       ? React.createElement('button', {
           type: 'button',
           className: 'running-ranking-segment-toggle-btn',
@@ -818,7 +822,8 @@
         rankMovementSource: rankMovementSource,
         rankMovementAsOfSeoul: rankMovementAsOfSeoul,
         leaderboardSource: leaderboardSource,
-        leaderboardAsOfSeoul: leaderboardAsOfSeoul
+        leaderboardAsOfSeoul: leaderboardAsOfSeoul,
+        showSegments: showOverallSegments
       });
     } else if (isCrewTab) {
       listBody = React.createElement('p', { className: 'stelvio-ranking-empty' },
@@ -963,7 +968,7 @@
           : null,
         React.createElement('div', {
           className: 'stelvio-category-card stelvio-ranking-list-card running-ranking-list-card' +
-            (isOverallTab ? ' running-ranking-list-card--overall' : '')
+            ((isOverallTab || isCrewOverallMetric) ? ' running-ranking-list-card--overall' : '')
         },
           React.createElement('div', { className: 'stelvio-category-header' },
             React.createElement('span', { className: 'stelvio-category-header-title' },
@@ -977,9 +982,10 @@
             id: 'runningRankingListBody',
             className: 'stelvio-category-body running-ranking-list-body running-ranking-list-body--avatar-align' +
               (isCrewTab ? ' stelvio-ranking-list-body--group-tab' : ' running-ranking-list-body--overall') +
+              (isCrewOverallMetric ? ' running-ranking-list-body--overall' : '') +
               (activeTab === 'distance' ? ' running-ranking-list-body--distance' : '') +
-              (isOverallTab && showOverallSegments ? ' running-ranking-list-body--segments-on' : '') +
-              (!isCrewTab && !showOverallSegments ? ' running-ranking-list-body--segments-off' : '')
+              (segmentsListOn ? ' running-ranking-list-body--segments-on' : '') +
+              (segmentsListOff ? ' running-ranking-list-body--segments-off' : '')
           }, listBody)
         ),
         isOverallTab ? React.createElement(RunningRankingStarLegend) : null,
