@@ -178,6 +178,7 @@
     var isTssTab = activeTab === 'tss';
     var isDistanceTab = activeTab === 'distance';
     var isCrewTab = activeTab === 'crew';
+    var isListRankingTab = isOverallTab || isPaceTab || isTssTab || isDistanceTab;
     var isCrewOverallMetric = isCrewTab && crewMetric === 'overall';
     var showSegmentFeatures = isOverallTab || isCrewOverallMetric;
     var segmentsListOn = showSegmentFeatures && showOverallSegments;
@@ -389,20 +390,20 @@
           rankMovementAsOfSeoul: rankMovementAsOfSeoul
         }, rankMovementByKey);
       }
-      if (isOverallTab && listFilter === 'interest') {
+      if (isListRankingTab && listFilter === 'interest') {
         var soc = socialApi();
         if (soc && typeof soc.filterRowsByListInterest === 'function') {
           list = soc.filterRowsByListInterest(list, listFilter, currentUserId);
         }
       }
-      if (isOverallTab && listFilter === 'interest') {
+      if (isListRankingTab && listFilter === 'interest') {
         list = list.map(function (item, idx) {
           var r = idx + 1;
           return Object.assign({}, item, { rank: r, boardRank: r });
         });
       }
       return list;
-    }, [baseRankedList, isOverallTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, leaderboardSource, leaderboardAsOfSeoul, rankMovementAsOfSeoul, socialVer]);
+    }, [baseRankedList, isListRankingTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, leaderboardSource, leaderboardAsOfSeoul, rankMovementAsOfSeoul, socialVer]);
 
     var myCrewIds = useMemo(function () {
       var set = new Set();
@@ -516,7 +517,7 @@
         payload = api.enrichChartPayloadWithViewerItem(payload, myViewerItem, rawRows);
       }
 
-      if (isOverallTab && listFilter === 'interest') {
+      if (isListRankingTab && listFilter === 'interest') {
         var soc = socialApi();
         if (soc && typeof soc.filterRowsByListInterest === 'function') {
           var filt = function (rows) {
@@ -549,7 +550,7 @@
       currentUserId,
       loading,
       socialVer,
-      isOverallTab,
+      isListRankingTab,
       myViewerItem,
       rawRows
     ]);
@@ -597,7 +598,7 @@
     var CollapsibleList = window.RunningRankingCollapsibleList;
     var Row = window.RunningRankingRow;
     var listView = window.runningRankingListView || {};
-    var skipListCollapse = isOverallTab && listFilter === 'interest';
+    var skipListCollapse = isListRankingTab && listFilter === 'interest';
     var gapScopeKey = listView.gapScopeKey
       ? listView.gapScopeKey(activeTab, activeCategory)
       : (activeTab + ':' + activeCategory);
@@ -685,7 +686,7 @@
         className: 'stelvio-duration-tab' + (activeTab === t.id ? ' active' : ''),
         onClick: function () {
           setActiveTab(t.id);
-          if (t.id !== 'overall' && t.id !== 'crew') setListFilter('all');
+          if (t.id === 'crew') setListFilter('all');
         }
       }, t.label);
     });
@@ -781,7 +782,7 @@
         }, showOverallSegments ? '▲' : '▼')
       : null;
 
-    var listFilterStar = (isOverallTab || isCrewTab)
+    var listFilterStar = (isListRankingTab || isCrewTab)
       ? React.createElement(RunningRankingListFilterStar, {
           listFilter: listFilter,
           onToggle: function () {
