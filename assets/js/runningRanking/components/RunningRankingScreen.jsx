@@ -25,38 +25,52 @@
   function fetchApi() { return window.runningRankingApi || {}; }
   function socialApi() { return window.runningRankingSocial || {}; }
 
-  function legendStarSvg(className) {
-    return React.createElement('span', { className: className, 'aria-hidden': true },
-      React.createElement('svg', {
-        className: 'stelvio-legend-star-svg',
+  function rowStarSvg(filled) {
+    if (filled) {
+      return React.createElement('svg', {
+        className: 'stelvio-rank-star-svg stelvio-rank-star-svg--filled',
         xmlns: 'http://www.w3.org/2000/svg',
         viewBox: '0 0 20 20',
-        width: '1.05em',
-        height: '1.05em'
+        width: '1.12em',
+        height: '1.12em',
+        'aria-hidden': true,
+        focusable: 'false'
       },
-        React.createElement('path', { fill: 'currentColor', d: STAR_PATH })
-      )
+        React.createElement('path', { fill: 'currentColor', stroke: 'none', d: STAR_PATH })
+      );
+    }
+    return React.createElement('svg', {
+      className: 'stelvio-rank-star-svg stelvio-rank-star-svg--outline',
+      xmlns: 'http://www.w3.org/2000/svg',
+      viewBox: '0 0 20 20',
+      width: '1.12em',
+      height: '1.12em',
+      'aria-hidden': true,
+      focusable: 'false'
+    },
+      React.createElement('path', {
+        fill: 'none',
+        stroke: 'currentColor',
+        strokeWidth: '1.35',
+        strokeLinejoin: 'round',
+        strokeLinecap: 'round',
+        d: STAR_PATH
+      })
     );
   }
 
-  function RunningRankingStarLegend() {
-    return React.createElement('div', {
-      className: 'stelvio-ranking-star-legend',
-      role: 'note',
-      'aria-label': '순위 목록 별 표시 설명'
-    },
-      React.createElement('span', { className: 'stelvio-ranking-star-legend-item' },
-        legendStarSvg('stelvio-legend-star stelvio-legend-star--friend'),
-        React.createElement('span', null, '친구')
-      ),
-      React.createElement('span', { className: 'stelvio-ranking-star-legend-item' },
-        legendStarSvg('stelvio-legend-star stelvio-legend-star--group'),
-        React.createElement('span', null, '그룹멤버')
-      ),
-      React.createElement('span', { className: 'stelvio-ranking-star-legend-item' },
-        legendStarSvg('stelvio-legend-star stelvio-legend-star--interest'),
-        React.createElement('span', null, '관심')
-      )
+  function RunningRankingListFilterStar(props) {
+    var interestOn = props.listFilter === 'interest';
+    return React.createElement('span', { className: 'stelvio-category-header-rank-col' },
+      React.createElement('button', {
+        type: 'button',
+        className: 'stelvio-ranking-list-filter-star stelvio-rank-star-btn' +
+          (interestOn ? ' stelvio-rank-star-btn--on active' : ''),
+        'aria-pressed': interestOn,
+        'aria-label': interestOn ? '전체 보기' : '관심만 보기',
+        title: interestOn ? '전체 보기' : '관심만 보기',
+        onClick: props.onToggle
+      }, rowStarSvg(interestOn))
     );
   }
 
@@ -767,29 +781,13 @@
         }, showOverallSegments ? '▲' : '▼')
       : null;
 
-    var listFilterToggle = (isOverallTab || isCrewTab)
-      ? React.createElement('div', {
-          className: 'stelvio-ranking-list-filter-toggle',
-          role: 'group',
-          'aria-label': '순위 목록 보기'
-        },
-          React.createElement('button', {
-            type: 'button',
-            className: 'stelvio-ranking-filter-chip' + (listFilter === 'all' ? ' stelvio-ranking-filter-chip--active' : ''),
-            'aria-pressed': listFilter === 'all',
-            onClick: function () { setListFilter('all'); }
-          }, '전체'),
-          React.createElement('button', {
-            type: 'button',
-            className: 'stelvio-ranking-filter-chip running-ranking-filter-chip--interest' +
-              (listFilter === 'interest' ? ' stelvio-ranking-filter-chip--active' : ''),
-            'aria-pressed': listFilter === 'interest',
-            onClick: function () { setListFilter('interest'); }
-          },
-            '관심',
-            React.createElement('span', { className: 'running-ranking-filter-star', 'aria-hidden': true }, '☆')
-          )
-        )
+    var listFilterStar = (isOverallTab || isCrewTab)
+      ? React.createElement(RunningRankingListFilterStar, {
+          listFilter: listFilter,
+          onToggle: function () {
+            setListFilter(function (prev) { return prev === 'interest' ? 'all' : 'interest'; });
+          }
+        })
       : null;
 
     var listBody;
@@ -973,11 +971,11 @@
             ((isOverallTab || isCrewOverallMetric) ? ' running-ranking-list-card--overall' : '')
         },
           React.createElement('div', { className: 'stelvio-category-header' },
+            listFilterStar,
             React.createElement('span', { className: 'stelvio-category-header-title' },
               isCrewTab ? '나의 크루' : listCategoryTitle,
               segmentToggle
             ),
-            listFilterToggle,
             React.createElement('span', { className: 'stelvio-category-header-unit' }, unitLabel)
           ),
           React.createElement('div', {
@@ -990,7 +988,6 @@
               (segmentsListOff ? ' running-ranking-list-body--segments-off' : '')
           }, listBody)
         ),
-        isOverallTab ? React.createElement(RunningRankingStarLegend) : null,
         isOverallTab
           ? React.createElement('div', {
               id: RUN_DIST_CHART_ROOTS.overall,
