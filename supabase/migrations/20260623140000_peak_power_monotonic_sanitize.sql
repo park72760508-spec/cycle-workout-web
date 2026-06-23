@@ -524,6 +524,13 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'fn_refresh_ranking_materialized_views'
+  ) THEN
+    PERFORM public.fn_refresh_ranking_materialized_views();
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public' AND p.proname = 'fn_rebuild_peak_rank_board_snapshots'
   ) THEN
     PERFORM public.fn_rebuild_peak_rank_board_snapshots();
