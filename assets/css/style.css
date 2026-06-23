@@ -28247,9 +28247,10 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   color: #b45309;
 }
 .running-ranking-pace-filter {
-  margin-bottom: 8px;
+  margin-top: 6px;
+  margin-bottom: 6px;
 }
-/* 페이스 탭: 1k~42k 거리 칩 중앙 정렬 */
+/* 페이스·구간 탭: 1k~42k 거리 칩 — 성별·카테고리 필터 아래 */
 #runningRankingScreen .running-ranking-pace-filter {
   display: flex;
   justify-content: center;
@@ -28264,18 +28265,10 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   margin-right: auto;
   flex-wrap: wrap;
 }
-#runningRankingScreen .running-ranking-body--crew-pace .running-ranking-pace-filter {
-  display: flex;
-  margin-top: 6px;
-  margin-bottom: 6px;
-}
-#runningRankingScreen .running-ranking-body--crew-pace .running-ranking-pace-filter--crew {
-  width: 100%;
-  box-sizing: border-box;
-}
 /* CYCLE 랭킹: 구간 탭 — Max~60분 서브 칩 (RUN 구간탭 1k~42k와 동일 스타일) */
 .stelvio-peak-segment-filter {
-  margin-bottom: 8px;
+  margin-top: 6px;
+  margin-bottom: 6px;
 }
 #stelvioRankingScreen .stelvio-peak-segment-filter:not(.hidden) {
   display: flex;
