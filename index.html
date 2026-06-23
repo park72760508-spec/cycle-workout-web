@@ -14231,17 +14231,15 @@
       }
     });
     function stelvioSyncRankingListFilterToggleUi() {
-      var allBtn = document.getElementById('stelvioRankingListFilterAll');
-      var intBtn = document.getElementById('stelvioRankingListFilterInterest');
+      var starBtn = document.getElementById('stelvioRankingListFilterStar');
       var interestOn = stelvioRankingState.listFilter === 'interest';
-      if (allBtn) {
-        allBtn.classList.toggle('stelvio-ranking-filter-chip--active', !interestOn);
-        allBtn.setAttribute('aria-pressed', (!interestOn).toString());
-      }
-      if (intBtn) {
-        intBtn.classList.toggle('stelvio-ranking-filter-chip--active', interestOn);
-        intBtn.setAttribute('aria-pressed', interestOn.toString());
-      }
+      if (!starBtn) return;
+      starBtn.classList.toggle('stelvio-rank-star-btn--on', interestOn);
+      starBtn.classList.toggle('active', interestOn);
+      starBtn.setAttribute('aria-pressed', interestOn.toString());
+      starBtn.setAttribute('aria-label', interestOn ? '전체 보기' : '관심만 보기');
+      starBtn.setAttribute('title', interestOn ? '전체 보기' : '관심만 보기');
+      starBtn.innerHTML = stelvioRankingStarSvgHtml(interestOn);
     }
     /** 랭킹 목록 재렌더 시 스크롤 위치 유지 (관심 필터 전환 등) */
     function stelvioWithRankingListScrollPreserved(renderFn) {
@@ -14480,18 +14478,13 @@
           }
         });
       }
-      var filtAll = document.getElementById('stelvioRankingListFilterAll');
-      var filtInt = document.getElementById('stelvioRankingListFilterInterest');
-      if (filtAll && !filtAll._stelvioRankFiltBound) {
-        filtAll._stelvioRankFiltBound = true;
-        filtAll.addEventListener('click', function () {
-          if (typeof stelvioOnRankingListFilterChange === 'function') stelvioOnRankingListFilterChange('all');
-        });
-      }
-      if (filtInt && !filtInt._stelvioRankFiltBound) {
-        filtInt._stelvioRankFiltBound = true;
-        filtInt.addEventListener('click', function () {
-          if (typeof stelvioOnRankingListFilterChange === 'function') stelvioOnRankingListFilterChange('interest');
+      var filtStar = document.getElementById('stelvioRankingListFilterStar');
+      if (filtStar && !filtStar._stelvioRankFiltBound) {
+        filtStar._stelvioRankFiltBound = true;
+        filtStar.addEventListener('click', function () {
+          if (typeof stelvioOnRankingListFilterChange !== 'function') return;
+          var next = stelvioRankingState.listFilter === 'interest' ? 'all' : 'interest';
+          stelvioOnRankingListFilterChange(next);
         });
       }
       /* 프로필 썸네일 확대 오버레이 */
@@ -15328,15 +15321,8 @@
       if (pWrap) pWrap.classList.toggle('hidden', isGroup || stelvioIsPersonalSpeedRanking());
       var mDrop = document.getElementById('stelvioGroupMetricDropdown');
       if (mDrop) mDrop.classList.toggle('hidden', !isGroup);
-      var filtWrap = document.querySelector('#stelvioRankingContent .stelvio-ranking-list-filter-toggle');
-      if (filtWrap) filtWrap.classList.remove('hidden');
-      var legend = document.querySelector('#stelvioRankingContent .stelvio-ranking-star-legend');
-      if (legend) legend.classList.remove('hidden');
-      var legendGroupItem = legend && legend.querySelector('.stelvio-legend-star--group');
-      if (legendGroupItem) {
-        var legendGroupWrap = legendGroupItem.closest('.stelvio-ranking-star-legend-item');
-        if (legendGroupWrap) legendGroupWrap.style.display = isGroup ? 'none' : '';
-      }
+      var filtRankCol = document.querySelector('#stelvioRankingContent .stelvio-category-header-rank-col');
+      if (filtRankCol) filtRankCol.classList.remove('hidden');
       var chartRt = document.getElementById('stelvio-distribution-chart-root');
       if (chartRt) chartRt.classList.remove('hidden');
       var ot = document.getElementById('stelvioOvertakeBtn');
@@ -22783,9 +22769,9 @@
       if (bodyElEarly && typeof stelvioRankingCancelListChunkJob === 'function') {
         stelvioRankingCancelListChunkJob(bodyElEarly);
       }
-      /* 그룹탭: 전체/관심 토글 유지 (관심 시 소모임 멤버 목록 필터) */
-      var _filterToggleWrap = document.querySelector('.stelvio-ranking-list-filter-toggle');
-      if (_filterToggleWrap) _filterToggleWrap.style.display = '';
+      /* 그룹탭: 순위 열 관심 별 필터 유지 (관심 시 소모임 멤버 목록 필터) */
+      var _filterRankCol = document.querySelector('#stelvioRankingContent .stelvio-category-header-rank-col');
+      if (_filterRankCol) _filterRankCol.style.display = '';
       if (stelvioIsGroupDistanceRanking()) {
         if (typeof stelvioEnsureRankingTabViewActive === 'function') {
           stelvioEnsureRankingTabViewActive('group_dist');
@@ -39109,11 +39095,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <div id="stelvioRankingContent" class="stelvio-ranking-content">
           <div class="stelvio-category-card stelvio-ranking-list-card">
             <div class="stelvio-category-header">
+              <span class="stelvio-category-header-rank-col">
+                <button type="button" id="stelvioRankingListFilterStar" class="stelvio-ranking-list-filter-star stelvio-rank-star-btn" aria-pressed="false" aria-label="관심만 보기" title="관심만 보기"><svg class="stelvio-rank-star-svg stelvio-rank-star-svg--outline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="1.12em" height="1.12em" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round" stroke-linecap="round" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></button>
+              </span>
               <span class="stelvio-category-header-title" id="stelvioListCategoryTitle">Supremo (전체)</span>
-              <div class="stelvio-ranking-list-filter-toggle" role="group" aria-label="순위 목록 보기">
-                <button type="button" id="stelvioRankingListFilterAll" class="stelvio-ranking-filter-chip stelvio-ranking-filter-chip--active" aria-pressed="true">전체</button>
-                <button type="button" id="stelvioRankingListFilterInterest" class="stelvio-ranking-filter-chip stelvio-ranking-filter-chip--interest" aria-pressed="false">관심<span class="stelvio-ranking-filter-star" aria-hidden="true">☆</span></button>
-              </div>
               <span class="stelvio-category-header-unit">W/kg</span>
             </div>
             <div class="stelvio-ranking-view-stack" id="stelvioRankingViewStack" aria-live="polite">
@@ -39130,11 +39115,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="40min"></div>
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="60min"></div>
             </div>
-          </div>
-          <div class="stelvio-ranking-star-legend" role="note" aria-label="순위 목록 별 표시 설명">
-            <span class="stelvio-ranking-star-legend-item"><span class="stelvio-legend-star stelvio-legend-star--friend" aria-hidden="true"><svg class="stelvio-legend-star-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="1.05em" height="1.05em"><path fill="currentColor" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></span><span>친구</span></span>
-            <span class="stelvio-ranking-star-legend-item"><span class="stelvio-legend-star stelvio-legend-star--group" aria-hidden="true"><svg class="stelvio-legend-star-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="1.05em" height="1.05em"><path fill="currentColor" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></span><span>그룹멤버</span></span>
-            <span class="stelvio-ranking-star-legend-item"><span class="stelvio-legend-star stelvio-legend-star--interest" aria-hidden="true"><svg class="stelvio-legend-star-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="1.05em" height="1.05em"><path fill="currentColor" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></span><span>관심</span></span>
           </div>
           <div id="stelvio-distribution-chart-root" class="stelvio-distribution-chart-root" aria-live="polite"></div>
         </div>
