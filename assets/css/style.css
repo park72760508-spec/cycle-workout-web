@@ -7887,6 +7887,20 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex: 1;
   min-width: 0;
   text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+.stelvio-category-header-title-text {
+  min-width: 0;
+}
+.stelvio-category-header-filter-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 2px;
 }
 .stelvio-category-header-unit {
   font-size: 0.9rem;
@@ -8941,24 +8955,15 @@ button.stelvio-rank-avatar-btn:focus-visible {
   gap: 6px 8px;
   align-items: center;
 }
-.stelvio-category-header-rank-col {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 3.85rem;
-  width: 3.85rem;
-  max-width: 3.85rem;
-  min-width: 3.85rem;
-  margin-right: 6px;
-  box-sizing: border-box;
-  flex-shrink: 0;
-}
 #stelvioRankingScreen .stelvio-category-header .stelvio-ranking-list-filter-star,
 #runningRankingScreen .stelvio-category-header .stelvio-ranking-list-filter-star {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin: 0;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 2px;
 }
 .stelvio-ranking-list-filter-toggle {
   display: none;
