@@ -254,17 +254,6 @@
       leaderboardSource, leaderboardAsOfSeoul
     ]);
 
-    useEffect(function () {
-      if (!expandedId || membersLoading || !memberRankedList.length) return;
-      var raf = requestAnimationFrame(function () {
-        var soc = window.runningRankingSocial;
-        if (soc && typeof soc.refreshStarSlots === 'function') {
-          soc.refreshStarSlots();
-        }
-      });
-      return function () { cancelAnimationFrame(raf); };
-    }, [expandedId, membersLoading, memberRankedList, socialVer, crewMetric, gender, category, listFilter]);
-
     function toggleGroup(gid) {
       var g = gid != null ? String(gid).trim() : '';
       if (!g) return;

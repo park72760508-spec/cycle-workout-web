@@ -44,6 +44,11 @@
   }
 
   function renderRankChangeSpan(item, listCategory, key) {
+    var soc = social();
+    if (soc.getRankChangeHtml) {
+      var rcHtml = soc.getRankChangeHtml(item, listCategory || 'Supremo');
+      if (rcHtml) return htmlSpan(key, 'stelvio-rank-change-slot', rcHtml);
+    }
     var suffix = resolveRankChangeSuffix(item, listCategory);
     if (!suffix || !suffix.text) return null;
     return React.createElement('span', {

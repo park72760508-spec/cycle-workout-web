@@ -237,7 +237,6 @@
     var setGapState = _gapState[1];
 
     var crewUnsubRef = useRef(null);
-    var starRefreshTimerRef = useRef(null);
     var isOverallTab = activeTab === 'overall';
     var isPaceTab = activeTab === 'pace';
     var isTssTab = activeTab === 'tss';
@@ -650,25 +649,6 @@
       rawRows
     ]);
 
-    useEffect(function () {
-      if (loading) return;
-      var soc = socialApi();
-      if (!soc || typeof soc.refreshStarSlots !== 'function') return;
-      if (starRefreshTimerRef.current) clearTimeout(starRefreshTimerRef.current);
-      starRefreshTimerRef.current = setTimeout(function () {
-        starRefreshTimerRef.current = null;
-        requestAnimationFrame(function () {
-          soc.refreshStarSlots();
-        });
-      }, 80);
-      return function () {
-        if (starRefreshTimerRef.current) {
-          clearTimeout(starRefreshTimerRef.current);
-          starRefreshTimerRef.current = null;
-        }
-      };
-    }, [rankedList.length, socialVer, loading, activeTab, listFilter, showOverallSegments, isCrewTab, filteredCrewGroups.length, crewMetric, gender, activeCategory]);
-
     var unitLabel = useMemo(function () {
       if (isCrewTab) {
         var ct = window.runningRankingCrewTab;
@@ -708,30 +688,6 @@
     }
 
     var searchExpanded = skipListCollapse || listExpanded;
-
-    useEffect(function () {
-      if (loading) return;
-      var rc = window.runningRankingRankChange;
-      if (!rc || typeof rc.refreshListRankChangeSlots !== 'function') return;
-      var bodyEl = document.getElementById('runningRankingListBody');
-      if (!bodyEl || !rankedList.length) return;
-      var cancelled = false;
-      function runRefresh() {
-        if (cancelled) return;
-        rc.refreshListRankChangeSlots(bodyEl, rankedList, activeCategory, { retryIfMissing: true });
-      }
-      var t1 = setTimeout(function () {
-        requestAnimationFrame(runRefresh);
-      }, 80);
-      var t2 = setTimeout(runRefresh, 280);
-      var t3 = setTimeout(runRefresh, 720);
-      return function () {
-        cancelled = true;
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-      };
-    }, [rankedList, activeCategory, activeTab, socialVer, loading, listFilter, showOverallSegments, listExpanded]);
 
     useEffect(function () {
       if (typeof window.runningRankingSearchSetContext !== 'function') return;
@@ -934,6 +890,7 @@
       );
     } else if (CollapsibleList) {
       listBody = React.createElement(CollapsibleList, {
+        key: activeTab + '|' + gender + '|' + activeCategory + '|' + listFilter + '|' + paceDistance,
         items: rankedList,
         tabId: activeTab,
         currentUserId: currentUserId,
