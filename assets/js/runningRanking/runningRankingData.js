@@ -615,22 +615,28 @@
    */
   function enrichChartPayloadWithViewerItem(payload, viewerItem, rows) {
     if (!payload || !viewerItem) return payload;
+    var out = payload;
+    try {
+      out = typeof structuredClone === 'function' ? structuredClone(payload) : JSON.parse(JSON.stringify(payload));
+    } catch (eClone) {
+      out = Object.assign({}, payload);
+    }
     var boardUid = resolveChartBoardUserId(rows || []);
     if (!boardUid && viewerItem.userId != null) {
       boardUid = String(viewerItem.userId);
     }
-    if (!boardUid) return payload;
+    if (!boardUid) return out;
 
-    payload.currentUserId = boardUid;
+    out.currentUserId = boardUid;
     if (viewerItem.rank != null && isFinite(Number(viewerItem.rank)) && Number(viewerItem.rank) >= 1) {
-      payload.overrideDisplayRank = Math.floor(Number(viewerItem.rank));
+      out.overrideDisplayRank = Math.floor(Number(viewerItem.rank));
     }
 
-    var found = findViewerChartEntries(payload.byCategory, boardUid);
-    if (found.myRankSupremo) payload.myRankSupremo = found.myRankSupremo;
+    var found = findViewerChartEntries(out.byCategory, boardUid);
+    if (found.myRankSupremo) out.myRankSupremo = found.myRankSupremo;
 
-    var activeCat = payload.activeCategory || 'Supremo';
-    var catEntry = findViewerChartEntryInCategory(payload.byCategory, boardUid, activeCat);
+    var activeCat = out.activeCategory || 'Supremo';
+    var catEntry = findViewerChartEntryInCategory(out.byCategory, boardUid, activeCat);
     var base = catEntry
       ? Object.assign({}, catEntry)
       : found.currentUser
@@ -645,20 +651,20 @@
     if (viewerItem.rank != null && isFinite(Number(viewerItem.rank))) {
       base.rank = Math.floor(Number(viewerItem.rank));
     }
-    if (payload.duration === 'gc' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
+    if (out.duration === 'gc' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
       base.gcScore = Number(viewerItem.value);
     }
-    if (payload.duration === 'tss' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
+    if (out.duration === 'tss' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
       base.totalTss = Number(viewerItem.value);
     }
-    if (payload.duration === 'personal_dist' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
+    if (out.duration === 'personal_dist' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
       base.totalKm = Number(viewerItem.value);
     }
-    if (payload.duration === 'run_pace' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
+    if (out.duration === 'run_pace' && viewerItem.value != null && isFinite(Number(viewerItem.value))) {
       base.paceSec = Number(viewerItem.value);
     }
-    payload.currentUser = base;
-    return payload;
+    out.currentUser = base;
+    return out;
   }
 
   /** StelvioRankingDistributionChart gc 모드용 엔트리 */
