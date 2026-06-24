@@ -87,6 +87,10 @@
   function refreshStarSlots() {
     var root = getRunningRoot();
     if (!root) return;
+    /* React 목록(RunningRankingRow)이 별·등락을 렌더 — imperative 패치 시 removeChild 충돌 */
+    if (root.querySelector('.running-ranking-collapsible-list, .running-ranking-plain-list')) {
+      return;
+    }
     var starFn = callFn('stelvioRankingStarButtonHtml');
     if (!starFn) return;
 
@@ -361,7 +365,6 @@
     window._runningRankSocialStarHooked = true;
     window.stelvioRankingApplySocialStarUi = function () {
       orig();
-      refreshStarSlots();
       if (typeof onChange === 'function') onChange();
     };
   }

@@ -395,7 +395,13 @@
   }
 
   function setSearchUiState(state) {
-    global[UI_STATE_KEY] = state || {};
+    state = state || {};
+    var prev = global[UI_STATE_KEY] || {};
+    if (state.tab && prev.tab && state.tab !== prev.tab) {
+      _moDisconnect();
+      _closeInput();
+    }
+    global[UI_STATE_KEY] = state;
     _updateFabVisibility();
   }
 

@@ -173,6 +173,13 @@
   function refreshListRankChangeSlots(rootEl, rankedList, listCategoryKey, refreshOpts) {
     refreshOpts = refreshOpts || {};
     if (!rootEl || !Array.isArray(rankedList) || !rankedList.length) return;
+    /* React 목록이 등락 UI를 렌더 — imperative 삽입 시 React reconcile 충돌 */
+    if (
+      rootEl.id === 'runningRankingListBody' ||
+      (rootEl.closest && rootEl.closest('#running-ranking-react-root'))
+    ) {
+      return;
+    }
     if (!callFn('stelvioServerRankChangeBadgeHtml')) return;
 
     var rowByUid = buildRowLookup(rankedList);
