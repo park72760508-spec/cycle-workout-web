@@ -13,6 +13,7 @@
   var React = window.React;
   var useState = React.useState;
   var useEffect = React.useEffect;
+  var useLayoutEffect = React.useLayoutEffect || React.useEffect;
   var useMemo = React.useMemo;
   var useCallback = React.useCallback;
   var useRef = React.useRef;
@@ -58,6 +59,70 @@
       })
     );
   }
+
+  function cloneChartPayload(base) {
+    if (!base) return null;
+    if (typeof structuredClone === 'function') {
+      try { return structuredClone(base); } catch (eClone) {}
+    }
+    try { return JSON.parse(JSON.stringify(base)); } catch (eJson) {}
+    var copy = {};
+    Object.keys(base).forEach(function (k) { copy[k] = base[k]; });
+    return copy;
+  }
+
+  var RUN_DIST_CHART_ROOTS = {
+    overall: 'running-ranking-distribution-chart-root',
+    pace: 'running-ranking-pace-distribution-chart-root',
+    tss: 'running-ranking-tss-distribution-chart-root',
+    distance: 'running-ranking-distance-distribution-chart-root'
+  };
+
+  function disposeAllDistCharts() {
+    var dispose = window.disposeStelvioDistributionChart;
+    if (typeof dispose !== 'function') return;
+    Object.keys(RUN_DIST_CHART_ROOTS).forEach(function (tabKey) {
+      try { dispose(RUN_DIST_CHART_ROOTS[tabKey]); } catch (e) {}
+    });
+  }
+
+  var RunningRankingErrorBoundary = (function () {
+    function RunningRankingErrorBoundary(props) {
+      React.Component.call(this, props);
+      this.state = { hasError: false };
+    }
+    RunningRankingErrorBoundary.prototype = Object.create(React.Component.prototype);
+    RunningRankingErrorBoundary.prototype.constructor = RunningRankingErrorBoundary;
+    RunningRankingErrorBoundary.getDerivedStateFromError = function () {
+      return { hasError: true };
+    };
+    RunningRankingErrorBoundary.prototype.componentDidCatch = function (error, info) {
+      console.warn('[RunningRankingScreen] render error', error, info);
+    };
+    RunningRankingErrorBoundary.prototype.render = function () {
+      if (this.state.hasError) {
+        return React.createElement('div', { className: 'running-ranking-error running-ranking-body' },
+          React.createElement('p', { className: 'stelvio-ranking-empty' }, '랭킹 화면을 표시하지 못했습니다.'),
+          React.createElement('button', {
+            type: 'button',
+            className: 'stelvio-purple-btn running-ranking-retry-btn',
+            onClick: function () {
+              if (typeof window.remountRunningRankingReact === 'function') {
+                window.remountRunningRankingReact({ forceRefresh: true });
+              } else {
+                this.setState({ hasError: false });
+              }
+            }.bind(this)
+          }, '다시 시도')
+        );
+      }
+      return this.props.children;
+    };
+    return RunningRankingErrorBoundary;
+  })();
+
+  window.RunningRankingErrorBoundary = RunningRankingErrorBoundary;
+  window.disposeRunningRankingCharts = disposeAllDistCharts;
 
   function RunningRankingListFilterStar(props) {
     var interestOn = props.listFilter === 'interest';
@@ -185,12 +250,8 @@
     var segmentsListOff = !segmentsListOn && (showSegmentFeatures || (!isCrewTab && !isOverallTab));
     var hasDistributionChart = isOverallTab || isPaceTab || isTssTab || isDistanceTab;
 
-    var RUN_DIST_CHART_ROOTS = {
-      overall: 'running-ranking-distribution-chart-root',
-      pace: 'running-ranking-pace-distribution-chart-root',
-      tss: 'running-ranking-tss-distribution-chart-root',
-      distance: 'running-ranking-distance-distribution-chart-root'
-    };
+    var chartRafRef = useRef({ a: 0, b: 0 });
+    var chartActiveMountRef = useRef('');
 
     var currentUserId = useMemo(function () {
       return dataApi().getCurrentUserId ? dataApi().getCurrentUserId() : null;
@@ -486,32 +547,50 @@
       return null;
     }, [activeTab, rawRows, gender, activeCategory, paceDistance]);
 
-    useEffect(function () {
+    useLayoutEffect(function () {
       var dispose = window.disposeStelvioDistributionChart;
+      function cancelChartFrames() {
+        if (chartRafRef.current.a) cancelAnimationFrame(chartRafRef.current.a);
+        if (chartRafRef.current.b) cancelAnimationFrame(chartRafRef.current.b);
+        chartRafRef.current.a = 0;
+        chartRafRef.current.b = 0;
+      }
+
       if (!hasDistributionChart) {
-        if (typeof dispose === 'function') {
-          Object.keys(RUN_DIST_CHART_ROOTS).forEach(function (tabKey) {
-            dispose(RUN_DIST_CHART_ROOTS[tabKey]);
-          });
-        }
+        cancelChartFrames();
+        disposeAllDistCharts();
+        chartActiveMountRef.current = '';
         return;
       }
-      if (loading) return;
+      if (loading) {
+        return function () {
+          cancelChartFrames();
+          var prevMount = chartActiveMountRef.current;
+          if (prevMount && typeof dispose === 'function') {
+            try { dispose(prevMount); } catch (eLoad) {}
+          }
+          chartActiveMountRef.current = '';
+        };
+      }
       if (typeof window.refreshStelvioDistributionChart !== 'function') return;
 
       Object.keys(RUN_DIST_CHART_ROOTS).forEach(function (tabKey) {
         if (tabKey !== activeTab && typeof dispose === 'function') {
-          dispose(RUN_DIST_CHART_ROOTS[tabKey]);
+          try { dispose(RUN_DIST_CHART_ROOTS[tabKey]); } catch (eDisp) {}
         }
       });
 
       var mountId = RUN_DIST_CHART_ROOTS[activeTab];
-      if (!mountId || !chartPayloadBase) return;
+      if (!mountId || !chartPayloadBase) {
+        chartActiveMountRef.current = '';
+        return function () { cancelChartFrames(); };
+      }
 
       var api = dataApi();
-      var payload = chartPayloadBase;
-      if (typeof structuredClone === 'function') {
-        try { payload = structuredClone(chartPayloadBase); } catch (eClone) { payload = chartPayloadBase; }
+      var payload = cloneChartPayload(chartPayloadBase);
+      if (!payload) {
+        chartActiveMountRef.current = '';
+        return function () { cancelChartFrames(); };
       }
       if (myViewerItem && api.enrichChartPayloadWithViewerItem) {
         payload = api.enrichChartPayloadWithViewerItem(payload, myViewerItem, rawRows);
@@ -534,13 +613,29 @@
         }
       }
 
-      var rafId = requestAnimationFrame(function () {
-        var el = document.getElementById(mountId);
-        if (!el) return;
-        window.refreshStelvioDistributionChart(payload, mountId);
+      chartActiveMountRef.current = mountId;
+      cancelChartFrames();
+      chartRafRef.current.a = requestAnimationFrame(function () {
+        chartRafRef.current.b = requestAnimationFrame(function () {
+          chartRafRef.current.a = 0;
+          chartRafRef.current.b = 0;
+          try {
+            if (chartActiveMountRef.current !== mountId) return;
+            var el = document.getElementById(mountId);
+            if (!el) return;
+            window.refreshStelvioDistributionChart(payload, mountId);
+          } catch (chartErr) {
+            console.warn('[RunningRankingScreen] distribution chart mount failed', chartErr);
+          }
+        });
       });
+
       return function () {
-        cancelAnimationFrame(rafId);
+        cancelChartFrames();
+        if (mountId && typeof dispose === 'function') {
+          try { dispose(mountId); } catch (eCleanup) {}
+        }
+        if (chartActiveMountRef.current === mountId) chartActiveMountRef.current = '';
       };
     }, [
       hasDistributionChart,
@@ -685,6 +780,7 @@
         type: 'button',
         className: 'stelvio-duration-tab' + (activeTab === t.id ? ' active' : ''),
         onClick: function () {
+          if (t.id !== activeTab) disposeAllDistCharts();
           setActiveTab(t.id);
           if (t.id === 'crew') setListFilter('all');
         }
@@ -991,34 +1087,19 @@
               (segmentsListOff ? ' running-ranking-list-body--segments-off' : '')
           }, listBody)
         ),
-        isOverallTab
-          ? React.createElement('div', {
-              id: RUN_DIST_CHART_ROOTS.overall,
-              className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
-              'aria-live': 'polite'
-            })
-          : null,
-        isPaceTab
-          ? React.createElement('div', {
-              id: RUN_DIST_CHART_ROOTS.pace,
-              className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
-              'aria-live': 'polite'
-            })
-          : null,
-        isTssTab
-          ? React.createElement('div', {
-              id: RUN_DIST_CHART_ROOTS.tss,
-              className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
-              'aria-live': 'polite'
-            })
-          : null,
-        isDistanceTab
-          ? React.createElement('div', {
-              id: RUN_DIST_CHART_ROOTS.distance,
-              className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
-              'aria-live': 'polite'
-            })
-          : null,
+        ['overall', 'pace', 'tss', 'distance'].map(function (chartTab) {
+          var chartActive = hasDistributionChart && activeTab === chartTab;
+          return React.createElement('div', {
+            key: chartTab,
+            id: RUN_DIST_CHART_ROOTS[chartTab],
+            className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root' +
+              (chartActive ? '' : ' hidden'),
+            'aria-live': chartActive ? 'polite' : 'off',
+            'aria-hidden': chartActive ? undefined : true,
+            hidden: chartActive ? undefined : true,
+            style: chartActive ? undefined : { display: 'none' }
+          });
+        }),
         React.createElement('p', {
           className: 'running-ranking-movement-hint running-ranking-movement-hint--footer'
         }, movementHintText)
@@ -1026,5 +1107,14 @@
     );
   }
 
+  function RunningRankingScreenWithBoundary() {
+    return React.createElement(
+      RunningRankingErrorBoundary,
+      null,
+      React.createElement(RunningRankingScreen)
+    );
+  }
+
   window.RunningRankingScreen = RunningRankingScreen;
+  window.RunningRankingScreenWithBoundary = RunningRankingScreenWithBoundary;
 })();
