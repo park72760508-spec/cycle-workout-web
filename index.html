@@ -26090,6 +26090,34 @@
   <script src="assets/js/runningRanking/components/RunningRankingScreen.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script>
     (function () {
+      function runningRankingScreenElement() {
+        var Screen = window.RunningRankingScreenWithBoundary || window.RunningRankingScreen;
+        return React.createElement(Screen);
+      }
+
+      function remountRunningRankingReact(opts) {
+        opts = opts || {};
+        var root = document.getElementById('running-ranking-react-mount');
+        if (!root || typeof ReactDOM === 'undefined' || typeof window.RunningRankingScreen !== 'function') {
+          return false;
+        }
+        if (typeof window.disposeRunningRankingCharts === 'function') {
+          try { window.disposeRunningRankingCharts(); } catch (eCharts) {}
+        }
+        try {
+          if (root._runningRankingRoot && typeof root._runningRankingRoot.unmount === 'function') {
+            root._runningRankingRoot.unmount();
+          } else if (typeof ReactDOM.unmountComponentAtNode === 'function') {
+            ReactDOM.unmountComponentAtNode(root);
+          }
+        } catch (eUnmount) {
+          console.warn('[RunningRanking] unmount failed', eUnmount);
+        }
+        root._runningRankingRoot = null;
+        root.innerHTML = '';
+        return initRunningRankingReact(Object.assign({}, opts, { forceRemount: true }));
+      }
+
       function initRunningRankingReact(opts) {
         opts = opts || {};
         var root = document.getElementById('running-ranking-react-mount');
@@ -26099,15 +26127,19 @@
         if (opts.forceRefresh && window.runningRankingApi && typeof window.runningRankingApi.invalidateCache === 'function') {
           window.runningRankingApi.invalidateCache();
         }
+        var brokenMount = root._runningRankingRoot && !root.querySelector('#running-ranking-react-root');
+        if (brokenMount) {
+          return remountRunningRankingReact(opts);
+        }
         if (!root._runningRankingRoot) {
           root._runningRankingRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
           if (root._runningRankingRoot) {
-            root._runningRankingRoot.render(React.createElement(window.RunningRankingScreen));
+            root._runningRankingRoot.render(runningRankingScreenElement());
           } else if (typeof ReactDOM.render === 'function') {
-            ReactDOM.render(React.createElement(window.RunningRankingScreen), root);
+            ReactDOM.render(runningRankingScreenElement(), root);
           }
         } else if (opts.forceRemount && root._runningRankingRoot.render) {
-          root._runningRankingRoot.render(React.createElement(window.RunningRankingScreen));
+          root._runningRankingRoot.render(runningRankingScreenElement());
         }
         if (window.runningRankingSocial && typeof window.runningRankingSocial.ensureUiListeners === 'function') {
           window.runningRankingSocial.ensureUiListeners();
@@ -26127,6 +26159,7 @@
         return true;
       }
       window.initRunningRankingReact = initRunningRankingReact;
+      window.remountRunningRankingReact = remountRunningRankingReact;
     })();
   </script>
   <script>
