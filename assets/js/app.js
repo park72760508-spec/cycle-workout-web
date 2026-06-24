@@ -7235,6 +7235,15 @@ window.showScreen = function(screenId) {
       }
     }
   }
+  if (currentActive && currentActive.id === 'runningRankingScreen' && screenId !== 'runningRankingScreen') {
+    if (typeof window.disposeRunningRankingCharts === 'function') {
+      try {
+        window.disposeRunningRankingCharts();
+      } catch (eRunRankLeave) {
+        console.warn('[RunningRanking] chart dispose on leave:', eRunRankLeave);
+      }
+    }
+  }
   // bluetooth 이탈 시 Wake Lock은 showScreen 끝에서 StelvioWakeLock.applyForScreen으로 일괄 처리
 
   // 모든 화면 숨기기 (스플래시 화면 제외)
