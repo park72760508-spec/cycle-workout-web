@@ -574,9 +574,18 @@ export async function writeRideToSupabase(rideRow) {
  * @param {object} log 저장된 log 필드
  * @param {'training'|'strava'} label 로그 구분
  */
-async function runSecondaryRideUpsert(userId, logDocId, log, label) {
+async function runSecondaryRideUpsert(userId, logDocId, log, label, options = {}) {
   await refreshDualRunFromRemoteConfig(true);
-  const decision = evaluateSecondaryIngestWrite(userId);
+  let decision = evaluateSecondaryIngestWrite(userId);
+  const forceRankingSync = options.force === true;
+  if (!decision.execute && forceRankingSync) {
+    decision = {
+      execute: true,
+      status: 'FORCED',
+      reason: 'ranking_rides_sync_forced',
+      userId,
+    };
+  }
   if (!decision.execute) {
     console.log('[supabaseDualWrite] ' + label + ' secondary 스킵:', decision.reason);
     return { skipped: true, reason: decision.reason };
@@ -626,7 +635,7 @@ export async function runSecondaryAfterTrainingSave(
   const log =
     (txResult && txResult.trainingLogData) ||
     buildFallbackLogFromTrainingData(trainingData, txResult);
-  return runSecondaryRideUpsert(userId, logDocId, log, 'training');
+  return runSecondaryRideUpsert(userId, logDocId, log, 'training', { force: true });
 }
 
 /**
@@ -636,7 +645,7 @@ export async function runSecondaryAfterTrainingSave(
  * @param {object} trainingLog 저장·조회된 log 필드
  */
 export async function runSecondaryAfterStravaSave(userId, logDocId, trainingLog) {
-  return runSecondaryRideUpsert(userId, logDocId, trainingLog, 'strava');
+  return runSecondaryRideUpsert(userId, logDocId, trainingLog, 'strava', { force: true });
 }
 
 export function evaluateIndoorPrimaryWrite(firebaseUid) {
