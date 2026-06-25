@@ -7,7 +7,6 @@ const {
   genderDbToClient,
 } = require("./rankingResponseAdapter");
 const rankingDayRollup = require("./rankingDayRollup");
-const weeklyTssRankingBuilder = require("./weeklyTssRankingBuilder");
 
 const HEPTAGON_CATEGORIES = [
   "Supremo",
@@ -522,55 +521,31 @@ async function fetchWeeklyTssRowsFromUserRankingMetrics(supabase, startStr, endS
  */
 async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
   logSupabaseRankingRequest(
-    "firestore_day_buckets|fn_weekly_tss_leaderboard_live",
+    "fn_weekly_tss_leaderboard_live",
     gender,
-    "tss"
+    `tss ${startStr}~${endStr}`
   );
-  const db = admin.firestore();
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const rows = await fetchWeeklyTssRowsFromDailySummariesLive(supabase, startStr, endStr);
 
-  const syncPromise = (async () => {
-    try {
-      const activeUserIds = await rankingDayRollup.findUserIdsWithRankingDayTotalsInRange(
-        db,
-        startStr,
-        endStr
-      );
-      if (!activeUserIds.length) return null;
-      return supabaseDualWriteServer.syncUsersLogsToSupabaseForDateRange(
-        db,
-        admin,
-        activeUserIds,
-        startStr,
-        endStr
-      );
-    } catch (syncErr) {
-      console.warn(
-        "[supabaseRankingReader] weekly TSS log sync failed:",
-        syncErr && syncErr.message ? syncErr.message : syncErr
-      );
-      return null;
-    }
-  })();
+  const missingFbUid = (rows || [])
+    .filter((r) => !(r.firebase_uid && String(r.firebase_uid).trim()))
+    .map((r) => r.user_id);
+  const uidMap = missingFbUid.length
+    ? await getFirebaseUidMapForSupabaseUsers(admin, supabase, missingFbUid)
+    : new Map();
 
-  const { entries: ranked, byCategory } =
-    await weeklyTssRankingBuilder.buildWeeklyTssRankingBoardEntries(
-      db,
-      startStr,
-      endStr,
-      gender
-    );
+  const entries = weeklyTssRowsToEntries(rows, uidMap, gender);
+  const { entries: ranked, byCategory } = buildByCategoryFromEntries(entries);
 
-  syncPromise
-    .then((syncResult) => {
-      if (syncResult && syncResult.synced > 0) {
-        console.log("[supabaseRankingReader] weekly TSS background rides sync", {
-          upserts: syncResult.synced,
-          startStr,
-          endStr,
-        });
-      }
-    })
-    .catch(() => {});
+  console.log(
+    "[Stelvio Supabase Request] Result:",
+    "weekly_tss",
+    "requested=",
+    gender,
+    "rows=",
+    ranked.length
+  );
 
   return {
     success: true,
@@ -581,10 +556,10 @@ async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
     period: "weekly",
     durationType: "tss",
     gender,
-    precomputed: false,
-    liveComputed: true,
+    precomputed: true,
+    liveComputed: false,
     readSource: "supabase",
-    supabaseWeeklyTssSource: "firestore_day_buckets",
+    supabaseWeeklyTssSource: "daily_summaries_live_rpc",
   };
 }
 

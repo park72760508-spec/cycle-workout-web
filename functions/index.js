@@ -4973,7 +4973,15 @@ exports.getWeeklyRanking = onRequest(
       }
       const hasRanking =
         Array.isArray(weeklyFromSupabase.ranking) && weeklyFromSupabase.ranking.length > 0;
-      if (hasRanking || usePrevWeek || weeklyFromSupabase.pendingAggregate) {
+      const fromSupabaseRead =
+        weeklyFromSupabase.readSource === "supabase" ||
+        weeklyFromSupabase.readBackend === "supabase";
+      if (
+        fromSupabaseRead ||
+        hasRanking ||
+        usePrevWeek ||
+        weeklyFromSupabase.pendingAggregate
+      ) {
         filterWithdrawnUsersFromRankingPayload(weeklyFromSupabase);
         res.set("Access-Control-Allow-Origin", "*");
         res.set("Cache-Control", "no-store");
@@ -7894,13 +7902,16 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
 
   const boardsByGender = {};
   for (const gender of ["all", "M", "F"]) {
-    boardsByGender[gender] = await getWeeklyTssRankingBoardEntries(
-      db,
+    const tssPayload = await supabaseRankingReader.fetchWeeklyTssRanking(
+      admin,
       wStart,
       wEnd,
-      gender,
-      sharedUsersSnap
+      gender
     );
+    boardsByGender[gender] = {
+      entries: (tssPayload && tssPayload.entries) || [],
+      byCategory: (tssPayload && tssPayload.byCategory) || {},
+    };
     const tssBoard = boardsByGender[gender];
     if (tssBoard && tssBoard.byCategory) {
       await applyPeakRankChanges(db, tssBoard.byCategory, `peak_tss_weekly_${gender}`);

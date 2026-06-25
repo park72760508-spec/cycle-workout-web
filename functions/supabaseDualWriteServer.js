@@ -822,23 +822,35 @@ async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr
  * @param {string} startStr YYYY-MM-DD
  * @param {string} endStr YYYY-MM-DD
  */
+const RANKING_LOG_SYNC_CONCURRENCY = 8;
+
 async function syncUsersLogsToSupabaseForDateRange(db, admin, userIds, startStr, endStr) {
   if (!db || !admin || !userIds || !userIds.length || !startStr || !endStr) return { synced: 0 };
+  const uniqueIds = Array.from(
+    new Set((userIds || []).map((id) => String(id || "").trim()).filter(Boolean))
+  );
   let synced = 0;
-  for (let i = 0; i < userIds.length; i += 1) {
-    const userId = userIds[i];
-    if (!userId) continue;
+  for (let i = 0; i < uniqueIds.length; i += RANKING_LOG_SYNC_CONCURRENCY) {
+    const batch = uniqueIds.slice(i, i + RANKING_LOG_SYNC_CONCURRENCY);
     /* eslint-disable no-await-in-loop */
-    try {
-      synced += await syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr);
-    } catch (e) {
-      console.warn(
-        "[supabaseDualWriteServer] syncUsersLogsToSupabaseForDateRange:",
-        userId,
-        e && e.message ? e.message : e
-      );
-    }
+    const counts = await Promise.all(
+      batch.map(async (userId) => {
+        try {
+          return await syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr);
+        } catch (e) {
+          console.warn(
+            "[supabaseDualWriteServer] syncUsersLogsToSupabaseForDateRange:",
+            userId,
+            e && e.message ? e.message : e
+          );
+          return 0;
+        }
+      })
+    );
     /* eslint-enable no-await-in-loop */
+    counts.forEach((n) => {
+      synced += Number(n) || 0;
+    });
   }
   return { synced };
 }
