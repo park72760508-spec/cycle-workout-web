@@ -6943,6 +6943,32 @@ async function shouldRunFirebaseRankingScheduledJob(db, jobName) {
   return enabled;
 }
 
+/** Supabase 주간 TSS parity 스케줄 — Firebase 집계 비활성(supabase 모드)에서도 기본 ON */
+function shouldRunSupabaseWeeklyTssParitySchedule() {
+  const raw = process.env.SUPABASE_WEEKLY_TSS_PARITY_SCHEDULE_ENABLED;
+  if (raw != null && String(raw).trim() !== "") {
+    return parseRankingAggregationBool(raw, true);
+  }
+  return true;
+}
+
+/**
+ * 이번 주 활동 사용자 전원 Firestore → Supabase 주간 TSS parity (rides + daily_summaries).
+ */
+async function runWeeklyTssSupabaseParityScheduledJob(db, logPrefix) {
+  const prefix = logPrefix || "[scheduledWeeklyTssSupabaseParity]";
+  const { startStr, endStr } = getWeekRangeSeoul();
+  const t0 = Date.now();
+  const result = await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(
+    db,
+    admin,
+    startStr,
+    endStr
+  );
+  console.log(prefix, "done", { startStr, endStr, ms: Date.now() - t0, ...result });
+  return { startStr, endStr, ...result };
+}
+
 /** GC rebuildHeptagonCohortRanks 와 동일: 집계 순위 맵이 실제로 바뀌었는지 */
 function peakBoardRankMapsEqual(a, b) {
   if (!a || typeof a !== "object") a = {};
@@ -7918,28 +7944,20 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
   });
 
   try {
-    const activeUserIds = await rankingDayRollup.findUserIdsWithRankingDayTotalsInRange(
+    const parityResult = await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(
       db,
+      admin,
       wStart,
       wEnd
     );
-    if (activeUserIds.length > 0) {
-      const syncResult = await supabaseDualWriteServer.syncUsersWeeklyTssParityToSupabase(
-        db,
-        admin,
-        activeUserIds,
-        wStart,
-        wEnd
-      );
-      console.log("[refreshWeeklyMileageTop10AggregatesOnly] supabase weekly TSS parity sync", {
-        users: activeUserIds.length,
-        ridesUpserts: syncResult && syncResult.ridesSynced,
-        bucketDays: syncResult && syncResult.bucketsSynced,
-      });
-    }
+    console.log("[refreshWeeklyMileageTop10AggregatesOnly] supabase weekly TSS parity sync", {
+      wStart,
+      wEnd,
+      ...parityResult,
+    });
   } catch (syncErr) {
     console.warn(
-      "[refreshWeeklyMileageTop10AggregatesOnly] supabase sync warn:",
+      "[refreshWeeklyMileageTop10AggregatesOnly] supabase parity warn:",
       syncErr && syncErr.message ? syncErr.message : syncErr
     );
   }
@@ -8069,6 +8087,26 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
       }));
     }
     console.log("[runRebuildRankingAggregatesCore] 버킷 강제 재계산 완료, ms:", Date.now() - t0);
+  }
+
+  lastPhase = "supabase_weekly_tss_parity";
+  try {
+    const parityEarly = await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(
+      db,
+      admin,
+      wStart,
+      wEnd
+    );
+    console.log("[runRebuildRankingAggregatesCore] supabase weekly TSS parity", parityEarly);
+    await markMasterDailyRankingRebuildProgress(db, "supabase_weekly_tss_parity_done", {
+      ...parityEarly,
+      elapsedMs: Date.now() - t0,
+    });
+  } catch (parityErr) {
+    console.warn(
+      "[runRebuildRankingAggregatesCore] supabase weekly TSS parity warn:",
+      parityErr && parityErr.message ? parityErr.message : parityErr
+    );
   }
 
   // ── 1. 주간 TSS 집계 (gender=all,M,F) ──
@@ -8469,6 +8507,30 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
 );
 
 /** @deprecated KST 00:05 증분 스케줄 제거 — TOP10은 03:40 마스터 + 09:00 2회만 갱신. refreshWeeklyTssMidnightIncremental()은 수동용 유지 */
+
+/** KST 04:45·21:45 — 이번 주 활동 사용자 전원 Supabase 주간 TSS parity (Strava 지연 수집 보정) */
+const scheduledWeeklyTssSupabaseParityOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  schedule: "45 4,21 * * *",
+  timeZone: "Asia/Seoul",
+  memory: "1GiB",
+  timeoutSeconds: 1800,
+});
+exports.scheduledWeeklyTssSupabaseParity = onSchedule(
+  scheduledWeeklyTssSupabaseParityOptions,
+  async () => {
+    if (!shouldRunSupabaseWeeklyTssParitySchedule()) {
+      console.log("[scheduledWeeklyTssSupabaseParity] skipped (env disabled)");
+      return;
+    }
+    const db = admin.firestore();
+    try {
+      await runWeeklyTssSupabaseParityScheduledJob(db, "[scheduledWeeklyTssSupabaseParity]");
+    } catch (e) {
+      console.error("[scheduledWeeklyTssSupabaseParity]", e && e.message ? e.message : e);
+      throw e;
+    }
+  }
+);
 
 /**
  * KST 02:50 — Strava 00:10 갭 탐지 직후 peak_28d rollup → 피크 보드(21) → 헵타곤 GC.
@@ -8928,7 +8990,7 @@ exports.adminBackfillStravaLogsToSupabase = onRequest(
 
         for (const logDoc of logsSnap.docs) {
           const log = logDoc.data() || {};
-          const dateStr = String(log.date || "").slice(0, 10);
+          const dateStr = rankingDayRollup.normalizeLogDateToSeoulYmd(log.date);
           if (startDate && dateStr && dateStr < startDate) {
             skippedLogs += 1;
             continue;
@@ -8964,6 +9026,30 @@ exports.adminBackfillStravaLogsToSupabase = onRequest(
         }
       }
 
+      let parityUsers = 0;
+      let parityRidesSynced = 0;
+      let parityBucketsSynced = 0;
+      if (!dryRun && startDate && endDate) {
+        const parityUserIds = userDocs.map((d) => d.id);
+        try {
+          const parity = await supabaseDualWriteServer.syncUsersWeeklyTssParityToSupabase(
+            db,
+            admin,
+            parityUserIds,
+            startDate,
+            endDate
+          );
+          parityUsers = parityUserIds.length;
+          parityRidesSynced = parity.ridesSynced;
+          parityBucketsSynced = parity.bucketsSynced;
+        } catch (parityErr) {
+          errors.push({
+            phase: "weekly_tss_parity",
+            message: parityErr && parityErr.message ? parityErr.message : String(parityErr),
+          });
+        }
+      }
+
       const lastUser = userDocs[userDocs.length - 1];
       res.status(200).json({
         success: true,
@@ -8975,6 +9061,9 @@ exports.adminBackfillStravaLogsToSupabase = onRequest(
         skippedLogs,
         failedLogs,
         truncatedUsers,
+        parityUsers,
+        parityRidesSynced,
+        parityBucketsSynced,
         nextStartAfterUid:
           targetUsers === "all" && userDocs.length === maxUsers && lastUser ? lastUser.id : null,
         errors,
@@ -8982,6 +9071,104 @@ exports.adminBackfillStravaLogsToSupabase = onRequest(
     } catch (e) {
       const status = e.status || 500;
       console.warn("[adminBackfillStravaLogsToSupabase]", e.message || e);
+      res.status(status).json({
+        success: false,
+        error: e.message || String(e),
+      });
+    }
+  }
+);
+
+/**
+ * 관리자(grade=1): 이번 주(또는 지정 구간) ranking_day_totals 활동 사용자 전원
+ * Firestore → Supabase 주간 TSS parity (rides + daily_summaries).
+ * POST { startDate?, endDate?, offset?, limit?, dryRun? }
+ */
+exports.adminBackfillWeeklyTssSupabaseParity = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({
+    cors: true,
+    timeoutSeconds: 3600,
+    memory: "1GiB",
+  }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원합니다." });
+      return;
+    }
+
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, callerUid);
+      const db = admin.firestore();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const weekDefault = getWeekRangeSeoul();
+      const startStr = String(body.startDate || req.query.startDate || weekDefault.startStr).slice(
+        0,
+        10
+      );
+      const endStr = String(body.endDate || req.query.endDate || weekDefault.endStr).slice(0, 10);
+      const offset = Math.max(0, Number(body.offset || req.query.offset || 0) || 0);
+      const limit = Math.max(1, Math.min(200, Number(body.limit || req.query.limit || 50) || 50));
+      const dryRun = String(body.dryRun ?? req.query.dryRun ?? "false").toLowerCase() === "true";
+
+      const activeUserIds = (
+        await rankingDayRollup.findUserIdsWithRankingDayTotalsInRange(db, startStr, endStr)
+      )
+        .slice()
+        .sort();
+      const batch = activeUserIds.slice(offset, offset + limit);
+
+      if (dryRun) {
+        res.status(200).json({
+          success: true,
+          dryRun: true,
+          startStr,
+          endStr,
+          totalActiveUsers: activeUserIds.length,
+          batchSize: batch.length,
+          offset,
+          nextOffset: offset + batch.length < activeUserIds.length ? offset + batch.length : null,
+        });
+        return;
+      }
+
+      let ridesSynced = 0;
+      let bucketsSynced = 0;
+      if (batch.length > 0) {
+        const parity = await supabaseDualWriteServer.syncUsersWeeklyTssParityToSupabase(
+          db,
+          admin,
+          batch,
+          startStr,
+          endStr
+        );
+        ridesSynced = parity.ridesSynced;
+        bucketsSynced = parity.bucketsSynced;
+      }
+
+      res.status(200).json({
+        success: true,
+        startStr,
+        endStr,
+        totalActiveUsers: activeUserIds.length,
+        processedUsers: batch.length,
+        offset,
+        nextOffset: offset + batch.length < activeUserIds.length ? offset + batch.length : null,
+        ridesSynced,
+        bucketsSynced,
+      });
+    } catch (e) {
+      const status = e.status || 500;
+      console.warn("[adminBackfillWeeklyTssSupabaseParity]", e.message || e);
       res.status(status).json({
         success: false,
         error: e.message || String(e),

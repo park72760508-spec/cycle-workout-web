@@ -759,59 +759,224 @@ async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr
   const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
   const dateSet = new Set(dates);
   let synced = 0;
+  const seen = new Set();
 
   const tryUpsert = async (doc) => {
+    if (!doc || seen.has(doc.id)) return;
     const data = doc.data() || {};
     if (!isCyclingLogForRankingSync(data)) return;
     const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(data.date);
     if (!ymd || !dateSet.has(ymd)) return;
+    seen.add(doc.id);
     const result = await runSecondaryAfterLogSave(admin, userId, doc.id, data, {
       force: true,
     });
     if (result && !result.skipped) synced += 1;
   };
 
+  const collectDocs = async (snap) => {
+    for (const doc of snap.docs) {
+      /* eslint-disable no-await-in-loop */
+      await tryUpsert(doc);
+      /* eslint-enable no-await-in-loop */
+    }
+  };
+
   try {
-    const ranged = await db
+    const rangedStr = await db
       .collection("users")
       .doc(userId)
       .collection("logs")
       .where("date", ">=", startStr)
       .where("date", "<=", endStr)
       .get();
-    for (const doc of ranged.docs) {
-      /* eslint-disable no-await-in-loop */
-      await tryUpsert(doc);
-      /* eslint-enable no-await-in-loop */
-    }
+    await collectDocs(rangedStr);
   } catch (rangeErr) {
     console.warn(
-      "[supabaseDualWriteServer] ranged log query failed, fallback recent scan:",
+      "[supabaseDualWriteServer] string date range query failed:",
       userId,
       rangeErr && rangeErr.message ? rangeErr.message : rangeErr
     );
   }
 
-  const seen = new Set();
-  const recent = await db
-    .collection("users")
-    .doc(userId)
-    .collection("logs")
-    .orderBy("date", "desc")
-    .limit(400)
-    .get();
-  for (const doc of recent.docs) {
-    if (seen.has(doc.id)) continue;
-    const data = doc.data() || {};
-    const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(data.date);
-    if (!ymd || !dateSet.has(ymd)) continue;
-    seen.add(doc.id);
-    /* eslint-disable no-await-in-loop */
-    await tryUpsert(doc);
-    /* eslint-enable no-await-in-loop */
+  try {
+    const tsStart = admin.firestore.Timestamp.fromDate(new Date(`${startStr}T00:00:00+09:00`));
+    const tsEnd = admin.firestore.Timestamp.fromDate(new Date(`${endStr}T23:59:59.999+09:00`));
+    const rangedTs = await db
+      .collection("users")
+      .doc(userId)
+      .collection("logs")
+      .where("date", ">=", tsStart)
+      .where("date", "<=", tsEnd)
+      .get();
+    await collectDocs(rangedTs);
+  } catch (tsRangeErr) {
+    console.warn(
+      "[supabaseDualWriteServer] timestamp date range query failed:",
+      userId,
+      tsRangeErr && tsRangeErr.message ? tsRangeErr.message : tsRangeErr
+    );
+  }
+
+  try {
+    const recent = await db
+      .collection("users")
+      .doc(userId)
+      .collection("logs")
+      .orderBy("date", "desc")
+      .limit(400)
+      .get();
+    await collectDocs(recent);
+  } catch (recentErr) {
+    console.warn(
+      "[supabaseDualWriteServer] recent log scan failed:",
+      userId,
+      recentErr && recentErr.message ? recentErr.message : recentErr
+    );
   }
 
   return synced;
+}
+
+const RANKING_LOG_SYNC_CONCURRENCY = 8;
+
+/**
+ * Firestore ranking_day_totals → Supabase daily_summaries TSS/KM (Stelvio rides 누락 보정).
+ * @returns {Promise<number>} upserted day count
+ */
+async function syncRankingDayBucketsToSupabaseForUser(db, userId, startStr, endStr) {
+  const rankingDayRollup = require("./rankingDayRollup");
+  if (!db || !userId || !startStr || !endStr) return 0;
+
+  const userSnap = await db.collection("users").doc(userId).get();
+  if (!userSnap.exists) return 0;
+  const userData = userSnap.data() || {};
+
+  await rankingDayRollup.ensureRankingBucketsFilledForRange(
+    db,
+    userId,
+    userData,
+    startStr,
+    endStr,
+    false
+  );
+
+  const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
+  if (!dates.length) return 0;
+
+  const refs = dates.map((ymd) => rankingDayRollup.bucketRef(db, userId, ymd));
+  const snaps = await rankingDayRollup.chunkedGetAll(db, refs, 30);
+  const buckets = [];
+  snaps.forEach((snap, i) => {
+    if (!snap || !snap.exists) return;
+    const b = snap.data() || {};
+    const tssStrava = Number(b.tss_strava_sum) || 0;
+    const tssStelvio = Number(b.tss_stelvio_sum) || 0;
+    const kmStrava = Number(b.km_strava_sum) || 0;
+    const kmStelvio = Number(b.km_stelvio_sum) || 0;
+    if (tssStrava <= 0 && tssStelvio <= 0 && kmStrava <= 0 && kmStelvio <= 0) return;
+    buckets.push({
+      summary_date: dates[i],
+      tss_strava_sum: Math.round(tssStrava * 100) / 100,
+      tss_stelvio_sum: Math.round(tssStelvio * 100) / 100,
+      km_strava_sum: Math.round(kmStrava * 1000) / 1000,
+      km_stelvio_sum: Math.round(kmStelvio * 1000) / 1000,
+    });
+  });
+  if (!buckets.length) return 0;
+
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase.rpc("fn_sync_daily_summary_buckets_from_firestore", {
+    p_firebase_uid: userId,
+    p_buckets: buckets,
+  });
+  if (error) {
+    throw error;
+  }
+  return Number(data) || buckets.length;
+}
+
+/**
+ * 주간 TSS Supabase parity — rides 로그 upsert + ranking_day_totals → daily_summaries.
+ */
+async function syncUsersWeeklyTssParityToSupabase(db, admin, userIds, startStr, endStr) {
+  if (!db || !admin || !userIds || !userIds.length || !startStr || !endStr) {
+    return { ridesSynced: 0, bucketsSynced: 0 };
+  }
+  const uniqueIds = Array.from(
+    new Set((userIds || []).map((id) => String(id || "").trim()).filter(Boolean))
+  );
+  let ridesSynced = 0;
+  let bucketsSynced = 0;
+
+  for (let i = 0; i < uniqueIds.length; i += RANKING_LOG_SYNC_CONCURRENCY) {
+    const batch = uniqueIds.slice(i, i + RANKING_LOG_SYNC_CONCURRENCY);
+    /* eslint-disable no-await-in-loop */
+    const results = await Promise.all(
+      batch.map(async (userId) => {
+        let rides = 0;
+        let buckets = 0;
+        try {
+          rides = await syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr);
+        } catch (rideErr) {
+          console.warn(
+            "[supabaseDualWriteServer] weekly TSS rides sync:",
+            userId,
+            rideErr && rideErr.message ? rideErr.message : rideErr
+          );
+        }
+        try {
+          buckets = await syncRankingDayBucketsToSupabaseForUser(db, userId, startStr, endStr);
+        } catch (bucketErr) {
+          console.warn(
+            "[supabaseDualWriteServer] weekly TSS bucket sync:",
+            userId,
+            bucketErr && bucketErr.message ? bucketErr.message : bucketErr
+          );
+        }
+        return { rides, buckets };
+      })
+    );
+    /* eslint-enable no-await-in-loop */
+    results.forEach((r) => {
+      ridesSynced += Number(r.rides) || 0;
+      bucketsSynced += Number(r.buckets) || 0;
+    });
+  }
+
+  return { ridesSynced, bucketsSynced };
+}
+
+/**
+ * ranking_day_totals에 이번 주(또는 지정 구간) 활동이 있는 전체 사용자 Supabase TSS parity.
+ * @returns {Promise<{ users: number, ridesSynced: number, bucketsSynced: number }>}
+ */
+async function runWeeklyTssSupabaseParityForActiveUsers(db, admin, startStr, endStr) {
+  const rankingDayRollup = require("./rankingDayRollup");
+  if (!db || !admin || !startStr || !endStr) {
+    return { users: 0, ridesSynced: 0, bucketsSynced: 0 };
+  }
+  const activeUserIds = await rankingDayRollup.findUserIdsWithRankingDayTotalsInRange(
+    db,
+    startStr,
+    endStr
+  );
+  if (!activeUserIds.length) {
+    return { users: 0, ridesSynced: 0, bucketsSynced: 0 };
+  }
+  const sortedIds = activeUserIds.slice().sort();
+  const result = await syncUsersWeeklyTssParityToSupabase(
+    db,
+    admin,
+    sortedIds,
+    startStr,
+    endStr
+  );
+  return {
+    users: sortedIds.length,
+    ridesSynced: result.ridesSynced,
+    bucketsSynced: result.bucketsSynced,
+  };
 }
 
 /**
@@ -822,8 +987,6 @@ async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr
  * @param {string} startStr YYYY-MM-DD
  * @param {string} endStr YYYY-MM-DD
  */
-const RANKING_LOG_SYNC_CONCURRENCY = 8;
-
 async function syncUsersLogsToSupabaseForDateRange(db, admin, userIds, startStr, endStr) {
   if (!db || !admin || !userIds || !userIds.length || !startStr || !endStr) return { synced: 0 };
   const uniqueIds = Array.from(
@@ -873,6 +1036,9 @@ module.exports = {
   runSecondaryAfterLogSave,
   runSecondaryAfterStravaLogSave,
   syncUsersLogsToSupabaseForDateRange,
+  syncRankingDayBucketsToSupabaseForUser,
+  syncUsersWeeklyTssParityToSupabase,
+  runWeeklyTssSupabaseParityForActiveUsers,
   toSeoulRideDateYmd,
   appendServiceRoleSecret,
   mapTrainingLogToRideRow,
