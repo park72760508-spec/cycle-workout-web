@@ -346,6 +346,23 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
     }
 
     if (activityIds.size === 0) {
+      if (range.dateFrom && range.dateTo && deps.supabaseDualWriteServer) {
+        try {
+          await deps.supabaseDualWriteServer.syncUsersWeeklyTssParityToSupabase(
+            db,
+            admin,
+            [entry.userId],
+            range.dateFrom,
+            range.dateTo
+          );
+        } catch (parityErr) {
+          console.warn(
+            "[stravaGapDetect] Supabase TSS parity sync (no missing ids):",
+            entry.userId,
+            parityErr && parityErr.message ? parityErr.message : parityErr
+          );
+        }
+      }
       if (gapError) {
         await stravaSyncRetry.markStravaSyncRetryPending(db, entry.userId, {
           dateFrom: range.dateFrom,
@@ -418,6 +435,24 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
       await stravaSyncRetry.clearStravaSyncRetryPending(db, entry.userId, { count: userIngested });
       for (const wh of entry.webhookEntries) {
         await markStravaWebhookRetryDone(db, wh.owner_id, wh.object_id);
+      }
+    }
+
+    if (range.dateFrom && range.dateTo && deps.supabaseDualWriteServer) {
+      try {
+        await deps.supabaseDualWriteServer.syncUsersWeeklyTssParityToSupabase(
+          db,
+          admin,
+          [entry.userId],
+          range.dateFrom,
+          range.dateTo
+        );
+      } catch (parityErr) {
+        console.warn(
+          "[stravaGapDetect] Supabase TSS parity sync:",
+          entry.userId,
+          parityErr && parityErr.message ? parityErr.message : parityErr
+        );
       }
     }
 

@@ -1595,6 +1595,25 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     });
   }
 
+  const activityDateYmd = rankingDayRollup.normalizeLogDateToSeoulYmd(mapped.date);
+  if (activityDateYmd) {
+    try {
+      await supabaseDualWriteServer.syncRankingDayBucketsToSupabaseForUser(
+        db,
+        userId,
+        activityDateYmd,
+        activityDateYmd
+      );
+    } catch (parityErr) {
+      console.warn(
+        "[processStravaActivity] daily_summary bucket parity:",
+        userId,
+        activityDateYmd,
+        parityErr && parityErr.message ? parityErr.message : parityErr
+      );
+    }
+  }
+
   let userTss = 0;
   if (isCyclingForMmp(mapped) && isNew && mapped.tss > 0 && (mapped.distance_km || 0) !== 0) {
     const dateStr = mapped.date || "";
@@ -2431,6 +2450,13 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
             "processOneUserStravaSync"
           );
         }
+      } else {
+        await ensureExistingStravaLogMirroredToSupabase(
+          userId,
+          actId,
+          d,
+          "processOneUserStravaSync:existing_complete"
+        );
       }
       continue;
     }
@@ -2590,6 +2616,23 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   await stravaSyncRetry.clearStravaSyncRetryPending(db, userId, {
     count: newActivities,
   });
+  if (dateFrom && dateTo) {
+    try {
+      await supabaseDualWriteServer.syncUsersWeeklyTssParityToSupabase(
+        db,
+        admin,
+        [userId],
+        dateFrom,
+        dateTo
+      );
+    } catch (parityErr) {
+      console.warn(
+        "[processOneUserStravaSync] Supabase TSS parity sync:",
+        userId,
+        parityErr && parityErr.message ? parityErr.message : parityErr
+      );
+    }
+  }
   return { userId, processed: 1, newActivities, userTss, error: null };
 }
 
@@ -7881,16 +7924,17 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
       wEnd
     );
     if (activeUserIds.length > 0) {
-      const syncResult = await supabaseDualWriteServer.syncUsersLogsToSupabaseForDateRange(
+      const syncResult = await supabaseDualWriteServer.syncUsersWeeklyTssParityToSupabase(
         db,
         admin,
         activeUserIds,
         wStart,
         wEnd
       );
-      console.log("[refreshWeeklyMileageTop10AggregatesOnly] supabase rides sync", {
+      console.log("[refreshWeeklyMileageTop10AggregatesOnly] supabase weekly TSS parity sync", {
         users: activeUserIds.length,
-        upserts: syncResult && syncResult.synced,
+        ridesUpserts: syncResult && syncResult.ridesSynced,
+        bucketDays: syncResult && syncResult.bucketsSynced,
       });
     }
   } catch (syncErr) {
