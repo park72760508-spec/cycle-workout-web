@@ -52,7 +52,7 @@ const groupReadRoutingPublic = require("./groupReadRoutingPublic");
 const logsReadRoutingPublic = require("./logsReadRoutingPublic");
 const groupDualWriteTriggers = require("./groupDualWriteTriggers");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
-const supabaseGroupReader = require("./supabaseGroupReader");
+const weeklyTssRankingBuilder = require("./weeklyTssRankingBuilder");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -6117,51 +6117,13 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
 /** 주간 TSS 랭킹 보드: 주간 마일리지 TOP10과 동일한 TSS 합산 규칙(getWeeklyTssForUser), 성별·리그 분류는 피크 파워와 동일
  * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
 async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null) {
-  const snap = usersSnap ?? await db.collection("users").get();
-  const docs = snap.docs;
-  const entries = [];
-  for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
-    const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map(async (doc) => {
-        const userId = doc.id;
-        const data = doc.data();
-        if (!isRankingEligibleUserData(data)) return null;
-        const name = data.name || "(이름 없음)";
-        const gender = String(data.gender || data.sex || "").toLowerCase();
-        if (genderFilter && genderFilter !== "all") {
-          const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
-          const match = gender === "m" || gender === "male" || gender === "남" ? "male" : (gender === "f" || gender === "female" || gender === "여" ? "female" : null);
-          if (match !== g) return null;
-        }
-        const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
-        const challenge = data.challenge || "Fitness";
-        const leagueCategory = getLeagueCategory(challenge, birthYear);
-        if (!leagueCategory) return null;
-        const totalTssRaw = await getWeeklyTssForUser(db, userId, startStr, endStr, data);
-        if (totalTssRaw <= 0) return null;
-        const totalTss = Math.round(totalTssRaw * 100) / 100;
-        return {
-          userId,
-          name,
-          totalTss,
-          ageCategory: leagueCategory,
-          gender,
-          is_private: privacyFlagFromFirestoreDoc(data),
-          profileImageUrl: profileImageUrlFromUserData(data),
-          ...rankingUserStatusFieldsFromData(data),
-        };
-      })
-    );
-    results.forEach((r) => { if (r) entries.push(r); });
-  }
-  entries.sort((a, b) => b.totalTss - a.totalTss);
-  const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
-  const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
-  withRank.forEach((e) => {
-    if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
-  });
-  return { entries: withRank, byCategory };
+  return weeklyTssRankingBuilder.buildWeeklyTssRankingBoardEntries(
+    db,
+    startStr,
+    endStr,
+    genderFilter,
+    usersSnap
+  );
 }
 
 /** 개인: 최근 30일(서울) 라이딩 거리 합 — 성별·리그 분류는 주간 TSS 랭킹과 동일
@@ -10624,8 +10586,12 @@ exports.getPeakPowerRanking = onRequest(
       return;
     }
     res.set("Access-Control-Allow-Origin", "*");
-    // 사전 집계 데이터는 5분간 CDN/프록시 캐싱 허용 (클라이언트는 localStorage로 별도 1일 캐시)
-    res.set("Cache-Control", "public, max-age=300, s-maxage=300, stale-while-revalidate=60");
+    const durationTypeEarly = req.query.duration || "5min";
+    if (durationTypeEarly === "tss") {
+      res.set("Cache-Control", "no-store");
+    } else {
+      res.set("Cache-Control", "public, max-age=300, s-maxage=300, stale-while-revalidate=60");
+    }
     const origJsonPeak = res.json.bind(res);
     res.json = (payload) => {
       if (payload && typeof payload === "object" && payload.success && !payload.readBackend) {

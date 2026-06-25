@@ -1668,6 +1668,7 @@ exports.max60minWattsFromBucketSnaps = max60minWattsFromBucketSnaps;
 exports.max60minWattsFromDayBuckets = max60minWattsFromDayBuckets;
 exports.peak60YmdFromDayBuckets = peak60YmdFromDayBuckets;
 exports.maxHrByDurationFromBucketSnaps = maxHrByDurationFromBucketSnaps;
+exports.normalizeLogDateToSeoulYmd = normalizeLogDateToSeoulYmd;
 exports.findUserIdsWithRankingDayTotalsInRange = findUserIdsWithRankingDayTotalsInRange;
 exports.bucketRef = bucketRef;
 exports.chunkedGetAll = chunkedGetAll;

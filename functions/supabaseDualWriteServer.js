@@ -754,6 +754,66 @@ async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, o
   return runSecondaryAfterLogSave(admin, userId, logDocId, logDoc, options);
 }
 
+async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr) {
+  const rankingDayRollup = require("./rankingDayRollup");
+  const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
+  const dateSet = new Set(dates);
+  let synced = 0;
+
+  const tryUpsert = async (doc) => {
+    const data = doc.data() || {};
+    if (!isCyclingLogForRankingSync(data)) return;
+    const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(data.date);
+    if (!ymd || !dateSet.has(ymd)) return;
+    const result = await runSecondaryAfterLogSave(admin, userId, doc.id, data, {
+      force: true,
+    });
+    if (result && !result.skipped) synced += 1;
+  };
+
+  try {
+    const ranged = await db
+      .collection("users")
+      .doc(userId)
+      .collection("logs")
+      .where("date", ">=", startStr)
+      .where("date", "<=", endStr)
+      .get();
+    for (const doc of ranged.docs) {
+      /* eslint-disable no-await-in-loop */
+      await tryUpsert(doc);
+      /* eslint-enable no-await-in-loop */
+    }
+  } catch (rangeErr) {
+    console.warn(
+      "[supabaseDualWriteServer] ranged log query failed, fallback recent scan:",
+      userId,
+      rangeErr && rangeErr.message ? rangeErr.message : rangeErr
+    );
+  }
+
+  const seen = new Set();
+  const recent = await db
+    .collection("users")
+    .doc(userId)
+    .collection("logs")
+    .orderBy("date", "desc")
+    .limit(400)
+    .get();
+  for (const doc of recent.docs) {
+    if (seen.has(doc.id)) continue;
+    const data = doc.data() || {};
+    const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(data.date);
+    if (!ymd || !dateSet.has(ymd)) continue;
+    seen.add(doc.id);
+    /* eslint-disable no-await-in-loop */
+    await tryUpsert(doc);
+    /* eslint-enable no-await-in-loop */
+  }
+
+  return synced;
+}
+
 /**
  * 주간 TSS 조회 전 — Firestore logs를 Supabase rides에 맞춤 (Stelvio 누락·ride_date UTC 오차 보정).
  * @param {import('firebase-admin').firestore.Firestore} db
@@ -770,21 +830,7 @@ async function syncUsersLogsToSupabaseForDateRange(db, admin, userIds, startStr,
     if (!userId) continue;
     /* eslint-disable no-await-in-loop */
     try {
-      const snap = await db
-        .collection("users")
-        .doc(userId)
-        .collection("logs")
-        .where("date", ">=", startStr)
-        .where("date", "<=", endStr)
-        .get();
-      for (const doc of snap.docs) {
-        const data = doc.data() || {};
-        if (!isCyclingLogForRankingSync(data)) continue;
-        const result = await runSecondaryAfterLogSave(admin, userId, doc.id, data, {
-          force: true,
-        });
-        if (result && !result.skipped) synced += 1;
-      }
+      synced += await syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr);
     } catch (e) {
       console.warn(
         "[supabaseDualWriteServer] syncUsersLogsToSupabaseForDateRange:",
