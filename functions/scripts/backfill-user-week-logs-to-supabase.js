@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * 특정 사용자의 주간(또는 임의 기간) Firestore logs → Supabase rides 백필.
- * Strava·Stelvio 모두 upsert 후 daily_summaries 트리거로 주간 TSS 재집계.
+ * 특정 사용자의 주간(또는 임의 기간) Firestore → Supabase TSS parity 백필.
+ * 1) logs → rides upsert
+ * 2) ranking_day_totals → daily_summaries (Stelvio 누락 보정)
  *
  * Usage:
  *   SUPABASE_SERVICE_ROLE_KEY=... node scripts/backfill-user-week-logs-to-supabase.js <uid> <startYmd> <endYmd>
@@ -46,8 +47,8 @@ const sb = require('../supabaseDualWriteServer');
     console.warn('[backfill] provision skip:', provErr.message || provErr);
   }
 
-  const result = await sb.syncUsersLogsToSupabaseForDateRange(db, admin, [uid], startStr, endStr);
-  console.log('[backfill] sync result', { uid, startStr, endStr, ...result });
+  const parity = await sb.syncUsersWeeklyTssParityToSupabase(db, admin, [uid], startStr, endStr);
+  console.log('[backfill] parity sync', { uid, startStr, endStr, ...parity });
 
   const rankingDayRollup = require('../rankingDayRollup');
   const userSnap = await db.collection('users').doc(uid).get();
@@ -61,6 +62,21 @@ const sb = require('../supabaseDualWriteServer');
     true
   );
   console.log('[verify firestore ranking_day_totals weekly TSS]', firestoreTss);
+
+  const supabase = sb.getSupabaseAdminClient();
+  const { data: rows, error } = await supabase.rpc('fn_weekly_tss_leaderboard_live', {
+    p_start: startStr,
+    p_end: endStr,
+  });
+  if (error) {
+    console.warn('[verify supabase weekly TSS] rpc error:', error.message || error);
+    return;
+  }
+  const row = (rows || []).find((r) => String(r.firebase_uid || '') === uid);
+  console.log('[verify supabase fn_weekly_tss_leaderboard_live]', {
+    weekly_tss: row ? row.weekly_tss : null,
+    found: !!row,
+  });
 })().catch((e) => {
   console.error(e);
   process.exit(1);
