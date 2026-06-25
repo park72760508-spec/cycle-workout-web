@@ -364,8 +364,13 @@ function toRideDate(raw) {
     const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
     if (m) return m[1];
     const d = new Date(raw);
-    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+    }
     return null;
+  }
+  if (typeof raw === 'object' && raw !== null && typeof raw.toDate === 'function') {
+    return raw.toDate().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
   }
   return null;
 }
