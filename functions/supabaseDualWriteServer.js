@@ -381,19 +381,30 @@ function str(v) {
   return s || null;
 }
 
-function toRideDate(raw) {
+/** Firestore log.date → 서울 YMD (랭킹 day bucket·daily_summaries와 동일) */
+function toSeoulRideDateYmd(raw) {
   if (raw == null || raw === "") return null;
   if (typeof raw === "string") {
     const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
     if (m) return m[1];
     const d = new Date(raw);
-    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    }
     return null;
   }
+  let d = null;
   if (typeof raw === "object" && raw !== null && typeof raw.toDate === "function") {
-    return raw.toDate().toISOString().slice(0, 10);
+    d = raw.toDate();
+  } else if (raw instanceof Date) {
+    d = raw;
   }
-  return null;
+  if (!d || Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
+function toRideDate(raw) {
+  return toSeoulRideDateYmd(raw);
 }
 
 function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
@@ -639,14 +650,32 @@ async function resolveRideUserIdForFirebaseUid(supabase, firebaseUid, uidConfig)
   }
 }
 
+const EXCLUDED_RANKING_ACTIVITY_TYPES = new Set([
+  "run",
+  "swim",
+  "walk",
+  "trailrun",
+  "weighttraining",
+]);
+
+function isCyclingLogForRankingSync(logDoc) {
+  const source = String((logDoc && logDoc.source) || "").toLowerCase();
+  if (source !== "strava") return true;
+  const type = String((logDoc && logDoc.activity_type) || "")
+    .trim()
+    .toLowerCase();
+  if (!type) return true;
+  return !EXCLUDED_RANKING_ACTIVITY_TYPES.has(type);
+}
+
 /**
- * Strava log Firestore 저장(merge) 성공 후 Supabase rides upsert.
+ * Firestore training·Strava log → Supabase rides upsert (주간 TSS·랭킹 원천).
  * @param {import('firebase-admin')} admin
  * @param {string} userId Firebase UID
- * @param {string} logDocId Firestore logs 문서 ID (Webhook·배치: Strava activity_id)
+ * @param {string} logDocId Firestore logs 문서 ID
  * @param {object} logDoc 저장된 log 필드
  */
-async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, options = {}) {
+async function runSecondaryAfterLogSave(admin, userId, logDocId, logDoc, options = {}) {
   await refreshDualRunFromRemoteConfig(admin, true);
   let decision = evaluateSecondaryIngestWrite(userId);
   const forceStravaIngest =
@@ -710,7 +739,7 @@ async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, o
     row.user_id = await resolveRideUserIdForFirebaseUid(supabase, userId, uidConfig);
     await writeRideToSupabase(row);
   }
-  console.log("[supabaseDualWriteServer] strava rides upsert OK", {
+  console.log("[supabaseDualWriteServer] rides upsert OK", {
     userId,
     activity_id: row.activity_id,
     ride_date: row.ride_date,
@@ -718,6 +747,54 @@ async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, o
     status: decision.status,
   });
   return { skipped: false, activity_id: row.activity_id };
+}
+
+/** @deprecated runSecondaryAfterLogSave 와 동일 */
+async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, options = {}) {
+  return runSecondaryAfterLogSave(admin, userId, logDocId, logDoc, options);
+}
+
+/**
+ * 주간 TSS 조회 전 — Firestore logs를 Supabase rides에 맞춤 (Stelvio 누락·ride_date UTC 오차 보정).
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {import('firebase-admin')} admin
+ * @param {string[]} userIds Firebase UID
+ * @param {string} startStr YYYY-MM-DD
+ * @param {string} endStr YYYY-MM-DD
+ */
+async function syncUsersLogsToSupabaseForDateRange(db, admin, userIds, startStr, endStr) {
+  if (!db || !admin || !userIds || !userIds.length || !startStr || !endStr) return { synced: 0 };
+  let synced = 0;
+  for (let i = 0; i < userIds.length; i += 1) {
+    const userId = userIds[i];
+    if (!userId) continue;
+    /* eslint-disable no-await-in-loop */
+    try {
+      const snap = await db
+        .collection("users")
+        .doc(userId)
+        .collection("logs")
+        .where("date", ">=", startStr)
+        .where("date", "<=", endStr)
+        .get();
+      for (const doc of snap.docs) {
+        const data = doc.data() || {};
+        if (!isCyclingLogForRankingSync(data)) continue;
+        const result = await runSecondaryAfterLogSave(admin, userId, doc.id, data, {
+          force: true,
+        });
+        if (result && !result.skipped) synced += 1;
+      }
+    } catch (e) {
+      console.warn(
+        "[supabaseDualWriteServer] syncUsersLogsToSupabaseForDateRange:",
+        userId,
+        e && e.message ? e.message : e
+      );
+    }
+    /* eslint-enable no-await-in-loop */
+  }
+  return { synced };
 }
 
 /** Cloud Function options.secrets 에 추가 */
@@ -735,7 +812,10 @@ module.exports = {
   supabaseUrlParam,
   uidNamespaceParam,
   uidModeParam,
+  runSecondaryAfterLogSave,
   runSecondaryAfterStravaLogSave,
+  syncUsersLogsToSupabaseForDateRange,
+  toSeoulRideDateYmd,
   appendServiceRoleSecret,
   mapTrainingLogToRideRow,
   resolveRideUserIdForFirebaseUid,

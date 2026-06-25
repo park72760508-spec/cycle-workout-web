@@ -258,6 +258,34 @@ function listInclusiveYmdsSeoul(startStr, endStr) {
   return dates;
 }
 
+async function findUserIdsWithRankingDayTotalsInRange(db, startStr, endStr) {
+  if (!db || !startStr || !endStr) return [];
+  const dates = listInclusiveYmdsSeoul(startStr, endStr);
+  if (!dates.length) return [];
+  const FieldPath = admin.firestore.FieldPath;
+  const coll = exports.RANKING_DAY_TOTALS_COLL;
+  const ids = new Set();
+  try {
+    for (let i = 0; i < dates.length; i += 1) {
+      const ymd = dates[i];
+      /* eslint-disable no-await-in-loop */
+      const snap = await db.collectionGroup(coll).where(FieldPath.documentId(), "==", ymd).get();
+      /* eslint-enable no-await-in-loop */
+      snap.forEach((docSnap) => {
+        const uid =
+          docSnap.ref.parent && docSnap.ref.parent.parent ? docSnap.ref.parent.parent.id : "";
+        if (uid) ids.add(uid);
+      });
+    }
+  } catch (e) {
+    console.warn(
+      "[rankingDayRollup] findUserIdsWithRankingDayTotalsInRange:",
+      e && e.message ? e.message : e
+    );
+  }
+  return Array.from(ids);
+}
+
 function bucketRef(db, userId, ymd) {
   const coll = exports.RANKING_DAY_TOTALS_COLL;
   return db.collection("users").doc(userId).collection(coll).doc(ymd);
@@ -1640,6 +1668,7 @@ exports.max60minWattsFromBucketSnaps = max60minWattsFromBucketSnaps;
 exports.max60minWattsFromDayBuckets = max60minWattsFromDayBuckets;
 exports.peak60YmdFromDayBuckets = peak60YmdFromDayBuckets;
 exports.maxHrByDurationFromBucketSnaps = maxHrByDurationFromBucketSnaps;
+exports.findUserIdsWithRankingDayTotalsInRange = findUserIdsWithRankingDayTotalsInRange;
 exports.bucketRef = bucketRef;
 exports.chunkedGetAll = chunkedGetAll;
 exports.getRolling183DaysRangeSeoul = getRolling183DaysRangeSeoul;

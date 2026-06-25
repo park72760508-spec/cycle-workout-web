@@ -488,7 +488,6 @@ async function fetchWeeklyTssRowsFromUserRankingMetrics(supabase, startStr, endS
       "user_id, weekly_tss, week_start, week_end, weekly_has_cheat_day, metrics_updated_at"
     )
     .eq("week_start", startStr)
-    .eq("week_end", endStr)
     .eq("weekly_has_cheat_day", false)
     .gt("weekly_tss", 0)
     .order("weekly_tss", { ascending: false })
@@ -522,6 +521,37 @@ async function fetchWeeklyTssRowsFromUserRankingMetrics(supabase, startStr, endS
  */
 async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
   logSupabaseRankingRequest("fn_weekly_tss_leaderboard_live|user_ranking_metrics", gender, "tss");
+  const db = admin.firestore();
+  try {
+    const activeUserIds = await rankingDayRollup.findUserIdsWithRankingDayTotalsInRange(
+      db,
+      startStr,
+      endStr
+    );
+    if (activeUserIds.length > 0) {
+      const syncResult = await supabaseDualWriteServer.syncUsersLogsToSupabaseForDateRange(
+        db,
+        admin,
+        activeUserIds,
+        startStr,
+        endStr
+      );
+      if (syncResult && syncResult.synced > 0) {
+        console.log("[supabaseRankingReader] weekly TSS pre-sync rides", {
+          users: activeUserIds.length,
+          upserts: syncResult.synced,
+          startStr,
+          endStr,
+        });
+      }
+    }
+  } catch (syncErr) {
+    console.warn(
+      "[supabaseRankingReader] weekly TSS log sync failed:",
+      syncErr && syncErr.message ? syncErr.message : syncErr
+    );
+  }
+
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
 
   let rows = [];

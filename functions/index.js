@@ -7904,6 +7904,32 @@ async function refreshWeeklyMileageTop10AggregatesOnly(db) {
     wPrevE,
   });
 
+  try {
+    const activeUserIds = await rankingDayRollup.findUserIdsWithRankingDayTotalsInRange(
+      db,
+      wStart,
+      wEnd
+    );
+    if (activeUserIds.length > 0) {
+      const syncResult = await supabaseDualWriteServer.syncUsersLogsToSupabaseForDateRange(
+        db,
+        admin,
+        activeUserIds,
+        wStart,
+        wEnd
+      );
+      console.log("[refreshWeeklyMileageTop10AggregatesOnly] supabase rides sync", {
+        users: activeUserIds.length,
+        upserts: syncResult && syncResult.synced,
+      });
+    }
+  } catch (syncErr) {
+    console.warn(
+      "[refreshWeeklyMileageTop10AggregatesOnly] supabase sync warn:",
+      syncErr && syncErr.message ? syncErr.message : syncErr
+    );
+  }
+
   const boardsByGender = {};
   for (const gender of ["all", "M", "F"]) {
     boardsByGender[gender] = await getWeeklyTssRankingBoardEntries(
@@ -11917,11 +11943,11 @@ const onUserLogWrittenHandler = async (change, context) => {
 
     if (
       affectsRanking &&
-      String(logData.source || "").toLowerCase() === "strava" &&
+      isCyclingForMmp(logData) &&
       !skipSupabaseUpsertOnTrigger
     ) {
       try {
-        await supabaseDualWriteServer.runSecondaryAfterStravaLogSave(
+        await supabaseDualWriteServer.runSecondaryAfterLogSave(
           admin,
           userId,
           logId,
@@ -11929,7 +11955,7 @@ const onUserLogWrittenHandler = async (change, context) => {
           { force: true }
         );
       } catch (e) {
-        console.warn("[onUserLogWritten] Strava Supabase rides 동기화 실패:", userId, logId, e.message);
+        console.warn("[onUserLogWritten] Supabase rides 동기화 실패:", userId, logId, e.message);
       }
     }
 
