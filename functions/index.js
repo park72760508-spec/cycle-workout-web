@@ -9275,6 +9275,7 @@ exports.getRankingBuildMetaPublic = onRequest(
           heptagon: buildMeta.heptagon,
           personalSpeed: buildMeta.personalSpeed,
           peak28d: buildMeta.peak28d,
+          rankingMetricsLive: buildMeta.rankingMetricsLive,
         },
         buildMetaFingerprint: buildMeta.fingerprint || "",
         error: buildMeta.error || undefined,
