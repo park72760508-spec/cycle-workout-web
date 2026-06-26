@@ -9417,16 +9417,31 @@
       }
     }
 
-    /** TSS 탭: TOP10 IndexedDB 캐시 → getPeakPowerRanking 형식 payload (즉시 표시 시드) */
-    function stelvioWeeklyTop10PayloadToTssBoardPayload(top10Data) {
-      if (!top10Data || !top10Data.success || !Array.isArray(top10Data.ranking)) return null;
-      if (!top10Data.ranking.length) return null;
-      var entries = top10Data.ranking.map(function (item, idx) {
+    /** TSS·TOP10 — getWeeklyRanking allEntries 또는 ranking[] → Supremo 전체 행 */
+    function stelvioBuildSupremoRowsFromWeeklyTop10Data(top10Data) {
+      if (!top10Data) return [];
+      if (Array.isArray(top10Data.allEntries) && top10Data.allEntries.length) {
+        return top10Data.allEntries.map(function (item, idx) {
+          return {
+            userId: item.userId,
+            name: item.name,
+            totalTss: item.totalTss != null ? Number(item.totalTss) : 0,
+            rank: item.rank != null ? Number(item.rank) : idx + 1,
+            rankChange: item.rankChange,
+            previousBoardRank: item.previousBoardRank,
+            is_private: item.is_private === true,
+            profileImageUrl: item.profileImageUrl || null,
+            ageCategory: item.ageCategory || 'Supremo',
+          };
+        });
+      }
+      if (!Array.isArray(top10Data.ranking)) return [];
+      return top10Data.ranking.map(function (item, idx) {
         return {
           userId: item.userId,
           name: item.name,
           totalTss: item.totalTss != null ? Number(item.totalTss) : 0,
-          rank: item.rank != null ? item.rank : idx + 1,
+          rank: item.rank != null ? Number(item.rank) : idx + 1,
           rankChange: item.rankChange,
           previousBoardRank: item.previousBoardRank,
           is_private: item.is_private === true,
@@ -9434,6 +9449,13 @@
           ageCategory: 'Supremo',
         };
       });
+    }
+
+    /** TSS 탭: TOP10 IndexedDB 캐시 → getPeakPowerRanking 형식 payload (즉시 표시 시드) */
+    function stelvioWeeklyTop10PayloadToTssBoardPayload(top10Data) {
+      if (!top10Data || !top10Data.success) return null;
+      var entries = stelvioBuildSupremoRowsFromWeeklyTop10Data(top10Data);
+      if (!entries.length) return null;
       var byCategory = stelvioEmptyByCategoryBuckets();
       byCategory.Supremo = entries.slice();
       var out = {
@@ -9495,30 +9517,27 @@
       return false;
     }
 
-    /** 전일 마지막 순위 baseline(서버 hydrate 메타)으로 TSS 등락 재계산 */
+    /** 전일 baseline — TSS 랭킹보드 Supremo 절대 순위로 등락 재계산 */
     function stelvioApplyWeeklyTssRankMovementFromPayloadBaselines(data) {
       if (!data || !data.byCategory) return data;
       if (data.prevWeekFallback === true || data._isPrevWeek === true) return data;
       if (!stelvioPayloadHasTssWeeklyRankMovementBaselines(data)) return data;
-      if (typeof stelvioRecomputeRankMovementAfterEligibleFilter === 'function') {
-        stelvioRecomputeRankMovementAfterEligibleFilter(data);
+      if (typeof stelvioRecomputeTssWeeklyAbsoluteRankMovement === 'function') {
+        stelvioRecomputeTssWeeklyAbsoluteRankMovement(data);
       }
       return data;
     }
 
-    /** 주간 TOP10 ranking[] — byCategory baseline 재계산 후 행에 등락 복사 */
+    /** 주간 TOP10 ranking[]·myRank — TSS Supremo baseline 절대 순위 등락 */
     function stelvioApplyWeeklyTssRankMovementToTop10Data(top10Data) {
       if (!top10Data || !Array.isArray(top10Data.ranking) || !top10Data.ranking.length) return top10Data;
       if (top10Data.prevWeekFallback === true || top10Data._isPrevWeek === true) return top10Data;
       if (!stelvioPayloadHasTssWeeklyRankMovementBaselines(top10Data)) return top10Data;
       var payload = stelvioWeeklyTop10PayloadToTssBoardPayload(top10Data);
       if (!payload || !payload.byCategory) return top10Data;
-      var serverSnap =
-        typeof stelvioExtractRankMovementSnapFromTop10Data === 'function'
-          ? stelvioExtractRankMovementSnapFromTop10Data(top10Data)
-          : null;
       stelvioApplyWeeklyTssRankMovementFromPayloadBaselines(payload);
       var rows = payload.byCategory.Supremo || [];
+      var baseline = stelvioResolveTssWeeklySupremoBaseline(payload);
       var byUid = Object.create(null);
       var ri;
       for (ri = 0; ri < rows.length; ri++) {
@@ -9540,10 +9559,9 @@
         if (myPk && myPk.rankChange != null && myPk.previousBoardRank != null) {
           top10Data.myRank.rankChange = myPk.rankChange;
           top10Data.myRank.previousBoardRank = myPk.previousBoardRank;
+        } else if (baseline) {
+          stelvioApplyTssWeeklyRankMovementToRow(top10Data.myRank, baseline, rows);
         }
-      }
-      if (typeof stelvioRestoreRankMovementOnTop10Data === 'function' && serverSnap) {
-        stelvioRestoreRankMovementOnTop10Data(top10Data, serverSnap);
       }
       return top10Data;
     }
@@ -10857,13 +10875,16 @@
       if (Array.isArray(data.fullEntries)) data.fullEntries = stelvioFilterRankingRowsForPublicViewer(data.fullEntries);
       if (Array.isArray(data.ranking)) data.ranking = stelvioFilterRankingRowsForPublicViewer(data.ranking);
       if (data.myRankSupremo && stelvioRankingIsWithdrawnRow(data.myRankSupremo)) data.myRankSupremo = null;
-      /* Max~60분: survivor 재계산. GC는 stelvioApplyGcRankMovementPipeline 종료 시 재계산(TSS와 분리). */
-      if (
-        typeof stelvioRecomputeRankMovementAfterEligibleFilter === 'function' &&
-        typeof stelvioIsPeakPowerDurationForRankChange === 'function' &&
-        stelvioIsPeakPowerDurationForRankChange(stelvioResolveRankMovementDurationType(data))
-      ) {
-        stelvioRecomputeRankMovementAfterEligibleFilter(data);
+      /* Max~60min: survivor 재계산. TSS: Supremo 절대 순위. GC는 stelvioApplyGcRankMovementPipeline 종료 시 재계산. */
+      if (typeof stelvioRecomputeRankMovementAfterEligibleFilter === 'function') {
+        var mvDur = stelvioResolveRankMovementDurationType(data);
+        if (
+          (typeof stelvioIsPeakPowerDurationForRankChange === 'function' &&
+            stelvioIsPeakPowerDurationForRankChange(mvDur)) ||
+          mvDur === 'tss'
+        ) {
+          stelvioRecomputeRankMovementAfterEligibleFilter(data);
+        }
       }
       return data;
     }
@@ -18147,6 +18168,12 @@
 
     function stelvioValidatePeakRankMovementOnPayload(data) {
       if (!data || !data.byCategory) return;
+      if (
+        data.durationType === 'tss' ||
+        (typeof stelvioIsTssWeeklyRankMovementScope === 'function' && stelvioIsTssWeeklyRankMovementScope(data))
+      ) {
+        return;
+      }
       var ci, ri, rows, row, cat;
       for (ci = 0; ci < STELVIO_RANK_BOARD_CATS.length; ci++) {
         cat = STELVIO_RANK_BOARD_CATS[ci];
@@ -18395,10 +18422,25 @@
         badgeOpts.isWeeklyTop10 === true ||
         (typeof stelvioIsTssRankingMode === 'function' && stelvioIsTssRankingMode());
       if (tssWeeklyScoped) {
+        var listCatTss = listCategoryKey || 'Supremo';
         var serverFirst = stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
         if (serverFirst) return serverFirst;
+        var supRow =
+          listCatTss !== 'Supremo' && typeof stelvioFindRankingRowForUser === 'function'
+            ? stelvioFindRankingRowForUser('Supremo', item.userId)
+            : null;
+        if (supRow && supRow.rankChange != null && supRow.previousBoardRank != null) {
+          return stelvioServerRankChangeBadgeHtml(supRow.rankChange, supRow.previousBoardRank);
+        }
         if (typeof stelvioNormalizeRankMovementOnRow === 'function') {
-          stelvioNormalizeRankMovementOnRow(item, listCategoryKey ? stelvioCategoryRankInFullList(stelvioRankingByCategory, listCategoryKey || 'Supremo', item.userId) : null);
+          var absRank =
+            item.rank != null && isFinite(Number(item.rank)) && Number(item.rank) >= 1
+              ? Math.floor(Number(item.rank))
+              : null;
+          if (absRank == null && supRow && supRow.rank != null) {
+            absRank = Math.floor(Number(supRow.rank));
+          }
+          stelvioNormalizeRankMovementOnRow(item, absRank);
         }
         return stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
       }
@@ -18459,6 +18501,192 @@
     window.stelvioResolvePreviousPeakRanksBaselineForCategory = stelvioResolvePreviousPeakRanksBaselineForCategory;
     var STELVIO_RANK_BOARD_CATS = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
 
+    /** TSS·TOP10 — Supremo 전체 순위 vs 전일 baseline 절대 순위 (랭킹보드 TSS와 동일) */
+    function stelvioComputeAbsoluteTssWeeklyRankMovementForRows(rows, baseline) {
+      var rankChanges = {};
+      var previousRanks = {};
+      if (!rows || !rows.length || !baseline || typeof baseline !== 'object') {
+        return { rankChanges: rankChanges, previousRanks: previousRanks };
+      }
+      for (var i = 0; i < rows.length; i++) {
+        var e = rows[i];
+        var uid = e && e.userId != null ? String(e.userId).trim() : '';
+        if (!uid || baseline[uid] == null) continue;
+        var prev = Math.floor(Number(baseline[uid]));
+        if (!isFinite(prev) || prev < 1) continue;
+        var curr =
+          e.rank != null && isFinite(Number(e.rank)) && Number(e.rank) >= 1
+            ? Math.floor(Number(e.rank))
+            : i + 1;
+        rankChanges[uid] = prev - curr;
+        previousRanks[uid] = prev;
+      }
+      return { rankChanges: rankChanges, previousRanks: previousRanks };
+    }
+
+    function stelvioResolveTssWeeklySupremoBaseline(data) {
+      if (!data) return null;
+      if (
+        data.rankMovementCompareBaselineByCategory &&
+        data.rankMovementCompareBaselineByCategory.Supremo &&
+        Object.keys(data.rankMovementCompareBaselineByCategory.Supremo).length
+      ) {
+        return data.rankMovementCompareBaselineByCategory.Supremo;
+      }
+      if (
+        data.rankMovementPrevDayByCategory &&
+        data.rankMovementPrevDayByCategory.Supremo &&
+        Object.keys(data.rankMovementPrevDayByCategory.Supremo).length
+      ) {
+        return data.rankMovementPrevDayByCategory.Supremo;
+      }
+      return null;
+    }
+
+    function stelvioApplyTssWeeklyRankMovementToRow(myRow, baseline, supremoRows) {
+      if (!myRow || myRow.userId == null || !baseline) return;
+      var uid = String(myRow.userId);
+      var prev = Math.floor(Number(baseline[uid]));
+      if (!isFinite(prev) || prev < 1) {
+        delete myRow.rankChange;
+        delete myRow.previousBoardRank;
+        return;
+      }
+      var curr =
+        myRow.rank != null && isFinite(Number(myRow.rank)) && Number(myRow.rank) >= 1
+          ? Math.floor(Number(myRow.rank))
+          : null;
+      if ((curr == null || curr < 1) && Array.isArray(supremoRows)) {
+        for (var si = 0; si < supremoRows.length; si++) {
+          if (supremoRows[si] && String(supremoRows[si].userId) === uid) {
+            curr =
+              supremoRows[si].rank != null && isFinite(Number(supremoRows[si].rank))
+                ? Math.floor(Number(supremoRows[si].rank))
+                : si + 1;
+            break;
+          }
+        }
+      }
+      if (curr == null || curr < 1) return;
+      myRow.previousBoardRank = prev;
+      myRow.rankChange = prev - curr;
+    }
+
+    function stelvioPropagateTssWeeklySupremoRankMovement(data) {
+      if (!data || !data.byCategory) return;
+      var sup = data.byCategory.Supremo;
+      if (!Array.isArray(sup) || !sup.length) return;
+      var mvByUid = Object.create(null);
+      var si;
+      for (si = 0; si < sup.length; si++) {
+        var sr = sup[si];
+        if (!sr || sr.userId == null || sr.rankChange == null || sr.previousBoardRank == null) continue;
+        mvByUid[String(sr.userId)] = {
+          rankChange: sr.rankChange,
+          previousBoardRank: sr.previousBoardRank,
+        };
+      }
+      if (!Object.keys(mvByUid).length) return;
+      function applyMvRow(row) {
+        if (!row || row.userId == null) return;
+        var pk = mvByUid[String(row.userId)];
+        if (!pk) {
+          delete row.rankChange;
+          delete row.previousBoardRank;
+          return;
+        }
+        row.rankChange = pk.rankChange;
+        row.previousBoardRank = pk.previousBoardRank;
+      }
+      var ci, ri, cat, rows;
+      for (ci = 0; ci < STELVIO_RANK_BOARD_CATS.length; ci++) {
+        cat = STELVIO_RANK_BOARD_CATS[ci];
+        rows = data.byCategory[cat];
+        if (!Array.isArray(rows)) continue;
+        for (ri = 0; ri < rows.length; ri++) applyMvRow(rows[ri]);
+      }
+      if (Array.isArray(data.entries)) {
+        for (ri = 0; ri < data.entries.length; ri++) applyMvRow(data.entries[ri]);
+      }
+      if (Array.isArray(data.ranking)) {
+        for (ri = 0; ri < data.ranking.length; ri++) applyMvRow(data.ranking[ri]);
+      }
+      if (data.myRank) applyMvRow(data.myRank);
+      if (data.myRankSupremo) applyMvRow(data.myRankSupremo);
+      if (data.currentUser) applyMvRow(data.currentUser);
+    }
+
+    function stelvioSyncTssWeeklyMyRankFromSupremo(data) {
+      if (!data || !data.byCategory) return;
+      var targets = [];
+      if (data.myRankSupremo && data.myRankSupremo.userId) targets.push(data.myRankSupremo);
+      if (data.currentUser && data.currentUser.userId) {
+        var dup = false;
+        for (var ti = 0; ti < targets.length; ti++) {
+          if (targets[ti] && String(targets[ti].userId) === String(data.currentUser.userId)) dup = true;
+        }
+        if (!dup) targets.push(data.currentUser);
+      }
+      if (data.myRank && data.myRank.userId) {
+        var dup2 = false;
+        for (var tj = 0; tj < targets.length; tj++) {
+          if (targets[tj] && String(targets[tj].userId) === String(data.myRank.userId)) dup2 = true;
+        }
+        if (!dup2) targets.push(data.myRank);
+      }
+      if (!targets.length) return;
+      var sup = data.byCategory.Supremo || [];
+      for (var tk = 0; tk < targets.length; tk++) {
+        var tgt = targets[tk];
+        if (!tgt || tgt.userId == null) continue;
+        var uid = String(tgt.userId);
+        for (var ri = 0; ri < sup.length; ri++) {
+          if (!sup[ri] || String(sup[ri].userId) !== uid) continue;
+          if (sup[ri].rankChange != null && sup[ri].previousBoardRank != null) {
+            tgt.rankChange = sup[ri].rankChange;
+            tgt.previousBoardRank = sup[ri].previousBoardRank;
+          }
+          if (sup[ri].rank != null) tgt.rank = sup[ri].rank;
+          else tgt.rank = ri + 1;
+          break;
+        }
+      }
+    }
+
+    function stelvioRecomputeTssWeeklyAbsoluteRankMovement(data) {
+      if (!data || !data.byCategory) return data;
+      if (data.prevWeekFallback === true || data._isPrevWeek === true) return data;
+      var baseline = stelvioResolveTssWeeklySupremoBaseline(data);
+      if (!baseline) return data;
+      var rows = data.byCategory.Supremo;
+      if (!Array.isArray(rows) || !rows.length) return data;
+      var mv = stelvioComputeAbsoluteTssWeeklyRankMovementForRows(rows, baseline);
+      for (var ri = 0; ri < rows.length; ri++) {
+        var row = rows[ri];
+        if (!row || row.userId == null) continue;
+        var uid = String(row.userId);
+        delete row.rankChange;
+        delete row.previousBoardRank;
+        if (mv.rankChanges[uid] == null || mv.previousRanks[uid] == null) continue;
+        row.rankChange = mv.rankChanges[uid];
+        row.previousBoardRank = mv.previousRanks[uid];
+      }
+      if (Array.isArray(data.entries)) {
+        for (var ei = 0; ei < data.entries.length; ei++) {
+          var ent = data.entries[ei];
+          if (!ent || ent.userId == null) continue;
+          var euid = String(ent.userId);
+          if (mv.rankChanges[euid] == null || mv.previousRanks[euid] == null) continue;
+          ent.rankChange = mv.rankChanges[euid];
+          ent.previousBoardRank = mv.previousRanks[euid];
+        }
+      }
+      stelvioSyncTssWeeklyMyRankFromSupremo(data);
+      stelvioPropagateTssWeeklySupremoRankMovement(data);
+      return data;
+    }
+    window.stelvioRecomputeTssWeeklyAbsoluteRankMovement = stelvioRecomputeTssWeeklyAbsoluteRankMovement;
+
 /**
  * 탈퇴·목록 이탈자 제외 생존 코호트 기준 등락 — rankingPeakMovement.js 와 동일.
  * 전일 스냅샷에 탈퇴자가 포함돼 있어도, 오늘 목록에 남은 사용자만 모수로 재산정한 뒤
@@ -18513,9 +18741,14 @@
     /** 탈퇴 필터·재정렬 직후 등락 재계산(서버 filterWithdrawnUsersFromRankingPayload 와 동일) */
     function stelvioRecomputeRankMovementAfterEligibleFilter(data) {
       if (!data || !data.byCategory) return data;
+      var tssWeeklyAbsolute =
+        data.durationType === 'tss' ||
+        (typeof stelvioIsTssWeeklyRankMovementScope === 'function' &&
+          stelvioIsTssWeeklyRankMovementScope(data));
+      var categoriesToProcess = tssWeeklyAbsolute ? ['Supremo'] : STELVIO_RANK_BOARD_CATS.slice();
       var ci, ri, cat, rows, baseline, uid, mv;
-      for (ci = 0; ci < STELVIO_RANK_BOARD_CATS.length; ci++) {
-        cat = STELVIO_RANK_BOARD_CATS[ci];
+      for (ci = 0; ci < categoriesToProcess.length; ci++) {
+        cat = categoriesToProcess[ci];
         rows = data.byCategory[cat];
         if (!rows || !rows.length) continue;
         baseline = null;
@@ -18540,7 +18773,10 @@
           }
         }
         if (!baseline || !Object.keys(baseline).length) continue;
-        mv = stelvioComputeSurvivorAwareRankMovementForRows(rows, baseline);
+        mv =
+          tssWeeklyAbsolute && cat === 'Supremo' && typeof stelvioComputeAbsoluteTssWeeklyRankMovementForRows === 'function'
+            ? stelvioComputeAbsoluteTssWeeklyRankMovementForRows(rows, baseline)
+            : stelvioComputeSurvivorAwareRankMovementForRows(rows, baseline);
         for (ri = 0; ri < rows.length; ri++) {
           if (!rows[ri] || rows[ri].userId == null) continue;
           uid = String(rows[ri].userId);
@@ -18552,6 +18788,9 @@
           rows[ri].rankChange = mv.rankChanges[uid];
           rows[ri].previousBoardRank = mv.previousRanks[uid];
         }
+      }
+      if (tssWeeklyAbsolute && typeof stelvioPropagateTssWeeklySupremoRankMovement === 'function') {
+        stelvioPropagateTssWeeklySupremoRankMovement(data);
       }
       return data;
     }
@@ -19403,6 +19642,9 @@
         if (stelvioRankingFullEntries) {
           payload.entries = JSON.parse(JSON.stringify(stelvioRankingFullEntries));
         }
+        if (dur === 'tss' && typeof stelvioMyRankSupremo !== 'undefined' && stelvioMyRankSupremo) {
+          payload.myRankSupremo = JSON.parse(JSON.stringify(stelvioMyRankSupremo));
+        }
       } catch (eMvGlob) {
         return false;
       }
@@ -19410,8 +19652,26 @@
         if (stelvioTssBoardWeekMeta.prevWeekFallback === true) payload.prevWeekFallback = true;
         if (stelvioTssBoardWeekMeta._isPrevWeek === true) payload._isPrevWeek = true;
       }
+      if (window.stelvioTssRankMovementMeta) {
+        if (window.stelvioTssRankMovementMeta.rankMovementCompareBaselineByCategory) {
+          payload.rankMovementCompareBaselineByCategory =
+            window.stelvioTssRankMovementMeta.rankMovementCompareBaselineByCategory;
+        }
+        if (window.stelvioTssRankMovementMeta.rankMovementPrevDayByCategory) {
+          payload.rankMovementPrevDayByCategory =
+            window.stelvioTssRankMovementMeta.rankMovementPrevDayByCategory;
+        }
+      }
       if (dur === 'tss') {
         stelvioApplyTssWeeklyRankMovementPipeline(payload);
+        stelvioSyncTssWeeklyMyRankFromSupremo(payload);
+        if (payload.myRankSupremo) {
+          try {
+            stelvioMyRankSupremo = JSON.parse(JSON.stringify(payload.myRankSupremo));
+          } catch (eMyMs) {
+            stelvioMyRankSupremo = payload.myRankSupremo;
+          }
+        }
       } else if (typeof stelvioApplyRankMovementPipeline === 'function') {
         stelvioApplyRankMovementPipeline(payload);
       }
@@ -19432,42 +19692,21 @@
     }
     window.stelvioSyncRankingRankMovementOnGlobals = stelvioSyncRankingRankMovementOnGlobals;
 
-    /** 주간 TSS·TOP10 전용 — 서버에서 받은 등락은 지우지 않고, 없을 때만 로컬 prevDay 재계산 */
+    /** 주간 TSS·TOP10 — TSS 랭킹보드 Supremo baseline 절대 순위로 등락 통일 */
     function stelvioApplyTssWeeklyRankMovementPipeline(data, pipelineOpts) {
       pipelineOpts = pipelineOpts || {};
       if (!stelvioIsTssWeeklyRankMovementScope(data, pipelineOpts)) return;
       if (!data || !data.byCategory) return;
       if (data.prevWeekFallback === true || data._isPrevWeek === true) return;
+      if (stelvioPayloadHasTssWeeklyRankMovementBaselines(data)) {
+        stelvioRecomputeTssWeeklyAbsoluteRankMovement(data);
+        stelvioEnsurePeakPowerRankMovementOnPayload(data);
+        return;
+      }
       var serverMvSnap =
         typeof stelvioExtractRankMovementFromPayload === 'function'
           ? stelvioExtractRankMovementFromPayload(data)
           : null;
-      var hadServerMv =
-        data._tssWeeklyServerRankMv === true ||
-        (typeof stelvioPeakRankMovementPresentOnPayload === 'function' &&
-          stelvioPeakRankMovementPresentOnPayload(data)) ||
-        (serverMvSnap && Object.keys(serverMvSnap).length > 0);
-      if (hadServerMv) {
-        if (typeof stelvioRestoreRankMovementWhereMissing === 'function') {
-          stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
-        }
-        /* 서버가 주입한 TSS 등락은 normalize로 삭제하지 않음 */
-        stelvioEnsurePeakPowerRankMovementOnPayload(data);
-        return;
-      }
-      if (stelvioPayloadHasTssWeeklyRankMovementBaselines(data)) {
-        stelvioApplyWeeklyTssRankMovementFromPayloadBaselines(data);
-        if (typeof stelvioRestoreRankMovementWhereMissing === 'function') {
-          stelvioRestoreRankMovementWhereMissing(data, serverMvSnap);
-        }
-        if (typeof stelvioNormalizeRankMovementOnPayload === 'function') {
-          stelvioNormalizeRankMovementOnPayload(data);
-        }
-        if (stelvioPeakRankMovementPresentOnPayload(data)) {
-          stelvioEnsurePeakPowerRankMovementOnPayload(data);
-          return;
-        }
-      }
       if (
         typeof stelvioPeakRankSnapshotHasPrevDayBaseline === 'function' &&
         stelvioPeakRankSnapshotHasPrevDayBaseline(data)
@@ -20415,6 +20654,21 @@
           prevWeekFallback: data.prevWeekFallback === true,
           _isPrevWeek: data._isPrevWeek === true,
         };
+        try {
+          window.stelvioTssRankMovementMeta = {
+            rankMovementCompareBaselineByCategory: data.rankMovementCompareBaselineByCategory
+              ? JSON.parse(JSON.stringify(data.rankMovementCompareBaselineByCategory))
+              : null,
+            rankMovementPrevDayByCategory: data.rankMovementPrevDayByCategory
+              ? JSON.parse(JSON.stringify(data.rankMovementPrevDayByCategory))
+              : null,
+          };
+        } catch (eTssMvMeta) {
+          window.stelvioTssRankMovementMeta = {
+            rankMovementCompareBaselineByCategory: data.rankMovementCompareBaselineByCategory || null,
+            rankMovementPrevDayByCategory: data.rankMovementPrevDayByCategory || null,
+          };
+        }
         stelvioUpdateWeeklyTssWeekCaption(data);
         if (stelvioTssBoardPayloadIsFullLeaderboard(data)) {
           try {
