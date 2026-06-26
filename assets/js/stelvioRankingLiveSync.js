@@ -1,5 +1,5 @@
 /**
- * CYCLE 주간 TSS 랭킹 실시간 동기화 — Supabase ranking_build_meta Realtime (Firebase 미사용)
+ * CYCLE 주간 TSS·개인 거리 랭킹 실시간 동기화 — Supabase ranking_build_meta Realtime (Firebase 미사용)
  * Auth Bridge 미사용: anon 키 + RLS SELECT — localStorage 세션 403(setSession) 회피
  */
 (function (global) {
