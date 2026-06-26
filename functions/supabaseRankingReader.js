@@ -498,6 +498,54 @@ async function fetchPersonalDistRowsFromDailySummariesLive(supabase, startStr, e
   return data || [];
 }
 
+async function enrichSupabaseRankingRowsWithProfiles(supabase, rows) {
+  const userIds = (rows || []).map((r) => r.user_id).filter(Boolean);
+  if (!userIds.length) return rows || [];
+  const profileMap = await getPublicProfileMapForSupabaseUsers(supabase, userIds);
+  return (rows || []).map((row) => {
+    const profile = profileMap.get(String(row.user_id));
+    if (!profile) return row;
+    return { ...row, ...profile, user_id: row.user_id };
+  });
+}
+
+/** Supabase public profile만 '비공개'인 행 — Firestore users.name 보강(이름 누락 TOP10 방지) */
+async function hydrateSupabaseRankingRowsMissingNames(admin, rows, uidMap) {
+  if (!admin || !Array.isArray(rows) || !rows.length) return rows || [];
+  const needFb = [];
+  for (const row of rows) {
+    const display = String(row.display_name || "").trim();
+    const actual = String(row.actual_name || row.name || "").trim();
+    if (actual.length >= 2) continue;
+    if (display.length >= 2 && display !== "비공개") continue;
+    const fbUid = uidMap.get(String(row.user_id));
+    if (fbUid) needFb.push(fbUid);
+  }
+  if (!needFb.length) return rows;
+  const unique = [...new Set(needFb)];
+  const nameByFb = new Map();
+  const db = admin.firestore();
+  const CHUNK = 10;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const slice = unique.slice(i, i + CHUNK);
+    const snaps = await db.getAll(...slice.map((id) => db.collection("users").doc(id)));
+    for (let j = 0; j < slice.length; j++) {
+      const snap = snaps[j];
+      if (!snap || !snap.exists) continue;
+      const d = snap.data() || {};
+      const n = String(d.name || d.display_name || "").trim();
+      if (n.length >= 2) nameByFb.set(slice[j], n);
+    }
+  }
+  if (!nameByFb.size) return rows;
+  return rows.map((row) => {
+    const fbUid = uidMap.get(String(row.user_id));
+    const fsName = fbUid ? nameByFb.get(fbUid) : null;
+    if (!fsName) return row;
+    return { ...row, actual_name: fsName };
+  });
+}
+
 async function fetchWeeklyTssRowsFromDailySummariesLive(supabase, startStr, endStr) {
   const { data, error } = await supabase.rpc("fn_weekly_tss_leaderboard_live", {
     p_start: startStr,
@@ -552,7 +600,8 @@ async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
     `tss ${startStr}~${endStr}`
   );
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const rows = await fetchWeeklyTssRowsFromDailySummariesLive(supabase, startStr, endStr);
+  let rows = await fetchWeeklyTssRowsFromDailySummariesLive(supabase, startStr, endStr);
+  rows = await enrichSupabaseRankingRowsWithProfiles(supabase, rows);
 
   const missingFbUid = (rows || [])
     .filter((r) => !(r.firebase_uid && String(r.firebase_uid).trim()))
@@ -560,6 +609,12 @@ async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
   const uidMap = missingFbUid.length
     ? await getFirebaseUidMapForSupabaseUsers(admin, supabase, missingFbUid)
     : new Map();
+  for (const row of rows || []) {
+    const sid = String(row.user_id || "");
+    const fb = row.firebase_uid ? String(row.firebase_uid).trim() : "";
+    if (sid && fb && !uidMap.has(sid)) uidMap.set(sid, fb);
+  }
+  rows = await hydrateSupabaseRankingRowsMissingNames(admin, rows, uidMap);
 
   const entries = weeklyTssRowsToEntries(rows, uidMap, gender);
   const { entries: ranked, byCategory } = buildByCategoryFromEntries(entries);
@@ -696,7 +751,8 @@ async function fetchPersonalDistCore(admin, startStr, endStr, gender) {
     `personal_dist ${startStr}~${endStr}`
   );
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const rows = await fetchPersonalDistRowsFromDailySummariesLive(supabase, startStr, endStr);
+  let rows = await fetchPersonalDistRowsFromDailySummariesLive(supabase, startStr, endStr);
+  rows = await enrichSupabaseRankingRowsWithProfiles(supabase, rows);
 
   const missingFbUid = (rows || [])
     .filter((r) => !(r.firebase_uid && String(r.firebase_uid).trim()))
@@ -704,6 +760,12 @@ async function fetchPersonalDistCore(admin, startStr, endStr, gender) {
   const uidMap = missingFbUid.length
     ? await getFirebaseUidMapForSupabaseUsers(admin, supabase, missingFbUid)
     : new Map();
+  for (const row of rows || []) {
+    const sid = String(row.user_id || "");
+    const fb = row.firebase_uid ? String(row.firebase_uid).trim() : "";
+    if (sid && fb && !uidMap.has(sid)) uidMap.set(sid, fb);
+  }
+  rows = await hydrateSupabaseRankingRowsMissingNames(admin, rows, uidMap);
 
   const entries = personalDistRowsToEntries(rows, uidMap, gender);
   const { entries: ranked, byCategory } = buildByCategoryFromEntries(entries);
