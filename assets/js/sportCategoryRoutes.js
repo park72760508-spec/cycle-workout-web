@@ -132,15 +132,21 @@
     if (typeof showScreen === 'function') showScreen('runDashboardScreen');
   }
 
+  /** CYCLE 베이스캠프 → 대시보드(분석) */
+  function openCycleDashboardFromBasecamp() {
+    setActiveSport('cycle');
+    if (typeof showScreen === 'function') showScreen('performanceDashboardScreen');
+  }
+
   /** 모임 화면 홈 버튼 — 진입 카테고리 기준 베이스캠프 */
   function goOpenRidingMoimHomeBasecamp() {
     if (resolveOpenRidingMoimCategory() === 'RUN') enterRunBasecamp();
     else enterCycleBasecamp();
   }
 
-  /** RUN 모드: 환경설정 상단에 로그인 본인 프로필 카드 표시 (관리자·일반 회원 공통) */
+  /** CYCLE·RUN 공통: 환경설정 상단에 로그인 본인 프로필 카드 표시 (관리자·일반 회원 공통) */
   function shouldShowSettingsProfileCard() {
-    return getActiveSport() === 'run';
+    return true;
   }
 
   window.sportCategoryRoutes = {
@@ -160,6 +166,7 @@
     navigateToRidingMoimFromBasecamp: navigateToRidingMoimFromBasecamp,
     navigateToRunCrewFromBasecamp: navigateToRunCrewFromBasecamp,
     openRunDashboardFromBasecamp: openRunDashboardFromBasecamp,
+    openCycleDashboardFromBasecamp: openCycleDashboardFromBasecamp,
     goOpenRidingMoimHomeBasecamp: goOpenRidingMoimHomeBasecamp,
     shouldShowSettingsProfileCard: shouldShowSettingsProfileCard
   };
@@ -176,6 +183,7 @@
   window.navigateToRidingMoimFromBasecamp = navigateToRidingMoimFromBasecamp;
   window.navigateToRunCrewFromBasecamp = navigateToRunCrewFromBasecamp;
   window.openRunDashboardFromBasecamp = openRunDashboardFromBasecamp;
+  window.openCycleDashboardFromBasecamp = openCycleDashboardFromBasecamp;
   window.goOpenRidingMoimHomeBasecamp = goOpenRidingMoimHomeBasecamp;
   window.shouldShowSettingsProfileCard = shouldShowSettingsProfileCard;
   window.showRunServiceComingSoonModal = showRunServiceComingSoonModal;
