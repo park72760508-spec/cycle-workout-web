@@ -11461,7 +11461,9 @@
       }
     }
     async function stelvioWebViewEnrichRankingPayloadAfterTabPaint(apiDur, data, uid) {
-      if (!data || !apiDur) return;
+      if (!data || !apiDur || !stelvioRankingState) return;
+      var curApi = stelvioResolveRankingBoardApiDuration(stelvioRankingState.duration);
+      if (curApi !== apiDur) return;
       if (
         apiDur === 'tss' &&
         data.prevWeekFallback !== true &&
@@ -11490,6 +11492,9 @@
       if (typeof renderStelvioHeroCard === 'function') {
         renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
       }
+      if (typeof refreshStelvioDistributionChartMounted === 'function') {
+        refreshStelvioDistributionChartMounted();
+      }
       var bodyEl = document.getElementById('stelvioRankingListBody');
       if (bodyEl && typeof stelvioRankingRefreshRankChangeSlotsForActiveTab === 'function') {
         stelvioRankingRefreshRankChangeSlotsForActiveTab(bodyEl);
@@ -11505,9 +11510,7 @@
     }
     function stelvioWebViewKickRankingBoardWarmAfterOpen() {
       if (!stelvioWebViewRankingFastTabEnabled()) return;
-      if (typeof stelvioSchedulePreRenderAllWarmTabsFromMemory === 'function') {
-        stelvioSchedulePreRenderAllWarmTabsFromMemory({ delayMs: 260 });
-      }
+      /* 프리렌더는 화면 표시 중 전역·listBody id를 건드려 탭 간섭(GC 유출) — WebView는 IDB→RAM prefetch만 */
       if (typeof stelvioEnsureRankingBoardWarmPrefetch !== 'function') return;
       var uidW =
         typeof stelvioRankingBoardUid === 'function' ? stelvioRankingBoardUid() : null;
@@ -12460,6 +12463,9 @@
             renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
           }
           if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+          if (typeof refreshStelvioDistributionChartMounted === 'function') {
+            refreshStelvioDistributionChartMounted();
+          }
           if (typeof stelvioFlushRankingBoardScrollAfterTabApply === 'function') {
             stelvioFlushRankingBoardScrollAfterTabApply();
           }
@@ -16576,9 +16582,6 @@
       }
       if (instantTabOk && stelvioRankingTabSwitchListReady()) {
         stelvioHideRankingBoardLoadingUi();
-        if (stelvioWebViewRankingFastTabEnabled() && typeof stelvioSchedulePreRenderAllWarmTabsFromMemory === 'function') {
-          stelvioSchedulePreRenderAllWarmTabsFromMemory({ delayMs: 80 });
-        }
       } else {
         if (typeof stelvioPrimeTabSwitchFromIndexedDb === 'function') {
           try {
@@ -16588,12 +16591,6 @@
           }
           if (primed && stelvioRankingTabSwitchListReady()) {
             stelvioHideRankingBoardLoadingUi();
-            if (
-              stelvioWebViewRankingFastTabEnabled() &&
-              typeof stelvioSchedulePreRenderAllWarmTabsFromMemory === 'function'
-            ) {
-              stelvioSchedulePreRenderAllWarmTabsFromMemory({ delayMs: 80 });
-            }
           }
         }
         /* 클럽 탭: 소모임 목록 플레이스홀더(전역 payload 비움 상태) */
@@ -18070,13 +18067,8 @@
       stelvioRankingPreRenderState.jobs[jobKey] = true;
       var run = async function () {
         delete stelvioRankingPreRenderState.jobs[jobKey];
-        var activeBodyEarly = document.getElementById('stelvioRankingListBody');
-        if (stelvioWebViewRankingFastTabEnabled()) {
-          if (stelvioRankingScreenIsVisible() && activeBodyEarly === view) return;
-        } else if (stelvioRankingScreenIsVisible()) {
-          return;
-        }
-        var activeBody = activeBodyEarly;
+        if (stelvioRankingScreenIsVisible()) return;
+        var activeBody = document.getElementById('stelvioRankingListBody');
         var oldHadId = activeBody === view;
         var savedState = Object.assign({}, stelvioRankingState || {});
         var savedGlobals = {
@@ -18244,6 +18236,12 @@
         try {
           stelvioRefreshRankingFavoriteSetFromStorage({ authoritativeLocal: true });
         } catch (eFavWvPr) {}
+        stelvioRankingFastTabSwitchFlag = true;
+        try {
+          if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+        } finally {
+          stelvioRankingFastTabSwitchFlag = false;
+        }
         if (typeof stelvioEnsureRankingFavoriteUiListeners === 'function') stelvioEnsureRankingFavoriteUiListeners();
         if (typeof renderStelvioHeroCard === 'function') {
           renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
