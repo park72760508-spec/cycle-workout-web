@@ -472,6 +472,32 @@ function weeklyTssRowsToEntries(rows, uidMap, gender) {
   return entries;
 }
 
+function personalDistRowsToEntries(rows, uidMap, gender) {
+  const entries = [];
+  for (const row of rows || []) {
+    if (!isSupabaseRankingEligibleProfile(row)) continue;
+    const fbUid = row.firebase_uid ? String(row.firebase_uid).trim() : uidMap.get(String(row.user_id));
+    if (!fbUid) continue;
+    if (!profileGenderMatches(row, gender)) continue;
+    const totalKm = Math.round(Number(row.distance_30d_km) * 100) / 100;
+    if (totalKm <= 0) continue;
+    entries.push({
+      ...mapRowToFirebaseUser(row, fbUid),
+      totalKm,
+    });
+  }
+  return entries;
+}
+
+async function fetchPersonalDistRowsFromDailySummariesLive(supabase, startStr, endStr) {
+  const { data, error } = await supabase.rpc("fn_personal_dist_leaderboard_live", {
+    p_start: startStr,
+    p_end: endStr,
+  });
+  if (error) throw error;
+  return data || [];
+}
+
 async function fetchWeeklyTssRowsFromDailySummariesLive(supabase, startStr, endStr) {
   const { data, error } = await supabase.rpc("fn_weekly_tss_leaderboard_live", {
     p_start: startStr,
@@ -664,63 +690,46 @@ async function fetchPeakPowerMonthly(admin, startStr, endStr, durationType, gend
  * @param {import('firebase-admin')} admin
  */
 async function fetchPersonalDistCore(admin, startStr, endStr, gender) {
-  logSupabaseRankingRequest("mv_leaderboard_distance_30d", gender, "personal_dist");
+  logSupabaseRankingRequest(
+    "fn_personal_dist_leaderboard_live",
+    gender,
+    `personal_dist ${startStr}~${endStr}`
+  );
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const rows = await fetchPersonalDistRowsFromDailySummariesLive(supabase, startStr, endStr);
 
-  let query = supabase
-    .from("mv_leaderboard_distance_30d")
-    .select(
-      "user_id, display_name, profile_image_url, gender, league_category, distance_30d_km, dist_window_start, dist_window_end"
-    )
-    .gt("distance_30d_km", 0)
-    .order("distance_30d_km", { ascending: false });
+  const missingFbUid = (rows || [])
+    .filter((r) => !(r.firebase_uid && String(r.firebase_uid).trim()))
+    .map((r) => r.user_id);
+  const uidMap = missingFbUid.length
+    ? await getFirebaseUidMapForSupabaseUsers(admin, supabase, missingFbUid)
+    : new Map();
 
-  query = applyGenderFilter(query, gender);
-
-  const { data, error } = await query.limit(2000);
-  if (error) throw error;
-
-  const profileMap = await getPublicProfileMapForSupabaseUsers(
-    supabase,
-    (data || []).map((row) => row.user_id)
-  );
-  const mergedRows = (data || [])
-    .map((row) => {
-      const profile = profileMap.get(String(row.user_id));
-      return profile ? { ...row, ...profile, user_id: row.user_id } : row;
-    })
-    .filter((row) => profileGenderMatches(row, gender));
-
-  const uidMap = await getFirebaseUidMapForSupabaseUsers(
-    admin,
-    supabase,
-    mergedRows.map((row) => row.user_id)
-  );
-  const entries = [];
-  for (const row of mergedRows) {
-    const fbUid = uidMap.get(String(row.user_id));
-    if (!fbUid) continue;
-    const totalKm = Math.round(Number(row.distance_30d_km) * 100) / 100;
-    if (totalKm <= 0) continue;
-    entries.push({
-      ...mapRowToFirebaseUser(row, fbUid),
-      totalKm,
-    });
-  }
-
+  const entries = personalDistRowsToEntries(rows, uidMap, gender);
   const { entries: ranked, byCategory } = buildByCategoryFromEntries(entries);
+
+  console.log(
+    "[Stelvio Supabase Request] Result:",
+    "personal_dist",
+    "requested=",
+    gender,
+    "rows=",
+    ranked.length
+  );
+
   return {
     success: true,
     byCategory,
     entries: ranked,
-    startStr:
-      (mergedRows[0] && mergedRows[0].dist_window_start) || startStr,
-    endStr: (mergedRows[0] && mergedRows[0].dist_window_end) || endStr,
+    startStr,
+    endStr,
     period: "rolling30",
     durationType: "personal_dist",
     gender,
     precomputed: true,
+    liveComputed: false,
     readSource: "supabase",
+    supabasePersonalDistSource: "daily_summaries_live_rpc",
   };
 }
 
