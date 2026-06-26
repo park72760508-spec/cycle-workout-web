@@ -3629,7 +3629,7 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-ranking" id="btnBasecampRanking" onclick="if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();" aria-label="랭킹보드">
                 <span>랭킹보드</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof handleMyCareerClick==='function'){handleMyCareerClick();}else if(typeof showMyCareerScreenWithLoading==='function'){showMyCareerScreenWithLoading();}else if(typeof showScreen==='function'){showScreen('myCareerScreen');}" aria-label="나의 기록">
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof openCycleDashboardFromBasecamp==='function')openCycleDashboardFromBasecamp();else if(typeof showScreen==='function')showScreen('performanceDashboardScreen');" aria-label="나의 기록">
                 <span>나의 기록</span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-group-entry" id="btnBasecampRidingGroupEntry" onclick="if (typeof navigateToClubHouseFromBasecamp === 'function') navigateToClubHouseFromBasecamp(); else { window.__openRidingInitialView = 'groups'; if (typeof showScreen === 'function') showScreen('openRidingRoomScreen'); }" aria-label="클럽 하우스">
@@ -39660,6 +39660,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       ];
       /** RUN 화면 하단 네비에서 숨길 메뉴 (훈련·계획·구독) */
       var HUB_NAV_KEYS_HIDDEN_ON_RUN = { train: true, plan: true, subscribe: true };
+      /**
+       * 일반 사용자(grade 2·3) 하단 네비 숨김 — enabled: false 또는 keys에서 항목 제거 시 다시 표시
+       * @example window.__hubNavStandardUserMenuHide.enabled = false;
+       */
+      window.__hubNavStandardUserMenuHide = window.__hubNavStandardUserMenuHide || {
+        enabled: true,
+        keys: { profile: true, subscribe: true }
+      };
       window.__hubNavModalTab = window.__hubNavModalTab || null;
       function hubNavIsRunMode() {
         return (
@@ -39682,7 +39690,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       function hubNavApplySportMenuVisibility(root) {
         if (!root) return;
         var isRun = hubNavIsRunMode();
-        var hideProfileOnRun = isRun && !hubNavIsAdminUser();
+        var isStandardUser = !hubNavIsAdminUser();
+        var hideProfileOnRun = isRun && isStandardUser;
+        var stdHideCfg = window.__hubNavStandardUserMenuHide || {};
+        var stdHideKeys = stdHideCfg.keys || {};
+        var hideStandardUserMenu = !!stdHideCfg.enabled && isStandardUser;
         var slots = root.querySelectorAll('.open-riding-bottom-glass-nav__slot');
         for (var s = 0; s < slots.length; s++) {
           var slot = slots[s];
@@ -39691,7 +39703,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var key = btn.getAttribute('data-hub-nav');
           var hide =
             (isRun && !!HUB_NAV_KEYS_HIDDEN_ON_RUN[key]) ||
-            (hideProfileOnRun && key === 'profile');
+            (hideProfileOnRun && key === 'profile') ||
+            (hideStandardUserMenu && !!stdHideKeys[key]);
           slot.style.display = hide ? 'none' : '';
           slot.setAttribute('aria-hidden', hide ? 'true' : 'false');
         }
