@@ -9256,6 +9256,9 @@
           /* 오프라인·오류 시 마지막 값 유지(기본 firebase) */
         }
         stelvioRankingReadSourceState.loadedAt = Date.now();
+        if (stelvioGetRankingReadSourceSync() === 'supabase' && typeof window.stelvioStartRankingLiveSync === 'function') {
+          window.stelvioStartRankingLiveSync().catch(function () {});
+        }
         return stelvioGetRankingReadSourceSync();
       })();
       try {
@@ -11055,6 +11058,23 @@
           return res.json().catch(function() { return { success: false }; });
         };
 
+        window.__stelvioWeeklyTop10SilentRevalidate = async function () {
+          if (!modal || modal.classList.contains('hidden')) return;
+          try {
+            var bg = await fetchWeeklyFromServer('current');
+            if (!bg.success || !weeklyTop10PayloadMatchesWeek(bg, 0) || !Array.isArray(bg.ranking) || !bg.ranking.length) {
+              return;
+            }
+            if (typeof stelvioEnsureWeeklyTop10RankMovement === 'function') {
+              bg = await stelvioEnsureWeeklyTop10RankMovement(bg);
+            }
+            await stelvioRankingLocalCache.set(top10LcKey, bg);
+            await renderTop10(bg, false, { silentRefresh: true });
+          } catch (eSilRev) {
+            console.warn('[WeeklyTop10] silent revalidate 실패:', eSilRev && eSilRev.message);
+          }
+        };
+
         // ── force=true (수동 집계 후 즉시 갱신) → 캐시 무효화 후 서버에서 직접 로드 ──
         if (force) {
           await stelvioRankingLocalCache.clearAll();
@@ -11248,6 +11268,64 @@
     window.closeWeeklyTop10Modal = closeWeeklyTop10Modal;
     window.fetchAndShowWeeklyTop10Modal = fetchAndShowWeeklyTop10Modal;
     window.prefetchWeeklyTop10ToDeviceStorage = prefetchWeeklyTop10ToDeviceStorage;
+
+    /** 주간 TOP10 모달이 열려 있을 때 조용히 재조회 (Supabase live meta·Realtime) */
+    async function stelvioSilentRefreshWeeklyTop10IfOpen() {
+      if (typeof window.__stelvioWeeklyTop10SilentRevalidate === 'function') {
+        await window.__stelvioWeeklyTop10SilentRevalidate();
+      }
+    }
+    window.stelvioSilentRefreshWeeklyTop10IfOpen = stelvioSilentRefreshWeeklyTop10IfOpen;
+
+    /**
+     * Supabase ranking_metrics_live Realtime — 주간 TSS 캐시 무효화 + 열린 UI 조용히 갱신 (Firebase 미사용)
+     */
+    var stelvioRankingLiveUpdateInflight = null;
+    async function stelvioHandleRankingMetricsLiveUpdate(opts) {
+      opts = opts || {};
+      if (stelvioGetRankingReadSourceSync() !== 'supabase') return;
+      if (stelvioRankingLiveUpdateInflight) return stelvioRankingLiveUpdateInflight;
+      stelvioRankingLiveUpdateInflight = (async function () {
+        try {
+          if (typeof stelvioRankingClearMemCaches === 'function') {
+            stelvioRankingClearMemCaches();
+          }
+          if (window.stelvioRankingLocalCache && typeof window.stelvioRankingLocalCache.getAllRecords === 'function') {
+            var rows = await window.stelvioRankingLocalCache.getAllRecords();
+            for (var i = 0; i < rows.length; i++) {
+              var rec = rows[i];
+              var k = rec && rec.key ? String(rec.key) : '';
+              if (k.indexOf('weeklyTop10:') === 0 && typeof window.stelvioRankingLocalCache.remove === 'function') {
+                await window.stelvioRankingLocalCache.remove(k);
+              }
+            }
+          }
+          if (typeof window.__stelvioRankingLiveTssRefresh === 'function') {
+            window.__stelvioRankingLiveTssRefresh();
+          }
+          var rankScreen = document.getElementById('stelvioRankingScreen');
+          var rankVisible =
+            rankScreen &&
+            (rankScreen.classList.contains('active') ||
+              window.getComputedStyle(rankScreen).display !== 'none');
+          if (
+            rankVisible &&
+            typeof stelvioIsTssRankingMode === 'function' &&
+            stelvioIsTssRankingMode() &&
+            typeof fetchStelvioPeakPowerRanking === 'function'
+          ) {
+            fetchStelvioPeakPowerRanking({ silentRevalidate: true, tabSwitch: true }).catch(function () {});
+          }
+          await stelvioSilentRefreshWeeklyTop10IfOpen();
+        } catch (eLive) {
+          console.warn('[StelvioRanking] live meta 처리 실패:', eLive && eLive.message);
+        }
+      })().finally(function () {
+        stelvioRankingLiveUpdateInflight = null;
+      });
+      return stelvioRankingLiveUpdateInflight;
+    }
+    window.stelvioHandleRankingMetricsLiveUpdate = stelvioHandleRankingMetricsLiveUpdate;
 
     /**
      * STELVIO 랭킹 보드 모달 (피크 파워 W/kg)
@@ -20790,6 +20868,12 @@
           bgRevalidate(false).catch(function () {});
         }
       }
+      window.__stelvioRankingLiveTssRefresh = function () {
+        if (stelvioGetRankingReadSourceSync() !== 'supabase') return;
+        if (typeof stelvioIsTssRankingMode === 'function' && stelvioIsTssRankingMode()) {
+          scheduleBgRefresh(true);
+        }
+      };
       function scheduleBgRefreshIfNeeded(includeRankMv) {
         if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
           if (!stelvioGcPayloadMatchesLatestSnapshot({ durationType: 'gc', gcSnapshotAsOf: window.stelvioLastGcSnapshotAsOf, gcMonthKey: window.stelvioLastGcMonthKey })) {
@@ -31631,6 +31715,8 @@
   <script src="assets/js/bluetoothCoachDashboard.js"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js"></script>
+  <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->
+  <script src="assets/js/stelvioRankingLiveSync.js"></script>
   <!-- 훈련 대시보드 브릿지: AUTO_CONNECT(마운트 1회) + deviceError UI 폴백 및 cleanup (showScreen 최종 래핑) -->
   <script src="assets/js/trainingDashboardBridge.js"></script>
   
