@@ -113,6 +113,19 @@ function filterWithdrawnUsersFromRankingPayload(payload) {
     if (typeof peakMovement.recomputePeakRankMovementAfterEligibleFilter === "function") {
       peakMovement.recomputePeakRankMovementAfterEligibleFilter(payload);
     }
+    if (String(payload.durationType || "").trim() === "tss") {
+      try {
+        const peakSupabase = require("./rankingPeakMovementSupabase");
+        if (typeof peakSupabase.syncEntriesRankMovementFromSupremo === "function") {
+          peakSupabase.syncEntriesRankMovementFromSupremo(payload);
+        }
+      } catch (eTssSync) {
+        console.warn(
+          "[filterWithdrawnUsersFromRankingPayload] TSS entries rank sync skipped:",
+          eTssSync && eTssSync.message ? eTssSync.message : eTssSync
+        );
+      }
+    }
   } catch (eReMv) {
     console.warn(
       "[filterWithdrawnUsersFromRankingPayload] rank movement recompute skipped:",

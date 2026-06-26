@@ -146,8 +146,11 @@ function computeAbsoluteBoardRankMovementForRows(rows, baseline) {
 function recomputePeakRankMovementAfterEligibleFilter(payload) {
   if (!payload || !payload.byCategory || typeof payload.byCategory !== "object") return payload;
 
-  for (let ci = 0; ci < PEAK_RANK_BOARD_CATEGORIES.length; ci++) {
-    const cat = PEAK_RANK_BOARD_CATEGORIES[ci];
+  const tssWeeklyAbsolute = String(payload.durationType || "").trim() === "tss";
+  const categoriesToProcess = tssWeeklyAbsolute ? ["Supremo"] : PEAK_RANK_BOARD_CATEGORIES;
+
+  for (let ci = 0; ci < categoriesToProcess.length; ci++) {
+    const cat = categoriesToProcess[ci];
     const rows = payload.byCategory[cat];
     if (!Array.isArray(rows) || !rows.length) continue;
 
@@ -172,7 +175,11 @@ function recomputePeakRankMovementAfterEligibleFilter(payload) {
     }
     if (!baseline || !Object.keys(baseline).length) continue;
 
-    const { rankChanges, previousRanks } = computeSurvivorAwareRankMovementForRows(rows, baseline);
+    const computeMv =
+      tssWeeklyAbsolute && cat === "Supremo"
+        ? computeAbsoluteBoardRankMovementForRows
+        : computeSurvivorAwareRankMovementForRows;
+    const { rankChanges, previousRanks } = computeMv(rows, baseline);
     for (let ri = 0; ri < rows.length; ri++) {
       const row = rows[ri];
       if (!row || row.userId == null) continue;
