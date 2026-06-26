@@ -1,103 +1,57 @@
 /**
  * CYCLE 주간 TSS 랭킹 실시간 동기화 — Supabase ranking_build_meta Realtime (Firebase 미사용)
+ * Auth Bridge 미사용: anon 키 + RLS SELECT — localStorage 세션 403(setSession) 회피
  */
 (function (global) {
   'use strict';
 
   var LIVE_META_KEY = 'ranking_metrics_live';
   var DEBOUNCE_MS = 1500;
+  var POLL_INTERVAL_MS = 20000;
+  var BUILD_META_PUBLIC_URL =
+    'https://us-central1-stelvio-ai.cloudfunctions.net/getRankingBuildMetaPublic';
+
   var channel = null;
   var debounceTimer = null;
+  var pollTimer = null;
   var lastLiveTs = 0;
   var startInflight = null;
+  var pollInflight = null;
 
   function getSupabaseConfig() {
     var c = global.STELVIO_SUPABASE_CONFIG || {};
     return {
       supabaseUrl: String(c.supabaseUrl || '').trim(),
       supabaseAnonKey: String(c.supabaseAnonKey || '').trim(),
-      authBridgeUrl: String(c.authBridgeUrl || '').trim(),
     };
   }
 
-  var supabaseClientPromise = null;
+  var supabaseAnonClientPromise = null;
 
-  async function getSupabaseClient() {
+  /** localStorage 공유 세션을 읽지 않음 — setSession /auth/v1/user 403 방지 */
+  async function getSupabaseAnonClient() {
     var cfg = getSupabaseConfig();
     if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
       throw new Error('STELVIO_SUPABASE_CONFIG 미설정');
     }
-    if (!supabaseClientPromise) {
-      supabaseClientPromise = (async function () {
+    if (!supabaseAnonClientPromise) {
+      supabaseAnonClientPromise = (async function () {
         var mod = await import('https://esm.sh/@supabase/supabase-js@2.49.1');
         return mod.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
           auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            storage: typeof global.localStorage !== 'undefined' ? global.localStorage : undefined,
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
           },
         });
       })();
     }
-    return supabaseClientPromise;
-  }
-
-  async function getFirebaseIdToken() {
-    var user =
-      (global.authV9 && global.authV9.currentUser) ||
-      (global.auth && global.auth.currentUser) ||
-      null;
-    if (!user || typeof user.getIdToken !== 'function') {
-      throw new Error('Firebase 로그인 세션이 없습니다.');
-    }
-    return user.getIdToken(false);
-  }
-
-  async function ensureSupabaseSession() {
-    var cfg = getSupabaseConfig();
-    if (!cfg.authBridgeUrl) throw new Error('authBridgeUrl 미설정');
-    var supabase = await getSupabaseClient();
-    var existing = await supabase.auth.getSession();
-    if (
-      existing.data.session &&
-      existing.data.session.expires_at &&
-      existing.data.session.expires_at > Math.floor(Date.now() / 1000) + 120
-    ) {
-      return supabase;
-    }
-    var bridgeUrl = cfg.authBridgeUrl.replace(/\/+$/, '');
-    var idToken = await getFirebaseIdToken();
-    var res = await fetch(bridgeUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + idToken,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({}),
-    });
-    var body = {};
-    try {
-      body = await res.json();
-    } catch (_e) {
-      body = {};
-    }
-    if (!res.ok || !body.success || !body.session || !body.session.access_token) {
-      throw new Error((body.error && body.error.message) || 'Auth bridge HTTP ' + res.status);
-    }
-    var setResult = await supabase.auth.setSession({
-      access_token: body.session.access_token,
-      refresh_token: body.session.refresh_token,
-    });
-    if (setResult.error || !setResult.data.session) {
-      throw new Error('Supabase setSession 실패');
-    }
-    return supabase;
+    return supabaseAnonClientPromise;
   }
 
   function parseLiveMetaTs(row) {
     if (!row) return 0;
-    var iso = row.updated_at || row.completed_at;
+    var iso = row.updated_at || row.completedAt || row.completed_at;
     if (!iso) return 0;
     var t = Date.parse(String(iso));
     return isFinite(t) ? t : 0;
@@ -130,65 +84,162 @@
     return global.stelvioGetRankingReadSourceSync() === 'supabase';
   }
 
-  async function bootstrapLastLiveTs(supabase) {
+  async function fetchLiveMetaTsFromRest() {
     try {
+      var supabase = await getSupabaseAnonClient();
       var res = await supabase
         .from('ranking_build_meta')
         .select('meta_key, updated_at, completed_at')
         .eq('meta_key', LIVE_META_KEY)
         .maybeSingle();
-      if (res.data) lastLiveTs = parseLiveMetaTs(res.data);
-    } catch (_eBoot) {}
+      if (res.data) return parseLiveMetaTs(res.data);
+    } catch (_eRest) {}
+    return 0;
+  }
+
+  async function fetchLiveMetaTsFromPublicApi() {
+    try {
+      var res = await fetch(BUILD_META_PUBLIC_URL, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-store',
+      });
+      if (!res.ok) return 0;
+      var json = await res.json().catch(function () {
+        return null;
+      });
+      var live = json && json.buildMeta && json.buildMeta.rankingMetricsLive;
+      return parseLiveMetaTs(live);
+    } catch (_eApi) {
+      return 0;
+    }
+  }
+
+  async function pollLiveMetaOnce() {
+    if (pollInflight) return pollInflight;
+    pollInflight = (async function () {
+      var ts = await fetchLiveMetaTsFromRest();
+      if (!ts) ts = await fetchLiveMetaTsFromPublicApi();
+      if (ts > lastLiveTs) {
+        scheduleLiveDispatch({ updated_at: new Date(ts).toISOString() });
+      } else if (ts > 0 && !lastLiveTs) {
+        lastLiveTs = ts;
+      }
+    })().finally(function () {
+      pollInflight = null;
+    });
+    return pollInflight;
+  }
+
+  function startPollingFallback() {
+    if (pollTimer) return;
+    pollTimer = setInterval(function () {
+      if (!shouldUseLiveSync()) return;
+      pollLiveMetaOnce().catch(function () {});
+    }, POLL_INTERVAL_MS);
+    pollLiveMetaOnce().catch(function () {});
+  }
+
+  function stopPollingFallback() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  async function bootstrapLastLiveTs() {
+    var ts = await fetchLiveMetaTsFromRest();
+    if (!ts) ts = await fetchLiveMetaTsFromPublicApi();
+    if (ts > 0) lastLiveTs = ts;
+  }
+
+  async function subscribeRealtime(supabase) {
+    return new Promise(function (resolve) {
+      var settled = false;
+      var ch = supabase
+        .channel('stelvio-ranking-metrics-live')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'ranking_build_meta',
+            filter: 'meta_key=eq.' + LIVE_META_KEY,
+          },
+          function (payload) {
+            scheduleLiveDispatch(payload && payload.new ? payload.new : null);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'ranking_build_meta',
+            filter: 'meta_key=eq.' + LIVE_META_KEY,
+          },
+          function (payload) {
+            scheduleLiveDispatch(payload && payload.new ? payload.new : null);
+          }
+        )
+        .subscribe(function (status) {
+          if (status === 'SUBSCRIBED') {
+            console.log('[StelvioRankingLive] Realtime 구독 시작 —', LIVE_META_KEY);
+            if (!settled) {
+              settled = true;
+              resolve({ ok: true, mode: 'realtime' });
+            }
+          } else if (
+            (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') &&
+            !settled
+          ) {
+            settled = true;
+            resolve({ ok: false, mode: 'realtime', status: status });
+          }
+        });
+      channel = ch;
+      setTimeout(function () {
+        if (!settled) {
+          settled = true;
+          resolve({ ok: false, mode: 'realtime', status: 'timeout' });
+        }
+      }, 8000);
+    });
   }
 
   async function startRankingLiveSync() {
     if (!shouldUseLiveSync()) return { ok: false, reason: 'not_supabase_read' };
-    if (channel) return { ok: true, reason: 'already_subscribed' };
+    if (channel || pollTimer) return { ok: true, reason: 'already_started' };
     if (startInflight) return startInflight;
 
     startInflight = (async function () {
+      await bootstrapLastLiveTs();
+      var realtimeOk = false;
       try {
-        var supabase = await ensureSupabaseSession();
-        await bootstrapLastLiveTs(supabase);
-        channel = supabase
-          .channel('stelvio-ranking-metrics-live')
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'ranking_build_meta',
-              filter: 'meta_key=eq.' + LIVE_META_KEY,
-            },
-            function (payload) {
-              scheduleLiveDispatch(payload && payload.new ? payload.new : null);
-            }
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'ranking_build_meta',
-              filter: 'meta_key=eq.' + LIVE_META_KEY,
-            },
-            function (payload) {
-              scheduleLiveDispatch(payload && payload.new ? payload.new : null);
-            }
-          )
-          .subscribe(function (status) {
-            if (status === 'SUBSCRIBED') {
-              console.log('[StelvioRankingLive] Realtime 구독 시작 —', LIVE_META_KEY);
-            }
-          });
-        return { ok: true };
-      } catch (eStart) {
-        console.warn('[StelvioRankingLive] 구독 실패(폴링·수동 갱신으로 대체):', eStart && eStart.message);
-        return { ok: false, error: eStart && eStart.message };
-      } finally {
-        startInflight = null;
+        var supabase = await getSupabaseAnonClient();
+        var sub = await subscribeRealtime(supabase);
+        realtimeOk = !!(sub && sub.ok);
+        if (!realtimeOk) {
+          console.warn(
+            '[StelvioRankingLive] Realtime 미연결 — 폴링으로 대체:',
+            sub && sub.status ? sub.status : 'unknown'
+          );
+          if (channel && typeof channel.unsubscribe === 'function') {
+            try {
+              channel.unsubscribe();
+            } catch (_eUn) {}
+          }
+          channel = null;
+        }
+      } catch (eRt) {
+        console.warn('[StelvioRankingLive] Realtime 오류 — 폴링으로 대체:', eRt && eRt.message);
+        channel = null;
       }
-    })();
+      startPollingFallback();
+      return { ok: true, realtime: realtimeOk, polling: true };
+    })().finally(function () {
+      startInflight = null;
+    });
     return startInflight;
   }
 
@@ -197,6 +248,7 @@
       clearTimeout(debounceTimer);
       debounceTimer = null;
     }
+    stopPollingFallback();
     if (channel && typeof channel.unsubscribe === 'function') {
       try {
         channel.unsubscribe();
@@ -207,4 +259,5 @@
 
   global.stelvioStartRankingLiveSync = startRankingLiveSync;
   global.stelvioStopRankingLiveSync = stopRankingLiveSync;
+  global.stelvioPollRankingMetricsLiveMeta = pollLiveMetaOnce;
 })(typeof window !== 'undefined' ? window : globalThis);
