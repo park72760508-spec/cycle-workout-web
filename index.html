@@ -4329,6 +4329,12 @@
                 환영합니다! 🎉<br>
                 훈련을 시작하기 전에 기본 정보를 입력해주세요.
               </p>
+
+              <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">이름(성명) *</label>
+                <input type="text" id="completeUserName" placeholder="홍길동" minlength="2" maxlength="20" required
+                       style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+              </div>
               
               <div class="form-group" style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">전화번호 *</label>
@@ -29138,6 +29144,31 @@
      * 1. Firebase Authentication: 전화번호@stelvio.ai, 비밀번호로 계정 생성
      * 2. Firestore users: 이름, 전화번호, FTP, 몸무게, 운동목적 저장
      */
+    function stelvioResolveRegisterEffectiveName(nameInput, isRejoinMode) {
+      var typed = String(nameInput && nameInput.value ? nameInput.value : '').trim();
+      if (typed.length >= 2) return typed;
+      if (isRejoinMode && window._stelvioWithdrawnUserProfile) {
+        var profName = String(window._stelvioWithdrawnUserProfile.name || '').trim();
+        if (profName.length >= 2) return profName;
+      }
+      return '';
+    }
+
+    function stelvioRequireRegisterName(nameInput, isRejoinMode) {
+      var effective = stelvioResolveRegisterEffectiveName(nameInput, isRejoinMode);
+      if (effective.length >= 2) return effective;
+      showRegisterStatus('이름(성명)을 2자 이상 입력해 주세요.', 'error');
+      alert(
+        '이름(성명)은 필수입니다.\n\n' +
+          '랭킹·프로필 표시를 위해 반드시 입력해 주세요.'
+      );
+      if (nameInput) {
+        nameInput.focus();
+        try { nameInput.select(); } catch (_eSel) {}
+      }
+      return '';
+    }
+
     async function handleRegister() {
       // DOM 요소 참조
       const phoneInput = document.getElementById('registerPhoneInput');
@@ -29153,7 +29184,6 @@
       
       // 입력값 가져오기
       const phone = phoneInput.value.trim();
-      const name = nameInput.value.trim();
       const password = passwordInput.value;
       const ftp = parseInt(ftpInput.value);
       const weight = parseFloat(weightInput.value);
@@ -29193,6 +29223,9 @@
         phoneInput.focus();
         return;
       }
+
+      const name = stelvioRequireRegisterName(nameInput, _isRejoinMode);
+      if (!name) return;
       
       if (!password || password.length < 6) {
         showRegisterStatus('비밀번호는 6자 이상이어야 합니다.', 'error');
@@ -29209,11 +29242,6 @@
 
       // 재가입 모드가 아닌 신규 가입일 때만 추가 필드 검증
       if (!_isRejoinMode) {
-        if (!name || name.length < 2) {
-          showRegisterStatus('이름을 2자 이상 입력해주세요.', 'error');
-          nameInput.focus();
-          return;
-        }
         if (isRunCategory) {
           if (weight == null || isNaN(weight) || weight < 0 || weight > 150) {
             showRegisterStatus('체중은 0~150kg 사이의 값이어야 합니다.', 'error');
