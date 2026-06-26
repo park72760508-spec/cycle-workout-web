@@ -8,6 +8,8 @@ const META_KEYS = [
   "heptagon_daily_rebuild",
   "personal_speed_logic",
   "peak_28d_board_refresh",
+  /** rides/daily_summaries → user_ranking_metrics 갱신 시 터치 (주간 TSS 실시간) */
+  "ranking_metrics_live",
 ];
 
 function metaTsFromIso(iso) {
@@ -40,6 +42,7 @@ function buildRankingBuildMetaPayload(rows) {
   const heptagon = rowToClientShape(byKey.heptagon_daily_rebuild);
   const personalSpeed = rowToClientShape(byKey.personal_speed_logic);
   const peak28d = rowToClientShape(byKey.peak_28d_board_refresh);
+  const rankingMetricsLive = rowToClientShape(byKey.ranking_metrics_live);
 
   const fingerprint = [
     "m:" +
@@ -67,6 +70,7 @@ function buildRankingBuildMetaPayload(rows) {
     heptagon,
     personalSpeed,
     peak28d,
+    rankingMetricsLive,
     fingerprint,
     rows: (rows || []).map((r) => ({
       metaKey: r.meta_key,
