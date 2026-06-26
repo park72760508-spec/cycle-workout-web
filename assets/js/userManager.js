@@ -5562,6 +5562,7 @@ function showCompleteUserInfoModal(userData) {
   }
   
   // 기존 값이 있으면 채우기
+  const nameEl = document.getElementById('completeUserName');
   const contactEl = document.getElementById('completeUserContact');
   const ftpEl = document.getElementById('completeUserFTP');
   const weightEl = document.getElementById('completeUserWeight');
@@ -5570,6 +5571,9 @@ function showCompleteUserInfoModal(userData) {
   const challengeEl = document.getElementById('completeUserChallenge');
   
   // 필드 초기화
+  if (nameEl) {
+    nameEl.value = getProfileUserDisplayName(userData) || '';
+  }
   if (contactEl) {
     contactEl.value = userData.contact || '';
     if (userData.contact && typeof autoFormatPhoneNumber === 'function') {
@@ -5661,6 +5665,7 @@ async function completeUserInfo() {
   }
   
   // 필수 필드 확인
+  const nameRaw = document.getElementById('completeUserName')?.value.trim();
   const contactRaw = document.getElementById('completeUserContact')?.value.trim();
   const ftp = parseInt(document.getElementById('completeUserFTP')?.value);
   const weight = parseFloat(document.getElementById('completeUserWeight')?.value);
@@ -5671,6 +5676,12 @@ async function completeUserInfo() {
   const isRun = isRunSportCategory(category);
   const needsFtp = needsFtpForCategory(category);
   
+  if (!nameRaw || nameRaw.length < 2) {
+    showToast('이름(성명)을 2자 이상 입력해주세요.');
+    alert('이름(성명)은 필수입니다.\n\n랭킹·프로필 표시를 위해 반드시 입력해 주세요.');
+    document.getElementById('completeUserName')?.focus();
+    return;
+  }
   if (!contactRaw) {
     showToast('전화번호를 입력해주세요.');
     return;
@@ -5726,6 +5737,7 @@ async function completeUserInfo() {
     
     // 사용자 정보 업데이트 (6개월 연장 + 나이·성별 포함)
     const updateData = {
+      name: nameRaw,
       contact: contactDB,
       ftp: ftpToUse,
       weight: weight,
