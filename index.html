@@ -11278,7 +11278,7 @@
     window.stelvioSilentRefreshWeeklyTop10IfOpen = stelvioSilentRefreshWeeklyTop10IfOpen;
 
     /**
-     * Supabase ranking_metrics_live Realtime — 주간 TSS 캐시 무효화 + 열린 UI 조용히 갱신 (Firebase 미사용)
+     * Supabase ranking_metrics_live Realtime — 주간 TSS·개인 거리 캐시 무효화 + 열린 UI 조용히 갱신 (Firebase 미사용)
      */
     var stelvioRankingLiveUpdateInflight = null;
     async function stelvioHandleRankingMetricsLiveUpdate(opts) {
@@ -11297,11 +11297,22 @@
               var k = rec && rec.key ? String(rec.key) : '';
               if (k.indexOf('weeklyTop10:') === 0 && typeof window.stelvioRankingLocalCache.remove === 'function') {
                 await window.stelvioRankingLocalCache.remove(k);
+                continue;
+              }
+              if (
+                k.indexOf('peak:v22:') === 0 &&
+                k.indexOf('duration=personal_dist') !== -1 &&
+                typeof window.stelvioRankingLocalCache.remove === 'function'
+              ) {
+                await window.stelvioRankingLocalCache.remove(k);
               }
             }
           }
           if (typeof window.__stelvioRankingLiveTssRefresh === 'function') {
             window.__stelvioRankingLiveTssRefresh();
+          }
+          if (typeof window.__stelvioRankingLiveDistRefresh === 'function') {
+            window.__stelvioRankingLiveDistRefresh();
           }
           var rankScreen = document.getElementById('stelvioRankingScreen');
           var rankVisible =
@@ -11312,6 +11323,14 @@
             rankVisible &&
             typeof stelvioIsTssRankingMode === 'function' &&
             stelvioIsTssRankingMode() &&
+            typeof fetchStelvioPeakPowerRanking === 'function'
+          ) {
+            fetchStelvioPeakPowerRanking({ silentRevalidate: true, tabSwitch: true }).catch(function () {});
+          }
+          if (
+            rankVisible &&
+            typeof stelvioIsPersonalDistanceRanking === 'function' &&
+            stelvioIsPersonalDistanceRanking() &&
             typeof fetchStelvioPeakPowerRanking === 'function'
           ) {
             fetchStelvioPeakPowerRanking({ silentRevalidate: true, tabSwitch: true }).catch(function () {});
@@ -20874,6 +20893,12 @@
           scheduleBgRefresh(true);
         }
       };
+      window.__stelvioRankingLiveDistRefresh = function () {
+        if (stelvioGetRankingReadSourceSync() !== 'supabase') return;
+        if (typeof stelvioIsPersonalDistanceRanking === 'function' && stelvioIsPersonalDistanceRanking()) {
+          scheduleBgRefresh(true);
+        }
+      };
       function scheduleBgRefreshIfNeeded(includeRankMv) {
         if (typeof stelvioIsGcRankingMode === 'function' && stelvioIsGcRankingMode()) {
           if (!stelvioGcPayloadMatchesLatestSnapshot({ durationType: 'gc', gcSnapshotAsOf: window.stelvioLastGcSnapshotAsOf, gcMonthKey: window.stelvioLastGcMonthKey })) {
@@ -20881,7 +20906,7 @@
           }
           return;
         }
-        if (apiDuration === 'tss') {
+        if (apiDuration === 'tss' || apiDuration === 'personal_dist') {
           scheduleBgRefresh(true);
           return;
         }
