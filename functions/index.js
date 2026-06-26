@@ -48,6 +48,7 @@ const rankingParity = require("./rankingParity");
 const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
 const rankingReadRoutingPublic = require("./rankingReadRoutingPublic");
 const groupReadRouter = require("./groupReadRouter");
+const supabaseGroupReader = require("./supabaseGroupReader");
 const groupReadRoutingPublic = require("./groupReadRoutingPublic");
 const logsReadRoutingPublic = require("./logsReadRoutingPublic");
 const groupDualWriteTriggers = require("./groupDualWriteTriggers");
