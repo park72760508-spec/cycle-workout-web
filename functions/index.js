@@ -7028,7 +7028,9 @@ async function hydratePeakRankMovementFromHistory(db, byCategory, historyKey) {
   }
   const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const prevNorm = await readPeakRankHistoryNorm(db, historyKey);
-  computePeakRankMovementFields(byCategory, prevNorm, todayYmd);
+  computePeakRankMovementFields(byCategory, prevNorm, todayYmd, {
+    tssWeeklyAbsolute: String(historyKey || "").startsWith("peak_tss_weekly_"),
+  });
 }
 
 /** 주간 마일리지 TOP10 — peak_rank_history 기준 전날 마지막 순위 대비 등락 재계산 */
@@ -7070,7 +7072,9 @@ async function applyPeakRankChanges(db, byCategory, historyKey) {
       eligibleByCategory = rankingEligibility.filterEligibleByCategory(byCategory);
     }
   } catch (_eElig) {}
-  const snapFields = computePeakRankMovementFields(eligibleByCategory, prevNorm, todayYmd);
+  const snapFields = computePeakRankMovementFields(eligibleByCategory, prevNorm, todayYmd, {
+    tssWeeklyAbsolute: String(historyKey || "").startsWith("peak_tss_weekly_"),
+  });
 
   try {
     await db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey).set({

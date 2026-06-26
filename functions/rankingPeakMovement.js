@@ -115,6 +115,32 @@ function computeSurvivorAwareRankMovementForRows(rows, baseline) {
 }
 
 /**
+ * 주간 TSS·TOP10 — Supremo 전체 순위(절대 rank) vs 전일 baseline 절대 순위.
+ * previousBoardRank = baseline[uid], rankChange = baseline[uid] − 현재 rank.
+ */
+function computeAbsoluteBoardRankMovementForRows(rows, baseline) {
+  const rankChanges = {};
+  const previousRanks = {};
+  if (!Array.isArray(rows) || !rows.length || !baseline || typeof baseline !== "object") {
+    return { rankChanges, previousRanks };
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const e = rows[i];
+    const uid = e && e.userId != null ? String(e.userId).trim() : "";
+    if (!uid || baseline[uid] == null) continue;
+    const prev = Math.floor(Number(baseline[uid]));
+    if (!isFinite(prev) || prev < 1) continue;
+    const curr =
+      e.rank != null && isFinite(Number(e.rank)) && Number(e.rank) >= 1
+        ? Math.floor(Number(e.rank))
+        : i + 1;
+    rankChanges[uid] = prev - curr;
+    previousRanks[uid] = prev;
+  }
+  return { rankChanges, previousRanks };
+}
+
+/**
  * 탈퇴 필터·재정렬 후 payload 등락 재계산(서버 res.json·클라이언트 공통).
  */
 function recomputePeakRankMovementAfterEligibleFilter(payload) {
@@ -269,10 +295,14 @@ function peakRankUidRankMapsEqual(a, b) {
  * @param {Record<string, any[]>} byCategory
  * @param {object} prevNorm
  * @param {string} [todayYmd]
+ * @param {{ tssWeeklyAbsolute?: boolean }} [opts]
  */
-function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
+function computePeakRankMovementFields(byCategory, prevNorm, todayYmd, opts) {
   const today = todayYmd || seoulTodayYmd();
   prevNorm = normalizePeakRankHistoryDoc(prevNorm);
+  opts = opts && typeof opts === "object" ? opts : {};
+  const tssWeeklyAbsolute = opts.tssWeeklyAbsolute === true;
+  const categoriesToProcess = tssWeeklyAbsolute ? ["Supremo"] : PEAK_RANK_BOARD_CATEGORIES;
 
   const newRanksByCategory = {};
   const newRankChangesByCategory = {};
@@ -280,7 +310,7 @@ function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
   const newPrevDayRanksByCategory = {};
   const compareBaselineByCategory = {};
 
-  for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+  for (const cat of categoriesToProcess) {
     const rows = byCategory[cat];
     if (!Array.isArray(rows) || !rows.length) continue;
 
@@ -316,7 +346,11 @@ function computePeakRankMovementFields(byCategory, prevNorm, todayYmd) {
     newPreviousRanksByCategory[cat] = {};
 
     if (!sameDaySelfBaseline && compareBaseline && Object.keys(compareBaseline).length) {
-      const survivorMv = computeSurvivorAwareRankMovementForRows(rows, compareBaseline);
+      const computeMv =
+        tssWeeklyAbsolute && cat === "Supremo"
+          ? computeAbsoluteBoardRankMovementForRows
+          : computeSurvivorAwareRankMovementForRows;
+      const survivorMv = computeMv(rows, compareBaseline);
       for (let i = 0; i < rows.length; i++) {
         const e = rows[i];
         const uid = e && e.userId != null ? String(e.userId).trim() : "";
@@ -368,6 +402,7 @@ module.exports = {
   resolvePeakRankHistoryKey,
   buildPeakBoardRankMapForCategoryRows,
   computeSurvivorAwareRankMovementForRows,
+  computeAbsoluteBoardRankMovementForRows,
   recomputePeakRankMovementAfterEligibleFilter,
   normalizePeakRankHistoryDoc,
   computePeakRankMovementFields,

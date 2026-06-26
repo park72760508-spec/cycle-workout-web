@@ -7,6 +7,180 @@ const peakMovement = require("./rankingPeakMovement");
 
 const TABLE = "peak_rank_board_snapshots";
 const PEAK_RANK_HISTORY_COL = "peak_rank_history";
+const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
+
+function historyKeyToGender(historyKey) {
+  const k = String(historyKey || "");
+  if (k.endsWith("_M")) return "M";
+  if (k.endsWith("_F")) return "F";
+  return "all";
+}
+
+/** getWeekRangeSeoul 과 동일 — 기준일 KST YYYY-MM-DD */
+function getWeekRangeForSeoulYmd(todayYmd, weekOffset = 0) {
+  const parts = String(todayYmd || peakMovement.seoulTodayYmd())
+    .split("-")
+    .map(Number);
+  const today = new Date(parts[0], parts[1] - 1, parts[2]);
+  const dayOfWeek = today.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  const pad = (n) => String(n).padStart(2, "0");
+
+  if (weekOffset < 0) {
+    monday.setDate(monday.getDate() + weekOffset * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return {
+      startStr: `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`,
+      endStr: `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`,
+    };
+  }
+
+  return {
+    startStr: `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`,
+    endStr: `${parts[0]}-${pad(parts[1])}-${pad(parts[2])}`,
+  };
+}
+
+/** 전일 03:40 마스터가 저장한 ranking_aggregates 키 (월요일=전주 확정) */
+function officialTssAggregateKeysForBaseline(todayYmd) {
+  const today = String(todayYmd || peakMovement.seoulTodayYmd()).trim();
+  const parts = today.split("-").map(Number);
+  const dayOfWeek = new Date(parts[0], parts[1] - 1, parts[2]).getDay();
+  if (dayOfWeek === 1) {
+    const prev = getWeekRangeForSeoulYmd(today, -1);
+    return [{ startStr: prev.startStr, endStr: prev.endStr, reason: "monday_prev_week" }];
+  }
+  const yesterday = peakMovement.seoulYesterdayYmd(today);
+  const curr = getWeekRangeForSeoulYmd(today, 0);
+  return [{ startStr: curr.startStr, endStr: yesterday, reason: "yesterday_in_week" }];
+}
+
+function byCategoryFromAggregateDoc(data) {
+  if (!data || typeof data !== "object") return null;
+  if (data.byCategory && typeof data.byCategory === "object") return data.byCategory;
+  if (!Array.isArray(data.entries) || !data.entries.length) return null;
+  const byCategory = {
+    Supremo: data.entries.slice(),
+    Assoluto: [],
+    Bianco: [],
+    Rosa: [],
+    Infinito: [],
+    Leggenda: [],
+  };
+  for (let i = 0; i < data.entries.length; i++) {
+    const e = data.entries[i];
+    const cat = e && e.ageCategory;
+    if (cat && byCategory[cat]) byCategory[cat].push(e);
+  }
+  return byCategory;
+}
+
+function buildPrevDayRanksFromByCategory(byCategory) {
+  const prevDay = {};
+  for (let i = 0; i < peakMovement.PEAK_RANK_BOARD_CATEGORIES.length; i++) {
+    const cat = peakMovement.PEAK_RANK_BOARD_CATEGORIES[i];
+    prevDay[cat] = peakMovement.buildPeakBoardRankMapForCategoryRows(byCategory[cat] || []);
+  }
+  return prevDay;
+}
+
+function prevDayBaselineLooksCorrupt(prevNorm) {
+  prevNorm = peakMovement.normalizePeakRankHistoryDoc(prevNorm);
+  const prevDay = (prevNorm.prevDayRanksByCategory || {}).Supremo || {};
+  const ranks = (prevNorm.ranksByCategory || {}).Supremo || {};
+  const nPrev = Object.keys(prevDay).length;
+  const nRanks = Object.keys(ranks).length;
+  if (nRanks > 15 && nPrev > 0 && nPrev < Math.min(15, Math.floor(nRanks * 0.1))) return true;
+  if (nRanks > 0 && nPrev === 0) return true;
+  return false;
+}
+
+/**
+ * Firestore ranking_aggregates — 전일 03:40 공식 TSS 보드에서 prev_day baseline 복구.
+ */
+async function buildPrevDayRanksFromFirestoreAggregate(admin, historyKey, todayYmd) {
+  if (!admin) return null;
+  const gender = historyKeyToGender(historyKey);
+  const keys = officialTssAggregateKeysForBaseline(todayYmd);
+  const db = admin.firestore();
+
+  for (let ki = 0; ki < keys.length; ki++) {
+    const { startStr, endStr, reason } = keys[ki];
+    const cacheKey = `peakRanking_weekly_tss_v2_${gender}_${startStr}_${endStr}`;
+    try {
+      const snap = await db.collection(RANKING_AGGREGATES_COLLECTION).doc(cacheKey).get();
+      if (!snap.exists) continue;
+      const byCategory = byCategoryFromAggregateDoc(snap.data() || {});
+      if (!byCategory) continue;
+      const prevDay = buildPrevDayRanksFromByCategory(byCategory);
+      if (!prevDayRanksPopulated({ prevDayRanksByCategory: prevDay })) continue;
+      console.log("[rankingPeakMovementSupabase] baseline from Firestore aggregate", {
+        historyKey,
+        cacheKey,
+        reason,
+        supremo: Object.keys(prevDay.Supremo || {}).length,
+      });
+      return prevDay;
+    } catch (eAgg) {
+      console.warn(
+        "[rankingPeakMovementSupabase] aggregate baseline read failed:",
+        cacheKey,
+        eAgg && eAgg.message ? eAgg.message : eAgg
+      );
+    }
+  }
+  return null;
+}
+
+/**
+ * Firestore 집계가 없을 때 — 전일(또는 월요일=전주) 구간 Supabase 주간 TSS 순위로 baseline 복구.
+ */
+async function buildPrevDayRanksFromSupabaseWeeklyTss(admin, historyKey, todayYmd) {
+  if (!admin) return null;
+  const gender = historyKeyToGender(historyKey);
+  const keys = officialTssAggregateKeysForBaseline(todayYmd);
+  let supabaseRankingReader;
+  try {
+    supabaseRankingReader = require("./supabaseRankingReader");
+  } catch (_e) {
+    return null;
+  }
+
+  for (let ki = 0; ki < keys.length; ki++) {
+    const { startStr, endStr, reason } = keys[ki];
+    try {
+      const payload = await supabaseRankingReader.fetchWeeklyTssRanking(
+        admin,
+        startStr,
+        endStr,
+        gender
+      );
+      if (!payload || !payload.byCategory) continue;
+      const prevDay = buildPrevDayRanksFromByCategory(payload.byCategory);
+      if (!prevDayRanksPopulated({ prevDayRanksByCategory: prevDay })) continue;
+      console.log("[rankingPeakMovementSupabase] baseline from Supabase weekly TSS", {
+        historyKey,
+        startStr,
+        endStr,
+        reason,
+        supremo: Object.keys(prevDay.Supremo || {}).length,
+      });
+      return prevDay;
+    } catch (eSb) {
+      console.warn(
+        "[rankingPeakMovementSupabase] Supabase weekly baseline fetch failed:",
+        startStr,
+        endStr,
+        gender,
+        eSb && eSb.message ? eSb.message : eSb
+      );
+    }
+  }
+  return null;
+}
 
 function rowToNorm(row) {
   if (!row) return peakMovement.normalizePeakRankHistoryDoc(null);
@@ -146,7 +320,11 @@ async function ensurePrevDayBaselineForTssWeekly(admin, prevNorm, historyKey, to
 
   const today = todayYmd || peakMovement.seoulTodayYmd();
   prevNorm = peakMovement.normalizePeakRankHistoryDoc(prevNorm);
-  if (prevDayRanksPopulated(prevNorm)) return prevNorm;
+  const corrupt = prevDayBaselineLooksCorrupt(prevNorm);
+  if (prevDayRanksPopulated(prevNorm) && !corrupt) return prevNorm;
+  if (corrupt) {
+    prevNorm = { ...prevNorm, prevDayRanksByCategory: {} };
+  }
 
   const yesterday = peakMovement.seoulYesterdayYmd(today);
   const asOf = String(prevNorm.asOfSeoul || "").trim();
@@ -168,7 +346,29 @@ async function ensurePrevDayBaselineForTssWeekly(admin, prevNorm, historyKey, to
   if (admin) {
     const fsNorm = await readPeakRankHistoryFirestore(admin, historyKey);
     const merged = mergePeakRankNorms(prevNorm, fsNorm, today);
-    if (prevDayRanksPopulated(merged)) return merged;
+    if (prevDayRanksPopulated(merged) && !prevDayBaselineLooksCorrupt(merged)) return merged;
+  }
+
+  if (admin) {
+    const aggPrevDay = await buildPrevDayRanksFromFirestoreAggregate(admin, historyKey, today);
+    if (aggPrevDay) {
+      return {
+        ...prevNorm,
+        prevDayRanksByCategory: aggPrevDay,
+        asOfSeoul: prevNorm.asOfSeoul || today,
+      };
+    }
+  }
+
+  if (admin) {
+    const sbPrevDay = await buildPrevDayRanksFromSupabaseWeeklyTss(admin, historyKey, today);
+    if (sbPrevDay) {
+      return {
+        ...prevNorm,
+        prevDayRanksByCategory: sbPrevDay,
+        asOfSeoul: prevNorm.asOfSeoul || today,
+      };
+    }
   }
 
   return prevNorm;
@@ -306,7 +506,8 @@ async function hydratePeakRankMovementOnPayload(payload, historyKey, opts) {
   const snapFields = peakMovement.computePeakRankMovementFields(
     payload.byCategory,
     prevNorm,
-    todayYmd
+    todayYmd,
+    { tssWeeklyAbsolute: String(historyKey || "").startsWith("peak_tss_weekly_") }
   );
 
   if (!peakMovement.payloadHasRankMovement(payload)) {
@@ -328,12 +529,40 @@ async function hydratePeakRankMovementOnPayload(payload, historyKey, opts) {
   if (
     opts.persistSnapshot !== false &&
     opts.admin &&
-    !hadPrevDay &&
+    (!hadPrevDay || prevDayBaselineLooksCorrupt(prevNorm)) &&
     prevDayRanksPopulated({
+      prevDayRanksByCategory: snapFields.newPrevDayRanksByCategory,
+    }) &&
+    !prevDayBaselineLooksCorrupt({
+      ranksByCategory: snapFields.newRanksByCategory,
       prevDayRanksByCategory: snapFields.newPrevDayRanksByCategory,
     })
   ) {
     await writePeakRankSnapshotSupabase(historyKey, snapFields);
+    try {
+      await opts.admin
+        .firestore()
+        .collection(PEAK_RANK_HISTORY_COL)
+        .doc(String(historyKey))
+        .set(
+          {
+            asOfSeoul: snapFields.asOfSeoul || todayYmd,
+            ranksByCategory: snapFields.newRanksByCategory || {},
+            rankChangesByCategory: snapFields.newRankChangesByCategory || {},
+            previousRanksByCategory: snapFields.newPreviousRanksByCategory || {},
+            prevDayRanksByCategory: snapFields.newPrevDayRanksByCategory || {},
+            officialBaselineLabel: "prev_day_03h_kst",
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+    } catch (eFsWrite) {
+      console.warn(
+        "[rankingPeakMovementSupabase] Firestore snapshot write failed:",
+        historyKey,
+        eFsWrite && eFsWrite.message ? eFsWrite.message : eFsWrite
+      );
+    }
   }
 
   return payload;
@@ -358,7 +587,9 @@ async function applyPeakRankChangesSupabase(byCategory, historyKey, opts) {
   if (opts.admin) {
     prevNorm = await ensurePrevDayBaselineForTssWeekly(opts.admin, prevNorm, key, todayYmd);
   }
-  const snapFields = peakMovement.computePeakRankMovementFields(eligibleByCategory, prevNorm, todayYmd);
+  const snapFields = peakMovement.computePeakRankMovementFields(eligibleByCategory, prevNorm, todayYmd, {
+    tssWeeklyAbsolute: key.startsWith("peak_tss_weekly_"),
+  });
   await writePeakRankSnapshotSupabase(key, snapFields);
 }
 
@@ -372,4 +603,8 @@ module.exports = {
   ensurePrevDayBaselineForTssWeekly,
   syncEntriesRankMovementFromSupremo,
   mergePeakRankNorms,
+  buildPrevDayRanksFromFirestoreAggregate,
+  buildPrevDayRanksFromSupabaseWeeklyTss,
+  officialTssAggregateKeysForBaseline,
+  prevDayBaselineLooksCorrupt,
 };
