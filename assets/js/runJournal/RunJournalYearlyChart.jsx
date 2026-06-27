@@ -16,12 +16,12 @@
   var MONTH_LABELS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
   var BAR_COLOR_ACTIVE = 'rgba(124, 58, 237, 0.95)';
   var BAR_COLOR_DIM = 'rgba(167, 139, 250, 0.45)';
-  var ZONE_REF_DASH = '6 4';
 
   var METRICS = [
     { id: 'duration', label: '시간', dataKey: 'hours' },
     { id: 'distance', label: '거리', dataKey: 'distanceKm' },
     { id: 'tss', label: 'TSS', dataKey: 'tss' },
+    { id: 'count', label: '횟수', dataKey: 'runCount' },
   ];
 
   function sanitizeTss(val) {
@@ -80,6 +80,11 @@
     return String(Math.round(val));
   }
 
+  function formatCountForAxis(val) {
+    if (!val || val < 0) return '0';
+    return String(Math.round(val));
+  }
+
   function formatMetricValue(metricId, row) {
     if (!row) return '—';
     if (metricId === 'duration') {
@@ -90,12 +95,14 @@
       return m + '분';
     }
     if (metricId === 'distance') return row.distanceKm.toFixed(1) + ' km';
+    if (metricId === 'count') return row.runCount + '회';
     return String(row.tss);
   }
 
   function axisFormatter(metricId) {
     if (metricId === 'duration') return formatHoursForAxis;
     if (metricId === 'distance') return formatDistanceForAxis;
+    if (metricId === 'count') return formatCountForAxis;
     return formatTssForAxis;
   }
 
@@ -143,7 +150,6 @@
     var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
     var Cell = Recharts && Recharts.Cell;
     var Tooltip = Recharts && Recharts.Tooltip;
-    var ReferenceLine = Recharts && Recharts.ReferenceLine;
 
     var selBar = selectedIndex != null ? monthlyData[selectedIndex] : null;
     var selValue = selBar ? formatMetricValue(metricId, selBar) : null;
@@ -220,24 +226,8 @@
                   Tooltip
                     ? R.createElement(Tooltip, {
                       content: function () { return null; },
-                      cursor: {
-                        stroke: '#7c3aed',
-                        strokeWidth: 1.5,
-                        strokeDasharray: ZONE_REF_DASH,
-                        fill: 'rgba(124, 58, 237, 0.04)',
-                      },
+                      cursor: { fill: 'rgba(124, 58, 237, 0.06)' },
                       isAnimationActive: false,
-                    })
-                    : null,
-                  selBar && ReferenceLine
-                    ? R.createElement(ReferenceLine, {
-                      x: selBar.name,
-                      stroke: '#7c3aed',
-                      strokeWidth: 2,
-                      strokeDasharray: ZONE_REF_DASH,
-                      strokeOpacity: 0.85,
-                      isFront: true,
-                      ifOverflow: 'visible',
                     })
                     : null,
                   Bar
