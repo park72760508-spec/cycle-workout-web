@@ -517,13 +517,18 @@ async function writeRideToSupabase(rideRow) {
   }
 }
 
-/** Phase 4 — shadow 중단 시 Strava activity_id 중복·TSS 조회용 */
-async function fetchStravaActivityIdsForUser(firebaseUid, sinceDateStr) {
+async function resolveSupabaseUserIdForFirebaseUid(firebaseUid) {
   const uidConfig = {
     uidNamespace: String(uidNamespaceParam.value() || "").trim(),
     uidMode: String(uidModeParam.value() || "v5").trim(),
   };
-  const userId = resolveUserUuid(firebaseUid, uidConfig.uidNamespace, uidConfig.uidMode);
+  const supabase = getSupabaseAdminClient();
+  return resolveRideUserIdForFirebaseUid(supabase, firebaseUid, uidConfig);
+}
+
+/** Phase 4 — shadow 중단 시 Strava activity_id 중복·TSS 조회용 */
+async function fetchStravaActivityIdsForUser(firebaseUid, sinceDateStr) {
+  const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
   if (!userId) return new Set();
 
   const supabase = getSupabaseAdminClient();
@@ -548,11 +553,7 @@ async function fetchStravaActivityIdsForUser(firebaseUid, sinceDateStr) {
 
 /** Phase 4 — shadow 중단 시 특정 activity_id 존재 여부 (range query 대신 in 필터) */
 async function fetchStravaActivityIdsExistForUser(firebaseUid, activityIds) {
-  const uidConfig = {
-    uidNamespace: String(uidNamespaceParam.value() || "").trim(),
-    uidMode: String(uidModeParam.value() || "v5").trim(),
-  };
-  const userId = resolveUserUuid(firebaseUid, uidConfig.uidNamespace, uidConfig.uidMode);
+  const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
   if (!userId) return new Set();
 
   const list = [...new Set((activityIds || []).map((id) => str(id)).filter(Boolean))];
@@ -579,11 +580,7 @@ async function fetchStravaActivityIdsExistForUser(firebaseUid, activityIds) {
 }
 
 async function fetchStravaTssSumForDate(firebaseUid, dateStr) {
-  const uidConfig = {
-    uidNamespace: String(uidNamespaceParam.value() || "").trim(),
-    uidMode: String(uidModeParam.value() || "v5").trim(),
-  };
-  const userId = resolveUserUuid(firebaseUid, uidConfig.uidNamespace, uidConfig.uidMode);
+  const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
   if (!userId || !dateStr) return 0;
 
   const supabase = getSupabaseAdminClient();

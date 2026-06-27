@@ -2,13 +2,14 @@
  * Strava 갭 탐지형 일일 동기화.
  * - A: strava_sync_retry_pending === true
  * - B: strava_webhook_retries (status=pending)
- * - C: 어제~오늘 API 1페이지 vs Firestore id diff → 누락만 ingest
+ * - C: 어제~오늘 API 페이지네이션 vs Firestore/Supabase id diff → 누락만 ingest
  */
 const admin = require("firebase-admin");
 const stravaSyncRetry = require("./stravaSyncRetry");
 const stravaLogRead = require("./stravaLogRead");
 
-const STRAVA_GAP_DETECT_PAGE_SIZE = 30;
+const STRAVA_GAP_DETECT_PAGE_SIZE = 200;
+const STRAVA_GAP_DETECT_MAX_PAGES = 15;
 const STRAVA_WEBHOOK_RETRIES_COLLECTION = "strava_webhook_retries";
 const EXCLUDED_STRAVA_TYPES = new Set(["run", "swim", "walk", "trailrun", "weighttraining"]);
 
@@ -239,43 +240,66 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
     accessToken = tokenResult.accessToken;
   }
 
-  let pageRes = await stravaSyncRetry.fetchActivitiesPageWithOuter429Retry(
-    deps.fetchStravaActivitiesPage,
-    accessToken,
-    range.afterUnix,
-    range.beforeUnix,
-    1,
-    STRAVA_GAP_DETECT_PAGE_SIZE,
-    `stravaGapDetect:${userId}`
-  );
-  if (!pageRes.success && pageRes.status === 401) {
-    const tokenResult = await deps.refreshStravaTokenForUser(db, userId);
-    accessToken = tokenResult.accessToken;
-    pageRes = await deps.fetchStravaActivitiesPage(
+  const listIds = [];
+  let page = 1;
+  let apiCount = 0;
+  let firstPageError = null;
+  let firstPageStatus = 0;
+
+  while (page <= STRAVA_GAP_DETECT_MAX_PAGES) {
+    let pageRes = await stravaSyncRetry.fetchActivitiesPageWithOuter429Retry(
+      deps.fetchStravaActivitiesPage,
       accessToken,
       range.afterUnix,
       range.beforeUnix,
-      1,
-      STRAVA_GAP_DETECT_PAGE_SIZE
+      page,
+      STRAVA_GAP_DETECT_PAGE_SIZE,
+      `stravaGapDetect:${userId}:p${page}`
     );
-  }
-  if (!pageRes.success) {
-    return {
-      missingIds: [],
-      error: pageRes.error || `활동 목록 조회 실패: ${pageRes.status || 0}`,
-      status: pageRes.status || 0,
-      apiCount: 1,
-    };
+    if (!pageRes.success && pageRes.status === 401) {
+      const tokenResult = await deps.refreshStravaTokenForUser(db, userId);
+      accessToken = tokenResult.accessToken;
+      pageRes = await deps.fetchStravaActivitiesPage(
+        accessToken,
+        range.afterUnix,
+        range.beforeUnix,
+        page,
+        STRAVA_GAP_DETECT_PAGE_SIZE
+      );
+    }
+    apiCount += 1;
+    if (!pageRes.success) {
+      if (page === 1) {
+        return {
+          missingIds: [],
+          error: pageRes.error || `활동 목록 조회 실패: ${pageRes.status || 0}`,
+          status: pageRes.status || 0,
+          apiCount,
+        };
+      }
+      firstPageError = pageRes.error || `활동 목록 조회 실패: ${pageRes.status || 0}`;
+      firstPageStatus = pageRes.status || 0;
+      break;
+    }
+
+    const pageActivities = Array.isArray(pageRes.activities) ? pageRes.activities : [];
+    for (const act of pageActivities) {
+      if (!isCyclingStravaListActivity(act)) continue;
+      const actId = act && act.id != null ? String(act.id) : "";
+      if (actId) listIds.push(actId);
+    }
+    if (pageActivities.length < STRAVA_GAP_DETECT_PAGE_SIZE) break;
+    page += 1;
   }
 
-  const listIds = [];
-  for (const act of Array.isArray(pageRes.activities) ? pageRes.activities : []) {
-    if (!isCyclingStravaListActivity(act)) continue;
-    const actId = act && act.id != null ? String(act.id) : "";
-    if (actId) listIds.push(actId);
-  }
   if (listIds.length === 0) {
-    return { missingIds: [], apiCount: 1, listCount: 0 };
+    return {
+      missingIds: [],
+      apiCount,
+      listCount: 0,
+      error: firstPageError || null,
+      status: firstPageStatus || 0,
+    };
   }
 
   const { ids: existingIds, readCount } = await getExistingStravaActivityIdsForActivityList(
@@ -285,7 +309,14 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
     deps && deps.supabaseDualWriteServer ? { supabaseDualWriteServer: deps.supabaseDualWriteServer } : {}
   );
   const missingIds = listIds.filter((id) => !existingIds.has(id));
-  return { missingIds, apiCount: 1, listCount: listIds.length, logReadCount: readCount };
+  return {
+    missingIds,
+    apiCount,
+    listCount: listIds.length,
+    logReadCount: readCount,
+    error: firstPageError || null,
+    status: firstPageStatus || 0,
+  };
 }
 
 /**

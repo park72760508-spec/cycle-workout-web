@@ -2375,11 +2375,9 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       }
       continue;
     }
-    if (existingIds.has(actId)) {
+    // Firestore doc만 업데이트 경로. Supabase-only(Phase4)는 docMap 없음 → 아래 신규 ingest로 dual-write
+    if (existingDocMap.has(actId)) {
       const entry = existingDocMap.get(actId);
-      if (!entry) {
-        continue;
-      }
       const d = entry.data;
       const powerFields = ['max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_30min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
       const hrFields = ['max_hr_5sec', 'max_hr_1min', 'max_hr_5min', 'max_hr_10min', 'max_hr_20min', 'max_hr_40min', 'max_hr_60min', 'max_hr'];
@@ -3580,7 +3578,7 @@ async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
  * 매일 00:10(Asia/Seoul) 갭 탐지형 Strava 동기화.
  * - A: strava_sync_retry_pending
  * - B: strava_webhook_retries 큐
- * - C: 어제~오늘 API 1페이지 vs Firestore diff → 누락만 processStravaActivity
+ * - C: 어제~오늘 API 페이지네이션 vs Firestore/Supabase diff → 누락만 processStravaActivity
  * (구 02:00 전체 스캔 runStravaSyncWithFanOut 대체)
  */
 const stravaSyncScheduleOptions = supabaseDualWriteServer.appendServiceRoleSecret({
