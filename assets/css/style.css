@@ -11260,6 +11260,67 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   to   { transform: rotate(360deg); }
 }
 
+/* Strava 동기화 모달 — 헤더 고정·본문 스크롤·스크롤바 숨김 */
+#stravaSyncModal {
+  overflow: hidden !important;
+  overscroll-behavior: contain;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-right, 0px)) !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+}
+
+#stravaSyncModalContent {
+  display: flex !important;
+  flex-direction: column !important;
+  width: min(500px, 100%) !important;
+  max-height: min(92dvh, calc(100dvh - 32px)) !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#stravaSyncModalContent::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+#stravaSyncModal .strava-sync-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex-shrink: 0;
+  margin: 0 !important;
+  padding: 20px 24px 16px !important;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.2) !important;
+  border-radius: 16px 16px 0 0 !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 0 rgba(102, 126, 234, 0.12);
+}
+
+#stravaSyncModal .strava-sync-modal-body {
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+
+#stravaSyncModal .strava-sync-modal-footer {
+  padding: 0 24px 8px;
+  position: relative;
+  z-index: 1;
+}
+
+#stravaSyncModal .strava-sync-modal-logo {
+  padding: 8px 24px 20px !important;
+  position: relative;
+  z-index: 1;
+}
+
 /* ========== Android 전용: 워크아웃 목록 스크롤 제한 해제 (iPhone은 기존 유지) ========== */
 html.is-android #workoutScreen.screen.active { touch-action: auto !important; }
 html.is-android #workoutScreen .workout-view-container {
