@@ -109,6 +109,7 @@
   function RunJournalYearlyChart(props) {
     var trainingLogs = props.trainingLogs || {};
     var year = props.currentYear;
+    var calendarMonth = typeof props.currentMonth === 'number' ? props.currentMonth : new Date().getMonth();
     var monthlyData = useMemo(function () {
       return buildYearlyMonthlyData(trainingLogs, year);
     }, [trainingLogs, year]);
@@ -130,16 +131,11 @@
         setSelectedIndex(null);
         return;
       }
-      var maxIdx = 0;
-      var maxVal = 0;
-      monthlyData.forEach(function (d, i) {
-        if (Number(d[dataKey]) > maxVal) {
-          maxVal = Number(d[dataKey]);
-          maxIdx = i;
-        }
-      });
-      setSelectedIndex(maxIdx);
-    }, [hasData, metricId, monthlyData, dataKey]);
+      var monthIdx = calendarMonth;
+      if (monthIdx < 0) monthIdx = 0;
+      if (monthIdx > 11) monthIdx = 11;
+      setSelectedIndex(monthIdx);
+    }, [hasData, metricId, monthlyData, dataKey, calendarMonth]);
 
     var Recharts = window.Recharts;
     var BarChart = Recharts && Recharts.BarChart;

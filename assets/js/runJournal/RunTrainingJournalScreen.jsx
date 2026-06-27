@@ -67,7 +67,8 @@
       }) : null,
       YearlyChart ? R.createElement(YearlyChart, {
         trainingLogs: data.trainingLogs,
-        currentYear: data.currentYear
+        currentYear: data.currentYear,
+        currentMonth: data.currentMonth
       }) : null,
       Sheet ? R.createElement(Sheet, {
         open: data.detailSheetOpen,
