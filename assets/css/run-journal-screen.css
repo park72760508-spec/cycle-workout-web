@@ -215,6 +215,46 @@
   justify-content: center;
 }
 
+#runTrainingJournalScreen .run-journal-monthly-summary {
+  margin-top: 12px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+#runTrainingJournalScreen .journal-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+#runTrainingJournalScreen .journal-bento-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#runTrainingJournalScreen .journal-bento-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+#runTrainingJournalScreen .journal-bento-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+#runTrainingJournalScreen .journal-bento-period-hint {
+  margin-top: 6px;
+  margin-bottom: 0;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
 #runTrainingJournalScreen .journal-daily-summary--with-route {
   position: relative;
   overflow: hidden;
