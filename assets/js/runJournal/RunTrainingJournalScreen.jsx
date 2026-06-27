@@ -19,6 +19,7 @@
     var data = useRunJournalData();
     var Calendar = window.RunJournalCalendarWidget;
     var Summary = window.RunJournalDailySummary;
+    var MonthlySummary = window.RunJournalMonthlySummary;
     var Sheet = window.RunJournalDetailBottomSheet;
 
     useLayoutEffect(function () {
@@ -57,6 +58,11 @@
         logs: data.logsForSelectedDate,
         dailyRouteDoc: data.dailyRouteDoc,
         onShowDetail: data.openDetailSheet
+      }) : null,
+      MonthlySummary ? R.createElement(MonthlySummary, {
+        trainingLogs: data.trainingLogs,
+        currentYear: data.currentYear,
+        currentMonth: data.currentMonth
       }) : null,
       Sheet ? R.createElement(Sheet, {
         open: data.detailSheetOpen,
