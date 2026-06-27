@@ -2150,6 +2150,14 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   -webkit-user-select: none;
 }
 
+#openRidingRoomScreen .open-riding-group-list-category-icon {
+  width: calc(3.5rem / 2);
+  height: calc(3.5rem / 2);
+  flex-shrink: 0;
+  object-fit: contain;
+  pointer-events: none;
+}
+
 /*
  * 그룹 목록 FAB: fixed · 네비(z~99999)보다 위, 맨위로(~101000)보다 살짝 아래 · 터치 수신 명시
  */
