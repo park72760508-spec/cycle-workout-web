@@ -11755,8 +11755,8 @@
     /** legacy localStorage 키 접두사(마이그레이션 정리용) */
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
-    /** peak IndexedDB 키 접두사 — CYCLE 90일 top2 집계(v23) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v23:';
+    /** peak IndexedDB 키 접두사 — CYCLE 90일 top2·GC 헵타곤 90일(v24) */
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v24:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
@@ -15715,7 +15715,7 @@
         } else if (stelvioIsKmDistanceRanking()) {
           label.textContent = '최근 30일';
         } else if (stelvioIsGcRankingMode()) {
-          label.textContent = '월간';
+          label.textContent = '최근 90일';
         } else {
           label.textContent = '월간';
         }
