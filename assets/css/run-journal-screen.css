@@ -7,7 +7,7 @@
   justify-content: center;
   margin-top: 0;
   margin-bottom: 0;
-  padding: 0 12px;
+  padding: 0 16px;
   min-height: 36px;
 }
 
@@ -17,7 +17,7 @@
 
 #runTrainingJournalScreen .run-journal-strava-sync-btn {
   position: absolute;
-  right: 12px;
+  right: 16px;
   top: 50%;
   transform: translateY(-50%);
   display: inline-flex;
@@ -52,13 +52,34 @@
 }
 
 #runTrainingJournalScreen .journal-screen-content {
-  padding: 0 12px;
+  width: 100%;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 16px;
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
 #runTrainingJournalScreen.active {
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#runTrainingJournalScreen.active::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+#runTrainingJournalScreen .journal-calendar-widget.card,
+#runTrainingJournalScreen .journal-daily-summary,
+#runTrainingJournalScreen .run-journal-monthly-summary,
+#runTrainingJournalScreen .run-journal-yearly-chart-card {
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
 }
 
