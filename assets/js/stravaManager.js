@@ -1604,6 +1604,7 @@ async function syncStravaDataWithMmp(months = 1, options) {
       window.dispatchEvent(
         new CustomEvent('journal-training-logs-refresh', { detail: { force: true } })
       );
+      window.dispatchEvent(new CustomEvent('run-journal-refresh'));
     }
     return data;
   } catch (err) {
