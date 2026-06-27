@@ -11321,6 +11321,50 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   z-index: 1;
 }
 
+/* Strava 동기화: 날짜 입력 너비 = 기간 초기화 버튼과 동일 */
+#stravaSyncModal #stravaSyncDateRangeSection,
+#stravaSyncModal #stravaSyncSingleDateSection {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#stravaSyncModal #stravaSyncDateRangeSection > div,
+#stravaSyncModal #stravaSyncSingleDateSection > div {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#stravaSyncModal #stravaSyncDateRangeSection input[type="date"],
+#stravaSyncModal #stravaSyncSingleDateSection input[type="date"] {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: textfield !important;
+  appearance: none !important;
+  min-height: 44px;
+  height: auto;
+}
+
+#stravaSyncModal #stravaSyncDateRangeSection > button:last-of-type {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  #stravaSyncModal #stravaSyncDateRangeSection input[type="date"],
+  #stravaSyncModal #stravaSyncSingleDateSection input[type="date"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 /* ========== Android 전용: 워크아웃 목록 스크롤 제한 해제 (iPhone은 기존 유지) ========== */
 html.is-android #workoutScreen.screen.active { touch-action: auto !important; }
 html.is-android #workoutScreen .workout-view-container {
