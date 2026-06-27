@@ -66,8 +66,14 @@ function buildSupabaseRankingPendingPayload(durationType, gender, reason, deps) 
   if (durationType === "gc") {
     out.period = "monthly";
     out.gcMonthKey = supabaseRankingReader.getMonthKeyKstNow();
-    if (deps && typeof deps.getRolling28DaysRangeSeoul === "function") {
-      const r = deps.getRolling28DaysRangeSeoul();
+    const peakWindowFn =
+      deps && typeof deps.getRolling90DaysRangeSeoul === "function"
+        ? deps.getRolling90DaysRangeSeoul
+        : deps && typeof deps.getRolling28DaysRangeSeoul === "function"
+          ? deps.getRolling28DaysRangeSeoul
+          : null;
+    if (peakWindowFn) {
+      const r = peakWindowFn();
       out.startStr = r.startStr;
       out.endStr = r.endStr;
     }
@@ -146,8 +152,13 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
     const {
       getWeekRangeSeoul,
       getRolling28DaysRangeSeoul,
+      getRolling90DaysRangeSeoul,
       getRolling30DaysRangeSeoul,
     } = deps;
+    const getPeakWindow =
+      typeof getRolling90DaysRangeSeoul === "function"
+        ? getRolling90DaysRangeSeoul
+        : getRolling28DaysRangeSeoul;
 
     if (durationType === "gc") {
       const monthKey = supabaseRankingReader.getMonthKeyKstNow();
@@ -156,6 +167,7 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
         await supabaseRankingReader.attachGcHeptagonMeta(admin, payload, {
           getMinHeptagonSnapshotAsOfSeoulYmd: deps.getMinHeptagonSnapshotAsOfSeoulYmd,
           getRolling28DaysRangeSeoul,
+          getRolling90DaysRangeSeoul,
           RANKING_HEPTAGON_REBUILD_META_DOC: deps.RANKING_HEPTAGON_REBUILD_META_DOC,
         });
       }
@@ -197,7 +209,7 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
         gender
       );
     } else {
-      const { startStr, endStr } = getRolling28DaysRangeSeoul();
+      const { startStr, endStr } = getPeakWindow();
       payload = await supabaseRankingReader.fetchPeakPowerMonthly(
         admin,
         startStr,

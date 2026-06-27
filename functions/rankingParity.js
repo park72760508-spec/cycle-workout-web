@@ -148,7 +148,11 @@ async function verifyPeakRankingParity(admin, db, supabasePayload, ctx) {
  * 야간 정합성 리포트 (scheduledRankingParityAudit).
  */
 async function runNightlyParityAudit(admin, db, deps) {
-  const { getWeekRangeSeoul, getRolling28DaysRangeSeoul } = deps;
+  const { getWeekRangeSeoul, getRolling28DaysRangeSeoul, getRolling90DaysRangeSeoul } = deps;
+  const getPeakWindow =
+    typeof getRolling90DaysRangeSeoul === "function"
+      ? getRolling90DaysRangeSeoul
+      : getRolling28DaysRangeSeoul;
   const reports = [];
 
   const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
@@ -172,12 +176,12 @@ async function runNightlyParityAudit(admin, db, deps) {
     reports.push({ board: "weekly_tss", ok: false, error: e.message });
   }
 
-  const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
+  const { startStr: rPeakS, endStr: rPeakE } = getPeakWindow();
   try {
     const sb60 = await supabaseRankingReader.fetchPeakPowerMonthly(
       admin,
-      r28s,
-      r28e,
+      rPeakS,
+      rPeakE,
       "60min",
       "all"
     );
@@ -186,8 +190,8 @@ async function runNightlyParityAudit(admin, db, deps) {
       ...(await verifyPeakRankingParity(admin, db, sb60, {
         durationType: "60min",
         gender: "all",
-        startStr: r28s,
-        endStr: r28e,
+        startStr: rPeakS,
+        endStr: rPeakE,
       })),
     });
   } catch (e) {

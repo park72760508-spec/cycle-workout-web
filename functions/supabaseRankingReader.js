@@ -1532,12 +1532,15 @@ async function attachGcHeptagonMeta(admin, payload, deps) {
   const {
     getMinHeptagonSnapshotAsOfSeoulYmd,
     getRolling28DaysRangeSeoul,
+    getRolling90DaysRangeSeoul,
     RANKING_HEPTAGON_REBUILD_META_DOC,
   } = deps;
+  const peakWindowFn =
+    typeof getRolling90DaysRangeSeoul === "function"
+      ? getRolling90DaysRangeSeoul
+      : getRolling28DaysRangeSeoul;
   const rollingFallback =
-    typeof getRolling28DaysRangeSeoul === "function"
-      ? getRolling28DaysRangeSeoul()
-      : { startStr: "", endStr: "" };
+    typeof peakWindowFn === "function" ? peakWindowFn() : { startStr: "", endStr: "" };
   const minGcAsOf =
     typeof getMinHeptagonSnapshotAsOfSeoulYmd === "function"
       ? getMinHeptagonSnapshotAsOfSeoulYmd()

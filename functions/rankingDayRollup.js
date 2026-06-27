@@ -18,9 +18,10 @@ exports.PERSONAL_SPEED_ROLLUP_DOC_ID = exports.PERSONAL_SPEED_28D_ROLLUP_ID;
 exports.PERSONAL_SPEED_PERIOD_ROLLING = "rolling28";
 /** 28일 피크·GC·헵타곤 — 일 버킷만 증분 갱신(전체 로그 스캔 없음) */
 exports.PEAK_28D_ROLLUP_ID = "peak_28d";
-/** 4주(28일) 중 주별 최고 1건씩 → 4주 중 최대 1건으로 환산 (GC·헵타곤) */
-exports.PEAK_28D_LOGIC_VERSION = 3;
+/** 90일 창 일별 top2 W/kg 평균 (1일 30% 페널티) — GC·헵타곤·피크 rollup */
+exports.PEAK_28D_LOGIC_VERSION = 4;
 exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK = "four_week_one_peak";
+exports.PEAK_METHOD_NINETY_DAY_TOP2_DAILY = "ninety_day_top2_daily";
 /**
  * 랭킹 항속 산출식 버전 — 변경 시 rollup·ranking_aggregates·cache 전면 재계산.
  * v12: 4주(28일) 롤링 창·rollup doc personal_speed_28d·일 버킷 우선(183일 제거).
@@ -629,9 +630,75 @@ function getRolling28DaysRangeSeoul() {
   return { startStr, endStr };
 }
 
+/** CYCLE 피크·GC·헵타곤 rollup 창 — 오늘 포함 최근 90일 */
+function getRolling90DaysRangeSeoul() {
+  const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const startStr = addDaysSeoulYmd(endStr, -89);
+  return { startStr, endStr };
+}
+
+function cyclePeakWkgFromTop2Daily(bestWkg, secondWkg, dayCount) {
+  const best = Number(bestWkg);
+  const days = Number(dayCount);
+  if (!Number.isFinite(best) || best <= 0 || !Number.isFinite(days) || days <= 0) return 0;
+  if (days === 1) {
+    return Math.round(((best + best * 0.7) / 2) * 100) / 100;
+  }
+  const second = Number(secondWkg);
+  const s = Number.isFinite(second) && second > 0 ? second : best * 0.7;
+  return Math.round(((best + s) / 2) * 100) / 100;
+}
+
 /**
- * GC·헵타곤: 28일을 4주로 나누고, 주별 최고 W/kg 중 **최대 1주**만 환산점수에 사용.
- * (28일 전체 일별 max와 수학적으로 동일한 단일 피크이나, 주별 breakdown을 rollup에 저장)
+ * CYCLE 90일: 일별 duration 최고 W → 상위 2일 W/kg 평균 (1일만 있으면 30% 페널티).
+ */
+function computeUserPeaksNinetyDayTop2DailyFromBucketSnaps(userData, bucketSnaps, startStr, endStr) {
+  const rawWeight = Number(userData.weight || userData.weightKg || 0);
+  if (rawWeight <= 0) return null;
+  const weightKg = Math.max(rawWeight, 45);
+  const peaks = {};
+
+  for (const dt of Object.keys(DURATION_FIELDS)) {
+    const field = DURATION_FIELDS[dt];
+    const dailyMax = new Map();
+    (bucketSnaps || []).forEach((snap) => {
+      if (!snap || !snap.exists) return;
+      const row = snap.data() || {};
+      const ymd = row.ymd || snap.id || "";
+      if (!ymd || ymd < startStr || ymd > endStr) return;
+      const watts = Number(row[field]) || 0;
+      if (watts <= 0) return;
+      if (!validatePeakPowerRecord(dt, watts, weightKg)) return;
+      const prev = dailyMax.get(ymd) || 0;
+      if (watts > prev) dailyMax.set(ymd, watts);
+    });
+
+    if (!dailyMax.size) continue;
+    const ranked = Array.from(dailyMax.entries())
+      .map(([ymd, watts]) => ({ ymd, watts }))
+      .sort((a, b) => b.watts - a.watts || (b.ymd > a.ymd ? 1 : b.ymd < a.ymd ? -1 : 0));
+    const dayCount = ranked.length;
+    const bestWatts = ranked[0].watts;
+    const bestWkg = Math.round((bestWatts / weightKg) * 100) / 100;
+    const secondWkg =
+      dayCount >= 2 ? Math.round((ranked[1].watts / weightKg) * 100) / 100 : null;
+    const finalWkg = cyclePeakWkgFromTop2Daily(bestWkg, secondWkg, dayCount);
+    peaks[dt] = {
+      watts: bestWatts,
+      wkg: finalWkg,
+      weightKg,
+      dayCount,
+      peakMethod: exports.PEAK_METHOD_NINETY_DAY_TOP2_DAILY,
+    };
+  }
+
+  return Object.keys(peaks).length
+    ? { weightKg, peaks, peakMethod: exports.PEAK_METHOD_NINETY_DAY_TOP2_DAILY }
+    : null;
+}
+
+/**
+ * @deprecated 28일 4주×1피크 — v4부터 computeUserPeaksNinetyDayTop2DailyFromBucketSnaps 사용
  */
 function computeUserPeaksFourWeekOnePeakFromBucketSnaps(userData, bucketSnaps, startStr, endStr) {
   const rawWeight = Number(userData.weight || userData.weightKg || 0);
@@ -689,11 +756,9 @@ function computeUserPeaksFourWeekOnePeakFromBucketSnaps(userData, bucketSnaps, s
     : null;
 }
 
-/**
- * GC·헵타곤·28일 롤링: 4주 중 주별 최고 → 그중 1피크만 환산.
- */
+/** CYCLE 피크·GC·헵타곤 rollup — 90일 일별 top2 W/kg */
 function computeFourWeekGcStylePeaksFromBucketSnaps(userData, bucketSnaps, startStr, endStr) {
-  return computeUserPeaksFourWeekOnePeakFromBucketSnaps(userData, bucketSnaps, startStr, endStr);
+  return computeUserPeaksNinetyDayTop2DailyFromBucketSnaps(userData, bucketSnaps, startStr, endStr);
 }
 
 /** 일 버킷 스냅샷(28일 등)으로 duration별 기간 내 최고 피크 1건 — 추가 로그 스캔 없음 */
@@ -1027,7 +1092,7 @@ function peak28dRollupNeedsInvalidate(rollup, startStr, endStr) {
   if (!rollup) return true;
   if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return true;
   if (Number(rollup.rollupLogicVersion) < exports.PEAK_28D_LOGIC_VERSION) return true;
-  if (rollup.peakMethod !== exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK) return true;
+  if (rollup.peakMethod !== exports.PEAK_METHOD_NINETY_DAY_TOP2_DAILY) return true;
   if (!rollup.userMeta || !rollup.userMeta.ageCategory) return true;
   return false;
 }
@@ -1076,7 +1141,7 @@ async function writePeak28dRollupDoc(db, userId, userData, startStr, endStr, pea
     windowEnd: endStr,
     weightKg: peakMap.weightKg,
     peaks: peakMap.peaks,
-    peakMethod: peakMap.peakMethod || exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
+    peakMethod: peakMap.peakMethod || exports.PEAK_METHOD_NINETY_DAY_TOP2_DAILY,
     hrMaxByDuration: hrMax || {},
     userMeta,
     rollupLogicVersion: exports.PEAK_28D_LOGIC_VERSION,
@@ -1087,7 +1152,7 @@ async function writePeak28dRollupDoc(db, userId, userData, startStr, endStr, pea
 }
 
 /**
- * 28일 창: 일 버킷만 읽어 4주 1피크 rollup 갱신 (로그 400건 스캔 없음).
+ * 90일 창: 일 버킷만 읽어 일별 top2 W/kg rollup 갱신 (로그 400건 스캔 없음).
  */
 async function rebuildPeak28dRollupFromBuckets(db, userId, userData, startStr, endStr, opts) {
   const ensureMissing = !!(opts && opts.ensureMissingDays);
@@ -1132,10 +1197,10 @@ async function rebuildPeak28dRollupsChunk(db, userDocs, startIndex, chunkSize, s
 }
 
 /**
- * 로그→일 버킷 직후: 28일 창이면 일 버킷만 재읽어 peak_28d 갱신(로그 전체 스캔 없음, 최대 28 reads).
+ * 로그→일 버킷 직후: 90일 창이면 일 버킷만 재읽어 peak_28d 갱신(로그 전체 스캔 없음, 최대 90 reads).
  */
 async function touchPeak28dRollupAfterDayChange(db, userId, userData, ymd, _dayPayload) {
-  const { startStr, endStr } = getRolling28DaysRangeSeoul();
+  const { startStr, endStr } = getRolling90DaysRangeSeoul();
   if (!ymd || ymd < startStr || ymd > endStr) return;
   await rebuildPeak28dRollupFromBuckets(db, userId, userData, startStr, endStr, { ensureMissingDays: false });
 }
@@ -1614,9 +1679,12 @@ function maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr) {
 }
 
 exports.getRolling28DaysRangeSeoul = getRolling28DaysRangeSeoul;
+exports.getRolling90DaysRangeSeoul = getRolling90DaysRangeSeoul;
+exports.cyclePeakWkgFromTop2Daily = cyclePeakWkgFromTop2Daily;
 exports.splitInclusiveRangeIntoFourWeeks = splitInclusiveRangeIntoFourWeeks;
 exports.calculateGcRankingFromWeeklyMaxWkg = calculateGcRankingFromWeeklyMaxWkg;
 exports.computeUserPeaksFourWeekOnePeakFromBucketSnaps = computeUserPeaksFourWeekOnePeakFromBucketSnaps;
+exports.computeUserPeaksNinetyDayTop2DailyFromBucketSnaps = computeUserPeaksNinetyDayTop2DailyFromBucketSnaps;
 exports.computeFourWeekGcStylePeaksFromBucketSnaps = computeFourWeekGcStylePeaksFromBucketSnaps;
 exports.rebuildPeak28dRollupFromBuckets = rebuildPeak28dRollupFromBuckets;
 exports.touchPeak28dRollupAfterDayChange = touchPeak28dRollupAfterDayChange;

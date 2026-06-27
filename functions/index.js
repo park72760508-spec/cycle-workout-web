@@ -4566,7 +4566,7 @@ async function markManualRankingPhaseMeta(db, phase, status, extra) {
 /** 28일 피크 → ranking_aggregates peakRanking_v2_monthly_* (Max~60분 전체) */
 async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
   const t0 = Date.now();
-  const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
+  const { startStr: r90s, endStr: r90e } = getRolling90DaysRangeSeoul();
   const useRollups = !(opts && opts.legacyOnePass === true);
   /** 기본 true — 553명×28버킷 선처리는 60분 타임아웃 유발. 보드 조립 시 rollup miss 만 개별 갱신 */
   const skipRollupBatch = opts && opts.skipRollupBatch === false ? false : true;
@@ -4577,8 +4577,8 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
   const userCount = snap ? snap.size : 0;
   try {
     await markManualRankingPhaseMeta(db, "peak_monthly", "running", {
-      r28s,
-      r28e,
+      r90s,
+      r90e,
       userCount,
       peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
       skipRollupBatch,
@@ -4588,7 +4588,7 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
     let allDur;
     let boardStats = null;
     if (useRollups) {
-      const fastBuilt = await buildPeakPowerFromPeak28dRollupsFast(db, r28s, r28e, null);
+      const fastBuilt = await buildPeakPowerFromPeak28dRollupsFast(db, r90s, r90e, null);
       allDur = fastBuilt.boards;
       boardStats = fastBuilt.stats;
       const fastOk =
@@ -4607,12 +4607,12 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
         }
         console.warn("[runRankingAggregatePeakMonthly28d] fast insufficient — legacy one-pass (allowLegacyFallback)");
         if (!snap) snap = await db.collection("users").get();
-        allDur = await buildPeakPowerFromPeak28dRollupsOnePass(db, r28s, r28e, snap, null);
+        allDur = await buildPeakPowerFromPeak28dRollupsOnePass(db, r90s, r90e, snap, null);
         boardStats = { mode: "legacy_one_pass_fallback", prior: boardStats };
       }
     } else {
       if (!snap) snap = await db.collection("users").get();
-      allDur = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, snap, null);
+      allDur = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r90s, r90e, snap, null);
       boardStats = { mode: "legacy_one_pass" };
     }
     const writeJobs = [];
@@ -4624,12 +4624,12 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
             if (!skipRankHistory) {
               await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
             }
-            const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
+            const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r90s}_${r90e}`;
             await writeRankingAggregatePayload(db, ckey, {
               byCategory: pack.byCategory,
               entries: pack.entries,
-              startStr: r28s,
-              endStr: r28e,
+              startStr: r90s,
+              endStr: r90e,
               cohortAvgHrBpm: pack.cohortAvgHrBpm,
             });
           })()
@@ -4643,11 +4643,11 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
       phase: "peak_monthly",
       wrote,
       ms,
-      startStr: r28s,
-      endStr: r28e,
+      startStr: r90s,
+      endStr: r90e,
       userCount: snap ? snap.size : userCount,
       peakBuildMode: useRollups ? "peak_28d_rollup" : "legacy_one_pass",
-      peakMethod: rankingDayRollup.PEAK_METHOD_FOUR_WEEK_ONE_PEAK,
+      peakMethod: rankingDayRollup.PEAK_METHOD_NINETY_DAY_TOP2_DAILY,
       skipRollupBatch,
       skipUsersFetch,
       boardStats,
@@ -4663,8 +4663,8 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
       await markManualRankingPhaseMeta(db, "peak_monthly", "failed", {
         lastError: ePeak && ePeak.message ? ePeak.message : String(ePeak),
         ms: msFail,
-        startStr: r28s,
-        endStr: r28e,
+        startStr: r90s,
+        endStr: r90e,
         userCount: snap ? snap.size : userCount,
         skipRollupBatch,
       });
@@ -4679,26 +4679,26 @@ async function runRankingAggregatePeakMonthlyOneDuration(db, durationType, users
     throw new Error(`invalid_duration:${durationType}`);
   }
   const t0 = Date.now();
-  const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
+  const { startStr: r90s, endStr: r90e } = getRolling90DaysRangeSeoul();
   const snap = usersSnap ?? (await db.collection("users").get());
   await markManualRankingPhaseMeta(db, "peak_duration", "running", {
     durationType,
-    r28s,
-    r28e,
+    r90s,
+    r90e,
     userCount: snap.size,
   });
-  await rankingDayRollup.rebuildPeak28dRollupsBatch(db, snap.docs, r28s, r28e, { ensureMissingDays: false });
-  const allDur = await buildPeakPowerFromPeak28dRollupsOnePass(db, r28s, r28e, snap, durationType);
+  await rankingDayRollup.rebuildPeak28dRollupsBatch(db, snap.docs, r90s, r90e, { ensureMissingDays: false });
+  const allDur = await buildPeakPowerFromPeak28dRollupsOnePass(db, r90s, r90e, snap, durationType);
   let wrote = 0;
   for (const gender of ["all", "M", "F"]) {
     const pack = allDur[gender][durationType];
     await applyPeakRankChanges(db, pack.byCategory, `peak_${durationType}_monthly_${gender}`);
-    const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
+    const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r90s}_${r90e}`;
     await writeRankingAggregatePayload(db, ckey, {
       byCategory: pack.byCategory,
       entries: pack.entries,
-      startStr: r28s,
-      endStr: r28e,
+      startStr: r90s,
+      endStr: r90e,
       cohortAvgHrBpm: pack.cohortAvgHrBpm,
     });
     wrote++;
@@ -4709,10 +4709,10 @@ async function runRankingAggregatePeakMonthlyOneDuration(db, durationType, users
     durationType,
     wrote,
     ms,
-    startStr: r28s,
-    endStr: r28e,
+    startStr: r90s,
+    endStr: r90e,
     userCount: snap.size,
-    cacheKeyExample: `peakRanking_v2_monthly_${durationType}_all_${r28s}_${r28e}`,
+    cacheKeyExample: `peakRanking_v2_monthly_${durationType}_all_${r90s}_${r90e}`,
   };
   await markManualRankingPhaseMeta(db, "peak_duration", "complete", result);
   console.log("[runRankingAggregatePeakMonthlyOneDuration] done", result);
@@ -5882,10 +5882,17 @@ function getRolling30DaysRangeSeoul() {
   return { startStr, endStr };
 }
 
-/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 28일(7×4주). GC·헵타곤·피크(rolling/monthly 탭) 공통 창 — 추가 로그 조회 없이 일 버킹만 사용. */
+/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 28일(7×4주). 항속(독주) 등 — CYCLE 피크는 getRolling90DaysRangeSeoul. */
 function getRolling28DaysRangeSeoul() {
   const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const startStr = addDaysSeoulYmd(endStr, -27);
+  return { startStr, endStr };
+}
+
+/** CYCLE 피크·GC·헵타곤 rollup — 오늘 포함 최근 90일 */
+function getRolling90DaysRangeSeoul() {
+  const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const startStr = addDaysSeoulYmd(endStr, -89);
   return { startStr, endStr };
 }
 
@@ -7522,7 +7529,7 @@ function transformPeakBoardToPersonalSpeed(byCategory) {
 }
 
 async function getPersonalSpeedRankingFromMonthly60minFallback(db, gender) {
-  const { startStr, endStr } = getRolling28DaysRangeSeoul();
+  const { startStr, endStr } = getRolling90DaysRangeSeoul();
   const cacheKey = `peakRanking_v2_monthly_60min_${gender}_${startStr}_${endStr}`;
   let agg =
     (await readRankingAggregatePayloadIfFresh(db, cacheKey)) ||
@@ -7538,11 +7545,11 @@ async function getPersonalSpeedRankingFromMonthly60minFallback(db, gender) {
   if (!agg || !agg.byCategory) return null;
   const pack = transformPeakBoardToPersonalSpeed(agg.byCategory);
   if (!pack) return null;
-  const r28 = getRolling28DaysRangeSeoul();
+  const r90 = getRolling90DaysRangeSeoul();
   return {
     ...pack,
-    startStr: r28.startStr,
-    endStr: r28.endStr,
+    startStr: r90.startStr,
+    endStr: r90.endStr,
     approximate: true,
     approximateSource: "monthly_60min_peak",
   };
@@ -8128,7 +8135,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
   let lastPhase = "init";
   const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
   const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
-  const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
+  const { startStr: r90s, endStr: r90e } = getRolling90DaysRangeSeoul();
   const { startStr: r30s, endStr: r30e } = getRolling30DaysRangeSeoul();
   const skipPersonalSpeed = !!(opts && opts.skipPersonalSpeed);
   try {
@@ -8257,8 +8264,8 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
       ms: Date.now() - t0,
       phase: "weekly_core",
       partial: true,
-      r28s,
-      r28e,
+      r90s,
+      r90e,
     });
   } catch (ePartialMeta) {
     console.warn("[runRebuildRankingAggregatesCore] weekly_core partial meta failed:", ePartialMeta && ePartialMeta.message);
@@ -8522,14 +8529,14 @@ exports.manualRebuildRankingPhase = onRequest(
     }
 
     const startedAt = new Date().toISOString();
-    const r28 = getRolling28DaysRangeSeoul();
+    const r90 = getRolling90DaysRangeSeoul();
     res.status(202).json({
       success: true,
       accepted: true,
       startedAt,
       phase,
       duration: phase === "peak_duration" ? duration : null,
-      rolling28: r28,
+      rolling90: r90,
       checkMetaDoc: `ranking_meta/${RANKING_PHASE_REBUILD_META_DOC}`,
       message: "부분 집계 시작. Firestore manual_ranking_phase_rebuild 의 status·progressAt 확인.",
     });
@@ -8687,7 +8694,7 @@ exports.scheduledPeak28dRollupBackfillChunk = onSchedule(
   },
   async () => {
     const db = admin.firestore();
-    const { startStr, endStr } = getRolling28DaysRangeSeoul();
+    const { startStr, endStr } = getRolling90DaysRangeSeoul();
     const metaRef = db.collection("ranking_meta").doc("peak_28d_backfill");
     const CHUNK = 80;
     try {
@@ -10180,6 +10187,7 @@ exports.scheduledRankingParityAudit = onSchedule(
       await rankingParity.runNightlyParityAudit(admin, db, {
         getWeekRangeSeoul,
         getRolling28DaysRangeSeoul,
+        getRolling90DaysRangeSeoul,
       });
     } catch (e) {
       console.error(
@@ -10202,7 +10210,7 @@ async function runHeptagonCohortRanksRebuildJob() {
   return heptagonCohortRanks.runRebuildHeptagonCohortRanks(db, {
     getPeakPowerRankingEntries,
     getLeagueCategory,
-    getRolling28DaysRangeSeoul,
+    getRolling90DaysRangeSeoul,
     admin,
     readRankingAggregatePayloadIfFresh,
     readRankingAggregatePayloadAllowStale: readAllowStaleForHeptagon,
@@ -10959,6 +10967,7 @@ exports.getPeakPowerRanking = onRequest(
           db,
           getWeekRangeSeoul,
           getRolling28DaysRangeSeoul,
+          getRolling90DaysRangeSeoul,
           getRolling30DaysRangeSeoul,
           getMinHeptagonSnapshotAsOfSeoulYmd,
           RANKING_HEPTAGON_REBUILD_META_DOC,
@@ -11019,6 +11028,7 @@ exports.getPeakPowerRanking = onRequest(
         rankingReadRouter.buildSupabaseRankingPendingPayload(durationType, gender, "firebase_read_disabled", {
           getWeekRangeSeoul,
           getRolling28DaysRangeSeoul,
+          getRolling90DaysRangeSeoul,
           getRolling30DaysRangeSeoul,
         })
       );
@@ -11719,7 +11729,7 @@ exports.getPeakPowerRanking = onRequest(
         console.warn("[getPeakPowerRanking gc]", eGc && eGc.message ? eGc.message : eGc);
         return res.status(500).json({ success: false, error: "gc_ranking_failed" });
       }
-      const rollingFallback = getRolling28DaysRangeSeoul();
+      const rollingFallback = getRolling90DaysRangeSeoul();
       const minGcAsOf = getMinHeptagonSnapshotAsOfSeoulYmd();
       let gcAsOf = snap.snapshotAsOfSeoul ? String(snap.snapshotAsOfSeoul).trim().slice(0, 10) : "";
       let gcStaleVsMin = !!(gcAsOf && minGcAsOf && gcAsOf < minGcAsOf);
@@ -11728,7 +11738,7 @@ exports.getPeakPowerRanking = onRequest(
           const live = await heptagonCohortRanks.buildLiveGcRankingPayload(db, fg, {
             getPeakPowerRankingEntries,
             getLeagueCategory,
-            getRolling28DaysRangeSeoul,
+            getRolling28DaysRangeSeoul: getRolling90DaysRangeSeoul,
             readRankingAggregatePayloadIfFresh,
             buildPeakPowerAllDurationsForRangeAllGendersOnePass,
           });
@@ -11815,16 +11825,8 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     let startStr, endStr;
-    if (period === "rolling28" || period === "rolling28d") {
-      const r = getRolling28DaysRangeSeoul();
-      startStr = r.startStr;
-      endStr = r.endStr;
-    } else if (period === "rolling6m" || period === "rolling183") {
-      const r = getRolling28DaysRangeSeoul();
-      startStr = r.startStr;
-      endStr = r.endStr;
-    } else if (period === "rolling30" || period === "monthly") {
-      const r = getRolling28DaysRangeSeoul();
+    if (period === "rolling28" || period === "rolling28d" || period === "rolling6m" || period === "rolling183" || period === "rolling30" || period === "monthly") {
+      const r = getRolling90DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
     } else {
@@ -12089,9 +12091,9 @@ exports.getOvertakeAnalysis = onRequest(
 
     const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
     const month = req.query.month ? parseInt(req.query.month, 10) : new Date().getMonth() + 1;
-    const r28 = getRolling28DaysRangeSeoul();
-    const startStr = r28.startStr;
-    const endStr = r28.endStr;
+    const r90 = getRolling90DaysRangeSeoul();
+    const startStr = r90.startStr;
+    const endStr = r90.endStr;
 
     const db = admin.firestore();
     const todayStr = req.query.today || req.body?.today || null;
