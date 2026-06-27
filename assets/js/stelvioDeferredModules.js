@@ -232,6 +232,7 @@
     await appendScript('assets/js/runJournal/useRunJournalData.js');
     await appendScript('assets/js/runJournal/RunJournalCalendarWidget.jsx', 'text/babel');
     await appendScript('assets/js/runJournal/RunJournalDailySummary.jsx', 'text/babel');
+    await appendScript('assets/js/runJournal/RunJournalMonthlySummary.jsx', 'text/babel');
     await appendScript('assets/js/runJournal/RunJournalDetailBottomSheet.jsx', 'text/babel');
     await appendScript('assets/js/runJournal/RunTrainingJournalScreen.jsx', 'text/babel');
     registerRunJournalInit();
