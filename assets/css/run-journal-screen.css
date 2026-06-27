@@ -401,13 +401,32 @@
 #runTrainingJournalScreen .journal-detail-value-wrap,
 .run-journal-detail-panel .journal-detail-value-wrap { display: inline-flex; align-items: center; gap: 6px; }
 #runTrainingJournalScreen .journal-detail-value,
-.run-journal-detail-panel .journal-detail-value { font-weight: 600; font-size: 14px; }
+.run-journal-detail-panel .journal-detail-value { font-weight: 600; font-size: 14px; line-height: 1.35; color: #111827; }
+
+#runTrainingJournalScreen .run-journal-pace-value-wrap,
+.run-journal-detail-panel .run-journal-pace-value-wrap {
+  align-items: flex-start;
+}
+
+#runTrainingJournalScreen .run-journal-pace-value-stack,
+.run-journal-detail-panel .run-journal-pace-value-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
 
 #runTrainingJournalScreen .run-journal-pace-speed-suffix,
 .run-journal-detail-panel .run-journal-pace-speed-suffix {
   font-weight: 400;
   font-size: 14px;
-  color: inherit;
+  line-height: 1.35;
+  color: #111827;
+}
+
+#runTrainingJournalScreen .run-journal-pace-meta,
+.run-journal-detail-panel .run-journal-pace-meta {
+  font-weight: 600;
 }
 
 #runTrainingJournalScreen .run-journal-log-card,
