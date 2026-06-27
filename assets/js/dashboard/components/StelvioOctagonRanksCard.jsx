@@ -18,6 +18,9 @@
 
   var RANKING_BASE = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
 
+  /** CYCLE 월간(90일) 헵타곤 범례·상세 모달 — 일별 top2 W/kg 평균 */
+  var HEPTAGON_MONTHLY_PERIOD_LABEL = '최근 90일 최고 기록 2회 평균';
+
   /** index.html 랭킹보드 #stelvioGenderSelect / #stelvioCategorySelect 와 동일 */
   var GENDER_OPTIONS = [
     { value: 'all', label: '전체' },
@@ -3752,7 +3755,7 @@
         octagonPeakReqRef.current += 1;
         var peakReqId = octagonPeakReqRef.current;
 
-        /** 월간(28일) 7축 getPeak만 사용 — 명예의 전당(365d) API 호출 제거 */
+        /** 월간(90일 top2) 7축 getPeak만 사용 — 명예의 전당(365d) API 호출 제거 */
         if (!quickRows) {
           setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
         }
@@ -4819,7 +4822,7 @@
           tierSummary={heptagonModalShowSummary}
           genderLabel={labelForGender(heptagonModalGender)}
           categoryLabel={labelForCategory(heptagonModalCategory)}
-          periodLabel="최근 4주 최고 기록(월)"
+          periodLabel={HEPTAGON_MONTHLY_PERIOD_LABEL}
           boardState={heptagonBoardForModal}
           boardFilterGender={heptagonModalGender}
           boardFilterCategory={heptagonModalCategory}
@@ -4971,7 +4974,7 @@
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(124, 58, 237, 0.45)', border: '1px solid #6d28d9' }} />
-              <span>최근 4주 최고 기록</span>
+              <span>{HEPTAGON_MONTHLY_PERIOD_LABEL}</span>
             </div>
           </div>
           <div
