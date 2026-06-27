@@ -6889,8 +6889,11 @@
       <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> Run 기록</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
-    <p class="subtitle" style="margin-top: 0; margin-bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
-      <span>나의 Run 기록을 확인하세요 <span id="runJournalSubtitleCount" aria-live="polite">( )</span></span>
+    <p class="subtitle run-journal-screen-subtitle">
+      <span class="run-journal-subtitle-text">나의 Run 기록을 확인하세요 <span id="runJournalSubtitleCount" aria-live="polite">( )</span></span>
+      <button type="button" id="runJournalStravaSyncBtn" class="run-journal-strava-sync-btn" aria-label="Strava MMP 동기화" title="Strava MMP 동기화">
+        <img src="assets/img/data.gif" alt="" class="run-journal-strava-sync-icon" draggable="false" aria-hidden="true">
+      </button>
     </p>
     <script>
       (function() {
@@ -6899,6 +6902,61 @@
           if (el) el.textContent = text || '( )';
         }
         window.updateRunJournalSubtitle = updateRunJournalSubtitle;
+
+        function getRunJournalCurrentUser() {
+          try {
+            var cu = window.currentUser;
+            if (!cu) cu = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            return cu;
+          } catch (e) {
+            return null;
+          }
+        }
+
+        function isRunJournalStravaConnected(user) {
+          if (typeof window.userHasStravaConnected === 'function') {
+            return window.userHasStravaConnected(user);
+          }
+          if (!user) return false;
+          if (user.strava_refresh_token || user.strava_access_token) return true;
+          if (user.strava_connected === true || user.strava_connected === 'true' || user.strava_connected === 1) return true;
+          if (user.has_strava === true || user.has_strava === 'true' || user.has_strava === 1) return true;
+          var athleteId = user.strava_athlete_id != null ? String(user.strava_athlete_id).trim() : '';
+          return !!athleteId;
+        }
+
+        function openRunJournalStravaSync() {
+          try {
+            var user = getRunJournalCurrentUser();
+            if (isRunJournalStravaConnected(user)) {
+              if (typeof window.openStravaSyncModal === 'function') {
+                window.openStravaSyncModal();
+              } else {
+                var modal = document.getElementById('stravaSyncModal');
+                if (modal) {
+                  modal.style.display = 'flex';
+                  modal.classList.remove('hidden');
+                } else if (typeof showScreen === 'function') {
+                  showScreen('stravaSyncScreen');
+                }
+              }
+            } else if (typeof window.openSettingsModal === 'function') {
+              window.openSettingsModal();
+            } else {
+              var sm = document.getElementById('settingsModal');
+              if (sm) {
+                sm.style.display = 'block';
+                sm.classList.remove('hidden');
+              }
+            }
+          } catch (e) {
+            console.error('[RunJournal] Strava sync open failed:', e);
+          }
+        }
+
+        var syncBtn = document.getElementById('runJournalStravaSyncBtn');
+        if (syncBtn) syncBtn.addEventListener('click', openRunJournalStravaSync);
+        window.openRunJournalStravaSync = openRunJournalStravaSync;
       })();
     </script>
     <div id="run-journal-react-root" style="display: block; margin-top: 0;">
