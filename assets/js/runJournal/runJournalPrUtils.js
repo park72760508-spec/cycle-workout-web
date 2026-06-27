@@ -24,10 +24,16 @@
     return m + ':' + (s < 10 ? '0' : '') + s + '/km';
   }
 
+  function formatSpeedKmhFromKmh(kmh) {
+    var v = Number(kmh);
+    if (!isFinite(v) || v <= 0) return null;
+    return (Math.round(v * 10) / 10).toFixed(1) + ' km/h';
+  }
+
   function formatSpeedKmhFromMs(speedMs) {
     var sp = Number(speedMs);
     if (!isFinite(sp) || sp <= 0) return null;
-    return Math.round(sp * 3.6) + 'km/h';
+    return formatSpeedKmhFromKmh(sp * 3.6);
   }
 
   function formatPaceWithSpeed(speedMs) {
@@ -151,6 +157,7 @@
     speedMsToPaceSec: speedMsToPaceSec,
     formatPaceFromSpeed: formatPaceFromSpeed,
     formatSpeedKmhFromMs: formatSpeedKmhFromMs,
+    formatSpeedKmhFromKmh: formatSpeedKmhFromKmh,
     formatPaceWithSpeed: formatPaceWithSpeed,
     buildYearlyPacePrByAxis: buildYearlyPacePrByAxis,
     isAxisPrForEffort: isAxisPrForEffort,

@@ -47,18 +47,24 @@
   function PaceDetailRow(label, speedMs, hr, cadence, isPr) {
     var pace = pr().formatPaceFromSpeed(speedMs);
     var kmh = pr().formatSpeedKmhFromMs(speedMs);
-    var cadText = '';
     var c = Math.round(Number(cadence) || 0);
-    if (c > 0) cadText = ' · ' + c + ' rpm';
-    var hrText = hr != null && Number(hr) > 0 ? ' · ' + Math.round(Number(hr)) + ' bpm' : '';
-    return R.createElement('div', { className: 'journal-detail-row' },
+    var metaParts = [];
+    if (c > 0) metaParts.push(c + ' rpm');
+    if (hr != null && Number(hr) > 0) metaParts.push(Math.round(Number(hr)) + ' bpm');
+    var metaText = metaParts.length ? '· ' + metaParts.join(' · ') : '';
+    return R.createElement('div', { className: 'journal-detail-row run-journal-pace-row' },
       R.createElement('span', { className: 'journal-detail-label' }, label),
-      R.createElement('span', { className: 'journal-detail-value-wrap' },
+      R.createElement('span', { className: 'journal-detail-value-wrap run-journal-pace-value-wrap' },
         isPr ? R.createElement(PrBadge) : null,
-        R.createElement('span', { className: 'journal-detail-value' }, pace),
-        kmh ? R.createElement('span', { className: 'run-journal-pace-speed-suffix' }, '(' + kmh + ')') : null,
-        cadText ? R.createElement('span', { className: 'journal-detail-value' }, cadText) : null,
-        hrText ? R.createElement('span', { className: 'journal-detail-value' }, hrText) : null
+        R.createElement('span', { className: 'run-journal-pace-value-stack' },
+          R.createElement('span', { className: 'journal-detail-value run-journal-pace-primary' }, pace),
+          kmh
+            ? R.createElement('span', { className: 'run-journal-pace-speed-suffix' }, '(' + kmh + ')')
+            : null,
+          metaText
+            ? R.createElement('span', { className: 'journal-detail-value run-journal-pace-meta' }, metaText)
+            : null
+        )
       )
     );
   }
