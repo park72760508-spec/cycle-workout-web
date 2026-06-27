@@ -2140,6 +2140,21 @@ async function ensureExistingStravaLogMirroredToSupabase(userId, logDocId, logDa
       logDocId,
       e && e.message ? e.message : e
     );
+    try {
+      const stravaSyncRetry = require("./stravaSyncRetry");
+      const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(logData.date);
+      if (ymd) {
+        await stravaSyncRetry.markStravaSyncRetryPending(admin.firestore(), userId, {
+          dateFrom: ymd,
+          dateTo: ymd,
+          reason: "mirror_failed",
+          status: 500,
+          activityId: logDocId,
+        });
+      }
+    } catch (markErr) {
+      console.warn("[stravaSync] mark mirror retry failed:", userId, logDocId, markErr.message);
+    }
     return false;
   }
 }

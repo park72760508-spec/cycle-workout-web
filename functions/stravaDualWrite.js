@@ -10,6 +10,27 @@
  */
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 
+async function markStravaSupabaseMirrorRetry(admin, userId, logDocId, logDoc, reason) {
+  if (!admin || !userId) return;
+  const db = typeof admin.firestore === "function" ? admin.firestore() : null;
+  if (!db) return;
+  try {
+    const rankingDayRollup = require("./rankingDayRollup");
+    const stravaSyncRetry = require("./stravaSyncRetry");
+    const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(logDoc && logDoc.date);
+    if (!ymd) return;
+    await stravaSyncRetry.markStravaSyncRetryPending(db, userId, {
+      dateFrom: ymd,
+      dateTo: ymd,
+      reason: String(reason || "supabase_mirror").slice(0, 40),
+      status: 500,
+      activityId: logDocId,
+    });
+  } catch (e) {
+    console.warn("[stravaDualWrite] mark mirror retry failed:", userId, logDocId, e.message || e);
+  }
+}
+
 /**
  * Firestore shadow 메타 (읽기 fallback·TTL 30일 — Firestore TTL 정책 연동용).
  * @param {import('firebase-admin')} admin
@@ -66,11 +87,13 @@ async function dualWriteStravaActivityLog(
               : String(secondaryResult.reason),
         }
       );
+      await markStravaSupabaseMirrorRetry(admin, userId, logDocId, logDoc, "secondary_failed");
     } else if (secondaryResult.value && secondaryResult.value.skipped) {
       console.log(
         "[stravaDualWrite] Supabase secondary skipped:",
         secondaryResult.value.reason
       );
+      await markStravaSupabaseMirrorRetry(admin, userId, logDocId, logDoc, "secondary_skipped");
     }
 
     return primaryResult;
@@ -95,6 +118,11 @@ async function dualWriteStravaActivityLog(
       reason: primaryDecision.reason,
       message: e && e.message ? e.message : String(e),
     });
+    await markStravaSupabaseMirrorRetry(admin, userId, logDocId, logDoc, "primary_failed");
+  }
+
+  if (supabaseSkipped) {
+    await markStravaSupabaseMirrorRetry(admin, userId, logDocId, logDoc, "primary_skipped");
   }
 
   if (

@@ -703,6 +703,31 @@ function isCyclingLogForRankingSync(logDoc) {
   return !EXCLUDED_RANKING_ACTIVITY_TYPES.has(type);
 }
 
+/** Supabase rides mirror 실패·스킵 시 갭 탐지 재시도 큐에 등록 */
+async function markSupabaseRidesMirrorRetry(db, userId, logDocId, logDoc, reason) {
+  if (!db || !userId) return;
+  try {
+    const rankingDayRollup = require("./rankingDayRollup");
+    const stravaSyncRetry = require("./stravaSyncRetry");
+    const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(logDoc && logDoc.date);
+    if (!ymd) return;
+    await stravaSyncRetry.markStravaSyncRetryPending(db, userId, {
+      dateFrom: ymd,
+      dateTo: ymd,
+      reason: String(reason || "supabase_mirror").slice(0, 40),
+      status: 500,
+      activityId: logDocId,
+    });
+  } catch (err) {
+    console.warn(
+      "[supabaseDualWriteServer] mark mirror retry failed:",
+      userId,
+      logDocId,
+      err && err.message ? err.message : err
+    );
+  }
+}
+
 /**
  * Firestore training·Strava log → Supabase rides upsert (주간 TSS·랭킹 원천).
  * @param {import('firebase-admin')} admin
@@ -712,6 +737,7 @@ function isCyclingLogForRankingSync(logDoc) {
  */
 async function runSecondaryAfterLogSave(admin, userId, logDocId, logDoc, options = {}) {
   await refreshDualRunFromRemoteConfig(admin, true);
+  const db = admin && typeof admin.firestore === "function" ? admin.firestore() : null;
   let decision = evaluateSecondaryIngestWrite(userId);
   const forceStravaIngest =
     options.force === true || process.env.SUPABASE_STRAVA_INGEST_ALWAYS !== "false";
@@ -731,6 +757,9 @@ async function runSecondaryAfterLogSave(admin, userId, logDocId, logDoc, options
         "[supabaseDualWriteServer] strava secondary 스킵:",
         decision.reason
       );
+      if (forceStravaIngest && db) {
+        await markSupabaseRidesMirrorRetry(db, userId, logDocId, logDoc, "ingest_off");
+      }
       return { skipped: true, reason: decision.reason };
     }
   }
@@ -752,6 +781,9 @@ async function runSecondaryAfterLogSave(admin, userId, logDocId, logDoc, options
       logDocId,
       date: logDoc.date,
     });
+    if (forceStravaIngest && db) {
+      await markSupabaseRidesMirrorRetry(db, userId, logDocId, logDoc, "map_failed");
+    }
     return { skipped: true, reason: "map failed" };
   }
 
@@ -761,6 +793,9 @@ async function runSecondaryAfterLogSave(admin, userId, logDocId, logDoc, options
     await writeRideToSupabase(row);
   } catch (error) {
     if (!isSupabaseForeignKeyUserError(error)) {
+      if (forceStravaIngest && db) {
+        await markSupabaseRidesMirrorRetry(db, userId, logDocId, logDoc, "write_failed");
+      }
       throw error;
     }
     console.warn("[supabaseDualWriteServer] rides user_id FK 실패, Supabase 사용자 보정 후 재시도:", {
@@ -789,31 +824,26 @@ async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, o
   return runSecondaryAfterLogSave(admin, userId, logDocId, logDoc, options);
 }
 
-async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr) {
+/**
+ * Firestore users/{uid}/logs 중 구간 내 사이클 Strava·훈련 로그 수집 (upsert 없음).
+ * @returns {Promise<Array<{ id: string, data: object }>>}
+ */
+async function collectFirestoreCyclingLogDocsInDateRange(db, adminApp, userId, startStr, endStr) {
   const rankingDayRollup = require("./rankingDayRollup");
   const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
   const dateSet = new Set(dates);
-  let synced = 0;
   const seen = new Set();
+  const out = [];
 
-  const tryUpsert = async (doc) => {
-    if (!doc || seen.has(doc.id)) return;
-    const data = doc.data() || {};
-    if (!isCyclingLogForRankingSync(data)) return;
-    const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(data.date);
-    if (!ymd || !dateSet.has(ymd)) return;
-    seen.add(doc.id);
-    const result = await runSecondaryAfterLogSave(admin, userId, doc.id, data, {
-      force: true,
-    });
-    if (result && !result.skipped) synced += 1;
-  };
-
-  const collectDocs = async (snap) => {
+  const collectSnap = (snap) => {
     for (const doc of snap.docs) {
-      /* eslint-disable no-await-in-loop */
-      await tryUpsert(doc);
-      /* eslint-enable no-await-in-loop */
+      if (!doc || seen.has(doc.id)) continue;
+      const data = doc.data() || {};
+      if (!isCyclingLogForRankingSync(data)) continue;
+      const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(data.date);
+      if (!ymd || !dateSet.has(ymd)) continue;
+      seen.add(doc.id);
+      out.push({ id: doc.id, data });
     }
   };
 
@@ -825,7 +855,7 @@ async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr
       .where("date", ">=", startStr)
       .where("date", "<=", endStr)
       .get();
-    await collectDocs(rangedStr);
+    collectSnap(rangedStr);
   } catch (rangeErr) {
     console.warn(
       "[supabaseDualWriteServer] string date range query failed:",
@@ -835,8 +865,8 @@ async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr
   }
 
   try {
-    const tsStart = admin.firestore.Timestamp.fromDate(new Date(`${startStr}T00:00:00+09:00`));
-    const tsEnd = admin.firestore.Timestamp.fromDate(new Date(`${endStr}T23:59:59.999+09:00`));
+    const tsStart = adminApp.firestore.Timestamp.fromDate(new Date(`${startStr}T00:00:00+09:00`));
+    const tsEnd = adminApp.firestore.Timestamp.fromDate(new Date(`${endStr}T23:59:59.999+09:00`));
     const rangedTs = await db
       .collection("users")
       .doc(userId)
@@ -844,7 +874,7 @@ async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr
       .where("date", ">=", tsStart)
       .where("date", "<=", tsEnd)
       .get();
-    await collectDocs(rangedTs);
+    collectSnap(rangedTs);
   } catch (tsRangeErr) {
     console.warn(
       "[supabaseDualWriteServer] timestamp date range query failed:",
@@ -861,7 +891,7 @@ async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr
       .orderBy("date", "desc")
       .limit(400)
       .get();
-    await collectDocs(recent);
+    collectSnap(recent);
   } catch (recentErr) {
     console.warn(
       "[supabaseDualWriteServer] recent log scan failed:",
@@ -870,6 +900,121 @@ async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr
     );
   }
 
+  return out;
+}
+
+/** @param {string} firebaseUid @param {string} startStr @param {string} endStr */
+async function listSupabaseStravaActivityIdsInDateRange(firebaseUid, startStr, endStr) {
+  const ids = new Set();
+  const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
+  if (!userId) return ids;
+
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("rides")
+    .select("activity_id")
+    .eq("user_id", userId)
+    .eq("source", "strava")
+    .gte("ride_date", startStr)
+    .lte("ride_date", endStr);
+  if (error) {
+    console.warn(
+      "[supabaseDualWriteServer] supabase strava ids query failed:",
+      firebaseUid,
+      error.message || String(error)
+    );
+    return ids;
+  }
+  for (const row of data || []) {
+    const id = str(row.activity_id);
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+/**
+ * Firestore에만 있고 Supabase rides에 없는 Strava 로그 → mirror (갭 보정).
+ * @returns {Promise<{ checked: number, missing: number, mirrored: number, failed: number }>}
+ */
+async function syncFirestoreSupabaseRidesGapsForUser(db, admin, userId, startStr, endStr) {
+  if (!db || !admin || !userId || !startStr || !endStr) {
+    return { checked: 0, missing: 0, mirrored: 0, failed: 0 };
+  }
+
+  const logs = await collectFirestoreCyclingLogDocsInDateRange(db, admin, userId, startStr, endStr);
+  if (!logs.length) {
+    return { checked: 0, missing: 0, mirrored: 0, failed: 0 };
+  }
+
+  const supabaseIds = await listSupabaseStravaActivityIdsInDateRange(userId, startStr, endStr);
+  const missing = logs.filter((entry) => {
+    const actId = str(entry.data.activity_id) || str(entry.id);
+    return actId && !supabaseIds.has(actId);
+  });
+
+  if (!missing.length) {
+    return { checked: logs.length, missing: 0, mirrored: 0, failed: 0 };
+  }
+
+  let mirrored = 0;
+  let failed = 0;
+  for (const entry of missing) {
+    try {
+      const result = await runSecondaryAfterLogSave(admin, userId, entry.id, entry.data, {
+        force: true,
+      });
+      if (result && result.skipped) {
+        failed += 1;
+        console.warn("[supabaseDualWriteServer] rides gap mirror skipped:", {
+          userId,
+          logDocId: entry.id,
+          reason: result.reason,
+        });
+      } else {
+        mirrored += 1;
+      }
+    } catch (err) {
+      failed += 1;
+      console.warn(
+        "[supabaseDualWriteServer] rides gap mirror failed:",
+        userId,
+        entry.id,
+        err && err.message ? err.message : err
+      );
+    }
+  }
+
+  if (mirrored > 0) {
+    console.log("[supabaseDualWriteServer] rides gap mirror OK", {
+      userId,
+      startStr,
+      endStr,
+      checked: logs.length,
+      missing: missing.length,
+      mirrored,
+      failed,
+    });
+  }
+
+  return {
+    checked: logs.length,
+    missing: missing.length,
+    mirrored,
+    failed,
+  };
+}
+
+async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr) {
+  const logs = await collectFirestoreCyclingLogDocsInDateRange(db, admin, userId, startStr, endStr);
+  let synced = 0;
+  for (const entry of logs) {
+    /* eslint-disable no-await-in-loop */
+    const result = await runSecondaryAfterLogSave(admin, userId, entry.id, entry.data, {
+      force: true,
+    });
+    /* eslint-enable no-await-in-loop */
+    if (result && !result.skipped) synced += 1;
+  }
   return synced;
 }
 
@@ -951,13 +1096,22 @@ async function syncUsersWeeklyTssParityToSupabase(db, admin, userIds, startStr, 
       batch.map(async (userId) => {
         let rides = 0;
         let buckets = 0;
+        let ridesGapMirrored = 0;
         try {
-          rides = await syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr);
-        } catch (rideErr) {
-          console.warn(
-            "[supabaseDualWriteServer] weekly TSS rides sync:",
+          const gap = await syncFirestoreSupabaseRidesGapsForUser(
+            db,
+            admin,
             userId,
-            rideErr && rideErr.message ? rideErr.message : rideErr
+            startStr,
+            endStr
+          );
+          ridesGapMirrored = Number(gap.mirrored) || 0;
+          rides = ridesGapMirrored;
+        } catch (gapErr) {
+          console.warn(
+            "[supabaseDualWriteServer] rides gap mirror:",
+            userId,
+            gapErr && gapErr.message ? gapErr.message : gapErr
           );
         }
         try {
@@ -969,7 +1123,7 @@ async function syncUsersWeeklyTssParityToSupabase(db, admin, userIds, startStr, 
             bucketErr && bucketErr.message ? bucketErr.message : bucketErr
           );
         }
-        return { rides, buckets };
+        return { rides, ridesGapMirrored, buckets };
       })
     );
     /* eslint-enable no-await-in-loop */
@@ -988,18 +1142,21 @@ async function syncUsersWeeklyTssParityToSupabase(db, admin, userIds, startStr, 
  */
 async function runWeeklyTssSupabaseParityForActiveUsers(db, admin, startStr, endStr) {
   const rankingDayRollup = require("./rankingDayRollup");
+  const stravaGapDetect = require("./stravaGapDetect");
   if (!db || !admin || !startStr || !endStr) {
     return { users: 0, ridesSynced: 0, bucketsSynced: 0 };
   }
-  const activeUserIds = await rankingDayRollup.findUserIdsWithRankingDayTotalsInRange(
+  const bucketUserIds = await rankingDayRollup.findUserIdsWithRankingDayTotalsInRange(
     db,
     startStr,
     endStr
   );
-  if (!activeUserIds.length) {
+  const stravaUserIds = await stravaGapDetect.listStravaConnectedUserIds(db);
+  const mergedIds = Array.from(new Set([...bucketUserIds, ...stravaUserIds]));
+  if (!mergedIds.length) {
     return { users: 0, ridesSynced: 0, bucketsSynced: 0 };
   }
-  const sortedIds = activeUserIds.slice().sort();
+  const sortedIds = mergedIds.slice().sort();
   const result = await syncUsersWeeklyTssParityToSupabase(
     db,
     admin,
@@ -1009,6 +1166,8 @@ async function runWeeklyTssSupabaseParityForActiveUsers(db, admin, startStr, end
   );
   return {
     users: sortedIds.length,
+    bucketUsers: bucketUserIds.length,
+    stravaUsers: stravaUserIds.length,
     ridesSynced: result.ridesSynced,
     bucketsSynced: result.bucketsSynced,
   };
@@ -1073,6 +1232,9 @@ module.exports = {
   syncUsersLogsToSupabaseForDateRange,
   syncRankingDayBucketsToSupabaseForUser,
   syncUsersWeeklyTssParityToSupabase,
+  syncFirestoreSupabaseRidesGapsForUser,
+  syncUserLogsInRangeToSupabase,
+  collectFirestoreCyclingLogDocsInDateRange,
   runWeeklyTssSupabaseParityForActiveUsers,
   toSeoulRideDateYmd,
   appendServiceRoleSecret,

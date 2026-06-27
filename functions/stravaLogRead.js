@@ -1,6 +1,9 @@
 /**
  * Strava 로그 Firestore read 최적화.
  * 1년 range query 대신 sync 대상 activity id만 doc.get / getAll.
+ *
+ * 갭 탐지: Firestore 문서 존재 ≠ Supabase rides 동기화 완료.
+ * Supabase-primary(Phase 4)에서는 syncFirestoreSupabaseRidesGapsForUser로 보정.
  */
 const BATCH_GET_SIZE = 100;
 

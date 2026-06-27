@@ -20,6 +20,32 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Firestore logs ↔ Supabase rides 불일치 보정 (Strava API 재수집 없이 mirror) */
+async function mirrorFirestoreSupabaseRidesGaps(db, userId, dateFrom, dateTo, supabaseDualWriteServer) {
+  if (!db || !userId || !dateFrom || !dateTo || !supabaseDualWriteServer) {
+    return { checked: 0, missing: 0, mirrored: 0, failed: 0 };
+  }
+  if (typeof supabaseDualWriteServer.syncFirestoreSupabaseRidesGapsForUser !== "function") {
+    return { checked: 0, missing: 0, mirrored: 0, failed: 0 };
+  }
+  try {
+    return await supabaseDualWriteServer.syncFirestoreSupabaseRidesGapsForUser(
+      db,
+      admin,
+      userId,
+      dateFrom,
+      dateTo
+    );
+  } catch (e) {
+    console.warn(
+      "[stravaGapDetect] firestore→supabase rides gap mirror failed:",
+      userId,
+      e && e.message ? e.message : e
+    );
+    return { checked: 0, missing: 0, mirrored: 0, failed: 1, error: e && e.message ? e.message : String(e) };
+  }
+}
+
 function isCyclingStravaListActivity(act) {
   if (!act) return false;
   if (processRunningActivity.isRunningStravaActivityType(act.type, act.sport_type)) {
@@ -437,6 +463,16 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
 
     if (activityIds.size === 0) {
       if (range.dateFrom && range.dateTo && deps.supabaseDualWriteServer) {
+        const gapMirror = await mirrorFirestoreSupabaseRidesGaps(
+          db,
+          entry.userId,
+          range.dateFrom,
+          range.dateTo,
+          deps.supabaseDualWriteServer
+        );
+        if (gapMirror.mirrored > 0) {
+          console.log("[stravaGapDetect] firestore→supabase rides gap mirror", entry.userId, gapMirror);
+        }
         try {
           await deps.supabaseDualWriteServer.syncUsersWeeklyTssParityToSupabase(
             db,
@@ -533,6 +569,16 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
     }
 
     if (range.dateFrom && range.dateTo && deps.supabaseDualWriteServer) {
+      const gapMirror = await mirrorFirestoreSupabaseRidesGaps(
+        db,
+        entry.userId,
+        range.dateFrom,
+        range.dateTo,
+        deps.supabaseDualWriteServer
+      );
+      if (gapMirror.mirrored > 0) {
+        console.log("[stravaGapDetect] firestore→supabase rides gap mirror", entry.userId, gapMirror);
+      }
       try {
         await deps.supabaseDualWriteServer.syncUsersWeeklyTssParityToSupabase(
           db,
