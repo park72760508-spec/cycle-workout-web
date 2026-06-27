@@ -39,6 +39,7 @@ function getOpenRidingMoimCopy(category) {
       ? '* 러닝 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트 사용'
       : '* 라이딩 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트 사용',
     navMoimLabel: isRun ? '러닝' : '라이딩',
+    navGroupsLabel: isRun ? '크루' : '클럽',
     navMoimAria: isRun ? '러닝 크루 달력' : '라이딩 모임 달력',
     navHomeAria: isRun ? '홈 — RUN 베이스캠프' : '홈 — 베이스캠프',
     navMenuAria: isRun ? '러닝 크루 하단 메뉴' : '라이딩 모임 하단 메뉴',
@@ -2883,6 +2884,7 @@ function OpenRidingBottomGlassNav(props) {
   var userId = props.userId || '';
   var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
   var navMoimLabel = moimCopy.navMoimLabel || '라이딩';
+  var navGroupsLabel = moimCopy.navGroupsLabel || '클럽';
   var navMoimAria = moimCopy.navMoimAria || '라이딩 모임 달력';
   var navHomeAria = moimCopy.navHomeAria || '홈 — 베이스캠프';
   var navMenuAria = moimCopy.navMenuAria || '라이딩 모임 하단 메뉴';
@@ -2957,7 +2959,7 @@ function OpenRidingBottomGlassNav(props) {
           className={openRidingGlassNavBtnClass(isActive)}
           onClick={onGroups}
           aria-current={isActive ? 'page' : undefined}
-          aria-label={'클럽' + (pendingGroupJoinCount > 0 ? ' (가입 요청 ' + pendingGroupJoinCount + '건)' : '')}
+          aria-label={navGroupsLabel + (pendingGroupJoinCount > 0 ? ' (가입 요청 ' + pendingGroupJoinCount + '건)' : '')}
         >
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
             <img
@@ -2982,7 +2984,7 @@ function OpenRidingBottomGlassNav(props) {
               </span>
             ) : null}
           </span>
-          <span className="open-riding-bottom-glass-nav__label">클럽</span>
+          <span className="open-riding-bottom-glass-nav__label">{navGroupsLabel}</span>
         </button>
       </OpenRidingGlassNavSlot>
     );
@@ -9816,12 +9818,20 @@ function OpenRidingGroupsList(props) {
       var base = rows;
       if (typeof gs.filterRidingGroupsByCategory === 'function') {
         base = gs.filterRidingGroupsByCategory(rows, clubCategory, isAdmin);
-      } else if (!isAdmin) {
+      } else {
         var want = String(clubCategory || 'CYCLE').toUpperCase() === 'RUN' ? 'RUN' : 'CYCLE';
-        base = (rows || []).filter(function (g) {
-          var gc = g && g.category != null ? String(g.category).trim().toUpperCase() : 'CYCLE';
-          return (gc || 'CYCLE') === want;
-        });
+        var rgCat =
+          typeof window !== 'undefined' &&
+          window.ridingGroupCategory &&
+          typeof window.ridingGroupCategory.filterRidingGroupsByBoardCategory === 'function';
+        if (rgCat) {
+          base = window.ridingGroupCategory.filterRidingGroupsByBoardCategory(rows, want);
+        } else {
+          base = (rows || []).filter(function (g) {
+            var gc = g && g.category != null ? String(g.category).trim().toUpperCase() : 'CYCLE';
+            return (gc || 'CYCLE') === want;
+          });
+        }
       }
       var q = String(filterText || '')
         .trim()
@@ -9943,8 +9953,6 @@ function OpenRidingGroupsList(props) {
             /* 수락 완료된 가입 멤버 (방장 제외, 가입 신청만 한 경우 해당 없음) */
             var isApprovedMember = !isHost && userId && myMemberGroupIds.has(String(g.id));
             var groupIsPublic = g.isPublic !== false;
-            var groupCat = openRidingNormalizeMoimCategoryRaw(g && g.category);
-            var categoryImgSrc = groupCat === 'RUN' ? 'assets/img/running1.gif' : 'assets/img/cycling1.gif';
             return (
               <li key={g.id}>
                 <button
@@ -10043,13 +10051,6 @@ function OpenRidingGroupsList(props) {
                       </span>
                     </span>
                   </span>
-                  <img
-                    src={categoryImgSrc}
-                    alt=""
-                    className="open-riding-group-list-category-icon shrink-0 object-contain"
-                    aria-hidden="true"
-                    decoding="async"
-                  />
                 </button>
               </li>
             );

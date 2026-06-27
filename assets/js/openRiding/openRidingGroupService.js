@@ -78,7 +78,6 @@ export function ridingGroupMatchesCategory(group, category) {
 
 /** @param {unknown[]} rows @param {unknown} category @param {boolean} [isAdmin] */
 export function filterRidingGroupsByCategory(rows, category, isAdmin) {
-  if (isAdmin) return Array.isArray(rows) ? rows.slice() : [];
   var rgCat =
     typeof window !== 'undefined' &&
     window.ridingGroupCategory &&
