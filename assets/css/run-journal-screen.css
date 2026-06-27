@@ -1,5 +1,47 @@
 /* RUN 기록 화면 — CYCLE 라이딩 기록(#trainingJournalScreen) 스타일 공유 클래스 */
 
+#runTrainingJournalScreen .run-journal-screen-subtitle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding: 0 12px;
+  min-height: 36px;
+}
+
+#runTrainingJournalScreen .run-journal-subtitle-text {
+  text-align: center;
+}
+
+#runTrainingJournalScreen .run-journal-strava-sync-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+}
+
+#runTrainingJournalScreen .run-journal-strava-sync-btn:active {
+  opacity: 0.75;
+}
+
+#runTrainingJournalScreen .run-journal-strava-sync-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
+}
+
 #runTrainingJournalScreen .journal-screen-content {
   padding: 0 12px;
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
