@@ -342,7 +342,7 @@ async function persistStravaLogToFirestore(userId, activityId, trainingLog) {
 }
 
 /**
- * Strava Firestore Primary 성공 후 Supabase Secondary (실패해도 Primary 유지).
+ * Strava Firestore Primary 성공 후 Supabase Secondary (레거시 OFF/CANARY skip 경로).
  */
 async function invokeStravaSupabaseSecondary(userId, logDocId, trainingLog) {
   try {
@@ -357,8 +357,9 @@ async function invokeStravaSupabaseSecondary(userId, logDocId, trainingLog) {
 }
 
 /**
- * 스트라바 활동 저장 (Firebase Firestore)
- * Subcollection 구조: users/{userId}/logs/{logId}
+ * 스트라바 활동 저장
+ * - dual_write_status=FULL (Phase 4): Supabase rides 전용 — Firestore users/logs 미기록
+ * - 레거시 OFF/CANARY skip: Firestore Primary → Supabase Secondary
  * @param {object} activity
  * @param {{ markTssApplied?: boolean }} [options] — true면 최초 저장 시 tss_applied 포함(별도 update Commit 방지)
  */
@@ -390,21 +391,18 @@ async function saveStravaActivityToFirebase(activity, options) {
       throw new Error('activity_id가 필요합니다.');
     }
 
-    console.log('[saveStravaActivityToFirebase] 중복 확인 시작:', { userId, activityId });
+    const dualMod = await import('./supabaseDualWrite.js');
+    await dualMod.refreshDualRunFromRemoteConfig(true);
+    const primaryDecision = dualMod.evaluateSupabasePrimaryIngest(userId);
+    const supabaseOnly =
+      primaryDecision.usePrimary === true &&
+      dualMod.isPhase4FirestoreLogShadowStopped();
 
-    var priorSave = await findExistingStravaLogInFirestore(userId, activityId);
+    console.log('[saveStravaActivityToFirebase] ingest 경로:', {
+      supabaseOnly,
+      reason: primaryDecision.reason,
+    });
 
-    if (priorSave) {
-      console.log('[saveStravaActivityToFirebase] ⚠️ 이미 존재하는 활동:', activityId);
-      await invokeStravaSupabaseSecondary(userId, priorSave.id, priorSave.data);
-      return {
-        success: true,
-        id: priorSave.id,
-        activityId: activityId,
-        isNew: false,
-      };
-    }
-    
     // 확장된 필드 구조로 변환 (Target Schema 기반)
     const trainingLog = {
       // 기본 필드
@@ -478,6 +476,63 @@ async function saveStravaActivityToFirebase(activity, options) {
       ...(markTssApplied ? { tss_applied_at: new Date().toISOString() } : {}),
       created_at: activity.created_at || new Date().toISOString()
     };
+
+    if (supabaseOnly) {
+      console.log('[saveStravaActivityToFirebase] Supabase-only 중복 확인:', activityId);
+      const existsInSupabase = await dualMod.fetchStravaRideExists(activityId);
+      if (existsInSupabase) {
+        console.log('[saveStravaActivityToFirebase] ⚠️ Supabase rides에 이미 존재:', activityId);
+        return {
+          success: true,
+          id: activityId,
+          activityId: activityId,
+          isNew: false,
+          supabaseOnly: true,
+        };
+      }
+      console.log('[saveStravaActivityToFirebase] Supabase rides upsert 시도...');
+      const sbResult = await dualMod.runSecondaryAfterStravaSave(
+        userId,
+        activityId,
+        trainingLog
+      );
+      if (!sbResult || sbResult.skipped) {
+        throw new Error(
+          'Supabase rides 저장 실패: ' +
+            ((sbResult && sbResult.reason) || 'unknown')
+        );
+      }
+      console.log('[saveStravaActivityToFirebase] ✅ Supabase-only 저장 완료:', {
+        userId,
+        activityId,
+        ride_date: trainingLog.date,
+      });
+      return {
+        success: true,
+        id: activityId,
+        activityId: activityId,
+        isNew: true,
+        supabaseOnly: true,
+      };
+    }
+
+    console.log('[saveStravaActivityToFirebase] 중복 확인 시작 (Firestore):', {
+      userId,
+      activityId,
+    });
+
+    var priorSave = await findExistingStravaLogInFirestore(userId, activityId);
+
+    if (priorSave) {
+      console.log('[saveStravaActivityToFirebase] ⚠️ 이미 존재하는 활동:', activityId);
+      await invokeStravaSupabaseSecondary(userId, priorSave.id, priorSave.data);
+      return {
+        success: true,
+        id: priorSave.id,
+        activityId: activityId,
+        isNew: false,
+      };
+    }
     
     console.log('[saveStravaActivityToFirebase] 저장할 데이터:', trainingLog);
     console.log('[saveStravaActivityToFirebase] Firestore 저장 시도...');

@@ -180,6 +180,102 @@ export function shouldRunSupabaseDualWrite(firebaseUid) {
 }
 
 /**
+ * Phase 3+ — Supabase Primary ingest (서버 evaluateSupabasePrimaryIngest와 동일).
+ * FULL 이면 Firestore users/logs 에 쓰지 않고 Supabase rides 만 기록.
+ * @param {string|undefined} firebaseUid
+ */
+export function evaluateSupabasePrimaryIngest(firebaseUid) {
+  const override =
+    typeof window !== 'undefined' && window.STELVIO_DUAL_WRITE_LOCAL_OVERRIDE;
+  const status = override
+    ? parseDualWriteStatus(override.status || override)
+    : dualRunCache.status;
+  const uid = String(firebaseUid || '').trim();
+
+  if (status === 'OFF') {
+    return { usePrimary: false, reason: 'dual_write_status=OFF', status };
+  }
+  if (status === 'FULL') {
+    return { usePrimary: true, reason: 'dual_write_status=FULL', status };
+  }
+
+  const shadowList = mergeUidLists(
+    DEFAULT_SHADOW_WHITELIST,
+    dualRunCache.shadowUids,
+    override && Array.isArray(override.shadowUids) ? override.shadowUids : []
+  );
+
+  if (status === 'SHADOW') {
+    const inShadow = uid && shadowList.includes(uid);
+    return {
+      usePrimary: inShadow,
+      reason: inShadow ? 'dual_write_status=SHADOW(uid)' : 'dual_write_status=SHADOW(skip)',
+      status,
+    };
+  }
+
+  if (status === 'CANARY') {
+    if (uid && shadowList.includes(uid)) {
+      return {
+        usePrimary: true,
+        reason: 'dual_write_status=CANARY, shadow whitelist',
+        status,
+      };
+    }
+    const pct = dualRunCache.canaryPercent;
+    if (uid && isUidInCanaryPercent(uid, pct)) {
+      return {
+        usePrimary: true,
+        reason: 'dual_write_status=CANARY, hash bucket<' + pct,
+        status,
+      };
+    }
+    return {
+      usePrimary: false,
+      reason: 'dual_write_status=CANARY, outside bucket',
+      status,
+    };
+  }
+
+  return { usePrimary: false, reason: 'dual_write_status=' + status, status };
+}
+
+/** Phase 4 — FULL Primary 성공 시 Firestore shadow 중단 (기본 ON). */
+export function isPhase4FirestoreLogShadowStopped() {
+  if (
+    typeof window !== 'undefined' &&
+    window.STELVIO_FIRESTORE_SHADOW_WRITE === true
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Supabase rides 에 Strava activity_id 존재 여부 (Phase 4 중복 확인).
+ * @param {string} activityId
+ */
+export async function fetchStravaRideExists(activityId) {
+  await syncSupabaseSessionFromBridge();
+  const supabase = await getSupabaseClient();
+  const { data: sess } = await supabase.auth.getSession();
+  if (!sess.session || !sess.session.user) {
+    throw new Error('Supabase auth session 없음');
+  }
+  const actId = String(activityId || '').trim();
+  if (!actId) return false;
+  const { data, error } = await supabase
+    .from('rides')
+    .select('activity_id')
+    .eq('user_id', sess.session.user.id)
+    .eq('source', 'strava')
+    .eq('activity_id', actId)
+    .maybeSingle();
+  if (error) throw error;
+  return !!(data && data.activity_id);
+}
+
+/**
  * 오픈라이딩·소모임·Functions ingest — SHADOW/CANARY/FULL이면 Secondary ON (서버와 동일).
  * 훈련 저장은 evaluateSupabaseDualWrite(SHADOW 화이트리스트) 사용.
  */
@@ -597,7 +693,7 @@ async function runSecondaryRideUpsert(userId, logDocId, log, label, options = {}
     return { skipped: true, reason: 'missing log payload' };
   }
 
-  await syncSupabaseSessionFromBridge();
+  const session = await syncSupabaseSessionFromBridge();
   const row = await mapTrainingLogToRideRow(
     userId,
     logDocId,
@@ -607,6 +703,9 @@ async function runSecondaryRideUpsert(userId, logDocId, log, label, options = {}
   if (!row) {
     console.warn('[supabaseDualWrite] ' + label + ' ride row 매핑 실패');
     return { skipped: true, reason: 'map failed' };
+  }
+  if (session && session.user && session.user.id) {
+    row.user_id = session.user.id;
   }
 
   await writeRideToSupabase(row);
