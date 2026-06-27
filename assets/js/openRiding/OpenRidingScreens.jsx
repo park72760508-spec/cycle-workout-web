@@ -9943,6 +9943,8 @@ function OpenRidingGroupsList(props) {
             /* 수락 완료된 가입 멤버 (방장 제외, 가입 신청만 한 경우 해당 없음) */
             var isApprovedMember = !isHost && userId && myMemberGroupIds.has(String(g.id));
             var groupIsPublic = g.isPublic !== false;
+            var groupCat = openRidingNormalizeMoimCategoryRaw(g && g.category);
+            var categoryImgSrc = groupCat === 'RUN' ? 'assets/img/running1.gif' : 'assets/img/cycling1.gif';
             return (
               <li key={g.id}>
                 <button
@@ -10041,6 +10043,13 @@ function OpenRidingGroupsList(props) {
                       </span>
                     </span>
                   </span>
+                  <img
+                    src={categoryImgSrc}
+                    alt=""
+                    className="open-riding-group-list-category-icon shrink-0 object-contain"
+                    aria-hidden="true"
+                    decoding="async"
+                  />
                 </button>
               </li>
             );
