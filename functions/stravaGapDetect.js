@@ -2,11 +2,14 @@
  * Strava 갭 탐지형 일일 동기화.
  * - A: strava_sync_retry_pending === true
  * - B: strava_webhook_retries (status=pending)
- * - C: 어제~오늘 API 페이지네이션 vs Firestore/Supabase id diff → 누락만 ingest
+ * - C: 어제~오늘 API 페이지네이션 vs Supabase diff → 누락만 ingest
+ *      · 사이클: rides (Firestore/Supabase rides)
+ *      · Run/VirtualRun/TrailRun: public.activities
  */
 const admin = require("firebase-admin");
 const stravaSyncRetry = require("./stravaSyncRetry");
 const stravaLogRead = require("./stravaLogRead");
+const processRunningActivity = require("./processRunningActivity");
 
 const STRAVA_GAP_DETECT_PAGE_SIZE = 200;
 const STRAVA_GAP_DETECT_MAX_PAGES = 15;
@@ -19,9 +22,24 @@ function sleep(ms) {
 
 function isCyclingStravaListActivity(act) {
   if (!act) return false;
+  if (processRunningActivity.isRunningStravaActivityType(act.type, act.sport_type)) {
+    return false;
+  }
   const type = String(act.type || act.sport_type || "").trim().toLowerCase();
   if (!type) return true;
   return !EXCLUDED_STRAVA_TYPES.has(type);
+}
+
+function classifyStravaListActivity(act) {
+  if (!act || act.id == null) return null;
+  const actId = String(act.id);
+  if (processRunningActivity.isRunningStravaActivityType(act.type, act.sport_type)) {
+    return { actId, kind: "running" };
+  }
+  if (isCyclingStravaListActivity(act)) {
+    return { actId, kind: "cycling" };
+  }
+  return null;
 }
 
 function webhookRetryDocId(ownerId, objectId) {
@@ -240,7 +258,8 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
     accessToken = tokenResult.accessToken;
   }
 
-  const listIds = [];
+  const cyclingListIds = [];
+  const runningListIds = [];
   let page = 1;
   let apiCount = 0;
   let firstPageError = null;
@@ -284,35 +303,67 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
 
     const pageActivities = Array.isArray(pageRes.activities) ? pageRes.activities : [];
     for (const act of pageActivities) {
-      if (!isCyclingStravaListActivity(act)) continue;
-      const actId = act && act.id != null ? String(act.id) : "";
-      if (actId) listIds.push(actId);
+      const classified = classifyStravaListActivity(act);
+      if (!classified) continue;
+      if (classified.kind === "running") runningListIds.push(classified.actId);
+      else cyclingListIds.push(classified.actId);
     }
     if (pageActivities.length < STRAVA_GAP_DETECT_PAGE_SIZE) break;
     page += 1;
   }
 
-  if (listIds.length === 0) {
+  if (cyclingListIds.length === 0 && runningListIds.length === 0) {
     return {
       missingIds: [],
+      missingCyclingIds: [],
+      missingRunningIds: [],
       apiCount,
       listCount: 0,
+      listCountCycling: 0,
+      listCountRunning: 0,
       error: firstPageError || null,
       status: firstPageStatus || 0,
     };
   }
 
-  const { ids: existingIds, readCount } = await getExistingStravaActivityIdsForActivityList(
-    db,
-    userId,
-    listIds,
-    deps && deps.supabaseDualWriteServer ? { supabaseDualWriteServer: deps.supabaseDualWriteServer } : {}
-  );
-  const missingIds = listIds.filter((id) => !existingIds.has(id));
+  let existingCyclingIds = new Set();
+  let readCount = 0;
+  if (cyclingListIds.length > 0) {
+    const cyclingExisting = await getExistingStravaActivityIdsForActivityList(
+      db,
+      userId,
+      cyclingListIds,
+      deps && deps.supabaseDualWriteServer ? { supabaseDualWriteServer: deps.supabaseDualWriteServer } : {}
+    );
+    existingCyclingIds = cyclingExisting.ids;
+    readCount = cyclingExisting.readCount;
+  }
+
+  let existingRunningIds = new Set();
+  const sbServer = deps && deps.supabaseDualWriteServer;
+  if (runningListIds.length > 0 && sbServer && typeof sbServer.fetchStravaRunningActivityIdsExistForUser === "function") {
+    try {
+      existingRunningIds = await sbServer.fetchStravaRunningActivityIdsExistForUser(
+        userId,
+        runningListIds
+      );
+    } catch (e) {
+      console.warn("[stravaGapDetect] supabase running id check failed:", userId, e.message || e);
+    }
+  }
+
+  const missingCyclingIds = cyclingListIds.filter((id) => !existingCyclingIds.has(id));
+  const missingRunningIds = runningListIds.filter((id) => !existingRunningIds.has(id));
+  const missingIds = [...new Set([...missingCyclingIds, ...missingRunningIds])];
+
   return {
     missingIds,
+    missingCyclingIds,
+    missingRunningIds,
     apiCount,
-    listCount: listIds.length,
+    listCount: cyclingListIds.length + runningListIds.length,
+    listCountCycling: cyclingListIds.length,
+    listCountRunning: runningListIds.length,
     logReadCount: readCount,
     error: firstPageError || null,
     status: firstPageStatus || 0,
@@ -370,6 +421,14 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
           gapStatus = gap.status || 0;
         } else {
           (gap.missingIds || []).forEach((id) => activityIds.add(id));
+          if ((gap.missingRunningIds || []).length > 0 || (gap.missingCyclingIds || []).length > 0) {
+            console.log("[stravaGapDetect] gap missing", entry.userId, {
+              cycling: (gap.missingCyclingIds || []).length,
+              running: (gap.missingRunningIds || []).length,
+              apiListCycling: gap.listCountCycling || 0,
+              apiListRunning: gap.listCountRunning || 0,
+            });
+          }
         }
       } catch (e) {
         gapError = e && e.message ? e.message : String(e);
@@ -424,8 +483,10 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
     }
 
     let userIngested = 0;
+    let runIngested = 0;
+    let cycleIngested = 0;
     let lastError = gapError || null;
-    const runningModule = require("./processRunningActivity");
+    const runningModule = processRunningActivity;
     for (const activityId of activityIds) {
       let legacyResult;
       try {
@@ -437,6 +498,7 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
         ) {
           await runningModule.processRunningActivity(db, athleteId, activityId, preview.activity);
           userIngested += 1;
+          runIngested += 1;
           await markStravaWebhookRetryDone(db, athleteId, activityId);
           continue;
         }
@@ -459,6 +521,7 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
         break;
       }
       userIngested += 1;
+      cycleIngested += 1;
       await markStravaWebhookRetryDone(db, athleteId, activityId);
     }
 
@@ -491,6 +554,8 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
       userId: entry.userId,
       sources: Array.from(entry.sources),
       ingested: userIngested,
+      runIngested,
+      cycleIngested,
       activityCount: activityIds.size,
       error: lastError,
     };
@@ -570,6 +635,7 @@ module.exports = {
   listPendingStravaWebhookRetries,
   listPendingRetryUserIds,
   buildGapDetectWorklist,
+  classifyStravaListActivity,
   detectMissingActivityIdsForUser,
   getExistingStravaActivityIdsForActivityList,
   getExistingStravaActivityIdsForDateRange,

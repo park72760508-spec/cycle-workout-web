@@ -590,6 +590,33 @@ async function fetchStravaActivityIdsExistForUser(firebaseUid, activityIds) {
   return ids;
 }
 
+/** Strava Run — Supabase public.activities 존재 여부 (갭 탐지용) */
+async function fetchStravaRunningActivityIdsExistForUser(firebaseUid, activityIds) {
+  const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
+  if (!userId) return new Set();
+
+  const list = [...new Set((activityIds || []).map((id) => str(id)).filter(Boolean))];
+  if (list.length === 0) return new Set();
+
+  const supabase = getSupabaseAdminClient();
+  const ids = new Set();
+  const chunkSize = 100;
+  for (let i = 0; i < list.length; i += chunkSize) {
+    const chunk = list.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("activities")
+      .select("activity_id")
+      .eq("user_id", userId)
+      .in("activity_id", chunk);
+    if (error) throw error;
+    for (const row of data || []) {
+      const id = str(row.activity_id);
+      if (id) ids.add(id);
+    }
+  }
+  return ids;
+}
+
 async function fetchStravaTssSumForDate(firebaseUid, dateStr) {
   const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
   if (!userId || !dateStr) return 0;
@@ -1068,5 +1095,6 @@ module.exports = {
   isUidInCanaryPercent,
   fetchStravaActivityIdsForUser,
   fetchStravaActivityIdsExistForUser,
+  fetchStravaRunningActivityIdsExistForUser,
   fetchStravaTssSumForDate,
 };

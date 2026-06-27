@@ -3578,7 +3578,7 @@ async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
  * 매일 00:10(Asia/Seoul) 갭 탐지형 Strava 동기화.
  * - A: strava_sync_retry_pending
  * - B: strava_webhook_retries 큐
- * - C: 어제~오늘 API 페이지네이션 vs Firestore/Supabase diff → 누락만 processStravaActivity
+ * - C: 어제~오늘 API 페이지네이션 vs Supabase diff → 사이클(rides)·Run(activities) 누락 ingest
  * (구 02:00 전체 스캔 runStravaSyncWithFanOut 대체)
  */
 const stravaSyncScheduleOptions = supabaseDualWriteServer.appendServiceRoleSecret({

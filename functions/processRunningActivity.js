@@ -212,6 +212,11 @@ async function upsertRunningActivityToSupabase(firebaseUid, row) {
     uidNamespace: String(supabaseDualWriteServer.uidNamespaceParam.value() || "").trim(),
     uidMode: String(supabaseDualWriteServer.uidModeParam.value() || "v5").trim(),
   };
+  row.user_id = await supabaseDualWriteServer.resolveRideUserIdForFirebaseUid(
+    supabase,
+    firebaseUid,
+    uidConfig
+  );
 
   async function writeOnce() {
     const { data: existing, error: readErr } = await supabase
