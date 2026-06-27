@@ -42,6 +42,15 @@
   display: block;
 }
 
+#runTrainingJournalScreen .run-journal-screen-subtitle,
+#runTrainingJournalScreen #run-journal-react-root {
+  width: 100%;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
 #runTrainingJournalScreen .journal-screen-content {
   padding: 0 12px;
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
