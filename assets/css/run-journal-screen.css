@@ -412,17 +412,24 @@
 .run-journal-detail-panel .run-journal-pace-value-stack {
   display: inline-flex;
   flex-direction: row;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
 }
 
+#runTrainingJournalScreen .run-journal-pace-primary,
+.run-journal-detail-panel .run-journal-pace-primary,
+#runTrainingJournalScreen .run-journal-pace-meta,
+.run-journal-detail-panel .run-journal-pace-meta {
+  line-height: 1;
+}
+
 #runTrainingJournalScreen .run-journal-pace-speed-suffix,
 .run-journal-detail-panel .run-journal-pace-speed-suffix {
   font-weight: 400;
-  font-size: 14px;
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1;
   color: #111827;
 }
 
