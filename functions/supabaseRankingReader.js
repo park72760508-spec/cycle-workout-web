@@ -1255,8 +1255,8 @@ function mapGcRowToEntry(row, fbUid, filterGender, gcScore, profile) {
 
 function captureGcSnapshotMeta(d, state) {
   if (!d || d.range_start == null) return;
-  const rs = String(d.range_start).trim();
-  const re = d.range_end != null ? String(d.range_end).trim() : "";
+  const rs = String(d.range_start).trim().slice(0, 10);
+  const re = d.range_end != null ? String(d.range_end).trim().slice(0, 10) : "";
   const asOf =
     d.as_of_seoul != null ? String(d.as_of_seoul).trim().slice(0, 10) : "";
   if (!state.snapshotRangeStart) {
@@ -1583,8 +1583,14 @@ async function attachGcHeptagonMeta(admin, payload, deps) {
     heptMetaDateKst > gcAsOf
   );
 
-  payload.startStr = payload.startStr || rollingFallback.startStr;
-  payload.endStr = payload.endStr || rollingFallback.endStr;
+  payload.startStr =
+    typeof getRolling90DaysRangeSeoul === "function"
+      ? getRolling90DaysRangeSeoul().startStr
+      : payload.startStr || rollingFallback.startStr;
+  payload.endStr =
+    typeof getRolling90DaysRangeSeoul === "function"
+      ? getRolling90DaysRangeSeoul().endStr
+      : payload.endStr || rollingFallback.endStr;
   payload.gcSnapshotDaily = true;
   payload.gcMinSnapshotAsOf = minGcAsOf;
   payload.gcSnapshotStale = gcStaleVsMin || gcStaleVsMeta;

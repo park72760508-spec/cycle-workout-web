@@ -1,7 +1,7 @@
 /**
  * STELVIO 헵타곤: 코호트별(월·성별·부문) **전면(Supremo) 환산 점수 합**이 동일한 값으로 모든 부문에 저장되고,
  * 각 부문 코호트에서는 이 값만으로 **내림차순** 정렬해 `boardRank`를 부여한다(부문마다 별도 환산 합을 계산하지 않음).
- * - 기간: `getRolling28DaysRangeSeoul` (최근 28일, 서울) — 피크는 구간별 단일 최고값(일 버킷 max)
+ * - 기간: `getRolling90DaysRangeSeoul` (최근 90일, 서울) — 피크는 90일 일별 top2 W/kg
  * - 7축 `sumPositionScores`: 항상 `computeDisplayRankForUser(..., "Supremo", ...)` 랭크로만 산출
  */
 
@@ -12,7 +12,7 @@ const N_AXIS = 7;
 const HEPTAGON_COHORT_COL = "heptagon_cohort_ranks";
 const { isRankingEligibleUserData } = require("./rankingEligibility");
 
-/** 랭킹보드 월간 피크 집계 키와 동일 — getPeakPowerRanking / rebuildRankingAggregates (28일 롤링) */
+/** 랭킹보드 월간 피크 집계 키와 동일 — getPeakPowerRanking / rebuildRankingAggregates (90일 롤링) */
 function peakMonthlyAggregateDocKey(durationType, gender, startStr, endStr) {
   return `peakRanking_v2_monthly_${durationType}_${gender}_${startStr}_${endStr}`;
 }
@@ -657,7 +657,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
           ref,
           {
             monthKey,
-            periodMode: "rolling28",
+            periodMode: "rolling90",
             rangeStart: startStr,
             rangeEnd: endStr,
             asOfSeoul: todayYmd,
@@ -713,7 +713,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
 
 /**
  * 즉시 GC 집계(디버그·비상용). 프로덕션 GC는 `scheduledPeak28dHeptagonOnly`(03:20) 스냅샷 + Firestore 읽기.
- * 대시보드와 동일 파이프라인(28일 롤링, 구간별 최고 피크 1건).
+ * 대시보드와 동일 파이프라인(90일 롤링, 일별 top2 W/kg).
  *
  * @param {string} filterGender `"all" | "M" | "F"` — getPeakPowerRanking gc 분기와 동일
  * @returns {{ byCategory: object, entries: Array, startStr: string, endStr: string, peakSource: string }}
