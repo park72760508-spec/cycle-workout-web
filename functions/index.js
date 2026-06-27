@@ -2385,8 +2385,29 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if (runDetailRes.success && runDetailRes.activity) detailedRun = runDetailRes.activity;
       const ownerId = Number(userData.strava_athlete_id);
       if (ownerId) {
-        await processRunningActivity.processRunningActivity(db, ownerId, actId, detailedRun);
-        newActivities += 1;
+        try {
+          await processRunningActivity.processRunningActivity(db, ownerId, actId, detailedRun);
+          newActivities += 1;
+        } catch (runErr) {
+          console.warn(
+            "[processOneUserStravaSync] RUN ingest failed:",
+            userId,
+            actId,
+            runErr && runErr.message ? runErr.message : runErr
+          );
+          const runYmd = rankingDayRollup.normalizeLogDateToSeoulYmd(
+            detailedRun.start_date_local || detailedRun.start_date || act.start_date_local || act.start_date
+          );
+          await stravaSyncRetry.markStravaSyncRetryPending(db, userId, {
+            dateFrom: runYmd || dateFrom,
+            dateTo: runYmd || dateTo,
+            afterUnix,
+            beforeUnix,
+            reason: "run_ingest_failed",
+            status: (runErr && runErr.status) || 500,
+            activityId: actId,
+          });
+        }
       }
       continue;
     }
@@ -6992,8 +7013,35 @@ async function runWeeklyTssSupabaseParityScheduledJob(db, logPrefix) {
     startStr,
     endStr
   );
-  console.log(prefix, "done", { startStr, endStr, ms: Date.now() - t0, ...result });
-  return { startStr, endStr, ...result };
+  let runningGap = { users: 0, ingested: 0, failed: 0, missing: 0, apiCalls: 0 };
+  try {
+    const stravaUserIds = await stravaGapDetect.listStravaConnectedUserIds(db);
+    const range = stravaSyncRetry.ymdRangeToUnix({ dateFrom: startStr, dateTo: endStr });
+    runningGap = await stravaGapDetect.syncUsersRunningActivitiesGapParity(
+      db,
+      stravaUserIds,
+      range,
+      {
+        refreshStravaTokenForUser,
+        fetchStravaActivitiesPage,
+        supabaseDualWriteServer,
+      }
+    );
+  } catch (runParityErr) {
+    console.warn(
+      prefix,
+      "RUN activities gap parity warn:",
+      runParityErr && runParityErr.message ? runParityErr.message : runParityErr
+    );
+  }
+  console.log(prefix, "done", {
+    startStr,
+    endStr,
+    ms: Date.now() - t0,
+    ...result,
+    runningGap,
+  });
+  return { startStr, endStr, ...result, runningGap };
 }
 
 /** GC rebuildHeptagonCohortRanks 와 동일: 집계 순위 맵이 실제로 바뀌었는지 */

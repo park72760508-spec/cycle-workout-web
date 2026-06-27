@@ -532,10 +532,23 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
           preview.activity &&
           runningModule.isRunningStravaActivityType(preview.activity.type, preview.activity.sport_type)
         ) {
-          await runningModule.processRunningActivity(db, athleteId, activityId, preview.activity);
-          userIngested += 1;
-          runIngested += 1;
-          await markStravaWebhookRetryDone(db, athleteId, activityId);
+          try {
+            await runningModule.processRunningActivity(db, athleteId, activityId, preview.activity);
+            userIngested += 1;
+            runIngested += 1;
+            await markStravaWebhookRetryDone(db, athleteId, activityId);
+          } catch (runErr) {
+            lastError = runErr && runErr.message ? runErr.message : String(runErr);
+            await stravaSyncRetry.markStravaSyncRetryPending(db, entry.userId, {
+              dateFrom: range.dateFrom,
+              dateTo: range.dateTo,
+              afterUnix: range.afterUnix,
+              beforeUnix: range.beforeUnix,
+              reason: "run_ingest_failed",
+              status: (runErr && runErr.status) || 500,
+              activityId,
+            });
+          }
           continue;
         }
         legacyResult = await deps.processStravaActivity(db, athleteId, activityId);
@@ -673,6 +686,182 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
   return { users: userEntries.length, ok, fail, ingested, apiCalls, results };
 }
 
+/**
+ * Strava API 목록 vs Supabase activities — RUN 누락만 재수집 (90일 랭킹 원천 activities·efforts 유지).
+ * @returns {Promise<{ ingested: number, failed: number, missing: number, listCountRunning?: number, apiCount?: number, error?: string, status?: number }>}
+ */
+async function ingestMissingRunningActivityIds(
+  db,
+  firebaseUid,
+  athleteId,
+  missingIds,
+  range
+) {
+  const ids = [...new Set((missingIds || []).map((id) => String(id).trim()).filter(Boolean))];
+  if (!ids.length || !athleteId) {
+    return { ingested: 0, failed: 0, missing: 0 };
+  }
+  let ingested = 0;
+  let failed = 0;
+  for (const activityId of ids) {
+    try {
+      const preview = await processRunningActivity.fetchStravaActivityDetailForOwner(
+        db,
+        athleteId,
+        activityId
+      );
+      if (
+        preview.success &&
+        preview.activity &&
+        processRunningActivity.isRunningStravaActivityType(
+          preview.activity.type,
+          preview.activity.sport_type
+        )
+      ) {
+        await processRunningActivity.processRunningActivity(
+          db,
+          athleteId,
+          activityId,
+          preview.activity
+        );
+      } else {
+        await processRunningActivity.processRunningActivity(db, athleteId, activityId, null);
+      }
+      ingested += 1;
+      await markStravaWebhookRetryDone(db, athleteId, activityId);
+    } catch (e) {
+      failed += 1;
+      console.warn(
+        "[stravaGapDetect] RUN gap ingest failed:",
+        firebaseUid,
+        activityId,
+        e && e.message ? e.message : e
+      );
+      await stravaSyncRetry.markStravaSyncRetryPending(db, firebaseUid, {
+        dateFrom: range.dateFrom,
+        dateTo: range.dateTo,
+        afterUnix: range.afterUnix,
+        beforeUnix: range.beforeUnix,
+        reason: "run_gap_ingest",
+        status: (e && e.status) || 500,
+        activityId,
+      });
+    }
+  }
+  return { ingested, failed, missing: ids.length };
+}
+
+/**
+ * 단일 사용자 RUN 갭 보정 (API ↔ activities).
+ */
+async function syncRunningActivitiesGapForUser(db, userId, userData, range, deps) {
+  if (!db || !userId || !range || !deps) {
+    return { ingested: 0, failed: 0, missing: 0 };
+  }
+  const gap = await detectMissingActivityIdsForUser(db, userId, userData || {}, range, deps);
+  if (gap.error) {
+    return {
+      ingested: 0,
+      failed: 0,
+      missing: 0,
+      listCountRunning: gap.listCountRunning || 0,
+      apiCount: gap.apiCount || 0,
+      error: gap.error,
+      status: gap.status || 0,
+    };
+  }
+  const missingIds = gap.missingRunningIds || [];
+  if (!missingIds.length) {
+    return {
+      ingested: 0,
+      failed: 0,
+      missing: 0,
+      listCountRunning: gap.listCountRunning || 0,
+      apiCount: gap.apiCount || 0,
+    };
+  }
+  const athleteId = Number((userData && userData.strava_athlete_id) || 0);
+  const ingest = await ingestMissingRunningActivityIds(
+    db,
+    userId,
+    athleteId,
+    missingIds,
+    range
+  );
+  return {
+    ingested: ingest.ingested,
+    failed: ingest.failed,
+    missing: ingest.missing,
+    listCountRunning: gap.listCountRunning || 0,
+    apiCount: gap.apiCount || 0,
+  };
+}
+
+/**
+ * Strava 연동 사용자 전원 RUN 갭 보정 (주간 parity·스케줄용).
+ * 90일 피크 윈도우는 Supabase running_leaderboard SQL에서 유지 — 여기서는 누락 ingest만.
+ */
+async function syncUsersRunningActivitiesGapParity(db, userIds, range, deps) {
+  const unique = Array.from(
+    new Set((userIds || []).map((id) => String(id || "").trim()).filter(Boolean))
+  );
+  if (!unique.length || !range || !deps) {
+    return { users: 0, ingested: 0, failed: 0, missing: 0, apiCalls: 0 };
+  }
+  const concurrency = stravaSyncRetry.STRAVA_SYNC_CONCURRENCY_SAFE;
+  let ingested = 0;
+  let failed = 0;
+  let missing = 0;
+  let apiCalls = 0;
+  let usersWithGap = 0;
+
+  for (let i = 0; i < unique.length; i += concurrency) {
+    const batch = unique.slice(i, i + concurrency);
+    /* eslint-disable no-await-in-loop */
+    const batchResults = await Promise.all(
+      batch.map(async (userId) => {
+        const snap = await db.collection("users").doc(userId).get();
+        if (!snap.exists) return null;
+        return syncRunningActivitiesGapForUser(db, userId, snap.data() || {}, range, deps);
+      })
+    );
+    /* eslint-enable no-await-in-loop */
+    for (const r of batchResults) {
+      if (!r) continue;
+      ingested += Number(r.ingested) || 0;
+      failed += Number(r.failed) || 0;
+      missing += Number(r.missing) || 0;
+      apiCalls += Number(r.apiCount) || 0;
+      if ((r.missing || 0) > 0) usersWithGap += 1;
+    }
+    if (i + concurrency < unique.length) {
+      await sleep(stravaSyncRetry.STRAVA_USER_BATCH_DELAY_MS);
+    }
+  }
+
+  if (ingested > 0) {
+    console.log("[stravaGapDetect] RUN activities gap parity", {
+      users: unique.length,
+      usersWithGap,
+      ingested,
+      failed,
+      missing,
+      apiCalls,
+      dateFrom: range.dateFrom,
+      dateTo: range.dateTo,
+    });
+  }
+
+  return {
+    users: unique.length,
+    usersWithGap,
+    ingested,
+    failed,
+    missing,
+    apiCalls,
+  };
+}
+
 module.exports = {
   STRAVA_GAP_DETECT_PAGE_SIZE,
   STRAVA_WEBHOOK_RETRIES_COLLECTION,
@@ -680,10 +869,13 @@ module.exports = {
   markStravaWebhookRetryDone,
   listPendingStravaWebhookRetries,
   listPendingRetryUserIds,
+  listStravaConnectedUserIds,
   buildGapDetectWorklist,
   classifyStravaListActivity,
   detectMissingActivityIdsForUser,
   getExistingStravaActivityIdsForActivityList,
   getExistingStravaActivityIdsForDateRange,
+  syncRunningActivitiesGapForUser,
+  syncUsersRunningActivitiesGapParity,
   runGapDetectSyncJob,
 };

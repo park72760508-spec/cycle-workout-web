@@ -148,6 +148,30 @@ function mapStravaRunningToActivityRow(activity, firebaseUid) {
   };
 }
 
+/** ingest 실패 시 갭 탐지·재시도 큐 (activities·efforts 보정) */
+async function markRunningActivitySyncRetry(db, firebaseUid, activityId, activityDateRaw, reason, status) {
+  if (!db || !firebaseUid) return;
+  try {
+    const stravaSyncRetry = require("./stravaSyncRetry");
+    const ymd = toActivityDate(activityDateRaw);
+    if (!ymd) return;
+    await stravaSyncRetry.markStravaSyncRetryPending(db, firebaseUid, {
+      dateFrom: ymd,
+      dateTo: ymd,
+      reason: String(reason || "run_mirror").slice(0, 40),
+      status: Number(status) || 500,
+      activityId,
+    });
+  } catch (e) {
+    console.warn(
+      "[processRunningActivity] mark retry failed:",
+      firebaseUid,
+      activityId,
+      e && e.message ? e.message : e
+    );
+  }
+}
+
 async function resolveStravaUserByOwnerId(db, ownerId) {
   const ownerIdNum = Number(ownerId);
   if (!ownerIdNum) return null;
@@ -285,6 +309,16 @@ async function processRunningActivity(db, ownerId, objectId, activityPrefetched)
       const err = new Error(fetched.error || "running activity fetch failed");
       err.status = fetched.status || 0;
       err.userId = fetched.userId || null;
+      if (fetched.userId) {
+        await markRunningActivitySyncRetry(
+          db,
+          fetched.userId,
+          String(objectId),
+          null,
+          "run_fetch_failed",
+          fetched.status || 500
+        );
+      }
       throw err;
     }
     activity = fetched.activity;
@@ -310,10 +344,32 @@ async function processRunningActivity(db, ownerId, objectId, activityPrefetched)
 
   const row = mapStravaRunningToActivityRow(activity, userId);
   if (!row) {
-    throw new Error("mapStravaRunningToActivityRow failed");
+    const mapErr = new Error("mapStravaRunningToActivityRow failed");
+    const actDate = toActivityDate(activity.start_date_local || activity.start_date);
+    await markRunningActivitySyncRetry(
+      db,
+      userId,
+      String(objectId),
+      actDate,
+      "run_map_failed",
+      500
+    );
+    throw mapErr;
   }
 
-  await upsertRunningActivityToSupabase(userId, row);
+  try {
+    await upsertRunningActivityToSupabase(userId, row);
+  } catch (upsertErr) {
+    await markRunningActivitySyncRetry(
+      db,
+      userId,
+      row.activity_id,
+      row.activity_date,
+      "activities_upsert_failed",
+      500
+    );
+    throw upsertErr;
+  }
   console.log("[processRunningActivity] Supabase activities upsert OK", {
     userId,
     activityId: row.activity_id,
@@ -332,6 +388,14 @@ async function processRunningActivity(db, ownerId, objectId, activityPrefetched)
     );
   } catch (effortsErr) {
     console.error("[processRunningActivity] calculateAndSaveRunEfforts 실패:", effortsErr);
+    await markRunningActivitySyncRetry(
+      db,
+      userId,
+      row.activity_id,
+      row.activity_date,
+      "run_efforts_failed",
+      500
+    );
   }
 
   return {
