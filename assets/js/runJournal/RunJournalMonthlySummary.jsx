@@ -17,32 +17,41 @@
     var month = monthIndex + 1;
     var now = new Date();
     var isCurrentMonth = year === now.getFullYear() && monthIndex === now.getMonth();
+    var startStr = year + '-' + pad2(month) + '-01';
+    var endStr;
     if (isCurrentMonth) {
-      var endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      var startDate = new Date(endDate);
-      startDate.setDate(endDate.getDate() - 29);
-      return {
-        startStr:
-          startDate.getFullYear() +
-          '-' +
-          pad2(startDate.getMonth() + 1) +
-          '-' +
-          pad2(startDate.getDate()),
-        endStr:
-          endDate.getFullYear() +
-          '-' +
-          pad2(endDate.getMonth() + 1) +
-          '-' +
-          pad2(endDate.getDate()),
-        isCurrentMonth: true,
-      };
+      endStr =
+        now.getFullYear() +
+        '-' +
+        pad2(now.getMonth() + 1) +
+        '-' +
+        pad2(now.getDate());
+    } else {
+      var lastDay = new Date(year, month, 0).getDate();
+      endStr = year + '-' + pad2(month) + '-' + pad2(lastDay);
     }
-    var lastDay = new Date(year, month, 0).getDate();
     return {
-      startStr: year + '-' + pad2(month) + '-01',
-      endStr: year + '-' + pad2(month) + '-' + pad2(lastDay),
-      isCurrentMonth: false,
+      startStr: startStr,
+      endStr: endStr,
     };
+  }
+
+  function formatPeriodHint(startStr, endStr) {
+    if (!startStr || !endStr) return '';
+    var s = startStr.split('-');
+    var e = endStr.split('-');
+    if (s.length < 3 || e.length < 3) return '';
+    return (
+      '* ' +
+      parseInt(s[1], 10) +
+      '/' +
+      parseInt(s[2], 10) +
+      ' ~ ' +
+      parseInt(e[1], 10) +
+      '/' +
+      parseInt(e[2], 10) +
+      ' 누적'
+    );
   }
 
   function sanitizeTss(val) {
@@ -82,7 +91,7 @@
       totalDistance: totalDist.toFixed(1),
       totalTSS: Math.round(totalTss),
       runCount: runCount,
-      isCurrentMonth: range.isCurrentMonth,
+      periodHint: formatPeriodHint(range.startStr, range.endStr),
     };
   }
 
@@ -106,8 +115,8 @@
         BentoCard('총 TSS', String(stats.totalTSS)),
         BentoCard('러닝 횟수', stats.runCount + '회')
       ),
-      stats.isCurrentMonth
-        ? R.createElement('p', { className: 'journal-bento-period-hint' }, '* 오늘 기준 1개월간')
+      stats.periodHint
+        ? R.createElement('p', { className: 'journal-bento-period-hint' }, stats.periodHint)
         : null
     );
   }
