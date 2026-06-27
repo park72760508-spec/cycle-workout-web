@@ -20,6 +20,7 @@
     var Calendar = window.RunJournalCalendarWidget;
     var Summary = window.RunJournalDailySummary;
     var MonthlySummary = window.RunJournalMonthlySummary;
+    var YearlyChart = window.RunJournalYearlyChart;
     var Sheet = window.RunJournalDetailBottomSheet;
 
     useLayoutEffect(function () {
@@ -63,6 +64,10 @@
         trainingLogs: data.trainingLogs,
         currentYear: data.currentYear,
         currentMonth: data.currentMonth
+      }) : null,
+      YearlyChart ? R.createElement(YearlyChart, {
+        trainingLogs: data.trainingLogs,
+        currentYear: data.currentYear
       }) : null,
       Sheet ? R.createElement(Sheet, {
         open: data.detailSheetOpen,
