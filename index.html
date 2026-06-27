@@ -10447,7 +10447,32 @@
       return false;
     }
 
-    /** GC·피크(28일) 등 API 기간이 오늘 기준 창과 맞는지 */
+    /** CYCLE 피크·GC — 서울 기준 오늘 포함 최근 90일 창 */
+    function stelvioRankingExpectedPeakWindowSeoul() {
+      try {
+        var todayStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Seoul',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date());
+        var p = todayStr.split('-');
+        var y = parseInt(p[0], 10);
+        var m = parseInt(p[1], 10);
+        var d = parseInt(p[2], 10);
+        var start = new Date(y, m - 1, d);
+        start.setDate(start.getDate() - 89);
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return {
+          startStr: start.getFullYear() + '-' + pad(start.getMonth() + 1) + '-' + pad(start.getDate()),
+          endStr: todayStr,
+        };
+      } catch (ePeakWin) {
+        return { startStr: '', endStr: '' };
+      }
+    }
+
+    /** GC·피크(90일) 등 API 기간이 오늘 기준 창과 맞는지 */
     function stelvioRankingPayloadMatchesCurrentApiWindow(data) {
       if (!data || data.startStr == null || data.endStr == null) return true;
       if (data.durationType === 'tss') {
@@ -10494,17 +10519,12 @@
           : true;
       }
       try {
-        var todayStr2 = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-        var p2 = todayStr2.split('-');
-        var y2 = parseInt(p2[0], 10);
-        var m2 = parseInt(p2[1], 10);
-        var d2 = parseInt(p2[2], 10);
-        var ed = new Date(y2, m2 - 1, d2);
-        ed.setDate(ed.getDate() - 27);
-        var pad2 = function (n2) { return String(n2).padStart(2, '0'); };
-        var expS2 = ed.getFullYear() + '-' + pad2(ed.getMonth() + 1) + '-' + pad2(ed.getDate());
-        return String(data.startStr) === String(expS2) && String(data.endStr) === String(todayStr2);
-      } catch (eR28) {
+        var peakWin = stelvioRankingExpectedPeakWindowSeoul();
+        return (
+          String(data.startStr) === String(peakWin.startStr) &&
+          String(data.endStr) === String(peakWin.endStr)
+        );
+      } catch (eR90) {
         return true;
       }
     }
@@ -11735,8 +11755,8 @@
     /** legacy localStorage 키 접두사(마이그레이션 정리용) */
     var STELVIO_RANKING_LC_PREFIX = 'stelvioRC:v3:';
     var STELVIO_RANKING_LC_LEGACY_PREFIX = STELVIO_RANKING_LC_PREFIX;
-    /** peak IndexedDB 키 접두사 — 사전집계 gender(GC 동일) 신뢰(v13) */
-    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v22:';
+    /** peak IndexedDB 키 접두사 — CYCLE 90일 top2 집계(v23) */
+    var STELVIO_PEAK_LC_KEY_PREFIX = 'peak:v23:';
     /** IndexedDB — 이 시간 지나면 백그라운드 재검증만 권장(표시 거부 아님, expiresAt·롤오버가 만료 판정) */
     var STELVIO_RANKING_LC_STALE_MS = 6 * 60 * 60 * 1000;
     var STELVIO_RANKING_IDB_NAME = 'stelvio-ranking-cache';
