@@ -405,15 +405,17 @@
 
 #runTrainingJournalScreen .run-journal-pace-value-wrap,
 .run-journal-detail-panel .run-journal-pace-value-wrap {
-  align-items: flex-start;
+  align-items: center;
 }
 
 #runTrainingJournalScreen .run-journal-pace-value-stack,
 .run-journal-detail-panel .run-journal-pace-value-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 #runTrainingJournalScreen .run-journal-pace-speed-suffix,
