@@ -3407,6 +3407,18 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   z-index: 50;
 }
 
+/* 라이딩 일지: 세로 스크롤바 숨김 (스크롤은 유지) */
+#trainingJournalScreen.active {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#trainingJournalScreen.active::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* 라이딩 일지: 상세 기록 보기 / 분석 차트 펼치기 버튼 터치 인식 개선 (접힌 상태에서만 하단 여백) */
 #trainingJournalScreen #journal-react-root:not(:has(.journal-accordion-expanded)),
 #trainingJournalScreen .journal-screen-content:not(:has(.journal-accordion-expanded)) {
