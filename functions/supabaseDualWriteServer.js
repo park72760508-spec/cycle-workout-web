@@ -163,6 +163,17 @@ function shouldMirrorStravaLogToFirestoreAfterSupabaseOk(supabaseOk) {
   return parseIngestBool(process.env.STRAVA_FIRESTORE_MIRROR) === true;
 }
 
+/**
+ * Phase 4 FULL — Supabase Primary 실패 시 Firestore fallback 금지 (일원화).
+ * 롤백: FIRESTORE_SHADOW_WRITE=true 또는 STRAVA_FIRESTORE_MIRROR=true
+ * @param {{ usePrimary?: boolean }} primaryDecision
+ */
+function shouldSkipFirestoreStravaFallbackOnSupabaseFailure(primaryDecision) {
+  if (!primaryDecision || primaryDecision.usePrimary !== true) return false;
+  if (parseIngestBool(process.env.STRAVA_FIRESTORE_MIRROR) === true) return false;
+  return isPhase4FirestoreLogShadowStopped();
+}
+
 function isOnUserLogWrittenEnabled() {
   const raw = process.env.ON_USER_LOG_WRITTEN_ENABLED;
   if (raw != null && String(raw).trim() !== "") {
@@ -1046,6 +1057,7 @@ module.exports = {
   shouldSkipFirebaseLogSideEffects,
   isFirestoreShadowWriteEnabled,
   shouldMirrorStravaLogToFirestoreAfterSupabaseOk,
+  shouldSkipFirestoreStravaFallbackOnSupabaseFailure,
   isPhase4FirestoreLogShadowStopped,
   isOnUserLogWrittenEnabled,
   getShadowTtlDays,

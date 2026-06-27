@@ -3,7 +3,8 @@
  *
  * Phase 1-2 (레거시): Firestore Primary → Supabase Secondary
  * Phase 3 (Canary):    Supabase Primary → Firestore Shadow (실패 시 Firestore fallback)
- * Phase 4-3:           Supabase Primary 성공 시 Firestore mirror 중단 (실패 시에만 fallback)
+ * Phase 4-3:           Supabase Primary 성공 시 Firestore mirror 중단
+ * Phase 4-4:           Supabase Primary 실패 시 Firestore fallback 중단 (재시도 큐만)
  *
  * 롤백: dual_write_status=OFF | STRAVA_FIRESTORE_MIRROR=true | FIRESTORE_SHADOW_WRITE=true
  */
@@ -107,6 +108,19 @@ async function dualWriteStravaActivityLog(
       reason: primaryDecision.reason,
     });
     return { supabasePrimary: true, firestoreMirrorSkipped: true };
+  }
+
+  if (
+    !supabaseOk &&
+    supabaseDualWriteServer.shouldSkipFirestoreStravaFallbackOnSupabaseFailure(
+      primaryDecision
+    )
+  ) {
+    const msg = `Supabase primary ingest failed — Firestore fallback disabled (Phase 4): userId=${userId} logDocId=${logDocId}`;
+    console.error("[stravaDualWrite]", msg, { reason: primaryDecision.reason });
+    const err = new Error(msg);
+    err.code = "SUPABASE_PRIMARY_FAILED_NO_FIRESTORE";
+    throw err;
   }
 
   const shadowEnabled = supabaseDualWriteServer.isFirestoreShadowWriteEnabled();
