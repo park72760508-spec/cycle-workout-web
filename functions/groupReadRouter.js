@@ -146,6 +146,198 @@ async function tryFetchApprovedRidingGroupsFromSupabase(admin, db, query) {
   }
 }
 
+/**
+ * Firebase 폴백 — 내 멤버십 소mo임 (HTTP 1회 = 1+G reads, 지속 리스너 아님).
+ */
+async function fetchMyRidingGroupsFromFirebase(db, firebaseUid) {
+  const uid = String(firebaseUid || "").trim();
+  if (!uid || !db) return [];
+
+  const snap = await db
+    .collection("stelvio_riding_groups")
+    .where("status", "==", "APPROVED")
+    .orderBy("createdAt", "desc")
+    .limit(200)
+    .get();
+
+  const rows = [];
+  await Promise.all(
+    snap.docs.map(async (docSnap) => {
+      const memSnap = await docSnap.ref.collection("members").doc(uid).get();
+      if (!memSnap.exists) return;
+      const gd = docSnap.data() || {};
+      const catRaw =
+        gd.category != null
+          ? gd.category
+          : gd.sportCategory != null
+            ? gd.sportCategory
+            : null;
+      const catNorm =
+        catRaw != null && String(catRaw).trim().toUpperCase() === "RUN" ? "RUN" : "CYCLE";
+      const rnRaw = gd.rankingNotice;
+      let rankingNotice = null;
+      if (rnRaw && typeof rnRaw === "object") {
+        rankingNotice = {
+          text: rnRaw.text != null ? String(rnRaw.text) : "",
+          updatedAt: rnRaw.updatedAt != null ? rnRaw.updatedAt : null,
+          updatedBy: rnRaw.updatedBy != null ? String(rnRaw.updatedBy) : "",
+        };
+      }
+      rows.push({
+        id: docSnap.id,
+        groupId: docSnap.id,
+        name: gd.name != null ? String(gd.name) : "(이름 없음)",
+        photoUrl: gd.photoUrl != null ? String(gd.photoUrl).trim() : "",
+        memberCount: gd.memberCount != null ? Number(gd.memberCount) : null,
+        createdBy: gd.createdBy != null ? String(gd.createdBy) : "",
+        category: catNorm,
+        resolvedCategory: catNorm,
+        categoryExplicit: catRaw != null,
+        regions: gd.regions != null ? gd.regions : null,
+        isPublic: gd.isPublic !== false,
+        rankingNotice,
+        readBackend: "firebase",
+      });
+    })
+  );
+
+  return rows.sort(function (a, b) {
+    const mcA = a.memberCount != null ? Number(a.memberCount) : 0;
+    const mcB = b.memberCount != null ? Number(b.memberCount) : 0;
+    if (mcB !== mcA) return mcB - mcA;
+    const na = String(a.name || "").toLowerCase();
+    const nb = String(b.name || "").toLowerCase();
+    if (na < nb) return -1;
+    if (na > nb) return 1;
+    return 0;
+  });
+}
+
+/**
+ * 내 소mo임 Read — Supabase 우선(Canary 무관, Firestore reads 폭증 방지).
+ */
+async function tryFetchMyRidingGroupsFromSupabase(admin, query) {
+  const uid = String(query.uid || query.userId || "").trim();
+  if (!uid) return null;
+
+  try {
+    const groups = await supabaseGroupReader.fetchMyRidingGroupsAsMember(admin, uid);
+    return {
+      success: true,
+      groups: groups || [],
+      readBackend: "supabase",
+      readSource: "supabase",
+    };
+  } catch (err) {
+    console.error("[groupReadRouter] my riding groups Supabase failed:", err.message || err);
+    return null;
+  }
+}
+
+async function tryFetchMyGroupMembershipsFromSupabase(admin, query) {
+  const uid = String(query.uid || query.userId || "").trim();
+  const rawIds = query.groupIds || query.ids || "";
+  const groupIds = String(rawIds)
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!uid || !groupIds.length) return null;
+
+  try {
+    const memberGroupIds = await supabaseGroupReader.fetchMyGroupMembershipFirestoreIds(
+      admin,
+      uid,
+      groupIds
+    );
+    return {
+      success: true,
+      memberGroupIds: memberGroupIds || [],
+      readBackend: "supabase",
+      readSource: "supabase",
+    };
+  } catch (err) {
+    console.error("[groupReadRouter] my group memberships Supabase failed:", err.message || err);
+    return null;
+  }
+}
+
+async function tryFetchMyGroupContactSetFromSupabase(admin, query) {
+  const uid = String(query.uid || query.userId || "").trim();
+  const rawIds = query.groupIds || query.ids || "";
+  const groupIds = String(rawIds)
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!uid || !groupIds.length) return null;
+
+  try {
+    const payload = await supabaseGroupReader.fetchMyGroupContactSet(admin, uid, groupIds);
+    return {
+      success: true,
+      uids: payload.uids || [],
+      map: payload.map || {},
+      readBackend: "supabase",
+      readSource: "supabase",
+    };
+  } catch (err) {
+    console.error("[groupReadRouter] my group contact set Supabase failed:", err.message || err);
+    return null;
+  }
+}
+
+/** Firebase 폴백 — 멤버십 Set */
+async function fetchMyGroupMembershipsFromFirebase(db, firebaseUid, groupFirestoreIds) {
+  const uid = String(firebaseUid || "").trim();
+  const ids = (groupFirestoreIds || []).map((g) => String(g || "").trim()).filter(Boolean);
+  if (!uid || !ids.length) return [];
+
+  const out = [];
+  await Promise.all(
+    ids.map(async (gid) => {
+      const memSnap = await db
+        .collection("stelvio_riding_groups")
+        .doc(gid)
+        .collection("members")
+        .doc(uid)
+        .get();
+      if (memSnap.exists) out.push(gid);
+    })
+  );
+  return out;
+}
+
+/** Firebase 폴백 — 그룹 멤버 contact set */
+async function fetchMyGroupContactSetFromFirebase(db, groupFirestoreIds) {
+  const ids = (groupFirestoreIds || []).map((g) => String(g || "").trim()).filter(Boolean);
+  if (!ids.length) return { uids: [], map: {} };
+
+  const uidSet = new Set();
+  const map = {};
+  await Promise.all(
+    ids.map(async (gid) => {
+      const memSnap = await db
+        .collection("stelvio_riding_groups")
+        .doc(gid)
+        .collection("members")
+        .get();
+      memSnap.docs.forEach((d) => {
+        const data = d.data() || {};
+        const fb = String(d.id);
+        uidSet.add(fb);
+        if (!map[fb]) {
+          map[fb] = {
+            userId: fb,
+            name: data.displayName != null ? String(data.displayName) : "",
+            profileImageUrl: data.profileImageUrl || null,
+            role: data.role || "member",
+          };
+        }
+      });
+    })
+  );
+  return { uids: [...uidSet], map };
+}
+
 /** Firebase 폴백 — rides/{id} */
 async function fetchOpenRideFromFirebase(db, rideId) {
   const snap = await db.collection("rides").doc(rideId).get();
@@ -176,6 +368,12 @@ module.exports = {
   tryFetchOpenRidesRangeFromSupabase,
   tryFetchRidingGroupFromSupabase,
   tryFetchApprovedRidingGroupsFromSupabase,
+  tryFetchMyRidingGroupsFromSupabase,
+  tryFetchMyGroupMembershipsFromSupabase,
+  tryFetchMyGroupContactSetFromSupabase,
+  fetchMyRidingGroupsFromFirebase,
+  fetchMyGroupMembershipsFromFirebase,
+  fetchMyGroupContactSetFromFirebase,
   fetchOpenRideFromFirebase,
   fetchRidingGroupFromFirebase,
 };

@@ -10025,6 +10025,144 @@ exports.getApprovedRidingGroupsForRead = onRequest(
   }
 );
 
+);
+
+/**
+ * 내 소mo임 목록 Read — Supabase 우선(Canary 무관) → Firebase 1회 배치 폴백.
+ * Firestore U×G onSnapshot 대체.
+ */
+exports.getMyRidingGroupsForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 45 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    const db = admin.firestore();
+    const uid = String(req.query.uid || req.query.userId || "").trim();
+    if (!uid) {
+      res.status(400).json({ success: false, error: "uid 필요" });
+      return;
+    }
+    try {
+      const fromSb = await groupReadRouter.tryFetchMyRidingGroupsFromSupabase(admin, req.query);
+      if (fromSb) {
+        res.status(200).json(fromSb);
+        return;
+      }
+      const groups = await groupReadRouter.fetchMyRidingGroupsFromFirebase(db, uid);
+      res.status(200).json({
+        success: true,
+        groups,
+        readBackend: "firebase",
+        readSource: "firebase",
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 클럽 UI — 보이는 그룹 중 내 멤버십 ID Set.
+ */
+exports.getMyGroupMembershipsForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    const db = admin.firestore();
+    const uid = String(req.query.uid || req.query.userId || "").trim();
+    const rawIds = req.query.groupIds || req.query.ids || "";
+    const groupIds = String(rawIds)
+      .split(/[,;\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!uid || !groupIds.length) {
+      res.status(400).json({ success: false, error: "uid, groupIds 필요" });
+      return;
+    }
+    try {
+      const fromSb = await groupReadRouter.tryFetchMyGroupMembershipsFromSupabase(admin, req.query);
+      if (fromSb) {
+        res.status(200).json(fromSb);
+        return;
+      }
+      const memberGroupIds = await groupReadRouter.fetchMyGroupMembershipsFromFirebase(
+        db,
+        uid,
+        groupIds
+      );
+      res.status(200).json({
+        success: true,
+        memberGroupIds,
+        readBackend: "firebase",
+        readSource: "firebase",
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 랭킹 소셜 — 내 소mo임 멤버 UID·프로필 맵 (M×K getDocs 대체).
+ */
+exports.getMyGroupContactSetForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 45 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    const db = admin.firestore();
+    const uid = String(req.query.uid || req.query.userId || "").trim();
+    const rawIds = req.query.groupIds || req.query.ids || "";
+    const groupIds = String(rawIds)
+      .split(/[,;\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!uid || !groupIds.length) {
+      res.status(400).json({ success: false, error: "uid, groupIds 필요" });
+      return;
+    }
+    try {
+      const fromSb = await groupReadRouter.tryFetchMyGroupContactSetFromSupabase(admin, req.query);
+      if (fromSb) {
+        res.status(200).json(fromSb);
+        return;
+      }
+      const payload = await groupReadRouter.fetchMyGroupContactSetFromFirebase(db, groupIds);
+      res.status(200).json({
+        success: true,
+        uids: payload.uids,
+        map: payload.map,
+        readBackend: "firebase",
+        readSource: "firebase",
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 /** 클라이언트 Secondary relay — Firestore Primary 성공 후 open_rides upsert */
 exports.ingestOpenRideDualWriteRelay = onRequest(
   supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),

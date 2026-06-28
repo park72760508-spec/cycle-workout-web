@@ -159,6 +159,231 @@ async function fetchRidingGroupByFirestoreId(admin, firestoreDocId, opts) {
   );
 }
 
+/** Supabase users.id → firebase_uid (필요 UUID만 조회 — 전체 users 스캔 방지) */
+async function fetchFirebaseUidsForUserUuids(supabase, uuids) {
+  const map = new Map();
+  const uniq = [
+    ...new Set(
+      (uuids || [])
+        .map((u) => (u != null ? String(u).trim().toLowerCase() : ""))
+        .filter(Boolean)
+    ),
+  ];
+  if (!supabase || !uniq.length) return map;
+  const chunkSize = 80;
+  for (let i = 0; i < uniq.length; i += chunkSize) {
+    const chunk = uniq.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, firebase_uid")
+      .in("id", chunk);
+    if (error) {
+      console.warn("[supabaseGroupReader] users firebase_uid batch failed:", error.message);
+      continue;
+    }
+    for (const row of data || []) {
+      if (row && row.id && row.firebase_uid) {
+        map.set(String(row.id).toLowerCase(), String(row.firebase_uid).trim());
+      }
+    }
+  }
+  return map;
+}
+
+async function resolveViewerUserUuid(supabase, firebaseUid) {
+  const uid = String(firebaseUid || "").trim();
+  if (!uid || !supabase) return null;
+  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
+  const mode =
+    supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  return supabaseDualWriteServer.resolveRideUserIdForFirebaseUid(supabase, uid, {
+    uidNamespace: ns,
+    uidMode: mode,
+  });
+}
+
+/** riding_groups 행 → 랭킹/클럽탭 `subscribeMyRidingGroupsAsMember` 목록 항목 */
+function mapAdaptedGroupToMyGroupsListRow(doc) {
+  if (!doc || !doc.id) return null;
+  const gid = String(doc.id);
+  const catNorm = String(doc.category || "CYCLE").toUpperCase() === "RUN" ? "RUN" : "CYCLE";
+  return {
+    id: gid,
+    groupId: gid,
+    name: doc.name != null ? String(doc.name) : "(이름 없음)",
+    photoUrl: doc.photoUrl != null ? String(doc.photoUrl).trim() : "",
+    memberCount: doc.memberCount != null ? Number(doc.memberCount) : null,
+    createdBy: doc.createdBy != null ? String(doc.createdBy) : "",
+    category: catNorm,
+    resolvedCategory: catNorm,
+    categoryExplicit: doc.category != null,
+    regions: doc.regions != null ? doc.regions : null,
+    isPublic: doc.isPublic !== false,
+    rankingNotice: doc.rankingNotice || null,
+    readBackend: doc.readBackend || "supabase",
+  };
+}
+
+/**
+ * 내가 멤버인 APPROVED 소mo임 — riding_group_members × riding_groups (1+1 쿼리).
+ * Firestore U×G 리스너 대체.
+ */
+async function fetchMyRidingGroupsAsMember(admin, firebaseUid) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return [];
+
+  const userUuid = await resolveViewerUserUuid(supabase, firebaseUid);
+  if (!userUuid) return [];
+
+  const { data: memRows, error: memErr } = await supabase
+    .from("riding_group_members")
+    .select("group_id")
+    .eq("user_id", userUuid);
+  if (memErr) throw memErr;
+  if (!memRows || !memRows.length) return [];
+
+  const groupUuids = [
+    ...new Set(memRows.map((r) => r.group_id).filter(Boolean)),
+  ];
+  if (!groupUuids.length) return [];
+
+  const { data: groupRows, error: grpErr } = await supabase
+    .from("riding_groups")
+    .select("*")
+    .in("id", groupUuids)
+    .eq("status", "APPROVED");
+  if (grpErr) throw grpErr;
+  if (!groupRows || !groupRows.length) return [];
+
+  const creatorUuids = groupRows.map((g) => g.created_by).filter(Boolean);
+  const uuidMap = await fetchFirebaseUidsForUserUuids(supabase, creatorUuids);
+
+  return groupRows
+    .map((row) => {
+      const createdByFb = row.created_by
+        ? uuidMap.get(String(row.created_by).toLowerCase()) || ""
+        : "";
+      const groupRow = {
+        ...row,
+        createdByFirebaseUid: createdByFb,
+      };
+      const adapted = groupResponseAdapter.adaptRidingGroupToFirestoreDoc(
+        groupRow,
+        [],
+        []
+      );
+      return mapAdaptedGroupToMyGroupsListRow(adapted);
+    })
+    .filter(Boolean)
+    .sort(function (a, b) {
+      const mcA = a.memberCount != null ? Number(a.memberCount) : 0;
+      const mcB = b.memberCount != null ? Number(b.memberCount) : 0;
+      if (mcB !== mcA) return mcB - mcA;
+      const na = String(a.name || "").toLowerCase();
+      const nb = String(b.name || "").toLowerCase();
+      if (na < nb) return -1;
+      if (na > nb) return 1;
+      return 0;
+    });
+}
+
+/**
+ * 화면에 보이는 그룹 ID 중 내 멤버십 — 단일 배치 쿼리.
+ */
+async function fetchMyGroupMembershipFirestoreIds(admin, firebaseUid, groupFirestoreIds) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return [];
+
+  const ids = (groupFirestoreIds || [])
+    .map((g) => String(g || "").trim())
+    .filter(Boolean);
+  if (!ids.length) return [];
+
+  const userUuid = await resolveViewerUserUuid(supabase, firebaseUid);
+  if (!userUuid) return [];
+
+  const { data: groups, error: gErr } = await supabase
+    .from("riding_groups")
+    .select("id, firestore_doc_id")
+    .in("firestore_doc_id", ids);
+  if (gErr) throw gErr;
+  if (!groups || !groups.length) return [];
+
+  const uuidByFs = new Map();
+  const groupUuids = [];
+  for (const g of groups) {
+    if (!g || !g.id || !g.firestore_doc_id) continue;
+    uuidByFs.set(String(g.id), String(g.firestore_doc_id));
+    groupUuids.push(g.id);
+  }
+  if (!groupUuids.length) return [];
+
+  const { data: memRows, error: mErr } = await supabase
+    .from("riding_group_members")
+    .select("group_id")
+    .eq("user_id", userUuid)
+    .in("group_id", groupUuids);
+  if (mErr) throw mErr;
+
+  const out = [];
+  for (const m of memRows || []) {
+    const fsId = uuidByFs.get(String(m.group_id));
+    if (fsId) out.push(fsId);
+  }
+  return out;
+}
+
+/**
+ * 내 소mo임들의 멤버 UID·프로필 맵 — M×K Firestore getDocs 대체.
+ */
+async function fetchMyGroupContactSet(admin, firebaseUid, groupFirestoreIds) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return { uids: [], map: {} };
+
+  const ids = (groupFirestoreIds || [])
+    .map((g) => String(g || "").trim())
+    .filter(Boolean);
+  if (!ids.length) return { uids: [], map: {} };
+
+  const { data: groups, error: gErr } = await supabase
+    .from("riding_groups")
+    .select("id, firestore_doc_id")
+    .in("firestore_doc_id", ids)
+    .eq("status", "APPROVED");
+  if (gErr) throw gErr;
+  if (!groups || !groups.length) return { uids: [], map: {} };
+
+  const groupUuids = groups.map((g) => g.id).filter(Boolean);
+  if (!groupUuids.length) return { uids: [], map: {} };
+
+  const { data: memRows, error: mErr } = await supabase
+    .from("riding_group_members")
+    .select("user_id, display_name, profile_image_url, role")
+    .in("group_id", groupUuids);
+  if (mErr) throw mErr;
+  if (!memRows || !memRows.length) return { uids: [], map: {} };
+
+  const memberUuids = [...new Set(memRows.map((r) => r.user_id).filter(Boolean))];
+  const uuidMap = await fetchFirebaseUidsForUserUuids(supabase, memberUuids);
+
+  const uidSet = new Set();
+  const map = {};
+  for (const row of memRows) {
+    const fb = uuidMap.get(String(row.user_id).toLowerCase());
+    if (!fb) continue;
+    uidSet.add(fb);
+    if (!map[fb]) {
+      map[fb] = {
+        userId: fb,
+        name: row.display_name != null ? String(row.display_name).trim() : "",
+        profileImageUrl: row.profile_image_url || null,
+        role: row.role || "member",
+      };
+    }
+  }
+  return { uids: [...uidSet], map };
+}
+
 async function fetchApprovedRidingGroups(admin, opts) {
   opts = opts || {};
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
@@ -639,6 +864,9 @@ module.exports = {
   fetchOpenRideByFirestoreId,
   fetchOpenRidesInDateRange,
   fetchRidingGroupByFirestoreId,
+  fetchMyRidingGroupsAsMember,
+  fetchMyGroupMembershipFirestoreIds,
+  fetchMyGroupContactSet,
   fetchApprovedRidingGroups,
   fetchUserRideLogsForMonth,
   fetchUserRideLogsRecent,
