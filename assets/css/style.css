@@ -3484,6 +3484,34 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   inset: -12px;
   z-index: 0;
 }
+
+/* CYCLE 대시보드·라이딩 기록 — RUN eTP 산출하기 버튼과 동일 outline 스타일 */
+#performanceDashboardScreen .stelvio-ranking-board-entry-btn,
+#performance-dashboard-container .stelvio-ranking-board-entry-btn,
+#trainingJournalScreen .stelvio-ranking-board-entry-btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(102, 126, 234, 0.35);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.06));
+  color: #4c51bf;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+#performanceDashboardScreen .stelvio-ranking-board-entry-btn:hover,
+#performance-dashboard-container .stelvio-ranking-board-entry-btn:hover,
+#trainingJournalScreen .stelvio-ranking-board-entry-btn:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12), rgba(118, 75, 162, 0.1));
+}
+
+#performanceDashboardScreen .stelvio-ranking-board-entry-btn:disabled,
+#performance-dashboard-container .stelvio-ranking-board-entry-btn:disabled,
+#trainingJournalScreen .stelvio-ranking-board-entry-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 #trainingJournalScreen .journal-accordion {
   position: relative;
   z-index: 10;
