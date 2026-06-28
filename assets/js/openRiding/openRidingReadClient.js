@@ -19,6 +19,9 @@ const API_BASE = 'https://us-central1-stelvio-ai.cloudfunctions.net';
 const GROUPS_READ_ROUTING_URL = API_BASE + '/getGroupsReadRoutingPublic';
 const READ_SOURCE_CACHE_MS = 60 * 1000;
 const SUPABASE_POLL_MS = 15000;
+/** 내 소mo임·멤버십 — 변경 빈도 낮음, Firestore reads 절감 */
+const MY_GROUPS_POLL_MS = 45000;
+const MY_MEMBERSHIPS_POLL_MS = 30000;
 
 /** @type {{ source: 'firebase'|'supabase', loadedAt: number, loading: Promise<string>|null }} */
 const groupsReadState = {
@@ -681,6 +684,103 @@ function subscribeRidingGroupsFirestoreViewer(db, onUpdate, viewerUid) {
   };
 }
 
+/**
+ * 내 소mo임 목록 — Supabase HTTP 폴링 (Firestore 승인 전체×members/{uid} 리스너 대체).
+ * Canary 무관: getMyRidingGroupsForRead 가 Supabase 우선.
+ */
+export function subscribeMyRidingGroupsAsMemberRouted(db, uid, onUpdate) {
+  if (!uid || typeof onUpdate !== 'function') return function () {};
+  var u = String(uid).trim();
+  if (!u) return function () {};
+
+  var stopped = false;
+  var pollTimer = null;
+
+  function poll() {
+    httpGetJson(API_BASE + '/getMyRidingGroupsForRead', { uid: u, userId: u }).then(function (json) {
+      if (stopped) return;
+      if (json && json.success && Array.isArray(json.groups)) {
+        onUpdate(json.groups);
+      }
+    });
+  }
+
+  poll();
+  pollTimer = setInterval(poll, MY_GROUPS_POLL_MS);
+
+  return function () {
+    stopped = true;
+    if (pollTimer) clearInterval(pollTimer);
+  };
+}
+
+/**
+ * 클럽 UI — 보이는 그룹 중 내 멤버십 Set (G개 onSnapshot 대체).
+ */
+export function subscribeUserGroupMembershipsRouted(db, userId, groupIds, onUpdate) {
+  if (typeof onUpdate !== 'function') return function () {};
+  var u = String(userId || '').trim();
+  var ids = (groupIds || [])
+    .map(function (g) {
+      return String(g || '').trim();
+    })
+    .filter(Boolean);
+  if (!u || !ids.length) {
+    onUpdate(new Set());
+    return function () {};
+  }
+
+  var stopped = false;
+  var pollTimer = null;
+
+  function poll() {
+    httpGetJson(API_BASE + '/getMyGroupMembershipsForRead', {
+      uid: u,
+      userId: u,
+      groupIds: ids.join(','),
+    }).then(function (json) {
+      if (stopped) return;
+      if (json && json.success && Array.isArray(json.memberGroupIds)) {
+        onUpdate(new Set(json.memberGroupIds));
+      }
+    });
+  }
+
+  poll();
+  pollTimer = setInterval(poll, MY_MEMBERSHIPS_POLL_MS);
+
+  return function () {
+    stopped = true;
+    if (pollTimer) clearInterval(pollTimer);
+  };
+}
+
+/**
+ * 랭킹 소셜 — 내 소mo임 멤버 UID·프로필 (M×K getDocs 대체).
+ * @returns {Promise<{ uids: string[], map: object }|null>}
+ */
+export async function fetchMyGroupContactSetRouted(db, uid, groupIds) {
+  var u = String(uid || '').trim();
+  var ids = (groupIds || [])
+    .map(function (g) {
+      return String(g || '').trim();
+    })
+    .filter(Boolean);
+  if (!u || !ids.length) return { uids: [], map: {} };
+
+  var json = await httpGetJson(API_BASE + '/getMyGroupContactSetForRead', {
+    uid: u,
+    userId: u,
+    groupIds: ids.join(','),
+  });
+  if (!json || !json.success) return null;
+  return {
+    uids: Array.isArray(json.uids) ? json.uids : [],
+    map: json.map && typeof json.map === 'object' ? json.map : {},
+    readBackend: json.readBackend || json.readSource || '',
+  };
+}
+
 if (typeof window !== 'undefined') {
   window.stelvioEnsureGroupsReadSource = stelvioEnsureGroupsReadSource;
   window.stelvioGetGroupsReadSourceSync = stelvioGetGroupsReadSourceSync;
@@ -697,5 +797,8 @@ if (typeof window !== 'undefined') {
     subscribeRidingGroupMembersRouted,
     subscribeRidingGroupJoinRequestsRouted,
     subscribeRidingGroupsRouted,
+    subscribeMyRidingGroupsAsMemberRouted,
+    subscribeUserGroupMembershipsRouted,
+    fetchMyGroupContactSetRouted,
   };
 }

@@ -32,6 +32,9 @@ import {
   fetchRidingGroupByIdRouted,
   fetchRidingGroupMembersListRouted,
   fetchRidingGroupJoinRequestsListRouted,
+  subscribeMyRidingGroupsAsMemberRouted,
+  subscribeUserGroupMembershipsRouted,
+  fetchMyGroupContactSetRouted,
 } from './openRidingReadClient.js';
 import { scheduleRidingGroupDualWriteFromFirestore } from '../openRidingDualWrite.js';
 
@@ -158,181 +161,10 @@ export function subscribeRidingGroups(db, isAdmin, onUpdate, viewerUid) {
 }
 
 /**
- * 내 UID가 멤버로 등록된 승인(APPROVED) 소mo임만 실시간 수집
- * collectionGroup + documentId(UID) 쿼리는 Firestore에서 경로 전체가 아니라면 지원되지 않음.
- * 대신 승인된 그룹 목록 스냅샷마다 각 그룹의 `members/{uid}` 문서를 개별 구독합니다.
- *
- * @param {import('firebase/firestore').Firestore} db
- * @param {string} uid
- * @param {function(Array<{ id: string; groupId: string; name: string; photoUrl: string; memberCount: number|null }>): void} onUpdate
- * @returns {function(): void}
+ * 내 UID가 멤버인 APPROVED 소mo임 — Supabase HTTP 폴링 (Firestore U×G 리스너 제거).
  */
 export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
-  if (!db || !uid || typeof onUpdate !== 'function') return function () {};
-  var u = String(uid).trim();
-  if (!u) return function () {};
-
-  var metaByGid = Object.create(null);
-  var unsubGroupByGid = Object.create(null);
-  var unsubMemberByGid = Object.create(null);
-  var approvedListUnsub = null;
-  var emitTimer = null;
-
-  function sortedList() {
-    return Object.keys(metaByGid)
-      .map(function (gid) {
-        return metaByGid[gid];
-      })
-      .filter(Boolean)
-      .sort(function (a, b) {
-        var mcA = a.memberCount != null ? Number(a.memberCount) : 0;
-        var mcB = b.memberCount != null ? Number(b.memberCount) : 0;
-        if (mcB !== mcA) return mcB - mcA;
-        var na = String(a.name || '').toLowerCase();
-        var nb = String(b.name || '').toLowerCase();
-        if (na < nb) return -1;
-        if (na > nb) return 1;
-        return 0;
-      });
-  }
-
-  function emit() {
-    onUpdate(sortedList());
-  }
-
-  function emitDebounced() {
-    if (emitTimer) clearTimeout(emitTimer);
-    emitTimer = setTimeout(function () {
-      emitTimer = null;
-      emit();
-    }, 220);
-  }
-
-  function unsubGroupDoc(gid) {
-    var gfn = unsubGroupByGid[gid];
-    if (gfn) {
-      try {
-        gfn();
-      } catch (e) {}
-      delete unsubGroupByGid[gid];
-    }
-    delete metaByGid[gid];
-  }
-
-  function unsubMemberSnap(gid) {
-    var mfn = unsubMemberByGid[gid];
-    if (mfn) {
-      try {
-        mfn();
-      } catch (e2) {}
-      delete unsubMemberByGid[gid];
-    }
-  }
-
-  function subGroupDoc(gid) {
-    if (unsubGroupByGid[gid]) return;
-    var gRef = doc(db, RIDING_GROUP_COLLECTION, gid);
-    unsubGroupByGid[gid] = onSnapshot(gRef, function (snap) {
-      if (!snap.exists()) {
-        unsubGroupDoc(gid);
-        unsubMemberSnap(gid);
-        emitDebounced();
-        return;
-      }
-      var gd = snap.data() || {};
-      var st = String(gd.status || '');
-      if (st !== GROUP_STATUS.APPROVED) {
-        unsubGroupDoc(gid);
-        delete metaByGid[gid];
-        emitDebounced();
-        return;
-      }
-      var rnRaw = gd.rankingNotice;
-      var rankingNotice = null;
-      if (rnRaw && typeof rnRaw === 'object') {
-        rankingNotice = {
-          text: trimLen(rnRaw.text, RIDING_GROUP_RANKING_NOTICE_MAX_LEN),
-          updatedAt: rnRaw.updatedAt != null ? rnRaw.updatedAt : null,
-          updatedBy: rnRaw.updatedBy != null ? String(rnRaw.updatedBy) : ''
-        };
-      }
-      var catRaw = extractRidingGroupCategoryRawFromDoc(gd);
-      var catNorm = normalizeRidingGroupCategory(catRaw);
-      metaByGid[gid] = {
-        id: gid,
-        groupId: gid,
-        name: gd.name != null ? String(gd.name) : '(이름 없음)',
-        photoUrl: gd.photoUrl != null ? String(gd.photoUrl).trim() : '',
-        memberCount: gd.memberCount != null ? Number(gd.memberCount) : null,
-        createdBy: gd.createdBy != null ? String(gd.createdBy) : '',
-        category: catNorm,
-        resolvedCategory: catNorm,
-        categoryExplicit: catRaw != null,
-        regions: gd.regions != null ? gd.regions : null,
-        isPublic: gd.isPublic !== false,
-        rankingNotice: rankingNotice
-      };
-      emitDebounced();
-    });
-  }
-
-  function attachMembershipListener(gid) {
-    if (unsubMemberByGid[gid]) return;
-    var mRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', u);
-    unsubMemberByGid[gid] = onSnapshot(mRef, function (memSnap) {
-      if (memSnap.exists()) {
-        subGroupDoc(gid);
-      } else {
-        unsubGroupDoc(gid);
-        emitDebounced();
-      }
-    });
-  }
-
-  function detachMembershipListener(gid) {
-    unsubMemberSnap(gid);
-    unsubGroupDoc(gid);
-  }
-
-  var qApproved = query(
-    collection(db, RIDING_GROUP_COLLECTION),
-    where('status', '==', GROUP_STATUS.APPROVED),
-    orderBy('createdAt', 'desc')
-  );
-
-  approvedListUnsub = onSnapshot(qApproved, function (groupSnap) {
-    var approvedIds = Object.create(null);
-    groupSnap.forEach(function (d) {
-      if (d && d.id) approvedIds[String(d.id)] = true;
-    });
-    Object.keys(unsubMemberByGid).forEach(function (oldGid) {
-      if (!approvedIds[oldGid]) detachMembershipListener(oldGid);
-    });
-    Object.keys(approvedIds).forEach(function (gidOne) {
-      attachMembershipListener(gidOne);
-    });
-    emitDebounced();
-  });
-
-  return function () {
-    if (emitTimer) {
-      clearTimeout(emitTimer);
-      emitTimer = null;
-    }
-    if (approvedListUnsub) {
-      try {
-        approvedListUnsub();
-      } catch (e3) {}
-      approvedListUnsub = null;
-    }
-    Object.keys(unsubMemberByGid).slice().forEach(function (gid) {
-      unsubMemberSnap(gid);
-    });
-    Object.keys(unsubGroupByGid).slice().forEach(function (gid) {
-      unsubGroupDoc(gid);
-    });
-    metaByGid = Object.create(null);
-  };
+  return subscribeMyRidingGroupsAsMemberRouted(db, uid, onUpdate);
 }
 
 /**
@@ -978,45 +810,10 @@ export function subscribeMyManagedGroupsJoinRequestCounts(db, userId, onUpdate) 
 }
 
 /**
- * 현재 사용자가 지정된 그룹들의 members/{userId} 문서를 직접 구독.
- * joinRequests(신청 대기) 상태는 포함하지 않음 — 수락 완료(members 문서 존재)만 true.
- * @param {import('firebase/firestore').Firestore} db
- * @param {string} userId
- * @param {string[]} groupIds  구독할 그룹 ID 배열 (화면에 보이는 그룹 목록)
- * @param {function(Set<string>): void} onUpdate  멤버로 등록된 groupId Set
- * @returns {function(): void}  unsubscribe
+ * 클럽 목록 — 보이는 그룹 중 내 멤버십 (Supabase HTTP 폴링, G개 리스너 제거).
  */
 export function subscribeUserGroupMemberships(db, userId, groupIds, onUpdate) {
-  if (!db || !userId || !Array.isArray(groupIds) || !groupIds.length || typeof onUpdate !== 'function') {
-    if (typeof onUpdate === 'function') onUpdate(new Set());
-    return function () {};
-  }
-  var uid = String(userId).trim();
-  var status = {};
-  var unsubs = [];
-
-  function emitSet() {
-    var s = new Set();
-    Object.keys(status).forEach(function (k) { if (status[k]) s.add(k); });
-    onUpdate(s);
-  }
-
-  groupIds.forEach(function (groupId) {
-    var gid = String(groupId).trim();
-    if (!gid) return;
-    status[gid] = false;
-    var mRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', uid);
-    var unsub = onSnapshot(
-      mRef,
-      function (snap) { status[gid] = snap.exists(); emitSet(); },
-      function ()     { status[gid] = false;          emitSet(); }
-    );
-    unsubs.push(unsub);
-  });
-
-  return function () {
-    unsubs.forEach(function (u) { try { u(); } catch (e) {} });
-  };
+  return subscribeUserGroupMembershipsRouted(db, userId, groupIds, onUpdate);
 }
 
 /**
