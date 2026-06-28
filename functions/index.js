@@ -4602,7 +4602,7 @@ async function runRankingAggregatePeakMonthly28d(db, usersSnap = null, opts) {
         if (!allowLegacyFallback) {
           throw new Error(
             `peak_28d fast board insufficient: rollupRows=${boardStats.rollupRows} used=${boardStats.used} skippedNoMeta=${boardStats.skippedNoMeta}. ` +
-              "scheduledPeak28dRollupBackfillChunk 대기 후 재시도. allowLegacyFallback=1 은 비권장(60분+)."
+              "Supabase stelvio_ranking_metrics_backfill_chunk(pg_cron) 대기 후 재시도. allowLegacyFallback=1 은 비권장(60분+)."
           );
         }
         console.warn("[runRankingAggregatePeakMonthly28d] fast insufficient — legacy one-pass (allowLegacyFallback)");
@@ -8682,83 +8682,7 @@ exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
   }
 );
 
-/**
- * KST 매 12분 — peak_28d rollup 청크 백필(80명/회). 전체 users 1회 스캔을 보드 집계와 분리.
- */
-exports.scheduledPeak28dRollupBackfillChunk = onSchedule(
-  {
-    schedule: "*/12 * * * *",
-    timeZone: "Asia/Seoul",
-    memory: "1GiB",
-    timeoutSeconds: 540,
-  },
-  async () => {
-    const db = admin.firestore();
-    const { startStr, endStr } = getRolling90DaysRangeSeoul();
-    const metaRef = db.collection("ranking_meta").doc("peak_28d_backfill");
-    const CHUNK = 80;
-    try {
-      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledPeak28dRollupBackfillChunk"))) return;
-      let meta = (await metaRef.get()).data() || {};
-      let userDocs = meta.userIdsCache;
-      if (!Array.isArray(userDocs) || !userDocs.length || meta.windowEnd !== endStr) {
-        const snap = await db.collection("users").get();
-        userDocs = snap.docs.map((d) => ({ id: d.id }));
-        await metaRef.set(
-          {
-            windowStart: startStr,
-            windowEnd: endStr,
-            userIdsCache: userDocs,
-            totalUsers: userDocs.length,
-            nextIndex: 0,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true }
-        );
-        meta = { nextIndex: 0, totalUsers: userDocs.length };
-      }
-      const startIndex = Number(meta.nextIndex) || 0;
-      if (startIndex >= userDocs.length) {
-        console.log("[scheduledPeak28dRollupBackfillChunk] done — all users processed");
-        return;
-      }
-      const slice = userDocs.slice(startIndex, startIndex + CHUNK);
-      const docRefs = slice.map((u) => db.collection("users").doc(u.id));
-      const userSnaps = await rankingDayRollup.chunkedGetAll(db, docRefs, 40);
-      const userDocsForChunk = userSnaps.map((s, i) => ({
-        id: slice[i].id,
-        data: () => (s.exists ? s.data() : {}),
-      }));
-      const chunkResult = await rankingDayRollup.rebuildPeak28dRollupsChunk(
-        db,
-        userDocsForChunk,
-        0,
-        userDocsForChunk.length,
-        startStr,
-        endStr,
-        getLeagueCategory
-      );
-      const nextIndex = startIndex + chunkResult.processed;
-      await metaRef.set(
-        {
-          nextIndex,
-          lastChunk: chunkResult,
-          done: chunkResult.done,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-      console.log("[scheduledPeak28dRollupBackfillChunk]", {
-        nextIndex,
-        total: userDocs.length,
-        rebuilt: chunkResult.rebuilt,
-      });
-    } catch (e) {
-      console.error("[scheduledPeak28dRollupBackfillChunk]", e && e.message ? e.message : e);
-      throw e;
-    }
-  }
-);
+/** peak_28d rollup 청크 백필 — Supabase pg_cron stelvio_ranking_metrics_backfill_chunk 로 이관 (2026-06-28). */
 
 /** KST 03:20 — 02:50 피크 보드 이후 헵타곤 GC (단독 9분) */
 exports.scheduledPeak28dHeptagonOnly = onSchedule(
