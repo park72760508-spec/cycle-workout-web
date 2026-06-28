@@ -410,7 +410,7 @@
   /**
    * 랭킹 API 응답에서 본인(uid) 항속을 6개월 60분 MMP 기준으로 맞춤(FTP 폴백 순위 제외).
    * @param {{ preserveServerSpeed?: boolean }} [opts]
-   *   preserveServerSpeed: true — 랭킹보드(4주 집계) 응답 speedKmh 유지, 6개월 로그 덮어쓰기 생략
+   *   preserveServerSpeed: true — 랭킹보드(90일 집계) 응답 speedKmh 유지, 6개월 로그 덮어쓰기 생략
    */
   async function alignPersonalSpeedRankingPayloadWithDashboard(data, uid, opts) {
     opts = opts || {};
