@@ -43,7 +43,19 @@ function getOpenRidingMoimCopy(category) {
     navMoimAria: isRun ? '러닝 크루 달력' : '라이딩 모임 달력',
     navHomeAria: isRun ? '홈 — RUN 베이스캠프' : '홈 — 베이스캠프',
     navMenuAria: isRun ? '러닝 크루 하단 메뉴' : '라이딩 모임 하단 메뉴',
-    homeScreenId: isRun ? 'runBasecampScreen' : 'basecampScreen'
+    homeScreenId: isRun ? 'runBasecampScreen' : 'basecampScreen',
+    groupsListTitle: isRun ? '크루 리스트' : '클럽 리스트',
+    groupsSearchPlaceholder: isRun ? '크루명 또는 러너 이름으로 검색' : '클럽명 또는 라이더 이름으로 검색',
+    groupsLegendJoined: isRun ? '가입 크루' : '가입 클럽',
+    groupDetailTitle: isRun ? '크루 상세' : '클럽 상세',
+    groupDetailCreateBtn: isRun ? '크루 생성' : '라이딩 생성',
+    groupDetailCreateHint: isRun
+      ? '크루 생성 시 크루 멤버(전화번호 등록)가 초대「선택된 목록」에 자동으로 채워집니다.'
+      : '라이딩 생성 시 클럽 멤버(전화번호 등록)가 초대「선택된 목록」에 자동으로 채워집니다.',
+    groupDetailBackAria: isRun ? '크루 상세로 뒤로' : '클럽 상세로 뒤로',
+    groupMembersInvitedNote: isRun
+      ? '크루 멤버 {count}명이「선택된 목록」에 추가되었습니다. 필요하면 아래에서 수정한 뒤 생성해 주세요.'
+      : '클럽 멤버 {count}명이「선택된 목록」에 추가되었습니다. 필요하면 아래에서 수정한 뒤 생성해 주세요.'
   };
 }
 
@@ -4759,6 +4771,7 @@ function OpenRidingCreateForm(props) {
   var onEditNavDelete = props.onEditNavDelete;
   var onCopyCancel = props.onCopyCancel || function () {};
   var moimCategoryProp = props.moimCategory || '';
+  var moimCopy = props.moimCopy || getOpenRidingMoimCopy(moimCategoryProp || 'CYCLE');
   var moimCatApi = typeof window !== 'undefined' ? window.openRidingMoimCategory || {} : {};
   var initialFormCategory =
     typeof moimCatApi.resolveInitialMoimCategory === 'function'
@@ -5553,7 +5566,7 @@ function OpenRidingCreateForm(props) {
       Array.isArray(initialInviteSelected) &&
       initialInviteSelected.length > 0 ? (
         <p className="rounded-lg border border-violet-200 bg-violet-50/95 text-violet-900 text-xs px-3 py-2 leading-snug m-0">
-          클럽 멤버 {initialInviteSelected.length}명이「선택된 목록」에 추가되었습니다. 필요하면 아래에서 수정한 뒤 생성해 주세요.
+          {moimCopy.groupMembersInvitedNote.replace('{count}', String(initialInviteSelected.length))}
         </p>
       ) : null}
       <label className="block font-medium text-slate-700">모임명<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} /></label>
@@ -9760,6 +9773,7 @@ function OpenRidingGroupsList(props) {
   var isAdmin = openRidingGroupsIsAdminGrade();
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
   var GROUP_ST = gs.GROUP_STATUS || { PENDING: 'PENDING', APPROVED: 'APPROVED' };
+  var moimCopy = getOpenRidingMoimCopy(clubCategory);
 
   var ownerUidsKey = useMemo(
     function () {
@@ -9929,7 +9943,7 @@ function OpenRidingGroupsList(props) {
           type="search"
           enterKeyHint="search"
           className="open-riding-group-search-input w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm box-border"
-          placeholder="클럽명 또는 라이더 이름으로 검색"
+          placeholder={moimCopy.groupsSearchPlaceholder}
           value={filterText}
           onChange={function (e) {
             setFilterText(e.target.value);
@@ -10018,7 +10032,7 @@ function OpenRidingGroupsList(props) {
                       <span
                         className={'absolute flex items-center justify-center rounded-full text-white border-4 border-white shadow pointer-events-none ' + (isHost ? 'bg-violet-600' : 'bg-emerald-600')}
                         style={{ width: '32px', height: '32px', top: '2px', left: '0px', transform: 'translate(-30%, -20%)' }}
-                        aria-label={isHost ? '내가 방장' : '가입 클럽'}
+                        aria-label={isHost ? '내가 방장' : moimCopy.groupsLegendJoined}
                       >
                         <svg className="block" width={18} height={18} viewBox="0 0 12 12" fill="none" aria-hidden="true">
                           <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -10074,7 +10088,7 @@ function OpenRidingGroupsList(props) {
                 <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
-            <span className="font-semibold text-slate-700 min-w-0">가입 클럽</span>
+            <span className="font-semibold text-slate-700 min-w-0">{moimCopy.groupsLegendJoined}</span>
           </div>
         </div>
       ) : null}
@@ -10592,6 +10606,7 @@ function OpenRidingGroupDetailView(props) {
   var onBack = props.onBack || function () {};
   var onEdit = props.onEdit || function () {};
   var onCreateRide = props.onCreateRide || function () {};
+  var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
   var _g = useState(null);
   var grp = _g[0];
   var setGrp = _g[1];
@@ -11398,7 +11413,7 @@ function OpenRidingGroupDetailView(props) {
                   disabled={!!busy}
                   onClick={handleCreateRideFromGroup}
                 >
-                  라이딩 생성
+                  {moimCopy.groupDetailCreateBtn}
                 </button>
                 <button
                   type="button"
@@ -11415,7 +11430,7 @@ function OpenRidingGroupDetailView(props) {
                 </button>
               </div>
               <p className="text-[11px] text-violet-900/85 m-0 leading-snug">
-                라이딩 생성 시 클럽 멤버(전화번호 등록)가 초대「선택된 목록」에 자동으로 채워집니다.
+                {moimCopy.groupDetailCreateHint}
               </p>
             </div>
           ) : isAdmin && !approved && !isOwner ? (
@@ -12059,13 +12074,13 @@ function OpenRidingRoomApp(props) {
             : view === 'friends'
               ? '친구 관리'
               : view === 'groups'
-                ? '클럽 리스트'
+                ? moimCopy.groupsListTitle
                 : view === 'groupCreate'
                   ? '클럽 만들기'
                   : view === 'groupEdit'
                     ? '클럽 수정'
                     : view === 'groupDetail'
-                      ? '클럽 상세'
+                      ? moimCopy.groupDetailTitle
                       : moimCopy.screenTitle;
 
   var useGlassBottomNavSpacer = !!(
@@ -12096,6 +12111,7 @@ function OpenRidingRoomApp(props) {
         firestore={firestore}
         userId={effectiveUserId}
         groupId={detailGroupId}
+        moimCopy={moimCopy}
         onBack={function () {
           setDetailGroupId(null);
           setView('groups');
@@ -12165,6 +12181,7 @@ function OpenRidingRoomApp(props) {
         storage={storage}
         hostUserId={effectiveUserId}
         moimCategory={clubCategory}
+        moimCopy={moimCopy}
         initialInviteSelected={groupInviteSeed}
         onCreated={function () {
           setGroupInviteSeed(null);
@@ -12352,7 +12369,7 @@ function OpenRidingRoomApp(props) {
                 view === 'copy'
                   ? '세부 내용으로 뒤로'
                   : detailGroupId && groupInviteSeed
-                    ? '클럽 상세로 뒤로'
+                    ? moimCopy.groupDetailBackAria
                     : '라이딩 모임으로 뒤로'
               }
             >
