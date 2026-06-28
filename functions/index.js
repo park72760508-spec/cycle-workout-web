@@ -7076,11 +7076,53 @@ function peakRankChangesAllZero(chMap) {
 async function readPeakRankHistoryNorm(db, historyKey) {
   let prevNorm = normalizePeakRankHistoryDoc(null);
   if (!db || !historyKey) return prevNorm;
+  const peakMovement = require("./rankingPeakMovement");
+
+  function normHasPrevDayBaseline(norm) {
+    norm = normalizePeakRankHistoryDoc(norm);
+    const prevDay = norm.prevDayRanksByCategory || {};
+    for (let i = 0; i < PEAK_RANK_BOARD_CATEGORIES.length; i++) {
+      const cat = PEAK_RANK_BOARD_CATEGORIES[i];
+      const m = prevDay[cat];
+      if (m && typeof m === "object" && Object.keys(m).length > 0) return true;
+    }
+    return false;
+  }
+
   try {
     const snap = await db.collection(PEAK_RANK_HISTORY_COL).doc(historyKey).get();
     if (snap.exists) prevNorm = normalizePeakRankHistoryDoc(snap.data());
   } catch (eRead) {
     console.warn("[readPeakRankHistoryNorm] 실패:", historyKey, eRead && eRead.message);
+  }
+  const legacyKey =
+    typeof peakMovement.resolveLegacyPeakRankHistoryKey === "function"
+      ? peakMovement.resolveLegacyPeakRankHistoryKey(historyKey)
+      : null;
+  if (legacyKey && !normHasPrevDayBaseline(prevNorm)) {
+    try {
+      const legacySnap = await db.collection(PEAK_RANK_HISTORY_COL).doc(legacyKey).get();
+      if (legacySnap.exists) {
+        const legacyNorm = normalizePeakRankHistoryDoc(legacySnap.data());
+        if (normHasPrevDayBaseline(legacyNorm)) {
+          prevNorm = {
+            ...prevNorm,
+            prevDayRanksByCategory: legacyNorm.prevDayRanksByCategory,
+          };
+        } else if (legacyNorm.ranksByCategory && Object.keys(legacyNorm.ranksByCategory).length) {
+          const prevDay = {};
+          for (const cat of PEAK_RANK_BOARD_CATEGORIES) {
+            const m = legacyNorm.ranksByCategory[cat];
+            if (m && typeof m === "object" && Object.keys(m).length) prevDay[cat] = m;
+          }
+          if (Object.keys(prevDay).length) {
+            prevNorm = { ...prevNorm, prevDayRanksByCategory: prevDay };
+          }
+        }
+      }
+    } catch (eLegacy) {
+      console.warn("[readPeakRankHistoryNorm] legacy baseline 실패:", legacyKey, eLegacy && eLegacy.message);
+    }
   }
   return prevNorm;
 }

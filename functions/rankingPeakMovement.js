@@ -18,6 +18,16 @@ function buildPeakRankHistoryKey(durationType, period, gender) {
   return `peak_${dt}_${p}_${g}`;
 }
 
+/** rolling90d 전환 시 등락 baseline — 구 rolling28d 스냅샷 키 */
+function resolveLegacyPeakRankHistoryKey(historyKey) {
+  const k = String(historyKey || "").trim();
+  if (!k) return null;
+  if (k.startsWith("peak_personal_speed_rolling90d_")) {
+    return k.replace("rolling90d_", "rolling28d_");
+  }
+  return null;
+}
+
 /** 클라이언트 stelvioResolveRankingBoardPeriod 와 동일 */
 function resolveRankingBoardPeriod(durationType, period) {
   const dt = String(durationType || "").trim();
@@ -408,6 +418,7 @@ module.exports = {
   buildPeakRankHistoryKey,
   resolveRankingBoardPeriod,
   resolvePeakRankHistoryKey,
+  resolveLegacyPeakRankHistoryKey,
   buildPeakBoardRankMapForCategoryRows,
   computeSurvivorAwareRankMovementForRows,
   computeAbsoluteBoardRankMovementForRows,

@@ -305,10 +305,76 @@ function mergePeakRankNorms(supabaseNorm, firestoreNorm, todayYmd) {
 }
 
 async function readPeakRankNormForHydrate(admin, historyKey, todayYmd) {
+  const today = todayYmd || peakMovement.seoulTodayYmd();
   const sb = await readPeakRankSnapshotSupabase(historyKey);
-  if (!admin) return sb;
-  const fs = await readPeakRankHistoryFirestore(admin, historyKey);
-  return mergePeakRankNorms(sb, fs, todayYmd);
+  let fs = peakMovement.normalizePeakRankHistoryDoc(null);
+  if (admin) {
+    fs = await readPeakRankHistoryFirestore(admin, historyKey);
+  }
+  let merged = mergePeakRankNorms(sb, fs, today);
+  if (!prevDayRanksPopulated(merged)) {
+    const legacyKey = peakMovement.resolveLegacyPeakRankHistoryKey(historyKey);
+    if (legacyKey) {
+      const legacySb = await readPeakRankSnapshotSupabase(legacyKey);
+      let legacyFs = peakMovement.normalizePeakRankHistoryDoc(null);
+      if (admin) {
+        legacyFs = await readPeakRankHistoryFirestore(admin, legacyKey);
+      }
+      const legacyNorm = mergePeakRankNorms(legacySb, legacyFs, today);
+      if (prevDayRanksPopulated(legacyNorm)) {
+        merged = {
+          ...merged,
+          prevDayRanksByCategory: legacyNorm.prevDayRanksByCategory,
+          asOfSeoul: merged.asOfSeoul || today,
+        };
+      } else if (categoryMapsHaveRanks(legacyNorm.ranksByCategory)) {
+        const prevDayCats = seedPrevDayRanksFromOfficialSnapshot(legacyNorm);
+        if (Object.keys(prevDayCats).length > 0) {
+          merged = {
+            ...merged,
+            prevDayRanksByCategory: prevDayCats,
+            asOfSeoul: merged.asOfSeoul || today,
+          };
+        }
+      }
+    }
+  }
+  return merged;
+}
+
+/**
+ * 독주(rolling90d): prev_day 비어 있으면 rolling28d 스냅샷·Firestore baseline 복구.
+ */
+async function ensurePrevDayBaselineForPersonalSpeed(admin, prevNorm, historyKey, todayYmd) {
+  const key = String(historyKey || "").trim();
+  if (!key.startsWith("peak_personal_speed_rolling90d_")) return prevNorm;
+
+  const today = todayYmd || peakMovement.seoulTodayYmd();
+  prevNorm = peakMovement.normalizePeakRankHistoryDoc(prevNorm);
+  if (prevDayRanksPopulated(prevNorm) && !prevDayBaselineLooksCorrupt(prevNorm)) return prevNorm;
+
+  const legacyKey = peakMovement.resolveLegacyPeakRankHistoryKey(key);
+  if (!legacyKey) return prevNorm;
+
+  const legacyNorm = await readPeakRankNormForHydrate(admin, legacyKey, today);
+  if (prevDayRanksPopulated(legacyNorm)) {
+    return {
+      ...prevNorm,
+      prevDayRanksByCategory: legacyNorm.prevDayRanksByCategory,
+      asOfSeoul: prevNorm.asOfSeoul || today,
+    };
+  }
+  if (categoryMapsHaveRanks(legacyNorm.ranksByCategory)) {
+    const prevDayCats = seedPrevDayRanksFromOfficialSnapshot(legacyNorm);
+    if (Object.keys(prevDayCats).length > 0) {
+      return {
+        ...prevNorm,
+        prevDayRanksByCategory: prevDayCats,
+        asOfSeoul: prevNorm.asOfSeoul || today,
+      };
+    }
+  }
+  return prevNorm;
 }
 
 /**
@@ -501,6 +567,7 @@ async function hydratePeakRankMovementOnPayload(payload, historyKey, opts) {
 
   if (opts.admin) {
     prevNorm = await ensurePrevDayBaselineForTssWeekly(opts.admin, prevNorm, historyKey, todayYmd);
+    prevNorm = await ensurePrevDayBaselineForPersonalSpeed(opts.admin, prevNorm, historyKey, todayYmd);
   }
 
   const snapFields = peakMovement.computePeakRankMovementFields(
@@ -586,6 +653,7 @@ async function applyPeakRankChangesSupabase(byCategory, historyKey, opts) {
   let prevNorm = await readPeakRankNormForHydrate(opts.admin, key, todayYmd);
   if (opts.admin) {
     prevNorm = await ensurePrevDayBaselineForTssWeekly(opts.admin, prevNorm, key, todayYmd);
+    prevNorm = await ensurePrevDayBaselineForPersonalSpeed(opts.admin, prevNorm, key, todayYmd);
   }
   const snapFields = peakMovement.computePeakRankMovementFields(eligibleByCategory, prevNorm, todayYmd, {
     tssWeeklyAbsolute: key.startsWith("peak_tss_weekly_"),
@@ -601,6 +669,7 @@ module.exports = {
   readPeakRankNormForHydrate,
   writePeakRankSnapshotSupabase,
   ensurePrevDayBaselineForTssWeekly,
+  ensurePrevDayBaselineForPersonalSpeed,
   syncEntriesRankMovementFromSupremo,
   mergePeakRankNorms,
   buildPrevDayRanksFromFirestoreAggregate,
