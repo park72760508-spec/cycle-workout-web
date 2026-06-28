@@ -13614,6 +13614,38 @@
         }
         if (!groupIds.length) return;
         try {
+          var contactViaHttp = null;
+          if (
+            typeof window.openRidingReadClient !== 'undefined' &&
+            window.openRidingReadClient &&
+            typeof window.openRidingReadClient.fetchMyGroupContactSetRouted === 'function'
+          ) {
+            contactViaHttp = await window.openRidingReadClient.fetchMyGroupContactSetRouted(
+              null,
+              myId,
+              groupIds
+            );
+          } else {
+            try {
+              await import('./assets/js/openRiding/openRidingReadClient.js');
+              if (
+                window.openRidingReadClient &&
+                typeof window.openRidingReadClient.fetchMyGroupContactSetRouted === 'function'
+              ) {
+                contactViaHttp = await window.openRidingReadClient.fetchMyGroupContactSetRouted(
+                  null,
+                  myId,
+                  groupIds
+                );
+              }
+            } catch (eImpGc) {}
+          }
+          if (contactViaHttp && Array.isArray(contactViaHttp.uids)) {
+            if (myGen !== stelvioGroupContactRefreshGen) return;
+            stelvioRankingGroupContactSet = new Set(contactViaHttp.uids);
+            stelvioRankingGroupContactDataMap = contactViaHttp.map || {};
+            return;
+          }
           var svc = await stelvioEnsureOpenRidingGroupServiceForRanking();
           var db = pack.db;
           var fns = pack.fns;
@@ -22245,33 +22277,6 @@
           }
         })();
       if (!uid) return;
-      if (!window.firestoreV9) {
-        if (!stelvioMyGroupsRankDeferredAttach) {
-          stelvioMyGroupsRankDeferredAttach = true;
-          var retryAttach = function () {
-            stelvioMyGroupsRankDeferredAttach = false;
-            stelvioEnsureMyGroupsFirestoreSubscription(bodyElHint);
-            if (bodyElHint && stelvioIsGroupDistanceRanking()) {
-              stelvioRenderGroupTabRankingList(bodyElHint);
-            }
-          };
-          if (typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
-            Promise.race([
-              window.ensureFirestoreV9ReadyForJournal(),
-              new Promise(function (resolve) {
-                setTimeout(resolve, 2500);
-              }),
-            ])
-              .then(retryAttach)
-              .catch(retryAttach);
-          } else {
-            setTimeout(retryAttach, 500);
-          }
-        } else if (bodyElHint && stelvioIsGroupDistanceRanking()) {
-          stelvioRenderGroupTabRankingList(bodyElHint);
-        }
-        return;
-      }
       stelvioMyGroupsRankDeferredAttach = false;
       stelvioMyGroupsRankAttachGen++;
       var attachGen = stelvioMyGroupsRankAttachGen;
@@ -22294,7 +22299,7 @@
         }
         try {
           stelvioMyGroupsRankUnsub = window.openRidingGroupService.subscribeMyRidingGroupsAsMember(
-            window.firestoreV9,
+            null,
             uid,
             function (rows) {
               stelvioOnMyGroupsFirestoreRows(rows, bodyElHint, attachGen);
