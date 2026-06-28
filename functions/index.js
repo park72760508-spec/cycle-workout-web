@@ -10025,8 +10025,6 @@ exports.getApprovedRidingGroupsForRead = onRequest(
   }
 );
 
-);
-
 /**
  * 내 소mo임 목록 Read — Supabase 우선(Canary 무관) → Firebase 1회 배치 폴백.
  * Firestore U×G onSnapshot 대체.
