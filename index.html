@@ -12842,7 +12842,7 @@
       stelvioRankingSwrCache = { key: '', body: null, ts: 0, expiresAt: 0 };
     }
 
-    var STELVIO_PEAK_RANK_MOVEMENT_LOGIC_VER = 3;
+    var STELVIO_PEAK_RANK_MOVEMENT_LOGIC_VER = 4;
     var STELVIO_PEAK_RANK_MOVEMENT_VER_KEY = 'stelvio_peak_rank_mv_logic:v';
 
     async function stelvioInvalidatePeakRankMovementCachesIfLogicStale() {
@@ -20148,6 +20148,14 @@
         if (raw) return JSON.parse(raw);
       } catch (e0) {}
       var p = stelvioPeakRankMoveParamsFromData(data);
+      if (p.duration === 'personal_speed' && p.period === 'rolling90') {
+        try {
+          var legacy90Key =
+            STELVIO_PEAK_RANK_SNAPSHOT_PREFIX + ['rolling28', p.duration, p.gender].join('|');
+          var rawLegacy90 = localStorage.getItem(legacy90Key);
+          if (rawLegacy90) return JSON.parse(rawLegacy90);
+        } catch (ePsLegacy) {}
+      }
       var startStr = (data && data.startStr) || '';
       var endStr = (data && data.endStr) || '';
       if (!startStr && !endStr) return null;
@@ -20157,6 +20165,14 @@
         var rawL = localStorage.getItem(legacyKey);
         if (rawL) return JSON.parse(rawL);
       } catch (e1) {}
+      if (p.duration === 'personal_speed' && p.period === 'rolling90') {
+        try {
+          var legacyPeriodKey =
+            'stelvio_peak_rank_snap:' + ['rolling28', p.duration, p.gender, startStr, endStr].join('|');
+          var rawLp = localStorage.getItem(legacyPeriodKey);
+          if (rawLp) return JSON.parse(rawLp);
+        } catch (e2) {}
+      }
       return null;
     }
 
