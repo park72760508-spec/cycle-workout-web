@@ -351,9 +351,10 @@
                 React.createElement('span', null, '최신 기록 우대 (오래된 기록일수록 반영 비율 감소)')
               )
             ),
-            React.createElement('button', {
-              type: 'button',
-              onClick: async function() {
+            React.createElement('div', { className: 'flex justify-center' },
+              React.createElement('button', {
+                type: 'button',
+                onClick: async function() {
                 if (ftpCalcLoading || !userProfile || !userProfile.id) return;
                 setFtpCalcLoading(true);
                 setFtpCalcResult(null);
@@ -384,12 +385,12 @@
                 }
               },
               disabled: ftpCalcLoading,
-              className: ('w-full py-3.5 px-4 text-white font-semibold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all text-base border-none ') + (ftpCalcLoading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'),
-              style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
+              className: 'stelvio-ranking-board-entry-btn'
             }, ftpCalcLoading ? React.createElement('span', { className: 'flex items-center justify-center gap-2' },
-              React.createElement('span', { className: 'w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin' }),
+              React.createElement('span', { className: 'w-5 h-5 border-2 border-[#667eea] border-t-transparent rounded-full animate-spin' }),
               '산출 중...'
             ) : 'FTP 산출하기')
+            )
           ))}
         </section>
 
@@ -412,12 +413,13 @@
                 React.createElement('span', null, '60분 피크가 없으면 FTP 기반 평속에 93%를 반영해 표기')
               )
             ),
-            React.createElement('button', {
-              type: 'button',
-              onClick: function() { setOneHourAbilityModalOpen(true); },
-              className: 'w-full py-3.5 px-4 text-white font-semibold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all text-base border-none cursor-pointer',
-              style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
-            }, '1시간 항속능력 산출하기')
+            React.createElement('div', { className: 'flex justify-center' },
+              React.createElement('button', {
+                type: 'button',
+                onClick: function() { setOneHourAbilityModalOpen(true); },
+                className: 'stelvio-ranking-board-entry-btn'
+              }, '1시간 항속능력 산출하기')
+            )
           ))}
         </section>
 

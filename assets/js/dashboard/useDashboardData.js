@@ -999,6 +999,8 @@
             return;
           }
         }
+        setAiLoading(false);
+        return;
       }
       if (aiAnalysisInProgressRef.current) return;
 
