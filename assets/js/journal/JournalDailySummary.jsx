@@ -391,7 +391,7 @@
       React.createElement('div', { className: 'journal-daily-summary-actions' },
         React.createElement('button', {
           type: 'button',
-          className: 'stelvio-ranking-board-entry-btn stelvio-purple-btn',
+          className: 'stelvio-ranking-board-entry-btn',
           onClick: onShowDetail,
           'aria-label': '상세 기록 보기'
         }, '상세 기록 보기')
