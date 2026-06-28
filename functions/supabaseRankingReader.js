@@ -933,7 +933,7 @@ async function fetchPersonalSpeedCore(admin, startStr, endStr, gender) {
     startStr:
       (data && data[0] && data[0].speed_window_start) || startStr,
     endStr: (data && data[0] && data[0].speed_window_end) || endStr,
-    period: "rolling28",
+    period: "rolling90",
     durationType: "personal_speed",
     gender,
     precomputed: true,

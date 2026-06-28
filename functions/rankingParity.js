@@ -123,7 +123,7 @@ async function verifyPeakRankingParity(admin, db, supabasePayload, ctx) {
     valueKey = "totalKm";
     eps = 0.05;
   } else if (durationType === "personal_speed") {
-    cacheKey = `peakRanking_personal_speed_28d_${gender}_${startStr}_${endStr}`;
+    cacheKey = `peakRanking_personal_speed_90d_${gender}_${startStr}_${endStr}`;
     valueKey = "speedKmh";
     eps = 0.05;
   } else if (durationType === "group_dist") {

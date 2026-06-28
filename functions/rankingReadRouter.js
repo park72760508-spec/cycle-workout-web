@@ -201,7 +201,7 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
         gender
       );
     } else if (durationType === "personal_speed") {
-      const { startStr, endStr } = getRolling28DaysRangeSeoul();
+      const { startStr, endStr } = getRolling90DaysRangeSeoul();
       payload = await supabaseRankingReader.fetchPersonalSpeed(
         admin,
         startStr,

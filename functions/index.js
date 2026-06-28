@@ -4745,23 +4745,23 @@ async function runRankingAggregatePersonalDist30d(db, usersSnap = null) {
   return result;
 }
 
-/** 4주(28일) 독주(항속) — 피크와 동일 롤링 창·일 버킷 rollup */
+/** 90일 독주(항속) — 피크·GC와 동일 롤링 창·일 버킷 rollup */
 function personalSpeedAggregateCacheKey(gender, startStr, endStr) {
-  return `peakRanking_personal_speed_28d_${gender}_${startStr}_${endStr}`;
+  return `peakRanking_personal_speed_90d_${gender}_${startStr}_${endStr}`;
 }
 
 function personalSpeedRankHistoryKey(gender) {
-  return `peak_personal_speed_rolling28d_${gender}`;
+  return `peak_personal_speed_rolling90d_${gender}`;
 }
 
 async function runRankingAggregatePersonalSpeed28d(db, usersSnap = null, opts) {
   const t0 = Date.now();
-  const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
+  const { startStr: r90s, endStr: r90e } = getRolling90DaysRangeSeoul();
   const snap = usersSnap ?? (await db.collection("users").get());
   const allUserDocs = snap.docs;
   await markManualRankingPhaseMeta(db, "personal_speed", "running", {
-    r28s,
-    r28e,
+    r90s,
+    r90e,
     userCount: snap.size,
     period: rankingDayRollup.PERSONAL_SPEED_PERIOD_ROLLING,
   });
@@ -4769,14 +4769,14 @@ async function runRankingAggregatePersonalSpeed28d(db, usersSnap = null, opts) {
   const psMetaSnap = await psMetaRef.get();
   const psMetaVer = psMetaSnap.exists ? Number((psMetaSnap.data() || {}).version) : 0;
   if (psMetaVer < rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) {
-    await resetPersonalSpeedRankingDerivedState(db, r28s, r28e);
+    await resetPersonalSpeedRankingDerivedState(db, r90s, r90e);
     await psMetaRef.set({
       version: rankingDayRollup.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION,
       period: rankingDayRollup.PERSONAL_SPEED_PERIOD_ROLLING,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
-  const psRollup = await rankingDayRollup.preparePersonalSpeedRankingRebuild(db, allUserDocs, r28s, r28e, {
+  const psRollup = await rankingDayRollup.preparePersonalSpeedRankingRebuild(db, allUserDocs, r90s, r90e, {
     ensureMissingDays: !!(opts && opts.ensureMissingDays),
     fromBucketsOnly: opts && opts.fromBucketsOnly === false ? false : true,
     skipUnchanged: opts && opts.skipUnchanged === false ? false : true,
@@ -4784,14 +4784,14 @@ async function runRankingAggregatePersonalSpeed28d(db, usersSnap = null, opts) {
   console.log("[runRankingAggregatePersonalSpeed28d] rollup", psRollup);
   let wrote = 0;
   for (const gender of ["all", "M", "F"]) {
-    const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r28s, r28e, gender, snap, {
+    const spd = await getPersonalSpeedRankingBoardEntriesFromRollups(db, r90s, r90e, gender, snap, {
       fromRollupsOnly: true,
       syncRollups: false,
     });
     spd.dashboardLogRouteEnriched = true;
     await applyPeakRankChanges(db, spd.byCategory, personalSpeedRankHistoryKey(gender));
-    const keyS = personalSpeedAggregateCacheKey(gender, r28s, r28e);
-    await persistPersonalSpeedRankingPack(db, keyS, spd, r28s, r28e);
+    const keyS = personalSpeedAggregateCacheKey(gender, r90s, r90e);
+    await persistPersonalSpeedRankingPack(db, keyS, spd, r90s, r90e);
     wrote++;
   }
   const ms = Date.now() - t0;
@@ -4799,8 +4799,8 @@ async function runRankingAggregatePersonalSpeed28d(db, usersSnap = null, opts) {
     phase: "personal_speed",
     wrote,
     ms,
-    startStr: r28s,
-    endStr: r28e,
+    startStr: r90s,
+    endStr: r90e,
     period: rankingDayRollup.PERSONAL_SPEED_PERIOD_ROLLING,
     psRollup,
     userCount: snap.size,
@@ -5882,7 +5882,7 @@ function getRolling30DaysRangeSeoul() {
   return { startStr, endStr };
 }
 
-/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 28일(7×4주). 항속(독주) 등 — CYCLE 피크는 getRolling90DaysRangeSeoul. */
+/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 28일(7×4주). legacy·기타 용도 — 독주·CYCLE 피크는 getRolling90DaysRangeSeoul. */
 function getRolling28DaysRangeSeoul() {
   const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const startStr = addDaysSeoulYmd(endStr, -27);
@@ -8277,7 +8277,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
   const distRes = await runRankingAggregatePersonalDist30d(db, sharedUsersSnap);
   wrote += distRes.wrote;
 
-  // ── 4-1. 4주(28일) 항속(독주) — 일 버킷 rollup (구 183일 대비 대폭 단축)
+  // ── 4-1. 90일 항속(독주) — 일 버킷 rollup
   if (!skipPersonalSpeed) {
     const psRes = await runRankingAggregatePersonalSpeed28d(db, sharedUsersSnap, {
       fromBucketsOnly: true,
@@ -8475,7 +8475,7 @@ exports.manualRebuildWeeklyRanking = onRequest(
  * phase:
  *   peak_monthly     — Max~60분 28일 전체 (21문서: 7구간×3성별)
  *   peak_duration    — 28일 단일 구간 (+ duration=max|1min|5min|10min|20min|40min|60min)
- *   personal_speed   — 독주 4주(28일)
+ *   personal_speed   — 독주 90일
  *   personal_dist    — 개인 거리 30일
  *
  * 진행: ranking_meta/manual_ranking_phase_rebuild
@@ -11369,9 +11369,9 @@ exports.getPeakPowerRanking = onRequest(
       return res.status(200).json(out);
     }
 
-    /** 개인: 최근 4주(28일) 1시간 항속능력(km/h) 랭킹 */
+    /** 개인: 최근 90일 1시간 항속능력(km/h) 랭킹 */
     if (durationType === "personal_speed") {
-      const { startStr, endStr } = getRolling28DaysRangeSeoul();
+      const { startStr, endStr } = getRolling90DaysRangeSeoul();
       const cacheKey = personalSpeedAggregateCacheKey(gender, startStr, endStr);
 
       async function buildPersonalSpeedOutFromPack(pack, meta) {
@@ -11885,7 +11885,7 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     let startStr, endStr;
-    if (period === "rolling28" || period === "rolling28d" || period === "rolling6m" || period === "rolling183" || period === "rolling30" || period === "monthly") {
+    if (period === "rolling28" || period === "rolling28d" || period === "rolling90" || period === "rolling90d" || period === "rolling6m" || period === "rolling183" || period === "rolling30" || period === "monthly") {
       const r = getRolling90DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
@@ -12062,6 +12062,8 @@ exports.getPeakPowerRanking = onRequest(
         period === "monthly" ||
         period === "rolling28" ||
         period === "rolling28d" ||
+        period === "rolling90" ||
+        period === "rolling90d" ||
         period === "rolling6m" ||
         period === "rolling183") &&
       DURATION_HR_FIELDS[durationType]

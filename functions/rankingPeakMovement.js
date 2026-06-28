@@ -22,10 +22,11 @@ function buildPeakRankHistoryKey(durationType, period, gender) {
 function resolveRankingBoardPeriod(durationType, period) {
   const dt = String(durationType || "").trim();
   if (dt === "tss") return "weekly";
-  if (dt === "personal_speed") return "rolling28d";
+  if (dt === "personal_speed") return "rolling90d";
   if (dt === "personal_dist" || dt === "group_dist") return "rolling30";
   const pr = String(period || "").trim();
   if (pr === "yearly") return "monthly";
+  if (pr === "rolling90" || pr === "rolling90d") return "rolling90d";
   if (pr === "rolling28" || pr === "rolling28d") return "rolling28d";
   return pr || "monthly";
 }
@@ -37,7 +38,7 @@ function resolvePeakRankHistoryKey(durationType, period, gender) {
   if (!dt || dt === "gc") return null;
   if (dt === "tss") return `peak_tss_weekly_${g}`;
   if (dt === "personal_dist") return `peak_personal_dist_rolling30_${g}`;
-  if (dt === "personal_speed") return `peak_personal_speed_rolling28d_${g}`;
+  if (dt === "personal_speed") return `peak_personal_speed_rolling90d_${g}`;
   if (dt === "group_dist") return "peak_group_dist_rolling30_all";
   const p = resolveRankingBoardPeriod(dt, period);
   return buildPeakRankHistoryKey(dt, p, g);

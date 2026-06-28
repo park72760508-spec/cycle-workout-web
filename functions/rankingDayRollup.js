@@ -15,7 +15,7 @@ exports.PERSONAL_SPEED_28D_ROLLUP_ID = "personal_speed_28d";
 /** @deprecated v12 이전 — prepare 시 삭제 */
 exports.PERSONAL_SPEED_6M_ROLLUP_ID = "personal_speed_6m";
 exports.PERSONAL_SPEED_ROLLUP_DOC_ID = exports.PERSONAL_SPEED_28D_ROLLUP_ID;
-exports.PERSONAL_SPEED_PERIOD_ROLLING = "rolling28";
+exports.PERSONAL_SPEED_PERIOD_ROLLING = "rolling90";
 /** 28일 피크·GC·헵타곤 — 일 버킷만 증분 갱신(전체 로그 스캔 없음) */
 exports.PEAK_28D_ROLLUP_ID = "peak_28d";
 /** 90일 창 일별 top2 W/kg 평균 (1일 30% 페널티) — GC·헵타곤·피크 rollup */
@@ -24,10 +24,10 @@ exports.PEAK_METHOD_FOUR_WEEK_ONE_PEAK = "four_week_one_peak";
 exports.PEAK_METHOD_NINETY_DAY_TOP2_DAILY = "ninety_day_top2_daily";
 /**
  * 랭킹 항속 산출식 버전 — 변경 시 rollup·ranking_aggregates·cache 전면 재계산.
- * v12: 4주(28일) 롤링 창·rollup doc personal_speed_28d·일 버킷 우선(183일 제거).
+ * v13: 90일 롤링 창·rollup doc personal_speed_28d·일 버킷 우선(183일 제거).
  * v11: 대시보드 로그 루트·max_60min_watts.
  */
-exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 12;
+exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION = 13;
 /** 사전집계 payload.peakDataSource — 구 rollup/캐시와 구분 */
 exports.PERSONAL_SPEED_PEAK_DATA_SOURCE = "dashboard_logs_route_v11";
 /** useDashboardData·getUserTrainingLogs 와 동일 상한 */
@@ -944,7 +944,7 @@ function personalSpeedRollupSpeedSynced(rollup, userData) {
 
 function personalSpeedRollupNeedsInvalidate(rollup, startStr, endStr, userData) {
   if (!rollup) return false;
-  if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return false;
+  if (rollup.windowStart !== startStr || rollup.windowEnd !== endStr) return true;
   if (Number(rollup.rollupLogicVersion) < exports.PERSONAL_SPEED_ROLLUP_LOGIC_VERSION) return true;
   if (rollup.peakSource !== exports.PERSONAL_SPEED_PEAK_SOURCE_MAX60) return true;
   if (personalSpeedRollupIsFtpDerived(rollup, userData)) return true;
@@ -1003,7 +1003,7 @@ async function writePersonalSpeed6mRollupDoc(db, userId, userData, startStr, end
 }
 
 /**
- * 4주(28일) 창: ranking_day_totals 일 버킷만 읽어 peak60·항속(km/h) 산출 (로그 스캔 없음).
+ * 90일 창: ranking_day_totals 일 버킷만 읽어 peak60·항속(km/h) 산출 (로그 스캔 없음).
  * ensureMissingDays=true일 때만 누락 일자 버킷을 로그로 채움(수동 백필용).
  */
 async function rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, startStr, endStr, opts) {
@@ -1034,7 +1034,7 @@ async function rebuildPersonalSpeed6mRollupFromBuckets(db, userId, userData, sta
  * 로그→일 버킷 반영 직후: 증분 peak 갱신(대부분) / peak 하락 시에만 버킷 재스캔.
  */
 async function touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, dayPayload) {
-  const { startStr, endStr } = getRolling28DaysRangeSeoul();
+  const { startStr, endStr } = getRolling90DaysRangeSeoul();
   if (!ymd || ymd < startStr || ymd > endStr) {
     return;
   }
