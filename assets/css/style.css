@@ -10299,11 +10299,15 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
     line-height: 1.45;
   }
 }
-/* RUN 분석: 4탭 — fTP 예측 블록과 동일 좌우 폭 · 동일 너비 */
+/* CYCLE·RUN 대시보드 4탭 — STELVIO 헥사곤·콘텐츠 카드와 동일 좌우 폭 · 균등 4열 */
+#run-dashboard-container .stelvio-detail-tabs,
+#performance-dashboard-container .stelvio-detail-tabs,
 #run-dashboard-container .DashboardDetailTabs--run .stelvio-run-detail-tabs {
   width: 100%;
   max-width: 100%;
 }
+#run-dashboard-container .stelvio-detail-tab-btn,
+#performance-dashboard-container .stelvio-detail-tab-btn,
 #run-dashboard-container .DashboardDetailTabs--run .stelvio-run-detail-tab-btn {
   display: flex;
   align-items: center;
