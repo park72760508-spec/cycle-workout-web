@@ -176,6 +176,7 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
   var unsubGroupByGid = Object.create(null);
   var unsubMemberByGid = Object.create(null);
   var approvedListUnsub = null;
+  var emitTimer = null;
 
   function sortedList() {
     return Object.keys(metaByGid)
@@ -197,6 +198,14 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
 
   function emit() {
     onUpdate(sortedList());
+  }
+
+  function emitDebounced() {
+    if (emitTimer) clearTimeout(emitTimer);
+    emitTimer = setTimeout(function () {
+      emitTimer = null;
+      emit();
+    }, 220);
   }
 
   function unsubGroupDoc(gid) {
@@ -227,7 +236,7 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
       if (!snap.exists()) {
         unsubGroupDoc(gid);
         unsubMemberSnap(gid);
-        emit();
+        emitDebounced();
         return;
       }
       var gd = snap.data() || {};
@@ -235,7 +244,7 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
       if (st !== GROUP_STATUS.APPROVED) {
         unsubGroupDoc(gid);
         delete metaByGid[gid];
-        emit();
+        emitDebounced();
         return;
       }
       var rnRaw = gd.rankingNotice;
@@ -263,7 +272,7 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
         isPublic: gd.isPublic !== false,
         rankingNotice: rankingNotice
       };
-      emit();
+      emitDebounced();
     });
   }
 
@@ -275,7 +284,7 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
         subGroupDoc(gid);
       } else {
         unsubGroupDoc(gid);
-        emit();
+        emitDebounced();
       }
     });
   }
@@ -302,10 +311,14 @@ export function subscribeMyRidingGroupsAsMember(db, uid, onUpdate) {
     Object.keys(approvedIds).forEach(function (gidOne) {
       attachMembershipListener(gidOne);
     });
-    emit();
+    emitDebounced();
   });
 
   return function () {
+    if (emitTimer) {
+      clearTimeout(emitTimer);
+      emitTimer = null;
+    }
     if (approvedListUnsub) {
       try {
         approvedListUnsub();
