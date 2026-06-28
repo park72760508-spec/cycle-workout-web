@@ -15195,7 +15195,7 @@
         var effSpdPeriod =
           typeof stelvioResolveRankingBoardPeriod === 'function'
             ? stelvioResolveRankingBoardPeriod('personal_speed', basePeriod)
-            : 'rolling28';
+            : 'rolling90';
 
         var tasks = [stelvioRankProfileFetchPayload(basePeriod, 'gc', gSel)];
         for (var di = 0; di < STELVIO_RANK_PROFILE_PEAK_DURS.length; di++) {
@@ -15690,8 +15690,8 @@
     function stelvioIsPersonalSpeedRanking() {
       return stelvioRankingState.duration === 'personal_speed';
     }
-    /** 항속 산식·필드 변경 시 bump — 로컬/SWR 캐시 무효화 (v12: 랭킹 독주 6개월 덮어쓰기 제거) */
-    var STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER = 12;
+    /** 항속 산식·필드 변경 시 bump — 로컬/SWR 캐시 무효화 (v13: 독주 90일 창) */
+    var STELVIO_PERSONAL_SPEED_LOGIC_CACHE_VER = 13;
     function stelvioPersonalSpeedBoardPayloadStale(data) {
       if (!data || !data.byCategory) return true;
       var psVer = Number(data.personalSpeedLogicVersion);
@@ -15746,7 +15746,7 @@
       if (stelvioIsRollingWindowDurationRanking() || stelvioIsGcRankingMode() || stelvioIsGroupDistanceRanking()) {
         if (stelvioIsGroupDistanceRanking()) {
           if (stelvioGroupTabMetric === 'tss') label.textContent = '주간';
-          else if (stelvioGroupTabMetric === 'personal_speed') label.textContent = '최근 4주';
+          else if (stelvioGroupTabMetric === 'personal_speed') label.textContent = '최근 90일';
           else if (stelvioGroupTabMetric === 'personal_dist') label.textContent = '최근 30일';
           else label.textContent = '월간';
         } else if (stelvioIsTssRankingMode()) {
@@ -15756,6 +15756,8 @@
           }
         } else if (stelvioIsKmDistanceRanking()) {
           label.textContent = '최근 30일';
+        } else if (stelvioIsPersonalSpeedRanking()) {
+          label.textContent = '최근 90일';
         } else if (stelvioIsGcRankingMode()) {
           label.textContent = '최근 90일';
         } else {
@@ -17622,7 +17624,7 @@
 
     function stelvioResolveRankingBoardPeriod(duration, period) {
       if (duration === 'tss') return 'weekly';
-      if (duration === 'personal_speed') return 'rolling28';
+      if (duration === 'personal_speed') return 'rolling90';
       if (duration === 'personal_dist' || duration === 'group_dist') return 'rolling30';
       if (period === 'yearly') return 'monthly';
       return period || (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) || 'monthly';
@@ -20665,7 +20667,7 @@
       return data;
     }
 
-    /** 독주: 서버 4주(28일) 집계 speedKmh 즉시 표시 — 6개월 로그 비동기 덮어쓰기 없음 */
+    /** 독주: 서버 90일 집계 speedKmh 즉시 표시 — 6개월 로그 비동기 덮어쓰기 없음 */
     function stelvioApplyPersonalSpeedInstantThenAlignViewer(data, myGen, uid, applyOpts) {
       applyOpts = applyOpts || {};
       var working = stelvioApplyPersonalSpeedPayloadSyncPatches(data);
@@ -21068,9 +21070,9 @@
         var hintEl = document.getElementById('stelvioRankingRefreshHint');
         if (hintEl) {
           hintEl.textContent = data.approximate
-            ? '4주(28일) 독주 집계 준비 중입니다. 임시로 월간 60분 피크 기준 순위를 표시합니다.'
+            ? '90일 독주 집계 준비 중입니다. 임시로 월간 60분 피크 기준 순위를 표시합니다.'
             : data.pendingAggregate
-              ? '4주 독주 순위 집계가 아직 없습니다. 매일 새벽(02:50~04:00) 집계 후 표시됩니다.'
+              ? '90일 독주 순위 집계가 아직 없습니다. 매일 새벽(02:50~04:00) 집계 후 표시됩니다.'
               : '집계 갱신 대기 중입니다. 표시된 순위는 최근 집계 결과입니다.';
         }
       } else if (data.durationType === 'gc' && typeof stelvioSetGcRankingRefreshHintFromPayload === 'function') {
@@ -21231,7 +21233,7 @@
       var lcKey = stelvioPeakRankingLcKey(swrKey);
       var urlFast = stelvioBuildRankingBoardFetchUrl(cacheKeyStr, false, needsRankMv);
       var urlRankMv = stelvioBuildRankingBoardFetchUrl(cacheKeyStr, true, needsRankMv);
-      /* 항속(4주): 사전 집계 miss 시 버킷·rollup 경로 — 구 6개월 대비 경량 */
+      /* 항속(90일): 사전 집계 miss 시 버킷·rollup 경로 — 구 6개월 대비 경량 */
       var fetchTimeoutMs = STELVIO_RANKING_FETCH_TIMEOUT_MS;
 
       function saveFreshPeakData(data) {
@@ -23315,7 +23317,7 @@
               : '전체 ' + globalRank + '위(' + spdP + ' km/h)입니다.';
         }
         var spdFootnote =
-          '<span class="stelvio-hero-speed-footnote">* 최근 4주(28일) 60분 피크 파워 기준 항속(km/h) 산출</span>';
+          '<span class="stelvio-hero-speed-footnote">* 최근 90일 60분 피크 파워 기준 항속(km/h) 산출</span>';
         msg = spdMain + '\n' + spdFootnote;
       } else if (stelvioIsTssRankingMode()) {
         var tssVal = (cu.totalTss != null ? Number(cu.totalTss) : 0).toFixed(1);
