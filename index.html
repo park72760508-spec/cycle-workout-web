@@ -13259,6 +13259,10 @@
     /** 랭킹 「그룹」탭: 내 소모임 목록 구독 */
     var stelvioMyGroupsRankUnsub = null;
     var stelvioMyGroupsRankDeferredAttach = false;
+    /** Firestore 멤버십 스냅샷 1회 이상 반영됨(초기 빈 emit·구독 대기와 구분) */
+    var stelvioMyGroupsRankListReady = false;
+    var stelvioMyGroupsRankAttachGen = 0;
+    var stelvioMyGroupsRankSettleTimer = null;
     var stelvioLastMyGroupsFireRows = [];
     var stelvioGroupTabExpandedId = null;
     var stelvioGroupTabCachedMembers = [];
@@ -15496,6 +15500,12 @@
           stelvioMyGroupsRankUnsub();
         } catch (eCloseGrp) {}
         stelvioMyGroupsRankUnsub = null;
+      }
+      stelvioMyGroupsRankListReady = false;
+      stelvioMyGroupsRankAttachGen++;
+      if (stelvioMyGroupsRankSettleTimer) {
+        clearTimeout(stelvioMyGroupsRankSettleTimer);
+        stelvioMyGroupsRankSettleTimer = null;
       }
       stelvioRankingSocialBootstrapDoneAt = 0;
     }
@@ -22157,11 +22167,73 @@
           });
       }
     }
+    function stelvioScheduleMyGroupsRankListSettle(attachGen) {
+      if (stelvioMyGroupsRankSettleTimer) {
+        clearTimeout(stelvioMyGroupsRankSettleTimer);
+        stelvioMyGroupsRankSettleTimer = null;
+      }
+      stelvioMyGroupsRankSettleTimer = setTimeout(function () {
+        stelvioMyGroupsRankSettleTimer = null;
+        if (attachGen !== stelvioMyGroupsRankAttachGen) return;
+        stelvioMyGroupsRankListReady = true;
+        if (!stelvioIsGroupDistanceRanking()) return;
+        var beSettle = document.getElementById('stelvioRankingListBody');
+        if (beSettle && typeof stelvioRenderGroupTabRankingList === 'function') {
+          stelvioRenderGroupTabRankingList(beSettle);
+        }
+        if (typeof stelvioHideRankingBoardLoadingUiIfReady === 'function') {
+          stelvioHideRankingBoardLoadingUiIfReady();
+        }
+      }, 3200);
+    }
+    function stelvioOnMyGroupsFirestoreRows(rows, bodyElHint, attachGen) {
+      stelvioApplyMyGroupsCategoryEnrichment(rows, function (enrichedRows) {
+        if (attachGen !== stelvioMyGroupsRankAttachGen) return;
+        stelvioLastMyGroupsFireRows = enrichedRows && enrichedRows.length ? enrichedRows.slice() : [];
+        if (stelvioLastMyGroupsFireRows.length) {
+          stelvioMyGroupsRankListReady = true;
+          if (stelvioMyGroupsRankSettleTimer) {
+            clearTimeout(stelvioMyGroupsRankSettleTimer);
+            stelvioMyGroupsRankSettleTimer = null;
+          }
+        }
+        stelvioRefreshGroupContactSetFromFirestore().then(function () {
+          if (typeof stelvioRankingApplySocialStarUi === 'function') {
+            stelvioRankingApplySocialStarUi();
+          }
+        });
+        var be = document.getElementById('stelvioRankingListBody');
+        var keep = {};
+        var zi;
+        for (zi = 0; zi < stelvioLastMyGroupsFireRows.length; zi++) {
+          var r0 = stelvioLastMyGroupsFireRows[zi];
+          var id0 = r0 && (r0.groupId || r0.id) != null ? String(r0.groupId || r0.id) : '';
+          if (id0) keep[id0] = true;
+        }
+        if (stelvioGroupTabExpandedId != null && !keep[String(stelvioGroupTabExpandedId)]) {
+          stelvioGroupTabExpandedId = null;
+          stelvioGroupTabCachedMembers = [];
+          stelvioStopGroupTabMembersOnly();
+        }
+        if (!stelvioIsGroupDistanceRanking()) return;
+        if (!be && bodyElHint) be = bodyElHint;
+        if (be) stelvioRenderGroupTabRankingList(be);
+        if (typeof stelvioHideRankingBoardLoadingUiIfReady === 'function') {
+          stelvioHideRankingBoardLoadingUiIfReady();
+        }
+        refreshStelvioDistributionChartMounted();
+      });
+    }
     /** 나의 소모임 목록 Firestore 구독(탭 이탈 시 teardown) — 이미 연결되어 있으면 재구독하지 않음 */
     function stelvioEnsureMyGroupsFirestoreSubscription(bodyElHint) {
       /* forceContactSet 호출 시 그룹 탭 모드와 무관하게 구독 시작
        * (관심 필터 + 그룹멤버 별 표시를 위해 항상 구독이 필요) */
-      if (stelvioMyGroupsRankUnsub) return;
+      if (stelvioMyGroupsRankUnsub) {
+        if (bodyElHint && stelvioIsGroupDistanceRanking()) {
+          stelvioRenderGroupTabRankingList(bodyElHint);
+        }
+        return;
+      }
       var uid =
         (window.currentUser && window.currentUser.id) ||
         (function () {
@@ -22174,78 +22246,87 @@
         })();
       if (!uid) return;
       if (!window.firestoreV9) {
-        if (stelvioMyGroupsRankDeferredAttach) return;
-        stelvioMyGroupsRankDeferredAttach = true;
-        var retryAttach = function () {
-          stelvioMyGroupsRankDeferredAttach = false;
-          if (bodyElHint && !stelvioIsGroupDistanceRanking()) return;
-          stelvioEnsureMyGroupsFirestoreSubscription(bodyElHint);
-          if (bodyElHint && stelvioIsGroupDistanceRanking()) {
-            stelvioRenderGroupTabRankingList(bodyElHint);
+        if (!stelvioMyGroupsRankDeferredAttach) {
+          stelvioMyGroupsRankDeferredAttach = true;
+          var retryAttach = function () {
+            stelvioMyGroupsRankDeferredAttach = false;
+            stelvioEnsureMyGroupsFirestoreSubscription(bodyElHint);
+            if (bodyElHint && stelvioIsGroupDistanceRanking()) {
+              stelvioRenderGroupTabRankingList(bodyElHint);
+            }
+          };
+          if (typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
+            Promise.race([
+              window.ensureFirestoreV9ReadyForJournal(),
+              new Promise(function (resolve) {
+                setTimeout(resolve, 2500);
+              }),
+            ])
+              .then(retryAttach)
+              .catch(retryAttach);
+          } else {
+            setTimeout(retryAttach, 500);
           }
-        };
-        if (typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
-          Promise.race([
-            window.ensureFirestoreV9ReadyForJournal(),
-            new Promise(function (resolve) {
-              setTimeout(resolve, 2500);
-            }),
-          ])
-            .then(retryAttach)
-            .catch(retryAttach);
-        } else {
-          setTimeout(retryAttach, 500);
+        } else if (bodyElHint && stelvioIsGroupDistanceRanking()) {
+          stelvioRenderGroupTabRankingList(bodyElHint);
         }
         return;
       }
       stelvioMyGroupsRankDeferredAttach = false;
-      function svcAttach() {
-        var svcOk = !!(window.openRidingGroupService && typeof window.openRidingGroupService.subscribeMyRidingGroupsAsMember === 'function');
-        if (!svcOk) return;
+      stelvioMyGroupsRankAttachGen++;
+      var attachGen = stelvioMyGroupsRankAttachGen;
+      stelvioMyGroupsRankListReady = false;
+      stelvioScheduleMyGroupsRankListSettle(attachGen);
+      function svcAttach(retryCount) {
+        retryCount = retryCount == null ? 0 : Number(retryCount);
+        if (attachGen !== stelvioMyGroupsRankAttachGen || stelvioMyGroupsRankUnsub) return;
+        var svcOk = !!(
+          window.openRidingGroupService &&
+          typeof window.openRidingGroupService.subscribeMyRidingGroupsAsMember === 'function'
+        );
+        if (!svcOk) {
+          if (retryCount < 4) {
+            setTimeout(function () {
+              svcAttach(retryCount + 1);
+            }, 280 * (retryCount + 1));
+          }
+          return;
+        }
         try {
-          stelvioMyGroupsRankUnsub = window.openRidingGroupService.subscribeMyRidingGroupsAsMember(window.firestoreV9, uid, function (rows) {
-            stelvioApplyMyGroupsCategoryEnrichment(rows, function (enrichedRows) {
-            stelvioLastMyGroupsFireRows = enrichedRows && enrichedRows.length ? enrichedRows.slice() : [];
-            stelvioRefreshGroupContactSetFromFirestore().then(function () {
-              if (typeof stelvioRankingApplySocialStarUi === 'function') {
-                stelvioRankingApplySocialStarUi();
-              }
-            });
-            var be = document.getElementById('stelvioRankingListBody');
-            var keep = {};
-            var zi;
-            for (zi = 0; zi < stelvioLastMyGroupsFireRows.length; zi++) {
-              var r0 = stelvioLastMyGroupsFireRows[zi];
-              var id0 = r0 && (r0.groupId || r0.id) != null ? String(r0.groupId || r0.id) : '';
-              if (id0) keep[id0] = true;
+          stelvioMyGroupsRankUnsub = window.openRidingGroupService.subscribeMyRidingGroupsAsMember(
+            window.firestoreV9,
+            uid,
+            function (rows) {
+              stelvioOnMyGroupsFirestoreRows(rows, bodyElHint, attachGen);
             }
-            if (stelvioGroupTabExpandedId != null && !keep[String(stelvioGroupTabExpandedId)]) {
-              stelvioGroupTabExpandedId = null;
-              stelvioGroupTabCachedMembers = [];
-              stelvioStopGroupTabMembersOnly();
-            }
-            if (!stelvioIsGroupDistanceRanking()) return;
-            if (!be && bodyElHint) be = bodyElHint;
-            if (be) stelvioRenderGroupTabRankingList(be);
-            if (typeof stelvioHideRankingBoardLoadingUiIfReady === 'function') {
-              stelvioHideRankingBoardLoadingUiIfReady();
-            }
-            refreshStelvioDistributionChartMounted();
-            });
-          });
+          );
         } catch (eSb) {
           console.warn('[StelvioRanking] 나의 소모임 구독 오류:', eSb);
+          stelvioMyGroupsRankUnsub = null;
+          if (retryCount < 2) {
+            setTimeout(function () {
+              svcAttach(retryCount + 1);
+            }, 400);
+          }
         }
       }
       if (window.openRidingGroupService && typeof window.openRidingGroupService.subscribeMyRidingGroupsAsMember === 'function') {
-        svcAttach();
+        svcAttach(0);
       } else {
         import('./assets/js/openRiding/openRidingGroupService.js')
           .then(function () {
-            svcAttach();
+            svcAttach(0);
           })
           .catch(function (eIm) {
             console.warn('[StelvioRanking] openRidingGroupService 로드 실패:', eIm);
+            setTimeout(function () {
+              if (attachGen !== stelvioMyGroupsRankAttachGen || stelvioMyGroupsRankUnsub) return;
+              import('./assets/js/openRiding/openRidingGroupService.js')
+                .then(function () {
+                  svcAttach(0);
+                })
+                .catch(function () {});
+            }, 600);
           });
       }
     }
@@ -22651,11 +22732,6 @@
     function stelvioRenderGroupTabRankingList(bodyEl) {
       if (!bodyEl) return;
       var groupMetricLabelForMsg = stelvioGroupTabCurrentMetricLabel();
-      if (!stelvioRankingByCategory) {
-        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">' + groupMetricLabelForMsg + ' 랭킹 불러오는 중…</p>';
-        if (typeof stelvioHideRankingBoardLoadingUiIfReady === 'function') stelvioHideRankingBoardLoadingUiIfReady();
-        return;
-      }
       var uidV =
         (window.currentUser && window.currentUser.id) ||
         (function () {
@@ -22673,7 +22749,7 @@
       }
       var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
       var grpRows = stelvioFilterClubTabMyGroups(stelvioLastMyGroupsFireRows || []);
-      if (!grpRows.length && !stelvioMyGroupsRankUnsub) {
+      if (!grpRows.length && (!stelvioMyGroupsRankUnsub || !stelvioMyGroupsRankListReady)) {
         bodyEl.innerHTML = '<p class="stelvio-ranking-empty">목록 불러오는 중…</p>';
         if (typeof stelvioHideRankingBoardLoadingUiIfReady === 'function') stelvioHideRankingBoardLoadingUiIfReady();
         return;
@@ -23451,9 +23527,7 @@
         var bodyElG2 = document.getElementById('stelvioRankingListBody');
         stelvioSyncRankingListHeaderUi();
         if (bodyElG2) stelvioEnsureMyGroupsFirestoreSubscription(bodyElG2);
-        if (!stelvioRankingByCategory && bodyElG2) {
-          bodyElG2.innerHTML = '<p class="stelvio-ranking-empty">' + stelvioGroupTabCurrentMetricLabel() + ' 랭킹 불러오는 중…</p>';
-        } else if (bodyElG2) {
+        if (bodyElG2) {
           stelvioRenderGroupTabRankingList(bodyElG2);
           if (
             stelvioGroupTabExpandedId &&
