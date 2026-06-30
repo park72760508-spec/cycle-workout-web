@@ -18,6 +18,8 @@ let cache = {
   whitelistUids: [],
   /** Supabase Read 기본: parity 불일치 시 Firebase 전체 집계 폴백 금지(트래픽 폭주 방지) */
   parityFallbackToFirebase: false,
+  /** HTTP Read 경로에서 Firebase ranking_aggregates parity 조회 — 기본 OFF(야간 감사만) */
+  parityCheckOnRead: false,
   loadedAt: 0,
 };
 
@@ -75,6 +77,7 @@ async function refreshRankingReadConfig(admin, force = false) {
   let useSupabaseLogsRead = false;
   let whitelistUids = [];
   let parityFallbackToFirebase = false;
+  let parityCheckOnRead = false;
 
   const envCfg = loadFromEnv();
   if (process.env.USE_SUPABASE_GLOBAL != null && String(process.env.USE_SUPABASE_GLOBAL).trim() !== "") {
@@ -107,6 +110,9 @@ async function refreshRankingReadConfig(admin, force = false) {
         } else if (useSupabaseGlobal) {
           parityFallbackToFirebase = false;
         }
+        if (d.parityCheckOnRead != null) {
+          parityCheckOnRead = parseBool(d.parityCheckOnRead);
+        }
       }
     } catch (err) {
       console.warn("[rankingReadConfig] Firestore load failed:", err.message);
@@ -117,6 +123,11 @@ async function refreshRankingReadConfig(admin, force = false) {
     parityFallbackToFirebase = true;
   } else if (process.env.RANKING_PARITY_FALLBACK === "false") {
     parityFallbackToFirebase = false;
+  }
+  if (process.env.RANKING_PARITY_CHECK_ON_READ === "true") {
+    parityCheckOnRead = true;
+  } else if (process.env.RANKING_PARITY_CHECK_ON_READ === "false") {
+    parityCheckOnRead = false;
   }
 
   /** Supabase 전용 Read(cutover) 시 Firestore parity=true 여도 Firebase 대량 폴백·500 방지 */
@@ -133,6 +144,7 @@ async function refreshRankingReadConfig(admin, force = false) {
     useSupabaseLogsRead,
     whitelistUids,
     parityFallbackToFirebase,
+    parityCheckOnRead,
     loadedAt: now,
   };
   return getRankingReadConfig();
@@ -145,6 +157,8 @@ function getRankingReadConfig() {
     whitelistUids: cache.whitelistUids.slice(),
     /** true: 긴급 Canary 시에만 — 기본 false(Supabase Read 시 Firebase ranking_aggregates·집계 스캔 금지) */
     parityFallbackToFirebase: cache.parityFallbackToFirebase === true,
+    /** true: HTTP Read마다 Firebase parity 조회 — 기본 false(야간 scheduledRankingParityAudit 전용) */
+    parityCheckOnRead: cache.parityCheckOnRead === true,
   };
 }
 

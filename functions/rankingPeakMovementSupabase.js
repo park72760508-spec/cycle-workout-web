@@ -307,8 +307,12 @@ function mergePeakRankNorms(supabaseNorm, firestoreNorm, todayYmd) {
 async function readPeakRankNormForHydrate(admin, historyKey, todayYmd) {
   const today = todayYmd || peakMovement.seoulTodayYmd();
   const sb = await readPeakRankSnapshotSupabase(historyKey);
+  if (prevDayRanksPopulated(sb) && !prevDayBaselineLooksCorrupt(sb)) {
+    return sb;
+  }
   let fs = peakMovement.normalizePeakRankHistoryDoc(null);
-  if (admin) {
+  const rankingReadConfig = require("./rankingReadConfig");
+  if (admin && rankingReadConfig.safeIsFirebaseRankingReadAllowed()) {
     fs = await readPeakRankHistoryFirestore(admin, historyKey);
   }
   let merged = mergePeakRankNorms(sb, fs, today);
@@ -317,7 +321,7 @@ async function readPeakRankNormForHydrate(admin, historyKey, todayYmd) {
     if (legacyKey) {
       const legacySb = await readPeakRankSnapshotSupabase(legacyKey);
       let legacyFs = peakMovement.normalizePeakRankHistoryDoc(null);
-      if (admin) {
+      if (admin && rankingReadConfig.safeIsFirebaseRankingReadAllowed()) {
         legacyFs = await readPeakRankHistoryFirestore(admin, legacyKey);
       }
       const legacyNorm = mergePeakRankNorms(legacySb, legacyFs, today);
@@ -410,28 +414,27 @@ async function ensurePrevDayBaselineForTssWeekly(admin, prevNorm, historyKey, to
   }
 
   if (admin) {
-    const fsNorm = await readPeakRankHistoryFirestore(admin, historyKey);
-    const merged = mergePeakRankNorms(prevNorm, fsNorm, today);
-    if (prevDayRanksPopulated(merged) && !prevDayBaselineLooksCorrupt(merged)) return merged;
-  }
-
-  if (admin) {
-    const aggPrevDay = await buildPrevDayRanksFromFirestoreAggregate(admin, historyKey, today);
-    if (aggPrevDay) {
-      return {
-        ...prevNorm,
-        prevDayRanksByCategory: aggPrevDay,
-        asOfSeoul: prevNorm.asOfSeoul || today,
-      };
-    }
-  }
-
-  if (admin) {
     const sbPrevDay = await buildPrevDayRanksFromSupabaseWeeklyTss(admin, historyKey, today);
     if (sbPrevDay) {
       return {
         ...prevNorm,
         prevDayRanksByCategory: sbPrevDay,
+        asOfSeoul: prevNorm.asOfSeoul || today,
+      };
+    }
+  }
+
+  const rankingReadConfig = require("./rankingReadConfig");
+  if (admin && rankingReadConfig.safeIsFirebaseRankingReadAllowed()) {
+    const fsNorm = await readPeakRankHistoryFirestore(admin, historyKey);
+    const merged = mergePeakRankNorms(prevNorm, fsNorm, today);
+    if (prevDayRanksPopulated(merged) && !prevDayBaselineLooksCorrupt(merged)) return merged;
+
+    const aggPrevDay = await buildPrevDayRanksFromFirestoreAggregate(admin, historyKey, today);
+    if (aggPrevDay) {
+      return {
+        ...prevNorm,
+        prevDayRanksByCategory: aggPrevDay,
         asOfSeoul: prevNorm.asOfSeoul || today,
       };
     }

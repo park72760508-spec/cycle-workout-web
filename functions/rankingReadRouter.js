@@ -268,7 +268,7 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
 
     const cfg = rankingReadConfig.getRankingReadConfig();
     let parityReport = { ok: true, reason: "parity_skip_gc" };
-    if (durationType !== "gc") {
+    if (durationType !== "gc" && cfg.parityCheckOnRead === true) {
       /* 비-GC M/F: Supabase는 all 통합 뷰만 제공 → parity·history도 all 집계와 비교 */
       const parityGender =
         payload.supabaseServedUnifiedAllView &&
@@ -316,6 +316,8 @@ async function tryBuildPeakPowerRankingFromSupabase(admin, query, deps) {
           mismatchCount: parityReport.mismatchCount,
         });
       }
+    } else if (durationType !== "gc") {
+      parityReport = { ok: true, reason: "parity_skip_on_read" };
     }
 
     attachCurrentUserToPayload(payload, uid, deps.buildMotivationMessage);
@@ -403,7 +405,7 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
     const entries = tssPayload.entries || [];
 
     const top10 = entries.slice(0, 10).map((e, i) => ({
-      rank: i + 1,
+      rank: e.rank != null && isFinite(Number(e.rank)) ? Math.floor(Number(e.rank)) : i + 1,
       userId: e.userId,
       name: e.name,
       totalTss: e.totalTss,
@@ -451,6 +453,7 @@ async function tryBuildWeeklyRankingFromSupabase(admin, query, deps) {
       rankMovementPrevDayByCategory: tssPayload.rankMovementPrevDayByCategory,
       rankMovementCompareBaselineByCategory: tssPayload.rankMovementCompareBaselineByCategory,
       rankMovementAsOfSeoul: tssPayload.rankMovementAsOfSeoul,
+      rankMovementHydrated: tssPayload.rankMovementHydrated === true,
       currentWeekEmpty: !usePrevWeek && entries.length === 0,
       prevWeekFallback: !usePrevWeek && tssPayload.prevWeekFallback === true,
       displayStartStr: tssPayload.displayStartStr,
