@@ -11232,6 +11232,9 @@
           await renderTop10(lcEntry.data, true);
           (async function bgTop10Revalidate() {
             try {
+              /* 비용 절감: 모달 재오픈마다 함수 호출하지 않도록 최소 간격 쓰로틀 */
+              if (Date.now() - stelvioTop10BgLastAt < STELVIO_RANKING_BG_MIN_INTERVAL_MS) return;
+              stelvioTop10BgLastAt = Date.now();
               var bg = await fetchWeeklyFromServer('current');
               if (!bg.success || !weeklyTop10PayloadMatchesWeek(bg, 0) || !Array.isArray(bg.ranking)) return;
               if (bg.ranking.length > 0) {
@@ -11521,6 +11524,12 @@
     /** 백그라운드 재검증·등락 보강(rankMv) — UI 차단 없음 */
     var STELVIO_RANKING_BG_FETCH_TIMEOUT_MS = 90000;
     var stelvioRankingBgFetchInFlight = {};
+    /** 비용 절감: 동일 보드 키의 백그라운드 재검증(getPeakPowerRanking) 최소 호출 간격.
+     *  탭 전환·재진입마다 함수를 다시 때리지 않도록 키별 쓰로틀. 실시간 갱신 신호는 force로 우회. */
+    var stelvioRankingBgLastAt = Object.create(null);
+    var STELVIO_RANKING_BG_MIN_INTERVAL_MS = 90000;
+    /** TOP10 모달: 모달 오픈마다 getWeeklyRanking 재검증하지 않도록 최소 간격(실시간 신호는 별도 경로) */
+    var stelvioTop10BgLastAt = 0;
     /** 마지막 페인트 탭 참조(visibilitychange·롤오버). 별도 DB 없음 — 신선도는 IndexedDB expiresAt */
     var stelvioRankingSwrCache = { key: '', body: null, ts: 0, expiresAt: 0 };
     /** GC 탭: 집계 공백·0시 API miss 시 마지막 유효 순위 payload 유지 */
@@ -21813,9 +21822,17 @@
        * 백그라운드 재검증 — UI 차단 없음, 실패해도 에러 메시지 없음.
        * @param {boolean} withRankMv — true면 등락 보강(느릴 수 있음)
        */
-      async function bgRevalidate(withRankMv) {
+      async function bgRevalidate(withRankMv, force) {
         var bgKey = swrKey + (withRankMv ? '|mv' : '|fast');
         if (stelvioRankingBgFetchInFlight[bgKey]) return;
+        /* 비용 절감: 최근에 재검증했으면 스킵 (실시간 신호 force=true 는 우회) */
+        if (
+          !force &&
+          Date.now() - (stelvioRankingBgLastAt[bgKey] || 0) < STELVIO_RANKING_BG_MIN_INTERVAL_MS
+        ) {
+          return;
+        }
+        stelvioRankingBgLastAt[bgKey] = Date.now();
         stelvioRankingBgFetchInFlight[bgKey] = true;
         var fetchUrl = withRankMv ? urlRankMv : urlFast;
         try {
@@ -21842,23 +21859,25 @@
         }
       }
 
-      function scheduleBgRefresh(includeRankMv) {
+      function scheduleBgRefresh(includeRankMv, force) {
         if (includeRankMv && needsRankMv) {
-          bgRevalidate(true).catch(function () {});
+          bgRevalidate(true, force).catch(function () {});
         } else {
-          bgRevalidate(false).catch(function () {});
+          bgRevalidate(false, force).catch(function () {});
         }
       }
       window.__stelvioRankingLiveTssRefresh = function () {
         if (stelvioGetRankingReadSourceSync() !== 'supabase') return;
         if (typeof stelvioIsTssRankingMode === 'function' && stelvioIsTssRankingMode()) {
-          scheduleBgRefresh(true);
+          /* 실시간 갱신 신호 — 쓰로틀 우회 */
+          scheduleBgRefresh(true, true);
         }
       };
       window.__stelvioRankingLiveDistRefresh = function () {
         if (stelvioGetRankingReadSourceSync() !== 'supabase') return;
         if (typeof stelvioIsPersonalDistanceRanking === 'function' && stelvioIsPersonalDistanceRanking()) {
-          scheduleBgRefresh(true);
+          /* 실시간 갱신 신호 — 쓰로틀 우회 */
+          scheduleBgRefresh(true, true);
         }
       };
       function scheduleBgRefreshIfNeeded(includeRankMv) {
