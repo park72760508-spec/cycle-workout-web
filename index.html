@@ -11041,9 +11041,9 @@
         var rankMedalSrc = ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
         var isAdmin = typeof stelvioRankingLoginIsAdmin === 'function' && stelvioRankingLoginIsAdmin();
         var html = '';
-        function weeklyRankChangeTightHtml(row) {
+        function weeklyRankChangeTightHtml(row, boardRankOpt) {
           if (typeof stelvioWeeklyTop10RankChangeBadgeHtml === 'function') {
-            return stelvioWeeklyTop10RankChangeBadgeHtml(row);
+            return stelvioWeeklyTop10RankChangeBadgeHtml(row, boardRankOpt);
           }
           if (typeof stelvioServerRankChangeBadgeHtml !== 'function') return '';
           var h = stelvioServerRankChangeBadgeHtml(row && row.rankChange, row && row.previousBoardRank);
@@ -11086,7 +11086,7 @@
           html += '<div class="weekly-rank-item' + (isSelf ? ' weekly-rank-item-self' : '') + '"' + (isSelf ? ' id="weeklyTop10MyRankRow"' : '') + '>';
           if (rank <= 3) html += '<span class="weekly-rank-medal"><img src="' + rankMedalSrc[rank - 1] + '" alt="" width="20" height="20" decoding="async" /></span>';
           html += '<span class="weekly-rank-position">' + rank + '위</span>';
-          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(profUrl, { userId: uid2, overlayName: displayText }) + '<span class="weekly-rank-name-text" title="' + rawName + '"><span class="weekly-rank-name-label">' + displayText + '</span><span class="weekly-rank-change-slot">' + weeklyRankChangeTightHtml(item) + badgeHtml + '</span></span></span>';
+          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(profUrl, { userId: uid2, overlayName: displayText }) + '<span class="weekly-rank-name-text" title="' + rawName + '"><span class="weekly-rank-name-label">' + displayText + '</span><span class="weekly-rank-change-slot">' + weeklyRankChangeTightHtml(item, rank) + badgeHtml + '</span></span></span>';
           html += '<span class="weekly-rank-tss">' + tssStr + '</span>';
           html += '</div>';
         });
@@ -11106,7 +11106,7 @@
           } else { mrDisplayText = mrRawName; }
           html += '<div class="weekly-rank-item weekly-rank-item-self" id="weeklyTop10MyRankRow">';
           html += '<span class="weekly-rank-position">' + mr.rank + '위</span>';
-          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(mrProfUrl, { userId: mrUid, overlayName: mrDisplayText }) + '<span class="weekly-rank-name-text" title="' + mrRawName + '"><span class="weekly-rank-name-label">' + mrDisplayText + '</span><span class="weekly-rank-change-slot">' + weeklyRankChangeTightHtml(mr) + mrBadgeHtml + '</span></span></span>';
+          html += '<span class="weekly-rank-name">' + stelvioRankingAvatarHtml(mrProfUrl, { userId: mrUid, overlayName: mrDisplayText }) + '<span class="weekly-rank-name-text" title="' + mrRawName + '"><span class="weekly-rank-name-label">' + mrDisplayText + '</span><span class="weekly-rank-change-slot">' + weeklyRankChangeTightHtml(mr, mr.rank) + mrBadgeHtml + '</span></span></span>';
           html += '<span class="weekly-rank-tss">' + mrTssStr + '</span>';
           html += '</div>';
         }
@@ -17312,17 +17312,22 @@
       if (top10Data.myRank) applyRow(top10Data.myRank);
     }
 
-    function stelvioWeeklyTop10RankChangeBadgeHtml(row) {
+    function stelvioWeeklyTop10RankChangeBadgeHtml(row, boardRankOpt) {
       if (!row || typeof stelvioServerRankChangeBadgeHtml !== 'function') return '';
-      if (typeof stelvioNormalizeRankMovementOnRow === 'function') stelvioNormalizeRankMovementOnRow(row);
+      var boardRank =
+        boardRankOpt != null && isFinite(Number(boardRankOpt)) && Number(boardRankOpt) >= 1
+          ? Math.floor(Number(boardRankOpt))
+          : row.rank != null && isFinite(Number(row.rank)) && Number(row.rank) >= 1
+            ? Math.floor(Number(row.rank))
+            : null;
+      if (typeof stelvioNormalizeRankMovementOnRow === 'function') {
+        stelvioNormalizeRankMovementOnRow(row, boardRank);
+      }
       var rcVal = row.rankChange;
       var prVal = row.previousBoardRank;
       if (rcVal == null && prVal == null) return '';
-      if (prVal == null && rcVal != null && row.rank != null) {
-        var estimatedPrev = Math.floor(Number(row.rank)) + Math.round(Number(rcVal));
-        if (isFinite(estimatedPrev) && estimatedPrev >= 1) {
-          prVal = estimatedPrev;
-        }
+      if (prVal == null && rcVal != null && boardRank != null) {
+        prVal = stelvioEstimateRankMovementPreviousBoardRank(rcVal, boardRank);
       }
       var h = stelvioServerRankChangeBadgeHtml(rcVal, prVal);
       if (!h) return '';
@@ -18470,6 +18475,15 @@
     window.stelvioActivatePreRenderedRankingView = stelvioActivatePreRenderedRankingView;
     window.stelvioCleanupPreRenderedRankingViews = stelvioCleanupPreRenderedRankingViews;
     /** rankChange·boardRank·previousBoardRank — 부문 순위(categoryRank)와 일치할 때만 유지 */
+    function stelvioEstimateRankMovementPreviousBoardRank(rc, boardRank) {
+      if (rc == null || boardRank == null) return null;
+      var rcN = Math.round(Number(rc));
+      var currN = Math.floor(Number(boardRank));
+      if (!isFinite(rcN) || !isFinite(currN) || currN < 1) return null;
+      var prevN = currN + rcN;
+      return isFinite(prevN) && prevN >= 1 ? prevN : null;
+    }
+
     function stelvioNormalizeRankMovementOnRow(row, categoryRank) {
       if (!row) return;
       var curr =
@@ -18497,11 +18511,29 @@
         row.previousBoardRank = prev;
       }
       if (curr == null || curr < 1 || prev == null || prev < 1 || rc == null) {
+        if (rc != null && prev != null && prev >= 1) {
+          var impliedOnly = prev - rc;
+          if (impliedOnly >= 1) {
+            row.rankChange = rc;
+            row.previousBoardRank = prev;
+            row.rank = impliedOnly;
+            return;
+          }
+        }
         delete row.rankChange;
         delete row.previousBoardRank;
         return;
       }
       if (prev - rc !== curr) {
+        var impliedCurr = prev - rc;
+        if (impliedCurr >= 1 && row.rankChange != null && row.previousBoardRank != null) {
+          row.rankChange = rc;
+          row.previousBoardRank = prev;
+          if (curr !== impliedCurr) {
+            row.rank = impliedCurr;
+          }
+          return;
+        }
         row.rankChange = prev - curr;
         row.previousBoardRank = prev;
         rc = row.rankChange;
@@ -18769,26 +18801,42 @@
         (typeof stelvioIsTssRankingMode === 'function' && stelvioIsTssRankingMode());
       if (tssWeeklyScoped) {
         var listCatTss = listCategoryKey || 'Supremo';
-        var serverFirst = stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
-        if (serverFirst) return serverFirst;
-        var supRow =
+        var supRowTss =
           listCatTss !== 'Supremo' && typeof stelvioFindRankingRowForUser === 'function'
             ? stelvioFindRankingRowForUser('Supremo', item.userId)
             : null;
-        if (supRow && supRow.rankChange != null && supRow.previousBoardRank != null) {
-          return stelvioServerRankChangeBadgeHtml(supRow.rankChange, supRow.previousBoardRank);
+        var absRankTss =
+          item.rank != null && isFinite(Number(item.rank)) && Number(item.rank) >= 1
+            ? Math.floor(Number(item.rank))
+            : null;
+        if (absRankTss == null && supRowTss && supRowTss.rank != null) {
+          absRankTss = Math.floor(Number(supRowTss.rank));
+        }
+        var prTss = item.previousBoardRank;
+        var rcTss = item.rankChange;
+        if (prTss == null && rcTss != null && absRankTss != null) {
+          prTss = stelvioEstimateRankMovementPreviousBoardRank(rcTss, absRankTss);
+        }
+        var serverFirstTss = stelvioServerRankChangeBadgeHtml(rcTss, prTss);
+        if (serverFirstTss) return serverFirstTss;
+        if (supRowTss) {
+          var supPr = supRowTss.previousBoardRank;
+          var supRc = supRowTss.rankChange;
+          if (supPr == null && supRc != null && absRankTss != null) {
+            supPr = stelvioEstimateRankMovementPreviousBoardRank(supRc, absRankTss);
+          }
+          var supHtml = stelvioServerRankChangeBadgeHtml(supRc, supPr);
+          if (supHtml) return supHtml;
         }
         if (typeof stelvioNormalizeRankMovementOnRow === 'function') {
-          var absRank =
-            item.rank != null && isFinite(Number(item.rank)) && Number(item.rank) >= 1
-              ? Math.floor(Number(item.rank))
-              : null;
-          if (absRank == null && supRow && supRow.rank != null) {
-            absRank = Math.floor(Number(supRow.rank));
-          }
-          stelvioNormalizeRankMovementOnRow(item, absRank);
+          stelvioNormalizeRankMovementOnRow(item, absRankTss);
         }
-        return stelvioServerRankChangeBadgeHtml(item.rankChange, item.previousBoardRank);
+        prTss = item.previousBoardRank;
+        rcTss = item.rankChange;
+        if (prTss == null && rcTss != null && absRankTss != null) {
+          prTss = stelvioEstimateRankMovementPreviousBoardRank(rcTss, absRankTss);
+        }
+        return stelvioServerRankChangeBadgeHtml(rcTss, prTss);
       }
       var listCat = listCategoryKey || 'Supremo';
       var listCatRank =
@@ -20268,8 +20316,6 @@
           if (row.rankChange != null && row.previousBoardRank != null) continue;
           var pk = sm[String(row.userId)];
           if (!pk) continue;
-          var pkRc = Number(pk.rankChange);
-          if (pkRc === 0 && stelvioPeakRankSnapshotHasPrevDayBaseline(data)) continue;
           row.rankChange = pk.rankChange;
           row.previousBoardRank = pk.previousBoardRank;
         }
