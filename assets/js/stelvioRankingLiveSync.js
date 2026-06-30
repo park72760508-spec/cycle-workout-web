@@ -7,7 +7,7 @@
 
   var LIVE_META_KEY = 'ranking_metrics_live';
   var DEBOUNCE_MS = 1500;
-  var POLL_INTERVAL_MS = 20000;
+  var POLL_INTERVAL_MS = 12000;
   var BUILD_META_PUBLIC_URL =
     'https://us-central1-stelvio-ai.cloudfunctions.net/getRankingBuildMetaPublic';
 
