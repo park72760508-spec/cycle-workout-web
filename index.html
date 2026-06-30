@@ -19966,6 +19966,14 @@
           var resTss = await fetch(urlTss, { method: 'GET', mode: 'cors', cache: 'no-store' });
           var jsonTss = await resTss.json();
           if (jsonTss && jsonTss.success && jsonTss.byCategory && Array.isArray(jsonTss.byCategory.Supremo)) {
+            /* TOP10·TSS 탭이 동일 baseline(전일 주간 TSS Supremo 순위)을 쓰도록 메타데이터 전달 →
+               아래 stelvioApplyWeeklyTssRankMovementToTop10Data 재계산으로 상승/보합/하락 모두 채움 */
+            if (jsonTss.rankMovementPrevDayByCategory) {
+              top10Data.rankMovementPrevDayByCategory = jsonTss.rankMovementPrevDayByCategory;
+            }
+            if (jsonTss.rankMovementCompareBaselineByCategory) {
+              top10Data.rankMovementCompareBaselineByCategory = jsonTss.rankMovementCompareBaselineByCategory;
+            }
             var supRows = jsonTss.byCategory.Supremo;
             var byUid = Object.create(null);
             var si;
@@ -20030,6 +20038,39 @@
     async function stelvioEnsureWeeklyTop10RankMovement(top10Data) {
       if (!top10Data || !Array.isArray(top10Data.ranking) || !top10Data.ranking.length) return top10Data;
       if (top10Data.prevWeekFallback === true || top10Data._isPrevWeek === true) return top10Data;
+      /*
+       * 상승·보합 누락 修正(핵심):
+       * 서버 Supabase TOP10 응답은 baseline(전일 주간 TSS Supremo 순위) 메타데이터를 포함한다.
+       * 서버 per-row 등락은 일부 행(주로 하락)만 채워져 있을 수 있으므로, baseline 이 있으면
+       * 네트워크 없이 즉시 절대순위로 전체 재계산하여 상승/보합/하락을 모두 표시한다.
+       * (rankMovementHydrated=true 는 "한 행이라도 등락 존재"이므로 부분 데이터에도 true → 단독 신뢰 금지)
+       */
+      if (stelvioPayloadHasTssWeeklyRankMovementBaselines(top10Data)) {
+        var top10Snap0 = stelvioExtractRankMovementSnapFromTop10Data(top10Data);
+        top10Data = stelvioApplyWeeklyTssRankMovementToTop10Data(top10Data);
+        if (
+          typeof stelvioPayloadHasUsableRankMovementRows === 'function' &&
+          stelvioPayloadHasUsableRankMovementRows(top10Data.ranking)
+        ) {
+          top10Data._weeklyTop10ServerRankMv = true;
+          if (typeof stelvioPersistWeeklyTop10RankMovementCache === 'function') {
+            var uidTop10Base0 =
+              (window.currentUser && window.currentUser.id) ||
+              (function () {
+                try {
+                  var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+                  return u && u.id ? u.id : null;
+                } catch (eUid0) {
+                  return null;
+                }
+              })();
+            await stelvioPersistWeeklyTop10RankMovementCache(top10Data, uidTop10Base0);
+          }
+          return top10Data;
+        }
+        /* 재계산이 표시 가능한 등락을 만들지 못하면(극단적 baseline 불일치) 원본 서버값 복원 — 손실 방지 */
+        stelvioRestoreRankMovementOnTop10Data(top10Data, top10Snap0);
+      }
       if (
         top10Data.rankMovementHydrated === true &&
         typeof stelvioPayloadHasUsableRankMovementRows === 'function' &&
@@ -20040,6 +20081,34 @@
       var serverSnap = stelvioExtractRankMovementSnapFromTop10Data(top10Data);
       if (typeof stelvioFetchWeeklyTop10RankMovementMerge === 'function') {
         await stelvioFetchWeeklyTop10RankMovementMerge(top10Data);
+      }
+      /*
+       * 상승·보합 누락 修正: baseline(전일 주간 TSS Supremo 순위)이 확보되면,
+       * 서버가 일부 행만 채워준 per-row 등락을 그대로 신뢰하지 말고 TSS 탭과 동일하게
+       * 절대순위로 전체 재계산한다(상승/보합/하락 모두). baseline 에 없던 신규 진입자는
+       * 이전 순위가 없으므로 배지를 표시하지 않는다.
+       */
+      if (stelvioPayloadHasTssWeeklyRankMovementBaselines(top10Data)) {
+        var top10SnapMerge = stelvioExtractRankMovementSnapFromTop10Data(top10Data);
+        top10Data = stelvioApplyWeeklyTssRankMovementToTop10Data(top10Data);
+        if (stelvioPayloadHasUsableRankMovementRows(top10Data.ranking)) {
+          top10Data._weeklyTop10ServerRankMv = true;
+          if (typeof stelvioPersistWeeklyTop10RankMovementCache === 'function') {
+            var uidTop10Reco =
+              (window.currentUser && window.currentUser.id) ||
+              (function () {
+                try {
+                  var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+                  return u && u.id ? u.id : null;
+                } catch (eUidR) {
+                  return null;
+                }
+              })();
+            await stelvioPersistWeeklyTop10RankMovementCache(top10Data, uidTop10Reco);
+          }
+          return top10Data;
+        }
+        stelvioRestoreRankMovementOnTop10Data(top10Data, top10SnapMerge);
       }
       if (top10Data._weeklyTop10ServerRankMv === true || stelvioPayloadHasUsableRankMovementRows(top10Data.ranking)) {
         stelvioRestoreRankMovementOnTop10Data(top10Data, stelvioExtractRankMovementSnapFromTop10Data(top10Data));
@@ -20219,6 +20288,32 @@
       if (!stelvioIsTssWeeklyRankMovementScope(data, pipelineOpts)) return;
       if (!data || !data.byCategory) return;
       if (data.prevWeekFallback === true || data._isPrevWeek === true) return;
+      /*
+       * 상승·보합 누락 修正(핵심):
+       * 전일 baseline 이 있으면 서버가 일부 행만 채워준 per-row 등락을 그대로 신뢰하지 말고,
+       * 현재 표시 중인 라이브 보드 "전체"를 baseline 절대순위로 재계산한다.
+       * (서버 per-row 등락은 공식/집계 보드 기준이라, 라이브에서 새로 활동해 올라온 상승·보합
+       *  사용자가 누락되고 하락자만 남는 현상이 발생함. 재계산은 상승/보합/하락 모두 채운다.)
+       * baseline 에 없던 신규 진입자는 서버가 계산해 둔 값이 있으면 보존한다.
+       */
+      if (stelvioPayloadHasTssWeeklyRankMovementBaselines(data)) {
+        var serverMvSnapTss =
+          typeof stelvioExtractRankMovementFromPayload === 'function'
+            ? stelvioExtractRankMovementFromPayload(data)
+            : null;
+        stelvioRecomputeTssWeeklyAbsoluteRankMovement(data);
+        if (serverMvSnapTss && typeof stelvioRestoreRankMovementWhereMissing === 'function') {
+          stelvioRestoreRankMovementWhereMissing(data, serverMvSnapTss);
+          if (typeof stelvioPropagateTssWeeklySupremoRankMovement === 'function') {
+            stelvioPropagateTssWeeklySupremoRankMovement(data);
+          }
+          if (typeof stelvioSyncTssWeeklyMyRankFromSupremo === 'function') {
+            stelvioSyncTssWeeklyMyRankFromSupremo(data);
+          }
+        }
+        stelvioEnsurePeakPowerRankMovementOnPayload(data);
+        return;
+      }
       var supRowsEarly = data.byCategory.Supremo;
       if (
         (data.rankMovementHydrated === true || data._tssWeeklyServerRankMv === true) &&
@@ -20231,11 +20326,6 @@
         if (typeof stelvioSyncTssWeeklyMyRankFromSupremo === 'function') {
           stelvioSyncTssWeeklyMyRankFromSupremo(data);
         }
-        stelvioEnsurePeakPowerRankMovementOnPayload(data);
-        return;
-      }
-      if (stelvioPayloadHasTssWeeklyRankMovementBaselines(data)) {
-        stelvioRecomputeTssWeeklyAbsoluteRankMovement(data);
         stelvioEnsurePeakPowerRankMovementOnPayload(data);
         return;
       }
