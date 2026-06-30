@@ -5157,6 +5157,20 @@ exports.getWeeklyRanking = onRequest(
       else if (precomputed === false) rankBody.liveComputed = true;
       rankBody.readBackend = "firebase";
       rankBody.readSource = "firebase";
+      /* baseline 메타 동봉 → 클라이언트가 상승/보합/하락 전체 재계산.
+         (Firebase 경로도 Supabase 경로와 동일하게 등락 표시) */
+      const rmMeta = entries && entries._rankMovementMeta;
+      if (rmMeta) {
+        if (rmMeta.rankMovementPrevDayByCategory)
+          rankBody.rankMovementPrevDayByCategory = rmMeta.rankMovementPrevDayByCategory;
+        if (rmMeta.rankMovementCompareBaselineByCategory)
+          rankBody.rankMovementCompareBaselineByCategory =
+            rmMeta.rankMovementCompareBaselineByCategory;
+        if (rmMeta.rankMovementSource) rankBody.rankMovementSource = rmMeta.rankMovementSource;
+        if (rmMeta.rankMovementAsOfSeoul)
+          rankBody.rankMovementAsOfSeoul = rmMeta.rankMovementAsOfSeoul;
+        rankBody.rankMovementHydrated = rmMeta.rankMovementHydrated === true;
+      }
       return res.status(200).json(rankBody);
     };
 
@@ -6938,7 +6952,11 @@ const PEAK_RANK_HISTORY_COL = "peak_rank_history";
 /** GC 헵타곤 cohort 와 동일: 부문별 보드 순위 기준 등락 (전체 Supremo 순위와 분리) */
 const PEAK_RANK_BOARD_CATEGORIES = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
 const peakRankMovementCore = require("./rankingPeakMovement");
-const { normalizePeakRankHistoryDoc, computePeakRankMovementFields } = peakRankMovementCore;
+const {
+  normalizePeakRankHistoryDoc,
+  computePeakRankMovementFields,
+  payloadHasRankMovement,
+} = peakRankMovementCore;
 
 function parseRankingAggregationBool(raw, fallback) {
   if (raw == null || raw === "") return fallback;
@@ -7208,17 +7226,25 @@ async function readPeakRankHistoryNorm(db, historyKey) {
  * HTTP 응답용 — peak_rank_history 읽기만 하고 행에 등락 주입(쓰기 없음).
  */
 async function hydratePeakRankMovementFromHistory(db, byCategory, historyKey) {
-  if (!db || !historyKey || !byCategory || typeof byCategory !== "object") return;
+  if (!db || !historyKey || !byCategory || typeof byCategory !== "object") return null;
   try {
     const route = await rankingReadConfig.shouldReadRankingFromSupabase(admin, null);
     if (route.route === "supabase") {
       const peakMovementSupabase = require("./rankingPeakMovementSupabase");
-      await peakMovementSupabase.hydratePeakRankMovementOnPayload(
-        { byCategory },
-        historyKey,
-        { admin, persistSnapshot: false }
-      );
-      return;
+      /* wrap.byCategory === byCategory(동일 참조) → 행 등락 주입 + baseline 메타를 wrap 에서 회수 */
+      const wrap = { byCategory };
+      await peakMovementSupabase.hydratePeakRankMovementOnPayload(wrap, historyKey, {
+        admin,
+        persistSnapshot: false,
+      });
+      return {
+        rankMovementPrevDayByCategory: wrap.rankMovementPrevDayByCategory || {},
+        rankMovementCompareBaselineByCategory: wrap.rankMovementCompareBaselineByCategory || {},
+        rankMovementSource: wrap.rankMovementSource,
+        rankMovementHistoryKey: wrap.rankMovementHistoryKey || historyKey,
+        rankMovementAsOfSeoul: wrap.rankMovementAsOfSeoul,
+        rankMovementHydrated: wrap.rankMovementHydrated === true,
+      };
     }
   } catch (eSbHydr) {
     console.warn(
@@ -7228,9 +7254,16 @@ async function hydratePeakRankMovementFromHistory(db, byCategory, historyKey) {
   }
   const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const prevNorm = await readPeakRankHistoryNorm(db, historyKey);
-  computePeakRankMovementFields(byCategory, prevNorm, todayYmd, {
+  const snap = computePeakRankMovementFields(byCategory, prevNorm, todayYmd, {
     tssWeeklyAbsolute: String(historyKey || "").startsWith("peak_tss_weekly_"),
   });
+  return {
+    rankMovementPrevDayByCategory: (snap && snap.newPrevDayRanksByCategory) || {},
+    rankMovementCompareBaselineByCategory: (snap && snap.compareBaselineByCategory) || {},
+    rankMovementHistoryKey: historyKey,
+    rankMovementAsOfSeoul: (snap && snap.asOfSeoul) || todayYmd,
+    rankMovementHydrated: payloadHasRankMovement({ byCategory }),
+  };
 }
 
 /** 주간 마일리지 TOP10 — peak_rank_history 기준 전날 마지막 순위 대비 등락 재계산 */
@@ -7253,7 +7286,23 @@ async function hydrateWeeklyRankingEntriesRankMovement(db, entries) {
     Infinito: [],
     Leggenda: [],
   };
-  await hydratePeakRankMovementFromHistory(db, byCategory, "peak_tss_weekly_all");
+  const rankMovementMeta = await hydratePeakRankMovementFromHistory(
+    db,
+    byCategory,
+    "peak_tss_weekly_all"
+  );
+  /* TOP10 응답에 baseline 메타 동봉 → 클라이언트가 전체(상승/보합/하락) 재계산 가능.
+     배열 참조에 비열거형 속성으로 부착(기존 호출부 영향 없음). */
+  try {
+    Object.defineProperty(supremo, "_rankMovementMeta", {
+      value: rankMovementMeta || null,
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    });
+  } catch (eDefMeta) {
+    supremo._rankMovementMeta = rankMovementMeta || null;
+  }
   return supremo;
 }
 
