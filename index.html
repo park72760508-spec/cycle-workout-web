@@ -19668,6 +19668,7 @@
           data.rankMovementCompareBaselineByCategory = json.rankMovementCompareBaselineByCategory;
         }
         if (json.rankMovementHydrated != null) data.rankMovementHydrated = json.rankMovementHydrated;
+        if (json.rankMovementHydrated != null) data.rankMovementHydrated = json.rankMovementHydrated;
         if (json.readBackend || json.readSource) {
           data.readBackend = json.readBackend || json.readSource;
           data.readSource = json.readSource || json.readBackend;
@@ -19862,6 +19863,13 @@
     async function stelvioEnsureWeeklyTop10RankMovement(top10Data) {
       if (!top10Data || !Array.isArray(top10Data.ranking) || !top10Data.ranking.length) return top10Data;
       if (top10Data.prevWeekFallback === true || top10Data._isPrevWeek === true) return top10Data;
+      if (
+        top10Data.rankMovementHydrated === true &&
+        typeof stelvioPayloadHasUsableRankMovementRows === 'function' &&
+        stelvioPayloadHasUsableRankMovementRows(top10Data.ranking)
+      ) {
+        return top10Data;
+      }
       var serverSnap = stelvioExtractRankMovementSnapFromTop10Data(top10Data);
       if (typeof stelvioFetchWeeklyTop10RankMovementMerge === 'function') {
         await stelvioFetchWeeklyTop10RankMovementMerge(top10Data);
@@ -20044,6 +20052,21 @@
       if (!stelvioIsTssWeeklyRankMovementScope(data, pipelineOpts)) return;
       if (!data || !data.byCategory) return;
       if (data.prevWeekFallback === true || data._isPrevWeek === true) return;
+      var supRowsEarly = data.byCategory.Supremo;
+      if (
+        (data.rankMovementHydrated === true || data._tssWeeklyServerRankMv === true) &&
+        typeof stelvioPayloadHasUsableRankMovementRows === 'function' &&
+        stelvioPayloadHasUsableRankMovementRows(supRowsEarly)
+      ) {
+        if (typeof stelvioPropagateTssWeeklySupremoRankMovement === 'function') {
+          stelvioPropagateTssWeeklySupremoRankMovement(data);
+        }
+        if (typeof stelvioSyncTssWeeklyMyRankFromSupremo === 'function') {
+          stelvioSyncTssWeeklyMyRankFromSupremo(data);
+        }
+        stelvioEnsurePeakPowerRankMovementOnPayload(data);
+        return;
+      }
       if (stelvioPayloadHasTssWeeklyRankMovementBaselines(data)) {
         stelvioRecomputeTssWeeklyAbsoluteRankMovement(data);
         stelvioEnsurePeakPowerRankMovementOnPayload(data);
@@ -20522,7 +20545,12 @@
           !stelvioPeakRankUidMapsEqual(compareBaseline, currCatRanks)
         ) {
           survivorRecomputeApplied = true;
-          var survivorMv = stelvioComputeSurvivorAwareRankMovementForRows(snapRows, compareBaseline);
+          var tssWeeklyAbsolute = duration === 'tss' && catKey === 'Supremo';
+          var computeMv =
+            tssWeeklyAbsolute && typeof stelvioComputeAbsoluteTssWeeklyRankMovementForRows === 'function'
+              ? stelvioComputeAbsoluteTssWeeklyRankMovementForRows
+              : stelvioComputeSurvivorAwareRankMovementForRows;
+          var survivorMv = computeMv(snapRows, compareBaseline);
           for (var sri = 0; sri < snapRows.length; sri++) {
             var row = snapRows[sri];
             if (!row || row.userId == null) continue;
