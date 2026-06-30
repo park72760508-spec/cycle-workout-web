@@ -22029,16 +22029,18 @@ if (originalCleanupMobileDashboard) {
 })();
 
 /* ============================================================
- * 베이스캠프 알림 배지 (v3)
- * 라이딩 모임 버튼 = ① 초대받은 라이딩 + ③ 친구 요청
- * 클럽 하우스 버튼 = ② 내가 방장인 그룹 가입신청 대기 합계 (클럽 리스트 배지와 동일)
+ * 베이스캠프 알림 배지 (v4 — 종목별 초대 분리)
+ * CYCLE 라이딩 모임 버튼 = ① 초대받은 "라이딩"(rides.category=CYCLE) + ③ 친구 요청
+ * RUN   러닝 크루 버튼   = ① 초대받은 "러닝"(rides.category=RUN)   + ③ 친구 요청
+ * 클럽 하우스 버튼       = ② 내가 방장인 그룹 가입신청 대기 합계 (클럽 리스트 배지와 동일)
+ * → 친구 요청은 두 버튼 공통, 라이딩/러닝 초대는 각 종목 버튼에만 표시.
  * Firebase v8 compat API 사용 (app.js 환경 — firestoreV9·ES 모듈 import 불필요)
  * ============================================================ */
 (function () {
   'use strict';
 
-  /* ── 내부 상태 ── */
-  var _counts       = { rides: 0, groups: 0, friends: 0 };
+  /* ── 내부 상태 (ridesCycle: 라이딩 초대, ridesRun: 러닝 초대) ── */
+  var _counts       = { ridesCycle: 0, ridesRun: 0, groups: 0, friends: 0 };
   var _unsubRides   = null;
   var _unsubGroupsList = null;
   var _unsubFriends = null;
@@ -22064,9 +22066,10 @@ if (originalCleanupMobileDashboard) {
 
   function _renderBadges() {
     /* 클럽 가입신청은 클럽 하우스 전용 — 라이딩 모임과 중복 표시하지 않음 */
-    _applyCountBadge('basecampRidingNotiBadge', _counts.rides + _counts.friends);
+    /* CYCLE 라이딩 모임 = 라이딩 초대 + 친구 요청 / RUN 러닝 크루 = 러닝 초대 + 친구 요청 */
+    _applyCountBadge('basecampRidingNotiBadge', _counts.ridesCycle + _counts.friends);
     _applyCountBadge('basecampClubHouseNotiBadge', _counts.groups);
-    _applyCountBadge('runBasecampRidingNotiBadge', _counts.rides + _counts.friends);
+    _applyCountBadge('runBasecampRidingNotiBadge', _counts.ridesRun + _counts.friends);
   }
 
   /* ── 구독 전체 정리 ── */
@@ -22080,7 +22083,7 @@ if (originalCleanupMobileDashboard) {
     _unsubRides = _unsubGroupsList = _unsubFriends = null;
     _groupUnsubMap = {};
     _cachedPhone   = null;
-    _counts        = { rides: 0, groups: 0, friends: 0 };
+    _counts        = { ridesCycle: 0, ridesRun: 0, groups: 0, friends: 0 };
   }
 
   /* ── 전화번호 정규화 (openRidingService.normalizePhoneDigits 동일 로직) ── */
@@ -22130,21 +22133,29 @@ if (originalCleanupMobileDashboard) {
     }
   }
 
-  /* ── ① 초대 라이딩 구독
+  /* ── 라이딩/러닝 구분: rides.category === 'RUN' → 러닝, 그 외(미기록 레거시 포함) → 라이딩(CYCLE) ── */
+  function _rideIsRun(d) {
+    var cat = d && d.category != null ? String(d.category).trim().toUpperCase() : '';
+    return cat === 'RUN';
+  }
+
+  /* ── ① 초대 라이딩/러닝 구독
    *  - invitedList array-contains normPhone (Firestore 단일 필드 쿼리 → 복합 인덱스 불필요)
    *  - 날짜 필터 + 아직 참여 안 한 조건은 클라이언트 사이드에서 처리
+   *  - rides.category 로 라이딩(CYCLE)·러닝(RUN) 초대 건수를 분리 집계
    * ── */
   function _subscribeRides(fs, uid, normPhone) {
     if (typeof _unsubRides === 'function') { try { _unsubRides(); } catch(e){} _unsubRides = null; }
     if (!normPhone || normPhone.length < 8) {
-      _counts.rides = 0; _renderBadges(); return;
+      _counts.ridesCycle = 0; _counts.ridesRun = 0; _renderBadges(); return;
     }
     var todayTs = _todayTs();
     try {
       _unsubRides = fs.collection('rides')
         .where('invitedList', 'array-contains', normPhone)
         .onSnapshot(function(snap) {
-          var count = 0;
+          var cycleCount = 0;
+          var runCount = 0;
           snap.forEach(function(doc) {
             var d = doc.data() || {};
             /* 날짜 필터: rides.date >= 오늘 */
@@ -22157,12 +22168,13 @@ if (originalCleanupMobileDashboard) {
             /* 이미 참여(uid가 participants 배열에 있으면) 제외 */
             var parts = Array.isArray(d.participants) ? d.participants : [];
             if (parts.indexOf(uid) !== -1) return;
-            count++;
+            if (_rideIsRun(d)) runCount++; else cycleCount++;
           });
-          _counts.rides = count;
+          _counts.ridesCycle = cycleCount;
+          _counts.ridesRun = runCount;
           _renderBadges();
-        }, function() { _counts.rides = 0; _renderBadges(); });
-    } catch(e) { _counts.rides = 0; _renderBadges(); }
+        }, function() { _counts.ridesCycle = 0; _counts.ridesRun = 0; _renderBadges(); });
+    } catch(e) { _counts.ridesCycle = 0; _counts.ridesRun = 0; _renderBadges(); }
   }
 
   /* ── ② 그룹 가입신청 대기 건수
