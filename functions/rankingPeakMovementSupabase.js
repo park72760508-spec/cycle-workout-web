@@ -182,6 +182,126 @@ async function buildPrevDayRanksFromSupabaseWeeklyTss(admin, historyKey, todayYm
   return null;
 }
 
+/**
+ * 주 초반(전일 baseline 부실) 대비 — 지난주 최종 주간 TSS 순위맵.
+ * 월요일에 리셋되는 주간 보드 특성상, 화·수에는 "어제(주 1·2일차)" 보드에
+ * 소수만 존재해 상승/보합이 표시되지 않는다. 이때 복귀 라이더에게 등락이
+ * 표시되도록 지난주 최종 순위를 비교 기준으로 사용한다.
+ */
+async function buildPrevWeekFinalRanksForTssWeekly(admin, historyKey, todayYmd) {
+  if (!admin) return null;
+  const key = String(historyKey || "");
+  if (!key.startsWith("peak_tss_weekly_")) return null;
+  const gender = historyKeyToGender(historyKey);
+  const today = todayYmd || peakMovement.seoulTodayYmd();
+  const prev = getWeekRangeForSeoulYmd(today, -1);
+
+  /* 1) Supabase 주간 TSS (지난주 전체 구간) */
+  try {
+    const supabaseRankingReader = require("./supabaseRankingReader");
+    const payload = await supabaseRankingReader.fetchWeeklyTssRanking(
+      admin,
+      prev.startStr,
+      prev.endStr,
+      gender
+    );
+    if (payload && payload.byCategory) {
+      const prevDay = buildPrevDayRanksFromByCategory(payload.byCategory);
+      if (prevDayRanksPopulated({ prevDayRanksByCategory: prevDay })) {
+        console.log("[rankingPeakMovementSupabase] prev-week baseline from Supabase", {
+          historyKey,
+          startStr: prev.startStr,
+          endStr: prev.endStr,
+          supremo: Object.keys(prevDay.Supremo || {}).length,
+        });
+        return prevDay;
+      }
+    }
+  } catch (eSb) {
+    console.warn(
+      "[rankingPeakMovementSupabase] prev-week Supabase baseline failed:",
+      eSb && eSb.message ? eSb.message : eSb
+    );
+  }
+
+  /* 2) Firestore 집계 fallback */
+  try {
+    const rankingReadConfig = require("./rankingReadConfig");
+    if (rankingReadConfig.safeIsFirebaseRankingReadAllowed()) {
+      const db = admin.firestore();
+      const cacheKey = `peakRanking_weekly_tss_v2_${gender}_${prev.startStr}_${prev.endStr}`;
+      const snap = await db.collection(RANKING_AGGREGATES_COLLECTION).doc(cacheKey).get();
+      if (snap.exists) {
+        const byCategory = byCategoryFromAggregateDoc(snap.data() || {});
+        if (byCategory) {
+          const prevDay = buildPrevDayRanksFromByCategory(byCategory);
+          if (prevDayRanksPopulated({ prevDayRanksByCategory: prevDay })) {
+            console.log("[rankingPeakMovementSupabase] prev-week baseline from Firestore", {
+              historyKey,
+              cacheKey,
+              supremo: Object.keys(prevDay.Supremo || {}).length,
+            });
+            return prevDay;
+          }
+        }
+      }
+    }
+  } catch (eAgg) {
+    console.warn(
+      "[rankingPeakMovementSupabase] prev-week Firestore baseline failed:",
+      eAgg && eAgg.message ? eAgg.message : eAgg
+    );
+  }
+
+  return null;
+}
+
+function supremoRankMapSize(prevNorm) {
+  const m = ((prevNorm && prevNorm.prevDayRanksByCategory) || {}).Supremo || {};
+  return Object.keys(m).length;
+}
+
+/**
+ * read(hydrate) 전용 — 주 초반 baseline 이 오늘 보드 대비 너무 부실하면
+ * 지난주 최종 순위로 비교 기준을 교체한다(상승/보합/하락 표시).
+ * 저장 스냅샷에는 반영하지 않도록 _earlyWeekFallback 플래그를 남긴다.
+ */
+async function applyEarlyWeekPrevWeekBaselineIfSparse(
+  admin,
+  prevNorm,
+  historyKey,
+  todayYmd,
+  boardSupremoSize
+) {
+  const key = String(historyKey || "");
+  if (!key.startsWith("peak_tss_weekly_") || !admin) return prevNorm;
+  const board = Number(boardSupremoSize) || 0;
+  if (board < 20) return prevNorm;
+
+  const inWeekSize = supremoRankMapSize(prevNorm);
+  const sparse = inWeekSize < Math.max(20, Math.floor(board * 0.4));
+  if (!sparse) return prevNorm;
+
+  const prevWeek = await buildPrevWeekFinalRanksForTssWeekly(admin, historyKey, todayYmd);
+  if (!prevWeek) return prevNorm;
+  const prevWeekSize = Object.keys(prevWeek.Supremo || {}).length;
+  if (prevWeekSize <= inWeekSize) return prevNorm;
+
+  const today = todayYmd || peakMovement.seoulTodayYmd();
+  console.log("[rankingPeakMovementSupabase] early-week baseline → prev-week final", {
+    historyKey,
+    board,
+    inWeekSize,
+    prevWeekSize,
+  });
+  return {
+    ...prevNorm,
+    asOfSeoul: today, // freeze 가 prevDay 를 baseline 으로 선택하도록(asOf===today)
+    prevDayRanksByCategory: prevWeek,
+    _earlyWeekFallback: true,
+  };
+}
+
 function rowToNorm(row) {
   if (!row) return peakMovement.normalizePeakRankHistoryDoc(null);
   return peakMovement.normalizePeakRankHistoryDoc({
@@ -571,6 +691,17 @@ async function hydratePeakRankMovementOnPayload(payload, historyKey, opts) {
   if (opts.admin) {
     prevNorm = await ensurePrevDayBaselineForTssWeekly(opts.admin, prevNorm, historyKey, todayYmd);
     prevNorm = await ensurePrevDayBaselineForPersonalSpeed(opts.admin, prevNorm, historyKey, todayYmd);
+    const boardSupremoSize =
+      payload.byCategory && Array.isArray(payload.byCategory.Supremo)
+        ? payload.byCategory.Supremo.length
+        : 0;
+    prevNorm = await applyEarlyWeekPrevWeekBaselineIfSparse(
+      opts.admin,
+      prevNorm,
+      historyKey,
+      todayYmd,
+      boardSupremoSize
+    );
   }
 
   const snapFields = peakMovement.computePeakRankMovementFields(
@@ -599,6 +730,7 @@ async function hydratePeakRankMovementOnPayload(payload, historyKey, opts) {
   if (
     opts.persistSnapshot !== false &&
     opts.admin &&
+    prevNorm._earlyWeekFallback !== true &&
     (!hadPrevDay || prevDayBaselineLooksCorrupt(prevNorm)) &&
     prevDayRanksPopulated({
       prevDayRanksByCategory: snapFields.newPrevDayRanksByCategory,
