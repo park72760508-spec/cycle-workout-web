@@ -3589,7 +3589,7 @@
                   <span id="categoryAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
                 </div>
                 <div class="basecamp-auth-bar-logout-wrap">
-                  <button type="button" id="btnCategoryAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout==='function')handleLogout();" aria-label="로그아웃" title="로그아웃">
+                  <button type="button" id="btnCategoryAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogoutWithConfirm==='function')handleLogoutWithConfirm();else if(typeof handleLogout==='function')handleLogout();" aria-label="로그아웃" title="로그아웃">
                     <img src="assets/img/out.png" alt="" width="24" height="24" decoding="async" />
                   </button>
                 </div>
@@ -3664,7 +3664,7 @@
                   <span id="authBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
                 </div>
                 <div class="basecamp-auth-bar-logout-wrap">
-                  <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn basecamp-home-to-category-btn" onclick="if(typeof showSportCategoryScreen==='function')showSportCategoryScreen();else if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="카테고리 화면" title="카테고리">
+                  <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn basecamp-home-to-category-btn" onclick="if(typeof confirmShowSportCategoryScreen==='function')confirmShowSportCategoryScreen();else if(typeof showSportCategoryScreen==='function')showSportCategoryScreen();else if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="나가기" title="나가기">
                     <img src="assets/img/home.svg" alt="" width="24" height="24" decoding="async" />
                   </button>
                 </div>
@@ -3717,7 +3717,7 @@
                   <span id="runAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
                 </div>
                 <div class="basecamp-auth-bar-logout-wrap">
-                  <button type="button" id="btnRunAuthHome" class="bluetooth-session-exit-btn basecamp-home-to-category-btn" onclick="if(typeof showSportCategoryScreen==='function')showSportCategoryScreen();else if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="카테고리 화면" title="카테고리">
+                  <button type="button" id="btnRunAuthHome" class="bluetooth-session-exit-btn basecamp-home-to-category-btn" onclick="if(typeof confirmShowSportCategoryScreen==='function')confirmShowSportCategoryScreen();else if(typeof showSportCategoryScreen==='function')showSportCategoryScreen();else if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="나가기" title="나가기">
                     <img src="assets/img/home.svg" alt="" width="24" height="24" decoding="async" />
                   </button>
                 </div>
@@ -29595,8 +29595,35 @@
       }
     }
     
+    /** CYCLE/RUN 카테고리 화면 나가기·로그아웃 확인 팝업 (STELVIO 스타일) */
+    var __stelvioLogoutConfirmOptions = {
+      message: '정말 로그아웃 하시겠습니까?',
+      cancelText: '아니오',
+      okText: '예'
+    };
+    function handleLogoutWithConfirm() {
+      if (typeof showStelvioExitConfirmPopup === 'function') {
+        showStelvioExitConfirmPopup(handleLogout, __stelvioLogoutConfirmOptions);
+      } else if (typeof handleLogout === 'function') {
+        handleLogout();
+      }
+    }
+    function confirmShowSportCategoryScreen() {
+      function goCategory() {
+        if (typeof showSportCategoryScreen === 'function') showSportCategoryScreen();
+        else if (typeof showScreen === 'function') showScreen('sportCategoryScreen');
+      }
+      if (typeof showStelvioExitConfirmPopup === 'function') {
+        showStelvioExitConfirmPopup(goCategory, __stelvioLogoutConfirmOptions);
+      } else {
+        goCategory();
+      }
+    }
+
     window.handleLogin = handleLogin;
     window.handleLogout = handleLogout;
+    window.handleLogoutWithConfirm = handleLogoutWithConfirm;
+    window.confirmShowSportCategoryScreen = confirmShowSportCategoryScreen;
     window.updateAuthBarUI = updateAuthBarUI;
 
     window.__deviceSettingsReturnScreenId = null;
