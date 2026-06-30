@@ -11311,8 +11311,17 @@
 
     /** 베이스캠프·인증 직후 백그라운드 적재 — 모달 열기 전 IndexedDB에 주간 TOP10 저장 */
     var weeklyTop10PrefetchInFlight = null;
-    async function prefetchWeeklyTop10ToDeviceStorage(userId) {
-      if (weeklyTop10PrefetchInFlight) return weeklyTop10PrefetchInFlight;
+    async function prefetchWeeklyTop10ToDeviceStorage(userId, prefetchOpts) {
+      prefetchOpts = prefetchOpts || {};
+      if (weeklyTop10PrefetchInFlight) {
+        if (prefetchOpts.force === true) {
+          try {
+            await weeklyTop10PrefetchInFlight;
+          } catch (_eWaitPf) {}
+        } else {
+          return weeklyTop10PrefetchInFlight;
+        }
+      }
       weeklyTop10PrefetchInFlight = (async function () {
         try {
           await stelvioEnsureRankingReadSource();
@@ -11328,19 +11337,21 @@
               }
             })();
           var top10LcKey = weeklyTop10CacheKeyForWeek('current', 0, uid);
-          await stelvioRankingMemCacheHydrateFromPersistent();
-          var lc = await stelvioRankingLocalCache.get(top10LcKey);
-          if (
-            lc &&
-            lc.data &&
-            lc.data.success &&
-            weeklyTop10PayloadMatchesWeek(lc.data, 0) &&
-            stelvioRankingPayloadMatchesReadSource(lc.data) &&
-            Array.isArray(lc.data.ranking) &&
-            lc.data.ranking.length > 0 &&
-            !stelvioRankingLocalCache.isStale(lc)
-          ) {
-            return;
+          if (prefetchOpts.force !== true) {
+            await stelvioRankingMemCacheHydrateFromPersistent();
+            var lc = await stelvioRankingLocalCache.get(top10LcKey);
+            if (
+              lc &&
+              lc.data &&
+              lc.data.success &&
+              weeklyTop10PayloadMatchesWeek(lc.data, 0) &&
+              stelvioRankingPayloadMatchesReadSource(lc.data) &&
+              Array.isArray(lc.data.ranking) &&
+              lc.data.ranking.length > 0 &&
+              !stelvioRankingLocalCache.isStale(lc)
+            ) {
+              return;
+            }
           }
           var urlBase = 'https://us-central1-stelvio-ai.cloudfunctions.net/getWeeklyRanking';
           var urlQ = urlBase + (uid ? '?userId=' + encodeURIComponent(uid) : '');
@@ -11386,32 +11397,33 @@
      * Supabase ranking_metrics_live Realtime — 주간 TSS·개인 거리 캐시 무효화 + 열린 UI 조용히 갱신 (Firebase 미사용)
      */
     var stelvioRankingLiveUpdateInflight = null;
+    var stelvioRankingLiveUpdatePending = false;
     async function stelvioHandleRankingMetricsLiveUpdate(opts) {
       opts = opts || {};
       if (stelvioGetRankingReadSourceSync() !== 'supabase') return;
-      if (stelvioRankingLiveUpdateInflight) return stelvioRankingLiveUpdateInflight;
+      if (stelvioRankingLiveUpdateInflight) {
+        stelvioRankingLiveUpdatePending = true;
+        return stelvioRankingLiveUpdateInflight;
+      }
       stelvioRankingLiveUpdateInflight = (async function () {
         try {
-          if (typeof stelvioRankingClearMemCaches === 'function') {
+          if (typeof stelvioInvalidateWeeklyTssLiveCaches === 'function') {
+            await stelvioInvalidateWeeklyTssLiveCaches();
+          } else if (typeof stelvioRankingClearMemCaches === 'function') {
             stelvioRankingClearMemCaches();
           }
-          if (window.stelvioRankingLocalCache && typeof window.stelvioRankingLocalCache.getAllRecords === 'function') {
-            var rows = await window.stelvioRankingLocalCache.getAllRecords();
-            for (var i = 0; i < rows.length; i++) {
-              var rec = rows[i];
-              var k = rec && rec.key ? String(rec.key) : '';
-              if (k.indexOf('weeklyTop10:') === 0 && typeof window.stelvioRankingLocalCache.remove === 'function') {
-                await window.stelvioRankingLocalCache.remove(k);
-                continue;
+          var uidLive =
+            (window.currentUser && window.currentUser.id) ||
+            (function () {
+              try {
+                var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+                return u && u.id ? u.id : null;
+              } catch (eUidLive) {
+                return null;
               }
-              if (
-                k.indexOf('peak:v22:') === 0 &&
-                k.indexOf('duration=personal_dist') !== -1 &&
-                typeof window.stelvioRankingLocalCache.remove === 'function'
-              ) {
-                await window.stelvioRankingLocalCache.remove(k);
-              }
-            }
+            })();
+          if (typeof prefetchWeeklyTop10ToDeviceStorage === 'function') {
+            prefetchWeeklyTop10ToDeviceStorage(uidLive, { force: true }).catch(function () {});
           }
           if (typeof window.__stelvioRankingLiveTssRefresh === 'function') {
             window.__stelvioRankingLiveTssRefresh();
@@ -11430,7 +11442,11 @@
             stelvioIsTssRankingMode() &&
             typeof fetchStelvioPeakPowerRanking === 'function'
           ) {
-            fetchStelvioPeakPowerRanking({ silentRevalidate: true, tabSwitch: true }).catch(function () {});
+            fetchStelvioPeakPowerRanking({
+              skipMemHydrate: true,
+              backgroundOnly: true,
+              tabSwitch: true,
+            }).catch(function () {});
           }
           if (
             rankVisible &&
@@ -11438,7 +11454,11 @@
             stelvioIsPersonalDistanceRanking() &&
             typeof fetchStelvioPeakPowerRanking === 'function'
           ) {
-            fetchStelvioPeakPowerRanking({ silentRevalidate: true, tabSwitch: true }).catch(function () {});
+            fetchStelvioPeakPowerRanking({
+              skipMemHydrate: true,
+              backgroundOnly: true,
+              tabSwitch: true,
+            }).catch(function () {});
           }
           await stelvioSilentRefreshWeeklyTop10IfOpen();
         } catch (eLive) {
@@ -11446,6 +11466,10 @@
         }
       })().finally(function () {
         stelvioRankingLiveUpdateInflight = null;
+        if (stelvioRankingLiveUpdatePending) {
+          stelvioRankingLiveUpdatePending = false;
+          stelvioHandleRankingMetricsLiveUpdate(opts).catch(function () {});
+        }
       });
       return stelvioRankingLiveUpdateInflight;
     }
@@ -12360,7 +12384,8 @@
               serverMeta.master,
               serverMeta.heptagon,
               serverMeta.personalSpeed,
-              serverMeta.peak28d
+              serverMeta.peak28d,
+              serverMeta.rankingMetricsLive
             )
           : '';
         var storedFp = stelvioRankingReadStoredMetaFingerprint();
@@ -12685,6 +12710,7 @@
 
     /** 집계 메타 지문 — Supabase ranking_build_meta 또는 Firestore ranking_meta */
     var STELVIO_RANKING_SYNC_META_LC_KEY = 'stelvioRC:syncMeta:v2';
+    var STELVIO_RANKING_LIVE_META_TS_KEY = 'stelvioRC:rankingMetricsLiveTs:v1';
     var STELVIO_RANKING_META_FS_WAIT_MS = 3500;
     var stelvioRankingMetaSyncInFlight = null;
     /** 인증 후 전 탭 프리페치 세션 — 랭킹보드 진입 시 스피너·대기에 사용 */
@@ -12803,18 +12829,67 @@
       return 0;
     }
 
-    function stelvioRankingBuildServerMetaFingerprint(master, hept, psLogic, peak28d) {
+    function stelvioRankingBuildServerMetaFingerprint(master, hept, psLogic, peak28d, rankingMetricsLive) {
       var m = master || {};
       var h = hept || {};
       var p = psLogic || {};
       var pk = peak28d || {};
+      var live = rankingMetricsLive || {};
       return [
         'm:' + String(m.dateKst || '') + ':' + stelvioRankingMetaTsFromField(m.completedAt),
         'h:' + String(h.dateKst || '') + ':' + String(h.status || '') + ':' + stelvioRankingMetaTsFromField(h.completedAt),
         'ps:' + String(p.version != null ? p.version : ''),
         'pk:' + String(pk.dateKst || '') + ':' + String(pk.status || '') + ':' + stelvioRankingMetaTsFromField(pk.completedAt),
+        'live:' + stelvioRankingMetaTsFromField(live.completedAt),
       ].join('|');
     }
+
+    function stelvioRankingReadStoredLiveMetaTs() {
+      try {
+        var raw = localStorage.getItem(STELVIO_RANKING_LIVE_META_TS_KEY);
+        if (!raw) return 0;
+        var n = Number(raw);
+        return isFinite(n) && n > 0 ? n : 0;
+      } catch (eLiveRd) {
+        return 0;
+      }
+    }
+
+    function stelvioRankingWriteStoredLiveMetaTs(ts) {
+      try {
+        if (ts != null && isFinite(Number(ts)) && Number(ts) > 0) {
+          localStorage.setItem(STELVIO_RANKING_LIVE_META_TS_KEY, String(Math.floor(Number(ts))));
+        }
+      } catch (eLiveWr) {}
+    }
+
+    /** 주간 TOP10·TSS RAM/IDB 캐시만 제거 — GC·피크 전체 IDB clearAll 회피 */
+    async function stelvioInvalidateWeeklyTssLiveCaches() {
+      if (typeof stelvioRankingClearMemCaches === 'function') {
+        stelvioRankingClearMemCaches();
+      }
+      if (window.stelvioRankingLocalCache && typeof window.stelvioRankingLocalCache.getAllRecords === 'function') {
+        try {
+          var rows = await window.stelvioRankingLocalCache.getAllRecords();
+          for (var i = 0; i < rows.length; i++) {
+            var rec = rows[i];
+            var k = rec && rec.key ? String(rec.key) : '';
+            if (!k || typeof window.stelvioRankingLocalCache.remove !== 'function') continue;
+            if (k.indexOf('weeklyTop10:') === 0) {
+              await window.stelvioRankingLocalCache.remove(k);
+              continue;
+            }
+            if (
+              k.indexOf('peak:v22:') === 0 &&
+              k.indexOf('duration=personal_dist') !== -1
+            ) {
+              await window.stelvioRankingLocalCache.remove(k);
+            }
+          }
+        } catch (eInvLive) {}
+      }
+    }
+    window.stelvioInvalidateWeeklyTssLiveCaches = stelvioInvalidateWeeklyTssLiveCaches;
 
     function stelvioRankingReadStoredMetaFingerprint() {
       try {
@@ -12897,6 +12972,7 @@
         heptagon: serverMeta.heptagon || null,
         personalSpeed: serverMeta.personalSpeed || null,
         peak28d: serverMeta.peak28d || null,
+        rankingMetricsLive: serverMeta.rankingMetricsLive || null,
       };
     }
 
@@ -12992,16 +13068,32 @@
      * 04:00 정규 마스터 집계·수동 집계·헵타곤/GC·항속 산식 변경 시 서버 메타가 바뀌면 IndexedDB 캐시 전면 무효화.
      */
     async function stelvioInvalidateRankingCachesIfMetaChanged(serverMeta) {
-      if (!serverMeta) return { invalidated: false, fingerprint: '' };
+      if (!serverMeta) return { invalidated: false, fingerprint: '', liveInvalidated: false };
       var fp = stelvioRankingBuildServerMetaFingerprint(
         serverMeta.master,
         serverMeta.heptagon,
         serverMeta.personalSpeed,
-        serverMeta.peak28d
+        serverMeta.peak28d,
+        serverMeta.rankingMetricsLive
       );
-      if (!fp) return { invalidated: false, fingerprint: '' };
+      if (!fp) return { invalidated: false, fingerprint: '', liveInvalidated: false };
       var stored = stelvioRankingReadStoredMetaFingerprint();
       var invalidated = false;
+      var liveInvalidated = false;
+      var liveTs = stelvioRankingMetaTsFromField(
+        serverMeta.rankingMetricsLive && serverMeta.rankingMetricsLive.completedAt
+      );
+      var storedLiveTs = stelvioRankingReadStoredLiveMetaTs();
+      if (liveTs > 0 && liveTs > storedLiveTs) {
+        await stelvioInvalidateWeeklyTssLiveCaches();
+        stelvioRankingWriteStoredLiveMetaTs(liveTs);
+        liveInvalidated = true;
+        if (typeof window.stelvioHandleRankingMetricsLiveUpdate === 'function') {
+          window.stelvioHandleRankingMetricsLiveUpdate({ source: 'meta_sync', metaKey: 'ranking_metrics_live' }).catch(
+            function () {}
+          );
+        }
+      }
       if (stored && stored !== fp) {
         await stelvioRankingPersistentCache.clearAll();
         stelvioRankingClearMemCaches();
@@ -13009,7 +13101,7 @@
         console.log('[StelvioRanking] 집계 메타 변경 — IndexedDB 랭킹 캐시 무효화');
       }
       stelvioRankingWriteStoredMetaFingerprint(fp, serverMeta);
-      return { invalidated: invalidated, fingerprint: fp };
+      return { invalidated: invalidated || liveInvalidated, fingerprint: fp, liveInvalidated: liveInvalidated };
     }
 
     async function stelvioEnsureFirestoreForRankingMeta() {
@@ -16858,6 +16950,12 @@
         var now = Date.now();
         if (now - lastSilentMetaProbe < STELVIO_RANKING_META_PROBE_MIN_MS) return;
         lastSilentMetaProbe = now;
+        if (
+          stelvioGetRankingReadSourceSync() === 'supabase' &&
+          typeof window.stelvioPollRankingMetricsLiveMeta === 'function'
+        ) {
+          window.stelvioPollRankingMetricsLiveMeta().catch(function () {});
+        }
         stelvioSyncRankingCacheWithFirestoreMeta({ uid: uid, gender: 'all' }).catch(function () {});
       });
     })();
