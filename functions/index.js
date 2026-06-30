@@ -5,6 +5,7 @@
  */
 const { onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 /** v1 전용(runWith · firestore.document). v7 패키지 루트는 v2라 runWith 미제공 → /v1 필요 */
 const functions = require("firebase-functions/v1");
 const { defineSecret } = require("firebase-functions/params");
@@ -12598,10 +12599,20 @@ const onUserLogWrittenHandler = async (change, context) => {
 };
 
 if (supabaseDualWriteServer.isOnUserLogWrittenEnabled()) {
-  exports.onUserLogWritten = functions
-    .runWith({ timeoutSeconds: 120, secrets: ["SUPABASE_SERVICE_ROLE_KEY"] })
-    .firestore.document("users/{userId}/logs/{logId}")
-    .onWrite(onUserLogWrittenHandler);
+  // Gen2(Cloud Run)로 전환 — App Engine(Gen1) 인프라 비용 제거 + 인스턴스 동시성으로 인스턴스 수↓.
+  // 기존 핸들러는 Gen1 시그니처(change, context)를 유지하고, Gen2 event를 동일 형태로 매핑해 넘긴다.
+  // (event.data 는 Change<DocumentSnapshot> 으로 .before/.after 가 Gen1과 동일하게 동작)
+  exports.onUserLogWritten = onDocumentWritten(
+    {
+      document: "users/{userId}/logs/{logId}",
+      timeoutSeconds: 120,
+      secrets: ["SUPABASE_SERVICE_ROLE_KEY"],
+    },
+    (event) => {
+      if (!event || !event.data) return null;
+      return onUserLogWrittenHandler(event.data, { params: event.params || {} });
+    }
+  );
 } else {
   console.log(
     "[index] Phase 4: onUserLogWritten export skipped — rollback: ON_USER_LOG_WRITTEN_ENABLED=true"
