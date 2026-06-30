@@ -816,6 +816,17 @@ async function runSecondaryAfterLogSave(admin, userId, logDocId, logDoc, options
     source: row.source,
     status: decision.status,
   });
+  try {
+    const rankingBuildMetaSupabase = require("./rankingBuildMetaSupabase");
+    if (typeof rankingBuildMetaSupabase.touchRankingMetricsLiveMeta === "function") {
+      await rankingBuildMetaSupabase.touchRankingMetricsLiveMeta();
+    }
+  } catch (eLiveTouch) {
+    console.warn(
+      "[supabaseDualWriteServer] ranking_metrics_live touch warn:",
+      eLiveTouch && eLiveTouch.message ? eLiveTouch.message : eLiveTouch
+    );
+  }
   return { skipped: false, activity_id: row.activity_id };
 }
 

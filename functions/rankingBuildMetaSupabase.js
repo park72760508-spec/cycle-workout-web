@@ -62,6 +62,7 @@ function buildRankingBuildMetaPayload(rows) {
       String((peak28d && peak28d.status) || "") +
       ":" +
       metaTsFromIso(peak28d && peak28d.completedAt),
+    "live:" + metaTsFromIso(rankingMetricsLive && rankingMetricsLive.completedAt),
   ].join("|");
 
   return {
@@ -147,10 +148,39 @@ async function runWeeklyTssDaytimeRefresh() {
   );
 }
 
+/** rides/daily_summaries 동기화 직후 — 클라이언트 Realtime·폴링 시그널 */
+async function touchRankingMetricsLiveMeta() {
+  let supabase;
+  try {
+    supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  } catch (eClient) {
+    return { ok: false, error: eClient && eClient.message ? eClient.message : String(eClient) };
+  }
+  if (!supabase) return { ok: false, error: "supabase_unavailable" };
+  const nowIso = new Date().toISOString();
+  const todayKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const { error } = await supabase.from("ranking_build_meta").upsert(
+    {
+      meta_key: "ranking_metrics_live",
+      date_kst: todayKst,
+      status: "complete",
+      completed_at: nowIso,
+      updated_at: nowIso,
+    },
+    { onConflict: "meta_key" }
+  );
+  if (error) {
+    console.warn("[rankingBuildMetaSupabase] touch ranking_metrics_live failed:", error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 module.exports = {
   META_KEYS,
   buildRankingBuildMetaPayload,
   fetchRankingBuildMetaFromSupabase,
   runMasterDailyRebuildWeeklyTss,
   runWeeklyTssDaytimeRefresh,
+  touchRankingMetricsLiveMeta,
 };
