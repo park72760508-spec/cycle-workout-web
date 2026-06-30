@@ -12868,6 +12868,23 @@
       if (typeof stelvioRankingClearMemCaches === 'function') {
         stelvioRankingClearMemCaches();
       }
+      try {
+        var rmLs = [];
+        var li;
+        for (li = 0; li < localStorage.length; li++) {
+          var lk = localStorage.key(li);
+          if (!lk) continue;
+          if (
+            lk.indexOf('stelvio_peak_rank_snap:peak_tss_weekly') === 0 ||
+            lk.indexOf('stelvio_rank_sess_base:') === 0
+          ) {
+            rmLs.push(lk);
+          }
+        }
+        for (li = 0; li < rmLs.length; li++) {
+          localStorage.removeItem(rmLs[li]);
+        }
+      } catch (_eLsTss) {}
       if (window.stelvioRankingLocalCache && typeof window.stelvioRankingLocalCache.getAllRecords === 'function') {
         try {
           var rows = await window.stelvioRankingLocalCache.getAllRecords();
@@ -12876,6 +12893,10 @@
             var k = rec && rec.key ? String(rec.key) : '';
             if (!k || typeof window.stelvioRankingLocalCache.remove !== 'function') continue;
             if (k.indexOf('weeklyTop10:') === 0) {
+              await window.stelvioRankingLocalCache.remove(k);
+              continue;
+            }
+            if (k.indexOf('peak:v22:') === 0 && k.indexOf('duration=tss') !== -1) {
               await window.stelvioRankingLocalCache.remove(k);
               continue;
             }
