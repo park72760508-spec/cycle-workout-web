@@ -20347,6 +20347,63 @@
       stelvioEnsurePeakPowerRankMovementOnPayload(data);
     }
 
+    /**
+     * 순위 등락 진단 — 콘솔에서 stelvioDebugRankMovementTss() 실행.
+     * baseline(전일 순위맵) 크기·현재 보드와의 교집합·상승/보합/하락 개수를 보고한다.
+     * "하락만 보이고 상승·보합 누락"의 원인이 (1) baseline 데이터 부족인지 (2) 클라이언트 로직인지 구분.
+     */
+    window.stelvioDebugRankMovementTss = async function () {
+      try {
+        var uid = (window.currentUser && window.currentUser.id) ||
+          (function () { try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch (e) { return null; } })();
+        var ck = stelvioBuildRankingBoardCacheKey('tss', 'all', uid, 'weekly');
+        var url = stelvioBuildRankingBoardFetchUrl(ck, true, true);
+        url += (url.indexOf('?') >= 0 ? '&' : '?') + '_dbg=' + Date.now();
+        var res = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store' });
+        var j = await res.json();
+        var sup = (j.byCategory && j.byCategory.Supremo) || [];
+        var prevDay = (j.rankMovementPrevDayByCategory && j.rankMovementPrevDayByCategory.Supremo) || {};
+        var cmp = (j.rankMovementCompareBaselineByCategory && j.rankMovementCompareBaselineByCategory.Supremo) || {};
+        var baseline = Object.keys(cmp).length ? cmp : prevDay;
+        var inBase = 0, up = 0, down = 0, flat = 0, withMv = 0;
+        sup.forEach(function (r) {
+          if (!r || r.userId == null) return;
+          if (baseline[String(r.userId)] != null) inBase++;
+          if (r.rankChange != null && r.previousBoardRank != null) {
+            withMv++;
+            var n = Number(r.rankChange);
+            if (n > 0) up++; else if (n < 0) down++; else flat++;
+          }
+        });
+        var out = {
+          readBackend: j.readBackend || j.readSource,
+          rankMovementSource: j.rankMovementSource,
+          rankMovementHydrated: j.rankMovementHydrated,
+          rankMovementAsOfSeoul: j.rankMovementAsOfSeoul,
+          startStr: j.startStr,
+          endStr: j.endStr,
+          boardRows: sup.length,
+          prevDayBaselineSize: Object.keys(prevDay).length,
+          compareBaselineSize: Object.keys(cmp).length,
+          rowsInBaseline: inBase,
+          rowsWithServerMv: withMv,
+          up: up, down: down, flat: flat,
+          sampleTop10: sup.slice(0, 10).map(function (r) {
+            return {
+              rank: r.rank, name: r.name, rc: r.rankChange, prev: r.previousBoardRank,
+              inBaseline: baseline[String(r.userId)] != null,
+              baselineRank: baseline[String(r.userId)] != null ? baseline[String(r.userId)] : null,
+            };
+          }),
+        };
+        console.log('[STELVIO RANKMV DEBUG]\n' + JSON.stringify(out, null, 2));
+        return out;
+      } catch (e) {
+        console.error('[STELVIO RANKMV DEBUG] 실패:', e);
+        return null;
+      }
+    };
+
     /** GC·피크·TSS 등 — 서버 rankChange 보존 후, 없으면 로컬 스냅샷으로 등락 보강(탭 즉시 전환 포함) */
     function stelvioApplyRankMovementPipeline(data) {
       if (!data || !data.byCategory) return;
