@@ -1505,7 +1505,30 @@ async function fetchGcRanking(admin, monthKey, requestedGender, viewerFirebaseUi
     want,
     `filter_gender=${want} month=${mk}`
   );
-  const payload = await fetchGcRankingCore(admin, mk, want);
+  let payload = await fetchGcRankingCore(admin, mk, want);
+  if (!payload) {
+    // 월초(매월 1일 00:00~03:20 KST) — 새 month_key 행이 아직 없음.
+    // TSS 전주 폴백과 동일 취지로, 직전 월 마지막 스냅샷으로 폴백해 공백을 막는다.
+    // (03:20 헵타곤 배치가 새 달을 적재하면 다음 조회부터 자연히 교체됨)
+    const heptagonCohortRanks = require("./heptagonCohortRanks");
+    const prevMk = heptagonCohortRanks.getPreviousMonthKeyKst(mk);
+    if (prevMk) {
+      payload = await fetchGcRankingCore(admin, prevMk, want);
+      if (payload) {
+        payload.gcPrevMonthFallback = true;
+        payload.gcRequestedMonthKey = mk;
+        console.log(
+          "[Stelvio Supabase Request] GC prev-month fallback:",
+          "requested=",
+          mk,
+          "served=",
+          prevMk,
+          "gender=",
+          want
+        );
+      }
+    }
+  }
   if (!payload) return null;
   if (viewerFirebaseUid) {
     await attachGcViewerHeptagonAxes(admin, payload, viewerFirebaseUid, want);
