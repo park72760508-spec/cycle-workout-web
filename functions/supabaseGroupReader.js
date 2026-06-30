@@ -576,6 +576,39 @@ async function fetchUserRideLogsRecent(firebaseUid, limit = 200) {
   return mapRideRowsToTrainingLogs(data);
 }
 
+/**
+ * 기간(ride_date YMD) 내 라이딩 로그 — 피크 파워·심박 등 분석용 (Service Role).
+ * Firestore users/{uid}/logs `where date >= start AND date <= end` 대체.
+ * @param {string} firebaseUid
+ * @param {string} startStr YYYY-MM-DD (포함)
+ * @param {string} endStr YYYY-MM-DD (포함)
+ * @returns {Promise<object[]>} mapRideRowToFirestoreTrainingLog 형태 배열
+ */
+async function fetchUserRideLogsInDateRange(firebaseUid, startStr, endStr) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return [];
+  const uid = String(firebaseUid || "").trim();
+  const s = String(startStr || "").trim().slice(0, 10);
+  const e = String(endStr || "").trim().slice(0, 10);
+  if (!uid || !s || !e) return [];
+
+  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
+  const mode =
+    supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  const userUuid = supabaseDualWriteServer.resolveUserUuid(uid, ns, mode);
+  if (!userUuid) return [];
+
+  const { data, error } = await supabase
+    .from("rides")
+    .select(RIDE_LOG_SELECT)
+    .eq("user_id", userUuid)
+    .gte("ride_date", s)
+    .lte("ride_date", e)
+    .order("ride_date", { ascending: false });
+  if (error) throw error;
+  return mapRideRowsToTrainingLogs(data);
+}
+
 /** Supabase yearly_peaks → Firestore users/yearly_peaks/{year} 호환 객체 */
 function mapYearlyPeaksRowToFirestoreDoc(row) {
   if (!row) return null;
@@ -870,6 +903,7 @@ module.exports = {
   fetchApprovedRidingGroups,
   fetchUserRideLogsForMonth,
   fetchUserRideLogsRecent,
+  fetchUserRideLogsInDateRange,
   fetchUserRunEffortsRecent,
   fetchUserRunActivitiesRecent,
   fetchUserRunWeeklyTss,

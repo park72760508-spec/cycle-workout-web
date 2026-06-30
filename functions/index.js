@@ -350,6 +350,76 @@ function isCyclingForMmp(logData) {
   return !EXCLUDED_ACTIVITY_TYPES.has(type); // Run/Swim/Walk만 제외
 }
 
+/**
+ * Phase 6 — appConfig/supabase_read_routing.useSupabaseLogsRead 가 켜져 있으면
+ * users/{uid}/logs(Firestore) 대신 Supabase rides 에서 기간 내 라이딩 로그를 읽는다.
+ * cutover 전(false)·실패 시 null 을 반환해 호출측이 기존 Firestore 쿼리로 폴백한다.
+ * @returns {Promise<object[]|null>} 훈련 로그 배열(이미 isCyclingForMmp 필터됨) 또는 null
+ */
+async function tryFetchCyclingLogsFromSupabaseRidesInRange(userId, startStr, endStr) {
+  try {
+    if (typeof rankingReadConfig.refreshRankingReadConfig === "function") {
+      try {
+        await rankingReadConfig.refreshRankingReadConfig(admin, false);
+      } catch (eCfg) {
+        /* 캐시된 값 사용 */
+      }
+    }
+    const cfg =
+      typeof rankingReadConfig.getRankingReadConfig === "function"
+        ? rankingReadConfig.getRankingReadConfig()
+        : null;
+    if (!cfg || cfg.useSupabaseLogsRead !== true) return null;
+    if (
+      !supabaseGroupReader ||
+      typeof supabaseGroupReader.fetchUserRideLogsInDateRange !== "function"
+    ) {
+      return null;
+    }
+    const logs = await supabaseGroupReader.fetchUserRideLogsInDateRange(
+      userId,
+      startStr,
+      endStr
+    );
+    if (!Array.isArray(logs)) return null;
+    return logs.filter((d) => isCyclingForMmp(d));
+  } catch (e) {
+    console.warn(
+      "[supabaseLogsRead] rides 기간 조회 실패 — Firestore 폴백:",
+      (e && e.message) || e
+    );
+    return null;
+  }
+}
+
+/**
+ * 기간 내 싸이클링 로그(데이터 객체) — cutover 시 Supabase rides, 그 외/실패 시 Firestore logs.
+ * 반환 배열은 isCyclingForMmp 로 필터링된 로그 데이터 객체.
+ */
+async function fetchCyclingLogsInDateRangeRouted(db, userId, startStr, endStr) {
+  const supabaseLogs = await tryFetchCyclingLogsFromSupabaseRidesInRange(
+    userId,
+    startStr,
+    endStr
+  );
+  if (supabaseLogs) return supabaseLogs;
+  if (!db || !userId) return [];
+  const snap = await db
+    .collection("users")
+    .doc(userId)
+    .collection("logs")
+    .where("date", ">=", startStr)
+    .where("date", "<=", endStr)
+    .get();
+  const out = [];
+  snap.docs.forEach((doc) => {
+    const d = doc.data() || {};
+    if (!isCyclingForMmp(d)) return;
+    out.push(d);
+  });
+  return out;
+}
+
 // CORS 헤더 설정 헬퍼 (preflight 및 실제 응답에 사용)
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin || "";
@@ -5587,8 +5657,7 @@ async function getMaxHRRolling365FromLogs(db, userId) {
   const coll = db.collection("users").doc(userId).collection("logs");
   const seen = new Set();
   let bestHr = 0;
-  const consider = (docSnap) => {
-    const d = docSnap.data() || {};
+  const considerLog = (d) => {
     const hr = Math.max(
       Number(d.max_hr_5sec) || 0,
       Number(d.max_hr) || 0,
@@ -5596,6 +5665,18 @@ async function getMaxHRRolling365FromLogs(db, userId) {
     );
     if (hr > 0 && hr <= HR_MAX_BPM && hr > bestHr) bestHr = hr;
   };
+  const consider = (docSnap) => considerLog(docSnap.data() || {});
+
+  const supabaseLogs = await tryFetchCyclingLogsFromSupabaseRidesInRange(
+    userId,
+    startStr,
+    endStr
+  );
+  if (supabaseLogs) {
+    supabaseLogs.forEach((d) => considerLog(d));
+    return bestHr > 0 ? bestHr : null;
+  }
+
   try {
     const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
     const endDate = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
@@ -6048,16 +6129,12 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
     // 보안: 현재 연도는 logs와 재검증 (onUserLogWritten 누락·트리거 배포 전 로그 등 방지)
     const isCurrentYear = year === String(new Date().getFullYear());
     if (isCurrentYear) {
-      const logsSnap = await db.collection("users").doc(userId).collection("logs")
-        .where("date", ">=", startStr)
-        .where("date", "<=", endStr)
-        .get();
+      const logs = await fetchCyclingLogsInDateRangeRouted(db, userId, startStr, endStr);
       let maxWattsFromLogs = 0;
       let maxHrFromLogs = 0;
       let maxHrDateFromLogs = null;
       let contributingActivityType = null;
-      logsSnap.docs.forEach((doc) => {
-        const d = doc.data();
+      logs.forEach((d) => {
         if (!isCyclingForMmp(d)) return;
         const w = Number(d[field]) || 0;
         if (w > 0 && validatePeakPowerRecord(durationType, w, weightKg) && w > maxWattsFromLogs) {
@@ -6103,14 +6180,10 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
     return { watts, wkg: wkgVal, weightKg };
   }
 
-  const snapshot = await db.collection("users").doc(userId).collection("logs")
-    .where("date", ">=", startStr)
-    .where("date", "<=", endStr)
-    .get();
+  const logs = await fetchCyclingLogsInDateRangeRouted(db, userId, startStr, endStr);
 
   let maxWatts = 0;
-  snapshot.docs.forEach((doc) => {
-    const d = doc.data();
+  logs.forEach((d) => {
     if (!isCyclingForMmp(d)) return;
     const watts = Number(d[field]) || 0;
     if (watts <= 0) return;
@@ -6128,13 +6201,9 @@ const PEAK_POWER_BATCH_SIZE = 50;
 async function getPeakHrForUser(db, userId, startStr, endStr, durationType) {
   const field = DURATION_HR_FIELDS[durationType];
   if (!field) return null;
-  const snapshot = await db.collection("users").doc(userId).collection("logs")
-    .where("date", ">=", startStr)
-    .where("date", "<=", endStr)
-    .get();
+  const logs = await fetchCyclingLogsInDateRangeRouted(db, userId, startStr, endStr);
   let maxHr = 0;
-  snapshot.docs.forEach((doc) => {
-    const d = doc.data();
+  logs.forEach((d) => {
     if (!isCyclingForMmp(d)) return;
     const dateStr = normalizeLogDateToSeoulYmd(d.date);
     if (!dateStr || dateStr < startStr || dateStr > endStr) return;

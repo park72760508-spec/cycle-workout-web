@@ -140,10 +140,54 @@ function effective60minWattsFromLogRankingStrict(logData, weightKg) {
 }
 
 /**
+ * Phase 6 — appConfig/supabase_read_routing.useSupabaseLogsRead 가 켜져 있으면
+ * users/{uid}/logs(Firestore) 대신 Supabase rides 에서 최근 로그를 읽는다.
+ * 클라이언트 logsReadRouter 와 동일한 플래그를 쓰며, 실패 시 null 을 반환해 호출측이 Firestore 로 폴백한다.
+ * @returns {Promise<object[]|null>} 훈련 로그 배열, 또는 Supabase 미사용/실패 시 null
+ */
+async function tryFetchTrainingLogsFromSupabaseRides(userId) {
+  try {
+    const readConfig = require("./rankingReadConfig");
+    if (typeof readConfig.refreshRankingReadConfig === "function") {
+      try {
+        await readConfig.refreshRankingReadConfig(admin, false);
+      } catch (eCfg) {
+        /* 캐시된 값 사용 */
+      }
+    }
+    const cfg =
+      typeof readConfig.getRankingReadConfig === "function"
+        ? readConfig.getRankingReadConfig()
+        : null;
+    if (!cfg || cfg.useSupabaseLogsRead !== true) return null;
+
+    const reader = require("./supabaseGroupReader");
+    if (!reader || typeof reader.fetchUserRideLogsRecent !== "function") return null;
+
+    const logs = await reader.fetchUserRideLogsRecent(
+      userId,
+      DASHBOARD_TRAINING_LOG_FETCH_LIMIT
+    );
+    if (!Array.isArray(logs)) return null;
+    /* fetchUserRideLogsRecent 는 이미 isRidingRideRow 로 필터링하지만 동일 기준으로 한 번 더 확정 */
+    return logs.filter((d) => isCyclingForMmp(d));
+  } catch (e) {
+    console.warn(
+      "[rankingDayRollup] Supabase rides read 실패 — Firestore 폴백:",
+      (e && e.message) || e
+    );
+    return null;
+  }
+}
+
+/**
  * 대시보드 useDashboardData / getUserTrainingLogs 와 동일: 최근 로그 N건 조회 후 서울 YMD로 6개월 필터.
+ * cutover(useSupabaseLogsRead=true) 시 Supabase rides 우선, 그 외/실패 시 Firestore logs.
  */
 async function fetchUserTrainingLogsDashboardRoute(db, userId) {
   if (!db || !userId) return [];
+  const supabaseLogs = await tryFetchTrainingLogsFromSupabaseRides(userId);
+  if (supabaseLogs) return supabaseLogs;
   const snap = await db
     .collection("users")
     .doc(userId)
