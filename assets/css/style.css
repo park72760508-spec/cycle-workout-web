@@ -3051,7 +3051,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   z-index: 1; /* 이미지 위에 표시 */
 }
 
-.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge) {
+.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#sportCategoryCycleNotiBadge):not(#sportCategoryRunNotiBadge) {
   color: #fff !important;
   position: relative;
   z-index: 2; /* 오버레이 위에 표시 */
@@ -29406,10 +29406,43 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   visibility: hidden !important;
   opacity: 0 !important;
 }
-#sportCategoryScreen .sport-category-btn span {
+#sportCategoryScreen .sport-category-btn span:not(#sportCategoryCycleNotiBadge):not(#sportCategoryRunNotiBadge) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
+}
+
+/* 카테고리(CYCLE/RUN) 버튼 알림 배지 — notifications.gif.
+   라이딩 모임·러닝 크루 배지와 동일한 사이즈(26px)·위치(우상단 25%) */
+#sportCategoryScreen .sport-category-btn .sport-category-noti-badge {
+  display: none !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: absolute !important;
+  top: 25% !important;
+  right: 25% !important;
+  transform: translate(50%, -50%) !important;
+  width: 26px !important;
+  min-width: 26px !important;
+  height: 26px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  box-sizing: border-box !important;
+  z-index: 20 !important;
+  pointer-events: none !important;
+  line-height: 0 !important;
+}
+#sportCategoryScreen .sport-category-btn .sport-category-noti-badge.show {
+  display: block !important;
+}
+#sportCategoryScreen .sport-category-btn .sport-category-noti-badge img {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 26px !important;
+  height: 26px !important;
+  object-fit: contain !important;
 }
 #sportCategoryScreen .connection-device-section.basecamp-device-section .sport-category-grid {
   --basecamp-cell: calc((100% - 8px) / 2);
