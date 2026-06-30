@@ -32,6 +32,8 @@ function snapshotToClientPayload(norm) {
   norm = peakMovement.normalizePeakRankHistoryDoc(norm);
   return {
     asOfSeoul: norm.asOfSeoul || "",
+    /* 스냅샷 자신의 보드(=집계일 전체 순위). 라이브(오늘) 보드 표시 시 직전일 baseline 으로 사용 */
+    ranksByCategory: norm.ranksByCategory || {},
     rankChangesByCategory: norm.rankChangesByCategory || {},
     previousRanksByCategory: norm.previousRanksByCategory || {},
     prevDayRanksByCategory: norm.prevDayRanksByCategory || {},
