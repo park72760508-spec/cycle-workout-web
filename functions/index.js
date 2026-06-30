@@ -7008,6 +7008,83 @@ function shouldRunSupabaseWeeklyTssParitySchedule() {
 }
 
 /**
+ * Supabase pg_cron 주간 TSS 마스터 집계 — parity 동기화 후 RPC 호출.
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {{ forceReconcile?: boolean, logPrefix?: string }} [opts]
+ */
+async function runSupabaseWeeklyTssMasterPipeline(db, opts) {
+  opts = opts || {};
+  const logPrefix = opts.logPrefix || "[runSupabaseWeeklyTssMasterPipeline]";
+  const rankingBuildMetaSupabase = require("./rankingBuildMetaSupabase");
+  const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
+  const t0 = Date.now();
+
+  if (opts.forceReconcile) {
+    const sharedUsersSnap = await db.collection("users").get();
+    const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
+    const allUserDocs = sharedUsersSnap.docs;
+    const RECONCILE_BATCH = 10;
+    for (let i = 0; i < allUserDocs.length; i += RECONCILE_BATCH) {
+      const batch = allUserDocs.slice(i, i + RECONCILE_BATCH);
+      await Promise.all(
+        batch.map(async (userDoc) => {
+          const uid = userDoc.id;
+          const udata = userDoc.data() || {};
+          try {
+            await rankingDayRollup.ensureRankingBucketsFilledForRange(db, uid, udata, wStart, wEnd, true);
+            await rankingDayRollup.ensureRankingBucketsFilledForRange(db, uid, udata, wPrevS, wPrevE, true);
+          } catch (eRec) {
+            console.warn(logPrefix, "bucket reconcile failed:", uid, eRec && eRec.message);
+          }
+        })
+      );
+    }
+  }
+
+  try {
+    const parityResult = await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(
+      db,
+      admin,
+      wStart,
+      wEnd
+    );
+    console.log(logPrefix, "parity done", parityResult);
+  } catch (parityErr) {
+    console.warn(
+      logPrefix,
+      "parity warn:",
+      parityErr && parityErr.message ? parityErr.message : parityErr
+    );
+  }
+
+  const rpcResult = await rankingBuildMetaSupabase.runMasterDailyRebuildWeeklyTss();
+  if (!rpcResult.ok) {
+    throw new Error(rpcResult.error || "fn_master_daily_rebuild_weekly_tss failed");
+  }
+  return { mode: "supabase_master", ms: Date.now() - t0, wStart, wEnd };
+}
+
+/**
+ * Supabase pg_cron 09:00 낮 갱신 — parity 후 RPC (pg_cron 실패 시 Functions 백업).
+ */
+async function runSupabaseWeeklyTssDaytimePipeline(db, logPrefix) {
+  const prefix = logPrefix || "[runSupabaseWeeklyTssDaytimePipeline]";
+  const rankingBuildMetaSupabase = require("./rankingBuildMetaSupabase");
+  const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
+  const t0 = Date.now();
+  try {
+    await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(db, admin, wStart, wEnd);
+  } catch (parityErr) {
+    console.warn(prefix, "parity warn:", parityErr && parityErr.message ? parityErr.message : parityErr);
+  }
+  const rpcResult = await rankingBuildMetaSupabase.runWeeklyTssDaytimeRefresh();
+  if (!rpcResult.ok) {
+    throw new Error(rpcResult.error || "fn_weekly_tss_daytime_refresh failed");
+  }
+  return { mode: "supabase_daytime", ms: Date.now() - t0 };
+}
+
+/**
  * 이번 주 활동 사용자 전원 Firestore → Supabase 주간 TSS parity (rides + daily_summaries).
  */
 async function runWeeklyTssSupabaseParityScheduledJob(db, logPrefix) {
@@ -8060,6 +8137,16 @@ async function applyGroupRankingParticipationForViewer(db, byCategory, entries, 
  */
 async function refreshWeeklyMileageTop10AggregatesOnly(db) {
   const t0 = Date.now();
+  const writeFirebaseWeekly =
+    await shouldRunFirebaseRankingScheduledJob(db, "scheduledWeeklyTop10PeakRefresh");
+  if (!writeFirebaseWeekly) {
+    const r = await runSupabaseWeeklyTssDaytimePipeline(
+      db,
+      "[refreshWeeklyMileageTop10AggregatesOnly]"
+    );
+    console.log("[refreshWeeklyMileageTop10AggregatesOnly] supabase daytime (Firebase write skipped)", r);
+    return r;
+  }
   const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
   const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
   const sharedUsersSnap = await db.collection("users").get();
@@ -8218,6 +8305,7 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
   }
 
   lastPhase = "supabase_weekly_tss_parity";
+  if (!(opts && opts.skipSupabaseParity)) {
   try {
     const parityEarly = await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(
       db,
@@ -8236,9 +8324,16 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
       parityErr && parityErr.message ? parityErr.message : parityErr
     );
   }
+  }
 
-  // ── 1. 주간 TSS 집계 (gender=all,M,F) ──
+  const writeFirebaseWeeklyTss = await shouldRunFirebaseRankingScheduledJob(
+    db,
+    "rebuildRankingAggregates"
+  );
+
+  // ── 1. 주간 TSS 집계 (gender=all,M,F) — Supabase pg_cron 03:40 대체 시 Firebase Write 생략 ──
   let weeklyRankingFullCurrent = null;
+  if (writeFirebaseWeeklyTss) {
   for (const gender of ["all", "M", "F"]) {
     const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
     await applyPeakRankChanges(db, tss.byCategory, `peak_tss_weekly_${gender}`);
@@ -8263,8 +8358,6 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
   }
 
   // ── 2. weekly_ranking_full_* 을 가장 먼저 기록 ──
-  // TSS 집계가 끝난 직후 TOP10 문서를 저장함으로써, 이후 단계에서 타임아웃이 발생해도
-  // getWeeklyRanking 이 항상 최신 TOP10 데이터를 반환할 수 있도록 보장.
   const entriesCurrent = weeklyRankingFullCurrent || [];
   const top10Current = entriesCurrent.slice(0, 10).map((e, i) => weeklyTop10RowFromEntry(e, i));
   const weeklyKey = `weekly_ranking_full_${wStart}_${wEnd}`;
@@ -8289,15 +8382,24 @@ async function runRebuildRankingAggregatesCore(db, forceReconcile, opts) {
     endStr: wPrevE,
   });
   wrote++;
+  } else {
+    console.log(
+      "[runRebuildRankingAggregatesCore] weekly TSS/TOP10 Firebase aggregate skipped (Supabase pg_cron primary)"
+    );
+    await markMasterDailyRankingRebuildProgress(db, "weekly_tss_supabase_primary", {
+      wrote,
+      elapsedMs: Date.now() - t0,
+    });
+  }
 
-  // 28일 피크·헵타곤 — 02:50·03:20 선행 완료 후 본 마스터(04:00)가 TSS·TOP10 등 갱신
+  // 28일 피크·헵타곤 — 02:50·03:20 선행 완료 후 본 마스터(03:40)가 TSS·TOP10 등 갱신
   lastPhase = "after_peak_0250_heptagon_0320";
   await markMasterDailyRankingRebuildProgress(db, lastPhase, {
     wrote,
     elapsedMs: Date.now() - t0,
     peakSchedule: "scheduledPeak28dBoardAndHeptagon 02:50 KST",
     heptagonSchedule: "scheduledPeak28dHeptagonOnly 03:20 KST",
-    masterSchedule: "rebuildRankingAggregates 03:40 KST",
+    masterSchedule: "fn_master_daily_rebuild_weekly_tss pg_cron 03:40 KST",
   });
   /** 주간 TSS·TOP10 완료 시점 — 이후 독주(28d) 구간 타임아웃 시에도 마스터 메타 확인 가능 */
   try {
@@ -8395,6 +8497,30 @@ async function assertPeakHeptagonCompleteBeforeMaster(db, opts) {
   }
 }
 
+/** KST 03:38 — pg_cron 03:40 마스터 직전 Firestore→Supabase 주간 TSS parity (Supabase 집계 모드 전용) */
+const scheduledPreMasterWeeklyTssParityOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  schedule: "38 3 * * *",
+  timeZone: "Asia/Seoul",
+  memory: "1GiB",
+  timeoutSeconds: 1800,
+});
+exports.scheduledPreMasterWeeklyTssParity = onSchedule(
+  scheduledPreMasterWeeklyTssParityOptions,
+  async () => {
+    if (await shouldRunFirebaseRankingScheduledJob(admin.firestore(), "rebuildRankingAggregates")) {
+      return;
+    }
+    if (!shouldRunSupabaseWeeklyTssParitySchedule()) return;
+    const db = admin.firestore();
+    try {
+      await runWeeklyTssSupabaseParityScheduledJob(db, "[scheduledPreMasterWeeklyTssParity]");
+    } catch (e) {
+      console.error("[scheduledPreMasterWeeklyTssParity]", e && e.message ? e.message : e);
+      throw e;
+    }
+  }
+);
+
 /** KST 03:40 — 마스터 집계 (주간 TSS·TOP10·거리·항속). 02:50 피크·03:20 헵타곤 complete 후만 실행. */
 exports.rebuildRankingAggregates = onSchedule(
   {
@@ -8407,7 +8533,12 @@ exports.rebuildRankingAggregates = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
-      if (!(await shouldRunFirebaseRankingScheduledJob(db, "rebuildRankingAggregates"))) return;
+      if (!(await shouldRunFirebaseRankingScheduledJob(db, "rebuildRankingAggregates"))) {
+        console.log(
+          "[rebuildRankingAggregates] Supabase pg_cron 03:40 KST handles weekly aggregate (Firebase write disabled)"
+        );
+        return;
+      }
       await assertPeakHeptagonCompleteBeforeMaster(db);
       const r = await runRebuildRankingAggregatesCore(db);
       console.log("[rebuildRankingAggregates] master ok", r);
@@ -8497,7 +8628,24 @@ exports.manualRebuildWeeklyRanking = onRequest(
 
     try {
       await assertPeakHeptagonCompleteBeforeMaster(db, { skipGate: skipPeakHeptagonGate });
-      const r = await runRebuildRankingAggregatesCore(db, forceReconcile, { skipPersonalSpeed });
+      const useFirebaseWeekly = await shouldRunFirebaseRankingScheduledJob(
+        db,
+        "rebuildRankingAggregates"
+      );
+      let r;
+      if (!useFirebaseWeekly) {
+        const sbMaster = await runSupabaseWeeklyTssMasterPipeline(db, {
+          forceReconcile,
+          logPrefix: "[manualRebuildWeeklyRanking]",
+        });
+        r = await runRebuildRankingAggregatesCore(db, forceReconcile, {
+          skipPersonalSpeed,
+          skipSupabaseParity: true,
+        });
+        r = { ...r, supabaseWeeklyMaster: sbMaster };
+      } else {
+        r = await runRebuildRankingAggregatesCore(db, forceReconcile, { skipPersonalSpeed });
+      }
       console.log("[manualRebuildWeeklyRanking] 완료", JSON.stringify({ ...r, startedAt, forceReconcile }));
     } catch (e) {
       console.error("[manualRebuildWeeklyRanking] full 집계 오류:", e && e.message ? e.message : e);
@@ -8624,7 +8772,17 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
   async () => {
     const db = admin.firestore();
     try {
-      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledWeeklyTop10PeakRefresh"))) return;
+      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledWeeklyTop10PeakRefresh"))) {
+        console.log(
+          "[scheduledWeeklyTop10PeakRefresh] Supabase pg_cron 09:00 KST primary — Functions RPC fallback"
+        );
+        const r = await runSupabaseWeeklyTssDaytimePipeline(
+          db,
+          "[scheduledWeeklyTop10PeakRefresh-supabase]"
+        );
+        console.log("[scheduledWeeklyTop10PeakRefresh] supabase daytime ok", r);
+        return;
+      }
       const r = await refreshWeeklyMileageTop10AggregatesOnly(db);
       console.log("[scheduledWeeklyTop10PeakRefresh] 09:00 KST TOP10 refresh", r);
     } catch (e) {

@@ -109,8 +109,48 @@ async function fetchRankingBuildMetaFromSupabase() {
   return buildRankingBuildMetaPayload(data || []);
 }
 
+async function invokeSupabaseRankingRpc(rpcName, logPrefix) {
+  const prefix = logPrefix || `[rankingBuildMetaSupabase.${rpcName}]`;
+  let supabase;
+  try {
+    supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  } catch (eClient) {
+    const msg = eClient && eClient.message ? eClient.message : String(eClient);
+    console.warn(prefix, "client init failed:", msg);
+    return { ok: false, error: msg };
+  }
+  if (!supabase) {
+    return { ok: false, error: "supabase_unavailable" };
+  }
+  const { error } = await supabase.rpc(rpcName);
+  if (error) {
+    console.warn(prefix, "rpc failed:", error.message);
+    return { ok: false, error: error.message };
+  }
+  console.log(prefix, "rpc ok");
+  return { ok: true };
+}
+
+/** pg_cron 03:40 KST — 수동·긴급 시 Functions에서 호출 */
+async function runMasterDailyRebuildWeeklyTss() {
+  return invokeSupabaseRankingRpc(
+    "fn_master_daily_rebuild_weekly_tss",
+    "[runMasterDailyRebuildWeeklyTss]"
+  );
+}
+
+/** pg_cron 09:00 KST — 수동·긴급 시 Functions에서 호출 */
+async function runWeeklyTssDaytimeRefresh() {
+  return invokeSupabaseRankingRpc(
+    "fn_weekly_tss_daytime_refresh",
+    "[runWeeklyTssDaytimeRefresh]"
+  );
+}
+
 module.exports = {
   META_KEYS,
   buildRankingBuildMetaPayload,
   fetchRankingBuildMetaFromSupabase,
+  runMasterDailyRebuildWeeklyTss,
+  runWeeklyTssDaytimeRefresh,
 };
