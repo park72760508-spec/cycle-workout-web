@@ -663,6 +663,18 @@ export async function writeRideToSupabase(rideRow) {
   }
 }
 
+function notifyRankingMetricsLiveAfterRideWrite() {
+  if (typeof window === 'undefined') return;
+  try {
+    if (typeof window.stelvioPollRankingMetricsLiveMeta === 'function') {
+      window.stelvioPollRankingMetricsLiveMeta().catch(function () {});
+    }
+    if (typeof window.stelvioHandleRankingMetricsLiveUpdate === 'function') {
+      window.stelvioHandleRankingMetricsLiveUpdate({ source: 'ride_write' }).catch(function () {});
+    }
+  } catch (_eNotify) {}
+}
+
 /**
  * Firestore log → Supabase rides upsert (training·Strava 공통).
  * @param {string} userId Firebase UID
@@ -716,6 +728,7 @@ async function runSecondaryRideUpsert(userId, logDocId, log, label, options = {}
     source: row.source,
     status: decision.status,
   });
+  notifyRankingMetricsLiveAfterRideWrite();
   return { skipped: false, activity_id: row.activity_id };
 }
 
@@ -856,6 +869,7 @@ export async function runPrimaryIndoorTrainingSave(userId, trainingData, txResul
     activity_id: row.activity_id,
     reason: decision.reason,
   });
+  notifyRankingMetricsLiveAfterRideWrite();
   return { skipped: false, reason: decision.reason, activity_id: row.activity_id };
 }
 
