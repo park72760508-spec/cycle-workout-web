@@ -1084,7 +1084,21 @@ async function syncRankingDayBucketsToSupabaseForUser(db, userId, startStr, endS
   if (error) {
     throw error;
   }
-  return Number(data) || buckets.length;
+  const synced = Number(data) || buckets.length;
+  if (synced > 0) {
+    try {
+      const rankingBuildMetaSupabase = require("./rankingBuildMetaSupabase");
+      if (typeof rankingBuildMetaSupabase.touchRankingMetricsLiveMeta === "function") {
+        await rankingBuildMetaSupabase.touchRankingMetricsLiveMeta();
+      }
+    } catch (eLiveTouch) {
+      console.warn(
+        "[supabaseDualWriteServer] ranking_metrics_live touch after bucket sync:",
+        eLiveTouch && eLiveTouch.message ? eLiveTouch.message : eLiveTouch
+      );
+    }
+  }
+  return synced;
 }
 
 /**

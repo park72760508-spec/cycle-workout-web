@@ -130,6 +130,17 @@ async function upsertRideFromLog(admin, firebaseUid, logDocId, logData) {
     ignoreDuplicates: false,
   });
   if (error && error.code !== "23505") throw error;
+  try {
+    const rankingBuildMetaSupabase = require("./rankingBuildMetaSupabase");
+    if (typeof rankingBuildMetaSupabase.touchRankingMetricsLiveMeta === "function") {
+      await rankingBuildMetaSupabase.touchRankingMetricsLiveMeta();
+    }
+  } catch (eLiveTouch) {
+    console.warn(
+      "[supabaseIndoorWriteServer] ranking_metrics_live touch:",
+      eLiveTouch && eLiveTouch.message ? eLiveTouch.message : eLiveTouch
+    );
+  }
   return row;
 }
 

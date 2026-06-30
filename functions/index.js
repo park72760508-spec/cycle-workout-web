@@ -12488,16 +12488,10 @@ const onUserLogWrittenHandler = async (change, context) => {
     const logData = snap.data();
 
     await supabaseDualWriteServer.refreshDualRunFromRemoteConfig(admin, false);
-    const skipSupabaseUpsertOnTrigger =
-      supabaseDualWriteServer.shouldSkipOnUserLogWrittenSupabaseUpsert(userId);
     const skipFirebaseLogSideEffects =
       supabaseDualWriteServer.shouldSkipFirebaseLogSideEffects(userId);
 
-    if (
-      affectsRanking &&
-      isCyclingForMmp(logData) &&
-      !skipSupabaseUpsertOnTrigger
-    ) {
+    if (affectsRanking && isCyclingForMmp(logData)) {
       try {
         await supabaseDualWriteServer.runSecondaryAfterLogSave(
           admin,
@@ -12508,6 +12502,26 @@ const onUserLogWrittenHandler = async (change, context) => {
         );
       } catch (e) {
         console.warn("[onUserLogWritten] Supabase rides 동기화 실패:", userId, logId, e.message);
+      }
+      if (!bypassFirebaseIncrementalRollup) {
+        const activityDateYmd = rankingDayRollup.normalizeLogDateToSeoulYmd(logData.date);
+        if (activityDateYmd) {
+          try {
+            await supabaseDualWriteServer.syncRankingDayBucketsToSupabaseForUser(
+              db,
+              userId,
+              activityDateYmd,
+              activityDateYmd
+            );
+          } catch (bucketErr) {
+            console.warn(
+              "[onUserLogWritten] daily_summary bucket parity:",
+              userId,
+              activityDateYmd,
+              bucketErr && bucketErr.message ? bucketErr.message : bucketErr
+            );
+          }
+        }
       }
     }
 
