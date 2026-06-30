@@ -7,7 +7,10 @@
 
   var LIVE_META_KEY = 'ranking_metrics_live';
   var DEBOUNCE_MS = 1500;
-  var POLL_INTERVAL_MS = 12000;
+  /* realtime 미연결 시 폴백 폴링 간격 (기존 12s → 30s) */
+  var POLL_INTERVAL_MS = 30000;
+  /* realtime 연결 시에는 푸시로 갱신되므로 안전망 폴링만 느리게(2분) */
+  var REALTIME_SAFETY_POLL_MS = 120000;
   var BUILD_META_PUBLIC_URL =
     'https://us-central1-stelvio-ai.cloudfunctions.net/getRankingBuildMetaPublic';
 
@@ -131,12 +134,13 @@
     return pollInflight;
   }
 
-  function startPollingFallback() {
+  function startPollingFallback(intervalMs) {
     if (pollTimer) return;
+    var iv = Number(intervalMs) > 0 ? Number(intervalMs) : POLL_INTERVAL_MS;
     pollTimer = setInterval(function () {
       if (!shouldUseLiveSync()) return;
       pollLiveMetaOnce().catch(function () {});
-    }, POLL_INTERVAL_MS);
+    }, iv);
     pollLiveMetaOnce().catch(function () {});
   }
 
@@ -235,7 +239,8 @@
         console.warn('[StelvioRankingLive] Realtime 오류 — 폴링으로 대체:', eRt && eRt.message);
         channel = null;
       }
-      startPollingFallback();
+      /* realtime 연결 시: 느린 안전망 폴링(2분). 미연결 시: 폴백 폴링(30s) */
+      startPollingFallback(realtimeOk ? REALTIME_SAFETY_POLL_MS : POLL_INTERVAL_MS);
       return { ok: true, realtime: realtimeOk, polling: true };
     })().finally(function () {
       startInflight = null;
