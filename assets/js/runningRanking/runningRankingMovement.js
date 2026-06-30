@@ -164,8 +164,6 @@
   /**
    * 전일 전체 baseline 맵 — CYCLE rankMovementPrevDayByCategory 동형.
    * prevDayRanksByCategory(집계 baseline 전체) 우선, 없으면 previousRanksByCategory(공식보드 교집합) 폴백.
-   * previousRanksByCategory 는 "어제 공식보드 ∩ 전일" 교집합이라, 이것만 쓰면 라이브에서 새로
-   * 올라온 상승·보합 사용자가 baseline 에서 빠져 하락자만 남는다(CYCLE TSS 개선 전과 동일 현상).
    */
   function resolveBaselineMap(snap, cat) {
     var prevDay = snap.prevDayRanksByCategory && snap.prevDayRanksByCategory[cat];
@@ -173,6 +171,87 @@
     var previous = snap.previousRanksByCategory && snap.previousRanksByCategory[cat];
     if (previous && Object.keys(previous).length) return previous;
     return null;
+  }
+
+  function baselinePrevRankForItem(baseline, item, tabId) {
+    var prevVal = tabId === 'crew'
+      ? lookupSnapVal(baseline, String(item.crewId))
+      : lookupSnapValForListItem(baseline, item);
+    if (prevVal == null) return null;
+    var prev = Math.floor(Number(prevVal));
+    return isFinite(prev) && prev >= 1 ? prev : null;
+  }
+
+  /**
+   * 생존 코호트(전일·현재 공통 사용자) 재순위 기반 등락 — CYCLE
+   * stelvioComputeSurvivorAwareRankMovementForRows 와 동일 개념.
+   *
+   * 왜 절대순위(prev - curr)가 아니라 생존 코호트인가:
+   * 주간 누적 TSS·30일 거리 등은 시간이 지날수록 참가자(모집단)가 늘어, 전일 baseline 에 있던
+   * 사용자들의 "현재 절대 순위 숫자"가 신규 진입자 때문에 일괄적으로 커진다(=전부 하락처럼 보임).
+   * 양일 공통 사용자만으로 양쪽을 다시 1..M 로 재순위하면 이 모집단 증가 편향이 제거돼
+   * 상승·보합·하락이 균형 있게 나타난다.
+   *
+   * 렌더 경로(stelvioRankMovementRowMatchesCurrentRank / stelvioNormalizeRankMovementOnRow)는
+   * previousBoardRank - rankChange === 현재(절대)rank 일치를 요구하므로,
+   * previousBoardRank 는 (현재 절대 rank + rankChange) 로 맞춘다.
+   * @returns {number} 등락이 채워진 생존자 수 (0 이면 미적용)
+   */
+  function applySurvivorAwareMovement(list, baseline, tabId) {
+    var survivors = [];
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      if (!item) continue;
+      if (tabId === 'crew') {
+        if (!item.crewId) continue;
+      } else if (!item.userId && !item.socialUserId && !item.firebaseUid) {
+        continue;
+      }
+      var prev = baselinePrevRankForItem(baseline, item, tabId);
+      var currAbs = Math.floor(Number(item.rank));
+      if (prev == null || !isFinite(currAbs) || currAbs < 1) continue;
+      survivors.push({ item: item, prev: prev, order: i });
+    }
+    if (!survivors.length) return 0;
+
+    var byPrev = survivors.slice().sort(function (a, b) {
+      if (a.prev !== b.prev) return a.prev - b.prev;
+      return a.order - b.order;
+    });
+    var p;
+    for (p = 0; p < byPrev.length; p++) byPrev[p].prevAmong = p + 1;
+    /* list 는 이미 현재 순위 오름차순 정렬 — order 가 곧 현재 순위 */
+    var byCurr = survivors.slice().sort(function (a, b) {
+      return a.order - b.order;
+    });
+    var c;
+    for (c = 0; c < byCurr.length; c++) byCurr[c].currAmong = c + 1;
+
+    var up = 0;
+    var down = 0;
+    var flat = 0;
+    for (var s = 0; s < survivors.length; s++) {
+      var sv = survivors[s];
+      var rc = sv.prevAmong - sv.currAmong;
+      var currAbs2 = Math.floor(Number(sv.item.rank));
+      sv.item.rankChange = rc;
+      /* prev - rc === currAbs 유지 → 렌더 일치 검증 통과 */
+      sv.item.previousBoardRank = currAbs2 + rc;
+      if (rc > 0) up++;
+      else if (rc < 0) down++;
+      else flat++;
+    }
+    try {
+      window.__runRankMovementDebug = {
+        listSize: list.length,
+        survivors: survivors.length,
+        up: up,
+        down: down,
+        flat: flat,
+        tabId: tabId
+      };
+    } catch (eDbg) {}
+    return survivors.length;
   }
 
   function applyFromServerSnap(list, tabId, opts, rankMovementByKey) {
@@ -185,83 +264,20 @@
 
     var cat = opts.category || 'Supremo';
     var baseline = resolveBaselineMap(snap, cat);
+    if (!baseline) return false; /* baseline 없으면 localStorage 폴백 */
 
-    if (baseline) {
-      /*
-       * 상승·보합 누락 修正(CYCLE stelvioRecomputeTssWeeklyAbsoluteRankMovement 동형):
-       * 서버 per-row 등락(rankChangesByCategory)을 그대로 신뢰하지 않고, 전일 baseline 절대순위 대비
-       * 현재 라이브 보드 "전체"를 prev - curr 로 재계산한다. baseline 에 있는 모든 사용자에게
-       * 상승/하락/보합을 채우므로, 하락자만 남던 현상이 사라진다. baseline 에 없는 신규 진입자는 무표시.
-       */
-      list.forEach(function (item) {
-        if (!item) return;
-        item.rankChange = null;
-        item.previousBoardRank = null;
-
-        if (tabId === 'crew') {
-          if (!item.crewId) return;
-        } else if (!item.userId && !item.socialUserId && !item.firebaseUid) {
-          return;
-        }
-
-        var prevVal = tabId === 'crew'
-          ? lookupSnapVal(baseline, String(item.crewId))
-          : lookupSnapValForListItem(baseline, item);
-        if (prevVal == null) return;
-        var prev = Math.floor(Number(prevVal));
-        var curr = Math.floor(Number(item.rank));
-        if (prev >= 1 && curr >= 1) {
-          item.rankChange = prev - curr;
-          item.previousBoardRank = prev;
-        }
-      });
-
-      normalizeListRankMovement(list);
-      /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */
-      return true;
-    }
-
-    /* baseline 맵이 없는 구 스냅샷 — 서버 per-row 등락으로 폴백 */
-    var changes = (snap.rankChangesByCategory && snap.rankChangesByCategory[cat]) || {};
-    var previousFallback = (snap.previousRanksByCategory && snap.previousRanksByCategory[cat]) || {};
-
+    /* 등락 초기화 후 생존 코호트 재순위로 상승/보합/하락 채움 */
     list.forEach(function (item) {
       if (!item) return;
       item.rankChange = null;
       item.previousBoardRank = null;
-
-      if (tabId === 'crew') {
-        if (!item.crewId) return;
-      } else if (!item.userId && !item.socialUserId && !item.firebaseUid) {
-        return;
-      }
-
-      var prevVal = tabId === 'crew'
-        ? lookupSnapVal(previousFallback, String(item.crewId))
-        : lookupSnapValForListItem(previousFallback, item);
-      if (prevVal != null) {
-        var prev = Math.floor(Number(prevVal));
-        var curr = Math.floor(Number(item.rank));
-        if (prev >= 1 && curr >= 1) {
-          item.rankChange = prev - curr;
-          item.previousBoardRank = prev;
-        }
-      } else {
-        var chVal = tabId === 'crew'
-          ? lookupSnapVal(changes, String(item.crewId))
-          : lookupSnapValForListItem(changes, item);
-        if (chVal != null && item.rank != null) {
-          var ch = Number(chVal);
-          var currRank = Math.floor(Number(item.rank));
-          if (isFinite(ch) && currRank >= 1) {
-            item.rankChange = ch;
-            item.previousBoardRank = currRank - ch;
-          }
-        }
-      }
     });
 
+    var filled = applySurvivorAwareMovement(list, baseline, tabId);
+    if (!filled) return false; /* 공통 사용자 없음 → localStorage 폴백 */
+
     normalizeListRankMovement(list);
+    /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */
     return true;
   }
 
@@ -312,26 +328,12 @@
 
     list.forEach(function (item) {
       if (!item) return;
-      if (tabId !== 'crew' && (item.isCrew || !item.userId)) return;
-      if (tabId === 'crew' && !item.crewId) return;
-
       item.rankChange = null;
       item.previousBoardRank = null;
-      var uid = tabId === 'crew' ? String(item.crewId) : String(item.userId);
-      var prevVal = null;
-      if (prevRanks) {
-        prevVal = lookupSnapVal(prevRanks, uid);
-        if (prevVal == null) prevVal = lookupSnapValForListItem(prevRanks, item);
-      }
-      if (prevVal != null) {
-        var prev = Math.floor(Number(prevVal));
-        var curr = Math.floor(Number(item.rank));
-        if (prev >= 1 && curr >= 1) {
-          item.rankChange = prev - curr;
-          item.previousBoardRank = prev;
-        }
-      }
     });
+
+    /* 서버 스냅샷과 동일하게 생존 코호트 재순위(모집단 증가 하락 편향 제거) */
+    if (prevRanks) applySurvivorAwareMovement(list, prevRanks, tabId);
 
     normalizeListRankMovement(list);
 
