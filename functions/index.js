@@ -2883,6 +2883,16 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
     }
   }
 
+  const summary = {
+    processed,
+    newActivities: newActivitiesTotal,
+    usersProcessed: docs.length,
+    errors: errors.length,
+    errorDetails: errors,
+    tssByUser: totalTssByUser,
+    dateFrom,
+    dateTo,
+  };
   console.log(`${prefix} 완료`, {
     processed,
     newActivities: newActivitiesTotal,
@@ -2893,6 +2903,7 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
       "Firebase Primary + Supabase Secondary (all users when dual_write_status≠OFF)",
   });
   if (errors.length) console.warn(`${prefix} 오류:`, errors);
+  return summary;
 }
 
 /** 1000명 대비: Strava 동기화 청크 워커 (50명/요청). 스케줄러가 팬아웃 호출. */
@@ -13656,6 +13667,7 @@ exports.migrateStelvioLogActivityType = onRequest(
 // ---------- Strava Webhook 비동기 처리 (processStravaActivity는 lib에서 호출) ----------
 exports.processStravaActivity = processStravaActivity;
 exports.processOneUserStravaSync = processOneUserStravaSync;
+exports.runStravaSyncForRange = runStravaSyncForRange;
 /** 러닝 Webhook 라우팅·processRunningActivity 전용 — 사이클 함수 본문 변경 없음 */
 exports.refreshStravaTokenForUser = refreshStravaTokenForUser;
 exports.fetchStravaActivityDetail = fetchStravaActivityDetail;
