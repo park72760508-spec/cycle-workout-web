@@ -64,7 +64,9 @@
   function enterRunBasecamp() {
     setActiveSport('run');
     try {
-      window.__basecampShownAfterAuth = false;
+      // RUN 주간 TOP10은 독립 플래그(__runWeeklyTop10AutoShownSession)로 표시된다.
+      // 공유 플래그 __basecampShownAfterAuth 는 CYCLE 주간 TOP10 게이트가 사용하므로
+      // RUN 진입 시 지우지 않는다(지우면 RUN 방문 후 CYCLE 팝업이 뜨지 않음).
       window.__deferWeeklyTop10UntilIntegratedDismiss = false;
     } catch (eRunTop) {}
     if (typeof showScreen === 'function') showScreen('runBasecampScreen');
