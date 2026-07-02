@@ -1106,7 +1106,8 @@ function applyInitialAuthRouting() {
           typeof window.stelvioShouldAutoShowCycleWeeklyTop10Modal === 'function' &&
           !window.stelvioShouldAutoShowCycleWeeklyTop10Modal()
         ) {
-          window.__basecampShownAfterAuth = false;
+          /* 활성 스포츠가 CYCLE이 아닐 뿐(RUN 우선 진입 등) — 인증 후 1회 플래그는 소비하지 않고 보존.
+             소비하면 RUN 먼저 방문 후 CYCLE 진입 시 CYCLE 주간 TOP10이 뜨지 않는다. */
           return;
         }
         var bc = document.getElementById('basecampScreen');
