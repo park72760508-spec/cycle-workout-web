@@ -11056,18 +11056,19 @@
         function weeklyPrivateDisplayName(rawName) {
           return rawName && rawName.length >= 1 ? rawName.charAt(0) + '**' : '**';
         }
+        var weeklyCaptionUnitHtml = '<span class="weekly-top10-unit-label" style="font-weight:700;color:#7c3aed;flex-shrink:0;">TSS</span>';
         if (isPrevWeek) {
           html +=
-            '<p class="weekly-top10-week-caption">※ 전주 확정 순위' +
+            '<p class="weekly-top10-week-caption" style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><span>※ 전주 확정 순위' +
             (data.startStr && data.endStr ? ' (' + data.startStr + ' ~ ' + data.endStr + ')' : '') +
-            '</p>';
+            '</span>' + weeklyCaptionUnitHtml + '</p>';
         } else if (data.startStr && data.endStr) {
           html +=
-            '<p class="weekly-top10-week-caption">※ 이번 주 순위 (' +
+            '<p class="weekly-top10-week-caption" style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><span>※ 이번 주 순위 (' +
             data.startStr +
             ' ~ ' +
             data.endStr +
-            ')</p>';
+            ')</span>' + weeklyCaptionUnitHtml + '</p>';
         }
         list.forEach(function(item, idx) {
           var rank = item.rank || (idx + 1);
@@ -11078,7 +11079,7 @@
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var displayText, badgeHtml = '', tssStr;
           var profUrl = stelvioRankingProfileImageUrlForDisplay(item);
-          tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
+          tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1);
           if (isPrivate) {
             if (canSeeFull) { displayText = rawName; badgeHtml = '<span class="ranking-private-badge ranking-private-badge-admin weekly-rank-private-badge-tight" style="margin-left:0;margin-right:0;" title="비공개">비</span>'; }
             else { displayText = weeklyPrivateDisplayName(rawName); }
@@ -11099,7 +11100,7 @@
           var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var mrDisplayText, mrBadgeHtml = '', mrTssStr;
           var mrProfUrl = stelvioRankingProfileImageUrlForDisplay(mr);
-          mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
+          mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1);
           if (mrIsPrivate) {
             if (mrCanSeeFull) { mrDisplayText = mrRawName; mrBadgeHtml = '<span class="ranking-private-badge ranking-private-badge-admin weekly-rank-private-badge-tight" style="margin-left:0;margin-right:0;" title="비공개">비</span>'; }
             else { mrDisplayText = weeklyPrivateDisplayName(mrRawName); }
@@ -39869,6 +39870,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           </div>
         </div>
         <button class="training-detail-close" onclick="closeRunWeeklyTop10Modal()" aria-label="닫기">&times;</button>
+      </div>
+      <!-- 제휴 할인 배너: 항상 표시(설정 연동 없음) — 클릭 시 제휴 할인 화면으로 이동 -->
+      <div id="runWeeklyTop10AffBanner" class="weekly-top10-aff-banner weekly-top10-aff-banner--connected" role="region" aria-label="스텔비오 제휴 할인 안내">
+        <img src="assets/img/gift.svg" class="weekly-top10-aff-icon" alt="" aria-hidden="true" style="width:2em;height:2em;object-fit:contain;flex-shrink:0;" />
+        <div class="weekly-top10-aff-text" style="justify-content:center;">
+          <span class="weekly-top10-aff-title">스텔비오 제휴 할인 받기</span>
+        </div>
+        <button type="button" class="weekly-top10-aff-btn" onclick="event.stopPropagation(); closeRunWeeklyTop10Modal(); setTimeout(function(){ if(typeof window.onAffiliateButtonClick==='function'){window.onAffiliateButtonClick();} else if(typeof showScreen==='function'){showScreen('affiliateScreen'); if(typeof window.initAffiliateReact==='function')window.initAffiliateReact();} }, 130);" aria-label="혜택 확인">혜택 확인</button>
       </div>
       <div class="training-detail-body" id="runWeeklyTop10Body">
         <!-- 랭킹 목록이 여기에 동적으로 표시됩니다 -->
