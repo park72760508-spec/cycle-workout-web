@@ -617,6 +617,8 @@ type ProcessStravaActivityResult = {
 };
 
 function inferWebhookRetryReason(status: number, errorText: string): string {
+  // 403 Application Inactive(앱 비활성)는 앱 레벨 공통 장애 — 사용자별 사유와 구분해 기록
+  if (status === 403 || errorText.toLowerCase().includes("application inactive")) return "app_inactive";
   if (status === 401) return "401";
   if (status === 429 || errorText.includes("429")) return "429";
   if (errorText.includes("dual-write")) return "processing";
