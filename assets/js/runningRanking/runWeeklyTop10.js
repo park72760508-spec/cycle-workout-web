@@ -92,9 +92,9 @@
     return '<span class="stelvio-rank-change stelvio-rank-change--flat weekly-rank-change-tight" style="margin-left:0;margin-right:0;" title="전날 ' + prev + '위">(-)</span>';
   }
 
+  /** 순위 행에는 값만 표기 (단위 km 는 캡션 우측에 표시) */
   function kmLabel(km) {
-    var f = fmt().formatDistanceKm ? fmt().formatDistanceKm(km) : (Number(km) || 0).toFixed(1);
-    return f + ' km';
+    return fmt().formatDistanceKm ? fmt().formatDistanceKm(km) : (Number(km) || 0).toFixed(1);
   }
 
   function maskedName(name) {
@@ -188,7 +188,10 @@
     }
 
     var wk = seoulWeekRange();
-    var html = '<p class="weekly-top10-week-caption">※ 이번 주 순위 (' + wk.startStr + ' ~ ' + wk.endStr + ')</p>';
+    var html = '<p class="weekly-top10-week-caption" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+      '<span>※ 이번 주 순위 (' + wk.startStr + ' ~ ' + wk.endStr + ')</span>' +
+      '<span class="weekly-top10-unit-label" style="font-weight:700;color:#7c3aed;flex-shrink:0;">km</span>' +
+      '</p>';
 
     var myItem = null;
     for (var i = 0; i < list.length; i++) {
