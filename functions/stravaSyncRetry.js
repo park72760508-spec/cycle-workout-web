@@ -174,9 +174,15 @@ function extractRetryStatusFromResult(result, userData) {
 }
 
 function inferRetryReasonFromResult(result, userData) {
+  // 403 Application Inactive(앱 비활성)는 앱 레벨 공통 장애 → 사용자별 재시도 사유와 구분해 기록
+  const appInactive =
+    (result && result.appInactive === true) ||
+    String(result && result.error ? result.error : "").toLowerCase().includes("application inactive");
+  if (appInactive) return "app_inactive";
+  const status = extractRetryStatusFromResult(result, userData);
+  if (status === 403) return "app_inactive";
   const existing = String(userData && userData.strava_sync_retry_reason ? userData.strava_sync_retry_reason : "").trim();
   if (existing) return existing.slice(0, 40);
-  const status = extractRetryStatusFromResult(result, userData);
   if (status === 401) return "401";
   if (status === 429) return "429";
   return "processing";

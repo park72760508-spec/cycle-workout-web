@@ -1233,6 +1233,29 @@ async function waitForStravaRateLimit(res) {
 /** Strava API 호출 간 딜레이 (Rate Limit 예방: 15분당 100회 → 9초 간격 필요) */
 const STRAVA_CALL_DELAY_MS = 9000;
 
+/**
+ * Strava 403 "Application Status Inactive" 판별.
+ * Strava 개발자 프로그램 정책상 앱이 비활성/미승인 상태이면 모든 사용자 호출이
+ * 403 {"resource":"Application","field":"Status","code":"Inactive"} 로 실패한다.
+ * 이는 특정 사용자 토큰 문제가 아니라 client_id(앱) 레벨 공통 장애이므로,
+ * 사용자별 재시도로는 복구되지 않고 Strava 설정(https://www.strava.com/settings/api)에서
+ * 앱 재활성화/티어 상향 승인이 필요하다.
+ */
+function isStravaApplicationInactiveError(status, bodyText) {
+  if (Number(status) !== 403) return false;
+  const t = String(bodyText || "").toLowerCase();
+  return t.includes("inactive") && (t.includes("application") || t.includes("status"));
+}
+
+/** 앱 비활성 상태를 운영자가 로그에서 즉시 식별하도록 남기는 공통 마커 로그 */
+function logStravaApplicationInactive(context, extra) {
+  console.error(
+    "[Strava][APP_INACTIVE] Strava 애플리케이션이 비활성(Inactive) 상태입니다. " +
+      "전체 사용자 수집 공통 장애 — https://www.strava.com/settings/api 에서 앱 상태/티어 확인 필요.",
+    { context: context || "unknown", ...(extra || {}) }
+  );
+}
+
 /** Strava 상세 활동 API 호출. 429 시 최대 5회 재시도 */
 async function fetchStravaActivityDetail(accessToken, activityId) {
   const url = `https://www.strava.com/api/v3/activities/${activityId}`;
@@ -1245,7 +1268,17 @@ async function fetchStravaActivityDetail(accessToken, activityId) {
         await waitForStravaRateLimit(res);
         continue;
       }
-      if (!res.ok) return { success: false, status: res.status, error: `Strava ${res.status}` };
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => "");
+        const appInactive = isStravaApplicationInactiveError(res.status, bodyText);
+        if (appInactive) logStravaApplicationInactive("fetchStravaActivityDetail", { activityId });
+        return {
+          success: false,
+          status: res.status,
+          appInactive,
+          error: `Strava ${res.status}${appInactive ? " Application Inactive" : ""}`,
+        };
+      }
       const activity = await res.json().catch(() => null);
       return activity ? { success: true, activity } : { success: false, error: "Invalid response" };
     } catch (e) {
@@ -1322,7 +1355,12 @@ async function fetchStravaStreams(accessToken, activityId) {
         await waitForStravaRateLimit(res);
         continue;
       }
-      if (!res.ok) return { success: false, status: res.status, watts: null, heartrate: null, altitude: null };
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => "");
+        const appInactive = isStravaApplicationInactiveError(res.status, bodyText);
+        if (appInactive) logStravaApplicationInactive("fetchStravaStreams", { activityId });
+        return { success: false, status: res.status, appInactive, watts: null, heartrate: null, altitude: null };
+      }
       const raw = await res.json().catch(() => null);
       let wattsArray = null;
       let heartrateArray = null;
@@ -1370,7 +1408,16 @@ async function fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, pag
         continue;
       }
       if (!res.ok) {
-        return { success: false, status: res.status, activities: [], error: `Strava ${res.status}` };
+        const bodyText = await res.text().catch(() => "");
+        const appInactive = isStravaApplicationInactiveError(res.status, bodyText);
+        if (appInactive) logStravaApplicationInactive("fetchStravaActivitiesPage", { afterUnix, beforeUnix, page });
+        return {
+          success: false,
+          status: res.status,
+          appInactive,
+          activities: [],
+          error: `Strava ${res.status}${appInactive ? " Application Inactive" : ""}`,
+        };
       }
       const activities = await res.json().catch(() => []);
       return {
@@ -2302,6 +2349,9 @@ function buildStravaFetchDiagnosticBase(userData, source) {
 function buildEmptyStravaFetchHint(diagnosticBase, count, status) {
   const hasReadAll = diagnosticBase && diagnosticBase.hasActivityReadAll === true;
   const hasRead = diagnosticBase && diagnosticBase.hasActivityRead === true;
+  if (Number(status) === 403) {
+    return "Strava가 403(Forbidden)을 반환했습니다. 앱이 비활성(Application Inactive) 상태이면 전체 사용자 공통 장애이므로 https://www.strava.com/settings/api 에서 앱 상태/티어 승인을 확인해야 합니다.";
+  }
   if (Number(status) !== 200) return "Strava 활동 목록 API가 200이 아니어서 수집 실패 상태입니다.";
   if (!hasReadAll && !hasRead) return "활동 읽기 권한(activity:read 또는 activity:read_all)이 없어 활동 목록을 가져올 수 없습니다.";
   if (hasReadAll && Number(count) === 0) {
@@ -2388,6 +2438,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     if (page === 1) firstPageStatus = pageRes.status || 0;
     if (!pageRes.success) {
       const failStatus = pageRes.status || 0;
+      const appInactive = pageRes.appInactive === true;
       await recordStravaActivityFetchDiagnostic(db, userId, {
         afterUnix,
         beforeUnix,
@@ -2397,7 +2448,12 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
         count: activities.length,
         pages: page,
         error: `활동 조회 실패: ${pageRes.status || pageRes.error}`,
+        hint: appInactive
+          ? "Strava 애플리케이션이 비활성(Inactive) 상태입니다. 특정 사용자 문제가 아닌 앱(client_id) 공통 장애이며, https://www.strava.com/settings/api 에서 앱 상태/티어를 확인해 재활성화·승인해야 수집이 재개됩니다."
+          : undefined,
       });
+      // 앱 비활성(403 Inactive)은 사용자별 재시도로 복구 불가 → pending 큐에 쌓지 않음(무의미한 재시도·쿼터 소모 방지).
+      // 앱 재활성화 후 스케줄 동기화가 자동으로 재수집한다.
       if (failStatus === 429) {
         await stravaSyncRetry.markStravaSyncRetryPending(db, userId, {
           dateFrom,
@@ -2408,7 +2464,15 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
           status: 429,
         });
       }
-      return { userId, processed: 0, newActivities: 0, userTss: 0, error: `활동 조회 실패: ${pageRes.status || pageRes.error}` };
+      return {
+        userId,
+        processed: 0,
+        newActivities: 0,
+        userTss: 0,
+        appInactive,
+        status: failStatus,
+        error: `활동 조회 실패: ${pageRes.status || pageRes.error}`,
+      };
     }
     activities.push(...pageRes.activities);
     if (pageRes.activities.length < 200) break;
