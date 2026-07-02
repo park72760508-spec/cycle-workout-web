@@ -27208,6 +27208,7 @@
   <script src="assets/js/runningRanking/runningRankingCrew.js"></script>
   <script src="assets/js/runningRanking/runningRankingCrewTab.js"></script>
   <script src="assets/js/runningRanking/runningRankingRoutes.js"></script>
+  <script src="assets/js/runningRanking/runWeeklyTop10.js"></script>
   <script src="assets/js/runningRanking/runningRankingListView.js"></script>
   <script src="assets/js/runningRanking/runningRankingSearch.js"></script>
   <script src="assets/js/runningRanking/components/RunningRankingSkeleton.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
@@ -39531,7 +39532,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (!tryShowWeeklyTop10()) { setTimeout(function() { tryShowWeeklyTop10(); }, 500); }
           }, 400);
         }
-        
+
+        /* RUN 베이스캠프 진입: 주간 마일리지(누적 거리) TOP10 자동 표시 (세션당 1회) */
+        if (screenId === 'runBasecampScreen' && typeof window.maybeAutoShowRunWeeklyTop10 === 'function') {
+          setTimeout(function () {
+            try { window.maybeAutoShowRunWeeklyTop10(); } catch (eRunTop10) {}
+          }, 400);
+        }
+
         /* 랭킹: openStelvioRankingBoardModal 외 경로(showScreen만) 진입 시에도 IDB 즉시 표시 + 백그라운드 동기화 */
         if (screenId === 'stelvioRankingScreen' && !window.__stelvioRankingOpening) {
           if (typeof stelvioEnsureDurationTabsScrollVisible === 'function') {
@@ -39838,6 +39846,41 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         </button>
         <label class="weekly-top10-dont-show-today" for="weeklyTop10DontShowToday" style="margin-top:5px;margin-bottom:20px;">
           <input type="checkbox" id="weeklyTop10DontShowToday" />
+          <span>오늘 그만 보기</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- RUN 주간 마일리지 TOP10 (CYCLE 주간 TOP10 디자인 재사용, 지표=주간 누적 거리) -->
+  <div id="runWeeklyTop10Modal" class="training-detail-modal stelvio-ios-popup hidden" onclick="if(event.target === this) closeRunWeeklyTop10Modal();">
+    <div class="training-detail-modal-content stelvio-ios-modal-content" onclick="event.stopPropagation();">
+      <div class="training-detail-header">
+        <div class="weekly-top10-header-text">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <h3 class="training-detail-title">RUN 주간 마일리지 TOP10</h3>
+            <button type="button" id="runWeeklyTop10InfoToggle"
+              onclick="(function(){var c=document.getElementById('runWeeklyTop10InfoCollapse');var btn=document.getElementById('runWeeklyTop10InfoToggle');if(c.style.display==='none'){c.style.display='block';btn.textContent='-';}else{c.style.display='none';btn.textContent='+';}})();"
+              style="flex-shrink:0;background:none;border:none;color:#7c3aed;font-size:18px;font-weight:bold;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;padding:0 2px;">+</button>
+          </div>
+          <div id="runWeeklyTop10InfoCollapse" style="display:none;">
+            <p class="weekly-top10-period">기간 : 매주 월~일요일 (주간 누적 거리 기준)</p>
+            <p class="weekly-top10-points">*순위 : 주간 누적 거리 1~10위 · 전일 대비 등락 표시</p>
+          </div>
+        </div>
+        <button class="training-detail-close" onclick="closeRunWeeklyTop10Modal()" aria-label="닫기">&times;</button>
+      </div>
+      <div class="training-detail-body" id="runWeeklyTop10Body">
+        <!-- 랭킹 목록이 여기에 동적으로 표시됩니다 -->
+      </div>
+      <div class="training-detail-strava-footer" style="display: flex; flex-direction: column; align-items: center; padding: 0 16px;">
+        <button type="button" class="stelvio-ranking-board-entry-btn stelvio-purple-btn" onclick="closeRunWeeklyTop10Modal(); if(typeof openRunningRankingBoard==='function')openRunningRankingBoard();">
+          <span class="stelvio-ranking-btn-left">랭킹 보드</span>
+          <img src="assets/img/stelvio_w.png" alt="" class="stelvio-ranking-btn-logo" style="height: 28px; width: auto; margin: 0;" />
+          <span class="stelvio-ranking-btn-right">더보기</span>
+        </button>
+        <label class="weekly-top10-dont-show-today" for="runWeeklyTop10DontShowToday" style="margin-top:5px;margin-bottom:20px;">
+          <input type="checkbox" id="runWeeklyTop10DontShowToday" />
           <span>오늘 그만 보기</span>
         </label>
       </div>
