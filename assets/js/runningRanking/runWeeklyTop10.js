@@ -57,12 +57,12 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  /** CYCLE 주간 TOP10과 동일한 원 스피너 디자인 (assets/css/style.css .weekly-top10-* 전역 클래스 재사용) */
   function loadingHtml() {
-    return '<div class="weekly-top10-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:12px;">' +
-      '<div class="weekly-top10-spinner" style="width:32px;height:32px;border:3px solid #e9e2fb;border-top-color:#7c3aed;border-radius:50%;animation:runWeeklySpin .8s linear infinite;"></div>' +
-      '<p class="weekly-top10-loading-text" style="color:#7c3aed;font-size:14px;">주간 마일리지 순위를 불러오는 중…</p>' +
-      '</div>' +
-      '<style>@keyframes runWeeklySpin{to{transform:rotate(360deg)}}</style>';
+    return '<div class="weekly-top10-loading" aria-live="polite" aria-busy="true">' +
+      '<div class="weekly-top10-spinner" role="img" aria-label="로딩 중"></div>' +
+      '<p class="weekly-top10-loading-text">주간 마일리지 TOP10 불러오는 중...</p>' +
+      '</div>';
   }
 
   function avatarHtml(profUrl, userId, name) {
@@ -147,13 +147,33 @@
     return list;
   }
 
+  /** CYCLE 주간 TOP10과 동일: 본인·관리자·친구·같은 모임 멤버는 실명 확인 가능 */
+  function viewerCanSeeFull(item, isSelf, isAdmin) {
+    if (isSelf || isAdmin) return true;
+    var friendSet = window.stelvioRankingFriendUserSet;
+    var groupSet = window.stelvioRankingGroupContactSet;
+    var ids = [];
+    if (item.socialUserId) ids.push(String(item.socialUserId));
+    if (item.userId != null) ids.push(String(item.userId));
+    if (item.firebaseUid) ids.push(String(item.firebaseUid));
+    for (var i = 0; i < ids.length; i++) {
+      if (friendSet && typeof friendSet.has === 'function' && friendSet.has(ids[i])) return true;
+      if (groupSet && typeof groupSet.has === 'function' && groupSet.has(ids[i])) return true;
+    }
+    return false;
+  }
+
   function rowHtml(item, opts) {
     opts = opts || {};
     var rank = item.rank;
     var medalSrc = (cfg().MEDAL_SRC) || ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
-    var canSee = opts.isSelf || opts.isAdmin;
+    var canSee = viewerCanSeeFull(item, opts.isSelf, opts.isAdmin);
     var rawName = escapeHtml(item.name || '러너');
     var displayText = item.isPrivate && !canSee ? escapeHtml(maskedName(item.name)) : rawName;
+    /* CYCLE 동일: 비공개 사용자를 실명으로 볼 수 있는 뷰어(본인·관리자·친구·모임)에게 '비' 배지 표시 */
+    var privateBadge = (item.isPrivate && canSee)
+      ? '<span class="ranking-private-badge ranking-private-badge-admin weekly-rank-private-badge-tight" style="margin-left:0;margin-right:0;" title="비공개">비</span>'
+      : '';
     var badge = rankChangeBadgeHtml(item);
     var html = '<div class="weekly-rank-item' + (opts.isSelf ? ' weekly-rank-item-self' : '') + '"' + (opts.isSelf ? ' id="runWeeklyTop10MyRankRow"' : '') + '>';
     if (rank <= 3) {
@@ -163,7 +183,7 @@
     html += '<span class="weekly-rank-name">' + avatarHtml(item.profileUrl, item.userId, displayText) +
       '<span class="weekly-rank-name-text" title="' + rawName + '">' +
       '<span class="weekly-rank-name-label">' + displayText + '</span>' +
-      '<span class="weekly-rank-change-slot">' + badge + '</span></span></span>';
+      '<span class="weekly-rank-change-slot">' + badge + privateBadge + '</span></span></span>';
     html += '<span class="weekly-rank-tss">' + kmLabel(item.value) + '</span>';
     html += '</div>';
     return html;
