@@ -9754,9 +9754,10 @@ exports.getRunningLeaderboard = onRequest(
           };
         }
       }
-      // 비공개(is_private) 전환이 재로딩 시 빠르게 반영되도록 캐시를 단축.
-      // (순위/점수는 스냅샷으로 동결, is_private·실명은 RPC가 public.users로 실시간 오버레이)
-      const cacheMaxAge = 120;
+      // 요청 URL 이 일자(d)·비공개버전(pv)로 캐시가 무효화되므로 장기 캐시로 함수 호출을 최소화.
+      // - 매일(KST 날짜 변경) 1회 자동 갱신, 비공개 토글 시 pv 증가로 즉시 갱신.
+      // - 라이브 폴백 응답은 좀 더 짧게 유지.
+      const cacheMaxAge = published.source === "live" ? 300 : 86400;
       res.set("Cache-Control", `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}`);
       return res.status(200).json({
         success: true,
@@ -13975,6 +13976,29 @@ exports.onUserProfileWritten = functions
       });
     } catch (e) {
       console.warn("[onUserProfileWritten] Supabase profile sync failed:", userId, e.message || e);
+    }
+
+    // 비공개(is_private) 변경 시 랭킹 캐시 버전을 올린다.
+    // 클라이언트가 이 버전을 리더보드 요청 URL에 붙여, 토글 즉시 CDN 캐시를 무효화(즉시 반영)한다.
+    try {
+      const wasPrivate = before ? before.is_private === true : false;
+      const nowPrivate = after.is_private === true;
+      if (!before || wasPrivate !== nowPrivate) {
+        await admin
+          .firestore()
+          .collection("ranking_meta")
+          .doc("run_privacy_version")
+          .set(
+            {
+              version: admin.firestore.FieldValue.increment(1),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              lastUserId: userId,
+            },
+            { merge: true }
+          );
+      }
+    } catch (e) {
+      console.warn("[onUserProfileWritten] privacy version bump failed:", userId, e.message || e);
     }
   });
 
