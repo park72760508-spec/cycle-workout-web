@@ -9754,7 +9754,9 @@ exports.getRunningLeaderboard = onRequest(
           };
         }
       }
-      const cacheMaxAge = published.source === "live" ? 300 : 3600;
+      // 비공개(is_private) 전환이 재로딩 시 빠르게 반영되도록 캐시를 단축.
+      // (순위/점수는 스냅샷으로 동결, is_private·실명은 RPC가 public.users로 실시간 오버레이)
+      const cacheMaxAge = 120;
       res.set("Cache-Control", `public, max-age=${cacheMaxAge}, s-maxage=${cacheMaxAge}`);
       return res.status(200).json({
         success: true,
