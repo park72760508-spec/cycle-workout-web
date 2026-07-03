@@ -321,7 +321,9 @@ async function provisionSupabaseUserAfterProfile(admin, firebaseUid) {
 }
 
 /**
- * Firestore gender/sex만 Supabase users.gender에 동기화 (경량).
+ * Firestore의 랭킹 공개용 프로필 필드(gender/sex, is_private, 프로필 이미지)를
+ * Supabase users에 경량 동기화한다. 기존에 비공개로 설정된 사용자가 트리거 배포 이전이라
+ * Supabase에 반영되지 못한 경우를 백필로 정정하기 위함.
  */
 async function syncSupabaseUserGenderFromFirestore(admin, firebaseUid) {
   const uid = String(firebaseUid || "").trim();
@@ -337,7 +339,7 @@ async function syncSupabaseUserGenderFromFirestore(admin, firebaseUid) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   const { data: existing, error: readErr } = await supabase
     .from("users")
-    .select("id, gender")
+    .select("id, gender, is_private, profile_image_url")
     .eq("id", row.id)
     .maybeSingle();
   if (readErr) throw readErr;
@@ -355,18 +357,30 @@ async function syncSupabaseUserGenderFromFirestore(admin, firebaseUid) {
     };
   }
 
-  if (existing.gender === row.gender) {
+  const nextIsPrivate = row.is_private === true;
+  const nextProfileImageUrl = row.profile_image_url || null;
+  const genderChanged = existing.gender !== row.gender;
+  const privacyChanged = Boolean(existing.is_private) !== nextIsPrivate;
+  const profileImageChanged = (existing.profile_image_url || null) !== nextProfileImageUrl;
+
+  if (!genderChanged && !privacyChanged && !profileImageChanged) {
     return {
       action: "unchanged",
       firebaseUid: uid,
       gender: row.gender,
       previousGender: existing.gender,
+      isPrivate: nextIsPrivate,
     };
   }
 
   const { error: updErr } = await supabase
     .from("users")
-    .update({ gender: row.gender, updated_at: new Date().toISOString() })
+    .update({
+      gender: row.gender,
+      is_private: nextIsPrivate,
+      profile_image_url: nextProfileImageUrl,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", row.id);
   if (updErr) throw updErr;
 
@@ -375,6 +389,8 @@ async function syncSupabaseUserGenderFromFirestore(admin, firebaseUid) {
     firebaseUid: uid,
     gender: row.gender,
     previousGender: existing.gender,
+    isPrivate: nextIsPrivate,
+    previousIsPrivate: Boolean(existing.is_private),
   };
 }
 

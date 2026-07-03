@@ -13977,7 +13977,8 @@ exports.onUserProfileWritten = functions
   });
 
 /**
- * 관리자(grade=1): Firestore users.gender/sex → Supabase users.gender 백필 (배치).
+ * 관리자(grade=1): Firestore 랭킹 공개 프로필(gender/sex, is_private, 프로필 이미지)
+ * → Supabase users 백필 (배치). 트리거 배포 이전에 비공개로 설정된 사용자를 정정한다.
  * body/query: startAfterUid, maxUsers (기본 500, 최대 5000), dryRun
  */
 exports.adminBackfillSupabaseUserGender = onRequest(
@@ -14018,7 +14019,7 @@ exports.adminBackfillSupabaseUserGender = onRequest(
         success: true,
         message: dryRun
           ? "Firestore gender 소스 집계 (dry-run, Supabase 미갱신)"
-          : "Supabase users.gender 백필 배치 완료",
+          : "Supabase users 프로필(gender·is_private·프로필이미지) 백필 배치 완료",
         ...stats,
       });
     } catch (e) {
