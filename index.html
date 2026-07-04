@@ -2853,7 +2853,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260704sportAuth3" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260704sportAuth4" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -3586,14 +3586,16 @@
                 <div class="basecamp-auth-bar-welcome">
                   <span id="categoryAuthBarWelcomeLine1" class="basecamp-auth-bar-welcome-line">환영합니다.</span>
                   <span id="categoryAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
-                  <!-- 인라인 스타일: CSS 캐시와 무관하게 녹색·가로 1줄 보장 -->
-                  <a id="categoryAuthBarCafeLink" class="basecamp-auth-bar-cafe-link" href="https://cafe.naver.com/stelvio" target="_blank" rel="noopener noreferrer" style="display:inline-flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;margin-top:4px;max-width:100%;color:#006400;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;line-height:1.2;" onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;">
-                    <img class="basecamp-footer-cafe-icon" src="assets/img/community.png" alt="" style="height:1.35em;width:auto;max-height:1.35em;flex-shrink:0;display:block;object-fit:contain;" />
-                    <span style="color:#006400;white-space:nowrap;flex-shrink:0;">STELVIO 카페 바로가기</span>
-                  </a>
                 </div>
               </div>
             </div>
+          </div>
+          <!-- 환영 블록과 구분선 사이 고정 12px 공간의 정중앙에 카페 바로가기 배치 (공간 높이 유지) -->
+          <div id="categoryCafeBetween" class="category-cafe-between" style="position:relative;height:12px;margin:0;padding:0;overflow:visible;z-index:5;" aria-hidden="true">
+            <a id="categoryAuthBarCafeLink" class="basecamp-auth-bar-cafe-link" href="https://cafe.naver.com/stelvio" target="_blank" rel="noopener noreferrer" style="display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;color:#006400;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;line-height:1.2;" onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;">
+              <img class="basecamp-footer-cafe-icon" src="assets/img/community.png" alt="" style="height:1.35em;width:auto;max-height:1.35em;flex-shrink:0;display:block;object-fit:contain;" />
+              <span style="color:#006400;white-space:nowrap;flex-shrink:0;">STELVIO 카페 바로가기</span>
+            </a>
           </div>
           <div id="categoryBasecampFooter" class="basecamp-footer" style="margin-top:0;margin-bottom:0;padding-top:12px;padding-bottom:12px;border-top:1px solid rgba(34,197,94,0.2);">
             <p style="margin:0;padding:0;line-height:1;">
@@ -29950,21 +29952,33 @@
         _catAuthRight.style.flexDirection = 'column';
         _catAuthRight.style.alignItems = 'center';
       }
-      // 카페 링크: CSS 캐시와 무관하게 녹색·가로 1줄 (인라인 + JS 재적용)
+      // 카페 링크: 환영 블록↔구분선 고정 12px 슬롯 정중앙 (로그인 시에만 표시)
+      var _catCafeBetween = document.getElementById('categoryCafeBetween');
       var _catCafeLink = document.getElementById('categoryAuthBarCafeLink');
+      if (_catCafeBetween) {
+        _catCafeBetween.setAttribute('aria-hidden', loggedIn ? 'false' : 'true');
+      }
       if (_catCafeLink) {
-        _catCafeLink.style.setProperty('display', 'inline-flex', 'important');
-        _catCafeLink.style.setProperty('flex-direction', 'row', 'important');
-        _catCafeLink.style.setProperty('flex-wrap', 'nowrap', 'important');
-        _catCafeLink.style.setProperty('align-items', 'center', 'important');
-        _catCafeLink.style.setProperty('white-space', 'nowrap', 'important');
-        _catCafeLink.style.setProperty('color', '#006400', 'important');
-        _catCafeLink.style.setProperty('font-size', '11px', 'important');
-        _catCafeLink.style.setProperty('font-weight', '600', 'important');
-        var _catCafeSpan = _catCafeLink.querySelector('span');
-        if (_catCafeSpan) {
-          _catCafeSpan.style.setProperty('color', '#006400', 'important');
-          _catCafeSpan.style.setProperty('white-space', 'nowrap', 'important');
+        if (loggedIn) {
+          _catCafeLink.style.setProperty('display', 'inline-flex', 'important');
+          _catCafeLink.style.setProperty('position', 'absolute', 'important');
+          _catCafeLink.style.setProperty('left', '50%', 'important');
+          _catCafeLink.style.setProperty('top', '50%', 'important');
+          _catCafeLink.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
+          _catCafeLink.style.setProperty('flex-direction', 'row', 'important');
+          _catCafeLink.style.setProperty('flex-wrap', 'nowrap', 'important');
+          _catCafeLink.style.setProperty('align-items', 'center', 'important');
+          _catCafeLink.style.setProperty('white-space', 'nowrap', 'important');
+          _catCafeLink.style.setProperty('color', '#006400', 'important');
+          _catCafeLink.style.setProperty('font-size', '11px', 'important');
+          _catCafeLink.style.setProperty('font-weight', '600', 'important');
+          var _catCafeSpan = _catCafeLink.querySelector('span');
+          if (_catCafeSpan) {
+            _catCafeSpan.style.setProperty('color', '#006400', 'important');
+            _catCafeSpan.style.setProperty('white-space', 'nowrap', 'important');
+          }
+        } else {
+          _catCafeLink.style.setProperty('display', 'none', 'important');
         }
       }
       // 스포츠 카테고리 footer: 로그인 시 로그아웃(이미지+문구 가로 1줄), 비로그인 시 카페 바로가기
