@@ -3229,6 +3229,46 @@ exports.stravaWebhookRetryMonitorSchedule = onSchedule(
   }
 );
 
+/** strava_webhook_retries "done" 문서 보관 기간(일). 이 기간이 지난 처리 완료 문서는 삭제한다. */
+const STRAVA_WEBHOOK_RETRY_DONE_TTL_DAYS = 30;
+
+/**
+ * strava_webhook_retries TTL 정리 — 매일 04:00(서울).
+ * status_queue="done"이고 processed_at이 TTL(기본 30일)보다 오래된 문서를 배치 삭제하여 컬렉션 무한 증가를 방지한다.
+ * pending 문서(processed_at=null)는 대상에서 제외(status_queue 조건으로 안전 분리).
+ */
+exports.stravaWebhookRetryCleanupSchedule = onSchedule(
+  { schedule: "0 4 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 540, memory: "256MiB" },
+  async () => {
+    const db = admin.firestore();
+    const cutoffIso = new Date(
+      Date.now() - STRAVA_WEBHOOK_RETRY_DONE_TTL_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const collRef = db.collection(stravaGapDetect.STRAVA_WEBHOOK_RETRIES_COLLECTION);
+    let deleted = 0;
+    // 실행당 상한(20배치 × 500 = 10,000건)으로 타임아웃 방지. 남으면 다음날 이어서 정리.
+    for (let batchNo = 0; batchNo < 20; batchNo += 1) {
+      const snap = await collRef
+        .where("status_queue", "==", "done")
+        .where("processed_at", "<", cutoffIso)
+        .orderBy("processed_at", "asc")
+        .limit(500)
+        .get();
+      if (snap.empty) break;
+      const batch = db.batch();
+      snap.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+      deleted += snap.size;
+      if (snap.size < 500) break;
+    }
+    console.log("[stravaWebhookRetryCleanup] 완료", {
+      deleted,
+      ttlDays: STRAVA_WEBHOOK_RETRY_DONE_TTL_DAYS,
+      cutoff: cutoffIso,
+    });
+  }
+);
+
 /** Strava API Rate Limit: 15분당 100회. 85회에서 중단하여 여유 확보. */
 const STRAVA_API_CALL_LIMIT = 85;
 
