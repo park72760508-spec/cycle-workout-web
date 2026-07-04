@@ -1525,16 +1525,29 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   const skipPointUpdate = Boolean(options && options.skipPointUpdate);
   const ownerIdNum = Number(ownerId);
   const activityId = String(objectId);
-  if (!ownerIdNum || !activityId) {
+  // options.userId가 오면 athlete_id 조회를 건너뛰고 해당 유저 문서를 직접 사용한다.
+  // (스케줄/갭 스캔·재시도 경로는 이미 userId를 알고 있으므로, strava_athlete_id 누락·불일치가 있어도 수집이 되도록 한다.)
+  const forcedUserId = options && options.userId ? String(options.userId).trim() : "";
+  if (!activityId || (!ownerIdNum && !forcedUserId)) {
     console.warn("[processStravaActivity] owner_id 또는 object_id 없음:", { ownerId, objectId });
     return buildProcessStravaActivityFailure(activityId, { error: "owner_id 또는 object_id 없음" });
   }
-  const usersSnap = await db.collection("users").where("strava_athlete_id", "==", ownerIdNum).limit(1).get();
-  if (usersSnap.empty) {
-    console.warn("[processStravaActivity] strava_athlete_id=", ownerIdNum, "에 해당하는 유저 없음");
-    return buildProcessStravaActivityFailure(activityId, { error: "user_not_found" });
+  let userDoc;
+  if (forcedUserId) {
+    const forcedSnap = await db.collection("users").doc(forcedUserId).get();
+    if (!forcedSnap.exists) {
+      console.warn("[processStravaActivity] userId=", forcedUserId, "문서 없음");
+      return buildProcessStravaActivityFailure(activityId, { userId: forcedUserId, error: "user_not_found" });
+    }
+    userDoc = forcedSnap;
+  } else {
+    const usersSnap = await db.collection("users").where("strava_athlete_id", "==", ownerIdNum).limit(1).get();
+    if (usersSnap.empty) {
+      console.warn("[processStravaActivity] strava_athlete_id=", ownerIdNum, "에 해당하는 유저 없음");
+      return buildProcessStravaActivityFailure(activityId, { error: "user_not_found" });
+    }
+    userDoc = usersSnap.docs[0];
   }
-  const userDoc = usersSnap.docs[0];
   const userId = userDoc.id;
   const userData = userDoc.data();
   const ftp = Number(userData.ftp) || 0;

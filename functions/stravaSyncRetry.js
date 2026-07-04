@@ -196,18 +196,19 @@ function inferRetryReasonFromResult(result, userData) {
  * @param {Function} processStravaActivityFn
  */
 async function retrySingleStravaActivity(db, userId, userData, activityId, processStravaActivityFn) {
-  const athleteId = Number(userData && userData.strava_athlete_id);
-  if (!athleteId || !activityId) {
+  const athleteId = Number(userData && userData.strava_athlete_id) || 0;
+  if (!activityId) {
     return {
       userId,
       processed: 0,
       newActivities: 0,
       userTss: 0,
-      error: !athleteId ? "strava_athlete_id 없음" : "activity_id 없음",
+      error: "activity_id 없음",
     };
   }
   try {
-    const legacyResult = await processStravaActivityFn(db, athleteId, activityId);
+    // { userId } 전달로 strava_athlete_id 누락·불일치와 무관하게 단건 수집이 되도록 한다.
+    const legacyResult = await processStravaActivityFn(db, athleteId, activityId, { userId });
     if (!legacyResult || legacyResult.error) {
       return {
         userId,

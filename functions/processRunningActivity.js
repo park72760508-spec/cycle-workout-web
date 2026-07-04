@@ -172,7 +172,16 @@ async function markRunningActivitySyncRetry(db, firebaseUid, activityId, activit
   }
 }
 
-async function resolveStravaUserByOwnerId(db, ownerId) {
+async function resolveStravaUserByOwnerId(db, ownerId, options = {}) {
+  // options.userId가 있으면 athlete_id 조회를 건너뛰고 해당 유저를 직접 사용한다.
+  // (갭 스캔·재시도 경로는 userId를 이미 알고 있으므로 strava_athlete_id 누락·불일치와 무관하게 동작한다.)
+  const forcedUserId = options && options.userId ? String(options.userId).trim() : "";
+  if (forcedUserId) {
+    if (options.userData) return { userId: forcedUserId, userData: options.userData };
+    const doc = await db.collection("users").doc(forcedUserId).get();
+    if (!doc.exists) return null;
+    return { userId: forcedUserId, userData: doc.data() || {} };
+  }
   const ownerIdNum = Number(ownerId);
   if (!ownerIdNum) return null;
   const snap = await db.collection("users").where("strava_athlete_id", "==", ownerIdNum).limit(1).get();
@@ -184,8 +193,8 @@ async function resolveStravaUserByOwnerId(db, ownerId) {
  * Webhook create 라우팅용 — Detailed Activity API 1회 조회.
  * @returns {Promise<{ success: boolean, activity?: object, userId?: string, status?: number, error?: string }>}
  */
-async function fetchStravaActivityDetailForOwner(db, ownerId, objectId) {
-  const resolved = await resolveStravaUserByOwnerId(db, ownerId);
+async function fetchStravaActivityDetailForOwner(db, ownerId, objectId, options = {}) {
+  const resolved = await resolveStravaUserByOwnerId(db, ownerId, options);
   if (!resolved) {
     return { success: false, error: "user_not_found" };
   }
@@ -299,12 +308,12 @@ async function upsertRunningActivityToSupabase(firebaseUid, row) {
  * @param {number|string} objectId Strava activity id
  * @param {object} [activityPrefetched] 라우팅 단계에서 이미 조회한 activity
  */
-async function processRunningActivity(db, ownerId, objectId, activityPrefetched) {
+async function processRunningActivity(db, ownerId, objectId, activityPrefetched, options = {}) {
   let activity = activityPrefetched;
   let userId = null;
 
   if (!activity) {
-    const fetched = await fetchStravaActivityDetailForOwner(db, ownerId, objectId);
+    const fetched = await fetchStravaActivityDetailForOwner(db, ownerId, objectId, options);
     if (!fetched.success || !fetched.activity) {
       const err = new Error(fetched.error || "running activity fetch failed");
       err.status = fetched.status || 0;
@@ -324,7 +333,7 @@ async function processRunningActivity(db, ownerId, objectId, activityPrefetched)
     activity = fetched.activity;
     userId = fetched.userId;
   } else {
-    const resolved = await resolveStravaUserByOwnerId(db, ownerId);
+    const resolved = await resolveStravaUserByOwnerId(db, ownerId, options);
     if (!resolved) {
       throw new Error("user_not_found");
     }

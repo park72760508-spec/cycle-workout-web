@@ -290,6 +290,8 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
   let apiCount = 0;
   let firstPageError = null;
   let firstPageStatus = 0;
+  // 활동 목록 항목의 athlete.id로 실제 Strava athlete id를 파악한다 (strava_athlete_id 누락·불일치 자가복구용).
+  let detectedAthleteId = 0;
 
   while (page <= STRAVA_GAP_DETECT_MAX_PAGES) {
     let pageRes = await stravaSyncRetry.fetchActivitiesPageWithOuter429Retry(
@@ -329,6 +331,10 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
 
     const pageActivities = Array.isArray(pageRes.activities) ? pageRes.activities : [];
     for (const act of pageActivities) {
+      if (!detectedAthleteId && act && act.athlete && act.athlete.id != null) {
+        const aid = Number(act.athlete.id);
+        if (Number.isFinite(aid) && aid > 0) detectedAthleteId = aid;
+      }
       const classified = classifyStravaListActivity(act);
       if (!classified) continue;
       if (classified.kind === "running") runningListIds.push(classified.actId);
@@ -347,6 +353,7 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
       listCount: 0,
       listCountCycling: 0,
       listCountRunning: 0,
+      detectedAthleteId,
       error: firstPageError || null,
       status: firstPageStatus || 0,
     };
@@ -391,6 +398,7 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
     listCountCycling: cyclingListIds.length,
     listCountRunning: runningListIds.length,
     logReadCount: readCount,
+    detectedAthleteId,
     error: firstPageError || null,
     status: firstPageStatus || 0,
   };
@@ -433,7 +441,7 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
       return { userId: entry.userId, skipped: true, reason: "user_not_found" };
     }
     const userData = userSnap.data() || {};
-    const athleteId = Number(userData.strava_athlete_id);
+    let athleteId = Number(userData.strava_athlete_id) || 0;
     const activityIds = new Set(entry.explicitActivityIds);
     let gapError = null;
     let gapStatus = 0;
@@ -442,6 +450,25 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
       try {
         const gap = await detectMissingActivityIdsForUser(db, entry.userId, userData, range, deps);
         apiCalls += gap.apiCount || 1;
+        // strava_athlete_id 자가복구: 토큰이 실제로 소유한 athlete id로 보정한다.
+        // (누락·불일치 시 웹훅이 owner_id로 유저를 못 찾아 실시간 수집이 실패하던 문제를 영구 복구)
+        const detectedAthleteId = Number(gap.detectedAthleteId) || 0;
+        if (detectedAthleteId > 0 && detectedAthleteId !== athleteId) {
+          try {
+            await db.collection("users").doc(entry.userId).update({ strava_athlete_id: detectedAthleteId });
+            console.warn("[stravaGapDetect] strava_athlete_id 자가복구:", entry.userId, {
+              before: athleteId || null,
+              after: detectedAthleteId,
+            });
+            athleteId = detectedAthleteId;
+          } catch (backfillErr) {
+            console.warn(
+              "[stravaGapDetect] strava_athlete_id 자가복구 실패(무시하고 계속):",
+              entry.userId,
+              backfillErr && backfillErr.message ? backfillErr.message : backfillErr
+            );
+          }
+        }
         if (gap.error) {
           gapError = gap.error;
           gapStatus = gap.status || 0;
@@ -514,9 +541,9 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
       };
     }
 
-    if (!athleteId) {
-      return { userId: entry.userId, error: "strava_athlete_id 없음", ingested: 0 };
-    }
+    // strava_athlete_id가 없거나 불일치여도 userId를 알고 있으므로 수집을 진행한다.
+    // (ingest 경로에 { userId }를 넘겨 athlete_id 재조회 의존을 제거)
+    const ingestOptions = { userId: entry.userId, userData };
 
     let userIngested = 0;
     let runIngested = 0;
@@ -526,17 +553,17 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
     for (const activityId of activityIds) {
       let legacyResult;
       try {
-        const preview = await runningModule.fetchStravaActivityDetailForOwner(db, athleteId, activityId);
+        const preview = await runningModule.fetchStravaActivityDetailForOwner(db, athleteId, activityId, ingestOptions);
         if (
           preview.success &&
           preview.activity &&
           runningModule.isRunningStravaActivityType(preview.activity.type, preview.activity.sport_type)
         ) {
           try {
-            await runningModule.processRunningActivity(db, athleteId, activityId, preview.activity);
+            await runningModule.processRunningActivity(db, athleteId, activityId, preview.activity, ingestOptions);
             userIngested += 1;
             runIngested += 1;
-            await markStravaWebhookRetryDone(db, athleteId, activityId);
+            if (athleteId) await markStravaWebhookRetryDone(db, athleteId, activityId);
           } catch (runErr) {
             lastError = runErr && runErr.message ? runErr.message : String(runErr);
             await stravaSyncRetry.markStravaSyncRetryPending(db, entry.userId, {
@@ -551,7 +578,7 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
           }
           continue;
         }
-        legacyResult = await deps.processStravaActivity(db, athleteId, activityId);
+        legacyResult = await deps.processStravaActivity(db, athleteId, activityId, ingestOptions);
       } catch (e) {
         lastError = e && e.message ? e.message : String(e);
         break;
@@ -571,7 +598,7 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
       }
       userIngested += 1;
       cycleIngested += 1;
-      await markStravaWebhookRetryDone(db, athleteId, activityId);
+      if (athleteId) await markStravaWebhookRetryDone(db, athleteId, activityId);
     }
 
     if (!lastError) {
@@ -703,12 +730,15 @@ async function ingestMissingRunningActivityIds(
   }
   let ingested = 0;
   let failed = 0;
+  // { userId }를 넘겨 strava_athlete_id 누락·불일치와 무관하게 RUN 누락도 수집되게 한다.
+  const ingestOptions = { userId: firebaseUid };
   for (const activityId of ids) {
     try {
       const preview = await processRunningActivity.fetchStravaActivityDetailForOwner(
         db,
         athleteId,
-        activityId
+        activityId,
+        ingestOptions
       );
       if (
         preview.success &&
@@ -722,13 +752,14 @@ async function ingestMissingRunningActivityIds(
           db,
           athleteId,
           activityId,
-          preview.activity
+          preview.activity,
+          ingestOptions
         );
       } else {
-        await processRunningActivity.processRunningActivity(db, athleteId, activityId, null);
+        await processRunningActivity.processRunningActivity(db, athleteId, activityId, null, ingestOptions);
       }
       ingested += 1;
-      await markStravaWebhookRetryDone(db, athleteId, activityId);
+      if (athleteId) await markStravaWebhookRetryDone(db, athleteId, activityId);
     } catch (e) {
       failed += 1;
       console.warn(
