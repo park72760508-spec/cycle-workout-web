@@ -258,19 +258,37 @@
     }, []);
 
     var navigateMonth = useCallback(function (dir) {
-      setCurrentMonth(function (m) {
-        var next = m + (dir === 'next' ? 1 : -1);
-        if (next > 11) {
-          setCurrentYear(function (y) { return y + 1; });
-          return 0;
-        }
-        if (next < 0) {
-          setCurrentYear(function (y) { return y - 1; });
-          return 11;
-        }
-        return next;
-      });
-    }, []);
+      var delta = dir === 'next' ? 1 : -1;
+      var targetYear = currentYear;
+      var targetMonth = currentMonth + delta;
+      if (targetMonth > 11) {
+        targetYear += 1;
+        targetMonth = 0;
+      } else if (targetMonth < 0) {
+        targetYear -= 1;
+        targetMonth = 11;
+      }
+      setCurrentYear(targetYear);
+      setCurrentMonth(targetMonth);
+
+      // 현재월(실제 오늘 기준)로 복귀하면 새로 동기화된 로그·PR까지 반영되도록
+      // Strava 동기화 후와 동일한 전체 강제 새로고침 경로를 태운다.
+      var realNow = new Date();
+      var isBackToRealCurrentMonth =
+        targetYear === realNow.getFullYear() && targetMonth === realNow.getMonth();
+      if (
+        isBackToRealCurrentMonth &&
+        typeof window !== 'undefined' &&
+        typeof window.dispatchEvent === 'function' &&
+        typeof window.CustomEvent === 'function'
+      ) {
+        setTimeout(function () {
+          window.dispatchEvent(
+            new CustomEvent('run-journal-refresh', { detail: { force: true } })
+          );
+        }, 0);
+      }
+    }, [currentYear, currentMonth]);
 
     var dailyRouteDocForSelectedDate =
       dailyRouteDocDate === selectedDate ? dailyRouteDoc : null;
