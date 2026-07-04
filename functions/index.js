@@ -2416,6 +2416,10 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 갱신 실패: ${e.message}` };
     }
   }
+  // 자가복구(핀셋): 동기화 대상이 된 유저의 strava_athlete_id가 없으면 GET /athlete로 즉시 채워 웹훅 역인덱스를 완성한다.
+  if (!(Number(userData.strava_athlete_id) > 0)) {
+    await ensureStravaAthleteId(db, userId, userData, accessToken);
+  }
   const activities = [];
   let page = 1;
   let firstPageStatus = 0;
@@ -2978,7 +2982,75 @@ exports.runStravaSyncChunk = onRequest(
 );
 
 /**
- * Strava Athlete ID 마이그레이션 (1회성).
+ * strava_athlete_id 보장(핀셋) — 없으면 GET /athlete로 즉시 채워 웹훅 owner_id 역인덱스를 완성한다(유저당 API 1회).
+ * 활동 유무와 무관하게 authoritative athlete id를 얻는다. 이미 있으면 API 호출 없음.
+ * @returns {Promise<number>} athleteId (실패 시 0)
+ */
+async function ensureStravaAthleteId(db, userId, userData, accessToken) {
+  const existing = Number(userData && userData.strava_athlete_id);
+  if (Number.isFinite(existing) && existing > 0) return existing;
+  if (!accessToken) return 0;
+  try {
+    const athleteRes = await fetch("https://www.strava.com/api/v3/athlete", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!athleteRes.ok) {
+      console.warn("[ensureStravaAthleteId] /athlete 실패:", userId, athleteRes.status);
+      return 0;
+    }
+    const athlete = await athleteRes.json().catch(() => ({}));
+    const athleteId = athlete && athlete.id != null ? Number(athlete.id) : 0;
+    if (!Number.isFinite(athleteId) || athleteId <= 0) return 0;
+    await db.collection("users").doc(userId).update({ strava_athlete_id: athleteId });
+    console.log("[ensureStravaAthleteId] backfill:", userId, "→", athleteId);
+    return athleteId;
+  } catch (e) {
+    console.warn("[ensureStravaAthleteId] 실패:", userId, e && e.message ? e.message : e);
+    return 0;
+  }
+}
+
+/**
+ * 타겟 athlete_id 백필 — strava_refresh_token은 있으나 strava_athlete_id가 없는 유저만 GET /athlete로 채운다.
+ * 전체 활동 스캔이 아니라 "누락 유저"라는 작고 점점 줄어드는 집합만 처리(유저당 API 1회).
+ * 웹훅 owner_id→user 역인덱스를 완성해, athlete_id 누락으로 인한 실시간 수집 실패를 근절하는 핀셋 안전망.
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {{ maxUsers?: number, delayMs?: number }} [options]
+ * @returns {Promise<{ total: number, successCount: number, failCount: number }>}
+ */
+async function runStravaAthleteIdBackfill(db, options = {}) {
+  const maxUsers = Math.max(1, Math.min(5000, Number(options.maxUsers) || 2000));
+  const delayMs = Number.isFinite(Number(options.delayMs)) ? Number(options.delayMs) : 500;
+  const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+  const candidates = [];
+  for (const doc of usersSnap.docs) {
+    const data = doc.data();
+    const aid = Number(data.strava_athlete_id);
+    if (data.strava_athlete_id == null || data.strava_athlete_id === undefined || !Number.isFinite(aid) || aid <= 0) {
+      candidates.push(doc.id);
+    }
+    if (candidates.length >= maxUsers) break;
+  }
+  const total = candidates.length;
+  let successCount = 0;
+  let failCount = 0;
+  for (const userId of candidates) {
+    try {
+      const tokenResult = await refreshStravaTokenForUser(db, userId);
+      const athleteId = await ensureStravaAthleteId(db, userId, {}, tokenResult.accessToken);
+      if (athleteId > 0) successCount += 1;
+      else failCount += 1;
+    } catch (e) {
+      failCount += 1;
+      console.warn("[stravaAthleteIdBackfill] 실패:", userId, e && e.message ? e.message : e);
+    }
+    if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return { total, successCount, failCount };
+}
+
+/**
+ * Strava Athlete ID 마이그레이션 (1회성/수동).
  * strava_refresh_token은 있으나 strava_athlete_id가 없는 유저에 대해 /athlete API로 ID 조회 후 업데이트.
  * Rate Limit 방어: 순차 처리 + 유저당 500ms 대기.
  */
@@ -2999,53 +3071,38 @@ exports.migrateStravaAthleteIds = onRequest(
       return;
     }
     const db = admin.firestore();
-    const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
-    const candidates = [];
-    for (const doc of usersSnap.docs) {
-      const data = doc.data();
-      if (data.strava_athlete_id == null || data.strava_athlete_id === undefined) {
-        candidates.push({ userId: doc.id, data });
-      }
-    }
-    const total = candidates.length;
-    let successCount = 0;
-    let failCount = 0;
-    for (const { userId, data } of candidates) {
-      try {
-        const tokenResult = await refreshStravaTokenForUser(db, userId);
-        const accessToken = tokenResult.accessToken;
-        const athleteRes = await fetch("https://www.strava.com/api/v3/athlete", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (!athleteRes.ok) {
-          failCount += 1;
-          console.warn("[migrateStravaAthleteIds] /athlete 실패:", userId, athleteRes.status);
-          await new Promise((r) => setTimeout(r, 500));
-          continue;
-        }
-        const athlete = await athleteRes.json().catch(() => ({}));
-        const athleteId = athlete && athlete.id != null ? Number(athlete.id) : null;
-        if (athleteId == null) {
-          failCount += 1;
-          console.warn("[migrateStravaAthleteIds] athlete.id 없음:", userId);
-          await new Promise((r) => setTimeout(r, 500));
-          continue;
-        }
-        await db.collection("users").doc(userId).update({ strava_athlete_id: athleteId });
-        successCount += 1;
-        console.log("[migrateStravaAthleteIds] 성공:", userId, "→", athleteId);
-      } catch (e) {
-        failCount += 1;
-        console.warn("[migrateStravaAthleteIds] 실패:", userId, e.message);
-      }
-      await new Promise((r) => setTimeout(r, 500));
-    }
+    const maxUsers = Number(req.query.maxUsers || (req.body && req.body.maxUsers)) || 2000;
+    const summary = await runStravaAthleteIdBackfill(db, { maxUsers });
     res.status(200).json({
       success: true,
-      total,
-      successCount,
-      failCount,
+      total: summary.total,
+      successCount: summary.successCount,
+      failCount: summary.failCount,
     });
+  }
+);
+
+/**
+ * 타겟 athlete_id 백필 스케줄 — 매일 01:30(서울). strava_athlete_id 누락 유저만 소량(maxUsers) GET /athlete로 채운다.
+ * 정상 상태에선 대상이 거의 0이라 비용/레이트리밋 부담이 미미하며, 누락이 생겨도 하루 내 웹훅 역인덱스가 복구된다.
+ * (전체 활동 스캔이 아닌 핀셋 안전망 — 해제한 전체 갭 스캔과 무관하게 athlete_id 문제만 전담)
+ */
+const stravaAthleteIdBackfillScheduleOptions = {
+  schedule: "30 1 * * *",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 540,
+  memory: "512MiB",
+};
+if (STRAVA_CLIENT_SECRET) {
+  stravaAthleteIdBackfillScheduleOptions.secrets = [STRAVA_CLIENT_SECRET];
+}
+exports.stravaAthleteIdBackfillSchedule = onSchedule(
+  stravaAthleteIdBackfillScheduleOptions,
+  async () => {
+    const db = admin.firestore();
+    // Strava 일일 레이트리밋(1000/day) 보호를 위해 스케줄 실행당 소량만 처리(누락 집합은 점진 소진).
+    const summary = await runStravaAthleteIdBackfill(db, { maxUsers: 150, delayMs: 800 });
+    console.log("[stravaAthleteIdBackfillSchedule] 완료", summary);
   }
 );
 
