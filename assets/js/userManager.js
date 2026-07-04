@@ -2911,8 +2911,11 @@ async function apiUpdateUser(id, userData) {
       userData.contact != null ||
       userData.challenge != null ||
       userData.category != null ||
-      userData.account_status != null
+      userData.account_status != null ||
+      userData.is_private != null
     ) {
+      // is_private 포함: 비공개 토글 시에도 Supabase 공개 프로필(v_user_public_profile.is_private)을
+      // 즉시 동기화해 랭킹보드(CYCLE) 비공개 표시가 지연 없이 반영되도록 한다.
       triggerSupabaseUserProvisionAfterProfile();
     }
 
