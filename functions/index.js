@@ -3811,13 +3811,16 @@ async function runStravaGapDetectPreviousDayJob(db, logPrefix) {
   );
 }
 
-exports.stravaSyncPreviousDay = onSchedule(
-  stravaSyncScheduleOptions,
-  async () => {
-    const db = admin.firestore();
-    await runStravaGapDetectPreviousDayJob(db, "[stravaSyncPreviousDay]");
-  }
-);
+// [스케줄 해제 2026-07] 새벽 전체 갭 스캔(00:10) — 전체 사용자 스캔은 Strava 레이트리밋(1000/day)·함수 타임아웃으로
+// 확장 불가하여 스케줄 해제. 웹훅 실패 복구는 stravaSyncRetrySchedule의 타겟 드레인(runStravaGapDetectTargetedJob)이 대체.
+// 필요 시 runStravaGapDetectPreviousDayJob(db)로 수동 실행 가능.
+// exports.stravaSyncPreviousDay = onSchedule(
+//   stravaSyncScheduleOptions,
+//   async () => {
+//     const db = admin.firestore();
+//     await runStravaGapDetectPreviousDayJob(db, "[stravaSyncPreviousDay]");
+//   }
+// );
 
 /**
  * 당일(서울) Strava 갭 탐지 — 웹훅·새벽 배치 누락 보완.
@@ -3855,13 +3858,16 @@ async function runStravaGapDetectTodayJob(db, logPrefix) {
     { includeGapScanAllUsers: true }
   );
 }
-exports.stravaSyncTodayGap = onSchedule(
-  stravaSyncTodayGapOptions,
-  async () => {
-    const db = admin.firestore();
-    await runStravaGapDetectTodayJob(db, "[stravaSyncTodayGap]");
-  }
-);
+// [스케줄 해제 2026-07] 당일 전체 갭 스캔(12:00,20:00) — 위 새벽 배치와 동일 사유로 스케줄 해제.
+// 웹훅 실패 복구는 stravaSyncRetrySchedule의 타겟 드레인(runStravaGapDetectTargetedJob)이 대체.
+// 필요 시 runStravaGapDetectTodayJob(db)로 수동 실행 가능.
+// exports.stravaSyncTodayGap = onSchedule(
+//   stravaSyncTodayGapOptions,
+//   async () => {
+//     const db = admin.firestore();
+//     await runStravaGapDetectTodayJob(db, "[stravaSyncTodayGap]");
+//   }
+// );
 
 /**
  * 일요일 19시(Asia/Seoul)에 당일(일요일) Strava 로그 수집. 1000명 대비 청크 팬아웃.
@@ -4090,6 +4096,33 @@ async function runStravaSyncRetryJob(db, dateFrom, dateTo, logPrefix) {
   );
 }
 
+/**
+ * 타겟 갭 드레인 — 전체 사용자 스캔 없이 A_pending(strava_sync_retry_pending) + B_webhook(strava_webhook_retries) 큐만 처리.
+ * includeGapScanAllUsers:false 이므로 확장 안전(처리량 O(실패건수)). needsGapScan 경로에서 strava_athlete_id 자가복구도 수행.
+ * (구 stravaSyncPreviousDay/stravaSyncTodayGap 전체 스캔의 웹훅 실패 복구 역할을 대체)
+ */
+async function runStravaGapDetectTargetedJob(db, logPrefix) {
+  const yesterday = getYesterdayAfterBefore();
+  const today = getTodayAfterBefore();
+  const range = stravaSyncRetry.ymdRangeToUnix({
+    dateFrom: yesterday.dateFrom,
+    dateTo: today.dateTo,
+  });
+  return stravaGapDetect.runGapDetectSyncJob(
+    db,
+    range,
+    {
+      refreshStravaTokenForUser,
+      fetchStravaActivitiesPage,
+      processStravaActivity,
+      processOneUserStravaSync,
+      supabaseDualWriteServer,
+    },
+    logPrefix || "[stravaSyncRetryTargeted]",
+    { includeGapScanAllUsers: false }
+  );
+}
+
 /** @deprecated stravaSync429RetryJob — runStravaSyncRetryJob 사용 */
 const runStrava429RetryJob = runStravaSyncRetryJob;
 
@@ -4177,6 +4210,9 @@ exports.stravaSyncRetrySchedule = onSchedule(
     });
     await runStravaSyncRetryJob(db, yesterday.dateFrom, yesterday.dateTo, "[stravaSyncRetrySchedule:yesterday]");
     await runStravaSyncRetryJob(db, today.dateFrom, today.dateTo, "[stravaSyncRetrySchedule:today]");
+    // 웹훅 실패 큐(strava_webhook_retries) 드레인 + strava_athlete_id 자가복구 (전체 스캔 없이 타겟만).
+    // 전체 갭 스캔(stravaSyncPreviousDay/stravaSyncTodayGap) 해제에 따른 웹훅 실패 복구 경로.
+    await runStravaGapDetectTargetedJob(db, "[stravaSyncRetrySchedule:targeted]");
   }
 );
 /** @deprecated stravaSync429RetrySchedule — stravaSyncRetrySchedule 사용 */
