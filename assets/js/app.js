@@ -1805,12 +1805,13 @@ function getSegmentFtpPercent(seg) {
 
 // 훈련 지표 상태 (TSS / kcal / NP 근사)
 const trainingMetrics = {
-  elapsedSec: 0,      // 전체 경과(초)
+  elapsedSec: 0,      // TSS 산출용 실질 훈련 경과(초). 일정 시간 이상 0W(일시정지) 구간은 제외
   joules: 0,          // 누적 일(줄). 1초마다 W(=J/s)를 더해줌
   ra30: 0,            // 30초 롤링 평균 파워(근사: 1차 IIR)
   np4sum: 0,          // (ra30^4)의 누적 합
   count: 0,           // 표본 개수(초 단위)
-  distanceKm: 0       // 속도 적산 거리(km). 속도(km/h) * 시간(초)/3600
+  distanceKm: 0,      // 속도 적산 거리(km). 속도(km/h) * 시간(초)/3600
+  zeroStreak: 0       // 연속 0W(파워 무입력) 초. 임계 초과 시 일시정지로 간주해 TSS 누적 제외
 };
 
 // 전역으로 노출 (resultManager.js에서 TSS 계산 시 사용)
@@ -4869,7 +4870,7 @@ function startWorkoutTraining() {
      
     // 훈련 시작 직전 리셋
     Object.assign(trainingMetrics, {
-      elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0
+      elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0, zeroStreak: 0
     });
 
     // liveData 초기화 강화
@@ -6083,13 +6084,32 @@ function updateTrainingMetrics() {
     const ftp = Number(window.currentUser?.ftp) || 200;
     const p = Math.max(0, Number(window.liveData?.power) || 0);
 
-    trainingMetrics.elapsedSec += 1;
-    trainingMetrics.joules += p;
-    trainingMetrics.ra30 += (p - trainingMetrics.ra30) / 30;
-    trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
-    trainingMetrics.count += 1;
+    // 일시정지(0W 지속) 구간 제외: 파워가 0인 상태가 임계(기본 15초)를 넘어가면
+    // 실질 훈련이 아니므로 TSS/NP 누적(경과초·np4sum·count·일)에서 제외해 신뢰성 있는 값 산출.
+    // (임계 이내의 짧은 0W(코스팅 등)는 정상 훈련으로 계속 반영)
+    const pauseZeroSec =
+      Number(window.STELVIO_TSS_PAUSE_ZERO_SEC) > 0
+        ? Number(window.STELVIO_TSS_PAUSE_ZERO_SEC)
+        : 15;
+    if (p > 0) {
+      trainingMetrics.zeroStreak = 0;
+    } else {
+      trainingMetrics.zeroStreak = (trainingMetrics.zeroStreak || 0) + 1;
+    }
+    const isPausedForTss = p <= 0 && trainingMetrics.zeroStreak > pauseZeroSec;
 
-    const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
+    if (!isPausedForTss) {
+      trainingMetrics.elapsedSec += 1;
+      trainingMetrics.joules += p;
+      trainingMetrics.ra30 += (p - trainingMetrics.ra30) / 30;
+      trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
+      trainingMetrics.count += 1;
+    }
+    // 일시정지 구간에서는 ra30(30초 롤링)를 동결해, 재개 시 NP가 자연스럽게 이어지도록 한다.
+
+    const NP = trainingMetrics.count > 0
+      ? Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25)
+      : 0;
     const IF = ftp ? (NP / ftp) : 0;
     const wKg = (Number(window.currentUser && window.currentUser.weight) > 0)
       ? Number(window.currentUser.weight)

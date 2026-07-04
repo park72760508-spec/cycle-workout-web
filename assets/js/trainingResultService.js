@@ -405,6 +405,13 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
   // weighted_watts 0 허용 → TSS 0, earned_points 0으로 저장 (워크아웃만 구동된 경우)
   const np = trainingData.weighted_watts != null ? Number(trainingData.weighted_watts) : 0;
   const avgWatts = avg_watts ? Number(avg_watts) : np; // avg_watts가 없으면 NP 사용
+
+  // 실질 훈련 시간(초): 인도어에서 0W(일시정지) 구간을 제외한 활성 시간.
+  // 있으면 TSS 산출의 시간·평균파워에 사용해 유휴 시간이 TSS에 반영되지 않도록 한다.
+  // (저장되는 duration/avg_watts는 기존대로 전체 기준을 유지 — TSS만 실질 훈련 시간 기준)
+  const activeSec = Number(td.active_sec) > 0 ? Number(td.active_sec) : durationSec;
+  const tssDurationSec = activeSec > 0 ? activeSec : durationSec;
+  const tssAvgWatts = Number(td.active_avg_watts) > 0 ? Number(td.active_avg_watts) : avgWatts;
   
   console.log('[saveTrainingSession] 시작:', {
     userId,
@@ -478,8 +485,8 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         ? Number(userData.weight ?? userData.weightKg)
         : ((typeof window !== 'undefined' && window.STELVIO_RTSS_DEFAULT_WEIGHT_KG) || 70);
 
-      // 2. TSS 계산 (effectiveFTP + rTSS)
-      const tss = calculateTSS(durationSec, np, effectiveFTP, weightForRtss, avgWatts);
+      // 2. TSS 계산 (effectiveFTP + rTSS) — 유휴(0W 지속) 제외한 실질 훈련 시간·평균파워 기준
+      const tss = calculateTSS(tssDurationSec, np, effectiveFTP, weightForRtss, tssAvgWatts);
       const earnedPoints = Math.round(tss);
       
       console.log('[saveTrainingSession] TSS 계산 결과:', {

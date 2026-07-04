@@ -429,11 +429,25 @@ async function saveTrainingResult(extra = {}) {
             ? Math.round(Number(rawDistance) * 100) / 100
             : null;
           
+          // 실질 훈련 시간(초)·평균파워: 인도어에서 0W(일시정지) 구간 제외 누적값(trainingMetrics).
+          // TSS 산출 시 유휴 시간이 반영되지 않도록 saveTrainingSession에 함께 전달한다.
+          const tmActiveSec =
+            (window.trainingMetrics && Number(window.trainingMetrics.elapsedSec) > 0)
+              ? Number(window.trainingMetrics.elapsedSec)
+              : null;
+          const tmActiveAvgWatts =
+            (tmActiveSec && Number(window.trainingMetrics.joules) > 0)
+              ? (Number(window.trainingMetrics.joules) / tmActiveSec)
+              : null;
+
           const trainingData = {
             // 필수 필드
             duration: totalSeconds,
             weighted_watts: finalNP,
             avg_watts: finalAvgWatts,
+            // 실질 훈련 시간(유휴 제외) — TSS 전용. 없으면 saveTrainingSession이 duration으로 폴백.
+            active_sec: tmActiveSec != null ? tmActiveSec : undefined,
+            active_avg_watts: tmActiveAvgWatts != null ? tmActiveAvgWatts : undefined,
             
             // 기본 정보
             workout_id: workoutId ? String(workoutId) : null,
