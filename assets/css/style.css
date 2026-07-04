@@ -2821,6 +2821,14 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   margin-right: 5% !important;
   box-sizing: border-box !important;
 }
+/* 스포츠 카테고리: 환영 블록 위·아래 여백 동일(12px), 구분선 위·아래 여백 동일(12px) */
+#sportCategoryScreen .connection-device-section #categoryAuthBar {
+  margin-top: 12px !important;
+  margin-bottom: 12px !important;
+}
+#sportCategoryScreen .connection-device-section.basecamp-device-section {
+  padding-bottom: 0 !important;
+}
 #sportCategoryScreen #categoryAuthBarLeft,
 #runBasecampScreen #runAuthBarLeft {
   display: flex;
@@ -2930,7 +2938,24 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   align-items: center;
   min-width: 0;
 }
-/* 스포츠 카테고리 footer 로그아웃 — 이미지+문구 1줄 (40px 고정 너비 해제) */
+/* 스포츠 카테고리 footer: 구분선 위(환영 블록 margin-bottom 12px)와 동일하게
+   구분선 아래(padding-top)·로그아웃 아래(padding-bottom)도 12px */
+#sportCategoryScreen .basecamp-footer,
+#sportCategoryScreen #categoryBasecampFooter {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+#sportCategoryScreen .connection-form-card.basecamp-card {
+  padding-bottom: 0 !important;
+}
+#sportCategoryScreen .basecamp-footer p,
+#sportCategoryScreen #categoryBasecampFooter p {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
 #sportCategoryScreen .basecamp-footer-logout-btn.bluetooth-session-exit-btn,
 #sportCategoryScreen .basecamp-footer-logout-btn {
   display: inline-flex !important;
@@ -2952,7 +2977,9 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   color: #006400 !important;
   background: transparent;
   border: none;
-  padding: 4px 8px;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 1 !important;
   white-space: nowrap !important;
 }
 #sportCategoryScreen .basecamp-footer-logout-btn img {
