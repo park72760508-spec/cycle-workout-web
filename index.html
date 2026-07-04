@@ -2853,7 +2853,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260704sportAuth1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260704sportAuth3" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -3595,15 +3595,15 @@
               </div>
             </div>
           </div>
-          <div class="basecamp-footer">
-            <p>
+          <div id="categoryBasecampFooter" class="basecamp-footer" style="margin-top:0;margin-bottom:0;padding-top:12px;padding-bottom:12px;border-top:1px solid rgba(34,197,94,0.2);">
+            <p style="margin:0;padding:0;line-height:1;">
               <!-- 비로그인 시: 카페 바로가기 / 로그인 시: 로그아웃 (updateAuthBarUI에서 표시 토글) -->
               <a id="categoryFooterCafe" class="basecamp-footer-cafe-link" href="https://cafe.naver.com/stelvio" target="_blank" rel="noopener noreferrer" onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;">
                 <img class="basecamp-footer-cafe-icon" src="assets/img/community.png" alt="" />
                 <span>STELVIO 카페 바로가기</span>
               </a>
               <!-- bluetooth-session-exit-btn(40×40 고정) 제거 — 이미지+문구 가로 1줄. 인라인으로 CSS 캐시 무관 보장 -->
-              <button type="button" id="btnCategoryAuthLogout" class="basecamp-footer-logout-btn" style="display:none !important;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:6px;width:auto;height:auto;min-width:0;padding:4px 8px;margin:0;border:none;background:transparent;color:#006400;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;position:relative;z-index:30;" onclick="event.preventDefault();event.stopPropagation();if(typeof handleLogoutWithConfirm==='function'){handleLogoutWithConfirm();}else if(typeof handleLogout==='function'){handleLogout();}return false;" aria-label="로그아웃" title="로그아웃">
+              <button type="button" id="btnCategoryAuthLogout" class="basecamp-footer-logout-btn" style="display:none !important;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:6px;width:auto;height:auto;min-width:0;padding:0;margin:0;border:none;background:transparent;color:#006400;font-size:12px;font-weight:600;white-space:nowrap;line-height:1;cursor:pointer;position:relative;z-index:30;" onclick="event.preventDefault();event.stopPropagation();if(typeof handleLogoutWithConfirm==='function'){handleLogoutWithConfirm();}else if(typeof handleLogout==='function'){handleLogout();}return false;" aria-label="로그아웃" title="로그아웃">
                 <img src="assets/img/out.png" alt="" width="24" height="24" decoding="async" style="width:24px;height:24px;display:block;flex-shrink:0;pointer-events:none;" />
                 <span style="color:#006400;white-space:nowrap;flex-shrink:0;pointer-events:none;">로그아웃</span>
               </button>
