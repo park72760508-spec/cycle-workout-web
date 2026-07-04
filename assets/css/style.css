@@ -2829,21 +2829,26 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #sportCategoryScreen .connection-device-section.basecamp-device-section {
   padding-bottom: 0 !important;
 }
-/* 환영 블록 ↔ 구분선 사이 고정 12px, 카페 링크는 그 정중앙 */
+/* 환영 블록 ↔ 구분선: 카페 링크 아래·구분선 위 여백 6px */
 #sportCategoryScreen #categoryCafeBetween.category-cafe-between {
   position: relative !important;
-  height: 12px !important;
+  height: auto !important;
+  min-height: 0 !important;
   margin: 0 !important;
-  padding: 0 !important;
+  padding: 0 0 6px 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   overflow: visible !important;
   z-index: 5;
+  box-sizing: border-box !important;
 }
 /* display는 updateAuthBarUI에서 로그인 시에만 inline-flex로 켬 */
 #sportCategoryScreen #categoryCafeBetween .basecamp-auth-bar-cafe-link {
-  position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-  transform: translate(-50%, -50%) !important;
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
   margin: 0 !important;
   flex-direction: row !important;
   flex-wrap: nowrap !important;
