@@ -2821,13 +2821,56 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   margin-right: 5% !important;
   box-sizing: border-box !important;
 }
-/* 스포츠 카테고리: 환영 블록 위·아래 여백 동일(12px), 구분선 위·아래 여백 동일(12px) */
+/* 스포츠 카테고리: 환영 블록 위 12px, 아래는 고정 12px 슬롯(#categoryCafeBetween) */
 #sportCategoryScreen .connection-device-section #categoryAuthBar {
   margin-top: 12px !important;
-  margin-bottom: 12px !important;
+  margin-bottom: 0 !important;
 }
 #sportCategoryScreen .connection-device-section.basecamp-device-section {
   padding-bottom: 0 !important;
+}
+/* 환영 블록 ↔ 구분선 사이 고정 12px, 카페 링크는 그 정중앙 */
+#sportCategoryScreen #categoryCafeBetween.category-cafe-between {
+  position: relative !important;
+  height: 12px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  z-index: 5;
+}
+/* display는 updateAuthBarUI에서 로그인 시에만 inline-flex로 켬 */
+#sportCategoryScreen #categoryCafeBetween .basecamp-auth-bar-cafe-link {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  max-width: 100%;
+  font-size: clamp(10px, 2.8vw, 12px);
+  font-weight: 600;
+  color: #006400 !important;
+  text-decoration: none;
+  line-height: 1.2;
+  white-space: nowrap !important;
+  pointer-events: auto;
+  cursor: pointer;
+}
+#sportCategoryScreen #categoryCafeBetween .basecamp-auth-bar-cafe-link span {
+  color: #006400 !important;
+  white-space: nowrap !important;
+}
+#sportCategoryScreen #categoryCafeBetween .basecamp-auth-bar-cafe-link .basecamp-footer-cafe-icon {
+  height: 1.35em !important;
+  width: auto !important;
+  max-height: 1.35em !important;
+  object-fit: contain !important;
+  flex-shrink: 0 !important;
+  display: block !important;
 }
 #sportCategoryScreen #categoryAuthBarLeft,
 #runBasecampScreen #runAuthBarLeft {
@@ -2896,41 +2939,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   display: block;
   white-space: nowrap;
 }
-/* 카페 바로가기: 이미지+문구 1줄(폰트 축소), 녹색 */
-#sportCategoryScreen .basecamp-auth-bar-cafe-link {
-  display: inline-flex !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px;
-  margin-top: 4px;
-  max-width: 100%;
-  font-size: clamp(10px, 2.8vw, 12px);
-  font-weight: 600;
-  color: #006400 !important;
-  text-decoration: none;
-  line-height: 1.2;
-  white-space: nowrap !important;
-  pointer-events: auto;
-  cursor: pointer;
-}
-#sportCategoryScreen .basecamp-auth-bar-cafe-link:hover {
+#sportCategoryScreen #categoryCafeBetween .basecamp-auth-bar-cafe-link:hover {
   text-decoration: underline;
-}
-#sportCategoryScreen .basecamp-auth-bar-cafe-link span {
-  color: #006400 !important;
-  white-space: nowrap !important;
-  flex-shrink: 1;
-  min-width: 0;
-}
-#sportCategoryScreen .basecamp-auth-bar-cafe-link .basecamp-footer-cafe-icon {
-  height: 1.35em !important;
-  width: auto !important;
-  max-height: 1.35em !important;
-  object-fit: contain !important;
-  flex-shrink: 0 !important;
-  display: block !important;
 }
 #runBasecampScreen .basecamp-auth-bar-logout-wrap {
   display: flex;
