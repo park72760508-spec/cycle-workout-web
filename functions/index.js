@@ -3106,6 +3106,129 @@ exports.stravaAthleteIdBackfillSchedule = onSchedule(
   }
 );
 
+/**
+ * strava_webhook_retries 큐의 pending 상태를 집계한다(대시보드·모니터 공용).
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {{ limit?: number, includeEntries?: boolean }} [options]
+ */
+async function summarizeStravaWebhookRetryQueue(db, options = {}) {
+  const limit = Math.max(1, Math.min(1000, Number(options.limit) || 500));
+  const includeEntries = options.includeEntries !== false;
+  const snap = await db
+    .collection(stravaGapDetect.STRAVA_WEBHOOK_RETRIES_COLLECTION)
+    .where("status_queue", "==", "pending")
+    .limit(limit)
+    .get();
+  const byReason = {};
+  let unresolvedCount = 0;
+  let resolvableCount = 0;
+  let oldestFailedAt = null;
+  const entries = [];
+  snap.docs.forEach((doc) => {
+    const d = doc.data() || {};
+    const reason = String(d.reason || "unknown");
+    byReason[reason] = (byReason[reason] || 0) + 1;
+    if (reason === "user_unresolved" || !d.user_id) unresolvedCount += 1;
+    else resolvableCount += 1;
+    const failedAt = d.failed_at || null;
+    if (failedAt && (!oldestFailedAt || String(failedAt) < String(oldestFailedAt))) oldestFailedAt = failedAt;
+    if (includeEntries) {
+      entries.push({
+        id: doc.id,
+        owner_id: d.owner_id ?? null,
+        object_id: d.object_id ?? null,
+        user_id: d.user_id ?? null,
+        reason,
+        status: d.status ?? null,
+        failed_at: failedAt,
+        error: d.error ? String(d.error).slice(0, 300) : null,
+      });
+    }
+  });
+  return {
+    pendingCount: snap.size,
+    truncated: snap.size >= limit,
+    unresolvedCount,
+    resolvableCount,
+    byReason,
+    oldestFailedAt,
+    entries,
+  };
+}
+
+/**
+ * 관리자: Strava 웹훅 재시도 큐 상태 조회 — user_unresolved 등 미해결 이벤트 가시화(대시보드용).
+ * 인증: X-Internal-Secret 또는 관리자(grade=1) Firebase Bearer.
+ */
+const adminStravaWebhookRetryStatusOptions = { cors: true, timeoutSeconds: 120 };
+exports.adminStravaWebhookRetryStatus = onRequest(
+  adminStravaWebhookRetryStatusOptions,
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    try {
+      const db = admin.firestore();
+      const rawSecret =
+        req.headers["x-internal-secret"] ||
+        req.headers["X-Internal-Secret"] ||
+        req.query.secret;
+      let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+      if (!authorized) {
+        const uid = await getUidFromRequest(req, res);
+        if (!uid) return;
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        if (grade !== "1") {
+          res.status(403).json({
+            success: false,
+            error: "관리자(grade=1) 또는 X-Internal-Secret 헤더가 필요합니다.",
+          });
+          return;
+        }
+        authorized = true;
+      }
+      const limit = Math.max(1, Math.min(1000, Number(req.query.limit) || 200));
+      const summary = await summarizeStravaWebhookRetryQueue(db, { limit, includeEntries: true });
+      res.status(200).json({ success: true, ...summary });
+    } catch (err) {
+      console.error("[adminStravaWebhookRetryStatus]", err);
+      res.status(500).json({
+        success: false,
+        error: err && err.message ? err.message : String(err),
+      });
+    }
+  }
+);
+
+/**
+ * Strava 웹훅 재시도 큐 모니터 — 6시간마다(서울). pending 적체·user_unresolved를 구조화 로그로 경보.
+ * (Cloud Logging 로그 기반 경보/알림에 연동 가능 — 외부 유료 API 미사용)
+ */
+exports.stravaWebhookRetryMonitorSchedule = onSchedule(
+  { schedule: "0 */6 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 120 },
+  async () => {
+    const db = admin.firestore();
+    const summary = await summarizeStravaWebhookRetryQueue(db, { limit: 1000, includeEntries: false });
+    if (summary.unresolvedCount > 0 || summary.pendingCount >= 50) {
+      console.error("[stravaWebhookRetryMonitor] ALERT: 웹훅 재시도 큐 적체", {
+        pendingCount: summary.pendingCount,
+        unresolvedCount: summary.unresolvedCount,
+        resolvableCount: summary.resolvableCount,
+        byReason: summary.byReason,
+        oldestFailedAt: summary.oldestFailedAt,
+        truncated: summary.truncated,
+      });
+    } else {
+      console.log("[stravaWebhookRetryMonitor] OK", {
+        pendingCount: summary.pendingCount,
+        byReason: summary.byReason,
+      });
+    }
+  }
+);
+
 /** Strava API Rate Limit: 15분당 100회. 85회에서 중단하여 여유 확보. */
 const STRAVA_API_CALL_LIMIT = 85;
 
