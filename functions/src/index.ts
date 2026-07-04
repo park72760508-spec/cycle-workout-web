@@ -744,6 +744,44 @@ async function routeStravaWebhookActivityAsync(
   await processStravaActivityAsync(db, ownerId, objectId);
 }
 
+/**
+ * Strava 앱 연동 해제(athlete deauthorize) 이벤트 처리.
+ * object_type:"athlete", updates.authorized:"false" 수신 시 해당 사용자의 Strava 연결(토큰)을 정리한다.
+ * - owner_id(strava_athlete_id)로 사용자 조회 후 토큰 무효화 → 이후 동기화/백필 대상에서 제외
+ * - 활동 로그 등 사용자 데이터는 보존(연결만 해제). 멱등 처리.
+ */
+async function handleStravaAthleteDeauthAsync(
+  db: admin.firestore.Firestore,
+  ownerId: number
+): Promise<void> {
+  const ownerIdNum = Number(ownerId);
+  if (!ownerIdNum) return;
+  const usersSnap = await db
+    .collection("users")
+    .where("strava_athlete_id", "==", ownerIdNum)
+    .limit(1)
+    .get();
+  if (usersSnap.empty) {
+    console.warn("[Strava Webhook] deauth: strava_athlete_id=", ownerIdNum, "사용자 없음(무시)");
+    return;
+  }
+  const userDoc = usersSnap.docs[0];
+  try {
+    await userDoc.ref.set(
+      {
+        strava_access_token: "",
+        strava_refresh_token: "",
+        strava_expires_at: 0,
+        strava_deauthorized_at: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    console.log("[Strava Webhook] deauth 처리 완료:", { userId: userDoc.id, athleteId: ownerIdNum });
+  } catch (e) {
+    console.error("[Strava Webhook] deauth 처리 실패:", userDoc.id, e);
+  }
+}
+
 async function processStravaActivityAsync(
   db: admin.firestore.Firestore,
   ownerId: number,
@@ -908,11 +946,23 @@ export const stravaWebhook = onRequest(
         objectId != null &&
         (aspectType === "create" || aspectType === "update");
 
+      /** 연동 해제: object_type:"athlete" + updates.authorized:"false" → 토큰 정리 (GDPR/개인정보 모범 사례) */
+      const isAthleteDeauth =
+        objectType === "athlete" &&
+        aspectType === "update" &&
+        ownerId != null &&
+        body?.updates != null &&
+        String(body.updates.authorized) === "false";
+
       if (shouldFetchActivity) {
         // 비동기 처리: await 없이 백그라운드에서 실행 (2초 제한 회피)
             // create → Run 계열은 processRunningActivity, 그 외는 기존 사이클 파이프라인
         routeStravaWebhookActivityAsync(db, ownerId, objectId, aspectType).catch((err) => {
           console.error("[Strava Webhook] Strava 활동 처리 실패:", err);
+        });
+      } else if (isAthleteDeauth) {
+        handleStravaAthleteDeauthAsync(db, ownerId).catch((err) => {
+          console.error("[Strava Webhook] deauth 처리 실패:", err);
         });
       } else {
         console.log("[Strava Webhook] POST (미처리):", { aspectType, objectType, ownerId, objectId });
