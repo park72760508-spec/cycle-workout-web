@@ -294,6 +294,30 @@ let _privateUserIdSetCacheAt = 0;
 // (비공개 토글이 보드에 반영되기까지 최대 이 정도 지연 — 수용 가능)
 const PRIVATE_USER_ID_SET_TTL_MS = 300 * 1000;
 
+// 비공개 사용자 id를 트리거로 유지하는 색인 문서(ranking_meta/private_user_ids_{n}).
+// Firestore 문서 1MB 한계 때문에 단일 문서 대신 소수의 고정 샤드로 나눈다(수만 명까지 안전).
+// 갱신당 읽기 = 샤드 수(+메타 1) = 작은 상수. 요청량·전체 사용자 수와 무관하게 고정.
+const PRIVATE_USER_IDS_SHARD_COUNT = 8;
+const PRIVATE_USER_IDS_DOC_PREFIX = "private_user_ids_";
+const PRIVATE_USER_IDS_META_DOC = "private_user_ids_meta";
+
+function privateUserIdsShardIndex(uid) {
+  const s = String(uid == null ? "" : uid);
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) % PRIVATE_USER_IDS_SHARD_COUNT;
+}
+
+function privateUserIdsShardRef(db, index) {
+  return db.collection("ranking_meta").doc(PRIVATE_USER_IDS_DOC_PREFIX + index);
+}
+
+/**
+ * 비공개 사용자 id 집합을 색인 문서(샤드)에서 읽어 캐시. 갱신당 읽기 = 샤드+메타(상수).
+ * 색인이 아직 초기화되지 않았으면(배포 직후·리빌드 전) 최초 1회 원천(users where)로 폴백해 정확성 보장.
+ */
 async function getPrivateUserIdSetCached(db) {
   if (!db) return null;
   const now = Date.now();
@@ -301,15 +325,26 @@ async function getPrivateUserIdSetCached(db) {
     return _privateUserIdSetCache;
   }
   try {
+    const metaRef = db.collection("ranking_meta").doc(PRIVATE_USER_IDS_META_DOC);
+    const shardRefs = [];
+    for (let i = 0; i < PRIVATE_USER_IDS_SHARD_COUNT; i += 1) {
+      shardRefs.push(privateUserIdsShardRef(db, i));
+    }
+    // getAll: 1회 왕복으로 메타+전 샤드 조회 (읽기 = 샤드+1, 고정)
+    const snaps = await db.getAll(metaRef, ...shardRefs);
+    const metaSnap = snaps[0];
+    const initialized = !!(metaSnap && metaSnap.exists && (metaSnap.data() || {}).initializedAt);
     const set = new Set();
-    // select()로 필드 없이 문서 id만 가져와 전송량 최소화 (읽기 1건/문서는 동일하나 비공개 사용자 수로 상한 고정)
-    const snap = await admin
-      .firestore()
-      .collection("users")
-      .where("is_private", "==", true)
-      .select()
-      .get();
-    snap.forEach((doc) => set.add(String(doc.id)));
+    for (let i = 1; i < snaps.length; i += 1) {
+      const data = snaps[i] && snaps[i].exists ? snaps[i].data() || {} : {};
+      const ids = Array.isArray(data.ids) ? data.ids : [];
+      for (const id of ids) set.add(String(id));
+    }
+    if (!initialized && set.size === 0) {
+      // 색인 미초기화 → 원천에서 1회 폴백 (이후 스케줄/트리거가 색인을 채움)
+      const q = await db.collection("users").where("is_private", "==", true).select().get();
+      q.forEach((doc) => set.add(String(doc.id)));
+    }
     _privateUserIdSetCache = set;
     _privateUserIdSetCacheAt = now;
     return set;
@@ -318,6 +353,51 @@ async function getPrivateUserIdSetCached(db) {
     // 조회 실패 시 직전 캐시 유지(있으면) — 일시 오류로 비공개가 풀리지 않도록
     return _privateUserIdSetCache;
   }
+}
+
+/**
+ * 색인(샤드) 전체를 users(is_private=true) 원천에서 재구성. 트리거 누락분·강등까지 자가 치유.
+ * 반환: { total, shardCount }
+ */
+async function rebuildPrivateUserIdShards(db) {
+  const buckets = [];
+  for (let i = 0; i < PRIVATE_USER_IDS_SHARD_COUNT; i += 1) buckets.push([]);
+  const q = await db.collection("users").where("is_private", "==", true).select().get();
+  q.forEach((doc) => {
+    buckets[privateUserIdsShardIndex(doc.id)].push(String(doc.id));
+  });
+  const batch = db.batch();
+  for (let i = 0; i < PRIVATE_USER_IDS_SHARD_COUNT; i += 1) {
+    batch.set(privateUserIdsShardRef(db, i), {
+      ids: buckets[i],
+      count: buckets[i].length,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+  batch.set(db.collection("ranking_meta").doc(PRIVATE_USER_IDS_META_DOC), {
+    initializedAt: admin.firestore.FieldValue.serverTimestamp(),
+    total: q.size,
+    shardCount: PRIVATE_USER_IDS_SHARD_COUNT,
+  });
+  await batch.commit();
+  // 인메모리 캐시 무효화(이 인스턴스) — 다른 인스턴스는 TTL 내 자연 반영
+  _privateUserIdSetCache = null;
+  _privateUserIdSetCacheAt = 0;
+  return { total: q.size, shardCount: PRIVATE_USER_IDS_SHARD_COUNT };
+}
+
+/** 비공개 토글 시 색인 샤드 증분 유지 (트리거에서 호출). 실패해도 스케줄 리빌드가 보정. */
+async function updatePrivateUserIdIndexForUser(db, userId, nowPrivate) {
+  const ref = privateUserIdsShardRef(db, privateUserIdsShardIndex(userId));
+  await ref.set(
+    {
+      ids: nowPrivate
+        ? admin.firestore.FieldValue.arrayUnion(userId)
+        : admin.firestore.FieldValue.arrayRemove(userId),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 /**
@@ -14329,14 +14409,13 @@ exports.onUserProfileWritten = functions
       console.warn("[onUserProfileWritten] Supabase profile sync failed:", userId, e.message || e);
     }
 
-    // 비공개(is_private) 변경 시 랭킹 캐시 버전을 올린다.
-    // 클라이언트가 이 버전을 리더보드 요청 URL에 붙여, 토글 즉시 CDN 캐시를 무효화(즉시 반영)한다.
+    // 비공개(is_private) 변경 시: (1) 랭킹 캐시 버전 상승(클라이언트 CDN 무효화) (2) 비공개 색인 샤드 증분 유지.
     try {
-      const wasPrivate = before ? before.is_private === true : false;
-      const nowPrivate = after.is_private === true;
+      const wasPrivate = before ? privacyFlagFromFirestoreDoc(before) : false;
+      const nowPrivate = privacyFlagFromFirestoreDoc(after);
       if (!before || wasPrivate !== nowPrivate) {
-        await admin
-          .firestore()
+        const db = admin.firestore();
+        await db
           .collection("ranking_meta")
           .doc("run_privacy_version")
           .set(
@@ -14347,11 +14426,80 @@ exports.onUserProfileWritten = functions
             },
             { merge: true }
           );
+        // 비공개 사용자 색인(샤드) 증분 유지 — 랭킹보드 저비용 비공개 오버레이의 원천.
+        try {
+          await updatePrivateUserIdIndexForUser(db, userId, nowPrivate);
+        } catch (eIdx) {
+          console.warn(
+            "[onUserProfileWritten] private index update failed:",
+            userId,
+            eIdx.message || eIdx
+          );
+        }
       }
     } catch (e) {
       console.warn("[onUserProfileWritten] privacy version bump failed:", userId, e.message || e);
     }
   });
+
+/**
+ * 비공개 사용자 색인(샤드) 재구성 — 매일 03:20(서울).
+ * 트리거 누락·강등 미반영을 자가 치유하고, 배포 직후 최초 초기화도 담당한다.
+ * users(is_private=true) 원천을 1회 조회(비공개=소수)하므로 비용이 낮다.
+ */
+exports.privateUserIdsRebuildSchedule = onSchedule(
+  { schedule: "20 3 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 300, memory: "256MiB" },
+  async () => {
+    const db = admin.firestore();
+    const result = await rebuildPrivateUserIdShards(db);
+    console.log("[privateUserIdsRebuild] 완료", result);
+  }
+);
+
+/**
+ * 관리자/내부 시크릿: 비공개 사용자 색인(샤드) 즉시 재구성 (배포 직후 초기화·수동 보정용).
+ * 인증: X-Internal-Secret 헤더 또는 grade=1 관리자.
+ */
+const adminRebuildPrivateUserIdsOptions = { cors: true, timeoutSeconds: 300 };
+exports.adminRebuildPrivateUserIds = onRequest(
+  adminRebuildPrivateUserIdsOptions,
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    try {
+      const db = admin.firestore();
+      const rawSecret =
+        req.headers["x-internal-secret"] ||
+        req.headers["X-Internal-Secret"] ||
+        req.query.secret;
+      let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+      if (!authorized) {
+        const uid = await getUidFromRequest(req, res);
+        if (!uid) return;
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        if (grade !== "1") {
+          res.status(403).json({
+            success: false,
+            error: "관리자(grade=1) 또는 X-Internal-Secret 헤더가 필요합니다.",
+          });
+          return;
+        }
+        authorized = true;
+      }
+      const result = await rebuildPrivateUserIdShards(db);
+      res.status(200).json({ success: true, ...result });
+    } catch (err) {
+      console.error("[adminRebuildPrivateUserIds]", err);
+      res.status(500).json({
+        success: false,
+        error: err && err.message ? err.message : String(err),
+      });
+    }
+  }
+);
 
 /**
  * 관리자(grade=1): Firestore 랭킹 공개 프로필(gender/sex, is_private, 프로필 이미지)
