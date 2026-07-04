@@ -2853,7 +2853,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260704sportAuth4" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260704sportAuth5" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -3590,9 +3590,9 @@
               </div>
             </div>
           </div>
-          <!-- 환영 블록과 구분선 사이 고정 12px 공간의 정중앙에 카페 바로가기 배치 (공간 높이 유지) -->
-          <div id="categoryCafeBetween" class="category-cafe-between" style="position:relative;height:12px;margin:0;padding:0;overflow:visible;z-index:5;" aria-hidden="true">
-            <a id="categoryAuthBarCafeLink" class="basecamp-auth-bar-cafe-link" href="https://cafe.naver.com/stelvio" target="_blank" rel="noopener noreferrer" style="display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;color:#006400;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;line-height:1.2;" onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;">
+          <!-- 환영 블록과 구분선 사이: 카페 링크 아래·구분선 위 여백 6px -->
+          <div id="categoryCafeBetween" class="category-cafe-between" style="position:relative;height:auto;margin:0;padding:0 0 6px 0;display:flex;align-items:center;justify-content:center;overflow:visible;z-index:5;box-sizing:border-box;" aria-hidden="true">
+            <a id="categoryAuthBarCafeLink" class="basecamp-auth-bar-cafe-link" href="https://cafe.naver.com/stelvio" target="_blank" rel="noopener noreferrer" style="display:none;position:static;margin:0;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;color:#006400;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;line-height:1.2;" onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;">
               <img class="basecamp-footer-cafe-icon" src="assets/img/community.png" alt="" style="height:1.35em;width:auto;max-height:1.35em;flex-shrink:0;display:block;object-fit:contain;" />
               <span style="color:#006400;white-space:nowrap;flex-shrink:0;">STELVIO 카페 바로가기</span>
             </a>
@@ -29952,19 +29952,22 @@
         _catAuthRight.style.flexDirection = 'column';
         _catAuthRight.style.alignItems = 'center';
       }
-      // 카페 링크: 환영 블록↔구분선 고정 12px 슬롯 정중앙 (로그인 시에만 표시)
+      // 카페 링크: 환영 블록↔구분선, 링크 아래·구분선 위 6px (로그인 시에만 표시)
       var _catCafeBetween = document.getElementById('categoryCafeBetween');
       var _catCafeLink = document.getElementById('categoryAuthBarCafeLink');
       if (_catCafeBetween) {
         _catCafeBetween.setAttribute('aria-hidden', loggedIn ? 'false' : 'true');
+        _catCafeBetween.style.setProperty('padding-bottom', '6px', 'important');
+        _catCafeBetween.style.setProperty('height', 'auto', 'important');
       }
       if (_catCafeLink) {
         if (loggedIn) {
           _catCafeLink.style.setProperty('display', 'inline-flex', 'important');
-          _catCafeLink.style.setProperty('position', 'absolute', 'important');
-          _catCafeLink.style.setProperty('left', '50%', 'important');
-          _catCafeLink.style.setProperty('top', '50%', 'important');
-          _catCafeLink.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
+          _catCafeLink.style.setProperty('position', 'static', 'important');
+          _catCafeLink.style.setProperty('left', 'auto', 'important');
+          _catCafeLink.style.setProperty('top', 'auto', 'important');
+          _catCafeLink.style.setProperty('transform', 'none', 'important');
+          _catCafeLink.style.setProperty('margin', '0', 'important');
           _catCafeLink.style.setProperty('flex-direction', 'row', 'important');
           _catCafeLink.style.setProperty('flex-wrap', 'nowrap', 'important');
           _catCafeLink.style.setProperty('align-items', 'center', 'important');
