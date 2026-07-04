@@ -189,13 +189,15 @@
 
   /**
    * @param {Array} logs
-   * @param {{ ftp?: number, weight?: number, rankingStrict?: boolean }} profile
+   * @param {{ ftp?: number, weight?: number, rankingStrict?: boolean, windowDays?: number }} profile
+   *   windowDays: 산출 대상 최근 기간(일). 기본 182(≈6개월). 예: 90 → 최근 90일 60분 피크
    */
   function computeOneHourAbilityFromLogs(logs, profile) {
     profile = profile || {};
     var rankingStrict = profile.rankingStrict === true;
+    var windowDays = Number(profile.windowDays) > 0 ? Math.floor(Number(profile.windowDays)) : 182;
     var todayYmd = getSeoulTodayYmd();
-    var start6mYmd = shiftYmd(todayYmd, -182);
+    var start6mYmd = shiftYmd(todayYmd, -windowDays);
     var ftpVal = Number(profile.ftp) || 0;
     var weightVal = Number(profile.weight) || 0;
     var deduped = dedupeTrainingLogsByDateStravaFirst(Array.isArray(logs) ? logs : []);
