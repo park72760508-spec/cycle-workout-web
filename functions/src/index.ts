@@ -635,44 +635,50 @@ async function markWebhookStravaSyncRetryPending(
   const activityId = String(legacyResult?.activityId || objectId || "").trim();
   if (!activityId) return;
 
-  let userId = String(legacyResult?.userId || "").trim();
-  if (!userId) {
-    const ownerIdNum = Number(ownerId);
-    if (!ownerIdNum) return;
-    const usersSnap = await db.collection("users").where("strava_athlete_id", "==", ownerIdNum).limit(1).get();
-    if (usersSnap.empty) return;
-    userId = usersSnap.docs[0].id;
-  }
-
   const errorText =
     String(legacyResult?.error || "") ||
     (caughtError instanceof Error ? caughtError.message : caughtError ? String(caughtError) : "webhook processing failed");
   const failStatus = Number(legacyResult?.status) || (errorText.includes("429") ? 429 : errorText.includes("401") ? 401 : 0);
-  // 단건 재시도(activityId)는 날짜와 무관 — 스케줄(전날·당일)에서 pending 유저를 잡기 위해 어제~오늘 구간 사용
-  const dateRange = stravaSyncRetry.getYesterdayTodayYmdSeoul();
+  const reason = inferWebhookRetryReason(failStatus, errorText);
 
-  await stravaSyncRetry.markStravaSyncRetryPending(db, userId, {
-    dateFrom: dateRange.dateFrom,
-    dateTo: dateRange.dateTo,
-    reason: inferWebhookRetryReason(failStatus, errorText),
-    status: failStatus || 500,
-    activityId,
-  });
+  // 사용자 해석: legacyResult → owner_id(athlete) 조회. 못 찾아도(strava_athlete_id 누락·불일치) 실패를 버리지 않는다.
+  let userId = String(legacyResult?.userId || "").trim();
+  if (!userId) {
+    const ownerIdNum = Number(ownerId);
+    if (ownerIdNum) {
+      const usersSnap = await db.collection("users").where("strava_athlete_id", "==", ownerIdNum).limit(1).get();
+      if (!usersSnap.empty) userId = usersSnap.docs[0].id;
+    }
+  }
+
+  // 사용자를 찾은 경우: strava_sync_retry_pending 플래그 → 재시도 스케줄(03:30/06:30/09:30)이 잡아 재수집한다.
+  if (userId) {
+    // 단건 재시도(activityId)는 날짜와 무관 — 스케줄(전날·당일)에서 pending 유저를 잡기 위해 어제~오늘 구간 사용
+    const dateRange = stravaSyncRetry.getYesterdayTodayYmdSeoul();
+    await stravaSyncRetry.markStravaSyncRetryPending(db, userId, {
+      dateFrom: dateRange.dateFrom,
+      dateTo: dateRange.dateTo,
+      reason,
+      status: failStatus || 500,
+      activityId,
+    });
+  }
+
+  // 구현1(silent-drop 방지)+구현2: 사용자 해석 여부와 무관하게 실패 상태를 항상 webhook_retries 큐에 기록한다.
+  // (owner_id/object_id/reason/status/error/failed_at 저장 → 재시도 스케줄의 타겟 드레인이 처리)
   await stravaGapDetect.enqueueStravaWebhookRetry(db, {
     ownerId: Number(ownerId),
     objectId: Number(objectId),
-    userId,
-    reason: inferWebhookRetryReason(failStatus, errorText),
+    userId: userId || null,
+    reason: userId ? reason : "user_unresolved",
     status: failStatus || 500,
     error: errorText,
   });
   console.warn("[Strava Webhook] 재시도 pending 등록:", {
-    userId,
+    userId: userId || null,
     activityId,
-    reason: inferWebhookRetryReason(failStatus, errorText),
+    reason: userId ? reason : "user_unresolved",
     status: failStatus || 500,
-    dateFrom: dateRange.dateFrom,
-    dateTo: dateRange.dateTo,
     error: errorText,
   });
 }
