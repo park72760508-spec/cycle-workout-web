@@ -207,6 +207,8 @@ function privacyFlagFromFirestoreDoc(data) {
 
 /**
  * 집계본/캐시 행에 최신 users.is_private 반영 (TSS·거리·피크 탭이 GC 대비 스냅샷을 쓰는 경로에서 비공개가 풀리는 문제 방지)
+ * Firestore users를 비공개(is_private)의 원천으로 삼아, 조회된 행에 한해 최신값으로 덮어쓴다.
+ * (users 문서 미조회 행은 기존 값을 유지 — Supabase 경로에서 비공개가 잘못 해제되지 않도록)
  */
 async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
   if (!byCategory || typeof byCategory !== "object" || !db) return;
@@ -232,7 +234,10 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
   const CHUNK = 30;
   for (let i = 0; i < ids.length; i += CHUNK) {
     const chunk = ids.slice(i, i + CHUNK);
-    chunk.forEach((id) => privMap.set(id, false));
+    // 주의: chunk id를 false로 선(先)세팅하지 않는다.
+    // Supabase 읽기 경로에서도 이 함수를 호출하는데, users 문서가 조회되지 않은 행(탈퇴/id 불일치 등)을
+    // 무조건 is_private=false로 덮어쓰면 이미 비공개로 표시되던 행이 잘못 공개될 수 있다.
+    // Firestore users 문서가 실제로 조회된 행만 아래 apply()에서 최신 is_private(원천)로 반영한다.
     try {
       const qSnap = await db.collection("users").where(FieldPath.documentId(), "in", chunk).get();
       qSnap.forEach((doc) => {
@@ -5470,12 +5475,22 @@ exports.getWeeklyRanking = onRequest(
     if (weeklyFromSupabase) {
       const ent = weeklyFromSupabase.allEntries || [];
       delete weeklyFromSupabase.allEntries;
+      // 비공개(is_private)는 Firestore users를 원천으로 항상 최신 반영한다.
+      // Supabase 동기화 지연/누락 시 비공개로 토글한 사용자가 주간 TSS/TOP10에 공개로 노출되는 문제를 방지.
+      // 주의: 응답의 ranking(top10)·myRank는 allEntries(ent)와 별개 객체이므로, 실제 반환 배열까지 함께 보강해야 한다.
+      const weeklyPrivacyRows = [];
+      if (Array.isArray(weeklyFromSupabase.ranking)) {
+        weeklyFromSupabase.ranking.forEach((r) => weeklyPrivacyRows.push(r));
+      }
+      if (weeklyFromSupabase.myRank) weeklyPrivacyRows.push(weeklyFromSupabase.myRank);
+      ent.forEach((r) => weeklyPrivacyRows.push(r));
+      await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: weeklyPrivacyRows }, null);
       if (
         weeklyFromSupabase.readSource !== "supabase" &&
         weeklyFromSupabase.readBackend !== "supabase"
       ) {
-        await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: ent }, ent);
-        await hydrateRankingBoardProfileImages(db, { Supremo: ent }, ent);
+        // 프로필 이미지 URL은 Supabase 값(profile_image_url)을 신뢰 — Firebase 경로에서만 추가 보강
+        await hydrateRankingBoardProfileImages(db, { Supremo: weeklyPrivacyRows }, null);
       }
       const hasRanking =
         Array.isArray(weeklyFromSupabase.ranking) && weeklyFromSupabase.ranking.length > 0;
@@ -11673,14 +11688,19 @@ exports.getPeakPowerRanking = onRequest(
     /** 집계/캐시 행은 스냅샷 시점의 is_private일 수 있음 → 응답 직전 users 기준 비공개·프로필 URL 보강 */
     const finalizeRankingProfileUrls = async (payload) => {
       if (!payload || !payload.byCategory) return;
+      // 비공개(is_private)는 Firestore users를 원천으로 항상 최신 반영한다.
+      // Supabase 읽기 경로에서도 Firestore→Supabase 동기화 지연/누락 시 비공개가 풀려 보이는 문제가 있어
+      // (예: 사용자가 비공개로 토글했는데 랭킹보드에 공개로 노출) 읽기 백엔드와 무관하게 항상 보강한다.
+      // userId는 firebase_uid(=users 문서 id)라 조회가 가능하며, 미조회 행은 기존 값을 유지한다.
+      await hydrateRankingBoardPrivacyFromUsers(db, payload.byCategory, payload.entries);
       if (
         payload.readSource === "supabase" ||
         payload.readBackend === "supabase" ||
         payload.supabaseReadBlockedFirebaseFallback === true
       ) {
+        // 프로필 이미지 URL은 Supabase 값(profile_image_url)을 신뢰 — 추가 Firestore 조회 없이 종료
         return;
       }
-      await hydrateRankingBoardPrivacyFromUsers(db, payload.byCategory, payload.entries);
       await hydrateRankingBoardProfileImages(db, payload.byCategory, payload.entries);
     };
 
