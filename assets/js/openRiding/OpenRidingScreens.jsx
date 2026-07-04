@@ -7325,33 +7325,35 @@ function OpenRidingDetail(props) {
         }
       }
 
-      var params = new URLSearchParams({
-        period: 'rolling6m',
-        duration: '60min',
-        gender: 'all'
-      });
-      params.set('uid', uid);
-      fetch(
-        'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString(),
-        { mode: 'cors' }
-      )
-        .then(function (r) {
-          return r.json();
-        })
-        .then(function (data) {
+      /**
+       * 세부 내용의 '나의 평지 항속 능력'은 최근 90일 중 60분 최고 평균 파워(피크)를 투입한 평속으로 표시.
+       * (랭킹보드 6개월 집계 대신 본인 로그에서 90일 윈도로 직접 산출 — 기간 의미가 명확하고 캐시 영향 없음)
+       */
+      var getLogsFn =
+        typeof window !== 'undefined' && typeof window.getUserTrainingLogs === 'function'
+          ? window.getUserTrainingLogs
+          : null;
+      var computeAbilityFn =
+        typeof window !== 'undefined' &&
+        typeof window.stelvioComputeOneHourAbilityFromLogs === 'function'
+          ? window.stelvioComputeOneHourAbilityFromLogs
+          : null;
+      if (!getLogsFn || !computeAbilityFn) {
+        finishWithPeak(0, 0);
+        return function () {
+          cancelled = true;
+        };
+      }
+      getLogsFn(uid, { limit: 400 })
+        .then(function (logs) {
           if (cancelled) return;
-          if (!data || !data.success || !data.byCategory) {
-            finishWithPeak(0, 0);
-            return;
-          }
-          var merged = mergePeakRankingEntriesFromByCategory(data.byCategory);
-          var entry =
-            merged.filter(function (e) {
-              return e.userId === uid;
-            })[0] || data.currentUser;
-          var peakW = entry && Number(entry.watts) > 0 ? Number(entry.watts) : 0;
-          var wKg = entry && Number(entry.weightKg) > 0 ? Number(entry.weightKg) : 0;
-          finishWithPeak(peakW, wKg);
+          var metrics = computeAbilityFn(Array.isArray(logs) ? logs : [], {
+            ftp: prof.ftp,
+            weight: prof.weight,
+            windowDays: 90
+          });
+          var peakW = metrics && Number(metrics.peak60minWatts) > 0 ? Number(metrics.peak60minWatts) : 0;
+          finishWithPeak(peakW, prof.ok ? prof.weight : 0);
         })
         .catch(function () {
           if (!cancelled) finishWithPeak(0, 0);
@@ -7959,11 +7961,11 @@ function OpenRidingDetail(props) {
                     ) : null}
                     {detailLevelPeakHint.usedFtpFallback ? (
                       <p className="m-0 text-[10px] text-emerald-800/90">
-                        참조: 60분 피크 없음 · FTP 평지 평속 × 93%
+                        참조: 최근 90일 60분 피크 없음 · FTP 평지 평속 × 93%
                       </p>
                     ) : detailLevelPeakHint.usedPeak ? (
                       <p className="m-0 text-[10px] text-emerald-800/90">
-                        참조: 60분 최고 평균 파워·체중 (현실 지표)
+                        참조: 최근 90일 60분 최고 평균 파워·체중 (현실 지표)
                       </p>
                     ) : null}
                   </div>
