@@ -236,13 +236,40 @@ async function ensureSupabaseAuthUser(supabase, admin, firebaseUid, supabaseId, 
   return { action: "created" };
 }
 
+/** PostgREST PGRST204 메시지에서 없는 컬럼명 추출. 예: "Could not find the 'x' column of 'users' ..." */
+function parseMissingColumnFromPgrstError(message) {
+  const m = /find the '([^']+)' column/i.exec(String(message || ""));
+  return m ? m[1] : null;
+}
+
 async function upsertPublicUser(supabase, row) {
-  const { error } = await supabase.from("users").upsert(row, {
-    onConflict: "id",
-    ignoreDuplicates: false,
-  });
-  if (error) throw error;
-  return { action: "upserted" };
+  // 스키마 드리프트 대비: 특정 컬럼이 Supabase에 아직 없거나 PostgREST 스키마 캐시가 오래되어
+  // PGRST204("...column ... in the schema cache")가 나면, 그 컬럼만 제외하고 재시도한다.
+  // 미지의 컬럼 하나 때문에 전체 upsert(핵심 필드 is_private·gender·name 등)가 막히는 것을 방지.
+  const payload = { ...row };
+  const droppedColumns = [];
+  let lastError = null;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const { error } = await supabase.from("users").upsert(payload, {
+      onConflict: "id",
+      ignoreDuplicates: false,
+    });
+    if (!error) {
+      return droppedColumns.length
+        ? { action: "upserted", droppedColumns }
+        : { action: "upserted" };
+    }
+    lastError = error;
+    const missingCol =
+      error && error.code === "PGRST204"
+        ? parseMissingColumnFromPgrstError(error.message)
+        : null;
+    if (!missingCol || !(missingCol in payload)) break;
+    delete payload[missingCol];
+    droppedColumns.push(missingCol);
+    console.warn("[upsertPublicUser] Supabase users 컬럼 미존재 → 제외 후 재시도:", missingCol);
+  }
+  throw lastError;
 }
 
 /**
