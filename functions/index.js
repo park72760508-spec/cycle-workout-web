@@ -281,6 +281,67 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
   }
 }
 
+// ── 저비용 비공개 오버레이 (대규모 트래픽 대비) ──────────────────────────────
+// hydrateRankingBoardPrivacyFromUsers는 보드의 "모든 행"에 대해 users 문서를 읽으므로
+// (피크 보드는 카테고리당 최대 수천 행) 10만 가입자·per-user CDN 캐시 환경에서 읽기 비용이 과도하다.
+// 대신 "현재 비공개(is_private=true)인 사용자 id 집합"만 조회한다.
+//  - users.where('is_private','==',true) → 비공개(소수)만 읽으므로 보드 전체 조회보다 훨씬 저렴.
+//  - 인메모리 TTL 캐시로 함수 인스턴스당 조회 횟수를 고정(요청량과 무관하게 상한).
+//  - 집합에 속한 행만 is_private=true로 강제(강등 없음) → 동기화 지연 시에도 비공개가 풀리지 않음.
+let _privateUserIdSetCache = null;
+let _privateUserIdSetCacheAt = 0;
+// 비공개 집합 인메모리 캐시 TTL. 피크 보드 CDN 캐시(s-maxage=300s)와 맞춰 조회 빈도를 낮춘다.
+// (비공개 토글이 보드에 반영되기까지 최대 이 정도 지연 — 수용 가능)
+const PRIVATE_USER_ID_SET_TTL_MS = 300 * 1000;
+
+async function getPrivateUserIdSetCached(db) {
+  if (!db) return null;
+  const now = Date.now();
+  if (_privateUserIdSetCache && now - _privateUserIdSetCacheAt < PRIVATE_USER_ID_SET_TTL_MS) {
+    return _privateUserIdSetCache;
+  }
+  try {
+    const set = new Set();
+    // select()로 필드 없이 문서 id만 가져와 전송량 최소화 (읽기 1건/문서는 동일하나 비공개 사용자 수로 상한 고정)
+    const snap = await admin
+      .firestore()
+      .collection("users")
+      .where("is_private", "==", true)
+      .select()
+      .get();
+    snap.forEach((doc) => set.add(String(doc.id)));
+    _privateUserIdSetCache = set;
+    _privateUserIdSetCacheAt = now;
+    return set;
+  } catch (e) {
+    console.warn("[getPrivateUserIdSetCached]", e && e.message ? e.message : e);
+    // 조회 실패 시 직전 캐시 유지(있으면) — 일시 오류로 비공개가 풀리지 않도록
+    return _privateUserIdSetCache;
+  }
+}
+
+/**
+ * 저비용 비공개 오버레이: 비공개 사용자 집합에 속한 행만 is_private=true로 강제.
+ * (집합에 없다고 공개로 강등하지 않음 — Supabase가 이미 비공개면 유지)
+ */
+async function applyRankingBoardPrivacyOverlay(db, byCategory, entries) {
+  const privateSet = await getPrivateUserIdSetCached(db);
+  if (!privateSet || privateSet.size === 0) return;
+  const apply = (r) => {
+    if (!r || r.userId == null) return;
+    if (privateSet.has(String(r.userId).trim())) r.is_private = true;
+  };
+  if (byCategory && typeof byCategory === "object") {
+    for (const k of Object.keys(byCategory)) {
+      const rows = byCategory[k];
+      if (Array.isArray(rows)) for (const r of rows) apply(r);
+    }
+  }
+  if (Array.isArray(entries)) {
+    for (const r of entries) apply(r);
+  }
+}
+
 /**
  * 랭킹 응답의 byCategory(및 선택적 entries)에 users.profileImageUrl 최신값 반영.
  * 집계 캐시(ranking_aggregates 등)에는 필드가 없거나 오래된 경우가 있어 GC와 동일하게 HTTP 응답 직전에 보강.
@@ -5475,21 +5536,22 @@ exports.getWeeklyRanking = onRequest(
     if (weeklyFromSupabase) {
       const ent = weeklyFromSupabase.allEntries || [];
       delete weeklyFromSupabase.allEntries;
-      // 비공개(is_private)는 Firestore users를 원천으로 항상 최신 반영한다.
-      // Supabase 동기화 지연/누락 시 비공개로 토글한 사용자가 주간 TSS/TOP10에 공개로 노출되는 문제를 방지.
-      // 주의: 응답의 ranking(top10)·myRank는 allEntries(ent)와 별개 객체이므로, 실제 반환 배열까지 함께 보강해야 한다.
+      // 비공개(is_private)는 Supabase 동기화 지연/누락 시 공개로 노출될 수 있어 응답 직전 보강한다.
+      // 응답에 실제로 나가는 배열(ranking(top10)·myRank)만 대상으로, 저비용 비공개 집합 오버레이 사용.
+      // (allEntries(ent)는 위에서 응답에서 제거되므로 보강 대상에서 제외 — 불필요한 조회 방지)
       const weeklyPrivacyRows = [];
       if (Array.isArray(weeklyFromSupabase.ranking)) {
         weeklyFromSupabase.ranking.forEach((r) => weeklyPrivacyRows.push(r));
       }
       if (weeklyFromSupabase.myRank) weeklyPrivacyRows.push(weeklyFromSupabase.myRank);
-      ent.forEach((r) => weeklyPrivacyRows.push(r));
-      await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: weeklyPrivacyRows }, null);
-      if (
-        weeklyFromSupabase.readSource !== "supabase" &&
-        weeklyFromSupabase.readBackend !== "supabase"
-      ) {
-        // 프로필 이미지 URL은 Supabase 값(profile_image_url)을 신뢰 — Firebase 경로에서만 추가 보강
+      const weeklyFromSupabaseRead =
+        weeklyFromSupabase.readSource === "supabase" ||
+        weeklyFromSupabase.readBackend === "supabase";
+      if (weeklyFromSupabaseRead) {
+        await applyRankingBoardPrivacyOverlay(db, { Supremo: weeklyPrivacyRows }, null);
+      } else {
+        // Firebase 폴백: 스냅샷 기반이라 users 기준 비공개·프로필 URL 보강
+        await hydrateRankingBoardPrivacyFromUsers(db, { Supremo: weeklyPrivacyRows }, null);
         await hydrateRankingBoardProfileImages(db, { Supremo: weeklyPrivacyRows }, null);
       }
       const hasRanking =
@@ -11688,19 +11750,19 @@ exports.getPeakPowerRanking = onRequest(
     /** 집계/캐시 행은 스냅샷 시점의 is_private일 수 있음 → 응답 직전 users 기준 비공개·프로필 URL 보강 */
     const finalizeRankingProfileUrls = async (payload) => {
       if (!payload || !payload.byCategory) return;
-      // 비공개(is_private)는 Firestore users를 원천으로 항상 최신 반영한다.
-      // Supabase 읽기 경로에서도 Firestore→Supabase 동기화 지연/누락 시 비공개가 풀려 보이는 문제가 있어
-      // (예: 사용자가 비공개로 토글했는데 랭킹보드에 공개로 노출) 읽기 백엔드와 무관하게 항상 보강한다.
-      // userId는 firebase_uid(=users 문서 id)라 조회가 가능하며, 미조회 행은 기존 값을 유지한다.
-      await hydrateRankingBoardPrivacyFromUsers(db, payload.byCategory, payload.entries);
       if (
         payload.readSource === "supabase" ||
         payload.readBackend === "supabase" ||
         payload.supabaseReadBlockedFirebaseFallback === true
       ) {
-        // 프로필 이미지 URL은 Supabase 값(profile_image_url)을 신뢰 — 추가 Firestore 조회 없이 종료
+        // Supabase 읽기: Firestore→Supabase 비공개 동기화 지연/누락 대비.
+        // 보드 전 행 조회(고비용) 대신 "비공개 사용자 집합"(소수·인메모리 캐시)만으로 비공개를 강제한다.
+        // 프로필 이미지 URL은 Supabase 값을 신뢰(추가 조회 없음).
+        await applyRankingBoardPrivacyOverlay(db, payload.byCategory, payload.entries);
         return;
       }
+      // Firebase 읽기(폴백/레거시): 스냅샷 기반이라 users 기준으로 비공개·이름·프로필 URL을 보강.
+      await hydrateRankingBoardPrivacyFromUsers(db, payload.byCategory, payload.entries);
       await hydrateRankingBoardProfileImages(db, payload.byCategory, payload.entries);
     };
 
