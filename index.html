@@ -3589,19 +3589,25 @@
                   <span id="categoryAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
                 </div>
                 <div class="basecamp-auth-bar-logout-wrap">
-                  <button type="button" id="btnCategoryAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogoutWithConfirm==='function')handleLogoutWithConfirm();else if(typeof handleLogout==='function')handleLogout();" aria-label="로그아웃" title="로그아웃">
-                    <img src="assets/img/out.png" alt="" width="24" height="24" decoding="async" />
-                  </button>
+                  <a class="basecamp-footer-cafe-link" href="https://cafe.naver.com/stelvio" target="_blank" rel="noopener noreferrer" onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;">
+                    <img class="basecamp-footer-cafe-icon" src="assets/img/community.png" alt="" />
+                    <span>STELVIO 카페 바로가기</span>
+                  </a>
                 </div>
               </div>
             </div>
           </div>
           <div class="basecamp-footer">
             <p>
-              <a class="basecamp-footer-cafe-link" href="https://cafe.naver.com/stelvio" target="_blank" rel="noopener noreferrer" onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;">
+              <!-- 비로그인 시: 카페 바로가기 / 로그인 시: 로그아웃 (updateAuthBarUI에서 표시 토글) -->
+              <a id="categoryFooterCafe" class="basecamp-footer-cafe-link" href="https://cafe.naver.com/stelvio" target="_blank" rel="noopener noreferrer" onclick="if(typeof openStelvioExternalUrl==='function'){openStelvioExternalUrl('https://cafe.naver.com/stelvio');}else if(typeof window.open==='function'){window.open('https://cafe.naver.com/stelvio','_blank','noopener,noreferrer');}else{window.location.href='https://cafe.naver.com/stelvio';} return false;">
                 <img class="basecamp-footer-cafe-icon" src="assets/img/community.png" alt="" />
                 <span>STELVIO 카페 바로가기</span>
               </a>
+              <button type="button" id="btnCategoryAuthLogout" class="basecamp-footer-cafe-link basecamp-footer-logout-btn" style="display: none !important; background: none; border: none; padding: 0; cursor: pointer; font: inherit;" onclick="if(typeof handleLogoutWithConfirm==='function')handleLogoutWithConfirm();else if(typeof handleLogout==='function')handleLogout();" aria-label="로그아웃" title="로그아웃">
+                <img class="basecamp-footer-cafe-icon" src="assets/img/out.png" alt="" />
+                <span>로그아웃</span>
+              </button>
             </p>
           </div>
         </div>
@@ -29938,6 +29944,13 @@
       _syncAuthBarPair('authBarLeft', 'authBarRight', 'authBarWarning', 'authBarWelcomeLine1', 'authBarWelcomeLine2', user, userName, loggedIn);
       _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn);
       _syncAuthBarPair('runAuthBarLeft', 'runAuthBarRight', 'runAuthBarWarning', 'runAuthBarWelcomeLine1', 'runAuthBarWelcomeLine2', user, userName, loggedIn);
+      // 스포츠 카테고리 화면 하단(footer): 로그인 시 로그아웃, 비로그인 시 카페 바로가기 표시
+      // (카페 바로가기는 로그인 시 상단 환영 영역으로 이동 배치)
+      // .basecamp-footer-cafe-link이 display:inline-flex !important 이므로 !important로 토글해야 적용됨
+      var _catFooterCafe = document.getElementById('categoryFooterCafe');
+      var _catFooterLogout = document.getElementById('btnCategoryAuthLogout');
+      if (_catFooterCafe) _catFooterCafe.style.setProperty('display', loggedIn ? 'none' : 'inline-flex', 'important');
+      if (_catFooterLogout) _catFooterLogout.style.setProperty('display', loggedIn ? 'inline-flex' : 'none', 'important');
       if (loggedIn) {
         if (subLeft) subLeft.style.display = 'none';
         if (subRight) subRight.style.display = 'grid';
