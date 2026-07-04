@@ -921,14 +921,8 @@
 
     ctx.drawImage(fillLayer, 0, 0);
 
-    if (strokeColor) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-over';
-      ctx.shadowColor = fillColor;
-      ctx.shadowBlur = Math.max(3, Math.round(Math.min(w, h) * 0.004));
-      ctx.drawImage(fillLayer, 0, 0);
-      ctx.restore();
-    }
+    // 네온 글로우(채색과 동일 색의 블러 halo) 제거: 색상 변경 시 이미지·문구 테두리가 뭉개져 시인성이 떨어지는 문제 해결.
+    // 시인성은 위의 대비 외곽선(stroke ring)만으로 확보 → 색상 변경이 선명하게 표시된다.
 
     return canvasToPngBlob(out);
   }
