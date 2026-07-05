@@ -256,33 +256,13 @@
 
   async function fetchTrainingLogsForUser(uid, limit) {
     limit = limit || 400;
-    var raw = [];
     if (typeof global.getUserTrainingLogs === 'function' && global.firestoreV9) {
       try {
-        raw = await global.getUserTrainingLogs(uid, { limit: limit });
+        var raw = await global.getUserTrainingLogs(uid, { limit: limit });
         if (Array.isArray(raw)) return raw;
       } catch (e) {}
     }
-    if (global.firestore) {
-      try {
-        var snap = await global.firestore
-          .collection('users')
-          .doc(uid)
-          .collection('logs')
-          .orderBy('date', 'desc')
-          .limit(limit)
-          .get();
-        snap.docs.forEach(function (doc) {
-          var dd = doc.data() || {};
-          var o = { id: doc.id };
-          Object.keys(dd).forEach(function (k) {
-            o[k] = dd[k];
-          });
-          raw.push(o);
-        });
-      } catch (e2) {}
-    }
-    return raw;
+    return [];
   }
 
   function removeUidFromPersonalSpeedBoard(data, uid) {
