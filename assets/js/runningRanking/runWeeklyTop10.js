@@ -112,9 +112,93 @@
     return fmt().formatDistanceKm ? fmt().formatDistanceKm(km) : (Number(km) || 0).toFixed(1);
   }
 
-  function maskedName(name) {
-    var n = name || '러너';
+  function resolveViewerFirebaseUid() {
+    if (typeof window.stelvioResolveRankingViewerUserId === 'function') {
+      var uid = window.stelvioResolveRankingViewerUserId();
+      if (uid) return String(uid);
+    }
+    var cur = window.currentUser;
+    if (cur && (cur.id || cur.uid)) return String(cur.id || cur.uid);
+    try {
+      var ls = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (ls && (ls.id || ls.uid)) return String(ls.id || ls.uid);
+    } catch (e) {}
+    return '';
+  }
+
+  function isPrivateRow(item) {
+    if (typeof window.stelvioRankingIsPrivateRow === 'function') {
+      return window.stelvioRankingIsPrivateRow(item);
+    }
+    return !!(item && (item.is_private === true || item.isPrivate === true));
+  }
+
+  function canSeePrivateFull(item, isSelf) {
+    if (isSelf) return true;
+    var uid = String((item && (item.userId || item.firebaseUid || item.socialUserId)) || '');
+    if (uid && typeof window.stelvioRankingCanViewerSeeUserFull === 'function') {
+      return window.stelvioRankingCanViewerSeeUserFull(uid);
+    }
+    if (typeof window.stelvioRankingViewerCanSeePrivateNames === 'function' &&
+      window.stelvioRankingViewerCanSeePrivateNames()) {
+      return true;
+    }
+    return false;
+  }
+
+  function resolveRawName(item) {
+    if (typeof window.stelvioRankingResolveRowRawName === 'function') {
+      return window.stelvioRankingResolveRowRawName(item);
+    }
+    return (item && item.name) ? String(item.name) : '러너';
+  }
+
+  function resolveMaskedName(rawName) {
+    if (typeof window.stelvioRankingPrivateMaskedDisplayName === 'function') {
+      return window.stelvioRankingPrivateMaskedDisplayName(rawName);
+    }
+    var n = rawName || '러너';
     return n.length >= 1 ? n.charAt(0) + '**' : '**';
+  }
+
+  function resolveProfileUrl(item) {
+    if (typeof window.stelvioRankingProfileImageUrlForDisplay === 'function') {
+      return window.stelvioRankingProfileImageUrlForDisplay({
+        profileImageUrl: item.profileUrl || item.profileImageUrl,
+        profile_image_url: item.profileUrl || item.profileImageUrl
+      });
+    }
+    return item.profileUrl || item.profileImageUrl || null;
+  }
+
+  /** CYCLE weeklyTop10 renderTop10 — stelvioWeeklyTop10RankChangeBadgeHtml 우선 */
+  function weeklyRankChangeTightHtml(item, boardRank) {
+    if (typeof window.stelvioWeeklyTop10RankChangeBadgeHtml === 'function') {
+      return window.stelvioWeeklyTop10RankChangeBadgeHtml(item, boardRank);
+    }
+    var rc = window.runningRankingRankChange;
+    if (rc && typeof rc.badgeHtmlForListItem === 'function') {
+      var h = rc.badgeHtmlForListItem(item, 'Supremo');
+      if (!h) return '';
+      return h.replace(
+        'class="stelvio-rank-change ',
+        'style="margin-left:0;margin-right:0;" class="stelvio-rank-change weekly-rank-change-tight '
+      );
+    }
+    return rankChangeBadgeHtml(item);
+  }
+
+  function toSocialRow(item) {
+    return {
+      userId: item.userId || item.firebaseUid,
+      firebaseUid: item.firebaseUid || item.userId,
+      name: item.name,
+      is_private: item.is_private != null ? item.is_private : item.isPrivate,
+      profileImageUrl: item.profileUrl || item.profileImageUrl,
+      rank: item.rank,
+      rankChange: item.rankChange,
+      previousBoardRank: item.previousBoardRank
+    };
   }
 
   /** 리더보드 rows → 주간 거리 랭킹 목록 (등락 적용 완료) */
@@ -127,15 +211,29 @@
       if (!r) return;
       var km = Number(r.weekly_distance_km);
       if (!isFinite(km) || km <= 0) return;
-      var userId = d ? d.rowUserId(r) : (r.user_info && r.user_info.user_id) || '';
       var fbUid = d ? d.rowFirebaseUid(r) : (r.user_info && r.user_info.firebase_uid) || '';
-      list.push({
-        userId: userId,
+      var boardUid = d ? d.rowUserId(r) : (r.user_info && r.user_info.user_id) || '';
+      var displayName = (r.user_info && r.user_info.display_name) ? String(r.user_info.display_name) : '러너';
+      var socialRow = {
+        userId: fbUid || boardUid,
         firebaseUid: fbUid,
-        socialUserId: fbUid || userId,
-        name: (r.user_info && r.user_info.display_name) ? String(r.user_info.display_name) : '러너',
+        boardUserId: boardUid,
+        socialUserId: fbUid || boardUid,
+        name: displayName,
+        is_private: d ? (d.isPrivateRow(r) ? true : false) : !!(r.user_info && r.user_info.is_private),
         profileUrl: (r.user_info && r.user_info.profile_image_url) ? String(r.user_info.profile_image_url) : '',
-        isPrivate: d ? d.isPrivateRow(r) : !!(r.user_info && r.user_info.is_private),
+        profileImageUrl: (r.user_info && r.user_info.profile_image_url) ? String(r.user_info.profile_image_url) : ''
+      };
+      list.push({
+        userId: socialRow.userId,
+        boardUserId: boardUid,
+        firebaseUid: fbUid,
+        socialUserId: socialRow.socialUserId,
+        name: displayName,
+        is_private: socialRow.is_private,
+        isPrivate: socialRow.is_private,
+        profileUrl: socialRow.profileUrl,
+        profileImageUrl: socialRow.profileImageUrl,
         value: km,
         raw: r
       });
@@ -186,39 +284,37 @@
       '</div>';
   }
 
-  function viewerCanSeeFull(item, isSelf, isAdmin) {
-    if (isSelf || isAdmin) return true;
-    var friendSet = window.stelvioRankingFriendUserSet;
-    var groupSet = window.stelvioRankingGroupContactSet;
-    var ids = [];
-    if (item.socialUserId) ids.push(String(item.socialUserId));
-    if (item.userId != null) ids.push(String(item.userId));
-    if (item.firebaseUid) ids.push(String(item.firebaseUid));
-    for (var i = 0; i < ids.length; i++) {
-      if (friendSet && typeof friendSet.has === 'function' && friendSet.has(ids[i])) return true;
-      if (groupSet && typeof groupSet.has === 'function' && groupSet.has(ids[i])) return true;
-    }
-    return false;
-  }
-
   function rowHtml(item, opts) {
     opts = opts || {};
     var rank = item.rank;
     var medalSrc = (cfg().MEDAL_SRC) || ['assets/img/1st.svg', 'assets/img/2nd.svg', 'assets/img/3rd.svg'];
-    var canSee = viewerCanSeeFull(item, opts.isSelf, opts.isAdmin);
-    var rawName = escapeHtml(item.name || '러너');
-    var displayText = item.isPrivate && !canSee ? escapeHtml(maskedName(item.name)) : rawName;
-    /* CYCLE 동일: 비공개 사용자를 실명으로 볼 수 있는 뷰어(본인·관리자·친구·모임)에게 '비' 배지 표시 */
-    var privateBadge = (item.isPrivate && canSee)
-      ? '<span class="ranking-private-badge ranking-private-badge-admin weekly-rank-private-badge-tight" style="margin-left:0;margin-right:0;" title="비공개">비</span>'
-      : '';
-    var badge = rankChangeBadgeHtml(item);
-    var html = '<div class="weekly-rank-item' + (opts.isSelf ? ' weekly-rank-item-self' : '') + '"' + (opts.isSelf ? ' id="runWeeklyTop10MyRankRow"' : '') + '>';
+    var social = toSocialRow(item);
+    var isSelf = !!opts.isSelf;
+    var isPrivate = isPrivateRow(social);
+    var canSee = canSeePrivateFull(social, isSelf);
+    var rawName = escapeHtml(resolveRawName(social));
+    var displayText;
+    var privateBadge = '';
+    if (isPrivate) {
+      if (canSee) {
+        displayText = rawName;
+        privateBadge =
+          '<span class="ranking-private-badge ranking-private-badge-admin weekly-rank-private-badge-tight" style="margin-left:0;margin-right:0;" title="비공개">비</span>';
+      } else {
+        displayText = escapeHtml(resolveMaskedName(social.name));
+      }
+    } else {
+      displayText = rawName;
+    }
+    var profUrl = resolveProfileUrl(social);
+    var avatarUid = String(social.userId || social.firebaseUid || '');
+    var badge = weeklyRankChangeTightHtml(social, rank);
+    var html = '<div class="weekly-rank-item' + (isSelf ? ' weekly-rank-item-self' : '') + '"' + (isSelf ? ' id="runWeeklyTop10MyRankRow"' : '') + '>';
     if (rank <= 3) {
       html += '<span class="weekly-rank-medal"><img src="' + medalSrc[rank - 1] + '" alt="" width="20" height="20" decoding="async" /></span>';
     }
     html += '<span class="weekly-rank-position">' + rank + '위</span>';
-    html += '<span class="weekly-rank-name">' + avatarHtml(item.profileUrl, item.userId, displayText) +
+    html += '<span class="weekly-rank-name">' + avatarHtml(profUrl, avatarUid, displayText) +
       '<span class="weekly-rank-name-text" title="' + rawName + '">' +
       '<span class="weekly-rank-name-label">' + displayText + '</span>' +
       '<span class="weekly-rank-change-slot">' + badge + privateBadge + '</span></span></span>';
@@ -235,12 +331,15 @@
 
     var d = dataMod();
     var identity = d && typeof d.getViewerIdentity === 'function' ? d.getViewerIdentity((list || []).map(function (i) { return i.raw; })) : null;
-    var isAdmin = typeof window.stelvioRankingLoginIsAdmin === 'function' && window.stelvioRankingLoginIsAdmin();
+    var viewerFbUid = resolveViewerFirebaseUid();
 
     function matchesViewer(item) {
-      if (!identity) return false;
-      if (d && typeof d.listItemMatchesViewer === 'function') return d.listItemMatchesViewer(item, identity);
-      return false;
+      if (!item) return false;
+      if (identity && d && typeof d.listItemMatchesViewer === 'function') {
+        return d.listItemMatchesViewer(item, identity);
+      }
+      var fb = String(item.firebaseUid || item.userId || '');
+      return !!(viewerFbUid && fb && viewerFbUid === fb);
     }
 
     if (!list || !list.length) {
@@ -266,12 +365,12 @@
     }
 
     list.slice(0, 10).forEach(function (item) {
-      html += rowHtml(item, { isSelf: myItem && item === myItem, isAdmin: isAdmin });
+      html += rowHtml(item, { isSelf: myItem && item === myItem });
     });
 
     if (myItem && myItem.rank > 10) {
       if (myItem.rank >= 12) html += '<div class="weekly-rank-item weekly-rank-ellipsis">....</div>';
-      html += rowHtml(myItem, { isSelf: true, isAdmin: isAdmin });
+      html += rowHtml(myItem, { isSelf: true });
     }
 
     var showStamp = isPrevWeek || isWeeklyRankingFinalizedSeoul();
