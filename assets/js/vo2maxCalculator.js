@@ -99,6 +99,8 @@
   }
 
   var FIRESTORE_MOD_VO2_STATS = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+  var VO2_DEMOGRAPHIC_SAMPLE_RELAY =
+    'https://us-central1-stelvio-ai.cloudfunctions.net/ingestVo2DemographicSampleRelay';
   var firestoreModVo2StatsPromise = null;
   function getFirestoreModVo2Stats() {
     if (!firestoreModVo2StatsPromise) firestoreModVo2StatsPromise = import(FIRESTORE_MOD_VO2_STATS);
@@ -213,6 +215,31 @@
     return Math.round(((m + f) / 2) * 10) / 10;
   }
 
+  /** Firestore Primary 성공 후 Supabase Secondary relay (Fault Isolated) */
+  function relayVo2DemographicSampleToSupabase(samplePayload) {
+    var auth = global.authV9;
+    if (!auth || !auth.currentUser || typeof auth.currentUser.getIdToken !== 'function') {
+      return Promise.resolve();
+    }
+    return auth.currentUser
+      .getIdToken()
+      .then(function (token) {
+        return fetch(VO2_DEMOGRAPHIC_SAMPLE_RELAY, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            genderKey: samplePayload.genderKey,
+            ageBracket: samplePayload.ageBracket,
+            avgSixMonthVo2: samplePayload.avgSixMonthVo2
+          })
+        });
+      })
+      .catch(function () {});
+  }
+
   /**
    * 대시보드 VO₂ 트렌드와 동일한 6개월 월별 VO₂의 산술평균을 기여(본인 문서만 갱신).
    * @param {Object} userProfile
@@ -233,18 +260,21 @@
     var avgSix = vals.reduce(function (a, b) {
       return a + b;
     }, 0) / vals.length;
+    var samplePayload = {
+      genderKey: pr.genderKey,
+      ageBracket: pr.ageBracket,
+      avgSixMonthVo2: Math.round(avgSix * 10) / 10
+    };
     return getFirestoreModVo2Stats()
       .then(function (mod) {
         return mod.setDoc(
           mod.doc(db, 'vo2_demographic_samples', uid),
-          {
-            genderKey: pr.genderKey,
-            ageBracket: pr.ageBracket,
-            avgSixMonthVo2: Math.round(avgSix * 10) / 10,
-            updatedAt: mod.serverTimestamp()
-          },
+          Object.assign({}, samplePayload, { updatedAt: mod.serverTimestamp() }),
           { merge: true }
         );
+      })
+      .then(function () {
+        relayVo2DemographicSampleToSupabase(samplePayload).catch(function () {});
       })
       .catch(function () {});
   }
