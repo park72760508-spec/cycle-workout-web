@@ -31,19 +31,34 @@
     }
   }
 
-  /** 서울 기준 이번 주 월요일~일요일 (표시용) */
-  function seoulWeekRange() {
+  /** 서울 기준 주간 범위. weekOffset 0=이번 주, -1=전주(월~일) */
+  function seoulWeekRangeOffset(weekOffset) {
+    weekOffset = weekOffset == null ? 0 : Number(weekOffset);
     var ymd = seoulToday();
     var parts = ymd.split('-');
-    var base = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
-    var dow = base.getUTCDay(); // 0=일
-    var isoDow = dow === 0 ? 7 : dow;
+    var y = Number(parts[0]);
+    var m = Number(parts[1]);
+    var d = Number(parts[2]);
+    var base = new Date(y, m - 1, d);
+    var dow = base.getDay();
+    var mondayOffset = dow === 0 ? -6 : 1 - dow;
     var mon = new Date(base);
-    mon.setUTCDate(base.getUTCDate() - (isoDow - 1));
-    var sun = new Date(mon);
-    sun.setUTCDate(mon.getUTCDate() + 6);
-    var f = function (d) { return d.toISOString().slice(0, 10); };
-    return { startStr: f(mon), endStr: f(sun) };
+    mon.setDate(base.getDate() + mondayOffset + weekOffset * 7);
+    var end = new Date(mon);
+    if (weekOffset < 0) {
+      end.setDate(mon.getDate() + 6);
+    } else {
+      end = new Date(base);
+    }
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return {
+      startStr: mon.getFullYear() + '-' + pad(mon.getMonth() + 1) + '-' + pad(mon.getDate()),
+      endStr: end.getFullYear() + '-' + pad(end.getMonth() + 1) + '-' + pad(end.getDate())
+    };
+  }
+
+  function seoulWeekRange() {
+    return seoulWeekRangeOffset(0);
   }
 
   function isSuppressedToday() {
@@ -103,7 +118,8 @@
   }
 
   /** 리더보드 rows → 주간 거리 랭킹 목록 (등락 적용 완료) */
-  function buildList(res) {
+  function buildList(res, opts) {
+    opts = opts || {};
     var d = dataMod();
     var rows = (res && res.rows) || [];
     var list = [];
@@ -133,16 +149,18 @@
     });
     list.forEach(function (it, i) { it.rank = i + 1; });
 
-    var mv = moveMod();
-    if (mv && typeof mv.applyRankMovement === 'function') {
-      mv.applyRankMovement(list, 'weekly_distance', {
-        gender: 'all',
-        category: 'Supremo',
-        rankMovementSource: (res && res.rankMovementSource) || '',
-        leaderboardSource: (res && res.leaderboardSource) || '',
-        leaderboardAsOfSeoul: (res && res.leaderboardAsOfSeoul) || '',
-        rankMovementAsOfSeoul: (res && res.rankMovementAsOfSeoul) || ''
-      }, (res && res.rankMovementByKey) || {});
+    if (!opts.isPrevWeek) {
+      var mv = moveMod();
+      if (mv && typeof mv.applyRankMovement === 'function') {
+        mv.applyRankMovement(list, 'weekly_distance', {
+          gender: 'all',
+          category: 'Supremo',
+          rankMovementSource: (res && res.rankMovementSource) || '',
+          leaderboardSource: (res && res.leaderboardSource) || '',
+          leaderboardAsOfSeoul: (res && res.leaderboardAsOfSeoul) || '',
+          rankMovementAsOfSeoul: (res && res.rankMovementAsOfSeoul) || ''
+        }, (res && res.rankMovementByKey) || {});
+      }
     }
     return list;
   }
@@ -209,9 +227,12 @@
     return html;
   }
 
-  function render(list) {
+  function render(list, renderOpts) {
+    renderOpts = renderOpts || {};
+    var isPrevWeek = !!renderOpts.isPrevWeek;
     var body = document.getElementById('runWeeklyTop10Body');
-    if (!body) return;
+    if (!body) return false;
+
     var d = dataMod();
     var identity = d && typeof d.getViewerIdentity === 'function' ? d.getViewerIdentity((list || []).map(function (i) { return i.raw; })) : null;
     var isAdmin = typeof window.stelvioRankingLoginIsAdmin === 'function' && window.stelvioRankingLoginIsAdmin();
@@ -223,13 +244,19 @@
     }
 
     if (!list || !list.length) {
-      body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;color:#666;">이번 주 러닝 기록이 아직 없습니다.</p>';
-      return;
+      return false;
     }
 
-    var wk = seoulWeekRange();
+    var wk = isPrevWeek
+      ? (renderOpts.weekStartStr && renderOpts.weekEndStr
+        ? { startStr: renderOpts.weekStartStr, endStr: renderOpts.weekEndStr }
+        : seoulWeekRangeOffset(-1))
+      : seoulWeekRange();
+    var captionText = isPrevWeek
+      ? '※ 전주 확정 순위 (' + wk.startStr + ' ~ ' + wk.endStr + ')'
+      : '※ 이번 주 순위 (' + wk.startStr + ' ~ ' + wk.endStr + ')';
     var html = '<p class="weekly-top10-week-caption" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
-      '<span>※ 이번 주 순위 (' + wk.startStr + ' ~ ' + wk.endStr + ')</span>' +
+      '<span>' + captionText + '</span>' +
       '<span class="weekly-top10-unit-label" style="font-weight:700;color:#7c3aed;flex-shrink:0;">km</span>' +
       '</p>';
 
@@ -242,13 +269,13 @@
       html += rowHtml(item, { isSelf: myItem && item === myItem, isAdmin: isAdmin });
     });
 
-    // 나의 순위가 TOP10 밖이면 하단에 별도 표시
     if (myItem && myItem.rank > 10) {
       if (myItem.rank >= 12) html += '<div class="weekly-rank-item weekly-rank-ellipsis">....</div>';
       html += rowHtml(myItem, { isSelf: true, isAdmin: isAdmin });
     }
 
-    if (isWeeklyRankingFinalizedSeoul()) {
+    var showStamp = isPrevWeek || isWeeklyRankingFinalizedSeoul();
+    if (showStamp) {
       html = '<div class="weekly-top10-body-inner" style="position:relative;">' + html +
         weeklyTop10StampOverlayHtml() + '</div>';
     }
@@ -265,6 +292,7 @@
         });
       });
     }
+    return true;
   }
 
   function closeRunWeeklyTop10Modal() {
@@ -299,7 +327,26 @@
         return;
       }
       try {
-        render(buildList(res));
+        var list = buildList(res);
+        if (list.length > 0 && render(list, { isPrevWeek: false })) {
+          return;
+        }
+        return a.fetchLeaderboard({ week: 'prev', force: true }).then(function (prevRes) {
+          if (modal.classList.contains('hidden')) return;
+          if (!prevRes || prevRes.success === false) {
+            modal.classList.add('hidden');
+            return;
+          }
+          var prevList = buildList(prevRes, { isPrevWeek: true });
+          if (prevList.length > 0 && render(prevList, {
+            isPrevWeek: true,
+            weekStartStr: prevRes.weekStartStr,
+            weekEndStr: prevRes.weekEndStr
+          })) {
+            return;
+          }
+          modal.classList.add('hidden');
+        });
       } catch (e) {
         console.warn('[RunWeeklyTop10] render 실패:', e && e.message ? e.message : e);
         body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">순위를 표시하지 못했습니다.</p>';

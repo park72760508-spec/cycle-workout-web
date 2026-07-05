@@ -65,10 +65,13 @@
     }
   }
 
-  /** API_URL 에 일자(d)·비공개버전(pv) 쿼리를 붙여 캐시 키를 구성 (서버는 무시, CDN 캐시 무효화용) */
-  function buildRequestUrl(base, pv) {
+  /** API_URL 에 일자(d)·비공개버전(pv)·week 쿼리를 붙여 CDN 캐시 키 구성 */
+  function buildRequestUrl(base, pv, opts) {
+    opts = opts || {};
     var sep = String(base).indexOf('?') >= 0 ? '&' : '?';
-    return base + sep + 'd=' + encodeURIComponent(seoulTodayYmd()) + '&pv=' + encodeURIComponent(pv || '0');
+    var url = base + sep + 'd=' + encodeURIComponent(seoulTodayYmd()) + '&pv=' + encodeURIComponent(pv || '0');
+    if (opts.week === 'prev') url += '&week=prev';
+    return url;
   }
 
   /**
@@ -80,12 +83,13 @@
     return resolvePrivacyVersion(opts.force).then(function (pv) {
       var now = Date.now();
       var minScoringVersion = cfg.LEADERBOARD_SCORING_VERSION || cfg.GC_SCORING_VERSION || 2;
+      var isPrevWeekReq = opts.week === 'prev';
       var cacheScoringOk = _cache.rows
         && _cache.rows.length
         && Number(_cache.rows[0].scoring_version) >= minScoringVersion;
       // 비공개 버전(pv)이 바뀌면 캐시를 신선하지 않은 것으로 보고 즉시 재조회
       var cacheFresh = !isStaleLeaderboardCache(_cache) && String(_cache.pv || '') === String(pv || '');
-      if (!opts.force && _cache.rows && cacheScoringOk && cacheFresh && now - _cache.at < cfg.CACHE_TTL_MS) {
+      if (!opts.force && !isPrevWeekReq && _cache.rows && cacheScoringOk && cacheFresh && now - _cache.at < cfg.CACHE_TTL_MS) {
         return {
           success: true,
           rows: _cache.rows.slice(),
@@ -98,7 +102,7 @@
       }
       if (_inflight && !opts.force) return _inflight;
 
-      _inflight = fetch(buildRequestUrl(cfg.API_URL, pv), { method: 'GET', credentials: 'omit' })
+      _inflight = fetch(buildRequestUrl(cfg.API_URL, pv, opts), { method: 'GET', credentials: 'omit' })
         .then(function (res) {
           return res.json().then(function (body) {
             if (!res.ok || !body || body.success === false) {
@@ -117,26 +121,32 @@
             var leaderboardSource = body.leaderboardSource ? String(body.leaderboardSource) : '';
             var leaderboardAsOfSeoul = body.leaderboardAsOfSeoul ? String(body.leaderboardAsOfSeoul) : '';
             var rankMovementSource = body.rankMovementSource ? String(body.rankMovementSource) : '';
-            _cache = {
-              at: Date.now(),
-              pv: String(pv || ''),
-              rows: rows,
-              rankMovementByKey: rankMovementByKey,
-              rankMovementAsOfSeoul: rankMovementAsOfSeoul,
-              rankMovementSource: rankMovementSource,
-              leaderboardSource: leaderboardSource,
-              leaderboardAsOfSeoul: leaderboardAsOfSeoul,
-              error: null
-            };
-            return {
+            var result = {
               success: true,
               rows: rows.slice(),
               rankMovementByKey: rankMovementByKey,
               rankMovementAsOfSeoul: rankMovementAsOfSeoul,
               rankMovementSource: rankMovementSource,
               leaderboardSource: leaderboardSource,
-              leaderboardAsOfSeoul: leaderboardAsOfSeoul
+              leaderboardAsOfSeoul: leaderboardAsOfSeoul,
+              prevWeekFallback: body.prevWeekFallback === true,
+              weekStartStr: body.weekStartStr ? String(body.weekStartStr) : '',
+              weekEndStr: body.weekEndStr ? String(body.weekEndStr) : ''
             };
+            if (!isPrevWeekReq) {
+              _cache = {
+                at: Date.now(),
+                pv: String(pv || ''),
+                rows: rows,
+                rankMovementByKey: rankMovementByKey,
+                rankMovementAsOfSeoul: rankMovementAsOfSeoul,
+                rankMovementSource: rankMovementSource,
+                leaderboardSource: leaderboardSource,
+                leaderboardAsOfSeoul: leaderboardAsOfSeoul,
+                error: null
+              };
+            }
+            return result;
           });
         })
         .catch(function (e) {
