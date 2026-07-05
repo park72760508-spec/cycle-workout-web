@@ -41,25 +41,6 @@ function RiderDashboardProfile(props) {
             raw = [];
           }
         }
-        if (raw.length === 0 && window.firestore) {
-          try {
-            const snap = await window.firestore
-              .collection('users')
-              .doc(userProfile.id)
-              .collection('logs')
-              .orderBy('date', 'desc')
-              .limit(400)
-              .get();
-            snap.docs.forEach((d) => {
-              const dd = d.data();
-              const o = { id: d.id };
-              if (dd && typeof dd === 'object') { for (const k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
-              raw.push(o);
-            });
-          } catch (e2) {
-            raw = [];
-          }
-        }
         const today = new Date();
         const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
         const fourWeeksAgo = new Date(today);

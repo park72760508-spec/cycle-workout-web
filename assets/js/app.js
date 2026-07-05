@@ -7041,12 +7041,8 @@ function checkAndShowDynamicFtpForMyCareer() {
         pollMs += 200;
       }
       if (typeof window.getUserTrainingLogs !== 'function' || !window.firestoreV9) {
-        if (window.firestore) {
-          console.log('[MyCareer/FTP] firestore compat 폴백 사용 예정');
-        } else {
-          console.warn('[MyCareer/FTP] 중단: getUserTrainingLogs 또는 firestoreV9 미준비 (getUserTrainingLogs:', typeof window.getUserTrainingLogs, ', firestoreV9:', !!window.firestoreV9, ')');
-          return;
-        }
+        console.warn('[MyCareer/FTP] 중단: getUserTrainingLogs 또는 firestoreV9 미준비 (getUserTrainingLogs:', typeof window.getUserTrainingLogs, ', firestoreV9:', !!window.firestoreV9, ')');
+        return;
       }
       var logs = [];
       if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
@@ -7067,21 +7063,6 @@ function checkAndShowDynamicFtpForMyCareer() {
               console.warn('[MyCareer/FTP] getUserTrainingLogs 재시도 실패:', e2);
             }
           }
-        }
-      }
-      if (logs.length === 0 && window.firestore) {
-        try {
-          console.log('[MyCareer/FTP] Firestore compat 폴백으로 로그 조회...');
-          var snap = await window.firestore.collection('users').doc(userId).collection('logs').orderBy('date', 'desc').limit(400).get();
-          snap.docs.forEach(function(d) {
-            var dd = d.data();
-            var o = { id: d.id };
-            if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
-            logs.push(o);
-          });
-          console.log('[MyCareer/FTP] compat 로그:', logs.length, '건');
-        } catch (e) {
-          console.warn('[MyCareer/FTP] Firestore compat 폴백 실패:', e);
         }
       }
       if (logs.length === 0) {

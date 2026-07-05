@@ -911,9 +911,16 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
     throw new Error('userId는 필수입니다.');
   }
 
+  var routerMod = null;
+  var useSupabase = false;
+  var allowFirestoreBulkFallback = true;
   try {
-    const routerMod = await import('./logsReadRouter.js');
-    const useSupabase = await routerMod.shouldReadTrainingLogsFromSupabase();
+    routerMod = await import('./logsReadRouter.js');
+    useSupabase = await routerMod.shouldReadTrainingLogsFromSupabase();
+    allowFirestoreBulkFallback =
+      typeof routerMod.shouldAllowFirestoreTrainingLogsBulkFallbackSync === 'function'
+        ? routerMod.shouldAllowFirestoreTrainingLogsBulkFallbackSync()
+        : !useSupabase;
     if (useSupabase) {
       const sbMod = await import('./supabaseRidesReadClient.js');
       var sbLogs = await sbMod.getUserTrainingLogsFromSupabase(userId, options);
@@ -922,7 +929,15 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
       return await enrichLogsWithTimeInZonesFromFirestore(userId, mergedLogs, dbForTiz);
     }
   } catch (sbErr) {
-    console.warn('[getUserTrainingLogs] Supabase Read 실패 → Firestore 폴백:', sbErr && sbErr.message);
+    console.warn('[getUserTrainingLogs] Supabase Read 실패:', sbErr && sbErr.message);
+    if (useSupabase && !allowFirestoreBulkFallback) {
+      return [];
+    }
+    console.warn('[getUserTrainingLogs] Firestore 폴백 시도');
+  }
+
+  if (useSupabase && !allowFirestoreBulkFallback) {
+    return [];
   }
 
   const db = firestoreInstance || window.firestoreV9;
@@ -982,10 +997,16 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
     throw new Error('userId는 필수입니다.');
   }
 
+  var useSupabaseMonth = false;
+  var allowFirestoreBulkFallbackMonth = true;
   try {
     const routerMod = await import('./logsReadRouter.js');
-    const useSupabase = await routerMod.shouldReadTrainingLogsFromSupabase();
-    if (useSupabase) {
+    useSupabaseMonth = await routerMod.shouldReadTrainingLogsFromSupabase();
+    allowFirestoreBulkFallbackMonth =
+      typeof routerMod.shouldAllowFirestoreTrainingLogsBulkFallbackSync === 'function'
+        ? routerMod.shouldAllowFirestoreTrainingLogsBulkFallbackSync()
+        : !useSupabaseMonth;
+    if (useSupabaseMonth) {
       const sbMod = await import('./supabaseRidesReadClient.js');
       var sbMonthLogs = await sbMod.getTrainingLogsByDateRangeFromSupabase(userId, year, month);
       var dbMonth = firestoreInstance || (typeof window !== 'undefined' ? window.firestoreV9 : null);
@@ -1001,7 +1022,15 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
       return await enrichLogsWithTimeInZonesFromFirestore(userId, mergedMonthLogs, dbMonth);
     }
   } catch (sbErr) {
-    console.warn('[getTrainingLogsByDateRange] Supabase Read 실패 → Firestore 폴백:', sbErr && sbErr.message);
+    console.warn('[getTrainingLogsByDateRange] Supabase Read 실패:', sbErr && sbErr.message);
+    if (useSupabaseMonth && !allowFirestoreBulkFallbackMonth) {
+      return [];
+    }
+    console.warn('[getTrainingLogsByDateRange] Firestore 폴백 시도');
+  }
+
+  if (useSupabaseMonth && !allowFirestoreBulkFallbackMonth) {
+    return [];
   }
 
   const db = firestoreInstance || window.firestoreV9;

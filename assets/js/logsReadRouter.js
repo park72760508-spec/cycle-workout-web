@@ -5,9 +5,10 @@ const API_BASE = 'https://us-central1-stelvio-ai.cloudfunctions.net';
 const LOGS_READ_ROUTING_URL = API_BASE + '/getLogsReadRoutingPublic';
 const CACHE_MS = 60 * 1000;
 
-/** @type {{ useSupabaseLogsRead: boolean, loadedAt: number, loading: Promise<boolean>|null }} */
+/** @type {{ useSupabaseLogsRead: boolean, parityFallbackToFirebase: boolean, loadedAt: number, loading: Promise<boolean>|null }} */
 const state = {
   useSupabaseLogsRead: false,
+  parityFallbackToFirebase: false,
   loadedAt: 0,
   loading: null,
 };
@@ -32,6 +33,7 @@ export async function refreshLogsReadRouting(force = false) {
       });
       const json = res.ok ? await res.json().catch(function () { return null; }) : null;
       state.useSupabaseLogsRead = !!(json && json.success && json.useSupabaseLogsRead);
+      state.parityFallbackToFirebase = !!(json && json.success && json.parityFallbackToFirebase);
     } catch (e) {
       try {
         if (window.firestore) {
@@ -41,6 +43,7 @@ export async function refreshLogsReadRouting(force = false) {
             .get();
           const d = snap.exists ? snap.data() : {};
           state.useSupabaseLogsRead = d.useSupabaseLogsRead === true;
+          state.parityFallbackToFirebase = d.parityFallbackToFirebase === true;
         }
       } catch (_) {
         /* keep last */
@@ -62,7 +65,21 @@ export async function shouldReadTrainingLogsFromSupabase() {
   return state.useSupabaseLogsRead;
 }
 
+/** Supabase cutover 시 users/logs 대량 Firestore 폴백(compat·orderBy limit) 허용 여부 */
+export function shouldAllowFirestoreTrainingLogsBulkFallbackSync() {
+  if (!state.useSupabaseLogsRead) return true;
+  return state.parityFallbackToFirebase === true;
+}
+
+export async function shouldAllowFirestoreTrainingLogsBulkFallback() {
+  await refreshLogsReadRouting(false);
+  return shouldAllowFirestoreTrainingLogsBulkFallbackSync();
+}
+
 if (typeof window !== 'undefined') {
   window.refreshLogsReadRouting = refreshLogsReadRouting;
   window.getLogsReadSourceSync = getLogsReadSourceSync;
+  window.shouldAllowFirestoreTrainingLogsBulkFallback = shouldAllowFirestoreTrainingLogsBulkFallback;
+  window.shouldAllowFirestoreTrainingLogsBulkFallbackSync =
+    shouldAllowFirestoreTrainingLogsBulkFallbackSync;
 }
