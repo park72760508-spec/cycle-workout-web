@@ -22,6 +22,136 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Strava refresh_token 만료·무효·회전 실패(재연결 필요) 여부 */
+function isStravaRefreshTokenInvalidError(errorText, status, tokenData) {
+  const err = String(errorText || "").toLowerCase();
+  const s = Number(status) || 0;
+  if (s === 400 && err.includes("bad request")) return true;
+  if (err.includes("invalid_grant")) return true;
+  if (err.includes("refresh_token") && err.includes("invalid")) return true;
+  if (err.includes("authorization error")) return true;
+  const errors = tokenData && Array.isArray(tokenData.errors) ? tokenData.errors : [];
+  for (const e of errors) {
+    const resource = String((e && e.resource) || "").toLowerCase();
+    const field = String((e && e.field) || "").toLowerCase();
+    const code = String((e && e.code) || "").toLowerCase();
+    if (resource === "refreshtoken" && field === "refresh_token" && code === "invalid") return true;
+  }
+  return false;
+}
+
+function isStravaAuthInvalidUserData(userData) {
+  return !!(userData && userData.strava_auth_invalid === true);
+}
+
+/**
+ * refresh_token 무효 — 재연결 필요. 무의미한 strava_sync_retry_pending 루프를 중단한다.
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {string} userId
+ * @param {{ reason?: string, error?: string, since?: string }} [meta]
+ */
+async function markStravaAuthInvalid(db, userId, meta) {
+  if (!db || !userId) return;
+  const m = meta && typeof meta === "object" ? meta : {};
+  const since = String(m.since || "").slice(0, 10);
+  try {
+    await db.collection("users").doc(userId).update({
+      strava_auth_invalid: true,
+      strava_auth_invalid_at: new Date().toISOString(),
+      strava_auth_invalid_reason: String(m.reason || "refresh_token_invalid").slice(0, 80),
+      strava_auth_invalid_error: m.error ? String(m.error).slice(0, 500) : admin.firestore.FieldValue.delete(),
+      strava_auth_invalid_since: since || admin.firestore.FieldValue.delete(),
+      strava_sync_retry_pending: false,
+      strava_sync_retry_reason: admin.firestore.FieldValue.delete(),
+      strava_sync_retry_status: admin.firestore.FieldValue.delete(),
+      strava_sync_retry_activity_id: admin.firestore.FieldValue.delete(),
+      strava_last_activity_fetch_hint:
+        "Strava refresh_token이 만료·무효화되었습니다. 환경설정에서 Strava를 다시 연결해 주세요.",
+    });
+  } catch (e) {
+    console.warn("[stravaSyncRetry] markStravaAuthInvalid failed:", userId, e.message || e);
+  }
+}
+
+/** Strava OAuth 재연결 성공 시 auth invalid 플래그 해제 */
+async function clearStravaAuthInvalidOnReconnect(db, userId) {
+  if (!db || !userId) return;
+  try {
+    await db.collection("users").doc(userId).update({
+      strava_auth_invalid: false,
+      strava_auth_invalid_at: admin.firestore.FieldValue.delete(),
+      strava_auth_invalid_reason: admin.firestore.FieldValue.delete(),
+      strava_auth_invalid_error: admin.firestore.FieldValue.delete(),
+      strava_auth_invalid_since: admin.firestore.FieldValue.delete(),
+      strava_auth_invalid_cleared_at: new Date().toISOString(),
+      strava_last_activity_fetch_error: admin.firestore.FieldValue.delete(),
+      strava_last_activity_fetch_hint: admin.firestore.FieldValue.delete(),
+    });
+  } catch (e) {
+    console.warn("[stravaSyncRetry] clearStravaAuthInvalidOnReconnect failed:", userId, e.message || e);
+  }
+}
+
+/**
+ * 재연결 후 누락 구간 백필 큐 등록 (마지막 Strava 로그 다음날 ~ 오늘, 최대 90일).
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {string} userId
+ */
+async function scheduleStravaReconnectBackfill(db, userId) {
+  if (!db || !userId) return;
+  const todaySeoul = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  let dateFrom = "";
+  try {
+    const logsSnap = await db
+      .collection("users")
+      .doc(userId)
+      .collection("logs")
+      .where("source", "==", "strava")
+      .orderBy("date", "desc")
+      .limit(1)
+      .get();
+    if (!logsSnap.empty) {
+      const lastDate = String((logsSnap.docs[0].data() || {}).date || "").slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(lastDate)) {
+        const [y, mo, d] = lastDate.split("-").map(Number);
+        const next = new Date(y, mo - 1, d);
+        next.setDate(next.getDate() + 1);
+        dateFrom = next.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+      }
+    }
+  } catch (e) {
+    console.warn("[stravaSyncRetry] scheduleStravaReconnectBackfill last log lookup failed:", userId, e.message || e);
+  }
+  if (!dateFrom) {
+    const cap = new Date();
+    cap.setDate(cap.getDate() - 90);
+    dateFrom = cap.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  }
+  if (dateFrom > todaySeoul) return;
+  const range = ymdRangeToUnix({ dateFrom, dateTo: todaySeoul });
+  try {
+    await db.collection("users").doc(userId).update({
+      strava_sync_retry_pending: true,
+      strava_sync_retry_date_from: dateFrom,
+      strava_sync_retry_date_to: todaySeoul,
+      strava_sync_retry_range: {
+        dateFrom,
+        dateTo: todaySeoul,
+        afterUnix: range.afterUnix,
+        beforeUnix: range.beforeUnix,
+        activityId: null,
+      },
+      strava_sync_retry_reason: "reconnect_backfill",
+      strava_sync_retry_status: 200,
+      strava_sync_retry_requested_at: new Date().toISOString(),
+      strava_sync_retry_attempts: 0,
+    });
+    console.log("[stravaSyncRetry] reconnect backfill scheduled:", userId, { dateFrom, dateTo: todaySeoul });
+  } catch (e) {
+    console.warn("[stravaSyncRetry] scheduleStravaReconnectBackfill failed:", userId, e.message || e);
+  }
+}
+
 function is429StatusOrError(status, errorText) {
   const s = Number(status) || 0;
   if (s === 429) return true;
@@ -69,6 +199,21 @@ function rangeOverlapsYmd(rangeFrom, rangeTo, targetFrom, targetTo) {
  */
 async function markStravaSyncRetryPending(db, userId, meta) {
   if (!db || !userId) return;
+  try {
+    const userSnap = await db.collection("users").doc(userId).get();
+    const userData = userSnap.exists ? userSnap.data() || {} : {};
+    if (isStravaAuthInvalidUserData(userData)) return;
+    const errText = String((meta && meta.error) || "");
+    if (isStravaRefreshTokenInvalidError(errText, meta && meta.status, null)) {
+      await markStravaAuthInvalid(db, userId, {
+        reason: "refresh_token_invalid",
+        error: errText || (meta && meta.reason) || "refresh_token_invalid",
+      });
+      return;
+    }
+  } catch (e) {
+    console.warn("[stravaSyncRetry] mark pending precheck failed:", userId, e.message || e);
+  }
   const dateFrom = String(meta.dateFrom || "").slice(0, 10);
   const dateTo = String(meta.dateTo || "").slice(0, 10);
   const activityId = meta.activityId != null ? String(meta.activityId).trim() : "";
@@ -134,6 +279,7 @@ async function listUsersNeedingStravaSyncRetry(db, options = {}) {
   const out = [];
   for (const doc of usersSnap.docs) {
     const d = doc.data() || {};
+    if (isStravaAuthInvalidUserData(d)) continue;
     if (d.strava_sync_retry_pending === false && d.strava_sync_retry_cleared_at) continue;
     const pending = d.strava_sync_retry_pending === true;
     const hasActivityRetry = Boolean(String(d.strava_sync_retry_activity_id || "").trim());
@@ -174,6 +320,11 @@ function extractRetryStatusFromResult(result, userData) {
 }
 
 function inferRetryReasonFromResult(result, userData) {
+  const errText = String(result && result.error ? result.error : "");
+  if (result && result.authInvalid === true) return "auth_invalid";
+  if (isStravaRefreshTokenInvalidError(errText, extractRetryStatusFromResult(result, userData), null)) {
+    return "auth_invalid";
+  }
   // 403 Application Inactive(앱 비활성)는 앱 레벨 공통 장애 → 사용자별 재시도 사유와 구분해 기록
   const appInactive =
     (result && result.appInactive === true) ||
@@ -299,15 +450,24 @@ async function runStravaSyncRetrySequential(
       });
     } else {
       const failStatus = extractRetryStatusFromResult(result, userData);
-      await markStravaSyncRetryPending(db, uid, {
-        dateFrom: range.dateFrom,
-        dateTo: range.dateTo,
-        afterUnix: range.afterUnix,
-        beforeUnix: range.beforeUnix,
-        reason: inferRetryReasonFromResult(result, userData),
-        status: failStatus || 429,
-        activityId: retryActivityId || null,
-      });
+      const errText = String(result.error || "");
+      if (isStravaRefreshTokenInvalidError(errText, failStatus, null)) {
+        await markStravaAuthInvalid(db, uid, {
+          reason: "refresh_token_invalid",
+          error: errText,
+        });
+      } else {
+        await markStravaSyncRetryPending(db, uid, {
+          dateFrom: range.dateFrom,
+          dateTo: range.dateTo,
+          afterUnix: range.afterUnix,
+          beforeUnix: range.beforeUnix,
+          reason: inferRetryReasonFromResult(result, userData),
+          status: failStatus || 429,
+          activityId: retryActivityId || null,
+          error: errText,
+        });
+      }
     }
     results.push(result);
     console.log(`${prefix} [${i + 1}/${userIds.length}]`, uid, {
@@ -369,6 +529,11 @@ module.exports = {
   STRAVA_CHUNK_FANOUT_DELAY_MS,
   STRAVA_SYNC_CONCURRENCY_SAFE,
   STRAVA_USER_BATCH_DELAY_MS,
+  isStravaRefreshTokenInvalidError,
+  isStravaAuthInvalidUserData,
+  markStravaAuthInvalid,
+  clearStravaAuthInvalidOnReconnect,
+  scheduleStravaReconnectBackfill,
   markStravaSyncRetryPending,
   clearStravaSyncRetryPending,
   listUsersNeedingStravaSyncRetry,

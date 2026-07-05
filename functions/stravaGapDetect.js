@@ -145,6 +145,8 @@ async function listPendingRetryUserIds(db, rangeOpts = {}) {
   const snap = await db.collection("users").where("strava_sync_retry_pending", "==", true).limit(maxUsers).get();
   const out = [];
   for (const doc of snap.docs) {
+    const d = doc.data() || {};
+    if (stravaSyncRetry.isStravaAuthInvalidUserData(d)) continue;
     out.push(doc.id);
   }
   return out;
@@ -280,8 +282,25 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
   const tokenExpiresAt = Number(userData.strava_expires_at || 0);
   const nowSec = Math.floor(Date.now() / 1000);
   if (!accessToken || tokenExpiresAt < nowSec + 300) {
-    const tokenResult = await deps.refreshStravaTokenForUser(db, userId);
-    accessToken = tokenResult.accessToken;
+    try {
+      const tokenResult = await deps.refreshStravaTokenForUser(db, userId);
+      accessToken = tokenResult.accessToken;
+    } catch (e) {
+      const errMsg = e && e.message ? e.message : String(e);
+      if (stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, 0, null)) {
+        await stravaSyncRetry.markStravaAuthInvalid(db, userId, {
+          reason: "refresh_token_invalid",
+          error: errMsg,
+        });
+      }
+      return {
+        missingIds: [],
+        error: `토큰 갱신 실패: ${errMsg}`,
+        status: 401,
+        apiCount: 0,
+        authInvalid: true,
+      };
+    }
   }
 
   const cyclingListIds = [];
@@ -517,14 +536,26 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
         }
       }
       if (gapError) {
-        await stravaSyncRetry.markStravaSyncRetryPending(db, entry.userId, {
-          dateFrom: range.dateFrom,
-          dateTo: range.dateTo,
-          afterUnix: range.afterUnix,
-          beforeUnix: range.beforeUnix,
-          reason: gapStatus === 429 ? "429" : "processing",
-          status: gapStatus || 500,
-        });
+        const errText = String(gapError || "");
+        if (
+          gap.authInvalid === true ||
+          stravaSyncRetry.isStravaRefreshTokenInvalidError(errText, gapStatus, null)
+        ) {
+          await stravaSyncRetry.markStravaAuthInvalid(db, entry.userId, {
+            reason: "refresh_token_invalid",
+            error: errText,
+          });
+        } else {
+          await stravaSyncRetry.markStravaSyncRetryPending(db, entry.userId, {
+            dateFrom: range.dateFrom,
+            dateTo: range.dateTo,
+            afterUnix: range.afterUnix,
+            beforeUnix: range.beforeUnix,
+            reason: gapStatus === 429 ? "429" : "processing",
+            status: gapStatus || 500,
+            error: errText,
+          });
+        }
         return { userId: entry.userId, sources: Array.from(entry.sources), error: gapError, ingested: 0, gapStatus };
       }
       if (entry.sources.has("A_pending") && !gapError) {

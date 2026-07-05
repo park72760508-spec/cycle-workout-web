@@ -1103,6 +1103,8 @@ exports.exchangeStravaCode = onRequest(
       };
       if (athleteId != null) updateData.strava_athlete_id = athleteId;
       await userRef.update(updateData);
+      await stravaSyncRetry.clearStravaAuthInvalidOnReconnect(db, userId);
+      await stravaSyncRetry.scheduleStravaReconnectBackfill(db, userId);
 
       res.status(200).json({ success: true });
     } catch (err) {
@@ -2316,20 +2318,39 @@ async function refreshStravaTokenForUser(db, userId) {
     }
   }
   if (!tokenRes.ok) {
-    throw new Error(tokenData.message || tokenData.error || `Strava ${tokenRes.status}`);
+    const errMsg = tokenData.message || tokenData.error || `Strava ${tokenRes.status}`;
+    if (stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, tokenRes.status, tokenData)) {
+      await stravaSyncRetry.markStravaAuthInvalid(db, userId, {
+        reason: "refresh_token_invalid",
+        error: errMsg,
+      });
+    }
+    throw new Error(errMsg);
   }
   const accessToken = tokenData.access_token || "";
   const newRefreshToken = tokenData.refresh_token || refreshToken;
   const expiresAt = tokenData.expires_at != null ? Number(tokenData.expires_at) : 0;
   const scopeUpdate = buildStravaScopeUpdate(tokenData);
   if (!accessToken) throw new Error("Strava에서 access_token을 받지 못했습니다.");
-  await userRef.update({
+  const updatePayload = {
     strava_access_token: accessToken,
     strava_refresh_token: newRefreshToken,
     strava_expires_at: expiresAt,
     ...scopeUpdate,
-  });
-  return { accessToken, scope: scopeUpdate.strava_scope || "" };
+  };
+  let lastSaveErr = null;
+  for (let saveAttempt = 0; saveAttempt < 3; saveAttempt++) {
+    try {
+      await userRef.update(updatePayload);
+      return { accessToken, scope: scopeUpdate.strava_scope || "" };
+    } catch (saveErr) {
+      lastSaveErr = saveErr;
+      console.warn("[refreshStravaTokenForUser] Firestore save retry:", userId, saveAttempt + 1, saveErr.message || saveErr);
+      await new Promise((r) => setTimeout(r, 400 * (saveAttempt + 1)));
+    }
+  }
+  console.error("[refreshStravaTokenForUser] CRITICAL token rotated but Firestore save failed:", userId, lastSaveErr && lastSaveErr.message);
+  throw new Error("Strava 토큰 갱신 후 저장 실패: " + (lastSaveErr && lastSaveErr.message ? lastSaveErr.message : "unknown"));
 }
 
 async function updateUserMileageInFirestore(db, userId, todayTss) {
@@ -2549,6 +2570,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       const tokenResult = await refreshStravaTokenForUser(db, userId);
       accessToken = tokenResult.accessToken;
     } catch (e) {
+      const errMsg = e && e.message ? e.message : String(e);
       await recordStravaActivityFetchDiagnostic(db, userId, {
         afterUnix,
         beforeUnix,
@@ -2557,9 +2579,18 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
         status: 0,
         count: 0,
         pages: 0,
-        error: `토큰 갱신 실패: ${e.message}`,
+        error: `토큰 갱신 실패: ${errMsg}`,
+        hint: stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, 0, null)
+          ? "Strava refresh_token이 만료·무효화되었습니다. 환경설정에서 Strava를 다시 연결해 주세요."
+          : "Strava refresh_token이 만료·무효화되었거나 다른 동기화가 토큰을 회전시켰습니다. Strava 재연결 후 다시 실행해야 합니다.",
       });
-      return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 갱신 실패: ${e.message}` };
+      if (stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, 0, null)) {
+        await stravaSyncRetry.markStravaAuthInvalid(db, userId, {
+          reason: "refresh_token_invalid",
+          error: errMsg,
+        });
+      }
+      return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 갱신 실패: ${errMsg}`, authInvalid: stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, 0, null) };
     }
   }
   // 자가복구(핀셋): 동기화 대상이 된 유저의 strava_athlete_id가 없으면 GET /athlete로 즉시 채워 웹훅 역인덱스를 완성한다.
