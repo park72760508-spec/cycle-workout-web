@@ -345,6 +345,60 @@
       : applySurvivorAwareMovement(list, baseline, tabId);
   }
 
+  /**
+   * 서버가 집계 시 계산해 둔 공식 등락(rankChangesByCategory·previousRanksByCategory)을 그대로 사용.
+   * — CYCLE GC(heptagon rank_change 우선)와 동일한 "서버 공식값 우선" 원칙.
+   *
+   * 왜 클라이언트 재계산보다 이게 우선인가:
+   * 라이브 보드(오늘)가 스냅샷 보드(어제 23:00 집계)와 사실상 동일하면, "라이브 vs 어제" 재계산은
+   * 전원 보합(-)이 되어버린다. 하지만 서버 공식 등락은 "어제 vs 그제"의 실제 상승/하락/보합을 담고
+   * 있어, 사용자가 기대하는 "이전에 잘 나오던" 등락이 그대로 나온다.
+   *
+   * 여기서 previousBoardRank = 서버 previousRanks(그제 순위), rankChange = 서버 change(어제-그제).
+   * 렌더 계층(resolveRankMovementFields)이 현재 표시 순위 기준으로 검증하므로:
+   *   - 라이브 순위 == 스냅샷 순위 → 서버 등락 그대로 표기(정확한 공식 등락)
+   *   - 어긋나면(당일 재정렬) → 현재 순위 기준으로 안전하게 재계산 (표시 순위 훼손 없음)
+   * ※ 이 경로에서는 stelvioNormalizeRankMovementOnRow(순위 훼손 위험)를 호출하지 않는다.
+   * @returns {number} 등락이 채워진 사용자 수
+   */
+  function applyServerComputedMovement(list, snap, cat, tabId) {
+    var changes = snap.rankChangesByCategory && snap.rankChangesByCategory[cat];
+    var previous = snap.previousRanksByCategory && snap.previousRanksByCategory[cat];
+    if (!nonEmptyMap(changes) || !nonEmptyMap(previous)) return 0;
+    var filled = 0;
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      if (!item) continue;
+      if (tabId === 'crew') {
+        if (!item.crewId) continue;
+      } else if (!item.userId && !item.socialUserId && !item.firebaseUid) {
+        continue;
+      }
+      var prevVal = tabId === 'crew'
+        ? lookupSnapVal(previous, String(item.crewId))
+        : lookupSnapValForListItem(previous, item);
+      var chVal = tabId === 'crew'
+        ? lookupSnapVal(changes, String(item.crewId))
+        : lookupSnapValForListItem(changes, item);
+      if (prevVal == null || chVal == null) continue; /* 신규 진입 → 미표기 */
+      var prev = Math.floor(Number(prevVal));
+      var rc = Math.round(Number(chVal));
+      if (!isFinite(prev) || prev < 1 || !isFinite(rc)) continue;
+      item.previousBoardRank = prev;
+      item.rankChange = rc;
+      filled++;
+    }
+    try {
+      window.__runRankMovementDebug = {
+        listSize: list.length,
+        filled: filled,
+        tabId: tabId,
+        mode: 'server'
+      };
+    } catch (eDbg) {}
+    return filled;
+  }
+
   function applyFromServerSnap(list, tabId, opts, rankMovementByKey) {
     if (!list || !list.length || !rankMovementByKey) return false;
 
@@ -354,15 +408,28 @@
     if (!serverSnapUsableForMovement(snap, opts)) return false;
 
     var cat = opts.category || 'Supremo';
-    var baseline = resolveBaselineMap(snap, cat, opts);
-    if (!baseline) return false; /* baseline 없으면 localStorage 폴백 */
 
-    /* 등락 초기화 후 생존 코호트 재순위로 상승/보합/하락 채움 */
+    /* 등락 초기화 */
     list.forEach(function (item) {
       if (!item) return;
       item.rankChange = null;
       item.previousBoardRank = null;
     });
+
+    /*
+     * 1순위: 서버 공식 등락(rankChangesByCategory) 그대로 사용 — CYCLE GC 와 동일한 서버 우선 원칙.
+     * 라이브 보드가 스냅샷 보드와 같아 클라이언트 재계산이 전원 보합이 되는 상황에서도,
+     * 서버가 담아둔 실제 상승/하락/보합을 표기한다. (렌더 계층이 현재 순위 기준으로 검증)
+     */
+    var serverFilled = applyServerComputedMovement(list, snap, cat, tabId);
+    if (serverFilled > 0) {
+      /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */
+      return true;
+    }
+
+    /* 2순위: 서버 공식 등락이 비면 baseline 재계산(생존 코호트/절대순위) */
+    var baseline = resolveBaselineMap(snap, cat, opts);
+    if (!baseline) return false; /* baseline 없으면 localStorage 폴백 */
 
     var mv = applyMovementForTab(list, baseline, tabId);
     if (!mv.filled) return false; /* 공통 사용자 없음 → localStorage 폴백 */
@@ -380,7 +447,6 @@
     }
 
     normalizeListRankMovement(list);
-    /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */
     return true;
   }
 

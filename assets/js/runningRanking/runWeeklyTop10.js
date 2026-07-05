@@ -373,40 +373,54 @@
     });
     list.forEach(function (it, i) { it.rank = i + 1; });
 
-    if (!opts.isPrevWeek) {
-      var weekStartStr = seoulWeekRange().startStr;
-      var finalized = isWeeklyRankingFinalizedSeoul();
-      var mv = moveMod();
+    var mv = moveMod();
+    /* 전주 응답 자체엔 rankMovementByKey 가 비어 있으므로, 전주 표시 시엔 메인 응답에서 넘겨받은
+       주간 스냅샷(opts.rankMovementByKey)을 사용한다. 현재 주는 res 의 것을 사용. */
+    var mvByKey = (res && res.rankMovementByKey && Object.keys(res.rankMovementByKey).length)
+      ? res.rankMovementByKey
+      : (opts.rankMovementByKey || {});
+    var mvOpts = {
+      gender: 'all',
+      category: 'Supremo',
+      rankMovementSource: (res && res.rankMovementSource) || opts.rankMovementSource || '',
+      leaderboardSource: (res && res.leaderboardSource) || opts.leaderboardSource || '',
+      leaderboardAsOfSeoul: (res && res.leaderboardAsOfSeoul) || opts.leaderboardAsOfSeoul || '',
+      rankMovementAsOfSeoul: (res && res.rankMovementAsOfSeoul) || opts.rankMovementAsOfSeoul || ''
+    };
 
-      if (finalized) {
-        /* 순위 확정(일 21시~) — 21시 이전에 저장된 등락 스냅샷 고정 표시 (CYCLE weeklyTop10 캐시 등락) */
-        var frozen = loadWeekRankMvCache(weekStartStr);
-        if (frozen && hasUsableRankMvSnap(frozen.snap)) {
-          /* 냉동 스냅샷이 현재 목록과 하나라도 매칭될 때만 확정 등락으로 사용.
-             매칭 0건이면 (예: 캐시 식별자 불일치) 아래 라이브 등락 계산으로 폴백 */
-          if (applyRankMvSnap(list, frozen.snap) > 0) {
-            return list;
-          }
+    if (opts.isPrevWeek) {
+      /* 전주 확정 순위 — 지난주 마지막날 집계 스냅샷(run_weekly_distance_*)의 서버 공식 등락 적용.
+         (월요일 등 새 주 시작 시 이번 주 거리가 0이라 전주 확정 화면으로 폴백되는 경로) */
+      if (mv && typeof mv.applyRankMovement === 'function') {
+        mv.applyRankMovement(list, 'weekly_distance', mvOpts, mvByKey);
+      }
+      return list;
+    }
+
+    var weekStartStr = seoulWeekRange().startStr;
+    var finalized = isWeeklyRankingFinalizedSeoul();
+
+    if (finalized) {
+      /* 순위 확정(일 21시~) — 21시 이전에 저장된 등락 스냅샷 고정 표시 (CYCLE weeklyTop10 캐시 등락) */
+      var frozen = loadWeekRankMvCache(weekStartStr);
+      if (frozen && hasUsableRankMvSnap(frozen.snap)) {
+        /* 냉동 스냅샷이 현재 목록과 하나라도 매칭될 때만 확정 등락으로 사용.
+           매칭 0건이면 (예: 캐시 식별자 불일치) 아래 라이브 등락 계산으로 폴백 */
+        if (applyRankMvSnap(list, frozen.snap) > 0) {
+          return list;
         }
       }
+    }
 
-      if (mv && typeof mv.applyRankMovement === 'function') {
-        mv.applyRankMovement(list, 'weekly_distance', {
-          gender: 'all',
-          category: 'Supremo',
-          rankMovementSource: (res && res.rankMovementSource) || '',
-          leaderboardSource: (res && res.leaderboardSource) || '',
-          leaderboardAsOfSeoul: (res && res.leaderboardAsOfSeoul) || '',
-          rankMovementAsOfSeoul: (res && res.rankMovementAsOfSeoul) || ''
-        }, (res && res.rankMovementByKey) || {});
-      }
+    if (mv && typeof mv.applyRankMovement === 'function') {
+      mv.applyRankMovement(list, 'weekly_distance', mvOpts, mvByKey);
+    }
 
-      if (finalized) {
-        saveWeekRankMvCache(weekStartStr, list, { finalized: true });
-      } else if (hasUsableRankMvSnap(extractRankMvSnap(list))) {
-        /* 21시 이전 — 매 조회마다 등락 갱신·저장 → 21시 이후 확정 화면에서 동일 등락 재사용 */
-        saveWeekRankMvCache(weekStartStr, list, { finalized: false });
-      }
+    if (finalized) {
+      saveWeekRankMvCache(weekStartStr, list, { finalized: true });
+    } else if (hasUsableRankMvSnap(extractRankMvSnap(list))) {
+      /* 21시 이전 — 매 조회마다 등락 갱신·저장 → 21시 이후 확정 화면에서 동일 등락 재사용 */
+      saveWeekRankMvCache(weekStartStr, list, { finalized: false });
     }
     return list;
   }
@@ -586,7 +600,15 @@
             modal.classList.add('hidden');
             return;
           }
-          var prevList = buildList(prevRes, { isPrevWeek: true });
+          var prevList = buildList(prevRes, {
+            isPrevWeek: true,
+            /* 전주 응답엔 등락 스냅샷이 없으므로 메인 응답(res)의 주간 스냅샷을 넘겨 등락 적용 */
+            rankMovementByKey: (res && res.rankMovementByKey) || {},
+            rankMovementSource: (res && res.rankMovementSource) || '',
+            rankMovementAsOfSeoul: (res && res.rankMovementAsOfSeoul) || '',
+            leaderboardSource: (res && res.leaderboardSource) || '',
+            leaderboardAsOfSeoul: (res && res.leaderboardAsOfSeoul) || ''
+          });
           if (prevList.length > 0 && render(prevList, {
             isPrevWeek: true,
             weekStartStr: prevRes.weekStartStr,
