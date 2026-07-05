@@ -147,7 +147,27 @@
     return list;
   }
 
-  /** CYCLE 주간 TOP10과 동일: 본인·관리자·친구·같은 모임 멤버는 실명 확인 가능 */
+  /** CYCLE 주간 TOP10과 동일: Asia/Seoul 기준 일요일 21시 이후 순위 확정 */
+  function isWeeklyRankingFinalizedSeoul() {
+    try {
+      var now = new Date();
+      var hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', hour12: false });
+      var weekDayFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' });
+      var seoulHour = parseInt(hourFmt.format(now), 10);
+      var seoulWeekday = weekDayFmt.format(now);
+      return seoulWeekday === 'Sun' && seoulHour >= 21;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** CYCLE weeklyTop10 renderTop10 과 동일 도장 오버레이 (assets/img/crop1.png) */
+  function weeklyTop10StampOverlayHtml() {
+    return '<div class="weekly-top10-stamp-overlay" style="position:absolute;left:0;top:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;pointer-events:none;">' +
+      '<img src="assets/img/crop1.png" alt="" class="weekly-top10-stamp-img" style="width:240px;height:auto;display:block;" />' +
+      '</div>';
+  }
+
   function viewerCanSeeFull(item, isSelf, isAdmin) {
     if (isSelf || isAdmin) return true;
     var friendSet = window.stelvioRankingFriendUserSet;
@@ -226,6 +246,11 @@
     if (myItem && myItem.rank > 10) {
       if (myItem.rank >= 12) html += '<div class="weekly-rank-item weekly-rank-ellipsis">....</div>';
       html += rowHtml(myItem, { isSelf: true, isAdmin: isAdmin });
+    }
+
+    if (isWeeklyRankingFinalizedSeoul()) {
+      html = '<div class="weekly-top10-body-inner" style="position:relative;">' + html +
+        weeklyTop10StampOverlayHtml() + '</div>';
     }
 
     body.innerHTML = html;
