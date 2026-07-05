@@ -85,6 +85,8 @@ async function refreshRankingReadConfig(admin, force = false) {
   }
   whitelistUids = envCfg.whitelistUids.slice();
 
+  let useSupabaseLogsReadFromDoc = false;
+
   if (admin && admin.firestore) {
     try {
       const snap = await admin
@@ -99,6 +101,7 @@ async function refreshRankingReadConfig(admin, force = false) {
         }
         if (d.useSupabaseLogsRead != null) {
           useSupabaseLogsRead = parseBool(d.useSupabaseLogsRead);
+          useSupabaseLogsReadFromDoc = true;
         }
         if (d.whitelistUids != null) {
           whitelistUids = parseUidList(d.whitelistUids);
@@ -133,6 +136,13 @@ async function refreshRankingReadConfig(admin, force = false) {
   /** Supabase 전용 Read(cutover) 시 Firestore parity=true 여도 Firebase 대량 폴백·500 방지 */
   if (useSupabaseGlobal && !safeIsFirebaseRankingReadAllowed()) {
     parityFallbackToFirebase = false;
+    if (
+      !useSupabaseLogsReadFromDoc &&
+      (process.env.USE_SUPABASE_LOGS_READ == null ||
+        String(process.env.USE_SUPABASE_LOGS_READ).trim() === "")
+    ) {
+      useSupabaseLogsRead = true;
+    }
   }
 
   if (process.env.USE_SUPABASE_LOGS_READ != null && String(process.env.USE_SUPABASE_LOGS_READ).trim() !== "") {

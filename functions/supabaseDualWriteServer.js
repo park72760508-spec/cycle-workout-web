@@ -836,86 +836,31 @@ async function runSecondaryAfterStravaLogSave(admin, userId, logDocId, logDoc, o
 }
 
 /**
- * Firestore users/{uid}/logs 중 구간 내 사이클 Strava·훈련 로그 수집 (upsert 없음).
+ * 기간 내 사이클 로그 수집 — Supabase rides 우선, Firestore reads 최소 폴백.
+ * @param {{ purpose?: 'read'|'gap_mirror'|'firestore_to_supabase_sync' }} [options]
  * @returns {Promise<Array<{ id: string, data: object }>>}
  */
-async function collectFirestoreCyclingLogDocsInDateRange(db, adminApp, userId, startStr, endStr) {
-  const rankingDayRollup = require("./rankingDayRollup");
-  const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
-  const dateSet = new Set(dates);
-  const seen = new Set();
-  const out = [];
-
-  const collectSnap = (snap) => {
-    for (const doc of snap.docs) {
-      if (!doc || seen.has(doc.id)) continue;
-      const data = doc.data() || {};
-      if (!isCyclingLogForRankingSync(data)) continue;
-      const ymd = rankingDayRollup.normalizeLogDateToSeoulYmd(data.date);
-      if (!ymd || !dateSet.has(ymd)) continue;
-      seen.add(doc.id);
-      out.push({ id: doc.id, data });
-    }
-  };
-
-  try {
-    const rangedStr = await db
-      .collection("users")
-      .doc(userId)
-      .collection("logs")
-      .where("date", ">=", startStr)
-      .where("date", "<=", endStr)
-      .get();
-    collectSnap(rangedStr);
-  } catch (rangeErr) {
-    console.warn(
-      "[supabaseDualWriteServer] string date range query failed:",
-      userId,
-      rangeErr && rangeErr.message ? rangeErr.message : rangeErr
-    );
-  }
-
-  try {
-    const tsStart = adminApp.firestore.Timestamp.fromDate(new Date(`${startStr}T00:00:00+09:00`));
-    const tsEnd = adminApp.firestore.Timestamp.fromDate(new Date(`${endStr}T23:59:59.999+09:00`));
-    const rangedTs = await db
-      .collection("users")
-      .doc(userId)
-      .collection("logs")
-      .where("date", ">=", tsStart)
-      .where("date", "<=", tsEnd)
-      .get();
-    collectSnap(rangedTs);
-  } catch (tsRangeErr) {
-    console.warn(
-      "[supabaseDualWriteServer] timestamp date range query failed:",
-      userId,
-      tsRangeErr && tsRangeErr.message ? tsRangeErr.message : tsRangeErr
-    );
-  }
-
-  try {
-    const recent = await db
-      .collection("users")
-      .doc(userId)
-      .collection("logs")
-      .orderBy("date", "desc")
-      .limit(400)
-      .get();
-    collectSnap(recent);
-  } catch (recentErr) {
-    console.warn(
-      "[supabaseDualWriteServer] recent log scan failed:",
-      userId,
-      recentErr && recentErr.message ? recentErr.message : recentErr
-    );
-  }
-
-  return out;
+async function collectFirestoreCyclingLogDocsInDateRange(
+  db,
+  adminApp,
+  userId,
+  startStr,
+  endStr,
+  options = {}
+) {
+  const logsReadRouter = require("./logsReadRouter");
+  return logsReadRouter.collectCyclingLogDocEntriesInDateRange(
+    db,
+    adminApp,
+    userId,
+    startStr,
+    endStr,
+    options
+  );
 }
 
 /** @param {string} firebaseUid @param {string} startStr @param {string} endStr */
-async function listSupabaseStravaActivityIdsInDateRange(firebaseUid, startStr, endStr) {
+async function listSupabaseRideActivityIdsInDateRange(firebaseUid, startStr, endStr) {
   const ids = new Set();
   const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
   if (!userId) return ids;
@@ -925,12 +870,11 @@ async function listSupabaseStravaActivityIdsInDateRange(firebaseUid, startStr, e
     .from("rides")
     .select("activity_id")
     .eq("user_id", userId)
-    .eq("source", "strava")
     .gte("ride_date", startStr)
     .lte("ride_date", endStr);
   if (error) {
     console.warn(
-      "[supabaseDualWriteServer] supabase strava ids query failed:",
+      "[supabaseDualWriteServer] supabase ride ids query failed:",
       firebaseUid,
       error.message || String(error)
     );
@@ -943,6 +887,11 @@ async function listSupabaseStravaActivityIdsInDateRange(firebaseUid, startStr, e
   return ids;
 }
 
+/** @deprecated listSupabaseRideActivityIdsInDateRange 사용 */
+async function listSupabaseStravaActivityIdsInDateRange(firebaseUid, startStr, endStr) {
+  return listSupabaseRideActivityIdsInDateRange(firebaseUid, startStr, endStr);
+}
+
 /**
  * Firestore에만 있고 Supabase rides에 없는 Strava 로그 → mirror (갭 보정).
  * @returns {Promise<{ checked: number, missing: number, mirrored: number, failed: number }>}
@@ -952,12 +901,19 @@ async function syncFirestoreSupabaseRidesGapsForUser(db, admin, userId, startStr
     return { checked: 0, missing: 0, mirrored: 0, failed: 0 };
   }
 
-  const logs = await collectFirestoreCyclingLogDocsInDateRange(db, admin, userId, startStr, endStr);
+  const logs = await collectFirestoreCyclingLogDocsInDateRange(
+    db,
+    admin,
+    userId,
+    startStr,
+    endStr,
+    { purpose: "gap_mirror" }
+  );
   if (!logs.length) {
     return { checked: 0, missing: 0, mirrored: 0, failed: 0 };
   }
 
-  const supabaseIds = await listSupabaseStravaActivityIdsInDateRange(userId, startStr, endStr);
+  const supabaseIds = await listSupabaseRideActivityIdsInDateRange(userId, startStr, endStr);
   const missing = logs.filter((entry) => {
     const actId = str(entry.data.activity_id) || str(entry.id);
     return actId && !supabaseIds.has(actId);
@@ -1016,7 +972,14 @@ async function syncFirestoreSupabaseRidesGapsForUser(db, admin, userId, startStr
 }
 
 async function syncUserLogsInRangeToSupabase(db, admin, userId, startStr, endStr) {
-  const logs = await collectFirestoreCyclingLogDocsInDateRange(db, admin, userId, startStr, endStr);
+  const logs = await collectFirestoreCyclingLogDocsInDateRange(
+    db,
+    admin,
+    userId,
+    startStr,
+    endStr,
+    { purpose: "firestore_to_supabase_sync" }
+  );
   let synced = 0;
   for (const entry of logs) {
     /* eslint-disable no-await-in-loop */

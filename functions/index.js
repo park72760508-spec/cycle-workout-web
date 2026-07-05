@@ -499,36 +499,22 @@ function isCyclingForMmp(logData) {
 /**
  * Phase 6 — appConfig/supabase_read_routing.useSupabaseLogsRead 가 켜져 있으면
  * users/{uid}/logs(Firestore) 대신 Supabase rides 에서 기간 내 라이딩 로그를 읽는다.
- * cutover 전(false)·실패 시 null 을 반환해 호출측이 기존 Firestore 쿼리로 폴백한다.
  * @returns {Promise<object[]|null>} 훈련 로그 배열(이미 isCyclingForMmp 필터됨) 또는 null
  */
 async function tryFetchCyclingLogsFromSupabaseRidesInRange(userId, startStr, endStr) {
   try {
-    if (typeof rankingReadConfig.refreshRankingReadConfig === "function") {
-      try {
-        await rankingReadConfig.refreshRankingReadConfig(admin, false);
-      } catch (eCfg) {
-        /* 캐시된 값 사용 */
-      }
-    }
-    const cfg =
-      typeof rankingReadConfig.getRankingReadConfig === "function"
-        ? rankingReadConfig.getRankingReadConfig()
-        : null;
-    if (!cfg || cfg.useSupabaseLogsRead !== true) return null;
-    if (
-      !supabaseGroupReader ||
-      typeof supabaseGroupReader.fetchUserRideLogsInDateRange !== "function"
-    ) {
-      return null;
-    }
-    const logs = await supabaseGroupReader.fetchUserRideLogsInDateRange(
+    const logsReadRouter = require("./logsReadRouter");
+    const routeCfg = await logsReadRouter.loadLogsReadRouteConfig(admin);
+    if (!routeCfg.useSupabaseLogsRead) return null;
+    const entries = await logsReadRouter.tryFetchLogEntriesFromSupabase(
       userId,
       startStr,
       endStr
     );
-    if (!Array.isArray(logs)) return null;
-    return logs.filter((d) => isCyclingForMmp(d));
+    if (entries === null) return null;
+    return entries
+      .map((entry) => entry.data)
+      .filter((d) => isCyclingForMmp(d));
   } catch (e) {
     console.warn(
       "[supabaseLogsRead] rides 기간 조회 실패 — Firestore 폴백:",
@@ -543,27 +529,15 @@ async function tryFetchCyclingLogsFromSupabaseRidesInRange(userId, startStr, end
  * 반환 배열은 isCyclingForMmp 로 필터링된 로그 데이터 객체.
  */
 async function fetchCyclingLogsInDateRangeRouted(db, userId, startStr, endStr) {
-  const supabaseLogs = await tryFetchCyclingLogsFromSupabaseRidesInRange(
+  const logsReadRouter = require("./logsReadRouter");
+  const logs = await logsReadRouter.fetchCyclingLogDataInDateRange(
+    db,
+    admin,
     userId,
     startStr,
     endStr
   );
-  if (supabaseLogs) return supabaseLogs;
-  if (!db || !userId) return [];
-  const snap = await db
-    .collection("users")
-    .doc(userId)
-    .collection("logs")
-    .where("date", ">=", startStr)
-    .where("date", "<=", endStr)
-    .get();
-  const out = [];
-  snap.docs.forEach((doc) => {
-    const d = doc.data() || {};
-    if (!isCyclingForMmp(d)) return;
-    out.push(d);
-  });
-  return out;
+  return logs.filter((d) => isCyclingForMmp(d));
 }
 
 // CORS 헤더 설정 헬퍼 (preflight 및 실제 응답에 사용)
