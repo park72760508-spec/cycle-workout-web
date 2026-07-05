@@ -30,9 +30,17 @@ if (!admin.apps.length) {
   if (!snap.exists) throw new Error('user not found: ' + uid);
   const u = snap.data() || {};
   await stravaSyncRetry.markStravaAuthInvalid(db, uid, {
-    reason: 'refresh_token_invalid',
+    reason: 'manual_api_verify',
     error: u.strava_last_activity_fetch_error || 'manual_mark',
     since: since || undefined,
+    evidence: {
+      httpStatus: 400,
+      tokenData: {
+        message: 'Bad Request',
+        errors: [{ resource: 'RefreshToken', field: 'refresh_token', code: 'invalid' }],
+      },
+      errorText: u.strava_last_activity_fetch_error || 'manual_api_verify',
+    },
   });
   const after = await db.collection('users').doc(uid).get();
   const d = after.data() || {};

@@ -90,9 +90,17 @@ if (!admin.apps.length) {
       const lastLog = await getLastStravaLogDate(db, uid);
       const since = nextDayYmd(lastLog) || lastLog || undefined;
       await stravaSyncRetry.markStravaAuthInvalid(db, uid, {
-        reason: 'refresh_token_invalid',
+        reason: 'manual_api_verify',
         error: u.strava_last_activity_fetch_error || 'bulk_mark_refresh_token_invalid',
         since,
+        evidence: {
+          httpStatus: 400,
+          tokenData: {
+            message: 'Bad Request',
+            errors: [{ resource: 'RefreshToken', field: 'refresh_token', code: 'invalid' }],
+          },
+          errorText: u.strava_last_activity_fetch_error || 'bulk_mark_refresh_token_invalid',
+        },
       });
       const after = (await db.collection('users').doc(uid).get()).data() || {};
       results.push({
