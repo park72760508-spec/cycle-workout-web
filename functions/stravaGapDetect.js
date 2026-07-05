@@ -128,10 +128,11 @@ async function listPendingStravaWebhookRetries(db, options = {}) {
   return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
 }
 
+const stravaConnectionReader = require("./stravaConnectionReader");
+
 /** @param {import('firebase-admin').firestore.Firestore} db */
 async function listStravaConnectedUserIds(db) {
-  const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
-  return usersSnap.docs.map((d) => d.id);
+  return stravaConnectionReader.listStravaConnectedFirebaseUids(db);
 }
 
 /**

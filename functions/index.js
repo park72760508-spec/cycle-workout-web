@@ -33,6 +33,7 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+const stravaConnectionReader = require("./stravaConnectionReader");
 const rankingDayRollup = require("./rankingDayRollup");
 const { sanitizePeakPowerWattsOnRow } = require("./peakPowerMonotonic");
 const peakBoardFast = require("./peakBoardFast");
@@ -3013,8 +3014,7 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
     const snapshots = await Promise.all(userIdsFilter.map((id) => db.collection("users").doc(id).get()));
     docs = snapshots.filter((s) => s.exists).map((s) => ({ id: s.id, data: () => s.data() }));
   } else {
-    const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
-    docs = usersSnap.docs;
+    docs = await stravaConnectionReader.fetchStravaConnectedUserDocSnaps(db);
   }
   if (docs.length === 0) {
     console.log(`${prefix} 처리 대상 사용자 없음`);
@@ -3180,15 +3180,17 @@ async function ensureStravaAthleteId(db, userId, userData, accessToken) {
 async function runStravaAthleteIdBackfill(db, options = {}) {
   const maxUsers = Math.max(1, Math.min(5000, Number(options.maxUsers) || 2000));
   const delayMs = Number.isFinite(Number(options.delayMs)) ? Number(options.delayMs) : 500;
-  const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
-  const candidates = [];
-  for (const doc of usersSnap.docs) {
-    const data = doc.data();
-    const aid = Number(data.strava_athlete_id);
-    if (data.strava_athlete_id == null || data.strava_athlete_id === undefined || !Number.isFinite(aid) || aid <= 0) {
-      candidates.push(doc.id);
+  let candidates = await stravaConnectionReader.listStravaAthleteIdBackfillFirebaseUids(maxUsers);
+  if (!candidates.length) {
+    const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+    for (const doc of usersSnap.docs) {
+      const data = doc.data();
+      const aid = Number(data.strava_athlete_id);
+      if (data.strava_athlete_id == null || data.strava_athlete_id === undefined || !Number.isFinite(aid) || aid <= 0) {
+        candidates.push(doc.id);
+      }
+      if (candidates.length >= maxUsers) break;
     }
-    if (candidates.length >= maxUsers) break;
   }
   const total = candidates.length;
   let successCount = 0;
@@ -3509,12 +3511,10 @@ exports.manualStravaSyncWithMmp = onRequest(
         res.status(403).json({ success: false, error: "관리자(grade=1)만 사용할 수 있습니다." });
         return;
       }
-      const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+      userIdsToProcess = await stravaConnectionReader.listStravaConnectedFirebaseUids(db);
       if (targetUsersParam === "admin") {
         userIdsToProcess = [uid];
         console.log("[manualStravaSyncWithMmp] 관리자 MMP: 현재 로그인 관리자 1명 대상");
-      } else {
-        userIdsToProcess = usersSnap.docs.map((d) => d.id);
       }
       console.log("[manualStravaSyncWithMmp] targetUsers=" + targetUsersParam + ", 대상 " + userIdsToProcess.length + "명");
     }
@@ -4099,8 +4099,7 @@ exports.manualStravaSyncWithMmp = onRequest(
 
 /** 스케줄 실행 시 1000명 대비: 인원 > 100이면 청크 URL로 팬아웃, 아니면 in-process 병렬 처리 */
 async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
-  const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
-  const userIds = usersSnap.docs.map((d) => d.id);
+  const userIds = await stravaConnectionReader.listStravaConnectedFirebaseUids(db);
   if (userIds.length === 0) {
     console.log(`${logPrefix} Strava 연결 사용자 없음`);
     return;
@@ -13877,16 +13876,19 @@ exports.migrateStravaActivityType = onRequest(
     const limit = isNaN(limitParam) || limitParam < 1 ? MIGRATION_BATCH_SIZE : Math.min(limitParam, 100);
 
     const db = admin.firestore();
-    const userQuery = db.collection("users").where("strava_refresh_token", ">", "");
-    const usersSnap = await (targetUserId
-      ? db.collection("users").doc(targetUserId).get().then((s) => ({ docs: s.exists ? [s] : [] }))
-      : userQuery.get());
+    let userDocs = [];
+    if (targetUserId) {
+      const snap = await db.collection("users").doc(targetUserId).get();
+      if (snap.exists) userDocs = [snap];
+    } else {
+      userDocs = await stravaConnectionReader.fetchStravaConnectedUserDocSnaps(db);
+    }
 
     let totalUpdated = 0;
     let totalSkipped = 0;
     let totalErrors = 0;
 
-    for (const userDoc of usersSnap.docs) {
+    for (const userDoc of userDocs) {
       const userId = userDoc.id;
       const userData = userDoc.data();
       let accessToken = userData.strava_access_token || "";

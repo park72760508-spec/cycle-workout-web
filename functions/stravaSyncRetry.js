@@ -4,6 +4,7 @@
  * - 스케줄/HTTP로 저동시성 순차 재시도
  */
 const admin = require("firebase-admin");
+const stravaConnectionReader = require("./stravaConnectionReader");
 
 /** 429 복구 시 유저 간 간격 (전역 한도 회복) */
 const STRAVA_RETRY_USER_DELAY_MS = 12000;
@@ -356,9 +357,9 @@ async function listUsersNeedingStravaSyncRetry(db, options = {}) {
   const dateTo = String(options.dateTo || dateFrom).slice(0, 10);
   const maxUsers = Math.max(1, Math.min(500, Number(options.maxUsers) || 200));
 
-  const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+  const docs = await stravaConnectionReader.fetchStravaConnectedUserDocSnaps(db);
   const out = [];
-  for (const doc of usersSnap.docs) {
+  for (const doc of docs) {
     const d = doc.data() || {};
     if (isStravaAuthInvalidUserData(d)) continue;
     if (d.strava_sync_retry_pending === false && d.strava_sync_retry_cleared_at) continue;
