@@ -192,6 +192,8 @@
   }
 
   var FIRESTORE_MOD_CYCLE_FITNESS = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+  var FITNESS_DEMOGRAPHIC_SAMPLE_RELAY =
+    'https://us-central1-stelvio-ai.cloudfunctions.net/ingestFitnessDemographicSampleRelay';
   var firestoreModCycleFitnessPromise = null;
   function getFirestoreModCycleFitness() {
     if (typeof global.getFirestoreModVo2Stats === 'function') {
@@ -208,6 +210,32 @@
     return typeof snap.exists === 'function' ? snap.exists() : snap.exists === true;
   }
 
+  /** Firestore Primary 성공 후 Supabase Secondary relay (Fault Isolated) */
+  function relayFitnessDemographicSampleToSupabase(samplePayload) {
+    var auth = global.authV9;
+    if (!auth || !auth.currentUser || typeof auth.currentUser.getIdToken !== 'function') {
+      return Promise.resolve();
+    }
+    return auth.currentUser
+      .getIdToken()
+      .then(function (token) {
+        return fetch(FITNESS_DEMOGRAPHIC_SAMPLE_RELAY, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            pmcModel: samplePayload.pmcModel,
+            latestCtl: samplePayload.latestCtl,
+            avgTrendCtl: samplePayload.avgTrendCtl,
+            avgTrendFitness: samplePayload.avgTrendFitness
+          })
+        });
+      })
+      .catch(function () {});
+  }
+
   /** CYCLE: Coggan CTL 기준 fitness_demographic_samples 기여 */
   function persistCycleFitnessDemographicSampleAsync(userProfile, fitnessChartRows) {
     var uid = userProfile && userProfile.id;
@@ -217,20 +245,23 @@
     }
     var sample = resolveCycleCtlSampleFromChartRows(fitnessChartRows);
     if (!sample || sample.latestCtl == null) return Promise.resolve();
+    var samplePayload = {
+      pmcModel: 'coggan_ctl',
+      latestCtl: sample.latestCtl,
+      avgTrendCtl: sample.avgTrendCtl,
+      avgTrendFitness: sample.latestCtl
+    };
     return getFirestoreModCycleFitness()
       .then(function (mod) {
         if (!mod) return;
         return mod.setDoc(
           mod.doc(db, 'fitness_demographic_samples', uid),
-          {
-            pmcModel: 'coggan_ctl',
-            latestCtl: sample.latestCtl,
-            avgTrendCtl: sample.avgTrendCtl,
-            avgTrendFitness: sample.latestCtl,
-            updatedAt: mod.serverTimestamp()
-          },
+          Object.assign({}, samplePayload, { updatedAt: mod.serverTimestamp() }),
           { merge: true }
         );
+      })
+      .then(function () {
+        relayFitnessDemographicSampleToSupabase(samplePayload).catch(function () {});
       })
       .catch(function () {});
   }
