@@ -363,17 +363,6 @@
                   if (typeof window.getUserTrainingLogs === 'function') {
                     logs = await window.getUserTrainingLogs(userProfile.id, { limit: 400 }) || [];
                   }
-                  if (logs.length === 0 && window.firestore) {
-                    try {
-                      var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
-                      snap.docs.forEach(function(d) {
-                        var dd = d.data();
-                        var o = { id: d.id };
-                        if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
-                        logs.push(o);
-                      });
-                    } catch (e2) {}
-                  }
                   var result = window.calculateDynamicFtp ? window.calculateDynamicFtp(logs) : { success: false, error: 'FTP 산출 함수를 불러올 수 없습니다.' };
                   setFtpCalcResult(result);
                   setFtpModalOpen(true);
@@ -582,7 +571,7 @@
             React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
               React.createElement('h3', { className: 'text-lg font-semibold mb-2 text-gray-800', style: { borderBottom: '2px solid #7c3aed', paddingBottom: '10px' } }, '나의 1시간 항속 능력 산출'),
               React.createElement('p', { className: 'text-[11px] text-slate-600 mt-0 mb-3 leading-relaxed' },
-                '최근 6개월 로그의 60분 MMP(max_60min_watts) 최댓값으로 산출합니다. 60분 피크가 없을 때만 FTP×93%를 사용하며, 랭킹보드 독주는 FTP 폴백 없이 60분 피크만 반영합니다.'
+                '최근 6개월 로그의 60분 MMP(max_60min_watts) 최댓값으로 산출합니다. 60분 피크가 없을 때만 FTP×93%를 사용하며, 랭킹보드 독주는 최근 90일 60분 피크만 반영합니다(FTP 폴백 없음).'
               ),
               React.createElement('p', { className: 'text-[10px] font-semibold text-slate-800 m-0 pb-2 border-b border-violet-100/80' },
                 '현실 지표 (최근 6개월 · 60분 최고 평균 파워·체중)',

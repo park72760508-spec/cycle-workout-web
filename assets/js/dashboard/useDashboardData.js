@@ -539,17 +539,6 @@
               raw = Array.isArray(raw) ? raw : [];
             } catch (e) { raw = []; }
           }
-          if (raw.length === 0 && window.firestore && (!window.getLogsReadSourceSync || window.getLogsReadSourceSync() !== 'supabase')) {
-            try {
-              var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
-              snap.docs.forEach(function(doc) {
-                var dd = doc.data();
-                var o = { id: doc.id };
-                if (dd) for (var k in dd) if (dd.hasOwnProperty(k)) o[k] = dd[k];
-                raw.push(o);
-              });
-            } catch (e) { raw = []; }
-          }
 
           var logs = raw.filter(function(log) {
             var ds = parseDate(log.date);
