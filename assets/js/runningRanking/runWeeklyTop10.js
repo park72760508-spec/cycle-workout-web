@@ -3,13 +3,15 @@
  * ─ CYCLE STELVIO 주간 TOP10과 동일 디자인/로직. 지표만 "주간(월~일) 누적 거리(km)".
  *
  * 데이터: runningRankingApi.fetchLeaderboard() (get_running_leaderboard → weekly_distance_km)
- * 등락  : runningRankingMovement.applyRankMovement(list, 'weekly_distance', ...) — run_weekly_distance_* 스냅샷(전일 대비)
+ * 등락  : runningRankingMovement.applyRankMovement — 일~토 실시간, 일 21시 확정 후 21시 이전 스냅샷 고정
  * 표시  : 1~10위 + 하단 나의 순위/거리 + 순위 등락(↑↓)
  */
 (function () {
   'use strict';
 
   var LS_DONT_SHOW = 'runWeeklyTop10DontShowDate';
+  /** 일요일 21시 순위 확정 이후 — 21시 직전 등락 스냅샷 재사용 (CYCLE weeklyTop10 캐시 등락과 동일 개념) */
+  var LS_RANK_MV_PREFIX = 'runWeeklyTop10RankMv:v1:';
 
   function cfg() { return window.runningRankingConfig || {}; }
   function fmt() { return window.runningRankingFormat || {}; }
@@ -245,6 +247,82 @@
     }, 1500);
   }
 
+  function weekRankMvCacheKey(weekStartStr) {
+    return LS_RANK_MV_PREFIX + (weekStartStr || seoulWeekRange().startStr);
+  }
+
+  function extractRankMvSnap(list) {
+    var snap = {};
+    (list || []).forEach(function (it) {
+      if (!it || it.rankChange == null || it.previousBoardRank == null) return;
+      var rc = Number(it.rankChange);
+      var pr = Math.floor(Number(it.previousBoardRank));
+      if (!isFinite(rc) || !isFinite(pr) || pr < 1) return;
+      var payload = { rankChange: rc, previousBoardRank: pr };
+      var ids = [it.boardUserId, it.firebaseUid, it.userId, it.socialUserId];
+      var i;
+      for (i = 0; i < ids.length; i++) {
+        if (ids[i] != null && String(ids[i]).trim()) snap[String(ids[i]).trim()] = payload;
+      }
+    });
+    return snap;
+  }
+
+  function applyRankMvSnap(list, snap) {
+    if (!list || !list.length || !snap) return;
+    list.forEach(function (it) {
+      if (!it) return;
+      var ids = [it.boardUserId, it.firebaseUid, it.userId, it.socialUserId];
+      var pk = null;
+      var i;
+      for (i = 0; i < ids.length; i++) {
+        if (ids[i] != null && snap[String(ids[i])]) {
+          pk = snap[String(ids[i])];
+          break;
+        }
+      }
+      if (pk) {
+        it.rankChange = pk.rankChange;
+        it.previousBoardRank = pk.previousBoardRank;
+      } else {
+        it.rankChange = null;
+        it.previousBoardRank = null;
+      }
+    });
+  }
+
+  function loadWeekRankMvCache(weekStartStr) {
+    try {
+      var raw = localStorage.getItem(weekRankMvCacheKey(weekStartStr));
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.snap || typeof parsed.snap !== 'object') return null;
+      if (parsed.weekStart && parsed.weekStart !== weekStartStr) return null;
+      return parsed;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveWeekRankMvCache(weekStartStr, list, opts) {
+    opts = opts || {};
+    var snap = extractRankMvSnap(list);
+    if (!Object.keys(snap).length) return;
+    try {
+      localStorage.setItem(weekRankMvCacheKey(weekStartStr), JSON.stringify({
+        weekStart: weekStartStr,
+        savedAt: seoulToday(),
+        finalized: opts.finalized === true,
+        snap: snap
+      }));
+    } catch (e) {}
+  }
+
+  function hasUsableRankMvSnap(snap) {
+    if (!snap || typeof snap !== 'object') return false;
+    return Object.keys(snap).length > 0;
+  }
+
   /** 리더보드 rows → 주간 거리 랭킹 목록 (등락 적용 완료) */
   function buildList(res, opts) {
     opts = opts || {};
@@ -292,7 +370,19 @@
     list.forEach(function (it, i) { it.rank = i + 1; });
 
     if (!opts.isPrevWeek) {
+      var weekStartStr = seoulWeekRange().startStr;
+      var finalized = isWeeklyRankingFinalizedSeoul();
       var mv = moveMod();
+
+      if (finalized) {
+        /* 순위 확정(일 21시~) — 21시 이전에 저장된 등락 스냅샷 고정 표시 (CYCLE weeklyTop10 캐시 등락) */
+        var frozen = loadWeekRankMvCache(weekStartStr);
+        if (frozen && hasUsableRankMvSnap(frozen.snap)) {
+          applyRankMvSnap(list, frozen.snap);
+          return list;
+        }
+      }
+
       if (mv && typeof mv.applyRankMovement === 'function') {
         mv.applyRankMovement(list, 'weekly_distance', {
           gender: 'all',
@@ -302,6 +392,13 @@
           leaderboardAsOfSeoul: (res && res.leaderboardAsOfSeoul) || '',
           rankMovementAsOfSeoul: (res && res.rankMovementAsOfSeoul) || ''
         }, (res && res.rankMovementByKey) || {});
+      }
+
+      if (finalized) {
+        saveWeekRankMvCache(weekStartStr, list, { finalized: true });
+      } else if (hasUsableRankMvSnap(extractRankMvSnap(list))) {
+        /* 21시 이전 — 매 조회마다 등락 갱신·저장 → 21시 이후 확정 화면에서 동일 등락 재사용 */
+        saveWeekRankMvCache(weekStartStr, list, { finalized: false });
       }
     }
     return list;
