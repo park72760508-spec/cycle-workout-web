@@ -260,10 +260,89 @@
         up: up,
         down: down,
         flat: flat,
-        tabId: tabId
+        tabId: tabId,
+        mode: 'absolute'
       };
     } catch (eDbg) {}
     return { filled: filled, up: up, down: down, flat: flat };
+  }
+
+  /**
+   * 생존 코호트 재순위 등락 — baseline·현재 보드 양쪽에 있는 공통 사용자만 각각 1..M 로
+   * 다시 순위 매겨 비교(CYCLE stelvioComputeSurvivorAwareRankMovementForRows 동형).
+   *
+   * 왜 종합·구간·거리·크루 탭은 이 방식인가:
+   * 절대순위 비교는 신규 진입으로 모집단이 커지면 기존 사용자 순위가 일제히 밀려
+   * 상승/보합이 사라지고 하락·미표기만 남는다. 생존 코호트 재순위는 이 편향을 제거해
+   * 상승/하락/보합(-)이 균형 있게 나온다.
+   * (tss·주간거리처럼 주간 누적으로 모집단이 계속 커지는 지표만 절대순위를 쓴다.)
+   *
+   * previousBoardRank = 현재 절대순위 + rankChange 로 맞춰 렌더 검증
+   * (previousBoardRank - rankChange === 현재순위)을 통과시킨다.
+   * @returns {{filled:number, up:number, down:number, flat:number}}
+   */
+  function applySurvivorAwareMovement(list, baseline, tabId) {
+    var up = 0;
+    var down = 0;
+    var flat = 0;
+    var survivors = [];
+    var i, item, prev, curr;
+    for (i = 0; i < list.length; i++) {
+      item = list[i];
+      if (!item) continue;
+      if (tabId === 'crew') {
+        if (!item.crewId) continue;
+      } else if (!item.userId && !item.socialUserId && !item.firebaseUid) {
+        continue;
+      }
+      prev = baselinePrevRankForItem(baseline, item, tabId);
+      curr = Math.floor(Number(item.rank));
+      if (prev == null || !isFinite(curr) || curr < 1) continue; /* 신규 진입 → 미표기 */
+      survivors.push({ item: item, prev: prev, curr: curr });
+    }
+    if (survivors.length) {
+      var byPrev = survivors.slice().sort(function (a, b) { return a.prev - b.prev; });
+      for (i = 0; i < byPrev.length; i++) byPrev[i].prevAmong = i + 1;
+      var byCurr = survivors.slice().sort(function (a, b) { return a.curr - b.curr; });
+      for (i = 0; i < byCurr.length; i++) byCurr[i].currAmong = i + 1;
+      for (i = 0; i < survivors.length; i++) {
+        var s = survivors[i];
+        var rc = s.prevAmong - s.currAmong;
+        s.item.rankChange = rc;
+        s.item.previousBoardRank = s.curr + rc;
+        if (rc > 0) up++;
+        else if (rc < 0) down++;
+        else flat++;
+      }
+    }
+    try {
+      window.__runRankMovementDebug = {
+        listSize: list.length,
+        baselineSize: baseline && typeof baseline === 'object' ? Object.keys(baseline).length : 0,
+        filled: survivors.length,
+        up: up,
+        down: down,
+        flat: flat,
+        tabId: tabId,
+        mode: 'survivor'
+      };
+    } catch (eDbg) {}
+    return { filled: survivors.length, up: up, down: down, flat: flat };
+  }
+
+  /*
+   * 절대순위 탭 = TSS 보드 탭만(07-01 결정: 주간 누적 TSS 는 신규 진입 하락을 그대로 표기).
+   * 종합·구간·거리·크루·주간거리(TOP10 모달) = 생존 코호트 재순위 →
+   * 모집단 증가 편향을 제거해 상승/하락/보합(-)이 균형 있게 표기된다.
+   */
+  function useAbsoluteMovementForTab(tabId) {
+    return tabId === 'tss';
+  }
+
+  function applyMovementForTab(list, baseline, tabId) {
+    return useAbsoluteMovementForTab(tabId)
+      ? applyAbsoluteMovement(list, baseline, tabId)
+      : applySurvivorAwareMovement(list, baseline, tabId);
   }
 
   function applyFromServerSnap(list, tabId, opts, rankMovementByKey) {
@@ -285,16 +364,17 @@
       item.previousBoardRank = null;
     });
 
-    var mv = applyAbsoluteMovement(list, baseline, tabId);
+    var mv = applyMovementForTab(list, baseline, tabId);
     if (!mv.filled) return false; /* 공통 사용자 없음 → localStorage 폴백 */
 
     /*
-     * 서버 baseline 이 현재 표시 보드와 사실상 동일(자기 자신 비교)이면 3명 이상이
-     * 전원 보합(up=0·down=0)으로만 나온다. 이는 정상 등락이 아니라 baseline 퇴행이므로
-     * 등락을 비우고 localStorage(실제 직전일 보드) 폴백으로 넘긴다.
+     * 절대순위 탭(TSS 보드 탭)에서만 자기비교(전원 보합) 퇴행 방어.
+     * 서버 baseline 이 현재 보드와 사실상 동일하면 3명 이상이 전원 보합(up=0·down=0)으로만
+     * 나오는데, 절대순위 탭에서는 정상 등락이 아니라 baseline 퇴행이므로 localStorage 폴백으로 넘긴다.
+     * 생존 코호트 탭은 순서 불변 시 전원 보합(-)이 정상이므로 가드에서 제외한다.
      * (CYCLE stelvioPeakRankMovementIsAllFlat 방어와 동일한 취지)
      */
-    if (mv.filled >= 3 && mv.up === 0 && mv.down === 0) {
+    if (useAbsoluteMovementForTab(tabId) && mv.filled >= 3 && mv.up === 0 && mv.down === 0) {
       clearRankMovementFields(list);
       return false;
     }
@@ -355,8 +435,8 @@
       item.previousBoardRank = null;
     });
 
-    /* 서버 스냅샷과 동일하게 절대순위 비교 */
-    if (prevRanks) applyAbsoluteMovement(list, prevRanks, tabId);
+    /* 서버 스냅샷과 동일한 탭별 방식(종합·구간·거리·크루=생존 코호트, tss·주간거리=절대순위) */
+    if (prevRanks) applyMovementForTab(list, prevRanks, tabId);
 
     normalizeListRankMovement(list);
 
