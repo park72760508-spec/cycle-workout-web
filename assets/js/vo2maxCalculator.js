@@ -103,6 +103,8 @@
     'https://us-central1-stelvio-ai.cloudfunctions.net/ingestVo2DemographicSampleRelay';
   var FITNESS_DEMOGRAPHIC_SAMPLE_RELAY =
     'https://us-central1-stelvio-ai.cloudfunctions.net/ingestFitnessDemographicSampleRelay';
+  var WEEKLY_TSS_DEMOGRAPHIC_SAMPLE_RELAY =
+    'https://us-central1-stelvio-ai.cloudfunctions.net/ingestWeeklyTssDemographicSampleRelay';
   var firestoreModVo2StatsPromise = null;
   function getFirestoreModVo2Stats() {
     if (!firestoreModVo2StatsPromise) firestoreModVo2StatsPromise = import(FIRESTORE_MOD_VO2_STATS);
@@ -380,6 +382,30 @@
       });
   }
 
+  /** Firestore Primary 성공 후 Supabase Secondary relay (Fault Isolated) */
+  function relayWeeklyTssDemographicSampleToSupabase(samplePayload) {
+    var auth = global.authV9;
+    if (!auth || !auth.currentUser || typeof auth.currentUser.getIdToken !== 'function') {
+      return Promise.resolve();
+    }
+    return auth.currentUser
+      .getIdToken()
+      .then(function (token) {
+        return fetch(WEEKLY_TSS_DEMOGRAPHIC_SAMPLE_RELAY, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            weekTssList: samplePayload.weekTssList,
+            avgThirtyWeekWindowTss: samplePayload.avgThirtyWeekWindowTss
+          })
+        });
+      })
+      .catch(function () {});
+  }
+
   /**
    * 대시보드 성장 추이·30주 주간 TSS 샘플(본인 문서만).
    * weekTssList: 주차별 합계 TSS(0 포함) — 집계 시 각 주마다 TSS>0 인 사용자만 분모에 포함.
@@ -411,17 +437,20 @@
     }, 0);
     if (sumW <= 0) return Promise.resolve();
     var avgW = sumW / weekTssList.length;
+    var samplePayload = {
+      weekTssList: weekTssList,
+      avgThirtyWeekWindowTss: Math.round(avgW * 10) / 10
+    };
     return getFirestoreModVo2Stats()
       .then(function (mod) {
         return mod.setDoc(
           mod.doc(db, 'weekly_tss_demographic_samples', uid),
-          {
-            weekTssList: weekTssList,
-            avgThirtyWeekWindowTss: Math.round(avgW * 10) / 10,
-            updatedAt: mod.serverTimestamp()
-          },
+          Object.assign({}, samplePayload, { updatedAt: mod.serverTimestamp() }),
           { merge: true }
         );
+      })
+      .then(function () {
+        relayWeeklyTssDemographicSampleToSupabase(samplePayload).catch(function () {});
       })
       .catch(function () {});
   }
