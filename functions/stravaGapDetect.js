@@ -287,18 +287,13 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
       accessToken = tokenResult.accessToken;
     } catch (e) {
       const errMsg = e && e.message ? e.message : String(e);
-      if (stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, 0, null)) {
-        await stravaSyncRetry.markStravaAuthInvalid(db, userId, {
-          reason: "refresh_token_invalid",
-          error: errMsg,
-        });
-      }
+      const authInvalidConfirmed = await stravaSyncRetry.isUserStravaAuthInvalidConfirmed(db, userId);
       return {
         missingIds: [],
         error: `토큰 갱신 실패: ${errMsg}`,
         status: 401,
         apiCount: 0,
-        authInvalid: true,
+        authInvalid: authInvalidConfirmed,
       };
     }
   }
@@ -537,15 +532,10 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
       }
       if (gapError) {
         const errText = String(gapError || "");
-        if (
+        const authBlocked =
           gap.authInvalid === true ||
-          stravaSyncRetry.isStravaRefreshTokenInvalidError(errText, gapStatus, null)
-        ) {
-          await stravaSyncRetry.markStravaAuthInvalid(db, entry.userId, {
-            reason: "refresh_token_invalid",
-            error: errText,
-          });
-        } else {
+          (await stravaSyncRetry.isUserStravaAuthInvalidConfirmed(db, entry.userId));
+        if (!authBlocked) {
           await stravaSyncRetry.markStravaSyncRetryPending(db, entry.userId, {
             dateFrom: range.dateFrom,
             dateTo: range.dateTo,
@@ -555,6 +545,8 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
             status: gapStatus || 500,
             error: errText,
           });
+        } else {
+          console.warn("[stravaGapDetect] auth invalid confirmed, skip retry pending:", entry.userId);
         }
         return { userId: entry.userId, sources: Array.from(entry.sources), error: gapError, ingested: 0, gapStatus };
       }

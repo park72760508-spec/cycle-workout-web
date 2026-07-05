@@ -2287,6 +2287,7 @@ async function refreshStravaTokenForUser(db, userId) {
     body: body.toString(),
   });
   let tokenData = await tokenRes.json().catch(() => ({}));
+  let refreshTokenUsed = String(refreshToken);
   if (!tokenRes.ok) {
     /*
      * Strava refresh token은 회전형이다. 웹훅·수동·스케줄이 같은 사용자를 동시에 갱신하면
@@ -2303,6 +2304,7 @@ async function refreshStravaTokenForUser(db, userId) {
       return { accessToken: latestAccess };
     }
     if (latestRefresh && latestRefresh !== String(refreshToken)) {
+      refreshTokenUsed = latestRefresh;
       const retryBody = new URLSearchParams({
         client_id: clientId,
         client_secret: clientSecret,
@@ -2319,12 +2321,16 @@ async function refreshStravaTokenForUser(db, userId) {
   }
   if (!tokenRes.ok) {
     const errMsg = tokenData.message || tokenData.error || `Strava ${tokenRes.status}`;
-    if (stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, tokenRes.status, tokenData)) {
-      await stravaSyncRetry.markStravaAuthInvalid(db, userId, {
-        reason: "refresh_token_invalid",
-        error: errMsg,
-      });
-    }
+    await stravaSyncRetry.markStravaAuthInvalid(db, userId, {
+      reason: "refresh_token_invalid",
+      error: errMsg,
+      evidence: {
+        httpStatus: tokenRes.status,
+        tokenData,
+        errorText: errMsg,
+        refreshTokenTried: refreshTokenUsed,
+      },
+    });
     throw new Error(errMsg);
   }
   const accessToken = tokenData.access_token || "";
@@ -2571,6 +2577,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       accessToken = tokenResult.accessToken;
     } catch (e) {
       const errMsg = e && e.message ? e.message : String(e);
+      const authInvalidConfirmed = await stravaSyncRetry.isUserStravaAuthInvalidConfirmed(db, userId);
       await recordStravaActivityFetchDiagnostic(db, userId, {
         afterUnix,
         beforeUnix,
@@ -2580,17 +2587,18 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
         count: 0,
         pages: 0,
         error: `토큰 갱신 실패: ${errMsg}`,
-        hint: stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, 0, null)
+        hint: authInvalidConfirmed
           ? "Strava refresh_token이 만료·무효화되었습니다. 환경설정에서 Strava를 다시 연결해 주세요."
-          : "Strava refresh_token이 만료·무효화되었거나 다른 동기화가 토큰을 회전시켰습니다. Strava 재연결 후 다시 실행해야 합니다.",
+          : "토큰 갱신에 실패했습니다. 일시적 오류일 수 있으며 pending 재시도가 계속됩니다. 반복 실패 시 Strava 재연결을 시도해 주세요.",
       });
-      if (stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, 0, null)) {
-        await stravaSyncRetry.markStravaAuthInvalid(db, userId, {
-          reason: "refresh_token_invalid",
-          error: errMsg,
-        });
-      }
-      return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 갱신 실패: ${errMsg}`, authInvalid: stravaSyncRetry.isStravaRefreshTokenInvalidError(errMsg, 0, null) };
+      return {
+        userId,
+        processed: 0,
+        newActivities: 0,
+        userTss: 0,
+        error: `토큰 갱신 실패: ${errMsg}`,
+        authInvalid: authInvalidConfirmed,
+      };
     }
   }
   // 자가복구(핀셋): 동기화 대상이 된 유저의 strava_athlete_id가 없으면 GET /athlete로 즉시 채워 웹훅 역인덱스를 완성한다.

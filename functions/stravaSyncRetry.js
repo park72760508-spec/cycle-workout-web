@@ -22,44 +22,128 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Strava refresh_token 만료·무효·회전 실패(재연결 필요) 여부 */
-function isStravaRefreshTokenInvalidError(errorText, status, tokenData) {
-  const err = String(errorText || "").toLowerCase();
-  const s = Number(status) || 0;
-  if (s === 400 && err.includes("bad request")) return true;
+/**
+ * Strava OAuth token 응답 본문에서 refresh_token 확정 무효 여부.
+ * (400 Bad Request 단독·Authorization Error 단독은 포함하지 않음)
+ */
+function hasStravaRefreshTokenInvalidInTokenData(tokenData) {
+  if (!tokenData || typeof tokenData !== "object") return false;
+  const oauthErr = String(tokenData.error || "").trim().toLowerCase();
+  if (oauthErr === "invalid_grant") return true;
+  const errors = Array.isArray(tokenData.errors) ? tokenData.errors : [];
+  return errors.some((e) => {
+    const resource = String((e && e.resource) || "").trim().toLowerCase();
+    const field = String((e && e.field) || "").trim().toLowerCase();
+    const code = String((e && e.code) || "").trim().toLowerCase();
+    return resource === "refreshtoken" && field === "refresh_token" && code === "invalid";
+  });
+}
+
+/**
+ * refresh_token **확정** 무효 — 재연결 필요 시에만 true.
+ * @param {number} [httpStatus]
+ * @param {object|null} [tokenData] Strava /oauth/token JSON 본문
+ * @param {string} [errorText] 보조(본문 없을 때 invalid_grant 등만)
+ */
+function isDefinitiveStravaRefreshTokenInvalid(httpStatus, tokenData, errorText) {
+  if (hasStravaRefreshTokenInvalidInTokenData(tokenData)) return true;
+  const err = String(errorText || "").trim().toLowerCase();
   if (err.includes("invalid_grant")) return true;
-  if (err.includes("refresh_token") && err.includes("invalid")) return true;
-  if (err.includes("authorization error")) return true;
-  const errors = tokenData && Array.isArray(tokenData.errors) ? tokenData.errors : [];
-  for (const e of errors) {
-    const resource = String((e && e.resource) || "").toLowerCase();
-    const field = String((e && e.field) || "").toLowerCase();
-    const code = String((e && e.code) || "").toLowerCase();
-    if (resource === "refreshtoken" && field === "refresh_token" && code === "invalid") return true;
+  // 에러 문자열에 Strava errors 배열이 포함된 경우만 파싱 (단순 "Bad Request"는 제외)
+  if (err.includes("refreshtoken") && err.includes("refresh_token") && err.includes("invalid")) {
+    return true;
+  }
+  try {
+    const raw = String(errorText || "");
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      const parsed = JSON.parse(raw.slice(start, end + 1));
+      if (hasStravaRefreshTokenInvalidInTokenData(parsed)) return true;
+    }
+  } catch (_e) {
+    /* ignore */
   }
   return false;
 }
 
+/** @deprecated — isDefinitiveStravaRefreshTokenInvalid 사용. tokenData 없이 true가 되지 않도록 엄격화됨. */
+function isStravaRefreshTokenInvalidError(errorText, status, tokenData) {
+  return isDefinitiveStravaRefreshTokenInvalid(status, tokenData, errorText);
+}
+
+/** 재시도 큐에서 제외·pending 중단 대상 (확정 무효만) */
 function isStravaAuthInvalidUserData(userData) {
-  return !!(userData && userData.strava_auth_invalid === true);
+  if (!userData || userData.strava_auth_invalid !== true) return false;
+  if (userData.strava_auth_invalid_confirmed === true) return true;
+  // 수동/API 검증으로 표시된 기존 사용자(일괄 처리 등)
+  const reason = String(userData.strava_auth_invalid_reason || "").trim();
+  return reason === "refresh_token_invalid" || reason === "manual_api_verify";
+}
+
+async function isUserStravaAuthInvalidConfirmed(db, userId) {
+  if (!db || !userId) return false;
+  try {
+    const snap = await db.collection("users").doc(userId).get();
+    return snap.exists && isStravaAuthInvalidUserData(snap.data() || {});
+  } catch (_e) {
+    return false;
+  }
 }
 
 /**
- * refresh_token 무효 — 재연결 필요. 무의미한 strava_sync_retry_pending 루프를 중단한다.
+ * refresh_token **확정** 무효 — 재연결 필요. evidence 검증 통과 시에만 pending 중단.
  * @param {import('firebase-admin').firestore.Firestore} db
  * @param {string} userId
- * @param {{ reason?: string, error?: string, since?: string }} [meta]
+ * @param {{ reason?: string, error?: string, since?: string, evidence?: { httpStatus?: number, tokenData?: object, errorText?: string, refreshTokenTried?: string } }} [meta]
+ * @returns {Promise<boolean>} 차단 적용 여부
  */
 async function markStravaAuthInvalid(db, userId, meta) {
-  if (!db || !userId) return;
+  if (!db || !userId) return false;
   const m = meta && typeof meta === "object" ? meta : {};
+  const evidence = m.evidence && typeof m.evidence === "object" ? m.evidence : {};
+  const httpStatus = Number(evidence.httpStatus) || 0;
+  const tokenData = evidence.tokenData || null;
+  const errorText = String(evidence.errorText || m.error || "").trim();
+
+  if (!isDefinitiveStravaRefreshTokenInvalid(httpStatus, tokenData, errorText)) {
+    console.warn("[stravaSyncRetry] markStravaAuthInvalid skipped (not definitive):", userId, {
+      httpStatus: httpStatus || null,
+      errorText: errorText ? errorText.slice(0, 120) : null,
+    });
+    return false;
+  }
+
+  // 동시 회전: Firestore refresh_token이 방금 시도한 것과 다르면 다른 프로세스가 이미 갱신한 것 → 차단하지 않음
+  if (evidence.refreshTokenTried) {
+    try {
+      const snap = await db.collection("users").doc(userId).get();
+      const currentRefresh = String((snap.data() || {}).strava_refresh_token || "");
+      if (currentRefresh && currentRefresh !== String(evidence.refreshTokenTried)) {
+        console.warn("[stravaSyncRetry] markStravaAuthInvalid skipped (concurrent token rotation):", userId);
+        return false;
+      }
+    } catch (_e) {
+      /* continue — evidence is definitive */
+    }
+  }
+
   const since = String(m.since || "").slice(0, 10);
+  const evidencePayload = {
+    httpStatus: httpStatus || null,
+    error: errorText ? errorText.slice(0, 300) : null,
+    oauthError: tokenData && tokenData.error != null ? String(tokenData.error) : null,
+    errors: tokenData && Array.isArray(tokenData.errors) ? tokenData.errors.slice(0, 5) : null,
+    confirmedAt: new Date().toISOString(),
+  };
   try {
     await db.collection("users").doc(userId).update({
       strava_auth_invalid: true,
+      strava_auth_invalid_confirmed: true,
       strava_auth_invalid_at: new Date().toISOString(),
       strava_auth_invalid_reason: String(m.reason || "refresh_token_invalid").slice(0, 80),
-      strava_auth_invalid_error: m.error ? String(m.error).slice(0, 500) : admin.firestore.FieldValue.delete(),
+      strava_auth_invalid_error: errorText ? errorText.slice(0, 500) : admin.firestore.FieldValue.delete(),
+      strava_auth_invalid_evidence: evidencePayload,
       strava_auth_invalid_since: since || admin.firestore.FieldValue.delete(),
       strava_sync_retry_pending: false,
       strava_sync_retry_reason: admin.firestore.FieldValue.delete(),
@@ -68,8 +152,10 @@ async function markStravaAuthInvalid(db, userId, meta) {
       strava_last_activity_fetch_hint:
         "Strava refresh_token이 만료·무효화되었습니다. 환경설정에서 Strava를 다시 연결해 주세요.",
     });
+    return true;
   } catch (e) {
     console.warn("[stravaSyncRetry] markStravaAuthInvalid failed:", userId, e.message || e);
+    return false;
   }
 }
 
@@ -79,9 +165,11 @@ async function clearStravaAuthInvalidOnReconnect(db, userId) {
   try {
     await db.collection("users").doc(userId).update({
       strava_auth_invalid: false,
+      strava_auth_invalid_confirmed: admin.firestore.FieldValue.delete(),
       strava_auth_invalid_at: admin.firestore.FieldValue.delete(),
       strava_auth_invalid_reason: admin.firestore.FieldValue.delete(),
       strava_auth_invalid_error: admin.firestore.FieldValue.delete(),
+      strava_auth_invalid_evidence: admin.firestore.FieldValue.delete(),
       strava_auth_invalid_since: admin.firestore.FieldValue.delete(),
       strava_auth_invalid_cleared_at: new Date().toISOString(),
       strava_last_activity_fetch_error: admin.firestore.FieldValue.delete(),
@@ -202,15 +290,8 @@ async function markStravaSyncRetryPending(db, userId, meta) {
   try {
     const userSnap = await db.collection("users").doc(userId).get();
     const userData = userSnap.exists ? userSnap.data() || {} : {};
+    // 확정 무효 사용자만 pending 등록 생략 (일시 오류·429·동시 회전은 pending 유지)
     if (isStravaAuthInvalidUserData(userData)) return;
-    const errText = String((meta && meta.error) || "");
-    if (isStravaRefreshTokenInvalidError(errText, meta && meta.status, null)) {
-      await markStravaAuthInvalid(db, userId, {
-        reason: "refresh_token_invalid",
-        error: errText || (meta && meta.reason) || "refresh_token_invalid",
-      });
-      return;
-    }
   } catch (e) {
     console.warn("[stravaSyncRetry] mark pending precheck failed:", userId, e.message || e);
   }
@@ -320,11 +401,7 @@ function extractRetryStatusFromResult(result, userData) {
 }
 
 function inferRetryReasonFromResult(result, userData) {
-  const errText = String(result && result.error ? result.error : "");
   if (result && result.authInvalid === true) return "auth_invalid";
-  if (isStravaRefreshTokenInvalidError(errText, extractRetryStatusFromResult(result, userData), null)) {
-    return "auth_invalid";
-  }
   // 403 Application Inactive(앱 비활성)는 앱 레벨 공통 장애 → 사용자별 재시도 사유와 구분해 기록
   const appInactive =
     (result && result.appInactive === true) ||
@@ -451,11 +528,10 @@ async function runStravaSyncRetrySequential(
     } else {
       const failStatus = extractRetryStatusFromResult(result, userData);
       const errText = String(result.error || "");
-      if (isStravaRefreshTokenInvalidError(errText, failStatus, null)) {
-        await markStravaAuthInvalid(db, uid, {
-          reason: "refresh_token_invalid",
-          error: errText,
-        });
+      const authBlocked = result.authInvalid === true || isStravaAuthInvalidUserData(userData);
+      if (authBlocked) {
+        // refreshStravaTokenForUser에서 확정 무효로 이미 차단됨 — pending 재등록하지 않음
+        console.warn(`${prefix} auth invalid confirmed, skip retry pending:`, uid);
       } else {
         await markStravaSyncRetryPending(db, uid, {
           dateFrom: range.dateFrom,
@@ -529,8 +605,11 @@ module.exports = {
   STRAVA_CHUNK_FANOUT_DELAY_MS,
   STRAVA_SYNC_CONCURRENCY_SAFE,
   STRAVA_USER_BATCH_DELAY_MS,
+  hasStravaRefreshTokenInvalidInTokenData,
+  isDefinitiveStravaRefreshTokenInvalid,
   isStravaRefreshTokenInvalidError,
   isStravaAuthInvalidUserData,
+  isUserStravaAuthInvalidConfirmed,
   markStravaAuthInvalid,
   clearStravaAuthInvalidOnReconnect,
   scheduleStravaReconnectBackfill,
