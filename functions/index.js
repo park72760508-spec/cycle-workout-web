@@ -3605,10 +3605,14 @@ exports.manualStravaSyncWithMmp = onRequest(
     const userData = userSnap.data();
     const ftp = Number(userData.ftp) || 0;
 
-    let accessToken;
+    let accessToken = userData.strava_access_token || "";
+    const tokenExpiresAt = Number(userData.strava_expires_at || 0);
+    const nowSec = Math.floor(Date.now() / 1000);
     try {
-      const tokenResult = await refreshStravaTokenForUser(db, uid);
-      accessToken = tokenResult.accessToken;
+      if (!accessToken || tokenExpiresAt < nowSec + 300) {
+        const tokenResult = await refreshStravaTokenForUser(db, uid);
+        accessToken = tokenResult.accessToken;
+      }
     } catch (e) {
       console.warn("[manualStravaSyncWithMmp] 토큰 갱신 실패, 건너뜀:", uid, e.message);
         const diagnosticBase = buildStravaFetchDiagnosticBase(userData, "manualStravaSyncWithMmp");
