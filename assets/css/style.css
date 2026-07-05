@@ -6327,7 +6327,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   white-space: nowrap;
   line-height: 1.25;
 }
-#weeklyTop10Modal .weekly-rank-change-slot {
+#weeklyTop10Modal .weekly-rank-change-slot,
+#runWeeklyTop10Modal .weekly-rank-change-slot {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -6337,7 +6338,10 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 #weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
 #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change,
-#weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge {
+#weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge,
+#runWeeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
+#runWeeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change,
+#runWeeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6347,35 +6351,45 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin-left: 0;
   margin-right: 0;
 }
-#weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight {
+#weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight,
+#runWeeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight {
   font-size: 0.68rem;
 }
-#weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight {
+#weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight,
+#runWeeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight {
   padding: 1px 6px;
   font-size: 0.68rem;
   line-height: 1.2;
 }
-#weeklyTop10Modal .weekly-rank-tss {
+#weeklyTop10Modal .weekly-rank-tss,
+#runWeeklyTop10Modal .weekly-rank-tss {
   flex: 0 0 auto;
   margin-left: auto;
 }
 @media (max-width: 600px) {
-  #weeklyTop10Modal .weekly-rank-name {
+  #weeklyTop10Modal .weekly-rank-name,
+  #runWeeklyTop10Modal .weekly-rank-name {
     flex: 0 1 auto;
     max-width: calc(100% - 5rem);
   }
-  #weeklyTop10Modal .weekly-rank-name-text {
+  #weeklyTop10Modal .weekly-rank-name-text,
+  #runWeeklyTop10Modal .weekly-rank-name-text {
     gap: 3px;
   }
-  #weeklyTop10Modal .weekly-rank-change-slot {
+  #weeklyTop10Modal .weekly-rank-change-slot,
+  #runWeeklyTop10Modal .weekly-rank-change-slot {
     gap: 3px;
   }
   #weeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
   #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change,
-  #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight {
+  #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight,
+  #runWeeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
+  #runWeeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change,
+  #runWeeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight {
     font-size: 0.74rem;
   }
-  #weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight {
+  #weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight,
+  #runWeeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight {
     font-size: 0.72rem;
     padding: 1px 5px;
   }
