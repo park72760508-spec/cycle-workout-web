@@ -11,6 +11,7 @@ async function getPublicLogsReadRouting(admin) {
     success: true,
     readSource: useSupabaseLogsRead ? "supabase" : "firebase",
     useSupabaseLogsRead,
+    parityFallbackToFirebase: cfg.parityFallbackToFirebase === true,
     note: "Phase 6: users/logs Read → Supabase rides. appConfig/supabase_read_routing.useSupabaseLogsRead",
   };
 }

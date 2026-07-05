@@ -182,12 +182,24 @@ async function tryFetchTrainingLogsFromSupabaseRides(userId) {
 
 /**
  * 대시보드 useDashboardData / getUserTrainingLogs 와 동일: 최근 로그 N건 조회 후 서울 YMD로 6개월 필터.
- * cutover(useSupabaseLogsRead=true) 시 Supabase rides 우선, 그 외/실패 시 Firestore logs.
+ * cutover(useSupabaseLogsRead=true) 시 Supabase rides 우선, parityFallback=false 이면 Firestore 대량 조회 생략.
  */
 async function fetchUserTrainingLogsDashboardRoute(db, userId) {
   if (!db || !userId) return [];
   const supabaseLogs = await tryFetchTrainingLogsFromSupabaseRides(userId);
   if (supabaseLogs) return supabaseLogs;
+
+  const readConfig = require("./rankingReadConfig");
+  try {
+    await readConfig.refreshRankingReadConfig(admin, false);
+  } catch (_) {
+    /* 캐시된 값 사용 */
+  }
+  const cfg = readConfig.getRankingReadConfig();
+  if (cfg.useSupabaseLogsRead && !cfg.parityFallbackToFirebase) {
+    return [];
+  }
+
   const snap = await db
     .collection("users")
     .doc(userId)
