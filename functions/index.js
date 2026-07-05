@@ -14232,14 +14232,101 @@ exports.rebuildVo2StelvioRollingStats = onSchedule(
 );
 
 // ---------- 훈련 트렌드 Fitness(Fitness) 전 사용자 평균 (샘플 → stats_fitness_stelvio_rolling) ----------
-const { rebuildFitnessStelvioRollingStats, rebuildRunFitnessStelvioRollingStats } = require("./fitnessDemographicStats");
+const {
+  rebuildFitnessStelvioRollingStats,
+  rebuildRunFitnessStelvioRollingStats,
+  upsertFitnessDemographicSampleForUser,
+  backfillFitnessDemographicSamplesToSupabase,
+} = require("./fitnessDemographicStats");
+
+/** 클라이언트 Secondary relay — Firestore fitness_demographic_samples 저장 후 Supabase upsert */
+exports.ingestFitnessDemographicSampleRelay = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원" });
+      return;
+    }
+    try {
+      const uid = await getUidFromRequest(req, res);
+      if (!uid) return;
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const result = await upsertFitnessDemographicSampleForUser(uid, {
+        pmcModel: body.pmcModel,
+        latestCtl: body.latestCtl,
+        avgTrendCtl: body.avgTrendCtl,
+        avgTrendFitness: body.avgTrendFitness,
+      });
+      if (!result.ok) {
+        res.status(400).json({ success: false, ...result });
+        return;
+      }
+      res.status(200).json({ success: true, ...result });
+    } catch (e) {
+      console.warn("[ingestFitnessDemographicSampleRelay]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * Firestore fitness_demographic_samples → Supabase 1회 백필
+ * GET/POST ?secret=stelvio-internal-sync-v1 (또는 grade=1 Bearer)
+ */
+exports.backfillFitnessDemographicSamplesHttp = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 540, memory: "512MiB" }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Internal-Secret");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET" && req.method !== "POST") {
+      res.status(405).json({ success: false, error: "GET/POST만 지원" });
+      return;
+    }
+
+    const rawSecret = req.query.secret || req.headers["x-internal-secret"] || req.headers["X-Internal-Secret"];
+    let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+    const db = admin.firestore();
+    if (!authorized) {
+      const callerUid = await getUidFromRequest(req, res);
+      if (!callerUid) return;
+      const callerSnap = await db.collection("users").doc(callerUid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      if (grade !== "1") {
+        res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
+        return;
+      }
+      authorized = true;
+    }
+
+    try {
+      const r = await backfillFitnessDemographicSamplesToSupabase(db);
+      res.status(200).json({ success: true, ...r });
+    } catch (e) {
+      console.error("[backfillFitnessDemographicSamplesHttp]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 exports.rebuildFitnessStelvioRollingStats = onSchedule(
-  {
+  supabaseDualWriteServer.appendServiceRoleSecret({
     schedule: "30 4 * * *",
     timeZone: "Asia/Seoul",
     memory: "512MiB",
     timeoutSeconds: 540,
-  },
+  }),
   async () => {
     const db = admin.firestore();
     try {
