@@ -192,6 +192,7 @@
     return {
       userId: item.userId || item.firebaseUid,
       firebaseUid: item.firebaseUid || item.userId,
+      boardUserId: item.boardUserId,
       name: item.name,
       is_private: item.is_private != null ? item.is_private : item.isPrivate,
       profileImageUrl: item.profileUrl || item.profileImageUrl,
@@ -199,6 +200,49 @@
       rankChange: item.rankChange,
       previousBoardRank: item.previousBoardRank
     };
+  }
+
+  /** CYCLE stelvioRefreshWeeklyTop10RankChangeDom — ranking[] 페이로드 변환 */
+  function buildRankRefreshPayload(list, myItem) {
+    function rowFromItem(it) {
+      if (!it) return null;
+      return {
+        userId: String(it.firebaseUid || it.userId || ''),
+        rank: it.rank,
+        rankChange: it.rankChange,
+        previousBoardRank: it.previousBoardRank
+      };
+    }
+    var ranking = [];
+    var i;
+    for (i = 0; i < Math.min(10, (list || []).length); i++) {
+      var row = rowFromItem(list[i]);
+      if (row) ranking.push(row);
+    }
+    var payload = { ranking: ranking };
+    if (myItem && myItem.rank > 10) {
+      var myRow = rowFromItem(myItem);
+      if (myRow) payload.myRank = myRow;
+    }
+    return payload;
+  }
+
+  /** CYCLE fetchAndShowWeeklyTop10Modal renderTop10 — DOM 등락 재주입(모바일 WebView) */
+  function refreshRankChangeDom(bodyEl, list, myItem) {
+    if (!bodyEl || typeof window.stelvioRefreshWeeklyTop10RankChangeDom !== 'function') return;
+    var payload = buildRankRefreshPayload(list, myItem);
+    window.stelvioRefreshWeeklyTop10RankChangeDom(bodyEl, payload);
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        window.stelvioRefreshWeeklyTop10RankChangeDom(bodyEl, payload);
+      });
+    });
+    setTimeout(function () {
+      window.stelvioRefreshWeeklyTop10RankChangeDom(bodyEl, payload);
+    }, 600);
+    setTimeout(function () {
+      window.stelvioRefreshWeeklyTop10RankChangeDom(bodyEl, payload);
+    }, 1500);
   }
 
   /** 리더보드 rows → 주간 거리 랭킹 목록 (등락 적용 완료) */
@@ -380,6 +424,8 @@
     }
 
     body.innerHTML = html;
+
+    refreshRankChangeDom(body, list, myItem);
 
     if (myItem) {
       requestAnimationFrame(function () {

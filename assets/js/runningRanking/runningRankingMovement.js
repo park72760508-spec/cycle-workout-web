@@ -130,9 +130,16 @@
   function lookupSnapValForListItem(map, item) {
     if (!map || !item) return null;
     var ids = [];
+    if (item.boardUserId != null && String(item.boardUserId).trim()) {
+      ids.push(String(item.boardUserId).trim());
+    }
     if (item.userId != null && String(item.userId).trim()) ids.push(String(item.userId).trim());
-    if (item.socialUserId != null && String(item.socialUserId).trim()) ids.push(String(item.socialUserId).trim());
-    if (item.firebaseUid != null && String(item.firebaseUid).trim()) ids.push(String(item.firebaseUid).trim());
+    if (item.socialUserId != null && String(item.socialUserId).trim()) {
+      ids.push(String(item.socialUserId).trim());
+    }
+    if (item.firebaseUid != null && String(item.firebaseUid).trim()) {
+      ids.push(String(item.firebaseUid).trim());
+    }
     var i;
     for (i = 0; i < ids.length; i++) {
       var v = lookupSnapVal(map, ids[i]);
@@ -339,10 +346,12 @@
     var ranks = {};
     list.forEach(function (item) {
       if (!item || item.rank == null) return;
+      var rankVal = Math.floor(Number(item.rank));
       if (tabId === 'crew') {
-        if (item.crewId) ranks[String(item.crewId)] = Math.floor(Number(item.rank));
-      } else if (item.userId && !item.isCrew) {
-        ranks[String(item.userId)] = Math.floor(Number(item.rank));
+        if (item.crewId) ranks[String(item.crewId)] = rankVal;
+      } else {
+        var snapId = item.boardUserId || item.userId;
+        if (snapId && !item.isCrew) ranks[String(snapId)] = rankVal;
       }
     });
 
