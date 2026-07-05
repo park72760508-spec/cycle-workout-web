@@ -49,10 +49,7 @@ const PEAK_WKG_COLUMN = {
   max: "peak_max_wkg",
 };
 
-/** @type {Map<string, string>|null} uuid → firebaseUid */
-let uuidToFirebaseCache = null;
-let uuidMapLoadedAt = 0;
-const UUID_MAP_TTL_MS = 5 * 60 * 1000;
+const supabaseUidMap = require("./supabaseUidMap");
 
 function getUidConfig() {
   return {
@@ -76,31 +73,11 @@ function resolveUuid(firebaseUid) {
 }
 
 /**
- * v5 UUID → Firebase UID 역매핑 (users 전체 1회 스캔, 5분 캐시).
+ * v5 UUID → Firebase UID 역매핑 — Supabase users.firebase_uid (5분 캐시).
  * @param {import('firebase-admin')} admin
  */
 async function getFirebaseUidByUuidMap(admin) {
-  const now = Date.now();
-  if (uuidToFirebaseCache && now - uuidMapLoadedAt < UUID_MAP_TTL_MS) {
-    return uuidToFirebaseCache;
-  }
-  const { v5: uuidv5 } = require("uuid");
-  const cfg = getUidConfig();
-  const map = new Map();
-  const snap = await admin.firestore().collection("users").select().get();
-  snap.docs.forEach((doc) => {
-    const fbUid = doc.id;
-    let uuid;
-    if (cfg.uidMode === "literal" || /^[0-9a-f-]{36}$/i.test(fbUid)) {
-      uuid = fbUid.toLowerCase();
-    } else {
-      uuid = uuidv5(fbUid, cfg.uidNamespace);
-    }
-    map.set(uuid, fbUid);
-  });
-  uuidToFirebaseCache = map;
-  uuidMapLoadedAt = now;
-  return map;
+  return supabaseUidMap.getUuidToFirebaseUidMap(admin);
 }
 
 /**
@@ -1630,8 +1607,7 @@ async function attachGcHeptagonMeta(admin, payload, deps) {
 }
 
 function resetUuidMapCacheForTests() {
-  uuidToFirebaseCache = null;
-  uuidMapLoadedAt = 0;
+  supabaseUidMap.resetUuidToFirebaseUidMapCache();
 }
 
 module.exports = {

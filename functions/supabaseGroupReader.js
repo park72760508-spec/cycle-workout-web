@@ -4,26 +4,10 @@
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const groupResponseAdapter = require("./groupResponseAdapter");
 
-/** @type {Map<string, string>} uuid → firebase uid */
-let uuidToFirebaseCache = { map: new Map(), loadedAt: 0 };
-const UUID_CACHE_MS = 5 * 60 * 1000;
+const supabaseUidMap = require("./supabaseUidMap");
 
 async function getUuidToFirebaseMap(admin) {
-  const now = Date.now();
-  if (now - uuidToFirebaseCache.loadedAt < UUID_CACHE_MS && uuidToFirebaseCache.map.size) {
-    return uuidToFirebaseCache.map;
-  }
-  const map = new Map();
-  const snap = await admin.firestore().collection("users").select().get();
-  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
-  const mode = supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
-  snap.forEach((doc) => {
-    const uid = doc.id;
-    const uuid = supabaseDualWriteServer.resolveUserUuid(uid, ns, mode);
-    if (uuid) map.set(String(uuid).toLowerCase(), uid);
-  });
-  uuidToFirebaseCache = { map, loadedAt: now };
-  return map;
+  return supabaseUidMap.getUuidToFirebaseUidMap(admin);
 }
 
 function attachFirebaseUids(row, uuidMap, fields) {
