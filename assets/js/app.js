@@ -8037,6 +8037,9 @@ function oneLogPerDayPreferStravaFallback(logs) {
       if (typeof window.updateSettingsGeminiApiStatusLine === 'function') {
         window.updateSettingsGeminiApiStatusLine();
       }
+      if (typeof window.updateSettingsStravaStatusLine === 'function') {
+        window.updateSettingsStravaStatusLine();
+      }
       var modal = document.getElementById('settingsModal');
       var cur = window.currentUser || (function () {
         try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (_e) { return null; }
@@ -15736,6 +15739,15 @@ function openSettingsModal() {
     // 저장된 API 키 로드
     loadGeminiApiKeyToSettings();
   }
+  if (typeof window.refreshCurrentUserFromFirestore === 'function') {
+    window.refreshCurrentUserFromFirestore('settings-open').then(function () {
+      if (typeof updateSettingsStravaStatusLine === 'function') updateSettingsStravaStatusLine();
+    }).catch(function () {
+      if (typeof updateSettingsStravaStatusLine === 'function') updateSettingsStravaStatusLine();
+    });
+  } else if (typeof updateSettingsStravaStatusLine === 'function') {
+    updateSettingsStravaStatusLine();
+  }
   if (typeof window.syncSettingsProfileSectionVisibility === 'function') {
     window.syncSettingsProfileSectionVisibility();
   }
@@ -15803,6 +15815,7 @@ function refreshSettingsModalAdminExtras() {
     }
     ensureStelvioAdminAccessStatsButton();
     if (typeof updateSettingsGeminiApiStatusLine === 'function') updateSettingsGeminiApiStatusLine();
+    if (typeof updateSettingsStravaStatusLine === 'function') updateSettingsStravaStatusLine();
   } catch (e) {}
 }
 window.refreshSettingsModalAdminExtras = refreshSettingsModalAdminExtras;
@@ -16124,6 +16137,41 @@ function updateSettingsGeminiApiStatusLine() {
 }
 window.updateSettingsGeminiApiStatusLine = updateSettingsGeminiApiStatusLine;
 
+/** 환경설정: Strava 연결·토큰 무효(재연결 필요) 상태 안내 */
+function updateSettingsStravaStatusLine() {
+  const el = document.getElementById('settingsStravaStatusLine');
+  if (!el) return;
+  const uid =
+    (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid && String(window.authV9.currentUser.uid)) ||
+    (window.currentUser && window.currentUser.id != null && String(window.currentUser.id)) ||
+    null;
+  let cu = window.currentUser || null;
+  if (uid && window.users && Array.isArray(window.users)) {
+    const row = window.users.find(function (u) {
+      return u && String(u.id) === String(uid);
+    });
+    if (row) cu = Object.assign({}, cu || {}, row);
+  }
+  const hasStrava =
+    cu &&
+    typeof userHasStravaConnected === 'function' &&
+    userHasStravaConnected(cu);
+  const authInvalid = !!(cu && cu.strava_auth_invalid === true);
+  if (authInvalid) {
+    el.textContent = 'Strava 토큰이 만료되었습니다. 위 버튼으로 다시 연결하면 누락된 활동이 자동 수집됩니다.';
+    el.style.color = '#b45309';
+    return;
+  }
+  if (hasStrava) {
+    el.textContent = 'Strava 연결됨 — 활동이 자동으로 수집됩니다.';
+    el.style.color = '#15803d';
+    return;
+  }
+  el.textContent = 'Strava 미연결 — 연결하면 훈련 기록이 자동으로 반영됩니다.';
+  el.style.color = '#64748b';
+}
+window.updateSettingsStravaStatusLine = updateSettingsStravaStatusLine;
+
 function loadGeminiApiKeyToSettings() {
   const apiKey = localStorage.getItem('geminiApiKey');
   const apiKeyInput = document.getElementById('settingsGeminiApiKey');
@@ -16135,6 +16183,7 @@ function loadGeminiApiKeyToSettings() {
     }
   }
   if (typeof updateSettingsGeminiApiStatusLine === 'function') updateSettingsGeminiApiStatusLine();
+  if (typeof updateSettingsStravaStatusLine === 'function') updateSettingsStravaStatusLine();
 }
 
 function resetApiKeyFromSettings() {

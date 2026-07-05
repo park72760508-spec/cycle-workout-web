@@ -71,114 +71,21 @@ async function refreshStravaTokenForUser(userId, refreshToken) {
   }
 
   // Cloud Function으로 토큰 갱신 (서버에서만 Client Secret 사용)
-  // onRequest로 변경되어 fetch로 호출
-  const functionsV9 = typeof window !== 'undefined' && window.functionsV9;
-  if (functionsV9) {
-    try {
-      // Functions URL 구성 (onRequest는 직접 HTTP 엔드포인트)
-      const url = `https://us-central1-stelvio-ai.cloudfunctions.net/refreshStravaToken`;
-      
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      
-      const data = await res.json();
-      if (res.ok && data.success) {
-        return { success: true, accessToken: data.accessToken };
-      }
-      return { success: false, error: data.error || '토큰 갱신 실패' };
-    } catch (err) {
-      console.error('[refreshStravaTokenForUser] Cloud Function 오류:', err);
-      return { success: false, error: err.message || '알 수 없는 오류' };
-    }
-  }
-
-  // 폴백: 클라이언트에서 직접 Strava API 호출 (config.local.js 필요)
-  if (!refreshToken) {
-    return { success: false, error: 'userId와 refresh_token이 필요합니다.' };
-  }
-  const STRAVA_CLIENT_ID = (typeof window !== 'undefined' && window.STRAVA_CLIENT_ID) || '';
-  const STRAVA_CLIENT_SECRET = (typeof window !== 'undefined' && window.STRAVA_CLIENT_SECRET) || '';
-  if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
-    console.warn('[Strava] STRAVA_CLIENT_ID 또는 STRAVA_CLIENT_SECRET이 없습니다. config.local.js 또는 Firestore appConfig/strava를 설정하세요.');
-    return { success: false, error: 'Strava 설정이 없습니다. config.local.js를 설정하세요.' };
-  }
-  const tokenUrl = 'https://www.strava.com/api/v3/oauth/token';
-  const payload = new URLSearchParams({
-    client_id: STRAVA_CLIENT_ID,
-    client_secret: STRAVA_CLIENT_SECRET,
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken
-  });
-
+  const refreshUrl = 'https://us-central1-stelvio-ai.cloudfunctions.net/refreshStravaToken';
   try {
-    const response = await fetch(tokenUrl, {
+    const res = await fetch(refreshUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: payload.toString()
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      try {
-        const errJson = JSON.parse(errorText);
-        return { success: false, error: errJson.message || `Strava token error: ${response.status}` };
-      } catch (e) {
-        return { success: false, error: `Strava token error: ${response.status} ${errorText}` };
-      }
+    const data = await res.json().catch(function () { return {}; });
+    if (res.ok && data.success) {
+      return { success: true, accessToken: data.accessToken };
     }
-
-    const tokenData = await response.json();
-    const accessToken = tokenData.access_token || '';
-    const newRefreshToken = tokenData.refresh_token || refreshToken;
-    const expiresAt = tokenData.expires_at != null ? Number(tokenData.expires_at) : 0;
-
-    if (!accessToken) {
-      return { success: false, error: 'Strava에서 access_token을 받지 못했습니다.' };
-    }
-
-    // Firebase Firestore에 새 토큰 저장
-    try {
-      const usersCollection = getUsersCollection();
-      const userDocRef = usersCollection.doc(userId);
-      
-      // 문서 존재 여부 확인
-      const userDoc = await userDocRef.get();
-      
-      if (!userDoc.exists) {
-        console.error('[refreshStravaTokenForUser] ❌ 사용자 문서가 존재하지 않습니다:', userId);
-        return { success: false, error: 'User not found' };
-      }
-      
-      // 문서가 존재하면 토큰 업데이트
-      await userDocRef.update({
-        strava_access_token: accessToken,
-        strava_refresh_token: newRefreshToken,
-        strava_expires_at: expiresAt
-      });
-
-      console.log('[refreshStravaTokenForUser] ✅ 토큰 갱신 및 저장 완료:', userId);
-      return { success: true, accessToken: accessToken };
-    } catch (firebaseError) {
-      console.error('[refreshStravaTokenForUser] ❌ Firebase 저장 실패:', firebaseError);
-      
-      // "User not found" 오류를 명확히 전달
-      if (firebaseError.code === 'not-found' || 
-          firebaseError.code === 'permission-denied' ||
-          firebaseError.message?.includes('not found') ||
-          firebaseError.message?.includes('No document to update')) {
-        return { success: false, error: 'User not found' };
-      }
-      
-      return { success: false, error: 'Firebase 저장 실패: ' + firebaseError.message };
-    }
-  } catch (error) {
-    console.error('[refreshStravaTokenForUser] ❌ 토큰 요청 실패:', error);
-    return { success: false, error: 'Strava 토큰 요청 실패: ' + (error.message || error) };
+    return { success: false, error: data.error || '토큰 갱신 실패' };
+  } catch (err) {
+    console.error('[refreshStravaTokenForUser] Cloud Function 오류:', err);
+    return { success: false, error: err.message || '알 수 없는 오류' };
   }
 }
 
