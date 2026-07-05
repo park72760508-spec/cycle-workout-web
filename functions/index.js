@@ -10161,6 +10161,35 @@ exports.getRunningLeaderboard = onRequest(
       const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
       const runningRankingMovement = require("./runningRankingMovement");
       const peakMovement = require("./rankingPeakMovement");
+      const weekParam = (req.query && req.query.week) || "";
+      const usePrevWeek = weekParam === "prev";
+
+      if (usePrevWeek) {
+        const { startStr, endStr } = getWeekRangeSeoul(-1);
+        const prevRes = await supabase.rpc("get_running_weekly_distance_leaderboard", {
+          p_week_offset: -1,
+        });
+        if (prevRes.error) {
+          console.error("[getRunningLeaderboard] prev week", prevRes.error);
+          return res.status(500).json({ success: false, error: prevRes.error.message });
+        }
+        const leaderboard = Array.isArray(prevRes.data) ? prevRes.data : [];
+        res.set("Cache-Control", "public, max-age=300, s-maxage=300");
+        return res.status(200).json({
+          success: true,
+          leaderboard,
+          leaderboardSource: "prev_week_live",
+          leaderboardAsOfSeoul: endStr,
+          leaderboardAggregatedAt: new Date().toISOString(),
+          prevWeekFallback: true,
+          weekStartStr: startStr,
+          weekEndStr: endStr,
+          rankMovementSource: "supabase",
+          rankMovementAsOfSeoul: endStr,
+          rankMovementByKey: {},
+        });
+      }
+
       const [lbRes, snapRes] = await Promise.all([
         supabase.rpc("get_running_leaderboard_published"),
         runningRankingMovement.fetchAllRunRankSnapshots(),
