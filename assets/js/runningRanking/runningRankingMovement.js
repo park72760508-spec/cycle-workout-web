@@ -195,8 +195,14 @@
     if (snapAsOf && lbAsOf && snapAsOf < lbAsOf) {
       return nonEmptyMap(ownRanks) || nonEmptyMap(prevDay) || nonEmptyMap(previous);
     }
-    /* 스냅샷 == 표시 보드(동일 집계일) → 전일 baseline */
-    return nonEmptyMap(prevDay) || nonEmptyMap(previous) || nonEmptyMap(ownRanks);
+    /*
+     * 스냅샷 == 표시 보드(동일 집계일) → 전일 baseline.
+     * 여기서 ownRanks 는 "표시 중인 현재 보드 그 자체"이므로 baseline 으로 쓰면
+     * prev === curr 가 되어 전원 (-) 보합으로만 표기되는 퇴행이 발생한다.
+     * 따라서 동일 집계일에는 ownRanks 폴백을 쓰지 않고, 전일 baseline 이 없으면
+     * null 을 반환해 localStorage(실제 직전일 보드) 폴백으로 넘긴다.
+     */
+    return nonEmptyMap(prevDay) || nonEmptyMap(previous);
   }
 
   function baselinePrevRankForItem(baseline, item, tabId) {
@@ -257,7 +263,7 @@
         tabId: tabId
       };
     } catch (eDbg) {}
-    return filled;
+    return { filled: filled, up: up, down: down, flat: flat };
   }
 
   function applyFromServerSnap(list, tabId, opts, rankMovementByKey) {
@@ -279,8 +285,19 @@
       item.previousBoardRank = null;
     });
 
-    var filled = applyAbsoluteMovement(list, baseline, tabId);
-    if (!filled) return false; /* 공통 사용자 없음 → localStorage 폴백 */
+    var mv = applyAbsoluteMovement(list, baseline, tabId);
+    if (!mv.filled) return false; /* 공통 사용자 없음 → localStorage 폴백 */
+
+    /*
+     * 서버 baseline 이 현재 표시 보드와 사실상 동일(자기 자신 비교)이면 3명 이상이
+     * 전원 보합(up=0·down=0)으로만 나온다. 이는 정상 등락이 아니라 baseline 퇴행이므로
+     * 등락을 비우고 localStorage(실제 직전일 보드) 폴백으로 넘긴다.
+     * (CYCLE stelvioPeakRankMovementIsAllFlat 방어와 동일한 취지)
+     */
+    if (mv.filled >= 3 && mv.up === 0 && mv.down === 0) {
+      clearRankMovementFields(list);
+      return false;
+    }
 
     normalizeListRankMovement(list);
     /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */

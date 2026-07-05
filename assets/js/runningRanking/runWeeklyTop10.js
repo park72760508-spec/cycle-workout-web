@@ -268,8 +268,10 @@
     return snap;
   }
 
+  /** @returns {number} 냉동 스냅샷과 매칭되어 등락이 채워진 항목 수 */
   function applyRankMvSnap(list, snap) {
-    if (!list || !list.length || !snap) return;
+    if (!list || !list.length || !snap) return 0;
+    var matched = 0;
     list.forEach(function (it) {
       if (!it) return;
       var ids = [it.boardUserId, it.firebaseUid, it.userId, it.socialUserId];
@@ -284,11 +286,13 @@
       if (pk) {
         it.rankChange = pk.rankChange;
         it.previousBoardRank = pk.previousBoardRank;
+        matched++;
       } else {
         it.rankChange = null;
         it.previousBoardRank = null;
       }
     });
+    return matched;
   }
 
   function loadWeekRankMvCache(weekStartStr) {
@@ -378,8 +382,11 @@
         /* 순위 확정(일 21시~) — 21시 이전에 저장된 등락 스냅샷 고정 표시 (CYCLE weeklyTop10 캐시 등락) */
         var frozen = loadWeekRankMvCache(weekStartStr);
         if (frozen && hasUsableRankMvSnap(frozen.snap)) {
-          applyRankMvSnap(list, frozen.snap);
-          return list;
+          /* 냉동 스냅샷이 현재 목록과 하나라도 매칭될 때만 확정 등락으로 사용.
+             매칭 0건이면 (예: 캐시 식별자 불일치) 아래 라이브 등락 계산으로 폴백 */
+          if (applyRankMvSnap(list, frozen.snap) > 0) {
+            return list;
+          }
         }
       }
 
