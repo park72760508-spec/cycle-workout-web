@@ -101,6 +101,8 @@
   var FIRESTORE_MOD_VO2_STATS = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
   var VO2_DEMOGRAPHIC_SAMPLE_RELAY =
     'https://us-central1-stelvio-ai.cloudfunctions.net/ingestVo2DemographicSampleRelay';
+  var FITNESS_DEMOGRAPHIC_SAMPLE_RELAY =
+    'https://us-central1-stelvio-ai.cloudfunctions.net/ingestFitnessDemographicSampleRelay';
   var firestoreModVo2StatsPromise = null;
   function getFirestoreModVo2Stats() {
     if (!firestoreModVo2StatsPromise) firestoreModVo2StatsPromise = import(FIRESTORE_MOD_VO2_STATS);
@@ -279,6 +281,32 @@
       .catch(function () {});
   }
 
+  /** Firestore Primary 성공 후 Supabase Secondary relay (Fault Isolated) */
+  function relayFitnessDemographicSampleToSupabase(samplePayload) {
+    var auth = global.authV9;
+    if (!auth || !auth.currentUser || typeof auth.currentUser.getIdToken !== 'function') {
+      return Promise.resolve();
+    }
+    return auth.currentUser
+      .getIdToken()
+      .then(function (token) {
+        return fetch(FITNESS_DEMOGRAPHIC_SAMPLE_RELAY, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            pmcModel: samplePayload.pmcModel,
+            latestCtl: samplePayload.latestCtl,
+            avgTrendCtl: samplePayload.avgTrendCtl,
+            avgTrendFitness: samplePayload.avgTrendFitness
+          })
+        });
+      })
+      .catch(function () {});
+  }
+
   /**
    * 대시보드 훈련 트렌드(최근 1개월) 차트와 동일한 버킷별 Fitness → 산술평균을 기여(본인 문서만).
    * @param {Object} userProfile
@@ -304,16 +332,19 @@
       vals.reduce(function (a, b) {
         return a + b;
       }, 0) / vals.length;
+    var samplePayload = {
+      avgTrendFitness: Math.round(avgTrend * 10) / 10
+    };
     return getFirestoreModVo2Stats()
       .then(function (mod) {
         return mod.setDoc(
           mod.doc(db, 'fitness_demographic_samples', uid),
-          {
-            avgTrendFitness: Math.round(avgTrend * 10) / 10,
-            updatedAt: mod.serverTimestamp(),
-          },
+          Object.assign({}, samplePayload, { updatedAt: mod.serverTimestamp() }),
           { merge: true }
         );
+      })
+      .then(function () {
+        relayFitnessDemographicSampleToSupabase(samplePayload).catch(function () {});
       })
       .catch(function () {});
   }
