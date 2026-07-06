@@ -179,6 +179,31 @@
     return item.profileUrl || item.profileImageUrl || null;
   }
 
+  /**
+   * 등락 표시 최종 정합화 — 표시 순위(item.rank)를 절대 기준으로 rankChange 를 재도출한다.
+   * rankChange = previousBoardRank(전날 순위) - rank(현재 순위).
+   * 서버/캐시가 넘겨준 등락이 현재 표시 순위와 어긋나도(예: 서버 스냅샷 prev=7·rc=-6 인데 실제 2위),
+   * 이 강제 정합화로 1·2위가 하락(↓)으로 표기되는 모순을 원천 차단한다.
+   * previousBoardRank 가 유효하지 않으면(1 미만/누락) 등락 미표기.
+   */
+  function enforceRankMovementConsistency(item) {
+    if (!item) return;
+    if (item.previousBoardRank == null || item.rank == null) {
+      item.rankChange = null;
+      item.previousBoardRank = null;
+      return;
+    }
+    var prev = Math.floor(Number(item.previousBoardRank));
+    var curr = Math.floor(Number(item.rank));
+    if (!isFinite(prev) || prev < 1 || !isFinite(curr) || curr < 1) {
+      item.rankChange = null;
+      item.previousBoardRank = null;
+      return;
+    }
+    item.previousBoardRank = prev;
+    item.rankChange = prev - curr;
+  }
+
   /** CYCLE weeklyTop10 renderTop10 — stelvioWeeklyTop10RankChangeBadgeHtml 우선 */
   function weeklyRankChangeTightHtml(item, boardRank) {
     if (typeof window.stelvioWeeklyTop10RankChangeBadgeHtml === 'function') {
@@ -513,6 +538,10 @@
     if (!list || !list.length) {
       return false;
     }
+
+    /* 렌더 직전 등락 최종 정합화 — 표시 순위 기준으로 강제(rowHtml·DOM 재주입 모두 동일 데이터 사용).
+       서버/캐시의 오래된 등락이 남아 있어도 1·2위가 하락(↓)으로 표기되는 모순을 차단한다. */
+    for (var ci = 0; ci < list.length; ci++) enforceRankMovementConsistency(list[ci]);
 
     var wk = isPrevWeek
       ? (renderOpts.weekStartStr && renderOpts.weekEndStr
