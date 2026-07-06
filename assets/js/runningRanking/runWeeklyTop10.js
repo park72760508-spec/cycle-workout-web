@@ -11,7 +11,7 @@
 
   var LS_DONT_SHOW = 'runWeeklyTop10DontShowDate';
   /** 일요일 21시 순위 확정 이후 — 21시 직전 등락 스냅샷 재사용 (CYCLE weeklyTop10 캐시 등락과 동일 개념) */
-  var LS_RANK_MV_PREFIX = 'runWeeklyTop10RankMv:v1:';
+  var LS_RANK_MV_PREFIX = 'runWeeklyTop10RankMv:v2:';
 
   function cfg() { return window.runningRankingConfig || {}; }
   function fmt() { return window.runningRankingFormat || {}; }
@@ -100,6 +100,12 @@
     var rc = Number(item.rankChange);
     var prev = Math.floor(Number(item.previousBoardRank));
     if (!isFinite(rc) || !isFinite(prev) || prev < 1) return '';
+    /* 표시 순위(전날 순위 - 등락 === 현재순위) 검증 — 어긋나면 현재 순위 기준으로 등락 재도출.
+       (서버/캐시의 오래된 등락값으로 1위가 하락(↓)으로 표기되는 것을 방지) */
+    var curr = item.rank != null && isFinite(Number(item.rank)) ? Math.floor(Number(item.rank)) : null;
+    if (curr != null && curr >= 1 && prev - rc !== curr) {
+      rc = prev - curr;
+    }
     if (rc > 0) {
       return '<span class="stelvio-rank-change stelvio-rank-change--up weekly-rank-change-tight" style="margin-left:0;margin-right:0;" title="전날 ' + prev + '위">(↑' + rc + ')</span>';
     }

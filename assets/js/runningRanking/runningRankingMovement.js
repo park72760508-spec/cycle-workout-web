@@ -420,11 +420,20 @@
      * 1순위: 서버 공식 등락(rankChangesByCategory) 그대로 사용 — CYCLE GC 와 동일한 서버 우선 원칙.
      * 라이브 보드가 스냅샷 보드와 같아 클라이언트 재계산이 전원 보합이 되는 상황에서도,
      * 서버가 담아둔 실제 상승/하락/보합을 표기한다. (렌더 계층이 현재 순위 기준으로 검증)
+     *
+     * 단, weekly_distance(주간 마일리지 TOP10 모달)는 제외한다.
+     * 이 보드는 "이번 주 실시간 누적 거리" 순위라 서버 스냅샷(어제/그제 기준)의 등락값과
+     * 현재 표시 순위가 어긋난다. 그 값을 그대로 쓰면 렌더 계층(stelvioNormalizeRankMovementOnRow)이
+     * 표시 순위 대신 서버 등락을 신뢰해 rank 를 덮어써, 실제 1위가 (↓N)으로 표기되는 오류가 난다.
+     * → 아래 baseline(전일 보드) 재계산으로만 등락을 산출해 항상 현재 순위와 일치시킨다.
+     * (previousBoardRank - rankChange === 현재순위 보장 → 1위는 절대 하락으로 표기되지 않음)
      */
-    var serverFilled = applyServerComputedMovement(list, snap, cat, tabId);
-    if (serverFilled > 0) {
-      /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */
-      return true;
+    if (tabId !== 'weekly_distance') {
+      var serverFilled = applyServerComputedMovement(list, snap, cat, tabId);
+      if (serverFilled > 0) {
+        /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */
+        return true;
+      }
     }
 
     /* 2순위: 서버 공식 등락이 비면 baseline 재계산(생존 코호트/절대순위) */
