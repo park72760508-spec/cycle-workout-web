@@ -331,12 +331,14 @@
   }
 
   /*
-   * 절대순위 탭 = TSS 보드 탭만(07-01 결정: 주간 누적 TSS 는 신규 진입 하락을 그대로 표기).
-   * 종합·구간·거리·크루·주간거리(TOP10 모달) = 생존 코호트 재순위 →
-   * 모집단 증가 편향을 제거해 상승/하락/보합(-)이 균형 있게 표기된다.
+   * 절대순위 탭 = TSS 보드 · 주간 마일리지 TOP10 모달(weekly_distance).
+   *   - 전날 "절대순위" vs 현재 "절대순위"를 직접 비교(rankChange = 전날순위 - 현재순위).
+   *   - 전날 보드에 없던 사용자(신규 진입)는 등락 미표기.
+   *   - 신규 진입으로 밀려난 하락도 "실제 등락"으로 그대로 표기한다(사용자 요청, 07-06).
+   * 종합·구간·크루 = 생존 코호트 재순위(모집단 증가 편향 제거).
    */
   function useAbsoluteMovementForTab(tabId) {
-    return tabId === 'tss';
+    return tabId === 'tss' || tabId === 'weekly_distance';
   }
 
   function applyMovementForTab(list, baseline, tabId) {
@@ -510,7 +512,7 @@
       item.previousBoardRank = null;
     });
 
-    /* 서버 스냅샷과 동일한 탭별 방식(종합·구간·거리·크루=생존 코호트, tss·주간거리=절대순위) */
+    /* 서버 스냅샷과 동일한 탭별 방식(종합·구간·크루=생존 코호트, tss·주간 마일리지=절대순위) */
     if (prevRanks) applyMovementForTab(list, prevRanks, tabId);
 
     normalizeListRankMovement(list);
