@@ -13820,26 +13820,18 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 
 .profile-list-col-category {
   flex: 0 0 auto;
-  min-width: 4.5em;
-  font-size: .78rem;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 6px;
-  text-align: center;
-  color: #fff;
-  background: #94a3b8;
+  min-width: 2.4em;
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
-.profile-list-category--CYCLE {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.profile-list-category--RUN {
-  background: #e53935;
-}
-
-.profile-list-category--CYCLE-RUN {
-  background: #6b7280;
+.profile-list-category-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
 }
 
 .profile-list-col-name {
