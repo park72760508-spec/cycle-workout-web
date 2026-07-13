@@ -756,6 +756,20 @@ function setProfileScreenListMode(mode) {
     mode === PROFILE_LIST_MODE_WITHDRAWN ? PROFILE_LIST_MODE_WITHDRAWN : PROFILE_LIST_MODE_ALL;
 }
 
+var PROFILE_VIEW_MODE_CARD = 'card';
+var PROFILE_VIEW_MODE_LIST = 'list';
+
+function getProfileScreenViewMode() {
+  return window._profileScreenViewMode === PROFILE_VIEW_MODE_LIST
+    ? PROFILE_VIEW_MODE_LIST
+    : PROFILE_VIEW_MODE_CARD;
+}
+
+function setProfileScreenViewMode(mode) {
+  window._profileScreenViewMode =
+    mode === PROFILE_VIEW_MODE_LIST ? PROFILE_VIEW_MODE_LIST : PROFILE_VIEW_MODE_CARD;
+}
+
 function getProfileScreenUsersForListMode(baseUsers) {
   var base = Array.isArray(baseUsers) ? baseUsers : window._profileScreenUsersBase || [];
   if (getProfileScreenListMode() === PROFILE_LIST_MODE_WITHDRAWN) {
@@ -775,15 +789,16 @@ function renderProfileScreenSubtitle(stats) {
   var withdrawnCount = Number(stats.withdrawnCount) || 0;
   var mode = getProfileScreenListMode();
 
+  var html;
   if (mode === PROFILE_LIST_MODE_WITHDRAWN) {
-    el.innerHTML =
+    html =
       '탈퇴 명단 <strong>' +
       withdrawnCount +
       '</strong>명 · <button type="button" class="profile-subtitle-link" data-profile-list-mode="' +
       PROFILE_LIST_MODE_ALL +
       '">전체 목록 보기</button>';
   } else {
-    var html = '현재 가입자 수(활성) : ' + activeCount + ' 명 · 목록 ' + listCount + '명';
+    html = '현재 가입자 수(활성) : ' + activeCount + ' 명 · 목록 ' + listCount + '명';
     if (withdrawnCount > 0) {
       html +=
         '(<button type="button" class="profile-subtitle-link" data-profile-list-mode="' +
@@ -792,8 +807,22 @@ function renderProfileScreenSubtitle(stats) {
         withdrawnCount +
         '명</button> 포함)';
     }
-    el.innerHTML = html;
   }
+  var viewMode = getProfileScreenViewMode();
+  html +=
+    '<div class="profile-view-mode-toggle stelvio-gender-toggle">' +
+    '<button type="button" class="stelvio-toggle-btn' +
+    (viewMode === PROFILE_VIEW_MODE_CARD ? ' active' : '') +
+    '" data-profile-view-mode="' +
+    PROFILE_VIEW_MODE_CARD +
+    '">카드</button>' +
+    '<button type="button" class="stelvio-toggle-btn' +
+    (viewMode === PROFILE_VIEW_MODE_LIST ? ' active' : '') +
+    '" data-profile-view-mode="' +
+    PROFILE_VIEW_MODE_LIST +
+    '">리스트</button>' +
+    '</div>';
+  el.innerHTML = html;
   el.style.display = '';
 }
 
@@ -802,6 +831,18 @@ function bindProfileScreenSubtitleActions() {
   if (!el || el._profileSubtitleBound) return;
   el._profileSubtitleBound = true;
   el.addEventListener('click', function (ev) {
+    var viewBtn =
+      ev.target && typeof ev.target.closest === 'function'
+        ? ev.target.closest('[data-profile-view-mode]')
+        : null;
+    if (viewBtn) {
+      ev.preventDefault();
+      setProfileScreenViewMode(viewBtn.getAttribute('data-profile-view-mode'));
+      if (typeof refreshProfileScreenUserList === 'function') {
+        refreshProfileScreenUserList();
+      }
+      return;
+    }
     var btn =
       ev.target && typeof ev.target.closest === 'function'
         ? ev.target.closest('[data-profile-list-mode]')
@@ -889,7 +930,7 @@ function refreshProfileScreenUserList() {
       emptyTitle +
       '</div></div>';
   } else {
-    renderProfileUserCards(filtered, ctx.viewerGrade, ctx.viewerId);
+    renderProfileUserListOrCards(filtered, ctx.viewerGrade, ctx.viewerId);
     if (typeof window.refreshProfileMaxHrAndRerender === 'function') {
       window.refreshProfileMaxHrAndRerender(filtered, ctx.viewerGrade, ctx.viewerId).catch(function () {});
     }
@@ -3961,7 +4002,7 @@ function getSettingsProfileUsers(allUsers, viewerId) {
 function renderProfileUserListsForTargets(isLoginAdmin, visibleUsers, allUsers, profileCardGrade, viewerId, targetIds) {
   const ids = Array.isArray(targetIds) && targetIds.length ? targetIds : getProfileUserListTargetIds();
   if (ids.indexOf('userList') >= 0) {
-    renderProfileUserCards(
+    renderProfileUserListOrCards(
       isLoginAdmin ? getProfileScreenUsersForListMode() : visibleUsers,
       profileCardGrade,
       viewerId,
@@ -4157,6 +4198,92 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
   });
 }
 
+/** 프로필 선택 화면 리스트형 보기 — 카테고리·성명·연결·대시보드·보기·만료일 컬럼 */
+function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetIds, renderOpts) {
+  renderOpts = renderOpts || {};
+  const hideDashboard = !!renderOpts.hideDashboard;
+  const noSelectClick = !!renderOpts.noSelectClick;
+  let ids = Array.isArray(targetIds) && targetIds.length ? targetIds.slice() : getProfileUserListTargetIds();
+  const containers = ids.map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (!containers.length) return;
+  usersToRender = filterProfileListDisplayableUsers(usersToRender);
+
+  let hasAiKeyLocal = false;
+  try {
+    const key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
+    hasAiKeyLocal = !!(key && String(key).trim());
+  } catch (e) {}
+  const loginGradeForAiDot =
+    typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : '2';
+  const canEditFor = (u) => {
+    if (viewerGrade === '1') return true;
+    if (viewerGrade === '2' || viewerGrade === '3') return viewerId && String(u.id) === viewerId;
+    return false;
+  };
+  const showDashboardBtn = hideDashboard ? false : viewerGrade === '1';
+
+  const sorted = [...usersToRender].sort((a, b) =>
+    getProfileUserDisplayName(a).localeCompare(getProfileUserDisplayName(b), 'ko')
+  );
+  const rowsHtml = sorted.map(user => {
+    const displayName = getProfileUserDisplayName(user);
+    const category = normalizeUserSportCategory(user.category || user.sport_category);
+    const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
+    const hasAiForUser =
+      loginGradeForAiDot === '1'
+        ? userHasGeminiApiRegistered(user)
+        : hasAiKeyLocal || userHasGeminiApiRegistered(user);
+    const aiDot = hasAiForUser ? 'background:#22c55e' : 'background:#d1d5db';
+    const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
+    const expRaw = user.expiry_date;
+    let expiryText = '미설정';
+    let expiryClass = '';
+    if (expRaw) {
+      const expiryDate = new Date(expRaw);
+      const today = new Date();
+      expiryDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((expiryDate - today) / (24 * 60 * 60 * 1000));
+      expiryText = expiryDate.toLocaleDateString();
+      if (diffDays < 0) { expiryClass = 'is-expired'; } else if (diffDays === 0) { expiryClass = 'is-soon'; expiryText += ' (D-DAY)'; } else if (diffDays <= 7) { expiryClass = 'is-soon'; expiryText += ` (D-${diffDays})`; }
+    }
+    const isWithdrawnUser = typeof isUserWithdrawn === 'function' && isUserWithdrawn(user);
+    const rowClickAttrs = noSelectClick
+      ? ''
+      : ' data-user-id="' + user.id + '" onclick="selectUser(\'' + user.id + '\')" style="cursor:pointer;"';
+
+    return `
+      <div class="profile-list-row${isWithdrawnUser ? ' profile-list-row--withdrawn' : ''}"${rowClickAttrs}>
+        <span class="profile-list-col-category profile-list-category--${category.replace('+', '-')}">${category}</span>
+        <span class="profile-list-col-name" title="${displayName}">${displayName}</span>
+        <span class="profile-list-col-connect" title="AI 페어링 / Strava 연결">
+          <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링"></span>
+          <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결"></span>
+        </span>
+        <span class="profile-list-col-dashboard" onclick="event.stopPropagation();">
+          ${showDashboardBtn ? `<button class="profile-list-icon-btn" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기"><img src="assets/img/DASHBOARD.png" alt="대시보드" style="width:20px;height:20px;display:block;" /></button>` : ''}
+        </span>
+        <span class="profile-list-col-view" onclick="event.stopPropagation();">
+          ${canEditFor(user) ? `<button class="profile-list-icon-btn" onclick="editUser('${user.id}')" title="상세보기"><img src="assets/img/glass.svg" alt="보기" style="width:20px;height:20px;display:block;" /></button>` : ''}
+        </span>
+        <span class="profile-list-col-expiry ${expiryClass}">${expiryText}</span>
+      </div>
+    `;
+  }).join('');
+  containers.forEach(function (container) {
+    container.innerHTML = rowsHtml;
+  });
+}
+
+/** 프로필 선택 화면: 현재 보기 모드(카드/리스트)에 따라 렌더 함수 분기 */
+function renderProfileUserListOrCards(usersToRender, viewerGrade, viewerId, targetIds, renderOpts) {
+  if (getProfileScreenViewMode() === PROFILE_VIEW_MODE_LIST) {
+    renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetIds, renderOpts);
+  } else {
+    renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds, renderOpts);
+  }
+}
+
 /**
  * 프로필 화면: 사용자별 Max HR 비동기 조회 후 카드 재렌더링
  * yearly_peaks에서 조회 (MMP 업데이트 시 max_hr도 반영됨, 로그 스캔 대비 효율적)
@@ -4173,7 +4300,7 @@ async function refreshProfileMaxHrAndRerender(usersToRender, viewerGrade, viewer
     );
     return;
   }
-  renderProfileUserCards(
+  renderProfileUserListOrCards(
     usersToRender,
     viewerGrade,
     viewerId,
@@ -4203,7 +4330,7 @@ function searchProfileUsers() {
       var nameRaw = nameInput && nameInput.value ? String(nameInput.value).trim() : '';
       var contactRaw = contactInput && contactInput.value ? String(contactInput.value).trim() : '';
       var countEl = document.getElementById('userList');
-      var cardCount = countEl ? countEl.querySelectorAll('.user-card').length : allUsers.length;
+      var cardCount = countEl ? countEl.querySelectorAll('.user-card, .profile-list-row').length : allUsers.length;
       showToast(nameRaw || contactRaw ? '검색 결과 ' + cardCount + '명' : '전체 ' + cardCount + '명');
     }
     return;
