@@ -13797,6 +13797,101 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   box-shadow: 0 8px 25px rgba(46, 116, 232, 0.15);
 }
 
+#profileScreenSubtitle .profile-view-mode-toggle {
+  margin-top: 6px;
+}
+
+.profile-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+}
+
+.profile-list-row:last-child {
+  border-bottom: none;
+}
+
+.profile-list-row--withdrawn {
+  opacity: .55;
+}
+
+.profile-list-col-category {
+  flex: 0 0 auto;
+  min-width: 4.5em;
+  font-size: .78rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  text-align: center;
+  color: #fff;
+  background: #94a3b8;
+}
+
+.profile-list-category--CYCLE {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.profile-list-category--RUN {
+  background: #e53935;
+}
+
+.profile-list-category--CYCLE-RUN {
+  background: #6b7280;
+}
+
+.profile-list-col-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  color: #1f2937;
+  font-size: .9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-list-col-connect {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+}
+
+.profile-list-col-dashboard,
+.profile-list-col-view {
+  flex: 0 0 auto;
+  width: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.profile-list-icon-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.profile-list-col-expiry {
+  flex: 0 0 auto;
+  min-width: 6.5em;
+  text-align: right;
+  font-size: .82rem;
+  color: #6b7280;
+}
+
+.profile-list-col-expiry.is-soon {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.profile-list-col-expiry.is-expired {
+  color: #dc2626;
+  font-weight: 600;
+}
+
 .loading-text {
   animation: pulse 1.5s ease-in-out infinite;
 }
