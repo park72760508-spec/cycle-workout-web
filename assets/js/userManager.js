@@ -4228,6 +4228,13 @@ function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetI
   const rowsHtml = sorted.map(user => {
     const displayName = getProfileUserDisplayName(user);
     const category = normalizeUserSportCategory(user.category || user.sport_category);
+    let categoryIconsHtml = '';
+    if (category === USER_SPORT_CATEGORY_CYCLE || category === USER_SPORT_CATEGORY_DUAL) {
+      categoryIconsHtml += '<img src="assets/img/cycling.gif" alt="CYCLE" title="CYCLE" class="profile-list-category-icon" />';
+    }
+    if (category === USER_SPORT_CATEGORY_RUN || category === USER_SPORT_CATEGORY_DUAL) {
+      categoryIconsHtml += '<img src="assets/img/running.gif" alt="RUN" title="RUN" class="profile-list-category-icon" />';
+    }
     const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
     const hasAiForUser =
       loginGradeForAiDot === '1'
@@ -4254,7 +4261,7 @@ function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetI
 
     return `
       <div class="profile-list-row${isWithdrawnUser ? ' profile-list-row--withdrawn' : ''}"${rowClickAttrs}>
-        <span class="profile-list-col-category profile-list-category--${category.replace('+', '-')}">${category}</span>
+        <span class="profile-list-col-category">${categoryIconsHtml}</span>
         <span class="profile-list-col-name" title="${displayName}">${displayName}</span>
         <span class="profile-list-col-connect" title="AI 페어링 / Strava 연결">
           <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링"></span>
