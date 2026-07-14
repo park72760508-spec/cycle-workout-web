@@ -3568,7 +3568,9 @@ exports.manualStravaSyncWithMmp = onRequest(
     let totalProcessed = 0;
     let totalUpdated = 0;
     let totalCreated = 0;
+    let totalRunProcessed = 0;
     let globalApiCallCount = 0;
+    const processRunningActivityModule = require("./processRunningActivity");
     const userResults = [];
 
     for (const targetUid of userIdsToProcess) {
@@ -3724,6 +3726,7 @@ exports.manualStravaSyncWithMmp = onRequest(
     let processedCount = 0;
     let updatedCount = 0;
     let createdCount = 0;
+    let runProcessedCount = 0;
     let userTss = 0;
 
     for (const act of activitiesToProcess) {
@@ -3864,10 +3867,35 @@ exports.manualStravaSyncWithMmp = onRequest(
           await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
           continue;
         }
+        const activity = detailRes.activity;
+
+        // Run/VirtualRun/TrailRun → 기존 러닝 파이프라인 재사용 (웹훅·벌크동기화와 동일 경로)
+        if (processRunningActivityModule.isRunningStravaActivityType(activity.type, activity.sport_type)) {
+          const ownerId = Number(userData.strava_athlete_id);
+          if (ownerId) {
+            try {
+              await processRunningActivityModule.processRunningActivity(db, ownerId, actId, activity);
+              runProcessedCount += 1;
+              console.log(`[manualStravaSyncWithMmp] RUN 활동 저장 완료: uid=${uid} actId=${actId} activity_type=${activity.type}`);
+            } catch (runErr) {
+              console.warn(`[manualStravaSyncWithMmp] RUN ingest failed: uid=${uid} actId=${actId}`, runErr && runErr.message ? runErr.message : runErr);
+              const runYmd = rankingDayRollup.normalizeLogDateToSeoulYmd(activity.start_date_local || activity.start_date);
+              await stravaSyncRetry.markStravaSyncRetryPending(db, uid, {
+                dateFrom: runYmd,
+                dateTo: runYmd,
+                reason: "run_ingest_failed",
+                status: (runErr && runErr.status) || 500,
+                activityId: actId,
+              });
+            }
+          }
+          await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
+          continue;
+        }
+
         await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         apiCallCount += 1;
-        const activity = detailRes.activity;
         const mapped = mapStravaActivityToLogSchema(activity, uid, ftp, userData.weight ?? userData.weightKg);
         const rawWatts = streamsRes.success && Array.isArray(streamsRes.watts) ? streamsRes.watts : null;
         const wattsArray = rawWatts && rawWatts.length > 0 ? smoothPowerSpikes(rawWatts) : null;
@@ -3971,7 +3999,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (routeProfileManual.elevation_profile) logDoc.elevation_profile = routeProfileManual.elevation_profile;
           logDoc.route_profile_updated_at = routeProfileManual.route_profile_updated_at;
         }
-        // Run/Swim/Walk/TrailRun/WeightTraining 등 비라이딩 활동은 저장하지 않음
+        // Swim/Walk/WeightTraining 등 비라이딩 활동은 저장하지 않음 (Run/VirtualRun/TrailRun은 위에서 이미 처리됨)
         if (!isCyclingForMmp(mapped)) {
           console.log(`[manualStravaSyncWithMmp] 비라이딩 활동 저장 제외: uid=${uid} actId=${actId} activity_type=${mapped.activity_type}`);
           continue;
@@ -4053,6 +4081,7 @@ exports.manualStravaSyncWithMmp = onRequest(
     totalProcessed += processedCount;
     totalUpdated += updatedCount;
     totalCreated += createdCount;
+    totalRunProcessed += runProcessedCount;
     if (activitiesToProcess.length > 0) {
       userResults.push({
         userId: uid,
@@ -4063,6 +4092,7 @@ exports.manualStravaSyncWithMmp = onRequest(
         processedCount,
         updatedCount,
         createdCount,
+        runProcessedCount,
         dailyRouteMerges: dailyMergeResults,
       });
     }
@@ -4086,6 +4116,7 @@ exports.manualStravaSyncWithMmp = onRequest(
       processedCount: totalProcessed,
       updatedCount: totalUpdated,
       createdCount: totalCreated,
+      runProcessedCount: totalRunProcessed,
       hasMore,
       apiCallCount: globalApiCallCount,
       userResults,
