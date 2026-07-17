@@ -4230,10 +4230,10 @@ function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetI
     const category = normalizeUserSportCategory(user.category || user.sport_category);
     let categoryIconsHtml = '';
     if (category === USER_SPORT_CATEGORY_CYCLE || category === USER_SPORT_CATEGORY_DUAL) {
-      categoryIconsHtml += '<img src="assets/img/cycling.gif" alt="CYCLE" title="CYCLE" class="profile-list-category-icon" />';
+      categoryIconsHtml += '<img src="assets/img/cycling.png" alt="CYCLE" title="CYCLE" class="profile-list-category-icon" />';
     }
     if (category === USER_SPORT_CATEGORY_RUN || category === USER_SPORT_CATEGORY_DUAL) {
-      categoryIconsHtml += '<img src="assets/img/running.gif" alt="RUN" title="RUN" class="profile-list-category-icon" />';
+      categoryIconsHtml += '<img src="assets/img/running.png" alt="RUN" title="RUN" class="profile-list-category-icon" />';
     }
     const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
     const hasAiForUser =
