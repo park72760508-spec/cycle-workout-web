@@ -89,8 +89,12 @@ function toYmdSeoulFromRideDate(value) {
   return "";
 }
 
+const WEEKDAY_KR = ["일", "월", "화", "수", "목", "금", "토"];
+
 /**
- * 카카오 수신 예시와 동일: 5/5/26 9:00 (M/D/YY H:mm 또는 HH:mm)
+ * 발송 형식: 2026/5/26(토) 07:00 (YYYY/M/D(요일) H:mm 또는 HH:mm)
+ * ※ #{meetup_datetime}은 승인 템플릿의 고정 문구가 아닌 변수 자리이므로
+ *    표시 형식을 자체적으로 바꿔도 템플릿 재승인이 필요하지 않음.
  */
 function formatMeetupDatetimeForTemplate(rideDateRaw, departureTimeRaw) {
   const ymd = toYmdSeoulFromRideDate(rideDateRaw);
@@ -103,9 +107,9 @@ function formatMeetupDatetimeForTemplate(rideDateRaw, departureTimeRaw) {
     m = p[1];
     day = p[2];
   }
-  const yy = yFull % 100;
+  const weekdayKr = WEEKDAY_KR[new Date(Date.UTC(yFull, m - 1, day)).getUTCDay()];
   const timeStr = String(departureTimeRaw || "").trim() || "00:00";
-  return `${m}/${day}/${yy} ${timeStr}`;
+  return `${yFull}/${m}/${day}(${weekdayKr}) ${timeStr}`;
 }
 
 function formatRidingDistanceKm(n) {
