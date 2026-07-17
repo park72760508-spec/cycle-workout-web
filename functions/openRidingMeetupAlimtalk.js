@@ -112,6 +112,28 @@ function formatMeetupDatetimeForTemplate(rideDateRaw, departureTimeRaw) {
   return `${yFull}/${m}/${day}(${weekdayKr}) ${timeStr}`;
 }
 
+/**
+ * assets/js/openRiding/koreaRegions.js의 RIDING_LEVEL_OPTIONS와 동일한 값/항속 매핑.
+ * 모임 생성 폼과 표시 기준을 일치시키기 위해 값 그대로 복제(프론트는 ESM, 여긴 CJS라 공유 불가).
+ */
+const RIDING_LEVEL_HINTS = {
+  "초급": "항속 25km/h 미만",
+  "입문": "항속 25~28km/h 미만",
+  "중급": "항속 28~32km/h 미만",
+  "중상급": "항속 32~35km/h 미만",
+  "상급": "항속 35km/h 이상",
+};
+
+/**
+ * 레벨 값에 항속 구간을 덧붙여 발송: "중급" → "중급 (항속 28~32km/h 미만)"
+ * ※ #{meetup_level}도 변수 자리이므로 표시 형식을 자체적으로 바꿔도 템플릿 재승인이 필요하지 않음.
+ */
+function formatMeetupLevelForTemplate(levelRaw) {
+  const level = String(levelRaw || "").trim() || "중급";
+  const hint = RIDING_LEVEL_HINTS[level];
+  return hint ? `${level} (${hint})` : level;
+}
+
 function formatRidingDistanceKm(n) {
   // "40km" 처럼 단위가 붙은 문자열 → 숫자만 추출 후 파싱
   const raw = String(n ?? "").replace(/[^\d.]/g, "");
@@ -263,7 +285,7 @@ async function sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData) {
   const meetupName = String(rideData.title || "").trim() || "라이딩 모임";
   const meetupDatetime = formatMeetupDatetimeForTemplate(rideData.date, rideData.departureTime);
   const meetingPlace = String(rideData.departureLocation || "").trim();
-  const meetupLevel = String(rideData.level || "중급").trim();
+  const meetupLevel = formatMeetupLevelForTemplate(rideData.level);
   const ridingDistance = formatRidingDistanceKm(rideData.distance);
   const inviteDisplayByPhone = rideData.inviteDisplayByPhone;
   const inviteFriendUidByPhone = rideData.inviteFriendUidByPhone;
