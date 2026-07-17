@@ -398,11 +398,123 @@ function userLogWriteAffectsRankingAggregates(change) {
   return !rankingLogSignalEqual(before, after);
 }
 
+/** 버킷 payload 저장(0이면 삭제) + personal_speed/peak_28d rollup 갱신 — Supabase/Firestore 두 경로 공용 */
+async function finalizeDayBucketWrite(db, userId, userData, ymd, payload) {
+  const ref = bucketRef(db, userId, ymd);
+  if (
+    payload.tss_strava_sum <= 0
+    && payload.tss_stelvio_sum <= 0
+    && payload.km_strava_sum <= 0
+    && payload.km_stelvio_sum <= 0
+    && Object.keys(DURATION_FIELDS).every((dt) => (payload[DURATION_FIELDS[dt]] || 0) <= 0)
+  ) {
+    await ref.delete().catch(() => {});
+    try {
+      await touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, null);
+    } catch (eTouch) {
+      console.warn("[rankingDayRollup] personal_speed touch(삭제) 실패:", userId, ymd, eTouch.message);
+    }
+    return;
+  }
+
+  await ref.set(payload, { merge: false });
+  try {
+    await touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, payload);
+  } catch (eTouch2) {
+    console.warn("[rankingDayRollup] personal_speed touch 실패:", userId, ymd, eTouch2.message);
+  }
+  try {
+    await touchPeak28dRollupAfterDayChange(db, userId, userData, ymd, payload);
+  } catch (ePeak28) {
+    console.warn("[rankingDayRollup] peak_28d touch 실패:", userId, ymd, ePeak28.message);
+  }
+}
+
 /**
- * 해당 일(day) 사용자 로그만 읽어 일 버킹 문서 재작성(삭제/수정 포함 정확 재현).
+ * Supabase daily_summaries(rides 트리거로 실시간 갱신)에서 이미 계산된 일 버킷을 읽어
+ * Firestore 버킷 payload와 동일한 형태로 매핑 — 성공 시 무거운 Firestore logs 범위 스캔을 생략한다.
+ * 라우팅 꺼짐/조회 실패/행 없음이면 null (호출부가 기존 Firestore 스캔으로 폴백).
+ */
+async function tryBuildDayBucketPayloadFromSupabase(userId, ymd, weightKgFall) {
+  try {
+    const rankingReadConfig = require("./rankingReadConfig");
+    const cfg = rankingReadConfig.getRankingReadConfig();
+    if (!cfg || cfg.useSupabaseGlobal !== true || cfg.useSupabaseLogsRead !== true) return null;
+
+    const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const uidConfig = {
+      uidNamespace: String(supabaseDualWriteServer.uidNamespaceParam.value() || "").trim(),
+      uidMode: String(supabaseDualWriteServer.uidModeParam.value() || "v5").trim(),
+    };
+    const supabaseUserId = await supabaseDualWriteServer.resolveRideUserIdForFirebaseUid(
+      supabase,
+      userId,
+      uidConfig
+    );
+    if (!supabaseUserId) return null;
+
+    const { data, error } = await supabase
+      .from("daily_summaries")
+      .select(
+        "tss_strava_sum, tss_stelvio_sum, km_strava_sum, km_stelvio_sum, weight_used_kg, " +
+          "max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_40min_watts, max_60min_watts, max_watts, " +
+          "max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min"
+      )
+      .eq("user_id", supabaseUserId)
+      .eq("summary_date", ymd)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+
+    const payload = {
+      ymd,
+      tss_strava_sum: Math.round((Number(data.tss_strava_sum) || 0) * 100) / 100,
+      tss_stelvio_sum: Math.round((Number(data.tss_stelvio_sum) || 0) * 100) / 100,
+      km_strava_sum: Math.round((Number(data.km_strava_sum) || 0) * 100) / 100,
+      km_stelvio_sum: Math.round((Number(data.km_stelvio_sum) || 0) * 100) / 100,
+      weight_used_kg: weightKgFall > 0 ? weightKgFall : null,
+      reconciled_at: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    for (const [durationType, field] of Object.entries(DURATION_FIELDS)) {
+      let watts = Number(data[field]) || 0;
+      /** Firestore 경로와 동일한 안전장치 — Supabase 값도 현재 체중 기준 재검증 */
+      if (watts > 0 && weightKgFall > 0 && durationType !== "60min") {
+        if (!validatePeakPowerRecord(durationType, watts, weightKgFall)) watts = 0;
+      }
+      payload[field] = watts > 0 ? watts : 0;
+    }
+    for (const [durationType, field] of Object.entries(DURATION_HR_FIELDS)) {
+      const hr = Number(data[field]) || 0;
+      payload[field] = hr >= 40 && hr <= HR_MAX_BPM ? hr : 0;
+    }
+    return payload;
+  } catch (e) {
+    console.warn(
+      "[rankingDayRollup] Supabase daily_summaries 조회 실패, Firestore로 폴백:",
+      userId,
+      ymd,
+      e && e.message ? e.message : e
+    );
+    return null;
+  }
+}
+
+/**
+ * 해당 일(day) 버킷 문서 재작성 — Supabase daily_summaries 우선 조회, 실패/미라우팅 시
+ * 사용자 로그만 읽어 재계산(삭제/수정 포함 정확 재현).
  */
 async function reconcileUserRankingDayBucket(db, userId, ymd, userData) {
   if (!db || !userId || !ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return;
+
+  const rawWeight = Number(userData && (userData.weight || userData.weightKg)) || 0;
+  const weightKgFall = rawWeight > 0 ? Math.max(rawWeight, 45) : 0;
+
+  const fromSupabase = await tryBuildDayBucketPayloadFromSupabase(userId, ymd, weightKgFall);
+  if (fromSupabase) {
+    return finalizeDayBucketWrite(db, userId, userData, ymd, fromSupabase);
+  }
 
   const logSnap = await db
     .collection("users")
@@ -416,9 +528,6 @@ async function reconcileUserRankingDayBucket(db, userId, ymd, userData) {
   let stelvioTssSum = 0;
   let stravaKmSum = 0;
   let stelvioKmSum = 0;
-
-  const rawWeight = Number(userData && (userData.weight || userData.weightKg)) || 0;
-  const weightKgFall = rawWeight > 0 ? Math.max(rawWeight, 45) : 0;
 
   const maxWattsByDur = {};
   for (const dt of Object.keys(DURATION_FIELDS)) maxWattsByDur[dt] = 0;
@@ -489,34 +598,7 @@ async function reconcileUserRankingDayBucket(db, userId, ymd, userData) {
     payload[fld] = h > 0 ? h : 0;
   }
 
-  const ref = bucketRef(db, userId, ymd);
-  if (
-    payload.tss_strava_sum <= 0
-    && payload.tss_stelvio_sum <= 0
-    && payload.km_strava_sum <= 0
-    && payload.km_stelvio_sum <= 0
-    && Object.keys(DURATION_FIELDS).every((dt) => (payload[DURATION_FIELDS[dt]] || 0) <= 0)
-  ) {
-    await ref.delete().catch(() => {});
-    try {
-      await touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, null);
-    } catch (eTouch) {
-      console.warn("[rankingDayRollup] personal_speed touch(삭제) 실패:", userId, ymd, eTouch.message);
-    }
-    return;
-  }
-
-  await ref.set(payload, { merge: false });
-  try {
-    await touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, payload);
-  } catch (eTouch2) {
-    console.warn("[rankingDayRollup] personal_speed touch 실패:", userId, ymd, eTouch2.message);
-  }
-  try {
-    await touchPeak28dRollupAfterDayChange(db, userId, userData, ymd, payload);
-  } catch (ePeak28) {
-    console.warn("[rankingDayRollup] peak_28d touch 실패:", userId, ymd, ePeak28.message);
-  }
+  return finalizeDayBucketWrite(db, userId, userData, ymd, payload);
 }
 
 /**
