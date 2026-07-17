@@ -9,6 +9,7 @@
  */
 const admin = require("firebase-admin");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+const stravaRouteMerge = require("./stravaRouteMerge");
 
 /** Webhook create 라우팅 대상 — Walk 제외 (RUN 랭킹은 Run 계열만) */
 const RUNNING_STRAVA_TYPES = new Set(["run", "virtualrun", "trailrun"]);
@@ -302,6 +303,32 @@ async function upsertRunningActivityToSupabase(firebaseUid, row) {
 }
 
 /**
+ * 같은 날(activityDate) RUN 활동이 여러 건이면 코스를 병합해 users/{uid}/daily_route_profiles/{date}에 저장.
+ * CYCLE(functions/index.js의 manualStravaSyncWithMmp 등)과 동일한 stravaRouteMerge 모듈을 재사용한다.
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {string} firebaseUid
+ * @param {string} supabaseUserId activities.user_id (Supabase UUID)
+ * @param {string} activityDate YYYY-MM-DD
+ */
+async function mergeRunningDailyRouteProfile(db, firebaseUid, supabaseUserId, activityDate) {
+  if (!firebaseUid || !supabaseUserId || !activityDate) return;
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("activities")
+    .select("activity_id, summary_polyline, start_date")
+    .eq("user_id", supabaseUserId)
+    .eq("activity_date", activityDate)
+    .eq("source", "strava");
+  if (error) throw error;
+  const logsShape = (data || []).map((r) => ({
+    activity_id: r.activity_id,
+    summary_polyline: r.summary_polyline,
+    start_date_local: r.start_date,
+  }));
+  await stravaRouteMerge.saveMergedDailyRouteProfile(db, firebaseUid, activityDate, logsShape);
+}
+
+/**
  * Strava Run 활동 → Supabase activities upsert.
  * @param {import('firebase-admin').firestore.Firestore} db
  * @param {number} ownerId Strava athlete id
@@ -407,6 +434,17 @@ async function processRunningActivity(db, ownerId, objectId, activityPrefetched,
     );
   }
 
+  try {
+    await mergeRunningDailyRouteProfile(db, userId, row.user_id, row.activity_date);
+  } catch (mergeErr) {
+    console.warn(
+      "[processRunningActivity] daily route merge 실패:",
+      userId,
+      row.activity_date,
+      mergeErr && mergeErr.message ? mergeErr.message : mergeErr
+    );
+  }
+
   return {
     userId,
     activityId: row.activity_id,
@@ -421,5 +459,6 @@ module.exports = {
   isRunningStravaActivityType,
   buildLightweightSplitsMetric,
   fetchStravaActivityDetailForOwner,
+  mergeRunningDailyRouteProfile,
   processRunningActivity,
 };
