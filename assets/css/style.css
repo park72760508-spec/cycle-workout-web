@@ -13805,8 +13805,8 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid #f3f4f6;
+  padding: 3px 12px;
+  border-bottom: 1px solid #e5e7eb;
   cursor: pointer;
 }
 
