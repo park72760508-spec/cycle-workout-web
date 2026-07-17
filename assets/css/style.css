@@ -9720,6 +9720,10 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   gap: 12px;
   margin-bottom: 16px;
   width: 100%;
+  /* 리스트/카드 모드 공통: 마지막 항목이 하단 플로팅 네비(#globalHubBottomGlassNavRoot)에
+     가려지지 않도록 여백 확보. .screen이 padding-bottom:0 !important이라 여기서 보완한다. */
+  padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 /* 환경설정 모달 — RUN 본인 프로필 (카드 없이 바로 표시) */
