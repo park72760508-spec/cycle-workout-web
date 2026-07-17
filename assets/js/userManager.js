@@ -4268,7 +4268,7 @@ function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetI
           <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결"></span>
         </span>
         <span class="profile-list-col-dashboard" onclick="event.stopPropagation();">
-          ${showDashboardBtn ? `<button class="profile-list-icon-btn" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기"><img src="assets/img/DASHBOARD.png" alt="대시보드" style="width:20px;height:20px;display:block;" /></button>` : ''}
+          ${showDashboardBtn ? `<button class="profile-list-icon-btn" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기"><img src="assets/img/data-analytics.png" alt="대시보드" style="width:20px;height:20px;display:block;" /></button>` : ''}
         </span>
         <span class="profile-list-col-view" onclick="event.stopPropagation();">
           ${canEditFor(user) ? `<button class="profile-list-icon-btn" onclick="editUser('${user.id}')" title="상세보기"><img src="assets/img/glass.svg" alt="보기" style="width:20px;height:20px;display:block;" /></button>` : ''}
