@@ -384,8 +384,17 @@
         : lookupSnapValForListItem(changes, item);
       if (prevVal == null || chVal == null) continue; /* 신규 진입 → 미표기 */
       var prev = Math.floor(Number(prevVal));
-      var rc = Math.round(Number(chVal));
-      if (!isFinite(prev) || prev < 1 || !isFinite(rc)) continue;
+      if (!isFinite(prev) || prev < 1) continue;
+      /*
+       * rankChange는 서버가 저장해둔 raw 값(chVal) 대신 "서버 previousBoardRank − 오늘 실제 표시 순위"로
+       * 다시 계산한다. chVal은 서버 집계 시점의 자체 current-rank로 계산돼 있어, 지금 화면에 표시 중인
+       * 라이브 순위(item.rank)와 어긋나면 1위가 (↓N)으로 오표기되는 문제가 있었다(weekly_distance 등
+       * 실시간 누적 지표에서 특히 발생). previousBoardRank(prev)는 그대로 서버의 정확한 전일 값을 쓰되,
+       * 등락 자체는 항상 "previousBoardRank - 현재 표시 순위"로 맞춰 표시 순위와 100% 일관되게 만든다.
+       */
+      var liveCurr = Math.floor(Number(item.rank));
+      var rc = (isFinite(liveCurr) && liveCurr >= 1) ? (prev - liveCurr) : Math.round(Number(chVal));
+      if (!isFinite(rc)) continue;
       item.previousBoardRank = prev;
       item.rankChange = rc;
       filled++;
@@ -419,23 +428,23 @@
     });
 
     /*
-     * 1순위: 서버 공식 등락(rankChangesByCategory) 그대로 사용 — CYCLE GC 와 동일한 서버 우선 원칙.
+     * 1순위: 서버 공식 baseline(previousRanksByCategory) 사용 — CYCLE GC 와 동일한 서버 우선 원칙.
      * 라이브 보드가 스냅샷 보드와 같아 클라이언트 재계산이 전원 보합이 되는 상황에서도,
-     * 서버가 담아둔 실제 상승/하락/보합을 표기한다. (렌더 계층이 현재 순위 기준으로 검증)
+     * 서버가 담아둔 실제 전일 순위를 baseline 으로 상승/하락/보합을 표기한다.
      *
-     * 단, weekly_distance(주간 마일리지 TOP10 모달)는 제외한다.
-     * 이 보드는 "이번 주 실시간 누적 거리" 순위라 서버 스냅샷(어제/그제 기준)의 등락값과
-     * 현재 표시 순위가 어긋난다. 그 값을 그대로 쓰면 렌더 계층(stelvioNormalizeRankMovementOnRow)이
-     * 표시 순위 대신 서버 등락을 신뢰해 rank 를 덮어써, 실제 1위가 (↓N)으로 표기되는 오류가 난다.
-     * → 아래 baseline(전일 보드) 재계산으로만 등락을 산출해 항상 현재 순위와 일치시킨다.
-     * (previousBoardRank - rankChange === 현재순위 보장 → 1위는 절대 하락으로 표기되지 않음)
+     * weekly_distance(주간 마일리지 TOP10 모달)도 이제 이 경로를 탄다 — 과거엔 "서버 raw 등락값을
+     * 그대로 믿으면 라이브 순위와 어긋나 1위가 (↓N)으로 오표기될 수 있다"는 이유로 제외했었지만,
+     * applyServerComputedMovement() 가 이제 raw chVal 대신 "서버 previousBoardRank − 오늘 실제
+     * 표시 순위(item.rank)"로 등락을 다시 계산하므로 그 문제가 원천 차단된다
+     * (previousBoardRank - rankChange === 현재순위 항상 보장 → 1위는 절대 하락으로 표기되지 않음).
+     * 이전엔 이 탭만 baseline 자체 재계산(아래 2순위)으로 우회했는데, 그 baseline이 상위권에서
+     * "오늘 순위 == 어제 순위"로 자주 일치해(누적 거리 특성상 선두권 순위 변동이 적음) TOP10이
+     * 항상 보합(-)으로만 표기되는 문제가 있었다 — 서버의 실제 등락값을 쓰면 해결된다.
      */
-    if (tabId !== 'weekly_distance') {
-      var serverFilled = applyServerComputedMovement(list, snap, cat, tabId);
-      if (serverFilled > 0) {
-        /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */
-        return true;
-      }
+    var serverFilled = applyServerComputedMovement(list, snap, cat, tabId);
+    if (serverFilled > 0) {
+      /* history_key가 있으면 서버 스냅샷이 기준 — 기기별 localStorage로 덮지 않음 */
+      return true;
     }
 
     /* 2순위: 서버 공식 등락이 비면 baseline 재계산(생존 코호트/절대순위) */
