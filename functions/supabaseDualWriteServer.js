@@ -497,6 +497,28 @@ function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
   return row;
 }
 
+const RETRYABLE_FETCH_MAX_ATTEMPTS = 3;
+const RETRYABLE_FETCH_BASE_DELAY_MS = 300;
+
+/** Supabase 호출 중 순간 네트워크 오류(TypeError: fetch failed 등)만 재시도 — HTTP 응답이 온 경우(4xx/5xx)는 그대로 통과 */
+async function fetchWithRetry(input, init) {
+  let lastErr;
+  for (let attempt = 1; attempt <= RETRYABLE_FETCH_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fetch(input, init);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === RETRYABLE_FETCH_MAX_ATTEMPTS) break;
+      console.warn(
+        `[supabaseDualWriteServer] fetch 재시도 (${attempt}/${RETRYABLE_FETCH_MAX_ATTEMPTS}):`,
+        err && err.message ? err.message : err
+      );
+      await new Promise((r) => setTimeout(r, RETRYABLE_FETCH_BASE_DELAY_MS * attempt));
+    }
+  }
+  throw lastErr;
+}
+
 function getSupabaseAdminClient() {
   const url = String(supabaseUrlParam.value() || "").trim();
   let serviceKey;
@@ -511,6 +533,7 @@ function getSupabaseAdminClient() {
   if (!supabaseAdminClient) {
     supabaseAdminClient = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: fetchWithRetry },
     });
   }
   return supabaseAdminClient;
