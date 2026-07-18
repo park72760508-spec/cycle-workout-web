@@ -246,21 +246,20 @@
     var admin = isAdmin();
     try {
       var list = await fetchCompetitionsForList(admin);
-      var headerEl = document.getElementById('competitionAdminCreateWrap');
-      if (headerEl) headerEl.remove();
+      var existingFab = document.getElementById('competitionAdminCreateFab');
+      if (existingFab) existingFab.remove();
       if (admin) {
-        var wrap = document.createElement('div');
-        wrap.id = 'competitionAdminCreateWrap';
-        wrap.style.marginBottom = '14px';
+        // 제휴사 등록(.affiliate-fab-create)과 동일한 좌하단 원형 FAB
         var createBtn = document.createElement('button');
         createBtn.type = 'button';
-        createBtn.className = 'competition-apply-btn';
-        createBtn.textContent = '+ 새 대회 만들기';
+        createBtn.id = 'competitionAdminCreateFab';
+        createBtn.className = 'competition-fab-create fixed z-[100100] flex items-center justify-center rounded-full shadow-lg text-white text-2xl font-bold';
+        createBtn.setAttribute('aria-label', '새 대회 만들기');
+        createBtn.textContent = '+';
         createBtn.addEventListener('click', function () {
           window.competitionAdminForm.openForm(null, renderCompetitionList);
         });
-        wrap.appendChild(createBtn);
-        container.parentNode.insertBefore(wrap, container);
+        document.getElementById('competitionScreen').appendChild(createBtn);
       }
 
       if (!list.length) {

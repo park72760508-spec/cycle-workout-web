@@ -185,7 +185,7 @@
         '</div>'
       );
     }
-    footerParts.push('<button type="button" class="competition-submit-btn" id="competitionDetailApplyBtn">신청하기</button>');
+    footerParts.push('<button type="button" class="competition-apply-btn" id="competitionDetailApplyBtn">신청하기</button>');
 
     var overlay = openSheet(escapeHtml(comp.title || '대회 상세'), body, footerParts.join(''));
 
