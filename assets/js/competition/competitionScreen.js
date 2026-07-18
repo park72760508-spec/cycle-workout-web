@@ -207,12 +207,12 @@
     card.innerHTML =
       '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + statusBadge + '</h3>' +
       '<div class="competition-card-info">' +
-      '  <div class="competition-card-info-row">대회 일시 : ' + escapeHtml(raceDateLabel) + '</div>' +
-      '  <div class="competition-card-info-row">장소 : ' + locationLabel + '</div>' +
+      '  <div class="competition-card-info-row"><img src="assets/img/day.png" class="competition-card-icon" alt="" />대회 일시 : ' + escapeHtml(raceDateLabel) + '</div>' +
+      '  <div class="competition-card-info-row"><img src="assets/img/gps.png" class="competition-card-icon" alt="" />장소 : ' + locationLabel + '</div>' +
       '</div>' +
       '<div class="competition-card-meta">' +
-      '  <span>참가비 ' + formatEntryFee(comp.entryFee) + '</span>' +
-      '  <span class="competition-card-remaining" id="' + remainingId + '">정원 확인 중...</span>' +
+      '  <span><img src="assets/img/profit.png" class="competition-card-icon" alt="" />참가비 ' + formatEntryFee(comp.entryFee) + '</span>' +
+      '  <span><img src="assets/img/users.png" class="competition-card-icon" alt="" /><span class="competition-card-remaining" id="' + remainingId + '">정원 확인 중...</span></span>' +
       '</div>' +
       '<button type="button" class="competition-apply-btn">신청하기</button>';
 
