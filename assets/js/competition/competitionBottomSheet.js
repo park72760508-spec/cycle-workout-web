@@ -177,10 +177,8 @@
       '</div>' +
       (opts.virtualAccount
         ? '<div class="competition-account-row">' +
-          '  <div><div class="competition-account-row-label">입금 은행</div><div class="competition-account-row-value">' + escapeHtml(opts.virtualAccount.bankName || '-') + '</div></div>' +
-          '</div>' +
-          '<div class="competition-account-row">' +
-          '  <div><div class="competition-account-row-label">입금 계좌번호</div><div class="competition-account-row-value" id="competitionDetailVaAccountNumber">' + escapeHtml(opts.virtualAccount.accountNumber || '-') + '</div></div>' +
+          '  <div><div class="competition-account-row-label">입금 계좌</div><div class="competition-account-row-value" id="competitionDetailVaAccountNumber">' +
+            escapeHtml(opts.virtualAccount.bankName || '-') + ' ' + escapeHtml(opts.virtualAccount.accountNumber || '-') + '</div></div>' +
           '  <button type="button" class="competition-copy-btn" id="competitionDetailVaCopyBtn">복사</button>' +
           '</div>' +
           '<div class="competition-due-countdown" id="competitionDetailVaCountdown">' + escapeHtml(formatRemaining(opts.virtualAccount.dueDate)) + '</div>'
