@@ -46,6 +46,18 @@
     return n > 0 ? n.toLocaleString('ko-KR') + '원' : '무료';
   }
 
+  function formatDateTimeKo(input) {
+    if (!input) return '';
+    var d = null;
+    if (typeof input.toDate === 'function') d = input.toDate();
+    else if (input instanceof Date) d = input;
+    else d = new Date(input);
+    if (!d || isNaN(d.getTime())) return '';
+    return d.toLocaleString('ko-KR', {
+      year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit',
+    });
+  }
+
   function renderSkeleton(container) {
     container.innerHTML =
       '<div class="competition-card skeleton-card" aria-hidden="true">' +
@@ -189,16 +201,15 @@
       admin && comp.status !== 'open'
         ? '<span style="font-size:11px;font-weight:700;color:#9ca3af;border:1px solid #e5e7eb;border-radius:6px;padding:2px 6px;margin-left:6px;">마감</span>'
         : '';
-    var adminControls = admin
-      ? '<div style="display:flex;gap:6px;margin-bottom:10px;">' +
-        '  <button type="button" class="competition-copy-btn competition-edit-btn" style="flex:1;">수정</button>' +
-        '  <button type="button" class="competition-copy-btn competition-delete-btn" style="flex:1;color:#b91c1c;border-color:#fecaca;">삭제</button>' +
-        '</div>'
-      : '';
+    var raceDateLabel = formatDateTimeKo(comp.raceDate) || '-';
+    var locationLabel = comp.location ? escapeHtml(comp.location) : '-';
 
     card.innerHTML =
-      adminControls +
       '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + statusBadge + '</h3>' +
+      '<div class="competition-card-info">' +
+      '  <div class="competition-card-info-row">대회 일시 : ' + escapeHtml(raceDateLabel) + '</div>' +
+      '  <div class="competition-card-info-row">장소 : ' + locationLabel + '</div>' +
+      '</div>' +
       '<div class="competition-card-meta">' +
       '  <span>참가비 ' + formatEntryFee(comp.entryFee) + '</span>' +
       '  <span class="competition-card-remaining" id="' + remainingId + '">정원 확인 중...</span>' +
@@ -217,19 +228,6 @@
       e.stopPropagation();
       applyToCompetitionFlow(comp, applyBtn);
     });
-
-    if (admin) {
-      var editBtn = card.querySelector('.competition-edit-btn');
-      var deleteBtn = card.querySelector('.competition-delete-btn');
-      editBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        window.competitionAdminForm.openForm(comp, renderCompetitionList);
-      });
-      deleteBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        window.competitionAdminForm.confirmAndDelete(comp, renderCompetitionList);
-      });
-    }
 
     card.style.cursor = 'pointer';
     card.addEventListener('click', function () {
