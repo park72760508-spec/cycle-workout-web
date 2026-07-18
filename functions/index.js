@@ -29,6 +29,11 @@ const aligoApiKeySecret = defineSecret("ALIGO_API_KEY");
 const aligoUserIdSecret = defineSecret("ALIGO_USER_ID");
 const aligoTokenSecret = defineSecret("ALIGO_TOKEN");
 
+/** 대회 선착순 신청 — 토스페이먼츠 · Upstash Redis Secret Manager (functions:secrets:set로 등록). */
+const tossSecretKeySecret = defineSecret("TOSS_SECRET_KEY");
+const upstashRedisRestUrlSecret = defineSecret("UPSTASH_REDIS_REST_URL");
+const upstashRedisRestTokenSecret = defineSecret("UPSTASH_REDIS_REST_TOKEN");
+
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -39,7 +44,17 @@ const { sanitizePeakPowerWattsOnRow } = require("./peakPowerMonotonic");
 const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const stravaDualWrite = require("./stravaDualWrite");
-const stravaRouteMerge = require("./stravaRouteMerge");
+let stravaRouteMerge;
+try {
+  stravaRouteMerge = require("./stravaRouteMerge");
+} catch (e) {
+  console.warn("[functions/index.js] stravaRouteMerge 모듈을 찾을 수 없어 일일 경로 병합 기능을 비활성화합니다:", e.message);
+  stravaRouteMerge = {
+    saveMergedDailyRouteProfile: async () => {
+      throw new Error("stravaRouteMerge module unavailable");
+    },
+  };
+}
 const stravaSyncRetry = require("./stravaSyncRetry");
 const stravaGapDetect = require("./stravaGapDetect");
 const stravaLogRead = require("./stravaLogRead");
@@ -56,6 +71,8 @@ const logsReadRoutingPublic = require("./logsReadRoutingPublic");
 const groupDualWriteTriggers = require("./groupDualWriteTriggers");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
 const weeklyTssRankingBuilder = require("./weeklyTssRankingBuilder");
+const tossPaymentsClient = require("./tossPaymentsClient");
+const raceRedisClient = require("./raceRedisClient");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -14890,6 +14907,501 @@ exports.adminBackfillSupabaseUserGender = onRequest(
         error: e.message || String(e),
       });
     }
+  }
+);
+
+// ---------- 대회 선착순 대행 신청 (Upstash Redis 원자적 슬롯 제어 + 토스페이먼츠 가상계좌) ----------
+
+const RACE_APPLICATIONS_COLLECTION = "race_applications";
+const RACE_COMPETITIONS_COLLECTION = "competitions";
+const TOSS_WEBHOOK_RETRIES_COLLECTION = "toss_webhook_retries";
+/** 가상계좌 발급 은행 기본값 — 대회 문서에 bankAllowlist가 없을 때만 사용(운영 시 competitions.bankAllowlist[0] 권장) */
+const DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE = "20"; // 우리은행 — Toss bank 코드는 실제 콘솔에서 재확인 필요
+const DEFAULT_VIRTUAL_ACCOUNT_VALID_HOURS = 1;
+/** 미입금 자동 취소 배치 1회 처리 상한(타임아웃 방지) */
+const RACE_UNPAID_CLEANUP_BATCH_LIMIT = 200;
+
+function appendRaceSecrets(options) {
+  const o = Object.assign({}, options);
+  o.secrets = Array.isArray(o.secrets) ? o.secrets.slice() : [];
+  [tossSecretKeySecret, upstashRedisRestUrlSecret, upstashRedisRestTokenSecret].forEach((s) => {
+    if (!o.secrets.includes(s)) o.secrets.push(s);
+  });
+  return o;
+}
+
+function raceRedisConn() {
+  return {
+    restUrl: upstashRedisRestUrlSecret.value(),
+    restToken: upstashRedisRestTokenSecret.value(),
+  };
+}
+
+function raceTossSecretKey() {
+  return tossSecretKeySecret.value();
+}
+
+/** 상태 변경 원장(감사 추적) — PointRewardService.processRidingReward와 동일 read-then-write-plus-ledger 패턴 */
+function writeRaceLedgerEntry(db, applicationRef, payload) {
+  return db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationRef.id).collection("history").add({
+    ...payload,
+    created_at: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+function writeTossWebhookRetry(db, payload) {
+  return db.collection(TOSS_WEBHOOK_RETRIES_COLLECTION).add({
+    ...payload,
+    status_queue: "pending",
+    created_at: admin.firestore.FieldValue.serverTimestamp(),
+    processed_at: null,
+  });
+}
+
+/** Authorization: Bearer <idToken> 검증 — 관리자 비밀번호 초기화 엔드포인트와 동일 패턴(index.js:592-606) */
+async function verifyRaceRequestAuth(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    const err = new Error("로그인이 필요합니다.");
+    err.status = 401;
+    throw err;
+  }
+  const idToken = authHeader.split("Bearer ")[1];
+  try {
+    return await admin.auth().verifyIdToken(idToken);
+  } catch (e) {
+    const err = new Error("로그인이 만료되었거나 유효하지 않습니다. 다시 로그인해 주세요.");
+    err.status = 401;
+    throw err;
+  }
+}
+
+function raceOrderIdFor(competitionId, uid) {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `race_${competitionId}_${uid}_${ts}${rand}`.slice(0, 64);
+}
+
+/**
+ * 대회 신청 — Redis 원자적 슬롯 예약 → 성공 시에만 토스 가상계좌 발급 → Firestore 기록.
+ * 정원 초과는 에러가 아니라 { success:false, reason:'SOLD_OUT' } 정상 응답으로 처리한다(폭주 시 5xx 방지).
+ */
+const applyForCompetitionOptions = appendRaceSecrets({ cors: true, timeoutSeconds: 60 });
+exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+
+  const db = admin.firestore();
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const competitionId = String(body.competitionId || "").trim();
+    if (!competitionId) {
+      res.status(400).json({ success: false, error: "competitionId가 필요합니다." });
+      return;
+    }
+
+    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
+    if (!compSnap.exists) {
+      res.status(404).json({ success: false, error: "존재하지 않는 대회입니다." });
+      return;
+    }
+    const comp = compSnap.data() || {};
+    const nowMs = Date.now();
+    const opensAtMs = comp.opensAt && comp.opensAt.toMillis ? comp.opensAt.toMillis() : null;
+    const closesAtMs = comp.closesAt && comp.closesAt.toMillis ? comp.closesAt.toMillis() : null;
+    if (
+      comp.status !== "open" ||
+      (opensAtMs != null && nowMs < opensAtMs) ||
+      (closesAtMs != null && nowMs > closesAtMs)
+    ) {
+      res.status(200).json({ success: false, reason: "CLOSED", error: "접수 기간이 아닙니다." });
+      return;
+    }
+
+    // 중복 신청 방지: 이미 대기중/완료된 신청이 있으면 그대로 반환(재시도로 인한 이중 결제 방지)
+    const dupSnap = await db
+      .collection(RACE_APPLICATIONS_COLLECTION)
+      .where("userId", "==", uid)
+      .where("competitionId", "==", competitionId)
+      .where("status", "in", ["PAYMENT_WAITING", "PAYMENT_COMPLETED"])
+      .limit(1)
+      .get();
+    if (!dupSnap.empty) {
+      const existing = dupSnap.docs[0].data() || {};
+      res.status(200).json({
+        success: true,
+        alreadyApplied: true,
+        applicationId: dupSnap.docs[0].id,
+        status: existing.status,
+        virtualAccount: existing.virtualAccount || null,
+      });
+      return;
+    }
+
+    const redisKey = comp.redisKey || `race:${competitionId}:count`;
+    const capacity = Number(comp.capacity) || 0;
+    const conn = raceRedisConn();
+    const reserved = await raceRedisClient.reserveSlot(conn, redisKey, capacity);
+    if (reserved === raceRedisClient.SOLD_OUT) {
+      res.status(200).json({ success: false, reason: "SOLD_OUT", error: "마감되었습니다." });
+      return;
+    }
+
+    // Redis 슬롯 확보 이후에는 반드시 성공 응답을 주거나, 실패 시 slot을 반환(release)해야 한다.
+    try {
+      const userSnap = await db.collection("users").doc(uid).get();
+      const userData = userSnap.exists ? userSnap.data() || {} : {};
+      const customerName = String(userData.name || userData.displayName || "STELVIO 회원").slice(0, 100);
+      const orderId = raceOrderIdFor(competitionId, uid);
+      const amount = Number(comp.entryFee) || 0;
+      const bank =
+        (Array.isArray(comp.bankAllowlist) && comp.bankAllowlist[0]) ||
+        DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE;
+      const validHours = Number(comp.validHours) > 0 ? Number(comp.validHours) : DEFAULT_VIRTUAL_ACCOUNT_VALID_HOURS;
+
+      const payment = await tossPaymentsClient.issueVirtualAccount(raceTossSecretKey(), {
+        amount,
+        orderId,
+        orderName: String(comp.title || "대회 참가 신청").slice(0, 100),
+        customerName,
+        bank,
+        validHours,
+      });
+
+      const va = payment.virtualAccount || {};
+      const paymentDueMs = va.dueDate ? new Date(va.dueDate).getTime() : nowMs + validHours * 3600 * 1000;
+
+      const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc();
+      await appRef.set({
+        userId: uid,
+        competitionId,
+        status: "PAYMENT_WAITING",
+        redisSlotConsumed: true,
+        redisKey,
+        tossOrderId: orderId,
+        tossPaymentKey: payment.paymentKey || null,
+        tossVirtualAccountSecret: va.secret || null,
+        virtualAccount: {
+          bankCode: va.bankCode || bank,
+          bankName: va.bank || null,
+          accountNumber: va.accountNumber || null,
+          dueDate: va.dueDate || null,
+        },
+        amount,
+        refundAccount: null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        paymentDueAt: admin.firestore.Timestamp.fromMillis(paymentDueMs),
+        paidAt: null,
+        canceledAt: null,
+      });
+      await writeRaceLedgerEntry(db, appRef, { event: "APPLIED", orderId, amount });
+
+      res.status(200).json({
+        success: true,
+        applicationId: appRef.id,
+        virtualAccount: {
+          bankName: va.bank || null,
+          accountNumber: va.accountNumber || null,
+          dueDate: va.dueDate || null,
+        },
+        amount,
+      });
+    } catch (issueErr) {
+      // 가상계좌 발급 실패 — 예약한 슬롯을 반드시 반환(마감 오탐 방지)
+      await raceRedisClient.releaseSlot(conn, redisKey).catch((releaseErr) => {
+        console.error("[applyForCompetition] slot release 실패(수동 확인 필요):", redisKey, releaseErr.message);
+      });
+      throw issueErr;
+    }
+  } catch (e) {
+    const status = e.status || 500;
+    console.error("[applyForCompetition]", e && e.message ? e.message : e);
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/** 대회 카드용 잔여 인원 표시 — Redis 카운트만 읽는 가벼운 GET, 부작용 없음 */
+const getCompetitionStatusOptions = appendRaceSecrets({ cors: true, timeoutSeconds: 30 });
+exports.getCompetitionStatus = onRequest(getCompetitionStatusOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  try {
+    const competitionId = String((req.query && req.query.competitionId) || "").trim();
+    if (!competitionId) {
+      res.status(400).json({ success: false, error: "competitionId가 필요합니다." });
+      return;
+    }
+    const db = admin.firestore();
+    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
+    if (!compSnap.exists) {
+      res.status(404).json({ success: false, error: "존재하지 않는 대회입니다." });
+      return;
+    }
+    const comp = compSnap.data() || {};
+    const redisKey = comp.redisKey || `race:${competitionId}:count`;
+    const capacity = Number(comp.capacity) || 0;
+    const conn = raceRedisConn();
+    const count = await raceRedisClient.getSlotCount(conn, redisKey);
+    res.status(200).json({
+      success: true,
+      capacity,
+      remaining: Math.max(0, capacity - count),
+      isOpen: comp.status === "open" && capacity - count > 0,
+    });
+  } catch (e) {
+    console.error("[getCompetitionStatus]", e && e.message ? e.message : e);
+    res.status(500).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
+ * 토스페이먼츠 웹훅 — DEPOSIT_CALLBACK(가상계좌 입금)만 처리.
+ * 서명 헤더가 없으므로 (1) 발급 시 저장해둔 virtualAccount.secret과 웹훅 secret 대조,
+ * (2) orderId로 결제를 재조회(authoritative)해 status==='DONE'일 때만 신뢰한다 — 웹훅 바디를 직접 믿지 않는다.
+ */
+const tossPaymentWebhookOptions = appendRaceSecrets({ cors: false, timeoutSeconds: 60 });
+exports.tossPaymentWebhook = onRequest(tossPaymentWebhookOptions, async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(200).send("OK");
+    return;
+  }
+  const db = admin.firestore();
+  const body = (typeof req.body === "object" && req.body !== null ? req.body : {});
+  const eventType = String(body.eventType || "").trim();
+  const flat = body.data && typeof body.data === "object" ? body.data : body;
+  const orderId = String(flat.orderId || "").trim();
+
+  try {
+    if (eventType && eventType !== "DEPOSIT_CALLBACK") {
+      res.status(200).send("OK");
+      return;
+    }
+    if (!orderId) {
+      res.status(200).send("OK");
+      return;
+    }
+
+    const appSnap = await db
+      .collection(RACE_APPLICATIONS_COLLECTION)
+      .where("tossOrderId", "==", orderId)
+      .limit(1)
+      .get();
+    if (appSnap.empty) {
+      await writeTossWebhookRetry(db, { reason: "application_not_found", orderId, rawBody: body });
+      res.status(200).send("OK");
+      return;
+    }
+    const appDoc = appSnap.docs[0];
+    const appData = appDoc.data() || {};
+
+    const webhookSecret = String(flat.secret || "").trim();
+    if (!webhookSecret || webhookSecret !== String(appData.tossVirtualAccountSecret || "")) {
+      console.error("[tossPaymentWebhook] secret 불일치 — 위조 의심:", orderId);
+      await writeTossWebhookRetry(db, { reason: "secret_mismatch", orderId, applicationId: appDoc.id });
+      res.status(200).send("OK");
+      return;
+    }
+
+    // authoritative 재조회 — 웹훅 바디의 status를 신뢰하지 않는다.
+    const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), orderId);
+    if (payment.status !== "DONE") {
+      console.log("[tossPaymentWebhook] 입금 미완료 상태 — 무시:", orderId, payment.status);
+      res.status(200).send("OK");
+      return;
+    }
+
+    await db.runTransaction(async (tx) => {
+      const freshSnap = await tx.get(appDoc.ref);
+      const fresh = freshSnap.data() || {};
+      if (fresh.status !== "PAYMENT_WAITING") return; // 이미 처리됨(멱등)
+      tx.update(appDoc.ref, {
+        status: "PAYMENT_COMPLETED",
+        tossPaymentKey: payment.paymentKey || fresh.tossPaymentKey || null,
+        paidAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+    await writeRaceLedgerEntry(db, appDoc.ref, { event: "PAYMENT_COMPLETED", orderId });
+
+    res.status(200).send("OK");
+  } catch (e) {
+    console.error("[tossPaymentWebhook]", e && e.message ? e.message : e);
+    await writeTossWebhookRetry(db, {
+      reason: "processing_error",
+      orderId,
+      error: (e && e.message) || String(e),
+      rawBody: body,
+    }).catch(() => {});
+    // 재시도 큐에 적재했으므로 Toss에는 200으로 응답(자체 재처리 스케줄에 위임)
+    res.status(200).send("OK");
+  }
+});
+
+/**
+ * 결제 완료 신청 건 취소·환불 — 사용자가 입력한 본인 명의 환불 계좌로 토스 결제취소 API 호출.
+ * status가 PAYMENT_WAITING(아직 입금 확인 전)이면 환불할 금액이 없으므로 거절 —
+ * 이 경우 사용자는 입금을 하지 않으면 cancelUnpaidCompetitionApplications가 자동 취소·좌석 반환한다.
+ */
+const requestCompetitionRefundOptions = appendRaceSecrets({ cors: true, timeoutSeconds: 60 });
+exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+
+  const db = admin.firestore();
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const applicationId = String(body.applicationId || "").trim();
+    const refundAccount = body.refundAccount || {};
+    const bank = String(refundAccount.bank || "").trim();
+    const accountNumber = String(refundAccount.accountNumber || "").trim();
+    const holderName = String(refundAccount.holderName || "").trim();
+    if (!applicationId || !bank || !accountNumber || !holderName) {
+      res.status(400).json({ success: false, error: "applicationId·refundAccount(bank/accountNumber/holderName)가 필요합니다." });
+      return;
+    }
+
+    const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationId);
+    const appSnap = await appRef.get();
+    if (!appSnap.exists) {
+      res.status(404).json({ success: false, error: "신청 내역을 찾을 수 없습니다." });
+      return;
+    }
+    const appData = appSnap.data() || {};
+    if (appData.userId !== uid) {
+      res.status(403).json({ success: false, error: "본인 신청 건만 취소할 수 있습니다." });
+      return;
+    }
+    if (appData.status !== "PAYMENT_COMPLETED") {
+      res.status(400).json({
+        success: false,
+        error:
+          appData.status === "PAYMENT_WAITING"
+            ? "아직 입금이 확인되지 않았습니다. 입금하지 않으면 자동으로 취소됩니다."
+            : "이미 취소되었거나 취소할 수 없는 상태입니다.",
+      });
+      return;
+    }
+    if (!appData.tossPaymentKey) {
+      res.status(400).json({ success: false, error: "결제 정보가 없어 취소할 수 없습니다. 관리자에게 문의해 주세요." });
+      return;
+    }
+
+    await tossPaymentsClient.cancelPayment(
+      raceTossSecretKey(),
+      appData.tossPaymentKey,
+      {
+        cancelReason: "사용자 요청 취소",
+        refundReceiveAccount: { bank, accountNumber, holderName },
+      },
+      `${applicationId}-cancel`
+    );
+
+    await db.runTransaction(async (tx) => {
+      const freshSnap = await tx.get(appRef);
+      const fresh = freshSnap.data() || {};
+      if (fresh.status !== "PAYMENT_COMPLETED") return; // 이미 처리됨(멱등)
+      tx.update(appRef, {
+        status: "CANCELED_REFUNDED",
+        redisSlotConsumed: false,
+        refundAccount: { bankCode: bank, accountNumber, holderName },
+        canceledAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+    await writeRaceLedgerEntry(db, appRef, { event: "CANCELED_REFUNDED", applicationId });
+
+    if (appData.redisSlotConsumed !== false) {
+      const redisKey = appData.redisKey || `race:${appData.competitionId}:count`;
+      await raceRedisClient.releaseSlot(raceRedisConn(), redisKey).catch((releaseErr) => {
+        console.error("[requestCompetitionRefund] slot release 실패(수동 확인 필요):", redisKey, releaseErr.message);
+      });
+    }
+
+    res.status(200).json({ success: true });
+  } catch (e) {
+    const status = e.status || 500;
+    console.error("[requestCompetitionRefund]", e && e.message ? e.message : e);
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
+ * 미입금 자동 취소 — 5분마다(서울) paymentDueAt이 지난 PAYMENT_WAITING 건을 CANCELED_UNPAID로 전환하고
+ * Redis 슬롯을 반환한다. 토스 가상계좌는 기한 후 자동 소멸하므로 별도 취소 API 호출은 하지 않는다.
+ */
+const cancelUnpaidCompetitionApplicationsOptions = appendRaceSecrets({
+  schedule: "*/5 * * * *",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 300,
+  memory: "256MiB",
+});
+exports.cancelUnpaidCompetitionApplications = onSchedule(
+  cancelUnpaidCompetitionApplicationsOptions,
+  async () => {
+    const db = admin.firestore();
+    const conn = raceRedisConn();
+    const nowTs = admin.firestore.Timestamp.now();
+    let processed = 0;
+    let released = 0;
+
+    const snap = await db
+      .collection(RACE_APPLICATIONS_COLLECTION)
+      .where("status", "==", "PAYMENT_WAITING")
+      .where("paymentDueAt", "<=", nowTs)
+      .limit(RACE_UNPAID_CLEANUP_BATCH_LIMIT)
+      .get();
+
+    for (const doc of snap.docs) {
+      /* eslint-disable no-await-in-loop */
+      try {
+        const data = doc.data() || {};
+        let shouldRelease = false;
+        await db.runTransaction(async (tx) => {
+          const freshSnap = await tx.get(doc.ref);
+          const fresh = freshSnap.data() || {};
+          if (fresh.status !== "PAYMENT_WAITING") return; // 이미 입금 확인·취소됨(멱등)
+          tx.update(doc.ref, {
+            status: "CANCELED_UNPAID",
+            redisSlotConsumed: false,
+            canceledAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          shouldRelease = fresh.redisSlotConsumed !== false;
+        });
+        await writeRaceLedgerEntry(db, doc.ref, { event: "CANCELED_UNPAID" });
+        processed += 1;
+        if (shouldRelease) {
+          const redisKey = data.redisKey || `race:${data.competitionId}:count`;
+          await raceRedisClient.releaseSlot(conn, redisKey);
+          released += 1;
+        }
+      } catch (e) {
+        console.error("[cancelUnpaidCompetitionApplications]", doc.id, e && e.message ? e.message : e);
+      }
+      /* eslint-enable no-await-in-loop */
+    }
+
+    console.log("[cancelUnpaidCompetitionApplications] 완료", { processed, released });
   }
 );
 
