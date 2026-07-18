@@ -25,20 +25,54 @@
     return !!(window.competitionAdminForm && window.competitionAdminForm.isAdmin());
   }
 
-  async function fetchCompetitionsForList(admin) {
+  /** 대회 일시(raceDate)·상태(status)·접수기간(opensAt/closesAt) 기준 목록 표시 상태 — 지난/접수중/예정 */
+  function categorizeCompetition(comp) {
+    var nowMs = Date.now();
+    var raceMs = toDateMs(comp.raceDate);
+    if (raceMs != null && raceMs < nowMs) {
+      return { key: 'past', label: '종료' };
+    }
+    var opensMs = toDateMs(comp.opensAt);
+    var closesMs = toDateMs(comp.closesAt);
+    var withinWindow = (opensMs == null || nowMs >= opensMs) && (closesMs == null || nowMs <= closesMs);
+    if (comp.status === 'open' && withinWindow) {
+      return { key: 'open', label: '접수중' };
+    }
+    return { key: 'upcoming', label: '예정' };
+  }
+
+  function toDateMs(input) {
+    if (!input) return null;
+    var d = null;
+    if (typeof input.toDate === 'function') d = input.toDate();
+    else if (input instanceof Date) d = input;
+    else d = new Date(input);
+    return d && !isNaN(d.getTime()) ? d.getTime() : null;
+  }
+
+  function seoulYearOf(ms) {
+    return Number(
+      new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(new Date(ms))
+    );
+  }
+
+  async function fetchCompetitionsForList() {
     var ctx = getFirestoreFns();
     if (!ctx) return [];
     var fns = ctx.fns;
-    var q = admin
-      ? fns.collection(ctx.db, 'competitions')
-      : fns.query(fns.collection(ctx.db, 'competitions'), fns.where('status', '==', 'open'));
-    var snap = await fns.getDocs(q);
+    // 카드별 지난/접수중/예정 구분·연도 필터는 클라이언트에서 일괄 처리(전체 조회 — 대회 수가 많지 않아 인덱스 불필요)
+    var snap = await fns.getDocs(fns.collection(ctx.db, 'competitions'));
     var rows = [];
     snap.forEach(function (d) {
       var data = typeof d.data === 'function' ? d.data() : {};
       rows.push(Object.assign({ id: d.id }, data));
     });
-    return rows;
+    var thisYear = seoulYearOf(Date.now());
+    return rows.filter(function (comp) {
+      var raceMs = toDateMs(comp.raceDate);
+      // 대회 일시 미입력 건은 연도 필터를 적용할 수 없으므로 예정 목록에서 계속 보이도록 유지
+      return raceMs == null || seoulYearOf(raceMs) === thisYear;
+    });
   }
 
   function formatEntryFee(fee) {
@@ -69,7 +103,7 @@
   }
 
   function renderEmpty(container) {
-    container.innerHTML = '<div class="competition-empty-state">현재 접수 중인 대회가 없습니다.</div>';
+    container.innerHTML = '<div class="competition-empty-state">올해 등록된 대회가 없습니다.</div>';
   }
 
   async function refreshRemainingLabel(competitionId, capacityFallback, labelEl, btnEl) {
@@ -174,9 +208,12 @@
   }
 
   function openDetail(comp, admin, remainingLabel) {
+    var category = categorizeCompetition(comp);
     window.competitionBottomSheet.showDetailSheet(comp, {
       isAdmin: admin,
-      remainingLabel: remainingLabel || '확인 중...',
+      remainingLabel: category.key === 'past' ? '종료' : remainingLabel || '확인 중...',
+      hideApply: category.key === 'past',
+      applyDisabledLabel: category.key === 'upcoming' ? '접수 예정' : null,
       onApply: function (btn) {
         applyToCompetitionFlow(comp, btn);
       },
@@ -194,13 +231,11 @@
   }
 
   function renderCard(comp, admin) {
+    var category = categorizeCompetition(comp);
     var card = document.createElement('div');
-    card.className = 'competition-card';
+    card.className = 'competition-card is-' + category.key;
     var remainingId = 'competitionRemaining_' + comp.id;
-    var statusBadge =
-      admin && comp.status !== 'open'
-        ? '<span style="font-size:11px;font-weight:700;color:#9ca3af;border:1px solid #e5e7eb;border-radius:6px;padding:2px 6px;margin-left:6px;">마감</span>'
-        : '';
+    var statusBadge = '<span class="competition-status-badge is-' + category.key + '">' + category.label + '</span>';
     var raceDateLabel = formatDateTimeKo(comp.raceDate) || '-';
     var locationLabel = comp.location ? escapeHtml(comp.location) : '-';
 
@@ -214,20 +249,30 @@
       '  <span><img src="assets/img/profit.png" class="competition-card-icon" alt="" />참가비 ' + formatEntryFee(comp.entryFee) + '</span>' +
       '  <span><img src="assets/img/users.png" class="competition-card-icon" alt="" /><span class="competition-card-remaining" id="' + remainingId + '">정원 확인 중...</span></span>' +
       '</div>' +
-      '<button type="button" class="competition-apply-btn">신청하기</button>';
+      (category.key === 'past'
+        ? ''
+        : '<button type="button" class="competition-apply-btn">' + (category.key === 'upcoming' ? '접수 예정' : '신청하기') + '</button>');
 
     var applyBtn = card.querySelector('.competition-apply-btn');
     var remainingEl = card.querySelector('#' + remainingId);
     var lastRemainingLabel = '확인 중...';
 
-    refreshRemainingLabel(comp.id, comp.capacity, remainingEl, applyBtn).then(function (label) {
-      if (label) lastRemainingLabel = label;
-    });
+    if (category.key !== 'past') {
+      refreshRemainingLabel(comp.id, comp.capacity, remainingEl, applyBtn).then(function (label) {
+        if (label) lastRemainingLabel = label;
+      });
+    }
 
-    applyBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      applyToCompetitionFlow(comp, applyBtn);
-    });
+    if (applyBtn) {
+      if (category.key === 'upcoming') {
+        applyBtn.disabled = true;
+      } else {
+        applyBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          applyToCompetitionFlow(comp, applyBtn);
+        });
+      }
+    }
 
     card.style.cursor = 'pointer';
     card.addEventListener('click', function () {
@@ -243,7 +288,7 @@
     renderSkeleton(container);
     var admin = isAdmin();
     try {
-      var list = await fetchCompetitionsForList(admin);
+      var list = await fetchCompetitionsForList();
       var existingFab = document.getElementById('competitionAdminCreateFab');
       if (existingFab) existingFab.remove();
       if (admin) {
@@ -265,12 +310,19 @@
         return;
       }
       container.innerHTML = '';
+      var categoryOrder = { open: 0, upcoming: 1, past: 2 };
       list
-        .sort(function (a, b) {
-          return (a.status === 'open' ? 0 : 1) - (b.status === 'open' ? 0 : 1);
+        .map(function (comp) {
+          return { comp: comp, category: categorizeCompetition(comp).key, raceMs: toDateMs(comp.raceDate) || 0 };
         })
-        .forEach(function (comp) {
-          container.appendChild(renderCard(comp, admin));
+        .sort(function (a, b) {
+          var byCategory = categoryOrder[a.category] - categoryOrder[b.category];
+          if (byCategory !== 0) return byCategory;
+          // 접수중·예정은 임박한 순, 종료는 최근 종료 순
+          return a.category === 'past' ? b.raceMs - a.raceMs : a.raceMs - b.raceMs;
+        })
+        .forEach(function (entry) {
+          container.appendChild(renderCard(entry.comp, admin));
         });
     } catch (e) {
       console.warn('[competitionScreen] 대회 목록 로드 실패:', e && e.message ? e.message : e);

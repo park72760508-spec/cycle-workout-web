@@ -185,12 +185,18 @@
         '</div>'
       );
     }
-    footerParts.push('<button type="button" class="competition-apply-btn" id="competitionDetailApplyBtn">신청하기</button>');
+    if (!opts.hideApply) {
+      footerParts.push(
+        '<button type="button" class="competition-apply-btn" id="competitionDetailApplyBtn"' +
+        (opts.applyDisabledLabel ? ' disabled' : '') + '>' +
+        (opts.applyDisabledLabel || '신청하기') + '</button>'
+      );
+    }
 
     var overlay = openSheet(escapeHtml(comp.title || '대회 상세'), body, footerParts.join(''));
 
     var applyBtn = overlay.querySelector('#competitionDetailApplyBtn');
-    if (applyBtn && typeof opts.onApply === 'function') {
+    if (applyBtn && !opts.applyDisabledLabel && typeof opts.onApply === 'function') {
       applyBtn.addEventListener('click', function () {
         haptic(10);
         opts.onApply(applyBtn);
