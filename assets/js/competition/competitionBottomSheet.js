@@ -125,6 +125,91 @@
     haptic(10);
   }
 
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function formatDateTimeKo(input) {
+    if (!input) return '';
+    var d = null;
+    if (typeof input.toDate === 'function') d = input.toDate();
+    else if (input instanceof Date) d = input;
+    else d = new Date(input);
+    if (!d || isNaN(d.getTime())) return '';
+    return d.toLocaleString('ko-KR', {
+      year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit',
+    });
+  }
+
+  /**
+   * 대회 상세 정보 — 설명·장소·일시 + 신청/관리 버튼.
+   * @param {object} comp — competitions 문서(id 포함)
+   * @param {{
+   *   isAdmin: boolean,
+   *   remainingLabel: string,
+   *   onApply: function(HTMLElement):void,
+   *   onEdit: function():void,
+   *   onDelete: function():void
+   * }} opts
+   */
+  function showDetailSheet(comp, opts) {
+    opts = opts || {};
+    var raceDateLabel = formatDateTimeKo(comp.raceDate);
+    var body =
+      (comp.description
+        ? '<p style="white-space:pre-wrap;font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">' + escapeHtml(comp.description) + '</p>'
+        : '') +
+      '<div class="competition-account-row">' +
+      '  <div><div class="competition-account-row-label">참가비</div><div class="competition-account-row-value">' +
+        (Number(comp.entryFee) > 0 ? Number(comp.entryFee).toLocaleString('ko-KR') + '원' : '무료') + '</div></div>' +
+      '</div>' +
+      (raceDateLabel
+        ? '<div class="competition-account-row"><div><div class="competition-account-row-label">대회 일시</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(raceDateLabel) + '</div></div></div>'
+        : '') +
+      (comp.location
+        ? '<div class="competition-account-row"><div><div class="competition-account-row-label">장소</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(comp.location) + '</div></div></div>'
+        : '') +
+      '<div class="competition-account-row">' +
+      '  <div><div class="competition-account-row-label">잔여 인원</div><div class="competition-account-row-value" id="competitionDetailRemaining">' +
+        escapeHtml(opts.remainingLabel || '확인 중...') + '</div></div>' +
+      '</div>';
+
+    var footerParts = [];
+    if (opts.isAdmin) {
+      footerParts.push(
+        '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+        '  <button type="button" class="competition-submit-btn" id="competitionDetailEditBtn" style="background:#f1f5f9;color:#334155;">수정</button>' +
+        '  <button type="button" class="competition-submit-btn" id="competitionDetailDeleteBtn" style="background:#fee2e2;color:#b91c1c;">삭제</button>' +
+        '</div>'
+      );
+    }
+    footerParts.push('<button type="button" class="competition-submit-btn" id="competitionDetailApplyBtn">신청하기</button>');
+
+    var overlay = openSheet(escapeHtml(comp.title || '대회 상세'), body, footerParts.join(''));
+
+    var applyBtn = overlay.querySelector('#competitionDetailApplyBtn');
+    if (applyBtn && typeof opts.onApply === 'function') {
+      applyBtn.addEventListener('click', function () {
+        haptic(10);
+        opts.onApply(applyBtn);
+      });
+    }
+    var editBtn = overlay.querySelector('#competitionDetailEditBtn');
+    if (editBtn && typeof opts.onEdit === 'function') {
+      editBtn.addEventListener('click', function () {
+        opts.onEdit();
+      });
+    }
+    var deleteBtn = overlay.querySelector('#competitionDetailDeleteBtn');
+    if (deleteBtn && typeof opts.onDelete === 'function') {
+      deleteBtn.addEventListener('click', function () {
+        opts.onDelete();
+      });
+    }
+  }
+
   /**
    * 취소·환불 계좌 입력 폼.
    * @param {string} applicationId
@@ -192,6 +277,8 @@
     showVirtualAccountSheet: showVirtualAccountSheet,
     showRefundFormSheet: showRefundFormSheet,
     showSoldOutFeedback: showSoldOutFeedback,
+    showDetailSheet: showDetailSheet,
+    openRawSheet: openSheet,
     closeSheet: closeSheet,
   };
 })();
