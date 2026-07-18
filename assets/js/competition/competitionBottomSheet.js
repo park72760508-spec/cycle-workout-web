@@ -174,7 +174,17 @@
       '<div class="competition-account-row">' +
       '  <div><div class="competition-account-row-label">잔여 인원</div><div class="competition-account-row-value" id="competitionDetailRemaining">' +
         escapeHtml(opts.remainingLabel || '확인 중...') + '</div></div>' +
-      '</div>';
+      '</div>' +
+      (opts.virtualAccount
+        ? '<div class="competition-account-row">' +
+          '  <div><div class="competition-account-row-label">입금 은행</div><div class="competition-account-row-value">' + escapeHtml(opts.virtualAccount.bankName || '-') + '</div></div>' +
+          '</div>' +
+          '<div class="competition-account-row">' +
+          '  <div><div class="competition-account-row-label">입금 계좌번호</div><div class="competition-account-row-value" id="competitionDetailVaAccountNumber">' + escapeHtml(opts.virtualAccount.accountNumber || '-') + '</div></div>' +
+          '  <button type="button" class="competition-copy-btn" id="competitionDetailVaCopyBtn">복사</button>' +
+          '</div>' +
+          '<div class="competition-due-countdown" id="competitionDetailVaCountdown">' + escapeHtml(formatRemaining(opts.virtualAccount.dueDate)) + '</div>'
+        : '');
 
     var footerParts = [];
     if (opts.isAdmin) {
@@ -194,6 +204,40 @@
     }
 
     var overlay = openSheet(escapeHtml(comp.title || '대회 상세'), body, footerParts.join(''));
+
+    if (opts.virtualAccount) {
+      var vaAccountNumber = opts.virtualAccount.accountNumber || '';
+      var vaCopyBtn = overlay.querySelector('#competitionDetailVaCopyBtn');
+      if (vaCopyBtn) {
+        vaCopyBtn.addEventListener('click', function () {
+          haptic(10);
+          var text = vaAccountNumber.replace(/-/g, '');
+          var done = function () {
+            vaCopyBtn.textContent = '복사됨';
+            vaCopyBtn.classList.add('is-copied');
+            setTimeout(function () {
+              vaCopyBtn.textContent = '복사';
+              vaCopyBtn.classList.remove('is-copied');
+            }, 1500);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(done);
+          } else {
+            done();
+          }
+        });
+      }
+      if (opts.virtualAccount.dueDate) {
+        var vaTimer = setInterval(function () {
+          var el = document.getElementById('competitionDetailVaCountdown');
+          if (!el || !document.body.contains(el)) {
+            clearInterval(vaTimer);
+            return;
+          }
+          el.textContent = formatRemaining(opts.virtualAccount.dueDate);
+        }, 1000);
+      }
+    }
 
     var applyBtn = overlay.querySelector('#competitionDetailApplyBtn');
     if (applyBtn && !opts.applyDisabledLabel && typeof opts.onApply === 'function') {

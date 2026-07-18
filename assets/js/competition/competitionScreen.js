@@ -278,13 +278,16 @@
     }
   }
 
-  function openDetail(comp, admin, remainingLabel) {
+  function openDetail(comp, admin, remainingLabel, myApp) {
     var category = categorizeCompetition(comp);
+    var isWaiting =
+      myApp && myApp.status === 'PAYMENT_WAITING' && (toDateMs(myApp.paymentDueAt) == null || toDateMs(myApp.paymentDueAt) > Date.now());
     window.competitionBottomSheet.showDetailSheet(comp, {
       isAdmin: admin,
       remainingLabel: category.key === 'past' ? '종료' : remainingLabel || '확인 중...',
       hideApply: category.key === 'past',
-      applyDisabledLabel: category.key === 'upcoming' ? '접수 예정' : null,
+      applyDisabledLabel: category.key === 'upcoming' ? '접수 예정' : isWaiting ? '입금 대기중' : null,
+      virtualAccount: isWaiting ? myApp.virtualAccount || {} : null,
       onApply: function (btn) {
         applyToCompetitionFlow(comp, btn);
       },
@@ -351,7 +354,7 @@
 
     card.style.cursor = 'pointer';
     card.addEventListener('click', function () {
-      openDetail(comp, admin, lastRemainingLabel);
+      openDetail(comp, admin, lastRemainingLabel, myApp);
     });
 
     return card;
