@@ -502,6 +502,56 @@ async function tryBuildDayBucketPayloadFromSupabase(userId, ymd, weightKgFall) {
 }
 
 /**
+ * 임의 구간(주간 TSS·30일 KM·치팅데이 여부) 1명 합산 — Supabase daily_summaries RPC 우선 조회.
+ * users/{uid}/ranking_day_totals 버킷 N개를 Firestore에서 읽는 대신 단일 RPC 호출로 대체한다.
+ * 라우팅 꺼짐/조회 실패면 null (호출부가 기존 Firestore 버킷 스캔으로 폴백).
+ * @returns {Promise<{ totalTss: number, totalKm: number, hasCheatDay: boolean }|null>}
+ */
+async function tryFetchUserRangeSummaryFromSupabase(userId, startStr, endStr) {
+  try {
+    const rankingReadConfig = require("./rankingReadConfig");
+    const cfg = rankingReadConfig.getRankingReadConfig();
+    if (!cfg || cfg.useSupabaseGlobal !== true) return null;
+
+    const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const uidConfig = {
+      uidNamespace: String(supabaseDualWriteServer.uidNamespaceParam.value() || "").trim(),
+      uidMode: String(supabaseDualWriteServer.uidModeParam.value() || "v5").trim(),
+    };
+    const supabaseUserId = await supabaseDualWriteServer.resolveRideUserIdForFirebaseUid(
+      supabase,
+      userId,
+      uidConfig
+    );
+    if (!supabaseUserId) return null;
+
+    const { data, error } = await supabase.rpc("fn_user_effective_range_summary", {
+      p_user_id: supabaseUserId,
+      p_start: startStr,
+      p_end: endStr,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
+    return {
+      totalTss: Math.round((Number(row.total_tss) || 0) * 100) / 100,
+      totalKm: Math.round((Number(row.total_km) || 0) * 100) / 100,
+      hasCheatDay: row.has_cheat_day === true,
+    };
+  } catch (e) {
+    console.warn(
+      "[rankingDayRollup] Supabase range summary 조회 실패, Firestore로 폴백:",
+      userId,
+      startStr,
+      endStr,
+      e && e.message ? e.message : e
+    );
+    return null;
+  }
+}
+
+/**
  * 해당 일(day) 버킷 문서 재작성 — Supabase daily_summaries 우선 조회, 실패/미라우팅 시
  * 사용자 로그만 읽어 재계산(삭제/수정 포함 정확 재현).
  */
@@ -688,6 +738,10 @@ function effectiveDayKmFromSnap(snap) {
 }
 
 async function weeklyTssSumFromDayBuckets(db, userId, userData, startStr, endStr, forceReconcile) {
+  if (!forceReconcile) {
+    const sb = await tryFetchUserRangeSummaryFromSupabase(userId, startStr, endStr);
+    if (sb) return sb.totalTss;
+  }
   await ensureRankingBucketsFilledForRange(db, userId, userData, startStr, endStr, forceReconcile);
   const dates = listInclusiveYmdsSeoul(startStr, endStr);
   const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
@@ -700,6 +754,8 @@ async function weeklyTssSumFromDayBuckets(db, userId, userData, startStr, endStr
 }
 
 async function rollingKmSumFromDayBuckets(db, userId, userData, startStr, endStr) {
+  const sb = await tryFetchUserRangeSummaryFromSupabase(userId, startStr, endStr);
+  if (sb) return sb.totalKm;
   await ensureRankingBucketsFilledForRange(db, userId, userData, startStr, endStr);
   const dates = listInclusiveYmdsSeoul(startStr, endStr);
   const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
@@ -712,6 +768,8 @@ async function rollingKmSumFromDayBuckets(db, userId, userData, startStr, endStr
 }
 
 async function cheatDayPresentFromBuckets(db, userId, userData, startStr, endStr) {
+  const sb = await tryFetchUserRangeSummaryFromSupabase(userId, startStr, endStr);
+  if (sb) return sb.hasCheatDay;
   await ensureRankingBucketsFilledForRange(db, userId, userData, startStr, endStr);
   const dates = listInclusiveYmdsSeoul(startStr, endStr);
   const refs = dates.map((ymd) => bucketRef(db, userId, ymd));
