@@ -2868,32 +2868,71 @@
     #competitionScreen .competition-card-remaining { font-weight: 700; }
     #competitionScreen .competition-card-remaining.is-low { color: #ef4444; }
     #competitionScreen .competition-card-remaining.is-soldout { color: #9ca3af; }
-    #competitionScreen .competition-apply-btn {
+    /* 신청하기 버튼 — 분석 > eTP 산출하기 버튼(.stelvio-ranking-board-entry-btn, 연보라 아웃라인)과 동일 디자인 */
+    #competitionScreen .competition-apply-btn,
+    .competition-bottom-sheet .competition-apply-btn {
       width: 100%;
-      border: none;
-      border-radius: 12px;
-      padding: 14px;
-      font-size: 15px;
-      font-weight: 700;
-      color: white;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      max-width: 320px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 1px solid rgba(102, 126, 234, 0.35);
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.06));
+      color: #4c51bf;
+      font-size: 0.95rem;
+      font-weight: 600;
       cursor: pointer;
-      transition: transform 0.15s ease, opacity 0.15s ease;
+      box-shadow: none;
+      transition: background 0.2s ease, transform 0.15s ease;
       -webkit-tap-highlight-color: transparent;
     }
-    #competitionScreen .competition-apply-btn:active { transform: scale(0.98); }
-    #competitionScreen .competition-apply-btn[disabled] { background: #cbd5e1; cursor: not-allowed; }
-    #competitionScreen .competition-apply-btn.is-loading { position: relative; color: transparent; }
-    #competitionScreen .competition-apply-btn.is-loading::after {
+    #competitionScreen .competition-apply-btn:hover,
+    .competition-bottom-sheet .competition-apply-btn:hover {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.12), rgba(118, 75, 162, 0.1));
+    }
+    #competitionScreen .competition-apply-btn:active,
+    .competition-bottom-sheet .competition-apply-btn:active { transform: scale(0.98); }
+    #competitionScreen .competition-apply-btn[disabled],
+    .competition-bottom-sheet .competition-apply-btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+    #competitionScreen .competition-apply-btn.is-loading,
+    .competition-bottom-sheet .competition-apply-btn.is-loading { position: relative; color: transparent; }
+    #competitionScreen .competition-apply-btn.is-loading::after,
+    .competition-bottom-sheet .competition-apply-btn.is-loading::after {
       content: '';
       position: absolute; left: 50%; top: 50%;
       width: 18px; height: 18px; margin: -9px 0 0 -9px;
-      border: 2px solid rgba(255,255,255,0.5); border-top-color: #fff;
+      border: 2px solid rgba(102, 126, 234, 0.35); border-top-color: #4c51bf;
       border-radius: 50%;
       animation: competitionSpin 0.7s linear infinite;
     }
     #competitionScreen .competition-empty-state { text-align: center; padding: 48px 16px; color: #94a3b8; font-size: 14px; }
     @keyframes competitionSpin { to { transform: rotate(360deg); } }
+
+    /* 새 대회 만들기 — 제휴사 등록(.affiliate-fab-create)과 동일 좌하단 원형 FAB */
+    #competitionScreen .competition-fab-create {
+      position: fixed;
+      left: max(20px, env(safe-area-inset-left, 20px));
+      bottom: calc(
+        (2 * var(--open-riding-glass-nav-inner-fixed-height, 58px))
+        + env(safe-area-inset-bottom, 0px)
+      );
+      width: 52px;
+      height: 52px;
+      border: none;
+      background: linear-gradient(135deg, #6d28d9, #4f46e5);
+      box-shadow: 0 4px 16px rgba(109, 40, 217, 0.45);
+      transition: transform 0.15s, box-shadow 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      z-index: 100100;
+    }
+    #competitionScreen .competition-fab-create:active {
+      transform: scale(0.92);
+      box-shadow: 0 2px 8px rgba(109, 40, 217, 0.3);
+    }
 
     /* 바텀시트(계좌 안내 · 환불 폼) — journal-bottom-sheet 구조 그대로 재사용 */
     .competition-bottom-sheet-overlay {
