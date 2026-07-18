@@ -25,6 +25,39 @@
     return !!(window.competitionAdminForm && window.competitionAdminForm.isAdmin());
   }
 
+  function getCurrentUid() {
+    try {
+      return (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * 내 신청 내역(PAYMENT_WAITING·PAYMENT_COMPLETED) — competitionId → race_applications 문서 맵.
+   * 화면 재진입 시에도 "입금 대기중"/"신청 완료" 상태가 그대로 보이도록 카드 최초 렌더에 반영한다.
+   */
+  async function fetchMyApplicationsMap() {
+    var map = new Map();
+    var ctx = getFirestoreFns();
+    var uid = getCurrentUid();
+    if (!ctx || !uid) return map;
+    try {
+      var fns = ctx.fns;
+      var q = fns.query(fns.collection(ctx.db, 'race_applications'), fns.where('userId', '==', uid));
+      var snap = await fns.getDocs(q);
+      snap.forEach(function (d) {
+        var data = typeof d.data === 'function' ? d.data() : {};
+        if (data.status === 'PAYMENT_WAITING' || data.status === 'PAYMENT_COMPLETED') {
+          map.set(data.competitionId, Object.assign({ id: d.id }, data));
+        }
+      });
+    } catch (e) {
+      console.warn('[competitionScreen] 내 신청 내역 조회 실패:', e && e.message ? e.message : e);
+    }
+    return map;
+  }
+
   /** 대회 일시(raceDate)·상태(status)·접수기간(opensAt/closesAt) 기준 목록 표시 상태 — 지난/접수중/예정 */
   function categorizeCompetition(comp) {
     var nowMs = Date.now();
@@ -136,7 +169,8 @@
     }
   }
 
-  function handleApplyResult(result, applyBtn) {
+  function handleApplyResult(result, applyBtn, opts) {
+    opts = opts || {};
     if (!result || result.success === false) {
       if (result && result.reason === 'SOLD_OUT') {
         window.competitionBottomSheet.showSoldOutFeedback();
@@ -186,7 +220,44 @@
     // PAYMENT_WAITING(신규 발급 또는 기존 대기중 재조회) — 계좌 안내 시트
     applyBtn.textContent = '입금 대기중';
     applyBtn.disabled = true;
-    window.competitionBottomSheet.showVirtualAccountSheet(result.virtualAccount || {});
+    if (opts.autoOpenSheet !== false) {
+      window.competitionBottomSheet.showVirtualAccountSheet(result.virtualAccount || {});
+    }
+  }
+
+  /**
+   * 화면 재진입 시 카드 최초 렌더에 내 신청 상태 반영 — handleApplyResult와 동일 표시 규칙,
+   * 단 시트를 자동으로 열지 않는다(신청 직후 클릭 흐름과 달리 목록 진입만으로는 팝업 없음).
+   * 입금 대기중인데 이미 기한이 지난 건은 무시(신청하기로 되돌아감) — 미입금 취소 스케줄이
+   * 아직 처리 전이어도 사용자에게는 정상 신청 가능한 상태로 보여준다.
+   */
+  function applyExistingStateToButton(applyBtn, myApp) {
+    if (!myApp || !applyBtn) return false;
+    if (myApp.status === 'PAYMENT_COMPLETED') {
+      handleApplyResult(
+        { success: true, status: 'PAYMENT_COMPLETED', applicationId: myApp.id },
+        applyBtn,
+        { autoOpenSheet: false }
+      );
+      return true;
+    }
+    if (myApp.status === 'PAYMENT_WAITING') {
+      var dueMs = toDateMs(myApp.paymentDueAt);
+      if (dueMs == null || dueMs > Date.now()) {
+        handleApplyResult(
+          {
+            success: true,
+            status: 'PAYMENT_WAITING',
+            applicationId: myApp.id,
+            virtualAccount: myApp.virtualAccount || {},
+          },
+          applyBtn,
+          { autoOpenSheet: false }
+        );
+        return true;
+      }
+    }
+    return false;
   }
 
   /** 카드 버튼·상세시트 버튼 공용 신청 플로우 */
@@ -230,7 +301,7 @@
     });
   }
 
-  function renderCard(comp, admin) {
+  function renderCard(comp, admin, myApp) {
     var category = categorizeCompetition(comp);
     var card = document.createElement('div');
     card.className = 'competition-card is-' + category.key;
@@ -256,9 +327,11 @@
     var applyBtn = card.querySelector('.competition-apply-btn');
     var remainingEl = card.querySelector('#' + remainingId);
     var lastRemainingLabel = '확인 중...';
+    var hasExistingApp = applyBtn && category.key === 'open' && applyExistingStateToButton(applyBtn, myApp);
 
     if (category.key !== 'past') {
-      refreshRemainingLabel(comp.id, comp.capacity, remainingEl, applyBtn).then(function (label) {
+      // 이미 입금 대기중/신청 완료 상태면 잔여 인원 조회로 버튼을 덮어쓰지 않는다(라벨 텍스트만 갱신)
+      refreshRemainingLabel(comp.id, comp.capacity, remainingEl, hasExistingApp ? null : applyBtn).then(function (label) {
         if (label) lastRemainingLabel = label;
       });
     }
@@ -267,6 +340,8 @@
       if (category.key === 'upcoming') {
         applyBtn.disabled = true;
       } else {
+        // hasExistingApp이면 handleApplyResult가 이미 disabled 처리 — 클릭 리스너는 항상 붙여둬서
+        // 환불 성공 후 버튼이 다시 활성화됐을 때(신청하기로 복귀) 정상 동작하도록 한다.
         applyBtn.addEventListener('click', function (e) {
           e.stopPropagation();
           applyToCompetitionFlow(comp, applyBtn);
@@ -288,7 +363,9 @@
     renderSkeleton(container);
     var admin = isAdmin();
     try {
-      var list = await fetchCompetitionsForList();
+      var listAndMyApps = await Promise.all([fetchCompetitionsForList(), fetchMyApplicationsMap()]);
+      var list = listAndMyApps[0];
+      var myAppsMap = listAndMyApps[1];
       var existingFab = document.getElementById('competitionAdminCreateFab');
       if (existingFab) existingFab.remove();
       if (admin) {
@@ -322,7 +399,7 @@
           return a.category === 'past' ? b.raceMs - a.raceMs : a.raceMs - b.raceMs;
         })
         .forEach(function (entry) {
-          container.appendChild(renderCard(entry.comp, admin));
+          container.appendChild(renderCard(entry.comp, admin, myAppsMap.get(entry.comp.id)));
         });
     } catch (e) {
       console.warn('[competitionScreen] 대회 목록 로드 실패:', e && e.message ? e.message : e);
