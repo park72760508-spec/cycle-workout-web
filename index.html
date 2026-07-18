@@ -2863,9 +2863,18 @@
       border: 1px solid #eef0f4;
       box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
     }
-    #competitionScreen .competition-card-title { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0 0 6px; }
+    /* 대회 제목 — 나의 기록(Run 기록) 화면 헤더(.header h1)와 동일 크기·가운데 정렬 */
+    #competitionScreen .competition-card-title { font-size: 1.8em; font-weight: bold; color: #0f172a; margin: 0 0 10px; text-align: center; }
     #competitionScreen .competition-card-info { margin: 0 0 10px; }
     #competitionScreen .competition-card-info-row { font-size: 13px; color: #475569; line-height: 1.6; }
+    #competitionScreen .competition-card-icon {
+      height: 1em;
+      width: auto;
+      vertical-align: -0.15em;
+      margin-right: 4px;
+      filter: grayscale(100%);
+      opacity: 0.65;
+    }
     #competitionScreen .competition-card-meta { font-size: 13px; color: #64748b; margin: 0 0 14px; display: flex; flex-wrap: wrap; gap: 6px 12px; }
     #competitionScreen .competition-card-remaining { font-weight: 700; }
     #competitionScreen .competition-card-remaining.is-low { color: #ef4444; }
