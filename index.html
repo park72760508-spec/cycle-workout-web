@@ -3103,48 +3103,26 @@
     }
     .competition-form-hint { font-size: 12px; color: #94a3b8; margin: 0 0 14px; line-height: 1.5; }
 
-    /* 아코디언(단계형) 섹션 — 한 번에 하나씩만 펼쳐 입력 피로도를 낮춘다 */
+    /* 신청서 섹션(1~5) — 접고 펼치는 동작 없이 항상 전부 펼쳐진 상태로 표시 */
     .competition-accordion-item {
       border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 10px; background: white;
     }
     .competition-accordion-item.is-medical { border-color: rgba(239, 68, 68, 0.35); }
     .competition-accordion-header {
-      width: 100%; display: flex; align-items: center; gap: 12px;
-      padding: 14px 16px; background: white; border: none; cursor: pointer; text-align: left;
-      -webkit-tap-highlight-color: transparent;
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; background: white; border-bottom: 1px solid #f1f5f9;
     }
     .competition-accordion-item.is-medical .competition-accordion-header { background: rgba(254, 242, 242, 0.5); }
     .competition-accordion-step {
       flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
-      background: #f1f5f9; color: #64748b; font-size: 12px; font-weight: 700;
+      background: #667eea; color: white; font-size: 12px; font-weight: 700;
       display: flex; align-items: center; justify-content: center;
     }
-    .competition-accordion-header.is-active .competition-accordion-step { background: #667eea; color: white; }
-    .competition-accordion-item.is-medical .competition-accordion-step { background: #fee2e2; color: #b91c1c; }
-    .competition-accordion-item.is-medical .competition-accordion-header.is-active .competition-accordion-step {
-      background: #ef4444; color: white;
-    }
+    .competition-accordion-item.is-medical .competition-accordion-step { background: #ef4444; }
     .competition-accordion-header-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .competition-accordion-title { font-size: 14px; font-weight: 700; color: #1e293b; }
     .competition-accordion-item.is-medical .competition-accordion-title { color: #b91c1c; }
-    .competition-accordion-summary {
-      font-size: 12px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .competition-accordion-chevron {
-      flex-shrink: 0; width: 18px; height: 18px; color: #94a3b8; transition: transform 0.25s ease;
-    }
-    .competition-accordion-header.is-active .competition-accordion-chevron { transform: rotate(180deg); color: #667eea; }
-    .competition-accordion-body {
-      display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease;
-    }
-    .competition-accordion-body.is-open { grid-template-rows: 1fr; }
-    .competition-accordion-body-inner { overflow: hidden; min-height: 0; padding: 0 16px 16px; }
-    .competition-accordion-next-btn {
-      width: 100%; margin-top: 4px; padding: 10px; border-radius: 10px;
-      border: 1px solid rgba(102, 126, 234, 0.35); background: rgba(102, 126, 234, 0.06);
-      color: #4c51bf; font-size: 13px; font-weight: 700; cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-    }
+    .competition-accordion-body { padding: 16px; }
     .competition-chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
     .competition-chip-group--2col { display: grid; grid-template-columns: 1fr 1fr; }
     .competition-chip-group--2col .competition-chip { text-align: center; }
