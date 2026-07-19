@@ -15118,10 +15118,13 @@ async function inviteNextWaitlistEntryIfClosed(db, competitionId) {
  * 드리프트가 쌓일 수 있다. Firestore의 실제 유효 신청 건수(PAYMENT_WAITING·PAYMENT_COMPLETED)를
  * 신뢰 원본으로 삼아 Redis 카운트를 그 값으로 직접 맞춘다(scheduledReconcileCompetitionSlots·수동 트리거 공용).
  */
-async function reconcileCompetitionSlotCount(db, competitionId) {
-  const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
-  if (!compSnap.exists) return null;
-  const comp = compSnap.data() || {};
+async function reconcileCompetitionSlotCount(db, competitionId, preloadedComp) {
+  let comp = preloadedComp;
+  if (!comp) {
+    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
+    if (!compSnap.exists) return null;
+    comp = compSnap.data() || {};
+  }
   const redisKey = comp.redisKey || `race:${competitionId}:count`;
 
   const appsSnap = await db
@@ -15978,18 +15981,31 @@ const scheduledReconcileCompetitionSlotsOptions = appendRaceSecrets({
   timeoutSeconds: 300,
   memory: "256MiB",
 });
+/** 대회 종료(raceDate) 후 이 기간이 지나면 신청 변동이 더 없다고 보고 매시간 리컨실 대상에서 제외한다 */
+const RECONCILE_SKIP_AFTER_RACE_MS = 7 * 24 * 3600 * 1000;
+
 exports.scheduledReconcileCompetitionSlots = onSchedule(
   scheduledReconcileCompetitionSlotsOptions,
   async () => {
     const db = admin.firestore();
     const compsSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).get();
+    const nowMs = Date.now();
     let reconciled = 0;
+    let skipped = 0;
     let drifted = 0;
 
     for (const doc of compsSnap.docs) {
       /* eslint-disable no-await-in-loop */
       try {
-        const result = await reconcileCompetitionSlotCount(db, doc.id);
+        const comp = doc.data() || {};
+        const raceMs = comp.raceDate && comp.raceDate.toMillis ? comp.raceDate.toMillis() : null;
+        if (raceMs != null && raceMs < nowMs - RECONCILE_SKIP_AFTER_RACE_MS) {
+          // 대회가 끝난 지 오래돼 더 이상 신청서가 늘거나 취소될 일이 없는 대회는 매시간 전체 신청
+          // 내역을 다시 읽지 않는다 — 대회 수가 쌓일수록 이 부분이 리컨실 비용의 대부분을 차지한다.
+          skipped += 1;
+          continue;
+        }
+        const result = await reconcileCompetitionSlotCount(db, doc.id, comp);
         if (result) {
           reconciled += 1;
           if (Number(result.before) !== result.after) {
@@ -16009,7 +16025,7 @@ exports.scheduledReconcileCompetitionSlots = onSchedule(
       /* eslint-enable no-await-in-loop */
     }
 
-    console.log("[scheduledReconcileCompetitionSlots] 완료", { reconciled, drifted });
+    console.log("[scheduledReconcileCompetitionSlots] 완료", { reconciled, skipped, drifted });
   }
 );
 
