@@ -181,6 +181,22 @@
     return prefix + (day > 0 ? day + '일 ' : '') + pad(h) + ':' + pad(m) + ':' + pad(s);
   }
 
+  /** 마감 이후 취소로 초대(INVITED)된 대기자의 24시간 신청 가능 시한 카운트다운 */
+  function formatWaitlistInviteRemaining(input) {
+    var ms = toDateMs(input);
+    if (ms == null) return '';
+    var diff = ms - Date.now();
+    if (diff <= 0) return '신청 가능 시간이 만료되었습니다';
+    var totalSec = Math.floor(diff / 1000);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var pad = function (n) {
+      return String(n).padStart(2, '0');
+    };
+    return pad(h) + ':' + pad(m) + ':' + pad(s) + ' 이내 신청 가능';
+  }
+
   var APPLICANT_GENDER_LABEL = { M: '남', F: '여' };
   var APPLICANT_NATIONALITY_LABEL = { DOMESTIC: '내국인', FOREIGN: '외국인' };
   var APPLICANT_DIVISION_LABEL = {
@@ -424,7 +440,11 @@
       footerParts.push(
         '<button type="button" class="competition-apply-btn" id="competitionDetailApplyBtn"' +
         (opts.applyDisabledLabel ? ' disabled' : '') + '>' +
-        (opts.applyDisabledLabel || '신청하기') + '</button>'
+        escapeHtml(opts.applyLabel || opts.applyDisabledLabel || '신청하기') + '</button>' +
+        (opts.waitlistInviteExpiresAt
+          ? '<div class="competition-due-countdown" id="competitionDetailInviteCountdown">' +
+            escapeHtml(formatWaitlistInviteRemaining(opts.waitlistInviteExpiresAt)) + '</div>'
+          : '')
       );
     }
 
@@ -446,6 +466,17 @@
           return;
         }
         el.textContent = formatEntryPeriodCountdown(comp);
+      }, 1000);
+    }
+
+    if (opts.waitlistInviteExpiresAt) {
+      var inviteTimer = setInterval(function () {
+        var el = document.getElementById('competitionDetailInviteCountdown');
+        if (!el || !document.body.contains(el)) {
+          clearInterval(inviteTimer);
+          return;
+        }
+        el.textContent = formatWaitlistInviteRemaining(opts.waitlistInviteExpiresAt);
       }, 1000);
     }
 

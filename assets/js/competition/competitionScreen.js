@@ -99,6 +99,38 @@
     return map;
   }
 
+  /**
+   * 내 대기자 등록 내역(WAITING·INVITED) — competitionId → race_waitlist 문서 맵.
+   * 마감 이후 취소로 자리가 나 초대(INVITED)되면 신청하기가 활성화되도록 카드/상세에 반영한다.
+   */
+  async function fetchMyWaitlistMap() {
+    var map = new Map();
+    var ctx = getFirestoreFns();
+    var uid = getCurrentUid();
+    if (!ctx || !uid) return map;
+    try {
+      var fns = ctx.fns;
+      var q = fns.query(fns.collection(ctx.db, 'race_waitlist'), fns.where('userId', '==', uid));
+      var snap = await fns.getDocs(q);
+      snap.forEach(function (d) {
+        var data = typeof d.data === 'function' ? d.data() : {};
+        if (data.status === 'WAITING' || data.status === 'INVITED') {
+          map.set(data.competitionId, Object.assign({ id: d.id }, data));
+        }
+      });
+    } catch (e) {
+      console.warn('[competitionScreen] 내 대기자 등록 내역 조회 실패:', e && e.message ? e.message : e);
+    }
+    return map;
+  }
+
+  /** 마감 이후 취소로 대기자 1순위로 초대(INVITED)되어 아직 유효한지 — 신청하기를 예외적으로 활성화한다 */
+  function getActiveWaitlistInvite(myWaitlist) {
+    if (!myWaitlist || myWaitlist.status !== 'INVITED') return null;
+    var expiresMs = toDateMs(myWaitlist.inviteExpiresAt);
+    return expiresMs != null && expiresMs > Date.now() ? myWaitlist : null;
+  }
+
   /** 대회 일시(raceDate)·상태(status)·접수기간(opensAt/closesAt) 기준 목록 표시 상태 — 지난/접수중/예정 */
   function categorizeCompetition(comp) {
     var nowMs = Date.now();
@@ -220,7 +252,8 @@
       if (result && result.reason === 'SOLD_OUT') {
         window.competitionBottomSheet.showSoldOutFeedback();
         applyBtn.disabled = true;
-        applyBtn.textContent = '마감되었습니다';
+        // 마감 시 자동으로 대기자 명단에 등록되므로(joinCompetitionWaitlistIfNotAlready), 사용자가 알 수 있게 안내한다.
+        applyBtn.textContent = result.waitlisted ? '대기 등록됨' : '마감되었습니다';
       } else if (result && result.reason === 'CLOSED') {
         window.competitionBottomSheet.showSoldOutFeedback();
         applyBtn.textContent = '접수 기간이 아닙니다';
@@ -331,7 +364,8 @@
     handleApplyResult(result, applyBtn, { silentAlert: true });
     if (!result || result.success === false) {
       var msg =
-        (result && result.reason === 'SOLD_OUT' && '마감되었습니다.') ||
+        (result && result.reason === 'SOLD_OUT' &&
+          (result.waitlisted ? '마감되어 대기자 명단에 등록되었습니다. 자리가 나면 알려드립니다.' : '마감되었습니다.')) ||
         (result && result.reason === 'CLOSED' && '접수 기간이 아닙니다.') ||
         (result && result.error) ||
         '신청에 실패했습니다.';
@@ -409,17 +443,20 @@
     }
   }
 
-  function openDetail(comp, admin, remainingLabel, myApp) {
+  function openDetail(comp, admin, remainingLabel, myApp, myWaitlist) {
     var category = categorizeCompetition(comp);
+    var invite = getActiveWaitlistInvite(myWaitlist);
     var isWaiting =
       myApp && myApp.status === 'PAYMENT_WAITING' && (toDateMs(myApp.paymentDueAt) == null || toDateMs(myApp.paymentDueAt) > Date.now());
     var isPaid = !!myApp && myApp.status === 'PAYMENT_COMPLETED';
     var hasApplication = isWaiting || isPaid;
     window.competitionBottomSheet.showDetailSheet(comp, {
       isAdmin: admin,
-      remainingLabel: category.key === 'past' ? '종료' : remainingLabel || '확인 중...',
-      hideApply: category.key === 'past' || hasApplication,
-      applyDisabledLabel: category.key === 'upcoming' ? '접수 예정' : null,
+      remainingLabel: category.key === 'past' && !invite ? '종료' : remainingLabel || '확인 중...',
+      hideApply: !invite && (category.key === 'past' || hasApplication),
+      applyDisabledLabel: !invite && category.key === 'upcoming' ? '접수 예정' : null,
+      applyLabel: invite ? '자리 확보! 지금 신청하기' : null,
+      waitlistInviteExpiresAt: invite ? invite.inviteExpiresAt : null,
       virtualAccount: hasApplication ? myApp.virtualAccount || {} : null,
       applicant: hasApplication ? myApp.applicant || null : null,
       paid: isPaid,
@@ -453,12 +490,15 @@
     });
   }
 
-  function renderCard(comp, admin, myApp) {
+  function renderCard(comp, admin, myApp, myWaitlist) {
     var category = categorizeCompetition(comp);
+    var invite = getActiveWaitlistInvite(myWaitlist);
     var card = document.createElement('div');
-    card.className = 'competition-card is-' + category.key;
+    card.className = 'competition-card is-' + category.key + (invite ? ' is-invited' : '');
     var remainingId = 'competitionRemaining_' + comp.id;
-    var statusBadge = '<span class="competition-status-badge is-' + category.key + '">' + category.label + '</span>';
+    var statusBadge = invite
+      ? '<span class="competition-status-badge is-invited">대기 순번 도착</span>'
+      : '<span class="competition-status-badge is-' + category.key + '">' + category.label + '</span>';
     var raceDateLabel = formatDateTimeKo(comp.raceDate) || '-';
     var locationLabel = comp.location ? escapeHtml(comp.location) : '-';
     var dday = category.key === 'past' ? null : computeCardDDay(comp);
@@ -469,6 +509,15 @@
       ? '<div class="competition-card-thumb" style="background-image:url(\'' + escapeHtml(comp.posterImageUrl) + '\')"></div>'
       : '<div class="competition-card-thumb competition-card-thumb--placeholder">' +
         escapeHtml(comp.category === 'CYCLE' ? 'CYCLE' : 'RUN') + '</div>';
+
+    var showApplyBtn = invite || category.key !== 'past';
+    var applyBtnLabel = invite ? '자리 확보! 지금 신청하기' : category.key === 'upcoming' ? '접수 예정' : '신청하기';
+    var applyBtnDisabled = !invite && category.key === 'upcoming';
+    var inviteHintHtml =
+      invite && invite.inviteExpiresAt
+        ? '<div class="competition-card-invite-hint">' +
+          escapeHtml(formatDateTimeKo(invite.inviteExpiresAt) || '') + '까지 신청 가능</div>'
+        : '';
 
     card.innerHTML =
       '<div class="competition-card-row">' +
@@ -485,24 +534,25 @@
       '</div>' +
       '</div>' +
       '</div>' +
-      (category.key === 'past'
-        ? ''
-        : '<button type="button" class="competition-apply-btn">' + (category.key === 'upcoming' ? '접수 예정' : '신청하기') + '</button>');
+      inviteHintHtml +
+      (showApplyBtn ? '<button type="button" class="competition-apply-btn">' + escapeHtml(applyBtnLabel) + '</button>' : '');
 
     var applyBtn = card.querySelector('.competition-apply-btn');
     var remainingEl = card.querySelector('#' + remainingId);
     var lastRemainingLabel = '확인 중...';
-    var hasExistingApp = applyBtn && category.key === 'open' && applyExistingStateToButton(applyBtn, myApp);
+    var hasExistingApp = applyBtn && !invite && category.key === 'open' && applyExistingStateToButton(applyBtn, myApp);
 
-    if (category.key !== 'past') {
-      // 이미 입금 대기중/신청 완료 상태면 잔여 인원 조회로 버튼을 덮어쓰지 않는다(라벨 텍스트만 갱신)
-      refreshRemainingLabel(comp.id, comp.capacity, remainingEl, hasExistingApp ? null : applyBtn).then(function (label) {
-        if (label) lastRemainingLabel = label;
-      });
+    if (category.key !== 'past' || invite) {
+      // 이미 입금 대기중/신청 완료/대기자 초대 상태면 잔여 인원 조회로 버튼을 덮어쓰지 않는다(라벨 텍스트만 갱신)
+      refreshRemainingLabel(comp.id, comp.capacity, remainingEl, hasExistingApp || invite ? null : applyBtn).then(
+        function (label) {
+          if (label) lastRemainingLabel = label;
+        }
+      );
     }
 
     if (applyBtn) {
-      if (category.key === 'upcoming') {
+      if (applyBtnDisabled) {
         applyBtn.disabled = true;
       } else {
         // hasExistingApp이면 handleApplyResult가 이미 disabled 처리 — 클릭 리스너는 항상 붙여둬서
@@ -516,7 +566,7 @@
 
     card.style.cursor = 'pointer';
     card.addEventListener('click', function () {
-      openDetail(comp, admin, lastRemainingLabel, myApp);
+      openDetail(comp, admin, lastRemainingLabel, myApp, myWaitlist);
     });
 
     return card;
@@ -528,9 +578,10 @@
     renderSkeleton(container);
     var admin = isAdmin();
     try {
-      var listAndMyApps = await Promise.all([fetchCompetitionsForList(), fetchMyApplicationsMap()]);
+      var listAndMyApps = await Promise.all([fetchCompetitionsForList(), fetchMyApplicationsMap(), fetchMyWaitlistMap()]);
       var list = listAndMyApps[0];
       var myAppsMap = listAndMyApps[1];
+      var myWaitlistMap = listAndMyApps[2];
       var existingFab = document.getElementById('competitionAdminCreateFab');
       if (existingFab) existingFab.remove();
       if (admin) {
@@ -564,7 +615,9 @@
           return a.category === 'past' ? b.raceMs - a.raceMs : a.raceMs - b.raceMs;
         })
         .forEach(function (entry) {
-          container.appendChild(renderCard(entry.comp, admin, myAppsMap.get(entry.comp.id)));
+          container.appendChild(
+            renderCard(entry.comp, admin, myAppsMap.get(entry.comp.id), myWaitlistMap.get(entry.comp.id))
+          );
         });
     } catch (e) {
       console.warn('[competitionScreen] 대회 목록 로드 실패:', e && e.message ? e.message : e);
