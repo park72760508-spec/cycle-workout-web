@@ -119,6 +119,14 @@
       ]
     },
     {
+      "collectionGroup": "race_applications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "paymentDueAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "race_waitlist",
       "queryScope": "COLLECTION",
       "fields": [
