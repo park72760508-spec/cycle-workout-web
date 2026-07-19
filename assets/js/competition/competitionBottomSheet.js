@@ -306,34 +306,66 @@
   }
 
   /** 신청서 내용 요약 — 입금 계좌 정보 바로 아래에 표시(showDetailSheet) */
+  var ICON_USER = '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>';
+  var ICON_INFO = '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>';
+  var ICON_GLOBE =
+    '<circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line>' +
+    '<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>';
+  var ICON_PHONE =
+    '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path>';
+  var ICON_GIFT =
+    '<polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect>' +
+    '<line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>' +
+    '<path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>';
+  var ICON_FLAG = '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line>';
+  var ICON_DROPLET = '<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>';
+  var ICON_CLIPBOARD =
+    '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path><rect x="9" y="3" width="6" height="4" rx="2"></rect>';
+
+  /** 신청서 내용 — 대회 정보 영역(종목·일시·장소·코스거리·참가비·잔여인원)과 동일한 아이콘 그리드 카드로 표시 */
   function buildApplicantSummaryHtml(a) {
     if (!a) return '';
-    var row = function (label, value) {
-      if (!value) return '';
-      return (
-        '<div class="competition-account-row"><div><div class="competition-account-row-label">' + escapeHtml(label) +
-        '</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(value) + '</div></div></div>'
-      );
-    };
     var address = ((a.zipCode ? '(' + a.zipCode + ') ' : '') + (a.address1 || '') + ' ' + (a.address2 || '')).trim();
-    var emergency =
+    var emergency = (
       (a.emergencyName || '') +
       (a.emergencyRelation ? ' (' + a.emergencyRelation + ')' : '') +
-      (a.emergencyPhone ? ' ' + a.emergencyPhone : '');
+      (a.emergencyPhone ? ' ' + a.emergencyPhone : '')
+    ).trim();
+    var cards = [
+      { icon: ICON_USER, label: '이름', value: a.name },
+      { icon: ICON_INFO, label: '성별', value: APPLICANT_GENDER_LABEL[a.gender] || a.gender },
+      { icon: ICON_CALENDAR, label: '생년월일', value: a.birth6 },
+      { icon: ICON_GLOBE, label: '국적', value: APPLICANT_NATIONALITY_LABEL[a.nationality] || a.nationality },
+      { icon: ICON_PHONE, label: '휴대전화', value: a.phone },
+      { icon: ICON_MAP_PIN, label: '배송지', value: address },
+      { icon: ICON_TAG, label: '참가 부문', value: APPLICANT_DIVISION_LABEL[a.division] || a.division },
+      { icon: ICON_GIFT, label: '기념품 사이즈', value: APPLICANT_SIZE_LABEL[a.size] || a.size },
+      { icon: ICON_FLAG, label: '출발 그룹', value: APPLICANT_START_GROUP_LABEL[a.startGroup] || a.startGroup },
+      { icon: ICON_PHONE, label: '비상 연락처', value: emergency },
+      { icon: ICON_DROPLET, label: '혈액형', value: APPLICANT_BLOOD_TYPE_LABEL[a.bloodType] || a.bloodType },
+    ];
+    var cardsHtml = cards
+      .filter(function (c) {
+        return !!c.value;
+      })
+      .map(function (c) {
+        return (
+          '<div class="competition-info-card">' + infoIcon(c.icon) +
+          '<div class="competition-info-card-label">' + escapeHtml(c.label) + '</div>' +
+          '<div class="competition-info-card-value">' + escapeHtml(c.value) + '</div>' +
+          '</div>'
+        );
+      })
+      .join('');
+    var medicalNoteHtml = a.medicalNote
+      ? '<div class="competition-info-card competition-info-card--wide">' + infoIcon(ICON_CLIPBOARD) +
+        '<div class="competition-info-card-label">의료 특이사항</div>' +
+        '<div class="competition-info-card-value" style="font-weight:600;white-space:pre-wrap;">' +
+        escapeHtml(a.medicalNote) + '</div></div>'
+      : '';
     return (
       '<h4 class="competition-form-section-title" style="margin-top:20px;">신청서 내용</h4>' +
-      row('이름', a.name) +
-      row('성별', APPLICANT_GENDER_LABEL[a.gender] || a.gender) +
-      row('생년월일', a.birth6) +
-      row('국적', APPLICANT_NATIONALITY_LABEL[a.nationality] || a.nationality) +
-      row('휴대전화', a.phone) +
-      row('배송지', address) +
-      row('참가 부문', APPLICANT_DIVISION_LABEL[a.division] || a.division) +
-      row('기념품 사이즈', APPLICANT_SIZE_LABEL[a.size] || a.size) +
-      row('출발 그룹', APPLICANT_START_GROUP_LABEL[a.startGroup] || a.startGroup) +
-      row('비상 연락처', emergency.trim()) +
-      row('혈액형', APPLICANT_BLOOD_TYPE_LABEL[a.bloodType] || a.bloodType) +
-      row('의료 특이사항', a.medicalNote)
+      '<div class="competition-info-grid">' + cardsHtml + medicalNoteHtml + '</div>'
     );
   }
 

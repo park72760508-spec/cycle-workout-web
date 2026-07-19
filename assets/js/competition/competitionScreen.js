@@ -459,12 +459,6 @@
     card.className = 'competition-card is-' + category.key;
     var remainingId = 'competitionRemaining_' + comp.id;
     var statusBadge = '<span class="competition-status-badge is-' + category.key + '">' + category.label + '</span>';
-    var categoryBadge =
-      comp.category === 'CYCLE'
-        ? '<span class="competition-category-badge">CYCLE</span>'
-        : comp.category === 'RUN'
-          ? '<span class="competition-category-badge">RUN</span>'
-          : '';
     var raceDateLabel = formatDateTimeKo(comp.raceDate) || '-';
     var locationLabel = comp.location ? escapeHtml(comp.location) : '-';
     var dday = category.key === 'past' ? null : computeCardDDay(comp);
@@ -480,7 +474,7 @@
       '<div class="competition-card-row">' +
       thumbHtml +
       '<div class="competition-card-main">' +
-      '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + categoryBadge + statusBadge + ddayBadge + '</h3>' +
+      '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + statusBadge + ddayBadge + '</h3>' +
       '<div class="competition-card-info">' +
       '  <div class="competition-card-info-row">' + cardIcon(CARD_ICON_CALENDAR) + '대회 일시 : ' + escapeHtml(raceDateLabel) + '</div>' +
       '  <div class="competition-card-info-row">' + cardIcon(CARD_ICON_MAP_PIN) + '장소 : ' + locationLabel + '</div>' +
