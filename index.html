@@ -3005,12 +3005,25 @@
     }
     .competition-copy-btn.is-copied { background: #10b981; color: white; border-color: #10b981; }
     .competition-due-countdown { text-align: center; font-size: 13px; color: #ef4444; font-weight: 600; margin-top: 4px; }
+    .competition-period-countdown { text-align: center; font-size: 13px; color: #4c51bf; font-weight: 600; margin-top: 4px; margin-bottom: 10px; }
+    .competition-category-badge {
+      display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 700; vertical-align: middle;
+      background: rgba(102,126,234,0.12); color: #4c51bf;
+    }
 
     .competition-form-field { margin-bottom: 14px; }
     .competition-form-label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
     .competition-form-input, .competition-form-select {
-      width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 10px;
+      width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; display: block;
+      padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 10px;
       font-size: 15px; color: #0f172a; background: white;
+    }
+    /* datetime-local은 브라우저(특히 모바일 Safari/WebView)가 네이티브 위젯 폭을 내용 기준으로 잡아
+       형제 입력창(텍스트/숫자/셀렉트)보다 좁게 보이는 경우가 있어 폭을 명시적으로 강제한다 */
+    .competition-form-input[type="datetime-local"] {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; min-width: 100%; max-width: 100%; box-sizing: border-box;
     }
     .competition-form-input:focus, .competition-form-select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.12); }
     .competition-form-error { color: #ef4444; font-size: 12px; margin-top: 6px; display: none; }
