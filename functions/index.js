@@ -15113,6 +15113,79 @@ async function inviteNextWaitlistEntryIfClosed(db, competitionId) {
 }
 
 /**
+ * 대회 잔여 인원 리컨실 — Redis INCR/DECR는 취소·롤백 시 releaseSlot 호출이 일시적으로 실패하면
+ * (네트워크 오류 등) 재시도·복구 수단이 없어 "Firestore는 취소됐는데 Redis 카운트만 안 줄어드는"
+ * 드리프트가 쌓일 수 있다. Firestore의 실제 유효 신청 건수(PAYMENT_WAITING·PAYMENT_COMPLETED)를
+ * 신뢰 원본으로 삼아 Redis 카운트를 그 값으로 직접 맞춘다(scheduledReconcileCompetitionSlots·수동 트리거 공용).
+ */
+async function reconcileCompetitionSlotCount(db, competitionId) {
+  const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
+  if (!compSnap.exists) return null;
+  const comp = compSnap.data() || {};
+  const redisKey = comp.redisKey || `race:${competitionId}:count`;
+
+  const appsSnap = await db
+    .collection(RACE_APPLICATIONS_COLLECTION)
+    .where("competitionId", "==", competitionId)
+    .get();
+  const actualCount = appsSnap.docs.filter((d) => {
+    const status = (d.data() || {}).status;
+    return status === "PAYMENT_WAITING" || status === "PAYMENT_COMPLETED";
+  }).length;
+
+  const conn = raceRedisConn();
+  const before = await raceRedisClient.getSlotCount(conn, redisKey);
+  await raceRedisClient.setSlotCount(conn, redisKey, actualCount);
+  return { competitionId, redisKey, before, after: actualCount };
+}
+
+/**
+ * 관리자 수동 트리거 — 특정 대회의 잔여 인원을 즉시 재계산해 Redis 카운트를 바로잡는다.
+ * 매시 정각 스케줄(scheduledReconcileCompetitionSlots)을 기다리지 않고 바로 확인·수정할 때 사용.
+ */
+const reconcileCompetitionSlotsOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
+exports.reconcileCompetitionSlots = onRequest(reconcileCompetitionSlotsOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+
+  const db = admin.firestore();
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const userSnap = await db.collection("users").doc(decoded.uid).get();
+    const userData = userSnap.exists ? userSnap.data() || {} : {};
+    if (String(userData.grade) !== "1") {
+      res.status(403).json({ success: false, error: "관리자만 사용할 수 있습니다." });
+      return;
+    }
+
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const competitionId = String(body.competitionId || "").trim();
+    if (!competitionId) {
+      res.status(400).json({ success: false, error: "competitionId가 필요합니다." });
+      return;
+    }
+
+    const result = await reconcileCompetitionSlotCount(db, competitionId);
+    if (!result) {
+      res.status(404).json({ success: false, error: "존재하지 않는 대회입니다." });
+      return;
+    }
+    res.status(200).json(Object.assign({ success: true }, result));
+  } catch (e) {
+    const status = e.status || 500;
+    console.error("[reconcileCompetitionSlots]", e && e.message ? e.message : e);
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
  * 대회 신청 — Redis 원자적 슬롯 예약 → 성공 시에만 토스 가상계좌 발급 → Firestore 기록.
  * 정원 초과는 에러가 아니라 { success:false, reason:'SOLD_OUT' } 정상 응답으로 처리한다(폭주 시 5xx 방지).
  * applicant(신청서 — competitionApplicationForm.js)는 서버에서도 화이트리스트 재검증 후 저장하며,
@@ -15751,8 +15824,20 @@ exports.cancelUnpaidCompetitionApplications = onSchedule(
         processed += 1;
         if (shouldRelease) {
           const redisKey = data.redisKey || `race:${data.competitionId}:count`;
-          await raceRedisClient.releaseSlot(conn, redisKey);
-          released += 1;
+          // releaseSlot 실패(네트워크 오류 등)로 이 건이 다음 배치에서 되풀이 처리되지 않도록 여기서
+          // 흡수한다 — Firestore 상태는 이미 CANCELED_UNPAID로 커밋됐으므로, 남는 드리프트는
+          // scheduledReconcileCompetitionSlots(매시 정각)가 자동으로 바로잡는다.
+          await raceRedisClient.releaseSlot(conn, redisKey)
+            .then(() => {
+              released += 1;
+            })
+            .catch((releaseErr) => {
+              console.error(
+                "[cancelUnpaidCompetitionApplications] slot release 실패(주기적 리컨실로 자동 보정됨):",
+                redisKey,
+                releaseErr.message
+              );
+            });
           await inviteNextWaitlistEntryIfClosed(db, data.competitionId).catch((waitlistErr) => {
             console.error(
               "[cancelUnpaidCompetitionApplications] 대기자 초대 실패(수동 확인 필요):",
@@ -15828,6 +15913,51 @@ exports.expireCompetitionWaitlistInvites = onSchedule(
     }
 
     console.log("[expireCompetitionWaitlistInvites] 완료", { expired, recascaded: competitionIdsToRecascade.size });
+  }
+);
+
+/**
+ * 대회 잔여 인원 자동 리컨실 — 매시 정각(서울) 전체 대회를 순회하며 Redis 카운트를 Firestore
+ * 실제 유효 신청 건수로 다시 맞춘다. releaseSlot 실패 등으로 생긴 드리프트가 최대 1시간 내 자동 해소된다.
+ */
+const scheduledReconcileCompetitionSlotsOptions = appendRaceSecrets({
+  schedule: "0 * * * *",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 300,
+  memory: "256MiB",
+});
+exports.scheduledReconcileCompetitionSlots = onSchedule(
+  scheduledReconcileCompetitionSlotsOptions,
+  async () => {
+    const db = admin.firestore();
+    const compsSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).get();
+    let reconciled = 0;
+    let drifted = 0;
+
+    for (const doc of compsSnap.docs) {
+      /* eslint-disable no-await-in-loop */
+      try {
+        const result = await reconcileCompetitionSlotCount(db, doc.id);
+        if (result) {
+          reconciled += 1;
+          if (Number(result.before) !== result.after) {
+            drifted += 1;
+            console.log(
+              "[scheduledReconcileCompetitionSlots] 드리프트 보정:",
+              doc.id,
+              result.before,
+              "→",
+              result.after
+            );
+          }
+        }
+      } catch (e) {
+        console.error("[scheduledReconcileCompetitionSlots]", doc.id, e && e.message ? e.message : e);
+      }
+      /* eslint-enable no-await-in-loop */
+    }
+
+    console.log("[scheduledReconcileCompetitionSlots] 완료", { reconciled, drifted });
   }
 );
 

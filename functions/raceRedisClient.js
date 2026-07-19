@@ -85,9 +85,22 @@ async function getSlotCount(conn, key) {
   return result == null ? 0 : Number(result);
 }
 
+/**
+ * 리컨실 전용 — 증감(INCR/DECR) 없이 카운트를 절대값으로 덮어쓴다.
+ * releaseSlot 호출이 일시적으로 실패하면(네트워크 오류 등) 재시도·복구 수단이 없어 취소 처리된
+ * 신청 건이 카운트에 영원히 남는 드리프트가 생길 수 있다 — Firestore(실제 유효 신청 건수)를
+ * 신뢰 원본으로 삼아 주기적으로 이 값으로 맞춰준다(reconcileCompetitionSlotCount).
+ */
+async function setSlotCount(conn, key, value) {
+  const safeValue = Math.max(0, Math.floor(Number(value) || 0));
+  await upstashCommand(conn.restUrl, conn.restToken, ["SET", key, String(safeValue)]);
+  return safeValue;
+}
+
 module.exports = {
   SOLD_OUT,
   reserveSlot,
   releaseSlot,
   getSlotCount,
+  setSlotCount,
 };
