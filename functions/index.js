@@ -15788,71 +15788,123 @@ const cancelUnpaidCompetitionApplicationsOptions = appendRaceSecrets({
   timeoutSeconds: 300,
   memory: "256MiB",
 });
+/**
+ * 미입금 자동 취소 실제 처리 로직 — 스케줄(cancelUnpaidCompetitionApplications)과 관리자 수동 트리거
+ * (manualCancelUnpaidCompetitionApplications) 양쪽에서 공유한다. status+paymentDueAt 복합 인덱스가
+ * 없으면 이 조회 자체가 FAILED_PRECONDITION으로 실패해 스케줄이 매번 조용히 실패할 수 있으니 주의.
+ */
+async function runUnpaidCompetitionApplicationsCleanup(db, conn) {
+  const nowTs = admin.firestore.Timestamp.now();
+  let processed = 0;
+  let released = 0;
+
+  const snap = await db
+    .collection(RACE_APPLICATIONS_COLLECTION)
+    .where("status", "==", "PAYMENT_WAITING")
+    .where("paymentDueAt", "<=", nowTs)
+    .limit(RACE_UNPAID_CLEANUP_BATCH_LIMIT)
+    .get();
+
+  for (const doc of snap.docs) {
+    /* eslint-disable no-await-in-loop */
+    try {
+      const data = doc.data() || {};
+      let shouldRelease = false;
+      await db.runTransaction(async (tx) => {
+        const freshSnap = await tx.get(doc.ref);
+        const fresh = freshSnap.data() || {};
+        if (fresh.status !== "PAYMENT_WAITING") return; // 이미 입금 확인·취소됨(멱등)
+        tx.update(doc.ref, {
+          status: "CANCELED_UNPAID",
+          redisSlotConsumed: false,
+          canceledAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        shouldRelease = fresh.redisSlotConsumed !== false;
+      });
+      await writeRaceLedgerEntry(db, doc.ref, { event: "CANCELED_UNPAID" });
+      processed += 1;
+      if (shouldRelease) {
+        const redisKey = data.redisKey || `race:${data.competitionId}:count`;
+        // releaseSlot 실패(네트워크 오류 등)로 이 건이 다음 배치에서 되풀이 처리되지 않도록 여기서
+        // 흡수한다 — Firestore 상태는 이미 CANCELED_UNPAID로 커밋됐으므로, 남는 드리프트는
+        // scheduledReconcileCompetitionSlots(매시 정각)가 자동으로 바로잡는다.
+        await raceRedisClient.releaseSlot(conn, redisKey)
+          .then(() => {
+            released += 1;
+          })
+          .catch((releaseErr) => {
+            console.error(
+              "[cancelUnpaidCompetitionApplications] slot release 실패(주기적 리컨실로 자동 보정됨):",
+              redisKey,
+              releaseErr.message
+            );
+          });
+        await inviteNextWaitlistEntryIfClosed(db, data.competitionId).catch((waitlistErr) => {
+          console.error(
+            "[cancelUnpaidCompetitionApplications] 대기자 초대 실패(수동 확인 필요):",
+            data.competitionId,
+            waitlistErr.message
+          );
+        });
+      }
+    } catch (e) {
+      console.error("[cancelUnpaidCompetitionApplications]", doc.id, e && e.message ? e.message : e);
+    }
+    /* eslint-enable no-await-in-loop */
+  }
+
+  return { processed, released };
+}
+
 exports.cancelUnpaidCompetitionApplications = onSchedule(
   cancelUnpaidCompetitionApplicationsOptions,
   async () => {
     const db = admin.firestore();
     const conn = raceRedisConn();
-    const nowTs = admin.firestore.Timestamp.now();
-    let processed = 0;
-    let released = 0;
+    const result = await runUnpaidCompetitionApplicationsCleanup(db, conn);
+    console.log("[cancelUnpaidCompetitionApplications] 완료", result);
+  }
+);
 
-    const snap = await db
-      .collection(RACE_APPLICATIONS_COLLECTION)
-      .where("status", "==", "PAYMENT_WAITING")
-      .where("paymentDueAt", "<=", nowTs)
-      .limit(RACE_UNPAID_CLEANUP_BATCH_LIMIT)
-      .get();
-
-    for (const doc of snap.docs) {
-      /* eslint-disable no-await-in-loop */
-      try {
-        const data = doc.data() || {};
-        let shouldRelease = false;
-        await db.runTransaction(async (tx) => {
-          const freshSnap = await tx.get(doc.ref);
-          const fresh = freshSnap.data() || {};
-          if (fresh.status !== "PAYMENT_WAITING") return; // 이미 입금 확인·취소됨(멱등)
-          tx.update(doc.ref, {
-            status: "CANCELED_UNPAID",
-            redisSlotConsumed: false,
-            canceledAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          shouldRelease = fresh.redisSlotConsumed !== false;
-        });
-        await writeRaceLedgerEntry(db, doc.ref, { event: "CANCELED_UNPAID" });
-        processed += 1;
-        if (shouldRelease) {
-          const redisKey = data.redisKey || `race:${data.competitionId}:count`;
-          // releaseSlot 실패(네트워크 오류 등)로 이 건이 다음 배치에서 되풀이 처리되지 않도록 여기서
-          // 흡수한다 — Firestore 상태는 이미 CANCELED_UNPAID로 커밋됐으므로, 남는 드리프트는
-          // scheduledReconcileCompetitionSlots(매시 정각)가 자동으로 바로잡는다.
-          await raceRedisClient.releaseSlot(conn, redisKey)
-            .then(() => {
-              released += 1;
-            })
-            .catch((releaseErr) => {
-              console.error(
-                "[cancelUnpaidCompetitionApplications] slot release 실패(주기적 리컨실로 자동 보정됨):",
-                redisKey,
-                releaseErr.message
-              );
-            });
-          await inviteNextWaitlistEntryIfClosed(db, data.competitionId).catch((waitlistErr) => {
-            console.error(
-              "[cancelUnpaidCompetitionApplications] 대기자 초대 실패(수동 확인 필요):",
-              data.competitionId,
-              waitlistErr.message
-            );
-          });
-        }
-      } catch (e) {
-        console.error("[cancelUnpaidCompetitionApplications]", doc.id, e && e.message ? e.message : e);
-      }
-      /* eslint-enable no-await-in-loop */
+/**
+ * 관리자 수동 트리거 — status+paymentDueAt 복합 인덱스가 방금 생성되어 아직 스케줄이 돌지 않았거나,
+ * 그동안 쌓인 미입금 만료 건을 기다리지 않고 바로 정리하고 싶을 때 사용.
+ */
+const manualCancelUnpaidCompetitionApplicationsOptions = appendRaceSecrets({
+  region: "asia-northeast3",
+  cors: true,
+  timeoutSeconds: 300,
+});
+exports.manualCancelUnpaidCompetitionApplications = onRequest(
+  manualCancelUnpaidCompetitionApplicationsOptions,
+  async (req, res) => {
+    setCorsHeaders(req, res);
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+      return;
     }
 
-    console.log("[cancelUnpaidCompetitionApplications] 완료", { processed, released });
+    const db = admin.firestore();
+    try {
+      const decoded = await verifyRaceRequestAuth(req);
+      const userSnap = await db.collection("users").doc(decoded.uid).get();
+      const userData = userSnap.exists ? userSnap.data() || {} : {};
+      if (String(userData.grade) !== "1") {
+        res.status(403).json({ success: false, error: "관리자만 사용할 수 있습니다." });
+        return;
+      }
+
+      const result = await runUnpaidCompetitionApplicationsCleanup(db, raceRedisConn());
+      res.status(200).json(Object.assign({ success: true }, result));
+    } catch (e) {
+      const status = e.status || 500;
+      console.error("[manualCancelUnpaidCompetitionApplications]", e && e.message ? e.message : e);
+      res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+    }
   }
 );
 
