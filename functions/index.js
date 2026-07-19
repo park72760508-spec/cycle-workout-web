@@ -14986,7 +14986,7 @@ function raceOrderIdFor(competitionId, uid) {
  * 대회 신청 — Redis 원자적 슬롯 예약 → 성공 시에만 토스 가상계좌 발급 → Firestore 기록.
  * 정원 초과는 에러가 아니라 { success:false, reason:'SOLD_OUT' } 정상 응답으로 처리한다(폭주 시 5xx 방지).
  */
-const applyForCompetitionOptions = appendRaceSecrets({ cors: true, timeoutSeconds: 60 });
+const applyForCompetitionOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
 exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === "OPTIONS") {
@@ -15037,15 +15037,49 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
       .limit(1)
       .get();
     if (!dupSnap.empty) {
-      const existing = dupSnap.docs[0].data() || {};
-      res.status(200).json({
-        success: true,
-        alreadyApplied: true,
-        applicationId: dupSnap.docs[0].id,
-        status: existing.status,
-        virtualAccount: existing.virtualAccount || null,
+      const existingDoc = dupSnap.docs[0];
+      const existing = existingDoc.data() || {};
+      const dueMs =
+        existing.paymentDueAt && existing.paymentDueAt.toMillis ? existing.paymentDueAt.toMillis() : null;
+      const isExpiredWaiting = existing.status === "PAYMENT_WAITING" && dueMs != null && dueMs <= nowMs;
+
+      if (!isExpiredWaiting) {
+        res.status(200).json({
+          success: true,
+          alreadyApplied: true,
+          applicationId: existingDoc.id,
+          status: existing.status,
+          virtualAccount: existing.virtualAccount || null,
+        });
+        return;
+      }
+
+      // 입금 기한이 지난 대기중 건 — cancelUnpaidCompetitionApplications(5분 주기) 처리 전에 재신청한 경우,
+      // 만료된 옛 가상계좌를 그대로 돌려주지 않도록 즉시 취소 처리하고 슬롯을 반환한 뒤 아래에서 새로 발급한다.
+      let releasedExpiredSlot = false;
+      await db.runTransaction(async (tx) => {
+        const freshSnap = await tx.get(existingDoc.ref);
+        const fresh = freshSnap.data() || {};
+        if (fresh.status !== "PAYMENT_WAITING") return; // 그 사이 입금 확인·취소됨(멱등)
+        tx.update(existingDoc.ref, {
+          status: "CANCELED_UNPAID",
+          redisSlotConsumed: false,
+          canceledAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        releasedExpiredSlot = fresh.redisSlotConsumed !== false;
       });
-      return;
+      await writeRaceLedgerEntry(db, existingDoc.ref, { event: "CANCELED_UNPAID", reason: "reapply_after_expiry" });
+      if (releasedExpiredSlot) {
+        const expiredRedisKey = existing.redisKey || `race:${competitionId}:count`;
+        await raceRedisClient.releaseSlot(raceRedisConn(), expiredRedisKey).catch((releaseErr) => {
+          console.error(
+            "[applyForCompetition] 만료 건 slot release 실패(수동 확인 필요):",
+            expiredRedisKey,
+            releaseErr.message
+          );
+        });
+      }
+      // 반환하지 않고 아래 신규 신청 플로우(슬롯 재예약 + 신규 가상계좌 발급)로 계속 진행한다.
     }
 
     const redisKey = comp.redisKey || `race:${competitionId}:count`;
@@ -15131,7 +15165,7 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
 });
 
 /** 대회 카드용 잔여 인원 표시 — Redis 카운트만 읽는 가벼운 GET, 부작용 없음 */
-const getCompetitionStatusOptions = appendRaceSecrets({ cors: true, timeoutSeconds: 30 });
+const getCompetitionStatusOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
 exports.getCompetitionStatus = onRequest(getCompetitionStatusOptions, async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === "OPTIONS") {
@@ -15172,7 +15206,7 @@ exports.getCompetitionStatus = onRequest(getCompetitionStatusOptions, async (req
  * 서명 헤더가 없으므로 (1) 발급 시 저장해둔 virtualAccount.secret과 웹훅 secret 대조,
  * (2) orderId로 결제를 재조회(authoritative)해 status==='DONE'일 때만 신뢰한다 — 웹훅 바디를 직접 믿지 않는다.
  */
-const tossPaymentWebhookOptions = appendRaceSecrets({ cors: false, timeoutSeconds: 60 });
+const tossPaymentWebhookOptions = appendRaceSecrets({ region: "asia-northeast3", cors: false, timeoutSeconds: 60 });
 exports.tossPaymentWebhook = onRequest(tossPaymentWebhookOptions, async (req, res) => {
   if (req.method !== "POST") {
     res.status(200).send("OK");
@@ -15254,7 +15288,7 @@ exports.tossPaymentWebhook = onRequest(tossPaymentWebhookOptions, async (req, re
  * status가 PAYMENT_WAITING(아직 입금 확인 전)이면 환불할 금액이 없으므로 거절 —
  * 이 경우 사용자는 입금을 하지 않으면 cancelUnpaidCompetitionApplications가 자동 취소·좌석 반환한다.
  */
-const requestCompetitionRefundOptions = appendRaceSecrets({ cors: true, timeoutSeconds: 60 });
+const requestCompetitionRefundOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
 exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === "OPTIONS") {
