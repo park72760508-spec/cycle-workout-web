@@ -15456,6 +15456,148 @@ exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, as
 });
 
 /**
+ * 입금 전(PAYMENT_WAITING) 신청 취소 — 결제된 돈이 없으므로 환불 계좌 없이 바로 취소·슬롯 반환한다.
+ * 이미 입금 완료(PAYMENT_COMPLETED)된 건은 requestCompetitionRefund(환불 계좌 필요)로 안내한다.
+ */
+const cancelCompetitionApplicationOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
+exports.cancelCompetitionApplication = onRequest(cancelCompetitionApplicationOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+
+  const db = admin.firestore();
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const applicationId = String(body.applicationId || "").trim();
+    if (!applicationId) {
+      res.status(400).json({ success: false, error: "applicationId가 필요합니다." });
+      return;
+    }
+
+    const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationId);
+    const appSnap = await appRef.get();
+    if (!appSnap.exists) {
+      res.status(404).json({ success: false, error: "신청 내역을 찾을 수 없습니다." });
+      return;
+    }
+    const appData = appSnap.data() || {};
+    if (appData.userId !== uid) {
+      res.status(403).json({ success: false, error: "본인 신청 건만 취소할 수 있습니다." });
+      return;
+    }
+    if (appData.status !== "PAYMENT_WAITING") {
+      res.status(400).json({
+        success: false,
+        error:
+          appData.status === "PAYMENT_COMPLETED"
+            ? "이미 입금이 완료된 신청입니다. 취소 및 환불 절차를 이용해 주세요."
+            : "이미 취소되었거나 취소할 수 없는 상태입니다.",
+      });
+      return;
+    }
+
+    let released = false;
+    await db.runTransaction(async (tx) => {
+      const freshSnap = await tx.get(appRef);
+      const fresh = freshSnap.data() || {};
+      if (fresh.status !== "PAYMENT_WAITING") return; // 이미 처리됨(멱등)
+      tx.update(appRef, {
+        status: "CANCELED_BY_USER",
+        redisSlotConsumed: false,
+        canceledAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      released = fresh.redisSlotConsumed !== false;
+    });
+    await writeRaceLedgerEntry(db, appRef, { event: "CANCELED_BY_USER" });
+    if (released) {
+      const redisKey = appData.redisKey || `race:${appData.competitionId}:count`;
+      await raceRedisClient.releaseSlot(raceRedisConn(), redisKey).catch((releaseErr) => {
+        console.error("[cancelCompetitionApplication] slot release 실패(수동 확인 필요):", redisKey, releaseErr.message);
+      });
+    }
+
+    res.status(200).json({ success: true });
+  } catch (e) {
+    const status = e.status || 500;
+    console.error("[cancelCompetitionApplication]", e && e.message ? e.message : e);
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
+ * 신청서 내용 수정 — 가상계좌·결제·Redis 슬롯은 건드리지 않고 applicant 필드만 화이트리스트 재검증 후 갱신한다.
+ * 취소된 신청은 수정할 수 없다.
+ */
+const updateCompetitionApplicationOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
+exports.updateCompetitionApplication = onRequest(updateCompetitionApplicationOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+
+  const db = admin.firestore();
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const applicationId = String(body.applicationId || "").trim();
+    if (!applicationId) {
+      res.status(400).json({ success: false, error: "applicationId가 필요합니다." });
+      return;
+    }
+
+    const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationId);
+    const appSnap = await appRef.get();
+    if (!appSnap.exists) {
+      res.status(404).json({ success: false, error: "신청 내역을 찾을 수 없습니다." });
+      return;
+    }
+    const appData = appSnap.data() || {};
+    if (appData.userId !== uid) {
+      res.status(403).json({ success: false, error: "본인 신청 건만 수정할 수 있습니다." });
+      return;
+    }
+    if (appData.status !== "PAYMENT_WAITING" && appData.status !== "PAYMENT_COMPLETED") {
+      res.status(400).json({ success: false, error: "취소된 신청은 수정할 수 없습니다." });
+      return;
+    }
+
+    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(appData.competitionId).get();
+    const comp = compSnap.exists ? compSnap.data() || {} : {};
+    const applicantResult = validateRaceApplicant(body.applicant, comp.category === "CYCLE" ? "CYCLE" : "RUN");
+    if (applicantResult.error) {
+      res.status(400).json({ success: false, error: applicantResult.error });
+      return;
+    }
+
+    await appRef.update({
+      applicant: applicantResult.data,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await writeRaceLedgerEntry(db, appRef, { event: "APPLICANT_UPDATED" });
+
+    res.status(200).json({ success: true });
+  } catch (e) {
+    const status = e.status || 500;
+    console.error("[updateCompetitionApplication]", e && e.message ? e.message : e);
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
  * 미입금 자동 취소 — 5분마다(서울) paymentDueAt이 지난 PAYMENT_WAITING 건을 CANCELED_UNPAID로 전환하고
  * Redis 슬롯을 반환한다. 토스 가상계좌는 기한 후 자동 소멸하므로 별도 취소 API 호출은 하지 않는다.
  */
