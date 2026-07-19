@@ -120,12 +120,108 @@
     );
   }
 
+  var ICON_CHEVRON =
+    '<svg class="competition-accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+  /**
+   * 아코디언 섹션 하나를 감싼다 — 헤더(단계 번호·제목·요약·화살표) 클릭 시 열고 닫히며,
+   * "다음" 버튼은 현재 섹션을 닫고 다음 섹션을 연 뒤 그쪽으로 스크롤한다(wireAccordion).
+   */
+  function buildAccordionItemHtml(section, index, isOpenDefault, nextId) {
+    return (
+      '<div class="competition-accordion-item' + (section.extraClass ? ' ' + section.extraClass : '') + '">' +
+      '  <button type="button" class="competition-accordion-header' + (isOpenDefault ? ' is-active' : '') +
+      '" data-accordion-toggle="' + section.id + '">' +
+      '    <span class="competition-accordion-step">' + (index + 1) + '</span>' +
+      '    <span class="competition-accordion-header-text">' +
+      '      <span class="competition-accordion-title">' + escapeHtml(section.title) +
+      (section.badge ? ' <span class="competition-form-required-badge">' + escapeHtml(section.badge) + '</span>' : '') +
+      '</span>' +
+      '      <span class="competition-accordion-summary" id="' + section.id + '-summary"></span>' +
+      '    </span>' +
+      ICON_CHEVRON +
+      '  </button>' +
+      '  <div class="competition-accordion-body' + (isOpenDefault ? ' is-open' : '') + '" id="' + section.id + '-body">' +
+      '    <div class="competition-accordion-body-inner">' +
+      section.bodyHtml +
+      (nextId
+        ? '<button type="button" class="competition-accordion-next-btn" data-accordion-next="' + nextId + '">다음</button>'
+        : '') +
+      '    </div>' +
+      '  </div>' +
+      '</div>'
+    );
+  }
+
+  function wireAccordion(overlay) {
+    var headers = Array.prototype.slice.call(overlay.querySelectorAll('[data-accordion-toggle]'));
+    var openId = function (id, scroll) {
+      headers.forEach(function (h) {
+        var isTarget = h.getAttribute('data-accordion-toggle') === id;
+        h.classList.toggle('is-active', isTarget);
+        var bodyEl = overlay.querySelector('#' + h.getAttribute('data-accordion-toggle') + '-body');
+        if (bodyEl) bodyEl.classList.toggle('is-open', isTarget);
+      });
+      if (scroll) {
+        var header = overlay.querySelector('[data-accordion-toggle="' + id + '"]');
+        if (header) setTimeout(function () { header.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+      }
+    };
+    headers.forEach(function (header) {
+      header.addEventListener('click', function () {
+        var id = header.getAttribute('data-accordion-toggle');
+        var isOpen = header.classList.contains('is-active');
+        openId(isOpen ? null : id, false);
+      });
+    });
+    Array.prototype.slice.call(overlay.querySelectorAll('[data-accordion-next]')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openId(btn.getAttribute('data-accordion-next'), true);
+      });
+    });
+    return { open: openId };
+  }
+
+  /** 접힌 섹션 헤더에 채워진 값 요약을 보여준다(예: "홍길동 · 남 · 960101") — 입력할 때마다 갱신 */
+  function updateSectionSummaries(overlay, comp, chipState) {
+    var q = function (id) {
+      return overlay.querySelector('#' + id);
+    };
+    var setSummary = function (id, parts) {
+      var el = overlay.querySelector('#' + id + '-summary');
+      if (el) el.textContent = parts.filter(Boolean).join(' · ');
+    };
+    var labelOf = function (options, value) {
+      var found = options.filter(function (o) {
+        return o.value === value;
+      })[0];
+      return found ? found.label : '';
+    };
+
+    setSummary('personal', [
+      q('cAppName').value.trim(),
+      labelOf(GENDER_OPTIONS, chipState.gender),
+      labelOf(NATIONALITY_OPTIONS, chipState.nationality),
+    ]);
+    setSummary('contact', [q('cAppPhone').value.trim(), q('cAppAddress1').value.trim()]);
+    var divisions = isCycle(comp) ? DIVISION_OPTIONS.CYCLE : DIVISION_OPTIONS.RUN;
+    setSummary('race', [
+      labelOf(divisions, chipState.division),
+      labelOf(SIZE_OPTIONS, chipState.size),
+      labelOf(START_GROUP_OPTIONS, chipState.startGroup),
+    ]);
+    setSummary('medical', [q('cAppEmergencyName').value.trim(), labelOf(BLOOD_TYPE_OPTIONS, q('cAppBloodType').value)]);
+    var allAgreed =
+      q('cAppAgreePrivacyCollect').checked && q('cAppAgreePrivacyThirdParty').checked && q('cAppAgreeMedicalWaiver').checked;
+    setSummary('agreements', [allAgreed ? '모두 동의 완료' : '']);
+  }
+
   function buildSectionPersonal(a) {
     a = a || {};
     return (
-      '<div class="competition-form-section">' +
-      '  <h4 class="competition-form-section-title">기본 인적 정보 <span class="competition-form-required-badge">필수</span></h4>' +
-      '  <div class="competition-form-field">' +
+      '<div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppName">이름</label>' +
       '    <input class="competition-form-input" id="cAppName" type="text" placeholder="실명을 입력해 주세요" value="' + escapeHtml(a.name) + '" />' +
       '  </div>' +
@@ -137,20 +233,17 @@
       '    <label class="competition-form-label" for="cAppBirth6">생년월일 (6자리, 예: 960101)</label>' +
       '    <input class="competition-form-input" id="cAppBirth6" type="text" placeholder="YYMMDD" value="' + escapeHtml(a.birth6) + '" />' +
       '  </div>' +
-      '  <div class="competition-form-field">' +
+      '  <div class="competition-form-field" style="margin-bottom:0;">' +
       '    <label class="competition-form-label">국적</label>' +
       chipGroupHtml('nationality', NATIONALITY_OPTIONS, 2, a.nationality) +
-      '  </div>' +
-      '</div>'
+      '  </div>'
     );
   }
 
   function buildSectionContact(a) {
     a = a || {};
     return (
-      '<div class="competition-form-section">' +
-      '  <h4 class="competition-form-section-title">연락처 및 배송지 정보 <span class="competition-form-required-badge">필수</span></h4>' +
-      '  <div class="competition-form-field">' +
+      '<div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppPhone">휴대전화 번호</label>' +
       '    <input class="competition-form-input" id="cAppPhone" type="tel" placeholder="010-1234-5678" value="' + escapeHtml(a.phone) + '" />' +
       '  </div>' +
@@ -164,23 +257,19 @@
       '  <div class="competition-form-field">' +
       '    <input class="competition-form-input" id="cAppAddress1" type="text" placeholder="기본 주소 (우편번호 찾기로 자동 입력)" readonly value="' + escapeHtml(a.address1) + '" />' +
       '  </div>' +
-      '  <div class="competition-form-field">' +
+      '  <div class="competition-form-field" style="margin-bottom:0;">' +
       '    <input class="competition-form-input" id="cAppAddress2" type="text" placeholder="상세 주소 (동/호수 등)" value="' + escapeHtml(a.address2) + '" />' +
-      '  </div>' +
-      '</div>'
+      '  </div>'
     );
   }
 
   function buildSectionRace(comp, a) {
     a = a || {};
     var cycle = isCycle(comp);
-    var sportLabel = cycle ? 'CYCLE' : 'RUN';
     var divisions = cycle ? DIVISION_OPTIONS.CYCLE : DIVISION_OPTIONS.RUN;
     var sizeLabel = cycle ? '져지 사이즈' : '기념품(티셔츠) 사이즈';
     return (
-      '<div class="competition-form-section">' +
-      '  <h4 class="competition-form-section-title">대회 참가 정보 — ' + escapeHtml(sportLabel) + ' <span class="competition-form-required-badge">필수</span></h4>' +
-      '  <div class="competition-form-field">' +
+      '<div class="competition-form-field">' +
       '    <label class="competition-form-label">참가 부문</label>' +
       chipGroupHtml('division', divisions, null, a.division) +
       '  </div>' +
@@ -188,11 +277,10 @@
       '    <label class="competition-form-label">' + escapeHtml(sizeLabel) + '</label>' +
       chipGroupHtml('size', SIZE_OPTIONS, null, a.size) +
       '  </div>' +
-      '  <div class="competition-form-field">' +
+      '  <div class="competition-form-field" style="margin-bottom:0;">' +
       '    <label class="competition-form-label">출발 그룹</label>' +
       chipGroupHtml('startGroup', START_GROUP_OPTIONS, null, a.startGroup) +
-      '  </div>' +
-      '</div>'
+      '  </div>'
     );
   }
 
@@ -203,10 +291,8 @@
       return '<option value="' + o.value + '"' + sel + '>' + escapeHtml(o.label) + '</option>';
     }).join('');
     return (
-      '<div class="competition-form-section-medical">' +
-      '  <h4 class="competition-form-section-title">안전 및 의료 정보 <span class="competition-form-required-badge">필수</span></h4>' +
-      '  <p class="competition-form-hint">대회 중 응급 상황 대비용으로만 사용되며, 신속한 대응을 위해 정확히 입력해 주세요.</p>' +
-      '  <div class="competition-form-field">' +
+      '<p class="competition-form-hint">대회 중 응급 상황 대비용으로만 사용되며, 신속한 대응을 위해 정확히 입력해 주세요.</p>' +
+      '<div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppEmergencyName">비상 연락처 — 이름</label>' +
       '    <input class="competition-form-input" id="cAppEmergencyName" type="text" placeholder="비상 연락처 이름" value="' + escapeHtml(a.emergencyName) + '" />' +
       '  </div>' +
@@ -229,17 +315,14 @@
       '  <div class="competition-form-field" style="margin-bottom:0;">' +
       '    <label class="competition-form-label" for="cAppMedicalNote">의료 특이사항 (선택)</label>' +
       '    <textarea class="competition-form-input" id="cAppMedicalNote" rows="3" placeholder="심혈관계 질환, 천식, 알레르기 등 대회 중 응급 대응에 참고할 사항을 자유롭게 적어 주세요">' + escapeHtml(a.medicalNote) + '</textarea>' +
-      '  </div>' +
-      '</div>'
+      '  </div>'
     );
   }
 
   function buildSectionAgreements(a) {
     var checkedAttr = a ? ' checked' : '';
     return (
-      '<div class="competition-form-section" style="margin-bottom:8px;">' +
-      '  <h4 class="competition-form-section-title">약관 동의</h4>' +
-      '  <div class="competition-agreement-row is-all">' +
+      '<div class="competition-agreement-row is-all">' +
       '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreeAll"' + checkedAttr + ' />' +
       '    <label class="competition-agreement-label is-all" for="cAppAgreeAll">전체 동의하기</label>' +
       '  </div>' +
@@ -257,15 +340,13 @@
       '      <div class="competition-agreement-detail">기록 측정 업체(스마트칩), 택배사, 상해보험사 등 대회 운영에 필요한 업체에 신청 정보가 제공되는 것에 동의합니다.</div>' +
       '    </label>' +
       '  </div>' +
-      '  <div class="competition-agreement-row">' +
+      '  <div class="competition-agreement-row" style="border-bottom:none;">' +
       '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreeMedicalWaiver" data-required-agree="1"' + checkedAttr + ' />' +
       '    <label class="competition-agreement-label" for="cAppAgreeMedicalWaiver">' +
       '      <span class="competition-agreement-required">[필수]</span>의료 면책 및 참가자 유의사항 동의' +
       '      <div class="competition-agreement-detail">본인의 건강 상태를 확인하고 참가하며, 대회 중 발생하는 부상 및 사고에 대해 주최 측에 책임을 묻지 않습니다.</div>' +
       '    </label>' +
-      '  </div>' +
-      '</div>' +
-      '<div class="competition-form-error" id="cAppError"></div>'
+      '  </div>'
     );
   }
 
@@ -413,28 +494,32 @@
       return o.value;
     });
 
-    if (!name) return { error: '이름을 입력해 주세요.' };
-    if (!chipState.gender) return { error: '성별을 선택해 주세요.' };
-    if (!isValidBirth6(birth6)) return { error: '생년월일 6자리를 정확히 입력해 주세요(예: 960101).' };
-    if (!chipState.nationality) return { error: '국적을 선택해 주세요.' };
-    if (!isValidPhone(phone)) return { error: '휴대전화 번호를 정확히 입력해 주세요(010-XXXX-XXXX).' };
-    if (!zip || !address1) return { error: '우편번호 찾기로 배송지 주소를 입력해 주세요.' };
-    if (!address2) return { error: '상세 주소를 입력해 주세요.' };
+    if (!name) return { error: '이름을 입력해 주세요.', sectionId: 'personal' };
+    if (!chipState.gender) return { error: '성별을 선택해 주세요.', sectionId: 'personal' };
+    if (!isValidBirth6(birth6)) return { error: '생년월일 6자리를 정확히 입력해 주세요(예: 960101).', sectionId: 'personal' };
+    if (!chipState.nationality) return { error: '국적을 선택해 주세요.', sectionId: 'personal' };
+    if (!isValidPhone(phone)) return { error: '휴대전화 번호를 정확히 입력해 주세요(010-XXXX-XXXX).', sectionId: 'contact' };
+    if (!zip || !address1) return { error: '우편번호 찾기로 배송지 주소를 입력해 주세요.', sectionId: 'contact' };
+    if (!address2) return { error: '상세 주소를 입력해 주세요.', sectionId: 'contact' };
     if (!chipState.division || validDivisions.indexOf(chipState.division) === -1) {
-      return { error: '참가 부문을 선택해 주세요.' };
+      return { error: '참가 부문을 선택해 주세요.', sectionId: 'race' };
     }
-    if (!chipState.size) return { error: '기념품 사이즈를 선택해 주세요.' };
-    if (!chipState.startGroup) return { error: '출발 그룹을 선택해 주세요.' };
-    if (!emergencyName) return { error: '비상 연락처 이름을 입력해 주세요.' };
-    if (!emergencyRelation) return { error: '참가자와의 관계를 입력해 주세요.' };
-    if (!isValidPhone(emergencyPhone)) return { error: '비상 연락처 번호를 정확히 입력해 주세요(010-XXXX-XXXX).' };
-    if (emergencyPhone === phone) return { error: '비상 연락처는 본인의 연락처와 동일할 수 없습니다.' };
-    if (!bloodType) return { error: '혈액형을 선택해 주세요.' };
+    if (!chipState.size) return { error: '기념품 사이즈를 선택해 주세요.', sectionId: 'race' };
+    if (!chipState.startGroup) return { error: '출발 그룹을 선택해 주세요.', sectionId: 'race' };
+    if (!emergencyName) return { error: '비상 연락처 이름을 입력해 주세요.', sectionId: 'medical' };
+    if (!emergencyRelation) return { error: '참가자와의 관계를 입력해 주세요.', sectionId: 'medical' };
+    if (!isValidPhone(emergencyPhone)) {
+      return { error: '비상 연락처 번호를 정확히 입력해 주세요(010-XXXX-XXXX).', sectionId: 'medical' };
+    }
+    if (emergencyPhone === phone) {
+      return { error: '비상 연락처는 본인의 연락처와 동일할 수 없습니다.', sectionId: 'medical' };
+    }
+    if (!bloodType) return { error: '혈액형을 선택해 주세요.', sectionId: 'medical' };
     var agreeAll =
       overlay.querySelector('#cAppAgreePrivacyCollect').checked &&
       overlay.querySelector('#cAppAgreePrivacyThirdParty').checked &&
       overlay.querySelector('#cAppAgreeMedicalWaiver').checked;
-    if (!agreeAll) return { error: '필수 약관에 모두 동의해 주세요.' };
+    if (!agreeAll) return { error: '필수 약관에 모두 동의해 주세요.', sectionId: 'agreements' };
 
     return {
       data: {
@@ -475,16 +560,37 @@
     }
     var isEdit = !!existingApplicant;
     var chipState = { gender: null, nationality: null, division: null, size: null, startGroup: null };
+    var sportLabel = isCycle(comp) ? 'CYCLE' : 'RUN';
+    var sections = [
+      { id: 'personal', title: '기본 인적 정보', badge: '필수', bodyHtml: buildSectionPersonal(existingApplicant) },
+      { id: 'contact', title: '연락처 및 배송지 정보', badge: '필수', bodyHtml: buildSectionContact(existingApplicant) },
+      {
+        id: 'race',
+        title: '대회 참가 정보 — ' + sportLabel,
+        badge: '필수',
+        bodyHtml: buildSectionRace(comp, existingApplicant),
+      },
+      {
+        id: 'medical',
+        title: '안전 및 의료 정보',
+        badge: '필수',
+        bodyHtml: buildSectionMedical(existingApplicant),
+        extraClass: 'is-medical',
+      },
+      { id: 'agreements', title: '약관 동의', badge: '', bodyHtml: buildSectionAgreements(existingApplicant) },
+    ];
     var body =
-      buildSectionPersonal(existingApplicant) +
-      buildSectionContact(existingApplicant) +
-      buildSectionRace(comp, existingApplicant) +
-      buildSectionMedical(existingApplicant) +
-      buildSectionAgreements(existingApplicant);
+      sections
+        .map(function (section, index) {
+          var nextId = sections[index + 1] ? sections[index + 1].id : null;
+          return buildAccordionItemHtml(section, index, index === 0, nextId);
+        })
+        .join('') + '<div class="competition-form-error" id="cAppError"></div>';
     var submitLabel = isEdit ? '수정 완료' : '작성 완료, 신청하기';
     var footer = '<button type="button" class="competition-submit-btn" id="cAppSubmitBtn">' + submitLabel + '</button>';
     var overlay = window.competitionBottomSheet.openRawSheet(isEdit ? '신청서 수정' : '참가 신청서 작성', body, footer);
 
+    var accordion = wireAccordion(overlay);
     wireChipGroups(overlay, chipState);
     wireAgreements(overlay);
     wireAddressSearch(overlay);
@@ -492,6 +598,16 @@
     wirePhoneAutoHyphen(overlay.querySelector('#cAppPhone'));
     wirePhoneAutoHyphen(overlay.querySelector('#cAppEmergencyPhone'));
     wireEmergencyPhoneCheck(overlay);
+
+    var refreshSummaries = function () {
+      updateSectionSummaries(overlay, comp, chipState);
+    };
+    overlay.addEventListener('input', refreshSummaries);
+    overlay.addEventListener('change', refreshSummaries);
+    overlay.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('.competition-chip')) refreshSummaries();
+    });
+    refreshSummaries();
 
     var submitBtn = overlay.querySelector('#cAppSubmitBtn');
     var errorEl = overlay.querySelector('#cAppError');
@@ -501,6 +617,7 @@
       if (parsed.error) {
         errorEl.textContent = parsed.error;
         errorEl.classList.add('is-visible');
+        if (parsed.sectionId) accordion.open(parsed.sectionId, true);
         return;
       }
       submitBtn.disabled = true;

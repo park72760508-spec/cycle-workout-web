@@ -194,6 +194,117 @@
     'RH-A': 'RH- A형', 'RH-B': 'RH- B형', 'RH-O': 'RH- O형', 'RH-AB': 'RH- AB형',
   };
 
+  var ICON_TAG = '<path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><circle cx="7" cy="7" r="1.5"></circle>';
+  var ICON_CALENDAR = '<rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>';
+  var ICON_MAP_PIN = '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle>';
+  var ICON_ACTIVITY = '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>';
+  var ICON_CARD = '<rect x="1" y="4" width="22" height="16" rx="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line>';
+  var ICON_USERS =
+    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle>' +
+    '<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>';
+
+  function infoIcon(inner) {
+    return (
+      '<svg class="competition-info-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>'
+    );
+  }
+
+  /** 접수 마감(또는 접수 시작) 기준 D-Day — 히어로 배지에 표시 */
+  function computeDDayInfo(comp) {
+    var nowMs = Date.now();
+    var raceMs = toDateMs(comp.raceDate);
+    var opensMs = toDateMs(comp.opensAt);
+    var closesMs = toDateMs(comp.closesAt);
+    if (raceMs != null && raceMs < nowMs) return { label: '종료', tone: 'past' };
+    if (opensMs != null && nowMs < opensMs) {
+      var daysToOpen = Math.max(0, Math.ceil((opensMs - nowMs) / 86400000));
+      return { label: '접수 D-' + daysToOpen, tone: 'upcoming' };
+    }
+    if (closesMs != null) {
+      if (nowMs > closesMs) return { label: '접수 종료', tone: 'past' };
+      var daysToClose = Math.floor((closesMs - nowMs) / 86400000);
+      return { label: daysToClose <= 0 ? '오늘 마감' : '마감 D-' + daysToClose, tone: 'open' };
+    }
+    return { label: '접수중', tone: 'open' };
+  }
+
+  /** 히어로(포스터) 섹션 — 이미지가 없으면 그라디언트 배경 + 배지만 표시 */
+  function buildHeroHtml(comp, ddayInfo) {
+    var hasImage = !!comp.posterImageUrl;
+    var catLabel = comp.category === 'CYCLE' ? 'CYCLE' : 'RUN';
+    return (
+      '<div class="competition-hero' + (hasImage ? '' : ' is-placeholder') + '">' +
+      (hasImage
+        ? '<div class="competition-hero-img" id="competitionDetailHeroImg" style="background-image:url(\'' +
+          escapeHtml(comp.posterImageUrl) + '\')"></div>' +
+          '<div class="competition-hero-overlay"></div>'
+        : '') +
+      '  <div class="competition-hero-badges">' +
+      '    <span class="competition-hero-badge">' + escapeHtml(catLabel) + '</span>' +
+      '    <span class="competition-hero-badge competition-hero-badge--dday is-' + ddayInfo.tone + '">' +
+      escapeHtml(ddayInfo.label) + '</span>' +
+      '  </div>' +
+      '</div>'
+    );
+  }
+
+  /** 종목·일시·장소·코스거리·참가비·잔여인원 — 텍스트 나열 대신 아이콘 그리드 카드로 표시 */
+  function buildInfoGridHtml(comp, opts, raceDateLabel) {
+    var cards = [
+      { icon: ICON_TAG, label: '종목', value: categoryLabel(comp.category) || '-' },
+      { icon: ICON_CALENDAR, label: '대회 일시', value: raceDateLabel || '미정' },
+      { icon: ICON_MAP_PIN, label: '장소', value: comp.location || '-' },
+      { icon: ICON_ACTIVITY, label: '코스 거리', value: comp.courseDistance || '-' },
+      {
+        icon: ICON_CARD,
+        label: '참가비',
+        value: Number(comp.entryFee) > 0 ? Number(comp.entryFee).toLocaleString('ko-KR') + '원' : '무료',
+      },
+    ];
+    var cardsHtml = cards
+      .map(function (c) {
+        return (
+          '<div class="competition-info-card">' + infoIcon(c.icon) +
+          '<div class="competition-info-card-label">' + escapeHtml(c.label) + '</div>' +
+          '<div class="competition-info-card-value">' + escapeHtml(c.value) + '</div>' +
+          '</div>'
+        );
+      })
+      .join('');
+    var remainingCardHtml =
+      '<div class="competition-info-card">' + infoIcon(ICON_USERS) +
+      '<div class="competition-info-card-label">잔여 인원</div>' +
+      '<div class="competition-info-card-value" id="competitionDetailRemaining">' +
+      escapeHtml(opts.remainingLabel || '확인 중...') + '</div>' +
+      '</div>';
+    return '<div class="competition-info-grid">' + cardsHtml + remainingCardHtml + '</div>';
+  }
+
+  function buildCourseMapHtml(comp) {
+    if (!comp.courseMapImageUrl) return '';
+    return (
+      '<h4 class="competition-form-section-title">코스 맵</h4>' +
+      '<div class="competition-course-map" style="background-image:url(\'' + escapeHtml(comp.courseMapImageUrl) + '\')"></div>'
+    );
+  }
+
+  /** 히어로 이미지 시차(parallax) 스크롤 효과 — 모션 최소화 설정 시 비활성화 */
+  function wireHeroParallax(overlay) {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var bodyEl = overlay.querySelector('.competition-bottom-sheet-body');
+    var heroImg = overlay.querySelector('#competitionDetailHeroImg');
+    if (!bodyEl || !heroImg) return;
+    bodyEl.addEventListener(
+      'scroll',
+      function () {
+        var offset = Math.max(0, bodyEl.scrollTop);
+        heroImg.style.transform = 'translateY(' + Math.min(offset * 0.35, 60) + 'px)';
+      },
+      { passive: true }
+    );
+  }
+
   /** 신청서 내용 요약 — 입금 계좌 정보 바로 아래에 표시(showDetailSheet) */
   function buildApplicantSummaryHtml(a) {
     if (!a) return '';
@@ -242,32 +353,19 @@
     var raceDateLabel = formatDateTimeKo(comp.raceDate);
     var opensLabel = formatDateTimeKo(comp.opensAt);
     var closesLabel = formatDateTimeKo(comp.closesAt);
+    var ddayInfo = computeDDayInfo(comp);
     var body =
-      (comp.description
-        ? '<p style="white-space:pre-wrap;font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">' + escapeHtml(comp.description) + '</p>'
-        : '') +
-      (categoryLabel(comp.category)
-        ? '<div class="competition-account-row"><div><div class="competition-account-row-label">종목</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(categoryLabel(comp.category)) + '</div></div></div>'
-        : '') +
-      '<div class="competition-account-row">' +
-      '  <div><div class="competition-account-row-label">참가비</div><div class="competition-account-row-value">' +
-        (Number(comp.entryFee) > 0 ? Number(comp.entryFee).toLocaleString('ko-KR') + '원' : '무료') + '</div></div>' +
-      '</div>' +
-      (raceDateLabel
-        ? '<div class="competition-account-row"><div><div class="competition-account-row-label">대회 일시</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(raceDateLabel) + '</div></div></div>'
-        : '') +
+      buildHeroHtml(comp, ddayInfo) +
+      buildInfoGridHtml(comp, opts, raceDateLabel) +
       (opensLabel || closesLabel
         ? '<div class="competition-account-row"><div><div class="competition-account-row-label">접수 기간</div><div class="competition-account-row-value" style="font-size:14px;line-height:1.5;">' +
           escapeHtml(opensLabel || '-') + ' ~ <br>' + escapeHtml(closesLabel || '-') + '</div></div></div>' +
           '<div class="competition-period-countdown" id="competitionDetailPeriodCountdown">' + escapeHtml(formatEntryPeriodCountdown(comp)) + '</div>'
         : '') +
-      (comp.location
-        ? '<div class="competition-account-row"><div><div class="competition-account-row-label">장소</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(comp.location) + '</div></div></div>'
+      buildCourseMapHtml(comp) +
+      (comp.description
+        ? '<p style="white-space:pre-wrap;font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">' + escapeHtml(comp.description) + '</p>'
         : '') +
-      '<div class="competition-account-row">' +
-      '  <div><div class="competition-account-row-label">잔여 인원</div><div class="competition-account-row-value" id="competitionDetailRemaining">' +
-        escapeHtml(opts.remainingLabel || '확인 중...') + '</div></div>' +
-      '</div>' +
       (opts.virtualAccount
         ? '<div class="competition-account-row">' +
           '  <div><div class="competition-account-row-label">입금 계좌</div><div class="competition-account-row-value" id="competitionDetailVaAccountNumber">' +
@@ -306,6 +404,7 @@
         ? '<button type="button" class="competition-bottom-sheet-icon-btn" id="competitionDetailEditIconBtn" aria-label="신청서 수정"><img src="assets/img/edit2.png" alt="" /></button>'
         : '');
     var overlay = openSheet(escapeHtml(comp.title || '대회 상세'), body, footerParts.join(''), headerActionsHtml);
+    wireHeroParallax(overlay);
 
     if (opensLabel || closesLabel) {
       var periodTimer = setInterval(function () {

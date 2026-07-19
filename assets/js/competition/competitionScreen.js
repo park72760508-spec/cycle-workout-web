@@ -16,6 +16,37 @@
     });
   }
 
+  /** 카드 라인 아이콘 — assets/img에 없는 파일(day/gps/profit/users.png)을 대체하는 인라인 SVG */
+  function cardIcon(inner) {
+    return (
+      '<svg class="competition-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>'
+    );
+  }
+  var CARD_ICON_CALENDAR = '<rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>';
+  var CARD_ICON_MAP_PIN = '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle>';
+  var CARD_ICON_CARD = '<rect x="1" y="4" width="22" height="16" rx="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line>';
+  var CARD_ICON_USERS =
+    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle>' +
+    '<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>';
+
+  /** 카드용 D-Day — 대회 상세 히어로 배지와 동일 규칙(competitionBottomSheet.computeDDayInfo) */
+  function computeCardDDay(comp) {
+    var nowMs = Date.now();
+    var raceMs = toDateMs(comp.raceDate);
+    var opensMs = toDateMs(comp.opensAt);
+    var closesMs = toDateMs(comp.closesAt);
+    if (raceMs != null && raceMs < nowMs) return null;
+    if (opensMs != null && nowMs < opensMs) {
+      return { label: '접수 D-' + Math.max(0, Math.ceil((opensMs - nowMs) / 86400000)), tone: 'upcoming' };
+    }
+    if (closesMs != null && nowMs <= closesMs) {
+      var days = Math.floor((closesMs - nowMs) / 86400000);
+      return { label: days <= 0 ? '오늘 마감' : '마감 D-' + days, tone: 'open' };
+    }
+    return null;
+  }
+
   function getFirestoreFns() {
     if (!window.firestoreV9 || !window._firebaseFirestoreFns) return null;
     return { db: window.firestoreV9, fns: window._firebaseFirestoreFns };
@@ -436,16 +467,29 @@
           : '';
     var raceDateLabel = formatDateTimeKo(comp.raceDate) || '-';
     var locationLabel = comp.location ? escapeHtml(comp.location) : '-';
+    var dday = category.key === 'past' ? null : computeCardDDay(comp);
+    var ddayBadge = dday
+      ? '<span class="competition-dday-chip is-' + dday.tone + '">' + escapeHtml(dday.label) + '</span>'
+      : '';
+    var thumbHtml = comp.posterImageUrl
+      ? '<div class="competition-card-thumb" style="background-image:url(\'' + escapeHtml(comp.posterImageUrl) + '\')"></div>'
+      : '<div class="competition-card-thumb competition-card-thumb--placeholder">' +
+        escapeHtml(comp.category === 'CYCLE' ? 'CYCLE' : 'RUN') + '</div>';
 
     card.innerHTML =
-      '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + categoryBadge + statusBadge + '</h3>' +
+      '<div class="competition-card-row">' +
+      thumbHtml +
+      '<div class="competition-card-main">' +
+      '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + categoryBadge + statusBadge + ddayBadge + '</h3>' +
       '<div class="competition-card-info">' +
-      '  <div class="competition-card-info-row"><img src="assets/img/day.png" class="competition-card-icon" alt="" />대회 일시 : ' + escapeHtml(raceDateLabel) + '</div>' +
-      '  <div class="competition-card-info-row"><img src="assets/img/gps.png" class="competition-card-icon" alt="" />장소 : ' + locationLabel + '</div>' +
+      '  <div class="competition-card-info-row">' + cardIcon(CARD_ICON_CALENDAR) + '대회 일시 : ' + escapeHtml(raceDateLabel) + '</div>' +
+      '  <div class="competition-card-info-row">' + cardIcon(CARD_ICON_MAP_PIN) + '장소 : ' + locationLabel + '</div>' +
       '</div>' +
       '<div class="competition-card-meta">' +
-      '  <span><img src="assets/img/profit.png" class="competition-card-icon" alt="" />참가비 ' + formatEntryFee(comp.entryFee) + '</span>' +
-      '  <span><img src="assets/img/users.png" class="competition-card-icon" alt="" /><span class="competition-card-remaining" id="' + remainingId + '">정원 확인 중...</span></span>' +
+      '  <span>' + cardIcon(CARD_ICON_CARD) + '참가비 ' + formatEntryFee(comp.entryFee) + '</span>' +
+      '  <span>' + cardIcon(CARD_ICON_USERS) + '<span class="competition-card-remaining" id="' + remainingId + '">정원 확인 중...</span></span>' +
+      '</div>' +
+      '</div>' +
       '</div>' +
       (category.key === 'past'
         ? ''

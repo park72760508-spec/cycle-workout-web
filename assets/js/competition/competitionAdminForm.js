@@ -23,6 +23,11 @@
     return { db: window.firestoreV9, fns: window._firebaseFirestoreFns };
   }
 
+  function getStorageFns() {
+    if (!window.firebaseStorageV9 || !window._firebaseStorageFns) return null;
+    return { storage: window.firebaseStorageV9, fns: window._firebaseStorageFns };
+  }
+
   function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -43,6 +48,101 @@
       d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
       'T' + pad(d.getHours()) + ':' + pad(d.getMinutes())
     );
+  }
+
+  var COMPETITION_IMAGE_MAX_PX = 1600;
+  var COMPETITION_IMAGE_MAX_BYTES = 2.2 * 1024 * 1024;
+
+  function readFileAsDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () {
+        reject(new Error('이미지를 읽을 수 없습니다.'));
+      };
+      reader.onload = function (e) {
+        resolve(e.target && e.target.result ? e.target.result : '');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImageElement(dataUrl) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onerror = function () {
+        reject(new Error('이미지 형식을 처리할 수 없습니다.'));
+      };
+      img.onload = function () {
+        resolve(img);
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  function canvasToJpegBlob(canvas, quality) {
+    return new Promise(function (resolve) {
+      canvas.toBlob(
+        function (blob) {
+          resolve(blob);
+        },
+        'image/jpeg',
+        quality
+      );
+    });
+  }
+
+  /** 포스터·코스맵 이미지 클라이언트 압축 — openRidingGroupService.compressRidingGroupCoverInput과 동일한 방식 */
+  async function compressCompetitionImage(file) {
+    if (!file) return file;
+    if (file.type && !String(file.type).startsWith('image/')) {
+      throw new Error('이미지 파일만 업로드할 수 있습니다.');
+    }
+    var dataUrl = await readFileAsDataUrl(file);
+    var img = await loadImageElement(dataUrl);
+    var w = img.naturalWidth || img.width || 0;
+    var h = img.naturalHeight || img.height || 0;
+    if (!w || !h) throw new Error('이미지 크기를 확인할 수 없습니다.');
+    if (w > COMPETITION_IMAGE_MAX_PX || h > COMPETITION_IMAGE_MAX_PX) {
+      if (w >= h) {
+        h = Math.round((h * COMPETITION_IMAGE_MAX_PX) / w);
+        w = COMPETITION_IMAGE_MAX_PX;
+      } else {
+        w = Math.round((w * COMPETITION_IMAGE_MAX_PX) / h);
+        h = COMPETITION_IMAGE_MAX_PX;
+      }
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('이미지 처리를 지원하지 않는 환경입니다.');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+
+    var quality = 0.88;
+    var blob = null;
+    for (var attempt = 0; attempt < 8; attempt++) {
+      blob = await canvasToJpegBlob(canvas, quality);
+      if (!blob) break;
+      if (blob.size <= COMPETITION_IMAGE_MAX_BYTES) return blob;
+      quality -= 0.1;
+      if (quality < 0.35) break;
+    }
+    if (blob && blob.size <= COMPETITION_IMAGE_MAX_BYTES) return blob;
+    throw new Error('이미지 용량이 너무 큽니다. 더 작은 이미지를 선택해 주세요.');
+  }
+
+  /** @param {string} kind — 'poster' | 'coursemap' (Storage 파일명 접두사) */
+  async function uploadCompetitionImage(competitionId, file, kind) {
+    var ctx = getStorageFns();
+    if (!ctx) throw new Error('이미지 업로드 서비스가 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.');
+    var blob = await compressCompetitionImage(file);
+    var name = kind + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '.jpg';
+    var path = 'competitions/' + competitionId + '/' + name;
+    var r = ctx.fns.ref(ctx.storage, path);
+    await ctx.fns.uploadBytes(r, blob, { contentType: 'image/jpeg' });
+    return ctx.fns.getDownloadURL(r);
   }
 
   var CSV_GENDER_LABEL = { M: '남', F: '여' };
@@ -181,6 +281,28 @@
     }
   }
 
+  /** 포스터(히어로)·코스맵 업로드 필드 — 미리보기 썸네일 + 파일선택 + 제거. wireImageUploadField와 짝을 이룬다 */
+  function buildImageUploadFieldHtml(idPrefix, label, existingUrl) {
+    var hasExisting = !!existingUrl;
+    return (
+      '<div class="competition-form-field">' +
+      '  <label class="competition-form-label">' + escapeHtml(label) + '</label>' +
+      '  <div class="competition-image-upload">' +
+      '    <div class="competition-image-preview" id="' + idPrefix + 'Preview"' +
+      (hasExisting ? ' style="background-image:url(\'' + escapeHtml(existingUrl) + '\')"' : '') +
+      '>' + (hasExisting ? '' : '이미지 없음') + '</div>' +
+      '    <div class="competition-image-upload-actions">' +
+      '      <input type="file" accept="image/*" id="' + idPrefix + 'File" class="competition-image-file-input" />' +
+      '      <label for="' + idPrefix + 'File" class="competition-image-upload-btn">이미지 선택</label>' +
+      '      <button type="button" class="competition-image-remove-btn" id="' + idPrefix + 'RemoveBtn"' +
+      (hasExisting ? '' : ' style="display:none;"') +
+      '>이미지 제거</button>' +
+      '    </div>' +
+      '  </div>' +
+      '</div>'
+    );
+  }
+
   function buildFormBody(comp) {
     comp = comp || {};
     return (
@@ -195,6 +317,8 @@
       '  <label class="competition-form-label" for="cAdminTitle">대회명</label>' +
       '  <input class="competition-form-input" id="cAdminTitle" type="text" value="' + escapeHtml(comp.title) + '" />' +
       '</div>' +
+      buildImageUploadFieldHtml('cAdminPoster', '포스터(히어로) 이미지', comp.posterImageUrl) +
+      buildImageUploadFieldHtml('cAdminCourseMap', '코스맵 이미지', comp.courseMapImageUrl) +
       '<div class="competition-form-field">' +
       '  <label class="competition-form-label" for="cAdminDescription">상세 설명</label>' +
       '  <textarea class="competition-form-input" id="cAdminDescription" rows="4">' + escapeHtml(comp.description) + '</textarea>' +
@@ -202,6 +326,10 @@
       '<div class="competition-form-field">' +
       '  <label class="competition-form-label" for="cAdminLocation">장소</label>' +
       '  <input class="competition-form-input" id="cAdminLocation" type="text" value="' + escapeHtml(comp.location) + '" />' +
+      '</div>' +
+      '<div class="competition-form-field">' +
+      '  <label class="competition-form-label" for="cAdminCourseDistance">코스 거리</label>' +
+      '  <input class="competition-form-input" id="cAdminCourseDistance" type="text" placeholder="예: 42.195km" value="' + escapeHtml(comp.courseDistance) + '" />' +
       '</div>' +
       '<div class="competition-form-field">' +
       '  <label class="competition-form-label" for="cAdminRaceDate">대회 일시</label>' +
@@ -268,6 +396,7 @@
         title: title,
         description: q('cAdminDescription').value.trim(),
         location: q('cAdminLocation').value.trim(),
+        courseDistance: q('cAdminCourseDistance').value.trim(),
         raceDate: raceDateStr ? new Date(raceDateStr) : null,
         entryFee: Number(q('cAdminEntryFee').value) || 0,
         capacity: capacity,
@@ -314,6 +443,46 @@
    * @param {object|null} comp — null이면 신규 생성, 값이 있으면 수정(comp.id 필요)
    * @param {function} onSaved — 저장 성공 후 호출(목록 새로고침용)
    */
+  /**
+   * 이미지 업로드 필드 하나를 wiring — 파일 선택 시 즉시 로컬 미리보기(object URL), 제거 시 미리보기 초기화.
+   * 실제 업로드는 저장 버튼 클릭 시(경진 대회 ID가 필요하므로) 별도로 수행한다.
+   * @returns {{ getFile: function(): (File|null), isRemoved: function(): boolean }}
+   */
+  function wireImageUploadField(overlay, idPrefix) {
+    var fileInput = overlay.querySelector('#' + idPrefix + 'File');
+    var preview = overlay.querySelector('#' + idPrefix + 'Preview');
+    var removeBtn = overlay.querySelector('#' + idPrefix + 'RemoveBtn');
+    var selectedFile = null;
+    var removed = false;
+
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      selectedFile = f;
+      removed = false;
+      preview.style.backgroundImage = 'url(' + URL.createObjectURL(f) + ')';
+      preview.textContent = '';
+      removeBtn.style.display = '';
+    });
+    removeBtn.addEventListener('click', function () {
+      selectedFile = null;
+      removed = true;
+      fileInput.value = '';
+      preview.style.backgroundImage = '';
+      preview.textContent = '이미지 없음';
+      removeBtn.style.display = 'none';
+    });
+
+    return {
+      getFile: function () {
+        return selectedFile;
+      },
+      isRemoved: function () {
+        return removed;
+      },
+    };
+  }
+
   function openForm(comp, onSaved) {
     if (!window.competitionBottomSheet || !window.competitionBottomSheet.openRawSheet) {
       console.error('[competitionAdminForm] competitionBottomSheet.openRawSheet 필요');
@@ -328,6 +497,8 @@
     var overlay = window.competitionBottomSheet.openRawSheet(isEdit ? '대회 정보 수정' : '새 대회 만들기', body, footer);
     var saveBtn = overlay.querySelector('#cAdminSaveBtn');
     var errorEl = overlay.querySelector('#cAdminError');
+    var posterField = wireImageUploadField(overlay, 'cAdminPoster');
+    var courseMapField = wireImageUploadField(overlay, 'cAdminCourseMap');
 
     saveBtn.addEventListener('click', async function () {
       errorEl.classList.remove('is-visible');
@@ -340,7 +511,27 @@
       saveBtn.disabled = true;
       saveBtn.textContent = '저장 중...';
       try {
-        await saveCompetition(isEdit ? comp.id : null, parsed.data);
+        var savedId = await saveCompetition(isEdit ? comp.id : null, parsed.data);
+
+        var imageUpdates = {};
+        var posterFile = posterField.getFile();
+        var courseMapFile = courseMapField.getFile();
+        if (posterFile) {
+          saveBtn.textContent = '포스터 이미지 업로드 중...';
+          imageUpdates.posterImageUrl = await uploadCompetitionImage(savedId, posterFile, 'poster');
+        } else if (posterField.isRemoved()) {
+          imageUpdates.posterImageUrl = null;
+        }
+        if (courseMapFile) {
+          saveBtn.textContent = '코스맵 이미지 업로드 중...';
+          imageUpdates.courseMapImageUrl = await uploadCompetitionImage(savedId, courseMapFile, 'coursemap');
+        } else if (courseMapField.isRemoved()) {
+          imageUpdates.courseMapImageUrl = null;
+        }
+        if (Object.keys(imageUpdates).length) {
+          await saveCompetition(savedId, imageUpdates);
+        }
+
         window.competitionBottomSheet.closeSheet();
         if (typeof onSaved === 'function') onSaved();
       } catch (e) {
