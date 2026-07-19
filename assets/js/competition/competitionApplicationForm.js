@@ -308,9 +308,38 @@
     });
   }
 
-  /** 우편번호 찾기 — Daum 우편번호 서비스를 최초 클릭 시에만 지연 로드한다 */
+  /**
+   * 우편번호 찾기 — Daum 우편번호 서비스를 최초 클릭 시에만 지연 로드한다.
+   * .open()은 내부적으로 window.open() 팝업을 띄우는데, 스크립트 지연 로드 후 콜백에서 호출되면
+   * 사용자 제스처 컨텍스트가 끊겨 iOS Safari 등에서 팝업 차단에 걸린다(신고된 증상과 일치).
+   * .embed()는 팝업 대신 오버레이 안에 iframe으로 직접 렌더링하므로 아이폰·안드로이드 모두에서
+   * 팝업 차단과 무관하게 항상 표시된다.
+   */
   function openDaumPostcode(onComplete) {
     function launch() {
+      var overlay = document.createElement('div');
+      overlay.className = 'competition-postcode-overlay';
+      overlay.innerHTML =
+        '<div class="competition-postcode-modal">' +
+        '  <div class="competition-postcode-header">' +
+        '    <span>주소 검색</span>' +
+        '    <button type="button" class="competition-postcode-close" aria-label="닫기">&times;</button>' +
+        '  </div>' +
+        '  <div class="competition-postcode-embed"></div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+
+      var removed = false;
+      var remove = function () {
+        if (removed) return;
+        removed = true;
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      };
+      overlay.querySelector('.competition-postcode-close').addEventListener('click', remove);
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) remove();
+      });
+
       new window.daum.Postcode({
         oncomplete: function (data) {
           var addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress;
@@ -320,9 +349,12 @@
             if (data.buildingName) extra += extra ? ', ' + data.buildingName : data.buildingName;
             if (extra) addr += ' (' + extra + ')';
           }
+          remove();
           onComplete({ zonecode: data.zonecode, address: addr });
         },
-      }).open();
+        width: '100%',
+        height: '100%',
+      }).embed(overlay.querySelector('.competition-postcode-embed'));
     }
     if (window.daum && window.daum.Postcode) {
       launch();
