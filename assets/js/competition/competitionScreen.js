@@ -25,6 +25,16 @@
     return !!(window.competitionAdminForm && window.competitionAdminForm.isAdmin());
   }
 
+  /** 현재 진입한 하단 네비 스포츠(CYCLE/RUN) — 대회 목록은 이 카테고리에 해당하는 대회만 표시한다 */
+  function getActiveCompetitionCategory() {
+    try {
+      if (window.sportCategoryRoutes && typeof window.sportCategoryRoutes.getActiveSport === 'function') {
+        return window.sportCategoryRoutes.getActiveSport() === 'run' ? 'RUN' : 'CYCLE';
+      }
+    } catch (e) {}
+    return 'CYCLE';
+  }
+
   function getCurrentUid() {
     try {
       return (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) || null;
@@ -101,10 +111,13 @@
       rows.push(Object.assign({ id: d.id }, data));
     });
     var thisYear = seoulYearOf(Date.now());
+    var activeCategory = getActiveCompetitionCategory();
     return rows.filter(function (comp) {
       var raceMs = toDateMs(comp.raceDate);
+      // 종목 미입력 건(종목 필드 추가 이전 등록분)은 과거 대회 화면이 RUN 전용이었던 이력을 반영해 RUN으로 간주
+      var compCategory = comp.category === 'CYCLE' ? 'CYCLE' : 'RUN';
       // 대회 일시 미입력 건은 연도 필터를 적용할 수 없으므로 예정 목록에서 계속 보이도록 유지
-      return raceMs == null || seoulYearOf(raceMs) === thisYear;
+      return compCategory === activeCategory && (raceMs == null || seoulYearOf(raceMs) === thisYear);
     });
   }
 
@@ -136,7 +149,8 @@
   }
 
   function renderEmpty(container) {
-    container.innerHTML = '<div class="competition-empty-state">올해 등록된 대회가 없습니다.</div>';
+    var categoryLabel = getActiveCompetitionCategory() === 'CYCLE' ? 'CYCLE' : 'RUN';
+    container.innerHTML = '<div class="competition-empty-state">올해 등록된 ' + categoryLabel + ' 대회가 없습니다.</div>';
   }
 
   async function refreshRemainingLabel(competitionId, capacityFallback, labelEl, btnEl) {
@@ -386,7 +400,7 @@
         createBtn.setAttribute('aria-label', '새 대회 만들기');
         createBtn.textContent = '+';
         createBtn.addEventListener('click', function () {
-          window.competitionAdminForm.openForm(null, renderCompetitionList);
+          window.competitionAdminForm.openForm({ category: getActiveCompetitionCategory() }, renderCompetitionList);
         });
         document.getElementById('competitionScreen').appendChild(createBtn);
       }
