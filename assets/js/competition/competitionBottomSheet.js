@@ -430,6 +430,7 @@
     if (opts.isAdmin) {
       footerParts.push(
         '<button type="button" class="competition-submit-btn" id="competitionDetailDownloadCsvBtn" style="background:#eef2ff;color:#4c51bf;margin-bottom:8px;">신청자 명단 CSV 다운로드</button>' +
+        '<button type="button" class="competition-submit-btn" id="competitionDetailReconcileBtn" style="background:#f0fdf4;color:#15803d;margin-bottom:8px;">잔여 인원 재계산</button>' +
         '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
         '  <button type="button" class="competition-submit-btn" id="competitionDetailEditBtn" style="background:#f1f5f9;color:#334155;">수정</button>' +
         '  <button type="button" class="competition-submit-btn" id="competitionDetailDeleteBtn" style="background:#fee2e2;color:#b91c1c;">삭제</button>' +
@@ -544,6 +545,19 @@
         } finally {
           downloadCsvBtn.disabled = false;
           downloadCsvBtn.textContent = '신청자 명단 CSV 다운로드';
+        }
+      });
+    }
+    var reconcileBtn = overlay.querySelector('#competitionDetailReconcileBtn');
+    if (reconcileBtn && typeof opts.onReconcileSlots === 'function') {
+      reconcileBtn.addEventListener('click', async function () {
+        reconcileBtn.disabled = true;
+        reconcileBtn.textContent = '재계산 중...';
+        try {
+          await opts.onReconcileSlots();
+        } finally {
+          reconcileBtn.disabled = false;
+          reconcileBtn.textContent = '잔여 인원 재계산';
         }
       });
     }

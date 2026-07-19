@@ -56,6 +56,11 @@
     return callAuthed('updateCompetitionApplication', { applicationId: applicationId, applicant: applicant });
   }
 
+  /** 관리자 전용 — 잔여 인원(Redis 카운트)을 Firestore 실제 신청 건수로 즉시 재계산 */
+  async function reconcileCompetitionSlots(competitionId) {
+    return callAuthed('reconcileCompetitionSlots', { competitionId: competitionId });
+  }
+
   /** 잔여 인원 조회 — 인증 불필요(공개 GET) */
   async function getCompetitionStatus(competitionId) {
     var res = await fetch(
@@ -72,6 +77,7 @@
     requestCompetitionRefund: requestCompetitionRefund,
     cancelCompetitionApplication: cancelCompetitionApplication,
     updateCompetitionApplication: updateCompetitionApplication,
+    reconcileCompetitionSlots: reconcileCompetitionSlots,
     getCompetitionStatus: getCompetitionStatus,
   };
 })();

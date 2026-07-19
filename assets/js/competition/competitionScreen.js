@@ -477,6 +477,16 @@
       onDownloadCsv: function () {
         return window.competitionAdminForm.downloadApplicantsCsv(comp);
       },
+      onReconcileSlots: function () {
+        return window.competitionApi.reconcileCompetitionSlots(comp.id).then(function (r) {
+          if (!r || r.success === false) {
+            alert((r && r.error) || '재계산에 실패했습니다.');
+            return;
+          }
+          alert('잔여 인원을 재계산했습니다 (' + r.before + ' → ' + r.after + ').');
+          renderCompetitionList();
+        });
+      },
       onEdit: function () {
         window.competitionBottomSheet.closeSheet();
         window.competitionAdminForm.openForm(comp, renderCompetitionList);
