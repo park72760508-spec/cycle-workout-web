@@ -143,6 +143,41 @@
     });
   }
 
+  function toDateMs(input) {
+    if (!input) return null;
+    var d = null;
+    if (typeof input.toDate === 'function') d = input.toDate();
+    else if (input instanceof Date) d = input;
+    else d = new Date(input);
+    return d && !isNaN(d.getTime()) ? d.getTime() : null;
+  }
+
+  function categoryLabel(category) {
+    return category === 'CYCLE' ? 'CYCLE (사이클)' : category === 'RUN' ? 'RUN (러닝)' : '';
+  }
+
+  /** 접수 시작~마감까지 실시간 카운트다운 — 시작 전이면 시작까지, 접수중이면 마감까지 */
+  function formatEntryPeriodCountdown(comp) {
+    var opensMs = toDateMs(comp.opensAt);
+    var closesMs = toDateMs(comp.closesAt);
+    var nowMs = Date.now();
+    if (closesMs != null && nowMs > closesMs) return '접수가 마감되었습니다';
+    var targetMs = opensMs != null && nowMs < opensMs ? opensMs : closesMs;
+    if (targetMs == null) return '';
+    var diff = targetMs - nowMs;
+    if (diff <= 0) return '';
+    var totalSec = Math.floor(diff / 1000);
+    var day = Math.floor(totalSec / 86400);
+    var h = Math.floor((totalSec % 86400) / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var pad = function (n) {
+      return String(n).padStart(2, '0');
+    };
+    var prefix = opensMs != null && nowMs < opensMs ? '접수 시작까지 ' : '접수 마감까지 ';
+    return prefix + (day > 0 ? day + '일 ' : '') + pad(h) + ':' + pad(m) + ':' + pad(s);
+  }
+
   /**
    * 대회 상세 정보 — 설명·장소·일시 + 신청/관리 버튼.
    * @param {object} comp — competitions 문서(id 포함)
@@ -157,9 +192,14 @@
   function showDetailSheet(comp, opts) {
     opts = opts || {};
     var raceDateLabel = formatDateTimeKo(comp.raceDate);
+    var opensLabel = formatDateTimeKo(comp.opensAt);
+    var closesLabel = formatDateTimeKo(comp.closesAt);
     var body =
       (comp.description
         ? '<p style="white-space:pre-wrap;font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">' + escapeHtml(comp.description) + '</p>'
+        : '') +
+      (categoryLabel(comp.category)
+        ? '<div class="competition-account-row"><div><div class="competition-account-row-label">종목</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(categoryLabel(comp.category)) + '</div></div></div>'
         : '') +
       '<div class="competition-account-row">' +
       '  <div><div class="competition-account-row-label">참가비</div><div class="competition-account-row-value">' +
@@ -167,6 +207,11 @@
       '</div>' +
       (raceDateLabel
         ? '<div class="competition-account-row"><div><div class="competition-account-row-label">대회 일시</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(raceDateLabel) + '</div></div></div>'
+        : '') +
+      (opensLabel || closesLabel
+        ? '<div class="competition-account-row"><div><div class="competition-account-row-label">접수 기간</div><div class="competition-account-row-value" style="font-size:14px;">' +
+          escapeHtml(opensLabel || '-') + ' ~ ' + escapeHtml(closesLabel || '-') + '</div></div></div>' +
+          '<div class="competition-period-countdown" id="competitionDetailPeriodCountdown">' + escapeHtml(formatEntryPeriodCountdown(comp)) + '</div>'
         : '') +
       (comp.location
         ? '<div class="competition-account-row"><div><div class="competition-account-row-label">장소</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(comp.location) + '</div></div></div>'
@@ -202,6 +247,17 @@
     }
 
     var overlay = openSheet(escapeHtml(comp.title || '대회 상세'), body, footerParts.join(''));
+
+    if (opensLabel || closesLabel) {
+      var periodTimer = setInterval(function () {
+        var el = document.getElementById('competitionDetailPeriodCountdown');
+        if (!el || !document.body.contains(el)) {
+          clearInterval(periodTimer);
+          return;
+        }
+        el.textContent = formatEntryPeriodCountdown(comp);
+      }, 1000);
+    }
 
     if (opts.virtualAccount) {
       var vaAccountNumber = opts.virtualAccount.accountNumber || '';

@@ -310,11 +310,17 @@
     card.className = 'competition-card is-' + category.key;
     var remainingId = 'competitionRemaining_' + comp.id;
     var statusBadge = '<span class="competition-status-badge is-' + category.key + '">' + category.label + '</span>';
+    var categoryBadge =
+      comp.category === 'CYCLE'
+        ? '<span class="competition-category-badge">CYCLE</span>'
+        : comp.category === 'RUN'
+          ? '<span class="competition-category-badge">RUN</span>'
+          : '';
     var raceDateLabel = formatDateTimeKo(comp.raceDate) || '-';
     var locationLabel = comp.location ? escapeHtml(comp.location) : '-';
 
     card.innerHTML =
-      '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + statusBadge + '</h3>' +
+      '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + categoryBadge + statusBadge + '</h3>' +
       '<div class="competition-card-info">' +
       '  <div class="competition-card-info-row"><img src="assets/img/day.png" class="competition-card-icon" alt="" />대회 일시 : ' + escapeHtml(raceDateLabel) + '</div>' +
       '  <div class="competition-card-info-row"><img src="assets/img/gps.png" class="competition-card-icon" alt="" />장소 : ' + locationLabel + '</div>' +

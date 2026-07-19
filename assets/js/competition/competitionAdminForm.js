@@ -49,6 +49,13 @@
     comp = comp || {};
     return (
       '<div class="competition-form-field">' +
+      '  <label class="competition-form-label" for="cAdminCategory">종목</label>' +
+      '  <select class="competition-form-select" id="cAdminCategory">' +
+      '    <option value="RUN"' + (comp.category !== 'CYCLE' ? ' selected' : '') + '>RUN (러닝)</option>' +
+      '    <option value="CYCLE"' + (comp.category === 'CYCLE' ? ' selected' : '') + '>CYCLE (사이클)</option>' +
+      '  </select>' +
+      '</div>' +
+      '<div class="competition-form-field">' +
       '  <label class="competition-form-label" for="cAdminTitle">대회명</label>' +
       '  <input class="competition-form-input" id="cAdminTitle" type="text" value="' + escapeHtml(comp.title) + '" />' +
       '</div>' +
@@ -121,6 +128,7 @@
     var raceDateStr = q('cAdminRaceDate').value;
     return {
       data: {
+        category: q('cAdminCategory').value === 'CYCLE' ? 'CYCLE' : 'RUN',
         title: title,
         description: q('cAdminDescription').value.trim(),
         location: q('cAdminLocation').value.trim(),
