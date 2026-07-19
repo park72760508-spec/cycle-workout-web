@@ -14982,9 +14982,75 @@ function raceOrderIdFor(competitionId, uid) {
   return `race_${competitionId}_${uid}_${ts}${rand}`.slice(0, 64);
 }
 
+const RACE_APPLICANT_GENDER = ["M", "F"];
+const RACE_APPLICANT_NATIONALITY = ["DOMESTIC", "FOREIGN"];
+const RACE_APPLICANT_DIVISION = {
+  RUN: ["FULL", "HALF", "10K", "5K"],
+  CYCLE: ["GRANFONDO", "MEDIOFONDO"],
+};
+const RACE_APPLICANT_SIZE = ["S", "M", "L", "XL", "XXL"];
+const RACE_APPLICANT_START_GROUP = ["A", "B", "C"];
+const RACE_APPLICANT_BLOOD_TYPE = [
+  "RH+A", "RH+B", "RH+O", "RH+AB", "RH-A", "RH-B", "RH-O", "RH-AB",
+];
+const RACE_PHONE_RE = /^010-\d{4}-\d{4}$/;
+
+/**
+ * 신청서(competitionApplicationForm.js) 제출값 서버측 검증 — 클라이언트 검증을 우회해 직접 호출하는
+ * 경우를 대비한 방어적 검증이므로 화이트리스트에 없는 값은 전부 거부하고, 통과한 필드만 저장한다.
+ */
+function validateRaceApplicant(applicant, category) {
+  const a = applicant && typeof applicant === "object" ? applicant : {};
+  const name = String(a.name || "").trim().slice(0, 50);
+  const birth6 = String(a.birth6 || "").trim();
+  const phone = String(a.phone || "").trim();
+  const zipCode = String(a.zipCode || "").trim();
+  const address1 = String(a.address1 || "").trim().slice(0, 200);
+  const address2 = String(a.address2 || "").trim().slice(0, 200);
+  const emergencyName = String(a.emergencyName || "").trim().slice(0, 50);
+  const emergencyRelation = String(a.emergencyRelation || "").trim().slice(0, 30);
+  const emergencyPhone = String(a.emergencyPhone || "").trim();
+  const medicalNote = String(a.medicalNote || "").trim().slice(0, 500);
+  const divisionWhitelist = category === "CYCLE" ? RACE_APPLICANT_DIVISION.CYCLE : RACE_APPLICANT_DIVISION.RUN;
+
+  if (!name) return { error: "이름을 입력해 주세요." };
+  if (!RACE_APPLICANT_GENDER.includes(a.gender)) return { error: "성별을 선택해 주세요." };
+  if (!/^\d{6}$/.test(birth6)) return { error: "생년월일 6자리를 정확히 입력해 주세요." };
+  if (!RACE_APPLICANT_NATIONALITY.includes(a.nationality)) return { error: "국적을 선택해 주세요." };
+  if (!RACE_PHONE_RE.test(phone)) return { error: "휴대전화 번호를 정확히 입력해 주세요." };
+  if (!zipCode || !address1) return { error: "배송지 주소를 입력해 주세요." };
+  if (!address2) return { error: "상세 주소를 입력해 주세요." };
+  if (!divisionWhitelist.includes(a.division)) return { error: "참가 부문을 선택해 주세요." };
+  if (!RACE_APPLICANT_SIZE.includes(a.size)) return { error: "기념품 사이즈를 선택해 주세요." };
+  if (!RACE_APPLICANT_START_GROUP.includes(a.startGroup)) return { error: "출발 그룹을 선택해 주세요." };
+  if (!emergencyName) return { error: "비상 연락처 이름을 입력해 주세요." };
+  if (!emergencyRelation) return { error: "참가자와의 관계를 입력해 주세요." };
+  if (!RACE_PHONE_RE.test(emergencyPhone)) return { error: "비상 연락처 번호를 정확히 입력해 주세요." };
+  if (emergencyPhone === phone) return { error: "비상 연락처는 본인의 연락처와 동일할 수 없습니다." };
+  if (!RACE_APPLICANT_BLOOD_TYPE.includes(a.bloodType)) return { error: "혈액형을 선택해 주세요." };
+  if (a.agreements && a.agreements.privacyCollect && a.agreements.privacyThirdParty && a.agreements.medicalWaiver) {
+    // ok
+  } else {
+    return { error: "필수 약관에 모두 동의해 주세요." };
+  }
+
+  return {
+    data: {
+      name, gender: a.gender, birth6, nationality: a.nationality,
+      phone, zipCode, address1, address2,
+      division: a.division, size: a.size, startGroup: a.startGroup,
+      emergencyName, emergencyRelation, emergencyPhone,
+      bloodType: a.bloodType, medicalNote,
+      agreements: { privacyCollect: true, privacyThirdParty: true, medicalWaiver: true },
+    },
+  };
+}
+
 /**
  * 대회 신청 — Redis 원자적 슬롯 예약 → 성공 시에만 토스 가상계좌 발급 → Firestore 기록.
  * 정원 초과는 에러가 아니라 { success:false, reason:'SOLD_OUT' } 정상 응답으로 처리한다(폭주 시 5xx 방지).
+ * applicant(신청서 — competitionApplicationForm.js)는 서버에서도 화이트리스트 재검증 후 저장하며,
+ * 향후 입금 안내·신청 내역 알림톡 발송(openRidingMeetupAlimtalk.js와 동일한 방식 예정)에 사용한다.
  */
 const applyForCompetitionOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
 exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, res) => {
@@ -15027,6 +15093,13 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
       res.status(200).json({ success: false, reason: "CLOSED", error: "접수 기간이 아닙니다." });
       return;
     }
+
+    const applicantResult = validateRaceApplicant(body.applicant, comp.category === "CYCLE" ? "CYCLE" : "RUN");
+    if (applicantResult.error) {
+      res.status(400).json({ success: false, error: applicantResult.error });
+      return;
+    }
+    const applicant = applicantResult.data;
 
     // 중복 신청 방지: 이미 대기중/완료된 신청이 있으면 그대로 반환(재시도로 인한 이중 결제 방지)
     const dupSnap = await db
@@ -15095,7 +15168,8 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
     try {
       const userSnap = await db.collection("users").doc(uid).get();
       const userData = userSnap.exists ? userSnap.data() || {} : {};
-      const customerName = String(userData.name || userData.displayName || "STELVIO 회원").slice(0, 100);
+      // 가상계좌 예금주 표시명은 실제 참가자 이름(신청서)을 우선한다 — 앱 프로필명(닉네임)과 다를 수 있음
+      const customerName = String(applicant.name || userData.name || userData.displayName || "STELVIO 회원").slice(0, 100);
       const orderId = raceOrderIdFor(competitionId, uid);
       const amount = Number(comp.entryFee) || 0;
       const bank =
@@ -15132,6 +15206,7 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
           dueDate: va.dueDate || null,
         },
         amount,
+        applicant,
         refundAccount: null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         paymentDueAt: admin.firestore.Timestamp.fromMillis(paymentDueMs),
