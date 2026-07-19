@@ -2869,8 +2869,20 @@
     #competitionScreen .competition-card.is-open { border-color: rgba(22, 163, 74, 0.35); box-shadow: 0 2px 10px rgba(22, 163, 74, 0.08); }
     /* 지난 대회 — 카드 전체 비활성화(그레이스케일·흐림), 클릭 시 상세만 확인 가능 */
     #competitionScreen .competition-card.is-past { filter: grayscale(100%); opacity: 0.55; }
+    #competitionScreen .competition-card-row { display: flex; gap: 12px; margin-bottom: 14px; }
+    #competitionScreen .competition-card-thumb {
+      width: 64px; height: 64px; border-radius: 12px; flex-shrink: 0;
+      background-size: cover; background-position: center; background-color: #f1f5f9;
+    }
+    #competitionScreen .competition-card-thumb--placeholder {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; letter-spacing: 0.02em; color: #6d28d9;
+      background: linear-gradient(135deg, #ede9fe, #e0e7ff);
+    }
+    #competitionScreen .competition-card-main { flex: 1; min-width: 0; }
     #competitionScreen .competition-card-title { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0 0 6px; }
-    #competitionScreen .competition-status-badge {
+    #competitionScreen .competition-status-badge,
+    #competitionScreen .competition-dday-chip {
       display: inline-block;
       font-size: 11px;
       font-weight: 700;
@@ -2882,16 +2894,16 @@
     #competitionScreen .competition-status-badge.is-open { color: #15803d; background: #dcfce7; }
     #competitionScreen .competition-status-badge.is-upcoming { color: #4338ca; background: #e0e7ff; }
     #competitionScreen .competition-status-badge.is-past { color: #6b7280; background: #f1f5f9; }
+    #competitionScreen .competition-dday-chip.is-open { color: #b91c1c; background: #fef2f2; }
+    #competitionScreen .competition-dday-chip.is-upcoming { color: #4338ca; background: #eef2ff; }
     #competitionScreen .competition-card-info { margin: 0 0 10px; }
     #competitionScreen .competition-card-info-row { font-size: 13px; color: #475569; line-height: 1.6; }
     #competitionScreen .competition-card-icon {
       display: inline-block;
-      height: 1em;
-      width: auto;
+      width: 13px; height: 13px;
       vertical-align: -0.15em;
       margin-right: 4px;
-      filter: grayscale(100%);
-      opacity: 0.65;
+      color: #94a3b8;
     }
     #competitionScreen .competition-card-meta { font-size: 13px; color: #64748b; margin: 0 0 14px; display: flex; flex-wrap: wrap; gap: 6px 12px; }
     #competitionScreen .competition-card-remaining { font-weight: 700; }
@@ -2999,6 +3011,43 @@
     .competition-bottom-sheet-body { padding: 20px 16px; overflow-y: auto; flex: 1; }
     .competition-bottom-sheet-footer { padding: 12px 16px 16px; }
 
+    /* 대회 상세 히어로 — 포스터 이미지(있으면) + 종목·D-Day 배지, 스크롤 시 시차(parallax) 효과 */
+    .competition-hero {
+      position: relative; height: 200px; margin: -20px -16px 20px; overflow: hidden;
+      background: linear-gradient(135deg, #6d28d9, #4f46e5);
+      display: flex; align-items: flex-end;
+    }
+    .competition-hero.is-placeholder { height: 92px; }
+    .competition-hero-img {
+      position: absolute; inset: -20% 0; background-size: cover; background-position: center;
+      will-change: transform;
+    }
+    .competition-hero-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.5) 100%);
+    }
+    .competition-hero-badges { position: relative; z-index: 1; display: flex; gap: 6px; padding: 0 16px 14px; }
+    .competition-hero-badge {
+      font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+      background: rgba(255,255,255,0.2); color: white;
+      border: 1px solid rgba(255,255,255,0.35);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    }
+    .competition-hero-badge--dday.is-open { background: rgba(239,68,68,0.9); border-color: transparent; }
+    .competition-hero-badge--dday.is-past { background: rgba(107,114,128,0.65); border-color: transparent; }
+
+    /* 대회 정보 그리드 카드 — 종목·일시·장소·코스거리·참가비·잔여인원 */
+    .competition-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .competition-info-card { background: #f8fafc; border-radius: 14px; padding: 14px; border: 1px solid #eef0f4; }
+    .competition-info-card-icon { width: 18px; height: 18px; color: #667eea; margin-bottom: 8px; display: block; }
+    .competition-info-card-label { font-size: 11px; color: #94a3b8; margin-bottom: 3px; }
+    .competition-info-card-value { font-size: 14px; font-weight: 700; color: #0f172a; line-height: 1.3; }
+    .competition-course-map {
+      width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; margin-bottom: 20px;
+      background-size: cover; background-position: center; background-color: #f1f5f9;
+      border: 1px solid #eef0f4;
+    }
+
     .competition-account-row {
       display: flex; align-items: center; justify-content: space-between;
       padding: 14px 16px; background: #f8fafc; border-radius: 12px; margin-bottom: 10px;
@@ -3042,25 +3091,57 @@
     }
     .competition-submit-btn[disabled] { background: #cbd5e1; cursor: not-allowed; }
 
-    /* 신청서 작성 폼 — 섹션 구분·칩 선택·약관 동의 (competitionApplicationForm.js) */
-    .competition-form-section { margin-bottom: 22px; }
-    .competition-form-section + .competition-form-section { padding-top: 20px; border-top: 1px solid #e2e8f0; }
+    /* 신청서 작성 폼 — 아코디언 섹션·칩 선택·약관 동의 (competitionApplicationForm.js) */
     .competition-form-section-title {
-      display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: #1e293b; margin: 0 0 14px;
+      display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: #1e293b; margin: 20px 0 14px;
     }
     .competition-form-required-badge {
       font-size: 10px; font-weight: 700; color: #fff; background: #667eea; border-radius: 999px; padding: 2px 8px;
     }
-    .competition-form-hint { font-size: 12px; color: #94a3b8; margin: -6px 0 14px; line-height: 1.5; }
-    .competition-form-section-medical {
-      border: 1.5px solid rgba(239, 68, 68, 0.35);
-      background: rgba(254, 242, 242, 0.6);
-      border-radius: 14px;
-      padding: 16px 14px;
-      margin-bottom: 24px;
+    .competition-form-hint { font-size: 12px; color: #94a3b8; margin: 0 0 14px; line-height: 1.5; }
+
+    /* 아코디언(단계형) 섹션 — 한 번에 하나씩만 펼쳐 입력 피로도를 낮춘다 */
+    .competition-accordion-item {
+      border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 10px; background: white;
     }
-    .competition-form-section-medical .competition-form-section-title { color: #b91c1c; }
-    .competition-form-section-medical .competition-form-required-badge { background: #ef4444; }
+    .competition-accordion-item.is-medical { border-color: rgba(239, 68, 68, 0.35); }
+    .competition-accordion-header {
+      width: 100%; display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; background: white; border: none; cursor: pointer; text-align: left;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .competition-accordion-item.is-medical .competition-accordion-header { background: rgba(254, 242, 242, 0.5); }
+    .competition-accordion-step {
+      flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+      background: #f1f5f9; color: #64748b; font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .competition-accordion-header.is-active .competition-accordion-step { background: #667eea; color: white; }
+    .competition-accordion-item.is-medical .competition-accordion-step { background: #fee2e2; color: #b91c1c; }
+    .competition-accordion-item.is-medical .competition-accordion-header.is-active .competition-accordion-step {
+      background: #ef4444; color: white;
+    }
+    .competition-accordion-header-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .competition-accordion-title { font-size: 14px; font-weight: 700; color: #1e293b; }
+    .competition-accordion-item.is-medical .competition-accordion-title { color: #b91c1c; }
+    .competition-accordion-summary {
+      font-size: 12px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .competition-accordion-chevron {
+      flex-shrink: 0; width: 18px; height: 18px; color: #94a3b8; transition: transform 0.25s ease;
+    }
+    .competition-accordion-header.is-active .competition-accordion-chevron { transform: rotate(180deg); color: #667eea; }
+    .competition-accordion-body {
+      display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease;
+    }
+    .competition-accordion-body.is-open { grid-template-rows: 1fr; }
+    .competition-accordion-body-inner { overflow: hidden; min-height: 0; padding: 0 16px 16px; }
+    .competition-accordion-next-btn {
+      width: 100%; margin-top: 4px; padding: 10px; border-radius: 10px;
+      border: 1px solid rgba(102, 126, 234, 0.35); background: rgba(102, 126, 234, 0.06);
+      color: #4c51bf; font-size: 13px; font-weight: 700; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
     .competition-chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
     .competition-chip-group--2col { display: grid; grid-template-columns: 1fr 1fr; }
     .competition-chip-group--2col .competition-chip { text-align: center; }
@@ -3124,6 +3205,27 @@
     .competition-postcode-close { background: none; border: none; font-size: 22px; color: #6b7280; cursor: pointer; padding: 0; line-height: 1; }
     .competition-postcode-embed { flex: 1; min-height: 0; }
     .competition-postcode-embed iframe { width: 100%; height: 100%; border: none; }
+
+    /* 관리자 폼 — 포스터·코스맵 이미지 업로드 (competitionAdminForm.js) */
+    .competition-image-upload { display: flex; align-items: center; gap: 14px; }
+    .competition-image-preview {
+      width: 88px; height: 88px; border-radius: 12px; flex-shrink: 0;
+      background-color: #f1f5f9; background-size: cover; background-position: center;
+      border: 1px solid #e2e8f0;
+      display: flex; align-items: center; justify-content: center;
+      color: #94a3b8; font-size: 11px; text-align: center; overflow: hidden;
+    }
+    .competition-image-upload-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+    .competition-image-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+    .competition-image-upload-btn {
+      display: inline-block; padding: 8px 14px; border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 8px;
+      font-size: 13px; font-weight: 600; color: #4c51bf; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .competition-image-remove-btn {
+      background: none; border: none; color: #ef4444; font-size: 12px; font-weight: 600;
+      cursor: pointer; padding: 0; -webkit-tap-highlight-color: transparent;
+    }
   </style>
 
   <!-- 한/영/숫자 폰트 통일: Noto Sans KR (안드로이드 등에서 영문·숫자 궁서체 fallback 방지) -->
