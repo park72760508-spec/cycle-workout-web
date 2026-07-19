@@ -195,7 +195,7 @@
         applyBtn.textContent = '접수 기간이 아닙니다';
       } else {
         haptic(10);
-        alert((result && result.error) || '신청에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        if (!opts.silentAlert) alert((result && result.error) || '신청에 실패했습니다. 잠시 후 다시 시도해 주세요.');
         applyBtn.disabled = false;
         applyBtn.textContent = '신청하기';
       }
@@ -235,7 +235,12 @@
     applyBtn.textContent = '입금 대기중';
     applyBtn.disabled = true;
     if (opts.autoOpenSheet !== false) {
-      window.competitionBottomSheet.showVirtualAccountSheet(result.virtualAccount || {});
+      // 신청서 작성 폼(competitionApplicationForm)에서 이어지는 흐름은 onSubmit resolve 직후
+      // 폼 자신의 바텀시트를 닫는다(단일 오버레이 구조) — 같은 틱에 열면 그 close에 곧바로 닫히므로
+      // 다음 매크로태스크로 미뤄 폼이 닫힌 뒤에 계좌 안내 시트가 열리도록 한다.
+      setTimeout(function () {
+        window.competitionBottomSheet.showVirtualAccountSheet(result.virtualAccount || {});
+      }, 0);
     }
   }
 
@@ -274,22 +279,45 @@
     return false;
   }
 
-  /** 카드 버튼·상세시트 버튼 공용 신청 플로우 */
-  async function applyToCompetitionFlow(comp, applyBtn) {
-    haptic(10);
+  /**
+   * 신청서 제출(competitionApplicationForm의 onSubmit) — 검증된 참가자 정보로 실제 신청 API를 호출한다.
+   * SOLD_OUT/CLOSED를 포함해 실패 시 reject해서 신청서 시트가 에러를 보여주고 재시도할 수 있게 열어둔다.
+   */
+  async function submitCompetitionApplication(comp, applyBtn, applicant) {
     applyBtn.disabled = true;
     applyBtn.classList.add('is-loading');
+    var result;
     try {
-      var result = await window.competitionApi.applyForCompetition(comp.id);
-      applyBtn.classList.remove('is-loading');
-      handleApplyResult(result, applyBtn);
+      result = await window.competitionApi.applyForCompetition(comp.id, applicant);
     } catch (e) {
       applyBtn.classList.remove('is-loading');
       applyBtn.disabled = false;
       applyBtn.textContent = '신청하기';
-      haptic(10);
-      alert((e && e.message) || '신청에 실패했습니다.');
+      throw e;
     }
+    applyBtn.classList.remove('is-loading');
+    // silentAlert: 실패 사유는 신청서 시트의 인라인 에러로 보여주므로 handleApplyResult의 alert()는 생략한다
+    handleApplyResult(result, applyBtn, { silentAlert: true });
+    if (!result || result.success === false) {
+      var msg =
+        (result && result.reason === 'SOLD_OUT' && '마감되었습니다.') ||
+        (result && result.reason === 'CLOSED' && '접수 기간이 아닙니다.') ||
+        (result && result.error) ||
+        '신청에 실패했습니다.';
+      throw new Error(msg);
+    }
+  }
+
+  /** 카드 버튼·상세시트 버튼 공용 신청 플로우 — 신청서 작성 화면을 먼저 띄운 뒤 제출 시 신청 API를 호출한다 */
+  function applyToCompetitionFlow(comp, applyBtn) {
+    haptic(10);
+    if (!window.competitionApplicationForm || typeof window.competitionApplicationForm.open !== 'function') {
+      console.error('[competitionScreen] competitionApplicationForm 필요');
+      return;
+    }
+    window.competitionApplicationForm.open(comp, function (applicant) {
+      return submitCompetitionApplication(comp, applyBtn, applicant);
+    });
   }
 
   function openDetail(comp, admin, remainingLabel, myApp) {

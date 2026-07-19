@@ -35,8 +35,8 @@
     return json;
   }
 
-  async function applyForCompetition(competitionId) {
-    return callAuthed('applyForCompetition', { competitionId: competitionId });
+  async function applyForCompetition(competitionId, applicant) {
+    return callAuthed('applyForCompetition', { competitionId: competitionId, applicant: applicant || null });
   }
 
   async function requestCompetitionRefund(applicationId, refundAccount) {
