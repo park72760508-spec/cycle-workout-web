@@ -117,6 +117,23 @@
         { "fieldPath": "windowEnd", "order": "ASCENDING" },
         { "fieldPath": "windowStart", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "race_waitlist",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competitionId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "race_waitlist",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "inviteExpiresAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
