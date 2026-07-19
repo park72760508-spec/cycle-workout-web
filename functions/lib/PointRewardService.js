@@ -35,18 +35,24 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PointRewardService = void 0;
 const admin = __importStar(require("firebase-admin"));
-const aligoCredentials_1 = require("./aligoCredentials");
-const aligoapi = require("aligoapi");
+const aligoAlimtalkUnified_1 = require("./aligoAlimtalkUnified");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const supabaseIndoorWriteServer = require("../supabaseIndoorWriteServer.js");
 /** 포인트 계산 비율: 기본 1 TSS = 1 SP */
 const POINTS_PER_TSS = Number(process.env.POINTS_PER_TSS || "1");
 /** 구독 연장 트리거 포인트 기준치 */
 const SUBSCRIPTION_POINT_THRESHOLD = Number(process.env.SUBSCRIPTION_POINT_THRESHOLD || "500");
 /** 기준치 1회 충족 시 연장되는 일수 */
 const SUBSCRIPTION_DAYS_PER_THRESHOLD = Number(process.env.SUBSCRIPTION_DAYS_PER_THRESHOLD || "1");
+/**
+ * 포인트 적립·만료일(구독) 연장 안내 알림톡(UH_2120) 발송 스위치.
+ * 기본 비활성화. 재활성화 시 Functions env `MISSION_SUBSCRIPTION_ALIMTALK_ENABLED=1` 설정.
+ */
+function isMissionSubscriptionAlimtalkEnabled() {
+    return /^(1|true|yes)$/i.test(String(process.env.MISSION_SUBSCRIPTION_ALIMTALK_ENABLED ?? "").trim());
+}
 const USERS_COLLECTION = "users";
 const POINT_HISTORY_COLLECTION = "point_history";
-const APP_CONFIG_COLLECTION = "appConfig";
-const ALIGO_CONFIG_DOC = "aligo";
 /** 알리고/카카오 승인 알림톡 제목(subject_1) — 본문 첫째 줄 […] 제목 텍스트와 동일(대괄호 없음) */
 const ALIMTALK_SUBJECT_KO = "STELVIO 라이딩 미션 달성 및 구독 연장 안내";
 /** 본문 첫 줄 검수 문구(대괄호 포함) — 승인 템플릿과 바이트 단위로 맞춤 */
@@ -131,10 +137,6 @@ function computeSubscriptionExpiryBeforeAfterSeoul(userExpiryRaw, extensionDays)
     const after = extensionDays > 0 ? addCalendarDaysYmdSeoul(before, extensionDays) : before;
     return { before, after };
 }
-/** 휴대폰 숫자만 추출하여 알림톡 수신자 형태(11자리)로 정규화 */
-function normalizeReceiverPhone(phone) {
-    return (phone || "").replace(/\D/g, "");
-}
 function getReceiverPhoneFromUserData(userData) {
     return String(userData.contact ??
         userData.phoneNumber ??
@@ -211,17 +213,8 @@ function formatRemPointsForMissionAlimtalk(n) {
     }
     return String(Math.round(Number.isFinite(n) ? n : 0));
 }
-/** 빈 값·공백·단일 비(문자/숫자) 기호(예: `-`)는 recvname/본문 치환 시 검수 오류 유발 → 안전 폴백 */
-function safeAlimtalkDisplayName(raw) {
-    const t = String(raw ?? "").trim();
-    if (!t)
-        return "회원";
-    if (t.length === 1 && /[^\p{L}\p{N}]/u.test(t))
-        return "회원";
-    return t;
-}
 function buildAlimtalkMessage(params) {
-    const displayName = safeAlimtalkDisplayName(params.userName);
+    const displayName = (0, aligoAlimtalkUnified_1.safeAlimtalkDisplayNameUnified)(params.userName);
     const earnedSp = formatSpForKakaoTemplate(params.earnedPoints);
     const extendedDaysStr = String(Number.isFinite(params.extendedDays) ? Math.trunc(params.extendedDays) : 0);
     const remSp = formatRemPointsForMissionAlimtalk(params.remPointsAfter);
@@ -253,113 +246,70 @@ function buildAlimtalkMessage(params) {
 ※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.`;
     return rawMessage.replace(/\r?\n/g, "\r\n");
 }
-/**
- * POST /akv10/alimtalk/send/ 응답: 성공 시 `code` 는 Integer 0, message 예: "성공적으로 전송요청 하였습니다."
- * (구 SMS 연동 result_code=1 는 본 API와 혼용되지 않음 — alimtalk 전용이면 code만 본다)
- */
-function isAligoAlimtalkApiSuccess(data) {
-    if (data.code !== undefined && data.code !== null) {
-        const c = Number(data.code);
-        return c === 0 && !Number.isNaN(c);
-    }
-    if (data.result_code !== undefined && data.result_code !== null) {
-        return String(data.result_code) === "1";
-    }
-    return false;
-}
 class PointRewardService {
-    constructor(db) {
+    constructor(db, opts) {
         this.db = db;
+        this.opts = opts;
     }
-    /** Strava Secret 패턴과 동일하게 env + appConfig(aligo) 조합으로 설정 로딩 */
-    async loadAligoConfig() {
-        const appConfigSnap = await this.db.collection(APP_CONFIG_COLLECTION).doc(ALIGO_CONFIG_DOC).get();
-        const appConfig = appConfigSnap.exists ? appConfigSnap.data() ?? {} : {};
-        const senderkey = (0, aligoCredentials_1.scrubAligoCredential)(String(process.env.ALIGO_SENDER_KEY || appConfig.senderkey || ""));
-        const tplCode = (0, aligoCredentials_1.scrubAligoCredential)(String(process.env.ALIGO_TPL_CODE || appConfig.tpl_code || ""));
-        const sender = (0, aligoCredentials_1.scrubAligoCredential)(String(process.env.ALIGO_SENDER || appConfig.sender || ""));
-        const apikey = (0, aligoCredentials_1.scrubAligoCredential)(process.env.ALIGO_API_KEY);
-        const userid = (0, aligoCredentials_1.scrubAligoCredential)(process.env.ALIGO_USER_ID);
-        const token = (0, aligoCredentials_1.scrubAligoCredential)(process.env.ALIGO_TOKEN);
-        if (!senderkey || !tplCode || !sender || !apikey || !userid || !token) {
-            throw new Error("알리고 설정이 누락되었습니다. (ALIGO_* env·Secret 또는 appConfig/aligo의 senderkey·tpl_code·sender 확인. API 인증 3종은 Secret ALIGO_API_KEY/USER_ID/TOKEN)");
+    async mirrorIndoorRewardToSupabaseIfEnabled(userId, pointDoc, userPatch) {
+        try {
+            await supabaseIndoorWriteServer.refreshIndoorWriteFromRemoteConfig(admin, true);
+            if (!supabaseIndoorWriteServer.evaluateIndoorSupabasePrimary(userId).usePrimary) {
+                return;
+            }
+            await supabaseIndoorWriteServer.mirrorPointHistoryFromFirestoreDoc(userId, pointDoc);
+            if (userPatch && Object.keys(userPatch).length > 0) {
+                await supabaseIndoorWriteServer.syncUserPoints(userId, userPatch);
+            }
         }
-        (0, aligoCredentials_1.logAligoAuthShape)("loadAligoConfig", apikey, userid, token);
-        return {
-            senderkey,
-            tpl_code: tplCode,
-            sender,
-            apikey,
-            userid,
-            token,
-        };
+        catch (err) {
+            console.warn("[PointReward] Supabase indoor mirror 실패:", userId, err);
+        }
     }
     /**
-     * aligoapi.alimtalkSend(req, auth) — body + auth( apikey, userid, token ) form 합쳐 POST
-     * 공식 필수: senderkey, tpl_code, sender, receiver_1, subject_1, message_1
-     * 선택: recvname_1, senddate, emtitle_1, button_1, failover, fsubject_1, fmessage_1, testMode
-     * failover=Y 일 때 fsubject_1, fmessage_1 필수 — 본 구현은 failover N(대체문자 없음)
-     * @see https://kakaoapi.aligo.in/akv10/alimtalk/send/
+     * 라이딩 미션 달성·구독 연장 알림톡(UH_2120 계열 tpl_code).
+     * @see aligoAlimtalkUnified.ts
      */
     async sendAlimtalk(receiverPhone, displayName, subject, message) {
-        const cfg = await this.loadAligoConfig();
-        const receiver = normalizeReceiverPhone(receiverPhone);
-        if (!receiver) {
-            throw new Error("알림톡 수신자 번호가 비어 있습니다.");
-        }
-        const recvName = safeAlimtalkDisplayName(displayName || "");
-        const messageOut = message.replace(/\r?\n/g, "\r\n");
-        const body = {
-            senderkey: cfg.senderkey,
-            tpl_code: cfg.tpl_code,
-            sender: cfg.sender,
-            receiver_1: receiver,
-            recvname_1: recvName,
-            subject_1: subject,
-            message_1: messageOut,
-            failover: "N",
-        };
-        if (String(process.env.ALIGO_ALIMTALK_TEST_MODE || "").toUpperCase() === "Y") {
-            body.testMode = "Y";
-        }
-        const em = String(process.env.ALIGO_ALIMTALK_EMTITLE_1 || "").trim();
-        if (em) {
-            body.emtitle_1 = em;
-        }
-        const btn = String(process.env.ALIGO_ALIMTALK_BUTTON_1 || "").trim();
-        if (btn) {
-            body.button_1 = btn;
-        }
-        /* aligoapi.formParse()는 Express req를 가정하여 obj.headers['content-type']에 직접 접근함.
-         * Firebase Functions 환경에서는 headers가 없으므로 직접 주입.
-         * 'application/json' 지정 → non-multipart 분기로 obj.body를 정상 파싱. */
-        const req = { body, headers: { 'content-type': 'application/json' } };
-        const authData = {
-            apikey: cfg.apikey,
-            userid: cfg.userid,
-            token: cfg.token,
-        };
-        const raw = (await aligoapi.alimtalkSend(req, authData));
-        if (!isAligoAlimtalkApiSuccess(raw)) {
-            let detail = "";
+        const relay = this.opts?.missionAlimVpcRelay;
+        if (relay?.url?.trim() && relay?.secret) {
+            const ac = new AbortController();
+            const t = setTimeout(() => ac.abort(), 120000);
+            let resp;
             try {
-                detail = JSON.stringify(raw);
+                resp = await fetch(relay.url.trim(), {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-mission-alim-relay-secret": relay.secret,
+                    },
+                    body: JSON.stringify({
+                        receiverPhone,
+                        displayName,
+                        subject,
+                        message,
+                    }),
+                    signal: ac.signal,
+                });
             }
-            catch {
-                detail = String(raw);
+            finally {
+                clearTimeout(t);
             }
-            const msg = String(raw.message ??
-                raw.Message ??
-                "알 수 없는 응답");
-            const c = raw?.code ?? raw?.result_code;
-            const hint = (0, aligoCredentials_1.aligoApiFailureHint)(c, msg);
-            console.error("[Aligo] alimtalkSend 비성공 응답:", detail, hint || "");
-            throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}${hint}`);
+            const bodyText = await resp.text().catch(() => "");
+            if (!resp.ok) {
+                throw new Error(`mission 알림 HTTPS 릴레이 실패 HTTP ${resp.status}: ${bodyText.slice(0, 800)}`);
+            }
+            return;
         }
-        const info = raw.info;
-        if (info && info.mid != null) {
-            console.log(`[Aligo] alimtalk 전송요청 수신 type=${String(info.type ?? "AT")} mid=${String(info.mid)} scnt=${info.scnt ?? ""} fcnt=${info.fcnt ?? ""}`);
-        }
+        const cfg = await (0, aligoAlimtalkUnified_1.loadAligoAlimtalkConfig)(this.db, aligoAlimtalkUnified_1.ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION);
+        await (0, aligoAlimtalkUnified_1.sendAlimtalkUnified)(cfg, {
+            receiverPhone,
+            displayName,
+            subject,
+            message,
+            templateKind: aligoAlimtalkUnified_1.ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION,
+            logTag: "[PointReward Aligo]",
+        });
     }
     /**
      * 인도어 세션 종료 / Strava 업로드 완료 시 호출되는 메인 함수
@@ -448,6 +398,25 @@ class PointRewardService {
                 },
             };
         });
+        await this.mirrorIndoorRewardToSupabaseIfEnabled(userId, {
+            is_strava: isStrava,
+            source: isStrava ? "strava" : "indoor",
+            tss,
+            earned_points: txResult.result.earnedPoints,
+            points_before: txResult.result.pointsBefore,
+            points_after: txResult.result.pointsAfter,
+            points_used_for_subscription: txResult.result.pointsUsed,
+            subscription_threshold: SUBSCRIPTION_POINT_THRESHOLD,
+            extension_count: txResult.result.extensionCount,
+            extended_days: txResult.result.extendedDays,
+            expiry_date_before: txResult.result.expiryDateBefore || null,
+            expiry_date_after: txResult.result.expiryDateAfter || null,
+            firebase_log_id: txResult.result.historyId,
+        }, {
+            rem_points: txResult.result.pointsAfter,
+            acc_points: undefined,
+            expiry_date: txResult.result.extendedDays > 0 ? txResult.result.expiryDateAfter : undefined,
+        });
         let alimtalkSent = false;
         let alimtalkSkip = txResult.result.extendedDays > 0 ? null : "no_subscription_extension";
         let alimtalkError = null;
@@ -520,7 +489,7 @@ class PointRewardService {
         const receiverPhone = getReceiverPhoneFromUserData(userData);
         const historyDocId = `stelvio_mileage_${userId}_${trainingLogId}`.replace(/[/#]/g, "_");
         const pointHistoryRef = this.db.collection(POINT_HISTORY_COLLECTION).doc(historyDocId);
-        await pointHistoryRef.set({
+        const pointDoc = {
             user_id: userId,
             source: "indoor",
             is_strava: false,
@@ -540,7 +509,12 @@ class PointRewardService {
             subscription_expiry_date_before: expiryDateBefore || null,
             subscription_expiry_date_after: expiryDateAfter || null,
             created_at: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        };
+        await pointHistoryRef.set(pointDoc, { merge: true });
+        await this.mirrorIndoorRewardToSupabaseIfEnabled(userId, {
+            ...pointDoc,
+            firebase_log_id: trainingLogId,
+        });
         const alimtalkPayload = extendedDays > 0
             ? {
                 userId,
@@ -560,13 +534,16 @@ class PointRewardService {
      * API 실패 시 예외를 던지지 않고 `aligo_error` + errorDetail로 반환(Functions가 멈추지 않음).
      */
     async sendStelvioIndoorAlimtalkFromPayload(payload) {
+        if (!isMissionSubscriptionAlimtalkEnabled()) {
+            return { alimtalkSent: false, skipped: "alimtalk_disabled" };
+        }
         if (!payload) {
             return { alimtalkSent: false, skipped: "no_subscription_extension" };
         }
         if (payload.extendedDays <= 0) {
             return { alimtalkSent: false, skipped: "no_subscription_extension" };
         }
-        if (!normalizeReceiverPhone(payload.receiverPhone)) {
+        if (!(0, aligoAlimtalkUnified_1.normalizeReceiverPhoneDigits)(payload.receiverPhone)) {
             console.warn(`[PointReward] userId=${payload.userId} 구독 연장 알림톡 생략: users에 휴대전화 없음 (contact·phone·mobile 등)`);
             return { alimtalkSent: false, skipped: "no_phone" };
         }

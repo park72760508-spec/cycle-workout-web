@@ -23,11 +23,21 @@ export declare const stravaWebhook: import("firebase-functions/v2/https").HttpsF
  * - users/{userId}/logs/{logId} 생성 이벤트에서 source!=strava 이고 tss>0 인 경우만 적립
  * - point_reward_v2_applied 플래그로 중복 적립 방지
  */
-export declare const onIndoorLogCreatedReward: import("firebase-functions/v2/core").CloudFunction<import("firebase-functions/v2/firestore").FirestoreEvent<import("firebase-functions/v2/firestore").QueryDocumentSnapshot | undefined, Record<string, string>>>;
-export declare const onMeetupInviteAlimtalkDeliver: import("firebase-functions/v2/core").CloudFunction<import("firebase-functions/v2/core").CloudEvent<import("firebase-functions/v2/pubsub").MessagePublishedData<any>>>;
-/** rides 생성 시 Pub/Sub에만 적재(VPC 불필요). 실제 알리고 호출은 onMeetupInviteAlimtalkDeliver */
-export declare const onRideCreatedMeetupInviteAlimtalk: import("firebase-functions/v2/core").CloudFunction<import("firebase-functions/v2/firestore").FirestoreEvent<import("firebase-functions/v2/firestore").QueryDocumentSnapshot | undefined, Record<string, string>>>;
+export declare const onIndoorLogCreatedReward: import("firebase-functions/core").CloudFunction<import("firebase-functions/v2/firestore").FirestoreEvent<import("firebase-functions/v2/firestore").QueryDocumentSnapshot | undefined, Record<string, string>>>;
+/**
+ * 라이딩 미션·구독 연장(UH_2120) 알림톡 — Strava 웹훅 전용 HTTPS 릴레이.
+ * `onIndoorLogCreatedReward`(실내)·모임 릴레이와 동일 Direct VPC egress로 알리고 kakaoapi 호출하여 NAT 고정 IP 정렬.
+ */
+export declare const missionSubscriptionAlimtalkHttpsRelay: import("firebase-functions/v2/https").HttpsFunction;
+/**
+ * 모임 알림톡 전용 HTTPS 릴레이 (VPC + ALL_TRAFFIC egress).
+ * 알리고 code=-99 시: rides....diagSeenPublicIp 에 찍힌 공인 IP를 카카오톡 API 허용 목록에 넣을 것.
+ * (VPC 미적용 egress는 34.96.x처럼 Google 기본 출구와 유사하게 보입니다. firebase-functions 예전 버전에서는 `network` 플래트 옵션이 배포 매니페스트에서 빠져 NAT가 적용되지 않을 수 있습니다 — 현재 레포는 `networkInterface`+`vpcEgress`(SDK ^7.2)로 배포합니다.)
+ */
+export declare const meetupInviteAlimtalkHttpsRelay: import("firebase-functions/v2/https").HttpsFunction;
+/** rides 생성 → 내부 HTTPS 릴레이 호출만 (VPC 없음). 성공 시 meetup 요약은 릴레이가 rides 에 기록한다. */
+export declare const onRideCreatedMeetupInviteAlimtalk: import("firebase-functions/core").CloudFunction<import("firebase-functions/v2/firestore").FirestoreEvent<import("firebase-functions/v2/firestore").QueryDocumentSnapshot | undefined, Record<string, string>>>;
 /** 라이딩 모임 참석 검증 (Strava 스트림 + 집결지 반경 200m, 모임 시각 ±1h) — 방장 전용 Callable */
-export declare const verifyMeetingAttendance: import("firebase-functions/v2/https").CallableFunction<any, Promise<import("./verifyMeetingAttendance").VerifyMeetingAttendanceResult>>;
-/** 서울 새벽 3:30: 전날 Strava 배치(02:00) 이후 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
+export declare const verifyMeetingAttendance: import("firebase-functions/v2/https").CallableFunction<any, Promise<import("./verifyMeetingAttendance").VerifyMeetingAttendanceResult>, unknown>;
+/** 서울 새벽 3:30: stravaSyncPreviousDay(00:10 갭 탐지) 이후 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
 export declare const scheduledRideAttendanceVerification: import("firebase-functions/v2/scheduler").ScheduleFunction;

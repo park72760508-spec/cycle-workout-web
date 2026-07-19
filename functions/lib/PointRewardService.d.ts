@@ -1,4 +1,12 @@
 import type { Firestore } from "firebase-admin/firestore";
+/** Strava 웹훅 등 VPC 비적용 진입점에서 미션 알림만 NAT 고정 출구 HTTPS 릴레이로 전달할 때 사용 */
+export interface PointRewardMissionAlimVpcRelay {
+    url: string;
+    secret: string;
+}
+export interface PointRewardServiceOptions {
+    missionAlimVpcRelay?: PointRewardMissionAlimVpcRelay;
+}
 interface ProcessRidingRewardResult {
     userId: string;
     earnedPoints: number;
@@ -39,15 +47,12 @@ export interface StelvioIndoorAlimtalkSendResult {
 }
 export declare class PointRewardService {
     private readonly db;
-    constructor(db: Firestore);
-    /** Strava Secret 패턴과 동일하게 env + appConfig(aligo) 조합으로 설정 로딩 */
-    private loadAligoConfig;
+    private readonly opts?;
+    constructor(db: Firestore, opts?: PointRewardServiceOptions | undefined);
+    private mirrorIndoorRewardToSupabaseIfEnabled;
     /**
-     * aligoapi.alimtalkSend(req, auth) — body + auth( apikey, userid, token ) form 합쳐 POST
-     * 공식 필수: senderkey, tpl_code, sender, receiver_1, subject_1, message_1
-     * 선택: recvname_1, senddate, emtitle_1, button_1, failover, fsubject_1, fmessage_1, testMode
-     * failover=Y 일 때 fsubject_1, fmessage_1 필수 — 본 구현은 failover N(대체문자 없음)
-     * @see https://kakaoapi.aligo.in/akv10/alimtalk/send/
+     * 라이딩 미션 달성·구독 연장 알림톡(UH_2120 계열 tpl_code).
+     * @see aligoAlimtalkUnified.ts
      */
     private sendAlimtalk;
     /**

@@ -33,21 +33,18 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.scheduledRideAttendanceVerification = exports.verifyMeetingAttendance = exports.onRideCreatedMeetupInviteAlimtalk = exports.onMeetupInviteAlimtalkDeliver = exports.onIndoorLogCreatedReward = exports.stravaWebhook = exports.naverSubscriptionSyncTest = exports.naverSubscriptionSyncSchedule = void 0;
+exports.scheduledRideAttendanceVerification = exports.verifyMeetingAttendance = exports.onRideCreatedMeetupInviteAlimtalk = exports.meetupInviteAlimtalkHttpsRelay = exports.missionSubscriptionAlimtalkHttpsRelay = exports.onIndoorLogCreatedReward = exports.stravaWebhook = exports.naverSubscriptionSyncTest = exports.naverSubscriptionSyncSchedule = void 0;
 exports.runNaverSubscriptionSync = runNaverSubscriptionSync;
 /**
  * STELVIO AI - 네이버 구독 자동화 메인 엔트리
  * 30분 단위 스케줄러, Direct VPC Egress(고정 IP 34.64.250.77 / Cloud NAT) 적용
- * [마이그레이션] VPC Connector(stelvio-connector) → Direct VPC Egress
- *   - network: GCP VPC 네트워크 이름 (GCP Console > VPC networks 에서 확인)
- *   - vpcEgress: 'ALL_TRAFFIC' → Cloud NAT를 통해 고정 IP로 아웃바운드
+ * [마이그레이션] VPC Connector(stelvio-connector) → Direct VPC Egress (firebase-functions ^7 의 networkInterface+vpcEgress)
+ * 공통 옵션: `aligoKakaoNatEgress.ts` ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS
  */
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
-const pubsub_1 = require("firebase-functions/v2/pubsub");
-const pubsub_2 = require("@google-cloud/pubsub");
 const params_1 = require("firebase-functions/params");
 const naverApi_1 = require("./naverApi");
 /** 네이버 공식 명세: CLAIM_REQUESTED(요청 시점), CLAIM_COMPLETED(완료 시점) 루프 조회. PAYED는 별도 처리 */
@@ -56,7 +53,11 @@ const subscriptionService_1 = require("./subscriptionService");
 const emailService_1 = require("./emailService");
 const verifyMeetingAttendance_1 = require("./verifyMeetingAttendance");
 const PointRewardService_1 = require("./PointRewardService");
+const aligoKakaoNatEgress_1 = require("./aligoKakaoNatEgress");
+const aligoAlimtalkUnified_1 = require("./aligoAlimtalkUnified");
 const aligoCredentials_1 = require("./aligoCredentials");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const supabaseDualWriteServer = require("../supabaseDualWriteServer");
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 // Client Secret: Firebase Secret Manager
 const navSecret = (0, params_1.defineSecret)("NAVER_CLIENT_SECRET");
@@ -75,6 +76,15 @@ const stravaClientSecret = (0, params_1.defineSecret)("STRAVA_CLIENT_SECRET");
 const aligoApiKeySecret = (0, params_1.defineSecret)("ALIGO_API_KEY");
 const aligoUserIdSecret = (0, params_1.defineSecret)("ALIGO_USER_ID");
 const aligoTokenSecret = (0, params_1.defineSecret)("ALIGO_TOKEN");
+/** Firestore 트리거 → HTTPS 릴레이 헤더 검증 (VPC는 릴레이만 적용해 알리고 IP=-99 방지) */
+const meetupAlimRelaySecret = (0, params_1.defineSecret)("MEETUP_ALIM_RELAY_SECRET");
+/** 릴레이 함수 URL 미지정 시 asia-northeast3-{프로젝트}.cloudfunctions.net 패턴 */
+const meetupAlimRelayUrlParam = (0, params_1.defineString)("MEETUP_ALIM_RELAY_URL", { default: "" });
+/** Strava 웹훅(VPC 미적용) → 미션·구독 연장 알림만 NAT 고정 출구 HTTPS 릴레이 (실내 로그 트리거와 동일 egress) */
+const missionAlimRelaySecret = (0, params_1.defineSecret)("MISSION_ALIM_RELAY_SECRET");
+const missionAlimRelayUrlParam = (0, params_1.defineString)("MISSION_ALIM_RELAY_URL", { default: "" });
+/** 선택: 진단 공인 IP가 이 값과 다르면 경고 로그 (예: 34.64.250.77) */
+const aligoNatEgressExpectIpv4 = (0, params_1.defineString)("ALIGO_NAT_EGRESS_EXPECT_IPV4", { default: "" });
 /** SMTP 환경 변수를 process.env에 주입 (emailService가 읽을 수 있도록). 호출 시점에 실행 */
 function injectSmtpEnv() {
     try {
@@ -108,8 +118,6 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 const db = admin.firestore();
-/** 모임 알림톡: Firestore 생성 트리거 → Pub/Sub → VPC 구독자에서 알리고 호출(code=-99 IP 회피) */
-const MEETUP_INVITE_ALIMTALK_TOPIC = "meetup-invite-alimtalk";
 /** 네이버 API 요구: KST(UTC+09:00) ISO 8601 + 밀리초(.SSS). 타임존 +09:00 명시 */
 function toKstIso8601(date) {
     const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
@@ -362,16 +370,11 @@ async function runNaverSubscriptionSync(clientSecret) {
  *   확인 방법: GCP Console → VPC network → VPC networks → 네트워크 이름
  *   (예: "default" 또는 커스텀 VPC명 "stelvio-vpc" 등)
  */
-exports.naverSubscriptionSyncSchedule = (0, scheduler_1.onSchedule)(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-{
+exports.naverSubscriptionSyncSchedule = (0, scheduler_1.onSchedule)({
     schedule: "every 30 minutes",
     timeZone: "Asia/Seoul",
     timeoutSeconds: 300,
-    region: "asia-northeast3",
-    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결 (Gen 2 전용, 비용 절감)
-    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
-    vpcEgress: "ALL_TRAFFIC", // 모든 아웃바운드를 VPC(Cloud NAT)로 라우팅 → 고정 IP 유지
+    ...aligoKakaoNatEgress_1.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
     secrets: [navSecret, smtpPassSecret],
 }, async () => {
     injectSmtpEnv();
@@ -404,13 +407,8 @@ exports.naverSubscriptionSyncSchedule = (0, scheduler_1.onSchedule)(
 });
 /** 네이버 구독 동기화 수동 테스트용 (스케줄 동작 확인) */
 const NAVER_SYNC_TEST_SECRET = process.env.NAVER_SYNC_TEST_SECRET || "stelvio-naver-sync-test";
-exports.naverSubscriptionSyncTest = (0, https_1.onRequest)(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-{
-    region: "asia-northeast3",
-    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결
-    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
-    vpcEgress: "ALL_TRAFFIC",
+exports.naverSubscriptionSyncTest = (0, https_1.onRequest)({
+    ...aligoKakaoNatEgress_1.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
     secrets: [navSecret, smtpPassSecret],
     cors: false,
 }, async (req, res) => {
@@ -468,15 +466,157 @@ exports.naverSubscriptionSyncTest = (0, https_1.onRequest)(
     }
 });
 /** Strava Webhook: index.js의 processStravaActivity 호출 (순환 참조 방지를 위해 런타임 require) */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const stravaGapDetect = require("../stravaGapDetect");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const stravaSyncRetry = require("../stravaSyncRetry");
+function inferWebhookRetryReason(status, errorText) {
+    // 403 Application Inactive(앱 비활성)는 앱 레벨 공통 장애 — 사용자별 사유와 구분해 기록
+    if (status === 403 || errorText.toLowerCase().includes("application inactive"))
+        return "app_inactive";
+    if (status === 401)
+        return "401";
+    if (status === 429 || errorText.includes("429"))
+        return "429";
+    if (errorText.includes("dual-write"))
+        return "processing";
+    return "webhook";
+}
+async function markWebhookStravaSyncRetryPending(db, ownerId, objectId, legacyResult, caughtError) {
+    const activityId = String(legacyResult?.activityId || objectId || "").trim();
+    if (!activityId)
+        return;
+    const errorText = String(legacyResult?.error || "") ||
+        (caughtError instanceof Error ? caughtError.message : caughtError ? String(caughtError) : "webhook processing failed");
+    const failStatus = Number(legacyResult?.status) || (errorText.includes("429") ? 429 : errorText.includes("401") ? 401 : 0);
+    const reason = inferWebhookRetryReason(failStatus, errorText);
+    // 사용자 해석: legacyResult → owner_id(athlete) 조회. 못 찾아도(strava_athlete_id 누락·불일치) 실패를 버리지 않는다.
+    let userId = String(legacyResult?.userId || "").trim();
+    if (!userId) {
+        const ownerIdNum = Number(ownerId);
+        if (ownerIdNum) {
+            const usersSnap = await db.collection("users").where("strava_athlete_id", "==", ownerIdNum).limit(1).get();
+            if (!usersSnap.empty)
+                userId = usersSnap.docs[0].id;
+        }
+    }
+    // 사용자를 찾은 경우: strava_sync_retry_pending 플래그 → 재시도 스케줄(03:30/06:30/09:30)이 잡아 재수집한다.
+    if (userId) {
+        // 단건 재시도(activityId)는 날짜와 무관 — 스케줄(전날·당일)에서 pending 유저를 잡기 위해 어제~오늘 구간 사용
+        const dateRange = stravaSyncRetry.getYesterdayTodayYmdSeoul();
+        await stravaSyncRetry.markStravaSyncRetryPending(db, userId, {
+            dateFrom: dateRange.dateFrom,
+            dateTo: dateRange.dateTo,
+            reason,
+            status: failStatus || 500,
+            activityId,
+        });
+    }
+    // 구현1(silent-drop 방지)+구현2: 사용자 해석 여부와 무관하게 실패 상태를 항상 webhook_retries 큐에 기록한다.
+    // (owner_id/object_id/reason/status/error/failed_at 저장 → 재시도 스케줄의 타겟 드레인이 처리)
+    await stravaGapDetect.enqueueStravaWebhookRetry(db, {
+        ownerId: Number(ownerId),
+        objectId: Number(objectId),
+        userId: userId || null,
+        reason: userId ? reason : "user_unresolved",
+        status: failStatus || 500,
+        error: errorText,
+    });
+    console.warn("[Strava Webhook] 재시도 pending 등록:", {
+        userId: userId || null,
+        activityId,
+        reason: userId ? reason : "user_unresolved",
+        status: failStatus || 500,
+        error: errorText,
+    });
+}
+/**
+ * Webhook POST 라우터 — create/update 시 type 분기.
+ *
+ * [사이클 영향 검토 — 2026-06-10]
+ * - Run/VirtualRun/TrailRun → processRunningActivity (Walk 제외)
+ * - Ride/VirtualRide 등 → processStravaActivityAsync (기존 사이클 파이프라인)
+ * - index.js processStravaActivity 본문·isCyclingForMmp·dualWriteStravaActivityLog: 미호출/미수정
+ */
+async function routeStravaWebhookActivityAsync(db, ownerId, objectId, _aspectType) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const runningModule = require("../processRunningActivity");
+    const preview = await runningModule.fetchStravaActivityDetailForOwner(db, ownerId, objectId);
+    const activityType = preview.activity?.type;
+    const sportType = preview.activity?.sport_type;
+    if (preview.success &&
+        preview.activity &&
+        runningModule.isRunningStravaActivityType(activityType, sportType)) {
+        try {
+            await runningModule.processRunningActivity(db, ownerId, objectId, preview.activity);
+        }
+        catch (runErr) {
+            console.error("[Strava Webhook] 러닝 활동 처리 실패:", runErr);
+            await markWebhookStravaSyncRetryPending(db, ownerId, objectId, {
+                userId: preview.userId || null,
+                activityId: String(objectId),
+                error: runErr instanceof Error ? runErr.message : String(runErr),
+                status: runErr && typeof runErr === "object" && "status" in runErr ? Number(runErr.status) : 500,
+            });
+        }
+        return;
+    }
+    await processStravaActivityAsync(db, ownerId, objectId);
+}
+/**
+ * Strava 앱 연동 해제(athlete deauthorize) 이벤트 처리.
+ * object_type:"athlete", updates.authorized:"false" 수신 시 해당 사용자의 Strava 연결(토큰)을 정리한다.
+ * - owner_id(strava_athlete_id)로 사용자 조회 후 토큰 무효화 → 이후 동기화/백필 대상에서 제외
+ * - 활동 로그 등 사용자 데이터는 보존(연결만 해제). 멱등 처리.
+ */
+async function handleStravaAthleteDeauthAsync(db, ownerId) {
+    const ownerIdNum = Number(ownerId);
+    if (!ownerIdNum)
+        return;
+    const usersSnap = await db
+        .collection("users")
+        .where("strava_athlete_id", "==", ownerIdNum)
+        .limit(1)
+        .get();
+    if (usersSnap.empty) {
+        console.warn("[Strava Webhook] deauth: strava_athlete_id=", ownerIdNum, "사용자 없음(무시)");
+        return;
+    }
+    const userDoc = usersSnap.docs[0];
+    try {
+        await userDoc.ref.set({
+            strava_access_token: "",
+            strava_refresh_token: "",
+            strava_expires_at: 0,
+            strava_deauthorized_at: new Date().toISOString(),
+        }, { merge: true });
+        console.log("[Strava Webhook] deauth 처리 완료:", { userId: userDoc.id, athleteId: ownerIdNum });
+    }
+    catch (e) {
+        console.error("[Strava Webhook] deauth 처리 실패:", userDoc.id, e);
+    }
+}
 async function processStravaActivityAsync(db, ownerId, objectId) {
     injectAligoEnv();
     const mainModule = require("../index.js");
-    const legacyResult = await mainModule.processStravaActivity(db, ownerId, objectId, {
-        skipPointUpdate: true,
-    });
-    const userId = String(legacyResult?.userId || "").trim();
-    const userTss = Number(legacyResult?.userTss || 0);
-    const activityId = String(legacyResult?.activityId || objectId || "").trim();
+    let legacyResult = null;
+    try {
+        legacyResult = await mainModule.processStravaActivity(db, ownerId, objectId, {
+            skipPointUpdate: true,
+        });
+    }
+    catch (err) {
+        await markWebhookStravaSyncRetryPending(db, ownerId, objectId, null, err);
+        return;
+    }
+    if (!legacyResult || legacyResult.error) {
+        await markWebhookStravaSyncRetryPending(db, ownerId, objectId, legacyResult);
+        return;
+    }
+    await stravaGapDetect.markStravaWebhookRetryDone(db, ownerId, objectId);
+    const userId = String(legacyResult.userId || "").trim();
+    const userTss = Number(legacyResult.userTss || 0);
+    const activityId = String(legacyResult.activityId || objectId || "").trim();
     if (!userId || !activityId || userTss <= 0) {
         return;
     }
@@ -486,7 +626,25 @@ async function processStravaActivityAsync(db, ownerId, objectId) {
         return;
     }
     try {
-        const rewardService = new PointRewardService_1.PointRewardService(db);
+        let relayUrl = missionAlimRelayUrlParam.value()?.trim();
+        const pid = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
+        if (!relayUrl && pid.length > 0) {
+            relayUrl = `https://asia-northeast3-${pid}.cloudfunctions.net/missionSubscriptionAlimtalkHttpsRelay`.trim();
+        }
+        let relaySecret = "";
+        try {
+            relaySecret = (0, aligoCredentials_1.scrubAligoCredential)(missionAlimRelaySecret.value());
+        }
+        catch {
+            relaySecret = "";
+        }
+        const missionRelayOpts = relayUrl && relaySecret
+            ? { missionAlimVpcRelay: { url: relayUrl, secret: relaySecret } }
+            : undefined;
+        if (!missionRelayOpts) {
+            console.warn("[Strava Webhook] MISSION_ALIM_RELAY_SECRET 미설정 또는 URL 없음 — 구독 연장 알림톡은 이 함수 기본 egress로 직접 알리고 호출됩니다(카카오 API 화이트리스트 IP가 NAT 전용이면 -99 가능).");
+        }
+        const rewardService = new PointRewardService_1.PointRewardService(db, missionRelayOpts);
         const rewardResult = await rewardService.processRidingReward(userId, userTss, true);
         await logRef.set({
             point_reward_v2_applied: true,
@@ -499,6 +657,14 @@ async function processStravaActivityAsync(db, ownerId, objectId) {
     }
     catch (rewardErr) {
         console.error("[Strava Webhook] 로그 저장은 완료됨. 포인트/알림톡 처리 실패:", rewardErr);
+        await markWebhookStravaSyncRetryPending(db, ownerId, objectId, {
+            userId,
+            activityId,
+            userTss,
+            error: rewardErr instanceof Error ? rewardErr.message : String(rewardErr),
+            status: 500,
+            activityDate: legacyResult.activityDate || null,
+        });
     }
 }
 /**
@@ -514,9 +680,19 @@ exports.stravaWebhook = (0, https_1.onRequest)(
     /**
      * Strava OAuth·활동·Streams API는 공용 인터넷으로 나가야 안정적이다.
      * Direct VPC Egress(고정 NAT)만 쓰면 Strava 쪽 TLS/라우팅 실패로 토큰 갱신·로그 저장이 끊길 수 있어
-     * 이 함수에는 network/vpcEgress를 넣지 않는다. (알리고는 기본 egress에서 동작; IP 화이트리스트가 NAT 전용이면 알림만 실패 가능 — 로그 수집은 우선)
+     * 이 함수에는 network/vpcEgress를 넣지 않는다.
+     *
+     * 구독 연장 알림톡(UH_2120): Secret `MISSION_ALIM_RELAY_SECRET` 설정 시 `missionSubscriptionAlimtalkHttpsRelay`(VPC+NAT)로 위임 —
+     * 실내 로그 트리거(onIndoorLogCreatedReward)와 동일 출구 정렬. 미설정 시 이 함수 기본 egress로 알리고 직접 호출(화이트리스트 불일치 시 -99 가능).
      */
-    secrets: [stravaClientSecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+    secrets: [
+        stravaClientSecret,
+        aligoApiKeySecret,
+        aligoUserIdSecret,
+        aligoTokenSecret,
+        missionAlimRelaySecret,
+        supabaseDualWriteServer.supabaseServiceRoleKey,
+    ],
 }, async (req, res) => {
     if (req.method === "GET") {
         // Strava 웹훅 등록 인증: hub.mode=subscribe, hub.verify_token 일치 시 hub.challenge 에코
@@ -548,10 +724,22 @@ exports.stravaWebhook = (0, https_1.onRequest)(
             ownerId != null &&
             objectId != null &&
             (aspectType === "create" || aspectType === "update");
+        /** 연동 해제: object_type:"athlete" + updates.authorized:"false" → 토큰 정리 (GDPR/개인정보 모범 사례) */
+        const isAthleteDeauth = objectType === "athlete" &&
+            aspectType === "update" &&
+            ownerId != null &&
+            body?.updates != null &&
+            String(body.updates.authorized) === "false";
         if (shouldFetchActivity) {
             // 비동기 처리: await 없이 백그라운드에서 실행 (2초 제한 회피)
-            processStravaActivityAsync(db, ownerId, objectId).catch((err) => {
+            // create → Run 계열은 processRunningActivity, 그 외는 기존 사이클 파이프라인
+            routeStravaWebhookActivityAsync(db, ownerId, objectId, aspectType).catch((err) => {
                 console.error("[Strava Webhook] Strava 활동 처리 실패:", err);
+            });
+        }
+        else if (isAthleteDeauth) {
+            handleStravaAthleteDeauthAsync(db, ownerId).catch((err) => {
+                console.error("[Strava Webhook] deauth 처리 실패:", err);
             });
         }
         else {
@@ -570,11 +758,7 @@ exports.onIndoorLogCreatedReward = (0, firestore_1.onDocumentCreated)(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 {
     document: "users/{userId}/logs/{logId}",
-    region: "asia-northeast3",
-    /** 알리고(카카오) API: stravaWebhook·네이버 스케줄과 동일 Cloud NAT 고정 IP(34.64.250.77) */
-    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결
-    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
-    vpcEgress: "ALL_TRAFFIC",
+    ...aligoKakaoNatEgress_1.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
     secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
 }, async (event) => {
     injectAligoEnv();
@@ -633,97 +817,219 @@ exports.onIndoorLogCreatedReward = (0, firestore_1.onDocumentCreated)(
     }, { merge: true });
 });
 /**
- * 오픈 라이딩 rides 생성 시 초대 대상에게 모임 오픈 알림톡 본 처리(알리고 HTTP).
- *
- * Gen2 Firestore 트리거는 VPC egress가 외부(알리고)까지 기대대로 적용되지 않아 code=-99 가 날 수 있음.
- * 그래서 rides 생성 트리거는 아래 주제로만 넘기고, 이 구독자는 스케줄/실내 포인트와 동일하게
- * Direct VPC egress + Cloud NAT 고정 IP로 알리고를 호출한다.
+ * 오픈 라이딩 rides 모임 초대 알림톡.
+ * rides 전용 Firestore 트리거는 VPC egress가 users 로그 생성 트리거와 실제 적용이 달라 알리고 code=-99가 날 수 있어,
+ * 트리거는 HTTPS 릴레이만 호출하고 알리고는 vpcEgress ALL_TRAFFIC 인 HTTPS 릴레이(onRequest)에서만 호출한다.
  */
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const openRidingMeetupAlimtalkJs = require("../openRidingMeetupAlimtalk.js");
-exports.onMeetupInviteAlimtalkDeliver = (0, pubsub_1.onMessagePublished)(
+/**
+ * 라이딩 미션·구독 연장(UH_2120) 알림톡 — Strava 웹훅 전용 HTTPS 릴레이.
+ * `onIndoorLogCreatedReward`(실내)·모임 릴레이와 동일 Direct VPC egress로 알리고 kakaoapi 호출하여 NAT 고정 IP 정렬.
+ */
+exports.missionSubscriptionAlimtalkHttpsRelay = (0, https_1.onRequest)(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 {
-    topic: MEETUP_INVITE_ALIMTALK_TOPIC,
-    region: "asia-northeast3",
+    ...aligoKakaoNatEgress_1.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
+    timeoutSeconds: 120,
+    memory: "512MiB",
+    cors: false,
+    secrets: [missionAlimRelaySecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+}, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+    let expectedRelay;
+    try {
+        expectedRelay = (0, aligoCredentials_1.scrubAligoCredential)(missionAlimRelaySecret.value());
+    }
+    catch {
+        res.status(500).json({ ok: false, error: "MISSION_ALIM_RELAY_SECRET 없음" });
+        return;
+    }
+    const gotRelay = String(req.headers["x-mission-alim-relay-secret"] ?? "").trim();
+    if (!expectedRelay || gotRelay !== expectedRelay) {
+        res.status(403).json({ ok: false, error: "Forbidden" });
+        return;
+    }
+    injectAligoEnv();
+    let receiverPhone = "";
+    let displayName = "";
+    let subject = "";
+    let message = "";
+    try {
+        const body = typeof req.body === "object" && req.body !== null
+            ? req.body
+            : {};
+        receiverPhone = String(body.receiverPhone ?? "").trim();
+        displayName = String(body.displayName ?? "").trim();
+        subject = String(body.subject ?? "").trim();
+        message = String(body.message ?? "").trim();
+    }
+    catch {
+        res.status(400).json({ ok: false, error: "INVALID_BODY" });
+        return;
+    }
+    if (!receiverPhone || !subject || !message) {
+        res.status(400).json({ ok: false, error: "MISSING_FIELDS" });
+        return;
+    }
+    let diagSeenPublicIp;
+    try {
+        const dip = await (0, aligoKakaoNatEgress_1.fetchAligoKakaoEgressPublicIpDiagnostics)();
+        diagSeenPublicIp = dip ?? undefined;
+        (0, aligoKakaoNatEgress_1.warnIfDiagPublicIpMismatch)(dip, aligoNatEgressExpectIpv4.value(), "missionSubscriptionAlimtalkHttpsRelay");
+        console.log("[missionSubscriptionAlimtalkHttpsRelay] diagSeenPublicIp:", dip ?? "(조회실패)");
+    }
+    catch {
+        /* ignore */
+    }
+    try {
+        const cfg = await (0, aligoAlimtalkUnified_1.loadAligoAlimtalkConfig)(db, aligoAlimtalkUnified_1.ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION);
+        await (0, aligoAlimtalkUnified_1.sendAlimtalkUnified)(cfg, {
+            receiverPhone,
+            displayName,
+            subject,
+            message,
+            templateKind: aligoAlimtalkUnified_1.ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION,
+            logTag: "[PointReward Aligo vpc-relay]",
+        });
+        res.status(200).json({ ok: true, ...(diagSeenPublicIp ? { diagSeenPublicIp } : {}) });
+    }
+    catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[missionSubscriptionAlimtalkHttpsRelay]", msg);
+        res.status(500).json({ ok: false, error: msg, ...(diagSeenPublicIp ? { diagSeenPublicIp } : {}) });
+    }
+});
+/**
+ * 모임 알림톡 전용 HTTPS 릴레이 (VPC + ALL_TRAFFIC egress).
+ * 알리고 code=-99 시: rides....diagSeenPublicIp 에 찍힌 공인 IP를 카카오톡 API 허용 목록에 넣을 것.
+ * (VPC 미적용 egress는 34.96.x처럼 Google 기본 출구와 유사하게 보입니다. firebase-functions 예전 버전에서는 `network` 플래트 옵션이 배포 매니페스트에서 빠져 NAT가 적용되지 않을 수 있습니다 — 현재 레포는 `networkInterface`+`vpcEgress`(SDK ^7.2)로 배포합니다.)
+ */
+exports.meetupInviteAlimtalkHttpsRelay = (0, https_1.onRequest)(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+{
+    ...aligoKakaoNatEgress_1.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
     timeoutSeconds: 300,
     memory: "512MiB",
-    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
-    network: "default",
-    vpcEgress: "ALL_TRAFFIC",
-}, async (event) => {
+    cors: false,
+    secrets: [meetupAlimRelaySecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+}, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Method Not Allowed");
+        return;
+    }
+    let expectedRelay;
+    try {
+        expectedRelay = (0, aligoCredentials_1.scrubAligoCredential)(meetupAlimRelaySecret.value());
+    }
+    catch {
+        res.status(500).json({ ok: false, error: "MEETUP_ALIM_RELAY_SECRET 없음" });
+        return;
+    }
+    const gotRelay = String(req.headers["x-meetup-alim-relay-secret"] ?? "").trim();
+    if (!expectedRelay || gotRelay !== expectedRelay) {
+        res.status(403).json({ ok: false, error: "Forbidden" });
+        return;
+    }
     injectAligoEnv();
     let rideId = "";
     try {
-        rideId = String(event.data.message.json?.rideId ?? "").trim();
+        const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+        rideId = String(body.rideId ?? "").trim();
     }
     catch {
-        console.error("[onMeetupInviteAlimtalkDeliver] message json 파싱 실패");
+        res.status(400).json({ ok: false, error: "INVALID_BODY" });
         return;
     }
     if (!rideId) {
-        console.error("[onMeetupInviteAlimtalkDeliver] rideId 없음");
+        res.status(400).json({ ok: false, error: "MISSING_RIDE_ID" });
         return;
     }
     const rideRef = db.collection("rides").doc(rideId);
     const rideSnap = await rideRef.get();
     if (!rideSnap.exists) {
-        console.warn("[onMeetupInviteAlimtalkDeliver] ride 없음", rideId);
+        res.status(404).json({ ok: false, error: "RIDE_NOT_FOUND" });
         return;
     }
     const rideDataRaw = rideSnap.data();
     if (!rideDataRaw) {
-        console.warn("[onMeetupInviteAlimtalkDeliver] ride 데이터 없음", rideId);
+        res.status(404).json({ ok: false, error: "NO_RIDE_DATA" });
         return;
     }
     const rideData = rideDataRaw;
-    /** 동일 라이드에 대한 Pub/Sub 재전달 시 이미 성공했으면 스킵(알림톡 중복 방지) */
     const prevSum = rideData.meetupInviteAlimtalkSummary;
     if (prevSum != null && typeof prevSum === "object" && Number(prevSum.sent) > 0) {
-        console.log("[onMeetupInviteAlimtalkDeliver] 이미 발송 성공 기록 있음 — 스킵", rideId);
+        res.status(200).json({ ok: true, skipped: true, reason: "already_sent" });
         return;
+    }
+    // 알리고 -99 분쟁 시: 미션 NAT IP와 숫자 비교해 릴레이 VPC 적용 여부 판별
+    let diagSeenPublicIp;
+    try {
+        const dip = await (0, aligoKakaoNatEgress_1.fetchAligoKakaoEgressPublicIpDiagnostics)();
+        diagSeenPublicIp = dip ?? undefined;
+        (0, aligoKakaoNatEgress_1.warnIfDiagPublicIpMismatch)(dip, aligoNatEgressExpectIpv4.value(), "meetupInviteAlimtalkHttpsRelay");
+        console.log("[meetupInviteAlimtalkHttpsRelay] diagSeenPublicIp:", dip ?? "(조회실패)", rideId);
+    }
+    catch (_) {
+        /* ignore */
     }
     try {
         const result = await openRidingMeetupAlimtalkJs.sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData);
+        const diag = diagSeenPublicIp ? { diagSeenPublicIp } : {};
         const summary = result.skipped
-            ? { skipped: true, reason: result.reason || "unknown", error: result.error || null }
+            ? {
+                skipped: true,
+                reason: result.reason || "unknown",
+                error: result.error || null,
+                delivery: "https_relay_vpc",
+                ...diag,
+            }
             : {
                 skipped: false,
                 sent: result.sent || 0,
                 total: result.total || 0,
                 attempts: result.attempts || [],
+                delivery: "https_relay_vpc",
+                ...diag,
             };
         await rideRef.set({
             meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
             meetupInviteAlimtalkSummary: summary,
         }, { merge: true });
+        res.status(200).json({ ok: true, skipped: result.skipped ?? false });
     }
     catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        console.error("[onMeetupInviteAlimtalkDeliver]", rideId, msg);
+        console.error("[meetupInviteAlimtalkHttpsRelay]", rideId, msg);
         try {
             await rideRef.set({
                 meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
                 meetupInviteAlimtalkSummary: {
                     skipped: false,
                     error: msg,
-                    delivery: "pubsub_worker",
+                    delivery: "https_relay_vpc",
+                    ...(diagSeenPublicIp ? { diagSeenPublicIp } : {}),
                 },
             }, { merge: true });
         }
         catch (e2) {
-            console.error("[onMeetupInviteAlimtalkDeliver] 요약 기록 실패", e2);
+            console.error("[meetupInviteAlimtalkHttpsRelay] 요약 기록 실패", e2);
         }
+        res.status(500).json({ ok: false, error: msg });
     }
 });
-/** rides 생성 시 Pub/Sub에만 적재(VPC 불필요). 실제 알리고 호출은 onMeetupInviteAlimtalkDeliver */
+/** rides 생성 → 내부 HTTPS 릴레이 호출만 (VPC 없음). 성공 시 meetup 요약은 릴레이가 rides 에 기록한다. */
 exports.onRideCreatedMeetupInviteAlimtalk = (0, firestore_1.onDocumentCreated)(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 {
     document: "rides/{rideId}",
     region: "asia-northeast3",
-    timeoutSeconds: 120,
+    timeoutSeconds: 180,
     memory: "256MiB",
+    secrets: [meetupAlimRelaySecret],
 }, async (event) => {
     const snap = event.data;
     if (!snap?.exists)
@@ -735,44 +1041,89 @@ exports.onRideCreatedMeetupInviteAlimtalk = (0, firestore_1.onDocumentCreated)(
     const invitedRaw = Array.isArray(rideData.invitedList) ? rideData.invitedList : [];
     if (invitedRaw.length === 0)
         return;
-    const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
-    const pubsub = projectId ? new pubsub_2.PubSub({ projectId }) : new pubsub_2.PubSub();
-    const topic = pubsub.topic(MEETUP_INVITE_ALIMTALK_TOPIC);
+    const prevSum = rideData.meetupInviteAlimtalkSummary;
+    if (prevSum != null && typeof prevSum === "object" && Number(prevSum.sent) > 0) {
+        console.log("[onRideCreatedMeetupInviteAlimtalk] 이미 발송 성공 기록 있음 — 스킵", rideId);
+        return;
+    }
+    const rideRef = db.collection("rides").doc(rideId);
+    let relaySecretVal = "";
     try {
-        const [exists] = await topic.exists();
-        if (!exists) {
-            await topic.create();
-        }
+        relaySecretVal = (0, aligoCredentials_1.scrubAligoCredential)(meetupAlimRelaySecret.value());
     }
-    catch (e) {
-        console.warn("[onRideCreatedMeetupInviteAlimtalk] topic 생성/확인(무시 가능):", e.message);
+    catch (eSec) {
+        console.error("[onRideCreatedMeetupInviteAlimtalk] MEETUP_ALIM_RELAY_SECRET 읽기 실패", rideId, eSec);
+        return;
     }
-    try {
-        await topic.publishMessage({ json: { rideId } });
-        console.log("[onRideCreatedMeetupInviteAlimtalk] Pub/Sub 전달:", rideId, MEETUP_INVITE_ALIMTALK_TOPIC);
-    }
-    catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.error("[onRideCreatedMeetupInviteAlimtalk] Pub/Sub publish 실패", rideId, msg);
+    const paramUrl = meetupAlimRelayUrlParam.value()?.trim();
+    const pid = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
+    const fallbackUrl = pid.length > 0 ? `https://asia-northeast3-${pid}.cloudfunctions.net/meetupInviteAlimtalkHttpsRelay`.trim() : "";
+    const relayUrl = (paramUrl || fallbackUrl || "").trim();
+    if (!relayUrl) {
+        console.error("[onRideCreatedMeetupInviteAlimtalk] 릴레이 URL 없음(PROJECT 또는 MEETUP_ALIM_RELAY_URL)", rideId);
         try {
-            await db
-                .collection("rides")
-                .doc(rideId)
-                .set({
+            await rideRef.set({
                 meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
                 meetupInviteAlimtalkSummary: {
-                    skipped: true,
-                    reason: "pubsub_publish_failed",
-                    error: msg,
+                    skipped: false,
+                    error: "릴레이 URL 미설정(GCLOUD_PROJECT / MEETUP_ALIM_RELAY_URL)",
+                    delivery: "firestore_relay_invoke",
                 },
             }, { merge: true });
         }
-        catch (e2) {
-            console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", e2);
+        catch {
+            /* ignore */
+        }
+        return;
+    }
+    try {
+        const resp = await fetch(relayUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "x-meetup-alim-relay-secret": relaySecretVal,
+            },
+            body: JSON.stringify({ rideId }),
+        });
+        const bodyText = await resp.text().catch(() => "");
+        if (!resp.ok) {
+            console.error("[onRideCreatedMeetupInviteAlimtalk] 릴레이 HTTP 오류", rideId, resp.status, bodyText);
+            try {
+                await rideRef.set({
+                    meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+                    meetupInviteAlimtalkSummary: {
+                        skipped: false,
+                        error: `릴레이 HTTP ${resp.status}: ${bodyText.slice(0, 800)}`,
+                        delivery: "firestore_relay_invoke",
+                    },
+                }, { merge: true });
+            }
+            catch (eWr) {
+                console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", eWr);
+            }
+            return;
+        }
+        console.log("[onRideCreatedMeetupInviteAlimtalk] 릴레이 OK", rideId, bodyText.slice(0, 200));
+    }
+    catch (eFetch) {
+        const msg = eFetch instanceof Error ? eFetch.message : String(eFetch);
+        console.error("[onRideCreatedMeetupInviteAlimtalk] 릴레이 fetch 실패", rideId, msg);
+        try {
+            await rideRef.set({
+                meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+                meetupInviteAlimtalkSummary: {
+                    skipped: false,
+                    error: msg,
+                    delivery: "firestore_relay_invoke",
+                },
+            }, { merge: true });
+        }
+        catch (eWr) {
+            console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", eWr);
         }
     }
 });
 /** 라이딩 모임 참석 검증 (Strava 스트림 + 집결지 반경 200m, 모임 시각 ±1h) — 방장 전용 Callable */
 exports.verifyMeetingAttendance = (0, verifyMeetingAttendance_1.createVerifyMeetingAttendance)(stravaClientSecret);
-/** 서울 새벽 3:30: 전날 Strava 배치(02:00) 이후 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
+/** 서울 새벽 3:30: stravaSyncPreviousDay(00:10 갭 탐지) 이후 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
 exports.scheduledRideAttendanceVerification = (0, verifyMeetingAttendance_1.createScheduledRideAttendanceVerification)(stravaClientSecret);

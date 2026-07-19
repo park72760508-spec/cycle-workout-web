@@ -838,7 +838,7 @@ function createVerifyMeetingAttendance(stravaClientSecret) {
     });
 }
 /**
- * 매일 서울 새벽: stravaSyncPreviousDay(전날 로그 수집, 02:00)·청크 완료 여유를 둔 뒤,
+ * 매일 서울 새벽: stravaSyncPreviousDay(갭 탐지 수집, 00:10)·청크 완료 여유를 둔 뒤,
  * 금일 0시 이전 일정의 rides 중 미검증 건에 대해 참석 검증(방장 없이 서버 실행).
  * 이전 자정+5분(00:05) 배치는 Strava 로그가 아직 Firestore에 없어 좌표 검증이 MISSED로 고착되는 경우가 많았음.
  */
