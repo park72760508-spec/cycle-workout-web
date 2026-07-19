@@ -3034,6 +3034,66 @@
       -webkit-tap-highlight-color: transparent;
     }
     .competition-submit-btn[disabled] { background: #cbd5e1; cursor: not-allowed; }
+
+    /* 신청서 작성 폼 — 섹션 구분·칩 선택·약관 동의 (competitionApplicationForm.js) */
+    .competition-form-section { margin-bottom: 22px; }
+    .competition-form-section + .competition-form-section { padding-top: 20px; border-top: 1px solid #e2e8f0; }
+    .competition-form-section-title {
+      display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: #1e293b; margin: 0 0 14px;
+    }
+    .competition-form-required-badge {
+      font-size: 10px; font-weight: 700; color: #fff; background: #667eea; border-radius: 999px; padding: 2px 8px;
+    }
+    .competition-form-hint { font-size: 12px; color: #94a3b8; margin: -6px 0 14px; line-height: 1.5; }
+    .competition-form-section-medical {
+      border: 1.5px solid rgba(239, 68, 68, 0.35);
+      background: rgba(254, 242, 242, 0.6);
+      border-radius: 14px;
+      padding: 16px 14px;
+      margin-bottom: 24px;
+    }
+    .competition-form-section-medical .competition-form-section-title { color: #b91c1c; }
+    .competition-form-section-medical .competition-form-required-badge { background: #ef4444; }
+    .competition-chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .competition-chip-group--2col { display: grid; grid-template-columns: 1fr 1fr; }
+    .competition-chip-group--2col .competition-chip { text-align: center; }
+    .competition-chip {
+      flex: 0 0 auto;
+      padding: 11px 16px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      background: white;
+      font-size: 14px; font-weight: 600; color: #475569;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .competition-chip.is-selected {
+      border-color: #667eea;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.14), rgba(118, 75, 162, 0.1));
+      color: #4c51bf;
+    }
+    .competition-form-error-inline { color: #ef4444; font-size: 12px; margin-top: 6px; display: none; }
+    .competition-form-error-inline.is-visible { display: block; }
+    .competition-address-row { display: flex; gap: 8px; }
+    .competition-address-row .competition-form-input { flex: 1 1 auto; width: auto; min-width: 0; background: #f8fafc; }
+    .competition-address-search-btn {
+      flex: 0 0 auto;
+      border: 1px solid rgba(102, 126, 234, 0.5);
+      background: white; color: #4c51bf;
+      border-radius: 10px; padding: 0 16px;
+      font-size: 13px; font-weight: 700;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .competition-agreement-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+    .competition-agreement-row:last-child { border-bottom: none; }
+    .competition-agreement-row.is-all { padding-bottom: 14px; margin-bottom: 4px; border-bottom: 1.5px solid #e2e8f0; }
+    .competition-agreement-checkbox { width: 20px; height: 20px; margin-top: 1px; flex-shrink: 0; accent-color: #667eea; }
+    .competition-agreement-label { font-size: 13px; color: #374151; line-height: 1.5; }
+    .competition-agreement-label.is-all { font-weight: 700; color: #1e293b; font-size: 14px; }
+    .competition-agreement-required { color: #ef4444; font-weight: 700; margin-right: 3px; }
+    .competition-agreement-detail { font-size: 12px; color: #94a3b8; margin-top: 4px; line-height: 1.5; }
   </style>
 
   <!-- 한/영/숫자 폰트 통일: Noto Sans KR (안드로이드 등에서 영문·숫자 궁서체 fallback 방지) -->
@@ -41733,6 +41793,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApi.js"></script>
   <script src="assets/js/competition/competitionBottomSheet.js"></script>
   <script src="assets/js/competition/competitionAdminForm.js"></script>
+  <script src="assets/js/competition/competitionApplicationForm.js"></script>
   <script src="assets/js/competition/competitionScreen.js"></script>
   <script>
   (function() {
