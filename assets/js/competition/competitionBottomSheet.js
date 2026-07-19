@@ -30,7 +30,7 @@
     if (e.key === 'Escape') closeSheet();
   }
 
-  function openSheet(title, bodyHtml, footerHtml) {
+  function openSheet(title, bodyHtml, footerHtml, headerActionsHtml) {
     closeSheet();
     var overlay = document.createElement('div');
     overlay.id = 'competitionBottomSheetOverlay';
@@ -40,7 +40,10 @@
       '  <div class="competition-bottom-sheet-handle"></div>' +
       '  <div class="competition-bottom-sheet-header">' +
       '    <h3 class="competition-bottom-sheet-title">' + title + '</h3>' +
-      '    <button type="button" class="competition-bottom-sheet-close" aria-label="닫기">&times;</button>' +
+      '    <div class="competition-bottom-sheet-header-actions">' +
+      (headerActionsHtml || '') +
+      '      <button type="button" class="competition-bottom-sheet-close" aria-label="닫기">&times;</button>' +
+      '    </div>' +
       '  </div>' +
       '  <div class="competition-bottom-sheet-body">' + bodyHtml + '</div>' +
       (footerHtml ? '  <div class="competition-bottom-sheet-footer">' + footerHtml + '</div>' : '') +
@@ -178,6 +181,51 @@
     return prefix + (day > 0 ? day + '일 ' : '') + pad(h) + ':' + pad(m) + ':' + pad(s);
   }
 
+  var APPLICANT_GENDER_LABEL = { M: '남', F: '여' };
+  var APPLICANT_NATIONALITY_LABEL = { DOMESTIC: '내국인', FOREIGN: '외국인' };
+  var APPLICANT_DIVISION_LABEL = {
+    FULL: 'Full', HALF: 'Half', '10K': '10km', '5K': '5km',
+    GRANFONDO: '그란폰도', MEDIOFONDO: '메디오폰도',
+  };
+  var APPLICANT_SIZE_LABEL = { S: 'S (90)', M: 'M (95)', L: 'L (100)', XL: 'XL (105)', XXL: 'XXL (110)' };
+  var APPLICANT_START_GROUP_LABEL = { A: 'A조', B: 'B조', C: 'C조' };
+  var APPLICANT_BLOOD_TYPE_LABEL = {
+    'RH+A': 'RH+ A형', 'RH+B': 'RH+ B형', 'RH+O': 'RH+ O형', 'RH+AB': 'RH+ AB형',
+    'RH-A': 'RH- A형', 'RH-B': 'RH- B형', 'RH-O': 'RH- O형', 'RH-AB': 'RH- AB형',
+  };
+
+  /** 신청서 내용 요약 — 입금 계좌 정보 바로 아래에 표시(showDetailSheet) */
+  function buildApplicantSummaryHtml(a) {
+    if (!a) return '';
+    var row = function (label, value) {
+      if (!value) return '';
+      return (
+        '<div class="competition-account-row"><div><div class="competition-account-row-label">' + escapeHtml(label) +
+        '</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(value) + '</div></div></div>'
+      );
+    };
+    var address = ((a.zipCode ? '(' + a.zipCode + ') ' : '') + (a.address1 || '') + ' ' + (a.address2 || '')).trim();
+    var emergency =
+      (a.emergencyName || '') +
+      (a.emergencyRelation ? ' (' + a.emergencyRelation + ')' : '') +
+      (a.emergencyPhone ? ' ' + a.emergencyPhone : '');
+    return (
+      '<h4 class="competition-form-section-title" style="margin-top:20px;">신청서 내용</h4>' +
+      row('이름', a.name) +
+      row('성별', APPLICANT_GENDER_LABEL[a.gender] || a.gender) +
+      row('생년월일', a.birth6) +
+      row('국적', APPLICANT_NATIONALITY_LABEL[a.nationality] || a.nationality) +
+      row('휴대전화', a.phone) +
+      row('배송지', address) +
+      row('참가 부문', APPLICANT_DIVISION_LABEL[a.division] || a.division) +
+      row('기념품 사이즈', APPLICANT_SIZE_LABEL[a.size] || a.size) +
+      row('출발 그룹', APPLICANT_START_GROUP_LABEL[a.startGroup] || a.startGroup) +
+      row('비상 연락처', emergency.trim()) +
+      row('혈액형', APPLICANT_BLOOD_TYPE_LABEL[a.bloodType] || a.bloodType) +
+      row('의료 특이사항', a.medicalNote)
+    );
+  }
+
   /**
    * 대회 상세 정보 — 설명·장소·일시 + 신청/관리 버튼.
    * @param {object} comp — competitions 문서(id 포함)
@@ -226,8 +274,11 @@
             escapeHtml(opts.virtualAccount.bankName || '-') + ' ' + escapeHtml(opts.virtualAccount.accountNumber || '-') + '</div></div>' +
           '  <button type="button" class="competition-copy-btn" id="competitionDetailVaCopyBtn">복사</button>' +
           '</div>' +
-          '<div class="competition-due-countdown" id="competitionDetailVaCountdown">' + escapeHtml(formatRemaining(opts.virtualAccount.dueDate)) + '</div>'
-        : '');
+          (opts.paid
+            ? '<div class="competition-period-countdown">입금 완료</div>'
+            : '<div class="competition-due-countdown" id="competitionDetailVaCountdown">' + escapeHtml(formatRemaining(opts.virtualAccount.dueDate)) + '</div>')
+        : '') +
+      buildApplicantSummaryHtml(opts.applicant);
 
     var footerParts = [];
     if (opts.isAdmin) {
@@ -247,7 +298,14 @@
       );
     }
 
-    var overlay = openSheet(escapeHtml(comp.title || '대회 상세'), body, footerParts.join(''));
+    var headerActionsHtml =
+      (opts.onCancelApplication
+        ? '<button type="button" class="competition-bottom-sheet-icon-btn" id="competitionDetailCancelIconBtn" aria-label="신청 취소"><img src="assets/img/cancel01.png" alt="" /></button>'
+        : '') +
+      (opts.onEditApplication
+        ? '<button type="button" class="competition-bottom-sheet-icon-btn" id="competitionDetailEditIconBtn" aria-label="신청서 수정"><img src="assets/img/edit2.png" alt="" /></button>'
+        : '');
+    var overlay = openSheet(escapeHtml(comp.title || '대회 상세'), body, footerParts.join(''), headerActionsHtml);
 
     if (opensLabel || closesLabel) {
       var periodTimer = setInterval(function () {
@@ -282,7 +340,7 @@
           }
         });
       }
-      if (opts.virtualAccount.dueDate) {
+      if (opts.virtualAccount.dueDate && !opts.paid) {
         var vaTimer = setInterval(function () {
           var el = document.getElementById('competitionDetailVaCountdown');
           if (!el || !document.body.contains(el)) {
@@ -299,6 +357,19 @@
       applyBtn.addEventListener('click', function () {
         haptic(10);
         opts.onApply(applyBtn);
+      });
+    }
+    var cancelIconBtn = overlay.querySelector('#competitionDetailCancelIconBtn');
+    if (cancelIconBtn && typeof opts.onCancelApplication === 'function') {
+      cancelIconBtn.addEventListener('click', function () {
+        haptic(10);
+        opts.onCancelApplication();
+      });
+    }
+    var editIconBtn = overlay.querySelector('#competitionDetailEditIconBtn');
+    if (editIconBtn && typeof opts.onEditApplication === 'function') {
+      editIconBtn.addEventListener('click', function () {
+        opts.onEditApplication();
       });
     }
     var downloadCsvBtn = overlay.querySelector('#competitionDetailDownloadCsvBtn');

@@ -46,6 +46,16 @@
     });
   }
 
+  /** 입금 전(PAYMENT_WAITING) 신청 취소 — 결제된 건은 requestCompetitionRefund를 사용한다 */
+  async function cancelCompetitionApplication(applicationId) {
+    return callAuthed('cancelCompetitionApplication', { applicationId: applicationId });
+  }
+
+  /** 신청서 내용 수정 — 가상계좌·결제 상태는 변경하지 않고 applicant 필드만 갱신한다 */
+  async function updateCompetitionApplication(applicationId, applicant) {
+    return callAuthed('updateCompetitionApplication', { applicationId: applicationId, applicant: applicant });
+  }
+
   /** 잔여 인원 조회 — 인증 불필요(공개 GET) */
   async function getCompetitionStatus(competitionId) {
     var res = await fetch(
@@ -60,6 +70,8 @@
   window.competitionApi = {
     applyForCompetition: applyForCompetition,
     requestCompetitionRefund: requestCompetitionRefund,
+    cancelCompetitionApplication: cancelCompetitionApplication,
+    updateCompetitionApplication: updateCompetitionApplication,
     getCompetitionStatus: getCompetitionStatus,
   };
 })();

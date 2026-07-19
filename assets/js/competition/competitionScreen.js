@@ -324,19 +324,88 @@
     });
   }
 
+  /** 신청서 수정 제출 — 가상계좌·결제 상태는 그대로 두고 applicant 내용만 갱신한다 */
+  async function submitEditApplication(applicationId, applicant) {
+    var result = await window.competitionApi.updateCompetitionApplication(applicationId, applicant);
+    if (!result || result.success === false) {
+      throw new Error((result && result.error) || '신청서 수정에 실패했습니다.');
+    }
+  }
+
+  function editMyApplicationFlow(comp, myApp) {
+    window.competitionApplicationForm.open(
+      comp,
+      function (applicant) {
+        return submitEditApplication(myApp.id, applicant).then(function () {
+          renderCompetitionList();
+        });
+      },
+      myApp.applicant
+    );
+  }
+
+  /**
+   * 신청 취소 — 입금 전(PAYMENT_WAITING)이면 환불 계좌 없이 바로 취소, 이미 입금 완료면
+   * 기존 취소 및 환불 플로우(showRefundFormSheet)로 안내한다(토스 결제취소 API 호출 필요).
+   */
+  function cancelMyApplicationFlow(comp, myApp) {
+    if (!myApp) return;
+    if (myApp.status === 'PAYMENT_COMPLETED') {
+      window.competitionBottomSheet.showRefundFormSheet(myApp.id, function (refundAccount) {
+        return window.competitionApi.requestCompetitionRefund(myApp.id, refundAccount).then(function (r) {
+          if (!r || r.success === false) throw new Error((r && r.error) || '취소 및 환불 신청에 실패했습니다.');
+          renderCompetitionList();
+        });
+      });
+      return;
+    }
+    if (myApp.status === 'PAYMENT_WAITING') {
+      if (!confirm('신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.')) return;
+      haptic(10);
+      window.competitionApi
+        .cancelCompetitionApplication(myApp.id)
+        .then(function (r) {
+          if (!r || r.success === false) {
+            alert((r && r.error) || '취소에 실패했습니다.');
+            return;
+          }
+          window.competitionBottomSheet.closeSheet();
+          renderCompetitionList();
+        })
+        .catch(function (e) {
+          alert((e && e.message) || '취소에 실패했습니다.');
+        });
+    }
+  }
+
   function openDetail(comp, admin, remainingLabel, myApp) {
     var category = categorizeCompetition(comp);
     var isWaiting =
       myApp && myApp.status === 'PAYMENT_WAITING' && (toDateMs(myApp.paymentDueAt) == null || toDateMs(myApp.paymentDueAt) > Date.now());
+    var isPaid = !!myApp && myApp.status === 'PAYMENT_COMPLETED';
+    var hasApplication = isWaiting || isPaid;
     window.competitionBottomSheet.showDetailSheet(comp, {
       isAdmin: admin,
       remainingLabel: category.key === 'past' ? '종료' : remainingLabel || '확인 중...',
-      hideApply: category.key === 'past',
-      applyDisabledLabel: category.key === 'upcoming' ? '접수 예정' : isWaiting ? '입금 대기중' : null,
-      virtualAccount: isWaiting ? myApp.virtualAccount || {} : null,
+      hideApply: category.key === 'past' || hasApplication,
+      applyDisabledLabel: category.key === 'upcoming' ? '접수 예정' : null,
+      virtualAccount: hasApplication ? myApp.virtualAccount || {} : null,
+      applicant: hasApplication ? myApp.applicant || null : null,
+      paid: isPaid,
       onApply: function (btn) {
         applyToCompetitionFlow(comp, btn);
       },
+      onEditApplication: hasApplication
+        ? function () {
+            window.competitionBottomSheet.closeSheet();
+            editMyApplicationFlow(comp, myApp);
+          }
+        : null,
+      onCancelApplication: hasApplication
+        ? function () {
+            cancelMyApplicationFlow(comp, myApp);
+          }
+        : null,
       onDownloadCsv: function () {
         return window.competitionAdminForm.downloadApplicantsCsv(comp);
       },

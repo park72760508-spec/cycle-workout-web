@@ -102,14 +102,15 @@
     return dd >= 1 && dd <= daysInMonth;
   }
 
-  function chipGroupHtml(groupName, options, columns) {
+  function chipGroupHtml(groupName, options, columns, selectedValue) {
     var cls = 'competition-chip-group' + (columns === 2 ? ' competition-chip-group--2col' : '');
     return (
       '<div class="' + cls + '" data-chip-group="' + groupName + '">' +
       options
         .map(function (opt) {
+          var sel = selectedValue && opt.value === selectedValue ? ' is-selected' : '';
           return (
-            '<button type="button" class="competition-chip" data-value="' + escapeHtml(opt.value) + '">' +
+            '<button type="button" class="competition-chip' + sel + '" data-value="' + escapeHtml(opt.value) + '">' +
             escapeHtml(opt.label) +
             '</button>'
           );
@@ -119,56 +120,59 @@
     );
   }
 
-  function buildSectionPersonal() {
+  function buildSectionPersonal(a) {
+    a = a || {};
     return (
       '<div class="competition-form-section">' +
       '  <h4 class="competition-form-section-title">기본 인적 정보 <span class="competition-form-required-badge">필수</span></h4>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppName">이름</label>' +
-      '    <input class="competition-form-input" id="cAppName" type="text" placeholder="실명을 입력해 주세요" />' +
+      '    <input class="competition-form-input" id="cAppName" type="text" placeholder="실명을 입력해 주세요" value="' + escapeHtml(a.name) + '" />' +
       '  </div>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label">성별</label>' +
-      chipGroupHtml('gender', GENDER_OPTIONS, 2) +
+      chipGroupHtml('gender', GENDER_OPTIONS, 2, a.gender) +
       '  </div>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppBirth6">생년월일 (6자리, 예: 960101)</label>' +
-      '    <input class="competition-form-input" id="cAppBirth6" type="text" placeholder="YYMMDD" />' +
+      '    <input class="competition-form-input" id="cAppBirth6" type="text" placeholder="YYMMDD" value="' + escapeHtml(a.birth6) + '" />' +
       '  </div>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label">국적</label>' +
-      chipGroupHtml('nationality', NATIONALITY_OPTIONS, 2) +
+      chipGroupHtml('nationality', NATIONALITY_OPTIONS, 2, a.nationality) +
       '  </div>' +
       '</div>'
     );
   }
 
-  function buildSectionContact() {
+  function buildSectionContact(a) {
+    a = a || {};
     return (
       '<div class="competition-form-section">' +
       '  <h4 class="competition-form-section-title">연락처 및 배송지 정보 <span class="competition-form-required-badge">필수</span></h4>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppPhone">휴대전화 번호</label>' +
-      '    <input class="competition-form-input" id="cAppPhone" type="tel" placeholder="010-1234-5678" />' +
+      '    <input class="competition-form-input" id="cAppPhone" type="tel" placeholder="010-1234-5678" value="' + escapeHtml(a.phone) + '" />' +
       '  </div>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppZip">배송지 주소 (기념품 발송)</label>' +
       '    <div class="competition-address-row">' +
-      '      <input class="competition-form-input" id="cAppZip" type="text" placeholder="우편번호" readonly />' +
+      '      <input class="competition-form-input" id="cAppZip" type="text" placeholder="우편번호" readonly value="' + escapeHtml(a.zipCode) + '" />' +
       '      <button type="button" class="competition-address-search-btn" id="cAppZipSearchBtn">우편번호 찾기</button>' +
       '    </div>' +
       '  </div>' +
       '  <div class="competition-form-field">' +
-      '    <input class="competition-form-input" id="cAppAddress1" type="text" placeholder="기본 주소 (우편번호 찾기로 자동 입력)" readonly />' +
+      '    <input class="competition-form-input" id="cAppAddress1" type="text" placeholder="기본 주소 (우편번호 찾기로 자동 입력)" readonly value="' + escapeHtml(a.address1) + '" />' +
       '  </div>' +
       '  <div class="competition-form-field">' +
-      '    <input class="competition-form-input" id="cAppAddress2" type="text" placeholder="상세 주소 (동/호수 등)" />' +
+      '    <input class="competition-form-input" id="cAppAddress2" type="text" placeholder="상세 주소 (동/호수 등)" value="' + escapeHtml(a.address2) + '" />' +
       '  </div>' +
       '</div>'
     );
   }
 
-  function buildSectionRace(comp) {
+  function buildSectionRace(comp, a) {
+    a = a || {};
     var cycle = isCycle(comp);
     var sportLabel = cycle ? 'CYCLE' : 'RUN';
     var divisions = cycle ? DIVISION_OPTIONS.CYCLE : DIVISION_OPTIONS.RUN;
@@ -178,23 +182,25 @@
       '  <h4 class="competition-form-section-title">대회 참가 정보 — ' + escapeHtml(sportLabel) + ' <span class="competition-form-required-badge">필수</span></h4>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label">참가 부문</label>' +
-      chipGroupHtml('division', divisions) +
+      chipGroupHtml('division', divisions, null, a.division) +
       '  </div>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label">' + escapeHtml(sizeLabel) + '</label>' +
-      chipGroupHtml('size', SIZE_OPTIONS) +
+      chipGroupHtml('size', SIZE_OPTIONS, null, a.size) +
       '  </div>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label">출발 그룹</label>' +
-      chipGroupHtml('startGroup', START_GROUP_OPTIONS) +
+      chipGroupHtml('startGroup', START_GROUP_OPTIONS, null, a.startGroup) +
       '  </div>' +
       '</div>'
     );
   }
 
-  function buildSectionMedical() {
+  function buildSectionMedical(a) {
+    a = a || {};
     var bloodOptionsHtml = BLOOD_TYPE_OPTIONS.map(function (o) {
-      return '<option value="' + o.value + '">' + escapeHtml(o.label) + '</option>';
+      var sel = a.bloodType === o.value ? ' selected' : '';
+      return '<option value="' + o.value + '"' + sel + '>' + escapeHtml(o.label) + '</option>';
     }).join('');
     return (
       '<div class="competition-form-section-medical">' +
@@ -202,56 +208,57 @@
       '  <p class="competition-form-hint">대회 중 응급 상황 대비용으로만 사용되며, 신속한 대응을 위해 정확히 입력해 주세요.</p>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppEmergencyName">비상 연락처 — 이름</label>' +
-      '    <input class="competition-form-input" id="cAppEmergencyName" type="text" placeholder="비상 연락처 이름" />' +
+      '    <input class="competition-form-input" id="cAppEmergencyName" type="text" placeholder="비상 연락처 이름" value="' + escapeHtml(a.emergencyName) + '" />' +
       '  </div>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppEmergencyRelation">참가자와의 관계</label>' +
-      '    <input class="competition-form-input" id="cAppEmergencyRelation" type="text" placeholder="예: 배우자, 부모, 형제자매" />' +
+      '    <input class="competition-form-input" id="cAppEmergencyRelation" type="text" placeholder="예: 배우자, 부모, 형제자매" value="' + escapeHtml(a.emergencyRelation) + '" />' +
       '  </div>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppEmergencyPhone">비상 연락처 — 휴대전화 번호</label>' +
-      '    <input class="competition-form-input" id="cAppEmergencyPhone" type="tel" placeholder="010-1234-5678" />' +
+      '    <input class="competition-form-input" id="cAppEmergencyPhone" type="tel" placeholder="010-1234-5678" value="' + escapeHtml(a.emergencyPhone) + '" />' +
       '    <div class="competition-form-error-inline" id="cAppEmergencyPhoneError">비상 연락처는 본인의 연락처와 동일할 수 없습니다.</div>' +
       '  </div>' +
       '  <div class="competition-form-field">' +
       '    <label class="competition-form-label" for="cAppBloodType">혈액형</label>' +
       '    <select class="competition-form-select" id="cAppBloodType">' +
-      '      <option value="" disabled selected>선택해 주세요</option>' +
+      '      <option value="" disabled' + (a.bloodType ? '' : ' selected') + '>선택해 주세요</option>' +
       bloodOptionsHtml +
       '    </select>' +
       '  </div>' +
       '  <div class="competition-form-field" style="margin-bottom:0;">' +
       '    <label class="competition-form-label" for="cAppMedicalNote">의료 특이사항 (선택)</label>' +
-      '    <textarea class="competition-form-input" id="cAppMedicalNote" rows="3" placeholder="심혈관계 질환, 천식, 알레르기 등 대회 중 응급 대응에 참고할 사항을 자유롭게 적어 주세요"></textarea>' +
+      '    <textarea class="competition-form-input" id="cAppMedicalNote" rows="3" placeholder="심혈관계 질환, 천식, 알레르기 등 대회 중 응급 대응에 참고할 사항을 자유롭게 적어 주세요">' + escapeHtml(a.medicalNote) + '</textarea>' +
       '  </div>' +
       '</div>'
     );
   }
 
-  function buildSectionAgreements() {
+  function buildSectionAgreements(a) {
+    var checkedAttr = a ? ' checked' : '';
     return (
       '<div class="competition-form-section" style="margin-bottom:8px;">' +
       '  <h4 class="competition-form-section-title">약관 동의</h4>' +
       '  <div class="competition-agreement-row is-all">' +
-      '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreeAll" />' +
+      '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreeAll"' + checkedAttr + ' />' +
       '    <label class="competition-agreement-label is-all" for="cAppAgreeAll">전체 동의하기</label>' +
       '  </div>' +
       '  <div class="competition-agreement-row">' +
-      '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreePrivacyCollect" data-required-agree="1" />' +
+      '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreePrivacyCollect" data-required-agree="1"' + checkedAttr + ' />' +
       '    <label class="competition-agreement-label" for="cAppAgreePrivacyCollect">' +
       '      <span class="competition-agreement-required">[필수]</span>개인정보 수집 및 이용 동의' +
       '      <div class="competition-agreement-detail">신청자 성명·생년월일·연락처·주소 등을 대회 참가 접수 및 운영 목적으로 수집·이용하는 것에 동의합니다.</div>' +
       '    </label>' +
       '  </div>' +
       '  <div class="competition-agreement-row">' +
-      '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreePrivacyThirdParty" data-required-agree="1" />' +
+      '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreePrivacyThirdParty" data-required-agree="1"' + checkedAttr + ' />' +
       '    <label class="competition-agreement-label" for="cAppAgreePrivacyThirdParty">' +
       '      <span class="competition-agreement-required">[필수]</span>개인정보 제3자 제공 동의' +
       '      <div class="competition-agreement-detail">기록 측정 업체(스마트칩), 택배사, 상해보험사 등 대회 운영에 필요한 업체에 신청 정보가 제공되는 것에 동의합니다.</div>' +
       '    </label>' +
       '  </div>' +
       '  <div class="competition-agreement-row">' +
-      '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreeMedicalWaiver" data-required-agree="1" />' +
+      '    <input type="checkbox" class="competition-agreement-checkbox" id="cAppAgreeMedicalWaiver" data-required-agree="1"' + checkedAttr + ' />' +
       '    <label class="competition-agreement-label" for="cAppAgreeMedicalWaiver">' +
       '      <span class="competition-agreement-required">[필수]</span>의료 면책 및 참가자 유의사항 동의' +
       '      <div class="competition-agreement-detail">본인의 건강 상태를 확인하고 참가하며, 대회 중 발생하는 부상 및 사고에 대해 주최 측에 책임을 묻지 않습니다.</div>' +
@@ -270,6 +277,9 @@
         var chips = groupEl.querySelectorAll('.competition-chip');
         for (var j = 0; j < chips.length; j++) {
           (function (chip) {
+            if (chip.classList.contains('is-selected')) {
+              state[groupName] = chip.getAttribute('data-value');
+            }
             chip.addEventListener('click', function () {
               for (var k = 0; k < chips.length; k++) chips[k].classList.remove('is-selected');
               chip.classList.add('is-selected');
@@ -426,16 +436,22 @@
    * @param {function(object): Promise} onSubmit — 검증된 applicant 데이터를 넘겨받아 실제 신청 API를 호출하는 콜백.
    *   resolve하면 시트를 닫고, reject(Error)하면 에러 문구를 표시하고 폼을 유지한다.
    */
-  function openApplicationForm(comp, onSubmit) {
+  function openApplicationForm(comp, onSubmit, existingApplicant) {
     if (!window.competitionBottomSheet || !window.competitionBottomSheet.openRawSheet) {
       console.error('[competitionApplicationForm] competitionBottomSheet.openRawSheet 필요');
       return;
     }
+    var isEdit = !!existingApplicant;
     var chipState = { gender: null, nationality: null, division: null, size: null, startGroup: null };
     var body =
-      buildSectionPersonal() + buildSectionContact() + buildSectionRace(comp) + buildSectionMedical() + buildSectionAgreements();
-    var footer = '<button type="button" class="competition-submit-btn" id="cAppSubmitBtn">작성 완료, 신청하기</button>';
-    var overlay = window.competitionBottomSheet.openRawSheet('참가 신청서 작성', body, footer);
+      buildSectionPersonal(existingApplicant) +
+      buildSectionContact(existingApplicant) +
+      buildSectionRace(comp, existingApplicant) +
+      buildSectionMedical(existingApplicant) +
+      buildSectionAgreements(existingApplicant);
+    var submitLabel = isEdit ? '수정 완료' : '작성 완료, 신청하기';
+    var footer = '<button type="button" class="competition-submit-btn" id="cAppSubmitBtn">' + submitLabel + '</button>';
+    var overlay = window.competitionBottomSheet.openRawSheet(isEdit ? '신청서 수정' : '참가 신청서 작성', body, footer);
 
     wireChipGroups(overlay, chipState);
     wireAgreements(overlay);
@@ -456,7 +472,7 @@
         return;
       }
       submitBtn.disabled = true;
-      submitBtn.textContent = '제출 중...';
+      submitBtn.textContent = isEdit ? '수정 중...' : '제출 중...';
       try {
         await onSubmit(parsed.data);
         window.competitionBottomSheet.closeSheet();
@@ -464,7 +480,7 @@
         errorEl.textContent = (e && e.message) || '신청서 제출에 실패했습니다. 잠시 후 다시 시도해 주세요.';
         errorEl.classList.add('is-visible');
         submitBtn.disabled = false;
-        submitBtn.textContent = '작성 완료, 신청하기';
+        submitBtn.textContent = submitLabel;
       }
     });
   }
