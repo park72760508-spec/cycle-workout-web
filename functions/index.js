@@ -14914,12 +14914,15 @@ exports.adminBackfillSupabaseUserGender = onRequest(
 
 const RACE_APPLICATIONS_COLLECTION = "race_applications";
 const RACE_COMPETITIONS_COLLECTION = "competitions";
+const RACE_WAITLIST_COLLECTION = "race_waitlist";
 const TOSS_WEBHOOK_RETRIES_COLLECTION = "toss_webhook_retries";
 /** 가상계좌 발급 은행 기본값 — 대회 문서에 bankAllowlist가 없을 때만 사용(운영 시 competitions.bankAllowlist[0] 권장) */
 const DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE = "20"; // 우리은행 — Toss bank 코드는 실제 콘솔에서 재확인 필요
 const DEFAULT_VIRTUAL_ACCOUNT_VALID_HOURS = 1;
 /** 미입금 자동 취소 배치 1회 처리 상한(타임아웃 방지) */
 const RACE_UNPAID_CLEANUP_BATCH_LIMIT = 200;
+/** 마감 이후 취소로 자리가 나면 대기자 1순위에게 신청하기를 열어 두는 시간 — 응답 없으면 다음 순위로 승격 */
+const RACE_WAITLIST_INVITE_VALID_HOURS = 24;
 
 function appendRaceSecrets(options) {
   const o = Object.assign({}, options);
@@ -15047,10 +15050,75 @@ function validateRaceApplicant(applicant, category) {
 }
 
 /**
+ * 마감(SOLD_OUT) 시 대기자 명단에 자동 등록 — 이미 대기중/초대된 건이 있으면 중복 등록하지 않는다.
+ * competitionId+userId 등가 필터만 사용해 복합 인덱스 없이 조회(status는 클라이언트 측에서 필터).
+ */
+async function joinCompetitionWaitlistIfNotAlready(db, competitionId, uid) {
+  const existingSnap = await db
+    .collection(RACE_WAITLIST_COLLECTION)
+    .where("competitionId", "==", competitionId)
+    .where("userId", "==", uid)
+    .get();
+  const active = existingSnap.docs.find((d) => {
+    const status = (d.data() || {}).status;
+    return status === "WAITING" || status === "INVITED";
+  });
+  if (active) return active.id;
+
+  const ref = await db.collection(RACE_WAITLIST_COLLECTION).add({
+    competitionId,
+    userId: uid,
+    status: "WAITING",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    invitedAt: null,
+    inviteExpiresAt: null,
+    convertedApplicationId: null,
+  });
+  return ref.id;
+}
+
+/**
+ * 접수 마감(closesAt 경과) 이후에 슬롯이 반환되면, 정상 선착순으로는 아무도 잡을 수 없으므로
+ * 대기자 1순위(가장 먼저 등록한 WAITING 건)를 24시간 동안 신청 가능하도록 초대(INVITED)한다.
+ * 접수가 아직 열려 있으면(마감 전) 그냥 반환 — 그 경우는 일반 선착순 재신청으로 충분하다.
+ */
+async function inviteNextWaitlistEntryIfClosed(db, competitionId) {
+  const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
+  if (!compSnap.exists) return;
+  const comp = compSnap.data() || {};
+  const closesAtMs = comp.closesAt && comp.closesAt.toMillis ? comp.closesAt.toMillis() : null;
+  if (closesAtMs == null || Date.now() <= closesAtMs) return;
+
+  const snap = await db
+    .collection(RACE_WAITLIST_COLLECTION)
+    .where("competitionId", "==", competitionId)
+    .where("status", "==", "WAITING")
+    .orderBy("createdAt", "asc")
+    .limit(1)
+    .get();
+  if (snap.empty) return;
+
+  const ref = snap.docs[0].ref;
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(ref);
+    if (!fresh.exists || (fresh.data() || {}).status !== "WAITING") return; // 이미 처리됨(멱등)
+    tx.update(ref, {
+      status: "INVITED",
+      invitedAt: admin.firestore.FieldValue.serverTimestamp(),
+      inviteExpiresAt: admin.firestore.Timestamp.fromMillis(
+        Date.now() + RACE_WAITLIST_INVITE_VALID_HOURS * 3600 * 1000
+      ),
+    });
+  });
+}
+
+/**
  * 대회 신청 — Redis 원자적 슬롯 예약 → 성공 시에만 토스 가상계좌 발급 → Firestore 기록.
  * 정원 초과는 에러가 아니라 { success:false, reason:'SOLD_OUT' } 정상 응답으로 처리한다(폭주 시 5xx 방지).
  * applicant(신청서 — competitionApplicationForm.js)는 서버에서도 화이트리스트 재검증 후 저장하며,
  * 향후 입금 안내·신청 내역 알림톡 발송(openRidingMeetupAlimtalk.js와 동일한 방식 예정)에 사용한다.
+ * 마감(closesAt) 이후라도 대기자 1순위로 초대(INVITED)되어 있고 초대가 만료되지 않았다면 예외적으로
+ * 신청을 허용한다(대기자 우선 구제) — 관리자가 명시적으로 닫은 대회(status!=='open')는 예외 없이 막는다.
  */
 const applyForCompetitionOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
 exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, res) => {
@@ -15085,11 +15153,29 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
     const nowMs = Date.now();
     const opensAtMs = comp.opensAt && comp.opensAt.toMillis ? comp.opensAt.toMillis() : null;
     const closesAtMs = comp.closesAt && comp.closesAt.toMillis ? comp.closesAt.toMillis() : null;
-    if (
-      comp.status !== "open" ||
-      (opensAtMs != null && nowMs < opensAtMs) ||
-      (closesAtMs != null && nowMs > closesAtMs)
-    ) {
+    const isAdminClosed = comp.status !== "open";
+    const isNotYetOpen = opensAtMs != null && nowMs < opensAtMs;
+    const isPastDeadline = closesAtMs != null && nowMs > closesAtMs;
+
+    // 마감 이후라도 본인이 대기자 1순위로 초대(INVITED)되어 있고 그 초대가 아직 유효하면 구제 신청을 허용한다.
+    let waitlistInvite = null;
+    if (isPastDeadline && !isAdminClosed && !isNotYetOpen) {
+      const inviteSnap = await db
+        .collection(RACE_WAITLIST_COLLECTION)
+        .where("competitionId", "==", competitionId)
+        .where("userId", "==", uid)
+        .get();
+      waitlistInvite =
+        inviteSnap.docs
+          .map((d) => Object.assign({ id: d.id }, d.data()))
+          .find((w) => {
+            if (w.status !== "INVITED") return false;
+            const expiresMs = w.inviteExpiresAt && w.inviteExpiresAt.toMillis ? w.inviteExpiresAt.toMillis() : null;
+            return expiresMs != null && expiresMs > nowMs;
+          }) || null;
+    }
+
+    if (isAdminClosed || isNotYetOpen || (isPastDeadline && !waitlistInvite)) {
       res.status(200).json({ success: false, reason: "CLOSED", error: "접수 기간이 아닙니다." });
       return;
     }
@@ -15160,7 +15246,10 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
     const conn = raceRedisConn();
     const reserved = await raceRedisClient.reserveSlot(conn, redisKey, capacity);
     if (reserved === raceRedisClient.SOLD_OUT) {
-      res.status(200).json({ success: false, reason: "SOLD_OUT", error: "마감되었습니다." });
+      await joinCompetitionWaitlistIfNotAlready(db, competitionId, uid).catch((waitlistErr) => {
+        console.error("[applyForCompetition] 대기자 등록 실패(수동 확인 필요):", competitionId, waitlistErr.message);
+      });
+      res.status(200).json({ success: false, reason: "SOLD_OUT", error: "마감되었습니다.", waitlisted: true });
       return;
     }
 
@@ -15214,6 +15303,15 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
         canceledAt: null,
       });
       await writeRaceLedgerEntry(db, appRef, { event: "APPLIED", orderId, amount });
+      if (waitlistInvite) {
+        await db
+          .collection(RACE_WAITLIST_COLLECTION)
+          .doc(waitlistInvite.id)
+          .update({ status: "CONVERTED", convertedApplicationId: appRef.id })
+          .catch((werr) => {
+            console.error("[applyForCompetition] 대기자 전환 처리 실패(수동 확인 필요):", waitlistInvite.id, werr.message);
+          });
+      }
 
       res.status(200).json({
         success: true,
@@ -15445,6 +15543,9 @@ exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, as
       await raceRedisClient.releaseSlot(raceRedisConn(), redisKey).catch((releaseErr) => {
         console.error("[requestCompetitionRefund] slot release 실패(수동 확인 필요):", redisKey, releaseErr.message);
       });
+      await inviteNextWaitlistEntryIfClosed(db, appData.competitionId).catch((waitlistErr) => {
+        console.error("[requestCompetitionRefund] 대기자 초대 실패(수동 확인 필요):", appData.competitionId, waitlistErr.message);
+      });
     }
 
     res.status(200).json({ success: true });
@@ -15521,6 +15622,13 @@ exports.cancelCompetitionApplication = onRequest(cancelCompetitionApplicationOpt
       const redisKey = appData.redisKey || `race:${appData.competitionId}:count`;
       await raceRedisClient.releaseSlot(raceRedisConn(), redisKey).catch((releaseErr) => {
         console.error("[cancelCompetitionApplication] slot release 실패(수동 확인 필요):", redisKey, releaseErr.message);
+      });
+      await inviteNextWaitlistEntryIfClosed(db, appData.competitionId).catch((waitlistErr) => {
+        console.error(
+          "[cancelCompetitionApplication] 대기자 초대 실패(수동 확인 필요):",
+          appData.competitionId,
+          waitlistErr.message
+        );
       });
     }
 
@@ -15645,6 +15753,13 @@ exports.cancelUnpaidCompetitionApplications = onSchedule(
           const redisKey = data.redisKey || `race:${data.competitionId}:count`;
           await raceRedisClient.releaseSlot(conn, redisKey);
           released += 1;
+          await inviteNextWaitlistEntryIfClosed(db, data.competitionId).catch((waitlistErr) => {
+            console.error(
+              "[cancelUnpaidCompetitionApplications] 대기자 초대 실패(수동 확인 필요):",
+              data.competitionId,
+              waitlistErr.message
+            );
+          });
         }
       } catch (e) {
         console.error("[cancelUnpaidCompetitionApplications]", doc.id, e && e.message ? e.message : e);
@@ -15653,6 +15768,66 @@ exports.cancelUnpaidCompetitionApplications = onSchedule(
     }
 
     console.log("[cancelUnpaidCompetitionApplications] 완료", { processed, released });
+  }
+);
+
+/**
+ * 대기자 초대 만료·순번 승격 — 15분마다(서울) inviteExpiresAt이 지난 INVITED 건을 EXPIRED로 전환하고,
+ * 해당 대회에 다음 대기자가 있으면 새로 24시간 초대를 연다(inviteNextWaitlistEntryIfClosed와 동일 규칙).
+ */
+const expireCompetitionWaitlistInvitesOptions = appendRaceSecrets({
+  schedule: "*/15 * * * *",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 300,
+  memory: "256MiB",
+});
+exports.expireCompetitionWaitlistInvites = onSchedule(
+  expireCompetitionWaitlistInvitesOptions,
+  async () => {
+    const db = admin.firestore();
+    const nowTs = admin.firestore.Timestamp.now();
+    let expired = 0;
+
+    const snap = await db
+      .collection(RACE_WAITLIST_COLLECTION)
+      .where("status", "==", "INVITED")
+      .where("inviteExpiresAt", "<=", nowTs)
+      .limit(RACE_UNPAID_CLEANUP_BATCH_LIMIT)
+      .get();
+
+    const competitionIdsToRecascade = new Set();
+    for (const doc of snap.docs) {
+      /* eslint-disable no-await-in-loop */
+      try {
+        const data = doc.data() || {};
+        let didExpire = false;
+        await db.runTransaction(async (tx) => {
+          const fresh = await tx.get(doc.ref);
+          if (!fresh.exists || (fresh.data() || {}).status !== "INVITED") return; // 이미 처리됨(멱등)
+          tx.update(doc.ref, { status: "EXPIRED" });
+          didExpire = true;
+        });
+        if (didExpire) {
+          expired += 1;
+          competitionIdsToRecascade.add(data.competitionId);
+        }
+      } catch (e) {
+        console.error("[expireCompetitionWaitlistInvites]", doc.id, e && e.message ? e.message : e);
+      }
+      /* eslint-enable no-await-in-loop */
+    }
+
+    for (const competitionId of competitionIdsToRecascade) {
+      /* eslint-disable no-await-in-loop */
+      try {
+        await inviteNextWaitlistEntryIfClosed(db, competitionId);
+      } catch (e) {
+        console.error("[expireCompetitionWaitlistInvites] cascade 실패:", competitionId, e && e.message ? e.message : e);
+      }
+      /* eslint-enable no-await-in-loop */
+    }
+
+    console.log("[expireCompetitionWaitlistInvites] 완료", { expired, recascaded: competitionIdsToRecascade.size });
   }
 );
 
