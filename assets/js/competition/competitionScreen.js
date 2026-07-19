@@ -306,6 +306,10 @@
         '신청에 실패했습니다.';
       throw new Error(msg);
     }
+
+    // 신청 완료(입금 대기중/신청 완료) 후에는 목록을 다시 불러와 잔여 인원·카드 상태를 최신으로 반영한다.
+    // 계좌 안내 시트가 그 위에 뜨는 동안 배경에서 갱신되므로 시트를 닫으면 바로 반영된 화면이 보인다.
+    renderCompetitionList();
   }
 
   /** 카드 버튼·상세시트 버튼 공용 신청 플로우 — 신청서 작성 화면을 먼저 띄운 뒤 제출 시 신청 API를 호출한다 */
@@ -332,6 +336,9 @@
       virtualAccount: isWaiting ? myApp.virtualAccount || {} : null,
       onApply: function (btn) {
         applyToCompetitionFlow(comp, btn);
+      },
+      onDownloadCsv: function () {
+        return window.competitionAdminForm.downloadApplicantsCsv(comp);
       },
       onEdit: function () {
         window.competitionBottomSheet.closeSheet();

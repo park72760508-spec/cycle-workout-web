@@ -45,6 +45,142 @@
     );
   }
 
+  var CSV_GENDER_LABEL = { M: '남', F: '여' };
+  var CSV_NATIONALITY_LABEL = { DOMESTIC: '내국인', FOREIGN: '외국인' };
+  var CSV_DIVISION_LABEL = {
+    FULL: 'Full', HALF: 'Half', '10K': '10km', '5K': '5km',
+    GRANFONDO: '그란폰도', MEDIOFONDO: '메디오폰도',
+  };
+  var CSV_SIZE_LABEL = { S: 'S (90)', M: 'M (95)', L: 'L (100)', XL: 'XL (105)', XXL: 'XXL (110)' };
+  var CSV_START_GROUP_LABEL = { A: 'A조', B: 'B조', C: 'C조' };
+  var CSV_BLOOD_TYPE_LABEL = {
+    'RH+A': 'RH+ A형', 'RH+B': 'RH+ B형', 'RH+O': 'RH+ O형', 'RH+AB': 'RH+ AB형',
+    'RH-A': 'RH- A형', 'RH-B': 'RH- B형', 'RH-O': 'RH- O형', 'RH-AB': 'RH- AB형',
+  };
+  var CSV_STATUS_LABEL = {
+    PAYMENT_WAITING: '입금 대기중',
+    PAYMENT_COMPLETED: '신청 완료(입금 확인)',
+    CANCELED_UNPAID: '미입금 취소',
+    CANCELED_REFUNDED: '취소·환불',
+  };
+
+  function formatDateTimeForCsv(input) {
+    if (!input) return '';
+    var d = null;
+    if (typeof input.toDate === 'function') d = input.toDate();
+    else if (input instanceof Date) d = input;
+    else d = new Date(input);
+    if (!d || isNaN(d.getTime())) return '';
+    var pad = function (n) {
+      return String(n).padStart(2, '0');
+    };
+    return (
+      d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+      ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
+    );
+  }
+
+  function toCsvCell(v) {
+    var s = v == null ? '' : String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  async function fetchApplicantsForCsv(competitionId) {
+    var ctx = getFirestoreFns();
+    if (!ctx) return [];
+    var fns = ctx.fns;
+    var q = fns.query(fns.collection(ctx.db, 'race_applications'), fns.where('competitionId', '==', competitionId));
+    var snap = await fns.getDocs(q);
+    var rows = [];
+    snap.forEach(function (d) {
+      var data = typeof d.data === 'function' ? d.data() : {};
+      rows.push(Object.assign({ id: d.id }, data));
+    });
+    rows.sort(function (a, b) {
+      var at = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+      var bt = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+      return at - bt;
+    });
+    return rows;
+  }
+
+  /** 신청서 내용 + 가상계좌 정보 + 입금 확인 여부를 한 행에 담는다 */
+  function buildApplicantsCsv(applications) {
+    var header = [
+      '신청ID', '신청일시', '이름', '성별', '생년월일(6자리)', '국적', '휴대전화',
+      '우편번호', '기본주소', '상세주소',
+      '참가부문', '사이즈', '출발그룹',
+      '비상연락처 이름', '비상연락처 관계', '비상연락처 전화', '혈액형', '의료특이사항',
+      '은행', '계좌번호', '입금기한',
+      '신청상태', '입금확인여부', '입금확인일시', '결제금액',
+    ];
+    var rows = [header];
+    applications.forEach(function (app) {
+      var a = app.applicant || {};
+      var va = app.virtualAccount || {};
+      rows.push([
+        app.id,
+        formatDateTimeForCsv(app.createdAt),
+        a.name || '',
+        CSV_GENDER_LABEL[a.gender] || a.gender || '',
+        a.birth6 || '',
+        CSV_NATIONALITY_LABEL[a.nationality] || a.nationality || '',
+        a.phone || '',
+        a.zipCode || '',
+        a.address1 || '',
+        a.address2 || '',
+        CSV_DIVISION_LABEL[a.division] || a.division || '',
+        CSV_SIZE_LABEL[a.size] || a.size || '',
+        CSV_START_GROUP_LABEL[a.startGroup] || a.startGroup || '',
+        a.emergencyName || '',
+        a.emergencyRelation || '',
+        a.emergencyPhone || '',
+        CSV_BLOOD_TYPE_LABEL[a.bloodType] || a.bloodType || '',
+        a.medicalNote || '',
+        va.bankName || '',
+        va.accountNumber || '',
+        formatDateTimeForCsv(va.dueDate),
+        CSV_STATUS_LABEL[app.status] || app.status || '',
+        app.status === 'PAYMENT_COMPLETED' ? 'Y' : 'N',
+        formatDateTimeForCsv(app.paidAt),
+        Number(app.amount) || 0,
+      ]);
+    });
+    return rows.map(function (row) {
+      return row.map(toCsvCell).join(',');
+    }).join('\r\n');
+  }
+
+  function downloadCsvFile(filename, csvContent) {
+    // BOM 포함 — 한글 데이터가 Excel(Windows)에서 깨지지 않도록
+    var blob = new Blob(['﻿' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    a.remove();
+  }
+
+  async function downloadApplicantsCsv(comp) {
+    if (!comp || !comp.id) return;
+    try {
+      var applications = await fetchApplicantsForCsv(comp.id);
+      if (!applications.length) {
+        alert('신청 내역이 없습니다.');
+        return;
+      }
+      var csv = buildApplicantsCsv(applications);
+      var safeTitle = String(comp.title || '대회').replace(/[\\/:*?"<>|]/g, '_');
+      var filename = safeTitle + '_신청자명단_' + new Date().toISOString().slice(0, 10) + '.csv';
+      downloadCsvFile(filename, csv);
+    } catch (e) {
+      alert((e && e.message) || 'CSV 다운로드에 실패했습니다.');
+    }
+  }
+
   function buildFormBody(comp) {
     comp = comp || {};
     return (
@@ -232,5 +368,6 @@
     isAdmin: isAdmin,
     openForm: openForm,
     confirmAndDelete: confirmAndDelete,
+    downloadApplicantsCsv: downloadApplicantsCsv,
   };
 })();

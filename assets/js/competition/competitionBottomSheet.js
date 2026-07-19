@@ -232,6 +232,7 @@
     var footerParts = [];
     if (opts.isAdmin) {
       footerParts.push(
+        '<button type="button" class="competition-submit-btn" id="competitionDetailDownloadCsvBtn" style="background:#eef2ff;color:#4c51bf;margin-bottom:8px;">신청자 명단 CSV 다운로드</button>' +
         '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
         '  <button type="button" class="competition-submit-btn" id="competitionDetailEditBtn" style="background:#f1f5f9;color:#334155;">수정</button>' +
         '  <button type="button" class="competition-submit-btn" id="competitionDetailDeleteBtn" style="background:#fee2e2;color:#b91c1c;">삭제</button>' +
@@ -298,6 +299,19 @@
       applyBtn.addEventListener('click', function () {
         haptic(10);
         opts.onApply(applyBtn);
+      });
+    }
+    var downloadCsvBtn = overlay.querySelector('#competitionDetailDownloadCsvBtn');
+    if (downloadCsvBtn && typeof opts.onDownloadCsv === 'function') {
+      downloadCsvBtn.addEventListener('click', async function () {
+        downloadCsvBtn.disabled = true;
+        downloadCsvBtn.textContent = '다운로드 준비 중...';
+        try {
+          await opts.onDownloadCsv();
+        } finally {
+          downloadCsvBtn.disabled = false;
+          downloadCsvBtn.textContent = '신청자 명단 CSV 다운로드';
+        }
       });
     }
     var editBtn = overlay.querySelector('#competitionDetailEditBtn');
