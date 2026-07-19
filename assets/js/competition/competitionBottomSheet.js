@@ -209,8 +209,8 @@
         ? '<div class="competition-account-row"><div><div class="competition-account-row-label">대회 일시</div><div class="competition-account-row-value" style="font-size:14px;">' + escapeHtml(raceDateLabel) + '</div></div></div>'
         : '') +
       (opensLabel || closesLabel
-        ? '<div class="competition-account-row"><div><div class="competition-account-row-label">접수 기간</div><div class="competition-account-row-value" style="font-size:14px;">' +
-          escapeHtml(opensLabel || '-') + ' ~ ' + escapeHtml(closesLabel || '-') + '</div></div></div>' +
+        ? '<div class="competition-account-row"><div><div class="competition-account-row-label">접수 기간</div><div class="competition-account-row-value" style="font-size:14px;line-height:1.5;">' +
+          escapeHtml(opensLabel || '-') + ' ~ <br>' + escapeHtml(closesLabel || '-') + '</div></div></div>' +
           '<div class="competition-period-countdown" id="competitionDetailPeriodCountdown">' + escapeHtml(formatEntryPeriodCountdown(comp)) + '</div>'
         : '') +
       (comp.location
