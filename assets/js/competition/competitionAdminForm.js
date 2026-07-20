@@ -470,6 +470,24 @@
   }
 
   /**
+   * 승인제 도입 이전(approvalStatus 필드 없음) 기존 대회 자동 보정 — 관리자가 목록을 열 때마다 1회성으로 채워 넣는다.
+   * 일반 사용자 목록 조회는 where('approvalStatus','==','APPROVED') 쿼리를 쓰므로, 필드가 아예 없으면 결과에서 빠진다.
+   */
+  function backfillLegacyApprovalStatus(rows) {
+    var ctx = getFirestoreFns();
+    if (!ctx) return Promise.resolve();
+    var legacy = (rows || []).filter(function (r) {
+      return r.approvalStatus == null;
+    });
+    if (!legacy.length) return Promise.resolve();
+    return Promise.all(
+      legacy.map(function (r) {
+        return ctx.fns.updateDoc(ctx.fns.doc(ctx.db, 'competitions', r.id), { approvalStatus: 'APPROVED' }).catch(function () {});
+      })
+    );
+  }
+
+  /**
    * 생성/수정 폼 바텀시트. competitionBottomSheet.js의 openSheet 프리미티브를 그대로 사용.
    * @param {object|null} comp — null이면 신규 생성, 값이 있으면 수정(comp.id 필요)
    * @param {function} onSaved — 저장 성공 후 호출(목록 새로고침용)
@@ -593,5 +611,6 @@
     downloadApplicantsCsv: downloadApplicantsCsv,
     approveCompetition: approveCompetition,
     rejectCompetition: rejectCompetition,
+    backfillLegacyApprovalStatus: backfillLegacyApprovalStatus,
   };
 })();

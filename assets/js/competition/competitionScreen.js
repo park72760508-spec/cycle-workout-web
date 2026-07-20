@@ -173,21 +173,55 @@
     );
   }
 
+  /**
+   * 대회 목록 원본 조회.
+   * 관리자는 전체 컬렉션을 필터 없이 읽는다(firestore.rules상 관리자는 모든 문서에서 항상 허용되므로
+   * list 쿼리가 문제없이 통과한다).
+   * 일반 사용자(비로그인 포함)는 반드시 규칙이 문서 단위가 아니라 쿼리 단위로 증명 가능한 where 절을 써야 한다 —
+   * Firestore는 list 쿼리 결과에 규칙을 통과하지 못하는 문서가 하나라도 섞이면 쿼리 전체를 permission-denied로
+   * 거부하기 때문에(부분 필터링이 아님), 필터 없는 조회를 쓰면 다른 사람의 PENDING/REJECTED 대회가 하나라도
+   * 있는 순간 전체 목록 조회가 실패한다. 그래서 승인된 것 + 내가 만든 것(로그인 시) 두 쿼리로 나눠 합친다.
+   */
   async function fetchCompetitionsForList() {
     var ctx = getFirestoreFns();
     if (!ctx) return [];
     var fns = ctx.fns;
-    // 카드별 지난/접수중/예정 구분·연도 필터는 클라이언트에서 일괄 처리(전체 조회 — 대회 수가 많지 않아 인덱스 불필요)
-    var snap = await fns.getDocs(fns.collection(ctx.db, 'competitions'));
-    var rows = [];
-    snap.forEach(function (d) {
-      var data = typeof d.data === 'function' ? d.data() : {};
-      rows.push(Object.assign({ id: d.id }, data));
-    });
-    var thisYear = seoulYearOf(Date.now());
-    var activeCategory = getActiveCompetitionCategory();
     var admin = isAdmin();
     var uid = getCurrentUid();
+    var rows = [];
+    var col = fns.collection(ctx.db, 'competitions');
+    if (admin) {
+      var snap = await fns.getDocs(col);
+      snap.forEach(function (d) {
+        var data = typeof d.data === 'function' ? d.data() : {};
+        rows.push(Object.assign({ id: d.id }, data));
+      });
+      // 승인제 도입 이전(approvalStatus 필드 없는) 기존 대회를 자동으로 APPROVED 처리 —
+      // 그래야 아래 일반 사용자용 where('approvalStatus','==','APPROVED') 쿼리에도 노출된다.
+      if (window.competitionAdminForm && typeof window.competitionAdminForm.backfillLegacyApprovalStatus === 'function') {
+        window.competitionAdminForm.backfillLegacyApprovalStatus(rows).catch(function (e) {
+          console.warn('[competitionScreen] 승인 상태 자동 보정 실패:', e && e.message ? e.message : e);
+        });
+      }
+    } else {
+      var queries = [fns.getDocs(fns.query(col, fns.where('approvalStatus', '==', 'APPROVED')))];
+      if (uid) {
+        queries.push(fns.getDocs(fns.query(col, fns.where('createdBy', '==', uid))));
+      }
+      var snaps = await Promise.all(queries);
+      var seen = {};
+      snaps.forEach(function (s) {
+        s.forEach(function (d) {
+          if (seen[d.id]) return;
+          seen[d.id] = true;
+          var data = typeof d.data === 'function' ? d.data() : {};
+          rows.push(Object.assign({ id: d.id }, data));
+        });
+      });
+    }
+    var thisYear = seoulYearOf(Date.now());
+    var activeCategory = getActiveCompetitionCategory();
+    // 카드별 지난/접수중/예정 구분·연도 필터는 클라이언트에서 일괄 처리(대회 수가 많지 않아 인덱스 불필요)
     return rows.filter(function (comp) {
       var raceMs = toDateMs(comp.raceDate);
       // 종목 미입력 건(종목 필드 추가 이전 등록분)은 과거 대회 화면이 RUN 전용이었던 이력을 반영해 RUN으로 간주
