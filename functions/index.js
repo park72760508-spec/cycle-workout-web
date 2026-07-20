@@ -15161,13 +15161,6 @@ exports.reconcileCompetitionSlots = onRequest(reconcileCompetitionSlotsOptions, 
   const db = admin.firestore();
   try {
     const decoded = await verifyRaceRequestAuth(req);
-    const userSnap = await db.collection("users").doc(decoded.uid).get();
-    const userData = userSnap.exists ? userSnap.data() || {} : {};
-    if (String(userData.grade) !== "1") {
-      res.status(403).json({ success: false, error: "관리자만 사용할 수 있습니다." });
-      return;
-    }
-
     const body = typeof req.body === "object" && req.body !== null ? req.body : {};
     const competitionId = String(body.competitionId || "").trim();
     if (!competitionId) {
@@ -15175,7 +15168,24 @@ exports.reconcileCompetitionSlots = onRequest(reconcileCompetitionSlotsOptions, 
       return;
     }
 
-    const result = await reconcileCompetitionSlotCount(db, competitionId);
+    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
+    if (!compSnap.exists) {
+      res.status(404).json({ success: false, error: "존재하지 않는 대회입니다." });
+      return;
+    }
+    const comp = compSnap.data() || {};
+
+    const userSnap = await db.collection("users").doc(decoded.uid).get();
+    const userData = userSnap.exists ? userSnap.data() || {} : {};
+    // 관리자이거나 이 대회의 생성자 본인만 재계산할 수 있다(생성자 화면에서도 동일 버튼을 노출하므로).
+    const isAdminUser = String(userData.grade) === "1";
+    const isOwner = comp.createdBy === decoded.uid;
+    if (!isAdminUser && !isOwner) {
+      res.status(403).json({ success: false, error: "관리자 또는 대회 생성자만 사용할 수 있습니다." });
+      return;
+    }
+
+    const result = await reconcileCompetitionSlotCount(db, competitionId, comp);
     if (!result) {
       res.status(404).json({ success: false, error: "존재하지 않는 대회입니다." });
       return;
