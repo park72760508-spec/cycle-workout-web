@@ -245,10 +245,20 @@
     return { label: '접수중', tone: 'open' };
   }
 
-  /** 히어로(포스터) 섹션 — 이미지가 없으면 그라디언트 배경 + 배지만 표시 */
-  function buildHeroHtml(comp, ddayInfo) {
+  /**
+   * 히어로(포스터) 섹션 — 이미지가 없으면 그라디언트 배경 + 배지만 표시.
+   * canModerate(관리자 + 승인 대기중)면 종목·마감 배지 라인 우측에 승인·거절 버튼을 배지와 동일한 톤으로 배치한다.
+   */
+  function buildHeroHtml(comp, ddayInfo, opts) {
+    opts = opts || {};
     var hasImage = !!comp.posterImageUrl;
     var catLabel = comp.category === 'CYCLE' ? 'CYCLE' : 'RUN';
+    var approvalActionsHtml = opts.canModerate
+      ? '<div class="competition-hero-approval-actions">' +
+        '  <button type="button" class="competition-hero-approval-btn is-approve" id="competitionDetailApproveBtn">승인</button>' +
+        '  <button type="button" class="competition-hero-approval-btn is-reject" id="competitionDetailRejectBtn">거절</button>' +
+        '</div>'
+      : '';
     return (
       '<div class="competition-hero' + (hasImage ? '' : ' is-placeholder') + '">' +
       (hasImage
@@ -260,6 +270,7 @@
       '    <span class="competition-hero-badge">' + escapeHtml(catLabel) + '</span>' +
       '    <span class="competition-hero-badge competition-hero-badge--dday is-' + ddayInfo.tone + '">' +
       escapeHtml(ddayInfo.label) + '</span>' +
+      approvalActionsHtml +
       '  </div>' +
       '</div>'
     );
@@ -338,6 +349,45 @@
   var ICON_CLIPBOARD =
     '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path><rect x="9" y="3" width="6" height="4" rx="2"></rect>';
 
+  /** 관리 버튼 행(명단·재계산·수정·삭제) 아이콘 — competitionScreen.cardIcon과 동일한 스트로크 스타일 */
+  var ICON_LIST =
+    '<line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line>' +
+    '<line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line>' +
+    '<line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>';
+  var ICON_REFRESH =
+    '<polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline>' +
+    '<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>';
+  var ICON_EDIT =
+    '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>' +
+    '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>';
+  var ICON_TRASH =
+    '<polyline points="3 6 5 6 21 6"></polyline>' +
+    '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>' +
+    '<line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line>';
+
+  function actionIcon(inner) {
+    return (
+      '<svg class="competition-detail-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>'
+    );
+  }
+
+  /** 신청자 명단 CSV·재계산·수정·삭제 — 한 줄에 아이콘 위·라벨 아래로 배치(대회 카드 아이콘과 동일 톤) */
+  function buildManageActionRowHtml() {
+    return (
+      '<div class="competition-detail-action-row">' +
+      '  <button type="button" class="competition-detail-action-btn" id="competitionDetailDownloadCsvBtn">' +
+      actionIcon(ICON_LIST) + '<span class="competition-detail-action-label">명단</span></button>' +
+      '  <button type="button" class="competition-detail-action-btn" id="competitionDetailReconcileBtn">' +
+      actionIcon(ICON_REFRESH) + '<span class="competition-detail-action-label">재계산</span></button>' +
+      '  <button type="button" class="competition-detail-action-btn" id="competitionDetailEditBtn">' +
+      actionIcon(ICON_EDIT) + '<span class="competition-detail-action-label">수정</span></button>' +
+      '  <button type="button" class="competition-detail-action-btn is-danger" id="competitionDetailDeleteBtn">' +
+      actionIcon(ICON_TRASH) + '<span class="competition-detail-action-label">삭제</span></button>' +
+      '</div>'
+    );
+  }
+
   /** 신청서 내용 — 대회 정보 영역(종목·일시·장소·코스거리·참가비·잔여인원)과 동일한 아이콘 그리드 카드로 표시 */
   function buildApplicantSummaryHtml(a) {
     if (!a) return '';
@@ -390,10 +440,14 @@
    * @param {object} comp — competitions 문서(id 포함)
    * @param {{
    *   isAdmin: boolean,
+   *   canManage: boolean,
+   *   canModerate: boolean,
    *   remainingLabel: string,
    *   onApply: function(HTMLElement):void,
    *   onEdit: function():void,
-   *   onDelete: function():void
+   *   onDelete: function():void,
+   *   onApprove: function():Promise,
+   *   onReject: function():Promise
    * }} opts
    */
   function showDetailSheet(comp, opts) {
@@ -403,7 +457,7 @@
     var closesLabel = formatDateTimeKo(comp.closesAt);
     var ddayInfo = computeDDayInfo(comp);
     var body =
-      buildHeroHtml(comp, ddayInfo) +
+      buildHeroHtml(comp, ddayInfo, { canModerate: opts.canModerate }) +
       buildInfoGridHtml(comp, opts, raceDateLabel) +
       (opensLabel || closesLabel
         ? '<div class="competition-account-row"><div><div class="competition-account-row-label">접수 기간</div><div class="competition-account-row-value" style="font-size:14px;line-height:1.5;">' +
@@ -428,14 +482,14 @@
 
     var footerParts = [];
     if (opts.isAdmin) {
+      // 입금기한 만료건 즉시 취소는 대회 단위가 아니라 전체 대상 일괄 처리라 관리자 전용으로 남긴다.
       footerParts.push(
-        '<button type="button" class="competition-submit-btn" id="competitionDetailDownloadCsvBtn" style="background:#eef2ff;color:#4c51bf;margin-bottom:8px;">신청자 명단 CSV 다운로드</button>' +
-        '<button type="button" class="competition-submit-btn" id="competitionDetailReconcileBtn" style="background:#f0fdf4;color:#15803d;margin-bottom:8px;">잔여 인원 재계산</button>' +
-        '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-        '  <button type="button" class="competition-submit-btn" id="competitionDetailEditBtn" style="background:#f1f5f9;color:#334155;">수정</button>' +
-        '  <button type="button" class="competition-submit-btn" id="competitionDetailDeleteBtn" style="background:#fee2e2;color:#b91c1c;">삭제</button>' +
-        '</div>'
+        '<button type="button" class="competition-submit-btn" id="competitionDetailCancelUnpaidBtn" style="background:#fffbeb;color:#b45309;margin-bottom:8px;">입금기한 만료건 즉시 취소</button>'
       );
+    }
+    if (opts.canManage) {
+      // 명단 CSV·재계산·수정·삭제 — 한 줄에 아이콘+라벨(대회 카드 아이콘과 동일 톤), 관리자와 생성자 본인 모두 노출.
+      footerParts.push(buildManageActionRowHtml());
     }
     if (!opts.hideApply) {
       footerParts.push(
@@ -537,27 +591,42 @@
     }
     var downloadCsvBtn = overlay.querySelector('#competitionDetailDownloadCsvBtn');
     if (downloadCsvBtn && typeof opts.onDownloadCsv === 'function') {
+      var downloadCsvLabel = downloadCsvBtn.querySelector('.competition-detail-action-label');
       downloadCsvBtn.addEventListener('click', async function () {
         downloadCsvBtn.disabled = true;
-        downloadCsvBtn.textContent = '다운로드 준비 중...';
+        if (downloadCsvLabel) downloadCsvLabel.textContent = '준비 중';
         try {
           await opts.onDownloadCsv();
         } finally {
           downloadCsvBtn.disabled = false;
-          downloadCsvBtn.textContent = '신청자 명단 CSV 다운로드';
+          if (downloadCsvLabel) downloadCsvLabel.textContent = '명단';
+        }
+      });
+    }
+    var cancelUnpaidBtn = overlay.querySelector('#competitionDetailCancelUnpaidBtn');
+    if (cancelUnpaidBtn && typeof opts.onCancelUnpaid === 'function') {
+      cancelUnpaidBtn.addEventListener('click', async function () {
+        cancelUnpaidBtn.disabled = true;
+        cancelUnpaidBtn.textContent = '처리 중...';
+        try {
+          await opts.onCancelUnpaid();
+        } finally {
+          cancelUnpaidBtn.disabled = false;
+          cancelUnpaidBtn.textContent = '입금기한 만료건 즉시 취소';
         }
       });
     }
     var reconcileBtn = overlay.querySelector('#competitionDetailReconcileBtn');
     if (reconcileBtn && typeof opts.onReconcileSlots === 'function') {
+      var reconcileLabel = reconcileBtn.querySelector('.competition-detail-action-label');
       reconcileBtn.addEventListener('click', async function () {
         reconcileBtn.disabled = true;
-        reconcileBtn.textContent = '재계산 중...';
+        if (reconcileLabel) reconcileLabel.textContent = '계산 중';
         try {
           await opts.onReconcileSlots();
         } finally {
           reconcileBtn.disabled = false;
-          reconcileBtn.textContent = '잔여 인원 재계산';
+          if (reconcileLabel) reconcileLabel.textContent = '재계산';
         }
       });
     }
@@ -571,6 +640,34 @@
     if (deleteBtn && typeof opts.onDelete === 'function') {
       deleteBtn.addEventListener('click', function () {
         opts.onDelete();
+      });
+    }
+    var approveBtn = overlay.querySelector('#competitionDetailApproveBtn');
+    var rejectBtnEl = overlay.querySelector('#competitionDetailRejectBtn');
+    if (approveBtn && typeof opts.onApprove === 'function') {
+      approveBtn.addEventListener('click', function () {
+        if (!window.confirm('이 대회를 승인하고 목록에 공개할까요?')) return;
+        haptic(10);
+        approveBtn.disabled = true;
+        if (rejectBtnEl) rejectBtnEl.disabled = true;
+        opts.onApprove().catch(function (e) {
+          alert((e && e.message) || '승인 처리에 실패했습니다.');
+          approveBtn.disabled = false;
+          if (rejectBtnEl) rejectBtnEl.disabled = false;
+        });
+      });
+    }
+    if (rejectBtnEl && typeof opts.onReject === 'function') {
+      rejectBtnEl.addEventListener('click', function () {
+        if (!window.confirm('이 대회를 거절할까요? 목록에서 제외되고 생성자 화면에는 거절로 표시됩니다.')) return;
+        haptic(10);
+        rejectBtnEl.disabled = true;
+        if (approveBtn) approveBtn.disabled = true;
+        opts.onReject().catch(function (e) {
+          alert((e && e.message) || '거절 처리에 실패했습니다.');
+          rejectBtnEl.disabled = false;
+          if (approveBtn) approveBtn.disabled = false;
+        });
       });
     }
   }

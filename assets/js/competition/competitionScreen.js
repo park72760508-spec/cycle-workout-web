@@ -75,6 +75,17 @@
   }
 
   /**
+   * 승인제 노출 규칙 — approvalStatus 미지정(승인제 도입 이전 문서)·APPROVED는 누구나,
+   * PENDING·REJECTED는 생성자 본인과 관리자만 볼 수 있다(stelvio_riding_groups와 동일 패턴).
+   */
+  function isCompetitionVisible(comp, admin, uid) {
+    var status = comp.approvalStatus;
+    if (!status || status === 'APPROVED') return true;
+    if (admin) return true;
+    return !!uid && comp.createdBy === uid;
+  }
+
+  /**
    * 내 신청 내역(PAYMENT_WAITING·PAYMENT_COMPLETED) — competitionId → race_applications 문서 맵.
    * 화면 재진입 시에도 "입금 대기중"/"신청 완료" 상태가 그대로 보이도록 카드 최초 렌더에 반영한다.
    */
@@ -175,12 +186,16 @@
     });
     var thisYear = seoulYearOf(Date.now());
     var activeCategory = getActiveCompetitionCategory();
+    var admin = isAdmin();
+    var uid = getCurrentUid();
     return rows.filter(function (comp) {
       var raceMs = toDateMs(comp.raceDate);
       // 종목 미입력 건(종목 필드 추가 이전 등록분)은 과거 대회 화면이 RUN 전용이었던 이력을 반영해 RUN으로 간주
       var compCategory = comp.category === 'CYCLE' ? 'CYCLE' : 'RUN';
       // 대회 일시 미입력 건은 연도 필터를 적용할 수 없으므로 예정 목록에서 계속 보이도록 유지
-      return compCategory === activeCategory && (raceMs == null || seoulYearOf(raceMs) === thisYear);
+      return compCategory === activeCategory &&
+        (raceMs == null || seoulYearOf(raceMs) === thisYear) &&
+        isCompetitionVisible(comp, admin, uid);
     });
   }
 
@@ -443,15 +458,22 @@
     }
   }
 
-  function openDetail(comp, admin, remainingLabel, myApp, myWaitlist) {
+  function openDetail(comp, admin, remainingLabel, myApp, myWaitlist, uid) {
     var category = categorizeCompetition(comp);
     var invite = getActiveWaitlistInvite(myWaitlist);
     var isWaiting =
       myApp && myApp.status === 'PAYMENT_WAITING' && (toDateMs(myApp.paymentDueAt) == null || toDateMs(myApp.paymentDueAt) > Date.now());
     var isPaid = !!myApp && myApp.status === 'PAYMENT_COMPLETED';
     var hasApplication = isWaiting || isPaid;
+    var isOwner = !!uid && comp.createdBy === uid;
+    // 생성자 화면: 관리자가 아니어도 본인이 만든 대회는 CSV·재계산·수정·삭제를 사용할 수 있다.
+    var canManage = admin || isOwner;
+    // 승인/거절은 관리자만, 그리고 아직 승인 대기중인 건에 한해 노출한다.
+    var canModerate = admin && comp.approvalStatus === 'PENDING';
     window.competitionBottomSheet.showDetailSheet(comp, {
       isAdmin: admin,
+      canManage: canManage,
+      canModerate: canModerate,
       remainingLabel: category.key === 'past' && !invite ? '종료' : remainingLabel || '확인 중...',
       hideApply: !invite && (category.key === 'past' || hasApplication),
       applyDisabledLabel: !invite && category.key === 'upcoming' ? '접수 예정' : null,
@@ -477,6 +499,19 @@
       onDownloadCsv: function () {
         return window.competitionAdminForm.downloadApplicantsCsv(comp);
       },
+      onCancelUnpaid: function () {
+        return window.competitionApi.manualCancelUnpaidCompetitionApplications().then(function (r) {
+          if (!r || r.success === false) {
+            alert((r && r.error) || '미입금 취소 처리에 실패했습니다.');
+            return;
+          }
+          alert('입금기한 만료건 ' + r.processed + '건을 취소 처리했습니다.');
+          // 방금 취소로 풀린 슬롯을 즉시 반영 — 이 대회 잔여 인원도 함께 재계산
+          return window.competitionApi.reconcileCompetitionSlots(comp.id).finally(function () {
+            renderCompetitionList();
+          });
+        });
+      },
       onReconcileSlots: function () {
         return window.competitionApi.reconcileCompetitionSlots(comp.id).then(function (r) {
           if (!r || r.success === false) {
@@ -497,10 +532,26 @@
           renderCompetitionList();
         });
       },
+      onApprove: canModerate
+        ? function () {
+            return window.competitionAdminForm.approveCompetition(comp.id).then(function () {
+              window.competitionBottomSheet.closeSheet();
+              renderCompetitionList();
+            });
+          }
+        : null,
+      onReject: canModerate
+        ? function () {
+            return window.competitionAdminForm.rejectCompetition(comp.id).then(function () {
+              window.competitionBottomSheet.closeSheet();
+              renderCompetitionList();
+            });
+          }
+        : null,
     });
   }
 
-  function renderCard(comp, admin, myApp, myWaitlist) {
+  function renderCard(comp, admin, myApp, myWaitlist, uid) {
     var category = categorizeCompetition(comp);
     var invite = getActiveWaitlistInvite(myWaitlist);
     var card = document.createElement('div');
@@ -515,6 +566,14 @@
     var ddayBadge = dday
       ? '<span class="competition-dday-chip is-' + dday.tone + '">' + escapeHtml(dday.label) + '</span>'
       : '';
+    // 승인 대기·거절 배지 — 관리자·생성자 본인에게만 보인다(다른 사용자에게는 목록 자체에서 걸러짐)
+    var isOwner = !!uid && comp.createdBy === uid;
+    var approvalBadge = '';
+    if ((admin || isOwner) && comp.approvalStatus === 'PENDING') {
+      approvalBadge = '<span class="competition-status-badge is-pending">승인 대기</span>';
+    } else if ((admin || isOwner) && comp.approvalStatus === 'REJECTED') {
+      approvalBadge = '<span class="competition-status-badge is-rejected">거절</span>';
+    }
     var thumbHtml = comp.posterImageUrl
       ? '<div class="competition-card-thumb" style="background-image:url(\'' + escapeHtml(comp.posterImageUrl) + '\')"></div>'
       : '<div class="competition-card-thumb competition-card-thumb--placeholder">' +
@@ -533,7 +592,7 @@
       '<div class="competition-card-row">' +
       thumbHtml +
       '<div class="competition-card-main">' +
-      '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + statusBadge + ddayBadge + '</h3>' +
+      '<h3 class="competition-card-title">' + escapeHtml(comp.title || '대회') + statusBadge + ddayBadge + approvalBadge + '</h3>' +
       '<div class="competition-card-info">' +
       '  <div class="competition-card-info-row">' + cardIcon(CARD_ICON_CALENDAR) + '대회 일시 : ' + escapeHtml(raceDateLabel) + '</div>' +
       '  <div class="competition-card-info-row">' + cardIcon(CARD_ICON_MAP_PIN) + '장소 : ' + locationLabel + '</div>' +
@@ -576,7 +635,7 @@
 
     card.style.cursor = 'pointer';
     card.addEventListener('click', function () {
-      openDetail(comp, admin, lastRemainingLabel, myApp, myWaitlist);
+      openDetail(comp, admin, lastRemainingLabel, myApp, myWaitlist, uid);
     });
 
     return card;
@@ -587,6 +646,7 @@
     if (!container) return;
     renderSkeleton(container);
     var admin = isAdmin();
+    var uid = getCurrentUid();
     try {
       var listAndMyApps = await Promise.all([fetchCompetitionsForList(), fetchMyApplicationsMap(), fetchMyWaitlistMap()]);
       var list = listAndMyApps[0];
@@ -594,8 +654,9 @@
       var myWaitlistMap = listAndMyApps[2];
       var existingFab = document.getElementById('competitionAdminCreateFab');
       if (existingFab) existingFab.remove();
-      if (admin) {
-        // 제휴사 등록(.affiliate-fab-create)과 동일한 좌하단 원형 FAB
+      if (uid) {
+        // 제휴사 등록(.affiliate-fab-create)과 동일한 좌하단 원형 FAB — 로그인한 사용자라면 관리자·일반 모두 노출.
+        // 관리자가 만들면 즉시 공개(APPROVED), 일반 사용자가 만들면 승인 대기(PENDING)로 시작한다(competitionAdminForm.saveCompetition).
         var createBtn = document.createElement('button');
         createBtn.type = 'button';
         createBtn.id = 'competitionAdminCreateFab';
@@ -626,7 +687,7 @@
         })
         .forEach(function (entry) {
           container.appendChild(
-            renderCard(entry.comp, admin, myAppsMap.get(entry.comp.id), myWaitlistMap.get(entry.comp.id))
+            renderCard(entry.comp, admin, myAppsMap.get(entry.comp.id), myWaitlistMap.get(entry.comp.id), uid)
           );
         });
     } catch (e) {

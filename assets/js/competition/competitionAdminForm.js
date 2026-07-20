@@ -23,6 +23,14 @@
     return { db: window.firestoreV9, fns: window._firebaseFirestoreFns };
   }
 
+  function getCurrentUid() {
+    try {
+      return (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function getStorageFns() {
     if (!window.firebaseStorageV9 || !window._firebaseStorageFns) return null;
     return { storage: window.firebaseStorageV9, fns: window._firebaseStorageFns };
@@ -420,9 +428,14 @@
       }));
       return id;
     }
+    var uid = getCurrentUid();
+    if (!uid) throw new Error('로그인이 필요합니다.');
+    // 관리자는 즉시 공개(APPROVED), 일반 사용자는 승인 대기(PENDING) — 관리자 승인 후 목록에 노출된다.
     var docRef = await fns.addDoc(fns.collection(db, 'competitions'), Object.assign({}, data, {
       createdAt: fns.serverTimestamp(),
       updatedAt: fns.serverTimestamp(),
+      createdBy: uid,
+      approvalStatus: isAdmin() ? 'APPROVED' : 'PENDING',
     }));
     // redisKey는 applyForCompetition/getCompetitionStatus가 없으면 자동으로 만들지만,
     // 문서에도 명시해 두면 관리자 화면에서 바로 확인 가능하다.
@@ -436,6 +449,24 @@
     var ctx = getFirestoreFns();
     if (!ctx) throw new Error('Firestore가 준비되지 않았습니다.');
     await ctx.fns.deleteDoc(ctx.fns.doc(ctx.db, 'competitions', id));
+  }
+
+  /** 관리자 승인/거절 — approvalStatus만 갱신한다(firestore.rules가 생성자 본인의 자가 승인은 차단). */
+  async function setApprovalStatus(competitionId, status) {
+    var ctx = getFirestoreFns();
+    if (!ctx) throw new Error('Firestore가 준비되지 않았습니다.');
+    await ctx.fns.updateDoc(ctx.fns.doc(ctx.db, 'competitions', competitionId), {
+      approvalStatus: status,
+      updatedAt: ctx.fns.serverTimestamp(),
+    });
+  }
+
+  function approveCompetition(competitionId) {
+    return setApprovalStatus(competitionId, 'APPROVED');
+  }
+
+  function rejectCompetition(competitionId) {
+    return setApprovalStatus(competitionId, 'REJECTED');
   }
 
   /**
@@ -560,5 +591,7 @@
     openForm: openForm,
     confirmAndDelete: confirmAndDelete,
     downloadApplicantsCsv: downloadApplicantsCsv,
+    approveCompetition: approveCompetition,
+    rejectCompetition: rejectCompetition,
   };
 })();
