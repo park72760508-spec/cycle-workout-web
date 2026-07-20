@@ -2901,6 +2901,8 @@
     #competitionScreen .competition-status-badge.is-upcoming { color: #4338ca; background: #e0e7ff; }
     #competitionScreen .competition-status-badge.is-past { color: #6b7280; background: #f1f5f9; }
     #competitionScreen .competition-status-badge.is-invited { color: #b45309; background: #fef3c7; }
+    #competitionScreen .competition-status-badge.is-pending { color: #b45309; background: #fef3c7; }
+    #competitionScreen .competition-status-badge.is-rejected { color: #b91c1c; background: #fee2e2; }
     #competitionScreen .competition-dday-chip.is-open { color: #b91c1c; background: #fef2f2; }
     #competitionScreen .competition-dday-chip.is-upcoming { color: #4338ca; background: #eef2ff; }
     #competitionScreen .competition-card-info { margin: 0 0 10px; }
@@ -3042,6 +3044,31 @@
     }
     .competition-hero-badge--dday.is-open { background: rgba(239,68,68,0.9); border-color: transparent; }
     .competition-hero-badge--dday.is-past { background: rgba(107,114,128,0.65); border-color: transparent; }
+
+    /* 승인/거절 — 종목·마감 배지와 같은 줄 우측(관리자가 승인 대기중인 대회를 열었을 때만 노출) */
+    .competition-hero-approval-actions { display: flex; gap: 6px; margin-left: auto; }
+    .competition-hero-approval-btn {
+      font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.35); color: white; cursor: pointer;
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .competition-hero-approval-btn.is-approve { background: rgba(22,163,74,0.85); border-color: transparent; }
+    .competition-hero-approval-btn.is-reject { background: rgba(239,68,68,0.85); border-color: transparent; }
+    .competition-hero-approval-btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+    /* 신청자 명단 CSV·재계산·수정·삭제 — 한 줄에 아이콘+라벨, 대회 카드 아이콘(.competition-card-icon)과 동일한 스트로크 톤 */
+    .competition-detail-action-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .competition-detail-action-btn {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      padding: 10px 4px; border-radius: 12px; border: 1px solid #eef0f4; background: #f8fafc;
+      color: #475569; font-size: 11px; font-weight: 700; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .competition-detail-action-btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+    .competition-detail-action-icon { width: 18px; height: 18px; color: #667eea; }
+    .competition-detail-action-btn.is-danger { background: #fef2f2; border-color: rgba(185,28,28,0.15); color: #b91c1c; }
+    .competition-detail-action-btn.is-danger .competition-detail-action-icon { color: #b91c1c; }
 
     /* 대회 정보 그리드 카드 — 종목·일시·장소·코스거리·참가비·잔여인원 */
     .competition-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
