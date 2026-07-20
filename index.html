@@ -2856,7 +2856,13 @@
     /* 화면 상단 '대회' 문구 — 나의 기록(Run 기록) 화면 헤더(.header h1)와 동일 크기·가운데 정렬 */
     #competitionScreen .competition-screen-title { margin: 0 0 4px; font-size: 1.8em; font-weight: bold; color: #0f172a; text-align: center; }
     #competitionScreen .competition-screen-subtitle { margin: 0; font-size: 13px; color: #64748b; }
-    #competitionScreen .competition-list-container { display: flex; flex-direction: column; gap: 14px; }
+    #competitionScreen .competition-list-container {
+      display: flex; flex-direction: column; gap: 14px;
+      /* 하단 글래스 네비(약 58px 높이, bottom:16px+safe-area 위치)에 마지막 카드가 가려지지 않도록
+         화면 padding-bottom(--hub-glass-nav-scroll-pad, 클래스 미적용 시 88px 폴백)과 별개로
+         safe-area를 명시적으로 더해 여유 있게 확보한다. */
+      margin-bottom: calc(16px + env(safe-area-inset-bottom, 0px) + 58px + 24px);
+    }
     #competitionScreen .competition-card {
       background: white;
       border-radius: 16px;
