@@ -9,6 +9,24 @@ const FIRESTORE_DOC_PATH = {
   collection: "appConfig",
   doc: "supabase_groups_read_routing",
 };
+const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+
+/** appConfig 문서를 Supabase app_config 미러에서 읽는다(우선 경로). 실패 시 null. */
+async function loadAppConfigDocFromSupabase(configKey) {
+  try {
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("app_config")
+      .select("data")
+      .eq("config_key", configKey)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? data.data || {} : null;
+  } catch (err) {
+    console.warn("[groupReadConfig] Supabase app_config 조회 실패, Firestore 폴백:", err && err.message ? err.message : err);
+    return null;
+  }
+}
 
 /** @type {{ useSupabaseGlobal: boolean, whitelistUids: string[], parityFallbackToFirebase: boolean, loadedAt: number }} */
 let cache = {
@@ -72,7 +90,22 @@ async function refreshGroupReadConfig(admin, force = false) {
   useSupabaseGlobal = envCfg.useSupabaseGlobal;
   whitelistUids = envCfg.whitelistUids.slice();
 
-  if (admin && admin.firestore) {
+  function applyRoutingDoc(d) {
+    if (d.useSupabaseGlobal != null) {
+      useSupabaseGlobal = parseBool(d.useSupabaseGlobal);
+    }
+    if (d.whitelistUids != null) {
+      whitelistUids = parseUidList(d.whitelistUids);
+    }
+    if (d.parityFallbackToFirebase != null) {
+      parityFallbackToFirebase = parseBool(d.parityFallbackToFirebase);
+    }
+  }
+
+  const supabaseDoc = await loadAppConfigDocFromSupabase(FIRESTORE_DOC_PATH.doc);
+  if (supabaseDoc) {
+    applyRoutingDoc(supabaseDoc);
+  } else if (admin && admin.firestore) {
     try {
       const snap = await admin
         .firestore()
@@ -80,16 +113,7 @@ async function refreshGroupReadConfig(admin, force = false) {
         .doc(FIRESTORE_DOC_PATH.doc)
         .get();
       if (snap.exists) {
-        const d = snap.data() || {};
-        if (d.useSupabaseGlobal != null) {
-          useSupabaseGlobal = parseBool(d.useSupabaseGlobal);
-        }
-        if (d.whitelistUids != null) {
-          whitelistUids = parseUidList(d.whitelistUids);
-        }
-        if (d.parityFallbackToFirebase != null) {
-          parityFallbackToFirebase = parseBool(d.parityFallbackToFirebase);
-        }
+        applyRoutingDoc(snap.data() || {});
       }
     } catch (err) {
       console.warn("[groupReadConfig] Firestore load failed, env fallback:", err.message);

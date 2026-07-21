@@ -73,13 +73,20 @@ function webhookRetryDocId(ownerId, objectId) {
 }
 
 /**
- * @param {import('firebase-admin').firestore.Firestore} db
+ * strava_webhook_retries는 클라이언트가 접근하지 않는 백엔드 전용 재시도 큐라 Firestore 없이
+ * Supabase(service_role)만으로 전량 이관했다(Firestore 읽기/쓰기 비용 절감). 롤백 시에는 호출부에서
+ * db 인자를 다시 Firestore write 로직으로 되돌리면 된다(과거 구현은 git history 참고).
+ */
+const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+
+/**
  * @param {{ ownerId: number, objectId: number, userId?: string|null, reason?: string, status?: number, error?: string }} entry
  */
-async function enqueueStravaWebhookRetry(db, entry) {
-  if (!db || entry.ownerId == null || entry.objectId == null) return;
+async function enqueueStravaWebhookRetry(_db, entry) {
+  if (entry.ownerId == null || entry.objectId == null) return;
   const docId = webhookRetryDocId(entry.ownerId, entry.objectId);
   const payload = {
+    id: docId,
     object_id: Number(entry.objectId),
     owner_id: Number(entry.ownerId),
     user_id: entry.userId ? String(entry.userId) : null,
@@ -89,43 +96,53 @@ async function enqueueStravaWebhookRetry(db, entry) {
     error: entry.error ? String(entry.error).slice(0, 500) : null,
     status_queue: "pending",
     processed_at: null,
+    updated_at: new Date().toISOString(),
   };
   try {
-    await db.collection(STRAVA_WEBHOOK_RETRIES_COLLECTION).doc(docId).set(payload, { merge: true });
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const { error } = await supabase.from("strava_webhook_retries").upsert(payload, { onConflict: "id" });
+    if (error) throw error;
   } catch (e) {
     console.warn("[stravaGapDetect] enqueue webhook retry failed:", docId, e.message || e);
   }
 }
 
-/** @param {import('firebase-admin').firestore.Firestore} db @param {number} ownerId @param {string|number} objectId */
-async function markStravaWebhookRetryDone(db, ownerId, objectId) {
-  if (!db || ownerId == null || objectId == null) return;
+/** @param {number} ownerId @param {string|number} objectId */
+async function markStravaWebhookRetryDone(_db, ownerId, objectId) {
+  if (ownerId == null || objectId == null) return;
   const docId = webhookRetryDocId(ownerId, objectId);
   try {
-    await db.collection(STRAVA_WEBHOOK_RETRIES_COLLECTION).doc(docId).set(
-      {
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const { error } = await supabase
+      .from("strava_webhook_retries")
+      .update({
         status_queue: "done",
         processed_at: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", docId);
+    if (error) throw error;
   } catch (e) {
     console.warn("[stravaGapDetect] mark webhook retry done failed:", docId, e.message || e);
   }
 }
 
 /**
- * @param {import('firebase-admin').firestore.Firestore} db
  * @param {{ maxEntries?: number }} [options]
  */
-async function listPendingStravaWebhookRetries(db, options = {}) {
+async function listPendingStravaWebhookRetries(_db, options = {}) {
   const maxEntries = Math.max(1, Math.min(1000, Number(options.maxEntries) || 500));
-  const snap = await db
-    .collection(STRAVA_WEBHOOK_RETRIES_COLLECTION)
-    .where("status_queue", "==", "pending")
-    .limit(maxEntries)
-    .get();
-  return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("strava_webhook_retries")
+    .select("*")
+    .eq("status_queue", "pending")
+    .limit(maxEntries);
+  if (error) {
+    console.warn("[stravaGapDetect] listPendingStravaWebhookRetries failed:", error.message);
+    return [];
+  }
+  return (data || []).map((row) => ({ id: row.id, ...row }));
 }
 
 const stravaConnectionReader = require("./stravaConnectionReader");

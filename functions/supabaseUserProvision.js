@@ -158,6 +158,10 @@ function mapFirestoreUserToRow(firebaseUid, d, uidConfig) {
     sport_category: mapSportCategory(d.category ?? d.sport_category),
     grade: mapGrade(d.grade),
     account_status: mapAccountStatus(d.account_status),
+    // rankingEligibility.isRankingEligibleUserData()를 Supabase 쪽에서도 재현하기 위한 원본 미러
+    // (account_status enum만으로는 is_active===false·레거시 status를 표현할 수 없음)
+    is_active: d.is_active === false ? false : true,
+    legacy_status: str(d.status),
     expiry_date: toDateOnly(d.expiry_date ?? d.subscription_end_date),
     acc_points: int(d.acc_points, 0),
     rem_points: int(d.rem_points, 0),

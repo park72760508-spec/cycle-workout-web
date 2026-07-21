@@ -9,6 +9,28 @@
  *   - whitelistUids / SUPABASE_WHITELIST_UIDS (쉼표·JSON 배열)
  */
 const FIRESTORE_DOC_PATH = { collection: "appConfig", doc: "supabase_read_routing" };
+const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+
+/**
+ * appConfig/supabase_read_routing 설정 문서를 Supabase app_config 미러에서 읽는다(우선 경로).
+ * 실패 시(장애·행 없음) null 반환 — 호출부가 Firestore로 폴백.
+ * @returns {Promise<object|null>}
+ */
+async function loadAppConfigDocFromSupabase(configKey) {
+  try {
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("app_config")
+      .select("data")
+      .eq("config_key", configKey)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? data.data || {} : null;
+  } catch (err) {
+    console.warn("[rankingReadConfig] Supabase app_config 조회 실패, Firestore 폴백:", err && err.message ? err.message : err);
+    return null;
+  }
+}
 
 /** @type {{ useSupabaseGlobal: boolean, useSupabaseLogsRead: boolean, whitelistUids: string[], loadedAt: number }} */
 let cache = {
@@ -87,7 +109,34 @@ async function refreshRankingReadConfig(admin, force = false) {
 
   let useSupabaseLogsReadFromDoc = false;
 
-  if (admin && admin.firestore) {
+  function applyRoutingDoc(d) {
+    if (d.useSupabaseGlobal != null) {
+      useSupabaseGlobal = parseBool(d.useSupabaseGlobal);
+    }
+    if (d.useSupabaseLogsRead != null) {
+      useSupabaseLogsRead = parseBool(d.useSupabaseLogsRead);
+      useSupabaseLogsReadFromDoc = true;
+    }
+    if (d.whitelistUids != null) {
+      whitelistUids = parseUidList(d.whitelistUids);
+    } else if (d.SUPABASE_WHITELIST_UIDS != null) {
+      whitelistUids = parseUidList(d.SUPABASE_WHITELIST_UIDS);
+    }
+    if (d.parityFallbackToFirebase != null) {
+      parityFallbackToFirebase = parseParityFallback(d.parityFallbackToFirebase);
+    } else if (useSupabaseGlobal) {
+      parityFallbackToFirebase = false;
+    }
+    if (d.parityCheckOnRead != null) {
+      parityCheckOnRead = parseBool(d.parityCheckOnRead);
+    }
+  }
+
+  // 우선 Supabase app_config 미러 조회(Firestore 읽기 절감) — 실패/행 없음 시에만 Firestore 폴백.
+  const supabaseDoc = await loadAppConfigDocFromSupabase(FIRESTORE_DOC_PATH.doc);
+  if (supabaseDoc) {
+    applyRoutingDoc(supabaseDoc);
+  } else if (admin && admin.firestore) {
     try {
       const snap = await admin
         .firestore()
@@ -95,27 +144,7 @@ async function refreshRankingReadConfig(admin, force = false) {
         .doc(FIRESTORE_DOC_PATH.doc)
         .get();
       if (snap.exists) {
-        const d = snap.data() || {};
-        if (d.useSupabaseGlobal != null) {
-          useSupabaseGlobal = parseBool(d.useSupabaseGlobal);
-        }
-        if (d.useSupabaseLogsRead != null) {
-          useSupabaseLogsRead = parseBool(d.useSupabaseLogsRead);
-          useSupabaseLogsReadFromDoc = true;
-        }
-        if (d.whitelistUids != null) {
-          whitelistUids = parseUidList(d.whitelistUids);
-        } else if (d.SUPABASE_WHITELIST_UIDS != null) {
-          whitelistUids = parseUidList(d.SUPABASE_WHITELIST_UIDS);
-        }
-        if (d.parityFallbackToFirebase != null) {
-          parityFallbackToFirebase = parseParityFallback(d.parityFallbackToFirebase);
-        } else if (useSupabaseGlobal) {
-          parityFallbackToFirebase = false;
-        }
-        if (d.parityCheckOnRead != null) {
-          parityCheckOnRead = parseBool(d.parityCheckOnRead);
-        }
+        applyRoutingDoc(snap.data() || {});
       }
     } catch (err) {
       console.warn("[rankingReadConfig] Firestore load failed:", err.message);

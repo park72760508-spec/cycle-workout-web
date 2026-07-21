@@ -11,6 +11,49 @@ const HEPTAGON_CATEGORIES = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito"
 const N_AXIS = 7;
 const HEPTAGON_COHORT_COL = "heptagon_cohort_ranks";
 const { isRankingEligibleUserData } = require("./rankingEligibility");
+const supabaseUsersReader = require("./supabaseUsersReader");
+
+/**
+ * 헵타곤 집계용 사용자 메타(표시명·연령 카테고리·비공개 여부) 맵.
+ * Supabase public.users(이미 onUserProfileWritten으로 동기화됨) 우선 조회 — 실패 시에만
+ * Firestore users 전체 스캔으로 폴백(기존 동작 그대로 유지).
+ * @param {import("firebase-admin").firestore.Firestore} db
+ * @param {Function} getLeagueCategory
+ */
+async function loadHeptagonUserMetaMap(db, getLeagueCategory) {
+  const userMeta = new Map();
+  try {
+    const rows = await supabaseUsersReader.fetchRankingEligibleUsersFromSupabase();
+    for (const row of rows) {
+      const leagueCategory = getLeagueCategory(row.challenge, row.birthYear);
+      if (!leagueCategory) continue;
+      userMeta.set(row.id, {
+        displayName: (row.name || row.displayName || "(이름 없음)").toString().trim() || "(이름 없음)",
+        ageCategory: leagueCategory,
+        is_private: row.isPrivate === true,
+      });
+    }
+    return userMeta;
+  } catch (e) {
+    console.warn("[heptagonCohortRanks] Supabase users 조회 실패, Firestore 폴백:", e && e.message ? e.message : e);
+  }
+
+  const usersSnap = await db.collection("users").get();
+  for (const doc of usersSnap.docs) {
+    const data = doc.data();
+    if (!isRankingEligibleUserData(data)) continue;
+    const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+    const challenge = data.challenge || "Fitness";
+    const leagueCategory = getLeagueCategory(challenge, birthYear);
+    if (!leagueCategory) continue;
+    userMeta.set(doc.id, {
+      displayName: (data.name || data.displayName || "(이름 없음)").toString().trim() || "(이름 없음)",
+      ageCategory: leagueCategory,
+      is_private: data.is_private === true,
+    });
+  }
+  return userMeta;
+}
 
 /** 랭킹보드 월간 피크 집계 키와 동일 — getPeakPowerRanking / rebuildRankingAggregates (90일 롤링) */
 function peakMonthlyAggregateDocKey(durationType, gender, startStr, endStr) {
@@ -439,21 +482,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
   const monthKey = getMonthKeyKstNow();
   const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
 
-  const usersSnap = await db.collection("users").get();
-  const userMeta = new Map();
-  for (const doc of usersSnap.docs) {
-    const data = doc.data();
-    if (!isRankingEligibleUserData(data)) continue;
-    const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
-    const challenge = data.challenge || "Fitness";
-    const leagueCategory = getLeagueCategory(challenge, birthYear);
-    if (!leagueCategory) continue;
-    userMeta.set(doc.id, {
-      displayName: (data.name || data.displayName || "(이름 없음)").toString().trim() || "(이름 없음)",
-      ageCategory: leagueCategory,
-      is_private: data.is_private === true,
-    });
-  }
+  const userMeta = await loadHeptagonUserMetaMap(db, getLeagueCategory);
 
   let peakSource = "none";
   let cache = null;
@@ -729,21 +758,7 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
 
   const { startStr, endStr } = getRolling28DaysRangeSeoul();
 
-  const usersSnap = await db.collection("users").get();
-  const userMeta = new Map();
-  for (const doc of usersSnap.docs) {
-    const data = doc.data();
-    if (!isRankingEligibleUserData(data)) continue;
-    const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
-    const challenge = data.challenge || "Fitness";
-    const leagueCategory = getLeagueCategory(challenge, birthYear);
-    if (!leagueCategory) continue;
-    userMeta.set(doc.id, {
-      displayName: (data.name || data.displayName || "(이름 없음)").toString().trim() || "(이름 없음)",
-      ageCategory: leagueCategory,
-      is_private: data.is_private === true,
-    });
-  }
+  const userMeta = await loadHeptagonUserMetaMap(db, getLeagueCategory);
 
   let peakSource = "legacy";
   let cache = null;

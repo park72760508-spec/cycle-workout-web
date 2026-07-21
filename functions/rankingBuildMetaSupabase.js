@@ -10,6 +10,8 @@ const META_KEYS = [
   "peak_28d_board_refresh",
   /** rides/daily_summaries → user_ranking_metrics 갱신 시 터치 (주간 TSS 실시간) */
   "ranking_metrics_live",
+  /** 러닝 랭킹 비공개 캐시 버전 — Firestore ranking_meta/run_privacy_version 대체 */
+  "run_privacy_version",
 ];
 
 function metaTsFromIso(iso) {
@@ -43,6 +45,10 @@ function buildRankingBuildMetaPayload(rows) {
   const personalSpeed = rowToClientShape(byKey.personal_speed_logic);
   const peak28d = rowToClientShape(byKey.peak_28d_board_refresh);
   const rankingMetricsLive = rowToClientShape(byKey.ranking_metrics_live);
+  const runPrivacyVersionRow = byKey.run_privacy_version;
+  const runPrivacyVersion = runPrivacyVersionRow && runPrivacyVersionRow.version != null
+    ? Number(runPrivacyVersionRow.version)
+    : 0;
 
   const fingerprint = [
     "m:" +
@@ -72,6 +78,7 @@ function buildRankingBuildMetaPayload(rows) {
     personalSpeed,
     peak28d,
     rankingMetricsLive,
+    runPrivacyVersion,
     fingerprint,
     rows: (rows || []).map((r) => ({
       metaKey: r.meta_key,
@@ -176,6 +183,27 @@ async function touchRankingMetricsLiveMeta() {
   return { ok: true };
 }
 
+/**
+ * 러닝 랭킹 비공개 토글 시 호출 — Supabase ranking_build_meta.run_privacy_version 원자적 증가.
+ * Firestore ranking_meta/run_privacy_version 증가(onUserProfileWritten)와 나란히 dual-write된다.
+ * @param {string} [userId] 로그용
+ */
+async function touchRunPrivacyVersionMeta(userId) {
+  let supabase;
+  try {
+    supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  } catch (eClient) {
+    return { ok: false, error: eClient && eClient.message ? eClient.message : String(eClient) };
+  }
+  if (!supabase) return { ok: false, error: "supabase_unavailable" };
+  const { data, error } = await supabase.rpc("fn_bump_run_privacy_version");
+  if (error) {
+    console.warn("[rankingBuildMetaSupabase] bump run_privacy_version failed:", userId, error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, version: data };
+}
+
 module.exports = {
   META_KEYS,
   buildRankingBuildMetaPayload,
@@ -183,4 +211,5 @@ module.exports = {
   runMasterDailyRebuildWeeklyTss,
   runWeeklyTssDaytimeRefresh,
   touchRankingMetricsLiveMeta,
+  touchRunPrivacyVersionMeta,
 };

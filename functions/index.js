@@ -43,6 +43,8 @@ const rankingDayRollup = require("./rankingDayRollup");
 const { sanitizePeakPowerWattsOnRow } = require("./peakPowerMonotonic");
 const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+const appConfigCache = require("./appConfigCache");
+const { getCachedCallerGrade } = require("./callerGradeCache");
 const stravaDualWrite = require("./stravaDualWrite");
 let stravaRouteMerge;
 try {
@@ -303,7 +305,8 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
 // hydrateRankingBoardPrivacyFromUsers는 보드의 "모든 행"에 대해 users 문서를 읽으므로
 // (피크 보드는 카테고리당 최대 수천 행) 10만 가입자·per-user CDN 캐시 환경에서 읽기 비용이 과도하다.
 // 대신 "현재 비공개(is_private=true)인 사용자 id 집합"만 조회한다.
-//  - users.where('is_private','==',true) → 비공개(소수)만 읽으므로 보드 전체 조회보다 훨씬 저렴.
+//  - Supabase public.users.is_private=true(비공개, 소수)만 조회 — Firestore 샤드 색인(구현) 대신
+//    이미 onUserProfileWritten으로 동기화되는 Supabase 미러를 직접 조회해 Firestore 읽기를 제거했다.
 //  - 인메모리 TTL 캐시로 함수 인스턴스당 조회 횟수를 고정(요청량과 무관하게 상한).
 //  - 집합에 속한 행만 is_private=true로 강제(강등 없음) → 동기화 지연 시에도 비공개가 풀리지 않음.
 let _privateUserIdSetCache = null;
@@ -312,110 +315,46 @@ let _privateUserIdSetCacheAt = 0;
 // (비공개 토글이 보드에 반영되기까지 최대 이 정도 지연 — 수용 가능)
 const PRIVATE_USER_ID_SET_TTL_MS = 300 * 1000;
 
-// 비공개 사용자 id를 트리거로 유지하는 색인 문서(ranking_meta/private_user_ids_{n}).
-// Firestore 문서 1MB 한계 때문에 단일 문서 대신 소수의 고정 샤드로 나눈다(수만 명까지 안전).
-// 갱신당 읽기 = 샤드 수(+메타 1) = 작은 상수. 요청량·전체 사용자 수와 무관하게 고정.
-const PRIVATE_USER_IDS_SHARD_COUNT = 8;
-const PRIVATE_USER_IDS_DOC_PREFIX = "private_user_ids_";
-const PRIVATE_USER_IDS_META_DOC = "private_user_ids_meta";
-
-function privateUserIdsShardIndex(uid) {
-  const s = String(uid == null ? "" : uid);
-  let h = 0;
-  for (let i = 0; i < s.length; i += 1) {
-    h = (h * 31 + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h) % PRIVATE_USER_IDS_SHARD_COUNT;
-}
-
-function privateUserIdsShardRef(db, index) {
-  return db.collection("ranking_meta").doc(PRIVATE_USER_IDS_DOC_PREFIX + index);
-}
-
 /**
- * 비공개 사용자 id 집합을 색인 문서(샤드)에서 읽어 캐시. 갱신당 읽기 = 샤드+메타(상수).
- * 색인이 아직 초기화되지 않았으면(배포 직후·리빌드 전) 최초 1회 원천(users where)로 폴백해 정확성 보장.
+ * 비공개 사용자 id(firebase_uid) 집합을 Supabase public.users에서 조회해 캐시.
+ * Supabase 조회 실패 시(장애 등) Firestore users(is_private=true) 원천으로 1회 폴백.
  */
 async function getPrivateUserIdSetCached(db) {
-  if (!db) return null;
   const now = Date.now();
   if (_privateUserIdSetCache && now - _privateUserIdSetCacheAt < PRIVATE_USER_ID_SET_TTL_MS) {
     return _privateUserIdSetCache;
   }
   try {
-    const metaRef = db.collection("ranking_meta").doc(PRIVATE_USER_IDS_META_DOC);
-    const shardRefs = [];
-    for (let i = 0; i < PRIVATE_USER_IDS_SHARD_COUNT; i += 1) {
-      shardRefs.push(privateUserIdsShardRef(db, i));
-    }
-    // getAll: 1회 왕복으로 메타+전 샤드 조회 (읽기 = 샤드+1, 고정)
-    const snaps = await db.getAll(metaRef, ...shardRefs);
-    const metaSnap = snaps[0];
-    const initialized = !!(metaSnap && metaSnap.exists && (metaSnap.data() || {}).initializedAt);
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("users")
+      .select("firebase_uid")
+      .eq("is_private", true)
+      .not("firebase_uid", "is", null);
+    if (error) throw error;
     const set = new Set();
-    for (let i = 1; i < snaps.length; i += 1) {
-      const data = snaps[i] && snaps[i].exists ? snaps[i].data() || {} : {};
-      const ids = Array.isArray(data.ids) ? data.ids : [];
-      for (const id of ids) set.add(String(id));
-    }
-    if (!initialized && set.size === 0) {
-      // 색인 미초기화 → 원천에서 1회 폴백 (이후 스케줄/트리거가 색인을 채움)
-      const q = await db.collection("users").where("is_private", "==", true).select().get();
-      q.forEach((doc) => set.add(String(doc.id)));
+    for (const row of data || []) {
+      if (row.firebase_uid) set.add(String(row.firebase_uid));
     }
     _privateUserIdSetCache = set;
     _privateUserIdSetCacheAt = now;
     return set;
   } catch (e) {
-    console.warn("[getPrivateUserIdSetCached]", e && e.message ? e.message : e);
-    // 조회 실패 시 직전 캐시 유지(있으면) — 일시 오류로 비공개가 풀리지 않도록
-    return _privateUserIdSetCache;
+    console.warn("[getPrivateUserIdSetCached] Supabase 조회 실패, Firestore 폴백:", e && e.message ? e.message : e);
+    if (!db) return _privateUserIdSetCache;
+    try {
+      const q = await db.collection("users").where("is_private", "==", true).select().get();
+      const set = new Set();
+      q.forEach((doc) => set.add(String(doc.id)));
+      _privateUserIdSetCache = set;
+      _privateUserIdSetCacheAt = now;
+      return set;
+    } catch (e2) {
+      console.warn("[getPrivateUserIdSetCached] Firestore 폴백도 실패:", e2 && e2.message ? e2.message : e2);
+      // 두 조회 모두 실패 시 직전 캐시 유지(있으면) — 일시 오류로 비공개가 풀리지 않도록
+      return _privateUserIdSetCache;
+    }
   }
-}
-
-/**
- * 색인(샤드) 전체를 users(is_private=true) 원천에서 재구성. 트리거 누락분·강등까지 자가 치유.
- * 반환: { total, shardCount }
- */
-async function rebuildPrivateUserIdShards(db) {
-  const buckets = [];
-  for (let i = 0; i < PRIVATE_USER_IDS_SHARD_COUNT; i += 1) buckets.push([]);
-  const q = await db.collection("users").where("is_private", "==", true).select().get();
-  q.forEach((doc) => {
-    buckets[privateUserIdsShardIndex(doc.id)].push(String(doc.id));
-  });
-  const batch = db.batch();
-  for (let i = 0; i < PRIVATE_USER_IDS_SHARD_COUNT; i += 1) {
-    batch.set(privateUserIdsShardRef(db, i), {
-      ids: buckets[i],
-      count: buckets[i].length,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  }
-  batch.set(db.collection("ranking_meta").doc(PRIVATE_USER_IDS_META_DOC), {
-    initializedAt: admin.firestore.FieldValue.serverTimestamp(),
-    total: q.size,
-    shardCount: PRIVATE_USER_IDS_SHARD_COUNT,
-  });
-  await batch.commit();
-  // 인메모리 캐시 무효화(이 인스턴스) — 다른 인스턴스는 TTL 내 자연 반영
-  _privateUserIdSetCache = null;
-  _privateUserIdSetCacheAt = 0;
-  return { total: q.size, shardCount: PRIVATE_USER_IDS_SHARD_COUNT };
-}
-
-/** 비공개 토글 시 색인 샤드 증분 유지 (트리거에서 호출). 실패해도 스케줄 리빌드가 보정. */
-async function updatePrivateUserIdIndexForUser(db, userId, nowPrivate) {
-  const ref = privateUserIdsShardRef(db, privateUserIdsShardIndex(userId));
-  await ref.set(
-    {
-      ids: nowPrivate
-        ? admin.firestore.FieldValue.arrayUnion(userId)
-        : admin.firestore.FieldValue.arrayRemove(userId),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
 }
 
 /**
@@ -908,9 +847,9 @@ exports.selfServiceResetPasswordHttp = onRequest(
  * onRequest로 변경하여 CORS 수동 처리
  */
 // Secret이 있으면 secrets 배열에 포함, 없으면 Secret 없이 배포
-const exchangeStravaCodeConfig = { cors: CORS_ORIGINS };
+const exchangeStravaCodeConfig = supabaseDualWriteServer.appendServiceRoleSecret({ cors: CORS_ORIGINS });
 if (STRAVA_CLIENT_SECRET) {
-  exchangeStravaCodeConfig.secrets = [STRAVA_CLIENT_SECRET];
+  exchangeStravaCodeConfig.secrets.push(STRAVA_CLIENT_SECRET);
 }
 
 exports.exchangeStravaCode = onRequest(
@@ -950,15 +889,14 @@ exports.exchangeStravaCode = onRequest(
       }
 
       const db = admin.firestore();
-      const appConfigSnap = await db.collection("appConfig").doc("strava").get();
-      if (!appConfigSnap.exists) {
+      const appConfig = await appConfigCache.getAppConfigDocCached(admin, "strava");
+      if (!appConfig) {
         throw new HttpsError(
           "failed-precondition",
           "Strava 앱 설정(appConfig/strava)이 없습니다. Firestore에 strava_client_id, strava_redirect_uri를 설정하세요."
         );
       }
 
-      const appConfig = appConfigSnap.data();
       const clientId = appConfig.strava_client_id || "";
       const redirectUri = appConfig.strava_redirect_uri || "";
       
@@ -1120,9 +1058,9 @@ exports.exchangeStravaCode = onRequest(
  * onRequest로 변경하여 CORS 수동 처리
  */
 // refreshStravaToken도 동일한 설정 사용
-const refreshStravaTokenConfig = { cors: CORS_ORIGINS };
+const refreshStravaTokenConfig = supabaseDualWriteServer.appendServiceRoleSecret({ cors: CORS_ORIGINS });
 if (STRAVA_CLIENT_SECRET) {
-  refreshStravaTokenConfig.secrets = [STRAVA_CLIENT_SECRET];
+  refreshStravaTokenConfig.secrets.push(STRAVA_CLIENT_SECRET);
 }
 
 exports.refreshStravaToken = onRequest(
@@ -1175,15 +1113,14 @@ exports.refreshStravaToken = onRequest(
         );
       }
 
-      const appConfigSnap = await db.collection("appConfig").doc("strava").get();
-      if (!appConfigSnap.exists) {
+      const appConfig = await appConfigCache.getAppConfigDocCached(admin, "strava");
+      if (!appConfig) {
         throw new HttpsError(
           "failed-precondition",
           "Strava 앱 설정(appConfig/strava)이 없습니다."
         );
       }
 
-      const appConfig = appConfigSnap.data();
       const clientId = appConfig.strava_client_id || "";
       
       // Secret에서 값을 가져오되, 없거나 빈 값이면 하드코딩된 값 사용
@@ -2261,9 +2198,9 @@ async function refreshStravaTokenForUser(db, userId) {
   const initialUserData = userSnap.data() || {};
   const refreshToken = initialUserData.strava_refresh_token || "";
   if (!refreshToken) throw new Error("Strava 리프레시 토큰이 없습니다.");
-  const appConfigSnap = await db.collection("appConfig").doc("strava").get();
-  if (!appConfigSnap.exists) throw new Error("Strava 앱 설정이 없습니다.");
-  const clientId = appConfigSnap.data().strava_client_id || "";
+  const appConfig = await appConfigCache.getAppConfigDocCached(admin, "strava");
+  if (!appConfig) throw new Error("Strava 앱 설정이 없습니다.");
+  const clientId = appConfig.strava_client_id || "";
   const clientSecret = getStravaClientSecret();
   if (!clientId || !clientSecret) throw new Error("Strava 설정이 불완전합니다.");
   const tokenUrl = "https://www.strava.com/api/v3/oauth/token";
@@ -3292,18 +3229,13 @@ exports.stravaAthleteIdBackfillSchedule = onSchedule(
 async function summarizeStravaWebhookRetryQueue(db, options = {}) {
   const limit = Math.max(1, Math.min(1000, Number(options.limit) || 500));
   const includeEntries = options.includeEntries !== false;
-  const snap = await db
-    .collection(stravaGapDetect.STRAVA_WEBHOOK_RETRIES_COLLECTION)
-    .where("status_queue", "==", "pending")
-    .limit(limit)
-    .get();
+  const rows = await stravaGapDetect.listPendingStravaWebhookRetries(db, { maxEntries: limit });
   const byReason = {};
   let unresolvedCount = 0;
   let resolvableCount = 0;
   let oldestFailedAt = null;
   const entries = [];
-  snap.docs.forEach((doc) => {
-    const d = doc.data() || {};
+  rows.forEach((d) => {
     const reason = String(d.reason || "unknown");
     byReason[reason] = (byReason[reason] || 0) + 1;
     if (reason === "user_unresolved" || !d.user_id) unresolvedCount += 1;
@@ -3312,7 +3244,7 @@ async function summarizeStravaWebhookRetryQueue(db, options = {}) {
     if (failedAt && (!oldestFailedAt || String(failedAt) < String(oldestFailedAt))) oldestFailedAt = failedAt;
     if (includeEntries) {
       entries.push({
-        id: doc.id,
+        id: d.id,
         owner_id: d.owner_id ?? null,
         object_id: d.object_id ?? null,
         user_id: d.user_id ?? null,
@@ -3324,8 +3256,8 @@ async function summarizeStravaWebhookRetryQueue(db, options = {}) {
     }
   });
   return {
-    pendingCount: snap.size,
-    truncated: snap.size >= limit,
+    pendingCount: rows.length,
+    truncated: rows.length >= limit,
     unresolvedCount,
     resolvableCount,
     byReason,
@@ -3338,7 +3270,10 @@ async function summarizeStravaWebhookRetryQueue(db, options = {}) {
  * 관리자: Strava 웹훅 재시도 큐 상태 조회 — user_unresolved 등 미해결 이벤트 가시화(대시보드용).
  * 인증: X-Internal-Secret 또는 관리자(grade=1) Firebase Bearer.
  */
-const adminStravaWebhookRetryStatusOptions = { cors: true, timeoutSeconds: 120 };
+const adminStravaWebhookRetryStatusOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: true,
+  timeoutSeconds: 120,
+});
 exports.adminStravaWebhookRetryStatus = onRequest(
   adminStravaWebhookRetryStatusOptions,
   async (req, res) => {
@@ -3356,8 +3291,7 @@ exports.adminStravaWebhookRetryStatus = onRequest(
       if (!authorized) {
         const uid = await getUidFromRequest(req, res);
         if (!uid) return;
-        const callerSnap = await db.collection("users").doc(uid).get();
-        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        const grade = await getCachedCallerGrade(db, uid);
         if (grade !== "1") {
           res.status(403).json({
             success: false,
@@ -3385,7 +3319,11 @@ exports.adminStravaWebhookRetryStatus = onRequest(
  * (Cloud Logging 로그 기반 경보/알림에 연동 가능 — 외부 유료 API 미사용)
  */
 exports.stravaWebhookRetryMonitorSchedule = onSchedule(
-  { schedule: "0 */6 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 120 },
+  supabaseDualWriteServer.appendServiceRoleSecret({
+    schedule: "0 */6 * * *",
+    timeZone: "Asia/Seoul",
+    timeoutSeconds: 120,
+  }),
   async () => {
     const db = admin.firestore();
     const summary = await summarizeStravaWebhookRetryQueue(db, { limit: 1000, includeEntries: false });
@@ -3416,28 +3354,44 @@ const STRAVA_WEBHOOK_RETRY_DONE_TTL_DAYS = 30;
  * pending 문서(processed_at=null)는 대상에서 제외(status_queue 조건으로 안전 분리).
  */
 exports.stravaWebhookRetryCleanupSchedule = onSchedule(
-  { schedule: "0 4 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 540, memory: "256MiB" },
+  supabaseDualWriteServer.appendServiceRoleSecret({
+    schedule: "0 4 * * *",
+    timeZone: "Asia/Seoul",
+    timeoutSeconds: 540,
+    memory: "256MiB",
+  }),
   async () => {
-    const db = admin.firestore();
     const cutoffIso = new Date(
       Date.now() - STRAVA_WEBHOOK_RETRY_DONE_TTL_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
-    const collRef = db.collection(stravaGapDetect.STRAVA_WEBHOOK_RETRIES_COLLECTION);
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
     let deleted = 0;
     // 실행당 상한(20배치 × 500 = 10,000건)으로 타임아웃 방지. 남으면 다음날 이어서 정리.
     for (let batchNo = 0; batchNo < 20; batchNo += 1) {
-      const snap = await collRef
-        .where("status_queue", "==", "done")
-        .where("processed_at", "<", cutoffIso)
-        .orderBy("processed_at", "asc")
-        .limit(500)
-        .get();
-      if (snap.empty) break;
-      const batch = db.batch();
-      snap.docs.forEach((doc) => batch.delete(doc.ref));
-      await batch.commit();
-      deleted += snap.size;
-      if (snap.size < 500) break;
+      /* eslint-disable no-await-in-loop */
+      const { data, error } = await supabase
+        .from("strava_webhook_retries")
+        .select("id")
+        .eq("status_queue", "done")
+        .lt("processed_at", cutoffIso)
+        .order("processed_at", { ascending: true })
+        .limit(500);
+      if (error) {
+        console.warn("[stravaWebhookRetryCleanup] select failed:", error.message);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      const { error: delError } = await supabase
+        .from("strava_webhook_retries")
+        .delete()
+        .in("id", data.map((row) => row.id));
+      /* eslint-enable no-await-in-loop */
+      if (delError) {
+        console.warn("[stravaWebhookRetryCleanup] delete failed:", delError.message);
+        break;
+      }
+      deleted += data.length;
+      if (data.length < 500) break;
     }
     console.log("[stravaWebhookRetryCleanup] 완료", {
       deleted,
@@ -3507,9 +3461,7 @@ exports.manualStravaSyncWithMmp = onRequest(
     const db = admin.firestore();
     let userIdsToProcess = [uid];
     if (targetUidParam) {
-      const callerSnap = await db.collection("users").doc(uid).get();
-      const callerData = callerSnap.exists ? callerSnap.data() : {};
-      const callerGrade = String(callerData.grade ?? "2");
+      const callerGrade = await getCachedCallerGrade(db, uid);
       if (callerGrade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1)만 targetUid를 사용할 수 있습니다." });
         return;
@@ -3521,9 +3473,7 @@ exports.manualStravaSyncWithMmp = onRequest(
         res.status(400).json({ success: false, error: "targetUsers=all|admin 사용 시 startDate와 endDate가 필요합니다." });
         return;
       }
-      const callerSnap = await db.collection("users").doc(uid).get();
-      const callerData = callerSnap.exists ? callerSnap.data() : {};
-      const callerGrade = String(callerData.grade ?? "2");
+      const callerGrade = await getCachedCallerGrade(db, uid);
       if (callerGrade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1)만 사용할 수 있습니다." });
         return;
@@ -4319,8 +4269,8 @@ exports.stravaSyncSunday = onSchedule(
     const db = admin.firestore();
     const range = getTodayAfterBefore();
     const getChunkUrl = async () => {
-      const snap = await db.collection("appConfig").doc("sync").get();
-      return snap.exists ? snap.data().runStravaSyncChunkUrl || null : null;
+      const cfg = await appConfigCache.getAppConfigDocCached(admin, "sync");
+      return cfg ? cfg.runStravaSyncChunkUrl || null : null;
     };
     await runStravaSyncWithFanOut(db, range, "[stravaSyncSunday]", getChunkUrl);
   }
@@ -4468,8 +4418,7 @@ exports.backfillStravaRouteProfileForDate = onRequest(
       } else if (rawSecret !== INTERNAL_SYNC_SECRET) {
         const callerUid = await getUidFromRequest(req, res);
         if (!callerUid) return;
-        const callerSnap = await db.collection("users").doc(callerUid).get();
-        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        const grade = await getCachedCallerGrade(db, callerUid);
         if (grade !== "1" && callerUid !== targetUid) {
           res.status(403).json({ success: false, error: "권한 없음" });
           return;
@@ -4575,8 +4524,7 @@ exports.runStravaSync429Retry = onRequest(stravaSync429RetryOptions, async (req,
     if (!authorized) {
       const uid = await getUidFromRequest(req, res);
       if (!uid) return;
-      const callerSnap = await db.collection("users").doc(uid).get();
-      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      const grade = await getCachedCallerGrade(db, uid);
       if (grade !== "1") {
         res.status(403).json({
           success: false,
@@ -4670,8 +4618,7 @@ exports.manualStravaSyncTodaySeoul = onRequest(
       if (!authorized) {
         const uid = await getUidFromRequest(req, res);
         if (!uid) return;
-        const callerSnap = await db.collection("users").doc(uid).get();
-        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        const grade = await getCachedCallerGrade(db, uid);
         if (grade !== "1") {
           res.status(403).json({
             success: false,
@@ -4684,8 +4631,8 @@ exports.manualStravaSyncTodaySeoul = onRequest(
 
       const range = getTodayAfterBefore();
       const getChunkUrl = async () => {
-        const snap = await db.collection("appConfig").doc("sync").get();
-        return snap.exists ? snap.data().runStravaSyncChunkUrl || null : null;
+        const cfg = await appConfigCache.getAppConfigDocCached(admin, "sync");
+        return cfg ? cfg.runStravaSyncChunkUrl || null : null;
       };
       await runStravaSyncWithFanOut(db, range, "[manualStravaSyncTodaySeoul]", getChunkUrl);
       res.status(200).json({
@@ -9260,8 +9207,7 @@ exports.manualRebuildWeeklyRanking = onRequest(
     if (!authorized) {
       const uid = await getUidFromRequest(req, res);
       if (!uid) return;
-      const callerSnap = await db.collection("users").doc(uid).get();
-      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      const grade = await getCachedCallerGrade(db, uid);
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -9371,8 +9317,7 @@ exports.manualRebuildRankingPhase = onRequest(
     if (!authorized) {
       const uid = await getUidFromRequest(req, res);
       if (!uid) return;
-      const callerSnap = await db.collection("users").doc(uid).get();
-      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      const grade = await getCachedCallerGrade(db, uid);
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -10172,10 +10117,48 @@ exports.getRankingBuildMetaPublic = onRequest(
           rankingMetricsLive: buildMeta.rankingMetricsLive,
         },
         buildMetaFingerprint: buildMeta.fingerprint || "",
+        runPrivacyVersion: buildMeta.runPrivacyVersion || 0,
         error: buildMeta.error || undefined,
       });
     } catch (e) {
       console.warn("[getRankingBuildMetaPublic]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * appConfig/strava(비민감 OAuth client_id·redirect_uri) 공개 조회 — Supabase app_config 미러 사용.
+ * Client Secret은 포함하지 않음(Secret Manager 전용). 앱 로드마다 매번 Firestore를 읽던 것을 대체.
+ */
+exports.getAppConfigPublic = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 15 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+    res.set("Cache-Control", "public, max-age=300, s-maxage=300");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    try {
+      const strava = await appConfigCache.getAppConfigDocCached(admin, "strava");
+      res.status(200).json({
+        success: true,
+        strava: strava
+          ? {
+              strava_client_id: strava.strava_client_id || null,
+              strava_redirect_uri: strava.strava_redirect_uri || null,
+            }
+          : null,
+      });
+    } catch (e) {
+      console.warn("[getAppConfigPublic]", e.message || e);
       res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }
@@ -10744,8 +10727,7 @@ exports.backfillFirestoreRidesToSupabase = onRequest(
     const dateYmd = String(body.date || today.dateFrom).slice(0, 10);
 
     if (targetUid !== String(callerUid).trim()) {
-      const callerSnap = await db.collection("users").doc(callerUid).get();
-      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      const grade = await getCachedCallerGrade(db, callerUid);
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "다른 사용자 백필은 관리자(grade=1)만 가능합니다." });
         return;
@@ -11402,8 +11384,7 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
       if (!authorized) {
         const uid = await getUidFromRequest(req, res);
         if (!uid) return;
-        const callerSnap = await db.collection("users").doc(uid).get();
-        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        const grade = await getCachedCallerGrade(db, uid);
         if (grade !== "1") {
           res.status(403).json({
             success: false,
@@ -14270,8 +14251,7 @@ exports.backfillVo2DemographicSamplesHttp = onRequest(
     if (!authorized) {
       const callerUid = await getUidFromRequest(req, res);
       if (!callerUid) return;
-      const callerSnap = await db.collection("users").doc(callerUid).get();
-      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      const grade = await getCachedCallerGrade(db, callerUid);
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -14378,8 +14358,7 @@ exports.backfillFitnessDemographicSamplesHttp = onRequest(
     if (!authorized) {
       const callerUid = await getUidFromRequest(req, res);
       if (!callerUid) return;
-      const callerSnap = await db.collection("users").doc(callerUid).get();
-      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      const grade = await getCachedCallerGrade(db, callerUid);
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -14485,8 +14464,7 @@ exports.backfillWeeklyTssDemographicSamplesHttp = onRequest(
     if (!authorized) {
       const callerUid = await getUidFromRequest(req, res);
       if (!callerUid) return;
-      const callerSnap = await db.collection("users").doc(callerUid).get();
-      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+      const grade = await getCachedCallerGrade(db, callerUid);
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -14724,6 +14702,8 @@ const USER_PROFILE_SYNC_FIELDS = [
   "grade",
   "email",
   "account_status",
+  "is_active",
+  "status",
   "expiry_date",
   "subscription_end_date",
   "is_private",
@@ -14778,16 +14758,20 @@ exports.onUserProfileWritten = functions
             },
             { merge: true }
           );
-        // 비공개 사용자 색인(샤드) 증분 유지 — 랭킹보드 저비용 비공개 오버레이의 원천.
         try {
-          await updatePrivateUserIdIndexForUser(db, userId, nowPrivate);
-        } catch (eIdx) {
+          const rankingBuildMetaSupabase = require("./rankingBuildMetaSupabase");
+          await rankingBuildMetaSupabase.touchRunPrivacyVersionMeta(userId);
+        } catch (eVer) {
           console.warn(
-            "[onUserProfileWritten] private index update failed:",
+            "[onUserProfileWritten] Supabase run_privacy_version touch failed:",
             userId,
-            eIdx.message || eIdx
+            eVer.message || eVer
           );
         }
+        // 비공개 사용자 집합 인메모리 캐시 무효화(이 인스턴스) — Supabase users.is_private은
+        // 위 upsertSupabaseUserProfileFromFirestore에서 이미 갱신됨. 다른 인스턴스는 TTL 내 자연 반영.
+        _privateUserIdSetCache = null;
+        _privateUserIdSetCacheAt = 0;
       }
     } catch (e) {
       console.warn("[onUserProfileWritten] privacy version bump failed:", userId, e.message || e);
@@ -14795,21 +14779,71 @@ exports.onUserProfileWritten = functions
   });
 
 /**
- * 비공개 사용자 색인(샤드) 재구성 — 매일 03:20(서울).
- * 트리거 누락·강등 미반영을 자가 치유하고, 배포 직후 최초 초기화도 담당한다.
- * users(is_private=true) 원천을 1회 조회(비공개=소수)하므로 비용이 낮다.
+ * Firestore appConfig/{configId} 변경 → Supabase public.app_config 미러(dual-write).
+ * Firestore가 여전히 admin 쓰기 원본 — 기존 admin 저장 경로(persistRankingReadRouting 등)를
+ * 하나도 수정하지 않고 이 트리거 하나로 전부 미러링해 읽기 경로만 Supabase로 옮긴다.
+ */
+exports.onAppConfigWritten = functions
+  .runWith({ timeoutSeconds: 30, secrets: ["SUPABASE_SERVICE_ROLE_KEY"] })
+  .firestore.document("appConfig/{configId}")
+  .onWrite(async (change, context) => {
+    const configId = context.params.configId;
+    if (!configId || !change.after.exists) return;
+    try {
+      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+      const { error } = await supabase.from("app_config").upsert(
+        {
+          config_key: configId,
+          data: change.after.data() || {},
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "config_key" }
+      );
+      if (error) throw error;
+    } catch (e) {
+      console.warn("[onAppConfigWritten] Supabase mirror failed:", configId, e.message || e);
+    }
+  });
+
+/**
+ * 비공개 사용자 집합 캐시 새로고침 — 매일 03:20(서울).
+ * Supabase 조회 자체가 상시 원천이라 재구성이라기보다 "인메모리 캐시 강제 새로고침 + 헬스체크" 역할.
+ * (과거 Firestore 샤드 색인 재구성 스케줄을 대체)
  */
 exports.privateUserIdsRebuildSchedule = onSchedule(
   { schedule: "20 3 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 300, memory: "256MiB" },
   async () => {
-    const db = admin.firestore();
-    const result = await rebuildPrivateUserIdShards(db);
-    console.log("[privateUserIdsRebuild] 완료", result);
+    _privateUserIdSetCache = null;
+    _privateUserIdSetCacheAt = 0;
+    const set = await getPrivateUserIdSetCached(admin.firestore());
+    console.log("[privateUserIdsRebuild] 완료", { total: set ? set.size : 0 });
+
+    // http_live_* 재집계 락 문서 정리 — 만료된(untilMs < now) 락은 재사용되지 않으므로 무한 증가 방지.
+    // ranking_meta 자체가 소수 문서(빌드 메타 몇 개 + 누적 락)라 전체 스캔 1회/일 비용은 낮다.
+    try {
+      const db = admin.firestore();
+      const nowMs = Date.now();
+      const snap = await db.collection("ranking_meta").get();
+      let deleted = 0;
+      const batch = db.batch();
+      snap.docs.forEach((doc) => {
+        if (!doc.id.startsWith("http_live_")) return;
+        const untilMs = Number((doc.data() || {}).untilMs) || 0;
+        if (untilMs > 0 && untilMs < nowMs) {
+          batch.delete(doc.ref);
+          deleted += 1;
+        }
+      });
+      if (deleted > 0) await batch.commit();
+      console.log("[privateUserIdsRebuild] http_live_* 락 정리 완료", { deleted });
+    } catch (eLock) {
+      console.warn("[privateUserIdsRebuild] http_live_* 락 정리 실패:", eLock && eLock.message);
+    }
   }
 );
 
 /**
- * 관리자/내부 시크릿: 비공개 사용자 색인(샤드) 즉시 재구성 (배포 직후 초기화·수동 보정용).
+ * 관리자/내부 시크릿: 비공개 사용자 집합 캐시 즉시 새로고침(수동 보정용).
  * 인증: X-Internal-Secret 헤더 또는 grade=1 관리자.
  */
 const adminRebuildPrivateUserIdsOptions = { cors: true, timeoutSeconds: 300 };
@@ -14830,8 +14864,7 @@ exports.adminRebuildPrivateUserIds = onRequest(
       if (!authorized) {
         const uid = await getUidFromRequest(req, res);
         if (!uid) return;
-        const callerSnap = await db.collection("users").doc(uid).get();
-        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        const grade = await getCachedCallerGrade(db, uid);
         if (grade !== "1") {
           res.status(403).json({
             success: false,
