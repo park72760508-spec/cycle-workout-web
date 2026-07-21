@@ -292,7 +292,24 @@
       scheduleDeferredAppDownloadLastUpdated();
     }
     
-    // Strava 설정을 Firestore appConfig/strava에서 로드 (수동 config.local.js 대체)
+    // Strava 설정 로드 (수동 config.local.js 대체) — getAppConfigPublic(Supabase, 5분 CDN 캐시) 우선,
+    // 실패 시에만 Firestore appConfig/strava로 폴백(앱 로드마다 매번 Firestore를 읽던 것을 제거).
+    var STELVIO_APP_CONFIG_PUBLIC_URL = 'https://us-central1-stelvio-ai.cloudfunctions.net/getAppConfigPublic';
+    function applyStravaAppConfig(d) {
+      if (!d) return false;
+      var applied = false;
+      if (d.strava_client_id) {
+        window.STRAVA_CLIENT_ID = d.strava_client_id;
+        applied = true;
+      }
+      if (d.strava_redirect_uri) {
+        if (typeof window.CONFIG === 'undefined') window.CONFIG = {};
+        window.CONFIG.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
+        window.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
+        applied = true;
+      }
+      return applied;
+    }
     window.loadStravaConfigFromFirestore = async function () {
       if (!firestoreV9 || !docFn || !getDocFn) return;
       try {
@@ -300,27 +317,39 @@
         var snap = await getDocFn(appConfigRef);
         if (window.stelvioDocSnapExists(snap)) {
           var d = snap.data ? snap.data() : null;
-          if (d && d.strava_client_id) {
-            window.STRAVA_CLIENT_ID = d.strava_client_id;
+          if (applyStravaAppConfig(d)) {
+            if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Strava 설정 Firestore에서 로드됨 (appConfig/strava)');
+            else console.log('✅ Strava 설정 Firestore에서 로드됨 (appConfig/strava)');
           }
-          if (d && d.strava_redirect_uri) {
-            if (typeof window.CONFIG === 'undefined') window.CONFIG = {};
-            window.CONFIG.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
-            window.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
-          }
-          if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Strava 설정 Firestore에서 로드됨 (appConfig/strava)');
-          else console.log('✅ Strava 설정 Firestore에서 로드됨 (appConfig/strava)');
         }
       } catch (e) {
         if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Strava] appConfig/strava 로드 실패:', e && e.message);
         else console.warn('[Strava] appConfig/strava 로드 실패:', e && e.message);
       }
     };
-    if (firestoreV9) {
-      setTimeout(function() {
-        window.loadStravaConfigFromFirestore().catch(function () {});
-      }, 2500);
-    }
+    window.loadStravaConfigViaPublicEndpoint = async function () {
+      try {
+        var res = await fetch(STELVIO_APP_CONFIG_PUBLIC_URL, { method: 'GET', mode: 'cors', cache: 'no-store' });
+        var json = res.ok ? await res.json().catch(function () { return null; }) : null;
+        if (json && json.success && applyStravaAppConfig(json.strava)) {
+          if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Strava 설정 getAppConfigPublic에서 로드됨');
+          else console.log('✅ Strava 설정 getAppConfigPublic에서 로드됨');
+          return true;
+        }
+        return false;
+      } catch (e) {
+        if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Strava] getAppConfigPublic 로드 실패:', e && e.message);
+        else console.warn('[Strava] getAppConfigPublic 로드 실패:', e && e.message);
+        return false;
+      }
+    };
+    setTimeout(function() {
+      window.loadStravaConfigViaPublicEndpoint().then(function (ok) {
+        if (!ok && firestoreV9) {
+          window.loadStravaConfigFromFirestore().catch(function () {});
+        }
+      });
+    }, 2500);
     
     // 전화번호를 @stelvio.ai 도메인을 붙인 가짜 이메일로 변환
     function phoneToEmail(phoneNumber) {
