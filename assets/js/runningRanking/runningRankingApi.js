@@ -39,16 +39,14 @@
     return asOf < seoulTodayYmd();
   }
 
-  // 비공개 캐시 버전 (ranking_meta/run_privacy_version). 토글 시 서버 트리거가 1 증가.
+  // 비공개 캐시 버전 (Supabase ranking_build_meta.run_privacy_version). 토글 시 서버가 1 증가.
   // 이 값을 리더보드 요청 URL에 붙여, 비공개 변경 시에만 CDN 캐시를 무효화한다.
+  // getRankingBuildMetaPublic(30초 CDN 캐시)을 우선 사용 — Firestore ranking_meta 직접 조회 제거.
+  var RUN_PRIVACY_VERSION_URL = 'https://us-central1-stelvio-ai.cloudfunctions.net/getRankingBuildMetaPublic';
   var _pvCache = { at: 0, value: '' };
   var PV_TTL_MS = 30000;
 
-  function resolvePrivacyVersion(force) {
-    var now = Date.now();
-    if (!force && _pvCache.value && now - _pvCache.at < PV_TTL_MS) {
-      return Promise.resolve(_pvCache.value);
-    }
+  function resolvePrivacyVersionViaFirestoreFallback() {
     try {
       var fs = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
       if (!fs) return Promise.resolve(_pvCache.value || '0');
@@ -63,6 +61,24 @@
     } catch (e) {
       return Promise.resolve(_pvCache.value || '0');
     }
+  }
+
+  function resolvePrivacyVersion(force) {
+    var now = Date.now();
+    if (!force && _pvCache.value && now - _pvCache.at < PV_TTL_MS) {
+      return Promise.resolve(_pvCache.value);
+    }
+    return fetch(RUN_PRIVACY_VERSION_URL, { method: 'GET', mode: 'cors', cache: 'no-store' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (json) {
+        if (!json || json.success !== true || json.runPrivacyVersion == null) {
+          return resolvePrivacyVersionViaFirestoreFallback();
+        }
+        var ver = String(json.runPrivacyVersion);
+        _pvCache = { at: Date.now(), value: ver };
+        return ver;
+      })
+      .catch(function () { return resolvePrivacyVersionViaFirestoreFallback(); });
   }
 
   /** API_URL 에 일자(d)·비공개버전(pv)·week 쿼리를 붙여 CDN 캐시 키 구성 */
