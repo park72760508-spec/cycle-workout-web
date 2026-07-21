@@ -36,7 +36,11 @@
     "logs-read:enable": "tsx scripts/setLogsReadRouting.ts --enable",
     "logs-read:disable": "tsx scripts/setLogsReadRouting.ts --disable",
     "archive:firestore-logs:dry": "tsx scripts/archiveFirestoreLogs30d.ts --dry-run",
-    "archive:firestore-logs": "tsx scripts/archiveFirestoreLogs30d.ts --execute"
+    "archive:firestore-logs": "tsx scripts/archiveFirestoreLogs30d.ts --execute",
+    "backfill:strava-webhook-retries": "tsx scripts/backfillStravaWebhookRetries.ts",
+    "backfill:strava-webhook-retries:dry": "tsx scripts/backfillStravaWebhookRetries.ts --dry-run",
+    "backfill:app-config": "tsx scripts/backfillAppConfig.ts",
+    "backfill:app-config:dry": "tsx scripts/backfillAppConfig.ts --dry-run"
   },
   "engines": {
     "node": ">=20"
