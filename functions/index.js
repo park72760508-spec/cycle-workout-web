@@ -10104,6 +10104,184 @@ exports.adminReconcileDailySummaryForUserDate = onRequest(
   }
 );
 
+const SCAN_STALE_SUMMARY_EXCLUDED_TYPES = new Set([
+  "run", "swim", "walk", "trailrun", "weighttraining",
+]);
+
+function scanIsCyclingRideRow(row) {
+  const type = String(row && row.activity_type || "").trim().toLowerCase();
+  if (!type) return true;
+  return !SCAN_STALE_SUMMARY_EXCLUDED_TYPES.has(type);
+}
+
+/** rides/daily_summaries 전체 페이지네이션 조회 (page당 1000행) */
+async function scanFetchAllRows(supabase, table, columns, filterFn) {
+  const PAGE = 1000;
+  let from = 0;
+  const out = [];
+  for (;;) {
+    let q = supabase.from(table).select(columns).range(from, from + PAGE - 1);
+    if (typeof filterFn === "function") q = filterFn(q);
+    const { data, error } = await q;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    out.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return out;
+}
+
+/**
+ * 전체 스캔: 하루 2건 이상 Strava 활동이 있는 사용자·날짜 중, daily_summaries.tss_strava_sum이
+ * rides 원본 합계와 어긋나 있는 건(=이번 인시던트와 동일한 증상, 두 번째 활동이 stale 버킷에
+ * 덮어써진 케이스)을 찾아낸다. fix=true면 발견 즉시 fn_reconcile_daily_summary로 복구한다.
+ * 인증: X-Internal-Secret. GET/POST { fix?: boolean, tolerance?: number }
+ */
+exports.adminScanStaleDailySummaries = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 540, memory: "512MiB" }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Headers", "Content-Type, X-Internal-Secret");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    const secret = req.headers["x-internal-secret"] || req.query.secret;
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      res.status(403).json({ success: false, error: "Forbidden" });
+      return;
+    }
+
+    try {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const doFix = String(body.fix ?? req.query.fix ?? "false").toLowerCase() === "true";
+      const tolerance = Number(body.tolerance ?? req.query.tolerance ?? 0.05) || 0.05;
+
+      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+
+      const rides = await scanFetchAllRows(
+        supabase,
+        "rides",
+        "user_id, ride_date, tss, source, activity_type",
+        (q) => q.eq("source", "strava")
+      );
+
+      const byKey = new Map(); // `${user_id}|${ride_date}` -> { sum, count }
+      for (const r of rides) {
+        if (!scanIsCyclingRideRow(r)) continue;
+        if (!r.user_id || !r.ride_date) continue;
+        const key = `${r.user_id}|${r.ride_date}`;
+        const cur = byKey.get(key) || { sum: 0, count: 0 };
+        cur.sum += Number(r.tss) || 0;
+        cur.count += 1;
+        byKey.set(key, cur);
+      }
+
+      const candidateKeys = [...byKey.entries()].filter(([, v]) => v.count >= 2);
+
+      const summaries = await scanFetchAllRows(
+        supabase,
+        "daily_summaries",
+        "user_id, summary_date, tss_strava_sum"
+      );
+      const summaryByKey = new Map();
+      for (const s of summaries) {
+        summaryByKey.set(`${s.user_id}|${s.summary_date}`, Number(s.tss_strava_sum) || 0);
+      }
+
+      const drifted = [];
+      for (const [key, v] of candidateKeys) {
+        const [userId, rideDate] = key.split("|");
+        const actual = summaryByKey.has(key) ? summaryByKey.get(key) : 0;
+        const expected = Math.round(v.sum * 100) / 100;
+        if (Math.abs(actual - expected) > tolerance) {
+          drifted.push({
+            supabaseUserId: userId,
+            date: rideDate,
+            rideCount: v.count,
+            expectedTssStravaSum: expected,
+            actualTssStravaSum: Math.round(actual * 100) / 100,
+          });
+        }
+      }
+
+      // firebase_uid·이름 보강
+      if (drifted.length > 0) {
+        const uniqueUserIds = [...new Set(drifted.map((d) => d.supabaseUserId))];
+        const { data: users, error: usersErr } = await supabase
+          .from("users")
+          .select("id, firebase_uid, name")
+          .in("id", uniqueUserIds);
+        if (!usersErr && users) {
+          const profileMap = new Map(users.map((u) => [u.id, u]));
+          drifted.forEach((d) => {
+            const p = profileMap.get(d.supabaseUserId);
+            d.firebaseUid = p ? p.firebase_uid : null;
+            d.name = p ? p.name : null;
+          });
+        }
+      }
+
+      let fixed = [];
+      let fixErrors = [];
+      if (doFix && drifted.length > 0) {
+        await rankingReadConfig.refreshRankingReadConfig(admin, true);
+        const db = admin.firestore();
+        for (const d of drifted) {
+          try {
+            const { error: rpcErr } = await supabase.rpc("fn_reconcile_daily_summary", {
+              p_user_id: d.supabaseUserId,
+              p_date: d.date,
+            });
+            if (rpcErr) throw rpcErr;
+            if (d.firebaseUid) {
+              const userSnap = await db.collection("users").doc(d.firebaseUid).get();
+              if (userSnap.exists) {
+                await rankingDayRollup.reconcileUserRankingDayBucket(
+                  db,
+                  d.firebaseUid,
+                  d.date,
+                  userSnap.data() || {}
+                );
+                await supabaseDualWriteServer.syncRankingDayBucketsToSupabaseForUser(
+                  db,
+                  d.firebaseUid,
+                  d.date,
+                  d.date,
+                  true
+                );
+              }
+            }
+            fixed.push({ supabaseUserId: d.supabaseUserId, date: d.date });
+          } catch (e) {
+            fixErrors.push({
+              supabaseUserId: d.supabaseUserId,
+              date: d.date,
+              error: e && e.message ? e.message : String(e),
+            });
+          }
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        ridesScanned: rides.length,
+        summariesScanned: summaries.length,
+        candidateDayCount: candidateKeys.length,
+        driftedCount: drifted.length,
+        drifted,
+        fixApplied: doFix,
+        fixed,
+        fixErrors,
+      });
+    } catch (e) {
+      console.warn("[adminScanStaleDailySummaries]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 /**
  * 관리자(grade=1): 이번 주(또는 지정 구간) ranking_day_totals 활동 사용자 전원
  * Firestore → Supabase 주간 TSS parity (rides + daily_summaries).
