@@ -9994,6 +9994,112 @@ exports.adminBackfillStravaLogsToSupabase = onRequest(
 );
 
 /**
+ * 긴급 복구 도구: 특정 사용자·날짜의 daily_summaries를 Supabase rides(원본 소스)에서 직접 재계산.
+ * Firestore ranking_day_totals 버킷·Strava 재동기화(processOneUserStravaSync) 경로를 전부 우회한다
+ * — 그 경로들은 stale 버킷을 그대로 push하거나(수정 완료) 기존 활동 재조회 시 date 누락으로 실패하는 등
+ * 이번 인시던트에서 확인된 약점이 있어, rides 테이블만을 신뢰하는 fn_reconcile_daily_summary를 직접 호출한다.
+ * 이후 Firestore 버킷도 강제 재계산해 동기화한다.
+ * 인증: X-Internal-Secret(runStravaSyncChunk와 동일).
+ * POST { uid, date(YYYY-MM-DD) }
+ */
+exports.adminReconcileDailySummaryForUserDate = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, X-Internal-Secret");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원합니다." });
+      return;
+    }
+    const secret = req.headers["x-internal-secret"] || req.query.secret;
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      res.status(403).json({ success: false, error: "Forbidden" });
+      return;
+    }
+
+    try {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const uid = String(body.uid || req.query.uid || "").trim();
+      const dateYmd = String(body.date || req.query.date || "").trim();
+      if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
+        res.status(400).json({ success: false, error: "uid, date(YYYY-MM-DD) 필요" });
+        return;
+      }
+
+      const db = admin.firestore();
+      const userSnap = await db.collection("users").doc(uid).get();
+      if (!userSnap.exists) {
+        res.status(404).json({ success: false, error: "사용자를 찾을 수 없습니다." });
+        return;
+      }
+      const userData = userSnap.data() || {};
+
+      const uidConfig = {
+        uidNamespace: String(supabaseDualWriteServer.uidNamespaceParam.value() || "").trim(),
+        uidMode: String(supabaseDualWriteServer.uidModeParam.value() || "v5").trim(),
+      };
+      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+      const supabaseUserId = await supabaseDualWriteServer.resolveRideUserIdForFirebaseUid(
+        supabase,
+        uid,
+        uidConfig
+      );
+      if (!supabaseUserId) {
+        res.status(404).json({ success: false, error: "Supabase 사용자 매핑을 찾을 수 없습니다." });
+        return;
+      }
+
+      const { data: rides, error: ridesErr } = await supabase
+        .from("rides")
+        .select("activity_id, source, tss, distance_km")
+        .eq("user_id", supabaseUserId)
+        .eq("ride_date", dateYmd);
+      if (ridesErr) throw ridesErr;
+
+      const { error: rpcErr } = await supabase.rpc("fn_reconcile_daily_summary", {
+        p_user_id: supabaseUserId,
+        p_date: dateYmd,
+      });
+      if (rpcErr) throw rpcErr;
+
+      const { data: summaryAfter, error: summaryErr } = await supabase
+        .from("daily_summaries")
+        .select("tss_strava_sum, tss_stelvio_sum, km_strava_sum, km_stelvio_sum, reconciled_at")
+        .eq("user_id", supabaseUserId)
+        .eq("summary_date", dateYmd)
+        .maybeSingle();
+      if (summaryErr) throw summaryErr;
+
+      await rankingDayRollup.reconcileUserRankingDayBucket(db, uid, dateYmd, userData);
+      await supabaseDualWriteServer.syncRankingDayBucketsToSupabaseForUser(
+        db,
+        uid,
+        dateYmd,
+        dateYmd,
+        true
+      );
+
+      res.status(200).json({
+        success: true,
+        uid,
+        date: dateYmd,
+        ridesFound: (rides || []).length,
+        rides: rides || [],
+        dailySummaryAfter: summaryAfter || null,
+      });
+    } catch (e) {
+      console.warn("[adminReconcileDailySummaryForUserDate]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
  * 관리자(grade=1): 이번 주(또는 지정 구간) ranking_day_totals 활동 사용자 전원
  * Firestore → Supabase 주간 TSS parity (rides + daily_summaries).
  * POST { startDate?, endDate?, offset?, limit?, dryRun? }
