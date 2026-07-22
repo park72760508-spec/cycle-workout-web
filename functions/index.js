@@ -10075,6 +10075,11 @@ exports.adminReconcileDailySummaryForUserDate = onRequest(
         .maybeSingle();
       if (summaryErr) throw summaryErr;
 
+      /* reconcileUserRankingDayBucket의 Supabase 우선 조회(tryBuildDayBucketPayloadFromSupabase)는
+       * rankingReadConfig 캐시가 useSupabaseLogsRead=true로 갱신돼 있어야 동작한다. 콜드 인스턴스에서
+       * 갱신 없이 호출하면 기본값(false)으로 막혀 Firestore logs(현재 비어있음) 폴백 → 전부 0 → 버킷 삭제로
+       * 이어진다(이번 인시던트에서 실제로 발생). 반드시 먼저 강제 갱신한다. */
+      await rankingReadConfig.refreshRankingReadConfig(admin, true);
       await rankingDayRollup.reconcileUserRankingDayBucket(db, uid, dateYmd, userData);
       await supabaseDualWriteServer.syncRankingDayBucketsToSupabaseForUser(
         db,
