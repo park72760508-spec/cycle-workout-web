@@ -885,6 +885,16 @@ async function mergeSupabaseLogsWithFirestoreShadow(userId, supabaseLogs, option
           if (dd.hasOwnProperty(k)) o[k] = dd[k];
         }
       }
+      // Stelvio(비-Strava) 로그는 Firestore 문서에 activity_id가 없다. 서버가 Supabase rides에
+      // 저장할 때 쓰는 것과 동일한 규칙("stelvio:"+logDocId, functions/supabaseDualWriteServer.js
+      // mapTrainingLogToRideRow)으로 여기서도 합성해야 logReadMergeKey가 Supabase 쪽 사본과
+      // 같은 키로 매칭된다. 안 그러면 동일 로그가 두 사본(Supabase 정본 + Firestore shadow)으로
+      // 중복 유지되어 하루 합산(mergeLogsForSummary 등)에서 TSS가 2배로 집계된다.
+      if (!o.activity_id) {
+        o.activity_id = String(o.source || '').toLowerCase() === 'strava'
+          ? docSnap.id
+          : ('stelvio:' + docSnap.id);
+      }
       var mk = logReadMergeKey(o);
       if (keys.has(mk)) return;
       keys.add(mk);
