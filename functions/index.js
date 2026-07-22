@@ -4702,11 +4702,77 @@ function weeklyTssBoardPayloadHasRows(payload) {
 }
 
 /**
+ * Supabase 라우팅이 켜져 있으면 fn_weekly_tss_leaderboard_live로 짧은 TTL(RANKING_SUPABASE_LIVE_MAX_AGE_MS)만
+ * 신선도로 인정하고, 지나면 즉시 라이브 재조회 후 캐시에 되써서 다음 요청은 캐시로 응답한다.
+ * 03:40·09:00 배치 스케줄 사이(최대 26h) 공백 동안 당일 라이딩이 랭킹보드에 반영되지 않는 문제의 근본 해결.
+ * 실패·미라우팅이면 null → 호출측이 기존 26h 캐시·stale 폴백 체인으로 처리(Supabase 장애 시 안전망).
+ */
+async function tryLiveWeeklyTssPayloadFromSupabase(db, cacheKey, startStr, endStr, gender) {
+  try {
+    const cfg = rankingReadConfig.getRankingReadConfig();
+    if (!cfg || cfg.useSupabaseGlobal !== true) return null;
+
+    const recentCache = await readRankingAggregatePayloadIfFresh(
+      db,
+      cacheKey,
+      RANKING_SUPABASE_LIVE_MAX_AGE_MS
+    );
+    if (recentCache && weeklyTssBoardPayloadHasRows(recentCache)) {
+      return { payload: recentCache, cacheKey, precomputed: true };
+    }
+
+    const live = await supabaseRankingReader.fetchWeeklyTssRanking(admin, startStr, endStr, gender);
+    if (!live || !weeklyTssBoardPayloadHasRows(live)) return null;
+    const payload = { byCategory: live.byCategory, entries: live.entries, startStr, endStr };
+    await writeRankingAggregatePayload(db, cacheKey, payload);
+    return { payload, cacheKey, precomputed: true };
+  } catch (e) {
+    console.warn(
+      "[readWeeklyTssRankingPayloadForHttp] Supabase 라이브 폴백 실패, 캐시 체인으로 폴백:",
+      e && e.message ? e.message : e
+    );
+    return null;
+  }
+}
+
+/**
+ * personal_dist(30일 거리) 탭용 — tryLiveWeeklyTssPayloadFromSupabase와 동일 패턴.
+ * 짧은 TTL 캐시 → 없으면 fn_personal_dist_leaderboard_live 라이브 조회 후 캐시에 되쓰기.
+ */
+async function tryLivePersonalDistPayloadFromSupabase(db, cacheKey, startStr, endStr, gender) {
+  try {
+    const cfg = rankingReadConfig.getRankingReadConfig();
+    if (!cfg || cfg.useSupabaseGlobal !== true) return null;
+
+    const recentCache = await readRankingAggregatePayloadIfFresh(
+      db,
+      cacheKey,
+      RANKING_SUPABASE_LIVE_MAX_AGE_MS
+    );
+    if (recentCache && recentCache.byCategory) return recentCache;
+
+    const live = await supabaseRankingReader.fetchPersonalDist(admin, startStr, endStr, gender);
+    if (!live || !live.byCategory) return null;
+    const payload = { byCategory: live.byCategory, entries: live.entries, startStr, endStr };
+    await writeRankingAggregatePayload(db, cacheKey, payload);
+    return payload;
+  } catch (e) {
+    console.warn(
+      "[personal_dist] Supabase 라이브 폴백 실패, 캐시 체인으로 폴백:",
+      e && e.message ? e.message : e
+    );
+    return null;
+  }
+}
+
+/**
  * 주간 TSS HTTP: endStr(오늘)이 바뀌면 새 cacheKey에 집계가 없어 빈 보드가 나오는 문제 방지.
- * 1) 당일 키 fresh/stale 2) 같은 주 시작·전일 endStr 키 stale 3) null → 라이브 재집계
+ * 0) Supabase 라이브(짧은 TTL) 1) 당일 키 fresh/stale 2) 같은 주 시작·전일 endStr 키 stale 3) null → 라이브 재집계
  */
 async function readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender) {
   const cacheKey = `peakRanking_weekly_tss_v2_${gender}_${startStr}_${endStr}`;
+  const liveHit = await tryLiveWeeklyTssPayloadFromSupabase(db, cacheKey, startStr, endStr, gender);
+  if (liveHit) return liveHit;
   const fresh = await readRankingAggregatePayloadIfFresh(db, cacheKey);
   if (fresh && weeklyTssBoardPayloadHasRows(fresh)) {
     return { payload: fresh, cacheKey, precomputed: true };
@@ -7427,6 +7493,12 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
 const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
 /** ranking_aggregates 읽기 허용 최대 경과 시간. 집계 cron 간격보다 길게 두어 사용자 요청 시 전체 재스캔 빈도를 줄임 */
 const RANKING_AGG_MAX_STALE_MS = 26 * 60 * 60 * 1000; // 26시간 (하루 1회 23:00 기준 최대 24h 공백 + 여유)
+/**
+ * daily_summaries 기반 live RPC(fn_weekly_tss_leaderboard_live·fn_personal_dist_leaderboard_live)가
+ * 붙어있는 탭(TSS·30일 거리) 전용 짧은 신선도 — 03:40·09:00 배치 사이(최대 26h) 동안 당일 라이딩이
+ * 랭킹보드에 반영되지 않는 공백을 막는다. RANKING_AGG_MAX_STALE_MS(26h) 캐시는 Supabase 장애 시 폴백으로 유지.
+ */
+const RANKING_SUPABASE_LIVE_MAX_AGE_MS = 5 * 60 * 1000;
 /** 헵타곤 재집계: 마스터 23:00 타임아웃·수동 재시도 시에도 ranking_aggregates 피크 보드 읽기 허용 */
 const HEPTAGON_AGG_STALE_MS = 8 * 24 * 60 * 60 * 1000;
 const HEPTAGON_REBUILD_RUNNING_STALE_MS = 25 * 60 * 1000;
@@ -7954,9 +8026,10 @@ async function hydratePeakRankMovementOnPayload(db, byCategory, entries, history
 /**
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} cacheKey
+ * @param {number} [maxAgeMs] 기본 RANKING_AGG_MAX_STALE_MS(26h)
  * @returns {Promise<object|null>} payload
  */
-async function readRankingAggregatePayloadIfFresh(db, cacheKey) {
+async function readRankingAggregatePayloadIfFresh(db, cacheKey, maxAgeMs) {
   if (!db || !cacheKey) return null;
   try {
     const ref = db.collection(RANKING_AGGREGATES_COLLECTION).doc(cacheKey);
@@ -7964,7 +8037,8 @@ async function readRankingAggregatePayloadIfFresh(db, cacheKey) {
     if (!snap.exists) return null;
     const d = snap.data() || {};
     const updatedAt = d.updatedAt && (d.updatedAt.toMillis ? d.updatedAt.toMillis() : d.updatedAt);
-    if (!updatedAt || (Date.now() - updatedAt > RANKING_AGG_MAX_STALE_MS)) return null;
+    const maxAge = Number.isFinite(maxAgeMs) && maxAgeMs > 0 ? maxAgeMs : RANKING_AGG_MAX_STALE_MS;
+    if (!updatedAt || (Date.now() - updatedAt > maxAge)) return null;
     return d.payload && typeof d.payload === "object" ? d.payload : null;
   } catch (e) {
     console.warn("[readRankingAggregatePayloadIfFresh]", cacheKey, e.message);
@@ -12097,7 +12171,9 @@ exports.getPeakPowerRanking = onRequest(
     if (durationType === "personal_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
       const cacheKey = `peakRanking_personal_dist_30d_${gender}_${startStr}_${endStr}`;
-      const aggPd = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      const aggPd = forceRankMv
+        ? null
+        : await tryLivePersonalDistPayloadFromSupabase(db, cacheKey, startStr, endStr, gender);
       if (aggPd && aggPd.byCategory) {
         let out = {
           success: true,
