@@ -1021,7 +1021,16 @@ const RANKING_LOG_SYNC_CONCURRENCY = 8;
  * Firestore ranking_day_totals → Supabase daily_summaries TSS/KM (Stelvio rides 누락 보정).
  * @returns {Promise<number>} upserted day count
  */
-async function syncRankingDayBucketsToSupabaseForUser(db, userId, startStr, endStr) {
+/**
+ * @param {boolean} [forceReconcile=false] true면 이미 존재하는 버킷도 강제 재계산 후 Supabase로 push.
+ *   같은 날 두 번째 이상 활동이 들어올 때 false로 두면 첫 활동 기준으로 이미 만들어진(더 이상 최신이 아닌)
+ *   버킷을 그대로 읽어 Supabase daily_summaries를 "이전 값으로" 덮어써 버리는 문제가 있다
+ *   (예: 0.3 TSS 활동 → 98.2 TSS 활동이 같은 날 연달아 들어오면 두 번째 처리 시 버킷이 최신화되지 않은 채
+ *   push되어 daily_summaries가 0.3으로 되돌아감). 활동 저장 직후 단일 날짜 동기화(processStravaActivity·
+ *   onUserLogWritten)에서는 반드시 true로 호출해야 한다. 다수 사용자·다일 구간을 도는 주간 parity 배치에서는
+ *   비용 때문에 기본값(false)을 유지한다.
+ */
+async function syncRankingDayBucketsToSupabaseForUser(db, userId, startStr, endStr, forceReconcile) {
   const rankingDayRollup = require("./rankingDayRollup");
   if (!db || !userId || !startStr || !endStr) return 0;
 
@@ -1035,7 +1044,7 @@ async function syncRankingDayBucketsToSupabaseForUser(db, userId, startStr, endS
     userData,
     startStr,
     endStr,
-    false
+    forceReconcile === true
   );
 
   const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);

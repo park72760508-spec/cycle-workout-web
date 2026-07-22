@@ -1824,7 +1824,8 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
         db,
         userId,
         activityDateYmd,
-        activityDateYmd
+        activityDateYmd,
+        true
       );
     } catch (parityErr) {
       console.warn(
@@ -13289,7 +13290,8 @@ const onUserLogWrittenHandler = async (change, context) => {
               db,
               userId,
               activityDateYmd,
-              activityDateYmd
+              activityDateYmd,
+              true
             );
           } catch (bucketErr) {
             console.warn(
