@@ -43,18 +43,19 @@ const DEFAULT_COMPETITION_APPLY_BUTTON_1 = JSON.stringify({
 });
 
 /**
- * Toss 가상계좌 발급 은행 코드 → 한글명. assets/js/competition/competitionBottomSheet.js의
- * BANK_OPTIONS와 동일 목록(단일 출처 아님 — 프론트와 동일하게 유지 필요).
+ * Toss 가상계좌 발급 은행 코드 → 한글명. https://docs.tosspayments.com/codes/org-codes 공식 표 기준.
+ * assets/js/competition/competitionBottomSheet.js의 BANK_OPTIONS와 동일 목록(단일 출처 아님 — 함께 유지 필요).
  * Toss 응답(virtualAccount)에는 은행 "이름" 필드가 없고 bankCode만 내려오므로 여기서 직접 매핑한다.
  */
 const TOSS_BANK_CODE_NAME_KO = {
   "20": "우리은행",
   "81": "KEB하나은행",
   "88": "신한은행",
-  "04": "KB국민은행",
+  "06": "KB국민은행",
   "11": "NH농협은행",
   "90": "카카오뱅크",
   "92": "토스뱅크",
+  "03": "IBK기업은행",
 };
 
 /** bankCode → 한글 은행명. 알 수 없는 코드는 코드 그대로 반환(빈 문자열보다 원인 파악에 유리) */
