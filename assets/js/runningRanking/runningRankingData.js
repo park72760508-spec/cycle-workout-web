@@ -748,8 +748,7 @@
       myRankSupremo: viewerChart.myRankSupremo,
       viewerIsAdmin: typeof window.getViewerGrade === 'function' && window.getViewerGrade() === '1',
       titleOverride: '참가자 분포',
-      pillLabelOverride: catLabel + ' · ' + (spec.pillMetricLabel || ''),
-      chartSubNoteOverride: '구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.'
+      pillLabelOverride: catLabel + ' · ' + (spec.pillMetricLabel || '')
     };
     if (spec.extra && typeof spec.extra === 'object') {
       Object.keys(spec.extra).forEach(function (k) {
@@ -873,8 +872,7 @@
       myRankSupremo: viewerChart.myRankSupremo,
       viewerIsAdmin: typeof window.getViewerGrade === 'function' && window.getViewerGrade() === '1',
       titleOverride: '참가자 분포',
-      pillLabelOverride: catLabel + ' · 종합 점수',
-      chartSubNoteOverride: '구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.'
+      pillLabelOverride: catLabel + ' · 종합 점수'
     };
   }
 
