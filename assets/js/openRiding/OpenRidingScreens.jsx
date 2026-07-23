@@ -11892,7 +11892,6 @@ function regionLineFromRegions(regions) {
 
 /** 오픈 라이딩방 단일 앱: 컴팩트 달력·목록 ↔ 생성 ↔ 상세 */
 function OpenRidingRoomApp(props) {
-  var firestore = props.firestore;
   var storage = props.storage;
   var userLabel = props.userLabel || '라이더';
   var gsEarly = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
@@ -11931,6 +11930,59 @@ function OpenRidingRoomApp(props) {
       return getOpenRidingMoimCopy(clubCategory);
     },
     [clubCategory]
+  );
+
+  /**
+   * 모바일(특히 안드로이드)에서 gstatic CDN에서 Firebase SDK를 내려받는 시간이 4초를 넘기면
+   * stelvioDeferredModules.js의 초기 대기가 firestoreV9를 못 잡은 채 넘어가 props.firestore가
+   * null로 고정되고, 이 컴포넌트는 그 mount 동안 계속 null을 들고 있어 달력 조회(useOpenRiding)가
+   * "db 없음"으로 조용히 스킵되며 빈 달력만 보이는 문제가 있었다. userId와 동일하게 firestore도
+   * 로컬 상태로 들고 있다가 window.firestoreV9가 뒤늦게 준비되면 재동기화한다.
+   */
+  var _fsEff = useState(function () {
+    return props.firestore || (typeof window !== 'undefined' ? window.firestoreV9 || null : null);
+  });
+  var firestore = _fsEff[0];
+  var setFirestore = _fsEff[1];
+
+  useEffect(
+    function () {
+      if (firestore) return undefined;
+      function syncFirestore() {
+        if (typeof window !== 'undefined' && window.firestoreV9) {
+          setFirestore(window.firestoreV9);
+        }
+      }
+      syncFirestore();
+      var onReady = function () {
+        syncFirestore();
+      };
+      try {
+        if (typeof window !== 'undefined') {
+          window.addEventListener('stelvio-firestoreV9-ready', onReady);
+        }
+      } catch (eL0) {}
+      // 이벤트를 놓쳤을 가능성(리스너 등록 전에 이미 dispatch됨)에 대비한 폴백 폴링 — 최대 20초
+      var start = Date.now();
+      var pollId = setInterval(function () {
+        if (typeof window === 'undefined') return;
+        if (window.firestoreV9) {
+          setFirestore(window.firestoreV9);
+          clearInterval(pollId);
+        } else if (Date.now() - start > 20000) {
+          clearInterval(pollId);
+        }
+      }, 500);
+      return function () {
+        try {
+          if (typeof window !== 'undefined') {
+            window.removeEventListener('stelvio-firestoreV9-ready', onReady);
+          }
+        } catch (eU0) {}
+        clearInterval(pollId);
+      };
+    },
+    [firestore]
   );
 
   /** PC/모바일: Firebase 세션 복원 전에는 Firestore가 permission-denied — UID를 auth와 동기화 */
