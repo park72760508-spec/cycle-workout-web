@@ -291,6 +291,10 @@
         return Object.assign({}, base, {
           entries: [],
           byCategory: emptyCrewChartByCategory(),
+          // 크루는 소수 인원이 많아 연령 카테고리별로 나누면 분포가 빈 채로 보이기 쉽다 — 크루 멤버는
+          // 항상 연령 무관 전체(Supremo)로 보여준다(점수 계산 자체는 chartOpts.category를 그대로 써서
+          // 현재 보드 탭과 동일한 산식을 유지하고, 코호트 필터링만 분리한다).
+          activeCategory: 'Supremo',
           overrideDisplayRank: null,
           titleOverride: '참가자 분포',
           pillLabelOverride: crewCategoryLabel + ' · ' + memberMetricLabel + ' · 크루'
@@ -328,6 +332,8 @@
       return Object.assign({}, base, {
         entries: mergedEntries,
         byCategory: slim,
+        // 위와 동일한 이유로 연령 카테고리 필터를 적용하지 않는다.
+        activeCategory: 'Supremo',
         overrideDisplayRank: myCrewRank,
         titleOverride: '참가자 분포',
         pillLabelOverride:
