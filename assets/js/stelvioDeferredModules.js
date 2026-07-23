@@ -106,26 +106,62 @@
       };
     }
 
+    /**
+     * window.firestoreV9 준비를 기다린다. 'stelvio-firestoreV9-ready' 이벤트(index.html에서
+     * firebase-firestore.js 로드 완료 시 dispatch)를 우선 신호로 쓰고, 리스너 등록 전에 이미
+     * dispatch됐을 가능성(레이스)에 대비해 짧은 폴백 폴링을 병행한다.
+     * 예전에는 firestoreV9 대기를 최대 4초로 임의로 끊고 넘어가서, gstatic CDN에서 Firebase SDK를
+     * 내려받는 게 느린 환경(모바일 셀룰러·콜드 스타트)에서는 firestore가 null인 채로 화면이
+     * 마운트되어 라이딩 모임 달력이 빈 채로 표시되는 문제가 있었다.
+     */
+    function waitForFirestoreV9(maxMs) {
+      return new Promise(function (resolve) {
+        if (window.firestoreV9) {
+          resolve();
+          return;
+        }
+        var done = false;
+        var pollId = null;
+        function finish() {
+          if (done) return;
+          done = true;
+          try {
+            window.removeEventListener('stelvio-firestoreV9-ready', onReady);
+          } catch (eRm) {}
+          if (pollId) clearInterval(pollId);
+          resolve();
+        }
+        function onReady() {
+          if (window.firestoreV9) finish();
+        }
+        try {
+          window.addEventListener('stelvio-firestoreV9-ready', onReady);
+        } catch (eAdd) {}
+        pollId = setInterval(function () {
+          if (window.firestoreV9) finish();
+        }, 100);
+        setTimeout(finish, maxMs);
+      });
+    }
+
     async function waitOpenRidingAuthAndFirestore(maxMs) {
       maxMs = maxMs || 12000;
       var t0 = Date.now();
-      while (!window.firestoreV9 && Date.now() - t0 < Math.min(maxMs, 4000)) {
-        await new Promise(function (r) {
-          setTimeout(r, 80);
-        });
-      }
+      await waitForFirestoreV9(maxMs);
+      var remaining = Math.max(0, maxMs - (Date.now() - t0));
       try {
         if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
           await Promise.race([
             window.authV9.authStateReady(),
             new Promise(function (r) {
-              setTimeout(r, maxMs);
+              setTimeout(r, remaining);
             }),
           ]);
           return;
         }
       } catch (eA) {}
-      while (Date.now() - t0 < maxMs) {
+      var t1 = Date.now();
+      while (Date.now() - t1 < remaining) {
         if (window.authV9 && window.authV9.currentUser) return;
         if (window.auth && window.auth.currentUser) return;
         try {
