@@ -3,15 +3,17 @@
  * .journal-bottom-sheet(index.html #trainingJournalScreen) 구조를 competition-bottom-sheet-* 로 복제.
  */
 (function () {
-  /** Toss 가상계좌 발급 은행 코드 — 콘솔에서 실제 코드로 재확인 필요(플레이스홀더) */
+  /** Toss 가상계좌 발급 은행 코드 — https://docs.tosspayments.com/codes/org-codes 공식 표 기준으로 검증됨.
+   *  (국민은행이 예전에 '04'로 잘못 들어가 있었음 — 공식 코드는 '06') */
   var BANK_OPTIONS = [
     { code: '20', name: '우리은행' },
     { code: '81', name: 'KEB하나은행' },
     { code: '88', name: '신한은행' },
-    { code: '04', name: 'KB국민은행' },
+    { code: '06', name: 'KB국민은행' },
     { code: '11', name: 'NH농협은행' },
     { code: '90', name: '카카오뱅크' },
     { code: '92', name: '토스뱅크' },
+    { code: '03', name: 'IBK기업은행' },
   ];
 
   function haptic(ms) {
