@@ -928,12 +928,6 @@
       listBody = null;
     }
 
-    var movementHintText = leaderboardSource === 'live'
-      ? '집계 대기 중 · 점수·순위는 실시간 미리보기입니다. 매일 23:00(KST) 집계 후 고정됩니다.'
-      : (leaderboardAsOfSeoul
-        ? ('점수·순위·등락은 매일 23:00(KST) 집계 기준 · 집계일 ' + leaderboardAsOfSeoul)
-        : '점수·순위·등락은 매일 23:00(KST) 집계 후 고정·전일 대비로 표시됩니다.');
-
     var rootClass = 'running-ranking-body' +
       (isOverallTab ? ' running-ranking-body--overall' : '') +
       (isPaceTab ? ' running-ranking-body--pace' : '') +
@@ -1056,10 +1050,7 @@
             hidden: chartActive ? undefined : true,
             style: chartActive ? undefined : { display: 'none' }
           });
-        }),
-        React.createElement('p', {
-          className: 'running-ranking-movement-hint running-ranking-movement-hint--footer'
-        }, movementHintText)
+        })
       )
     );
   }
