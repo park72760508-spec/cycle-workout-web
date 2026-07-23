@@ -28,6 +28,10 @@ try {
 const aligoApiKeySecret = defineSecret("ALIGO_API_KEY");
 const aligoUserIdSecret = defineSecret("ALIGO_USER_ID");
 const aligoTokenSecret = defineSecret("ALIGO_TOKEN");
+/** 대회 신청 알림톡 — applyForCompetition(VPC 미적용) → competitionApplyAlimtalkHttpsRelay(VPC) 내부 호출 인증용.
+ *  meetupInviteAlimtalkHttpsRelay와 동일 이유: 알리고 kakaoapi는 egress IP 화이트리스트가 있어
+ *  Direct VPC egress가 적용된 릴레이(onRequest)에서만 알림톡을 직접 호출한다. */
+const competitionAlimRelaySecret = defineSecret("COMPETITION_ALIM_RELAY_SECRET");
 
 /** 대회 선착순 신청 — 토스페이먼츠 · Upstash Redis Secret Manager (functions:secrets:set로 등록). */
 const tossSecretKeySecret = defineSecret("TOSS_SECRET_KEY");
@@ -15599,14 +15603,93 @@ exports.reconcileCompetitionSlots = onRequest(reconcileCompetitionSlotsOptions, 
 });
 
 /**
+ * 대회 신청 접수 알림톡 전용 HTTPS 릴레이 (VPC + ALL_TRAFFIC egress).
+ * openRidingMeetupAlimtalk.js·meetupInviteAlimtalkHttpsRelay와 동일한 이유로 분리한다: applyForCompetition은
+ * VPC egress가 없어 알리고 kakaoapi 호출 시 IP 화이트리스트 미등록으로 code=-99가 날 수 있으므로,
+ * 결제(가상계좌)·Firestore 기록까지 끝난 뒤 이 릴레이에만 알림톡 발송을 위임한다.
+ * receiverPhone/displayName/subject/message는 호출측(applyForCompetition)이 이미 완성해서 넘긴다
+ * (missionSubscriptionAlimtalkHttpsRelay와 동일한 "범용 단건 발송" 구조 — 대회 데이터를 릴레이가 다시 조회하지 않음).
+ */
+const competitionApplyAlimtalk = require("./competitionApplyAlimtalk");
+const aligoKakaoNatEgress = require("./lib/aligoKakaoNatEgress");
+const { sendAlimtalkUnified } = require("./lib/aligoAlimtalkUnified");
+const { scrubAligoCredential: scrubAligoCredentialForRace } = require("./lib/aligoCredentials");
+
+exports.competitionApplyAlimtalkHttpsRelay = onRequest(
+  {
+    ...aligoKakaoNatEgress.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
+    timeoutSeconds: 60,
+    memory: "256MiB",
+    cors: false,
+    secrets: [competitionAlimRelaySecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+  },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+    let expectedRelay;
+    try {
+      expectedRelay = scrubAligoCredentialForRace(competitionAlimRelaySecret.value());
+    } catch (e) {
+      res.status(500).json({ ok: false, error: "COMPETITION_ALIM_RELAY_SECRET 없음" });
+      return;
+    }
+    const gotRelay = String(req.headers["x-competition-alim-relay-secret"] || "").trim();
+    if (!expectedRelay || gotRelay !== expectedRelay) {
+      res.status(403).json({ ok: false, error: "Forbidden" });
+      return;
+    }
+
+    // 알리고 인증 Secret을 process.env로 주입 (loadCompetitionAlimtalkConfig가 동일 패턴으로 읽음)
+    try {
+      process.env.ALIGO_API_KEY = scrubAligoCredentialForRace(aligoApiKeySecret.value()) || process.env.ALIGO_API_KEY;
+      process.env.ALIGO_USER_ID = scrubAligoCredentialForRace(aligoUserIdSecret.value()) || process.env.ALIGO_USER_ID;
+      process.env.ALIGO_TOKEN = scrubAligoCredentialForRace(aligoTokenSecret.value()) || process.env.ALIGO_TOKEN;
+    } catch (eEnv) {
+      // Secret 미설정 시 이후 loadCompetitionAlimtalkConfig에서 missing 필드로 명확히 실패
+    }
+
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const receiverPhone = String(body.receiverPhone || "").trim();
+    const displayName = String(body.displayName || "").trim();
+    const subject = String(body.subject || "").trim();
+    const message = String(body.message || "").trim();
+    if (!receiverPhone || !subject || !message) {
+      res.status(400).json({ ok: false, error: "MISSING_FIELDS" });
+      return;
+    }
+
+    try {
+      const db = admin.firestore();
+      const cfg = await competitionApplyAlimtalk.loadCompetitionAlimtalkConfig(db);
+      await sendAlimtalkUnified(cfg, {
+        receiverPhone,
+        displayName,
+        subject,
+        message,
+        templateKind: "competition_signup",
+        logTag: "[competitionApplyAlimtalk vpc-relay]",
+      });
+      res.status(200).json({ ok: true });
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      console.error("[competitionApplyAlimtalkHttpsRelay]", msg);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  }
+);
+
+/**
  * 대회 신청 — Redis 원자적 슬롯 예약 → 성공 시에만 토스 가상계좌 발급 → Firestore 기록.
  * 정원 초과는 에러가 아니라 { success:false, reason:'SOLD_OUT' } 정상 응답으로 처리한다(폭주 시 5xx 방지).
  * applicant(신청서 — competitionApplicationForm.js)는 서버에서도 화이트리스트 재검증 후 저장하며,
- * 향후 입금 안내·신청 내역 알림톡 발송(openRidingMeetupAlimtalk.js와 동일한 방식 예정)에 사용한다.
+ * 신청 접수 알림톡(UJ_6279, competitionApplyAlimtalkHttpsRelay)을 신청 완료 직후 발송한다.
  * 마감(closesAt) 이후라도 대기자 1순위로 초대(INVITED)되어 있고 초대가 만료되지 않았다면 예외적으로
  * 신청을 허용한다(대기자 우선 구제) — 관리자가 명시적으로 닫은 대회(status!=='open')는 예외 없이 막는다.
  */
 const applyForCompetitionOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
+applyForCompetitionOptions.secrets.push(competitionAlimRelaySecret);
 exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, res) => {
   setCorsHeaders(req, res);
   if (req.method === "OPTIONS") {
@@ -15797,6 +15880,68 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
           .catch((werr) => {
             console.error("[applyForCompetition] 대기자 전환 처리 실패(수동 확인 필요):", waitlistInvite.id, werr.message);
           });
+      }
+
+      // 신청 접수 알림톡 — 결제/Firestore 기록이 끝난 뒤에만 시도. 실패해도 신청 자체는 이미 성공했으므로
+      // 아래 성공 응답을 막지 않고 appRef에 결과만 기록한다(라이딩 모임 meetupInviteAlimtalkSummary와 동일 관례).
+      try {
+        const userNameForAlim = String(userData.name || userData.displayName || applicant.name || "STELVIO 회원");
+        const message = competitionApplyAlimtalk.buildCompetitionApplyAlimtalkMessage({
+          userName: userNameForAlim,
+          competitionName: comp.title || "대회",
+          competitionDivision: competitionApplyAlimtalk.formatCompetitionDivisionKo(comp.category, applicant.division),
+          applicantName: applicant.name,
+          paymentAmount: amount,
+          bankName: va.bank || "",
+          accountNumber: va.accountNumber || "",
+          accountHolderName: customerName,
+          paymentDueDate: competitionApplyAlimtalk.formatPaymentDueDateKo(va.dueDate),
+        });
+        const relayUrl =
+          process.env.COMPETITION_ALIM_RELAY_URL ||
+          "https://asia-northeast3-stelvio-ai.cloudfunctions.net/competitionApplyAlimtalkHttpsRelay";
+        const ac = new AbortController();
+        const relayTimeout = setTimeout(() => ac.abort(), 10000);
+        let relayResp;
+        try {
+          relayResp = await fetch(relayUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-competition-alim-relay-secret": competitionAlimRelaySecret.value(),
+            },
+            body: JSON.stringify({
+              receiverPhone: applicant.phone,
+              displayName: applicant.name,
+              subject: competitionApplyAlimtalk.COMPETITION_APPLY_ALIM_SUBJECT_KO,
+              message,
+            }),
+            signal: ac.signal,
+          });
+        } finally {
+          clearTimeout(relayTimeout);
+        }
+        const relayJson = await relayResp.json().catch(() => ({}));
+        await appRef.set(
+          {
+            alimtalk_sent: !!(relayResp.ok && relayJson && relayJson.ok),
+            alimtalk_error: relayResp.ok && relayJson && relayJson.ok ? null : String((relayJson && relayJson.error) || relayResp.status),
+            alimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (alimErr) {
+        console.error("[applyForCompetition] 신청 접수 알림톡 발송 실패(수동 확인 필요):", appRef.id, alimErr.message);
+        await appRef
+          .set(
+            {
+              alimtalk_sent: false,
+              alimtalk_error: alimErr.message || String(alimErr),
+              alimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          )
+          .catch(() => {});
       }
 
       res.status(200).json({
