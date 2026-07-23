@@ -29625,7 +29625,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 }
 #runBasecampScreen .btn-device.basecamp-btn-affiliate-entry,
 #runBasecampScreen .basecamp-btn-affiliate-entry {
-  background-image: url('https://stelvio.ai.kr/assets/img/s(06).svg') !important;
+  background-image: url('../img/champion.svg') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
   background-size: 90% !important;
   background-position: center center !important;
