@@ -217,7 +217,6 @@
     var viewerIsAdmin = p.viewerIsAdmin === true;
     var titleOverride = p.titleOverride;
     var pillLabelOverride = p.pillLabelOverride;
-    var chartSubNoteOverride = p.chartSubNoteOverride;
 
     var isTss = duration === 'tss';
     var isKmMode = duration === 'personal_dist' || duration === 'group_dist';
@@ -874,13 +873,6 @@
             </p>
           ) : null}
         </div>
-        {chartSubNoteOverride !== false ? (
-          <p className="text-[11px] text-slate-500 text-center leading-snug mt-1.5 px-1">
-            {typeof chartSubNoteOverride === 'string' && chartSubNoteOverride.trim()
-              ? chartSubNoteOverride.trim()
-              : '구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.'}
-          </p>
-        ) : null}
       </div>
     );
   }
