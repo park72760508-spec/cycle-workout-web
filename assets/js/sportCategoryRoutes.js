@@ -134,6 +134,19 @@
     if (typeof showScreen === 'function') showScreen('runDashboardScreen');
   }
 
+  /**
+   * RUN 베이스캠프 → 대회. competitionScreen.js의 getActiveCompetitionCategory()가
+   * getActiveSport()로 RUN/CYCLE 대회를 필터링하므로, 진입 전 반드시 setActiveSport('run')로
+   * 재확인해야 한다(하단 네비 '대회' 탭과 동일한 hubNavGoCompetition 로직 재사용).
+   */
+  function openCompetitionFromRunBasecamp() {
+    setActiveSport('run');
+    if (typeof showScreen === 'function') {
+      showScreen('competitionScreen');
+      if (typeof window.competitionScreenInit === 'function') setTimeout(window.competitionScreenInit, 150);
+    }
+  }
+
   /** CYCLE 베이스캠프 → 대시보드(분석) */
   function openCycleDashboardFromBasecamp() {
     setActiveSport('cycle');
@@ -168,6 +181,7 @@
     navigateToRidingMoimFromBasecamp: navigateToRidingMoimFromBasecamp,
     navigateToRunCrewFromBasecamp: navigateToRunCrewFromBasecamp,
     openRunDashboardFromBasecamp: openRunDashboardFromBasecamp,
+    openCompetitionFromRunBasecamp: openCompetitionFromRunBasecamp,
     openCycleDashboardFromBasecamp: openCycleDashboardFromBasecamp,
     goOpenRidingMoimHomeBasecamp: goOpenRidingMoimHomeBasecamp,
     shouldShowSettingsProfileCard: shouldShowSettingsProfileCard
@@ -185,6 +199,7 @@
   window.navigateToRidingMoimFromBasecamp = navigateToRidingMoimFromBasecamp;
   window.navigateToRunCrewFromBasecamp = navigateToRunCrewFromBasecamp;
   window.openRunDashboardFromBasecamp = openRunDashboardFromBasecamp;
+  window.openCompetitionFromRunBasecamp = openCompetitionFromRunBasecamp;
   window.openCycleDashboardFromBasecamp = openCycleDashboardFromBasecamp;
   window.goOpenRidingMoimHomeBasecamp = goOpenRidingMoimHomeBasecamp;
   window.shouldShowSettingsProfileCard = shouldShowSettingsProfileCard;
