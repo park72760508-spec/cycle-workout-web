@@ -1,7 +1,7 @@
 /**
  * RUN 랭킹보드 크루 탭 — CYCLE 클럽 탭 UI·로직 (나의 크루 목록 + 멤버 순위)
  */
-/* global React, useState, useEffect, useMemo, useCallback, useRef */
+/* global React, useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef */
 (function () {
   'use strict';
   if (!window.React) return;
@@ -9,6 +9,7 @@
   var React = window.React;
   var useState = React.useState;
   var useEffect = React.useEffect;
+  var useLayoutEffect = React.useLayoutEffect;
   var useMemo = React.useMemo;
   var useCallback = React.useCallback;
   var useRef = React.useRef;
@@ -172,6 +173,8 @@
     var setMembersLoading = _membersLoading[1];
 
     var membersUnsubRef = useRef(null);
+    var chartRafRef = useRef({ a: 0, b: 0 });
+    var chartActiveMountRef = useRef('');
     var GroupMemberRow = window.RunningRankingGroupMemberRow;
     var memberTabId = crewApi().metricToTabId ? crewApi().metricToTabId(crewMetric) : 'overall';
     var memberMetricLabel = crewApi().crewMetricLabel ? crewApi().crewMetricLabel(crewMetric) : '';
@@ -364,18 +367,42 @@
       crewCategoryLabel, memberMetricLabel, memberRankedList, currentUserId, boardUidByFirebaseUid
     ]);
 
-    useEffect(function () {
-      if (typeof window.refreshStelvioDistributionChart !== 'function' || !crewChartPayload) return;
-      window.refreshStelvioDistributionChart(crewChartPayload, CREW_DIST_CHART_ROOT);
-    }, [crewChartPayload]);
-
-    useEffect(function () {
+    useLayoutEffect(function () {
+      var dispose = window.disposeStelvioDistributionChart;
+      function cancelChartFrames() {
+        if (chartRafRef.current.a) cancelAnimationFrame(chartRafRef.current.a);
+        if (chartRafRef.current.b) cancelAnimationFrame(chartRafRef.current.b);
+        chartRafRef.current.a = 0;
+        chartRafRef.current.b = 0;
+      }
+      if (typeof window.refreshStelvioDistributionChart !== 'function' || !crewChartPayload) {
+        cancelChartFrames();
+        return undefined;
+      }
+      chartActiveMountRef.current = CREW_DIST_CHART_ROOT;
+      cancelChartFrames();
+      chartRafRef.current.a = requestAnimationFrame(function () {
+        chartRafRef.current.b = requestAnimationFrame(function () {
+          chartRafRef.current.a = 0;
+          chartRafRef.current.b = 0;
+          try {
+            if (chartActiveMountRef.current !== CREW_DIST_CHART_ROOT) return;
+            var el = document.getElementById(CREW_DIST_CHART_ROOT);
+            if (!el) return;
+            window.refreshStelvioDistributionChart(crewChartPayload, CREW_DIST_CHART_ROOT);
+          } catch (chartErr) {
+            console.warn('[RunningRankingCrewTab] distribution chart mount failed', chartErr);
+          }
+        });
+      });
       return function () {
-        if (typeof window.disposeStelvioDistributionChart === 'function') {
-          try { window.disposeStelvioDistributionChart(CREW_DIST_CHART_ROOT); } catch (eDispose) {}
+        cancelChartFrames();
+        if (typeof dispose === 'function') {
+          try { dispose(CREW_DIST_CHART_ROOT); } catch (eCleanup) {}
         }
+        chartActiveMountRef.current = '';
       };
-    }, []);
+    }, [crewChartPayload]);
 
     function toggleGroup(gid) {
       var g = gid != null ? String(gid).trim() : '';
