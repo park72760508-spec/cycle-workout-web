@@ -15,6 +15,17 @@
 
   function crewApi() { return window.runningRankingCrewTab || {}; }
   function cfg() { return window.runningRankingConfig || {}; }
+  function dataApi() { return window.runningRankingData || {}; }
+
+  /** CYCLE 클럽 탭(stelvioBuildGroupTabChartFilteredPayload)과 동일 스킴 — 참가자 분포 차트 mount root */
+  var CREW_DIST_CHART_ROOT = 'running-ranking-crew-distribution-chart-root';
+  var CREW_CHART_CATEGORIES = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+
+  function emptyCrewChartByCategory() {
+    var out = {};
+    CREW_CHART_CATEGORIES.forEach(function (c) { out[c] = []; });
+    return out;
+  }
 
   function defaultProfileImg() {
     return typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
@@ -254,6 +265,92 @@
       leaderboardSource, leaderboardAsOfSeoul
     ]);
 
+    var crewCategoryLabel = (cfg().CATEGORY_LABELS || {})[category] || category;
+
+    /**
+     * 참가자 분포 차트 payload — CYCLE 클럽 탭(stelvioBuildGroupTabChartFilteredPayload)과 동일 스킴:
+     * RUN 종합/구간/TSS/거리 탭이 이미 쓰는 보드 전체 분포(byCategory)를 그대로 재사용하고,
+     * 펼쳐진 크루의 멤버 UID로만 필터링한다(멤버별 수치를 따로 재계산하지 않음).
+     */
+    var crewChartPayload = useMemo(function () {
+      var api = dataApi();
+      var chartOpts = { gender: gender, category: category, paceDistance: paceDistance };
+      var base = null;
+      if (crewMetric === 'pace' && api.buildPaceDistributionPayload) {
+        base = api.buildPaceDistributionPayload(leaderboardRows, chartOpts);
+      } else if (crewMetric === 'tss' && api.buildTssDistributionPayload) {
+        base = api.buildTssDistributionPayload(leaderboardRows, chartOpts);
+      } else if (crewMetric === 'distance' && api.buildDistanceDistributionPayload) {
+        base = api.buildDistanceDistributionPayload(leaderboardRows, chartOpts);
+      } else if (api.buildDistributionPayload) {
+        base = api.buildDistributionPayload(leaderboardRows, chartOpts);
+      }
+      if (!base) return null;
+
+      if (!expandedId || !members.length) {
+        return Object.assign({}, base, {
+          entries: [],
+          byCategory: emptyCrewChartByCategory(),
+          overrideDisplayRank: null,
+          titleOverride: '참가자 분포',
+          pillLabelOverride: crewCategoryLabel + ' · ' + memberMetricLabel + ' · 크루'
+        });
+      }
+
+      var memberUidSet = {};
+      members.forEach(function (m) {
+        var mid = m && (m.userId || m.uid || m.id) ? String(m.userId || m.uid || m.id) : '';
+        if (mid) memberUidSet[mid] = true;
+      });
+      var srcBc = base.byCategory || {};
+      var slim = {};
+      CREW_CHART_CATEGORIES.forEach(function (c) {
+        slim[c] = (srcBc[c] || []).filter(function (e) {
+          return e && e.userId && memberUidSet[String(e.userId)];
+        });
+      });
+      var seen = {};
+      var mergedEntries = [];
+      CREW_CHART_CATEGORIES.forEach(function (c) {
+        slim[c].forEach(function (e) {
+          if (e && e.userId && !seen[e.userId]) {
+            seen[e.userId] = true;
+            mergedEntries.push(e);
+          }
+        });
+      });
+
+      var myItem = currentUserId
+        ? memberRankedList.filter(function (it) { return String(it.userId) === String(currentUserId); })[0]
+        : null;
+      var myCrewRank = myItem && myItem._crewRank != null ? myItem._crewRank : null;
+
+      return Object.assign({}, base, {
+        entries: mergedEntries,
+        byCategory: slim,
+        overrideDisplayRank: myCrewRank,
+        titleOverride: '참가자 분포',
+        pillLabelOverride:
+          crewCategoryLabel + ' · ' + memberMetricLabel + ' · 크루 ' + String(members.length) + '명'
+      });
+    }, [
+      expandedId, members, leaderboardRows, crewMetric, gender, category, paceDistance,
+      crewCategoryLabel, memberMetricLabel, memberRankedList, currentUserId
+    ]);
+
+    useEffect(function () {
+      if (typeof window.refreshStelvioDistributionChart !== 'function' || !crewChartPayload) return;
+      window.refreshStelvioDistributionChart(crewChartPayload, CREW_DIST_CHART_ROOT);
+    }, [crewChartPayload]);
+
+    useEffect(function () {
+      return function () {
+        if (typeof window.disposeStelvioDistributionChart === 'function') {
+          try { window.disposeStelvioDistributionChart(CREW_DIST_CHART_ROOT); } catch (eDispose) {}
+        }
+      };
+    }, []);
+
     function toggleGroup(gid) {
       var g = gid != null ? String(gid).trim() : '';
       if (!g) return;
@@ -402,6 +499,11 @@
           ),
           React.createElement('div', { className: 'stelvio-group-members-slot' }, memberBlock)
         );
+      }),
+      React.createElement('div', {
+        id: CREW_DIST_CHART_ROOT,
+        className: 'stelvio-distribution-chart-root running-ranking-distribution-chart-root',
+        'aria-live': 'polite'
       })
     );
   }
