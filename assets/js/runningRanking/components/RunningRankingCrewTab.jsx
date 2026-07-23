@@ -268,6 +268,23 @@
     var crewCategoryLabel = (cfg().CATEGORY_LABELS || {})[category] || category;
 
     /**
+     * 분포 차트 항목의 userId는 보드 원본(user_info.user_id, Supabase UUID)이고 크루 멤버 문서 ID는
+     * Firebase UID라서 서로 다르다(runningRankingCrewTab.js buildCrewMemberRankedList의 findRawRow와
+     * 동일한 이중 매칭이 필요) — leaderboardRows에서 firebase_uid → user_id 매핑을 만들어 둔다.
+     */
+    var boardUidByFirebaseUid = useMemo(function () {
+      var map = {};
+      (leaderboardRows || []).forEach(function (r) {
+        var ui = r && r.user_info;
+        if (!ui) return;
+        var fb = ui.firebase_uid != null ? String(ui.firebase_uid).trim() : '';
+        var uid = ui.user_id != null ? String(ui.user_id).trim() : '';
+        if (fb && uid) map[fb] = uid;
+      });
+      return map;
+    }, [leaderboardRows]);
+
+    /**
      * 참가자 분포 차트 payload — CYCLE 클럽 탭(stelvioBuildGroupTabChartFilteredPayload)과 동일 스킴:
      * RUN 종합/구간/TSS/거리 탭이 이미 쓰는 보드 전체 분포(byCategory)를 그대로 재사용하고,
      * 펼쳐진 크루의 멤버 UID로만 필터링한다(멤버별 수치를 따로 재계산하지 않음).
@@ -304,7 +321,10 @@
       var memberUidSet = {};
       members.forEach(function (m) {
         var mid = m && (m.userId || m.uid || m.id) ? String(m.userId || m.uid || m.id) : '';
-        if (mid) memberUidSet[mid] = true;
+        if (!mid) return;
+        memberUidSet[mid] = true;
+        var boardUid = boardUidByFirebaseUid[mid];
+        if (boardUid) memberUidSet[boardUid] = true;
       });
       var srcBc = base.byCategory || {};
       var slim = {};
@@ -341,7 +361,7 @@
       });
     }, [
       expandedId, members, leaderboardRows, crewMetric, gender, category, paceDistance,
-      crewCategoryLabel, memberMetricLabel, memberRankedList, currentUserId
+      crewCategoryLabel, memberMetricLabel, memberRankedList, currentUserId, boardUidByFirebaseUid
     ]);
 
     useEffect(function () {
