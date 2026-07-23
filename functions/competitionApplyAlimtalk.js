@@ -23,6 +23,47 @@ const COMPETITION_APPLY_ALIM_HEADER_LINE = "[STELVIO 대회 신청 접수 안내
 /** 승인 템플릿 코드(운영 기본). env·Firestore로 덮어쓰기 가능 */
 const DEFAULT_COMPETITION_APPLY_TPL_CODE = "UJ_6279";
 
+/**
+ * 승인 템플릿 하단 버튼("대회 접수 확인") — 카카오 알림톡은 등록된 템플릿에 버튼이 있으면
+ * 발송 메시지에도 동일 버튼이 실려야 통과된다(버튼 누락 시 "메시지가 템플릿과 일치하지않음").
+ * ⚠️ name은 카카오 채널 관리자 센터에 등록된 버튼명과 한 글자도 다르면 안 된다("대회 접수 확인" 그대로).
+ * linkType·URL은 실제 등록값과 다를 수 있으니, 다르면 ALIGO_COMPETITION_BUTTON_1(env) 또는
+ * appConfig/aligo.competition_button_1(Firestore, JSON 문자열)로 정확한 값을 덮어쓴다.
+ */
+const DEFAULT_COMPETITION_APPLY_BUTTON_1 = JSON.stringify({
+  button: [
+    {
+      name: "대회 접수 확인",
+      linkType: "WL",
+      linkTypeName: "웹링크",
+      linkMo: "https://stelvio.ai.kr",
+      linkPc: "https://stelvio.ai.kr",
+    },
+  ],
+});
+
+/**
+ * Toss 가상계좌 발급 은행 코드 → 한글명. assets/js/competition/competitionBottomSheet.js의
+ * BANK_OPTIONS와 동일 목록(단일 출처 아님 — 프론트와 동일하게 유지 필요).
+ * Toss 응답(virtualAccount)에는 은행 "이름" 필드가 없고 bankCode만 내려오므로 여기서 직접 매핑한다.
+ */
+const TOSS_BANK_CODE_NAME_KO = {
+  "20": "우리은행",
+  "81": "KEB하나은행",
+  "88": "신한은행",
+  "04": "KB국민은행",
+  "11": "NH농협은행",
+  "90": "카카오뱅크",
+  "92": "토스뱅크",
+};
+
+/** bankCode → 한글 은행명. 알 수 없는 코드는 코드 그대로 반환(빈 문자열보다 원인 파악에 유리) */
+function resolveBankNameKo(bankCode) {
+  const code = String(bankCode || "").trim();
+  if (!code) return "";
+  return TOSS_BANK_CODE_NAME_KO[code] || code;
+}
+
 const RACE_DIVISION_LABEL_KO = {
   FULL: "풀코스",
   HALF: "하프코스",
@@ -101,8 +142,9 @@ function buildCompetitionApplyAlimtalkMessage(p) {
 
 /**
  * 대회 신청 알림톡 전용 알리고 설정 로드 — 미션·모임과 계정(senderkey/sender/apikey/userid/token)은 공유하고
- * tpl_code만 별도(UJ_6279 계열)로 관리한다. 버튼(button_1)은 등록된 템플릿에 필요해지면
- * ALIGO_COMPETITION_BUTTON_1(env) 또는 appConfig/aligo.competition_button_1로 추가한다(현재는 미설정 시 생략).
+ * tpl_code만 별도(UJ_6279 계열)로 관리한다. button_1은 DEFAULT_COMPETITION_APPLY_BUTTON_1이 기본 적용되며,
+ * 실제 등록된 버튼 정보와 다르면 ALIGO_COMPETITION_BUTTON_1(env) 또는
+ * appConfig/aligo.competition_button_1(Firestore)로 덮어쓴다.
  */
 async function loadCompetitionAlimtalkConfig(db) {
   const appConfigSnap = await db.collection(APP_CONFIG_COLLECTION).doc(ALIGO_CONFIG_DOC).get();
@@ -126,7 +168,10 @@ async function loadCompetitionAlimtalkConfig(db) {
   );
 
   const button1 = String(
-    process.env.ALIGO_COMPETITION_BUTTON_1 || appConfig.competition_button_1 || appConfig.competitionButton1 || ""
+    process.env.ALIGO_COMPETITION_BUTTON_1 ||
+      appConfig.competition_button_1 ||
+      appConfig.competitionButton1 ||
+      DEFAULT_COMPETITION_APPLY_BUTTON_1
   ).trim();
 
   const missing = [];
@@ -155,6 +200,7 @@ module.exports = {
   COMPETITION_APPLY_ALIM_SUBJECT_KO,
   COMPETITION_APPLY_ALIM_HEADER_LINE,
   DEFAULT_COMPETITION_APPLY_TPL_CODE,
+  resolveBankNameKo,
   formatCompetitionDivisionKo,
   formatCompetitionAmountKo,
   formatPaymentDueDateKo,

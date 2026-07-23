@@ -15845,6 +15845,9 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
       });
 
       const va = payment.virtualAccount || {};
+      // Toss virtualAccount 응답에는 은행 "이름" 필드가 없고 bankCode만 내려온다 — 직접 매핑해서 채운다
+      // (그대로 두면 알림톡·앱 화면 모두 "입금 은행 : "이 빈 값으로 표시됨).
+      const bankNameKo = competitionApplyAlimtalk.resolveBankNameKo(va.bankCode || bank);
       const paymentDueMs = va.dueDate ? new Date(va.dueDate).getTime() : nowMs + validHours * 3600 * 1000;
 
       const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc();
@@ -15859,7 +15862,7 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
         tossVirtualAccountSecret: va.secret || null,
         virtualAccount: {
           bankCode: va.bankCode || bank,
-          bankName: va.bank || null,
+          bankName: bankNameKo || null,
           accountNumber: va.accountNumber || null,
           dueDate: va.dueDate || null,
         },
@@ -15892,7 +15895,7 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
           competitionDivision: competitionApplyAlimtalk.formatCompetitionDivisionKo(comp.category, applicant.division),
           applicantName: applicant.name,
           paymentAmount: amount,
-          bankName: va.bank || "",
+          bankName: bankNameKo || "",
           accountNumber: va.accountNumber || "",
           accountHolderName: customerName,
           paymentDueDate: competitionApplyAlimtalk.formatPaymentDueDateKo(va.dueDate),
@@ -15948,7 +15951,7 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
         success: true,
         applicationId: appRef.id,
         virtualAccount: {
-          bankName: va.bank || null,
+          bankName: bankNameKo || null,
           accountNumber: va.accountNumber || null,
           dueDate: va.dueDate || null,
         },
