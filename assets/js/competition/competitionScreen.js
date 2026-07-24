@@ -661,6 +661,13 @@
           escapeHtml(formatDateTimeKo(invite.inviteExpiresAt) || '') + '까지 신청 가능</div>'
         : '';
 
+    // 종료된 대회는 잔여 인원 조회(refreshRemainingLabel)를 하지 않으므로(마감 이후라 의미 없음),
+    // "정원 확인 중..." placeholder가 그대로 남지 않도록 모집 당시 정원(comp.capacity)을 바로 표시한다.
+    var initialRemainingLabel =
+      category.key === 'past' && !invite
+        ? '정원 ' + (Number(comp.capacity) || 0) + '명'
+        : '정원 확인 중...';
+
     card.innerHTML =
       '<div class="competition-card-row">' +
       thumbHtml +
@@ -672,7 +679,7 @@
       '</div>' +
       '<div class="competition-card-meta">' +
       '  <span>' + cardIcon(CARD_ICON_CARD) + '참가비 ' + formatEntryFee(comp.entryFee) + '</span>' +
-      '  <span>' + cardIcon(CARD_ICON_USERS) + '<span class="competition-card-remaining" id="' + remainingId + '">정원 확인 중...</span></span>' +
+      '  <span>' + cardIcon(CARD_ICON_USERS) + '<span class="competition-card-remaining" id="' + remainingId + '">' + escapeHtml(initialRemainingLabel) + '</span></span>' +
       '</div>' +
       '</div>' +
       '</div>' +
@@ -681,7 +688,7 @@
 
     var applyBtn = card.querySelector('.competition-apply-btn');
     var remainingEl = card.querySelector('#' + remainingId);
-    var lastRemainingLabel = '확인 중...';
+    var lastRemainingLabel = initialRemainingLabel;
     var hasExistingApp = applyBtn && !invite && category.key === 'open' && applyExistingStateToButton(applyBtn, myApp);
 
     if (category.key !== 'past' || invite) {
