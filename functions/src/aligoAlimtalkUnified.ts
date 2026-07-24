@@ -1,9 +1,9 @@
 /**
  * 카카오 알림톡(알리고) 공통 레이어
  * - 라이딩 미션 달성·구독 연장(UH_2120 등, ALIGO_TPL_CODE / tpl_code)
- * - 오프라인 라이딩 모임 오픈(UH_5528 등, MEETUP_OPEN_TPL 코드)
+ * - 오프라인 모임 오픈(UJ_6159 등, MEETUP_OPEN_TPL 코드 — 구 템플릿 UH_5528에서 교체, 2026-07-24)
  *
- * UH_2120 과 UH_5528 모두 다음이 동일해야 함(알리고 콘솔 카카오톡 API 키 1세트):
+ * UH_2120 과 UJ_6159 모두 다음이 동일해야 함(알리고 콘솔 카카오톡 API 키 1세트):
  * 발급키(apikey)·Identifier/userid(stelvioai 등)·발급 token·SenderKey·발신프로필(sender).
  * 차이는 tpl_code(subject·본문·선택 버튼 env) 만.
  *
@@ -17,12 +17,12 @@ const aligoapi = require("aligoapi");
 const APP_CONFIG_COLLECTION = "appConfig";
 const ALIGO_CONFIG_DOC = "aligo";
 
-const DEFAULT_MEETUP_OPEN_TPL_CODE = "UH_5528";
+const DEFAULT_MEETUP_OPEN_TPL_CODE = "UJ_6159";
 
 export const ALIMTALK_TEMPLATE = {
   /** 미션 달성·구독 연장 안내 (기본 템플릿 코드 UH_2120 계열 — env/appConfig 에서 로드) */
   MISSION_SUBSCRIPTION: "mission_subscription",
-  /** 오프라인 라이딩 모임 오픈 (UH_5528 계열 — meetup_* 키) */
+  /** 오프라인 모임 오픈 (UJ_6159 계열 — meetup_* 키) */
   MEETUP_OFFLINE_OPEN: "meetup_offline_open",
 } as const;
 
