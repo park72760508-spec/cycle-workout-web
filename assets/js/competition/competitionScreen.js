@@ -52,6 +52,45 @@
     return { db: window.firestoreV9, fns: window._firebaseFirestoreFns };
   }
 
+  /**
+   * window.firestoreV9 준비를 기다린다(라이딩 모임 달력의 waitForFirestoreV9와 동일 취지 —
+   * assets/js/stelvioDeferredModules.js:117-145 참고). 'stelvio-firestoreV9-ready' 이벤트를
+   * 우선 신호로 쓰고, 리스너 등록 전에 이미 dispatch됐을 레이스에 대비해 짧은 폴백 폴링을 병행한다.
+   *
+   * 이 화면은 하단 네비 클릭 시 고정 150ms setTimeout 이후 호출되는데, gstatic CDN에서 Firebase SDK를
+   * 내려받는 게 느린 환경(모바일 셀룰러·콜드 스타트)에서는 150ms 안에 firestoreV9가 준비되지 않아
+   * getFirestoreFns()가 null을 반환 → 목록이 "없음"으로 조용히 렌더되는 게 간헐적 빈 목록의 원인이었다.
+   */
+  function waitForFirestoreV9(maxMs) {
+    return new Promise(function (resolve) {
+      if (window.firestoreV9 && window._firebaseFirestoreFns) {
+        resolve();
+        return;
+      }
+      var done = false;
+      var pollId = null;
+      function finish() {
+        if (done) return;
+        done = true;
+        try {
+          window.removeEventListener('stelvio-firestoreV9-ready', onReady);
+        } catch (eRm) {}
+        if (pollId) clearInterval(pollId);
+        resolve();
+      }
+      function onReady() {
+        if (window.firestoreV9 && window._firebaseFirestoreFns) finish();
+      }
+      try {
+        window.addEventListener('stelvio-firestoreV9-ready', onReady);
+      } catch (eAdd) {}
+      pollId = setInterval(function () {
+        if (window.firestoreV9 && window._firebaseFirestoreFns) finish();
+      }, 100);
+      setTimeout(finish, maxMs || 8000);
+    });
+  }
+
   function isAdmin() {
     return !!(window.competitionAdminForm && window.competitionAdminForm.isAdmin());
   }
@@ -675,14 +714,24 @@
     return card;
   }
 
+  /** 짧은 시간에 두 번 진입(중복 탭 등)했을 때, 먼저 시작한 호출의 응답이 늦게 도착해
+   *  나중 호출의 결과를 덮어쓰지 않도록 하는 세대 토큰. */
+  var renderCompetitionListGen = 0;
+
   async function renderCompetitionList() {
     var container = document.getElementById('competitionListContainer');
     if (!container) return;
     renderSkeleton(container);
+    var myGen = ++renderCompetitionListGen;
+    if (!getFirestoreFns()) {
+      await waitForFirestoreV9(8000);
+    }
+    if (myGen !== renderCompetitionListGen) return; // 그 사이 화면을 다시 진입해 더 최신 호출이 시작됨
     var admin = isAdmin();
     var uid = getCurrentUid();
     try {
       var listAndMyApps = await Promise.all([fetchCompetitionsForList(), fetchMyApplicationsMap(), fetchMyWaitlistMap()]);
+      if (myGen !== renderCompetitionListGen) return;
       var list = listAndMyApps[0];
       var myAppsMap = listAndMyApps[1];
       var myWaitlistMap = listAndMyApps[2];
@@ -725,6 +774,7 @@
           );
         });
     } catch (e) {
+      if (myGen !== renderCompetitionListGen) return;
       console.warn('[competitionScreen] 대회 목록 로드 실패:', e && e.message ? e.message : e);
       container.innerHTML = '<div class="competition-empty-state">대회 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>';
     }
