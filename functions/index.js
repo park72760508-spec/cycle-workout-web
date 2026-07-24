@@ -14129,14 +14129,10 @@ exports.getFtpSuggestion = onRequest(
     const start30Str = getDateStrDaysAgo(30);
     const start14Str = getDateStrDaysAgo(14);
 
-    const logsSnap = await db.collection("users").doc(uid).collection("logs")
-      .where("date", ">=", start42Str)
-      .where("date", "<=", todayStr)
-      .get();
+    const logs = await fetchCyclingLogsInDateRangeRouted(db, uid, start42Str, todayStr);
 
     const byDate = {};
-    logsSnap.docs.forEach((doc) => {
-      const d = doc.data();
+    logs.forEach((d) => {
       if (!isCyclingForMmp(d)) return; // Run 등 비사이클링 Strava 로그는 FTP 제안에서 제외
       const dateStr = normalizeLogDateToSeoulYmd(d.date);
       if (!dateStr) return;
