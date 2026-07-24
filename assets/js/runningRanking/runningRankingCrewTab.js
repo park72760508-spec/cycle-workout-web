@@ -59,6 +59,10 @@
     var gender = opts.gender || 'all';
     var category = opts.category || 'Supremo';
     var paceDistance = opts.paceDistance || '5k';
+    /* '종합' 항목 점수는 카테고리별 코호트 상대 점수(gc_scores[gender][category])라서 카테고리 필터를
+       그대로 넘기면 선택할 때마다 재계산되어 다른 값이 표시된다 — 크루탭의 카테고리 필터는 소속 확인
+       (categoryOk)에만 쓰고, 표시 값/보드 순위는 항상 전체(Supremo) 순위 기준으로 고정한다. */
+    var scoreCategory = tabId === 'overall' ? 'Supremo' : category;
     var rowUserId = dataApi.rowUserId;
     var rowFirebaseUid = dataApi.rowFirebaseUid;
     var fmtApi = window.runningRankingFormat || {};
@@ -115,7 +119,7 @@
 
     var fullList = dataApi.buildRankedList(rows, tabId, {
       gender: gender,
-      category: category,
+      category: scoreCategory,
       paceDistance: paceDistance
     });
     var movementOpts = opts.movement || {};
@@ -123,7 +127,7 @@
     if (moveMod && typeof moveMod.applyRankMovement === 'function') {
       moveMod.applyRankMovement(fullList, tabId, {
         gender: gender,
-        category: category,
+        category: scoreCategory,
         paceDistance: paceDistance,
         rankMovementSource: movementOpts.rankMovementSource || '',
         leaderboardSource: movementOpts.leaderboardSource || '',
@@ -174,7 +178,7 @@
       if (raw && dataApi.buildListItemFromRawRow) {
         var fromRaw = dataApi.buildListItemFromRawRow(raw, tabId, {
           gender: gender,
-          category: category,
+          category: scoreCategory,
           paceDistance: paceDistance
         });
         if (fromRaw) {
@@ -188,6 +192,14 @@
       return base;
     }
 
+    /* 보드 랭킹 목록(buildRankedList)과 동일 기준 — 선택된 항목에 유효 점수(값 > 0)가 없는
+       멤버는 '—'로 값만 감추지 않고 크루 순위 목록에서 완전히 제외한다. */
+    function hasValidCrewValue(item) {
+      if (!item) return false;
+      var v = Number(item.value);
+      return isFinite(v) && v > 0;
+    }
+
     var merged = [];
     (memberRows || []).forEach(function (mem) {
       var memUid = mem && (mem.userId || mem.uid || mem.id)
@@ -196,13 +208,18 @@
       if (!memUid) return;
 
       var raw = findRawRow(memUid);
+      /* CYCLE 클럽 탭(stelvioGroupTabBuildMergedForGid)과 동일 — 성별·카테고리 필터에
+         해당하지 않는(또는 보드에 없는) 멤버는 자리표시자로 남기지 않고 목록에서 제외한다. */
+      if (!raw) return;
+
       var globalItem =
         rankedById[memUid] ||
-        (raw ? rankedById[rowUserId(raw)] || rankedById[rowFirebaseUid(raw)] : null);
-      var fromRaw = raw && dataApi.buildListItemFromRawRow
+        rankedById[rowUserId(raw)] ||
+        rankedById[rowFirebaseUid(raw)];
+      var fromRaw = dataApi.buildListItemFromRawRow
         ? dataApi.buildListItemFromRawRow(raw, tabId, {
           gender: gender,
-          category: category,
+          category: scoreCategory,
           paceDistance: paceDistance
         })
         : null;
@@ -228,6 +245,7 @@
       } else {
         item = placeholderItem(mem, raw, memUid);
       }
+      if (!hasValidCrewValue(item)) return;
       merged.push(item);
     });
 
