@@ -20,6 +20,9 @@
 
 /* ========== 디자인 시스템: Zone & 다크 테마 변수 ========== */
 :root {
+  /* 기기/브라우저 다크 모드 설정과 무관하게 폼 컨트롤·스크롤바 등 UA 기본 렌더링을 라이트로 고정
+     (meta name="color-scheme" content="light only" 와 함께 적용 — index.html 등 모든 화면 공통) */
+  color-scheme: light;
   /* Zone별 색상 (세그먼트 그래프, 카드 등 전역 사용) */
   --zone-1: #9E9E9E;  /* Z1 Active Recovery */
   --zone-2: #3498DB;  /* Z2 Endurance */

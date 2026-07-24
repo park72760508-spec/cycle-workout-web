@@ -2233,7 +2233,9 @@ body {
   }
 }
 
-/* 다크모드 기본 지원 */
+/* 다크모드 기본 지원 — 앱 전체 라이트 모드 강제 정책에 따라 비활성화(2026-07-24).
+   기기가 다크 모드여도 아래 색 재정의가 더 이상 적용되지 않고 기본 라이트 스타일이 유지된다.
+   필요 시 이 블록의 @media 조건을 복구하면 즉시 재활성화된다.
 @media (prefers-color-scheme: dark) {
   .room-card,
   .participant-card,
@@ -2242,25 +2244,26 @@ body {
     border-color: #4a5568;
     color: #e2e8f0;
   }
-  
+
   .room-header h4,
   .participant-name {
     color: #e2e8f0;
   }
-  
+
   .metric {
     background: #4a5568;
     color: #e2e8f0;
   }
-  
+
   .metric-label {
     color: #a0adb8;
   }
-  
+
   .metric-value {
     color: #e2e8f0;
   }
 }
+*/
 
 /* 인쇄 스타일 */
 @media print {
