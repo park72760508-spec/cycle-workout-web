@@ -164,7 +164,17 @@
     var listFilter = _listFilter[0];
     var setListFilter = _listFilter[1];
 
-    var _loading = useState(true);
+    /* 페이지/WebView 재로드로 초기 마운트 시에도, localStorage에 남아있는 직전 스냅샷이 있으면
+       스켈레톤 없이 바로 표시하고 loadLeaderboard()는 그대로 백그라운드 검증·갱신을 수행한다
+       (CYCLE stelvioInstantTabSwitchFromMemory와 동일 취지 — 이 폴백/신선도 판단 로직 자체는 그대로 둔다). */
+    function cachedLeaderboardSnapshotForInit() {
+      var api = window.runningRankingApi;
+      return api && typeof api.getCachedSnapshot === 'function' ? api.getCachedSnapshot() : null;
+    }
+
+    var _loading = useState(function () {
+      return !cachedLeaderboardSnapshotForInit();
+    });
     var loading = _loading[0];
     var setLoading = _loading[1];
 
@@ -172,7 +182,10 @@
     var error = _error[0];
     var setError = _error[1];
 
-    var _rows = useState([]);
+    var _rows = useState(function () {
+      var snap = cachedLeaderboardSnapshotForInit();
+      return snap && snap.rows ? snap.rows : [];
+    });
     var rawRows = _rows[0];
     var setRawRows = _rows[1];
 
@@ -188,23 +201,38 @@
     var stale = _stale[0];
     var setStale = _stale[1];
 
-    var _rankMovement = useState({});
+    var _rankMovement = useState(function () {
+      var snap = cachedLeaderboardSnapshotForInit();
+      return snap && snap.rankMovementByKey ? snap.rankMovementByKey : {};
+    });
     var rankMovementByKey = _rankMovement[0];
     var setRankMovementByKey = _rankMovement[1];
 
-    var _rankMovementAsOf = useState('');
+    var _rankMovementAsOf = useState(function () {
+      var snap = cachedLeaderboardSnapshotForInit();
+      return snap && snap.rankMovementAsOfSeoul ? snap.rankMovementAsOfSeoul : '';
+    });
     var rankMovementAsOfSeoul = _rankMovementAsOf[0];
     var setRankMovementAsOfSeoul = _rankMovementAsOf[1];
 
-    var _rankMovementSource = useState('');
+    var _rankMovementSource = useState(function () {
+      var snap = cachedLeaderboardSnapshotForInit();
+      return snap && snap.rankMovementSource ? snap.rankMovementSource : '';
+    });
     var rankMovementSource = _rankMovementSource[0];
     var setRankMovementSource = _rankMovementSource[1];
 
-    var _leaderboardSource = useState('');
+    var _leaderboardSource = useState(function () {
+      var snap = cachedLeaderboardSnapshotForInit();
+      return snap && snap.leaderboardSource ? snap.leaderboardSource : '';
+    });
     var leaderboardSource = _leaderboardSource[0];
     var setLeaderboardSource = _leaderboardSource[1];
 
-    var _leaderboardAsOf = useState('');
+    var _leaderboardAsOf = useState(function () {
+      var snap = cachedLeaderboardSnapshotForInit();
+      return snap && snap.leaderboardAsOfSeoul ? snap.leaderboardAsOfSeoul : '';
+    });
     var leaderboardAsOfSeoul = _leaderboardAsOf[0];
     var setLeaderboardAsOfSeoul = _leaderboardAsOf[1];
 
