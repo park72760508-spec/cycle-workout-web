@@ -16026,14 +16026,14 @@
             : Promise.resolve();
         var readSrcP = stelvioEnsureRankingReadSource();
         await Promise.all([hydrateP, readSrcP]);
-        if (stelvioWebViewRankingFastTabEnabled()) {
-          if (typeof stelvioBootstrapRankingSocialSets === 'function') {
-            stelvioBootstrapRankingSocialSets({ forceFirestore: true, subscribeGroups: true }).catch(
-              function () {}
-            );
-          }
-        } else if (typeof stelvioBootstrapRankingSocialSets === 'function') {
-          await stelvioBootstrapRankingSocialSets({ forceFirestore: true, subscribeGroups: true });
+        /* 즉시 표시(메모리/IndexedDB) 경로를 소셜 부트스트랩(Firestore 왕복)에 막히지 않게 한다 —
+           기존에는 WebView(stelvioWebViewRankingFastTabEnabled)에서만 fire-and-forget이었고
+           일반 웹(PC/모바일 브라우저)에서는 await로 막혀 있어 첫 진입이 느렸다. 즐겨찾기/친구 표시는
+           완료되는 대로 반영되므로(스타 등은 비동기 갱신) 렌더를 막을 필요가 없다. */
+        if (typeof stelvioBootstrapRankingSocialSets === 'function') {
+          stelvioBootstrapRankingSocialSets({ forceFirestore: true, subscribeGroups: true }).catch(
+            function () {}
+          );
         }
         var instantOpenOk = false;
         if (typeof stelvioInstantTabSwitchFromMemory === 'function') {
