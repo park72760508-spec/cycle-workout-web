@@ -10836,15 +10836,28 @@ exports.getTrainingLogsForRead = onRequest(
 
     const yearRaw = req.query.year;
     const monthRaw = req.query.month;
+    const startRaw = req.query.start;
+    const endRaw = req.query.end;
     const hasMonth =
       yearRaw != null &&
       String(yearRaw).trim() !== "" &&
       monthRaw != null &&
       String(monthRaw).trim() !== "";
+    const hasRange =
+      startRaw != null &&
+      String(startRaw).trim() !== "" &&
+      endRaw != null &&
+      String(endRaw).trim() !== "";
 
     try {
       let logs;
-      if (hasMonth) {
+      if (hasRange) {
+        logs = await supabaseGroupReader.fetchUserRideLogsInDateRange(
+          requestedUid,
+          String(startRaw),
+          String(endRaw)
+        );
+      } else if (hasMonth) {
         logs = await supabaseGroupReader.fetchUserRideLogsForMonth(
           requestedUid,
           Number(yearRaw),
