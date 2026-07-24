@@ -92,6 +92,7 @@ function formatPaymentDueDateKo(dueDateRaw) {
   const d = new Date(dueDateRaw);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
     year: "numeric",
     month: "long",
     day: "numeric",
