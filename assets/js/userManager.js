@@ -3574,7 +3574,71 @@ var HR_ROLLING_MAX_BPM = 220;
  * @returns {Promise<{ maxHr: number, maxHrDate?: string|null }|null>}
  */
 async function fetchMaxHrRolling365Days(userId) {
-  if (!userId || !window.firestoreV9) return null;
+  if (!userId) return null;
+  var pad2 = function (n) {
+    return String(n).padStart(2, '0');
+  };
+  var localYmd = function (d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  };
+  var end = new Date();
+  var start = new Date(end.getTime());
+  start.setDate(start.getDate() - 365);
+  var startStr = localYmd(start);
+  var endStr = localYmd(end);
+  var bestHr = 0;
+  var bestDate = null;
+  var considerData = function (data) {
+    var d = data || {};
+    var hr = Math.max(
+      Number(d.max_hr_5sec) || 0,
+      Number(d.max_hr) || 0,
+      Number(d.max_heartrate) || 0
+    );
+    if (hr > 0 && hr <= HR_ROLLING_MAX_BPM && hr > bestHr) {
+      bestHr = hr;
+      var ds = '';
+      if (d.date != null && typeof d.date === 'string') {
+        ds = String(d.date).trim().slice(0, 10);
+      } else if (d.date && typeof d.date.toDate === 'function') {
+        try {
+          ds = localYmd(d.date.toDate());
+        } catch (eD) {
+          ds = '';
+        }
+      }
+      bestDate = ds || null;
+    }
+  };
+
+  /* Phase 6 — logsReadRouter와 동일 라우팅: users/logs 365일 Firestore range 쿼리(비용 최다 쿼리)를
+     Supabase rides로 대체. useSupabaseLogsRead=true면 parityFallbackToFirebase가 true일 때만
+     Firestore로 폴백한다(logsReadRouter.shouldAllowFirestoreTrainingLogsBulkFallbackSync와 동일 기준). */
+  var useSupabaseRolling = false;
+  var allowFirestoreBulkFallbackRolling = true;
+  try {
+    var routerMod = await import('./logsReadRouter.js');
+    useSupabaseRolling = await routerMod.shouldReadTrainingLogsFromSupabase();
+    allowFirestoreBulkFallbackRolling =
+      typeof routerMod.shouldAllowFirestoreTrainingLogsBulkFallbackSync === 'function'
+        ? routerMod.shouldAllowFirestoreTrainingLogsBulkFallbackSync()
+        : !useSupabaseRolling;
+    if (useSupabaseRolling) {
+      var sbMod = await import('./supabaseRidesReadClient.js');
+      var sbLogs = await sbMod.getTrainingLogsInRangeFromSupabase(userId, startStr, endStr);
+      (sbLogs || []).forEach(considerData);
+      return bestHr > 0 ? { maxHr: bestHr, maxHrDate: bestDate } : null;
+    }
+  } catch (sbErr) {
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[UserManager] fetchMaxHrRolling365Days Supabase 조회 실패:', sbErr && sbErr.message);
+    }
+    if (useSupabaseRolling && !allowFirestoreBulkFallbackRolling) {
+      return null;
+    }
+  }
+
+  if (!window.firestoreV9) return null;
   try {
     var fsMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
     var collection = fsMod.collection;
@@ -3584,43 +3648,8 @@ async function fetchMaxHrRolling365Days(userId) {
     var Timestamp = fsMod.Timestamp;
     if (!collection || !query || !where || !getDocs || !Timestamp) return null;
     var db = window.firestoreV9;
-    var pad2 = function (n) {
-      return String(n).padStart(2, '0');
-    };
-    var localYmd = function (d) {
-      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
-    };
-    var end = new Date();
-    var start = new Date(end.getTime());
-    start.setDate(start.getDate() - 365);
-    var startStr = localYmd(start);
-    var endStr = localYmd(end);
     var userLogsRef = collection(db, 'users', userId, 'logs');
     var seen = {};
-    var bestHr = 0;
-    var bestDate = null;
-    var considerData = function (data) {
-      var d = data || {};
-      var hr = Math.max(
-        Number(d.max_hr_5sec) || 0,
-        Number(d.max_hr) || 0,
-        Number(d.max_heartrate) || 0
-      );
-      if (hr > 0 && hr <= HR_ROLLING_MAX_BPM && hr > bestHr) {
-        bestHr = hr;
-        var ds = '';
-        if (d.date != null && typeof d.date === 'string') {
-          ds = String(d.date).trim().slice(0, 10);
-        } else if (d.date && typeof d.date.toDate === 'function') {
-          try {
-            ds = localYmd(d.date.toDate());
-          } catch (eD) {
-            ds = '';
-          }
-        }
-        bestDate = ds || null;
-      }
-    };
     try {
       var startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
       var endDate = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);

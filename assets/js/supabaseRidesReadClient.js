@@ -53,6 +53,10 @@ async function fetchTrainingLogsViaReadRelay(userId, query) {
     url.searchParams.set('year', String(query.year));
     url.searchParams.set('month', String(query.month));
   }
+  if (query && query.start && query.end) {
+    url.searchParams.set('start', String(query.start));
+    url.searchParams.set('end', String(query.end));
+  }
   const token = await getFirebaseIdTokenForReadRelay();
   const res = await fetch(url.toString(), {
     method: 'GET',
@@ -264,6 +268,39 @@ export async function getTrainingLogsByDateRangeFromSupabase(userId, year, month
   }
 
   return fetchTrainingLogsViaReadRelay(userId, { year, month });
+}
+
+/**
+ * 임의 날짜 범위(YYYY-MM-DD, 양끝 포함) 훈련 로그 — rolling N일 통계(예: 최근 365일 Max HR)용.
+ * Firestore `users/{uid}/logs where date >= start AND date <= end` 대체.
+ * @param {string} userId
+ * @param {string} startStr YYYY-MM-DD
+ * @param {string} endStr YYYY-MM-DD
+ */
+export async function getTrainingLogsInRangeFromSupabase(userId, startStr, endStr) {
+  if (!userId) throw new Error('userId는 필수입니다.');
+  if (!startStr || !endStr) throw new Error('startStr/endStr은 필수입니다.');
+
+  const direct = await tryDirectRidesRead(function (supabase, userUuid) {
+    return supabase
+      .from('rides')
+      .select(RIDE_SELECT)
+      .eq('user_id', userUuid)
+      .gte('ride_date', startStr)
+      .lte('ride_date', endStr)
+      .order('ride_date', { ascending: true });
+  });
+  if (direct) {
+    console.log('[supabaseRidesRead] getTrainingLogsInRange (direct)', {
+      userId,
+      startStr,
+      endStr,
+      count: direct.length,
+    });
+    return direct;
+  }
+
+  return fetchTrainingLogsViaReadRelay(userId, { start: startStr, end: endStr });
 }
 
 /** PR 표시 — Supabase yearly_peaks relay (Auth Bridge 불필요) */
