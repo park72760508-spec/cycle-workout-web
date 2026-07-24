@@ -23193,8 +23193,8 @@
           });
       }
     }
+    /** 비공개 여부와 관계없이 지표 값은 항상 공개(이름만 마스킹) — stelvioFormatRankCellForViewer와 동일 정책 */
     function stelvioFormatGroupTabGcCell(item, canSeeFull) {
-      if (stelvioRankingIsPrivateRow(item) && !canSeeFull) return '\u2014';
       var g = item && item.gcScore != null ? Number(item.gcScore) : NaN;
       if (!isFinite(g)) return '\u2014';
       return g.toFixed(1);
@@ -23212,7 +23212,6 @@
     }
     /** 그룹 탭 현재 지표에 맞는 포맷된 값 문자열 (단위는 헤더 .stelvio-category-header-unit) */
     function stelvioGroupTabFormatMemberValue(item, canSeeFull) {
-      if (stelvioRankingIsPrivateRow(item) && !canSeeFull) return '\u2014';
       return stelvioFormatRankCell(item);
     }
     /** 현재 그룹 지표 라벨 */
