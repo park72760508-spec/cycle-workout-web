@@ -42,6 +42,39 @@
     });
   }
 
+  /**
+   * Toss 가상계좌 발급 지원 은행 코드 — https://docs.tosspayments.com/codes/org-codes 공식 표 기준으로 검증됨.
+   * assets/js/competition/competitionBottomSheet.js BANK_OPTIONS · functions/competitionApplyAlimtalk.js
+   * TOSS_BANK_CODE_NAME_KO와 동일 목록(단일 출처 아님 — 함께 유지 필요).
+   * 자유 입력 텍스트였던 이전 필드는 Toss가 지원하지 않는 코드(예: '10')를 그대로 저장할 수 있어
+   * 알림톡에 은행명이 제대로 표기되지 않는 원인이 되었다 — select로 바꿔 원천 차단한다.
+   */
+  var BANK_OPTIONS = [
+    { code: '20', name: '우리은행' },
+    { code: '81', name: 'KEB하나은행' },
+    { code: '88', name: '신한은행' },
+    { code: '06', name: 'KB국민은행' },
+    { code: '11', name: 'NH농협은행' },
+    { code: '90', name: '카카오뱅크' },
+    { code: '92', name: '토스뱅크' },
+    { code: '03', name: 'IBK기업은행' },
+    { code: '39', name: '경남은행' },
+    { code: '34', name: '광주은행' },
+    { code: '31', name: 'iM뱅크(대구)' },
+    { code: '32', name: '부산은행' },
+    { code: '07', name: 'Sh수협은행' },
+    { code: '71', name: '우체국예금보험' },
+    { code: '37', name: '전북은행' },
+  ];
+
+  function bankOptionsHtml(selectedCode) {
+    var sel = String(selectedCode || '20');
+    return BANK_OPTIONS.map(function (b) {
+      return '<option value="' + b.code + '"' + (b.code === sel ? ' selected' : '') + '>' +
+        escapeHtml(b.name) + ' (' + b.code + ')</option>';
+    }).join('');
+  }
+
   function toDatetimeLocalValue(input) {
     if (!input) return '';
     var d = null;
@@ -364,9 +397,10 @@
       '  <input class="competition-form-input" id="cAdminValidHours" type="number" min="1" value="' + (Number(comp.validHours) || 1) + '" />' +
       '</div>' +
       '<div class="competition-form-field">' +
-      '  <label class="competition-form-label" for="cAdminBank">가상계좌 발급 은행 코드</label>' +
-      '  <input class="competition-form-input" id="cAdminBank" type="text" placeholder="예: 20" value="' +
-        escapeHtml((comp.bankAllowlist && comp.bankAllowlist[0]) || '20') + '" />' +
+      '  <label class="competition-form-label" for="cAdminBank">가상계좌 발급 은행</label>' +
+      '  <select class="competition-form-select" id="cAdminBank">' +
+           bankOptionsHtml(comp.bankAllowlist && comp.bankAllowlist[0]) +
+      '  </select>' +
       '</div>' +
       '<div class="competition-form-field">' +
       '  <label class="competition-form-label" for="cAdminStatus">접수 상태</label>' +

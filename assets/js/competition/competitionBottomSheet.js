@@ -14,6 +14,13 @@
     { code: '90', name: '카카오뱅크' },
     { code: '92', name: '토스뱅크' },
     { code: '03', name: 'IBK기업은행' },
+    { code: '39', name: '경남은행' },
+    { code: '34', name: '광주은행' },
+    { code: '31', name: 'iM뱅크(대구)' },
+    { code: '32', name: '부산은행' },
+    { code: '07', name: 'Sh수협은행' },
+    { code: '71', name: '우체국예금보험' },
+    { code: '37', name: '전북은행' },
   ];
 
   function haptic(ms) {
