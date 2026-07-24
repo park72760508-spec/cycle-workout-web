@@ -17,6 +17,44 @@
   };
   var _inflight = null;
 
+  /* localStorage 영속 캐시 — 페이지/WebView 재로드로 메모리 캐시(_cache)가 사라져도
+     최초 진입 시 즉시 표시할 수 있게 한다(CYCLE stelvioRankingPersistentCache와 동일 취지).
+     신선도 판정(isStaleLeaderboardCache/CACHE_TTL_MS/pv 비교)은 그대로 유지 — 저장 위치만 추가. */
+  var RUN_LB_LS_KEY = 'stelvio_run_leaderboard_cache_v1';
+
+  function persistCacheToLocalStorage() {
+    try {
+      if (!_cache.rows || !_cache.rows.length) return;
+      localStorage.setItem(RUN_LB_LS_KEY, JSON.stringify(_cache));
+    } catch (e) {
+      /* 용량 부족 등 — 메모리 캐시만으로 계속 동작 */
+    }
+  }
+
+  function hydrateCacheFromLocalStorage() {
+    try {
+      var raw = localStorage.getItem(RUN_LB_LS_KEY);
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.rows) && parsed.rows.length) {
+        _cache = {
+          at: Number(parsed.at) || 0,
+          pv: parsed.pv || '',
+          rows: parsed.rows,
+          rankMovementByKey: parsed.rankMovementByKey || null,
+          rankMovementAsOfSeoul: parsed.rankMovementAsOfSeoul || '',
+          rankMovementSource: parsed.rankMovementSource || '',
+          leaderboardSource: parsed.leaderboardSource || '',
+          leaderboardAsOfSeoul: parsed.leaderboardAsOfSeoul || '',
+          error: null
+        };
+      }
+    } catch (e) {
+      /* 손상된 캐시 — 무시하고 네트워크로 진행 */
+    }
+  }
+  hydrateCacheFromLocalStorage();
+
   function getConfig() {
     return window.runningRankingConfig || { API_URL: '', CACHE_TTL_MS: 3600000 };
   }
@@ -161,6 +199,7 @@
                 leaderboardAsOfSeoul: leaderboardAsOfSeoul,
                 error: null
               };
+              persistCacheToLocalStorage();
             }
             return result;
           });
@@ -203,6 +242,9 @@
       error: null
     };
     _pvCache = { at: 0, value: '' };
+    try {
+      localStorage.removeItem(RUN_LB_LS_KEY);
+    } catch (e) {}
   }
 
   function getCachedRows() {
