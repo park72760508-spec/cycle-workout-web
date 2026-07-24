@@ -1989,7 +1989,7 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   min-width: 2.25rem;
   margin-right: 8px;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 14.4px;
   color: #1e40af;
   flex-shrink: 0;
   text-align: center;
@@ -2222,7 +2222,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #openRidingRoomScreen .open-riding-detail-host-icon-btn {
   min-width: 0;
   min-height: 0;
-  padding: 0.15rem 0.35rem;
+  padding: 2.4px 5.6px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -2328,16 +2328,16 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 /* 일시~내 상태 등: 코스 설명란과 동일 text-sm(0.875rem) · line-height 1.25rem */
 #openRidingRoomScreen .open-riding-detail-stat-row:not(:first-child) .open-riding-detail-stat-label {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.25rem;
 }
 #openRidingRoomScreen .open-riding-detail-stat-row:not(:first-child) .open-riding-detail-stat-value {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.25rem;
 }
 /* GPX 미등록 안내: 상세 정보(일시~내 상태) 값 행과 동일 타이포 */
 .open-riding-gpx-empty-hint {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.25rem;
   font-weight: 500;
   color: #334155;
@@ -2346,7 +2346,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   border-bottom: none;
 }
 #openRidingRoomScreen .open-riding-detail-stat-label {
-  font-size: 0.875rem;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: #6d28d9;
@@ -2355,7 +2355,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   line-height: 1.25rem;
 }
 #openRidingRoomScreen .open-riding-detail-stat-value {
-  font-size: 0.875rem;
+  font-size: 14px;
   font-weight: 500;
   color: #334155;
   text-align: right;
@@ -2364,7 +2364,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 
 /* 초대 명단: 코스 설명과 동일 text-sm. 이름 색만 기본값, (참석)/(대기)/(미응답) 색은 JSX에서 유지 */
 #openRidingRoomScreen .open-riding-detail-stat-row:not(:first-child) .open-riding-detail-invite-list {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.25rem;
   font-weight: 500;
   color: #334155;
@@ -2396,12 +2396,12 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   border-bottom: none;
 }
 #openRidingRoomScreen .open-riding-detail-invite-fold .open-riding-detail-stat-row--invite .open-riding-detail-stat-label {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.25rem;
   color: #6d28d9;
 }
 #openRidingRoomScreen .open-riding-detail-invite-fold .open-riding-detail-stat-row--invite .open-riding-detail-stat-value {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.25rem;
   font-weight: 500;
   color: #334155;
@@ -2409,7 +2409,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 
 /* 초대 명단 리스트: 우측 정렬·좌우 12px(다른 스탯 값 열과 동일) */
 #openRidingRoomScreen .open-riding-detail-invite-fold .open-riding-detail-invite-list--in-fold {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.25rem;
   font-weight: 500;
   color: #334155;
@@ -2607,10 +2607,10 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   aspect-ratio: 1;
 }
 #openRidingRoomScreen button.open-riding-group-detail-avatar-btn.stelvio-rank-avatar-btn {
-  width: 4rem;
-  height: 4rem;
-  min-width: 4rem;
-  min-height: 4rem;
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  min-height: 64px;
   box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.55);
 }
 #openRidingRoomScreen .open-riding-avatar-zoom-backdrop {
@@ -5997,13 +5997,13 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 
 .training-detail-label {
-  font-size: 0.875rem; /* 대시보드 추천 디자인: text-xs 기반 */
+  font-size: 14px; /* 대시보드 추천 디자인: text-xs 기반 */
   color: #6b7280; /* 대시보드 추천 디자인: 회색 텍스트 */
   font-weight: 500;
 }
 
 .training-detail-value {
-  font-size: 0.875rem; /* 대시보드 추천 디자인: text-xs */
+  font-size: 14px; /* 대시보드 추천 디자인: text-xs */
   color: #1e40af; /* 대시보드 추천 디자인: text-blue-800 */
   font-weight: 600; /* 대시보드 추천 디자인: font-semibold */
 }
@@ -6018,7 +6018,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 0 6px;
   margin-left: 4px;
   font-family: inherit;
-  font-size: 0.7rem;
+  font-size: 11.2px;
   font-weight: 700;
   color: #ffffff;
   background: #dc2626;
@@ -6178,7 +6178,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   pointer-events: none;
 }
 .weekly-top10-aff-icon {
-  font-size: 1.35rem;
+  font-size: 21.6px;
   line-height: 1;
   flex-shrink: 0;
   filter: drop-shadow(0 0 5px rgba(251,191,36,0.75));
@@ -6191,7 +6191,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   gap: 2px;
 }
 .weekly-top10-aff-title {
-  font-size: 0.8rem;
+  font-size: 12.8px;
   font-weight: 700;
   color: #f5f3ff;
   line-height: 1.2;
@@ -6200,7 +6200,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   text-overflow: ellipsis;
 }
 .weekly-top10-aff-subtitle {
-  font-size: 0.65rem;
+  font-size: 10.4px;
   color: #ffffff;
   line-height: 1.3;
 }
@@ -6209,7 +6209,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-shrink: 0;
   background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
   color: #fff;
-  font-size: 0.71rem;
+  font-size: 11.36px;
   font-weight: 700;
   padding: 5px 11px;
   border: 1px solid rgba(167,139,250,0.45);
@@ -6239,9 +6239,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 /* 좁은 화면 대응 */
 @media (max-width: 360px) {
-  .weekly-top10-aff-title { font-size: 0.73rem; }
-  .weekly-top10-aff-subtitle { font-size: 0.6rem; }
-  .weekly-top10-aff-btn { font-size: 0.66rem; padding: 4px 9px; }
+  .weekly-top10-aff-title { font-size: 11.68px; }
+  .weekly-top10-aff-subtitle { font-size: 9.6px; }
+  .weekly-top10-aff-btn { font-size: 10.56px; padding: 4px 9px; }
 }
 
 /* 주간 마일리지 TOP10 순위 확정 후 도장 오버레이 (순위표 정중앙, 1/4 크기, -45도 회전) */
@@ -6356,12 +6356,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 #weeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight,
 #runWeeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight {
-  font-size: 0.68rem;
+  font-size: 10.88px;
 }
 #weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight,
 #runWeeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight {
   padding: 1px 6px;
-  font-size: 0.68rem;
+  font-size: 10.88px;
   line-height: 1.2;
 }
 #weeklyTop10Modal .weekly-rank-tss,
@@ -6389,11 +6389,11 @@ body:has(#trainingDetailModal:not(.hidden)) {
   #runWeeklyTop10Modal .weekly-rank-name-text .stelvio-rank-change,
   #runWeeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change,
   #runWeeklyTop10Modal .weekly-rank-change-slot .stelvio-rank-change.weekly-rank-change-tight {
-    font-size: 0.74rem;
+    font-size: 11.84px;
   }
   #weeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight,
   #runWeeklyTop10Modal .weekly-rank-change-slot .ranking-private-badge.weekly-rank-private-badge-tight {
-    font-size: 0.72rem;
+    font-size: 11.52px;
     padding: 1px 5px;
   }
 }
@@ -6486,7 +6486,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 10px 12px;
   border: none;
   border-radius: 8px;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -6527,7 +6527,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 6px 14px;
   border: none;
   border-radius: 8px;
-  font-size: 0.85rem;
+  font-size: 13.6px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -6575,7 +6575,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-overtake-loading-text {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   font-weight: 600;
   color: #374151;
 }
@@ -6605,7 +6605,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-overtake-report-card-header {
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   color: #ff6b35;
   margin-bottom: 8px;
   padding-bottom: 6px;
@@ -6622,13 +6622,13 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border: 1px solid rgba(0, 212, 170, 0.4);
 }
 .stelvio-overtake-report-card-stats {
-  font-size: 0.85rem;
+  font-size: 13.6px;
   color: #4b5563;
   margin-bottom: 8px;
   line-height: 1.5;
 }
 .stelvio-overtake-report-card-comment {
-  font-size: 0.85rem;
+  font-size: 13.6px;
   color: #1f2937;
   line-height: 1.5;
   padding: 8px 0 0;
@@ -6644,7 +6644,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-overtake-recommend-btn {
   width: 100%;
   padding: 12px 16px;
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: bold;
   cursor: pointer;
   border-radius: 8px;
@@ -6789,7 +6789,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   min-width: 108px;
 }
 #runningRankingScreen .stelvio-dropdown-caption {
-  font-size: 0.72rem;
+  font-size: 11.52px;
   font-weight: 700;
   color: #374151;
   margin-right: 6px;
@@ -6797,7 +6797,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   line-height: 1.2;
 }
 #runningRankingScreen .stelvio-dropdown-label {
-  font-size: 0.9rem;
+  font-size: 14.4px;
   font-weight: 700;
   color: #374151;
   margin-right: 2px;
@@ -6859,7 +6859,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   background: rgba(255, 255, 255, 0.45);
 }
 .stelvio-octagon-filter-cap {
-  font-size: 0.6rem;
+  font-size: 9.6px;
   font-weight: 500;
   letter-spacing: 0.02em;
   text-transform: none;
@@ -6869,7 +6869,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   user-select: none;
 }
 .stelvio-octagon-filter-val {
-  font-size: 0.7rem;
+  font-size: 11.2px;
   font-weight: 500;
   color: #64748b;
   line-height: 1.2;
@@ -7065,14 +7065,14 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin-top: 0;
   margin-bottom: 6px;
   width: 100%;
-  max-width: 7.75rem;
+  max-width: 124px;
 }
 /* 세로바 상단 등급 pill: 주황색 네온 강조 — 버튼으로 인식되도록 강한 glow + 깜빡임 */
 .stelvio-octagon-tier-level-name--sidebar-neon {
   display: block;
   width: 100%;
   margin-top: 0;
-  max-width: 7.75rem;
+  max-width: 124px;
   padding: 4px 10px;
   border-radius: 9999px;
   border: 2px solid rgba(234, 88, 12, 0.8);
@@ -7195,7 +7195,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   color: #e2e8f0;
-  font-size: 0.68rem;
+  font-size: 10.88px;
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1.2;
@@ -7231,12 +7231,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
   text-align: center;
 }
 .stelvio-octagon-tier-hint-rank {
-  font-size: 0.78rem;
+  font-size: 12.48px;
   font-weight: 700;
   color: #f8fafc;
 }
 .stelvio-octagon-tier-hint-pct {
-  font-size: 0.65rem;
+  font-size: 10.4px;
   font-weight: 600;
   color: #cbd5e1;
   letter-spacing: 0.02em;
@@ -7304,14 +7304,14 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-heptagon-detail-modal__title {
   margin: 0 0 0.2rem 0;
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 700;
   color: #1e293b;
   line-height: 1.3;
 }
 .stelvio-heptagon-detail-modal__meta {
   margin: 0;
-  font-size: 0.7rem;
+  font-size: 11.2px;
   color: #64748b;
   line-height: 1.35;
   min-height: 2.1rem;
@@ -7324,7 +7324,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border-radius: 0.5rem;
   background: #f1f5f9;
   color: #64748b;
-  font-size: 1.35rem;
+  font-size: 21.6px;
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -7338,7 +7338,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #334155;
 }
 .stelvio-heptagon-detail-modal__summary {
-  font-size: 0.8rem;
+  font-size: 12.8px;
   color: #475569;
   margin-bottom: 0.65rem;
   min-height: 5.5rem;
@@ -7355,13 +7355,13 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin-top: 0.25rem;
 }
 .stelvio-heptagon-detail-modal__nref {
-  font-size: 0.65rem;
+  font-size: 10.4px;
   color: #94a3b8;
 }
 .stelvio-heptagon-detail-modal__summary strong {
   color: #5b21b6;
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 13.6px;
 }
 .stelvio-heptagon-detail-modal__tablewrap {
   flex: 1 1 auto;
@@ -7374,7 +7374,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-heptagon-detail-modal__table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.72rem;
+  font-size: 11.52px;
 }
 .stelvio-heptagon-detail-modal__table th {
   text-align: left;
@@ -7397,13 +7397,13 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #334155;
 }
 .stelvio-heptagon-detail-modal__empty {
-  font-size: 0.75rem;
+  font-size: 12px;
   color: #94a3b8;
   text-align: center;
   margin: 0.5rem 0;
 }
 .stelvio-heptagon-detail-modal__note {
-  font-size: 0.6rem;
+  font-size: 9.6px;
   line-height: 1.4;
   color: #94a3b8;
   margin: 0 0 0.5rem 0;
@@ -7418,7 +7418,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-heptagon-detail-modal__btn {
   padding: 0.45rem 0.9rem;
-  font-size: 0.8rem;
+  font-size: 12.8px;
   font-weight: 600;
   border-radius: 0.5rem;
   border: 1px solid #c4b5fd;
@@ -7442,7 +7442,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border: 0;
 }
 .stelvio-heptagon-detail-modal__neighborhead {
-  font-size: 0.8rem;
+  font-size: 12.8px;
   font-weight: 700;
   color: #4c1d95;
   margin: 0.5rem 0 0.35rem 0;
@@ -7463,7 +7463,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   width: 100%;
 }
 .stelvio-heptagon-detail-modal__boardhead-t {
-  font-size: 0.8rem;
+  font-size: 12.8px;
   font-weight: 700;
   color: #4c1d95;
   margin: 0;
@@ -7512,7 +7512,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 0.15rem;
 }
 .stelvio-heptagon-board-pill {
-  font-size: 0.7rem;
+  font-size: 11.2px;
   font-weight: 600;
   line-height: 1.2;
   padding: 0.3rem 0.4rem;
@@ -7554,13 +7554,13 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #5b21b6;
 }
 .stelvio-heptagon-detail-modal__neighborload {
-  font-size: 0.72rem;
+  font-size: 11.52px;
   line-height: 1.4;
   color: #94a3b8;
   margin: 0.3rem 0 0.4rem 0;
 }
 .stelvio-heptagon-detail-modal__neighboreq {
-  font-size: 0.72rem;
+  font-size: 11.52px;
   line-height: 1.4;
   color: #b45309;
   background: #fffbeb;
@@ -7578,7 +7578,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   display: inline-block;
   vertical-align: middle;
   margin-left: 2px;
-  font-size: 0.55rem;
+  font-size: 8.8px;
   margin-top: 0;
 }
 
@@ -7598,7 +7598,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-hept-grade {
   display: inline-block;
   vertical-align: middle;
-  font-size: 0.62rem;
+  font-size: 9.92px;
   font-weight: 700;
   line-height: 1.15;
   padding: 2px 5px;
@@ -7710,7 +7710,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   display: inline-block;
   vertical-align: middle;
   margin-left: 4px;
-  font-size: 0.68rem;
+  font-size: 10.88px;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1;
@@ -7750,7 +7750,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   }
   #stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change {
     flex-shrink: 0;
-    font-size: 0.72rem;
+    font-size: 11.52px;
     margin-left: 2px;
     line-height: 1.2;
     white-space: nowrap;
@@ -7759,7 +7759,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
   #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change-slot .stelvio-rank-change {
     flex-shrink: 0;
-    font-size: 0.72rem;
+    font-size: 11.52px;
     margin-left: 2px;
     line-height: 1.2;
     white-space: nowrap;
@@ -7778,7 +7778,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-hero-text {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   font-weight: 600;
   color: #1f2937;
   line-height: 1.5;
@@ -7842,7 +7842,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border: 1.5px solid rgba(102, 126, 234, 0.4);
   border-radius: 20px;
   padding: 5px 16px;
-  font-size: 0.82rem;
+  font-size: 13.12px;
   color: #667eea;
   font-weight: 600;
   cursor: pointer;
@@ -7855,7 +7855,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #4f46e5;
 }
 .stelvio-hero-expand-btn-icon {
-  font-size: 1.05rem;
+  font-size: 16.8px;
   line-height: 1;
   font-weight: 700;
 }
@@ -7883,7 +7883,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border: none;
   background: #fff;
   border-radius: 8px;
-  font-size: 0.85rem;
+  font-size: 13.6px;
   font-weight: 600;
   cursor: pointer;
   color: #6b7280;
@@ -7919,7 +7919,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border: none;
   background: #e5e7eb;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: 14.4px;
   font-weight: 600;
   cursor: pointer;
   color: #374151;
@@ -7954,7 +7954,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   gap: 8px;
 }
 .stelvio-filter-label {
-  font-size: 0.85rem;
+  font-size: 13.6px;
   color: #6b7280;
   font-weight: 600;
 }
@@ -7963,7 +7963,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border: none;
   background: #fff;
   border-radius: 8px;
-  font-size: 0.85rem;
+  font-size: 13.6px;
   cursor: pointer;
   color: #6b7280;
   transition: all 0.2s;
@@ -7989,7 +7989,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-motivation-text {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   font-weight: 600;
   color: #1f2937;
   line-height: 1.5;
@@ -8008,7 +8008,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-ranking-loading p {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   color: #6b7280;
 }
 .stelvio-ranking-spinner {
@@ -8061,7 +8061,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 10px 14px;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.06) 100%);
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   color: #1f2937;
   border-bottom: 1px solid rgba(102, 126, 234, 0.15);
 }
@@ -8085,7 +8085,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin-left: 2px;
 }
 .stelvio-category-header-unit {
-  font-size: 0.9rem;
+  font-size: 14.4px;
   font-weight: 700;
   color: #764ba2;
   flex-shrink: 0;
@@ -8119,7 +8119,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  font-size: 16px;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -8156,7 +8156,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name,
 #stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name-text,
 #stelvioRankingScreen .stelvio-rank-row .stelvio-rank-wkg {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.5;
   color: #374151;
   font-weight: 400;
@@ -8390,7 +8390,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  font-size: 0.78rem;
+  font-size: 12.48px;
   font-weight: 700;
   color: #7c3aed;
   white-space: nowrap;
@@ -8428,13 +8428,13 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin-bottom: 8px;
 }
 #stelvioRankingScreen .stelvio-group-notice-title {
-  font-size: 0.82rem;
+  font-size: 13.12px;
   font-weight: 800;
   color: #92400e;
 }
 #stelvioRankingScreen .stelvio-group-notice-date {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 600;
   color: #b45309;
 }
@@ -8444,7 +8444,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 #stelvioRankingScreen .stelvio-group-notice-body {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.55;
   color: #44403c;
   word-break: break-word;
@@ -8458,7 +8458,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border: 1px solid #fcd34d;
   border-radius: 8px;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.5;
   color: #1f2937;
   background: #fff;
@@ -8476,14 +8476,14 @@ body:has(#trainingDetailModal:not(.hidden)) {
   gap: 8px;
 }
 #stelvioRankingScreen .stelvio-group-notice-count {
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 600;
   color: #78716c;
 }
 #stelvioRankingScreen .stelvio-group-notice-save {
   flex-shrink: 0;
   padding: 6px 14px;
-  font-size: 0.8rem;
+  font-size: 12.8px;
   font-weight: 700;
   border-radius: 8px;
   min-height: 34px;
@@ -8521,7 +8521,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   min-width: 2.2em;
   margin-right: 8px;
   color: #1e40af;
-  font-size: 0.9rem;
+  font-size: 14.4px;
 }
 .stelvio-rank-name {
   flex: 1;
@@ -8531,7 +8531,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   gap: 6px;
   font-weight: 600;
   color: #1f2937;
-  font-size: 0.9rem;
+  font-size: 14.4px;
 }
 
 .stelvio-rank-avatar {
@@ -8691,7 +8691,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   font-weight: 800;
-  font-size: 0.94rem;
+  font-size: 15.04px;
   line-height: 1.42;
   color: #f8fafc;
   letter-spacing: -0.02em;
@@ -8704,7 +8704,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
   padding: 10px 4px;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.32);
-  font-size: 0.6875rem;
+  font-size: 11px;
   line-height: 1.6;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -8714,12 +8714,12 @@ button.stelvio-rank-avatar-btn:focus-visible {
 }
 @media (min-width: 380px) {
   .stelvio-rank-avatar-zoom-line2 {
-    font-size: 0.74rem;
+    font-size: 11.84px;
   }
 }
 .stelvio-rank-avatar-zoom-line3 {
   padding-top: 2px;
-  font-size: 0.815rem;
+  font-size: 13.04px;
   line-height: 1.52;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -8764,13 +8764,13 @@ button.stelvio-rank-avatar-btn:focus-visible {
   overflow: hidden;
 }
 .stelvio-profile-crop-modal__title {
-  font-size: 1.05rem;
+  font-size: 16.8px;
   font-weight: 700;
   margin: 14px 16px 4px;
   color: var(--text-primary, #e8eaed);
 }
 .stelvio-profile-crop-modal__hint {
-  font-size: 0.8rem;
+  font-size: 12.8px;
   color: var(--text-secondary, #9aa0a6);
   margin: 0 16px 10px;
   line-height: 1.4;
@@ -8839,12 +8839,12 @@ button.stelvio-rank-avatar-btn:focus-visible {
 .stelvio-rank-wkg {
   font-weight: 700;
   color: #764ba2;
-  font-size: 0.9rem;
+  font-size: 14.4px;
 }
 .stelvio-ranking-empty {
   margin: 0;
   padding: 12px 0;
-  font-size: 0.9rem;
+  font-size: 14.4px;
   color: #6b7280;
   text-align: center;
 }
@@ -8854,7 +8854,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
 .stelvio-ranking-empty-note {
   display: block;
   margin-top: 4px;
-  font-size: 0.78rem;
+  font-size: 12.48px;
   color: #9ca3af;
 }
 .stelvio-rank-dots-row {
@@ -9082,7 +9082,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
   min-width: 0;
 }
 #stelvioRankingScreen .stelvio-dropdown-caption {
-  font-size: 0.62rem;
+  font-size: 9.92px;
   font-weight: 600;
   color: #9ca3af;
   margin-right: 3px;
@@ -9090,7 +9090,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
   line-height: 1.2;
 }
 #stelvioRankingScreen .stelvio-dropdown-label {
-  font-size: 0.72rem;
+  font-size: 11.52px;
   font-weight: 600;
   color: #4b5563;
   margin-right: 2px;
@@ -9103,7 +9103,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
 #stelvioRankingScreen .stelvio-overtake-btn {
   flex-shrink: 0;
   padding: 4px 10px;
-  font-size: 0.72rem;
+  font-size: 11.52px;
   font-weight: 600;
   border-radius: 6px;
 }
@@ -9191,7 +9191,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
   padding: 2px;
   margin: 0;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 16px;
   line-height: 1;
   /* 관심 미등록(outline 별): 클릭 가능함을 인지할 수 있도록 충분히 보이게 설정 */
   color: rgba(148, 163, 184, 0.60);
@@ -9213,7 +9213,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  font-size: 16px;
   line-height: 1;
   color: #c084fc !important;
   -webkit-text-fill-color: #c084fc;
@@ -9231,7 +9231,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  font-size: 16px;
   line-height: 1;
   color: #c084fc !important;
   -webkit-text-fill-color: #c084fc;
@@ -10076,14 +10076,14 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 
 /* 아이콘 */
 #profileScreen .stelvio-affiliate-btn-icon {
-  font-size: 1.3rem;
+  font-size: 20.8px;
   line-height: 1;
   display: block;
 }
 
 /* 라벨 */
 #profileScreen .stelvio-affiliate-btn-label {
-  font-size: 0.58rem;
+  font-size: 9.28px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #92400e;
@@ -10099,10 +10099,10 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 
 /* 아이콘·라벨 – 2/3 축소 컨텍스트 */
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar > .stelvio-affiliate-btn .stelvio-affiliate-btn-icon {
-  font-size: 0.9rem;
+  font-size: 14.4px;
 }
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .stelvio-user-points-with-avatar > .stelvio-affiliate-btn .stelvio-affiliate-btn-label {
-  font-size: 0.5rem;
+  font-size: 8px;
 }
 
 /* 공개/비공개 토글 – 4번째 컬럼 1/4 균등 */
@@ -13846,7 +13846,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   min-width: 0;
   font-weight: 600;
   color: #1f2937;
-  font-size: .9rem;
+  font-size: 14.4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -13877,7 +13877,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   flex: 0 0 auto;
   min-width: 6.5em;
   text-align: right;
-  font-size: .82rem;
+  font-size: 13.12px;
   color: #6b7280;
 }
 
@@ -16277,7 +16277,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 }
 .riding-moim-intro-title {
   margin: 0 40px 16px 0;
-  font-size: 1.15rem;
+  font-size: 18.4px;
   font-weight: 700;
   color: #1e1b4b;
   line-height: 1.35;
@@ -18071,7 +18071,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   line-height: 0;
 }
 .btn-schedule-detail-delete img {
-  height: 1.4em;
+  height: 22.4px;
   width: auto;
   max-height: 24px;
   object-fit: contain;
@@ -18139,7 +18139,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   cursor: pointer;
 }
 .btn-schedule-start-on-graph img {
-  height: 3.25em;
+  height: 52px;
   width: auto;
   object-fit: contain;
 }
@@ -18282,7 +18282,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 }
 .auth-transition-message {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 16.8px;
   font-weight: 600;
   color: #15803d;
   letter-spacing: -0.02em;
@@ -18366,7 +18366,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   width: 100%;
   margin-bottom: 0;
   padding: 14px 18px;
-  font-size: 1rem;
+  font-size: 16px;
   min-height: 48px;
 }
 
@@ -18446,7 +18446,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.12);
 }
 #scheduleCreateAIModal .ai-schedule-korean-picker__title {
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.02em;
   flex: 1;
@@ -18461,7 +18461,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.18);
   color: #fff;
-  font-size: 1.35rem;
+  font-size: 21.6px;
   line-height: 1;
   cursor: pointer;
   transition: background 0.2s ease;
@@ -18506,7 +18506,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   border-radius: 10px;
   background: #f8fafc;
   color: #1e293b;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
@@ -18539,7 +18539,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   border-radius: 10px;
   background: #f1f5f9;
   color: #475569;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -20160,7 +20160,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   }
 
   #workoutRecommendationModal .result-title {
-    font-size: 1.25rem !important;   /* 20px 수준, 시인성 확보 */
+    font-size: 20px !important;   /* 20px 수준, 시인성 확보 */
     margin-bottom: 8px !important;
   }
 
@@ -20226,7 +20226,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   }
 
   #workoutRecommendationModal .recommendation-item .recommendation-rank {
-    font-size: 1.5rem !important;
+    font-size: 24px !important;
     line-height: 1 !important;
   }
 
@@ -20284,7 +20284,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   }
 
   #workoutRecommendationModal .result-title {
-    font-size: 1.15rem !important;
+    font-size: 18.4px !important;
   }
 
   #workoutRecommendationModal .result-stat-item {
@@ -21283,7 +21283,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 }
 
 .splash-title {
-  font-size: 5.5rem;
+  font-size: 88px;
   font-weight: 700;
   letter-spacing: 0.1em;
   margin: 0;
@@ -21299,7 +21299,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 }
 
 .splash-subtitle {
-  font-size: 2.5rem;
+  font-size: 40px;
   font-weight: 300;
   letter-spacing: 0.3em;
   color: #ffffff;
@@ -21309,7 +21309,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 }
 
 .splash-tagline {
-  font-size: 1.1rem;
+  font-size: 17.6px;
   font-weight: 400;
   letter-spacing: 0.15em;
   color: rgba(255, 255, 255, 0.9);
@@ -21375,15 +21375,15 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 /* 반응형 디자인 */
 @media (max-width: 768px) {
   .splash-title {
-    font-size: 3.5rem;
+    font-size: 56px;
   }
   
   .splash-subtitle {
-    font-size: 1.8rem;
+    font-size: 28.8px;
   }
   
   .splash-tagline {
-    font-size: 0.9rem;
+    font-size: 14.4px;
     padding: 0 20px;
   }
   
@@ -21394,15 +21394,15 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 
 @media (max-width: 480px) {
   .splash-title {
-    font-size: 2.5rem;
+    font-size: 40px;
   }
   
   .splash-subtitle {
-    font-size: 1.3rem;
+    font-size: 20.8px;
   }
   
   .splash-tagline {
-    font-size: 0.8rem;
+    font-size: 12.8px;
   }
   
   .splash-loader {
@@ -21516,14 +21516,14 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 }
 .power-source-select-title {
   margin: 0 0 8px 0;
-  font-size: 1.15rem;
+  font-size: 18.4px;
   font-weight: 600;
   color: #fff;
   text-align: center;
 }
 .power-source-select-desc {
   margin: 0 0 20px 0;
-  font-size: 0.9rem;
+  font-size: 14.4px;
   color: rgba(255, 255, 255, 0.8);
   line-height: 1.4;
   text-align: center;
@@ -21543,7 +21543,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.06);
   color: #fff;
-  font-size: 1rem;
+  font-size: 16px;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 }
@@ -21556,7 +21556,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   color: #00d4aa;
 }
 .power-source-select-name {
-  font-size: 0.85rem;
+  font-size: 13.6px;
   color: rgba(255, 255, 255, 0.85);
   word-break: break-all;
   text-align: center;
@@ -22259,7 +22259,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 #workoutRecommendationModal .ai-workout-spinner-inner {
   position: relative;
   z-index: 2;
-  font-size: 0.95rem;
+  font-size: 15.2px;
   font-weight: 600;
   color: #00d4aa;
   text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
@@ -22393,7 +22393,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   }
 
   #workoutRecommendationModal .result-title {
-    font-size: 1.15rem;
+    font-size: 18.4px;
     margin-bottom: 6px;
   }
 
@@ -27894,7 +27894,7 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
 }
 #accessStatsScreen .access-stats-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 20px;
   font-weight: 700;
   color: #0f172a;
 }
@@ -28372,7 +28372,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   margin-bottom: 4px;
 }
 .stelvio-admin-read-db-desc {
-  font-size: 0.75rem;
+  font-size: 12px;
   color: #6b7280;
   margin: 0 0 10px;
   line-height: 1.4;
@@ -28390,7 +28390,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   cursor: wait;
 }
 .stelvio-admin-read-db-status {
-  font-size: 0.72rem;
+  font-size: 11.52px;
   color: #64748b;
   margin: 0;
   line-height: 1.45;
@@ -28515,13 +28515,13 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   min-width: 0;
 }
 #runningRankingScreen .stelvio-dropdown-caption {
-  font-size: 0.62rem;
+  font-size: 9.92px;
   font-weight: 600;
   color: #9ca3af;
   margin-right: 3px;
 }
 #runningRankingScreen .stelvio-dropdown-label {
-  font-size: 0.72rem;
+  font-size: 11.52px;
   font-weight: 600;
   color: #4b5563;
 }
@@ -28570,13 +28570,13 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   box-shadow: 0 1px 6px rgba(91, 33, 182, 0.12);
 }
 .running-hexagon-center-rank {
-  font-size: 0.95rem;
+  font-size: 15.2px;
   font-weight: 800;
   color: #5b21b6;
   line-height: 1.1;
 }
 .running-hexagon-center-score {
-  font-size: 0.68rem;
+  font-size: 10.88px;
   font-weight: 600;
   color: #6b7280;
   line-height: 1.1;
@@ -28584,7 +28584,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 .running-hexagon-axis-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.72rem;
+  font-size: 11.52px;
 }
 .running-hexagon-axis-table th,
 .running-hexagon-axis-table td {
@@ -28604,7 +28604,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 .running-ranking-movement-hint {
   margin: 8px 0 0;
   padding: 0 2px;
-  font-size: 0.72rem;
+  font-size: 11.52px;
   color: #6b7280;
   line-height: 1.35;
 }
@@ -28623,13 +28623,13 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 .running-ranking-subtitle {
   margin: 0 0 10px;
   padding: 0 4px;
-  font-size: 0.72rem;
+  font-size: 11.52px;
   color: #6b7280;
   line-height: 1.35;
 }
 .running-ranking-stale-hint {
   margin: 0 0 8px;
-  font-size: 0.7rem;
+  font-size: 11.2px;
   color: #b45309;
 }
 .running-ranking-pace-filter {
@@ -28725,7 +28725,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .stelvio-rank-row.running-ranking-row .stelvio-rank-name,
 #runningRankingScreen .stelvio-rank-row.running-ranking-row .stelvio-rank-name-text,
 #runningRankingScreen .stelvio-rank-row.running-ranking-row .stelvio-rank-wkg {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.5;
   color: #374151;
   font-weight: 400;
@@ -28852,7 +28852,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change,
   #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change-slot .stelvio-rank-change {
     flex-shrink: 0;
-    font-size: 0.72rem;
+    font-size: 11.52px;
     margin-left: 2px;
     line-height: 1.2;
     white-space: nowrap;
@@ -28878,7 +28878,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .running-ranking-list-body--avatar-align .stelvio-rank-row .stelvio-rank-name,
 #runningRankingScreen .running-ranking-list-body--avatar-align .stelvio-rank-row .stelvio-rank-name-text,
 #runningRankingScreen .running-ranking-list-body--avatar-align .stelvio-rank-row .stelvio-rank-wkg {
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.5;
   color: #374151;
   font-weight: 400;
@@ -28939,13 +28939,13 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   box-sizing: border-box;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-dist {
-  font-size: 0.5625rem;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: 0.02em;
 }
 #runningRankingScreen .running-ranking-list-body--segments-on .running-ranking-segment-pace {
-  font-size: 0.6875rem;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
   color: #333333;
@@ -29071,7 +29071,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   align-items: center;
 }
 #runningRankingScreen .stelvio-category-header-unit {
-  font-size: 0.9rem;
+  font-size: 14.4px;
   font-weight: 700;
   color: #764ba2;
 }
@@ -29099,7 +29099,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   box-shadow: none;
 }
 #runningRankingScreen .stelvio-hero-text {
-  font-size: 0.875rem;
+  font-size: 14px;
   font-weight: 500;
   color: #374151;
 }
@@ -29155,7 +29155,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   gap: 2px;
 }
 .running-ranking-value--pace {
-  font-size: 0.875rem;
+  font-size: 14px;
   font-weight: 400;
   letter-spacing: normal;
   color: #374151;
@@ -29163,7 +29163,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   font-variant-numeric: tabular-nums;
 }
 #runningRankingScreen .stelvio-rank-row.running-ranking-row .running-ranking-value--pace {
-  font-size: 0.875rem !important;
+  font-size: 14px !important;
   font-weight: 400 !important;
   letter-spacing: normal;
   color: #374151;
@@ -29213,13 +29213,13 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   box-sizing: border-box;
 }
 .running-ranking-segment-dist {
-  font-size: 0.5625rem;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: 0.02em;
 }
 .running-ranking-segment-pace {
-  font-size: 0.6875rem;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
   color: #333333;
@@ -29281,17 +29281,17 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 }
 /* 레거시 클래스 호환 */
 .running-ranking-segment-label {
-  font-size: 0.5625rem;
+  font-size: 9px;
   font-weight: 700;
 }
 .running-ranking-segment-score {
-  font-size: 0.6875rem;
+  font-size: 11px;
   font-weight: 700;
   color: #333333;
   font-variant-numeric: tabular-nums;
 }
 .running-ranking-crew-meta {
-  font-size: 0.72rem;
+  font-size: 11.52px;
   color: #94a3b8;
   font-weight: 500;
 }
@@ -29316,7 +29316,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   padding: 2px;
   margin: 0;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 16px;
   line-height: 1;
   color: rgba(148, 163, 184, 0.60);
   vertical-align: middle;
@@ -29330,7 +29330,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  font-size: 16px;
   line-height: 1;
   color: #c084fc !important;
   -webkit-text-fill-color: #c084fc;
@@ -29344,7 +29344,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  font-size: 16px;
   line-height: 1;
   color: #c084fc !important;
   -webkit-text-fill-color: #c084fc;
@@ -29376,7 +29376,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 #runningRankingScreen .stelvio-rank-row .stelvio-rank-name .stelvio-rank-change-slot .stelvio-rank-change {
   flex-shrink: 0;
   overflow: visible;
-  font-size: 0.68rem;
+  font-size: 10.88px;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1;
@@ -29398,7 +29398,7 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   border-radius: 6px;
   background: #fff;
   color: #475569;
-  font-size: 0.62rem;
+  font-size: 9.92px;
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
@@ -29447,7 +29447,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 }
 .running-ranking-loading-text {
   margin: 8px 0 16px;
-  font-size: 0.9rem;
+  font-size: 14.4px;
   color: #6b7280;
 }
 .running-ranking-skeleton-row {
@@ -29475,7 +29475,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 .running-ranking-retry-btn {
   margin-top: 12px;
   padding: 10px 18px;
-  font-size: 0.9rem;
+  font-size: 14.4px;
 }
 /* ── 스포츠 카테고리 · RUN 베이스캠프 ── */
 #sportCategoryScreen .sport-category-grid,

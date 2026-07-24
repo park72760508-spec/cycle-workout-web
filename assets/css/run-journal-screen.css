@@ -220,7 +220,7 @@
 
 #runTrainingJournalScreen .journal-daily-summary-title {
   margin: 0;
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 600;
   color: #4c51bf;
   flex: 1;
@@ -554,7 +554,7 @@
 #runTrainingJournalScreen .journal-bottom-sheet-title,
 .run-journal-detail-panel .journal-bottom-sheet-title {
   margin: 0;
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 600;
   color: #4c51bf;
 }

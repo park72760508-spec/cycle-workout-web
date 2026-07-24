@@ -163,7 +163,7 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  font-size: 0.78rem;
+  font-size: 12.48px;
   font-weight: 700;
   color: #7c3aed;
   white-space: nowrap;
@@ -201,13 +201,13 @@
   margin-bottom: 8px;
 }
 #runningRankingScreen .stelvio-group-notice-title {
-  font-size: 0.82rem;
+  font-size: 13.12px;
   font-weight: 800;
   color: #92400e;
 }
 #runningRankingScreen .stelvio-group-notice-date {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 600;
   color: #b45309;
 }
@@ -217,7 +217,7 @@
 }
 #runningRankingScreen .stelvio-group-notice-body {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.55;
   color: #44403c;
   word-break: break-word;
@@ -231,7 +231,7 @@
   border: 1px solid #fcd34d;
   border-radius: 8px;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 14px;
   line-height: 1.5;
   color: #1f2937;
   background: #fff;
@@ -249,14 +249,14 @@
   gap: 8px;
 }
 #runningRankingScreen .stelvio-group-notice-count {
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 600;
   color: #78716c;
 }
 #runningRankingScreen .stelvio-group-notice-save {
   flex-shrink: 0;
   padding: 6px 14px;
-  font-size: 0.8rem;
+  font-size: 12.8px;
   font-weight: 700;
   border-radius: 8px;
   min-height: 34px;
@@ -283,7 +283,7 @@
   padding-top: 4px;
 }
 #runningRankingScreen .stelvio-ranking-empty--group {
-  font-size: 0.9rem;
+  font-size: 14.4px;
   line-height: 1.55;
   color: #64748b;
 }
