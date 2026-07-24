@@ -2642,88 +2642,80 @@ function clearWorkoutCache() {
   }
 }
 
+/**
+ * 캐시 반환 이후 백그라운드에서 서버 목록 수를 확인하고, 변경이 감지된 경우에만
+ * 캐시를 갱신하고(기존 세그먼트 병합 로직 그대로) 현재 워크아웃 화면이 보이는 중이면
+ * loadWorkouts를 재호출해 조용히 갱신한다. 반환값 없음(fire-and-forget 전용).
+ */
+async function reconcileWorkoutCacheInBackground(cache) {
+  try {
+    if (!window.GAS_URL) return;
+
+    const serverResult = await jsonpRequest(window.GAS_URL, {
+      action: 'listWorkouts'
+    });
+
+    if (!serverResult || !serverResult.success) return;
+
+    const serverWorkouts = serverResult.items || serverResult.data || serverResult.workouts || (Array.isArray(serverResult) ? serverResult : []);
+    const serverCount = Array.isArray(serverWorkouts) ? serverWorkouts.length : 0;
+
+    if (serverCount === cache.count) {
+      console.log('[Workout Cache] 백그라운드 확인: 목록 수 동일 - 재다운로드 없음:', serverCount, '개');
+      return;
+    }
+
+    console.log('[Workout Cache] 백그라운드 확인: 목록 수 변경 감지 - 캐시 갱신:', {
+      cached: cache.count,
+      server: serverCount
+    });
+
+    if (Array.isArray(serverWorkouts) && serverWorkouts.length > 0) {
+      try {
+        // 기존 캐시의 세그먼트를 새 워크아웃에 병합
+        const workoutsWithSegments = serverWorkouts.map(workout => {
+          const cachedWorkout = cache.workouts.find(w => String(w.id) === String(workout.id));
+          if (cachedWorkout && cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0) {
+            return {
+              ...workout,
+              segments: cachedWorkout.segments  // 기존 캐시된 세그먼트 유지
+            };
+          }
+          return workout;
+        });
+        setWorkoutCache(workoutsWithSegments);
+      } catch (mergeError) {
+        console.warn('[Workout Cache] 세그먼트 병합 실패, 기본 저장:', mergeError);
+        setWorkoutCache(serverWorkouts);
+      }
+    }
+
+    // 신규/변경된 워크아웃이 있을 때만, 화면이 실제로 보이는 중이면 조용히 재렌더
+    const screenEl = document.getElementById('workoutScreen');
+    if (screenEl && screenEl.classList.contains('active') && typeof loadWorkouts === 'function') {
+      var cat = (window.workoutViewState && window.workoutViewState.selectedCategory) ? window.workoutViewState.selectedCategory : 'all';
+      loadWorkouts(cat, true);
+    }
+  } catch (checkError) {
+    console.warn('[Workout Cache] 백그라운드 확인 실패 (캐시 유지):', checkError);
+  }
+}
+
 async function apiGetWorkouts(forceRefresh = false) {
   try {
-    // 강제 새로고침이 아니고 캐시가 있으면 먼저 서버의 목록 수만 확인
+    // 강제 새로고침이 아니고 캐시가 있으면 캐시를 즉시 반환한다(재다운로드 없음).
+    // 서버 목록 수 변경 여부는 reconcileWorkoutCacheInBackground가 백그라운드에서 확인하고,
+    // 실제로 변경된 경우에만 캐시를 갱신·재렌더한다 — 최초 렌더는 네트워크를 기다리지 않는다.
     if (!forceRefresh) {
       const cache = getWorkoutCache();
       if (cache && cache.workouts && Array.isArray(cache.workouts) && cache.workouts.length > 0) {
-        console.log('[Workout Cache] 캐시된 워크아웃:', cache.count, '개');
-        
-        // 서버에서 목록 수만 확인 (간단한 요청)
-        // 실제로는 전체 목록을 가져와서 비교하는 것이 더 정확하지만,
-        // API가 목록 수만 반환하는 기능이 없으므로 전체 목록을 가져와서 비교
-        // 다만, 캐시된 데이터를 먼저 반환하고 백그라운드에서 업데이트하는 방식 사용
-        try {
-          if (!window.GAS_URL) {
-            console.warn('[Workout Cache] GAS_URL이 없어 캐시 사용');
-            return {
-              success: true,
-              items: cache.workouts,
-              fromCache: true
-            };
-          }
-          
-          const serverResult = await jsonpRequest(window.GAS_URL, { 
-            action: 'listWorkouts'
-          });
-          
-          if (serverResult && serverResult.success) {
-            const serverWorkouts = serverResult.items || serverResult.data || serverResult.workouts || (Array.isArray(serverResult) ? serverResult : []);
-            const serverCount = Array.isArray(serverWorkouts) ? serverWorkouts.length : 0;
-            
-            // 서버의 목록 수가 캐시와 같으면 캐시 반환
-            if (serverCount === cache.count) {
-              console.log('[Workout Cache] 목록 수 동일 - 캐시 사용:', serverCount, '개');
-              return {
-                success: true,
-                items: cache.workouts,
-                fromCache: true
-              };
-            } else {
-              // 목록 수가 다르면 서버 데이터 사용 및 캐시 업데이트
-              console.log('[Workout Cache] 목록 수 변경 감지 - 서버 데이터 사용:', {
-                cached: cache.count,
-                server: serverCount
-              });
-              
-              // 서버 데이터 캐시에 저장 (기존 세그먼트 병합)
-              if (Array.isArray(serverWorkouts) && serverWorkouts.length > 0) {
-                try {
-                  // 기존 캐시의 세그먼트를 새 워크아웃에 병합
-                  const workoutsWithSegments = serverWorkouts.map(workout => {
-                    const cachedWorkout = cache.workouts.find(w => String(w.id) === String(workout.id));
-                    if (cachedWorkout && cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0) {
-                      return {
-                        ...workout,
-                        segments: cachedWorkout.segments  // 기존 캐시된 세그먼트 유지
-                      };
-                    }
-                    return workout;
-                  });
-                  setWorkoutCache(workoutsWithSegments);
-                } catch (mergeError) {
-                  console.warn('[Workout Cache] 세그먼트 병합 실패, 기본 저장:', mergeError);
-                  setWorkoutCache(serverWorkouts);
-                }
-              }
-              
-              return {
-                success: true,
-                items: serverWorkouts,
-                fromCache: false
-              };
-            }
-          }
-        } catch (checkError) {
-          console.warn('[Workout Cache] 서버 확인 실패, 캐시 사용:', checkError);
-          // 서버 확인 실패 시 캐시 반환
-          return {
-            success: true,
-            items: cache.workouts,
-            fromCache: true
-          };
-        }
+        console.log('[Workout Cache] 캐시된 워크아웃:', cache.count, '개 - 즉시 반환, 서버 확인은 백그라운드');
+        reconcileWorkoutCacheInBackground(cache);
+        return {
+          success: true,
+          items: cache.workouts,
+          fromCache: true
+        };
       } else {
         // 캐시가 없거나 비어있으면 서버에서 가져오기
         console.log('[Workout Cache] 캐시 없음 - 서버에서 로드');
