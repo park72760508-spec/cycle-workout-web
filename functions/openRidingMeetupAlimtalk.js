@@ -1,9 +1,10 @@
 /**
  * 오픈 라이딩 모임 생성 시 — 초대된 연락처(라이딩 친구)에게 카카오 알림톡(알리고) 발송.
- * 카카오 채널: @stelvio_ai · 승인 템플릿 코드: UH_5528 · 템플릿명: [STELVIO 오프라인 라이딩 모임 오픈 안내]
+ * 카카오 채널: @stelvio_ai · 승인 템플릿 코드: UJ_6159 · 템플릿명: STELVIO 모임 안내
+ * (구 템플릿 UH_5528 [STELVIO 오프라인 라이딩 모임 안내] → UJ_6159로 교체, 2026-07-24)
  * 대체문자: 미사용(failover N)
  *
- * tpl_code 기본값 UH_5528 — 다른 값이 필요하면 ALIGO_MEETUP_OPEN_TPL_CODE 또는 appConfig/aligo.meetup_open_tpl_code
+ * tpl_code 기본값 UJ_6159 — 다른 값이 필요하면 ALIGO_MEETUP_OPEN_TPL_CODE 또는 appConfig/aligo.meetup_open_tpl_code
  * 그 외 ALIGO_SENDER_KEY, ALIGO_SENDER, ALIGO_API_KEY, ALIGO_USER_ID, ALIGO_TOKEN
  * 선택: OPEN_RIDING_MEETUP_ALIMTALK=0 으로 비활성화
  */
@@ -19,19 +20,19 @@ const {
 
 /**
  * 알리고 subject_1 — 알리고에 등록된 카카오 승인 템플릿 제목(대괄호 없음).
- * ※ 알리고 UH_5528 등록 제목은 "STELVIO 오프라인 라이딩 모임 안내" (오픈 없음).
+ * ※ 알리고 UJ_6159 등록 제목: "STELVIO 모임 안내".
  *    message_1 첫 줄(MEETUP_OPEN_HEADER_LINE)은 별도로 "[...오픈 안내]" 형식 유지.
  */
-const MEETUP_ALIM_SUBJECT_KO = "STELVIO 오프라인 라이딩 모임 안내";
+const MEETUP_ALIM_SUBJECT_KO = "STELVIO 모임 안내";
 /**
  * 승인 템플릿 message_1 첫 줄.
- * 알리고 등록 본문 첫 줄: "[STELVIO 오프라인 라이딩 모임 오픈 안내]"
+ * 알리고 등록 본문 첫 줄: "[STELVIO 모임 오픈 안내]"
  * subject_1 과 달리 본문에는 "오픈"이 포함되어 있음 — 둘을 일치시키면 안 됨.
  */
-const MEETUP_OPEN_HEADER_LINE = "[STELVIO 오프라인 라이딩 모임 오픈 안내]";
+const MEETUP_OPEN_HEADER_LINE = "[STELVIO 모임 오픈 안내]";
 
 /** 승인 템플릿 코드(운영 기본). env·Firestore로 덮어쓰기 가능 */
-const DEFAULT_MEETUP_OPEN_TPL_CODE = "UH_5528";
+const DEFAULT_MEETUP_OPEN_TPL_CODE = "UJ_6159";
 
 function normalizePhoneDigitsServer(input) {
   let d = String(input || "").replace(/\D/g, "");
@@ -134,7 +135,7 @@ function formatMeetupLevelForTemplate(levelRaw) {
   return hint ? `${level} (${hint})` : level;
 }
 
-function formatRidingDistanceKm(n) {
+function formatCourseDistanceKm(n) {
   // "40km" 처럼 단위가 붙은 문자열 → 숫자만 추출 후 파싱
   const raw = String(n ?? "").replace(/[^\d.]/g, "");
   const x = raw !== "" ? Number(raw) : Number(n);
@@ -150,31 +151,32 @@ function formatRidingDistanceKm(n) {
  */
 function buildMeetupOpenAlimtalkMessage(vars) {
   const userName = safeAlimtalkDisplayNameUnified(vars.userName);
-  const meetupName = String(vars.meetupName || "").trim() || "라이딩 모임";
+  const meetupName = String(vars.meetupName || "").trim() || "모임";
   const meetupDatetime = String(vars.meetupDatetime || "").trim();
   const meetingPlace = String(vars.meetingPlace || "").trim() || "-";
   const meetupLevel = String(vars.meetupLevel || "").trim() || "-";
-  const ridingDistance = String(vars.ridingDistance || "").trim() || "0km";
+  const courseDistance = String(vars.courseDistance || "").trim() || "0km";
 
   // ─────────────────────────────────────────────────────────────────
-  // 아래 리터럴은 카카오 승인 템플릿(UH_5528) 본문과 1:1 대응.
+  // 아래 리터럴은 카카오 승인 템플릿(UJ_6159) 본문과 1:1 대응.
   // 들여쓰기·공백·줄바꿈을 절대 변경하지 말 것.
   // ─────────────────────────────────────────────────────────────────
-  const raw = `[STELVIO 오프라인 라이딩 모임 오픈 안내]
+  const raw = `[STELVIO 모임 오픈 안내]
 
 안녕하세요 ${userName}님,
-요청하신 STELVIO 오프라인 라이딩 모임 일정이 오픈되어 안내해 드립니다.
+알림을 신청하신 STELVIO 오프라인 모임이 확정되어 안내해 드립니다.
 
-▶ 라이딩 모임 상세 정보
+▶ 모임 상세 정보
 모임명 : ${meetupName}
 일시 : ${meetupDatetime}
 집결지 : ${meetingPlace}
 레벨 : ${meetupLevel}
-라이딩 거리 : ${ridingDistance}
+코스 거리 : ${courseDistance}
 
-${userName}님께서 요청하신 일정에 맞춰 안전하게 라이딩을 준비해 주시기 바랍니다. 상세한 참석 방법은 STELVIO 앱/웹에서 확인 가능합니다.
+모임 일정에 맞춰 안전하게 준비해 주시기 바랍니다.
+상세한 참석 방법 및 코스 정보는 STELVIO 앱/웹에서 확인 가능합니다.
 
-※ 본 메시지는 'STELVIO 오프라인 라이딩 모임 오픈 알림'을 사전 신청하신 회원님께만 발송되는 정보성 안내 메시지입니다.`;
+※ 본 메시지는 'STELVIO 오프라인 모임 오픈 알림'을 사전 신청하신 회원님께 발송되는 정보성 안내입니다.`;
 
   // \r\n → \n 정규화 (Windows 환경 소스 저장 시 CRLF 혼입 방지)
   // 최종 줄바꿈 형식(LF/CRLF)은 sendAlimtalkUnified 에서 templateKind별로 결정
@@ -286,7 +288,7 @@ async function sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData) {
   const meetupDatetime = formatMeetupDatetimeForTemplate(rideData.date, rideData.departureTime);
   const meetingPlace = String(rideData.departureLocation || "").trim();
   const meetupLevel = formatMeetupLevelForTemplate(rideData.level);
-  const ridingDistance = formatRidingDistanceKm(rideData.distance);
+  const courseDistance = formatCourseDistanceKm(rideData.distance);
   const inviteDisplayByPhone = rideData.inviteDisplayByPhone;
   const inviteFriendUidByPhone = rideData.inviteFriendUidByPhone;
 
@@ -304,7 +306,7 @@ async function sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData) {
       meetupDatetime,
       meetingPlace,
       meetupLevel,
-      ridingDistance,
+      courseDistance,
     });
     const attemptTail = recvDigits.length >= 4 ? recvDigits.slice(-4) : "?";
     try {
