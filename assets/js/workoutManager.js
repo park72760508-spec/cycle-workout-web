@@ -4494,20 +4494,33 @@ async function selectWorkout(workoutId) {
   
   try {
     console.log('Selecting workout with ID:', workoutId);
-    const result = await apiGetWorkout(workoutId);
-    
-    if (!result || !result.success) {
-      console.error('Failed to get workout:', result?.error);
-      window.showToast('워크아웃 정보를 불러올 수 없습니다.');
-      return;
+
+    // 목록 로딩(loadWorkouts) 때 이미 세그먼트까지 포함해 받아온 워크아웃이면
+    // 재조회 없이 그대로 사용 — apiGetWorkoutSegments가 캐시를 먼저 확인하는 것과 동일한 취지.
+    var workout = null;
+    var cachedList = Array.isArray(window.workouts) ? window.workouts : null;
+    var cachedMatch = cachedList
+      ? cachedList.find(function (w) { return w && String(w.id) === String(workoutId); })
+      : null;
+    if (cachedMatch && Array.isArray(cachedMatch.segments) && cachedMatch.segments.length > 0) {
+      console.log('[Workout Cache] 이미 로드된 워크아웃 사용(재다운로드 없음):', workoutId);
+      workout = cachedMatch;
+    } else {
+      const result = await apiGetWorkout(workoutId);
+
+      if (!result || !result.success) {
+        console.error('Failed to get workout:', result?.error);
+        window.showToast('워크아웃 정보를 불러올 수 없습니다.');
+        return;
+      }
+
+      workout = result.item;
+      if (!workout) {
+        window.showToast('워크아웃 데이터가 비어있습니다.');
+        return;
+      }
     }
 
-    const workout = result.item;
-    if (!workout) {
-      window.showToast('워크아웃 데이터가 비어있습니다.');
-      return;
-    }
-    
     console.log('Retrieved workout:', workout);
 
     // AI 추천 워크아웃 선택과 동일한 로직 사용 (selectWorkoutForTrainingReady)
