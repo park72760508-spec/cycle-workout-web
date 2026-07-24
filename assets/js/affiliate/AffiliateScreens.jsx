@@ -34,6 +34,25 @@ function affiliateIsStravaConnected() {
   return !!(r || a);
 }
 
+/**
+ * RUN에서 제휴 화면에 진입했을 때는 STRAVA 연동 여부 확인을 건너뛴다(항상 이용 가능 취급).
+ * affiliateIsStravaConnected() 자체와 호출부는 그대로 두고, 이 스위치만 끄면(false) 즉시
+ * RUN에도 CYCLE과 동일하게 STRAVA 연동 확인이 다시 적용된다 — 기능 제거가 아닌 우회.
+ */
+var AFFILIATE_STRAVA_CHECK_DISABLED_FOR_RUN = true;
+function affiliateShouldSkipStravaCheck() {
+  if (!AFFILIATE_STRAVA_CHECK_DISABLED_FOR_RUN) return false;
+  try {
+    return !!(
+      window.sportCategoryRoutes &&
+      typeof window.sportCategoryRoutes.getActiveSport === 'function' &&
+      window.sportCategoryRoutes.getActiveSport() === 'run'
+    );
+  } catch (e) {
+    return false;
+  }
+}
+
 function affiliateCurrentUser() {
   try {
     if (
@@ -1210,7 +1229,7 @@ function AffiliateList(props) {
                   ].join(' ')}
                   onClick={function(){
                     if (!isClickable && !isAdmin) return;
-                    if (!affiliateIsStravaConnected() && !isAdmin) {
+                    if (!affiliateShouldSkipStravaCheck() && !affiliateIsStravaConnected() && !isAdmin) {
                       if (typeof window.showAffiliateConnectAlert === 'function') {
                         window.showAffiliateConnectAlert();
                       }
