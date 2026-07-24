@@ -8094,7 +8094,22 @@
             renderWorkoutCategories(window.workouts);
             return;
           }
-          renderWorkoutCategories(window.workouts || []);
+          /* 앱을 새로 구동해 메모리 캐시(window.workouts)가 비어있는 경우에도, localStorage에
+             남아있는 이전 워크아웃 캐시가 있으면 빈 화면 대신 바로 미리보기로 표시한다.
+             정확한(등급 필터 적용된) 목록은 아래 loadWorkouts가 곧이어 채워 넣는다. */
+          var previewWorkouts = window.workouts || [];
+          if (
+            (!previewWorkouts || previewWorkouts.length === 0) &&
+            typeof getWorkoutCache === 'function'
+          ) {
+            try {
+              var wCache = getWorkoutCache();
+              if (wCache && Array.isArray(wCache.workouts) && wCache.workouts.length > 0) {
+                previewWorkouts = wCache.workouts;
+              }
+            } catch (eCachePreview) {}
+          }
+          renderWorkoutCategories(previewWorkouts);
           if (typeof loadWorkouts === 'function') {
             setTimeout(function() { loadWorkouts('all'); }, 250);
           }
@@ -12002,8 +12017,8 @@
     var stelvioRankingMedalsPreloaded = false;
     var STELVIO_RANKING_TAB_WARM_WAIT_MS = 400;
     var STELVIO_RANKING_PREFETCH_CONCURRENCY = 5;
-    /** WebView aggressive boot warming — 사용자가 허용한 초기 부하 범위에서 4탭까지 빠르게 적재 */
-    var STELVIO_RANKING_WEBVIEW_WARM_CONCURRENCY = 4;
+    /** WebView 백그라운드 워밍 동시성 — 발열 저감을 위해 2탭까지만 동시 적재(과거 4에서 하향) */
+    var STELVIO_RANKING_WEBVIEW_WARM_CONCURRENCY = 2;
     /** Stelvio WebView: 탭 클릭마다만 fetch 시 발열·로딩 ↑ → 인증·일일 메타 sync 시에는 전 탭 백그라운드 적재 */
     var STELVIO_RANKING_THERMAL_WEBVIEW =
       typeof window !== 'undefined' &&
@@ -12094,16 +12109,22 @@
         prefetchConcurrency: STELVIO_RANKING_WEBVIEW_WARM_CONCURRENCY,
       }).catch(function () {});
     }
-    /** WebView 빠른 탭 모드일 때만 PC와 동일 ms, 그 외 기존 분기 유지 */
+    /**
+     * WebView는 legacyWebViewMs(더 느긋한 값), PC는 pcMs.
+     * (예전엔 `stelvioWebViewRankingFastTabEnabled() ? pcMs : ...`가 WebView에서도 항상 true라서
+     *  legacyWebViewMs 분기가 죽은 코드였고, 로그인 직후 전 탭 백그라운드 워밍이 WebView에서도
+     *  PC와 동일한 속도로(=더 자주, 더 촘촘히) 실행되어 발열의 큰 원인이었다.)
+     */
     function stelvioRankingPcOrLegacyWebViewMs(pcMs, legacyWebViewMs) {
-      return stelvioWebViewRankingFastTabEnabled()
-        ? pcMs
-        : STELVIO_RANKING_THERMAL_WEBVIEW
-          ? legacyWebViewMs
-          : pcMs;
+      return STELVIO_RANKING_THERMAL_WEBVIEW ? legacyWebViewMs : pcMs;
     }
+    /**
+     * WebView에서 가벼운(light) 탭 전환마다 백그라운드 재검증 fetch를 매번 쏘지 않게 한다
+     * (연속 탭 전환 시 매 탭마다 네트워크 재요청이 겹쳐 발열의 원인이 됨).
+     * (예전엔 `if (stelvioWebViewRankingFastTabEnabled()) return true;`가 WebView에서 항상 true라서
+     *  아래 tabSwitchLight 조건이 죽은 코드였다.)
+     */
     function stelvioRankingTabSwitchAllowsBgRevalidate(tabSwitchLight) {
-      if (stelvioWebViewRankingFastTabEnabled()) return true;
       return !STELVIO_RANKING_THERMAL_WEBVIEW || !tabSwitchLight;
     }
     var STELVIO_RANKING_BOARD_TAB_DURATIONS = [
@@ -12126,7 +12147,8 @@
     var STELVIO_RANKING_RENDER_INSTANT_ROWS = 80;
     var STELVIO_RANKING_RENDER_CHUNK_ROWS = 40;
     var STELVIO_RANKING_PRERENDER_MAX_ROWS = 100;
-    var STELVIO_RANKING_AGGRESSIVE_BOOT_CONCURRENCY = 4;
+    /** 로그인 직후 전 탭 백그라운드 워밍 동시성 — 발열 저감을 위해 2탭까지만(과거 4에서 하향) */
+    var STELVIO_RANKING_AGGRESSIVE_BOOT_CONCURRENCY = 2;
     /** 유휴 시간 IndexedDB → 메모리 Pre-warming (네트워크 fetch와 분리) */
     var stelvioRankingIdleMemPrewarmState = { gen: 0, inFlight: false };
     /** 탭 전환 즉시 렌더(IndexedDB·무거운 apply 생략) 플래그 */
@@ -18602,7 +18624,10 @@
 
     function stelvioRankingImgLoadAttrs(fastPaint) {
       if (fastPaint) {
-        return ' loading="eager" decoding="sync" fetchpriority="high"';
+        /* decoding="sync"는 탭 전환마다 최대 80장(STELVIO_RANKING_RENDER_INSTANT_ROWS)의 아바타·메달
+           이미지를 메인 스레드에서 강제로 동기 디코딩시켜 발열의 큰 원인이었다 — eager 로딩(먼저 요청,
+           팝인 방지)은 유지하고 디코딩만 async로 바꿔 메인 스레드 블로킹만 제거한다. */
+        return ' loading="eager" decoding="async" fetchpriority="high"';
       }
       return ' loading="lazy" decoding="async" fetchpriority="low"';
     }
@@ -18852,15 +18877,15 @@
       function runPreRenderJob() {
         run().catch(function () {});
       }
+      /* 발열 저감: WebView는 이 프리렌더(화면 밖 탭 HTML 미리 빌드)를 급하게 강제 실행하지 않도록
+         idle 데드라인을 넉넉히 준다 — 실제 idle 시점에 실행되면 더 빨리 끝날 수도 있고, 못 찾으면
+         최대 이 시간만큼만 기다렸다가 실행(스킵 아님). */
       if (typeof requestIdleCallback !== 'undefined') {
         requestIdleCallback(runPreRenderJob, {
-          timeout: stelvioWebViewRankingFastTabEnabled() ? 2500 : STELVIO_RANKING_THERMAL_WEBVIEW ? 5000 : 2500,
+          timeout: STELVIO_RANKING_THERMAL_WEBVIEW ? 5000 : 2500,
         });
       } else {
-        setTimeout(
-          runPreRenderJob,
-          stelvioWebViewRankingFastTabEnabled() ? 140 : STELVIO_RANKING_THERMAL_WEBVIEW ? 420 : 140
-        );
+        setTimeout(runPreRenderJob, STELVIO_RANKING_THERMAL_WEBVIEW ? 420 : 140);
       }
     }
 
@@ -18880,14 +18905,14 @@
           }
         }
       };
+      /* 발열 저감: WebView는 탭을 연 직후 곧바로 다른 11개 탭 전체를 미리 렌더하지 않고
+         충분히 늦게(1.8s) 시작해 초기 진입 직후의 부하가 겹치지 않게 한다. */
       var delayMs =
         opts.delayMs != null
           ? Math.max(0, Number(opts.delayMs) || 0)
-          : stelvioWebViewRankingFastTabEnabled()
-            ? 260
-            : STELVIO_RANKING_THERMAL_WEBVIEW
-              ? 1800
-              : 700;
+          : STELVIO_RANKING_THERMAL_WEBVIEW
+            ? 1800
+            : 700;
       setTimeout(function () {
         if (typeof requestIdleCallback !== 'undefined') requestIdleCallback(run, { timeout: 5000 });
         else run();
@@ -22486,14 +22511,13 @@
         }
       }
 
-      /** TSS·PC: 즉시 등락 보정 — WebView(구 발열 모드)만 다른 탭 2.5s 지연 */
+      /**
+       * TSS·PC: 즉시 등락 보정 — WebView(발열 모드)만 다른 탭 2.5s 지연.
+       * (예전엔 `!STELVIO_RANKING_THERMAL_WEBVIEW || stelvioWebViewRankingFastTabEnabled()`가
+       *  항상 true인 항진명제라서 WebView에서도 지연 없이 매 탭 전환마다 즉시 계산되고 있었다 — 제거.)
+       */
       function scheduleRankMvDeferred() {
-        if (
-          apiDuration === 'tss' ||
-          !tabSwitchLight ||
-          !STELVIO_RANKING_THERMAL_WEBVIEW ||
-          stelvioWebViewRankingFastTabEnabled()
-        ) {
+        if (apiDuration === 'tss' || !tabSwitchLight || !STELVIO_RANKING_THERMAL_WEBVIEW) {
           scheduleRankMvIfNeeded();
           return;
         }
