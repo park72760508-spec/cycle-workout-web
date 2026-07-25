@@ -11380,7 +11380,12 @@
     function stelvioBuildRankingCategoryDisplayRows(byCategory, cat) {
       if (!byCategory || !cat) return [];
       var arr = stelvioFilterRowsByListInterest(byCategory[cat] || []);
-      if (typeof stelvioFilterRankingRowsForPublicViewer === 'function') {
+      if (stelvioRankingState.listFilter === 'interest') {
+        /* 관심(별표) 필터는 단순 노출 필터 — 탈퇴 사용자만 제외하고 원래 순위(rank)는 재부여하지 않음 */
+        arr = (arr || []).filter(function (r) {
+          return !(typeof stelvioRankingIsWithdrawnRow === 'function' && stelvioRankingIsWithdrawnRow(r));
+        });
+      } else if (typeof stelvioFilterRankingRowsForPublicViewer === 'function') {
         arr = stelvioFilterRankingRowsForPublicViewer(arr);
       }
       arr = stelvioInterestMergeGroupMembers(arr, byCategory, cat);
