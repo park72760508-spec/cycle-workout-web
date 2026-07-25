@@ -147,10 +147,10 @@
     }
   }
 
-  /** CYCLE 베이스캠프 → 대시보드(분석) */
+  /** CYCLE 베이스캠프 → 나의 기록(라이딩 기록) */
   function openCycleDashboardFromBasecamp() {
     setActiveSport('cycle');
-    if (typeof showScreen === 'function') showScreen('performanceDashboardScreen');
+    if (typeof showScreen === 'function') showScreen('trainingJournalScreen');
   }
 
   /** 모임 화면 홈 버튼 — 진입 카테고리 기준 베이스캠프 */
