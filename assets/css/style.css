@@ -21635,9 +21635,10 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
-/* 스트라바(Strava) 신규 가입 가이드 모달 */
+/* 스트라바(Strava) 신규 가입 가이드 모달 — 환경설정 모달(.modal-overlay 10100200) 위에 표시되도록
+   그보다 높은 값이어야 함. 10001은 그보다 훨씬 낮아 환경설정 모달 뒤에 가려지는 원인이었음. */
 #stravaSignupGuideModal {
-  z-index: 10001; /* 환경설정 모달 위에 표시 */
+  z-index: 10100300;
 }
 .strava-signup-guide-modal {
   max-height: 90vh !important;
