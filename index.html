@@ -27865,7 +27865,10 @@
   <script src="assets/js/openRiding/openRidingGpx.js"></script>
   <script src="assets/js/openRiding/openRidingMoimCategory.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="assets/js/openRiding/OpenRidingScreens.jsx?v=open-riding-detail-nav-20260519" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
+       페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
+       원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx -->
+  <script src="assets/js/openRiding/OpenRidingScreens.compiled.js?v=open-riding-detail-nav-20260519"></script>
   <script>
     (function() {
       var openRidingReactRoot = null;
