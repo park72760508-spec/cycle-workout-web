@@ -17737,12 +17737,9 @@
     function stelvioScheduleRankingBoardProfileHydrate(data, opts) {
       opts = opts || {};
       stelvioEnrichMissingProfileImages(data);
-      if (stelvioRankingPayloadFromSupabaseRead(data)) {
-        return;
-      }
-      if (stelvioGetRankingReadSourceSync() === 'supabase') {
-        return;
-      }
+      /* Supabase 응답(또는 그 응답이 저장된 stale 캐시)도 프로필 사진 join이 비어있는 행이 있을 수 있으므로
+         Firestore users/{uid} 라이브 보강은 read source와 무관하게 항상 시도한다.
+         (누락 행이 없으면 stelvioHydrateRankingBoardProfilesFromUsers 내부에서 즉시 no-op) */
       stelvioHydrateRankingBoardProfilesFromUsers(data, opts).catch(function () {});
     }
 
