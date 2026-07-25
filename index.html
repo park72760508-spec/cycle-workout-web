@@ -17264,8 +17264,13 @@
         stelvioSyncDurationTabActiveUi();
         return;
       }
+      var prevRankDur = stelvioRankingState.duration;
       stelvioRankingFetchGen++;
       stelvioRankingState.duration = nextDur;
+      /* 클럽 탭 이탈 시 소모임 멤버 실시간 구독 해제 — 방치 시 다른 탭 렌더와 경합해 목록 갱신이 꼬일 수 있음 */
+      if (prevRankDur === 'group_dist' && nextDur !== 'group_dist' && typeof stelvioStopGroupTabMembersOnly === 'function') {
+        stelvioStopGroupTabMembersOnly();
+      }
       stelvioSyncDurationTabActiveUi();
       var scrollBtn = opts.scrollTabBtn;
       if (scrollBtn && typeof stelvioScrollDurationTabIntoView === 'function') {
@@ -17316,12 +17321,16 @@
             stelvioHideRankingBoardLoadingUi();
           }
         }
-        /* 클럽 탭: 소모임 목록 플레이스홀더(전역 payload 비움 상태) */
+        /* 클럽 탭: 소모임 목록 플레이스홀더(전역 payload 비움 상태) — 렌더 실패 시에도 로딩 스피너가 영구히 남지 않도록 보호 */
         if (
           nextDur === 'group_dist' &&
           typeof renderStelvioActiveCategory === 'function'
         ) {
-          renderStelvioActiveCategory();
+          try {
+            renderStelvioActiveCategory();
+          } catch (eGroupTabRender) {
+            console.warn('[StelvioRanking] 클럽 탭 렌더 실패:', eGroupTabRender);
+          }
           if (stelvioRankingTabSwitchListReady()) {
             stelvioHideRankingBoardLoadingUi();
           }
@@ -18202,6 +18211,7 @@
       for (var vi = 0; vi < views.length; vi++) {
         var v = views[vi];
         if (!v) continue;
+        if (keepUiDuration && v.getAttribute('data-ranking-view-duration') === keepUiDuration) continue;
         v.innerHTML = '';
         v.removeAttribute('data-prerender-ready');
         v.removeAttribute('data-prerender-swr-key');
@@ -23018,10 +23028,14 @@
         stelvioStopGroupTabMembersOnly();
         stelvioStartGroupTabMembersSubscription(g);
       }
-      if (be) stelvioRenderGroupTabRankingList(be);
-      refreshStelvioDistributionChartMounted();
-      /* 소모임 확장/접힘 후 Hero 카드 갱신 */
-      if (stelvioIsGroupDistanceRanking()) renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
+      try {
+        if (be) stelvioRenderGroupTabRankingList(be);
+        refreshStelvioDistributionChartMounted();
+        /* 소모임 확장/접힘 후 Hero 카드 갱신 */
+        if (stelvioIsGroupDistanceRanking()) renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
+      } catch (eGroupPickRender) {
+        console.warn('[StelvioRanking] 클럽 멤버 목록 렌더 실패:', eGroupPickRender);
+      }
       return false;
     };
     function stelvioStartGroupTabMembersSubscription(groupId) {
@@ -40967,6 +40981,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <!-- 랭킹 순위표 프로필 확대 (딤 바깥 탭 시 닫힘) -->
     <div id="stelvioRankAvatarZoomBackdrop" class="stelvio-rank-avatar-zoom-backdrop hidden" aria-hidden="true">
       <div class="stelvio-rank-avatar-zoom-card" role="dialog" aria-modal="true" aria-label="\ub7ad\ud0b9 \ud504\ub85c\ud544">
+        <button type="button" class="stelvio-rank-avatar-zoom-close" aria-label="\ub2eb\uae30" onclick="if(typeof stelvioCloseRankAvatarZoom==='function')stelvioCloseRankAvatarZoom();">&#10005;</button>
         <div class="stelvio-rank-avatar-zoom-photo-wrap">
           <div class="stelvio-rank-avatar-zoom-inner">
             <img id="stelvioRankAvatarZoomImg" class="stelvio-rank-avatar-zoom-img" alt="" width="280" height="280" decoding="async" />
