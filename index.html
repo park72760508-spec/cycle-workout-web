@@ -14950,17 +14950,12 @@
         catArr2.forEach(function (item) { if (item && item.userId) catByUid[String(item.userId)] = item; });
       }
 
-      /* 누락된 그룹멤버 추가
-       * 우선순위: 특정 카테고리 데이터 → Supremo 데이터 → 프로필 맵(랭킹 데이터 없는 경우 이름·이미지만) */
+      /* 누락된 그룹멤버 추가 — 특정 카테고리 데이터 → Supremo 데이터 순으로만 보충.
+       * 값이 0(랭킹 데이터 없음)인 대상은 전체 목록과 동일하게 미표시 — 프로필만으로 0값 placeholder 행을 만들지 않는다. */
       var extra = [];
       stelvioRankingGroupContactSet.forEach(function (uid) {
         if (included[uid]) return;
         var data = catByUid[uid] || supByUid[uid];
-        if (!data && stelvioRankingGroupContactDataMap && stelvioRankingGroupContactDataMap[uid]) {
-          /* 랭킹 데이터 없는 멤버: 프로필만 있는 최소 행으로 표시 */
-          var prof = stelvioRankingGroupContactDataMap[uid];
-          data = { userId: uid, name: prof.name || '(이름 없음)', profileImageUrl: prof.profileImageUrl || null, wkg: 0, totalTss: 0, totalKm: 0, gcScore: 0 };
-        }
         if (data) extra.push(data);
       });
       if (!extra.length) return arr;
