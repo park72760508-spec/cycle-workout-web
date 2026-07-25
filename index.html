@@ -13918,6 +13918,9 @@
     var stelvioGroupTabUserProfileCache = {};
     var stelvioGroupTabUserProfileMiss = {};
     var stelvioGroupTabUserProfileFetchGen = 0;
+    /** GC 등 일반 랭킹 탭 보강 전용 miss 캐시 — stelvioTeardownGroupTabState(클럽 탭 이탈 시)에도 리셋되지 않아
+        사진 미업로드 사용자에 대한 재조회가 렌더마다 반복되는 것을 방지 (보드 모달 세션 동안 유지) */
+    var stelvioRankingBoardProfileMissPersist = {};
     /** `users/{uid}`에서 보강한 성별(M|F) — 집계 캐시 행 gender 누락 시 클라이언트 필터용 */
     var stelvioRankingUserGenderCache = {};
     /** 그룹 탭 방장 공지 — 편집 중 초안·저장 중 플래그 */
@@ -17632,7 +17635,7 @@
       var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
       function push(uid) {
         var u = String(uid || '').trim();
-        if (!u || seen[u] || stelvioGroupTabUserProfileMiss[u]) return;
+        if (!u || seen[u] || stelvioGroupTabUserProfileMiss[u] || stelvioRankingBoardProfileMissPersist[u]) return;
         if (out.length >= STELVIO_RANKING_BOARD_PROFILE_HYDRATE_MAX) return;
         seen[u] = true;
         out.push(u);
@@ -17689,9 +17692,11 @@
               var url = stelvioExtractProfileImageUrlFromUserDoc(prof);
               if (!url) {
                 stelvioGroupTabUserProfileMiss[uid] = true;
+                stelvioRankingBoardProfileMissPersist[uid] = true;
                 return;
               }
               delete stelvioGroupTabUserProfileMiss[uid];
+              delete stelvioRankingBoardProfileMissPersist[uid];
               stelvioGroupTabUserProfileCache[uid] = url;
               stelvioApplyProfileUrlToRankingPayload(data, uid, url);
               if (stelvioRankingGroupContactDataMap) {
@@ -17702,6 +17707,7 @@
             })
             .catch(function () {
               stelvioGroupTabUserProfileMiss[uid] = true;
+              stelvioRankingBoardProfileMissPersist[uid] = true;
             });
         })
       ).then(function () {
