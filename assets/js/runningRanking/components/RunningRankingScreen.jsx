@@ -481,14 +481,9 @@
       if (isListRankingTab && listFilter === 'interest') {
         var soc = socialApi();
         if (soc && typeof soc.filterRowsByListInterest === 'function') {
+          /* 관심(별표) 필터는 단순 노출 필터 — 원래 순위(rank/boardRank)는 그대로 유지하고 재부여하지 않음 */
           list = soc.filterRowsByListInterest(list, listFilter, currentUserId);
         }
-      }
-      if (isListRankingTab && listFilter === 'interest') {
-        list = list.map(function (item, idx) {
-          var r = idx + 1;
-          return Object.assign({}, item, { rank: r, boardRank: r });
-        });
       }
       return list;
     }, [baseRankedList, isListRankingTab, listFilter, currentUserId, activeTab, paceDistance, gender, activeCategory, rankMovementByKey, rankMovementSource, leaderboardSource, leaderboardAsOfSeoul, rankMovementAsOfSeoul, socialVer]);
