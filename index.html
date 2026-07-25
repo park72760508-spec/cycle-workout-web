@@ -11548,7 +11548,7 @@
           var isPrivate = stelvioRankingIsPrivateRow(item);
           var isSelf = !!(currentUserId && String(item.userId || '') === String(currentUserId));
           var uid2 = String(item.userId || '');
-          var canSeeFull = isSelf || isAdmin || stelvioRankingFriendUserSet.has(uid2) || stelvioRankingGroupContactSet.has(uid2);
+          var canSeeFull = isSelf || isAdmin || stelvioRankingFriendUserSet.has(uid2);
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var displayText, badgeHtml = '', tssStr;
           var profUrl = stelvioRankingProfileImageUrlForDisplay(item);
@@ -11569,7 +11569,7 @@
           if (mr.rank >= 12) html += '<div class="weekly-rank-item weekly-rank-ellipsis">....</div>';
           var mrIsPrivate = stelvioRankingIsPrivateRow(mr);
           var mrUid = String(mr.userId || '');
-          var mrCanSeeFull = (currentUserId && String(mr.userId || '') === String(currentUserId)) || isAdmin || stelvioRankingFriendUserSet.has(mrUid) || stelvioRankingGroupContactSet.has(mrUid);
+          var mrCanSeeFull = (currentUserId && String(mr.userId || '') === String(currentUserId)) || isAdmin || stelvioRankingFriendUserSet.has(mrUid);
           var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var mrDisplayText, mrBadgeHtml = '', mrTssStr;
           var mrProfUrl = stelvioRankingProfileImageUrlForDisplay(mr);
@@ -15060,6 +15060,7 @@
       );
     }
 
+    /* 비공개 사용자 실명 노출은 "친구"인 경우에만 허용 — 같은 클럽/크루 소속만으로는 공개하지 않음 */
     function stelvioRankingCanViewerSeeUserFull(uid) {
       var id = uid != null ? String(uid).trim() : '';
       if (!id) return false;
@@ -15067,7 +15068,6 @@
       if (myId && id === myId) return true;
       if (stelvioRankingViewerCanSeePrivateNames()) return true;
       if (stelvioRankingFriendUserSet.has(id)) return true;
-      if (stelvioRankingGroupContactSet.has(id)) return true;
       return false;
     }
     window.stelvioRankingCanViewerSeeUserFull = stelvioRankingCanViewerSeeUserFull;
@@ -23973,7 +23973,8 @@
           var rawNm = (it.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var prv = stelvioRankingIsPrivateRow(it);
           var isCur = !!(uidV && String(it.userId) === String(uidV));
-          var canFull = isCur || isAdminG;
+          /* 같은 클럽 소속이라는 이유만으로는 비공개 실명을 공개하지 않음 — 친구인 경우만 공개 */
+          var canFull = isCur || isAdminG || stelvioRankingFriendUserSet.has(String(it.userId || ''));
           var nm = rawNm.length > maxNm ? rawNm.substring(0, maxNm - 2) + '..' : rawNm;
           var prof = stelvioRankingProfileImageUrlForDisplay(it);
           var valStr = stelvioGroupTabFormatMemberValue(it, canFull);
@@ -24915,8 +24916,7 @@
           var isPrivate = stelvioRankingIsPrivateRow(item);
           var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
           var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
-          var isGroupContact = stelvioRankingGroupContactSet.has(String(item.userId || ''));
-          var canSeeFull = isCurrent || isAdmin || isFriend || isGroupContact;
+          var canSeeFull = isCurrent || isAdmin || isFriend;
           var name;
           var valStr = stelvioFormatRankCellForViewer(item, canSeeFull);
           var profUrl = stelvioRankingProfileImageUrlForDisplay(item);
@@ -25284,8 +25284,7 @@
         var isPrivate = stelvioRankingIsPrivateRow(item);
         var isCurrent = !!(currentUserId && String(item.userId || '') === String(currentUserId));
         var isFriend = stelvioRankingFriendUserSet.has(String(item.userId || ''));
-        var isGroupContactCat = stelvioRankingGroupContactSet.has(String(item.userId || ''));
-        var canSeeFull = isCurrent || isAdmin || isFriend || isGroupContactCat;
+        var canSeeFull = isCurrent || isAdmin || isFriend;
         var name;
         var valStr = stelvioFormatRankCellForViewer(item, canSeeFull);
         var profUrlCat = stelvioRankingProfileImageUrlForDisplay(item);
@@ -41145,8 +41144,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var uid = String(item.userId || '');
         var isCurrent      = !!(ctx.currentUserId && uid === String(ctx.currentUserId));
         var isFriend       = !!(ctx.friendSet && typeof ctx.friendSet.has === 'function' && ctx.friendSet.has(uid));
-        var isGroupContact = !!(ctx.groupContactSet && typeof ctx.groupContactSet.has === 'function' && ctx.groupContactSet.has(uid));
-        var canSeeFull = isCurrent || ctx.isAdmin || isFriend || isGroupContact;
+        var canSeeFull = isCurrent || ctx.isAdmin || isFriend;
         var isPrivate  = typeof ctx.isPrivate === 'function' ? ctx.isPrivate(item) : false;
         var name;
         if (isPrivate && !canSeeFull) {
@@ -41229,7 +41227,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (ctx && Array.isArray(ctx.arr) && ctx.arr.length > 0) {
 
               /* 숨겨진 매치 수집 (MAX_GHOST 개 제한)
-               * 비공개 사용자는 친구·그룹멤버·본인·관리자가 아닌 경우 제외 */
+               * 비공개 사용자는 친구·본인·관리자가 아닌 경우 제외 (같은 클럽/크루 소속만으로는 공개하지 않음) */
               var hiddenMatches = [];
               for (var j = 0; j < ctx.arr.length && hiddenMatches.length < MAX_GHOST; j++) {
                 var item    = ctx.arr[j];
@@ -41241,8 +41239,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 if (itmPrivate) {
                   var itmIsCurrent      = !!(ctx.currentUserId && uid === String(ctx.currentUserId));
                   var itmIsFriend       = !!(ctx.friendSet && typeof ctx.friendSet.has === 'function' && ctx.friendSet.has(uid));
-                  var itmIsGroupContact = !!(ctx.groupContactSet && typeof ctx.groupContactSet.has === 'function' && ctx.groupContactSet.has(uid));
-                  if (!itmIsCurrent && !ctx.isAdmin && !itmIsFriend && !itmIsGroupContact) continue;
+                  if (!itmIsCurrent && !ctx.isAdmin && !itmIsFriend) continue;
                 }
 
                 var itmName = (item.name || '').toLowerCase();
