@@ -10665,7 +10665,7 @@ exports.getRunningLeaderboard = onRequest(
  * Phase 6 — 훈련 로그 Read DB (Firebase logs vs Supabase rides) 공개 조회.
  */
 exports.getLogsReadRoutingPublic = onRequest(
-  { cors: true, timeoutSeconds: 15 },
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 15 }),
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -10693,7 +10693,7 @@ exports.getLogsReadRoutingPublic = onRequest(
  * 전 사용자 — 라이딩 모임 Read DB (Firebase vs Supabase) 공개 조회.
  */
 exports.getGroupsReadRoutingPublic = onRequest(
-  { cors: true, timeoutSeconds: 15 },
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 15 }),
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
