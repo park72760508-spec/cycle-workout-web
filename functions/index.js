@@ -2068,6 +2068,18 @@ async function getStelvioLogDates(db, userId) {
   const cutoffDate = new Date();
   cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
   const cutoffStr = cutoffDate.toISOString().split("T")[0];
+
+  // Phase 4 — shadow 중단(기본 ON) 시 users/logs 1년 range 스캔(최다 비용 쿼리) 대신 Supabase rides 조회
+  if (supabaseDualWriteServer.isPhase4FirestoreLogShadowStopped()) {
+    try {
+      const sbDates = await supabaseDualWriteServer.fetchStelvioLogDatesForUser(userId, cutoffStr);
+      sbDates.forEach((d) => dates.add(d));
+      return dates;
+    } catch (sbErr) {
+      console.warn("[getStelvioLogDates] supabase 조회 실패, Firestore로 폴백:", userId, sbErr.message);
+    }
+  }
+
   const snapshot = await db.collection("users").doc(userId).collection("logs")
     .where("date", ">=", cutoffStr)
     .get();

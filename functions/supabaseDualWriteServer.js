@@ -585,6 +585,34 @@ async function fetchStravaActivityIdsForUser(firebaseUid, sinceDateStr) {
   return ids;
 }
 
+/**
+ * Stelvio(비-Strava) 로그가 존재하는 날짜 집합 — getStelvioLogDates의 Supabase 대체.
+ * users/{uid}/logs 1년 range 스캔(WHERE date >= ?, 비용 최다 쿼리 중 하나) 대신 rides에서 조회.
+ */
+async function fetchStelvioLogDatesForUser(firebaseUid, sinceDateStr) {
+  const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
+  if (!userId) return new Set();
+
+  const supabase = getSupabaseAdminClient();
+  let query = supabase
+    .from("rides")
+    .select("ride_date")
+    .eq("user_id", userId)
+    .neq("source", "strava");
+  if (sinceDateStr) {
+    query = query.gte("ride_date", sinceDateStr);
+  }
+  const { data, error } = await query.limit(5000);
+  if (error) throw error;
+
+  const dates = new Set();
+  for (const row of data || []) {
+    const d = str(row.ride_date);
+    if (d) dates.add(d);
+  }
+  return dates;
+}
+
 /** Phase 4 — shadow 중단 시 특정 activity_id 존재 여부 (range query 대신 in 필터) */
 async function fetchStravaActivityIdsExistForUser(firebaseUid, activityIds) {
   const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
@@ -1279,4 +1307,5 @@ module.exports = {
   fetchStravaActivityIdsExistForUser,
   fetchStravaRunningActivityIdsExistForUser,
   fetchStravaTssSumForDate,
+  fetchStelvioLogDatesForUser,
 };
