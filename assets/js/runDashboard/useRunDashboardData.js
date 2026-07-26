@@ -493,7 +493,9 @@
               var tInfo = window.getWeeklyTargetRtss(ch);
               if (tInfo && tInfo.target != null) wt = tInfo.target;
             }
-            setUserProfile(buildRunDashboardUserProfile(Object.assign({}, d, {
+            /* 캐시(동기) 값과 실제로 다를 때만 새 참조로 교체 — 값이 같으면 logsLoadEffect(deps=[userProfile])의
+               무거운 로그 재처리가 두 번 도는 것을 막는다(발열 완화) */
+            var nextRunProfile = buildRunDashboardUserProfile(Object.assign({}, d, {
               id: userId,
               name: d.name || userName,
               ftp: f,
@@ -504,7 +506,19 @@
               acc_points: d.acc_points || 0,
               rem_points: d.rem_points || 0,
               is_private: d.is_private === true
-            })));
+            }));
+            setUserProfile(function(prev) {
+              if (prev) {
+                var keys = Object.keys(nextRunProfile);
+                var allSame = true;
+                for (var ki = 0; ki < keys.length; ki++) {
+                  var k = keys[ki];
+                  if (prev[k] !== nextRunProfile[k]) { allSame = false; break; }
+                }
+                if (allSame) return prev;
+              }
+              return nextRunProfile;
+            });
             setStats(function(prev) {
               var next = Object.assign({}, prev);
               next.ftp = f;
