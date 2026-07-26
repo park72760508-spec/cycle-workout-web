@@ -46,10 +46,18 @@
     return 1000 / mps;
   }
 
+  /** 천 단위 ',' 구분자 적용 (TSS·거리 전용 — 점수·페이스 등에는 사용하지 않음) */
+  function formatDecimalWithComma(n, decimals) {
+    return n.toLocaleString('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  }
+
   function formatDistanceKm(v) {
     var n = Number(v);
     if (!isFinite(n) || n <= 0) return '0.0';
-    return n.toFixed(n >= 100 ? 0 : 1);
+    return formatDecimalWithComma(n, n >= 100 ? 0 : 1);
   }
 
   function formatScore(v) {
@@ -61,7 +69,7 @@
   function formatTss(v) {
     var n = Number(v);
     if (!isFinite(n) || n <= 0) return '0';
-    return n % 1 === 0 ? String(n) : n.toFixed(1);
+    return n % 1 === 0 ? formatDecimalWithComma(n, 0) : formatDecimalWithComma(n, 1);
   }
 
   function normalizeGender(g) {
