@@ -27785,8 +27785,29 @@
         }
         return true;
       }
+      /** RUN 랭킹보드(러닝·크루·친구 탭 포함) 화면 이탈 시 호출: 소셜 리스너·분포도 차트·훅이
+          display:none 뒤에서 계속 도는 것을 방지(발열 완화) */
+      function destroyRunningRankingReact() {
+        var root = document.getElementById('running-ranking-react-mount');
+        if (!root) return;
+        if (typeof window.disposeRunningRankingCharts === 'function') {
+          try { window.disposeRunningRankingCharts(); } catch (eCharts) {}
+        }
+        try {
+          if (root._runningRankingRoot && typeof root._runningRankingRoot.unmount === 'function') {
+            root._runningRankingRoot.unmount();
+          } else if (typeof ReactDOM !== 'undefined' && typeof ReactDOM.unmountComponentAtNode === 'function') {
+            ReactDOM.unmountComponentAtNode(root);
+          }
+        } catch (eUnmount) {
+          console.warn('[RunningRanking] unmount on leave failed', eUnmount);
+        }
+        root._runningRankingRoot = null;
+        root.innerHTML = '';
+      }
       window.initRunningRankingReact = initRunningRankingReact;
       window.remountRunningRankingReact = remountRunningRankingReact;
+      window.destroyRunningRankingReact = destroyRunningRankingReact;
     })();
   </script>
   <script>
@@ -27854,6 +27875,23 @@
         return true;
       }
       window.initRunTrainingJournalReact = initRunTrainingJournalReact;
+      /** RUN 기록 화면 이탈 시 호출: display:none 뒤에서 차트·이벤트 리스너·훅이 계속 도는 것을 방지(발열 완화) */
+      window.destroyRunTrainingJournalReact = function () {
+        var root = document.getElementById('run-journal-react-root');
+        try {
+          if (root && root._runJournalRoot && typeof root._runJournalRoot.unmount === 'function') {
+            root._runJournalRoot.unmount();
+          } else if (root && typeof ReactDOM !== 'undefined' && typeof ReactDOM.unmountComponentAtNode === 'function') {
+            ReactDOM.unmountComponentAtNode(root);
+          }
+        } catch (eUnmountRunJournal) {
+          console.warn('[RunJournal] unmount:', eUnmountRunJournal);
+        }
+        if (root) {
+          root._runJournalRoot = null;
+          root.innerHTML = '';
+        }
+      };
     })();
   </script>
 
@@ -39883,6 +39921,25 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       }
     }
 
+    /** RUN 분석 화면 이탈 시에도 호출: display:none 뒤에서 로그 갱신 이벤트에 반응해 무거운
+        재계산이 계속 도는 것을 방지(발열 완화). 재진입 시 initRunDashboard 내부에서도 재사용. */
+    function destroyRunDashboardReact() {
+      var rootElement = document.getElementById('run-dashboard-root');
+      if (runDashboardRootInstance) {
+        try {
+          if (ReactDOM.createRoot) {
+            runDashboardRootInstance.unmount();
+          } else if (rootElement) {
+            ReactDOM.unmountComponentAtNode(rootElement);
+          }
+        } catch (e) {
+          console.warn('[RunDashboard] Error unmounting previous instance:', e);
+        }
+        runDashboardRootInstance = null;
+      }
+    }
+    window.destroyRunDashboardReact = destroyRunDashboardReact;
+
     function initRunDashboard() {
       try {
         var rootElement = document.getElementById('run-dashboard-root');
@@ -40006,6 +40063,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }
           if (typeof window.stopDashboardHealthCheck === 'function') {
             try { window.stopDashboardHealthCheck(); } catch (eHc) {}
+          }
+        }
+        /* RUN 기록·분석·랭킹보드(러닝·크루·친구 탭) 화면 이탈 시 언마운트 — 동일한 발열 방지 목적 */
+        if (prevScreen && prevScreen.id === 'runTrainingJournalScreen' && screenId !== 'runTrainingJournalScreen') {
+          if (typeof window.destroyRunTrainingJournalReact === 'function') {
+            try { window.destroyRunTrainingJournalReact(); } catch (eDRJ) {}
+          }
+        }
+        if (prevScreen && prevScreen.id === 'runDashboardScreen' && screenId !== 'runDashboardScreen') {
+          if (typeof window.destroyRunDashboardReact === 'function') {
+            try { window.destroyRunDashboardReact(); } catch (eDRD) {}
+          }
+        }
+        if (prevScreen && prevScreen.id === 'runningRankingScreen' && screenId !== 'runningRankingScreen') {
+          if (typeof window.destroyRunningRankingReact === 'function') {
+            try { window.destroyRunningRankingReact(); } catch (eDRR) {}
           }
         }
         if (screenId === 'affiliateScreen') {
