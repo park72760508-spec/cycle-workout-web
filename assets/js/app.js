@@ -19167,8 +19167,15 @@ function closeSubscribeOverlay() {
   } catch (eHub) {}
 }
 
+/**
+ * 구독 만료 사용제한 전체 스위치 — 아직 유료화 전이라 기본 false(비활성화).
+ * 유료화 시작 시 이 값을 true로 바꾸면 isUserExpired()의 만료 제한이 다시 걸린다(재활성화 요청 시까지 유지).
+ */
+window.STELVIO_SUBSCRIPTION_GATE_ENABLED = false;
+
 /** 사용자 만료일 체크 (grade=2만 적용, 관리자 제외) */
 function isUserExpired(user) {
+  if (!window.STELVIO_SUBSCRIPTION_GATE_ENABLED) return false;
   if (!user) return false;
   var grade = String(user.grade || '2');
   if (grade === '1') return false; // 관리자는 제한 없음

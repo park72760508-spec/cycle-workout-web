@@ -4803,7 +4803,7 @@ async function selectUser(userId) {
     const user = result.item;
     
     const userGrade = String(user.grade || '2');
-    if (userGrade === '2' && user.expiry_date) {
+    if (window.STELVIO_SUBSCRIPTION_GATE_ENABLED && userGrade === '2' && user.expiry_date) {
       const expiryDate = new Date(user.expiry_date);
       const today = new Date();
       expiryDate.setHours(0,0,0,0);
