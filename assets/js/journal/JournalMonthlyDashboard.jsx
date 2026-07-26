@@ -39,7 +39,8 @@
     var currentYear = props.currentYear;
     var currentMonth = props.currentMonth;
 
-    var _useState = useState(true);
+    /* 기본 접힘 — 펼치기 전까지 차트 5개+Recharts 2개를 만드는 무거운 연산(발열 원인)을 미룬다 */
+    var _useState = useState(false);
     var accordionOpen = _useState[0];
     var setAccordionOpen = _useState[1];
 

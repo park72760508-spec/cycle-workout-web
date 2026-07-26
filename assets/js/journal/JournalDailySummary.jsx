@@ -276,7 +276,8 @@
       window.journalTransparentShare &&
       (window.journalTransparentShare.openShareComposer ||
         window.journalTransparentShare.exportTransparentSharePng);
-    var shareLog = mergeLogsForShare(logs, dailyRouteDoc, selectedDate, userProfile);
+    /* mergeLogsForShare(폴리라인 디코딩 포함)는 공유 버튼 클릭 시에만 필요 — 매 렌더마다 미리
+       계산하지 않고 onClick에서 지연 계산한다(불필요한 재디코딩으로 인한 발열 방지) */
 
     return React.createElement('div', {
       className:
@@ -296,7 +297,9 @@
             ? '투명 이미지 만들기'
             : '코스 지도·워크아웃 그래프 없음 — 투명 이미지 만들기 불가',
           onClick: function () {
-            if (!canShareTransparent || shareBusy || !shareLog) return;
+            if (!canShareTransparent || shareBusy) return;
+            var shareLog = mergeLogsForShare(logs, dailyRouteDoc, selectedDate, userProfile);
+            if (!shareLog) return;
             setShareBusy(true);
             var shareApi = window.journalTransparentShare;
             var shareOpts = {
