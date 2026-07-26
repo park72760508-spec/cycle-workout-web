@@ -11546,7 +11546,7 @@
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var displayText, badgeHtml = '', tssStr;
           var profUrl = stelvioRankingProfileImageUrlForDisplay(item);
-          tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1);
+          tssStr = stelvioFormatDecimalWithComma(item.totalTss, 1);
           if (isPrivate) {
             if (canSeeFull) { displayText = rawName; badgeHtml = '<span class="ranking-private-badge ranking-private-badge-admin weekly-rank-private-badge-tight" style="margin-left:0;margin-right:0;" title="비공개">비</span>'; }
             else { displayText = weeklyPrivateDisplayName(rawName); }
@@ -11567,7 +11567,7 @@
           var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var mrDisplayText, mrBadgeHtml = '', mrTssStr;
           var mrProfUrl = stelvioRankingProfileImageUrlForDisplay(mr);
-          mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1);
+          mrTssStr = stelvioFormatDecimalWithComma(mr.totalTss, 1);
           if (mrIsPrivate) {
             if (mrCanSeeFull) { mrDisplayText = mrRawName; mrBadgeHtml = '<span class="ranking-private-badge ranking-private-badge-admin weekly-rank-private-badge-tight" style="margin-left:0;margin-right:0;" title="비공개">비</span>'; }
             else { mrDisplayText = weeklyPrivateDisplayName(mrRawName); }
@@ -15856,10 +15856,10 @@
         var distTxt = '\u2014';
         var spdTxt = stelvioRankProfileFormatSpeedAbilityText(spdInfo, catLab);
         if (tssRow && tssRow.totalTss != null && !Number.isNaN(Number(tssRow.totalTss))) {
-          tssTxt = Number(tssRow.totalTss).toFixed(1) + ' TSS';
+          tssTxt = stelvioFormatDecimalWithComma(tssRow.totalTss, 1) + ' TSS';
         }
         if (pdRow && pdRow.totalKm != null && !Number.isNaN(Number(pdRow.totalKm))) {
-          distTxt = Number(pdRow.totalKm).toFixed(1) + ' km';
+          distTxt = stelvioFormatDecimalWithComma(pdRow.totalKm, 1) + ' km';
         }
 
         if (!dieIfStale()) return;
@@ -23343,8 +23343,8 @@
       var metricVal;
       switch (stelvioGroupTabMetric) {
         case 'gc':           metricVal = (ve && ve.gcScore   != null ? Number(ve.gcScore)   : 0).toFixed(1) + '점';    break;
-        case 'tss':          metricVal = (ve && ve.totalTss  != null ? Number(ve.totalTss)  : 0).toFixed(1) + ' TSS';  break;
-        case 'personal_dist':metricVal = (ve && ve.totalKm   != null ? Number(ve.totalKm)   : 0).toFixed(1) + ' km';   break;
+        case 'tss':          metricVal = stelvioFormatDecimalWithComma(ve && ve.totalTss, 1) + ' TSS';  break;
+        case 'personal_dist':metricVal = stelvioFormatDecimalWithComma(ve && ve.totalKm, 1) + ' km';   break;
         case 'personal_speed':metricVal = (ve && ve.speedKmh != null ? Number(ve.speedKmh)  : 0).toFixed(1) + ' km/h'; break;
         default:             metricVal = (ve && ve.wkg       != null ? Number(ve.wkg)       : 0).toFixed(2) + ' W/kg'; break;
       }
@@ -24160,7 +24160,7 @@
       var msg;
       var userNameEsc = stelvioEscapeHtml(userName);
       if (stelvioIsPersonalDistanceRanking()) {
-        var kmP = (cu.totalKm != null ? Number(cu.totalKm) : 0).toFixed(1);
+        var kmP = stelvioFormatDecimalWithComma(cu.totalKm, 1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
           msg = userNameEsc + '님은 최근 30일 ' + durLabel + ' 전체 ' + globalRank + '위(' + kmP + ' km)입니다.';
         } else {
@@ -24182,7 +24182,7 @@
           '<span class="stelvio-hero-speed-footnote">* 최근 90일 60분 피크 파워 기준 항속(km/h) 산출</span>';
         msg = spdMain + '\n' + spdFootnote;
       } else if (stelvioIsTssRankingMode()) {
-        var tssVal = (cu.totalTss != null ? Number(cu.totalTss) : 0).toFixed(1);
+        var tssVal = stelvioFormatDecimalWithComma(cu.totalTss, 1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
           msg = userNameEsc + '님은 주간 ' + durLabel + ' 전체 ' + globalRank + '위(' + tssVal + ' TSS)입니다.';
         } else {
@@ -24721,14 +24721,25 @@
       return false;
     }
 
+    /** TSS\u00b7\uac70\ub9ac(km) \ub4f1 \ucc9c \ub2e8\uc704\uac00 \ub118\uc5b4\uac08 \uc218 \uc788\ub294 \uac12\uc5d0 ',' \uad6c\ubd84\uc790\ub97c \uc801\uc6a9\ud574 \ud45c\uc2dc */
+    function stelvioFormatDecimalWithComma(val, decimals) {
+      var n = val != null ? Number(val) : 0;
+      if (!isFinite(n)) n = 0;
+      return n.toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      });
+    }
+
     function stelvioFormatRankCell(item) {
       if (stelvioIsGroupDistanceRanking()) {
         var vG = stelvioGroupTabGetMetricValue(item);
         if (!isFinite(vG) || vG < 0) return '\u2014';
         switch (stelvioGroupTabMetric) {
-          case 'gc':
           case 'tss':
           case 'personal_dist':
+            return stelvioFormatDecimalWithComma(vG, 1);
+          case 'gc':
           case 'personal_speed':
             return vG.toFixed(1);
           default:
@@ -24739,10 +24750,10 @@
         return (item.speedKmh != null ? Number(item.speedKmh) : 0).toFixed(1);
       }
       if (stelvioIsKmDistanceRanking()) {
-        return (item.totalKm != null ? Number(item.totalKm) : 0).toFixed(1);
+        return stelvioFormatDecimalWithComma(item.totalKm, 1);
       }
       if (stelvioIsTssRankingMode()) {
-        return (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1);
+        return stelvioFormatDecimalWithComma(item.totalTss, 1);
       }
       if (stelvioIsGcRankingMode()) {
         var gcVal =
