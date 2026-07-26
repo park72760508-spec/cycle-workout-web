@@ -91,6 +91,23 @@
     );
   }
 
+  var WEEKDAY_LABELS_KO = ['일', '월', '화', '수', '목', '금', '토'];
+
+  /** datetime-local 문자열(YYYY-MM-DDTHH:mm) → "2026년 7월 26일 (일) 14:00" 표시용 텍스트 */
+  function formatDateTimeDisplayKo(value) {
+    if (!value) return '';
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    var pad = function (n) {
+      return String(n).padStart(2, '0');
+    };
+    return (
+      d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일' +
+      ' (' + WEEKDAY_LABELS_KO[d.getDay()] + ') ' +
+      pad(d.getHours()) + ':' + pad(d.getMinutes())
+    );
+  }
+
   var COMPETITION_IMAGE_MAX_PX = 1600;
   var COMPETITION_IMAGE_MAX_BYTES = 2.2 * 1024 * 1024;
 
@@ -344,6 +361,30 @@
     );
   }
 
+  /**
+   * 네이티브 datetime-local 대신 STELVIO 디자인의 커스텀 달력 팝업을 여는 트리거로 대체.
+   * 네이티브 위젯은 브라우저/OS 로케일에 따라 월이 영문(Jan/Feb..)으로 표시되고 디자인도
+   * 커스터마이즈할 수 없어, 값 자체는 동일한 hidden input(id 동일)에 보관해 저장 로직은 그대로 둔다.
+   */
+  function buildDateTimeFieldHtml(id, label, existingValue) {
+    var value = toDatetimeLocalValue(existingValue);
+    var displayText = value ? formatDateTimeDisplayKo(value) : '날짜·시간을 선택하세요';
+    return (
+      '<div class="competition-form-field">' +
+      '  <label class="competition-form-label" for="' + id + '_trigger">' + escapeHtml(label) + '</label>' +
+      '  <button type="button" class="competition-datetime-trigger" id="' + id + '_trigger" data-target="' + id + '">' +
+      '    <span class="competition-datetime-trigger-text"' + (value ? '' : ' data-placeholder="1"') + '>' + escapeHtml(displayText) + '</span>' +
+      '    <svg class="competition-datetime-trigger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+      '      <rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" stroke-width="2"/>' +
+      '      <path d="M3 9H21" stroke="currentColor" stroke-width="2"/>' +
+      '      <path d="M8 3V6M16 3V6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+      '    </svg>' +
+      '  </button>' +
+      '  <input type="hidden" id="' + id + '" value="' + escapeHtml(value) + '" />' +
+      '</div>'
+    );
+  }
+
   function buildFormBody(comp) {
     comp = comp || {};
     return (
@@ -372,10 +413,7 @@
       '  <label class="competition-form-label" for="cAdminCourseDistance">코스 거리</label>' +
       '  <input class="competition-form-input" id="cAdminCourseDistance" type="text" placeholder="예: 42.195km" value="' + escapeHtml(comp.courseDistance) + '" />' +
       '</div>' +
-      '<div class="competition-form-field">' +
-      '  <label class="competition-form-label" for="cAdminRaceDate">대회 일시</label>' +
-      '  <input class="competition-form-input" id="cAdminRaceDate" type="datetime-local" value="' + toDatetimeLocalValue(comp.raceDate) + '" />' +
-      '</div>' +
+      buildDateTimeFieldHtml('cAdminRaceDate', '대회 일시', comp.raceDate) +
       '<div class="competition-form-field">' +
       '  <label class="competition-form-label" for="cAdminEntryFee">참가비(원)</label>' +
       '  <input class="competition-form-input" id="cAdminEntryFee" type="number" min="0" value="' + (Number(comp.entryFee) || 0) + '" />' +
@@ -384,14 +422,8 @@
       '  <label class="competition-form-label" for="cAdminCapacity">정원</label>' +
       '  <input class="competition-form-input" id="cAdminCapacity" type="number" min="1" value="' + (Number(comp.capacity) || 100) + '" />' +
       '</div>' +
-      '<div class="competition-form-field">' +
-      '  <label class="competition-form-label" for="cAdminOpensAt">접수 시작</label>' +
-      '  <input class="competition-form-input" id="cAdminOpensAt" type="datetime-local" value="' + toDatetimeLocalValue(comp.opensAt) + '" />' +
-      '</div>' +
-      '<div class="competition-form-field">' +
-      '  <label class="competition-form-label" for="cAdminClosesAt">접수 마감</label>' +
-      '  <input class="competition-form-input" id="cAdminClosesAt" type="datetime-local" value="' + toDatetimeLocalValue(comp.closesAt) + '" />' +
-      '</div>' +
+      buildDateTimeFieldHtml('cAdminOpensAt', '접수 시작', comp.opensAt) +
+      buildDateTimeFieldHtml('cAdminClosesAt', '접수 마감', comp.closesAt) +
       '<div class="competition-form-field">' +
       '  <label class="competition-form-label" for="cAdminValidHours">가상계좌 입금 기한(시간)</label>' +
       '  <input class="competition-form-input" id="cAdminValidHours" type="number" min="1" value="' + (Number(comp.validHours) || 1) + '" />' +
@@ -566,6 +598,143 @@
     };
   }
 
+  var MINUTE_STEP_OPTIONS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  /** STELVIO 디자인의 커스텀 날짜·시간 선택 팝업 — 월은 항상 숫자("7월")로 표시된다 */
+  function openDateTimePickerPopup(initialValue, onConfirm) {
+    var now = new Date();
+    var base = initialValue ? new Date(initialValue) : now;
+    if (isNaN(base.getTime())) base = now;
+    var viewYear = base.getFullYear();
+    var viewMonth = base.getMonth(); // 0-11
+    var selYear = base.getFullYear();
+    var selMonth = base.getMonth();
+    var selDay = base.getDate();
+    var selHour = base.getHours();
+    var selMinute = MINUTE_STEP_OPTIONS.reduce(function (closest, m) {
+      return Math.abs(m - base.getMinutes()) < Math.abs(closest - base.getMinutes()) ? m : closest;
+    }, 0);
+
+    var overlay = document.createElement('div');
+    overlay.className = 'competition-datetime-picker-overlay';
+
+    function pad(n) {
+      return String(n).padStart(2, '0');
+    }
+
+    function buildDaysGridHtml() {
+      var firstOfMonth = new Date(viewYear, viewMonth, 1);
+      var startWeekday = firstOfMonth.getDay();
+      var daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+      var todayY = now.getFullYear(), todayM = now.getMonth(), todayD = now.getDate();
+      var cells = [];
+      var i;
+      for (i = 0; i < startWeekday; i++) cells.push('<span class="competition-datetime-picker-day is-empty"></span>');
+      for (i = 1; i <= daysInMonth; i++) {
+        var isSelected = viewYear === selYear && viewMonth === selMonth && i === selDay;
+        var isToday = viewYear === todayY && viewMonth === todayM && i === todayD;
+        cells.push(
+          '<button type="button" class="competition-datetime-picker-day' +
+          (isSelected ? ' is-selected' : '') + (isToday && !isSelected ? ' is-today' : '') +
+          '" data-day="' + i + '">' + i + '</button>'
+        );
+      }
+      return cells.join('');
+    }
+
+    function buildTimeSelectHtml(idSuffix, options, current, formatFn) {
+      return (
+        '<select class="competition-datetime-picker-select" id="cAdminDtPicker' + idSuffix + '">' +
+        options.map(function (v) {
+          return '<option value="' + v + '"' + (v === current ? ' selected' : '') + '>' + formatFn(v) + '</option>';
+        }).join('') +
+        '</select>'
+      );
+    }
+
+    var hourOptions = [];
+    for (var h = 0; h < 24; h++) hourOptions.push(h);
+
+    function render() {
+      overlay.innerHTML =
+        '<div class="competition-datetime-picker" role="dialog" aria-modal="true" aria-label="날짜·시간 선택">' +
+        '  <div class="competition-datetime-picker-header">' +
+        '    <button type="button" class="competition-datetime-picker-nav" data-dir="-1" aria-label="이전 달">&lsaquo;</button>' +
+        '    <span class="competition-datetime-picker-title">' + viewYear + '년 ' + (viewMonth + 1) + '월</span>' +
+        '    <button type="button" class="competition-datetime-picker-nav" data-dir="1" aria-label="다음 달">&rsaquo;</button>' +
+        '  </div>' +
+        '  <div class="competition-datetime-picker-weekdays">' +
+             WEEKDAY_LABELS_KO.map(function (w) { return '<span>' + w + '</span>'; }).join('') +
+        '  </div>' +
+        '  <div class="competition-datetime-picker-days">' + buildDaysGridHtml() + '</div>' +
+        '  <div class="competition-datetime-picker-time-row">' +
+        '    <span class="competition-datetime-picker-time-label">시간</span>' +
+        buildTimeSelectHtml('Hour', hourOptions, selHour, function (v) { return pad(v) + '시'; }) +
+        buildTimeSelectHtml('Minute', MINUTE_STEP_OPTIONS, selMinute, function (v) { return pad(v) + '분'; }) +
+        '  </div>' +
+        '  <div class="competition-datetime-picker-footer">' +
+        '    <button type="button" class="competition-datetime-picker-btn is-cancel">취소</button>' +
+        '    <button type="button" class="competition-datetime-picker-btn is-confirm">확인</button>' +
+        '  </div>' +
+        '</div>';
+
+      overlay.querySelector('.competition-datetime-picker-header').addEventListener('click', function (e) {
+        var btn = e.target.closest('.competition-datetime-picker-nav');
+        if (!btn) return;
+        viewMonth += Number(btn.getAttribute('data-dir'));
+        if (viewMonth < 0) { viewMonth = 11; viewYear -= 1; }
+        else if (viewMonth > 11) { viewMonth = 0; viewYear += 1; }
+        render();
+      });
+      overlay.querySelector('.competition-datetime-picker-days').addEventListener('click', function (e) {
+        var btn = e.target.closest('.competition-datetime-picker-day');
+        if (!btn || btn.classList.contains('is-empty')) return;
+        selYear = viewYear;
+        selMonth = viewMonth;
+        selDay = Number(btn.getAttribute('data-day'));
+        render();
+      });
+      overlay.querySelector('.competition-datetime-picker-btn.is-cancel').addEventListener('click', close);
+      overlay.querySelector('.competition-datetime-picker-btn.is-confirm').addEventListener('click', function () {
+        selHour = Number(overlay.querySelector('#cAdminDtPickerHour').value);
+        selMinute = Number(overlay.querySelector('#cAdminDtPickerMinute').value);
+        var value =
+          selYear + '-' + pad(selMonth + 1) + '-' + pad(selDay) + 'T' + pad(selHour) + ':' + pad(selMinute);
+        close();
+        if (typeof onConfirm === 'function') onConfirm(value);
+      });
+    }
+
+    function onKeyDown(e) {
+      if (e.key === 'Escape') close();
+    }
+    function close() {
+      document.removeEventListener('keydown', onKeyDown);
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) close();
+    });
+    document.addEventListener('keydown', onKeyDown);
+    render();
+    document.body.appendChild(overlay);
+  }
+
+  function wireDateTimeField(overlay, id) {
+    var trigger = overlay.querySelector('#' + id + '_trigger');
+    var hiddenInput = overlay.querySelector('#' + id);
+    if (!trigger || !hiddenInput) return;
+    trigger.addEventListener('click', function () {
+      openDateTimePickerPopup(hiddenInput.value, function (value) {
+        hiddenInput.value = value;
+        var textEl = trigger.querySelector('.competition-datetime-trigger-text');
+        textEl.textContent = formatDateTimeDisplayKo(value);
+        textEl.removeAttribute('data-placeholder');
+      });
+    });
+  }
+
   function openForm(comp, onSaved) {
     if (!window.competitionBottomSheet || !window.competitionBottomSheet.openRawSheet) {
       console.error('[competitionAdminForm] competitionBottomSheet.openRawSheet 필요');
@@ -582,6 +751,9 @@
     var errorEl = overlay.querySelector('#cAdminError');
     var posterField = wireImageUploadField(overlay, 'cAdminPoster');
     var courseMapField = wireImageUploadField(overlay, 'cAdminCourseMap');
+    wireDateTimeField(overlay, 'cAdminRaceDate');
+    wireDateTimeField(overlay, 'cAdminOpensAt');
+    wireDateTimeField(overlay, 'cAdminClosesAt');
 
     saveBtn.addEventListener('click', async function () {
       errorEl.classList.remove('is-visible');
