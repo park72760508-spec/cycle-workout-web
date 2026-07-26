@@ -3142,12 +3142,6 @@
       padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 10px;
       font-size: 15px; color: #0f172a; background: white;
     }
-    /* datetime-local은 브라우저(특히 모바일 Safari/WebView)가 네이티브 위젯 폭을 내용 기준으로 잡아
-       형제 입력창(텍스트/숫자/셀렉트)보다 좁게 보이는 경우가 있어 폭을 명시적으로 강제한다 */
-    .competition-form-input[type="datetime-local"] {
-      -webkit-appearance: none; appearance: none;
-      width: 100%; min-width: 100%; max-width: 100%; box-sizing: border-box;
-    }
     .competition-form-input:focus, .competition-form-select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.12); }
     .competition-form-error { color: #ef4444; font-size: 12px; margin-top: 6px; display: none; }
     .competition-form-error.is-visible { display: block; }
@@ -3157,6 +3151,72 @@
       -webkit-tap-highlight-color: transparent;
     }
     .competition-submit-btn[disabled] { background: #cbd5e1; cursor: not-allowed; }
+
+    /* 대회 일시·접수 시작·접수 마감 — 네이티브 datetime-local 대신 STELVIO 디자인 커스텀 달력 팝업 트리거.
+       네이티브 위젯은 브라우저/OS 로케일에 따라 월이 영문(Jan/Feb..)으로 표시되고 디자인 커스터마이즈가
+       불가해, 값은 동일한 hidden input에 보관하고 트리거 버튼 + 팝업으로 대체한다. */
+    .competition-datetime-trigger {
+      width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 10px;
+      font-size: 15px; color: #0f172a; background: white; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; box-sizing: border-box; text-align: left;
+    }
+    .competition-datetime-trigger:focus, .competition-datetime-trigger:hover {
+      outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.12);
+    }
+    .competition-datetime-trigger-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .competition-datetime-trigger-text[data-placeholder] { color: #94a3b8; }
+    .competition-datetime-trigger-icon { flex-shrink: 0; color: #667eea; }
+
+    .competition-datetime-picker-overlay {
+      position: fixed; inset: 0; z-index: 200100;
+      background: rgba(0,0,0,0.35); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+      animation: journalFadeIn 0.15s ease; box-sizing: border-box;
+    }
+    .competition-datetime-picker {
+      background: white; border-radius: 20px; width: 100%; max-width: 340px;
+      padding: 18px; box-shadow: 0 20px 50px rgba(0,0,0,0.25), 0 0 0 1px rgba(102,126,234,0.15);
+      box-sizing: border-box;
+    }
+    .competition-datetime-picker-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .competition-datetime-picker-title { font-size: 16px; font-weight: 700; color: #1f2937; }
+    .competition-datetime-picker-nav {
+      width: 32px; height: 32px; border-radius: 50%; border: none; background: #f1f5f9; color: #667eea;
+      font-size: 18px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .competition-datetime-picker-nav:hover { background: rgba(102,126,234,0.14); }
+    .competition-datetime-picker-weekdays, .competition-datetime-picker-days {
+      display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
+    }
+    .competition-datetime-picker-weekdays span { font-size: 12px; font-weight: 600; color: #94a3b8; padding: 4px 0; }
+    .competition-datetime-picker-day {
+      border: none; background: none; padding: 8px 0; font-size: 14px; color: #1f2937; border-radius: 50%;
+      cursor: pointer; -webkit-tap-highlight-color: transparent; aspect-ratio: 1;
+    }
+    .competition-datetime-picker-day:hover { background: rgba(102,126,234,0.1); }
+    .competition-datetime-picker-day.is-today { color: #667eea; font-weight: 700; }
+    .competition-datetime-picker-day.is-selected {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: 700;
+    }
+    .competition-datetime-picker-day.is-empty { cursor: default; }
+    .competition-datetime-picker-time-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #f1f5f9;
+    }
+    .competition-datetime-picker-time-label { font-size: 13px; font-weight: 600; color: #374151; margin-right: 2px; }
+    .competition-datetime-picker-select {
+      flex: 1; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; color: #0f172a;
+      background: white; box-sizing: border-box;
+    }
+    .competition-datetime-picker-select:focus { outline: none; border-color: #667eea; }
+    .competition-datetime-picker-footer { display: flex; gap: 8px; margin-top: 16px; }
+    .competition-datetime-picker-btn {
+      flex: 1; border: none; border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 700; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .competition-datetime-picker-btn.is-cancel { background: #f1f5f9; color: #475569; }
+    .competition-datetime-picker-btn.is-confirm { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
 
     /* 신청서 작성 폼 — 아코디언 섹션·칩 선택·약관 동의 (competitionApplicationForm.js) */
     .competition-form-section-title {
