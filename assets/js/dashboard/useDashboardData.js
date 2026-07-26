@@ -324,18 +324,39 @@
               var tInfo = window.getWeeklyTargetTSS(ch);
               if (tInfo && tInfo.target != null) wt = tInfo.target;
             }
-            setUserProfile({
-              id: userId,
-              name: d.name || userName,
-              ftp: f,
-              weight: w,
-              grade: d.grade || '2',
-              challenge: ch,
-              run_challenge: d.run_challenge || '',
-              category: d.category || d.sport_category || 'CYCLE',
-              acc_points: d.acc_points || 0,
-              rem_points: d.rem_points || 0,
-              is_private: d.is_private === true
+            /* 캐시(동기) 값과 실제로 다를 때만 새 참조로 교체 — 값이 같으면 logsLoadEffect(deps=[userProfile])의
+               무거운 로그 재처리(최대 400건, 6개월치 집계)가 두 번 도는 것을 막는다(발열 완화) */
+            setUserProfile(function(prev) {
+              var next = {
+                id: userId,
+                name: d.name || userName,
+                ftp: f,
+                weight: w,
+                grade: d.grade || '2',
+                challenge: ch,
+                run_challenge: d.run_challenge || '',
+                category: d.category || d.sport_category || 'CYCLE',
+                acc_points: d.acc_points || 0,
+                rem_points: d.rem_points || 0,
+                is_private: d.is_private === true
+              };
+              if (
+                prev &&
+                prev.id === next.id &&
+                prev.name === next.name &&
+                prev.ftp === next.ftp &&
+                prev.weight === next.weight &&
+                prev.grade === next.grade &&
+                prev.challenge === next.challenge &&
+                prev.run_challenge === next.run_challenge &&
+                prev.category === next.category &&
+                prev.acc_points === next.acc_points &&
+                prev.rem_points === next.rem_points &&
+                prev.is_private === next.is_private
+              ) {
+                return prev;
+              }
+              return next;
             });
             setStats(function(prev) {
               var next = Object.assign({}, prev);
