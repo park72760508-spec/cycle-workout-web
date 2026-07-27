@@ -2752,6 +2752,26 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #openRidingRoomScreen .open-riding-create-btn {
   box-sizing: border-box;
 }
+/* 라이딩 모임·러닝 크루 달력 — 월 이동 화살표: 대회 만들기 날짜 팝업과 동일한 연보라 원형 디자인 */
+#openRidingRoomScreen .open-riding-calendar-nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f5f9;
+  color: #667eea;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+#openRidingRoomScreen .open-riding-calendar-nav-btn:hover {
+  background: rgba(102, 126, 234, 0.14);
+}
 
 /* 오픈 라이딩방 목록: 지역·레벨·시간·거리·정원 사이 가운데점 구분 */
 #openRidingRoomScreen .open-riding-list-meta-sep {
