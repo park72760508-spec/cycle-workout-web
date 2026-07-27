@@ -4608,15 +4608,19 @@ function OpenRidingCalendarMain(props) {
               var hasAnyRide = allRideDateKeys.has(key);
               var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
 
-              /* 다음달 여백 날짜 — 흐리게 표시(클릭하면 모임 목록 표시). 이전달 여백 날짜는 아래
-                 일반 셀 로직을 그대로 타서 "이번달 지나간 날짜"와 동일한 디자인으로 표시된다. */
+              /* 다음달 여백 날짜 — 흐리게 표시(클릭하면 모임 목록 표시 + 선택 테두리). 이전달 여백 날짜는
+                 아래 일반 셀 로직을 그대로 타서 "이번달 지나간 날짜"와 동일한 디자인으로 표시된다. */
               if (isNextAdjacent) {
+                var isSelNext = selectedKey === key;
                 return (
                   <button
                     type="button"
                     key={key}
                     onClick={function () { setSelectedKey(key); }}
-                    className={cellH + ' rounded-lg text-sm flex items-center justify-center relative overflow-visible opacity-40 transition hover:opacity-60'}
+                    className={
+                      cellH + ' rounded-lg text-sm flex items-center justify-center relative overflow-visible opacity-40 transition hover:opacity-60 ' +
+                      (isSelNext ? 'ring-2 ring-violet-500 font-semibold opacity-100 ' : '')
+                    }
                   >
                     {isHostDay ? (
                       <span className="absolute inset-1 z-[1] rounded-md pointer-events-none border bg-violet-600 border-violet-700/45" aria-hidden />
