@@ -32,12 +32,16 @@ export function useOpenRiding(db, userId, anchorMonth) {
   const [loadingRides, setLoadingRides] = useState(false);
   const [error, setError] = useState(null);
 
+  /* 달력 그리드가 앞뒤로 표시하는 이전/다음달 여백 날짜(흐리게 표시)에도 모임 표시가 나오도록
+     실제 캘린더월 경계가 아니라 그리드에 보이는 첫 일요일~마지막 토요일까지 조회한다. */
   const monthRange = useMemo(() => {
     const base = anchorMonth ? new Date(anchorMonth) : new Date();
     base.setDate(1);
     base.setHours(0, 0, 0, 0);
     const start = new Date(base);
+    start.setDate(start.getDate() - start.getDay());
     const end = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
+    end.setDate(end.getDate() + (6 - end.getDay()));
     return { start, end };
   }, [anchorMonth]);
 

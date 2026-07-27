@@ -3517,14 +3517,30 @@ function OpenRidingCalendarMain(props) {
   var firstDow = new Date(year, month, 1).getDay();
   var lastDate = new Date(year, month + 1, 0).getDate();
 
+  /** 이전/다음달 여백 칸도 실제 날짜(흐리게 표시)로 채운다 — 빈 칸(null) 대신 {day,y,m,adjacent} 객체 */
   var days = useMemo(function () {
     var cells = [];
     var i;
-    for (i = 0; i < firstDow; i++) cells.push(null);
-    for (i = 1; i <= lastDate; i++) cells.push(i);
-    while (cells.length % 7 !== 0) cells.push(null);
+    var prevMonthDate = new Date(year, month, 0);
+    var prevY = prevMonthDate.getFullYear();
+    var prevM = prevMonthDate.getMonth();
+    var prevLastDate = prevMonthDate.getDate();
+    for (i = firstDow - 1; i >= 0; i--) {
+      cells.push({ day: prevLastDate - i, y: prevY, m: prevM, adjacent: 'prev' });
+    }
+    for (i = 1; i <= lastDate; i++) {
+      cells.push({ day: i, y: year, m: month, adjacent: null });
+    }
+    var nextMonthDate = new Date(year, month + 1, 1);
+    var nextY = nextMonthDate.getFullYear();
+    var nextM = nextMonthDate.getMonth();
+    var nextDay = 1;
+    while (cells.length % 7 !== 0) {
+      cells.push({ day: nextDay, y: nextY, m: nextM, adjacent: 'next' });
+      nextDay++;
+    }
     return cells;
-  }, [firstDow, lastDate]);
+  }, [year, month, firstDow, lastDate]);
 
   var ridesForDay = useMemo(function () {
     if (!selectedKey) return [];
@@ -3688,7 +3704,6 @@ function OpenRidingCalendarMain(props) {
   );
 
   var cellH = compact ? 'h-8' : 'h-10';
-  var emptyH = compact ? 'h-8' : 'h-10';
 
   function addRegionFromSelect() {
     var t = resolveOpenRidingFullRegionLabel(filterSidoPick, filterDistrictPick, filterDistrictsForSido);
@@ -4566,10 +4581,10 @@ function OpenRidingCalendarMain(props) {
 
       <div className={compact ? 'flex flex-col gap-3' : 'grid grid-cols-1 md:grid-cols-3 gap-4'}>
         <section className={(compact ? 'rounded-xl p-3 ' : 'md:col-span-2 rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
-          <div className="flex items-center justify-center mb-3 gap-2">
-            <button type="button" className="text-slate-600 shrink-0" onClick={function () { setViewMonth(new Date(year, month - 1, 1)); }}>{'‹'}</button>
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <button type="button" className="open-riding-calendar-nav-btn shrink-0" onClick={function () { setViewMonth(new Date(year, month - 1, 1)); }} aria-label="이전 달">{'‹'}</button>
             <span className="font-semibold text-sm sm:text-base">{year}년 {month + 1}월</span>
-            <button type="button" className="text-slate-600 shrink-0" onClick={function () { setViewMonth(new Date(year, month + 1, 1)); }}>{'›'}</button>
+            <button type="button" className="open-riding-calendar-nav-btn shrink-0" onClick={function () { setViewMonth(new Date(year, month + 1, 1)); }} aria-label="다음 달">{'›'}</button>
           </div>
           {loadingRides ? <p className="text-sm text-slate-400">불러오는 중…</p> : null}
           <div className="grid grid-cols-7 gap-1 text-center text-xs mb-1 font-semibold">
@@ -4584,14 +4599,37 @@ function OpenRidingCalendarMain(props) {
             })}
           </div>
           <div className="grid grid-cols-7 gap-1 overflow-visible pt-0.5 open-riding-calendar-grid">
-            {days.map(function (day, idx) {
-              if (day == null) return <div key={'e' + idx} className={emptyH} />;
-              var key = dateKey(year, month, day);
-              var isPastCell = key < calendarTodayYmd;
+            {days.map(function (cell, idx) {
+              var day = cell.day;
+              var isAdjacent = !!cell.adjacent;
+              var key = dateKey(cell.y, cell.m, day);
               var isHostDay = hostDateKeys.has(key);
               var hasMatch = matchingDateKeys.has(key);
               var hasAnyRide = allRideDateKeys.has(key);
               var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
+
+              /* 이전/다음달 여백 날짜 — 흐리게 표시, 클릭 불가. 모임 표시(호스트/매칭/기타)도 함께 흐리게 */
+              if (isAdjacent) {
+                return (
+                  <div
+                    key={'adj' + idx}
+                    className={cellH + ' rounded-lg text-sm flex items-center justify-center relative overflow-visible opacity-40'}
+                  >
+                    {isHostDay ? (
+                      <span className="absolute inset-1 z-[1] rounded-md pointer-events-none border bg-violet-600 border-violet-700/45" aria-hidden />
+                    ) : hasMatch ? (
+                      <span className="absolute inset-1 z-[1] rounded-md pointer-events-none border bg-emerald-400/80 border-emerald-600/40" aria-hidden />
+                    ) : showOtherOnly ? (
+                      <span className="absolute inset-1 z-[1] rounded-md bg-slate-200/60 border border-slate-400/35 pointer-events-none" aria-hidden />
+                    ) : null}
+                    <span className={'relative z-10 tabular-nums ' + (isHostDay || hasMatch ? 'text-white font-medium' : 'text-slate-400')}>
+                      {day}
+                    </span>
+                  </div>
+                );
+              }
+
+              var isPastCell = key < calendarTodayYmd;
               var isSel = selectedKey === key;
               var isConfirmedDay = participantConfirmedDateKeys.has(key);
               var isTodayCell = key === calendarTodayYmd;
