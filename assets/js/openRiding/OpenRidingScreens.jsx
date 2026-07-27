@@ -4643,9 +4643,10 @@ function OpenRidingCalendarMain(props) {
               var isTodayCell = key === calendarTodayYmd;
               var dayNumClass = 'relative z-10 tabular-nums ';
               if (isPrevAdjacent) {
-                /* 이전달 여백 날짜 — 숫자 색은 다음달 여백 날짜와 동일한 톤 적용(현재 달과 구분).
-                   모임 색깔 표시(배경)는 아래 isPastCell 로직 그대로 유지 */
-                dayNumClass += (isHostDay || hasMatch) ? 'text-white font-medium' : 'text-slate-400';
+                /* 이전달 여백 날짜 — 다음달 여백 날짜는 버튼 전체에 opacity-40이 적용되어 숫자도 함께
+                   흐려지므로, 색상 클래스만 같으면 실제로는 더 진하게 보인다. 동일한 opacity-40을
+                   숫자에도 적용해 육안상 톤을 맞춘다. 모임 색깔 표시(배경)는 그대로 유지 */
+                dayNumClass += ((isHostDay || hasMatch) ? 'text-white font-medium' : 'text-slate-400') + ' opacity-40';
               } else if (isHostDay) {
                 dayNumClass += isPastCell ? 'text-violet-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
               } else if (hasMatch) {
