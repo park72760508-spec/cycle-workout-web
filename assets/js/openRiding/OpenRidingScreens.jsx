@@ -4601,19 +4601,22 @@ function OpenRidingCalendarMain(props) {
           <div className="grid grid-cols-7 gap-1 overflow-visible pt-0.5 open-riding-calendar-grid">
             {days.map(function (cell, idx) {
               var day = cell.day;
-              var isAdjacent = !!cell.adjacent;
+              var isNextAdjacent = cell.adjacent === 'next';
               var key = dateKey(cell.y, cell.m, day);
               var isHostDay = hostDateKeys.has(key);
               var hasMatch = matchingDateKeys.has(key);
               var hasAnyRide = allRideDateKeys.has(key);
               var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
 
-              /* 이전/다음달 여백 날짜 — 흐리게 표시, 클릭 불가. 모임 표시(호스트/매칭/기타)도 함께 흐리게 */
-              if (isAdjacent) {
+              /* 다음달 여백 날짜 — 흐리게 표시(클릭하면 모임 목록 표시). 이전달 여백 날짜는 아래
+                 일반 셀 로직을 그대로 타서 "이번달 지나간 날짜"와 동일한 디자인으로 표시된다. */
+              if (isNextAdjacent) {
                 return (
-                  <div
-                    key={'adj' + idx}
-                    className={cellH + ' rounded-lg text-sm flex items-center justify-center relative overflow-visible opacity-40'}
+                  <button
+                    type="button"
+                    key={key}
+                    onClick={function () { setSelectedKey(key); }}
+                    className={cellH + ' rounded-lg text-sm flex items-center justify-center relative overflow-visible opacity-40 transition hover:opacity-60'}
                   >
                     {isHostDay ? (
                       <span className="absolute inset-1 z-[1] rounded-md pointer-events-none border bg-violet-600 border-violet-700/45" aria-hidden />
@@ -4625,7 +4628,7 @@ function OpenRidingCalendarMain(props) {
                     <span className={'relative z-10 tabular-nums ' + (isHostDay || hasMatch ? 'text-white font-medium' : 'text-slate-400')}>
                       {day}
                     </span>
-                  </div>
+                  </button>
                 );
               }
 
