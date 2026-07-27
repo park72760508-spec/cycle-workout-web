@@ -4636,12 +4636,17 @@ function OpenRidingCalendarMain(props) {
                 );
               }
 
+              var isPrevAdjacent = cell.adjacent === 'prev';
               var isPastCell = key < calendarTodayYmd;
               var isSel = selectedKey === key;
               var isConfirmedDay = participantConfirmedDateKeys.has(key);
               var isTodayCell = key === calendarTodayYmd;
               var dayNumClass = 'relative z-10 tabular-nums ';
-              if (isHostDay) {
+              if (isPrevAdjacent) {
+                /* 이전달 여백 날짜 — 숫자 색은 다음달 여백 날짜와 동일한 톤 적용(현재 달과 구분).
+                   모임 색깔 표시(배경)는 아래 isPastCell 로직 그대로 유지 */
+                dayNumClass += (isHostDay || hasMatch) ? 'text-white font-medium' : 'text-slate-400';
+              } else if (isHostDay) {
                 dayNumClass += isPastCell ? 'text-violet-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
               } else if (hasMatch) {
                 dayNumClass += isPastCell ? 'text-emerald-800/50 font-medium' : 'text-emerald-950 font-semibold';
