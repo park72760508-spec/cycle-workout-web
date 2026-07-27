@@ -4586,7 +4586,12 @@ function OpenRidingCalendarMain(props) {
             <span className="font-semibold text-sm sm:text-base">{year}년 {month + 1}월</span>
             <button type="button" className="open-riding-calendar-nav-btn shrink-0" onClick={function () { setViewMonth(new Date(year, month + 1, 1)); }} aria-label="다음 달">{'›'}</button>
           </div>
-          {loadingRides ? <p className="text-sm text-slate-400">불러오는 중…</p> : null}
+          {loadingRides ? (
+            <div className="open-riding-loading-wrap">
+              <div className="open-riding-loading-spinner" />
+              <p className="open-riding-loading-text">모임 로딩 중...</p>
+            </div>
+          ) : null}
           <div className="grid grid-cols-7 gap-1 text-center text-xs mb-1 font-semibold">
             {['일', '월', '화', '수', '목', '금', '토'].map(function (w) {
               var wc =
