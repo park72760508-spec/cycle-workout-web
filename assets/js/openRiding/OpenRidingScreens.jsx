@@ -10940,6 +10940,22 @@ function OpenRidingGroupDetailView(props) {
     return uid.length > 4 ? '라이더 …' + uid.slice(-4) : '라이더';
   }
 
+  /** 비공개 설정 사용자인지 — 랭킹보드 stelvioRankingIsPrivateRow와 동일한 판정(true/'true'/1/'1' 허용) */
+  function isPrivateGroupMember(uid) {
+    var row = memberProfiles[String(uid || '')];
+    if (!row) return false;
+    var v = row.is_private;
+    return v === true || v === 'true' || v === 1 || v === '1';
+  }
+
+  /** 첫 글자 + '**' 마스킹 — 랭킹보드 stelvioRankingPrivateMaskedDisplayName과 동일 규칙 */
+  function maskPrivateMemberName(raw) {
+    if (typeof window.stelvioRankingPrivateMaskedDisplayName === 'function') {
+      return window.stelvioRankingPrivateMaskedDisplayName(raw);
+    }
+    return raw && raw.length >= 2 ? raw.charAt(0) + '**' : '**';
+  }
+
   function photoForMember(m) {
     var uid = String(m.userId || '');
     var row = memberProfiles[uid];
@@ -11536,8 +11552,12 @@ function OpenRidingGroupDetailView(props) {
                 var canTransferOwnership = self && isRowOwner && !!isOwner;
                 var rank = idx + 1;
                 var nm = displayNameForMember(m);
+                var isPrivateMember = isPrivateGroupMember(uid);
+                /* 방장(뷰어)·관리자·본인만 비공개 실명 확인 가능 — 그 외에는 마스킹 */
+                var canSeeFullMember = self || isOwner || isAdmin;
+                var nmDisplay = isPrivateMember && !canSeeFullMember ? maskPrivateMemberName(nm) : nm;
                 var photo = photoForMember(m);
-                var initial = nm.charAt(0) || '·';
+                var initial = nmDisplay.charAt(0) || '·';
                 return (
                   <div
                     key={uid || idx}
@@ -11548,16 +11568,19 @@ function OpenRidingGroupDetailView(props) {
                     <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank}</span>
                     <span className="stelvio-rank-name">
                       {photo ? (
-                        renderGroupDetailClickableAvatar(photo, nm)
+                        renderGroupDetailClickableAvatar(photo, nmDisplay)
                       ) : (
                         <span className="open-riding-group-member-avatar-fallback inline-flex shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
                           {initial}
                         </span>
                       )}
-                      <span className="stelvio-rank-name-text truncate" title={nm}>
-                        {nm}
+                      <span className="stelvio-rank-name-text truncate" title={nmDisplay}>
+                        {nmDisplay}
                         {isRowOwner ? (
                           <span className="ml-1 text-[10px] font-semibold text-violet-600">방장</span>
+                        ) : null}
+                        {isPrivateMember && canSeeFullMember ? (
+                          <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>
                         ) : null}
                       </span>
                     </span>
