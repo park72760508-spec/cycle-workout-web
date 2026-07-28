@@ -258,8 +258,16 @@
           list = soc.filterRowsByListInterest(list, 'interest', currentUserId);
         }
       }
+      /* 이 크루의 방장이면 이 크루 멤버 목록 안에서만 비공개 실명 마스킹 해제(다른 탭·다른 크루엔 영향 없음) */
+      var viewerIsCrewOwner = (members || []).some(function (m) {
+        var mid = m && (m.userId || m.uid || m.id) ? String(m.userId || m.uid || m.id) : '';
+        return !!mid && !!currentUserId && mid === String(currentUserId) && String(m.role || '') === 'owner';
+      });
       list = list.map(function (item, idx) {
-        return Object.assign({}, item, { _crewRank: idx + 1 });
+        return Object.assign({}, item, {
+          _crewRank: idx + 1,
+          _viewerIsGroupOwner: viewerIsCrewOwner
+        });
       });
       return list;
     }, [
