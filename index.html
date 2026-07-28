@@ -23847,6 +23847,17 @@
           return;
         }
         var merged = st.merged;
+        /* 이 클럽의 방장이면 이 클럽 멤버 목록 안에서만 비공개 실명 마스킹 해제(다른 탭·다른 클럽에는 영향 없음) */
+        var viewerIsOwnerOfThisClub = false;
+        for (var vi = 0; vi < merged.length; vi++) {
+          if (
+            String(merged[vi].userId || '') === String(uidV || '') &&
+            String(merged[vi]._groupRole || '') === 'owner'
+          ) {
+            viewerIsOwnerOfThisClub = true;
+            break;
+          }
+        }
         var needUserProfileNames = [];
         var needUserProfilePhotos = [];
         var maxNm = 12;
@@ -24025,8 +24036,8 @@
           var rawNm = (it.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var prv = stelvioRankingIsPrivateRow(it);
           var isCur = !!(uidV && String(it.userId) === String(uidV));
-          /* 같은 클럽 소속이라는 이유만으로는 비공개 실명을 공개하지 않음 — 친구인 경우만 공개 */
-          var canFull = isCur || isAdminG || stelvioRankingFriendUserSet.has(String(it.userId || ''));
+          /* 같은 클럽 소속이라는 이유만으로는 비공개 실명을 공개하지 않음 — 친구·이 클럽 방장인 경우만 공개 */
+          var canFull = isCur || isAdminG || viewerIsOwnerOfThisClub || stelvioRankingFriendUserSet.has(String(it.userId || ''));
           var nm = rawNm.length > maxNm ? rawNm.substring(0, maxNm - 2) + '..' : rawNm;
           var prof = stelvioRankingProfileImageUrlForDisplay(it);
           var valStr = stelvioGroupTabFormatMemberValue(it, canFull);
