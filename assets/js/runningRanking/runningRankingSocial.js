@@ -172,6 +172,8 @@
 
   function canSeeFull(item, currentUserId) {
     if (!item || item.isCrew) return true;
+    /* 이 크루의 방장이 이 크루 멤버 목록을 볼 때만 비공개 실명 마스킹 해제(RunningRankingCrewTab에서만 설정되는 플래그) */
+    if (item._viewerIsGroupOwner) return true;
     if (isViewerListItem(item, currentUserId || resolveViewerUserId())) return true;
     var sid = socialUserId(item);
     var boardUid = item.userId != null ? String(item.userId) : '';
