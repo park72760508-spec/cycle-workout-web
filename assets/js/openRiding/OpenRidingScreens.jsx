@@ -4075,9 +4075,6 @@ function OpenRidingCalendarMain(props) {
       <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-3 space-y-3 open-riding-filter-ability-panel">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <span className="text-xs font-semibold text-violet-900">나의 페이스 능력 레벨</span>
-          <span className="text-[10px] text-slate-500 leading-tight text-right">
-            관심 레벨 판별: 최근 90일 10k 피크 페이스(없으면 7k/5k로 유추) · 구간은 입문~상급 기준
-          </span>
         </div>
         {openRidingFilterRunPace.loading ? (
           <p className="text-xs text-slate-500 m-0 py-2 text-center">페이스 데이터 불러오는 중…</p>
