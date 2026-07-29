@@ -690,16 +690,51 @@
     return key;
   }
 
-  /** StelvioRankingDistributionChart run_pace 모드용 엔트리 */
+  /**
+   * StelvioRankingDistributionChart run_pace 모드용 엔트리
+   * 10k 기록이 없는 사용자는 7k → 5k 피크 페이스로 10k 페이스를 유추해 분포에 포함시킨다
+   * (러닝 크루 레벨 판정 — resolveRunCrewLevelPaceFromEfforts와 동일한 우선순위: 10k > 7k > 5k).
+   */
   function rowToPaceChartEntry(row, distKey) {
     var pace = getPaceForDistance(row, distKey);
-    if (pace.paceSec == null || pace.paceSec <= 0) return null;
+    var paceSec = pace.paceSec;
+    var inferred = false;
+    if ((paceSec == null || paceSec <= 0) && distKey === '10k') {
+      var inferFn =
+        typeof window !== 'undefined' &&
+        window.runDashboardPace &&
+        typeof window.runDashboardPace.infer10kPaceSecFromShorterDistancePeak === 'function'
+          ? window.runDashboardPace.infer10kPaceSecFromShorterDistancePeak
+          : null;
+      if (inferFn) {
+        var pace7 = getPaceForDistance(row, '7k');
+        if (pace7.paceSec != null && pace7.paceSec > 0) {
+          var inferred7 = inferFn(pace7.paceSec, 7);
+          if (inferred7 != null && inferred7 > 0) {
+            paceSec = inferred7;
+            inferred = true;
+          }
+        }
+        if (paceSec == null || paceSec <= 0) {
+          var pace5 = getPaceForDistance(row, '5k');
+          if (pace5.paceSec != null && pace5.paceSec > 0) {
+            var inferred5 = inferFn(pace5.paceSec, 5);
+            if (inferred5 != null && inferred5 > 0) {
+              paceSec = inferred5;
+              inferred = true;
+            }
+          }
+        }
+      }
+    }
+    if (paceSec == null || paceSec <= 0) return null;
     return {
       userId: rowUserId(row),
       name: rowDisplayName(row),
-      paceSec: pace.paceSec,
+      paceSec: paceSec,
       ageCategory: rowAgeCategory(row) || 'Supremo',
-      is_private: isPrivateRow(row)
+      is_private: isPrivateRow(row),
+      paceInferred: inferred
     };
   }
 
@@ -726,7 +761,9 @@
       for (ci = 0; ci < CHART_CATEGORIES.length; ci++) {
         var chartCat = CHART_CATEGORIES[ci];
         if (chartCat === 'Supremo' || base.ageCategory === chartCat) {
-          byCategory[chartCat].push(base);
+          // 카테고리별 독립 객체로 push — 같은 참조를 공유하면 뒤에 처리되는 연령대 버킷의
+          // rank 재할당이 Supremo(전체) 버킷의 rank까지 덮어써 전체 등수가 연령대 등수로 뒤바뀐다.
+          byCategory[chartCat].push(Object.assign({}, base));
         }
       }
     });
