@@ -23,8 +23,9 @@ import {
  * @param {import('firebase/firestore').Firestore | null} db
  * @param {string | null} userId
  * @param {Date} [anchorMonth] 표시 월 기준일
+ * @param {string} [moimCategory] 'CYCLE' | 'RUN' — 맞춤 필터(관심 레벨·활동 지역) 저장을 모임별로 분리
  */
-export function useOpenRiding(db, userId, anchorMonth) {
+export function useOpenRiding(db, userId, anchorMonth, moimCategory) {
   const [prefs, setPrefs] = useState({ activeRegions: [], preferredLevels: [] });
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [ridesMonth, setRidesMonth] = useState([]);
@@ -64,7 +65,7 @@ export function useOpenRiding(db, userId, anchorMonth) {
     let cancelled = false;
     (async () => {
       try {
-        const p = await getUserOpenRidingPreferences(db, userId);
+        const p = await getUserOpenRidingPreferences(db, userId, moimCategory);
         if (!cancelled) setPrefs(p);
       } catch (e) {
         if (!cancelled) setError((e && e.message) || 'prefs_load_failed');
@@ -73,7 +74,7 @@ export function useOpenRiding(db, userId, anchorMonth) {
       }
     })();
     return () => { cancelled = true; };
-  }, [db, userId]);
+  }, [db, userId, moimCategory]);
 
   const refreshMonth = useCallback(async () => {
     if (!db) return;
@@ -122,10 +123,10 @@ export function useOpenRiding(db, userId, anchorMonth) {
   const savePrefs = useCallback(
     async (next) => {
       if (!db || !userId) return;
-      await saveUserOpenRidingPreferences(db, userId, next);
+      await saveUserOpenRidingPreferences(db, userId, next, moimCategory);
       setPrefs(next);
     },
-    [db, userId]
+    [db, userId, moimCategory]
   );
 
   return {

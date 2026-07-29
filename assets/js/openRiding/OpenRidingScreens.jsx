@@ -3324,7 +3324,7 @@ function OpenRidingCalendarMain(props) {
     );
   }
 
-  var hook = useOpenRidingFn(firestore, userId || null, viewMonth);
+  var hook = useOpenRidingFn(firestore, userId || null, viewMonth, moimCategory);
   var prefs = hook.prefs;
   var savePrefs = hook.savePrefs;
   var ridesMonthRaw = hook.ridesMonth;

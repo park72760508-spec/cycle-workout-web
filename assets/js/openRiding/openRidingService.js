@@ -609,19 +609,30 @@ function omitInviteDisplayByPhoneForPhone(inviteMap, phoneRaw) {
 
 /**
  * 사용자 선호 저장 (users 문서 merge)
+ * CYCLE(라이딩 모임)은 기존 activeRegions/preferredLevels 필드를 그대로 쓰고(하위호환),
+ * RUN(러닝 크루)은 별도 필드(runActiveRegions/runPreferredLevels)에 저장해 두 모임의
+ * 맞춤 필터(관심 레벨·활동 지역) 체크값이 서로 섞이지 않고 개별로 관리되게 한다.
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} userId
  * @param {{ activeRegions: string[], preferredLevels: string[] }} prefs
+ * @param {string} [moimCategory] 'CYCLE' | 'RUN'
  */
-export async function saveUserOpenRidingPreferences(db, userId, prefs) {
+export async function saveUserOpenRidingPreferences(db, userId, prefs, moimCategory) {
+  const isRun = String(moimCategory || '').trim().toUpperCase() === 'RUN';
   const uref = doc(db, 'users', userId);
   await setDoc(
     uref,
-    {
-      activeRegions: prefs.activeRegions || [],
-      preferredLevels: prefs.preferredLevels || [],
-      openRidingPrefsUpdatedAt: serverTimestamp()
-    },
+    isRun
+      ? {
+          runActiveRegions: prefs.activeRegions || [],
+          runPreferredLevels: prefs.preferredLevels || [],
+          openRidingPrefsUpdatedAt: serverTimestamp()
+        }
+      : {
+          activeRegions: prefs.activeRegions || [],
+          preferredLevels: prefs.preferredLevels || [],
+          openRidingPrefsUpdatedAt: serverTimestamp()
+        },
     { merge: true }
   );
 }
@@ -629,14 +640,21 @@ export async function saveUserOpenRidingPreferences(db, userId, prefs) {
 /**
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} userId
+ * @param {string} [moimCategory] 'CYCLE' | 'RUN'
  */
-export async function getUserOpenRidingPreferences(db, userId) {
+export async function getUserOpenRidingPreferences(db, userId, moimCategory) {
+  const isRun = String(moimCategory || '').trim().toUpperCase() === 'RUN';
   const snap = await getDoc(doc(db, 'users', userId));
   const d = snap.exists() ? snap.data() : {};
-  return {
-    activeRegions: asStringArray(d.activeRegions),
-    preferredLevels: asStringArray(d.preferredLevels)
-  };
+  return isRun
+    ? {
+        activeRegions: asStringArray(d.runActiveRegions),
+        preferredLevels: asStringArray(d.runPreferredLevels)
+      }
+    : {
+        activeRegions: asStringArray(d.activeRegions),
+        preferredLevels: asStringArray(d.preferredLevels)
+      };
 }
 
 /**
