@@ -371,11 +371,11 @@
         var b3 = paceChartMetricFromSec(270); // 중급/중상급 경계 4:30
         var b4 = paceChartMetricFromSec(240); // 중상급/상급 경계 4:00
         return [
-          { x0: xMin, x1: b1, label: '입문', speedHint: '~9:00', color: 'rgba(253, 224, 71, 0.72)' },
-          { x0: b1, x1: b2, label: '초급', speedHint: '~8:00', color: 'rgba(190, 242, 100, 0.46)' },
-          { x0: b2, x1: b3, label: '중급', speedHint: '~6:00', color: 'rgba(168, 85, 247, 0.4)' },
-          { x0: b3, x1: b4, label: '중상급', speedHint: '~4:30', color: 'rgba(249, 115, 22, 0.42)' },
-          { x0: b4, x1: xMax, label: '상급', speedHint: '~4:00', color: 'rgba(239, 68, 68, 0.42)' },
+          { x0: xMin, x1: b1, label: '입문', speedHint: '~9:00', color: 'rgba(253, 224, 71, 0.72)', dotColor: '#eab308' },
+          { x0: b1, x1: b2, label: '초급', speedHint: '~8:00', color: 'rgba(190, 242, 100, 0.46)', dotColor: '#84cc16' },
+          { x0: b2, x1: b3, label: '중급', speedHint: '~6:00', color: 'rgba(168, 85, 247, 0.4)', dotColor: '#a855f7' },
+          { x0: b3, x1: b4, label: '중상급', speedHint: '~4:30', color: 'rgba(249, 115, 22, 0.42)', dotColor: '#f97316' },
+          { x0: b4, x1: xMax, label: '상급', speedHint: '~4:00', color: 'rgba(220, 38, 38, 0.55)', dotColor: '#dc2626' },
         ];
       },
       [runPaceTierBandEnabled, xMin, xMax]
@@ -905,7 +905,7 @@
                   >
                     <span
                       className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                      style={{ background: seg.color }}
+                      style={{ background: seg.dotColor || seg.color }}
                     />
                     {seg.label} {seg.speedHint}
                   </span>
