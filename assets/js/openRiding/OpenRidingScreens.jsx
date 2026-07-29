@@ -3799,6 +3799,68 @@ function OpenRidingCalendarMain(props) {
     [filterPageOpen, moimCategory, userId]
   );
 
+  /** 러닝 크루 맞춤 필터 — 전체 사용자 10k 페이스 분포 차트용 */
+  var _runDistFetch = useState({ loading: false, error: false, payload: null });
+  var openRidingFilterRunDist = _runDistFetch[0];
+  var setOpenRidingFilterRunDist = _runDistFetch[1];
+  var filterRunDistFetchStartedRef = useRef(false);
+
+  useEffect(
+    function () {
+      if (filterPageOpen) {
+        filterRunDistFetchStartedRef.current = false;
+      }
+    },
+    [filterPageOpen]
+  );
+
+  useEffect(
+    function () {
+      if (!filterPageOpen || moimCategory !== 'RUN') return undefined;
+      if (filterRunDistFetchStartedRef.current) return undefined;
+      filterRunDistFetchStartedRef.current = true;
+      var cancelled = false;
+      var api = typeof window !== 'undefined' ? window.runningRankingApi : null;
+      var dataApi = typeof window !== 'undefined' ? window.runningRankingData : null;
+      if (!api || !dataApi || typeof dataApi.buildPaceDistributionPayload !== 'function') {
+        setOpenRidingFilterRunDist({ loading: false, error: true, payload: null });
+        return undefined;
+      }
+      setOpenRidingFilterRunDist(function (s) {
+        return Object.assign({}, s, { loading: true, error: false });
+      });
+      Promise.resolve()
+        .then(function () {
+          var cached = typeof api.getCachedRows === 'function' ? api.getCachedRows() : null;
+          if (cached && cached.length) return { success: true, rows: cached };
+          if (typeof api.fetchLeaderboard === 'function') return api.fetchLeaderboard();
+          return { success: false, rows: [] };
+        })
+        .then(function (res) {
+          if (cancelled) return;
+          if (!res || !res.success || !Array.isArray(res.rows) || !res.rows.length) {
+            setOpenRidingFilterRunDist({ loading: false, error: true, payload: null });
+            return;
+          }
+          var payload = dataApi.buildPaceDistributionPayload(res.rows, {
+            paceDistance: '10k',
+            gender: 'all',
+            category: 'Supremo'
+          });
+          setOpenRidingFilterRunDist({ loading: false, error: false, payload: payload });
+        })
+        .catch(function () {
+          if (!cancelled) {
+            setOpenRidingFilterRunDist({ loading: false, error: true, payload: null });
+          }
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [filterPageOpen, moimCategory]
+  );
+
   var cellH = compact ? 'h-8' : 'h-10';
 
   function addRegionFromSelect() {
@@ -4052,6 +4114,26 @@ function OpenRidingCalendarMain(props) {
             최근 90일 이내 러닝 기록(10k/7k/5k 구간 피크)이 있으면, 관심 레벨 배지가
             <strong> 10k 피크 페이스</strong> 기준으로 참석 가능 여부를 알려드립니다.
           </p>
+        )}
+        {openRidingFilterRunDist.loading ? (
+          <p className="text-xs text-slate-500 m-0 py-2 text-center">분포 데이터 불러오는 중…</p>
+        ) : openRidingFilterRunDist.error ? (
+          <p className="text-xs text-amber-700 m-0 py-2 text-center">
+            전체 사용자 분포를 불러오지 못했습니다. 네트워크 후 다시 열어 주세요.
+          </p>
+        ) : StelvioDistChart &&
+          openRidingFilterRunDist.payload &&
+          openRidingFilterRunDist.payload.entries &&
+          openRidingFilterRunDist.payload.entries.length ? (
+          <StelvioDistChart
+            {...openRidingFilterRunDist.payload}
+            runPaceTierBandEnabled={true}
+            titleOverride="전체 사용자 10k 페이스 분포"
+            pillLabelOverride="전체 · 10k 페이스"
+            chartSubNoteOverride={false}
+          />
+        ) : (
+          <p className="text-xs text-slate-500 m-0 py-2 text-center">표시할 분포 데이터가 없습니다.</p>
         )}
       </div>
     ) : (
