@@ -360,8 +360,32 @@
       [openRidingTierBandWeightKg, isTss, isKmMode, xMin, xMax]
     );
 
-    var chartXAxisBottomMargin = openRidingTierBandWeightKg ? 33 : 8;
-    var openRidingTierStripOverlapPx = openRidingTierBandWeightKg && openRidingTierBandSegments.length > 0 ? 15 : 0;
+    /** RUN 맞춤 필터 — 10k 페이스 분포: 체중 등 개인화 없이 고정 구간(입문~상급)으로 표시 */
+    var runPaceTierBandEnabled = isPaceMode && p.runPaceTierBandEnabled === true;
+
+    var runPaceTierBandSegments = useMemo(
+      function () {
+        if (!runPaceTierBandEnabled) return [];
+        var b1 = paceChartMetricFromSec(480); // 입문/초급 경계 8:00
+        var b2 = paceChartMetricFromSec(360); // 초급/중급 경계 6:00
+        var b3 = paceChartMetricFromSec(270); // 중급/중상급 경계 4:30
+        var b4 = paceChartMetricFromSec(240); // 중상급/상급 경계 4:00
+        return [
+          { x0: xMin, x1: b1, label: '입문', speedHint: '~8:00', color: 'rgba(253, 224, 71, 0.72)' },
+          { x0: b1, x1: b2, label: '초급', speedHint: '~6:00', color: 'rgba(190, 242, 100, 0.46)' },
+          { x0: b2, x1: b3, label: '중급', speedHint: '~4:30', color: 'rgba(168, 85, 247, 0.4)' },
+          { x0: b3, x1: b4, label: '중상급', speedHint: '~4:00', color: 'rgba(249, 115, 22, 0.42)' },
+          { x0: b4, x1: xMax, label: '상급', speedHint: '4:00 미만', color: 'rgba(239, 68, 68, 0.42)' },
+        ];
+      },
+      [runPaceTierBandEnabled, xMin, xMax]
+    );
+
+    var tierBandActive = !!openRidingTierBandWeightKg || runPaceTierBandEnabled;
+    var tierBandSegments = openRidingTierBandWeightKg ? openRidingTierBandSegments : runPaceTierBandSegments;
+
+    var chartXAxisBottomMargin = tierBandActive ? 33 : 8;
+    var openRidingTierStripOverlapPx = tierBandActive && tierBandSegments.length > 0 ? 15 : 0;
 
     var myRaw = null;
     if (overrideMyWkg != null && !isTss && !isKmMode && !isSpeedMode && !isGcMode && !isPaceMode) {
@@ -811,7 +835,7 @@
               </div>
             ) : null}
           </div>
-          {openRidingTierBandSegments.length > 0 ? (
+          {tierBandSegments.length > 0 ? (
             <div
               className="relative z-0 h-[30px] w-full overflow-hidden border border-slate-200/90 box-border rounded-b-md leading-normal mt-0 shrink-0"
               style={{
@@ -821,7 +845,7 @@
                 marginTop: openRidingTierStripOverlapPx ? -openRidingTierStripOverlapPx + 'px' : 0,
               }}
             >
-              {openRidingTierBandSegments.map(function (seg, si) {
+              {tierBandSegments.map(function (seg, si) {
                 var span = xMax - xMin;
                 if (!(span > 0)) return null;
                 var xa = Math.max(xMin, Math.min(xMax, seg.x0));
@@ -867,9 +891,11 @@
               })}
             </div>
           ) : null}
-          {openRidingTierBandSegments.length > 0 ? (
+          {tierBandSegments.length > 0 ? (
             <p className="text-[10px] text-slate-500 text-center m-0 mt-1.5 px-1">
-              본인 체중({openRidingTierBandWeightKg}kg) 기준 평지 항속 상한 — W/kg 축과 동일 스케일
+              {openRidingTierBandWeightKg
+                ? '본인 체중(' + openRidingTierBandWeightKg + 'kg) 기준 평지 항속 상한 — W/kg 축과 동일 스케일'
+                : '10k 페이스 구간(입문~상급) — 페이스 축과 동일 스케일'}
             </p>
           ) : null}
         </div>
