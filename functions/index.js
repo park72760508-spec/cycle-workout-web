@@ -1029,6 +1029,18 @@ exports.exchangeStravaCode = onRequest(
         throw new HttpsError("not-found", "해당 사용자를 찾을 수 없습니다.");
       }
 
+      const prevAthleteId = Number((userSnap.data() || {}).strava_athlete_id) || 0;
+      // 재연동 시 Strava가 이전과 다른 athlete_id를 반환하면(다른 계정으로 승인) 조용히 덮어쓰지 않고
+      // 감사 로그·플래그를 남긴다 — 잘못된 계정 연결로 이후 활동이 통째로 수집되지 않는 사고 방지.
+      const athleteMismatch =
+        prevAthleteId > 0 && athleteId != null && athleteId > 0 && athleteId !== prevAthleteId;
+      if (athleteMismatch) {
+        console.error(
+          "[exchangeStravaCode] ⚠️ STRAVA ATHLETE MISMATCH — 재연동 시 이전과 다른 Strava 계정이 연결됨:",
+          { userId, previousAthleteId: prevAthleteId, newAthleteId: athleteId }
+        );
+      }
+
       const updateData = {
         strava_access_token: accessToken,
         strava_refresh_token: refreshToken,
@@ -1036,11 +1048,20 @@ exports.exchangeStravaCode = onRequest(
         ...scopeUpdate,
       };
       if (athleteId != null) updateData.strava_athlete_id = athleteId;
+      if (athleteMismatch) {
+        updateData.strava_athlete_id_prev = prevAthleteId;
+        updateData.strava_athlete_mismatch_at = new Date().toISOString();
+        updateData.strava_athlete_mismatch_pending_review = true;
+      }
       await userRef.update(updateData);
       await stravaSyncRetry.clearStravaAuthInvalidOnReconnect(db, userId);
       await stravaSyncRetry.scheduleStravaReconnectBackfill(db, userId);
 
-      res.status(200).json({ success: true });
+      res.status(200).json(
+        athleteMismatch
+          ? { success: true, athleteMismatch: true, previousAthleteId: prevAthleteId, newAthleteId: athleteId }
+          : { success: true }
+      );
     } catch (err) {
       console.error("[exchangeStravaCode]", err);
       if (!res.headersSent) {
