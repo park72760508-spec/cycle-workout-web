@@ -3703,6 +3703,102 @@ function OpenRidingCalendarMain(props) {
     [filterPageOpen, userId]
   );
 
+  /** 러닝 크루 맞춤 필터 — 관심 레벨(10k 페이스 기준) 참석 가능 체크용 나의 피크 페이스 */
+  var _runPaceFetch = useState({
+    loading: false,
+    error: false,
+    paceSec: null,
+    display: null,
+    source: null,
+    paceLabel: null,
+    referenceNote: null,
+    inferred: false
+  });
+  var openRidingFilterRunPace = _runPaceFetch[0];
+  var setOpenRidingFilterRunPace = _runPaceFetch[1];
+  var filterRunPaceFetchStartedRef = useRef(false);
+
+  useEffect(
+    function () {
+      filterRunPaceFetchStartedRef.current = false;
+    },
+    [userId]
+  );
+
+  useEffect(
+    function () {
+      if (filterPageOpen) {
+        filterRunPaceFetchStartedRef.current = false;
+      }
+    },
+    [filterPageOpen]
+  );
+
+  useEffect(
+    function () {
+      if (!filterPageOpen || moimCategory !== 'RUN' || !userId) return undefined;
+      if (filterRunPaceFetchStartedRef.current) return undefined;
+      filterRunPaceFetchStartedRef.current = true;
+      var cancelled = false;
+      var resolvePaceFn =
+        typeof window !== 'undefined' &&
+        window.runDashboardPace &&
+        typeof window.runDashboardPace.resolveRunCrewLevelPaceFromEfforts === 'function'
+          ? window.runDashboardPace.resolveRunCrewLevelPaceFromEfforts
+          : null;
+      var fetchEffortsFn =
+        typeof window !== 'undefined' && typeof window.getUserRunEfforts === 'function'
+          ? window.getUserRunEfforts
+          : null;
+      if (!resolvePaceFn || !fetchEffortsFn) {
+        setOpenRidingFilterRunPace(function (s) {
+          return Object.assign({}, s, { loading: false, error: true });
+        });
+        return undefined;
+      }
+      setOpenRidingFilterRunPace(function (s) {
+        return Object.assign({}, s, { loading: true, error: false });
+      });
+      var today = new Date();
+      today.setHours(0, 0, 0, 0);
+      var cutoff = new Date(today);
+      cutoff.setDate(cutoff.getDate() - 90);
+      var cutoffStr =
+        cutoff.getFullYear() +
+        '-' +
+        String(cutoff.getMonth() + 1).padStart(2, '0') +
+        '-' +
+        String(cutoff.getDate()).padStart(2, '0');
+      fetchEffortsFn(String(userId), { limit: 600 })
+        .then(function (efforts) {
+          if (cancelled) return;
+          var res = resolvePaceFn(efforts, cutoffStr) || {};
+          var paceSec = res.secPerKm != null && res.secPerKm > 0 ? res.secPerKm : null;
+          setOpenRidingFilterRunPace({
+            loading: false,
+            error: false,
+            paceSec: paceSec,
+            display: res.display || null,
+            source: res.source || null,
+            paceLabel: res.paceLabel || null,
+            referenceNote: res.referenceNote || null,
+            inferred: !!res.inferred
+          });
+        })
+        .catch(function () {
+          if (!cancelled) {
+            setOpenRidingFilterRunPace(function (s) {
+              return Object.assign({}, s, { loading: false, error: true });
+            });
+          }
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [filterPageOpen, moimCategory, userId]
+  );
+
   var cellH = compact ? 'h-8' : 'h-10';
 
   function addRegionFromSelect() {
@@ -3772,6 +3868,23 @@ function OpenRidingCalendarMain(props) {
     var chartRefBadgeTitle = realisticStats ? '나의 60분' : '나의 FTP';
     var chartRefValueNote = realisticStats ? ' (최근 6개월)' : ' (프로필)';
 
+    var isRunMoim = moimCategory === 'RUN';
+    var moimCatApiForFilter = typeof window !== 'undefined' ? window.openRidingMoimCategory || {} : {};
+    var RUN_LEVEL_OPTIONS_FOR_FILTER =
+      moimCatApiForFilter.RUN_LEVEL_OPTIONS && moimCatApiForFilter.RUN_LEVEL_OPTIONS.length
+        ? moimCatApiForFilter.RUN_LEVEL_OPTIONS
+        : [];
+    var runClsFn =
+      typeof window !== 'undefined' && typeof window.classifyOpenRidingRunLevelFilter === 'function'
+        ? window.classifyOpenRidingRunLevelFilter
+        : null;
+    var runTierLabelFn =
+      typeof window !== 'undefined' && typeof window.getOpenRidingRunTierLevelLabelFromPaceSec === 'function'
+        ? window.getOpenRidingRunTierLevelLabelFromPaceSec
+        : null;
+    var runPaceSec = openRidingFilterRunPace.paceSec;
+    var levelOptionsForFilter = isRunMoim ? RUN_LEVEL_OPTIONS_FOR_FILTER : RIDING_LEVEL_OPTIONS;
+
     var regionAndLevels = (
       <div className="space-y-4 text-left">
         <div>
@@ -3825,21 +3938,37 @@ function OpenRidingCalendarMain(props) {
 
         <div>
           <span className="text-xs text-slate-500 block mb-1">관심 레벨</span>
-          {RIDING_LEVEL_OPTIONS.map(function (opt) {
+          {levelOptionsForFilter.map(function (opt) {
             var on = prefs.preferredLevels.indexOf(opt.value) >= 0;
-            var wLv = peak60Watts > 0 && peakWeightKg > 0 ? peakWeightKg : prof.weight;
-            var refSoloFn =
-              typeof window !== 'undefined' && typeof window.getFilterInterestReferenceSoloSpeedKmH === 'function'
-                ? window.getFilterInterestReferenceSoloSpeedKmH
-                : null;
-            var intClsFn =
-              typeof window !== 'undefined' && typeof window.classifyOpenRidingInterestLevelFilter === 'function'
-                ? window.classifyOpenRidingInterestLevelFilter
-                : null;
-            var refSolo =
-              refSoloFn && prof.ok && wLv > 0 ? refSoloFn(peak60Watts, prof.ftp, wLv) : null;
-            var part =
-              intClsFn && refSolo != null && refSolo > 0 ? intClsFn(refSolo, opt.value) : null;
+            var part;
+            var badgeTitle;
+            if (isRunMoim) {
+              part = runClsFn && runPaceSec != null && runPaceSec > 0 ? runClsFn(runPaceSec, opt.value) : null;
+              badgeTitle = part
+                ? part.comment
+                : openRidingFilterRunPace.loading
+                  ? '10k 피크 페이스를 불러오는 중입니다.'
+                  : '최근 90일 러닝 기록(10k/7k/5k 구간 피크)이 있으면 참석 가능 여부를 표시합니다.';
+            } else {
+              var wLv = peak60Watts > 0 && peakWeightKg > 0 ? peakWeightKg : prof.weight;
+              var refSoloFn =
+                typeof window !== 'undefined' && typeof window.getFilterInterestReferenceSoloSpeedKmH === 'function'
+                  ? window.getFilterInterestReferenceSoloSpeedKmH
+                  : null;
+              var intClsFn =
+                typeof window !== 'undefined' && typeof window.classifyOpenRidingInterestLevelFilter === 'function'
+                  ? window.classifyOpenRidingInterestLevelFilter
+                  : null;
+              var refSolo =
+                refSoloFn && prof.ok && wLv > 0 ? refSoloFn(peak60Watts, prof.ftp, wLv) : null;
+              part =
+                intClsFn && refSolo != null && refSolo > 0 ? intClsFn(refSolo, opt.value) : null;
+              badgeTitle = part
+                ? part.comment
+                : !prof.ok
+                  ? 'FTP·체중을 입력하면 참조 평지 개인 평속(60분 피크, 없으면 FTP 평속×93%)으로 관심 레벨을 판별합니다.'
+                  : '';
+            }
             var badgeCls =
               part && part.tier === 'go'
                 ? 'bg-emerald-100 text-emerald-900 border border-emerald-300/90'
@@ -3848,11 +3977,6 @@ function OpenRidingCalendarMain(props) {
                   : part && part.tier === 'stop'
                     ? 'bg-red-50 text-red-800 border border-red-200/90'
                     : 'bg-slate-100 text-slate-500 border border-slate-200';
-            var badgeTitle = part
-              ? part.comment
-              : !prof.ok
-                ? 'FTP·체중을 입력하면 참조 평지 개인 평속(60분 피크, 없으면 FTP 평속×93%)으로 관심 레벨을 판별합니다.'
-                : '';
             return (
               <div
                 key={opt.value}
@@ -3885,7 +4009,52 @@ function OpenRidingCalendarMain(props) {
       </div>
     );
 
-    var abilityPanel = (
+    var abilityPanel = isRunMoim ? (
+      <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-3 space-y-3 open-riding-filter-ability-panel">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-violet-900">나의 페이스 능력 레벨</span>
+          <span className="text-[10px] text-slate-500 leading-tight text-right">
+            관심 레벨 판별: 최근 90일 10k 피크 페이스(없으면 7k/5k로 유추) · 구간은 입문~상급 기준
+          </span>
+        </div>
+        {openRidingFilterRunPace.loading ? (
+          <p className="text-xs text-slate-500 m-0 py-2 text-center">페이스 데이터 불러오는 중…</p>
+        ) : openRidingFilterRunPace.error ? (
+          <p className="text-xs text-amber-700 m-0 py-2 text-center">
+            최근 90일 러닝 기록을 불러오지 못했습니다. 네트워크 후 다시 열어 주세요.
+          </p>
+        ) : runPaceSec != null ? (
+          <>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5 col-span-2 open-riding-filter-ftp-solo-highlight">
+                <div className="text-violet-900 text-[10px] font-semibold">
+                  {openRidingFilterRunPace.paceLabel || '나의 10k 피크 페이스'}
+                </div>
+                <div className="font-bold text-violet-950 tabular-nums text-sm">
+                  {openRidingFilterRunPace.display || '-'}
+                </div>
+              </div>
+              <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5 col-span-2">
+                <div className="text-slate-500 text-[10px]">나의 관심 레벨 구간</div>
+                <div className="font-semibold text-slate-800 tabular-nums">
+                  {runTierLabelFn ? runTierLabelFn(runPaceSec) : '-'}
+                </div>
+              </div>
+            </div>
+            {openRidingFilterRunPace.referenceNote ? (
+              <p className="text-[10px] text-slate-500 m-0 leading-snug">
+                {openRidingFilterRunPace.referenceNote}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-xs text-slate-600 m-0 leading-relaxed">
+            최근 90일 이내 러닝 기록(10k/7k/5k 구간 피크)이 있으면, 관심 레벨 배지가
+            <strong> 10k 피크 페이스</strong> 기준으로 참석 가능 여부를 알려드립니다.
+          </p>
+        )}
+      </div>
+    ) : (
       <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-3 space-y-3 open-riding-filter-ability-panel">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs font-semibold text-violet-900">나의 항속 능력 레벨</span>

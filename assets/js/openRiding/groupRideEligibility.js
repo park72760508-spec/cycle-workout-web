@@ -403,14 +403,17 @@ export function getMaxRidingLevelsForPeakParticipation(powerW, weightKg, levelVa
 
 var OPEN_RIDING_RUN_LEVEL_ORDER = ['입문', '초급', '중급', '중상급', '상급'];
 
-/** 페이스(sec/km) — 빠를수록(초↓) 상위 티어 */
+/**
+ * 페이스(sec/km) — 빠를수록(초↓) 상위 티어
+ * 10k 페이스 기준: 입문(9분 초과)·초급(8분 이내)·중급(6분 이내)·중상급(4분30초 이내)·상급(4분 이내)
+ */
 function runPaceSecPerKmToTierIndex(secPerKm) {
   var sec = Number(secPerKm);
   if (!isFinite(sec) || sec <= 0) return 0;
-  if (sec >= 480) return 0;
-  if (sec >= 360) return 1;
-  if (sec >= 300) return 2;
-  if (sec >= 270) return 3;
+  if (sec > 480) return 0;
+  if (sec > 360) return 1;
+  if (sec > 270) return 2;
+  if (sec > 240) return 3;
   return 4;
 }
 

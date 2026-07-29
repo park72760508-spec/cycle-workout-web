@@ -8,11 +8,11 @@
   var RUN = 'RUN';
 
   var RUN_LEVEL_OPTIONS = [
-    { value: '입문', hint: '페이스 8:00/km 이상 또는 펀런' },
-    { value: '초급', hint: '페이스 6:00 ~ 7:59/km' },
-    { value: '중급', hint: '페이스 5:00 ~ 5:59/km' },
-    { value: '중상급', hint: '페이스 4:30 ~ 4:59/km' },
-    { value: '상급', hint: '페이스 4:30/km 미만 · 서브3 타깃 레이스' }
+    { value: '입문', hint: '10k 페이스 9:00/km 초과 또는 펀런' },
+    { value: '초급', hint: '10k 페이스 8:00/km 이내' },
+    { value: '중급', hint: '10k 페이스 6:00/km 이내' },
+    { value: '중상급', hint: '10k 페이스 4:30/km 이내' },
+    { value: '상급', hint: '10k 페이스 4:00/km 이내' }
   ];
 
   var RUN_ROTATION_OPTIONS = [
