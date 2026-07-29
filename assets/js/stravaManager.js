@@ -972,7 +972,18 @@ async function exchangeStravaCode(code, userId) {
       
       if (data.success) {
         console.log('[exchangeStravaCode] ✅ 성공');
-        return { success: true };
+        if (data.athleteMismatch) {
+          console.warn('[exchangeStravaCode] ⚠️ 이전과 다른 Strava 계정이 연결됨:', {
+            previousAthleteId: data.previousAthleteId,
+            newAthleteId: data.newAthleteId
+          });
+        }
+        return {
+          success: true,
+          athleteMismatch: !!data.athleteMismatch,
+          previousAthleteId: data.previousAthleteId,
+          newAthleteId: data.newAthleteId
+        };
       }
       return { success: false, error: data.error || '토큰 교환 실패' };
     } catch (err) {
