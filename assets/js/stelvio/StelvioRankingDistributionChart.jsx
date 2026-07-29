@@ -866,36 +866,56 @@
                       borderRight: '1px solid rgba(255,255,255,0.5)',
                     }}
                   >
-                    <span
-                      className={
-                        'leading-tight ' +
-                        (isBeginnerBand
-                          ? 'text-[10px] font-bold text-amber-950/95'
-                          : 'text-[9px] font-bold text-slate-900/95')
-                      }
-                    >
-                      {seg.label}
-                    </span>
-                    <span
-                      className={
-                        'leading-tight ' +
-                        (isBeginnerBand
-                          ? 'text-[9px] font-semibold text-amber-900/95'
-                          : 'text-[8px] font-semibold text-slate-800/95')
-                      }
-                    >
-                      {seg.speedHint}
-                    </span>
+                    {!runPaceTierBandEnabled ? (
+                      <>
+                        <span
+                          className={
+                            'leading-tight ' +
+                            (isBeginnerBand
+                              ? 'text-[10px] font-bold text-amber-950/95'
+                              : 'text-[9px] font-bold text-slate-900/95')
+                          }
+                        >
+                          {seg.label}
+                        </span>
+                        <span
+                          className={
+                            'leading-tight ' +
+                            (isBeginnerBand
+                              ? 'text-[9px] font-semibold text-amber-900/95'
+                              : 'text-[8px] font-semibold text-slate-800/95')
+                          }
+                        >
+                          {seg.speedHint}
+                        </span>
+                      </>
+                    ) : null}
                   </div>
                 );
               })}
             </div>
           ) : null}
-          {tierBandSegments.length > 0 ? (
+          {runPaceTierBandEnabled && tierBandSegments.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 mt-1.5 px-1">
+              {tierBandSegments.map(function (seg, si) {
+                return (
+                  <span
+                    key={'run-tier-legend-' + si}
+                    className="inline-flex items-center gap-1 text-[10px] text-slate-600"
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                      style={{ background: seg.color }}
+                    />
+                    {seg.label} {seg.speedHint}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
+          {tierBandSegments.length > 0 && openRidingTierBandWeightKg ? (
             <p className="text-[10px] text-slate-500 text-center m-0 mt-1.5 px-1">
-              {openRidingTierBandWeightKg
-                ? '본인 체중(' + openRidingTierBandWeightKg + 'kg) 기준 평지 항속 상한 — W/kg 축과 동일 스케일'
-                : '10k 페이스 구간(입문~상급) — 페이스 축과 동일 스케일'}
+              {'본인 체중(' + openRidingTierBandWeightKg + 'kg) 기준 평지 항속 상한 — W/kg 축과 동일 스케일'}
             </p>
           ) : null}
         </div>
