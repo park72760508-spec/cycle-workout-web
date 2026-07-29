@@ -84,6 +84,7 @@
     </div>
     <div id="success" class="hidden">
       <p class="msg">✅ Strava 연동이 완료되었습니다.</p>
+      <p id="athleteMismatchNote" class="msg err hidden" style="font-size: 13px; margin-top: 8px;"></p>
       <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
         <button id="closeBtn" type="button" class="link" style="cursor: pointer; border: none; font-size: inherit; font-family: inherit; margin-top: 0;">닫기</button>
       </div>
@@ -353,10 +354,19 @@
         success.classList.add('hidden');
         error.classList.add('hidden');
       }
-      function showSuccess() {
+      function showSuccess(data) {
         loading.classList.add('hidden');
         success.classList.remove('hidden');
         error.classList.add('hidden');
+        var mismatchNote = document.getElementById('athleteMismatchNote');
+        if (mismatchNote) {
+          if (data && data.athleteMismatch) {
+            mismatchNote.textContent = '⚠️ 이전에 연결했던 Strava 계정과 다른 계정이 연결되었습니다. 올바른 계정인지 꼭 확인해 주세요. 다른 계정이라면 다시 연동해 주세요.';
+            mismatchNote.classList.remove('hidden');
+          } else {
+            mismatchNote.classList.add('hidden');
+          }
+        }
       }
       function showError(msg) {
         loading.classList.add('hidden');
@@ -431,7 +441,7 @@
           }
           callbackProcessed = true;
           handleStravaCallback(
-            function () { showSuccess(); },
+            function (data) { showSuccess(data); },
             function (err) { showError(err); }
           );
           return;
@@ -480,7 +490,7 @@
         console.log('[callback.html] ✅ Firebase Auth 상태 확인 완료, Strava 콜백 처리 시작');
         console.log('[callback.html] 현재 사용자:', currentUser.uid);
         handleStravaCallback(
-          function () { showSuccess(); },
+          function (data) { showSuccess(data); },
           function (err) { showError(err); }
         );
       };
