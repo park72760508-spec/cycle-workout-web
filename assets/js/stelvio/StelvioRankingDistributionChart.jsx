@@ -371,11 +371,11 @@
         var b3 = paceChartMetricFromSec(270); // 중급/중상급 경계 4:30
         var b4 = paceChartMetricFromSec(240); // 중상급/상급 경계 4:00
         return [
-          { x0: xMin, x1: b1, label: '입문', speedHint: '~8:00', color: 'rgba(253, 224, 71, 0.72)' },
-          { x0: b1, x1: b2, label: '초급', speedHint: '~6:00', color: 'rgba(190, 242, 100, 0.46)' },
-          { x0: b2, x1: b3, label: '중급', speedHint: '~4:30', color: 'rgba(168, 85, 247, 0.4)' },
-          { x0: b3, x1: b4, label: '중상급', speedHint: '~4:00', color: 'rgba(249, 115, 22, 0.42)' },
-          { x0: b4, x1: xMax, label: '상급', speedHint: '4:00 미만', color: 'rgba(239, 68, 68, 0.42)' },
+          { x0: xMin, x1: b1, label: '입문', speedHint: '~9:00', color: 'rgba(253, 224, 71, 0.72)' },
+          { x0: b1, x1: b2, label: '초급', speedHint: '~8:00', color: 'rgba(190, 242, 100, 0.46)' },
+          { x0: b2, x1: b3, label: '중급', speedHint: '~6:00', color: 'rgba(168, 85, 247, 0.4)' },
+          { x0: b3, x1: b4, label: '중상급', speedHint: '~4:30', color: 'rgba(249, 115, 22, 0.42)' },
+          { x0: b4, x1: xMax, label: '상급', speedHint: '~4:00', color: 'rgba(239, 68, 68, 0.42)' },
         ];
       },
       [runPaceTierBandEnabled, xMin, xMax]
