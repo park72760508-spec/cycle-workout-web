@@ -368,13 +368,13 @@
         if (!runPaceTierBandEnabled) return [];
         var b1 = paceChartMetricFromSec(480); // 입문/초급 경계 8:00
         var b2 = paceChartMetricFromSec(360); // 초급/중급 경계 6:00
-        var b3 = paceChartMetricFromSec(270); // 중급/중상급 경계 4:30
+        var b3 = paceChartMetricFromSec(300); // 중급/중상급 경계 5:00
         var b4 = paceChartMetricFromSec(240); // 중상급/상급 경계 4:00
         return [
           { x0: xMin, x1: b1, label: '입문', speedHint: '~9:00', color: '#eab308', dotColor: '#eab308' },
           { x0: b1, x1: b2, label: '초급', speedHint: '~8:00', color: '#84cc16', dotColor: '#84cc16' },
           { x0: b2, x1: b3, label: '중급', speedHint: '~6:00', color: '#a855f7', dotColor: '#a855f7' },
-          { x0: b3, x1: b4, label: '중상급', speedHint: '~4:30', color: '#f97316', dotColor: '#f97316' },
+          { x0: b3, x1: b4, label: '중상급', speedHint: '~5:00', color: '#f97316', dotColor: '#f97316' },
           { x0: b4, x1: xMax, label: '상급', speedHint: '~4:00', color: '#dc2626', dotColor: '#dc2626' },
         ];
       },
