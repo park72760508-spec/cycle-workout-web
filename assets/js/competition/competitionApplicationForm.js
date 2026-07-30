@@ -37,6 +37,14 @@
     { value: 'B', label: 'B조' },
     { value: 'C', label: 'C조' },
   ];
+  /** RUN 출발 그룹 — 10k 페이스 기준(초/km 이내). E조는 상한 없음(느린 러너 기본 조). */
+  var RUN_START_GROUP_OPTIONS = [
+    { value: 'A', label: 'A조', maxSec: 240 },
+    { value: 'B', label: 'B조', maxSec: 300 },
+    { value: 'C', label: 'C조', maxSec: 360 },
+    { value: 'D', label: 'D조', maxSec: 480 },
+    { value: 'E', label: 'E조', maxSec: Infinity },
+  ];
   var BLOOD_TYPE_OPTIONS = [
     { value: 'RH+A', label: 'RH+ A형' },
     { value: 'RH+B', label: 'RH+ B형' },
@@ -102,15 +110,18 @@
     return dd >= 1 && dd <= daysInMonth;
   }
 
-  function chipGroupHtml(groupName, options, columns, selectedValue) {
-    var cls = 'competition-chip-group' + (columns === 2 ? ' competition-chip-group--2col' : '');
+  function chipGroupHtml(groupName, options, columns, selectedValue, disabledValues) {
+    var cls = 'competition-chip-group' + (columns ? ' competition-chip-group--' + columns + 'col' : '');
     return (
       '<div class="' + cls + '" data-chip-group="' + groupName + '">' +
       options
         .map(function (opt) {
           var sel = selectedValue && opt.value === selectedValue ? ' is-selected' : '';
+          var isDisabled = !!(disabledValues && disabledValues.indexOf(opt.value) !== -1);
+          var disabledCls = isDisabled ? ' is-disabled' : '';
+          var disabledAttr = isDisabled ? ' disabled' : '';
           return (
-            '<button type="button" class="competition-chip' + sel + '" data-value="' + escapeHtml(opt.value) + '">' +
+            '<button type="button" class="competition-chip' + sel + disabledCls + '" data-value="' + escapeHtml(opt.value) + '"' + disabledAttr + '>' +
             escapeHtml(opt.label) +
             '</button>'
           );
@@ -189,6 +200,22 @@
     var cycle = isCycle(comp);
     var divisions = cycle ? DIVISION_OPTIONS.CYCLE : DIVISION_OPTIONS.RUN;
     var sizeLabel = cycle ? '져지 사이즈' : '기념품(티셔츠) 사이즈';
+    var startGroupBlock = cycle
+      ? (
+        '<div class="competition-form-field" style="margin-bottom:0;">' +
+        '    <label class="competition-form-label">출발 그룹</label>' +
+        chipGroupHtml('startGroup', START_GROUP_OPTIONS, null, a.startGroup) +
+        '  </div>'
+      )
+      : (
+        '<div class="competition-form-field" style="margin-bottom:0;">' +
+        '    <label class="competition-form-label">출발 그룹' +
+        '      <span class="competition-form-hint-inline" id="cAppStartGroupPaceStatus">10k 페이스 확인 중…</span>' +
+        '    </label>' +
+        chipGroupHtml('startGroup', RUN_START_GROUP_OPTIONS, 5, a.startGroup) +
+        '    <p class="competition-form-hint">A조(4분 이내), B조(5분 이내), C조(6분 이내), D조(8분 이내), E조(9분 초과) / 10km 페이스 기준</p>' +
+        '  </div>'
+      );
     return (
       '<div class="competition-form-field">' +
       '    <label class="competition-form-label">참가 부문</label>' +
@@ -198,10 +225,7 @@
       '    <label class="competition-form-label">' + escapeHtml(sizeLabel) + '</label>' +
       chipGroupHtml('size', SIZE_OPTIONS, null, a.size) +
       '  </div>' +
-      '  <div class="competition-form-field" style="margin-bottom:0;">' +
-      '    <label class="competition-form-label">출발 그룹</label>' +
-      chipGroupHtml('startGroup', START_GROUP_OPTIONS, null, a.startGroup) +
-      '  </div>'
+      startGroupBlock
     );
   }
 
@@ -283,6 +307,7 @@
               state[groupName] = chip.getAttribute('data-value');
             }
             chip.addEventListener('click', function () {
+              if (chip.disabled || chip.classList.contains('is-disabled')) return;
               for (var k = 0; k < chips.length; k++) chips[k].classList.remove('is-selected');
               chip.classList.add('is-selected');
               state[groupName] = chip.getAttribute('data-value');
@@ -394,6 +419,107 @@
     };
     phoneEl.addEventListener('input', check);
     emergencyEl.addEventListener('input', check);
+  }
+
+  function resolveCurrentUid() {
+    try {
+      return (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** 10k 페이스(초/km) → RUN_START_GROUP_OPTIONS 인덱스(0=A조 가장 빠름 … 4=E조). */
+  function computeRunStartGroupTierIndex(paceSec) {
+    var sec = Number(paceSec);
+    if (!isFinite(sec) || sec <= 0) return null;
+    for (var i = 0; i < RUN_START_GROUP_OPTIONS.length; i++) {
+      if (sec <= RUN_START_GROUP_OPTIONS[i].maxSec) return i;
+    }
+    return RUN_START_GROUP_OPTIONS.length - 1;
+  }
+
+  /**
+   * 신청자의 10k 페이스로 출발 그룹 자격을 조회한다.
+   * 10k 기록이 없으면 7k → 5k 피크 페이스에 리겔 피로도(패널티)를 적용해 유추한다
+   * (runDashboardPace.resolveRunCrewLevelPaceFromEfforts — 러닝 크루 레벨 판정과 동일 로직).
+   */
+  function fetchRunStartGroupPaceInfo() {
+    var uid = resolveCurrentUid();
+    var pace = window.runDashboardPace;
+    if (
+      !uid ||
+      typeof window.getUserRunEfforts !== 'function' ||
+      !pace ||
+      typeof pace.resolveRunCrewLevelPaceFromEfforts !== 'function'
+    ) {
+      return Promise.resolve({ tierIndex: null, paceSec: null, display: null, inferred: false });
+    }
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var cutoff = new Date(today);
+    cutoff.setDate(cutoff.getDate() - 90);
+    var cutoffStr =
+      cutoff.getFullYear() +
+      '-' +
+      String(cutoff.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(cutoff.getDate()).padStart(2, '0');
+    return window
+      .getUserRunEfforts(uid, { limit: 600 })
+      .then(function (efforts) {
+        var res = pace.resolveRunCrewLevelPaceFromEfforts(efforts, cutoffStr) || {};
+        var paceSec = res.secPerKm != null && res.secPerKm > 0 ? res.secPerKm : null;
+        return {
+          tierIndex: computeRunStartGroupTierIndex(paceSec),
+          paceSec: paceSec,
+          display: res.display || null,
+          inferred: !!res.inferred
+        };
+      })
+      .catch(function () {
+        return { tierIndex: null, paceSec: null, display: null, inferred: false };
+      });
+  }
+
+  /** tierIndex보다 빠른(자격 없는) 조 버튼을 비활성화하고, 선택돼 있었다면 해제한다. */
+  function applyRunStartGroupEligibility(overlay, chipState, tierIndex) {
+    var groupEl = overlay.querySelector('[data-chip-group="startGroup"]');
+    if (!groupEl) return;
+    var chips = groupEl.querySelectorAll('.competition-chip');
+    for (var i = 0; i < chips.length; i++) {
+      var chip = chips[i];
+      var value = chip.getAttribute('data-value');
+      var optIdx = -1;
+      for (var j = 0; j < RUN_START_GROUP_OPTIONS.length; j++) {
+        if (RUN_START_GROUP_OPTIONS[j].value === value) {
+          optIdx = j;
+          break;
+        }
+      }
+      var disabled = optIdx >= 0 && optIdx < tierIndex;
+      chip.disabled = disabled;
+      chip.classList.toggle('is-disabled', disabled);
+      if (disabled && chipState.startGroup === value) {
+        chip.classList.remove('is-selected');
+        chipState.startGroup = null;
+      }
+    }
+  }
+
+  function wireRunStartGroupPace(overlay, comp, chipState) {
+    if (isCycle(comp)) return;
+    var statusEl = overlay.querySelector('#cAppStartGroupPaceStatus');
+    fetchRunStartGroupPaceInfo().then(function (info) {
+      if (info.tierIndex == null) {
+        if (statusEl) statusEl.textContent = '최근 90일 러닝 기록이 없어 전체 조 선택이 가능합니다.';
+        return;
+      }
+      applyRunStartGroupEligibility(overlay, chipState, info.tierIndex);
+      if (statusEl) {
+        statusEl.textContent = '나의 10k 페이스 ' + (info.display || '-') + (info.inferred ? ' (유추)' : '') + ' 기준';
+      }
+    });
   }
 
   function validateAndCollect(overlay, comp, chipState) {
@@ -508,6 +634,7 @@
     var overlay = window.competitionBottomSheet.openRawSheet(isEdit ? '신청서 수정' : '참가 신청서 작성', body, footer);
 
     wireChipGroups(overlay, chipState);
+    wireRunStartGroupPace(overlay, comp, chipState);
     wireAgreements(overlay);
     wireAddressSearch(overlay);
     wireDigitsOnlyInput(overlay.querySelector('#cAppBirth6'), 6);
