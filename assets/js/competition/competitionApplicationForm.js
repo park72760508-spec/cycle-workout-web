@@ -531,17 +531,33 @@
   }
 
   /** 맞춤 필터 설정 > 관심 레벨과 동일한 판정: 프로필 FTP·체중 → 평지 개인 평속(km/h) → 레벨 라벨. */
-  function resolveCurrentProfileFtpWeight() {
-    var u = null;
+  /**
+   * 신청서 화면은 프로필을 직접 로드하지 않아 window.currentUser가 비어 있거나 오래된 값일 수 있다.
+   * getUserByUid(uid)로 Firestore에서 최신 FTP·체중을 직접 읽고, 실패 시에만 캐시된 값으로 폴백한다.
+   */
+  function resolveCurrentProfileFtpWeight(uid) {
+    var fallback = { ftp: 0, weight: 0 };
     try {
-      u = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null;
+      var u = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null;
       if (!u) u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      fallback.ftp = u && Number(u.ftp) > 0 ? Number(u.ftp) : 0;
+      fallback.weight = u && Number(u.weight) > 0 ? Number(u.weight) : 0;
     } catch (e) {
-      u = null;
+      /* ignore, keep fallback zeros */
     }
-    var ftp = u && Number(u.ftp) > 0 ? Number(u.ftp) : 0;
-    var weight = u && Number(u.weight) > 0 ? Number(u.weight) : 0;
-    return { ftp: ftp, weight: weight, ok: ftp > 0 && weight > 0 };
+    if (!uid || typeof window === 'undefined' || typeof window.getUserByUid !== 'function') {
+      return Promise.resolve(fallback);
+    }
+    return window
+      .getUserByUid(uid)
+      .then(function (data) {
+        var ftp = data && Number(data.ftp) > 0 ? Number(data.ftp) : fallback.ftp;
+        var weight = data && Number(data.weight) > 0 ? Number(data.weight) : fallback.weight;
+        return { ftp: ftp, weight: weight };
+      })
+      .catch(function () {
+        return fallback;
+      });
   }
 
   /**
@@ -589,35 +605,22 @@
   function wireCycleStartGroupPace(overlay, comp, chipState) {
     if (!isCycle(comp)) return;
     var statusEl = overlay.querySelector('#cAppStartGroupPaceStatus');
-    var prof = resolveCurrentProfileFtpWeight();
     var refFn =
       typeof window !== 'undefined' && typeof window.getFilterInterestReferenceSoloSpeedKmH === 'function'
         ? window.getFilterInterestReferenceSoloSpeedKmH
         : null;
-    if (!refFn) {
-      if (statusEl) statusEl.textContent = '프로필에 FTP·체중을 입력하면 전체 조 선택이 가능합니다.';
-      return;
-    }
     var uid = resolveCurrentUid();
-    fetchCyclePeak60WattsInfo(uid).then(function (peakInfo) {
+    Promise.all([resolveCurrentProfileFtpWeight(uid), fetchCyclePeak60WattsInfo(uid)]).then(function (results) {
+      var prof = results[0];
+      var peakInfo = results[1];
       var weightForCalc = peakInfo.weightKg > 0 ? peakInfo.weightKg : prof.weight;
-      if (!(weightForCalc > 0)) {
-        if (statusEl) statusEl.textContent = '프로필에 FTP·체중을 입력하면 전체 조 선택이 가능합니다.';
-        return;
-      }
-      var soloKmh = refFn(peakInfo.watts, prof.ftp, weightForCalc);
-      if (soloKmh == null) {
-        if (statusEl) statusEl.textContent = '프로필에 FTP·체중을 입력하면 전체 조 선택이 가능합니다.';
-        return;
-      }
-      var tierIndex = computeCycleStartGroupTierIndex(soloKmh);
-      if (tierIndex == null) {
-        if (statusEl) statusEl.textContent = '';
-        return;
-      }
-      applyStartGroupEligibility(overlay, chipState, tierIndex, CYCLE_START_GROUP_OPTIONS);
+      var soloKmh = refFn && weightForCalc > 0 ? refFn(peakInfo.watts, prof.ftp, weightForCalc) : null;
       if (statusEl) {
-        statusEl.innerHTML = '나의 항속 능력<br>' + soloKmh + 'km/h';
+        statusEl.innerHTML = '나의 항속 능력<br>' + (soloKmh != null ? soloKmh + 'km/h' : '—');
+      }
+      var tierIndex = soloKmh != null ? computeCycleStartGroupTierIndex(soloKmh) : null;
+      if (tierIndex != null) {
+        applyStartGroupEligibility(overlay, chipState, tierIndex, CYCLE_START_GROUP_OPTIONS);
       }
     });
   }
