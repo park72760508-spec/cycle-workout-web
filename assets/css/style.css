@@ -3503,6 +3503,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .btn-device.basecamp-btn-indoor-entry::before,
 #basecampScreen .btn-device.basecamp-btn-riding-group-entry::before,
 #basecampScreen .btn-device.basecamp-btn-affiliate-entry::before,
+#basecampScreen .btn-device.basecamp-btn-cycle-competition::before,
 .basecamp-btn-career::before {
   content: '';
   position: absolute;
