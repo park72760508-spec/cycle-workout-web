@@ -3340,6 +3340,16 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   background-repeat: no-repeat !important;
 }
 
+/* 베이스캠프: CYCLE 대회 (RUN 베이스캠프 대회 버튼과 동일 아트워크) */
+#basecampScreen .btn-device.basecamp-btn-cycle-competition,
+#basecampScreen .basecamp-btn-cycle-competition {
+  background-image: url('../img/champion.svg') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
 #basecampScreen .btn-device.basecamp-btn-riding-group-entry::before,
 #basecampScreen .basecamp-btn-riding-group-entry::before,
 #basecampScreen .btn-device.basecamp-btn-affiliate-entry::before,
