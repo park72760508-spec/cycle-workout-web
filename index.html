@@ -4140,14 +4140,13 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof openCycleDashboardFromBasecamp==='function')openCycleDashboardFromBasecamp();else if(typeof showScreen==='function')showScreen('performanceDashboardScreen');" aria-label="나의 기록">
                 <span>나의 기록</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-group-entry" id="btnBasecampRidingGroupEntry" onclick="if (typeof navigateToClubHouseFromBasecamp === 'function') navigateToClubHouseFromBasecamp(); else { window.__openRidingInitialView = 'groups'; if (typeof showScreen === 'function') showScreen('openRidingRoomScreen'); }" aria-label="클럽 하우스">
-                <span>클럽 하우스</span>
-                <span id="basecampClubHouseNotiBadge" aria-label="클럽 가입 신청 건수"></span>
-              </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampOpenRiding" onclick="if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp(); else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="라이딩 모임">
                 <span>라이딩 모임</span>
                 <!-- 알림 배지: top:25% / right:25% (버튼 4등분 우상단 중앙) — 이후 수치 보정 가능 -->
                 <span id="basecampRidingNotiBadge" aria-label="알림 건수"></span>
+              </button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-cycle-competition" id="btnBasecampCompetition" onclick="if(typeof openCompetitionFromCycleBasecamp==='function')openCompetitionFromCycleBasecamp();else if(typeof showScreen==='function')showScreen('competitionScreen');" aria-label="대회">
+                <span>대회</span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-indoor-entry" id="btnBasecampIndoorEntry" onclick="if (typeof showScreen === 'function') showScreen('indoorTrainingSubScreen');" aria-label="인도어 훈련">
                 <span>인도어 훈련</span>
@@ -37324,7 +37323,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
 
       useEffect(
         function () {
-          if (!hasAny) return;
+          if (!data || data.length === 0) return;
           var ctx = chartRef.current && chartRef.current.getContext('2d');
           if (!ctx || typeof Chart === 'undefined') return;
           if (chartInstanceRef.current) {
@@ -37447,14 +37446,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
           };
         },
-        [data, selectedSlot, hasAny]
+        [data, selectedSlot]
       );
 
       function cadenceHeaderAndPanel() {
         if (!hasAny) {
           return (
-            <div className="flex items-center justify-between gap-2 mb-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1 min-w-0 flex-wrap">
               <h3 className="text-sm font-semibold text-gray-600 truncate">케이던스 트렌드</h3>
+              <span className="text-[11px] text-gray-400">{slotLabel} 구간 기록 없음</span>
             </div>
           );
         }
@@ -37505,18 +37505,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         );
       }
 
-      if (!data || data.length === 0 || !hasAny) {
+      if (!data || data.length === 0) {
         return (
-          <DashboardCard>
-            {cadenceHeaderAndPanel()}
-            <div className="h-[180px] flex flex-col items-center justify-center text-gray-400 text-sm gap-1">
-              <span>{slotLabel} 구간에는 케이던스 기록이 없습니다.</span>
-              <span>위 구간 버튼에서 다른 구간을 선택해 보세요.</span>
+          <DashboardCard title="케이던스 트렌드">
+            <div className="h-[180px] flex items-center justify-center text-gray-400 text-sm">
+              데이터가 없습니다
             </div>
           </DashboardCard>
         );
       }
 
+      /** 선택 구간에 케이던스 값이 하나도 없어도 축·격자만이라도 항상 그래프 카드를 렌더링한다
+       * (값이 전부 null이면 Chart.js가 선 없이 빈 축만 그려서 "그래프가 통째로 안 보인다"는
+       * 인상을 주지 않고, 구간을 잘못 골랐을 뿐이라는 게 바로 보이게 한다). */
       return (
         <DashboardCard>
           {cadenceHeaderAndPanel()}
@@ -37525,6 +37526,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <canvas ref={chartRef} />
             </div>
           </div>
+          {!hasAny ? (
+            <p className="text-[11px] text-gray-400 text-center mt-1 mb-0">
+              {slotLabel} 구간에는 케이던스 기록이 없습니다 — 위 구간 버튼에서 다른 구간을 선택해 보세요.
+            </p>
+          ) : null}
         </DashboardCard>
       );
     }
