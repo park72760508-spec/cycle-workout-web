@@ -672,13 +672,17 @@
 
           var RUN_GROWTH_SPEED_FIELDS = ['speed_1k', 'speed_3k', 'speed_5k', 'speed_7k', 'speed_10k', 'speed_20k'];
           var RUN_GROWTH_HR_FIELDS = ['hr_1k', 'hr_3k', 'hr_5k', 'hr_7k', 'hr_10k', 'hr_20k'];
+          /** 구간별 윈도우 스캔(calculateAndSaveRunEfforts) 시 이미 추출돼 저장된 케이던스 값 재사용 */
+          var RUN_GROWTH_CADENCE_FIELDS = ['cadence_1k', 'cadence_3k', 'cadence_5k', 'cadence_7k', 'cadence_10k', 'cadence_20k'];
           var RUN_GROWTH_SLOT_COUNT = 6;
           function emptyRunGrowthDay() {
             return {
               w: [0, 0, 0, 0, 0, 0],
               h: [0, 0, 0, 0, 0, 0],
+              c: [0, 0, 0, 0, 0, 0],
               wDate: [null, null, null, null, null, null],
-              hDate: [null, null, null, null, null, null]
+              hDate: [null, null, null, null, null, null],
+              cDate: [null, null, null, null, null, null]
             };
           }
           var effortsForGrowth = [];
@@ -699,6 +703,7 @@
             for (si = 0; si < RUN_GROWTH_SLOT_COUNT; si++) {
               var wv = Number(eff[RUN_GROWTH_SPEED_FIELDS[si]]) || 0;
               var hv = Number(eff[RUN_GROWTH_HR_FIELDS[si]]) || 0;
+              var cv = Number(eff[RUN_GROWTH_CADENCE_FIELDS[si]]) || 0;
               if (wv > d.w[si]) {
                 d.w[si] = wv;
                 d.wDate[si] = ds;
@@ -706,6 +711,10 @@
               if (hv > d.h[si]) {
                 d.h[si] = hv;
                 d.hDate[si] = ds;
+              }
+              if (cv > d.c[si]) {
+                d.c[si] = cv;
+                d.cDate[si] = ds;
               }
             }
           });
@@ -742,8 +751,10 @@
             }
             var monthW = [0, 0, 0, 0, 0, 0];
             var monthH = [0, 0, 0, 0, 0, 0];
+            var monthC = [0, 0, 0, 0, 0, 0];
             var monthPeakDateW = [null, null, null, null, null, null];
             var monthPeakDateH = [null, null, null, null, null, null];
+            var monthPeakDateC = [null, null, null, null, null, null];
             Object.keys(byDateGrowth).forEach(function(ds) {
               if (ds < startStr || ds > endStr) return;
               var day = byDateGrowth[ds];
@@ -757,6 +768,10 @@
                   monthH[si2] = day.h[si2];
                   monthPeakDateH[si2] = day.hDate[si2] || ds;
                 }
+                if (day.c[si2] > monthC[si2]) {
+                  monthC[si2] = day.c[si2];
+                  monthPeakDateC[si2] = day.cDate[si2] || ds;
+                }
               }
             });
             var monthLabel = m + '월';
@@ -767,8 +782,10 @@
               growthSport: 'run',
               growthWattsSlots: monthW.map(function(v) { return v > 0 ? v : null; }),
               growthHrSlots: monthH.map(function(v) { return v > 0 ? v : null; }),
+              growthCadenceSlots: monthC.map(function(v) { return v > 0 ? v : null; }),
               growthWattsPeakDates: monthPeakDateW.slice(),
               growthHrPeakDates: monthPeakDateH.slice(),
+              growthCadencePeakDates: monthPeakDateC.slice(),
               max20minWatts: monthW[4] > 0 ? monthW[4] : null,
               maxHr20min: monthH[4] > 0 ? monthH[4] : null
             });
