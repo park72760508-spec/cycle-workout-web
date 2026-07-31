@@ -561,26 +561,26 @@
   }
 
   /**
-   * 맞춤 필터 설정 > 관심 레벨의 "현실 지표"와 동일: 최근 6개월 60분 최고 평균 파워(랭킹 산출)로
-   * 항속 능력을 구한다. 랭킹 데이터에 60분 피크가 없으면 { watts: 0 }을 반환해 FTP 폴백을 타게 한다.
+   * 분석 > "1시간 항속 능력 산출하기"와 동일한 로직(stelvioComputeOneHourAbilityFromLogs)으로
+   * 최근 라이딩 기록의 60분 피크 파워를 구한다. 기록이 없거나 산출 불가하면 해당 함수 내부의
+   * FTP×93% 폴백이 적용된다.
    */
-  function fetchCyclePeak60WattsInfo(uid) {
-    if (!uid) return Promise.resolve({ watts: 0, weightKg: 0 });
-    var params = new URLSearchParams({ period: 'rolling6m', duration: '60min', gender: 'all', uid: String(uid) });
-    var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString();
-    return fetch(url, { method: 'GET', mode: 'cors' })
-      .then(function (res) {
-        return res.json();
-      })
-      .then(function (data) {
-        if (!data || !data.success) return { watts: 0, weightKg: 0 };
-        var cu = data.currentUser || null;
-        var watts = cu && Number(cu.watts) > 0 ? Number(cu.watts) : 0;
-        var weightKg = cu && Number(cu.weightKg) > 0 ? Number(cu.weightKg) : 0;
-        return { watts: watts, weightKg: weightKg };
+  function fetchCycleOneHourAbility(uid, prof) {
+    var getLogsFn =
+      typeof window !== 'undefined' && typeof window.getUserTrainingLogs === 'function'
+        ? window.getUserTrainingLogs
+        : null;
+    var computeFn =
+      typeof window !== 'undefined' && typeof window.stelvioComputeOneHourAbilityFromLogs === 'function'
+        ? window.stelvioComputeOneHourAbilityFromLogs
+        : null;
+    if (!uid || !getLogsFn || !computeFn) return Promise.resolve(null);
+    return getLogsFn(uid, { limit: 400 })
+      .then(function (logs) {
+        return computeFn(Array.isArray(logs) ? logs : [], { ftp: prof.ftp, weight: prof.weight });
       })
       .catch(function () {
-        return { watts: 0, weightKg: 0 };
+        return null;
       });
   }
 
@@ -605,23 +605,18 @@
   function wireCycleStartGroupPace(overlay, comp, chipState) {
     if (!isCycle(comp)) return;
     var statusEl = overlay.querySelector('#cAppStartGroupPaceStatus');
-    var refFn =
-      typeof window !== 'undefined' && typeof window.getFilterInterestReferenceSoloSpeedKmH === 'function'
-        ? window.getFilterInterestReferenceSoloSpeedKmH
-        : null;
     var uid = resolveCurrentUid();
-    Promise.all([resolveCurrentProfileFtpWeight(uid), fetchCyclePeak60WattsInfo(uid)]).then(function (results) {
-      var prof = results[0];
-      var peakInfo = results[1];
-      var weightForCalc = peakInfo.weightKg > 0 ? peakInfo.weightKg : prof.weight;
-      var soloKmh = refFn && weightForCalc > 0 ? refFn(peakInfo.watts, prof.ftp, weightForCalc) : null;
-      if (statusEl) {
-        statusEl.innerHTML = '나의 항속 능력<br>' + (soloKmh != null ? soloKmh + 'km/h' : '—');
-      }
-      var tierIndex = soloKmh != null ? computeCycleStartGroupTierIndex(soloKmh) : null;
-      if (tierIndex != null) {
-        applyStartGroupEligibility(overlay, chipState, tierIndex, CYCLE_START_GROUP_OPTIONS);
-      }
+    resolveCurrentProfileFtpWeight(uid).then(function (prof) {
+      return fetchCycleOneHourAbility(uid, prof).then(function (ability) {
+        var soloKmh = ability && Number(ability.speedKmh) > 0 ? ability.speedKmh : null;
+        if (statusEl) {
+          statusEl.innerHTML = '나의 항속 능력<br>' + (soloKmh != null ? soloKmh + 'km/h' : '—');
+        }
+        var tierIndex = soloKmh != null ? computeCycleStartGroupTierIndex(soloKmh) : null;
+        if (tierIndex != null) {
+          applyStartGroupEligibility(overlay, chipState, tierIndex, CYCLE_START_GROUP_OPTIONS);
+        }
+      });
     });
   }
 
