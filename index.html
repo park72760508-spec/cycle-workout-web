@@ -37401,16 +37401,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         [data, selectedSlot]
       );
 
+      /** 전체 슬롯이 아니라 '현재 선택된 구간(selectedSlot)'에 값이 있는지로 판정해야 한다 —
+       * 전체 슬롯 기준으로 판정하면 다른 구간엔 값이 있는데 선택된 구간만 비어 있을 때도
+       * hasAny=true가 되어 빈 그래프(선만 없는 축)가 그대로 렌더링된다. */
       var hasAny =
         data &&
         data.some(function (d) {
-          return d.growthCadenceSlots && d.growthCadenceSlots.some(function (v) { return v != null && v > 0; });
+          var v = d.growthCadenceSlots ? d.growthCadenceSlots[selectedSlot] : null;
+          return v != null && v > 0;
         });
       if (!data || data.length === 0 || !hasAny) {
+        var slotLabel = RUN_GROWTH_PR_CIRCLE_LABELS[selectedSlot] || '';
         return (
           <DashboardCard title="케이던스 트렌드">
-            <div className="h-[180px] flex items-center justify-center text-gray-400 text-sm">
-              데이터가 없습니다
+            <div className="h-[180px] flex flex-col items-center justify-center text-gray-400 text-sm gap-1">
+              <span>{slotLabel} 구간에는 케이던스 기록이 없습니다.</span>
+              <span>위 구간 버튼에서 다른 구간을 선택해 보세요.</span>
             </div>
           </DashboardCard>
         );
