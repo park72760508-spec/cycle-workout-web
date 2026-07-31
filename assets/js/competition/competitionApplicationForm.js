@@ -610,7 +610,11 @@
       return fetchCycleOneHourAbility(uid, prof).then(function (ability) {
         var soloKmh = ability && Number(ability.speedKmh) > 0 ? ability.speedKmh : null;
         if (statusEl) {
-          statusEl.innerHTML = '나의 항속 능력<br>' + (soloKmh != null ? soloKmh + 'km/h' : '—');
+          statusEl.innerHTML =
+            '나의 항속 능력 ' +
+            (soloKmh != null
+              ? '<span style="color:#fb923c;font-weight:700;">' + soloKmh + 'km/h</span>'
+              : '—');
         }
         var tierIndex = soloKmh != null ? computeCycleStartGroupTierIndex(soloKmh) : null;
         if (tierIndex != null) {
