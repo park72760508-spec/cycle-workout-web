@@ -37297,14 +37297,34 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       var p = props || {};
       var data = p.data || [];
       var selectedSlot = p.selectedSlot != null ? p.selectedSlot : 4;
-      var GROWTH_LINE_CADENCE = '#0d9488';
-      var GROWTH_FILL_CADENCE = 'rgba(13, 148, 136, 0.14)';
+      /** 훈련 부하 트렌드(TSS) 그래프와 동일한 녹색 팔레트·호버 배지 패턴 */
+      var CADENCE_LINE = '#15803d';
+      var CADENCE_FILL = 'rgba(22, 163, 74, 0.12)';
+      var CADENCE_PANEL_REF_LINE = '#16a34a';
+      var CADENCE_PANEL_BADGE_W = 140;
+      var CADENCE_PANEL_SUB = '#64748b';
       var chartRef = useRef(null);
       var chartInstanceRef = useRef(null);
+      var cadencePanelIndexRef = useRef(0);
+      var _hoverState = useState(0);
+      var cadenceHoverIdx = _hoverState[0];
+      var setCadenceHoverIdx = _hoverState[1];
+
+      var slotLabel = RUN_GROWTH_PR_CIRCLE_LABELS[selectedSlot] || '';
+
+      /** 전체 슬롯이 아니라 '현재 선택된 구간(selectedSlot)'에 값이 있는지로 판정해야 한다 —
+       * 전체 슬롯 기준으로 판정하면 다른 구간엔 값이 있는데 선택된 구간만 비어 있을 때도
+       * hasAny=true가 되어 빈 그래프(선만 없는 축)가 그대로 렌더링된다. */
+      var hasAny =
+        data &&
+        data.some(function (d) {
+          var v = d && d.growthCadenceSlots ? d.growthCadenceSlots[selectedSlot] : null;
+          return v != null && v > 0;
+        });
 
       useEffect(
         function () {
-          if (!data || data.length === 0) return;
+          if (!hasAny) return;
           var ctx = chartRef.current && chartRef.current.getContext('2d');
           if (!ctx || typeof Chart === 'undefined') return;
           if (chartInstanceRef.current) {
@@ -37320,16 +37340,46 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var validC = cadenceData.filter(function (v) {
             return v != null && !isNaN(v) && v > 0;
           });
-          var yMin = 0;
-          var yMax = 200;
+          var yMin = 150;
+          var yMax = 190;
           if (validC.length) {
-            yMin = Math.max(0, Math.min.apply(null, validC) - 5);
-            yMax = Math.max.apply(null, validC) + 8;
+            yMin = Math.max(0, Math.floor(Math.min.apply(null, validC) - 5));
+            yMax = Math.ceil(Math.max.apply(null, validC) + 8);
           }
-          if (yMax <= yMin) {
+          if (!(yMax > yMin)) {
             yMin = 150;
             yMax = 190;
           }
+          var lastIx = Math.max(0, data.length - 1);
+          cadencePanelIndexRef.current = lastIx;
+          setCadenceHoverIdx(lastIx);
+
+          var cadencePurpleVertPlugin = {
+            id: 'cadenceTrendVertLine',
+            afterDraw: function (chart) {
+              var idx = cadencePanelIndexRef.current;
+              if (typeof idx !== 'number' || idx < 0 || !chart.chartArea) return;
+              var meta = chart.getDatasetMeta(0);
+              if (!meta || !meta.data || idx >= meta.data.length) return;
+              var pt = meta.data[idx];
+              if (!pt || pt.x == null) return;
+              var x = pt.x;
+              var top = chart.chartArea.top;
+              var bottom = chart.chartArea.bottom;
+              var c2 = chart.ctx;
+              c2.save();
+              c2.beginPath();
+              c2.setLineDash([6, 4]);
+              c2.strokeStyle = CADENCE_PANEL_REF_LINE;
+              c2.lineWidth = 3;
+              c2.moveTo(x, top);
+              c2.lineTo(x, bottom);
+              c2.stroke();
+              c2.setLineDash([]);
+              c2.restore();
+            }
+          };
+
           chartInstanceRef.current = new Chart(ctx, {
             type: 'line',
             data: {
@@ -37338,58 +37388,57 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 {
                   label: '케이던스 (spm)',
                   data: cadenceData,
-                  borderColor: GROWTH_LINE_CADENCE,
-                  backgroundColor: GROWTH_FILL_CADENCE,
-                  borderWidth: 2,
-                  tension: 0.45,
+                  borderColor: CADENCE_LINE,
+                  backgroundColor: CADENCE_FILL,
+                  borderWidth: 2.5,
+                  tension: 0.4,
+                  cubicInterpolationMode: 'monotone',
                   fill: true,
                   spanGaps: true,
-                  pointRadius: 3,
+                  pointRadius: 0,
                   pointHoverRadius: 5,
-                  pointBackgroundColor: GROWTH_LINE_CADENCE
+                  pointHoverBackgroundColor: CADENCE_PANEL_REF_LINE,
+                  pointHitRadius: 10,
+                  pointBackgroundColor: 'transparent',
+                  pointBorderWidth: 0
                 }
               ]
             },
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              layout: { padding: { top: 8, left: 0, right: 4, bottom: 0 } },
+              layout: { padding: { top: 8, left: 4, right: 6, bottom: 2 } },
               interaction: { mode: 'index', intersect: false },
+              onHover: function (event, elements, chart) {
+                var lastI = Math.max(0, data.length - 1);
+                var ix = elements && elements.length > 0 && elements[0].index != null ? elements[0].index : lastI;
+                cadencePanelIndexRef.current = ix;
+                setCadenceHoverIdx(function (prev) {
+                  return prev === ix ? prev : ix;
+                });
+                try {
+                  chart.update('none');
+                } catch (e2) {}
+              },
               plugins: {
                 legend: { display: false },
-                tooltip: {
-                  callbacks: {
-                    label: function (ctx2) {
-                      var v = ctx2.parsed.y;
-                      return v != null ? '케이던스 ' + Math.round(v) + ' spm' : '기록 없음';
-                    }
-                  }
-                }
+                tooltip: { enabled: false }
               },
               scales: {
                 x: {
                   grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                  ticks: { font: { size: 10 }, color: '#6b7280', maxRotation: 45, minRotation: 0, maxTicksLimit: 12, autoSkip: true }
+                  ticks: { font: { size: 10 }, color: '#6b7280', maxRotation: 0, minRotation: 0, autoSkip: false, maxTicksLimit: 12 }
                 },
                 y: {
-                  type: 'linear',
-                  position: 'left',
-                  display: true,
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: { font: { size: 11 }, color: '#6b7280' },
                   min: yMin,
                   max: yMax,
-                  beginAtZero: false,
-                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                  ticks: {
-                    font: { size: 10 },
-                    color: GROWTH_LINE_CADENCE,
-                    maxTicksLimit: 5,
-                    callback: function (value) {
-                      return Math.round(value);
-                    }
-                  }
+                  beginAtZero: false
                 }
               }
-            }
+            },
+            plugins: [cadencePurpleVertPlugin]
           });
           return function cleanup() {
             if (chartInstanceRef.current) {
@@ -37398,22 +37447,68 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
           };
         },
-        [data, selectedSlot]
+        [data, selectedSlot, hasAny]
       );
 
-      /** 전체 슬롯이 아니라 '현재 선택된 구간(selectedSlot)'에 값이 있는지로 판정해야 한다 —
-       * 전체 슬롯 기준으로 판정하면 다른 구간엔 값이 있는데 선택된 구간만 비어 있을 때도
-       * hasAny=true가 되어 빈 그래프(선만 없는 축)가 그대로 렌더링된다. */
-      var hasAny =
-        data &&
-        data.some(function (d) {
-          var v = d.growthCadenceSlots ? d.growthCadenceSlots[selectedSlot] : null;
-          return v != null && v > 0;
-        });
-      if (!data || data.length === 0 || !hasAny) {
-        var slotLabel = RUN_GROWTH_PR_CIRCLE_LABELS[selectedSlot] || '';
+      function cadenceHeaderAndPanel() {
+        if (!hasAny) {
+          return (
+            <div className="flex items-center justify-between gap-2 mb-1 min-w-0">
+              <h3 className="text-sm font-semibold text-gray-600 truncate">케이던스 트렌드</h3>
+            </div>
+          );
+        }
+        var gi = cadenceHoverIdx;
+        if (gi == null || gi < 0 || gi >= data.length) gi = Math.max(0, data.length - 1);
+        var row = data[gi] || {};
+        var cVal = row.growthCadenceSlots ? row.growthCadenceSlots[selectedSlot] : null;
+        var cText = cVal != null && cVal > 0 ? Math.round(cVal) + ' spm' : '기록 없음';
+        var peakDates = row.growthCadencePeakDates;
+        var peakDs = peakDates ? peakDates[selectedSlot] : null;
+        var gSub = slotLabel + ' | ' + (peakDs && String(peakDs).length >= 8
+          ? String(peakDs).split('-').slice(1, 3).map(function (s) { return String(s).padStart(2, '0'); }).join('-')
+          : (row.monthLabel || '—'));
+        if (gSub.length > 24) gSub = gSub.slice(0, 22) + '…';
+        var panelBg = 'linear-gradient(180deg, rgba(21,128,61,0.11) 0%, rgba(21,128,61,0.05) 100%), #fff';
         return (
-          <DashboardCard title="케이던스 트렌드">
+          <React.Fragment>
+            <div className="flex items-center justify-between gap-2 mb-3 min-w-0">
+              <h3 className="text-sm font-semibold text-gray-600 truncate">케이던스 트렌드</h3>
+            </div>
+            <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', flexShrink: 0, boxSizing: 'border-box', paddingBottom: 4, pointerEvents: 'none' }}>
+              <div
+                style={{
+                  width: CADENCE_PANEL_BADGE_W,
+                  minHeight: 36,
+                  boxSizing: 'border-box',
+                  background: panelBg,
+                  border: '1.5px solid ' + CADENCE_PANEL_REF_LINE,
+                  borderRadius: 10,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                  padding: '4px 6px 5px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: 'ui-sans-serif, system-ui, sans-serif'
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, color: CADENCE_PANEL_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased', textAlign: 'center', maxWidth: '100%', fontVariantNumeric: 'tabular-nums' }}>
+                  {cText}
+                </div>
+                <div style={{ fontSize: 9, fontWeight: 400, color: CADENCE_PANEL_SUB, lineHeight: 1.2, marginTop: 2, textAlign: 'center', maxWidth: '100%', wordBreak: 'break-all' }}>
+                  {gSub}
+                </div>
+              </div>
+            </div>
+          </React.Fragment>
+        );
+      }
+
+      if (!data || data.length === 0 || !hasAny) {
+        return (
+          <DashboardCard>
+            {cadenceHeaderAndPanel()}
             <div className="h-[180px] flex flex-col items-center justify-center text-gray-400 text-sm gap-1">
               <span>{slotLabel} 구간에는 케이던스 기록이 없습니다.</span>
               <span>위 구간 버튼에서 다른 구간을 선택해 보세요.</span>
@@ -37423,9 +37518,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       }
 
       return (
-        <DashboardCard title="케이던스 트렌드">
-          <div style={{ position: 'relative', width: '100%', height: 180 }}>
-            <canvas ref={chartRef} />
+        <DashboardCard>
+          {cadenceHeaderAndPanel()}
+          <div className="min-h-0 w-full" style={{ display: 'flex', flexDirection: 'column', minHeight: 180, height: 'min(180px, 42vw)' }}>
+            <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1, touchAction: 'none' }}>
+              <canvas ref={chartRef} />
+            </div>
           </div>
         </DashboardCard>
       );
