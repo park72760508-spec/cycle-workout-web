@@ -206,11 +206,10 @@
     var startGroupBlock = cycle
       ? (
         '<div class="competition-form-field" style="margin-bottom:0;">' +
-        '    <label class="competition-form-label">출발 그룹' +
-        '      <span class="competition-form-hint-inline" id="cAppStartGroupPaceStatus">관심 레벨 확인 중…</span>' +
-        '    </label>' +
+        '    <label class="competition-form-label">출발 그룹</label>' +
+        '    <p class="competition-form-hint" id="cAppStartGroupPaceStatus">항속 능력 확인 중…</p>' +
         chipGroupHtml('startGroup', CYCLE_START_GROUP_OPTIONS, 5, a.startGroup) +
-        '    <p class="competition-form-hint">A조(상급), B조(중상급), C조(중급), D조(초급), E조(입문) / 맞춤 필터 관심 레벨 기준</p>' +
+        '    <p class="competition-form-hint">A조(35km/h~), B조(~35km/h), C조(~32km/h), D조(~28km/h), E조(~25km/h)</p>' +
         '  </div>'
       )
       : (
@@ -618,9 +617,7 @@
       }
       applyStartGroupEligibility(overlay, chipState, tierIndex, CYCLE_START_GROUP_OPTIONS);
       if (statusEl) {
-        var usedPeak = peakInfo.watts > 0;
-        statusEl.textContent =
-          (usedPeak ? '나의 60분 피크 평지 평속 ' : '나의 FTP 평지 평속(93%) ') + soloKmh + 'km/h 기준';
+        statusEl.innerHTML = '나의 항속 능력<br>' + soloKmh + 'km/h';
       }
     });
   }
