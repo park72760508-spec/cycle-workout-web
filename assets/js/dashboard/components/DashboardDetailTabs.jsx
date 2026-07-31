@@ -254,6 +254,11 @@
     var showSkeleton = _useState2[0];
     var setShowSkeleton = _useState2[1];
 
+    /** 나의 성장 트렌드 구간(1k~20k) 버튼 — RUN 케이던스 트렌드 차트와 공용으로 사용 */
+    var _useStateGrowthSlot = useState(4);
+    var sharedGrowthSlot = _useStateGrowthSlot[0];
+    var setSharedGrowthSlot = _useStateGrowthSlot[1];
+
     var tabReadyTimerRef = useRef(null);
     var tabRefs = useRef([]);
     var containerRef = useRef(null);
@@ -278,6 +283,7 @@
     var Vo2MaxTrendChart = window.Vo2MaxTrendChart;
     var TrainingLoadTssTrendChart = window.TrainingLoadTssTrendChart;
     var GrowthTrendChart = window.GrowthTrendChart;
+    var GrowthCadenceTrendChart = window.GrowthCadenceTrendChart;
     var YearlyPowerPrChart = window.YearlyPowerPrChart;
     var WkgGradeIndicator = window.WkgGradeIndicator;
     var StelvioOctagonRanksCard = window.StelvioOctagonRanksCard;
@@ -380,7 +386,17 @@
             DashboardCard,
             { title: '나의 성장 트렌드' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
-          ) : GrowthTrendChart && React.createElement(GrowthTrendChart, { data: growthTrendData, yearlyGrowthPr: growthYearlyPr, userProfile: userProfile, isRun: isRun }),
+          ) : GrowthTrendChart && React.createElement(GrowthTrendChart, {
+            data: growthTrendData,
+            yearlyGrowthPr: growthYearlyPr,
+            userProfile: userProfile,
+            isRun: isRun,
+            onSlotChange: setSharedGrowthSlot
+          }),
+          isRun && !logsLoading && !logsLoadError && GrowthCadenceTrendChart && React.createElement(GrowthCadenceTrendChart, {
+            data: growthTrendData,
+            selectedSlot: sharedGrowthSlot
+          }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: 'VO₂max 트렌드' },
