@@ -147,6 +147,15 @@
     }
   }
 
+  /** CYCLE 베이스캠프 → 대회 (RUN과 동일 화면, CYCLE 카테고리로 필터) */
+  function openCompetitionFromCycleBasecamp() {
+    setActiveSport('cycle');
+    if (typeof showScreen === 'function') {
+      showScreen('competitionScreen');
+      if (typeof window.competitionScreenInit === 'function') setTimeout(window.competitionScreenInit, 150);
+    }
+  }
+
   /** CYCLE 베이스캠프 → 나의 기록(라이딩 기록) */
   function openCycleDashboardFromBasecamp() {
     setActiveSport('cycle');
@@ -182,6 +191,7 @@
     navigateToRunCrewFromBasecamp: navigateToRunCrewFromBasecamp,
     openRunDashboardFromBasecamp: openRunDashboardFromBasecamp,
     openCompetitionFromRunBasecamp: openCompetitionFromRunBasecamp,
+    openCompetitionFromCycleBasecamp: openCompetitionFromCycleBasecamp,
     openCycleDashboardFromBasecamp: openCycleDashboardFromBasecamp,
     goOpenRidingMoimHomeBasecamp: goOpenRidingMoimHomeBasecamp,
     shouldShowSettingsProfileCard: shouldShowSettingsProfileCard
@@ -200,6 +210,7 @@
   window.navigateToRunCrewFromBasecamp = navigateToRunCrewFromBasecamp;
   window.openRunDashboardFromBasecamp = openRunDashboardFromBasecamp;
   window.openCompetitionFromRunBasecamp = openCompetitionFromRunBasecamp;
+  window.openCompetitionFromCycleBasecamp = openCompetitionFromCycleBasecamp;
   window.openCycleDashboardFromBasecamp = openCycleDashboardFromBasecamp;
   window.goOpenRidingMoimHomeBasecamp = goOpenRidingMoimHomeBasecamp;
   window.shouldShowSettingsProfileCard = shouldShowSettingsProfileCard;
