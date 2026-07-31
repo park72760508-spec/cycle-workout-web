@@ -32,10 +32,13 @@
     { value: 'XL', label: 'XL (105)' },
     { value: 'XXL', label: 'XXL (110)' },
   ];
-  var START_GROUP_OPTIONS = [
-    { value: 'A', label: 'A조' },
-    { value: 'B', label: 'B조' },
-    { value: 'C', label: 'C조' },
+  /** CYCLE 출발 그룹 — 맞춤 필터 설정의 관심 레벨(입문~상급) 기준. A조가 가장 빠른(상급) 조. */
+  var CYCLE_START_GROUP_OPTIONS = [
+    { value: 'A', label: 'A조', levelLabel: '상급' },
+    { value: 'B', label: 'B조', levelLabel: '중상급' },
+    { value: 'C', label: 'C조', levelLabel: '중급' },
+    { value: 'D', label: 'D조', levelLabel: '초급' },
+    { value: 'E', label: 'E조', levelLabel: '입문' },
   ];
   /** RUN 출발 그룹 — 10k 페이스 기준(초/km 이내). E조는 상한 없음(느린 러너 기본 조). */
   var RUN_START_GROUP_OPTIONS = [
@@ -203,8 +206,11 @@
     var startGroupBlock = cycle
       ? (
         '<div class="competition-form-field" style="margin-bottom:0;">' +
-        '    <label class="competition-form-label">출발 그룹</label>' +
-        chipGroupHtml('startGroup', START_GROUP_OPTIONS, null, a.startGroup) +
+        '    <label class="competition-form-label">출발 그룹' +
+        '      <span class="competition-form-hint-inline" id="cAppStartGroupPaceStatus">관심 레벨 확인 중…</span>' +
+        '    </label>' +
+        chipGroupHtml('startGroup', CYCLE_START_GROUP_OPTIONS, 5, a.startGroup) +
+        '    <p class="competition-form-hint">A조(상급), B조(중상급), C조(중급), D조(초급), E조(입문) / 맞춤 필터 관심 레벨 기준</p>' +
         '  </div>'
       )
       : (
@@ -482,8 +488,11 @@
       });
   }
 
-  /** tierIndex보다 빠른(자격 없는) 조 버튼을 비활성화하고, 선택돼 있었다면 해제한다. */
-  function applyRunStartGroupEligibility(overlay, chipState, tierIndex) {
+  /**
+   * tierIndex(0=A조 가장 빠름/어려움 … 마지막=가장 느림/쉬움)보다 빠른(자격 없는) 조 버튼을
+   * 비활성화하고, 선택돼 있었다면 해제한다. RUN·CYCLE 출발 그룹 공용.
+   */
+  function applyStartGroupEligibility(overlay, chipState, tierIndex, options) {
     var groupEl = overlay.querySelector('[data-chip-group="startGroup"]');
     if (!groupEl) return;
     var chips = groupEl.querySelectorAll('.competition-chip');
@@ -491,8 +500,8 @@
       var chip = chips[i];
       var value = chip.getAttribute('data-value');
       var optIdx = -1;
-      for (var j = 0; j < RUN_START_GROUP_OPTIONS.length; j++) {
-        if (RUN_START_GROUP_OPTIONS[j].value === value) {
+      for (var j = 0; j < options.length; j++) {
+        if (options[j].value === value) {
           optIdx = j;
           break;
         }
@@ -515,9 +524,103 @@
         if (statusEl) statusEl.textContent = '최근 90일 러닝 기록이 없어 전체 조 선택이 가능합니다.';
         return;
       }
-      applyRunStartGroupEligibility(overlay, chipState, info.tierIndex);
+      applyStartGroupEligibility(overlay, chipState, info.tierIndex, RUN_START_GROUP_OPTIONS);
       if (statusEl) {
         statusEl.textContent = '나의 10k 페이스 ' + (info.display || '-') + (info.inferred ? ' (유추)' : '') + ' 기준';
+      }
+    });
+  }
+
+  /** 맞춤 필터 설정 > 관심 레벨과 동일한 판정: 프로필 FTP·체중 → 평지 개인 평속(km/h) → 레벨 라벨. */
+  function resolveCurrentProfileFtpWeight() {
+    var u = null;
+    try {
+      u = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null;
+      if (!u) u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    } catch (e) {
+      u = null;
+    }
+    var ftp = u && Number(u.ftp) > 0 ? Number(u.ftp) : 0;
+    var weight = u && Number(u.weight) > 0 ? Number(u.weight) : 0;
+    return { ftp: ftp, weight: weight, ok: ftp > 0 && weight > 0 };
+  }
+
+  /**
+   * 맞춤 필터 설정 > 관심 레벨의 "현실 지표"와 동일: 최근 6개월 60분 최고 평균 파워(랭킹 산출)로
+   * 항속 능력을 구한다. 랭킹 데이터에 60분 피크가 없으면 { watts: 0 }을 반환해 FTP 폴백을 타게 한다.
+   */
+  function fetchCyclePeak60WattsInfo(uid) {
+    if (!uid) return Promise.resolve({ watts: 0, weightKg: 0 });
+    var params = new URLSearchParams({ period: 'rolling6m', duration: '60min', gender: 'all', uid: String(uid) });
+    var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString();
+    return fetch(url, { method: 'GET', mode: 'cors' })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.success) return { watts: 0, weightKg: 0 };
+        var cu = data.currentUser || null;
+        var watts = cu && Number(cu.watts) > 0 ? Number(cu.watts) : 0;
+        var weightKg = cu && Number(cu.weightKg) > 0 ? Number(cu.weightKg) : 0;
+        return { watts: watts, weightKg: weightKg };
+      })
+      .catch(function () {
+        return { watts: 0, weightKg: 0 };
+      });
+  }
+
+  /** 관심 레벨 라벨(입문~상급) → CYCLE_START_GROUP_OPTIONS 인덱스(0=A조 상급 … 4=E조 입문). */
+  var CYCLE_LEVEL_TO_START_GROUP_VALUE = { 상급: 'A', 중상급: 'B', 중급: 'C', 초급: 'D', 입문: 'E' };
+  function computeCycleStartGroupTierIndex(soloKmh) {
+    var v = Number(soloKmh);
+    if (!isFinite(v) || v <= 0) return null;
+    var labelFn =
+      typeof window !== 'undefined' && typeof window.getOpenRidingSoloTierLevelLabelFromKmH === 'function'
+        ? window.getOpenRidingSoloTierLevelLabelFromKmH
+        : null;
+    if (!labelFn) return null;
+    var levelLabel = labelFn(v);
+    var groupValue = CYCLE_LEVEL_TO_START_GROUP_VALUE[levelLabel];
+    for (var i = 0; i < CYCLE_START_GROUP_OPTIONS.length; i++) {
+      if (CYCLE_START_GROUP_OPTIONS[i].value === groupValue) return i;
+    }
+    return null;
+  }
+
+  function wireCycleStartGroupPace(overlay, comp, chipState) {
+    if (!isCycle(comp)) return;
+    var statusEl = overlay.querySelector('#cAppStartGroupPaceStatus');
+    var prof = resolveCurrentProfileFtpWeight();
+    var refFn =
+      typeof window !== 'undefined' && typeof window.getFilterInterestReferenceSoloSpeedKmH === 'function'
+        ? window.getFilterInterestReferenceSoloSpeedKmH
+        : null;
+    if (!refFn) {
+      if (statusEl) statusEl.textContent = '프로필에 FTP·체중을 입력하면 전체 조 선택이 가능합니다.';
+      return;
+    }
+    var uid = resolveCurrentUid();
+    fetchCyclePeak60WattsInfo(uid).then(function (peakInfo) {
+      var weightForCalc = peakInfo.weightKg > 0 ? peakInfo.weightKg : prof.weight;
+      if (!(weightForCalc > 0)) {
+        if (statusEl) statusEl.textContent = '프로필에 FTP·체중을 입력하면 전체 조 선택이 가능합니다.';
+        return;
+      }
+      var soloKmh = refFn(peakInfo.watts, prof.ftp, weightForCalc);
+      if (soloKmh == null) {
+        if (statusEl) statusEl.textContent = '프로필에 FTP·체중을 입력하면 전체 조 선택이 가능합니다.';
+        return;
+      }
+      var tierIndex = computeCycleStartGroupTierIndex(soloKmh);
+      if (tierIndex == null) {
+        if (statusEl) statusEl.textContent = '';
+        return;
+      }
+      applyStartGroupEligibility(overlay, chipState, tierIndex, CYCLE_START_GROUP_OPTIONS);
+      if (statusEl) {
+        var usedPeak = peakInfo.watts > 0;
+        statusEl.textContent =
+          (usedPeak ? '나의 60분 피크 평지 평속 ' : '나의 FTP 평지 평속(93%) ') + soloKmh + 'km/h 기준';
       }
     });
   }
@@ -635,6 +738,7 @@
 
     wireChipGroups(overlay, chipState);
     wireRunStartGroupPace(overlay, comp, chipState);
+    wireCycleStartGroupPace(overlay, comp, chipState);
     wireAgreements(overlay);
     wireAddressSearch(overlay);
     wireDigitsOnlyInput(overlay.querySelector('#cAppBirth6'), 6);
