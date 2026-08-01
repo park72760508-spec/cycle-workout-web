@@ -325,17 +325,24 @@
     );
   }
 
-  /** 히어로 이미지 시차(parallax) 스크롤 효과 — 모션 최소화 설정 시 비활성화 */
+  /** 히어로 이미지 시차(parallax) 스크롤 효과 — 모션 최소화 설정 시 비활성화
+   *  scroll 이벤트마다 즉시 쓰지 않고 rAF로 프레임당 1회만 반영(발열 요인이던 과도한 리페인트 방지) */
   function wireHeroParallax(overlay) {
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     var bodyEl = overlay.querySelector('.competition-bottom-sheet-body');
     var heroImg = overlay.querySelector('#competitionDetailHeroImg');
     if (!bodyEl || !heroImg) return;
+    var ticking = false;
     bodyEl.addEventListener(
       'scroll',
       function () {
-        var offset = Math.max(0, bodyEl.scrollTop);
-        heroImg.style.transform = 'translateY(' + Math.min(offset * 0.35, 60) + 'px)';
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(function () {
+          var offset = Math.max(0, bodyEl.scrollTop);
+          heroImg.style.transform = 'translateY(' + Math.min(offset * 0.35, 60) + 'px)';
+          ticking = false;
+        });
       },
       { passive: true }
     );
