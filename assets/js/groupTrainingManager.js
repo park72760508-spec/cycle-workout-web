@@ -2290,50 +2290,6 @@ async function apiUpdateRoom(roomCode, data = {}) {
 }
 
 /**
- * 워크아웃 목록 조회 API
- */
-/**
- * 워크아웃 목록 조회 API (개선된 버전)
- */
-async function apiGetWorkouts() {
-  try {
-    if (!window.GAS_URL) {
-      console.warn('GAS_URL이 설정되지 않았습니다. 기본 워크아웃 사용');
-      return { 
-        success: true, 
-        items: getDefaultWorkouts() 
-      };
-    }
-    
-    console.log('워크아웃 목록 API 요청 시작');
-    const result = await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
-    
-    // API 응답 검증 및 정규화
-    if (result && result.success) {
-      console.log('API 응답 성공:', result);
-      
-      // 워크아웃 데이터가 있는지 확인
-      let workouts = result.items || result.workouts || result.data || [];
-      
-      if (Array.isArray(workouts) && workouts.length > 0) {
-        return { success: true, items: workouts };
-      } else {
-        console.warn('API에서 워크아웃 데이터가 없음. 기본 워크아웃 사용');
-        return { success: true, items: getDefaultWorkouts() };
-      }
-    } else {
-      console.warn('API 응답 실패 또는 성공하지 않음:', result);
-      return { success: true, items: getDefaultWorkouts() };
-    }
-  } catch (error) {
-    console.error('apiGetWorkouts 실패:', error);
-    console.log('기본 워크아웃 목록으로 대체');
-    return { success: true, items: getDefaultWorkouts() };
-  }
-}
-
-
-/**
  * 즉시 중복 워크아웃 선택 요소 제거 (개선된 버전)
  */
 function removeDuplicateWorkoutSelectsNow() {
@@ -8993,9 +8949,6 @@ try {
   }
   if (typeof updateRoomOnBackend === 'function') {
     window.updateRoomOnBackend = updateRoomOnBackend;
-  }
-  if (typeof apiGetWorkouts === 'function') {
-    window.apiGetWorkouts = apiGetWorkouts;
   }
   if (typeof apiLeaveRoom === 'function') {
     window.apiLeaveRoom = apiLeaveRoom;
