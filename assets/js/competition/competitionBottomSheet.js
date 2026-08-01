@@ -29,10 +29,50 @@
     } catch (e) {}
   }
 
+  /** 시트가 닫힐 때(저장·× 버튼·바깥 클릭·Esc 어떤 경로든) 1회 실행할 정리 콜백 — GPX 패널의 React 루트 unmount 등 */
+  var sheetCloseListeners = [];
+  function onSheetClose(fn) {
+    if (typeof fn === 'function') sheetCloseListeners.push(fn);
+  }
+
+  /**
+   * 오픈라이딩 생성 폼과 동일한 GPX→지도·고도표(확대/이동 ON/OFF 토글 포함) 위젯을
+   * 별도 React 루트로 마운트 — 대회 코스맵(관리자 폼·상세화면)에서 공용으로 사용.
+   * @param {HTMLElement} container
+   * @param {{ gpxUrl?: string|null, file?: File|null, showEmptyMessage?: boolean }} props
+   */
+  function mountGpxCoursePanel(container, props) {
+    if (!container || typeof React === 'undefined' || typeof ReactDOM === 'undefined') return;
+    var Panel = window.OpenRidingGpxCoursePanel;
+    if (typeof Panel !== 'function') return;
+    var el = React.createElement(Panel, props || {});
+    if (ReactDOM.createRoot) {
+      if (!container._gpxPanelRoot) container._gpxPanelRoot = ReactDOM.createRoot(container);
+      container._gpxPanelRoot.render(el);
+    } else {
+      ReactDOM.render(el, container);
+    }
+  }
+
+  function unmountGpxCoursePanel(container) {
+    if (!container) return;
+    if (container._gpxPanelRoot) {
+      try { container._gpxPanelRoot.unmount(); } catch (e) {}
+      container._gpxPanelRoot = null;
+    } else if (typeof ReactDOM !== 'undefined' && ReactDOM.unmountComponentAtNode) {
+      try { ReactDOM.unmountComponentAtNode(container); } catch (e2) {}
+    }
+  }
+
   function closeSheet() {
     var overlay = document.getElementById('competitionBottomSheetOverlay');
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     document.removeEventListener('keydown', onEscKey);
+    var listeners = sheetCloseListeners;
+    sheetCloseListeners = [];
+    listeners.forEach(function (fn) {
+      try { fn(); } catch (e) {}
+    });
   }
 
   function onEscKey(e) {
@@ -317,7 +357,20 @@
     return '<div class="competition-info-grid">' + cardsHtml + remainingCardHtml + '</div>';
   }
 
+  /**
+   * 코스 맵 — GPX가 등록된 대회는 라이딩 세부 내용과 동일한 지도·고도표·ON/OFF 토글 패널 +
+   * GPX 다운로드 링크로 표시(마운트는 showDetailSheet에서 수행). GPX 없이 예전 코스맵 이미지만
+   * 있는 대회(마이그레이션 이전 데이터)는 기존 정적 이미지로 폴백.
+   */
   function buildCourseMapHtml(comp) {
+    if (comp.gpxUrl) {
+      return (
+        '<h4 class="competition-form-section-title">코스 맵 · 고도표</h4>' +
+        '<div class="competition-course-gpx-panel" id="competitionDetailGpxPanel"></div>' +
+        '<a class="competition-gpx-download-link" id="competitionDetailGpxDownload" href="' +
+        escapeHtml(comp.gpxUrl) + '" target="_blank" rel="noreferrer" download>GPX 파일 다운로드</a>'
+      );
+    }
     if (!comp.courseMapImageUrl) return '';
     return (
       '<h4 class="competition-form-section-title">코스 맵</h4>' +
@@ -528,6 +581,14 @@
         : '');
     var overlay = openSheet(escapeHtml(comp.title || '대회 상세'), body, footerParts.join(''), headerActionsHtml);
     wireHeroParallax(overlay);
+
+    if (comp.gpxUrl) {
+      var gpxMount = overlay.querySelector('#competitionDetailGpxPanel');
+      if (gpxMount) {
+        mountGpxCoursePanel(gpxMount, { gpxUrl: comp.gpxUrl, showEmptyMessage: true });
+        onSheetClose(function () { unmountGpxCoursePanel(gpxMount); });
+      }
+    }
 
     if (opensLabel || closesLabel) {
       var periodTimer = setInterval(function () {
@@ -758,5 +819,8 @@
     showDetailSheet: showDetailSheet,
     openRawSheet: openSheet,
     closeSheet: closeSheet,
+    onSheetClose: onSheetClose,
+    mountGpxCoursePanel: mountGpxCoursePanel,
+    unmountGpxCoursePanel: unmountGpxCoursePanel,
   };
 })();

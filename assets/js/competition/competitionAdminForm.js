@@ -203,6 +203,18 @@
     return ctx.fns.getDownloadURL(r);
   }
 
+  /** 코스 GPX 원본 업로드(압축 없음) — assets/js/openRiding/openRidingService.js uploadRideGpx와 동일 방식 */
+  async function uploadCompetitionGpx(competitionId, file) {
+    var ctx = getStorageFns();
+    if (!ctx) throw new Error('GPX 업로드 서비스가 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.');
+    var name = 'course_' + Date.now() + '.gpx';
+    var path = 'competitions/' + competitionId + '/' + name;
+    var r = ctx.fns.ref(ctx.storage, path);
+    var contentType = file && file.type && String(file.type).trim() ? String(file.type).trim() : 'application/gpx+xml';
+    await ctx.fns.uploadBytes(r, file, { contentType: contentType });
+    return ctx.fns.getDownloadURL(r);
+  }
+
   var CSV_GENDER_LABEL = { M: '남', F: '여' };
   var CSV_NATIONALITY_LABEL = { DOMESTIC: '내국인', FOREIGN: '외국인' };
   var CSV_DIVISION_LABEL = {
@@ -362,6 +374,33 @@
   }
 
   /**
+   * 코스 지도·고도표(GPX) 업로드 필드 — 라이딩 생성 폼과 동일하게 GPX 업로드 시
+   * OpenRidingGpxCoursePanel(지도+고도표+확대/이동 ON/OFF 토글)을 그대로 마운트해 미리보기.
+   * wireGpxUploadField와 짝을 이룬다.
+   */
+  function buildGpxUploadFieldHtml(idPrefix, label, existingUrl) {
+    var hasExisting = !!existingUrl;
+    return (
+      '<div class="competition-form-field">' +
+      '  <label class="competition-form-label">' + escapeHtml(label) + '</label>' +
+      '  <div class="competition-gpx-upload">' +
+      '    <div class="competition-course-gpx-panel" id="' + idPrefix + 'PanelMount"></div>' +
+      '    <div class="competition-image-upload-actions">' +
+      '      <input type="file" accept=".gpx,application/gpx+xml" id="' + idPrefix + 'File" class="competition-image-file-input" />' +
+      '      <label for="' + idPrefix + 'File" class="competition-image-upload-btn">GPX 파일</label>' +
+      '      <button type="button" class="competition-image-remove-btn" id="' + idPrefix + 'RemoveBtn"' +
+      (hasExisting ? '' : ' style="display:none;"') +
+      '>GPX 제거</button>' +
+      '    </div>' +
+      (hasExisting
+        ? '    <p class="competition-form-hint" style="margin:6px 0 0;">이미 등록된 GPX가 있습니다. 새 파일을 선택하면 저장 시 교체됩니다.</p>'
+        : '') +
+      '  </div>' +
+      '</div>'
+    );
+  }
+
+  /**
    * 네이티브 datetime-local 대신 STELVIO 디자인의 커스텀 달력 팝업을 여는 트리거로 대체.
    * 네이티브 위젯은 브라우저/OS 로케일에 따라 월이 영문(Jan/Feb..)으로 표시되고 디자인도
    * 커스터마이즈할 수 없어, 값 자체는 동일한 hidden input(id 동일)에 보관해 저장 로직은 그대로 둔다.
@@ -400,7 +439,7 @@
       '  <input class="competition-form-input" id="cAdminTitle" type="text" value="' + escapeHtml(comp.title) + '" />' +
       '</div>' +
       buildImageUploadFieldHtml('cAdminPoster', '포스터(히어로) 이미지', comp.posterImageUrl) +
-      buildImageUploadFieldHtml('cAdminCourseMap', '코스맵 이미지', comp.courseMapImageUrl) +
+      buildGpxUploadFieldHtml('cAdminCourseMap', '코스 지도 · 고도표 (GPX)', comp.gpxUrl) +
       '<div class="competition-form-field">' +
       '  <label class="competition-form-label" for="cAdminDescription">상세 설명</label>' +
       '  <textarea class="competition-form-input" id="cAdminDescription" rows="4">' + escapeHtml(comp.description) + '</textarea>' +
@@ -598,6 +637,61 @@
     };
   }
 
+  /**
+   * 코스 지도·고도표(GPX) 필드 wiring — 파일 선택 시 OpenRidingGpxCoursePanel을 로컬 File로 즉시
+   * 재마운트해 미리보기(지도·고도표·ON/OFF 토글까지 라이딩 생성과 동일). 실제 업로드는 저장 시 수행.
+   * 시트가 어떤 경로로 닫히든(저장·×·바깥 클릭·Esc) React 루트를 정리한다.
+   * @returns {{ getFile: function(): (File|null), isRemoved: function(): boolean }}
+   */
+  function wireGpxUploadField(overlay, idPrefix, existingGpxUrl) {
+    var fileInput = overlay.querySelector('#' + idPrefix + 'File');
+    var mountEl = overlay.querySelector('#' + idPrefix + 'PanelMount');
+    var removeBtn = overlay.querySelector('#' + idPrefix + 'RemoveBtn');
+    var bs = window.competitionBottomSheet;
+    var selectedFile = null;
+    var removed = false;
+
+    function render() {
+      if (!bs || !mountEl || typeof bs.mountGpxCoursePanel !== 'function') return;
+      bs.mountGpxCoursePanel(mountEl, {
+        gpxUrl: !removed && !selectedFile ? existingGpxUrl || null : null,
+        file: selectedFile,
+        showEmptyMessage: true,
+      });
+    }
+    render();
+
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      selectedFile = f;
+      removed = false;
+      removeBtn.style.display = '';
+      render();
+    });
+    removeBtn.addEventListener('click', function () {
+      selectedFile = null;
+      removed = true;
+      fileInput.value = '';
+      removeBtn.style.display = 'none';
+      render();
+    });
+    if (bs && typeof bs.onSheetClose === 'function') {
+      bs.onSheetClose(function () {
+        if (typeof bs.unmountGpxCoursePanel === 'function') bs.unmountGpxCoursePanel(mountEl);
+      });
+    }
+
+    return {
+      getFile: function () {
+        return selectedFile;
+      },
+      isRemoved: function () {
+        return removed;
+      },
+    };
+  }
+
   var MINUTE_STEP_OPTIONS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
   /** STELVIO 디자인의 커스텀 날짜·시간 선택 팝업 — 월은 항상 숫자("7월")로 표시된다 */
@@ -750,7 +844,7 @@
     var saveBtn = overlay.querySelector('#cAdminSaveBtn');
     var errorEl = overlay.querySelector('#cAdminError');
     var posterField = wireImageUploadField(overlay, 'cAdminPoster');
-    var courseMapField = wireImageUploadField(overlay, 'cAdminCourseMap');
+    var courseMapField = wireGpxUploadField(overlay, 'cAdminCourseMap', (comp || {}).gpxUrl);
     wireDateTimeField(overlay, 'cAdminRaceDate');
     wireDateTimeField(overlay, 'cAdminOpensAt');
     wireDateTimeField(overlay, 'cAdminClosesAt');
@@ -778,10 +872,10 @@
           imageUpdates.posterImageUrl = null;
         }
         if (courseMapFile) {
-          saveBtn.textContent = '코스맵 이미지 업로드 중...';
-          imageUpdates.courseMapImageUrl = await uploadCompetitionImage(savedId, courseMapFile, 'coursemap');
+          saveBtn.textContent = 'GPX 업로드 중...';
+          imageUpdates.gpxUrl = await uploadCompetitionGpx(savedId, courseMapFile);
         } else if (courseMapField.isRemoved()) {
-          imageUpdates.courseMapImageUrl = null;
+          imageUpdates.gpxUrl = null;
         }
         if (Object.keys(imageUpdates).length) {
           await saveCompetition(savedId, imageUpdates);
