@@ -756,6 +756,70 @@ export function subscribeUserGroupMembershipsRouted(db, userId, groupIds, onUpda
 }
 
 /**
+ * 오픈라이딩 룸 — 내가 방장인 소mo임들의 가입신청 대기 건수(총합 + 그룹별 breakdown).
+ * G개 그룹별 joinRequests fan-out onSnapshot 대체(그룹 목록 리스너 1개 + 그룹당 리스너 1개씩).
+ */
+export function subscribeMyManagedGroupsJoinRequestCountsRouted(db, userId, onUpdate) {
+  if (!userId || typeof onUpdate !== 'function') return function () {};
+  var u = String(userId).trim();
+  if (!u) return function () {};
+
+  var stopped = false;
+  var pollTimer = null;
+
+  function poll() {
+    httpGetJsonAuthed(API_BASE + '/getManagedGroupsPendingJoinRequestCountForRead', { uid: u }).then(function (json) {
+      if (stopped) return;
+      if (json && json.success) {
+        onUpdate(
+          typeof json.total === 'number' ? json.total : 0,
+          json.countMap && typeof json.countMap === 'object' ? json.countMap : {}
+        );
+      }
+    });
+  }
+
+  poll();
+  pollTimer = setInterval(poll, SUPABASE_POLL_MS);
+
+  return function () {
+    stopped = true;
+    if (pollTimer) clearInterval(pollTimer);
+  };
+}
+
+/**
+ * 오픈라이딩 룸 — 특정 소mo임에 대한 내 가입신청 대기 상태(단건).
+ * 단건 joinRequests/{uid} onSnapshot 대체.
+ */
+export function subscribeRidingGroupMyJoinRequestRouted(db, groupId, uid, cb) {
+  if (!groupId || !uid || typeof cb !== 'function') return function () {};
+  var gid = String(groupId).trim();
+  var u = String(uid).trim();
+  if (!gid || !u) return function () {};
+
+  var stopped = false;
+  var pollTimer = null;
+
+  function poll() {
+    httpGetJsonAuthed(API_BASE + '/getMyGroupJoinRequestStatusForRead', { uid: u, groupId: gid }).then(function (json) {
+      if (stopped) return;
+      if (json && json.success) {
+        cb(json.row || null);
+      }
+    });
+  }
+
+  poll();
+  pollTimer = setInterval(poll, SUPABASE_POLL_MS);
+
+  return function () {
+    stopped = true;
+    if (pollTimer) clearInterval(pollTimer);
+  };
+}
+
+/**
  * 랭킹 소셜 — 내 소mo임 멤버 UID·프로필 (M×K getDocs 대체).
  * @returns {Promise<{ uids: string[], map: object }|null>}
  */
@@ -800,5 +864,7 @@ if (typeof window !== 'undefined') {
     subscribeMyRidingGroupsAsMemberRouted,
     subscribeUserGroupMembershipsRouted,
     fetchMyGroupContactSetRouted,
+    subscribeMyManagedGroupsJoinRequestCountsRouted,
+    subscribeRidingGroupMyJoinRequestRouted,
   };
 }

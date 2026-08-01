@@ -35,6 +35,8 @@ import {
   subscribeMyRidingGroupsAsMemberRouted,
   subscribeUserGroupMembershipsRouted,
   fetchMyGroupContactSetRouted,
+  subscribeMyManagedGroupsJoinRequestCountsRouted,
+  subscribeRidingGroupMyJoinRequestRouted,
 } from './openRidingReadClient.js';
 import { scheduleRidingGroupDualWriteFromFirestore } from '../openRidingDualWrite.js';
 
@@ -199,17 +201,7 @@ export function subscribeRidingGroupJoinRequests(db, groupId, cb) {
  * @param {function(any|null): void} cb
  */
 export function subscribeRidingGroupMyJoinRequest(db, groupId, uid, cb) {
-  if (!db || !groupId || !uid || typeof cb !== 'function') return function () {};
-  var id = String(groupId).trim();
-  var u = String(uid).trim();
-  var ref = doc(db, RIDING_GROUP_COLLECTION, id, RIDING_GROUP_JOIN_REQUESTS_SUB, u);
-  return onSnapshot(ref, function (snap) {
-    if (!snap.exists()) {
-      cb(null);
-      return;
-    }
-    cb({ userId: snap.id, ...snap.data() });
-  });
+  return subscribeRidingGroupMyJoinRequestRouted(db, groupId, uid, cb);
 }
 
 /**
@@ -747,66 +739,15 @@ export async function uploadRidingGroupCover(storage, groupId, file) {
 }
 
 /**
- * 내가 방장인 APPROVED 그룹들의 가입 요청(joinRequests) 건수를 실시간 구독.
- * onUpdate(totalCount, countMap) 형태로 호출됨.
+ * 내가 방장인 APPROVED 그룹들의 가입 요청(joinRequests) 건수를 주기 폴링으로 구독.
+ * onUpdate(totalCount, countMap) 형태로 호출됨(그룹별 fan-out onSnapshot 대체).
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} userId
  * @param {function(number, Object<string,number>): void} onUpdate
  * @returns {function(): void}
  */
 export function subscribeMyManagedGroupsJoinRequestCounts(db, userId, onUpdate) {
-  if (!db || !userId || typeof onUpdate !== 'function') return function () {};
-  var uid = String(userId).trim();
-  var countMap = {};
-  var unsubByGroup = {};
-  var unsubGroupsList = null;
-
-  function emitTotal() {
-    var total = Object.keys(countMap).reduce(function (s, k) { return s + (countMap[k] || 0); }, 0);
-    onUpdate(total, Object.assign({}, countMap));
-  }
-
-  var q = query(
-    collection(db, RIDING_GROUP_COLLECTION),
-    where('status', '==', GROUP_STATUS.APPROVED),
-    where('createdBy', '==', uid)
-  );
-
-  unsubGroupsList = onSnapshot(q, function (snap) {
-    var currentIds = {};
-    snap.forEach(function (d) { currentIds[d.id] = true; });
-
-    Object.keys(unsubByGroup).forEach(function (gid) {
-      if (!currentIds[gid]) {
-        try { unsubByGroup[gid](); } catch (e) {}
-        delete unsubByGroup[gid];
-        delete countMap[gid];
-      }
-    });
-
-    Object.keys(currentIds).forEach(function (gid) {
-      if (unsubByGroup[gid]) return;
-      var jRef = collection(db, RIDING_GROUP_COLLECTION, gid, RIDING_GROUP_JOIN_REQUESTS_SUB);
-      unsubByGroup[gid] = onSnapshot(jRef, function (jSnap) {
-        countMap[gid] = jSnap.size;
-        emitTotal();
-      }, function () {
-        countMap[gid] = 0;
-        emitTotal();
-      });
-    });
-
-    emitTotal();
-  }, function () {
-    onUpdate(0, {});
-  });
-
-  return function () {
-    if (unsubGroupsList) { try { unsubGroupsList(); } catch (e) {} }
-    Object.keys(unsubByGroup).forEach(function (gid) {
-      try { unsubByGroup[gid](); } catch (e) {}
-    });
-  };
+  return subscribeMyManagedGroupsJoinRequestCountsRouted(db, userId, onUpdate);
 }
 
 /**
