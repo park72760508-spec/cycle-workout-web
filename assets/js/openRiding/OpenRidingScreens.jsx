@@ -12859,4 +12859,7 @@ if (typeof window !== 'undefined') {
   window.OpenRidingFriendsManage = OpenRidingFriendsManage;
   window.OpenRidingRoomApp = OpenRidingRoomApp;
   window.openRidingBridgeOpenAddressBook = openRidingBridgeOpenAddressBook;
+  /* GPX → 지도·고도표(ON/OFF 상호작용 토글 포함) 재사용 위젯 — 대회 코스맵(competitionAdminForm.js·
+     competitionBottomSheet.js)에서 동일 컴포넌트를 별도 React 루트로 마운트해 재사용한다 */
+  window.OpenRidingGpxCoursePanel = OpenRidingGpxCoursePanel;
 }
