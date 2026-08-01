@@ -239,6 +239,80 @@ async function fetchOwnedGroupsPendingJoinRequestCount(admin, firebaseUid) {
 }
 
 /**
+ * 내가 방장인 APPROVED 소mo임별 대기 중인 가입신청 건수 — 그룹 상세 화면의
+ * "내가 관리하는 모임" 카운트 배지용. Firestore doc id 기준 countMap 반환.
+ * (오픈라이딩 룸 화면 내부 fan-out onSnapshot 대체 — 베이스캠프 전역 배지와 별개)
+ */
+async function fetchOwnedGroupsPendingJoinRequestBreakdown(admin, firebaseUid) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return { total: 0, countMap: {} };
+
+  const userUuid = await resolveViewerUserUuid(supabase, firebaseUid);
+  if (!userUuid) return { total: 0, countMap: {} };
+
+  const { data: groups, error: gErr } = await supabase
+    .from("riding_groups")
+    .select("id, firestore_doc_id")
+    .eq("created_by", userUuid)
+    .eq("status", "APPROVED");
+  if (gErr) throw gErr;
+
+  const groupIds = (groups || []).map((g) => g.id);
+  if (!groupIds.length) return { total: 0, countMap: {} };
+
+  const uuidToDocId = new Map();
+  for (const g of groups) {
+    if (g.firestore_doc_id) uuidToDocId.set(g.id, g.firestore_doc_id);
+  }
+
+  const { data: reqRows, error: rErr } = await supabase
+    .from("riding_group_join_requests")
+    .select("group_id")
+    .in("group_id", groupIds);
+  if (rErr) throw rErr;
+
+  const countMap = {};
+  let total = 0;
+  for (const r of reqRows || []) {
+    const docId = uuidToDocId.get(r.group_id);
+    if (!docId) continue;
+    countMap[docId] = (countMap[docId] || 0) + 1;
+    total += 1;
+  }
+  return { total, countMap };
+}
+
+/**
+ * 특정 소mo임에 대한 내(uid)의 가입신청 대기 여부 — 존재하면 pending, 없으면 null.
+ * joinRequests 문서는 승인/거부 시 삭제되므로 존재 여부만으로 판정 가능(status 컬럼 없음).
+ * 그룹 상세 화면의 단건 onSnapshot(참여자 본인 상태 표시) 대체.
+ */
+async function fetchMyGroupJoinRequestStatus(admin, firestoreGroupDocId, firebaseUid) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  const { data: group, error: gErr } = await supabase
+    .from("riding_groups")
+    .select("id")
+    .eq("firestore_doc_id", firestoreGroupDocId)
+    .maybeSingle();
+  if (gErr || !group) return null;
+
+  const userUuid = await resolveViewerUserUuid(supabase, firebaseUid);
+  if (!userUuid) return null;
+
+  const { data: row, error: rErr } = await supabase
+    .from("riding_group_join_requests")
+    .select("user_id, requested_at")
+    .eq("group_id", group.id)
+    .eq("user_id", userUuid)
+    .maybeSingle();
+  if (rErr || !row) return null;
+
+  return { userId: firebaseUid, pending: true, requestedAt: row.requested_at || null };
+}
+
+/**
  * 내가 멤버인 APPROVED 소mo임 — riding_group_members × riding_groups (1+1 쿼리).
  * Firestore U×G 리스너 대체.
  */
@@ -912,6 +986,8 @@ module.exports = {
   fetchOpenRidesInDateRange,
   fetchRidingGroupByFirestoreId,
   fetchOwnedGroupsPendingJoinRequestCount,
+  fetchOwnedGroupsPendingJoinRequestBreakdown,
+  fetchMyGroupJoinRequestStatus,
   fetchMyRidingGroupsAsMember,
   fetchMyGroupMembershipFirestoreIds,
   fetchMyGroupContactSet,

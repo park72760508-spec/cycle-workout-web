@@ -11585,6 +11585,93 @@ exports.getBasecampBadgeCountsForRead = onRequest(
   }
 );
 
+/**
+ * 오픈라이딩 룸 화면 — 내가 방장인 소mo임들의 가입신청 대기 건수(총합 + 그룹별 breakdown).
+ * openRidingGroupService.js 의 subscribeMyManagedGroupsJoinRequestCounts 전역 fan-out
+ * onSnapshot(오너 그룹 목록 + 그룹별 joinRequests, 그룹 수만큼 리스너) 대체.
+ */
+exports.getManagedGroupsPendingJoinRequestCountForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+
+    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
+    if (!requestedUid) {
+      res.status(400).json({ success: false, error: "uid 필요" });
+      return;
+    }
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 관리 모임만 조회할 수 있습니다." });
+      return;
+    }
+
+    try {
+      const { total, countMap } = await supabaseGroupReader.fetchOwnedGroupsPendingJoinRequestBreakdown(
+        admin,
+        requestedUid
+      );
+      res.status(200).json({ success: true, total: total || 0, countMap: countMap || {} });
+    } catch (e) {
+      console.warn("[getManagedGroupsPendingJoinRequestCountForRead]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 오픈라이딩 룸 화면 — 특정 소mo임에 대한 내(uid) 가입신청 대기 상태.
+ * openRidingGroupService.js 의 subscribeRidingGroupMyJoinRequest 단건 onSnapshot 대체.
+ */
+exports.getMyGroupJoinRequestStatusForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+
+    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
+    const groupId = String(req.query.groupId || "").trim();
+    if (!requestedUid || !groupId) {
+      res.status(400).json({ success: false, error: "uid, groupId 필요" });
+      return;
+    }
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 가입신청 상태만 조회할 수 있습니다." });
+      return;
+    }
+
+    try {
+      const row = await supabaseGroupReader.fetchMyGroupJoinRequestStatus(admin, groupId, requestedUid);
+      res.status(200).json({ success: true, row: row || null });
+    } catch (e) {
+      console.warn("[getMyGroupJoinRequestStatusForRead]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 /** 클라이언트 Secondary relay — Firestore Primary 성공 후 open_rides upsert */
 exports.ingestOpenRideDualWriteRelay = onRequest(
   supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
