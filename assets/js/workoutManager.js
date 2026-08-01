@@ -142,6 +142,7 @@ const MAX_URL_LENGTH = 1800;
 const MAX_RETRIES = 3;
 const BATCH_DELAY = 1000;
 const JSONP_TIMEOUT = 60000; // 60초 타임아웃
+const SEGMENT_JSONP_TIMEOUT = 15000; // 세그먼트 단건 조회는 목록 조회보다 훨씬 짧게(백그라운드 조회이므로 빨리 포기하고 다음으로)
 
 // 필수 설정 확인 및 초기화
 function initializeWorkoutManager() {
@@ -176,7 +177,7 @@ function initializeWorkoutManager() {
 }
 
 // 개선된 JSONP 요청 함수 (60초 타임아웃) - groupTrainingManager의 jsonpRequest와 분리
-function jsonpRequest(url, params = {}) {
+function jsonpRequest(url, params = {}, timeoutMs) {
   return new Promise((resolve, reject) => {
     if (!url || typeof url !== 'string') {
       reject(new Error('유효하지 않은 URL입니다.'));
@@ -272,7 +273,7 @@ function jsonpRequest(url, params = {}) {
           cleanup();
           reject(new Error(`요청 시간 초과: ${url}`));
         }
-      }, JSONP_TIMEOUT); // 60초 타임아웃
+      }, timeoutMs || JSONP_TIMEOUT);
       
     } catch (error) {
       if (!isResolved) {
@@ -2836,7 +2837,7 @@ async function apiGetWorkoutSegments(workoutId, forceRefresh = false) {
   }
   
   const doFetch = async () => {
-    const result = await (typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest)(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) });
+    const result = await (typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest)(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) }, SEGMENT_JSONP_TIMEOUT);
     if (!result || !result.success) return [];
     const segs = result.segments || result.items || (Array.isArray(result) ? result : []);
     return Array.isArray(segs) ? segs : [];
@@ -3261,6 +3262,78 @@ async function apiDeleteWorkout(id) {
 // 워크아웃 목록 및 선택 관리
 // ==========================================================
 
+/**
+ * 목록 렌더링 이후 백그라운드에서 세그먼트가 없는 워크아웃만 조회·캐시 갱신.
+ * loadWorkouts()가 이 함수를 await 하지 않으므로(fire-and-forget), 세그먼트 조회가 느리거나
+ * 타임아웃되어도(GAS 응답 지연) 목록 화면은 이미 표시된 상태로 계속 사용 가능하다.
+ * 새 세그먼트를 가져온 경우에만 캐시를 갱신하고, 워크아웃 화면이 여전히 열려있으면 조용히 재렌더한다.
+ */
+async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWorkoutsForCount, isFromCacheForSegments, grade) {
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const workoutsNeedingSegments = filteredWorkouts.filter(function (w) {
+    return !w.segments || !Array.isArray(w.segments) || w.segments.length === 0;
+  });
+  const totalToFetch = workoutsNeedingSegments.length;
+
+  if (totalToFetch === 0) {
+    if (isFromCacheForSegments) {
+      console.log('[loadWorkouts] ✅ 캐시 모드: 세그먼트가 이미 포함되어 있음 - 세그먼트 조회 건너뛰기');
+    }
+    return;
+  }
+
+  console.log('[loadWorkouts] 🔄 백그라운드 세그먼트 로딩 시작 (', totalToFetch, '개, 목록은 이미 표시됨)');
+
+  const batchSize = isFromCacheForSegments ? 100 : 20;
+  const batchDelay = isFromCacheForSegments ? 0 : (isAndroid ? 250 : 100);
+
+  for (let i = 0; i < workoutsNeedingSegments.length; i += batchSize) {
+    const batch = workoutsNeedingSegments.slice(i, i + batchSize);
+    await Promise.all(batch.map(async function (workout) {
+      const segments = await apiGetWorkoutSegments(workout.id);
+      workout.segments = segments;
+    }));
+    if (i + batchSize < workoutsNeedingSegments.length && batchDelay > 0) {
+      await new Promise(function (r) { setTimeout(r, batchDelay); });
+    }
+  }
+  console.log('[loadWorkouts] ✅ 백그라운드 세그먼트 로딩 완료 (', totalToFetch, '개)');
+
+  try {
+    const cache = getWorkoutCache();
+    if (cache && cache.workouts && Array.isArray(cache.workouts)) {
+      const updatedWorkouts = cache.workouts.map(function (cachedWorkout) {
+        const updatedWorkout = filteredWorkouts.find(function (w) { return String(w.id) === String(cachedWorkout.id); });
+        if (updatedWorkout && updatedWorkout.segments && Array.isArray(updatedWorkout.segments) && updatedWorkout.segments.length > 0) {
+          return Object.assign({}, updatedWorkout, { segments: updatedWorkout.segments });
+        }
+        return cachedWorkout;
+      });
+      setWorkoutCache(updatedWorkouts);
+      console.log('[Workout Cache] 세그먼트 포함하여 캐시 업데이트 완료 (', totalToFetch, '개 워크아웃의 세그먼트 추가됨)');
+    } else {
+      setWorkoutCache(filteredWorkouts);
+      console.log('[Workout Cache] 워크아웃 목록 및 세그먼트 캐시 저장 완료');
+    }
+  } catch (cacheUpdateError) {
+    console.warn('[Workout Cache] 세그먼트 캐시 업데이트 실패:', cacheUpdateError);
+  }
+
+  // 새로 받은 세그먼트로 TSS 재계산 후, 화면이 여전히 열려있으면 조용히 재렌더
+  filteredWorkouts.forEach(function (w) {
+    if ((!w.total_seconds || w.total_seconds <= 0) && w.segments && w.segments.length > 0 && typeof getSegmentDurationSec === 'function') {
+      w.total_seconds = w.segments.reduce(function (sum, s) { return sum + getSegmentDurationSec(s); }, 0);
+      w.totalSeconds = w.total_seconds;
+      w.totalMinutes = Math.round(w.total_seconds / 60);
+    }
+  });
+  const screenEl = document.getElementById('workoutScreen');
+  if (screenEl && screenEl.classList.contains('active') && typeof renderWorkoutTable === 'function') {
+    renderWorkoutTable(filteredWorkouts, {}, {}, grade);
+    if (typeof renderWorkoutCategories === 'function') renderWorkoutCategories(allWorkoutsForCount);
+  }
+}
+
 async function loadWorkouts(categoryId, forceRefresh = false) {
   const workoutList = safeGetElement('workoutList');
   const loadingOverlay = document.getElementById('workoutLoadingOverlay');
@@ -3611,113 +3684,16 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
       return;
     }
 
-    // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만)
-    const isAndroid = /android/i.test(navigator.userAgent);
     // result 객체가 이 스코프에서 접근 가능한지 확인 (위에서 이미 정의됨)
     const isFromCacheForSegments = result && result.fromCache;
-    console.log('[loadWorkouts] 세그먼트 조회 모드:', {
-      isFromCache: isFromCacheForSegments,
-      filteredWorkoutsCount: filteredWorkouts.length
-    });
-    
-    // 세그먼트가 없는 워크아웃만 필터링
-    let workoutsNeedingSegments = filteredWorkouts.filter(w => {
-      // 세그먼트가 없거나 빈 배열인 경우만 포함
-      if (!w.segments || !Array.isArray(w.segments) || w.segments.length === 0) {
-        return true;
-      }
-      return false;
-    });
-    
-    const totalToFetch = workoutsNeedingSegments.length;
-    
-    // 캐시 모드에서 세그먼트가 필요한 워크아웃이 없으면 세그먼트 조회 완전히 건너뛰기
-    if (isFromCacheForSegments && totalToFetch === 0) {
-      console.log('[loadWorkouts] ✅ 캐시 모드: 세그먼트가 이미 포함되어 있음 - 세그먼트 조회 건너뛰기');
-    } else if (isFromCacheForSegments && totalToFetch > 0) {
-      // 캐시 모드이지만 세그먼트가 필요한 경우: 빠른 배치 처리 (100개씩, 지연 없음)
-      console.log('[loadWorkouts] ⚡ 캐시 모드: 세그먼트 빠른 로딩 시작 (', totalToFetch, '개, 배치 크기: 100개, 지연: 없음)');
-      showLoading(totalToFetch, 0);
-      
-      // 캐시 모드: 모든 세그먼트를 큰 배치로 빠르게 처리 (지연 없음)
-      const largeBatchSize = 100;  // 캐시 모드에서는 100개씩
-      for (let i = 0; i < workoutsNeedingSegments.length; i += largeBatchSize) {
-        const batch = workoutsNeedingSegments.slice(i, i + largeBatchSize);
-        console.log('[loadWorkouts] 캐시 모드: 세그먼트 배치 처리 중...', i + 1, '-', Math.min(i + largeBatchSize, totalToFetch), '/', totalToFetch);
-        await Promise.all(batch.map(async (workout) => {
-          const segments = await apiGetWorkoutSegments(workout.id);
-          workout.segments = segments;
-        }));
-        const loadedCount = Math.min(i + batch.length, totalToFetch);
-        showLoading(totalToFetch, loadedCount);
-        // 캐시 모드에서는 지연 없음 (즉시 다음 배치 처리)
-      }
-      console.log('[loadWorkouts] ✅ 캐시 모드: 세그먼트 로딩 완료 (', totalToFetch, '개)');
-    } else if (!isFromCacheForSegments && totalToFetch > 0) {
-      // 서버 모드: 기존 배치 처리 유지 (20개씩, 지연 있음)
-      console.log('[loadWorkouts] 🌐 서버 모드: 세그먼트 배치 로딩 시작 (', totalToFetch, '개, 배치 크기: 20개, 지연: ', (isAndroid ? 250 : 100), 'ms)');
-      showLoading(totalToFetch, 0);
-      
-      const SEGMENT_BATCH_SIZE = 20;  // 서버 모드: 20개씩
-      const SEGMENT_BATCH_DELAY = isAndroid ? 250 : 100;  // 서버 모드: 지연 있음
-      
-      for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
-        const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
-        console.log('[loadWorkouts] 서버 모드: 세그먼트 배치 처리 중...', i + 1, '-', Math.min(i + SEGMENT_BATCH_SIZE, totalToFetch), '/', totalToFetch);
-        await Promise.all(batch.map(async (workout) => {
-          const segments = await apiGetWorkoutSegments(workout.id);
-          workout.segments = segments;
-        }));
-        const loadedCount = Math.min(i + batch.length, totalToFetch);
-        showLoading(totalToFetch, loadedCount);
-        if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length && SEGMENT_BATCH_DELAY > 0) {
-          await new Promise(r => setTimeout(r, SEGMENT_BATCH_DELAY));
-        }
-      }
-      console.log('[loadWorkouts] ✅ 서버 모드: 세그먼트 로딩 완료 (', totalToFetch, '개)');
-    }
 
     // 전역 변수에 저장 (검색·신규 추가 시 기존 목록 유지용)
     window.workouts = filteredWorkouts;
     window.workoutsFull = allWorkoutsForCount;
 
-    // 세그먼트를 가져온 후 캐시 업데이트 (다음 로드 시 세그먼트 조회 건너뛰기)
-    // 캐시 모드든 서버 모드든 세그먼트를 가져온 경우 캐시 업데이트
-    if (totalToFetch > 0) {
-      try {
-        const cache = getWorkoutCache();
-        if (cache && cache.workouts && Array.isArray(cache.workouts)) {
-          // 세그먼트가 추가된 워크아웃으로 캐시 업데이트
-          const updatedWorkouts = cache.workouts.map(cachedWorkout => {
-            const updatedWorkout = filteredWorkouts.find(w => String(w.id) === String(cachedWorkout.id));
-            if (updatedWorkout && updatedWorkout.segments && Array.isArray(updatedWorkout.segments) && updatedWorkout.segments.length > 0) {
-              // 세그먼트가 포함된 워크아웃으로 교체
-              return {
-                ...updatedWorkout,
-                segments: updatedWorkout.segments  // 세그먼트 포함
-              };
-            }
-            // 세그먼트가 없는 경우 기존 워크아웃 유지 (또는 캐시된 세그먼트가 있으면 유지)
-            if (cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0) {
-              return cachedWorkout;  // 기존 캐시된 세그먼트 유지
-            }
-            return cachedWorkout;  // 기존 워크아웃 유지
-          });
-          setWorkoutCache(updatedWorkouts);
-          console.log('[Workout Cache] 세그먼트 포함하여 캐시 업데이트 완료 (', totalToFetch, '개 워크아웃의 세그먼트 추가됨)');
-        } else {
-          // 캐시가 없으면 현재 워크아웃 목록을 세그먼트 포함하여 캐시 저장
-          setWorkoutCache(filteredWorkouts);
-          console.log('[Workout Cache] 워크아웃 목록 및 세그먼트 캐시 저장 완료');
-        }
-      } catch (cacheUpdateError) {
-        console.warn('[Workout Cache] 세그먼트 캐시 업데이트 실패:', cacheUpdateError);
-      }
-    } else if (isFromCacheForSegments) {
-      console.log('[Workout Cache] 모든 워크아웃에 세그먼트가 이미 포함되어 있음');
-    }
-
-    // TSS 계산용: total_seconds 미설정 시 세그먼트 합으로 채우기 (전체 목록 표시 일관화)
+    // TSS 계산용: total_seconds 미설정 시 세그먼트 합으로 채우기 (이미 세그먼트가 있는 워크아웃만 —
+    // 목록 표시엔 세그먼트가 필요 없으므로 여기서 서버 조회를 기다리지 않는다. 아직 세그먼트가 없는
+    // 워크아웃은 fetchMissingWorkoutSegmentsInBackground가 조용히 채운 뒤 재계산한다)
     filteredWorkouts.forEach(function (w) {
       if ((!w.total_seconds || w.total_seconds <= 0) && w.segments && w.segments.length > 0 && typeof getSegmentDurationSec === 'function') {
         w.total_seconds = w.segments.reduce(function (sum, s) { return sum + getSegmentDurationSec(s); }, 0);
@@ -3734,6 +3710,11 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
     const sourceText = result.fromCache ? ' (캐시)' : '';
     window.showToast(`${filteredWorkouts.length}개의 워크아웃을 불러왔습니다${sourceText}.`);
     hideLoading();
+
+    // 목록은 이미 렌더링됨 — 세그먼트가 아직 캐시에 없는 워크아웃(신규 추가분 등)만 백그라운드에서
+    // 조용히 채운다. 예전엔 이 조회가 끝날 때까지(GAS 응답 지연 시 최대 60초) 목록 렌더링 자체가
+    // 멈춰 있었다 — await 하지 않음(fire-and-forget), 화면은 이미 사용 가능한 상태.
+    fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWorkoutsForCount, isFromCacheForSegments, grade);
 
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
