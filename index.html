@@ -3024,8 +3024,9 @@
     /* 바텀시트(계좌 안내 · 환불 폼) — journal-bottom-sheet 구조 그대로 재사용 */
     .competition-bottom-sheet-overlay {
       position: fixed; inset: 0; z-index: 200030;
-      background: rgba(0,0,0,0.35);
-      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      /* backdrop-filter(blur) 제거 — 모바일에서 시트가 열려있는 동안 GPU 합성 부하로 인한 발열 요인.
+         배경 어둡게 처리(디밍)로 동일한 시각적 구분 유지, 흐림 효과만 제외 */
+      background: rgba(0,0,0,0.5);
       display: flex; align-items: flex-end; justify-content: center;
       animation: journalFadeIn 0.2s ease;
     }
@@ -3075,9 +3076,9 @@
     .competition-hero-badges { position: relative; z-index: 1; display: flex; gap: 6px; padding: 0 16px 14px; }
     .competition-hero-badge {
       font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
-      background: rgba(255,255,255,0.2); color: white;
+      /* backdrop-filter(blur) 제거 — 발열 요인. 배경 불투명도를 올려 가독성 유지 */
+      background: rgba(0,0,0,0.4); color: white;
       border: 1px solid rgba(255,255,255,0.35);
-      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
     }
     .competition-hero-badge--dday.is-open { background: rgba(239,68,68,0.9); border-color: transparent; }
     .competition-hero-badge--dday.is-past { background: rgba(107,114,128,0.65); border-color: transparent; }
@@ -3087,7 +3088,7 @@
     .competition-hero-approval-btn {
       font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
       border: 1px solid rgba(255,255,255,0.35); color: white; cursor: pointer;
-      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      /* backdrop-filter(blur) 제거 — 발열 요인. 승인/거절 버튼은 이미 거의 불투명한 배경(0.85)이라 시각적 차이 없음 */
       -webkit-tap-highlight-color: transparent;
     }
     .competition-hero-approval-btn.is-approve { background: rgba(22,163,74,0.85); border-color: transparent; }
