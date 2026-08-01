@@ -461,7 +461,8 @@
           'div',
           {
             className: 'fixed inset-0 z-[10001] flex items-center justify-center p-4 overflow-y-auto',
-            style: { background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' },
+            /* backdropFilter(blur) 제거 — 결과를 스크롤하며 읽는 동안 GPU 합성 부하로 인한 발열 요인 */
+            style: { background: 'rgba(0,0,0,0.6)' },
             onClick: function(e) { if (e.target === e.currentTarget) closeEtpModal(); }
           },
           React.createElement(
@@ -552,7 +553,8 @@
           'div',
           {
             className: 'fixed inset-0 z-[10001] flex items-center justify-center p-4 overflow-y-auto run-ftp-modal-overlay',
-            style: { background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' },
+            /* backdropFilter(blur) 제거 — 결과를 스크롤하며 읽는 동안 GPU 합성 부하로 인한 발열 요인 */
+            style: { background: 'rgba(0,0,0,0.6)' },
             onClick: function (e) { if (e.target === e.currentTarget) closeRunFtpModal(); }
           },
           React.createElement(

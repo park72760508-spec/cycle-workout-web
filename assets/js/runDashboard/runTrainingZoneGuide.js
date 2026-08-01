@@ -389,7 +389,8 @@
     style.textContent =
       '.run-workout-guide-modal{position:fixed;inset:0;z-index:100020;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .25s ease}' +
       '.run-workout-guide-modal.is-open{opacity:1;pointer-events:auto}' +
-      '.run-workout-guide-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(4px)}' +
+      /* backdrop-filter(blur) 제거 — 가이드를 스크롤하며 읽는 동안 GPU 합성 부하로 인한 발열 요인. 배경 불투명도를 올려 동일한 시각적 구분 유지 */
+      '.run-workout-guide-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.72)}' +
       '.run-workout-guide-panel{position:relative;width:100%;max-width:440px;max-height:92vh;overflow-y:auto;border-radius:24px;background:#fff;box-shadow:0 24px 64px rgba(15,23,42,.22);animation:runGuideSlideUp .35s ease}' +
       '@keyframes runGuideSlideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}' +
       '.run-workout-guide-close{position:absolute;top:14px;right:14px;width:36px;height:36px;border:none;border-radius:50%;background:rgba(255,255,255,.9);color:#475569;font-size:22px;cursor:pointer;z-index:2;box-shadow:0 2px 8px rgba(0,0,0,.08)}' +
