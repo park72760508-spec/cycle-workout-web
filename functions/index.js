@@ -11473,6 +11473,118 @@ exports.getMyGroupContactSetForRead = onRequest(
   }
 );
 
+/** 전화번호 정규화 (assets/js/app.js _normPhone 동일 로직) */
+function normalizePhoneDigitsForBadge(input) {
+  var d = String(input || "").replace(/\D/g, "");
+  if (d.slice(0, 2) === "82" && d.length >= 10) d = "0" + d.slice(2);
+  return d.slice(0, 15);
+}
+
+/**
+ * 베이스캠프 알림 배지 — 초대 라이딩/러닝·모임 가입신청·친구요청 집계 (1회성 조회).
+ * assets/js/app.js 의 4개 전역 상시 onSnapshot(초대 rides, 소mo임 목록 + 그룹별 joinRequests 팬아웃,
+ * friendRequests)을 대체하는 단발 조회 엔드포인트 — 클라이언트는 이 API를 주기적으로 폴링한다.
+ * 모임 가입신청은 Supabase(riding_groups·riding_group_join_requests)에서, 라이딩/러닝 초대와
+ * 친구요청은 Supabase 미러가 없어 Firestore 1회 조회로 집계한다(리스너 제거가 핵심 — 백엔드는 유지).
+ */
+exports.getBasecampBadgeCountsForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+
+    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
+    if (!requestedUid) {
+      res.status(400).json({ success: false, error: "uid 필요" });
+      return;
+    }
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 알림 배지만 조회할 수 있습니다." });
+      return;
+    }
+
+    const db = admin.firestore();
+    try {
+      const userSnap = await db.collection("users").doc(requestedUid).get();
+      const userData = userSnap.exists ? userSnap.data() || {} : {};
+      const normPhone = normalizePhoneDigitsForBadge(
+        userData.phone || userData.phoneNumber || userData.contact || userData.tel || ""
+      );
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayTs = admin.firestore.Timestamp.fromDate(todayStart);
+
+      const ridesPromise =
+        normPhone.length >= 8
+          ? db
+              .collection("rides")
+              .where("invitedList", "array-contains", normPhone)
+              .get()
+              .then((snap) => {
+                var cycleCount = 0;
+                var runCount = 0;
+                snap.forEach((doc) => {
+                  var d = doc.data() || {};
+                  var rideDate = d.date;
+                  if (rideDate && typeof rideDate.toDate === "function") {
+                    if (rideDate.toDate() < todayTs.toDate()) return;
+                  }
+                  var parts = Array.isArray(d.participants) ? d.participants : [];
+                  if (parts.indexOf(requestedUid) !== -1) return;
+                  var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
+                  if (cat === "RUN") runCount++;
+                  else cycleCount++;
+                });
+                return { ridesCycle: cycleCount, ridesRun: runCount };
+              })
+              .catch(() => ({ ridesCycle: 0, ridesRun: 0 }))
+          : Promise.resolve({ ridesCycle: 0, ridesRun: 0 });
+
+      const friendsPromise = db
+        .collection("friendRequests")
+        .where("toUid", "==", requestedUid)
+        .where("status", "==", "pending")
+        .count()
+        .get()
+        .then((snap) => snap.data().count || 0)
+        .catch(() => 0);
+
+      const groupsPromise = supabaseGroupReader
+        .fetchOwnedGroupsPendingJoinRequestCount(admin, requestedUid)
+        .catch(() => 0);
+
+      const [ridesCounts, friends, groups] = await Promise.all([
+        ridesPromise,
+        friendsPromise,
+        groupsPromise,
+      ]);
+
+      res.status(200).json({
+        success: true,
+        ridesCycle: ridesCounts.ridesCycle,
+        ridesRun: ridesCounts.ridesRun,
+        friends: friends,
+        groups: groups || 0,
+      });
+    } catch (e) {
+      console.warn("[getBasecampBadgeCountsForRead]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 /** 클라이언트 Secondary relay — Firestore Primary 성공 후 open_rides upsert */
 exports.ingestOpenRideDualWriteRelay = onRequest(
   supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),

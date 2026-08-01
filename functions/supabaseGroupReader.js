@@ -209,6 +209,36 @@ function mapAdaptedGroupToMyGroupsListRow(doc) {
 }
 
 /**
+ * 내가 방장(created_by)인 APPROVED 소mo임들의 대기 중인 가입신청 총합.
+ * joinRequests 문서는 승인/거부 시 삭제되므로 행 개수 = 대기 건수 (status 컬럼 없음).
+ * 베이스캠프 알림 배지의 전역 onSnapshot 팬아웃 리스너 대체.
+ */
+async function fetchOwnedGroupsPendingJoinRequestCount(admin, firebaseUid) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  const userUuid = await resolveViewerUserUuid(supabase, firebaseUid);
+  if (!userUuid) return 0;
+
+  const { data: groups, error: gErr } = await supabase
+    .from("riding_groups")
+    .select("id")
+    .eq("created_by", userUuid)
+    .eq("status", "APPROVED");
+  if (gErr) throw gErr;
+
+  const groupIds = (groups || []).map((g) => g.id);
+  if (!groupIds.length) return 0;
+
+  const { count, error: cErr } = await supabase
+    .from("riding_group_join_requests")
+    .select("*", { count: "exact", head: true })
+    .in("group_id", groupIds);
+  if (cErr) throw cErr;
+  return count || 0;
+}
+
+/**
  * 내가 멤버인 APPROVED 소mo임 — riding_group_members × riding_groups (1+1 쿼리).
  * Firestore U×G 리스너 대체.
  */
@@ -881,6 +911,7 @@ module.exports = {
   fetchOpenRideByFirestoreId,
   fetchOpenRidesInDateRange,
   fetchRidingGroupByFirestoreId,
+  fetchOwnedGroupsPendingJoinRequestCount,
   fetchMyRidingGroupsAsMember,
   fetchMyGroupMembershipFirestoreIds,
   fetchMyGroupContactSet,
