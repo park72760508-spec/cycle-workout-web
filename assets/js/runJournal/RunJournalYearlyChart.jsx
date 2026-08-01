@@ -153,6 +153,8 @@
     function applyPointerState(state) {
       if (!state || state.activeTooltipIndex == null) return;
       var idx = state.activeTooltipIndex;
+      /* 포인터가 같은 막대 위에 머무는 동안 매 mousemove마다 재렌더되는 것을 방지 */
+      if (idx === selectedIndex) return;
       if (idx >= 0 && idx < monthlyData.length) setSelectedIndex(idx);
     }
 
