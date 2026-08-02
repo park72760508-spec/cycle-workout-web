@@ -2738,7 +2738,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #openRidingRoomScreen .open-riding-filter-modal-panel {
   box-shadow: 0 20px 50px rgba(91, 33, 182, 0.15);
 }
-/* 라이딩 모임 달력 — 오늘 날짜: 월 이동 버튼(.open-riding-calendar-nav-btn)과 동일한 크기(32px 원형)·색상 */
+/* 라이딩 모임 달력 — 오늘 날짜: 월 이동 버튼(.open-riding-calendar-nav-btn)과 동일한 32px 원형 크기, 색상은 연한 주황 */
 #openRidingRoomScreen .open-riding-calendar-grid .open-riding-cal-day--today .open-riding-cal-today-num {
   display: inline-flex;
   align-items: center;
@@ -2746,9 +2746,9 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #f1f5f9;
+  background: #ffedd5;
   border: none;
-  color: #667eea;
+  color: #ea580c;
   box-sizing: border-box;
   font-size: inherit;
   font-weight: inherit;
