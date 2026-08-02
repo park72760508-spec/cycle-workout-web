@@ -3120,6 +3120,13 @@
       background-size: cover; background-position: center; background-color: #f1f5f9;
       border: 1px solid #eef0f4;
     }
+    /* 코스맵·고도표 GPX 패널(OpenRidingGpxCoursePanel React 마운트) + 다운로드 링크 — 라이딩 세부 내용과 동일 UI */
+    .competition-course-gpx-panel { margin-bottom: 10px; }
+    .competition-gpx-download-link {
+      display: inline-flex; align-items: center; gap: 4px; margin: 0 0 20px;
+      color: #7c3aed; font-size: 14px; font-weight: 700; text-decoration: none;
+    }
+    .competition-gpx-download-link:hover { text-decoration: underline; }
 
     .competition-account-row {
       display: flex; align-items: center; justify-content: space-between;
@@ -28004,7 +28011,7 @@
        React/ReactDOM보다 항상 늦게 실행됐다. 일반 스크립트로 바꾼 뒤에도 같은 순서를 유지하려면
        defer가 반드시 필요 — 없으면 이 스크립트가 문서 위치에서 즉시(React 로드 전에) 실행되어
        "React is not defined" 등 오류가 난다. -->
-  <script defer src="assets/js/openRiding/OpenRidingScreens.compiled.js?v=open-riding-detail-nav-20260519"></script>
+  <script defer src="assets/js/openRiding/OpenRidingScreens.compiled.js?v=open-riding-calendar-color-20260802"></script>
   <script>
     (function() {
       var openRidingReactRoot = null;
