@@ -389,6 +389,20 @@ async function upsertOpenRideToSupabase(openRide, participants) {
       .upsert(participants, { onConflict: "ride_id,user_id" });
     if (pErr) throw pErr;
   }
+
+  /*
+   * 참석 취소 반영 — 위 upsert는 "현재 참가자"만 추가/갱신할 뿐 빠진 사람을 지우지 않는다.
+   * Firestore participants 배열에서 빠졌는데도 이 행이 계속 남아있어, 취소해도 Supabase
+   * 읽기 경로에서는 영원히 참가자로 보이던 버그(2026-08). 매 쓰기마다 "지금 목록에 없는
+   * 행"을 정리해 upsert-only 테이블을 실제 배열과 일치시킨다.
+   */
+  const currentUserIds = (participants || []).map((p) => p.user_id).filter(Boolean);
+  let deleteQuery = supabase.from("open_ride_participants").delete().eq("ride_id", openRide.id);
+  if (currentUserIds.length) {
+    deleteQuery = deleteQuery.not("user_id", "in", `(${currentUserIds.join(",")})`);
+  }
+  const { error: delErr } = await deleteQuery;
+  if (delErr) throw delErr;
 }
 
 async function upsertRidingGroupToSupabase(groupRow, members, joinRequests) {
