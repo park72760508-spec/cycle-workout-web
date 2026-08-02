@@ -74,6 +74,7 @@ function adaptOpenRideToFirestoreDoc(row, participants) {
   return {
     id: firestoreId,
     title: str(row.title) || "",
+    category: str(row.category)?.toUpperCase() === "RUN" ? "RUN" : "CYCLE",
     date: tsFromIso(row.ride_date ? row.ride_date + "T00:00:00+09:00" : null),
     departureTime: str(row.departure_time)?.slice(0, 5) || "",
     departureLocation: str(row.departure_location) || "",

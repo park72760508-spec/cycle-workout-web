@@ -218,12 +218,14 @@ function mapFirestoreOpenRideToRows(firestoreDocId, d) {
   else if (statusRaw === "completed") status = "completed";
 
   const rideId = resolveOpenRideUuid(firestoreDocId);
+  const category = str(d.category)?.toUpperCase() === "RUN" ? "RUN" : "CYCLE";
   const openRide = {
     id: rideId,
     firestore_doc_id: firestoreDocId,
     host_user_id: hostUserId,
     title: str(d.title) || "",
     ride_date: rideDate,
+    category,
     departure_time: toTimeOnly(d.departureTime),
     departure_location: str(d.departureLocation) || "",
     distance_km: num(d.distance, 0),
