@@ -29607,6 +29607,10 @@
             if (window.authV9 && window.authV9.currentUser) return;
             if (window.auth && window.auth.currentUser) return;
           } catch (e2) {}
+          /* 자동 재로그인 표시 — handlePhoneAuth가 탈퇴 사전확인(login_account_flags)을 건너뛰도록.
+             이 기기는 이미 한 번 정상 로그인했던 계정이고, 실제 탈퇴 여부는 로그인 성공 후
+             users 문서(account_status)로 어차피 다시 판정되므로 사전확인 없이도 안전하다. */
+          window.__stelvioIsAutoRelogin = true;
           handlePhoneAuth();
         }, 200);
       } catch (eC) {}
@@ -29733,6 +29737,10 @@
         return;
       }
       window.__stelvioPhoneAuthBusy = true;
+      /* 함수 최상단에서 즉시 소비 — 아래 조기 return 경로들 때문에 플래그가 다음 호출(수동 로그인)로
+         새어나가 탈퇴 사전확인이 잘못 생략되는 것을 방지 */
+      var isAutoRelogin = window.__stelvioIsAutoRelogin === true;
+      window.__stelvioIsAutoRelogin = false;
 
       const phoneInput = document.getElementById('authPhoneInput');
       const passwordInput = document.getElementById('authPasswordInput');
@@ -29830,10 +29838,15 @@
         const formattedPhone = (window.formatPhoneForDB || window.formatPhoneNumber || ((p) => p))(phone);
         console.log('🔐 로그인 시도:', { email: email, phone: phone, formattedPhone: formattedPhone });
 
-        /* 탈퇴 플래그만 사전 확인 — 등록 여부는 로그인 시도 결과로 판별 */
+        /* 탈퇴 플래그만 사전 확인 — 등록 여부는 로그인 시도 결과로 판별.
+           자동 재로그인(저장된 자격증명, SESSION-only 전환 후 앱을 열 때마다 발생)은 이미 한 번
+           정상 로그인했던 기기라 사전확인을 건너뛴다(isAutoRelogin, 함수 최상단에서 소비) —
+           실제 탈퇴 여부는 로그인 성공 후 users 문서(account_status, isUserWithdrawn)로
+           어차피 다시 판정되므로 안전하다. (login_account_flags는 전체 회원 중 극소수만 존재해
+           대부분 NOT_FOUND 과금 읽기로 끝나던 조회 — 앱을 열 때마다 매번 발생하던 트래픽의 핵심 원인이었다.) */
         showAuthStatus('회원 확인 중…', 'info');
         var loginPreflight = { withdrawn: false, hasRegisteredFlag: false, email: email };
-        if (typeof window.stelvioPreflightPhoneLogin === 'function') {
+        if (!isAutoRelogin && typeof window.stelvioPreflightPhoneLogin === 'function') {
           loginPreflight = await window.stelvioPreflightPhoneLogin(phone);
         }
         if (loginPreflight.withdrawn) {
