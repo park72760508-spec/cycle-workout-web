@@ -220,7 +220,9 @@ async function getExistingStravaActivityIdsForDateRange(db, userId, dateFrom, da
 
 /**
  * @param {import('firebase-admin').firestore.Firestore} db
- * @param {{ includeGapScanAllUsers?: boolean, maxUsers?: number }} options
+ * @param {{ includeGapScanAllUsers?: boolean, maxUsers?: number, gapScanUserIds?: string[] }} options
+ *   gapScanUserIds: includeGapScanAllUsers가 false일 때만 사용 — 전체 스캔 대신 이 목록의
+ *   사용자만 needsGapScan으로 표시(회전 배치 스캔용, stravaRotatingGapScanSchedule 참고).
  * @param {{ dateFrom: string, dateTo: string }} range
  */
 async function buildGapDetectWorklist(db, range, options = {}) {
@@ -281,6 +283,16 @@ async function buildGapDetectWorklist(db, range, options = {}) {
       const entry = ensureUser(uid);
       if (!entry) continue;
       entry.sources.add("C_gap_scan");
+      entry.needsGapScan = true;
+    }
+  } else if (Array.isArray(options.gapScanUserIds) && options.gapScanUserIds.length) {
+    // 전체 스캔(Strava 레이트리밋 1000/day 초과로 해제됨) 대신, 호출자가 커서로 회전시킨
+    // 소규모 배치만 검사 — 웹훅이 아예 도착하지 않아 A_pending/B_webhook 큐에도 못 들어간
+    // 케이스(예: 2026-08-02 사례)를 레이트리밋 안에서 며칠에 걸쳐 전원 커버하기 위한 안전망.
+    for (const uid of options.gapScanUserIds) {
+      const entry = ensureUser(uid);
+      if (!entry) continue;
+      entry.sources.add("D_rotating_gap_scan");
       entry.needsGapScan = true;
     }
   }
@@ -441,7 +453,7 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
  * @param {{ afterUnix: number, beforeUnix: number, dateFrom: string, dateTo: string }} range
  * @param {object} deps
  * @param {string} logPrefix
- * @param {{ includeGapScanAllUsers?: boolean, maxUsers?: number }} [options]
+ * @param {{ includeGapScanAllUsers?: boolean, maxUsers?: number, gapScanUserIds?: string[] }} [options]
  */
 async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
   const prefix = logPrefix || "[stravaGapDetect]";
