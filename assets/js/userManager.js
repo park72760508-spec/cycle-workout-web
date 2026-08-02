@@ -2389,10 +2389,25 @@ if (typeof window !== 'undefined' && (window.auth || window.authV9)) {
 // ========== Firestore API 함수들 (기존 Google Sheets API 호환) ==========
 
 /**
+ * apiGetUsers() 짧은 TTL 캐시 — 관리자 전체 목록 조회는 users 컬렉션 전체(수백~수천 건)를
+ * 매번 다시 읽는 비용이 커서, 부팅 시 heavySyncAfterAuth(syncUsersFromDB → loadUsers)처럼
+ * 같은 세션에서 짧은 시간 안에 연달아 호출되는 경우가 많다. 세션당 로그인 사용자는 1명뿐이므로
+ * 전역 캐시 슬롯 1개로 충분(다른 사용자의 데이터가 섞일 위험 없음).
+ * @param {boolean} [forceRefresh] 캐시를 무시하고 강제로 새로 조회(생성/수정 직후 등)
+ */
+const API_GET_USERS_CACHE_TTL_MS = 30000;
+let __apiGetUsersCache = null;
+let __apiGetUsersCacheAt = 0;
+
+/**
  * 모든 사용자 목록 조회
  * @returns {Promise<{success: boolean, items?: array, error?: string}>}
  */
-async function apiGetUsers() {
+async function apiGetUsers(forceRefresh) {
+  if (!forceRefresh && __apiGetUsersCache && Date.now() - __apiGetUsersCacheAt < API_GET_USERS_CACHE_TTL_MS) {
+    console.log('[apiGetUsers] ⚡ 캐시 사용 — Firestore 재조회 생략 (', __apiGetUsersCache.items ? __apiGetUsersCache.items.length : 0, '명)');
+    return __apiGetUsersCache;
+  }
   try {
     // 로그인 상태 확인 - 여러 소스에서 확인
     const authCurrentUser = window.auth?.currentUser;
@@ -2595,30 +2610,36 @@ async function apiGetUsers() {
             users.push(o);
           });
           
-          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestoreV9):', { 
+          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestoreV9):', {
             totalUsers: users.length,
-            userIds: users.map(u => u.id) 
+            userIds: users.map(u => u.id)
           });
-          
-          return { success: true, items: users };
+
+          var resultV9 = { success: true, items: users };
+          __apiGetUsersCache = resultV9;
+          __apiGetUsersCacheAt = Date.now();
+          return resultV9;
         } else {
           // v8 Compat 사용 (fallback)
           const usersSnapshot = await getUsersCollection().get();
           const users = [];
-          
+
           usersSnapshot.forEach(doc => {
             var dd = doc.data() || {};
             var o = { id: doc.id };
             if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
             users.push(o);
           });
-          
-          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestore v8):', { 
+
+          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestore v8):', {
             totalUsers: users.length,
-            userIds: users.map(u => u.id) 
+            userIds: users.map(u => u.id)
           });
-          
-          return { success: true, items: users };
+
+          var resultV8 = { success: true, items: users };
+          __apiGetUsersCache = resultV8;
+          __apiGetUsersCacheAt = Date.now();
+          return resultV8;
         }
       } catch (listError) {
         // 전체 목록 조회 실패 시 자신의 문서만 반환
