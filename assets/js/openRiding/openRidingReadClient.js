@@ -111,6 +111,33 @@ async function httpGetJsonAuthed(path, params) {
   return res.json().catch(function () { return null; });
 }
 
+/**
+ * Supabase 어댑터(functions/groupResponseAdapter.js의 tsFromIso)가 만드는 날짜 필드는
+ * 순수 JSON {seconds, nanoseconds} 객체라 Firestore Timestamp의 .toDate()가 없다.
+ * 캘린더 등 클라이언트 코드는 전부 ts.toDate()(또는 instanceof Date)로 날짜를 판별하므로,
+ * HTTP 응답을 받는 시점에 한 번 폴리필해두면 이후 모든 소비 지점이 그대로 동작한다.
+ * (2026-08 회귀: 이 폴리필 없이 라우팅을 켰더니 캘린더에 모임 표시가 전부 사라졌었음 —
+ * 데이터 마이그레이션 문제가 아니라 날짜 필드 형태 불일치였음.)
+ */
+function stelvioHydrateTimestampLikeFields(obj, fields) {
+  if (!obj) return obj;
+  fields.forEach(function (f) {
+    var v = obj[f];
+    if (v && typeof v === 'object' && typeof v.seconds === 'number' && typeof v.toDate !== 'function') {
+      var seconds = v.seconds;
+      var nanoseconds = typeof v.nanoseconds === 'number' ? v.nanoseconds : 0;
+      obj[f] = {
+        seconds: seconds,
+        nanoseconds: nanoseconds,
+        toDate: function () {
+          return new Date(seconds * 1000 + Math.round(nanoseconds / 1e6));
+        },
+      };
+    }
+  });
+  return obj;
+}
+
 export async function fetchTrainingLogsByDateRangeForReviewRouted(userId, year, month) {
   const uid = String(userId || '').trim();
   const y = Number(year);
@@ -164,12 +191,23 @@ export async function fetchRideByIdRouted(db, rideId) {
 
   if (stelvioGetGroupsReadSourceSync() === 'supabase') {
     const json = await httpGetJson(API_BASE + '/getOpenRideForRead', { rideId: id });
-    if (json && json.success && json.ride) return json.ride;
+    if (json && json.success && json.ride) {
+      return stelvioHydrateTimestampLikeFields(json.ride, ['date', 'createdAt', 'updatedAt']);
+    }
   }
 
   const snap = await getDoc(doc(db, 'rides', id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() };
+}
+
+/** 로컬(기기) 날짜 → YYYY-MM-DD. toISOString()은 UTC로 변환되어 한국시간 자정 근처에서
+ *  하루 밀리는 문제가 있어, from/to(로컬 시각 Date)는 로컬 getter로 직접 포맷한다. */
+function stelvioLocalDateToYmd(d) {
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
 }
 
 export async function fetchRidesInDateRangeRouted(db, from, to) {
@@ -178,13 +216,17 @@ export async function fetchRidesInDateRangeRouted(db, from, to) {
   const toTs = Timestamp.fromDate(to);
 
   if (stelvioGetGroupsReadSourceSync() === 'supabase') {
-    const startStr = from.toISOString().slice(0, 10);
-    const endStr = to.toISOString().slice(0, 10);
+    const startStr = stelvioLocalDateToYmd(from);
+    const endStr = stelvioLocalDateToYmd(to);
     const json = await httpGetJson(API_BASE + '/getOpenRidesInDateRangeForRead', {
       startStr,
       endStr,
     });
-    if (json && json.success && Array.isArray(json.rides)) return json.rides;
+    if (json && json.success && Array.isArray(json.rides)) {
+      return json.rides.map(function (r) {
+        return stelvioHydrateTimestampLikeFields(r, ['date', 'createdAt', 'updatedAt']);
+      });
+    }
   }
 
   const q = query(
