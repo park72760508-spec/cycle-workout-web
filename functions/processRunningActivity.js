@@ -197,11 +197,13 @@ async function resolveStravaUserByOwnerId(db, ownerId, options = {}) {
 async function fetchStravaActivityDetailForOwner(db, ownerId, objectId, options = {}) {
   const resolved = await resolveStravaUserByOwnerId(db, ownerId, options);
   if (!resolved) {
+    console.warn("[fetchStravaActivityDetailForOwner] user_not_found:", { ownerId, objectId });
     return { success: false, error: "user_not_found" };
   }
   const { userId, userData } = resolved;
   const mainModule = require("./index.js");
   if (typeof mainModule.refreshStravaTokenForUser !== "function" || typeof mainModule.fetchStravaActivityDetail !== "function") {
+    console.error("[fetchStravaActivityDetailForOwner] strava_helpers_unavailable:", { userId, objectId });
     return { success: false, error: "strava_helpers_unavailable" };
   }
 
@@ -213,6 +215,7 @@ async function fetchStravaActivityDetailForOwner(db, ownerId, objectId, options 
       const tokenResult = await mainModule.refreshStravaTokenForUser(db, userId);
       accessToken = tokenResult.accessToken;
     } catch (e) {
+      console.error("[fetchStravaActivityDetailForOwner] 토큰 갱신 실패:", userId, objectId, e.message);
       return { success: false, userId, error: `토큰 갱신 실패: ${e.message}`, status: 401 };
     }
   }
@@ -224,16 +227,36 @@ async function fetchStravaActivityDetailForOwner(db, ownerId, objectId, options 
       accessToken = tokenResult.accessToken;
       detailRes = await mainModule.fetchStravaActivityDetail(accessToken, String(objectId));
     } catch (e) {
+      console.error("[fetchStravaActivityDetailForOwner] 401 후 토큰 재갱신 실패:", userId, objectId, e.message);
       return { success: false, userId, error: `401 후 토큰 재갱신 실패: ${e.message}`, status: 401 };
     }
   }
 
   if (!detailRes || !detailRes.success || !detailRes.activity) {
+    const status = detailRes && detailRes.status ? detailRes.status : 0;
+    const errText = String((detailRes && detailRes.error) || "");
+    // 429(레이트리밋)는 다른 실패와 구분해서 명확히 남긴다 — 2026-08-02 사례처럼 무료 한도 초과 시
+    // 이 경로가 아무 로그 없이 조용히 실패해 원인 파악이 오래 걸렸다. fetchStravaActivityDetail은
+    // 재시도 소진 시 status 없이 "Strava 429 retries exhausted" 문자열만 반환하므로 함께 확인한다.
+    if (status === 429 || errText.includes("429")) {
+      console.error("[fetchStravaActivityDetailForOwner] Strava 레이트리밋(429) — 요청 한도 초과:", {
+        userId,
+        objectId,
+        error: errText,
+      });
+    } else {
+      console.warn("[fetchStravaActivityDetailForOwner] 활동 상세 조회 실패:", {
+        userId,
+        objectId,
+        status,
+        error: errText || "활동 상세 조회 실패",
+      });
+    }
     return {
       success: false,
       userId,
       error: (detailRes && detailRes.error) || "활동 상세 조회 실패",
-      status: detailRes && detailRes.status ? detailRes.status : 0,
+      status,
     };
   }
   return { success: true, userId, activity: detailRes.activity, accessToken };
