@@ -421,18 +421,38 @@
       return [];
     };
 
-    /** 로그인 전 탈퇴 여부 — login_account_flags/{전화번호숫자} (공개 read) */
+    /**
+     * 로그인 전 탈퇴 여부 — login_account_flags/{전화번호숫자} (공개 read).
+     * 이 문서는 실제 탈퇴 계정(전체 회원 중 극소수)에만 존재하므로, 대부분의 조회는
+     * 매번 NOT_FOUND로 끝난다 — Firestore는 NOT_FOUND도 과금되는 읽기라 SESSION-only 전환
+     * 이후(앱을 열 때마다 재로그인 → 매번 이 조회) 트래픽이 급증한 원인 중 하나였다.
+     * 최종 차단 여부는 Firebase 로그인 후 users 문서로 다시 판단하므로(아래 stelvioPreflightPhoneLogin
+     * 참고), 이 사전 확인은 UX용 조기 안내일 뿐 — 로컬 캐시(6시간)로 지연시켜도 보안엔 영향 없다.
+     */
+    var STELVIO_LOGIN_FLAG_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
     window.stelvioLookupLoginAccountFlag = async function (phoneDigits) {
       var digits = String(phoneDigits || '').replace(/\D/g, '');
       if (!digits || digits.length < 10 || !firestoreV9 || !collectionFn || !docFn || !getDocFn) {
         return null;
       }
+      var cacheKey = 'stelvio_login_flag_cache_' + digits;
+      try {
+        var cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          var cached = JSON.parse(cachedRaw);
+          if (cached && typeof cached.at === 'number' && Date.now() - cached.at < STELVIO_LOGIN_FLAG_CACHE_TTL_MS) {
+            return cached.flag;
+          }
+        }
+      } catch (eCacheRead) {}
       try {
         var flagRef = docFn(collectionFn(firestoreV9, 'login_account_flags'), digits);
         var flagSnap = await getDocFn(flagRef);
-        if (window.stelvioDocSnapExists(flagSnap)) {
-          return flagSnap.data ? flagSnap.data() : null;
-        }
+        var result = window.stelvioDocSnapExists(flagSnap) ? (flagSnap.data ? flagSnap.data() : null) : null;
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({ flag: result, at: Date.now() }));
+        } catch (eCacheWrite) {}
+        return result;
       } catch (eFlag) {}
       return null;
     };
