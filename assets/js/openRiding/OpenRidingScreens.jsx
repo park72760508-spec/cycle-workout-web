@@ -19,6 +19,16 @@ var openRidingCalBadgeCircleStyle = {
   transform: 'translate(-50%, -50%)',
 };
 
+/* 날짜 선택 테두리 — 모임 배지(32px)보다 한 단계 큰 원으로 감싸서 배지와 겹치지 않고
+   바깥쪽에 별도 테두리로 구분되어 보이도록 한다. */
+var openRidingCalSelectRingStyle = {
+  width: '40px',
+  height: '40px',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+};
+
 function getOpenRidingHooks() {
   return {
     useOpenRiding: window.useOpenRiding,
@@ -4894,7 +4904,7 @@ function OpenRidingCalendarMain(props) {
                       <span className="absolute z-[1] rounded-full bg-slate-200/60 border border-slate-400/35 pointer-events-none" style={openRidingCalBadgeCircleStyle} aria-hidden />
                     ) : null}
                     {isSelNext ? (
-                      <span className="absolute z-[15] rounded-full border-2 border-violet-500 pointer-events-none" style={openRidingCalBadgeCircleStyle} aria-hidden />
+                      <span className="absolute z-[15] rounded-full border-2 border-violet-500 pointer-events-none" style={openRidingCalSelectRingStyle} aria-hidden />
                     ) : null}
                     <span className={'relative z-10 tabular-nums ' + (isHostDay || hasMatch ? 'text-white font-medium' : 'text-slate-400')}>
                       {day}
@@ -4945,7 +4955,7 @@ function OpenRidingCalendarMain(props) {
                   }
                 >
                   {isSel ? (
-                    <span className="absolute z-[15] rounded-full border-2 border-violet-500 pointer-events-none" style={openRidingCalBadgeCircleStyle} aria-hidden />
+                    <span className="absolute z-[15] rounded-full border-2 border-violet-500 pointer-events-none" style={openRidingCalSelectRingStyle} aria-hidden />
                   ) : null}
                   {isHostDay ? (
                     <span
