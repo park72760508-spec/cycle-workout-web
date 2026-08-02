@@ -3353,6 +3353,82 @@ exports.adminStravaWebhookRetryStatus = onRequest(
 );
 
 /**
+ * 관리자: Strava 앱의 실제 push_subscriptions 등록 상태를 Strava API에서 직접 조회.
+ * 2026-08-02 점검 중 드러난 맹점 — 재시도 큐(strava_webhook_retries)가 텅 비어 있는 것과
+ * "구독 자체가 없어서 이벤트가 원천적으로 안 옴"을 구분할 방법이 이 앱에 전혀 없었다(둘 다 큐가
+ * 비어 "정상"처럼 보임). 구독 목록이 비어 있거나 callback_url이 우리 stravaWebhook 주소와
+ * 다르면 그 자체가 원인이므로, 정기 점검 시 가장 먼저 확인해야 하는 값이다.
+ * 인증: X-Internal-Secret 또는 관리자(grade=1) Firebase Bearer.
+ */
+const adminStravaSubscriptionStatusOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: true,
+  timeoutSeconds: 30,
+});
+if (STRAVA_CLIENT_SECRET) {
+  adminStravaSubscriptionStatusOptions.secrets = adminStravaSubscriptionStatusOptions.secrets || [];
+  if (!adminStravaSubscriptionStatusOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    adminStravaSubscriptionStatusOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
+}
+exports.adminStravaSubscriptionStatus = onRequest(
+  adminStravaSubscriptionStatusOptions,
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    try {
+      const db = admin.firestore();
+      const rawSecret =
+        req.headers["x-internal-secret"] || req.headers["X-Internal-Secret"] || req.query.secret;
+      let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+      if (!authorized) {
+        const uid = await getUidFromRequest(req, res);
+        if (!uid) return;
+        const grade = await getCachedCallerGrade(db, uid);
+        if (grade !== "1") {
+          res.status(403).json({
+            success: false,
+            error: "관리자(grade=1) 또는 X-Internal-Secret 헤더가 필요합니다.",
+          });
+          return;
+        }
+        authorized = true;
+      }
+
+      const appConfig = await appConfigCache.getAppConfigDocCached(admin, "strava");
+      const clientId = appConfig && appConfig.strava_client_id;
+      const clientSecret = getStravaClientSecret();
+      if (!clientId || !clientSecret) {
+        res.status(500).json({ success: false, error: "Strava 앱 설정이 불완전합니다(client_id/secret)." });
+        return;
+      }
+
+      const params = new URLSearchParams({ client_id: String(clientId), client_secret: clientSecret });
+      const stravaRes = await fetch(`https://www.strava.com/api/v3/push_subscriptions?${params.toString()}`);
+      const subscriptions = await stravaRes.json().catch(() => null);
+
+      const healthSnap = await db.collection("appConfig").doc("strava_webhook_health").get();
+      const lastReceivedAt = healthSnap.exists ? healthSnap.data().lastReceivedAt : null;
+      const lastReceivedMs =
+        lastReceivedAt && typeof lastReceivedAt.toMillis === "function" ? lastReceivedAt.toMillis() : 0;
+
+      res.status(200).json({
+        success: stravaRes.ok,
+        httpStatus: stravaRes.status,
+        subscriptionCount: Array.isArray(subscriptions) ? subscriptions.length : 0,
+        subscriptions: Array.isArray(subscriptions) ? subscriptions : subscriptions,
+        lastWebhookReceivedAt: lastReceivedMs > 0 ? new Date(lastReceivedMs).toISOString() : null,
+        staleHours: lastReceivedMs > 0 ? Number(((Date.now() - lastReceivedMs) / 3600000).toFixed(1)) : null,
+      });
+    } catch (err) {
+      console.error("[adminStravaSubscriptionStatus]", err);
+      res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
+    }
+  }
+);
+
+/**
  * Strava 웹훅 재시도 큐 모니터 — 6시간마다(서울). pending 적체·user_unresolved를 구조화 로그로 경보.
  * (Cloud Logging 로그 기반 경보/알림에 연동 가능 — 외부 유료 API 미사용)
  */
