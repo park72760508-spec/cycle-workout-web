@@ -1181,6 +1181,9 @@ body.run-dashboard-active .screen:not(#runDashboardScreen):not(#splashScreen) {
   overflow: hidden !important;
   overflow-x: hidden !important;
   overflow-y: hidden !important;
+  /* 랭킹보드(#runningRankingScreen/#stelvioRankingScreen)와 동일한 좌우 여백 */
+  padding-left: max(4px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(4px, env(safe-area-inset-right, 0px)) !important;
 }
 
 #openRidingRoomScreen .open-riding-react-root {
