@@ -12780,7 +12780,7 @@ function OpenRidingRoomApp(props) {
       {/* 스크롤 전용 본문: pseudo는 pointer-events:none. 메인·필터는 글래스 하단 네비만큼 하단 여백(style.css) */}
       <div
         className={
-          'open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 w-full box-border ' +
+          'open-riding-app-body flex-1 min-h-0 overflow-y-auto px-1 w-full box-border ' +
           (view === 'groupDetail' && detailGroupId ? 'open-riding-app-body--group-detail-no-scrollbar ' : '') +
           (view === 'groups' ? 'open-riding-app-body--groups-no-scrollbar ' : '') +
           ((view === 'detail' && detailRideId) || (view === 'groupDetail' && detailGroupId)
