@@ -4899,9 +4899,12 @@ function OpenRidingCalendarMain(props) {
                 /* 이전달 여백 날짜 — 다음달 여백 날짜는 버튼 전체에 opacity-40이 적용되어 숫자도 함께
                    흐려지므로, 색상 클래스만 같으면 실제로는 더 진하게 보인다. 동일한 opacity-40을
                    숫자에도 적용해 육안상 톤을 맞춘다. 모임 색깔 표시(배경)는 그대로 유지.
-                   일정 없는 날은 기존 톤(slate-400) 유지, 모임(호스트·매칭)이 있는 날만 더 또렷한
-                   그레이톤(slate-600)으로 — 배경이 옅은 파스텔이라 흰 글씨보다 대비가 낫다. */
-                dayNumClass += ((isHostDay || hasMatch) ? 'text-slate-600 font-medium' : 'text-slate-400') + ' opacity-40';
+                   일정 없는 날은 기존 톤(slate-400 opacity-40) 유지. 모임(호스트·매칭)이 있는 날은
+                   slate-600으로도 흰 글씨 대비 시인성 개선이 부족해, 이번달 평일과 동일한 톤
+                   (text-slate-800)에 opacity-50을 적용 — 더 진하게 보이도록 조정. */
+                dayNumClass += (isHostDay || hasMatch)
+                  ? 'text-slate-800 font-medium opacity-50'
+                  : 'text-slate-400 opacity-40';
               } else if (isHostDay) {
                 dayNumClass += isPastCell ? 'text-violet-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
               } else if (hasMatch) {
