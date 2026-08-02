@@ -3380,6 +3380,28 @@ exports.stravaWebhookRetryMonitorSchedule = onSchedule(
         byReason: summary.byReason,
       });
     }
+
+    // 재시도 큐 적체가 없는 것과 "구독이 죽어서 이벤트 자체가 안 옴"은 구분해야 한다 —
+    // 후자는 큐가 텅 비어 위 체크로는 절대 못 잡는다(실패한 게 없으니 재시도 대상도 없음).
+    // stravaWebhook 핸들러가 POST를 받을 때마다 기록하는 lastReceivedAt으로 별도 판정한다.
+    try {
+      const healthSnap = await db.collection("appConfig").doc("strava_webhook_health").get();
+      const lastReceivedAt = healthSnap.exists ? healthSnap.data().lastReceivedAt : null;
+      const lastReceivedMs = lastReceivedAt && typeof lastReceivedAt.toMillis === "function" ? lastReceivedAt.toMillis() : 0;
+      const staleHours = lastReceivedMs > 0 ? (Date.now() - lastReceivedMs) / 3600000 : Infinity;
+      const STRAVA_WEBHOOK_STALE_ALERT_HOURS = 24;
+      if (staleHours > STRAVA_WEBHOOK_STALE_ALERT_HOURS) {
+        console.error("[stravaWebhookRetryMonitor] ALERT: 웹훅 이벤트 수신이 끊긴 것으로 보임(구독 만료 가능성)", {
+          lastReceivedAt: lastReceivedMs > 0 ? new Date(lastReceivedMs).toISOString() : null,
+          staleHours: Number(staleHours.toFixed(1)),
+          hint: "Strava push_subscriptions 등록 상태 확인 필요 — 큐 적체가 0이어도 구독이 죽으면 이벤트가 아예 안 들어와 재시도 큐로는 감지되지 않는다.",
+        });
+      } else {
+        console.log("[stravaWebhookRetryMonitor] 웹훅 수신 정상", { staleHours: Number(staleHours.toFixed(1)) });
+      }
+    } catch (healthErr) {
+      console.warn("[stravaWebhookRetryMonitor] 웹훅 헬스 체크 실패(무시):", healthErr && healthErr.message);
+    }
   }
 );
 
@@ -4633,6 +4655,95 @@ exports.stravaSyncRetrySchedule = onSchedule(
 );
 /** @deprecated stravaSync429RetrySchedule — stravaSyncRetrySchedule 사용 */
 exports.stravaSync429RetrySchedule = exports.stravaSyncRetrySchedule;
+
+/**
+ * 전체 사용자 순환 갭 스캔 — Strava 웹훅이 아예 도착하지 않아 strava_sync_retry_pending /
+ * strava_webhook_retries 어느 큐에도 잡히지 않는 케이스의 안전망.
+ * (2026-08-02 사례: 박지성(Ys8GQZYyf3ZoEunSVGKnWNbtSkv2)의 라이딩 종료 후 stravaWebhook이
+ *  전혀 호출되지 않았고, 재시도 큐에도 진입 기록이 없어 stravaSyncRetrySchedule의 타겟 드레인
+ *  (A_pending·B_webhook)으로는 애초에 감지 불가능했음 — 웹훅 자체가 오지 않으면 아무 흔적도
+ *  안 남는다는 것이 근본 원인.)
+ *
+ * 과거의 전체 스캔(stravaSyncPreviousDay/stravaSyncTodayGap, 2026-07 스케줄 해제)은 매 실행마다
+ * "전 사용자"를 스캔해 Strava 앱 전체 레이트리밋(1000회/day)을 초과했다. 이번엔 회전 커서로
+ * 매 실행마다 일부 사용자만(batchSize) 스캔하고, appConfig/strava_rotating_gap_scan에 커서를
+ * 저장해 다음 실행이 이어받는다 — 레이트리밋 예산 안에서 며칠에 걸쳐 전원을 커버한다.
+ */
+const STRAVA_ROTATING_GAP_SCAN_BATCH_SIZE = 60;
+const stravaRotatingGapScanOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  schedule: "15 4,10,16,22 * * *", // 하루 4회, stravaSyncRetrySchedule(3,6,9시)과 겹치지 않게 배치
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 1800,
+  memory: "1GiB",
+});
+if (STRAVA_CLIENT_SECRET) {
+  stravaRotatingGapScanOptions.secrets = stravaRotatingGapScanOptions.secrets || [];
+  if (!stravaRotatingGapScanOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    stravaRotatingGapScanOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
+}
+
+/** 연결된 전체 사용자 중 커서 다음 batchSize명을 가져오고, 커서를 그만큼 전진시켜 저장한다. */
+async function getNextRotatingGapScanBatch(db, batchSize) {
+  const allUserIds = await stravaConnectionReader.listStravaConnectedFirebaseUids(db);
+  if (!allUserIds.length) return { batch: [], total: 0 };
+
+  const cursorRef = db.collection("appConfig").doc("strava_rotating_gap_scan");
+  const cursorSnap = await cursorRef.get();
+  const prevCursor = cursorSnap.exists ? Number(cursorSnap.data().cursor || 0) : 0;
+  const start = ((prevCursor % allUserIds.length) + allUserIds.length) % allUserIds.length;
+
+  const batch = [];
+  const take = Math.min(batchSize, allUserIds.length);
+  for (let i = 0; i < take; i++) {
+    batch.push(allUserIds[(start + i) % allUserIds.length]);
+  }
+
+  await cursorRef.set(
+    {
+      cursor: start + take,
+      totalUsers: allUserIds.length,
+      lastBatchSize: batch.length,
+      lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return { batch, total: allUserIds.length };
+}
+
+exports.stravaRotatingGapScanSchedule = onSchedule(stravaRotatingGapScanOptions, async () => {
+  const db = admin.firestore();
+  const { batch, total } = await getNextRotatingGapScanBatch(db, STRAVA_ROTATING_GAP_SCAN_BATCH_SIZE);
+  if (!batch.length) {
+    console.log("[stravaRotatingGapScanSchedule] 연결된 사용자 없음 — 건너뜀");
+    return;
+  }
+  const yesterday = getYesterdayAfterBefore();
+  const today = getTodayAfterBefore();
+  const range = stravaSyncRetry.ymdRangeToUnix({
+    dateFrom: yesterday.dateFrom,
+    dateTo: today.dateTo,
+  });
+  console.log("[stravaRotatingGapScanSchedule] 시작", {
+    batchSize: batch.length,
+    totalConnected: total,
+  });
+  const result = await stravaGapDetect.runGapDetectSyncJob(
+    db,
+    range,
+    {
+      refreshStravaTokenForUser,
+      fetchStravaActivitiesPage,
+      processStravaActivity,
+      processOneUserStravaSync,
+      supabaseDualWriteServer,
+    },
+    "[stravaRotatingGapScanSchedule]",
+    { includeGapScanAllUsers: false, gapScanUserIds: batch }
+  );
+  console.log("[stravaRotatingGapScanSchedule] 완료", result);
+});
 
 exports.manualStravaSyncTodaySeoul = onRequest(
   manualStravaSyncTodaySeoulOptions,
