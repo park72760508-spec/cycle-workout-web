@@ -5016,15 +5016,15 @@ function OpenRidingCalendarMain(props) {
           </div>
           <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-[10px] sm:text-[11px] text-slate-600 leading-snug open-riding-calendar-legend">
             <div className="flex gap-2 items-center min-w-0">
-              <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-emerald-400/90 border border-emerald-600/25" aria-hidden />
+              <span className="inline-block w-3.5 h-3.5 rounded-full shrink-0 bg-emerald-400/90 border border-emerald-600/25" aria-hidden />
               <span className="font-semibold text-slate-700 min-w-0">참석 가능</span>
             </div>
             <div className="flex gap-2 items-center min-w-0">
-              <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-violet-600 border border-violet-800/30" aria-hidden />
+              <span className="inline-block w-3.5 h-3.5 rounded-full shrink-0 bg-violet-600 border border-violet-800/30" aria-hidden />
               <span className="font-semibold text-slate-700 min-w-0">내가 주최</span>
             </div>
             <div className="flex gap-2 items-center min-w-0">
-              <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-slate-300/90 border border-slate-400/35" aria-hidden />
+              <span className="inline-block w-3.5 h-3.5 rounded-full shrink-0 bg-slate-300/90 border border-slate-400/35" aria-hidden />
               <span className="font-semibold text-slate-700 min-w-0">구경 하기</span>
             </div>
             <div className="flex gap-2 items-center min-w-0">
