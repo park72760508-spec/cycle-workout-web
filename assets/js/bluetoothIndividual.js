@@ -357,6 +357,17 @@ let segmentPowerHistory = []; // 현재 세그먼트 파워 히스토리
 let currentSegmentStartTime = null; // 현재 세그먼트 시작 시간
 let maxPowerRecorded = 0; // 기록된 최대 파워
 
+// Firebase 쓰기 절감(변화량 기반 억제) — RTDB 트래픽 비용 최적화
+let fbLastSentPower = null;
+let fbLastSentHr = null;
+let fbLastSentCadence = null;
+let fbLastSentTargetPower = null;
+let fbLastSentAt = 0;
+const FB_SEND_HEARTBEAT_MS = 5000; // 값이 안 바뀌어도 최소 이 주기로는 강제 전송(코치 화면 정지 방지)
+const FB_POWER_DELTA_THRESHOLD = 3; // watt
+const FB_HR_DELTA_THRESHOLD = 2; // bpm
+const FB_CADENCE_DELTA_THRESHOLD = 2; // rpm
+
 // ★ 블루투스 개인훈련 대시보드 전용 3초 평균 파워 계산 버퍼 (app.js와 독립적)
 let bluetoothIndividualPowerBuffer = [];
 
@@ -534,21 +545,37 @@ function sendDataToFirebase() {
         segmentPower = Math.round(totalSegmentPower / segmentPowerHistory.length);
     }
     
-    // Firebase에 전송할 데이터 객체
+    // 변화량 기반 전송 억제: 파워·HR·케이던스·목표파워가 임계값 이상 안 바뀌었고
+    // 하트비트 주기(5초)도 안 지났으면 이번 틱은 Firebase 쓰기를 건너뛴다.
+    // (로컬 히스토리·UI 갱신은 위에서 이미 처리됐으므로 화면 표시엔 영향 없음 — RTDB 다운로드 트래픽만 절감)
+    const sinceLastSendMs = now - fbLastSentAt;
+    const powerChanged = fbLastSentPower === null || Math.abs(power - fbLastSentPower) >= FB_POWER_DELTA_THRESHOLD;
+    const hrChanged = fbLastSentHr === null || Math.abs(heartRate - fbLastSentHr) >= FB_HR_DELTA_THRESHOLD;
+    const cadenceChanged = fbLastSentCadence === null || Math.abs(cadence - fbLastSentCadence) >= FB_CADENCE_DELTA_THRESHOLD;
+    const targetPowerChanged = fbLastSentTargetPower === null || targetPower !== fbLastSentTargetPower;
+    const heartbeatDue = sinceLastSendMs >= FB_SEND_HEARTBEAT_MS;
+    if (!powerChanged && !hrChanged && !cadenceChanged && !targetPowerChanged && !heartbeatDue) {
+        return;
+    }
+    fbLastSentPower = power;
+    fbLastSentHr = heartRate;
+    fbLastSentCadence = cadence;
+    fbLastSentTargetPower = targetPower;
+    fbLastSentAt = now;
+
+    // Firebase에 전송할 데이터 객체 (hr/cadence/lastUpdate만 — heartRate/rpm/timestamp는
+    // 동일 값의 중복 필드라 코치 대시보드가 읽지도 않음, 페이로드만 키우던 항목이라 제거)
     const dataToSend = {
         power: power > 0 ? power : 0,
         hr: heartRate > 0 ? heartRate : 0,
-        heartRate: heartRate > 0 ? heartRate : 0,
         cadence: cadence > 0 ? cadence : 0,
-        rpm: cadence > 0 ? cadence : 0,
         avgPower: avgPower,
         maxPower: maxPowerRecorded,
         segmentPower: segmentPower,
         targetPower: targetPower,
-        lastUpdate: now,
-        timestamp: now
+        lastUpdate: now
     };
-    
+
     // 사용자 정보 추가 (있는 경우)
     if (currentUserInfo.userId) {
         dataToSend.userId = currentUserInfo.userId;
