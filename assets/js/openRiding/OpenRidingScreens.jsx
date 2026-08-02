@@ -4876,11 +4876,11 @@ function OpenRidingCalendarMain(props) {
                     }
                   >
                     {isHostDay ? (
-                      <span className="absolute inset-1 z-[1] rounded-md pointer-events-none border bg-violet-600 border-violet-700/45" aria-hidden />
+                      <span className="absolute inset-1 z-[1] rounded-full pointer-events-none border bg-violet-600 border-violet-700/45" aria-hidden />
                     ) : hasMatch ? (
-                      <span className="absolute inset-1 z-[1] rounded-md pointer-events-none border bg-emerald-400/80 border-emerald-600/40" aria-hidden />
+                      <span className="absolute inset-1 z-[1] rounded-full pointer-events-none border bg-emerald-400/80 border-emerald-600/40" aria-hidden />
                     ) : showOtherOnly ? (
-                      <span className="absolute inset-1 z-[1] rounded-md bg-slate-200/60 border border-slate-400/35 pointer-events-none" aria-hidden />
+                      <span className="absolute inset-1 z-[1] rounded-full bg-slate-200/60 border border-slate-400/35 pointer-events-none" aria-hidden />
                     ) : null}
                     <span className={'relative z-10 tabular-nums ' + (isHostDay || hasMatch ? 'text-white font-medium' : 'text-slate-400')}>
                       {day}
@@ -4933,7 +4933,7 @@ function OpenRidingCalendarMain(props) {
                   {isHostDay ? (
                     <span
                       className={
-                        'absolute inset-1 z-[1] rounded-md pointer-events-none border ' +
+                        'absolute inset-1 z-[1] rounded-full pointer-events-none border ' +
                         (isPastCell
                           ? 'bg-violet-200/45 border-violet-300/40'
                           : 'bg-violet-600 border-violet-700/45')
@@ -4943,7 +4943,7 @@ function OpenRidingCalendarMain(props) {
                   ) : hasMatch ? (
                     <span
                       className={
-                        'absolute inset-1 z-[1] rounded-md pointer-events-none border ' +
+                        'absolute inset-1 z-[1] rounded-full pointer-events-none border ' +
                         (isPastCell
                           ? 'bg-emerald-200/45 border-emerald-400/35'
                           : 'bg-emerald-400/80 border-emerald-600/40')
@@ -4952,7 +4952,7 @@ function OpenRidingCalendarMain(props) {
                     />
                   ) : showOtherOnly ? (
                     <span
-                      className="absolute inset-1 z-[1] rounded-md bg-slate-200/60 border border-slate-400/35 pointer-events-none"
+                      className="absolute inset-1 z-[1] rounded-full bg-slate-200/60 border border-slate-400/35 pointer-events-none"
                       aria-hidden
                     />
                   ) : null}
