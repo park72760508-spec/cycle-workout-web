@@ -939,6 +939,24 @@ export const stravaWebhook = onRequest(
       const ownerId = body?.owner_id;
       const objectId = body?.object_id;
 
+      /**
+       * 웹훅 수신 헬스 기록 — 처리 성공/실패와 무관하게 POST가 실제로 도착했는지만 기록.
+       * 2026-08-02 사례처럼 Strava가 웹훅 자체를 보내지 않으면 재시도 큐(strava_webhook_retries)도
+       * 비어있어 "정상"처럼 보인다 — stravaWebhookRetryMonitorSchedule이 이 lastReceivedAt으로
+       * "구독은 있는데 이벤트가 안 옴" 상태(구독 만료 등)를 별도로 탐지한다.
+       */
+      db.collection("appConfig")
+        .doc("strava_webhook_health")
+        .set(
+          {
+            lastReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastAspectType: aspectType,
+            lastObjectType: objectType,
+          },
+          { merge: true }
+        )
+        .catch((err) => console.warn("[Strava Webhook] health 기록 실패:", err));
+
       /** 생성·갱신: 동일 활동 재조회·merge 저장 (공개 변경·제목 수정 등으로 update만 오는 경우 대비) — delete 비처리 */
       const shouldFetchActivity =
         objectType === "activity" &&
