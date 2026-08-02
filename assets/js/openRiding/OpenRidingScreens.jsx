@@ -4977,12 +4977,14 @@ function OpenRidingCalendarMain(props) {
                     />
                   ) : null}
                   {isConfirmedDay ? (
+                    /* 32px 모임 배지 원(반지름 16px)의 12시~3시 사이 45도 지점 위에 배지 중심을 얹어
+                       테두리 선에 절반씩 걸치도록 배치: offset = 16 * cos(45°) ≈ 11.31px */
                     <span
                       className={
                         'open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 ' +
                         (isPastCell ? 'bg-red-400/75 opacity-90' : 'bg-red-600')
                       }
-                      style={{ width: '11px', height: '11px', top: '50%', right: '4px', transform: 'translate(50%, -50%)' }}
+                      style={{ width: '11px', height: '11px', top: 'calc(50% - 11.31px)', left: 'calc(50% + 11.31px)', transform: 'translate(-50%, -50%)' }}
                       title="참석 확정"
                       aria-hidden
                     >
