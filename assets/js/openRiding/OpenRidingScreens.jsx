@@ -8,6 +8,17 @@ var useEffect = React.useEffect;
 var useMemo = React.useMemo;
 var useRef = React.useRef;
 
+/* 캘린더 셀 모임 배지 — 오늘 날짜 원(.open-riding-cal-today-num, 32px)과 동일한 정원 크기.
+   셀 너비는 grid-cols-7 gap 기반 가변값이라 inset-*로 채우면 폭≠높이가 되어 알약 모양이 되므로,
+   고정 32px 정사각형을 셀 중앙에 배치해 항상 완전한 원으로 렌더링한다. */
+var openRidingCalBadgeCircleStyle = {
+  width: '32px',
+  height: '32px',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+};
+
 function getOpenRidingHooks() {
   return {
     useOpenRiding: window.useOpenRiding,
@@ -4876,11 +4887,11 @@ function OpenRidingCalendarMain(props) {
                     }
                   >
                     {isHostDay ? (
-                      <span className="absolute inset-1 z-[1] rounded-full pointer-events-none border bg-violet-600 border-violet-700/45" aria-hidden />
+                      <span className="absolute z-[1] rounded-full pointer-events-none border bg-violet-600 border-violet-700/45" style={openRidingCalBadgeCircleStyle} aria-hidden />
                     ) : hasMatch ? (
-                      <span className="absolute inset-1 z-[1] rounded-full pointer-events-none border bg-emerald-400/80 border-emerald-600/40" aria-hidden />
+                      <span className="absolute z-[1] rounded-full pointer-events-none border bg-emerald-400/80 border-emerald-600/40" style={openRidingCalBadgeCircleStyle} aria-hidden />
                     ) : showOtherOnly ? (
-                      <span className="absolute inset-1 z-[1] rounded-full bg-slate-200/60 border border-slate-400/35 pointer-events-none" aria-hidden />
+                      <span className="absolute z-[1] rounded-full bg-slate-200/60 border border-slate-400/35 pointer-events-none" style={openRidingCalBadgeCircleStyle} aria-hidden />
                     ) : null}
                     <span className={'relative z-10 tabular-nums ' + (isHostDay || hasMatch ? 'text-white font-medium' : 'text-slate-400')}>
                       {day}
@@ -4933,26 +4944,29 @@ function OpenRidingCalendarMain(props) {
                   {isHostDay ? (
                     <span
                       className={
-                        'absolute inset-1 z-[1] rounded-full pointer-events-none border ' +
+                        'absolute z-[1] rounded-full pointer-events-none border ' +
                         (isPastCell
                           ? 'bg-violet-200/45 border-violet-300/40'
                           : 'bg-violet-600 border-violet-700/45')
                       }
+                      style={openRidingCalBadgeCircleStyle}
                       aria-hidden
                     />
                   ) : hasMatch ? (
                     <span
                       className={
-                        'absolute inset-1 z-[1] rounded-full pointer-events-none border ' +
+                        'absolute z-[1] rounded-full pointer-events-none border ' +
                         (isPastCell
                           ? 'bg-emerald-200/45 border-emerald-400/35'
                           : 'bg-emerald-400/80 border-emerald-600/40')
                       }
+                      style={openRidingCalBadgeCircleStyle}
                       aria-hidden
                     />
                   ) : showOtherOnly ? (
                     <span
-                      className="absolute inset-1 z-[1] rounded-full bg-slate-200/60 border border-slate-400/35 pointer-events-none"
+                      className="absolute z-[1] rounded-full bg-slate-200/60 border border-slate-400/35 pointer-events-none"
+                      style={openRidingCalBadgeCircleStyle}
                       aria-hidden
                     />
                   ) : null}
