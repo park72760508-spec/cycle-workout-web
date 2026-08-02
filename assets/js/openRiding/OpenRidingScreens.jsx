@@ -4883,7 +4883,7 @@ function OpenRidingCalendarMain(props) {
                     onClick={function () { setSelectedKey(key); }}
                     className={
                       cellH + ' rounded-lg text-sm flex items-center justify-center relative overflow-visible opacity-40 transition hover:opacity-60 ' +
-                      (isSelNext ? 'ring-2 ring-violet-500 font-semibold opacity-100 ' : '')
+                      (isSelNext ? 'font-semibold opacity-100 ' : '')
                     }
                   >
                     {isHostDay ? (
@@ -4892,6 +4892,9 @@ function OpenRidingCalendarMain(props) {
                       <span className="absolute z-[1] rounded-full pointer-events-none border bg-emerald-400/80 border-emerald-600/40" style={openRidingCalBadgeCircleStyle} aria-hidden />
                     ) : showOtherOnly ? (
                       <span className="absolute z-[1] rounded-full bg-slate-200/60 border border-slate-400/35 pointer-events-none" style={openRidingCalBadgeCircleStyle} aria-hidden />
+                    ) : null}
+                    {isSelNext ? (
+                      <span className="absolute z-[15] rounded-full border-2 border-violet-500 pointer-events-none" style={openRidingCalBadgeCircleStyle} aria-hidden />
                     ) : null}
                     <span className={'relative z-10 tabular-nums ' + (isHostDay || hasMatch ? 'text-white font-medium' : 'text-slate-400')}>
                       {day}
@@ -4937,10 +4940,13 @@ function OpenRidingCalendarMain(props) {
                   className={
                     'open-riding-cal-day relative overflow-visible ' + cellH + ' rounded-lg text-sm flex items-center justify-center transition ' +
                     (isTodayCell ? 'open-riding-cal-day--today ' : '') +
-                    (isSel ? 'ring-2 ring-violet-500 font-semibold ' : '') +
+                    (isSel ? 'font-semibold ' : '') +
                     ' hover:bg-slate-50'
                   }
                 >
+                  {isSel ? (
+                    <span className="absolute z-[15] rounded-full border-2 border-violet-500 pointer-events-none" style={openRidingCalBadgeCircleStyle} aria-hidden />
+                  ) : null}
                   {isHostDay ? (
                     <span
                       className={
