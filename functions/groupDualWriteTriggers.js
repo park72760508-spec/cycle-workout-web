@@ -60,9 +60,10 @@ exports.onRidingGroupWrittenDualWrite = onDocumentWritten(
 exports.onRidingGroupMemberWrittenDualWrite = onDocumentWritten(
   { document: "stelvio_riding_groups/{groupId}/members/{memberId}", ...groupWriteOpts },
   async (event) => {
-    const { groupId, memberId } = event.params;
-    const after = event.data && event.data.after;
-    if (!after || !after.exists) return;
+    const { groupId } = event.params;
+    /* 멤버 문서가 삭제(탈퇴)된 경우도 반드시 동기화해야 한다 — 예전엔 여기서 조용히 return해서
+       탈퇴가 Supabase에 전혀 반영되지 않았다(2026-08). 생성·수정·삭제 모두 동일하게 그룹의
+       members 서브컬렉션 전체를 다시 읽어 upsertRidingGroupToSupabase의 삭제 정리까지 태운다. */
     const admin = require("firebase-admin");
     try {
       const groupSnap = await admin

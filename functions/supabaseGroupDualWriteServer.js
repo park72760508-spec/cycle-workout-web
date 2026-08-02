@@ -405,7 +405,13 @@ async function upsertOpenRideToSupabase(openRide, participants) {
   if (delErr) throw delErr;
 }
 
-async function upsertRidingGroupToSupabase(groupRow, members, joinRequests) {
+/**
+ * @param {boolean} membersAreComplete true면 members가 Firestore members 서브컬렉션 전체를
+ *   막 다시 읽어온 완전한 목록(opts.syncMembersFromFirestore 경로)이라는 뜻 — 이때만 안전하게
+ *   "목록에 없는 행 삭제"를 수행한다. false/미지정이면 members가 부분 목록일 수 있어(예: 클라이언트
+ *   릴레이가 syncMembers:false로 호출) 삭제를 절대 수행하지 않는다(잘못하면 다른 멤버까지 지워짐).
+ */
+async function upsertRidingGroupToSupabase(groupRow, members, joinRequests, membersAreComplete) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   if (!supabase) throw new Error("supabase_admin_unavailable");
 
@@ -425,6 +431,22 @@ async function upsertRidingGroupToSupabase(groupRow, members, joinRequests) {
       .from("riding_group_join_requests")
       .upsert(joinRequests, { onConflict: "group_id,user_id" });
     if (jErr) throw jErr;
+  }
+
+  /*
+   * 소모임 탈퇴 반영 — upsert는 추가/갱신만 할 뿐 빠진 멤버를 지우지 않는다. Firestore
+   * members 서브컬렉션에서 문서가 삭제(탈퇴)돼도 이 행이 Supabase에 계속 남아있어, 탈퇴해도
+   * 계속 멤버로 보이던 버그(2026-08, open_ride_participants와 동일 패턴). members가 전체
+   * 목록임이 확실할 때만(membersAreComplete) 목록에 없는 행을 정리한다.
+   */
+  if (membersAreComplete) {
+    const currentUserIds = (members || []).map((m) => m.user_id).filter(Boolean);
+    let deleteQuery = supabase.from("riding_group_members").delete().eq("group_id", groupRow.id);
+    if (currentUserIds.length) {
+      deleteQuery = deleteQuery.not("user_id", "in", `(${currentUserIds.join(",")})`);
+    }
+    const { error: delErr } = await deleteQuery;
+    if (delErr) throw delErr;
   }
 }
 
@@ -528,7 +550,7 @@ async function runSecondaryAfterRidingGroupWrite(
       .filter(Boolean);
   }
 
-  await upsertRidingGroupToSupabase(groupRow, members, joinRequests);
+  await upsertRidingGroupToSupabase(groupRow, members, joinRequests, opts.syncMembersFromFirestore === true);
   await syncMediaForRidingGroup(firestoreDocId, groupData);
   console.log("[supabaseGroupDualWrite] riding_groups upsert OK", {
     firestoreDocId,
