@@ -6973,6 +6973,14 @@ function OpenRidingDetail(props) {
   var _actBusy = useState(false);
   var isActionBusy = _actBusy[0];
   var setBusy = _actBusy[1];
+  /* 참석 신청/취소 후 버튼 라벨이 실제로 바뀔 때까지 스피너를 유지하기 위한 상태.
+     join()/leave() 내부에서 reload()를 이미 한 번 await하지만, Supabase 라우팅 읽기는
+     dual-write 반영에 지연이 있어 그 reload()가 아직 예전 상태를 반환할 수 있다 — 그 경우
+     라벨이 안 바뀐 채 스피너만 먼저 사라져 보이는 문제가 있었다(2026-08). 요청한 role 값이
+     실제로 뒤바뀔 때까지 짧은 간격으로 reload()를 재시도하며 스피너를 계속 표시한다. */
+  var pendingRoleTargetRef = useRef(null);
+  var pendingRolePollRef = useRef(null);
+  var pendingRoleTimeoutRef = useRef(null);
   var _bomb = useState(false);
   var bombOpen = _bomb[0];
   var setBombOpen = _bomb[1];
@@ -7883,16 +7891,58 @@ function OpenRidingDetail(props) {
     [isHost, firestore, rideId, userId, ride, inviteRows, inviteResolvedLabels, reload]
   );
 
+  function stopPendingRoleWait() {
+    pendingRoleTargetRef.current = null;
+    if (pendingRolePollRef.current) {
+      clearInterval(pendingRolePollRef.current);
+      pendingRolePollRef.current = null;
+    }
+    if (pendingRoleTimeoutRef.current) {
+      clearTimeout(pendingRoleTimeoutRef.current);
+      pendingRoleTimeoutRef.current = null;
+    }
+  }
+  /** expectJoined: true = 참석 신청 후 role이 생기길 대기, false = 참석 취소 후 role이 사라지길 대기 */
+  function beginPendingRoleWait(expectJoined) {
+    stopPendingRoleWait();
+    pendingRoleTargetRef.current = expectJoined;
+    /* Supabase 라우팅 읽기는 최대 15초 폴링이라 자연 갱신만 기다리면 스피너가 오래 떠 있게
+       된다 — 짧은 간격으로 직접 reload()를 재시도해 라벨이 바뀌는 즉시 스피너도 사라지게 한다. */
+    pendingRolePollRef.current = setInterval(function () {
+      if (typeof reload === 'function') reload();
+    }, 900);
+    pendingRoleTimeoutRef.current = setTimeout(function () {
+      stopPendingRoleWait();
+      setBusy(false);
+    }, 12000);
+  }
+  useEffect(function () {
+    if (pendingRoleTargetRef.current === null) return undefined;
+    if (!!role === pendingRoleTargetRef.current) {
+      stopPendingRoleWait();
+      setBusy(false);
+    }
+    return undefined;
+  }, [role]);
+  useEffect(function () {
+    return stopPendingRoleWait;
+  }, []);
+
   async function confirmJoinWithContactShare(contactPublic) {
     setBusy(true);
+    var joinedOk = false;
     try {
       var jres = await join({
         contactPublicToParticipants: !!contactPublic,
         joinPasswordAttempt: joinPasswordInput
       });
-      if (jres && jres.status) setJoinShareModalOpen(false);
+      if (jres && jres.status) {
+        setJoinShareModalOpen(false);
+        joinedOk = true;
+      }
     } finally {
-      setBusy(false);
+      if (joinedOk) beginPendingRoleWait(true);
+      else setBusy(false);
     }
   }
   async function openJoinChargeConfirmModal() {
@@ -7923,10 +7973,16 @@ function OpenRidingDetail(props) {
   }
   async function onLeave() {
     setBusy(true);
+    var leftOk = false;
     try {
-      await leave();
+      /* leave()는 실패해도 throw하지 않고 내부에서 actionError만 세팅한 뒤 undefined를
+         반환한다 — 반환값으로 성공 여부를 판단해야 한다(예외 발생 여부로 판단하면 항상
+         "성공"으로 오판해 실패 시에도 스피너가 role 변화를 기다리며 멈춰버린다). */
+      var lres = await leave();
+      if (lres) leftOk = true;
     } finally {
-      setBusy(false);
+      if (leftOk) beginPendingRoleWait(false);
+      else setBusy(false);
     }
   }
   async function openLeaveRefundConfirmModal() {
