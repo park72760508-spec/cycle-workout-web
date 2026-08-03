@@ -9064,6 +9064,15 @@ function OpenRidingDetail(props) {
         </div>
       ) : null}
 
+      {isActionBusy ? (
+        /* 참석 신청/취소 확인 후 서버 반영이 끝날 때까지의 공백 구간 — 특히 참석 취소는 모달이
+           즉시 닫히고 나면 이 오버레이가 뜨기 전까지 아무 피드백도 없어 "먹통"처럼 보이던
+           지점이라, 전체 화면을 덮는 오버레이 + 큰 녹색 원형 스피너로 진행 중임을 표시한다. */
+        <div className="open-riding-action-busy-overlay fixed inset-0 z-[200090] flex items-center justify-center" aria-live="polite" aria-busy="true">
+          <div className="open-riding-action-busy-spinner" aria-hidden />
+        </div>
+      ) : null}
+
       {bombOpen ? (
         <div
           className="open-riding-bomb-modal-backdrop fixed inset-0 z-[200070] flex items-center justify-center p-4"

@@ -2805,6 +2805,22 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   color: #4b5563;
 }
 
+/* 참석 신청/취소 확인 처리 중 오버레이 — 참석 취소는 모달이 바로 닫혀버려 서버 응답을
+   기다리는 동안 아무 피드백이 없었다. 화면 전체를 살짝 덮고 큰 녹색 원형 스피너로
+   "처리 중"임을 표시한다(달력 로딩 스피너와 동일 색·애니메이션, 크기만 확대). */
+#openRidingRoomScreen .open-riding-action-busy-overlay {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(1px);
+}
+#openRidingRoomScreen .open-riding-action-busy-spinner {
+  width: 64px;
+  height: 64px;
+  border: 6px solid rgba(34, 197, 94, 0.2);
+  border-top-color: #22c55e;
+  border-radius: 50%;
+  animation: journalSpin 0.9s linear infinite;
+}
+
 /* 오픈 라이딩방 목록: 지역·레벨·시간·거리·정원 사이 가운데점 구분 */
 #openRidingRoomScreen .open-riding-list-meta-sep {
   position: relative;
