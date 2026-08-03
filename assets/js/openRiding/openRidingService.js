@@ -940,33 +940,42 @@ function applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds
  */
 export async function cancelRideByHost(db, rideId, hostUserId) {
   const rideRef = doc(db, 'rides', rideId);
-  const deleted = await runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(rideRef);
-    if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
-    const data = snap.data();
-    if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+  let deleted;
+  try {
+    deleted = await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(rideRef);
+      if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+      const data = snap.data();
+      if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
 
-    const { joinRefundSp, participantRefunds, hostRefund, shouldRefundHost } = await readRideHostRefundUserSnaps(
-      transaction,
-      db,
-      data,
-      hostUserId
-    );
-    applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
+      const { joinRefundSp, participantRefunds, hostRefund, shouldRefundHost } = await readRideHostRefundUserSnaps(
+        transaction,
+        db,
+        data,
+        hostUserId
+      );
+      applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
 
-    const parts = Array.isArray(data.participants) ? data.participants : [];
-    if (parts.length === 0) {
-      transaction.delete(rideRef);
-      return true;
-    }
-    transaction.update(rideRef, {
-      rideStatus: 'cancelled',
-      hostPointRefunded: shouldRefundHost ? true : data.hostPointRefunded === true,
-      cancelledAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      const parts = Array.isArray(data.participants) ? data.participants : [];
+      if (parts.length === 0) {
+        transaction.delete(rideRef);
+        return true;
+      }
+      transaction.update(rideRef, {
+        rideStatus: 'cancelled',
+        hostPointRefunded: shouldRefundHost ? true : data.hostPointRefunded === true,
+        cancelledAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      return false;
     });
-    return false;
-  });
+  } catch (err) {
+    if (err && err.message === 'RIDE_NOT_FOUND') {
+      /* deleteRideByHost와 동일한 이유 — Firestore엔 없지만 Supabase엔 유령 행이 남은 경우 정리. */
+      await runSecondaryAfterOpenRideDelete(hostUserId, rideId).catch(function () {});
+    }
+    throw err;
+  }
   const result = { deleted: !!deleted };
   if (!result.deleted) {
     await scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
@@ -986,21 +995,31 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
  */
 export async function deleteRideByHost(db, rideId, hostUserId) {
   const rideRef = doc(db, 'rides', rideId);
-  await runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(rideRef);
-    if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
-    const data = snap.data();
-    if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(rideRef);
+      if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+      const data = snap.data();
+      if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
 
-    const { joinRefundSp, participantRefunds, hostRefund } = await readRideHostRefundUserSnaps(
-      transaction,
-      db,
-      data,
-      hostUserId
-    );
-    applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
-    transaction.delete(rideRef);
-  });
+      const { joinRefundSp, participantRefunds, hostRefund } = await readRideHostRefundUserSnaps(
+        transaction,
+        db,
+        data,
+        hostUserId
+      );
+      applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
+      transaction.delete(rideRef);
+    });
+  } catch (err) {
+    if (err && err.message === 'RIDE_NOT_FOUND') {
+      /* Firestore엔 이미 없는데 Supabase(secondary)엔 유령 행이 남아 목록/캘린더에 계속
+         보이는 경우(dual-write delete 실패 등) — 정리 relay를 태워 secondary도 지운다.
+         이게 없으면 화면은 "삭제됨"으로 취급해 돌아가지만 목록엔 계속 남아있게 된다(2026-08). */
+      await runSecondaryAfterOpenRideDelete(hostUserId, rideId).catch(function () {});
+    }
+    throw err;
+  }
   /* await: 삭제 확인 후 캘린더로 돌아갈 때 Supabase 읽기 라우팅에서도 곧바로 사라지도록,
      화면 이동 전에 Secondary 삭제까지 끝내둔다(실패해도 onOpenRideWrittenDualWrite 트리거가
      비동기 백업으로 정리한다 — deleteOpenRideFromSupabase 참고). */
