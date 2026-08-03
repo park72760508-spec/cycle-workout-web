@@ -8855,12 +8855,12 @@ function OpenRidingDetail(props) {
           '연락처',
           !ride.contactInfo ? (
             '-'
+          ) : ride.isContactPublic === false ? (
+            /* 방장이 생성 시 연락처를 비공개로 설정한 경우 — 방장 본인 화면에도 동일하게
+               "비공개"만 표시한다(정원 목록과 동일 원칙, 2026-08 요청). */
+            <span className="text-slate-400">비공개</span>
           ) : isHost ? (
             maskContacts ? maskPhoneLastFourDisplay(ride.contactInfo) : ride.contactInfo
-          ) : ride.isContactPublic === false ? (
-            /* 방장이 생성 시 연락처를 비공개로 설정한 경우 — 본인(방장) 외에는 신청 여부와
-               무관하게 항상 미표시(2026-08 요청). */
-            <span className="text-slate-400">비공개</span>
           ) : showHostContactRow ? (
             maskContacts ? maskPhoneLastFourDisplay(ride.contactInfo) : ride.contactInfo
           ) : (
