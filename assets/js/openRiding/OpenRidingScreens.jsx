@@ -7978,6 +7978,17 @@ function OpenRidingDetail(props) {
       if (typeof onBack === 'function') onBack();
     } catch (err) {
       console.warn('[openRiding] deleteRideByHost', err);
+      /* RIDE_NOT_FOUND: 이전 시도에서 Firestore 삭제 자체는 이미 성공했는데(예: Secondary
+         반영 지연으로 화면에는 아직 남아 보여서) 사용자가 다시 삭제를 시도한 경우 — 이미 삭제된
+         상태이므로 실패로 취급하지 않고 정상 종료(모달 닫고 뒤로가기)한다. 예전엔 여기서 그냥
+         콘솔 경고만 찍고 아무 반응도 없어 "두 번째 예 버튼이 안 먹는다"처럼 보이던 버그(2026-08). */
+      var msg = (err && err.message) || '';
+      if (msg === 'RIDE_NOT_FOUND') {
+        setDeleteModalOpen(false);
+        if (typeof onBack === 'function') onBack();
+      } else if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+        window.showToast('모임 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      }
     } finally {
       setDeleteBusy(false);
     }

@@ -29,7 +29,10 @@ import {
   fetchTrainingLogsByDateRangeForReviewRouted,
   subscribeRideByIdRouted,
 } from './openRidingReadClient.js';
-import { scheduleOpenRideDualWriteFromFirestore } from '../openRidingDualWrite.js';
+import {
+  scheduleOpenRideDualWriteFromFirestore,
+  runSecondaryAfterOpenRideDelete,
+} from '../openRidingDualWrite.js';
 
 /** @param {unknown} v */
 function asStringArray(v) {
@@ -745,7 +748,10 @@ export async function createRide(db, hostUserId, input) {
     });
   });
   const createdRideId = rideRef.id;
-  scheduleOpenRideDualWriteFromFirestore(db, createdRideId, hostKey || hostUserId);
+  /* await: 생성 직후 바로 화면을 되돌아가 캘린더가 재조회할 때(Supabase 읽기 라우팅 시)
+     Secondary에 아직 반영 안 된 새 모임이 안 보이던 버그(2026-08) 방지 — 실패해도 이 함수는
+     내부에서 에러를 삼키므로 생성 자체는 그대로 성공 처리된다. */
+  await scheduleOpenRideDualWriteFromFirestore(db, createdRideId, hostKey || hostUserId);
   return createdRideId;
 }
 
@@ -807,7 +813,7 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     updatedAt: serverTimestamp()
   };
   await updateDoc(rideRef, patch);
-  scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
+  await scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
 }
 
 /**
@@ -963,7 +969,10 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
   });
   const result = { deleted: !!deleted };
   if (!result.deleted) {
-    scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
+    await scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
+  } else {
+    /* 참가자 0명이라 방 자체가 삭제된 경우 — upsert relay가 아니라 delete relay를 태워야 한다. */
+    await runSecondaryAfterOpenRideDelete(hostUserId, rideId);
   }
   return result;
 }
@@ -992,6 +1001,10 @@ export async function deleteRideByHost(db, rideId, hostUserId) {
     applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
     transaction.delete(rideRef);
   });
+  /* await: 삭제 확인 후 캘린더로 돌아갈 때 Supabase 읽기 라우팅에서도 곧바로 사라지도록,
+     화면 이동 전에 Secondary 삭제까지 끝내둔다(실패해도 onOpenRideWrittenDualWrite 트리거가
+     비동기 백업으로 정리한다 — deleteOpenRideFromSupabase 참고). */
+  await runSecondaryAfterOpenRideDelete(hostUserId, rideId);
   return { deleted: true };
 }
 
