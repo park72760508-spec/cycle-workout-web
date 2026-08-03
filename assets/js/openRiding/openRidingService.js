@@ -682,7 +682,10 @@ export async function createRide(db, hostUserId, input) {
   const participantContactPublic = {};
   if (hostKey) {
     if (hostPhone) participantContact[hostKey] = hostPhone;
-    participantContactPublic[hostKey] = true;
+    /* 방장의 정원 목록 연락처 공개 여부는 생성 폼의 공개/비공개 토글(input.isContactPublic)을
+       그대로 따라야 한다 — 예전엔 여기서 무조건 true로 고정해, 비공개로 생성해도 방장 본인의
+       정원 목록 행에는 번호가 그대로 노출되던 버그였다(2026-08). */
+    participantContactPublic[hostKey] = !!input.isContactPublic;
   }
   const isPrivate = !!input.isPrivate;
   const invitedRaw = Array.isArray(input.invitedList) ? input.invitedList : [];
@@ -812,6 +815,14 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     category: normalizeOpenRideCategory(input.category != null ? input.category : data.category),
     updatedAt: serverTimestamp()
   };
+  const hostKeyForContact = String(hostUserId != null ? hostUserId : '').trim();
+  if (hostKeyForContact) {
+    /* 정원 목록에 노출되는 방장 본인 행도 이 수정 폼의 공개/비공개 설정을 그대로 따르게
+       한다 — createRide와 동일하게, 이 값을 안 맞춰주면 수정으로 비공개를 선택해도 정원
+       목록에는 예전 공개 상태가 그대로 남아있게 된다(2026-08). */
+    patch['participantContact.' + hostKeyForContact] = String(input.contactInfo || '').trim().slice(0, 80);
+    patch['participantContactPublic.' + hostKeyForContact] = !!input.isContactPublic;
+  }
   await updateDoc(rideRef, patch);
   await scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
 }

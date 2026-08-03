@@ -3,7 +3,7 @@
  * window.openRidingService, window.useOpenRiding, window.useOpenRideDetail, 지역/레벨 옵션 노출
  */
 import { refreshDualRunFromRemoteConfig } from '../supabaseDualWrite.js';
-import './openRidingService.js?v=sync-fix-20260803v3';
+import './openRidingService.js?v=sync-fix-20260803v4';
 import './openRidingGroupService.js?v=sync-fix-20260803v2';
 
 refreshDualRunFromRemoteConfig(true).catch(function (err) {
@@ -11,7 +11,7 @@ refreshDualRunFromRemoteConfig(true).catch(function (err) {
     console.warn('[openRidingBoot] Remote Config prefetch:', err);
   }
 });
-import './openRidingFriendsService.js?v=sync-fix-20260803v3';
-import './useOpenRiding.js?v=sync-fix-20260803v3';
+import './openRidingFriendsService.js?v=sync-fix-20260803v4';
+import './useOpenRiding.js?v=sync-fix-20260803v4';
 import './koreaRegions.js';
 import './groupRideEligibility.js';
