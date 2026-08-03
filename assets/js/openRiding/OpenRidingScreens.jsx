@@ -8220,10 +8220,13 @@ function OpenRidingDetail(props) {
     });
     /** 일정 지난 뒤 정원·참석자 목록에서는 전화번호 자체를 표시하지 않음 */
     if (maskContacts) return null;
+    /** 참가자가 연락처를 비공개로 설정했다면 방장·본인 포함 그 누구에게도 표시하지 않는다(2026-08) —
+        예전에는 방장이거나 확정 참가자끼리는 이 설정과 무관하게 항상 전체 번호가 보이던 예외가 있어
+        "비공개"를 선택해도 실제로는 공개되던 버그였다. */
+    if (!shareToPeers) return null;
     if (!attendeeViewer) return ' (' + maskPhoneLastFourDisplay(rawStr) + ')';
-    /** 방장·참석(대기) 신청자는 참석 확정자 연락처 전체 공개(신청 시 비공개 선택 포함) */
+    /** 방장·참석(대기) 신청자는 공개로 설정한 확정자 연락처 전체를 볼 수 있다 */
     if (isHost || (hasApplied && isConfirmedParticipant)) return ' (' + rawStr + ')';
-    if (shareToPeers) return ' (' + rawStr + ')';
     return ' (' + maskPhoneLastFourDisplay(rawStr) + ')';
   }
 
