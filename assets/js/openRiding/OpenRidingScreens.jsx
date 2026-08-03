@@ -4886,6 +4886,7 @@ function OpenRidingCalendarMain(props) {
                  아래 일반 셀 로직을 그대로 타서 "이번달 지나간 날짜"와 동일한 디자인으로 표시된다. */
               if (isNextAdjacent) {
                 var isSelNext = selectedKey === key;
+                var isConfirmedNext = participantConfirmedDateKeys.has(key);
                 return (
                   <button
                     type="button"
@@ -4905,6 +4906,27 @@ function OpenRidingCalendarMain(props) {
                     ) : null}
                     {isSelNext ? (
                       <span className="absolute z-[15] rounded-full border-2 border-violet-500 pointer-events-none" style={openRidingCalSelectRingStyle} aria-hidden />
+                    ) : null}
+                    {isConfirmedNext ? (
+                      /* 다음달 여백 날짜도 이번달 날짜와 동일하게 참석 확정 배지를 보여준다 — 데이터는
+                         이미 있는데(모임 배지 자체가 이미 표시됨) 이 조기 return 블록에서만 빠져 있던
+                         것이라, 이번달 셀과 동일한 배지 위치·크기로 추가한다. */
+                      <span
+                        className="open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 bg-red-600"
+                        style={{ width: '11px', height: '11px', top: 'calc(50% - 11.31px)', left: 'calc(50% + 11.31px)', transform: 'translate(-50%, -50%)' }}
+                        title="참석 확정"
+                        aria-hidden
+                      >
+                        <svg className="block" width={7} height={7} viewBox="0 0 12 12" fill="none" aria-hidden>
+                          <path
+                            d="M2.5 6L5 8.5L9.5 3.5"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </span>
                     ) : null}
                     <span className={'relative z-10 tabular-nums ' + (isHostDay || hasMatch ? 'text-white font-medium' : 'text-slate-400')}>
                       {day}
