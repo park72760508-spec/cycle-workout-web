@@ -28,7 +28,7 @@ import {
   fetchRidesInDateRangeRouted,
   fetchTrainingLogsByDateRangeForReviewRouted,
   subscribeRideByIdRouted,
-} from './openRidingReadClient.js';
+} from './openRidingReadClient.js?v=heat-fix-20260803';
 import {
   scheduleOpenRideDualWriteFromFirestore,
   runSecondaryAfterOpenRideDelete,

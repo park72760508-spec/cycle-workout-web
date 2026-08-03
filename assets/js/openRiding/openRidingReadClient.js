@@ -23,6 +23,20 @@ const SUPABASE_POLL_MS = 15000;
 const MY_GROUPS_POLL_MS = 45000;
 const MY_MEMBERSHIPS_POLL_MS = 30000;
 
+/**
+ * 화면(탭)이 백그라운드/화면 꺼짐 상태일 때는 폴링을 건너뛴다 — 라이딩 모임·러닝 크루 화면을
+ * 켜둔 채 다른 앱으로 전환하거나 화면이 꺼져도, 이 모듈이 mount돼 있는 한 라이딩 상세·소모임
+ * 목록·가입 신청 배지 등 여러 구독이 각자 독립적으로 15~45초마다 계속 HTTP 폴링을 돌려 배터리·
+ * 발열 부담을 주던 부분을 줄인다(2026-08). visible로 돌아오면 바로 다음 tick부터 정상 재개된다.
+ * @param {() => void} fn
+ */
+function stelvioVisibilityGatedPoll(fn) {
+  return function () {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    fn();
+  };
+}
+
 /** @type {{ source: 'firebase'|'supabase', loadedAt: number, loading: Promise<string>|null }} */
 const groupsReadState = {
   source: 'firebase',
@@ -275,7 +289,7 @@ export function subscribeRideByIdRouted(db, rideId, onNext, onError) {
           );
       }
       poll();
-      pollTimer = setInterval(poll, SUPABASE_POLL_MS);
+      pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), SUPABASE_POLL_MS);
       return;
     }
 
@@ -415,7 +429,7 @@ export function subscribeRidingGroupDetailRouted(db, groupId, cb) {
         });
       }
       poll();
-      pollTimer = setInterval(poll, SUPABASE_POLL_MS);
+      pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), SUPABASE_POLL_MS);
       return;
     }
 
@@ -454,7 +468,7 @@ export function subscribeRidingGroupMembersRouted(db, groupId, cb) {
         });
       }
       poll();
-      pollTimer = setInterval(poll, SUPABASE_POLL_MS);
+      pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), SUPABASE_POLL_MS);
       return;
     }
 
@@ -496,7 +510,7 @@ export function subscribeRidingGroupJoinRequestsRouted(db, groupId, cb) {
         });
       }
       poll();
-      pollTimer = setInterval(poll, SUPABASE_POLL_MS);
+      pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), SUPABASE_POLL_MS);
       return;
     }
 
@@ -573,7 +587,7 @@ export function subscribeRidingGroupsRouted(db, isAdmin, onUpdate, viewerUid) {
         );
       }
       pollApproved();
-      pollTimer = setInterval(pollApproved, SUPABASE_POLL_MS);
+      pollTimer = setInterval(stelvioVisibilityGatedPoll(pollApproved), SUPABASE_POLL_MS);
 
       var vu = viewerUid != null ? String(viewerUid).trim() : '';
       if (vu) {
@@ -748,7 +762,7 @@ export function subscribeMyRidingGroupsAsMemberRouted(db, uid, onUpdate) {
   }
 
   poll();
-  pollTimer = setInterval(poll, MY_GROUPS_POLL_MS);
+  pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), MY_GROUPS_POLL_MS);
 
   return function () {
     stopped = true;
@@ -789,7 +803,7 @@ export function subscribeUserGroupMembershipsRouted(db, userId, groupIds, onUpda
   }
 
   poll();
-  pollTimer = setInterval(poll, MY_MEMBERSHIPS_POLL_MS);
+  pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), MY_MEMBERSHIPS_POLL_MS);
 
   return function () {
     stopped = true;
@@ -821,8 +835,11 @@ export function subscribeMyManagedGroupsJoinRequestCountsRouted(db, userId, onUp
     });
   }
 
+  /* 배지 카운트는 라이딩 모임·러닝 크루 화면이 열려있는 동안(어느 하위 화면이든) 항상 켜져
+     있는 백그라운드 구독이라, 실시간성이 필요한 상세 화면 폴링(SUPABASE_POLL_MS=15초)과 같은
+     주기로 돌 필요가 없다 — MY_GROUPS_POLL_MS(45초)로 늦춰 상시 폴링 부담을 줄인다(2026-08). */
   poll();
-  pollTimer = setInterval(poll, SUPABASE_POLL_MS);
+  pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), MY_GROUPS_POLL_MS);
 
   return function () {
     stopped = true;
@@ -853,7 +870,7 @@ export function subscribeRidingGroupMyJoinRequestRouted(db, groupId, uid, cb) {
   }
 
   poll();
-  pollTimer = setInterval(poll, SUPABASE_POLL_MS);
+  pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), SUPABASE_POLL_MS);
 
   return function () {
     stopped = true;
