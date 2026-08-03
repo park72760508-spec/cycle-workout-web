@@ -2755,10 +2755,10 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   line-height: 1;
 }
 /* 오늘 날짜 원이 모임 배지(호스트·매칭·기타)와 같은 셀에서 겹치는 경우 — 고정 주황 대신 흰색을
-   5%만 얹어(rgba white 0.05) 아래 모임 배지 색이 그대로 비치되 5% 더 연하게 보이도록 한다.
-   호스트(보라)·매칭(초록)·기타(회색) 등 배지 색과 무관하게 항상 "그 색보다 5% 연하게"가 성립. */
+   10%만 얹어(rgba white 0.10) 아래 모임 배지 색이 그대로 비치되 10% 더 흐린 톤으로 보이도록 한다.
+   호스트(보라)·매칭(초록)·기타(회색) 등 배지 색과 무관하게 항상 "그 색보다 10% 흐린 톤"이 성립. */
 #openRidingRoomScreen .open-riding-calendar-grid .open-riding-cal-day--today-with-ride .open-riding-cal-today-num {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.1);
 }
 #openRidingRoomScreen .open-riding-create-btn {
   box-sizing: border-box;
