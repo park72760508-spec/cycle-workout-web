@@ -32,7 +32,7 @@ import {
 import {
   scheduleOpenRideDualWriteFromFirestore,
   runSecondaryAfterOpenRideDelete,
-} from '../openRidingDualWrite.js';
+} from '../openRidingDualWrite.js?v=sync-fix-20260803';
 
 /** @param {unknown} v */
 function asStringArray(v) {

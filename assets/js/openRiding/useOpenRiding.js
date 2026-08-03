@@ -17,7 +17,7 @@ import {
   leaveRideTransaction,
   fetchRideById,
   subscribeRideById
-} from './openRidingService.js';
+} from './openRidingService.js?v=sync-fix-20260803';
 
 /**
  * @param {import('firebase/firestore').Firestore | null} db
