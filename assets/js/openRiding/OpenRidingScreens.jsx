@@ -5162,6 +5162,7 @@ function OpenRidingCreateForm(props) {
         maxParticipants: 10,
         hostName: prof.hostName || '',
         contactInfo: prof.contactInfo || '',
+        isContactPublic: true,
         region: '',
         gpxFile: null,
         gpxUrlExisting: null,
@@ -5496,6 +5497,7 @@ function OpenRidingCreateForm(props) {
                 maxParticipants: Math.max(1, Number(ride.maxParticipants) || 10),
                 hostName: String(ride.hostName || prof.hostName || ''),
                 contactInfo: String(ride.contactInfo || prof.contactInfo || ''),
+                isContactPublic: isCopyMode ? true : ride.isContactPublic !== false,
                 region: String(ride.region || ''),
                 gpxFile: null,
                 gpxUrlExisting: ride.gpxUrl != null ? String(ride.gpxUrl) : null,
@@ -5742,10 +5744,10 @@ function OpenRidingCreateForm(props) {
       checkList.push('최대 인원을 1 이상 입력해 주세요.');
     }
     if (!String(form.hostName || '').trim()) {
-      checkList.push('방장명이 없습니다. 프로필(사용자 정보)에서 이름을 등록해 주세요.');
+      checkList.push('방장명을 입력해 주세요.');
     }
     if (!String(form.contactInfo || '').trim()) {
-      checkList.push('연락처가 없습니다. 프로필에서 휴대폰 번호를 등록해 주세요.');
+      checkList.push('연락처를 입력해 주세요.');
     }
     if (
       typeof moimCatApi.isValidLevelForCategory === 'function' &&
@@ -5806,7 +5808,7 @@ function OpenRidingCreateForm(props) {
           maxParticipants: Math.max(1, Math.floor(maxParsed)),
           hostName: form.hostName,
           contactInfo: form.contactInfo,
-          isContactPublic: false,
+          isContactPublic: !!form.isContactPublic,
           region: form.region,
           gpxUrl: gpxUrl,
           isPrivate: !!form.isPrivate,
@@ -5852,7 +5854,7 @@ function OpenRidingCreateForm(props) {
               String(hostUserId).trim(),
               String(form.hostName || '').trim().slice(0, 80) || '라이더',
               String(form.contactInfo || '').trim().slice(0, 80),
-              { contactPublicToParticipants: true, joinPasswordAttempt: '' }
+              { contactPublicToParticipants: !!form.isContactPublic, joinPasswordAttempt: '' }
             );
           } catch (eJoin) {
             console.warn('[OpenRiding] 생성 직후 방장 참석 명단 보정 실패:', eJoin && eJoin.message ? eJoin.message : eJoin);
@@ -6686,22 +6688,54 @@ function OpenRidingCreateForm(props) {
       <label className="block font-medium text-slate-700">
         방장명
         <input
-          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 text-sm"
+          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
           value={form.hostName}
-          readOnly
-          title="로그인 프로필 이름이 자동 입력됩니다. 변경은 프로필(사용자 정보)에서 하세요."
+          onChange={function (e) { set('hostName', e.target.value); }}
+          placeholder="방장명"
         />
       </label>
       <label className="block font-medium text-slate-700">
-        연락처
+        <div className="flex items-center justify-between gap-2">
+          <span>연락처</span>
+          <div className="flex gap-1" role="group" aria-label="연락처 공개 여부">
+            <button
+              type="button"
+              className={
+                'px-2.5 py-1 rounded-lg text-xs font-semibold border transition ' +
+                (form.isContactPublic
+                  ? 'bg-violet-600 border-violet-600 text-white'
+                  : 'bg-white border-slate-300 text-slate-500')
+              }
+              onClick={function () { set('isContactPublic', true); }}
+            >
+              공개
+            </button>
+            <button
+              type="button"
+              className={
+                'px-2.5 py-1 rounded-lg text-xs font-semibold border transition ' +
+                (!form.isContactPublic
+                  ? 'bg-violet-600 border-violet-600 text-white'
+                  : 'bg-white border-slate-300 text-slate-500')
+              }
+              onClick={function () { set('isContactPublic', false); }}
+            >
+              비공개
+            </button>
+          </div>
+        </div>
         <input
-          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 text-sm"
+          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
           value={form.contactInfo}
-          readOnly
-          title="로그인 프로필 연락처가 자동 입력됩니다. 참석 확정자에게만 공개됩니다."
+          onChange={function (e) { set('contactInfo', e.target.value); }}
+          placeholder="연락처"
         />
       </label>
-      <p className="text-xs text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
+      <p className="text-xs text-slate-500 -mt-1">
+        {form.isContactPublic
+          ? '연락처는 참석 신청 후 확정된 참가자에게 공개됩니다.'
+          : '비공개로 설정하면 정원 목록·연락처 항목에 전화번호가 표시되지 않습니다.'}
+      </p>
 
       {!editRideId ? (
         <div className="open-riding-bottom-actions">
@@ -8819,12 +8853,18 @@ function OpenRidingDetail(props) {
         {statRow('방장', ride.hostName != null ? ride.hostName : '-')}
         {statRow(
           '연락처',
-          showHostContactRow && ride.contactInfo ? (
-            maskContacts ? maskPhoneLastFourDisplay(ride.contactInfo) : ride.contactInfo
-          ) : !showHostContactRow && ride.contactInfo ? (
-            <span className="text-amber-600">참석 신청 후 방장 연락처가 표시됩니다.</span>
-          ) : (
+          !ride.contactInfo ? (
             '-'
+          ) : isHost ? (
+            maskContacts ? maskPhoneLastFourDisplay(ride.contactInfo) : ride.contactInfo
+          ) : ride.isContactPublic === false ? (
+            /* 방장이 생성 시 연락처를 비공개로 설정한 경우 — 본인(방장) 외에는 신청 여부와
+               무관하게 항상 미표시(2026-08 요청). */
+            <span className="text-slate-400">비공개</span>
+          ) : showHostContactRow ? (
+            maskContacts ? maskPhoneLastFourDisplay(ride.contactInfo) : ride.contactInfo
+          ) : (
+            <span className="text-amber-600">참석 신청 후 방장 연락처가 표시됩니다.</span>
           )
         )}
         {statRow('공개 여부', isPrivateRide ? '비공개 · 초대 또는 입장 비밀번호로 신청' : '공개')}
