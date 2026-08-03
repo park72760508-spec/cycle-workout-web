@@ -934,8 +934,9 @@
         'aria-label': '러닝 랭킹 목록'
       },
         rankedList.map(function (item) {
+          /* CollapsibleList와 동일한 이유로 key에 socialVer를 넣지 않음(전체 언마운트 방지) */
           return React.createElement(Row, {
-            key: (item.crewId || item.userId || '') + '-' + item.rank + '-' + socialVer + (showOverallSegments ? '-seg' : ''),
+            key: (item.crewId || item.userId || '') + '-' + item.rank + (showOverallSegments ? '-seg' : ''),
             item: item,
             tabId: activeTab,
             currentUserId: currentUserId,

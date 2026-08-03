@@ -199,5 +199,8 @@
     }, children);
   }
 
-  window.RunningRankingRow = RunningRankingRow;
+  /* 목록이 펼쳐진 상태에서 socialVer(스타·팔로우 등) 하나만 바뀌어도 매번 모든 행이 리렌더되던
+     비용을 줄인다 — props가 실제로 안 바뀐 행은 React.memo가 리렌더 자체를 건너뛴다(표시 결과는
+     동일, 순수 성능 최적화). */
+  window.RunningRankingRow = React.memo ? React.memo(RunningRankingRow) : RunningRankingRow;
 })();

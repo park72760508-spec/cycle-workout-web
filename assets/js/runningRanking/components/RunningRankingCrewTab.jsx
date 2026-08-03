@@ -497,10 +497,12 @@
                   : (crewApi().buildGroupMemberRankMetaHtml
                     ? crewApi().buildGroupMemberRankMetaHtml(item, leaderboardRows, category)
                     : '');
+                /* key에 socialVer를 넣지 않음 — RunningRankingCollapsibleList와 동일한 이유로,
+                   넣으면 스타/팔로우 변경 때마다 크루 멤버 전원이 통째로 재마운트된다. */
                 return React.createElement(GroupMemberRow, {
                   key: String(item.userId) + '-cr' + (item._crewRank != null ? item._crewRank : '') +
                     '-br' + (item.boardRank != null ? item.boardRank : item.rank) +
-                    '-' + crewMetric + '-' + paceDistance + '-' + socialVer +
+                    '-' + crewMetric + '-' + paceDistance +
                     (showSegments ? '-seg' : ''),
                   item: item,
                   tabId: memberTabId,
@@ -509,7 +511,10 @@
                   listCategory: category,
                   rankMetaHtml: rankMetaHtml,
                   groupRole: item._groupRole,
-                  showSegments: showSegments
+                  showSegments: showSegments,
+                  /* React.memo가 스타/팔로우 변경을 감지해 이 행만 다시 그리도록 prop으로 전달
+                     (컴포넌트 내부에서 직접 읽진 않지만 memo 비교 대상에 필요). */
+                  socialVer: socialVer
                 });
               })
             );

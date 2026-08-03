@@ -270,11 +270,16 @@
         }
         measure();
         var ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-        if (ro) ro.observe(el);
-        window.addEventListener('resize', measure);
+        if (ro) {
+          ro.observe(el);
+        } else {
+          /* ResizeObserver 미지원 브라우저에서만 window resize로 폴백 — 지원 브라우저에서는
+             둘 다 걸어두면 리사이즈 1회에 measure()가 중복 호출돼 불필요한 재계산이 두 배가 된다. */
+          window.addEventListener('resize', measure);
+        }
         return function () {
           if (ro) ro.disconnect();
-          window.removeEventListener('resize', measure);
+          else window.removeEventListener('resize', measure);
         };
       },
       [activeCategory, duration]

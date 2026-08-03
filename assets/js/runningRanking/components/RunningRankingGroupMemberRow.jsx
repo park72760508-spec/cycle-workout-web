@@ -175,5 +175,7 @@
     }, children);
   }
 
-  window.RunningRankingGroupMemberRow = RunningRankingGroupMemberRow;
+  /* RunningRankingRow와 동일한 이유 — socialVer만 바뀌어도 크루 멤버 전원이 리렌더되던 비용을
+     React.memo로 줄인다(표시 결과는 동일). */
+  window.RunningRankingGroupMemberRow = React.memo ? React.memo(RunningRankingGroupMemberRow) : RunningRankingGroupMemberRow;
 })();

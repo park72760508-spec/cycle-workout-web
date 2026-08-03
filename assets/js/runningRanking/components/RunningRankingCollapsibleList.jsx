@@ -221,8 +221,11 @@
 
     function renderRow(item, extraClass) {
       if (!Row || !item) return null;
+      /* key에는 socialVer를 넣지 않는다 — 넣으면 스타/팔로우 등 socialVer가 바뀔 때마다 모든 행이
+         (리렌더가 아니라) 통째로 언마운트·재마운트돼 비용이 훨씬 크다. socialVer는 prop으로만
+         전달해 React.memo가 필요한 행만 값싸게 리렌더하도록 한다. */
       return React.createElement(Row, {
-        key: (item.crewId || item.userId || '') + '-' + item.rank + '-' + socialVer + (showSegments ? '-seg' : '') + (extraClass || ''),
+        key: (item.crewId || item.userId || '') + '-' + item.rank + (showSegments ? '-seg' : '') + (extraClass || ''),
         item: item,
         tabId: tabId,
         currentUserId: currentUserId,
