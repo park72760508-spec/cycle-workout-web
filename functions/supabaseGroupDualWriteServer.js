@@ -463,6 +463,25 @@ async function deleteJoinRequestFromSupabase(groupUuid, firebaseUid) {
 }
 
 /**
+ * Firestore rides/{id} 하드 삭제(모임 삭제) → Supabase open_rides 행 정리.
+ * @see onOpenRideWrittenDualWrite (groupDualWriteTriggers.js) — 예전엔 삭제 이벤트에서
+ *   그냥 return해서 Supabase에 삭제된 모임이 영원히 남아있던 버그(2026-08).
+ */
+async function deleteOpenRideFromSupabase(firestoreDocId) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return;
+  const rideId = resolveOpenRideUuid(firestoreDocId);
+  if (!rideId) return;
+  const { error: pErr } = await supabase
+    .from("open_ride_participants")
+    .delete()
+    .eq("ride_id", rideId);
+  if (pErr) throw pErr;
+  const { error: rErr } = await supabase.from("open_rides").delete().eq("id", rideId);
+  if (rErr) throw rErr;
+}
+
+/**
  * Firestore rides/{id} 변경 → Supabase Secondary (ingest 게이트 적용).
  */
 async function runSecondaryAfterOpenRideWrite(admin, firestoreDocId, rideData, actorUid) {
@@ -567,6 +586,7 @@ module.exports = {
   upsertOpenRideToSupabase,
   upsertRidingGroupToSupabase,
   deleteJoinRequestFromSupabase,
+  deleteOpenRideFromSupabase,
   runSecondaryAfterOpenRideWrite,
   runSecondaryAfterRidingGroupWrite,
   resolveOpenRideUuid,

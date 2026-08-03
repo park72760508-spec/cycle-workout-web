@@ -3408,6 +3408,24 @@ exports.adminStravaSubscriptionStatus = onRequest(
       const stravaRes = await fetch(`https://www.strava.com/api/v3/push_subscriptions?${params.toString()}`);
       const subscriptions = await stravaRes.json().catch(() => null);
 
+      /**
+       * Strava는 모든 API 응답에 15분 윈도우 기준 레이트리밋 헤더를 실어 보낸다.
+       * X-RateLimit-*  = "Overall"(전체 요청), X-ReadRateLimit-* = "Read"(읽기 요청) —
+       * Strava 개발자 대시보드의 "Requests every 15 minutes" 그래프와 동일한 두 계열이다.
+       * 무료 등급 초과·유료 결제 반영 여부는 limit 값 자체의 변화로 확인 가능하다
+       * (예: 무료 100/1000 → 유료 등급으로 상향되면 limit 값이 커짐).
+       */
+      const rateLimit = {
+        overall: {
+          limit: stravaRes.headers.get("x-ratelimit-limit"),
+          usage: stravaRes.headers.get("x-ratelimit-usage"),
+        },
+        read: {
+          limit: stravaRes.headers.get("x-readratelimit-limit"),
+          usage: stravaRes.headers.get("x-readratelimit-usage"),
+        },
+      };
+
       const healthSnap = await db.collection("appConfig").doc("strava_webhook_health").get();
       const lastReceivedAt = healthSnap.exists ? healthSnap.data().lastReceivedAt : null;
       const lastReceivedMs =
@@ -3416,6 +3434,8 @@ exports.adminStravaSubscriptionStatus = onRequest(
       res.status(200).json({
         success: stravaRes.ok,
         httpStatus: stravaRes.status,
+        rateLimitBlocked: stravaRes.status === 429,
+        rateLimit,
         subscriptionCount: Array.isArray(subscriptions) ? subscriptions.length : 0,
         subscriptions: Array.isArray(subscriptions) ? subscriptions : subscriptions,
         lastWebhookReceivedAt: lastReceivedMs > 0 ? new Date(lastReceivedMs).toISOString() : null,
@@ -11890,6 +11910,38 @@ exports.ingestOpenRideDualWriteRelay = onRequest(
       res.status(200).json({ success: true, ...result });
     } catch (e) {
       console.warn("[ingestOpenRideDualWriteRelay]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 클라이언트 Secondary relay — open_rides 하드 삭제(모임 삭제).
+ * Firestore Primary 삭제 성공 후 호출 — 실패해도 onOpenRideWrittenDualWrite 트리거가 백업으로 정리한다.
+ */
+exports.ingestOpenRideDeleteRelay = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원" });
+      return;
+    }
+    try {
+      const body = req.body || {};
+      const firestoreDocId = String(body.firestoreDocId || "").trim();
+      if (!firestoreDocId) {
+        res.status(400).json({ success: false, error: "firestoreDocId 필요" });
+        return;
+      }
+      await supabaseGroupDualWrite.deleteOpenRideFromSupabase(firestoreDocId);
+      res.status(200).json({ success: true });
+    } catch (e) {
+      console.warn("[ingestOpenRideDeleteRelay]", e.message || e);
       res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }

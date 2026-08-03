@@ -20,7 +20,16 @@ exports.onOpenRideWrittenDualWrite = onDocumentWritten(
   async (event) => {
     const rideId = event.params.rideId;
     const after = event.data && event.data.after;
-    if (!after || !after.exists) return;
+    /* 모임 삭제(하드 delete)도 반드시 Supabase에 반영해야 한다 — 예전엔 여기서 조용히
+       return해서 삭제된 모임이 Supabase 읽기 경로(캘린더)에 영원히 남아있던 버그(2026-08). */
+    if (!after || !after.exists) {
+      try {
+        await supabaseGroupDualWrite.deleteOpenRideFromSupabase(rideId);
+      } catch (err) {
+        console.warn("[onOpenRideWrittenDualWrite] delete secondary failed:", err.message || err);
+      }
+      return;
+    }
     try {
       await supabaseGroupDualWrite.runSecondaryAfterOpenRideWrite(
         require("firebase-admin"),
