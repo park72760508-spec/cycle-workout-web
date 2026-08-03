@@ -274,6 +274,10 @@ function mapFirestoreOpenRideToRows(firestoreDocId, d) {
       user_id: userId,
       is_waitlist: false,
       waitlist_position: null,
+      /* Firestore participants 배열 순서(항상 host가 0번, 이후 참가 순서대로 append)를 그대로
+         보존 — 이 값이 없으면 읽기 쿼리가 정렬 기준으로 쓸 컬럼이 없어 "1번=방장, 순차 참가"
+         순서가 화면에서 뒤섞이는 버그(2026-08)가 재발한다. */
+      join_order: idx,
       display_name: str(pDisplay[uid]) || "",
       contact_info: str(pContact[uid]) || "",
       is_contact_public: Boolean(pContactPub[uid]),

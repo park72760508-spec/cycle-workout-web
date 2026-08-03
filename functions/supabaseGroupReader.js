@@ -46,7 +46,8 @@ async function fetchOpenRideByFirestoreId(admin, firestoreDocId) {
   const { data: parts } = await supabase
     .from("open_ride_participants")
     .select("*")
-    .eq("ride_id", row.id);
+    .eq("ride_id", row.id)
+    .order("join_order", { ascending: true, nullsFirst: false });
 
   const participants = (parts || []).map((p) => {
     const fb = uuidMap.get(String(p.user_id).toLowerCase());
@@ -74,7 +75,9 @@ async function fetchOpenRidesInDateRange(admin, startYmd, endYmd) {
   const { data: allParts } = await supabase
     .from("open_ride_participants")
     .select("*")
-    .in("ride_id", rideIds);
+    .in("ride_id", rideIds)
+    .order("ride_id", { ascending: true })
+    .order("join_order", { ascending: true, nullsFirst: false });
 
   const partsByRide = new Map();
   for (const p of allParts || []) {
