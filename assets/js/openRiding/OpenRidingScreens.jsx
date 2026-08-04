@@ -12129,6 +12129,23 @@ function OpenRidingGroupDetailView(props) {
                 </span>
               ) : null}
             </div>
+            {(isOwner || isAdmin) && approved ? (
+              /* 아바타·이름 라인 우측 빠른 모임 생성 — 아래쪽 "모임 생성" 버튼과 동일 동작,
+                 메인 달력 화면의 원형 + 생성 버튼과 동일한 디자인의 인라인 버전(2026-08). */
+              <button
+                type="button"
+                className="open-riding-action-btn shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-full border-0 text-white shadow-sm disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+                disabled={!!busy}
+                onClick={handleCreateRideFromGroup}
+                title={moimCopy.groupDetailCreateBtn}
+                aria-label={moimCopy.groupDetailCreateBtn}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            ) : null}
           </div>
           {grp.intro ? (
             <p className="text-sm text-slate-700 mt-3 whitespace-pre-wrap m-0 leading-relaxed">{String(grp.intro)}</p>
