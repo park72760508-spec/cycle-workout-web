@@ -2861,6 +2861,8 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
   var userId = ctx.userId || '';
   var onSelectRide = ctx.onSelectRide || function () {};
   var inviteCheckPhone = ctx.inviteCheckPhone || '';
+  var groupPhotoByGroupId = ctx.groupPhotoByGroupId || {};
+  var groupBadgeUrl = r.groupId ? groupPhotoByGroupId[String(r.groupId).trim()] || '' : '';
   var isCancelled = String(r.rideStatus || 'active') === 'cancelled';
   var isMine = !!(userId && String(r.hostUserId || '') === String(userId));
   var isCompactHostListRow = !!(ex.hostedListSection || (ex.myRidesUnifiedList && ex.myRideKind === 'host'));
@@ -3014,7 +3016,20 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
           ) : null}
             </>
           )}
-          <span className="truncate">{r.title}</span>
+          <span className="relative inline-block min-w-0 max-w-full align-middle">
+            <span className="truncate block">{r.title}</span>
+            {groupBadgeUrl ? (
+              /* 클럽/크루에서 생성된 모임 — 제목 끝 우측 상단에 그 클럽/크루의 원형 아바타를
+                 배지로 얹는다. 크기는 제목 앞 상태 아이콘(범례, 18px)과 동일하게 맞춘다(2026-08). */
+              <span
+                className="absolute -top-1.5 -right-1.5 h-[18px] w-[18px] shrink-0 rounded-full overflow-hidden ring-1 ring-white shadow-sm bg-slate-100 pointer-events-none"
+                title="클럽·크루 모임"
+                aria-hidden
+              >
+                <img src={groupBadgeUrl} alt="" className="h-full w-full object-cover" decoding="async" />
+              </span>
+            ) : null}
+          </span>
         </div>
         <div
           className={
@@ -3756,6 +3771,61 @@ function OpenRidingCalendarMain(props) {
       });
     },
     [ridesMyListRaw, moimCategory]
+  );
+
+  /** 클럽/크루에서 생성된 모임인 경우 날짜 목록 행에 그 그룹 아바타 배지를 보여주기 위해,
+      이번 달에 등장하는 groupId들의 사진을 조회해둔다(2026-08). */
+  var _groupPhotos = useState({});
+  var groupPhotoByGroupId = _groupPhotos[0];
+  var setGroupPhotoByGroupId = _groupPhotos[1];
+  var monthGroupIds = useMemo(
+    function () {
+      var s = new Set();
+      ridesMonth.forEach(function (r) {
+        var gid = r && r.groupId ? String(r.groupId).trim() : '';
+        if (gid) s.add(gid);
+      });
+      return Array.from(s);
+    },
+    [ridesMonth]
+  );
+  var monthGroupIdsKey = monthGroupIds.slice().sort().join(' ');
+  useEffect(
+    function () {
+      var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+      if (typeof gs.fetchRidingGroupById !== 'function') return undefined;
+      var missing = monthGroupIds.filter(function (gid) {
+        return !Object.prototype.hasOwnProperty.call(groupPhotoByGroupId, gid);
+      });
+      if (!missing.length) return undefined;
+      var cancelled = false;
+      Promise.all(
+        missing.map(function (gid) {
+          return gs.fetchRidingGroupById(firestore, gid).then(
+            function (g) {
+              return [gid, g && g.photoUrl ? String(g.photoUrl) : ''];
+            },
+            function () {
+              return [gid, ''];
+            }
+          );
+        })
+      ).then(function (pairs) {
+        if (cancelled) return;
+        setGroupPhotoByGroupId(function (prev) {
+          var next = Object.assign({}, prev);
+          pairs.forEach(function (pair) {
+            next[pair[0]] = pair[1];
+          });
+          return next;
+        });
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [monthGroupIdsKey, firestore]
   );
   var matchingDateKeys = useMemo(
     function () {
@@ -4713,7 +4783,8 @@ function OpenRidingCalendarMain(props) {
     return openRidingRenderMonthRideListRowShared(r, extra, {
       userId: userId,
       onSelectRide: onSelectRide,
-      inviteCheckPhone: inviteCheckPhone
+      inviteCheckPhone: inviteCheckPhone,
+      groupPhotoByGroupId: groupPhotoByGroupId
     });
   }
 
@@ -13267,9 +13338,17 @@ function OpenRidingRoomApp(props) {
               className="open-riding-action-btn shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100/90 -ml-0.5"
               onClick={function () {
                 setDetailRideId(null);
+                /* 클럽/크루 상세의 모임 캘린더에서 들어온 세부 내용이면(onSelectGroupRide가
+                   detailGroupId를 지우지 않고 유지) 원래 있던 그 클럽/크루 상세로 돌아간다 —
+                   메인 캘린더에서 들어온 경우(onSelectRide가 detailGroupId를 null로 지움)에는
+                   기존처럼 라이딩 모임 화면으로 돌아간다(2026-08). */
+                if (detailGroupId) {
+                  setView('groupDetail');
+                  return;
+                }
                 setView('main');
               }}
-              aria-label="라이딩 모임으로 뒤로"
+              aria-label={detailGroupId ? moimCopy.groupDetailBackAria : '라이딩 모임으로 뒤로'}
             >
               <svg
                 width="22"
@@ -13356,9 +13435,9 @@ function OpenRidingRoomApp(props) {
           </h1>
           {view === 'groupDetail' && groupDetailHeaderActions ? (
             /* 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭이라 우측 칸이 36px뿐이다.
-               테두리 있던 시절과 비슷한 손가락 간격을 주기 위해 아이콘을 13px로 줄이고 그
-               사이 gap을 8px로 넓혀서(13+8+13=34px) 36px 안에서 오조작 여지를 줄인다(2026-08). */
-            <div className="shrink-0 flex items-center justify-end gap-2">
+               아이콘을 30% 확대(13px -> 17px)하는 대신 gap을 2px로 좁혀 36px 안에 맞춘다
+               (17+2+17=36, 2026-08). */
+            <div className="shrink-0 flex items-center justify-end gap-0.5">
               <button
                 type="button"
                 className="p-0 m-0 border-0 bg-transparent inline-flex items-center justify-center disabled:opacity-50"
@@ -13367,7 +13446,7 @@ function OpenRidingRoomApp(props) {
                 aria-label={moimCopy.groupDetailTitle + ' 수정'}
                 title="수정"
               >
-                <img src="assets/img/edit2.png" alt="" width={13} height={13} className="block object-contain" decoding="async" />
+                <img src="assets/img/edit2.png" alt="" width={17} height={17} className="block object-contain" decoding="async" />
               </button>
               <button
                 type="button"
@@ -13377,7 +13456,7 @@ function OpenRidingRoomApp(props) {
                 aria-label="그룹 삭제"
                 title="그룹 삭제"
               >
-                <img src="assets/img/delete2.png" alt="" width={13} height={13} className="block object-contain" decoding="async" />
+                <img src="assets/img/delete2.png" alt="" width={17} height={17} className="block object-contain" decoding="async" />
               </button>
             </div>
           ) : (
