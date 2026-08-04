@@ -5110,6 +5110,232 @@ function OpenRidingCalendarMain(props) {
   );
 }
 
+/**
+ * 클럽/크루 상세 — 이 그룹에서 생성된 모임만 보여주는 캘린더 (관리자 메뉴 박스가 있던 자리).
+ * 메인 달력(OpenRidingCalendarMain)과 동일한 그리드·오늘 표시 CSS 클래스를 그대로 재사용해
+ * 동일 디자인을 유지하되, 필터·초대·내 라이딩 목록 등 다른 관심사는 들고 오지 않는다.
+ */
+function OpenRidingGroupCalendarSection(props) {
+  var firestore = props.firestore;
+  var userId = props.userId || '';
+  var groupId = props.groupId || '';
+  var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
+  var onSelectRide = props.onSelectRide || function () {};
+
+  var _m = useState(function () { return new Date(); });
+  var viewMonth = _m[0];
+  var setViewMonth = _m[1];
+  var _sel = useState('');
+  var selectedKey = _sel[0];
+  var setSelectedKey = _sel[1];
+
+  var _hooks = getOpenRidingHooks();
+  var useOpenRidingFn = _hooks.useOpenRiding;
+  var moimCategory = moimCopy.isRun ? 'RUN' : 'CYCLE';
+  var hook =
+    typeof useOpenRidingFn === 'function'
+      ? useOpenRidingFn(firestore, userId || null, viewMonth, moimCategory)
+      : { ridesMonth: [], loadingRides: false };
+  var ridesMonthRaw = hook.ridesMonth || [];
+  var loadingRides = hook.loadingRides;
+
+  var groupRides = useMemo(
+    function () {
+      var gid = String(groupId || '');
+      if (!gid) return [];
+      return (ridesMonthRaw || []).filter(function (r) {
+        return r && String(r.groupId || '') === gid;
+      });
+    },
+    [ridesMonthRaw, groupId]
+  );
+
+  var year = viewMonth.getFullYear();
+  var month = viewMonth.getMonth();
+  var firstDow = new Date(year, month, 1).getDay();
+  var lastDate = new Date(year, month + 1, 0).getDate();
+  var todayYmd = getTodaySeoulYmd();
+
+  var days = useMemo(
+    function () {
+      var cells = [];
+      var i;
+      var prevMonthDate = new Date(year, month, 0);
+      var prevY = prevMonthDate.getFullYear();
+      var prevM = prevMonthDate.getMonth();
+      var prevLastDate = prevMonthDate.getDate();
+      for (i = firstDow - 1; i >= 0; i--) {
+        cells.push({ day: prevLastDate - i, y: prevY, m: prevM });
+      }
+      for (i = 1; i <= lastDate; i++) {
+        cells.push({ day: i, y: year, m: month });
+      }
+      var nextMonthDate = new Date(year, month + 1, 1);
+      var nextY = nextMonthDate.getFullYear();
+      var nextM = nextMonthDate.getMonth();
+      var nextDay = 1;
+      while (cells.length % 7 !== 0) {
+        cells.push({ day: nextDay, y: nextY, m: nextM });
+        nextDay++;
+      }
+      return cells;
+    },
+    [year, month, firstDow, lastDate]
+  );
+
+  var rideDateKeys = useMemo(
+    function () {
+      var s = new Set();
+      groupRides.forEach(function (r) {
+        var ts = r.date;
+        var d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
+        if (!d) return;
+        s.add(dateKey(d.getFullYear(), d.getMonth(), d.getDate()));
+      });
+      return s;
+    },
+    [groupRides]
+  );
+
+  var ridesForSelectedDay = useMemo(
+    function () {
+      if (!selectedKey) return [];
+      return groupRides.filter(function (r) {
+        var ts = r.date;
+        var d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
+        if (!d) return false;
+        return dateKey(d.getFullYear(), d.getMonth(), d.getDate()) === selectedKey;
+      });
+    },
+    [groupRides, selectedKey]
+  );
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card mt-4">
+      <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header">
+        <h3 className="text-sm font-semibold text-slate-800 m-0">{moimCopy.screenTitle} 캘린더</h3>
+      </div>
+      <div className="stelvio-category-body p-3">
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <button
+            type="button"
+            className="open-riding-calendar-nav-btn shrink-0"
+            onClick={function () { setViewMonth(new Date(year, month - 1, 1)); }}
+            aria-label="이전 달"
+          >
+            {'‹'}
+          </button>
+          <span className="font-semibold text-sm sm:text-base">{year}년 {month + 1}월</span>
+          <button
+            type="button"
+            className="open-riding-calendar-nav-btn shrink-0"
+            onClick={function () { setViewMonth(new Date(year, month + 1, 1)); }}
+            aria-label="다음 달"
+          >
+            {'›'}
+          </button>
+        </div>
+        {loadingRides ? (
+          <div className="open-riding-loading-wrap">
+            <div className="open-riding-loading-spinner" />
+            <p className="open-riding-loading-text">모임 로딩 중...</p>
+          </div>
+        ) : null}
+        <div className="grid grid-cols-7 gap-1 text-center text-xs mb-1 font-semibold">
+          {['일', '월', '화', '수', '목', '금', '토'].map(function (w) {
+            var wc = w === '일' ? 'text-red-600' : w === '토' ? 'text-blue-600' : 'text-slate-500';
+            return (
+              <div key={w} className={wc}>
+                {w}
+              </div>
+            );
+          })}
+        </div>
+        <div className="grid grid-cols-7 gap-1 overflow-visible pt-0.5 open-riding-calendar-grid">
+          {days.map(function (cell, idx) {
+            var key = dateKey(cell.y, cell.m, cell.day);
+            var hasRide = rideDateKeys.has(key);
+            var isTodayCell = key === todayYmd;
+            var isSel = selectedKey === key;
+            var isOutside = cell.m !== month;
+            var dowPlain = seoulDowSun0FromYmd(key);
+            var dayNumClass = 'relative z-10 tabular-nums ';
+            if (isOutside) {
+              dayNumClass += 'text-slate-400 opacity-40';
+            } else if (hasRide) {
+              dayNumClass += 'text-white font-semibold';
+            } else if (dowPlain === 0) {
+              dayNumClass += 'text-red-600 font-semibold';
+            } else if (dowPlain === 6) {
+              dayNumClass += 'text-blue-600 font-semibold';
+            } else {
+              dayNumClass += 'text-slate-800';
+            }
+            return (
+              <button
+                type="button"
+                key={key + '-' + idx}
+                onClick={function () { setSelectedKey(key); }}
+                className={
+                  'open-riding-cal-day relative overflow-visible ' + (isOutside ? 'opacity-60 ' : '') +
+                  'h-9 rounded-lg text-sm flex items-center justify-center transition hover:bg-slate-50 ' +
+                  (isTodayCell ? 'open-riding-cal-day--today ' : '') +
+                  (isTodayCell && hasRide ? 'open-riding-cal-day--today-with-ride ' : '')
+                }
+              >
+                {hasRide ? (
+                  <span
+                    className="absolute z-[1] rounded-full pointer-events-none border bg-violet-600 border-violet-700/45"
+                    style={openRidingCalBadgeCircleStyle}
+                    aria-hidden
+                  />
+                ) : null}
+                {isSel ? (
+                  <span
+                    className="absolute z-[15] rounded-full border-2 border-violet-500 pointer-events-none"
+                    style={openRidingCalSelectRingStyle}
+                    aria-hidden
+                  />
+                ) : null}
+                <span className={dayNumClass + (isTodayCell ? ' open-riding-cal-today-num' : '')}>{cell.day}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div
+          className="mt-3 rounded-xl p-3 border-2 border-slate-400 bg-slate-50/80 shadow-sm open-riding-selected-day-list-panel"
+        >
+          <h4 className="text-sm font-semibold text-slate-800 mb-2 m-0">
+            {selectedKey ? formatMdDowFromYmdSeoul(selectedKey) || selectedKey : '날짜를 선택하세요'}
+          </h4>
+          {!selectedKey ? (
+            <p className="text-sm text-slate-400 m-0">달력에서 날짜를 탭하면 목록이 표시됩니다.</p>
+          ) : ridesForSelectedDay.length === 0 ? (
+            <p className="text-sm text-slate-400 m-0">이 날 등록된 모임이 없습니다.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto m-0 p-0 list-none">
+              {ridesForSelectedDay.map(function (r) {
+                return (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      className="w-full text-left py-2 px-1 text-sm text-slate-700 hover:bg-slate-100 rounded-lg flex items-center justify-between gap-2"
+                      onClick={function () { onSelectRide(r.id); }}
+                    >
+                      <span className="truncate">{r.title || '(제목 없음)'}</span>
+                      <span className="text-xs text-slate-400 shrink-0">{r.departureTime || ''}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /** 생성·수정 폼 — editRideId 있으면 수정 모드 */
 function OpenRidingCreateForm(props) {
   var _svcForm = getOpenRidingServiceFns();
@@ -5128,6 +5354,7 @@ function OpenRidingCreateForm(props) {
   var sourceRideId = editRideId || copyFromRideId;
   var isCopyMode = !!copyFromRideId && !editRideId;
   var initialInviteSelected = props.initialInviteSelected || null;
+  var presetGroupId = String(props.presetGroupId || '').trim();
   var onCreated = props.onCreated || function () {};
   var onEditSaved = props.onEditSaved || function () {};
   var onEditNavMoim = props.onEditNavMoim;
@@ -5809,6 +6036,9 @@ function OpenRidingCreateForm(props) {
           hostName: form.hostName,
           contactInfo: form.contactInfo,
           isContactPublic: !!form.isContactPublic,
+          /* 클럽/크루 상세의 "모임 생성"으로 들어온 경우에만 채워짐(수정 시에는 항상 빈 문자열이라
+             updateRideByHost가 무시함 — createRide에서만 실제로 저장됨). */
+          groupId: presetGroupId,
           region: form.region,
           gpxUrl: gpxUrl,
           isPrivate: !!form.isPrivate,
@@ -11748,6 +11978,52 @@ function OpenRidingGroupDetailView(props) {
 
   var detailShellClass = 'w-full max-w-lg mx-auto';
 
+  /* 수정·그룹 삭제 버튼을 화면 상단 제목 우측으로 옮기면서, 실제 표시 여부·권한 판단(owner·
+     admin·승인 상태)은 여기(자식)만 알고 있는데 버튼은 부모(화면 헤더)가 그려야 해서, 매
+     렌더마다 부모에게 현재 상태를 올려보낸다(React Navigation의 setOptions와 같은 패턴).
+     조건부 return(!detailReady, !grp) 이전에 선언해야 훅 호출 순서가 매 렌더 동일하게 유지된다. */
+  useEffect(
+    function () {
+      if (typeof props.onHeaderActionsChange !== 'function') return undefined;
+      if (!grp) {
+        props.onHeaderActionsChange(null);
+        return undefined;
+      }
+      var stEarly = String(grp.status || '');
+      var approvedEarly = stEarly === GROUP_ST.APPROVED;
+      var pendingEarly = stEarly === GROUP_ST.PENDING;
+      var canEdit = false;
+      var canDelete = false;
+      if (pendingEarly && isOwner) {
+        canEdit = true;
+        canDelete = canDeletePendingGroup;
+      } else if ((isOwner || isAdmin) && approvedEarly) {
+        canEdit = true;
+        canDelete = isAdmin || canDeletePendingGroup;
+      } else if (isAdmin && !approvedEarly && !isOwner) {
+        canEdit = true;
+        canDelete = true;
+      }
+      if (!canEdit) {
+        props.onHeaderActionsChange(null);
+        return undefined;
+      }
+      props.onHeaderActionsChange({
+        onEdit: onEdit,
+        onDelete: requestDeleteGroup,
+        canDelete: canDelete,
+        busy: busy
+      });
+      return undefined;
+    },
+    [grp, isOwner, isAdmin, canDeletePendingGroup, busy]
+  );
+  useEffect(function () {
+    return function () {
+      if (typeof props.onHeaderActionsChange === 'function') props.onHeaderActionsChange(null);
+    };
+  }, []);
+
   if (!detailReady) {
     return (
       <div className={detailShellClass}>
@@ -11791,12 +12067,12 @@ function OpenRidingGroupDetailView(props) {
     loadOpenRidingInviteSelectedFromGroupMembersAsync(firestore, members, memberProfiles, userId)
       .then(function (rows) {
         if (typeof onCreateRide === 'function') {
-          onCreateRide(rows, grp && grp.name ? String(grp.name) : '');
+          onCreateRide(rows, grp && grp.name ? String(grp.name) : '', groupId);
         }
       })
       .catch(function () {
         if (typeof onCreateRide === 'function') {
-          onCreateRide([], grp && grp.name ? String(grp.name) : '');
+          onCreateRide([], grp && grp.name ? String(grp.name) : '', groupId);
         }
       })
       .finally(function () {
@@ -11860,36 +12136,12 @@ function OpenRidingGroupDetailView(props) {
             <p className="text-sm text-slate-400 mt-3 m-0">등록된 소개가 없습니다.</p>
           )}
           {pending && isOwner ? (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-3 space-y-3">
+            /* 수정·그룹 삭제 버튼은 화면 상단 제목 우측으로 이동(2026-08) — 여기는 안내 문구만 남긴다. */
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-3 space-y-2">
               <p className="text-xs text-amber-950 m-0 leading-snug">
-                관리자 승인 전입니다. 아래에서 <strong>수정</strong>을 하거나, 조건을 만족하면{' '}
-                <strong>그룹 삭제</strong>를 할 수 있습니다.
+                관리자 승인 전입니다. 상단의 <strong>수정</strong> 버튼으로 내용을 바꾸거나, 조건을 만족하면{' '}
+                <strong>삭제</strong> 버튼으로 그룹을 삭제할 수 있습니다.
               </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 disabled:opacity-50"
-                  disabled={!!busy}
-                  onClick={function () {
-                    onEdit();
-                  }}
-                >
-                  수정
-                </button>
-                <button
-                  type="button"
-                  className={
-                    'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm ' +
-                    (canDeletePendingGroup && !busy
-                      ? 'border-red-300 bg-white text-red-700 hover:bg-red-50'
-                      : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed')
-                  }
-                  disabled={!canDeletePendingGroup || !!busy}
-                  onClick={requestDeleteGroup}
-                >
-                  그룹 삭제
-                </button>
-              </div>
               {!canDeletePendingGroup ? (
                 <p className="text-[11px] text-amber-900/85 m-0 leading-snug">
                   삭제는 방장(본인) 멤버만 있는 상태이고, 다른 멤버·가입 신청 대기자가 없을 때만 가능합니다.
@@ -11898,72 +12150,33 @@ function OpenRidingGroupDetailView(props) {
             </div>
           ) : null}
           {(isOwner || isAdmin) && approved ? (
-            <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/90 px-3 py-3 space-y-3">
-              <p className="text-xs text-violet-950 m-0 leading-snug font-semibold">관리자 메뉴</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 disabled:opacity-50"
-                  disabled={!!busy}
-                  onClick={function () {
-                    onEdit();
-                  }}
-                >
-                  수정
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-violet-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
-                  disabled={!!busy}
-                  onClick={handleCreateRideFromGroup}
-                >
-                  {moimCopy.groupDetailCreateBtn}
-                </button>
-                <button
-                  type="button"
-                  className={
-                    'inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold shadow-sm disabled:opacity-50 ' +
-                    (isAdmin || canDeletePendingGroup
-                      ? 'border-red-300 bg-white text-red-700 hover:bg-red-50'
-                      : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed')
-                  }
-                  disabled={!!busy || (!isAdmin && !canDeletePendingGroup)}
-                  onClick={requestDeleteGroup}
-                >
-                  그룹 삭제
-                </button>
-              </div>
+            <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/90 px-3 py-3 space-y-2">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-violet-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
+                disabled={!!busy}
+                onClick={handleCreateRideFromGroup}
+              >
+                {moimCopy.groupDetailCreateBtn}
+              </button>
               <p className="text-[11px] text-violet-900/85 m-0 leading-snug">
                 {moimCopy.groupDetailCreateHint}
               </p>
             </div>
-          ) : isAdmin && !approved && !isOwner ? (
-            <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/90 px-3 py-3 space-y-3">
-              <p className="text-xs text-violet-950 m-0 leading-snug font-semibold">관리자 메뉴</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 disabled:opacity-50"
-                  disabled={!!busy}
-                  onClick={function () {
-                    onEdit();
-                  }}
-                >
-                  수정
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:opacity-50"
-                  disabled={!!busy}
-                  onClick={requestDeleteGroup}
-                >
-                  그룹 삭제
-                </button>
-              </div>
-            </div>
           ) : null}
         </div>
       </div>
+      {approved ? (
+        <OpenRidingGroupCalendarSection
+          firestore={firestore}
+          userId={userId}
+          groupId={groupId}
+          moimCopy={moimCopy}
+          onSelectRide={function (rideId) {
+            if (typeof props.onSelectGroupRide === 'function') props.onSelectGroupRide(rideId);
+          }}
+        />
+      ) : null}
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
         <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header">
@@ -12548,6 +12761,15 @@ function OpenRidingRoomApp(props) {
   var _groupInviteSeed = useState(null);
   var groupInviteSeed = _groupInviteSeed[0];
   var setGroupInviteSeed = _groupInviteSeed[1];
+  /** 클럽/크루 상세 "모임 생성"으로 만들 때만 채움 — 생성 시 rides.groupId로 저장돼 그 그룹
+      상세의 캘린더가 자신의 모임만 필터링해서 보여줄 수 있게 한다. */
+  var _createFromGroupId = useState('');
+  var createFromGroupId = _createFromGroupId[0];
+  var setCreateFromGroupId = _createFromGroupId[1];
+  /** 클럽/크루 상세 화면이 자신의 수정·삭제 권한 상태를 화면 상단 제목 우측 버튼에 올려보내는 곳 */
+  var _groupHeaderActions = useState(null);
+  var groupDetailHeaderActions = _groupHeaderActions[0];
+  var setGroupDetailHeaderActions = _groupHeaderActions[1];
   var _gfd = useState(null);
   var detailGroupId = _gfd[0];
   var setDetailGroupId = _gfd[1];
@@ -12682,18 +12904,26 @@ function OpenRidingRoomApp(props) {
         userId={effectiveUserId}
         groupId={detailGroupId}
         moimCopy={moimCopy}
+        onHeaderActionsChange={setGroupDetailHeaderActions}
         onBack={function () {
+          setGroupDetailHeaderActions(null);
           setDetailGroupId(null);
           setView('groups');
         }}
         onEdit={function () {
           setView('groupEdit');
         }}
-        onCreateRide={function (inviteRows) {
+        onCreateRide={function (inviteRows, groupName, groupIdForRide) {
           setGroupInviteSeed(Array.isArray(inviteRows) ? inviteRows : []);
+          setCreateFromGroupId(String(groupIdForRide || '').trim());
           setCopyFromRideId(null);
           setDetailRideId(null);
           setView('create');
+        }}
+        onSelectGroupRide={function (rideId) {
+          setGroupDetailHeaderActions(null);
+          setDetailRideId(rideId);
+          setView('detail');
         }}
       />
     );
@@ -12753,8 +12983,10 @@ function OpenRidingRoomApp(props) {
         moimCategory={clubCategory}
         moimCopy={moimCopy}
         initialInviteSelected={groupInviteSeed}
+        presetGroupId={createFromGroupId}
         onCreated={function () {
           setGroupInviteSeed(null);
+          setCreateFromGroupId('');
           setView('main');
         }}
       />
@@ -12929,6 +13161,7 @@ function OpenRidingRoomApp(props) {
                   return;
                 }
                 setGroupInviteSeed(null);
+                setCreateFromGroupId('');
                 if (detailGroupId) {
                   setView('groupDetail');
                   return;
@@ -12963,7 +13196,32 @@ function OpenRidingRoomApp(props) {
           <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
             {headerTitle}
           </h1>
-          <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
+          {view === 'groupDetail' && groupDetailHeaderActions ? (
+            <div className="shrink-0 flex items-center gap-1">
+              <button
+                type="button"
+                className="open-riding-action-btn inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100/90 disabled:opacity-50"
+                disabled={!!groupDetailHeaderActions.busy}
+                onClick={groupDetailHeaderActions.onEdit}
+                aria-label={moimCopy.groupDetailTitle + ' 수정'}
+                title="수정"
+              >
+                <img src="assets/img/edit2.png" alt="" width={20} height={20} className="block object-contain" decoding="async" />
+              </button>
+              <button
+                type="button"
+                className="open-riding-action-btn inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100/90 disabled:opacity-50"
+                disabled={!!groupDetailHeaderActions.busy || !groupDetailHeaderActions.canDelete}
+                onClick={groupDetailHeaderActions.onDelete}
+                aria-label="그룹 삭제"
+                title="그룹 삭제"
+              >
+                <img src="assets/img/delete2.png" alt="" width={20} height={20} className="block object-contain" decoding="async" />
+              </button>
+            </div>
+          ) : (
+            <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
+          )}
         </div>
       </div>
       {/* 스크롤 전용 본문: pseudo는 pointer-events:none. 메인·필터는 글래스 하단 네비만큼 하단 여백(style.css) */}
@@ -13020,6 +13278,7 @@ function OpenRidingRoomApp(props) {
           onCreate={function () {
             setDetailGroupId(null);
             setGroupInviteSeed(null);
+            setCreateFromGroupId('');
             setView('create');
           }}
           onGroups={function () {

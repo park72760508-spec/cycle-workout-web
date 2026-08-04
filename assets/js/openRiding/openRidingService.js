@@ -712,6 +712,9 @@ export async function createRide(db, hostUserId, input) {
     hostName: String(input.hostName || ''),
     contactInfo: String(input.contactInfo || ''),
     isContactPublic: !!input.isContactPublic,
+    /* 클럽/크루 상세의 "모임 생성" 버튼으로 만든 경우에만 채워짐 — 그 그룹 상세의 캘린더가
+       이 값으로 자신의 모임만 필터링해서 보여준다(2026-08). */
+    groupId: String(input.groupId || '').trim(),
     gpxUrl: input.gpxUrl != null ? String(input.gpxUrl) : null,
     region: String(input.region || ''),
     isPrivate,

@@ -85,6 +85,7 @@ function adaptOpenRideToFirestoreDoc(row, participants) {
     hostName: str(row.host_name) || "",
     contactInfo: str(row.contact_info) || "",
     isContactPublic: Boolean(row.is_contact_public),
+    groupId: str(row.group_firestore_doc_id) || "",
     gpxUrl: str(row.gpx_url),
     region: str(row.region) || "",
     isPrivate: Boolean(row.is_private),

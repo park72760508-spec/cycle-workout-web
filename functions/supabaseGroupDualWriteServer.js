@@ -235,6 +235,8 @@ function mapFirestoreOpenRideToRows(firestoreDocId, d) {
     host_name: str(d.hostName) || "",
     contact_info: str(d.contactInfo) || "",
     is_contact_public: Boolean(d.isContactPublic),
+    /* 클럽/크루 상세에서 "모임 생성"으로 만든 라이딩만 채워짐 — 일반 생성은 null(2026-08) */
+    group_firestore_doc_id: str(d.groupId) || null,
     gpx_url: str(d.gpxUrl),
     region: str(d.region) || "",
     status,
