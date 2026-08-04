@@ -3016,20 +3016,19 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
           ) : null}
             </>
           )}
-          <span className="relative inline-block min-w-0 max-w-full align-middle">
-            <span className="truncate block">{r.title}</span>
-            {groupBadgeUrl ? (
-              /* 클럽/크루에서 생성된 모임 — 제목 끝 우측 상단에 그 클럽/크루의 원형 아바타를
-                 배지로 얹는다. 크기는 제목 앞 상태 아이콘(범례, 18px)과 동일하게 맞춘다(2026-08). */
-              <span
-                className="absolute -top-1.5 -right-1.5 h-[18px] w-[18px] shrink-0 rounded-full overflow-hidden ring-1 ring-white shadow-sm bg-slate-100 pointer-events-none"
-                title="클럽·크루 모임"
-                aria-hidden
-              >
-                <img src={groupBadgeUrl} alt="" className="h-full w-full object-cover" decoding="async" />
-              </span>
-            ) : null}
-          </span>
+          <span className="truncate">{r.title}</span>
+          {groupBadgeUrl ? (
+            /* 클럽/크루에서 생성된 모임 — 제목 끝 글자 뒤에 그 클럽/크루의 원형 아바타를
+               글자와 수평으로(코너 오버레이가 아니라 인라인으로) 배치한다. 크기는 제목 앞
+               상태 아이콘(범례, 18px)과 동일하게 맞춘다(2026-08). */
+            <span
+              className="shrink-0 h-[18px] w-[18px] rounded-full overflow-hidden ring-1 ring-white shadow-sm bg-slate-100"
+              title="클럽·크루 모임"
+              aria-hidden
+            >
+              <img src={groupBadgeUrl} alt="" className="h-full w-full object-cover" decoding="async" />
+            </span>
+          ) : null}
         </div>
         <div
           className={
@@ -13434,10 +13433,10 @@ function OpenRidingRoomApp(props) {
             {headerTitle}
           </h1>
           {view === 'groupDetail' && groupDetailHeaderActions ? (
-            /* 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭이라 우측 칸이 36px뿐이다.
-               아이콘을 30% 확대(13px -> 17px)하는 대신 gap을 2px로 좁혀 36px 안에 맞춘다
-               (17+2+17=36, 2026-08). */
-            <div className="shrink-0 flex items-center justify-end gap-0.5">
+            /* 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭(우측 칸 36px)이지만, 요청대로
+               간격을 기존 2px의 2배(4px)로 늘린다 — 17+4+17=38px로 2px 정도만 살짝 넘친다
+               (2026-08, 아이콘이 워낙 작아 시각적으로는 무리 없음). */
+            <div className="shrink-0 flex items-center justify-end gap-1">
               <button
                 type="button"
                 className="p-0 m-0 border-0 bg-transparent inline-flex items-center justify-center disabled:opacity-50"
