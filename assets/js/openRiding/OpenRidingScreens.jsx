@@ -5121,6 +5121,9 @@ function OpenRidingGroupCalendarSection(props) {
   var groupId = props.groupId || '';
   var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
   var onSelectRide = props.onSelectRide || function () {};
+  var canCreate = !!props.canCreate;
+  var createBusy = !!props.createBusy;
+  var onCreateClick = props.onCreateClick || function () {};
 
   var _m = useState(function () { return new Date(); });
   var viewMonth = _m[0];
@@ -5212,8 +5215,23 @@ function OpenRidingGroupCalendarSection(props) {
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card mt-4">
-      <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header">
+      <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-800 m-0">{moimCopy.screenTitle} 캘린더</h3>
+        {canCreate ? (
+          <button
+            type="button"
+            className="open-riding-action-btn shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full border-0 text-white disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+            disabled={createBusy}
+            onClick={onCreateClick}
+            title={moimCopy.groupDetailCreateBtn}
+            aria-label={moimCopy.groupDetailCreateBtn}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.6" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        ) : null}
       </div>
       <div className="stelvio-category-body p-3">
         <div className="flex items-center justify-between mb-3 gap-2">
@@ -11551,6 +11569,12 @@ function OpenRidingGroupDetailView(props) {
   );
 
   var isOwner = grp && String(grp.createdBy || '') === String(userId);
+  var isMember = !!(
+    userId &&
+    members.some(function (m) {
+      return String((m && m.userId) || '') === String(userId);
+    })
+  );
 
   var createdByUid = grp ? String(grp.createdBy || '') : '';
   var nonOwnerMemberCount = useMemo(
@@ -12129,23 +12153,6 @@ function OpenRidingGroupDetailView(props) {
                 </span>
               ) : null}
             </div>
-            {(isOwner || isAdmin) && approved ? (
-              /* 아바타·이름 라인 우측 빠른 모임 생성 — 아래쪽 "모임 생성" 버튼과 동일 동작,
-                 메인 달력 화면의 원형 + 생성 버튼과 동일한 디자인의 인라인 버전(2026-08). */
-              <button
-                type="button"
-                className="open-riding-action-btn shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-full border-0 text-white shadow-sm disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-                disabled={!!busy}
-                onClick={handleCreateRideFromGroup}
-                title={moimCopy.groupDetailCreateBtn}
-                aria-label={moimCopy.groupDetailCreateBtn}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
-            ) : null}
           </div>
           {grp.intro ? (
             <p className="text-sm text-slate-700 mt-3 whitespace-pre-wrap m-0 leading-relaxed">{String(grp.intro)}</p>
@@ -12166,21 +12173,6 @@ function OpenRidingGroupDetailView(props) {
               ) : null}
             </div>
           ) : null}
-          {(isOwner || isAdmin) && approved ? (
-            <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/90 px-3 py-3 space-y-2">
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-lg border border-violet-500 bg-violet-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
-                disabled={!!busy}
-                onClick={handleCreateRideFromGroup}
-              >
-                {moimCopy.groupDetailCreateBtn}
-              </button>
-              <p className="text-[11px] text-violet-900/85 m-0 leading-snug">
-                {moimCopy.groupDetailCreateHint}
-              </p>
-            </div>
-          ) : null}
         </div>
       </div>
       {approved ? (
@@ -12189,6 +12181,9 @@ function OpenRidingGroupDetailView(props) {
           userId={userId}
           groupId={groupId}
           moimCopy={moimCopy}
+          canCreate={isMember}
+          createBusy={busy}
+          onCreateClick={handleCreateRideFromGroup}
           onSelectRide={function (rideId) {
             if (typeof props.onSelectGroupRide === 'function') props.onSelectGroupRide(rideId);
           }}
