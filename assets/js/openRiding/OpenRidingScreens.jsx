@@ -5321,14 +5321,23 @@ function OpenRidingGroupCalendarSection(props) {
         {canCreate ? (
           <button
             type="button"
-            className="open-riding-action-btn shrink-0 inline-flex h-[19.6px] w-[19.6px] items-center justify-center rounded-full border-0 text-white disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+            className="open-riding-action-btn shrink-0 inline-flex items-center justify-center rounded-full border-0 text-white disabled:opacity-50"
+            /* .open-riding-action-btn에 min-width/min-height:48px가 걸려 있어 Tailwind 크기
+               클래스로는 안 줄어든다 — 인라인 스타일로 덮어써서 캘린더 모임 배지 원(32px,
+               openRidingCalBadgeCircleStyle)과 동일한 크기로 맞춘다(2026-08). */
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              width: '32px',
+              height: '32px',
+              minWidth: '32px',
+              minHeight: '32px'
+            }}
             disabled={createBusy}
             onClick={onCreateClick}
             title={moimCopy.groupDetailCreateBtn}
             aria-label={moimCopy.groupDetailCreateBtn}
           >
-            <svg className="w-[11.2px] h-[11.2px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.6" d="M12 4v16m8-8H4" />
             </svg>
           </button>
@@ -13346,9 +13355,10 @@ function OpenRidingRoomApp(props) {
             {headerTitle}
           </h1>
           {view === 'groupDetail' && groupDetailHeaderActions ? (
-            /* 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭이라, 우측 칸(36px)에 버튼
-               2개를 넣으려면 테두리·배경 없는 순수 이미지로만 작게 배치해야 줄바꿈되지 않는다. */
-            <div className="shrink-0 flex items-center justify-end gap-0.5">
+            /* 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭이라 우측 칸이 36px뿐이다.
+               테두리 있던 시절과 비슷한 손가락 간격을 주기 위해 아이콘을 13px로 줄이고 그
+               사이 gap을 8px로 넓혀서(13+8+13=34px) 36px 안에서 오조작 여지를 줄인다(2026-08). */
+            <div className="shrink-0 flex items-center justify-end gap-2">
               <button
                 type="button"
                 className="p-0 m-0 border-0 bg-transparent inline-flex items-center justify-center disabled:opacity-50"
@@ -13357,7 +13367,7 @@ function OpenRidingRoomApp(props) {
                 aria-label={moimCopy.groupDetailTitle + ' 수정'}
                 title="수정"
               >
-                <img src="assets/img/edit2.png" alt="" width={16} height={16} className="block object-contain" decoding="async" />
+                <img src="assets/img/edit2.png" alt="" width={13} height={13} className="block object-contain" decoding="async" />
               </button>
               <button
                 type="button"
@@ -13367,7 +13377,7 @@ function OpenRidingRoomApp(props) {
                 aria-label="그룹 삭제"
                 title="그룹 삭제"
               >
-                <img src="assets/img/delete2.png" alt="" width={16} height={16} className="block object-contain" decoding="async" />
+                <img src="assets/img/delete2.png" alt="" width={13} height={13} className="block object-contain" decoding="async" />
               </button>
             </div>
           ) : (
