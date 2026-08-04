@@ -3896,7 +3896,7 @@ function OpenRidingCalendarMain(props) {
         var id = r != null && r.id != null ? String(r.id) : '';
         if (!id || seen[id]) return;
         if (String(r.rideStatus || 'active') === 'cancelled') return;
-        var parts = openRideIdsFromFirestoreListField(r.participants);
+        var parts = openRidingIdsFromFirestoreListFieldShared(r.participants);
         var inPart = parts.some(function (p) {
           return String(p) === uid;
         });
