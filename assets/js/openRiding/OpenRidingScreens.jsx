@@ -5321,14 +5321,14 @@ function OpenRidingGroupCalendarSection(props) {
         {canCreate ? (
           <button
             type="button"
-            className="open-riding-action-btn shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full border-0 text-white disabled:opacity-50"
+            className="open-riding-action-btn shrink-0 inline-flex h-[19.6px] w-[19.6px] items-center justify-center rounded-full border-0 text-white disabled:opacity-50"
             style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
             disabled={createBusy}
             onClick={onCreateClick}
             title={moimCopy.groupDetailCreateBtn}
             aria-label={moimCopy.groupDetailCreateBtn}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="w-[11.2px] h-[11.2px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.6" d="M12 4v16m8-8H4" />
             </svg>
           </button>
@@ -12140,6 +12140,51 @@ function OpenRidingGroupDetailView(props) {
 
   var detailShellClass = 'w-full max-w-lg mx-auto';
 
+  /* 수정·그룹 삭제 버튼을 화면 상단 제목과 같은 줄에 두기 위해, 표시 여부·권한 판단은
+     여기(자식)만 알고 있으니 매 렌더 부모(화면 헤더)에게 올려보낸다. 조건부 return
+     (!detailReady, !grp) 이전에 선언해야 훅 호출 순서가 매 렌더 동일하게 유지된다. */
+  useEffect(
+    function () {
+      if (typeof props.onHeaderActionsChange !== 'function') return undefined;
+      if (!grp) {
+        props.onHeaderActionsChange(null);
+        return undefined;
+      }
+      var stEarly = String(grp.status || '');
+      var approvedEarly = stEarly === GROUP_ST.APPROVED;
+      var pendingEarly = stEarly === GROUP_ST.PENDING;
+      var canEdit = false;
+      var canDelete = false;
+      if (pendingEarly && isOwner) {
+        canEdit = true;
+        canDelete = canDeletePendingGroup;
+      } else if ((isOwner || isAdmin) && approvedEarly) {
+        canEdit = true;
+        canDelete = isAdmin || canDeletePendingGroup;
+      } else if (isAdmin && !approvedEarly && !isOwner) {
+        canEdit = true;
+        canDelete = true;
+      }
+      if (!canEdit) {
+        props.onHeaderActionsChange(null);
+        return undefined;
+      }
+      props.onHeaderActionsChange({
+        onEdit: onEdit,
+        onDelete: requestDeleteGroup,
+        canDelete: canDelete,
+        busy: busy
+      });
+      return undefined;
+    },
+    [grp, isOwner, isAdmin, canDeletePendingGroup, busy]
+  );
+  useEffect(function () {
+    return function () {
+      if (typeof props.onHeaderActionsChange === 'function') props.onHeaderActionsChange(null);
+    };
+  }, []);
+
   if (!detailReady) {
     return (
       <div className={detailShellClass}>
@@ -12177,23 +12222,6 @@ function OpenRidingGroupDetailView(props) {
   var regLine = regionLineFromRegions(grp.regions);
   var canModerateJoin = approved && (isOwner || isAdmin);
 
-  /* 수정·그룹 삭제 아이콘 버튼 표시 여부·삭제 가능 여부 — 예전 "관리자 메뉴" 박스 3종과 동일한
-     권한 분기를 그대로 유지한다. 화면 상단 앱 헤더에 두면 뒤로가기 버튼·중앙 타이틀과 함께
-     좁은 한 줄에 끼어 삭제 버튼이 화면 밖으로 밀려나는 문제가 있어(2026-08), 이 화면 자체의
-     콘텐츠 폭(모임 캘린더 블럭과 동일한 max-w-lg) 안에서 우측 정렬한다. */
-  var canEditGroup = false;
-  var canDeleteGroup = false;
-  if (pending && isOwner) {
-    canEditGroup = true;
-    canDeleteGroup = canDeletePendingGroup;
-  } else if ((isOwner || isAdmin) && approved) {
-    canEditGroup = true;
-    canDeleteGroup = isAdmin || canDeletePendingGroup;
-  } else if (isAdmin && !approved && !isOwner) {
-    canEditGroup = true;
-    canDeleteGroup = true;
-  }
-
   function handleCreateRideFromGroup() {
     if (busy) return;
     setBusy(true);
@@ -12215,32 +12243,6 @@ function OpenRidingGroupDetailView(props) {
 
   return (
     <div className={detailShellClass + ' space-y-4 pb-6 text-left'}>
-      {canEditGroup ? (
-        <div className="flex items-center justify-end gap-1.5">
-          <button
-            type="button"
-            className="open-riding-action-btn inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-            disabled={!!busy}
-            onClick={function () {
-              onEdit();
-            }}
-            aria-label={moimCopy.groupDetailTitle + ' 수정'}
-            title="수정"
-          >
-            <img src="assets/img/edit2.png" alt="" width={20} height={20} className="block object-contain" decoding="async" />
-          </button>
-          <button
-            type="button"
-            className="open-riding-action-btn inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-            disabled={!!busy || !canDeleteGroup}
-            onClick={requestDeleteGroup}
-            aria-label="그룹 삭제"
-            title="그룹 삭제"
-          >
-            <img src="assets/img/delete2.png" alt="" width={20} height={20} className="block object-contain" decoding="async" />
-          </button>
-        </div>
-      ) : null}
       <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative isolate bg-white">
         {grp.photoUrl ? (
           <>
@@ -12913,6 +12915,10 @@ function OpenRidingRoomApp(props) {
   var _createFromGroupId = useState('');
   var createFromGroupId = _createFromGroupId[0];
   var setCreateFromGroupId = _createFromGroupId[1];
+  /** 클럽/크루 상세 화면이 자신의 수정·삭제 권한 상태를 화면 상단 제목 라인 버튼에 올려보내는 곳 */
+  var _groupHeaderActions = useState(null);
+  var groupDetailHeaderActions = _groupHeaderActions[0];
+  var setGroupDetailHeaderActions = _groupHeaderActions[1];
   var _gfd = useState(null);
   var detailGroupId = _gfd[0];
   var setDetailGroupId = _gfd[1];
@@ -13047,7 +13053,9 @@ function OpenRidingRoomApp(props) {
         userId={effectiveUserId}
         groupId={detailGroupId}
         moimCopy={moimCopy}
+        onHeaderActionsChange={setGroupDetailHeaderActions}
         onBack={function () {
+          setGroupDetailHeaderActions(null);
           setDetailGroupId(null);
           setView('groups');
         }}
@@ -13062,6 +13070,7 @@ function OpenRidingRoomApp(props) {
           setView('create');
         }}
         onSelectGroupRide={function (rideId) {
+          setGroupDetailHeaderActions(null);
           setDetailRideId(rideId);
           setView('detail');
         }}
@@ -13336,7 +13345,34 @@ function OpenRidingRoomApp(props) {
           <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
             {headerTitle}
           </h1>
-          <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
+          {view === 'groupDetail' && groupDetailHeaderActions ? (
+            /* 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭이라, 우측 칸(36px)에 버튼
+               2개를 넣으려면 테두리·배경 없는 순수 이미지로만 작게 배치해야 줄바꿈되지 않는다. */
+            <div className="shrink-0 flex items-center justify-end gap-0.5">
+              <button
+                type="button"
+                className="p-0 m-0 border-0 bg-transparent inline-flex items-center justify-center disabled:opacity-50"
+                disabled={!!groupDetailHeaderActions.busy}
+                onClick={groupDetailHeaderActions.onEdit}
+                aria-label={moimCopy.groupDetailTitle + ' 수정'}
+                title="수정"
+              >
+                <img src="assets/img/edit2.png" alt="" width={16} height={16} className="block object-contain" decoding="async" />
+              </button>
+              <button
+                type="button"
+                className="p-0 m-0 border-0 bg-transparent inline-flex items-center justify-center disabled:opacity-50"
+                disabled={!!groupDetailHeaderActions.busy || !groupDetailHeaderActions.canDelete}
+                onClick={groupDetailHeaderActions.onDelete}
+                aria-label="그룹 삭제"
+                title="그룹 삭제"
+              >
+                <img src="assets/img/delete2.png" alt="" width={16} height={16} className="block object-contain" decoding="async" />
+              </button>
+            </div>
+          ) : (
+            <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
+          )}
         </div>
       </div>
       {/* 스크롤 전용 본문: pseudo는 pointer-events:none. 메인·필터는 글래스 하단 네비만큼 하단 여백(style.css) */}
