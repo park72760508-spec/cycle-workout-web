@@ -11906,6 +11906,9 @@ function OpenRidingGroupDetailView(props) {
   var _rankByCategory = useState(null);
   var rankByCategory = _rankByCategory[0];
   var setRankByCategory = _rankByCategory[1];
+  var _rankLoading = useState(false);
+  var rankLoading = _rankLoading[0];
+  var setRankLoading = _rankLoading[1];
 
   useEffect(
     function () {
@@ -11913,9 +11916,12 @@ function OpenRidingGroupDetailView(props) {
       var api = typeof window !== 'undefined' ? window.runningRankingApi : null;
       if (!api || typeof api.fetchLeaderboard !== 'function') return undefined;
       var cancelled = false;
+      setRankLoading(true);
       api.fetchLeaderboard({}).then(
         function (res) {
-          if (cancelled || !res || !res.success) return;
+          if (cancelled) return;
+          setRankLoading(false);
+          if (!res || !res.success) return;
           setRankLeaderboardRows(Array.isArray(res.rows) ? res.rows : []);
           setRankMovementInfo({
             rankMovementByKey: res.rankMovementByKey || {},
@@ -11925,7 +11931,9 @@ function OpenRidingGroupDetailView(props) {
             leaderboardAsOfSeoul: res.leaderboardAsOfSeoul || ''
           });
         },
-        function () {}
+        function () {
+          if (!cancelled) setRankLoading(false);
+        }
       );
       return function () {
         cancelled = true;
@@ -11940,12 +11948,17 @@ function OpenRidingGroupDetailView(props) {
       var api = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
       if (!api || typeof api.fetchClubRanking !== 'function') return undefined;
       var cancelled = false;
+      setRankLoading(true);
       api.fetchClubRanking({ metric: rankMetric, gender: rankGender }).then(
         function (json) {
-          if (cancelled || !json) return;
+          if (cancelled) return;
+          setRankLoading(false);
+          if (!json) return;
           setRankByCategory(json.byCategory || null);
         },
-        function () {}
+        function () {
+          if (!cancelled) setRankLoading(false);
+        }
       );
       return function () {
         cancelled = true;
@@ -12651,7 +12664,17 @@ function OpenRidingGroupDetailView(props) {
         </div>
       ) : null}
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
+      <section className="relative rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
+        {showRankFilter && rankLoading ? (
+          <div
+            className="open-riding-action-busy-overlay absolute inset-0 z-10 flex flex-col items-center justify-center gap-2"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <div className="open-riding-action-busy-spinner" aria-hidden />
+            <p className="open-riding-loading-text m-0">순위 집계 중....</p>
+          </div>
+        ) : null}
         <div className="bg-violet-100 border-b border-violet-200/60 px-2 sm:px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
           <span className="flex items-center gap-2">
