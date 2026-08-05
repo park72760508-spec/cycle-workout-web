@@ -11887,6 +11887,9 @@ function OpenRidingGroupDetailView(props) {
   var _rankCategory = useState('Supremo');
   var rankCategory = _rankCategory[0];
   var setRankCategory = _rankCategory[1];
+  var _rankPaceDistance = useState('1k');
+  var rankPaceDistance = _rankPaceDistance[0];
+  var setRankPaceDistance = _rankPaceDistance[1];
   var _leaderboardRows = useState([]);
   var rankLeaderboardRows = _leaderboardRows[0];
   var setRankLeaderboardRows = _leaderboardRows[1];
@@ -11932,6 +11935,7 @@ function OpenRidingGroupDetailView(props) {
         metric: rankMetric,
         gender: rankGender,
         category: rankCategory,
+        paceDistance: rankPaceDistance,
         movement: mv
       });
       /* buildCrewMemberRankedList는 선택한 필터에 해당하는 유효 점수가 없는 멤버를 목록에서
@@ -11967,7 +11971,7 @@ function OpenRidingGroupDetailView(props) {
       });
       return ranked.concat(placeholders);
     },
-    [isRunGroup, rankLeaderboardRows, members, rankMetric, rankGender, rankCategory, rankMovementInfo]
+    [isRunGroup, rankLeaderboardRows, members, rankMetric, rankGender, rankCategory, rankPaceDistance, rankMovementInfo]
   );
 
   function openGroupDetailAvatarZoom(src, name) {
@@ -12572,6 +12576,26 @@ function OpenRidingGroupDetailView(props) {
         </div>
       ) : null}
 
+      {isRunGroup && rankMetric === 'pace' ? (
+        /* 랭킹보드 페이스(구간) 탭과 동일 — 1k~42k 거리 칩(2026-08) */
+        <div className="stelvio-group-metric-filter running-ranking-pace-filter">
+          <div className="stelvio-group-metric-chips">
+            {((window.runningRankingConfig && window.runningRankingConfig.PACE_DISTANCES) || []).map(function (d) {
+              return (
+                <button
+                  key={d.key}
+                  type="button"
+                  className={'stelvio-group-metric-chip' + (rankPaceDistance === d.key ? ' active' : '')}
+                  onClick={function () { setRankPaceDistance(d.key); }}
+                >
+                  {d.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
         <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header">
           <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
@@ -12665,7 +12689,7 @@ function OpenRidingGroupDetailView(props) {
                       </span>
                       <span className="stelvio-rank-wkg open-riding-group-rank-actions">
                         {useRanked ? (
-                          <span className="text-[11px] font-semibold text-slate-700 tabular-nums">
+                          <span className="text-[14.4px] font-semibold text-slate-700 tabular-nums">
                             {m.valueLabel != null ? m.valueLabel : '-'}
                           </span>
                         ) : canTransferOwnership ? (
