@@ -12697,7 +12697,7 @@ function OpenRidingGroupDetailView(props) {
                           ) : null}
                         </span>
                       </span>
-                      <span className="stelvio-rank-wkg open-riding-group-rank-actions">
+                      <span className="stelvio-rank-wkg open-riding-group-rank-actions text-right">
                         {useRanked ? (
                           <span className="text-[14.4px] font-semibold text-slate-700 tabular-nums">
                             {m.valueLabel != null ? m.valueLabel : '-'}
