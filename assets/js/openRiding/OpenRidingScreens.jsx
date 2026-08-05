@@ -11873,6 +11873,100 @@ function OpenRidingGroupDetailView(props) {
     [members, memberProfiles, createdByUid]
   );
 
+  /* 멤버 리스트 순위 필터(항목·성별·카테고리) — 러닝 크루는 랭킹보드와 동일한 데이터 함수
+     (window.runningRankingCrewTab, window.runningRankingApi)를 재사용한다. 랭킹보드 자체의
+     화면·탭 상태와는 완전히 분리된 순수 fetch/계산 함수라 여기서 독립적으로 호출 가능하다.
+     클럽(CYCLE)은 동일 데이터 파이프라인이 랭킹보드 화면 상태에 강하게 결합돼 있어 별도 작업이
+     필요 — 지금은 러닝 크루만 지원한다(2026-08). */
+  var _rankMetric = useState('overall');
+  var rankMetric = _rankMetric[0];
+  var setRankMetric = _rankMetric[1];
+  var _rankGender = useState('all');
+  var rankGender = _rankGender[0];
+  var setRankGender = _rankGender[1];
+  var _rankCategory = useState('Supremo');
+  var rankCategory = _rankCategory[0];
+  var setRankCategory = _rankCategory[1];
+  var _leaderboardRows = useState([]);
+  var rankLeaderboardRows = _leaderboardRows[0];
+  var setRankLeaderboardRows = _leaderboardRows[1];
+  var _rankMovement = useState(null);
+  var rankMovementInfo = _rankMovement[0];
+  var setRankMovementInfo = _rankMovement[1];
+  var isRunGroup = !!moimCopy.isRun;
+
+  useEffect(
+    function () {
+      if (!isRunGroup) return undefined;
+      var api = typeof window !== 'undefined' ? window.runningRankingApi : null;
+      if (!api || typeof api.fetchLeaderboard !== 'function') return undefined;
+      var cancelled = false;
+      api.fetchLeaderboard({}).then(
+        function (res) {
+          if (cancelled || !res || !res.success) return;
+          setRankLeaderboardRows(Array.isArray(res.rows) ? res.rows : []);
+          setRankMovementInfo({
+            rankMovementByKey: res.rankMovementByKey || {},
+            rankMovementSource: res.rankMovementSource || '',
+            rankMovementAsOfSeoul: res.rankMovementAsOfSeoul || '',
+            leaderboardSource: res.leaderboardSource || '',
+            leaderboardAsOfSeoul: res.leaderboardAsOfSeoul || ''
+          });
+        },
+        function () {}
+      );
+      return function () {
+        cancelled = true;
+      };
+    },
+    [isRunGroup]
+  );
+
+  var memberRankedList = useMemo(
+    function () {
+      if (!isRunGroup) return null;
+      var crewApi = typeof window !== 'undefined' ? window.runningRankingCrewTab : null;
+      if (!crewApi || typeof crewApi.buildCrewMemberRankedList !== 'function') return null;
+      var mv = rankMovementInfo || {};
+      var ranked = crewApi.buildCrewMemberRankedList(rankLeaderboardRows, members, {
+        metric: rankMetric,
+        gender: rankGender,
+        category: rankCategory,
+        movement: mv
+      });
+      /* buildCrewMemberRankedList는 선택한 필터에 해당하는 유효 점수가 없는 멤버를 목록에서
+         아예 제외한다 — 요청대로 "숨기지 않고 맨 후순위에 -로 표기"하려면 빠진 멤버를 직접
+         찾아 순위·항목값을 '-'로 채운 플레이스홀더로 뒤에 붙여야 한다. */
+      var rankedUidSet = {};
+      ranked.forEach(function (it) {
+        if (it && it.userId != null) rankedUidSet[String(it.userId)] = true;
+      });
+      var leftover = (members || []).filter(function (m) {
+        var mid = m && (m.userId || m.uid || m.id) ? String(m.userId || m.uid || m.id) : '';
+        return mid && !rankedUidSet[mid];
+      });
+      var placeholders = leftover.map(function (m) {
+        var mid = String(m.userId || m.uid || m.id);
+        return {
+          userId: mid,
+          firebaseUid: mid,
+          socialUserId: mid,
+          name: displayNameForMember(m),
+          profileUrl: photoForMember(m),
+          value: -1,
+          valueLabel: '-',
+          rank: null,
+          boardRank: null,
+          rankChange: null,
+          _groupRole: m.role || 'member',
+          _crewRank: null
+        };
+      });
+      return ranked.concat(placeholders);
+    },
+    [isRunGroup, rankLeaderboardRows, members, rankMetric, rankGender, rankCategory, rankMovementInfo]
+  );
+
   function openGroupDetailAvatarZoom(src, name) {
     var s = src != null ? String(src).trim() : '';
     if (!s) return;
@@ -12406,83 +12500,179 @@ function OpenRidingGroupDetailView(props) {
         />
       ) : null}
 
+      {isRunGroup ? (
+        /* 랭킹보드 크루 탭과 동일한 항목·성별·카테고리 드롭다운 디자인(2026-08) */
+        <div className="stelvio-ranking-filter-row flex items-center gap-2 flex-wrap">
+          <div className="stelvio-metric-dropdown">
+            <span className="stelvio-dropdown-caption">항목</span>
+            <span className="stelvio-dropdown-label">
+              {(function () {
+                var opts = (window.runningRankingConfig && window.runningRankingConfig.CREW_METRIC_OPTIONS) || [];
+                var found = opts.filter(function (o) { return o.value === rankMetric; })[0];
+                return found ? found.label : '종합';
+              })()}
+            </span>
+            <span className="stelvio-dropdown-chevron">▾</span>
+            <select
+              className="stelvio-dropdown-select"
+              value={rankMetric}
+              aria-label="멤버 순위 항목 필터"
+              onChange={function (e) { setRankMetric(e.target.value); }}
+            >
+              {((window.runningRankingConfig && window.runningRankingConfig.CREW_METRIC_OPTIONS) || []).map(function (o) {
+                return <option key={o.value} value={o.value}>{o.label}</option>;
+              })}
+            </select>
+          </div>
+          <div className="stelvio-gender-dropdown">
+            <span className="stelvio-dropdown-caption">성별</span>
+            <span className="stelvio-dropdown-label">
+              {(function () {
+                var opts = (window.runningRankingConfig && window.runningRankingConfig.GENDER_OPTIONS) || [];
+                var found = opts.filter(function (o) { return o.value === rankGender; })[0];
+                return found ? found.label : '전체';
+              })()}
+            </span>
+            <span className="stelvio-dropdown-chevron">▾</span>
+            <select
+              className="stelvio-dropdown-select"
+              value={rankGender}
+              aria-label="멤버 순위 성별 필터"
+              onChange={function (e) { setRankGender(e.target.value); }}
+            >
+              {((window.runningRankingConfig && window.runningRankingConfig.GENDER_OPTIONS) || []).map(function (o) {
+                return <option key={o.value} value={o.value}>{o.label}</option>;
+              })}
+            </select>
+          </div>
+          <div className="stelvio-category-dropdown">
+            <span className="stelvio-dropdown-caption">카테고리</span>
+            <span className="stelvio-dropdown-label">
+              {(function () {
+                var opts = (window.runningRankingConfig && window.runningRankingConfig.CATEGORY_OPTIONS) || [];
+                var found = opts.filter(function (o) { return o.value === rankCategory; })[0];
+                return found ? found.label : '전체';
+              })()}
+            </span>
+            <span className="stelvio-dropdown-chevron">▾</span>
+            <select
+              className="stelvio-dropdown-select"
+              value={rankCategory}
+              aria-label="멤버 순위 카테고리 필터"
+              onChange={function (e) { setRankCategory(e.target.value); }}
+            >
+              {((window.runningRankingConfig && window.runningRankingConfig.CATEGORY_OPTIONS) || []).map(function (o) {
+                return <option key={o.value} value={o.value}>{o.label}</option>;
+              })}
+            </select>
+          </div>
+        </div>
+      ) : null}
+
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
         <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header">
           <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
         </div>
         <div className="stelvio-category-body px-2 sm:px-3 py-1 open-riding-group-member-rank-list">
-          {sortedMembersForDisplay.length === 0 ? (
-            <p className="text-sm text-slate-500 m-0 px-1 py-2">멤버 정보를 불러오는 중입니다.</p>
-          ) : (
-            <div className="space-y-0">
-              {sortedMembersForDisplay.map(function (m, idx) {
-                var uid = String(m.userId || '');
-                var self = uid && uid === String(userId);
-                var isRowOwner = String(m.role || '') === 'owner';
-                var canLeave = self && !isRowOwner;
-                var canTransferOwnership = self && isRowOwner && !!isOwner;
-                var rank = idx + 1;
-                var nm = displayNameForMember(m);
-                var isPrivateMember = isPrivateGroupMember(uid);
-                /* 방장(뷰어)·관리자·본인만 비공개 실명 확인 가능 — 그 외에는 마스킹 */
-                var canSeeFullMember = self || isOwner || isAdmin;
-                var nmDisplay = isPrivateMember && !canSeeFullMember ? maskPrivateMemberName(nm) : nm;
-                var photo = photoForMember(m);
-                var initial = nmDisplay.charAt(0) || '·';
-                return (
-                  <div
-                    key={uid || idx}
-                    className={
-                      'stelvio-rank-row open-riding-group-rank-row' + (self ? ' stelvio-rank-current' : '')
+          {(function () {
+            var useRanked = isRunGroup && !!memberRankedList;
+            var listSource = useRanked ? memberRankedList : sortedMembersForDisplay;
+            if (!listSource || listSource.length === 0) {
+              return <p className="text-sm text-slate-500 m-0 px-1 py-2">멤버 정보를 불러오는 중입니다.</p>;
+            }
+            return (
+              <div className="space-y-0">
+                {listSource.map(function (m, idx) {
+                  var uid = String(m.userId || '');
+                  var self = uid && uid === String(userId);
+                  var isRowOwner = String(m.role || m._groupRole || '') === 'owner';
+                  var canLeave = self && !isRowOwner;
+                  var canTransferOwnership = self && isRowOwner && !!isOwner;
+                  var rank = useRanked ? (m._crewRank || m.rank || null) : idx + 1;
+                  var nm = useRanked ? (m.name || displayNameForMember(m)) : displayNameForMember(m);
+                  var isPrivateMember = isPrivateGroupMember(uid);
+                  /* 방장(뷰어)·관리자·본인만 비공개 실명 확인 가능 — 그 외에는 마스킹 */
+                  var canSeeFullMember = self || isOwner || isAdmin;
+                  var nmDisplay = isPrivateMember && !canSeeFullMember ? maskPrivateMemberName(nm) : nm;
+                  var photo = useRanked ? (m.profileUrl || photoForMember(m)) : photoForMember(m);
+                  var initial = nmDisplay.charAt(0) || '·';
+                  var rankMetaHtml = '';
+                  if (useRanked) {
+                    var metaFn = typeof window !== 'undefined' && window.runningRankingCrewTab
+                      ? window.runningRankingCrewTab.buildCrewMemberRankMetaHtml
+                      : null;
+                    rankMetaHtml = typeof metaFn === 'function' ? metaFn(m) : '';
+                    /* 보드 순위가 없는(플레이스홀더) 멤버는 전체순위를 '-'로 표기 */
+                    if (!rankMetaHtml) {
+                      rankMetaHtml = '<span class="stelvio-rank-name-meta">(-)</span>';
                     }
-                  >
-                    <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank}</span>
-                    <span className="stelvio-rank-name">
-                      {photo ? (
-                        renderGroupDetailClickableAvatar(photo, nmDisplay)
-                      ) : (
-                        <span className="open-riding-group-member-avatar-fallback inline-flex shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
-                          {initial}
+                  }
+                  return (
+                    <div
+                      key={uid || idx}
+                      className={
+                        'stelvio-rank-row open-riding-group-rank-row' + (self ? ' stelvio-rank-current' : '')
+                      }
+                    >
+                      <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank || '-'}</span>
+                      <span className="stelvio-rank-name">
+                        {photo ? (
+                          renderGroupDetailClickableAvatar(photo, nmDisplay)
+                        ) : (
+                          <span className="open-riding-group-member-avatar-fallback inline-flex shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
+                            {initial}
+                          </span>
+                        )}
+                        <span className="stelvio-rank-name-text truncate" title={nmDisplay}>
+                          {nmDisplay}
+                          {isRowOwner ? (
+                            <span className="ml-1 text-[10px] font-semibold text-violet-600">방장</span>
+                          ) : null}
+                          {isPrivateMember && canSeeFullMember ? (
+                            <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>
+                          ) : null}
+                          {useRanked && rankMetaHtml ? (
+                            <span
+                              className="stelvio-rank-meta text-[10px] text-slate-400 ml-1"
+                              dangerouslySetInnerHTML={{ __html: rankMetaHtml }}
+                            />
+                          ) : null}
                         </span>
-                      )}
-                      <span className="stelvio-rank-name-text truncate" title={nmDisplay}>
-                        {nmDisplay}
-                        {isRowOwner ? (
-                          <span className="ml-1 text-[10px] font-semibold text-violet-600">방장</span>
+                      </span>
+                      <span className="stelvio-rank-wkg open-riding-group-rank-actions flex flex-col items-end gap-0.5">
+                        {useRanked ? (
+                          <span className="text-[11px] font-semibold text-slate-700 tabular-nums">
+                            {m.valueLabel != null ? m.valueLabel : '-'}
+                          </span>
                         ) : null}
-                        {isPrivateMember && canSeeFullMember ? (
-                          <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>
+                        {canTransferOwnership ? (
+                          <button
+                            type="button"
+                            className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
+                            disabled={busy}
+                            onClick={openTransferModal}
+                          >
+                            이관
+                          </button>
+                        ) : canLeave ? (
+                          <button
+                            type="button"
+                            className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+                            disabled={busy}
+                            onClick={doLeave}
+                          >
+                            탈퇴
+                          </button>
+                        ) : !useRanked ? (
+                          <span className="text-slate-300">—</span>
                         ) : null}
                       </span>
-                    </span>
-                    <span className="stelvio-rank-wkg open-riding-group-rank-actions">
-                      {canTransferOwnership ? (
-                        <button
-                          type="button"
-                          className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
-                          disabled={busy}
-                          onClick={openTransferModal}
-                        >
-                          이관
-                        </button>
-                      ) : canLeave ? (
-                        <button
-                          type="button"
-                          className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
-                          disabled={busy}
-                          onClick={doLeave}
-                        >
-                          탈퇴
-                        </button>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
         {(approved && !isMember) || (pending && isAdmin) ? (
           <div className="open-riding-group-member-cta-slot open-riding-bottom-actions border-t border-slate-200/90 bg-[rgba(255,255,255,0.98)] px-3 pt-2 pb-3 space-y-2 box-border">
