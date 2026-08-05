@@ -12597,8 +12597,27 @@ function OpenRidingGroupDetailView(props) {
       ) : null}
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
-        <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header">
+        <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
+          {isMember && isOwner ? (
+            <button
+              type="button"
+              className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
+              disabled={busy}
+              onClick={openTransferModal}
+            >
+              이관
+            </button>
+          ) : isMember ? (
+            <button
+              type="button"
+              className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+              disabled={busy}
+              onClick={doLeave}
+            >
+              탈퇴
+            </button>
+          ) : null}
         </div>
         <div className="stelvio-category-body px-2 sm:px-3 py-1 open-riding-group-member-rank-list">
           {(function () {
@@ -12615,8 +12634,6 @@ function OpenRidingGroupDetailView(props) {
                   var uid = String((useRanked && m.firebaseUid) || m.userId || '');
                   var self = uid && uid === String(userId);
                   var isRowOwner = String(m.role || m._groupRole || '') === 'owner';
-                  var canLeave = self && !isRowOwner;
-                  var canTransferOwnership = self && isRowOwner && !!isOwner;
                   var rank = useRanked ? (m._crewRank || m.rank || null) : idx + 1;
                   var nm = useRanked ? (m.name || displayNameForMember(m)) : displayNameForMember(m);
                   var isPrivateMember = isPrivateGroupMember(uid);
@@ -12667,49 +12684,12 @@ function OpenRidingGroupDetailView(props) {
                             />
                           ) : null}
                         </span>
-                        {useRanked && canTransferOwnership ? (
-                          <button
-                            type="button"
-                            className="open-riding-action-btn ml-auto shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
-                            disabled={busy}
-                            onClick={openTransferModal}
-                          >
-                            이관
-                          </button>
-                        ) : useRanked && canLeave ? (
-                          <button
-                            type="button"
-                            className="open-riding-action-btn ml-auto shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
-                            disabled={busy}
-                            onClick={doLeave}
-                          >
-                            탈퇴
-                          </button>
-                        ) : null}
                       </span>
                       <span className="stelvio-rank-wkg open-riding-group-rank-actions">
                         {useRanked ? (
                           <span className="text-[14.4px] font-semibold text-slate-700 tabular-nums">
                             {m.valueLabel != null ? m.valueLabel : '-'}
                           </span>
-                        ) : canTransferOwnership ? (
-                          <button
-                            type="button"
-                            className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
-                            disabled={busy}
-                            onClick={openTransferModal}
-                          >
-                            이관
-                          </button>
-                        ) : canLeave ? (
-                          <button
-                            type="button"
-                            className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
-                            disabled={busy}
-                            onClick={doLeave}
-                          >
-                            탈퇴
-                          </button>
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}
