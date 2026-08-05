@@ -12792,7 +12792,7 @@ function OpenRidingGroupDetailView(props) {
                           ) : null}
                           {useRanked && rankMetaHtml ? (
                             <span
-                              className="stelvio-rank-meta text-[10px] text-slate-400 ml-1"
+                              className="stelvio-rank-meta text-[10px] text-slate-400 ml-1 align-middle"
                               dangerouslySetInnerHTML={{ __html: rankMetaHtml }}
                             />
                           ) : null}
