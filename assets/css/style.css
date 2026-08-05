@@ -2002,6 +2002,20 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   min-width: 3.25rem;
   margin-left: 6px;
 }
+/* 멤버 이름 옆 (전체순위/등락) — 등락 화살표는 전역 .stelvio-rank-change가 10.88px로 더 작게
+   지정돼 있어 전체순위(N위) 텍스트와 크기·높이가 어긋나 보였다. 전체순위 폰트 크기를 그대로
+   상속해 통일하고, 구성 요소 전부 세로 중앙 정렬해 한 줄 안에서 가지런히 보이게 한다
+   (색상은 .stelvio-rank-change--up/down/flat 그대로 유지). */
+#openRidingRoomScreen .stelvio-rank-name-meta,
+#openRidingRoomScreen .stelvio-rank-overall,
+#openRidingRoomScreen .stelvio-rank-meta-sep,
+#openRidingRoomScreen .stelvio-rank-change {
+  vertical-align: middle;
+}
+#openRidingRoomScreen .stelvio-rank-change {
+  font-size: inherit;
+  margin-left: 2px;
+}
 /* 가입 신청: 수락·거절 한 줄 — 열 너비는 내용 기준 */
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-join-request-actions.open-riding-group-rank-actions {
   flex-wrap: nowrap;
