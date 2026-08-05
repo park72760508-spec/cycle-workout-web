@@ -10816,6 +10816,26 @@ function OpenRidingGroupsList(props) {
     [rows, filterText, ownerProfiles, clubCategory, isAdmin, gs]
   );
 
+  /* 목록 정렬: 1) 내가 방장인 클럽/크루 2) 내가 가입한 클럽/크루 3) 나머지 — 각 구간 내에서는 가나다순 */
+  var sortedFilteredRows = useMemo(
+    function () {
+      var uid = String(userId || '');
+      function tier(g) {
+        if (uid && String(g.createdBy || '') === uid) return 0;
+        var gid = String(g.id || g.groupId || '');
+        if (gid && myMemberGroupIds.has(gid)) return 1;
+        return 2;
+      }
+      return filteredRows.slice().sort(function (a, b) {
+        var ta = tier(a);
+        var tb = tier(b);
+        if (ta !== tb) return ta - tb;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
+      });
+    },
+    [filteredRows, myMemberGroupIds, userId]
+  );
+
   useEffect(
     function () {
       if (!firestore || typeof gs.subscribeRidingGroups !== 'function') return;
@@ -10906,12 +10926,12 @@ function OpenRidingGroupsList(props) {
       <ul className="space-y-2">
         {!firestore ? (
           <li className="text-sm text-slate-500">연결 오류</li>
-        ) : filteredRows.length === 0 ? (
+        ) : sortedFilteredRows.length === 0 ? (
           <li className="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white px-3 py-6 text-center">
             {rows.length === 0 ? '표시할 클럽이 없습니다.' : '검색 결과가 없습니다.'}
           </li>
         ) : (
-          filteredRows.map(function (g) {
+          sortedFilteredRows.map(function (g) {
             var st = String(g.status || '');
             var pending = st === GROUP_ST.PENDING;
             var name = g.name != null ? String(g.name) : '';
