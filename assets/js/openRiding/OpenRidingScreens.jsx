@@ -12782,17 +12782,17 @@ function OpenRidingGroupDetailView(props) {
                             {initial}
                           </span>
                         )}
-                        <span className="stelvio-rank-name-text truncate" title={nmDisplay}>
-                          {nmDisplay}
+                        <span className="stelvio-rank-name-text" title={nmDisplay}>
+                          <span className="truncate min-w-0">{nmDisplay}</span>
                           {isRowOwner ? (
-                            <span className="ml-1 text-[10px] font-semibold text-violet-600">방장</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-violet-600">방장</span>
                           ) : null}
                           {isPrivateMember && canSeeFullMember ? (
-                            <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>
+                            <span className="ranking-private-badge ranking-private-badge-admin shrink-0" title="비공개">비</span>
                           ) : null}
                           {useRanked && rankMetaHtml ? (
                             <span
-                              className="stelvio-rank-meta text-[10px] text-slate-400 ml-1 align-middle"
+                              className="stelvio-rank-meta shrink-0 text-slate-400"
                               dangerouslySetInnerHTML={{ __html: rankMetaHtml }}
                             />
                           ) : null}

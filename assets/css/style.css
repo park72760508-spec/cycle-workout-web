@@ -2002,19 +2002,33 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   min-width: 3.25rem;
   margin-left: 6px;
 }
-/* 멤버 이름 옆 (전체순위/등락) — 등락 화살표는 전역 .stelvio-rank-change가 10.88px로 더 작게
-   지정돼 있어 전체순위(N위) 텍스트와 크기·높이가 어긋나 보였다. 전체순위 폰트 크기를 그대로
-   상속해 통일하고, 구성 요소 전부 세로 중앙 정렬해 한 줄 안에서 가지런히 보이게 한다
-   (색상은 .stelvio-rank-change--up/down/flat 그대로 유지). */
-#openRidingRoomScreen .stelvio-rank-name-meta,
-#openRidingRoomScreen .stelvio-rank-overall,
-#openRidingRoomScreen .stelvio-rank-meta-sep,
-#openRidingRoomScreen .stelvio-rank-change {
-  vertical-align: middle;
+/* 멤버 이름 옆 (전체순위/등락) — 근본 원인: 순위/등락 블럭이 일반 inline span이라
+   vertical-align:middle만으로는 CJK 텍스트의 폰트 메트릭 차이 때문에 이름보다 아래로
+   처지는 것처럼 보였다(이관/탈퇴 버튼 위치 요청 때 여러 차례 지적된 문제). 주간 마일리지
+   TOP10 모달(#weeklyTop10Modal .weekly-rank-change-slot 등)이 쓰는 것과 동일한 방식
+   — 이름 줄 자체를 inline-flex + align-items:center로 만들고 각 배지도 inline-flex로
+   교차축 중앙 정렬 — 을 그대로 적용한다. 폰트 크기도 주간 마일리지와 동일한 10.88px로
+   통일(색상은 .stelvio-rank-change--up/down/flat 그대로 유지). */
+#openRidingRoomScreen .open-riding-group-member-rank-list .stelvio-rank-name-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  line-height: 1;
 }
-#openRidingRoomScreen .stelvio-rank-change {
-  font-size: inherit;
-  margin-left: 2px;
+#openRidingRoomScreen .open-riding-group-member-rank-list .stelvio-rank-meta,
+#openRidingRoomScreen .open-riding-group-member-rank-list .stelvio-rank-name-meta,
+#openRidingRoomScreen .open-riding-group-member-rank-list .stelvio-rank-overall,
+#openRidingRoomScreen .open-riding-group-member-rank-list .stelvio-rank-meta-sep,
+#openRidingRoomScreen .open-riding-group-member-rank-list .stelvio-rank-change {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  line-height: 1;
+  font-size: 10.88px;
+  margin: 0;
 }
 /* 가입 신청: 수락·거절 한 줄 — 열 너비는 내용 기준 */
 #openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-join-request-actions.open-riding-group-rank-actions {
