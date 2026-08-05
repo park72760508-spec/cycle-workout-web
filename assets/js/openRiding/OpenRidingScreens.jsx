@@ -12684,21 +12684,16 @@ function OpenRidingGroupDetailView(props) {
         </div>
       ) : null}
 
-      <section className="relative rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
-        {showRankFilter && rankLoading ? (
-          <div
-            className="open-riding-action-busy-overlay absolute inset-0 z-10"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            {/* 멤버 블럭이 화면보다 길 때도 스피너가 항상 "현재 보이는 화면"의 상하 중앙에
-                오도록 sticky로 뷰포트 중앙에 고정(오버레이 범위를 벗어나면 자연히 사라짐) */}
-            <div className="sticky top-[50vh] -translate-y-1/2 flex flex-col items-center justify-center gap-2">
-              <div className="open-riding-action-busy-spinner" aria-hidden />
-              <p className="open-riding-loading-text m-0">순위 집계 중....</p>
-            </div>
-          </div>
-        ) : null}
+      {showRankFilter && rankLoading ? (
+        /* 콤보 선택 직후 재조회 중임을 알리는 스피너 — 멤버 블럭을 덮지 않고 콤보 목록
+           바로 아래에 스피너 크기만큼 공간을 확보해 그 안에 표시한다 */
+        <div className="flex flex-col items-center justify-center gap-2 py-3" aria-live="polite" aria-busy="true">
+          <div className="open-riding-action-busy-spinner" aria-hidden />
+          <p className="open-riding-loading-text m-0">순위 집계 중....</p>
+        </div>
+      ) : null}
+
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
         <div className="bg-violet-100 border-b border-violet-200/60 px-2 sm:px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
           <span className="flex items-center gap-2">
