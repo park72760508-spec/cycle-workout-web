@@ -12597,13 +12597,14 @@ function OpenRidingGroupDetailView(props) {
       ) : null}
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
-        <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
+        <div className="bg-violet-100 border-b border-violet-200/60 px-2 sm:px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
           <span className="flex items-center gap-2">
             {isMember && isOwner ? (
               <button
                 type="button"
-                className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
+                className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
+                style={{ height: '24px', minHeight: '24px', lineHeight: '1' }}
                 disabled={busy}
                 onClick={openTransferModal}
               >
@@ -12612,7 +12613,8 @@ function OpenRidingGroupDetailView(props) {
             ) : isMember ? (
               <button
                 type="button"
-                className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+                className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+                style={{ height: '24px', minHeight: '24px', lineHeight: '1' }}
                 disabled={busy}
                 onClick={doLeave}
               >
