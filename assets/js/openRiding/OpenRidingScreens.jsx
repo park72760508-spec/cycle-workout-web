@@ -11939,7 +11939,10 @@ function OpenRidingGroupDetailView(props) {
          찾아 순위·항목값을 '-'로 채운 플레이스홀더로 뒤에 붙여야 한다. */
       var rankedUidSet = {};
       ranked.forEach(function (it) {
-        if (it && it.userId != null) rankedUidSet[String(it.userId)] = true;
+        if (!it) return;
+        if (it.userId != null) rankedUidSet[String(it.userId)] = true;
+        if (it.firebaseUid != null) rankedUidSet[String(it.firebaseUid)] = true;
+        if (it.socialUserId != null) rankedUidSet[String(it.socialUserId)] = true;
       });
       var leftover = (members || []).filter(function (m) {
         var mid = m && (m.userId || m.uid || m.id) ? String(m.userId || m.uid || m.id) : '';
@@ -12583,7 +12586,9 @@ function OpenRidingGroupDetailView(props) {
             return (
               <div className="space-y-0">
                 {listSource.map(function (m, idx) {
-                  var uid = String(m.userId || '');
+                  /* 랭킹 목록 항목의 userId는 보드(Supabase) id일 수 있어 실제 그룹 멤버 식별에는
+                     firebaseUid를 우선 사용 — 아니면 본인/방장 판정이 어긋나 이관·탈퇴 버튼이 잘못 표시된다 */
+                  var uid = String((useRanked && m.firebaseUid) || m.userId || '');
                   var self = uid && uid === String(userId);
                   var isRowOwner = String(m.role || m._groupRole || '') === 'owner';
                   var canLeave = self && !isRowOwner;
@@ -12638,14 +12643,32 @@ function OpenRidingGroupDetailView(props) {
                             />
                           ) : null}
                         </span>
+                        {useRanked && canTransferOwnership ? (
+                          <button
+                            type="button"
+                            className="open-riding-action-btn ml-auto shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
+                            disabled={busy}
+                            onClick={openTransferModal}
+                          >
+                            이관
+                          </button>
+                        ) : useRanked && canLeave ? (
+                          <button
+                            type="button"
+                            className="open-riding-action-btn ml-auto shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+                            disabled={busy}
+                            onClick={doLeave}
+                          >
+                            탈퇴
+                          </button>
+                        ) : null}
                       </span>
-                      <span className="stelvio-rank-wkg open-riding-group-rank-actions flex flex-col items-end gap-0.5">
+                      <span className="stelvio-rank-wkg open-riding-group-rank-actions">
                         {useRanked ? (
                           <span className="text-[11px] font-semibold text-slate-700 tabular-nums">
                             {m.valueLabel != null ? m.valueLabel : '-'}
                           </span>
-                        ) : null}
-                        {canTransferOwnership ? (
+                        ) : canTransferOwnership ? (
                           <button
                             type="button"
                             className="open-riding-action-btn text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
@@ -12663,9 +12686,9 @@ function OpenRidingGroupDetailView(props) {
                           >
                             탈퇴
                           </button>
-                        ) : !useRanked ? (
+                        ) : (
                           <span className="text-slate-300">—</span>
-                        ) : null}
+                        )}
                       </span>
                     </div>
                   );

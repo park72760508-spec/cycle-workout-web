@@ -6886,7 +6886,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #374151;
 }
 #stelvioRankingScreen .stelvio-dropdown-select,
-#runningRankingScreen .stelvio-dropdown-select {
+#runningRankingScreen .stelvio-dropdown-select,
+#openRidingRoomScreen .stelvio-dropdown-select {
   position: absolute;
   left: 0;
   top: 0;
@@ -28596,7 +28597,10 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
 }
 #runningRankingScreen .stelvio-metric-dropdown,
 #runningRankingScreen .stelvio-gender-dropdown,
-#runningRankingScreen .stelvio-category-dropdown {
+#runningRankingScreen .stelvio-category-dropdown,
+#openRidingRoomScreen .stelvio-metric-dropdown,
+#openRidingRoomScreen .stelvio-gender-dropdown,
+#openRidingRoomScreen .stelvio-category-dropdown {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -28608,24 +28612,29 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   background: #f3f4f6;
   min-width: 0;
 }
-#runningRankingScreen .stelvio-metric-dropdown {
+#runningRankingScreen .stelvio-metric-dropdown,
+#openRidingRoomScreen .stelvio-metric-dropdown {
   min-width: 64px;
 }
-#runningRankingScreen .stelvio-category-dropdown {
+#runningRankingScreen .stelvio-category-dropdown,
+#openRidingRoomScreen .stelvio-category-dropdown {
   min-width: 0;
 }
-#runningRankingScreen .stelvio-dropdown-caption {
+#runningRankingScreen .stelvio-dropdown-caption,
+#openRidingRoomScreen .stelvio-dropdown-caption {
   font-size: 9.92px;
   font-weight: 600;
   color: #9ca3af;
   margin-right: 3px;
 }
-#runningRankingScreen .stelvio-dropdown-label {
+#runningRankingScreen .stelvio-dropdown-label,
+#openRidingRoomScreen .stelvio-dropdown-label {
   font-size: 11.52px;
   font-weight: 600;
   color: #4b5563;
 }
-#runningRankingScreen .stelvio-dropdown-chevron {
+#runningRankingScreen .stelvio-dropdown-chevron,
+#openRidingRoomScreen .stelvio-dropdown-chevron {
   font-size: 0.6em;
   color: #9ca3af;
   margin-left: 1px;
