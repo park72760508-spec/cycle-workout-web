@@ -12599,25 +12599,35 @@ function OpenRidingGroupDetailView(props) {
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
         <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
-          {isMember && isOwner ? (
-            <button
-              type="button"
-              className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
-              disabled={busy}
-              onClick={openTransferModal}
-            >
-              이관
-            </button>
-          ) : isMember ? (
-            <button
-              type="button"
-              className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
-              disabled={busy}
-              onClick={doLeave}
-            >
-              탈퇴
-            </button>
-          ) : null}
+          <span className="flex items-center gap-2">
+            {isMember && isOwner ? (
+              <button
+                type="button"
+                className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-violet-400 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-40"
+                disabled={busy}
+                onClick={openTransferModal}
+              >
+                이관
+              </button>
+            ) : isMember ? (
+              <button
+                type="button"
+                className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+                disabled={busy}
+                onClick={doLeave}
+              >
+                탈퇴
+              </button>
+            ) : null}
+            {isRunGroup ? (
+              <span className="stelvio-category-header-unit">
+                {(function () {
+                  var ct = typeof window !== 'undefined' ? window.runningRankingCrewTab : null;
+                  return ct && typeof ct.crewMetricUnit === 'function' ? ct.crewMetricUnit(rankMetric) : 'pt';
+                })()}
+              </span>
+            ) : null}
+          </span>
         </div>
         <div className="stelvio-category-body px-2 sm:px-3 py-1 open-riding-group-member-rank-list">
           {(function () {
