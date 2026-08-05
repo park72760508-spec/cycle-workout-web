@@ -12010,6 +12010,10 @@ function OpenRidingGroupDetailView(props) {
           _crewRank: null
         };
       });
+      /* 값 없는 멤버(플레이스홀더)는 순위 없이 맨 뒤에 붙되, 그 안에서는 이름 가나다순 정렬 */
+      placeholders.sort(function (a, b) {
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
+      });
       return ranked.concat(placeholders);
     },
     [
