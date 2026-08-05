@@ -12505,7 +12505,7 @@ function OpenRidingGroupDetailView(props) {
 
       {isRunGroup ? (
         /* 랭킹보드 크루 탭과 동일한 항목·성별·카테고리 드롭다운 디자인(2026-08) */
-        <div className="stelvio-ranking-filter-row flex items-center gap-2 flex-wrap">
+        <div className="stelvio-ranking-filter-row flex items-center justify-center gap-2 flex-wrap">
           <div className="stelvio-metric-dropdown">
             <span className="stelvio-dropdown-caption">항목</span>
             <span className="stelvio-dropdown-label">
