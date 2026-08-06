@@ -2002,6 +2002,104 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   min-width: 3.25rem;
   margin-left: 6px;
 }
+/* 러닝 크루 멤버 리스트: 랭킹보드 RUN 탭(#runningRankingScreen)과 동일한 본인 하이라이트(오렌지) */
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-row--run.stelvio-rank-current {
+  background: linear-gradient(90deg, rgba(255, 107, 53, 0.12) 0%, transparent 100%) !important;
+}
+/* 랭킹보드 종합탭과 동일 — '구간 페이스 펼치기' 토글 on일 때 멤버 행이 줄바꿈되어
+   1k~20k 구간 칩이 아래 새 줄에 표시된다(#runningRankingScreen .running-ranking-list-body--segments-on 이식). */
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-row--segments-on {
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+#openRidingRoomScreen .open-riding-group-member-rank-list .open-riding-group-rank-row--segments-on .stelvio-rank-name {
+  flex: 1 1 0;
+  min-width: 0;
+}
+#openRidingRoomScreen .running-ranking-segments {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 0;
+  margin: 0;
+  padding: 1px 0 3px;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+#openRidingRoomScreen .running-ranking-segments::-webkit-scrollbar {
+  display: none;
+}
+#openRidingRoomScreen .running-ranking-segment-chip {
+  flex: 0 0 var(--run-overall-seg-chip-width);
+  width: var(--run-overall-seg-chip-width);
+  min-width: var(--run-overall-seg-chip-width);
+  max-width: var(--run-overall-seg-chip-width);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 2px;
+  margin: 0 3px;
+  border-radius: 6px;
+  border: none !important;
+  box-shadow: none;
+  gap: 1px;
+  box-sizing: border-box;
+}
+#openRidingRoomScreen .running-ranking-segment-dist {
+  width: 100%;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1;
+  letter-spacing: 0;
+  font-size: 9px;
+  font-weight: 700;
+}
+#openRidingRoomScreen .running-ranking-segment-pace {
+  width: 100%;
+  min-width: 5ch;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #333333;
+}
+#openRidingRoomScreen .running-ranking-segment-chip--1k { background: var(--run-overall-1k-bg); }
+#openRidingRoomScreen .running-ranking-segment-chip--3k { background: var(--run-overall-3k-bg); }
+#openRidingRoomScreen .running-ranking-segment-chip--5k { background: var(--run-overall-5k-bg); }
+#openRidingRoomScreen .running-ranking-segment-chip--7k { background: var(--run-overall-7k-bg); }
+#openRidingRoomScreen .running-ranking-segment-chip--10k { background: var(--run-overall-10k-bg); }
+#openRidingRoomScreen .running-ranking-segment-chip--20k { background: var(--run-overall-20k-bg); }
+#openRidingRoomScreen .running-ranking-segment-chip:not(.running-ranking-segment-chip--empty) .running-ranking-segment-dist {
+  color: var(--run-overall-seg-dist);
+  font-weight: 600;
+}
+#openRidingRoomScreen .running-ranking-segment-chip:not(.running-ranking-segment-chip--empty) .running-ranking-segment-pace {
+  color: var(--run-overall-seg-pace);
+}
+#openRidingRoomScreen .running-ranking-segment-chip--empty {
+  background: rgba(0, 0, 0, 0.03) !important;
+  opacity: 0.38;
+}
+#openRidingRoomScreen .running-ranking-segment-chip--empty .running-ranking-segment-dist {
+  color: #BDBDBD !important;
+  font-weight: 600;
+}
+#openRidingRoomScreen .running-ranking-segment-chip--empty .running-ranking-segment-pace {
+  color: #E0E0E0 !important;
+  font-weight: 500;
+}
 /* 멤버 이름 옆 (전체순위/등락) — 근본 원인: 순위/등락 블럭이 일반 inline span이라
    vertical-align:middle만으로는 CJK 텍스트의 폰트 메트릭 차이 때문에 이름보다 아래로
    처지는 것처럼 보였다(이관/탈퇴 버튼 위치 요청 때 여러 차례 지적된 문제). 주간 마일리지

@@ -11929,6 +11929,10 @@ function OpenRidingGroupDetailView(props) {
   var _rankLoading = useState(false);
   var rankLoading = _rankLoading[0];
   var setRankLoading = _rankLoading[1];
+  /* 랭킹보드 종합탭과 동일 — 항목이 '종합'일 때만 멤버별 1k~20k 구간 페이스 펼쳐보기 토글 */
+  var _showOverallSegments = useState(false);
+  var showOverallSegments = _showOverallSegments[0];
+  var setShowOverallSegments = _showOverallSegments[1];
 
   useEffect(
     function () {
@@ -12695,7 +12699,21 @@ function OpenRidingGroupDetailView(props) {
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
         <div className="bg-violet-100 border-b border-violet-200/60 px-2 sm:px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
+          <span className="flex items-center">
+            <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
+            {isRunGroup && rankMetric === 'overall' ? (
+              <button
+                type="button"
+                className="running-ranking-segment-toggle-btn"
+                aria-pressed={showOverallSegments}
+                aria-label={showOverallSegments ? '구간 페이스 접기' : '구간 페이스 펼치기'}
+                title={showOverallSegments ? '구간 페이스 접기' : '구간 페이스 펼치기'}
+                onClick={function () { setShowOverallSegments(function (prev) { return !prev; }); }}
+              >
+                {showOverallSegments ? '▲' : '▼'}
+              </button>
+            ) : null}
+          </span>
           <span className="flex items-center gap-2">
             {isMember && isOwner ? (
               <button
@@ -12766,11 +12784,21 @@ function OpenRidingGroupDetailView(props) {
                       rankMetaHtml = '<span class="stelvio-rank-name-meta">(-)</span>';
                     }
                   }
+                  var showRowSegments =
+                    useRanked &&
+                    isRunGroup &&
+                    rankMetric === 'overall' &&
+                    showOverallSegments &&
+                    Array.isArray(m.segments) &&
+                    m.segments.length > 0;
                   return (
                     <div
                       key={uid || idx}
                       className={
-                        'stelvio-rank-row open-riding-group-rank-row' + (self ? ' stelvio-rank-current' : '')
+                        'stelvio-rank-row open-riding-group-rank-row' +
+                        (isRunGroup ? ' open-riding-group-rank-row--run' : '') +
+                        (showRowSegments ? ' open-riding-group-rank-row--segments-on' : '') +
+                        (self ? ' stelvio-rank-current' : '')
                       }
                     >
                       <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank || '-'}</span>
@@ -12807,6 +12835,29 @@ function OpenRidingGroupDetailView(props) {
                           <span className="text-slate-300">—</span>
                         )}
                       </span>
+                      {showRowSegments ? (
+                        <div className="running-ranking-segments" role="group" aria-label="거리별 페이스">
+                          {m.segments.map(function (seg) {
+                            var paceLabel = seg.pace && String(seg.pace).trim() ? String(seg.pace).trim() : '—';
+                            var hasPace = paceLabel !== '—' && paceLabel !== '-' && paceLabel.toLowerCase() !== 'null';
+                            var zc = (typeof window !== 'undefined' && window.runDistanceZoneColors) || {};
+                            var titlePrefix = typeof zc.segmentTitlePrefix === 'function' ? zc.segmentTitlePrefix(seg.key) : seg.label;
+                            var titleParts = [titlePrefix + ' · 페이스 ' + paceLabel];
+                            if (seg.score != null) titleParts.push('순위점수 ' + seg.score + 'pt');
+                            var chipClass =
+                              (typeof zc.segmentChipClass === 'function'
+                                ? zc.segmentChipClass(seg.key)
+                                : 'running-ranking-segment-chip running-ranking-segment-chip--' + seg.key) +
+                              (hasPace ? '' : ' running-ranking-segment-chip--empty');
+                            return (
+                              <span key={seg.key} className={chipClass} title={titleParts.join(' · ')}>
+                                <span className="running-ranking-segment-dist">{seg.label}</span>
+                                <span className="running-ranking-segment-pace">{paceLabel}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
