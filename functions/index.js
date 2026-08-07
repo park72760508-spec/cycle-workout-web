@@ -76,6 +76,7 @@ const groupReadRoutingPublic = require("./groupReadRoutingPublic");
 const logsReadRoutingPublic = require("./logsReadRoutingPublic");
 const groupDualWriteTriggers = require("./groupDualWriteTriggers");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
+const ridingGroupSupabaseWrites = require("./ridingGroupSupabaseWrites");
 const weeklyTssRankingBuilder = require("./weeklyTssRankingBuilder");
 const tossPaymentsClient = require("./tossPaymentsClient");
 const raceRedisClient = require("./raceRedisClient");
@@ -11877,6 +11878,56 @@ exports.getMyGroupJoinRequestStatusForRead = onRequest(
       res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }
+);
+
+/**
+ * 크루/클럽 가입·승인·거절·탈퇴 — Supabase Primary 쓰기 4종 공용 핸들러.
+ * @see functions/ridingGroupSupabaseWrites.js — 검증·Supabase 쓰기·Firestore 동기 미러링 로직
+ */
+function registerRidingGroupSupabaseWriteEndpoint(exportName, handlerFn) {
+  exports[exportName] = onRequest(
+    supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+    async (req, res) => {
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return;
+      }
+      if (req.method !== "POST") {
+        res.status(405).json({ success: false, error: "POST만 지원합니다." });
+        return;
+      }
+      const uid = await getUidFromRequest(req, res);
+      if (!uid) return;
+      try {
+        const result = await handlerFn(admin, uid, req.body || {});
+        res.status(200).json(result);
+      } catch (e) {
+        const status = e instanceof ridingGroupSupabaseWrites.WriteError ? e.status : 500;
+        if (status >= 500) console.error("[" + exportName + "]", e.message || e);
+        res.status(status).json({ success: false, error: e.message || String(e) });
+      }
+    }
+  );
+}
+
+registerRidingGroupSupabaseWriteEndpoint(
+  "joinRidingGroupSupabase",
+  ridingGroupSupabaseWrites.handleJoinRidingGroup
+);
+registerRidingGroupSupabaseWriteEndpoint(
+  "approveRidingGroupJoinRequestSupabase",
+  ridingGroupSupabaseWrites.handleApproveJoinRequest
+);
+registerRidingGroupSupabaseWriteEndpoint(
+  "rejectRidingGroupJoinRequestSupabase",
+  ridingGroupSupabaseWrites.handleRejectJoinRequest
+);
+registerRidingGroupSupabaseWriteEndpoint(
+  "leaveRidingGroupSupabase",
+  ridingGroupSupabaseWrites.handleLeaveRidingGroup
 );
 
 /** 클라이언트 Secondary relay — Firestore Primary 성공 후 open_rides upsert */

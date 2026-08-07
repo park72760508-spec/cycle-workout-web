@@ -48,7 +48,16 @@ exports.onRidingGroupWrittenDualWrite = onDocumentWritten(
   async (event) => {
     const groupId = event.params.groupId;
     const after = event.data && event.data.after;
-    if (!after || !after.exists) return;
+    /* 그룹 삭제(하드 delete)도 반드시 Supabase에 반영해야 한다 — 예전엔 여기서 조용히
+       return해서 삭제된 그룹이 Supabase 읽기 경로에 고아로 영원히 남아있던 버그(2026-08). */
+    if (!after || !after.exists) {
+      try {
+        await supabaseGroupDualWrite.deleteRidingGroupFromSupabase(groupId);
+      } catch (err) {
+        console.warn("[onRidingGroupWrittenDualWrite] delete secondary failed:", err.message || err);
+      }
+      return;
+    }
     try {
       await supabaseGroupDualWrite.runSecondaryAfterRidingGroupWrite(
         require("firebase-admin"),

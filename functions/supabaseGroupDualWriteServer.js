@@ -488,6 +488,31 @@ async function deleteOpenRideFromSupabase(firestoreDocId) {
 }
 
 /**
+ * Firestore stelvio_riding_groups/{id} 하드 삭제(그룹 삭제) → Supabase 행 정리.
+ * @see onRidingGroupWrittenDualWrite (groupDualWriteTriggers.js) — 예전엔 삭제 이벤트에서
+ *   그냥 return해서 Supabase에 삭제된 그룹이 riding_groups/riding_group_members에 고아로
+ *   영원히 남아있던 버그(2026-08) — 그룹 상세·목록 읽기를 Supabase 우선으로 돌리면서 함께 수정.
+ */
+async function deleteRidingGroupFromSupabase(firestoreDocId) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return;
+  const groupUuid = resolveRidingGroupUuid(firestoreDocId);
+  if (!groupUuid) return;
+  const { error: jErr } = await supabase
+    .from("riding_group_join_requests")
+    .delete()
+    .eq("group_id", groupUuid);
+  if (jErr) throw jErr;
+  const { error: mErr } = await supabase
+    .from("riding_group_members")
+    .delete()
+    .eq("group_id", groupUuid);
+  if (mErr) throw mErr;
+  const { error: gErr } = await supabase.from("riding_groups").delete().eq("id", groupUuid);
+  if (gErr) throw gErr;
+}
+
+/**
  * Firestore rides/{id} 변경 → Supabase Secondary (ingest 게이트 적용).
  */
 async function runSecondaryAfterOpenRideWrite(admin, firestoreDocId, rideData, actorUid) {
@@ -593,10 +618,12 @@ module.exports = {
   upsertRidingGroupToSupabase,
   deleteJoinRequestFromSupabase,
   deleteOpenRideFromSupabase,
+  deleteRidingGroupFromSupabase,
   runSecondaryAfterOpenRideWrite,
   runSecondaryAfterRidingGroupWrite,
   resolveOpenRideUuid,
   resolveRidingGroupUuid,
+  resolveUserUuid,
   syncMediaForOpenRide,
   syncMediaForRidingGroup,
   upsertMediaAssets,

@@ -68,13 +68,12 @@ async function tryFetchOpenRidesRangeFromSupabase(admin, db, query) {
  */
 async function tryFetchRidingGroupFromSupabase(admin, db, query) {
   const groupId = String(query.groupId || query.id || "").trim();
-  const uid = String(query.uid || query.userId || "").trim() || null;
   const includeJoinRequests = query.includeJoinRequests === "1" || query.includeJoinRequests === "true";
   if (!groupId) return null;
 
-  const route = await groupReadConfig.shouldReadGroupsFromSupabase(admin, uid);
-  if (route.route !== "supabase") return null;
-
+  /* 2026-08: 캐너리 게이트 제거 — tryFetchMyRidingGroupsFromSupabase 등 나머지 3개 그룹 read
+     함수와 동일하게 항상 Supabase를 먼저 시도한다. 실패/미존재 시 아래 catch와 getRidingGroupForRead의
+     상위 폴백, 그리고 parity-fallback(멤버·가입신청 개별 보정)이 안전망 역할을 한다. */
   try {
     const group = await supabaseGroupReader.fetchRidingGroupByFirestoreId(admin, groupId, {
       includeMembers: true,
@@ -139,10 +138,6 @@ async function tryFetchRidingGroupFromSupabase(admin, db, query) {
  * @param {object} query req.query
  */
 async function tryFetchApprovedRidingGroupsFromSupabase(admin, db, query) {
-  const uid = String(query.uid || query.userId || "").trim() || null;
-  const route = await groupReadConfig.shouldReadGroupsFromSupabase(admin, uid);
-  if (route.route !== "supabase") return null;
-
   try {
     const groups = await supabaseGroupReader.fetchApprovedRidingGroups(admin, {
       limit: Math.min(Number(query.limit) || 200, 500),
