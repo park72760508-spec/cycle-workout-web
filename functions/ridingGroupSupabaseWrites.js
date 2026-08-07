@@ -329,10 +329,76 @@ async function handleLeaveRidingGroup(admin, uid, body) {
   return { success: true };
 }
 
+/**
+ * 전체 그룹 스캔 — Firestore members/joinRequests 서브컬렉션 개수와 Supabase 행 개수를
+ * 비교해 어긋난 그룹을 찾고(dryRun=true면 리포트만), 실행 모드에서는
+ * runSecondaryAfterRidingGroupWrite(syncMembersFromFirestore/syncJoinRequestsFromFirestore)로
+ * Firestore 기준 전체 재동기화(추가된 것 upsert + Supabase에만 있는 고아 행 정리)를 수행한다.
+ * 과거 fire-and-forget dual-write가 실패해 누적된 드리프트를 한 번에 복구하기 위한 운영 도구.
+ *
+ * @param {import('firebase-admin')} admin
+ * @param {{ dryRun?: boolean }} opts
+ */
+async function handleBackfillRidingGroupMembers(admin, opts) {
+  opts = opts || {};
+  const dryRun = !!opts.dryRun;
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+
+  const groupsSnap = await admin.firestore().collection(RIDING_GROUP_COLLECTION).get();
+  const report = [];
+
+  for (const groupDoc of groupsSnap.docs) {
+    const gid = groupDoc.id;
+    const gd = groupDoc.data() || {};
+    const groupUuid = supabaseGroupDualWrite.resolveRidingGroupUuid(gid);
+    if (!groupUuid) continue;
+
+    const [memSnap, reqSnap] = await Promise.all([
+      groupDoc.ref.collection("members").get(),
+      groupDoc.ref.collection("joinRequests").get(),
+    ]);
+    const fsMemberCount = memSnap.size;
+    const fsReqCount = reqSnap.size;
+
+    const [{ count: sbMemberCount }, { count: sbReqCount }] = await Promise.all([
+      supabase.from("riding_group_members").select("*", { count: "exact", head: true }).eq("group_id", groupUuid),
+      supabase.from("riding_group_join_requests").select("*", { count: "exact", head: true }).eq("group_id", groupUuid),
+    ]);
+
+    const mismatch = fsMemberCount !== (sbMemberCount || 0) || fsReqCount !== (sbReqCount || 0);
+    if (!mismatch) continue;
+
+    const entry = {
+      groupId: gid,
+      name: gd.name || "",
+      firestoreMembers: fsMemberCount,
+      supabaseMembers: sbMemberCount || 0,
+      firestoreJoinRequests: fsReqCount,
+      supabaseJoinRequests: sbReqCount || 0,
+    };
+    if (!dryRun) {
+      try {
+        await supabaseGroupDualWrite.runSecondaryAfterRidingGroupWrite(admin, gid, gd, gd.createdBy, {
+          syncMembersFromFirestore: true,
+          syncJoinRequestsFromFirestore: true,
+        });
+        entry.repaired = true;
+      } catch (err) {
+        entry.repaired = false;
+        entry.error = err.message || String(err);
+      }
+    }
+    report.push(entry);
+  }
+
+  return { success: true, dryRun, scanned: groupsSnap.size, mismatches: report.length, report };
+}
+
 module.exports = {
   WriteError,
   handleJoinRidingGroup,
   handleApproveJoinRequest,
   handleRejectJoinRequest,
   handleLeaveRidingGroup,
+  handleBackfillRidingGroupMembers,
 };

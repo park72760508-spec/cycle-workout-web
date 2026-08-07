@@ -11930,6 +11930,38 @@ registerRidingGroupSupabaseWriteEndpoint(
   ridingGroupSupabaseWrites.handleLeaveRidingGroup
 );
 
+/**
+ * 운영 도구(관리자 grade=1 전용) — 전체 크루/클럽의 Firestore↔Supabase 멤버·가입신청 드리프트
+ * 스캔 및 복구. GET(또는 ?dryRun=1)은 리포트만, POST는 실제 복구까지 수행.
+ * @see functions/ridingGroupSupabaseWrites.js handleBackfillRidingGroupMembers
+ */
+exports.manualBackfillRidingGroupMembers = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 540 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET" && req.method !== "POST") {
+      res.status(405).json({ success: false, error: "GET 또는 POST만 지원합니다." });
+      return;
+    }
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
+      const dryRun = req.method === "GET" || req.query.dryRun === "1" || req.query.dryRun === "true";
+      const result = await ridingGroupSupabaseWrites.handleBackfillRidingGroupMembers(admin, { dryRun });
+      res.status(200).json(result);
+    } catch (e) {
+      const status = e.status || 500;
+      if (status >= 500) console.error("[manualBackfillRidingGroupMembers]", e.message || e);
+      res.status(status).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 /** 클라이언트 Secondary relay — Firestore Primary 성공 후 open_rides upsert */
 exports.ingestOpenRideDualWriteRelay = onRequest(
   supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
