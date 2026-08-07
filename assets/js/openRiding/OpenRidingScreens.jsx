@@ -11730,24 +11730,30 @@ function OpenRidingGroupDetailView(props) {
         return;
       }
       var cancelled = false;
-      Promise.all(
-        uids.map(function (uid) {
-          return window
-            .getUserByUid(uid)
-            .then(function (row) {
-              return { uid: uid, row: row };
-            })
-            .catch(function () {
-              return { uid: uid, row: null };
+      setMemberProfiles({});
+      /* 크루 전체 인원의 프로필을 Promise.all로 한 번에 기다렸다가 반영하면, 그중 한 명만
+         네트워크가 느려도(또는 인원이 많아도) 전원의 사진 갱신이 가장 느린 그 사람만큼
+         지연됐다(체감 ~10초) — 완료되는 즉시 개별 반영해서 먼저 끝난 멤버부터 바로 최신
+         사진이 보이게 한다(2026-08). */
+      uids.forEach(function (uid) {
+        window
+          .getUserByUid(uid)
+          .then(function (row) {
+            if (cancelled) return;
+            setMemberProfiles(function (prev) {
+              var next = Object.assign({}, prev);
+              next[uid] = row;
+              return next;
             });
-        })
-      ).then(function (pairs) {
-        if (cancelled) return;
-        var next = {};
-        pairs.forEach(function (p) {
-          next[p.uid] = p.row;
-        });
-        setMemberProfiles(next);
+          })
+          .catch(function () {
+            if (cancelled) return;
+            setMemberProfiles(function (prev) {
+              var next = Object.assign({}, prev);
+              next[uid] = null;
+              return next;
+            });
+          });
       });
       return function () {
         cancelled = true;

@@ -156,10 +156,15 @@
       return dn || '(이름 없음)';
     }
 
+    /* raw(Supabase 보드 user_info)가 항상 최신 — 그룹 members 서브컬렉션의 profileImageUrl은
+       가입/승인 시점 1회 스냅샷이라 이후 프로필 사진을 바꿔도 갱신되지 않는다(2026-08). 보드
+       데이터가 없을 때만 그 스냅샷으로 폴백한다. */
     function memProfile(mem, raw) {
+      var boardUrl = raw ? rowProfileUrl(raw) : '';
+      if (boardUrl) return boardUrl;
       if (mem && mem.profileImageUrl) return String(mem.profileImageUrl);
       if (mem && mem.photoUrl) return String(mem.photoUrl);
-      return raw ? rowProfileUrl(raw) : '';
+      return '';
     }
 
     function placeholderItem(mem, raw, memUid) {
