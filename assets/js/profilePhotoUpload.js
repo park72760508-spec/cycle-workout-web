@@ -188,6 +188,32 @@
     return last;
   }
 
+  /** 네트워크 불안정 시 업로드/저장 promise가 resolve도 reject도 안 되고 무한 대기하는 것을 방지 */
+  function withTimeout(promise, ms, message) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        reject(new Error(message));
+      }, ms);
+      promise.then(
+        function (v) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(v);
+        },
+        function (e) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          reject(e);
+        }
+      );
+    });
+  }
+
   async function uploadProfileImage(uid, blob) {
     var isWebp = blob.type && String(blob.type).indexOf('webp') >= 0;
     var ext = isWebp ? '.webp' : '.jpg';
@@ -308,10 +334,18 @@
       }
       var blob = await encodeProfileAvatarBlobForUpload(canvas);
       if (!blob || blob.size < 16) throw new Error('압축 결과가 비어 있습니다.');
-      var url = await uploadProfileImage(uid, blob);
+      var url = await withTimeout(
+        uploadProfileImage(uid, blob),
+        30000,
+        '업로드가 지연되고 있습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.'
+      );
       var apiFn = typeof window.apiUpdateUser === 'function' ? window.apiUpdateUser : null;
       if (!apiFn) throw new Error('apiUpdateUser를 사용할 수 없습니다.');
-      var upd = await apiFn(uid, { profileImageUrl: url });
+      var upd = await withTimeout(
+        apiFn(uid, { profileImageUrl: url }),
+        15000,
+        '저장이 지연되고 있습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.'
+      );
       if (!upd || !upd.success) throw new Error((upd && upd.error) || 'Firestore 업데이트 실패');
 
       if (window.currentUser && String(window.currentUser.id) === uid) {
