@@ -13931,10 +13931,11 @@ function OpenRidingRoomApp(props) {
             {headerTitle}
           </h1>
           {view === 'groupDetail' && groupDetailHeaderActions ? (
-            /* 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭(우측 칸 36px)이지만, 요청대로
-               간격을 기존 2px의 2배(4px)로 늘린다 — 17+4+17=38px로 2px 정도만 살짝 넘친다
-               (2026-08, 아이콘이 워낙 작아 시각적으로는 무리 없음). */
-            <div className="shrink-0 flex items-center justify-end gap-1">
+            /* justify-end라 삭제 아이콘은 우측 끝에 그대로 고정되고, gap을 늘리면 수정 아이콘만
+               좌측으로 밀려난다 — 요청대로 기존 간격(4px)의 2배(8px)로 이격.
+               상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭(우측 칸 36px)이지만
+               17+8+17=42px로 6px 정도 넘친다(2026-08, 아이콘이 작아 시각적으로는 무리 없음). */
+            <div className="shrink-0 flex items-center justify-end gap-2">
               <button
                 type="button"
                 className="p-0 m-0 border-0 bg-transparent inline-flex items-center justify-center disabled:opacity-50"
