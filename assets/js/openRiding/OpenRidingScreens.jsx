@@ -11623,6 +11623,10 @@ function OpenRidingGroupDetailView(props) {
   var _jConfirm = useState(null);
   var joinActionConfirm = _jConfirm[0];
   var setJoinActionConfirm = _jConfirm[1];
+  /** 수락/거절 처리 중인 신청 건 — 멤버 리스트가 새로고침될 때까지 해당 행 버튼에 진행 중 스피너 표시 */
+  var _jabItem = useState(null);
+  var joinActionBusyItem = _jabItem[0];
+  var setJoinActionBusyItem = _jabItem[1];
   var _deleteConfirmOpen = useState(false);
   var deleteConfirmOpen = _deleteConfirmOpen[0];
   var setDeleteConfirmOpen = _deleteConfirmOpen[1];
@@ -12316,6 +12320,7 @@ function OpenRidingGroupDetailView(props) {
       return;
     }
     setBusy(true);
+    setJoinActionBusyItem({ uid: appUid, action: 'approve' });
     svc
       .approveRidingGroupJoinRequest(firestore, String(userId), String(groupId), appUid)
       .then(function () {
@@ -12326,6 +12331,7 @@ function OpenRidingGroupDetailView(props) {
       })
       .finally(function () {
         setBusy(false);
+        setJoinActionBusyItem(null);
       });
   }
 
@@ -13018,7 +13024,17 @@ function OpenRidingGroupDetailView(props) {
                             openJoinActionConfirm('approve', uid, nm);
                           }}
                         >
-                          수락
+                          {joinActionBusyItem && joinActionBusyItem.action === 'approve' && joinActionBusyItem.uid === uid ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span
+                                className="inline-block h-3 w-3 shrink-0 rounded-full border-2 border-emerald-900/30 border-t-emerald-900 animate-spin motion-reduce:animate-none"
+                                aria-hidden="true"
+                              />
+                              진행 중…
+                            </span>
+                          ) : (
+                            '수락'
+                          )}
                         </button>
                         <button
                           type="button"
