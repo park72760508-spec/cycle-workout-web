@@ -1100,8 +1100,9 @@ function AffiliateList(props) {
 
       {/* 목록 */}
       {loading ? (
-        <div className="flex justify-center py-16">
-          <span className="inline-block h-10 w-10 rounded-full border-[3px] border-violet-200 border-t-violet-600 animate-spin" style={{ animationDuration: '0.85s' }} />
+        <div className="open-riding-loading-wrap">
+          <div className="open-riding-loading-spinner" />
+          <p className="open-riding-loading-text">제휴사 목록 불러오는 중...</p>
         </div>
       ) : loadError ? (
         <div className="flex flex-col items-center py-16 gap-3">

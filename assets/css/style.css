@@ -28455,6 +28455,28 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   color: #111827;
 }
 
+/* 제휴사 목록 로딩 — #openRidingRoomScreen .open-riding-loading-spinner(녹색 원형)와 동일 */
+#affiliateScreen .open-riding-loading-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+  gap: 12px;
+}
+#affiliateScreen .open-riding-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(34, 197, 94, 0.2);
+  border-top-color: #22c55e;
+  border-radius: 50%;
+  animation: journalSpin 0.9s linear infinite;
+}
+#affiliateScreen .open-riding-loading-text {
+  font-size: 14px;
+  color: #4b5563;
+}
+
 /* 아바타 원형 배지 */
 .affiliate-avatar-circle {
   display: inline-flex;
