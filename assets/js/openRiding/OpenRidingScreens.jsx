@@ -12253,6 +12253,12 @@ function OpenRidingGroupDetailView(props) {
       .joinRidingGroup(firestore, userId, groupId, joinPw, profileHintsForJoin())
       .then(function () {
         setJoinPw('');
+        /* 실제 가입신청 구독(subscribeRidingGroupMyJoinRequest)이 반영되기 전까지 버튼이
+           잠깐 다시 활성화되어 보이는 깜빡임을 막기 위해, 성공 즉시 낙관적으로 표시 전환 —
+           구독이 갱신되면 실제 row로 덮어써진다. */
+        setMyJoinRequest(function (prev) {
+          return prev || { optimistic: true };
+        });
       })
       .catch(function (e) {
         alert(e && e.message ? e.message : '가입 실패');
