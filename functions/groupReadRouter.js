@@ -84,7 +84,10 @@ async function tryFetchRidingGroupFromSupabase(admin, db, query) {
     const cfg = groupReadConfig.getGroupReadConfig();
     const sbMembers = Array.isArray(group._members) ? group._members : [];
     const mc = Number(group.memberCount) || 0;
-    const membersLookEmpty = sbMembers.length === 0 && mc > 0;
+    /* 2026-08: 완전히 비었을 때(sbMembers.length===0)만 감지하던 조건을 부분 누락(예: count=5,
+       실제 행=3)까지 잡도록 확장 — "SK 행복페이스" 사례처럼 dual-write가 일부 멤버만 누락시킨
+       경우 fallback이 발동하지 않아 카운트/리스트 불일치가 화면에 그대로 노출되던 버그. */
+    const membersLookEmpty = mc > 0 && sbMembers.length < mc;
     /* 가입 신청은 joinRidingGroup()이 Firestore에 먼저 쓰고 Supabase는 별도 dual-write로
        뒤따라가는 구조라, Supabase 쪽 미러링이 지연·누락되면 신청 인원 카운트(Supabase 전용
        getManagedGroupsPendingJoinRequestCountForRead)는 정상인데 상세 화면 목록만 비어
