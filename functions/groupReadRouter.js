@@ -85,31 +85,44 @@ async function tryFetchRidingGroupFromSupabase(admin, db, query) {
     const cfg = groupReadConfig.getGroupReadConfig();
     const sbMembers = Array.isArray(group._members) ? group._members : [];
     const mc = Number(group.memberCount) || 0;
-    if (
-      cfg.parityFallbackToFirebase !== false &&
-      sbMembers.length === 0 &&
-      mc > 0
-    ) {
+    const membersLookEmpty = sbMembers.length === 0 && mc > 0;
+    /* 가입 신청은 joinRidingGroup()이 Firestore에 먼저 쓰고 Supabase는 별도 dual-write로
+       뒤따라가는 구조라, Supabase 쪽 미러링이 지연·누락되면 신청 인원 카운트(Supabase 전용
+       getManagedGroupsPendingJoinRequestCountForRead)는 정상인데 상세 화면 목록만 비어
+       보일 수 있다 — 멤버 fallback과 별개로 가입 신청도 단독으로 parity 확인한다. */
+    const joinRequestsLookEmpty =
+      includeJoinRequests && (!Array.isArray(group._joinRequests) || group._joinRequests.length === 0);
+    if (cfg.parityFallbackToFirebase !== false && (membersLookEmpty || joinRequestsLookEmpty)) {
       const fromFb = await fetchRidingGroupFromFirebase(db, groupId, {
         includeMembers: true,
         includeJoinRequests,
       });
       if (fromFb && fromFb.group) {
-        const fbMembers = Array.isArray(fromFb.group._members) ? fromFb.group._members : [];
-        if (fbMembers.length > 0) {
-          console.warn("[groupReadRouter] Supabase members empty → Firebase merge", {
-            groupId,
-            memberCount: mc,
-            fbCount: fbMembers.length,
-          });
-          group._members = fbMembers;
-          if (includeJoinRequests && (!group._joinRequests || !group._joinRequests.length)) {
-            group._joinRequests = fromFb.group._joinRequests || [];
+        if (membersLookEmpty) {
+          const fbMembers = Array.isArray(fromFb.group._members) ? fromFb.group._members : [];
+          if (fbMembers.length > 0) {
+            console.warn("[groupReadRouter] Supabase members empty → Firebase merge", {
+              groupId,
+              memberCount: mc,
+              fbCount: fbMembers.length,
+            });
+            group._members = fbMembers;
+            group.membersParityFallback = true;
           }
-          group.readBackend = "supabase";
-          group.readSource = "supabase";
-          group.membersParityFallback = true;
         }
+        if (joinRequestsLookEmpty) {
+          const fbJoinRequests = Array.isArray(fromFb.group._joinRequests) ? fromFb.group._joinRequests : [];
+          if (fbJoinRequests.length > 0) {
+            console.warn("[groupReadRouter] Supabase joinRequests empty → Firebase merge", {
+              groupId,
+              fbCount: fbJoinRequests.length,
+            });
+            group._joinRequests = fbJoinRequests;
+            group.joinRequestsParityFallback = true;
+          }
+        }
+        group.readBackend = "supabase";
+        group.readSource = "supabase";
       }
     }
 
