@@ -246,6 +246,11 @@
         item = placeholderItem(mem, raw, memUid);
       }
       if (!hasValidCrewValue(item)) return;
+      /* 아바타 확대 오버레이(주간 TSS·최근 30일 거리 표기)용 — 선택된 항목과 무관하게 원본 값 보존 */
+      var wkTss = Number(raw.weekly_tss);
+      var dist30d = Number(raw.distance_30d_km);
+      item.weeklyTss = isFinite(wkTss) && wkTss > 0 ? wkTss : 0;
+      item.distance30dKm = isFinite(dist30d) && dist30d > 0 ? dist30d : 0;
       merged.push(item);
     });
 
@@ -270,6 +275,30 @@
     merged.forEach(function (item, idx) {
       item._crewRank = idx + 1;
     });
+    /* 아바타 확대 오버레이의 구간별 페이스 칩(1k/5k/…)에 크루 내 순위를 함께 표기하기 위해,
+       보드 전역 순위와 별개로 이 크루 멤버들끼리만 구간별 score를 다시 정렬한다. */
+    if (tabId === 'overall') {
+      var rrCfg = window.runningRankingConfig || {};
+      var segKeys = (rrCfg.OVERALL_SEGMENTS || []).map(function (s) {
+        return s.key;
+      });
+      segKeys.forEach(function (key) {
+        var ranked = merged
+          .filter(function (item) {
+            var seg = (item.segments || []).filter(function (s) { return s.key === key; })[0];
+            return seg && seg.score != null && Number(seg.score) > 0;
+          })
+          .sort(function (a, b) {
+            var segA = a.segments.filter(function (s) { return s.key === key; })[0];
+            var segB = b.segments.filter(function (s) { return s.key === key; })[0];
+            return Number(segB.score) - Number(segA.score);
+          });
+        ranked.forEach(function (item, idx) {
+          var seg = item.segments.filter(function (s) { return s.key === key; })[0];
+          if (seg) seg.crewRank = idx + 1;
+        });
+      });
+    }
     return merged;
   }
 

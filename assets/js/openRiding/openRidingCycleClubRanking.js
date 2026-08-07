@@ -164,7 +164,12 @@
           rank: hit.boardRank,
           rankChange: hit.row.rankChange != null ? hit.row.rankChange : null,
           previousBoardRank: hit.row.previousBoardRank != null ? hit.row.previousBoardRank : null,
-          _groupRole: m.role || 'member'
+          _groupRole: m.role || 'member',
+          /* 아바타 확대 오버레이(GC·주간TSS·최근 30일 거리·독주) — 선택된 항목과 무관하게 원본 값 보존 */
+          gcScore: metricValue('gc', hit.row),
+          weeklyTss: metricValue('tss', hit.row),
+          distance30dKm: metricValue('personal_dist', hit.row),
+          personalSpeedKmh: metricValue('personal_speed', hit.row)
         })
       );
     });

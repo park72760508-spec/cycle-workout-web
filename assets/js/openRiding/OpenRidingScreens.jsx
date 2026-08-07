@@ -12791,30 +12791,6 @@ function OpenRidingGroupDetailView(props) {
             if (!listSource || listSource.length === 0) {
               return <p className="text-sm text-slate-500 m-0 px-1 py-2">멤버 정보를 불러오는 중입니다.</p>;
             }
-            /* 아바타 확대 오버레이의 순위 카드(랭킹보드와 동일 항목: 순위·전체 보드 순위·항목값)에
-               쓸 현재 항목명·단위 — 행마다 다시 계산할 필요 없이 한 번만 구한다 */
-            var overlayMetricLabel = '';
-            var overlayMetricUnit = '';
-            if (useRanked) {
-              if (isRunGroup) {
-                var crewLabelApi = typeof window !== 'undefined' ? window.runningRankingCrewTab : null;
-                overlayMetricLabel =
-                  crewLabelApi && typeof crewLabelApi.crewMetricLabel === 'function' ? crewLabelApi.crewMetricLabel(rankMetric) : '종합';
-                overlayMetricUnit =
-                  crewLabelApi && typeof crewLabelApi.crewMetricUnit === 'function' ? crewLabelApi.crewMetricUnit(rankMetric) : 'pt';
-              } else {
-                var cycleLabelApi = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
-                var metricOpt =
-                  cycleLabelApi && Array.isArray(cycleLabelApi.METRIC_OPTIONS)
-                    ? cycleLabelApi.METRIC_OPTIONS.filter(function (o) {
-                        return o.value === rankMetric;
-                      })[0]
-                    : null;
-                overlayMetricLabel = metricOpt ? metricOpt.label : 'GC';
-                overlayMetricUnit =
-                  cycleLabelApi && typeof cycleLabelApi.metricUnit === 'function' ? cycleLabelApi.metricUnit(rankMetric) : '점';
-              }
-            }
             return (
               <div className="space-y-0">
                 {listSource.map(function (m, idx) {
@@ -12849,6 +12825,50 @@ function OpenRidingGroupDetailView(props) {
                     showOverallSegments &&
                     Array.isArray(m.segments) &&
                     m.segments.length > 0;
+                  /* 아바타 확대 오버레이 — 랭킹보드 아바타 확대 형식(구간별 크루 순위/페이스 · 주간
+                     TSS·최근 30일 거리)과 동일하게 표시. 구간 값은 '종합' 탭에서 계산된 m.segments가
+                     있을 때만 채워진다(다른 탭 선택 시에는 이 줄만 비어 보인다). */
+                  var overlaySegmentsLine = '';
+                  var overlayBottomLine = '';
+                  if (useRanked) {
+                    if (isRunGroup) {
+                      if (Array.isArray(m.segments) && m.segments.length > 0) {
+                        overlaySegmentsLine = m.segments
+                          .map(function (seg) {
+                            var rp = seg.crewRank != null && seg.crewRank >= 1 ? seg.crewRank + '위' : '-';
+                            var pp = seg.pace && String(seg.pace).trim() ? String(seg.pace).trim() : '-';
+                            return seg.label + '(' + rp + '/' + pp + ')';
+                          })
+                          .join(' · ');
+                      }
+                      var runFmtApi = (typeof window !== 'undefined' && window.runningRankingFormat) || {};
+                      var wkTssTxt =
+                        m.weeklyTss > 0 && typeof runFmtApi.formatTss === 'function' ? runFmtApi.formatTss(m.weeklyTss) : '-';
+                      var dist30Txt =
+                        m.distance30dKm > 0 && typeof runFmtApi.formatDistanceKm === 'function'
+                          ? runFmtApi.formatDistanceKm(m.distance30dKm) + 'km'
+                          : '-';
+                      overlayBottomLine = '주간 TSS : ' + wkTssTxt + ' · 최근 30일 거리 : ' + dist30Txt;
+                    } else {
+                      var cycleFmtApi = (typeof window !== 'undefined' && window.openRidingCycleClubRanking) || {};
+                      var fmtMetric =
+                        typeof cycleFmtApi.formatMetricValue === 'function'
+                          ? cycleFmtApi.formatMetricValue
+                          : function (metric, v) {
+                              return v != null ? String(v) : '-';
+                            };
+                      var gcTxt = m.gcScore != null && m.gcScore > 0 ? fmtMetric('gc', m.gcScore) + '점' : '-';
+                      var tssTxt = m.weeklyTss != null && m.weeklyTss > 0 ? fmtMetric('tss', m.weeklyTss) : '-';
+                      var distTxt =
+                        m.distance30dKm != null && m.distance30dKm > 0 ? fmtMetric('personal_dist', m.distance30dKm) + 'km' : '-';
+                      var speedTxt =
+                        m.personalSpeedKmh != null && m.personalSpeedKmh > 0
+                          ? fmtMetric('personal_speed', m.personalSpeedKmh) + 'km/h'
+                          : '-';
+                      overlayBottomLine =
+                        'GC : ' + gcTxt + ' · 주간TSS : ' + tssTxt + ' · 최근 30일 거리 : ' + distTxt + ' · 독주 능력 : ' + speedTxt;
+                    }
+                  }
                   return (
                     <div
                       key={uid || idx}
@@ -12871,9 +12891,8 @@ function OpenRidingGroupDetailView(props) {
                                   groupLabel: isRunGroup ? '크루' : '클럽',
                                   rank: rank || null,
                                   metaHtml: rankMetaHtml,
-                                  metricLabel: overlayMetricLabel,
-                                  metricUnit: overlayMetricUnit,
-                                  valueLabel: m.valueLabel != null ? m.valueLabel : null
+                                  segmentsLine: overlaySegmentsLine,
+                                  bottomLine: overlayBottomLine
                                 }
                               : null
                           )
@@ -13311,14 +13330,10 @@ function OpenRidingGroupDetailView(props) {
                     '-'
                   )}
                 </p>
-                <p className="stelvio-rank-avatar-zoom-line3">
-                  {avatarZoom.rank.metricLabel
-                    ? avatarZoom.rank.metricLabel +
-                      ': ' +
-                      (avatarZoom.rank.valueLabel != null ? avatarZoom.rank.valueLabel : '-') +
-                      avatarZoom.rank.metricUnit
-                    : null}
-                </p>
+                {avatarZoom.rank.segmentsLine ? (
+                  <p className="stelvio-rank-avatar-zoom-line2">{avatarZoom.rank.segmentsLine}</p>
+                ) : null}
+                <p className="stelvio-rank-avatar-zoom-line3">{avatarZoom.rank.bottomLine || null}</p>
               </div>
             ) : null}
           </div>
