@@ -427,18 +427,15 @@ async function syncSupabaseUserGenderFromFirestore(admin, firebaseUid) {
 
 /**
  * @param {import('firebase-admin')} admin
- * @param {{ startAfterUid?: string, maxUsers?: number, dryRun?: boolean }} [opts]
+ * @param {{ startAfterUid?: string, maxUsers?: number, dryRun?: boolean, uids?: string[] }} [opts]
  */
 async function backfillSupabaseUserGenderFromFirestore(admin, opts = {}) {
   const db = admin.firestore();
-  const startAfterUid = String(opts.startAfterUid || "").trim();
-  const maxUsers = Math.max(1, Math.min(5000, Number(opts.maxUsers) || 500));
   const dryRun = opts.dryRun === true;
+  const explicitUids = Array.isArray(opts.uids)
+    ? [...new Set(opts.uids.map((u) => String(u || "").trim()).filter(Boolean))]
+    : [];
 
-  let query = db.collection("users").orderBy(admin.firestore.FieldPath.documentId()).limit(maxUsers);
-  if (startAfterUid) query = query.startAfter(startAfterUid);
-
-  const snap = await query.get();
   const stats = {
     scanned: 0,
     updated: 0,
@@ -453,7 +450,25 @@ async function backfillSupabaseUserGenderFromFirestore(admin, opts = {}) {
     dryRun,
   };
 
-  for (const doc of snap.docs) {
+  let docs;
+  if (explicitUids.length > 0) {
+    // 특정 UID만 지정 — 크루 멤버 dual-write FK 실패처럼 개별 사용자가 Supabase에 아직
+    // provisioning 안 된 경우를 콕 집어 복구할 때 전체 스캔 대신 사용한다.
+    const refs = explicitUids.map((uid) => db.collection("users").doc(uid));
+    const snaps = await db.getAll(...refs);
+    docs = snaps.filter((s) => s.exists);
+    stats.hasMore = false;
+  } else {
+    const startAfterUid = String(opts.startAfterUid || "").trim();
+    const maxUsers = Math.max(1, Math.min(5000, Number(opts.maxUsers) || 500));
+    let query = db.collection("users").orderBy(admin.firestore.FieldPath.documentId()).limit(maxUsers);
+    if (startAfterUid) query = query.startAfter(startAfterUid);
+    const snap = await query.get();
+    docs = snap.docs;
+    stats.hasMore = snap.size >= maxUsers;
+  }
+
+  for (const doc of docs) {
     stats.scanned += 1;
     stats.lastUid = doc.id;
     const mapped = mapGender((doc.data() || {}).gender ?? (doc.data() || {}).sex);
@@ -477,7 +492,6 @@ async function backfillSupabaseUserGenderFromFirestore(admin, opts = {}) {
     }
   }
 
-  stats.hasMore = snap.size >= maxUsers;
   return stats;
 }
 

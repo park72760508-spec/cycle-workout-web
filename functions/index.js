@@ -15852,11 +15852,13 @@ exports.adminBackfillSupabaseUserGender = onRequest(
         Math.min(5000, Number(body.maxUsers || req.query.maxUsers || 500) || 500)
       );
       const dryRun = String(body.dryRun ?? req.query.dryRun ?? "false").toLowerCase() === "true";
+      const uids = Array.isArray(body.uids) ? body.uids : [];
 
       const stats = await supabaseUserProvision.backfillSupabaseUserGenderFromFirestore(admin, {
         startAfterUid,
         maxUsers,
         dryRun,
+        uids,
       });
 
       res.status(200).json({
