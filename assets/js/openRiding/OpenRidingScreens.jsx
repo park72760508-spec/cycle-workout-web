@@ -11589,6 +11589,10 @@ function OpenRidingGroupDetailView(props) {
   var _busy = useState(false);
   var busy = _busy[0];
   var setBusy = _busy[1];
+  /** 탈퇴 처리 중 — 멤버 리스트가 새로고침되어 탈퇴가 반영될 때까지 버튼에 진행 중 스피너 표시 */
+  var _leaving = useState(false);
+  var leaving = _leaving[0];
+  var setLeaving = _leaving[1];
   var _pw = useState('');
   var joinPw = _pw[0];
   var setJoinPw = _pw[1];
@@ -12277,13 +12281,21 @@ function OpenRidingGroupDetailView(props) {
     if (!window.confirm('이 그룹에서 탈퇴할까요?')) return;
     if (typeof gs.leaveRidingGroup !== 'function') return;
     setBusy(true);
+    setLeaving(true);
     gs
       .leaveRidingGroup(firestore, userId, groupId)
+      .then(function () {
+        if (typeof gs.fetchRidingGroupMembersList !== 'function') return undefined;
+        return gs.fetchRidingGroupMembersList(firestore, groupId).then(function (list) {
+          setMembers(Array.isArray(list) ? list : []);
+        });
+      })
       .catch(function (e) {
         alert(e && e.message ? e.message : '탈퇴 실패');
       })
       .finally(function () {
         setBusy(false);
+        setLeaving(false);
       });
   }
 
@@ -12740,12 +12752,22 @@ function OpenRidingGroupDetailView(props) {
             ) : isMember ? (
               <button
                 type="button"
-                className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40"
+                className="open-riding-action-btn shrink-0 text-[11px] font-semibold px-2 rounded-md border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-40 inline-flex items-center justify-center gap-1"
                 style={{ height: '24px', minHeight: '24px', lineHeight: '1' }}
                 disabled={busy}
                 onClick={doLeave}
               >
-                탈퇴
+                {leaving ? (
+                  <>
+                    <span
+                      className="inline-block h-3 w-3 shrink-0 rounded-full border-2 border-slate-400/40 border-t-slate-600 animate-spin motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
+                    처리 중…
+                  </>
+                ) : (
+                  '탈퇴'
+                )}
               </button>
             ) : null}
             {showRankFilter ? (
