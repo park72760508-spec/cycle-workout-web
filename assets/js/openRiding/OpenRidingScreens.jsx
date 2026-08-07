@@ -13932,9 +13932,10 @@ function OpenRidingRoomApp(props) {
           </h1>
           {view === 'groupDetail' && groupDetailHeaderActions ? (
             /* justify-end라 삭제 아이콘은 우측 끝에 그대로 고정되고, gap을 늘리면 수정 아이콘만
-               좌측으로 밀려난다 — 요청대로 기존 간격(4px)의 2배(8px)로 이격.
-               상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭(우측 칸 36px)이지만
-               17+8+17=42px로 6px 정도 넘친다(2026-08, 아이콘이 작아 시각적으로는 무리 없음). */
+               좌측으로 밀려난다 — 간격은 기존(4px)의 2배(8px)로 이격, 아이콘은 요청대로
+               17px→22px(30% 확대)로 키웠다. 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem]
+               고정 폭(우측 칸 36px)인데 22+8+22=52px로 16px 넘친다 — 그리드 셀이 overflow를
+               clip하지 않아 시각적으로는 유지되지만, 제목이 아주 길면 살짝 겹칠 수 있다(2026-08). */
             <div className="shrink-0 flex items-center justify-end gap-2">
               <button
                 type="button"
@@ -13944,7 +13945,7 @@ function OpenRidingRoomApp(props) {
                 aria-label={moimCopy.groupDetailTitle + ' 수정'}
                 title="수정"
               >
-                <img src="assets/img/edit2.png" alt="" width={17} height={17} className="block object-contain" decoding="async" />
+                <img src="assets/img/edit2.png" alt="" width={22} height={22} className="block object-contain" decoding="async" />
               </button>
               <button
                 type="button"
@@ -13954,7 +13955,7 @@ function OpenRidingRoomApp(props) {
                 aria-label="그룹 삭제"
                 title="그룹 삭제"
               >
-                <img src="assets/img/delete2.png" alt="" width={17} height={17} className="block object-contain" decoding="async" />
+                <img src="assets/img/delete2.png" alt="" width={22} height={22} className="block object-contain" decoding="async" />
               </button>
             </div>
           ) : (
