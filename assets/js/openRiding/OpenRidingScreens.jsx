@@ -12067,13 +12067,13 @@ function OpenRidingGroupDetailView(props) {
     ]
   );
 
-  function openGroupDetailAvatarZoom(src, name) {
+  function openGroupDetailAvatarZoom(src, name, rankInfo) {
     var s = src != null ? String(src).trim() : '';
     if (!s) return;
-    setAvatarZoom({ src: s, name: name != null ? String(name).trim() : '' });
+    setAvatarZoom({ src: s, name: name != null ? String(name).trim() : '', rank: rankInfo || null });
   }
 
-  function renderGroupDetailClickableAvatar(photo, displayName, btnClass) {
+  function renderGroupDetailClickableAvatar(photo, displayName, btnClass, rankInfo) {
     var src = photo != null ? String(photo).trim() : '';
     if (!src) return null;
     var nm = displayName != null ? String(displayName).trim() : '';
@@ -12091,7 +12091,7 @@ function OpenRidingGroupDetailView(props) {
         onClick={function (e) {
           e.preventDefault();
           e.stopPropagation();
-          openGroupDetailAvatarZoom(src, nm);
+          openGroupDetailAvatarZoom(src, nm, rankInfo);
         }}
       >
         <img
@@ -12757,6 +12757,30 @@ function OpenRidingGroupDetailView(props) {
             if (!listSource || listSource.length === 0) {
               return <p className="text-sm text-slate-500 m-0 px-1 py-2">멤버 정보를 불러오는 중입니다.</p>;
             }
+            /* 아바타 확대 오버레이의 순위 카드(랭킹보드와 동일 항목: 순위·전체 보드 순위·항목값)에
+               쓸 현재 항목명·단위 — 행마다 다시 계산할 필요 없이 한 번만 구한다 */
+            var overlayMetricLabel = '';
+            var overlayMetricUnit = '';
+            if (useRanked) {
+              if (isRunGroup) {
+                var crewLabelApi = typeof window !== 'undefined' ? window.runningRankingCrewTab : null;
+                overlayMetricLabel =
+                  crewLabelApi && typeof crewLabelApi.crewMetricLabel === 'function' ? crewLabelApi.crewMetricLabel(rankMetric) : '종합';
+                overlayMetricUnit =
+                  crewLabelApi && typeof crewLabelApi.crewMetricUnit === 'function' ? crewLabelApi.crewMetricUnit(rankMetric) : 'pt';
+              } else {
+                var cycleLabelApi = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
+                var metricOpt =
+                  cycleLabelApi && Array.isArray(cycleLabelApi.METRIC_OPTIONS)
+                    ? cycleLabelApi.METRIC_OPTIONS.filter(function (o) {
+                        return o.value === rankMetric;
+                      })[0]
+                    : null;
+                overlayMetricLabel = metricOpt ? metricOpt.label : 'GC';
+                overlayMetricUnit =
+                  cycleLabelApi && typeof cycleLabelApi.metricUnit === 'function' ? cycleLabelApi.metricUnit(rankMetric) : '점';
+              }
+            }
             return (
               <div className="space-y-0">
                 {listSource.map(function (m, idx) {
@@ -12804,7 +12828,21 @@ function OpenRidingGroupDetailView(props) {
                       <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank || '-'}</span>
                       <span className="stelvio-rank-name">
                         {photo ? (
-                          renderGroupDetailClickableAvatar(photo, nmDisplay)
+                          renderGroupDetailClickableAvatar(
+                            photo,
+                            nmDisplay,
+                            null,
+                            useRanked
+                              ? {
+                                  groupLabel: isRunGroup ? '크루' : '클럽',
+                                  rank: rank || null,
+                                  metaHtml: rankMetaHtml,
+                                  metricLabel: overlayMetricLabel,
+                                  metricUnit: overlayMetricUnit,
+                                  valueLabel: m.valueLabel != null ? m.valueLabel : null
+                                }
+                              : null
+                          )
                         ) : (
                           <span className="open-riding-group-member-avatar-fallback inline-flex shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
                             {initial}
@@ -12888,11 +12926,18 @@ function OpenRidingGroupDetailView(props) {
                   </p>
                   <button
                     type="button"
-                    className="open-riding-action-btn w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50 text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-3 box-border"
+                    className="open-riding-action-btn w-full min-h-[clamp(2.75rem,10vw,3.5rem)] rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50 text-[clamp(0.8125rem,3.8vw,0.9375rem)] px-3 box-border inline-flex items-center justify-center gap-2"
                     disabled={busy}
+                    aria-busy={busy}
                     onClick={doJoin}
                   >
-                    그룹 가입하기
+                    {busy ? (
+                      <span
+                        className="inline-block h-4 w-4 shrink-0 rounded-full border-2 border-white/30 border-t-white animate-spin motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    {busy ? '가입 처리 중…' : '그룹 가입하기'}
                   </button>
                 </>
               )
@@ -13177,7 +13222,7 @@ function OpenRidingGroupDetailView(props) {
       ) : null}
       {avatarZoom ? (
         <div
-          className="open-riding-avatar-zoom-backdrop"
+          className="stelvio-rank-avatar-zoom-backdrop"
           role="dialog"
           aria-modal="true"
           aria-label={avatarZoom.name ? avatarZoom.name + ' 프로필 사진' : '프로필 사진'}
@@ -13186,24 +13231,52 @@ function OpenRidingGroupDetailView(props) {
           }}
         >
           <div
-            className="open-riding-avatar-zoom-card"
+            className="stelvio-rank-avatar-zoom-card"
             onClick={function (e) {
               e.stopPropagation();
             }}
           >
-            <div className="open-riding-avatar-zoom-inner">
-              <img
-                className="open-riding-avatar-zoom-img"
-                src={avatarZoom.src}
-                alt=""
-                decoding="async"
-                onError={function (e) {
-                  e.currentTarget.onerror = null;
-                  var def = openRidingDefaultProfileImg();
-                  if (e.currentTarget.src !== def) e.currentTarget.src = def;
-                }}
-              />
+            <div className="stelvio-rank-avatar-zoom-photo-wrap">
+              <div className="stelvio-rank-avatar-zoom-inner">
+                <img
+                  className="stelvio-rank-avatar-zoom-img"
+                  src={avatarZoom.src}
+                  alt=""
+                  decoding="async"
+                  onError={function (e) {
+                    e.currentTarget.onerror = null;
+                    var def = openRidingDefaultProfileImg();
+                    if (e.currentTarget.src !== def) e.currentTarget.src = def;
+                  }}
+                />
+              </div>
             </div>
+            {avatarZoom.rank ? (
+              <div className="stelvio-rank-avatar-zoom-profile">
+                <p className="stelvio-rank-avatar-zoom-line1">
+                  {(avatarZoom.name ? avatarZoom.name + ' · ' : '') +
+                    avatarZoom.rank.groupLabel +
+                    ' 순위 ' +
+                    (avatarZoom.rank.rank ? avatarZoom.rank.rank + '위' : '-')}
+                </p>
+                <p className="stelvio-rank-avatar-zoom-line2">
+                  전체 랭킹보드{' '}
+                  {avatarZoom.rank.metaHtml ? (
+                    <span dangerouslySetInnerHTML={{ __html: avatarZoom.rank.metaHtml }} />
+                  ) : (
+                    '-'
+                  )}
+                </p>
+                <p className="stelvio-rank-avatar-zoom-line3">
+                  {avatarZoom.rank.metricLabel
+                    ? avatarZoom.rank.metricLabel +
+                      ': ' +
+                      (avatarZoom.rank.valueLabel != null ? avatarZoom.rank.valueLabel : '-') +
+                      avatarZoom.rank.metricUnit
+                    : null}
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
