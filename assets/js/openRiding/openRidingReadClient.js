@@ -126,6 +126,52 @@ async function httpGetJsonAuthed(path, params) {
 }
 
 /**
+ * 인증된 POST — 가입/승인/거절/탈퇴처럼 Supabase에 먼저 쓰고 Firestore를 서버가 동기
+ * 미러링하는 쓰기 전용 Cloud Function 호출용. GET과 달리 실패를 삼키지 않고 그대로
+ * 던져서(throw) 호출부(openRidingGroupService.js)가 사용자에게 에러를 보여줄 수 있게 한다.
+ */
+async function httpPostJsonAuthed(path, body) {
+  const token =
+    typeof window !== 'undefined' &&
+    window.authV9 &&
+    window.authV9.currentUser &&
+    typeof window.authV9.currentUser.getIdToken === 'function'
+      ? await window.authV9.currentUser.getIdToken()
+      : '';
+  if (!token) throw new Error('로그인이 필요합니다.');
+  const res = await fetch(path, {
+    method: 'POST',
+    mode: 'cors',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify(body || {}),
+  });
+  const json = await res.json().catch(function () { return null; });
+  if (!res.ok || !json || json.success === false) {
+    const msg = (json && json.error && (json.error.message || json.error)) || '요청을 처리하지 못했습니다.';
+    throw new Error(String(msg));
+  }
+  return json;
+}
+
+/**
+ * 가입/승인/거절/탈퇴 — Supabase-우선 쓰기 Cloud Function 공용 호출부.
+ * @param {'join'|'approve'|'reject'|'leave'} action
+ * @param {object} body
+ */
+export async function postRidingGroupWriteRouted(action, body) {
+  const endpoints = {
+    join: API_BASE + '/joinRidingGroupSupabase',
+    approve: API_BASE + '/approveRidingGroupJoinRequestSupabase',
+    reject: API_BASE + '/rejectRidingGroupJoinRequestSupabase',
+    leave: API_BASE + '/leaveRidingGroupSupabase',
+  };
+  const url = endpoints[action];
+  if (!url) throw new Error('알 수 없는 요청입니다.');
+  return httpPostJsonAuthed(url, body);
+}
+
+/**
  * Supabase 어댑터(functions/groupResponseAdapter.js의 tsFromIso)가 만드는 날짜 필드는
  * 순수 JSON {seconds, nanoseconds} 객체라 Firestore Timestamp의 .toDate()가 없다.
  * 캘린더 등 클라이언트 코드는 전부 ts.toDate()(또는 instanceof Date)로 날짜를 판별하므로,

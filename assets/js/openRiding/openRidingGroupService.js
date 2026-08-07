@@ -7,15 +7,12 @@ import {
   doc,
   getDoc,
   getDocs,
-  setDoc,
   updateDoc,
-  deleteDoc,
   query,
   where,
   orderBy,
   onSnapshot,
   serverTimestamp,
-  increment,
   writeBatch,
   runTransaction
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
@@ -37,7 +34,8 @@ import {
   fetchMyGroupContactSetRouted,
   subscribeMyManagedGroupsJoinRequestCountsRouted,
   subscribeRidingGroupMyJoinRequestRouted,
-} from './openRidingReadClient.js?v=heat-fix-20260803';
+  postRidingGroupWriteRouted,
+} from './openRidingReadClient.js?v=supabase-primary-join-writes-20260807v1';
 import { scheduleRidingGroupDualWriteFromFirestore } from '../openRidingDualWrite.js?v=sync-fix-20260803v2';
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
@@ -347,31 +345,14 @@ export async function setRidingGroupStatusByAdmin(db, adminUid, groupId, nextSta
  * @param {{ displayName?: string; profileImageUrl?: string|null }} [profileHints]
  */
 export async function joinRidingGroup(db, uid, groupId, passwordGuess, profileHints) {
-  if (!db || !uid || !groupId) throw new Error('로그인이 필요합니다.');
-  var gid = String(groupId).trim();
-  var u = String(uid).trim();
-  var ref = doc(db, RIDING_GROUP_COLLECTION, gid);
-  var snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
-  var d = snap.data() || {};
-  if (String(d.status || '') !== GROUP_STATUS.APPROVED) throw new Error('가입할 수 없는 그룹입니다.');
-  if (!d.isPublic) {
-    var need = String(d.joinPassword || '');
-    if (!need || String(passwordGuess || '') !== need) throw new Error('비밀번호가 일치하지 않습니다.');
-  }
-  var memRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', u);
-  var ex = await getDoc(memRef);
-  if (ex.exists()) throw new Error('이미 이 그룹 멤버입니다.');
-  var jRef = doc(db, RIDING_GROUP_COLLECTION, gid, RIDING_GROUP_JOIN_REQUESTS_SUB, u);
-  var jEx = await getDoc(jRef);
-  if (jEx.exists()) throw new Error('이미 가입 신청이 접수되었습니다.');
+  if (!uid || !groupId) throw new Error('로그인이 필요합니다.');
   var ph = profileHints || {};
-  await setDoc(jRef, {
-    requestedAt: serverTimestamp(),
+  await postRidingGroupWriteRouted('join', {
+    groupId: String(groupId).trim(),
+    passwordGuess: passwordGuess != null ? String(passwordGuess) : '',
     displayName: ph.displayName != null ? String(ph.displayName) : '',
     profileImageUrl: ph.profileImageUrl != null ? ph.profileImageUrl : null
   });
-  scheduleRidingGroupDualWriteFromFirestore(db, gid, u, { syncJoinRequests: true });
 }
 
 /**
@@ -381,40 +362,10 @@ export async function joinRidingGroup(db, uid, groupId, passwordGuess, profileHi
  * @param {string} applicantUid
  */
 export async function approveRidingGroupJoinRequest(db, moderatorUid, groupId, applicantUid) {
-  if (!db || !moderatorUid || !groupId || !applicantUid) throw new Error('요청이 올바르지 않습니다.');
-  var gid = String(groupId).trim();
-  var app = String(applicantUid).trim();
-  var gRef = doc(db, RIDING_GROUP_COLLECTION, gid);
-  var jRef = doc(db, RIDING_GROUP_COLLECTION, gid, RIDING_GROUP_JOIN_REQUESTS_SUB, app);
-  var mRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', app);
-  await runTransaction(db, function (transaction) {
-    return transaction.get(gRef).then(function (gSnap) {
-      if (!gSnap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
-      var gd = gSnap.data() || {};
-      if (String(gd.status || '') !== GROUP_STATUS.APPROVED) throw new Error('이 그룹은 가입을 수락할 수 없습니다.');
-      return transaction.get(jRef).then(function (jSnap) {
-        if (!jSnap.exists()) throw new Error('가입 신청을 찾을 수 없습니다.');
-        return transaction.get(mRef).then(function (mSnap) {
-          if (mSnap.exists()) throw new Error('이미 멤버입니다.');
-          var jd = jSnap.data() || {};
-          transaction.delete(jRef);
-          transaction.set(mRef, {
-            joinedAt: serverTimestamp(),
-            displayName: jd.displayName != null ? String(jd.displayName) : '',
-            profileImageUrl: jd.profileImageUrl != null ? jd.profileImageUrl : null,
-            role: 'member'
-          });
-          transaction.update(gRef, {
-            memberCount: increment(1),
-            updatedAt: serverTimestamp()
-          });
-        });
-      });
-    });
-  });
-  scheduleRidingGroupDualWriteFromFirestore(db, gid, moderatorUid, {
-    syncMembers: true,
-    syncJoinRequests: true,
+  if (!moderatorUid || !groupId || !applicantUid) throw new Error('요청이 올바르지 않습니다.');
+  await postRidingGroupWriteRouted('approve', {
+    groupId: String(groupId).trim(),
+    applicantUid: String(applicantUid).trim()
   });
 }
 
@@ -425,16 +376,11 @@ export async function approveRidingGroupJoinRequest(db, moderatorUid, groupId, a
  * @param {string} applicantUid
  */
 export async function rejectRidingGroupJoinRequest(db, moderatorUid, groupId, applicantUid) {
-  if (!db || !moderatorUid || !groupId || !applicantUid) throw new Error('요청이 올바르지 않습니다.');
-  var jRef = doc(
-    db,
-    RIDING_GROUP_COLLECTION,
-    String(groupId).trim(),
-    RIDING_GROUP_JOIN_REQUESTS_SUB,
-    String(applicantUid).trim()
-  );
-  await deleteDoc(jRef);
-  scheduleRidingGroupDualWriteFromFirestore(db, groupId, moderatorUid, { syncJoinRequests: true });
+  if (!moderatorUid || !groupId || !applicantUid) throw new Error('요청이 올바르지 않습니다.');
+  await postRidingGroupWriteRouted('reject', {
+    groupId: String(groupId).trim(),
+    applicantUid: String(applicantUid).trim()
+  });
 }
 
 /**
@@ -443,24 +389,8 @@ export async function rejectRidingGroupJoinRequest(db, moderatorUid, groupId, ap
  * @param {string} groupId
  */
 export async function leaveRidingGroup(db, uid, groupId) {
-  if (!db || !uid || !groupId) throw new Error('요청이 올바르지 않습니다.');
-  var gid = String(groupId).trim();
-  var ref = doc(db, RIDING_GROUP_COLLECTION, gid);
-  var snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error('그룹을 찾을 수 없습니다.');
-  var d = snap.data() || {};
-  if (String(d.createdBy || '') === String(uid)) throw new Error('방장은 탈퇴할 수 없습니다. 그룹 삭제는 별도 메뉴에서 진행해 주세요.');
-  var memRef = doc(db, RIDING_GROUP_COLLECTION, gid, 'members', String(uid).trim());
-  var ex = await getDoc(memRef);
-  if (!ex.exists()) return;
-  var batch = writeBatch(db);
-  batch.delete(memRef);
-  batch.update(ref, {
-    memberCount: increment(-1),
-    updatedAt: serverTimestamp()
-  });
-  await batch.commit();
-  scheduleRidingGroupDualWriteFromFirestore(db, gid, uid, { syncMembers: true });
+  if (!uid || !groupId) throw new Error('요청이 올바르지 않습니다.');
+  await postRidingGroupWriteRouted('leave', { groupId: String(groupId).trim() });
 }
 
 /**
