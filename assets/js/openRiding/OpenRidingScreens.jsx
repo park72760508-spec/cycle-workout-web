@@ -10713,6 +10713,9 @@ function OpenRidingGroupsList(props) {
   var _rows = useState([]);
   var rows = _rows[0];
   var setRows = _rows[1];
+  var _loading = useState(true);
+  var loading = _loading[0];
+  var setLoading = _loading[1];
   var _filterText = useState('');
   var filterText = _filterText[0];
   var setFilterText = _filterText[1];
@@ -10839,8 +10842,10 @@ function OpenRidingGroupsList(props) {
   useEffect(
     function () {
       if (!firestore || typeof gs.subscribeRidingGroups !== 'function') return;
+      setLoading(true);
       return gs.subscribeRidingGroups(firestore, isAdmin, function (list) {
         setRows(Array.isArray(list) ? list : []);
+        setLoading(false);
       }, userId);
     },
     [firestore, isAdmin, userId]
@@ -10926,6 +10931,13 @@ function OpenRidingGroupsList(props) {
       <ul className="space-y-2">
         {!firestore ? (
           <li className="text-sm text-slate-500">연결 오류</li>
+        ) : loading && rows.length === 0 ? (
+          <li>
+            <div className="open-riding-loading-wrap">
+              <div className="open-riding-loading-spinner" />
+              <p className="open-riding-loading-text">{moimCopy.groupsListTitle} 불러오는 중...</p>
+            </div>
+          </li>
         ) : sortedFilteredRows.length === 0 ? (
           <li className="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white px-3 py-6 text-center">
             {rows.length === 0 ? '표시할 클럽이 없습니다.' : '검색 결과가 없습니다.'}
