@@ -7,6 +7,7 @@ assets/js/config.local.js
 .env
 .env.local
 .env.*.local
+functions/.env.stelvio-ai
 secrets.js
 **/secrets.js
 
