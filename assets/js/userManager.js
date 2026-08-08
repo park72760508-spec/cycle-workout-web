@@ -2948,20 +2948,25 @@ async function apiUpdateUser(id, userData) {
 
     // Firestore 업데이트
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
+    // updateDoc/.update()는 문서가 아직 없으면 조용히(throw) 실패한다 — 예: 프로필 사진을
+    // 회원가입 완료 직후처럼 users/{uid} 문서가 아직 안 만들어진 타이밍에 저장하면 Storage
+    // 업로드는 성공해도 이 Firestore 반영만 실패해서 사진이 "사라진 것처럼" 보이는 버그가
+    // 있었다(2026-08). setDoc(..., {merge:true})는 문서가 없으면 만들고, 있으면 병합만
+    // 하므로 기존 동작은 그대로 유지하면서 이 실패 케이스를 없앤다.
     if (window.firestoreV9) {
       var updateDocMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
-      var updateDoc = updateDocMod && updateDocMod.updateDoc;
+      var setDoc = updateDocMod && updateDocMod.setDoc;
       var doc = updateDocMod && updateDocMod.doc;
       var collection = updateDocMod && updateDocMod.collection;
       const usersRef = collection(window.firestoreV9, 'users');
       const userDocRef = doc(usersRef, id);
-      await updateDoc(userDocRef, updateData);
-      
+      await setDoc(userDocRef, updateData, { merge: true });
+
       console.log('✅ 사용자 정보 업데이트 완료 (firestoreV9):', id);
     } else {
       // v8 Compat 사용 (fallback)
-      await getUsersCollection().doc(id).update(updateData);
-      
+      await getUsersCollection().doc(id).set(updateData, { merge: true });
+
       console.log('✅ 사용자 정보 업데이트 완료 (firestore v8):', id);
     }
 

@@ -11962,6 +11962,166 @@ exports.manualBackfillRidingGroupMembers = onRequest(
   }
 );
 
+/**
+ * 운영 진단 도구(관리자 grade=1 전용) — 특정 사용자 Firestore users/{uid} 문서의 프로필 사진
+ * 관련 필드 원본 값 확인(프로필 선택 화면에서 사진이 갑자기 안 보이는 문의 조사용). 읽기 전용.
+ */
+exports.adminDebugUserProfile = onRequest(
+  { cors: true, timeoutSeconds: 30, invoker: "public" },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
+      const targetUid = String(req.query.uid || "").trim();
+      if (!targetUid) {
+        res.status(400).json({ success: false, error: "uid 쿼리 파라미터가 필요합니다." });
+        return;
+      }
+      const snap = await admin.firestore().collection("users").doc(targetUid).get();
+      if (!snap.exists) {
+        res.status(404).json({ success: false, error: "해당 uid의 users 문서를 찾을 수 없습니다." });
+        return;
+      }
+      const d = snap.data() || {};
+      res.status(200).json({
+        success: true,
+        uid: targetUid,
+        fields: Object.keys(d).sort(),
+        doc: d,
+      });
+    } catch (e) {
+      const status = e.status || 500;
+      if (status >= 500) console.error("[adminDebugUserProfile]", e.message || e);
+      res.status(status).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 운영 도구(관리자 grade=1 전용) — Storage profile_images/{uid}_profile.{webp|jpg}는 있는데
+ * Firestore users/{uid}.profileImageUrl은 비어 있는 계정을 찾아 복구한다(2026-08 굵은다리 케이스
+ * 조사 중 발견 — apiUpdateUser가 updateDoc()을 써서, users 문서가 아직 없는 타이밍에 사진을
+ * 올리면 Storage 업로드는 성공하고 Firestore 반영만 조용히 실패할 수 있었다). GET(dryRun)은
+ * 리포트만, POST는 실제 복구까지 수행. uids를 주면 그 사용자들만, 안 주면 프로필 사진
+ * 전체를 스캔한다(용량에 따라 시간이 걸릴 수 있음).
+ */
+exports.adminRepairMissingProfileImages = onRequest(
+  { cors: true, timeoutSeconds: 300, memory: "512MiB", invoker: "public" },
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
+      const dryRun = req.method !== "POST";
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const onlyUids =
+        Array.isArray(body.uids) && body.uids.length
+          ? new Set(body.uids.map((u) => String(u || "").trim()).filter(Boolean))
+          : null;
+
+      const bucket = admin.storage().bucket();
+      const [files] = await bucket.getFiles({ prefix: "profile_images/" });
+      const fileRe = /^profile_images\/([^/]+)_profile\.(webp|jpg)$/;
+      const byUid = new Map();
+      for (const f of files) {
+        const m = fileRe.exec(f.name);
+        if (!m) continue;
+        const fUid = m[1];
+        if (onlyUids && !onlyUids.has(fUid)) continue;
+        // 같은 uid에 webp/jpg 둘 다 있으면 webp 우선(현재 인코딩 기본값과 일치)
+        const prev = byUid.get(fUid);
+        if (!prev || (prev.ext === "jpg" && m[2] === "webp")) {
+          byUid.set(fUid, { file: f, ext: m[2] });
+        }
+      }
+
+      const report = [];
+      const db = admin.firestore();
+      let checked = 0;
+      for (const [targetUid, hit] of byUid.entries()) {
+        checked += 1;
+        const userSnap = await db.collection("users").doc(targetUid).get();
+        const existingUrl = userSnap.exists ? userSnap.data().profileImageUrl : undefined;
+        if (existingUrl) continue; // 이미 정상 — 리포트에 안 올림
+
+        let downloadUrl = null;
+        try {
+          const [urls] = await hit.file.getSignedUrl({
+            action: "read",
+            expires: "01-01-2100",
+          });
+          downloadUrl = urls;
+        } catch (eSign) {
+          // getSignedUrl은 서비스 계정에 signBlob 권한 필요 — 실패 시 공개 다운로드 URL(토큰 방식)로 폴백
+          try {
+            const [meta] = await hit.file.getMetadata();
+            const token =
+              meta.metadata && meta.metadata.firebaseStorageDownloadTokens
+                ? String(meta.metadata.firebaseStorageDownloadTokens).split(",")[0]
+                : null;
+            if (token) {
+              downloadUrl =
+                "https://firebasestorage.googleapis.com/v0/b/" +
+                bucket.name +
+                "/o/" +
+                encodeURIComponent(hit.file.name) +
+                "?alt=media&token=" +
+                token;
+            }
+          } catch (eMeta) {
+            console.warn("[adminRepairMissingProfileImages] getMetadata failed:", targetUid, eMeta.message || eMeta);
+          }
+        }
+
+        const entry = {
+          uid: targetUid,
+          userDocExists: userSnap.exists,
+          storagePath: hit.file.name,
+          resolvedUrl: downloadUrl,
+        };
+        if (!dryRun && downloadUrl) {
+          try {
+            await db
+              .collection("users")
+              .doc(targetUid)
+              .set({ profileImageUrl: downloadUrl }, { merge: true });
+            entry.repaired = true;
+          } catch (eWrite) {
+            entry.repaired = false;
+            entry.error = eWrite.message || String(eWrite);
+          }
+        }
+        report.push(entry);
+      }
+
+      res.status(200).json({
+        success: true,
+        dryRun,
+        scannedStorageFiles: files.length,
+        checkedUids: checked,
+        mismatches: report.length,
+        report,
+      });
+    } catch (e) {
+      const status = e.status || 500;
+      if (status >= 500) console.error("[adminRepairMissingProfileImages]", e.message || e);
+      res.status(status).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 /** 클라이언트 Secondary relay — Firestore Primary 성공 후 open_rides upsert */
 exports.ingestOpenRideDualWriteRelay = onRequest(
   supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
