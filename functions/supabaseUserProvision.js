@@ -334,6 +334,20 @@ async function upsertSupabaseUserProfileFromFirestore(admin, firebaseUid, opts =
   }
   const profileResult = await upsertPublicUser(supabase, row);
 
+  // riding_group_members·riding_group_join_requests의 display_name·profile_image_url은 가입/승인
+  // 시점 스냅샷이라 프로필을 여기서 갱신할 때 함께 최신화해줘야 다시 stale해지지 않는다(2026-08 —
+  // 크루 상세에서 프로필 사진을 나중에 바꾼 멤버만 계속 옛 사진으로 보이던 버그의 원인).
+  let groupSnapshotResult = null;
+  try {
+    const supabaseGroupDualWriteServer = require("./supabaseGroupDualWriteServer");
+    groupSnapshotResult = await supabaseGroupDualWriteServer.syncRidingGroupMemberSnapshotFromUser(uid, {
+      displayName: row.name,
+      profileImageUrl: row.profile_image_url,
+    });
+  } catch (e) {
+    console.warn("[upsertSupabaseUserProfileFromFirestore] riding_group_members snapshot sync failed:", uid, e.message || e);
+  }
+
   return {
     success: true,
     firebaseUid: uid,
@@ -341,6 +355,7 @@ async function upsertSupabaseUserProfileFromFirestore(admin, firebaseUid, opts =
     gender: row.gender,
     auth: authResult,
     profile: profileResult,
+    groupSnapshot: groupSnapshotResult,
   };
 }
 
@@ -393,6 +408,19 @@ async function syncSupabaseUserGenderFromFirestore(admin, firebaseUid) {
   const genderChanged = existing.gender !== row.gender;
   const privacyChanged = Boolean(existing.is_private) !== nextIsPrivate;
   const profileImageChanged = (existing.profile_image_url || null) !== nextProfileImageUrl;
+
+  // riding_group_members·riding_group_join_requests의 스냅샷도 이 김에 최신화 — 이미 존재하는
+  // 사용자는 users 행 자체가 안 바뀌어도(gender/is_private/profile_image_url 동일) 그룹 스냅샷은
+  // 애초에 한 번도 동기화된 적이 없을 수 있다(2026-08 uids 백필로 새로 생성된 사용자 등).
+  try {
+    const supabaseGroupDualWriteServer = require("./supabaseGroupDualWriteServer");
+    await supabaseGroupDualWriteServer.syncRidingGroupMemberSnapshotFromUser(uid, {
+      displayName: row.name,
+      profileImageUrl: row.profile_image_url,
+    });
+  } catch (e) {
+    console.warn("[syncSupabaseUserGenderFromFirestore] riding_group_members snapshot sync failed:", uid, e.message || e);
+  }
 
   if (!genderChanged && !privacyChanged && !profileImageChanged) {
     return {

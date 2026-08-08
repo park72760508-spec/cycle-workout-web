@@ -609,6 +609,38 @@ async function runSecondaryAfterRidingGroupWrite(
   return { skipped: false, groupId: groupRow.id };
 }
 
+/**
+ * riding_group_members.display_name/profile_image_url·riding_group_join_requests의 동일 컬럼은
+ * 가입/승인 시점 1회 스냅샷이라 이후 사용자가 프로필 사진·이름을 바꿔도 갱신되지 않았다(2026-08 —
+ * 크루 상세에서 특정 멤버 사진만 계속 예전 것으로 보이던 버그의 원인). users 프로필이 바뀔 때마다
+ * 이 함수로 그 사용자가 속한 모든 그룹의 캐시된 스냅샷을 함께 갱신해 다시 stale해지지 않게 한다.
+ * @param {string} firebaseUid
+ * @param {{ displayName?: string, profileImageUrl?: string|null }} profile
+ */
+async function syncRidingGroupMemberSnapshotFromUser(firebaseUid, profile) {
+  const userId = resolveUserUuid(firebaseUid);
+  if (!userId) return { updated: 0 };
+  const patch = {};
+  if (profile && profile.displayName != null) patch.display_name = String(profile.displayName);
+  if (profile && "profileImageUrl" in profile) {
+    patch.profile_image_url = profile.profileImageUrl != null ? String(profile.profileImageUrl) : null;
+  }
+  if (!Object.keys(patch).length) return { updated: 0 };
+
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const { error: memErr, count } = await supabase
+    .from("riding_group_members")
+    .update(patch, { count: "exact" })
+    .eq("user_id", userId);
+  if (memErr) throw memErr;
+  const { error: reqErr } = await supabase
+    .from("riding_group_join_requests")
+    .update(patch)
+    .eq("user_id", userId);
+  if (reqErr) throw reqErr;
+  return { updated: count || 0 };
+}
+
 module.exports = {
   mapFirestoreOpenRideToRows,
   mapFirestoreRidingGroupToRow,
@@ -626,5 +658,6 @@ module.exports = {
   resolveUserUuid,
   syncMediaForOpenRide,
   syncMediaForRidingGroup,
+  syncRidingGroupMemberSnapshotFromUser,
   upsertMediaAssets,
 };
