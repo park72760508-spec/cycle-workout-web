@@ -41982,7 +41982,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         'competitionScreen'
       ];
       /** RUN 화면 하단 네비에서 숨길 메뉴 (훈련·계획·구독) */
-      var HUB_NAV_KEYS_HIDDEN_ON_RUN = { train: true, plan: true, subscribe: true, moim: true };
+      var HUB_NAV_KEYS_HIDDEN_ON_RUN = { train: true, plan: true, subscribe: true };
       /**
        * 일반 사용자(grade 2·3) 하단 네비 숨김 — enabled: false 또는 keys에서 항목 제거 시 다시 표시
        * @example window.__hubNavStandardUserMenuHide.enabled = false;
@@ -42068,9 +42068,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           if (typeof window.competitionScreenInit === 'function') setTimeout(window.competitionScreenInit, 150);
         }
       }
-      /** CYCLE 네비게이션바 — 기록·대회 사이 모임 버튼: basecamp의 "라이딩 모임" 진입과 동일 경로 */
+      /** 네비게이션바 — 기록·대회 사이 모임 버튼: basecamp의 "라이딩 모임"/"러닝 크루" 진입과 동일 경로
+          (스포츠 모드에 따라 목적지가 갈린다 — analysis/journal 등 다른 버튼과 동일 패턴) */
       function hubNavGoMoim() {
-        if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp();
+        if (hubNavIsRunMode()) {
+          if (typeof navigateToRunCrewFromBasecamp === 'function') navigateToRunCrewFromBasecamp();
+          else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
+        } else if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp();
         else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
       }
       function hubNavUpdateScrollEdgeHints(root) {
