@@ -857,6 +857,17 @@ function bindProfileScreenSubtitleActions() {
   });
 }
 
+/* 검색어 입력마다(디바운스 없이) 전체 사용자 카드를 다시 그리던 것이 관리자 화면 발열의
+   주된 원인이었다 — 키 입력이 멈추고 220ms 후 한 번만 재렌더하도록 디바운스한다(2026-08). */
+var _profileSearchDebounceTimer = null;
+function debouncedRefreshProfileScreenUserList() {
+  if (_profileSearchDebounceTimer) clearTimeout(_profileSearchDebounceTimer);
+  _profileSearchDebounceTimer = setTimeout(function () {
+    _profileSearchDebounceTimer = null;
+    if (typeof refreshProfileScreenUserList === 'function') refreshProfileScreenUserList();
+  }, 220);
+}
+
 function bindProfileSearchInputs() {
   var nameInput = document.getElementById('profileSearchName');
   var contactInput = document.getElementById('profileSearchContact');
@@ -866,24 +877,28 @@ function bindProfileSearchInputs() {
     nameInput.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter') {
         ev.preventDefault();
+        if (_profileSearchDebounceTimer) {
+          clearTimeout(_profileSearchDebounceTimer);
+          _profileSearchDebounceTimer = null;
+        }
         if (typeof searchProfileUsers === 'function') searchProfileUsers();
       }
     });
-    nameInput.addEventListener('input', function () {
-      if (typeof refreshProfileScreenUserList === 'function') refreshProfileScreenUserList();
-    });
+    nameInput.addEventListener('input', debouncedRefreshProfileScreenUserList);
   }
   if (contactInput && !contactInput._profileSearchBound) {
     contactInput._profileSearchBound = true;
     contactInput.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter') {
         ev.preventDefault();
+        if (_profileSearchDebounceTimer) {
+          clearTimeout(_profileSearchDebounceTimer);
+          _profileSearchDebounceTimer = null;
+        }
         if (typeof searchProfileUsers === 'function') searchProfileUsers();
       }
     });
-    contactInput.addEventListener('input', function () {
-      if (typeof refreshProfileScreenUserList === 'function') refreshProfileScreenUserList();
-    });
+    contactInput.addEventListener('input', debouncedRefreshProfileScreenUserList);
   }
 }
 
@@ -930,9 +945,13 @@ function refreshProfileScreenUserList() {
       emptyTitle +
       '</div></div>';
   } else {
-    renderProfileUserListOrCards(filtered, ctx.viewerGrade, ctx.viewerId);
-    if (typeof window.refreshProfileMaxHrAndRerender === 'function') {
-      window.refreshProfileMaxHrAndRerender(filtered, ctx.viewerGrade, ctx.viewerId).catch(function () {});
+    /* userList와 settingsUserList를 한 번에 같은 targetIds로 렌더하면(옛 코드) settingsUserList도
+       검색 결과 그대로에 hideDashboard/noSelectClick 옵션 없이 그려져서, 곧이어 renderSettingsProfilePanel로
+       다시 덮어 그리는 이중 렌더가 있었다 — userList만 targetIds로 명시해 한 번만 그리고,
+       settingsUserList는 필요할 때만 별도로 그린다(2026-08, 발열 원인 1순위). */
+    renderProfileUserListOrCards(filtered, ctx.viewerGrade, ctx.viewerId, ['userList']);
+    if (shouldEmbedProfileInSettingsModal() && document.getElementById('settingsUserList')) {
+      renderSettingsProfilePanel(filtered, ctx.viewerGrade, ctx.viewerId);
     }
   }
 
@@ -4207,7 +4226,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
           <div class="user-row1">
             <div class="user-name-wrapper">
               <div class="user-name user-name-with-indicators">
-                <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${displayName}${withdrawnBadgeHtml}</span>
+                <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon" width="32" height="32" loading="lazy" decoding="async"> ${displayName}${withdrawnBadgeHtml}</span>
                 <span class="user-name-badges" title="AI 페어링 / Strava 연결">
                   <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링" aria-label="AI 페어링"></span>
                   <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결" aria-label="Strava 연결"></span>
@@ -4216,7 +4235,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
             </div>
             <div class="user-actions" onclick="event.stopPropagation();">
               ${showDashboardBtn ? `<button class="btn-dashboard" onclick="event.stopPropagation();showPerformanceDashboard('${user.id}')" title="대시보드 보기">📊 대시보드</button>` : ''}
-              ${canEdit ? `<button class="btn-edit" onclick="event.stopPropagation();editUser('${user.id}')" title="수정"><img src="assets/img/edit2.png" alt="수정" style="width:20px;height:20px;display:block;" /></button><button class="btn-delete ${deleteButtonClass}" onclick="event.stopPropagation();deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}><img src="assets/img/delete2.png" alt="삭제" style="width:20px;height:20px;display:block;" /></button>` : ''}
+              ${canEdit ? `<button class="btn-edit" onclick="event.stopPropagation();editUser('${user.id}')" title="수정"><img src="assets/img/edit2.png" alt="수정" width="20" height="20" loading="lazy" decoding="async" style="width:20px;height:20px;display:block;" /></button><button class="btn-delete ${deleteButtonClass}" onclick="event.stopPropagation();deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}><img src="assets/img/delete2.png" alt="삭제" width="20" height="20" loading="lazy" decoding="async" style="width:20px;height:20px;display:block;" /></button>` : ''}
             </div>
           </div>
 
@@ -4285,10 +4304,10 @@ function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetI
     const category = normalizeUserSportCategory(user.category || user.sport_category);
     let categoryIconsHtml = '';
     if (category === USER_SPORT_CATEGORY_CYCLE || category === USER_SPORT_CATEGORY_DUAL) {
-      categoryIconsHtml += '<img src="assets/img/cycling.png" alt="CYCLE" title="CYCLE" class="profile-list-category-icon" />';
+      categoryIconsHtml += '<img src="assets/img/cycling.png" alt="CYCLE" title="CYCLE" class="profile-list-category-icon" width="22" height="22" loading="lazy" decoding="async" />';
     }
     if (category === USER_SPORT_CATEGORY_RUN || category === USER_SPORT_CATEGORY_DUAL) {
-      categoryIconsHtml += '<img src="assets/img/running.png" alt="RUN" title="RUN" class="profile-list-category-icon" />';
+      categoryIconsHtml += '<img src="assets/img/running.png" alt="RUN" title="RUN" class="profile-list-category-icon" width="22" height="22" loading="lazy" decoding="async" />';
     }
     const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
     const hasAiForUser =
@@ -4347,33 +4366,6 @@ function renderProfileUserListOrCards(usersToRender, viewerGrade, viewerId, targ
 }
 
 /**
- * 프로필 화면: 사용자별 Max HR 비동기 조회 후 카드 재렌더링
- * yearly_peaks에서 조회 (MMP 업데이트 시 max_hr도 반영됨, 로그 스캔 대비 효율적)
- */
-async function refreshProfileMaxHrAndRerender(usersToRender, viewerGrade, viewerId, renderOptions) {
-  if (renderOptions && typeof renderOptions === 'object') {
-    renderProfileUserListsForTargets(
-      !!renderOptions.isLoginAdmin,
-      renderOptions.visibleUsers || usersToRender,
-      renderOptions.allUsers || usersToRender,
-      viewerGrade,
-      viewerId,
-      renderOptions.targetIds
-    );
-    return;
-  }
-  renderProfileUserListOrCards(
-    usersToRender,
-    viewerGrade,
-    viewerId,
-    getProfileUserListTargetIds().filter(function (id) { return id !== 'settingsUserList'; })
-  );
-  if (shouldEmbedProfileInSettingsModal() && document.getElementById('settingsUserList')) {
-    renderSettingsProfilePanel(usersToRender, viewerGrade, viewerId);
-  }
-}
-
-/**
  * 관리자(grade=1) 전용: 프로필 화면 사용자 검색 (이름/전화번호, 빈값이면 전체 검색)
  */
 function searchProfileUsers() {
@@ -4400,7 +4392,6 @@ function searchProfileUsers() {
 }
 
 window.searchProfileUsers = searchProfileUsers;
-window.refreshProfileMaxHrAndRerender = refreshProfileMaxHrAndRerender;
 
 /**
  * 날짜에 N개월 더한 YYYY-MM-DD 반환
@@ -4678,19 +4669,6 @@ async function loadUsers() {
         profileSubtitle.textContent = '';
         profileSubtitle.style.display = 'none';
       }
-    }
-    if (visibleUsers.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
-      window.refreshProfileMaxHrAndRerender(
-        isLoginAdmin ? getProfileScreenUsersForListMode() : visibleUsers,
-        profileCardGrade,
-        viewerId,
-        {
-          isLoginAdmin: isLoginAdmin,
-          visibleUsers: visibleUsers,
-          allUsers: users,
-          targetIds: targetIds
-        }
-      ).catch(() => {});
     }
 
     const profileScreen = document.getElementById('profileScreen');
