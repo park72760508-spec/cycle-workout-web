@@ -13965,10 +13965,11 @@ function OpenRidingRoomApp(props) {
           </h1>
           {view === 'groupDetail' && groupDetailHeaderActions ? (
             /* justify-end라 삭제 아이콘은 우측 끝에 그대로 고정되고, gap을 늘리면 수정 아이콘만
-               좌측으로 밀려난다 — 간격은 기존(4px)의 2배(8px)로 이격, 아이콘은 요청대로
-               17px→22px(30% 확대)로 키웠다. 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem]
-               고정 폭(우측 칸 36px)인데 22+8+22=52px로 16px 넘친다 — 그리드 셀이 overflow를
-               clip하지 않아 시각적으로는 유지되지만, 제목이 아주 길면 살짝 겹칠 수 있다(2026-08). */
+               좌측으로 밀려난다. 아이콘 확대(17px→22px)가 좁은 뷰포트에서 육안으로 잘 구분되지
+               않는다는 피드백이 있어 28px로 더 키우고, width/height 속성만으로는 혹시 모를 외부
+               CSS(가능성은 낮지만) 간섭을 완전히 배제하기 위해 style로도 명시적으로 고정했다
+               (2026-08). 상단 헤더는 grid-cols-[2.25rem_1fr_2.25rem] 고정 폭(우측 칸 36px)이지만
+               그리드 셀이 overflow를 clip하지 않아 초과분은 시각적으로 그대로 유지된다. */
             <div className="shrink-0 flex items-center justify-end gap-2">
               <button
                 type="button"
@@ -13978,7 +13979,15 @@ function OpenRidingRoomApp(props) {
                 aria-label={moimCopy.groupDetailTitle + ' 수정'}
                 title="수정"
               >
-                <img src="assets/img/edit2.png" alt="" width={22} height={22} className="block object-contain" decoding="async" />
+                <img
+                  src="assets/img/edit2.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  style={{ width: '28px', height: '28px', minWidth: '28px', minHeight: '28px', maxWidth: 'none' }}
+                  className="block object-contain"
+                  decoding="async"
+                />
               </button>
               <button
                 type="button"
@@ -13988,7 +13997,15 @@ function OpenRidingRoomApp(props) {
                 aria-label="그룹 삭제"
                 title="그룹 삭제"
               >
-                <img src="assets/img/delete2.png" alt="" width={22} height={22} className="block object-contain" decoding="async" />
+                <img
+                  src="assets/img/delete2.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  style={{ width: '28px', height: '28px', minWidth: '28px', minHeight: '28px', maxWidth: 'none' }}
+                  className="block object-contain"
+                  decoding="async"
+                />
               </button>
             </div>
           ) : (
