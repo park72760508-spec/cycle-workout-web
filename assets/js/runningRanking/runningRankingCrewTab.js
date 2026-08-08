@@ -280,27 +280,15 @@
     merged.forEach(function (item, idx) {
       item._crewRank = idx + 1;
     });
-    /* 아바타 확대 오버레이의 구간별 페이스 칩(1k/5k/…)에 크루 내 순위를 함께 표기하기 위해,
-       보드 전역 순위와 별개로 이 크루 멤버들끼리만 구간별 score를 다시 정렬한다. */
-    if (tabId === 'overall') {
-      var rrCfg = window.runningRankingConfig || {};
-      var segKeys = (rrCfg.OVERALL_SEGMENTS || []).map(function (s) {
-        return s.key;
-      });
-      segKeys.forEach(function (key) {
-        var ranked = merged
-          .filter(function (item) {
-            var seg = (item.segments || []).filter(function (s) { return s.key === key; })[0];
-            return seg && seg.score != null && Number(seg.score) > 0;
-          })
-          .sort(function (a, b) {
-            var segA = a.segments.filter(function (s) { return s.key === key; })[0];
-            var segB = b.segments.filter(function (s) { return s.key === key; })[0];
-            return Number(segB.score) - Number(segA.score);
-          });
-        ranked.forEach(function (item, idx) {
-          var seg = item.segments.filter(function (s) { return s.key === key; })[0];
-          if (seg) seg.crewRank = idx + 1;
+    /* 아바타 확대 오버레이의 구간별 페이스 칩(1k/5k/…)에 전체 랭킹보드 순위를 함께 표기 —
+       크루원끼리만 비교한 순위가 아니라 buildSegmentRankMaps로 보드 전체 코호트 기준 순위를 그대로 쓴다. */
+    if (tabId === 'overall' && typeof dataApi.buildSegmentRankMaps === 'function') {
+      var segRankMaps = dataApi.buildSegmentRankMaps(rows, gender);
+      merged.forEach(function (item) {
+        (item.segments || []).forEach(function (seg) {
+          var segMap = segRankMaps[seg.key] || {};
+          var hit = item.userId != null ? segMap[String(item.userId)] : null;
+          seg.rank = hit ? hit.rank : null;
         });
       });
     }

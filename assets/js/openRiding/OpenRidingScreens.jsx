@@ -12843,9 +12843,10 @@ function OpenRidingGroupDetailView(props) {
                     showOverallSegments &&
                     Array.isArray(m.segments) &&
                     m.segments.length > 0;
-                  /* 아바타 확대 오버레이 — 랭킹보드 아바타 확대 형식(구간별 크루 순위/페이스 · 주간
-                     TSS·최근 30일 거리)과 동일하게 표시. 구간 값은 '종합' 탭에서 계산된 m.segments가
-                     있을 때만 채워진다(다른 탭 선택 시에는 이 줄만 비어 보인다). */
+                  /* 아바타 확대 오버레이 — 랭킹보드 아바타 확대 형식(구간별 전체 순위/페이스 · 주간
+                     TSS·최근 30일 거리)과 동일하게 표시. 순위는 크루 내 순위가 아니라 전체
+                     랭킹보드 기준(buildSegmentRankMaps)이다(2026-08). 구간 값은 '종합' 탭에서
+                     계산된 m.segments가 있을 때만 채워진다(다른 탭 선택 시에는 이 줄만 비어 보인다). */
                   var overlaySegmentsLine = '';
                   var overlayBottomLine = '';
                   if (useRanked) {
@@ -12853,7 +12854,7 @@ function OpenRidingGroupDetailView(props) {
                       if (Array.isArray(m.segments) && m.segments.length > 0) {
                         overlaySegmentsLine = m.segments
                           .map(function (seg) {
-                            var rp = seg.crewRank != null && seg.crewRank >= 1 ? seg.crewRank + '위' : '-';
+                            var rp = seg.rank != null && seg.rank >= 1 ? seg.rank + '위' : '-';
                             var pp = seg.pace && String(seg.pace).trim() ? String(seg.pace).trim() : '-';
                             return seg.label + '(' + rp + '/' + pp + ')';
                           })
