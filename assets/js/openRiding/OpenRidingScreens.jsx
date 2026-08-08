@@ -13982,9 +13982,9 @@ function OpenRidingRoomApp(props) {
                 <img
                   src="assets/img/edit2.png"
                   alt=""
-                  width={25}
-                  height={25}
-                  style={{ width: '25px', height: '25px', minWidth: '25px', minHeight: '25px', maxWidth: 'none' }}
+                  width={23}
+                  height={23}
+                  style={{ width: '23px', height: '23px', minWidth: '23px', minHeight: '23px', maxWidth: 'none' }}
                   className="block object-contain"
                   decoding="async"
                 />
@@ -14000,9 +14000,9 @@ function OpenRidingRoomApp(props) {
                 <img
                   src="assets/img/delete2.png"
                   alt=""
-                  width={25}
-                  height={25}
-                  style={{ width: '25px', height: '25px', minWidth: '25px', minHeight: '25px', maxWidth: 'none' }}
+                  width={23}
+                  height={23}
+                  style={{ width: '23px', height: '23px', minWidth: '23px', minHeight: '23px', maxWidth: 'none' }}
                   className="block object-contain"
                   decoding="async"
                 />
