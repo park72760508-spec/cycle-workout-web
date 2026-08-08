@@ -11952,6 +11952,10 @@ function OpenRidingGroupDetailView(props) {
   var _rankByCategory = useState(null);
   var rankByCategory = _rankByCategory[0];
   var setRankByCategory = _rankByCategory[1];
+  /** 아바타 오버레이(GC·주간TSS·최근 30일 거리·독주) — 4개 항목 각각 별도 fetch 결과 */
+  var _rankAllMetrics = useState(null);
+  var rankAllMetricsByCategory = _rankAllMetrics[0];
+  var setRankAllMetricsByCategory = _rankAllMetrics[1];
   var _rankLoading = useState(false);
   var rankLoading = _rankLoading[0];
   var setRankLoading = _rankLoading[1];
@@ -12017,6 +12021,42 @@ function OpenRidingGroupDetailView(props) {
     [isCycleGroup, rankMetric, rankGender]
   );
 
+  /* 아바타 확대 오버레이용 — GC·주간TSS·최근 30일 거리·독주 4개 항목을 선택된 탭과 무관하게 병렬로
+     받아둔다. getPeakPowerRanking은 duration(항목)별 응답이 분리돼 있어 한 번의 fetch로는 이 4개를
+     동시에 얻을 수 없다(2026-08). */
+  useEffect(
+    function () {
+      if (!isCycleGroup) return undefined;
+      var api = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
+      if (!api || typeof api.fetchClubRanking !== 'function') return undefined;
+      var cancelled = false;
+      var metrics = ['gc', 'tss', 'personal_dist', 'personal_speed'];
+      Promise.all(
+        metrics.map(function (m) {
+          return api.fetchClubRanking({ metric: m, gender: rankGender }).then(
+            function (json) {
+              return json && json.byCategory ? json.byCategory : null;
+            },
+            function () {
+              return null;
+            }
+          );
+        })
+      ).then(function (results) {
+        if (cancelled) return;
+        var next = {};
+        metrics.forEach(function (m, idx) {
+          next[m] = results[idx];
+        });
+        setRankAllMetricsByCategory(next);
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [isCycleGroup, rankGender]
+  );
+
   var memberRankedList = useMemo(
     function () {
       var ranked;
@@ -12036,7 +12076,8 @@ function OpenRidingGroupDetailView(props) {
         if (!cycleApi || typeof cycleApi.buildClubMemberRankedList !== 'function' || !rankByCategory) return null;
         ranked = cycleApi.buildClubMemberRankedList(rankByCategory, members, {
           metric: rankMetric,
-          category: rankCategory
+          category: rankCategory,
+          allMetricsByCategory: rankAllMetricsByCategory
         });
       } else {
         return null;
@@ -12084,6 +12125,7 @@ function OpenRidingGroupDetailView(props) {
       isCycleGroup,
       rankLeaderboardRows,
       rankByCategory,
+      rankAllMetricsByCategory,
       members,
       rankMetric,
       rankGender,

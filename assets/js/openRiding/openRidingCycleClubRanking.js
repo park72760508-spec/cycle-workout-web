@@ -139,10 +139,23 @@
     return byUid;
   }
 
+  function rowsByUid(rows) {
+    var map = Object.create(null);
+    (rows || []).forEach(function (r) {
+      if (r && r.userId != null) map[String(r.userId)] = r;
+    });
+    return map;
+  }
+
   /**
    * 클럽 멤버 순위 목록 — RUN 크루탭 buildCrewMemberRankedList와 동일한 결과 형태.
    * 전체순위(rank/boardRank)는 카테고리 풀 전체 기준, 목록 표시 순서(_crewRank)는
    * 클럽 멤버 중 유효 값이 있는 멤버만 값 기준 재정렬한다.
+   *
+   * @param {object} opts.allMetricsByCategory — { gc, tss, personal_dist, personal_speed } 각각
+   *   fetchClubRanking({metric}).byCategory. getPeakPowerRanking은 duration(항목)별로 별도 응답이라
+   *   한 응답에 gcScore/totalTss/totalKm/speedKmh가 동시에 들어있지 않다 — 아바타 오버레이가 4개
+   *   항목을 모두 보여주려면 4번 fetch한 결과를 각각 넘겨야 한다(2026-08).
    */
   function buildClubMemberRankedList(byCategory, memberRows, opts) {
     opts = opts || {};
@@ -163,12 +176,26 @@
       byUid[String(r.userId)] = { row: r, boardRank: idx + 1 };
     });
 
-    /* 아바타 확대 오버레이 — GC·주간TSS·최근 30일 거리·독주 각각 전체 랭킹보드 순위(랭킹보드에서
-       해당 항목 탭을 선택했을 때와 동일한 순위)를 별도로 계산해둔다(2026-08). */
-    var gcRankByUid = rankPoolByMetric(rows, 'gc');
-    var tssRankByUid = rankPoolByMetric(rows, 'tss');
-    var distRankByUid = rankPoolByMetric(rows, 'personal_dist');
-    var speedRankByUid = rankPoolByMetric(rows, 'personal_speed');
+    /* 아바타 확대 오버레이 — GC·주간TSS·최근 30일 거리·독주 각각의 원본 값·전체 순위.
+       allMetricsByCategory가 없으면(호출부가 아직 안 넘겨줬을 때) 현재 탭 응답으로 폴백하되,
+       그 경우 선택 탭 외 나머지 항목 값은 비어(-) 보일 수 있다. */
+    var allMetrics = opts.allMetricsByCategory || {};
+    function metricRows(key) {
+      var byCat = allMetrics[key];
+      return (byCat && byCat[category]) || rows;
+    }
+    var gcRows = metricRows('gc');
+    var tssRows = metricRows('tss');
+    var distRows = metricRows('personal_dist');
+    var speedRows = metricRows('personal_speed');
+    var gcByUid = rowsByUid(gcRows);
+    var tssByUid = rowsByUid(tssRows);
+    var distByUid = rowsByUid(distRows);
+    var speedByUid = rowsByUid(speedRows);
+    var gcRankByUid = rankPoolByMetric(gcRows, 'gc');
+    var tssRankByUid = rankPoolByMetric(tssRows, 'tss');
+    var distRankByUid = rankPoolByMetric(distRows, 'personal_dist');
+    var speedRankByUid = rankPoolByMetric(speedRows, 'personal_speed');
 
     var merged = [];
     (memberRows || []).forEach(function (m) {
@@ -190,10 +217,10 @@
           previousBoardRank: hit.row.previousBoardRank != null ? hit.row.previousBoardRank : null,
           _groupRole: m.role || 'member',
           /* 아바타 확대 오버레이(GC·주간TSS·최근 30일 거리·독주) — 선택된 항목과 무관하게 원본 값 보존 */
-          gcScore: metricValue('gc', hit.row),
-          weeklyTss: metricValue('tss', hit.row),
-          distance30dKm: metricValue('personal_dist', hit.row),
-          personalSpeedKmh: metricValue('personal_speed', hit.row),
+          gcScore: metricValue('gc', gcByUid[uid]),
+          weeklyTss: metricValue('tss', tssByUid[uid]),
+          distance30dKm: metricValue('personal_dist', distByUid[uid]),
+          personalSpeedKmh: metricValue('personal_speed', speedByUid[uid]),
           gcRank: gcRankByUid[uid] || null,
           weeklyTssRank: tssRankByUid[uid] || null,
           distance30dRank: distRankByUid[uid] || null,
