@@ -12937,9 +12937,9 @@ function OpenRidingGroupDetailView(props) {
                           : function (metric, v) {
                               return v != null ? String(v) : '-';
                             };
-                      /* 랭킹보드 아바타 오버레이와 동일하게 전체 순위를 값과 함께 표기(2026-08) */
+                      /* 항목 : 값(순위) 형식 — 예) GC : 544점(34위) (2026-08) */
                       var rankValueTxt = function (rank, valueTxt) {
-                        return (rank != null && rank >= 1 ? '전체 ' + rank + '위 · ' : '') + valueTxt;
+                        return valueTxt + (rank != null && rank >= 1 ? '(' + rank + '위)' : '');
                       };
                       var gcTxt =
                         m.gcScore != null && m.gcScore > 0
