@@ -12895,13 +12895,25 @@ function OpenRidingGroupDetailView(props) {
                           : function (metric, v) {
                               return v != null ? String(v) : '-';
                             };
-                      var gcTxt = m.gcScore != null && m.gcScore > 0 ? fmtMetric('gc', m.gcScore) + '점' : '-';
-                      var tssTxt = m.weeklyTss != null && m.weeklyTss > 0 ? fmtMetric('tss', m.weeklyTss) : '-';
+                      /* 랭킹보드 아바타 오버레이와 동일하게 전체 순위를 값과 함께 표기(2026-08) */
+                      var rankValueTxt = function (rank, valueTxt) {
+                        return (rank != null && rank >= 1 ? '전체 ' + rank + '위 · ' : '') + valueTxt;
+                      };
+                      var gcTxt =
+                        m.gcScore != null && m.gcScore > 0
+                          ? rankValueTxt(m.gcRank, fmtMetric('gc', m.gcScore) + '점')
+                          : '-';
+                      var tssTxt =
+                        m.weeklyTss != null && m.weeklyTss > 0
+                          ? rankValueTxt(m.weeklyTssRank, fmtMetric('tss', m.weeklyTss))
+                          : '-';
                       var distTxt =
-                        m.distance30dKm != null && m.distance30dKm > 0 ? fmtMetric('personal_dist', m.distance30dKm) + 'km' : '-';
+                        m.distance30dKm != null && m.distance30dKm > 0
+                          ? rankValueTxt(m.distance30dRank, fmtMetric('personal_dist', m.distance30dKm) + 'km')
+                          : '-';
                       var speedTxt =
                         m.personalSpeedKmh != null && m.personalSpeedKmh > 0
-                          ? fmtMetric('personal_speed', m.personalSpeedKmh) + 'km/h'
+                          ? rankValueTxt(m.personalSpeedRank, fmtMetric('personal_speed', m.personalSpeedKmh) + 'km/h')
                           : '-';
                       overlayBottomLine =
                         'GC : ' + gcTxt + ' · 주간TSS : ' + tssTxt + ' · 최근 30일 거리 : ' + distTxt + ' · 독주 능력 : ' + speedTxt;

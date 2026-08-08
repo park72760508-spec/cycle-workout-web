@@ -122,6 +122,23 @@
       });
   }
 
+  /** 특정 항목 기준으로 전체 풀을 정렬해 userId → 전체 순위 맵을 만든다(랭킹보드와 동일 기준). */
+  function rankPoolByMetric(rows, metric) {
+    var pool = rows.slice().sort(function (a, b) {
+      var av = metricValue(metric, a);
+      var bv = metricValue(metric, b);
+      av = av == null ? -1 : av;
+      bv = bv == null ? -1 : bv;
+      return bv - av;
+    });
+    var byUid = Object.create(null);
+    pool.forEach(function (r, idx) {
+      if (!r || r.userId == null) return;
+      byUid[String(r.userId)] = idx + 1;
+    });
+    return byUid;
+  }
+
   /**
    * 클럽 멤버 순위 목록 — RUN 크루탭 buildCrewMemberRankedList와 동일한 결과 형태.
    * 전체순위(rank/boardRank)는 카테고리 풀 전체 기준, 목록 표시 순서(_crewRank)는
@@ -146,6 +163,13 @@
       byUid[String(r.userId)] = { row: r, boardRank: idx + 1 };
     });
 
+    /* 아바타 확대 오버레이 — GC·주간TSS·최근 30일 거리·독주 각각 전체 랭킹보드 순위(랭킹보드에서
+       해당 항목 탭을 선택했을 때와 동일한 순위)를 별도로 계산해둔다(2026-08). */
+    var gcRankByUid = rankPoolByMetric(rows, 'gc');
+    var tssRankByUid = rankPoolByMetric(rows, 'tss');
+    var distRankByUid = rankPoolByMetric(rows, 'personal_dist');
+    var speedRankByUid = rankPoolByMetric(rows, 'personal_speed');
+
     var merged = [];
     (memberRows || []).forEach(function (m) {
       var uid = m && (m.userId || m.uid || m.id) ? String(m.userId || m.uid || m.id) : '';
@@ -169,7 +193,11 @@
           gcScore: metricValue('gc', hit.row),
           weeklyTss: metricValue('tss', hit.row),
           distance30dKm: metricValue('personal_dist', hit.row),
-          personalSpeedKmh: metricValue('personal_speed', hit.row)
+          personalSpeedKmh: metricValue('personal_speed', hit.row),
+          gcRank: gcRankByUid[uid] || null,
+          weeklyTssRank: tssRankByUid[uid] || null,
+          distance30dRank: distRankByUid[uid] || null,
+          personalSpeedRank: speedRankByUid[uid] || null
         })
       );
     });
