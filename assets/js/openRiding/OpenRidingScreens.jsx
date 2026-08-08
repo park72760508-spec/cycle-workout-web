@@ -12149,6 +12149,25 @@ function OpenRidingGroupDetailView(props) {
     [avatarZoom]
   );
 
+  /* 아바타 확대 오버레이는 #openRidingRoomScreen 내부(position:relative; z-index:0 스택 컨텍스트)에서
+     렌더되는데, 전역 맨 위로 가기 버튼(#globalBackToTopBtn, z-index:9999)은 그 스택 컨텍스트
+     바깥의 형제 요소라 오버레이의 z-index가 아무리 커도 버튼이 그 위에 그대로 떠 보인다(2026-08).
+     오버레이가 열려 있는 동안만 버튼을 직접 숨긴다. */
+  useEffect(
+    function () {
+      var btn = document.getElementById('globalBackToTopBtn');
+      if (!btn) return undefined;
+      if (avatarZoom) {
+        btn.classList.add('stelvio-hidden-for-avatar-zoom');
+        return function () {
+          btn.classList.remove('stelvio-hidden-for-avatar-zoom');
+        };
+      }
+      return undefined;
+    },
+    [avatarZoom]
+  );
+
   function displayNameForJoinRequest(j) {
     var uid = joinRequestApplicantUid(j);
     var row = memberProfiles[uid];

@@ -9674,6 +9674,12 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   z-index: 101000;
   bottom: var(--open-riding-global-floating-actions-bottom, calc(143px + env(safe-area-inset-bottom, 0px)));
 }
+/* 크루/클럽 상세 아바타 확대 오버레이가 열려 있는 동안 — 오버레이는 open-riding-app-root의
+   지역 스택 컨텍스트(position:relative; z-index:0) 안에 있어서 그 밖의 형제 요소인 이 버튼의
+   z-index(101000)를 이길 수 없다. 오버레이가 떠 있을 때는 버튼 자체를 숨긴다(2026-08). */
+.global-back-to-top-btn.stelvio-hidden-for-avatar-zoom {
+  display: none !important;
+}
 .global-back-to-top-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5), 0 4px 12px rgba(118, 75, 162, 0.35);
