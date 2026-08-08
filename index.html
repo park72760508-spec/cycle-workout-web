@@ -41884,6 +41884,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               </button>
             </div>
             <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="moim" aria-label="라이딩 모임">
+                <img src="assets/img/people.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" onerror="this.src='assets/img/user.png';this.onerror=null;" />
+                <span class="open-riding-bottom-glass-nav__label">모임</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
               <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="competition" aria-label="대회">
                 <svg class="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 21h8M12 17v4M7 4h10v4a5 5 0 01-10 0V4zM7 6H4a3 3 0 003 3M17 6h3a3 3 0 01-3 3" />
@@ -41976,7 +41982,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         'competitionScreen'
       ];
       /** RUN 화면 하단 네비에서 숨길 메뉴 (훈련·계획·구독) */
-      var HUB_NAV_KEYS_HIDDEN_ON_RUN = { train: true, plan: true, subscribe: true };
+      var HUB_NAV_KEYS_HIDDEN_ON_RUN = { train: true, plan: true, subscribe: true, moim: true };
       /**
        * 일반 사용자(grade 2·3) 하단 네비 숨김 — enabled: false 또는 keys에서 항목 제거 시 다시 표시
        * @example window.__hubNavStandardUserMenuHide.enabled = false;
@@ -42061,6 +42067,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           showScreen('competitionScreen');
           if (typeof window.competitionScreenInit === 'function') setTimeout(window.competitionScreenInit, 150);
         }
+      }
+      /** CYCLE 네비게이션바 — 기록·대회 사이 모임 버튼: basecamp의 "라이딩 모임" 진입과 동일 경로 */
+      function hubNavGoMoim() {
+        if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp();
+        else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');
       }
       function hubNavUpdateScrollEdgeHints(root) {
         if (!root) return;
@@ -42180,6 +42191,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           else if (key === 'train') hubNavGoTrain();
           else if (key === 'plan') hubNavGoPlan();
           else if (key === 'competition') hubNavGoCompetition();
+          else if (key === 'moim') hubNavGoMoim();
           else if (key === 'ranking') {
             if (typeof window.sportCategoryRoutes !== 'undefined' && window.sportCategoryRoutes.getActiveSport() === 'run') {
               if (typeof openRunningRankingBoard === 'function') openRunningRankingBoard();
