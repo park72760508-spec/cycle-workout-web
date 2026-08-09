@@ -4450,7 +4450,9 @@ async function runStravaGapDetectTodayJob(db, logPrefix) {
 const stravaSyncSundayOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "0 19 * * 0",
   timeZone: "Asia/Seoul",
-  timeoutSeconds: 540,
+  // 청크 팬아웃 사이 45초 지연(Strava rate-limit 페이싱) × 청크 수가 늘면서 540초로는
+  // 부족해져 5주 연속 타임아웃 실패 — Cloud Scheduler HTTP 최대치인 1800초로 상향.
+  timeoutSeconds: 1800,
 });
 if (STRAVA_CLIENT_SECRET) {
   stravaSyncSundayOptions.secrets = stravaSyncSundayOptions.secrets || [];
@@ -4479,7 +4481,8 @@ exports.stravaSyncSunday = onSchedule(
 const manualStravaSyncTodaySeoulOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   region: "asia-northeast3",
   cors: false,
-  timeoutSeconds: 540,
+  // stravaSyncSunday와 동일한 runStravaSyncWithFanOut 사용 — 540초로는 청크가 많을 때 부족
+  timeoutSeconds: 1800,
 });
 if (STRAVA_CLIENT_SECRET) {
   manualStravaSyncTodaySeoulOptions.secrets =
@@ -9750,12 +9753,12 @@ exports.manualRebuildRankingPhase = onRequest(
 
 /** KST 09:00 — 주간 마일리지 TOP10·TSS 보드 전체 재집계 (낮 1회, 03:40 마스터와 별도) */
 exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
-  {
+  supabaseDualWriteServer.appendServiceRoleSecret({
     schedule: WEEKLY_MILEAGE_TOP10_DAYTIME_CRON,
     timeZone: "Asia/Seoul",
     memory: "1GiB",
     timeoutSeconds: 540,
-  },
+  }),
   async () => {
     const db = admin.firestore();
     try {
