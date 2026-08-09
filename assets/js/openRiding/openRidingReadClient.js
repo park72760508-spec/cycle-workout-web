@@ -950,6 +950,23 @@ export async function fetchMyGroupContactSetRouted(db, uid, groupIds) {
   };
 }
 
+/**
+ * 라이딩/러닝 모임 생성 "GPX 파일(선택) → 즐겨찾기 코스" 팝업 —
+ * 내가 host로 만든 모임 중 GPX가 등록된 것들을 gpx_url 기준 중복 제외한 목록.
+ * @returns {Promise<Array<{id:string,title:string,course:string,gpxUrl:string,createdAt:string|null}>>}
+ */
+export async function fetchMyGpxCoursesRouted(uid, category) {
+  var u = String(uid || '').trim();
+  if (!u) return [];
+  var json = await httpGetJsonAuthed(API_BASE + '/getMyGpxCoursesForRead', {
+    uid: u,
+    userId: u,
+    category: category === 'RUN' ? 'RUN' : 'CYCLE',
+  });
+  if (!json || !json.success) return [];
+  return Array.isArray(json.courses) ? json.courses : [];
+}
+
 if (typeof window !== 'undefined') {
   window.stelvioEnsureGroupsReadSource = stelvioEnsureGroupsReadSource;
   window.stelvioGetGroupsReadSourceSync = stelvioGetGroupsReadSourceSync;
@@ -968,6 +985,7 @@ if (typeof window !== 'undefined') {
     subscribeRidingGroupsRouted,
     subscribeMyRidingGroupsAsMemberRouted,
     subscribeUserGroupMembershipsRouted,
+    fetchMyGpxCoursesRouted,
     fetchMyGroupContactSetRouted,
     subscribeMyManagedGroupsJoinRequestCountsRouted,
     subscribeRidingGroupMyJoinRequestRouted,

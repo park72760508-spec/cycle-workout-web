@@ -2048,6 +2048,221 @@ function openRidingFindScrollableAncestor(el) {
 var OPEN_RIDING_GPX_VEIL_CLASS = 'open-riding-gpx-map-interact-veil';
 
 /**
+ * GPX 파일(선택) 클릭 시 뜨는 1차 팝업 — 코스 폴더(기존 파일탐색기) vs 즐겨찾기 코스(내 모임 재사용)
+ */
+function OpenRidingGpxSourcePickerModal(props) {
+  var onClose = props.onClose || function () {};
+  var onPickFolder = props.onPickFolder || function () {};
+  var onPickFavorite = props.onPickFavorite || function () {};
+
+  return (
+    <div
+      className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:w-96 bg-white rounded-t-2xl sm:rounded-2xl p-4 space-y-2"
+        onClick={function (e) { e.stopPropagation(); }}
+      >
+        <p className="text-sm font-semibold text-slate-800 m-0 mb-1">GPX 파일 선택</p>
+        <button
+          type="button"
+          className="w-full flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 text-left hover:bg-slate-50"
+          onClick={onPickFolder}
+        >
+          <span className="text-2xl leading-none">📁</span>
+          <span>
+            <span className="block text-sm font-medium text-slate-800">코스 폴더에서 선택</span>
+            <span className="block text-xs text-slate-500">내 기기에서 GPX 파일을 직접 선택합니다</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="w-full flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 text-left hover:bg-slate-50"
+          onClick={onPickFavorite}
+        >
+          <span className="text-2xl leading-none">⭐</span>
+          <span>
+            <span className="block text-sm font-medium text-slate-800">즐겨찾기 코스에서 선택</span>
+            <span className="block text-xs text-slate-500">내가 만든 모임의 코스 GPX를 다시 사용합니다</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="w-full text-center text-sm text-slate-500 py-2"
+          onClick={onClose}
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 즐겨찾기 코스 리스트 팝업 — 내가 host로 만든 모임 중 GPX가 있는 것들을 gpxUrl 기준 중복 제외 후,
+ * 라이딩 기록 상세 Summary 탭과 동일한 JournalCourseMapPreview로 각 코스를 지도 썸네일로 나열.
+ * @param {{ uid: string, category: 'CYCLE'|'RUN', storage: any, onClose: Function, onSelect: (course: object)=>void }} props
+ */
+function OpenRidingFavoriteCourseModal(props) {
+  var uid = props.uid;
+  var category = props.category === 'RUN' ? 'RUN' : 'CYCLE';
+  var storage = props.storage || null;
+  var onClose = props.onClose || function () {};
+  var onSelect = props.onSelect || function () {};
+
+  var _st = useState({ status: 'loading', courses: [], err: '' });
+  var state = _st[0];
+  var setState = _st[1];
+
+  useEffect(
+    function () {
+      var cancelled = false;
+      var client = typeof window !== 'undefined' ? window.openRidingReadClient : null;
+      if (!uid || !client || typeof client.fetchMyGpxCoursesRouted !== 'function') {
+        setState({ status: 'err', courses: [], err: '즐겨찾기 코스를 불러올 수 없습니다.' });
+        return undefined;
+      }
+      client
+        .fetchMyGpxCoursesRouted(uid, category)
+        .then(function (courses) {
+          if (cancelled) return;
+          setState({ status: 'ok', courses: Array.isArray(courses) ? courses : [], err: '' });
+        })
+        .catch(function (e) {
+          if (cancelled) return;
+          setState({
+            status: 'err',
+            courses: [],
+            err: (e && e.message) ? String(e.message) : '즐겨찾기 코스를 불러올 수 없습니다.'
+          });
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [uid, category]
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:w-[440px] max-h-[85vh] bg-white rounded-t-2xl sm:rounded-2xl flex flex-col"
+        onClick={function (e) { e.stopPropagation(); }}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
+          <p className="text-sm font-semibold text-slate-800 m-0">즐겨찾기 코스</p>
+          <button type="button" className="text-slate-400 text-xl leading-none px-1" onClick={onClose} aria-label="닫기">×</button>
+        </div>
+        <div className="overflow-y-auto px-4 py-3 space-y-3">
+          {state.status === 'loading' ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-10">
+              <div className="stelvio-group-members-loading-spinner" />
+              <p className="text-xs text-slate-500 m-0">코스 불러오는 중…</p>
+            </div>
+          ) : null}
+          {state.status === 'err' ? (
+            <p className="text-xs text-rose-600 text-center py-10 m-0">{state.err}</p>
+          ) : null}
+          {state.status === 'ok' && !state.courses.length ? (
+            <p className="text-xs text-slate-500 text-center py-10 m-0">GPX가 등록된 내 모임이 아직 없습니다.</p>
+          ) : null}
+          {state.status === 'ok'
+            ? state.courses.map(function (c) {
+                return (
+                  <OpenRidingFavoriteCourseCard
+                    key={c.gpxUrl}
+                    course={c}
+                    storage={storage}
+                    onSelect={function () { onSelect(c); }}
+                  />
+                );
+              })
+            : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 즐겨찾기 코스 카드 1건 — GPX 로드/파싱 후 지도 썸네일 + 코스 설명 + 선택 버튼 */
+function OpenRidingFavoriteCourseCard(props) {
+  var course = props.course || {};
+  var storage = props.storage || null;
+  var onSelect = props.onSelect || function () {};
+
+  var _mst = useState({ status: 'loading', latlngs: null });
+  var mapState = _mst[0];
+  var setMapState = _mst[1];
+
+  useEffect(
+    function () {
+      var cancelled = false;
+      if (!course.gpxUrl) {
+        setMapState({ status: 'err', latlngs: null });
+        return undefined;
+      }
+      loadGpxTextFromUrl(course.gpxUrl, storage, function () { return cancelled; })
+        .then(function (text) {
+          if (cancelled) return;
+          var mod = typeof window !== 'undefined' ? window.openRidingGpx : null;
+          var parse = mod && typeof mod.parseGpxToTrack === 'function' ? mod.parseGpxToTrack : null;
+          if (!parse) throw new Error('GPX 모듈(openRidingGpx)이 로드되지 않았습니다.');
+          var track = parse(String(text || ''));
+          if (cancelled) return;
+          setMapState({
+            status: 'ok',
+            latlngs: track && track.latlngs && track.latlngs.length >= 2 ? track.latlngs : null
+          });
+        })
+        .catch(function () {
+          if (!cancelled) setMapState({ status: 'err', latlngs: null });
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [course.gpxUrl, storage]
+  );
+
+  var MapPreview = typeof window !== 'undefined' ? window.JournalCourseMapPreview : null;
+
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden">
+      {mapState.status === 'loading' ? (
+        <div className="flex items-center justify-center bg-slate-50" style={{ height: 140 }}>
+          <div className="stelvio-group-members-loading-spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+        </div>
+      ) : null}
+      {mapState.status === 'ok' && mapState.latlngs && MapPreview ? (
+        <MapPreview routeProfile={{ segments: [mapState.latlngs] }} mapHeight={140} dateKey={course.gpxUrl} />
+      ) : null}
+      {mapState.status === 'err' ? (
+        <div className="flex items-center justify-center bg-slate-50 text-xs text-slate-400" style={{ height: 140 }}>
+          지도를 불러올 수 없습니다
+        </div>
+      ) : null}
+      <div className="p-3 space-y-2">
+        <p className="text-sm font-semibold text-slate-800 m-0 truncate">{course.title || '(제목 없음)'}</p>
+        {course.course ? (
+          <p className="text-xs text-slate-600 m-0 whitespace-pre-wrap">{course.course}</p>
+        ) : null}
+        <button
+          type="button"
+          className="w-full text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 rounded-lg py-2"
+          onClick={onSelect}
+        >
+          선택
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * GPX URL 또는 로컬 File → Leaflet 지도 + Chart.js 고도표 (코스 설명 블록 하단용)
  * @param {{ gpxUrl?: string|null, file?: File|null, showEmptyMessage?: boolean, storage?: import('firebase/storage').FirebaseStorage | null }} props
  */
@@ -5606,6 +5821,14 @@ function OpenRidingCreateForm(props) {
 
   var formRef = useRef(null);
   var initialInviteAppliedRef = useRef(false);
+  var gpxFileInputRef = useRef(null);
+
+  var _gpxSrcModal = useState(false);
+  var showGpxSourceModal = _gpxSrcModal[0];
+  var setShowGpxSourceModal = _gpxSrcModal[1];
+  var _favCourseModal = useState(false);
+  var showFavoriteCourseModal = _favCourseModal[0];
+  var setShowFavoriteCourseModal = _favCourseModal[1];
 
   var st = useState(function () {
     var prof = getOpenRidingProfileDefaults();
@@ -6784,21 +7007,61 @@ function OpenRidingCreateForm(props) {
           storage={storage}
           showEmptyMessage={!!(form.gpxUrlExisting || form.gpxFile)}
         />
-        <label className="block text-sm font-medium text-slate-700">
+        <div className="block text-sm font-medium text-slate-700">
           GPX 파일 (선택)
           <input
+            ref={gpxFileInputRef}
             type="file"
             accept=".gpx,application/gpx+xml"
-            className="mt-1 block w-full text-sm"
+            className="hidden"
             onChange={function (e) {
-              set('gpxFile', e.target.files && e.target.files[0]);
+              var f = e.target.files && e.target.files[0];
+              set('gpxFile', f || null);
+              if (f) set('gpxUrlExisting', null);
             }}
           />
-        </label>
+          <button
+            type="button"
+            className="mt-1 w-full text-left text-sm border border-slate-300 rounded-lg px-3 py-1.5 bg-white hover:bg-slate-50 truncate"
+            onClick={function () { setShowGpxSourceModal(true); }}
+          >
+            {form.gpxFile
+              ? form.gpxFile.name
+              : form.gpxUrlExisting
+                ? '등록된 GPX 있음 · 탭하여 변경'
+                : '파일 선택'}
+          </button>
+        </div>
         {form.gpxUrlExisting && !form.gpxFile ? (
           <p className="text-xs text-slate-600 m-0">이미 등록된 GPX가 있습니다. 새 파일을 선택하면 저장 시 교체됩니다.</p>
         ) : null}
       </div>
+      {showGpxSourceModal ? (
+        <OpenRidingGpxSourcePickerModal
+          onClose={function () { setShowGpxSourceModal(false); }}
+          onPickFolder={function () {
+            setShowGpxSourceModal(false);
+            if (gpxFileInputRef.current) gpxFileInputRef.current.click();
+          }}
+          onPickFavorite={function () {
+            setShowGpxSourceModal(false);
+            setShowFavoriteCourseModal(true);
+          }}
+        />
+      ) : null}
+      {showFavoriteCourseModal ? (
+        <OpenRidingFavoriteCourseModal
+          uid={hostUserId}
+          category={formCategory}
+          storage={storage}
+          onClose={function () { setShowFavoriteCourseModal(false); }}
+          onSelect={function (courseItem) {
+            set('gpxFile', null);
+            set('gpxUrlExisting', courseItem.gpxUrl);
+            setShowFavoriteCourseModal(false);
+          }}
+        />
+      ) : null}
 
       {!isRunMoimForm ? (
       <fieldset className="border border-slate-200 rounded-xl p-3 space-y-2">

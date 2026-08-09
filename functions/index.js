@@ -103,6 +103,7 @@ const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
 const rankingReadRoutingPublic = require("./rankingReadRoutingPublic");
 const groupReadRouter = require("./groupReadRouter");
 const supabaseGroupReader = require("./supabaseGroupReader");
+const gpxCourseLibraryReader = require("./gpxCourseLibraryReader");
 const { withComputeCache } = require("./httpComputeCache");
 const groupReadRoutingPublic = require("./groupReadRoutingPublic");
 const logsReadRoutingPublic = require("./logsReadRoutingPublic");
@@ -11947,6 +11948,53 @@ exports.getMyGroupJoinRequestStatusForRead = onRequest(
       res.status(200).json({ success: true, row: row || null });
     } catch (e) {
       console.warn("[getMyGroupJoinRequestStatusForRead]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 라이딩/러닝 모임 생성 화면 "GPX 파일(선택) → 즐겨찾기 코스" 팝업 —
+ * 내가 host로 만든 모임 중 GPX가 등록된 것들을 gpx_url 기준 중복 제외 후 반환.
+ */
+exports.getMyGpxCoursesForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+
+    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
+    const category = String(req.query.category || "CYCLE").trim().toUpperCase() === "RUN" ? "RUN" : "CYCLE";
+    if (!requestedUid) {
+      res.status(400).json({ success: false, error: "uid 필요" });
+      return;
+    }
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 코스 목록만 조회할 수 있습니다." });
+      return;
+    }
+
+    try {
+      const courses = await withComputeCache(
+        admin,
+        "my_gpx_courses_v1__" + requestedUid + "__" + category,
+        30000,
+        () => gpxCourseLibraryReader.fetchMyGpxCourses(admin, requestedUid, category)
+      );
+      res.status(200).json({ success: true, courses: courses || [] });
+    } catch (e) {
+      console.warn("[getMyGpxCoursesForRead]", e.message || e);
       res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }
