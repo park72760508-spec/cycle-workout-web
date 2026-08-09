@@ -11958,7 +11958,7 @@ exports.getMyGroupJoinRequestStatusForRead = onRequest(
  * 내가 host로 만든 모임 중 GPX가 등록된 것들을 gpx_url 기준 중복 제외 후 반환.
  */
 exports.getMyGpxCoursesForRead = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60 }),
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");

@@ -2050,12 +2050,25 @@ var OPEN_RIDING_GPX_VEIL_CLASS = 'open-riding-gpx-map-interact-veil';
 /**
  * GPX 파일(선택) 클릭 시 뜨는 1차 팝업 — 코스 폴더(기존 파일탐색기) vs 즐겨찾기 코스(내 모임 재사용)
  */
+/**
+ * body로 포털 렌더 — open-riding 화면 루트에 스크롤/transform 컨테이너가 있어
+ * position:fixed 자식이 뷰포트가 아니라 그 컨테이너 기준으로 갇히는 문제 회피
+ * (하단 글래스 네비 OpenRidingGlassNavPortal과 동일한 이유·동일 패턴).
+ */
+function openRidingRenderModalPortal(el) {
+  var rd = typeof ReactDOM !== 'undefined' ? ReactDOM : typeof window !== 'undefined' ? window.ReactDOM : undefined;
+  if (typeof document !== 'undefined' && rd && typeof rd.createPortal === 'function') {
+    return rd.createPortal(el, document.body);
+  }
+  return el;
+}
+
 function OpenRidingGpxSourcePickerModal(props) {
   var onClose = props.onClose || function () {};
   var onPickFolder = props.onPickFolder || function () {};
   var onPickFavorite = props.onPickFavorite || function () {};
 
-  return (
+  return openRidingRenderModalPortal(
     <div
       className="fixed inset-0 z-[100100] flex items-center justify-center bg-black/40"
       onClick={onClose}
@@ -2147,7 +2160,7 @@ function OpenRidingFavoriteCourseModal(props) {
   var navClearance =
     'calc(16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-pad-y, 8px) * 2 + var(--open-riding-glass-nav-row-min, 47px) + 20px)';
 
-  return (
+  return openRidingRenderModalPortal(
     <div
       className="fixed inset-x-0 top-0 z-[100100] flex items-end sm:items-center justify-center bg-black/40"
       style={{ bottom: navClearance }}
