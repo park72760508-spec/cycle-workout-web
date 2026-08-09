@@ -28,6 +28,18 @@
 
   var AVG_GUIDE_LINE = 'rgba(249, 115, 22, 0.45)';
 
+  /** 짧은 구간 ≥ 긴 구간(파워·심박 공통 원칙) — 저장 단계에서 이미 보정되지만, 서로 다른 시점/
+   * 소스에서 채워진 값이 섞여 들어올 수 있어 화면에 그리기 직전 한 번 더 눌러준다(2026-08).
+   * rows는 이미 짧은→긴 구간 순서로 정렬돼 있다고 가정한다. */
+  function capPeakRowsMonotonicDesc(rows) {
+    for (var i = 1; i < rows.length; i++) {
+      if (rows[i - 1].val > 0 && rows[i].val > rows[i - 1].val) {
+        rows[i] = Object.assign({}, rows[i], { val: rows[i - 1].val });
+      }
+    }
+    return rows;
+  }
+
   /** journal-detail-value와 동일: 14px, font-weight 600 */
   var JOURNAL_PEAK_BAR_VALUE_FONT = '600 14px sans-serif';
 
@@ -215,6 +227,7 @@
         { label: '40분', shortLabel: '40', field: 'max_40min_watts', val: Number(log.max_40min_watts) || 0 },
         { label: '60분', shortLabel: '60', field: 'max_60min_watts', val: Number(log.max_60min_watts) || 0 }
       ];
+      capPeakRowsMonotonicDesc(rows);
       var wattsValues = rows.map(function(r) { return r.val; });
       var avgGuide = Number(log.avg_watts) > 0 ? Number(log.avg_watts) : 0;
       var hasAnyBar = wattsValues.some(function(w) { return w > 0; });
@@ -410,6 +423,7 @@
         { label: '40분', shortLabel: '40', field: 'max_hr_40min', val: Number(log.max_hr_40min) || 0 },
         { label: '60분', shortLabel: '60', field: 'max_hr_60min', val: Number(log.max_hr_60min) || 0 }
       ];
+      capPeakRowsMonotonicDesc(rows);
       var values = rows.map(function(r) { return r.val; });
       var avgGuide = Number(log.avg_hr) > 0 ? Number(log.avg_hr) : 0;
       var hasAnyBar = values.some(function(w) { return w > 0; });

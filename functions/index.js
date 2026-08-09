@@ -44,7 +44,38 @@ if (!admin.apps.length) {
 
 const stravaConnectionReader = require("./stravaConnectionReader");
 const rankingDayRollup = require("./rankingDayRollup");
-const { sanitizePeakPowerWattsOnRow } = require("./peakPowerMonotonic");
+const { sanitizePeakPowerWattsOnRow, capPeakPowerMonotonicInPlace } = require("./peakPowerMonotonic");
+
+/** 5초 ≥ 1분 ≥ 5분 ≥ 10분 ≥ 20분 ≥ 40분 ≥ 60분 — 파워와 동일 원칙을 심박에도 적용(2026-08).
+ * capPeakPowerMonotonicInPlace는 필드명 배열을 받는 범용 함수라 그대로 재사용한다. */
+const HR_PEAK_FIELDS_ASC_DURATION = [
+  "max_hr_5sec",
+  "max_hr_1min",
+  "max_hr_5min",
+  "max_hr_10min",
+  "max_hr_20min",
+  "max_hr_40min",
+  "max_hr_60min",
+];
+function capHrPeaksMonotonicOnRow(row) {
+  if (!row) return row;
+  capPeakPowerMonotonicInPlace(row, HR_PEAK_FIELDS_ASC_DURATION);
+  return row;
+}
+/** 부분 업데이트(updateData)만으로는 기존 문서(existingRow)에 남아있는 다른 구간 값과
+ * 조합했을 때만 단조성이 깨질 수 있다 — existingRow와 합친 뷰로 보정한 뒤, 실제로 바뀐
+ * 필드만 updateData에 다시 반영해 Firestore에도 그 값이 저장되게 한다. */
+function capHrPeaksMonotonicOnPartialUpdate(updateData, existingRow) {
+  if (!updateData) return updateData;
+  const merged = Object.assign({}, existingRow || {}, updateData);
+  capHrPeaksMonotonicOnRow(merged);
+  for (const f of HR_PEAK_FIELDS_ASC_DURATION) {
+    if (Object.prototype.hasOwnProperty.call(updateData, f) && updateData[f] !== merged[f]) {
+      updateData[f] = merged[f];
+    }
+  }
+  return updateData;
+}
 const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const appConfigCache = require("./appConfigCache");
@@ -1805,6 +1836,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     if (hrPeaks.max_hr_40min != null) logDoc.max_hr_40min = hrPeaks.max_hr_40min;
     if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
     if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
+    capHrPeaksMonotonicOnRow(logDoc);
   }
 
   const routeProfile = buildStravaRouteProfileFields(activity, streamsRes);
@@ -2762,6 +2794,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
           if (hrPeaks.max_hr_40min != null) updateData.max_hr_40min = hrPeaks.max_hr_40min;
           if (hrPeaks.max_hr_60min != null) updateData.max_hr_60min = hrPeaks.max_hr_60min;
           if (hrPeaks.max_hr != null) updateData.max_hr = hrPeaks.max_hr;
+          capHrPeaksMonotonicOnPartialUpdate(updateData, d);
         }
         if (streamsRes.success && (streamsRes.watts?.length > 0 || streamsRes.heartrate?.length > 0)) {
           const effectiveFtp = getFTPWithFallback(userData, streamsRes.watts || []);
@@ -2910,6 +2943,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if (hrPeaks.max_hr_40min != null) logDoc.max_hr_40min = hrPeaks.max_hr_40min;
       if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
       if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
+      capHrPeaksMonotonicOnRow(logDoc);
     }
     const routeProfileBatch = buildStravaRouteProfileFields(detailedActivity, streamsRes);
     if (routeProfileBatch) {
@@ -3922,6 +3956,7 @@ exports.manualStravaSyncWithMmp = onRequest(
             if (hrPeaks.max_hr_40min != null) updateData.max_hr_40min = hrPeaks.max_hr_40min;
             if (hrPeaks.max_hr_60min != null) updateData.max_hr_60min = hrPeaks.max_hr_60min;
             if (hrPeaks.max_hr != null) updateData.max_hr = hrPeaks.max_hr;
+            capHrPeaksMonotonicOnPartialUpdate(updateData, existingData);
           }
           if (streamsRes.success && (streamsRes.watts?.length > 0 || streamsRes.heartrate?.length > 0)) {
             const effectiveFtp = getFTPWithFallback(userData, streamsRes.watts || []);
@@ -4115,6 +4150,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (hrPeaks.max_hr_40min != null) logDoc.max_hr_40min = hrPeaks.max_hr_40min;
           if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
           if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
+          capHrPeaksMonotonicOnRow(logDoc);
         }
         if (userWeight != null) logDoc.weight = userWeight;
         const routeProfileManual = buildStravaRouteProfileFields(activity, streamsRes);

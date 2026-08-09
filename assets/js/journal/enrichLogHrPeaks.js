@@ -30,6 +30,19 @@
     return log;
   }
 
+  /** 5초 ≥ 1분 ≥ 5분 ≥ 10분 ≥ 20분 ≥ 40분 ≥ 60분 — 필드별로 서로 다른 소스(Supabase/Firestore)
+   * 값을 섞어 채우면(위 병합) 이 순서가 깨질 수 있어, 병합 후 짧은 구간이 긴 구간보다 작아지면
+   * 긴 구간 값으로 눌러준다(피크 파워 capPeakPowerMonotonicInPlace와 동일 원칙, 2026-08). */
+  function capHrPeaksMonotonicInPlace(log) {
+    if (!log) return log;
+    for (var i = 1; i < HR_PEAK_FIELDS.length; i++) {
+      var prev = Number(log[HR_PEAK_FIELDS[i - 1]]) || 0;
+      var cur = Number(log[HR_PEAK_FIELDS[i]]) || 0;
+      if (prev > 0 && cur > prev) log[HR_PEAK_FIELDS[i]] = prev;
+    }
+    return log;
+  }
+
   function mergeHrPeaksFromFirestore(supabaseLog, firestoreLog) {
     var out = Object.assign({}, supabaseLog);
     var i;
@@ -43,6 +56,7 @@
       var mh = Number(firestoreLog.max_hr || firestoreLog.max_heartrate) || 0;
       if (mh > 0) out.max_hr = mh;
     }
+    capHrPeaksMonotonicInPlace(out);
     return applyHr5FallbackToLog(out);
   }
 
@@ -84,27 +98,29 @@
       }
     }
     if (!needsFirestore) {
-      return logs.map(applyHr5FallbackToLog);
+      return logs.map(function (l) {
+        return capHrPeaksMonotonicInPlace(Object.assign({}, applyHr5FallbackToLog(l)));
+      });
     }
 
     var out = [];
     for (i = 0; i < logs.length; i++) {
       var log = logs[i];
       if (Number(log.max_hr_5sec) > 0) {
-        out.push(log);
+        out.push(capHrPeaksMonotonicInPlace(Object.assign({}, log)));
         continue;
       }
       var docId = String(log.activity_id || log.id || '').trim();
       if (!docId) {
-        out.push(applyHr5FallbackToLog(log));
+        out.push(capHrPeaksMonotonicInPlace(Object.assign({}, applyHr5FallbackToLog(log))));
         continue;
       }
       try {
         var fs = await fetchFirestoreLogDoc(userId, docId);
         if (fs) out.push(mergeHrPeaksFromFirestore(log, fs));
-        else out.push(applyHr5FallbackToLog(log));
+        else out.push(capHrPeaksMonotonicInPlace(Object.assign({}, applyHr5FallbackToLog(log))));
       } catch (_e) {
-        out.push(applyHr5FallbackToLog(log));
+        out.push(capHrPeaksMonotonicInPlace(Object.assign({}, applyHr5FallbackToLog(log))));
       }
     }
     return out;
