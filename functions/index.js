@@ -103,6 +103,7 @@ const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
 const rankingReadRoutingPublic = require("./rankingReadRoutingPublic");
 const groupReadRouter = require("./groupReadRouter");
 const supabaseGroupReader = require("./supabaseGroupReader");
+const { withComputeCache } = require("./httpComputeCache");
 const groupReadRoutingPublic = require("./groupReadRoutingPublic");
 const logsReadRoutingPublic = require("./logsReadRoutingPublic");
 const groupDualWriteTriggers = require("./groupDualWriteTriggers");
@@ -11521,7 +11522,14 @@ exports.getRidingGroupForRead = onRequest(
     const includeJoinRequests =
       req.query.includeJoinRequests === "1" || req.query.includeJoinRequests === "true";
     try {
-      const fromSb = await groupReadRouter.tryFetchRidingGroupFromSupabase(admin, db, req.query);
+      const groupCacheKey =
+        "riding_group_read_v1__" + groupId + "__" + (includeJoinRequests ? "1" : "0");
+      const fromSb = await withComputeCache(
+        admin,
+        groupCacheKey,
+        8000,
+        () => groupReadRouter.tryFetchRidingGroupFromSupabase(admin, db, req.query)
+      );
       if (fromSb) {
         res.status(200).json(fromSb);
         return;
@@ -11604,7 +11612,12 @@ exports.getMyRidingGroupsForRead = onRequest(
       return;
     }
     try {
-      const fromSb = await groupReadRouter.tryFetchMyRidingGroupsFromSupabase(admin, req.query);
+      const fromSb = await withComputeCache(
+        admin,
+        "my_riding_groups_read_v1__" + uid,
+        15000,
+        () => groupReadRouter.tryFetchMyRidingGroupsFromSupabase(admin, req.query)
+      );
       if (fromSb) {
         res.status(200).json(fromSb);
         return;
@@ -11698,7 +11711,14 @@ exports.getMyGroupContactSetForRead = onRequest(
       return;
     }
     try {
-      const fromSb = await groupReadRouter.tryFetchMyGroupContactSetFromSupabase(admin, req.query);
+      const contactCacheKey =
+        "my_group_contact_set_v1__" + uid + "__" + groupIds.slice().sort().join(",");
+      const fromSb = await withComputeCache(
+        admin,
+        contactCacheKey,
+        10000,
+        () => groupReadRouter.tryFetchMyGroupContactSetFromSupabase(admin, req.query)
+      );
       if (fromSb) {
         res.status(200).json(fromSb);
         return;
@@ -11760,68 +11780,77 @@ exports.getBasecampBadgeCountsForRead = onRequest(
 
     const db = admin.firestore();
     try {
-      const userSnap = await db.collection("users").doc(requestedUid).get();
-      const userData = userSnap.exists ? userSnap.data() || {} : {};
-      const normPhone = normalizePhoneDigitsForBadge(
-        userData.phone || userData.phoneNumber || userData.contact || userData.tel || ""
+      const counts = await withComputeCache(
+        admin,
+        "basecamp_badge_counts_v1__" + requestedUid,
+        15000,
+        async () => {
+          const userSnap = await db.collection("users").doc(requestedUid).get();
+          const userData = userSnap.exists ? userSnap.data() || {} : {};
+          const normPhone = normalizePhoneDigitsForBadge(
+            userData.phone || userData.phoneNumber || userData.contact || userData.tel || ""
+          );
+
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const todayTs = admin.firestore.Timestamp.fromDate(todayStart);
+
+          const ridesPromise =
+            normPhone.length >= 8
+              ? db
+                  .collection("rides")
+                  .where("invitedList", "array-contains", normPhone)
+                  .get()
+                  .then((snap) => {
+                    var cycleCount = 0;
+                    var runCount = 0;
+                    snap.forEach((doc) => {
+                      var d = doc.data() || {};
+                      var rideDate = d.date;
+                      if (rideDate && typeof rideDate.toDate === "function") {
+                        if (rideDate.toDate() < todayTs.toDate()) return;
+                      }
+                      var parts = Array.isArray(d.participants) ? d.participants : [];
+                      if (parts.indexOf(requestedUid) !== -1) return;
+                      var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
+                      if (cat === "RUN") runCount++;
+                      else cycleCount++;
+                    });
+                    return { ridesCycle: cycleCount, ridesRun: runCount };
+                  })
+                  .catch(() => ({ ridesCycle: 0, ridesRun: 0 }))
+              : Promise.resolve({ ridesCycle: 0, ridesRun: 0 });
+
+          const friendsPromise = db
+            .collection("friendRequests")
+            .where("toUid", "==", requestedUid)
+            .where("status", "==", "pending")
+            .count()
+            .get()
+            .then((snap) => snap.data().count || 0)
+            .catch(() => 0);
+
+          const groupsPromise = supabaseGroupReader
+            .fetchOwnedGroupsPendingJoinRequestCount(admin, requestedUid)
+            .catch(() => 0);
+
+          const [ridesCounts, friends, groups] = await Promise.all([
+            ridesPromise,
+            friendsPromise,
+            groupsPromise,
+          ]);
+
+          return {
+            success: true,
+            ridesCycle: ridesCounts.ridesCycle,
+            ridesRun: ridesCounts.ridesRun,
+            friends: friends,
+            groups: groups || 0,
+          };
+        }
       );
 
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayTs = admin.firestore.Timestamp.fromDate(todayStart);
-
-      const ridesPromise =
-        normPhone.length >= 8
-          ? db
-              .collection("rides")
-              .where("invitedList", "array-contains", normPhone)
-              .get()
-              .then((snap) => {
-                var cycleCount = 0;
-                var runCount = 0;
-                snap.forEach((doc) => {
-                  var d = doc.data() || {};
-                  var rideDate = d.date;
-                  if (rideDate && typeof rideDate.toDate === "function") {
-                    if (rideDate.toDate() < todayTs.toDate()) return;
-                  }
-                  var parts = Array.isArray(d.participants) ? d.participants : [];
-                  if (parts.indexOf(requestedUid) !== -1) return;
-                  var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
-                  if (cat === "RUN") runCount++;
-                  else cycleCount++;
-                });
-                return { ridesCycle: cycleCount, ridesRun: runCount };
-              })
-              .catch(() => ({ ridesCycle: 0, ridesRun: 0 }))
-          : Promise.resolve({ ridesCycle: 0, ridesRun: 0 });
-
-      const friendsPromise = db
-        .collection("friendRequests")
-        .where("toUid", "==", requestedUid)
-        .where("status", "==", "pending")
-        .count()
-        .get()
-        .then((snap) => snap.data().count || 0)
-        .catch(() => 0);
-
-      const groupsPromise = supabaseGroupReader
-        .fetchOwnedGroupsPendingJoinRequestCount(admin, requestedUid)
-        .catch(() => 0);
-
-      const [ridesCounts, friends, groups] = await Promise.all([
-        ridesPromise,
-        friendsPromise,
-        groupsPromise,
-      ]);
-
-      res.status(200).json({
-        success: true,
-        ridesCycle: ridesCounts.ridesCycle,
-        ridesRun: ridesCounts.ridesRun,
-        friends: friends,
-        groups: groups || 0,
-      });
+      res.status(200).json(counts);
     } catch (e) {
       console.warn("[getBasecampBadgeCountsForRead]", e.message || e);
       res.status(500).json({ success: false, error: e.message || String(e) });
@@ -11862,9 +11891,11 @@ exports.getManagedGroupsPendingJoinRequestCountForRead = onRequest(
     }
 
     try {
-      const { total, countMap } = await supabaseGroupReader.fetchOwnedGroupsPendingJoinRequestBreakdown(
+      const { total, countMap } = await withComputeCache(
         admin,
-        requestedUid
+        "managed_groups_pending_join_v1__" + requestedUid,
+        10000,
+        () => supabaseGroupReader.fetchOwnedGroupsPendingJoinRequestBreakdown(admin, requestedUid)
       );
       res.status(200).json({ success: true, total: total || 0, countMap: countMap || {} });
     } catch (e) {
@@ -11907,7 +11938,12 @@ exports.getMyGroupJoinRequestStatusForRead = onRequest(
     }
 
     try {
-      const row = await supabaseGroupReader.fetchMyGroupJoinRequestStatus(admin, groupId, requestedUid);
+      const row = await withComputeCache(
+        admin,
+        "my_group_join_request_status_v1__" + requestedUid + "__" + groupId,
+        8000,
+        () => supabaseGroupReader.fetchMyGroupJoinRequestStatus(admin, groupId, requestedUid)
+      );
       res.status(200).json({ success: true, row: row || null });
     } catch (e) {
       console.warn("[getMyGroupJoinRequestStatusForRead]", e.message || e);
@@ -12290,6 +12326,49 @@ exports.scheduledRankingParityAudit = onSchedule(
 
 // ---------- STELVIO 헵타곤·GC 랭킹: heptagon_cohort_ranks (일 1회 03:20 KST — scheduledPeak28dHeptagonOnly) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
+const heptagonDashboardSupabaseReader = require("./heptagonDashboardSupabaseReader");
+
+const getHeptagonDashboardCohortOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: true,
+  timeoutSeconds: 30,
+});
+/**
+ * 대시보드 헵타곤/옥타곤 카드 전용 — 클라이언트 직접 Firestore 조회(heptagon_cohort_ranks, limit 최대 10000)를
+ * Supabase 서버 프록시로 대체(트래픽 절감). op=bySumDesc|entry|boardN — stelvioHeptagonRankLog.js 참고.
+ */
+exports.getHeptagonDashboardCohort = onRequest(getHeptagonDashboardCohortOptions, async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Cache-Control", "public, max-age=60, s-maxage=60, stale-while-revalidate=30");
+  const op = String(req.query.op || "").trim();
+  const params = {
+    monthKey: req.query.monthKey,
+    filterCategory: req.query.filterCategory,
+    filterGender: req.query.filterGender,
+    userId: req.query.userId,
+    limit: req.query.limit,
+  };
+  try {
+    let payload;
+    if (op === "bySumDesc") {
+      payload = await heptagonDashboardSupabaseReader.fetchCohortBySumDesc(admin, params);
+    } else if (op === "entry") {
+      payload = await heptagonDashboardSupabaseReader.fetchCohortEntry(admin, params);
+    } else if (op === "boardN") {
+      payload = await heptagonDashboardSupabaseReader.fetchCohortBoardN(admin, params);
+    } else {
+      res.status(400).json({ ok: false, error: "unknown op" });
+      return;
+    }
+    res.status(200).json(payload);
+  } catch (e) {
+    console.error("[getHeptagonDashboardCohort]", op, e && e.message ? e.message : e);
+    res.status(200).json({ ok: false, error: String(e && e.message ? e.message : e) });
+  }
+});
 
 /** 스케줄·수동 배치 공통 — `scheduledPeak28dHeptagonOnly` / `manualRebuildHeptagonCohortRanks` */
 async function runHeptagonCohortRanksRebuildJob() {

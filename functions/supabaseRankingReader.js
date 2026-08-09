@@ -19,6 +19,53 @@ const HEPTAGON_CATEGORIES = [
 const GC_RANKING_MAX_ROWS_PER_CATEGORY = 10000;
 const SUPABASE_IN_QUERY_CHUNK = 200;
 
+/**
+ * 랭킹 코어 계산(6개 부문 Supabase fan-out 등) 결과를 Firestore `cache`에 짧게 캐싱 —
+ * 뷰어별 개인화(currentUser·heptagon axis 등)는 호출부가 캐시된 결과 위에서 별도로 붙이므로 영향 없음.
+ * Firestore 1MiB 문서 한도 보호를 위해 큰 payload는 캐싱을 건너뛰고 항상 정상 응답(비캐시 경로와 동일)한다.
+ */
+const RANKING_COMPUTE_CACHE_COLLECTION = "cache";
+const RANKING_COMPUTE_CACHE_MAX_CHARS = 700000;
+
+async function readRankingComputeCache(admin, cacheKey, ttlMs) {
+  try {
+    const snap = await admin
+      .firestore()
+      .collection(RANKING_COMPUTE_CACHE_COLLECTION)
+      .doc(cacheKey)
+      .get();
+    if (!snap.exists) return null;
+    const d = snap.data();
+    if (!d || d.payload == null || !isFinite(Number(d.updatedAtMs))) return null;
+    if (Date.now() - Number(d.updatedAtMs) > ttlMs) return null;
+    return d.payload;
+  } catch (err) {
+    console.warn("[rankingComputeCache] read failed:", cacheKey, err && err.message ? err.message : err);
+    return null;
+  }
+}
+
+async function writeRankingComputeCache(admin, cacheKey, payload) {
+  try {
+    let serialized;
+    try {
+      serialized = JSON.stringify(payload);
+    } catch (eSer) {
+      return;
+    }
+    if (!serialized || serialized.length > RANKING_COMPUTE_CACHE_MAX_CHARS) return;
+    /* undefined 필드가 있으면 Firestore.set()이 거부함 — JSON 왕복으로 제거(res.json()과 동일 동작) */
+    const safePayload = JSON.parse(serialized);
+    await admin
+      .firestore()
+      .collection(RANKING_COMPUTE_CACHE_COLLECTION)
+      .doc(cacheKey)
+      .set({ payload: safePayload, updatedAtMs: Date.now() });
+  } catch (err) {
+    console.warn("[rankingComputeCache] write failed:", cacheKey, err && err.message ? err.message : err);
+  }
+}
+
 function effectiveDayKmFromSummaryRow(row) {
   const ks = Number(row.km_strava_sum) || 0;
   const kk = Number(row.km_stelvio_sum) || 0;
@@ -621,9 +668,29 @@ async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
   };
 }
 
+/** getWeeklyRanking 다건 동시 요청 대비 원천 계산 결과만 짧게 캐싱(뷰어 개인화는 상위에서 별도 처리) */
+const TSS_CORE_CACHE_TTL_MS = 20000;
+
+async function fetchWeeklyTssRankingCoreCached(admin, startStr, endStr, gender) {
+  const cacheKey = "weekly_tss_core_v1__" + startStr + "__" + endStr + "__" + gender;
+  const t0 = Date.now();
+  const cached = await readRankingComputeCache(admin, cacheKey, TSS_CORE_CACHE_TTL_MS);
+  if (cached) {
+    console.log("[rankingComputeCache] HIT", cacheKey, "readMs=", Date.now() - t0);
+    return cached;
+  }
+  const fresh = await fetchWeeklyTssRankingCore(admin, startStr, endStr, gender);
+  console.log("[rankingComputeCache] MISS", cacheKey, "computeMs=", Date.now() - t0);
+  if (fresh) {
+    /* Cloud Run은 응답 전송 직후 백그라운드 실행을 보장하지 않으므로 반드시 await 후 반환 */
+    await writeRankingComputeCache(admin, cacheKey, fresh).catch(function () {});
+  }
+  return fresh;
+}
+
 async function fetchWeeklyTssRanking(admin, startStr, endStr, gender) {
   return fetchNonGcSupabaseBoard(
-    fetchWeeklyTssRankingCore,
+    fetchWeeklyTssRankingCoreCached,
     admin,
     [startStr, endStr],
     gender,
@@ -1381,6 +1448,31 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
 }
 
 /**
+ * fetchGcRankingCore(6개 부문 Supabase fan-out — GC 응답 중 가장 비싼 부분)를 짧게 캐싱.
+ * 뷰어 개인화(attachGcViewerHeptagonAxes 등)는 캐시와 무관하게 매 요청마다 그대로 붙는다.
+ * 헵타곤 코호트는 하루 2회(01:15·03:30 KST)만 갱신되므로 2분 캐시로도 신선도 손실 없음.
+ */
+const GC_CORE_CACHE_TTL_MS = 120000;
+
+async function fetchGcRankingCoreCached(admin, monthKey, queryGender) {
+  const fg = queryGender === "M" || queryGender === "F" ? queryGender : "all";
+  const cacheKey = "gc_cohort_core_v1__" + monthKey + "__" + fg;
+  const t0 = Date.now();
+  const cached = await readRankingComputeCache(admin, cacheKey, GC_CORE_CACHE_TTL_MS);
+  if (cached) {
+    console.log("[rankingComputeCache] HIT", cacheKey, "readMs=", Date.now() - t0);
+    return cached;
+  }
+  const fresh = await fetchGcRankingCore(admin, monthKey, queryGender);
+  console.log("[rankingComputeCache] MISS", cacheKey, "computeMs=", Date.now() - t0);
+  if (fresh) {
+    /* Cloud Run은 응답 전송 직후 백그라운드 실행을 보장하지 않으므로 반드시 await 후 반환 */
+    await writeRankingComputeCache(admin, cacheKey, fresh).catch(function () {});
+  }
+  return fresh;
+}
+
+/**
  * GC(헵타곤): M/F 요청도 Supabase는 filter_gender=all만 조회, 응답 gender=all.
  * @param {import('firebase-admin')} admin
  * @param {string} [monthKey] YYYY-MM (KST)
@@ -1482,7 +1574,7 @@ async function fetchGcRanking(admin, monthKey, requestedGender, viewerFirebaseUi
     want,
     `filter_gender=${want} month=${mk}`
   );
-  let payload = await fetchGcRankingCore(admin, mk, want);
+  let payload = await fetchGcRankingCoreCached(admin, mk, want);
   if (!payload) {
     // 월초(매월 1일 00:00~03:20 KST) — 새 month_key 행이 아직 없음.
     // TSS 전주 폴백과 동일 취지로, 직전 월 마지막 스냅샷으로 폴백해 공백을 막는다.
@@ -1490,7 +1582,7 @@ async function fetchGcRanking(admin, monthKey, requestedGender, viewerFirebaseUi
     const heptagonCohortRanks = require("./heptagonCohortRanks");
     const prevMk = heptagonCohortRanks.getPreviousMonthKeyKst(mk);
     if (prevMk) {
-      payload = await fetchGcRankingCore(admin, prevMk, want);
+      payload = await fetchGcRankingCoreCached(admin, prevMk, want);
       if (payload) {
         payload.gcPrevMonthFallback = true;
         payload.gcRequestedMonthKey = mk;

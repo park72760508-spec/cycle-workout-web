@@ -15,6 +15,33 @@
   var COL_COHORT = 'heptagon_cohort_ranks';
 
   /**
+   * 대시보드 헵타곤 카드 트래픽 절감: Firestore `heptagon_cohort_ranks` 직접 조회(최대 limit 10000) 대신
+   * Supabase를 읽는 `getHeptagonDashboardCohort` 프록시를 우선 사용하고, 실패 시에만 Firestore로 폴백한다.
+   * 롤백: `window.__stelvioHeptagonDashboardSupabaseOff = true`
+   */
+  var HEPTAGON_DASHBOARD_COHORT_API = 'https://us-central1-stelvio-ai.cloudfunctions.net/getHeptagonDashboardCohort';
+
+  function heptagonDashboardCohortFetch(op, params) {
+    if (typeof window === 'undefined' || typeof fetch !== 'function' || window.__stelvioHeptagonDashboardSupabaseOff === true) {
+      return Promise.reject(new Error('supabase-proxy-disabled'));
+    }
+    var qs = 'op=' + encodeURIComponent(op);
+    for (var k in params) {
+      if (!Object.prototype.hasOwnProperty.call(params, k) || params[k] == null || params[k] === '') continue;
+      qs += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(String(params[k]));
+    }
+    return fetch(HEPTAGON_DASHBOARD_COHORT_API + '?' + qs)
+      .then(function (res) {
+        if (!res || !res.ok) throw new Error('http-' + (res && res.status));
+        return res.json();
+      })
+      .then(function (json) {
+        if (!json || json.ok !== true) throw new Error((json && json.error) || 'bad-response');
+        return json;
+      });
+  }
+
+  /**
    * 같은 JS 번들에서 import한 modular Firestore만 collection()/query()에 넘길 수 있음.
    * window.firestoreV9는 다른 모듈 인스턴스면 "Expected first argument to collection() …" 발생.
    */
@@ -91,6 +118,18 @@
     if (!o.userId) {
       return Promise.resolve({ ok: false, data: null, error: 'no-uid' });
     }
+    return heptagonDashboardCohortFetch('entry', {
+      userId: o.userId,
+      monthKey: o.monthKey,
+      filterCategory: o.filterCategory,
+      filterGender: o.filterGender
+    }).catch(function () {
+      return getStelvioHeptagonCohortEntryViaFirestore(o);
+    });
+  }
+
+  function getStelvioHeptagonCohortEntryViaFirestore(o) {
+    o = o || {};
     return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
         if (!mod || !mod.getDoc || !mod.doc || !mod.collection) {
@@ -281,6 +320,17 @@
     if (lim > 10000) {
       lim = 10000;
     }
+    return heptagonDashboardCohortFetch('bySumDesc', {
+      monthKey: monthKey,
+      filterCategory: filterCategory,
+      filterGender: filterGender,
+      limit: lim
+    }).catch(function () {
+      return queryStelvioHeptagonCohortBySumDescViaFirestore(o, monthKey, filterCategory, filterGender, lim);
+    });
+  }
+
+  function queryStelvioHeptagonCohortBySumDescViaFirestore(o, monthKey, filterCategory, filterGender, lim) {
     return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
         if (!mod || !mod.query || !mod.getDocs || !mod.collection) {
@@ -337,6 +387,16 @@
     var monthKey = o.monthKey != null ? String(o.monthKey) : monthKeyKst();
     var filterCategory = o.filterCategory != null ? String(o.filterCategory) : 'Supremo';
     var filterGender = o.filterGender != null ? String(o.filterGender) : 'all';
+    return heptagonDashboardCohortFetch('boardN', {
+      monthKey: monthKey,
+      filterCategory: filterCategory,
+      filterGender: filterGender
+    }).catch(function () {
+      return queryStelvioHeptagonCohortBoardNViaFirestore(monthKey, filterCategory, filterGender);
+    });
+  }
+
+  function queryStelvioHeptagonCohortBoardNViaFirestore(monthKey, filterCategory, filterGender) {
     return import(FIRESTORE_MOD_URL)
       .then(function (mod) {
         if (!mod || !mod.query || !mod.getDocs || !mod.collection) {

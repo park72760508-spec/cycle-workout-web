@@ -10,6 +10,8 @@ assets/js/config.local.js
 functions/.env.stelvio-ai
 secrets.js
 **/secrets.js
+functions/scripts/serviceAccountKey.json
+**/serviceAccountKey.json
 
 # 로컬 설정
 *.local.js
