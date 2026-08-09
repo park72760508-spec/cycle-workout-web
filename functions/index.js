@@ -11958,7 +11958,7 @@ exports.getMyGroupJoinRequestStatusForRead = onRequest(
  * 내가 host로 만든 모임 중 GPX가 등록된 것들을 gpx_url 기준 중복 제외 후 반환.
  */
 exports.getMyGpxCoursesForRead = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60 }),
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60, invoker: "public" }),
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -11995,6 +11995,52 @@ exports.getMyGpxCoursesForRead = onRequest(
       res.status(200).json({ success: true, courses: courses || [] });
     } catch (e) {
       console.warn("[getMyGpxCoursesForRead]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 라이딩/러닝 모임 생성·수정 시 방금 첨부한 GPX가 내 기존 코스 라이브러리와 지오메트리상
+ * 같은 코스인지 확인. 매치되면 기존 gpxUrl을 돌려줘서 새 Storage 업로드 없이 재사용하게 해
+ * 중복 코스맵이 쌓이는 것을 원천 차단한다.
+ * POST { uid, category, gpxText }
+ */
+exports.matchExistingGpxCourse = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60, invoker: "public" }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 지원합니다." });
+      return;
+    }
+
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const requestedUid = String(body.uid || body.userId || "").trim();
+    const category = String(body.category || "CYCLE").trim().toUpperCase() === "RUN" ? "RUN" : "CYCLE";
+    const gpxText = typeof body.gpxText === "string" ? body.gpxText : "";
+    if (!requestedUid || !gpxText.trim()) {
+      res.status(400).json({ success: false, error: "uid, gpxText 필요" });
+      return;
+    }
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 코스만 비교할 수 있습니다." });
+      return;
+    }
+
+    try {
+      const match = await gpxCourseLibraryReader.findMatchingExistingCourse(admin, requestedUid, category, gpxText);
+      res.status(200).json({ success: true, matched: !!match, course: match || null });
+    } catch (e) {
+      console.warn("[matchExistingGpxCourse]", e.message || e);
       res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }

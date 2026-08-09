@@ -194,12 +194,14 @@ async function collapseNearDuplicateCourses(bucket, candidates) {
 }
 
 /**
+ * 내 코스 라이브러리(호스트로 만든 모임 중 GPX 있는 것들, gpx_storage_path 1차 dedup +
+ * 지오메트리 근접중복 그룹화까지 마친 대표 목록) — gpxStoragePath 포함한 내부용 전체 필드.
+ * fetchMyGpxCourses(공개 API)와 findMatchingExistingCourse(신규 업로드 중복 체크)가 공유.
  * @param {import('firebase-admin')} admin
  * @param {string} fbUid Firebase UID
  * @param {'CYCLE'|'RUN'} category
- * @returns {Promise<Array<{id:string, title:string, course:string, gpxUrl:string, distanceKm:number|null, createdAt:string|null}>>}
  */
-async function fetchMyGpxCourses(admin, fbUid, category) {
+async function fetchMyDedupedCourseLibrary(admin, fbUid, category) {
   const uid = String(fbUid || "").trim();
   if (!uid) return [];
   const cat = category === "RUN" ? "RUN" : "CYCLE";
@@ -255,7 +257,18 @@ async function fetchMyGpxCourses(admin, fbUid, category) {
     finalList = firstPass;
   }
 
-  return finalList.map(function (c) {
+  return finalList;
+}
+
+/**
+ * @param {import('firebase-admin')} admin
+ * @param {string} fbUid Firebase UID
+ * @param {'CYCLE'|'RUN'} category
+ * @returns {Promise<Array<{id:string, title:string, course:string, gpxUrl:string, distanceKm:number|null, createdAt:string|null}>>}
+ */
+async function fetchMyGpxCourses(admin, fbUid, category) {
+  const list = await fetchMyDedupedCourseLibrary(admin, fbUid, category);
+  return list.map(function (c) {
     return {
       id: c.id,
       title: c.title,
@@ -267,4 +280,48 @@ async function fetchMyGpxCourses(admin, fbUid, category) {
   });
 }
 
-module.exports = { fetchMyGpxCourses };
+/**
+ * 라이딩/러닝 모임 생성 시 새로 첨부한 GPX가 내 기존 코스 라이브러리와 지오메트리상 같은 코스인지 확인.
+ * 매치되면 그 기존 코스의 gpxUrl/gpxStoragePath를 돌려줘서, 호출부가 새 Storage 업로드 없이
+ * 기존 파일을 그대로 재사용하도록 한다(중복 코스맵 누적 방지).
+ * @param {import('firebase-admin')} admin
+ * @param {string} fbUid Firebase UID
+ * @param {'CYCLE'|'RUN'} category
+ * @param {string} candidateGpxText 방금 첨부한 로컬 GPX 파일의 원문(XML)
+ * @returns {Promise<{id:string, title:string, gpxUrl:string, gpxStoragePath:string}|null>}
+ */
+async function findMatchingExistingCourse(admin, fbUid, category, candidateGpxText) {
+  const candidatePoints = parseGpxPoints(candidateGpxText);
+  const candidateStats = computeTrackStats(candidatePoints);
+  if (!candidateStats) return null;
+
+  const library = await fetchMyDedupedCourseLibrary(admin, fbUid, category);
+  if (!library.length) return null;
+
+  const bucket = admin.storage().bucket();
+  for (const course of library) {
+    if (!course.gpxStoragePath) continue;
+    try {
+      const file = bucket.file(course.gpxStoragePath);
+      const [buf] = await file.download();
+      const existingStats = computeTrackStats(parseGpxPoints(buf.toString("utf8")));
+      if (existingStats && isNearDuplicateTrack(candidateStats, existingStats)) {
+        return {
+          id: course.id,
+          title: course.title,
+          gpxUrl: course.gpxUrl,
+          gpxStoragePath: course.gpxStoragePath,
+        };
+      }
+    } catch (e) {
+      console.warn(
+        "[gpxCourseLibraryReader] 기존 코스 비교용 GPX 다운로드 실패:",
+        course.gpxStoragePath,
+        e && e.message ? e.message : e
+      );
+    }
+  }
+  return null;
+}
+
+module.exports = { fetchMyGpxCourses, findMatchingExistingCourse };

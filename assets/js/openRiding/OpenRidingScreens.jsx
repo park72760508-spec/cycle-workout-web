@@ -1945,6 +1945,24 @@ function firebaseStorageDownloadUrlToObjectPath(url) {
  * @param {import('firebase/storage').FirebaseStorage | null | undefined} storage
  * @param {() => boolean} isCancelled
  */
+/** 로컬 File(GPX) → 텍스트, Promise 래핑 — 제출 시 기존 코스 라이브러리와 지오메트리 중복 비교용 */
+function openRidingReadFileAsText(file) {
+  return new Promise(function (resolve, reject) {
+    if (!file) {
+      reject(new Error('파일이 없습니다.'));
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      resolve(String(reader.result || ''));
+    };
+    reader.onerror = function () {
+      reject(new Error('파일을 읽을 수 없습니다.'));
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
 function loadGpxTextFromUrl(url, storage, isCancelled) {
   var u = String(url || '').trim();
   if (!u) return Promise.reject(new Error('URL 없음'));
@@ -6481,9 +6499,28 @@ function OpenRidingCreateForm(props) {
     try {
       var gpxUrl = form.gpxUrlExisting != null ? form.gpxUrlExisting : null;
       if (storage && form.gpxFile && typeof uploadRideGpx === 'function') {
-        var draftPrefix = editRideId ? String(editRideId) : 'draft/' + hostUserId;
-        var draftId = draftPrefix + '/' + Date.now();
-        gpxUrl = await uploadRideGpx(storage, form.gpxFile, draftId);
+        var reusedExistingCourse = null;
+        var matchClient = typeof window !== 'undefined' ? window.openRidingReadClient : null;
+        if (matchClient && typeof matchClient.matchExistingGpxCourseRouted === 'function') {
+          try {
+            var gpxTextForMatch = await openRidingReadFileAsText(form.gpxFile);
+            reusedExistingCourse = await matchClient.matchExistingGpxCourseRouted(
+              hostUserId,
+              formCategory,
+              gpxTextForMatch
+            );
+          } catch (eMatch) {
+            reusedExistingCourse = null;
+          }
+        }
+        if (reusedExistingCourse && reusedExistingCourse.gpxUrl) {
+          // 기존 코스 라이브러리에 지오메트리상 동일한 코스가 이미 있음 — 새로 업로드하지 않고 재사용
+          gpxUrl = reusedExistingCourse.gpxUrl;
+        } else {
+          var draftPrefix = editRideId ? String(editRideId) : 'draft/' + hostUserId;
+          var draftId = draftPrefix + '/' + Date.now();
+          gpxUrl = await uploadRideGpx(storage, form.gpxFile, draftId);
+        }
       }
       var d = new Date(form.date + 'T12:00:00+09:00');
       var packRidingRulesPayload =

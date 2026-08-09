@@ -967,6 +967,30 @@ export async function fetchMyGpxCoursesRouted(uid, category) {
   return Array.isArray(json.courses) ? json.courses : [];
 }
 
+/**
+ * 라이딩/러닝 모임 생성 시 방금 첨부한 GPX(원문 텍스트)가 내 기존 코스 라이브러리와
+ * 지오메트리상 같은 코스인지 서버에 확인 — 매치되면 그 코스의 gpxUrl을 돌려받아
+ * 새로 업로드하지 않고 재사용한다(중복 코스맵 누적 방지).
+ * 실패해도 예외를 던지지 않고 null을 반환 — 호출부는 그냥 평소대로 새로 업로드하면 됨.
+ * @returns {Promise<{id:string,title:string,gpxUrl:string,gpxStoragePath:string}|null>}
+ */
+export async function matchExistingGpxCourseRouted(uid, category, gpxText) {
+  var u = String(uid || '').trim();
+  var text = String(gpxText || '');
+  if (!u || !text.trim()) return null;
+  try {
+    var json = await httpPostJsonAuthed(API_BASE + '/matchExistingGpxCourse', {
+      uid: u,
+      category: category === 'RUN' ? 'RUN' : 'CYCLE',
+      gpxText: text,
+    });
+    return json && json.matched && json.course ? json.course : null;
+  } catch (e) {
+    console.warn('[openRidingReadClient] matchExistingGpxCourseRouted 실패(새로 업로드 진행):', e && e.message);
+    return null;
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.stelvioEnsureGroupsReadSource = stelvioEnsureGroupsReadSource;
   window.stelvioGetGroupsReadSourceSync = stelvioGetGroupsReadSourceSync;
@@ -986,6 +1010,7 @@ if (typeof window !== 'undefined') {
     subscribeMyRidingGroupsAsMemberRouted,
     subscribeUserGroupMembershipsRouted,
     fetchMyGpxCoursesRouted,
+    matchExistingGpxCourseRouted,
     fetchMyGroupContactSetRouted,
     subscribeMyManagedGroupsJoinRequestCountsRouted,
     subscribeRidingGroupMyJoinRequestRouted,
