@@ -465,10 +465,12 @@
               role: 'region',
               'aria-label': membersAriaLabel
             },
-              React.createElement('p', {
-                className: 'stelvio-ranking-empty stelvio-ranking-loading-local',
-                style: { margin: '10px 0 10px 12px' }
-              }, '멤버 불러오는 중…')
+              React.createElement('div', { className: 'stelvio-group-members-loading-wrap' },
+                React.createElement('div', { className: 'stelvio-group-members-loading-spinner' }),
+                React.createElement('p', {
+                  className: 'stelvio-ranking-empty stelvio-ranking-loading-local'
+                }, '멤버 불러오는 중…')
+              )
             );
           } else if (!memberRankedList.length) {
             memberBlock = React.createElement('div', {

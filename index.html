@@ -3382,8 +3382,8 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260808avatarZoomBackToTop1" />
-  <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260809clubMemberLoadingSpinner1" />
+  <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
   <link rel="preload" href="assets/img/stelvio.svg" as="image" type="image/svg+xml" />
@@ -23881,7 +23881,11 @@
         }
         if (st.mode === 'loading') {
           slotEl.innerHTML =
-            '<div class="stelvio-group-members-block" role="region" aria-label="소모임 멤버 ' + stelvioGroupTabCurrentMetricLabel() + ' 순위 로딩"><p class="stelvio-ranking-empty stelvio-ranking-loading-local" style="margin:10px 0 10px 12px">멤버 불러오는 중…</p></div>';
+            '<div class="stelvio-group-members-block" role="region" aria-label="소모임 멤버 ' + stelvioGroupTabCurrentMetricLabel() + ' 순위 로딩">' +
+            '<div class="stelvio-group-members-loading-wrap">' +
+            '<div class="stelvio-group-members-loading-spinner"></div>' +
+            '<p class="stelvio-ranking-empty stelvio-ranking-loading-local">멤버 불러오는 중…</p>' +
+            '</div></div>';
           return;
         }
         var merged = st.merged;
