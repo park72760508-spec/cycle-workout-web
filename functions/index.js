@@ -4292,7 +4292,8 @@ exports.manualStravaSyncWithMmp = onRequest(
 
 /** 스케줄 실행 시 1000명 대비: 인원 > 100이면 청크 URL로 팬아웃, 아니면 in-process 병렬 처리 */
 async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
-  const userIds = await stravaConnectionReader.listStravaConnectedFirebaseUids(db);
+  // dead-letter(재연결 필요 확정) 사용자는 청크 예산 낭비 방지를 위해 제외
+  const userIds = await stravaConnectionReader.listStravaConnectedFirebaseUidsExcludingDeadLetter(db);
   if (userIds.length === 0) {
     console.log(`${logPrefix} Strava 연결 사용자 없음`);
     return;
@@ -4808,6 +4809,10 @@ exports.stravaSync429RetrySchedule = exports.stravaSyncRetrySchedule;
  * 저장해 다음 실행이 이어받는다 — 레이트리밋 예산 안에서 며칠에 걸쳐 전원을 커버한다.
  */
 const STRAVA_ROTATING_GAP_SCAN_BATCH_SIZE = 60;
+/** 배치(60) 중 활동 사용자에게 배정하는 슬롯 — 사용자 수가 늘어도 활동 사용자군은 매 회전마다 빠르게 커버 */
+const STRAVA_ROTATING_GAP_SCAN_ACTIVE_SLICE = 48;
+/** 배치 중 비활동 사용자에게 배정하는 슬롯 — 느리더라도 결국 전원 커버(완전히 배제하지 않음) */
+const STRAVA_ROTATING_GAP_SCAN_INACTIVE_SLICE = 12;
 const stravaRotatingGapScanOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "15 4,10,16,22 * * *", // 하루 4회, stravaSyncRetrySchedule(3,6,9시)과 겹치지 않게 배치
   timeZone: "Asia/Seoul",
@@ -4821,33 +4826,70 @@ if (STRAVA_CLIENT_SECRET) {
   }
 }
 
-/** 연결된 전체 사용자 중 커서 다음 batchSize명을 가져오고, 커서를 그만큼 전진시켜 저장한다. */
+/** pool에서 커서 다음 take명을 가져오고 전진된 커서를 반환(pool이 비었으면 빈 배치). */
+function advanceRotatingCursorOverPool(pool, prevCursor, take) {
+  if (!pool.length || take <= 0) return { batch: [], nextCursor: prevCursor };
+  const actualTake = Math.min(take, pool.length);
+  const start = ((prevCursor % pool.length) + pool.length) % pool.length;
+  const batch = [];
+  for (let i = 0; i < actualTake; i++) {
+    batch.push(pool[(start + i) % pool.length]);
+  }
+  return { batch, nextCursor: start + actualTake };
+}
+
+/**
+ * 연동 전체 사용자(dead-letter 제외)를 활동성 기준(최근 30일 주행거리 실적 여부)으로 나눠, 활동 사용자 위주로
+ * 우선 스캔하되 비활동 사용자도 느린 주기로 결국 전원 커버하는 배치를 만든다.
+ * 사용자 수가 1만명으로 늘어도, 실제로 놓치면 안 되는 "활동 사용자" 집합은 훨씬 작게 유지되므로
+ * 이 집합의 회전 주기는 총 사용자 수가 아니라 활동 사용자 수에 비례해 안정적으로 유지된다.
+ */
 async function getNextRotatingGapScanBatch(db, batchSize) {
-  const allUserIds = await stravaConnectionReader.listStravaConnectedFirebaseUids(db);
-  if (!allUserIds.length) return { batch: [], total: 0 };
+  const { active, inactive } = await stravaConnectionReader.listStravaConnectedFirebaseUidsByRecency(db);
+  const total = active.length + inactive.length;
+  if (!total) return { batch: [], total: 0 };
 
   const cursorRef = db.collection("appConfig").doc("strava_rotating_gap_scan");
   const cursorSnap = await cursorRef.get();
-  const prevCursor = cursorSnap.exists ? Number(cursorSnap.data().cursor || 0) : 0;
-  const start = ((prevCursor % allUserIds.length) + allUserIds.length) % allUserIds.length;
+  const prev = cursorSnap.exists ? cursorSnap.data() || {} : {};
+  // cursor(구버전 단일 커서)는 activeCursor로 승계 — 마이그레이션 시 재스캔 범위가 튀지 않게 함
+  const prevActiveCursor = Number(prev.activeCursor != null ? prev.activeCursor : prev.cursor || 0);
+  const prevInactiveCursor = Number(prev.inactiveCursor || 0);
 
-  const batch = [];
-  const take = Math.min(batchSize, allUserIds.length);
-  for (let i = 0; i < take; i++) {
-    batch.push(allUserIds[(start + i) % allUserIds.length]);
+  const activeTakeWanted = Math.min(STRAVA_ROTATING_GAP_SCAN_ACTIVE_SLICE, batchSize);
+  let activeResult = advanceRotatingCursorOverPool(active, prevActiveCursor, activeTakeWanted);
+
+  let inactiveTakeWanted = Math.min(
+    STRAVA_ROTATING_GAP_SCAN_INACTIVE_SLICE,
+    batchSize - activeResult.batch.length
+  );
+  // 활동 풀이 작아 슬롯이 남으면 비활동 풀로 이월
+  inactiveTakeWanted += activeTakeWanted - activeResult.batch.length;
+  let inactiveResult = advanceRotatingCursorOverPool(inactive, prevInactiveCursor, inactiveTakeWanted);
+
+  // 비활동 풀도 작아 여전히 슬롯이 남으면 활동 풀에서 추가로 당겨온다(예산 낭비 방지)
+  const stillLeftover = batchSize - activeResult.batch.length - inactiveResult.batch.length;
+  if (stillLeftover > 0 && activeResult.batch.length < active.length) {
+    const extra = advanceRotatingCursorOverPool(active, activeResult.nextCursor, stillLeftover);
+    activeResult = { batch: activeResult.batch.concat(extra.batch), nextCursor: extra.nextCursor };
   }
+
+  const batch = activeResult.batch.concat(inactiveResult.batch);
 
   await cursorRef.set(
     {
-      cursor: start + take,
-      totalUsers: allUserIds.length,
+      activeCursor: activeResult.nextCursor,
+      inactiveCursor: inactiveResult.nextCursor,
+      activeTotal: active.length,
+      inactiveTotal: inactive.length,
+      totalUsers: total,
       lastBatchSize: batch.length,
       lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
 
-  return { batch, total: allUserIds.length };
+  return { batch, total };
 }
 
 exports.stravaRotatingGapScanSchedule = onSchedule(stravaRotatingGapScanOptions, async () => {

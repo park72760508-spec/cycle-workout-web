@@ -224,9 +224,127 @@ function getStravaConnectedUsersCacheMeta() {
   };
 }
 
+/** @type {{ ids: string[]|null, loadedAt: number }} */
+let deadLetterCache = { ids: null, loadedAt: 0 };
+
+/**
+ * strava_auth_invalid_confirmed(재연결 필요 확정)로 dead-letter된 사용자를 제외한 연동 목록.
+ * 회전/전체 스캔처럼 "언젠가 전원을 훑어야 하는" 경로에서, 재연결 전까지는 절대 성공할 수 없다고
+ * 이미 확정된 사용자에게 스캔 슬롯·Strava API 예산을 낭비하지 않도록 한다.
+ * (실패 큐 드레인 경로는 listUsersNeedingStravaSyncRetry 등에서 이미 개별적으로 필터링됨 — 중복 아님)
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {{ forceRefresh?: boolean }} [options]
+ * @returns {Promise<string[]>}
+ */
+async function listStravaConnectedFirebaseUidsExcludingDeadLetter(db, options = {}) {
+  const now = Date.now();
+  const forceRefresh = options.forceRefresh === true;
+  if (!forceRefresh && deadLetterCache.ids && now - deadLetterCache.loadedAt < CACHE_MS) {
+    return deadLetterCache.ids.slice();
+  }
+  const allIds = await listStravaConnectedFirebaseUids(db, options);
+  if (!allIds.length || !db) {
+    deadLetterCache = { ids: allIds, loadedAt: now };
+    return allIds.slice();
+  }
+  const alive = [];
+  for (let i = 0; i < allIds.length; i += FIRESTORE_GETALL_CHUNK) {
+    const chunk = allIds.slice(i, i + FIRESTORE_GETALL_CHUNK);
+    const refs = chunk.map((id) => db.collection("users").doc(id));
+    /* eslint-disable no-await-in-loop */
+    const snaps = await db.getAll(...refs);
+    /* eslint-enable no-await-in-loop */
+    snaps.forEach((snap, idx) => {
+      const data = snap.exists ? snap.data() || {} : {};
+      if (data.strava_auth_invalid_confirmed === true) return;
+      alive.push(chunk[idx]);
+    });
+  }
+  deadLetterCache = { ids: alive, loadedAt: now };
+  return alive.slice();
+}
+
+const ACTIVITY_RECENCY_CACHE_MS = 30 * 60 * 1000; // 활동성 분류는 자주 안 바뀌므로 30분 캐시
+/** @type {{ supabaseUuids: Set<string>|null, loadedAt: number }} */
+let activityRecencyCache = { supabaseUuids: null, loadedAt: 0 };
+
+/**
+ * 최근 활동(주행거리 30일 실적 > 0)이 있는 Supabase user_id(uuid) 집합.
+ * 회전 갭 스캔의 활동성 기반 우선순위 분류용.
+ * workout_logs 테이블은 실제로 비어있어(2026-08 확인) 사용 불가 — 랭킹 파이프라인이 매일 전원에
+ * 대해 갱신하는 user_ranking_metrics.distance_30d_km(롤링 30일 윈도우, dist_window_end=오늘)를
+ * 대신 사용한다. 이 테이블이 유지하는 윈도우가 30일 고정이라 함수 자체에 기간 파라미터는 없다.
+ * @returns {Promise<Set<string>>}
+ */
+async function listRecentlyActiveSupabaseUserUuids() {
+  const now = Date.now();
+  if (activityRecencyCache.supabaseUuids && now - activityRecencyCache.loadedAt < ACTIVITY_RECENCY_CACHE_MS) {
+    return activityRecencyCache.supabaseUuids;
+  }
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return new Set();
+  const uuids = new Set();
+  let from = 0;
+  for (let page = 0; page < 50; page += 1) {
+    /* eslint-disable no-await-in-loop */
+    const { data, error } = await supabase
+      .from("user_ranking_metrics")
+      .select("user_id")
+      .gt("distance_30d_km", 0)
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+    /* eslint-enable no-await-in-loop */
+    if (error) {
+      console.warn("[stravaConnectionReader] listRecentlyActiveSupabaseUserUuids failed:", error.message);
+      break;
+    }
+    for (const row of data || []) {
+      if (row && row.user_id) uuids.add(String(row.user_id));
+    }
+    if (!data || data.length < SUPABASE_PAGE_SIZE) break;
+    from += SUPABASE_PAGE_SIZE;
+  }
+  activityRecencyCache = { supabaseUuids: uuids, loadedAt: now };
+  return uuids;
+}
+
+/**
+ * 연동 사용자(dead-letter 제외)를 최근 활동 여부로 active/inactive 두 그룹으로 나눠 반환.
+ * 활동 이력이 아예 없는 경우(막 연동한 신규 사용자, user_ranking_metrics 행 없음 등)는 놓치지 않도록
+ * 안전하게 active로 분류한다.
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @returns {Promise<{ active: string[], inactive: string[] }>}
+ */
+async function listStravaConnectedFirebaseUidsByRecency(db) {
+  const aliveIds = await listStravaConnectedFirebaseUidsExcludingDeadLetter(db);
+  if (!aliveIds.length) return { active: [], inactive: [] };
+
+  const connectionRows = await loadStravaConnectionRowsFromSupabase();
+  const uidMap = await loadFirebaseUidMapForUserUuids(connectionRows.map((row) => String(row.user_id)));
+  const fbUidToUuid = new Map();
+  for (const [uuid, fbUid] of uidMap.entries()) {
+    if (!fbUidToUuid.has(fbUid)) fbUidToUuid.set(fbUid, uuid);
+  }
+
+  const activeUuids = await listRecentlyActiveSupabaseUserUuids();
+
+  const active = [];
+  const inactive = [];
+  for (const fbUid of aliveIds) {
+    const uuid = fbUidToUuid.get(fbUid);
+    if (!uuid || activeUuids.has(uuid)) {
+      active.push(fbUid);
+    } else {
+      inactive.push(fbUid);
+    }
+  }
+  return { active, inactive };
+}
+
 module.exports = {
   listStravaConnectedFirebaseUids,
   listStravaConnectedUserIds,
+  listStravaConnectedFirebaseUidsExcludingDeadLetter,
+  listStravaConnectedFirebaseUidsByRecency,
   fetchStravaConnectedUserDocSnaps,
   listStravaAthleteIdBackfillFirebaseUids,
   resetStravaConnectedUsersCache,
