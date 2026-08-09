@@ -2057,11 +2057,11 @@ function OpenRidingGpxSourcePickerModal(props) {
 
   return (
     <div
-      className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center bg-black/40"
+      className="fixed inset-0 z-[100100] flex items-center justify-center bg-black/40"
       onClick={onClose}
     >
       <div
-        className="w-full sm:w-96 bg-white rounded-t-2xl sm:rounded-2xl p-4 space-y-2"
+        className="w-[calc(100%-32px)] sm:w-96 bg-white rounded-2xl p-4 space-y-2"
         onClick={function (e) { e.stopPropagation(); }}
       >
         <p className="text-sm font-semibold text-slate-800 m-0 mb-1">GPX 파일 선택</p>
@@ -2144,13 +2144,17 @@ function OpenRidingFavoriteCourseModal(props) {
     [uid, category]
   );
 
+  var navClearance =
+    'calc(16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-pad-y, 8px) * 2 + var(--open-riding-glass-nav-row-min, 47px) + 20px)';
+
   return (
     <div
-      className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center bg-black/40"
+      className="fixed inset-x-0 top-0 z-[100100] flex items-end sm:items-center justify-center bg-black/40"
+      style={{ bottom: navClearance }}
       onClick={onClose}
     >
       <div
-        className="w-full sm:w-[440px] max-h-[85vh] bg-white rounded-t-2xl sm:rounded-2xl flex flex-col"
+        className="w-full sm:w-[440px] max-h-full bg-white rounded-t-2xl sm:rounded-2xl flex flex-col"
         onClick={function (e) { e.stopPropagation(); }}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
@@ -2246,7 +2250,12 @@ function OpenRidingFavoriteCourseCard(props) {
         </div>
       ) : null}
       <div className="p-3 space-y-2">
-        <p className="text-sm font-semibold text-slate-800 m-0 truncate">{course.title || '(제목 없음)'}</p>
+        <p className="text-sm font-semibold text-slate-800 m-0 truncate">
+          {course.title || '(제목 없음)'}
+          {course.distanceKm != null && isFinite(Number(course.distanceKm)) ? (
+            <span className="font-normal text-slate-500"> · {Number(course.distanceKm).toFixed(1).replace(/\.0$/, '')}km</span>
+          ) : null}
+        </p>
         {course.course ? (
           <p className="text-xs text-slate-600 m-0 whitespace-pre-wrap">{course.course}</p>
         ) : null}
