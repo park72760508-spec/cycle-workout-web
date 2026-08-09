@@ -2286,6 +2286,9 @@ function OpenRidingFavoriteCourseCard(props) {
           {course.distanceKm != null && isFinite(Number(course.distanceKm)) ? (
             <span className="font-normal text-slate-500"> · {Number(course.distanceKm).toFixed(1).replace(/\.0$/, '')}km</span>
           ) : null}
+          {course.elevGainM != null && isFinite(Number(course.elevGainM)) ? (
+            <span className="font-normal text-slate-500"> · ↑{Math.round(Number(course.elevGainM))}m</span>
+          ) : null}
         </p>
         {course.course ? (
           <p className="text-xs text-slate-600 m-0 whitespace-pre-wrap">{course.course}</p>

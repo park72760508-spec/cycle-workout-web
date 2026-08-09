@@ -160,6 +160,12 @@ async function collapseNearDuplicateCourses(bucket, candidates) {
       }
     })
   );
+  // 목록 표시용 거리/상승고도는 저장된 값이 아니라 실제 GPX 지오메트리 계산값을 사용
+  for (let i = 0; i < withPath.length; i++) {
+    if (!stats[i]) continue;
+    withPath[i].distanceKm = stats[i].totalDistanceM / 1000;
+    withPath[i].elevGainM = Math.round(stats[i].elevGainM);
+  }
 
   const n = withPath.length;
   const uf = makeUnionFind(n);
@@ -264,7 +270,7 @@ async function fetchMyDedupedCourseLibrary(admin, fbUid, category) {
  * @param {import('firebase-admin')} admin
  * @param {string} fbUid Firebase UID
  * @param {'CYCLE'|'RUN'} category
- * @returns {Promise<Array<{id:string, title:string, course:string, gpxUrl:string, distanceKm:number|null, createdAt:string|null}>>}
+ * @returns {Promise<Array<{id:string, title:string, course:string, gpxUrl:string, distanceKm:number|null, elevGainM:number|null, createdAt:string|null}>>}
  */
 async function fetchMyGpxCourses(admin, fbUid, category) {
   const list = await fetchMyDedupedCourseLibrary(admin, fbUid, category);
@@ -275,6 +281,7 @@ async function fetchMyGpxCourses(admin, fbUid, category) {
       course: c.course,
       gpxUrl: c.gpxUrl,
       distanceKm: c.distanceKm,
+      elevGainM: c.elevGainM != null ? c.elevGainM : null,
       createdAt: c.createdAt,
     };
   });
