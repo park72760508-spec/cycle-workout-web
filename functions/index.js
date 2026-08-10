@@ -2421,6 +2421,13 @@ async function updateUserMileageInFirestore(db, userId, todayTss) {
 const STRAVA_SYNC_CHUNK_SIZE = 50;        // 청크당 사용자 수 (팬아웃)
 const STRAVA_SYNC_CONCURRENCY = 10;      // 청크 내 동시 처리 사용자 수
 const STRAVA_SYNC_CHUNK_THRESHOLD = 100; // 이 인원 초과 시 청크 팬아웃 사용
+/**
+ * "전체 사용자 한 번에" 방식(stravaSyncSunday/manualStravaSyncTodaySeoul)의 안전 상한.
+ * Strava 앱 전체 일일 한도(1000회/day, 이 파일의 "1000명 규모 설계 상수" 원래 설계값)를 이 작업
+ * 혼자서 넘기지 않도록 하는 값 — 사용자 수가 이 값을 넘으면 실패/타임아웃이 사실상 확정이므로
+ * 예산을 낭비하며 시도하는 대신 건너뛴다(회전 갭 스캔이 지속적으로 커버하므로 안전).
+ */
+const STRAVA_FULL_SCAN_MAX_USERS = 1000;
 const INTERNAL_SYNC_SECRET = "stelvio-internal-sync-v1"; // 청크 HTTP 인증 (필요 시 Secret으로 교체)
 
 async function ensureExistingStravaLogMirroredToSupabase(userId, logDocId, logData, contextLabel) {
@@ -4296,6 +4303,12 @@ async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
   const userIds = await stravaConnectionReader.listStravaConnectedFirebaseUidsExcludingDeadLetter(db);
   if (userIds.length === 0) {
     console.log(`${logPrefix} Strava 연결 사용자 없음`);
+    return;
+  }
+  if (userIds.length > STRAVA_FULL_SCAN_MAX_USERS) {
+    console.warn(
+      `${logPrefix} 연동 ${userIds.length}명 > 안전 상한 ${STRAVA_FULL_SCAN_MAX_USERS}명 — Strava 일일 한도(1000/day) 초과가 확정적이라 건너뜀. 회전 갭 스캔(stravaRotatingGapScanSchedule)이 지속 커버.`
+    );
     return;
   }
   if (userIds.length <= STRAVA_SYNC_CHUNK_THRESHOLD) {
