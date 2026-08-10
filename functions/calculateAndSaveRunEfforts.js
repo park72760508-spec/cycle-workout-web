@@ -29,6 +29,40 @@ const STREAM_DISTANCE_TARGETS = {
 /** 짧은 거리일수록 빠르거나 같아야 함: speed_1k >= speed_3k >= … >= speed_42k (m/s) */
 const EFFORT_DISTANCE_ORDER = ["1k", "3k", "5k", "7k", "10k", "20k", "42k"];
 
+/**
+ * 거리별 실제 세계기록 페이스(m/s)에 여유를 둔 상한 — 거리가 길어질수록 지속 가능한 페이스는
+ * 떨어지므로 1km 기준 단일 상한(예: 8.3 m/s)을 그대로 쓰면 7k~42k 구간에서는 여전히
+ * 세계기록보다 빠른 값을 놓친다(예: 7km을 8.28 m/s=14:05로 주파 — 실제 세계기록 페이스보다 빠름).
+ * 세계기록: 1km≈2:11(7.6㎧) 5km≈12:35(6.6㎧) 10km≈26:11(6.4㎧) 하프≈57:31(6.1㎧) 풀≈2:00:35(5.8㎧)
+ * 에 약 8~9% 여유를 둠. 이보다 빠른 구간은 GPS 튐·이동시간 오판정(휴대폰이 정지 상태로 오래
+ * 있다가 짧은 "이동 시간"에 긴 거리가 몰려 잡히는 경우 등)일 가능성이 매우 높다.
+ * (2026-08-10 실사례: 김용운 8lROXViUw4hCoR7aBBk9DVbI2633, activity 19664462372 —
+ *  전체 평균 30.4km/h·1km 구간 28.66m/s(103km/h)로 계산된 러닝 기록, 케이던스 데이터 전무.)
+ */
+const RUN_EFFORT_MAX_PLAUSIBLE_SPEED_MPS = {
+  "1k": 8.3,
+  "3k": 7.5,
+  "5k": 7.2,
+  "7k": 7.0,
+  "10k": 6.9,
+  "20k": 6.5,
+  "42k": 6.3,
+};
+
+/** targetDistanceM(m)에서 사람이 실제로 낼 수 있는 최대 페이스 상한(m/s) — 가장 가까운 거리 기준 보간 없이 최근접 라벨 채택 */
+function maxPlausibleSpeedForDistance(targetDistanceM) {
+  let closestLabel = "1k";
+  let closestDiff = Infinity;
+  for (const label of Object.keys(STREAM_DISTANCE_TARGETS)) {
+    const diff = Math.abs(STREAM_DISTANCE_TARGETS[label] - targetDistanceM);
+    if (diff < closestDiff) {
+      closestDiff = diff;
+      closestLabel = label;
+    }
+  }
+  return RUN_EFFORT_MAX_PLAUSIBLE_SPEED_MPS[closestLabel] || 8.3;
+}
+
 /** 중첩 탐색 순서: 긴 거리 최적 윈도우 → 그 안에서 짧은 거리 */
 const NESTED_EFFORT_DISTANCE_ORDER = ["42k", "20k", "10k", "7k", "5k", "3k", "1k"];
 
@@ -273,6 +307,12 @@ function findFastestDistanceWindow(timeArr, distanceArr, hrArr, targetDistanceM,
       }
     }
     if (cadCount > 0) cadence = Math.round(sumCad / cadCount);
+  }
+  // 비정상적으로 빠른 구간(해당 거리의 사람 한계 이상)인데 케이던스 데이터가 전혀 없으면 GPS 오류로
+  // 간주하고 이 구간을 기록으로 채택하지 않는다. 케이던스가 실제로 있으면(장치가 보행을 감지했다는
+  // 뜻이므로) 아무리 빨라도 일단 실제 기록 후보로 통과시킨다.
+  if (speed > maxPlausibleSpeedForDistance(targetDistanceM) && cadence == null) {
+    return null;
   }
   return { speed, hr, cadence, start: bestStart, end: bestEnd };
 }
@@ -621,6 +661,8 @@ module.exports = {
   STREAM_DISTANCE_TARGETS,
   EFFORT_DISTANCE_ORDER,
   NESTED_EFFORT_DISTANCE_ORDER,
+  RUN_EFFORT_MAX_PLAUSIBLE_SPEED_MPS,
+  maxPlausibleSpeedForDistance,
   findBestEffortByLabel,
   interpolateTimeAtDistance,
   elapsedForExactDistanceWindow,
