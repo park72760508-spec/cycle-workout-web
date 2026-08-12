@@ -1495,12 +1495,13 @@ async function fetchStravaStreams(accessToken, activityId) {
         const bodyText = await res.text().catch(() => "");
         const appInactive = isStravaApplicationInactiveError(res.status, bodyText);
         if (appInactive) logStravaApplicationInactive("fetchStravaStreams", { activityId });
-        return { success: false, status: res.status, appInactive, watts: null, heartrate: null, altitude: null };
+        return { success: false, status: res.status, appInactive, watts: null, heartrate: null, altitude: null, time: null };
       }
       const raw = await res.json().catch(() => null);
       let wattsArray = null;
       let heartrateArray = null;
       let altitudeArray = null;
+      let timeArray = null;
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
         wattsArray = Array.isArray(raw.watts) ? raw.watts : (raw.watts && Array.isArray(raw.watts.data) ? raw.watts.data : null);
         heartrateArray = Array.isArray(raw.heartrate)
@@ -1513,21 +1514,24 @@ async function fetchStravaStreams(accessToken, activityId) {
           : raw.altitude && Array.isArray(raw.altitude.data)
             ? raw.altitude.data
             : null;
+        timeArray = Array.isArray(raw.time) ? raw.time : (raw.time && Array.isArray(raw.time.data) ? raw.time.data : null);
       } else {
         const streamArray = Array.isArray(raw) ? raw : raw && Array.isArray(raw.data) ? raw.data : [];
         const wattsStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "watts");
         const heartrateStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "heartrate");
         const altitudeStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "altitude");
+        const timeStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "time");
         wattsArray = wattsStream && Array.isArray(wattsStream.data) ? wattsStream.data : null;
         heartrateArray = heartrateStream && Array.isArray(heartrateStream.data) ? heartrateStream.data : null;
         altitudeArray = altitudeStream && Array.isArray(altitudeStream.data) ? altitudeStream.data : null;
+        timeArray = timeStream && Array.isArray(timeStream.data) ? timeStream.data : null;
       }
-      return { success: true, watts: wattsArray, heartrate: heartrateArray, altitude: altitudeArray };
+      return { success: true, watts: wattsArray, heartrate: heartrateArray, altitude: altitudeArray, time: timeArray };
     } catch (e) {
-      if (attempt === maxRetries) return { success: false, watts: null, heartrate: null };
+      if (attempt === maxRetries) return { success: false, watts: null, heartrate: null, time: null };
     }
   }
-  return { success: false, watts: null, heartrate: null };
+  return { success: false, watts: null, heartrate: null, time: null };
 }
 
 async function fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, page, perPage) {
@@ -1739,6 +1743,40 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   }
 
   const activity = detailRes.activity;
+
+  // moving_time 오염 방어: 실내 트레이너 등에서 기록 종료를 못 해 GPS 자동일시정지가 걸리지 않으면
+  // Strava가 실제 페달링 시간이 아니라 방치된 전체 경과시간을 moving_time으로 보고할 수 있다.
+  // (2026-08-12 실사례: 홍경희 Pd8oNdgYcrZqeQ09rq4OyYBS3iF2, activity 19705200710 —
+  //  moving_time=82562초(22.9시간) 보고. time 스트림 자체도 0~82562초 전체를 span해 "첫~마지막
+  //  샘플 차이"로는 못 잡았음 — 샘플 간 gap 하나가 79436초(22시간)였고 나머지는 전부 1초 간격의
+  //  정상 기록이었음. 즉 "총 경과시간"이 아니라 "연속 기록 구간의 합"이 진짜 활동시간이다.
+  //  gap>30초(신호 드롭 허용 여유)인 구간을 제외하고 합산하면 2813초(46.9분)로, 같은 활동의
+  //  time_in_zones 합(2778~2816초)과 사실상 일치 — 그런데도 TSS는 kJ 상한 가드레일에 걸릴
+  //  정도로(445.8) 부풀려졌음.)
+  if (streamsRes.success && Array.isArray(streamsRes.time) && streamsRes.time.length > 1) {
+    const MAX_CONTINUOUS_GAP_SEC = 30;
+    const t = streamsRes.time;
+    let continuousDurationSec = 0;
+    for (let i = 1; i < t.length; i++) {
+      const gap = Number(t[i]) - Number(t[i - 1]);
+      if (gap > 0 && gap <= MAX_CONTINUOUS_GAP_SEC) continuousDurationSec += gap;
+    }
+    const reportedMovingTime = Number(activity.moving_time) || 0;
+    if (
+      continuousDurationSec > 0 &&
+      reportedMovingTime > continuousDurationSec * 1.5 &&
+      reportedMovingTime - continuousDurationSec > 300
+    ) {
+      console.warn("[processStravaActivity] moving_time 이상치 감지(비연속 gap 포함), 연속 기록 구간 합으로 보정:", {
+        activityId,
+        userId,
+        reportedMovingTimeSec: reportedMovingTime,
+        continuousDurationSec,
+      });
+      activity.moving_time = Math.round(continuousDurationSec);
+    }
+  }
+
   const mapped = mapStravaActivityToLogSchema(activity, userId, ftp, userData.weight ?? userData.weightKg);
 
   let max1minWatts = null;
