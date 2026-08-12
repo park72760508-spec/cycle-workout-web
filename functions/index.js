@@ -1767,13 +1767,25 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
       reportedMovingTime > continuousDurationSec * 1.5 &&
       reportedMovingTime - continuousDurationSec > 300
     ) {
+      // average_watts는 Strava가 kilojoules(실제 일량, gap과 무관하게 유효)를 원래(오염된)
+      // moving_time으로 나눠 보고한 값이라 duration만 고치면 avg_watts가 새 duration과
+      // 안 맞아 TSS 내부 kJ 가드레일(avgPower*duration/1000)이 실제보다 훨씬 작은 값으로
+      // 잘못 계산되어 TSS가 오히려 과소 산정된다(2026-08-12: 위 사례에서 445.8→15.2로만 보정돼
+      // Garmin 산출치 42와 여전히 크게 어긋남 — kilojoules 기준 재계산 후 38.1로 정정, 정합).
+      const kilojoules = Number(activity.kilojoules) || 0;
+      const correctedAvgWatts = kilojoules > 0 ? (kilojoules * 1000) / continuousDurationSec : null;
       console.warn("[processStravaActivity] moving_time 이상치 감지(비연속 gap 포함), 연속 기록 구간 합으로 보정:", {
         activityId,
         userId,
         reportedMovingTimeSec: reportedMovingTime,
         continuousDurationSec,
+        reportedAvgWatts: activity.average_watts,
+        correctedAvgWatts,
       });
       activity.moving_time = Math.round(continuousDurationSec);
+      if (correctedAvgWatts != null) {
+        activity.average_watts = correctedAvgWatts;
+      }
     }
   }
 
