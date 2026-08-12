@@ -94,6 +94,7 @@ try {
 }
 const stravaSyncRetry = require("./stravaSyncRetry");
 const stravaGapDetect = require("./stravaGapDetect");
+const dynamicFtpServer = require("./dynamicFtpServer");
 const stravaLogRead = require("./stravaLogRead");
 const rankingReadRouter = require("./rankingReadRouter");
 const rankingReadConfig = require("./rankingReadConfig");
@@ -1690,7 +1691,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   }
   const userId = userDoc.id;
   const userData = userDoc.data();
-  const ftp = Number(userData.ftp) || 0;
+  const profileFtp = Number(userData.ftp) || 0;
 
   // 만료 5분 전 이내거나 토큰 없을 때만 갱신 (무조건 갱신 시 Rotating Refresh Token 경쟁 조건 방지)
   let accessToken = userData.strava_access_token || "";
@@ -1789,7 +1790,34 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     }
   }
 
-  const mapped = mapStravaActivityToLogSchema(activity, userId, ftp, userData.weight ?? userData.weightKg);
+  // TSS 산출 FTP: 프로필 FTP와 "이 라이딩 시점 기준" 동적 FTP(최근 6개 구간 PR 가중평균) 중
+  // 더 높은 값을 사용 — 프로필 FTP를 낮게 설정/방치한 사용자의 TSS 과다 산정을 막는다.
+  // 미래 PR이 과거 라이딩에 소급 적용되지 않도록 반드시 이 라이딩 날짜 이전(포함) 기록만 사용.
+  let tssFtp = profileFtp;
+  try {
+    const activityDateStr = String(activity.start_date_local || activity.start_date || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(activityDateStr)) {
+      const dynStart = new Date(`${activityDateStr}T00:00:00`);
+      dynStart.setDate(dynStart.getDate() - 200);
+      const dynStartStr = dynStart.toISOString().slice(0, 10);
+      const historyLogs = await fetchCyclingLogsInDateRangeRouted(db, userId, dynStartStr, activityDateStr);
+      const dynResult = dynamicFtpServer.calculateDynamicFtp(historyLogs, activityDateStr);
+      if (dynResult.success && dynResult.newFtp > tssFtp) {
+        console.log("[processStravaActivity] 동적 FTP가 프로필보다 높아 채택:", {
+          userId,
+          activityId,
+          activityDateStr,
+          profileFtp,
+          dynamicFtp: dynResult.newFtp,
+        });
+        tssFtp = dynResult.newFtp;
+      }
+    }
+  } catch (e) {
+    console.warn("[processStravaActivity] 동적 FTP 계산 실패(프로필 FTP로 진행):", userId, e && e.message);
+  }
+
+  const mapped = mapStravaActivityToLogSchema(activity, userId, tssFtp, userData.weight ?? userData.weightKg);
 
   let max1minWatts = null;
   let max5minWatts = null;
