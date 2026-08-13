@@ -29739,47 +29739,57 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   flex-wrap: nowrap;
   padding: 3px 0;
 }
+/* 단일 색조(보라, 기존 GC 토글 브랜드 컬러 #7c3aed 계열)의 톤 램프 — Max(가장 짙음, 고강도)부터
+   60분(가장 옅음, 저강도)까지 명도 단계로 구분. 7단계 모두 인접 명도차 확보 + 밝은 끝단도
+   대비 확보되도록 검증된 값(dataviz 스킬 ordinal 팔레트 체크 통과). */
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-max {
-  background: color-mix(in srgb, var(--zone-7) 16%, white);
+  background: #290d59;
 }
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-max .running-ranking-segment-dist {
-  color: var(--zone-7);
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-max .running-ranking-segment-dist,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-max .running-ranking-segment-pace {
+  color: #ffffff;
 }
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-1min {
-  background: color-mix(in srgb, var(--zone-6) 16%, white);
+  background: #3d1386;
 }
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-1min .running-ranking-segment-dist {
-  color: var(--zone-6);
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-1min .running-ranking-segment-dist,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-1min .running-ranking-segment-pace {
+  color: #ffffff;
 }
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-5min {
-  background: color-mix(in srgb, var(--zone-5) 16%, white);
+  background: #5219b3;
 }
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-5min .running-ranking-segment-dist {
-  color: var(--zone-5);
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-5min .running-ranking-segment-dist,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-5min .running-ranking-segment-pace {
+  color: #ffffff;
 }
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-10min {
-  background: color-mix(in srgb, var(--zone-4) 18%, white);
+  background: #6620df;
 }
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-10min .running-ranking-segment-dist {
-  color: #A8890A;
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-10min .running-ranking-segment-dist,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-10min .running-ranking-segment-pace {
+  color: #ffffff;
 }
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-20min {
-  background: color-mix(in srgb, var(--zone-3) 16%, white);
+  background: #854ce6;
 }
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-20min .running-ranking-segment-dist {
-  color: var(--zone-3);
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-20min .running-ranking-segment-dist,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-20min .running-ranking-segment-pace {
+  color: #ffffff;
 }
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-40min {
-  background: color-mix(in srgb, var(--zone-2) 16%, white);
+  background: #a379ec;
 }
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-40min .running-ranking-segment-dist {
-  color: var(--zone-2);
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-40min .running-ranking-segment-dist,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-40min .running-ranking-segment-pace {
+  color: #2e1065;
 }
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-60min {
-  background: color-mix(in srgb, var(--zone-1) 16%, white);
+  background: #bc9df1;
 }
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-60min .running-ranking-segment-dist {
-  color: #6B6B6B;
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-60min .running-ranking-segment-dist,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-60min .running-ranking-segment-pace {
+  color: #2e1065;
 }
 #runningRankingScreen #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop,
 body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
