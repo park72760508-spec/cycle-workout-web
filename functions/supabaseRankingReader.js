@@ -96,6 +96,41 @@ const PEAK_WKG_COLUMN = {
   max: "peak_max_wkg",
 };
 
+const PEAK_WKG_DURATION_ORDER = [
+  "max",
+  "1min",
+  "5min",
+  "10min",
+  "20min",
+  "40min",
+  "60min",
+];
+
+/**
+ * GC 랭킹 행에 붙일 구간별(Max~60분) W/kg 맵 — mv_leaderboard_peak_28d는
+ * 유저 1명당 7개 구간이 이미 한 row에 계산되어 있어 배치 조회 1번으로 충분하다.
+ */
+async function fetchPeakWkgSegmentsMap(supabase, userIds) {
+  const cols = PEAK_WKG_DURATION_ORDER.map((d) => PEAK_WKG_COLUMN[d]);
+  const rows = await supabaseSelectInChunks(
+    supabase,
+    "mv_leaderboard_peak_28d",
+    ["user_id", ...cols].join(","),
+    "user_id",
+    userIds
+  );
+  const map = new Map();
+  for (const row of rows) {
+    const segments = {};
+    for (const d of PEAK_WKG_DURATION_ORDER) {
+      const v = Number(row[PEAK_WKG_COLUMN[d]]);
+      segments[d] = isFinite(v) && v > 0 ? v : null;
+    }
+    map.set(String(row.user_id), segments);
+  }
+  return map;
+}
+
 const supabaseUidMap = require("./supabaseUidMap");
 
 function getUidConfig() {
@@ -1366,6 +1401,10 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
         supabase,
         latestRows.map((row) => row.user_id)
       );
+      const peakWkgMap = await fetchPeakWkgSegmentsMap(
+        supabase,
+        latestRows.map((row) => row.user_id)
+      );
       const rows = [];
       for (let i = 0; i < latestRows.length; i++) {
         const row = latestRows[i];
@@ -1380,6 +1419,7 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
             ? Number(row.sum_position_scores)
             : 0;
         const entry = mapGcRowToEntry(row, fbUid, fg, gcScore, profile);
+        entry.peakWkgSegments = peakWkgMap.get(String(row.user_id)) || null;
         entry.rank =
           row.board_rank != null && isFinite(Number(row.board_rank))
             ? Math.floor(Number(row.board_rank))
