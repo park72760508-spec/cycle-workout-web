@@ -25026,6 +25026,39 @@
         return;
       }
 
+      /* GC탭 구간(Max~60분 W/kg) 펼침 — Supremo(전체)·연령대 카테고리 행 렌더 함수(buildSupremoRow·
+         buildCategoryRow) 양쪽에서 공용으로 쓴다. 성별/카테고리 필터와 무관하게 서버가 모든 카테고리에
+         peakWkgSegments를 붙여 보내므로, 이 두 렌더 함수 모두 지원해야 필터 조합 전체에서 동작한다. */
+      var STELVIO_CYCLE_PEAK_SEGMENTS = [
+        { key: 'max', label: 'Max' },
+        { key: '1min', label: '1분' },
+        { key: '5min', label: '5분' },
+        { key: '10min', label: '10분' },
+        { key: '20min', label: '20분' },
+        { key: '40min', label: '40분' },
+        { key: '60min', label: '60분' }
+      ];
+      /** GC 행 안에 Max~60분 구간별 W/kg 칩 펼침 — RUN 종합탭 running-ranking-segments/-chip과 동일 마크업 */
+      function stelvioSupremoSegmentsHtml(peakWkgSegments) {
+        if (!peakWkgSegments) return '';
+        var chips = STELVIO_CYCLE_PEAK_SEGMENTS.map(function (seg) {
+          var val = Number(peakWkgSegments[seg.key]);
+          var hasVal = isFinite(val) && val > 0;
+          var label = hasVal ? val.toFixed(1) : '—';
+          var chipClass = 'running-ranking-segment-chip running-ranking-segment-chip--cycle-' + seg.key +
+            (hasVal ? '' : ' running-ranking-segment-chip--empty');
+          return '<span class="' + chipClass + '" title="' + seg.label + ' · ' + label + ' W/kg">' +
+            '<span class="running-ranking-segment-dist">' + seg.label + '</span>' +
+            '<span class="running-ranking-segment-pace">' + label + '</span></span>';
+        }).join('');
+        /* stelvioRankingSplitListRowHtml()이 "<div class=\"stelvio-rank-row\"...부터 첫 </div>까지"로
+           행 하나를 정규식 매칭한다 — 이 래퍼가 <div>면 행마다 </div>가 2개가 되어 그 매칭이 진짜 행
+           종료 지점보다 앞에서 잘리고, 이후 청크 삽입 시 다음 행이 이전 행 안에 중첩되어 하이라이트
+           번짐·리스트 간격 오류로 이어진다. <span>이면 행마다 </div>가 여전히 1개로 유지되어 안전하다. */
+        return '<span class="running-ranking-segments" role="group" aria-label="구간별 W/kg">' + chips + '</span>';
+      }
+      var stelvioGcSegmentsShowInThisRender = stelvioGcSegmentsOn && stelvioRankingState && stelvioRankingState.duration === 'gc';
+
       /* ----- 전체(Supremo): 연령대 탭과 동일한 생략·펼침 UX (상단 일부 + 내 주변 + 전체 랭킹 ±) — API 전체 목록 전제 ----- */
       if (cat === 'Supremo') {
         var maxNameLenS = 12;
@@ -25060,37 +25093,9 @@
           if (!mySupremoRow.userId && currentUserId) mySupremoRow.userId = currentUserId;
         }
 
-        var STELVIO_CYCLE_PEAK_SEGMENTS = [
-          { key: 'max', label: 'Max' },
-          { key: '1min', label: '1분' },
-          { key: '5min', label: '5분' },
-          { key: '10min', label: '10분' },
-          { key: '20min', label: '20분' },
-          { key: '40min', label: '40분' },
-          { key: '60min', label: '60분' }
-        ];
-        /** GC 행 안에 Max~60분 구간별 W/kg 칩 펼침 — RUN 종합탭 running-ranking-segments/-chip과 동일 마크업 */
-        function stelvioSupremoSegmentsHtml(peakWkgSegments) {
-          if (!peakWkgSegments) return '';
-          var chips = STELVIO_CYCLE_PEAK_SEGMENTS.map(function (seg) {
-            var val = Number(peakWkgSegments[seg.key]);
-            var hasVal = isFinite(val) && val > 0;
-            var label = hasVal ? val.toFixed(1) : '—';
-            var chipClass = 'running-ranking-segment-chip running-ranking-segment-chip--cycle-' + seg.key +
-              (hasVal ? '' : ' running-ranking-segment-chip--empty');
-            return '<span class="' + chipClass + '" title="' + seg.label + ' · ' + label + ' W/kg">' +
-              '<span class="running-ranking-segment-dist">' + seg.label + '</span>' +
-              '<span class="running-ranking-segment-pace">' + label + '</span></span>';
-          }).join('');
-          /* stelvioRankingSplitListRowHtml()이 "<div class=\"stelvio-rank-row\"...부터 첫 </div>까지"로
-             행 하나를 정규식 매칭한다 — 이 래퍼가 <div>면 행마다 </div>가 2개가 되어 그 매칭이 진짜 행
-             종료 지점보다 앞에서 잘리고, 이후 청크 삽입 시 다음 행이 이전 행 안에 중첩되어 하이라이트
-             번짐·리스트 간격 오류로 이어진다. <span>이면 행마다 </div>가 여전히 1개로 유지되어 안전하다. */
-          return '<span class="running-ranking-segments" role="group" aria-label="구간별 W/kg">' + chips + '</span>';
-        }
         function buildSupremoRow(item, categoryRank, extraRowClass) {
           extraRowClass = extraRowClass || '';
-          var showSegments = stelvioGcSegmentsOn && stelvioRankingState && stelvioRankingState.duration === 'gc';
+          var showSegments = stelvioGcSegmentsShowInThisRender;
           var rawNamePlain = stelvioRankingResolveRowRawName(item);
           var rawName = stelvioEscapeHtml(rawNamePlain);
           var isPrivate = stelvioRankingIsPrivateRow(item);
@@ -25524,6 +25529,7 @@
           badgePart +
           '</span>';
         h += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
+        if (stelvioGcSegmentsShowInThisRender) h += stelvioSupremoSegmentsHtml(item.peakWkgSegments);
         h += '</div>';
         return h;
       }
