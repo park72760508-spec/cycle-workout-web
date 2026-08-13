@@ -29721,6 +29721,11 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   padding: 4px 0;
   align-items: center;
   row-gap: 3px;
+  /* 펼침 시 행이 2줄로 늘어나 content-visibility:auto의 48px 추정치(위쪽 기본 규칙)와
+     실제 높이가 어긋나면 하이라이트 번짐·스크롤 시 빈 간격이 생긴다 — 펼침 상태에서는
+     화면 밖 스킵 렌더링을 끄고 항상 완전 레이아웃하도록 강제해 방지한다. */
+  content-visibility: visible !important;
+  contain-intrinsic-size: auto !important;
 }
 #stelvioRankingScreen .running-ranking-list-body--segments-on .stelvio-rank-row .stelvio-rank-name {
   flex: 1 1 0;
@@ -29739,57 +29744,35 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   flex-wrap: nowrap;
   padding: 3px 0;
 }
-/* 단일 색조(보라, 기존 GC 토글 브랜드 컬러 #7c3aed 계열)의 톤 램프 — Max(가장 짙음, 고강도)부터
-   60분(가장 옅음, 저강도)까지 명도 단계로 구분. 7단계 모두 인접 명도차 확보 + 밝은 끝단도
-   대비 확보되도록 검증된 값(dataviz 스킬 ordinal 팔레트 체크 통과). */
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-max {
-  background: #290d59;
+/* 구간 칩은 행의 이름·순위·GC 점수보다 낮은 우선순위의 보조 정보 — 톤을 낮춘 무채색
+   회색 배경 하나로 통일(색상 아이덴티티를 쓰지 않음). 값은 진한 회색, 구간 라벨은
+   옅은 회색으로 값보다도 한 단계 더 낮춰 시각적 위계를 명확히 한다. */
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-max,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-1min,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-5min,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-10min,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-20min,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-40min,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-60min {
+  background: #eef0f2;
 }
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-max .running-ranking-segment-dist,
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-max .running-ranking-segment-pace {
-  color: #ffffff;
-}
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-1min {
-  background: #3d1386;
-}
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-1min .running-ranking-segment-dist,
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-1min .running-ranking-segment-pace {
-  color: #ffffff;
-}
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-5min {
-  background: #5219b3;
-}
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-5min .running-ranking-segment-dist,
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-5min .running-ranking-segment-pace {
-  color: #ffffff;
-}
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-10min {
-  background: #6620df;
-}
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-10min .running-ranking-segment-dist,
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-10min .running-ranking-segment-pace {
-  color: #ffffff;
-}
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-20min {
-  background: #854ce6;
-}
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-20min .running-ranking-segment-dist,
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-20min .running-ranking-segment-pace {
-  color: #ffffff;
-}
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-40min {
-  background: #a379ec;
-}
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-40min .running-ranking-segment-dist,
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-40min .running-ranking-segment-pace {
-  color: #2e1065;
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-60min .running-ranking-segment-dist {
+  color: #9199a3;
 }
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-60min {
-  background: #bc9df1;
-}
-#stelvioRankingScreen .running-ranking-segment-chip--cycle-60min .running-ranking-segment-dist,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-max .running-ranking-segment-pace,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-1min .running-ranking-segment-pace,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-5min .running-ranking-segment-pace,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-10min .running-ranking-segment-pace,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-20min .running-ranking-segment-pace,
+#stelvioRankingScreen .running-ranking-segment-chip--cycle-40min .running-ranking-segment-pace,
 #stelvioRankingScreen .running-ranking-segment-chip--cycle-60min .running-ranking-segment-pace {
-  color: #2e1065;
+  color: #52585f;
 }
 #runningRankingScreen #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop,
 body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {

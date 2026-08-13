@@ -3382,7 +3382,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260813gcSegmentToggle2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260814gcSegmentToggle3" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -25082,7 +25082,11 @@
               '<span class="running-ranking-segment-dist">' + seg.label + '</span>' +
               '<span class="running-ranking-segment-pace">' + label + '</span></span>';
           }).join('');
-          return '<div class="running-ranking-segments" role="group" aria-label="구간별 W/kg">' + chips + '</div>';
+          /* stelvioRankingSplitListRowHtml()이 "<div class=\"stelvio-rank-row\"...부터 첫 </div>까지"로
+             행 하나를 정규식 매칭한다 — 이 래퍼가 <div>면 행마다 </div>가 2개가 되어 그 매칭이 진짜 행
+             종료 지점보다 앞에서 잘리고, 이후 청크 삽입 시 다음 행이 이전 행 안에 중첩되어 하이라이트
+             번짐·리스트 간격 오류로 이어진다. <span>이면 행마다 </div>가 여전히 1개로 유지되어 안전하다. */
+          return '<span class="running-ranking-segments" role="group" aria-label="구간별 W/kg">' + chips + '</span>';
         }
         function buildSupremoRow(item, categoryRank, extraRowClass) {
           extraRowClass = extraRowClass || '';
