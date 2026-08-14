@@ -27,7 +27,37 @@ const SUPABASE_IN_QUERY_CHUNK = 200;
 const RANKING_COMPUTE_CACHE_COLLECTION = "cache";
 const RANKING_COMPUTE_CACHE_MAX_CHARS = 700000;
 
+/**
+ * 인메모리(L1) 캐시 — 같은 warm 인스턴스가 반복 요청을 처리할 때 Firestore 문서 read/write
+ * (실측 600ms+, payload가 크면 더 걸림)를 완전히 생략한다. TTL은 호출부와 완전히 동일하게
+ * 적용되므로 신선도는 기존과 동일 — 순수 속도 최적화(응답 내용 변화 없음).
+ * Firestore(L2)는 그대로 유지되어 다른 인스턴스·콜드스타트 시에도 캐시가 계속 공유된다.
+ */
+const RANKING_COMPUTE_MEMORY_CACHE = new Map();
+const RANKING_COMPUTE_MEMORY_CACHE_MAX_ENTRIES = 50;
+
+function readRankingComputeMemoryCache(cacheKey, ttlMs) {
+  const entry = RANKING_COMPUTE_MEMORY_CACHE.get(cacheKey);
+  if (!entry) return null;
+  if (Date.now() - entry.updatedAtMs > ttlMs) {
+    RANKING_COMPUTE_MEMORY_CACHE.delete(cacheKey);
+    return null;
+  }
+  return entry.payload;
+}
+
+function writeRankingComputeMemoryCache(cacheKey, payload) {
+  RANKING_COMPUTE_MEMORY_CACHE.delete(cacheKey); // 재삽입으로 최신순 유지(LRU 근사)
+  RANKING_COMPUTE_MEMORY_CACHE.set(cacheKey, { payload, updatedAtMs: Date.now() });
+  while (RANKING_COMPUTE_MEMORY_CACHE.size > RANKING_COMPUTE_MEMORY_CACHE_MAX_ENTRIES) {
+    const oldestKey = RANKING_COMPUTE_MEMORY_CACHE.keys().next().value;
+    RANKING_COMPUTE_MEMORY_CACHE.delete(oldestKey);
+  }
+}
+
 async function readRankingComputeCache(admin, cacheKey, ttlMs) {
+  const mem = readRankingComputeMemoryCache(cacheKey, ttlMs);
+  if (mem != null) return mem;
   try {
     const snap = await admin
       .firestore()
@@ -38,6 +68,7 @@ async function readRankingComputeCache(admin, cacheKey, ttlMs) {
     const d = snap.data();
     if (!d || d.payload == null || !isFinite(Number(d.updatedAtMs))) return null;
     if (Date.now() - Number(d.updatedAtMs) > ttlMs) return null;
+    writeRankingComputeMemoryCache(cacheKey, d.payload);
     return d.payload;
   } catch (err) {
     console.warn("[rankingComputeCache] read failed:", cacheKey, err && err.message ? err.message : err);
@@ -46,6 +77,7 @@ async function readRankingComputeCache(admin, cacheKey, ttlMs) {
 }
 
 async function writeRankingComputeCache(admin, cacheKey, payload) {
+  writeRankingComputeMemoryCache(cacheKey, payload);
   try {
     let serialized;
     try {
@@ -703,8 +735,10 @@ async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
   };
 }
 
-/** getWeeklyRanking 다건 동시 요청 대비 원천 계산 결과만 짧게 캐싱(뷰어 개인화는 상위에서 별도 처리) */
-const TSS_CORE_CACHE_TTL_MS = 20000;
+/** getWeeklyRanking 다건 동시 요청 대비 원천 계산 결과만 짧게 캐싱(뷰어 개인화는 상위에서 별도 처리).
+ *  20초는 재계산(실측 2.4~2.6초) 빈도를 필요 이상으로 높였다 — 주간 TSS는 GC(2분)처럼 실시간성이
+ *  중요하지 않은 값은 아니지만, 45초 지연은 체감상 문제되지 않는 수준이라 판단해 상향. */
+const TSS_CORE_CACHE_TTL_MS = 45000;
 
 async function fetchWeeklyTssRankingCoreCached(admin, startStr, endStr, gender) {
   const cacheKey = "weekly_tss_core_v1__" + startStr + "__" + endStr + "__" + gender;
@@ -1757,4 +1791,6 @@ module.exports = {
   resolveUuid,
   getMonthKeyKstNow,
   HEPTAGON_CATEGORIES,
+  readRankingComputeCache,
+  writeRankingComputeCache,
 };

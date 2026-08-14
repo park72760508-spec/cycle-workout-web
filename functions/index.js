@@ -11444,6 +11444,10 @@ exports.getRunWeeklyTssForRead = onRequest(
   }
 );
 
+/** 자기 자신의 연간 최고기록 조회 — 같은 화면 재진입/새로고침 시 반복 호출 대비 짧게 캐싱.
+ *  본인 데이터만 조회 가능한 엔드포인트라 캐시 키에 uid를 포함해도 다른 사용자와 섞이지 않는다. */
+const YEARLY_PEAKS_CACHE_TTL_MS = 60000;
+
 /**
  * PR 표시용 yearly_peaks Read — Supabase (Service Role relay).
  * GET ?uid=&year=2026
@@ -11479,7 +11483,21 @@ exports.getYearlyPeaksForRead = onRequest(
     }
 
     try {
-      const peaks = await supabaseGroupReader.fetchYearlyPeaksForYear(requestedUid, yearNum);
+      const cacheKey = "yearly_peaks_v1__" + requestedUid + "__" + yearNum;
+      let peaks = await supabaseRankingReader.readRankingComputeCache(
+        admin,
+        cacheKey,
+        YEARLY_PEAKS_CACHE_TTL_MS
+      );
+      if (peaks === null || peaks === undefined) {
+        peaks = await supabaseGroupReader.fetchYearlyPeaksForYear(requestedUid, yearNum);
+        // 캐시는 값이 있을 때만(null 저장 시 "미존재"와 "미조회"를 구분 못 해 매번 재조회하게 됨).
+        if (peaks) {
+          await supabaseRankingReader
+            .writeRankingComputeCache(admin, cacheKey, peaks)
+            .catch(function () {});
+        }
+      }
       res.status(200).json({
         success: true,
         year: yearNum,
