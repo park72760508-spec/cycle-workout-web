@@ -3778,7 +3778,11 @@
       };
     })();
   </script>
-  <script defer src="https://cdn.tailwindcss.com"></script>
+  <!-- cdn.tailwindcss.com(런타임 JIT — 문서 전체를 MutationObserver로 감시하며 클래스가 바뀔 때마다
+       브라우저 안에서 CSS를 재생성. Tailwind 공식 문서가 프로덕션에 쓰지 말라고 명시하는 방식이고,
+       iOS Safari 발열 요인으로 지목되어 정적 사전빌드로 교체(2026-08). 새 화면에 Tailwind 클래스를
+       추가했다면 scripts/build-tailwind.mjs를 다시 실행해야 반영된다(pre-commit 훅에서 자동 실행). -->
+  <link rel="stylesheet" href="assets/css/tailwind-build.css?v=20260815static1" />
   <script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script defer src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
