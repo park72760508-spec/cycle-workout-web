@@ -1188,7 +1188,7 @@ async function syncUsersWeeklyTssParityToSupabase(db, admin, userIds, startStr, 
  * ranking_day_totals에 이번 주(또는 지정 구간) 활동이 있는 전체 사용자 Supabase TSS parity.
  * @returns {Promise<{ users: number, ridesSynced: number, bucketsSynced: number }>}
  */
-async function runWeeklyTssSupabaseParityForActiveUsers(db, admin, startStr, endStr) {
+async function runWeeklyTssSupabaseParityForActiveUsers(db, admin, startStr, endStr, stravaUserIdsOverride) {
   const rankingDayRollup = require("./rankingDayRollup");
   const stravaGapDetect = require("./stravaGapDetect");
   if (!db || !admin || !startStr || !endStr) {
@@ -1199,7 +1199,9 @@ async function runWeeklyTssSupabaseParityForActiveUsers(db, admin, startStr, end
     startStr,
     endStr
   );
-  const stravaUserIds = await stravaGapDetect.listStravaConnectedUserIds(db);
+  const stravaUserIds = Array.isArray(stravaUserIdsOverride)
+    ? stravaUserIdsOverride
+    : await stravaGapDetect.listStravaConnectedUserIds(db);
   const mergedIds = Array.from(new Set([...bucketUserIds, ...stravaUserIds]));
   if (!mergedIds.length) {
     return { users: 0, ridesSynced: 0, bucketsSynced: 0 };

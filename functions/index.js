@@ -8176,6 +8176,36 @@ async function runSupabaseWeeklyTssDaytimePipeline(db, logPrefix) {
   return { mode: "supabase_daytime", ms: Date.now() - t0 };
 }
 
+const WEEKLY_TSS_PARITY_INACTIVE_ROTATION_SLICE = 15; // 비활동 풀(~수십명)이 하루 3회 실행으로 대략 하루 안에 1순환
+
+/**
+ * Weekly TSS Parity 스케줄 전용 Strava 대상 사용자 목록.
+ * 최근 30일 활동 사용자는 매회 전원 스캔(active), 비활동 사용자는 stravaRotatingGapScanSchedule과는
+ * 별도 커서로 느린 회전을 돌려 결국 전원 커버한다 — "위험 · 끄면 랭킹이 깨짐" 안전망 폭을 유지하면서
+ * 매 실행마다 340명 전원을 훑던 범위를 좁힌다.
+ */
+async function listStravaUserIdsForWeeklyTssParity(db) {
+  const { active, inactive } = await stravaConnectionReader.listStravaConnectedFirebaseUidsByRecency(db);
+  if (!inactive.length) return active.slice();
+  const cursorRef = db.collection("appConfig").doc("weekly_tss_parity_inactive_rotation");
+  const cursorSnap = await cursorRef.get();
+  const prevCursor = Number((cursorSnap.exists && cursorSnap.data() && cursorSnap.data().cursor) || 0);
+  const { batch, nextCursor } = advanceRotatingCursorOverPool(
+    inactive,
+    prevCursor,
+    WEEKLY_TSS_PARITY_INACTIVE_ROTATION_SLICE
+  );
+  await cursorRef.set(
+    {
+      cursor: nextCursor,
+      inactiveTotal: inactive.length,
+      lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  return active.concat(batch);
+}
+
 /**
  * 이번 주 활동 사용자 전원 Firestore → Supabase 주간 TSS parity (rides + daily_summaries).
  */
@@ -8183,15 +8213,16 @@ async function runWeeklyTssSupabaseParityScheduledJob(db, logPrefix) {
   const prefix = logPrefix || "[scheduledWeeklyTssSupabaseParity]";
   const { startStr, endStr } = getWeekRangeSeoul();
   const t0 = Date.now();
+  const stravaUserIds = await listStravaUserIdsForWeeklyTssParity(db);
   const result = await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(
     db,
     admin,
     startStr,
-    endStr
+    endStr,
+    stravaUserIds
   );
   let runningGap = { users: 0, ingested: 0, failed: 0, missing: 0, apiCalls: 0 };
   try {
-    const stravaUserIds = await stravaGapDetect.listStravaConnectedUserIds(db);
     const range = stravaSyncRetry.ymdRangeToUnix({ dateFrom: startStr, dateTo: endStr });
     runningGap = await stravaGapDetect.syncUsersRunningActivitiesGapParity(
       db,
@@ -8216,6 +8247,7 @@ async function runWeeklyTssSupabaseParityScheduledJob(db, logPrefix) {
     ms: Date.now() - t0,
     ...result,
     runningGap,
+    stravaScopeUsers: stravaUserIds.length,
   });
   return { startStr, endStr, ...result, runningGap };
 }
