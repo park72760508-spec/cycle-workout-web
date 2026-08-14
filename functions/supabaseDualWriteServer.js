@@ -1288,6 +1288,8 @@ module.exports = {
   appendServiceRoleSecret,
   mapTrainingLogToRideRow,
   resolveRideUserIdForFirebaseUid,
+  isSupabaseForeignKeyUserError,
+  writeRideToSupabase,
   evaluateSecondaryIngestWrite,
   evaluateSupabasePrimaryIngest,
   shouldSkipOnUserLogWrittenSupabaseUpsert,

@@ -1002,7 +1002,15 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
   {
     document: "users/{userId}/logs/{logId}",
     ...ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
-    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+    // SUPABASE_SERVICE_ROLE_KEY 누락 시 mirrorIndoorRewardToSupabaseIfEnabled/
+    // upsertIndoorRideToSupabaseIfEnabled(PointRewardService.ts)가 항상 실패한다 —
+    // 실측 로그(2026-08-14)로 확인된 배포 설정 누락, 다른 함수(stravaWebhook 등)와 동일하게 추가.
+    secrets: [
+      aligoApiKeySecret,
+      aligoUserIdSecret,
+      aligoTokenSecret,
+      supabaseDualWriteServer.supabaseServiceRoleKey,
+    ],
   } as any,
   async (event) => {
     injectAligoEnv();

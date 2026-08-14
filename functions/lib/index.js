@@ -719,6 +719,20 @@ exports.stravaWebhook = (0, https_1.onRequest)(
         const objectType = String(body?.object_type || "").toLowerCase();
         const ownerId = body?.owner_id;
         const objectId = body?.object_id;
+        /**
+         * 웹훅 수신 헬스 기록 — 처리 성공/실패와 무관하게 POST가 실제로 도착했는지만 기록.
+         * 2026-08-02 사례처럼 Strava가 웹훅 자체를 보내지 않으면 재시도 큐(strava_webhook_retries)도
+         * 비어있어 "정상"처럼 보인다 — stravaWebhookRetryMonitorSchedule이 이 lastReceivedAt으로
+         * "구독은 있는데 이벤트가 안 옴" 상태(구독 만료 등)를 별도로 탐지한다.
+         */
+        db.collection("appConfig")
+            .doc("strava_webhook_health")
+            .set({
+            lastReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastAspectType: aspectType,
+            lastObjectType: objectType,
+        }, { merge: true })
+            .catch((err) => console.warn("[Strava Webhook] health 기록 실패:", err));
         /** 생성·갱신: 동일 활동 재조회·merge 저장 (공개 변경·제목 수정 등으로 update만 오는 경우 대비) — delete 비처리 */
         const shouldFetchActivity = objectType === "activity" &&
             ownerId != null &&
@@ -759,7 +773,15 @@ exports.onIndoorLogCreatedReward = (0, firestore_1.onDocumentCreated)(
 {
     document: "users/{userId}/logs/{logId}",
     ...aligoKakaoNatEgress_1.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
-    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+    // SUPABASE_SERVICE_ROLE_KEY 누락 시 mirrorIndoorRewardToSupabaseIfEnabled/
+    // upsertIndoorRideToSupabaseIfEnabled(PointRewardService.ts)가 항상 실패한다 —
+    // 실측 로그(2026-08-14)로 확인된 배포 설정 누락, 다른 함수(stravaWebhook 등)와 동일하게 추가.
+    secrets: [
+        aligoApiKeySecret,
+        aligoUserIdSecret,
+        aligoTokenSecret,
+        supabaseDualWriteServer.supabaseServiceRoleKey,
+    ],
 }, async (event) => {
     injectAligoEnv();
     const snap = event.data;

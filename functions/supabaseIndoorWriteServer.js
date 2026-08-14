@@ -114,22 +114,41 @@ function isIndoorFirestoreLogShadowEnabled() {
 }
 
 async function upsertRideFromLog(admin, firebaseUid, logDocId, logData) {
+  const uidConfig = {
+    uidNamespace: String(supabaseDualWriteServer.uidNamespaceParam.value() || "").trim(),
+    uidMode: String(supabaseDualWriteServer.uidModeParam.value() || "v5").trim(),
+  };
   const row = supabaseDualWriteServer.mapTrainingLogToRideRow(
     firebaseUid,
     logDocId,
     logData,
-    {
-      uidNamespace: String(supabaseDualWriteServer.uidNamespaceParam.value() || "").trim(),
-      uidMode: String(supabaseDualWriteServer.uidModeParam.value() || "v5").trim(),
-    }
+    uidConfig
   );
   if (!row) throw new Error("ride row mapping failed");
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const { error } = await supabase.from("rides").upsert(row, {
-    onConflict: "user_id,activity_id",
-    ignoreDuplicates: false,
-  });
-  if (error && error.code !== "23505") throw error;
+  row.user_id = await supabaseDualWriteServer.resolveRideUserIdForFirebaseUid(
+    supabase,
+    firebaseUid,
+    uidConfig
+  );
+  try {
+    await supabaseDualWriteServer.writeRideToSupabase(row);
+  } catch (error) {
+    if (!supabaseDualWriteServer.isSupabaseForeignKeyUserError(error)) throw error;
+    console.warn(
+      "[supabaseIndoorWriteServer] rides user_id FK 실패, Supabase 사용자 보정 후 재시도:",
+      firebaseUid,
+      logDocId
+    );
+    const supabaseUserProvision = require("./supabaseUserProvision");
+    await supabaseUserProvision.provisionSupabaseUserAfterProfile(admin, firebaseUid);
+    row.user_id = await supabaseDualWriteServer.resolveRideUserIdForFirebaseUid(
+      supabase,
+      firebaseUid,
+      uidConfig
+    );
+    await supabaseDualWriteServer.writeRideToSupabase(row);
+  }
   try {
     const rankingBuildMetaSupabase = require("./rankingBuildMetaSupabase");
     if (typeof rankingBuildMetaSupabase.touchRankingMetricsLiveMeta === "function") {

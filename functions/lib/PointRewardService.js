@@ -267,6 +267,24 @@ class PointRewardService {
         }
     }
     /**
+     * 인도어/GPX(비-Strava) 활동 로그를 Supabase `rides`에 실시간 반영.
+     * `rides` INSERT는 Postgres 트리거로 daily_summaries·user_ranking_metrics까지 자동 재계산되므로,
+     * 이 호출 하나로 해당 유저의 랭킹 파이프라인이 배치(parity) 없이도 최신 상태를 유지한다.
+     * mirrorIndoorRewardToSupabaseIfEnabled와 동일하게 실패해도 포인트 적립·알림톡에는 영향 없음.
+     */
+    async upsertIndoorRideToSupabaseIfEnabled(userId, trainingLogId, logData) {
+        try {
+            await supabaseIndoorWriteServer.refreshIndoorWriteFromRemoteConfig(admin, true);
+            if (!supabaseIndoorWriteServer.evaluateIndoorSupabasePrimary(userId).usePrimary) {
+                return;
+            }
+            await supabaseIndoorWriteServer.upsertRideFromLog(admin, userId, trainingLogId, logData);
+        }
+        catch (err) {
+            console.warn("[PointReward] Supabase indoor ride upsert 실패:", userId, trainingLogId, err);
+        }
+    }
+    /**
      * 라이딩 미션 달성·구독 연장 알림톡(UH_2120 계열 tpl_code).
      * @see aligoAlimtalkUnified.ts
      */
@@ -515,6 +533,7 @@ class PointRewardService {
             ...pointDoc,
             firebase_log_id: trainingLogId,
         });
+        await this.upsertIndoorRideToSupabaseIfEnabled(userId, trainingLogId, logData);
         const alimtalkPayload = extendedDays > 0
             ? {
                 userId,
