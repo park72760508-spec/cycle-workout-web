@@ -333,11 +333,13 @@ body:has(#bluetoothPlayerListScreen.active) {
   overflow: hidden !important;
 }
 
-/* 오픈 라이딩방: 배경만 동일 적용, 문서 루트는 overflow 잠그지 않음 */
+/* 오픈 라이딩방: 배경만 동일 적용, 문서 루트는 overflow 잠그지 않음.
+   화면 자체가 overflow:hidden으로 스크롤을 내부(.open-riding-app-body)에 가두므로
+   html/body는 애초에 바운스 스크롤되지 않는다 — background-attachment:fixed는
+   여기서는 시각적 이점 없이 iOS Safari에서 리페인트/컴포지팅 비용만 유발해 제거. */
 html:has(#openRidingRoomScreen.active),
 body:has(#openRidingRoomScreen.active) {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%) !important;
-  background-attachment: fixed !important;
 }
 h1,h2,h3,h4 { font-weight: 600; }
 

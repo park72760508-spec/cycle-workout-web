@@ -3284,7 +3284,7 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
               title="클럽·크루 모임"
               aria-hidden
             >
-              <img src={groupBadgeUrl} alt="" className="h-full w-full object-cover" decoding="async" />
+              <img src={groupBadgeUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
             </span>
           ) : null}
         </div>
@@ -11294,7 +11294,7 @@ function OpenRidingGroupsList(props) {
                   <span className="relative shrink-0 inline-flex">
                     <span className="inline-flex h-14 w-14 shrink-0 aspect-square items-center justify-center rounded-full ring-2 ring-violet-200 overflow-hidden bg-gradient-to-br from-violet-50 to-slate-100 box-border">
                       {photo ? (
-                        <img src={photo} alt="" className="h-full w-full object-cover object-center" decoding="async" />
+                        <img src={photo} alt="" className="h-full w-full object-cover object-center" loading="lazy" decoding="async" />
                       ) : (
                         <span className="text-lg font-bold text-violet-700">{name ? name.charAt(0) : 'G'}</span>
                       )}
