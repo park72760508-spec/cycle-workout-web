@@ -1,0 +1,725 @@
+// ============================================
+// Firestore 보안 규칙 (Firebase 콘솔에 복사하여 붙여넣기)
+// ============================================
+// 위치: Firebase 콘솔 → Firestore Database → Rules 탭
+// ============================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== users 컬렉션 규칙 =====
+    match /users/{userId} {
+      // 1. 로그인한 사용자는 자신의 문서 읽기/쓰기 가능 (회원가입 시 users/{uid} 생성 포함)
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // 2. 관리자(grade='1')는 모든 사용자 읽기/쓰기 가능
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+
+      // 3. 부관리자(grade='3')는 모든 사용자 읽기 가능, 자신의 문서만 쓰기 가능
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3';
+
+      // 4. 일반 사용자(grade='2')는 자신의 문서만 읽기/쓰기 가능 (위의 첫 번째 규칙으로 처리됨)
+
+      // 5. 오픈 라이딩·친구 검색: 다른 회원 문서를 조회(list/query)할 때, 아래 중 하나라도 만족하면 읽기 허용
+      //    (전화 8자 이상 / 이름·표시명 1자 이상 — 친구 요청 대상 검색용; 쿼리 결과 문서마다 평가됨)
+      allow read: if request.auth != null && (
+        (resource.data.contact is string && resource.data.contact.size() >= 8) ||
+        (resource.data.phone is string && resource.data.phone.size() >= 8) ||
+        (resource.data.phoneNumber is string && resource.data.phoneNumber.size() >= 8) ||
+        (resource.data.tel is string && resource.data.tel.size() >= 8) ||
+        (resource.data.name is string && resource.data.name.size() >= 1) ||
+        (resource.data.displayName is string && resource.data.displayName.size() >= 1)
+      );
+
+      // ===== users/{userId}/friends (라이딩 친구 초대용) =====
+      match /friends/{friendDocId} {
+        // 본인 목록: 읽기/쓰기
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        // 상대가 나를 친구로 등록했는지 확인: users/{상대}/friends/{내 uid} 만 허용
+        allow read: if request.auth != null && friendDocId == request.auth.uid;
+      }
+
+      // ===== users/{userId}/location_batches (GPS 배치 Fallback 저장) =====
+      match /location_batches/{batchId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ===== 로그인 사전 확인 — 탈퇴 여부만 공개 read (전화번호 숫자 docId) =====
+    match /login_account_flags/{phoneKey} {
+      allow read: if true;
+      allow create, update: if request.auth != null && (
+        request.resource.data.uid == request.auth.uid ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1'
+        )
+      );
+      allow delete: if request.auth != null && (
+        resource.data.uid == request.auth.uid ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1'
+        )
+      );
+    }
+
+    // ===== training_results 컬렉션 규칙 =====
+    match /training_results/{resultId} {
+      // 로그인한 사용자는 자신의 훈련 결과 읽기/쓰기 가능
+      // user_id 또는 userId 필드 모두 지원
+      allow read, write: if request.auth != null &&
+        (request.resource.data.user_id == request.auth.uid ||
+         request.resource.data.userId == request.auth.uid);
+
+      // 관리자(grade='1')는 모든 훈련 결과 읽기/쓰기 가능
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+
+      // 부관리자(grade='3')는 모든 훈련 결과 읽기 가능
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3';
+    }
+
+    // ===== schedule_results 컬렉션 규칙 =====
+    match /schedule_results/{resultId} {
+      // 로그인한 사용자는 자신의 스케줄 결과 읽기/쓰기 가능
+      allow read: if request.auth != null &&
+        resource.data.user_id == request.auth.uid;
+      allow create, update: if request.auth != null &&
+        request.resource.data.user_id == request.auth.uid;
+      allow delete: if request.auth != null &&
+        resource.data.user_id == request.auth.uid;
+
+      // 관리자(grade='1')는 모든 스케줄 결과 읽기/쓰기 가능
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+
+      // 부관리자(grade='3')는 모든 스케줄 결과 읽기 가능
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3';
+    }
+
+    // ===== training_log 컬렉션 규칙 (스트라바 활동) =====
+    match /training_log/{logId} {
+      // 로그인한 사용자는 자신의 활동 로그 읽기/쓰기 가능
+      // read: resource.data 사용, write: request.resource.data 사용
+      allow read: if request.auth != null &&
+        (resource.data.user_id == request.auth.uid ||
+         resource.data.userId == request.auth.uid);
+
+      allow create: if request.auth != null &&
+        (request.resource.data.user_id == request.auth.uid ||
+         request.resource.data.userId == request.auth.uid);
+
+      allow update, delete: if request.auth != null &&
+        (resource.data.user_id == request.auth.uid ||
+         resource.data.userId == request.auth.uid) &&
+        (request.resource.data.user_id == request.auth.uid ||
+         request.resource.data.userId == request.auth.uid);
+
+      // 관리자(grade='1')는 모든 활동 로그 읽기/쓰기 가능
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+
+      // 부관리자(grade='3')는 모든 활동 로그 읽기 가능
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3';
+    }
+
+    // ===== users/{userId}/yearly_peaks 서브컬렉션 규칙 (연간 최고 기록 - MMP, max_hr) =====
+    // 구조: users/{userId}/yearly_peaks/{year}
+    // Cloud Function(onUserLogWritten)에서 쓰기, 클라이언트에서 프로필 화면 max_hr 조회용 읽기
+    match /users/{userId}/yearly_peaks/{year} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3';
+      // 쓰기는 Cloud Function(Admin SDK)만 수행
+      allow write: if false;
+    }
+
+    // ===== users/{userId}/ranking_rollups (6개월 항속 등 사전 집계) =====
+    // Cloud Function(로그 반영·23시 집계)에서만 쓰기. 클라이언트 직접 접근 없음.
+    match /users/{userId}/ranking_rollups/{rollupId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3';
+      allow write: if false;
+    }
+
+    // ===== users/{userId}/logs 서브컬렉션 규칙 (훈련 결과 저장 - Subcollection 구조) =====
+    // 구조: users/{userId}/logs/{logId}
+    // 참고: trainingResultService는 로그 문서에 userId 필드로 저장 (user_id 아님)
+    match /users/{userId}/logs/{logId} {
+      // Phase 6-1: Read는 Supabase rides(useSupabaseLogsRead). 아래 Firestore write는 shadow·알림톡 트리거용.
+      // Phase 6-2 cutover: useSupabaseLogsRead=true + indoor ingest 완료 후 owner create/update/delete → false 로 교체.
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null &&
+        request.auth.uid == userId &&
+        (request.resource.data.user_id == request.auth.uid ||
+         request.resource.data.userId == request.auth.uid);
+      allow update, delete: if request.auth != null &&
+        request.auth.uid == userId &&
+        (resource.data.user_id == request.auth.uid ||
+         resource.data.userId == request.auth.uid);
+
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3';
+    }
+
+    // ===== users/{userId}/daily_route_profiles (일별 통합 Strava 코스) =====
+    // Cloud Function(MMP·백필)에서만 쓰기. 일지 지도는 읽기 + 클라이언트 logs 병합 폴백.
+    match /users/{userId}/daily_route_profiles/{dateKey} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3';
+      allow write: if false;
+    }
+
+    // ===== 기존 training_logs 컬렉션 규칙 (하위 호환성 유지 - 선택사항) =====
+    // 참고: Subcollection 구조로 마이그레이션 후 제거 가능
+    // match /training_logs/{logId} {
+    //   allow read, write: if request.auth != null &&
+    //     request.resource.data.userId == request.auth.uid;
+    // }
+
+    // ===== training_schedules 컬렉션 규칙 (Training Room) =====
+    match /training_schedules/{scheduleId} {
+      // 로그인한 사용자는 모든 Training Room 읽기 가능 (활성 훈련실 조회용)
+      allow read: if request.auth != null;
+
+      // 로그인한 사용자는 자신이 생성한 Training Room 쓰기 가능
+      allow write: if request.auth != null &&
+        (request.resource.data.user_id == request.auth.uid ||
+         request.resource.data.userId == request.auth.uid ||
+         resource.data.user_id == request.auth.uid ||
+         resource.data.userId == request.auth.uid);
+
+      // 관리자(grade='1')는 모든 Training Room 읽기/쓰기 가능
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+
+      // 부관리자(grade='3')는 모든 Training Room 읽기 가능
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3';
+    }
+
+    // ===== rides 컬렉션 규칙 (오픈 라이딩방 — 달력·참석 Transaction) =====
+    // 클라이언트: openRidingService.js → collection(db, 'rides')
+    match /rides/{rideId} {
+      // 로그인 사용자: 월간 조회·상세
+      allow read: if request.auth != null;
+
+      // 생성: users 문서에 grade가 1·2·3(문자·숫자)인 계정만 — 앱 오픈 라이딩방과 동일(일반 2등급 포함)
+      // hostUserId는 본인 UID와 일치해야 함
+      allow create: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '2' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 1 ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 2 ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 3) &&
+        request.resource.data.hostUserId == request.auth.uid;
+
+      // 수정: 방장 전체 수정 가능 / 참석·대기열·연락처맵·updatedAt 만 변경 시 로그인 사용자(Transaction 참석·취소)
+      allow update: if request.auth != null && (
+        resource.data.hostUserId == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'waitlist', 'updatedAt', 'participantDisplay', 'participantContact', 'participantContactPublic', 'inviteJoinedUidByPhone', 'inviteDisplayByPhone', 'inviteFriendUidByPhone'])
+      );
+
+      // 삭제: 방장 또는 관리자(grade='1')
+      allow delete: if request.auth != null && (
+        resource.data.hostUserId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1')
+      );
+
+      // 관리자(grade='1'): 모든 rides 읽기/쓰기 (운영·복구)
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+
+      // 참석 확정자 본인 STRAVA 후기 거리(누적 합계용) — 문서 ID = uid, 본인만 쓰기
+      match /participantStravaReview/{uid} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null &&
+          request.auth.uid == uid &&
+          exists(/databases/$(database)/documents/rides/$(rideId)) &&
+          request.auth.uid in get(/databases/$(database)/documents/rides/$(rideId)).data.participants &&
+          get(/databases/$(database)/documents/rides/$(rideId)).data.rideStatus != 'cancelled';
+        allow delete: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if request.auth != null &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+      }
+    }
+
+    // ===== stelvio_riding_groups (라이딩 모임 소모임 / 관리자 승인) =====
+    // 클라이언트: openRidingGroupService.js
+    match /stelvio_riding_groups/{groupId} {
+      function stelvioGroupIsAdmin() {
+        return request.auth != null &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1' ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 1
+          );
+      }
+      allow read: if request.auth != null && (
+        resource.data.status == 'APPROVED' ||
+        resource.data.createdBy == request.auth.uid ||
+        stelvioGroupIsAdmin()
+      );
+      allow create: if request.auth != null &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.status == 'PENDING' &&
+        request.resource.data.memberCount == 1;
+      allow update: if stelvioGroupIsAdmin();
+      allow update: if request.auth != null &&
+        resource.data.createdBy == request.auth.uid &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.createdBy == resource.data.createdBy;
+      // 방장: 랭킹보드 그룹 탭 메모 공지 (승인된 소모임, 500자 이내)
+      allow update: if request.auth != null &&
+        resource.data.createdBy == request.auth.uid &&
+        resource.data.status == 'APPROVED' &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rankingNotice', 'updatedAt']) &&
+        request.resource.data.rankingNotice is map &&
+        request.resource.data.rankingNotice.keys().hasOnly(['text', 'updatedAt', 'updatedBy']) &&
+        request.resource.data.rankingNotice.text is string &&
+        request.resource.data.rankingNotice.text.size() <= 500 &&
+        request.resource.data.rankingNotice.updatedBy == request.auth.uid;
+      // 방장: createdBy 만 다른 멤버 UID 로 변경(이관). status 불변.
+      allow update: if request.auth != null &&
+        resource.data.createdBy == request.auth.uid &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['createdBy', 'updatedAt']) &&
+        request.resource.data.createdBy != resource.data.createdBy;
+      allow update: if request.auth != null &&
+        resource.data.status == 'APPROVED' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount', 'updatedAt']);
+      allow delete: if request.auth != null && (
+        resource.data.createdBy == request.auth.uid ||
+        stelvioGroupIsAdmin()
+      );
+
+      match /members/{memberId} {
+        allow read: if request.auth != null && (
+          get(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.status == 'APPROVED' ||
+          get(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.createdBy == request.auth.uid ||
+          stelvioGroupIsAdmin()
+        );
+        // 방장이 그룹 문서 + 본인 members 문서를 한 배치로 만들 때(createRidingGroupPending),
+        // get()은 커밋 전 DB라 부모 그룹이 없어 거부됨 → 같은 배치 반영 후 상태는 getAfter()로 검증
+        allow create: if request.auth != null &&
+          request.auth.uid == memberId &&
+          (
+            getAfter(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.status == 'APPROVED' ||
+            (
+              getAfter(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.status == 'PENDING' &&
+              getAfter(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.createdBy == memberId
+            )
+          );
+        // 방장·관리자(grade=1): 가입 신청 수락 시 타인 멤버 문서 생성
+        allow create: if request.auth != null &&
+          request.auth.uid != memberId &&
+          get(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.status == 'APPROVED' &&
+          (
+            get(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.createdBy == request.auth.uid ||
+            stelvioGroupIsAdmin()
+          ) &&
+          request.resource.data.role == 'member' &&
+          request.resource.data.keys().hasOnly(['joinedAt', 'displayName', 'profileImageUrl', 'role']) &&
+          request.resource.data.displayName is string &&
+          (request.resource.data.profileImageUrl == null || request.resource.data.profileImageUrl is string) &&
+          request.resource.data.role == 'member';
+        allow delete: if request.auth != null && request.auth.uid == memberId;
+        // 방장 이관: 기존 방장 → member, 지정 멤버 → owner (transaction 동시 갱신)
+        allow update: if request.auth != null &&
+          get(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.createdBy == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']) &&
+          (
+            (memberId == request.auth.uid && resource.data.role == 'owner' && request.resource.data.role == 'member') ||
+            (memberId != request.auth.uid && resource.data.role == 'member' && request.resource.data.role == 'owner')
+          );
+        allow read, write: if stelvioGroupIsAdmin();
+      }
+
+      // 가입 신청 큐(승인된 그룹) — 신청자 본인·방장·관리자(grade=1) 읽기/삭제
+      match /joinRequests/{reqUid} {
+        allow read: if request.auth != null && (
+          request.auth.uid == reqUid ||
+          get(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.createdBy == request.auth.uid ||
+          stelvioGroupIsAdmin()
+        );
+        allow create: if request.auth != null &&
+          request.auth.uid == reqUid &&
+          reqUid == request.auth.uid &&
+          get(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.status == 'APPROVED' &&
+          !exists(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)/members/$(reqUid)) &&
+          request.resource.data.keys().hasOnly(['requestedAt', 'displayName', 'profileImageUrl']) &&
+          request.resource.data.displayName is string &&
+          (request.resource.data.profileImageUrl == null || request.resource.data.profileImageUrl is string);
+        allow delete: if request.auth != null && (
+          request.auth.uid == reqUid ||
+          get(/databases/$(database)/documents/stelvio_riding_groups/$(groupId)).data.createdBy == request.auth.uid ||
+          stelvioGroupIsAdmin()
+        );
+        allow update: if false;
+      }
+    }
+
+    // ===== training_rooms 컬렉션 규칙 (Training Room 생성 팝업으로 생성된 방) =====
+    match /training_rooms/{roomId} {
+      // 로그인한 사용자는 모든 Training Room 읽기 가능
+      allow read: if request.auth != null;
+      // 로그인한 사용자는 생성 가능 (생성 시 user_id/userId는 관리자 선택값)
+      allow create: if request.auth != null;
+      // 수정/삭제: 본인(관리자) 또는 grade=1
+      allow update, delete: if request.auth != null &&
+        (resource.data.user_id == request.auth.uid ||
+         resource.data.userId == request.auth.uid ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1'));
+    }
+
+    // ===== analytics_daily (일별 접속·화면·버튼 통계 + bc_uniq 하위 문서) =====
+    // - screens.* 맵 필드(stelvioAnalytics.js): deviceSettingScreen, openRidingRoomScreen, workoutScreen 등
+    //   별도 경로가 아니라 본 문서에 merge + increment 로 쓰이므로, 아래 write 규칙 하나로 모두 허용됨.
+    match /analytics_daily/{date} {
+      // 부모 문서: 관리자만 읽기, 로그인 사용자 쓰기
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+      allow write: if request.auth != null;
+
+      // 하위 접속자 기록: 문서 ID = uid 또는 uid(표시명) — 본인만 쓰기 (runTransaction 필수), 관리자는 읽기
+      // ※ matches 정규식 + 한글 표시명 조합에서 거부되는 환경이 있어, 첫 번째 '(' 기준 접두 검증으로 통일
+      match /bc_uniq/{docId} {
+        function isOwnBcUniqDoc() {
+          return request.auth.uid == docId ||
+            (docId.split('\\(').size() > 1 && docId.split('\\(')[0] == request.auth.uid);
+        }
+        allow read, write: if request.auth != null && isOwnBcUniqDoc();
+        allow read: if request.auth != null &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+      }
+    }
+
+    // ===== VO₂max 연령·성별 실제 평균 집계 (대시보드 주황선) =====
+    // 사용자별 6개월 월별 VO₂ 산술평균 기여 — 본인 문서만 쓰기
+    match /vo2_demographic_samples/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+    }
+    // Cloud Function 집계 결과(연령·성별 키: male_50-59 등) — 로그인 사용자 읽기, 서버만 쓰기
+    match /stats_vo2_stelvio_rolling/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ===== 훈련 트렌드 Fitness 전 사용자 평균 (대시보드 파란 점선) =====
+    match /fitness_demographic_samples/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+    }
+    match /stats_fitness_stelvio_rolling/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ===== 주간 TSS(30주 창) 전 사용자 평균 (대시보드 성장 추이 녹색 점선) =====
+    match /weekly_tss_demographic_samples/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+    }
+    match /stats_weekly_tss_stelvio_rolling/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ===== friendRequests (오픈 라이딩 친구 요청 — 문서 ID: {fromUid}_{toUid}) =====
+    match /friendRequests/{requestId} {
+      // 문서가 아직 없을 때 sendFriendRequest의 getDoc(존재 여부 확인)도 통과해야 함.
+      // 존재하는 문서는 발신·수신 당사자만 읽기.
+      allow read: if request.auth != null && (
+        !exists(/databases/$(database)/documents/friendRequests/$(requestId)) ||
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+
+      // 생성: 보낸 사람만, pending, 상대 UID 고정
+      allow create: if request.auth != null &&
+        request.resource.data.fromUid == request.auth.uid &&
+        request.resource.data.toUid is string &&
+        request.resource.data.toUid != request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.fromDisplayName is string &&
+        request.resource.data.fromContact is string;
+
+      // 수신자: pending→accepted/rejected, rejected→accepted/rejected/pending(재검토)
+      allow update: if request.auth != null &&
+        resource.data.toUid == request.auth.uid &&
+        request.resource.data.fromUid == resource.data.fromUid &&
+        request.resource.data.toUid == resource.data.toUid &&
+        (
+          (resource.data.status == 'pending' &&
+            (request.resource.data.status == 'accepted' || request.resource.data.status == 'rejected')) ||
+          (resource.data.status == 'rejected' &&
+            (request.resource.data.status == 'accepted' ||
+             request.resource.data.status == 'rejected' ||
+             request.resource.data.status == 'pending'))
+        ) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt', 'toDisplayName', 'toContact']);
+
+      // 발신자: pending→cancelled / 거절·취소 후 동일 상대에게 재요청(pending)
+      allow update: if request.auth != null &&
+        resource.data.fromUid == request.auth.uid &&
+        request.resource.data.fromUid == resource.data.fromUid &&
+        request.resource.data.toUid == resource.data.toUid &&
+        (
+          (resource.data.status == 'pending' &&
+            request.resource.data.status == 'cancelled' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+          ((resource.data.status == 'rejected' || resource.data.status == 'cancelled') &&
+            request.resource.data.status == 'pending' &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'updatedAt', 'fromDisplayName', 'fromContact', 'targetPreviewName', 'targetPreviewContact'])) ||
+          // 상대 users/{toUid}/friends/{내 uid} 가 있으면, 내가 보낸 pending 을 수락 처리로 상호 완성 (요청 없이 맞추기)
+          (resource.data.status == 'pending' &&
+            request.resource.data.status == 'accepted' &&
+            exists(/databases/$(database)/documents/users/$(resource.data.toUid)/friends/$(request.auth.uid)) &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'updatedAt', 'toDisplayName', 'toContact']))
+        );
+
+      // 발신자: 취소·거절 건을 요청 목록에서 완전히 제거
+      allow delete: if request.auth != null &&
+        resource.data.fromUid == request.auth.uid &&
+        (resource.data.status == 'cancelled' || resource.data.status == 'rejected');
+
+      // 양쪽: 수락된 관계 해제·목록 정리 시 문서 삭제
+      allow delete: if request.auth != null &&
+        resource.data.status == 'accepted' &&
+        (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+    }
+
+    // ===== heptagon_rank_log: STELVIO 헵타곤 7축 포지션·종합(랭킹보드·레벨용, 민감정보 없음) =====
+    match /heptagon_rank_log/{userId} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.userId == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ===== ranking_meta: 야간 집계 완료 시각·버전(민감 정보 없음) — 앱 캐시 동기화용 공개 읽기 =====
+    match /ranking_meta/{docId} {
+      allow read: if true;
+      allow create, update, delete: if false;
+    }
+
+    // ===== heptagon_cohort_ranks: 헵타곤 코호트별(월·필터) 전원 순위 — Cloud Function만 쓰기, 앱은 읽기 전용 =====
+    match /heptagon_cohort_ranks/{docId} {
+      allow read: if true;
+      allow create, update, delete: if false;
+    }
+
+    // ===== appConfig 컬렉션 규칙 (Strava 설정 등 앱 전역 설정) =====
+    match /appConfig/{docId} {
+      // 모든 사용자가 읽기 가능 (시크릿이 없으므로 안전)
+      // aligo 문서에는 senderkey·tpl_code·sender만 두고, API 키/토큰은 넣지 말 것(공개 읽기됨)
+      allow read: if true;
+
+      // 쓰기는 관리자(grade='1')만 가능
+      allow write: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+    }
+
+    // ===== affiliates 컬렉션 규칙 (제휴사 관리) =====
+    // 목록/상세: 로그인한 모든 사용자 읽기 가능
+    // 등록/수정/삭제: 관리자(grade='1') 또는 직접 등록한 사용자
+    match /affiliates/{affiliateId} {
+      // 읽기: 로그인 사용자 전체
+      allow read: if request.auth != null;
+
+      // 생성: 로그인 사용자 중 grade='1'(관리자)만 허용
+      //       createdBy 필드는 반드시 본인 UID 여야 함
+      allow create: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1' &&
+        request.resource.data.createdBy == request.auth.uid;
+
+      // 수정: 관리자(grade='1') 또는 등록자 본인
+      allow update: if request.auth != null && (
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1'
+        ) ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // 만족도 집계 업데이트: 로그인한 모든 사용자가
+      // ratingSum · ratingCount · updatedAt 필드만 변경 가능
+      allow update: if request.auth != null &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['ratingSum', 'ratingCount', 'updatedAt']);
+
+      // 삭제: 관리자(grade='1') 또는 등록자 본인
+      allow delete: if request.auth != null && (
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1'
+        ) ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // ── 만족도 평가 서브컬렉션 ──────────────────────────────
+      match /ratings/{raterId} {
+        // 읽기: 본인 평가 또는 관리자
+        allow read: if request.auth != null && (
+          request.auth.uid == raterId ||
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1'
+          )
+        );
+        // 생성·수정: 본인만, score는 1~5 정수
+        allow create, update: if request.auth != null &&
+          request.auth.uid == raterId &&
+          request.resource.data.score is int &&
+          request.resource.data.score >= 1 &&
+          request.resource.data.score <= 5;
+        // 삭제: 만족도 평가 초기화(집계에서 제외)
+        allow delete: if request.auth != null && request.auth.uid == raterId;
+      }
+    }
+
+    // ===== competitions 컬렉션 규칙 (대회 정보 — 공개 조회, 승인제 등록) =====
+    // 대회 카드 리스트(competitionScreen.js)는 로그인 여부와 무관하게 공개 조회하되,
+    // PENDING/REJECTED(미승인) 건은 생성자 본인·관리자만 볼 수 있다(stelvio_riding_groups와 동일 패턴).
+    // 일반 사용자도 대회를 만들 수 있으나 approvalStatus='PENDING'으로 시작해 관리자 승인 전에는
+    // 공개 목록에 노출되지 않는다. approvalStatus 필드가 없는 기존 문서(승인제 도입 이전)는 승인된 것으로 간주.
+    // applyForCompetition 등 Cloud Function은 Admin SDK로 이 규칙과 무관하게 읽는다.
+    match /competitions/{competitionId} {
+      function stelvioCompetitionIsAdmin() {
+        return request.auth != null &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+      }
+      allow read: if resource.data.approvalStatus == null ||
+        resource.data.approvalStatus == 'APPROVED' ||
+        (request.auth != null && (
+          resource.data.createdBy == request.auth.uid || stelvioCompetitionIsAdmin()
+        ));
+      // 생성: 본인 명의로만, 관리자는 즉시 승인(APPROVED)·일반 사용자는 승인 대기(PENDING)로 시작.
+      allow create: if request.auth != null &&
+        request.resource.data.createdBy == request.auth.uid &&
+        (
+          (stelvioCompetitionIsAdmin() && request.resource.data.approvalStatus == 'APPROVED') ||
+          (!stelvioCompetitionIsAdmin() && request.resource.data.approvalStatus == 'PENDING')
+        );
+      // 수정: 관리자는 승인/거절 포함 전체 허용, 생성자 본인은 approvalStatus·createdBy를 바꾸지 않는 한 허용(자가 승인 방지).
+      allow update: if stelvioCompetitionIsAdmin();
+      allow update: if request.auth != null &&
+        resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.approvalStatus == resource.data.approvalStatus;
+      allow delete: if stelvioCompetitionIsAdmin() ||
+        (request.auth != null && resource.data.createdBy == request.auth.uid);
+    }
+
+    // ===== race_applications 컬렉션 규칙 (대회 신청 — 결제·환불계좌 포함 민감 정보) =====
+    // 신청/입금확인/환불/미입금취소는 전부 applyForCompetition·tossPaymentWebhook·
+    // requestCompetitionRefund·cancelUnpaidCompetitionApplications(Cloud Functions Admin SDK)에서만 기록한다.
+    // 클라이언트는 본인 신청 내역만 읽을 수 있고 직접 쓸 수 없다(가상계좌·Redis 슬롯 정합성 보호).
+    match /race_applications/{applicationId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+      allow write: if false;
+
+      // 상태 변경 원장(감사 추적) — 신청자 본인·관리자만 조회, 쓰기는 Cloud Function 전용
+      match /history/{entryId} {
+        allow read: if request.auth != null && (
+          get(/databases/$(database)/documents/race_applications/$(applicationId)).data.userId == request.auth.uid ||
+          (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1'
+          )
+        );
+        allow write: if false;
+      }
+    }
+
+    // ===== race_waitlist 컬렉션 규칙 (마감 후 취소 시 대기자 1순위 활성화 — race_applications와 동일 보호) =====
+    // 등록(마감 시 자동)/초대(취소 시)/만료·순번 승격은 전부 applyForCompetition·requestCompetitionRefund·
+    // cancelCompetitionApplication·cancelUnpaidCompetitionApplications·expireCompetitionWaitlistInvites
+    // (Cloud Functions Admin SDK)에서만 기록한다. 클라이언트는 본인 대기 상태만 읽을 수 있다.
+    match /race_waitlist/{waitlistId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+      allow write: if false;
+    }
+
+    // ===== 다른 컬렉션들 (필요시 추가) =====
+    // 예: workouts 등
+    // match /workouts/{workoutId} {
+    //   allow read: if request.auth != null;
+    //   allow write: if request.auth != null &&
+    //     exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+    //     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
+    // }
+  }
+}

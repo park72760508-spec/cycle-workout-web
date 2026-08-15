@@ -4,6 +4,7 @@
  */
 import {
   collection,
+  collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -293,16 +294,25 @@ export async function searchUsersForFriendRequest(db, term, myUid) {
   }
 
   if (db && out.length > 0) {
-    await Promise.all(
-      out.map(async (row) => {
-        try {
-          const g = await getDoc(doc(db, 'users', row.uid, 'friends', me));
-          row.theyHaveMe = g.exists();
-        } catch (_e) {
-          row.theyHaveMe = false;
-        }
-      })
-    );
+    // 검색결과마다 존재하지 않는 문서를 개별 조회(대부분 NOT_FOUND, 과금 대상)하는 대신
+    // "나를 친구로 등록한 사람 집합"을 collection group 쿼리 1번으로 구해 교집합만 판정한다.
+    try {
+      const snap = await getDocs(
+        query(collectionGroup(db, 'friends'), where('friendUid', '==', me))
+      );
+      const theyHaveMeSet = new Set();
+      snap.forEach((d) => {
+        const parent = d.ref.parent && d.ref.parent.parent;
+        if (parent) theyHaveMeSet.add(parent.id);
+      });
+      out.forEach((row) => {
+        row.theyHaveMe = theyHaveMeSet.has(row.uid);
+      });
+    } catch (_e) {
+      out.forEach((row) => {
+        row.theyHaveMe = false;
+      });
+    }
   } else {
     out.forEach((row) => {
       row.theyHaveMe = false;
