@@ -189,7 +189,7 @@
         return;
       }
       try {
-        await import('./openRiding/openRidingBoot.js?v=create-delete-sync-fix-20260803v6');
+        await import('./openRiding/openRidingBoot.js?v=friend-search-cgquery-20260815v1');
       } catch (bootErr) {
         console.error('[OpenRiding] openRidingBoot 로드 실패:', bootErr);
         rootEl.innerHTML = '<p class="text-sm text-red-700 px-2">오픈 라이딩 모듈을 불러오지 못했습니다.</p>';

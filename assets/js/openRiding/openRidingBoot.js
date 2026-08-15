@@ -11,7 +11,7 @@ refreshDualRunFromRemoteConfig(true).catch(function (err) {
     console.warn('[openRidingBoot] Remote Config prefetch:', err);
   }
 });
-import './openRidingFriendsService.js?v=sync-fix-20260803v6';
+import './openRidingFriendsService.js?v=friend-search-cgquery-20260815v1';
 import './useOpenRiding.js?v=sync-fix-20260803v6';
 import './koreaRegions.js';
 import './groupRideEligibility.js';
