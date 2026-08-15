@@ -8165,7 +8165,8 @@ async function runSupabaseWeeklyTssDaytimePipeline(db, logPrefix) {
   const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
   const t0 = Date.now();
   try {
-    await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(db, admin, wStart, wEnd);
+    const { batch: stravaUserIds } = await getNextWeeklyTssParityStravaBatch(db);
+    await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(db, admin, wStart, wEnd, stravaUserIds);
   } catch (parityErr) {
     console.warn(prefix, "parity warn:", parityErr && parityErr.message ? parityErr.message : parityErr);
   }
@@ -8176,34 +8177,62 @@ async function runSupabaseWeeklyTssDaytimePipeline(db, logPrefix) {
   return { mode: "supabase_daytime", ms: Date.now() - t0 };
 }
 
-const WEEKLY_TSS_PARITY_INACTIVE_ROTATION_SLICE = 15; // 비활동 풀(~수십명)이 하루 3회 실행으로 대략 하루 안에 1순환
+const WEEKLY_TSS_PARITY_ROTATION_BATCH_SIZE = 300;
+const WEEKLY_TSS_PARITY_ROTATION_ACTIVE_SLICE = 250;
+const WEEKLY_TSS_PARITY_ROTATION_INACTIVE_SLICE = 50;
 
 /**
- * Weekly TSS Parity 스케줄 전용 Strava 대상 사용자 목록.
- * 최근 30일 활동 사용자는 매회 전원 스캔(active), 비활동 사용자는 stravaRotatingGapScanSchedule과는
- * 별도 커서로 느린 회전을 돌려 결국 전원 커버한다 — "위험 · 끄면 랭킹이 깨짐" 안전망 폭을 유지하면서
- * 매 실행마다 340명 전원을 훑던 범위를 좁힌다.
+ * Weekly TSS Parity 스케줄(하루 4회: scheduledWeeklyTssSupabaseParity ×2, scheduledPreMasterWeeklyTssParity,
+ * scheduledWeeklyTop10PeakRefresh) 전용 Strava 대상 사용자 배치 — getNextRotatingGapScanBatch와 동일한
+ * 원리로 active/inactive 모두 고정 배치만 처리한다. 유저 수가 늘어도 1회 실행 시간은 항상 일정하게
+ * 유지되고, 대신 한 사용자가 이 안전망에 의해 재점검되는 주기가 유저 수에 비례해 늘어난다(의도된
+ * 트레이드오프 — Strava 실시간 dual-write가 이미 주 경로라 이 잡은 순수 안전망).
+ * stravaRotatingGapScanSchedule과는 별도 커서를 써서 두 스케줄의 회전 진행이 서로 간섭하지 않는다.
  */
-async function listStravaUserIdsForWeeklyTssParity(db) {
+async function getNextWeeklyTssParityStravaBatch(db) {
   const { active, inactive } = await stravaConnectionReader.listStravaConnectedFirebaseUidsByRecency(db);
-  if (!inactive.length) return active.slice();
-  const cursorRef = db.collection("appConfig").doc("weekly_tss_parity_inactive_rotation");
+  const total = active.length + inactive.length;
+  if (!total) return { batch: [], total: 0 };
+
+  const cursorRef = db.collection("appConfig").doc("weekly_tss_parity_rotation");
   const cursorSnap = await cursorRef.get();
-  const prevCursor = Number((cursorSnap.exists && cursorSnap.data() && cursorSnap.data().cursor) || 0);
-  const { batch, nextCursor } = advanceRotatingCursorOverPool(
-    inactive,
-    prevCursor,
-    WEEKLY_TSS_PARITY_INACTIVE_ROTATION_SLICE
+  const prev = cursorSnap.exists ? cursorSnap.data() || {} : {};
+  const prevActiveCursor = Number(prev.activeCursor || 0);
+  const prevInactiveCursor = Number(prev.inactiveCursor || 0);
+
+  const activeTakeWanted = Math.min(WEEKLY_TSS_PARITY_ROTATION_ACTIVE_SLICE, active.length);
+  let activeResult = advanceRotatingCursorOverPool(active, prevActiveCursor, activeTakeWanted);
+
+  let inactiveTakeWanted = Math.min(
+    WEEKLY_TSS_PARITY_ROTATION_INACTIVE_SLICE,
+    WEEKLY_TSS_PARITY_ROTATION_BATCH_SIZE - activeResult.batch.length
   );
+  inactiveTakeWanted += activeTakeWanted - activeResult.batch.length;
+  let inactiveResult = advanceRotatingCursorOverPool(inactive, prevInactiveCursor, inactiveTakeWanted);
+
+  const stillLeftover =
+    WEEKLY_TSS_PARITY_ROTATION_BATCH_SIZE - activeResult.batch.length - inactiveResult.batch.length;
+  if (stillLeftover > 0 && activeResult.batch.length < active.length) {
+    const extra = advanceRotatingCursorOverPool(active, activeResult.nextCursor, stillLeftover);
+    activeResult = { batch: activeResult.batch.concat(extra.batch), nextCursor: extra.nextCursor };
+  }
+
+  const batch = activeResult.batch.concat(inactiveResult.batch);
+
   await cursorRef.set(
     {
-      cursor: nextCursor,
+      activeCursor: activeResult.nextCursor,
+      inactiveCursor: inactiveResult.nextCursor,
+      activeTotal: active.length,
       inactiveTotal: inactive.length,
+      totalUsers: total,
+      lastBatchSize: batch.length,
       lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
-  return active.concat(batch);
+
+  return { batch, total };
 }
 
 /**
@@ -8213,7 +8242,7 @@ async function runWeeklyTssSupabaseParityScheduledJob(db, logPrefix) {
   const prefix = logPrefix || "[scheduledWeeklyTssSupabaseParity]";
   const { startStr, endStr } = getWeekRangeSeoul();
   const t0 = Date.now();
-  const stravaUserIds = await listStravaUserIdsForWeeklyTssParity(db);
+  const { batch: stravaUserIds } = await getNextWeeklyTssParityStravaBatch(db);
   const result = await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(
     db,
     admin,
