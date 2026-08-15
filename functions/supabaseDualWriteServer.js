@@ -693,6 +693,37 @@ async function fetchStravaTssSumForDate(firebaseUid, dateStr) {
   return sum;
 }
 
+/**
+ * 오늘(KST) 날짜에 STRAVA 연동으로 수집된 기록이 CYCLE/RUN 각각 있는지 여부.
+ * 베이스캠프 "나의 기록" 버튼 배지용 — 개수가 아니라 존재 여부만 필요하므로 boolean으로 반환.
+ * activity_type 분류는 fetchStravaTssSumForDate와 동일한 기준 재사용.
+ */
+async function fetchStravaActivityPresenceForDate(firebaseUid, dateStr) {
+  const userId = await resolveSupabaseUserIdForFirebaseUid(firebaseUid);
+  if (!userId || !dateStr) return { hasCycle: false, hasRun: false };
+
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("rides")
+    .select("activity_type")
+    .eq("user_id", userId)
+    .eq("source", "strava")
+    .eq("ride_date", dateStr);
+  if (error) throw error;
+
+  const runTypes = new Set(["run", "trailrun"]);
+  const nonCycleTypes = new Set(["run", "trailrun", "swim", "walk", "weighttraining"]);
+  let hasCycle = false;
+  let hasRun = false;
+  for (const row of data || []) {
+    const activityType = String(str(row.activity_type) || "").toLowerCase();
+    if (runTypes.has(activityType)) hasRun = true;
+    else if (!nonCycleTypes.has(activityType)) hasCycle = true;
+    if (hasCycle && hasRun) break;
+  }
+  return { hasCycle, hasRun };
+}
+
 function isSupabaseForeignKeyUserError(error) {
   if (!error) return false;
   const code = String(error.code || "");
@@ -1311,5 +1342,6 @@ module.exports = {
   fetchStravaActivityIdsExistForUser,
   fetchStravaRunningActivityIdsExistForUser,
   fetchStravaTssSumForDate,
+  fetchStravaActivityPresenceForDate,
   fetchStelvioLogDatesForUser,
 };

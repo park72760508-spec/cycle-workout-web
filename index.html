@@ -3382,7 +3382,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260815openRidingHeatFix1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260816careerStravaBadge1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4172,6 +4172,10 @@
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof openCycleDashboardFromBasecamp==='function')openCycleDashboardFromBasecamp();else if(typeof showScreen==='function')showScreen('performanceDashboardScreen');" aria-label="나의 기록">
                 <span>나의 기록</span>
+                <!-- 오늘(KST) STRAVA 기록 수집 배지: 라이딩 모임 숫자 배지와 동일 위치, 참석확정 스타일 체크마크 -->
+                <span id="basecampCareerNotiBadge" class="basecamp-check-badge" aria-label="오늘 STRAVA 기록 수집됨">
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6L5 8.5L9.5 3.5"/></svg>
+                </span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampOpenRiding" onclick="if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp(); else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="라이딩 모임">
                 <span>라이딩 모임</span>
@@ -4233,6 +4237,10 @@
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnRunBasecampCareer" onclick="if(typeof openRunDashboardFromBasecamp==='function')openRunDashboardFromBasecamp();else if(typeof showScreen==='function')showScreen('runDashboardScreen');" aria-label="나의 기록">
                 <span>나의 기록</span>
+                <!-- 오늘(KST) STRAVA 기록 수집 배지: 러닝 크루 숫자 배지와 동일 위치, 참석확정 스타일 체크마크 -->
+                <span id="runBasecampCareerNotiBadge" class="basecamp-check-badge" aria-label="오늘 STRAVA 기록 수집됨">
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6L5 8.5L9.5 3.5"/></svg>
+                </span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnRunBasecampCrewMoim" onclick="if(typeof navigateToRunCrewFromBasecamp==='function')navigateToRunCrewFromBasecamp();else if(typeof showScreen==='function')showScreen('openRidingRoomScreen');" aria-label="러닝 크루">
                 <span>러닝 크루</span>

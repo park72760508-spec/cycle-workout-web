@@ -12052,10 +12052,15 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             .fetchOwnedGroupsPendingJoinRequestCount(admin, requestedUid)
             .catch(() => 0);
 
-          const [ridesCounts, friends, groups] = await Promise.all([
+          const stravaTodayPromise = supabaseDualWriteServer
+            .fetchStravaActivityPresenceForDate(requestedUid, todaySeoulStr)
+            .catch(() => ({ hasCycle: false, hasRun: false }));
+
+          const [ridesCounts, friends, groups, stravaToday] = await Promise.all([
             ridesPromise,
             friendsPromise,
             groupsPromise,
+            stravaTodayPromise,
           ]);
 
           return {
@@ -12064,6 +12069,8 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             ridesRun: ridesCounts.ridesRun,
             friends: friends,
             groups: groups || 0,
+            stravaTodayCycle: !!stravaToday.hasCycle,
+            stravaTodayRun: !!stravaToday.hasRun,
           };
         }
       );

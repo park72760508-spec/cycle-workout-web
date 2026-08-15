@@ -22102,7 +22102,7 @@ if (originalCleanupMobileDashboard) {
   var BADGE_API_URL = 'https://us-central1-stelvio-ai.cloudfunctions.net/getBasecampBadgeCountsForRead';
   var POLL_MS = 90 * 1000;
 
-  var _counts     = { ridesCycle: 0, ridesRun: 0, groups: 0, friends: 0 };
+  var _counts     = { ridesCycle: 0, ridesRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false };
   var _pollTimer  = null;
   var _inFlight   = false;
 
@@ -22123,6 +22123,15 @@ if (originalCleanupMobileDashboard) {
     }
   }
 
+  /* "나의 기록" 오늘 STRAVA 수집 배지 — 참석확정 스타일(체크마크, 숫자 없음). 자정(KST)이 지나면
+     서버 응답의 stravaTodayCycle/Run이 자연히 false로 바뀌므로 별도 해제 타이머가 필요 없다. */
+  function _applyCheckBadge(badgeId, on) {
+    var badge = document.getElementById(badgeId);
+    if (!badge) return;
+    if (on) badge.classList.add('show');
+    else badge.classList.remove('show');
+  }
+
   function _renderBadges() {
     /* 클럽 가입신청은 클럽 하우스 전용 — 라이딩 모임과 중복 표시하지 않음 */
     /* CYCLE 라이딩 모임 = 라이딩 초대 + 친구 요청 / RUN 러닝 크루 = 러닝 초대 + 친구 요청 */
@@ -22133,10 +22142,14 @@ if (originalCleanupMobileDashboard) {
     /* 카테고리 화면: 라이딩 모임 배지와 동일한 빨강원+흰숫자 배지로 표시 (친구 요청 공통 + 각 종목 초대) */
     _applyCountBadge('sportCategoryCycleNotiBadge', _counts.ridesCycle + _counts.friends);
     _applyCountBadge('sportCategoryRunNotiBadge', _counts.ridesRun + _counts.friends);
+
+    /* "나의 기록" 버튼: 오늘(KST) STRAVA 기록 수집 여부 — 참석확정 체크마크 배지 */
+    _applyCheckBadge('basecampCareerNotiBadge', _counts.stravaTodayCycle);
+    _applyCheckBadge('runBasecampCareerNotiBadge', _counts.stravaTodayRun);
   }
 
   function _clearAll() {
-    _counts = { ridesCycle: 0, ridesRun: 0, groups: 0, friends: 0 };
+    _counts = { ridesCycle: 0, ridesRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false };
   }
 
   /* ── 현재 UID ── */
@@ -22184,6 +22197,8 @@ if (originalCleanupMobileDashboard) {
         _counts.ridesRun = Number(json.ridesRun) || 0;
         _counts.groups = Number(json.groups) || 0;
         _counts.friends = Number(json.friends) || 0;
+        _counts.stravaTodayCycle = !!json.stravaTodayCycle;
+        _counts.stravaTodayRun = !!json.stravaTodayRun;
         _renderBadges();
       }
     }).catch(function () {}).then(function () { _inFlight = false; });

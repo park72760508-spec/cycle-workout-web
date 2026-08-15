@@ -3375,7 +3375,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   z-index: 1; /* 이미지 위에 표시 */
 }
 
-.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#sportCategoryCycleNotiBadge):not(#sportCategoryRunNotiBadge) {
+.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#sportCategoryCycleNotiBadge):not(#sportCategoryRunNotiBadge):not(#basecampCareerNotiBadge):not(#runBasecampCareerNotiBadge) {
   color: #fff !important;
   position: relative;
   z-index: 2; /* 오버레이 위에 표시 */
@@ -3416,6 +3416,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   background-size: 90% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
+  /* 알림 배지가 버튼 경계 밖으로 표시될 수 있도록 overflow 해제 */
+  overflow: visible !important;
 }
 
 /* 베이스캠프: 랭킹보드·인도어 훈련 타일 (나의 기록과 동일 이미지 비율·속성) */
@@ -3438,8 +3440,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 }
 
 /* 베이스캠프 path 그리드 6버튼 — 라벨 숨김(아이콘만), 알림 배지는 제외 */
-#basecampScreen .btn-device.basecamp-btn-career span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge),
-#basecampScreen .basecamp-btn-career span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge),
+#basecampScreen .btn-device.basecamp-btn-career span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#basecampCareerNotiBadge),
+#basecampScreen .basecamp-btn-career span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#basecampCareerNotiBadge),
 #basecampScreen .btn-device.basecamp-btn-ranking span,
 #basecampScreen .basecamp-btn-ranking span,
 #basecampScreen .btn-device.basecamp-btn-indoor-entry span,
@@ -3574,6 +3576,41 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   min-width: 26px !important;
   padding: 0 5px !important;
   border-radius: 13px !important;
+}
+
+/* "나의 기록" 버튼 — 오늘(KST) STRAVA 기록 수집 배지. 라이딩 모임 숫자 배지와 동일한 위치·크기,
+   참석확정과 동일한 빨간 원 + 흰 체크마크(숫자 없음, boolean 표시). */
+#basecampCareerNotiBadge,
+#runBasecampCareerNotiBadge {
+  display: none !important;
+  position: absolute !important;
+  top: 25% !important;
+  right: 25% !important;
+  transform: translate(50%, -50%) !important;
+  width: 26px !important;
+  min-width: 26px !important;
+  height: 26px !important;
+  background: #e53e3e !important;
+  border-radius: 50% !important;
+  color: #fff !important;
+  box-sizing: border-box !important;
+  z-index: 20 !important;
+  pointer-events: none !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35) !important;
+  align-items: center !important;
+  justify-content: center !important;
+  order: unset !important;
+  flex: none !important;
+  align-self: auto !important;
+}
+#basecampCareerNotiBadge.show,
+#runBasecampCareerNotiBadge.show {
+  display: flex !important;
+}
+#basecampCareerNotiBadge svg,
+#runBasecampCareerNotiBadge svg {
+  width: 13px !important;
+  height: 13px !important;
 }
 
 /* MY CAREER 화면 내부 버튼 텍스트 표시 스타일 */
@@ -29936,7 +29973,8 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   box-shadow: 0 8px 16px rgba(135, 206, 235, 0.4);
 }
 #runBasecampScreen .run-basecamp-path-grid .basecamp-btn-manual,
-#runBasecampScreen .run-basecamp-path-grid .basecamp-btn-riding-group-entry {
+#runBasecampScreen .run-basecamp-path-grid .basecamp-btn-riding-group-entry,
+#runBasecampScreen .run-basecamp-path-grid .basecamp-btn-career {
   overflow: visible !important;
 }
 #runBasecampScreen .btn-device.basecamp-btn-career,
@@ -29981,7 +30019,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
-#runBasecampScreen .basecamp-path-grid .basecamp-btn > span:not(#runBasecampRidingNotiBadge) {
+#runBasecampScreen .basecamp-path-grid .basecamp-btn > span:not(#runBasecampRidingNotiBadge):not(#runBasecampCareerNotiBadge) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
