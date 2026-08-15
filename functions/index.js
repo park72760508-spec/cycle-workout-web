@@ -12007,9 +12007,11 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             userData.phone || userData.phoneNumber || userData.contact || userData.tel || ""
           );
 
-          const todayStart = new Date();
-          todayStart.setHours(0, 0, 0, 0);
-          const todayTs = admin.firestore.Timestamp.fromDate(todayStart);
+          // Cloud Functions 서버는 UTC이므로 서울 시간 기준 자정으로 명시 계산해야 함
+          // (getTodayAfterBefore 등 기존 관례와 동일) — 그렇지 않으면 KST 자정이 지나도
+          // UTC 자정(=KST 오전 9시)까지 최대 9시간 만료된 라이딩 초대가 계속 배지에 잡힘.
+          const todaySeoulStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+          const todayTs = admin.firestore.Timestamp.fromDate(new Date(`${todaySeoulStr}T00:00:00+09:00`));
 
           const ridesPromise =
             normPhone.length >= 8
