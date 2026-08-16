@@ -10075,53 +10075,35 @@ function OpenRidingGroupsList(props) {
                         <span className="block">대기</span>
                       </span>
                     ) : null}
-                    {/* 2시 방향: 가입 요청 건수 */}
+                    {/* 우측 상단(2시 방향): 가입 요청 + 모임 초대 합산 — 모임 초대가 하나라도 있으면
+                        녹색, 순수 가입신청 대기뿐이면 보라색(네비바 클럽 탭 배지와 동일한 로직) */}
                     {(function () {
-                      var cnt = joinRequestCountMap[g.id];
-                      if (!cnt || cnt <= 0) return null;
-                      var isWide = cnt >= 10;
+                      var joinCnt = joinRequestCountMap[g.id] || 0;
+                      var inviteCnt = crewInviteCountMap[g.id] || 0;
+                      var total = joinCnt + inviteCnt;
+                      if (total <= 0) return null;
+                      var isWide = total >= 10;
+                      var colorClass = inviteCnt > 0 ? 'bg-emerald-600' : 'bg-violet-600';
+                      var label =
+                        (joinCnt > 0 ? '가입 요청 ' + joinCnt + '건 ' : '') +
+                        (inviteCnt > 0 ? '모임 초대 ' + inviteCnt + '건' : '');
                       return (
                         <span
-                          className="absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold border-4 border-white shadow pointer-events-none leading-none"
+                          className={'absolute flex items-center justify-center rounded-full text-white font-bold border-4 border-white shadow pointer-events-none leading-none ' + colorClass}
                           style={{
                             width: isWide ? 'auto' : '32px',
                             minWidth: '32px',
                             height: '32px',
-                            fontSize: cnt > 99 ? 9 : (cnt > 9 ? 11 : 13),
+                            fontSize: total > 99 ? 9 : (total > 9 ? 11 : 13),
                             paddingLeft: isWide ? 4 : 0,
                             paddingRight: isWide ? 4 : 0,
                             top: '2px',
                             right: '0px',
                             transform: 'translate(30%, -20%)'
                           }}
-                          aria-label={'가입 요청 ' + cnt + '건'}
+                          aria-label={label.trim()}
                         >
-                          {cnt > 99 ? '99+' : cnt}
-                        </span>
-                      );
-                    })()}
-                    {/* 4시 방향: 이 크루가 생성한 모임에 초대된 건수(녹색 원) */}
-                    {(function () {
-                      var inviteCnt = crewInviteCountMap[g.id];
-                      if (!inviteCnt || inviteCnt <= 0) return null;
-                      var isWide = inviteCnt >= 10;
-                      return (
-                        <span
-                          className="absolute flex items-center justify-center rounded-full bg-emerald-600 text-white font-bold border-4 border-white shadow pointer-events-none leading-none"
-                          style={{
-                            width: isWide ? 'auto' : '32px',
-                            minWidth: '32px',
-                            height: '32px',
-                            fontSize: inviteCnt > 99 ? 9 : (inviteCnt > 9 ? 11 : 13),
-                            paddingLeft: isWide ? 4 : 0,
-                            paddingRight: isWide ? 4 : 0,
-                            bottom: '2px',
-                            right: '0px',
-                            transform: 'translate(30%, 20%)'
-                          }}
-                          aria-label={'모임 초대 ' + inviteCnt + '건'}
-                        >
-                          {inviteCnt > 99 ? '99+' : inviteCnt}
+                          {total > 99 ? '99+' : total}
                         </span>
                       );
                     })()}
