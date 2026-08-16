@@ -36,7 +36,7 @@ import {
   subscribeRidingGroupMyJoinRequestRouted,
   postRidingGroupWriteRouted,
   subscribeMyInvitedRidesCountRouted,
-} from './openRidingReadClient.js?v=crew-invite-dedup-20260816v1';
+} from './openRidingReadClient.js?v=crew-invite-color-map-20260816v1';
 import { scheduleRidingGroupDualWriteFromFirestore } from '../openRidingDualWrite.js?v=sync-fix-20260803v2';
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';

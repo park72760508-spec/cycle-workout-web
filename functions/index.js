@@ -12024,6 +12024,7 @@ exports.getBasecampBadgeCountsForRead = onRequest(
                     var runCount = 0;
                     var crewInviteCycle = 0;
                     var crewInviteRun = 0;
+                    var crewInviteMap = {};
                     snap.forEach((doc) => {
                       var d = doc.data() || {};
                       var rideDate = d.date;
@@ -12035,7 +12036,8 @@ exports.getBasecampBadgeCountsForRead = onRequest(
                       var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
                       // 크루(그룹)가 생성한 모임(rides.groupId 있음)에 의한 초대는 "크루" 배지 쪽으로
                       // 집계하고 "라이딩/러닝" 개인 초대 집계에서는 제외한다(중복 카운트 방지).
-                      var isCrewRide = !!(d.groupId && String(d.groupId).trim());
+                      var gid = d.groupId ? String(d.groupId).trim() : "";
+                      var isCrewRide = !!gid;
                       if (cat === "RUN") {
                         if (isCrewRide) crewInviteRun++;
                         else runCount++;
@@ -12044,16 +12046,20 @@ exports.getBasecampBadgeCountsForRead = onRequest(
                       } else {
                         cycleCount++;
                       }
+                      if (isCrewRide) {
+                        crewInviteMap[gid] = (crewInviteMap[gid] || 0) + 1;
+                      }
                     });
                     return {
                       ridesCycle: cycleCount,
                       ridesRun: runCount,
                       crewInviteCycle: crewInviteCycle,
                       crewInviteRun: crewInviteRun,
+                      crewInviteMap: crewInviteMap,
                     };
                   })
-                  .catch(() => ({ ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0 }))
-              : Promise.resolve({ ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0 });
+                  .catch(() => ({ ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, crewInviteMap: {} }))
+              : Promise.resolve({ ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, crewInviteMap: {} });
 
           const friendsPromise = db
             .collection("friendRequests")
@@ -12085,6 +12091,7 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             ridesRun: ridesCounts.ridesRun,
             crewInviteCycle: ridesCounts.crewInviteCycle || 0,
             crewInviteRun: ridesCounts.crewInviteRun || 0,
+            crewInviteMap: ridesCounts.crewInviteMap || {},
             friends: friends,
             groups: groups || 0,
             stravaTodayCycle: !!stravaToday.hasCycle,

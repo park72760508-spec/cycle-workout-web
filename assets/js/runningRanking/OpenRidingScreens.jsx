@@ -2893,6 +2893,7 @@ function OpenRidingBottomGlassNav(props) {
   var onFriends = props.onFriends || function () {};
   var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
   var pendingGroupJoinCount = typeof props.pendingGroupJoinCount === 'number' ? props.pendingGroupJoinCount : 0;
+  var crewInviteCount = typeof props.crewInviteCount === 'number' ? props.crewInviteCount : 0;
   var pendingInvitedRidesCount = typeof props.pendingInvitedRidesCount === 'number' ? props.pendingInvitedRidesCount : 0;
   var userId = props.userId || '';
   var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
@@ -2965,6 +2966,11 @@ function OpenRidingBottomGlassNav(props) {
   var friendsActive = navVariant === 'friends';
 
   function renderGroupsButton(isActive) {
+    var groupsBadgeTotal = pendingGroupJoinCount + crewInviteCount;
+    var groupsBadgeColorClass = crewInviteCount > 0 ? 'bg-emerald-600' : 'bg-violet-600';
+    var groupsAriaExtra =
+      (pendingGroupJoinCount > 0 ? ' (가입 요청 ' + pendingGroupJoinCount + '건)' : '') +
+      (crewInviteCount > 0 ? ' (모임 초대 ' + crewInviteCount + '건)' : '');
     return (
       <OpenRidingGlassNavSlot>
         <button
@@ -2972,7 +2978,7 @@ function OpenRidingBottomGlassNav(props) {
           className={openRidingGlassNavBtnClass(isActive)}
           onClick={onGroups}
           aria-current={isActive ? 'page' : undefined}
-          aria-label={navGroupsLabel + (pendingGroupJoinCount > 0 ? ' (가입 요청 ' + pendingGroupJoinCount + '건)' : '')}
+          aria-label={navGroupsLabel + groupsAriaExtra}
         >
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
             <img
@@ -2987,13 +2993,13 @@ function OpenRidingBottomGlassNav(props) {
                 e.currentTarget.onerror = function () { e.currentTarget.style.display = 'none'; };
               }}
             />
-            {pendingGroupJoinCount > 0 ? (
+            {groupsBadgeTotal > 0 ? (
               <span
-                className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
-                style={{ minWidth: '17px', height: '17px', fontSize: pendingGroupJoinCount > 9 ? 9 : 10, paddingLeft: pendingGroupJoinCount > 9 ? 3 : 4, paddingRight: pendingGroupJoinCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }}
+                className={'open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none ' + groupsBadgeColorClass}
+                style={{ minWidth: '17px', height: '17px', fontSize: groupsBadgeTotal > 9 ? 9 : 10, paddingLeft: groupsBadgeTotal > 9 ? 3 : 4, paddingRight: groupsBadgeTotal > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }}
                 aria-hidden="true"
               >
-                {pendingGroupJoinCount > 99 ? '99+' : pendingGroupJoinCount}
+                {groupsBadgeTotal > 99 ? '99+' : groupsBadgeTotal}
               </span>
             ) : null}
           </span>
@@ -9821,6 +9827,7 @@ function OpenRidingGroupsList(props) {
   var userId = props.userId || '';
   var clubCategory = props.clubCategory || 'CYCLE';
   var joinRequestCountMap = props.joinRequestCountMap || {};
+  var crewInviteCountMap = props.crewInviteCountMap || {};
   var onOpenDetail = props.onOpenDetail || function () {};
   var onCreate = props.onCreate || function () {};
   var _rows = useState([]);
@@ -10090,6 +10097,31 @@ function OpenRidingGroupsList(props) {
                           aria-label={'가입 요청 ' + cnt + '건'}
                         >
                           {cnt > 99 ? '99+' : cnt}
+                        </span>
+                      );
+                    })()}
+                    {/* 4시 방향: 이 크루가 생성한 모임에 초대된 건수(녹색 원) */}
+                    {(function () {
+                      var inviteCnt = crewInviteCountMap[g.id];
+                      if (!inviteCnt || inviteCnt <= 0) return null;
+                      var isWide = inviteCnt >= 10;
+                      return (
+                        <span
+                          className="absolute flex items-center justify-center rounded-full bg-emerald-600 text-white font-bold border-4 border-white shadow pointer-events-none leading-none"
+                          style={{
+                            width: isWide ? 'auto' : '32px',
+                            minWidth: '32px',
+                            height: '32px',
+                            fontSize: inviteCnt > 99 ? 9 : (inviteCnt > 9 ? 11 : 13),
+                            paddingLeft: isWide ? 4 : 0,
+                            paddingRight: isWide ? 4 : 0,
+                            bottom: '2px',
+                            right: '0px',
+                            transform: 'translate(30%, 20%)'
+                          }}
+                          aria-label={'모임 초대 ' + inviteCnt + '건'}
+                        >
+                          {inviteCnt > 99 ? '99+' : inviteCnt}
                         </span>
                       );
                     })()}
@@ -12190,18 +12222,24 @@ function OpenRidingRoomApp(props) {
   var crewInviteCount = _cic[0];
   var setCrewInviteCount = _cic[1];
 
+  var _cim = useState({});
+  var crewInviteMap = _cim[0];
+  var setCrewInviteMap = _cim[1];
+
   useEffect(
     function () {
       if (!effectiveUserId) {
         setPendingInvitedRidesCount(0);
         setCrewInviteCount(0);
+        setCrewInviteMap({});
         return;
       }
       var gs2 = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
       if (typeof gs2.subscribeMyInvitedRidesCount !== 'function') return;
-      var unsub2 = gs2.subscribeMyInvitedRidesCount(effectiveUserId, clubCategory, function (n, crewN) {
+      var unsub2 = gs2.subscribeMyInvitedRidesCount(effectiveUserId, clubCategory, function (n, crewN, crewMap) {
         setPendingInvitedRidesCount(typeof n === 'number' ? n : 0);
         setCrewInviteCount(typeof crewN === 'number' ? crewN : 0);
+        setCrewInviteMap(crewMap && typeof crewMap === 'object' ? crewMap : {});
       });
       return function () {
         if (typeof unsub2 === 'function') unsub2();
@@ -12334,6 +12372,7 @@ function OpenRidingRoomApp(props) {
         userId={effectiveUserId}
         clubCategory={clubCategory}
         joinRequestCountMap={groupJoinCountMap}
+        crewInviteCountMap={crewInviteMap}
         onOpenDetail={function (id) {
           setDetailGroupId(id);
           setView('groupDetail');
@@ -12631,7 +12670,8 @@ function OpenRidingRoomApp(props) {
             setView('friends');
           }}
           pendingIncomingCount={pendingIncomingCount}
-          pendingGroupJoinCount={pendingGroupJoinCount + crewInviteCount}
+          pendingGroupJoinCount={pendingGroupJoinCount}
+          crewInviteCount={crewInviteCount}
           pendingInvitedRidesCount={pendingInvitedRidesCount}
           userId={effectiveUserId}
           moimCopy={moimCopy}
