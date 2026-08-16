@@ -12024,7 +12024,12 @@ exports.getBasecampBadgeCountsForRead = onRequest(
                     var runCount = 0;
                     var crewInviteCycle = 0;
                     var crewInviteRun = 0;
-                    var crewInviteMap = {};
+                    // 카테고리(CYCLE/RUN)별로 분리 — 크루 리스트 화면은 clubCategory로 필터링된
+                    // 크루만 보여주므로, 맵도 카테고리별로 나눠야 화면에 보이는 크루의 id와만 매칭된다.
+                    // (섞어서 하나로 두면 RUN 크루 초대 건수가 CYCLE 클럽 탭 배지에도 합산되는데,
+                    // CYCLE 크루 리스트엔 그 RUN 크루가 안 보여 숫자만 있고 매칭 배지가 없는 버그 발생)
+                    var crewInviteMapCycle = {};
+                    var crewInviteMapRun = {};
                     snap.forEach((doc) => {
                       var d = doc.data() || {};
                       var rideDate = d.date;
@@ -12047,7 +12052,8 @@ exports.getBasecampBadgeCountsForRead = onRequest(
                         cycleCount++;
                       }
                       if (isCrewRide) {
-                        crewInviteMap[gid] = (crewInviteMap[gid] || 0) + 1;
+                        if (cat === "RUN") crewInviteMapRun[gid] = (crewInviteMapRun[gid] || 0) + 1;
+                        else crewInviteMapCycle[gid] = (crewInviteMapCycle[gid] || 0) + 1;
                       }
                     });
                     return {
@@ -12055,11 +12061,26 @@ exports.getBasecampBadgeCountsForRead = onRequest(
                       ridesRun: runCount,
                       crewInviteCycle: crewInviteCycle,
                       crewInviteRun: crewInviteRun,
-                      crewInviteMap: crewInviteMap,
+                      crewInviteMapCycle: crewInviteMapCycle,
+                      crewInviteMapRun: crewInviteMapRun,
                     };
                   })
-                  .catch(() => ({ ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, crewInviteMap: {} }))
-              : Promise.resolve({ ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, crewInviteMap: {} });
+                  .catch(() => ({
+                    ridesCycle: 0,
+                    ridesRun: 0,
+                    crewInviteCycle: 0,
+                    crewInviteRun: 0,
+                    crewInviteMapCycle: {},
+                    crewInviteMapRun: {},
+                  }))
+              : Promise.resolve({
+                  ridesCycle: 0,
+                  ridesRun: 0,
+                  crewInviteCycle: 0,
+                  crewInviteRun: 0,
+                  crewInviteMapCycle: {},
+                  crewInviteMapRun: {},
+                });
 
           const friendsPromise = db
             .collection("friendRequests")
@@ -12080,7 +12101,8 @@ exports.getBasecampBadgeCountsForRead = onRequest(
 
           // "내가 주최한 모임" 배지 — invitedList와 무관하게 hostUserId 기준으로 별도 집계.
           // groupId가 있는(크루 상세에서 생성한) 모임은 크루별로도 나눠 hostedInCrewMap에 담아
-          // 크루 리스트 화면의 아바타별 배지·클럽 탭 배지에 쓴다.
+          // 크루 리스트 화면의 아바타별 배지·클럽 탭 배지에 쓴다. crewInviteMap과 마찬가지로
+          // CYCLE/RUN을 분리해야 화면에 보이는(clubCategory로 필터링된) 크루의 id와만 매칭된다.
           const hostedRidesPromise = db
             .collection("rides")
             .where("hostUserId", "==", requestedUid)
@@ -12088,7 +12110,8 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             .then((snap) => {
               var hostedCycle = 0;
               var hostedRun = 0;
-              var hostedInCrewMap = {};
+              var hostedInCrewMapCycle = {};
+              var hostedInCrewMapRun = {};
               snap.forEach((doc) => {
                 var d = doc.data() || {};
                 var rideDate = d.date;
@@ -12097,16 +12120,23 @@ exports.getBasecampBadgeCountsForRead = onRequest(
                 }
                 if (String(d.rideStatus || "active") === "cancelled") return;
                 var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
-                if (cat === "RUN") hostedRun++;
+                var isRunRide = cat === "RUN";
+                if (isRunRide) hostedRun++;
                 else hostedCycle++;
                 var gid = d.groupId ? String(d.groupId).trim() : "";
                 if (gid) {
-                  hostedInCrewMap[gid] = (hostedInCrewMap[gid] || 0) + 1;
+                  if (isRunRide) hostedInCrewMapRun[gid] = (hostedInCrewMapRun[gid] || 0) + 1;
+                  else hostedInCrewMapCycle[gid] = (hostedInCrewMapCycle[gid] || 0) + 1;
                 }
               });
-              return { hostedCycle: hostedCycle, hostedRun: hostedRun, hostedInCrewMap: hostedInCrewMap };
+              return {
+                hostedCycle: hostedCycle,
+                hostedRun: hostedRun,
+                hostedInCrewMapCycle: hostedInCrewMapCycle,
+                hostedInCrewMapRun: hostedInCrewMapRun,
+              };
             })
-            .catch(() => ({ hostedCycle: 0, hostedRun: 0, hostedInCrewMap: {} }));
+            .catch(() => ({ hostedCycle: 0, hostedRun: 0, hostedInCrewMapCycle: {}, hostedInCrewMapRun: {} }));
 
           const [ridesCounts, friends, groups, stravaToday, hostedCounts] = await Promise.all([
             ridesPromise,
@@ -12122,10 +12152,12 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             ridesRun: ridesCounts.ridesRun,
             crewInviteCycle: ridesCounts.crewInviteCycle || 0,
             crewInviteRun: ridesCounts.crewInviteRun || 0,
-            crewInviteMap: ridesCounts.crewInviteMap || {},
+            crewInviteMapCycle: ridesCounts.crewInviteMapCycle || {},
+            crewInviteMapRun: ridesCounts.crewInviteMapRun || {},
             hostedCycle: hostedCounts.hostedCycle || 0,
             hostedRun: hostedCounts.hostedRun || 0,
-            hostedInCrewMap: hostedCounts.hostedInCrewMap || {},
+            hostedInCrewMapCycle: hostedCounts.hostedInCrewMapCycle || {},
+            hostedInCrewMapRun: hostedCounts.hostedInCrewMapRun || {},
             friends: friends,
             groups: groups || 0,
             stravaTodayCycle: !!stravaToday.hasCycle,

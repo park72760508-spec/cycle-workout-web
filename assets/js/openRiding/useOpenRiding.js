@@ -17,7 +17,7 @@ import {
   leaveRideTransaction,
   fetchRideById,
   subscribeRideById
-} from './openRidingService.js?v=hosted-in-crew-20260816v1';
+} from './openRidingService.js?v=hosted-cat-split-20260816v1';
 
 /**
  * @param {import('firebase/firestore').Firestore | null} db

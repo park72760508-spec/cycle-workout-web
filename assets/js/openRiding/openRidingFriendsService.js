@@ -17,7 +17,7 @@ import {
   writeBatch,
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import { normalizePhoneDigits } from './openRidingService.js?v=hosted-in-crew-20260816v1';
+import { normalizePhoneDigits } from './openRidingService.js?v=hosted-cat-split-20260816v1';
 
 /** @param {string} a @param {string} b */
 export function friendRequestDocId(fromUid, toUid) {

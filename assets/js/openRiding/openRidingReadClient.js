@@ -916,8 +916,10 @@ export function subscribeMyInvitedRidesCountRouted(userId, category, onUpdate) {
       if (json && json.success) {
         var n = isRun ? json.ridesRun : json.ridesCycle;
         var crewN = isRun ? json.crewInviteRun : json.crewInviteCycle;
-        var crewMap = json.crewInviteMap && typeof json.crewInviteMap === 'object' ? json.crewInviteMap : {};
-        var hostedMap = json.hostedInCrewMap && typeof json.hostedInCrewMap === 'object' ? json.hostedInCrewMap : {};
+        var crewMapRaw = isRun ? json.crewInviteMapRun : json.crewInviteMapCycle;
+        var crewMap = crewMapRaw && typeof crewMapRaw === 'object' ? crewMapRaw : {};
+        var hostedMapRaw = isRun ? json.hostedInCrewMapRun : json.hostedInCrewMapCycle;
+        var hostedMap = hostedMapRaw && typeof hostedMapRaw === 'object' ? hostedMapRaw : {};
         onUpdate(typeof n === 'number' ? n : 0, typeof crewN === 'number' ? crewN : 0, crewMap, hostedMap);
       }
     });
