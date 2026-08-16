@@ -35,7 +35,8 @@ import {
   subscribeMyManagedGroupsJoinRequestCountsRouted,
   subscribeRidingGroupMyJoinRequestRouted,
   postRidingGroupWriteRouted,
-} from './openRidingReadClient.js?v=supabase-primary-join-writes-20260807v1';
+  subscribeMyInvitedRidesCountRouted,
+} from './openRidingReadClient.js?v=invited-rides-badge-20260816v1';
 import { scheduleRidingGroupDualWriteFromFirestore } from '../openRidingDualWrite.js?v=sync-fix-20260803v2';
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
@@ -681,6 +682,14 @@ export function subscribeMyManagedGroupsJoinRequestCounts(db, userId, onUpdate) 
 }
 
 /**
+ * 라이딩 모임·러닝 크루 하단 네비 "라이딩/러닝" 메뉴 배지 — 오늘 기준 초대받은 건수(참석확정 전).
+ * KST 자정이 지난 초대는 getBasecampBadgeCountsForRead가 이미 제외하고 응답한다.
+ */
+export function subscribeMyInvitedRidesCount(userId, category, onUpdate) {
+  return subscribeMyInvitedRidesCountRouted(userId, category, onUpdate);
+}
+
+/**
  * 클럽 목록 — 보이는 그룹 중 내 멤버십 (Supabase HTTP 폴링, G개 리스너 제거).
  */
 export function subscribeUserGroupMemberships(db, userId, groupIds, onUpdate) {
@@ -729,6 +738,7 @@ if (typeof window !== 'undefined') {
     fetchRidingGroupJoinRequestsList,
     uploadRidingGroupCover,
     subscribeMyManagedGroupsJoinRequestCounts,
-    subscribeUserGroupMemberships
+    subscribeUserGroupMemberships,
+    subscribeMyInvitedRidesCount
   };
 }

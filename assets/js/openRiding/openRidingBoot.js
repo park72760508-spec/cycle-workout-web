@@ -4,7 +4,7 @@
  */
 import { refreshDualRunFromRemoteConfig } from '../supabaseDualWrite.js';
 import './openRidingService.js?v=sync-fix-20260803v6';
-import './openRidingGroupService.js?v=supabase-primary-join-writes-20260807v1';
+import './openRidingGroupService.js?v=invited-rides-badge-20260816v1';
 
 refreshDualRunFromRemoteConfig(true).catch(function (err) {
   if (typeof console !== 'undefined' && console.warn) {

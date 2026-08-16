@@ -894,6 +894,38 @@ export function subscribeMyManagedGroupsJoinRequestCountsRouted(db, userId, onUp
 }
 
 /**
+ * 라이딩 모임·러닝 크루 하단 네비 "라이딩/러닝" 메뉴 배지 — 오늘 기준 초대받은(참석 확정 전) 건수.
+ * getBasecampBadgeCountsForRead가 이미 KST 자정 기준으로 만료된 초대를 제외하므로 그대로 재사용한다.
+ */
+export function subscribeMyInvitedRidesCountRouted(userId, category, onUpdate) {
+  if (!userId || typeof onUpdate !== 'function') return function () {};
+  var u = String(userId).trim();
+  if (!u) return function () {};
+  var isRun = String(category || 'CYCLE').trim().toUpperCase() === 'RUN';
+
+  var stopped = false;
+  var pollTimer = null;
+
+  function poll() {
+    httpGetJsonAuthed(API_BASE + '/getBasecampBadgeCountsForRead', { uid: u }).then(function (json) {
+      if (stopped) return;
+      if (json && json.success) {
+        var n = isRun ? json.ridesRun : json.ridesCycle;
+        onUpdate(typeof n === 'number' ? n : 0);
+      }
+    });
+  }
+
+  poll();
+  pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), MY_GROUPS_POLL_MS);
+
+  return function () {
+    stopped = true;
+    if (pollTimer) clearInterval(pollTimer);
+  };
+}
+
+/**
  * 오픈라이딩 룸 — 특정 소mo임에 대한 내 가입신청 대기 상태(단건).
  * 단건 joinRequests/{uid} onSnapshot 대체.
  */

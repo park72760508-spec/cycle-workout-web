@@ -2893,6 +2893,7 @@ function OpenRidingBottomGlassNav(props) {
   var onFriends = props.onFriends || function () {};
   var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
   var pendingGroupJoinCount = typeof props.pendingGroupJoinCount === 'number' ? props.pendingGroupJoinCount : 0;
+  var pendingInvitedRidesCount = typeof props.pendingInvitedRidesCount === 'number' ? props.pendingInvitedRidesCount : 0;
   var userId = props.userId || '';
   var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
   var navMoimLabel = moimCopy.navMoimLabel || '라이딩';
@@ -3016,9 +3017,16 @@ function OpenRidingBottomGlassNav(props) {
           className={openRidingGlassNavBtnClass(moimActive)}
           onClick={onMoim}
           aria-current={moimActive ? 'page' : undefined}
-          aria-label={navMoimAria}
+          aria-label={navMoimAria + (pendingInvitedRidesCount > 0 ? ' (초대 ' + pendingInvitedRidesCount + '건)' : '')}
         >
-          {iconMoim()}
+          <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
+            {iconMoim()}
+            {pendingInvitedRidesCount > 0 ? (
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-emerald-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: pendingInvitedRidesCount > 9 ? 9 : 10, paddingLeft: pendingInvitedRidesCount > 9 ? 3 : 4, paddingRight: pendingInvitedRidesCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+                {pendingInvitedRidesCount > 99 ? '99+' : pendingInvitedRidesCount}
+              </span>
+            ) : null}
+          </span>
           <span className="open-riding-bottom-glass-nav__label">{navMoimLabel}</span>
         </button>
       </OpenRidingGlassNavSlot>
@@ -12174,6 +12182,28 @@ function OpenRidingRoomApp(props) {
     [firestore, effectiveUserId]
   );
 
+  var _pir = useState(0);
+  var pendingInvitedRidesCount = _pir[0];
+  var setPendingInvitedRidesCount = _pir[1];
+
+  useEffect(
+    function () {
+      if (!effectiveUserId) {
+        setPendingInvitedRidesCount(0);
+        return;
+      }
+      var gs2 = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+      if (typeof gs2.subscribeMyInvitedRidesCount !== 'function') return;
+      var unsub2 = gs2.subscribeMyInvitedRidesCount(effectiveUserId, clubCategory, function (n) {
+        setPendingInvitedRidesCount(typeof n === 'number' ? n : 0);
+      });
+      return function () {
+        if (typeof unsub2 === 'function') unsub2();
+      };
+    },
+    [effectiveUserId, clubCategory]
+  );
+
   function handleEditNavDeleteRide() {
     if (!firestore || !effectiveUserId || !detailRideId) return;
     var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
@@ -12596,6 +12626,7 @@ function OpenRidingRoomApp(props) {
           }}
           pendingIncomingCount={pendingIncomingCount}
           pendingGroupJoinCount={pendingGroupJoinCount}
+          pendingInvitedRidesCount={pendingInvitedRidesCount}
           userId={effectiveUserId}
           moimCopy={moimCopy}
         />
