@@ -896,9 +896,10 @@ export function subscribeMyManagedGroupsJoinRequestCountsRouted(db, userId, onUp
 /**
  * 라이딩 모임·러닝 크루 하단 네비 "라이딩/러닝" 메뉴 배지 — 오늘 기준 초대받은(참석 확정 전) 건수.
  * getBasecampBadgeCountsForRead가 이미 KST 자정 기준으로 만료된 초대를 제외하므로 그대로 재사용한다.
- * onUpdate(personalCount, crewInviteCount, crewInviteMap) — 크루(그룹)가 생성한 모임 초대는
- * personalCount에서 제외되어 크루 배지 쪽에서만 세도록 서버가 이미 분리해서 응답한다(중복 카운트
- * 방지). crewInviteMap은 { groupId: count } — 크루 리스트 화면에서 그룹별 배지에 쓴다.
+ * onUpdate(personalCount, crewInviteCount, crewInviteMap, hostedInCrewMap) — 크루(그룹)가 생성한
+ * 모임 초대는 personalCount에서 제외되어 크루 배지 쪽에서만 세도록 서버가 이미 분리해서 응답한다
+ * (중복 카운트 방지). crewInviteMap/hostedInCrewMap은 { groupId: count } — 크루 리스트 화면에서
+ * 그룹별 배지에 쓴다.
  */
 export function subscribeMyInvitedRidesCountRouted(userId, category, onUpdate) {
   if (!userId || typeof onUpdate !== 'function') return function () {};
@@ -916,7 +917,8 @@ export function subscribeMyInvitedRidesCountRouted(userId, category, onUpdate) {
         var n = isRun ? json.ridesRun : json.ridesCycle;
         var crewN = isRun ? json.crewInviteRun : json.crewInviteCycle;
         var crewMap = json.crewInviteMap && typeof json.crewInviteMap === 'object' ? json.crewInviteMap : {};
-        onUpdate(typeof n === 'number' ? n : 0, typeof crewN === 'number' ? crewN : 0, crewMap);
+        var hostedMap = json.hostedInCrewMap && typeof json.hostedInCrewMap === 'object' ? json.hostedInCrewMap : {};
+        onUpdate(typeof n === 'number' ? n : 0, typeof crewN === 'number' ? crewN : 0, crewMap, hostedMap);
       }
     });
   }

@@ -12079,6 +12079,8 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             .catch(() => ({ hasCycle: false, hasRun: false }));
 
           // "내가 주최한 모임" 배지 — invitedList와 무관하게 hostUserId 기준으로 별도 집계.
+          // groupId가 있는(크루 상세에서 생성한) 모임은 크루별로도 나눠 hostedInCrewMap에 담아
+          // 크루 리스트 화면의 아바타별 배지·클럽 탭 배지에 쓴다.
           const hostedRidesPromise = db
             .collection("rides")
             .where("hostUserId", "==", requestedUid)
@@ -12086,6 +12088,7 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             .then((snap) => {
               var hostedCycle = 0;
               var hostedRun = 0;
+              var hostedInCrewMap = {};
               snap.forEach((doc) => {
                 var d = doc.data() || {};
                 var rideDate = d.date;
@@ -12096,10 +12099,14 @@ exports.getBasecampBadgeCountsForRead = onRequest(
                 var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
                 if (cat === "RUN") hostedRun++;
                 else hostedCycle++;
+                var gid = d.groupId ? String(d.groupId).trim() : "";
+                if (gid) {
+                  hostedInCrewMap[gid] = (hostedInCrewMap[gid] || 0) + 1;
+                }
               });
-              return { hostedCycle: hostedCycle, hostedRun: hostedRun };
+              return { hostedCycle: hostedCycle, hostedRun: hostedRun, hostedInCrewMap: hostedInCrewMap };
             })
-            .catch(() => ({ hostedCycle: 0, hostedRun: 0 }));
+            .catch(() => ({ hostedCycle: 0, hostedRun: 0, hostedInCrewMap: {} }));
 
           const [ridesCounts, friends, groups, stravaToday, hostedCounts] = await Promise.all([
             ridesPromise,
@@ -12118,6 +12125,7 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             crewInviteMap: ridesCounts.crewInviteMap || {},
             hostedCycle: hostedCounts.hostedCycle || 0,
             hostedRun: hostedCounts.hostedRun || 0,
+            hostedInCrewMap: hostedCounts.hostedInCrewMap || {},
             friends: friends,
             groups: groups || 0,
             stravaTodayCycle: !!stravaToday.hasCycle,

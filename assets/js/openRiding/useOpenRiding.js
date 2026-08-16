@@ -17,7 +17,7 @@ import {
   leaveRideTransaction,
   fetchRideById,
   subscribeRideById
-} from './openRidingService.js?v=sync-fix-20260803v6';
+} from './openRidingService.js?v=hosted-in-crew-20260816v1';
 
 /**
  * @param {import('firebase/firestore').Firestore | null} db
@@ -46,12 +46,15 @@ export function useOpenRiding(db, userId, anchorMonth, moimCategory) {
     return { start, end };
   }, [anchorMonth]);
 
-  /** 나의 라이딩 목록 전용: 오늘~+30일 범위 (고정, 마운트 시 1회 계산) */
+  /** 나의 라이딩 목록 전용: 오늘~+180일 범위 (고정, 마운트 시 1회 계산).
+   * 예전엔 +30일까지만 조회해서, 그보다 먼 미래(예: 2달 뒤) 예정으로 내가 주최·초대된 모임이
+   * "나의 라이딩" 목록·하단 네비 배지에 전혀 안 잡히는 버그가 있었다(베이스캠프 배지는 월 제한이
+   * 없는 별도 서버 집계라 정상 표시됐음) — 180일로 넉넉히 늘려 실질적으로 놓치는 경우를 없앤다. */
   const myListRange = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
-    end.setDate(end.getDate() + 30);
+    end.setDate(end.getDate() + 180);
     end.setHours(23, 59, 59, 999);
     return { start, end };
   // eslint-disable-next-line react-hooks/exhaustive-deps

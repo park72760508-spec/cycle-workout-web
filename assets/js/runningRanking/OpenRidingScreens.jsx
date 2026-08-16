@@ -2894,6 +2894,7 @@ function OpenRidingBottomGlassNav(props) {
   var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
   var pendingGroupJoinCount = typeof props.pendingGroupJoinCount === 'number' ? props.pendingGroupJoinCount : 0;
   var crewInviteCount = typeof props.crewInviteCount === 'number' ? props.crewInviteCount : 0;
+  var hostedInCrewCount = typeof props.hostedInCrewCount === 'number' ? props.hostedInCrewCount : 0;
   var pendingInvitedRidesCount = typeof props.pendingInvitedRidesCount === 'number' ? props.pendingInvitedRidesCount : 0;
   var hostedRidesCount = typeof props.hostedRidesCount === 'number' ? props.hostedRidesCount : 0;
   var userId = props.userId || '';
@@ -2971,7 +2972,8 @@ function OpenRidingBottomGlassNav(props) {
     var groupsBadgeColorClass = crewInviteCount > 0 ? 'bg-emerald-600' : 'bg-violet-600';
     var groupsAriaExtra =
       (pendingGroupJoinCount > 0 ? ' (가입 요청 ' + pendingGroupJoinCount + '건)' : '') +
-      (crewInviteCount > 0 ? ' (모임 초대 ' + crewInviteCount + '건)' : '');
+      (crewInviteCount > 0 ? ' (모임 초대 ' + crewInviteCount + '건)' : '') +
+      (hostedInCrewCount > 0 ? ' (내가 주최 ' + hostedInCrewCount + '건)' : '');
     return (
       <OpenRidingGlassNavSlot>
         <button
@@ -3001,6 +3003,15 @@ function OpenRidingBottomGlassNav(props) {
                 aria-hidden="true"
               >
                 {groupsBadgeTotal > 99 ? '99+' : groupsBadgeTotal}
+              </span>
+            ) : null}
+            {hostedInCrewCount > 0 ? (
+              <span
+                className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
+                style={{ minWidth: '17px', height: '17px', fontSize: hostedInCrewCount > 9 ? 9 : 10, paddingLeft: hostedInCrewCount > 9 ? 3 : 4, paddingRight: hostedInCrewCount > 9 ? 3 : 4, top: 0, left: 0, transform: 'translate(-45%, -40%)' }}
+                aria-hidden="true"
+              >
+                {hostedInCrewCount > 99 ? '99+' : hostedInCrewCount}
               </span>
             ) : null}
           </span>
@@ -9858,6 +9869,7 @@ function OpenRidingGroupsList(props) {
   var clubCategory = props.clubCategory || 'CYCLE';
   var joinRequestCountMap = props.joinRequestCountMap || {};
   var crewInviteCountMap = props.crewInviteCountMap || {};
+  var hostedInCrewCountMap = props.hostedInCrewCountMap || {};
   var onOpenDetail = props.onOpenDetail || function () {};
   var onCreate = props.onCreate || function () {};
   var _rows = useState([]);
@@ -10134,6 +10146,31 @@ function OpenRidingGroupsList(props) {
                           aria-label={label.trim()}
                         >
                           {total > 99 ? '99+' : total}
+                        </span>
+                      );
+                    })()}
+                    {/* 4시 방향: 이 크루 상세에서 내가 주최한 모임 건수(보라색 원) */}
+                    {(function () {
+                      var hostedCnt = hostedInCrewCountMap[g.id];
+                      if (!hostedCnt || hostedCnt <= 0) return null;
+                      var isWide = hostedCnt >= 10;
+                      return (
+                        <span
+                          className="absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold border-4 border-white shadow pointer-events-none leading-none"
+                          style={{
+                            width: isWide ? 'auto' : '32px',
+                            minWidth: '32px',
+                            height: '32px',
+                            fontSize: hostedCnt > 99 ? 9 : (hostedCnt > 9 ? 11 : 13),
+                            paddingLeft: isWide ? 4 : 0,
+                            paddingRight: isWide ? 4 : 0,
+                            bottom: '2px',
+                            right: '0px',
+                            transform: 'translate(30%, 20%)'
+                          }}
+                          aria-label={'내가 주최한 모임 ' + hostedCnt + '건'}
+                        >
+                          {hostedCnt > 99 ? '99+' : hostedCnt}
                         </span>
                       );
                     })()}
@@ -12242,22 +12279,39 @@ function OpenRidingRoomApp(props) {
   var crewInviteMap = _cim[0];
   var setCrewInviteMap = _cim[1];
 
+  var _hicm = useState({});
+  var hostedInCrewMap = _hicm[0];
+  var setHostedInCrewMap = _hicm[1];
+
+  var _hicc = useState(0);
+  var hostedInCrewCount = _hicc[0];
+  var setHostedInCrewCount = _hicc[1];
+
   /* pendingInvitedRidesCount(하단 네비 라이딩/러닝 배지)는 이제 서버 폴링이 아니라
      OpenRidingCalendarMain의 [나의 라이딩] 리스트(초대됨 항목 수)에서 직접 보고받는다
      (onInvitedRidesCountChange) — 화면에 실제 표시되는 개수와 배지 숫자를 일치시키기 위함.
-     이 폴링은 크루(그룹) 관련 배지(crewInviteCount/Map)만 계속 공급한다. */
+     이 폴링은 크루(그룹) 관련 배지(crewInviteCount/Map, hostedInCrewMap/Count)만 계속 공급한다. */
   useEffect(
     function () {
       if (!effectiveUserId) {
         setCrewInviteCount(0);
         setCrewInviteMap({});
+        setHostedInCrewMap({});
+        setHostedInCrewCount(0);
         return;
       }
       var gs2 = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
       if (typeof gs2.subscribeMyInvitedRidesCount !== 'function') return;
-      var unsub2 = gs2.subscribeMyInvitedRidesCount(effectiveUserId, clubCategory, function (n, crewN, crewMap) {
+      var unsub2 = gs2.subscribeMyInvitedRidesCount(effectiveUserId, clubCategory, function (n, crewN, crewMap, hostedMap) {
         setCrewInviteCount(typeof crewN === 'number' ? crewN : 0);
         setCrewInviteMap(crewMap && typeof crewMap === 'object' ? crewMap : {});
+        var hMap = hostedMap && typeof hostedMap === 'object' ? hostedMap : {};
+        setHostedInCrewMap(hMap);
+        var total = 0;
+        Object.keys(hMap).forEach(function (k) {
+          total += Number(hMap[k]) || 0;
+        });
+        setHostedInCrewCount(total);
       });
       return function () {
         if (typeof unsub2 === 'function') unsub2();
@@ -12391,6 +12445,7 @@ function OpenRidingRoomApp(props) {
         clubCategory={clubCategory}
         joinRequestCountMap={groupJoinCountMap}
         crewInviteCountMap={crewInviteMap}
+        hostedInCrewCountMap={hostedInCrewMap}
         onOpenDetail={function (id) {
           setDetailGroupId(id);
           setView('groupDetail');
@@ -12692,6 +12747,7 @@ function OpenRidingRoomApp(props) {
           pendingIncomingCount={pendingIncomingCount}
           pendingGroupJoinCount={pendingGroupJoinCount}
           crewInviteCount={crewInviteCount}
+          hostedInCrewCount={hostedInCrewCount}
           pendingInvitedRidesCount={pendingInvitedRidesCount}
           hostedRidesCount={hostedRidesCount}
           userId={effectiveUserId}
