@@ -3563,15 +3563,17 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   align-self: auto !important;
 }
 
-/* 배지 표시 시 flex 중앙 정렬 (라이딩 모임·클럽하우스 공통) */
+/* 배지 표시 시 flex 중앙 정렬 (라이딩 모임·클럽하우스·러닝 크루 공통) */
 #basecampRidingNotiBadge.show,
-#basecampClubHouseNotiBadge.show {
+#basecampClubHouseNotiBadge.show,
+#runBasecampRidingNotiBadge.show {
   display: flex !important;
 }
 
 /* 배지 숫자가 2자리 이상(10+)일 때 타원 방지 — 너비를 자동 확장하되 높이 고정 */
 #basecampRidingNotiBadge[data-wide],
-#basecampClubHouseNotiBadge[data-wide] {
+#basecampClubHouseNotiBadge[data-wide],
+#runBasecampRidingNotiBadge[data-wide] {
   width: auto !important;
   min-width: 26px !important;
   padding: 0 5px !important;
