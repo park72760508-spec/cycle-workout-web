@@ -22102,7 +22102,7 @@ if (originalCleanupMobileDashboard) {
   var BADGE_API_URL = 'https://us-central1-stelvio-ai.cloudfunctions.net/getBasecampBadgeCountsForRead';
   var POLL_MS = 90 * 1000;
 
-  var _counts     = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false };
+  var _counts     = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, hostedCycle: 0, hostedRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false };
   var _pollTimer  = null;
   var _inFlight   = false;
 
@@ -22148,13 +22148,17 @@ if (originalCleanupMobileDashboard) {
     _applyCountBadge('sportCategoryCycleNotiBadge', _counts.ridesCycle + _counts.friends + crewCycle);
     _applyCountBadge('sportCategoryRunNotiBadge', _counts.ridesRun + _counts.friends + crewRun);
 
+    /* "내가 주최한 모임" 배지 — 초대 배지와 별개, 보라색 원(좌상단) */
+    _applyCountBadge('basecampRidingHostBadge', _counts.hostedCycle);
+    _applyCountBadge('runBasecampRidingHostBadge', _counts.hostedRun);
+
     /* "나의 기록" 버튼: 오늘(KST) STRAVA 기록 수집 여부 — 참석확정 체크마크 배지 */
     _applyCheckBadge('basecampCareerNotiBadge', _counts.stravaTodayCycle);
     _applyCheckBadge('runBasecampCareerNotiBadge', _counts.stravaTodayRun);
   }
 
   function _clearAll() {
-    _counts = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false };
+    _counts = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, hostedCycle: 0, hostedRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false };
   }
 
   /* ── 현재 UID ── */
@@ -22202,6 +22206,8 @@ if (originalCleanupMobileDashboard) {
         _counts.ridesRun = Number(json.ridesRun) || 0;
         _counts.crewInviteCycle = Number(json.crewInviteCycle) || 0;
         _counts.crewInviteRun = Number(json.crewInviteRun) || 0;
+        _counts.hostedCycle = Number(json.hostedCycle) || 0;
+        _counts.hostedRun = Number(json.hostedRun) || 0;
         _counts.groups = Number(json.groups) || 0;
         _counts.friends = Number(json.friends) || 0;
         _counts.stravaTodayCycle = !!json.stravaTodayCycle;

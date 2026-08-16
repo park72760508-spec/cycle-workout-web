@@ -12078,11 +12078,35 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             .fetchStravaActivityPresenceForDate(requestedUid, todaySeoulStr)
             .catch(() => ({ hasCycle: false, hasRun: false }));
 
-          const [ridesCounts, friends, groups, stravaToday] = await Promise.all([
+          // "내가 주최한 모임" 배지 — invitedList와 무관하게 hostUserId 기준으로 별도 집계.
+          const hostedRidesPromise = db
+            .collection("rides")
+            .where("hostUserId", "==", requestedUid)
+            .get()
+            .then((snap) => {
+              var hostedCycle = 0;
+              var hostedRun = 0;
+              snap.forEach((doc) => {
+                var d = doc.data() || {};
+                var rideDate = d.date;
+                if (rideDate && typeof rideDate.toDate === "function") {
+                  if (rideDate.toDate() < todayTs.toDate()) return;
+                }
+                if (String(d.rideStatus || "active") === "cancelled") return;
+                var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
+                if (cat === "RUN") hostedRun++;
+                else hostedCycle++;
+              });
+              return { hostedCycle: hostedCycle, hostedRun: hostedRun };
+            })
+            .catch(() => ({ hostedCycle: 0, hostedRun: 0 }));
+
+          const [ridesCounts, friends, groups, stravaToday, hostedCounts] = await Promise.all([
             ridesPromise,
             friendsPromise,
             groupsPromise,
             stravaTodayPromise,
+            hostedRidesPromise,
           ]);
 
           return {
@@ -12092,6 +12116,8 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             crewInviteCycle: ridesCounts.crewInviteCycle || 0,
             crewInviteRun: ridesCounts.crewInviteRun || 0,
             crewInviteMap: ridesCounts.crewInviteMap || {},
+            hostedCycle: hostedCounts.hostedCycle || 0,
+            hostedRun: hostedCounts.hostedRun || 0,
             friends: friends,
             groups: groups || 0,
             stravaTodayCycle: !!stravaToday.hasCycle,

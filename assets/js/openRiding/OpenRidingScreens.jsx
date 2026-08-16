@@ -3578,6 +3578,7 @@ function OpenRidingBottomGlassNav(props) {
   var pendingGroupJoinCount = typeof props.pendingGroupJoinCount === 'number' ? props.pendingGroupJoinCount : 0;
   var crewInviteCount = typeof props.crewInviteCount === 'number' ? props.crewInviteCount : 0;
   var pendingInvitedRidesCount = typeof props.pendingInvitedRidesCount === 'number' ? props.pendingInvitedRidesCount : 0;
+  var hostedRidesCount = typeof props.hostedRidesCount === 'number' ? props.hostedRidesCount : 0;
   var userId = props.userId || '';
   var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
   var navMoimLabel = moimCopy.navMoimLabel || '라이딩';
@@ -3707,13 +3708,22 @@ function OpenRidingBottomGlassNav(props) {
           className={openRidingGlassNavBtnClass(moimActive)}
           onClick={onMoim}
           aria-current={moimActive ? 'page' : undefined}
-          aria-label={navMoimAria + (pendingInvitedRidesCount > 0 ? ' (초대 ' + pendingInvitedRidesCount + '건)' : '')}
+          aria-label={
+            navMoimAria +
+            (pendingInvitedRidesCount > 0 ? ' (초대 ' + pendingInvitedRidesCount + '건)' : '') +
+            (hostedRidesCount > 0 ? ' (내가 주최 ' + hostedRidesCount + '건)' : '')
+          }
         >
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
             {iconMoim()}
             {pendingInvitedRidesCount > 0 ? (
               <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-emerald-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: pendingInvitedRidesCount > 9 ? 9 : 10, paddingLeft: pendingInvitedRidesCount > 9 ? 3 : 4, paddingRight: pendingInvitedRidesCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
                 {pendingInvitedRidesCount > 99 ? '99+' : pendingInvitedRidesCount}
+              </span>
+            ) : null}
+            {hostedRidesCount > 0 ? (
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: hostedRidesCount > 9 ? 9 : 10, paddingLeft: hostedRidesCount > 9 ? 3 : 4, paddingRight: hostedRidesCount > 9 ? 3 : 4, top: 0, left: 0, transform: 'translate(-45%, -40%)' }} aria-hidden="true">
+                {hostedRidesCount > 99 ? '99+' : hostedRidesCount}
               </span>
             ) : null}
           </span>
@@ -4261,15 +4271,22 @@ function OpenRidingCalendarMain(props) {
     [ridesMyList, userId, inviteCheckPhone]
   );
 
-  /* 하단 네비 라이딩/러닝 배지 = [나의 라이딩] 리스트에 실제로 "초대됨"으로 표시된 항목 수.
+  /* 하단 네비 라이딩/러닝 배지 = [나의 라이딩] 리스트에 실제로 "초대됨"/"내가 주최"로 표시된 항목 수.
      서버 별도 집계 대신 화면에 보이는 리스트와 항상 일치하도록 그대로 보고한다. */
   useEffect(
     function () {
-      if (typeof props.onInvitedRidesCountChange !== 'function') return;
-      var invitedCount = myRidesUnifiedRows.filter(function (row) {
-        return row.kind === 'invited';
-      }).length;
-      props.onInvitedRidesCountChange(invitedCount);
+      if (typeof props.onInvitedRidesCountChange === 'function') {
+        var invitedCount = myRidesUnifiedRows.filter(function (row) {
+          return row.kind === 'invited';
+        }).length;
+        props.onInvitedRidesCountChange(invitedCount);
+      }
+      if (typeof props.onHostedRidesCountChange === 'function') {
+        var hostedCount = myRidesUnifiedRows.filter(function (row) {
+          return row.kind === 'host';
+        }).length;
+        props.onHostedRidesCountChange(hostedCount);
+      }
     },
     [myRidesUnifiedRows]
   );
@@ -14029,6 +14046,10 @@ function OpenRidingRoomApp(props) {
   var pendingInvitedRidesCount = _pir[0];
   var setPendingInvitedRidesCount = _pir[1];
 
+  var _hrc = useState(0);
+  var hostedRidesCount = _hrc[0];
+  var setHostedRidesCount = _hrc[1];
+
   var _cic = useState(0);
   var crewInviteCount = _cic[0];
   var setCrewInviteCount = _cic[1];
@@ -14307,6 +14328,7 @@ function OpenRidingRoomApp(props) {
         moimCopy={moimCopy}
         moimCategory={clubCategory}
         onInvitedRidesCountChange={setPendingInvitedRidesCount}
+        onHostedRidesCountChange={setHostedRidesCount}
       />
     );
   }
@@ -14561,6 +14583,7 @@ function OpenRidingRoomApp(props) {
           pendingGroupJoinCount={pendingGroupJoinCount}
           crewInviteCount={crewInviteCount}
           pendingInvitedRidesCount={pendingInvitedRidesCount}
+          hostedRidesCount={hostedRidesCount}
           userId={effectiveUserId}
           moimCopy={moimCopy}
         />

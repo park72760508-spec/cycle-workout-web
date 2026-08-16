@@ -3375,7 +3375,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   z-index: 1; /* 이미지 위에 표시 */
 }
 
-.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#sportCategoryCycleNotiBadge):not(#sportCategoryRunNotiBadge):not(#basecampCareerNotiBadge):not(#runBasecampCareerNotiBadge) {
+.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#sportCategoryCycleNotiBadge):not(#sportCategoryRunNotiBadge):not(#basecampCareerNotiBadge):not(#runBasecampCareerNotiBadge):not(#basecampRidingHostBadge):not(#runBasecampRidingHostBadge) {
   color: #fff !important;
   position: relative;
   z-index: 2; /* 오버레이 위에 표시 */
@@ -3450,10 +3450,10 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .basecamp-btn-riding-group-entry span:not(#basecampClubHouseNotiBadge),
 #basecampScreen .btn-device.basecamp-btn-affiliate-entry span,
 #basecampScreen .basecamp-btn-affiliate-entry span,
-#basecampScreen .btn-device.basecamp-btn-manual span:not(#basecampRidingNotiBadge),
-#basecampScreen .basecamp-btn-manual span:not(#basecampRidingNotiBadge),
-#basecampScreen .basecamp-path-grid .btn-device.basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge),
-#basecampScreen .basecamp-path-grid .basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge) {
+#basecampScreen .btn-device.basecamp-btn-manual span:not(#basecampRidingNotiBadge):not(#basecampRidingHostBadge),
+#basecampScreen .basecamp-btn-manual span:not(#basecampRidingNotiBadge):not(#basecampRidingHostBadge),
+#basecampScreen .basecamp-path-grid .btn-device.basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#basecampRidingHostBadge),
+#basecampScreen .basecamp-path-grid .basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#basecampRidingHostBadge) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -3574,6 +3574,52 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampRidingNotiBadge[data-wide],
 #basecampClubHouseNotiBadge[data-wide],
 #runBasecampRidingNotiBadge[data-wide] {
+  width: auto !important;
+  min-width: 26px !important;
+  padding: 0 5px !important;
+  border-radius: 13px !important;
+}
+
+/* "내가 주최한 모임" 배지 — 초대 배지(우상단, 빨강)와 별개로 좌상단에 보라색 원으로 표시.
+ * 위치: 버튼 4등분 좌상단 중앙 (top:25% / left:25%, translate(-50%,-50%)) */
+#basecampRidingHostBadge,
+#runBasecampRidingHostBadge {
+  display: none !important;
+  position: absolute !important;
+  top: 25% !important;
+  left: 25% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 26px !important;
+  min-width: 26px !important;
+  height: 26px !important;
+  background: #7c3aed !important;
+  border-radius: 50% !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  z-index: 20 !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35) !important;
+  text-shadow: none !important;
+  font-variant-numeric: tabular-nums !important;
+  align-items: center !important;
+  justify-content: center !important;
+  order: unset !important;
+  flex: none !important;
+  align-self: auto !important;
+}
+#basecampRidingHostBadge.show,
+#runBasecampRidingHostBadge.show {
+  display: flex !important;
+}
+#basecampRidingHostBadge[data-wide],
+#runBasecampRidingHostBadge[data-wide] {
   width: auto !important;
   min-width: 26px !important;
   padding: 0 5px !important;
@@ -30021,7 +30067,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
-#runBasecampScreen .basecamp-path-grid .basecamp-btn > span:not(#runBasecampRidingNotiBadge):not(#runBasecampCareerNotiBadge) {
+#runBasecampScreen .basecamp-path-grid .basecamp-btn > span:not(#runBasecampRidingNotiBadge):not(#runBasecampCareerNotiBadge):not(#runBasecampRidingHostBadge) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
