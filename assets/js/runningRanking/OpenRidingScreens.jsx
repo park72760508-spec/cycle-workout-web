@@ -3522,6 +3522,19 @@ function OpenRidingCalendarMain(props) {
     [ridesMyList, userId, inviteCheckPhone]
   );
 
+  /* 하단 네비 라이딩/러닝 배지 = [나의 라이딩] 리스트에 실제로 "초대됨"으로 표시된 항목 수.
+     서버 별도 집계 대신 화면에 보이는 리스트와 항상 일치하도록 그대로 보고한다. */
+  useEffect(
+    function () {
+      if (typeof props.onInvitedRidesCountChange !== 'function') return;
+      var invitedCount = myRidesUnifiedRows.filter(function (row) {
+        return row.kind === 'invited';
+      }).length;
+      props.onInvitedRidesCountChange(invitedCount);
+    },
+    [myRidesUnifiedRows]
+  );
+
   var _sel = useState(null);
   var selectedKey = _sel[0];
   var setSelectedKey = _sel[1];
@@ -12208,10 +12221,13 @@ function OpenRidingRoomApp(props) {
   var crewInviteMap = _cim[0];
   var setCrewInviteMap = _cim[1];
 
+  /* pendingInvitedRidesCount(하단 네비 라이딩/러닝 배지)는 이제 서버 폴링이 아니라
+     OpenRidingCalendarMain의 [나의 라이딩] 리스트(초대됨 항목 수)에서 직접 보고받는다
+     (onInvitedRidesCountChange) — 화면에 실제 표시되는 개수와 배지 숫자를 일치시키기 위함.
+     이 폴링은 크루(그룹) 관련 배지(crewInviteCount/Map)만 계속 공급한다. */
   useEffect(
     function () {
       if (!effectiveUserId) {
-        setPendingInvitedRidesCount(0);
         setCrewInviteCount(0);
         setCrewInviteMap({});
         return;
@@ -12219,7 +12235,6 @@ function OpenRidingRoomApp(props) {
       var gs2 = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
       if (typeof gs2.subscribeMyInvitedRidesCount !== 'function') return;
       var unsub2 = gs2.subscribeMyInvitedRidesCount(effectiveUserId, clubCategory, function (n, crewN, crewMap) {
-        setPendingInvitedRidesCount(typeof n === 'number' ? n : 0);
         setCrewInviteCount(typeof crewN === 'number' ? crewN : 0);
         setCrewInviteMap(crewMap && typeof crewMap === 'object' ? crewMap : {});
       });
@@ -12458,6 +12473,7 @@ function OpenRidingRoomApp(props) {
         }}
         moimCopy={moimCopy}
         moimCategory={clubCategory}
+        onInvitedRidesCountChange={setPendingInvitedRidesCount}
       />
     );
   }
