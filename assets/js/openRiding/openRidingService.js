@@ -28,7 +28,7 @@ import {
   fetchRidesInDateRangeRouted,
   fetchTrainingLogsByDateRangeForReviewRouted,
   subscribeRideByIdRouted,
-} from './openRidingReadClient.js?v=invited-rides-badge-20260816v1';
+} from './openRidingReadClient.js?v=crew-invite-dedup-20260816v1';
 import {
   scheduleOpenRideDualWriteFromFirestore,
   runSecondaryAfterOpenRideDelete,

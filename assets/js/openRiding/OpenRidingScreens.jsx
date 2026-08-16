@@ -14001,16 +14001,22 @@ function OpenRidingRoomApp(props) {
   var pendingInvitedRidesCount = _pir[0];
   var setPendingInvitedRidesCount = _pir[1];
 
+  var _cic = useState(0);
+  var crewInviteCount = _cic[0];
+  var setCrewInviteCount = _cic[1];
+
   useEffect(
     function () {
       if (!effectiveUserId) {
         setPendingInvitedRidesCount(0);
+        setCrewInviteCount(0);
         return;
       }
       var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
       if (typeof gs.subscribeMyInvitedRidesCount !== 'function') return;
-      var unsub = gs.subscribeMyInvitedRidesCount(effectiveUserId, clubCategory, function (n) {
+      var unsub = gs.subscribeMyInvitedRidesCount(effectiveUserId, clubCategory, function (n, crewN) {
         setPendingInvitedRidesCount(typeof n === 'number' ? n : 0);
+        setCrewInviteCount(typeof crewN === 'number' ? crewN : 0);
       });
       return function () {
         if (typeof unsub === 'function') unsub();
@@ -14514,7 +14520,7 @@ function OpenRidingRoomApp(props) {
             setView('friends');
           }}
           pendingIncomingCount={pendingIncomingCount}
-          pendingGroupJoinCount={pendingGroupJoinCount}
+          pendingGroupJoinCount={pendingGroupJoinCount + crewInviteCount}
           pendingInvitedRidesCount={pendingInvitedRidesCount}
           userId={effectiveUserId}
           moimCopy={moimCopy}

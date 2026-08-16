@@ -896,6 +896,8 @@ export function subscribeMyManagedGroupsJoinRequestCountsRouted(db, userId, onUp
 /**
  * 라이딩 모임·러닝 크루 하단 네비 "라이딩/러닝" 메뉴 배지 — 오늘 기준 초대받은(참석 확정 전) 건수.
  * getBasecampBadgeCountsForRead가 이미 KST 자정 기준으로 만료된 초대를 제외하므로 그대로 재사용한다.
+ * onUpdate(personalCount, crewInviteCount) — 크루(그룹)가 생성한 모임 초대는 personalCount에서
+ * 제외되어 크루 배지 쪽에서만 세도록 서버가 이미 분리해서 응답한다(중복 카운트 방지).
  */
 export function subscribeMyInvitedRidesCountRouted(userId, category, onUpdate) {
   if (!userId || typeof onUpdate !== 'function') return function () {};
@@ -911,7 +913,8 @@ export function subscribeMyInvitedRidesCountRouted(userId, category, onUpdate) {
       if (stopped) return;
       if (json && json.success) {
         var n = isRun ? json.ridesRun : json.ridesCycle;
-        onUpdate(typeof n === 'number' ? n : 0);
+        var crewN = isRun ? json.crewInviteRun : json.crewInviteCycle;
+        onUpdate(typeof n === 'number' ? n : 0, typeof crewN === 'number' ? crewN : 0);
       }
     });
   }
