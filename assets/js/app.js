@@ -22133,15 +22133,15 @@ if (originalCleanupMobileDashboard) {
   }
 
   function _renderBadges() {
-    /* 클럽 가입신청은 클럽 하우스 전용 — 라이딩 모임과 중복 표시하지 않음 */
-    /* CYCLE 라이딩 모임 = 라이딩 초대 + 친구 요청 / RUN 러닝 크루 = 러닝 초대 + 친구 요청 */
-    _applyCountBadge('basecampRidingNotiBadge', _counts.ridesCycle + _counts.friends);
+    /* CYCLE 라이딩 모임 = 라이딩 초대 + 친구 요청 + 크루(내가 방장인 그룹 가입신청 대기)
+       RUN 러닝 크루 = 러닝 초대 + 친구 요청 + 크루 — 화면 안 하단 네비의 라이딩·친구·클럽 배지 3개 합산(2026-08) */
+    _applyCountBadge('basecampRidingNotiBadge', _counts.ridesCycle + _counts.friends + _counts.groups);
     _applyCountBadge('basecampClubHouseNotiBadge', _counts.groups);
-    _applyCountBadge('runBasecampRidingNotiBadge', _counts.ridesRun + _counts.friends);
+    _applyCountBadge('runBasecampRidingNotiBadge', _counts.ridesRun + _counts.friends + _counts.groups);
 
-    /* 카테고리 화면: 라이딩 모임 배지와 동일한 빨강원+흰숫자 배지로 표시 (친구 요청 공통 + 각 종목 초대) */
-    _applyCountBadge('sportCategoryCycleNotiBadge', _counts.ridesCycle + _counts.friends);
-    _applyCountBadge('sportCategoryRunNotiBadge', _counts.ridesRun + _counts.friends);
+    /* 카테고리 화면: 라이딩 모임 배지와 동일한 빨강원+흰숫자 배지로 표시 (친구 요청·크루 공통 + 각 종목 초대) */
+    _applyCountBadge('sportCategoryCycleNotiBadge', _counts.ridesCycle + _counts.friends + _counts.groups);
+    _applyCountBadge('sportCategoryRunNotiBadge', _counts.ridesRun + _counts.friends + _counts.groups);
 
     /* "나의 기록" 버튼: 오늘(KST) STRAVA 기록 수집 여부 — 참석확정 체크마크 배지 */
     _applyCheckBadge('basecampCareerNotiBadge', _counts.stravaTodayCycle);
