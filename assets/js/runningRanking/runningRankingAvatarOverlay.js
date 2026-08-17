@@ -193,6 +193,26 @@
     img.src = imageSrc;
 
     var uidTrim = meta.userId != null ? String(meta.userId).trim() : '';
+
+    var cameraBtn = el('runningRankAvatarZoomCameraBtn');
+    if (cameraBtn) {
+      var myUid = (window.currentUser && window.currentUser.id) || (function () {
+        try {
+          var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+          return u && u.id ? u.id : null;
+        } catch (eCu) {
+          return null;
+        }
+      })();
+      if (uidTrim && myUid && String(myUid) === uidTrim) {
+        cameraBtn.setAttribute('data-target-uid', uidTrim);
+        cameraBtn.classList.remove('hidden');
+      } else {
+        cameraBtn.removeAttribute('data-target-uid');
+        cameraBtn.classList.add('hidden');
+      }
+    }
+
     if (profWrap && l1 && l2 && l3) {
       if (uidTrim) {
         profWrap.classList.remove('hidden');
@@ -240,6 +260,11 @@
     }
     var img = el(IMG_ID);
     if (img) img.removeAttribute('src');
+    var cameraBtnClose = el('runningRankAvatarZoomCameraBtn');
+    if (cameraBtnClose) {
+      cameraBtnClose.classList.add('hidden');
+      cameraBtnClose.removeAttribute('data-target-uid');
+    }
     var pw = el(PROFILE_ID);
     var i;
     for (i = 0; i < LINE_IDS.length; i++) {

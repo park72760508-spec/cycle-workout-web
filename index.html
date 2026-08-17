@@ -3382,7 +3382,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260816indoorCenter1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260817avatarCamBtn1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -16037,6 +16037,26 @@
       img.src = imageSrc;
 
       var uidTrim = meta.userId != null ? String(meta.userId).trim() : '';
+
+      var cameraBtn = document.getElementById('stelvioRankAvatarZoomCameraBtn');
+      if (cameraBtn) {
+        var myUid = (window.currentUser && window.currentUser.id) || (function () {
+          try {
+            var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            return u && u.id ? u.id : null;
+          } catch (eCu) {
+            return null;
+          }
+        })();
+        if (uidTrim && myUid && String(myUid) === uidTrim) {
+          cameraBtn.setAttribute('data-target-uid', uidTrim);
+          cameraBtn.classList.remove('hidden');
+        } else {
+          cameraBtn.removeAttribute('data-target-uid');
+          cameraBtn.classList.add('hidden');
+        }
+      }
+
       if (profWrap && l1 && l2 && l3) {
         if (uidTrim) {
           profWrap.classList.remove('hidden');
@@ -16082,6 +16102,11 @@
       }
       var img = document.getElementById('stelvioRankAvatarZoomImg');
       if (img) img.removeAttribute('src');
+      var cameraBtnClose = document.getElementById('stelvioRankAvatarZoomCameraBtn');
+      if (cameraBtnClose) {
+        cameraBtnClose.classList.add('hidden');
+        cameraBtnClose.removeAttribute('data-target-uid');
+      }
       var pw = document.getElementById('stelvioRankAvatarZoomProfile');
       var q1 = document.getElementById('stelvioRankAvatarZoomLine1');
       var q2 = document.getElementById('stelvioRankAvatarZoomLine2');
@@ -41548,6 +41573,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-rank-avatar-zoom-inner">
             <img id="stelvioRankAvatarZoomImg" class="stelvio-rank-avatar-zoom-img" alt="" width="280" height="280" decoding="async" />
           </div>
+          <button
+            type="button"
+            id="stelvioRankAvatarZoomCameraBtn"
+            class="stelvio-rank-avatar-zoom-camera-btn hidden"
+            aria-label="프로필 사진 변경"
+            onclick="event.stopPropagation();var __u=this.getAttribute('data-target-uid')||'';if(typeof stelvioCloseRankAvatarZoom==='function')stelvioCloseRankAvatarZoom();typeof stelvioOpenProfilePhotoPicker==='function'&&stelvioOpenProfilePhotoPicker(__u);"
+          ></button>
         </div>
         <div id="stelvioRankAvatarZoomProfile" class="stelvio-rank-avatar-zoom-profile hidden">
           <div
@@ -41612,6 +41644,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-rank-avatar-zoom-inner">
             <img id="runningRankAvatarZoomImg" class="stelvio-rank-avatar-zoom-img" alt="" width="280" height="280" decoding="async" />
           </div>
+          <button
+            type="button"
+            id="runningRankAvatarZoomCameraBtn"
+            class="stelvio-rank-avatar-zoom-camera-btn hidden"
+            aria-label="프로필 사진 변경"
+            onclick="event.stopPropagation();var __u=this.getAttribute('data-target-uid')||'';if(typeof closeRunningRankAvatarZoom==='function')closeRunningRankAvatarZoom();typeof stelvioOpenProfilePhotoPicker==='function'&&stelvioOpenProfilePhotoPicker(__u);"
+          ></button>
         </div>
         <div id="runningRankAvatarZoomProfile" class="stelvio-rank-avatar-zoom-profile hidden">
           <div
