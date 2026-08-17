@@ -1088,6 +1088,13 @@ const RANKING_LOG_SYNC_CONCURRENCY = 8;
  *   push되어 daily_summaries가 0.3으로 되돌아감). 활동 저장 직후 단일 날짜 동기화(processStravaActivity·
  *   onUserLogWritten)에서는 반드시 true로 호출해야 한다. 다수 사용자·다일 구간을 도는 주간 parity 배치에서는
  *   비용 때문에 기본값(false)을 유지한다.
+ *
+ *   [2026-08] TSS 산출 로직 버그 수정 후 Supabase만 재계산·백필했는데, 갱신되지 않은(오래된) Firestore
+ *   버킷을 이 함수가 그대로 다시 push해 Supabase 값이 며칠 뒤 정기 배치(scheduledWeeklyTssSupabaseParity 등)
+ *   실행 시 원래의 잘못된 값으로 되돌아가는 회귀가 실제로 발생했다. 근본 원인은 fn_sync_daily_summary_
+ *   buckets_from_firestore RPC가 Supabase 기존 값의 최신 여부와 무관하게 무조건 덮어쓴다는 데 있었다 —
+ *   각 버킷의 reconciled_at을 함께 전달해, RPC가 Supabase 기존 reconciled_at보다 오래된 버킷은 스킵하도록
+ *   고쳤다(아래 buckets.push의 reconciled_at 필드 참고).
  */
 async function syncRankingDayBucketsToSupabaseForUser(db, userId, startStr, endStr, forceReconcile) {
   const rankingDayRollup = require("./rankingDayRollup");
@@ -1120,12 +1127,19 @@ async function syncRankingDayBucketsToSupabaseForUser(db, userId, startStr, endS
     const kmStrava = Number(b.km_strava_sum) || 0;
     const kmStelvio = Number(b.km_stelvio_sum) || 0;
     if (tssStrava <= 0 && tssStelvio <= 0 && kmStrava <= 0 && kmStelvio <= 0) return;
+    /* Firestore 버킷 자체의 reconciled_at을 함께 보내 RPC가 "이 버킷이 Supabase의 기존
+     * 값보다 실제로 더 최신인지" 판단할 수 있게 한다 — 없으면 RPC가 무조건 최신으로 간주. */
+    const reconciledAtIso =
+      b.reconciled_at && typeof b.reconciled_at.toDate === "function"
+        ? b.reconciled_at.toDate().toISOString()
+        : null;
     buckets.push({
       summary_date: dates[i],
       tss_strava_sum: Math.round(tssStrava * 100) / 100,
       tss_stelvio_sum: Math.round(tssStelvio * 100) / 100,
       km_strava_sum: Math.round(kmStrava * 1000) / 1000,
       km_stelvio_sum: Math.round(kmStelvio * 1000) / 1000,
+      reconciled_at: reconciledAtIso,
     });
   });
   if (!buckets.length) return 0;
