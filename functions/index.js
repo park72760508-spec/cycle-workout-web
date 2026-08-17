@@ -9302,27 +9302,70 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} uid
  */
+/**
+ * 클럽/그룹 랭킹 탭의 "내가 참가한 모임" 표시(currentUserParticipated)용 — 뷰어가 참가한
+ * 오픈 라이딩의 호스트 uid 집합을 조회한다.
+ * [2026-08] Firestore rides 전체 스캔(랭킹보드 클럽 탭 요청마다 매번 발생, 라우팅 설정과
+ * 무관하게 항상 실행됨) 대신 Supabase open_ride_participants/open_rides를 사용하도록 변경
+ * — 랭킹보드 표시 로직에서 Firestore 조회 트래픽을 없애기 위함(기존 반환 형태·시맨틱 동일:
+ * 취소되지 않고 날짜 범위 내인 라이딩만, 호스트 firebase uid Set).
+ */
 async function getHostUserIdsForOpenRidesParticipation(db, uid, startStr, endStr) {
   const out = new Set();
   if (!uid) return out;
-  const tsStart = admin.firestore.Timestamp.fromDate(new Date(`${startStr}T00:00:00+09:00`));
-  const tsEnd = admin.firestore.Timestamp.fromDate(new Date(`${endStr}T23:59:59.999+09:00`));
   const uidStr = String(uid).trim();
-  const ridesSnap = await db.collection("rides")
-    .where("date", ">=", tsStart)
-    .where("date", "<=", tsEnd)
-    .get();
-  ridesSnap.forEach((rdoc) => {
-    const r = rdoc.data() || {};
-    if (String(r.rideStatus || "active") === "cancelled") return;
-    const ymd = rideDocDateToSeoulYmd(r.date);
-    if (!ymd || ymd < startStr || ymd > endStr) return;
-    const parts = Array.isArray(r.participants) ? r.participants : [];
-    if (!parts.some((p) => String(p || "").trim() === uidStr)) return;
-    const h = String(r.hostUserId || "").trim();
-    if (h) out.add(h);
-  });
-  return out;
+  try {
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+
+    const { data: viewerRow, error: viewerErr } = await supabase
+      .from("users")
+      .select("id")
+      .eq("firebase_uid", uidStr)
+      .maybeSingle();
+    if (viewerErr || !viewerRow || !viewerRow.id) return out;
+    const viewerUuid = String(viewerRow.id);
+
+    const { data: partRows, error: partErr } = await supabase
+      .from("open_ride_participants")
+      .select("ride_id")
+      .eq("user_id", viewerUuid)
+      .eq("is_waitlist", false);
+    if (partErr || !partRows || !partRows.length) return out;
+    const rideIds = Array.from(
+      new Set(partRows.map((r) => r && r.ride_id).filter(Boolean).map(String))
+    );
+    if (!rideIds.length) return out;
+
+    const { data: rideRows, error: rideErr } = await supabase
+      .from("open_rides")
+      .select("host_user_id, ride_date, status")
+      .in("id", rideIds)
+      .gte("ride_date", startStr)
+      .lte("ride_date", endStr)
+      .neq("status", "cancelled");
+    if (rideErr || !rideRows || !rideRows.length) return out;
+    const hostUuids = Array.from(
+      new Set(rideRows.map((r) => r && r.host_user_id).filter(Boolean).map(String))
+    );
+    if (!hostUuids.length) return out;
+
+    const { data: hostUserRows, error: hostErr } = await supabase
+      .from("users")
+      .select("id, firebase_uid")
+      .in("id", hostUuids);
+    if (hostErr || !hostUserRows) return out;
+    hostUserRows.forEach((u) => {
+      const fUid = u && u.firebase_uid ? String(u.firebase_uid).trim() : "";
+      if (fUid) out.add(fUid);
+    });
+    return out;
+  } catch (e) {
+    console.warn(
+      "[getHostUserIdsForOpenRidesParticipation] Supabase 조회 실패:",
+      e && e.message ? e.message : e
+    );
+    return out;
+  }
 }
 
 /**

@@ -20,11 +20,16 @@ const GC_RANKING_MAX_ROWS_PER_CATEGORY = 10000;
 const SUPABASE_IN_QUERY_CHUNK = 200;
 
 /**
- * 랭킹 코어 계산(6개 부문 Supabase fan-out 등) 결과를 Firestore `cache`에 짧게 캐싱 —
+ * 랭킹 코어 계산(6개 부문 Supabase fan-out 등) 결과를 짧게 캐싱 —
  * 뷰어별 개인화(currentUser·heptagon axis 등)는 호출부가 캐시된 결과 위에서 별도로 붙이므로 영향 없음.
- * Firestore 1MiB 문서 한도 보호를 위해 큰 payload는 캐싱을 건너뛰고 항상 정상 응답(비캐시 경로와 동일)한다.
+ * [2026-08] Firestore `cache` 컬렉션 → Supabase `ranking_compute_cache` 테이블로 이전.
+ * 랭킹보드는 요청마다(라우팅 설정과 무관하게) 이 캐시를 거치므로, 이 함수가 유일하게 남아있던
+ * "항상 발생하는" Firestore 트래픽이었다 — 랭킹보드 표시 로직에서 Firestore 조회를 완전히
+ * 배제하기 위해 Postgres 테이블로 옮기고 payload 크기 제한도 Firestore 1MiB 한도가 아닌
+ * jsonb 컬럼 기준으로 넉넉히 유지했다(동일하게 과대 payload는 캐싱을 건너뛰고 항상 정상
+ * 응답 — 비캐시 경로와 동일하게 동작).
  */
-const RANKING_COMPUTE_CACHE_COLLECTION = "cache";
+const RANKING_COMPUTE_CACHE_TABLE = "ranking_compute_cache";
 const RANKING_COMPUTE_CACHE_MAX_CHARS = 700000;
 
 /**
@@ -55,27 +60,34 @@ function writeRankingComputeMemoryCache(cacheKey, payload) {
   }
 }
 
+/**
+ * @param {*} admin 미사용 — 호출부 시그니처 호환을 위해 유지(과거 Firestore admin SDK 인자).
+ */
 async function readRankingComputeCache(admin, cacheKey, ttlMs) {
   const mem = readRankingComputeMemoryCache(cacheKey, ttlMs);
   if (mem != null) return mem;
   try {
-    const snap = await admin
-      .firestore()
-      .collection(RANKING_COMPUTE_CACHE_COLLECTION)
-      .doc(cacheKey)
-      .get();
-    if (!snap.exists) return null;
-    const d = snap.data();
-    if (!d || d.payload == null || !isFinite(Number(d.updatedAtMs))) return null;
-    if (Date.now() - Number(d.updatedAtMs) > ttlMs) return null;
-    writeRankingComputeMemoryCache(cacheKey, d.payload);
-    return d.payload;
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from(RANKING_COMPUTE_CACHE_TABLE)
+      .select("payload, updated_at")
+      .eq("cache_key", cacheKey)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data || data.payload == null || !data.updated_at) return null;
+    const updatedAtMs = new Date(data.updated_at).getTime();
+    if (!isFinite(updatedAtMs) || Date.now() - updatedAtMs > ttlMs) return null;
+    writeRankingComputeMemoryCache(cacheKey, data.payload);
+    return data.payload;
   } catch (err) {
     console.warn("[rankingComputeCache] read failed:", cacheKey, err && err.message ? err.message : err);
     return null;
   }
 }
 
+/**
+ * @param {*} admin 미사용 — 호출부 시그니처 호환을 위해 유지(과거 Firestore admin SDK 인자).
+ */
 async function writeRankingComputeCache(admin, cacheKey, payload) {
   writeRankingComputeMemoryCache(cacheKey, payload);
   try {
@@ -86,13 +98,15 @@ async function writeRankingComputeCache(admin, cacheKey, payload) {
       return;
     }
     if (!serialized || serialized.length > RANKING_COMPUTE_CACHE_MAX_CHARS) return;
-    /* undefined 필드가 있으면 Firestore.set()이 거부함 — JSON 왕복으로 제거(res.json()과 동일 동작) */
     const safePayload = JSON.parse(serialized);
-    await admin
-      .firestore()
-      .collection(RANKING_COMPUTE_CACHE_COLLECTION)
-      .doc(cacheKey)
-      .set({ payload: safePayload, updatedAtMs: Date.now() });
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const { error } = await supabase
+      .from(RANKING_COMPUTE_CACHE_TABLE)
+      .upsert(
+        { cache_key: cacheKey, payload: safePayload, updated_at: new Date().toISOString() },
+        { onConflict: "cache_key" }
+      );
+    if (error) throw error;
   } catch (err) {
     console.warn("[rankingComputeCache] write failed:", cacheKey, err && err.message ? err.message : err);
   }
