@@ -41607,6 +41607,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <!-- RUN 랭킹 순위표 프로필 확대 (CYCLE과 동일 디자인) -->
     <div id="runningRankAvatarZoomBackdrop" class="stelvio-rank-avatar-zoom-backdrop hidden" aria-hidden="true">
       <div class="stelvio-rank-avatar-zoom-card" role="dialog" aria-modal="true" aria-label="RUN 랭킹 프로필">
+        <button type="button" class="stelvio-rank-avatar-zoom-close" aria-label="닫기" onclick="if(typeof closeRunningRankAvatarZoom==='function')closeRunningRankAvatarZoom();">&#10005;</button>
         <div class="stelvio-rank-avatar-zoom-photo-wrap">
           <div class="stelvio-rank-avatar-zoom-inner">
             <img id="runningRankAvatarZoomImg" class="stelvio-rank-avatar-zoom-img" alt="" width="280" height="280" decoding="async" />
