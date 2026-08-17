@@ -17,6 +17,23 @@
   var STELVIO_RTSS_DEFAULT_WEIGHT_KG = 70;
 
   /**
+   * 지속시간별 생리학적으로 타당한 IF(강도계수=NP/FTP) 상한 — functions/index.js와 동일 로직.
+   * FTP는 "약 60분간 유지 가능한 최대 파워"로 정의되므로, 60~90분을 넘어서는 라이딩에서
+   * IF 1.0 이상을 수 시간 유지하는 것은 생리학적으로 불가능하다(가능하다면 그 라이딩의
+   * NP가 실제 FTP에 더 가깝다는 뜻). FTP가 실제보다 낮게 설정된 사용자의 장시간 라이딩에서
+   * TSS가 IF²에 비례해 폭증하는 문제를 막기 위해 라이딩 시간별 IF 상한을 둔다.
+   */
+  function maxPlausibleIntensityFactorForDuration(durationSec) {
+    var min = Number(durationSec) / 60;
+    if (min <= 20) return 1.3;
+    if (min <= 60) return 1.1;
+    if (min <= 90) return 0.98;
+    if (min <= 180) return 0.88;
+    if (min <= 300) return 0.8;
+    return 0.72;
+  }
+
+  /**
    * @param {number} durationSec
    * @param {number} avgPower - 평균 파워 (W)
    * @param {number} np - Normalized Power (W)
@@ -34,8 +51,10 @@
     if (npN <= 0 || avgN <= 0) return 0;
     if (!d || d <= 0) return 0;
 
-    var ifFactor = npN / ftpN;
-    var baseTSS = ((d * npN * ifFactor) / (ftpN * 3600)) * 100;
+    var rawIfFactor = npN / ftpN;
+    var ifCap = maxPlausibleIntensityFactorForDuration(d);
+    var ifFactor = Math.min(rawIfFactor, ifCap);
+    var baseTSS = (d / 3600) * ifFactor * ifFactor * 100;
     var totalKJ = (avgN * d) / 1000;
     if (totalKJ <= 0) return 0;
 

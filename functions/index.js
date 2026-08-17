@@ -1308,12 +1308,40 @@ function buildStravaScopeUpdate(tokenData) {
 const STELVIO_RTSS_DEFAULT_WEIGHT_KG = 70;
 
 /**
+ * 지속시간별 생리학적으로 타당한 IF(강도계수=NP/FTP) 상한.
+ * Coggan/Allen의 IF 구간 정의(Training and Racing with a Power Meter) 기준 —
+ * FTP 자체가 "약 60분간 유지 가능한 최대 파워"로 정의되므로, 60~90분을 넘어서는
+ * 라이딩에서 IF가 1.0 이상으로 수 시간 유지되는 것은 생리학적으로 불가능하다
+ * (그게 가능하다면 그 라이딩의 NP 자체가 실제 FTP에 더 가깝다는 뜻).
+ * FTP를 실제보다 낮게(오래돼) 설정한 사용자가 장시간 라이딩을 하면 TSS가 IF²에
+ * 비례해 폭증하는 문제(예: 4시간 라이딩·IF 1.07 → TSS 474)를 막기 위해,
+ * Garmin/TrainingPeaks 등이 FTP 자동 감지에 쓰는 것과 동일한 파워-지속시간
+ * 곡선 개념으로 라이딩 시간별 IF 상한을 두고 그 이상은 클램프한다.
+ */
+function maxPlausibleIntensityFactorForDuration(durationSec) {
+  const min = Number(durationSec) / 60;
+  if (min <= 20) return 1.3; // 무산소/VO2max성 짧은 최대 노력
+  if (min <= 60) return 1.1; // FTP 테스트 길이 내외의 임계 구간
+  if (min <= 90) return 0.98; // 장시간 임계/스위트스팟 경계
+  if (min <= 180) return 0.88; // 템포~스위트스팟(1.5~3시간)
+  if (min <= 300) return 0.8; // 장거리 템포~엔듀런스(3~5시간)
+  return 0.72; // 5시간 이상 초장거리 엔듀런스
+}
+
+/**
  * STELVIO 글로벌 개정 TSS (rTSS) — W/kg 가중치
  * [수정] kJ 가드레일 재설계 (클라이언트 stelvioRtss.js와 동일한 로직 적용)
  *  구버전 wPerKg < 2.5 → tssPerKJ > 15.0, wPerKg > 4.0 → tssPerKJ < 6.0 로직은
  *  정상 범위(0.05~0.8 TSS/kJ)보다 10~100배 높아 비정상 파워 데이터 입력 시 수천~수만 TSS 발생.
  *  (예: 2026-05-09~12 기간 TSS 4173·9927·9927.2 버그의 원인)
  *  변경 후: 1.5 TSS/kJ 단일 상한 + 500 TSS 절대 상한으로 통일.
+ * [수정] 지속시간별 IF 상한 가드레일 추가 (클라이언트 stelvioRtss.js와 동일한 로직 적용)
+ *  FTP가 실제보다 낮게 설정된 사용자가 장시간(수 시간) 라이딩을 하면, kJ/500 상한에
+ *  걸리지 않는 범위 내에서도 IF²에 비례해 TSS가 비정상적으로 높게 산출되는 문제가
+ *  있었다(예: 76kg·FTP 159W 사용자가 3.5~3.9시간 라이딩에서 IF 1.07~1.11을 기록해
+ *  하루 TSS 462.7·474.8 산출 — 일반 라이더 기준 상식적으로 납득하기 어려운 수치).
+ *  IF 1.0 이상을 1시간 넘게 유지하는 것은 FTP 정의상 불가능하므로, 근본 원인인
+ *  IF 계산 단계에서 지속시간별 상한(maxPlausibleIntensityFactorForDuration)을 적용한다.
  */
 function calculateStelvioRevisedTSS(durationSec, avgPower, np, ftp, weight) {
   const d = Number(durationSec);
@@ -1325,8 +1353,10 @@ function calculateStelvioRevisedTSS(durationSec, avgPower, np, ftp, weight) {
   if (!ftpN || !w || ftpN <= 0 || w <= 0) return 0;
   if (npN <= 0 || avgN <= 0) return 0;
   if (!d || d <= 0) return 0;
-  const ifFactor = npN / ftpN;
-  const baseTSS = ((d * npN * ifFactor) / (ftpN * 3600)) * 100;
+  const rawIfFactor = npN / ftpN;
+  const ifCap = maxPlausibleIntensityFactorForDuration(d);
+  const ifFactor = Math.min(rawIfFactor, ifCap);
+  const baseTSS = (d / 3600) * ifFactor * ifFactor * 100;
   const totalKJ = (avgN * d) / 1000;
   if (totalKJ <= 0) return 0;
   const wPerKg = ftpN / w;
