@@ -9950,10 +9950,19 @@ function OpenRidingDetail(props) {
             className="open-riding-share-contact-panel w-full max-w-sm rounded-2xl border border-violet-200 bg-white shadow-xl overflow-hidden"
             onClick={function (e) { e.stopPropagation(); }}
           >
-            <div className="open-riding-share-contact-header px-4 py-3 border-b border-violet-100">
+            <div className="open-riding-share-contact-header px-4 py-3 border-b border-violet-100 flex items-center justify-between gap-2">
               <h2 id="open-riding-share-contact-title" className="text-base font-bold text-violet-900 m-0">
                 라이딩 모임 참석 신청
               </h2>
+              <button
+                type="button"
+                className="text-violet-400 text-xl leading-none px-1 disabled:opacity-50"
+                disabled={isActionBusy}
+                onClick={function () { setJoinShareModalOpen(false); }}
+                aria-label="닫기"
+              >
+                &times;
+              </button>
             </div>
             <div className="p-4 space-y-3">
               <p className="text-sm text-slate-800 font-medium m-0">라이딩 모임 참석 시 TSS 마일리지 누적 포인트에서 10SP 차감됩니다.</p>
