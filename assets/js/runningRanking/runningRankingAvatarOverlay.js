@@ -194,18 +194,27 @@
 
     var uidTrim = meta.userId != null ? String(meta.userId).trim() : '';
 
+    /* RUN 랭킹 행의 data-stelvio-rank-user-id는 Supabase board UUID(user_info.user_id)이지
+     * window.currentUser.id는 Firebase uid라 직접 비교하면 절대 일치하지 않는다(자기 아바타에도
+     * 카메라 버튼이 안 보이던 원인). runningRankingData.getViewerIdentity가 이미 같은 문제를
+     * "나의 위치" 배지용으로 해결해둔 board UUID 매핑을 그대로 재사용한다 — stelvioOpenProfilePhotoPicker는
+     * 반대로 Firebase uid를 요구하므로, 버튼 타깃은 반드시 identity.firebaseId로 설정한다. */
     var cameraBtn = el('runningRankAvatarZoomCameraBtn');
     if (cameraBtn) {
-      var myUid = (window.currentUser && window.currentUser.id) || (function () {
-        try {
-          var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
-          return u && u.id ? u.id : null;
-        } catch (eCu) {
-          return null;
+      var isMe = false;
+      var myFirebaseUid = '';
+      try {
+        var dataMod = window.runningRankingData;
+        if (dataMod && typeof dataMod.getViewerIdentity === 'function') {
+          var identity = dataMod.getViewerIdentity(getRows());
+          myFirebaseUid = identity && identity.firebaseId ? String(identity.firebaseId) : '';
+          var myBoardUid = identity && identity.boardUserId ? String(identity.boardUserId) : '';
+          if (uidTrim && myBoardUid && uidTrim === myBoardUid) isMe = true;
+          if (!isMe && uidTrim && myFirebaseUid && uidTrim === myFirebaseUid) isMe = true;
         }
-      })();
-      if (uidTrim && myUid && String(myUid) === uidTrim) {
-        cameraBtn.setAttribute('data-target-uid', uidTrim);
+      } catch (eIdentity) {}
+      if (isMe && myFirebaseUid) {
+        cameraBtn.setAttribute('data-target-uid', myFirebaseUid);
         cameraBtn.classList.remove('hidden');
       } else {
         cameraBtn.removeAttribute('data-target-uid');
