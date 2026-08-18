@@ -300,6 +300,72 @@
     );
   }
 
+  function buildSectionRefund() {
+    return (
+      '<p class="competition-form-hint" style="margin-bottom:12px;">참가비 취소·환불 기준을 확인해 주세요.</p>' +
+      '<div class="competition-refund-toggle-row">' +
+      '    <button type="button" class="competition-refund-toggle-btn" id="cAppRefundToggleBtn" aria-expanded="false">' +
+      '      <span class="competition-refund-toggle-icon" id="cAppRefundToggleIcon">+</span>' +
+      '      <span id="cAppRefundToggleLabel">펼쳐보기</span>' +
+      '    </button>' +
+      '  </div>' +
+      '  <div class="competition-refund-detail" id="cAppRefundDetail">' +
+      '    <div class="competition-refund-rule">' +
+      '      <p class="competition-refund-rule-title">1. 접수 기간 내 취소 (접수 마감일 자정 전까지)</p>' +
+      '      <ul class="competition-refund-rule-body">' +
+      '        <li>참가 접수 기간 내에 신청을 취소하는 경우, 참가비 전액(100%)이 환불됩니다.</li>' +
+      '        <li>단, 결제 대행사(PG사) 수수료 또는 가상계좌 이체 수수료가 발생하는 경우 일부 금액이 차감될 수 있습니다.</li>' +
+      '      </ul>' +
+      '    </div>' +
+      '    <div class="competition-refund-rule">' +
+      '      <p class="competition-refund-rule-title">2. 접수 마감 이후 취소 및 환불 불가 안내</p>' +
+      '      <ul class="competition-refund-rule-body">' +
+      '        <li>참가 접수 마감일 이후에는 참가자 배번호 제작, 기념품 발주, 코스 안전 요원 배치 및 보험 가입 등 대회 준비가 본격적으로 시작되므로 어떠한 사유로도 참가 취소 및 환불이 불가능합니다. (개인 사정, 부상, 천재지변, 국가 비상사태 등 포함)</li>' +
+      '      </ul>' +
+      '    </div>' +
+      '    <div class="competition-refund-rule">' +
+      '      <p class="competition-refund-rule-title">3. 참가권 양도 및 대리 참가 금지</p>' +
+      '      <ul class="competition-refund-rule-body">' +
+      '        <li>본 대회는 안전 사고 예방과 정확한 기록 측정을 위하여 타인에게 참가권을 양도하거나 대리 참가를 엄격히 금지합니다.</li>' +
+      '        <li>적발 시 실격 처리되며, 양수인과 양도인 모두 향후 STELVIO에서 주최/주관하는 모든 대회에 참가할 수 없습니다.</li>' +
+      '      </ul>' +
+      '    </div>' +
+      '    <div class="competition-refund-rule">' +
+      '      <p class="competition-refund-rule-title">4. 주최 측 사정에 의한 대회 취소</p>' +
+      '      <ul class="competition-refund-rule-body">' +
+      '        <li>주최 측의 귀책 사유나 불가항력적 재난·재해(악천후, 감염병 확산 등)로 인해 대회가 취소 또는 연기되는 경우, 환불 기준은 다음과 같이 적용됩니다.' +
+      '          <ul class="competition-refund-rule-sublist">' +
+      '            <li>대회 전 전면 취소 시: 소요된 실비(기념품 제작 비용 등)를 제외한 잔여 금액을 환불합니다.</li>' +
+      '            <li>대회 일자 연기 시: 연기된 일정에 참가하지 못하는 참가자에 한하여 주최 측이 정한 기간 내에 취소를 요청할 경우 환불이 가능합니다.</li>' +
+      '          </ul>' +
+      '        </li>' +
+      '      </ul>' +
+      '    </div>' +
+      '    <div class="competition-refund-rule" style="margin-bottom:0;">' +
+      '      <p class="competition-refund-rule-title">5. 토스(TOSS) 가상계좌 환불 관련 유의사항</p>' +
+      '      <ul class="competition-refund-rule-body">' +
+      '        <li>가상계좌로 입금한 내역을 환불받는 경우, 환불 수수료가 발생할 수 있으며 환불 처리에 영업일 기준 3~5일이 소요될 수 있습니다.</li>' +
+      '        <li>환불 신청 시 반드시 본인 명의의 계좌(예금주, 은행명, 계좌번호)를 입력해야 하며, 타인 명의 계좌로는 환불이 제한될 수 있습니다.</li>' +
+      '      </ul>' +
+      '    </div>' +
+      '  </div>'
+    );
+  }
+
+  function wireRefundToggle(overlay) {
+    var btn = overlay.querySelector('#cAppRefundToggleBtn');
+    var icon = overlay.querySelector('#cAppRefundToggleIcon');
+    var label = overlay.querySelector('#cAppRefundToggleLabel');
+    var detail = overlay.querySelector('#cAppRefundDetail');
+    if (!btn || !detail) return;
+    btn.addEventListener('click', function () {
+      var open = detail.classList.toggle('competition-refund-detail--open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (icon) icon.textContent = open ? '−' : '+';
+      if (label) label.textContent = open ? '접어보기' : '펼쳐보기';
+    });
+  }
+
   function wireChipGroups(overlay, state) {
     var groups = overlay.querySelectorAll('[data-chip-group]');
     for (var i = 0; i < groups.length; i++) {
@@ -727,6 +793,7 @@
         extraClass: 'is-medical',
       },
       { id: 'agreements', title: '약관 동의', badge: '', bodyHtml: buildSectionAgreements(existingApplicant) },
+      { id: 'refund', title: '환불 규정', badge: '', bodyHtml: buildSectionRefund() },
     ];
     var body =
       sections.map(buildAccordionItemHtml).join('') +
@@ -739,6 +806,7 @@
     wireRunStartGroupPace(overlay, comp, chipState);
     wireCycleStartGroupPace(overlay, comp, chipState);
     wireAgreements(overlay);
+    wireRefundToggle(overlay);
     wireAddressSearch(overlay);
     wireDigitsOnlyInput(overlay.querySelector('#cAppBirth6'), 6);
     wirePhoneAutoHyphen(overlay.querySelector('#cAppPhone'));

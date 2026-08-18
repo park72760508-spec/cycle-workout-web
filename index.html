@@ -3327,6 +3327,37 @@
     .competition-agreement-required { color: #ef4444; font-weight: 700; margin-right: 3px; }
     .competition-agreement-detail { font-size: 12px; color: #94a3b8; margin-top: 4px; line-height: 1.5; }
 
+    /* 환불 규정 섹션(6번) — 랭킹보드 히어로카드의 「펼쳐보기」 토글과 동일한 디자인 언어로 통일 */
+    .competition-refund-toggle-row { display: flex; justify-content: center; }
+    .competition-refund-toggle-btn {
+      touch-action: manipulation; -webkit-tap-highlight-color: rgba(102, 126, 234, 0.25);
+      display: inline-flex; align-items: center; gap: 5px;
+      background: none; border: 1.5px solid rgba(102, 126, 234, 0.4); border-radius: 20px;
+      padding: 5px 16px; font-size: 13px; color: #667eea; font-weight: 600; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s; letter-spacing: 0.01em;
+    }
+    .competition-refund-toggle-btn:hover { background: rgba(102, 126, 234, 0.08); border-color: rgba(102, 126, 234, 0.65); color: #4f46e5; }
+    .competition-refund-toggle-icon { font-size: 16px; line-height: 1; font-weight: 700; }
+    .competition-refund-detail {
+      overflow: hidden; max-height: 0; margin-top: 0;
+      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), margin-top 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .competition-refund-detail.competition-refund-detail--open { max-height: 2400px; margin-top: 14px; transition: max-height 0.55s cubic-bezier(0.4, 0, 0.2, 1), margin-top 0.4s ease; }
+    .competition-refund-rule { margin-bottom: 16px; }
+    .competition-refund-rule-title { font-size: 13px; font-weight: 700; color: #1e293b; margin: 0 0 6px; }
+    .competition-refund-rule-body { list-style: none; margin: 0; padding: 0; }
+    .competition-refund-rule-body > li {
+      position: relative; padding-left: 12px; font-size: 12.5px; color: #64748b; line-height: 1.6; margin-bottom: 4px;
+    }
+    .competition-refund-rule-body > li:last-child { margin-bottom: 0; }
+    .competition-refund-rule-body > li::before { content: ''; position: absolute; left: 0; top: 9px; width: 3px; height: 3px; border-radius: 50%; background: #cbd5e1; }
+    .competition-refund-rule-sublist { list-style: none; margin: 6px 0 0; padding: 0 0 0 4px; }
+    .competition-refund-rule-sublist > li {
+      position: relative; padding-left: 14px; font-size: 12.5px; color: #64748b; line-height: 1.6; margin-bottom: 4px;
+    }
+    .competition-refund-rule-sublist > li:last-child { margin-bottom: 0; }
+    .competition-refund-rule-sublist > li::before { content: '—'; position: absolute; left: 0; top: 0; color: #94a3b8; font-size: 11px; }
+
     /* 우편번호 찾기(Daum Postcode) — 팝업(window.open) 대신 embed()로 렌더링해 iOS 등의
        팝업 차단과 무관하게 항상 표시되도록 한다(competitionApplicationForm.js) */
     .competition-postcode-overlay {
@@ -42622,7 +42653,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApi.js"></script>
   <script src="assets/js/competition/competitionBottomSheet.js"></script>
   <script src="assets/js/competition/competitionAdminForm.js"></script>
-  <script src="assets/js/competition/competitionApplicationForm.js"></script>
+  <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/competition/competitionScreen.js"></script>
   <script>
   (function() {
