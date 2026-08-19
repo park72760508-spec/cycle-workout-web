@@ -548,6 +548,10 @@ async function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidNamespace)
       log.time_in_zones && typeof log.time_in_zones === 'object'
         ? log.time_in_zones
         : null,
+    segment_avg_watts_json:
+      Array.isArray(log.segment_avg_watts) && log.segment_avg_watts.length
+        ? log.segment_avg_watts
+        : null,
   };
 }
 

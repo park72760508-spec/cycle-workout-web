@@ -845,18 +845,14 @@ function logNeedsTimeInZones(log) {
   return !hasPower && !hasHr;
 }
 
-function logNeedsSegmentAvgWatts(log) {
-  return !(log && Array.isArray(log.segment_avg_watts) && log.segment_avg_watts.length > 0);
-}
-
 /**
- * Supabase Read 시 time_in_zones·segment_avg_watts 미포함 로그를 Firestore에서 보강한다.
- * 두 필드 모두 Supabase rides 테이블 스키마에는 없는 Firestore 전용 필드라, 같은 조회 결과에서
- * 함께 채워 넣어 왕복 조회를 늘리지 않는다 (기존 데이터·마이그레이션 전 호환).
+ * Supabase Read 시 time_in_zones 미포함 로그를 Firestore에서 보강 (기존 데이터·마이그레이션 전 호환).
+ * segment_avg_watts는 rides.segment_avg_watts_json 컬럼으로 Supabase에 직접 dual-write되므로
+ * (mapTrainingLogToRideRow) 이 Firestore 보강 대상에 포함하지 않는다 — Firestore 트래픽 추가 없음.
  */
 async function enrichLogsWithTimeInZonesFromFirestore(userId, logs, db) {
   if (!logs || !logs.length) return logs;
-  if (!logs.some(logNeedsTimeInZones) && !logs.some(logNeedsSegmentAvgWatts)) return logs;
+  if (!logs.some(logNeedsTimeInZones)) return logs;
   if (!db) return logs;
   try {
     var userLogsRef = collection(db, 'users', userId, 'logs');
@@ -867,29 +863,21 @@ async function enrichLogsWithTimeInZonesFromFirestore(userId, logs, db) {
     snap.forEach(function(docSnap) {
       var d = docSnap.data() || {};
       var tiz = d.time_in_zones;
-      var segAvg = Array.isArray(d.segment_avg_watts) && d.segment_avg_watts.length ? d.segment_avg_watts : null;
-      if ((!tiz || typeof tiz !== 'object') && !segAvg) return;
+      if (!tiz || typeof tiz !== 'object') return;
       var aid = d.activity_id ? String(d.activity_id) : String(docSnap.id);
       var ds = parseLogDateStrForTiz(d.date);
-      var entry = { tiz: tiz && typeof tiz === 'object' ? tiz : null, segAvg: segAvg };
-      byActivityId.set(aid, entry);
-      if (ds) byDate.set(ds, entry);
+      byActivityId.set(aid, tiz);
+      if (ds) byDate.set(ds, tiz);
     });
     return logs.map(function(log) {
-      var needsTiz = logNeedsTimeInZones(log);
-      var needsSeg = logNeedsSegmentAvgWatts(log);
-      if (!needsTiz && !needsSeg) return log;
+      if (!logNeedsTimeInZones(log)) return log;
       var aid = log.activity_id ? String(log.activity_id) : (log.id ? String(log.id) : '');
       var ds = parseLogDateStrForTiz(log.date) || (typeof log.date === 'string' ? log.date.slice(0, 10) : '');
-      var entry = (aid && byActivityId.get(aid)) || (ds && byDate.get(ds)) || null;
-      if (!entry) return log;
-      var patch = {};
-      if (needsTiz && entry.tiz) patch.time_in_zones = entry.tiz;
-      if (needsSeg && entry.segAvg) patch.segment_avg_watts = entry.segAvg;
-      return Object.keys(patch).length ? Object.assign({}, log, patch) : log;
+      var tiz = (aid && byActivityId.get(aid)) || (ds && byDate.get(ds)) || null;
+      return tiz ? Object.assign({}, log, { time_in_zones: tiz }) : log;
     });
   } catch (e) {
-    console.warn('[getUserTrainingLogs] Firestore time_in_zones/segment_avg_watts 보강 실패:', e && e.message);
+    console.warn('[getUserTrainingLogs] Firestore time_in_zones 보강 실패:', e && e.message);
     return logs;
   }
 }
