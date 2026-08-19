@@ -383,15 +383,54 @@
       return;
     }
 
-    // PAYMENT_WAITING(신규 발급 또는 기존 대기중 재조회) — 계좌 안내 시트
+    // PAYMENT_WAITING(신규 발급 또는 기존 대기중 재조회) — 계좌 안내 시트 + 카드에도 입금 전 취소 버튼 노출
     applyBtn.textContent = '입금 대기중';
     applyBtn.disabled = true;
+    var wrapWaiting = applyBtn.parentElement;
+    if (wrapWaiting && !wrapWaiting.querySelector('.competition-cancel-waiting-btn') && result.applicationId) {
+      var cancelWaitingBtn = document.createElement('button');
+      cancelWaitingBtn.type = 'button';
+      cancelWaitingBtn.className = 'competition-apply-btn competition-cancel-waiting-btn';
+      cancelWaitingBtn.style.marginTop = '8px';
+      cancelWaitingBtn.style.background = '#f1f5f9';
+      cancelWaitingBtn.style.color = '#334155';
+      cancelWaitingBtn.textContent = '입금 전 신청 취소';
+      cancelWaitingBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        haptic(10);
+        if (!confirm('신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.')) return;
+        cancelWaitingBtn.disabled = true;
+        window.competitionApi
+          .cancelCompetitionApplication(result.applicationId)
+          .then(function (r) {
+            if (!r || r.success === false) {
+              alert((r && r.error) || '취소에 실패했습니다.');
+              cancelWaitingBtn.disabled = false;
+              return;
+            }
+            applyBtn.textContent = '신청하기';
+            applyBtn.disabled = false;
+            cancelWaitingBtn.remove();
+          })
+          .catch(function (e) {
+            alert((e && e.message) || '취소에 실패했습니다.');
+            cancelWaitingBtn.disabled = false;
+          });
+      });
+      wrapWaiting.appendChild(cancelWaitingBtn);
+    }
     if (opts.autoOpenSheet !== false) {
       // 신청서 작성 폼(competitionApplicationForm)에서 이어지는 흐름은 onSubmit resolve 직후
       // 폼 자신의 바텀시트를 닫는다(단일 오버레이 구조) — 같은 틱에 열면 그 close에 곧바로 닫히므로
       // 다음 매크로태스크로 미뤄 폼이 닫힌 뒤에 계좌 안내 시트가 열리도록 한다.
       setTimeout(function () {
-        window.competitionBottomSheet.showVirtualAccountSheet(result.virtualAccount || {});
+        window.competitionBottomSheet.showVirtualAccountSheet(result.virtualAccount || {}, result.applicationId, function () {
+          applyBtn.textContent = '신청하기';
+          applyBtn.disabled = false;
+          var btn = applyBtn.parentElement && applyBtn.parentElement.querySelector('.competition-cancel-waiting-btn');
+          if (btn) btn.remove();
+          renderCompetitionList();
+        });
       }, 0);
     }
   }

@@ -122,10 +122,12 @@
   }
 
   /**
-   * 신청 성공 — 가상계좌 정보 안내.
+   * 신청 성공 — 가상계좌 정보 안내. 입금 전이면 여기서 바로 신청을 취소할 수 있다.
    * @param {{bankName:string, accountNumber:string, dueDate:string}} virtualAccount
+   * @param {string} [applicationId] - 있으면 "신청 취소" 버튼을 표시한다.
+   * @param {function} [onCanceled] - 취소 성공 후 호출(호출자가 버튼·목록 상태를 되돌릴 수 있게).
    */
-  function showVirtualAccountSheet(virtualAccount) {
+  function showVirtualAccountSheet(virtualAccount, applicationId, onCanceled) {
     haptic(50);
     var bankName = virtualAccount.bankName || '입금 은행';
     var accountNumber = virtualAccount.accountNumber || '';
@@ -138,8 +140,37 @@
       '  <button type="button" class="competition-copy-btn" id="competitionVaCopyBtn">복사</button>' +
       '</div>' +
       '<div class="competition-due-countdown" id="competitionVaCountdown">' + formatRemaining(virtualAccount.dueDate) + '</div>';
+    var footer = applicationId
+      ? '<button type="button" class="competition-va-cancel-btn" id="competitionVaCancelBtn">입금 전 신청 취소</button>'
+      : '';
 
-    var overlay = openSheet('입금 계좌 안내', body);
+    var overlay = openSheet('입금 계좌 안내', body, footer);
+    var cancelBtn = overlay.querySelector('#competitionVaCancelBtn');
+    if (cancelBtn && applicationId) {
+      cancelBtn.addEventListener('click', function () {
+        haptic(10);
+        if (!confirm('신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.')) return;
+        cancelBtn.disabled = true;
+        cancelBtn.textContent = '취소 처리 중...';
+        window.competitionApi
+          .cancelCompetitionApplication(applicationId)
+          .then(function (r) {
+            if (!r || r.success === false) {
+              alert((r && r.error) || '취소에 실패했습니다.');
+              cancelBtn.disabled = false;
+              cancelBtn.textContent = '입금 전 신청 취소';
+              return;
+            }
+            closeSheet();
+            if (typeof onCanceled === 'function') onCanceled();
+          })
+          .catch(function (e) {
+            alert((e && e.message) || '취소에 실패했습니다.');
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = '입금 전 신청 취소';
+          });
+      });
+    }
     var copyBtn = overlay.querySelector('#competitionVaCopyBtn');
     if (copyBtn) {
       copyBtn.addEventListener('click', function () {
