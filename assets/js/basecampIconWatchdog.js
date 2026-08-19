@@ -1,5 +1,6 @@
 /**
- * CYCLE 베이스캠프 화면 버튼·배경 아이콘 워치독.
+ * 베이스캠프류 화면(CYCLE 베이스캠프, RUN 베이스캠프, 인도어 훈련, 로그인 직후 CYCLE/RUN 카테고리
+ * 선택 화면) 버튼·배경 아이콘 워치독.
  *
  * 버튼 아이콘은 CSS `background-image`로 그려지는데, <img>와 달리 background-image는
  * 로드가 실패해도 onerror 같은 감지·재시도 수단이 브라우저에 전혀 없다 — 모바일 데이터에서
@@ -13,7 +14,12 @@
 (function () {
   'use strict';
 
-  var TARGET_SELECTOR = '#basecampScreen .basecamp-btn, #basecampScreen .basecamp-background-image';
+  // 네 화면 모두 버튼에 .basecamp-btn(스포츠 카테고리 화면은 .sport-category-btn도 겸함),
+  // 배경에 .basecamp-background-image를 공통으로 쓴다 — .basecamp-btn 하나로 전부 커버된다.
+  var TARGET_SCREEN_IDS = ['basecampScreen', 'runBasecampScreen', 'indoorTrainingSubScreen', 'sportCategoryScreen'];
+  var TARGET_SELECTOR = TARGET_SCREEN_IDS.map(function (id) {
+    return '#' + id + ' .basecamp-btn, #' + id + ' .basecamp-background-image';
+  }).join(', ');
   var RETRY_DELAYS_MS = [1000, 3000, 8000, 20000];
   var MAX_ATTEMPTS = RETRY_DELAYS_MS.length;
 
@@ -69,8 +75,10 @@
   }
 
   function scan() {
-    var screen = document.getElementById('basecampScreen');
-    if (!screen) return;
+    var hasAnyTargetScreen = TARGET_SCREEN_IDS.some(function (id) {
+      return !!document.getElementById(id);
+    });
+    if (!hasAnyTargetScreen) return;
     var els = document.querySelectorAll(TARGET_SELECTOR);
     for (var i = 0; i < els.length; i++) verify(els[i], 0);
   }

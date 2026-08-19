@@ -705,10 +705,10 @@ body.run-dashboard-active .screen:not(#runDashboardScreen):not(#splashScreen) {
   overflow: hidden;
 }
 #indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-racing {
-  background-image: url('https://stelvio.ai.kr/assets/img/s(03).png') !important;
+  background-image: url('../img/s(03).png') !important;
 }
 #indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-device {
-  background-image: url('https://stelvio.ai.kr/assets/img/s(04).png') !important;
+  background-image: url('../img/s(04).png') !important;
 }
 #indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-racing::before,
 #indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-device::before {
