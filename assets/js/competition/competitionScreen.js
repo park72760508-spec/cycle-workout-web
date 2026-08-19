@@ -434,13 +434,7 @@
       // 폼 자신의 바텀시트를 닫는다(단일 오버레이 구조) — 같은 틱에 열면 그 close에 곧바로 닫히므로
       // 다음 매크로태스크로 미뤄 폼이 닫힌 뒤에 계좌 안내 시트가 열리도록 한다.
       setTimeout(function () {
-        window.competitionBottomSheet.showVirtualAccountSheet(result.virtualAccount || {}, result.applicationId, function () {
-          applyBtn.textContent = '신청하기';
-          applyBtn.disabled = false;
-          var btn = applyBtn.parentElement && applyBtn.parentElement.querySelector('.competition-cancel-waiting-btn');
-          if (btn) btn.remove();
-          renderCompetitionList();
-        });
+        window.competitionBottomSheet.showVirtualAccountSheet(result.virtualAccount || {});
       }, 0);
     }
   }
