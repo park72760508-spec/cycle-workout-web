@@ -29,7 +29,7 @@
   }
 
   function verify(el, attempt) {
-    var state = el.__stelvioIconState || (el.__stelvioIconState = { attempt: 0, timer: null, pending: false, failed: false });
+    var state = el.__stelvioIconState || (el.__stelvioIconState = { token: 0, timer: null, pending: false, failed: false });
     if (state.pending) return;
 
     var url = extractUrl(getComputedStyle(el).backgroundImage);
@@ -39,9 +39,17 @@
     // 재시도(attempt>=1)부터는 캐시 무효화 쿼리를 붙여, 실패가 캐시된 경우에도 실제 네트워크로 재시도한다.
     var probeUrl = attempt === 0 ? url : url + (url.indexOf('?') === -1 ? '?' : '&') + '_iconRetry=' + attempt + '_' + Date.now();
 
+    // 새 검증 주기를 시작할 때마다 토큰을 올린다 — 이전에 예약된 재시도 타이머가 뒤늦게 실행되며
+    // 이번 주기의 결과를 덮어쓰는 경쟁 상태(stale callback)를 막는다.
+    var myToken = ++state.token;
+    if (state.timer) {
+      clearTimeout(state.timer);
+      state.timer = null;
+    }
     state.pending = true;
     var probe = new Image();
     probe.onload = function () {
+      if (state.token !== myToken) return; // 이미 새 주기로 대체된 낡은 콜백
       state.pending = false;
       if (state.failed) {
         state.failed = false;
@@ -49,10 +57,10 @@
       }
     };
     probe.onerror = function () {
+      if (state.token !== myToken) return;
       state.pending = false;
       state.failed = true;
       if (attempt + 1 >= MAX_ATTEMPTS) return;
-      if (state.timer) clearTimeout(state.timer);
       state.timer = setTimeout(function () {
         verify(el, attempt + 1);
       }, RETRY_DELAYS_MS[attempt]);
