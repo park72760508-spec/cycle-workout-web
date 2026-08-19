@@ -149,26 +149,36 @@
     if (cancelBtn && applicationId) {
       cancelBtn.addEventListener('click', function () {
         haptic(10);
-        if (!confirm('신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.')) return;
-        cancelBtn.disabled = true;
-        cancelBtn.textContent = '취소 처리 중...';
-        window.competitionApi
-          .cancelCompetitionApplication(applicationId)
-          .then(function (r) {
-            if (!r || r.success === false) {
-              alert((r && r.error) || '취소에 실패했습니다.');
+        var runCancel = function () {
+          cancelBtn.disabled = true;
+          cancelBtn.textContent = '취소 처리 중...';
+          window.competitionApi
+            .cancelCompetitionApplication(applicationId)
+            .then(function (r) {
+              if (!r || r.success === false) {
+                alert((r && r.error) || '취소에 실패했습니다.');
+                cancelBtn.disabled = false;
+                cancelBtn.textContent = '입금 전 신청 취소';
+                return;
+              }
+              closeSheet();
+              if (typeof onCanceled === 'function') onCanceled();
+            })
+            .catch(function (e) {
+              alert((e && e.message) || '취소에 실패했습니다.');
               cancelBtn.disabled = false;
               cancelBtn.textContent = '입금 전 신청 취소';
-              return;
-            }
-            closeSheet();
-            if (typeof onCanceled === 'function') onCanceled();
-          })
-          .catch(function (e) {
-            alert((e && e.message) || '취소에 실패했습니다.');
-            cancelBtn.disabled = false;
-            cancelBtn.textContent = '입금 전 신청 취소';
+            });
+        };
+        if (typeof window.showStelvioExitConfirmPopup === 'function') {
+          window.showStelvioExitConfirmPopup(runCancel, {
+            message: '신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.',
+            okText: '취소하기',
+            cancelText: '유지하기'
           });
+        } else if (confirm('신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.')) {
+          runCancel();
+        }
       });
     }
     var copyBtn = overlay.querySelector('#competitionVaCopyBtn');

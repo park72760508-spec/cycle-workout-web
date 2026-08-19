@@ -398,24 +398,34 @@
       cancelWaitingBtn.addEventListener('click', function (e) {
         e.stopPropagation();
         haptic(10);
-        if (!confirm('신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.')) return;
-        cancelWaitingBtn.disabled = true;
-        window.competitionApi
-          .cancelCompetitionApplication(result.applicationId)
-          .then(function (r) {
-            if (!r || r.success === false) {
-              alert((r && r.error) || '취소에 실패했습니다.');
+        var runCancel = function () {
+          cancelWaitingBtn.disabled = true;
+          window.competitionApi
+            .cancelCompetitionApplication(result.applicationId)
+            .then(function (r) {
+              if (!r || r.success === false) {
+                alert((r && r.error) || '취소에 실패했습니다.');
+                cancelWaitingBtn.disabled = false;
+                return;
+              }
+              applyBtn.textContent = '신청하기';
+              applyBtn.disabled = false;
+              cancelWaitingBtn.remove();
+            })
+            .catch(function (e) {
+              alert((e && e.message) || '취소에 실패했습니다.');
               cancelWaitingBtn.disabled = false;
-              return;
-            }
-            applyBtn.textContent = '신청하기';
-            applyBtn.disabled = false;
-            cancelWaitingBtn.remove();
-          })
-          .catch(function (e) {
-            alert((e && e.message) || '취소에 실패했습니다.');
-            cancelWaitingBtn.disabled = false;
+            });
+        };
+        if (typeof window.showStelvioExitConfirmPopup === 'function') {
+          window.showStelvioExitConfirmPopup(runCancel, {
+            message: '신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.',
+            okText: '취소하기',
+            cancelText: '유지하기'
           });
+        } else if (confirm('신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.')) {
+          runCancel();
+        }
       });
       wrapWaiting.appendChild(cancelWaitingBtn);
     }
@@ -552,21 +562,31 @@
       return;
     }
     if (myApp.status === 'PAYMENT_WAITING') {
-      if (!confirm('신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.')) return;
       haptic(10);
-      window.competitionApi
-        .cancelCompetitionApplication(myApp.id)
-        .then(function (r) {
-          if (!r || r.success === false) {
-            alert((r && r.error) || '취소에 실패했습니다.');
-            return;
-          }
-          window.competitionBottomSheet.closeSheet();
-          renderCompetitionList();
-        })
-        .catch(function (e) {
-          alert((e && e.message) || '취소에 실패했습니다.');
+      var runCancel = function () {
+        window.competitionApi
+          .cancelCompetitionApplication(myApp.id)
+          .then(function (r) {
+            if (!r || r.success === false) {
+              alert((r && r.error) || '취소에 실패했습니다.');
+              return;
+            }
+            window.competitionBottomSheet.closeSheet();
+            renderCompetitionList();
+          })
+          .catch(function (e) {
+            alert((e && e.message) || '취소에 실패했습니다.');
+          });
+      };
+      if (typeof window.showStelvioExitConfirmPopup === 'function') {
+        window.showStelvioExitConfirmPopup(runCancel, {
+          message: '신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.',
+          okText: '취소하기',
+          cancelText: '유지하기'
         });
+      } else if (confirm('신청을 취소하시겠습니까? 발급된 가상계좌는 더 이상 사용할 수 없습니다.')) {
+        runCancel();
+      }
     }
   }
 
