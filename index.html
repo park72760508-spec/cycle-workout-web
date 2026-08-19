@@ -15995,11 +15995,13 @@
           var dur = STELVIO_RANK_PROFILE_PEAK_DURS[pi];
           var pData = results[1 + pi];
           var pr = null;
+          var prWkg = null;
           if (pData && pData.byCategory && pData.byCategory.Supremo) {
             var par = pData.byCategory.Supremo || [];
             for (var pk = 0; pk < par.length; pk++) {
               if (par[pk] && String(par[pk].userId) === String(userId)) {
                 pr = stelvioRankProfileRankFromRow(par[pk], pk);
+                prWkg = par[pk].wkg;
                 break;
               }
             }
@@ -16008,7 +16010,8 @@
           try {
             labDur = typeof STELVIO_DURATION_LABELS !== 'undefined' && STELVIO_DURATION_LABELS[dur] ? STELVIO_DURATION_LABELS[dur] : dur;
           } catch (edl) {}
-          line2Parts.push(labDur + '(' + stelvioRankProfileFormatRank(pr) + ')');
+          var wkgTxt = prWkg != null && Number(prWkg) > 0 ? '·' + Number(prWkg).toFixed(1) + 'W/kg' : '';
+          line2Parts.push(labDur + '(' + stelvioRankProfileFormatRank(pr) + wkgTxt + ')');
         }
 
         var tssData = results[1 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
