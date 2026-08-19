@@ -124,6 +124,51 @@ if (typeof postJSONWithProxy !== 'function') {
     return segmentResult;
   }
 
+  /**
+   * 라이딩 기록 워크아웃 그래프의 "실제 세그먼트별 평균 파워" 오버레이용 세그먼트 조회.
+   * window.currentWorkout.segments는 훈련 UI가 여러 종류(개인 블루투스/모바일 대시보드/그룹
+   * 코치 등)라 세션 도중 리셋·미동기화될 수 있어(예: "workoutPlan 업데이트됨, 하지만
+   * currentWorkout이 없음" 케이스) 저장 시점에 신뢰할 수 없다. workoutId 기준으로
+   * 워크아웃 캐시 → API 순으로 재조회해 라이딩 기록의 워크아웃 그래프(journalWorkoutGraphUtils.js
+   * loadWorkoutSegmentsForJournal)가 쓰는 것과 동일한 소스로 확정한다.
+   */
+  async function resolveWorkoutSegmentsForSave(workoutId, liveWorkout) {
+    if (
+      liveWorkout &&
+      Array.isArray(liveWorkout.segments) &&
+      liveWorkout.segments.length &&
+      (!workoutId || String(liveWorkout.id) === String(workoutId))
+    ) {
+      return liveWorkout.segments;
+    }
+    if (!workoutId) return null;
+    try {
+      if (typeof window.getWorkoutCache === 'function') {
+        const cache = window.getWorkoutCache();
+        const cached =
+          cache && Array.isArray(cache.workouts)
+            ? cache.workouts.find(function (w) {
+                return w && (String(w.id) === String(workoutId) || String(w.workout_id) === String(workoutId));
+              })
+            : null;
+        if (cached && Array.isArray(cached.segments) && cached.segments.length) return cached.segments;
+      }
+    } catch (eCache) {
+      console.warn('[resolveWorkoutSegmentsForSave] 캐시 조회 실패:', eCache && eCache.message);
+    }
+    try {
+      if (typeof window.apiGetWorkout === 'function') {
+        const res = await window.apiGetWorkout(workoutId);
+        const item = res && (res.item || res.workout || res);
+        const segs = (item && item.segments) || (res && res.segments) || null;
+        if (Array.isArray(segs) && segs.length) return segs;
+      }
+    } catch (eApi) {
+      console.warn('[resolveWorkoutSegmentsForSave] API 조회 실패:', eApi && eApi.message);
+    }
+    return null;
+  }
+
   // ---------------------------
   // 저장 / 조회
   // ---------------------------
@@ -440,6 +485,8 @@ async function saveTrainingResult(extra = {}) {
               ? (Number(window.trainingMetrics.joules) / tmActiveSec)
               : null;
 
+          const resolvedSegments = await resolveWorkoutSegmentsForSave(workoutId, window.currentWorkout);
+
           const trainingData = {
             // 필수 필드
             duration: totalSeconds,
@@ -453,9 +500,7 @@ async function saveTrainingResult(extra = {}) {
             workout_id: workoutId ? String(workoutId) : null,
             title: workoutTitle,
             // 라이딩 기록 워크아웃 그래프의 "실제 세그먼트별 평균 파워" 오버레이 계산용
-            segments: (window.currentWorkout && Array.isArray(window.currentWorkout.segments) && window.currentWorkout.segments.length)
-              ? window.currentWorkout.segments
-              : null,
+            segments: resolvedSegments,
             distance_km: distanceKm,
             elevation_gain: null, // GPS 데이터가 있으면 추가 가능
             
