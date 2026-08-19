@@ -44,6 +44,25 @@
     return '';
   }
 
+  /**
+   * 완료된 STELVIO 인도어 세션의 실제 세그먼트별 평균 파워(segment_avg_watts)를 가진 로그를 찾는다.
+   * resolveWorkoutIdFromLogs와 동일한 우선순위(첫 STELVIO 로그)로 탐색 — 워크아웃 그래프에 표시되는
+   * workout_id와 실제 결과 오버레이가 같은 세션을 가리키도록 맞춘다.
+   */
+  function resolveStelvioLogWithActualPower(log, logs) {
+    var base = logs || (log && log._logsForShare) || (log ? [log] : []);
+    var arr = expandLogsWithStelvioCompanions(base);
+    function hasActual(l) {
+      return !!l && Array.isArray(l.segment_avg_watts) && l.segment_avg_watts.length > 0;
+    }
+    if (log && isStelvioActivityLog(log) && hasActual(log)) return log;
+    for (var i = 0; i < arr.length; i++) {
+      var l = arr[i];
+      if (isStelvioActivityLog(l) && hasActual(l)) return l;
+    }
+    return null;
+  }
+
   function shouldShowWorkoutGraphInsteadOfMap(routeInfo, log, logs) {
     if (routeInfo && routeInfo.hasRoute) return false;
     return !!resolveWorkoutIdFromLogs(log, logs);
@@ -227,6 +246,7 @@
       isStelvioActivityLog: isStelvioActivityLog,
       expandLogsWithStelvioCompanions: expandLogsWithStelvioCompanions,
       resolveWorkoutIdFromLogs: resolveWorkoutIdFromLogs,
+      resolveStelvioLogWithActualPower: resolveStelvioLogWithActualPower,
       shouldShowWorkoutGraphInsteadOfMap: shouldShowWorkoutGraphInsteadOfMap,
       enrichLogsWithStelvioWorkoutFromFirestore: enrichLogsWithStelvioWorkoutFromFirestore,
       loadWorkoutSegmentsForJournal: loadWorkoutSegmentsForJournal

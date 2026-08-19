@@ -858,6 +858,10 @@
         : (log.workout_id != null ? String(log.workout_id).trim() : '');
     var showWorkoutGraph =
       !routeInfo.hasRoute && !!workoutId && WorkoutGraph;
+    var actualPowerLog =
+      graphUtils && typeof graphUtils.resolveStelvioLogWithActualPower === 'function'
+        ? graphUtils.resolveStelvioLogWithActualPower(log, logsForRoute)
+        : null;
     var spd = log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
       ? Number(log.avg_speed_kmh)
       : avgSpeedKmhFromDistanceTime(log.distance_km, log.duration_sec);
@@ -895,7 +899,9 @@
               key: 'wo-' + workoutId + '-' + (log.date || ''),
               workoutId: workoutId,
               maxHeight: 200,
-              className: 'journal-summary-sheet-workout-graph'
+              className: 'journal-summary-sheet-workout-graph',
+              actualSegmentAvgWatts: actualPowerLog ? actualPowerLog.segment_avg_watts : null,
+              actualFtp: actualPowerLog ? actualPowerLog.ftp_at_time : null
             })
           : React.createElement('p', { className: 'journal-course-preview-empty' },
               '코스 지도 없음 — Strava MMP 동기화 후 다시 열어 주세요.'

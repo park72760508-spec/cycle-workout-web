@@ -360,9 +360,55 @@ function calculateMaxHeartRatePeaks(heartrateArray) {
 }
 
 /**
+ * 워크아웃 세그먼트별 실제 평균 파워 — 라이딩 기록 워크아웃 그래프의 실제 결과 오버레이용.
+ * oneHzWatts는 이미 1Hz로 정규화·스파이크 보간된 배열(smoothedForFtp)을 그대로 재사용한다.
+ * 세그먼트 순서대로 누적 초를 이동하며 각 구간의 평균을 구하고, 유효 샘플이 없는 구간은 null.
+ *
+ * @param {number[]} oneHzWatts
+ * @param {Array<{duration_sec?: number, duration?: number}>} segments
+ * @returns {number[]|null}
+ */
+function computeSegmentAvgWatts(oneHzWatts, segments) {
+  if (!oneHzWatts || !oneHzWatts.length || !segments || !segments.length) return null;
+  const result = [];
+  let cursor = 0;
+  let hasAny = false;
+  for (let i = 0; i < segments.length; i++) {
+    const dur = Math.round(Number(segments[i].duration_sec || segments[i].duration || 0));
+    if (dur <= 0) {
+      result.push(null);
+      continue;
+    }
+    const start = cursor;
+    const end = Math.min(oneHzWatts.length, cursor + dur);
+    cursor += dur;
+    if (end <= start) {
+      result.push(null);
+      continue;
+    }
+    let sum = 0;
+    let count = 0;
+    for (let s = start; s < end; s++) {
+      const w = Number(oneHzWatts[s]);
+      if (isFinite(w) && w >= 0) {
+        sum += w;
+        count++;
+      }
+    }
+    if (count > 0) {
+      result.push(Math.round(sum / count));
+      hasAny = true;
+    } else {
+      result.push(null);
+    }
+  }
+  return hasAny ? result : null;
+}
+
+/**
  * 훈련 세션 저장 및 보상 처리
  * Firestore Transaction을 사용하여 데이터 무결성 보장
- * 
+ *
  * @param {string} userId - 사용자 UID
  * @param {Object} trainingData - 훈련 데이터
  * @param {number} trainingData.duration - 훈련 시간(초)
@@ -379,6 +425,7 @@ function calculateMaxHeartRatePeaks(heartrateArray) {
  * @param {number} [trainingData.elevation_gain] - 획득 고도 (m)
  * @param {number} [trainingData.rpe] - 주관적 운동 강도 (90-110%)
  * @param {Array} [trainingData.powerData] - 파워 데이터 배열 (존 분포 계산용)
+ * @param {Array} [trainingData.segments] - 워크아웃 세그먼트 배열(있으면 세그먼트별 실제 평균 파워 저장)
  * @param {Object} [firestoreInstance] - Firestore 인스턴스 (선택사항, 없으면 window.firestoreV9 사용)
  * @returns {Promise<Object>} 저장 결과
  */
@@ -604,6 +651,12 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const max40minWatts = wattsArray && wattsArray.length >= 2400 ? calculateMaxAveragePower(wattsArray, 2400) : null;
       const max60minWatts = wattsArray && wattsArray.length >= 3600 ? calculateMaxAveragePower(wattsArray, 3600) : null;
 
+      // 세그먼트별 실제 평균 파워 (라이딩 기록 워크아웃 그래프 오버레이용) — 인도어 구조화 워크아웃에서만 존재
+      const segmentAvgWatts =
+        Array.isArray(trainingData.segments) && trainingData.segments.length
+          ? computeSegmentAvgWatts(smoothedForFtp, trainingData.segments)
+          : null;
+
       let maxWattsResolved =
         trainingData.max_watts != null && Number(trainingData.max_watts) > 0
           ? Math.round(Number(trainingData.max_watts))
@@ -660,6 +713,9 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         // 케이던스 (Technique)
         avg_cadence: trainingData.avg_cadence || null,
         
+        // 세그먼트별 실제 평균 파워 (라이딩 기록 워크아웃 그래프의 target 막대 위 오버레이용)
+        ...(segmentAvgWatts != null && { segment_avg_watts: segmentAvgWatts }),
+
         // MMP (피크 파워)
         ...(max1minWatts != null && { max_1min_watts: max1minWatts }),
         ...(max5minWatts != null && { max_5min_watts: max5minWatts }),
@@ -789,12 +845,18 @@ function logNeedsTimeInZones(log) {
   return !hasPower && !hasHr;
 }
 
+function logNeedsSegmentAvgWatts(log) {
+  return !(log && Array.isArray(log.segment_avg_watts) && log.segment_avg_watts.length > 0);
+}
+
 /**
- * Supabase Read 시 time_in_zones 미포함 로그를 Firestore에서 보강 (기존 데이터·마이그레이션 전 호환).
+ * Supabase Read 시 time_in_zones·segment_avg_watts 미포함 로그를 Firestore에서 보강한다.
+ * 두 필드 모두 Supabase rides 테이블 스키마에는 없는 Firestore 전용 필드라, 같은 조회 결과에서
+ * 함께 채워 넣어 왕복 조회를 늘리지 않는다 (기존 데이터·마이그레이션 전 호환).
  */
 async function enrichLogsWithTimeInZonesFromFirestore(userId, logs, db) {
   if (!logs || !logs.length) return logs;
-  if (!logs.some(logNeedsTimeInZones)) return logs;
+  if (!logs.some(logNeedsTimeInZones) && !logs.some(logNeedsSegmentAvgWatts)) return logs;
   if (!db) return logs;
   try {
     var userLogsRef = collection(db, 'users', userId, 'logs');
@@ -805,21 +867,29 @@ async function enrichLogsWithTimeInZonesFromFirestore(userId, logs, db) {
     snap.forEach(function(docSnap) {
       var d = docSnap.data() || {};
       var tiz = d.time_in_zones;
-      if (!tiz || typeof tiz !== 'object') return;
+      var segAvg = Array.isArray(d.segment_avg_watts) && d.segment_avg_watts.length ? d.segment_avg_watts : null;
+      if ((!tiz || typeof tiz !== 'object') && !segAvg) return;
       var aid = d.activity_id ? String(d.activity_id) : String(docSnap.id);
       var ds = parseLogDateStrForTiz(d.date);
-      byActivityId.set(aid, tiz);
-      if (ds) byDate.set(ds, tiz);
+      var entry = { tiz: tiz && typeof tiz === 'object' ? tiz : null, segAvg: segAvg };
+      byActivityId.set(aid, entry);
+      if (ds) byDate.set(ds, entry);
     });
     return logs.map(function(log) {
-      if (!logNeedsTimeInZones(log)) return log;
+      var needsTiz = logNeedsTimeInZones(log);
+      var needsSeg = logNeedsSegmentAvgWatts(log);
+      if (!needsTiz && !needsSeg) return log;
       var aid = log.activity_id ? String(log.activity_id) : (log.id ? String(log.id) : '');
       var ds = parseLogDateStrForTiz(log.date) || (typeof log.date === 'string' ? log.date.slice(0, 10) : '');
-      var tiz = (aid && byActivityId.get(aid)) || (ds && byDate.get(ds)) || null;
-      return tiz ? Object.assign({}, log, { time_in_zones: tiz }) : log;
+      var entry = (aid && byActivityId.get(aid)) || (ds && byDate.get(ds)) || null;
+      if (!entry) return log;
+      var patch = {};
+      if (needsTiz && entry.tiz) patch.time_in_zones = entry.tiz;
+      if (needsSeg && entry.segAvg) patch.segment_avg_watts = entry.segAvg;
+      return Object.keys(patch).length ? Object.assign({}, log, patch) : log;
     });
   } catch (e) {
-    console.warn('[getUserTrainingLogs] Firestore time_in_zones 보강 실패:', e && e.message);
+    console.warn('[getUserTrainingLogs] Firestore time_in_zones/segment_avg_watts 보강 실패:', e && e.message);
     return logs;
   }
 }

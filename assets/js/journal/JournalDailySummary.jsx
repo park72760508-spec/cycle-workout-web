@@ -264,6 +264,10 @@
         ? graphUtils.resolveWorkoutIdFromLogs(null, logsExpanded)
         : '';
     var showWorkoutGraph = !routeProfile.hasRoute && !!workoutId && WorkoutGraph;
+    var actualPowerLog =
+      graphUtils && typeof graphUtils.resolveStelvioLogWithActualPower === 'function'
+        ? graphUtils.resolveStelvioLogWithActualPower(null, logsExpanded)
+        : null;
     var mapKey =
       (selectedDate || '') +
       '-seg' +
@@ -348,7 +352,9 @@
               key: 'wo-' + workoutId + '-' + (selectedDate || ''),
               workoutId: workoutId,
               maxHeight: 200,
-              className: 'journal-daily-summary-workout-graph'
+              className: 'journal-daily-summary-workout-graph',
+              actualSegmentAvgWatts: actualPowerLog ? actualPowerLog.segment_avg_watts : null,
+              actualFtp: actualPowerLog ? actualPowerLog.ftp_at_time : null
             })
           : React.createElement('p', { className: 'journal-course-preview-empty' },
               '코스 지도 없음 — Strava 「MMP 포함」 동기화 후 달력을 새로고침하세요.'

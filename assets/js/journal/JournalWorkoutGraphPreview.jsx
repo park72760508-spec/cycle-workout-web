@@ -21,6 +21,8 @@
     var workoutId = p.workoutId != null ? String(p.workoutId).trim() : '';
     var maxHeight = p.maxHeight != null ? Number(p.maxHeight) : 200;
     var className = p.className || 'journal-workout-graph-wrap';
+    var actualSegmentAvgWatts = Array.isArray(p.actualSegmentAvgWatts) ? p.actualSegmentAvgWatts : null;
+    var actualFtp = p.actualFtp != null ? Number(p.actualFtp) : null;
     var graphRef = useRef(null);
 
     var _st = useState({ loading: !!workoutId, title: '', segments: null, error: null });
@@ -75,8 +77,12 @@
         el.innerHTML = '<div class="segmented-workout-graph-empty">그래프를 표시할 수 없습니다</div>';
         return;
       }
-      render(el, state.segments, { maxHeight: maxHeight });
-    }, [state.loading, state.error, state.segments, maxHeight]);
+      render(el, state.segments, {
+        maxHeight: maxHeight,
+        actualSegmentAvgWatts: actualSegmentAvgWatts,
+        actualFtp: actualFtp
+      });
+    }, [state.loading, state.error, state.segments, maxHeight, actualSegmentAvgWatts, actualFtp]);
 
     if (!workoutId) return null;
 
@@ -84,6 +90,7 @@
       return React.createElement(
         'div',
         { className: className + ' journal-workout-graph-wrap--loading' },
+        React.createElement('div', { className: 'journal-loading-spinner' }),
         React.createElement('p', { className: 'journal-workout-graph-status' }, '워크아웃 그래프 불러오는 중…')
       );
     }

@@ -452,6 +452,10 @@ async function saveTrainingResult(extra = {}) {
             // 기본 정보
             workout_id: workoutId ? String(workoutId) : null,
             title: workoutTitle,
+            // 라이딩 기록 워크아웃 그래프의 "실제 세그먼트별 평균 파워" 오버레이 계산용
+            segments: (window.currentWorkout && Array.isArray(window.currentWorkout.segments) && window.currentWorkout.segments.length)
+              ? window.currentWorkout.segments
+              : null,
             distance_km: distanceKm,
             elevation_gain: null, // GPS 데이터가 있으면 추가 가능
             

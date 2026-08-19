@@ -2096,6 +2096,17 @@
       font-size: 12px;
       color: #6b7280;
     }
+    #trainingJournalScreen .journal-workout-graph-wrap--loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding-top: 8px;
+    }
+    #trainingJournalScreen .journal-workout-graph-wrap--loading .journal-workout-graph-status {
+      padding: 0 12px 4px;
+    }
     #trainingJournalScreen .journal-daily-summary-header,
     #trainingJournalScreen .journal-daily-summary-grid,
     #trainingJournalScreen .journal-daily-summary-actions {
@@ -3413,7 +3424,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260819basecampIconRelPath1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260819actualPowerOverlay1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -8030,7 +8041,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js"></script>
+<script src="assets/js/workoutManager.js?v=actual-power-overlay-20260819a"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
@@ -9221,7 +9232,7 @@
     (async function() {
       let saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange;
       try {
-        var mod = await import('./assets/js/trainingResultService.js');
+        var mod = await import('./assets/js/trainingResultService.js?v=actual-power-overlay-20260819a');
         if (mod && typeof mod === 'object') {
           saveTrainingSession = mod.saveTrainingSession;
           getUserTrainingLogs = mod.getUserTrainingLogs;
@@ -27913,10 +27924,10 @@
   <script src="assets/js/journal/JournalCalendarWidget.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/RidingCourseSvgBackground.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/JournalCourseMapPreview.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/journal/journalWorkoutGraphUtils.js"></script>
-  <script src="assets/js/journal/JournalWorkoutGraphPreview.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/journal/JournalDailySummary.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/journal/JournalDetailBottomSheet.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/journal/journalWorkoutGraphUtils.js?v=actual-power-overlay-20260819a"></script>
+  <script src="assets/js/journal/JournalWorkoutGraphPreview.jsx?v=actual-power-overlay-20260819a" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/journal/JournalDailySummary.jsx?v=actual-power-overlay-20260819a" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/journal/JournalDetailBottomSheet.jsx?v=actual-power-overlay-20260819a" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/JournalMonthlyDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/TrainingJournalScreen.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <!-- RUN 기록 일지 (CYCLE 라이딩 기록과 분리) -->
@@ -32719,7 +32730,7 @@
 <script src="assets/js/stelvioRtss.js"></script>
 <script src="assets/js/stravaManager.js"></script>
 <script src="assets/js/trainingResultsManager.js"></script>
-<script src="assets/js/resultManager.js"></script>
+<script src="assets/js/resultManager.js?v=actual-power-overlay-20260819a"></script>
 <script src="assets/js/bluetooth.js"></script>
 <script src="assets/js/ErgController.js"></script>
 <script src="assets/js/ergMode.js"></script>

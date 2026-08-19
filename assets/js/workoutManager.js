@@ -6581,6 +6581,46 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     }
   });
 
+  // 실제 세그먼트별 평균 파워 오버레이(연한 오렌지 계단선) — actualFtp 기준으로 target 막대와 동일한
+  // ftpPercentToBarHeight 스케일을 사용해야 두 값이 같은 좌표계에서 비교된다.
+  const actualWatts = Array.isArray(opts.actualSegmentAvgWatts) ? opts.actualSegmentAvgWatts : null;
+  const actualFtp = Number(opts.actualFtp) > 0 ? Number(opts.actualFtp) : null;
+  let actualOverlayMarkup = '';
+  if (actualWatts && actualWatts.length && actualFtp) {
+    // bars는 duration<=0인 세그먼트를 걸러내 인덱스가 밀릴 수 있으므로, actualWatts와 인덱스가
+    // 반드시 일치하는 원본 segments 배열을 기준으로 순회한다 (bars와 동일한 duration 추출 규칙 사용).
+    let cursorSec = 0;
+    const points = [];
+    for (let i = 0; i < segments.length; i++) {
+      const duration = segments[i].duration_sec || segments[i].duration || 0;
+      if (duration <= 0) continue;
+      const xStart = (cursorSec / totalSeconds) * 100;
+      cursorSec += duration;
+      const xEnd = (cursorSec / totalSeconds) * 100;
+      const w = Number(actualWatts[i]);
+      if (!isFinite(w) || w <= 0) continue;
+      const ftpPct = (w / actualFtp) * 100;
+      const heightPct = ftpPercentToBarHeight(ftpPct);
+      const y = Math.max(0, Math.min(100, 100 - heightPct));
+      points.push({ xStart, xEnd, y });
+    }
+    if (points.length) {
+      let d = '';
+      points.forEach((pt) => {
+        const seg = `L ${pt.xStart.toFixed(2)} ${pt.y.toFixed(2)} L ${pt.xEnd.toFixed(2)} ${pt.y.toFixed(2)} `;
+        d += d ? seg : 'M ' + seg.slice(2);
+      });
+      const dots = points
+        .map((pt) => `<circle class="segmented-workout-graph__actual-dot" cx="${((pt.xStart + pt.xEnd) / 2).toFixed(2)}" cy="${pt.y.toFixed(2)}" r="1.6" vector-effect="non-scaling-stroke" />`)
+        .join('');
+      actualOverlayMarkup = `
+      <svg class="segmented-workout-graph__actual-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path d="${d.trim()}" fill="none" vector-effect="non-scaling-stroke" />
+        ${dots}
+      </svg>`;
+    }
+  }
+
   el.innerHTML = `
     <div class="segmented-workout-graph" role="img" aria-label="워크아웃 세그먼트 그래프" style="--ftp-line-bottom: ${ftpLineBottomPercent}%;">
       <div class="segmented-workout-graph__ftp-line" aria-hidden="true"></div>
@@ -6604,6 +6644,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
           <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone}" style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%;" title="Zone ${b.zone} · ${Math.round(b.duration)}초"></div>`;
         }).join('')}
       </div>
+      ${actualOverlayMarkup}
     </div>
   `;
 }

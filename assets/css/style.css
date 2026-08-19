@@ -11099,6 +11099,28 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   transform: translate(-50%, -100%);
   margin-top: -2px;
 }
+/* 실제 세그먼트별 평균 파워 오버레이 — 계획(target) 막대 위에 연한 오렌지 계단선으로 실제 결과 표시 */
+.segmented-workout-graph__actual-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
+}
+.segmented-workout-graph__actual-overlay path {
+  stroke: #fdba74;
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.45));
+}
+.segmented-workout-graph__actual-dot {
+  fill: #fdba74;
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 1px;
+}
 
 /* ========== WorkoutCard 컴포넌트 ========== */
 .workout-cards-grid {
