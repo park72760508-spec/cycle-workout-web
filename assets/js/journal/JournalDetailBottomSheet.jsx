@@ -27,8 +27,6 @@
   ];
 
   var AVG_GUIDE_LINE = 'rgba(249, 115, 22, 0.45)';
-  /** 세그먼트 평균 파워 라인 — Claude 브랜드 코랄/테라코타 */
-  var AVG_POWER_GUIDE_LINE = '#D97757';
 
   /** 짧은 구간 ≥ 긴 구간(파워·심박 공통 원칙) — 저장 단계에서 이미 보정되지만, 서로 다른 시점/
    * 소스에서 채워진 값이 섞여 들어올 수 있어 화면에 그리기 직전 한 번 더 눌러준다(2026-08).
@@ -291,22 +289,6 @@
           if (chartArea) {
             drawUnitRowWithOptionalPrLegend(chart.ctx, chartArea, 'W', hasChartPr);
           }
-          if (avgGuide > 0 && chart.scales && chart.scales.y && chartArea) {
-            var avgLineY = chart.scales.y.getPixelForValue(avgGuide);
-            var avgLabelText = Math.round(avgGuide) + 'W';
-            chart.ctx.font = JOURNAL_PEAK_BAR_VALUE_FONT;
-            var avgPadX = 6;
-            var avgPillH = 18;
-            var avgTextW = chart.ctx.measureText(avgLabelText).width;
-            var avgPillW = avgTextW + avgPadX * 2;
-            var avgPillX = chartArea.right - avgPillW - 2;
-            var avgPillY = avgLineY - avgPillH / 2;
-            fillRoundRect(chart.ctx, avgPillX, avgPillY, avgPillW, avgPillH, avgPillH / 2, 'rgba(229, 231, 235, 0.95)');
-            chart.ctx.fillStyle = '#1f2937';
-            chart.ctx.textAlign = 'center';
-            chart.ctx.textBaseline = 'middle';
-            chart.ctx.fillText(avgLabelText, avgPillX + avgPillW / 2, avgLineY);
-          }
           chart.ctx.restore();
         }
       };
@@ -328,7 +310,7 @@
           type: 'line',
           label: '평균 파워',
           data: labels.map(function() { return avgGuide; }),
-          borderColor: AVG_POWER_GUIDE_LINE,
+          borderColor: AVG_GUIDE_LINE,
           backgroundColor: 'transparent',
           borderWidth: 2,
           pointRadius: 0,

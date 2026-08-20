@@ -6602,7 +6602,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       const ftpPct = (w / actualFtp) * 100;
       const heightPct = ftpPercentToBarHeight(ftpPct);
       const y = Math.max(0, Math.min(100, 100 - heightPct));
-      points.push({ xStart, xEnd, y });
+      points.push({ xStart, xEnd, y, watts: w });
     }
     if (points.length) {
       let d = '';
@@ -6613,11 +6613,17 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       const dots = points
         .map((pt) => `<circle class="segmented-workout-graph__actual-dot" cx="${((pt.xStart + pt.xEnd) / 2).toFixed(2)}" cy="${pt.y.toFixed(2)}" r="1.6" vector-effect="non-scaling-stroke" />`)
         .join('');
+      // 세그먼트별 실제 평균 파워 값 라벨(연한 회색 배경 pill) — SVG viewBox 스케일에서는 글자가
+      // 찌그러지므로 같은 %좌표계의 일반 HTML 오버레이로 그린다.
+      const labels = points
+        .map((pt) => `<span class="segmented-workout-graph__actual-label" style="left:${((pt.xStart + pt.xEnd) / 2).toFixed(2)}%; top:${pt.y.toFixed(2)}%;">${Math.round(pt.watts)}W</span>`)
+        .join('');
       actualOverlayMarkup = `
       <svg class="segmented-workout-graph__actual-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         <path d="${d.trim()}" fill="none" vector-effect="non-scaling-stroke" />
         ${dots}
-      </svg>`;
+      </svg>
+      <div class="segmented-workout-graph__actual-labels" aria-hidden="true">${labels}</div>`;
     }
   }
 

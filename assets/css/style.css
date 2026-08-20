@@ -11110,16 +11110,36 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   overflow: visible;
 }
 .segmented-workout-graph__actual-overlay path {
-  stroke: #fdba74;
+  stroke: #D97757;
   stroke-width: 2.5px;
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.45));
 }
 .segmented-workout-graph__actual-dot {
-  fill: #fdba74;
+  fill: #D97757;
   stroke: rgba(0, 0, 0, 0.45);
   stroke-width: 1px;
+}
+.segmented-workout-graph__actual-labels {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  pointer-events: none;
+}
+.segmented-workout-graph__actual-label {
+  position: absolute;
+  transform: translate(-50%, -140%);
+  background: rgba(229, 231, 235, 0.95);
+  color: #1f2937;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 8px;
+  white-space: nowrap;
 }
 
 /* ========== WorkoutCard 컴포넌트 ========== */
