@@ -2494,6 +2494,39 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   line-height: 1.25rem;
 }
 
+/* 출발 지역 날씨 — 06/08/10/12/14/16시 6칸, 폭이 좁으면 가로 스크롤 */
+#openRidingRoomScreen .open-riding-departure-weather-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  justify-content: flex-end;
+  -webkit-overflow-scrolling: touch;
+}
+#openRidingRoomScreen .open-riding-departure-weather-cell {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 34px;
+}
+#openRidingRoomScreen .open-riding-departure-weather-hour {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6d28d9;
+  line-height: 1.2;
+}
+#openRidingRoomScreen .open-riding-departure-weather-icon {
+  font-size: 15px;
+  line-height: 1.2;
+}
+#openRidingRoomScreen .open-riding-departure-weather-temp {
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1.2;
+}
+
 /* 초대 명단: 코스 설명과 동일 text-sm. 이름 색만 기본값, (참석)/(대기)/(미응답) 색은 JSX에서 유지 */
 #openRidingRoomScreen .open-riding-detail-stat-row:not(:first-child) .open-riding-detail-invite-list {
   font-size: 14px;

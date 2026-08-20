@@ -371,6 +371,98 @@ function formatOpenRidingDepartureRegionDisplay(ride) {
   return reg || dep;
 }
 
+var OPEN_RIDING_WEATHER_HOURS = [6, 8, 10, 12, 14, 16];
+
+/** Date → "YYYY-MM-DD"(로컬 벽시계 기준, ride.date와 동일 시각대) */
+function openRidingWeatherYmd(d) {
+  if (!d || isNaN(d.getTime())) return '';
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var dd = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mm + '-' + dd;
+}
+
+/**
+ * 상세: 출발 지역 날씨 — 모임 당일 06/08/10/12/14/16시 기온·하늘상태(기상청 단기예보).
+ * @param {{ region: string, meetupDate: Date }} props
+ */
+function OpenRidingDepartureWeatherPanel(props) {
+  var region = props && props.region ? String(props.region).trim() : '';
+  var meetupDate = props && props.meetupDate ? props.meetupDate : null;
+  var ymd = meetupDate ? openRidingWeatherYmd(meetupDate) : '';
+
+  var _st = useState({ loading: !!(region && ymd), error: false, hours: null, note: '' });
+  var state = _st[0];
+  var setState = _st[1];
+
+  useEffect(
+    function () {
+      if (!region || !ymd) {
+        setState({ loading: false, error: false, hours: null, note: '' });
+        return undefined;
+      }
+      var cancelled = false;
+      setState({ loading: true, error: false, hours: null, note: '' });
+      var params = new URLSearchParams({ region: region, date: ymd });
+      fetch(
+        'https://us-central1-stelvio-ai.cloudfunctions.net/getOpenRidingDepartureWeather?' + params.toString(),
+        { method: 'GET', mode: 'cors' }
+      )
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (cancelled) return;
+          if (!data || !data.success) {
+            setState({ loading: false, error: true, hours: null, note: '' });
+            return;
+          }
+          setState({
+            loading: false,
+            error: false,
+            hours: Array.isArray(data.hours) ? data.hours : [],
+            note: data.note || ''
+          });
+        })
+        .catch(function () {
+          if (!cancelled) setState({ loading: false, error: true, hours: null, note: '' });
+        });
+      return function () { cancelled = true; };
+    },
+    [region, ymd]
+  );
+
+  if (!region || !ymd) {
+    return <span className="text-xs text-slate-400">-</span>;
+  }
+  if (state.loading) {
+    return <span className="text-xs text-slate-400">날씨 불러오는 중…</span>;
+  }
+  if (state.error) {
+    return <span className="text-xs text-slate-400">날씨 정보를 불러올 수 없습니다</span>;
+  }
+  if (state.note || !state.hours || !state.hours.length) {
+    return <span className="text-xs text-slate-400">{state.note || '날씨 정보 없음'}</span>;
+  }
+
+  return (
+    <div className="open-riding-departure-weather-row">
+      {OPEN_RIDING_WEATHER_HOURS.map(function (h) {
+        var item = state.hours.find(function (x) { return x && x.hour === h; });
+        var hasTemp = item && item.tempC != null;
+        return (
+          <div className="open-riding-departure-weather-cell" key={h}>
+            <span className="open-riding-departure-weather-hour">{h}시</span>
+            <span className="open-riding-departure-weather-icon" aria-hidden="true">
+              {item && item.icon ? item.icon : '–'}
+            </span>
+            <span className="open-riding-departure-weather-temp">
+              {hasTemp ? Math.round(item.tempC) + '°' : '-'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** 초대 번호 ↔ 저장 연락처 매칭 (openRidingService.normalizePhoneDigits + 뒤 8자리 규칙) */
 function openRidingInvitePhoneDigitsMatch(a, b) {
   var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
@@ -9164,6 +9256,7 @@ function OpenRidingDetail(props) {
           </span>
         ))}
         {statRow('출발 지역', formatOpenRidingDepartureRegionDisplay(ride))}
+        {statRow('날씨 정보', <OpenRidingDepartureWeatherPanel region={ride.region} meetupDate={ts} />)}
         {statRow(
           '레벨',
           isRunDetail ? (

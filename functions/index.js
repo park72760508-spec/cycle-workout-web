@@ -38,6 +38,9 @@ const tossSecretKeySecret = defineSecret("TOSS_SECRET_KEY");
 const upstashRedisRestUrlSecret = defineSecret("UPSTASH_REDIS_REST_URL");
 const upstashRedisRestTokenSecret = defineSecret("UPSTASH_REDIS_REST_TOKEN");
 
+/** 라이딩/러닝 모임 출발 지역 날씨 — 기상청 단기예보 조회서비스(공공데이터포털) 서비스키 */
+const kmaServiceKeySecret = defineSecret("KMA_SERVICE_KEY");
+
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -45,6 +48,7 @@ if (!admin.apps.length) {
 const stravaConnectionReader = require("./stravaConnectionReader");
 const rankingDayRollup = require("./rankingDayRollup");
 const { sanitizePeakPowerWattsOnRow, capPeakPowerMonotonicInPlace } = require("./peakPowerMonotonic");
+const kmaWeatherService = require("./kmaWeatherService");
 
 /** 5초 ≥ 1분 ≥ 5분 ≥ 10분 ≥ 20분 ≥ 40분 ≥ 60분 — 파워와 동일 원칙을 심박에도 적용(2026-08).
  * capPeakPowerMonotonicInPlace는 필드명 배열을 받는 범용 함수라 그대로 재사용한다. */
@@ -11296,6 +11300,54 @@ exports.getOpenRideForRead = onRequest(
       res.status(404).json({ success: false, error: "not_found" });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
+ * 오픈 라이딩/러닝 모임 "출발 지역" 날씨 — 기상청 단기예보(getVilageFcst) 06/08/10/12/14/16시.
+ * GET ?region=<시도 구군>&date=<YYYY-MM-DD>
+ */
+const getOpenRidingDepartureWeatherOptions = {
+  cors: true,
+  timeoutSeconds: 30,
+  secrets: [kmaServiceKeySecret],
+};
+exports.getOpenRidingDepartureWeather = onRequest(
+  getOpenRidingDepartureWeatherOptions,
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    const region = String(req.query.region || "").trim();
+    const date = String(req.query.date || "").trim();
+    if (!region || !date) {
+      res.status(400).json({ success: false, error: "region, date 필요" });
+      return;
+    }
+    try {
+      const serviceKey = kmaServiceKeySecret.value();
+      if (!serviceKey) {
+        res.status(500).json({ success: false, error: "kma_service_key_missing" });
+        return;
+      }
+      res.set("Cache-Control", "public, max-age=1800, s-maxage=1800");
+      const result = await kmaWeatherService.getDepartureWeatherForRegion(
+        region,
+        date,
+        serviceKey,
+        admin.firestore()
+      );
+      res.status(result.success ? 200 : 400).json(result);
+    } catch (e) {
+      console.warn("[getOpenRidingDepartureWeather]", e && e.message ? e.message : e);
+      res.status(500).json({ success: false, error: e && e.message ? e.message : String(e) });
     }
   }
 );
