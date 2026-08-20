@@ -291,6 +291,22 @@
           if (chartArea) {
             drawUnitRowWithOptionalPrLegend(chart.ctx, chartArea, 'W', hasChartPr);
           }
+          if (avgGuide > 0 && chart.scales && chart.scales.y && chartArea) {
+            var avgLineY = chart.scales.y.getPixelForValue(avgGuide);
+            var avgLabelText = Math.round(avgGuide) + 'W';
+            chart.ctx.font = JOURNAL_PEAK_BAR_VALUE_FONT;
+            var avgPadX = 6;
+            var avgPillH = 18;
+            var avgTextW = chart.ctx.measureText(avgLabelText).width;
+            var avgPillW = avgTextW + avgPadX * 2;
+            var avgPillX = chartArea.right - avgPillW - 2;
+            var avgPillY = avgLineY - avgPillH / 2;
+            fillRoundRect(chart.ctx, avgPillX, avgPillY, avgPillW, avgPillH, avgPillH / 2, 'rgba(229, 231, 235, 0.95)');
+            chart.ctx.fillStyle = '#1f2937';
+            chart.ctx.textAlign = 'center';
+            chart.ctx.textBaseline = 'middle';
+            chart.ctx.fillText(avgLabelText, avgPillX + avgPillW / 2, avgLineY);
+          }
           chart.ctx.restore();
         }
       };
