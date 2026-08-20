@@ -11121,6 +11121,11 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   stroke: rgba(0, 0, 0, 0.45);
   stroke-width: 1px;
 }
+.segmented-workout-graph__actual-guide {
+  stroke: rgba(107, 114, 128, 0.55);
+  stroke-width: 1px;
+  stroke-dasharray: 2 2;
+}
 .segmented-workout-graph__actual-labels {
   position: absolute;
   inset: 0;
@@ -11131,7 +11136,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 }
 .segmented-workout-graph__actual-label {
   position: absolute;
-  transform: translate(-50%, -140%);
+  transform: translate(-50%, -50%);
   background: rgba(229, 231, 235, 0.95);
   color: #1f2937;
   font-size: 10px;

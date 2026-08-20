@@ -6613,14 +6613,39 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       const dots = points
         .map((pt) => `<circle class="segmented-workout-graph__actual-dot" cx="${((pt.xStart + pt.xEnd) / 2).toFixed(2)}" cy="${pt.y.toFixed(2)}" r="1.6" vector-effect="non-scaling-stroke" />`)
         .join('');
-      // 세그먼트별 실제 평균 파워 값 라벨(연한 회색 배경 pill) — SVG viewBox 스케일에서는 글자가
-      // 찌그러지므로 같은 %좌표계의 일반 HTML 오버레이로 그린다.
+
+      // 세그먼트별 실제 평균 파워 값 라벨 — 짧은 세그먼트가 연속되면 값 위치(pt.y)에 그대로 찍을 때
+      // 서로 겹쳐 식별이 안 되므로, 상단 여유 공간의 고정 라벨 열(labelRowY)에 최소 간격을 두고
+      // 배치한 뒤 실제 지점까지 얇은 가이드 선으로 연결한다.
+      const xMids = points.map((pt) => (pt.xStart + pt.xEnd) / 2);
+      const labelRowY = 6;
+      const labelMinGap = 9;
+      const labelMinX = 3;
+      const labelMaxX = 97;
+      const labelX = new Array(points.length);
+      let prevX = -Infinity;
+      xMids.forEach((xm, i) => {
+        const x = Math.max(xm, labelMinX, prevX + labelMinGap);
+        labelX[i] = x;
+        prevX = x;
+      });
+      let nextX = labelMaxX;
+      for (let i = points.length - 1; i >= 0; i--) {
+        if (labelX[i] > nextX) labelX[i] = nextX;
+        nextX = labelX[i] - labelMinGap;
+      }
+
+      const guides = points
+        .map((pt, i) => `<line class="segmented-workout-graph__actual-guide" x1="${labelX[i].toFixed(2)}" y1="${(labelRowY + 3).toFixed(2)}" x2="${xMids[i].toFixed(2)}" y2="${pt.y.toFixed(2)}" vector-effect="non-scaling-stroke" />`)
+        .join('');
+      // SVG viewBox 스케일에서는 글자가 찌그러지므로 같은 %좌표계의 일반 HTML 오버레이로 그린다.
       const labels = points
-        .map((pt) => `<span class="segmented-workout-graph__actual-label" style="left:${((pt.xStart + pt.xEnd) / 2).toFixed(2)}%; top:${pt.y.toFixed(2)}%;">${Math.round(pt.watts)}W</span>`)
+        .map((pt, i) => `<span class="segmented-workout-graph__actual-label" style="left:${labelX[i].toFixed(2)}%; top:${labelRowY}%;">${Math.round(pt.watts)}W</span>`)
         .join('');
       actualOverlayMarkup = `
       <svg class="segmented-workout-graph__actual-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         <path d="${d.trim()}" fill="none" vector-effect="non-scaling-stroke" />
+        ${guides}
         ${dots}
       </svg>
       <div class="segmented-workout-graph__actual-labels" aria-hidden="true">${labels}</div>`;
