@@ -6491,6 +6491,28 @@ function getSegmentFtpPercentForBarHeight(seg) {
 }
 
 /**
+ * 세그먼트 평균 파워 라벨(.segmented-workout-graph__actual-label) 픽셀 폭 측정 — CSS의
+ * font-size:10px/font-weight:600/padding:2px 5px와 동일한 값으로 캔버스 measureText 사용.
+ * 캔버스 미지원 환경(구형 WebView 등)에서는 문자당 근사폭으로 대체한다.
+ */
+var _segGraphLabelMeasureCtx = null;
+function measureSegmentedGraphLabelWidthPx(text) {
+  if (_segGraphLabelMeasureCtx === null) {
+    try {
+      _segGraphLabelMeasureCtx = document.createElement('canvas').getContext('2d');
+    } catch (e) {
+      _segGraphLabelMeasureCtx = false;
+    }
+  }
+  const horizontalPadding = 10; // CSS padding: 2px 5px → 좌우 합 10px
+  if (!_segGraphLabelMeasureCtx) {
+    return text.length * 6.5 + horizontalPadding;
+  }
+  _segGraphLabelMeasureCtx.font = '600 10px sans-serif';
+  return _segGraphLabelMeasureCtx.measureText(text).width + horizontalPadding;
+}
+
+/**
  * SegmentedWorkoutGraph 렌더
  * @param {HTMLElement|string} container - 컨테이너 요소 또는 ID
  * @param {Array} segments - 세그먼트 배열 [{duration_sec, target_type, target_value, segment_type}]
@@ -6510,6 +6532,9 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     el.innerHTML = '<div class="segmented-workout-graph-empty">유효한 세그먼트가 없습니다</div>';
     return;
   }
+  // 세그먼트 평균 파워 라벨의 실제 픽셀 폭 대비 좁은 모바일 컨테이너에서도 겹치지 않도록,
+  // %가 아닌 실측 컨테이너 폭(px) 기준으로 라벨 간격·가장자리 여백을 계산한다.
+  const containerWidthPx = el.clientWidth || el.offsetWidth || 0;
   const prefix = opts.classPrefix || 'swg';
   const RPM_BASELINE = 90;
   function getRpmFromSegment(seg) {
@@ -6622,28 +6647,46 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       const ftpLineTopPercent = 100 - ftpLineBottomPercent;
       const labelRowY = Math.min(Math.max(ftpLineTopPercent / 2, 4), 45);
       const xMids = points.map((pt) => (pt.xStart + pt.xEnd) / 2);
-      const labelMinGap = 9;
-      const labelMinX = 3;
-      const labelMaxX = 97;
-      const labelX = new Array(points.length);
-      let prevX = -Infinity;
-      xMids.forEach((xm, i) => {
-        const x = Math.max(xm, labelMinX, prevX + labelMinGap);
-        labelX[i] = x;
-        prevX = x;
+
+      // 라벨 폭을 %가 아닌 실측 컨테이너 폭(px) 기준으로 계산 — 좁은 모바일 화면에서도 좌우
+      // 가장자리에 잘리지 않고, 라벨 사이 최소 여백을 확보한 채 가능한 만큼 촘촘히 배치한다.
+      // (세그먼트가 너무 많아 폭이 부족한 경우에만 어쩔 수 없이 라벨이 맞닿는다.)
+      const labelTexts = points.map((pt) => Math.round(pt.watts) + 'W');
+      const pxBase = containerWidthPx > 0 ? containerWidthPx : 320;
+      const halfWidthPct = labelTexts.map((text) => {
+        const wPx = containerWidthPx > 0 ? measureSegmentedGraphLabelWidthPx(text) : 26;
+        return (wPx / pxBase) * 100 / 2;
       });
-      let nextX = labelMaxX;
+      const labelGapPct = (4 / pxBase) * 100;
+      const edgeMarginPct = (3 / pxBase) * 100;
+
+      const labelLeft = new Array(points.length);
+      const labelRight = new Array(points.length);
+      let prevRight = -Infinity;
+      xMids.forEach((xm, i) => {
+        const w = halfWidthPct[i] * 2;
+        const l = Math.max(xm - halfWidthPct[i], prevRight + labelGapPct, edgeMarginPct);
+        labelLeft[i] = l;
+        labelRight[i] = l + w;
+        prevRight = labelRight[i];
+      });
+      let nextLeftBound = 100 - edgeMarginPct;
       for (let i = points.length - 1; i >= 0; i--) {
-        if (labelX[i] > nextX) labelX[i] = nextX;
-        nextX = labelX[i] - labelMinGap;
+        const w = halfWidthPct[i] * 2;
+        if (labelRight[i] > nextLeftBound) {
+          labelRight[i] = nextLeftBound;
+          labelLeft[i] = labelRight[i] - w;
+        }
+        nextLeftBound = labelLeft[i] - labelGapPct;
       }
+      const labelX = labelLeft.map((l, i) => (l + labelRight[i]) / 2);
 
       const guides = points
         .map((pt, i) => `<line class="segmented-workout-graph__actual-guide" x1="${labelX[i].toFixed(2)}" y1="${(labelRowY + 3).toFixed(2)}" x2="${xMids[i].toFixed(2)}" y2="${pt.y.toFixed(2)}" vector-effect="non-scaling-stroke" />`)
         .join('');
       // SVG viewBox 스케일에서는 글자가 찌그러지므로 같은 %좌표계의 일반 HTML 오버레이로 그린다.
       const labels = points
-        .map((pt, i) => `<span class="segmented-workout-graph__actual-label" style="left:${labelX[i].toFixed(2)}%; top:${labelRowY.toFixed(2)}%;">${Math.round(pt.watts)}W</span>`)
+        .map((pt, i) => `<span class="segmented-workout-graph__actual-label" style="left:${labelX[i].toFixed(2)}%; top:${labelRowY.toFixed(2)}%;">${labelTexts[i]}</span>`)
         .join('');
       actualOverlayMarkup = `
       <svg class="segmented-workout-graph__actual-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
