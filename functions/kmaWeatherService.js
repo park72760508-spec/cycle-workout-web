@@ -6,7 +6,7 @@ const { KOREA_REGION_WEATHER_COORDS } = require("./koreaRegionWeatherCoords");
 
 const KMA_BASE_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst";
 const KMA_BASE_TIMES = ["0200", "0500", "0800", "1100", "1400", "1700", "2000", "2300"];
-const TARGET_HOURS = [6, 8, 10, 12, 14, 16];
+const TARGET_HOURS = [6, 8, 10, 12, 14, 16, 18];
 /** 기상청 발표 주기(3시간)와 동일하게 캐시 — 같은 모임을 여러 명이 봐도 API 호출 1회로 절감 */
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 

@@ -2494,21 +2494,26 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   line-height: 1.25rem;
 }
 
-/* 출발 지역 날씨 — 06/08/10/12/14/16시 6칸, 폭이 좁으면 가로 스크롤 */
+/* 날씨 정보 행 — 라벨을 위에, 06~18시 7칸을 아래 전체 폭에 배치(스크롤 없음) */
+#openRidingRoomScreen .open-riding-detail-stat-row--weather {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+/* 출발 지역 날씨 — 06/08/10/12/14/16/18시 7칸, 패널 전체 폭에 균등 배분(스크롤 없이 고정) */
 #openRidingRoomScreen .open-riding-departure-weather-row {
   display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  justify-content: flex-end;
-  -webkit-overflow-scrolling: touch;
+  gap: 2px;
+  justify-content: space-between;
 }
 #openRidingRoomScreen .open-riding-departure-weather-cell {
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  min-width: 34px;
 }
 #openRidingRoomScreen .open-riding-departure-weather-hour {
   font-size: 10px;

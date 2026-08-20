@@ -371,7 +371,7 @@ function formatOpenRidingDepartureRegionDisplay(ride) {
   return reg || dep;
 }
 
-var OPEN_RIDING_WEATHER_HOURS = [6, 8, 10, 12, 14, 16];
+var OPEN_RIDING_WEATHER_HOURS = [6, 8, 10, 12, 14, 16, 18];
 
 /** Date → "YYYY-MM-DD"(로컬 벽시계 기준, ride.date와 동일 시각대) */
 function openRidingWeatherYmd(d) {
@@ -9256,7 +9256,10 @@ function OpenRidingDetail(props) {
           </span>
         ))}
         {statRow('출발 지역', formatOpenRidingDepartureRegionDisplay(ride))}
-        {statRow('날씨 정보', <OpenRidingDepartureWeatherPanel region={ride.region} meetupDate={ts} />)}
+        <div className="open-riding-detail-stat-row open-riding-detail-stat-row--weather">
+          <span className="open-riding-detail-stat-label">날씨 정보</span>
+          <OpenRidingDepartureWeatherPanel region={ride.region} meetupDate={ts} />
+        </div>
         {statRow(
           '레벨',
           isRunDetail ? (
