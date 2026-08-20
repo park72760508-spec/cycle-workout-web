@@ -27,6 +27,8 @@
   ];
 
   var AVG_GUIDE_LINE = 'rgba(249, 115, 22, 0.45)';
+  /** 세그먼트 평균 파워 라인 — Claude 브랜드 코랄/테라코타 */
+  var AVG_POWER_GUIDE_LINE = '#D97757';
 
   /** 짧은 구간 ≥ 긴 구간(파워·심박 공통 원칙) — 저장 단계에서 이미 보정되지만, 서로 다른 시점/
    * 소스에서 채워진 값이 섞여 들어올 수 있어 화면에 그리기 직전 한 번 더 눌러준다(2026-08).
@@ -310,7 +312,7 @@
           type: 'line',
           label: '평균 파워',
           data: labels.map(function() { return avgGuide; }),
-          borderColor: AVG_GUIDE_LINE,
+          borderColor: AVG_POWER_GUIDE_LINE,
           backgroundColor: 'transparent',
           borderWidth: 2,
           pointRadius: 0,
