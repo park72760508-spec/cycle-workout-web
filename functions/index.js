@@ -4913,8 +4913,8 @@ exports.stravaSyncRetrySchedule = onSchedule(
     await runStravaGapDetectTargetedJob(db, "[stravaSyncRetrySchedule:targeted]");
   }
 );
-/** @deprecated stravaSync429RetrySchedule — stravaSyncRetrySchedule 사용 */
-exports.stravaSync429RetrySchedule = exports.stravaSyncRetrySchedule;
+/** stravaSync429RetrySchedule 제거됨(2026-08-20) — stravaSyncRetrySchedule과 완전히 동일한 코드가
+ * 별도 Cloud Function으로 중복 배포되어 03:30·06:30·09:30에 동일 작업이 두 번 실행되고 있었음. */
 
 /**
  * 전체 사용자 순환 갭 스캔 — Strava 웹훅이 아예 도착하지 않아 strava_sync_retry_pending /
@@ -9763,6 +9763,13 @@ const scheduledPreMasterWeeklyTssParityOptions = supabaseDualWriteServer.appendS
   memory: "1GiB",
   timeoutSeconds: 1800,
 });
+if (STRAVA_CLIENT_SECRET) {
+  scheduledPreMasterWeeklyTssParityOptions.secrets =
+    scheduledPreMasterWeeklyTssParityOptions.secrets || [];
+  if (!scheduledPreMasterWeeklyTssParityOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    scheduledPreMasterWeeklyTssParityOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
+}
 exports.scheduledPreMasterWeeklyTssParity = onSchedule(
   scheduledPreMasterWeeklyTssParityOptions,
   async () => {
