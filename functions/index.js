@@ -16502,7 +16502,12 @@ exports.onAppConfigWritten = functions
  * (과거 Firestore 샤드 색인 재구성 스케줄을 대체)
  */
 exports.privateUserIdsRebuildSchedule = onSchedule(
-  { schedule: "20 3 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 300, memory: "256MiB" },
+  supabaseDualWriteServer.appendServiceRoleSecret({
+    schedule: "20 3 * * *",
+    timeZone: "Asia/Seoul",
+    timeoutSeconds: 300,
+    memory: "256MiB",
+  }),
   async () => {
     _privateUserIdSetCache = null;
     _privateUserIdSetCacheAt = 0;
