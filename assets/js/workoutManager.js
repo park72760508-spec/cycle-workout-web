@@ -6617,8 +6617,11 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       // 세그먼트별 실제 평균 파워 값 라벨 — 짧은 세그먼트가 연속되면 값 위치(pt.y)에 그대로 찍을 때
       // 서로 겹쳐 식별이 안 되므로, 상단 여유 공간의 고정 라벨 열(labelRowY)에 최소 간격을 두고
       // 배치한 뒤 실제 지점까지 얇은 가이드 선으로 연결한다.
+      // labelRowY는 그래프 맨 위(0)와 FTP 100% 점선(ftpLineTopPercent) 사이 중간 지점 — FTP
+      // 점선과 라벨이 겹치지 않게 사용자 FTP 설정(zoneFtp100)에 따라 동적으로 계산한다.
+      const ftpLineTopPercent = 100 - ftpLineBottomPercent;
+      const labelRowY = Math.min(Math.max(ftpLineTopPercent / 2, 4), 45);
       const xMids = points.map((pt) => (pt.xStart + pt.xEnd) / 2);
-      const labelRowY = 6;
       const labelMinGap = 9;
       const labelMinX = 3;
       const labelMaxX = 97;
@@ -6640,7 +6643,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
         .join('');
       // SVG viewBox 스케일에서는 글자가 찌그러지므로 같은 %좌표계의 일반 HTML 오버레이로 그린다.
       const labels = points
-        .map((pt, i) => `<span class="segmented-workout-graph__actual-label" style="left:${labelX[i].toFixed(2)}%; top:${labelRowY}%;">${Math.round(pt.watts)}W</span>`)
+        .map((pt, i) => `<span class="segmented-workout-graph__actual-label" style="left:${labelX[i].toFixed(2)}%; top:${labelRowY.toFixed(2)}%;">${Math.round(pt.watts)}W</span>`)
         .join('');
       actualOverlayMarkup = `
       <svg class="segmented-workout-graph__actual-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
