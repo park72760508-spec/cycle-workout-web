@@ -61,12 +61,14 @@ async function fetchOpenRidesInDateRange(admin, startYmd, endYmd) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   if (!supabase) return [];
 
+  /* status 필터 없음 — Firestore 폴백 경로(getOpenRidesInDateRangeForRead)도 상태 무관하게
+   * 전부 반환한다. 예전에 .eq("status","active")가 있어 취소(cancelled)·완료(completed) 모임이
+   * Supabase Canary 경로에서만 달력에서 사라져 보이는 버그였다(2026-08). */
   const { data: rows, error } = await supabase
     .from("open_rides")
     .select("*")
     .gte("ride_date", startYmd)
     .lte("ride_date", endYmd)
-    .eq("status", "active")
     .order("ride_date", { ascending: true });
   if (error || !rows || !rows.length) return [];
 
