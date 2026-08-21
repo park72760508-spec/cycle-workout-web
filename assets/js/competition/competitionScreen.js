@@ -126,7 +126,7 @@
 
   /**
    * 내 신청 내역(PAYMENT_WAITING·PAYMENT_COMPLETED) — competitionId → race_applications 문서 맵.
-   * 화면 재진입 시에도 "입금 대기중"/"신청 완료" 상태가 그대로 보이도록 카드 최초 렌더에 반영한다.
+   * 화면 재진입 시에도 "입금 대기중"/"접수 완료(입금 완료)" 상태가 그대로 보이도록 카드 최초 렌더에 반영한다.
    */
   async function fetchMyApplicationsMap() {
     var map = new Map();
@@ -356,7 +356,7 @@
 
     if (result.status === 'PAYMENT_COMPLETED') {
       // 참가 취소·환불은 목록 카드가 아니라 상세화면(showDetailSheet의 "참가 취소" 버튼)에서만 진행한다.
-      applyBtn.textContent = '신청 완료';
+      applyBtn.textContent = '접수 완료(입금 완료)';
       applyBtn.disabled = true;
       return;
     }
