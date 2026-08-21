@@ -17245,7 +17245,10 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
         redisKey,
         tossOrderId: orderId,
         tossPaymentKey: payment.paymentKey || null,
-        tossVirtualAccountSecret: va.secret || null,
+        /* secret은 virtualAccount 안이 아니라 Payment 객체 최상위 필드다(토스 공식 문서 확인,
+           2026-08) — va.secret으로 읽으면 항상 undefined라 웹훅의 secret 검증이 매번
+           실패하고, 입금이 실제로 확인돼도 PAYMENT_COMPLETED로 못 넘어가는 버그였다. */
+        tossVirtualAccountSecret: payment.secret || null,
         virtualAccount: {
           bankCode: va.bankCode || bank,
           bankName: bankNameKo || null,
@@ -17396,7 +17399,7 @@ exports.getCompetitionStatus = onRequest(getCompetitionStatusOptions, async (req
 
 /**
  * 토스페이먼츠 웹훅 — DEPOSIT_CALLBACK(가상계좌 입금)만 처리.
- * 서명 헤더가 없으므로 (1) 발급 시 저장해둔 virtualAccount.secret과 웹훅 secret 대조,
+ * 서명 헤더가 없으므로 (1) 발급 시 저장해둔 payment.secret(Payment 객체 최상위 필드)과 웹훅 secret 대조,
  * (2) orderId로 결제를 재조회(authoritative)해 status==='DONE'일 때만 신뢰한다 — 웹훅 바디를 직접 믿지 않는다.
  */
 const tossPaymentWebhookOptions = appendRaceSecrets({ region: "asia-northeast3", cors: false, timeoutSeconds: 60 });
