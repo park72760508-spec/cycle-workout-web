@@ -23,6 +23,46 @@
     { code: '37', name: '전북은행' },
   ];
 
+  /** 참가 취소 환불 규정 — functions/index.js의 computeCompetitionRefundPolicy와 반드시 맞춰 유지(화면 미리보기용, 최종 계산은 서버 재검증) */
+  var COMPETITION_REFUND_FEE_KRW = 440;
+  var COMPETITION_REFUND_D30_MS = 30 * 24 * 60 * 60 * 1000;
+
+  function toMillis(v) {
+    if (v == null) return null;
+    if (typeof v.toMillis === 'function') return v.toMillis();
+    if (typeof v.toDate === 'function') return v.toDate().getTime();
+    var d = new Date(v);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  /**
+   * @param {number} amount
+   * @param {*} closesAt 대회 접수 마감(Firestore Timestamp|Date|ISO)
+   * @param {*} raceDate 대회 개최일(Firestore Timestamp|Date|ISO)
+   * @param {number} [nowMs]
+   */
+  function computeCompetitionRefundPolicy(amount, closesAt, raceDate, nowMs) {
+    var amt = Math.max(0, Number(amount) || 0);
+    var now = nowMs != null ? nowMs : Date.now();
+    var closesAtMs = toMillis(closesAt);
+    var raceDateMs = toMillis(raceDate);
+    if (closesAtMs != null && now <= closesAtMs) {
+      return {
+        tier: 'FULL',
+        refundAmount: Math.max(0, amt - COMPETITION_REFUND_FEE_KRW),
+        label: '100% 환불(수수료 ' + COMPETITION_REFUND_FEE_KRW + '원 차감)'
+      };
+    }
+    if (raceDateMs != null && now <= raceDateMs - COMPETITION_REFUND_D30_MS) {
+      return {
+        tier: 'PARTIAL',
+        refundAmount: Math.max(0, Math.floor(amt * 0.5) - COMPETITION_REFUND_FEE_KRW),
+        label: '50% 환불(수수료 ' + COMPETITION_REFUND_FEE_KRW + '원 차감)'
+      };
+    }
+    return { tier: 'NONE', refundAmount: 0, label: '환불 불가(대회 개최 30일 전 이후 취소)' };
+  }
+
   function haptic(ms) {
     try {
       if (navigator.vibrate) navigator.vibrate(ms);
@@ -564,6 +604,12 @@
         '<button type="button" class="competition-submit-btn" id="competitionDetailCancelUnpaidBtn" style="background:#fffbeb;color:#b45309;margin-bottom:8px;">입금기한 만료건 즉시 취소</button>'
       );
     }
+    if (opts.paid && typeof opts.onCancelApplication === 'function') {
+      // 헤더 아이콘(신청 취소)과 동일 동작 — 입금완료 후에는 눈에 잘 띄는 버튼으로도 노출한다.
+      footerParts.push(
+        '<button type="button" class="competition-submit-btn" id="competitionDetailCancelParticipationBtn" style="background:#f1f5f9;color:#334155;margin-bottom:8px;">참가 취소</button>'
+      );
+    }
     if (opts.canManage) {
       // 명단 CSV·재계산·수정·삭제 — 한 줄에 아이콘+라벨(대회 카드 아이콘과 동일 톤), 관리자와 생성자 본인 모두 노출.
       footerParts.push(buildManageActionRowHtml());
@@ -668,6 +714,13 @@
         opts.onCancelApplication();
       });
     }
+    var cancelParticipationBtn = overlay.querySelector('#competitionDetailCancelParticipationBtn');
+    if (cancelParticipationBtn && typeof opts.onCancelApplication === 'function') {
+      cancelParticipationBtn.addEventListener('click', function () {
+        haptic(10);
+        opts.onCancelApplication();
+      });
+    }
     var editIconBtn = overlay.querySelector('#competitionDetailEditIconBtn');
     if (editIconBtn && typeof opts.onEditApplication === 'function') {
       editIconBtn.addEventListener('click', function () {
@@ -761,13 +814,26 @@
    * 취소·환불 계좌 입력 폼.
    * @param {string} applicationId
    * @param {function(object):Promise} onSubmit — competitionApi.requestCompetitionRefund 등 호출부에서 주입
+   * @param {{amount:number, tier:string, label:string}} [refundPreview] — computeCompetitionRefundPolicy 결과.
+   *   화면 미리보기용이며 최종 금액은 서버(requestCompetitionRefund)가 다시 계산해 확정한다.
    */
-  function showRefundFormSheet(applicationId, onSubmit) {
+  function showRefundFormSheet(applicationId, onSubmit, refundPreview) {
     var bankOptionsHtml = BANK_OPTIONS.map(function (b) {
       return '<option value="' + b.code + '">' + b.name + '</option>';
     }).join('');
 
+    var previewHtml = refundPreview
+      ? '<div class="competition-refund-preview">' +
+        '  <div class="competition-refund-preview-label">' + escapeHtml(refundPreview.label || '') + '</div>' +
+        '  <div class="competition-refund-preview-amount">' + Number(refundPreview.amount || 0).toLocaleString() + '원 환불 예정</div>' +
+        '</div>'
+      : '';
+    var submitLabel = refundPreview
+      ? Number(refundPreview.amount || 0).toLocaleString() + '원 환불 신청'
+      : '취소 및 환불 신청';
+
     var body =
+      previewHtml +
       '<div class="competition-form-field">' +
       '  <label class="competition-form-label" for="competitionRefundBank">환불 받을 은행</label>' +
       '  <select class="competition-form-select" id="competitionRefundBank">' + bankOptionsHtml + '</select>' +
@@ -781,7 +847,7 @@
       '  <input class="competition-form-input" id="competitionRefundHolderName" type="text" placeholder="본인 명의 예금주" />' +
       '</div>' +
       '<div class="competition-form-error" id="competitionRefundError"></div>';
-    var footer = '<button type="button" class="competition-submit-btn" id="competitionRefundSubmitBtn">취소 및 환불 신청</button>';
+    var footer = '<button type="button" class="competition-submit-btn" id="competitionRefundSubmitBtn">' + escapeHtml(submitLabel) + '</button>';
 
     var overlay = openSheet('취소 및 환불', body, footer);
     var submitBtn = overlay.querySelector('#competitionRefundSubmitBtn');
@@ -815,7 +881,7 @@
         errorEl.textContent = (e && e.message) || '환불 신청에 실패했습니다. 잠시 후 다시 시도해 주세요.';
         errorEl.classList.add('is-visible');
         submitBtn.disabled = false;
-        submitBtn.textContent = '취소 및 환불 신청';
+        submitBtn.textContent = submitLabel;
       }
     });
   }
@@ -830,5 +896,6 @@
     onSheetClose: onSheetClose,
     mountGpxCoursePanel: mountGpxCoursePanel,
     unmountGpxCoursePanel: unmountGpxCoursePanel,
+    computeCompetitionRefundPolicy: computeCompetitionRefundPolicy,
   };
 })();

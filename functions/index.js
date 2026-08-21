@@ -16714,6 +16714,39 @@ const RACE_UNPAID_CLEANUP_BATCH_LIMIT = 200;
 /** 마감 이후 취소로 자리가 나면 대기자 1순위에게 신청하기를 열어 두는 시간 — 응답 없으면 다음 순위로 승격 */
 const RACE_WAITLIST_INVITE_VALID_HOURS = 24;
 
+/** 참가 취소 환불 규정 — 프론트(competitionBottomSheet.js)의 동일 공식과 반드시 맞춰 유지 */
+const COMPETITION_REFUND_FEE_KRW = 440;
+const COMPETITION_REFUND_D30_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * 참가 취소 환불 규정 계산.
+ * - 100% 환불: 대회 접수 기간(~closesAt) 내 취소 — 수수료 440원 차감
+ * - 부분 환불(50%): 접수 종료 이후 ~ 대회 개최 D-30일까지 — 50% 후 수수료 440원 차감
+ * - 환불 불가: D-30일 이후 취소(대회 당일 불참 포함)
+ * @param {number} amount 원래 결제 금액
+ * @param {number|null} closesAtMs 접수 마감 시각(ms)
+ * @param {number|null} raceDateMs 대회 개최 시각(ms)
+ * @param {number} nowMs
+ */
+function computeCompetitionRefundPolicy(amount, closesAtMs, raceDateMs, nowMs) {
+  const amt = Math.max(0, Number(amount) || 0);
+  if (closesAtMs != null && nowMs <= closesAtMs) {
+    return {
+      tier: "FULL",
+      refundAmount: Math.max(0, amt - COMPETITION_REFUND_FEE_KRW),
+      label: "100% 환불(수수료 " + COMPETITION_REFUND_FEE_KRW + "원 차감)",
+    };
+  }
+  if (raceDateMs != null && nowMs <= raceDateMs - COMPETITION_REFUND_D30_MS) {
+    return {
+      tier: "PARTIAL",
+      refundAmount: Math.max(0, Math.floor(amt * 0.5) - COMPETITION_REFUND_FEE_KRW),
+      label: "50% 환불(수수료 " + COMPETITION_REFUND_FEE_KRW + "원 차감)",
+    };
+  }
+  return { tier: "NONE", refundAmount: 0, label: "환불 불가(대회 개최 30일 전 이후 취소)" };
+}
+
 function appendRaceSecrets(options) {
   const o = Object.assign({}, options);
   o.secrets = Array.isArray(o.secrets) ? o.secrets.slice() : [];
@@ -17164,6 +17197,7 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
           applicationId: existingDoc.id,
           status: existing.status,
           virtualAccount: existing.virtualAccount || null,
+          amount: existing.amount,
         });
         return;
       }
@@ -17538,11 +17572,25 @@ exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, as
       return;
     }
 
+    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(appData.competitionId).get();
+    const comp = compSnap.exists ? compSnap.data() || {} : {};
+    const closesAtMs = comp.closesAt && comp.closesAt.toMillis ? comp.closesAt.toMillis() : null;
+    const raceDateMs = comp.raceDate && comp.raceDate.toMillis ? comp.raceDate.toMillis() : null;
+    const policy = computeCompetitionRefundPolicy(appData.amount, closesAtMs, raceDateMs, Date.now());
+    if (policy.tier === "NONE" || policy.refundAmount <= 0) {
+      res.status(400).json({
+        success: false,
+        error: "대회 개최 30일 전이 지나 환불이 불가능한 기간입니다. 참가 취소는 대회 주최자(관리자)에게 문의해 주세요.",
+      });
+      return;
+    }
+
     await tossPaymentsClient.cancelPayment(
       raceTossSecretKey(),
       appData.tossPaymentKey,
       {
-        cancelReason: "사용자 요청 취소",
+        cancelReason: "사용자 요청 취소(" + policy.label + ")",
+        cancelAmount: policy.refundAmount,
         refundReceiveAccount: { bank, accountNumber, holderName },
       },
       `${applicationId}-cancel`
@@ -17556,10 +17604,17 @@ exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, as
         status: "CANCELED_REFUNDED",
         redisSlotConsumed: false,
         refundAccount: { bankCode: bank, accountNumber, holderName },
+        refundAmount: policy.refundAmount,
+        refundTier: policy.tier,
         canceledAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
-    await writeRaceLedgerEntry(db, appRef, { event: "CANCELED_REFUNDED", applicationId });
+    await writeRaceLedgerEntry(db, appRef, {
+      event: "CANCELED_REFUNDED",
+      applicationId,
+      refundAmount: policy.refundAmount,
+      refundTier: policy.tier,
+    });
 
     if (appData.redisSlotConsumed !== false) {
       const redisKey = appData.redisKey || `race:${appData.competitionId}:count`;
@@ -17571,7 +17626,7 @@ exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, as
       });
     }
 
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, refundAmount: policy.refundAmount, refundTier: policy.tier });
   } catch (e) {
     const status = e.status || 500;
     console.error("[requestCompetitionRefund]", e && e.message ? e.message : e);

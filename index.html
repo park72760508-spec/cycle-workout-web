@@ -3190,6 +3190,13 @@
       -webkit-tap-highlight-color: transparent;
     }
     .competition-submit-btn[disabled] { background: #cbd5e1; cursor: not-allowed; }
+    .competition-refund-preview {
+      margin-bottom: 16px; padding: 14px 16px; border-radius: 12px;
+      background: linear-gradient(135deg, rgba(102,126,234,0.08) 0%, rgba(118,75,162,0.08) 100%);
+      border: 1px solid rgba(102,126,234,0.18); text-align: center;
+    }
+    .competition-refund-preview-label { font-size: 12px; font-weight: 600; color: #6d28d9; margin-bottom: 4px; }
+    .competition-refund-preview-amount { font-size: 20px; font-weight: 800; color: #1f2937; }
 
     /* 대회 일시·접수 시작·접수 마감 — 네이티브 datetime-local 대신 STELVIO 디자인 커스텀 달력 팝업 트리거.
        네이티브 위젯은 브라우저/OS 로케일에 따라 월이 영문(Jan/Feb..)으로 표시되고 디자인 커스터마이즈가
@@ -42665,11 +42672,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/runDashboard/RunDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/stelvio/StelvioRankingDistributionChart.jsx?v=run-ranking-heat-opt-20260803" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/competition/competitionApi.js"></script>
-  <script src="assets/js/competition/competitionBottomSheet.js?v=va-sheet-ok-only-20260820c"></script>
+  <script src="assets/js/competition/competitionBottomSheet.js?v=cancel-refund-policy-20260822a"></script>
   <script src="assets/js/competition/competitionAdminForm.js"></script>
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
-  <script src="assets/js/competition/competitionScreen.js?v=va-sheet-ok-only-20260820c"></script>
+  <script src="assets/js/competition/competitionScreen.js?v=cancel-refund-policy-20260822a"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

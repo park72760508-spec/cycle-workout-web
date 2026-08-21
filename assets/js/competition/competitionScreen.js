@@ -365,18 +365,38 @@
         refundBtn.style.marginTop = '8px';
         refundBtn.style.background = '#f1f5f9';
         refundBtn.style.color = '#334155';
-        refundBtn.textContent = '취소 및 환불';
+        refundBtn.textContent = '참가 취소';
         refundBtn.addEventListener('click', function (e) {
           e.stopPropagation();
+          var comp = opts.comp;
+          var policy = window.competitionBottomSheet.computeCompetitionRefundPolicy(
+            result.amount, comp && comp.closesAt, comp && comp.raceDate
+          );
+          if (policy.tier === 'NONE' || policy.refundAmount <= 0) {
+            haptic(10);
+            alert('대회 개최 30일 전이 지나 환불이 불가능한 기간입니다. 참가 취소는 대회 주최자에게 문의해 주세요.');
+            return;
+          }
           haptic(10);
-          window.competitionBottomSheet.showRefundFormSheet(result.applicationId, function (refundAccount) {
-            return window.competitionApi.requestCompetitionRefund(result.applicationId, refundAccount).then(function (r) {
-              if (!r || r.success === false) throw new Error((r && r.error) || '환불 신청 실패');
-              applyBtn.textContent = '신청하기';
-              applyBtn.disabled = false;
-              refundBtn.remove();
+          var openRefundForm = function () {
+            window.competitionBottomSheet.showRefundFormSheet(result.applicationId, function (refundAccount) {
+              return window.competitionApi.requestCompetitionRefund(result.applicationId, refundAccount).then(function (r) {
+                if (!r || r.success === false) throw new Error((r && r.error) || '환불 신청 실패');
+                applyBtn.textContent = '신청하기';
+                applyBtn.disabled = false;
+                refundBtn.remove();
+              });
+            }, policy);
+          };
+          if (typeof window.showStelvioExitConfirmPopup === 'function') {
+            window.showStelvioExitConfirmPopup(openRefundForm, {
+              message: '정말 취소하시겠습니까?',
+              okText: '환불하기',
+              cancelText: '아니요'
             });
-          });
+          } else if (confirm('정말 취소하시겠습니까?')) {
+            openRefundForm();
+          }
         });
         wrap.appendChild(refundBtn);
       }
@@ -445,13 +465,13 @@
    * 입금 대기중인데 이미 기한이 지난 건은 무시(신청하기로 되돌아감) — 미입금 취소 스케줄이
    * 아직 처리 전이어도 사용자에게는 정상 신청 가능한 상태로 보여준다.
    */
-  function applyExistingStateToButton(applyBtn, myApp) {
+  function applyExistingStateToButton(applyBtn, myApp, comp) {
     if (!myApp || !applyBtn) return false;
     if (myApp.status === 'PAYMENT_COMPLETED') {
       handleApplyResult(
-        { success: true, status: 'PAYMENT_COMPLETED', applicationId: myApp.id },
+        { success: true, status: 'PAYMENT_COMPLETED', applicationId: myApp.id, amount: myApp.amount },
         applyBtn,
-        { autoOpenSheet: false }
+        { autoOpenSheet: false, comp: comp }
       );
       return true;
     }
@@ -492,7 +512,7 @@
     }
     applyBtn.classList.remove('is-loading');
     // silentAlert: 실패 사유는 신청서 시트의 인라인 에러로 보여주므로 handleApplyResult의 alert()는 생략한다
-    handleApplyResult(result, applyBtn, { silentAlert: true });
+    handleApplyResult(result, applyBtn, { silentAlert: true, comp: comp });
     if (!result || result.success === false) {
       var msg =
         (result && result.reason === 'SOLD_OUT' &&
@@ -547,12 +567,32 @@
   function cancelMyApplicationFlow(comp, myApp) {
     if (!myApp) return;
     if (myApp.status === 'PAYMENT_COMPLETED') {
-      window.competitionBottomSheet.showRefundFormSheet(myApp.id, function (refundAccount) {
-        return window.competitionApi.requestCompetitionRefund(myApp.id, refundAccount).then(function (r) {
-          if (!r || r.success === false) throw new Error((r && r.error) || '취소 및 환불 신청에 실패했습니다.');
-          renderCompetitionList();
+      var policy = window.competitionBottomSheet.computeCompetitionRefundPolicy(
+        myApp.amount, comp && comp.closesAt, comp && comp.raceDate
+      );
+      if (policy.tier === 'NONE' || policy.refundAmount <= 0) {
+        haptic(10);
+        alert('대회 개최 30일 전이 지나 환불이 불가능한 기간입니다. 참가 취소는 대회 주최자에게 문의해 주세요.');
+        return;
+      }
+      haptic(10);
+      var openRefundForm = function () {
+        window.competitionBottomSheet.showRefundFormSheet(myApp.id, function (refundAccount) {
+          return window.competitionApi.requestCompetitionRefund(myApp.id, refundAccount).then(function (r) {
+            if (!r || r.success === false) throw new Error((r && r.error) || '취소 및 환불 신청에 실패했습니다.');
+            renderCompetitionList();
+          });
+        }, policy);
+      };
+      if (typeof window.showStelvioExitConfirmPopup === 'function') {
+        window.showStelvioExitConfirmPopup(openRefundForm, {
+          message: '정말 취소하시겠습니까?',
+          okText: '환불하기',
+          cancelText: '아니요'
         });
-      });
+      } else if (confirm('정말 취소하시겠습니까?')) {
+        openRefundForm();
+      }
       return;
     }
     if (myApp.status === 'PAYMENT_WAITING') {
@@ -742,7 +782,7 @@
     var applyBtn = card.querySelector('.competition-apply-btn');
     var remainingEl = card.querySelector('#' + remainingId);
     var lastRemainingLabel = initialRemainingLabel;
-    var hasExistingApp = applyBtn && !invite && category.key === 'open' && applyExistingStateToButton(applyBtn, myApp);
+    var hasExistingApp = applyBtn && !invite && category.key === 'open' && applyExistingStateToButton(applyBtn, myApp, comp);
 
     if (category.key !== 'past' || invite) {
       // 이미 입금 대기중/신청 완료/대기자 초대 상태면 잔여 인원 조회로 버튼을 덮어쓰지 않는다(라벨 텍스트만 갱신)
