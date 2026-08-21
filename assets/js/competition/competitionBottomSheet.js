@@ -825,11 +825,11 @@
     var previewHtml = refundPreview
       ? '<div class="competition-refund-preview">' +
         '  <div class="competition-refund-preview-label">' + escapeHtml(refundPreview.label || '') + '</div>' +
-        '  <div class="competition-refund-preview-amount">' + Number(refundPreview.amount || 0).toLocaleString() + '원 환불 예정</div>' +
+        '  <div class="competition-refund-preview-amount">' + Number(refundPreview.refundAmount || 0).toLocaleString() + '원 환불 예정</div>' +
         '</div>'
       : '';
     var submitLabel = refundPreview
-      ? Number(refundPreview.amount || 0).toLocaleString() + '원 환불 신청'
+      ? Number(refundPreview.refundAmount || 0).toLocaleString() + '원 환불 신청'
       : '취소 및 환불 신청';
 
     var body =
