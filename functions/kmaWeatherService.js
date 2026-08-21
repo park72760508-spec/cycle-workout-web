@@ -7,8 +7,8 @@ const { KOREA_REGION_WEATHER_COORDS } = require("./koreaRegionWeatherCoords");
 const KMA_BASE_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst";
 const KMA_BASE_TIMES = ["0200", "0500", "0800", "1100", "1400", "1700", "2000", "2300"];
 const TARGET_HOURS = [6, 8, 10, 12, 14, 16, 18];
-/** 1시간 캐시 — 같은 모임을 여러 명이 같은 시간대에 봐도 API 호출은 아껴가며, 갱신 주기는 1시간 단위로 유지 */
-const CACHE_TTL_MS = 60 * 60 * 1000;
+/** 기상청 발표 주기(3시간)와 동일하게 캐시 — 같은 모임을 여러 명이 봐도 API 호출 1회로 절감 */
+const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 
 // 기상청 "단기예보 조회서비스 활용가이드"의 LCC(Lambert Conformal Conic) 격자 변환 상수
 const RE = 6371.00877;
