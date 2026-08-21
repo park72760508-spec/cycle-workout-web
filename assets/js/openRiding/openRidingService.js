@@ -944,9 +944,10 @@ function applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds
 }
 
 /**
- * 방장 폭파(취소)
- * - 참석 확정(participants) 0명: 문서 삭제
- * - 1명 이상: 기존처럼 rideStatus= cancelled 유지
+ * 방장 폭파(취소) — 참가자 수와 무관하게 문서는 유지하고 rideStatus=cancelled로 표시.
+ * 완전 삭제는 별도의 deleteRideByHost 전용 액션만 담당한다(2026-08 회귀 수정: 확정 참가자
+ * 0명일 때 문서를 통째로 지우던 분기가 있었는데, 이 경우 폭파된 모임이 달력에서 아예
+ * 사라져버리는 버그였다 — 폭파는 취소 표시이지 삭제가 아니다).
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
  * @param {string} hostUserId
@@ -954,9 +955,8 @@ function applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds
  */
 export async function cancelRideByHost(db, rideId, hostUserId) {
   const rideRef = doc(db, 'rides', rideId);
-  let deleted;
   try {
-    deleted = await runTransaction(db, async (transaction) => {
+    await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(rideRef);
       if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
       const data = snap.data();
@@ -970,18 +970,12 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
       );
       applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
 
-      const parts = Array.isArray(data.participants) ? data.participants : [];
-      if (parts.length === 0) {
-        transaction.delete(rideRef);
-        return true;
-      }
       transaction.update(rideRef, {
         rideStatus: 'cancelled',
         hostPointRefunded: shouldRefundHost ? true : data.hostPointRefunded === true,
         cancelledAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
-      return false;
     });
   } catch (err) {
     if (err && err.message === 'RIDE_NOT_FOUND') {
@@ -990,14 +984,8 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
     }
     throw err;
   }
-  const result = { deleted: !!deleted };
-  if (!result.deleted) {
-    await scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
-  } else {
-    /* 참가자 0명이라 방 자체가 삭제된 경우 — upsert relay가 아니라 delete relay를 태워야 한다. */
-    await runSecondaryAfterOpenRideDelete(hostUserId, rideId);
-  }
-  return result;
+  await scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
+  return { deleted: false };
 }
 
 /**
