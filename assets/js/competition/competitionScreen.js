@@ -355,51 +355,9 @@
     }
 
     if (result.status === 'PAYMENT_COMPLETED') {
+      // 참가 취소·환불은 목록 카드가 아니라 상세화면(showDetailSheet의 "참가 취소" 버튼)에서만 진행한다.
       applyBtn.textContent = '신청 완료';
       applyBtn.disabled = true;
-      var wrap = applyBtn.parentElement;
-      if (wrap && !wrap.querySelector('.competition-refund-btn')) {
-        var refundBtn = document.createElement('button');
-        refundBtn.type = 'button';
-        refundBtn.className = 'competition-apply-btn competition-refund-btn';
-        refundBtn.style.marginTop = '8px';
-        refundBtn.style.background = '#f1f5f9';
-        refundBtn.style.color = '#334155';
-        refundBtn.textContent = '참가 취소';
-        refundBtn.addEventListener('click', function (e) {
-          e.stopPropagation();
-          var comp = opts.comp;
-          var policy = window.competitionBottomSheet.computeCompetitionRefundPolicy(
-            result.amount, comp && comp.closesAt, comp && comp.raceDate
-          );
-          if (policy.tier === 'NONE' || policy.refundAmount <= 0) {
-            haptic(10);
-            alert('대회 개최 30일 전이 지나 환불이 불가능한 기간입니다. 참가 취소는 대회 주최자에게 문의해 주세요.');
-            return;
-          }
-          haptic(10);
-          var openRefundForm = function () {
-            window.competitionBottomSheet.showRefundFormSheet(result.applicationId, function (refundAccount) {
-              return window.competitionApi.requestCompetitionRefund(result.applicationId, refundAccount).then(function (r) {
-                if (!r || r.success === false) throw new Error((r && r.error) || '환불 신청 실패');
-                applyBtn.textContent = '신청하기';
-                applyBtn.disabled = false;
-                refundBtn.remove();
-              });
-            }, policy);
-          };
-          if (typeof window.showStelvioExitConfirmPopup === 'function') {
-            window.showStelvioExitConfirmPopup(openRefundForm, {
-              message: '정말 취소하시겠습니까?',
-              okText: '환불하기',
-              cancelText: '아니요'
-            });
-          } else if (confirm('정말 취소하시겠습니까?')) {
-            openRefundForm();
-          }
-        });
-        wrap.appendChild(refundBtn);
-      }
       return;
     }
 
