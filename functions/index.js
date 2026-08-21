@@ -17580,6 +17580,125 @@ exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, as
 });
 
 /**
+ * 관리자 전용 — requestCompetitionRefund가 처리 못 하는 건(예: 웹훅 처리 누락으로 실제로는
+ * 입금됐는데 status가 여전히 PAYMENT_WAITING인 건)을 강제로 환불·취소한다. requestCompetitionRefund
+ * 에러 메시지의 "관리자에게 문의해 주세요" 안내가 실제로 처리할 수 있는 창구.
+ * Toss 결제를 authoritative 재조회해 DONE인 경우에만 취소·환불한다(저장된 status를 신뢰하지 않음).
+ * GET/POST ?secret=stelvio-internal-sync-v1 또는 관리자(grade=1)
+ */
+const adminForceRefundCompetitionApplicationOptions = appendRaceSecrets({
+  region: "asia-northeast3",
+  cors: true,
+  timeoutSeconds: 60,
+});
+exports.adminForceRefundCompetitionApplication = onRequest(
+  adminForceRefundCompetitionApplicationOptions,
+  async (req, res) => {
+    setCorsHeaders(req, res);
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    const db = admin.firestore();
+    const rawSecret =
+      req.query.secret ||
+      req.headers["x-internal-secret"] ||
+      req.headers["X-Internal-Secret"] ||
+      (req.body && req.body.secret);
+    let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+    if (!authorized) {
+      const uid = await getUidFromRequest(req, res);
+      if (!uid) return;
+      const grade = await getCachedCallerGrade(db, uid);
+      if (grade !== "1") {
+        res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
+        return;
+      }
+      authorized = true;
+    }
+
+    try {
+      const applicationId = String(req.query.applicationId || (req.body && req.body.applicationId) || "").trim();
+      const bank = String(req.query.bank || (req.body && req.body.bank) || "").trim();
+      const accountNumber = String(req.query.accountNumber || (req.body && req.body.accountNumber) || "").trim();
+      const holderName = String(req.query.holderName || (req.body && req.body.holderName) || "").trim();
+      if (!applicationId || !bank || !accountNumber || !holderName) {
+        res.status(400).json({ success: false, error: "applicationId·bank·accountNumber·holderName 필요" });
+        return;
+      }
+      const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationId);
+      const appSnap = await appRef.get();
+      if (!appSnap.exists) {
+        res.status(404).json({ success: false, error: "not_found" });
+        return;
+      }
+      const appData = appSnap.data() || {};
+      if (appData.status === "CANCELED_REFUNDED" || appData.status === "CANCELED_UNPAID") {
+        res.status(200).json({ success: true, alreadyDone: true, status: appData.status });
+        return;
+      }
+      if (!appData.tossOrderId) {
+        res.status(400).json({ success: false, error: "tossOrderId 없음" });
+        return;
+      }
+
+      const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), appData.tossOrderId);
+      if (payment.status !== "DONE") {
+        res.status(400).json({ success: false, error: "결제가 완료(DONE) 상태가 아닙니다: " + payment.status });
+        return;
+      }
+
+      await tossPaymentsClient.cancelPayment(
+        raceTossSecretKey(),
+        payment.paymentKey || appData.tossPaymentKey,
+        {
+          cancelReason: "관리자 수동 환불(웹훅 처리 누락 건)",
+          refundReceiveAccount: { bank, accountNumber, holderName },
+        },
+        `${applicationId}-admin-refund`
+      );
+
+      await db.runTransaction(async (tx) => {
+        const freshSnap = await tx.get(appRef);
+        const fresh = freshSnap.data() || {};
+        if (fresh.status === "CANCELED_REFUNDED") return; // 멱등
+        tx.update(appRef, {
+          status: "CANCELED_REFUNDED",
+          redisSlotConsumed: false,
+          tossPaymentKey: payment.paymentKey || fresh.tossPaymentKey || null,
+          refundAccount: { bankCode: bank, accountNumber, holderName },
+          canceledAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      await writeRaceLedgerEntry(db, appRef, { event: "ADMIN_CANCELED_REFUNDED", applicationId });
+
+      if (appData.redisSlotConsumed !== false) {
+        const redisKey = appData.redisKey || `race:${appData.competitionId}:count`;
+        await raceRedisClient.releaseSlot(raceRedisConn(), redisKey).catch((releaseErr) => {
+          console.error(
+            "[adminForceRefundCompetitionApplication] slot release 실패(수동 확인 필요):",
+            redisKey,
+            releaseErr.message
+          );
+        });
+        await inviteNextWaitlistEntryIfClosed(db, appData.competitionId).catch((waitlistErr) => {
+          console.error(
+            "[adminForceRefundCompetitionApplication] 대기자 초대 실패(수동 확인 필요):",
+            appData.competitionId,
+            waitlistErr.message
+          );
+        });
+      }
+
+      res.status(200).json({ success: true });
+    } catch (e) {
+      console.error("[adminForceRefundCompetitionApplication]", e && e.message ? e.message : e);
+      res.status(500).json({ success: false, error: (e && e.message) || String(e) });
+    }
+  }
+);
+
+/**
  * 입금 전(PAYMENT_WAITING) 신청 취소 — 결제된 돈이 없으므로 환불 계좌 없이 바로 취소·슬롯 반환한다.
  * 이미 입금 완료(PAYMENT_COMPLETED)된 건은 requestCompetitionRefund(환불 계좌 필요)로 안내한다.
  */
