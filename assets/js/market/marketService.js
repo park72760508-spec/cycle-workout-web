@@ -3,12 +3,13 @@
  * market_items/market_favorites는 Supabase RLS(auth.uid())로 직접 read/write, 결제(가상계좌
  * 발급·구매확정)는 Toss 시크릿 키가 필요해 Cloud Functions를 거친다.
  */
-import { getSupabaseClient, syncSupabaseSessionFromBridge } from '../supabaseDualWrite.js';
+import { fetchSupabaseSessionFromBridge } from '../supabaseDualWrite.js';
 
 const MARKET_IMAGE_MAX_WIDTH = 800;
 const MARKET_IMAGE_QUALITY = 0.7;
 const MARKET_IMAGE_BUCKET = 'market-images';
 const MARKET_BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const SUPABASE_JS_URL = 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 function functionsBaseUrl(region) {
   const projectId =
@@ -51,30 +52,75 @@ async function callMarketFunction(name, body, region) {
   return data;
 }
 
-/** 로그인된 Supabase 세션이 붙은 클라이언트를 반환 — market_items/favorites RLS(user_id=auth.uid()) 전제 */
-export async function ensureMarketSupabaseSession() {
-  await syncSupabaseSessionFromBridge();
-  return getSupabaseClient();
-}
-
-function isAuthSessionMissingError(err) {
-  const msg = err && err.message ? String(err.message) : String(err || '');
-  return /auth session missing/i.test(msg) || (err && err.name === 'AuthSessionMissingError');
-}
-
 /**
- * 커스텀 JWT 브리지 특성상 세션이 예기치 않게 사라지는 경우가 있어("Auth session missing!"),
- * 그 경우에만 세션을 강제로 다시 발급받고 한 번 재시도한다. 다른 종류의 오류는 그대로 던진다.
- * @template T
- * @param {() => Promise<T>} fn
- * @returns {Promise<T>}
+ * 중고랜드 전용 Supabase 클라이언트 — supabase.auth.setSession()을 쓰지 않는다.
+ * mintSupabaseSessionHttp가 발급하는 토큰은 GoTrue가 실제로 추적하는 세션이 아니라 RLS
+ * auth.uid() 추출용으로만 서명된 커스텀 JWT라, setSession()을 부르면 내부적으로 GoTrue
+ * 자체 세션 검증 엔드포인트(/auth/v1/user)를 호출하는데 거기서 이 session_id를 모르니
+ * 403이 나고 결국 "Auth session missing!"으로 이어진다(2026-08 콘솔 스택트레이스로 확인:
+ * GoTrueClient._setSession → _getUser → /auth/v1/user 403).
+ * 대신 supabase-js의 accessToken 콜백(서드파티 인증용 공식 옵션)으로 토큰을 직접 붙여
+ * PostgREST/Storage 요청에만 사용하고 GoTrue 세션 엔드포인트는 아예 건드리지 않는다.
  */
+let marketSupabaseClientPromise = null;
+let marketTokenCache = { token: null, expiresAtSec: 0, supabaseUserId: null };
+
+async function getFreshMarketAccessToken() {
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (marketTokenCache.token && marketTokenCache.expiresAtSec > nowSec + 120) {
+    return marketTokenCache.token;
+  }
+  const cfg = (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
+  if (!cfg.authBridgeUrl) throw new Error('authBridgeUrl 미설정');
+  const idToken = await getFirebaseIdToken();
+  const minted = await fetchSupabaseSessionFromBridge(cfg.authBridgeUrl, idToken);
+  marketTokenCache = {
+    token: minted.access_token,
+    expiresAtSec: nowSec + (Number(minted.expires_in) || 3600),
+    supabaseUserId: minted.supabase_user_id || null,
+  };
+  return marketTokenCache.token;
+}
+
+function getMarketSupabaseClient() {
+  if (!marketSupabaseClientPromise) {
+    marketSupabaseClientPromise = (async () => {
+      const cfg = (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
+      if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+        throw new Error('STELVIO_SUPABASE_CONFIG 미설정');
+      }
+      const { createClient } = await import(SUPABASE_JS_URL);
+      return createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        accessToken: getFreshMarketAccessToken,
+      });
+    })();
+  }
+  return marketSupabaseClientPromise;
+}
+
+/** 로그인된 Supabase 클라이언트를 반환 — market_items/favorites RLS(user_id=auth.uid()) 전제 */
+export async function ensureMarketSupabaseSession() {
+  await getFreshMarketAccessToken();
+  return getMarketSupabaseClient();
+}
+
+/** 현재 로그인 사용자의 Supabase UUID — mintSupabaseSessionHttp 응답에 이미 포함되어 있어
+ *  supabase.auth.getUser()/getSession() 없이도 바로 알 수 있다. */
+export async function getMySupabaseUserId() {
+  await getFreshMarketAccessToken();
+  return marketTokenCache.supabaseUserId;
+}
+
+/** 네트워크 오류 등 일시적 실패에 대비한 단순 1회 재시도(비-GoTrue 경로라 인증 자체는 안정적). */
 async function withMarketAuthRetry(fn) {
   try {
     return await fn();
   } catch (err) {
-    if (!isAuthSessionMissingError(err)) throw err;
-    await syncSupabaseSessionFromBridge();
+    const msg = err && err.message ? String(err.message) : String(err || '');
+    if (!/auth|jwt|token/i.test(msg)) throw err;
+    marketTokenCache = { token: null, expiresAtSec: 0, supabaseUserId: null };
+    await getFreshMarketAccessToken();
     return await fn();
   }
 }
@@ -212,9 +258,9 @@ export async function getMarketItem(id) {
 export async function createMarketItem(item) {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
-    const { data: sess } = await supabase.auth.getSession();
-    if (!sess.session || !sess.session.user) throw new Error('Supabase 로그인 세션이 없습니다.');
-    const row = Object.assign({}, item, { user_id: sess.session.user.id });
+    const userId = await getMySupabaseUserId();
+    if (!userId) throw new Error('Supabase 로그인 세션이 없습니다.');
+    const row = Object.assign({}, item, { user_id: userId });
     const { data, error } = await supabase.from('market_items').insert(row).select().single();
     if (error) throw error;
     return data;
@@ -277,9 +323,8 @@ export async function bumpMarketItem(id) {
 export async function toggleMarketFavorite(itemId, nextFavorited) {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
-    const { data: sess } = await supabase.auth.getSession();
-    if (!sess.session || !sess.session.user) throw new Error('Supabase 로그인 세션이 없습니다.');
-    const userId = sess.session.user.id;
+    const userId = await getMySupabaseUserId();
+    if (!userId) throw new Error('Supabase 로그인 세션이 없습니다.');
     if (nextFavorited) {
       const { error } = await supabase
         .from('market_favorites')
@@ -299,34 +344,26 @@ export async function toggleMarketFavorite(itemId, nextFavorited) {
 export async function getMyFavoriteItemIds() {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
-    const { data: sess } = await supabase.auth.getSession();
-    if (!sess.session || !sess.session.user) return new Set();
+    const userId = await getMySupabaseUserId();
+    if (!userId) return new Set();
     const { data, error } = await supabase
       .from('market_favorites')
       .select('item_id')
-      .eq('user_id', sess.session.user.id);
+      .eq('user_id', userId);
     if (error) throw error;
     return new Set((data || []).map((r) => r.item_id));
-  });
-}
-
-export async function getMySupabaseUserId() {
-  return withMarketAuthRetry(async () => {
-    const supabase = await ensureMarketSupabaseSession();
-    const { data: sess } = await supabase.auth.getSession();
-    return sess.session && sess.session.user ? sess.session.user.id : null;
   });
 }
 
 export async function getMyMarketItems() {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
-    const { data: sess } = await supabase.auth.getSession();
-    if (!sess.session || !sess.session.user) return [];
+    const userId = await getMySupabaseUserId();
+    if (!userId) return [];
     const { data, error } = await supabase
       .from('market_items')
       .select('*')
-      .eq('user_id', sess.session.user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return data || [];
@@ -347,13 +384,13 @@ export async function confirmMarketPurchase(orderId) {
 export async function getMarketOrderForItem(itemId) {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
-    const { data: sess } = await supabase.auth.getSession();
-    if (!sess.session || !sess.session.user) return null;
+    const userId = await getMySupabaseUserId();
+    if (!userId) return null;
     const { data, error } = await supabase
       .from('market_orders')
       .select('*')
       .eq('item_id', itemId)
-      .eq('buyer_id', sess.session.user.id)
+      .eq('buyer_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
