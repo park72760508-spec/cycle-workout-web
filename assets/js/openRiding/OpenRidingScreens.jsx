@@ -539,6 +539,9 @@ function OpenRidingSettlementFold(props) {
   var _myPaidOverride = useState(null);
   var myPaidOverride = _myPaidOverride[0];
   var setMyPaidOverride = _myPaidOverride[1];
+  var _acctCopied = useState(false);
+  var accountCopied = _acctCopied[0];
+  var setAccountCopied = _acctCopied[1];
 
   if (!isParticipant) return null;
 
@@ -676,6 +679,20 @@ function OpenRidingSettlementFold(props) {
       setErrMsg((e && e.message) || '입금 상태 변경에 실패했습니다.');
     } finally {
       setPaidToggleBusy(false);
+    }
+  }
+
+  function copySettlementAccountNumber() {
+    var text = String((settlement && settlement.bankAccount && settlement.bankAccount.accountNumber) || '').replace(/-/g, '');
+    if (!text) return;
+    var done = function () {
+      setAccountCopied(true);
+      setTimeout(function () { setAccountCopied(false); }, 1500);
+    };
+    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(done);
+    } else {
+      done();
     }
   }
 
@@ -907,9 +924,25 @@ function OpenRidingSettlementFold(props) {
               </div>
 
               {settlement.bankAccount && (settlement.bankAccount.accountNumber || settlement.bankAccount.bank) ? (
-                <div className="pt-2 border-t border-slate-100 text-xs text-slate-600">
-                  <span className="font-semibold text-slate-700">입금 계좌 </span>
-                  {settlement.bankAccount.bank} {settlement.bankAccount.accountNumber} ({settlement.bankAccount.holderName})
+                <div className="pt-2 border-t border-slate-100 text-xs text-slate-600 flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate">
+                    <span className="font-semibold text-slate-700">입금 계좌 </span>
+                    {settlement.bankAccount.bank} {settlement.bankAccount.accountNumber} ({settlement.bankAccount.holderName})
+                  </span>
+                  {settlement.bankAccount.accountNumber ? (
+                    <button
+                      type="button"
+                      className={
+                        'shrink-0 text-[11px] font-semibold rounded-full px-2.5 py-1 border ' +
+                        (accountCopied
+                          ? 'bg-emerald-500 text-white border-emerald-500'
+                          : 'bg-white text-violet-700 border-violet-300 hover:bg-violet-50')
+                      }
+                      onClick={copySettlementAccountNumber}
+                    >
+                      {accountCopied ? '복사됨' : '복사'}
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
