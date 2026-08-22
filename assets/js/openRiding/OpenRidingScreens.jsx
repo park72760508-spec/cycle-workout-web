@@ -688,7 +688,7 @@ function OpenRidingSettlementFold(props) {
               등록하기
             </button>
           ) : (
-            <span className="text-sm font-semibold text-slate-800">
+            <span className="text-sm font-semibold text-orange-600">
               나의 정산금액 {myAmount.toLocaleString()}원
             </span>
           )}
