@@ -53,9 +53,11 @@ function mapGender(raw) {
 
 function mapChallenge(raw) {
   const s = str(raw);
+  // Supabase challenge_goal enum과 반드시 일치해야 함 — "IronMan"은 DB enum에 없어 허용하면
+  // upsert가 "invalid input value for enum challenge_goal" 에러로 실패한다(2026-08 백필 중 확인).
   const allowed = [
-    "Fitness", "GranFondo", "IronMan", "Racing", "Elite", "PRO",
-    "PR", "MastersRace", "CityRunner", "Challenger", "Sub3Club",
+    "Fitness", "GranFondo", "Racing", "Elite", "PRO",
+    "PR", "MastersRace", "CityRunner", "Challenger", "Sub3Club", "other",
   ];
   if (s && allowed.includes(s)) return s;
   return "Fitness";
