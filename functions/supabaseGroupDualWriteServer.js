@@ -255,6 +255,7 @@ function mapFirestoreOpenRideToRows(firestoreDocId, d) {
     host_point_refunded: Boolean(d.hostPointRefunded),
     participant_join_charge_sp: int(d.participantJoinChargeSp, 0),
     host_public_review_summary: d.hostPublicReviewSummary || null,
+    settlement: d.settlement || null,
     gpx_storage_path: str(d.gpxStoragePath) || inferStoragePathFromFirebaseUrl(d.gpxUrl),
     gpx_content_type: str(d.gpxContentType) || "application/gpx+xml",
     created_at: toIso(d.createdAt),

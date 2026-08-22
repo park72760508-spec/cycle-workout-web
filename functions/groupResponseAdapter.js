@@ -107,6 +107,7 @@ function adaptOpenRideToFirestoreDoc(row, participants) {
     hostPointRefunded: Boolean(row.host_point_refunded),
     participantJoinChargeSp: num(row.participant_join_charge_sp, 0),
     hostPublicReviewSummary: row.host_public_review_summary || null,
+    settlement: row.settlement || null,
     createdAt: tsFromIso(row.created_at),
     updatedAt: tsFromIso(row.updated_at),
     readBackend: "supabase",
