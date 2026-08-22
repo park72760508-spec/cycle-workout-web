@@ -57,6 +57,28 @@ export async function ensureMarketSupabaseSession() {
   return getSupabaseClient();
 }
 
+function isAuthSessionMissingError(err) {
+  const msg = err && err.message ? String(err.message) : String(err || '');
+  return /auth session missing/i.test(msg) || (err && err.name === 'AuthSessionMissingError');
+}
+
+/**
+ * 커스텀 JWT 브리지 특성상 세션이 예기치 않게 사라지는 경우가 있어("Auth session missing!"),
+ * 그 경우에만 세션을 강제로 다시 발급받고 한 번 재시도한다. 다른 종류의 오류는 그대로 던진다.
+ * @template T
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+async function withMarketAuthRetry(fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    if (!isAuthSessionMissingError(err)) throw err;
+    await syncSupabaseSessionFromBridge();
+    return await fn();
+  }
+}
+
 /**
  * 이미지 리사이즈+압축 — expo-image-manipulator의 웹 등가물(Canvas). 가로 최대 800px, JPEG 0.7.
  * @param {File} file
@@ -112,14 +134,16 @@ export async function hashImageBlob(blob) {
 
 /** 이미 등록된 상품 중 동일 이미지 해시가 있는지 검사 — 있으면 그 상품 정보를 반환 */
 export async function findDuplicateImageItem(hash) {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data, error } = await supabase
-    .from('market_items')
-    .select('id, title, user_id')
-    .contains('image_hashes', [hash])
-    .limit(1);
-  if (error) throw error;
-  return data && data.length ? data[0] : null;
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_items')
+      .select('id, title, user_id')
+      .contains('image_hashes', [hash])
+      .limit(1);
+    if (error) throw error;
+    return data && data.length ? data[0] : null;
+  });
 }
 
 /**
@@ -140,14 +164,16 @@ export async function processAndUploadMarketImage(file, userId, itemDraftId, ind
     err.duplicateItem = dup;
     throw err;
   }
-  const supabase = await ensureMarketSupabaseSession();
-  const path = userId + '/' + itemDraftId + '/img' + index + '_' + Date.now() + '.jpg';
-  const { error: upErr } = await supabase.storage
-    .from(MARKET_IMAGE_BUCKET)
-    .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-  if (upErr) throw upErr;
-  const { data: pub } = supabase.storage.from(MARKET_IMAGE_BUCKET).getPublicUrl(path);
-  return { url: pub.publicUrl, hash };
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const path = userId + '/' + itemDraftId + '/img' + index + '_' + Date.now() + '.jpg';
+    const { error: upErr } = await supabase.storage
+      .from(MARKET_IMAGE_BUCKET)
+      .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+    if (upErr) throw upErr;
+    const { data: pub } = supabase.storage.from(MARKET_IMAGE_BUCKET).getPublicUrl(path);
+    return { url: pub.publicUrl, hash };
+  });
 }
 
 /**
@@ -155,136 +181,156 @@ export async function processAndUploadMarketImage(file, userId, itemDraftId, ind
  * @param {{category?:string, subCategory?:string, offset?:number, limit?:number}} opts
  */
 export async function listMarketItems(opts) {
-  opts = opts || {};
-  const supabase = await ensureMarketSupabaseSession();
-  const offset = opts.offset || 0;
-  const limit = opts.limit || 60;
-  let q = supabase
-    .from('market_items')
-    .select('*')
-    .neq('status', 'HIDDEN')
-    .order('bumped_at', { ascending: false })
-    .range(offset, offset + limit - 1);
-  if (opts.category) q = q.eq('category', opts.category);
-  if (opts.subCategory) q = q.eq('sub_category', opts.subCategory);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data || [];
+  return withMarketAuthRetry(async () => {
+    opts = opts || {};
+    const supabase = await ensureMarketSupabaseSession();
+    const offset = opts.offset || 0;
+    const limit = opts.limit || 60;
+    let q = supabase
+      .from('market_items')
+      .select('*')
+      .neq('status', 'HIDDEN')
+      .order('bumped_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (opts.category) q = q.eq('category', opts.category);
+    if (opts.subCategory) q = q.eq('sub_category', opts.subCategory);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
+  });
 }
 
 export async function getMarketItem(id) {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data, error } = await supabase.from('market_items').select('*').eq('id', id).maybeSingle();
-  if (error) throw error;
-  return data;
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.from('market_items').select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    return data;
+  });
 }
 
 export async function createMarketItem(item) {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data: sess } = await supabase.auth.getSession();
-  if (!sess.session || !sess.session.user) throw new Error('Supabase 로그인 세션이 없습니다.');
-  const row = Object.assign({}, item, { user_id: sess.session.user.id });
-  const { data, error } = await supabase.from('market_items').insert(row).select().single();
-  if (error) throw error;
-  return data;
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess.session || !sess.session.user) throw new Error('Supabase 로그인 세션이 없습니다.');
+    const row = Object.assign({}, item, { user_id: sess.session.user.id });
+    const { data, error } = await supabase.from('market_items').insert(row).select().single();
+    if (error) throw error;
+    return data;
+  });
 }
 
 export async function updateMarketItem(id, patch) {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data, error } = await supabase
-    .from('market_items')
-    .update(Object.assign({}, patch, { updated_at: new Date().toISOString() }))
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_items')
+      .update(Object.assign({}, patch, { updated_at: new Date().toISOString() }))
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  });
 }
 
 export async function deleteMarketItem(id) {
-  const supabase = await ensureMarketSupabaseSession();
-  const { error } = await supabase.from('market_items').delete().eq('id', id);
-  if (error) throw error;
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.from('market_items').delete().eq('id', id);
+    if (error) throw error;
+  });
 }
 
 /** 끌어올리기 — 최근 24시간 이내에 이미 끌어올렸으면 남은 시간을 담아 거절 */
 export async function bumpMarketItem(id) {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data: item, error: fetchErr } = await supabase
-    .from('market_items')
-    .select('bumped_at, user_id')
-    .eq('id', id)
-    .maybeSingle();
-  if (fetchErr || !item) throw new Error('상품을 찾을 수 없습니다.');
-  const lastBumpMs = item.bumped_at ? new Date(item.bumped_at).getTime() : 0;
-  const elapsed = Date.now() - lastBumpMs;
-  if (elapsed < MARKET_BUMP_COOLDOWN_MS) {
-    const remainMin = Math.ceil((MARKET_BUMP_COOLDOWN_MS - elapsed) / 60000);
-    const err = new Error('끌어올리기는 24시간에 한 번만 가능합니다. (' + Math.ceil(remainMin / 60) + '시간 후 다시 시도)');
-    err.code = 'BUMP_COOLDOWN';
-    err.remainMs = MARKET_BUMP_COOLDOWN_MS - elapsed;
-    throw err;
-  }
-  const nowIso = new Date().toISOString();
-  const { data, error } = await supabase
-    .from('market_items')
-    .update({ bumped_at: nowIso, updated_at: nowIso })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data: item, error: fetchErr } = await supabase
+      .from('market_items')
+      .select('bumped_at, user_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (fetchErr || !item) throw new Error('상품을 찾을 수 없습니다.');
+    const lastBumpMs = item.bumped_at ? new Date(item.bumped_at).getTime() : 0;
+    const elapsed = Date.now() - lastBumpMs;
+    if (elapsed < MARKET_BUMP_COOLDOWN_MS) {
+      const remainMin = Math.ceil((MARKET_BUMP_COOLDOWN_MS - elapsed) / 60000);
+      const err = new Error('끌어올리기는 24시간에 한 번만 가능합니다. (' + Math.ceil(remainMin / 60) + '시간 후 다시 시도)');
+      err.code = 'BUMP_COOLDOWN';
+      err.remainMs = MARKET_BUMP_COOLDOWN_MS - elapsed;
+      throw err;
+    }
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('market_items')
+      .update({ bumped_at: nowIso, updated_at: nowIso })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  });
 }
 
 export async function toggleMarketFavorite(itemId, nextFavorited) {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data: sess } = await supabase.auth.getSession();
-  if (!sess.session || !sess.session.user) throw new Error('Supabase 로그인 세션이 없습니다.');
-  const userId = sess.session.user.id;
-  if (nextFavorited) {
-    const { error } = await supabase
-      .from('market_favorites')
-      .upsert({ user_id: userId, item_id: itemId }, { onConflict: 'user_id,item_id' });
-    if (error) throw error;
-  } else {
-    const { error } = await supabase
-      .from('market_favorites')
-      .delete()
-      .eq('user_id', userId)
-      .eq('item_id', itemId);
-    if (error) throw error;
-  }
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess.session || !sess.session.user) throw new Error('Supabase 로그인 세션이 없습니다.');
+    const userId = sess.session.user.id;
+    if (nextFavorited) {
+      const { error } = await supabase
+        .from('market_favorites')
+        .upsert({ user_id: userId, item_id: itemId }, { onConflict: 'user_id,item_id' });
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('market_favorites')
+        .delete()
+        .eq('user_id', userId)
+        .eq('item_id', itemId);
+      if (error) throw error;
+    }
+  });
 }
 
 export async function getMyFavoriteItemIds() {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data: sess } = await supabase.auth.getSession();
-  if (!sess.session || !sess.session.user) return new Set();
-  const { data, error } = await supabase
-    .from('market_favorites')
-    .select('item_id')
-    .eq('user_id', sess.session.user.id);
-  if (error) throw error;
-  return new Set((data || []).map((r) => r.item_id));
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess.session || !sess.session.user) return new Set();
+    const { data, error } = await supabase
+      .from('market_favorites')
+      .select('item_id')
+      .eq('user_id', sess.session.user.id);
+    if (error) throw error;
+    return new Set((data || []).map((r) => r.item_id));
+  });
 }
 
 export async function getMySupabaseUserId() {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data: sess } = await supabase.auth.getSession();
-  return sess.session && sess.session.user ? sess.session.user.id : null;
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data: sess } = await supabase.auth.getSession();
+    return sess.session && sess.session.user ? sess.session.user.id : null;
+  });
 }
 
 export async function getMyMarketItems() {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data: sess } = await supabase.auth.getSession();
-  if (!sess.session || !sess.session.user) return [];
-  const { data, error } = await supabase
-    .from('market_items')
-    .select('*')
-    .eq('user_id', sess.session.user.id)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data || [];
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess.session || !sess.session.user) return [];
+    const { data, error } = await supabase
+      .from('market_items')
+      .select('*')
+      .eq('user_id', sess.session.user.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  });
 }
 
 /** 구매 요청 — 가상계좌(안전결제) 발급. Cloud Function이 Toss 시크릿 키로 발급을 대행한다.
@@ -299,19 +345,21 @@ export async function confirmMarketPurchase(orderId) {
 }
 
 export async function getMarketOrderForItem(itemId) {
-  const supabase = await ensureMarketSupabaseSession();
-  const { data: sess } = await supabase.auth.getSession();
-  if (!sess.session || !sess.session.user) return null;
-  const { data, error } = await supabase
-    .from('market_orders')
-    .select('*')
-    .eq('item_id', itemId)
-    .eq('buyer_id', sess.session.user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess.session || !sess.session.user) return null;
+    const { data, error } = await supabase
+      .from('market_orders')
+      .select('*')
+      .eq('item_id', itemId)
+      .eq('buyer_id', sess.session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  });
 }
 
 if (typeof window !== 'undefined') {

@@ -30510,6 +30510,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 /* 중고랜드 하단 네비 — 라이딩 모임 글래스 네비(#openRidingBottomGlassNavRoot)와 동일한
    플로팅 pill·blur·레이아웃. 클래스명만 분리해 라이딩 모임 쪽 CSS/JS와는 완전히 독립적으로 둔다. */
 .market-bottom-nav {
+  --market-glass-nav-inner-h: calc((14px * 0.6 * 2) + 22px + 4px + 11px);
   position: fixed;
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   left: 50%;
@@ -30519,10 +30520,16 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   margin: 0;
   box-sizing: border-box;
   padding: 0;
-  z-index: 500;
+  z-index: 99999 !important;
+  isolation: isolate;
   background: transparent;
   border: none;
   box-shadow: none;
+}
+/* 라이딩 모임 글래스 네비와 동일: iOS 휴대폰에서는 안전영역 부근 터치가 씹히는 문제가 있어
+   네비 자체를 내부 고정 높이의 절반만큼 더 아래로 내려 버튼이 실제 터치 가능 영역 안에 오게 한다. */
+html.market-glass-nav-ios-phone .market-bottom-nav {
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px) - (var(--market-glass-nav-inner-h) * 0.5));
 }
 .market-bottom-nav__pill {
   width: 100%;
@@ -30573,6 +30580,8 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 }
 .market-bottom-nav__btn:active { transform: scale(0.93); background-color: rgba(15, 23, 42, 0.08); }
 .market-bottom-nav__btn.active { color: #c2410c; background-color: rgba(234, 88, 12, 0.12); }
+/* 라이딩 모임 글래스 네비와 동일: 버튼 내부 아이콘·라벨이 클릭을 가로채지 않도록 항상 버튼 자체가 받는다. */
+.market-bottom-nav__btn * { pointer-events: none !important; }
 .market-bottom-nav__icon {
   width: 22px;
   height: 22px;

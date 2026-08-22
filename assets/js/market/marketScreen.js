@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260823market2';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260823market3';
   var svc = null;
 
   function loadMarketService() {
@@ -15,6 +15,21 @@
       svc = mod;
       return svc;
     });
+  }
+
+  /** 라이딩 모임 글래스 네비와 동일한 iOS 폰 판별(assets/js/openRiding/OpenRidingScreens.jsx의
+   * openRidingIsIOSPhoneUA와 동일 로직) — iOS Safari에서 안전영역 부근 버튼이 눌리지 않는 문제를
+   * 같은 방식(html 클래스 + bottom 오프셋 보정)으로 대응하기 위함. */
+  function marketIsIOSPhoneUA() {
+    if (typeof navigator === 'undefined') return false;
+    var ua = navigator.userAgent || '';
+    if (/android/i.test(ua)) return false;
+    if (/iPhone|iPod/.test(ua)) return true;
+    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+    return false;
+  }
+  if (typeof document !== 'undefined' && marketIsIOSPhoneUA()) {
+    document.documentElement.classList.add('market-glass-nav-ios-phone');
   }
 
   var SUB_CATEGORIES = {

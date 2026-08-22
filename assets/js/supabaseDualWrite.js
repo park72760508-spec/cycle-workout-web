@@ -634,7 +634,17 @@ export async function syncSupabaseSessionFromBridge() {
     throw new Error('authBridgeUrl 미설정');
   }
   const supabase = await getSupabaseClient();
-  const { data: existing } = await supabase.auth.getSession();
+  // getSession()이 정상이면 세션 없음을 { session: null }로 resolve해야 하지만, 커스텀 JWT를
+  // GoTrue가 내부적으로 무효 판단해 정리하는 과정과 겹치면 드물게 throw하는 경우가 관측됐다
+  // ("Auth session missing!" — 2026-08 중고랜드 목록 조회 중 확인). 그 경우도 "기존 세션 없음"과
+  // 동일하게 취급해 아래에서 새로 발급하면 되므로 여기서 삼킨다.
+  let existing = { session: null };
+  try {
+    const res = await supabase.auth.getSession();
+    existing = res.data || existing;
+  } catch (e) {
+    existing = { session: null };
+  }
   if (existing.session && existing.session.expires_at) {
     const nowSec = Math.floor(Date.now() / 1000);
     if (existing.session.expires_at > nowSec + 120) {
