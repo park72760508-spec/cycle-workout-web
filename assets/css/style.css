@@ -30398,6 +30398,11 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   -webkit-overflow-scrolling: touch;
   padding-bottom: 8px;
 }
+/* 하단 네비가 이제 sticky가 아니라 플로팅(position:fixed) pill이라 콘텐츠가 가려지지 않도록
+   스크롤 영역 하단에 네비 높이만큼 여백을 둔다. */
+.market-screen:has(.market-bottom-nav) .market-scroll-area {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
 
 .market-grid {
   display: grid;
@@ -30502,32 +30507,84 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-size: 13.5px;
 }
 
+/* 중고랜드 하단 네비 — 라이딩 모임 글래스 네비(#openRidingBottomGlassNavRoot)와 동일한
+   플로팅 pill·blur·레이아웃. 클래스명만 분리해 라이딩 모임 쪽 CSS/JS와는 완전히 독립적으로 둔다. */
 .market-bottom-nav {
-  position: sticky;
-  bottom: 0;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-  background: #fff;
-  border-top: 1px solid #e2e8f0;
-  padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px)) 0;
-  flex-shrink: 0;
+  position: fixed;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 500px;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 0;
+  z-index: 500;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.market-bottom-nav__pill {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 10px 36px rgba(15, 23, 42, 0.15),
+    0 4px 14px rgba(15, 23, 42, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(20px) saturate(175%);
+  backdrop-filter: blur(20px) saturate(175%);
+}
+.market-bottom-nav__inner {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0;
+  padding: calc(14px * 0.6) 13px;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
 }
 .market-bottom-nav__btn {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  font-size: 10.5px;
-  font-weight: 600;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 6px 5px;
   cursor: pointer;
-  padding: 4px 0;
+  font: inherit;
+  color: #64748b;
+  background-color: transparent;
+  border: none;
+  border-radius: 17px;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.14s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.14s ease, color 0.14s ease;
 }
-.market-bottom-nav__btn.active { color: #ea580c; }
-.market-bottom-nav__icon { font-size: 18px; line-height: 1; }
+.market-bottom-nav__btn:active { transform: scale(0.93); background-color: rgba(15, 23, 42, 0.08); }
+.market-bottom-nav__btn.active { color: #c2410c; background-color: rgba(234, 88, 12, 0.12); }
+.market-bottom-nav__icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.market-bottom-nav__label {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
 
 /* 상품 등록 폼 */
 .market-form { padding-bottom: 20px; }
