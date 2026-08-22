@@ -16420,6 +16420,75 @@ exports.provisionSupabaseUserAfterProfileHttp = onRequest(
   }
 );
 
+/**
+ * 관리자 전용 — Firestore users에는 있지만 Supabase public.users 미러에는 없는 계정을 특정
+ * UID 목록으로 일괄 백필한다. provisionSupabaseUserAfterProfileHttp는 본인 셀프 프로비저닝만
+ * 가능해 다른 사용자 UID는 처리할 수 없어서 별도로 둔다.
+ * GET/POST ?secret=stelvio-internal-sync-v1 또는 관리자(grade=1), body: { uids: string[] }
+ */
+const adminBackfillMissingSupabaseUsersOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: true,
+  timeoutSeconds: 300,
+});
+exports.adminBackfillMissingSupabaseUsers = onRequest(
+  adminBackfillMissingSupabaseUsersOptions,
+  async (req, res) => {
+    setCorsHeaders(req, res);
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    const db = admin.firestore();
+    const rawSecret =
+      req.query.secret ||
+      req.headers["x-internal-secret"] ||
+      req.headers["X-Internal-Secret"] ||
+      (req.body && req.body.secret);
+    let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+    if (!authorized) {
+      const uid = await getUidFromRequest(req, res);
+      if (!uid) return;
+      const grade = await getCachedCallerGrade(db, uid);
+      if (grade !== "1") {
+        res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
+        return;
+      }
+      authorized = true;
+    }
+
+    const uids = Array.isArray(req.query.uids)
+      ? req.query.uids
+      : Array.isArray(req.body && req.body.uids)
+        ? req.body.uids
+        : String(req.query.uids || (req.body && req.body.uids) || "")
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+    if (!uids.length) {
+      res.status(400).json({ success: false, error: "uids 필요(배열 또는 콤마구분 문자열)" });
+      return;
+    }
+
+    const results = [];
+    for (const uid of uids) {
+      try {
+        const r = await supabaseUserProvision.upsertSupabaseUserProfileFromFirestore(admin, uid, {
+          requireNameContact: false,
+        });
+        results.push({ uid, success: true, supabaseUserId: r.supabaseUserId });
+      } catch (e) {
+        results.push({ uid, success: false, error: (e && e.message) || String(e) });
+      }
+    }
+    res.status(200).json({
+      success: true,
+      processed: results.length,
+      okCount: results.filter((r) => r.success).length,
+      results,
+    });
+  }
+);
+
 const deleteUserAccountConfig = supabaseDualWriteServer.appendServiceRoleSecret({
   cors: CORS_ORIGINS,
   timeoutSeconds: 120,
