@@ -70,6 +70,33 @@ function mapSportCategory(raw) {
   return "CYCLE";
 }
 
+/** userManager.js의 userHasStravaConnected()와 동일 판정 로직 — 원본 토큰은 Supabase에 저장하지 않음 */
+function computeHasStravaConnected(d) {
+  const r = d.strava_refresh_token != null ? String(d.strava_refresh_token).trim() : "";
+  const a = d.strava_access_token != null ? String(d.strava_access_token).trim() : "";
+  if (r || a) return true;
+  const connected = d.strava_connected;
+  if (connected === true || connected === "true" || connected === 1 || connected === "1") return true;
+  const hasStrava = d.has_strava;
+  if (hasStrava === true || hasStrava === "true" || hasStrava === 1 || hasStrava === "1") return true;
+  const athleteId = d.strava_athlete_id != null ? String(d.strava_athlete_id).trim() : "";
+  if (athleteId) return true;
+  const scope = d.strava_scope != null ? String(d.strava_scope).trim() : "";
+  const hasRead = d.strava_has_activity_read === true || d.strava_has_activity_read === "true";
+  const hasReadAll = d.strava_has_activity_read_all === true || d.strava_has_activity_read_all === "true";
+  return !!(scope && (hasRead || hasReadAll || scope.indexOf("activity:read") !== -1));
+}
+
+/** userManager.js의 userHasGeminiApiRegistered()와 동일 판정 로직 — API 키 원문은 Supabase에 저장하지 않음 */
+function computeHasGeminiRegistered(d) {
+  const sts = d.API_sts;
+  if (sts === true || sts === "true" || sts === 1 || sts === "1") return true;
+  const reg = d.gemini_api_registered;
+  if (reg === true || reg === "true" || reg === 1 || reg === "1") return true;
+  const k = d.gemini_api_key != null ? String(d.gemini_api_key).trim() : "";
+  return k.length > 0;
+}
+
 function mapGrade(raw) {
   const g = String(raw ?? "2");
   if (g === "1") return "admin";
@@ -171,6 +198,8 @@ function mapFirestoreUserToRow(firebaseUid, d, uidConfig) {
     is_private: Boolean(d.is_private),
     profile_image_url: str(d.profileImageUrl) ?? str(d.profile_image_url),
     max_hr: int(d.max_hr ?? d.maxHr, 0) || null,
+    has_strava_connected: computeHasStravaConnected(d),
+    has_gemini_registered: computeHasGeminiRegistered(d),
     ranking_favorite_user_ids: mapRankingFavoriteUserIds(d),
     created_at: toTimestamptz(d.created_at) ?? new Date().toISOString(),
     updated_at: new Date().toISOString(),

@@ -4224,7 +4224,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
     if (challenge === 'GranFondo') challengeImage = 'green.png'; else if (challenge === 'IronMan') challengeImage = 'dgreen.png'; else if (challenge === 'Racing') challengeImage = 'blue.png'; else if (challenge === 'Elite') challengeImage = 'orenge.png'; else if (challenge === 'PRO') challengeImage = 'red.png';
     const accPoints = user.acc_points || 0;
     const remPoints = user.rem_points || 0;
-    const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
+    const hasStrava = userHasStravaConnected(user);
     const hasAiForUser =
       loginGradeForAiDot === '1'
         ? userHasGeminiApiRegistered(user)
@@ -4357,7 +4357,7 @@ function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetI
     if (category === USER_SPORT_CATEGORY_RUN || category === USER_SPORT_CATEGORY_DUAL) {
       categoryIconsHtml += '<img src="assets/img/running.png" alt="RUN" title="RUN" class="profile-list-category-icon" width="22" height="22" loading="lazy" decoding="async" />';
     }
-    const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
+    const hasStrava = userHasStravaConnected(user);
     const hasAiForUser =
       loginGradeForAiDot === '1'
         ? userHasGeminiApiRegistered(user)

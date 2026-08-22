@@ -16538,6 +16538,13 @@ function supabaseUserRowToAdminListItem(row) {
   if (row.is_private != null) out.is_private = row.is_private;
   if (row.profile_image_url != null) out.profileImageUrl = row.profile_image_url;
   if (row.max_hr != null) out.maxHr = row.max_hr;
+  // 원본 Strava 토큰·Gemini API 키는 Supabase에 저장하지 않으므로, 연결 여부 boolean만
+  // 클라이언트의 userHasStravaConnected()/userHasGeminiApiRegistered()가 읽는 필드명으로 매핑
+  if (row.has_strava_connected != null) out.strava_connected = row.has_strava_connected;
+  if (row.has_gemini_registered != null) {
+    out.API_sts = row.has_gemini_registered;
+    out.gemini_api_registered = row.has_gemini_registered;
+  }
   if (row.ranking_favorite_user_ids != null) out.ranking_favorite_user_ids = row.ranking_favorite_user_ids;
   if (row.created_at != null) out.created_at = row.created_at;
   return out;
