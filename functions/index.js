@@ -16543,6 +16543,7 @@ function supabaseUserRowToAdminListItem(row) {
 const getAllUsersForAdminReadOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   cors: true,
   timeoutSeconds: 60,
+  invoker: "public",
 });
 exports.getAllUsersForAdminRead = onRequest(
   getAllUsersForAdminReadOptions,
