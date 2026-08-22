@@ -631,21 +631,33 @@ function OpenRidingSettlementFold(props) {
     }
   }
 
-  async function deleteSettlement() {
+  function deleteSettlement() {
     var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
     if (!firestore || !userId || typeof svc.deleteRideSettlement !== 'function') return;
-    var ok = typeof window !== 'undefined' && window.confirm ? window.confirm('정산 내역을 전체 삭제하시겠습니까?') : true;
-    if (!ok) return;
-    setSaving(true);
-    setErrMsg('');
-    try {
-      await svc.deleteRideSettlement(firestore, rideId, userId);
-      setEditing(false);
-      await reload();
-    } catch (e) {
-      setErrMsg((e && e.message) || '삭제에 실패했습니다.');
-    } finally {
-      setSaving(false);
+    var runDelete = function () {
+      setSaving(true);
+      setErrMsg('');
+      svc
+        .deleteRideSettlement(firestore, rideId, userId)
+        .then(function () {
+          setEditing(false);
+          return reload();
+        })
+        .catch(function (e) {
+          setErrMsg((e && e.message) || '삭제에 실패했습니다.');
+        })
+        .finally(function () {
+          setSaving(false);
+        });
+    };
+    if (typeof window !== 'undefined' && typeof window.showStelvioExitConfirmPopup === 'function') {
+      window.showStelvioExitConfirmPopup(runDelete, {
+        message: '정산 내역을 전체 삭제하시겠습니까?',
+        okText: '삭제하기',
+        cancelText: '취소'
+      });
+    } else if (typeof window !== 'undefined' && window.confirm && window.confirm('정산 내역을 전체 삭제하시겠습니까?')) {
+      runDelete();
     }
   }
 
@@ -709,7 +721,7 @@ function OpenRidingSettlementFold(props) {
           aria-labelledby="open-riding-settlement-toggle"
         >
           {canEdit ? (
-            <div className="flex items-center gap-4" role="toolbar" aria-label="정산 관리">
+            <div className="flex items-center justify-end gap-4" role="toolbar" aria-label="정산 관리">
               <button
                 type="button"
                 className="inline-flex flex-col items-center gap-1 text-[11px] font-medium text-slate-600 disabled:opacity-50"
