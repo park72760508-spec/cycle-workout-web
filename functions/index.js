@@ -16489,6 +16489,109 @@ exports.adminBackfillMissingSupabaseUsers = onRequest(
   }
 );
 
+/**
+ * Supabase public.users 행 → 클라이언트(userManager.js)가 기대하는 Firestore 문서 필드 형태로 역매핑.
+ * supabaseUserProvision.mapFirestoreUserToRow()의 역방향이며, 해당 함수가 다루는 필드만 채운다.
+ * Supabase users 테이블은 랭킹/매칭용으로 선별된 필드만 미러링하므로 원본 Firestore 문서의
+ * 그 외 상세 필드(예: 알림 토큰, 주소 등)는 이 응답에 포함되지 않는다 — "안전한 하이브리드" 설계상
+ * 이 엔드포인트가 실패하면 호출부가 기존 Firestore 전체 스캔으로 폴백한다.
+ */
+function supabaseUserRowToAdminListItem(row) {
+  if (!row || !row.firebase_uid) return null;
+  const out = { id: row.firebase_uid };
+  if (row.name != null) out.name = row.name;
+  if (row.display_name != null) out.displayName = row.display_name;
+  if (row.contact != null) out.contact = row.contact;
+  if (row.phone != null) out.phone = row.phone;
+  if (row.email != null) out.email = row.email;
+  if (row.ftp != null) out.ftp = row.ftp;
+  if (row.ftp_updated_at != null) out.ftp_updated_at = row.ftp_updated_at;
+  if (row.weight_kg != null) out.weight = row.weight_kg;
+  if (row.birth_year != null) {
+    out.birth_year = row.birth_year;
+    out.birthYear = row.birth_year;
+  }
+  if (row.gender != null) out.gender = row.gender;
+  if (row.challenge != null) out.challenge = row.challenge;
+  if (row.run_challenge != null) out.run_challenge = row.run_challenge;
+  if (row.sport_category != null) {
+    out.category = row.sport_category;
+    out.sport_category = row.sport_category;
+  }
+  if (row.grade != null) out.grade = row.grade;
+  if (row.account_status != null) out.account_status = row.account_status;
+  if (row.is_active != null) out.is_active = row.is_active;
+  if (row.legacy_status != null) out.status = row.legacy_status;
+  if (row.expiry_date != null) out.expiry_date = row.expiry_date;
+  if (row.acc_points != null) out.acc_points = row.acc_points;
+  if (row.rem_points != null) out.rem_points = row.rem_points;
+  if (row.last_training_date != null) out.last_training_date = row.last_training_date;
+  if (row.is_private != null) out.is_private = row.is_private;
+  if (row.profile_image_url != null) out.profileImageUrl = row.profile_image_url;
+  if (row.max_hr != null) out.maxHr = row.max_hr;
+  if (row.ranking_favorite_user_ids != null) out.ranking_favorite_user_ids = row.ranking_favorite_user_ids;
+  if (row.created_at != null) out.created_at = row.created_at;
+  return out;
+}
+
+/**
+ * 관리자 전용 — Firestore users 전체 스캔(약 673건, 매 로그인 시 발생) 대신 Supabase
+ * public.users 미러에서 목록을 읽어 Firebase 트래픽을 줄인다. 클라이언트(apiGetUsers)는
+ * 이 엔드포인트 실패 시 기존 Firestore 전체 스캔으로 자동 폴백한다(Canary 패턴).
+ * GET/POST, 관리자(grade=1) ID 토큰 필요.
+ */
+const getAllUsersForAdminReadOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: true,
+  timeoutSeconds: 60,
+});
+exports.getAllUsersForAdminRead = onRequest(
+  getAllUsersForAdminReadOptions,
+  async (req, res) => {
+    setCorsHeaders(req, res);
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    const db = admin.firestore();
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+    const grade = await getCachedCallerGrade(db, uid);
+    if (String(grade).trim() !== "1") {
+      res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
+      return;
+    }
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+    try {
+      const PAGE_SIZE = 1000;
+      const items = [];
+      for (let page = 0; page < 50; page += 1) {
+        const from = page * PAGE_SIZE;
+        /* eslint-disable no-await-in-loop */
+        const { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .not("firebase_uid", "is", null)
+          .order("id", { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+        /* eslint-enable no-await-in-loop */
+        if (error) throw error;
+        for (const row of data || []) {
+          const item = supabaseUserRowToAdminListItem(row);
+          if (item) items.push(item);
+        }
+        if (!data || data.length < PAGE_SIZE) break;
+      }
+      res.status(200).json({ success: true, items });
+    } catch (e) {
+      res.status(500).json({ success: false, error: (e && e.message) || String(e) });
+    }
+  }
+);
+
 const deleteUserAccountConfig = supabaseDualWriteServer.appendServiceRoleSecret({
   cors: CORS_ORIGINS,
   timeoutSeconds: 120,

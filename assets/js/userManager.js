@@ -2417,12 +2417,30 @@ if (typeof window !== 'undefined' && (window.auth || window.authV9)) {
 const API_GET_USERS_CACHE_TTL_MS = 30000;
 let __apiGetUsersCache = null;
 let __apiGetUsersCacheAt = 0;
+let __apiGetUsersInFlight = null;
 
 /**
- * 모든 사용자 목록 조회
+ * 모든 사용자 목록 조회 — loadUsers()·syncUsersFromDB()가 로그인 시점에 거의 동시에 호출해서
+ * 캐시가 채워지기 전에 둘 다 통과해 버리는 레이스 컨디션이 있었다(전체 사용자 조회가 실제로 2번
+ * 실행됨, 2026-08). 진행 중인 호출이 있으면 그 Promise를 그대로 재사용해 실제 조회는 1번만 나가게 한다.
  * @returns {Promise<{success: boolean, items?: array, error?: string}>}
  */
 async function apiGetUsers(forceRefresh) {
+  if (!forceRefresh && __apiGetUsersCache && Date.now() - __apiGetUsersCacheAt < API_GET_USERS_CACHE_TTL_MS) {
+    console.log('[apiGetUsers] ⚡ 캐시 사용 — 재조회 생략 (', __apiGetUsersCache.items ? __apiGetUsersCache.items.length : 0, '명)');
+    return __apiGetUsersCache;
+  }
+  if (__apiGetUsersInFlight) {
+    console.log('[apiGetUsers] ⏳ 진행 중인 조회 재사용 — 중복 호출 방지');
+    return __apiGetUsersInFlight;
+  }
+  __apiGetUsersInFlight = _apiGetUsersImpl(forceRefresh).finally(function () {
+    __apiGetUsersInFlight = null;
+  });
+  return __apiGetUsersInFlight;
+}
+
+async function _apiGetUsersImpl(forceRefresh) {
   if (!forceRefresh && __apiGetUsersCache && Date.now() - __apiGetUsersCacheAt < API_GET_USERS_CACHE_TTL_MS) {
     console.log('[apiGetUsers] ⚡ 캐시 사용 — Firestore 재조회 생략 (', __apiGetUsersCache.items ? __apiGetUsersCache.items.length : 0, '명)');
     return __apiGetUsersCache;
@@ -2602,6 +2620,36 @@ async function apiGetUsers(forceRefresh) {
     // 관리자(grade=1 문자·숫자)인 경우에만 전체 목록 조회
     if (typeof isStelvioAdminGrade === 'function' ? isStelvioAdminGrade(userGrade) : String(userGrade).trim() === '1') {
       console.log('[apiGetUsers] 🔑 관리자 권한 확인됨 - 전체 사용자 목록 조회 시작');
+
+      // Supabase 미러 우선 조회(Firestore 전체 스캔 트래픽 절감) — 실패 시 아래 기존 Firestore
+      // 전체 스캔 로직으로 자동 폴백한다. Supabase users 테이블은 선별 필드만 미러링하므로
+      // 응답에 없는 상세 필드는 undefined로 남는다(admin.getUserById로 편집 시엔 apiGetUser가
+      // Firestore를 그대로 조회하므로 데이터 정확성에는 영향 없음).
+      try {
+        const tokenUser = (window.authV9 && window.authV9.currentUser)
+          ? window.authV9.currentUser
+          : (window.auth && window.auth.currentUser ? window.auth.currentUser : null);
+        if (!tokenUser) throw new Error('로그인 사용자 토큰 없음');
+        const idToken = await tokenUser.getIdToken();
+        const projectId = (window.authV9 && window.authV9.app && window.authV9.app.options && window.authV9.app.options.projectId) || 'stelvio-ai';
+        const supaUrl = 'https://us-central1-' + projectId + '.cloudfunctions.net/getAllUsersForAdminRead';
+        const supaRes = await fetch(supaUrl, {
+          method: 'GET',
+          headers: { 'Authorization': 'Bearer ' + idToken },
+        });
+        const supaData = await supaRes.json();
+        if (supaRes.ok && supaData && supaData.success === true && Array.isArray(supaData.items)) {
+          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (Supabase):', { totalUsers: supaData.items.length });
+          var resultSupa = { success: true, items: supaData.items };
+          __apiGetUsersCache = resultSupa;
+          __apiGetUsersCacheAt = Date.now();
+          return resultSupa;
+        }
+        throw new Error((supaData && supaData.error) || ('HTTP ' + supaRes.status));
+      } catch (supaErr) {
+        console.warn('[apiGetUsers] ⚠️ Supabase 목록 조회 실패, Firestore로 폴백:', supaErr && supaErr.message);
+      }
+
       try {
         // firestoreV9 사용 (authV9에 사용자 있을 때만)
         if (window.firestoreV9 && !useV8Firestore) {
