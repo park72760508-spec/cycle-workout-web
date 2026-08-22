@@ -16511,14 +16511,23 @@ function supabaseUserRowToAdminListItem(row) {
     out.birth_year = row.birth_year;
     out.birthYear = row.birth_year;
   }
-  if (row.gender != null) out.gender = row.gender;
+  // mapGender()가 Firestore의 '남'/'여'를 Supabase enum "male"/"female"/"unknown"으로
+  // 변환해 저장하므로, 클라이언트(userData.gender === '남' 등 한글 비교)와 맞추려면 역변환 필요.
+  if (row.gender === "male") out.gender = "남";
+  else if (row.gender === "female") out.gender = "여";
   if (row.challenge != null) out.challenge = row.challenge;
   if (row.run_challenge != null) out.run_challenge = row.run_challenge;
   if (row.sport_category != null) {
     out.category = row.sport_category;
     out.sport_category = row.sport_category;
   }
-  if (row.grade != null) out.grade = row.grade;
+  // mapGrade()가 Firestore의 '1'/'2'/'3'을 Supabase enum "admin"/"sub_admin"/"member"로
+  // 변환해 저장하므로, isStelvioAdminGrade() 등 클라이언트 권한 판별이 문자열 '1'/'2'/'3'을
+  // 기대하는 것과 맞추기 위해 역변환한다 — 이 매핑을 빠뜨리면 관리자 계정도 grade="admin"으로
+  // 내려가 isStelvioAdminGrade가 false를 반환해 관리자 전용 화면이 조용히 깨진다(2026-08 확인).
+  if (row.grade === "admin") out.grade = "1";
+  else if (row.grade === "sub_admin") out.grade = "3";
+  else if (row.grade != null) out.grade = "2";
   if (row.account_status != null) out.account_status = row.account_status;
   if (row.is_active != null) out.is_active = row.is_active;
   if (row.legacy_status != null) out.status = row.legacy_status;
