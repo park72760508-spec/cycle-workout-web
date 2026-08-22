@@ -3209,8 +3209,9 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   box-shadow: 0 1px 4px rgba(234, 88, 12, 0.35);
 }
 #sportCategoryScreen .market-entry-btn__icon {
-  font-size: 14px;
-  line-height: 1;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 #runBasecampScreen .basecamp-auth-bar-logout-wrap {
   display: flex;
@@ -30519,18 +30520,6 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-weight: 700;
   color: #ea580c;
 }
-.market-card__bump {
-  margin-top: 3px;
-  padding: 3px 0;
-  border: 1px solid #fdba74;
-  border-radius: 6px;
-  background: #fff7ed;
-  color: #c2410c;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
 .market-loadmore-btn {
   display: block;
   width: 100%;

@@ -4170,7 +4170,7 @@
                   <span id="categoryAuthBarWelcomeLine1" class="basecamp-auth-bar-welcome-line">환영합니다.</span>
                   <span id="categoryAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
                   <button type="button" id="btnGoToMarketFromCategory" class="market-entry-btn" style="display:none;" onclick="if(typeof navigateToMarketLand==='function')navigateToMarketLand();else if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="중고랜드로 이동하기">
-                    <span class="market-entry-btn__icon" aria-hidden="true">🛒</span>
+                    <svg class="market-entry-btn__icon" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"></path></svg>
                     <span>중고랜드로 이동하기</span>
                   </button>
                 </div>
@@ -4451,7 +4451,7 @@
       <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="뒤로 가기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
       </button>
-      <h2 class="market-header__title">상품 등록</h2>
+      <h2 class="market-header__title" id="marketFormScreenTitle">상품 등록</h2>
       <span class="market-header__spacer"></span>
     </div>
     <div class="market-scroll-area market-form">
@@ -42831,7 +42831,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script src="assets/js/competition/competitionScreen.js?v=paid-label-20260822a"></script>
-  <script src="assets/js/market/marketScreen.js?v=20260824market6"></script>
+  <script src="assets/js/market/marketScreen.js?v=20260825market7"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

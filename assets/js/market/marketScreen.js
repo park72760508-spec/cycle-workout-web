@@ -133,7 +133,6 @@
   function marketItemCardHtml(item) {
     var img = (item.images && item.images[0]) || 'assets/img/profile-placeholder.svg';
     var isFav = homeState.favoriteIds.has(item.id);
-    var isMine = homeState.myUserId && item.user_id === homeState.myUserId;
     var soldClass = item.status === 'SOLD' ? ' market-card--sold' : '';
     return (
       '<div class="market-card' + soldClass + '" data-item-id="' + item.id + '">' +
@@ -146,9 +145,6 @@
         '</div>' +
         '<div class="market-card__title">' + escapeHtml(item.title) + '</div>' +
         '<div class="market-card__price">' + formatPrice(item.price) + '원</div>' +
-        (isMine
-          ? '<button type="button" class="market-card__bump" data-bump="' + item.id + '">끌어올리기</button>'
-          : '') +
       '</div>'
     );
   }
@@ -174,7 +170,7 @@
   function wireMarketGridEvents(scope) {
     Array.prototype.forEach.call(scope.querySelectorAll('.market-card'), function (card) {
       card.addEventListener('click', function (e) {
-        if (e.target.closest('[data-fav-toggle]') || e.target.closest('[data-bump]')) return;
+        if (e.target.closest('[data-fav-toggle]')) return;
         openMarketItemDetail(card.getAttribute('data-item-id'));
       });
     });
@@ -182,12 +178,6 @@
       btn.onclick = function (e) {
         e.stopPropagation();
         handleFavoriteToggle(btn.getAttribute('data-fav-toggle'), btn);
-      };
-    });
-    Array.prototype.forEach.call(scope.querySelectorAll('[data-bump]'), function (btn) {
-      btn.onclick = function (e) {
-        e.stopPropagation();
-        handleBump(btn.getAttribute('data-bump'), btn);
       };
     });
   }
@@ -335,11 +325,54 @@
   // ───────────────────────── 마이페이지 진입 ─────────────────────────
 
   window.navigateToMarketForm = function () {
-    resetMarketForm();
+    pendingEditItem = null;
+    if (typeof window.showScreen === 'function') window.showScreen('marketItemFormScreen');
+  };
+
+  /** 상품 상세 화면의 [수정] 버튼 — 기존 상품 정보로 채운 등록 화면을 연다. */
+  window.navigateToMarketFormForEdit = function (item) {
+    pendingEditItem = item;
     if (typeof window.showScreen === 'function') window.showScreen('marketItemFormScreen');
   };
 
   // ───────────────────────── 상품 등록/수정 화면 ─────────────────────────
+
+  var pendingEditItem = null;
+
+  function populateMarketFormForEdit(item) {
+    resetMarketForm();
+    formState.editingId = item.id;
+    var titleEl = document.getElementById('marketFormTitle');
+    var priceEl = document.getElementById('marketFormPrice');
+    var descEl = document.getElementById('marketFormDescription');
+    var locEl = document.getElementById('marketFormDirectLocation');
+    if (titleEl) titleEl.value = item.title || '';
+    if (priceEl) priceEl.value = item.price != null ? Number(item.price).toLocaleString('ko-KR') : '';
+    if (descEl) descEl.value = item.description || '';
+    renderMarketFormCategoryOptions(item.category || 'CYCLE');
+    var subEl = document.getElementById('marketFormSubCategory');
+    if (subEl && item.sub_category) subEl.value = item.sub_category;
+    var dealMethods = item.deal_method || [];
+    Array.prototype.forEach.call(document.querySelectorAll('.market-form-deal-checkbox'), function (cb) {
+      cb.checked = dealMethods.indexOf(cb.value) !== -1;
+    });
+    var directWrap = document.getElementById('marketFormDirectLocationWrap');
+    if (directWrap) directWrap.style.display = dealMethods.indexOf('직거래') !== -1 ? 'block' : 'none';
+    if (locEl) locEl.value = item.direct_deal_location || '';
+    Array.prototype.forEach.call(document.querySelectorAll('.market-form-condition'), function (r) {
+      r.checked = r.value === item.condition;
+    });
+    var images = item.images || [];
+    var hashes = item.image_hashes || [];
+    for (var i = 0; i < MAX_IMAGES; i++) {
+      if (images[i]) {
+        formState.previews[i] = images[i];
+        formState.uploaded[i] = { url: images[i], hash: hashes[i] || '' };
+      }
+    }
+    renderMarketImageSlots();
+    updateMarketDescCounter();
+  }
 
   function resetMarketForm() {
     formState.files = [null, null, null];
@@ -447,13 +480,14 @@
       toast('직거래 지역을 입력해 주세요.');
       return;
     }
-    if (formState.files.every(function (f) { return !f; })) {
+    if (formState.files.every(function (f) { return !f; }) && formState.uploaded.every(function (u) { return !u; })) {
       toast('사진을 최소 1장 첨부해 주세요.');
       return;
     }
 
+    var isEditing = !!formState.editingId;
     submitBtn.disabled = true;
-    submitBtn.textContent = '등록 중...';
+    submitBtn.textContent = isEditing ? '수정 중...' : '등록 중...';
     try {
       var s = await loadMarketService();
       var userId = await s.getMySupabaseUserId();
@@ -482,28 +516,41 @@
         image_hashes: hashes,
       };
 
-      if (formState.editingId) {
+      if (isEditing) {
         await s.updateMarketItem(formState.editingId, payload);
+        toast('수정되었습니다.');
+        openMarketItemDetail(formState.editingId);
       } else {
         await s.createMarketItem(payload);
+        toast('등록되었습니다.');
+        window.navigateToMarketLand();
       }
-      toast('등록되었습니다.');
-      window.navigateToMarketLand();
     } catch (err) {
       if (err && err.code === 'DUPLICATE_IMAGE') {
         toast(err.message);
       } else {
-        toast('등록 실패: ' + (err && err.message ? err.message : err));
+        toast((isEditing ? '수정' : '등록') + ' 실패: ' + (err && err.message ? err.message : err));
       }
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = '등록 하기';
+      submitBtn.textContent = isEditing ? '수정 완료' : '등록 하기';
     }
   }
 
   window.marketFormScreenInit = function () {
     syncMarketBottomNav('register');
-    resetMarketForm();
+    var titleEl = document.getElementById('marketFormScreenTitle');
+    var submitBtnLabelEl = document.getElementById('marketFormSubmitBtn');
+    if (pendingEditItem) {
+      populateMarketFormForEdit(pendingEditItem);
+      pendingEditItem = null;
+      if (titleEl) titleEl.textContent = '상품 수정';
+      if (submitBtnLabelEl) submitBtnLabelEl.textContent = '수정 완료';
+    } else {
+      resetMarketForm();
+      if (titleEl) titleEl.textContent = '상품 등록';
+      if (submitBtnLabelEl) submitBtnLabelEl.textContent = '등록 하기';
+    }
     var catEl = document.getElementById('marketFormCategory');
     if (catEl) catEl.onchange = function () { renderMarketFormCategoryOptions(catEl.value); };
     var descEl = document.getElementById('marketFormDescription');
@@ -578,6 +625,7 @@
       actionHtml =
         '<div class="market-detail-actions">' +
           '<button type="button" class="market-btn market-btn--outline" id="marketDetailBumpBtn">끌어올리기</button>' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketDetailEditBtn">수정</button>' +
           '<button type="button" class="market-btn market-btn--danger" id="marketDetailDeleteBtn">삭제</button>' +
         '</div>';
     } else if (myOrder && myOrder.escrow_status === 'PAID') {
@@ -617,6 +665,8 @@
     if (confirmBtn) confirmBtn.onclick = function () { handleMarketConfirmPurchase(item.id, myOrder.id); };
     var bumpBtn = document.getElementById('marketDetailBumpBtn');
     if (bumpBtn) bumpBtn.onclick = function () { handleBump(item.id, bumpBtn); };
+    var editBtn = document.getElementById('marketDetailEditBtn');
+    if (editBtn) editBtn.onclick = function () { window.navigateToMarketFormForEdit(item); };
     var deleteBtn = document.getElementById('marketDetailDeleteBtn');
     if (deleteBtn) deleteBtn.onclick = function () { handleMarketDelete(item.id); };
   }
