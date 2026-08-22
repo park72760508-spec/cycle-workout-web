@@ -3185,6 +3185,33 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #sportCategoryScreen #categoryCafeBetween .basecamp-auth-bar-cafe-link:hover {
   text-decoration: underline;
 }
+/* 중고랜드 이동 버튼 — 카테고리 선택 화면 환영 블록 2줄차 */
+#sportCategoryScreen .market-entry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  box-shadow: 0 2px 8px rgba(234, 88, 12, 0.35);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+#sportCategoryScreen .market-entry-btn:active {
+  transform: scale(0.97);
+  box-shadow: 0 1px 4px rgba(234, 88, 12, 0.35);
+}
+#sportCategoryScreen .market-entry-btn__icon {
+  font-size: 14px;
+  line-height: 1;
+}
 #runBasecampScreen .basecamp-auth-bar-logout-wrap {
   display: flex;
   justify-content: flex-end;
@@ -30274,4 +30301,387 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   display: none;
   width: 0;
   height: 0;
+}
+
+/* ============================= 중고랜드(Market Land) ============================= */
+.screen.market-screen.active {
+  display: flex;
+  flex-direction: column;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.market-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
+.market-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.market-back-btn:active { background: #f1f5f9; }
+.market-header__title {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.market-header__spacer { width: 36px; flex-shrink: 0; }
+
+.market-category-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0 10px 0;
+  flex-shrink: 0;
+}
+.market-category-tab {
+  flex: 1;
+  padding: 10px 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.market-category-tab.active {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  border-color: #ea580c;
+  color: #fff;
+}
+
+.market-subtabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  flex-shrink: 0;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.market-subtabs::-webkit-scrollbar { display: none; }
+.market-subtab {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.market-subtab.active {
+  background: #fff7ed;
+  border-color: #fb923c;
+  color: #c2410c;
+}
+
+.market-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.market-card {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+.market-card--sold .market-card__img { opacity: 0.45; }
+.market-card__img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+.market-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.market-card__heart {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #ef4444;
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.market-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fff;
+}
+.market-badge--sold { background: #64748b; }
+.market-badge--reserved { background: #f59e0b; }
+.market-card__title {
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.market-card__price {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ea580c;
+}
+.market-card__bump {
+  margin-top: 3px;
+  padding: 3px 0;
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.market-loadmore-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.market-empty, .market-loading {
+  grid-column: 1 / -1;
+  padding: 60px 0;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13.5px;
+}
+
+.market-bottom-nav {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px)) 0;
+  flex-shrink: 0;
+}
+.market-bottom-nav__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.market-bottom-nav__btn.active { color: #ea580c; }
+.market-bottom-nav__icon { font-size: 18px; line-height: 1; }
+
+/* 상품 등록 폼 */
+.market-form { padding-bottom: 20px; }
+.market-form-label {
+  display: block;
+  margin: 14px 0 6px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+.market-form-input,
+.market-form-select,
+.market-form-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #0f172a;
+  background: #fff;
+}
+.market-form-textarea { resize: vertical; font-family: inherit; }
+.market-form-row { display: flex; gap: 8px; }
+.market-form-row .market-form-select { flex: 1; }
+.market-form-radio-row, .market-form-checkbox-row { gap: 16px; align-items: center; }
+.market-form-radio, .market-form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: #334155;
+  cursor: pointer;
+}
+.market-form-desc-counter {
+  text-align: right;
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+.market-form-guide {
+  margin: 10px 0 0 0;
+  padding: 10px 12px;
+  background: #fef9c3;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #854d0e;
+  line-height: 1.5;
+}
+.market-form-submit { width: 100%; margin-top: 18px; }
+
+.market-image-slots { display: flex; gap: 8px; }
+.market-image-slot {
+  width: 84px;
+  height: 84px;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.market-image-slot.has-image { border-style: solid; border-color: #e2e8f0; }
+.market-image-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.market-image-slot__plus { font-size: 26px; color: #cbd5e1; font-weight: 300; }
+
+/* 버튼 공통 */
+.market-btn {
+  display: block;
+  width: 100%;
+  padding: 13px 0;
+  border: none;
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+}
+.market-btn--primary { background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; }
+.market-btn--outline { background: #fff; color: #ea580c; border: 1px solid #fdba74; }
+.market-btn--danger { background: #fff; color: #ef4444; border: 1px solid #fecaca; }
+.market-btn--disabled { background: #f1f5f9; color: #94a3b8; }
+.market-detail-actions { display: flex; gap: 8px; }
+.market-detail-actions .market-btn { flex: 1; }
+
+/* 상품 상세 */
+.market-detail-slider {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+.market-detail-slider__track {
+  display: flex;
+  height: 100%;
+  transition: transform 0.25s ease;
+}
+.market-detail-slider__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.market-detail-slider__dots {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+.market-detail-slider__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+}
+.market-detail-slider__dot.active { background: #fff; }
+.market-detail-info { padding: 14px 0; }
+.market-detail-title { font-size: 17px; font-weight: 700; color: #0f172a; margin-top: 8px; }
+.market-detail-price { font-size: 20px; font-weight: 800; color: #ea580c; margin-top: 4px; }
+.market-detail-meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: #64748b;
+}
+.market-detail-meta span {
+  padding: 3px 8px;
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+.market-detail-desc {
+  margin-top: 14px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #334155;
+  white-space: pre-wrap;
+}
+.market-detail-action-bar { padding: 10px 0 20px 0; }
+.market-detail-order-notice {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #15803d;
 }

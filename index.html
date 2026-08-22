@@ -4168,7 +4168,10 @@
               <div id="categoryAuthBarRight" class="basecamp-auth-bar-right category-auth-bar-right--stacked" style="display: none;">
                 <div class="basecamp-auth-bar-welcome">
                   <span id="categoryAuthBarWelcomeLine1" class="basecamp-auth-bar-welcome-line">환영합니다.</span>
-                  <span id="categoryAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
+                  <button type="button" id="btnGoToMarketFromCategory" class="market-entry-btn" onclick="if(typeof navigateToMarketLand==='function')navigateToMarketLand();else if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="중고랜드로 이동하기">
+                    <span class="market-entry-btn__icon" aria-hidden="true">🛒</span>
+                    <span>중고랜드로 이동하기</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -4413,6 +4416,147 @@
         <div class="skeleton-line medium"></div>
         <div class="skeleton-line"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- 중고랜드(Market Land) — 홈/목록 -->
+  <div id="marketHomeScreen" class="screen market-screen" style="display: none;">
+    <div class="market-header">
+      <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="뒤로 가기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
+      </button>
+      <h2 class="market-header__title">중고랜드</h2>
+      <span class="market-header__spacer"></span>
+    </div>
+    <div class="market-category-tabs">
+      <button type="button" id="marketCategoryTabCycle" class="market-category-tab active">CYCLE</button>
+      <button type="button" id="marketCategoryTabRun" class="market-category-tab">RUN</button>
+    </div>
+    <div id="marketSubCategoryTabs" class="market-subtabs"></div>
+    <div class="market-scroll-area">
+      <div id="marketItemGrid" class="market-grid"></div>
+      <button type="button" id="marketLoadMoreBtn" class="market-loadmore-btn" style="display:none;">더보기</button>
+    </div>
+    <div class="market-bottom-nav">
+      <button type="button" class="market-bottom-nav__btn active" onclick="if(typeof marketNavGoList==='function')marketNavGoList();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">🏠</span><span>홈</span>
+      </button>
+      <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoList==='function')marketNavGoList();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">📋</span><span>목록</span>
+      </button>
+      <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoRegister==='function')marketNavGoRegister();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">✏️</span><span>등록</span>
+      </button>
+      <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoMyPage==='function')marketNavGoMyPage();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">👤</span><span>마이페이지</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 중고랜드 — 상품 등록 -->
+  <div id="marketItemFormScreen" class="screen market-screen" style="display: none;">
+    <div class="market-header">
+      <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="뒤로 가기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
+      </button>
+      <h2 class="market-header__title">상품 등록</h2>
+      <span class="market-header__spacer"></span>
+    </div>
+    <div class="market-scroll-area market-form">
+      <label class="market-form-label">사진 (최대 3장)</label>
+      <div id="marketImageSlots" class="market-image-slots"></div>
+
+      <label class="market-form-label" for="marketFormTitle">상품명</label>
+      <input type="text" id="marketFormTitle" class="market-form-input" placeholder="상품명을 입력해 주세요" maxlength="80" />
+
+      <label class="market-form-label">카테고리</label>
+      <div class="market-form-row">
+        <select id="marketFormCategory" class="market-form-select">
+          <option value="CYCLE">CYCLE</option>
+          <option value="RUN">RUN</option>
+        </select>
+        <select id="marketFormSubCategory" class="market-form-select"></select>
+      </div>
+
+      <label class="market-form-label" for="marketFormPrice">판매가</label>
+      <input type="text" id="marketFormPrice" class="market-form-input" inputmode="numeric" placeholder="0" />
+
+      <label class="market-form-label">상품 상태</label>
+      <div class="market-form-row market-form-radio-row">
+        <label class="market-form-radio"><input type="radio" name="marketCondition" class="market-form-condition" value="신상품" /> 신상품</label>
+        <label class="market-form-radio"><input type="radio" name="marketCondition" class="market-form-condition" value="중고 상품" checked /> 중고 상품</label>
+      </div>
+
+      <label class="market-form-label">거래 방법</label>
+      <div class="market-form-row market-form-checkbox-row">
+        <label class="market-form-checkbox"><input type="checkbox" class="market-form-deal-checkbox" value="택배거래" /> 택배거래</label>
+        <label class="market-form-checkbox"><input type="checkbox" class="market-form-deal-checkbox" value="직거래" /> 직거래</label>
+      </div>
+      <div id="marketFormDirectLocationWrap" style="display:none;">
+        <input type="text" id="marketFormDirectLocation" class="market-form-input" placeholder="직거래 희망 지역 (예: 서울 강남구)" />
+      </div>
+
+      <label class="market-form-label" for="marketFormDescription">상품 설명</label>
+      <textarea id="marketFormDescription" class="market-form-textarea" maxlength="1000" rows="6" placeholder="상품 상태, 구매 시기, 하자 유무 등을 자세히 적어주세요."></textarea>
+      <div class="market-form-desc-counter" id="marketFormDescCounter">0/1000</div>
+      <p class="market-form-guide">⚠️ 안전거래를 권장합니다. 허위매물·과장광고는 이용 제재 대상이 될 수 있습니다.</p>
+
+      <button type="button" id="marketFormSubmitBtn" class="market-btn market-btn--primary market-form-submit">등록 하기</button>
+    </div>
+    <div class="market-bottom-nav">
+      <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoHome==='function')marketNavGoHome();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">🏠</span><span>홈</span>
+      </button>
+      <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoList==='function')marketNavGoList();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">📋</span><span>목록</span>
+      </button>
+      <button type="button" class="market-bottom-nav__btn active" onclick="if(typeof marketNavGoRegister==='function')marketNavGoRegister();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">✏️</span><span>등록</span>
+      </button>
+      <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoMyPage==='function')marketNavGoMyPage();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">👤</span><span>마이페이지</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 중고랜드 — 상품 상세 -->
+  <div id="marketItemDetailScreen" class="screen market-screen" style="display: none;">
+    <div class="market-header">
+      <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="뒤로 가기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
+      </button>
+      <h2 class="market-header__title">상품 상세</h2>
+      <span class="market-header__spacer"></span>
+    </div>
+    <div id="marketDetailBody" class="market-scroll-area market-detail"></div>
+  </div>
+
+  <!-- 중고랜드 — 마이페이지 -->
+  <div id="marketMyPageScreen" class="screen market-screen" style="display: none;">
+    <div class="market-header">
+      <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="뒤로 가기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
+      </button>
+      <h2 class="market-header__title">마이페이지</h2>
+      <span class="market-header__spacer"></span>
+    </div>
+    <div id="marketMyPageTabs" class="market-subtabs"></div>
+    <div class="market-scroll-area">
+      <div id="marketMyPageGrid" class="market-grid"></div>
+    </div>
+    <div class="market-bottom-nav">
+      <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoHome==='function')marketNavGoHome();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">🏠</span><span>홈</span>
+      </button>
+      <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoList==='function')marketNavGoList();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">📋</span><span>목록</span>
+      </button>
+      <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoRegister==='function')marketNavGoRegister();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">✏️</span><span>등록</span>
+      </button>
+      <button type="button" class="market-bottom-nav__btn active" onclick="if(typeof marketNavGoMyPage==='function')marketNavGoMyPage();">
+        <span class="market-bottom-nav__icon" aria-hidden="true">👤</span><span>마이페이지</span>
+      </button>
     </div>
   </div>
 
@@ -30735,7 +30879,7 @@
     /**
      * auth 바 UI 갱신: 로그인 시 환영합니다. 사용자명님 + 로그아웃, 비로그인 시 로그인 버튼 + 안내
      */
-    function _syncAuthBarPair(leftId, rightId, warnId, line1Id, line2Id, user, userName, loggedIn) {
+    function _syncAuthBarPair(leftId, rightId, warnId, line1Id, line2Id, user, userName, loggedIn, combineOneLine) {
       var left = document.getElementById(leftId);
       var right = document.getElementById(rightId);
       if (!left || !right) return;
@@ -30746,8 +30890,13 @@
         if (warning) warning.style.display = 'none';
         var l1 = line1Id ? document.getElementById(line1Id) : null;
         var l2 = line2Id ? document.getElementById(line2Id) : null;
-        if (l1) l1.textContent = '환영합니다.';
-        if (l2) l2.textContent = userName + '님';
+        if (combineOneLine) {
+          // 카테고리 선택 화면: 1줄차 "환영합니다, 이름님!" + 2줄차는 중고랜드 이동 버튼(텍스트 갱신 생략)
+          if (l1) l1.textContent = '환영합니다, ' + userName + '님!';
+        } else {
+          if (l1) l1.textContent = '환영합니다.';
+          if (l2) l2.textContent = userName + '님';
+        }
       } else {
         left.style.display = 'flex';
         right.style.display = 'none';
@@ -30766,7 +30915,7 @@
       var loggedIn = isAuthBarLoggedIn(authUser);
       var userName = loggedIn ? resolveAuthBarUserName(authUser) : '사용자';
       _syncAuthBarPair('authBarLeft', 'authBarRight', 'authBarWarning', 'authBarWelcomeLine1', 'authBarWelcomeLine2', user, userName, loggedIn);
-      _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn);
+      _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn, true);
       _syncAuthBarPair('runAuthBarLeft', 'runAuthBarRight', 'runAuthBarWarning', 'runAuthBarWelcomeLine1', 'runAuthBarWelcomeLine2', user, userName, loggedIn);
       // 스포츠 카테고리: 환영합니다 / 이름님 / 카페 바로가기 3줄 세로 배치 (grid 강제 해제)
       var _catAuthRight = document.getElementById('categoryAuthBarRight');
@@ -42677,6 +42826,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script src="assets/js/competition/competitionScreen.js?v=paid-label-20260822a"></script>
+  <script src="assets/js/market/marketScreen.js?v=20260823market1"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

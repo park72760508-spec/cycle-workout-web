@@ -17647,7 +17647,9 @@ exports.getCompetitionStatus = onRequest(getCompetitionStatusOptions, async (req
  * 서명 헤더가 없으므로 (1) 발급 시 저장해둔 payment.secret(Payment 객체 최상위 필드)과 웹훅 secret 대조,
  * (2) orderId로 결제를 재조회(authoritative)해 status==='DONE'일 때만 신뢰한다 — 웹훅 바디를 직접 믿지 않는다.
  */
-const tossPaymentWebhookOptions = appendRaceSecrets({ region: "asia-northeast3", cors: false, timeoutSeconds: 60 });
+const tossPaymentWebhookOptions = supabaseDualWriteServer.appendServiceRoleSecret(
+  appendRaceSecrets({ region: "asia-northeast3", cors: false, timeoutSeconds: 60 })
+);
 exports.tossPaymentWebhook = onRequest(tossPaymentWebhookOptions, async (req, res) => {
   if (req.method !== "POST") {
     res.status(200).send("OK");
@@ -17675,6 +17677,11 @@ exports.tossPaymentWebhook = onRequest(tossPaymentWebhookOptions, async (req, re
       .limit(1)
       .get();
     if (appSnap.empty) {
+      if (orderId.startsWith("market_")) {
+        await handleMarketOrderWebhook(orderId, flat);
+        res.status(200).send("OK");
+        return;
+      }
       await writeTossWebhookRetry(db, { reason: "application_not_found", orderId, rawBody: body });
       res.status(200).send("OK");
       return;
@@ -17844,6 +17851,397 @@ exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, as
     res.status(status).json({ success: false, error: (e && e.message) || String(e) });
   }
 });
+
+/**
+ * 중고랜드(Market Land) — 구매 요청 시 안전결제(가상계좌) 발급.
+ * 결제 대금(상품가+수수료 1,000원 정액)은 STELVIO 정산 계좌로 입금된다. Toss Payments 가상계좌
+ * API 자체에는 제3자 에스크로 개념이 없으므로, "에스크로"는 앱 레벨에서 구현한다 — 구매자가
+ * [구매 확정]을 누르기 전까지 market_orders.escrow_status를 PAID로 유지하고 정산을 보류한다.
+ */
+const MARKET_ORDER_FEE_KRW = 1000;
+const MARKET_ORDER_VALID_HOURS = 24;
+
+function marketOrderIdFor(itemId, uid) {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `market_${itemId}_${uid}_${ts}${rand}`.slice(0, 64);
+}
+
+function appendMarketSecrets(options) {
+  const o = supabaseDualWriteServer.appendServiceRoleSecret(options);
+  o.secrets = Array.isArray(o.secrets) ? o.secrets.slice() : [];
+  if (!o.secrets.includes(tossSecretKeySecret)) o.secrets.push(tossSecretKeySecret);
+  return o;
+}
+
+function resolveMarketBuyerUuid(uid) {
+  const uidNamespace = supabaseDualWriteServer.uidNamespaceParam.value();
+  const uidMode = supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  return supabaseDualWriteServer.resolveUserUuid(uid, uidNamespace, uidMode);
+}
+
+/**
+ * tossPaymentWebhook에서 Firestore 대회 신청 컬렉션에 없는 orderId(market_ 접두)를 위임받아 처리 —
+ * Toss 콘솔에 등록된 웹훅 URL 하나를 그대로 재사용하기 위해 별도 웹훅 엔드포인트를 새로 등록하지 않는다.
+ */
+async function handleMarketOrderWebhook(orderId, flat) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return;
+  const { data: order } = await supabase
+    .from("market_orders")
+    .select("*")
+    .eq("toss_order_id", orderId)
+    .maybeSingle();
+  if (!order) {
+    console.warn("[handleMarketOrderWebhook] 주문 없음:", orderId);
+    return;
+  }
+  const webhookSecret = String(flat.secret || "").trim();
+  if (!webhookSecret || webhookSecret !== String(order.toss_virtual_account_secret || "")) {
+    console.error("[handleMarketOrderWebhook] secret 불일치 — 위조 의심:", orderId);
+    return;
+  }
+  if (order.escrow_status !== "PENDING") {
+    return; // 이미 처리됨(멱등)
+  }
+
+  // authoritative 재조회 — 웹훅 바디의 status를 신뢰하지 않는다.
+  const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), orderId);
+  if (payment.status !== "DONE") {
+    console.log("[handleMarketOrderWebhook] 입금 미완료 상태 — 무시:", orderId, payment.status);
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  await supabase
+    .from("market_orders")
+    .update({
+      escrow_status: "PAID",
+      toss_payment_key: payment.paymentKey || order.toss_payment_key,
+      paid_at: nowIso,
+      updated_at: nowIso,
+    })
+    .eq("id", order.id)
+    .eq("escrow_status", "PENDING");
+}
+
+const createMarketOrderOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
+exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const itemId = String(body.itemId || "").trim();
+    if (!itemId) {
+      res.status(400).json({ success: false, error: "itemId가 필요합니다." });
+      return;
+    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+
+    const buyerId = resolveMarketBuyerUuid(uid);
+    if (!buyerId) {
+      res.status(400).json({ success: false, error: "구매자 식별에 실패했습니다." });
+      return;
+    }
+
+    const { data: item, error: itemErr } = await supabase
+      .from("market_items")
+      .select("*")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (itemErr || !item) {
+      res.status(404).json({ success: false, error: "존재하지 않는 상품입니다." });
+      return;
+    }
+    if (item.user_id === buyerId) {
+      res.status(400).json({ success: false, error: "본인이 등록한 상품은 구매할 수 없습니다." });
+      return;
+    }
+    if (item.status !== "ON_SALE") {
+      res.status(409).json({ success: false, error: "이미 예약되었거나 판매 완료된 상품입니다." });
+      return;
+    }
+
+    // 멱등성: 동일 구매자가 이 상품에 대해 이미 요청한 결제 대기/완료 주문이 있으면 재사용(중복 결제 방지)
+    const { data: existingOrders } = await supabase
+      .from("market_orders")
+      .select("*")
+      .eq("item_id", itemId)
+      .eq("buyer_id", buyerId)
+      .in("escrow_status", ["PENDING", "PAID"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (existingOrders && existingOrders.length) {
+      const ex = existingOrders[0];
+      if (ex.escrow_status === "PAID" || (ex.va_due_at && new Date(ex.va_due_at).getTime() > Date.now())) {
+        res.status(200).json({
+          success: true,
+          alreadyRequested: true,
+          orderId: ex.id,
+          escrowStatus: ex.escrow_status,
+          amount: ex.amount,
+        });
+        return;
+      }
+    }
+
+    const db = admin.firestore();
+    const userSnap = await db.collection("users").doc(uid).get();
+    const userData = userSnap.exists ? userSnap.data() || {} : {};
+    const customerName = String(userData.name || userData.displayName || "STELVIO 회원").slice(0, 100);
+
+    const amount = Number(item.price) + MARKET_ORDER_FEE_KRW;
+    const tossOrderId = marketOrderIdFor(itemId, uid);
+
+    const payment = await tossPaymentsClient.issueVirtualAccount(raceTossSecretKey(), {
+      amount,
+      orderId: tossOrderId,
+      orderName: String(item.title || "중고랜드 상품").slice(0, 100),
+      customerName,
+      bank: DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE,
+      validHours: MARKET_ORDER_VALID_HOURS,
+    });
+    const va = payment.virtualAccount || {};
+    const dueMs = va.dueDate
+      ? new Date(va.dueDate).getTime()
+      : Date.now() + MARKET_ORDER_VALID_HOURS * 3600 * 1000;
+    const bankNameKo = competitionApplyAlimtalk.resolveBankNameKo(va.bankCode || DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE);
+
+    const { data: orderRow, error: insertErr } = await supabase
+      .from("market_orders")
+      .insert({
+        item_id: itemId,
+        buyer_id: buyerId,
+        seller_id: item.user_id,
+        toss_order_id: tossOrderId,
+        toss_payment_key: payment.paymentKey || null,
+        toss_virtual_account_secret: payment.secret || null,
+        item_price: item.price,
+        fee: MARKET_ORDER_FEE_KRW,
+        amount,
+        escrow_status: "PENDING",
+        va_due_at: new Date(dueMs).toISOString(),
+      })
+      .select()
+      .single();
+    if (insertErr) throw insertErr;
+
+    await supabase
+      .from("market_items")
+      .update({ status: "RESERVED", updated_at: new Date().toISOString() })
+      .eq("id", itemId)
+      .eq("status", "ON_SALE"); // 낙관적 잠금 — 동시 구매 요청 경쟁 방지
+
+    res.status(200).json({
+      success: true,
+      orderId: orderRow.id,
+      tossOrderId,
+      amount,
+      virtualAccount: {
+        bankCode: va.bankCode || DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE,
+        bankName: bankNameKo,
+        accountNumber: va.accountNumber || null,
+        customerName,
+        dueDate: va.dueDate || new Date(dueMs).toISOString(),
+      },
+    });
+  } catch (e) {
+    console.error("[createMarketOrder]", e && e.message ? e.message : e);
+    const status = e.status || 500;
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
+ * 구매자가 물품 수령 후 [구매 확정]을 누르면 호출 — 입금 확인(PAID) 상태에서만 확정 가능.
+ * 판매자 계좌로의 실제 이체는 Toss Payments API에 제3자 지급대행 기능이 없어 자동화할 수 없다.
+ * 확정 시점에 정산 대기열(escrow_status=CONFIRMED, settlement_transferred_at=null)로 올라가고,
+ * 관리자가 판매자 등록 계좌로 수동 이체한 뒤 adminMarkMarketOrderSettled로 마감 처리한다.
+ */
+const confirmMarketPurchaseOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
+exports.confirmMarketPurchase = onRequest(confirmMarketPurchaseOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const orderId = String(body.orderId || "").trim();
+    if (!orderId) {
+      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
+      return;
+    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+    const buyerId = resolveMarketBuyerUuid(uid);
+
+    const { data: order, error: orderErr } = await supabase
+      .from("market_orders")
+      .select("*")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (orderErr || !order) {
+      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
+      return;
+    }
+    if (order.buyer_id !== buyerId) {
+      res.status(403).json({ success: false, error: "본인 주문만 확정할 수 있습니다." });
+      return;
+    }
+    if (order.escrow_status !== "PAID") {
+      res.status(400).json({
+        success: false,
+        error: order.escrow_status === "CONFIRMED" ? "이미 구매 확정된 주문입니다." : "입금이 확인된 주문만 확정할 수 있습니다.",
+      });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data: updated, error: updErr } = await supabase
+      .from("market_orders")
+      .update({ escrow_status: "CONFIRMED", settled_at: nowIso, updated_at: nowIso })
+      .eq("id", orderId)
+      .eq("escrow_status", "PAID") // 낙관적 잠금 — 동시 확정 방지
+      .select();
+    if (updErr) throw updErr;
+    if (!updated || !updated.length) {
+      res.status(409).json({ success: false, error: "이미 처리된 주문입니다." });
+      return;
+    }
+
+    await supabase.from("market_items").update({ status: "SOLD", updated_at: nowIso }).eq("id", order.item_id);
+
+    res.status(200).json({ success: true });
+  } catch (e) {
+    console.error("[confirmMarketPurchase]", e && e.message ? e.message : e);
+    const status = e.status || 500;
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
+ * 관리자 전용 — 구매확정(CONFIRMED)된 주문의 판매대금을 판매자 등록 계좌로 실제 이체한 뒤 마감 처리한다.
+ * (이체 자체는 관리자가 은행 앱/인터넷뱅킹으로 직접 수행 — 이 엔드포인트는 그 사실을 기록만 한다.)
+ * GET/POST ?secret=stelvio-internal-sync-v1 또는 관리자(grade=1), body: { orderId }
+ */
+const adminMarkMarketOrderSettledOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  cors: true,
+  timeoutSeconds: 30,
+});
+exports.adminMarkMarketOrderSettled = onRequest(adminMarkMarketOrderSettledOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  const db = admin.firestore();
+  const rawSecret =
+    req.query.secret || req.headers["x-internal-secret"] || (req.body && req.body.secret);
+  let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+  if (!authorized) {
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+    const grade = await getCachedCallerGrade(db, uid);
+    if (grade !== "1") {
+      res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
+      return;
+    }
+    authorized = true;
+  }
+  const orderId = String(req.query.orderId || (req.body && req.body.orderId) || "").trim();
+  if (!orderId) {
+    res.status(400).json({ success: false, error: "orderId가 필요합니다." });
+    return;
+  }
+
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) {
+    res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+    return;
+  }
+  const { data: order } = await supabase.from("market_orders").select("*").eq("id", orderId).maybeSingle();
+  if (!order) {
+    res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
+    return;
+  }
+  if (order.escrow_status !== "CONFIRMED") {
+    res.status(400).json({ success: false, error: "구매확정된 주문만 정산 완료 처리할 수 있습니다." });
+    return;
+  }
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("market_orders")
+    .update({ settlement_transferred_at: nowIso, updated_at: nowIso })
+    .eq("id", orderId);
+  if (error) {
+    res.status(500).json({ success: false, error: error.message });
+    return;
+  }
+  res.status(200).json({ success: true });
+});
+
+/**
+ * 입금 기한이 지난 PENDING 중고랜드 주문 정리 — 상품을 다시 ON_SALE로 되돌린다.
+ * Toss 가상계좌는 기한이 지나면 자동 만료되므로 별도 취소 API 호출은 불필요.
+ */
+exports.cancelUnpaidMarketOrdersSchedule = onSchedule(
+  {
+    schedule: "every 15 minutes",
+    region: "asia-northeast3",
+    secrets: [supabaseDualWriteServer.supabaseServiceRoleKey],
+  },
+  async () => {
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) return;
+    const nowIso = new Date().toISOString();
+    const { data: expired, error } = await supabase
+      .from("market_orders")
+      .select("id, item_id")
+      .eq("escrow_status", "PENDING")
+      .lt("va_due_at", nowIso);
+    if (error || !expired || !expired.length) return;
+    for (const o of expired) {
+      /* eslint-disable no-await-in-loop */
+      await supabase
+        .from("market_orders")
+        .update({ escrow_status: "CANCELLED", updated_at: nowIso })
+        .eq("id", o.id);
+      await supabase
+        .from("market_items")
+        .update({ status: "ON_SALE", updated_at: nowIso })
+        .eq("id", o.item_id)
+        .eq("status", "RESERVED");
+      /* eslint-enable no-await-in-loop */
+    }
+    console.log("[cancelUnpaidMarketOrdersSchedule] 만료 처리:", expired.length);
+  }
+);
 
 /**
  * 관리자 전용 — requestCompetitionRefund가 처리 못 하는 건(예: 웹훅 처리 누락으로 실제로는

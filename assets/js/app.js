@@ -7362,6 +7362,22 @@ function initializeCurrentScreen(screenId) {
       })();
       break;
 
+    case 'marketHomeScreen':
+      if (typeof window.marketScreenInit === 'function') window.marketScreenInit();
+      break;
+
+    case 'marketItemFormScreen':
+      if (typeof window.marketFormScreenInit === 'function') window.marketFormScreenInit();
+      break;
+
+    case 'marketItemDetailScreen':
+      if (typeof window.marketItemDetailScreenInit === 'function') window.marketItemDetailScreenInit();
+      break;
+
+    case 'marketMyPageScreen':
+      if (typeof window.marketMyPageScreenInit === 'function') window.marketMyPageScreenInit();
+      break;
+
     case 'affiliateScreen':
       setTimeout(function () {
         if (typeof window.initAffiliateReact === 'function') {
