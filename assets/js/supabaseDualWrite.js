@@ -609,10 +609,17 @@ export async function getSupabaseClient() {
       const { createClient } = await import(
         'https://esm.sh/@supabase/supabase-js@2.49.1'
       );
+      // autoRefreshToken: false — access_token/refresh_token 모두 mintSupabaseSessionHttp가 직접
+      // 서명하는 커스텀 JWT라 GoTrue가 자기 세션 저장소에 추적하는 진짜 refresh token이 아니다.
+      // true로 두면 SDK가 백그라운드 타이머로 GoTrue의 실제 /token?grant_type=refresh_token을
+      // 호출해 이 커스텀 refresh_token으로 갱신을 시도하고, GoTrue가 이를 거부하면 SDK가 세션을
+      // 지워버려 이후 아무 호출에서나 "Auth session missing!"이 난다(2026-08 중고랜드 상품 등록
+      // 중 확인 — 이미지 업로드처럼 여러 단계를 거치는 동안 백그라운드 갱신과 경합했을 가능성).
+      // 세션 갱신은 syncSupabaseSessionFromBridge()가 만료 2분 전 재발급으로 직접 처리한다.
       return createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
         auth: {
           persistSession: true,
-          autoRefreshToken: true,
+          autoRefreshToken: false,
           storage: typeof window !== 'undefined' ? window.localStorage : undefined,
         },
       });
