@@ -106,7 +106,14 @@ function iconAndLabelFor(sky, pty) {
   return { icon: "🌡️", label: "" };
 }
 
-async function fetchKmaVilageFcst(nx, ny, baseDate, baseTime, serviceKey) {
+/**
+ * 기상청 API(apis.data.go.kr)는 us-central1 등 원거리 리전에서 간헐적으로 연결이 지연·실패해
+ * "fetch failed"(TCP/TLS 단계 실패, 원인이 undici error.cause에만 담김)로 이어지는 경우가 있어
+ * (2026-08 확인 — 실사용자 요청이 us-central1에서 10초 넘게 걸리다 실패), 15초 타임아웃 + 1회
+ * 재시도를 둔다. 근본 대응은 이 함수를 호출하는 Cloud Function을 한국에 가까운 asia-northeast3로
+ * 배포하는 것(index.js의 getOpenRidingDepartureWeatherOptions에 반영).
+ */
+async function fetchKmaVilageFcstOnce(nx, ny, baseDate, baseTime, serviceKey) {
   const url =
     KMA_BASE_URL +
     "?serviceKey=" + encodeURIComponent(serviceKey) +
@@ -115,7 +122,17 @@ async function fetchKmaVilageFcst(nx, ny, baseDate, baseTime, serviceKey) {
     "&base_time=" + baseTime +
     "&nx=" + nx +
     "&ny=" + ny;
-  const res = await fetch(url);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  let res;
+  try {
+    res = await fetch(url, { signal: controller.signal });
+  } catch (e) {
+    const cause = e && e.cause ? " (" + (e.cause.code || e.cause.message || e.cause) + ")" : "";
+    throw new Error("KMA fetch 실패: " + (e && e.message ? e.message : String(e)) + cause);
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) throw new Error("KMA HTTP " + res.status);
   const json = await res.json();
   const header = json && json.response && json.response.header;
@@ -124,6 +141,15 @@ async function fetchKmaVilageFcst(nx, ny, baseDate, baseTime, serviceKey) {
   }
   const items = json.response.body && json.response.body.items && json.response.body.items.item;
   return Array.isArray(items) ? items : [];
+}
+
+async function fetchKmaVilageFcst(nx, ny, baseDate, baseTime, serviceKey) {
+  try {
+    return await fetchKmaVilageFcstOnce(nx, ny, baseDate, baseTime, serviceKey);
+  } catch (eFirst) {
+    console.warn("[kmaWeatherService] 1차 조회 실패, 재시도:", eFirst && eFirst.message);
+    return await fetchKmaVilageFcstOnce(nx, ny, baseDate, baseTime, serviceKey);
+  }
 }
 
 /**

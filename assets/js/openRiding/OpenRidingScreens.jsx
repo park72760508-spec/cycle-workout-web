@@ -404,7 +404,7 @@ function OpenRidingDepartureWeatherPanel(props) {
       setState({ loading: true, error: false, hours: null, note: '' });
       var params = new URLSearchParams({ region: region, date: ymd });
       fetch(
-        'https://us-central1-stelvio-ai.cloudfunctions.net/getOpenRidingDepartureWeather?' + params.toString(),
+        'https://asia-northeast3-stelvio-ai.cloudfunctions.net/getOpenRidingDepartureWeather?' + params.toString(),
         { method: 'GET', mode: 'cors' }
       )
         .then(function (res) { return res.json(); })

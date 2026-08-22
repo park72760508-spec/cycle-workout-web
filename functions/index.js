@@ -11308,7 +11308,10 @@ exports.getOpenRideForRead = onRequest(
  * 오픈 라이딩/러닝 모임 "출발 지역" 날씨 — 기상청 단기예보(getVilageFcst) 06/08/10/12/14/16시.
  * GET ?region=<시도 구군>&date=<YYYY-MM-DD>
  */
+// 기상청 API(apis.data.go.kr) 연결 지연·실패가 us-central1 등 원거리 리전에서 두드러져
+// asia-northeast3(서울)로 배포 — 클라이언트 호출 URL도 함께 변경해야 함(OpenRidingScreens.jsx).
 const getOpenRidingDepartureWeatherOptions = {
+  region: "asia-northeast3",
   cors: true,
   timeoutSeconds: 30,
   secrets: [kmaServiceKeySecret],
