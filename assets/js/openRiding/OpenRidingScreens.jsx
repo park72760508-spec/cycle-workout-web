@@ -725,7 +725,7 @@ function OpenRidingSettlementFold(props) {
                 disabled={saving}
                 onClick={addDraftItem}
               >
-                <img src="assets/img/add.png" alt="" width={20} height={20} className="block object-contain" />
+                <img src="assets/img/copy.png" alt="" width={20} height={20} className="block object-contain" />
                 항목추가
               </button>
               {settlement ? (
