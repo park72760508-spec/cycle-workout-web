@@ -16652,6 +16652,14 @@ const USER_PROFILE_SYNC_FIELDS = [
   "starredUsers",
   "rankingFavoritesUpdatedAt",
   "rankingFavoritesSchemaVersion",
+  "strava_refresh_token",
+  "strava_access_token",
+  "strava_connected",
+  "has_strava",
+  "strava_athlete_id",
+  "API_sts",
+  "gemini_api_registered",
+  "gemini_api_key",
 ];
 
 function userProfileFieldsChanged(before, after) {
