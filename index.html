@@ -4433,6 +4433,11 @@
       <button type="button" id="marketCategoryTabCycle" class="market-category-tab active">CYCLE</button>
       <button type="button" id="marketCategoryTabRun" class="market-category-tab">RUN</button>
     </div>
+    <div class="market-search-bar">
+      <svg class="market-search-bar__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.35-4.35"></path></svg>
+      <input type="search" id="marketSearchInput" class="market-search-bar__input" placeholder="상품명, 상품 설명으로 검색" autocomplete="off" enterkeyhint="search" />
+      <button type="button" id="marketSearchClearBtn" class="market-search-bar__clear" style="display:none;" aria-label="검색어 지우기">✕</button>
+    </div>
     <div id="marketSubCategoryTabs" class="market-subtabs"></div>
     <div class="market-scroll-area">
       <div id="marketItemGrid" class="market-grid"></div>
@@ -42826,7 +42831,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script src="assets/js/competition/competitionScreen.js?v=paid-label-20260822a"></script>
-  <script src="assets/js/market/marketScreen.js?v=20260823market5"></script>
+  <script src="assets/js/market/marketScreen.js?v=20260824market6"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

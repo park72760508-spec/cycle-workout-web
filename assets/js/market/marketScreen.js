@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260823market4';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260824market5';
   var svc = null;
 
   function loadMarketService() {
@@ -65,6 +65,7 @@
   var homeState = {
     category: 'CYCLE',
     subCategory: '',
+    keyword: '',
     items: [],
     offset: 0,
     hasMore: true,
@@ -157,7 +158,11 @@
     if (!grid) return;
     var html = homeState.items.map(marketItemCardHtml).join('');
     if (!append) {
-      grid.innerHTML = html || '<div class="market-empty">등록된 상품이 없습니다.</div>';
+      grid.innerHTML =
+        html ||
+        (homeState.keyword
+          ? '<div class="market-empty">\'' + escapeHtml(homeState.keyword) + '\'에 대한 검색 결과가 없습니다.</div>'
+          : '<div class="market-empty">등록된 상품이 없습니다.</div>');
     } else {
       grid.insertAdjacentHTML('beforeend', html);
     }
@@ -237,6 +242,7 @@
         return s.listMarketItems({
           category: homeState.category,
           subCategory: homeState.subCategory || undefined,
+          keyword: homeState.keyword || undefined,
           offset: homeState.offset,
           limit: PAGE_SIZE,
         });
@@ -290,7 +296,37 @@
     if (runTab) runTab.onclick = function () { setMarketCategory('RUN'); };
     var moreBtn = document.getElementById('marketLoadMoreBtn');
     if (moreBtn) moreBtn.onclick = function () { loadMoreMarketItems(); };
+    wireMarketSearchInput();
   };
+
+  var marketSearchDebounceTimer = null;
+
+  function wireMarketSearchInput() {
+    var input = document.getElementById('marketSearchInput');
+    var clearBtn = document.getElementById('marketSearchClearBtn');
+    if (!input) return;
+    input.value = homeState.keyword;
+    if (clearBtn) clearBtn.style.display = homeState.keyword ? 'flex' : 'none';
+    input.oninput = function () {
+      var val = input.value;
+      if (clearBtn) clearBtn.style.display = val ? 'flex' : 'none';
+      if (marketSearchDebounceTimer) clearTimeout(marketSearchDebounceTimer);
+      marketSearchDebounceTimer = setTimeout(function () {
+        homeState.keyword = val.trim();
+        reloadMarketHomeList();
+      }, 350);
+    };
+    if (clearBtn) {
+      clearBtn.onclick = function () {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        if (marketSearchDebounceTimer) clearTimeout(marketSearchDebounceTimer);
+        homeState.keyword = '';
+        reloadMarketHomeList();
+        input.focus();
+      };
+    }
+  }
 
   window.navigateToMarketLand = function () {
     if (typeof window.showScreen === 'function') window.showScreen('marketHomeScreen');

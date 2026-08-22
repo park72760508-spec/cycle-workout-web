@@ -222,9 +222,18 @@ export async function processAndUploadMarketImage(file, userId, itemDraftId, ind
   });
 }
 
+/** PostgREST .or() 필터 문자열에 섞이면 안 되는 문자(%,(),")를 제거 — ILIKE 와일드카드·필터 구문 보호 */
+function sanitizeMarketSearchKeyword(raw) {
+  return String(raw || '')
+    .trim()
+    .replace(/[%,()"]/g, '')
+    .slice(0, 60);
+}
+
 /**
  * 상품 목록 조회 — 최신 등록/끌어올린 순(bumped_at desc), 60개(20줄×3개) 단위 페이지네이션.
- * @param {{category?:string, subCategory?:string, offset?:number, limit?:number}} opts
+ * keyword가 있으면 상품명·상품 설명에 포함된 경우만(대소문자 무관) 조회한다.
+ * @param {{category?:string, subCategory?:string, keyword?:string, offset?:number, limit?:number}} opts
  */
 export async function listMarketItems(opts) {
   return withMarketAuthRetry(async () => {
@@ -240,6 +249,10 @@ export async function listMarketItems(opts) {
       .range(offset, offset + limit - 1);
     if (opts.category) q = q.eq('category', opts.category);
     if (opts.subCategory) q = q.eq('sub_category', opts.subCategory);
+    const kw = sanitizeMarketSearchKeyword(opts.keyword);
+    if (kw) {
+      q = q.or(`title.ilike.%${kw}%,description.ilike.%${kw}%`);
+    }
     const { data, error } = await q;
     if (error) throw error;
     return data || [];
