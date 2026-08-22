@@ -17,7 +17,7 @@ import {
   leaveRideTransaction,
   fetchRideById,
   subscribeRideById
-} from './openRidingService.js?v=cancel-no-delete-fix-20260821a';
+} from './openRidingService.js?v=settlement-20260822a';
 
 /**
  * @param {import('firebase/firestore').Firestore | null} db

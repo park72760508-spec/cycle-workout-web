@@ -253,9 +253,16 @@ service cloud.firestore {
         request.resource.data.hostUserId == request.auth.uid;
 
       // 수정: 방장 전체 수정 가능 / 참석·대기열·연락처맵·updatedAt 만 변경 시 로그인 사용자(Transaction 참석·취소)
+      // / 정산(settlement)만 변경 시 — 최초 등록 전이면 확정 참가자 누구나, 등록된 뒤에는 그 등록자만
       allow update: if request.auth != null && (
         resource.data.hostUserId == request.auth.uid ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'waitlist', 'updatedAt', 'participantDisplay', 'participantContact', 'participantContactPublic', 'inviteJoinedUidByPhone', 'inviteDisplayByPhone', 'inviteFriendUidByPhone'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'waitlist', 'updatedAt', 'participantDisplay', 'participantContact', 'participantContactPublic', 'inviteJoinedUidByPhone', 'inviteDisplayByPhone', 'inviteFriendUidByPhone']) ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settlement', 'updatedAt']) &&
+          (resource.data.get('settlement', null) == null
+            ? request.auth.uid in resource.data.get('participants', [])
+            : resource.data.settlement.registeredBy == request.auth.uid)
+        )
       );
 
       // 삭제: 방장 또는 관리자(grade='1')

@@ -831,6 +831,77 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
 }
 
 /**
+ * 모임 정산(참가비 등 분담금) 등록·수정 — 방장 또는 정산 등록자만 가능.
+ * 최초 등록(ride.settlement 없음)은 확정 참가자 누구나 등록자가 될 수 있고, 이후엔
+ * 방장 또는 그 등록자만 수정 가능(firestore.rules의 조건과 반드시 맞춰 유지).
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} uid 요청자
+ * @param {{ items: Array<{id?:string,label:string,amount:number|string,participantUids:string[]}>,
+ *           bankAccount: {bank:string,accountNumber:string,holderName:string}, registeredByName?: string }} settlement
+ */
+export async function updateRideSettlement(db, rideId, uid, settlement) {
+  const rideRef = doc(db, 'rides', rideId);
+  const snap = await getDoc(rideRef);
+  if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+  const data = snap.data();
+  const isHost = String(data.hostUserId || '') === String(uid);
+  const existing = data.settlement || null;
+  const isRegistrant = !!existing && String(existing.registeredBy || '') === String(uid);
+  if (!isHost && !isRegistrant) {
+    const parts = Array.isArray(data.participants) ? data.participants.map(String) : [];
+    if (existing || parts.indexOf(String(uid)) === -1) throw new Error('FORBIDDEN');
+  }
+
+  const items = Array.isArray(settlement && settlement.items)
+    ? settlement.items
+        .map((it) => ({
+          id: String((it && it.id) || '').trim() || Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          label: String((it && it.label) || '').trim().slice(0, 60),
+          amount: Math.max(0, Math.round(Number(it && it.amount) || 0)),
+          participantUids: Array.isArray(it && it.participantUids) ? it.participantUids.map(String) : []
+        }))
+        .filter((it) => it.label && it.amount > 0 && it.participantUids.length > 0)
+    : [];
+  const bankAccountInput = (settlement && settlement.bankAccount) || {};
+  const bankAccount = {
+    bank: String(bankAccountInput.bank || '').trim().slice(0, 30),
+    accountNumber: String(bankAccountInput.accountNumber || '').replace(/\D/g, '').slice(0, 20),
+    holderName: String(bankAccountInput.holderName || '').trim().slice(0, 40)
+  };
+
+  await updateDoc(rideRef, {
+    settlement: {
+      registeredBy: existing ? existing.registeredBy : uid,
+      registeredByName: existing ? existing.registeredByName || '' : String((settlement && settlement.registeredByName) || '').slice(0, 40),
+      items,
+      bankAccount
+    },
+    updatedAt: serverTimestamp()
+  });
+  await scheduleOpenRideDualWriteFromFirestore(db, rideId, data.hostUserId);
+}
+
+/**
+ * 정산 내역 전체 삭제 — 방장 또는 정산 등록자만 가능.
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} uid 요청자
+ */
+export async function deleteRideSettlement(db, rideId, uid) {
+  const rideRef = doc(db, 'rides', rideId);
+  const snap = await getDoc(rideRef);
+  if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+  const data = snap.data();
+  const isHost = String(data.hostUserId || '') === String(uid);
+  const existing = data.settlement || null;
+  const isRegistrant = !!existing && String(existing.registeredBy || '') === String(uid);
+  if (!isHost && !isRegistrant) throw new Error('FORBIDDEN');
+  await updateDoc(rideRef, { settlement: null, updatedAt: serverTimestamp() });
+  await scheduleOpenRideDualWriteFromFirestore(db, rideId, data.hostUserId);
+}
+
+/**
  * 방장 전용: inviteDisplayByPhone 부분 병합 (프로필 DB에서 조회한 실명을 저장해 초대받은 사용자도 동일 문서로 표시)
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
@@ -1690,6 +1761,8 @@ if (typeof window !== 'undefined') {
     joinRideTransaction,
     leaveRideTransaction,
     updateRideByHost,
+    updateRideSettlement,
+    deleteRideSettlement,
     enrichInviteDisplayByPhoneFromUsers,
     mergeInviteDisplayByPhoneForHost,
     cancelRideByHost,

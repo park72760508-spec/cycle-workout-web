@@ -17,7 +17,7 @@ import {
   writeBatch,
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import { normalizePhoneDigits } from './openRidingService.js?v=cancel-no-delete-fix-20260821a';
+import { normalizePhoneDigits } from './openRidingService.js?v=settlement-20260822a';
 
 /** @param {string} a @param {string} b */
 export function friendRequestDocId(fromUid, toUid) {

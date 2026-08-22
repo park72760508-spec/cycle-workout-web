@@ -463,6 +463,404 @@ function OpenRidingDepartureWeatherPanel(props) {
   );
 }
 
+/** 정산 금액 절상 — 10원 단위 */
+function openRidingRoundUpTo10(n) {
+  return Math.ceil((Number(n) || 0) / 10) * 10;
+}
+
+/**
+ * 정산 항목별로 대상자(participantUids)에게 1/n 분담(10원 단위 절상) 후 참가자별 합계를 낸다.
+ * @param {Array<{id:string,label:string,amount:number,participantUids:string[]}>} items
+ * @returns {{ total: number, perParticipant: Record<string, number> }}
+ */
+function computeOpenRidingSettlementBreakdown(items) {
+  var list = Array.isArray(items) ? items : [];
+  var total = 0;
+  var perParticipant = {};
+  list.forEach(function (item) {
+    var amount = Number(item && item.amount) || 0;
+    total += amount;
+    var uids = Array.isArray(item && item.participantUids) ? item.participantUids : [];
+    if (!uids.length || amount <= 0) return;
+    var share = openRidingRoundUpTo10(amount / uids.length);
+    uids.forEach(function (uid) {
+      var key = String(uid);
+      perParticipant[key] = (perParticipant[key] || 0) + share;
+    });
+  });
+  return { total: total, perParticipant: perParticipant };
+}
+
+function openRidingNewSettlementItemId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+/**
+ * 모임 정산(참가비 등 분담금) — "내 상태" 아래에 표시. 확정 참가자에게만 노출.
+ * 방장 또는 정산 등록자(최초 등록한 확정 참가자)만 편집 가능(firestore.rules와 동일 조건).
+ */
+function OpenRidingSettlementFold(props) {
+  var ride = props.ride;
+  var rideId = props.rideId;
+  var firestore = props.firestore;
+  var userId = props.userId;
+  var isHost = !!props.isHost;
+  var reload = props.reload || function () {};
+
+  var settlement = (ride && ride.settlement) || null;
+  var confirmedUids = Array.isArray(ride && ride.participants) ? ride.participants.map(String) : [];
+  var isParticipant = !!(userId && confirmedUids.indexOf(String(userId)) !== -1);
+  var participantDisplay = (ride && ride.participantDisplay) || {};
+  var canEdit = isHost || (settlement ? String(settlement.registeredBy) === String(userId) : isParticipant);
+
+  var _exp = useState(false);
+  var expanded = _exp[0];
+  var setExpanded = _exp[1];
+  var _editing = useState(false);
+  var editing = _editing[0];
+  var setEditing = _editing[1];
+  var _draftItems = useState([]);
+  var draftItems = _draftItems[0];
+  var setDraftItems = _draftItems[1];
+  var _draftBank = useState({ bank: '', accountNumber: '', holderName: '' });
+  var draftBank = _draftBank[0];
+  var setDraftBank = _draftBank[1];
+  var _saving = useState(false);
+  var saving = _saving[0];
+  var setSaving = _saving[1];
+  var _err = useState('');
+  var errMsg = _err[0];
+  var setErrMsg = _err[1];
+
+  if (!isParticipant) return null;
+
+  var breakdown = computeOpenRidingSettlementBreakdown(settlement ? settlement.items : []);
+  var myAmount = breakdown.perParticipant[String(userId)] || 0;
+
+  function displayNameFor(uid) {
+    var n = participantDisplay[String(uid)];
+    return n ? String(n) : '참가자';
+  }
+
+  function startEditing() {
+    var src = settlement && Array.isArray(settlement.items) ? settlement.items : [];
+    setDraftItems(
+      src.map(function (it) {
+        return {
+          id: it.id || openRidingNewSettlementItemId(),
+          label: it.label || '',
+          amount: it.amount != null ? String(it.amount) : '',
+          participantUids: Array.isArray(it.participantUids) ? it.participantUids.map(String) : []
+        };
+      })
+    );
+    setDraftBank({
+      bank: (settlement && settlement.bankAccount && settlement.bankAccount.bank) || '',
+      accountNumber: (settlement && settlement.bankAccount && settlement.bankAccount.accountNumber) || '',
+      holderName: (settlement && settlement.bankAccount && settlement.bankAccount.holderName) || ''
+    });
+    setErrMsg('');
+    setEditing(true);
+    setExpanded(true);
+  }
+
+  function addDraftItem() {
+    if (!editing) {
+      startEditing();
+    }
+    setDraftItems(function (prev) {
+      return prev.concat([{ id: openRidingNewSettlementItemId(), label: '', amount: '', participantUids: confirmedUids.slice() }]);
+    });
+  }
+
+  function removeDraftItem(itemId) {
+    setDraftItems(function (prev) {
+      return prev.filter(function (it) {
+        return it.id !== itemId;
+      });
+    });
+  }
+
+  function updateDraftItem(itemId, patch) {
+    setDraftItems(function (prev) {
+      return prev.map(function (it) {
+        return it.id === itemId ? Object.assign({}, it, patch) : it;
+      });
+    });
+  }
+
+  function toggleDraftItemUid(itemId, uid) {
+    setDraftItems(function (prev) {
+      return prev.map(function (it) {
+        if (it.id !== itemId) return it;
+        var has = it.participantUids.indexOf(uid) !== -1;
+        var nextUids = has ? it.participantUids.filter(function (u) { return u !== uid; }) : it.participantUids.concat([uid]);
+        return Object.assign({}, it, { participantUids: nextUids });
+      });
+    });
+  }
+
+  async function saveSettlement() {
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (!firestore || !userId || typeof svc.updateRideSettlement !== 'function') return;
+    setSaving(true);
+    setErrMsg('');
+    try {
+      var userProfile = typeof window !== 'undefined' && window.currentUserData ? window.currentUserData : {};
+      await svc.updateRideSettlement(firestore, rideId, userId, {
+        items: draftItems.map(function (it) {
+          return { id: it.id, label: it.label, amount: it.amount, participantUids: it.participantUids };
+        }),
+        bankAccount: draftBank,
+        registeredByName: (userProfile && (userProfile.name || userProfile.displayName)) || ''
+      });
+      setEditing(false);
+      await reload();
+    } catch (e) {
+      setErrMsg((e && e.message) || '저장에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteSettlement() {
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (!firestore || !userId || typeof svc.deleteRideSettlement !== 'function') return;
+    var ok = typeof window !== 'undefined' && window.confirm ? window.confirm('정산 내역을 전체 삭제하시겠습니까?') : true;
+    if (!ok) return;
+    setSaving(true);
+    setErrMsg('');
+    try {
+      await svc.deleteRideSettlement(firestore, rideId, userId);
+      setEditing(false);
+      await reload();
+    } catch (e) {
+      setErrMsg((e && e.message) || '삭제에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="open-riding-detail-pack-rules-fold open-riding-detail-invite-fold--block w-full min-w-0">
+      <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
+        <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
+          <button
+            type="button"
+            className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+            onClick={function () {
+              setExpanded(function (v) { return !v; });
+            }}
+            aria-expanded={expanded}
+            id="open-riding-settlement-toggle"
+          >
+            정산하기{' '}
+            <span className="tabular-nums font-semibold text-inherit" aria-hidden>
+              {expanded ? '(−)' : '(+)'}
+            </span>
+          </button>
+        </span>
+        <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
+          {!settlement && canEdit ? (
+            <button
+              type="button"
+              className="text-xs font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-full px-3 py-1"
+              onClick={startEditing}
+            >
+              등록하기
+            </button>
+          ) : (
+            <span className="text-sm font-semibold text-slate-800">
+              나의 정산금액 {myAmount.toLocaleString()}원
+            </span>
+          )}
+        </div>
+      </div>
+      {expanded ? (
+        <div
+          className="m-0 w-full min-w-0 border-t border-slate-100/90 px-3 py-3 space-y-3 text-left"
+          role="region"
+          aria-labelledby="open-riding-settlement-toggle"
+        >
+          {canEdit ? (
+            <div className="flex items-center gap-4" role="toolbar" aria-label="정산 관리">
+              <button
+                type="button"
+                className="inline-flex flex-col items-center gap-1 text-[11px] font-medium text-slate-600 disabled:opacity-50"
+                disabled={saving}
+                onClick={editing ? saveSettlement : startEditing}
+              >
+                <img src="assets/img/edit2.png" alt="" width={20} height={20} className="block object-contain" />
+                {editing ? (saving ? '저장 중...' : '저장') : '등록/수정'}
+              </button>
+              <button
+                type="button"
+                className="inline-flex flex-col items-center gap-1 text-[11px] font-medium text-slate-600 disabled:opacity-50"
+                disabled={saving}
+                onClick={addDraftItem}
+              >
+                <img src="assets/img/add.png" alt="" width={20} height={20} className="block object-contain" />
+                항목추가
+              </button>
+              {settlement ? (
+                <button
+                  type="button"
+                  className="inline-flex flex-col items-center gap-1 text-[11px] font-medium text-slate-600 disabled:opacity-50"
+                  disabled={saving}
+                  onClick={deleteSettlement}
+                >
+                  <img src="assets/img/delete2.png" alt="" width={20} height={20} className="block object-contain" />
+                  삭제
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {errMsg ? <p className="text-xs text-red-600 m-0">{errMsg}</p> : null}
+
+          {editing ? (
+            <div className="space-y-3">
+              {draftItems.length === 0 ? (
+                <p className="text-xs text-slate-400 m-0 italic">항목추가를 눌러 정산 항목을 추가하세요.</p>
+              ) : (
+                draftItems.map(function (it, idx) {
+                  return (
+                    <div key={it.id} className="rounded-lg border border-slate-200 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-violet-700 shrink-0">{idx + 1}차</span>
+                        <button
+                          type="button"
+                          className="text-xs text-slate-400 hover:text-red-500"
+                          onClick={function () { removeDraftItem(it.id); }}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        className="w-full min-w-0 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+                        placeholder="항목명 (예: 식비, 숙소비)"
+                        value={it.label}
+                        onChange={function (e) { updateDraftItem(it.id, { label: e.target.value }); }}
+                      />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className="w-full min-w-0 border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm"
+                        placeholder="금액 (숫자만)"
+                        value={it.amount}
+                        onChange={function (e) {
+                          updateDraftItem(it.id, { amount: e.target.value.replace(/[^0-9]/g, '') });
+                        }}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        {confirmedUids.map(function (uid) {
+                          var checked = it.participantUids.indexOf(uid) !== -1;
+                          return (
+                            <label
+                              key={uid}
+                              className={
+                                'inline-flex items-center gap-1 text-xs rounded-full px-2 py-1 border cursor-pointer ' +
+                                (checked ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-300')
+                              }
+                            >
+                              <input
+                                type="checkbox"
+                                className="hidden"
+                                checked={checked}
+                                onChange={function () { toggleDraftItemUid(it.id, uid); }}
+                              />
+                              {displayNameFor(uid)}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-xs font-semibold text-slate-700 m-0 mb-1.5">입금 계좌 정보</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <input
+                    type="text"
+                    className="border border-slate-300 rounded-lg px-2 py-1.5 text-xs col-span-1"
+                    placeholder="은행명"
+                    value={draftBank.bank}
+                    onChange={function (e) { setDraftBank(Object.assign({}, draftBank, { bank: e.target.value })); }}
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="border border-slate-300 rounded-lg px-2 py-1.5 text-xs col-span-1"
+                    placeholder="계좌번호"
+                    value={draftBank.accountNumber}
+                    onChange={function (e) {
+                      setDraftBank(Object.assign({}, draftBank, { accountNumber: e.target.value.replace(/[^0-9]/g, '') }));
+                    }}
+                  />
+                  <input
+                    type="text"
+                    className="border border-slate-300 rounded-lg px-2 py-1.5 text-xs col-span-1"
+                    placeholder="예금주"
+                    value={draftBank.holderName}
+                    onChange={function (e) { setDraftBank(Object.assign({}, draftBank, { holderName: e.target.value })); }}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : settlement ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                {(settlement.items || []).map(function (it, idx) {
+                  return (
+                    <div key={it.id || idx} className="flex items-center justify-between text-sm">
+                      <span className="text-slate-600">{idx + 1}차 · {it.label}</span>
+                      <span className="font-semibold text-slate-800">{Number(it.amount || 0).toLocaleString()}원</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between text-sm font-bold border-t border-slate-200 pt-2">
+                <span>합계</span>
+                <span>{breakdown.total.toLocaleString()}원</span>
+              </div>
+
+              <div className="pt-1">
+                <p className="text-xs font-semibold text-slate-700 m-0 mb-1.5">세부 정산 내역</p>
+                <div className="space-y-1">
+                  {confirmedUids
+                    .filter(function (uid) { return (breakdown.perParticipant[uid] || 0) > 0; })
+                    .map(function (uid) {
+                      return (
+                        <div key={uid} className="flex items-center justify-between text-xs">
+                          <span className="text-slate-600">{displayNameFor(uid)}</span>
+                          <span className="font-semibold text-slate-800">
+                            {(breakdown.perParticipant[uid] || 0).toLocaleString()}원
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {settlement.bankAccount && (settlement.bankAccount.accountNumber || settlement.bankAccount.bank) ? (
+                <div className="pt-2 border-t border-slate-100 text-xs text-slate-600">
+                  <span className="font-semibold text-slate-700">입금 계좌 </span>
+                  {settlement.bankAccount.bank} {settlement.bankAccount.accountNumber} ({settlement.bankAccount.holderName})
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 m-0 italic">아직 등록된 정산 내역이 없습니다.</p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** 초대 번호 ↔ 저장 연락처 매칭 (openRidingService.normalizePhoneDigits + 뒤 8자리 규칙) */
 function openRidingInvitePhoneDigitsMatch(a, b) {
   var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
@@ -9816,6 +10214,14 @@ function OpenRidingDetail(props) {
         )}
         {statRow('공개 여부', isPrivateRide ? '비공개 · 초대 또는 입장 비밀번호로 신청' : '공개')}
         {statRow('내 상태', roleLabel)}
+        <OpenRidingSettlementFold
+          ride={ride}
+          rideId={rideId}
+          firestore={firestore}
+          userId={userId}
+          isHost={isHost}
+          reload={reload}
+        />
         <div className="open-riding-detail-pack-rules-fold open-riding-detail-invite-fold--block w-full min-w-0">
           <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
             <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
