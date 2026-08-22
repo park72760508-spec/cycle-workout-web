@@ -902,6 +902,38 @@ export async function deleteRideSettlement(db, rideId, uid) {
 }
 
 /**
+ * 정산 입금완료 자가 표시 — 확정 참가자 본인만 자신의 상태를 토글할 수 있다(firestore.rules와 동일 조건).
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} uid 요청자(본인)
+ * @param {boolean} paid true면 입금완료로, false면 미입금으로
+ */
+export async function toggleMySettlementPaid(db, rideId, uid, paid) {
+  const rideRef = doc(db, 'rides', rideId);
+  const snap = await getDoc(rideRef);
+  if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+  const data = snap.data();
+  const existing = data.settlement || null;
+  if (!existing) throw new Error('SETTLEMENT_NOT_FOUND');
+  const parts = Array.isArray(data.participants) ? data.participants.map(String) : [];
+  if (parts.indexOf(String(uid)) === -1) throw new Error('FORBIDDEN');
+
+  const prevPaidUids = Array.isArray(existing.paidUids) ? existing.paidUids.map(String) : [];
+  const uidStr = String(uid);
+  const nextPaidUids = paid
+    ? prevPaidUids.indexOf(uidStr) === -1
+      ? prevPaidUids.concat([uidStr])
+      : prevPaidUids
+    : prevPaidUids.filter((u) => u !== uidStr);
+
+  await updateDoc(rideRef, {
+    settlement: Object.assign({}, existing, { paidUids: nextPaidUids }),
+    updatedAt: serverTimestamp()
+  });
+  await scheduleOpenRideDualWriteFromFirestore(db, rideId, data.hostUserId);
+}
+
+/**
  * 방장 전용: inviteDisplayByPhone 부분 병합 (프로필 DB에서 조회한 실명을 저장해 초대받은 사용자도 동일 문서로 표시)
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
@@ -1763,6 +1795,7 @@ if (typeof window !== 'undefined') {
     updateRideByHost,
     updateRideSettlement,
     deleteRideSettlement,
+    toggleMySettlementPaid,
     enrichInviteDisplayByPhoneFromUsers,
     mergeInviteDisplayByPhoneForHost,
     cancelRideByHost,

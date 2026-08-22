@@ -531,6 +531,9 @@ function OpenRidingSettlementFold(props) {
   var _err = useState('');
   var errMsg = _err[0];
   var setErrMsg = _err[1];
+  var _paidBusy = useState(false);
+  var paidToggleBusy = _paidBusy[0];
+  var setPaidToggleBusy = _paidBusy[1];
 
   if (!isParticipant) return null;
 
@@ -638,6 +641,21 @@ function OpenRidingSettlementFold(props) {
       setErrMsg((e && e.message) || '삭제에 실패했습니다.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function togglePaidStatus(nextPaid) {
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (!firestore || !userId || typeof svc.toggleMySettlementPaid !== 'function' || paidToggleBusy) return;
+    setPaidToggleBusy(true);
+    setErrMsg('');
+    try {
+      await svc.toggleMySettlementPaid(firestore, rideId, userId, nextPaid);
+      await reload();
+    } catch (e) {
+      setErrMsg((e && e.message) || '입금 상태 변경에 실패했습니다.');
+    } finally {
+      setPaidToggleBusy(false);
     }
   }
 
@@ -829,15 +847,33 @@ function OpenRidingSettlementFold(props) {
 
               <div className="pt-1">
                 <p className="text-xs font-semibold text-slate-700 m-0 mb-1.5">세부 정산 내역</p>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {confirmedUids
                     .filter(function (uid) { return (breakdown.perParticipant[uid] || 0) > 0; })
                     .map(function (uid) {
+                      var isMe = String(uid) === String(userId);
+                      var isPaid = (settlement.paidUids || []).indexOf(String(uid)) !== -1;
                       return (
-                        <div key={uid} className="flex items-center justify-between text-xs">
-                          <span className="text-slate-600">{displayNameFor(uid)}</span>
-                          <span className="font-semibold text-slate-800">
-                            {(breakdown.perParticipant[uid] || 0).toLocaleString()}원
+                        <div key={uid} className="flex items-center justify-between text-xs gap-2">
+                          <span className="text-slate-600 min-w-0 truncate">{displayNameFor(uid)}</span>
+                          <span className="flex items-center gap-1.5 shrink-0">
+                            <span className="font-semibold text-slate-800">
+                              {(breakdown.perParticipant[uid] || 0).toLocaleString()}원
+                            </span>
+                            <button
+                              type="button"
+                              className={
+                                'text-[10px] font-semibold rounded-full px-2 py-0.5 border ' +
+                                (isPaid
+                                  ? 'bg-emerald-500 text-white border-emerald-500'
+                                  : 'bg-slate-100 text-slate-500 border-slate-300') +
+                                (isMe ? ' cursor-pointer' : ' cursor-default opacity-80')
+                              }
+                              disabled={!isMe || paidToggleBusy}
+                              onClick={isMe ? function () { togglePaidStatus(!isPaid); } : undefined}
+                            >
+                              {isPaid ? '입금완료' : '미입금'}
+                            </button>
                           </span>
                         </div>
                       );

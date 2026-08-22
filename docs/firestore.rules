@@ -254,6 +254,7 @@ service cloud.firestore {
 
       // 수정: 방장 전체 수정 가능 / 참석·대기열·연락처맵·updatedAt 만 변경 시 로그인 사용자(Transaction 참석·취소)
       // / 정산(settlement)만 변경 시 — 최초 등록 전이면 확정 참가자 누구나, 등록된 뒤에는 그 등록자만
+      // / 정산의 입금완료 표시(settlement.paidUids)만 변경 시 — 확정 참가자 누구나(본인 상태 self-report)
       allow update: if request.auth != null && (
         resource.data.hostUserId == request.auth.uid ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'waitlist', 'updatedAt', 'participantDisplay', 'participantContact', 'participantContactPublic', 'inviteJoinedUidByPhone', 'inviteDisplayByPhone', 'inviteFriendUidByPhone']) ||
@@ -262,6 +263,12 @@ service cloud.firestore {
           (resource.data.get('settlement', null) == null
             ? request.auth.uid in resource.data.get('participants', [])
             : resource.data.settlement.registeredBy == request.auth.uid)
+        ) ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settlement', 'updatedAt']) &&
+          resource.data.get('settlement', null) != null &&
+          request.resource.data.settlement.diff(resource.data.settlement).affectedKeys().hasOnly(['paidUids']) &&
+          request.auth.uid in resource.data.get('participants', [])
         )
       );
 
