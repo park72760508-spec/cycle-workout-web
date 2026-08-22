@@ -4168,7 +4168,8 @@
               <div id="categoryAuthBarRight" class="basecamp-auth-bar-right category-auth-bar-right--stacked" style="display: none;">
                 <div class="basecamp-auth-bar-welcome">
                   <span id="categoryAuthBarWelcomeLine1" class="basecamp-auth-bar-welcome-line">환영합니다.</span>
-                  <button type="button" id="btnGoToMarketFromCategory" class="market-entry-btn" onclick="if(typeof navigateToMarketLand==='function')navigateToMarketLand();else if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="중고랜드로 이동하기">
+                  <span id="categoryAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
+                  <button type="button" id="btnGoToMarketFromCategory" class="market-entry-btn" style="display:none;" onclick="if(typeof navigateToMarketLand==='function')navigateToMarketLand();else if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="중고랜드로 이동하기">
                     <span class="market-entry-btn__icon" aria-hidden="true">🛒</span>
                     <span>중고랜드로 이동하기</span>
                   </button>
@@ -30915,11 +30916,16 @@
         var l1 = line1Id ? document.getElementById(line1Id) : null;
         var l2 = line2Id ? document.getElementById(line2Id) : null;
         if (combineOneLine) {
-          // 카테고리 선택 화면: 1줄차 "환영합니다, 이름님!" + 2줄차는 중고랜드 이동 버튼(텍스트 갱신 생략)
+          // 관리자 전용 미리보기: 1줄차 "환영합니다, 이름님!" + 2줄차 자리에 중고랜드 이동 버튼
+          // (완성 후 일반 사용자에도 동일하게 적용 예정 — 그 전까지는 관리자만 이 1줄 표기를 봄)
           if (l1) l1.textContent = '환영합니다, ' + userName + '님!';
+          if (l2) l2.style.display = 'none';
         } else {
           if (l1) l1.textContent = '환영합니다.';
-          if (l2) l2.textContent = userName + '님';
+          if (l2) {
+            l2.textContent = userName + '님';
+            l2.style.display = 'block';
+          }
         }
       } else {
         left.style.display = 'flex';
@@ -30938,9 +30944,18 @@
       var authUser = resolveAuthBarAuthUser(user);
       var loggedIn = isAuthBarLoggedIn(authUser);
       var userName = loggedIn ? resolveAuthBarUserName(authUser) : '사용자';
+      // 중고랜드는 아직 관리자 전용 미리보기 단계 — 완성 후 일반 사용자에게도 동일 적용 예정
+      var isAdminForMarket =
+        loggedIn &&
+        ((typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true) ||
+          (typeof getLoginUserGrade === 'function' &&
+            typeof isStelvioAdminGrade === 'function' &&
+            isStelvioAdminGrade(getLoginUserGrade())));
       _syncAuthBarPair('authBarLeft', 'authBarRight', 'authBarWarning', 'authBarWelcomeLine1', 'authBarWelcomeLine2', user, userName, loggedIn);
-      _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn, true);
+      _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn, isAdminForMarket);
       _syncAuthBarPair('runAuthBarLeft', 'runAuthBarRight', 'runAuthBarWarning', 'runAuthBarWelcomeLine1', 'runAuthBarWelcomeLine2', user, userName, loggedIn);
+      var marketEntryBtn = document.getElementById('btnGoToMarketFromCategory');
+      if (marketEntryBtn) marketEntryBtn.style.display = isAdminForMarket ? 'inline-flex' : 'none';
       // 스포츠 카테고리: 환영합니다 / 이름님 / 카페 바로가기 3줄 세로 배치 (grid 강제 해제)
       var _catAuthRight = document.getElementById('categoryAuthBarRight');
       if (_catAuthRight && loggedIn) {
