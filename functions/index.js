@@ -16428,7 +16428,7 @@ exports.provisionSupabaseUserAfterProfileHttp = onRequest(
  */
 const adminBackfillMissingSupabaseUsersOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   cors: true,
-  timeoutSeconds: 300,
+  timeoutSeconds: 540,
 });
 exports.adminBackfillMissingSupabaseUsers = onRequest(
   adminBackfillMissingSupabaseUsersOptions,
@@ -16456,7 +16456,7 @@ exports.adminBackfillMissingSupabaseUsers = onRequest(
       authorized = true;
     }
 
-    const uids = Array.isArray(req.query.uids)
+    let uids = Array.isArray(req.query.uids)
       ? req.query.uids
       : Array.isArray(req.body && req.body.uids)
         ? req.body.uids
@@ -16464,8 +16464,22 @@ exports.adminBackfillMissingSupabaseUsers = onRequest(
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean);
+
+    // all=1: uids 없이 Firestore users 컬렉션 전체(문서 ID만, listDocuments는 읽기 비용 없음)를
+    // 대상으로 재동기화 — has_strava_connected/has_gemini_registered 같은 신규 컬럼을 기존
+    // 사용자 전원에게 소급 반영할 때 클라이언트에서 674명 uid를 일일이 넘길 필요가 없게 한다.
+    // offset/limit(선택)으로 나눠 호출하면 300초 타임아웃 안에서 여러 번에 나눠 처리 가능.
+    const wantAll = req.query.all === "1" || (req.body && req.body.all === true);
+    if (!uids.length && wantAll) {
+      const allRefs = await db.collection("users").listDocuments();
+      let allIds = allRefs.map((r) => r.id);
+      const offset = parseInt(req.query.offset, 10) || 0;
+      const limit = parseInt(req.query.limit, 10) || allIds.length;
+      uids = allIds.slice(offset, offset + limit);
+    }
+
     if (!uids.length) {
-      res.status(400).json({ success: false, error: "uids 필요(배열 또는 콤마구분 문자열)" });
+      res.status(400).json({ success: false, error: "uids 필요(배열 또는 콤마구분 문자열) 또는 all=1" });
       return;
     }
 
