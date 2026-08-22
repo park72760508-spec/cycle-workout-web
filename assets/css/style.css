@@ -30398,9 +30398,10 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   -webkit-overflow-scrolling: touch;
   padding-bottom: 8px;
 }
-/* 하단 네비가 이제 sticky가 아니라 플로팅(position:fixed) pill이라 콘텐츠가 가려지지 않도록
-   스크롤 영역 하단에 네비 높이만큼 여백을 둔다. */
-.market-screen:has(.market-bottom-nav) .market-scroll-area {
+/* 하단 네비가 이제 sticky가 아니라 플로팅(position:fixed) pill이고, 라이딩 모임 글래스 네비와
+   같은 이유로 특정 .screen 내부가 아니라 body 바로 아래 단독으로 존재해서(#marketBottomNav)
+   :has(.market-bottom-nav)로는 더 이상 감지할 수 없다 — 네비가 있는 화면에 직접 표시 클래스를 둔다. */
+.market-screen--with-nav .market-scroll-area {
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 

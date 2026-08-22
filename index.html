@@ -4421,9 +4421,9 @@
   </div>
 
   <!-- 중고랜드(Market Land) — 홈/목록 -->
-  <div id="marketHomeScreen" class="screen market-screen" style="display: none;">
+  <div id="marketHomeScreen" class="screen market-screen market-screen--with-nav" style="display: none;">
     <div class="market-header">
-      <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="뒤로 가기">
+      <button type="button" class="market-back-btn" onclick="if(typeof marketNavGoHome==='function')marketNavGoHome();else if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="뒤로 가기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
       </button>
       <h2 class="market-header__title">중고랜드</h2>
@@ -4438,32 +4438,10 @@
       <div id="marketItemGrid" class="market-grid"></div>
       <button type="button" id="marketLoadMoreBtn" class="market-loadmore-btn" style="display:none;">더보기</button>
     </div>
-    <div class="market-bottom-nav">
-      <div class="market-bottom-nav__pill">
-        <div class="market-bottom-nav__inner">
-          <button type="button" class="market-bottom-nav__btn active" onclick="if(typeof marketNavGoList==='function')marketNavGoList();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-            <span class="market-bottom-nav__label">홈</span>
-          </button>
-          <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoList==='function')marketNavGoList();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
-            <span class="market-bottom-nav__label">목록</span>
-          </button>
-          <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoRegister==='function')marketNavGoRegister();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16m8-8H4"></path></svg>
-            <span class="market-bottom-nav__label">등록</span>
-          </button>
-          <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoMyPage==='function')marketNavGoMyPage();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0116 0"></path></svg>
-            <span class="market-bottom-nav__label">마이페이지</span>
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- 중고랜드 — 상품 등록 -->
-  <div id="marketItemFormScreen" class="screen market-screen" style="display: none;">
+  <div id="marketItemFormScreen" class="screen market-screen market-screen--with-nav" style="display: none;">
     <div class="market-header">
       <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="뒤로 가기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
@@ -4512,28 +4490,6 @@
 
       <button type="button" id="marketFormSubmitBtn" class="market-btn market-btn--primary market-form-submit">등록 하기</button>
     </div>
-    <div class="market-bottom-nav">
-      <div class="market-bottom-nav__pill">
-        <div class="market-bottom-nav__inner">
-          <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoHome==='function')marketNavGoHome();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-            <span class="market-bottom-nav__label">홈</span>
-          </button>
-          <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoList==='function')marketNavGoList();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
-            <span class="market-bottom-nav__label">목록</span>
-          </button>
-          <button type="button" class="market-bottom-nav__btn active" onclick="if(typeof marketNavGoRegister==='function')marketNavGoRegister();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16m8-8H4"></path></svg>
-            <span class="market-bottom-nav__label">등록</span>
-          </button>
-          <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoMyPage==='function')marketNavGoMyPage();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0116 0"></path></svg>
-            <span class="market-bottom-nav__label">마이페이지</span>
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- 중고랜드 — 상품 상세 -->
@@ -4549,7 +4505,7 @@
   </div>
 
   <!-- 중고랜드 — 마이페이지 -->
-  <div id="marketMyPageScreen" class="screen market-screen" style="display: none;">
+  <div id="marketMyPageScreen" class="screen market-screen market-screen--with-nav" style="display: none;">
     <div class="market-header">
       <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="뒤로 가기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
@@ -4561,26 +4517,31 @@
     <div class="market-scroll-area">
       <div id="marketMyPageGrid" class="market-grid"></div>
     </div>
-    <div class="market-bottom-nav">
-      <div class="market-bottom-nav__pill">
-        <div class="market-bottom-nav__inner">
-          <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoHome==='function')marketNavGoHome();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-            <span class="market-bottom-nav__label">홈</span>
-          </button>
-          <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoList==='function')marketNavGoList();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
-            <span class="market-bottom-nav__label">목록</span>
-          </button>
-          <button type="button" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoRegister==='function')marketNavGoRegister();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16m8-8H4"></path></svg>
-            <span class="market-bottom-nav__label">등록</span>
-          </button>
-          <button type="button" class="market-bottom-nav__btn active" onclick="if(typeof marketNavGoMyPage==='function')marketNavGoMyPage();">
-            <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0116 0"></path></svg>
-            <span class="market-bottom-nav__label">마이페이지</span>
-          </button>
-        </div>
+  </div>
+
+  <!-- 중고랜드 하단 네비 — 라이딩 모임 글래스 네비(OpenRidingGlassNavPortal)와 동일하게 특정
+       .screen 내부가 아니라 body 바로 아래 단독으로 둔다. .screen이 position:fixed·overflow-y:auto로
+       자체 스크롤 컨테이너가 되는 전역 규칙(.screen.active:not(...)) 안에 네비가 중첩되어 있으면
+       가운데 버튼(목록·등록) 히트 영역이 스크롤 컨테이너에 먹히는 문제가 있어 완전히 분리했다. -->
+  <div id="marketBottomNav" class="market-bottom-nav" style="display: none;">
+    <div class="market-bottom-nav__pill">
+      <div class="market-bottom-nav__inner">
+        <button type="button" id="marketNavBtnHome" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoHome==='function')marketNavGoHome();">
+          <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+          <span class="market-bottom-nav__label">홈</span>
+        </button>
+        <button type="button" id="marketNavBtnList" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoList==='function')marketNavGoList();">
+          <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+          <span class="market-bottom-nav__label">목록</span>
+        </button>
+        <button type="button" id="marketNavBtnRegister" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoRegister==='function')marketNavGoRegister();">
+          <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16m8-8H4"></path></svg>
+          <span class="market-bottom-nav__label">등록</span>
+        </button>
+        <button type="button" id="marketNavBtnMyPage" class="market-bottom-nav__btn" onclick="if(typeof marketNavGoMyPage==='function')marketNavGoMyPage();">
+          <svg class="market-bottom-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0116 0"></path></svg>
+          <span class="market-bottom-nav__label">마이페이지</span>
+        </button>
       </div>
     </div>
   </div>
@@ -42865,7 +42826,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script src="assets/js/competition/competitionScreen.js?v=paid-label-20260822a"></script>
-  <script src="assets/js/market/marketScreen.js?v=20260823market4"></script>
+  <script src="assets/js/market/marketScreen.js?v=20260823market5"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

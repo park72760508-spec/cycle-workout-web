@@ -32,6 +32,28 @@
     document.documentElement.classList.add('market-glass-nav-ios-phone');
   }
 
+  /** body 최상위 단일 네비(#marketBottomNav)의 표시 여부·활성 탭을 화면 전환마다 동기화한다.
+   * activeKey가 null이면(상세 화면) 네비 자체를 숨긴다. */
+  function syncMarketBottomNav(activeKey) {
+    var nav = document.getElementById('marketBottomNav');
+    if (!nav) return;
+    if (!activeKey) {
+      nav.style.display = 'none';
+      return;
+    }
+    nav.style.display = 'block';
+    var idByKey = {
+      home: 'marketNavBtnHome',
+      list: 'marketNavBtnList',
+      register: 'marketNavBtnRegister',
+      mypage: 'marketNavBtnMyPage',
+    };
+    Object.keys(idByKey).forEach(function (key) {
+      var btn = document.getElementById(idByKey[key]);
+      if (btn) btn.classList.toggle('active', key === activeKey);
+    });
+  }
+
   var SUB_CATEGORIES = {
     CYCLE: ['완성차/프레임', '휠셋', '구동계', '부품/용품', '의류'],
     RUN: ['러닝화', '운동복', '용품/부품'],
@@ -247,6 +269,7 @@
   }
 
   window.marketScreenInit = function () {
+    syncMarketBottomNav('list');
     loadMarketService()
       .then(function (s) {
         return Promise.all([s.getMyFavoriteItemIds(), s.getMySupabaseUserId()]);
@@ -443,6 +466,7 @@
   }
 
   window.marketFormScreenInit = function () {
+    syncMarketBottomNav('register');
     resetMarketForm();
     var catEl = document.getElementById('marketFormCategory');
     if (catEl) catEl.onchange = function () { renderMarketFormCategoryOptions(catEl.value); };
@@ -640,7 +664,9 @@
     }
   }
 
-  window.marketItemDetailScreenInit = function () {};
+  window.marketItemDetailScreenInit = function () {
+    syncMarketBottomNav(null);
+  };
 
   // ───────────────────────── 마이페이지 화면 ─────────────────────────
 
@@ -693,6 +719,7 @@
   }
 
   window.marketMyPageScreenInit = function () {
+    syncMarketBottomNav('mypage');
     myPageState.tab = 'selling';
     loadMarketService()
       .then(function (s) { return s.getMySupabaseUserId(); })
@@ -711,6 +738,7 @@
   // ───────────────────────── 하단 네비게이션 ─────────────────────────
 
   window.marketNavGoHome = function () {
+    syncMarketBottomNav(null);
     if (typeof window.showScreen === 'function') window.showScreen('sportCategoryScreen');
   };
   window.marketNavGoList = function () {
