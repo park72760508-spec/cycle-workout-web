@@ -887,6 +887,13 @@ function OpenRidingSettlementFold(props) {
                 <div className="space-y-1.5">
                   {confirmedUids
                     .filter(function (uid) { return (breakdown.perParticipant[uid] || 0) > 0; })
+                    .sort(function (a, b) {
+                      var aIsMe = String(a) === String(userId);
+                      var bIsMe = String(b) === String(userId);
+                      if (aIsMe && !bIsMe) return -1;
+                      if (bIsMe && !aIsMe) return 1;
+                      return displayNameFor(a).localeCompare(displayNameFor(b), 'ko');
+                    })
                     .map(function (uid) {
                       var isMe = String(uid) === String(userId);
                       var isPaid = isMe && myPaidOverride != null
