@@ -534,6 +534,11 @@ function OpenRidingSettlementFold(props) {
   var _paidBusy = useState(false);
   var paidToggleBusy = _paidBusy[0];
   var setPaidToggleBusy = _paidBusy[1];
+  /* 서버 반영(Supabase 라우팅 지연 포함)을 기다리지 않고 클릭 즉시 내 상태를 화면에 반영하기 위한
+     낙관적 업데이트 값 — null이면 settlement.paidUids를 그대로 신뢰, true/false면 이 값을 우선한다. */
+  var _myPaidOverride = useState(null);
+  var myPaidOverride = _myPaidOverride[0];
+  var setMyPaidOverride = _myPaidOverride[1];
 
   if (!isParticipant) return null;
 
@@ -647,12 +652,15 @@ function OpenRidingSettlementFold(props) {
   async function togglePaidStatus(nextPaid) {
     var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
     if (!firestore || !userId || typeof svc.toggleMySettlementPaid !== 'function' || paidToggleBusy) return;
+    // 낙관적 업데이트 — Supabase 읽기 라우팅 지연을 기다리지 않고 클릭 즉시 화면에 반영한다.
+    setMyPaidOverride(nextPaid);
     setPaidToggleBusy(true);
     setErrMsg('');
     try {
       await svc.toggleMySettlementPaid(firestore, rideId, userId, nextPaid);
-      await reload();
+      reload(); // 배경에서 실데이터 동기화(await 불필요 — 화면은 이미 반영됨)
     } catch (e) {
+      setMyPaidOverride(!nextPaid); // 실패 시 되돌림
       setErrMsg((e && e.message) || '입금 상태 변경에 실패했습니다.');
     } finally {
       setPaidToggleBusy(false);
@@ -852,28 +860,33 @@ function OpenRidingSettlementFold(props) {
                     .filter(function (uid) { return (breakdown.perParticipant[uid] || 0) > 0; })
                     .map(function (uid) {
                       var isMe = String(uid) === String(userId);
-                      var isPaid = (settlement.paidUids || []).indexOf(String(uid)) !== -1;
+                      var isPaid = isMe && myPaidOverride != null
+                        ? myPaidOverride
+                        : (settlement.paidUids || []).indexOf(String(uid)) !== -1;
                       return (
                         <div key={uid} className="flex items-center justify-between text-xs gap-2">
-                          <span className="text-slate-600 min-w-0 truncate">{displayNameFor(uid)}</span>
-                          <span className="flex items-center gap-1.5 shrink-0">
-                            <span className="font-semibold text-slate-800">
-                              {(breakdown.perParticipant[uid] || 0).toLocaleString()}원
-                            </span>
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-slate-600 truncate">{displayNameFor(uid)}</span>
                             <button
                               type="button"
                               className={
-                                'text-[10px] font-semibold rounded-full px-2 py-0.5 border ' +
+                                'text-[10px] font-semibold rounded-full px-2 py-0.5 border shrink-0 ' +
                                 (isPaid
                                   ? 'bg-emerald-500 text-white border-emerald-500'
                                   : 'bg-slate-100 text-slate-500 border-slate-300') +
-                                (isMe ? ' cursor-pointer' : ' cursor-default opacity-80')
+                                (isMe
+                                  ? ' cursor-pointer ring-2 ring-orange-400 ring-offset-1'
+                                  : ' cursor-default opacity-60 pointer-events-none')
                               }
                               disabled={!isMe || paidToggleBusy}
                               onClick={isMe ? function () { togglePaidStatus(!isPaid); } : undefined}
+                              title={isMe ? '탭해서 입금 상태 변경' : undefined}
                             >
                               {isPaid ? '입금완료' : '미입금'}
                             </button>
+                          </span>
+                          <span className="font-semibold text-slate-800 shrink-0">
+                            {(breakdown.perParticipant[uid] || 0).toLocaleString()}원
                           </span>
                         </div>
                       );
