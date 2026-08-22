@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260823market1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260823market2';
   var svc = null;
 
   function loadMarketService() {

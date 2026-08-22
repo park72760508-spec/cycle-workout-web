@@ -10,7 +10,7 @@ const MARKET_IMAGE_QUALITY = 0.7;
 const MARKET_IMAGE_BUCKET = 'market-images';
 const MARKET_BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
-function functionsBaseUrl() {
+function functionsBaseUrl(region) {
   const projectId =
     (typeof window !== 'undefined' &&
       window.authV9 &&
@@ -18,7 +18,7 @@ function functionsBaseUrl() {
       window.authV9.app.options &&
       window.authV9.app.options.projectId) ||
     'stelvio-ai';
-  return 'https://us-central1-' + projectId + '.cloudfunctions.net';
+  return 'https://' + (region || 'us-central1') + '-' + projectId + '.cloudfunctions.net';
 }
 
 async function getFirebaseIdToken() {
@@ -32,9 +32,9 @@ async function getFirebaseIdToken() {
   return user.getIdToken();
 }
 
-async function callMarketFunction(name, body) {
+async function callMarketFunction(name, body, region) {
   const idToken = await getFirebaseIdToken();
-  const res = await fetch(functionsBaseUrl() + '/' + name, {
+  const res = await fetch(functionsBaseUrl(region) + '/' + name, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + idToken },
     body: JSON.stringify(body || {}),
@@ -287,14 +287,15 @@ export async function getMyMarketItems() {
   return data || [];
 }
 
-/** 구매 요청 — 가상계좌(안전결제) 발급. Cloud Function이 Toss 시크릿 키로 발급을 대행한다. */
+/** 구매 요청 — 가상계좌(안전결제) 발급. Cloud Function이 Toss 시크릿 키로 발급을 대행한다.
+ *  createMarketOrder/confirmMarketPurchase는 다른 대회 결제 함수와 동일하게 asia-northeast3에 배포됨. */
 export async function requestMarketPurchase(itemId) {
-  return callMarketFunction('createMarketOrder', { itemId });
+  return callMarketFunction('createMarketOrder', { itemId }, 'asia-northeast3');
 }
 
 /** 구매 확정 — 물품 수령 확인. */
 export async function confirmMarketPurchase(orderId) {
-  return callMarketFunction('confirmMarketPurchase', { orderId });
+  return callMarketFunction('confirmMarketPurchase', { orderId }, 'asia-northeast3');
 }
 
 export async function getMarketOrderForItem(itemId) {
