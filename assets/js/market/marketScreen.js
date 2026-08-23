@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260824market5';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260826market6';
   var svc = null;
 
   function loadMarketService() {
@@ -468,12 +468,16 @@
     updateMarketDescCounter();
   }
 
-  function renderMarketFormBankOptions() {
-    var bankEl = document.getElementById('marketFormSettlementBank');
+  function renderMarketFormBankOptionsInto(elId) {
+    var bankEl = document.getElementById(elId);
     if (!bankEl || bankEl.options.length) return;
     bankEl.innerHTML = MARKET_BANK_OPTIONS.map(function (b) {
       return '<option value="' + b.code + '">' + escapeHtml(b.name) + '</option>';
     }).join('');
+  }
+
+  function renderMarketFormBankOptions() {
+    renderMarketFormBankOptionsInto('marketFormSettlementBank');
   }
 
   function renderMarketFormCategoryOptions(cat) {
@@ -726,9 +730,23 @@
     } else if (myOrder && myOrder.escrow_status === 'PAID') {
       actionHtml =
         '<div class="market-detail-order-notice">입금이 확인되었습니다. 물품을 수령하셨으면 아래 버튼을 눌러주세요.</div>' +
-        '<button type="button" class="market-btn market-btn--primary" id="marketDetailConfirmBtn">구매 확정하기</button>';
+        '<div class="market-detail-actions">' +
+          '<button type="button" class="market-btn market-btn--primary" id="marketDetailConfirmBtn">구매 확정하기</button>' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketDetailRefundToggleBtn">환불 요청</button>' +
+        '</div>' +
+        '<div id="marketRefundForm" class="market-refund-form" style="display:none;">' +
+          '<p class="market-form-hint">본인 명의 환불 계좌로 상품가(수수료 1,000원 제외)가 환불됩니다.</p>' +
+          '<select id="marketRefundBank" class="market-form-select"></select>' +
+          '<input id="marketRefundAccountNumber" class="market-form-input" inputmode="numeric" placeholder="환불 계좌번호(숫자만)" />' +
+          '<input id="marketRefundHolderName" class="market-form-input" placeholder="예금주명(본인)" />' +
+          '<button type="button" class="market-btn market-btn--danger" id="marketRefundSubmitBtn">환불 신청</button>' +
+        '</div>';
     } else if (myOrder && myOrder.escrow_status === 'PENDING') {
-      actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>입금 확인 대기 중입니다</button>';
+      actionHtml =
+        '<div class="market-detail-actions">' +
+          '<button type="button" class="market-btn market-btn--disabled" disabled>입금 확인 대기 중입니다</button>' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketDetailCancelOrderBtn">구매 취소</button>' +
+        '</div>';
     } else if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
       actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>구매 확정 완료된 거래입니다</button>';
     } else if (item.status === 'SOLD') {
@@ -758,6 +776,20 @@
     if (buyBtn) buyBtn.onclick = function () { handleMarketBuy(item); };
     var confirmBtn = document.getElementById('marketDetailConfirmBtn');
     if (confirmBtn) confirmBtn.onclick = function () { handleMarketConfirmPurchase(item.id, myOrder.id); };
+    var cancelOrderBtn = document.getElementById('marketDetailCancelOrderBtn');
+    if (cancelOrderBtn) cancelOrderBtn.onclick = function () { handleMarketCancelOrder(item.id, myOrder.id); };
+    var refundToggleBtn = document.getElementById('marketDetailRefundToggleBtn');
+    if (refundToggleBtn) {
+      refundToggleBtn.onclick = function () {
+        var form = document.getElementById('marketRefundForm');
+        if (!form) return;
+        var showing = form.style.display !== 'none';
+        form.style.display = showing ? 'none' : 'block';
+        if (!showing) renderMarketFormBankOptionsInto('marketRefundBank');
+      };
+    }
+    var refundSubmitBtn = document.getElementById('marketRefundSubmitBtn');
+    if (refundSubmitBtn) refundSubmitBtn.onclick = function () { handleMarketRefundSubmit(item.id, myOrder.id, refundSubmitBtn); };
     var bumpBtn = document.getElementById('marketDetailBumpBtn');
     if (bumpBtn) bumpBtn.onclick = function () { handleBump(item.id, bumpBtn); };
     var editBtn = document.getElementById('marketDetailEditBtn');
@@ -830,6 +862,51 @@
     } catch (err) {
       toast('구매 확정 실패: ' + (err && err.message ? err.message : err));
       if (btn) { btn.disabled = false; btn.textContent = '구매 확정하기'; }
+    }
+  }
+
+  async function handleMarketCancelOrder(itemId, orderId) {
+    if (!confirm('구매를 취소할까요? 아직 입금 전이라 별도 환불 절차 없이 바로 취소됩니다.')) return;
+    var btn = document.getElementById('marketDetailCancelOrderBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '취소 중...'; }
+    try {
+      var s = await loadMarketService();
+      await s.cancelMarketOrder(orderId);
+      toast('구매가 취소되었습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('취소 실패: ' + (err && err.message ? err.message : err));
+      if (btn) { btn.disabled = false; btn.textContent = '구매 취소'; }
+    }
+  }
+
+  async function handleMarketRefundSubmit(itemId, orderId, submitBtn) {
+    var bankEl = document.getElementById('marketRefundBank');
+    var accNumEl = document.getElementById('marketRefundAccountNumber');
+    var holderEl = document.getElementById('marketRefundHolderName');
+    var bank = bankEl ? bankEl.value : '';
+    var accountNumber = (accNumEl ? accNumEl.value : '').replace(/[^0-9]/g, '');
+    var holderName = (holderEl ? holderEl.value : '').trim();
+    if (!accountNumber || !/^[0-9]{6,20}$/.test(accountNumber)) {
+      toast('환불 계좌번호를 정확히 입력해 주세요(숫자만).');
+      return;
+    }
+    if (!holderName || holderName.length < 2) {
+      toast('예금주명을 입력해 주세요.');
+      return;
+    }
+    if (!confirm('환불을 신청할까요? 상품가만 환불되며(수수료 1,000원 제외), 신청 후 취소할 수 없습니다.')) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '환불 처리 중...';
+    try {
+      var s = await loadMarketService();
+      var result = await s.requestMarketOrderRefund(orderId, { bank: bank, accountNumber: accountNumber, holderName: holderName });
+      toast(formatPrice(result.refundAmount) + '원 환불이 접수되었습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('환불 신청 실패: ' + (err && err.message ? err.message : err));
+      submitBtn.disabled = false;
+      submitBtn.textContent = '환불 신청';
     }
   }
 

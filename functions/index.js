@@ -18165,6 +18165,206 @@ exports.confirmMarketPurchase = onRequest(confirmMarketPurchaseOptions, async (r
 });
 
 /**
+ * 입금 전(PENDING) 주문 자기 취소 — Toss에 아직 결제 확정 건이 없으므로(가상계좌 발급만 된 상태)
+ * 취소 API 호출 없이 DB 상태만 정리하면 된다. 만료 미입금 자동 정리(cancelUnpaidMarketOrdersSchedule)
+ * 를 기다리지 않고 구매자가 스스로 즉시 취소해 상품을 다시 판매 가능 상태로 돌릴 수 있게 한다.
+ */
+const cancelMarketOrderOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
+exports.cancelMarketOrder = onRequest(cancelMarketOrderOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const orderId = String(body.orderId || "").trim();
+    if (!orderId) {
+      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
+      return;
+    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+    const buyerId = resolveMarketBuyerUuid(uid);
+
+    const { data: order, error: orderErr } = await supabase
+      .from("market_orders")
+      .select("*")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (orderErr || !order) {
+      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
+      return;
+    }
+    if (order.buyer_id !== buyerId) {
+      res.status(403).json({ success: false, error: "본인 주문만 취소할 수 있습니다." });
+      return;
+    }
+    if (order.escrow_status !== "PENDING") {
+      res.status(400).json({
+        success: false,
+        error: order.escrow_status === "PAID" ? "이미 입금된 주문은 환불 요청으로 취소해 주세요." : "취소할 수 없는 상태입니다.",
+      });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data: updated, error: updErr } = await supabase
+      .from("market_orders")
+      .update({ escrow_status: "CANCELLED", updated_at: nowIso })
+      .eq("id", orderId)
+      .eq("escrow_status", "PENDING")
+      .select();
+    if (updErr) throw updErr;
+    if (!updated || !updated.length) {
+      res.status(409).json({ success: false, error: "이미 처리된 주문입니다." });
+      return;
+    }
+
+    await supabase
+      .from("market_items")
+      .update({ status: "ON_SALE", updated_at: nowIso })
+      .eq("id", order.item_id)
+      .eq("status", "RESERVED");
+
+    res.status(200).json({ success: true });
+  } catch (e) {
+    console.error("[cancelMarketOrder]", e && e.message ? e.message : e);
+    const status = e.status || 500;
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
+ * 입금 완료(PAID, 구매확정 전) 주문의 자기 환불 요청 — requestCompetitionRefund와 동일 패턴:
+ * 본인 명의 환불 계좌를 받아 Toss 결제취소 API로 실제 환불한다. 구매확정(CONFIRMED) 이후에는
+ * 거래가 완결된 것으로 보고 이 경로로는 환불하지 않는다(관리자 개입 필요).
+ * 플랫폼 수수료 1,000원은 안전거래 처리 비용으로 보고 환불 대상에서 제외 — 상품가만 환불한다
+ * (대회 환불의 "100% 환불(수수료 440원 차감)" 정책과 동일한 설계 원칙).
+ */
+const requestMarketOrderRefundOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
+exports.requestMarketOrderRefund = onRequest(requestMarketOrderRefundOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const orderId = String(body.orderId || "").trim();
+    const refundAccount = body.refundAccount || {};
+    const bank = String(refundAccount.bank || "").trim();
+    const accountNumber = String(refundAccount.accountNumber || "").trim();
+    const holderName = String(refundAccount.holderName || "").trim();
+    if (!orderId || !bank || !accountNumber || !holderName) {
+      res.status(400).json({ success: false, error: "orderId·refundAccount(bank/accountNumber/holderName)가 필요합니다." });
+      return;
+    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+    const buyerId = resolveMarketBuyerUuid(uid);
+
+    const { data: order, error: orderErr } = await supabase
+      .from("market_orders")
+      .select("*")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (orderErr || !order) {
+      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
+      return;
+    }
+    if (order.buyer_id !== buyerId) {
+      res.status(403).json({ success: false, error: "본인 주문만 환불 요청할 수 있습니다." });
+      return;
+    }
+    if (order.escrow_status !== "PAID") {
+      res.status(400).json({
+        success: false,
+        error:
+          order.escrow_status === "PENDING"
+            ? "아직 입금이 확인되지 않았습니다. 입금 전이면 바로 취소할 수 있습니다."
+            : order.escrow_status === "CONFIRMED"
+              ? "이미 구매 확정된 거래는 이 방법으로 환불할 수 없습니다. 고객센터로 문의해 주세요."
+              : "환불할 수 없는 상태입니다.",
+      });
+      return;
+    }
+    if (!order.toss_payment_key) {
+      res.status(409).json({ success: false, error: "결제 정보가 없어 환불할 수 없습니다. 관리자에게 문의해 주세요." });
+      return;
+    }
+
+    // authoritative 재조회 — DB에 저장된 status를 신뢰하지 않고 Toss 결제 상태를 직접 확인
+    const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), order.toss_order_id);
+    if (payment.status !== "DONE") {
+      res.status(409).json({ success: false, error: "Toss 결제 상태가 완료(DONE)가 아니어서 환불할 수 없습니다." });
+      return;
+    }
+
+    const cancelAmount = Number(order.item_price) || 0;
+    await tossPaymentsClient.cancelPayment(
+      raceTossSecretKey(),
+      order.toss_payment_key,
+      {
+        cancelReason: "중고랜드 구매자 환불 요청",
+        cancelAmount,
+        refundReceiveAccount: { bank, accountNumber, holderName },
+      },
+      "market-refund-" + order.id
+    );
+
+    const nowIso = new Date().toISOString();
+    const { data: updated, error: updErr } = await supabase
+      .from("market_orders")
+      .update({
+        escrow_status: "REFUNDED",
+        settlement_transferred_at: null,
+        updated_at: nowIso,
+      })
+      .eq("id", orderId)
+      .eq("escrow_status", "PAID")
+      .select();
+    if (updErr) throw updErr;
+    if (!updated || !updated.length) {
+      // Toss 취소는 이미 성공했는데 DB 갱신만 실패한 경우 — 재시도 없이 관리자 확인 필요 로그만 남긴다.
+      console.error("[requestMarketOrderRefund] Toss 취소 성공했지만 DB 상태 갱신 실패(수동 확인 필요):", orderId);
+    }
+
+    await supabase
+      .from("market_items")
+      .update({ status: "ON_SALE", updated_at: nowIso })
+      .eq("id", order.item_id)
+      .eq("status", "RESERVED");
+
+    res.status(200).json({ success: true, refundAmount: cancelAmount });
+  } catch (e) {
+    console.error("[requestMarketOrderRefund]", e && e.message ? e.message : e);
+    const status = e.status || 500;
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
  * 관리자 전용 — 구매확정(CONFIRMED)된 주문의 판매대금을 판매자 등록 계좌로 실제 이체한 뒤 마감 처리한다.
  * (이체 자체는 관리자가 은행 앱/인터넷뱅킹으로 직접 수행 — 이 엔드포인트는 그 사실을 기록만 한다.)
  * GET/POST ?secret=stelvio-internal-sync-v1 또는 관리자(grade=1), body: { orderId }

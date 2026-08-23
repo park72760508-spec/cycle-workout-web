@@ -394,6 +394,16 @@ export async function confirmMarketPurchase(orderId) {
   return callMarketFunction('confirmMarketPurchase', { orderId }, 'asia-northeast3');
 }
 
+/** 입금 전(PENDING) 주문 자기 취소 — Toss 호출 없이 즉시 처리됨. */
+export async function cancelMarketOrder(orderId) {
+  return callMarketFunction('cancelMarketOrder', { orderId }, 'asia-northeast3');
+}
+
+/** 입금 완료(PAID, 구매확정 전) 주문 환불 요청 — 본인 명의 환불 계좌 필요. */
+export async function requestMarketOrderRefund(orderId, refundAccount) {
+  return callMarketFunction('requestMarketOrderRefund', { orderId, refundAccount }, 'asia-northeast3');
+}
+
 export async function getMarketOrderForItem(itemId) {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
@@ -431,6 +441,8 @@ if (typeof window !== 'undefined') {
     getMyMarketItems,
     requestMarketPurchase,
     confirmMarketPurchase,
+    cancelMarketOrder,
+    requestMarketOrderRefund,
     getMarketOrderForItem,
   };
 }
