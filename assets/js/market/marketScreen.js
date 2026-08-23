@@ -55,27 +55,32 @@
   }
 
   var SUB_CATEGORIES = {
-    CYCLE: ['완성차/프레임', '휠셋', '구동계', '부품/용품', '의류'],
-    RUN: ['러닝화', '운동복', '용품/부품'],
+    CYCLE: [
+      { label: '완차', icon: 'bike1' },
+      { label: '프레임', icon: 'bike2' },
+      { label: '휠셋', icon: 'bike3' },
+      { label: '구동계', icon: 'bike4' },
+      { label: '부품', icon: 'bike5' },
+      { label: '의류', icon: 'bike6' },
+    ],
+    RUN: [
+      { label: '런닝화', icon: 'run1' },
+      { label: '워치', icon: 'run2' },
+      { label: '의류', icon: 'run3' },
+      { label: '용품', icon: 'run4' },
+    ],
   };
 
-  /** 서브카테고리 심플 아이콘(Feather/Lucide 라인 아이콘 — 검정 단일색, stroke=currentColor) */
-  var SUB_CATEGORY_ICONS = {
-    '전체': '<path d="M12 2 2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path>',
-    '완성차/프레임': '<circle cx="5.5" cy="17.5" r="3.5"></circle><circle cx="18.5" cy="17.5" r="3.5"></circle><path d="M15 6a1 1 0 100-2 1 1 0 000 2z"></path><path d="M12 17.5V14l-3-3 4-3 2 3h2"></path>',
-    '휠셋': '<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="2.5"></circle>',
-    '구동계': '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"></path>',
-    '부품/용품': '<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"></path>',
-    '의류': '<path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.47a1 1 0 001 .84H6v10a2 2 0 002 2h8a2 2 0 002-2V10h2.14a1 1 0 001-.84l.58-3.47a2 2 0 00-1.34-2.23z"></path>',
-    '러닝화': '<path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 11-4 0z"></path><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 104 0z"></path><path d="M16 17h4M4 13h4"></path>',
-    '운동복': '<path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.47a1 1 0 001 .84H6v10a2 2 0 002 2h8a2 2 0 002-2V10h2.14a1 1 0 001-.84l.58-3.47a2 2 0 00-1.34-2.23z"></path>',
-    '용품/부품': '<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"></path>',
-  };
+  /** "전체" 탭 — 하단 네비게이션바 "목록" 아이콘과 동일한 SVG(그리드)를 재사용 */
+  var SUB_CATEGORY_ALL_ICON_SVG =
+    '<svg class="market-subtab__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect>' +
+    '<rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect>' +
+    '</svg>';
 
-  function subCategoryIconSvg(label) {
-    var inner = SUB_CATEGORY_ICONS[label];
-    if (!inner) return '';
-    return '<svg class="market-subtab__icon" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">' + inner + '</svg>';
+  function subCategoryIconHtml(sub) {
+    if (!sub) return SUB_CATEGORY_ALL_ICON_SVG;
+    return '<img class="market-subtab__icon" src="assets/img/' + sub.icon + '.svg" alt="" />';
   }
   var PAGE_SIZE = 60;
   var MAX_IMAGES = 3;
@@ -134,10 +139,10 @@
     if (!wrap) return;
     var subs = SUB_CATEGORIES[homeState.category] || [];
     var html = '<button type="button" class="market-subtab' + (homeState.subCategory === '' ? ' active' : '') +
-      '" data-sub="">' + subCategoryIconSvg('전체') + '<span>전체</span></button>';
+      '" data-sub="" aria-label="전체" title="전체">' + subCategoryIconHtml(null) + '</button>';
     subs.forEach(function (s) {
-      html += '<button type="button" class="market-subtab' + (homeState.subCategory === s ? ' active' : '') +
-        '" data-sub="' + escapeHtml(s) + '">' + subCategoryIconSvg(s) + '<span>' + escapeHtml(s) + '</span></button>';
+      html += '<button type="button" class="market-subtab' + (homeState.subCategory === s.label ? ' active' : '') +
+        '" data-sub="' + escapeHtml(s.label) + '" aria-label="' + escapeHtml(s.label) + '" title="' + escapeHtml(s.label) + '">' + subCategoryIconHtml(s) + '</button>';
     });
     wrap.innerHTML = html;
     Array.prototype.forEach.call(wrap.querySelectorAll('.market-subtab'), function (btn) {
@@ -430,7 +435,7 @@
     if (!subSelect) return;
     var subs = SUB_CATEGORIES[cat] || [];
     subSelect.innerHTML = subs.map(function (s) {
-      return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>';
+      return '<option value="' + escapeHtml(s.label) + '">' + escapeHtml(s.label) + '</option>';
     }).join('');
   }
 

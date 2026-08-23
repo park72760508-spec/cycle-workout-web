@@ -30444,35 +30444,36 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   scrollbar-width: none;
 }
 .market-subtabs::-webkit-scrollbar { display: none; }
+/* 아이콘 전용(텍스트 라벨 없음) — 하단 네비게이션바·헤더 CYCLE/RUN 토글과 동일한 원형 버튼 디자인 */
 .market-subtab {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
   flex-shrink: 0;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #475569;
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
   cursor: pointer;
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  transition: background-color 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
 }
+.market-subtab:active { transform: scale(0.93); }
 .market-subtab__icon {
-  width: 15px;
-  height: 15px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
+  object-fit: contain;
   stroke: #000;
 }
-/* 하단 네비게이션바 활성 탭과 동일한 표시(rgba(234,88,12,.12) 배경 + #c2410c) */
+/* 하단 네비게이션바·헤더 토글의 활성 표시와 동일(오렌지 배경) */
 .market-subtab.active {
-  background-color: rgba(234, 88, 12, 0.12);
-  border-color: transparent;
-  color: #c2410c;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  border-color: #ea580c;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.35);
 }
-.market-subtab.active .market-subtab__icon { stroke: #c2410c; }
+.market-subtab.active .market-subtab__icon { stroke: #fff; }
 
 .market-scroll-area {
   flex: 1;
