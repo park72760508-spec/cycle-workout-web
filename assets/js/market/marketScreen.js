@@ -62,6 +62,7 @@
       { label: '구동계', icon: 'bike4' },
       { label: '부품', icon: 'bike5' },
       { label: '의류', icon: 'bike6' },
+      { label: '용품', icon: 'bike7' },
     ],
     RUN: [
       { label: '런닝화', icon: 'run1' },
