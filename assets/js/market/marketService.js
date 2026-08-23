@@ -460,6 +460,17 @@ export async function getSellerPublicProfile(sellerId) {
   });
 }
 
+/** 판매자 연락처(전화번호) — 실제 상품을 등록한 판매자에 한해 서버 함수(get_market_seller_contact)로만 노출 */
+export async function getSellerPhone(sellerId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.rpc('get_market_seller_contact', { p_seller_id: sellerId });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return row && row.phone ? row.phone : '';
+  });
+}
+
 /** 판매자 만족도 평균 — 제휴사와 동일하게 2점 이상만 집계에 포함(1점·미평가 제외) */
 export async function getSellerRatingAggregate(sellerId) {
   return withMarketAuthRetry(async () => {
@@ -539,6 +550,7 @@ if (typeof window !== 'undefined') {
     incrementMarketItemView,
     getMarketFavoriteCount,
     getSellerPublicProfile,
+    getSellerPhone,
     getSellerRatingAggregate,
     getMyRatingForOrder,
     submitSellerRating,

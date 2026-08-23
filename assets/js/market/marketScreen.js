@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260827market7';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260828market8';
   var svc = null;
 
   function loadMarketService() {
@@ -165,6 +165,14 @@
     if (myScore >= 2) return '현재 평가: ' + myScore + '점 · 같은 별을 다시 누르면 초기화됩니다';
     if (myScore === 1) return '1점(낮음)으로 저장됨 · 같은 별을 다시 눌러 초기화하거나 2점 이상을 선택하세요';
     return '2~5번 별을 눌러 만족도를 평가해 주세요 (같은 별 재클릭 시 초기화)';
+  }
+
+  function marketFormatPhone(raw) {
+    var digits = String(raw || '').replace(/\D/g, '').slice(0, 11);
+    if (!digits) return '';
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 7) return digits.slice(0, 3) + '-' + digits.slice(3);
+    return digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7, 11);
   }
 
   function marketSellerDisplayName(profile, isSelf) {
@@ -744,7 +752,7 @@
 
   // ───────────────────────── 상품 상세 화면 ─────────────────────────
 
-  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0 };
+  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0 };
 
   function openMarketItemDetail(itemId) {
     if (typeof window.showScreen === 'function') window.showScreen('marketItemDetailScreen');
@@ -758,11 +766,12 @@
             var item = res[0];
             return Promise.all([
               s.getSellerPublicProfile(item.user_id).catch(function () { return null; }),
+              s.getSellerPhone(item.user_id).catch(function () { return ''; }),
               s.getMarketFavoriteCount(item.id).catch(function () { return 0; }),
               s.getSellerRatingAggregate(item.user_id).catch(function () { return { avg: 0, count: 0 }; }),
               res[2] && res[2].escrow_status === 'CONFIRMED' ? s.getMyRatingForOrder(res[2].id).catch(function () { return 0; }) : Promise.resolve(0),
             ]).then(function (extra) {
-              return { item: item, myUserId: res[1], myOrder: res[2], sellerProfile: extra[0], favoriteCount: extra[1], ratingAgg: extra[2], myRating: extra[3] };
+              return { item: item, myUserId: res[1], myOrder: res[2], sellerProfile: extra[0], sellerPhone: extra[1], favoriteCount: extra[2], ratingAgg: extra[3], myRating: extra[4] };
             });
           });
       })
@@ -770,6 +779,7 @@
         detailState.item = res.item;
         detailState.sliderIndex = 0;
         detailState.sellerProfile = res.sellerProfile;
+        detailState.sellerPhone = res.sellerPhone || '';
         detailState.favoriteCount = res.favoriteCount;
         detailState.ratingAvg = res.ratingAgg ? res.ratingAgg.avg : 0;
         detailState.ratingCount = res.ratingAgg ? res.ratingAgg.count : 0;
@@ -858,12 +868,14 @@
 
     var seller = detailState.sellerProfile;
     var sellerName = marketSellerDisplayName(seller, isMine);
+    var sellerPhoneFormatted = marketFormatPhone(detailState.sellerPhone);
+    var sellerNameDisplay = sellerName + (sellerPhoneFormatted ? '(' + sellerPhoneFormatted + ')' : '');
     var sellerAvatarUrl = (seller && seller.profile_image_url) || 'assets/img/profile-placeholder.svg';
     var sellerRowHtml =
       '<div class="market-detail-seller-row">' +
         '<div class="market-detail-seller-row__left">' +
           '<img class="market-detail-seller-avatar" src="' + escapeHtml(sellerAvatarUrl) + '" alt="" />' +
-          '<span class="market-detail-seller-name">' + escapeHtml(sellerName) + '</span>' +
+          '<span class="market-detail-seller-name">' + escapeHtml(sellerNameDisplay) + '</span>' +
           '<span class="market-detail-seller-sep">·</span>' +
           '<span>' + escapeHtml(item.sub_category || '') + '</span>' +
           '<span class="market-detail-seller-sep">·</span>' +
