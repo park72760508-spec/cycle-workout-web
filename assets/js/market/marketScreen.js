@@ -54,6 +54,25 @@
     });
   }
 
+  /** competitionBottomSheet.js의 BANK_OPTIONS와 동일 목록(모듈이 분리돼 있어 값만 그대로 복사) */
+  var MARKET_BANK_OPTIONS = [
+    { code: '20', name: '우리은행' },
+    { code: '81', name: 'KEB하나은행' },
+    { code: '88', name: '신한은행' },
+    { code: '06', name: 'KB국민은행' },
+    { code: '11', name: 'NH농협은행' },
+    { code: '90', name: '카카오뱅크' },
+    { code: '92', name: '토스뱅크' },
+    { code: '03', name: 'IBK기업은행' },
+    { code: '39', name: '경남은행' },
+    { code: '34', name: '광주은행' },
+    { code: '31', name: 'iM뱅크(대구)' },
+    { code: '32', name: '부산은행' },
+    { code: '07', name: 'Sh수협은행' },
+    { code: '71', name: '우체국예금보험' },
+    { code: '37', name: '전북은행' },
+  ];
+
   var SUB_CATEGORIES = {
     CYCLE: [
       { label: '완차', icon: 'bike1' },
@@ -390,6 +409,12 @@
     renderMarketFormCategoryOptions(item.category || 'CYCLE');
     var subEl = document.getElementById('marketFormSubCategory');
     if (subEl && item.sub_category) subEl.value = item.sub_category;
+    var bankEl = document.getElementById('marketFormSettlementBank');
+    var accNumEl = document.getElementById('marketFormSettlementAccountNumber');
+    var holderEl = document.getElementById('marketFormSettlementHolderName');
+    if (bankEl && item.settlement_bank) bankEl.value = item.settlement_bank;
+    if (accNumEl) accNumEl.value = item.settlement_account_number || '';
+    if (holderEl) holderEl.value = item.settlement_holder_name || '';
     var dealMethods = item.deal_method || [];
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-deal-checkbox'), function (cb) {
       cb.checked = dealMethods.indexOf(cb.value) !== -1;
@@ -425,6 +450,12 @@
     if (priceEl) priceEl.value = '';
     if (descEl) descEl.value = '';
     if (locEl) locEl.value = '';
+    var bankEl = document.getElementById('marketFormSettlementBank');
+    var accNumEl = document.getElementById('marketFormSettlementAccountNumber');
+    var holderEl = document.getElementById('marketFormSettlementHolderName');
+    if (bankEl) bankEl.value = MARKET_BANK_OPTIONS[0].code;
+    if (accNumEl) accNumEl.value = '';
+    if (holderEl) holderEl.value = '';
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-deal-checkbox'), function (cb) {
       cb.checked = false;
     });
@@ -432,8 +463,17 @@
       r.checked = r.value === '중고 상품';
     });
     renderMarketFormCategoryOptions('CYCLE');
+    renderMarketFormBankOptions();
     renderMarketImageSlots();
     updateMarketDescCounter();
+  }
+
+  function renderMarketFormBankOptions() {
+    var bankEl = document.getElementById('marketFormSettlementBank');
+    if (!bankEl || bankEl.options.length) return;
+    bankEl.innerHTML = MARKET_BANK_OPTIONS.map(function (b) {
+      return '<option value="' + b.code + '">' + escapeHtml(b.name) + '</option>';
+    }).join('');
   }
 
   function renderMarketFormCategoryOptions(cat) {
@@ -503,6 +543,9 @@
     var subEl = document.getElementById('marketFormSubCategory');
     var locEl = document.getElementById('marketFormDirectLocation');
     var conditionEl = document.querySelector('.market-form-condition:checked');
+    var bankEl = document.getElementById('marketFormSettlementBank');
+    var accNumEl = document.getElementById('marketFormSettlementAccountNumber');
+    var holderEl = document.getElementById('marketFormSettlementHolderName');
 
     var title = (titleEl.value || '').trim();
     var priceRaw = (priceEl.value || '').replace(/[^0-9]/g, '');
@@ -510,6 +553,9 @@
     var description = (descEl.value || '').trim();
     var dealMethods = collectDealMethods();
     var directLocation = (locEl.value || '').trim();
+    var settlementBank = bankEl ? bankEl.value : '';
+    var settlementAccountNumber = (accNumEl ? accNumEl.value : '').replace(/[^0-9]/g, '');
+    var settlementHolderName = (holderEl ? holderEl.value : '').trim();
 
     if (!title) { toast('상품명을 입력해 주세요.'); return; }
     if (!priceRaw || price < 0) { toast('판매가를 입력해 주세요.'); return; }
@@ -520,6 +566,14 @@
     }
     if (formState.files.every(function (f) { return !f; }) && formState.uploaded.every(function (u) { return !u; })) {
       toast('사진을 최소 1장 첨부해 주세요.');
+      return;
+    }
+    if (!settlementAccountNumber || !/^[0-9]{6,20}$/.test(settlementAccountNumber)) {
+      toast('안전거래 입금 계좌번호를 정확히 입력해 주세요(숫자만).');
+      return;
+    }
+    if (!settlementHolderName || settlementHolderName.length < 2) {
+      toast('안전거래 입금 계좌의 예금주명을 입력해 주세요.');
       return;
     }
 
@@ -552,6 +606,9 @@
         description: description,
         images: images,
         image_hashes: hashes,
+        settlement_bank: settlementBank,
+        settlement_account_number: settlementAccountNumber,
+        settlement_holder_name: settlementHolderName,
       };
 
       if (isEditing) {

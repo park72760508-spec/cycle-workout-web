@@ -17979,6 +17979,13 @@ exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res)
       res.status(409).json({ success: false, error: "이미 예약되었거나 판매 완료된 상품입니다." });
       return;
     }
+    if (!item.settlement_account_number || !item.settlement_holder_name) {
+      res.status(409).json({
+        success: false,
+        error: "판매자가 정산 계좌를 등록하지 않은 상품입니다. 판매자에게 상품 정보 수정을 요청해 주세요.",
+      });
+      return;
+    }
 
     // 멱등성: 동일 구매자가 이 상품에 대해 이미 요청한 결제 대기/완료 주문이 있으면 재사용(중복 결제 방지)
     const { data: existingOrders } = await supabase
@@ -18024,6 +18031,14 @@ exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res)
       ? new Date(va.dueDate).getTime()
       : Date.now() + MARKET_ORDER_VALID_HOURS * 3600 * 1000;
     const bankNameKo = competitionApplyAlimtalk.resolveBankNameKo(va.bankCode || DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE);
+    // 판매자 정산 계좌는 주문 시점 스냅샷 — 이후 판매자가 상품을 수정해 계좌를 바꿔도 이미 진행 중인
+    // 거래의 정산지는 바뀌지 않는다(관리자가 adminMarkMarketOrderSettled로 처리할 때 참조).
+    const settlementAccount = {
+      bank: item.settlement_bank || null,
+      bankName: competitionApplyAlimtalk.resolveBankNameKo(item.settlement_bank || ""),
+      accountNumber: item.settlement_account_number,
+      holderName: item.settlement_holder_name,
+    };
 
     const { data: orderRow, error: insertErr } = await supabase
       .from("market_orders")
@@ -18039,6 +18054,7 @@ exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res)
         amount,
         escrow_status: "PENDING",
         va_due_at: new Date(dueMs).toISOString(),
+        settlement_account: settlementAccount,
       })
       .select()
       .single();

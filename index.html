@@ -3431,7 +3431,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260825marketCategoryLabelHeader" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260826marketSettlementAccount" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4492,6 +4492,13 @@
       <label class="market-form-label" for="marketFormDescription">상품 설명</label>
       <textarea id="marketFormDescription" class="market-form-textarea" maxlength="1000" rows="6" placeholder="상품 상태, 구매 시기, 하자 유무 등을 자세히 적어주세요."></textarea>
       <div class="market-form-desc-counter" id="marketFormDescCounter">0/1000</div>
+
+      <label class="market-form-label market-form-label--section">안전거래 입금 계좌</label>
+      <p class="market-form-hint">구매자가 안전결제로 결제하면, 구매 확정 후 이 계좌로 판매대금이 정산됩니다.</p>
+      <select id="marketFormSettlementBank" class="market-form-select market-form-settlement-bank"></select>
+      <input type="text" id="marketFormSettlementAccountNumber" class="market-form-input" inputmode="numeric" placeholder="계좌번호 (- 없이 숫자만)" />
+      <input type="text" id="marketFormSettlementHolderName" class="market-form-input" placeholder="예금주명" />
+
       <p class="market-form-guide">⚠️ 안전거래를 권장합니다. 허위매물·과장광고는 이용 제재 대상이 될 수 있습니다.</p>
 
       <button type="button" id="marketFormSubmitBtn" class="market-btn market-btn--primary market-form-submit">등록 하기</button>
@@ -42832,7 +42839,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script src="assets/js/competition/competitionScreen.js?v=paid-label-20260822a"></script>
-  <script src="assets/js/market/marketScreen.js?v=20260825market12"></script>
+  <script src="assets/js/market/marketScreen.js?v=20260826market13"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

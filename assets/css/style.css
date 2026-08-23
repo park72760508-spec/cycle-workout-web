@@ -30714,6 +30714,15 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
   background: #fff;
 }
 .market-form-textarea { resize: vertical; font-family: inherit; }
+.market-form-label--section { margin-top: 20px; }
+.market-form-hint {
+  margin: 0 0 8px 0;
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.market-form-settlement-bank { margin-bottom: 8px; }
+#marketFormSettlementAccountNumber { margin-bottom: 8px; }
 .market-form-row { display: flex; gap: 8px; }
 .market-form-row .market-form-select { flex: 1; }
 .market-form-radio-row, .market-form-checkbox-row { gap: 16px; align-items: center; }
