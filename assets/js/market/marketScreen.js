@@ -152,6 +152,13 @@
         reloadMarketHomeList();
       };
     });
+    updateMarketSelectedCategoryLabel();
+  }
+
+  function updateMarketSelectedCategoryLabel() {
+    var labelEl = document.getElementById('marketSelectedCategoryLabel');
+    if (!labelEl) return;
+    labelEl.textContent = homeState.subCategory || '전체';
   }
 
   function marketItemCardHtml(item) {
