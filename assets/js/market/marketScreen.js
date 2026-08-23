@@ -190,36 +190,10 @@
    * AFFILIATE_STAR_PATH/색 보간/부분 채움(clip-path) 방식을 vanilla HTML 문자열로 재구현. */
   var AFFILIATE_STAR_PATH = 'M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z';
 
-  function marketRatingFillColorForAverage(avg) {
-    var t = Math.min(5, Math.max(0, Number(avg) || 0)) / 5;
-    var r1 = 148, g1 = 163, b1 = 184; /* #94a3b8 */
-    var r2 = 245, g2 = 158, b2 = 11;  /* #f59e0b */
-    var r = Math.round(r1 + (r2 - r1) * t);
-    var g = Math.round(g1 + (g2 - g1) * t);
-    var b = Math.round(b1 + (b2 - b1) * t);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
-  }
-
-  function marketStarDisplayHtml(avg, size, keyPrefix) {
-    avg = Number(avg) || 0;
-    size = size || 13;
-    var avgFixed = Math.round(avg * 10) / 10;
-    var fillRgb = marketRatingFillColorForAverage(avg);
-    var emptyRgb = '#e2e8f0';
-    var html = '<span class="market-star-display">';
-    for (var i = 1; i <= 5; i++) {
-      var fillPortion = Math.min(1, Math.max(0, avg - (i - 1)));
-      var clipW = Math.max(0, Math.min(20, fillPortion * 20));
-      var clipId = 'mkt-star-clip-' + keyPrefix + '-' + i;
-      html += '<svg viewBox="0 0 20 20" width="' + size + '" height="' + size + '" style="display:block;flex-shrink:0;">' +
-        '<defs><clipPath id="' + clipId + '"><rect x="0" y="0" width="' + clipW + '" height="20"></rect></clipPath></defs>' +
-        '<path d="' + AFFILIATE_STAR_PATH + '" fill="' + emptyRgb + '"></path>' +
-        (fillPortion > 0 ? '<path d="' + AFFILIATE_STAR_PATH + '" fill="' + fillRgb + '" clip-path="url(#' + clipId + ')"></path>' : '') +
-        '</svg>';
-    }
-    if (avgFixed > 0) html += '<span class="market-star-display__avg">' + avgFixed.toFixed(1) + '</span>';
-    html += '</span>';
-    return html;
+  /** 상세화면 상단 요약행 만족도 표시 — 별 아이콘 대신 "4.2/5" 숫자 표기(5점 만점) */
+  function marketRatingNumericHtml(avg) {
+    var avgFixed = Math.round((Number(avg) || 0) * 10) / 10;
+    return '<span class="market-detail-stat market-detail-stat--rating">' + avgFixed.toFixed(1) + '/5</span>';
   }
 
   var MARKET_EYE_ICON_SVG =
@@ -884,7 +858,7 @@
         '<div class="market-detail-seller-row__right">' +
           '<span class="market-detail-stat">' + MARKET_EYE_ICON_SVG + (Number(item.view_count) || 0) + '</span>' +
           '<span class="market-detail-stat">' + MARKET_HEART_ICON_SVG + (detailState.favoriteCount || 0) + '</span>' +
-          marketStarDisplayHtml(detailState.ratingAvg, 13, 'detail') +
+          marketRatingNumericHtml(detailState.ratingAvg) +
         '</div>' +
       '</div>';
 

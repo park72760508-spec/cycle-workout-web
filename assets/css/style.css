@@ -30844,8 +30844,9 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
 .market-detail-info { padding: 14px 0; }
 .market-detail-seller-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 11.5px;
   color: #94a3b8;
@@ -30853,10 +30854,10 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
 .market-detail-seller-row__left {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
   gap: 4px;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
 }
 .market-detail-seller-avatar {
   width: 18px;
@@ -30869,9 +30870,7 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
 .market-detail-seller-name {
   color: #64748b;
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 170px;
+  white-space: nowrap;
 }
 .market-detail-seller-sep { color: #cbd5e1; }
 .market-detail-seller-row__right {
@@ -30887,8 +30886,7 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
   color: #cbd5e1;
 }
 .market-detail-stat__icon { width: 14px; height: 14px; }
-.market-star-display { display: inline-flex; align-items: center; gap: 1px; vertical-align: middle; }
-.market-star-display__avg { font-size: 11.5px; color: #94a3b8; margin-left: 2px; line-height: 1; }
+.market-detail-stat--rating { color: #f59e0b; font-weight: 700; }
 .market-rating-widget {
   border: 1px solid #ede9fe;
   background: #faf9ff;
