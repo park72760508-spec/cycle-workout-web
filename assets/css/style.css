@@ -30483,6 +30483,10 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 .market-card {
   display: flex;
   flex-direction: column;
+  /* min-width 기본값(auto)이면 grid 트랙(1fr) 폭을 무시하고 white-space:nowrap 제목의 원래
+     길이만큼 셀이 늘어나 3열이 서로 다른 크기가 되고 줄임(...)도 동작하지 않는다 — 카드가 항상
+     트랙 폭에 맞춰 줄어들도록 명시. */
+  min-width: 0;
   cursor: pointer;
 }
 /* 거래 완료(판매완료) 상품 — 카드 전체를 비활성화 톤으로: 이미지는 흐리게+무채색, 제목/가격도 반투명 */
