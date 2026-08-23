@@ -30340,29 +30340,41 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-weight: 700;
   color: #0f172a;
 }
+.market-header__title--left { text-align: left; }
 .market-header__spacer { width: 36px; flex-shrink: 0; }
 
-.market-category-tabs {
+/* CYCLE/RUN 토글 — 프로필 선택 목록 화면과 동일한 종목 이미지(cycling.png/running.png)를
+   헤더 우측 토글 버튼으로 사용. 선택된 쪽만 오렌지 배경으로 강조. */
+.market-header-category-toggle {
   display: flex;
-  gap: 8px;
-  padding: 4px 0 10px 0;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
 }
-.market-category-tab {
-  flex: 1;
-  padding: 10px 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+.market-category-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 50%;
   background: #f8fafc;
-  color: #64748b;
-  font-weight: 700;
-  font-size: 14px;
   cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
 }
-.market-category-tab.active {
+.market-category-toggle-btn:active { transform: scale(0.93); }
+.market-category-toggle-btn img {
+  width: 20px;
+  height: 20px;
+  display: block;
+  object-fit: contain;
+}
+.market-category-toggle-btn.active {
   background: linear-gradient(135deg, #f97316, #ea580c);
   border-color: #ea580c;
-  color: #fff;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.35);
 }
 
 .market-search-bar {

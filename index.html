@@ -4426,12 +4426,15 @@
       <button type="button" class="market-back-btn" onclick="if(typeof marketNavGoHome==='function')marketNavGoHome();else if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="뒤로 가기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
       </button>
-      <h2 class="market-header__title">중고랜드</h2>
-      <span class="market-header__spacer"></span>
-    </div>
-    <div class="market-category-tabs">
-      <button type="button" id="marketCategoryTabCycle" class="market-category-tab active">CYCLE</button>
-      <button type="button" id="marketCategoryTabRun" class="market-category-tab">RUN</button>
+      <h2 class="market-header__title market-header__title--left">중고랜드</h2>
+      <div class="market-header-category-toggle">
+        <button type="button" id="marketCategoryTabCycle" class="market-category-toggle-btn active" aria-label="CYCLE" aria-pressed="true">
+          <img src="assets/img/cycling.png" alt="CYCLE" width="22" height="22" loading="lazy" decoding="async" />
+        </button>
+        <button type="button" id="marketCategoryTabRun" class="market-category-toggle-btn" aria-label="RUN" aria-pressed="false">
+          <img src="assets/img/running.png" alt="RUN" width="22" height="22" loading="lazy" decoding="async" />
+        </button>
+      </div>
     </div>
     <div class="market-search-bar">
       <svg class="market-search-bar__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.35-4.35"></path></svg>
@@ -42831,7 +42834,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script src="assets/js/competition/competitionScreen.js?v=paid-label-20260822a"></script>
-  <script src="assets/js/market/marketScreen.js?v=20260825market7"></script>
+  <script src="assets/js/market/marketScreen.js?v=20260825market8"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

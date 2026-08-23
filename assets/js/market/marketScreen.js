@@ -258,8 +258,14 @@
     homeState.subCategory = '';
     var cycleTab = document.getElementById('marketCategoryTabCycle');
     var runTab = document.getElementById('marketCategoryTabRun');
-    if (cycleTab) cycleTab.classList.toggle('active', cat === 'CYCLE');
-    if (runTab) runTab.classList.toggle('active', cat === 'RUN');
+    if (cycleTab) {
+      cycleTab.classList.toggle('active', cat === 'CYCLE');
+      cycleTab.setAttribute('aria-pressed', cat === 'CYCLE' ? 'true' : 'false');
+    }
+    if (runTab) {
+      runTab.classList.toggle('active', cat === 'RUN');
+      runTab.setAttribute('aria-pressed', cat === 'RUN' ? 'true' : 'false');
+    }
     renderSubCategoryTabs();
     reloadMarketHomeList();
   }
