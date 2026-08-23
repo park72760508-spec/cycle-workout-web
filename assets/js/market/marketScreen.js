@@ -1097,12 +1097,13 @@
     var wrap = document.getElementById('marketMyPageTabs');
     if (!wrap) return;
     var tabs = [
-      { key: 'selling', label: '내 상품' },
-      { key: 'favorites', label: '찜한 상품' },
+      { key: 'selling', label: '내 상품', icon: 'my' },
+      { key: 'favorites', label: '찜한 상품', icon: 'heart' },
     ];
     wrap.innerHTML = tabs.map(function (t) {
       return '<button type="button" class="market-subtab' + (myPageState.tab === t.key ? ' active' : '') +
-        '" data-tab="' + t.key + '">' + t.label + '</button>';
+        '" data-tab="' + t.key + '" aria-label="' + t.label + '" title="' + t.label + '">' +
+        '<img class="market-subtab__icon" src="assets/img/' + t.icon + '.svg" alt="" /></button>';
     }).join('');
     Array.prototype.forEach.call(wrap.querySelectorAll('[data-tab]'), function (btn) {
       btn.onclick = function () {
