@@ -30467,13 +30467,13 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   object-fit: contain;
   stroke: #000;
 }
-/* 하단 네비게이션바·헤더 토글의 활성 표시와 동일(오렌지 배경) */
+/* 하단 네비게이션바 활성 탭과 동일한 흐릿한 오렌지 톤(진한 그라디언트 아님) */
 .market-subtab.active {
-  background: linear-gradient(135deg, #f97316, #ea580c);
-  border-color: #ea580c;
-  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.35);
+  background-color: rgba(234, 88, 12, 0.12);
+  border-color: transparent;
+  box-shadow: none;
 }
-.market-subtab.active .market-subtab__icon { stroke: #fff; }
+.market-subtab.active .market-subtab__icon { stroke: #c2410c; }
 
 .market-scroll-area {
   flex: 1;
