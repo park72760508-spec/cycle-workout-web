@@ -30446,11 +30446,10 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 .market-subtabs::-webkit-scrollbar { display: none; }
 
 /* 목록 상단 좌측 — 현재 선택된 카테고리 품목명 표시판(연한 오렌지 바탕 + 검정 텍스트) */
+/* 헤더 행의 좌측 끝 — "중고랜드" 제목과 같은 줄에 배치(제목은 absolute-center라 흐름에서 빠짐) */
 .market-selected-category-label {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  margin-bottom: 8px;
   padding: 5px 12px;
   border-radius: 8px;
   background: rgba(234, 88, 12, 0.12);
@@ -30458,6 +30457,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-size: 12.5px;
   font-weight: 700;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 /* 아이콘 전용(텍스트 라벨 없음) — 하단 네비게이션바·헤더 CYCLE/RUN 토글과 동일한 원형 버튼 디자인 */
 .market-subtab {
