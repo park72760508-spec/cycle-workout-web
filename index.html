@@ -3431,7 +3431,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260820departureWeather18h" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260825marketHeaderSold" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4422,12 +4422,9 @@
 
   <!-- 중고랜드(Market Land) — 홈/목록 -->
   <div id="marketHomeScreen" class="screen market-screen market-screen--with-nav" style="display: none;">
-    <div class="market-header">
-      <button type="button" class="market-back-btn" onclick="if(typeof marketNavGoHome==='function')marketNavGoHome();else if(typeof showScreen==='function')showScreen('sportCategoryScreen');" aria-label="뒤로 가기">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
-      </button>
-      <h2 class="market-header__title market-header__title--left">중고랜드</h2>
-      <div class="market-header-category-toggle">
+    <div class="market-header market-header--centered">
+      <h2 class="market-header__title market-header__title--absolute-center">중고랜드</h2>
+      <div class="market-header-category-toggle market-header-category-toggle--pinned-right">
         <button type="button" id="marketCategoryTabCycle" class="market-category-toggle-btn active" aria-label="CYCLE" aria-pressed="true">
           <img src="assets/img/cycling.png" alt="CYCLE" width="22" height="22" loading="lazy" decoding="async" />
         </button>

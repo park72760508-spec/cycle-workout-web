@@ -30318,6 +30318,18 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   padding: 10px 0;
   flex-shrink: 0;
 }
+/* 뒤로가기 화살표가 없는 화면(중고랜드 홈) — 제목을 헤더 좌우 정중앙에 절대배치로 고정하고
+   토글은 오른쪽 끝에 붙인다(제목 정중앙은 좌우 요소 폭과 무관해야 하므로 flex 중앙정렬 대신 사용). */
+.market-header--centered { position: relative; }
+.market-header__title--absolute-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  flex: none;
+}
+.market-header-category-toggle--pinned-right { margin-left: auto; }
 .market-back-btn {
   display: flex;
   align-items: center;
@@ -30473,7 +30485,13 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   flex-direction: column;
   cursor: pointer;
 }
-.market-card--sold .market-card__img { opacity: 0.45; }
+/* 거래 완료(판매완료) 상품 — 카드 전체를 비활성화 톤으로: 이미지는 흐리게+무채색, 제목/가격도 반투명 */
+.market-card--sold .market-card__img { opacity: 0.45; filter: grayscale(0.4); }
+.market-card--sold .market-card__title,
+.market-card--sold .market-card__price {
+  opacity: 0.5;
+}
+.market-card--sold .market-card__heart { opacity: 0.6; }
 .market-card__img-wrap {
   position: relative;
   width: 100%;
