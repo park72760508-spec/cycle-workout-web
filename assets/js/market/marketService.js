@@ -422,6 +422,98 @@ export async function getMarketOrderForItem(itemId) {
   });
 }
 
+/** 조회수 증가 — RLS를 우회하는 SECURITY DEFINER RPC. 실패해도 상세 화면 표시에 영향 없어야 하므로
+ *  호출부에서 결과를 기다리지 않고 흘려보내는 형태로 쓴다(fire-and-forget). */
+export async function incrementMarketItemView(itemId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.rpc('increment_market_item_view', { p_item_id: itemId });
+    if (error) throw error;
+  });
+}
+
+/** 관심상품(하트) 클릭 수 — market_favorites 건수를 그대로 카운트(별도 카운터 불필요) */
+export async function getMarketFavoriteCount(itemId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { count, error } = await supabase
+      .from('market_favorites')
+      .select('*', { count: 'exact', head: true })
+      .eq('item_id', itemId);
+    if (error) throw error;
+    return count || 0;
+  });
+}
+
+/** 판매자 공개 프로필(v_user_public_profile) — RLS상 users 테이블은 본인 것만 보이므로 반드시
+ *  이 공개 뷰를 통해서만 다른 사용자(판매자)의 이름·프로필 사진을 읽을 수 있다. */
+export async function getSellerPublicProfile(sellerId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('v_user_public_profile')
+      .select('id, display_name, profile_image_url, is_private')
+      .eq('id', sellerId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  });
+}
+
+/** 판매자 만족도 평균 — 제휴사와 동일하게 2점 이상만 집계에 포함(1점·미평가 제외) */
+export async function getSellerRatingAggregate(sellerId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_seller_ratings')
+      .select('score')
+      .eq('seller_id', sellerId)
+      .gte('score', 2);
+    if (error) throw error;
+    const rows = data || [];
+    const count = rows.length;
+    const sum = rows.reduce((acc, r) => acc + (Number(r.score) || 0), 0);
+    return { avg: count > 0 ? sum / count : 0, count };
+  });
+}
+
+export async function getMyRatingForOrder(orderId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_seller_ratings')
+      .select('score')
+      .eq('order_id', orderId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? Number(data.score) || 0 : 0;
+  });
+}
+
+/** 구매확정된 주문 1건당 판매자 평가 등록/수정 — 같은 별 재클릭 시 clearSellerRating으로 초기화 */
+export async function submitSellerRating(orderId, sellerId, score) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const buyerId = await getMySupabaseUserId();
+    if (!buyerId) throw new Error('로그인이 필요합니다.');
+    const { error } = await supabase
+      .from('market_seller_ratings')
+      .upsert(
+        { order_id: orderId, seller_id: sellerId, buyer_id: buyerId, score, updated_at: new Date().toISOString() },
+        { onConflict: 'order_id' }
+      );
+    if (error) throw error;
+  });
+}
+
+export async function clearSellerRating(orderId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.from('market_seller_ratings').delete().eq('order_id', orderId);
+    if (error) throw error;
+  });
+}
+
 if (typeof window !== 'undefined') {
   window.marketService = {
     ensureMarketSupabaseSession,
@@ -444,5 +536,12 @@ if (typeof window !== 'undefined') {
     cancelMarketOrder,
     requestMarketOrderRefund,
     getMarketOrderForItem,
+    incrementMarketItemView,
+    getMarketFavoriteCount,
+    getSellerPublicProfile,
+    getSellerRatingAggregate,
+    getMyRatingForOrder,
+    submitSellerRating,
+    clearSellerRating,
   };
 }

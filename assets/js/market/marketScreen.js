@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260826market6';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260827market7';
   var svc = null;
 
   function loadMarketService() {
@@ -151,6 +151,76 @@
     if (status === 'RESERVED') return '<span class="market-badge market-badge--reserved">예약중</span>';
     return '';
   }
+
+  function marketFormatDate(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('ko-KR');
+    } catch (e) { return ''; }
+  }
+
+  function marketRatingHintText(myScore) {
+    if (myScore >= 2) return '현재 평가: ' + myScore + '점 · 같은 별을 다시 누르면 초기화됩니다';
+    if (myScore === 1) return '1점(낮음)으로 저장됨 · 같은 별을 다시 눌러 초기화하거나 2점 이상을 선택하세요';
+    return '2~5번 별을 눌러 만족도를 평가해 주세요 (같은 별 재클릭 시 초기화)';
+  }
+
+  function marketSellerDisplayName(profile, isSelf) {
+    var raw = (profile && profile.display_name) ? String(profile.display_name) : '판매자';
+    if (profile && profile.is_private && !isSelf) {
+      if (typeof window.stelvioRankingPrivateMaskedDisplayName === 'function') {
+        return window.stelvioRankingPrivateMaskedDisplayName(raw);
+      }
+      return raw.length >= 1 ? raw.charAt(0) + '**' : '**';
+    }
+    return raw;
+  }
+
+  /** 제휴사 만족도(별점) 로직 그대로 이식(assets/js/affiliate/AffiliateScreens.jsx) —
+   * AFFILIATE_STAR_PATH/색 보간/부분 채움(clip-path) 방식을 vanilla HTML 문자열로 재구현. */
+  var AFFILIATE_STAR_PATH = 'M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z';
+
+  function marketRatingFillColorForAverage(avg) {
+    var t = Math.min(5, Math.max(0, Number(avg) || 0)) / 5;
+    var r1 = 148, g1 = 163, b1 = 184; /* #94a3b8 */
+    var r2 = 245, g2 = 158, b2 = 11;  /* #f59e0b */
+    var r = Math.round(r1 + (r2 - r1) * t);
+    var g = Math.round(g1 + (g2 - g1) * t);
+    var b = Math.round(b1 + (b2 - b1) * t);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+
+  function marketStarDisplayHtml(avg, size, keyPrefix) {
+    avg = Number(avg) || 0;
+    size = size || 13;
+    var avgFixed = Math.round(avg * 10) / 10;
+    var fillRgb = marketRatingFillColorForAverage(avg);
+    var emptyRgb = '#e2e8f0';
+    var html = '<span class="market-star-display">';
+    for (var i = 1; i <= 5; i++) {
+      var fillPortion = Math.min(1, Math.max(0, avg - (i - 1)));
+      var clipW = Math.max(0, Math.min(20, fillPortion * 20));
+      var clipId = 'mkt-star-clip-' + keyPrefix + '-' + i;
+      html += '<svg viewBox="0 0 20 20" width="' + size + '" height="' + size + '" style="display:block;flex-shrink:0;">' +
+        '<defs><clipPath id="' + clipId + '"><rect x="0" y="0" width="' + clipW + '" height="20"></rect></clipPath></defs>' +
+        '<path d="' + AFFILIATE_STAR_PATH + '" fill="' + emptyRgb + '"></path>' +
+        (fillPortion > 0 ? '<path d="' + AFFILIATE_STAR_PATH + '" fill="' + fillRgb + '" clip-path="url(#' + clipId + ')"></path>' : '') +
+        '</svg>';
+    }
+    if (avgFixed > 0) html += '<span class="market-star-display__avg">' + avgFixed.toFixed(1) + '</span>';
+    html += '</span>';
+    return html;
+  }
+
+  var MARKET_EYE_ICON_SVG =
+    '<svg class="market-detail-stat__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"></path>' +
+    '<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>';
+  var MARKET_HEART_ICON_SVG =
+    '<svg class="market-detail-stat__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"></path></svg>';
 
   // ───────────────────────── 홈/목록 화면 ─────────────────────────
 
@@ -674,7 +744,7 @@
 
   // ───────────────────────── 상품 상세 화면 ─────────────────────────
 
-  var detailState = { item: null, sliderIndex: 0 };
+  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0 };
 
   function openMarketItemDetail(itemId) {
     if (typeof window.showScreen === 'function') window.showScreen('marketItemDetailScreen');
@@ -682,12 +752,29 @@
     if (body) body.innerHTML = '<div class="market-loading">불러오는 중...</div>';
     loadMarketService()
       .then(function (s) {
-        return Promise.all([s.getMarketItem(itemId), s.getMySupabaseUserId(), s.getMarketOrderForItem(itemId)]);
+        s.incrementMarketItemView(itemId).catch(function () {});
+        return Promise.all([s.getMarketItem(itemId), s.getMySupabaseUserId(), s.getMarketOrderForItem(itemId)])
+          .then(function (res) {
+            var item = res[0];
+            return Promise.all([
+              s.getSellerPublicProfile(item.user_id).catch(function () { return null; }),
+              s.getMarketFavoriteCount(item.id).catch(function () { return 0; }),
+              s.getSellerRatingAggregate(item.user_id).catch(function () { return { avg: 0, count: 0 }; }),
+              res[2] && res[2].escrow_status === 'CONFIRMED' ? s.getMyRatingForOrder(res[2].id).catch(function () { return 0; }) : Promise.resolve(0),
+            ]).then(function (extra) {
+              return { item: item, myUserId: res[1], myOrder: res[2], sellerProfile: extra[0], favoriteCount: extra[1], ratingAgg: extra[2], myRating: extra[3] };
+            });
+          });
       })
       .then(function (res) {
-        detailState.item = res[0];
+        detailState.item = res.item;
         detailState.sliderIndex = 0;
-        renderMarketDetail(res[1], res[2]);
+        detailState.sellerProfile = res.sellerProfile;
+        detailState.favoriteCount = res.favoriteCount;
+        detailState.ratingAvg = res.ratingAgg ? res.ratingAgg.avg : 0;
+        detailState.ratingCount = res.ratingAgg ? res.ratingAgg.count : 0;
+        detailState.myRating = res.myRating || 0;
+        renderMarketDetail(res.myUserId, res.myOrder);
       })
       .catch(function (err) {
         if (body) body.innerHTML = '<div class="market-empty">상품을 불러오지 못했습니다: ' + escapeHtml(err.message || String(err)) + '</div>';
@@ -748,7 +835,19 @@
           '<button type="button" class="market-btn market-btn--outline" id="marketDetailCancelOrderBtn">구매 취소</button>' +
         '</div>';
     } else if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
-      actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>구매 확정 완료된 거래입니다</button>';
+      actionHtml =
+        '<div class="market-rating-widget">' +
+          '<p class="market-rating-widget__title">⭐ 판매자 만족도 평가</p>' +
+          '<p class="market-rating-widget__hint" id="marketRatingHint">' + marketRatingHintText(detailState.myRating) + '</p>' +
+          '<div class="market-rating-widget__stars" id="marketRatingStars">' +
+            [1, 2, 3, 4, 5].map(function (i) {
+              var filled = (detailState.myRating >= 2 ? detailState.myRating : 0) >= i;
+              return '<button type="button" class="market-rating-star-btn' + (filled ? ' filled' : '') + '" data-score="' + i + '" aria-label="' + i + '점 평가">' +
+                '<svg viewBox="0 0 20 20" width="30" height="30"><path d="' + AFFILIATE_STAR_PATH + '" fill="currentColor"></path></svg>' +
+              '</button>';
+            }).join('') +
+          '</div>' +
+        '</div>';
     } else if (item.status === 'SOLD') {
       actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>판매 완료된 상품입니다</button>';
     } else if (item.status === 'RESERVED') {
@@ -757,9 +856,30 @@
       actionHtml = '<button type="button" class="market-btn market-btn--primary" id="marketDetailBuyBtn">안전결제로 구매하기</button>';
     }
 
+    var seller = detailState.sellerProfile;
+    var sellerName = marketSellerDisplayName(seller, isMine);
+    var sellerAvatarUrl = (seller && seller.profile_image_url) || 'assets/img/profile-placeholder.svg';
+    var sellerRowHtml =
+      '<div class="market-detail-seller-row">' +
+        '<div class="market-detail-seller-row__left">' +
+          '<img class="market-detail-seller-avatar" src="' + escapeHtml(sellerAvatarUrl) + '" alt="" />' +
+          '<span class="market-detail-seller-name">' + escapeHtml(sellerName) + '</span>' +
+          '<span class="market-detail-seller-sep">·</span>' +
+          '<span>' + escapeHtml(item.sub_category || '') + '</span>' +
+          '<span class="market-detail-seller-sep">·</span>' +
+          '<span>' + escapeHtml(marketFormatDate(item.created_at)) + '</span>' +
+        '</div>' +
+        '<div class="market-detail-seller-row__right">' +
+          '<span class="market-detail-stat">' + MARKET_EYE_ICON_SVG + (Number(item.view_count) || 0) + '</span>' +
+          '<span class="market-detail-stat">' + MARKET_HEART_ICON_SVG + (detailState.favoriteCount || 0) + '</span>' +
+          marketStarDisplayHtml(detailState.ratingAvg, 13, 'detail') +
+        '</div>' +
+      '</div>';
+
     body.innerHTML =
       sliderHtml +
       '<div class="market-detail-info">' +
+        sellerRowHtml +
         statusBadgeHtml(item.status) +
         '<div class="market-detail-title">' + escapeHtml(item.title) + '</div>' +
         '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>' +
@@ -796,6 +916,49 @@
     if (editBtn) editBtn.onclick = function () { window.navigateToMarketFormForEdit(item); };
     var deleteBtn = document.getElementById('marketDetailDeleteBtn');
     if (deleteBtn) deleteBtn.onclick = function () { handleMarketDelete(item.id); };
+    if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
+      var starsWrap = document.getElementById('marketRatingStars');
+      if (starsWrap) {
+        Array.prototype.forEach.call(starsWrap.querySelectorAll('.market-rating-star-btn'), function (starBtn) {
+          starBtn.onclick = function () {
+            handleMarketRateSeller(myOrder.id, item.user_id, Number(starBtn.getAttribute('data-score')));
+          };
+        });
+      }
+    }
+  }
+
+  var marketRatingSaving = false;
+  function handleMarketRateSeller(orderId, sellerId, score) {
+    if (marketRatingSaving) return;
+    marketRatingSaving = true;
+    var isClear = score === detailState.myRating;
+    loadMarketService()
+      .then(function (s) {
+        return isClear ? s.clearSellerRating(orderId) : s.submitSellerRating(orderId, sellerId, score);
+      })
+      .then(function () {
+        detailState.myRating = isClear ? 0 : score;
+        toast(isClear ? '만족도 평가가 초기화되었습니다.' : '만족도가 저장되었습니다.');
+        return loadMarketService().then(function (s) { return s.getSellerRatingAggregate(sellerId); });
+      })
+      .then(function (agg) {
+        detailState.ratingAvg = agg ? agg.avg : 0;
+        detailState.ratingCount = agg ? agg.count : 0;
+        var hint = document.getElementById('marketRatingHint');
+        if (hint) hint.textContent = marketRatingHintText(detailState.myRating);
+        var starsWrap = document.getElementById('marketRatingStars');
+        if (starsWrap) {
+          Array.prototype.forEach.call(starsWrap.querySelectorAll('.market-rating-star-btn'), function (starBtn) {
+            var i = Number(starBtn.getAttribute('data-score'));
+            starBtn.classList.toggle('filled', (detailState.myRating >= 2 ? detailState.myRating : 0) >= i);
+          });
+        }
+      })
+      .catch(function (err) {
+        toast('평가 저장 실패: ' + (err && err.message ? err.message : err));
+      })
+      .finally(function () { marketRatingSaving = false; });
   }
 
   function wireMarketDetailSlider() {
