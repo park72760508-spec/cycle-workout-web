@@ -3198,7 +3198,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   background: linear-gradient(135deg, #f97316, #ea580c);
   box-shadow: 0 2px 8px rgba(234, 88, 12, 0.35);
   color: #fff;
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
@@ -3209,8 +3209,8 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   box-shadow: 0 1px 4px rgba(234, 88, 12, 0.35);
 }
 #sportCategoryScreen .market-entry-btn__icon {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 #runBasecampScreen .basecamp-auth-bar-logout-wrap {
