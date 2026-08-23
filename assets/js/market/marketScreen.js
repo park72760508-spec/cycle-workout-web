@@ -341,7 +341,7 @@
     homeState.offset = 0;
     homeState.hasMore = true;
     var grid = document.getElementById('marketItemGrid');
-    if (grid) grid.innerHTML = '<div class="market-loading">불러오는 중...</div>';
+    if (grid) grid.innerHTML = '<div class="market-loading market-loading--spinner"><div class="market-loading__spinner-circle"></div><div class="market-loading__spinner-text">상품 로딩 중 ....</div></div>';
     loadMoreMarketItems();
   }
 

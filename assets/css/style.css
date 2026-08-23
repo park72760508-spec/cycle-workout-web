@@ -30603,6 +30603,22 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   color: #94a3b8;
   font-size: 13.5px;
 }
+.market-loading--spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.market-loading__spinner-circle {
+  width: 52px;
+  height: 52px;
+  border: 5px solid rgba(234, 88, 12, 0.18);
+  border-top-color: #ea580c;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.market-loading__spinner-text { font-size: 13.5px; color: #94a3b8; }
 
 /* 중고랜드 하단 네비 — 라이딩 모임 글래스 네비(#openRidingBottomGlassNavRoot)와 동일한
    플로팅 pill·blur·레이아웃. 클래스명만 분리해 라이딩 모임 쪽 CSS/JS와는 완전히 독립적으로 둔다. */
