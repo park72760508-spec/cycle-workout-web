@@ -30445,6 +30445,9 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 }
 .market-subtabs::-webkit-scrollbar { display: none; }
 .market-subtab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   flex-shrink: 0;
   padding: 6px 12px;
   border-radius: 999px;
@@ -30455,12 +30458,21 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
+.market-subtab__icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  stroke: #000;
+}
+/* 하단 네비게이션바 활성 탭과 동일한 표시(rgba(234,88,12,.12) 배경 + #c2410c) */
 .market-subtab.active {
-  background: #fff7ed;
-  border-color: #fb923c;
+  background-color: rgba(234, 88, 12, 0.12);
+  border-color: transparent;
   color: #c2410c;
 }
+.market-subtab.active .market-subtab__icon { stroke: #c2410c; }
 
 .market-scroll-area {
   flex: 1;
