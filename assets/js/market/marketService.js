@@ -405,6 +405,11 @@ export async function requestMarketPurchase(itemId) {
   return callMarketFunction('createMarketOrder', { itemId }, 'asia-northeast3');
 }
 
+/** 직거래 요청 — 안전결제(Toss 가상계좌) 없이 예약(escrow_status=RESERVED)만 한다. */
+export async function requestMarketDirectDeal(itemId) {
+  return callMarketFunction('requestMarketDirectDeal', { itemId }, 'asia-northeast3');
+}
+
 /** 구매 확정 — 물품 수령 확인. */
 export async function confirmMarketPurchase(orderId) {
   return callMarketFunction('confirmMarketPurchase', { orderId }, 'asia-northeast3');
@@ -624,6 +629,7 @@ if (typeof window !== 'undefined') {
     getMyMarketItems,
     getMyMarketOrders,
     requestMarketPurchase,
+    requestMarketDirectDeal,
     confirmMarketPurchase,
     cancelMarketOrder,
     requestMarketOrderRefund,

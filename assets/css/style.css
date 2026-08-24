@@ -31126,7 +31126,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   border-radius: 8px;
   flex-shrink: 0;
 }
-.market-order-history-status--pending { background: #fff7ed; color: #c2410c; }
+.market-order-history-status--pending,
+.market-order-history-status--reserved { background: #fff7ed; color: #c2410c; }
 .market-order-history-status--paid { background: #eff6ff; color: #1d4ed8; }
 .market-order-history-status--confirmed { background: #f0fdf4; color: #15803d; }
 .market-order-history-status--refunded,

@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260902market12';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260902market13';
   var svc = null;
 
   function loadMarketService() {
@@ -188,11 +188,18 @@
 
   function marketOrderStatusLabel(status) {
     if (status === 'PENDING') return '입금 대기중';
+    if (status === 'RESERVED') return '직거래 예약중';
     if (status === 'PAID') return '입금완료';
     if (status === 'CONFIRMED') return '구매확정 완료';
     if (status === 'REFUNDED') return '환불 완료';
     if (status === 'CANCELLED') return '거래 취소됨';
     return status;
+  }
+
+  /** 연락처 공개 시점 — 예약(RESERVED/PENDING) 시점부터 판매자·구매자가 바로 연락을
+   * 조율할 수 있도록 서버 함수(get_market_buyer_contact)와 동일한 조건을 클라이언트에서도 사용. */
+  function marketOrderRevealsPhone(status) {
+    return status === 'PENDING' || status === 'RESERVED' || status === 'PAID' || status === 'CONFIRMED';
   }
 
   /** 거래내역 1줄 행 — 아바타+이름, 금액, 상태, (입금 대기중일 때만) 입금기한 카운트다운.
@@ -812,7 +819,7 @@
                   return (isMine ? s.getMarketOrdersForItem(item.id).catch(function () { return []; }) : Promise.resolve([]))
                     .then(function (orders) {
                       return Promise.all(orders.map(function (o) {
-                        var revealPhone = o.escrow_status === 'PAID' || o.escrow_status === 'CONFIRMED';
+                        var revealPhone = marketOrderRevealsPhone(o.escrow_status);
                         return Promise.all([
                           s.getSellerPublicProfile(o.buyer_id).catch(function () { return null; }),
                           revealPhone ? s.getBuyerPhone(o.buyer_id).catch(function () { return ''; }) : Promise.resolve(''),
@@ -905,6 +912,12 @@
           '<button type="button" class="market-btn market-btn--disabled" disabled>입금 확인 대기 중입니다</button>' +
           '<button type="button" class="market-btn market-btn--outline" id="marketDetailCancelOrderBtn">구매 취소</button>' +
         '</div>';
+    } else if (myOrder && myOrder.escrow_status === 'RESERVED') {
+      actionHtml =
+        '<div class="market-detail-actions">' +
+          '<button type="button" class="market-btn market-btn--primary" id="marketDetailConfirmBtn">구매 확정하기</button>' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketDetailCancelOrderBtn">예약 취소</button>' +
+        '</div>';
     } else if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
       actionHtml =
         '<div class="market-rating-widget">' +
@@ -924,19 +937,24 @@
     } else if (item.status === 'RESERVED') {
       actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>거래 진행 중인 상품입니다</button>';
     } else {
-      actionHtml = '<button type="button" class="market-btn market-btn--primary" id="marketDetailBuyBtn">안전결제로 구매하기</button>';
+      var supportsDirectDeal = item.deal_method && item.deal_method.indexOf('직거래') !== -1;
+      actionHtml =
+        '<div class="market-detail-actions">' +
+          '<button type="button" class="market-btn market-btn--primary" id="marketDetailBuyBtn">안전결제로 구매하기</button>' +
+          (supportsDirectDeal
+            ? '<button type="button" class="market-btn market-btn--outline" id="marketDetailDirectDealBtn">직거래 요청</button>'
+            : '') +
+        '</div>';
     }
 
     var seller = detailState.sellerProfile;
     var sellerName = marketSellerDisplayName(seller);
-    var sellerPhoneFormatted = marketFormatPhone(detailState.sellerPhone);
-    var sellerNameDisplay = sellerName + (sellerPhoneFormatted ? '(' + sellerPhoneFormatted + ')' : '');
     var sellerAvatarUrl = (seller && seller.profile_image_url) || 'assets/img/profile-placeholder.svg';
     var sellerRowHtml =
       '<div class="market-detail-seller-row">' +
         '<div class="market-detail-seller-row__left">' +
           '<img class="market-detail-seller-avatar" src="' + escapeHtml(sellerAvatarUrl) + '" alt="" />' +
-          '<span class="market-detail-seller-name">' + escapeHtml(sellerNameDisplay) + '</span>' +
+          '<span class="market-detail-seller-name">' + escapeHtml(sellerName) + '</span>' +
           '<span class="market-detail-seller-sep">·</span>' +
           '<span>' + escapeHtml(item.sub_category || '') + '</span>' +
           '<span class="market-detail-seller-sep">·</span>' +
@@ -1019,8 +1037,8 @@
         '</div>';
     }
 
-    // 판매자 전용 "거래내역" — 가격 조정 요구 내용 아래에 이어서 표시. 입금 확인(PAID) 이후에는
-    // 판매자·구매자 각각의 연락처를 함께 노출한다.
+    // 판매자 전용 "거래내역" — 가격 조정 요구 내용 아래에 이어서 표시. 예약(RESERVED/PENDING)
+    // 시점부터 판매자·구매자 각각의 연락처를 함께 노출한다.
     var orderHistoryHtml = '';
     if (isMine && detailState.orderHistory && detailState.orderHistory.length) {
       orderHistoryHtml =
@@ -1030,15 +1048,16 @@
             var bp = o.buyerProfile;
             var bName = marketSellerDisplayName(bp);
             var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
-            var revealPhone = o.escrow_status === 'PAID' || o.escrow_status === 'CONFIRMED';
+            var revealPhone = marketOrderRevealsPhone(o.escrow_status);
             var contactsHtml = revealPhone
               ? '<div class="market-order-history-contacts">' +
                   '<div>판매자 연락처 : ' + escapeHtml(marketFormatPhone(detailState.sellerPhone) || '-') + '</div>' +
                   '<div>구매자 연락처 : ' + escapeHtml(marketFormatPhone(o.buyerPhone) || '-') + '</div>' +
                 '</div>'
               : '';
+            var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.amount) + '원';
             return '<div class="market-nego-divider"></div>' +
-              marketTxRowHtml(bAvatar, bName, '입금 금액 : ' + formatPrice(o.amount) + '원', o.escrow_status, o.va_due_at) +
+              marketTxRowHtml(bAvatar, bName, sellerAmountLabel, o.escrow_status, o.va_due_at) +
               contactsHtml;
           }).join('') +
         '</div>';
@@ -1052,15 +1071,21 @@
       var sp = detailState.sellerProfile;
       var sellerName = marketSellerDisplayName(sp);
       var sellerAvatar = (sp && sp.profile_image_url) || 'assets/img/profile-placeholder.svg';
+      var isDirectDeal = myOrder.deal_type === 'DIRECT_DEAL';
+      var buyerAmountLabel = (isDirectDeal ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(myOrder.amount) + '원';
       var vaLineHtml = myOrder.va_account_number
         ? '<div class="market-order-history-contacts">가상계좌 : ' + escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number) + '</div>'
+        : '';
+      var sellerContactHtml = marketOrderRevealsPhone(myOrder.escrow_status)
+        ? '<div class="market-order-history-contacts">판매자 연락처 : ' + escapeHtml(marketFormatPhone(detailState.sellerPhone) || '-') + '</div>'
         : '';
       buyerOrderHistoryHtml =
         '<div class="market-order-history">' +
           '<p class="market-order-history__title">거래내역</p>' +
           '<div class="market-nego-divider"></div>' +
-          marketTxRowHtml(sellerAvatar, sellerName, '입금 금액 : ' + formatPrice(myOrder.amount) + '원', myOrder.escrow_status, myOrder.va_due_at) +
+          marketTxRowHtml(sellerAvatar, sellerName, buyerAmountLabel, myOrder.escrow_status, myOrder.va_due_at) +
           vaLineHtml +
+          sellerContactHtml +
         '</div>';
     }
 
@@ -1105,6 +1130,8 @@
     }
     var buyBtn = document.getElementById('marketDetailBuyBtn');
     if (buyBtn) buyBtn.onclick = function () { handleMarketBuy(item); };
+    var directDealBtn = document.getElementById('marketDetailDirectDealBtn');
+    if (directDealBtn) directDealBtn.onclick = function () { handleMarketDirectDeal(item, directDealBtn); };
     var confirmBtn = document.getElementById('marketDetailConfirmBtn');
     if (confirmBtn) confirmBtn.onclick = function () { handleMarketConfirmPurchase(item.id, myOrder.id); };
     var cancelOrderBtn = document.getElementById('marketDetailCancelOrderBtn');
@@ -1238,6 +1265,29 @@
     } catch (err) {
       toast('구매 요청 실패: ' + (err && err.message ? err.message : err));
       if (btn) { btn.disabled = false; btn.textContent = '안전결제로 구매하기'; }
+    }
+  }
+
+  function handleMarketDirectDeal(item, btn) {
+    var nego = detailState.myNegoRequest;
+    var dealPrice = (nego && nego.status === 'ACCEPTED') ? Number(nego.requested_price) : Number(item.price);
+    showMarketConfirmPopup(
+      formatPrice(dealPrice) + '원에 직거래를 요청할까요? 안전결제(가상계좌 입금) 없이 예약되며, 판매자와 직접 만나 대금을 주고받습니다.',
+      function () { doMarketDirectDeal(item, btn); },
+      { okText: '직거래 요청' }
+    );
+  }
+
+  async function doMarketDirectDeal(item, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '요청 중...'; }
+    try {
+      var s = await loadMarketService();
+      await s.requestMarketDirectDeal(item.id);
+      toast('직거래를 요청했습니다. 판매자 연락처를 확인해 거래를 진행해 주세요.');
+      openMarketItemDetail(item.id);
+    } catch (err) {
+      toast('직거래 요청 실패: ' + (err && err.message ? err.message : err));
+      if (btn) { btn.disabled = false; btn.textContent = '직거래 요청'; }
     }
   }
 

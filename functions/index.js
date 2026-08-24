@@ -18105,6 +18105,132 @@ exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res)
 });
 
 /**
+ * 직거래 요청 — 안전결제(Toss 가상계좌)를 거치지 않고 상품을 예약(escrow_status=RESERVED)한다.
+ * 거래 방법에 "직거래"가 포함된 상품에서만 가능. 판매자 정산 계좌도 필요 없다(현장에서 직접
+ * 주고받으므로). 이후 흐름은 안전결제와 동일한 화면·함수(구매 확정하기/구매 취소)를 공유한다 —
+ * confirmMarketPurchase/cancelMarketOrder가 RESERVED 상태도 함께 처리하도록 되어 있다.
+ */
+const requestMarketDirectDealOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
+exports.requestMarketDirectDeal = onRequest(requestMarketDirectDealOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const itemId = String(body.itemId || "").trim();
+    if (!itemId) {
+      res.status(400).json({ success: false, error: "itemId가 필요합니다." });
+      return;
+    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+
+    const buyerId = resolveMarketBuyerUuid(uid);
+    if (!buyerId) {
+      res.status(400).json({ success: false, error: "구매자 식별에 실패했습니다." });
+      return;
+    }
+
+    const { data: item, error: itemErr } = await supabase
+      .from("market_items")
+      .select("*")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (itemErr || !item) {
+      res.status(404).json({ success: false, error: "존재하지 않는 상품입니다." });
+      return;
+    }
+    if (item.user_id === buyerId) {
+      res.status(400).json({ success: false, error: "본인이 등록한 상품은 예약할 수 없습니다." });
+      return;
+    }
+    if (!Array.isArray(item.deal_method) || item.deal_method.indexOf("직거래") === -1) {
+      res.status(400).json({ success: false, error: "직거래를 지원하지 않는 상품입니다." });
+      return;
+    }
+    if (item.status !== "ON_SALE") {
+      res.status(409).json({ success: false, error: "이미 예약되었거나 판매 완료된 상품입니다." });
+      return;
+    }
+
+    // 멱등성: 동일 구매자가 이미 진행 중인 요청/주문이 있으면 재사용
+    const { data: existingOrders } = await supabase
+      .from("market_orders")
+      .select("*")
+      .eq("item_id", itemId)
+      .eq("buyer_id", buyerId)
+      .in("escrow_status", ["PENDING", "RESERVED", "PAID"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (existingOrders && existingOrders.length) {
+      const ex = existingOrders[0];
+      res.status(200).json({ success: true, alreadyRequested: true, orderId: ex.id, escrowStatus: ex.escrow_status });
+      return;
+    }
+
+    // 수락된 가격 조정이 있으면 반영(안전결제와 동일 로직)
+    let effectiveItemPrice = Number(item.price);
+    if (item.negotiable) {
+      const { data: acceptedNego } = await supabase
+        .from("market_nego_requests")
+        .select("requested_price")
+        .eq("item_id", itemId)
+        .eq("buyer_id", buyerId)
+        .eq("status", "ACCEPTED")
+        .maybeSingle();
+      if (acceptedNego && Number(acceptedNego.requested_price) > 0) {
+        effectiveItemPrice = Number(acceptedNego.requested_price);
+      }
+    }
+
+    // toss_order_id는 안전결제 전용 컬럼이지만 NOT NULL UNIQUE라 직거래도 고유값을 채워야 한다.
+    const syntheticOrderId = "direct_" + itemId + "_" + buyerId + "_" + Date.now();
+
+    const { data: orderRow, error: insertErr } = await supabase
+      .from("market_orders")
+      .insert({
+        item_id: itemId,
+        buyer_id: buyerId,
+        seller_id: item.user_id,
+        toss_order_id: syntheticOrderId,
+        deal_type: "DIRECT_DEAL",
+        item_price: effectiveItemPrice,
+        fee: 0,
+        amount: effectiveItemPrice,
+        escrow_status: "RESERVED",
+      })
+      .select()
+      .single();
+    if (insertErr) throw insertErr;
+
+    await supabase
+      .from("market_items")
+      .update({ status: "RESERVED", updated_at: new Date().toISOString() })
+      .eq("id", itemId)
+      .eq("status", "ON_SALE"); // 낙관적 잠금 — 동시 요청 경쟁 방지
+
+    res.status(200).json({ success: true, orderId: orderRow.id });
+  } catch (e) {
+    console.error("[requestMarketDirectDeal]", e && e.message ? e.message : e);
+    const status = e.status || 500;
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
  * 구매자가 물품 수령 후 [구매 확정]을 누르면 호출 — 입금 확인(PAID) 상태에서만 확정 가능.
  * 판매자 계좌로의 실제 이체는 Toss Payments API에 제3자 지급대행 기능이 없어 자동화할 수 없다.
  * 확정 시점에 정산 대기열(escrow_status=CONFIRMED, settlement_transferred_at=null)로 올라가고,
@@ -18151,10 +18277,10 @@ exports.confirmMarketPurchase = onRequest(confirmMarketPurchaseOptions, async (r
       res.status(403).json({ success: false, error: "본인 주문만 확정할 수 있습니다." });
       return;
     }
-    if (order.escrow_status !== "PAID") {
+    if (order.escrow_status !== "PAID" && order.escrow_status !== "RESERVED") {
       res.status(400).json({
         success: false,
-        error: order.escrow_status === "CONFIRMED" ? "이미 구매 확정된 주문입니다." : "입금이 확인된 주문만 확정할 수 있습니다.",
+        error: order.escrow_status === "CONFIRMED" ? "이미 구매 확정된 주문입니다." : "확정할 수 없는 상태입니다.",
       });
       return;
     }
@@ -18164,7 +18290,7 @@ exports.confirmMarketPurchase = onRequest(confirmMarketPurchaseOptions, async (r
       .from("market_orders")
       .update({ escrow_status: "CONFIRMED", settled_at: nowIso, updated_at: nowIso })
       .eq("id", orderId)
-      .eq("escrow_status", "PAID") // 낙관적 잠금 — 동시 확정 방지
+      .in("escrow_status", ["PAID", "RESERVED"]) // 낙관적 잠금 — 동시 확정 방지
       .select();
     if (updErr) throw updErr;
     if (!updated || !updated.length) {
@@ -18228,7 +18354,7 @@ exports.cancelMarketOrder = onRequest(cancelMarketOrderOptions, async (req, res)
       res.status(403).json({ success: false, error: "본인 주문만 취소할 수 있습니다." });
       return;
     }
-    if (order.escrow_status !== "PENDING") {
+    if (order.escrow_status !== "PENDING" && order.escrow_status !== "RESERVED") {
       res.status(400).json({
         success: false,
         error: order.escrow_status === "PAID" ? "이미 입금된 주문은 환불 요청으로 취소해 주세요." : "취소할 수 없는 상태입니다.",
@@ -18241,7 +18367,7 @@ exports.cancelMarketOrder = onRequest(cancelMarketOrderOptions, async (req, res)
       .from("market_orders")
       .update({ escrow_status: "CANCELLED", updated_at: nowIso })
       .eq("id", orderId)
-      .eq("escrow_status", "PENDING")
+      .in("escrow_status", ["PENDING", "RESERVED"])
       .select();
     if (updErr) throw updErr;
     if (!updated || !updated.length) {
