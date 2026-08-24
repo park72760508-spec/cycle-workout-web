@@ -31089,6 +31089,31 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-nego-request-status--accepted { background: #f0fdf4; color: #15803d; }
 .market-nego-request-status--rejected { background: #f8fafc; color: #94a3b8; }
+
+.market-order-history { margin-top: 4px; }
+.market-order-history__title { font-size: 13px; font-weight: 700; color: #334155; margin: 16px 0 0 0; }
+.market-order-history-status {
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.market-order-history-status--pending { background: #fff7ed; color: #c2410c; }
+.market-order-history-status--paid { background: #eff6ff; color: #1d4ed8; }
+.market-order-history-status--confirmed { background: #f0fdf4; color: #15803d; }
+.market-order-history-status--refunded,
+.market-order-history-status--cancelled { background: #f8fafc; color: #94a3b8; }
+.market-order-history-contacts {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 12.5px;
+  color: #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .market-detail-action-bar { padding: 10px 0 20px 0; }
 .market-detail-order-notice {
   margin-bottom: 10px;

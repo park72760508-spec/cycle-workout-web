@@ -478,6 +478,31 @@ export async function getSellerPhone(sellerId) {
   });
 }
 
+/** 구매자 연락처(전화번호) — 입금 확인(PAID) 이후 그 주문의 판매자에 한해서만 노출 */
+export async function getBuyerPhone(buyerId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.rpc('get_market_buyer_contact', { p_buyer_id: buyerId });
+    if (error) throw error;
+    return data || '';
+  });
+}
+
+/** 판매자 상세화면 "거래내역" — 해당 상품의 전체 주문(RLS가 알아서 범위를 좁혀준다:
+ * 판매자는 전체, 구매자는 본인 주문만) */
+export async function getMarketOrdersForItem(itemId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_orders')
+      .select('*')
+      .eq('item_id', itemId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  });
+}
+
 /** 가격 네고 제안 — 재제안 시 서버에서 upsert(status는 항상 PENDING으로 리셋) */
 export async function submitMarketNegoRequest(itemId, price) {
   return withMarketAuthRetry(async () => {
@@ -586,10 +611,12 @@ if (typeof window !== 'undefined') {
     cancelMarketOrder,
     requestMarketOrderRefund,
     getMarketOrderForItem,
+    getMarketOrdersForItem,
     incrementMarketItemView,
     getMarketFavoriteCount,
     getSellerPublicProfile,
     getSellerPhone,
+    getBuyerPhone,
     submitMarketNegoRequest,
     decideMarketNegoRequest,
     getMarketNegoRequestsForItem,

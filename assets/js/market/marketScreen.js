@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260830market10';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260831market11';
   var svc = null;
 
   function loadMarketService() {
@@ -163,6 +163,15 @@
       if (isNaN(d.getTime())) return '';
       return d.toLocaleDateString('ko-KR');
     } catch (e) { return ''; }
+  }
+
+  function marketOrderStatusLabel(status) {
+    if (status === 'PENDING') return '입금 대기중';
+    if (status === 'PAID') return '입금완료';
+    if (status === 'CONFIRMED') return '구매확정 완료';
+    if (status === 'REFUNDED') return '환불 완료';
+    if (status === 'CANCELLED') return '거래 취소됨';
+    return status;
   }
 
   function marketRatingHintText(myScore) {
@@ -732,7 +741,7 @@
 
   // ───────────────────────── 상품 상세 화면 ─────────────────────────
 
-  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0, myNegoRequest: null, negoRequests: [] };
+  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0, myNegoRequest: null, negoRequests: [], orderHistory: [] };
 
   function openMarketItemDetail(itemId) {
     if (typeof window.showScreen === 'function') window.showScreen('marketItemDetailScreen');
@@ -762,11 +771,26 @@
               return Promise.all(sellerNego.map(function (r) { return s.getSellerPublicProfile(r.buyer_id).catch(function () { return null; }); }))
                 .then(function (buyerProfiles) {
                   var sellerNegoWithBuyer = sellerNego.map(function (r, i) { return Object.assign({}, r, { buyerProfile: buyerProfiles[i] }); });
-                  return {
-                    item: item, myUserId: myUserId, myOrder: res[2],
-                    sellerProfile: extra[0], sellerPhone: extra[1], favoriteCount: extra[2], ratingAgg: extra[3], myRating: extra[4],
-                    myNegoRequest: myNegoRequest, negoRequests: sellerNegoWithBuyer,
-                  };
+                  // 판매자 전용 "거래내역" — 해당 상품의 전체 주문(입금/구매확정/환불 등)을 시간순으로 표시.
+                  return (isMine ? s.getMarketOrdersForItem(item.id).catch(function () { return []; }) : Promise.resolve([]))
+                    .then(function (orders) {
+                      return Promise.all(orders.map(function (o) {
+                        var revealPhone = o.escrow_status === 'PAID' || o.escrow_status === 'CONFIRMED';
+                        return Promise.all([
+                          s.getSellerPublicProfile(o.buyer_id).catch(function () { return null; }),
+                          revealPhone ? s.getBuyerPhone(o.buyer_id).catch(function () { return ''; }) : Promise.resolve(''),
+                        ]);
+                      })).then(function (pairs) {
+                        var orderHistory = orders.map(function (o, i) {
+                          return Object.assign({}, o, { buyerProfile: pairs[i][0], buyerPhone: pairs[i][1] });
+                        });
+                        return {
+                          item: item, myUserId: myUserId, myOrder: res[2],
+                          sellerProfile: extra[0], sellerPhone: extra[1], favoriteCount: extra[2], ratingAgg: extra[3], myRating: extra[4],
+                          myNegoRequest: myNegoRequest, negoRequests: sellerNegoWithBuyer, orderHistory: orderHistory,
+                        };
+                      });
+                    });
                 });
             });
           });
@@ -782,6 +806,7 @@
         detailState.myRating = res.myRating || 0;
         detailState.myNegoRequest = res.myNegoRequest;
         detailState.negoRequests = res.negoRequests;
+        detailState.orderHistory = res.orderHistory;
         renderMarketDetail(res.myUserId, res.myOrder);
       })
       .catch(function (err) {
@@ -952,6 +977,41 @@
         '</div>';
     }
 
+    // 판매자 전용 "거래내역" — 가격 조정 요구 내용 아래에 이어서 표시. 입금 확인(PAID) 이후에는
+    // 판매자·구매자 각각의 연락처를 함께 노출한다.
+    var orderHistoryHtml = '';
+    if (isMine && detailState.orderHistory && detailState.orderHistory.length) {
+      orderHistoryHtml =
+        '<div class="market-order-history">' +
+          '<p class="market-order-history__title">거래내역</p>' +
+          detailState.orderHistory.map(function (o) {
+            var bp = o.buyerProfile;
+            var bName = marketSellerDisplayName(bp);
+            var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
+            var revealPhone = o.escrow_status === 'PAID' || o.escrow_status === 'CONFIRMED';
+            var statusClass = o.escrow_status ? o.escrow_status.toLowerCase() : '';
+            var contactsHtml = revealPhone
+              ? '<div class="market-order-history-contacts">' +
+                  '<div>판매자 연락처 : ' + escapeHtml(marketFormatPhone(detailState.sellerPhone) || '-') + '</div>' +
+                  '<div>구매자 연락처 : ' + escapeHtml(marketFormatPhone(o.buyerPhone) || '-') + '</div>' +
+                '</div>'
+              : '';
+            return '<div class="market-nego-divider"></div>' +
+              '<div class="market-nego-request-row">' +
+                '<div class="market-nego-request-row__top">' +
+                  '<img class="market-nego-request-avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
+                  '<span class="market-nego-request-name">' + escapeHtml(bName) + '</span>' +
+                '</div>' +
+                '<div class="market-nego-request-row__bottom">' +
+                  '<span class="market-nego-request-amount">입금 금액 : ' + formatPrice(o.amount) + '원</span>' +
+                  '<span class="market-order-history-status market-order-history-status--' + statusClass + '">' + marketOrderStatusLabel(o.escrow_status) + '</span>' +
+                '</div>' +
+                contactsHtml +
+              '</div>';
+          }).join('') +
+        '</div>';
+    }
+
     body.innerHTML =
       sliderHtml +
       '<div class="market-detail-info">' +
@@ -965,6 +1025,7 @@
         '</div>' +
         '<div class="market-detail-desc">' + escapeHtml(item.description || '').replace(/\n/g, '<br/>') + '</div>' +
         negoListHtml +
+        orderHistoryHtml +
       '</div>';
 
     // 하단 액션 버튼은 body 레벨 플로팅 바(#marketDetailFloatingBar)에 렌더링한다 —
