@@ -179,15 +179,10 @@
     return digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7, 11);
   }
 
-  function marketSellerDisplayName(profile, isSelf) {
-    var raw = (profile && profile.display_name) ? String(profile.display_name) : '판매자';
-    if (profile && profile.is_private && !isSelf) {
-      if (typeof window.stelvioRankingPrivateMaskedDisplayName === 'function') {
-        return window.stelvioRankingPrivateMaskedDisplayName(raw);
-      }
-      return raw.length >= 1 ? raw.charAt(0) + '**' : '**';
-    }
-    return raw;
+  /** 중고랜드는 실거래 상대를 식별해야 하는 특성상, 랭킹보드 등과 달리 비공개(is_private)
+   * 설정과 무관하게 실명을 그대로 표시한다. */
+  function marketSellerDisplayName(profile) {
+    return (profile && profile.display_name) ? String(profile.display_name) : '판매자';
   }
 
   /** 제휴사 만족도(별점) 로직 그대로 이식(assets/js/affiliate/AffiliateScreens.jsx) —
@@ -868,7 +863,7 @@
     }
 
     var seller = detailState.sellerProfile;
-    var sellerName = marketSellerDisplayName(seller, isMine);
+    var sellerName = marketSellerDisplayName(seller);
     var sellerPhoneFormatted = marketFormatPhone(detailState.sellerPhone);
     var sellerNameDisplay = sellerName + (sellerPhoneFormatted ? '(' + sellerPhoneFormatted + ')' : '');
     var sellerAvatarUrl = (seller && seller.profile_image_url) || 'assets/img/profile-placeholder.svg';
@@ -925,15 +920,19 @@
         '<div class="market-nego-requests">' +
           detailState.pendingNego.map(function (r) {
             var bp = r.buyerProfile;
-            var bName = marketSellerDisplayName(bp, false);
+            var bName = marketSellerDisplayName(bp);
             var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
             return '<div class="market-nego-request-row">' +
-              '<img class="market-nego-request-avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
-              '<span class="market-nego-request-name">' + escapeHtml(bName) + '</span>' +
-              '<span class="market-nego-request-amount">' + formatPrice(r.requested_price) + '원</span>' +
-              '<div class="market-nego-request-actions">' +
-                '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
-                '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
+              '<div class="market-nego-request-row__top">' +
+                '<img class="market-nego-request-avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
+                '<span class="market-nego-request-name">' + escapeHtml(bName) + '</span>' +
+              '</div>' +
+              '<div class="market-nego-request-row__bottom">' +
+                '<span class="market-nego-request-amount">가격 조정 요구 : ' + formatPrice(r.requested_price) + '원</span>' +
+                '<div class="market-nego-request-actions">' +
+                  '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
+                  '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
+                '</div>' +
               '</div>' +
             '</div>';
           }).join('') +

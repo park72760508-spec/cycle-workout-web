@@ -30506,6 +30506,13 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
    가리지 않도록 여유 있게 하단 패딩을 준다. */
 .market-scroll-area.market-detail {
   padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.market-scroll-area.market-detail::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 /* 하단 네비가 이제 sticky가 아니라 플로팅(position:fixed) pill이고, 라이딩 모임 글래스 네비와
    같은 이유로 특정 .screen 내부가 아니라 body 바로 아래 단독으로 존재해서(#marketBottomNav)
@@ -31034,11 +31041,23 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-nego-request-row {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   padding: 10px;
   background: #fafafa;
   border-radius: 10px;
+}
+.market-nego-request-row__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.market-nego-request-row__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .market-nego-request-avatar {
   width: 28px;
@@ -31048,8 +31067,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex-shrink: 0;
   background: #e2e8f0;
 }
-.market-nego-request-name { font-size: 13px; font-weight: 600; color: #334155; flex-shrink: 0; }
-.market-nego-request-amount { font-size: 14px; font-weight: 800; color: #ea580c; flex: 1; }
+.market-nego-request-name { font-size: 13px; font-weight: 600; color: #334155; }
+.market-nego-request-amount { font-size: 13px; font-weight: 800; color: #ea580c; }
 .market-nego-request-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .market-nego-accept-btn, .market-nego-reject-btn {
   border: none;
