@@ -383,6 +383,22 @@ export async function getMyMarketItems() {
   });
 }
 
+/** 마이페이지 "나의거래내역" — 내가 구매자인 주문을 상품 정보와 함께 조회 */
+export async function getMyMarketOrders() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const userId = await getMySupabaseUserId();
+    if (!userId) return [];
+    const { data, error } = await supabase
+      .from('market_orders')
+      .select('*, item:market_items(*)')
+      .eq('buyer_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  });
+}
+
 /** 구매 요청 — 가상계좌(안전결제) 발급. Cloud Function이 Toss 시크릿 키로 발급을 대행한다.
  *  createMarketOrder/confirmMarketPurchase는 다른 대회 결제 함수와 동일하게 asia-northeast3에 배포됨. */
 export async function requestMarketPurchase(itemId) {
@@ -606,6 +622,7 @@ if (typeof window !== 'undefined') {
     getMyFavoriteItemIds,
     getMySupabaseUserId,
     getMyMarketItems,
+    getMyMarketOrders,
     requestMarketPurchase,
     confirmMarketPurchase,
     cancelMarketOrder,

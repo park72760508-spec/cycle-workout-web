@@ -30526,6 +30526,9 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
+/* 마이페이지 "나의거래내역" — 예약중/거래완료 두 섹션(각각 .market-grid)을 세로로 쌓는 컨테이너 */
+.market-deals-list .market-grid { margin-bottom: 8px; }
+.market-deals-list .market-order-history__title:first-child { margin-top: 0; }
 .market-card {
   display: flex;
   flex-direction: column;

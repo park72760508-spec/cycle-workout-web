@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260831market11';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260902market12';
   var svc = null;
 
   function loadMarketService() {
@@ -1445,6 +1445,7 @@
     var tabs = [
       { key: 'selling', label: '내 상품', icon: 'my' },
       { key: 'favorites', label: '찜한 상품', icon: 'heart' },
+      { key: 'deals', label: '나의거래내역', icon: 'deal' },
     ];
     wrap.innerHTML = tabs.map(function (t) {
       return '<button type="button" class="market-subtab' + (myPageState.tab === t.key ? ' active' : '') +
@@ -1460,30 +1461,53 @@
     });
   }
 
+  var MARKET_DEALS_RESERVED_STATUSES = ['PENDING', 'PAID'];
+
   function loadMyPageContent() {
     var grid = document.getElementById('marketMyPageGrid');
-    if (grid) grid.innerHTML = '<div class="market-loading">불러오는 중...</div>';
+    if (!grid) return;
+    grid.className = myPageState.tab === 'deals' ? 'market-deals-list' : 'market-grid';
+    grid.innerHTML = '<div class="market-loading">불러오는 중...</div>';
     loadMarketService()
       .then(function (s) {
+        if (myPageState.tab === 'deals') return renderMyDeals(s, grid);
         if (myPageState.tab === 'favorites') {
           return s.getMyFavoriteItemIds().then(function (ids) {
             return Promise.all(Array.from(ids).map(function (id) { return s.getMarketItem(id); }));
+          }).then(function (rows) {
+            renderMyPageItemGrid(grid, rows, '찜한 상품이 없습니다.');
           });
         }
-        return s.getMyMarketItems();
-      })
-      .then(function (rows) {
-        rows = (rows || []).filter(Boolean);
-        if (grid) {
-          grid.innerHTML = rows.length
-            ? rows.map(marketItemCardHtml).join('')
-            : '<div class="market-empty">' + (myPageState.tab === 'favorites' ? '찜한 상품이 없습니다.' : '등록한 상품이 없습니다.') + '</div>';
-          wireMarketGridEvents(grid);
-        }
+        return s.getMyMarketItems().then(function (rows) {
+          renderMyPageItemGrid(grid, rows, '등록한 상품이 없습니다.');
+        });
       })
       .catch(function (err) {
-        if (grid) grid.innerHTML = '<div class="market-empty">불러오지 못했습니다: ' + escapeHtml(err.message || String(err)) + '</div>';
+        grid.innerHTML = '<div class="market-empty">불러오지 못했습니다: ' + escapeHtml(err.message || String(err)) + '</div>';
       });
+  }
+
+  function renderMyPageItemGrid(grid, rows, emptyMessage) {
+    rows = (rows || []).filter(Boolean);
+    grid.innerHTML = rows.length ? rows.map(marketItemCardHtml).join('') : '<div class="market-empty">' + emptyMessage + '</div>';
+    wireMarketGridEvents(grid);
+  }
+
+  /** "나의거래내역" — 내가 구매자인 주문을 예약중(PENDING·PAID)/거래완료(CONFIRMED)로 나눠 표시 */
+  function renderMyDeals(s, grid) {
+    return s.getMyMarketOrders().then(function (orders) {
+      orders = orders || [];
+      var reserved = orders.filter(function (o) { return MARKET_DEALS_RESERVED_STATUSES.indexOf(o.escrow_status) !== -1; });
+      var completed = orders.filter(function (o) { return o.escrow_status === 'CONFIRMED'; });
+      function sectionHtml(title, list) {
+        var cardsHtml = list.length
+          ? '<div class="market-grid">' + list.map(function (o) { return marketItemCardHtml(o.item); }).join('') + '</div>'
+          : '<div class="market-empty">' + title + ' 내역이 없습니다.</div>';
+        return '<p class="market-order-history__title">' + title + '</p>' + cardsHtml;
+      }
+      grid.innerHTML = sectionHtml('예약중', reserved) + sectionHtml('거래완료', completed);
+      wireMarketGridEvents(grid);
+    });
   }
 
   window.marketMyPageScreenInit = function () {
