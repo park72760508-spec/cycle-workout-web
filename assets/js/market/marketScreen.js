@@ -156,6 +156,14 @@
     return '';
   }
 
+  /** 상세화면 이미지 중앙 오버레이 배지(목록 카드용 statusBadgeHtml과 별도 — 이미지 위에
+   * 놓이도록 반투명·큰 크기로 표시) */
+  function marketDetailImageStatusBadgeHtml(status) {
+    if (status === 'SOLD') return '<div class="market-detail-slider__status-badge market-detail-slider__status-badge--sold">판매완료</div>';
+    if (status === 'RESERVED') return '<div class="market-detail-slider__status-badge market-detail-slider__status-badge--reserved">예약중</div>';
+    return '';
+  }
+
   function marketFormatDate(iso) {
     if (!iso) return '';
     try {
@@ -834,8 +842,9 @@
     var images = item.images && item.images.length ? item.images : ['assets/img/profile-placeholder.svg'];
     var isMine = myUserId && item.user_id === myUserId;
 
+    var isUnavailableStatus = item.status === 'RESERVED' || item.status === 'SOLD';
     var sliderHtml =
-      '<div class="market-detail-slider" id="marketDetailSlider">' +
+      '<div class="market-detail-slider' + (isUnavailableStatus ? ' market-detail-slider--dimmed' : '') + '" id="marketDetailSlider">' +
         '<div class="market-detail-slider__track" id="marketDetailSliderTrack">' +
           images.map(function (url) {
             return '<img class="market-detail-slider__img" src="' + escapeHtml(url) + '" alt="" loading="lazy" decoding="async" />';
@@ -848,6 +857,7 @@
               }).join('') +
             '</div>'
           : '') +
+        marketDetailImageStatusBadgeHtml(item.status) +
       '</div>';
 
     var dealMethodText = (item.deal_method || []).join(', ') + (item.direct_deal_location ? (' (' + escapeHtml(item.direct_deal_location) + ')') : '');
@@ -862,7 +872,6 @@
         '</div>';
     } else if (myOrder && myOrder.escrow_status === 'PAID') {
       actionHtml =
-        '<div class="market-detail-order-notice">입금이 확인되었습니다. 물품을 수령하셨으면 아래 버튼을 눌러주세요.</div>' +
         '<div class="market-detail-actions">' +
           '<button type="button" class="market-btn market-btn--primary" id="marketDetailConfirmBtn">구매 확정하기</button>' +
           '<button type="button" class="market-btn market-btn--outline" id="marketDetailRefundToggleBtn">환불 요청</button>' +
@@ -1061,7 +1070,6 @@
       sliderHtml +
       '<div class="market-detail-info">' +
         sellerRowHtml +
-        statusBadgeHtml(item.status) +
         '<div class="market-detail-title">' + escapeHtml(item.title) + '</div>' +
         priceRowHtml +
         '<div class="market-detail-meta">' +

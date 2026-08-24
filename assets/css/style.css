@@ -30886,6 +30886,29 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   object-fit: cover;
   flex-shrink: 0;
 }
+/* 예약중/판매완료 — 사진을 옅은 흑백톤으로 낮춰 비활성 느낌을 준다 */
+.market-detail-slider--dimmed .market-detail-slider__img {
+  filter: grayscale(0.55) brightness(0.85);
+}
+/* 상태 배지를 사진 정중앙에 반투명하게 겹쳐 사진과 이질감 없이 어우러지도록 표시 */
+.market-detail-slider__status-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-8deg);
+  padding: 10px 28px;
+  border-radius: 10px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  z-index: 1;
+  pointer-events: none;
+}
+.market-detail-slider__status-badge--reserved { background: rgba(245, 158, 11, 0.72); }
+.market-detail-slider__status-badge--sold { background: rgba(100, 116, 139, 0.72); }
 .market-detail-slider__dots {
   position: absolute;
   bottom: 8px;
@@ -31133,15 +31156,6 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-buyer-order-label { color: #94a3b8; font-weight: 600; flex-shrink: 0; }
 .market-due-countdown { font-size: 13px; color: #ef4444; font-weight: 700; }
 .market-detail-action-bar { padding: 10px 0 20px 0; }
-.market-detail-order-notice {
-  margin-bottom: 10px;
-  padding: 10px 12px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 8px;
-  font-size: 12.5px;
-  color: #15803d;
-}
 .market-refund-form {
   margin-top: 10px;
   padding: 12px;
