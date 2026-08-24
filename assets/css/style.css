@@ -31114,6 +31114,23 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex-direction: column;
   gap: 4px;
 }
+.market-buyer-order-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 10px;
+}
+.market-buyer-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+.market-buyer-order-label { color: #94a3b8; font-weight: 600; flex-shrink: 0; }
 .market-detail-action-bar { padding: 10px 0 20px 0; }
 .market-detail-order-notice {
   margin-bottom: 10px;

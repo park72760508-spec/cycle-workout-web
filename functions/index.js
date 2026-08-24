@@ -18069,6 +18069,9 @@ exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res)
         amount,
         escrow_status: "PENDING",
         va_due_at: new Date(dueMs).toISOString(),
+        va_bank_code: va.bankCode || DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE,
+        va_bank_name: bankNameKo,
+        va_account_number: va.accountNumber || null,
         settlement_account: settlementAccount,
       })
       .select()

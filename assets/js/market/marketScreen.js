@@ -1012,6 +1012,29 @@
         '</div>';
     }
 
+    // 구매자 전용 "거래내역" — 안전결제로 구매하기 클릭 후, 이후 화면을 나갔다 돌아와도
+    // 가상계좌 정보·입금액·입금상태를 계속 확인할 수 있게 한다.
+    var buyerOrderHistoryHtml = '';
+    if (!isMine && myOrder) {
+      var vaRowHtml = myOrder.va_account_number
+        ? '<div class="market-buyer-order-row"><span class="market-buyer-order-label">가상계좌</span><span>' +
+            escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number) + '</span></div>'
+        : '';
+      var orderStatusClass = myOrder.escrow_status ? myOrder.escrow_status.toLowerCase() : '';
+      buyerOrderHistoryHtml =
+        '<div class="market-order-history">' +
+          '<p class="market-order-history__title">거래내역</p>' +
+          '<div class="market-nego-divider"></div>' +
+          '<div class="market-buyer-order-card">' +
+            vaRowHtml +
+            '<div class="market-buyer-order-row"><span class="market-buyer-order-label">입금금액</span><span>' + formatPrice(myOrder.amount) + '원</span></div>' +
+            '<div class="market-buyer-order-row"><span class="market-buyer-order-label">입금상태</span>' +
+              '<span class="market-order-history-status market-order-history-status--' + orderStatusClass + '">' + marketOrderStatusLabel(myOrder.escrow_status) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }
+
     body.innerHTML =
       sliderHtml +
       '<div class="market-detail-info">' +
@@ -1026,6 +1049,7 @@
         '<div class="market-detail-desc">' + escapeHtml(item.description || '').replace(/\n/g, '<br/>') + '</div>' +
         negoListHtml +
         orderHistoryHtml +
+        buyerOrderHistoryHtml +
       '</div>';
 
     // 하단 액션 버튼은 body 레벨 플로팅 바(#marketDetailFloatingBar)에 렌더링한다 —
