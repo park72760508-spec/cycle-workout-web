@@ -1057,7 +1057,9 @@
               '<div>구매자 연락처 : ' + escapeHtml(marketFormatPhone(o.buyerPhone) || '-') + '</div>' +
             '</div>'
           : '';
-        var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.amount) + '원';
+        // 판매자에게는 실제 정산받는 금액(수수료 차감된 item_price)을 보여준다 — amount는
+        // 구매자가 실제로 입금한 총액(수수료 포함)이라 판매자 관점에서는 오해를 줄 수 있다.
+        var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.item_price) + '원';
         return '<div class="market-nego-divider"></div>' +
           marketTxRowHtml(bAvatar, bName, sellerAmountLabel, o.escrow_status, o.va_due_at) +
           contactsHtml;
