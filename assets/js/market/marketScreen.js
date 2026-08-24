@@ -36,6 +36,10 @@
    * activeKey가 null이면(상세 화면) 네비 자체를 숨긴다. */
   function syncMarketBottomNav(activeKey) {
     var nav = document.getElementById('marketBottomNav');
+    if (activeKey) {
+      var floatingBar = document.getElementById('marketDetailFloatingBar');
+      if (floatingBar) floatingBar.style.display = 'none';
+    }
     if (!nav) return;
     if (!activeKey) {
       nav.style.display = 'none';
@@ -949,8 +953,15 @@
         '</div>' +
         '<div class="market-detail-desc">' + escapeHtml(item.description || '').replace(/\n/g, '<br/>') + '</div>' +
         negoListHtml +
-      '</div>' +
-      '<div class="market-detail-action-bar">' + actionHtml + '</div>';
+      '</div>';
+
+    // 하단 액션 버튼은 body 레벨 플로팅 바(#marketDetailFloatingBar)에 렌더링한다 —
+    // .market-scroll-area 안에 있으면 전역 .screen.active 스크롤 컨테이너와 겹쳐 버튼이
+    // 눌리지 않는 문제가 있어 하단 네비와 동일하게 완전히 분리했다.
+    var floatingBar = document.getElementById('marketDetailFloatingBar');
+    var floatingBarContent = document.getElementById('marketDetailFloatingBarContent');
+    if (floatingBarContent) floatingBarContent.innerHTML = '<div class="market-detail-action-bar">' + actionHtml + '</div>';
+    if (floatingBar) floatingBar.style.display = 'block';
 
     wireMarketDetailSlider();
     var buyBtn = document.getElementById('marketDetailBuyBtn');
