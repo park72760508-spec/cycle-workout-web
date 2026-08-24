@@ -732,7 +732,7 @@
 
   // ───────────────────────── 상품 상세 화면 ─────────────────────────
 
-  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0, myNegoRequest: null, pendingNego: [] };
+  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0, myNegoRequest: null, negoRequests: [] };
 
   function openMarketItemDetail(itemId) {
     if (typeof window.showScreen === 'function') window.showScreen('marketItemDetailScreen');
@@ -756,14 +756,16 @@
             ]).then(function (extra) {
               var negoRows = extra[5] || [];
               var myNegoRequest = !isMine ? (negoRows.filter(function (r) { return r.buyer_id === myUserId; })[0] || null) : null;
-              var pendingNego = isMine ? negoRows.filter(function (r) { return r.status === 'PENDING'; }) : [];
-              return Promise.all(pendingNego.map(function (r) { return s.getSellerPublicProfile(r.buyer_id).catch(function () { return null; }); }))
+              // 판매자에게는 결정 여부와 무관하게 전체 요청 이력을 보여준다(수락/거절 후에도
+              // 목록에서 사라지지 않고 상태만 갱신되어야 하므로 PENDING만 걸러내지 않는다).
+              var sellerNego = isMine ? negoRows : [];
+              return Promise.all(sellerNego.map(function (r) { return s.getSellerPublicProfile(r.buyer_id).catch(function () { return null; }); }))
                 .then(function (buyerProfiles) {
-                  var pendingNegoWithBuyer = pendingNego.map(function (r, i) { return Object.assign({}, r, { buyerProfile: buyerProfiles[i] }); });
+                  var sellerNegoWithBuyer = sellerNego.map(function (r, i) { return Object.assign({}, r, { buyerProfile: buyerProfiles[i] }); });
                   return {
                     item: item, myUserId: myUserId, myOrder: res[2],
                     sellerProfile: extra[0], sellerPhone: extra[1], favoriteCount: extra[2], ratingAgg: extra[3], myRating: extra[4],
-                    myNegoRequest: myNegoRequest, pendingNego: pendingNegoWithBuyer,
+                    myNegoRequest: myNegoRequest, negoRequests: sellerNegoWithBuyer,
                   };
                 });
             });
@@ -779,7 +781,7 @@
         detailState.ratingCount = res.ratingAgg ? res.ratingAgg.count : 0;
         detailState.myRating = res.myRating || 0;
         detailState.myNegoRequest = res.myNegoRequest;
-        detailState.pendingNego = res.pendingNego;
+        detailState.negoRequests = res.negoRequests;
         renderMarketDetail(res.myUserId, res.myOrder);
       })
       .catch(function (err) {
@@ -914,27 +916,38 @@
     }
 
     var negoListHtml = '';
-    if (isMine && detailState.pendingNego && detailState.pendingNego.length) {
+    if (isMine && detailState.negoRequests && detailState.negoRequests.length) {
       negoListHtml =
-        '<div class="market-nego-divider"></div>' +
         '<div class="market-nego-requests">' +
-          detailState.pendingNego.map(function (r) {
+          detailState.negoRequests.map(function (r) {
             var bp = r.buyerProfile;
             var bName = marketSellerDisplayName(bp);
             var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
-            return '<div class="market-nego-request-row">' +
-              '<div class="market-nego-request-row__top">' +
-                '<img class="market-nego-request-avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
-                '<span class="market-nego-request-name">' + escapeHtml(bName) + '</span>' +
-              '</div>' +
-              '<div class="market-nego-request-row__bottom">' +
-                '<span class="market-nego-request-amount">가격 조정 요구 : ' + formatPrice(r.requested_price) + '원</span>' +
+            var rightHtml;
+            if (r.status === 'PENDING') {
+              rightHtml =
                 '<div class="market-nego-request-actions">' +
                   '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
                   '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
+                '</div>';
+            } else {
+              rightHtml = '<span class="market-nego-request-status market-nego-request-status--' +
+                (r.status === 'ACCEPTED' ? 'accepted' : 'rejected') + '">' +
+                (r.status === 'ACCEPTED' ? '수락됨' : '거절됨') + '</span>';
+            }
+            // 요청마다 위쪽에 회색 점선 구분선을 두어, 다른 사용자가 추가로 가격 조정을
+            // 요구할 때마다 구분선+내용이 계속 이어붙는 형태로 표시되게 한다.
+            return '<div class="market-nego-divider"></div>' +
+              '<div class="market-nego-request-row">' +
+                '<div class="market-nego-request-row__top">' +
+                  '<img class="market-nego-request-avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
+                  '<span class="market-nego-request-name">' + escapeHtml(bName) + '</span>' +
                 '</div>' +
-              '</div>' +
-            '</div>';
+                '<div class="market-nego-request-row__bottom">' +
+                  '<span class="market-nego-request-amount">가격 조정 요구 : ' + formatPrice(r.requested_price) + '원</span>' +
+                  rightHtml +
+                '</div>' +
+              '</div>';
           }).join('') +
         '</div>';
     }

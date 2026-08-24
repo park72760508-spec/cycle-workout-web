@@ -31032,7 +31032,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-nego-divider {
   margin: 16px 0;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px dashed #cbd5e1;
 }
 .market-nego-requests {
   display: flex;
@@ -31080,6 +31080,15 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-nego-accept-btn { background: #ea580c; color: #fff; }
 .market-nego-reject-btn { background: #f1f5f9; color: #64748b; }
+.market-nego-request-status {
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.market-nego-request-status--accepted { background: #f0fdf4; color: #15803d; }
+.market-nego-request-status--rejected { background: #f8fafc; color: #94a3b8; }
 .market-detail-action-bar { padding: 10px 0 20px 0; }
 .market-detail-order-notice {
   margin-bottom: 10px;
