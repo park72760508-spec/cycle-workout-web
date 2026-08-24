@@ -427,6 +427,10 @@
 
   window.marketScreenInit = function () {
     syncMarketBottomNav('list');
+    // 화면 접속과 동시에 스피너부터 표시 — 즐겨찾기/로그인 사용자 조회가 끝나야 시작되던
+    // reloadMarketHomeList() 호출 이전에도 곧바로 로딩 상태가 보이게 한다.
+    var grid = document.getElementById('marketItemGrid');
+    if (grid) grid.innerHTML = '<div class="market-loading market-loading--spinner"><div class="market-loading__spinner-circle"></div><div class="market-loading__spinner-text">상품 로딩 중 ....</div></div>';
     loadMarketService()
       .then(function (s) {
         return Promise.all([s.getMyFavoriteItemIds(), s.getMySupabaseUserId()]);
