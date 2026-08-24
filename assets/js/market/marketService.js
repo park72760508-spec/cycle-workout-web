@@ -447,6 +447,9 @@ export async function getMarketFavoriteCount(itemId) {
 
 /** 판매자 공개 프로필(v_user_public_profile) — RLS상 users 테이블은 본인 것만 보이므로 반드시
  *  이 공개 뷰를 통해서만 다른 사용자(판매자)의 이름·프로필 사진을 읽을 수 있다. */
+/** v_user_public_profile.display_name은 비공개(is_private) 사용자를 '비공개' 문자열로
+ * 마스킹해서 내려준다(랭킹보드 등 공통 정책). 중고랜드는 실거래 상대를 식별해야 하므로,
+ * 정당한 거래 관계에 한해 실명을 조회하는 get_market_display_name으로 덮어쓴다. */
 export async function getSellerPublicProfile(sellerId) {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
@@ -456,6 +459,10 @@ export async function getSellerPublicProfile(sellerId) {
       .eq('id', sellerId)
       .maybeSingle();
     if (error) throw error;
+    if (data && data.is_private) {
+      const { data: realName } = await supabase.rpc('get_market_display_name', { p_user_id: sellerId });
+      if (realName) data.display_name = realName;
+    }
     return data;
   });
 }
