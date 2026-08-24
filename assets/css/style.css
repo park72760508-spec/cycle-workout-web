@@ -30958,9 +30958,23 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
   gap: 8px;
   margin-top: 8px;
   align-items: center;
+  width: 100%;
 }
-.market-nego-input { flex: 1; margin-bottom: 0 !important; }
-.market-nego-submit-btn { flex-shrink: 0; white-space: nowrap; }
+.market-nego-input {
+  flex: 1 1 0%;
+  min-width: 0;
+  margin-bottom: 0 !important;
+}
+/* .market-btn의 width:100%가 flex-basis로 상속돼 버튼이 입력창과 폭을 다투는 문제를
+   막기 위해 width/flex-basis를 명시적으로 내용 크기로 재정의 */
+.market-nego-submit-btn {
+  display: inline-block;
+  width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 11px 14px;
+  font-size: 13px;
+}
 .market-nego-divider {
   margin: 16px 0;
   border-top: 1px solid #f1f5f9;
