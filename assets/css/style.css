@@ -31131,6 +31131,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   color: #334155;
 }
 .market-buyer-order-label { color: #94a3b8; font-weight: 600; flex-shrink: 0; }
+.market-due-countdown { font-size: 13px; color: #ef4444; font-weight: 700; }
 .market-detail-action-bar { padding: 10px 0 20px 0; }
 .market-detail-order-notice {
   margin-bottom: 10px;

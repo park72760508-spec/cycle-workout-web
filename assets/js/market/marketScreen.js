@@ -165,6 +165,19 @@
     } catch (e) { return ''; }
   }
 
+  /** 대회 참가신청 입금기한 카운트다운(competitionBottomSheet.js의 formatRemaining)과 동일 로직 */
+  function marketFormatRemaining(dueDateStr) {
+    var due = new Date(dueDateStr).getTime();
+    var diff = due - Date.now();
+    if (!isFinite(due) || diff <= 0) return '입금 기한이 지났습니다';
+    var totalSec = Math.floor(diff / 1000);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return pad(h) + ':' + pad(m) + ':' + pad(s) + ' 남음';
+  }
+
   function marketOrderStatusLabel(status) {
     if (status === 'PENDING') return '입금 대기중';
     if (status === 'PAID') return '입금완료';
@@ -1021,6 +1034,14 @@
             escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number) + '</span></div>'
         : '';
       var orderStatusClass = myOrder.escrow_status ? myOrder.escrow_status.toLowerCase() : '';
+      // 대회 참가신청 입금기한 표시(competitionBottomSheet.js)와 동일 로직 — 입금 대기중(PENDING)
+      // 동안에만 실시간 카운트다운을 보여주고, 입금 확인 이후에는 표시하지 않는다.
+      var dueRowHtml = (myOrder.escrow_status === 'PENDING' && myOrder.va_due_at)
+        ? '<div class="market-buyer-order-row"><span class="market-buyer-order-label">입금기한</span>' +
+            '<span class="market-due-countdown" id="marketBuyerVaCountdown" data-va-due="' + escapeHtml(myOrder.va_due_at) + '">' +
+              escapeHtml(marketFormatRemaining(myOrder.va_due_at)) +
+            '</span></div>'
+        : '';
       buyerOrderHistoryHtml =
         '<div class="market-order-history">' +
           '<p class="market-order-history__title">거래내역</p>' +
@@ -1028,6 +1049,7 @@
           '<div class="market-buyer-order-card">' +
             vaRowHtml +
             '<div class="market-buyer-order-row"><span class="market-buyer-order-label">입금금액</span><span>' + formatPrice(myOrder.amount) + '원</span></div>' +
+            dueRowHtml +
             '<div class="market-buyer-order-row"><span class="market-buyer-order-label">입금상태</span>' +
               '<span class="market-order-history-status market-order-history-status--' + orderStatusClass + '">' + marketOrderStatusLabel(myOrder.escrow_status) + '</span>' +
             '</div>' +
@@ -1061,6 +1083,16 @@
     if (floatingBar) floatingBar.style.display = 'block';
 
     wireMarketDetailSlider();
+    if (myOrder && myOrder.escrow_status === 'PENDING' && myOrder.va_due_at) {
+      var vaTimer = setInterval(function () {
+        var el = document.getElementById('marketBuyerVaCountdown');
+        if (!el || !document.body.contains(el)) {
+          clearInterval(vaTimer);
+          return;
+        }
+        el.textContent = marketFormatRemaining(el.getAttribute('data-va-due'));
+      }, 1000);
+    }
     var buyBtn = document.getElementById('marketDetailBuyBtn');
     if (buyBtn) buyBtn.onclick = function () { handleMarketBuy(item); };
     var confirmBtn = document.getElementById('marketDetailConfirmBtn');
