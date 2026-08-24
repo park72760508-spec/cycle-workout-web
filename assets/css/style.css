@@ -31062,37 +31062,38 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex-direction: column;
   gap: 10px;
 }
-.market-nego-request-row {
+/* 가격조정내역·거래내역 공용 1줄 행 — 아바타+이름, 금액, 상태(또는 버튼)를 한 줄에 배치.
+ * 좁은 화면에서는 flex-wrap으로만 안전하게 줄바꿈되고 강제로 잘리지 않는다. */
+.market-tx-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
   padding: 10px;
   background: #fafafa;
   border-radius: 10px;
-}
-.market-nego-request-row__top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.market-nego-request-row__bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   flex-wrap: wrap;
 }
-.market-nego-request-avatar {
-  width: 28px;
-  height: 28px;
+.market-tx-row__avatar {
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
   background: #e2e8f0;
 }
-.market-nego-request-name { font-size: 13px; font-weight: 600; color: #334155; }
-.market-nego-request-amount { font-size: 13px; font-weight: 800; color: #ea580c; }
-.market-nego-request-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.market-tx-row__name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #334155;
+  flex-shrink: 0;
+  max-width: 84px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.market-tx-row__amount { font-size: 12.5px; font-weight: 800; color: #ea580c; flex: 1; min-width: 90px; }
+.market-tx-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
+.market-tx-row__due { flex-shrink: 0; }
 .market-nego-accept-btn, .market-nego-reject-btn {
   border: none;
   border-radius: 8px;
@@ -31137,24 +31138,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex-direction: column;
   gap: 4px;
 }
-.market-buyer-order-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 10px;
-}
-.market-buyer-order-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 13px;
-  color: #334155;
-}
-.market-buyer-order-label { color: #94a3b8; font-weight: 600; flex-shrink: 0; }
-.market-due-countdown { font-size: 13px; color: #ef4444; font-weight: 700; }
+.market-due-countdown { font-size: 12.5px; color: #ef4444; font-weight: 700; }
 .market-detail-action-bar { padding: 10px 0 20px 0; }
 .market-refund-form {
   margin-top: 10px;

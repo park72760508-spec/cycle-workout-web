@@ -195,6 +195,22 @@
     return status;
   }
 
+  /** 거래내역 1줄 행 — 아바타+이름, 금액, 상태, (입금 대기중일 때만) 입금기한 카운트다운.
+   * 판매자 화면의 여러 주문 목록과 구매자 화면의 본인 주문 카드가 동일 컴포넌트를 공유한다. */
+  function marketTxRowHtml(avatarUrl, name, amountLabel, status, vaDueAt) {
+    var statusClass = status ? status.toLowerCase() : '';
+    var dueHtml = (status === 'PENDING' && vaDueAt)
+      ? '<span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(vaDueAt) + '">' + escapeHtml(marketFormatRemaining(vaDueAt)) + '</span>'
+      : '';
+    return '<div class="market-tx-row">' +
+      '<img class="market-tx-row__avatar" src="' + escapeHtml(avatarUrl) + '" alt="" />' +
+      '<span class="market-tx-row__name">' + escapeHtml(name) + '</span>' +
+      '<span class="market-tx-row__amount">' + amountLabel + '</span>' +
+      '<span class="market-order-history-status market-order-history-status--' + statusClass + '">' + marketOrderStatusLabel(status) + '</span>' +
+      dueHtml +
+    '</div>';
+  }
+
   function marketRatingHintText(myScore) {
     if (myScore >= 2) return '현재 평가: ' + myScore + '점 · 같은 별을 다시 누르면 초기화됩니다';
     if (myScore === 1) return '1점(낮음)으로 저장됨 · 같은 별을 다시 눌러 초기화하거나 2점 이상을 선택하세요';
@@ -934,19 +950,27 @@
       '</div>';
 
     var nego = detailState.myNegoRequest;
+    // 수락된 가격 조정 — 판매자와 해당 예약자(구매 예정자) 화면에만 취소선 원가 + 조정가를 표시.
+    // 다른 사용자가 보는 목록/상세에는 영향 없음(각자 화면 기준으로만 계산).
+    var acceptedNego = isMine
+      ? (detailState.negoRequests || []).filter(function (r) { return r.status === 'ACCEPTED'; })[0] || null
+      : (nego && nego.status === 'ACCEPTED' ? nego : null);
+
     var priceRowHtml;
-    if (!isMine && item.negotiable && !myOrder) {
+    if (acceptedNego) {
+      priceRowHtml =
+        '<div class="market-detail-price market-detail-price--negotiated">' +
+          '<span class="market-detail-price__original">' + formatPrice(item.price) + '원</span>' +
+          '<span class="market-detail-price__final">' + formatPrice(acceptedNego.requested_price) + '원</span>' +
+        '</div>' +
+        (!isMine && !myOrder
+          ? '<div class="market-nego-status market-nego-status--accepted">판매자가 가격 조정을 수락했습니다. 조정된 금액으로 구매할 수 있습니다.</div>'
+          : '');
+    } else if (!isMine && item.negotiable && !myOrder) {
       if (nego && nego.status === 'PENDING') {
         priceRowHtml =
           '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>' +
           '<div class="market-nego-status market-nego-status--pending">가격 조정 요청 중 (제안가 ' + formatPrice(nego.requested_price) + '원)</div>';
-      } else if (nego && nego.status === 'ACCEPTED') {
-        priceRowHtml =
-          '<div class="market-detail-price market-detail-price--negotiated">' +
-            '<span class="market-detail-price__original">' + formatPrice(item.price) + '원</span>' +
-            '<span class="market-detail-price__final">' + formatPrice(nego.requested_price) + '원</span>' +
-          '</div>' +
-          '<div class="market-nego-status market-nego-status--accepted">판매자가 가격 조정을 수락했습니다. 조정된 금액으로 구매할 수 있습니다.</div>';
       } else {
         priceRowHtml =
           '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>' +
@@ -973,27 +997,23 @@
             var rightHtml;
             if (r.status === 'PENDING') {
               rightHtml =
-                '<div class="market-nego-request-actions">' +
+                '<div class="market-tx-row__actions">' +
                   '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
                   '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
                 '</div>';
             } else {
               rightHtml = '<span class="market-nego-request-status market-nego-request-status--' +
                 (r.status === 'ACCEPTED' ? 'accepted' : 'rejected') + '">' +
-                (r.status === 'ACCEPTED' ? '수락됨' : '거절됨') + '</span>';
+                (r.status === 'ACCEPTED' ? '수락됨' : '거절') + '</span>';
             }
             // 요청마다 위쪽에 회색 점선 구분선을 두어, 다른 사용자가 추가로 가격 조정을
             // 요구할 때마다 구분선+내용이 계속 이어붙는 형태로 표시되게 한다.
             return '<div class="market-nego-divider"></div>' +
-              '<div class="market-nego-request-row">' +
-                '<div class="market-nego-request-row__top">' +
-                  '<img class="market-nego-request-avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
-                  '<span class="market-nego-request-name">' + escapeHtml(bName) + '</span>' +
-                '</div>' +
-                '<div class="market-nego-request-row__bottom">' +
-                  '<span class="market-nego-request-amount">가격 조정 요구 : ' + formatPrice(r.requested_price) + '원</span>' +
-                  rightHtml +
-                '</div>' +
+              '<div class="market-tx-row">' +
+                '<img class="market-tx-row__avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
+                '<span class="market-tx-row__name">' + escapeHtml(bName) + '</span>' +
+                '<span class="market-tx-row__amount">조정 가격 : ' + formatPrice(r.requested_price) + '원</span>' +
+                rightHtml +
               '</div>';
           }).join('') +
         '</div>';
@@ -1011,7 +1031,6 @@
             var bName = marketSellerDisplayName(bp);
             var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
             var revealPhone = o.escrow_status === 'PAID' || o.escrow_status === 'CONFIRMED';
-            var statusClass = o.escrow_status ? o.escrow_status.toLowerCase() : '';
             var contactsHtml = revealPhone
               ? '<div class="market-order-history-contacts">' +
                   '<div>판매자 연락처 : ' + escapeHtml(marketFormatPhone(detailState.sellerPhone) || '-') + '</div>' +
@@ -1019,50 +1038,29 @@
                 '</div>'
               : '';
             return '<div class="market-nego-divider"></div>' +
-              '<div class="market-nego-request-row">' +
-                '<div class="market-nego-request-row__top">' +
-                  '<img class="market-nego-request-avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
-                  '<span class="market-nego-request-name">' + escapeHtml(bName) + '</span>' +
-                '</div>' +
-                '<div class="market-nego-request-row__bottom">' +
-                  '<span class="market-nego-request-amount">입금 금액 : ' + formatPrice(o.amount) + '원</span>' +
-                  '<span class="market-order-history-status market-order-history-status--' + statusClass + '">' + marketOrderStatusLabel(o.escrow_status) + '</span>' +
-                '</div>' +
-                contactsHtml +
-              '</div>';
+              marketTxRowHtml(bAvatar, bName, '입금 금액 : ' + formatPrice(o.amount) + '원', o.escrow_status, o.va_due_at) +
+              contactsHtml;
           }).join('') +
         '</div>';
     }
 
     // 구매자 전용 "거래내역" — 안전결제로 구매하기 클릭 후, 이후 화면을 나갔다 돌아와도
-    // 가상계좌 정보·입금액·입금상태를 계속 확인할 수 있게 한다.
+    // 가상계좌 정보·입금액·입금상태를 계속 확인할 수 있게 한다. 판매자 쪽과 동일한 1줄 행 포맷
+    // 재사용(아바타는 거래 상대인 판매자).
     var buyerOrderHistoryHtml = '';
     if (!isMine && myOrder) {
-      var vaRowHtml = myOrder.va_account_number
-        ? '<div class="market-buyer-order-row"><span class="market-buyer-order-label">가상계좌</span><span>' +
-            escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number) + '</span></div>'
-        : '';
-      var orderStatusClass = myOrder.escrow_status ? myOrder.escrow_status.toLowerCase() : '';
-      // 대회 참가신청 입금기한 표시(competitionBottomSheet.js)와 동일 로직 — 입금 대기중(PENDING)
-      // 동안에만 실시간 카운트다운을 보여주고, 입금 확인 이후에는 표시하지 않는다.
-      var dueRowHtml = (myOrder.escrow_status === 'PENDING' && myOrder.va_due_at)
-        ? '<div class="market-buyer-order-row"><span class="market-buyer-order-label">입금기한</span>' +
-            '<span class="market-due-countdown" id="marketBuyerVaCountdown" data-va-due="' + escapeHtml(myOrder.va_due_at) + '">' +
-              escapeHtml(marketFormatRemaining(myOrder.va_due_at)) +
-            '</span></div>'
+      var sp = detailState.sellerProfile;
+      var sellerName = marketSellerDisplayName(sp);
+      var sellerAvatar = (sp && sp.profile_image_url) || 'assets/img/profile-placeholder.svg';
+      var vaLineHtml = myOrder.va_account_number
+        ? '<div class="market-order-history-contacts">가상계좌 : ' + escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number) + '</div>'
         : '';
       buyerOrderHistoryHtml =
         '<div class="market-order-history">' +
           '<p class="market-order-history__title">거래내역</p>' +
           '<div class="market-nego-divider"></div>' +
-          '<div class="market-buyer-order-card">' +
-            vaRowHtml +
-            '<div class="market-buyer-order-row"><span class="market-buyer-order-label">입금금액</span><span>' + formatPrice(myOrder.amount) + '원</span></div>' +
-            dueRowHtml +
-            '<div class="market-buyer-order-row"><span class="market-buyer-order-label">입금상태</span>' +
-              '<span class="market-order-history-status market-order-history-status--' + orderStatusClass + '">' + marketOrderStatusLabel(myOrder.escrow_status) + '</span>' +
-            '</div>' +
-          '</div>' +
+          marketTxRowHtml(sellerAvatar, sellerName, '입금 금액 : ' + formatPrice(myOrder.amount) + '원', myOrder.escrow_status, myOrder.va_due_at) +
+          vaLineHtml +
         '</div>';
     }
 
@@ -1091,14 +1089,18 @@
     if (floatingBar) floatingBar.style.display = 'block';
 
     wireMarketDetailSlider();
-    if (myOrder && myOrder.escrow_status === 'PENDING' && myOrder.va_due_at) {
+    // 거래내역의 입금기한 카운트다운 — 판매자 화면엔 여러 건이 동시에 있을 수 있어 클래스
+    // 기준으로 전체를 매초 갱신한다(대회 참가신청 입금기한 표시와 동일 로직).
+    if (document.querySelector('.market-tx-row__due')) {
       var vaTimer = setInterval(function () {
-        var el = document.getElementById('marketBuyerVaCountdown');
-        if (!el || !document.body.contains(el)) {
+        var els = document.querySelectorAll('.market-tx-row__due');
+        if (!els.length) {
           clearInterval(vaTimer);
           return;
         }
-        el.textContent = marketFormatRemaining(el.getAttribute('data-va-due'));
+        Array.prototype.forEach.call(els, function (el) {
+          el.textContent = marketFormatRemaining(el.getAttribute('data-va-due'));
+        });
       }, 1000);
     }
     var buyBtn = document.getElementById('marketDetailBuyBtn');
