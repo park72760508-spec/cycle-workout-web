@@ -30305,11 +30305,16 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 }
 
 /* ============================= 중고랜드(Market Land) ============================= */
+/* 전역 .screen.active가 overflow-y:auto!important로 화면 전체를 스크롤 영역으로 만들면
+   내부 .market-scroll-area와 이중 스크롤이 겹쳐 헤더·서브카테고리 탭까지 함께 밀려 올라간다
+   (라이딩 모임 룸 화면과 동일한 원인 — #openRidingRoomScreen.screen.active 참고).
+   이 화면들만 바깥 스크롤을 막고, .market-scroll-area만 스크롤되게 한다. */
 .screen.market-screen.active {
   display: flex;
   flex-direction: column;
   padding-left: 12px;
   padding-right: 12px;
+  overflow: hidden !important;
 }
 .market-header {
   display: flex;
@@ -30492,6 +30497,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 
 .market-scroll-area {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 8px;
