@@ -1186,16 +1186,56 @@
     }
   }
 
-  async function handleMarketNegoDecide(itemId, requestId, accept) {
-    if (!confirm(accept ? '이 가격 조정 요청을 수락할까요?' : '이 가격 조정 요청을 거절할까요?')) return;
-    try {
-      var s = await loadMarketService();
-      await s.decideMarketNegoRequest(requestId, accept);
-      toast(accept ? '가격 조정을 수락했습니다.' : '가격 조정을 거절했습니다.');
-      openMarketItemDetail(itemId);
-    } catch (err) {
-      toast('처리 실패: ' + (err && err.message ? err.message : err));
+  /** 스텔비오 전역 종료확인 팝업(showStelvioExitConfirmPopup)과 동일한 구조·상호작용을
+   * 중고랜드 전용 오렌지 톤(#marketConfirmModal)으로 재구현 — 네이티브 confirm() 대체.
+   * 팝업 요소가 없는 예외 상황을 대비해 네이티브 confirm() 폴백은 유지한다. */
+  function showMarketConfirmPopup(message, onConfirm, options) {
+    options = options || {};
+    var modal = document.getElementById('marketConfirmModal');
+    if (!modal) {
+      if (confirm(message)) onConfirm();
+      return;
     }
+    var msgEl = document.getElementById('marketConfirmMessage');
+    var okBtn = document.getElementById('marketConfirmOkBtn');
+    var cancelBtn = document.getElementById('marketConfirmCancelBtn');
+    if (msgEl) msgEl.textContent = message;
+    if (okBtn) okBtn.textContent = options.okText || '확인';
+    if (cancelBtn) cancelBtn.textContent = options.cancelText || '취소';
+    if (okBtn) {
+      okBtn.onclick = function () {
+        closeMarketConfirmPopup();
+        onConfirm();
+      };
+    }
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+
+  function closeMarketConfirmPopup() {
+    var modal = document.getElementById('marketConfirmModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
+  }
+  window.closeMarketConfirmPopup = closeMarketConfirmPopup;
+
+  async function handleMarketNegoDecide(itemId, requestId, accept) {
+    showMarketConfirmPopup(
+      accept ? '이 가격 조정 요청을 수락할까요?' : '이 가격 조정 요청을 거절할까요?',
+      async function () {
+        try {
+          var s = await loadMarketService();
+          await s.decideMarketNegoRequest(requestId, accept);
+          toast(accept ? '가격 조정을 수락했습니다.' : '가격 조정을 거절했습니다.');
+          openMarketItemDetail(itemId);
+        } catch (err) {
+          toast('처리 실패: ' + (err && err.message ? err.message : err));
+        }
+      },
+      { okText: accept ? '수락' : '거절' }
+    );
   }
 
   window.marketItemDetailScreenInit = function () {
