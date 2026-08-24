@@ -1004,64 +1004,65 @@
       priceRowHtml = '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>';
     }
 
-    var negoListHtml = '';
+    var negoRowsHtml = '';
     if (isMine && detailState.negoRequests && detailState.negoRequests.length) {
-      negoListHtml =
-        '<div class="market-nego-requests">' +
-          detailState.negoRequests.map(function (r) {
-            var bp = r.buyerProfile;
-            var bName = marketSellerDisplayName(bp);
-            var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
-            var rightHtml;
-            if (r.status === 'PENDING') {
-              rightHtml =
-                '<div class="market-tx-row__actions">' +
-                  '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
-                  '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
-                '</div>';
-            } else {
-              rightHtml = '<span class="market-nego-request-status market-nego-request-status--' +
-                (r.status === 'ACCEPTED' ? 'accepted' : 'rejected') + '">' +
-                (r.status === 'ACCEPTED' ? '수락됨' : '거절') + '</span>';
-            }
-            // 요청마다 위쪽에 회색 점선 구분선을 두어, 다른 사용자가 추가로 가격 조정을
-            // 요구할 때마다 구분선+내용이 계속 이어붙는 형태로 표시되게 한다.
-            return '<div class="market-nego-divider"></div>' +
-              '<div class="market-tx-row">' +
-                '<img class="market-tx-row__avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
-                '<span class="market-tx-row__name">' + escapeHtml(bName) + '</span>' +
-                '<span class="market-tx-row__amount">조정 가격 : ' + formatPrice(r.requested_price) + '원</span>' +
-                rightHtml +
-              '</div>';
-          }).join('') +
-        '</div>';
+      negoRowsHtml = detailState.negoRequests.map(function (r) {
+        var bp = r.buyerProfile;
+        var bName = marketSellerDisplayName(bp);
+        var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
+        var rightHtml;
+        if (r.status === 'PENDING') {
+          rightHtml =
+            '<div class="market-tx-row__actions">' +
+              '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
+              '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
+            '</div>';
+        } else {
+          rightHtml = '<span class="market-nego-request-status market-nego-request-status--' +
+            (r.status === 'ACCEPTED' ? 'accepted' : 'rejected') + '">' +
+            (r.status === 'ACCEPTED' ? '수락됨' : '거절') + '</span>';
+        }
+        // 요청마다 위쪽에 회색 점선 구분선을 두어, 다른 사용자가 추가로 가격 조정을
+        // 요구할 때마다 구분선+내용이 계속 이어붙는 형태로 표시되게 한다.
+        return '<div class="market-nego-divider"></div>' +
+          '<div class="market-tx-row">' +
+            '<img class="market-tx-row__avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
+            '<span class="market-tx-row__name">' + escapeHtml(bName) + '</span>' +
+            '<span class="market-tx-row__amount">조정 가격 : ' + formatPrice(r.requested_price) + '원</span>' +
+            rightHtml +
+          '</div>';
+      }).join('');
     }
 
-    // 판매자 전용 "거래내역" — 가격 조정 요구 내용 아래에 이어서 표시. 예약(RESERVED/PENDING)
-    // 시점부터 판매자·구매자 각각의 연락처를 함께 노출한다.
-    var orderHistoryHtml = '';
+    // 판매자 전용 "거래내역" — 가격조정내역과 주문내역을 하나의 "거래내역" 아래에 함께 표시.
+    // 예약(RESERVED/PENDING) 시점부터 구매자 연락처를 노출하되, 본인(판매자) 연락처는 표시하지
+    // 않고 대신 이 주문에 스냅샷된 판매자 입금 계좌를 확인용으로 보여준다.
+    var orderRowsHtml = '';
     if (isMine && detailState.orderHistory && detailState.orderHistory.length) {
-      orderHistoryHtml =
-        '<div class="market-order-history">' +
-          '<p class="market-order-history__title">거래내역</p>' +
-          detailState.orderHistory.map(function (o) {
-            var bp = o.buyerProfile;
-            var bName = marketSellerDisplayName(bp);
-            var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
-            var revealPhone = marketOrderRevealsPhone(o.escrow_status);
-            var contactsHtml = revealPhone
-              ? '<div class="market-order-history-contacts">' +
-                  '<div>판매자 연락처 : ' + escapeHtml(marketFormatPhone(detailState.sellerPhone) || '-') + '</div>' +
-                  '<div>구매자 연락처 : ' + escapeHtml(marketFormatPhone(o.buyerPhone) || '-') + '</div>' +
-                '</div>'
-              : '';
-            var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.amount) + '원';
-            return '<div class="market-nego-divider"></div>' +
-              marketTxRowHtml(bAvatar, bName, sellerAmountLabel, o.escrow_status, o.va_due_at) +
-              contactsHtml;
-          }).join('') +
-        '</div>';
+      orderRowsHtml = detailState.orderHistory.map(function (o) {
+        var bp = o.buyerProfile;
+        var bName = marketSellerDisplayName(bp);
+        var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
+        var sa = o.settlement_account;
+        var settlementHtml = sa && sa.accountNumber
+          ? '<div>판매자 입금 계좌 : ' + escapeHtml((sa.bankName || '') + ' ' + sa.accountNumber) + '</div>'
+          : '';
+        var contactsHtml = marketOrderRevealsPhone(o.escrow_status)
+          ? '<div class="market-order-history-contacts">' +
+              settlementHtml +
+              '<div>구매자 연락처 : ' + escapeHtml(marketFormatPhone(o.buyerPhone) || '-') + '</div>' +
+            '</div>'
+          : '';
+        var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.amount) + '원';
+        return '<div class="market-nego-divider"></div>' +
+          marketTxRowHtml(bAvatar, bName, sellerAmountLabel, o.escrow_status, o.va_due_at) +
+          contactsHtml;
+      }).join('');
     }
+
+    var dealsHistoryHtml = (negoRowsHtml || orderRowsHtml)
+      ? '<div class="market-order-history"><p class="market-order-history__title">거래내역</p>' + negoRowsHtml + orderRowsHtml + '</div>'
+      : '';
 
     // 구매자 전용 "거래내역" — 안전결제로 구매하기 클릭 후, 이후 화면을 나갔다 돌아와도
     // 가상계좌 정보·입금액·입금상태를 계속 확인할 수 있게 한다. 판매자 쪽과 동일한 1줄 행 포맷
@@ -1100,8 +1101,7 @@
           '<span>' + escapeHtml(dealMethodText) + '</span>' +
         '</div>' +
         '<div class="market-detail-desc">' + escapeHtml(item.description || '').replace(/\n/g, '<br/>') + '</div>' +
-        negoListHtml +
-        orderHistoryHtml +
+        dealsHistoryHtml +
         buyerOrderHistoryHtml +
       '</div>';
 
