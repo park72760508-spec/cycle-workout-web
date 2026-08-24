@@ -30915,13 +30915,13 @@
       var authUser = resolveAuthBarAuthUser(user);
       var loggedIn = isAuthBarLoggedIn(authUser);
       var userName = loggedIn ? resolveAuthBarUserName(authUser) : '사용자';
-      // 중고랜드는 아직 관리자 전용 미리보기 단계 — 완성 후 일반 사용자에게도 동일 적용 예정
+      // 중고랜드는 아직 관리자·부관리자 전용 미리보기 단계 — 완성 후 일반 사용자에게도 동일 적용 예정
       var isAdminForMarket =
         loggedIn &&
         ((typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true) ||
           (typeof getLoginUserGrade === 'function' &&
-            typeof isStelvioAdminGrade === 'function' &&
-            isStelvioAdminGrade(getLoginUserGrade())));
+            typeof isStelvioOpenRidingRoomAdminGrade === 'function' &&
+            isStelvioOpenRidingRoomAdminGrade(getLoginUserGrade())));
       _syncAuthBarPair('authBarLeft', 'authBarRight', 'authBarWarning', 'authBarWelcomeLine1', 'authBarWelcomeLine2', user, userName, loggedIn);
       _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn, isAdminForMarket);
       _syncAuthBarPair('runAuthBarLeft', 'runAuthBarRight', 'runAuthBarWarning', 'runAuthBarWelcomeLine1', 'runAuthBarWelcomeLine2', user, userName, loggedIn);
