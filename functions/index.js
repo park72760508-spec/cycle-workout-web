@@ -18015,7 +18015,22 @@ exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res)
     const userData = userSnap.exists ? userSnap.data() || {} : {};
     const customerName = String(userData.name || userData.displayName || "STELVIO 회원").slice(0, 100);
 
-    const amount = Number(item.price) + MARKET_ORDER_FEE_KRW;
+    // 판매자가 이 구매자의 가격 조정 요청을 수락한 경우, 조정된 금액으로 결제한다.
+    let effectiveItemPrice = Number(item.price);
+    if (item.negotiable) {
+      const { data: acceptedNego } = await supabase
+        .from("market_nego_requests")
+        .select("requested_price")
+        .eq("item_id", itemId)
+        .eq("buyer_id", buyerId)
+        .eq("status", "ACCEPTED")
+        .maybeSingle();
+      if (acceptedNego && Number(acceptedNego.requested_price) > 0) {
+        effectiveItemPrice = Number(acceptedNego.requested_price);
+      }
+    }
+
+    const amount = effectiveItemPrice + MARKET_ORDER_FEE_KRW;
     const tossOrderId = marketOrderIdFor(itemId, uid);
 
     const payment = await tossPaymentsClient.issueVirtualAccount(raceTossSecretKey(), {
@@ -18049,7 +18064,7 @@ exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res)
         toss_order_id: tossOrderId,
         toss_payment_key: payment.paymentKey || null,
         toss_virtual_account_secret: payment.secret || null,
-        item_price: item.price,
+        item_price: effectiveItemPrice,
         fee: MARKET_ORDER_FEE_KRW,
         amount,
         escrow_status: "PENDING",

@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260828market8';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260828market9';
   var svc = null;
 
   function loadMarketService() {
@@ -471,6 +471,8 @@
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-deal-checkbox'), function (cb) {
       cb.checked = dealMethods.indexOf(cb.value) !== -1;
     });
+    var negotiableEditEl = document.getElementById('marketFormNegotiable');
+    if (negotiableEditEl) negotiableEditEl.checked = !!item.negotiable;
     var directWrap = document.getElementById('marketFormDirectLocationWrap');
     if (directWrap) directWrap.style.display = dealMethods.indexOf('직거래') !== -1 ? 'block' : 'none';
     if (locEl) locEl.value = item.direct_deal_location || '';
@@ -511,6 +513,8 @@
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-deal-checkbox'), function (cb) {
       cb.checked = false;
     });
+    var negotiableEl0 = document.getElementById('marketFormNegotiable');
+    if (negotiableEl0) negotiableEl0.checked = false;
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-condition'), function (r) {
       r.checked = r.value === '중고 상품';
     });
@@ -608,6 +612,8 @@
     var price = Number(priceRaw);
     var description = (descEl.value || '').trim();
     var dealMethods = collectDealMethods();
+    var negotiableEl = document.getElementById('marketFormNegotiable');
+    var negotiable = !!(negotiableEl && negotiableEl.checked);
     var directLocation = (locEl.value || '').trim();
     var settlementBank = bankEl ? bankEl.value : '';
     var settlementAccountNumber = (accNumEl ? accNumEl.value : '').replace(/[^0-9]/g, '');
@@ -658,6 +664,7 @@
         price: price,
         condition: conditionEl ? conditionEl.value : '중고 상품',
         deal_method: dealMethods,
+        negotiable: negotiable,
         direct_deal_location: dealMethods.indexOf('직거래') !== -1 ? directLocation : null,
         description: description,
         images: images,
@@ -726,7 +733,7 @@
 
   // ───────────────────────── 상품 상세 화면 ─────────────────────────
 
-  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0 };
+  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0, myNegoRequest: null, pendingNego: [] };
 
   function openMarketItemDetail(itemId) {
     if (typeof window.showScreen === 'function') window.showScreen('marketItemDetailScreen');
@@ -738,14 +745,28 @@
         return Promise.all([s.getMarketItem(itemId), s.getMySupabaseUserId(), s.getMarketOrderForItem(itemId)])
           .then(function (res) {
             var item = res[0];
+            var myUserId = res[1];
+            var isMine = myUserId && item.user_id === myUserId;
             return Promise.all([
               s.getSellerPublicProfile(item.user_id).catch(function () { return null; }),
               s.getSellerPhone(item.user_id).catch(function () { return ''; }),
               s.getMarketFavoriteCount(item.id).catch(function () { return 0; }),
               s.getSellerRatingAggregate(item.user_id).catch(function () { return { avg: 0, count: 0 }; }),
               res[2] && res[2].escrow_status === 'CONFIRMED' ? s.getMyRatingForOrder(res[2].id).catch(function () { return 0; }) : Promise.resolve(0),
+              item.negotiable ? s.getMarketNegoRequestsForItem(item.id).catch(function () { return []; }) : Promise.resolve([]),
             ]).then(function (extra) {
-              return { item: item, myUserId: res[1], myOrder: res[2], sellerProfile: extra[0], sellerPhone: extra[1], favoriteCount: extra[2], ratingAgg: extra[3], myRating: extra[4] };
+              var negoRows = extra[5] || [];
+              var myNegoRequest = !isMine ? (negoRows.filter(function (r) { return r.buyer_id === myUserId; })[0] || null) : null;
+              var pendingNego = isMine ? negoRows.filter(function (r) { return r.status === 'PENDING'; }) : [];
+              return Promise.all(pendingNego.map(function (r) { return s.getSellerPublicProfile(r.buyer_id).catch(function () { return null; }); }))
+                .then(function (buyerProfiles) {
+                  var pendingNegoWithBuyer = pendingNego.map(function (r, i) { return Object.assign({}, r, { buyerProfile: buyerProfiles[i] }); });
+                  return {
+                    item: item, myUserId: myUserId, myOrder: res[2],
+                    sellerProfile: extra[0], sellerPhone: extra[1], favoriteCount: extra[2], ratingAgg: extra[3], myRating: extra[4],
+                    myNegoRequest: myNegoRequest, pendingNego: pendingNegoWithBuyer,
+                  };
+                });
             });
           });
       })
@@ -758,6 +779,8 @@
         detailState.ratingAvg = res.ratingAgg ? res.ratingAgg.avg : 0;
         detailState.ratingCount = res.ratingAgg ? res.ratingAgg.count : 0;
         detailState.myRating = res.myRating || 0;
+        detailState.myNegoRequest = res.myNegoRequest;
+        detailState.pendingNego = res.pendingNego;
         renderMarketDetail(res.myUserId, res.myOrder);
       })
       .catch(function (err) {
@@ -862,18 +885,70 @@
         '</div>' +
       '</div>';
 
+    var nego = detailState.myNegoRequest;
+    var priceRowHtml;
+    if (!isMine && item.negotiable && !myOrder) {
+      if (nego && nego.status === 'PENDING') {
+        priceRowHtml =
+          '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>' +
+          '<div class="market-nego-status market-nego-status--pending">가격 조정 요청 중 (제안가 ' + formatPrice(nego.requested_price) + '원)</div>';
+      } else if (nego && nego.status === 'ACCEPTED') {
+        priceRowHtml =
+          '<div class="market-detail-price market-detail-price--negotiated">' +
+            '<span class="market-detail-price__original">' + formatPrice(item.price) + '원</span>' +
+            '<span class="market-detail-price__final">' + formatPrice(nego.requested_price) + '원</span>' +
+          '</div>' +
+          '<div class="market-nego-status market-nego-status--accepted">판매자가 가격 조정을 수락했습니다. 조정된 금액으로 구매할 수 있습니다.</div>';
+      } else {
+        priceRowHtml =
+          '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>' +
+          (nego && nego.status === 'REJECTED'
+            ? '<div class="market-nego-status market-nego-status--rejected">네고 불가 (이전 제안 ' + formatPrice(nego.requested_price) + '원이 거절되었습니다)</div>'
+            : '') +
+          '<div class="market-nego-form">' +
+            '<input type="text" inputmode="numeric" id="marketNegoPriceInput" class="market-form-input market-nego-input" placeholder="희망 가격(숫자만)" />' +
+            '<button type="button" class="market-btn market-btn--outline market-nego-submit-btn" id="marketNegoSubmitBtn">가격 조정 요구</button>' +
+          '</div>';
+      }
+    } else {
+      priceRowHtml = '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>';
+    }
+
+    var negoListHtml = '';
+    if (isMine && detailState.pendingNego && detailState.pendingNego.length) {
+      negoListHtml =
+        '<div class="market-nego-divider"></div>' +
+        '<div class="market-nego-requests">' +
+          detailState.pendingNego.map(function (r) {
+            var bp = r.buyerProfile;
+            var bName = marketSellerDisplayName(bp, false);
+            var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
+            return '<div class="market-nego-request-row">' +
+              '<img class="market-nego-request-avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
+              '<span class="market-nego-request-name">' + escapeHtml(bName) + '</span>' +
+              '<span class="market-nego-request-amount">' + formatPrice(r.requested_price) + '원</span>' +
+              '<div class="market-nego-request-actions">' +
+                '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
+                '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
+              '</div>' +
+            '</div>';
+          }).join('') +
+        '</div>';
+    }
+
     body.innerHTML =
       sliderHtml +
       '<div class="market-detail-info">' +
         sellerRowHtml +
         statusBadgeHtml(item.status) +
         '<div class="market-detail-title">' + escapeHtml(item.title) + '</div>' +
-        '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>' +
+        priceRowHtml +
         '<div class="market-detail-meta">' +
           '<span>' + escapeHtml(item.condition) + '</span>' +
           '<span>' + escapeHtml(dealMethodText) + '</span>' +
         '</div>' +
         '<div class="market-detail-desc">' + escapeHtml(item.description || '').replace(/\n/g, '<br/>') + '</div>' +
+        negoListHtml +
       '</div>' +
       '<div class="market-detail-action-bar">' + actionHtml + '</div>';
 
@@ -902,6 +977,14 @@
     if (editBtn) editBtn.onclick = function () { window.navigateToMarketFormForEdit(item); };
     var deleteBtn = document.getElementById('marketDetailDeleteBtn');
     if (deleteBtn) deleteBtn.onclick = function () { handleMarketDelete(item.id); };
+    var negoSubmitBtn = document.getElementById('marketNegoSubmitBtn');
+    if (negoSubmitBtn) negoSubmitBtn.onclick = function () { handleMarketNegoSubmit(item, negoSubmitBtn); };
+    Array.prototype.forEach.call(document.querySelectorAll('.market-nego-accept-btn'), function (btn) {
+      btn.onclick = function () { handleMarketNegoDecide(item.id, btn.getAttribute('data-nego-id'), true); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-nego-reject-btn'), function (btn) {
+      btn.onclick = function () { handleMarketNegoDecide(item.id, btn.getAttribute('data-nego-id'), false); };
+    });
     if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
       var starsWrap = document.getElementById('marketRatingStars');
       if (starsWrap) {
@@ -977,7 +1060,9 @@
   }
 
   async function handleMarketBuy(item) {
-    if (!confirm(formatPrice(item.price) + '원 + 안전결제 수수료 1,000원 = 총 ' + formatPrice(item.price + 1000) + '원을 결제하시겠습니까?')) return;
+    var nego = detailState.myNegoRequest;
+    var buyPrice = (nego && nego.status === 'ACCEPTED') ? Number(nego.requested_price) : Number(item.price);
+    if (!confirm(formatPrice(buyPrice) + '원 + 안전결제 수수료 1,000원 = 총 ' + formatPrice(buyPrice + 1000) + '원을 결제하시겠습니까?')) return;
     var btn = document.getElementById('marketDetailBuyBtn');
     if (btn) { btn.disabled = true; btn.textContent = '가상계좌 발급 중...'; }
     try {
@@ -1068,6 +1153,38 @@
       window.navigateToMarketLand();
     } catch (err) {
       toast('삭제 실패: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  async function handleMarketNegoSubmit(item, btn) {
+    var input = document.getElementById('marketNegoPriceInput');
+    var priceRaw = input ? (input.value || '').replace(/[^0-9]/g, '') : '';
+    var price = Number(priceRaw);
+    if (!priceRaw || price <= 0) { toast('희망 가격을 숫자로 입력해 주세요.'); return; }
+    if (price >= Number(item.price)) { toast('현재 판매가보다 낮은 금액을 입력해 주세요.'); return; }
+    btn.disabled = true;
+    btn.textContent = '요청 중...';
+    try {
+      var s = await loadMarketService();
+      await s.submitMarketNegoRequest(item.id, price);
+      toast('가격 조정을 요청했습니다.');
+      openMarketItemDetail(item.id);
+    } catch (err) {
+      toast('요청 실패: ' + (err && err.message ? err.message : err));
+      btn.disabled = false;
+      btn.textContent = '가격 조정 요구';
+    }
+  }
+
+  async function handleMarketNegoDecide(itemId, requestId, accept) {
+    if (!confirm(accept ? '이 가격 조정 요청을 수락할까요?' : '이 가격 조정 요청을 거절할까요?')) return;
+    try {
+      var s = await loadMarketService();
+      await s.decideMarketNegoRequest(requestId, accept);
+      toast(accept ? '가격 조정을 수락했습니다.' : '가격 조정을 거절했습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('처리 실패: ' + (err && err.message ? err.message : err));
     }
   }
 

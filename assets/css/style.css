@@ -30741,7 +30741,7 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
 #marketFormSettlementAccountNumber { margin-bottom: 8px; }
 .market-form-row { display: flex; gap: 8px; }
 .market-form-row .market-form-select { flex: 1; }
-.market-form-radio-row, .market-form-checkbox-row { gap: 16px; align-items: center; }
+.market-form-radio-row, .market-form-checkbox-row { gap: 16px; align-items: center; flex-wrap: wrap; }
 .market-form-radio, .market-form-checkbox {
   display: flex;
   align-items: center;
@@ -30929,6 +30929,70 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
   color: #334155;
   white-space: pre-wrap;
 }
+.market-detail-price--negotiated { display: flex; align-items: baseline; gap: 8px; }
+.market-detail-price__original {
+  font-size: 14px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-decoration: line-through;
+}
+.market-detail-price__final { font-size: 20px; font-weight: 800; color: #ea580c; }
+.market-nego-status {
+  margin-top: 6px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  display: inline-block;
+}
+.market-nego-status--pending { background: #fff7ed; color: #c2410c; }
+.market-nego-status--accepted { background: #f0fdf4; color: #15803d; }
+.market-nego-status--rejected { background: #f8fafc; color: #94a3b8; }
+.market-nego-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.market-nego-input { flex: 1; margin-bottom: 0 !important; }
+.market-nego-submit-btn { flex-shrink: 0; white-space: nowrap; }
+.market-nego-divider {
+  margin: 16px 0;
+  border-top: 1px solid #f1f5f9;
+}
+.market-nego-requests {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.market-nego-request-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: #fafafa;
+  border-radius: 10px;
+}
+.market-nego-request-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #e2e8f0;
+}
+.market-nego-request-name { font-size: 13px; font-weight: 600; color: #334155; flex-shrink: 0; }
+.market-nego-request-amount { font-size: 14px; font-weight: 800; color: #ea580c; flex: 1; }
+.market-nego-request-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.market-nego-accept-btn, .market-nego-reject-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.market-nego-accept-btn { background: #ea580c; color: #fff; }
+.market-nego-reject-btn { background: #f1f5f9; color: #64748b; }
 .market-detail-action-bar { padding: 10px 0 20px 0; }
 .market-detail-order-notice {
   margin-bottom: 10px;

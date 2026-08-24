@@ -471,6 +471,38 @@ export async function getSellerPhone(sellerId) {
   });
 }
 
+/** 가격 네고 제안 — 재제안 시 서버에서 upsert(status는 항상 PENDING으로 리셋) */
+export async function submitMarketNegoRequest(itemId, price) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.rpc('submit_market_nego_request', { p_item_id: itemId, p_price: price });
+    if (error) throw error;
+  });
+}
+
+/** 판매자의 수락/거절 결정 — 본인 상품에 들어온 PENDING 제안만 가능(서버에서 검증) */
+export async function decideMarketNegoRequest(requestId, accept) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.rpc('decide_market_nego_request', { p_request_id: requestId, p_accept: accept });
+    if (error) throw error;
+  });
+}
+
+/** 상품에 대한 네고 제안 목록 — RLS가 알아서 범위를 좁혀준다(판매자: 전체, 구매자: 본인 제안만) */
+export async function getMarketNegoRequestsForItem(itemId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_nego_requests')
+      .select('*')
+      .eq('item_id', itemId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  });
+}
+
 /** 판매자 만족도 평균 — 제휴사와 동일하게 2점 이상만 집계에 포함(1점·미평가 제외) */
 export async function getSellerRatingAggregate(sellerId) {
   return withMarketAuthRetry(async () => {
@@ -551,6 +583,9 @@ if (typeof window !== 'undefined') {
     getMarketFavoriteCount,
     getSellerPublicProfile,
     getSellerPhone,
+    submitMarketNegoRequest,
+    decideMarketNegoRequest,
+    getMarketNegoRequestsForItem,
     getSellerRatingAggregate,
     getMyRatingForOrder,
     submitSellerRating,
