@@ -31135,13 +31135,22 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   box-shadow: 0 16px 48px rgba(234, 88, 12, 0.18), 0 0 0 1px rgba(234, 88, 12, 0.08);
   text-align: center;
 }
-.market-confirm-message {
-  margin: 0 0 24px 0;
+.market-confirm-title {
+  margin: 0 0 8px 0;
   font-size: 16px;
-  font-weight: 600;
-  color: #2d3748;
+  font-weight: 800;
+  color: #c2410c;
   line-height: 1.4;
 }
+.market-confirm-message {
+  margin: 0 0 24px 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #2d3748;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+.market-confirm-message--detail { text-align: left; }
 .market-confirm-buttons {
   display: flex;
   gap: 12px;

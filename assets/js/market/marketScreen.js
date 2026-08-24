@@ -1082,33 +1082,47 @@
     });
   }
 
-  async function handleMarketBuy(item) {
+  function handleMarketBuy(item) {
     var nego = detailState.myNegoRequest;
     var buyPrice = (nego && nego.status === 'ACCEPTED') ? Number(nego.requested_price) : Number(item.price);
-    if (!confirm(formatPrice(buyPrice) + '원 + 안전결제 수수료 1,000원 = 총 ' + formatPrice(buyPrice + 1000) + '원을 결제하시겠습니까?')) return;
+    showMarketConfirmPopup(
+      formatPrice(buyPrice) + '원 + 안전결제 수수료 1,000원 = 총 ' + formatPrice(buyPrice + 1000) + '원을 결제하시겠습니까?',
+      function () { doMarketBuy(item); },
+      { okText: '결제하기' }
+    );
+  }
+
+  async function doMarketBuy(item) {
     var btn = document.getElementById('marketDetailBuyBtn');
     if (btn) { btn.disabled = true; btn.textContent = '가상계좌 발급 중...'; }
     try {
       var s = await loadMarketService();
       var result = await s.requestMarketPurchase(item.id);
       var va = result.virtualAccount || {};
-      alert(
-        '안전결제 가상계좌가 발급되었습니다.\n\n' +
+      showMarketAlertPopup(
         '은행: ' + (va.bankName || va.bankCode || '') + '\n' +
         '계좌번호: ' + (va.accountNumber || '') + '\n' +
         '입금액: ' + formatPrice(result.amount) + '원\n' +
         '입금기한: ' + (va.dueDate ? new Date(va.dueDate).toLocaleString('ko-KR') : '') + '\n\n' +
-        '입금이 확인되면 판매자에게 알림이 가고, 물품 수령 후 [구매 확정]을 눌러주세요.'
+        '입금이 확인되면 판매자에게 알림이 가고, 물품 수령 후 [구매 확정]을 눌러주세요.',
+        function () { openMarketItemDetail(item.id); },
+        { title: '안전결제 가상계좌가 발급되었습니다' }
       );
-      openMarketItemDetail(item.id);
     } catch (err) {
       toast('구매 요청 실패: ' + (err && err.message ? err.message : err));
       if (btn) { btn.disabled = false; btn.textContent = '안전결제로 구매하기'; }
     }
   }
 
-  async function handleMarketConfirmPurchase(itemId, orderId) {
-    if (!confirm('물품을 정상적으로 수령하셨습니까? 확정하면 판매자에게 대금이 정산됩니다.')) return;
+  function handleMarketConfirmPurchase(itemId, orderId) {
+    showMarketConfirmPopup(
+      '물품을 정상적으로 수령하셨습니까? 확정하면 판매자에게 대금이 정산됩니다.',
+      function () { doMarketConfirmPurchase(itemId, orderId); },
+      { okText: '구매 확정' }
+    );
+  }
+
+  async function doMarketConfirmPurchase(itemId, orderId) {
     var btn = document.getElementById('marketDetailConfirmBtn');
     if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
     try {
@@ -1122,8 +1136,15 @@
     }
   }
 
-  async function handleMarketCancelOrder(itemId, orderId) {
-    if (!confirm('구매를 취소할까요? 아직 입금 전이라 별도 환불 절차 없이 바로 취소됩니다.')) return;
+  function handleMarketCancelOrder(itemId, orderId) {
+    showMarketConfirmPopup(
+      '구매를 취소할까요? 아직 입금 전이라 별도 환불 절차 없이 바로 취소됩니다.',
+      function () { doMarketCancelOrder(itemId, orderId); },
+      { okText: '구매 취소', cancelText: '계속 진행' }
+    );
+  }
+
+  async function doMarketCancelOrder(itemId, orderId) {
     var btn = document.getElementById('marketDetailCancelOrderBtn');
     if (btn) { btn.disabled = true; btn.textContent = '취소 중...'; }
     try {
@@ -1137,7 +1158,7 @@
     }
   }
 
-  async function handleMarketRefundSubmit(itemId, orderId, submitBtn) {
+  function handleMarketRefundSubmit(itemId, orderId, submitBtn) {
     var bankEl = document.getElementById('marketRefundBank');
     var accNumEl = document.getElementById('marketRefundAccountNumber');
     var holderEl = document.getElementById('marketRefundHolderName');
@@ -1152,7 +1173,14 @@
       toast('예금주명을 입력해 주세요.');
       return;
     }
-    if (!confirm('환불을 신청할까요? 상품가만 환불되며(수수료 1,000원 제외), 신청 후 취소할 수 없습니다.')) return;
+    showMarketConfirmPopup(
+      '환불을 신청할까요? 상품가만 환불되며(수수료 1,000원 제외), 신청 후 취소할 수 없습니다.',
+      function () { doMarketRefundSubmit(itemId, orderId, submitBtn, bank, accountNumber, holderName); },
+      { okText: '환불 신청' }
+    );
+  }
+
+  async function doMarketRefundSubmit(itemId, orderId, submitBtn, bank, accountNumber, holderName) {
     submitBtn.disabled = true;
     submitBtn.textContent = '환불 처리 중...';
     try {
@@ -1167,8 +1195,15 @@
     }
   }
 
-  async function handleMarketDelete(itemId) {
-    if (!confirm('이 상품을 삭제할까요?')) return;
+  function handleMarketDelete(itemId) {
+    showMarketConfirmPopup(
+      '이 상품을 삭제할까요?',
+      function () { doMarketDelete(itemId); },
+      { okText: '삭제' }
+    );
+  }
+
+  async function doMarketDelete(itemId) {
     try {
       var s = await loadMarketService();
       await s.deleteMarketItem(itemId);
@@ -1209,20 +1244,38 @@
       if (confirm(message)) onConfirm();
       return;
     }
+    var titleEl = document.getElementById('marketConfirmTitle');
     var msgEl = document.getElementById('marketConfirmMessage');
     var okBtn = document.getElementById('marketConfirmOkBtn');
     var cancelBtn = document.getElementById('marketConfirmCancelBtn');
-    if (msgEl) msgEl.textContent = message;
+    if (titleEl) {
+      if (options.title) { titleEl.textContent = options.title; titleEl.style.display = 'block'; }
+      else { titleEl.textContent = ''; titleEl.style.display = 'none'; }
+    }
+    if (msgEl) {
+      msgEl.textContent = message;
+      msgEl.classList.toggle('market-confirm-message--detail', !!options.detail);
+    }
     if (okBtn) okBtn.textContent = options.okText || '확인';
-    if (cancelBtn) cancelBtn.textContent = options.cancelText || '취소';
+    if (cancelBtn) {
+      cancelBtn.textContent = options.cancelText || '취소';
+      cancelBtn.style.display = options.hideCancel ? 'none' : '';
+    }
     if (okBtn) {
       okBtn.onclick = function () {
         closeMarketConfirmPopup();
-        onConfirm();
+        if (typeof onConfirm === 'function') onConfirm();
       };
     }
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
+  }
+
+  /** 확인 버튼 하나만 있는 안내형 팝업(가상계좌 발급 안내 등) — showMarketConfirmPopup을
+   * 취소 버튼 없이 재사용한다. */
+  function showMarketAlertPopup(message, onOk, options) {
+    options = Object.assign({ hideCancel: true, detail: true }, options || {});
+    showMarketConfirmPopup(message, onOk, options);
   }
 
   function closeMarketConfirmPopup() {
