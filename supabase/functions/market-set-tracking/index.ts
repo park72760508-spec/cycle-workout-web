@@ -11,12 +11,19 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
+// deliveryapi.co.kr 공식 문서(GET /v1/tracking/couriers, POST /v1/tracking/trace)의
+// courierCode 전체 목록을 그대로 반영 — 이전에는 예시 코드에 나온 5개만 등록했었음.
 const MARKET_COURIERS: Record<string, string> = {
   cj: "CJ대한통운",
-  lotte: "롯데",
-  post: "우체국",
-  hanjin: "한진",
-  logen: "로젠",
+  lotte: "롯데택배",
+  post: "우체국택배",
+  hanjin: "한진택배",
+  logen: "로젠택배",
+  kyungdong: "경동택배",
+  daesin: "대신택배",
+  hapdong: "합동택배",
+  coupang: "쿠팡",
+  woori: "우리택배",
 };
 
 const CORS_HEADERS = {
@@ -34,17 +41,14 @@ function jsonResponse(body: unknown, status = 200) {
 
 const DELIVERY_API_BASE = "https://api.deliveryapi.co.kr/v1";
 
-/** 배송 상태 코드는 문서상 "송장조회 API와 동일"이라고만 명시되어 구체적인 값 목록은
- * 확인하지 못했다 — DELIVERED 여부는 items[].isDelivered(boolean, 문서화됨)로 판정하고,
- * 화면 표시용 상태 텍스트는 currentStatus 원문을 그대로 저장한다(별도 매핑/추측 없음). */
-function statusFromItem(item: Record<string, unknown>) {
-  const isDelivered = Boolean(item.isDelivered);
-  const currentStatus = String(item.currentStatus || "").trim();
-  return {
-    status: isDelivered ? "DELIVERED" : currentStatus ? "IN_TRANSIT" : "UNKNOWN",
-    statusText: currentStatus,
-    isDelivered,
-  };
+// POST /v1/tracking/trace 응답의 results[].data를 그대로 해석 — deliveryStatus는 API가
+// 이미 정규화해서 주는 코드(PENDING/REGISTERED/PICKUP_READY/PICKED_UP/IN_TRANSIT/
+// OUT_FOR_DELIVERY/DELIVERED/FAILED/RETURNED/CANCELLED/HOLD/UNKNOWN)라 추측 매핑이 필요 없다.
+function statusFromTraceData(data: Record<string, unknown>) {
+  const isDelivered = Boolean(data.isDelivered);
+  const status = String(data.deliveryStatus || "").trim() || "UNKNOWN";
+  const statusText = String(data.deliveryStatusText || "").trim();
+  return { status, statusText, isDelivered };
 }
 
 async function registerTracking(
@@ -83,18 +87,20 @@ async function registerTracking(
   return json.data as { requestId: string; itemCount: number; recurring: boolean };
 }
 
-/** 등록 즉시 현재 상태를 한 번 더 확인(문서화된 배치 조회 API) — 구독의 첫 자동 폴링을
- * 기다리지 않고 화면에 바로 최신 상태를 보여주기 위한 선택적 호출(실패해도 무시). */
+/** 등록 즉시 현재 상태를 한 번 더 확인 — 문서상 단발성 조회 전용 API인 POST /v1/tracking/trace를
+ * 사용한다(구독 폴링용 웹훅과는 별개). 구독의 첫 자동 폴링을 기다리지 않고 화면에 바로 최신
+ * 상태를 보여주기 위한 선택적 호출이며, 실패해도 무시(구독이 곧 웹훅으로 갱신해줌). */
 async function fetchImmediateStatus(apiKey: string, courierCode: string, trackingNumber: string) {
-  const res = await fetch(`${DELIVERY_API_BASE}/webhooks/results`, {
+  const res = await fetch(`${DELIVERY_API_BASE}/tracking/trace`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ items: [{ courierCode, trackingNumber }] }),
+    body: JSON.stringify({ items: [{ courierCode, trackingNumber }], skipCache: true }),
   });
   if (!res.ok) return null;
   const json = await res.json().catch(() => null);
-  const item = json?.data?.results?.[0];
-  return item ? statusFromItem(item) : null;
+  const result = json?.data?.results?.[0];
+  if (!result?.success || !result.data) return null;
+  return statusFromTraceData(result.data as Record<string, unknown>);
 }
 
 Deno.serve(async (req) => {

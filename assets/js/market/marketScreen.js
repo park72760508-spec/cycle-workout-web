@@ -77,14 +77,19 @@
     { code: '37', name: '전북은행' },
   ];
 
-  /** functions/index.js MARKET_COURIER_OPTIONS와 동일 목록(값만 그대로 복사) — 사용자가 제공한
-   * deliveryapi.co.kr 예시 코드만 반영, 그 외 택배사는 검증되지 않아 포함하지 않았다. */
+  /** deliveryapi.co.kr 공식 문서(GET /v1/tracking/couriers, POST /v1/tracking/trace)의 courierCode
+   * 전체 목록 — supabase/functions/market-set-tracking의 MARKET_COURIERS와 동일하게 유지해야 함. */
   var MARKET_COURIER_OPTIONS = [
     { code: 'cj', name: 'CJ대한통운' },
-    { code: 'lotte', name: '롯데' },
-    { code: 'post', name: '우체국' },
-    { code: 'hanjin', name: '한진' },
-    { code: 'logen', name: '로젠' },
+    { code: 'lotte', name: '롯데택배' },
+    { code: 'post', name: '우체국택배' },
+    { code: 'hanjin', name: '한진택배' },
+    { code: 'logen', name: '로젠택배' },
+    { code: 'kyungdong', name: '경동택배' },
+    { code: 'daesin', name: '대신택배' },
+    { code: 'hapdong', name: '합동택배' },
+    { code: 'coupang', name: '쿠팡' },
+    { code: 'woori', name: '우리택배' },
   ];
 
   var SUB_CATEGORIES = {
@@ -320,13 +325,19 @@
     { icon: 'delivery4', label: '구매확정' },
   ];
 
+  // deliveryapi.co.kr 공식 문서의 정규화된 배송 상태 코드 중 "집하 이후" 단계 — 이 중 하나면
+  // 배송중 스텝을 완료로 표시한다(PENDING/REGISTERED/UNKNOWN은 아직 접수 전 단계로 취급).
+  var MARKET_DELIVERY_IN_TRANSIT_STATUSES = {
+    PICKUP_READY: true, PICKED_UP: true, IN_TRANSIT: true, OUT_FOR_DELIVERY: true, DELIVERED: true,
+  };
+
   function marketDealStepStates(order) {
     var isDirect = order.deal_type === 'DIRECT_DEAL';
     var status = order.escrow_status;
     var negoDone = true; // 주문이 존재하는 시점엔 가격이 이미 합의된 상태
     var paidDone = isDirect ? (status === 'RESERVED' || status === 'CONFIRMED') : (status === 'PAID' || status === 'CONFIRMED');
     var shippedDone = isDirect ? paidDone : !!order.tracking_number;
-    var transitDone = isDirect ? paidDone : (order.delivery_status === 'IN_TRANSIT' || order.delivery_status === 'DELIVERED');
+    var transitDone = isDirect ? paidDone : !!MARKET_DELIVERY_IN_TRANSIT_STATUSES[order.delivery_status];
     var deliveredDone = isDirect ? paidDone : order.delivery_status === 'DELIVERED';
     var confirmedDone = status === 'CONFIRMED';
     var doneFlags = [negoDone, paidDone, shippedDone, transitDone, deliveredDone, confirmedDone];

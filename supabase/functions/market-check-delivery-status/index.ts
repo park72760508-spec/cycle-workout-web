@@ -6,7 +6,8 @@
 // 상태 변경을 무료로 웹훅 전송하므로(market-set-tracking이 등록, market-delivery-webhook이
 // 수신), 정상적인 경우 이 함수가 할 일은 거의 없다. 이 함수는 웹훅 전송 실패·엔드포인트 일시
 // 비활성화·14일 구독 만료 같은 드문 예외만 잡아내는 안전망이며, 여러 건을 POST
-// /v1/webhooks/results 배치 API 한 번(최대 50건씩)으로 묶어 조회해 API 호출 자체를 최소화한다.
+// /v1/tracking/trace 배치 조회 한 번(최대 50건씩, clientId로 주문과 매칭)으로 묶어 조회해
+// API 호출 자체를 최소화한다.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -18,20 +19,18 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 const DELIVERY_API_BASE = "https://api.deliveryapi.co.kr/v1";
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 50; // POST /v1/tracking/trace의 items 최대 개수(문서화됨)와 동일하게 맞춤
 
-function statusFromItem(item: Record<string, unknown>) {
-  const isDelivered = Boolean(item.isDelivered);
-  const currentStatus = String(item.currentStatus || "").trim();
-  return {
-    status: isDelivered ? "DELIVERED" : currentStatus ? "IN_TRANSIT" : "UNKNOWN",
-    statusText: currentStatus,
-    isDelivered,
-  };
+// deliveryStatus는 API가 이미 정규화해서 주는 코드라 추측 매핑 없이 그대로 사용한다.
+function statusFromTraceData(data: Record<string, unknown>) {
+  const isDelivered = Boolean(data.isDelivered);
+  const status = String(data.deliveryStatus || "").trim() || "UNKNOWN";
+  const statusText = String(data.deliveryStatusText || "").trim();
+  return { status, statusText, isDelivered };
 }
 
-async function batchResults(apiKey: string, items: { courierCode: string; trackingNumber: string }[]) {
-  const res = await fetch(`${DELIVERY_API_BASE}/webhooks/results`, {
+async function batchTrace(apiKey: string, items: { courierCode: string; trackingNumber: string; clientId: string }[]) {
+  const res = await fetch(`${DELIVERY_API_BASE}/tracking/trace`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ items }),
@@ -75,16 +74,14 @@ Deno.serve(async (req) => {
   for (let i = 0; i < orders.length; i += BATCH_SIZE) {
     const chunk = orders.slice(i, i + BATCH_SIZE);
     try {
-      const results = await batchResults(
+      const results = await batchTrace(
         apiKey as string,
-        chunk.map((o) => ({ courierCode: o.courier_code, trackingNumber: o.tracking_number }))
+        chunk.map((o) => ({ courierCode: o.courier_code, trackingNumber: o.tracking_number, clientId: o.id }))
       );
-      for (const item of results) {
-        const match = chunk.find(
-          (o) => o.tracking_number === item.trackingNumber && o.courier_code === item.courierCode
-        );
-        if (!match) continue;
-        const trace = statusFromItem(item);
+      for (const result of results) {
+        const match = chunk.find((o) => o.id === result.clientId);
+        if (!match || !result.success || !result.data) continue;
+        const trace = statusFromTraceData(result.data as Record<string, unknown>);
         const nowIso = new Date().toISOString();
         const update: Record<string, unknown> = {
           delivery_status: trace.status,
