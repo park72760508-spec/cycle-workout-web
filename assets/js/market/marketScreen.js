@@ -1213,7 +1213,7 @@
     }
 
     var dealsHistoryHtml = (negoRowsHtml || orderRowsHtml)
-      ? '<div class="market-order-history"><p class="market-order-history__title">거래 진행 상태</p>' + negoRowsHtml + orderRowsHtml + '</div>'
+      ? '<div class="market-order-history"><p class="market-order-history__title market-order-history__title--deal-status">거래 진행 상태</p>' + negoRowsHtml + orderRowsHtml + '</div>'
       : '';
 
     // 구매자 전용 "거래내역" — 안전결제로 구매하기 클릭 후, 이후 화면을 나갔다 돌아와도
@@ -1233,7 +1233,7 @@
         : '';
       buyerOrderHistoryHtml =
         '<div class="market-order-history">' +
-          '<p class="market-order-history__title">거래 진행 상태</p>' +
+          '<p class="market-order-history__title market-order-history__title--deal-status">거래 진행 상태</p>' +
           '<div class="market-nego-divider"></div>' +
           marketDealStepsHtml(myOrder) +
           sellerCounterpartHtml +
