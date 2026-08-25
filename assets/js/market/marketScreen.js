@@ -1185,9 +1185,9 @@
         // 구매자가 실제로 입금한 총액(수수료 포함)이라 판매자 관점에서는 오해를 줄 수 있다.
         var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.item_price) + '원';
         return '<div class="market-nego-divider"></div>' +
-          marketDealAmountStatusHtml(sellerAmountLabel, o.escrow_status, o.va_due_at) +
           marketDealStepsHtml(o) +
           counterpartHtml +
+          marketDealAmountStatusHtml(sellerAmountLabel, o.escrow_status, o.va_due_at) +
           settlementHtml +
           marketSellerDeliveryHtml(o);
       }).join('');
@@ -1216,9 +1216,9 @@
         '<div class="market-order-history">' +
           '<p class="market-order-history__title">거래내역</p>' +
           '<div class="market-nego-divider"></div>' +
-          marketDealAmountStatusHtml(buyerAmountLabel, myOrder.escrow_status, myOrder.va_due_at) +
           marketDealStepsHtml(myOrder) +
           sellerCounterpartHtml +
+          marketDealAmountStatusHtml(buyerAmountLabel, myOrder.escrow_status, myOrder.va_due_at) +
           vaLineHtml +
           marketBuyerDeliveryHtml(myOrder) +
         '</div>';
