@@ -381,6 +381,32 @@
     '</div>';
   }
 
+  /** 판매자 전용 — 구매자 한 명의 가격 조정 요청/결과 1건(요청당 1행, item+buyer 유니크). */
+  function marketNegoRowHtml(r) {
+    var bp = r.buyerProfile;
+    var bName = marketSellerDisplayName(bp);
+    var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
+    var rightHtml;
+    if (r.status === 'PENDING') {
+      rightHtml =
+        '<div class="market-tx-row__actions">' +
+          '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
+          '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
+        '</div>';
+    } else {
+      rightHtml = '<span class="market-nego-request-status market-nego-request-status--' +
+        (r.status === 'ACCEPTED' ? 'accepted' : 'rejected') + '">' +
+        (r.status === 'ACCEPTED' ? '수락됨' : '거절') + '</span>';
+    }
+    return '<div class="market-nego-divider"></div>' +
+      '<div class="market-tx-row">' +
+        '<img class="market-tx-row__avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
+        '<span class="market-tx-row__name">' + escapeHtml(bName) + '</span>' +
+        '<span class="market-tx-row__amount">조정 가격 : ' + formatPrice(r.requested_price) + '원</span>' +
+        rightHtml +
+      '</div>';
+  }
+
   // ───────────────────────── 홈/목록 화면 ─────────────────────────
 
   function renderSubCategoryTabs() {
@@ -1133,62 +1159,45 @@
       priceRowHtml = '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>';
     }
 
+    // 가격 조정 요청은 구매자당 1건(유니크)이라, 주문이 이미 생긴 구매자의 요청은 해당 주문의
+    // 거래 상대 정보 카드 아래에 발생 순서대로 붙여서 보여준다(요청 → 주문 흐름이 한 곳에 보이게).
+    // 아직 주문으로 이어지지 않은(협상만 진행 중인) 요청만 별도 목록으로 상단에 남긴다.
+    var orderBuyerIds = {};
+    if (isMine && detailState.orderHistory) {
+      detailState.orderHistory.forEach(function (o) { orderBuyerIds[o.buyer_id] = true; });
+    }
     var negoRowsHtml = '';
     if (isMine && detailState.negoRequests && detailState.negoRequests.length) {
-      negoRowsHtml = detailState.negoRequests.map(function (r) {
-        var bp = r.buyerProfile;
-        var bName = marketSellerDisplayName(bp);
-        var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
-        var rightHtml;
-        if (r.status === 'PENDING') {
-          rightHtml =
-            '<div class="market-tx-row__actions">' +
-              '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
-              '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
-            '</div>';
-        } else {
-          rightHtml = '<span class="market-nego-request-status market-nego-request-status--' +
-            (r.status === 'ACCEPTED' ? 'accepted' : 'rejected') + '">' +
-            (r.status === 'ACCEPTED' ? '수락됨' : '거절') + '</span>';
-        }
-        // 요청마다 위쪽에 회색 점선 구분선을 두어, 다른 사용자가 추가로 가격 조정을
-        // 요구할 때마다 구분선+내용이 계속 이어붙는 형태로 표시되게 한다.
-        return '<div class="market-nego-divider"></div>' +
-          '<div class="market-tx-row">' +
-            '<img class="market-tx-row__avatar" src="' + escapeHtml(bAvatar) + '" alt="" />' +
-            '<span class="market-tx-row__name">' + escapeHtml(bName) + '</span>' +
-            '<span class="market-tx-row__amount">조정 가격 : ' + formatPrice(r.requested_price) + '원</span>' +
-            rightHtml +
-          '</div>';
-      }).join('');
+      negoRowsHtml = detailState.negoRequests
+        .filter(function (r) { return !orderBuyerIds[r.buyer_id]; })
+        .map(marketNegoRowHtml)
+        .join('');
     }
 
-    // 판매자 전용 "거래내역" — 가격조정내역과 주문내역을 하나의 "거래내역" 아래에 함께 표시.
-    // 예약(RESERVED/PENDING) 시점부터 구매자 연락처를 노출하되, 본인(판매자) 연락처는 표시하지
-    // 않고 대신 이 주문에 스냅샷된 판매자 입금 계좌를 확인용으로 보여준다.
+    // 판매자 전용 "거래내역" — 예약(RESERVED/PENDING) 시점부터 구매자 연락처를 노출하되,
+    // 본인(판매자) 연락처는 표시하지 않는다.
     var orderRowsHtml = '';
     if (isMine && detailState.orderHistory && detailState.orderHistory.length) {
       orderRowsHtml = detailState.orderHistory.map(function (o) {
         var bp = o.buyerProfile;
         var bName = marketSellerDisplayName(bp);
         var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
-        var sa = o.settlement_account;
-        var settlementHtml = sa && sa.accountNumber
-          ? '<div class="market-order-history-contacts">판매자 입금 계좌 : ' + escapeHtml((sa.bankName || '') + ' ' + sa.accountNumber) + '</div>'
-          : '';
         // 구매자 연락처는 전화·문자 버튼이 붙은 상대방 카드(marketCounterpartCardHtml)로 대체 —
         // 텍스트로 따로 또 보여주지 않는다.
         var counterpartHtml = marketOrderRevealsPhone(o.escrow_status)
           ? marketCounterpartCardHtml(bAvatar, bName, o.buyerPhone)
           : '';
+        // 이 구매자가 제출한 가격 조정 요청(있다면) — 거래 상대 정보 카드 바로 아래, 발생 순서에 표시.
+        var negoForThisOrder = (detailState.negoRequests || []).find(function (r) { return r.buyer_id === o.buyer_id; });
+        var negoHtml = negoForThisOrder ? marketNegoRowHtml(negoForThisOrder) : '';
         // 판매자에게는 실제 정산받는 금액(수수료 차감된 item_price)을 보여준다 — amount는
         // 구매자가 실제로 입금한 총액(수수료 포함)이라 판매자 관점에서는 오해를 줄 수 있다.
         var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.item_price) + '원';
         return '<div class="market-nego-divider"></div>' +
           marketDealStepsHtml(o) +
           counterpartHtml +
+          negoHtml +
           marketDealAmountStatusHtml(sellerAmountLabel, o.escrow_status, o.va_due_at) +
-          settlementHtml +
           marketSellerDeliveryHtml(o);
       }).join('');
     }
