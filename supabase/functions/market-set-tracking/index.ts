@@ -2,6 +2,12 @@
 // ⚠️ deliveryapi.co.kr 공식 요청/응답 스키마 문서를 확인하지 못해, 요청 필드명(carrierId/
 // trackingNumber)과 응답 정규화(normalizeDeliveryTraceResponse)는 업계 통상 관례를 따른
 // 최선의 추정이다. 실제 배송 건 첫 호출 결과를 보고 이 함수 안의 normalize 로직만 조정하면 된다.
+//
+// 트래픽 최소화: 등록 즉시 1회 조회 후, "웹훅 등록 1건만 차감·이후 무료" 정책을 활용해
+// market-delivery-webhook으로 상태 변경을 무료로 받도록 웹훅도 함께 등록한다(POST
+// /v1/webhooks/endpoints — 이 엔드포인트의 요청 스키마도 문서를 확인하지 못해 최선의 추정).
+// 웹훅 등록이 성공하면 market-check-delivery-status의 정기 폴링 대상에서 제외되어 API
+// 호출을 아낀다. 등록에 실패해도 주문 등록 자체는 성공 처리하고 폴링(6시간 주기)으로 폴백한다.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -61,6 +67,19 @@ async function traceDelivery(apiKey: string, courierCode: string, trackingNumber
     throw new Error(`택배 조회 API 오류(HTTP ${res.status}): ${String(json?.message || json?.error || text.slice(0, 200))}`);
   }
   return normalizeDeliveryTraceResponse(json);
+}
+
+/** ⚠️ 요청 스키마 미검증 — carrierId/trackingNumber/url(콜백 주소) 조합은 최선의 추정. */
+async function registerDeliveryWebhook(apiKey: string, courierCode: string, trackingNumber: string, callbackUrl: string) {
+  const res = await fetch(`${DELIVERY_API_BASE}/webhooks/endpoints`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ carrierId: courierCode, trackingNumber, url: callbackUrl }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`웹훅 등록 실패(HTTP ${res.status}): ${text.slice(0, 200)}`);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -137,9 +156,21 @@ Deno.serve(async (req) => {
       update.delivery_status_text = trace.statusText;
       update.delivery_checked_at = nowIso;
       if (trace.isDelivered) update.delivered_at = nowIso;
+
+      if (!trace.isDelivered) {
+        try {
+          const callbackUrl = `${supabaseUrl}/functions/v1/market-delivery-webhook`;
+          await registerDeliveryWebhook(apiKey as string, courierCode, trackingNumber, callbackUrl);
+          update.webhook_registered = true;
+          update.webhook_registered_at = nowIso;
+        } catch (eHook) {
+          // 웹훅 등록 실패는 폴링(6시간 주기)으로 폴백 — 등록 자체는 계속 성공 처리한다.
+          console.warn("[market-set-tracking] 웹훅 등록 실패(폴링으로 폴백):", orderId, (eHook as Error).message);
+        }
+      }
     }
   } catch (eTrace) {
-    console.warn("[market-set-tracking] 즉시 조회 실패(스케줄러가 재시도):", orderId, (eTrace as Error).message);
+    console.warn("[market-set-tracking] 즉시 조회 실패(폴링이 재시도):", orderId, (eTrace as Error).message);
   }
 
   const { data: updated, error: updErr } = await admin

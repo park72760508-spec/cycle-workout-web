@@ -1,6 +1,11 @@
-// 중고랜드 — 송장 등록된 미배송완료 주문의 배송 상태를 주기 조회(pg_cron이 30분마다 호출).
+// 중고랜드 — 송장 등록된 미배송완료 주문의 배송 상태를 주기 조회(pg_cron이 6시간마다 호출).
 // pg_cron -> pg_net이 x-cron-secret 헤더로 인증한다(서비스 전체를 여는 service_role JWT 대신
 // 무작위 생성한 저권한 공유 비밀만 사용 — supabase/migrations/20260904090000_*.sql 참고).
+//
+// 트래픽 최소화: "웹훅 등록 1건만 차감, 이후 무료" 정책을 활용해 웹훅이 주 채널이 됐으므로
+// (market-set-tracking이 등록, market-delivery-webhook이 수신), 여기서는 웹훅 등록에 실패한
+// 건(webhook_registered=false)만 안전망으로 폴링한다 — 정상 등록된 건은 API 호출을 아예 만들지
+// 않는다. 주기도 30분→6시간으로 늘려 안전망 자체의 호출량도 최소화했다.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -48,6 +53,20 @@ async function traceDelivery(apiKey: string, courierCode: string, trackingNumber
   return normalizeDeliveryTraceResponse(json);
 }
 
+/** 웹훅 등록 재시도 — 처음 등록 시 일시적 오류였을 수 있으므로 폴링할 때마다 다시 시도해서
+ * 성공하면 이후 폴링 대상에서 완전히 빠지도록 한다(트래픽을 계속 최소화하는 방향으로 수렴). */
+async function registerDeliveryWebhook(apiKey: string, courierCode: string, trackingNumber: string, callbackUrl: string) {
+  const res = await fetch(`${DELIVERY_API_BASE}/webhooks/endpoints`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ carrierId: courierCode, trackingNumber, url: callbackUrl }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`웹훅 등록 실패(HTTP ${res.status}): ${text.slice(0, 200)}`);
+  }
+}
+
 Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -69,6 +88,7 @@ Deno.serve(async (req) => {
     .select("id, courier_code, tracking_number, delivery_status")
     .not("tracking_number", "is", null)
     .neq("delivery_status", "DELIVERED")
+    .eq("webhook_registered", false)
     .limit(200);
   if (error || !orders?.length) {
     return jsonResponse({ success: true, checked: 0, delivered: 0 });
@@ -88,6 +108,16 @@ Deno.serve(async (req) => {
       if (trace.isDelivered && o.delivery_status !== "DELIVERED") {
         update.delivered_at = nowIso;
         delivered += 1;
+      } else {
+        // 아직 배송 중이면 웹훅 등록을 재시도 — 성공하면 다음 폴링부터 이 건은 완전히 제외된다.
+        try {
+          const callbackUrl = `${supabaseUrl}/functions/v1/market-delivery-webhook`;
+          await registerDeliveryWebhook(apiKey as string, o.courier_code, o.tracking_number, callbackUrl);
+          update.webhook_registered = true;
+          update.webhook_registered_at = nowIso;
+        } catch (_eHook) {
+          // 이번에도 실패하면 다음 폴링 때 다시 시도 — 조용히 넘어간다.
+        }
       }
       await admin.from("market_orders").update(update).eq("id", o.id);
       checked += 1;
