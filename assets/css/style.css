@@ -31097,6 +31097,134 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-tx-row__amount { font-size: 12.5px; font-weight: 800; color: #ea580c; flex: 1; min-width: 90px; }
 .market-tx-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
 .market-tx-row__due { flex-shrink: 0; }
+
+/* 거래 주문 카드 상단 — 금액+상태(+입금기한). 아바타/이름 없이 market-tx-row와 스타일만 공유. */
+.market-deal-amount-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px;
+  background: #fafafa;
+  border-radius: 10px 10px 0 0;
+}
+
+/* 거래 진행 6단계 스텝바 — 완료/진행중 단계는 오렌지 톤, 미완료는 회색조. */
+.market-deal-steps {
+  display: flex;
+  align-items: flex-start;
+  background: #fafafa;
+  padding: 4px 6px 10px 6px;
+}
+.market-deal-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.market-deal-step:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  top: 17px;
+  left: -50%;
+  width: 100%;
+  height: 2px;
+  background: #e2e8f0;
+  z-index: 0;
+}
+.market-deal-step--done:not(:first-child)::before,
+.market-deal-step--active:not(:first-child)::before {
+  background: #fdba74;
+}
+.market-deal-step__icon-wrap {
+  position: relative;
+  z-index: 1;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  flex-shrink: 0;
+}
+.market-deal-step--done .market-deal-step__icon-wrap,
+.market-deal-step--active .market-deal-step__icon-wrap {
+  background: rgba(234, 88, 12, 0.12);
+  border-color: #ea580c;
+}
+.market-deal-step__icon {
+  width: 19px;
+  height: 19px;
+  object-fit: contain;
+  filter: grayscale(1) opacity(0.45);
+}
+.market-deal-step--done .market-deal-step__icon,
+.market-deal-step--active .market-deal-step__icon {
+  filter: none;
+}
+.market-deal-step__label {
+  font-size: 9px;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.market-deal-step--done .market-deal-step__label,
+.market-deal-step--active .market-deal-step__label {
+  color: #c2410c;
+  font-weight: 700;
+}
+
+/* 거래 상대방(구매자/판매자) 정보 + 전화·문자 바로가기 카드 */
+.market-deal-contact-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  margin: 8px 0;
+}
+.market-deal-contact-card__avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #e2e8f0;
+}
+.market-deal-contact-card__name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #334155;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.market-deal-contact-card__actions { display: flex; gap: 8px; flex-shrink: 0; }
+.market-deal-contact-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(234, 88, 12, 0.12);
+  color: #ea580c;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.market-deal-contact-btn svg { width: 17px; height: 17px; }
+.market-deal-contact-btn:active { transform: scale(0.93); }
+
 .market-nego-accept-btn, .market-nego-reject-btn {
   border: none;
   border-radius: 8px;

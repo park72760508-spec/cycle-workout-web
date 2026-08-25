@@ -212,20 +212,16 @@
     return status === 'PENDING' || status === 'RESERVED' || status === 'PAID' || status === 'CONFIRMED';
   }
 
-  function marketDeliveryStatusLabel(status, text) {
-    var base = status === 'DELIVERED' ? '배송완료' : status === 'IN_TRANSIT' ? '배송중' : '배송상태 확인 중';
-    return text && text !== base ? base + ' (' + text + ')' : base;
-  }
-
   /** 판매자 거래내역 행 아래 택배 정보 — 입금완료(PAID)+안전결제 주문에서만 노출.
    * 송장 미등록 시 입력 폼, 등록 후에는 조회된 배송상태를 표시한다. */
   function marketSellerDeliveryHtml(o) {
     if (o.deal_type === 'DIRECT_DEAL' || o.escrow_status !== 'PAID') return '';
     if (o.tracking_number) {
+      // 배송 상태 자체는 위쪽 6단계 진행 스텝바(marketDealStepsHtml)에서 이미 보여주므로
+      // 여기서는 택배사·송장번호만 확인용으로 남긴다.
       return '<div class="market-delivery-info">' +
         '<div>택배사 : ' + escapeHtml(o.courier_name || o.courier_code || '') + '</div>' +
         '<div>송장번호 : ' + escapeHtml(o.tracking_number) + '</div>' +
-        '<div>배송상태 : ' + escapeHtml(marketDeliveryStatusLabel(o.delivery_status, o.delivery_status_text)) + '</div>' +
       '</div>';
     }
     return '<div class="market-delivery-form" data-order-id="' + o.id + '">' +
@@ -244,24 +240,23 @@
     var timerHtml = (o.delivery_status === 'DELIVERED' && deadlineIso)
       ? '<div>자동 구매확정까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>'
       : '';
+    // 배송 상태 자체는 위쪽 6단계 진행 스텝바(marketDealStepsHtml)에서 이미 보여주므로
+    // 여기서는 택배사·송장번호와 72시간 자동확정 타이머만 남긴다.
     return '<div class="market-delivery-info">' +
       '<div>택배사 : ' + escapeHtml(o.courier_name || o.courier_code || '') + '</div>' +
       '<div>송장번호 : ' + escapeHtml(o.tracking_number) + '</div>' +
-      '<div>배송상태 : ' + escapeHtml(marketDeliveryStatusLabel(o.delivery_status, o.delivery_status_text)) + '</div>' +
       timerHtml +
     '</div>';
   }
 
-  /** 거래내역 1줄 행 — 아바타+이름, 금액, 상태, (입금 대기중일 때만) 입금기한 카운트다운.
-   * 판매자 화면의 여러 주문 목록과 구매자 화면의 본인 주문 카드가 동일 컴포넌트를 공유한다. */
-  function marketTxRowHtml(avatarUrl, name, amountLabel, status, vaDueAt) {
+  /** 거래 주문 카드 상단 — 금액+상태(+입금기한)만 표시(아바타·이름은 아래 상대방 카드가
+   * 전담하므로 marketTxRowHtml처럼 중복 표시하지 않는다). */
+  function marketDealAmountStatusHtml(amountLabel, status, vaDueAt) {
     var statusClass = status ? status.toLowerCase() : '';
     var dueHtml = (status === 'PENDING' && vaDueAt)
       ? '<span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(vaDueAt) + '">' + escapeHtml(marketFormatRemaining(vaDueAt)) + '</span>'
       : '';
-    return '<div class="market-tx-row">' +
-      '<img class="market-tx-row__avatar" src="' + escapeHtml(avatarUrl) + '" alt="" />' +
-      '<span class="market-tx-row__name">' + escapeHtml(name) + '</span>' +
+    return '<div class="market-deal-amount-row">' +
       '<span class="market-tx-row__amount">' + amountLabel + '</span>' +
       '<span class="market-order-history-status market-order-history-status--' + statusClass + '">' + marketOrderStatusLabel(status) + '</span>' +
       dueHtml +
@@ -305,6 +300,75 @@
   var MARKET_HEART_ICON_SVG =
     '<svg class="market-detail-stat__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"></path></svg>';
+
+  var MARKET_CALL_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M2.25 6.75c0 8.284 6.716 15 15 15h1.5a2.25 2.25 0 002.25-2.25v-1.372a1.125 1.125 0 00-.852-1.091l-4.423-1.106a1.125 1.125 0 00-1.173.417l-.97 1.293a.996.996 0 01-1.21.38 12.035 12.035 0 01-7.143-7.143.996.996 0 01.38-1.21l1.293-.97a1.125 1.125 0 00.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"></path></svg>';
+  var MARKET_SMS_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"></path>' +
+    '<path d="M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"></path></svg>';
+
+  /** 거래 진행 6단계 — 직거래(DIRECT_DEAL)는 안전결제·택배 배송 개념이 없어 예약(RESERVED)
+   * 시점에 2~5단계가 한꺼번에 완료되는 것으로 취급한다(대면 거래는 앱이 중간 과정을 추적하지 않음). */
+  var MARKET_DEAL_STEPS = [
+    { icon: 'deal', label: '구매협상' },
+    { icon: 'bank', label: '입금확인' },
+    { icon: 'delivery1', label: '택배접수' },
+    { icon: 'delivery2', label: '배송중' },
+    { icon: 'delivery3', label: '배송완료' },
+    { icon: 'delivery4', label: '구매확정' },
+  ];
+
+  function marketDealStepStates(order) {
+    var isDirect = order.deal_type === 'DIRECT_DEAL';
+    var status = order.escrow_status;
+    var negoDone = true; // 주문이 존재하는 시점엔 가격이 이미 합의된 상태
+    var paidDone = isDirect ? (status === 'RESERVED' || status === 'CONFIRMED') : (status === 'PAID' || status === 'CONFIRMED');
+    var shippedDone = isDirect ? paidDone : !!order.tracking_number;
+    var transitDone = isDirect ? paidDone : (order.delivery_status === 'IN_TRANSIT' || order.delivery_status === 'DELIVERED');
+    var deliveredDone = isDirect ? paidDone : order.delivery_status === 'DELIVERED';
+    var confirmedDone = status === 'CONFIRMED';
+    var doneFlags = [negoDone, paidDone, shippedDone, transitDone, deliveredDone, confirmedDone];
+    var activeIndex = doneFlags.indexOf(false);
+    return doneFlags.map(function (done, i) {
+      if (done) return 'done';
+      return i === activeIndex ? 'active' : 'pending';
+    });
+  }
+
+  function marketDealStepsHtml(order) {
+    var states = marketDealStepStates(order);
+    return '<div class="market-deal-steps">' +
+      MARKET_DEAL_STEPS.map(function (step, i) {
+        var state = states[i];
+        return '<div class="market-deal-step market-deal-step--' + state + '">' +
+          '<div class="market-deal-step__icon-wrap">' +
+            '<img class="market-deal-step__icon" src="assets/img/' + step.icon + '.svg" alt="" />' +
+          '</div>' +
+          '<span class="market-deal-step__label">' + step.label + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  /** 상대방(구매자/판매자) 정보 + 전화·문자 바로가기 카드 — 연락처가 아직 공개되지 않은
+   * 단계(marketOrderRevealsPhone 이전)에서는 통화/문자 버튼 없이 아바타+이름만 표시한다. */
+  function marketCounterpartCardHtml(avatarUrl, name, phone) {
+    var phoneFormatted = marketFormatPhone(phone);
+    var digitsOnly = phoneFormatted.replace(/[^0-9]/g, '');
+    var actionsHtml = digitsOnly
+      ? '<div class="market-deal-contact-card__actions">' +
+          '<a class="market-deal-contact-btn" href="tel:' + digitsOnly + '" aria-label="전화 걸기">' + MARKET_CALL_ICON_SVG + '</a>' +
+          '<a class="market-deal-contact-btn" href="sms:' + digitsOnly + '" aria-label="문자 보내기">' + MARKET_SMS_ICON_SVG + '</a>' +
+        '</div>'
+      : '';
+    return '<div class="market-deal-contact-card">' +
+      '<img class="market-deal-contact-card__avatar" src="' + escapeHtml(avatarUrl) + '" alt="" />' +
+      '<span class="market-deal-contact-card__name">' + escapeHtml(name) + '</span>' +
+      actionsHtml +
+    '</div>';
+  }
 
   // ───────────────────────── 홈/목록 화면 ─────────────────────────
 
@@ -1099,20 +1163,21 @@
         var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
         var sa = o.settlement_account;
         var settlementHtml = sa && sa.accountNumber
-          ? '<div>판매자 입금 계좌 : ' + escapeHtml((sa.bankName || '') + ' ' + sa.accountNumber) + '</div>'
+          ? '<div class="market-order-history-contacts">판매자 입금 계좌 : ' + escapeHtml((sa.bankName || '') + ' ' + sa.accountNumber) + '</div>'
           : '';
-        var contactsHtml = marketOrderRevealsPhone(o.escrow_status)
-          ? '<div class="market-order-history-contacts">' +
-              settlementHtml +
-              '<div>구매자 연락처 : ' + escapeHtml(marketFormatPhone(o.buyerPhone) || '-') + '</div>' +
-            '</div>'
+        // 구매자 연락처는 전화·문자 버튼이 붙은 상대방 카드(marketCounterpartCardHtml)로 대체 —
+        // 텍스트로 따로 또 보여주지 않는다.
+        var counterpartHtml = marketOrderRevealsPhone(o.escrow_status)
+          ? marketCounterpartCardHtml(bAvatar, bName, o.buyerPhone)
           : '';
         // 판매자에게는 실제 정산받는 금액(수수료 차감된 item_price)을 보여준다 — amount는
         // 구매자가 실제로 입금한 총액(수수료 포함)이라 판매자 관점에서는 오해를 줄 수 있다.
         var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.item_price) + '원';
         return '<div class="market-nego-divider"></div>' +
-          marketTxRowHtml(bAvatar, bName, sellerAmountLabel, o.escrow_status, o.va_due_at) +
-          contactsHtml +
+          marketDealAmountStatusHtml(sellerAmountLabel, o.escrow_status, o.va_due_at) +
+          marketDealStepsHtml(o) +
+          counterpartHtml +
+          settlementHtml +
           marketSellerDeliveryHtml(o);
       }).join('');
     }
@@ -1122,8 +1187,7 @@
       : '';
 
     // 구매자 전용 "거래내역" — 안전결제로 구매하기 클릭 후, 이후 화면을 나갔다 돌아와도
-    // 가상계좌 정보·입금액·입금상태를 계속 확인할 수 있게 한다. 판매자 쪽과 동일한 1줄 행 포맷
-    // 재사용(아바타는 거래 상대인 판매자).
+    // 6단계 진행 스텝바·판매자 연락처(전화·문자 바로가기)를 계속 확인할 수 있게 한다.
     var buyerOrderHistoryHtml = '';
     if (!isMine && myOrder) {
       var sp = detailState.sellerProfile;
@@ -1134,16 +1198,17 @@
       var vaLineHtml = myOrder.va_account_number
         ? '<div class="market-order-history-contacts">가상계좌 : ' + escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number) + '</div>'
         : '';
-      var sellerContactHtml = marketOrderRevealsPhone(myOrder.escrow_status)
-        ? '<div class="market-order-history-contacts">판매자 연락처 : ' + escapeHtml(marketFormatPhone(detailState.sellerPhone) || '-') + '</div>'
+      var sellerCounterpartHtml = marketOrderRevealsPhone(myOrder.escrow_status)
+        ? marketCounterpartCardHtml(sellerAvatar, sellerName, detailState.sellerPhone)
         : '';
       buyerOrderHistoryHtml =
         '<div class="market-order-history">' +
           '<p class="market-order-history__title">거래내역</p>' +
           '<div class="market-nego-divider"></div>' +
-          marketTxRowHtml(sellerAvatar, sellerName, buyerAmountLabel, myOrder.escrow_status, myOrder.va_due_at) +
+          marketDealAmountStatusHtml(buyerAmountLabel, myOrder.escrow_status, myOrder.va_due_at) +
+          marketDealStepsHtml(myOrder) +
+          sellerCounterpartHtml +
           vaLineHtml +
-          sellerContactHtml +
           marketBuyerDeliveryHtml(myOrder) +
         '</div>';
     }
