@@ -31098,7 +31098,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-tx-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
 .market-tx-row__due { flex-shrink: 0; }
 
-/* 거래 주문 카드의 금액+상태(+입금기한) — 6단계 스텝바·상대방 카드 아래 세부 정보 영역. */
+/* 거래 주문 카드의 금액+상태(+입금기한) — 6단계 스텝바·상대방 카드 아래 세부 정보 영역.
+   가격조정(marketNegoAmountRowHtml)과 연속으로 붙을 때도 동일한 항목으로 보이도록 스타일 공유. */
 .market-deal-amount-row {
   display: flex;
   align-items: center;
@@ -31106,6 +31107,9 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex-wrap: wrap;
   padding: 10px;
   background: #fafafa;
+}
+.market-deal-amount-row + .market-deal-amount-row {
+  border-top: 1px solid #f1f5f9;
 }
 
 /* 거래 진행 6단계 스텝바 — 거래내역 카드 맨 위, 완료/진행중 단계는 오렌지 톤, 미완료는 회색조. */
