@@ -410,6 +410,11 @@ export async function requestMarketDirectDeal(itemId) {
   return callMarketFunction('requestMarketDirectDeal', { itemId }, 'asia-northeast3');
 }
 
+/** 판매자가 입금완료 주문에 택배사/송장번호를 등록 — 등록과 함께 배송 조회가 시작된다. */
+export async function setMarketOrderTracking(orderId, courierCode, trackingNumber) {
+  return callMarketFunction('setMarketOrderTracking', { orderId, courierCode, trackingNumber }, 'asia-northeast3');
+}
+
 /** 구매 확정 — 물품 수령 확인. */
 export async function confirmMarketPurchase(orderId) {
   return callMarketFunction('confirmMarketPurchase', { orderId }, 'asia-northeast3');
@@ -630,6 +635,7 @@ if (typeof window !== 'undefined') {
     getMyMarketOrders,
     requestMarketPurchase,
     requestMarketDirectDeal,
+    setMarketOrderTracking,
     confirmMarketPurchase,
     cancelMarketOrder,
     requestMarketOrderRefund,

@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260902market13';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260903market14';
   var svc = null;
 
   function loadMarketService() {
@@ -75,6 +75,16 @@
     { code: '07', name: 'Sh수협은행' },
     { code: '71', name: '우체국예금보험' },
     { code: '37', name: '전북은행' },
+  ];
+
+  /** functions/index.js MARKET_COURIER_OPTIONS와 동일 목록(값만 그대로 복사) — 사용자가 제공한
+   * deliveryapi.co.kr 예시 코드만 반영, 그 외 택배사는 검증되지 않아 포함하지 않았다. */
+  var MARKET_COURIER_OPTIONS = [
+    { code: 'cj', name: 'CJ대한통운' },
+    { code: 'lotte', name: '롯데' },
+    { code: 'post', name: '우체국' },
+    { code: 'hanjin', name: '한진' },
+    { code: 'logen', name: '로젠' },
   ];
 
   var SUB_CATEGORIES = {
@@ -200,6 +210,46 @@
    * 조율할 수 있도록 서버 함수(get_market_buyer_contact)와 동일한 조건을 클라이언트에서도 사용. */
   function marketOrderRevealsPhone(status) {
     return status === 'PENDING' || status === 'RESERVED' || status === 'PAID' || status === 'CONFIRMED';
+  }
+
+  function marketDeliveryStatusLabel(status, text) {
+    var base = status === 'DELIVERED' ? '배송완료' : status === 'IN_TRANSIT' ? '배송중' : '배송상태 확인 중';
+    return text && text !== base ? base + ' (' + text + ')' : base;
+  }
+
+  /** 판매자 거래내역 행 아래 택배 정보 — 입금완료(PAID)+안전결제 주문에서만 노출.
+   * 송장 미등록 시 입력 폼, 등록 후에는 조회된 배송상태를 표시한다. */
+  function marketSellerDeliveryHtml(o) {
+    if (o.deal_type === 'DIRECT_DEAL' || o.escrow_status !== 'PAID') return '';
+    if (o.tracking_number) {
+      return '<div class="market-delivery-info">' +
+        '<div>택배사 : ' + escapeHtml(o.courier_name || o.courier_code || '') + '</div>' +
+        '<div>송장번호 : ' + escapeHtml(o.tracking_number) + '</div>' +
+        '<div>배송상태 : ' + escapeHtml(marketDeliveryStatusLabel(o.delivery_status, o.delivery_status_text)) + '</div>' +
+      '</div>';
+    }
+    return '<div class="market-delivery-form" data-order-id="' + o.id + '">' +
+      '<select class="market-form-select market-delivery-courier-select">' +
+        MARKET_COURIER_OPTIONS.map(function (c) { return '<option value="' + c.code + '">' + escapeHtml(c.name) + '</option>'; }).join('') +
+      '</select>' +
+      '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" />' +
+      '<button type="button" class="market-btn market-btn--outline market-delivery-submit-btn" data-order-id="' + o.id + '">택배사/송장번호 등록</button>' +
+    '</div>';
+  }
+
+  /** 구매자 거래내역의 배송 추적 카드 — 배송완료 시 72시간 자동 구매확정 잔여 타이머 포함. */
+  function marketBuyerDeliveryHtml(o) {
+    if (o.deal_type === 'DIRECT_DEAL' || !o.tracking_number) return '';
+    var deadlineIso = o.delivered_at ? new Date(new Date(o.delivered_at).getTime() + 72 * 3600 * 1000).toISOString() : null;
+    var timerHtml = (o.delivery_status === 'DELIVERED' && deadlineIso)
+      ? '<div>자동 구매확정까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>'
+      : '';
+    return '<div class="market-delivery-info">' +
+      '<div>택배사 : ' + escapeHtml(o.courier_name || o.courier_code || '') + '</div>' +
+      '<div>송장번호 : ' + escapeHtml(o.tracking_number) + '</div>' +
+      '<div>배송상태 : ' + escapeHtml(marketDeliveryStatusLabel(o.delivery_status, o.delivery_status_text)) + '</div>' +
+      timerHtml +
+    '</div>';
   }
 
   /** 거래내역 1줄 행 — 아바타+이름, 금액, 상태, (입금 대기중일 때만) 입금기한 카운트다운.
@@ -1062,7 +1112,8 @@
         var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.item_price) + '원';
         return '<div class="market-nego-divider"></div>' +
           marketTxRowHtml(bAvatar, bName, sellerAmountLabel, o.escrow_status, o.va_due_at) +
-          contactsHtml;
+          contactsHtml +
+          marketSellerDeliveryHtml(o);
       }).join('');
     }
 
@@ -1093,6 +1144,7 @@
           marketTxRowHtml(sellerAvatar, sellerName, buyerAmountLabel, myOrder.escrow_status, myOrder.va_due_at) +
           vaLineHtml +
           sellerContactHtml +
+          marketBuyerDeliveryHtml(myOrder) +
         '</div>';
     }
 
@@ -1167,6 +1219,9 @@
     });
     Array.prototype.forEach.call(document.querySelectorAll('.market-nego-reject-btn'), function (btn) {
       btn.onclick = function () { handleMarketNegoDecide(item.id, btn.getAttribute('data-nego-id'), false); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-submit-btn'), function (btn) {
+      btn.onclick = function () { handleMarketSetTracking(item.id, btn); };
     });
     if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
       var starsWrap = document.getElementById('marketRatingStars');
@@ -1485,6 +1540,29 @@
       },
       { okText: accept ? '수락' : '거절' }
     );
+  }
+
+  async function handleMarketSetTracking(itemId, btn) {
+    var orderId = btn.getAttribute('data-order-id');
+    var form = document.querySelector('.market-delivery-form[data-order-id="' + orderId + '"]');
+    if (!form) return;
+    var courierSelect = form.querySelector('.market-delivery-courier-select');
+    var trackingInput = form.querySelector('.market-delivery-tracking-input');
+    var courierCode = courierSelect ? courierSelect.value : '';
+    var trackingNumber = (trackingInput ? trackingInput.value : '').trim();
+    if (!trackingNumber) { toast('송장번호를 입력해 주세요.'); return; }
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+    try {
+      var s = await loadMarketService();
+      await s.setMarketOrderTracking(orderId, courierCode, trackingNumber);
+      toast('택배사·송장번호를 등록했습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('등록 실패: ' + (err && err.message ? err.message : err));
+      btn.disabled = false;
+      btn.textContent = '택배사/송장번호 등록';
+    }
   }
 
   window.marketItemDetailScreenInit = function () {
