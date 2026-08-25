@@ -16697,8 +16697,14 @@ exports.onUserProfileWritten = functions
     if (!userProfileFieldsChanged(before, after)) return;
 
     try {
+      // ensureAuth:true — 클라이언트의 1회성 self-provisioning 호출(가입 직후 fire-and-forget,
+      // 실패해도 콘솔 경고만 남기고 조용히 무시됨)이 레이스·네트워크 오류로 실패하면 auth.users
+      // 행이 영원히 생성되지 않아 이후 모든 프로필 쓰기가 users_id_fkey 위반으로 계속 실패하는
+      // 영구 고장 상태가 됐다(2026-08-25, 신규가입자 다수에서 재현 확인). ensureSupabaseAuthUser는
+      // 존재 여부를 먼저 확인하는 멱등 함수라 매 쓰기마다 호출해도 안전 — 이 트리거 자체를
+      // self-healing하게 만들어 근본 원인을 해결한다.
       await supabaseUserProvision.upsertSupabaseUserProfileFromFirestore(admin, userId, {
-        ensureAuth: false,
+        ensureAuth: true,
         requireNameContact: false,
       });
     } catch (e) {
