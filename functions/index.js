@@ -41,9 +41,6 @@ const upstashRedisRestTokenSecret = defineSecret("UPSTASH_REDIS_REST_TOKEN");
 /** 라이딩/러닝 모임 출발 지역 날씨 — 기상청 단기예보 조회서비스(공공데이터포털) 서비스키 */
 const kmaServiceKeySecret = defineSecret("KMA_SERVICE_KEY");
 
-/** 중고랜드 택배 배송 조회 — deliveryapi.co.kr (Secret Manager, functions:secrets:set로 등록). */
-const deliveryApiKeySecret = defineSecret("DELIVERY_API_KEY");
-
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -120,7 +117,6 @@ const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
 const ridingGroupSupabaseWrites = require("./ridingGroupSupabaseWrites");
 const weeklyTssRankingBuilder = require("./weeklyTssRankingBuilder");
 const tossPaymentsClient = require("./tossPaymentsClient");
-const deliveryApiClient = require("./deliveryApiClient");
 const raceRedisClient = require("./raceRedisClient");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
@@ -17873,15 +17869,6 @@ exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, as
  */
 const MARKET_ORDER_FEE_KRW = 1000;
 const MARKET_ORDER_VALID_HOURS = 24;
-const MARKET_DELIVERY_AUTO_CONFIRM_HOURS = 72;
-/** deliveryapi.co.kr 지원 택배사 — 사용자가 제공한 예시 코드만 반영(그 외 코드는 검증되지 않음). */
-const MARKET_COURIER_OPTIONS = [
-  { code: "cj", name: "CJ대한통운" },
-  { code: "lotte", name: "롯데" },
-  { code: "post", name: "우체국" },
-  { code: "hanjin", name: "한진" },
-  { code: "logen", name: "로젠" },
-];
 
 function marketOrderIdFor(itemId, uid) {
   const ts = Date.now().toString(36);
@@ -18622,191 +18609,6 @@ exports.cancelUnpaidMarketOrdersSchedule = onSchedule(
       /* eslint-enable no-await-in-loop */
     }
     console.log("[cancelUnpaidMarketOrdersSchedule] 만료 처리:", expired.length);
-  }
-);
-
-/**
- * 판매자가 입금완료(PAID) 주문에 택배사/송장번호를 등록 — 등록 즉시 1회 배송 조회를 시도하고,
- * 이후 상태 갱신은 checkMarketDeliveryStatusSchedule이 주기적으로 처리한다(즉시 조회가 실패해도
- * 등록 자체는 성공 처리 — 스케줄러가 재시도).
- */
-const setMarketOrderTrackingOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-setMarketOrderTrackingOptions.secrets = setMarketOrderTrackingOptions.secrets.concat([deliveryApiKeySecret]);
-exports.setMarketOrderTracking = onRequest(setMarketOrderTrackingOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const orderId = String(body.orderId || "").trim();
-    const courierCode = String(body.courierCode || "").trim();
-    const trackingNumber = String(body.trackingNumber || "").replace(/[^0-9A-Za-z-]/g, "").trim();
-    if (!orderId || !courierCode || !trackingNumber) {
-      res.status(400).json({ success: false, error: "orderId·courierCode·trackingNumber가 필요합니다." });
-      return;
-    }
-    const courier = MARKET_COURIER_OPTIONS.find((c) => c.code === courierCode);
-    if (!courier) {
-      res.status(400).json({ success: false, error: "지원하지 않는 택배사입니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    const sellerId = resolveMarketBuyerUuid(uid);
-
-    const { data: order, error: orderErr } = await supabase
-      .from("market_orders")
-      .select("*")
-      .eq("id", orderId)
-      .maybeSingle();
-    if (orderErr || !order) {
-      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
-      return;
-    }
-    if (order.seller_id !== sellerId) {
-      res.status(403).json({ success: false, error: "본인 상품의 주문만 등록할 수 있습니다." });
-      return;
-    }
-    if (order.escrow_status !== "PAID") {
-      res.status(400).json({ success: false, error: "입금이 확인된 주문만 송장을 등록할 수 있습니다." });
-      return;
-    }
-
-    const nowIso = new Date().toISOString();
-    const update = {
-      courier_code: courierCode,
-      courier_name: courier.name,
-      tracking_number: trackingNumber,
-      shipped_at: nowIso,
-      delivery_status: "IN_TRANSIT",
-      updated_at: nowIso,
-    };
-    try {
-      const trace = await deliveryApiClient.traceDelivery(deliveryApiKeySecret.value(), courierCode, trackingNumber);
-      update.delivery_status = trace.status;
-      update.delivery_status_text = trace.statusText;
-      update.delivery_checked_at = nowIso;
-      if (trace.isDelivered) update.delivered_at = nowIso;
-    } catch (eTrace) {
-      console.warn("[setMarketOrderTracking] 즉시 조회 실패(스케줄러가 재시도):", orderId, eTrace.message || eTrace);
-    }
-
-    const { data: updated, error: updErr } = await supabase
-      .from("market_orders")
-      .update(update)
-      .eq("id", orderId)
-      .eq("escrow_status", "PAID")
-      .select()
-      .single();
-    if (updErr) throw updErr;
-
-    res.status(200).json({ success: true, order: updated });
-  } catch (e) {
-    console.error("[setMarketOrderTracking]", e && e.message ? e.message : e);
-    const status = e.status || 500;
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/** 송장이 등록된 미배송완료 주문의 배송 상태를 주기적으로 조회. */
-exports.checkMarketDeliveryStatusSchedule = onSchedule(
-  {
-    schedule: "every 30 minutes",
-    region: "asia-northeast3",
-    secrets: [supabaseDualWriteServer.supabaseServiceRoleKey, deliveryApiKeySecret],
-  },
-  async () => {
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) return;
-    const { data: orders, error } = await supabase
-      .from("market_orders")
-      .select("id, courier_code, tracking_number, delivery_status")
-      .not("tracking_number", "is", null)
-      .neq("delivery_status", "DELIVERED")
-      .limit(200);
-    if (error || !orders || !orders.length) return;
-
-    let checked = 0;
-    let deliveredCount = 0;
-    for (const o of orders) {
-      /* eslint-disable no-await-in-loop */
-      try {
-        const trace = await deliveryApiClient.traceDelivery(deliveryApiKeySecret.value(), o.courier_code, o.tracking_number);
-        const nowIso = new Date().toISOString();
-        const update = {
-          delivery_status: trace.status,
-          delivery_status_text: trace.statusText,
-          delivery_checked_at: nowIso,
-        };
-        if (trace.isDelivered && o.delivery_status !== "DELIVERED") {
-          update.delivered_at = nowIso;
-          deliveredCount += 1;
-        }
-        await supabase.from("market_orders").update(update).eq("id", o.id);
-        checked += 1;
-      } catch (e) {
-        console.warn("[checkMarketDeliveryStatusSchedule] 조회 실패:", o.id, e.message || e);
-      }
-      /* eslint-enable no-await-in-loop */
-    }
-    console.log("[checkMarketDeliveryStatusSchedule] 조회:", checked, "신규 배송완료:", deliveredCount);
-  }
-);
-
-/**
- * 배송완료(delivered_at) 후 72시간이 지나도 구매자가 직접 [구매 확정]을 누르지 않으면 자동으로
- * 구매확정(CONFIRMED) 처리한다 — confirmMarketPurchase와 동일한 효과(구매자가 누른 것과 동일하게
- * 취급). 실제 판매대금 계좌 이체는 여전히 관리자가 수동으로 처리한다(adminMarkMarketOrderSettled) —
- * Toss Payments에는 제3자 계좌로의 자동 지급대행 API가 없어 "자동 정산 입금"까지는 지원하지 않는다.
- */
-exports.autoConfirmDeliveredMarketOrdersSchedule = onSchedule(
-  {
-    schedule: "every 60 minutes",
-    region: "asia-northeast3",
-    secrets: [supabaseDualWriteServer.supabaseServiceRoleKey],
-  },
-  async () => {
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) return;
-    const cutoffIso = new Date(Date.now() - MARKET_DELIVERY_AUTO_CONFIRM_HOURS * 3600 * 1000).toISOString();
-    const { data: orders, error } = await supabase
-      .from("market_orders")
-      .select("id, item_id")
-      .eq("escrow_status", "PAID")
-      .not("delivered_at", "is", null)
-      .lte("delivered_at", cutoffIso);
-    if (error || !orders || !orders.length) return;
-
-    let confirmed = 0;
-    for (const o of orders) {
-      /* eslint-disable no-await-in-loop */
-      const nowIso = new Date().toISOString();
-      const { data: updated } = await supabase
-        .from("market_orders")
-        .update({ escrow_status: "CONFIRMED", settled_at: nowIso, updated_at: nowIso })
-        .eq("id", o.id)
-        .eq("escrow_status", "PAID")
-        .select();
-      if (updated && updated.length) {
-        await supabase.from("market_items").update({ status: "SOLD", updated_at: nowIso }).eq("id", o.item_id);
-        confirmed += 1;
-      }
-      /* eslint-enable no-await-in-loop */
-    }
-    console.log("[autoConfirmDeliveredMarketOrdersSchedule] 자동 구매확정:", confirmed);
   }
 );
 

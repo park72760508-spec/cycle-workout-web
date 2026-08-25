@@ -52,6 +52,34 @@ async function callMarketFunction(name, body, region) {
   return data;
 }
 
+/** Supabase Edge Function 호출 — 중고랜드 세션(getFreshMarketAccessToken)이 발급한 커스텀 JWT를
+ * 그대로 Authorization으로 붙인다. PostgREST가 동일 JWT로 auth.uid()를 정상 추출하는 것과 같은
+ * 검증 스택이라 Edge Function의 verify_jwt에도 그대로 통과한다. */
+async function callMarketEdgeFunction(name, body) {
+  const cfg = (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) throw new Error('STELVIO_SUPABASE_CONFIG 미설정');
+  const token = await getFreshMarketAccessToken();
+  const res = await fetch(cfg.supabaseUrl + '/functions/v1/' + name, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + token,
+      apikey: cfg.supabaseAnonKey,
+    },
+    body: JSON.stringify(body || {}),
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (e) {
+    throw new Error('서버 응답을 읽을 수 없습니다.');
+  }
+  if (!res.ok || !data || data.success !== true) {
+    throw new Error((data && data.error) || 'HTTP ' + res.status);
+  }
+  return data;
+}
+
 /**
  * 중고랜드 전용 Supabase 클라이언트 — supabase.auth.setSession()을 쓰지 않는다.
  * mintSupabaseSessionHttp가 발급하는 토큰은 GoTrue가 실제로 추적하는 세션이 아니라 RLS
@@ -412,7 +440,7 @@ export async function requestMarketDirectDeal(itemId) {
 
 /** 판매자가 입금완료 주문에 택배사/송장번호를 등록 — 등록과 함께 배송 조회가 시작된다. */
 export async function setMarketOrderTracking(orderId, courierCode, trackingNumber) {
-  return callMarketFunction('setMarketOrderTracking', { orderId, courierCode, trackingNumber }, 'asia-northeast3');
+  return callMarketEdgeFunction('market-set-tracking', { orderId, courierCode, trackingNumber });
 }
 
 /** 구매 확정 — 물품 수령 확인. */
