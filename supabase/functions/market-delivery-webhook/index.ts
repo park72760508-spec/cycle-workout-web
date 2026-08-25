@@ -1,77 +1,110 @@
-// 중고랜드 — deliveryapi.co.kr 웹훅 수신. market-set-tracking이 송장 등록 시 함께 등록해둔
-// 콜백 주소로, 배송 상태가 바뀔 때마다 무료로(등록 1건만 차감, 이후 상태 변경 알림은 무료 정책)
-// 푸시된다. 이게 주 채널이 되면서 정기 폴링(market-check-delivery-status)은 웹훅 등록에
-// 실패한 건에 한해서만 6시간 주기 안전망으로만 동작해 API 호출량을 크게 줄인다.
+// 중고랜드 — deliveryapi.co.kr 웹훅 수신. market-set-tracking이 구독 등록 시 지정한 엔드포인트
+// (market-delivery-webhook-setup으로 미리 1회 등록·Vault 저장)로, 배송 상태가 바뀔 때마다
+// 무료로(등록 1건만 과금, 이후 폴링·알림은 무료) 푸시된다 — 이게 주 채널이고, 정기 폴링
+// (market-check-delivery-status)은 구독이 실패/만료된 극소수 건만 처리하는 하루 1회 안전망이다.
 //
-// ⚠️ 실제 웹훅 페이로드 스키마와 서명 검증 방식을 확인하지 못했다 — 흔한 필드명 후보를 관대하게
-// 탐색하고, 서명 검증은 하지 않는다(수신 URL을 아는 제3자가 이미 우리 DB에 존재하는 송장번호에
-// 대해 조회를 조작해 보낼 수 있다는 뜻 — 다만 tracking_number가 실제로 매칭되는 미배송완료
-// 주문에 한해서만 반영하므로 임의 주문을 건드릴 수는 없고, 최악의 경우도 "배송완료" 조기 반영
-// 정도라 실제 정산은 여전히 관리자가 수동 확인 후 처리해 자금 이동 위험은 없다).
+// 서명 검증(공식 문서): HMAC-SHA256(webhookSecret, "{timestamp}.{rawBody}"),
+// X-Webhook-Signature: "sha256=<hex>", X-Webhook-Timestamp 허용 오차 300초.
+// 반드시 200을 반환해야 하며(문서: 실패 지속 시 엔드포인트 자동 비활성화), 서명 불일치처럼
+// 우리가 명확히 거부해야 하는 경우에만 401로 응답한다.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-
-const DELIVERED_TOKENS = ["delivered", "완료", "배달완료", "배송완료", "수령완료"];
-
-function normalizeDeliveryTraceResponse(json: Record<string, unknown>) {
-  const root = (json && ((json.data as Record<string, unknown>) || (json.result as Record<string, unknown>))) || json || {};
-  const rawStatus = String(root.status || root.state || root.deliveryStatus || root.trackingStatus || "").trim();
-  const statusLower = rawStatus.toLowerCase();
-  const isDelivered = DELIVERED_TOKENS.some((t) => statusLower.includes(t.toLowerCase()));
-  const statusText = String(root.statusText || root.stateText || root.description || rawStatus || "").trim();
-  return {
-    status: isDelivered ? "DELIVERED" : rawStatus ? "IN_TRANSIT" : "UNKNOWN",
-    statusText,
-    isDelivered,
-  };
-}
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return result === 0;
+}
+
+async function verifySignature(rawBody: string, timestamp: string, signature: string, secret: string): Promise<boolean> {
+  if (!timestamp || !signature) return false;
+  const diff = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!Number.isFinite(diff) || diff > 300) return false;
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, encoder.encode(`${timestamp}.${rawBody}`));
+  const hex = Array.from(new Uint8Array(sigBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return timingSafeEqualStr(`sha256=${hex}`, signature);
+}
+
+function statusFromItem(item: Record<string, unknown>) {
+  const isDelivered = Boolean(item.isDelivered);
+  const currentStatus = String(item.currentStatus || "").trim();
+  return {
+    status: isDelivered ? "DELIVERED" : currentStatus ? "IN_TRANSIT" : "UNKNOWN",
+    statusText: currentStatus,
+    isDelivered,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
-    return jsonResponse({ success: true }); // 헬스체크·GET 확인 등에 대비해 200으로만 응답
-  }
-
-  let body: Record<string, unknown> = {};
-  try {
-    body = await req.json();
-  } catch (_e) {
-    return jsonResponse({ success: false, error: "잘못된 요청 본문" }, 200); // 웹훅은 재시도 폭주 방지를 위해 200 유지
-  }
-
-  // ⚠️ 실제 필드명 미검증 — trackingNumber/invoiceNo/trackNo 후보를 관대하게 탐색.
-  const trackingNumber = String(body.trackingNumber || body.invoiceNo || body.trackNo || "").trim();
-  if (!trackingNumber) {
-    return jsonResponse({ success: false, error: "trackingNumber 없음" });
+    return jsonResponse({ success: true }); // 헬스체크·GET 확인 등에 대비
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data: order, error } = await admin
-    .from("market_orders")
-    .select("id, delivery_status")
-    .eq("tracking_number", trackingNumber)
-    .neq("delivery_status", "DELIVERED")
-    .maybeSingle();
-  if (error || !order) {
-    return jsonResponse({ success: true, matched: false });
+  const { data: webhookConfig } = await admin.rpc("get_delivery_webhook_config").single();
+  const webhookSecret = webhookConfig?.webhook_secret as string | undefined;
+
+  const rawBody = await req.text();
+  const timestamp = req.headers.get("x-webhook-timestamp") || "";
+  const signature = req.headers.get("x-webhook-signature") || "";
+
+  if (!webhookSecret) {
+    console.error("[market-delivery-webhook] webhookSecret 미설정 — 검증 불가로 요청 거부");
+    return jsonResponse({ success: false, error: "server misconfigured" }, 401);
+  }
+  const validSig = await verifySignature(rawBody, timestamp, signature, webhookSecret);
+  if (!validSig) {
+    return jsonResponse({ success: false, error: "invalid signature" }, 401);
   }
 
-  const trace = normalizeDeliveryTraceResponse(body);
-  const nowIso = new Date().toISOString();
-  const update: Record<string, unknown> = {
-    delivery_status: trace.status,
-    delivery_status_text: trace.statusText,
-    delivery_checked_at: nowIso,
-  };
-  if (trace.isDelivered) update.delivered_at = nowIso;
+  let body: Record<string, unknown> = {};
+  try {
+    body = JSON.parse(rawBody);
+  } catch (_e) {
+    return jsonResponse({ success: false, error: "잘못된 요청 본문" }, 200); // 재시도 폭주 방지 위해 200 유지
+  }
 
-  await admin.from("market_orders").update(update).eq("id", order.id);
+  const items = Array.isArray(body.items) ? (body.items as Record<string, unknown>[]) : [];
+  let matched = 0;
+  for (const item of items) {
+    const clientId = String(item.clientId || "").trim();
+    const trackingNumber = String(item.trackingNumber || "").trim();
+    const courierCode = String(item.courierCode || "").trim();
 
-  return jsonResponse({ success: true, matched: true });
+    let query = admin.from("market_orders").select("id, delivery_status").neq("delivery_status", "DELIVERED");
+    query = clientId ? query.eq("id", clientId) : query.eq("tracking_number", trackingNumber).eq("courier_code", courierCode);
+    const { data: order } = await query.maybeSingle();
+    if (!order) continue;
+
+    const trace = statusFromItem(item);
+    const nowIso = new Date().toISOString();
+    const update: Record<string, unknown> = {
+      delivery_status: trace.status,
+      delivery_status_text: trace.statusText,
+      delivery_checked_at: nowIso,
+    };
+    if (trace.isDelivered) update.delivered_at = nowIso;
+
+    await admin.from("market_orders").update(update).eq("id", order.id);
+    matched += 1;
+  }
+
+  return jsonResponse({ success: true, event: body.event, matched, total: items.length });
 });
