@@ -31261,6 +31261,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   font-weight: 800;
   text-align: center;
   border-radius: 999px;
+  border: 1.5px solid #ea580c;
 }
 .market-order-history-status {
   font-size: 12.5px;
