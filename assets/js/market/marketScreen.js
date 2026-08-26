@@ -225,7 +225,10 @@
           return '<option value="' + c.code + '"' + (c.code === selectedCourier ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
         }).join('') +
       '</select>' +
-      '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" value="' + escapeHtml(isEdit ? o.tracking_number : '') + '" />' +
+      '<div class="market-delivery-tracking-row">' +
+        '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" value="' + escapeHtml(isEdit ? o.tracking_number : '') + '" />' +
+        '<button type="button" class="market-deal-contact-btn market-delivery-scan-btn" data-order-id="' + o.id + '" aria-label="바코드로 송장번호 스캔">' + MARKET_BARCODE_ICON_SVG + '</button>' +
+      '</div>' +
       '<div class="market-delivery-form__actions">' +
         '<button type="button" class="market-btn market-btn--outline market-delivery-submit-btn" data-order-id="' + o.id + '">' + (isEdit ? '수정 완료' : '택배사/송장번호 등록') + '</button>' +
         (isEdit ? '<button type="button" class="market-btn market-btn--outline market-delivery-edit-cancel-btn" data-order-id="' + o.id + '">취소</button>' : '') +
@@ -340,6 +343,17 @@
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M16.862 4.487a2.1 2.1 0 112.97 2.97L7.5 19.79l-4.5 1.13 1.13-4.5L16.862 4.487z"></path>' +
     '<path d="M15.232 6.117l2.65 2.65"></path></svg>';
+  var MARKET_BARCODE_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+    '<rect x="2" y="4" width="1.6" height="16"></rect>' +
+    '<rect x="5.2" y="4" width="0.9" height="16"></rect>' +
+    '<rect x="7.6" y="4" width="2" height="16"></rect>' +
+    '<rect x="11.1" y="4" width="0.9" height="16"></rect>' +
+    '<rect x="13.4" y="4" width="1.6" height="16"></rect>' +
+    '<rect x="16.4" y="4" width="0.9" height="16"></rect>' +
+    '<rect x="18.7" y="4" width="2" height="16"></rect>' +
+    '<rect x="21.4" y="4" width="0.9" height="16"></rect>' +
+    '</svg>';
 
   /** 거래 진행 6단계 — 직거래(DIRECT_DEAL)는 안전결제·택배 배송 개념이 없어 예약(RESERVED)
    * 시점에 2~5단계가 한꺼번에 완료되는 것으로 취급한다(대면 거래는 앱이 중간 과정을 추적하지 않음). */
@@ -1377,6 +1391,20 @@
         if (form) form.classList.add('is-hidden');
       };
     });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-scan-btn'), function (btn) {
+      btn.onclick = function () {
+        var orderId = btn.getAttribute('data-order-id');
+        var form = document.querySelector('.market-delivery-form[data-order-id="' + orderId + '"]');
+        var input = form && form.querySelector('.market-delivery-tracking-input');
+        if (!input) return;
+        openMarketBarcodeScanner(function (text) {
+          // 택배 송장 바코드는 보통 숫자로만 구성됨 — 등록 시와 동일한 허용 문자만 남긴다.
+          input.value = String(text || '').replace(/[^0-9A-Za-z-]/g, '');
+          input.focus();
+          haptic(10);
+        });
+      };
+    });
     if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
       var starsWrap = document.getElementById('marketRatingStars');
       if (starsWrap) {
@@ -1694,6 +1722,58 @@
       },
       { okText: accept ? '수락' : '거절' }
     );
+  }
+
+  var marketBarcodeReader = null; // ZXing BrowserMultiFormatReader — 스캐너 오버레이 열려있는 동안만 유지
+
+  function closeMarketBarcodeScanner() {
+    if (marketBarcodeReader) {
+      try { marketBarcodeReader.reset(); } catch (e) { /* ignore */ }
+      marketBarcodeReader = null;
+    }
+    var overlay = document.getElementById('marketBarcodeScannerOverlay');
+    if (overlay) overlay.remove();
+  }
+
+  /** 송장 바코드(대부분 Code128 1D 바코드) 카메라 스캔 — 인식되는 즉시 onDetected(text)를 호출하고 닫는다.
+   * ZXing을 esm.sh에서 동적 로드(빌드 스텝 없는 프로젝트라 로컬 번들 대신 CDN import). */
+  async function openMarketBarcodeScanner(onDetected) {
+    closeMarketBarcodeScanner();
+    var overlay = document.createElement('div');
+    overlay.id = 'marketBarcodeScannerOverlay';
+    overlay.className = 'market-barcode-scanner-overlay';
+    overlay.innerHTML =
+      '<div class="market-barcode-scanner-header">' +
+        '<span>송장 바코드를 비춰주세요</span>' +
+        '<button type="button" class="market-barcode-scanner-close" aria-label="닫기">&times;</button>' +
+      '</div>' +
+      '<div class="market-barcode-scanner-body">' +
+        '<video class="market-barcode-scanner-video" id="marketBarcodeScannerVideo" playsinline muted></video>' +
+        '<div class="market-barcode-scanner-guide"></div>' +
+        '<p class="market-barcode-scanner-hint">바코드를 화면 중앙 네모 안에 맞춰주세요</p>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.market-barcode-scanner-close').onclick = closeMarketBarcodeScanner;
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) closeMarketBarcodeScanner();
+    });
+
+    try {
+      var zxing = await import('https://esm.sh/@zxing/browser@0.1.5');
+      var reader = new zxing.BrowserMultiFormatReader();
+      marketBarcodeReader = reader;
+      var videoEl = document.getElementById('marketBarcodeScannerVideo');
+      if (!videoEl) return; // 오버레이가 그 사이 닫혔으면 중단
+      await reader.decodeFromVideoDevice(undefined, videoEl, function (result) {
+        if (!result) return; // 프레임마다 실패 콜백도 오므로 성공한 프레임만 처리
+        var text = result.getText();
+        closeMarketBarcodeScanner();
+        onDetected(text);
+      });
+    } catch (e) {
+      closeMarketBarcodeScanner();
+      toast('카메라를 사용할 수 없습니다: ' + (e && e.message ? e.message : e));
+    }
   }
 
   async function handleMarketSetTracking(itemId, btn) {

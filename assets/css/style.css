@@ -31341,6 +31341,84 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-delivery-form.is-hidden { display: none; }
 .market-delivery-form .market-form-select,
 .market-delivery-form .market-form-input { margin-bottom: 0; }
+/* 송장번호 입력칸 + 바코드 스캔 버튼 한 줄 — 입력칸은 스캔 버튼 자리만큼 살짝 줄어든다. */
+.market-delivery-tracking-row { display: flex; align-items: center; gap: 8px; }
+.market-delivery-tracking-row .market-delivery-tracking-input { flex: 1; min-width: 0; margin-bottom: 0; }
+/* 송장정보 수정 버튼(market-delivery-edit-btn)과 동일한 디자인의 바코드 스캔 아이콘 버튼. */
+.market-delivery-scan-btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.market-delivery-scan-btn svg { width: 14px; height: 14px; }
+
+/* 송장 바코드 카메라 스캔 전체화면 오버레이 */
+.market-barcode-scanner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+}
+.market-barcode-scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.market-barcode-scanner-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.market-barcode-scanner-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.market-barcode-scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+.market-barcode-scanner-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 78%;
+  max-width: 340px;
+  height: 110px;
+  border: 2px solid #ea580c;
+  border-radius: 10px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.market-barcode-scanner-hint {
+  position: absolute;
+  bottom: 32px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 13px;
+  margin: 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
 .market-delivery-form__actions { display: flex; gap: 8px; }
 .market-delivery-form__actions .market-delivery-submit-btn,
 .market-delivery-form__actions .market-delivery-edit-cancel-btn { flex: 1; }
