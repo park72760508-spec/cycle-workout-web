@@ -30952,18 +30952,12 @@
       var authUser = resolveAuthBarAuthUser(user);
       var loggedIn = isAuthBarLoggedIn(authUser);
       var userName = loggedIn ? resolveAuthBarUserName(authUser) : '사용자';
-      // 중고랜드는 아직 관리자·부관리자 전용 미리보기 단계 — 완성 후 일반 사용자에게도 동일 적용 예정
-      var isAdminForMarket =
-        loggedIn &&
-        ((typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true) ||
-          (typeof getLoginUserGrade === 'function' &&
-            typeof isStelvioOpenRidingRoomAdminGrade === 'function' &&
-            isStelvioOpenRidingRoomAdminGrade(getLoginUserGrade())));
+      // 중고랜드 진입 버튼 — 관리자 전용 미리보기 단계를 마치고 모든 로그인 사용자에게 동일하게 노출.
       _syncAuthBarPair('authBarLeft', 'authBarRight', 'authBarWarning', 'authBarWelcomeLine1', 'authBarWelcomeLine2', user, userName, loggedIn);
-      _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn, isAdminForMarket);
+      _syncAuthBarPair('categoryAuthBarLeft', 'categoryAuthBarRight', 'categoryAuthBarWarning', 'categoryAuthBarWelcomeLine1', 'categoryAuthBarWelcomeLine2', user, userName, loggedIn, true);
       _syncAuthBarPair('runAuthBarLeft', 'runAuthBarRight', 'runAuthBarWarning', 'runAuthBarWelcomeLine1', 'runAuthBarWelcomeLine2', user, userName, loggedIn);
       var marketEntryBtn = document.getElementById('btnGoToMarketFromCategory');
-      if (marketEntryBtn) marketEntryBtn.style.display = isAdminForMarket ? 'inline-flex' : 'none';
+      if (marketEntryBtn) marketEntryBtn.style.display = loggedIn ? 'inline-flex' : 'none';
       // 스포츠 카테고리: 환영합니다 / 이름님 / 카페 바로가기 3줄 세로 배치 (grid 강제 해제)
       var _catAuthRight = document.getElementById('categoryAuthBarRight');
       if (_catAuthRight && loggedIn) {
