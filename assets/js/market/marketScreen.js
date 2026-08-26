@@ -370,6 +370,14 @@
     return [negoState, paidState, shippedState, transitState, deliveredState, confirmedState];
   }
 
+  // CSS의 dashed 테두리는 점 개수를 지정할 수 없어(브라우저가 굵기 기준으로 자동 계산),
+  // 진행중(active) 단계는 SVG 원 stroke-dasharray로 정확히 20개 점선을 그린다.
+  // 원 지름 34px(반지름 16) 기준 둘레 ≈ 100.5px → 점 20개+칸 20개 = 40구간, 구간당 ≈ 2.51px.
+  var MARKET_DEAL_STEP_ACTIVE_RING_SVG =
+    '<svg class="market-deal-step__active-ring" viewBox="0 0 34 34" aria-hidden="true">' +
+    '<circle cx="17" cy="17" r="16" fill="none" stroke="#ea580c" stroke-width="2" stroke-dasharray="2.51 2.51"></circle>' +
+    '</svg>';
+
   function marketDealStepsHtml(order) {
     var states = marketDealStepStates(order);
     return '<div class="market-deal-steps">' +
@@ -377,6 +385,7 @@
         var state = states[i];
         return '<div class="market-deal-step market-deal-step--' + state + '">' +
           '<div class="market-deal-step__icon-wrap">' +
+            (state === 'active' ? MARKET_DEAL_STEP_ACTIVE_RING_SVG : '') +
             '<img class="market-deal-step__icon" src="assets/img/' + step.icon + '.svg" alt="" />' +
           '</div>' +
           '<span class="market-deal-step__label">' + step.label + '</span>' +
