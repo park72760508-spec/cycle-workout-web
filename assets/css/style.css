@@ -31295,8 +31295,11 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex-direction: column;
   gap: 8px;
 }
+.market-delivery-form.is-hidden { display: none; }
 .market-delivery-form .market-form-select,
 .market-delivery-form .market-form-input { margin-bottom: 0; }
+.market-delivery-form__actions { display: flex; gap: 8px; }
+.market-delivery-form__actions .market-delivery-submit-btn { flex: 1; }
 .market-delivery-info {
   margin-top: 8px;
   padding-top: 8px;
@@ -31307,6 +31310,14 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex-direction: column;
   gap: 4px;
 }
+.market-delivery-info__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.market-delivery-info__text { display: flex; flex-direction: column; gap: 4px; }
+.market-delivery-edit-btn { flex-shrink: 0; padding: 6px 12px; font-size: 12px; }
 .market-detail-action-bar { padding: 10px 0 20px 0; }
 .market-refund-form {
   margin-top: 10px;

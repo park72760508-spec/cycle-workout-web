@@ -217,25 +217,41 @@
     return status === 'PENDING' || status === 'RESERVED' || status === 'PAID' || status === 'CONFIRMED';
   }
 
+  function marketDeliveryFormHtml(o, isEdit) {
+    var selectedCourier = isEdit ? o.courier_code : '';
+    return '<div class="market-delivery-form' + (isEdit ? ' is-hidden' : '') + '" data-order-id="' + o.id + '">' +
+      '<select class="market-form-select market-delivery-courier-select">' +
+        MARKET_COURIER_OPTIONS.map(function (c) {
+          return '<option value="' + c.code + '"' + (c.code === selectedCourier ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
+        }).join('') +
+      '</select>' +
+      '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" value="' + escapeHtml(isEdit ? o.tracking_number : '') + '" />' +
+      '<div class="market-delivery-form__actions">' +
+        '<button type="button" class="market-btn market-btn--outline market-delivery-submit-btn" data-order-id="' + o.id + '">' + (isEdit ? '수정 완료' : '택배사/송장번호 등록') + '</button>' +
+        (isEdit ? '<button type="button" class="market-btn market-btn--outline market-delivery-edit-cancel-btn" data-order-id="' + o.id + '">취소</button>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
   /** 판매자 거래내역 행 아래 택배 정보 — 입금완료(PAID)+안전결제 주문에서만 노출.
-   * 송장 미등록 시 입력 폼, 등록 후에는 조회된 배송상태를 표시한다. */
+   * 송장 미등록 시 입력 폼, 등록 후에는 조회된 배송상태 + 수정 버튼(오입력 정정용)을 표시한다. */
   function marketSellerDeliveryHtml(o) {
     if (o.deal_type === 'DIRECT_DEAL' || o.escrow_status !== 'PAID') return '';
     if (o.tracking_number) {
       // 배송 상태 자체는 위쪽 6단계 진행 스텝바(marketDealStepsHtml)에서 이미 보여주므로
-      // 여기서는 택배사·송장번호만 확인용으로 남긴다.
-      return '<div class="market-delivery-info">' +
-        '<div>택배사 : ' + escapeHtml(o.courier_name || o.courier_code || '') + '</div>' +
-        '<div>송장번호 : ' + escapeHtml(o.tracking_number) + '</div>' +
-      '</div>';
+      // 여기서는 택배사·송장번호 확인 + 오입력 시 정정할 수 있는 수정 버튼만 남긴다.
+      return '<div class="market-delivery-info" data-order-id="' + o.id + '">' +
+        '<div class="market-delivery-info__row">' +
+          '<div class="market-delivery-info__text">' +
+            '<div>택배사 : ' + escapeHtml(o.courier_name || o.courier_code || '') + '</div>' +
+            '<div>송장번호 : ' + escapeHtml(o.tracking_number) + '</div>' +
+          '</div>' +
+          '<button type="button" class="market-btn market-btn--outline market-delivery-edit-btn" data-order-id="' + o.id + '">수정</button>' +
+        '</div>' +
+      '</div>' +
+      marketDeliveryFormHtml(o, true);
     }
-    return '<div class="market-delivery-form" data-order-id="' + o.id + '">' +
-      '<select class="market-form-select market-delivery-courier-select">' +
-        MARKET_COURIER_OPTIONS.map(function (c) { return '<option value="' + c.code + '">' + escapeHtml(c.name) + '</option>'; }).join('') +
-      '</select>' +
-      '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" />' +
-      '<button type="button" class="market-btn market-btn--outline market-delivery-submit-btn" data-order-id="' + o.id + '">택배사/송장번호 등록</button>' +
-    '</div>';
+    return marketDeliveryFormHtml(o, false);
   }
 
   /** 구매자 거래내역의 배송 추적 카드 — 배송완료 시 72시간 자동 구매확정 잔여 타이머 포함. */
@@ -1317,6 +1333,20 @@
     });
     Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-submit-btn'), function (btn) {
       btn.onclick = function () { handleMarketSetTracking(item.id, btn); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-edit-btn'), function (btn) {
+      btn.onclick = function () {
+        var orderId = btn.getAttribute('data-order-id');
+        var form = document.querySelector('.market-delivery-form[data-order-id="' + orderId + '"]');
+        if (form) form.classList.remove('is-hidden');
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-edit-cancel-btn'), function (btn) {
+      btn.onclick = function () {
+        var orderId = btn.getAttribute('data-order-id');
+        var form = document.querySelector('.market-delivery-form[data-order-id="' + orderId + '"]');
+        if (form) form.classList.add('is-hidden');
+      };
     });
     if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
       var starsWrap = document.getElementById('marketRatingStars');
