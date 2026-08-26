@@ -222,7 +222,7 @@
     GRANFONDO: '그란폰도', MEDIOFONDO: '메디오폰도',
   };
   var CSV_SIZE_LABEL = { S: 'S (90)', M: 'M (95)', L: 'L (100)', XL: 'XL (105)', XXL: 'XXL (110)' };
-  var CSV_START_GROUP_LABEL = { A: 'A조', B: 'B조', C: 'C조' };
+  var CSV_START_GROUP_LABEL = { A: 'A조', B: 'B조', C: 'C조', D: 'D조', E: 'E조' };
   var CSV_BLOOD_TYPE_LABEL = {
     'RH+A': 'RH+ A형', 'RH+B': 'RH+ B형', 'RH+O': 'RH+ O형', 'RH+AB': 'RH+ AB형',
     'RH-A': 'RH- A형', 'RH-B': 'RH- B형', 'RH-O': 'RH- O형', 'RH-AB': 'RH- AB형',

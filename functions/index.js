@@ -17035,7 +17035,7 @@ const RACE_APPLICANT_DIVISION = {
   CYCLE: ["GRANFONDO", "MEDIOFONDO"],
 };
 const RACE_APPLICANT_SIZE = ["S", "M", "L", "XL", "XXL"];
-const RACE_APPLICANT_START_GROUP = ["A", "B", "C"];
+const RACE_APPLICANT_START_GROUP = ["A", "B", "C", "D", "E"];
 const RACE_APPLICANT_BLOOD_TYPE = [
   "RH+A", "RH+B", "RH+O", "RH+AB", "RH-A", "RH-B", "RH-O", "RH-AB",
 ];
