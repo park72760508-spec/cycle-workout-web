@@ -30898,7 +30898,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%) rotate(-8deg);
+  transform: translate(-50%, -50%);
   padding: 10px 28px;
   border-radius: 10px;
   font-size: 20px;
@@ -31283,6 +31283,11 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   font-size: 13px;
   font-weight: 700;
   text-align: left;
+}
+/* 판매자 화면은 제목 바로 다음에 각 주문/가격조정 항목이 자체 구분선을 달고 이어지는데,
+   제목 바로 아래에도 구분선이 겹쳐 보이므로 제목 뒤 첫 구분선만 숨긴다(항목 간 구분선은 유지). */
+.market-order-history__title--deal-status + .market-nego-divider {
+  display: none;
 }
 .market-order-history-status {
   font-size: 12.5px;
