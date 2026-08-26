@@ -31172,8 +31172,9 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-deal-step__active-ring {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 34px;
   height: 34px;
   pointer-events: none;
