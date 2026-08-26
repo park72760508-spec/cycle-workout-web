@@ -31335,6 +31335,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.market-delivery-info__label { font-weight: 800; color: #ea580c; }
+.market-delivery-info__value { font-weight: 400; color: #000; }
 .market-delivery-edit-btn {
   flex-shrink: 0;
   padding: 3px 10px;

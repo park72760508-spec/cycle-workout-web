@@ -233,6 +233,14 @@
     '</div>';
   }
 
+  /** "송장정보 : " 라벨(굵은 오렌지) + 택배사/송장번호(보통 굵기 검정) 한 줄 — 판매자·구매자 공용. */
+  function marketTrackingInfoLineHtml(o) {
+    return '<span class="market-delivery-info__label">송장정보 : </span>' +
+      '<span class="market-delivery-info__value">' +
+        escapeHtml(o.courier_name || o.courier_code || '') + ' / ' + escapeHtml(o.tracking_number) +
+      '</span>';
+  }
+
   /** 판매자 거래내역 행 아래 택배 정보 — 입금완료(PAID)+안전결제 주문에서만 노출.
    * 송장 미등록 시 입력 폼, 등록 후에는 조회된 배송상태 + 수정 버튼(오입력 정정용)을 표시한다. */
   function marketSellerDeliveryHtml(o) {
@@ -242,9 +250,7 @@
       // 여기서는 택배사·송장번호 확인 + 오입력 시 정정할 수 있는 수정 버튼만 남긴다.
       return '<div class="market-delivery-info" data-order-id="' + o.id + '">' +
         '<div class="market-delivery-info__row">' +
-          '<span class="market-delivery-info__text">' +
-            escapeHtml(o.courier_name || o.courier_code || '') + ' / ' + escapeHtml(o.tracking_number) +
-          '</span>' +
+          '<span class="market-delivery-info__text">' + marketTrackingInfoLineHtml(o) + '</span>' +
           '<button type="button" class="market-btn market-btn--outline market-delivery-edit-btn" data-order-id="' + o.id + '">수정</button>' +
         '</div>' +
       '</div>' +
@@ -261,10 +267,9 @@
       ? '<div>자동 구매확정까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>'
       : '';
     // 배송 상태 자체는 위쪽 6단계 진행 스텝바(marketDealStepsHtml)에서 이미 보여주므로
-    // 여기서는 택배사·송장번호와 72시간 자동확정 타이머만 남긴다.
+    // 여기서는 송장정보와 72시간 자동확정 타이머만 남긴다.
     return '<div class="market-delivery-info">' +
-      '<div>택배사 : ' + escapeHtml(o.courier_name || o.courier_code || '') + '</div>' +
-      '<div>송장번호 : ' + escapeHtml(o.tracking_number) + '</div>' +
+      '<div>' + marketTrackingInfoLineHtml(o) + '</div>' +
       timerHtml +
     '</div>';
   }
