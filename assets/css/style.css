@@ -31316,8 +31316,19 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   justify-content: space-between;
   gap: 8px;
 }
-.market-delivery-info__text { display: flex; flex-direction: column; gap: 4px; }
-.market-delivery-edit-btn { flex-shrink: 0; padding: 6px 12px; font-size: 12px; }
+.market-delivery-info__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.market-delivery-edit-btn {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  font-size: 11px;
+  line-height: 1.6;
+}
 .market-detail-action-bar { padding: 10px 0 20px 0; }
 .market-refund-form {
   margin-top: 10px;

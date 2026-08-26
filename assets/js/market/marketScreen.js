@@ -242,10 +242,9 @@
       // 여기서는 택배사·송장번호 확인 + 오입력 시 정정할 수 있는 수정 버튼만 남긴다.
       return '<div class="market-delivery-info" data-order-id="' + o.id + '">' +
         '<div class="market-delivery-info__row">' +
-          '<div class="market-delivery-info__text">' +
-            '<div>택배사 : ' + escapeHtml(o.courier_name || o.courier_code || '') + '</div>' +
-            '<div>송장번호 : ' + escapeHtml(o.tracking_number) + '</div>' +
-          '</div>' +
+          '<span class="market-delivery-info__text">' +
+            escapeHtml(o.courier_name || o.courier_code || '') + ' / ' + escapeHtml(o.tracking_number) +
+          '</span>' +
           '<button type="button" class="market-btn market-btn--outline market-delivery-edit-btn" data-order-id="' + o.id + '">수정</button>' +
         '</div>' +
       '</div>' +
