@@ -31094,7 +31094,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.market-tx-row__amount { font-size: 12.5px; font-weight: 800; color: #ea580c; flex: 1; min-width: 90px; }
+.market-tx-row__amount { font-size: 12.5px; font-weight: 800; color: #000; flex: 1; min-width: 90px; }
 .market-tx-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
 .market-tx-row__due { flex-shrink: 0; }
 
@@ -31268,22 +31268,21 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   border-radius: 8px;
   flex-shrink: 0;
 }
-.market-nego-request-status--accepted { background: #f0fdf4; color: #15803d; }
+.market-nego-request-status--accepted { background: #eff6ff; color: #1d4ed8; }
 .market-nego-request-status--rejected { background: #f8fafc; color: #94a3b8; }
 
 .market-order-history { margin-top: 4px; }
 .market-order-history__title { font-size: 13px; font-weight: 700; color: #334155; margin: 16px 0 0 0; }
 .market-order-history__title--deal-status {
-  display: table;
-  margin: 4px auto 12px auto;
-  padding: 7px 20px;
-  background: #fff7ed;
-  color: #c2410c;
-  font-size: 13.5px;
-  font-weight: 800;
-  text-align: center;
-  border-radius: 999px;
-  border: 1.5px solid #ea580c;
+  display: block;
+  margin: 8px 0 4px 0;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #000;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
 }
 .market-order-history-status {
   font-size: 12.5px;
@@ -31343,7 +31342,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex: 1;
   min-width: 0;
 }
-.market-delivery-info__label { font-weight: 800; color: #ea580c; }
+.market-delivery-info__label { font-weight: 800; color: #000; }
 .market-delivery-info__value { font-weight: 400; color: #000; }
 /* 거래 상대방 카드의 통화/문자 아이콘 버튼(market-deal-contact-btn)과 동일한 디자인,
    본문 텍스트 옆에 붙는 작은 아이콘이라 크기만 살짝 줄인다. */
