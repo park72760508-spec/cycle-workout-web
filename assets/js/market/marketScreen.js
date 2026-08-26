@@ -345,27 +345,29 @@
     { icon: 'delivery4', label: '구매확정' },
   ];
 
-  // deliveryapi.co.kr 공식 문서의 정규화된 배송 상태 코드 중 "집하 이후" 단계 — 이 중 하나면
-  // 배송중 스텝을 완료로 표시한다(PENDING/REGISTERED/UNKNOWN은 아직 접수 전 단계로 취급).
-  var MARKET_DELIVERY_IN_TRANSIT_STATUSES = {
-    PICKUP_READY: true, PICKED_UP: true, IN_TRANSIT: true, OUT_FOR_DELIVERY: true, DELIVERED: true,
-  };
-
+  // "배송중"·"구매확정 대기"처럼 실제로 지금 진행 중인 단계는 done(완료)이 아니라
+  // active(진행중 — 점선 테두리+펄스)로 표시해야 한다. 이전엔 "다음에 아직 안 끝난 단계"를
+  // 무조건 active로 잡는 단순 컷오프 방식이라, 배송중일 때 정작 배송중 아이콘은 완료로
+  // 채워지고 아직 시작도 안 한 배송완료 아이콘이 대신 깜빡이는 오해를 낳았다 — 각 단계의
+  // 상태를 실제 의미에 맞게 개별적으로 판정한다.
   function marketDealStepStates(order) {
     var isDirect = order.deal_type === 'DIRECT_DEAL';
     var status = order.escrow_status;
-    var negoDone = true; // 주문이 존재하는 시점엔 가격이 이미 합의된 상태
     var paidDone = isDirect ? (status === 'RESERVED' || status === 'CONFIRMED') : (status === 'PAID' || status === 'CONFIRMED');
     var shippedDone = isDirect ? paidDone : !!order.tracking_number;
-    var transitDone = isDirect ? paidDone : !!MARKET_DELIVERY_IN_TRANSIT_STATUSES[order.delivery_status];
     var deliveredDone = isDirect ? paidDone : order.delivery_status === 'DELIVERED';
     var confirmedDone = status === 'CONFIRMED';
-    var doneFlags = [negoDone, paidDone, shippedDone, transitDone, deliveredDone, confirmedDone];
-    var activeIndex = doneFlags.indexOf(false);
-    return doneFlags.map(function (done, i) {
-      if (done) return 'done';
-      return i === activeIndex ? 'active' : 'pending';
-    });
+
+    var negoState = 'done'; // 주문이 존재하는 시점엔 가격이 이미 합의된 상태
+    var paidState = paidDone ? 'done' : 'active';
+    var shippedState = !paidDone ? 'pending' : shippedDone ? 'done' : 'active';
+    // 송장 등록 후 배송완료 전까지는 "배송중"이 지금 실제로 진행되는 단계.
+    var transitState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'active';
+    var deliveredState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'pending';
+    // 배송완료 후 구매확정 전까지는 "구매확정"이 구매자의 확인을 기다리는 진행중 단계.
+    var confirmedState = !deliveredDone ? 'pending' : confirmedDone ? 'done' : 'active';
+
+    return [negoState, paidState, shippedState, transitState, deliveredState, confirmedState];
   }
 
   function marketDealStepsHtml(order) {
