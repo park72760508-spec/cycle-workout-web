@@ -1,10 +1,15 @@
 // 중고랜드 — 판매자가 입금완료(PAID) 주문에 택배사/송장번호를 등록하고, deliveryapi.co.kr의
 // 구독형 웹훅 추적(POST /v1/webhooks/register, recurring:true)을 함께 등록한다.
 //
-// 이 함수는 verify_jwt: false로 배포된다 — 중고랜드 전용 커스텀 JWT(GoTrue가
-// 세션으로 추적하지 않음)는 Supabase 플랫폼 게이트웨이의 verify_jwt 검증을 통과하지
-// 못해(게이트웨이 단계에서 코드 실행 자체가 가로막혀 항상 401), 대신 아래에서
-// getUser(token)으로 직접 무상태 검증한다(다른 cron-secret 보호 함수들과 동일한 패턴).
+// 이 함수는 verify_jwt: false로 배포된다 — 중고랜드 전용 커스텀 JWT(GoTrue가 실제
+// 로그인으로 발급한 세션이 아니라 Firebase Auth Bridge가 RS256으로 직접 서명해 발급)는
+// (1) Supabase 플랫폼 게이트웨이의 verify_jwt를 통과하지 못하고(게이트웨이 단계에서
+// 코드 실행 자체가 막혀 항상 401), (2) supabase-js의 auth.getUser(token)도 내부적으로
+// GoTrue의 /auth/v1/user를 호출하는데 이 토큰의 session_id가 auth.sessions 테이블에
+// 실제로 존재하지 않아 서명이 유효해도 거부된다("Auth session missing!"과 동일한 근본
+// 원인). PostgREST는 세션 테이블을 보지 않고 JWKS로 서명만 검증하기 때문에 같은 토큰이
+// PostgREST 요청에는 항상 성공한다 — 그래서 GoTrue를 거치지 않고 PostgREST와 동일하게
+// 프로젝트 JWKS(jose 라이브러리, RS256)로 서명을 직접 검증해 sub를 추출한다.
 //
 // 과금 구조(공식 문서 기준): 구독 등록 시 건당 1회만 과금되고, 이후 최대 14일간 1시간 간격
 // 자동 폴링과 상태 변경 웹훅 전송은 전부 무료다. 등록 즉시 1회 조회도 이 안에 포함된다.
@@ -15,6 +20,13 @@
 // Vault에 저장), 여기서는 그 endpointId를 붙여 송장을 구독 등록하기만 한다.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
+
+// 프로젝트 JWKS를 모듈 스코프에서 한 번만 생성 — jose가 내부적으로 키를 캐시해
+// 매 요청마다 JWKS를 다시 받아오지 않는다(PostgREST가 JWT를 검증하는 것과 동일한 방식).
+const jwks = createRemoteJWKSet(
+  new URL(`${Deno.env.get("SUPABASE_URL")}/auth/v1/.well-known/jwks.json`)
+);
 
 // deliveryapi.co.kr 공식 문서(GET /v1/tracking/couriers, POST /v1/tracking/trace)의
 // courierCode 전체 목록을 그대로 반영 — 이전에는 예시 코드에 나온 5개만 등록했었음.
@@ -130,20 +142,24 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const authHeader = req.headers.get("Authorization") || "";
-  // 중고랜드 전용 커스텀 JWT는 GoTrue가 추적하는 실제 세션이 아니므로, 인자 없는
-  // auth.getUser()는 로컬 세션을 찾다가 네트워크 호출조차 없이 "Auth session missing!"으로
-  // 즉시 실패한다(marketService.js의 accessToken 콜백 설계와 동일한 이유). 토큰을 직접
-  // getUser(jwt)에 넘겨 무상태(stateless) 검증을 해야 한다.
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const userClient = createClient(supabaseUrl, anonKey);
-  const { data: userData, error: userErr } = await userClient.auth.getUser(token);
-  if (userErr || !userData?.user) {
+
+  // GoTrue의 /auth/v1/user는 세션 테이블(auth.sessions)에 없는 토큰을 서명이 유효해도
+  // 거부하므로(파일 상단 주석 참고), PostgREST와 동일하게 프로젝트 JWKS로 서명만
+  // 직접 검증한다 — 무상태(stateless) 검증이라 세션 존재 여부와 무관하게 통과한다.
+  let sellerId: string;
+  try {
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: `${supabaseUrl}/auth/v1`,
+      audience: "authenticated",
+    });
+    if (!payload.sub) throw new Error("no sub claim");
+    sellerId = payload.sub;
+  } catch (_eAuth) {
     return jsonResponse({ success: false, error: "인증이 필요합니다." }, 401);
   }
-  const sellerId = userData.user.id;
 
   let body: Record<string, unknown> = {};
   try {
