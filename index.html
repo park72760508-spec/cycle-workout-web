@@ -3448,7 +3448,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260906marketAmountFontTight" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260906categoryWelcomeStrip" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -30925,9 +30925,8 @@
         var l1 = line1Id ? document.getElementById(line1Id) : null;
         var l2 = line2Id ? document.getElementById(line2Id) : null;
         if (combineOneLine) {
-          // 관리자 전용 미리보기: 1줄차 "환영합니다, 이름님!" + 2줄차 자리에 중고랜드 이동 버튼
-          // (완성 후 일반 사용자에도 동일하게 적용 예정 — 그 전까지는 관리자만 이 1줄 표기를 봄)
-          if (l1) l1.textContent = '환영합니다, ' + userName + '님!';
+          // 스포츠 카테고리 화면: 환영 문구·사각 박스는 제거하고 중고랜드 버튼만 남긴다.
+          if (l1) l1.style.display = 'none';
           if (l2) l2.style.display = 'none';
         } else {
           if (l1) l1.textContent = '환영합니다.';
