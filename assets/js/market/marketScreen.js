@@ -1724,55 +1724,62 @@
     );
   }
 
-  var marketBarcodeReader = null; // ZXing BrowserMultiFormatReader — 스캐너 오버레이 열려있는 동안만 유지
-  var marketBarcodeControls = null; // decodeFromVideoDevice가 돌려주는 controls(스캔 재개/정지용)
+  var marketBarcodeFileInput = null; // <input type=file capture> — OS 카메라 앱을 그대로 호출
 
   function closeMarketBarcodeScanner() {
-    if (marketBarcodeControls) {
-      try { marketBarcodeControls.stop(); } catch (e) { /* ignore */ }
-      marketBarcodeControls = null;
-    }
-    if (marketBarcodeReader) {
-      try { marketBarcodeReader.reset(); } catch (e) { /* ignore */ }
-      marketBarcodeReader = null;
-    }
     var overlay = document.getElementById('marketBarcodeScannerOverlay');
     if (overlay) overlay.remove();
   }
 
-  function marketBarcodeErrorMessage(e) {
-    var name = e && e.name;
-    if (name === 'NotAllowedError') return '카메라 권한이 거부되었습니다. 브라우저 설정에서 카메라 접근을 허용해 주세요.';
-    if (name === 'NotFoundError') return '사용 가능한 카메라를 찾을 수 없습니다.';
-    if (name === 'NotReadableError') return '카메라를 다른 앱이 사용 중이라 접근할 수 없습니다.';
-    return '카메라를 사용할 수 없습니다: ' + (e && e.message ? e.message : String(e));
+  function ensureMarketBarcodeFileInput() {
+    if (marketBarcodeFileInput) return marketBarcodeFileInput;
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    marketBarcodeFileInput = input;
+    return input;
   }
 
-  /** 송장 바코드(대부분 Code128 1D 바코드) 카메라 스캔.
-   * ZXing을 esm.sh에서 동적 로드(빌드 스텝 없는 프로젝트라 로컬 번들 대신 CDN import).
-   * 인식되면 곧바로 입력하지 않고 인식된 번호를 화면에 보여준 뒤, 사용자가 "입력" 버튼을
-   * 눌러야만 onConfirm(text)을 호출한다(오인식을 그대로 입력해버리는 사고 방지).
-   * 실패 시에도 오버레이를 즉시 닫지 않고 오버레이 안에 에러 메시지를 표시한다(이전에는
-   * catch에서 바로 닫아버려 화면이 "잠깐 보였다 사라지는" 것처럼 보이는 문제가 있었음). */
-  async function openMarketBarcodeScanner(onConfirm) {
+  /** 송장 바코드(대부분 Code128 1D 바코드) 스캔.
+   * getUserMedia(페이지 안 실시간 카메라 미리보기)는 앱 웹뷰가 카메라 스트림 접근을 별도로
+   * 브릿지해주지 않으면 navigator.mediaDevices 자체가 없어 "undefined is not an object"로
+   * 실패한다 — 앱에 별도 카메라 권한을 추가하지 않고도 항상 동작하도록, 대신 OS 표준
+   * 파일 선택(<input type=file capture>)으로 OS 카메라 앱을 그대로 호출해 사진을 한 장
+   * 찍게 하고, 그 사진 파일에서 바코드를 디코딩한다(ZXing decodeFromImageUrl).
+   * 인식되면 곧바로 입력하지 않고 인식된 번호를 보여준 뒤, "입력"을 눌러야만 onConfirm을
+   * 호출한다(오인식을 그대로 입력해버리는 사고 방지). */
+  function openMarketBarcodeScanner(onConfirm) {
+    var input = ensureMarketBarcodeFileInput();
+    input.value = ''; // 같은 사진을 다시 찍어도 change 이벤트가 발생하도록 초기화
+    input.onchange = function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      decodeMarketBarcodeFromFile(file, onConfirm);
+    };
+    input.click();
+  }
+
+  async function decodeMarketBarcodeFromFile(file, onConfirm) {
     closeMarketBarcodeScanner();
     var overlay = document.createElement('div');
     overlay.id = 'marketBarcodeScannerOverlay';
     overlay.className = 'market-barcode-scanner-overlay';
     overlay.innerHTML =
       '<div class="market-barcode-scanner-header">' +
-        '<span>송장 바코드를 비춰주세요</span>' +
+        '<span>바코드 인식</span>' +
         '<button type="button" class="market-barcode-scanner-close" aria-label="닫기">&times;</button>' +
       '</div>' +
-      '<div class="market-barcode-scanner-body">' +
-        '<video class="market-barcode-scanner-video" id="marketBarcodeScannerVideo" playsinline muted></video>' +
-        '<div class="market-barcode-scanner-guide"></div>' +
-        '<p class="market-barcode-scanner-hint" id="marketBarcodeScannerHint">바코드를 화면 중앙 네모 안에 맞춰주세요</p>' +
+      '<div class="market-barcode-scanner-body market-barcode-scanner-body--photo">' +
+        '<img class="market-barcode-scanner-photo" id="marketBarcodeScannerPhoto" alt="" />' +
+        '<p class="market-barcode-scanner-hint" id="marketBarcodeScannerHint">인식 중입니다...</p>' +
       '</div>' +
       '<div class="market-barcode-scanner-result" id="marketBarcodeScannerResult" style="display:none;">' +
         '<div class="market-barcode-scanner-result-text" id="marketBarcodeScannerResultText"></div>' +
         '<div class="market-barcode-scanner-result-actions">' +
-          '<button type="button" class="market-btn market-btn--outline" id="marketBarcodeScannerRetryBtn">다시 스캔</button>' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketBarcodeScannerRetryBtn">다시 촬영</button>' +
           '<button type="button" class="market-btn market-btn--primary" id="marketBarcodeScannerConfirmBtn">입력</button>' +
         '</div>' +
       '</div>';
@@ -1782,50 +1789,17 @@
       if (e.target === overlay) closeMarketBarcodeScanner();
     });
 
+    var photoEl = document.getElementById('marketBarcodeScannerPhoto');
     var hintEl = document.getElementById('marketBarcodeScannerHint');
     var resultBox = document.getElementById('marketBarcodeScannerResult');
     var resultText = document.getElementById('marketBarcodeScannerResultText');
     var detected = '';
 
-    function onFrame(result) {
-      if (!result || detected) return; // 이미 하나 인식된 뒤에도 계속 오는 콜백은 무시
-      detected = result.getText();
-      if (resultText) resultText.textContent = detected;
-      if (resultBox) resultBox.style.display = 'flex';
-      if (marketBarcodeControls) { try { marketBarcodeControls.stop(); } catch (e) { /* ignore */ } }
-      haptic(10);
-    }
-
-    var zxing, reader;
-    try {
-      zxing = await import('https://esm.sh/@zxing/browser@0.1.5');
-      reader = new zxing.BrowserMultiFormatReader();
-    } catch (e) {
-      if (hintEl) hintEl.textContent = '스캐너 라이브러리를 불러오지 못했습니다: ' + (e && e.message ? e.message : e);
-      return;
-    }
-    marketBarcodeReader = reader;
-
-    function startScanning() {
-      var videoEl = document.getElementById('marketBarcodeScannerVideo');
-      if (!videoEl) return;
-      reader
-        .decodeFromVideoDevice(undefined, videoEl, onFrame)
-        .then(function (controls) {
-          marketBarcodeControls = controls;
-        })
-        .catch(function (e) {
-          if (hintEl) hintEl.textContent = marketBarcodeErrorMessage(e);
-        });
-    }
-    startScanning();
-
     var retryBtn = document.getElementById('marketBarcodeScannerRetryBtn');
     if (retryBtn) {
       retryBtn.onclick = function () {
-        detected = '';
-        if (resultBox) resultBox.style.display = 'none';
-        startScanning();
+        closeMarketBarcodeScanner();
+        openMarketBarcodeScanner(onConfirm);
       };
     }
     var confirmBtn = document.getElementById('marketBarcodeScannerConfirmBtn');
@@ -1835,6 +1809,23 @@
         closeMarketBarcodeScanner();
         onConfirm(text);
       };
+    }
+
+    var url = URL.createObjectURL(file);
+    if (photoEl) photoEl.src = url;
+    try {
+      var zxing = await import('https://esm.sh/@zxing/browser@0.1.5');
+      var reader = new zxing.BrowserMultiFormatReader();
+      var result = await reader.decodeFromImageUrl(url);
+      detected = result.getText();
+      if (hintEl) hintEl.style.display = 'none';
+      if (resultText) resultText.textContent = detected;
+      if (resultBox) resultBox.style.display = 'flex';
+      haptic(10);
+    } catch (e) {
+      if (hintEl) hintEl.textContent = '바코드를 찾지 못했습니다. 바코드가 잘 보이도록 다시 촬영해 주세요.';
+    } finally {
+      URL.revokeObjectURL(url);
     }
   }
 
