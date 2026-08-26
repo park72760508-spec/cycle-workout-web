@@ -251,7 +251,7 @@
       return '<div class="market-delivery-info" data-order-id="' + o.id + '">' +
         '<div class="market-delivery-info__row">' +
           '<span class="market-delivery-info__text">' + marketTrackingInfoLineHtml(o) + '</span>' +
-          '<button type="button" class="market-btn market-btn--outline market-delivery-edit-btn" data-order-id="' + o.id + '">수정</button>' +
+          '<button type="button" class="market-deal-contact-btn market-delivery-edit-btn" data-order-id="' + o.id + '" aria-label="송장정보 수정">' + MARKET_EDIT_ICON_SVG + '</button>' +
         '</div>' +
       '</div>' +
       marketDeliveryFormHtml(o, true);
@@ -333,6 +333,10 @@
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"></path>' +
     '<path d="M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"></path></svg>';
+  var MARKET_EDIT_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M16.862 4.487a2.1 2.1 0 112.97 2.97L7.5 19.79l-4.5 1.13 1.13-4.5L16.862 4.487z"></path>' +
+    '<path d="M15.232 6.117l2.65 2.65"></path></svg>';
 
   /** 거래 진행 6단계 — 직거래(DIRECT_DEAL)는 안전결제·택배 배송 개념이 없어 예약(RESERVED)
    * 시점에 2~5단계가 한꺼번에 완료되는 것으로 취급한다(대면 거래는 앱이 중간 과정을 추적하지 않음). */

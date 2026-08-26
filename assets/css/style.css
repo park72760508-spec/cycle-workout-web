@@ -31344,12 +31344,17 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-delivery-info__label { font-weight: 800; color: #ea580c; }
 .market-delivery-info__value { font-weight: 400; color: #000; }
+/* 거래 상대방 카드의 통화/문자 아이콘 버튼(market-deal-contact-btn)과 동일한 디자인,
+   본문 텍스트 옆에 붙는 작은 아이콘이라 크기만 살짝 줄인다. */
 .market-delivery-edit-btn {
+  width: 26px;
+  height: 26px;
   flex-shrink: 0;
-  padding: 3px 10px;
-  font-size: 11px;
-  line-height: 1.6;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
+.market-delivery-edit-btn svg { width: 14px; height: 14px; }
 .market-detail-action-bar { padding: 10px 0 20px 0; }
 .market-refund-form {
   margin-top: 10px;
