@@ -276,13 +276,16 @@
 
   /** 거래 주문 카드 상단 — 금액+상태(+입금기한)만 표시(아바타·이름은 아래 상대방 카드가
    * 전담하므로 marketTxRowHtml처럼 중복 표시하지 않는다). */
-  function marketDealAmountStatusHtml(amountLabel, status, vaDueAt) {
+  function marketDealAmountStatusHtml(labelText, valueText, status, vaDueAt) {
     var statusClass = status ? status.toLowerCase() : '';
     var dueHtml = (status === 'PENDING' && vaDueAt)
       ? '<span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(vaDueAt) + '">' + escapeHtml(marketFormatRemaining(vaDueAt)) + '</span>'
       : '';
     return '<div class="market-deal-amount-row">' +
-      '<span class="market-tx-row__amount">' + amountLabel + '</span>' +
+      '<span class="market-tx-row__amount">' +
+        '<span class="market-delivery-info__label">' + labelText + '</span>' +
+        '<span class="market-delivery-info__value">' + valueText + '</span>' +
+      '</span>' +
       '<span class="market-order-history-status market-order-history-status--' + statusClass + '">' + marketOrderStatusLabel(status) + '</span>' +
       dueHtml +
     '</div>';
@@ -435,7 +438,10 @@
    * 알려주므로 아바타·이름 없이, 아래 입금 금액 행과 동일한 형식(label : 값 + 상태)으로 표시. */
   function marketNegoAmountRowHtml(r) {
     return '<div class="market-deal-amount-row">' +
-      '<span class="market-tx-row__amount">조정 가격 : ' + formatPrice(r.requested_price) + '원</span>' +
+      '<span class="market-tx-row__amount">' +
+        '<span class="market-delivery-info__label">조정 가격 : </span>' +
+        '<span class="market-delivery-info__value">' + formatPrice(r.requested_price) + '원</span>' +
+      '</span>' +
       marketNegoActionHtml(r) +
     '</div>';
   }
@@ -1237,12 +1243,13 @@
         var negoHtml = negoForThisOrder ? marketNegoAmountRowHtml(negoForThisOrder) : '';
         // 판매자에게는 실제 정산받는 금액(수수료 차감된 item_price)을 보여준다 — amount는
         // 구매자가 실제로 입금한 총액(수수료 포함)이라 판매자 관점에서는 오해를 줄 수 있다.
-        var sellerAmountLabel = (o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(o.item_price) + '원';
+        var sellerAmountLabelText = o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ';
+        var sellerAmountValueText = formatPrice(o.item_price) + '원';
         return '<div class="market-nego-divider"></div>' +
           marketDealStepsHtml(o) +
           counterpartHtml +
           negoHtml +
-          marketDealAmountStatusHtml(sellerAmountLabel, o.escrow_status, o.va_due_at) +
+          marketDealAmountStatusHtml(sellerAmountLabelText, sellerAmountValueText, o.escrow_status, o.va_due_at) +
           marketSellerDeliveryHtml(o);
       }).join('');
     }
@@ -1261,7 +1268,8 @@
       var sellerName = marketSellerDisplayName(sp);
       var sellerAvatar = (sp && sp.profile_image_url) || 'assets/img/profile-placeholder.svg';
       var isDirectDeal = myOrder.deal_type === 'DIRECT_DEAL';
-      var buyerAmountLabel = (isDirectDeal ? '거래 금액 : ' : '입금 금액 : ') + formatPrice(myOrder.amount) + '원';
+      var buyerAmountLabelText = isDirectDeal ? '거래 금액 : ' : '입금 금액 : ';
+      var buyerAmountValueText = formatPrice(myOrder.amount) + '원';
       var vaLineHtml = myOrder.va_account_number
         ? '<div class="market-order-history-contacts">가상계좌 : ' + escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number) + '</div>'
         : '';
@@ -1274,7 +1282,7 @@
           '<p class="market-order-history__title--deal-status">거래 진행 상태</p>' +
           marketDealStepsHtml(myOrder) +
           sellerCounterpartHtml +
-          marketDealAmountStatusHtml(buyerAmountLabel, myOrder.escrow_status, myOrder.va_due_at) +
+          marketDealAmountStatusHtml(buyerAmountLabelText, buyerAmountValueText, myOrder.escrow_status, myOrder.va_due_at) +
           vaLineHtml +
           marketBuyerDeliveryHtml(myOrder) +
         '</div>';
