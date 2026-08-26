@@ -225,10 +225,7 @@
           return '<option value="' + c.code + '"' + (c.code === selectedCourier ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
         }).join('') +
       '</select>' +
-      '<div class="market-delivery-tracking-row">' +
-        '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" value="' + escapeHtml(isEdit ? o.tracking_number : '') + '" />' +
-        '<button type="button" class="market-deal-contact-btn market-delivery-scan-btn" data-order-id="' + o.id + '" aria-label="바코드로 송장번호 스캔">' + MARKET_BARCODE_ICON_SVG + '</button>' +
-      '</div>' +
+      '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" value="' + escapeHtml(isEdit ? o.tracking_number : '') + '" />' +
       '<div class="market-delivery-form__actions">' +
         '<button type="button" class="market-btn market-btn--outline market-delivery-submit-btn" data-order-id="' + o.id + '">' + (isEdit ? '수정 완료' : '택배사/송장번호 등록') + '</button>' +
         (isEdit ? '<button type="button" class="market-btn market-btn--outline market-delivery-edit-cancel-btn" data-order-id="' + o.id + '">취소</button>' : '') +
@@ -343,17 +340,6 @@
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M16.862 4.487a2.1 2.1 0 112.97 2.97L7.5 19.79l-4.5 1.13 1.13-4.5L16.862 4.487z"></path>' +
     '<path d="M15.232 6.117l2.65 2.65"></path></svg>';
-  var MARKET_BARCODE_ICON_SVG =
-    '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
-    '<rect x="2" y="4" width="1.6" height="16"></rect>' +
-    '<rect x="5.2" y="4" width="0.9" height="16"></rect>' +
-    '<rect x="7.6" y="4" width="2" height="16"></rect>' +
-    '<rect x="11.1" y="4" width="0.9" height="16"></rect>' +
-    '<rect x="13.4" y="4" width="1.6" height="16"></rect>' +
-    '<rect x="16.4" y="4" width="0.9" height="16"></rect>' +
-    '<rect x="18.7" y="4" width="2" height="16"></rect>' +
-    '<rect x="21.4" y="4" width="0.9" height="16"></rect>' +
-    '</svg>';
 
   /** 거래 진행 6단계 — 직거래(DIRECT_DEAL)는 안전결제·택배 배송 개념이 없어 예약(RESERVED)
    * 시점에 2~5단계가 한꺼번에 완료되는 것으로 취급한다(대면 거래는 앱이 중간 과정을 추적하지 않음). */
@@ -1391,20 +1377,6 @@
         if (form) form.classList.add('is-hidden');
       };
     });
-    Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-scan-btn'), function (btn) {
-      btn.onclick = function () {
-        var orderId = btn.getAttribute('data-order-id');
-        var form = document.querySelector('.market-delivery-form[data-order-id="' + orderId + '"]');
-        var input = form && form.querySelector('.market-delivery-tracking-input');
-        if (!input) return;
-        openMarketBarcodeScanner(function (text) {
-          // 택배 송장 바코드는 보통 숫자로만 구성됨 — 등록 시와 동일한 허용 문자만 남긴다.
-          input.value = String(text || '').replace(/[^0-9A-Za-z-]/g, '');
-          input.focus();
-          haptic(10);
-        });
-      };
-    });
     if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
       var starsWrap = document.getElementById('marketRatingStars');
       if (starsWrap) {
@@ -1722,111 +1694,6 @@
       },
       { okText: accept ? '수락' : '거절' }
     );
-  }
-
-  var marketBarcodeFileInput = null; // <input type=file capture> — OS 카메라 앱을 그대로 호출
-
-  function closeMarketBarcodeScanner() {
-    var overlay = document.getElementById('marketBarcodeScannerOverlay');
-    if (overlay) overlay.remove();
-  }
-
-  function ensureMarketBarcodeFileInput() {
-    if (marketBarcodeFileInput) return marketBarcodeFileInput;
-    var input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.style.display = 'none';
-    document.body.appendChild(input);
-    marketBarcodeFileInput = input;
-    return input;
-  }
-
-  /** 송장 바코드(대부분 Code128 1D 바코드) 스캔.
-   * getUserMedia(페이지 안 실시간 카메라 미리보기)는 앱 웹뷰가 카메라 스트림 접근을 별도로
-   * 브릿지해주지 않으면 navigator.mediaDevices 자체가 없어 "undefined is not an object"로
-   * 실패한다 — 앱에 별도 카메라 권한을 추가하지 않고도 항상 동작하도록, 대신 OS 표준
-   * 파일 선택(<input type=file capture>)으로 OS 카메라 앱을 그대로 호출해 사진을 한 장
-   * 찍게 하고, 그 사진 파일에서 바코드를 디코딩한다(ZXing decodeFromImageUrl).
-   * 인식되면 곧바로 입력하지 않고 인식된 번호를 보여준 뒤, "입력"을 눌러야만 onConfirm을
-   * 호출한다(오인식을 그대로 입력해버리는 사고 방지). */
-  function openMarketBarcodeScanner(onConfirm) {
-    var input = ensureMarketBarcodeFileInput();
-    input.value = ''; // 같은 사진을 다시 찍어도 change 이벤트가 발생하도록 초기화
-    input.onchange = function () {
-      var file = input.files && input.files[0];
-      if (!file) return;
-      decodeMarketBarcodeFromFile(file, onConfirm);
-    };
-    input.click();
-  }
-
-  async function decodeMarketBarcodeFromFile(file, onConfirm) {
-    closeMarketBarcodeScanner();
-    var overlay = document.createElement('div');
-    overlay.id = 'marketBarcodeScannerOverlay';
-    overlay.className = 'market-barcode-scanner-overlay';
-    overlay.innerHTML =
-      '<div class="market-barcode-scanner-header">' +
-        '<span>바코드 인식</span>' +
-        '<button type="button" class="market-barcode-scanner-close" aria-label="닫기">&times;</button>' +
-      '</div>' +
-      '<div class="market-barcode-scanner-body market-barcode-scanner-body--photo">' +
-        '<img class="market-barcode-scanner-photo" id="marketBarcodeScannerPhoto" alt="" />' +
-        '<p class="market-barcode-scanner-hint" id="marketBarcodeScannerHint">인식 중입니다...</p>' +
-      '</div>' +
-      '<div class="market-barcode-scanner-result" id="marketBarcodeScannerResult" style="display:none;">' +
-        '<div class="market-barcode-scanner-result-text" id="marketBarcodeScannerResultText"></div>' +
-        '<div class="market-barcode-scanner-result-actions">' +
-          '<button type="button" class="market-btn market-btn--outline" id="marketBarcodeScannerRetryBtn">다시 촬영</button>' +
-          '<button type="button" class="market-btn market-btn--primary" id="marketBarcodeScannerConfirmBtn">입력</button>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(overlay);
-    overlay.querySelector('.market-barcode-scanner-close').onclick = closeMarketBarcodeScanner;
-    overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) closeMarketBarcodeScanner();
-    });
-
-    var photoEl = document.getElementById('marketBarcodeScannerPhoto');
-    var hintEl = document.getElementById('marketBarcodeScannerHint');
-    var resultBox = document.getElementById('marketBarcodeScannerResult');
-    var resultText = document.getElementById('marketBarcodeScannerResultText');
-    var detected = '';
-
-    var retryBtn = document.getElementById('marketBarcodeScannerRetryBtn');
-    if (retryBtn) {
-      retryBtn.onclick = function () {
-        closeMarketBarcodeScanner();
-        openMarketBarcodeScanner(onConfirm);
-      };
-    }
-    var confirmBtn = document.getElementById('marketBarcodeScannerConfirmBtn');
-    if (confirmBtn) {
-      confirmBtn.onclick = function () {
-        var text = detected;
-        closeMarketBarcodeScanner();
-        onConfirm(text);
-      };
-    }
-
-    var url = URL.createObjectURL(file);
-    if (photoEl) photoEl.src = url;
-    try {
-      var zxing = await import('https://esm.sh/@zxing/browser@0.1.5');
-      var reader = new zxing.BrowserMultiFormatReader();
-      var result = await reader.decodeFromImageUrl(url);
-      detected = result.getText();
-      if (hintEl) hintEl.style.display = 'none';
-      if (resultText) resultText.textContent = detected;
-      if (resultBox) resultBox.style.display = 'flex';
-      haptic(10);
-    } catch (e) {
-      if (hintEl) hintEl.textContent = '바코드를 찾지 못했습니다. 바코드가 잘 보이도록 다시 촬영해 주세요.';
-    } finally {
-      URL.revokeObjectURL(url);
-    }
   }
 
   async function handleMarketSetTracking(itemId, btn) {
