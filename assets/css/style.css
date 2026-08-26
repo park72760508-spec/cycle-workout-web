@@ -31419,6 +31419,28 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   margin: 0;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
+/* 인식된 번호 확인 패널 — 인식 즉시 자동 입력하지 않고, 확인 후 "입력"을 눌러야 반영된다. */
+.market-barcode-scanner-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #111;
+  flex-shrink: 0;
+}
+.market-barcode-scanner-result-text {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+.market-barcode-scanner-result-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.market-barcode-scanner-result-actions .market-btn { flex: 1; width: auto; }
 .market-delivery-form__actions { display: flex; gap: 8px; }
 .market-delivery-form__actions .market-delivery-submit-btn,
 .market-delivery-form__actions .market-delivery-edit-cancel-btn { flex: 1; }
