@@ -598,20 +598,8 @@
       buildApplicantSummaryHtml(opts.applicant);
 
     var footerParts = [];
-    if (opts.isAdmin) {
-      // 입금기한 만료건 즉시 취소는 대회 단위가 아니라 전체 대상 일괄 처리라 관리자 전용으로 남긴다.
-      footerParts.push(
-        '<button type="button" class="competition-submit-btn" id="competitionDetailCancelUnpaidBtn" style="background:#fffbeb;color:#b45309;margin-bottom:8px;">입금기한 만료건 즉시 취소</button>'
-      );
-    }
-    if (opts.paid && typeof opts.onCancelApplication === 'function') {
-      // 헤더 아이콘(신청 취소)과 동일 동작 — 입금완료 후에는 눈에 잘 띄는 버튼으로도 노출한다.
-      footerParts.push(
-        '<button type="button" class="competition-submit-btn" id="competitionDetailCancelParticipationBtn" style="background:#f1f5f9;color:#334155;margin-bottom:8px;">참가 취소</button>'
-      );
-    }
     if (opts.canManage) {
-      // 명단 CSV·재계산·수정·삭제 — 한 줄에 아이콘+라벨(대회 카드 아이콘과 동일 톤), 관리자와 생성자 본인 모두 노출.
+      // 명단(참가자 표 팝업)·재계산·수정·삭제 — 한 줄에 아이콘+라벨(대회 카드 아이콘과 동일 톤), 관리자와 생성자 본인 모두 노출.
       footerParts.push(buildManageActionRowHtml());
     }
     if (!opts.hideApply) {
@@ -714,13 +702,6 @@
         opts.onCancelApplication();
       });
     }
-    var cancelParticipationBtn = overlay.querySelector('#competitionDetailCancelParticipationBtn');
-    if (cancelParticipationBtn && typeof opts.onCancelApplication === 'function') {
-      cancelParticipationBtn.addEventListener('click', function () {
-        haptic(10);
-        opts.onCancelApplication();
-      });
-    }
     var editIconBtn = overlay.querySelector('#competitionDetailEditIconBtn');
     if (editIconBtn && typeof opts.onEditApplication === 'function') {
       editIconBtn.addEventListener('click', function () {
@@ -738,19 +719,6 @@
         } finally {
           downloadCsvBtn.disabled = false;
           if (downloadCsvLabel) downloadCsvLabel.textContent = '명단';
-        }
-      });
-    }
-    var cancelUnpaidBtn = overlay.querySelector('#competitionDetailCancelUnpaidBtn');
-    if (cancelUnpaidBtn && typeof opts.onCancelUnpaid === 'function') {
-      cancelUnpaidBtn.addEventListener('click', async function () {
-        cancelUnpaidBtn.disabled = true;
-        cancelUnpaidBtn.textContent = '처리 중...';
-        try {
-          await opts.onCancelUnpaid();
-        } finally {
-          cancelUnpaidBtn.disabled = false;
-          cancelUnpaidBtn.textContent = '입금기한 만료건 즉시 취소';
         }
       });
     }

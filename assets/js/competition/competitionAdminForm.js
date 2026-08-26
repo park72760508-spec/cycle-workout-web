@@ -351,6 +351,62 @@
     }
   }
 
+  /** 주최자 화면 "명단" 버튼 — 현재까지 신청한 참가자를 순번/이름/연락처/출발 그룹/입금여부
+   * 표로 팝업에 보여준다. 상세 다운로드가 필요하면 팝업 안의 CSV 버튼으로 별도 제공한다. */
+  function buildApplicantsTableHtml(applications) {
+    var rowsHtml = applications
+      .map(function (app, i) {
+        var a = app.applicant || {};
+        var paid = app.status === 'PAYMENT_COMPLETED';
+        return (
+          '<tr>' +
+          '<td>' + (i + 1) + '</td>' +
+          '<td>' + escapeHtml(a.name || '-') + '</td>' +
+          '<td>' + escapeHtml(a.phone || '-') + '</td>' +
+          '<td>' + escapeHtml(CSV_START_GROUP_LABEL[a.startGroup] || a.startGroup || '-') + '</td>' +
+          '<td><span class="competition-applicants-paid-badge competition-applicants-paid-badge--' +
+          (paid ? 'yes' : 'no') + '">' + (paid ? '입금완료' : '미입금') + '</span></td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+    return (
+      '<div class="competition-applicants-table-wrap">' +
+      '<table class="competition-applicants-table">' +
+      '<thead><tr><th>순번</th><th>이름</th><th>연락처</th><th>출발 그룹</th><th>입금여부</th></tr></thead>' +
+      '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+      '</div>'
+    );
+  }
+
+  async function showApplicantsList(comp) {
+    if (!comp || !comp.id) return;
+    if (!window.competitionBottomSheet || !window.competitionBottomSheet.openRawSheet) {
+      console.error('[competitionAdminForm] competitionBottomSheet.openRawSheet 필요');
+      return;
+    }
+    var applications;
+    try {
+      applications = await fetchApplicantsForCsv(comp.id);
+    } catch (e) {
+      alert((e && e.message) || '참가자 명단을 불러오지 못했습니다.');
+      return;
+    }
+    var body = applications.length
+      ? '<p class="competition-applicants-count">현재까지 신청 ' + applications.length + '명</p>' +
+        buildApplicantsTableHtml(applications)
+      : '<p class="competition-form-hint">신청 내역이 없습니다.</p>';
+    var footer = '<button type="button" class="competition-submit-btn" id="competitionApplicantsCsvBtn">CSV로 다운로드</button>';
+    var overlay = window.competitionBottomSheet.openRawSheet('참가자 명단', body, footer);
+    var csvBtn = overlay.querySelector('#competitionApplicantsCsvBtn');
+    if (csvBtn) {
+      csvBtn.addEventListener('click', function () {
+        downloadApplicantsCsv(comp);
+      });
+    }
+  }
+
   /** 포스터(히어로)·코스맵 업로드 필드 — 미리보기 썸네일 + 파일선택 + 제거. wireImageUploadField와 짝을 이룬다 */
   function buildImageUploadFieldHtml(idPrefix, label, existingUrl) {
     var hasExisting = !!existingUrl;
@@ -909,6 +965,7 @@
     openForm: openForm,
     confirmAndDelete: confirmAndDelete,
     downloadApplicantsCsv: downloadApplicantsCsv,
+    showApplicantsList: showApplicantsList,
     approveCompetition: approveCompetition,
     rejectCompetition: rejectCompetition,
     backfillLegacyApprovalStatus: backfillLegacyApprovalStatus,

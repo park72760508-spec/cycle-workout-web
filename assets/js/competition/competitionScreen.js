@@ -621,20 +621,7 @@
           }
         : null,
       onDownloadCsv: function () {
-        return window.competitionAdminForm.downloadApplicantsCsv(comp);
-      },
-      onCancelUnpaid: function () {
-        return window.competitionApi.manualCancelUnpaidCompetitionApplications().then(function (r) {
-          if (!r || r.success === false) {
-            alert((r && r.error) || '미입금 취소 처리에 실패했습니다.');
-            return;
-          }
-          alert('입금기한 만료건 ' + r.processed + '건을 취소 처리했습니다.');
-          // 방금 취소로 풀린 슬롯을 즉시 반영 — 이 대회 잔여 인원도 함께 재계산
-          return window.competitionApi.reconcileCompetitionSlots(comp.id).finally(function () {
-            renderCompetitionList();
-          });
-        });
+        return window.competitionAdminForm.showApplicantsList(comp);
       },
       onReconcileSlots: function () {
         return window.competitionApi.reconcileCompetitionSlots(comp.id).then(function (r) {

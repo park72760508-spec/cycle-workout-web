@@ -3273,6 +3273,23 @@
     }
     .competition-form-hint { font-size: 12px; color: #94a3b8; margin: 0 0 14px; line-height: 1.5; }
 
+    /* 주최자 "명단" 팝업 — 순번/이름/연락처/출발 그룹/입금여부 표 */
+    .competition-applicants-count { font-size: 13px; color: #64748b; margin: 0 0 10px; }
+    .competition-applicants-table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .competition-applicants-table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+    .competition-applicants-table th,
+    .competition-applicants-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f1f5f9; }
+    .competition-applicants-table th {
+      background: #f8fafc; color: #64748b; font-weight: 700; font-size: 12px;
+      position: sticky; top: 0;
+    }
+    .competition-applicants-table tbody tr:last-child td { border-bottom: none; }
+    .competition-applicants-paid-badge {
+      display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+    }
+    .competition-applicants-paid-badge--yes { background: #eff6ff; color: #1d4ed8; }
+    .competition-applicants-paid-badge--no { background: #fffbeb; color: #b45309; }
+
     /* 신청서 섹션(1~5) — 접고 펼치는 동작 없이 항상 전부 펼쳐진 상태로 표시 */
     .competition-accordion-item {
       border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 10px; background: white;
@@ -42852,11 +42869,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/runDashboard/RunDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/stelvio/StelvioRankingDistributionChart.jsx?v=run-ranking-heat-opt-20260803" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/competition/competitionApi.js"></script>
-  <script src="assets/js/competition/competitionBottomSheet.js?v=startgroup-de-20260906"></script>
+  <script src="assets/js/competition/competitionBottomSheet.js?v=applicants-popup-20260906"></script>
   <script src="assets/js/competition/competitionAdminForm.js"></script>
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
-  <script src="assets/js/competition/competitionScreen.js?v=paid-label-20260822a"></script>
+  <script src="assets/js/competition/competitionScreen.js?v=applicants-popup-20260906"></script>
   <script src="assets/js/market/marketScreen.js?v=20260906market54"></script>
   <script>
   (function() {
