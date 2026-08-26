@@ -207,9 +207,33 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
     if (!byFcstTime[t]) byFcstTime[t] = {};
     byFcstTime[t][it.category] = it.fcstValue;
   });
+  const availableFcstTimes = Object.keys(byFcstTime);
+
+  /**
+   * 기상청 단기예보는 예보 지평선 끝자락(발표 시점 기준 약 2.5~3일 뒤)에서 시간별이 아니라
+   * 6·12·18시처럼 3~6시간 간격으로만 값을 제공하는 경우가 있다(실측 확인 — 정확히 이
+   * 증상으로 06/08/10/12/14/16/18시 중 06·12·18시만 채워짐). 정확히 그 시각이 없으면
+   * 같은 날짜 안에서 가장 가까운 시각의 예보로 대체해 빈 칸("-")이 남지 않게 한다.
+   */
+  function nearestRow(h) {
+    var exact = byFcstTime[pad2(h) + "00"];
+    if (exact) return exact;
+    var targetMin = h * 60;
+    var nearestKey = null;
+    var nearestDiff = Infinity;
+    availableFcstTimes.forEach((t) => {
+      var tMin = Number(t.slice(0, 2)) * 60 + Number(t.slice(2, 4));
+      var diff = Math.abs(tMin - targetMin);
+      if (diff < nearestDiff) {
+        nearestDiff = diff;
+        nearestKey = t;
+      }
+    });
+    return nearestKey ? byFcstTime[nearestKey] : null;
+  }
 
   const hours = TARGET_HOURS.map((h) => {
-    const row = byFcstTime[pad2(h) + "00"];
+    const row = nearestRow(h);
     if (!row) return { hour: h, tempC: null, sky: null, pty: null, icon: null, label: null };
     const tempC = row.TMP != null ? Number(row.TMP) : null;
     const meta = iconAndLabelFor(row.SKY, row.PTY);
