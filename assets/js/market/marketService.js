@@ -53,8 +53,11 @@ async function callMarketFunction(name, body, region) {
 }
 
 /** Supabase Edge Function 호출 — 중고랜드 세션(getFreshMarketAccessToken)이 발급한 커스텀 JWT를
- * 그대로 Authorization으로 붙인다. PostgREST가 동일 JWT로 auth.uid()를 정상 추출하는 것과 같은
- * 검증 스택이라 Edge Function의 verify_jwt에도 그대로 통과한다. */
+ * 그대로 Authorization으로 붙인다. PostgREST의 auth.uid() 추출은 이 JWT로 잘 되지만, Edge
+ * Function 플랫폼 게이트웨이의 verify_jwt는 별개 검증기라 이 커스텀 JWT를 통과시키지 못한다
+ * (실제로 market-set-tracking에서 전량 401로 확인됨) — 그래서 사용자 인증이 필요한 Edge
+ * Function은 반드시 verify_jwt: false로 배포하고, 함수 코드 안에서 supabase.auth.getUser(token)
+ * 으로 직접 검증해야 한다. */
 async function callMarketEdgeFunction(name, body) {
   const cfg = (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) throw new Error('STELVIO_SUPABASE_CONFIG 미설정');
