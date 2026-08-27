@@ -899,6 +899,9 @@ const PHONE_OTP_TTL_MS = 3 * 60 * 1000; // 3분 — 코드베이스에 재사용
 const PHONE_OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 const PHONE_OTP_MAX_SENDS_PER_DAY = 5;
 const PHONE_OTP_MAX_ATTEMPTS = 5;
+// TEMP: true인 동안 이미 가입된 번호에도 인증문자를 보낸다(SMS 발송 자체를 테스트하기 위함).
+// 테스트가 끝나면 false로 되돌려 배포할 것 — "정상 동작로직으로 적용해줘" 요청 시 여기만 고친다.
+const PHONE_OTP_TEMP_SKIP_DUPLICATE_CHECK = true;
 
 function phoneOtpDigitsOnly(raw) {
   return String(raw || "").replace(/\D/g, "");
@@ -963,7 +966,9 @@ exports.sendPhoneVerificationCode = onRequest(sendPhoneVerificationCodeOptions, 
     }
 
     const db = admin.firestore();
-    if (await phoneOtpIsAlreadyRegisteredActive(db, digits)) {
+    // TEMP: SMS 발송 자체(IP 화이트리스트 수정) 테스트를 위해 기가입 번호 차단을 잠시 우회.
+    // 테스트 종료 후 PHONE_OTP_TEMP_SKIP_DUPLICATE_CHECK를 false로 되돌려 정상 로직 복원할 것.
+    if (!PHONE_OTP_TEMP_SKIP_DUPLICATE_CHECK && (await phoneOtpIsAlreadyRegisteredActive(db, digits))) {
       res.status(409).json({ success: false, error: "이미 등록된 번호입니다." });
       return;
     }
