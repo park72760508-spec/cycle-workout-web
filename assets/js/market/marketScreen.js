@@ -45,6 +45,14 @@
       nav.style.display = 'none';
       return;
     }
+    // marketBottomNav는 특정 .screen 내부가 아니라 body 바로 아래 독립 요소라(주석 참고)
+    // .screen 전환 자체가 실패해도 이 함수만 호출되면 화면과 무관하게 표시될 수 있다 —
+    // 실제로 중고랜드 화면이 활성 상태일 때만 표시해 "다른 화면인데 하단 네비만 남는" 문제를 막는다.
+    var activeScreen = document.querySelector('.screen.active');
+    if (!activeScreen || activeScreen.id.indexOf('market') !== 0) {
+      nav.style.display = 'none';
+      return;
+    }
     nav.style.display = 'block';
     var idByKey = {
       home: 'marketNavBtnHome',
@@ -932,8 +940,24 @@
     }
   }
 
+  // 카테고리 화면(CYCLE·RUN)의 "중고랜드" 버튼 등에서 간헐적으로, showScreen이 화면 전환에
+  // 실패(인증 상태 순간 불안정·환영 오버레이 등 index.html showScreen 래퍼 내부 사유로 무시됨)
+  // 하는데도 마켓 홈 초기화 콜백(marketScreenInit)이 이미 실행돼 있어, 하단 중고랜드 네비만
+  // 화면에 남고 실제 화면은 이전 화면(카테고리 등)에 그대로 머무르는 문제가 보고되었다.
+  // 연타(더블탭/고스트클릭)로 인한 중복 요청은 막고, 요청 후 실제로 전환됐는지 재확인해
+  // 실패 시 한 번 더 시도한다.
+  var marketLandNavPending = false;
   window.navigateToMarketLand = function () {
+    if (marketLandNavPending) return;
+    marketLandNavPending = true;
     if (typeof window.showScreen === 'function') window.showScreen('marketHomeScreen');
+    setTimeout(function () {
+      var marketScreenEl = document.getElementById('marketHomeScreen');
+      if (marketScreenEl && !marketScreenEl.classList.contains('active') && typeof window.showScreen === 'function') {
+        window.showScreen('marketHomeScreen');
+      }
+      marketLandNavPending = false;
+    }, 200);
   };
 
   // ───────────────────────── 마이페이지 진입 ─────────────────────────
