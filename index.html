@@ -396,16 +396,16 @@
       var remain = seconds;
       if (window.__stelvioPhoneOtpState.cooldownTimer) clearInterval(window.__stelvioPhoneOtpState.cooldownTimer);
       btn.disabled = true;
-      btn.textContent = '재전송(' + remain + '초)';
+      btn.textContent = remain + '초';
       window.__stelvioPhoneOtpState.cooldownTimer = setInterval(function () {
         remain -= 1;
         if (remain <= 0) {
           clearInterval(window.__stelvioPhoneOtpState.cooldownTimer);
           btn.disabled = false;
-          btn.textContent = '인증번호 재전송';
+          btn.innerHTML = '인증번호<br>받기';
           return;
         }
-        btn.textContent = '재전송(' + remain + '초)';
+        btn.textContent = remain + '초';
       }, 1000);
     }
     window.handleSendPhoneVerificationCode = async function () {
@@ -416,7 +416,7 @@
         stelvioSetPhoneOtpStatus('올바른 휴대폰 번호를 입력해 주세요.', 'error');
         return;
       }
-      if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '전송 중...'; }
+      if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '전송중'; }
       try {
         var res = await fetch(STELVIO_PHONE_OTP_SEND_URL, {
           method: 'POST',
@@ -439,7 +439,7 @@
         stelvioStartPhoneOtpCooldown(sendBtn, 60);
       } catch (e) {
         stelvioSetPhoneOtpStatus((e && e.message) || '인증번호 전송에 실패했습니다.', 'error');
-        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '인증번호 받기'; }
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '인증번호<br>받기'; }
       }
     };
     window.handleVerifyPhoneCode = async function () {
@@ -474,6 +474,7 @@
         var sendBtn = document.getElementById('registerPhoneSendCodeBtn');
         if (sendBtn) { sendBtn.disabled = true; if (window.__stelvioPhoneOtpState.cooldownTimer) clearInterval(window.__stelvioPhoneOtpState.cooldownTimer); }
         if (phoneInput) phoneInput.readOnly = true;
+        if (typeof window.stelvioUpdateRegisterSubmitEnabled === 'function') window.stelvioUpdateRegisterSubmitEnabled();
       } catch (e) {
         stelvioSetPhoneOtpStatus((e && e.message) || '인증번호가 올바르지 않습니다.', 'error');
         if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.textContent = '확인'; }
@@ -481,20 +482,94 @@
     };
     // 인증완료 후 번호를 다시 바꾸면(readOnly 해제 등 예외 상황 대비) 인증 상태를 초기화해
     // 재인증 없이 다른 번호로 가입되는 것을 막는다.
+    // 필수 항목 입력 + 전화번호 문자인증(또는 재가입 모드)이 모두 완료돼야 "가입 완료" 버튼이
+    // 활성화된다 — handleRegister()의 검증 로직을 제출 전에 미리 반영(엄격한 재검증은 그대로 유지).
+    function stelvioUpdateRegisterSubmitEnabled() {
+      var submitBtn = document.getElementById('registerSubmitBtn');
+      if (!submitBtn) return;
+      var phoneInput = document.getElementById('registerPhoneInput');
+      var nameInput = document.getElementById('registerNameInput');
+      var passwordInput = document.getElementById('registerPasswordInput');
+      var ftpInput = document.getElementById('registerFTPInput');
+      var weightInput = document.getElementById('registerWeightInput');
+      var birthYearInput = document.getElementById('registerBirthYearInput');
+      var genderInput = document.getElementById('registerGenderInput');
+      var categoryInput = document.getElementById('registerCategoryInput');
+      if (!phoneInput || !nameInput || !passwordInput || !birthYearInput) return;
+
+      var phoneDigits = stelvioPhoneOtpDigits(phoneInput.value);
+      var isRejoinMode =
+        (window._stelvioWithdrawnAuthPhone && phoneDigits === stelvioPhoneOtpDigits(window._stelvioWithdrawnAuthPhone)) ||
+        (window._stelvioWithdrawnUserProfile && window._stelvioWithdrawnUserProfile.contact &&
+          phoneDigits === stelvioPhoneOtpDigits(window._stelvioWithdrawnUserProfile.contact));
+      var phoneOk = isRejoinMode
+        ? phoneDigits.length >= 10
+        : (window.__stelvioPhoneOtpState.verifiedDigits === phoneDigits && phoneDigits.length >= 10);
+
+      var nameOk = nameInput.value.trim().length >= 2;
+      var passwordOk = (passwordInput.value || '').length >= 6;
+
+      var currentYear = new Date().getFullYear();
+      var birthYear = parseInt(birthYearInput.value, 10);
+      var birthYearOk = !!birthYear && birthYear >= 1900 && birthYear <= currentYear;
+
+      var category = (typeof normalizeUserSportCategory === 'function')
+        ? normalizeUserSportCategory(categoryInput ? categoryInput.value : 'CYCLE')
+        : String((categoryInput && categoryInput.value) || 'CYCLE').toUpperCase();
+      var isRunCategory = (typeof isRunSportCategory === 'function') ? isRunSportCategory(category) : category === 'RUN';
+      var needsFtpCategory = (typeof needsFtpForCategory === 'function') ? needsFtpForCategory(category) : !isRunCategory;
+
+      var extraOk = true;
+      if (!isRejoinMode) {
+        var weight = parseFloat(weightInput ? weightInput.value : '');
+        if (isRunCategory) {
+          if (weight == null || isNaN(weight) || weight < 0 || weight > 150) extraOk = false;
+        } else if (!weight || weight < 40 || weight > 150) {
+          extraOk = false;
+        }
+        var gender = genderInput ? genderInput.value : '';
+        if (!gender || (gender !== '남' && gender !== '여')) extraOk = false;
+        if (needsFtpCategory) {
+          var ftpVal = parseInt(ftpInput ? ftpInput.value : '', 10);
+          if (Number.isFinite(ftpVal) && ftpVal > 600) extraOk = false;
+        }
+      }
+
+      submitBtn.disabled = !(phoneOk && nameOk && passwordOk && birthYearOk && extraOk);
+    }
+    window.stelvioUpdateRegisterSubmitEnabled = stelvioUpdateRegisterSubmitEnabled;
+
     document.addEventListener('DOMContentLoaded', function () {
       var phoneInput = document.getElementById('registerPhoneInput');
-      if (!phoneInput) return;
-      phoneInput.addEventListener('input', function () {
-        if (phoneInput.readOnly) return;
-        if (window.__stelvioPhoneOtpState.verifiedDigits == null && window.__stelvioPhoneOtpState.sentDigits == null) return;
-        window.__stelvioPhoneOtpState.verifiedDigits = null;
-        window.__stelvioPhoneOtpState.sentDigits = null;
-        var codeRow = document.getElementById('registerPhoneCodeRow');
-        if (codeRow) codeRow.style.display = 'none';
-        stelvioSetPhoneOtpStatus('', '');
-        var sendBtn = document.getElementById('registerPhoneSendCodeBtn');
-        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '인증번호 받기'; }
-        if (window.__stelvioPhoneOtpState.cooldownTimer) clearInterval(window.__stelvioPhoneOtpState.cooldownTimer);
+      var submitBtn = document.getElementById('registerSubmitBtn');
+      if (submitBtn) submitBtn.disabled = true; // 문자인증 도입 후 기본값: 검증 통과 전엔 비활성
+
+      if (phoneInput) {
+        phoneInput.addEventListener('input', function () {
+          if (phoneInput.readOnly) return;
+          if (window.__stelvioPhoneOtpState.verifiedDigits == null && window.__stelvioPhoneOtpState.sentDigits == null) {
+            stelvioUpdateRegisterSubmitEnabled();
+            return;
+          }
+          window.__stelvioPhoneOtpState.verifiedDigits = null;
+          window.__stelvioPhoneOtpState.sentDigits = null;
+          var codeRow = document.getElementById('registerPhoneCodeRow');
+          if (codeRow) codeRow.style.display = 'none';
+          stelvioSetPhoneOtpStatus('', '');
+          var sendBtn = document.getElementById('registerPhoneSendCodeBtn');
+          if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '인증번호<br>받기'; }
+          if (window.__stelvioPhoneOtpState.cooldownTimer) clearInterval(window.__stelvioPhoneOtpState.cooldownTimer);
+          stelvioUpdateRegisterSubmitEnabled();
+        });
+      }
+
+      ['registerNameInput', 'registerPasswordInput', 'registerFTPInput', 'registerWeightInput', 'registerBirthYearInput'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', stelvioUpdateRegisterSubmitEnabled);
+      });
+      ['registerCategoryInput', 'registerGenderInput'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', stelvioUpdateRegisterSubmitEnabled);
       });
     });
 
@@ -1201,6 +1276,16 @@
       background: #d1d5db;
       color: #6b7280;
       cursor: not-allowed;
+    }
+    /* 인증번호 받기 버튼만 폭을 2/3로 줄이고 라벨을 2줄로 표시 — 그만큼 전화번호 입력란이
+       넓어진다(형제 input이 flex:1이라 자동으로 폭을 가져감). */
+    .auth-phone-send-btn {
+      width: 64px;
+      padding: 2px 4px;
+      font-size: 11px;
+      line-height: 1.25;
+      white-space: normal;
+      text-align: center;
     }
     .auth-phone-verify-status {
       margin: 4px 0 0 0;
@@ -4198,7 +4283,7 @@
                   maxlength="13"
                   required
                 >
-                <button type="button" id="registerPhoneSendCodeBtn" class="auth-phone-verify-btn" onclick="if(typeof handleSendPhoneVerificationCode==='function')handleSendPhoneVerificationCode();">인증번호 받기</button>
+                <button type="button" id="registerPhoneSendCodeBtn" class="auth-phone-verify-btn auth-phone-send-btn" onclick="if(typeof handleSendPhoneVerificationCode==='function')handleSendPhoneVerificationCode();">인증번호<br>받기</button>
               </div>
               <div id="registerPhoneCodeRow" class="auth-phone-verify-row" style="display:none;">
                 <input type="text" id="registerPhoneCodeInput" placeholder="인증번호 6자리" inputmode="numeric" maxlength="6">
