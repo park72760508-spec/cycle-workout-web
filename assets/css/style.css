@@ -31223,6 +31223,13 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   font-weight: 700;
 }
 .market-return-cancelled-text { color: #dc2626; font-weight: 700; }
+/* 반품 진행 상태의 자동 반품완료/환불 카운트다운 — 라벨 텍스트가 길어 좁은 화면에서
+   줄바꿈되지 않도록 한 줄로 고정하고, 필요 시 가로 스크롤로만 흡수한다. */
+.market-due-line {
+  white-space: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 /* 거래 상대방(구매자/판매자) 정보 + 전화·문자 바로가기 카드 */
 .market-deal-contact-card {

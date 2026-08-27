@@ -533,7 +533,7 @@
     } else if (o.return_status === 'DELIVERED') {
       var deadlineIso = o.return_delivered_at ? new Date(new Date(o.return_delivered_at).getTime() + 72 * 3600 * 1000).toISOString() : null;
       var timerHtml = deadlineIso
-        ? '<div>자동 반품완료까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>'
+        ? '<div class="market-due-line">자동 반품완료까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>'
         : '';
       body =
         '<div class="market-delivery-info">' +
@@ -586,7 +586,7 @@
       var timerHtml = '';
       if (o.return_status === 'DELIVERED' && o.return_delivered_at) {
         var deadlineIso2 = new Date(new Date(o.return_delivered_at).getTime() + 72 * 3600 * 1000).toISOString();
-        timerHtml = '<div class="market-delivery-info">판매자 확인 대기(자동 환불까지) : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso2) + '">' + escapeHtml(marketFormatRemaining(deadlineIso2)) + '</span></div>';
+        timerHtml = '<div class="market-delivery-info market-due-line">판매자 확인 대기(자동 환불까지) : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso2) + '">' + escapeHtml(marketFormatRemaining(deadlineIso2)) + '</span></div>';
       }
       body = addrHtml + trackingHtml + timerHtml;
     } else if (o.return_status === 'DISPUTED') {
