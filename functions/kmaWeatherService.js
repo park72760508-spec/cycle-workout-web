@@ -1,6 +1,8 @@
 /**
- * 라이딩/러닝 모임 "출발 지역" 날씨 — 기상청 단기예보(getVilageFcst) 조회.
- * 위경도 → 격자(nx,ny) 변환은 기상청 공식 LCC DFS 격자 변환 공식(RE=6371.00877 등)을 그대로 사용.
+ * 라이딩/러닝 모임 "출발 지역" 날씨 — 기상청 단기예보(getVilageFcst)를 우선 사용하고,
+ * 실패하거나(연결 문제 등) 해당 날짜에 값이 없으면 Open-Meteo(무료·API 키 불필요)로
+ * 자동 전환한다. 위경도 → 격자(nx,ny) 변환은 기상청 공식 LCC DFS 격자 변환 공식
+ * (RE=6371.00877 등)을 그대로 사용(Open-Meteo는 위경도를 그대로 받아 변환이 필요 없음).
  */
 const { KOREA_REGION_WEATHER_COORDS } = require("./koreaRegionWeatherCoords");
 
@@ -54,7 +56,7 @@ function resolveRegionGrid(regionStr) {
   if (!key) return null;
   const coord = KOREA_REGION_WEATHER_COORDS[key];
   if (!coord) return null;
-  return Object.assign({ region: key }, latLonToGrid(coord.lat, coord.lon));
+  return Object.assign({ region: key, lat: coord.lat, lon: coord.lon }, latLonToGrid(coord.lat, coord.lon));
 }
 
 function pad2(n) {
@@ -107,11 +109,13 @@ function iconAndLabelFor(sky, pty) {
 }
 
 /**
- * 기상청 API(apis.data.go.kr)는 us-central1 등 원거리 리전에서 간헐적으로 연결이 지연·실패해
- * "fetch failed"(TCP/TLS 단계 실패, 원인이 undici error.cause에만 담김)로 이어지는 경우가 있어
- * (2026-08 확인 — 실사용자 요청이 us-central1에서 10초 넘게 걸리다 실패), 15초 타임아웃 + 1회
- * 재시도를 둔다. 근본 대응은 이 함수를 호출하는 Cloud Function을 한국에 가까운 asia-northeast3로
- * 배포하는 것(index.js의 getOpenRidingDepartureWeatherOptions에 반영).
+ * 기상청 API(apis.data.go.kr)는 Cloud Functions 쪽 아웃바운드 연결이 장시간(2026-08-26
+ * 확인 — asia-northeast3에서 50분 넘게 지속) 타임아웃되는 경우가 있다. 원인이 기상청 쪽
+ * IP 정책 변경인지 GCP 아웃바운드 라우팅 문제인지 원격에서 특정할 수 없어 근본 해결이
+ * 불확실하므로, 실패 시 즉시 Open-Meteo(무료·API 키 불필요·글로벌 CDN이라 도달성이 훨씬
+ * 안정적)로 자동 전환한다(getDepartureWeatherForRegion 참고). 여기서는 빨리 실패해
+ * 폴백으로 넘어가도록 타임아웃을 8초로 줄였다(기존 15초 × 재시도 1회 = 최대 30초 대기는
+ * 사용자 체감상 너무 길었음).
  */
 async function fetchKmaVilageFcstOnce(nx, ny, baseDate, baseTime, serviceKey) {
   const url =
@@ -123,7 +127,7 @@ async function fetchKmaVilageFcstOnce(nx, ny, baseDate, baseTime, serviceKey) {
     "&nx=" + nx +
     "&ny=" + ny;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
   let res;
   try {
     res = await fetch(url, { signal: controller.signal });
@@ -143,13 +147,80 @@ async function fetchKmaVilageFcstOnce(nx, ny, baseDate, baseTime, serviceKey) {
   return Array.isArray(items) ? items : [];
 }
 
+// 실패 시 곧바로 Open-Meteo 폴백으로 넘어가므로(같은 죽은 호스트에 재시도하는 대신),
+// 여기서 재시도는 하지 않는다 — 실패 경로 최대 대기 시간을 8초로 묶어 사용자 체감을 개선.
 async function fetchKmaVilageFcst(nx, ny, baseDate, baseTime, serviceKey) {
+  return fetchKmaVilageFcstOnce(nx, ny, baseDate, baseTime, serviceKey);
+}
+
+// ── Open-Meteo 폴백(무료, API 키 불필요) ──────────────────────────────────
+// WMO 일기 코드(weathercode) → 기존 SKY/PTY 아이콘 체계와 톤을 맞춘 이모지·라벨.
+// https://open-meteo.com/en/docs 의 "WMO Weather interpretation codes" 표 기준.
+const WMO_ICON_LABEL = [
+  { codes: [0], icon: "☀️", label: "맑음" },
+  { codes: [1, 2], icon: "⛅", label: "구름많음" },
+  { codes: [3], icon: "☁️", label: "흐림" },
+  { codes: [45, 48], icon: "🌫️", label: "안개" },
+  { codes: [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82], icon: "🌧️", label: "비" },
+  { codes: [71, 73, 75, 77, 85, 86], icon: "❄️", label: "눈" },
+  { codes: [95, 96, 99], icon: "⛈️", label: "뇌우" },
+];
+function wmoIconAndLabel(code) {
+  const n = Number(code);
+  const hit = WMO_ICON_LABEL.find((g) => g.codes.indexOf(n) !== -1);
+  return hit ? { icon: hit.icon, label: hit.label } : { icon: "🌡️", label: "" };
+}
+
+/**
+ * Open-Meteo는 위경도를 그대로 받아 격자 변환이 필요 없고, API 키 없이 무료로 시간별
+ * 예보(최대 16일)를 제공한다 — KMA가 실패했을 때의 폴백 소스.
+ */
+async function fetchOpenMeteoHours(lat, lon, targetYmd) {
+  const url =
+    "https://api.open-meteo.com/v1/forecast" +
+    "?latitude=" + encodeURIComponent(lat) +
+    "&longitude=" + encodeURIComponent(lon) +
+    "&hourly=temperature_2m,weathercode" +
+    "&timezone=" + encodeURIComponent("Asia/Seoul") +
+    "&start_date=" + targetYmd +
+    "&end_date=" + targetYmd;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  let res;
   try {
-    return await fetchKmaVilageFcstOnce(nx, ny, baseDate, baseTime, serviceKey);
-  } catch (eFirst) {
-    console.warn("[kmaWeatherService] 1차 조회 실패, 재시도:", eFirst && eFirst.message);
-    return await fetchKmaVilageFcstOnce(nx, ny, baseDate, baseTime, serviceKey);
+    res = await fetch(url, { signal: controller.signal });
+  } catch (e) {
+    const cause = e && e.cause ? " (" + (e.cause.code || e.cause.message || e.cause) + ")" : "";
+    throw new Error("Open-Meteo fetch 실패: " + (e && e.message ? e.message : String(e)) + cause);
+  } finally {
+    clearTimeout(timeoutId);
   }
+  if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
+  const json = await res.json();
+  const times = json && json.hourly && json.hourly.time;
+  const temps = json && json.hourly && json.hourly.temperature_2m;
+  const codes = json && json.hourly && json.hourly.weathercode;
+  if (!Array.isArray(times)) throw new Error("Open-Meteo 응답 형식 오류");
+
+  const byHour = {};
+  times.forEach((iso, i) => {
+    const hh = Number(String(iso).slice(11, 13));
+    byHour[hh] = { tempC: temps ? Number(temps[i]) : null, code: codes ? codes[i] : null };
+  });
+
+  return TARGET_HOURS.map((h) => {
+    const row = byHour[h];
+    if (!row) return { hour: h, tempC: null, sky: null, pty: null, icon: null, label: null };
+    const meta = wmoIconAndLabel(row.code);
+    return {
+      hour: h,
+      tempC: isFinite(row.tempC) ? row.tempC : null,
+      sky: null,
+      pty: null,
+      icon: meta.icon,
+      label: meta.label,
+    };
+  });
 }
 
 /**
@@ -183,7 +254,7 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
         const d = snap.data() || {};
         const fetchedAt = Number(d.fetchedAtMs || 0);
         if (Array.isArray(d.hours) && Date.now() - fetchedAt < CACHE_TTL_MS) {
-          return { success: true, region: grid.region, date: targetYmd, hours: d.hours, note: d.note || null, cached: true };
+          return { success: true, region: grid.region, date: targetYmd, hours: d.hours, note: d.note || null, source: d.source || null, cached: true };
         }
       }
     } catch (eCache) {
@@ -192,73 +263,94 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
   }
 
   const { baseDate, baseTime } = getLatestBaseDateTime(today);
-  let items;
+  let hours = null;
+  let source = null;
+
   try {
-    items = await fetchKmaVilageFcst(grid.nx, grid.ny, baseDate, baseTime, serviceKey);
-  } catch (eFetch) {
-    return { success: false, error: "kma_fetch_failed", message: eFetch && eFetch.message };
-  }
-
-  const byFcstTime = {};
-  items.forEach((it) => {
-    if (it.fcstDate !== targetCompact) return;
-    if (it.category !== "TMP" && it.category !== "SKY" && it.category !== "PTY") return;
-    const t = it.fcstTime;
-    if (!byFcstTime[t]) byFcstTime[t] = {};
-    byFcstTime[t][it.category] = it.fcstValue;
-  });
-  const availableFcstTimes = Object.keys(byFcstTime);
-
-  /**
-   * 기상청 단기예보는 예보 지평선 끝자락(발표 시점 기준 약 2.5~3일 뒤)에서 시간별이 아니라
-   * 6·12·18시처럼 3~6시간 간격으로만 값을 제공하는 경우가 있다(실측 확인 — 정확히 이
-   * 증상으로 06/08/10/12/14/16/18시 중 06·12·18시만 채워짐). 정확히 그 시각이 없으면
-   * 같은 날짜 안에서 가장 가까운 시각의 예보로 대체해 빈 칸("-")이 남지 않게 한다.
-   */
-  function nearestRow(h) {
-    var exact = byFcstTime[pad2(h) + "00"];
-    if (exact) return exact;
-    var targetMin = h * 60;
-    var nearestKey = null;
-    var nearestDiff = Infinity;
-    availableFcstTimes.forEach((t) => {
-      var tMin = Number(t.slice(0, 2)) * 60 + Number(t.slice(2, 4));
-      var diff = Math.abs(tMin - targetMin);
-      if (diff < nearestDiff) {
-        nearestDiff = diff;
-        nearestKey = t;
-      }
+    const items = await fetchKmaVilageFcst(grid.nx, grid.ny, baseDate, baseTime, serviceKey);
+    const byFcstTime = {};
+    items.forEach((it) => {
+      if (it.fcstDate !== targetCompact) return;
+      if (it.category !== "TMP" && it.category !== "SKY" && it.category !== "PTY") return;
+      const t = it.fcstTime;
+      if (!byFcstTime[t]) byFcstTime[t] = {};
+      byFcstTime[t][it.category] = it.fcstValue;
     });
-    return nearestKey ? byFcstTime[nearestKey] : null;
+    const availableFcstTimes = Object.keys(byFcstTime);
+
+    /**
+     * 기상청 단기예보는 예보 지평선 끝자락(발표 시점 기준 약 2.5~3일 뒤)에서 시간별이 아니라
+     * 6·12·18시처럼 3~6시간 간격으로만 값을 제공하는 경우가 있다(실측 확인 — 정확히 이
+     * 증상으로 06/08/10/12/14/16/18시 중 06·12·18시만 채워짐). 정확히 그 시각이 없으면
+     * 같은 날짜 안에서 가장 가까운 시각의 예보로 대체해 빈 칸("-")이 남지 않게 한다.
+     */
+    const nearestRow = (h) => {
+      const exact = byFcstTime[pad2(h) + "00"];
+      if (exact) return exact;
+      const targetMin = h * 60;
+      let nearestKey = null;
+      let nearestDiff = Infinity;
+      availableFcstTimes.forEach((t) => {
+        const tMin = Number(t.slice(0, 2)) * 60 + Number(t.slice(2, 4));
+        const diff = Math.abs(tMin - targetMin);
+        if (diff < nearestDiff) {
+          nearestDiff = diff;
+          nearestKey = t;
+        }
+      });
+      return nearestKey ? byFcstTime[nearestKey] : null;
+    };
+
+    const kmaHours = TARGET_HOURS.map((h) => {
+      const row = nearestRow(h);
+      if (!row) return { hour: h, tempC: null, sky: null, pty: null, icon: null, label: null };
+      const tempC = row.TMP != null ? Number(row.TMP) : null;
+      const meta = iconAndLabelFor(row.SKY, row.PTY);
+      return {
+        hour: h,
+        tempC: isFinite(tempC) ? tempC : null,
+        sky: row.SKY != null ? String(row.SKY) : null,
+        pty: row.PTY != null ? String(row.PTY) : null,
+        icon: meta.icon,
+        label: meta.label,
+      };
+    });
+    if (kmaHours.some((h) => h.tempC != null)) {
+      hours = kmaHours;
+      source = "kma";
+    }
+  } catch (eFetch) {
+    console.warn("[kmaWeatherService] KMA 조회 실패, Open-Meteo로 폴백:", eFetch && eFetch.message);
   }
 
-  const hours = TARGET_HOURS.map((h) => {
-    const row = nearestRow(h);
-    if (!row) return { hour: h, tempC: null, sky: null, pty: null, icon: null, label: null };
-    const tempC = row.TMP != null ? Number(row.TMP) : null;
-    const meta = iconAndLabelFor(row.SKY, row.PTY);
-    return {
-      hour: h,
-      tempC: isFinite(tempC) ? tempC : null,
-      sky: row.SKY != null ? String(row.SKY) : null,
-      pty: row.PTY != null ? String(row.PTY) : null,
-      icon: meta.icon,
-      label: meta.label,
-    };
-  });
+  // KMA가 실패했거나(연결 문제 등) 그 날짜에 값이 전혀 없으면(아직 예보 지평선 밖) 무료·키
+  // 불필요·글로벌 CDN이라 도달성이 훨씬 안정적인 Open-Meteo로 자동 전환해, 사용자에게
+  // "날씨 정보를 불러올 수 없습니다"가 뜨는 상황을 최대한 피한다.
+  if (!hours) {
+    try {
+      hours = await fetchOpenMeteoHours(grid.lat, grid.lon, targetYmd);
+      source = "open-meteo";
+    } catch (eOpenMeteo) {
+      console.warn("[kmaWeatherService] Open-Meteo 폴백도 실패:", eOpenMeteo && eOpenMeteo.message);
+    }
+  }
+
+  if (!hours) {
+    return { success: false, error: "weather_fetch_failed", message: "기상청·Open-Meteo 모두 조회에 실패했습니다." };
+  }
 
   const hasAny = hours.some((h) => h.tempC != null);
   const note = hasAny ? null : "아직 예보가 제공되지 않는 기간입니다 (약 3일 이내 일정만 제공)";
 
   if (cacheRef) {
     try {
-      await cacheRef.set({ hours, note, fetchedAtMs: Date.now(), baseDate, baseTime });
+      await cacheRef.set({ hours, note, source, fetchedAtMs: Date.now(), baseDate, baseTime });
     } catch (eWrite) {
       console.warn("[kmaWeatherService] cache write failed:", eWrite && eWrite.message);
     }
   }
 
-  return { success: true, region: grid.region, date: targetYmd, hours, note };
+  return { success: true, region: grid.region, date: targetYmd, hours, note, source };
 }
 
 module.exports = {
