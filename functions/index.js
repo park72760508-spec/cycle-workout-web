@@ -885,6 +885,177 @@ exports.selfServiceResetPasswordHttp = onRequest(
 );
 
 /**
+ * 회원가입 전화번호 문자(SMS) 인증 — 알리고 일반 SMS API(apis.aligo.in/send/) 사용.
+ * 카카오 알림톡용 ALIGO_TOKEN은 필요 없다(SMS는 key/user_id만 사용 — aligoapi 패키지의
+ * aligo_sms.js 예제 참고). 발신번호는 알리고 콘솔에 SMS용으로 사전등록된 번호를 사용한다.
+ *
+ * 코드는 Firestore phone_otp_codes/{phoneDigits}에 평문으로 저장한다 — 3분 만료·5회 시도
+ * 제한이 걸린 단발성 저가치 비밀번호라 admin 전용 접근(클라이언트 직접 조회 불가)만으로
+ * 충분하다고 판단(비밀번호·결제정보 등과는 위협 모델이 다름).
+ */
+const ALIGO_SMS_SENDER = "01050149029";
+const PHONE_OTP_COLLECTION = "phone_otp_codes";
+const PHONE_OTP_TTL_MS = 3 * 60 * 1000; // 3분 — 코드베이스에 재사용할 기존 인증 유효시간 값이 없어 신규 도입
+const PHONE_OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const PHONE_OTP_MAX_SENDS_PER_DAY = 5;
+const PHONE_OTP_MAX_ATTEMPTS = 5;
+
+function phoneOtpDigitsOnly(raw) {
+  return String(raw || "").replace(/\D/g, "");
+}
+
+function isValidKoreanMobileDigits(digits) {
+  return /^01[0-9]\d{7,8}$/.test(digits);
+}
+
+function phoneOtpTodayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+const sendPhoneVerificationCodeOptions = {
+  cors: false,
+  secrets: [aligoApiKeySecret, aligoUserIdSecret],
+};
+exports.sendPhoneVerificationCode = onRequest(sendPhoneVerificationCodeOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const digits = phoneOtpDigitsOnly(body.phone);
+    if (!isValidKoreanMobileDigits(digits)) {
+      res.status(400).json({ success: false, error: "올바른 휴대폰 번호를 입력해 주세요." });
+      return;
+    }
+
+    const db = admin.firestore();
+    const docRef = db.collection(PHONE_OTP_COLLECTION).doc(digits);
+    const snap = await docRef.get();
+    const existing = snap.exists ? snap.data() : null;
+    const nowMs = Date.now();
+
+    if (existing && existing.lastSentAt && nowMs - existing.lastSentAt.toMillis() < PHONE_OTP_RESEND_COOLDOWN_MS) {
+      const waitSec = Math.ceil((PHONE_OTP_RESEND_COOLDOWN_MS - (nowMs - existing.lastSentAt.toMillis())) / 1000);
+      res.status(429).json({ success: false, error: `잠시 후 다시 시도해 주세요. (${waitSec}초 후 재전송 가능)` });
+      return;
+    }
+    const today = phoneOtpTodayStr();
+    const sentTodayCount = existing && existing.sendCountDate === today ? Number(existing.sendCountToday) || 0 : 0;
+    if (sentTodayCount >= PHONE_OTP_MAX_SENDS_PER_DAY) {
+      res.status(429).json({ success: false, error: "오늘 요청 가능한 인증번호 전송 횟수를 초과했습니다." });
+      return;
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+
+    const { scrubAligoCredential } = require("./lib/aligoCredentials");
+    const apikey = scrubAligoCredential(aligoApiKeySecret.value());
+    const userid = scrubAligoCredential(aligoUserIdSecret.value());
+    if (!apikey || !userid) {
+      console.error("[sendPhoneVerificationCode] ALIGO_API_KEY/ALIGO_USER_ID 미설정");
+      res.status(500).json({ success: false, error: "문자 발송 설정이 올바르지 않습니다. 관리자에게 문의해 주세요." });
+      return;
+    }
+
+    const aligoapi = require("aligoapi");
+    const smsReq = {
+      headers: { "content-type": "application/json" },
+      body: {
+        sender: ALIGO_SMS_SENDER,
+        receiver: digits,
+        msg: `[STELVIO] 인증번호 [${code}]를 입력해 주세요. (3분 이내 유효)`,
+        msg_type: "SMS",
+      },
+    };
+    const smsAuth = { key: apikey, user_id: userid };
+    const raw = await aligoapi.send(smsReq, smsAuth);
+    const resultCode = raw && raw.result_code !== undefined ? String(raw.result_code) : "";
+    if (resultCode !== "1") {
+      console.error("[sendPhoneVerificationCode] Aligo SMS 전송 실패:", JSON.stringify(raw));
+      res.status(502).json({ success: false, error: "문자 전송에 실패했습니다. 잠시 후 다시 시도해 주세요." });
+      return;
+    }
+
+    await docRef.set({
+      code,
+      expiresAt: admin.firestore.Timestamp.fromMillis(nowMs + PHONE_OTP_TTL_MS),
+      attempts: 0,
+      verified: false,
+      verifiedAt: null,
+      lastSentAt: admin.firestore.Timestamp.fromMillis(nowMs),
+      sendCountToday: sentTodayCount + 1,
+      sendCountDate: today,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.status(200).json({ success: true, expiresInSeconds: PHONE_OTP_TTL_MS / 1000 });
+  } catch (e) {
+    console.error("[sendPhoneVerificationCode]", e && e.message ? e.message : e);
+    res.status(500).json({ success: false, error: "인증번호 전송 중 오류가 발생했습니다." });
+  }
+});
+
+const verifyPhoneVerificationCodeOptions = { cors: false };
+exports.verifyPhoneVerificationCode = onRequest(verifyPhoneVerificationCodeOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const digits = phoneOtpDigitsOnly(body.phone);
+    const code = String(body.code || "").trim();
+    if (!isValidKoreanMobileDigits(digits) || !/^[0-9]{6}$/.test(code)) {
+      res.status(400).json({ success: false, error: "요청 값이 올바르지 않습니다." });
+      return;
+    }
+
+    const db = admin.firestore();
+    const docRef = db.collection(PHONE_OTP_COLLECTION).doc(digits);
+    const snap = await docRef.get();
+    if (!snap.exists) {
+      res.status(400).json({ success: false, error: "인증번호를 먼저 요청해 주세요." });
+      return;
+    }
+    const data = snap.data();
+    if (data.verified === true) {
+      res.status(200).json({ success: true });
+      return;
+    }
+    if (!data.expiresAt || data.expiresAt.toMillis() < Date.now()) {
+      res.status(400).json({ success: false, error: "인증번호가 만료되었습니다. 다시 요청해 주세요." });
+      return;
+    }
+    if ((Number(data.attempts) || 0) >= PHONE_OTP_MAX_ATTEMPTS) {
+      res.status(400).json({ success: false, error: "시도 횟수를 초과했습니다. 인증번호를 다시 요청해 주세요." });
+      return;
+    }
+    if (String(data.code) !== code) {
+      await docRef.update({ attempts: admin.firestore.FieldValue.increment(1) });
+      res.status(400).json({ success: false, error: "인증번호가 일치하지 않습니다." });
+      return;
+    }
+
+    await docRef.update({ verified: true, verifiedAt: admin.firestore.FieldValue.serverTimestamp() });
+    res.status(200).json({ success: true });
+  } catch (e) {
+    console.error("[verifyPhoneVerificationCode]", e && e.message ? e.message : e);
+    res.status(500).json({ success: false, error: "인증번호 확인 중 오류가 발생했습니다." });
+  }
+});
+
+/**
  * Strava 인증 코드를 액세스/리프레시 토큰으로 교환하고 users/{userId}에 저장.
  * Client Secret은 서버(Secret Manager)에서만 사용. appConfig/strava에서 client_id, redirect_uri 읽음.
  * onRequest로 변경하여 CORS 수동 처리

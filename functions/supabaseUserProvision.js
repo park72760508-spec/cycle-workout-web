@@ -176,6 +176,8 @@ function mapFirestoreUserToRow(firebaseUid, d, uidConfig) {
     display_name: str(d.displayName) ?? str(d.display_name),
     contact: str(d.contact) ?? str(d.phone) ?? str(d.phoneNumber) ?? str(d.tel),
     phone: str(d.phone) ?? str(d.phoneNumber) ?? str(d.tel),
+    // 신규 가입(문자인증 적용) 시에만 true로 기록됨 — 그 이전 가입자는 필드 자체가 없어 false.
+    phone_verified: Boolean(d.phone_verified),
     email: str(d.email),
     ftp: num(d.ftp) ?? 0,
     ftp_updated_at: toTimestamptz(d.ftp_updated_at),
@@ -243,7 +245,9 @@ async function ensureSupabaseAuthUser(supabase, admin, firebaseUid, supabaseId, 
     password: randomPassword,
     email_confirm: true,
     phone,
-    phone_confirm: phone ? true : undefined,
+    // 문자인증(신규 가입)을 실제로 통과한 경우에만 확인됨으로 표시 — 그 이전엔 전화번호가
+    // 있다는 이유만으로 무조건 true로 채웠으나, 문자인증 도입 후에는 실제 검증 여부를 반영한다.
+    phone_confirm: phone && firestore?.phone_verified === true ? true : undefined,
     user_metadata: {
       firebase_uid: firebaseUid,
       display_name: displayName,
