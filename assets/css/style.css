@@ -31223,6 +31223,28 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   font-weight: 700;
 }
 .market-return-cancelled-text { color: #dc2626; font-weight: 700; }
+/* 반품 진행 6단계 스텝바 — 안전거래 6단계와 동일한 done/active 스타일을 재사용하되,
+   서로 다른 흐름임을 구분할 수 있도록 오렌지 톤과 동일한 밝기 단계(50/300/600/700)의
+   파란색으로 배색만 바꾼다(marketReturnStepsHtml, .market-deal-steps--return). */
+.market-deal-steps--return .market-deal-step--done:not(:first-child)::before,
+.market-deal-steps--return .market-deal-step--active:not(:first-child)::before {
+  background: #93c5fd;
+}
+.market-deal-steps--return .market-deal-step--done .market-deal-step__icon-wrap {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+.market-deal-steps--return .market-deal-step--active .market-deal-step__icon-wrap {
+  animation: marketReturnStepPulse 1.6s ease-in-out infinite;
+}
+@keyframes marketReturnStepPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.25); }
+  50% { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12); }
+}
+.market-deal-steps--return .market-deal-step--done .market-deal-step__label,
+.market-deal-steps--return .market-deal-step--active .market-deal-step__label {
+  color: #1d4ed8;
+}
 /* 반품 진행 상태의 자동 반품완료/환불 카운트다운 — 라벨 텍스트가 길어 좁은 화면에서
    줄바꿈되지 않도록 한 줄로 고정하고, 필요 시 가로 스크롤로만 흡수한다. */
 .market-due-line {

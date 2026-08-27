@@ -403,6 +403,12 @@
     '<circle cx="17" cy="17" r="16" fill="none" stroke="#ea580c" stroke-width="2" stroke-dasharray="2.51 2.51"></circle>' +
     '</svg>';
 
+  /** 반품 진행 스텝바 전용 — 위 오렌지 링과 동일한 형태에 색상만 파란 톤(#2563eb)으로 적용. */
+  var MARKET_RETURN_STEP_ACTIVE_RING_SVG =
+    '<svg class="market-deal-step__active-ring" viewBox="0 0 34 34" aria-hidden="true">' +
+    '<circle cx="17" cy="17" r="16" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="2.51 2.51"></circle>' +
+    '</svg>';
+
   function marketDealStepsHtml(order) {
     var states = marketDealStepStates(order);
     return '<div class="market-deal-steps">' +
@@ -452,12 +458,12 @@
 
   function marketReturnStepsHtml(order) {
     var states = marketReturnStepStates(order);
-    return '<div class="market-deal-steps">' +
+    return '<div class="market-deal-steps market-deal-steps--return">' +
       MARKET_RETURN_STEPS.map(function (step, i) {
         var state = states[i];
         return '<div class="market-deal-step market-deal-step--' + state + '">' +
           '<div class="market-deal-step__icon-wrap">' +
-            (state === 'active' ? MARKET_DEAL_STEP_ACTIVE_RING_SVG : '') +
+            (state === 'active' ? MARKET_RETURN_STEP_ACTIVE_RING_SVG : '') +
             '<img class="market-deal-step__icon" src="assets/img/' + step.icon + '.svg" alt="" />' +
           '</div>' +
           '<span class="market-deal-step__label">' + step.label + '</span>' +
