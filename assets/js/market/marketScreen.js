@@ -1538,10 +1538,15 @@
     }
 
     // 판매자 전용 "거래내역" — 예약(RESERVED/PENDING) 시점부터 구매자 연락처를 노출하되,
-    // 본인(판매자) 연락처는 표시하지 않는다.
+    // 본인(판매자) 연락처는 표시하지 않는다. 취소(CANCELLED)·환불(REFUNDED, 조기환불·반품환불
+    // 모두 포함)로 끝난 거래는 더 이상 진행 중이 아니므로 거래/반품 진행 상태를 표시하지 않고
+    // 초기 판매 등록 상태처럼 보이게 한다.
     var orderRowsHtml = '';
-    if (isMine && detailState.orderHistory && detailState.orderHistory.length) {
-      orderRowsHtml = detailState.orderHistory.map(function (o) {
+    var activeOrderHistory = (detailState.orderHistory || []).filter(function (o) {
+      return o.escrow_status !== 'CANCELLED' && o.escrow_status !== 'REFUNDED';
+    });
+    if (isMine && activeOrderHistory.length) {
+      orderRowsHtml = activeOrderHistory.map(function (o) {
         var bp = o.buyerProfile;
         var bName = marketSellerDisplayName(bp);
         var bAvatar = (bp && bp.profile_image_url) || 'assets/img/profile-placeholder.svg';
@@ -1576,8 +1581,11 @@
 
     // 구매자 전용 "거래내역" — 안전결제로 구매하기 클릭 후, 이후 화면을 나갔다 돌아와도
     // 6단계 진행 스텝바·판매자 연락처(전화·문자 바로가기)를 계속 확인할 수 있게 한다.
+    // 단, 거래가 취소(CANCELLED)되었거나 환불(REFUNDED, 조기환불·반품환불 모두 포함)로
+    // 끝난 경우엔 더 이상 진행 중인 거래가 아니므로 기록을 표시하지 않고 초기 판매 등록
+    // 상태처럼 보이게 한다(상단 액션 버튼은 이미 item.status 기준으로 "구매하기"로 복귀함).
     var buyerOrderHistoryHtml = '';
-    if (!isMine && myOrder) {
+    if (!isMine && myOrder && myOrder.escrow_status !== 'CANCELLED' && myOrder.escrow_status !== 'REFUNDED') {
       var sp = detailState.sellerProfile;
       var sellerName = marketSellerDisplayName(sp);
       var sellerAvatar = (sp && sp.profile_image_url) || 'assets/img/profile-placeholder.svg';
