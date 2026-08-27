@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260906market16';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260827marketReturnFlow1';
   var svc = null;
 
   function loadMarketService() {
@@ -399,6 +399,182 @@
         '</div>';
       }).join('') +
     '</div>';
+  }
+
+  /** 반품 진행 6단계 — return_status(REQUESTED→ADDRESS_SET→…→COMPLETED)가 안전거래
+   * escrow_status와 완전히 독립적으로 진행되므로, 위의 거래 6단계와 별개의 스텝바로 표시한다.
+   * 이의제기(DISPUTED)는 별도 아이콘 없이 "반품완료" 단계가 보류(active)된 상태로 취급한다. */
+  var MARKET_RETURN_STEPS = [
+    { icon: 'return', label: '반품신청' },
+    { icon: 'address', label: '반품주소' },
+    { icon: 'delivery1', label: '택배접수' },
+    { icon: 'delivery2', label: '배송중' },
+    { icon: 'delivery3', label: '배송완료' },
+    { icon: 'delivery4', label: '반품완료' },
+  ];
+
+  function marketReturnStepStates(order) {
+    var rs = order.return_status;
+    var requestedDone = !!rs;
+    var addressDone = rs === 'ADDRESS_SET' || rs === 'DELIVERED' || rs === 'DISPUTED' || rs === 'COMPLETED';
+    var shippedDone = !!order.return_tracking_number;
+    var deliveredDone = rs === 'DELIVERED' || rs === 'DISPUTED' || rs === 'COMPLETED';
+    var completedDone = rs === 'COMPLETED';
+
+    var requestedState = requestedDone ? 'done' : 'pending';
+    var addressState = !requestedDone ? 'pending' : addressDone ? 'done' : 'active';
+    var shippedState = !addressDone ? 'pending' : shippedDone ? 'done' : 'active';
+    var transitState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'active';
+    var deliveredState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'pending';
+    var completedState = !deliveredDone ? 'pending' : completedDone ? 'done' : 'active';
+
+    return [requestedState, addressState, shippedState, transitState, deliveredState, completedState];
+  }
+
+  function marketReturnStepsHtml(order) {
+    var states = marketReturnStepStates(order);
+    return '<div class="market-deal-steps">' +
+      MARKET_RETURN_STEPS.map(function (step, i) {
+        var state = states[i];
+        return '<div class="market-deal-step market-deal-step--' + state + '">' +
+          '<div class="market-deal-step__icon-wrap">' +
+            (state === 'active' ? MARKET_DEAL_STEP_ACTIVE_RING_SVG : '') +
+            '<img class="market-deal-step__icon" src="assets/img/' + step.icon + '.svg" alt="" />' +
+          '</div>' +
+          '<span class="market-deal-step__label">' + step.label + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  /** 구매자 또는 판매자 — 이의제기(DISPUTED) 상태에서 "합의완료" 인라인 버튼/대기 상태 표시.
+   * 본인이 이미 합의했다면 비활성 버튼으로 상대방 확인 대기 중임을 알린다. */
+  function marketReturnAgreeHtml(o, isBuyer) {
+    var agreed = isBuyer ? o.return_dispute_agreed_by_buyer : o.return_dispute_agreed_by_seller;
+    if (agreed) {
+      return '<button type="button" class="market-btn market-btn--disabled" disabled>합의완료(상대방 확인 대기 중)</button>';
+    }
+    return '<button type="button" class="market-btn market-btn--primary market-return-agree-btn" data-order-id="' + o.id + '">합의완료</button>';
+  }
+
+  /** 구매자가 반품 택배사/송장번호를 입력하는 폼 — marketDeliveryFormHtml과 동일 구조를
+   * return_* 컬럼·전용 클래스로 재사용한다(제출 시 market-set-return-tracking 호출). */
+  function marketReturnDeliveryFormHtml(o, isEdit) {
+    var selectedCourier = isEdit ? o.return_courier_code : '';
+    return '<div class="market-delivery-form market-return-delivery-form' + (isEdit ? ' is-hidden' : '') + '" data-order-id="' + o.id + '">' +
+      '<select class="market-form-select market-return-delivery-courier-select">' +
+        MARKET_COURIER_OPTIONS.map(function (c) {
+          return '<option value="' + c.code + '"' + (c.code === selectedCourier ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
+        }).join('') +
+      '</select>' +
+      '<input type="text" class="market-form-input market-return-delivery-tracking-input" placeholder="반품 송장번호" value="' + escapeHtml(isEdit ? o.return_tracking_number : '') + '" />' +
+      '<div class="market-delivery-form__actions">' +
+        '<button type="button" class="market-btn market-btn--outline market-return-delivery-submit-btn" data-order-id="' + o.id + '">' + (isEdit ? '수정 완료' : '반품 송장번호 등록') + '</button>' +
+        (isEdit ? '<button type="button" class="market-btn market-btn--outline market-return-delivery-edit-cancel-btn" data-order-id="' + o.id + '">취소</button>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function marketReturnTrackingInfoLineHtml(o) {
+    return '<span class="market-delivery-info__label">반품 송장정보 : </span>' +
+      '<span class="market-delivery-info__value">' +
+        escapeHtml(o.return_courier_name || o.return_courier_code || '') + ' / ' + escapeHtml(o.return_tracking_number) +
+      '</span>';
+  }
+
+  /** 판매자가 "반품 확인" 클릭 후 반품받을 주소를 입력하는 폼 — 대회 참가신청의 Daum
+   * 우편번호 embed 로직(openDaumPostcode)을 그대로 재사용한다. */
+  function marketReturnAddressFormHtml(o) {
+    return '<div class="market-return-address" data-order-id="' + o.id + '">' +
+      '<button type="button" class="market-btn market-btn--outline market-return-confirm-btn" data-order-id="' + o.id + '">반품 확인</button>' +
+      '<div class="market-return-address-form is-hidden" data-order-id="' + o.id + '">' +
+        '<div class="market-address-search-row">' +
+          '<input type="text" class="market-form-input market-return-zip" placeholder="우편번호" readonly />' +
+          '<button type="button" class="market-btn market-btn--outline market-return-zip-search-btn" data-order-id="' + o.id + '">주소 검색</button>' +
+        '</div>' +
+        '<input type="text" class="market-form-input market-return-address1" placeholder="주소" readonly />' +
+        '<input type="text" class="market-form-input market-return-address2" placeholder="상세주소" />' +
+        '<button type="button" class="market-btn market-btn--primary market-return-address-submit-btn" data-order-id="' + o.id + '">주소 등록</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /** 판매자 화면(내 상품 거래내역) — 반품 진행 카드. return_status가 있을 때만 표시된다. */
+  function marketSellerReturnHtml(o) {
+    if (!o.return_status) return '';
+    var body = '';
+    if (o.return_status === 'REQUESTED') {
+      body = marketReturnAddressFormHtml(o);
+    } else if (o.return_status === 'ADDRESS_SET') {
+      body =
+        '<div class="market-delivery-info">반품 받을 주소 : ' +
+          escapeHtml('(' + (o.return_address_zip || '') + ') ' + (o.return_address1 || '') + ' ' + (o.return_address2 || '')) +
+        '</div>' +
+        '<div class="market-delivery-info">구매자의 반품 송장 등록을 기다리는 중입니다.</div>';
+    } else if (o.return_status === 'DELIVERED') {
+      var deadlineIso = o.return_delivered_at ? new Date(new Date(o.return_delivered_at).getTime() + 72 * 3600 * 1000).toISOString() : null;
+      var timerHtml = deadlineIso
+        ? '<div>자동 반품완료까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>'
+        : '';
+      body =
+        '<div class="market-delivery-info">' + marketReturnTrackingInfoLineHtml(o) + timerHtml + '</div>' +
+        '<div class="market-detail-actions">' +
+          '<button type="button" class="market-btn market-btn--primary market-return-complete-btn" data-order-id="' + o.id + '">반품완료</button>' +
+          '<button type="button" class="market-btn market-btn--outline market-return-dispute-btn" data-order-id="' + o.id + '">이의제기</button>' +
+        '</div>';
+    } else if (o.return_status === 'DISPUTED') {
+      body =
+        '<div class="market-delivery-info market-return-dispute-notice">이의제기 중입니다. 구매자와 합의 후 [합의완료]를 눌러주세요.</div>' +
+        marketReturnAgreeHtml(o, false);
+    } else if (o.return_status === 'COMPLETED') {
+      body = '<div class="market-delivery-info market-return-complete-notice">반품이 완료되어 구매자에게 환불되었습니다.</div>';
+    }
+    return '<div class="market-nego-divider"></div>' +
+      '<p class="market-order-history__title--deal-status">반품 진행 상태</p>' +
+      marketReturnStepsHtml(o) +
+      body;
+  }
+
+  /** 구매자 화면(거래 진행 상태) — 반품 진행 카드. return_status가 있을 때만 표시된다. */
+  function marketBuyerReturnHtml(o) {
+    if (!o.return_status) return '';
+    var body = '';
+    if (o.return_status === 'REQUESTED') {
+      body = '<div class="market-delivery-info">판매자가 반품 받으실 주소를 등록하면 반품 송장을 입력할 수 있습니다.</div>';
+    } else if (o.return_status === 'ADDRESS_SET' || o.return_status === 'DELIVERED') {
+      var addrHtml = '<div class="market-delivery-info">반품 받을 주소 : ' +
+        escapeHtml('(' + (o.return_address_zip || '') + ') ' + (o.return_address1 || '') + ' ' + (o.return_address2 || '')) +
+      '</div>';
+      var trackingHtml;
+      if (o.return_tracking_number) {
+        trackingHtml =
+          '<div class="market-delivery-info" data-order-id="' + o.id + '">' +
+            '<div class="market-delivery-info__row">' +
+              '<span class="market-delivery-info__text">' + marketReturnTrackingInfoLineHtml(o) + '</span>' +
+              '<button type="button" class="market-deal-contact-btn market-return-delivery-edit-btn" data-order-id="' + o.id + '" aria-label="반품 송장정보 수정">' + MARKET_EDIT_ICON_SVG + '</button>' +
+            '</div>' +
+          '</div>' +
+          marketReturnDeliveryFormHtml(o, true);
+      } else {
+        trackingHtml = marketReturnDeliveryFormHtml(o, false);
+      }
+      var timerHtml = '';
+      if (o.return_status === 'DELIVERED' && o.return_delivered_at) {
+        var deadlineIso2 = new Date(new Date(o.return_delivered_at).getTime() + 72 * 3600 * 1000).toISOString();
+        timerHtml = '<div>판매자 확인 대기(자동 환불까지) : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso2) + '">' + escapeHtml(marketFormatRemaining(deadlineIso2)) + '</span></div>';
+      }
+      body = addrHtml + trackingHtml + timerHtml;
+    } else if (o.return_status === 'DISPUTED') {
+      body =
+        '<div class="market-delivery-info market-return-dispute-notice">판매자가 이의제기하여 대금 지급이 보류되었습니다. 합의가 완료되면 환불됩니다.</div>' +
+        marketReturnAgreeHtml(o, true);
+    } else if (o.return_status === 'COMPLETED') {
+      body = '<div class="market-delivery-info market-return-complete-notice">반품이 완료되어 환불되었습니다.</div>';
+    }
+    return '<div class="market-nego-divider"></div>' +
+      '<p class="market-order-history__title--deal-status">반품 진행 상태</p>' +
+      marketReturnStepsHtml(o) +
+      body;
   }
 
   /** 상대방(구매자/판매자) 정보 + 전화·문자 바로가기 카드 — 연락처가 아직 공개되지 않은
@@ -1099,6 +1275,28 @@
           '<button type="button" class="market-btn market-btn--outline" id="marketDetailEditBtn">수정</button>' +
           '<button type="button" class="market-btn market-btn--danger" id="marketDetailDeleteBtn">삭제</button>' +
         '</div>';
+    } else if (myOrder && myOrder.escrow_status === 'PAID' && (myOrder.return_status === 'DISPUTED' || myOrder.return_status === 'COMPLETED')) {
+      // 이의제기 중엔 인라인 [합의완료] 버튼(marketBuyerReturnHtml)이, 반품완료 후엔 별도 액션이 필요 없다.
+      actionHtml = '';
+    } else if (myOrder && myOrder.escrow_status === 'PAID' && myOrder.return_status === 'REQUESTED') {
+      actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>판매자의 반품 주소 등록을 기다리는 중입니다</button>';
+    } else if (myOrder && myOrder.escrow_status === 'PAID' && myOrder.return_status === 'ADDRESS_SET') {
+      actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>반품 송장번호를 등록해 주세요</button>';
+    } else if (myOrder && myOrder.escrow_status === 'PAID' && myOrder.return_status === 'DELIVERED') {
+      actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>판매자의 반품 확인을 기다리는 중입니다</button>';
+    } else if (myOrder && myOrder.escrow_status === 'PAID' && myOrder.delivery_status === 'DELIVERED') {
+      actionHtml =
+        '<div class="market-detail-actions">' +
+          '<button type="button" class="market-btn market-btn--primary" id="marketDetailConfirmBtn">구매 확정</button>' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketDetailReturnToggleBtn">반품 신청</button>' +
+        '</div>' +
+        '<div id="marketReturnRequestForm" class="market-refund-form" style="display:none;">' +
+          '<p class="market-form-hint">환불 받으실 계좌 정보를 입력해 주세요. 반품 상품이 판매자에게 배송완료되면 환불됩니다.</p>' +
+          '<select id="marketReturnBank" class="market-form-select"></select>' +
+          '<input id="marketReturnAccountNumber" class="market-form-input" inputmode="numeric" placeholder="환불 계좌번호(숫자만)" />' +
+          '<input id="marketReturnHolderName" class="market-form-input" placeholder="예금주명(본인)" />' +
+          '<button type="button" class="market-btn market-btn--danger" id="marketReturnRequestSubmitBtn">반품 신청</button>' +
+        '</div>';
     } else if (myOrder && myOrder.escrow_status === 'PAID') {
       actionHtml =
         '<div class="market-detail-actions">' +
@@ -1250,7 +1448,8 @@
           counterpartHtml +
           negoHtml +
           marketDealAmountStatusHtml(sellerAmountLabelText, sellerAmountValueText, o.escrow_status, o.va_due_at) +
-          marketSellerDeliveryHtml(o);
+          marketSellerDeliveryHtml(o) +
+          marketSellerReturnHtml(o);
       }).join('');
     }
 
@@ -1285,6 +1484,7 @@
           marketDealAmountStatusHtml(buyerAmountLabelText, buyerAmountValueText, myOrder.escrow_status, myOrder.va_due_at) +
           vaLineHtml +
           marketBuyerDeliveryHtml(myOrder) +
+          marketBuyerReturnHtml(myOrder) +
         '</div>';
     }
 
@@ -1346,6 +1546,70 @@
     }
     var refundSubmitBtn = document.getElementById('marketRefundSubmitBtn');
     if (refundSubmitBtn) refundSubmitBtn.onclick = function () { handleMarketRefundSubmit(item.id, myOrder.id, refundSubmitBtn); };
+    var returnToggleBtn = document.getElementById('marketDetailReturnToggleBtn');
+    if (returnToggleBtn) {
+      returnToggleBtn.onclick = function () {
+        var form = document.getElementById('marketReturnRequestForm');
+        if (!form) return;
+        var showing = form.style.display !== 'none';
+        form.style.display = showing ? 'none' : 'block';
+        if (!showing) renderMarketFormBankOptionsInto('marketReturnBank');
+      };
+    }
+    var returnSubmitBtn = document.getElementById('marketReturnRequestSubmitBtn');
+    if (returnSubmitBtn) returnSubmitBtn.onclick = function () { handleMarketReturnRequestSubmit(item.id, myOrder.id, returnSubmitBtn); };
+    Array.prototype.forEach.call(document.querySelectorAll('.market-return-confirm-btn'), function (btn) {
+      btn.onclick = function () {
+        var orderId = btn.getAttribute('data-order-id');
+        var form = document.querySelector('.market-return-address-form[data-order-id="' + orderId + '"]');
+        if (form) form.classList.remove('is-hidden');
+        btn.style.display = 'none';
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-return-zip-search-btn'), function (btn) {
+      btn.onclick = function () {
+        var orderId = btn.getAttribute('data-order-id');
+        var wrap = document.querySelector('.market-return-address[data-order-id="' + orderId + '"]');
+        if (!wrap) return;
+        openDaumPostcode(function (result) {
+          var zipEl = wrap.querySelector('.market-return-zip');
+          var addr1El = wrap.querySelector('.market-return-address1');
+          var addr2El = wrap.querySelector('.market-return-address2');
+          if (zipEl) zipEl.value = result.zonecode;
+          if (addr1El) addr1El.value = result.address;
+          if (addr2El) addr2El.focus();
+        });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-return-address-submit-btn'), function (btn) {
+      btn.onclick = function () { handleMarketSetReturnAddress(item.id, btn); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-return-delivery-submit-btn'), function (btn) {
+      btn.onclick = function () { handleMarketSetReturnTracking(item.id, btn); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-return-delivery-edit-btn'), function (btn) {
+      btn.onclick = function () {
+        var orderId = btn.getAttribute('data-order-id');
+        var form = document.querySelector('.market-return-delivery-form[data-order-id="' + orderId + '"]');
+        if (form) form.classList.remove('is-hidden');
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-return-delivery-edit-cancel-btn'), function (btn) {
+      btn.onclick = function () {
+        var orderId = btn.getAttribute('data-order-id');
+        var form = document.querySelector('.market-return-delivery-form[data-order-id="' + orderId + '"]');
+        if (form) form.classList.add('is-hidden');
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-return-complete-btn'), function (btn) {
+      btn.onclick = function () { handleMarketReturnComplete(item.id, btn); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-return-dispute-btn'), function (btn) {
+      btn.onclick = function () { handleMarketReturnDispute(item.id, btn); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-return-agree-btn'), function (btn) {
+      btn.onclick = function () { handleMarketReturnAgree(item.id, btn.getAttribute('data-order-id'), btn); };
+    });
     var bumpBtn = document.getElementById('marketDetailBumpBtn');
     if (bumpBtn) bumpBtn.onclick = function () { handleBump(item.id, bumpBtn); };
     var editBtn = document.getElementById('marketDetailEditBtn');
@@ -1717,6 +1981,213 @@
       btn.disabled = false;
       btn.textContent = '택배사/송장번호 등록';
     }
+  }
+
+  /** 반품 신청 시 환불 계좌 정보 입력 폼 — handleMarketRefundSubmit과 동일한 검증 로직. */
+  function handleMarketReturnRequestSubmit(itemId, orderId, submitBtn) {
+    var bankEl = document.getElementById('marketReturnBank');
+    var accNumEl = document.getElementById('marketReturnAccountNumber');
+    var holderEl = document.getElementById('marketReturnHolderName');
+    var bank = bankEl ? bankEl.value : '';
+    var accountNumber = (accNumEl ? accNumEl.value : '').replace(/[^0-9]/g, '');
+    var holderName = (holderEl ? holderEl.value : '').trim();
+    if (!accountNumber || !/^[0-9]{6,20}$/.test(accountNumber)) {
+      toast('환불 계좌번호를 정확히 입력해 주세요(숫자만).');
+      return;
+    }
+    if (!holderName || holderName.length < 2) {
+      toast('예금주명을 입력해 주세요.');
+      return;
+    }
+    showMarketConfirmPopup(
+      '반품을 신청할까요? 신청 후 판매자가 반품 받을 주소를 등록하면 반품 택배를 발송할 수 있습니다.',
+      function () { doMarketReturnRequestSubmit(itemId, orderId, submitBtn, bank, accountNumber, holderName); },
+      { okText: '반품 신청' }
+    );
+  }
+
+  async function doMarketReturnRequestSubmit(itemId, orderId, submitBtn, bank, accountNumber, holderName) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '신청 중...';
+    try {
+      var s = await loadMarketService();
+      await s.requestMarketReturn(orderId, { bank: bank, accountNumber: accountNumber, holderName: holderName });
+      toast('반품을 신청했습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('반품 신청 실패: ' + (err && err.message ? err.message : err));
+      submitBtn.disabled = false;
+      submitBtn.textContent = '반품 신청';
+    }
+  }
+
+  async function handleMarketSetReturnAddress(itemId, btn) {
+    var orderId = btn.getAttribute('data-order-id');
+    var wrap = document.querySelector('.market-return-address[data-order-id="' + orderId + '"]');
+    if (!wrap) return;
+    var zipEl = wrap.querySelector('.market-return-zip');
+    var addr1El = wrap.querySelector('.market-return-address1');
+    var addr2El = wrap.querySelector('.market-return-address2');
+    var zipCode = zipEl ? zipEl.value.trim() : '';
+    var address1 = addr1El ? addr1El.value.trim() : '';
+    var address2 = addr2El ? addr2El.value.trim() : '';
+    if (!zipCode || !address1) { toast('주소 검색으로 주소를 입력해 주세요.'); return; }
+    if (!address2) { toast('상세주소를 입력해 주세요.'); return; }
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+    try {
+      var s = await loadMarketService();
+      await s.setMarketReturnAddress(orderId, zipCode, address1, address2);
+      toast('반품 받을 주소를 등록했습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('주소 등록 실패: ' + (err && err.message ? err.message : err));
+      btn.disabled = false;
+      btn.textContent = '주소 등록';
+    }
+  }
+
+  async function handleMarketSetReturnTracking(itemId, btn) {
+    var orderId = btn.getAttribute('data-order-id');
+    var form = document.querySelector('.market-return-delivery-form[data-order-id="' + orderId + '"]');
+    if (!form) return;
+    var courierSelect = form.querySelector('.market-return-delivery-courier-select');
+    var trackingInput = form.querySelector('.market-return-delivery-tracking-input');
+    var courierCode = courierSelect ? courierSelect.value : '';
+    var trackingNumber = (trackingInput ? trackingInput.value : '').trim();
+    if (!trackingNumber) { toast('반품 송장번호를 입력해 주세요.'); return; }
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+    try {
+      var s = await loadMarketService();
+      await s.setMarketReturnTracking(orderId, courierCode, trackingNumber);
+      toast('반품 택배사·송장번호를 등록했습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('등록 실패: ' + (err && err.message ? err.message : err));
+      btn.disabled = false;
+      btn.textContent = '반품 송장번호 등록';
+    }
+  }
+
+  function handleMarketReturnComplete(itemId, btn) {
+    var orderId = btn.getAttribute('data-order-id');
+    showMarketConfirmPopup(
+      '반품을 완료 처리할까요? 즉시 구매자에게 환불됩니다.',
+      function () { doMarketReturnComplete(itemId, orderId, btn); },
+      { okText: '반품완료' }
+    );
+  }
+
+  async function doMarketReturnComplete(itemId, orderId, btn) {
+    btn.disabled = true;
+    btn.textContent = '처리 중...';
+    try {
+      var s = await loadMarketService();
+      await s.completeMarketReturn(orderId);
+      toast('반품이 완료되어 환불되었습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('반품완료 처리 실패: ' + (err && err.message ? err.message : err));
+      btn.disabled = false;
+      btn.textContent = '반품완료';
+    }
+  }
+
+  function handleMarketReturnDispute(itemId, btn) {
+    var orderId = btn.getAttribute('data-order-id');
+    showMarketConfirmPopup(
+      '이의제기할까요? 대금 지급이 보류되며, 구매자와 합의 후 [합의완료]를 눌러야 환불됩니다.',
+      function () { doMarketReturnDispute(itemId, orderId, btn); },
+      { okText: '이의제기' }
+    );
+  }
+
+  async function doMarketReturnDispute(itemId, orderId, btn) {
+    btn.disabled = true;
+    try {
+      var s = await loadMarketService();
+      await s.disputeMarketReturn(orderId);
+      toast('이의제기가 접수되었습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('이의제기 실패: ' + (err && err.message ? err.message : err));
+      btn.disabled = false;
+    }
+  }
+
+  async function handleMarketReturnAgree(itemId, orderId, btn) {
+    btn.disabled = true;
+    btn.textContent = '처리 중...';
+    try {
+      var s = await loadMarketService();
+      var result = await s.agreeMarketReturnDispute(orderId);
+      toast(result && result.finalized ? '합의가 완료되어 환불되었습니다.' : '합의 처리되었습니다. 상대방 확인을 기다립니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('처리 실패: ' + (err && err.message ? err.message : err));
+      btn.disabled = false;
+      btn.textContent = '합의완료';
+    }
+  }
+
+  /**
+   * 반품받을 주소 검색 — 대회 참가신청(competitionApplicationForm.js의 openDaumPostcode)과
+   * 동일한 로직: .embed()로 오버레이 안에 iframe 렌더링해 iOS Safari 팝업 차단을 피한다.
+   * CSS는 index.html에 이미 전역으로 정의된 .competition-postcode-* 클래스를 그대로 재사용한다.
+   */
+  function openDaumPostcode(onComplete) {
+    function launch() {
+      var overlay = document.createElement('div');
+      overlay.className = 'competition-postcode-overlay';
+      overlay.innerHTML =
+        '<div class="competition-postcode-modal">' +
+        '  <div class="competition-postcode-header">' +
+        '    <span>주소 검색</span>' +
+        '    <button type="button" class="competition-postcode-close" aria-label="닫기">&times;</button>' +
+        '  </div>' +
+        '  <div class="competition-postcode-embed"></div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+
+      var removed = false;
+      var remove = function () {
+        if (removed) return;
+        removed = true;
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      };
+      overlay.querySelector('.competition-postcode-close').addEventListener('click', remove);
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) remove();
+      });
+
+      new window.daum.Postcode({
+        oncomplete: function (data) {
+          var addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress;
+          var extra = '';
+          if (data.userSelectedType === 'R') {
+            if (data.bname) extra += data.bname;
+            if (data.buildingName) extra += extra ? ', ' + data.buildingName : data.buildingName;
+            if (extra) addr += ' (' + extra + ')';
+          }
+          remove();
+          onComplete({ zonecode: data.zonecode, address: addr });
+        },
+        width: '100%',
+        height: '100%',
+      }).embed(overlay.querySelector('.competition-postcode-embed'));
+    }
+    if (window.daum && window.daum.Postcode) {
+      launch();
+      return;
+    }
+    var script = document.createElement('script');
+    script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+    script.onload = launch;
+    script.onerror = function () {
+      alert('우편번호 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    };
+    document.body.appendChild(script);
   }
 
   window.marketItemDetailScreenInit = function () {

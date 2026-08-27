@@ -7,7 +7,8 @@
 // 수신), 정상적인 경우 이 함수가 할 일은 거의 없다. 이 함수는 웹훅 전송 실패·엔드포인트 일시
 // 비활성화·14일 구독 만료 같은 드문 예외만 잡아내는 안전망이며, 여러 건을 POST
 // /v1/tracking/trace 배치 조회 한 번(최대 50건씩, clientId로 주문과 매칭)으로 묶어 조회해
-// API 호출 자체를 최소화한다.
+// API 호출 자체를 최소화한다. 원 배송(forward)과 반품 배송(return_*)을 각각 별도 배치로
+// 폴링한다(반품 배송완료 시 return_status도 함께 DELIVERED로 전환).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -59,46 +60,71 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: "배송 조회 API 키를 찾을 수 없습니다." }, 500);
   }
 
-  const { data: orders, error } = await admin
+  type Cols = { id: string; courierCode: string; trackingNumber: string; status: string };
+
+  async function pollGroup(
+    orders: Cols[],
+    fields: { courier: string; tracking: string; status: string; statusText: string; checkedAt: string; deliveredAt: string; returnStatus?: string }
+  ) {
+    let checked = 0;
+    let delivered = 0;
+    for (let i = 0; i < orders.length; i += BATCH_SIZE) {
+      const chunk = orders.slice(i, i + BATCH_SIZE);
+      try {
+        const results = await batchTrace(
+          apiKey as string,
+          chunk.map((o) => ({ courierCode: o.courierCode, trackingNumber: o.trackingNumber, clientId: o.id }))
+        );
+        for (const result of results) {
+          const match = chunk.find((o) => o.id === result.clientId);
+          if (!match || !result.success || !result.data) continue;
+          const trace = statusFromTraceData(result.data as Record<string, unknown>);
+          const nowIso = new Date().toISOString();
+          const update: Record<string, unknown> = {
+            [fields.status]: trace.status,
+            [fields.statusText]: trace.statusText,
+            [fields.checkedAt]: nowIso,
+          };
+          if (trace.isDelivered && match.status !== "DELIVERED") {
+            update[fields.deliveredAt] = nowIso;
+            if (fields.returnStatus) update[fields.returnStatus] = "DELIVERED";
+            delivered += 1;
+          }
+          await admin.from("market_orders").update(update).eq("id", match.id);
+          checked += 1;
+        }
+      } catch (e) {
+        console.warn("[market-check-delivery-status] 배치 조회 실패:", (e as Error).message);
+      }
+    }
+    return { checked, delivered };
+  }
+
+  const { data: forwardOrders } = await admin
     .from("market_orders")
     .select("id, courier_code, tracking_number, delivery_status")
     .not("tracking_number", "is", null)
     .neq("delivery_status", "DELIVERED")
     .limit(200);
-  if (error || !orders?.length) {
-    return jsonResponse({ success: true, checked: 0, delivered: 0 });
-  }
+  const { data: returnOrders } = await admin
+    .from("market_orders")
+    .select("id, return_courier_code, return_tracking_number, return_delivery_status")
+    .not("return_tracking_number", "is", null)
+    .neq("return_delivery_status", "DELIVERED")
+    .limit(200);
 
-  let checked = 0;
-  let delivered = 0;
-  for (let i = 0; i < orders.length; i += BATCH_SIZE) {
-    const chunk = orders.slice(i, i + BATCH_SIZE);
-    try {
-      const results = await batchTrace(
-        apiKey as string,
-        chunk.map((o) => ({ courierCode: o.courier_code, trackingNumber: o.tracking_number, clientId: o.id }))
-      );
-      for (const result of results) {
-        const match = chunk.find((o) => o.id === result.clientId);
-        if (!match || !result.success || !result.data) continue;
-        const trace = statusFromTraceData(result.data as Record<string, unknown>);
-        const nowIso = new Date().toISOString();
-        const update: Record<string, unknown> = {
-          delivery_status: trace.status,
-          delivery_status_text: trace.statusText,
-          delivery_checked_at: nowIso,
-        };
-        if (trace.isDelivered && match.delivery_status !== "DELIVERED") {
-          update.delivered_at = nowIso;
-          delivered += 1;
-        }
-        await admin.from("market_orders").update(update).eq("id", match.id);
-        checked += 1;
-      }
-    } catch (e) {
-      console.warn("[market-check-delivery-status] 배치 조회 실패:", (e as Error).message);
-    }
-  }
+  const forwardResult = await pollGroup(
+    (forwardOrders || []).map((o) => ({ id: o.id, courierCode: o.courier_code, trackingNumber: o.tracking_number, status: o.delivery_status })),
+    { courier: "courier_code", tracking: "tracking_number", status: "delivery_status", statusText: "delivery_status_text", checkedAt: "delivery_checked_at", deliveredAt: "delivered_at" }
+  );
+  const returnResult = await pollGroup(
+    (returnOrders || []).map((o) => ({ id: o.id, courierCode: o.return_courier_code, trackingNumber: o.return_tracking_number, status: o.return_delivery_status })),
+    { courier: "return_courier_code", tracking: "return_tracking_number", status: "return_delivery_status", statusText: "return_delivery_status_text", checkedAt: "return_delivery_checked_at", deliveredAt: "return_delivered_at", returnStatus: "return_status" }
+  );
 
-  return jsonResponse({ success: true, checked, delivered });
+  return jsonResponse({
+    success: true,
+    checked: forwardResult.checked + returnResult.checked,
+    delivered: forwardResult.delivered + returnResult.delivered,
+  });
 });

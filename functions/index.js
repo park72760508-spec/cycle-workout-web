@@ -18515,6 +18515,301 @@ exports.requestMarketOrderRefund = onRequest(requestMarketOrderRefundOptions, as
 });
 
 /**
+ * 반품 처리 공통 헬퍼 — Toss 결제취소(cancelPayment)로 구매자에게 실제 환불하고 반품을 종료한다.
+ * requestMarketOrderRefund와 동일한 Toss 취소 패턴을 재사용하되, 환불계좌는 반품 신청 시
+ * 받아둔 return_refund_account를 사용한다. completeMarketReturn(판매자 수동), 합의완료
+ * (양측 합의), 72시간 자동완료(cron) 세 경로 모두 이 헬퍼로 귀결된다.
+ */
+async function finalizeMarketReturn(supabase, order) {
+  const account = order.return_refund_account || {};
+  const bank = String(account.bank || "").trim();
+  const accountNumber = String(account.accountNumber || "").trim();
+  const holderName = String(account.holderName || "").trim();
+  if (!bank || !accountNumber || !holderName) {
+    const err = new Error("환불 계좌 정보가 없어 반품 환불을 처리할 수 없습니다.");
+    err.status = 409;
+    throw err;
+  }
+  if (!order.toss_payment_key) {
+    const err = new Error("결제 정보가 없어 환불할 수 없습니다. 관리자에게 문의해 주세요.");
+    err.status = 409;
+    throw err;
+  }
+
+  const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), order.toss_order_id);
+  if (payment.status !== "DONE") {
+    const err = new Error("Toss 결제 상태가 완료(DONE)가 아니어서 환불할 수 없습니다.");
+    err.status = 409;
+    throw err;
+  }
+
+  const cancelAmount = Number(order.item_price) || 0;
+  await tossPaymentsClient.cancelPayment(
+    raceTossSecretKey(),
+    order.toss_payment_key,
+    {
+      cancelReason: "중고랜드 반품 환불",
+      cancelAmount,
+      refundReceiveAccount: { bank, accountNumber, holderName },
+    },
+    "market-return-refund-" + order.id
+  );
+
+  const nowIso = new Date().toISOString();
+  const { data: updated, error: updErr } = await supabase
+    .from("market_orders")
+    .update({
+      escrow_status: "REFUNDED",
+      return_status: "COMPLETED",
+      return_completed_at: nowIso,
+      settlement_transferred_at: null,
+      updated_at: nowIso,
+    })
+    .eq("id", order.id)
+    .eq("escrow_status", "PAID")
+    .select();
+  if (updErr) throw updErr;
+  if (!updated || !updated.length) {
+    console.error("[finalizeMarketReturn] Toss 취소 성공했지만 DB 상태 갱신 실패(수동 확인 필요):", order.id);
+  }
+
+  await supabase
+    .from("market_items")
+    .update({ status: "ON_SALE", updated_at: nowIso })
+    .eq("id", order.item_id)
+    .eq("status", "RESERVED");
+
+  return cancelAmount;
+}
+
+/**
+ * 판매자 — 반품 배송완료(return_status=DELIVERED) 상태에서 "반품완료" 클릭 시 즉시 환불 처리.
+ */
+const completeMarketReturnOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
+exports.completeMarketReturn = onRequest(completeMarketReturnOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const sellerId = resolveMarketBuyerUuid(decoded.uid);
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const orderId = String(body.orderId || "").trim();
+    if (!orderId) {
+      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
+      return;
+    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+    const { data: order, error: orderErr } = await supabase.from("market_orders").select("*").eq("id", orderId).maybeSingle();
+    if (orderErr || !order) {
+      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
+      return;
+    }
+    if (order.seller_id !== sellerId) {
+      res.status(403).json({ success: false, error: "본인 상품의 주문만 처리할 수 있습니다." });
+      return;
+    }
+    if (order.return_status !== "DELIVERED") {
+      res.status(400).json({ success: false, error: "반품 배송완료 상태의 주문만 반품완료 처리할 수 있습니다." });
+      return;
+    }
+
+    const refundAmount = await finalizeMarketReturn(supabase, order);
+    res.status(200).json({ success: true, refundAmount });
+  } catch (e) {
+    console.error("[completeMarketReturn]", e && e.message ? e.message : e);
+    const status = e.status || 500;
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
+ * 판매자 — 반품 배송완료 상태에서 "이의제기" 클릭 시 대금 지급을 정지하고 양측 합의 대기 상태로 전환.
+ */
+const disputeMarketReturnOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  region: "asia-northeast3",
+  cors: true,
+  timeoutSeconds: 30,
+});
+exports.disputeMarketReturn = onRequest(disputeMarketReturnOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const sellerId = resolveMarketBuyerUuid(decoded.uid);
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const orderId = String(body.orderId || "").trim();
+    if (!orderId) {
+      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
+      return;
+    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+    const { data: order, error: orderErr } = await supabase.from("market_orders").select("*").eq("id", orderId).maybeSingle();
+    if (orderErr || !order) {
+      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
+      return;
+    }
+    if (order.seller_id !== sellerId) {
+      res.status(403).json({ success: false, error: "본인 상품의 주문만 처리할 수 있습니다." });
+      return;
+    }
+    if (order.return_status !== "DELIVERED") {
+      res.status(400).json({ success: false, error: "반품 배송완료 상태의 주문만 이의제기할 수 있습니다." });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data: updated, error: updErr } = await supabase
+      .from("market_orders")
+      .update({
+        return_status: "DISPUTED",
+        return_dispute_requested_at: nowIso,
+        return_dispute_agreed_by_buyer: false,
+        return_dispute_agreed_by_seller: false,
+        updated_at: nowIso,
+      })
+      .eq("id", orderId)
+      .eq("return_status", "DELIVERED")
+      .select()
+      .single();
+    if (updErr) throw updErr;
+    res.status(200).json({ success: true, order: updated });
+  } catch (e) {
+    console.error("[disputeMarketReturn]", e && e.message ? e.message : e);
+    const status = e.status || 500;
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
+ * 구매자 또는 판매자 — 이의제기(DISPUTED) 상태에서 "합의완료" 클릭. 양측 모두 합의하면
+ * 그 즉시 finalizeMarketReturn으로 환불·반품종료 처리한다.
+ */
+const agreeMarketReturnDisputeOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
+exports.agreeMarketReturnDispute = onRequest(agreeMarketReturnDisputeOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const callerId = resolveMarketBuyerUuid(decoded.uid);
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const orderId = String(body.orderId || "").trim();
+    if (!orderId) {
+      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
+      return;
+    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+    const { data: order, error: orderErr } = await supabase.from("market_orders").select("*").eq("id", orderId).maybeSingle();
+    if (orderErr || !order) {
+      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
+      return;
+    }
+    const isBuyer = order.buyer_id === callerId;
+    const isSeller = order.seller_id === callerId;
+    if (!isBuyer && !isSeller) {
+      res.status(403).json({ success: false, error: "본인 거래만 처리할 수 있습니다." });
+      return;
+    }
+    if (order.return_status !== "DISPUTED") {
+      res.status(400).json({ success: false, error: "이의제기 상태의 반품만 합의 처리할 수 있습니다." });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const agreeField = isBuyer ? "return_dispute_agreed_by_buyer" : "return_dispute_agreed_by_seller";
+    const { data: updated, error: updErr } = await supabase
+      .from("market_orders")
+      .update({ [agreeField]: true, updated_at: nowIso })
+      .eq("id", orderId)
+      .eq("return_status", "DISPUTED")
+      .select()
+      .single();
+    if (updErr) throw updErr;
+
+    const bothAgreed = isBuyer ? updated.return_dispute_agreed_by_seller : updated.return_dispute_agreed_by_buyer;
+    if (bothAgreed) {
+      const refundAmount = await finalizeMarketReturn(supabase, updated);
+      res.status(200).json({ success: true, finalized: true, refundAmount });
+      return;
+    }
+    res.status(200).json({ success: true, finalized: false, order: updated });
+  } catch (e) {
+    console.error("[agreeMarketReturnDispute]", e && e.message ? e.message : e);
+    const status = e.status || 500;
+    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
+  }
+});
+
+/**
+ * 반품 배송완료(return_status=DELIVERED) 후 판매자가 72시간 동안 반품완료/이의제기 아무 동작도
+ * 하지 않으면 반품완료로 간주해 자동 환불 처리한다.
+ */
+const autoCompleteReturnedMarketOrdersOptions = appendMarketSecrets({
+  schedule: "every 15 minutes",
+  region: "asia-northeast3",
+});
+exports.autoCompleteReturnedMarketOrdersSchedule = onSchedule(autoCompleteReturnedMarketOrdersOptions, async () => {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return;
+  const cutoffIso = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+  const { data: due, error } = await supabase
+    .from("market_orders")
+    .select("*")
+    .eq("return_status", "DELIVERED")
+    .lte("return_delivered_at", cutoffIso);
+  if (error || !due || !due.length) return;
+  for (const order of due) {
+    /* eslint-disable no-await-in-loop */
+    try {
+      await finalizeMarketReturn(supabase, order);
+    } catch (e) {
+      console.error(
+        "[autoCompleteReturnedMarketOrdersSchedule] 자동 반품완료 실패:",
+        order.id,
+        e && e.message ? e.message : e
+      );
+    }
+    /* eslint-enable no-await-in-loop */
+  }
+  console.log("[autoCompleteReturnedMarketOrdersSchedule] 자동 반품완료 처리:", due.length);
+});
+
+/**
  * 관리자 전용 — 구매확정(CONFIRMED)된 주문의 판매대금을 판매자 등록 계좌로 실제 이체한 뒤 마감 처리한다.
  * (이체 자체는 관리자가 은행 앱/인터넷뱅킹으로 직접 수행 — 이 엔드포인트는 그 사실을 기록만 한다.)
  * GET/POST ?secret=stelvio-internal-sync-v1 또는 관리자(grade=1), body: { orderId }

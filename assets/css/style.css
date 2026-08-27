@@ -31462,3 +31462,21 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-confirm-btn-ok:active,
 .market-confirm-btn-cancel:active { transform: translateY(0); }
 .market-refund-form .market-btn { margin-top: 2px; }
+
+/* 반품 진행 — 판매자 "반품 확인" 클릭 후 주소 입력 폼(Daum 우편번호 embed 재사용)과
+   이의제기/합의완료 상태 문구. 기존 market-delivery-form/market-refund-form 톤과 통일. */
+.market-return-address { margin-top: 8px; }
+.market-return-address-form {
+  margin-top: 8px;
+  padding: 8px 10px 0 10px;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.market-return-address-form.is-hidden { display: none; }
+.market-return-address-form .market-form-input { margin-bottom: 0; }
+.market-address-search-row { display: flex; gap: 8px; }
+.market-address-search-row .market-return-zip { flex: 1; }
+.market-return-dispute-notice { color: #b91c1c; font-weight: 700; }
+.market-return-complete-notice { color: #15803d; font-weight: 700; }

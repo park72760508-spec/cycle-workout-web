@@ -461,6 +461,41 @@ export async function requestMarketOrderRefund(orderId, refundAccount) {
   return callMarketFunction('requestMarketOrderRefund', { orderId, refundAccount }, 'asia-northeast3');
 }
 
+/** 구매자 — 배송완료 상품 반품 신청. 환불 받을 계좌 정보를 함께 등록한다. */
+export async function requestMarketReturn(orderId, refundAccount) {
+  return callMarketEdgeFunction('market-request-return', {
+    orderId,
+    bank: refundAccount.bank,
+    accountNumber: refundAccount.accountNumber,
+    holderName: refundAccount.holderName,
+  });
+}
+
+/** 판매자 — "반품 확인" 클릭 후 반품받을 주소 등록. */
+export async function setMarketReturnAddress(orderId, zipCode, address1, address2) {
+  return callMarketEdgeFunction('market-set-return-address', { orderId, zipCode, address1, address2 });
+}
+
+/** 구매자 — 반품 택배사/송장번호 등록. */
+export async function setMarketReturnTracking(orderId, courierCode, trackingNumber) {
+  return callMarketEdgeFunction('market-set-return-tracking', { orderId, courierCode, trackingNumber });
+}
+
+/** 판매자 — 반품 배송완료 상태에서 "반품완료" 클릭. 즉시 환불 처리됨. */
+export async function completeMarketReturn(orderId) {
+  return callMarketFunction('completeMarketReturn', { orderId }, 'asia-northeast3');
+}
+
+/** 판매자 — 반품 배송완료 상태에서 "이의제기" 클릭. 대금 지급이 정지되고 합의 대기 상태로 전환됨. */
+export async function disputeMarketReturn(orderId) {
+  return callMarketFunction('disputeMarketReturn', { orderId }, 'asia-northeast3');
+}
+
+/** 구매자 또는 판매자 — 이의제기 상태에서 "합의완료" 클릭. 양측 모두 합의하면 즉시 환불됨. */
+export async function agreeMarketReturnDispute(orderId) {
+  return callMarketFunction('agreeMarketReturnDispute', { orderId }, 'asia-northeast3');
+}
+
 export async function getMarketOrderForItem(itemId) {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
@@ -670,6 +705,12 @@ if (typeof window !== 'undefined') {
     confirmMarketPurchase,
     cancelMarketOrder,
     requestMarketOrderRefund,
+    requestMarketReturn,
+    setMarketReturnAddress,
+    setMarketReturnTracking,
+    completeMarketReturn,
+    disputeMarketReturn,
+    agreeMarketReturnDispute,
     getMarketOrderForItem,
     getMarketOrdersForItem,
     incrementMarketItemView,

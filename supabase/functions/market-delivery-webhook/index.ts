@@ -84,23 +84,52 @@ Deno.serve(async (req) => {
   const items = Array.isArray(body.items) ? (body.items as Record<string, unknown>[]) : [];
   let matched = 0;
   for (const item of items) {
-    const clientId = String(item.clientId || "").trim();
+    const rawClientId = String(item.clientId || "").trim();
     const trackingNumber = String(item.trackingNumber || "").trim();
     const courierCode = String(item.courierCode || "").trim();
+    // market-set-return-tracking이 등록 시 clientId를 "{orderId}:return"으로 붙였다 —
+    // 이 접미사로 원 배송 구독인지 반품 배송 구독인지 구분해 컬럼을 다르게 갱신한다.
+    const isReturn = rawClientId.endsWith(":return");
+    const clientId = isReturn ? rawClientId.slice(0, -":return".length) : rawClientId;
 
-    let query = admin.from("market_orders").select("id, delivery_status").neq("delivery_status", "DELIVERED");
-    query = clientId ? query.eq("id", clientId) : query.eq("tracking_number", trackingNumber).eq("courier_code", courierCode);
-    const { data: order } = await query.maybeSingle();
+    let order: { id: string } | null = null;
+    if (clientId) {
+      const { data } = await admin.from("market_orders").select("id").eq("id", clientId).maybeSingle();
+      order = data;
+    } else {
+      const col = isReturn ? "return_tracking_number" : "tracking_number";
+      const courierCol = isReturn ? "return_courier_code" : "courier_code";
+      const { data } = await admin
+        .from("market_orders")
+        .select("id")
+        .eq(col, trackingNumber)
+        .eq(courierCol, courierCode)
+        .maybeSingle();
+      order = data;
+    }
     if (!order) continue;
 
     const trace = statusFromItem(item);
     const nowIso = new Date().toISOString();
-    const update: Record<string, unknown> = {
-      delivery_status: trace.status,
-      delivery_status_text: trace.statusText,
-      delivery_checked_at: nowIso,
-    };
-    if (trace.isDelivered) update.delivered_at = nowIso;
+    const update: Record<string, unknown> = isReturn
+      ? {
+          return_delivery_status: trace.status,
+          return_delivery_status_text: trace.statusText,
+          return_delivery_checked_at: nowIso,
+        }
+      : {
+          delivery_status: trace.status,
+          delivery_status_text: trace.statusText,
+          delivery_checked_at: nowIso,
+        };
+    if (trace.isDelivered) {
+      if (isReturn) {
+        update.return_delivered_at = nowIso;
+        update.return_status = "DELIVERED";
+      } else {
+        update.delivered_at = nowIso;
+      }
+    }
 
     await admin.from("market_orders").update(update).eq("id", order.id);
     matched += 1;
