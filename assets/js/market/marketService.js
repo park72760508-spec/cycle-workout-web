@@ -432,8 +432,16 @@ export async function getMyMarketOrders() {
 
 /** 구매 요청 — 가상계좌(안전결제) 발급. Cloud Function이 Toss 시크릿 키로 발급을 대행한다.
  *  createMarketOrder/confirmMarketPurchase는 다른 대회 결제 함수와 동일하게 asia-northeast3에 배포됨. */
-export async function requestMarketPurchase(itemId) {
-  return callMarketFunction('createMarketOrder', { itemId }, 'asia-northeast3');
+/** 안전결제 구매 — address(zipCode/address1/address2)는 물품을 받으실 배송 주소로, 결제 확인
+ * 팝업(대회 참가신청과 동일한 Daum 우편번호 검색 폼)에서 입력받아 주문 생성 시 함께 저장한다. */
+export async function requestMarketPurchase(itemId, address) {
+  const body = { itemId };
+  if (address) {
+    body.zipCode = address.zipCode;
+    body.address1 = address.address1;
+    body.address2 = address.address2;
+  }
+  return callMarketFunction('createMarketOrder', body, 'asia-northeast3');
 }
 
 /** 직거래 요청 — 안전결제(Toss 가상계좌) 없이 예약(escrow_status=RESERVED)만 한다. */

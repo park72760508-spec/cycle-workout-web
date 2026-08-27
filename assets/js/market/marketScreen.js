@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260827marketReturnFlow1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260827marketPurchaseAddr1';
   var svc = null;
 
   function loadMarketService() {
@@ -239,6 +239,14 @@
       '<span class="market-delivery-info__value">' +
         escapeHtml(o.courier_name || o.courier_code || '') + ' / ' + escapeHtml(o.tracking_number) +
       '</span>';
+  }
+
+  /** 안전결제 구매 시점에 입력받은 배송 주소 — 구매자·판매자 거래내역 공통 표시(직거래는 해당 없음). */
+  function marketDeliveryAddressLineHtml(o) {
+    if (o.deal_type === 'DIRECT_DEAL' || !o.delivery_address1) return '';
+    return '<div class="market-delivery-info">배송 주소 : ' +
+      escapeHtml('(' + (o.delivery_address_zip || '') + ') ' + (o.delivery_address1 || '') + ' ' + (o.delivery_address2 || '')) +
+    '</div>';
   }
 
   /** 판매자 거래내역 행 아래 택배 정보 — 입금완료(PAID)+안전결제 주문에서만 노출.
@@ -1448,6 +1456,7 @@
           counterpartHtml +
           negoHtml +
           marketDealAmountStatusHtml(sellerAmountLabelText, sellerAmountValueText, o.escrow_status, o.va_due_at) +
+          marketDeliveryAddressLineHtml(o) +
           marketSellerDeliveryHtml(o) +
           marketSellerReturnHtml(o);
       }).join('');
@@ -1483,6 +1492,7 @@
           sellerCounterpartHtml +
           marketDealAmountStatusHtml(buyerAmountLabelText, buyerAmountValueText, myOrder.escrow_status, myOrder.va_due_at) +
           vaLineHtml +
+          marketDeliveryAddressLineHtml(myOrder) +
           marketBuyerDeliveryHtml(myOrder) +
           marketBuyerReturnHtml(myOrder) +
         '</div>';
@@ -1718,19 +1728,69 @@
   function handleMarketBuy(item) {
     var nego = detailState.myNegoRequest;
     var buyPrice = (nego && nego.status === 'ACCEPTED') ? Number(nego.requested_price) : Number(item.price);
-    showMarketConfirmPopup(
-      formatPrice(buyPrice) + '원 + 안전결제 수수료 1,000원 = 총 ' + formatPrice(buyPrice + 1000) + '원을 결제하시겠습니까?',
-      function () { doMarketBuy(item); },
-      { okText: '결제하기' }
-    );
+    showMarketPurchaseAddressPopup(item, buyPrice);
   }
 
-  async function doMarketBuy(item) {
+  /** 안전결제 구매 확인 팝업 — 결제 전 배송받을 주소를 입력받는다(대회 참가신청과 동일한
+   * Daum 우편번호 검색 폼을 openDaumPostcode로 재사용). 주소 입력을 완료해야 결제가 진행된다. */
+  function showMarketPurchaseAddressPopup(item, buyPrice) {
+    var modal = document.getElementById('marketPurchaseAddressModal');
+    if (!modal) { doMarketBuy(item, null); return; }
+    var msgEl = document.getElementById('marketPurchaseAddressMessage');
+    var zipEl = document.getElementById('marketPurchaseZip');
+    var addr1El = document.getElementById('marketPurchaseAddress1');
+    var addr2El = document.getElementById('marketPurchaseAddress2');
+    var okBtn = document.getElementById('marketPurchaseAddressOkBtn');
+    var cancelBtn = document.getElementById('marketPurchaseAddressCancelBtn');
+    var searchBtn = document.getElementById('marketPurchaseZipSearchBtn');
+    if (msgEl) {
+      msgEl.textContent =
+        formatPrice(buyPrice) + '원 + 안전결제 수수료 1,000원 = 총 ' + formatPrice(buyPrice + 1000) + '원을 결제합니다.\n' +
+        '상품을 받으실 배송 주소를 입력해 주세요.';
+    }
+    if (zipEl) zipEl.value = '';
+    if (addr1El) addr1El.value = '';
+    if (addr2El) addr2El.value = '';
+    if (searchBtn) {
+      searchBtn.onclick = function () {
+        openDaumPostcode(function (result) {
+          if (zipEl) zipEl.value = result.zonecode;
+          if (addr1El) addr1El.value = result.address;
+          if (addr2El) addr2El.focus();
+        });
+      };
+    }
+    if (cancelBtn) cancelBtn.onclick = closeMarketPurchaseAddressPopup;
+    if (okBtn) {
+      okBtn.onclick = function () {
+        var zipCode = zipEl ? zipEl.value.trim() : '';
+        var address1 = addr1El ? addr1El.value.trim() : '';
+        var address2 = addr2El ? addr2El.value.trim() : '';
+        if (!zipCode || !address1) { toast('주소 검색으로 배송받을 주소를 입력해 주세요.'); return; }
+        if (!address2) { toast('상세주소를 입력해 주세요.'); return; }
+        closeMarketPurchaseAddressPopup();
+        doMarketBuy(item, { zipCode: zipCode, address1: address1, address2: address2 });
+      };
+    }
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+
+  function closeMarketPurchaseAddressPopup() {
+    var modal = document.getElementById('marketPurchaseAddressModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
+  }
+  window.closeMarketPurchaseAddressPopup = closeMarketPurchaseAddressPopup;
+
+  async function doMarketBuy(item, address) {
     var btn = document.getElementById('marketDetailBuyBtn');
     if (btn) { btn.disabled = true; btn.textContent = '가상계좌 발급 중...'; }
     try {
       var s = await loadMarketService();
-      var result = await s.requestMarketPurchase(item.id);
+      var result = await s.requestMarketPurchase(item.id, address);
       var va = result.virtualAccount || {};
       showMarketAlertPopup(
         '은행: ' + (va.bankName || va.bankCode || '') + '\n' +

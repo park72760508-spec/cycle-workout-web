@@ -31480,3 +31480,14 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-address-search-row .market-return-zip { flex: 1; }
 .market-return-dispute-notice { color: #b91c1c; font-weight: 700; }
 .market-return-complete-notice { color: #15803d; font-weight: 700; }
+
+/* 안전결제 구매 확인 팝업(marketPurchaseAddressModal) 내 배송 주소 입력 폼 —
+   market-return-address-form과 동일한 톤으로 통일. */
+.market-purchase-address-form {
+  margin: 4px 0 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+.market-purchase-address-form .market-form-input { margin-bottom: 0; }

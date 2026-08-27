@@ -17955,6 +17955,13 @@ exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res)
       res.status(400).json({ success: false, error: "itemId가 필요합니다." });
       return;
     }
+    const deliveryZipCode = String(body.zipCode || "").trim();
+    const deliveryAddress1 = String(body.address1 || "").trim();
+    const deliveryAddress2 = String(body.address2 || "").trim();
+    if (!deliveryZipCode || !deliveryAddress1 || !deliveryAddress2) {
+      res.status(400).json({ success: false, error: "배송받을 주소(우편번호·주소·상세주소)가 필요합니다." });
+      return;
+    }
 
     const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
     if (!supabase) {
@@ -18079,6 +18086,9 @@ exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res)
         va_bank_name: bankNameKo,
         va_account_number: va.accountNumber || null,
         settlement_account: settlementAccount,
+        delivery_address_zip: deliveryZipCode,
+        delivery_address1: deliveryAddress1,
+        delivery_address2: deliveryAddress2,
       })
       .select()
       .single();
