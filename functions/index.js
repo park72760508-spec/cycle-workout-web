@@ -18289,7 +18289,11 @@ exports.confirmMarketPurchase = onRequest(confirmMarketPurchaseOptions, async (r
       res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
       return;
     }
-    if (order.buyer_id !== buyerId) {
+    // 직거래(RESERVED, 안전결제 없음)는 대면 현장에서 대금·물품을 주고받으므로 구매자뿐 아니라
+    // 판매자도 "거래완료"로 확정할 수 있게 한다. 안전결제(PAID) 주문은 기존과 동일하게
+    // 구매자만 확정할 수 있다(대금이 이미 Toss 에스크로에 있는 상태를 판매자가 임의로 끝낼 수 없음).
+    const isSellerDirectDealConfirm = order.deal_type === "DIRECT_DEAL" && order.seller_id === buyerId;
+    if (order.buyer_id !== buyerId && !isSellerDirectDealConfirm) {
       res.status(403).json({ success: false, error: "본인 주문만 확정할 수 있습니다." });
       return;
     }
@@ -18366,7 +18370,10 @@ exports.cancelMarketOrder = onRequest(cancelMarketOrderOptions, async (req, res)
       res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
       return;
     }
-    if (order.buyer_id !== buyerId) {
+    // 직거래 예약(RESERVED)은 판매자도 취소할 수 있게 한다 — 입금 대기(PENDING) 취소는
+    // 안전결제 전용 상태라 기존과 동일하게 구매자만 취소할 수 있다.
+    const isSellerDirectDealCancel = order.deal_type === "DIRECT_DEAL" && order.escrow_status === "RESERVED" && order.seller_id === buyerId;
+    if (order.buyer_id !== buyerId && !isSellerDirectDealCancel) {
       res.status(403).json({ success: false, error: "본인 주문만 취소할 수 있습니다." });
       return;
     }

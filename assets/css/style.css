@@ -30885,6 +30885,9 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-btn--disabled { background: #f1f5f9; color: #94a3b8; }
 .market-detail-actions { display: flex; gap: 8px; }
 .market-detail-actions .market-btn { flex: 1; }
+/* 판매자 화면에 끌어올리기/수정/삭제 아래 거래완료/예약취소 버튼 줄이 추가로 붙는
+   경우(직거래 예약 중) 두 줄이 맞닿지 않도록 여백을 둔다. */
+.market-detail-actions + .market-detail-actions { margin-top: 8px; }
 
 /* 상품 상세 */
 .market-detail-slider {

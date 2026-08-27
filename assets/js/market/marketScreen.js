@@ -1313,12 +1313,24 @@
     if (isMine) {
       // 예약중(거래 진행 중)인 상품은 구매자와의 거래가 완결되기 전까지 삭제할 수 없다.
       var deleteDisabled = item.status === 'RESERVED';
+      // 직거래는 안전결제 없이 현장에서 대금·물품을 주고받으므로, 예약(RESERVED) 중인 직거래
+      // 건이 있으면 구매자 화면의 "구매 확정하기/예약 취소"와 동일한 디자인의 버튼을
+      // 판매자 화면 하단에도 배치해 판매자도 거래완료·예약취소를 처리할 수 있게 한다.
+      var activeDirectDealOrder = (detailState.orderHistory || []).filter(function (o) {
+        return o.escrow_status === 'RESERVED' && o.deal_type === 'DIRECT_DEAL';
+      })[0] || null;
       actionHtml =
         '<div class="market-detail-actions">' +
           '<button type="button" class="market-btn market-btn--outline" id="marketDetailBumpBtn">끌어올리기</button>' +
           '<button type="button" class="market-btn market-btn--outline" id="marketDetailEditBtn">수정</button>' +
           '<button type="button" class="market-btn market-btn--danger' + (deleteDisabled ? ' market-btn--disabled' : '') + '" id="marketDetailDeleteBtn"' + (deleteDisabled ? ' disabled' : '') + '>삭제</button>' +
-        '</div>';
+        '</div>' +
+        (activeDirectDealOrder
+          ? '<div class="market-detail-actions">' +
+              '<button type="button" class="market-btn market-btn--primary" id="marketDetailSellerCompleteBtn" data-order-id="' + activeDirectDealOrder.id + '">거래완료</button>' +
+              '<button type="button" class="market-btn market-btn--outline" id="marketDetailSellerCancelBtn" data-order-id="' + activeDirectDealOrder.id + '">예약 취소</button>' +
+            '</div>'
+          : '');
     } else if (myOrder && myOrder.escrow_status === 'PAID' && (myOrder.return_status === 'DISPUTED' || myOrder.return_status === 'COMPLETED')) {
       // 이의제기 중엔 인라인 [합의완료] 버튼(marketBuyerReturnHtml)이, 반품완료 후엔 별도 액션이 필요 없다.
       actionHtml = '';
@@ -1662,6 +1674,18 @@
     if (editBtn) editBtn.onclick = function () { window.navigateToMarketFormForEdit(item); };
     var deleteBtn = document.getElementById('marketDetailDeleteBtn');
     if (deleteBtn) deleteBtn.onclick = function () { handleMarketDelete(item.id); };
+    var sellerCompleteBtn = document.getElementById('marketDetailSellerCompleteBtn');
+    if (sellerCompleteBtn) {
+      sellerCompleteBtn.onclick = function () {
+        handleMarketSellerComplete(item.id, sellerCompleteBtn.getAttribute('data-order-id'), sellerCompleteBtn);
+      };
+    }
+    var sellerCancelBtn = document.getElementById('marketDetailSellerCancelBtn');
+    if (sellerCancelBtn) {
+      sellerCancelBtn.onclick = function () {
+        handleMarketSellerCancelReservation(item.id, sellerCancelBtn.getAttribute('data-order-id'), sellerCancelBtn);
+      };
+    }
     var negoSubmitBtn = document.getElementById('marketNegoSubmitBtn');
     if (negoSubmitBtn) negoSubmitBtn.onclick = function () { handleMarketNegoSubmit(item, negoSubmitBtn); };
     Array.prototype.forEach.call(document.querySelectorAll('.market-nego-accept-btn'), function (btn) {
@@ -1907,6 +1931,51 @@
     } catch (err) {
       toast('취소 실패: ' + (err && err.message ? err.message : err));
       if (btn) { btn.disabled = false; btn.textContent = '구매 취소'; }
+    }
+  }
+
+  /** 직거래 예약 건에서 판매자가 "거래완료" 클릭 — confirmMarketPurchase를 그대로 재사용한다
+   * (Firebase 쪽에서 직거래 RESERVED 건은 판매자 호출도 허용하도록 확장됨). */
+  function handleMarketSellerComplete(itemId, orderId, btn) {
+    showMarketConfirmPopup(
+      '거래를 완료할까요? 확정하면 예약이 종료되고 판매완료로 처리됩니다.',
+      function () { doMarketSellerComplete(itemId, orderId, btn); },
+      { okText: '거래완료' }
+    );
+  }
+
+  async function doMarketSellerComplete(itemId, orderId, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '처리 중...'; }
+    try {
+      var s = await loadMarketService();
+      await s.confirmMarketPurchase(orderId);
+      toast('거래를 완료했습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('거래완료 처리 실패: ' + (err && err.message ? err.message : err));
+      if (btn) { btn.disabled = false; btn.textContent = '거래완료'; }
+    }
+  }
+
+  /** 직거래 예약 건에서 판매자가 "예약 취소" 클릭 — cancelMarketOrder를 그대로 재사용한다. */
+  function handleMarketSellerCancelReservation(itemId, orderId, btn) {
+    showMarketConfirmPopup(
+      '예약을 취소할까요? 상품이 다시 판매중 상태로 전환됩니다.',
+      function () { doMarketSellerCancelReservation(itemId, orderId, btn); },
+      { okText: '예약 취소', cancelText: '계속 진행' }
+    );
+  }
+
+  async function doMarketSellerCancelReservation(itemId, orderId, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '취소 중...'; }
+    try {
+      var s = await loadMarketService();
+      await s.cancelMarketOrder(orderId);
+      toast('예약이 취소되었습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('취소 실패: ' + (err && err.message ? err.message : err));
+      if (btn) { btn.disabled = false; btn.textContent = '예약 취소'; }
     }
   }
 
