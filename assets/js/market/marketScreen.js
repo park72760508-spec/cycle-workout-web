@@ -165,6 +165,20 @@
     else alert(msg);
   }
 
+  /** 중고랜드 진입 버튼 노출과 동일한 기준(등급 1·3)의 관리자 판정 — userManager.js가
+   * 전역으로 노출한 함수를 그대로 재사용한다(index.html updateAuthBarUI의 isAdminForMarket). */
+  function marketIsAdminUser() {
+    try {
+      return (
+        typeof window.getLoginUserGrade === 'function' &&
+        typeof window.isStelvioOpenRidingRoomAdminGrade === 'function' &&
+        window.isStelvioOpenRidingRoomAdminGrade(window.getLoginUserGrade())
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
   function statusBadgeHtml(status) {
     if (status === 'SOLD') return '<span class="market-badge market-badge--sold">판매완료</span>';
     if (status === 'RESERVED') return '<span class="market-badge market-badge--reserved">예약중</span>';
@@ -1320,9 +1334,10 @@
     var dealMethodText = (item.deal_method || []).join(', ') + (item.direct_deal_location ? (' (' + escapeHtml(item.direct_deal_location) + ')') : '');
 
     var actionHtml;
-    if (isMine && item.status === 'SOLD') {
+    if (isMine && item.status === 'SOLD' && !marketIsAdminUser()) {
       // 판매 완료된 상품은 더 이상 끌어올리기·수정·삭제·거래 액션이 의미가 없으므로
       // 하단 버튼 블록 자체를 표시하지 않는다(그 외 상태에서는 버튼 블록 유지).
+      // 단, 관리자는 판매완료 후에도 점검·수정 목적으로 버튼 블록을 계속 사용할 수 있어야 한다.
       actionHtml = '';
     } else if (isMine) {
       // 예약중(거래 진행 중)인 상품은 구매자와의 거래가 완결되기 전까지 삭제할 수 없다.
@@ -1580,7 +1595,7 @@
     // 눌리지 않는 문제가 있어 하단 네비와 동일하게 완전히 분리했다.
     var floatingBar = document.getElementById('marketDetailFloatingBar');
     var floatingBarContent = document.getElementById('marketDetailFloatingBarContent');
-    var hideFloatingBar = isMine && item.status === 'SOLD';
+    var hideFloatingBar = isMine && item.status === 'SOLD' && !marketIsAdminUser();
     if (floatingBarContent) floatingBarContent.innerHTML = hideFloatingBar ? '' : '<div class="market-detail-action-bar">' + actionHtml + '</div>';
     if (floatingBar) floatingBar.style.display = hideFloatingBar ? 'none' : 'block';
 
