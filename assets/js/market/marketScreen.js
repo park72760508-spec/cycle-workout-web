@@ -702,15 +702,23 @@
 
   // ───────────────────────── 홈/목록 화면 ─────────────────────────
 
+  /** 원형 아이콘 아래 카테고리명을 붙인다 — 라벨 너비를 원 지름(40px)으로 제한해 원 폭보다
+   * 커지지 않게 하고, 혹시 모를 긴 이름 대비 ellipsis로 안전하게 자른다(market-subtab__label). */
+  function subCategoryButtonHtml(label, iconHtml, dataSub, isActive) {
+    return '<button type="button" class="market-subtab' + (isActive ? ' active' : '') +
+      '" data-sub="' + escapeHtml(dataSub) + '" aria-label="' + escapeHtml(label) + '" title="' + escapeHtml(label) + '">' +
+      '<span class="market-subtab__icon-wrap">' + iconHtml + '</span>' +
+      '<span class="market-subtab__label">' + escapeHtml(label) + '</span>' +
+    '</button>';
+  }
+
   function renderSubCategoryTabs() {
     var wrap = document.getElementById('marketSubCategoryTabs');
     if (!wrap) return;
     var subs = SUB_CATEGORIES[homeState.category] || [];
-    var html = '<button type="button" class="market-subtab' + (homeState.subCategory === '' ? ' active' : '') +
-      '" data-sub="" aria-label="전체" title="전체">' + subCategoryIconHtml(null) + '</button>';
+    var html = subCategoryButtonHtml('전체', subCategoryIconHtml(null), '', homeState.subCategory === '');
     subs.forEach(function (s) {
-      html += '<button type="button" class="market-subtab' + (homeState.subCategory === s.label ? ' active' : '') +
-        '" data-sub="' + escapeHtml(s.label) + '" aria-label="' + escapeHtml(s.label) + '" title="' + escapeHtml(s.label) + '">' + subCategoryIconHtml(s) + '</button>';
+      html += subCategoryButtonHtml(s.label, subCategoryIconHtml(s), s.label, homeState.subCategory === s.label);
     });
     wrap.innerHTML = html;
     Array.prototype.forEach.call(wrap.querySelectorAll('.market-subtab'), function (btn) {
@@ -720,13 +728,6 @@
         reloadMarketHomeList();
       };
     });
-    updateMarketSelectedCategoryLabel();
-  }
-
-  function updateMarketSelectedCategoryLabel() {
-    var labelEl = document.getElementById('marketSelectedCategoryLabel');
-    if (!labelEl) return;
-    labelEl.textContent = homeState.subCategory || '전체';
   }
 
   function marketItemCardHtml(item) {
