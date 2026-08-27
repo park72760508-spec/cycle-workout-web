@@ -536,7 +536,10 @@
         ? '<div>자동 반품완료까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>'
         : '';
       body =
-        '<div class="market-delivery-info">' + marketReturnTrackingInfoLineHtml(o) + timerHtml + '</div>' +
+        '<div class="market-delivery-info">' +
+          '<div>' + marketReturnTrackingInfoLineHtml(o) + '</div>' +
+          timerHtml +
+        '</div>' +
         '<div class="market-detail-actions">' +
           '<button type="button" class="market-btn market-btn--primary market-return-complete-btn" data-order-id="' + o.id + '">반품완료</button>' +
           '<button type="button" class="market-btn market-btn--outline market-return-dispute-btn" data-order-id="' + o.id + '">이의제기</button>' +
@@ -561,8 +564,11 @@
     if (o.return_status === 'REQUESTED') {
       body = '<div class="market-delivery-info">판매자가 반품 받으실 주소를 등록하면 반품 송장을 입력할 수 있습니다.</div>';
     } else if (o.return_status === 'ADDRESS_SET' || o.return_status === 'DELIVERED') {
-      var addrHtml = '<div class="market-delivery-info">반품 받을 주소 : ' +
-        escapeHtml('(' + (o.return_address_zip || '') + ') ' + (o.return_address1 || '') + ' ' + (o.return_address2 || '')) +
+      var addrHtml = '<div class="market-delivery-info">' +
+        '<span class="market-delivery-info__label">반품 주소 : </span>' +
+        '<span class="market-delivery-info__value">' +
+          escapeHtml('(' + (o.return_address_zip || '') + ') ' + (o.return_address1 || '') + ' ' + (o.return_address2 || '')) +
+        '</span>' +
       '</div>';
       var trackingHtml;
       if (o.return_tracking_number) {
@@ -580,7 +586,7 @@
       var timerHtml = '';
       if (o.return_status === 'DELIVERED' && o.return_delivered_at) {
         var deadlineIso2 = new Date(new Date(o.return_delivered_at).getTime() + 72 * 3600 * 1000).toISOString();
-        timerHtml = '<div>판매자 확인 대기(자동 환불까지) : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso2) + '">' + escapeHtml(marketFormatRemaining(deadlineIso2)) + '</span></div>';
+        timerHtml = '<div class="market-delivery-info">판매자 확인 대기(자동 환불까지) : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso2) + '">' + escapeHtml(marketFormatRemaining(deadlineIso2)) + '</span></div>';
       }
       body = addrHtml + trackingHtml + timerHtml;
     } else if (o.return_status === 'DISPUTED') {
