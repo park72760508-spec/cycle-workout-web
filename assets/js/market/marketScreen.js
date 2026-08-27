@@ -425,7 +425,7 @@
    * 이의제기(DISPUTED)는 별도 아이콘 없이 "반품완료" 단계가 보류(active)된 상태로 취급한다. */
   var MARKET_RETURN_STEPS = [
     { icon: 'return', label: '반품신청' },
-    { icon: 'address', label: '반품주소' },
+    { icon: 'address', label: '반품확인' },
     { icon: 'delivery1', label: '택배접수' },
     { icon: 'delivery2', label: '배송중' },
     { icon: 'delivery3', label: '배송완료' },
