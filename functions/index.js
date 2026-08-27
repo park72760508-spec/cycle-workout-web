@@ -912,7 +912,35 @@ function phoneOtpTodayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** withdrawn(탈퇴) 계정과 동일한 판정 기준(assets/js/userManager.js의 getUserAccountStatus)을
+ * 서버에서도 재현 — 탈퇴 계정은 재가입 대상이라 "이미 등록된 번호" 차단에서 제외한다. */
+function phoneOtpIsWithdrawnAccountData(d) {
+  if (!d) return false;
+  if (d.is_active === false) return true;
+  const s = String(d.account_status || d.status || "").trim().toLowerCase();
+  if (s === "withdrawn" || s === "inactive" || s === "deleted" || s === "deactivated") return true;
+  if (d.withdrawn_at && String(d.withdrawn_at).trim() && s !== "active") return true;
+  return false;
+}
+
+/** 이미 가입된(탈퇴하지 않은) 전화번호인지 확인 — selfServiceResetPasswordHttp와 동일한
+ * formatted/digits 두 변형 조회 패턴을 재사용한다. */
+async function phoneOtpIsAlreadyRegisteredActive(db, digits) {
+  const formatted = selfResetFormatContactForDb(digits);
+  let snaps = await db.collection("users").where("contact", "==", formatted).limit(5).get();
+  if (snaps.empty && digits !== formatted) {
+    snaps = await db.collection("users").where("contact", "==", digits).limit(5).get();
+  }
+  if (snaps.empty) return false;
+  return snaps.docs.some((doc) => !phoneOtpIsWithdrawnAccountData(doc.data() || {}));
+}
+
+// 알리고 SMS API도 카카오 알림톡 API와 동일하게 발송 IP 화이트리스트를 요구한다
+// (result_code=-101 "인증오류입니다.-IP" 실측 확인) — 카카오 릴레이 함수들과 동일한
+// Cloud NAT 고정 IP(34.64.250.77, asia-northeast3)로 나가도록 동일 VPC 옵션을 적용한다.
+const aligoKakaoNatEgressForSms = require("./lib/aligoKakaoNatEgress");
 const sendPhoneVerificationCodeOptions = {
+  ...aligoKakaoNatEgressForSms.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
   cors: false,
   secrets: [aligoApiKeySecret, aligoUserIdSecret],
 };
@@ -935,6 +963,10 @@ exports.sendPhoneVerificationCode = onRequest(sendPhoneVerificationCodeOptions, 
     }
 
     const db = admin.firestore();
+    if (await phoneOtpIsAlreadyRegisteredActive(db, digits)) {
+      res.status(409).json({ success: false, error: "이미 등록된 번호입니다." });
+      return;
+    }
     const docRef = db.collection(PHONE_OTP_COLLECTION).doc(digits);
     const snap = await docRef.get();
     const existing = snap.exists ? snap.data() : null;
