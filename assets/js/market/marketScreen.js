@@ -117,9 +117,13 @@
     '<rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect>' +
     '</svg>';
 
+  /** "전체" 아이콘(인라인 SVG, stroke로 색 전환)과 달리 카테고리별 아이콘은 <img> 참조 SVG라
+   * CSS로 색을 바꿀 수 없다 — mask-image로 실루엣을 만들어 배경색(background-color)으로
+   * 선택/미선택 색을 전환한다(assets/js/openRiding 쪽 riding-moim-intro-cyclist와 동일 기법). */
   function subCategoryIconHtml(sub) {
     if (!sub) return SUB_CATEGORY_ALL_ICON_SVG;
-    return '<img class="market-subtab__icon" src="assets/img/' + sub.icon + '.svg" alt="" />';
+    var url = "assets/img/" + sub.icon + ".svg";
+    return '<span class="market-subtab__icon market-subtab__icon--masked" style="-webkit-mask-image:url(\'' + url + '\');mask-image:url(\'' + url + '\');"></span>';
   }
   var PAGE_SIZE = 60;
   var MAX_IMAGES = 3;

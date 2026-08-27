@@ -30500,6 +30500,18 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   object-fit: contain;
   stroke: #000;
 }
+/* 카테고리별 아이콘(<img> 참조 SVG)은 stroke로 색을 바꿀 수 없어 mask-image 실루엣 +
+   background-color로 선택/미선택 색을 전환한다("전체" 아이콘의 stroke 전환과 동일한 결과). */
+.market-subtab__icon--masked {
+  display: inline-block;
+  background-color: #000;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
 /* 하단 네비게이션바 활성 탭과 동일한 흐릿한 오렌지 톤(진한 그라디언트 아님) */
 .market-subtab.active .market-subtab__icon-wrap {
   background-color: rgba(234, 88, 12, 0.12);
@@ -30507,6 +30519,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   box-shadow: none;
 }
 .market-subtab.active .market-subtab__icon { stroke: #c2410c; }
+.market-subtab.active .market-subtab__icon--masked { background-color: #c2410c; }
 /* 한글 3자가 원 폭(40px) 안에 들어가는 크기 — 회색 톤, 혹시 모를 긴 이름은 ellipsis로 방어. */
 .market-subtab__label {
   max-width: 40px;
@@ -30517,7 +30530,8 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.market-subtab.active .market-subtab__label { color: #000; font-weight: 700; }
+/* 선택된 라벨은 아이콘과 동일한 오렌지 톤으로 표시(미선택은 위 기본 회색 유지). */
+.market-subtab.active .market-subtab__label { color: #c2410c; font-weight: 700; }
 
 .market-scroll-area {
   flex: 1;
