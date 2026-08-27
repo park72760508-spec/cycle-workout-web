@@ -165,14 +165,14 @@
     else alert(msg);
   }
 
-  /** 중고랜드 진입 버튼 노출과 동일한 기준(등급 1·3)의 관리자 판정 — userManager.js가
-   * 전역으로 노출한 함수를 그대로 재사용한다(index.html updateAuthBarUI의 isAdminForMarket). */
+  /** 판매완료 후 버튼 블록 유지는 등급 1(정관리자)만 예외로 둔다 — grade=3(부관리자)은
+   * 일반 판매자와 동일하게 취급한다(userManager.js의 isStelvioAdminGrade, 등급 1만 true). */
   function marketIsAdminUser() {
     try {
       return (
         typeof window.getLoginUserGrade === 'function' &&
-        typeof window.isStelvioOpenRidingRoomAdminGrade === 'function' &&
-        window.isStelvioOpenRidingRoomAdminGrade(window.getLoginUserGrade())
+        typeof window.isStelvioAdminGrade === 'function' &&
+        window.isStelvioAdminGrade(window.getLoginUserGrade())
       );
     } catch (e) {
       return false;
