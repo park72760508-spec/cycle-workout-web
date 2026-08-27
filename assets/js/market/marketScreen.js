@@ -386,9 +386,10 @@
     var transitState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'active';
     var deliveredState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'pending';
     // 반품이 신청된 이후로는 구매확정이 더 이상 진행될 수 없는 경로이므로(반품이 최종 종료를
-    // 대신함) "구매확정" 단계를 취소 상태로 표시한다.
+    // 대신함) "구매확정" 단계를 다른 완료 단계와 동일한 done 스타일로 표시하되 라벨만
+    // marketDealStepsHtml에서 "구매취소"로 바꾼다.
     var confirmedState = order.return_status
-      ? 'cancelled'
+      ? 'done'
       : (!deliveredDone ? 'pending' : confirmedDone ? 'done' : 'active');
 
     return [negoState, paidState, shippedState, transitState, deliveredState, confirmedState];
@@ -407,7 +408,7 @@
     return '<div class="market-deal-steps">' +
       MARKET_DEAL_STEPS.map(function (step, i) {
         var state = states[i];
-        var label = state === 'cancelled' ? '취소' : step.label;
+        var label = (i === MARKET_DEAL_STEPS.length - 1 && order.return_status) ? '구매취소' : step.label;
         return '<div class="market-deal-step market-deal-step--' + state + '">' +
           '<div class="market-deal-step__icon-wrap">' +
             (state === 'active' ? MARKET_DEAL_STEP_ACTIVE_RING_SVG : '') +
