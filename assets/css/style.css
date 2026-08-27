@@ -31304,6 +31304,12 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-deal-contact-btn svg { width: 17px; height: 17px; }
 .market-deal-contact-btn:active { transform: scale(0.93); }
+/* 거래완료(구매확정) 후 전화·문자 버튼 비활성 표시 — 더 이상 연락 조율이 필요 없는 상태임을 알린다. */
+.market-deal-contact-btn--disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
 
 .market-nego-accept-btn, .market-nego-reject-btn {
   border: none;

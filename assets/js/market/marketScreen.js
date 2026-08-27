@@ -621,15 +621,25 @@
 
   /** 상대방(구매자/판매자) 정보 + 전화·문자 바로가기 카드 — 연락처가 아직 공개되지 않은
    * 단계(marketOrderRevealsPhone 이전)에서는 통화/문자 버튼 없이 아바타+이름만 표시한다. */
-  function marketCounterpartCardHtml(avatarUrl, name, phone) {
+  function marketCounterpartCardHtml(avatarUrl, name, phone, disabled) {
     var phoneFormatted = marketFormatPhone(phone);
     var digitsOnly = phoneFormatted.replace(/[^0-9]/g, '');
-    var actionsHtml = digitsOnly
-      ? '<div class="market-deal-contact-card__actions">' +
+    var actionsHtml = '';
+    if (digitsOnly && disabled) {
+      // 거래완료(구매확정) 후에는 더 이상 연락을 조율할 필요가 없으므로 전화·문자 버튼을
+      // 비활성 표시로 전환한다(카드 자체는 유지).
+      actionsHtml =
+        '<div class="market-deal-contact-card__actions">' +
+          '<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_CALL_ICON_SVG + '</span>' +
+          '<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_SMS_ICON_SVG + '</span>' +
+        '</div>';
+    } else if (digitsOnly) {
+      actionsHtml =
+        '<div class="market-deal-contact-card__actions">' +
           '<a class="market-deal-contact-btn" href="tel:' + digitsOnly + '" aria-label="전화 걸기">' + MARKET_CALL_ICON_SVG + '</a>' +
           '<a class="market-deal-contact-btn" href="sms:' + digitsOnly + '" aria-label="문자 보내기">' + MARKET_SMS_ICON_SVG + '</a>' +
-        '</div>'
-      : '';
+        '</div>';
+    }
     return '<div class="market-deal-contact-card">' +
       '<img class="market-deal-contact-card__avatar" src="' + escapeHtml(avatarUrl) + '" alt="" />' +
       '<span class="market-deal-contact-card__name">' + escapeHtml(name) + '</span>' +
@@ -1494,7 +1504,7 @@
         // 구매자 연락처는 전화·문자 버튼이 붙은 상대방 카드(marketCounterpartCardHtml)로 대체 —
         // 텍스트로 따로 또 보여주지 않는다.
         var counterpartHtml = marketOrderRevealsPhone(o.escrow_status)
-          ? marketCounterpartCardHtml(bAvatar, bName, o.buyerPhone)
+          ? marketCounterpartCardHtml(bAvatar, bName, o.buyerPhone, o.escrow_status === 'CONFIRMED')
           : '';
         // 이 구매자가 제출한 가격 조정 요청(있다면) — 거래 상대 정보 카드 바로 아래, 발생 순서에 표시.
         var negoForThisOrder = (detailState.negoRequests || []).find(function (r) { return r.buyer_id === o.buyer_id; });
@@ -1534,7 +1544,7 @@
         ? '<div class="market-order-history-contacts">가상계좌 : ' + escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number) + '</div>'
         : '';
       var sellerCounterpartHtml = marketOrderRevealsPhone(myOrder.escrow_status)
-        ? marketCounterpartCardHtml(sellerAvatar, sellerName, detailState.sellerPhone)
+        ? marketCounterpartCardHtml(sellerAvatar, sellerName, detailState.sellerPhone, myOrder.escrow_status === 'CONFIRMED')
         : '';
       buyerOrderHistoryHtml =
         '<div class="market-order-history">' +
