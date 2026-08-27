@@ -375,7 +375,9 @@
     // 알리고 일반 SMS API를 사용하는 신규 Cloud Functions(sendPhoneVerificationCode/
     // verifyPhoneVerificationCode)를 호출한다. 신규 가입자에게만 적용(재가입은 별도 검증 경로
     // 존재로 제외) — handleRegister()에서 __stelvioPhoneOtpState.verifiedDigits로 게이트한다.
-    var STELVIO_PHONE_OTP_SEND_URL = 'https://us-central1-stelvio-ai.cloudfunctions.net/sendPhoneVerificationCode';
+    // sendPhoneVerificationCode는 알리고 SMS 화이트리스트 IP 확보를 위한 VPC egress(Cloud NAT)
+    // 설정 때문에 asia-northeast3에 배포된다(카카오 알림톡 릴레이 함수들과 동일 리전).
+    var STELVIO_PHONE_OTP_SEND_URL = 'https://asia-northeast3-stelvio-ai.cloudfunctions.net/sendPhoneVerificationCode';
     var STELVIO_PHONE_OTP_VERIFY_URL = 'https://us-central1-stelvio-ai.cloudfunctions.net/verifyPhoneVerificationCode';
     window.__stelvioPhoneOtpState = { verifiedDigits: null, sentDigits: null, cooldownTimer: null };
 
