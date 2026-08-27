@@ -31157,7 +31157,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   z-index: 0;
 }
 .market-deal-step--done:not(:first-child)::before,
-.market-deal-step--active:not(:first-child)::before {
+.market-deal-step--active:not(:first-child)::before,
+.market-deal-step--skipped:not(:first-child)::before {
   background: #fdba74;
 }
 .market-deal-step__icon-wrap {

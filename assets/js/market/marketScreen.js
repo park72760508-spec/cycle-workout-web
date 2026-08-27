@@ -374,12 +374,23 @@
   function marketDealStepStates(order) {
     var isDirect = order.deal_type === 'DIRECT_DEAL';
     var status = order.escrow_status;
-    var paidDone = isDirect ? (status === 'RESERVED' || status === 'CONFIRMED') : (status === 'PAID' || status === 'CONFIRMED');
-    var shippedDone = isDirect ? paidDone : !!order.tracking_number;
-    var deliveredDone = isDirect ? paidDone : order.delivery_status === 'DELIVERED';
+    var negoState = 'done'; // 주문이 존재하는 시점엔 가격이 이미 합의된 상태
+
+    if (isDirect) {
+      // 직거래는 안전결제·택배 배송 개념이 없어 입금확인~배송완료(2~5단계)를 실제로 거치지
+      // 않는다 — 마치 진행된 것처럼 채워 보이지 않도록 비활성(회색) 아이콘으로 표시하되,
+      // 거래 자체는 이어졌음을 보여주기 위해 연결선은 완료 단계와 동일한 오렌지로 유지한다
+      // (skipped 상태 — CSS는 .market-deal-step--skipped:not(:first-child)::before만
+      // 오렌지로 지정하고 아이콘·라벨은 기본(pending) 회색 스타일을 그대로 물려받는다).
+      var confirmedStateDirect = status === 'CONFIRMED' ? 'done' : 'active';
+      return [negoState, 'skipped', 'skipped', 'skipped', 'skipped', confirmedStateDirect];
+    }
+
+    var paidDone = status === 'PAID' || status === 'CONFIRMED';
+    var shippedDone = !!order.tracking_number;
+    var deliveredDone = order.delivery_status === 'DELIVERED';
     var confirmedDone = status === 'CONFIRMED';
 
-    var negoState = 'done'; // 주문이 존재하는 시점엔 가격이 이미 합의된 상태
     var paidState = paidDone ? 'done' : 'active';
     var shippedState = !paidDone ? 'pending' : shippedDone ? 'done' : 'active';
     // 송장 등록 후 배송완료 전까지는 "배송중"이 지금 실제로 진행되는 단계.
