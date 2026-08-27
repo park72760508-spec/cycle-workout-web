@@ -1310,7 +1310,11 @@
     var dealMethodText = (item.deal_method || []).join(', ') + (item.direct_deal_location ? (' (' + escapeHtml(item.direct_deal_location) + ')') : '');
 
     var actionHtml;
-    if (isMine) {
+    if (isMine && item.status === 'SOLD') {
+      // 판매 완료된 상품은 더 이상 끌어올리기·수정·삭제·거래 액션이 의미가 없으므로
+      // 하단 버튼 블록 자체를 표시하지 않는다(그 외 상태에서는 버튼 블록 유지).
+      actionHtml = '';
+    } else if (isMine) {
       // 예약중(거래 진행 중)인 상품은 구매자와의 거래가 완결되기 전까지 삭제할 수 없다.
       var deleteDisabled = item.status === 'RESERVED';
       // 직거래는 안전결제 없이 현장에서 대금·물품을 주고받으므로, 예약(RESERVED) 중인 직거래
@@ -1566,8 +1570,9 @@
     // 눌리지 않는 문제가 있어 하단 네비와 동일하게 완전히 분리했다.
     var floatingBar = document.getElementById('marketDetailFloatingBar');
     var floatingBarContent = document.getElementById('marketDetailFloatingBarContent');
-    if (floatingBarContent) floatingBarContent.innerHTML = '<div class="market-detail-action-bar">' + actionHtml + '</div>';
-    if (floatingBar) floatingBar.style.display = 'block';
+    var hideFloatingBar = isMine && item.status === 'SOLD';
+    if (floatingBarContent) floatingBarContent.innerHTML = hideFloatingBar ? '' : '<div class="market-detail-action-bar">' + actionHtml + '</div>';
+    if (floatingBar) floatingBar.style.display = hideFloatingBar ? 'none' : 'block';
 
     wireMarketDetailSlider();
     // 거래내역의 입금기한 카운트다운 — 판매자 화면엔 여러 건이 동시에 있을 수 있어 클래스
