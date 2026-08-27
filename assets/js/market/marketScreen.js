@@ -422,14 +422,14 @@
 
   /** 반품 진행 6단계 — return_status(REQUESTED→ADDRESS_SET→…→COMPLETED)가 안전거래
    * escrow_status와 완전히 독립적으로 진행되므로, 위의 거래 6단계와 별개의 스텝바로 표시한다.
-   * 이의제기(DISPUTED)는 별도 아이콘 없이 "반품완료" 단계가 보류(active)된 상태로 취급한다. */
+   * 이의제기(DISPUTED)는 별도 아이콘 없이 "반품확인" 단계가 보류(active)된 상태로 취급한다. */
   var MARKET_RETURN_STEPS = [
     { icon: 'return', label: '반품신청' },
-    { icon: 'address', label: '반품확인' },
+    { icon: 'address', label: '주소입력' },
     { icon: 'delivery1', label: '택배접수' },
     { icon: 'delivery2', label: '배송중' },
     { icon: 'delivery3', label: '배송완료' },
-    { icon: 'delivery4', label: '반품완료' },
+    { icon: 'delivery4', label: '반품확인' },
   ];
 
   function marketReturnStepStates(order) {
