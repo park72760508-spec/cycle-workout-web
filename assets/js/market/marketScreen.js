@@ -270,10 +270,16 @@
   /** 구매자 거래내역의 배송 추적 카드 — 배송완료 시 72시간 자동 구매확정 잔여 타이머 포함. */
   function marketBuyerDeliveryHtml(o) {
     if (o.deal_type === 'DIRECT_DEAL' || !o.tracking_number) return '';
-    var deadlineIso = o.delivered_at ? new Date(new Date(o.delivered_at).getTime() + 72 * 3600 * 1000).toISOString() : null;
-    var timerHtml = (o.delivery_status === 'DELIVERED' && deadlineIso)
-      ? '<div>자동 구매확정까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>'
-      : '';
+    var timerHtml = '';
+    if (o.delivery_status === 'DELIVERED') {
+      if (o.return_status) {
+        // 반품이 신청된 이후로는 72시간 자동 구매확정이 더 이상 의미가 없다(반품이 대신 진행됨).
+        timerHtml = '<div>자동 구매확정까지 : <span class="market-return-cancelled-text">시간표시 취소됨</span></div>';
+      } else if (o.delivered_at) {
+        var deadlineIso = new Date(new Date(o.delivered_at).getTime() + 72 * 3600 * 1000).toISOString();
+        timerHtml = '<div>자동 구매확정까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>';
+      }
+    }
     // 배송 상태 자체는 위쪽 6단계 진행 스텝바(marketDealStepsHtml)에서 이미 보여주므로
     // 여기서는 송장정보와 72시간 자동확정 타이머만 남긴다.
     return '<div class="market-delivery-info">' +
@@ -379,8 +385,11 @@
     // 송장 등록 후 배송완료 전까지는 "배송중"이 지금 실제로 진행되는 단계.
     var transitState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'active';
     var deliveredState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'pending';
-    // 배송완료 후 구매확정 전까지는 "구매확정"이 구매자의 확인을 기다리는 진행중 단계.
-    var confirmedState = !deliveredDone ? 'pending' : confirmedDone ? 'done' : 'active';
+    // 반품이 신청된 이후로는 구매확정이 더 이상 진행될 수 없는 경로이므로(반품이 최종 종료를
+    // 대신함) "구매확정" 단계를 취소 상태로 표시한다.
+    var confirmedState = order.return_status
+      ? 'cancelled'
+      : (!deliveredDone ? 'pending' : confirmedDone ? 'done' : 'active');
 
     return [negoState, paidState, shippedState, transitState, deliveredState, confirmedState];
   }
@@ -398,12 +407,13 @@
     return '<div class="market-deal-steps">' +
       MARKET_DEAL_STEPS.map(function (step, i) {
         var state = states[i];
+        var label = state === 'cancelled' ? '취소' : step.label;
         return '<div class="market-deal-step market-deal-step--' + state + '">' +
           '<div class="market-deal-step__icon-wrap">' +
             (state === 'active' ? MARKET_DEAL_STEP_ACTIVE_RING_SVG : '') +
             '<img class="market-deal-step__icon" src="assets/img/' + step.icon + '.svg" alt="" />' +
           '</div>' +
-          '<span class="market-deal-step__label">' + step.label + '</span>' +
+          '<span class="market-deal-step__label">' + label + '</span>' +
         '</div>';
       }).join('') +
     '</div>';

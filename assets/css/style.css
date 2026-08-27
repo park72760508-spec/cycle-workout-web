@@ -31222,6 +31222,20 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   color: #c2410c;
   font-weight: 700;
 }
+/* 반품 신청 시 "구매확정" 단계를 취소 상태로 표시 — done(주황)/active(주황 펄스)와
+   구분되는 빨간 톤으로 더 이상 진행되지 않는 경로임을 알린다. */
+.market-deal-step--cancelled .market-deal-step__icon-wrap {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+.market-deal-step--cancelled .market-deal-step__icon {
+  filter: grayscale(1) opacity(0.35);
+}
+.market-deal-step--cancelled .market-deal-step__label {
+  color: #dc2626;
+  font-weight: 700;
+}
+.market-return-cancelled-text { color: #dc2626; font-weight: 700; }
 
 /* 거래 상대방(구매자/판매자) 정보 + 전화·문자 바로가기 카드 */
 .market-deal-contact-card {
