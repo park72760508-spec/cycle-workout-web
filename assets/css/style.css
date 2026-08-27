@@ -30517,7 +30517,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.market-subtab.active .market-subtab__label { color: #64748b; }
+.market-subtab.active .market-subtab__label { color: #000; font-weight: 700; }
 
 .market-scroll-area {
   flex: 1;
