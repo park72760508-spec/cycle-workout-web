@@ -1288,11 +1288,13 @@
 
     var actionHtml;
     if (isMine) {
+      // 예약중(거래 진행 중)인 상품은 구매자와의 거래가 완결되기 전까지 삭제할 수 없다.
+      var deleteDisabled = item.status === 'RESERVED';
       actionHtml =
         '<div class="market-detail-actions">' +
           '<button type="button" class="market-btn market-btn--outline" id="marketDetailBumpBtn">끌어올리기</button>' +
           '<button type="button" class="market-btn market-btn--outline" id="marketDetailEditBtn">수정</button>' +
-          '<button type="button" class="market-btn market-btn--danger" id="marketDetailDeleteBtn">삭제</button>' +
+          '<button type="button" class="market-btn market-btn--danger' + (deleteDisabled ? ' market-btn--disabled' : '') + '" id="marketDetailDeleteBtn"' + (deleteDisabled ? ' disabled' : '') + '>삭제</button>' +
         '</div>';
     } else if (myOrder && myOrder.escrow_status === 'PAID' && (myOrder.return_status === 'DISPUTED' || myOrder.return_status === 'COMPLETED')) {
       // 이의제기 중엔 인라인 [합의완료] 버튼(marketBuyerReturnHtml)이, 반품완료 후엔 별도 액션이 필요 없다.
