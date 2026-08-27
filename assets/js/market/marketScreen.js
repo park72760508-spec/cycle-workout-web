@@ -540,7 +540,7 @@
           '<div>' + marketReturnTrackingInfoLineHtml(o) + '</div>' +
           timerHtml +
         '</div>' +
-        '<div class="market-detail-actions">' +
+        '<div class="market-detail-actions market-return-actions">' +
           '<button type="button" class="market-btn market-btn--primary market-return-complete-btn" data-order-id="' + o.id + '">반품완료</button>' +
           '<button type="button" class="market-btn market-btn--outline market-return-dispute-btn" data-order-id="' + o.id + '">이의제기</button>' +
         '</div>';

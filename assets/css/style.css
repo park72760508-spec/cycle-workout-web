@@ -31230,6 +31230,9 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* 반품 진행 상태 카드 아래 반품완료/이의제기 버튼 — 바로 위 송장·타이머 정보와
+   붙어 보이지 않도록 버튼 높이(~44px)의 절반 정도 여백을 둔다. */
+.market-return-actions { margin-top: 22px; }
 
 /* 거래 상대방(구매자/판매자) 정보 + 전화·문자 바로가기 카드 */
 .market-deal-contact-card {
