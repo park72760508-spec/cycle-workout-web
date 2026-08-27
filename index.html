@@ -438,7 +438,10 @@
         var verifyBtn = document.getElementById('registerPhoneVerifyBtn');
         if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.textContent = '확인'; }
         stelvioSetPhoneOtpStatus('인증번호를 전송했습니다. 3분 이내에 입력해 주세요.', 'info');
-        stelvioStartPhoneOtpCooldown(sendBtn, 60);
+        // 재전송 대기 시간은 서버의 인증번호 유효시간(expiresInSeconds)을 그대로 사용 —
+        // 버튼에 보이는 시간과 실제 인증 유효시간이 항상 일치하도록 한다.
+        var cooldownSec = Number(data.expiresInSeconds) > 0 ? Number(data.expiresInSeconds) : 180;
+        stelvioStartPhoneOtpCooldown(sendBtn, cooldownSec);
       } catch (e) {
         stelvioSetPhoneOtpStatus((e && e.message) || '인증번호 전송에 실패했습니다.', 'error');
         if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '인증번호<br>받기'; }

@@ -896,12 +896,13 @@ exports.selfServiceResetPasswordHttp = onRequest(
 const ALIGO_SMS_SENDER = "01050149029";
 const PHONE_OTP_COLLECTION = "phone_otp_codes";
 const PHONE_OTP_TTL_MS = 3 * 60 * 1000; // 3분 — 코드베이스에 재사용할 기존 인증 유효시간 값이 없어 신규 도입
-const PHONE_OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+// 재전송 쿨다운은 인증번호 유효시간과 동일하게 맞춘다(기존 코드가 아직 유효한 동안엔
+// 새 코드를 또 받을 필요가 없음 — 버튼에 표시되는 시간도 이 값을 그대로 사용).
+const PHONE_OTP_RESEND_COOLDOWN_MS = PHONE_OTP_TTL_MS;
 const PHONE_OTP_MAX_SENDS_PER_DAY = 5;
 const PHONE_OTP_MAX_ATTEMPTS = 5;
-// TEMP: true인 동안 이미 가입된 번호에도 인증문자를 보낸다(SMS 발송 자체를 테스트하기 위함).
-// 테스트가 끝나면 false로 되돌려 배포할 것 — "정상 동작로직으로 적용해줘" 요청 시 여기만 고친다.
-const PHONE_OTP_TEMP_SKIP_DUPLICATE_CHECK = true;
+// SMS 발송 테스트가 끝나 정상 로직(기가입 번호 차단)으로 복원됨.
+const PHONE_OTP_TEMP_SKIP_DUPLICATE_CHECK = false;
 
 function phoneOtpDigitsOnly(raw) {
   return String(raw || "").replace(/\D/g, "");
