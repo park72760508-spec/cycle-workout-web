@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketBadgePulse1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketBadgeFix1';
   var svc = null;
 
   function loadMarketService() {
@@ -821,7 +821,7 @@
   function renderMarketGrid(append) {
     var grid = document.getElementById('marketItemGrid');
     if (!grid) return;
-    var html = homeState.items.map(marketItemCardHtml).join('');
+    var html = homeState.items.map(function (item) { return marketItemCardHtml(item); }).join('');
     if (!append) {
       grid.innerHTML =
         html ||
