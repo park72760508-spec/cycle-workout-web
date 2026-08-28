@@ -1377,7 +1377,6 @@
     var titleEl = document.getElementById('marketFormTitle');
     var priceEl = document.getElementById('marketFormPrice');
     var descEl = document.getElementById('marketFormDescription');
-    var locEl = document.getElementById('marketFormDirectLocation');
     if (titleEl) titleEl.value = item.title || '';
     if (priceEl) priceEl.value = item.price != null ? Number(item.price).toLocaleString('ko-KR') : '';
     if (descEl) descEl.value = item.description || '';
@@ -1398,7 +1397,8 @@
     if (negotiableEditEl) negotiableEditEl.checked = !!item.negotiable;
     var directWrap = document.getElementById('marketFormDirectLocationWrap');
     if (directWrap) directWrap.style.display = dealMethods.indexOf('직거래') !== -1 ? 'block' : 'none';
-    if (locEl) locEl.value = item.direct_deal_location || '';
+    resetMarketDirectRegionPicker();
+    setMarketDirectLocation(item.direct_deal_location || '');
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-condition'), function (r) {
       r.checked = r.value === item.condition;
     });
@@ -1422,11 +1422,10 @@
     var titleEl = document.getElementById('marketFormTitle');
     var priceEl = document.getElementById('marketFormPrice');
     var descEl = document.getElementById('marketFormDescription');
-    var locEl = document.getElementById('marketFormDirectLocation');
     if (titleEl) titleEl.value = '';
     if (priceEl) priceEl.value = '';
     if (descEl) descEl.value = '';
-    if (locEl) locEl.value = '';
+    resetMarketDirectRegionPicker();
     var bankEl = document.getElementById('marketFormSettlementBank');
     var accNumEl = document.getElementById('marketFormSettlementAccountNumber');
     var holderEl = document.getElementById('marketFormSettlementHolderName');
@@ -1517,6 +1516,90 @@
       out.push(cb.value);
     });
     return out;
+  }
+
+  /** 라이딩 생성 폼과 동일한 시·도→구·군 단일 소스(koreaRegions.js)를 재사용 —
+   * 목록이 251개 구·군에 달해 중고랜드에서 별도로 들고 있지 않는다. */
+  var koreaRegionGroupsPromise = null;
+  function loadKoreaRegionGroups() {
+    if (window.KOREA_REGION_GROUPS) return Promise.resolve(window.KOREA_REGION_GROUPS);
+    if (!koreaRegionGroupsPromise) {
+      koreaRegionGroupsPromise = import('../openRiding/koreaRegions.js').then(function (mod) {
+        return mod.KOREA_REGION_GROUPS;
+      });
+    }
+    return koreaRegionGroupsPromise;
+  }
+
+  function setMarketDirectLocation(text) {
+    var locEl = document.getElementById('marketFormDirectLocation');
+    var pillEl = document.getElementById('marketFormDirectLocationPill');
+    var pillTextEl = document.getElementById('marketFormDirectLocationPillText');
+    var emptyHintEl = document.getElementById('marketFormDirectLocationEmptyHint');
+    var t = String(text || '').trim();
+    if (locEl) locEl.value = t;
+    if (pillTextEl) pillTextEl.textContent = t;
+    if (pillEl) pillEl.style.display = t ? 'inline-flex' : 'none';
+    if (emptyHintEl) emptyHintEl.style.display = t ? 'none' : '';
+  }
+
+  function resetMarketDirectRegionPicker() {
+    var sidoEl = document.getElementById('marketFormDirectSido');
+    var gugunEl = document.getElementById('marketFormDirectGugun');
+    if (sidoEl) sidoEl.value = '';
+    if (gugunEl) {
+      gugunEl.innerHTML = '<option value="">구·군</option>';
+      gugunEl.disabled = true;
+    }
+    setMarketDirectLocation('');
+  }
+
+  /** 직거래 희망 지역: 라이딩 생성 폼의 지역 선택 로직을 그대로 적용하되, "추가" 버튼 없이
+   * 구·군을 선택하는 즉시 지역이 추가(대체)되도록 한다. */
+  function setupMarketDirectRegionPicker() {
+    var sidoEl = document.getElementById('marketFormDirectSido');
+    var gugunEl = document.getElementById('marketFormDirectGugun');
+    var clearBtn = document.getElementById('marketFormDirectLocationClearBtn');
+    if (!sidoEl || !gugunEl) return;
+    loadKoreaRegionGroups().then(function (groups) {
+      if (sidoEl.options.length <= 1) {
+        (groups || []).forEach(function (g) {
+          var opt = document.createElement('option');
+          opt.value = g.sido;
+          opt.textContent = g.sido;
+          sidoEl.appendChild(opt);
+        });
+      }
+      sidoEl.onchange = function () {
+        var group = (groups || []).find(function (g) { return g.sido === sidoEl.value; });
+        var districts = group && Array.isArray(group.districts) ? group.districts : [];
+        gugunEl.innerHTML = '<option value="">구·군</option>';
+        districts.forEach(function (d) {
+          var opt = document.createElement('option');
+          opt.value = d;
+          opt.textContent = d;
+          gugunEl.appendChild(opt);
+        });
+        gugunEl.disabled = districts.length === 0;
+        if (sidoEl.value && !districts.length) {
+          // 세종특별자치시 등 구·군이 없는 시·도는 시·도 선택만으로 바로 추가
+          setMarketDirectLocation(sidoEl.value);
+          sidoEl.value = '';
+        }
+      };
+      gugunEl.onchange = function () {
+        if (!sidoEl.value || !gugunEl.value) return;
+        setMarketDirectLocation(sidoEl.value + ' ' + gugunEl.value);
+        sidoEl.value = '';
+        gugunEl.innerHTML = '<option value="">구·군</option>';
+        gugunEl.disabled = true;
+      };
+    });
+    if (clearBtn) {
+      clearBtn.onclick = function () {
+        setMarketDirectLocation('');
+      };
+    }
   }
 
   async function submitMarketForm() {
@@ -1647,10 +1730,13 @@
       };
     }
     var directWrap = document.getElementById('marketFormDirectLocationWrap');
+    setupMarketDirectRegionPicker();
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-deal-checkbox'), function (cb) {
       cb.onchange = function () {
         var checkedDirect = document.querySelector('.market-form-deal-checkbox[value="직거래"]');
-        if (directWrap) directWrap.style.display = checkedDirect && checkedDirect.checked ? 'block' : 'none';
+        var isDirect = !!(checkedDirect && checkedDirect.checked);
+        if (directWrap) directWrap.style.display = isDirect ? 'block' : 'none';
+        if (!isDirect) resetMarketDirectRegionPicker();
       };
     });
     var submitBtn = document.getElementById('marketFormSubmitBtn');
