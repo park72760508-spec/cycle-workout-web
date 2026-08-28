@@ -262,6 +262,18 @@ function sanitizeMarketSearchKeyword(raw) {
 }
 
 /**
+ * 공백으로 구분된 여러 단어를 "전부 붙어있는 한 구문"이 아니라 "단어 중 하나라도 포함"으로
+ * 매칭되게 OR 필터를 구성한다. 예: "로드바이크 프레임" → 로드바이크만 있거나 프레임만 있어도
+ * 매칭(기존에는 두 단어가 그 순서 그대로 붙어있어야만 매칭되어 검색 결과가 거의 안 나왔음).
+ * 특히 이미지 검색(사진→키워드)에서 Gemini가 여러 단어를 반환할 때 이 완화가 필수적이다.
+ */
+function buildMarketSearchOrFilter(kw) {
+  const terms = kw.split(/\s+/).filter(Boolean).slice(0, 4);
+  if (!terms.length) return '';
+  return terms.map((t) => `title.ilike.%${t}%,description.ilike.%${t}%`).join(',');
+}
+
+/**
  * 상품 목록 조회 — 최신 등록/끌어올린 순(bumped_at desc), 60개(20줄×3개) 단위 페이지네이션.
  * keyword가 있으면 상품명·상품 설명에 포함된 경우만(대소문자 무관) 조회한다.
  * @param {{category?:string, subCategory?:string, keyword?:string, offset?:number, limit?:number}} opts
@@ -282,7 +294,8 @@ export async function listMarketItems(opts) {
     if (opts.subCategory) q = q.eq('sub_category', opts.subCategory);
     const kw = sanitizeMarketSearchKeyword(opts.keyword);
     if (kw) {
-      q = q.or(`title.ilike.%${kw}%,description.ilike.%${kw}%`);
+      const orFilter = buildMarketSearchOrFilter(kw);
+      if (orFilter) q = q.or(orFilter);
     }
     const { data, error } = await q;
     if (error) throw error;

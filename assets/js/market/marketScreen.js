@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketImgSearch1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketImgSearchAcc1';
   var svc = null;
 
   function loadMarketService() {
@@ -1098,9 +1098,13 @@
   async function marketFetchGeminiImageKeyword(apiKey, base64Image) {
     var prompt =
       '이 사진은 자전거·러닝 중고거래 마켓플레이스에 올라온 상품 사진입니다. ' +
-      '사진 속 상품을 가장 잘 나타내는 한국어 검색 키워드를 1~3개, 쉼표 없이 띄어쓰기로만 ' +
-      '구분해 핵심 명사 위주로 간단히 답하세요(예: "로드바이크 프레임", "런닝화 나이키"). ' +
-      '다른 설명이나 문장부호 없이 키워드만 출력하세요.';
+      '이 사진으로 실제 중고거래 게시글을 검색한다고 할 때, 판매자들이 게시글 제목에 ' +
+      '실제로 쓸 법한 핵심 검색어를 한국어로 1~2개만, 띄어쓰기로만 구분해 출력하세요.\n' +
+      '- 사진에 브랜드명·모델명이 텍스트나 로고로 뚜렷하게 보이면 반드시 그 브랜드명을 포함하세요.\n' +
+      '- 브랜드를 알 수 없다면 상품 종류를 나타내는 가장 흔한 명사 하나만 쓰세요 ' +
+      '(예: 로드바이크, 산악자전거, 런닝화, 사이클슈즈, 헬멧, 고글).\n' +
+      '- 너무 구체적이거나 드문 표현, 형용사, 색상·상태 설명은 쓰지 마세요.\n' +
+      '- 다른 설명, 문장부호, 따옴표 없이 검색어만 출력하세요.';
     var body = {
       contents: [{
         parts: [
@@ -1108,7 +1112,7 @@
           { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
         ],
       }],
-      generationConfig: { maxOutputTokens: 60, temperature: 0.2 },
+      generationConfig: { maxOutputTokens: 40, temperature: 0.15 },
     };
     var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
     var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + MARKET_IMAGE_SEARCH_GEMINI_MODEL + ':generateContent?key=' + apiKey;
