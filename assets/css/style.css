@@ -30348,7 +30348,9 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   min-height: 100dvh !important;
   min-height: -webkit-fill-available !important;
   max-height: 100dvh !important;
-  padding-top: max(20px, env(safe-area-inset-top, 0px)) !important;
+  /* 제목 위 여백이 다른 화면(20px 최소)보다 좁게 — 중고랜드는 뒤로가기 없는 목록형
+     화면이라 더 컴팩트하게 시작해도 무방하다. */
+  padding-top: max(8px, env(safe-area-inset-top, 0px)) !important;
   padding-bottom: 0 !important;
   padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
   padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
@@ -30359,7 +30361,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 0;
+  padding: 6px 0;
   flex-shrink: 0;
 }
 .market-back-btn {
