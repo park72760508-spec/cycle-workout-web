@@ -30426,15 +30426,13 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   opacity: 0.55;
   transition: opacity 0.14s ease;
 }
-/* 카테고리 화면의 "중고랜드" 진입 버튼(#sportCategoryScreen .market-entry-btn)과 동일한
-   디자인(폰트크기·색상·아이콘 크기)을 선택된 탭에 적용 — 오렌지 그라디언트 + 흰 글자. */
+/* 하단 네비게이션바 선택 탭(.market-bottom-nav__btn.active)과 동일한 오렌지 톤 */
 .market-category-tab.active {
-  background: linear-gradient(135deg, #f97316, #ea580c);
-  box-shadow: 0 2px 8px rgba(234, 88, 12, 0.35);
-  color: #fff;
-  font-size: 17px;
+  background-color: rgba(234, 88, 12, 0.12);
+  color: #c2410c;
+  box-shadow: none;
 }
-.market-category-tab.active img { opacity: 1; width: 18px; height: 18px; }
+.market-category-tab.active img { opacity: 1; }
 
 /* "중고랜드" 제목과 같은 줄 우측의 검색 아이콘 — 클릭하면 이 줄 아래
    .market-header-search-row가 펼쳐지고, 좌측 spacer가 아이콘 폭(36px)만큼
