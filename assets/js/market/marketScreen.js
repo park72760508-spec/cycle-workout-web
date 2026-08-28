@@ -1199,20 +1199,67 @@
   // 하는데도 마켓 홈 초기화 콜백(marketScreenInit)이 이미 실행돼 있어, 하단 중고랜드 네비만
   // 화면에 남고 실제 화면은 이전 화면(카테고리 등)에 그대로 머무르는 문제가 보고되었다.
   // 연타(더블탭/고스트클릭)로 인한 중복 요청은 막고, 요청 후 실제로 전환됐는지 재확인해
-  // 실패 시 한 번 더 시도한다.
+  // 실패 시 여러 번 재시도한다(1회만 재시도했을 때 인증 상태 안정화가 200ms보다 늦게 끝나는
+  // 경우까지는 못 잡아서 "간헐적으로" 여전히 실패한다는 재현 보고가 있었음).
   var marketLandNavPending = false;
   window.navigateToMarketLand = function () {
     if (marketLandNavPending) return;
     marketLandNavPending = true;
-    if (typeof window.showScreen === 'function') window.showScreen('marketHomeScreen');
-    setTimeout(function () {
-      var marketScreenEl = document.getElementById('marketHomeScreen');
-      if (marketScreenEl && !marketScreenEl.classList.contains('active') && typeof window.showScreen === 'function') {
-        window.showScreen('marketHomeScreen');
-      }
-      marketLandNavPending = false;
-    }, 200);
+    var attempts = 0;
+    var maxAttempts = 4; // 약 200+300+500+800ms에 걸쳐 재확인
+    var delays = [200, 300, 500, 800];
+    function attempt() {
+      if (typeof window.showScreen === 'function') window.showScreen('marketHomeScreen');
+      setTimeout(function () {
+        var marketScreenEl = document.getElementById('marketHomeScreen');
+        var isActive = marketScreenEl && marketScreenEl.classList.contains('active');
+        attempts++;
+        if (!isActive && attempts < maxAttempts) {
+          attempt();
+        } else {
+          marketLandNavPending = false;
+        }
+      }, delays[attempts] || 800);
+    }
+    attempt();
   };
+
+  // 위 재시도로도 화면 전환 자체가 늦어지거나 실패하는 순간이 있을 수 있는데, 그 사이에
+  // marketScreenInit이 한 번이라도 실행돼 하단 네비(#marketBottomNav)가 표시된 채로 남아있는
+  // 상태에서, 다른 비동기 로직(인증 상태 변경 리스너 등 마켓과 무관한 코드)이 뒤늦게
+  // showScreen(다른 화면)을 호출해 실제 활성 화면이 카테고리 등으로 되돌아가 버리면, 네비만
+  // 화면에 계속 남는 "간헐적" 증상이 생긴다. 이 재현 경로 전부를 근본적으로 막기 위해, 원인이
+  // 무엇이든 상관없이 "showScreen 호출이 끝난 뒤 실제 활성 화면이 market* 화면이 아니면 네비를
+  // 무조건 숨긴다"는 규칙을 전역 showScreen에 걸어 마켓 화면 전용 코드 경로에 의존하지 않게 한다.
+  function hideMarketBottomNavIfNotOnMarketScreen() {
+    var nav = document.getElementById('marketBottomNav');
+    if (!nav || nav.style.display === 'none') return;
+    var activeScreen = document.querySelector('.screen.active');
+    var isMarketScreen = !!activeScreen && activeScreen.id.indexOf('market') === 0;
+    if (!isMarketScreen) nav.style.display = 'none';
+  }
+  (function installMarketBottomNavGuard() {
+    function wrap() {
+      if (typeof window.showScreen !== 'function') return;
+      if (window.showScreen.__stelvioMarketNavGuardWrapped) return;
+      var prev = window.showScreen;
+      function wrapped() {
+        var ret = prev.apply(this, arguments);
+        // index.html의 showScreen 래퍼 자체가 최대 100ms 뒤에 폴백 전환을 시도할 수 있고,
+        // navigateToMarketLand의 재시도도 200ms 단위로 이어지므로 여러 시점에 확인한다.
+        setTimeout(hideMarketBottomNavIfNotOnMarketScreen, 0);
+        setTimeout(hideMarketBottomNavIfNotOnMarketScreen, 150);
+        setTimeout(hideMarketBottomNavIfNotOnMarketScreen, 900);
+        return ret;
+      }
+      wrapped.__stelvioMarketNavGuardWrapped = true;
+      window.showScreen = wrapped;
+    }
+    wrap();
+    setTimeout(wrap, 0);
+    setTimeout(wrap, 400);
+    setTimeout(wrap, 1500);
+  })();
 
   // ───────────────────────── 마이페이지 진입 ─────────────────────────
 
