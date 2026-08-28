@@ -3702,7 +3702,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260828marketCard5Lines1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260828marketImgSearch1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4702,22 +4702,24 @@
   <!-- 중고랜드(Market Land) — 홈/목록 -->
   <div id="marketHomeScreen" class="screen market-screen market-screen--with-nav" style="display: none;">
     <div class="market-header">
-      <h2 class="market-header__title">중고랜드</h2>
-    </div>
-    <div class="market-category-tabbar" role="tablist">
-      <button type="button" id="marketCategoryTabCycle" class="market-category-tab active" aria-label="CYCLE" aria-pressed="true">
-        <img src="assets/img/cycling.png" alt="" width="20" height="20" loading="lazy" decoding="async" />
-        <span>자전거 장터</span>
-      </button>
-      <button type="button" id="marketCategoryTabRun" class="market-category-tab" aria-label="RUN" aria-pressed="false">
-        <img src="assets/img/running02.svg" alt="" width="20" height="20" loading="lazy" decoding="async" />
-        <span>런닝 장터</span>
+      <span class="market-header__spacer"></span>
+      <h2 class="market-header__title" id="marketHomeTitle">중고랜드</h2>
+      <button type="button" id="marketSearchToggleBtn" class="market-header-icon-btn" aria-label="검색">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.35-4.35"></path></svg>
       </button>
     </div>
-    <div class="market-search-bar">
-      <svg class="market-search-bar__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.35-4.35"></path></svg>
-      <input type="search" id="marketSearchInput" class="market-search-bar__input" placeholder="상품명, 상품 설명으로 검색" autocomplete="off" enterkeyhint="search" />
-      <button type="button" id="marketSearchClearBtn" class="market-search-bar__clear" style="display:none;" aria-label="검색어 지우기">✕</button>
+    <div class="market-header-search-row" id="marketSearchRow" style="display:none;">
+      <div class="market-header-search-input-wrap">
+        <input type="search" id="marketSearchInput" class="market-header-search-input" placeholder="상품명, 상품 설명으로 검색" autocomplete="off" enterkeyhint="search" />
+        <button type="button" id="marketSearchClearBtn" class="market-search-bar__clear" style="display:none;" aria-label="검색어 지우기">✕</button>
+      </div>
+      <button type="button" id="marketSearchImageBtn" class="market-header-icon-btn" aria-label="이미지로 검색" style="display:none;" title="이미지로 검색(환경설정에 Gemini API 키가 등록된 경우에만 사용 가능)">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.113-1.134.176C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.176 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.822 1.316z"></path><path d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"></path></svg>
+      </button>
+      <input type="file" id="marketSearchImageFileInput" accept="image/*" style="display:none;" />
+      <button type="button" id="marketSearchCloseBtn" class="market-header-icon-btn" aria-label="검색 닫기">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
     </div>
     <div id="marketSubCategoryTabs" class="market-subtabs"></div>
     <div id="marketHomeScrollArea" class="market-scroll-area">
@@ -43199,7 +43201,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script src="assets/js/competition/competitionScreen.js?v=applicants-popup-20260906"></script>
-  <script src="assets/js/market/marketScreen.js?v=20260828marketCard5Lines1"></script>
+  <script src="assets/js/market/marketScreen.js?v=20260828marketImgSearch1"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {
