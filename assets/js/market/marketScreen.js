@@ -306,6 +306,24 @@
     '</div>';
   }
 
+  /** 복사 버튼 바로 옆(좌측)에 뜨는 작은 말풍선 — 화면 하단 플로팅 액션바에 가려 안 보이던
+   * 전역 토스트 대신, 버튼을 누른 자리에서 바로 결과를 확인할 수 있게 한다. */
+  function showMarketCopyInlineToast(btn, msg) {
+    var row = btn.closest ? btn.closest('.market-deal-info-row') : null;
+    if (!row) { toast(msg); return; }
+    var existing = row.querySelector('.market-copy-toast');
+    if (existing) existing.parentNode.removeChild(existing);
+    var el = document.createElement('span');
+    el.className = 'market-copy-toast';
+    el.textContent = msg;
+    row.appendChild(el);
+    requestAnimationFrame(function () { el.classList.add('market-copy-toast--visible'); });
+    setTimeout(function () {
+      el.classList.remove('market-copy-toast--visible');
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 200);
+    }, 1400);
+  }
+
   /** 가상 계좌번호 등 복사 버튼(marketDealInfoLineHtml) 클릭 처리 — execCommand('copy')를
    * 먼저 시도한다(동기적이라 네이티브 앱 WebView에서도 즉시 성공 여부를 알 수 있음).
    * Clipboard API(navigator.clipboard.writeText)는 일부 WebView에서 권한 프롬프트가
@@ -314,8 +332,8 @@
   function handleMarketCopyClick(btn) {
     var value = btn.getAttribute('data-copy-value') || '';
     if (!value) return;
-    function onSuccess() { toast('복사되었습니다.'); }
-    function onFail() { toast('복사에 실패했습니다. 직접 선택해 복사해 주세요.'); }
+    function onSuccess() { showMarketCopyInlineToast(btn, '복사되었습니다.'); }
+    function onFail() { showMarketCopyInlineToast(btn, '복사 실패'); }
     if (marketFallbackCopy(value)) {
       onSuccess();
       return;
