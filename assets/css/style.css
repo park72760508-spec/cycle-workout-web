@@ -30340,18 +30340,6 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   padding: 10px 0;
   flex-shrink: 0;
 }
-/* 뒤로가기 화살표가 없는 화면(중고랜드 홈) — 제목을 헤더 좌우 정중앙에 절대배치로 고정하고
-   토글은 오른쪽 끝에 붙인다(제목 정중앙은 좌우 요소 폭과 무관해야 하므로 flex 중앙정렬 대신 사용). */
-.market-header--centered { position: relative; }
-.market-header__title--absolute-center {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
-  flex: none;
-}
-.market-header-category-toggle--pinned-right { margin-left: auto; }
 .market-back-btn {
   display: flex;
   align-items: center;
@@ -30377,39 +30365,49 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 .market-header__title--left { text-align: left; }
 .market-header__spacer { width: 36px; flex-shrink: 0; }
 
-/* CYCLE/RUN 토글 — 프로필 선택 목록 화면과 동일한 종목 이미지(cycling.png/running.png)를
-   헤더 우측 토글 버튼으로 사용. 선택된 쪽만 오렌지 배경으로 강조. */
-.market-header-category-toggle {
+/* CYCLE/RUN 전환 — 우측 상단의 작은 아이콘 토글 대신, 화면 최상단 중앙에 이름표가 붙은
+   탭바(세그먼트 컨트롤) 형태로 배치해 지금 보고 있는 장터가 무엇인지 명확히 인지되게 한다. */
+.market-category-tabbar {
   display: flex;
-  align-items: center;
+  justify-content: center;
   gap: 6px;
+  padding: 4px;
+  margin-bottom: 8px;
+  background: #f1f5f9;
+  border-radius: 12px;
   flex-shrink: 0;
 }
-.market-category-toggle-btn {
+.market-category-tab {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 50%;
-  background: #f8fafc;
+  gap: 6px;
+  flex: 1;
+  max-width: 220px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13.5px;
+  font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
+  transition: background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
 }
-.market-category-toggle-btn:active { transform: scale(0.93); }
-.market-category-toggle-btn img {
-  width: 20px;
-  height: 20px;
+.market-category-tab img {
+  width: 18px;
+  height: 18px;
   display: block;
   object-fit: contain;
+  opacity: 0.55;
+  transition: opacity 0.14s ease;
 }
-.market-category-toggle-btn.active {
-  background: linear-gradient(135deg, #f97316, #ea580c);
-  border-color: #ea580c;
-  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.35);
+.market-category-tab.active {
+  background: #fff;
+  color: #ea580c;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.14);
 }
+.market-category-tab.active img { opacity: 1; }
 
 .market-search-bar {
   display: flex;
@@ -30559,34 +30557,36 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
+/* 상품 목록 — 한 줄에 1건, 좌측 이미지 + 우측 4줄(상품명/가격/상태/통계) 리스트형 레이아웃. */
 .market-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
 }
 /* 마이페이지 "나의거래내역" — 예약중/거래완료 두 섹션(각각 .market-grid)을 세로로 쌓는 컨테이너 */
 .market-deals-list .market-grid { margin-bottom: 8px; }
 .market-deals-list .market-order-history__title:first-child { margin-top: 0; }
 .market-card {
   display: flex;
-  flex-direction: column;
-  /* min-width 기본값(auto)이면 grid 트랙(1fr) 폭을 무시하고 white-space:nowrap 제목의 원래
-     길이만큼 셀이 늘어나 3열이 서로 다른 크기가 되고 줄임(...)도 동작하지 않는다 — 카드가 항상
-     트랙 폭에 맞춰 줄어들도록 명시. */
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
   min-width: 0;
+  padding: 12px 2px;
+  /* 리스트 간 구분선(흐릿한 실선) — 마지막 항목은 생략 */
+  border-bottom: 1px solid #eef1f5;
   cursor: pointer;
 }
-/* 거래 완료(판매완료) 상품 — 카드 전체를 비활성화 톤으로: 이미지는 흐리게+무채색, 제목/가격도 반투명 */
+.market-card:last-child { border-bottom: none; }
+/* 거래 완료(판매완료) 상품 — 카드 전체를 비활성화 톤으로: 이미지는 흐리게+무채색, 텍스트도 반투명 */
 .market-card--sold .market-card__img { opacity: 0.45; filter: grayscale(0.4); }
-.market-card--sold .market-card__title,
-.market-card--sold .market-card__price {
-  opacity: 0.5;
-}
+.market-card--sold .market-card__info { opacity: 0.5; }
 .market-card--sold .market-card__heart { opacity: 0.6; }
 .market-card__img-wrap {
   position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1;
+  /* 기존 그리드 카드 썸네일(약 90px) 대비 20% 확대 */
+  width: 108px;
+  height: 108px;
+  flex-shrink: 0;
   border-radius: 10px;
   overflow: hidden;
   background: #f1f5f9;
@@ -30627,20 +30627,43 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 }
 .market-badge--sold { background: #64748b; }
 .market-badge--reserved { background: #f59e0b; }
+.market-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
 .market-card__title {
-  margin-top: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 700;
   color: #1e293b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .market-card__price {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   color: #ea580c;
 }
+.market-card__condition {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: #64748b;
+}
+.market-card__stats {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #94a3b8;
+}
+.market-card__stats .market-detail-stat__icon { width: 13px; height: 13px; }
+.market-card__stats span:not(.market-detail-stat--rating) { margin-right: 8px; }
+.market-card__stats .market-detail-stat--rating { font-size: 11.5px; font-weight: 400; color: #94a3b8; }
 .market-loadmore-btn {
   display: block;
   width: 100%;
@@ -30832,6 +30855,24 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   background: #fff;
 }
 .market-form-textarea { resize: vertical; font-family: inherit; }
+/* 카테고리·은행 등 select 목록 — 브라우저 기본 화살표 대신 커스텀 셰브론 + 오렌지 포커스
+   링을 적용해 중고랜드 화면 톤(오렌지 강조)에 맞춘 STELVIO 디자인으로 통일한다. */
+.market-form-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 34px;
+  cursor: pointer;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+.market-form-select:focus {
+  outline: none;
+  border-color: #ea580c;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.12);
+}
 .market-form-label--section { margin-top: 20px; }
 .market-form-hint {
   margin: 0 0 8px 0;

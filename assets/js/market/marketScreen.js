@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260827marketPurchaseAddr1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketListRedesign1';
   var svc = null;
 
   function loadMarketService() {
@@ -746,6 +746,8 @@
     var img = (item.images && item.images[0]) || 'assets/img/profile-placeholder.svg';
     var isFav = homeState.favoriteIds.has(item.id);
     var soldClass = item.status === 'SOLD' ? ' market-card--sold' : '';
+    var viewCount = Number(item.view_count) || 0;
+    var favCount = Number(item.__favoriteCount) || 0;
     return (
       '<div class="market-card' + soldClass + '" data-item-id="' + item.id + '">' +
         '<div class="market-card__img-wrap">' +
@@ -755,8 +757,16 @@
             (isFav ? '♥' : '♡') +
           '</button>' +
         '</div>' +
-        '<div class="market-card__title">' + escapeHtml(item.title) + '</div>' +
-        '<div class="market-card__price">' + formatPrice(item.price) + '원</div>' +
+        '<div class="market-card__info">' +
+          '<div class="market-card__title">' + escapeHtml(item.title) + '</div>' +
+          '<div class="market-card__price">' + formatPrice(item.price) + '원</div>' +
+          '<div class="market-card__condition">' + escapeHtml(item.condition || '') + '</div>' +
+          '<div class="market-card__stats">' +
+            MARKET_EYE_ICON_SVG + '<span>' + viewCount + '</span>' +
+            MARKET_HEART_ICON_SVG + '<span>' + favCount + '</span>' +
+            marketRatingNumericHtml(item.__sellerRatingAvg) +
+          '</div>' +
+        '</div>' +
       '</div>'
     );
   }
@@ -839,14 +849,34 @@
   function loadMoreMarketItems() {
     if (homeState.loading || !homeState.hasMore) return;
     homeState.loading = true;
+    var svcRef = null;
     loadMarketService()
       .then(function (s) {
+        svcRef = s;
         return s.listMarketItems({
           category: homeState.category,
           subCategory: homeState.subCategory || undefined,
           keyword: homeState.keyword || undefined,
           offset: homeState.offset,
           limit: PAGE_SIZE,
+        });
+      })
+      .then(function (rows) {
+        // 목록 카드에 조회수/관심수/만족도를 표시하기 위해 이번 페이지 상품에 대해서만
+        // 관심수·판매자 만족도를 배치 조회해 병합한다(상품별 개별 조회 시 N+1 방지).
+        var itemIds = rows.map(function (r) { return r.id; });
+        var sellerIds = rows.map(function (r) { return r.user_id; });
+        return Promise.all([
+          svcRef.getMarketFavoriteCountsForItems(itemIds).catch(function () { return {}; }),
+          svcRef.getSellerRatingAggregatesForSellers(sellerIds).catch(function () { return {}; }),
+        ]).then(function (res) {
+          var favCounts = res[0] || {};
+          var ratingAggs = res[1] || {};
+          rows.forEach(function (r) {
+            r.__favoriteCount = favCounts[r.id] || 0;
+            r.__sellerRatingAvg = (ratingAggs[r.user_id] && ratingAggs[r.user_id].avg) || 0;
+          });
+          return rows;
         });
       })
       .then(function (rows) {
@@ -1047,7 +1077,9 @@
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-condition'), function (r) {
       r.checked = r.value === '중고 상품';
     });
-    renderMarketFormCategoryOptions('CYCLE');
+    // 신규 등록 시엔 "종목선택" 플레이스홀더 상태로 시작해 사용자가 직접 펼쳐서 선택하게 한다
+    // (수정 화면은 populateMarketFormForEdit에서 기존 상품의 실제 카테고리로 채움).
+    renderMarketFormCategoryOptions('');
     renderMarketFormBankOptions();
     renderMarketImageSlots();
     updateMarketDescCounter();
@@ -1149,6 +1181,7 @@
     var settlementHolderName = (holderEl ? holderEl.value : '').trim();
 
     if (!title) { toast('상품명을 입력해 주세요.'); return; }
+    if (!catEl.value) { toast('종목을 선택해 주세요.'); return; }
     if (!priceRaw || price < 0) { toast('판매가를 입력해 주세요.'); return; }
     if (!dealMethods.length) { toast('거래 방법을 하나 이상 선택해 주세요.'); return; }
     if (dealMethods.indexOf('직거래') !== -1 && !directLocation) {

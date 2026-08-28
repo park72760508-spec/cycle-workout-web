@@ -545,6 +545,52 @@ export async function getMarketFavoriteCount(itemId) {
   });
 }
 
+/** 목록 화면용 — 여러 상품의 관심수를 한 번의 쿼리로 배치 조회(N+1 방지). PostgREST에
+ * group-by 카운트 API가 없어 item_id만 받아 클라이언트에서 빈도수를 센다(목록 페이지당
+ * 건수가 적어 부담 없음). */
+export async function getMarketFavoriteCountsForItems(itemIds) {
+  return withMarketAuthRetry(async () => {
+    const ids = Array.from(new Set(itemIds || [])).filter(Boolean);
+    if (!ids.length) return {};
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.from('market_favorites').select('item_id').in('item_id', ids);
+    if (error) throw error;
+    const counts = {};
+    (data || []).forEach((row) => {
+      counts[row.item_id] = (counts[row.item_id] || 0) + 1;
+    });
+    return counts;
+  });
+}
+
+/** 목록 화면용 — 여러 판매자의 만족도 평균을 한 번의 쿼리로 배치 조회(N+1 방지). */
+export async function getSellerRatingAggregatesForSellers(sellerIds) {
+  return withMarketAuthRetry(async () => {
+    const ids = Array.from(new Set(sellerIds || [])).filter(Boolean);
+    if (!ids.length) return {};
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_seller_ratings')
+      .select('seller_id, score')
+      .in('seller_id', ids)
+      .gte('score', 2);
+    if (error) throw error;
+    const bySeller = {};
+    (data || []).forEach((row) => {
+      const cur = bySeller[row.seller_id] || { sum: 0, count: 0 };
+      cur.sum += Number(row.score) || 0;
+      cur.count += 1;
+      bySeller[row.seller_id] = cur;
+    });
+    const result = {};
+    Object.keys(bySeller).forEach((sellerId) => {
+      const { sum, count } = bySeller[sellerId];
+      result[sellerId] = { avg: count > 0 ? sum / count : 0, count };
+    });
+    return result;
+  });
+}
+
 /** 판매자 공개 프로필(v_user_public_profile) — RLS상 users 테이블은 본인 것만 보이므로 반드시
  *  이 공개 뷰를 통해서만 다른 사용자(판매자)의 이름·프로필 사진을 읽을 수 있다. */
 /** v_user_public_profile.display_name은 비공개(is_private) 사용자를 '비공개' 문자열로
@@ -723,6 +769,8 @@ if (typeof window !== 'undefined') {
     getMarketOrdersForItem,
     incrementMarketItemView,
     getMarketFavoriteCount,
+    getMarketFavoriteCountsForItems,
+    getSellerRatingAggregatesForSellers,
     getSellerPublicProfile,
     getSellerPhone,
     getBuyerPhone,
