@@ -30666,6 +30666,24 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
+/* 마이페이지 "내 상품" 카드 — 완결되지 않은 거래 요청이 걸려 있으면 이미지 좌측 상단에
+   오렌지 점 + 펄스 애니메이션으로 알람처럼 시선을 끈다. */
+.market-card__request-dot {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ea580c;
+  border: 2px solid #fff;
+  z-index: 2;
+  animation: marketRequestDotPulse 1.6s ease-in-out infinite;
+}
+@keyframes marketRequestDotPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.5); }
+  50% { box-shadow: 0 0 0 5px rgba(234, 88, 12, 0.18); }
+}
 .market-badge {
   position: absolute;
   top: 6px;
@@ -30843,6 +30861,7 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
   position: relative;
 }
 .market-bottom-nav__btn {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -30862,6 +30881,18 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.14s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.14s ease, color 0.14s ease;
+}
+/* 마이페이지 아이콘 배지 — 내가 판매자인 상품에 완결되지 않은 거래 요청이 있을 때 표시 */
+.market-bottom-nav__icon-wrap { position: relative; display: flex; }
+.market-bottom-nav__badge {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ea580c;
+  border: 1.5px solid #fff;
 }
 .market-bottom-nav__btn:active { transform: scale(0.93); background-color: rgba(15, 23, 42, 0.08); }
 .market-bottom-nav__btn.active { color: #c2410c; background-color: rgba(234, 88, 12, 0.12); }

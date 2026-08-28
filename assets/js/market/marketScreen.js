@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketImgSearchAcc1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketBadgePulse1';
   var svc = null;
 
   function loadMarketService() {
@@ -64,6 +64,23 @@
       var btn = document.getElementById(idByKey[key]);
       if (btn) btn.classList.toggle('active', key === activeKey);
     });
+    refreshMarketMyPageBadge();
+  }
+
+  /** 하단 네비 마이페이지 아이콘 배지 — 내가 판매자인 상품에 완결되지 않은 거래 요청이
+   * 하나라도 있으면 점을 표시한다. 중고랜드 화면에 들어올 때마다(syncMarketBottomNav) 갱신. */
+  var marketMyPageBadgeRefreshing = false;
+  function refreshMarketMyPageBadge() {
+    if (marketMyPageBadgeRefreshing) return;
+    marketMyPageBadgeRefreshing = true;
+    loadMarketService()
+      .then(function (s) { return s.getSellerActiveOrderItemIds(); })
+      .then(function (ids) {
+        var badge = document.getElementById('marketNavMyPageBadge');
+        if (badge) badge.style.display = (ids && ids.size) ? 'block' : 'none';
+      })
+      .catch(function () {})
+      .finally(function () { marketMyPageBadgeRefreshing = false; });
   }
 
   /** competitionBottomSheet.js의 BANK_OPTIONS와 동일 목록(모듈이 분리돼 있어 값만 그대로 복사) */
@@ -769,17 +786,19 @@
     });
   }
 
-  function marketItemCardHtml(item) {
+  function marketItemCardHtml(item, activeOrderIds) {
     var img = (item.images && item.images[0]) || 'assets/img/profile-placeholder.svg';
     var isFav = homeState.favoriteIds.has(item.id);
     var soldClass = item.status === 'SOLD' ? ' market-card--sold' : '';
     var viewCount = Number(item.view_count) || 0;
     var favCount = Number(item.__favoriteCount) || 0;
+    var hasActiveRequest = !!(activeOrderIds && activeOrderIds.has(item.id));
     return (
       '<div class="market-card' + soldClass + '" data-item-id="' + item.id + '">' +
         '<div class="market-card__img-wrap">' +
           '<img class="market-card__img" src="' + escapeHtml(img) + '" alt="" loading="lazy" decoding="async" />' +
           statusBadgeHtml(item.status) +
+          (hasActiveRequest ? '<span class="market-card__request-dot" aria-label="거래 요청 있음" title="거래 요청이 있습니다"></span>' : '') +
           '<button type="button" class="market-card__heart" data-fav-toggle="' + item.id + '" aria-label="관심상품">' +
             (isFav ? '♥' : '♡') +
           '</button>' +
@@ -2892,9 +2911,13 @@
       { key: 'deals', label: '나의거래내역', icon: 'deal' },
     ];
     wrap.innerHTML = tabs.map(function (t) {
+      var iconUrl = 'assets/img/' + t.icon + '.svg';
       return '<button type="button" class="market-subtab' + (myPageState.tab === t.key ? ' active' : '') +
         '" data-tab="' + t.key + '" aria-label="' + t.label + '" title="' + t.label + '">' +
-        '<img class="market-subtab__icon" src="assets/img/' + t.icon + '.svg" alt="" /></button>';
+        '<span class="market-subtab__icon-wrap">' +
+          '<span class="market-subtab__icon market-subtab__icon--masked" style="-webkit-mask-image:url(\'' + iconUrl + '\');mask-image:url(\'' + iconUrl + '\');"></span>' +
+        '</span>' +
+      '</button>';
     }).join('');
     Array.prototype.forEach.call(wrap.querySelectorAll('[data-tab]'), function (btn) {
       btn.onclick = function () {
@@ -2922,8 +2945,8 @@
             renderMyPageItemGrid(grid, rows, '찜한 상품이 없습니다.');
           });
         }
-        return s.getMyMarketItems().then(function (rows) {
-          renderMyPageItemGrid(grid, rows, '등록한 상품이 없습니다.');
+        return Promise.all([s.getMyMarketItems(), s.getSellerActiveOrderItemIds().catch(function () { return new Set(); })]).then(function (res) {
+          renderMyPageItemGrid(grid, res[0], '등록한 상품이 없습니다.', res[1]);
         });
       })
       .catch(function (err) {
@@ -2931,9 +2954,11 @@
       });
   }
 
-  function renderMyPageItemGrid(grid, rows, emptyMessage) {
+  function renderMyPageItemGrid(grid, rows, emptyMessage, activeOrderIds) {
     rows = (rows || []).filter(Boolean);
-    grid.innerHTML = rows.length ? rows.map(marketItemCardHtml).join('') : '<div class="market-empty">' + emptyMessage + '</div>';
+    grid.innerHTML = rows.length
+      ? rows.map(function (item) { return marketItemCardHtml(item, activeOrderIds); }).join('')
+      : '<div class="market-empty">' + emptyMessage + '</div>';
     wireMarketGridEvents(grid);
   }
 

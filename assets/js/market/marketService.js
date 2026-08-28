@@ -443,6 +443,23 @@ export async function getMyMarketOrders() {
   });
 }
 
+/** 하단 네비 마이페이지 배지·"내 상품" 카드 알림 점 — 내가 판매자인 상품 중 아직 완결되지
+ * 않은(입금대기·예약·입금완료) 거래 요청이 걸려 있는 상품 id 집합을 조회한다. */
+export async function getSellerActiveOrderItemIds() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const userId = await getMySupabaseUserId();
+    if (!userId) return new Set();
+    const { data, error } = await supabase
+      .from('market_orders')
+      .select('item_id')
+      .eq('seller_id', userId)
+      .in('escrow_status', ['PENDING', 'RESERVED', 'PAID']);
+    if (error) throw error;
+    return new Set((data || []).map((o) => o.item_id));
+  });
+}
+
 /** 구매 요청 — 가상계좌(안전결제) 발급. Cloud Function이 Toss 시크릿 키로 발급을 대행한다.
  *  createMarketOrder/confirmMarketPurchase는 다른 대회 결제 함수와 동일하게 asia-northeast3에 배포됨. */
 /** 안전결제 구매 — address(zipCode/address1/address2)는 물품을 받으실 배송 주소로, 결제 확인
@@ -766,6 +783,7 @@ if (typeof window !== 'undefined') {
     getMySupabaseUserId,
     getMyMarketItems,
     getMyMarketOrders,
+    getSellerActiveOrderItemIds,
     requestMarketPurchase,
     requestMarketDirectDeal,
     setMarketOrderTracking,
