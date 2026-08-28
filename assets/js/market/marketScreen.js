@@ -793,6 +793,7 @@
             MARKET_HEART_ICON_SVG + '<span>' + favCount + '</span>' +
             marketRatingNumericHtml(item.__sellerRatingAvg) +
           '</div>' +
+          '<div class="market-card__date">' + escapeHtml(marketFormatDate(item.created_at)) + '</div>' +
         '</div>' +
       '</div>'
     );
