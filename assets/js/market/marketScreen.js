@@ -272,7 +272,7 @@
         }).join('') +
       '</select>' +
       '<div class="market-tracking-input-row">' +
-        '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" value="' + escapeHtml(isEdit ? o.tracking_number : '') + '" />' +
+        '<input type="text" inputmode="numeric" class="market-form-input market-delivery-tracking-input" placeholder="송장번호(숫자만)" value="' + escapeHtml(isEdit ? o.tracking_number : '') + '" />' +
         marketBarcodeScanBtnHtml(o.id, 'forward') +
       '</div>' +
       '<div class="market-delivery-form__actions">' +
@@ -665,7 +665,7 @@
         }).join('') +
       '</select>' +
       '<div class="market-tracking-input-row">' +
-        '<input type="text" class="market-form-input market-return-delivery-tracking-input" placeholder="반품 송장번호" value="' + escapeHtml(isEdit ? o.return_tracking_number : '') + '" />' +
+        '<input type="text" inputmode="numeric" class="market-form-input market-return-delivery-tracking-input" placeholder="반품 송장번호(숫자만)" value="' + escapeHtml(isEdit ? o.return_tracking_number : '') + '" />' +
         marketBarcodeScanBtnHtml(o.id, 'return') +
       '</div>' +
       '<div class="market-delivery-form__actions">' +
@@ -2620,8 +2620,10 @@
     var courierSelect = form.querySelector('.market-delivery-courier-select');
     var trackingInput = form.querySelector('.market-delivery-tracking-input');
     var courierCode = courierSelect ? courierSelect.value : '';
-    var trackingNumber = (trackingInput ? trackingInput.value : '').trim();
-    if (!trackingNumber) { toast('송장번호를 입력해 주세요.'); return; }
+    // 국내 택배사(deliveryapi.co.kr 지원 목록)는 전부 운송장번호가 숫자로만 구성되어
+    // 있어, 계좌번호 입력과 동일하게 제출 시점에 숫자 외 문자를 제거한다.
+    var trackingNumber = (trackingInput ? trackingInput.value : '').trim().replace(/[^0-9]/g, '');
+    if (!trackingNumber) { toast('송장번호를 숫자로 입력해 주세요.'); return; }
     btn.disabled = true;
     btn.textContent = '등록 중...';
     try {
@@ -2910,8 +2912,8 @@
     var courierSelect = form.querySelector('.market-return-delivery-courier-select');
     var trackingInput = form.querySelector('.market-return-delivery-tracking-input');
     var courierCode = courierSelect ? courierSelect.value : '';
-    var trackingNumber = (trackingInput ? trackingInput.value : '').trim();
-    if (!trackingNumber) { toast('반품 송장번호를 입력해 주세요.'); return; }
+    var trackingNumber = (trackingInput ? trackingInput.value : '').trim().replace(/[^0-9]/g, '');
+    if (!trackingNumber) { toast('반품 송장번호를 숫자로 입력해 주세요.'); return; }
     btn.disabled = true;
     btn.textContent = '등록 중...';
     try {
