@@ -167,6 +167,7 @@
     favoriteIds: new Set(),
     myUserId: null,
     activeOrderIds: new Set(),
+    categoryOverrideUserKey: null,
   };
 
   var formState = {
@@ -1036,9 +1037,7 @@
       });
   }
 
-  function setMarketCategory(cat) {
-    homeState.category = cat;
-    homeState.subCategory = '';
+  function applyMarketCategoryTabUI(cat) {
     var cycleTab = document.getElementById('marketCategoryTabCycle');
     var runTab = document.getElementById('marketCategoryTabRun');
     if (cycleTab) {
@@ -1049,12 +1048,59 @@
       runTab.classList.toggle('active', cat === 'RUN');
       runTab.setAttribute('aria-pressed', cat === 'RUN' ? 'true' : 'false');
     }
+  }
+
+  function setMarketCategory(cat) {
+    homeState.category = cat;
+    homeState.subCategory = '';
+    homeState.categoryOverrideUserKey = getCurrentUserKeyForMarketDefault();
+    applyMarketCategoryTabUI(cat);
     renderSubCategoryTabs();
     reloadMarketHomeList();
   }
 
+  function getCurrentUserKeyForMarketDefault() {
+    var user = window.currentUser || null;
+    if (!user) {
+      try {
+        user = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      } catch (e) {
+        user = null;
+      }
+    }
+    return (user && (user.id != null ? user.id : user.uid)) || null;
+  }
+
+  /** 회원가입 시 등록한 종목(category: CYCLE/RUN/CYCLE+RUN)에 따라 중고랜드 접속 시 기본
+   * 카테고리 탭을 선택한다. CYCLE·CYCLE+RUN → 자전거 장터, RUN → 러닝 장터.
+   * 같은 계정으로 세션 중 탭을 직접 전환한 뒤에는(categoryOverrideUserKey) 재진입 시 덮어쓰지
+   * 않되, 로그아웃 후 다른 계정으로 로그인하면(사용자 키가 달라지면) 새 계정의 종목으로 다시
+   * 반영된다. */
+  function getPreferredMarketCategoryFromCurrentUser() {
+    var user = window.currentUser || null;
+    if (!user) {
+      try {
+        user = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      } catch (e) {
+        user = null;
+      }
+    }
+    var raw = user && (user.category || user.sport_category);
+    var normalized = typeof window.normalizeUserSportCategory === 'function' ? window.normalizeUserSportCategory(raw) : String(raw || '').trim().toUpperCase();
+    return normalized === 'RUN' ? 'RUN' : 'CYCLE';
+  }
+
+  function applyDefaultMarketCategoryFromCurrentUser() {
+    var userKey = getCurrentUserKeyForMarketDefault();
+    if (homeState.categoryOverrideUserKey && homeState.categoryOverrideUserKey === userKey) return;
+    homeState.category = getPreferredMarketCategoryFromCurrentUser();
+    homeState.subCategory = '';
+    applyMarketCategoryTabUI(homeState.category);
+  }
+
   window.marketScreenInit = function () {
     syncMarketBottomNav('list');
+    applyDefaultMarketCategoryFromCurrentUser();
     // 하단 네비 등 뒤로가기 버튼을 거치지 않는 경로로 상세 화면을 벗어날 수도 있어, 목록
     // 화면 재진입 시점에 스캐너가 열려 있었다면 카메라 스트림을 확실히 정리한다.
     if (typeof window.closeMarketBarcodeScanner === 'function') window.closeMarketBarcodeScanner();
