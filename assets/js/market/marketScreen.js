@@ -1348,7 +1348,14 @@
 
   // ───────────────────────── 상품 상세 화면 ─────────────────────────
 
-  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0, myNegoRequest: null, negoRequests: [], orderHistory: [] };
+  var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0, myNegoRequest: null, negoRequests: [], orderHistory: [], myOrder: null };
+
+  /** 취소(CANCELLED)·환불(REFUNDED)로 끝난 주문은 협상가를 소비한 것으로 보고 무효화한다
+   * (renderMarketDetail의 가격 표시 초기화와 동일한 정책 — 구매/직거래 버튼도 같은 기준을 써야
+   * 화면에 보이는 가격과 실제 결제 금액이 어긋나지 않는다). */
+  function marketNegoStillActiveForOrder(order) {
+    return !(order && (order.escrow_status === 'CANCELLED' || order.escrow_status === 'REFUNDED'));
+  }
 
   function openMarketItemDetail(itemId) {
     if (typeof window.showScreen === 'function') window.showScreen('marketItemDetailScreen');
@@ -1425,6 +1432,7 @@
     var item = detailState.item;
     var body = document.getElementById('marketDetailBody');
     if (!body || !item) return;
+    detailState.myOrder = myOrder || null;
     var images = item.images && item.images.length ? item.images : ['assets/img/profile-placeholder.svg'];
     var isMine = myUserId && item.user_id === myUserId;
 
@@ -1573,10 +1581,15 @@
 
     var nego = detailState.myNegoRequest;
     // 수락된 가격 조정 — 판매자와 해당 예약자(구매 예정자) 화면에만 취소선 원가 + 조정가를 표시.
-    // 다른 사용자가 보는 목록/상세에는 영향 없음(각자 화면 기준으로만 계산).
+    // 다른 사용자가 보는 목록/상세에는 영향 없음(각자 화면 기준으로만 계산). 취소·환불로 끝난
+    // 거래는 협상가를 소비한 것으로 보고 무효화한다(marketNegoStillActiveForOrder).
     var acceptedNego = isMine
-      ? (detailState.negoRequests || []).filter(function (r) { return r.status === 'ACCEPTED'; })[0] || null
-      : (nego && nego.status === 'ACCEPTED' ? nego : null);
+      ? (detailState.negoRequests || []).filter(function (r) {
+          if (r.status !== 'ACCEPTED') return false;
+          var order = (detailState.orderHistory || []).find(function (o) { return o.buyer_id === r.buyer_id; });
+          return marketNegoStillActiveForOrder(order);
+        })[0] || null
+      : (nego && nego.status === 'ACCEPTED' && marketNegoStillActiveForOrder(myOrder) ? nego : null);
 
     var priceRowHtml;
     if (acceptedNego) {
@@ -1943,7 +1956,8 @@
 
   function handleMarketBuy(item) {
     var nego = detailState.myNegoRequest;
-    var buyPrice = (nego && nego.status === 'ACCEPTED') ? Number(nego.requested_price) : Number(item.price);
+    var negoActive = nego && nego.status === 'ACCEPTED' && marketNegoStillActiveForOrder(detailState.myOrder);
+    var buyPrice = negoActive ? Number(nego.requested_price) : Number(item.price);
     showMarketPurchaseAddressPopup(item, buyPrice);
   }
 
@@ -2025,7 +2039,8 @@
 
   function handleMarketDirectDeal(item, btn) {
     var nego = detailState.myNegoRequest;
-    var dealPrice = (nego && nego.status === 'ACCEPTED') ? Number(nego.requested_price) : Number(item.price);
+    var negoActive = nego && nego.status === 'ACCEPTED' && marketNegoStillActiveForOrder(detailState.myOrder);
+    var dealPrice = negoActive ? Number(nego.requested_price) : Number(item.price);
     showMarketConfirmPopup(
       formatPrice(dealPrice) + '원에 직거래를 요청할까요? 안전결제(가상계좌 입금) 없이 예약되며, 판매자와 직접 만나 대금을 주고받습니다.',
       function () { doMarketDirectDeal(item, btn); },
