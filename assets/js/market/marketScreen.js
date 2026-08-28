@@ -187,6 +187,22 @@
     return Number(n || 0).toLocaleString('ko-KR');
   }
 
+  /** 상품 상세 화면 기본 가격 표시 — 구입가가 있으면 취소선 구입가 + 판매가, 없으면(구가 등록 이전
+   * 상품) 판매가만 표시. 가격 조정(네고) 수락 시의 3단 표시는 renderMarketDetail의 acceptedNego
+   * 분기에서 별도로 처리한다. */
+  function marketDetailPlainPriceHtml(item) {
+    var purchasePrice = item.purchase_price != null ? Number(item.purchase_price) : 0;
+    if (purchasePrice > 0) {
+      return (
+        '<div class="market-detail-price market-detail-price--with-original">' +
+          '<span class="market-detail-price__original">' + formatPrice(purchasePrice) + '원</span>' +
+          '<span class="market-detail-price__final">' + formatPrice(item.price) + '원</span>' +
+        '</div>'
+      );
+    }
+    return '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>';
+  }
+
   function haptic(ms) {
     try {
       if (navigator.vibrate) navigator.vibrate(ms || 8);
@@ -1417,14 +1433,56 @@
 
   var pendingEditItem = null;
 
+  function getMarketFormPriceRaw(el) {
+    return el ? Number((el.value || '').replace(/[^0-9]/g, '')) || 0 : 0;
+  }
+
+  /** 구입가·판매가를 모두 입력하면 "가격 입력" 라벨 옆에 할인율을 오렌지로 표기한다.
+   * 판매가가 구입가보다 낮을 때만(할인일 때만) 보여주고, 그 외(동일가·인상 등)에는 숨긴다. */
+  function updateMarketFormPriceDiscountBadge() {
+    var badgeEl = document.getElementById('marketFormPriceDiscountBadge');
+    if (!badgeEl) return;
+    var purchasePrice = getMarketFormPriceRaw(document.getElementById('marketFormPurchasePrice'));
+    var price = getMarketFormPriceRaw(document.getElementById('marketFormPrice'));
+    var discountPct = purchasePrice > 0 && price > 0 && price < purchasePrice ? Math.round((1 - price / purchasePrice) * 100) : 0;
+    if (discountPct > 0) {
+      badgeEl.textContent = '(' + discountPct + '% 할인)';
+      badgeEl.style.display = '';
+    } else {
+      badgeEl.style.display = 'none';
+    }
+  }
+
+  function wireMarketFormPriceInputs() {
+    var purchasePriceEl = document.getElementById('marketFormPurchasePrice');
+    var priceEl = document.getElementById('marketFormPrice');
+    if (purchasePriceEl) {
+      purchasePriceEl.oninput = function () {
+        var digits = purchasePriceEl.value.replace(/[^0-9]/g, '');
+        purchasePriceEl.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+        updateMarketFormPriceDiscountBadge();
+      };
+    }
+    if (priceEl) {
+      priceEl.oninput = function () {
+        var digits = priceEl.value.replace(/[^0-9]/g, '');
+        priceEl.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+        updateMarketFormPriceDiscountBadge();
+      };
+    }
+  }
+
   function populateMarketFormForEdit(item) {
     resetMarketForm();
     formState.editingId = item.id;
     var titleEl = document.getElementById('marketFormTitle');
+    var purchasePriceEl = document.getElementById('marketFormPurchasePrice');
     var priceEl = document.getElementById('marketFormPrice');
     var descEl = document.getElementById('marketFormDescription');
     if (titleEl) titleEl.value = item.title || '';
+    if (purchasePriceEl) purchasePriceEl.value = item.purchase_price != null ? Number(item.purchase_price).toLocaleString('ko-KR') : '';
     if (priceEl) priceEl.value = item.price != null ? Number(item.price).toLocaleString('ko-KR') : '';
+    updateMarketFormPriceDiscountBadge();
     if (descEl) descEl.value = item.description || '';
     renderMarketFormCategoryOptions(item.category || 'CYCLE');
     var subEl = document.getElementById('marketFormSubCategory');
@@ -1466,10 +1524,13 @@
     formState.uploaded = [null, null, null];
     formState.editingId = null;
     var titleEl = document.getElementById('marketFormTitle');
+    var purchasePriceEl = document.getElementById('marketFormPurchasePrice');
     var priceEl = document.getElementById('marketFormPrice');
     var descEl = document.getElementById('marketFormDescription');
     if (titleEl) titleEl.value = '';
+    if (purchasePriceEl) purchasePriceEl.value = '';
     if (priceEl) priceEl.value = '';
+    updateMarketFormPriceDiscountBadge();
     if (descEl) descEl.value = '';
     resetMarketDirectRegionPicker();
     var bankEl = document.getElementById('marketFormSettlementBank');
@@ -1651,6 +1712,7 @@
   async function submitMarketForm() {
     var submitBtn = document.getElementById('marketFormSubmitBtn');
     var titleEl = document.getElementById('marketFormTitle');
+    var purchasePriceEl = document.getElementById('marketFormPurchasePrice');
     var priceEl = document.getElementById('marketFormPrice');
     var descEl = document.getElementById('marketFormDescription');
     var catEl = document.getElementById('marketFormCategory');
@@ -1662,6 +1724,8 @@
     var holderEl = document.getElementById('marketFormSettlementHolderName');
 
     var title = (titleEl.value || '').trim();
+    var purchasePriceRaw = (purchasePriceEl.value || '').replace(/[^0-9]/g, '');
+    var purchasePrice = Number(purchasePriceRaw);
     var priceRaw = (priceEl.value || '').replace(/[^0-9]/g, '');
     var price = Number(priceRaw);
     var description = (descEl.value || '').trim();
@@ -1675,6 +1739,7 @@
 
     if (!title) { toast('상품명을 입력해 주세요.'); return; }
     if (!catEl.value) { toast('종목을 선택해 주세요.'); return; }
+    if (!purchasePriceRaw || purchasePrice < 0) { toast('구입가를 입력해 주세요.'); return; }
     if (!priceRaw || price < 0) { toast('판매가를 입력해 주세요.'); return; }
     if (!dealMethods.length) { toast('거래 방법을 하나 이상 선택해 주세요.'); return; }
     if (dealMethods.indexOf('직거래') !== -1 && !directLocation) {
@@ -1716,6 +1781,7 @@
         title: title,
         category: catEl.value,
         sub_category: subEl.value,
+        purchase_price: purchasePrice,
         price: price,
         condition: conditionEl ? conditionEl.value : '중고 상품',
         deal_method: dealMethods,
@@ -1768,13 +1834,7 @@
     if (catEl) catEl.onchange = function () { renderMarketFormCategoryOptions(catEl.value); };
     var descEl = document.getElementById('marketFormDescription');
     if (descEl) descEl.oninput = updateMarketDescCounter;
-    var priceEl = document.getElementById('marketFormPrice');
-    if (priceEl) {
-      priceEl.oninput = function () {
-        var digits = priceEl.value.replace(/[^0-9]/g, '');
-        priceEl.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
-      };
-    }
+    wireMarketFormPriceInputs();
     var directWrap = document.getElementById('marketFormDirectLocationWrap');
     setupMarketDirectRegionPicker();
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-deal-checkbox'), function (cb) {
@@ -2008,11 +2068,13 @@
     var seller = detailState.sellerProfile;
     var sellerName = marketSellerDisplayName(seller);
     var sellerAvatarUrl = (seller && seller.profile_image_url) || 'assets/img/profile-placeholder.svg';
+    var sellerRatingAvgFixed = Math.round((Number(detailState.ratingAvg) || 0) * 10) / 10;
     var sellerRowHtml =
       '<div class="market-detail-seller-row">' +
         '<div class="market-detail-seller-row__left">' +
           '<img class="market-detail-seller-avatar" src="' + escapeHtml(sellerAvatarUrl) + '" alt="" />' +
           '<span class="market-detail-seller-name">' + escapeHtml(sellerName) + '</span>' +
+          '<span class="market-detail-seller-rating">(' + sellerRatingAvgFixed.toFixed(1) + '/5)</span>' +
           '<span class="market-detail-seller-sep">·</span>' +
           '<span>' + escapeHtml(item.sub_category || '') + '</span>' +
           '<span class="market-detail-seller-sep">·</span>' +
@@ -2021,7 +2083,6 @@
         '<div class="market-detail-seller-row__right">' +
           '<span class="market-detail-stat">' + MARKET_EYE_ICON_SVG + (Number(item.view_count) || 0) + '</span>' +
           '<span class="market-detail-stat">' + MARKET_HEART_ICON_SVG + (detailState.favoriteCount || 0) + '</span>' +
-          marketRatingNumericHtml(detailState.ratingAvg) +
         '</div>' +
       '</div>';
 
@@ -2039,8 +2100,12 @@
 
     var priceRowHtml;
     if (acceptedNego) {
+      // 가격 조정 수락 시 구매자·판매자 화면에 한해(위 acceptedNego 계산 참고) 구입가·판매가를
+      // 모두 취소선으로, 조정된 최종가만 오렌지로 표시한다.
+      var negoPurchasePrice = item.purchase_price != null ? Number(item.purchase_price) : 0;
       priceRowHtml =
         '<div class="market-detail-price market-detail-price--negotiated">' +
+          (negoPurchasePrice > 0 ? '<span class="market-detail-price__original">' + formatPrice(negoPurchasePrice) + '원</span>' : '') +
           '<span class="market-detail-price__original">' + formatPrice(item.price) + '원</span>' +
           '<span class="market-detail-price__final">' + formatPrice(acceptedNego.requested_price) + '원</span>' +
         '</div>' +
@@ -2050,11 +2115,11 @@
     } else if (!isMine && item.negotiable && !myOrder) {
       if (nego && nego.status === 'PENDING') {
         priceRowHtml =
-          '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>' +
+          marketDetailPlainPriceHtml(item) +
           '<div class="market-nego-status market-nego-status--pending">가격 조정 요청 중 (제안가 ' + formatPrice(nego.requested_price) + '원)</div>';
       } else {
         priceRowHtml =
-          '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>' +
+          marketDetailPlainPriceHtml(item) +
           (nego && nego.status === 'REJECTED'
             ? '<div class="market-nego-status market-nego-status--rejected">네고 불가 (이전 제안 ' + formatPrice(nego.requested_price) + '원이 거절되었습니다)</div>'
             : '') +
@@ -2064,7 +2129,7 @@
           '</div>';
       }
     } else {
-      priceRowHtml = '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>';
+      priceRowHtml = marketDetailPlainPriceHtml(item);
     }
 
     // 가격 조정 요청은 구매자당 1건(유니크)이라, 주문이 이미 생긴 구매자의 요청은 해당 주문의

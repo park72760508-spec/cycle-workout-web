@@ -31007,6 +31007,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 #marketFormSettlementAccountNumber { margin-bottom: 8px; }
 .market-form-row { display: flex; gap: 8px; }
 .market-form-row .market-form-select { flex: 1; }
+.market-form-row .market-form-input { flex: 1; min-width: 0; }
+.market-form-price-discount { color: #ea580c; font-weight: 700; font-size: 12.5px; }
 .market-form-radio-row, .market-form-checkbox-row { gap: 16px; align-items: center; flex-wrap: wrap; }
 .market-form-radio, .market-form-checkbox {
   display: flex;
@@ -31187,6 +31189,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   font-weight: 600;
   white-space: nowrap;
 }
+.market-detail-seller-rating { color: #f59e0b; font-weight: 700; }
 .market-detail-seller-sep { color: #cbd5e1; }
 .market-detail-seller-row__right {
   display: flex;
@@ -31244,7 +31247,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   color: #334155;
   white-space: pre-wrap;
 }
-.market-detail-price--negotiated { display: flex; align-items: baseline; gap: 8px; }
+.market-detail-price--negotiated,
+.market-detail-price--with-original { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .market-detail-price__original {
   font-size: 14px;
   font-weight: 600;
