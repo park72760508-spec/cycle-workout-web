@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketListRedesign1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketHeaderStickyTop1';
   var svc = null;
 
   function loadMarketService() {
@@ -914,6 +914,11 @@
 
   window.marketScreenInit = function () {
     syncMarketBottomNav('list');
+    // 전역 .screen.active가 overflow-y:auto!important로 화면 전체를 스크롤 영역으로 만들면
+    // 헤더·탭바·검색창까지 상품 목록과 함께 밀려 올라간다 — CSS 특이도만으로는 전역 규칙을
+    // 확실히 이기기 어려워(각 :not()이 ID 특이도를 더함) 인라인 !important로 명확히 고정한다.
+    var marketHomeScreenEl = document.getElementById('marketHomeScreen');
+    if (marketHomeScreenEl) marketHomeScreenEl.style.setProperty('overflow', 'hidden', 'important');
     // 화면 접속과 동시에 스피너부터 표시 — 즐겨찾기/로그인 사용자 조회가 끝나야 시작되던
     // reloadMarketHomeList() 호출 이전에도 곧바로 로딩 상태가 보이게 한다.
     var grid = document.getElementById('marketItemGrid');
@@ -939,6 +944,29 @@
     var moreBtn = document.getElementById('marketLoadMoreBtn');
     if (moreBtn) moreBtn.onclick = function () { loadMoreMarketItems(); };
     wireMarketSearchInput();
+    initMarketBackToTopButton();
+  };
+
+  /** 랭킹보드(stelvioInitBackToTopButton/handleStelvioBackToTop)와 동일한 로직 — 목록 스크롤
+   * 영역이 300px 이상 내려가면 우측 하단 오렌지 원형 버튼을 표시하고, 클릭 시 맨 위로 스크롤. */
+  var marketBackToTopScrollHandler = null;
+  function initMarketBackToTopButton() {
+    var scrollEl = document.getElementById('marketHomeScrollArea');
+    var btn = document.getElementById('marketBackToTopBtn');
+    if (!scrollEl || !btn) return;
+    if (marketBackToTopScrollHandler) {
+      scrollEl.removeEventListener('scroll', marketBackToTopScrollHandler, { passive: true });
+      marketBackToTopScrollHandler = null;
+    }
+    marketBackToTopScrollHandler = function () {
+      if (scrollEl.scrollTop >= 300) btn.classList.add('market-back-to-top-visible');
+      else btn.classList.remove('market-back-to-top-visible');
+    };
+    scrollEl.addEventListener('scroll', marketBackToTopScrollHandler, { passive: true });
+  }
+  window.handleMarketBackToTop = function () {
+    var scrollEl = document.getElementById('marketHomeScrollArea');
+    if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   var marketSearchDebounceTimer = null;

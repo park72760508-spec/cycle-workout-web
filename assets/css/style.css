@@ -30324,14 +30324,24 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 /* ============================= 중고랜드(Market Land) ============================= */
 /* 전역 .screen.active가 overflow-y:auto!important로 화면 전체를 스크롤 영역으로 만들면
    내부 .market-scroll-area와 이중 스크롤이 겹쳐 헤더·서브카테고리 탭까지 함께 밀려 올라간다
-   (라이딩 모임 룸 화면과 동일한 원인 — #openRidingRoomScreen.screen.active 참고).
-   이 화면들만 바깥 스크롤을 막고, .market-scroll-area만 스크롤되게 한다. */
+   (라이딩 모임 룸 화면과 동일한 원인). .screen.market-screen.active(클래스 3개, 특이도 0,0,3)는
+   전역 규칙(.screen.active:not(#id)... — :not() 각각이 ID 특이도를 더해 0,12,2로 훨씬 높음)에게
+   overflow-y 선언에서 밀려 실제로는 적용되지 않는다 — #openRidingRoomScreen.screen.active와
+   동일하게 각 화면 ID를 직접 명시해 특이도를 끌어올려 이 화면들만 바깥 스크롤을 막고
+   .market-scroll-area만 스크롤되게 한다. */
 .screen.market-screen.active {
   display: flex;
   flex-direction: column;
   padding-left: 12px;
   padding-right: 12px;
+}
+#marketHomeScreen.screen.active,
+#marketItemFormScreen.screen.active,
+#marketItemDetailScreen.screen.active,
+#marketMyPageScreen.screen.active {
   overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
 }
 .market-header {
   display: flex;
@@ -30402,10 +30412,11 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   opacity: 0.55;
   transition: opacity 0.14s ease;
 }
+/* 하단 네비게이션바 선택 탭(.market-bottom-nav__btn.active)과 동일한 오렌지 톤 */
 .market-category-tab.active {
-  background: #fff;
-  color: #ea580c;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.14);
+  background-color: rgba(234, 88, 12, 0.12);
+  color: #c2410c;
+  box-shadow: none;
 }
 .market-category-tab.active img { opacity: 1; }
 
@@ -30677,6 +30688,37 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-size: 13.5px;
   cursor: pointer;
 }
+
+/* 맨 위로 가기 — 랭킹보드(.stelvio-back-to-top-btn)와 동일한 구조·동작, 중고랜드 톤에 맞춰
+   오렌지 그라디언트만 다르게 적용. 하단 네비 pill(#marketBottomNav, bottom~16px+54px 높이)과
+   겹치지 않도록 그 위쪽에 띄운다. */
+.market-back-to-top-btn {
+  position: fixed;
+  right: 20px;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(234, 88, 12, 0.4), 0 2px 8px rgba(234, 88, 12, 0.25);
+  z-index: 30000;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.2s ease;
+}
+.market-back-to-top-btn.market-back-to-top-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.market-back-to-top-btn:active { transform: scale(0.93); }
 
 .market-empty, .market-loading {
   grid-column: 1 / -1;
