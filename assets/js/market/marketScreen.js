@@ -3022,13 +3022,16 @@
       orders = orders || [];
       var reserved = orders.filter(function (o) { return MARKET_DEALS_RESERVED_STATUSES.indexOf(o.escrow_status) !== -1; });
       var completed = orders.filter(function (o) { return o.escrow_status === 'CONFIRMED'; });
-      function sectionHtml(title, list) {
+      // "예약중"에 있는 주문은 정의상 전부 아직 완결되지 않은 진행 중 거래이므로, 판매자
+      // 화면의 거래요청 알림 점과 동일한 표시를 구매자 화면에도 준다(예약중 상품 id 전체).
+      var reservedItemIds = new Set(reserved.map(function (o) { return o.item.id; }));
+      function sectionHtml(title, list, activeIds) {
         var cardsHtml = list.length
-          ? '<div class="market-grid">' + list.map(function (o) { return marketItemCardHtml(o.item); }).join('') + '</div>'
+          ? '<div class="market-grid">' + list.map(function (o) { return marketItemCardHtml(o.item, activeIds); }).join('') + '</div>'
           : '<div class="market-empty">' + title + ' 내역이 없습니다.</div>';
         return '<p class="market-order-history__title">' + title + '</p>' + cardsHtml;
       }
-      grid.innerHTML = sectionHtml('예약중', reserved) + sectionHtml('거래완료', completed);
+      grid.innerHTML = sectionHtml('예약중', reserved, reservedItemIds) + sectionHtml('거래완료', completed);
       wireMarketGridEvents(grid);
     });
   }
