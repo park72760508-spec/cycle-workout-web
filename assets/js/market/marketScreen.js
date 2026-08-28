@@ -291,11 +291,50 @@
   /** 거래내역 카드의 "라벨 : 값" 한 줄 표시(가상 계좌·배송 주소 등) — 입금 금액 행
    * (marketDealAmountStatusHtml)과 동일하게 라벨은 굵게, 좌측 정렬도 동일한 패딩으로
    * 맞춘다. 앞으로 거래내역에 새 항목을 추가할 때도 이 함수로 형식을 통일한다. */
-  function marketDealInfoLineHtml(label, value) {
+  function marketDealInfoLineHtml(label, value, copyValue) {
+    var copyBtnHtml = copyValue
+      ? '<button type="button" class="market-copy-btn" data-copy-value="' + escapeHtml(copyValue) + '" aria-label="복사">' + MARKET_COPY_ICON_SVG + '</button>'
+      : '';
     return '<div class="market-deal-info-row">' +
-      '<span class="market-delivery-info__label">' + label + '</span>' +
-      '<span class="market-delivery-info__value">' + value + '</span>' +
+      '<span class="market-deal-info-row__text">' +
+        '<span class="market-delivery-info__label">' + label + '</span>' +
+        '<span class="market-delivery-info__value">' + value + '</span>' +
+      '</span>' +
+      copyBtnHtml +
     '</div>';
+  }
+
+  /** 가상 계좌번호 등 복사 버튼(marketDealInfoLineHtml) 클릭 처리 — Clipboard API 우선,
+   * 구형 WebView 등 미지원 환경은 임시 textarea + execCommand('copy')로 대체한다. */
+  function handleMarketCopyClick(btn) {
+    var value = btn.getAttribute('data-copy-value') || '';
+    if (!value) return;
+    function onSuccess() { toast('복사되었습니다.'); }
+    function onFail() { toast('복사에 실패했습니다. 직접 선택해 복사해 주세요.'); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(onSuccess).catch(function () {
+        marketFallbackCopy(value) ? onSuccess() : onFail();
+      });
+    } else {
+      marketFallbackCopy(value) ? onSuccess() : onFail();
+    }
+  }
+
+  function marketFallbackCopy(value) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = value;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) {
+      return false;
+    }
   }
 
   /** 안전결제 구매 시점에 입력받은 배송 주소 — 구매자·판매자 거래내역 공통 표시(직거래는 해당 없음). */
@@ -413,6 +452,10 @@
   var MARKET_BARCODE_ICON_SVG =
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">' +
     '<path d="M4 5v14M7.5 5v14M10 5v14M12.5 5v14M15 5v14M17.5 5v14M20 5v14"></path></svg>';
+  var MARKET_COPY_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="9" y="9" width="12" height="12" rx="2"></rect>' +
+    '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>';
 
   /** getUserMedia 카메라 스캔 지원 여부 — 네이티브 STELVIO 앱 WebView는 카메라 브릿지가
    * 없어(과거 실측: navigator.mediaDevices가 undefined, 별도 시도인 <input capture>
@@ -1919,7 +1962,7 @@
       var buyerAmountLabelText = isDirectDeal ? '거래 금액 : ' : '입금 금액 : ';
       var buyerAmountValueText = formatPrice(myOrder.amount) + '원';
       var vaLineHtml = myOrder.va_account_number
-        ? marketDealInfoLineHtml('가상 계좌 : ', escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number))
+        ? marketDealInfoLineHtml('가상 계좌 : ', escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number), myOrder.va_account_number)
         : '';
       var sellerCounterpartHtml = marketOrderRevealsPhone(myOrder.escrow_status)
         ? marketCounterpartCardHtml(sellerAvatar, sellerName, detailState.sellerPhone, myOrder.escrow_status === 'CONFIRMED')
@@ -2089,6 +2132,9 @@
     });
     Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-submit-btn'), function (btn) {
       btn.onclick = function () { handleMarketSetTracking(item.id, btn); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-copy-btn'), function (btn) {
+      btn.onclick = function () { handleMarketCopyClick(btn); };
     });
     Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-edit-btn'), function (btn) {
       btn.onclick = function () {
