@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketScreenFixExcl1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketBarcodeScan1';
   var svc = null;
 
   function loadMarketService() {
@@ -251,7 +251,10 @@
           return '<option value="' + c.code + '"' + (c.code === selectedCourier ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
         }).join('') +
       '</select>' +
-      '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" value="' + escapeHtml(isEdit ? o.tracking_number : '') + '" />' +
+      '<div class="market-tracking-input-row">' +
+        '<input type="text" class="market-form-input market-delivery-tracking-input" placeholder="송장번호" value="' + escapeHtml(isEdit ? o.tracking_number : '') + '" />' +
+        marketBarcodeScanBtnHtml(o.id, 'forward') +
+      '</div>' +
       '<div class="market-delivery-form__actions">' +
         '<button type="button" class="market-btn market-btn--outline market-delivery-submit-btn" data-order-id="' + o.id + '">' + (isEdit ? '수정 완료' : '택배사/송장번호 등록') + '</button>' +
         (isEdit ? '<button type="button" class="market-btn market-btn--outline market-delivery-edit-cancel-btn" data-order-id="' + o.id + '">취소</button>' : '') +
@@ -380,6 +383,27 @@
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M16.862 4.487a2.1 2.1 0 112.97 2.97L7.5 19.79l-4.5 1.13 1.13-4.5L16.862 4.487z"></path>' +
     '<path d="M15.232 6.117l2.65 2.65"></path></svg>';
+  var MARKET_BARCODE_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">' +
+    '<path d="M4 5v14M7.5 5v14M10 5v14M12.5 5v14M15 5v14M17.5 5v14M20 5v14"></path></svg>';
+
+  /** getUserMedia 카메라 스캔 지원 여부 — 네이티브 STELVIO 앱 WebView는 카메라 브릿지가
+   * 없어(과거 실측: navigator.mediaDevices가 undefined, 별도 시도인 <input capture>
+   * 방식은 실제 앱 크래시까지 유발해 긴급 롤백된 이력이 있음) 스캔 버튼 자체를 표시하지
+   * 않는다 — 일반 모바일/데스크톱 브라우저(Safari, Chrome 등 직접 접속)에서만 노출. */
+  function marketBarcodeScanSupported() {
+    try {
+      if (typeof window.isStelvioNativeApp === 'function' && window.isStelvioNativeApp()) return false;
+      return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function marketBarcodeScanBtnHtml(orderId, target) {
+    if (!marketBarcodeScanSupported()) return '';
+    return '<button type="button" class="market-barcode-scan-btn" data-order-id="' + orderId + '" data-scan-target="' + target + '" aria-label="바코드로 송장번호 스캔">' + MARKET_BARCODE_ICON_SVG + '</button>';
+  }
 
   /** 거래 진행 6단계 — 직거래(DIRECT_DEAL)는 안전결제·택배 배송 개념이 없어 예약(RESERVED)
    * 시점에 2~5단계가 한꺼번에 완료되는 것으로 취급한다(대면 거래는 앱이 중간 과정을 추적하지 않음). */
@@ -529,7 +553,10 @@
           return '<option value="' + c.code + '"' + (c.code === selectedCourier ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
         }).join('') +
       '</select>' +
-      '<input type="text" class="market-form-input market-return-delivery-tracking-input" placeholder="반품 송장번호" value="' + escapeHtml(isEdit ? o.return_tracking_number : '') + '" />' +
+      '<div class="market-tracking-input-row">' +
+        '<input type="text" class="market-form-input market-return-delivery-tracking-input" placeholder="반품 송장번호" value="' + escapeHtml(isEdit ? o.return_tracking_number : '') + '" />' +
+        marketBarcodeScanBtnHtml(o.id, 'return') +
+      '</div>' +
       '<div class="market-delivery-form__actions">' +
         '<button type="button" class="market-btn market-btn--outline market-return-delivery-submit-btn" data-order-id="' + o.id + '">' + (isEdit ? '수정 완료' : '반품 송장번호 등록') + '</button>' +
         (isEdit ? '<button type="button" class="market-btn market-btn--outline market-return-delivery-edit-cancel-btn" data-order-id="' + o.id + '">취소</button>' : '') +
@@ -914,6 +941,9 @@
 
   window.marketScreenInit = function () {
     syncMarketBottomNav('list');
+    // 하단 네비 등 뒤로가기 버튼을 거치지 않는 경로로 상세 화면을 벗어날 수도 있어, 목록
+    // 화면 재진입 시점에 스캐너가 열려 있었다면 카메라 스트림을 확실히 정리한다.
+    if (typeof window.closeMarketBarcodeScanner === 'function') window.closeMarketBarcodeScanner();
     // 화면 접속과 동시에 스피너부터 표시 — 즐겨찾기/로그인 사용자 조회가 끝나야 시작되던
     // reloadMarketHomeList() 호출 이전에도 곧바로 로딩 상태가 보이게 한다.
     var grid = document.getElementById('marketItemGrid');
@@ -1834,6 +1864,9 @@
         if (form) form.classList.add('is-hidden');
       };
     });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-barcode-scan-btn'), function (btn) {
+      btn.onclick = function () { handleMarketBarcodeScanBtnClick(btn); };
+    });
     if (myOrder && myOrder.escrow_status === 'CONFIRMED') {
       var starsWrap = document.getElementById('marketRatingStars');
       if (starsWrap) {
@@ -2269,6 +2302,209 @@
       btn.disabled = false;
       btn.textContent = '택배사/송장번호 등록';
     }
+  }
+
+  // ───────────────────────── 송장번호 바코드 스캔 ─────────────────────────
+  // getUserMedia 실시간 카메라 + ZXing(@zxing/browser, esm.sh 동적 import — 과거
+  // <input capture> 방식이 실제 앱 크래시를 유발해 롤백된 이력이 있어, 카메라 스트림을
+  // 직접 다루는 이 방식으로 재구현한다). marketBarcodeScanSupported()가 네이티브 앱
+  // WebView에서는 버튼 자체를 렌더링하지 않으므로 이 코드 경로는 일반 브라우저에서만 실행된다.
+  var marketBarcodeScannerState = {
+    controls: null,
+    devices: [],
+    deviceIndex: 0,
+    torchOn: false,
+    onSuccess: null,
+  };
+  var marketBarcodeLastResult = '';
+  var marketBarcodeLastResultAt = 0;
+
+  async function ensureZXingBrowserModule() {
+    if (window.__marketZXingBrowser) return window.__marketZXingBrowser;
+    var mod = await import('https://esm.sh/@zxing/browser@0.1.5');
+    window.__marketZXingBrowser = mod;
+    return mod;
+  }
+
+  function marketBarcodeSetStatus(text) {
+    var el = document.getElementById('marketBarcodeScannerStatus');
+    if (el) el.textContent = text;
+  }
+
+  function marketBarcodeErrorMessage(e) {
+    var name = e && e.name ? e.name : '';
+    if (name === 'NotAllowedError') return '카메라 접근 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해 주세요.';
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return '사용 가능한 카메라를 찾을 수 없습니다.';
+    if (typeof window !== 'undefined' && window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+      return '카메라는 보안 연결(https)에서만 사용할 수 있습니다.';
+    }
+    return '카메라를 시작할 수 없습니다. 잠시 후 다시 시도하거나 송장번호를 직접 입력해 주세요.';
+  }
+
+  /** 택배사별 송장번호 자릿수 관례에 기반한 참고용 추정 — 사업자별 예외가 있어 100%
+   * 정확하지 않다. 애매한 자릿수(10~11자리는 여러 택배사가 겹침)는 자동 선택하지 않고
+   * 사용자가 직접 택배사를 고르게 둔다. */
+  function marketBarcodeGuessCourier(digits) {
+    if (digits.length === 13) return 'post';
+    if (digits.length === 12) return 'cj';
+    return '';
+  }
+
+  function marketBarcodeSuccessFeedback() {
+    haptic(30);
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = new Ctx();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.value = 0.15;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      setTimeout(function () {
+        try { osc.stop(); ctx.close(); } catch (e) {}
+      }, 120);
+    } catch (e) {}
+  }
+
+  function marketBarcodeHandleResult(rawText) {
+    var digits = String(rawText || '').replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 13) return; // 유효하지 않은 형식 — 계속 스캔
+    var now = Date.now();
+    if (digits === marketBarcodeLastResult && now - marketBarcodeLastResultAt < 1500) return; // 연속 프레임 중복 방지
+    marketBarcodeLastResult = digits;
+    marketBarcodeLastResultAt = now;
+    marketBarcodeSuccessFeedback();
+    var courierCode = marketBarcodeGuessCourier(digits);
+    var cb = marketBarcodeScannerState.onSuccess;
+    closeMarketBarcodeScanner();
+    if (typeof cb === 'function') cb(digits, courierCode);
+  }
+
+  async function marketBarcodeStartDecode() {
+    var ZXingBrowser = window.__marketZXingBrowser;
+    var video = document.getElementById('marketBarcodeScannerVideo');
+    if (!ZXingBrowser || !video) return;
+    if (marketBarcodeScannerState.controls) {
+      try { marketBarcodeScannerState.controls.stop(); } catch (e) {}
+      marketBarcodeScannerState.controls = null;
+    }
+    var devices = marketBarcodeScannerState.devices;
+    var videoConstraints;
+    if (devices.length) {
+      var device = devices[marketBarcodeScannerState.deviceIndex % devices.length];
+      videoConstraints = { deviceId: { exact: device.deviceId } };
+    } else {
+      videoConstraints = { facingMode: { ideal: 'environment' } };
+    }
+    marketBarcodeSetStatus('송장번호 바코드를 사각형 안에 맞춰주세요');
+    if (!marketBarcodeScannerState.reader) {
+      marketBarcodeScannerState.reader = new ZXingBrowser.BrowserMultiFormatReader();
+    }
+    var controls = await marketBarcodeScannerState.reader.decodeFromConstraints(
+      { audio: false, video: videoConstraints },
+      video,
+      function (result) {
+        if (result) marketBarcodeHandleResult(result.getText());
+        // NotFoundException은 프레임마다 코드가 안 보일 때 정상적으로 발생 — 무시.
+      }
+    );
+    marketBarcodeScannerState.controls = controls;
+    var torchBtn = document.getElementById('marketBarcodeScannerTorchBtn');
+    if (torchBtn) {
+      var track = video.srcObject && video.srcObject.getVideoTracks ? video.srcObject.getVideoTracks()[0] : null;
+      var caps = track && track.getCapabilities ? track.getCapabilities() : null;
+      torchBtn.style.display = caps && caps.torch ? 'block' : 'none';
+    }
+  }
+
+  window.openMarketBarcodeScanner = async function (onSuccess) {
+    var modal = document.getElementById('marketBarcodeScannerModal');
+    var video = document.getElementById('marketBarcodeScannerVideo');
+    if (!modal || !video) return;
+    marketBarcodeScannerState.onSuccess = onSuccess;
+    marketBarcodeScannerState.deviceIndex = 0;
+    marketBarcodeScannerState.torchOn = false;
+    marketBarcodeLastResult = '';
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    marketBarcodeSetStatus('카메라를 준비하는 중...');
+    var torchBtn = document.getElementById('marketBarcodeScannerTorchBtn');
+    var switchBtn = document.getElementById('marketBarcodeScannerSwitchBtn');
+    if (torchBtn) { torchBtn.style.display = 'none'; torchBtn.classList.remove('active'); torchBtn.textContent = '조명 켜기'; }
+    if (switchBtn) switchBtn.style.display = 'none';
+
+    try {
+      var ZXingBrowser = await ensureZXingBrowserModule();
+      var devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
+      marketBarcodeScannerState.devices = devices || [];
+      if (switchBtn && marketBarcodeScannerState.devices.length > 1) switchBtn.style.display = 'block';
+      await marketBarcodeStartDecode();
+    } catch (e) {
+      console.error('[marketBarcodeScanner] 초기화 실패:', e);
+      marketBarcodeSetStatus(marketBarcodeErrorMessage(e));
+    }
+  };
+
+  window.closeMarketBarcodeScanner = function () {
+    var modal = document.getElementById('marketBarcodeScannerModal');
+    if (modal) { modal.classList.add('hidden'); modal.style.display = 'none'; }
+    if (marketBarcodeScannerState.controls) {
+      try { marketBarcodeScannerState.controls.stop(); } catch (e) {}
+      marketBarcodeScannerState.controls = null;
+    }
+    var video = document.getElementById('marketBarcodeScannerVideo');
+    if (video) {
+      try { video.srcObject = null; } catch (e) {}
+    }
+    marketBarcodeScannerState.onSuccess = null;
+  };
+
+  window.toggleMarketBarcodeTorch = async function () {
+    var video = document.getElementById('marketBarcodeScannerVideo');
+    var track = video && video.srcObject && video.srcObject.getVideoTracks ? video.srcObject.getVideoTracks()[0] : null;
+    if (!track) return;
+    var next = !marketBarcodeScannerState.torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next }] });
+      marketBarcodeScannerState.torchOn = next;
+      var btn = document.getElementById('marketBarcodeScannerTorchBtn');
+      if (btn) { btn.classList.toggle('active', next); btn.textContent = next ? '조명 끄기' : '조명 켜기'; }
+    } catch (e) {
+      toast('이 기기에서는 조명을 지원하지 않습니다.');
+    }
+  };
+
+  window.switchMarketBarcodeCamera = async function () {
+    if (!marketBarcodeScannerState.devices.length) return;
+    marketBarcodeScannerState.deviceIndex = (marketBarcodeScannerState.deviceIndex + 1) % marketBarcodeScannerState.devices.length;
+    try {
+      await marketBarcodeStartDecode();
+    } catch (e) {
+      marketBarcodeSetStatus(marketBarcodeErrorMessage(e));
+    }
+  };
+
+  /** 송장 입력 폼 옆 스캔 버튼 클릭 — data-scan-target(forward/return)으로 정확한 폼을
+   * 찾아 인식 결과를 해당 택배사 select·송장번호 input에 채운다. */
+  function handleMarketBarcodeScanBtnClick(btn) {
+    var orderId = btn.getAttribute('data-order-id');
+    var target = btn.getAttribute('data-scan-target');
+    var formSelector = target === 'return'
+      ? '.market-return-delivery-form[data-order-id="' + orderId + '"]'
+      : '.market-delivery-form[data-order-id="' + orderId + '"]:not(.market-return-delivery-form)';
+    var form = document.querySelector(formSelector);
+    if (!form) return;
+    var trackingInput = form.querySelector(target === 'return' ? '.market-return-delivery-tracking-input' : '.market-delivery-tracking-input');
+    var courierSelect = form.querySelector(target === 'return' ? '.market-return-delivery-courier-select' : '.market-delivery-courier-select');
+    openMarketBarcodeScanner(function (digits, courierCode) {
+      if (trackingInput) trackingInput.value = digits;
+      if (courierCode && courierSelect) courierSelect.value = courierCode;
+      toast('송장번호를 인식했습니다: ' + digits);
+    });
   }
 
   /** 반품 신청 시 환불 계좌 정보 입력 폼 — handleMarketRefundSubmit과 동일한 검증 로직. */

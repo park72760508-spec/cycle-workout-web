@@ -3702,7 +3702,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260828marketHeaderPadTrim1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260828marketBarcodeScan1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4793,7 +4793,7 @@
   <!-- 중고랜드 — 상품 상세 -->
   <div id="marketItemDetailScreen" class="screen market-screen" style="display: none;">
     <div class="market-header">
-      <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="뒤로 가기">
+      <button type="button" class="market-back-btn" onclick="if(typeof closeMarketBarcodeScanner==='function')closeMarketBarcodeScanner();if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="뒤로 가기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
       </button>
       <h2 class="market-header__title">상품 상세</h2>
@@ -4880,6 +4880,30 @@
         <button type="button" class="market-confirm-btn market-confirm-btn-cancel" id="marketPurchaseAddressCancelBtn">취소</button>
         <button type="button" class="market-confirm-btn market-confirm-btn-ok" id="marketPurchaseAddressOkBtn">결제하기</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 중고랜드 송장번호 바코드 스캔 — getUserMedia 실시간 카메라(ZXing). 네이티브 STELVIO 앱
+       WebView는 카메라 브릿지가 없어(과거 크래시 이력) 스캔 버튼 자체를 렌더링하지 않는다
+       (marketBarcodeScanSupported() — 일반 모바일/데스크톱 브라우저에서만 노출). -->
+  <div id="marketBarcodeScannerModal" class="market-barcode-scanner-modal hidden" style="display: none;">
+    <div class="market-barcode-scanner-header">
+      <span>바코드 스캔</span>
+      <button type="button" class="market-barcode-scanner-close" aria-label="닫기" onclick="if(typeof closeMarketBarcodeScanner==='function')closeMarketBarcodeScanner();">&times;</button>
+    </div>
+    <div class="market-barcode-scanner-body">
+      <video id="marketBarcodeScannerVideo" class="market-barcode-scanner-video" playsinline muted autoplay></video>
+      <div class="market-barcode-scanner-viewfinder" aria-hidden="true">
+        <span class="market-barcode-scanner-corner market-barcode-scanner-corner--tl"></span>
+        <span class="market-barcode-scanner-corner market-barcode-scanner-corner--tr"></span>
+        <span class="market-barcode-scanner-corner market-barcode-scanner-corner--bl"></span>
+        <span class="market-barcode-scanner-corner market-barcode-scanner-corner--br"></span>
+      </div>
+      <p id="marketBarcodeScannerStatus" class="market-barcode-scanner-status">카메라를 준비하는 중...</p>
+    </div>
+    <div class="market-barcode-scanner-controls">
+      <button type="button" id="marketBarcodeScannerTorchBtn" class="market-barcode-scanner-ctrl-btn" style="display:none;" onclick="if(typeof toggleMarketBarcodeTorch==='function')toggleMarketBarcodeTorch();">조명 켜기</button>
+      <button type="button" id="marketBarcodeScannerSwitchBtn" class="market-barcode-scanner-ctrl-btn" style="display:none;" onclick="if(typeof switchMarketBarcodeCamera==='function')switchMarketBarcodeCamera();">카메라 전환</button>
     </div>
   </div>
 
@@ -43175,7 +43199,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script src="assets/js/competition/competitionScreen.js?v=applicants-popup-20260906"></script>
-  <script src="assets/js/market/marketScreen.js?v=20260828marketScreenFixExcl1"></script>
+  <script src="assets/js/market/marketScreen.js?v=20260828marketBarcodeScan1"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {
