@@ -1817,17 +1817,20 @@
           '<button type="button" class="market-btn market-btn--danger" id="marketReturnRequestSubmitBtn">반품 신청</button>' +
         '</div>';
     } else if (myOrder && myOrder.escrow_status === 'PAID') {
+      // 배송완료 전에는 [구매 확정]을 비활성화해 실수로 물품을 받기 전에 확정을 눌러버리는
+      // 사고를 막는다(배송완료 상태가 되면 위 분기(delivery_status === 'DELIVERED')로 넘어가
+      // 자동으로 활성화된 버튼이 렌더링된다).
       actionHtml =
         '<div class="market-detail-actions">' +
-          '<button type="button" class="market-btn market-btn--primary" id="marketDetailConfirmBtn">구매 확정하기</button>' +
-          '<button type="button" class="market-btn market-btn--outline" id="marketDetailRefundToggleBtn">환불 요청</button>' +
+          '<button type="button" class="market-btn market-btn--primary market-btn--disabled" id="marketDetailConfirmBtn" disabled title="배송완료 후 구매 확정이 가능합니다">구매 확정하기</button>' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketDetailRefundToggleBtn">구매 취소</button>' +
         '</div>' +
         '<div id="marketRefundForm" class="market-refund-form" style="display:none;">' +
           '<p class="market-form-hint">본인 명의 환불 계좌로 상품가(수수료 1,000원 제외)가 환불됩니다.</p>' +
           '<select id="marketRefundBank" class="market-form-select"></select>' +
           '<input id="marketRefundAccountNumber" class="market-form-input" inputmode="numeric" placeholder="환불 계좌번호(숫자만)" />' +
           '<input id="marketRefundHolderName" class="market-form-input" placeholder="예금주명(본인)" />' +
-          '<button type="button" class="market-btn market-btn--danger" id="marketRefundSubmitBtn">환불 신청</button>' +
+          '<button type="button" class="market-btn market-btn--danger" id="marketRefundSubmitBtn">구매 취소 및 환불 신청</button>' +
         '</div>';
     } else if (myOrder && myOrder.escrow_status === 'PENDING') {
       actionHtml =
@@ -2480,24 +2483,24 @@
       return;
     }
     showMarketConfirmPopup(
-      '환불을 신청할까요? 상품가만 환불되며(수수료 1,000원 제외), 신청 후 취소할 수 없습니다.',
+      '구매를 취소하고 환불을 신청할까요? 상품가만 환불되며(수수료 1,000원 제외), 신청 후 취소할 수 없습니다.',
       function () { doMarketRefundSubmit(itemId, orderId, submitBtn, bank, accountNumber, holderName); },
-      { okText: '환불 신청' }
+      { okText: '구매 취소' }
     );
   }
 
   async function doMarketRefundSubmit(itemId, orderId, submitBtn, bank, accountNumber, holderName) {
     submitBtn.disabled = true;
-    submitBtn.textContent = '환불 처리 중...';
+    submitBtn.textContent = '구매 취소 처리 중...';
     try {
       var s = await loadMarketService();
       var result = await s.requestMarketOrderRefund(orderId, { bank: bank, accountNumber: accountNumber, holderName: holderName });
       toast(formatPrice(result.refundAmount) + '원 환불이 접수되었습니다.');
       openMarketItemDetail(itemId);
     } catch (err) {
-      toast('환불 신청 실패: ' + (err && err.message ? err.message : err));
+      toast('구매 취소 실패: ' + (err && err.message ? err.message : err));
       submitBtn.disabled = false;
-      submitBtn.textContent = '환불 신청';
+      submitBtn.textContent = '구매 취소 및 환불 신청';
     }
   }
 
