@@ -164,6 +164,7 @@
     loading: false,
     favoriteIds: new Set(),
     myUserId: null,
+    activeOrderIds: new Set(),
   };
 
   var formState = {
@@ -821,7 +822,7 @@
   function renderMarketGrid(append) {
     var grid = document.getElementById('marketItemGrid');
     if (!grid) return;
-    var html = homeState.items.map(function (item) { return marketItemCardHtml(item); }).join('');
+    var html = homeState.items.map(function (item) { return marketItemCardHtml(item, homeState.activeOrderIds); }).join('');
     if (!append) {
       grid.innerHTML =
         html ||
@@ -970,11 +971,16 @@
     if (grid) grid.innerHTML = '<div class="market-loading market-loading--spinner"><div class="market-loading__spinner-circle"></div><div class="market-loading__spinner-text">상품 로딩 중 ....</div></div>';
     loadMarketService()
       .then(function (s) {
-        return Promise.all([s.getMyFavoriteItemIds(), s.getMySupabaseUserId()]);
+        return Promise.all([
+          s.getMyFavoriteItemIds(),
+          s.getMySupabaseUserId(),
+          s.getSellerActiveOrderItemIds().catch(function () { return new Set(); }),
+        ]);
       })
       .then(function (res) {
         homeState.favoriteIds = res[0] || new Set();
         homeState.myUserId = res[1] || null;
+        homeState.activeOrderIds = res[2] || new Set();
       })
       .catch(function () {})
       .finally(function () {
@@ -2906,9 +2912,9 @@
     var wrap = document.getElementById('marketMyPageTabs');
     if (!wrap) return;
     var tabs = [
-      { key: 'selling', label: '내 상품', icon: 'my' },
-      { key: 'favorites', label: '찜한 상품', icon: 'heart' },
-      { key: 'deals', label: '나의거래내역', icon: 'deal' },
+      { key: 'selling', label: '판매', icon: 'my' },
+      { key: 'favorites', label: '찜', icon: 'heart' },
+      { key: 'deals', label: '구입', icon: 'deal' },
     ];
     wrap.innerHTML = tabs.map(function (t) {
       var iconUrl = 'assets/img/' + t.icon + '.svg';
@@ -2917,6 +2923,7 @@
         '<span class="market-subtab__icon-wrap">' +
           '<span class="market-subtab__icon market-subtab__icon--masked" style="-webkit-mask-image:url(\'' + iconUrl + '\');mask-image:url(\'' + iconUrl + '\');"></span>' +
         '</span>' +
+        '<span class="market-subtab__label">' + escapeHtml(t.label) + '</span>' +
       '</button>';
     }).join('');
     Array.prototype.forEach.call(wrap.querySelectorAll('[data-tab]'), function (btn) {
