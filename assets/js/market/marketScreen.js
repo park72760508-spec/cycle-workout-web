@@ -2914,7 +2914,7 @@
     var tabs = [
       { key: 'selling', label: '판매', icon: 'my' },
       { key: 'favorites', label: '찜', icon: 'heart' },
-      { key: 'deals', label: '구입', icon: 'deal' },
+      { key: 'deals', label: '구매', icon: 'deal' },
     ];
     wrap.innerHTML = tabs.map(function (t) {
       var iconUrl = 'assets/img/' + t.icon + '.svg';
