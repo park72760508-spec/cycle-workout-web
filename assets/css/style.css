@@ -373,7 +373,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시·성과 대시보드 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
 /* 화면이 뷰포트 전체로 확장 — 하단 구분 영역 없이 넓게 사용 (min-height로 확장, -webkit-fill-available로 Safari 대응) */
 /* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
-.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#runDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen) {
+.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#runDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen):not(#marketHomeScreen):not(#marketItemFormScreen):not(#marketItemDetailScreen):not(#marketMyPageScreen) {
   /* iOS/Bluefy: position fixed + inset 0으로 뷰포트 전체 채움 (하단 회색 바 근본 해결) */
   position: fixed !important;
   top: 0 !important;
@@ -30324,24 +30324,36 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 /* ============================= 중고랜드(Market Land) ============================= */
 /* 전역 .screen.active가 overflow-y:auto!important로 화면 전체를 스크롤 영역으로 만들면
    내부 .market-scroll-area와 이중 스크롤이 겹쳐 헤더·서브카테고리 탭까지 함께 밀려 올라간다
-   (라이딩 모임 룸 화면과 동일한 원인). .screen.market-screen.active(클래스 3개, 특이도 0,0,3)는
-   전역 규칙(.screen.active:not(#id)... — :not() 각각이 ID 특이도를 더해 0,12,2로 훨씬 높음)에게
-   overflow-y 선언에서 밀려 실제로는 적용되지 않는다 — #openRidingRoomScreen.screen.active와
-   동일하게 각 화면 ID를 직접 명시해 특이도를 끌어올려 이 화면들만 바깥 스크롤을 막고
-   .market-scroll-area만 스크롤되게 한다. */
-.screen.market-screen.active {
-  display: flex;
-  flex-direction: column;
-  padding-left: 12px;
-  padding-right: 12px;
-}
+   (라이딩 모임 룸·랭킹보드와 동일한 원인). ID 선택자로 특이도를 올려 overflow만 덮어써
+   봤지만, 전역 규칙이 :not() 12개로 인해 여전히 더 높은 특이도를 가져 실제로는 이기지
+   못했다(이겼다면 반대로 .market-scroll-area까지 포함해 아무 것도 스크롤되지 않는 등
+   예측 불가능한 결과만 낳는다) — #stelvioRankingScreen.screen.active와 완전히 동일하게,
+   전역 규칙의 :not() 목록에서 이 화면들을 아예 제외하고 이 규칙에서 position:fixed·높이·
+   패딩까지 전부 자체 완결적으로 정의해 특이도 경쟁 자체를 없앤다. */
 #marketHomeScreen.screen.active,
 #marketItemFormScreen.screen.active,
 #marketItemDetailScreen.screen.active,
 #marketMyPageScreen.screen.active {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
   overflow: hidden !important;
   overflow-x: hidden !important;
   overflow-y: hidden !important;
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+  min-height: -webkit-fill-available !important;
+  max-height: 100dvh !important;
+  padding-top: max(20px, env(safe-area-inset-top, 0px)) !important;
+  padding-bottom: 0 !important;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
+  padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
+  box-sizing: border-box !important;
+  touch-action: pan-y;
 }
 .market-header {
   display: flex;

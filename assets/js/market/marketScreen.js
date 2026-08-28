@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketHeaderStickyTop1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketScreenFixExcl1';
   var svc = null;
 
   function loadMarketService() {
@@ -914,11 +914,6 @@
 
   window.marketScreenInit = function () {
     syncMarketBottomNav('list');
-    // 전역 .screen.active가 overflow-y:auto!important로 화면 전체를 스크롤 영역으로 만들면
-    // 헤더·탭바·검색창까지 상품 목록과 함께 밀려 올라간다 — CSS 특이도만으로는 전역 규칙을
-    // 확실히 이기기 어려워(각 :not()이 ID 특이도를 더함) 인라인 !important로 명확히 고정한다.
-    var marketHomeScreenEl = document.getElementById('marketHomeScreen');
-    if (marketHomeScreenEl) marketHomeScreenEl.style.setProperty('overflow', 'hidden', 'important');
     // 화면 접속과 동시에 스피너부터 표시 — 즐겨찾기/로그인 사용자 조회가 끝나야 시작되던
     // reloadMarketHomeList() 호출 이전에도 곧바로 로딩 상태가 보이게 한다.
     var grid = document.getElementById('marketItemGrid');
