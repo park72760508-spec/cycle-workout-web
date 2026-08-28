@@ -30572,7 +30572,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   max-width: 40px;
   font-size: 10.5px;
   font-weight: 700;
-  color: #94a3b8;
+  color: #000;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -30894,6 +30894,7 @@ html.market-glass-nav-ios-phone .market-bottom-nav {
   border-radius: 50%;
   background: #ea580c;
   border: 1.5px solid #fff;
+  animation: marketRequestDotPulse 1.6s ease-in-out infinite;
 }
 .market-bottom-nav__btn:active { transform: scale(0.93); background-color: rgba(15, 23, 42, 0.08); }
 .market-bottom-nav__btn.active { color: #c2410c; background-color: rgba(234, 88, 12, 0.12); }
