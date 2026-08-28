@@ -30565,7 +30565,9 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
    같은 이유로 특정 .screen 내부가 아니라 body 바로 아래 단독으로 존재해서(#marketBottomNav)
    :has(.market-bottom-nav)로는 더 이상 감지할 수 없다 — 네비가 있는 화면에 직접 표시 클래스를 둔다. */
 .market-screen--with-nav .market-scroll-area {
-  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  /* 하단 네비 pill(하단 16px + 안쪽 높이 약 54px ≈ 70px)보다 충분히 여유 있게 —
+     마지막 상품 목록이 네비게이션바에 가려 보이지 않던 문제 수정. */
+  padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
 }
 
 /* 상품 목록 — 한 줄에 1건, 좌측 이미지 + 우측 4줄(상품명/가격/상태/통계) 리스트형 레이아웃. */
