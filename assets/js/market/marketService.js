@@ -444,19 +444,30 @@ export async function getMyMarketOrders() {
 }
 
 /** 하단 네비 마이페이지 배지·"내 상품" 카드 알림 점 — 내가 판매자인 상품 중 아직 완결되지
- * 않은(입금대기·예약·입금완료) 거래 요청이 걸려 있는 상품 id 집합을 조회한다. */
+ * 않은(입금대기·예약·입금완료) 거래 요청, 또는 아직 결정하지 않은(PENDING) 가격 조정 제안이
+ * 걸려 있는 상품 id 집합을 조회한다(market_orders와 market_nego_requests 둘 다 확인). */
 export async function getSellerActiveOrderItemIds() {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
     const userId = await getMySupabaseUserId();
     if (!userId) return new Set();
-    const { data, error } = await supabase
-      .from('market_orders')
-      .select('item_id')
-      .eq('seller_id', userId)
-      .in('escrow_status', ['PENDING', 'RESERVED', 'PAID']);
-    if (error) throw error;
-    return new Set((data || []).map((o) => o.item_id));
+    const [ordersRes, negoRes] = await Promise.all([
+      supabase
+        .from('market_orders')
+        .select('item_id')
+        .eq('seller_id', userId)
+        .in('escrow_status', ['PENDING', 'RESERVED', 'PAID']),
+      supabase
+        .from('market_nego_requests')
+        .select('item_id')
+        .eq('seller_id', userId)
+        .eq('status', 'PENDING'),
+    ]);
+    if (ordersRes.error) throw ordersRes.error;
+    if (negoRes.error) throw negoRes.error;
+    const ids = (ordersRes.data || []).map((o) => o.item_id)
+      .concat((negoRes.data || []).map((n) => n.item_id));
+    return new Set(ids);
   });
 }
 
