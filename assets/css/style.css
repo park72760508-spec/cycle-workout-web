@@ -31329,22 +31329,9 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   font-size: 12.5px;
 }
 .market-deal-info-row__text { flex: 1; min-width: 0; }
-.market-copy-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 7px;
-  background: #fff;
-  color: #64748b;
-  cursor: pointer;
-  padding: 0;
-}
-.market-copy-btn:active { background: #f1f5f9; }
-.market-copy-btn svg { width: 14px; height: 14px; }
+/* 복사 버튼은 판매자 전화 연락 아이콘(.market-deal-contact-btn)과 동일한 원형 디자인을
+   그대로 재사용한다 — market-copy-btn은 JS 이벤트 훅용 클래스일 뿐 별도 스타일 없음. */
+.market-copy-btn { border: none; cursor: pointer; padding: 0; }
 
 /* 거래 진행 6단계 스텝바 — 거래내역 카드 맨 위, 완료/진행중 단계는 오렌지 톤, 미완료는 회색조. */
 .market-deal-steps {

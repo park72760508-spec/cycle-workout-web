@@ -293,7 +293,7 @@
    * 맞춘다. 앞으로 거래내역에 새 항목을 추가할 때도 이 함수로 형식을 통일한다. */
   function marketDealInfoLineHtml(label, value, copyValue) {
     var copyBtnHtml = copyValue
-      ? '<button type="button" class="market-copy-btn" data-copy-value="' + escapeHtml(copyValue) + '" aria-label="복사">' + MARKET_COPY_ICON_SVG + '</button>'
+      ? '<button type="button" class="market-deal-contact-btn market-copy-btn" data-copy-value="' + escapeHtml(copyValue) + '" aria-label="복사">' + MARKET_COPY_ICON_SVG + '</button>'
       : '';
     return '<div class="market-deal-info-row">' +
       '<span class="market-deal-info-row__text">' +
@@ -304,19 +304,40 @@
     '</div>';
   }
 
-  /** 가상 계좌번호 등 복사 버튼(marketDealInfoLineHtml) 클릭 처리 — Clipboard API 우선,
-   * 구형 WebView 등 미지원 환경은 임시 textarea + execCommand('copy')로 대체한다. */
+  /** 가상 계좌번호 등 복사 버튼(marketDealInfoLineHtml) 클릭 처리 — execCommand('copy')를
+   * 먼저 시도한다(동기적이라 네이티브 앱 WebView에서도 즉시 성공 여부를 알 수 있음).
+   * Clipboard API(navigator.clipboard.writeText)는 일부 WebView에서 권한 프롬프트가
+   * 뜨지 않고 Promise가 영영 resolve/reject 되지 않는 경우가 있어(토스트가 아예 안 뜨는
+   * 원인) 보조 수단으로만 쓰고, 반드시 타임아웃을 둬 어떤 경우든 결과 토스트가 뜨게 한다. */
   function handleMarketCopyClick(btn) {
     var value = btn.getAttribute('data-copy-value') || '';
     if (!value) return;
     function onSuccess() { toast('복사되었습니다.'); }
     function onFail() { toast('복사에 실패했습니다. 직접 선택해 복사해 주세요.'); }
+    if (marketFallbackCopy(value)) {
+      onSuccess();
+      return;
+    }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(value).then(onSuccess).catch(function () {
-        marketFallbackCopy(value) ? onSuccess() : onFail();
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        onFail();
+      }, 1200);
+      navigator.clipboard.writeText(value).then(function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        onSuccess();
+      }).catch(function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        onFail();
       });
     } else {
-      marketFallbackCopy(value) ? onSuccess() : onFail();
+      onFail();
     }
   }
 
