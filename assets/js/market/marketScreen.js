@@ -288,12 +288,21 @@
       '</span>';
   }
 
+  /** 거래내역 카드의 "라벨 : 값" 한 줄 표시(가상 계좌·배송 주소 등) — 입금 금액 행
+   * (marketDealAmountStatusHtml)과 동일하게 라벨은 굵게, 좌측 정렬도 동일한 패딩으로
+   * 맞춘다. 앞으로 거래내역에 새 항목을 추가할 때도 이 함수로 형식을 통일한다. */
+  function marketDealInfoLineHtml(label, value) {
+    return '<div class="market-deal-info-row">' +
+      '<span class="market-delivery-info__label">' + label + '</span>' +
+      '<span class="market-delivery-info__value">' + value + '</span>' +
+    '</div>';
+  }
+
   /** 안전결제 구매 시점에 입력받은 배송 주소 — 구매자·판매자 거래내역 공통 표시(직거래는 해당 없음). */
   function marketDeliveryAddressLineHtml(o) {
     if (o.deal_type === 'DIRECT_DEAL' || !o.delivery_address1) return '';
-    return '<div class="market-delivery-info">배송 주소 : ' +
-      escapeHtml('(' + (o.delivery_address_zip || '') + ') ' + (o.delivery_address1 || '') + ' ' + (o.delivery_address2 || '')) +
-    '</div>';
+    return marketDealInfoLineHtml('배송 주소 : ',
+      escapeHtml('(' + (o.delivery_address_zip || '') + ') ' + (o.delivery_address1 || '') + ' ' + (o.delivery_address2 || '')));
   }
 
   /** 판매자 거래내역 행 아래 택배 정보 — 입금완료(PAID)+안전결제 주문에서만 노출.
@@ -1910,7 +1919,7 @@
       var buyerAmountLabelText = isDirectDeal ? '거래 금액 : ' : '입금 금액 : ';
       var buyerAmountValueText = formatPrice(myOrder.amount) + '원';
       var vaLineHtml = myOrder.va_account_number
-        ? '<div class="market-order-history-contacts">가상계좌 : ' + escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number) + '</div>'
+        ? marketDealInfoLineHtml('가상 계좌 : ', escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number))
         : '';
       var sellerCounterpartHtml = marketOrderRevealsPhone(myOrder.escrow_status)
         ? marketCounterpartCardHtml(sellerAvatar, sellerName, detailState.sellerPhone, myOrder.escrow_status === 'CONFIRMED')

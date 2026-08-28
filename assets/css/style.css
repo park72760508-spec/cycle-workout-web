@@ -31317,6 +31317,14 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   border-top: 1px solid #f1f5f9;
 }
 
+/* 가상 계좌·배송 주소 등 거래내역 "라벨 : 값" 한 줄 표시 — 입금 금액 행(.market-deal-amount-row)과
+   동일한 좌우 패딩으로 좌측을 맞춘다(marketDealInfoLineHtml). */
+.market-deal-info-row {
+  padding: 6px 10px;
+  border-top: 1px dashed #e2e8f0;
+  font-size: 12.5px;
+}
+
 /* 거래 진행 6단계 스텝바 — 거래내역 카드 맨 위, 완료/진행중 단계는 오렌지 톤, 미완료는 회색조. */
 .market-deal-steps {
   display: flex;
