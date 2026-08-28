@@ -96,6 +96,42 @@ async function callMarketEdgeFunction(name, body) {
 let marketSupabaseClientPromise = null;
 let marketTokenCache = { token: null, expiresAtSec: 0, supabaseUserId: null };
 
+/**
+ * 로그아웃 후 다른 계정으로 로그인해도(앱을 완전히 재시작하지 않는 한) marketTokenCache가
+ * 만료 전까지 이전 사용자의 토큰을 그대로 재사용해 중고랜드가 이전 계정으로 계속 접속되는
+ * 문제가 있었다. Firebase UID 변경을 직접 감지해 캐시를 무효화한다(앱 재시작 시에는 모듈이
+ * 새로 로드되며 캐시도 자연히 초기화되므로 그동안은 증상이 없었음).
+ */
+let marketLastSeenFirebaseUid = undefined; // undefined = 아직 관찰 전(최초 로드)
+function invalidateMarketTokenCacheOnAuthChange(user) {
+  const uid = (user && user.uid) || null;
+  if (marketLastSeenFirebaseUid === undefined) {
+    marketLastSeenFirebaseUid = uid;
+    return;
+  }
+  if (uid !== marketLastSeenFirebaseUid) {
+    marketLastSeenFirebaseUid = uid;
+    marketTokenCache = { token: null, expiresAtSec: 0, supabaseUserId: null };
+  }
+}
+(function bindMarketAuthChangeListener() {
+  if (typeof window === 'undefined') return;
+  if (window.__marketAuthChangeListenerBound) return;
+  window.__marketAuthChangeListenerBound = true;
+  var tries = 0;
+  (function attach() {
+    tries++;
+    var bound = false;
+    if (window.authV9 && typeof window.authV9.onAuthStateChanged === 'function') {
+      try { window.authV9.onAuthStateChanged(invalidateMarketTokenCacheOnAuthChange); bound = true; } catch (e) {}
+    }
+    if (typeof firebase !== 'undefined' && firebase.auth && typeof firebase.auth === 'function') {
+      try { firebase.auth().onAuthStateChanged(invalidateMarketTokenCacheOnAuthChange); bound = true; } catch (e2) {}
+    }
+    if (!bound && tries < 20) setTimeout(attach, 300);
+  })();
+})();
+
 async function getFreshMarketAccessToken() {
   const nowSec = Math.floor(Date.now() / 1000);
   if (marketTokenCache.token && marketTokenCache.expiresAtSec > nowSec + 120) {
