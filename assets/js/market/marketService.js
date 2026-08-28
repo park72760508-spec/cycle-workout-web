@@ -471,6 +471,30 @@ export async function getSellerActiveOrderItemIds() {
   });
 }
 
+/** 하단 네비 마이페이지 배지·목록 화면 카드 알림 점 — 판매자 요청(getSellerActiveOrderItemIds)에
+ * 더해, 내가 구매자로서 아직 완결되지 않은(입금대기·예약·입금완료 = "예약중") 주문을 가진
+ * 상품도 함께 포함한다. 판매자 쪽 신호만 보던 기존 로직은 구매자 본인의 진행 중인 거래에는
+ * 반응하지 않아, 예약중 상태로 바뀌어도(=거래완료 전인데도) 알림이 사라지는 문제가 있었다.
+ * 거래완료(CONFIRMED)·취소·환불이 되어야만 비로소 알림에서 빠진다. */
+export async function getMyActiveDealItemIds() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const userId = await getMySupabaseUserId();
+    if (!userId) return new Set();
+    const [sellerIds, buyerOrdersRes] = await Promise.all([
+      getSellerActiveOrderItemIds(),
+      supabase
+        .from('market_orders')
+        .select('item_id')
+        .eq('buyer_id', userId)
+        .in('escrow_status', ['PENDING', 'RESERVED', 'PAID']),
+    ]);
+    if (buyerOrdersRes.error) throw buyerOrdersRes.error;
+    const ids = Array.from(sellerIds).concat((buyerOrdersRes.data || []).map((o) => o.item_id));
+    return new Set(ids);
+  });
+}
+
 /** 구매 요청 — 가상계좌(안전결제) 발급. Cloud Function이 Toss 시크릿 키로 발급을 대행한다.
  *  createMarketOrder/confirmMarketPurchase는 다른 대회 결제 함수와 동일하게 asia-northeast3에 배포됨. */
 /** 안전결제 구매 — address(zipCode/address1/address2)는 물품을 받으실 배송 주소로, 결제 확인
@@ -795,6 +819,7 @@ if (typeof window !== 'undefined') {
     getMyMarketItems,
     getMyMarketOrders,
     getSellerActiveOrderItemIds,
+    getMyActiveDealItemIds,
     requestMarketPurchase,
     requestMarketDirectDeal,
     setMarketOrderTracking,

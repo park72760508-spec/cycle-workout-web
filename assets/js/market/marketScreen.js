@@ -68,13 +68,15 @@
   }
 
   /** 하단 네비 마이페이지 아이콘 배지 — 내가 판매자인 상품에 완결되지 않은 거래 요청이
-   * 하나라도 있으면 점을 표시한다. 중고랜드 화면에 들어올 때마다(syncMarketBottomNav) 갱신. */
+   * 있거나, 내가 구매자로서 아직 거래완료(CONFIRMED)되지 않은 진행 중인(예약중 포함) 주문이
+   * 하나라도 있으면 점을 표시한다. 거래완료·취소·환불이 되어야 사라진다.
+   * 중고랜드 화면에 들어올 때마다(syncMarketBottomNav) 갱신. */
   var marketMyPageBadgeRefreshing = false;
   function refreshMarketMyPageBadge() {
     if (marketMyPageBadgeRefreshing) return;
     marketMyPageBadgeRefreshing = true;
     loadMarketService()
-      .then(function (s) { return s.getSellerActiveOrderItemIds(); })
+      .then(function (s) { return s.getMyActiveDealItemIds(); })
       .then(function (ids) {
         var badge = document.getElementById('marketNavMyPageBadge');
         if (badge) badge.style.display = (ids && ids.size) ? 'block' : 'none';
@@ -1047,7 +1049,7 @@
         return Promise.all([
           s.getMyFavoriteItemIds(),
           s.getMySupabaseUserId(),
-          s.getSellerActiveOrderItemIds().catch(function () { return new Set(); }),
+          s.getMyActiveDealItemIds().catch(function () { return new Set(); }),
         ]);
       })
       .then(function (res) {
