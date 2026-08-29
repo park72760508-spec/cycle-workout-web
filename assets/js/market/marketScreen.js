@@ -1612,6 +1612,74 @@
     renderMarketFormBankOptionsInto('marketFormSettlementBank');
   }
 
+  /** 카테고리(종목)별 상품 설명 작성 가이드 — HTML placeholder가 아니라 실제 textarea 값으로
+   * 채워 넣는다. placeholder와 달리 포커스해도 사라지지 않고, 예시 부분만 지우고 실제 값으로
+   * 바꿔 쓸 수 있다(직접 입력한 글도 그대로 유지되고 서버에 저장되는 값 자체가 된다). */
+  var MARKET_DESC_TEMPLATE_CYCLE = [
+    '[📌 기본 정보]',
+    '* 제품명/브랜드: (예: 스페셜라이즈드 타막 SL7 / 가민 엣지 830)',
+    '* 구매 시기 및 연식: (예: 2024년 정품 구매 / 23년식)',
+    '* 사이즈: (예: 52사이즈 / 의류 L / 신발 42 EU)',
+    '',
+    '[⚙️ 제품 상태 및 상세 스펙]',
+    '* 누적 주행거리: (예: 약 1,500km / 실내 롤러 위주 사용)',
+    '* 구동계/파츠 스펙: (예: 울테그라 Di2 12단 / 카본 휠셋)',
+    '* 배터리/센서 상태: (예: 충전 100% 정상 작동 / 완충 시 20시간 유지)',
+    '* 소모품 잔여 상태: (체인, 타이어 마모도, 패드 등)',
+    '',
+    '[🔍 하자 및 사용감 안내]',
+    '* 낙차/도색 까짐/스크래치: (예: 우측 레버 미세 긁힘 있음, 크랙 일절 없음)',
+    '* 정비 내역: (예: 최근 숍에서 전체 점검 및 오일링 완료)'
+  ].join('\n');
+
+  var MARKET_DESC_TEMPLATE_RUN = [
+    '[📌 기본 정보]',
+    '* 제품명/브랜드: (예: 나이키 알파플라이 3 / 가민 포러너 265)',
+    '* 사이즈: (예: 270mm / 발볼 D 보통 / 의류 M)',
+    '* 구매처 및 구매 시기: (예: 나이키 코리아 공홈 / 2025년 10월)',
+    '',
+    '[⚙️ 착용 및 마일리지 상태]',
+    '* 누적 러닝 거리(마일리지): (예: 50km 미만 러닝 / 트랙 3회 착용)',
+    '* 아웃솔/쿠션 상태: (예: 힐컵 마모 거의 없음, 줌에어 빵빵함)',
+    '* 시계/기기 배터리 및 센서: (예: GPS/심박 센서 정상, 배터리 효율 최상)',
+    '',
+    '[🔍 제품 상태 상세]',
+    '* 세탁/관리 여부: (예: 단독 손세탁 완료 / 제습 보관)',
+    '* 하자 및 사용감: (예: 갑피 오염 없음, 아웃솔 흙먼지 미세 흔적)'
+  ].join('\n');
+
+  function marketDescTemplateForCategory(cat) {
+    if (cat === 'RUN') return MARKET_DESC_TEMPLATE_RUN;
+    if (cat === 'CYCLE') return MARKET_DESC_TEMPLATE_CYCLE;
+    return '';
+  }
+
+  /** 아직 손대지 않은 상태(비어있거나 두 템플릿 중 하나와 완전히 동일)인지 — 이 경우에만
+   * 확인 없이 바로 다른 종목의 템플릿으로 갈아 끼운다. 그 외(사용자가 실제로 수정/작성한
+   * 내용이 있음)에는 호출부에서 확인창을 거치게 한다. */
+  function marketDescIsUntouchedTemplate(text) {
+    var t = (text || '').trim();
+    if (!t) return true;
+    return t === MARKET_DESC_TEMPLATE_CYCLE.trim() || t === MARKET_DESC_TEMPLATE_RUN.trim();
+  }
+
+  /** confirmMessage가 주어졌고 사용자가 이미 템플릿을 손댄 상태라면 확인 후에만 덮어쓴다.
+   * confirmMessage를 생략하면 항상 강제로 덮어쓴다. 반환값은 실제로 덮어썼는지 여부 —
+   * 호출부(카테고리 select onchange)가 사용자가 취소를 누르면 select 값 자체도 이전
+   * 카테고리로 되돌릴 수 있도록 한다(취소했는데 카테고리만 바뀐 채 남는 상태 방지). */
+  function applyMarketDescTemplateForCategory(cat, confirmMessage) {
+    var descEl = document.getElementById('marketFormDescription');
+    if (!descEl) return true;
+    var template = marketDescTemplateForCategory(cat);
+    if (!template) return true;
+    if (confirmMessage && !marketDescIsUntouchedTemplate(descEl.value)) {
+      if (!window.confirm(confirmMessage)) return false;
+    }
+    descEl.value = template;
+    updateMarketDescCounter();
+    return true;
+  }
+
   function renderMarketFormCategoryOptions(cat) {
     var catSelect = document.getElementById('marketFormCategory');
     var subSelect = document.getElementById('marketFormSubCategory');
@@ -1876,9 +1944,32 @@
       if (submitBtnLabelEl) submitBtnLabelEl.textContent = '등록 하기';
     }
     var catEl = document.getElementById('marketFormCategory');
-    if (catEl) catEl.onchange = function () { renderMarketFormCategoryOptions(catEl.value); };
+    if (catEl) {
+      var lastCommittedCategory = catEl.value;
+      catEl.onchange = function () {
+        var nextCat = catEl.value;
+        var applied = applyMarketDescTemplateForCategory(nextCat, '카테고리를 변경하면 작성 중인 내용이 템플릿으로 초기화됩니다. 변경하시겠습니까?');
+        if (!applied) {
+          // 사용자가 취소를 누르면 select 표시값도 원래 카테고리로 되돌려, "설명은 그대로인데
+          // 카테고리만 바뀐" 불일치 상태가 남지 않게 한다.
+          catEl.value = lastCommittedCategory;
+          renderMarketFormCategoryOptions(lastCommittedCategory);
+          return;
+        }
+        lastCommittedCategory = nextCat;
+        renderMarketFormCategoryOptions(nextCat);
+      };
+    }
     var descEl = document.getElementById('marketFormDescription');
     if (descEl) descEl.oninput = updateMarketDescCounter;
+    var descTemplateResetBtn = document.getElementById('marketFormDescTemplateResetBtn');
+    if (descTemplateResetBtn) {
+      descTemplateResetBtn.onclick = function () {
+        var cat = catEl ? catEl.value : '';
+        if (!cat) { toast('먼저 종목을 선택해 주세요.'); return; }
+        applyMarketDescTemplateForCategory(cat, '작성 중인 내용을 지우고 가이드를 다시 불러올까요?');
+      };
+    }
     wireMarketFormPriceInputs();
     var directWrap = document.getElementById('marketFormDirectLocationWrap');
     setupMarketDirectRegionPicker();
