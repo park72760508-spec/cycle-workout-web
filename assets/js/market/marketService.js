@@ -876,6 +876,25 @@ export async function indexMarketItemImage(itemId) {
   return callMarketFunction('indexMarketItemEmbedding', { itemId }, 'asia-northeast3');
 }
 
+/** 마이페이지 "정산" 탭(관리자 전용) — 안전거래로 입금 확인된 주문의 정산 내역을 조회한다.
+ * market_orders를 새 테이블 없이 그대로 조회하되, 구매자·판매자 이름은 관리자 우회가 있는
+ * RPC(get_market_settlements_for_admin)를 통해서만 가져올 수 있다. */
+export async function getMarketSettlementsForAdmin() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.rpc('get_market_settlements_for_admin');
+    if (error) throw error;
+    return data || [];
+  });
+}
+
+/** 관리자가 판매자 계좌로 실제 이체를 완료한 뒤 정산일(settlement_transferred_at)을 기록한다.
+ * us-central1에 배포되어 있어(다른 market 함수들과 달리 지역을 지정하지 않고 배포됨) 지역
+ * 인자를 생략한다(callMarketFunction의 기본값과 일치). */
+export async function adminMarkMarketOrderSettled(orderId) {
+  return callMarketFunction('adminMarkMarketOrderSettled', { orderId });
+}
+
 if (typeof window !== 'undefined') {
   window.marketService = {
     ensureMarketSupabaseSession,
@@ -926,5 +945,7 @@ if (typeof window !== 'undefined') {
     clearSellerRating,
     matchMarketItemsByImage,
     indexMarketItemImage,
+    getMarketSettlementsForAdmin,
+    adminMarkMarketOrderSettled,
   };
 }

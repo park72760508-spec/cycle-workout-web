@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260908marketImageSearch1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260908marketSettlementTab1';
   var svc = null;
 
   function loadMarketService() {
@@ -3483,6 +3483,10 @@
       { key: 'favorites', label: '찜', icon: 'heart' },
       { key: 'deals', label: '구매', icon: 'deal' },
     ];
+    // 정산 탭은 관리자에게만 노출 — 실제 계좌 이체 여부(settlement_transferred_at)를
+    // 기록하는 화면이라 클라이언트 판단(marketIsAdminUser)과 무관하게 서버 RPC도 다시
+    // fn_is_admin()으로 막혀 있다(이중 방어).
+    if (marketIsAdminUser()) tabs.push({ key: 'settlement', label: '정산', icon: 'won' });
     wrap.innerHTML = tabs.map(function (t) {
       var iconUrl = 'assets/img/' + t.icon + '.svg';
       return '<button type="button" class="market-subtab' + (myPageState.tab === t.key ? ' active' : '') +
@@ -3507,10 +3511,13 @@
   function loadMyPageContent() {
     var grid = document.getElementById('marketMyPageGrid');
     if (!grid) return;
-    grid.className = myPageState.tab === 'deals' ? 'market-deals-list' : 'market-grid';
+    grid.className = myPageState.tab === 'deals' ? 'market-deals-list'
+      : myPageState.tab === 'settlement' ? 'market-settlement-wrap'
+      : 'market-grid';
     grid.innerHTML = '<div class="market-loading">불러오는 중...</div>';
     loadMarketService()
       .then(function (s) {
+        if (myPageState.tab === 'settlement') return renderMySettlementTable(s, grid);
         if (myPageState.tab === 'deals') return renderMyDeals(s, grid);
         if (myPageState.tab === 'favorites') {
           return s.getMyFavoriteItemIds().then(function (ids) {
@@ -3526,6 +3533,67 @@
       .catch(function (err) {
         grid.innerHTML = '<div class="market-empty">불러오지 못했습니다: ' + escapeHtml(err.message || String(err)) + '</div>';
       });
+  }
+
+  /** 마이페이지 "정산" 탭(관리자 전용) — 안전거래 입금 확인건을 거래발생(입금일) 최신순으로
+   * 표 형식으로 보여준다. 판매금액(item_price)은 주문 생성 시점에 이미 수락된 협의가가
+   * 반영돼 있어(협의가 없으면 판매가) 별도 계산이 필요 없다. 정산일이 비어있는 행에는
+   * 관리자가 실제 계좌 이체 후 눌러 기록하는 버튼을 둔다. */
+  function renderMySettlementTable(s, grid) {
+    return s.getMarketSettlementsForAdmin().then(function (rows) {
+      if (!rows.length) {
+        grid.innerHTML = '<div class="market-empty">정산 대상 거래가 없습니다.</div>';
+        return;
+      }
+      var bodyRows = rows.map(function (r, i) {
+        var accountParts = [];
+        if (r.bank_name) accountParts.push(r.bank_name);
+        if (r.account_number) accountParts.push(r.account_number);
+        var accountText = accountParts.length
+          ? escapeHtml(accountParts.join(' ')) + (r.holder_name ? ' (' + escapeHtml(r.holder_name) + ')' : '')
+          : '-';
+        var transferredCellHtml = r.settlement_transferred_at
+          ? escapeHtml(marketFormatDate(r.settlement_transferred_at))
+          : '<button type="button" class="market-settlement-mark-btn" data-order-id="' + escapeHtml(r.order_id) + '">정산 처리</button>';
+        return (
+          '<tr>' +
+            '<td>' + (i + 1) + '</td>' +
+            '<td class="market-settlement-table__title">' + escapeHtml(r.item_title || '') + '</td>' +
+            '<td>' + escapeHtml(marketFormatDate(r.paid_at)) + '</td>' +
+            '<td>' + escapeHtml(marketFormatDate(r.settled_at)) + '</td>' +
+            '<td>' + escapeHtml(r.buyer_name || '') + '</td>' +
+            '<td>' + escapeHtml(r.seller_name || '') + '</td>' +
+            '<td>' + accountText + '</td>' +
+            '<td>' + formatPrice(r.item_price) + '원</td>' +
+            '<td>' + transferredCellHtml + '</td>' +
+          '</tr>'
+        );
+      }).join('');
+      grid.innerHTML =
+        '<div class="market-settlement-table-scroll">' +
+          '<table class="market-settlement-table">' +
+            '<thead><tr>' +
+              '<th>순번</th><th>상품명</th><th>거래발생</th><th>거래종료</th><th>구매자</th><th>판매자</th><th>계좌정보</th><th>판매금액</th><th>정산일</th>' +
+            '</tr></thead>' +
+            '<tbody>' + bodyRows + '</tbody>' +
+          '</table>' +
+        '</div>';
+      Array.prototype.forEach.call(grid.querySelectorAll('.market-settlement-mark-btn'), function (btn) {
+        btn.onclick = function () {
+          var orderId = btn.getAttribute('data-order-id');
+          btn.disabled = true;
+          btn.textContent = '처리 중...';
+          s.adminMarkMarketOrderSettled(orderId).then(function () {
+            toast('정산 처리되었습니다.');
+            loadMyPageContent();
+          }).catch(function (err) {
+            toast('정산 처리 실패: ' + (err && err.message ? err.message : err));
+            btn.disabled = false;
+            btn.textContent = '정산 처리';
+          });
+        };
+      });
+    });
   }
 
   function renderMyPageItemGrid(grid, rows, emptyMessage, activeOrderIds) {
