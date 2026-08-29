@@ -860,7 +860,7 @@ export async function matchMarketItemsByImage(embedding, opts) {
     const supabase = await ensureMarketSupabaseSession();
     const { data, error } = await supabase.rpc('match_products_by_image', {
       p_embedding: embedding,
-      p_match_threshold: opts.threshold != null ? opts.threshold : 0.6,
+      p_match_threshold: opts.threshold != null ? opts.threshold : 0.68,
       p_match_count: opts.limit != null ? opts.limit : 20,
       p_filter_category: opts.category || null,
     });

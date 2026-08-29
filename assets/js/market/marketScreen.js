@@ -1347,6 +1347,19 @@
     homeState.items = items;
     homeState.hasMore = false;
     renderMarketGrid(false);
+    // 결과별로 실제 이미지 일치율(%)을 카드 가격 옆에 표시 — 왜 이 상품이 검색됐는지 사용자가
+    // 판단할 수 있게 하고, 임계값(threshold) 튜닝에도 참고가 되도록 한다.
+    items.forEach(function (item) {
+      if (item.similarity == null) return;
+      var card = document.querySelector('.market-card[data-item-id="' + item.id + '"]');
+      var priceEl = card && card.querySelector('.market-card__price');
+      if (!priceEl) return;
+      var pct = Math.round(Math.max(0, Math.min(1, item.similarity)) * 100);
+      var badge = document.createElement('span');
+      badge.className = 'market-card__similarity-badge';
+      badge.textContent = pct + '% 일치';
+      priceEl.appendChild(badge);
+    });
     var banner = document.getElementById('marketImageSearchBanner');
     var text = document.getElementById('marketImageSearchBannerText');
     if (text) text.textContent = items.length ? ('이미지 검색 결과 ' + items.length + '건') : '비슷한 상품을 찾지 못했습니다.';
@@ -1371,10 +1384,13 @@
       var s = await loadMarketService();
       var blob = await s.resizeAndCompressImage(file);
       var embedding = await computeMarketImageEmbeddingFromBlob(blob);
+      // threshold 0.68 — 실측 결과 서로 다른 카테고리 상품끼리도 CLIP 코사인 유사도가
+      // 0.5~0.6까지 나와, 그보다 낮은 임계값은 사실상 무관한 상품까지 다 걸러졌다
+      // (marketService.js의 matchMarketItemsByImage 기본값과 동일 — RPC 기본값도 동일하게 맞춤).
       var results = await s.matchMarketItemsByImage(embedding, {
         category: homeState.category || undefined,
         limit: 30,
-        threshold: 0.6,
+        threshold: 0.68,
       });
       if (results.length) {
         // 목록 카드와 동일한 부가 정보(관심수·판매자 만족도)를 배치 조회로 채운다
