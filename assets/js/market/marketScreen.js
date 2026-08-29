@@ -3535,14 +3535,60 @@
       });
   }
 
+  /** 정산 표 컬럼 정의 — data-field 값과 순서의 단일 소스. 체크박스 on/off로 th/td를
+   * 함께 숨기고 보여주는 데 재사용한다. */
+  var MARKET_SETTLEMENT_FIELDS = [
+    { key: 'seq', label: '순번' },
+    { key: 'title', label: '상품명' },
+    { key: 'paid', label: '거래발생' },
+    { key: 'settled', label: '거래종료' },
+    { key: 'buyer', label: '구매자' },
+    { key: 'seller', label: '판매자' },
+    { key: 'account', label: '계좌정보' },
+    { key: 'price', label: '판매금액' },
+    { key: 'transferred', label: '정산일' },
+  ];
+  // 화면을 나갔다 다시 들어와도(탭 전환 등) 선택 유지 — 모듈 스코프에 둔다.
+  var marketSettlementVisibleFields = null;
+  function getMarketSettlementVisibleFields() {
+    if (!marketSettlementVisibleFields) {
+      marketSettlementVisibleFields = {};
+      MARKET_SETTLEMENT_FIELDS.forEach(function (f) { marketSettlementVisibleFields[f.key] = true; });
+    }
+    return marketSettlementVisibleFields;
+  }
+
+  function applyMarketSettlementFieldVisibility(grid) {
+    var visible = getMarketSettlementVisibleFields();
+    MARKET_SETTLEMENT_FIELDS.forEach(function (f) {
+      var show = visible[f.key] !== false;
+      Array.prototype.forEach.call(grid.querySelectorAll('[data-field="' + f.key + '"]'), function (cell) {
+        cell.style.display = show ? '' : 'none';
+      });
+    });
+  }
+
   /** 마이페이지 "정산" 탭(관리자 전용) — 안전거래 입금 확인건을 거래발생(입금일) 최신순으로
    * 표 형식으로 보여준다. 판매금액(item_price)은 주문 생성 시점에 이미 수락된 협의가가
    * 반영돼 있어(협의가 없으면 판매가) 별도 계산이 필요 없다. 정산일이 비어있는 행에는
    * 관리자가 실제 계좌 이체 후 눌러 기록하는 버튼을 둔다. */
   function renderMySettlementTable(s, grid) {
     return s.getMarketSettlementsForAdmin().then(function (rows) {
+      var toolbarHtml =
+        '<div class="market-settlement-toolbar">' +
+          '<div class="market-settlement-field-picker">' +
+            '<button type="button" id="marketSettlementFieldBtn" class="market-settlement-field-btn">필드 ▾</button>' +
+            '<div class="market-settlement-field-dropdown" id="marketSettlementFieldDropdown" style="display:none;">' +
+              MARKET_SETTLEMENT_FIELDS.map(function (f) {
+                var checked = getMarketSettlementVisibleFields()[f.key] !== false;
+                return '<label><input type="checkbox" data-field-toggle="' + f.key + '"' + (checked ? ' checked' : '') + '> ' + escapeHtml(f.label) + '</label>';
+              }).join('') +
+            '</div>' +
+          '</div>' +
+        '</div>';
       if (!rows.length) {
-        grid.innerHTML = '<div class="market-empty">정산 대상 거래가 없습니다.</div>';
+        grid.innerHTML = toolbarHtml + '<div class="market-empty">정산 대상 거래가 없습니다.</div>';
+        wireMarketSettlementFieldPicker(grid);
         return;
       }
       var bodyRows = rows.map(function (r, i) {
@@ -3554,30 +3600,35 @@
           : '-';
         var transferredCellHtml = r.settlement_transferred_at
           ? escapeHtml(marketFormatDate(r.settlement_transferred_at))
-          : '<button type="button" class="market-settlement-mark-btn" data-order-id="' + escapeHtml(r.order_id) + '">정산 처리</button>';
+          : '<button type="button" class="market-settlement-mark-btn" data-order-id="' + escapeHtml(r.order_id) + '">정산</button>';
         return (
           '<tr>' +
-            '<td>' + (i + 1) + '</td>' +
-            '<td class="market-settlement-table__title">' + escapeHtml(r.item_title || '') + '</td>' +
-            '<td>' + escapeHtml(marketFormatDate(r.paid_at)) + '</td>' +
-            '<td>' + escapeHtml(marketFormatDate(r.settled_at)) + '</td>' +
-            '<td>' + escapeHtml(r.buyer_name || '') + '</td>' +
-            '<td>' + escapeHtml(r.seller_name || '') + '</td>' +
-            '<td>' + accountText + '</td>' +
-            '<td>' + formatPrice(r.item_price) + '원</td>' +
-            '<td>' + transferredCellHtml + '</td>' +
+            '<td data-field="seq">' + (i + 1) + '</td>' +
+            '<td class="market-settlement-table__title" data-field="title">' + escapeHtml(r.item_title || '') + '</td>' +
+            '<td data-field="paid">' + escapeHtml(marketFormatDate(r.paid_at)) + '</td>' +
+            '<td data-field="settled">' + escapeHtml(marketFormatDate(r.settled_at)) + '</td>' +
+            '<td data-field="buyer">' + escapeHtml(r.buyer_name || '') + '</td>' +
+            '<td data-field="seller">' + escapeHtml(r.seller_name || '') + '</td>' +
+            '<td data-field="account">' + accountText + '</td>' +
+            '<td data-field="price">' + formatPrice(r.item_price) + '원</td>' +
+            '<td data-field="transferred">' + transferredCellHtml + '</td>' +
           '</tr>'
         );
       }).join('');
       grid.innerHTML =
+        toolbarHtml +
         '<div class="market-settlement-table-scroll">' +
           '<table class="market-settlement-table">' +
             '<thead><tr>' +
-              '<th>순번</th><th>상품명</th><th>거래발생</th><th>거래종료</th><th>구매자</th><th>판매자</th><th>계좌정보</th><th>판매금액</th><th>정산일</th>' +
+              MARKET_SETTLEMENT_FIELDS.map(function (f) {
+                return '<th data-field="' + f.key + '">' + escapeHtml(f.label) + '</th>';
+              }).join('') +
             '</tr></thead>' +
             '<tbody>' + bodyRows + '</tbody>' +
           '</table>' +
         '</div>';
+      wireMarketSettlementFieldPicker(grid);
+      applyMarketSettlementFieldVisibility(grid);
       Array.prototype.forEach.call(grid.querySelectorAll('.market-settlement-mark-btn'), function (btn) {
         btn.onclick = function () {
           var orderId = btn.getAttribute('data-order-id');
@@ -3589,11 +3640,39 @@
           }).catch(function (err) {
             toast('정산 처리 실패: ' + (err && err.message ? err.message : err));
             btn.disabled = false;
-            btn.textContent = '정산 처리';
+            btn.textContent = '정산';
           });
         };
       });
     });
+  }
+
+  /** "필드 ▾" 버튼 — 클릭하면 체크박스 목록이 펼쳐지고, 각 체크박스를 켜고 끄면 해당
+   * 컬럼(th+td)이 즉시 표에서 숨겨지거나 다시 보인다. */
+  function wireMarketSettlementFieldPicker(grid) {
+    var btn = grid.querySelector('#marketSettlementFieldBtn');
+    var dropdown = grid.querySelector('#marketSettlementFieldDropdown');
+    if (!btn || !dropdown) return;
+    btn.onclick = function (e) {
+      e.stopPropagation();
+      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    };
+    dropdown.onclick = function (e) { e.stopPropagation(); };
+    Array.prototype.forEach.call(dropdown.querySelectorAll('[data-field-toggle]'), function (cb) {
+      cb.onchange = function () {
+        var key = cb.getAttribute('data-field-toggle');
+        getMarketSettlementVisibleFields()[key] = cb.checked;
+        applyMarketSettlementFieldVisibility(grid);
+      };
+    });
+    if (!document.__marketSettlementFieldDropdownCloseBound) {
+      document.__marketSettlementFieldDropdownCloseBound = true;
+      document.addEventListener('click', function () {
+        Array.prototype.forEach.call(document.querySelectorAll('.market-settlement-field-dropdown'), function (dd) {
+          dd.style.display = 'none';
+        });
+      });
+    }
   }
 
   function renderMyPageItemGrid(grid, rows, emptyMessage, activeOrderIds) {
