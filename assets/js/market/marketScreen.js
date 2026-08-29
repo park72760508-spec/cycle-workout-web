@@ -268,6 +268,15 @@
     } catch (e) { return ''; }
   }
 
+  /** 미니 달력이 돌려주는 "YYYY-MM-DD" 문자열을 marketFormatDate와 같은 표기("2026. 8. 29.")로
+   * 바꾼다 — new Date('YYYY-MM-DD')는 UTC 자정으로 해석되어 관리자 브라우저 시간대에 따라
+   * 하루 밀릴 수 있어, Date 객체를 거치지 않고 문자열에서 바로 구성한다. */
+  function marketFormatYmdDot(ymd) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ymd || ''));
+    if (!m) return '';
+    return m[1] + '. ' + Number(m[2]) + '. ' + Number(m[3]) + '.';
+  }
+
   /** 대회 참가신청 입금기한 카운트다운(competitionBottomSheet.js의 formatRemaining)과 동일 로직 */
   function marketFormatRemaining(dueDateStr) {
     var due = new Date(dueDateStr).getTime();
@@ -3798,19 +3807,17 @@
           '</table>' +
         '</div>';
       applyMarketSettlementFieldVisibility();
+      // 날짜를 고르면 그 값만 저장하고 셀에 날짜만 표시한다 — 다른 정산 로직(구매확정
+      // 처리, 목록 전체 재조회 등)은 건드리지 않는다.
       Array.prototype.forEach.call(grid.querySelectorAll('.market-settlement-mark-btn'), function (btn) {
         btn.onclick = function () {
           var orderId = btn.getAttribute('data-order-id');
+          var cell = btn.parentNode;
           openMarketSettlementDatePicker(btn, function (isoDate) {
-            btn.disabled = true;
-            btn.textContent = '처리 중...';
             s.adminMarkMarketOrderSettled(orderId, isoDate).then(function () {
-              toast('정산 처리되었습니다.');
-              loadMyPageContent();
+              if (cell) cell.textContent = marketFormatYmdDot(isoDate);
             }).catch(function (err) {
-              toast('정산 처리 실패: ' + (err && err.message ? err.message : err));
-              btn.disabled = false;
-              btn.textContent = '정산';
+              toast('정산일 저장 실패: ' + (err && err.message ? err.message : err));
             });
           });
         };
