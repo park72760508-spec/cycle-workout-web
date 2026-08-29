@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260828marketAuthCacheFix1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260829marketHeatFix1';
   var svc = null;
 
   function loadMarketService() {
@@ -945,36 +945,45 @@
     );
   }
 
-  function renderMarketGrid(append) {
+  // 더보기(append) 시 새로 받아온 페이지(newItems)만 카드로 만들어 붙인다 — 이전에는 매번
+  // homeState.items(누적 전체 목록)를 통째로 다시 append해서 "더보기"를 누를수록 카드가
+  // 60→180→360→600개로 중복 누적되며(스크롤 시 화면 발열의 주요 원인) DOM/이미지 디코딩
+  // 비용이 제곱으로 커졌다.
+  function renderMarketGrid(append, newItems) {
     var grid = document.getElementById('marketItemGrid');
     if (!grid) return;
-    var html = homeState.items.map(function (item) { return marketItemCardHtml(item, homeState.activeOrderIds); }).join('');
     if (!append) {
+      var html = homeState.items.map(function (item) { return marketItemCardHtml(item, homeState.activeOrderIds); }).join('');
       grid.innerHTML =
         html ||
         (homeState.keyword
           ? '<div class="market-empty">\'' + escapeHtml(homeState.keyword) + '\'에 대한 검색 결과가 없습니다.</div>'
           : '<div class="market-empty">등록된 상품이 없습니다.</div>');
     } else {
-      grid.insertAdjacentHTML('beforeend', html);
+      var appendHtml = (newItems || []).map(function (item) { return marketItemCardHtml(item, homeState.activeOrderIds); }).join('');
+      if (appendHtml) grid.insertAdjacentHTML('beforeend', appendHtml);
     }
     wireMarketGridEvents(grid);
     var moreBtn = document.getElementById('marketLoadMoreBtn');
     if (moreBtn) moreBtn.style.display = homeState.hasMore ? 'block' : 'none';
   }
 
+  // 카드 클릭/찜 버튼을 그리드 컨테이너 하나에만 위임 바인딩한다 — 기존에는 카드마다
+  // addEventListener를 새로 추가해서, "더보기"로 그리드가 커질 때마다 이전 카드에도 리스너가
+  // 누적되어(카드 1개당 클릭 시 상세 조회가 N번 중복 실행) 불필요한 네트워크 요청과 렌더링이
+  // 반복되는 원인이 됐다. 컨테이너 엘리먼트당 한 번만 바인딩되도록 플래그로 가드한다.
   function wireMarketGridEvents(scope) {
-    Array.prototype.forEach.call(scope.querySelectorAll('.market-card'), function (card) {
-      card.addEventListener('click', function (e) {
-        if (e.target.closest('[data-fav-toggle]')) return;
-        openMarketItemDetail(card.getAttribute('data-item-id'));
-      });
-    });
-    Array.prototype.forEach.call(scope.querySelectorAll('[data-fav-toggle]'), function (btn) {
-      btn.onclick = function (e) {
+    if (scope.__marketGridClickWired) return;
+    scope.__marketGridClickWired = true;
+    scope.addEventListener('click', function (e) {
+      var favBtn = e.target.closest('[data-fav-toggle]');
+      if (favBtn) {
         e.stopPropagation();
-        handleFavoriteToggle(btn.getAttribute('data-fav-toggle'), btn);
-      };
+        handleFavoriteToggle(favBtn.getAttribute('data-fav-toggle'), favBtn);
+        return;
+      }
+      var card = e.target.closest('.market-card');
+      if (card) openMarketItemDetail(card.getAttribute('data-item-id'));
     });
   }
 
@@ -1058,7 +1067,7 @@
         homeState.items = append ? homeState.items.concat(rows) : rows;
         homeState.offset += rows.length;
         homeState.hasMore = rows.length === PAGE_SIZE;
-        renderMarketGrid(append);
+        renderMarketGrid(append, rows);
       })
       .catch(function (err) {
         var grid = document.getElementById('marketItemGrid');
@@ -1180,9 +1189,22 @@
       scrollEl.removeEventListener('scroll', marketBackToTopScrollHandler, { passive: true });
       marketBackToTopScrollHandler = null;
     }
+    // 스크롤 이벤트는 고주사율 화면에서 초당 백여 번까지도 발생할 수 있어, 매 이벤트마다
+    // scrollTop을 읽고 classList를 건드리면 스크롤 내내 메인 스레드가 계속 깨어있게 되어
+    // 발열 요인이 된다. rAF로 프레임당 최대 1회만 처리하고, 표시 상태가 실제로 바뀔 때만
+    // classList를 갱신한다.
+    var ticking = false;
+    var isVisible = null;
     marketBackToTopScrollHandler = function () {
-      if (scrollEl.scrollTop >= 300) btn.classList.add('market-back-to-top-visible');
-      else btn.classList.remove('market-back-to-top-visible');
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        ticking = false;
+        var shouldShow = scrollEl.scrollTop >= 300;
+        if (shouldShow === isVisible) return;
+        isVisible = shouldShow;
+        btn.classList.toggle('market-back-to-top-visible', shouldShow);
+      });
     };
     scrollEl.addEventListener('scroll', marketBackToTopScrollHandler, { passive: true });
   }
@@ -1403,10 +1425,17 @@
   // 무엇이든 상관없이 "showScreen 호출이 끝난 뒤 실제 활성 화면이 market* 화면이 아니면 네비를
   // 무조건 숨긴다"는 규칙을 전역 showScreen에 걸어 마켓 화면 전용 코드 경로에 의존하지 않게 한다.
   function hideMarketBottomNavIfNotOnMarketScreen() {
-    var nav = document.getElementById('marketBottomNav');
-    if (!nav || nav.style.display === 'none') return;
     var activeScreen = document.querySelector('.screen.active');
     var isMarketScreen = !!activeScreen && activeScreen.id.indexOf('market') === 0;
+    // 마켓 화면을 벗어났는데도(뒤로가기 버튼을 거치지 않는 경로 포함) 입금기한 카운트다운
+    // 타이머나 바코드 스캐너 카메라가 계속 살아있으면 배터리·발열 원인이 되므로, 전역 showScreen
+    // 훅에서 확실히 정리한다 — 목록 화면 재진입까지 기다리지 않고 화면을 벗어나는 즉시 멈춘다.
+    if (!isMarketScreen) {
+      if (typeof stopMarketDetailVaTimer === 'function') stopMarketDetailVaTimer();
+      if (typeof window.closeMarketBarcodeScanner === 'function') window.closeMarketBarcodeScanner();
+    }
+    var nav = document.getElementById('marketBottomNav');
+    if (!nav || nav.style.display === 'none') return;
     if (!isMarketScreen) nav.style.display = 'none';
   }
   (function installMarketBottomNavGuard() {
@@ -1869,6 +1898,17 @@
 
   var detailState = { item: null, sliderIndex: 0, sellerProfile: null, sellerPhone: '', favoriteCount: 0, ratingAvg: 0, ratingCount: 0, myRating: 0, myNegoRequest: null, negoRequests: [], orderHistory: [], myOrder: null };
 
+  // 입금기한 카운트다운(1초 간격) 핸들 — 이전에는 함수 지역 변수라 화면 밖에서 정지시킬 방법이
+  // 없어, 상세 화면을 벗어나도(뒤로가기 없이 하단 네비로 다른 화면 이동 등) 타이머가 앱 세션
+  // 내내 계속 돌며 배터리를 소모했다. 모듈 스코프로 끌어올려 재렌더링/화면 이탈 시 확실히 멈춘다.
+  var marketDetailVaTimer = null;
+  function stopMarketDetailVaTimer() {
+    if (marketDetailVaTimer) {
+      clearInterval(marketDetailVaTimer);
+      marketDetailVaTimer = null;
+    }
+  }
+
   /** 취소(CANCELLED)·환불(REFUNDED)로 끝난 주문은 협상가를 소비한 것으로 보고 무효화한다
    * (renderMarketDetail의 가격 표시 초기화와 동일한 정책 — 구매/직거래 버튼도 같은 기준을 써야
    * 화면에 보이는 가격과 실제 결제 금액이 어긋나지 않는다). */
@@ -1880,6 +1920,16 @@
     if (typeof window.showScreen === 'function') window.showScreen('marketItemDetailScreen');
     var body = document.getElementById('marketDetailBody');
     if (body) body.innerHTML = '<div class="market-loading">불러오는 중...</div>';
+    // 판매자 프로필은 판매자 본인, 협상 신청자, 주문 구매자로 최대 3곳에서 겹쳐 조회될 수 있다
+    // (예: 협상도 하고 실제 주문도 한 구매자는 이전에는 동일 프로필을 2번 조회했다). 상세 화면
+    // 1회 진입당 사용자 id 기준으로 캐싱해 중복 네트워크 요청(=불필요한 모뎀 웨이크업)을 없앤다.
+    var sellerProfileCache = {};
+    function getCachedSellerProfile(s, userId) {
+      if (Object.prototype.hasOwnProperty.call(sellerProfileCache, userId)) return sellerProfileCache[userId];
+      var p = s.getSellerPublicProfile(userId).catch(function () { return null; });
+      sellerProfileCache[userId] = p;
+      return p;
+    }
     loadMarketService()
       .then(function (s) {
         s.incrementMarketItemView(itemId).catch(function () {});
@@ -1889,7 +1939,7 @@
             var myUserId = res[1];
             var isMine = myUserId && item.user_id === myUserId;
             return Promise.all([
-              s.getSellerPublicProfile(item.user_id).catch(function () { return null; }),
+              getCachedSellerProfile(s, item.user_id),
               s.getSellerPhone(item.user_id).catch(function () { return ''; }),
               s.getMarketFavoriteCount(item.id).catch(function () { return 0; }),
               s.getSellerRatingAggregate(item.user_id).catch(function () { return { avg: 0, count: 0 }; }),
@@ -1901,7 +1951,7 @@
               // 판매자에게는 결정 여부와 무관하게 전체 요청 이력을 보여준다(수락/거절 후에도
               // 목록에서 사라지지 않고 상태만 갱신되어야 하므로 PENDING만 걸러내지 않는다).
               var sellerNego = isMine ? negoRows : [];
-              return Promise.all(sellerNego.map(function (r) { return s.getSellerPublicProfile(r.buyer_id).catch(function () { return null; }); }))
+              return Promise.all(sellerNego.map(function (r) { return getCachedSellerProfile(s, r.buyer_id); }))
                 .then(function (buyerProfiles) {
                   var sellerNegoWithBuyer = sellerNego.map(function (r, i) { return Object.assign({}, r, { buyerProfile: buyerProfiles[i] }); });
                   // 판매자 전용 "거래내역" — 해당 상품의 전체 주문(입금/구매확정/환불 등)을 시간순으로 표시.
@@ -1910,7 +1960,7 @@
                       return Promise.all(orders.map(function (o) {
                         var revealPhone = marketOrderRevealsPhone(o.escrow_status);
                         return Promise.all([
-                          s.getSellerPublicProfile(o.buyer_id).catch(function () { return null; }),
+                          getCachedSellerProfile(s, o.buyer_id),
                           revealPhone ? s.getBuyerPhone(o.buyer_id).catch(function () { return ''; }) : Promise.resolve(''),
                         ]);
                       })).then(function (pairs) {
@@ -2264,12 +2314,14 @@
 
     wireMarketDetailSlider();
     // 거래내역의 입금기한 카운트다운 — 판매자 화면엔 여러 건이 동시에 있을 수 있어 클래스
-    // 기준으로 전체를 매초 갱신한다(대회 참가신청 입금기한 표시와 동일 로직).
+    // 기준으로 전체를 매초 갱신한다(대회 참가신청 입금기한 표시와 동일 로직). 재렌더링마다
+    // 이전 타이머부터 정리해 중복 실행을 막는다.
+    stopMarketDetailVaTimer();
     if (document.querySelector('.market-tx-row__due')) {
-      var vaTimer = setInterval(function () {
+      marketDetailVaTimer = setInterval(function () {
         var els = document.querySelectorAll('.market-tx-row__due');
         if (!els.length) {
-          clearInterval(vaTimer);
+          stopMarketDetailVaTimer();
           return;
         }
         Array.prototype.forEach.call(els, function (el) {
@@ -3005,10 +3057,27 @@
     }
     var video = document.getElementById('marketBarcodeScannerVideo');
     if (video) {
+      // controls.stop()이 내부적으로 실패해도(위 catch로 삼켜짐) 카메라 LED가 계속 켜진 채
+      // 남지 않도록, 스트림의 각 트랙을 직접 멈추는 안전망을 둔다.
+      try {
+        if (video.srcObject && typeof video.srcObject.getTracks === 'function') {
+          video.srcObject.getTracks().forEach(function (t) { t.stop(); });
+        }
+      } catch (e) {}
       try { video.srcObject = null; } catch (e) {}
     }
     marketBarcodeScannerState.onSuccess = null;
   };
+
+  // 앱이 백그라운드로 전환되거나(다른 앱 전환, 화면 잠금) 페이지를 벗어날 때도 카메라 스트림이
+  // 계속 켜진 채 남지 않도록 정리한다 — 기존에는 뒤로가기 버튼·목록 화면 재진입 경로에서만
+  // 정리됐다.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && typeof window.closeMarketBarcodeScanner === 'function') window.closeMarketBarcodeScanner();
+  });
+  window.addEventListener('pagehide', function () {
+    if (typeof window.closeMarketBarcodeScanner === 'function') window.closeMarketBarcodeScanner();
+  });
 
   window.toggleMarketBarcodeTorch = async function () {
     var video = document.getElementById('marketBarcodeScannerVideo');
@@ -3308,7 +3377,7 @@
         if (myPageState.tab === 'deals') return renderMyDeals(s, grid);
         if (myPageState.tab === 'favorites') {
           return s.getMyFavoriteItemIds().then(function (ids) {
-            return Promise.all(Array.from(ids).map(function (id) { return s.getMarketItem(id); }));
+            return s.getMarketItemsByIds(Array.from(ids));
           }).then(function (rows) {
             renderMyPageItemGrid(grid, rows, '찜한 상품이 없습니다.');
           });

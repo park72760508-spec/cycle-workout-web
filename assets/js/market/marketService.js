@@ -320,9 +320,12 @@ export async function listMarketItems(opts) {
     const supabase = await ensureMarketSupabaseSession();
     const offset = opts.offset || 0;
     const limit = opts.limit || 60;
+    // 목록 카드(marketItemCardHtml)가 실제로 쓰는 컬럼만 요청한다 — 이전에는 select('*')로
+    // description(최대 1000자)·image_hashes·정산계좌 등 카드에 쓰이지 않는 필드까지 60건씩
+    // 매번 내려받아 파싱했다.
     let q = supabase
       .from('market_items')
-      .select('*')
+      .select('id, user_id, title, price, purchase_price, condition, images, status, view_count, created_at')
       .neq('status', 'HIDDEN')
       .order('bumped_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -345,6 +348,18 @@ export async function getMarketItem(id) {
     const { data, error } = await supabase.from('market_items').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
     return data;
+  });
+}
+
+/** 마이페이지 "찜한 상품" 등 — 여러 상품을 한 번의 쿼리로 배치 조회(id별 개별 조회 시 N+1 방지). */
+export async function getMarketItemsByIds(itemIds) {
+  return withMarketAuthRetry(async () => {
+    const ids = Array.from(new Set(itemIds || [])).filter(Boolean);
+    if (!ids.length) return [];
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.from('market_items').select('*').in('id', ids);
+    if (error) throw error;
+    return data || [];
   });
 }
 

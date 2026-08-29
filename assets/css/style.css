@@ -30627,6 +30627,12 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   /* 리스트 간 구분선(흐릿한 실선) — 마지막 항목은 생략 */
   border-bottom: 1px solid #eef1f5;
   cursor: pointer;
+  /* 목록을 "더보기"로 계속 늘려도(수십~수백 장) 화면 밖 카드는 레이아웃·페인트를 건너뛰게 해
+     스크롤 중 발열을 낮춘다. 실제 높이는 이미지(108px)+패딩 기준으로 대략 추정만 하면 되고,
+     실측과 달라도 화면에 들어오는 순간 자동 보정된다(레이아웃 깨짐 없음). 미지원 브라우저는
+     기본 렌더링으로 자연스럽게 폴백된다. */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 140px;
 }
 .market-card:last-child { border-bottom: none; }
 /* 거래 완료(판매완료) 상품 — 카드 전체를 비활성화 톤으로: 이미지는 흐리게+무채색, 텍스트도 반투명 */
@@ -31505,6 +31511,17 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 @keyframes marketReturnStepPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.25); }
   50% { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12); }
+}
+/* box-shadow 애니메이션은 컴포지터가 아닌 페인트 단계를 매 프레임 다시 태우는 무거운
+   연출이라, 화면에 계속 떠 있는 배지·스텝 아이콘에 무한 반복으로 걸려있으면 그 자체로
+   지속적인 발열 요인이 된다. 모션 최소화를 켠 사용자에게는 정지 상태로 표시한다. */
+@media (prefers-reduced-motion: reduce) {
+  .market-bottom-nav__badge,
+  .market-card__request-dot,
+  .market-deal-step--active .market-deal-step__icon-wrap,
+  .market-deal-steps--return .market-deal-step--active .market-deal-step__icon-wrap {
+    animation: none;
+  }
 }
 .market-deal-steps--return .market-deal-step--done .market-deal-step__label,
 .market-deal-steps--return .market-deal-step--active .market-deal-step__label {
