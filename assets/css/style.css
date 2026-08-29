@@ -30914,15 +30914,17 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 }
 .market-card__heart {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 26px;
-  height: 26px;
+  /* 썸네일 모서리에 정확히 맞춰 배치 — 탭 영역이 이미지 우측 하단 모서리까지 이어져서
+     모서리 쪽을 눌러도 정확히 찜 버튼이 눌리도록 한다(사각 버튼 크기도 20% 확대: 26px -> 32px). */
+  right: 0;
+  bottom: 0;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: #ef4444;
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1;
   display: flex;
   align-items: center;
