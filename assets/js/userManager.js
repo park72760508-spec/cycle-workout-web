@@ -4286,7 +4286,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
               </div>
             </div>
             <div class="user-actions" onclick="event.stopPropagation();">
-              ${showDashboardBtn ? `<button class="btn-dashboard" onclick="event.stopPropagation();showPerformanceDashboard('${user.id}')" title="대시보드 보기">📊 대시보드</button>` : ''}
+              ${showDashboardBtn ? `<button class="btn-dashboard" onclick="event.stopPropagation();showPerformanceDashboard('${user.id}')" title="대시보드 보기"><img src="assets/img/data-analytics.png" alt="" class="btn-dashboard-icon" width="14" height="14" loading="lazy" decoding="async" /> 대시보드</button>` : ''}
               ${canEdit ? `<button class="btn-edit" onclick="event.stopPropagation();editUser('${user.id}')" title="수정"><img src="assets/img/edit2.png" alt="수정" width="20" height="20" loading="lazy" decoding="async" style="width:20px;height:20px;display:block;" /></button><button class="btn-delete ${deleteButtonClass}" onclick="event.stopPropagation();deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}><img src="assets/img/delete2.png" alt="삭제" width="20" height="20" loading="lazy" decoding="async" style="width:20px;height:20px;display:block;" /></button>` : ''}
             </div>
           </div>

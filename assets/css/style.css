@@ -10040,6 +10040,9 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
    1장뿐인 일반 사용자 화면에서는 티가 안 나지만 목록 전체를 넘겨보는 관리자 화면 발열의
    핵심 원인이었다. 반투명 배경만으로도 시각적 차이는 거의 없다.) */
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: rgba(102, 126, 234, 0.75) !important; /* 반투명 효과 — blur 제거로 살짝 더 진하게 보정 */
   color: white !important;
   border: 1px solid rgba(102, 126, 234, 0.3) !important;
@@ -10051,6 +10054,15 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   margin-right: 4px;
   transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   box-shadow: 0 2px 4px rgba(102, 126, 234, 0.15);
+}
+/* 라이딩 기록 > 월간 상세 분석 차트 펼치기와 동일한 그래프 아이콘(data-analytics.png) —
+   원본이 검정 아이콘이라 버튼의 흰 글자색과 맞춰 흰색으로 반전한다. */
+:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: block;
+  filter: brightness(0) invert(1);
 }
 
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard:hover {
