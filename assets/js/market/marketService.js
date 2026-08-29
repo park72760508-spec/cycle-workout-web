@@ -851,6 +851,31 @@ export async function clearSellerRating(orderId) {
   });
 }
 
+/** 이미지 검색 — 브라우저에서 계산한 CLIP 임베딩으로 유사 상품을 찾는다. 임베딩 계산은
+ * 클라이언트(WASM/WebGPU)에서 직접 하고, 계산된 벡터로 Postgres RPC를 바로 호출하므로
+ * 서버 왕복이 없다(marketScreen.js의 computeMarketImageEmbeddingFromBlob 참고). */
+export async function matchMarketItemsByImage(embedding, opts) {
+  opts = opts || {};
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.rpc('match_products_by_image', {
+      p_embedding: embedding,
+      p_match_threshold: opts.threshold != null ? opts.threshold : 0.6,
+      p_match_count: opts.limit != null ? opts.limit : 20,
+      p_filter_category: opts.category || null,
+    });
+    if (error) throw error;
+    return data || [];
+  });
+}
+
+/** 상품 등록/수정 후 첫 이미지로 서버(Cloud Function)에서 CLIP 임베딩을 계산해 저장(색인)한다.
+ * 검색 정확도에만 영향을 주는 부가 작업이라, 호출부에서는 best-effort로(실패해도 등록/수정
+ * 자체는 막지 않도록) 사용해야 한다. */
+export async function indexMarketItemImage(itemId) {
+  return callMarketFunction('indexMarketItemEmbedding', { itemId }, 'asia-northeast3');
+}
+
 if (typeof window !== 'undefined') {
   window.marketService = {
     ensureMarketSupabaseSession,
@@ -899,5 +924,7 @@ if (typeof window !== 'undefined') {
     getMyRatingForOrder,
     submitSellerRating,
     clearSellerRating,
+    matchMarketItemsByImage,
+    indexMarketItemImage,
   };
 }

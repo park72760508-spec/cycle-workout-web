@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260829marketHeatFix1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260908marketImageSearch1';
   var svc = null;
 
   function loadMarketService() {
@@ -168,6 +168,7 @@
     myUserId: null,
     activeOrderIds: new Set(),
     categoryOverrideUserKey: null,
+    imageSearchActive: false,
   };
 
   var formState = {
@@ -1021,6 +1022,8 @@
   }
 
   function reloadMarketHomeList() {
+    homeState.imageSearchActive = false;
+    hideMarketImageSearchBanner();
     homeState.items = [];
     homeState.offset = 0;
     homeState.hasMore = true;
@@ -1228,12 +1231,11 @@
     input.value = homeState.keyword;
     if (clearBtn) clearBtn.style.display = homeState.keyword ? 'flex' : 'none';
 
-    // 이미지 검색(카메라 아이콘)은 환경설정에 개인 Gemini API 키를 등록해둔 사용자에게만
-    // 노출한다 — 해당 키로 클라이언트에서 바로 Gemini Vision을 호출하는 구조라, 키가
-    // 없으면 애초에 호출 자체가 불가능하기 때문(서버 공용 키는 사용하지 않음).
-    var hasGeminiKey = false;
-    try { hasGeminiKey = !!localStorage.getItem('geminiApiKey'); } catch (e) {}
-    if (imageBtn) imageBtn.style.display = hasGeminiKey ? 'flex' : 'none';
+    // 이미지 검색(카메라 아이콘) — CLIP 임베딩을 브라우저에서 직접 계산하므로(서버 API 키
+    // 불필요) 모든 사용자에게 노출한다.
+    if (imageBtn) imageBtn.style.display = 'flex';
+    var imageSearchClearBtn = document.getElementById('marketImageSearchClearBtn');
+    if (imageSearchClearBtn) imageSearchClearBtn.onclick = function () { reloadMarketHomeList(); };
 
     if (headerRow && searchRow) {
       // 검색어가 남아있는 채로 화면을 재진입했다면 펼쳐진 상태로 시작.
@@ -1295,91 +1297,103 @@
     }
   }
 
-  /** 이미지 검색 — 서버 공용 API 키 없이, 사용자가 환경설정에 등록해둔 개인 Gemini API
-   * 키로 클라이언트에서 바로 Vision 호출("사진→키워드 검색" 방식). 실제 상품 매칭은
-   * 기존 title/description 키워드 검색을 그대로 재사용한다(신규 임베딩·DB 작업 없음). */
-  var MARKET_IMAGE_SEARCH_GEMINI_MODEL = 'gemini-2.5-flash';
+  /** 이미지 검색 — CLIP(ViT-B/32) 임베딩을 브라우저에서 직접 계산해(서버 API 키·비용 없음)
+   * 계산된 벡터로 Postgres RPC(match_products_by_image)를 바로 호출하는 진짜 이미지 유사도
+   * 검색. 예전 버전은 개인 Gemini API 키로 사진→검색어 텍스트를 뽑아 기존 키워드 검색을
+   * 재사용하는 임시방편이었다 — 이제 그 방식을 대체한다. 모델은 esm.sh CDN(이 파일이 이미
+   * @zxing/browser에 쓰는 것과 동일한 방식)에서 최초 1회만 받아 브라우저에 캐시된다. */
+  var MARKET_CLIP_MODEL_ID = 'Xenova/clip-vit-base-patch32';
+  var marketClipVisionPipelinePromise = null;
 
-  function marketBlobToBase64(blob) {
-    return new Promise(function (resolve, reject) {
-      var reader = new FileReader();
-      reader.onload = function () {
-        var result = String(reader.result || '');
-        var idx = result.indexOf(',');
-        resolve(idx >= 0 ? result.slice(idx + 1) : result);
-      };
-      reader.onerror = function () { reject(new Error('이미지를 읽지 못했습니다.')); };
-      reader.readAsDataURL(blob);
-    });
+  function loadMarketClipVisionPipeline() {
+    if (!marketClipVisionPipelinePromise) {
+      marketClipVisionPipelinePromise = import('https://esm.sh/@huggingface/transformers@3.8.1').then(function (mod) {
+        return Promise.all([
+          mod.AutoProcessor.from_pretrained(MARKET_CLIP_MODEL_ID),
+          mod.CLIPVisionModelWithProjection.from_pretrained(MARKET_CLIP_MODEL_ID, { dtype: 'q8' }),
+        ]).then(function (res) {
+          return { RawImage: mod.RawImage, processor: res[0], visionModel: res[1] };
+        });
+      });
+    }
+    return marketClipVisionPipelinePromise;
   }
 
-  async function marketFetchGeminiImageKeyword(apiKey, base64Image) {
-    var prompt =
-      '이 사진은 자전거·러닝 중고거래 마켓플레이스에 올라온 상품 사진입니다. ' +
-      '이 사진으로 실제 중고거래 게시글을 검색한다고 할 때, 판매자들이 게시글 제목에 ' +
-      '실제로 쓸 법한 핵심 검색어를 한국어로 1~2개만, 띄어쓰기로만 구분해 출력하세요.\n' +
-      '- 사진에 브랜드명·모델명이 텍스트나 로고로 뚜렷하게 보이면 반드시 그 브랜드명을 포함하세요.\n' +
-      '- 브랜드를 알 수 없다면 상품 종류를 나타내는 가장 흔한 명사 하나만 쓰세요 ' +
-      '(예: 로드바이크, 산악자전거, 런닝화, 사이클슈즈, 헬멧, 고글).\n' +
-      '- 너무 구체적이거나 드문 표현, 형용사, 색상·상태 설명은 쓰지 마세요.\n' +
-      '- 다른 설명, 문장부호, 따옴표 없이 검색어만 출력하세요.';
-    var body = {
-      contents: [{
-        parts: [
-          { text: prompt },
-          { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
-        ],
-      }],
-      generationConfig: { maxOutputTokens: 40, temperature: 0.15 },
-    };
-    var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
-    var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + MARKET_IMAGE_SEARCH_GEMINI_MODEL + ':generateContent?key=' + apiKey;
-    var res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      var errText = '';
-      try {
-        var errJson = await res.json();
-        errText = (errJson && errJson.error && errJson.error.message) || '';
-      } catch (eParse) {}
-      throw new Error(errText || ('Gemini API 오류 (HTTP ' + res.status + ')'));
+  function marketL2Normalize(values) {
+    var sumSq = 0;
+    var i;
+    for (i = 0; i < values.length; i++) sumSq += values[i] * values[i];
+    var norm = Math.sqrt(sumSq) || 1;
+    var out = new Array(values.length);
+    for (i = 0; i < values.length; i++) out[i] = values[i] / norm;
+    return out;
+  }
+
+  async function computeMarketImageEmbeddingFromBlob(blob) {
+    var ctx = await loadMarketClipVisionPipeline();
+    var url = URL.createObjectURL(blob);
+    try {
+      var image = await ctx.RawImage.read(url);
+      var inputs = await ctx.processor(image);
+      var output = await ctx.visionModel(inputs);
+      return marketL2Normalize(Array.prototype.slice.call(output.image_embeds.data));
+    } finally {
+      URL.revokeObjectURL(url);
     }
-    var data = await res.json();
-    var text = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
-      data.candidates[0].content.parts && data.candidates[0].content.parts[0] &&
-      data.candidates[0].content.parts[0].text;
-    return String(text || '').trim().replace(/["'.]/g, '');
+  }
+
+  function showMarketImageSearchResults(items) {
+    homeState.imageSearchActive = true;
+    homeState.items = items;
+    homeState.hasMore = false;
+    renderMarketGrid(false);
+    var banner = document.getElementById('marketImageSearchBanner');
+    var text = document.getElementById('marketImageSearchBannerText');
+    if (text) text.textContent = items.length ? ('이미지 검색 결과 ' + items.length + '건') : '비슷한 상품을 찾지 못했습니다.';
+    if (banner) banner.style.display = 'flex';
+  }
+
+  function hideMarketImageSearchBanner() {
+    var banner = document.getElementById('marketImageSearchBanner');
+    if (banner) banner.style.display = 'none';
   }
 
   async function handleMarketImageSearch(file) {
-    var input = document.getElementById('marketSearchInput');
-    var clearBtn = document.getElementById('marketSearchClearBtn');
     var imageBtn = document.getElementById('marketSearchImageBtn');
-    var apiKey = '';
-    try { apiKey = localStorage.getItem('geminiApiKey') || ''; } catch (e) {}
-    if (!apiKey) {
-      toast('이미지 검색을 사용하려면 환경설정에서 Gemini API 키를 등록해 주세요.');
-      return;
-    }
     if (imageBtn) imageBtn.disabled = true;
     toast('이미지를 분석하는 중...');
     try {
       var s = await loadMarketService();
       var blob = await s.resizeAndCompressImage(file);
-      var base64 = await marketBlobToBase64(blob);
-      var keyword = await marketFetchGeminiImageKeyword(apiKey, base64);
-      if (!keyword) {
-        toast('이미지에서 검색어를 추출하지 못했습니다. 다른 사진으로 시도해 주세요.');
-        return;
+      var embedding = await computeMarketImageEmbeddingFromBlob(blob);
+      var results = await s.matchMarketItemsByImage(embedding, {
+        category: homeState.category || undefined,
+        limit: 30,
+        threshold: 0.6,
+      });
+      if (results.length) {
+        // 목록 카드와 동일한 부가 정보(관심수·판매자 만족도)를 배치 조회로 채운다
+        // (loadMoreMarketItems와 동일한 N+1 방지 패턴).
+        var itemIds = results.map(function (r) { return r.id; });
+        var sellerIds = results.map(function (r) { return r.user_id; });
+        var extra = await Promise.all([
+          s.getMarketFavoriteCountsForItems(itemIds).catch(function () { return {}; }),
+          s.getSellerRatingAggregatesForSellers(sellerIds).catch(function () { return {}; }),
+        ]);
+        var favCounts = extra[0] || {};
+        var ratingAggs = extra[1] || {};
+        results.forEach(function (r) {
+          r.__favoriteCount = favCounts[r.id] || 0;
+          r.__sellerRatingAvg = (ratingAggs[r.user_id] && ratingAggs[r.user_id].avg) || 0;
+        });
       }
-      if (input) input.value = keyword;
-      if (clearBtn) clearBtn.style.display = 'flex';
-      homeState.keyword = keyword;
-      reloadMarketHomeList();
-      toast('"' + keyword + '"(으)로 검색했습니다.');
+      var input = document.getElementById('marketSearchInput');
+      var clearBtn = document.getElementById('marketSearchClearBtn');
+      if (input) input.value = '';
+      if (clearBtn) clearBtn.style.display = 'none';
+      homeState.keyword = '';
+      showMarketImageSearchResults(results);
+      toast(results.length ? ('비슷한 상품 ' + results.length + '건을 찾았습니다.') : '비슷한 상품을 찾지 못했습니다. 다른 사진으로 시도해 주세요.');
     } catch (err) {
       toast('이미지 검색 실패: ' + (err && err.message ? err.message : err));
     } finally {
@@ -1910,10 +1924,20 @@
 
       if (isEditing) {
         await s.updateMarketItem(formState.editingId, payload);
+        // 이미지 검색용 임베딩 재색인 — 검색 정확도에만 영향을 주는 부가 작업이라 결과를
+        // 기다리지 않고(best-effort) 실패해도 수정 자체는 그대로 성공 처리한다.
+        s.indexMarketItemImage(formState.editingId).catch(function (e) {
+          console.warn('[market] 이미지 검색 색인 실패:', e && e.message ? e.message : e);
+        });
         toast('수정되었습니다.');
         openMarketItemDetail(formState.editingId);
       } else {
-        await s.createMarketItem(payload);
+        var createdItem = await s.createMarketItem(payload);
+        if (createdItem && createdItem.id) {
+          s.indexMarketItemImage(createdItem.id).catch(function (e) {
+            console.warn('[market] 이미지 검색 색인 실패:', e && e.message ? e.message : e);
+          });
+        }
         toast('등록되었습니다.');
         window.navigateToMarketLand();
       }

@@ -82,6 +82,7 @@ function capHrPeaksMonotonicOnPartialUpdate(updateData, existingRow) {
 }
 const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
+const marketImageSearch = require("./marketImageSearch");
 const appConfigCache = require("./appConfigCache");
 const { getCachedCallerGrade } = require("./callerGradeCache");
 const stravaDualWrite = require("./stravaDualWrite");
@@ -19132,6 +19133,150 @@ exports.cancelUnpaidMarketOrdersSchedule = onSchedule(
     console.log("[cancelUnpaidMarketOrdersSchedule] 만료 처리:", expired.length);
   }
 );
+
+/**
+ * 중고랜드 이미지 검색 — 상품 등록/수정 직후 첫 번째 이미지로 CLIP 임베딩을 계산해 저장한다.
+ * 검색(조회) 자체는 브라우저에서 직접 계산한 임베딩으로 Supabase RPC(match_products_by_image)를
+ * 호출하므로(marketScreen.js) 이 함수를 거치지 않는다 — 이 함수는 "색인"만 담당한다.
+ * service role로 RLS를 우회해 쓰기 때문에, 호출자가 해당 상품의 실제 소유자인지 직접 검증한다.
+ */
+const indexMarketItemEmbeddingOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  region: "asia-northeast3",
+  cors: true,
+  timeoutSeconds: 60,
+  memory: "1GiB",
+});
+exports.indexMarketItemEmbedding = onRequest(indexMarketItemEmbeddingOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const itemId = String(body.itemId || "").trim();
+    if (!itemId) {
+      res.status(400).json({ success: false, error: "itemId가 필요합니다." });
+      return;
+    }
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+    const { data: item, error: itemErr } = await supabase
+      .from("market_items")
+      .select("id, user_id, images")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (itemErr || !item) {
+      res.status(404).json({ success: false, error: "상품을 찾을 수 없습니다." });
+      return;
+    }
+    const ownerId = resolveMarketBuyerUuid(uid);
+    if (!ownerId || item.user_id !== ownerId) {
+      res.status(403).json({ success: false, error: "본인 상품만 색인할 수 있습니다." });
+      return;
+    }
+    const imageUrl = Array.isArray(item.images) ? item.images[0] : null;
+    if (!imageUrl) {
+      res.status(400).json({ success: false, error: "색인할 이미지가 없습니다." });
+      return;
+    }
+    const embedding = await marketImageSearch.computeMarketImageEmbeddingFromUrl(imageUrl);
+    const { error: updateErr } = await supabase
+      .from("market_items")
+      .update({ embedding, embedding_updated_at: new Date().toISOString() })
+      .eq("id", itemId);
+    if (updateErr) {
+      res.status(500).json({ success: false, error: updateErr.message || "임베딩 저장 실패" });
+      return;
+    }
+    res.status(200).json({ success: true });
+  } catch (e) {
+    console.error("[indexMarketItemEmbedding]", e);
+    res.status(e.status || 500).json({ success: false, error: e.message || String(e) });
+  }
+});
+
+/**
+ * 관리자 전용 — 임베딩이 없는 기존 상품들을 일괄 색인한다(이미지 검색 기능 최초 배포 시 1회
+ * 실행 용도). 타임아웃 안에 끝내도록 호출당 최대 BACKFILL_BATCH_LIMIT건만 처리하고, 남은
+ * 건수를 응답에 담아 알려준다 — remaining이 0이 될 때까지 같은 요청을 반복 호출하면 된다.
+ */
+const BACKFILL_BATCH_LIMIT = 20;
+const backfillMarketItemEmbeddingsOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  region: "asia-northeast3",
+  cors: true,
+  timeoutSeconds: 540,
+  memory: "1GiB",
+});
+exports.backfillMarketItemEmbeddings = onRequest(backfillMarketItemEmbeddingsOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  try {
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+    const db = admin.firestore();
+    const grade = await getCachedCallerGrade(db, uid);
+    if (grade !== "1") {
+      res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
+      return;
+    }
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+    const { data: rows, error: selectErr } = await supabase
+      .from("market_items")
+      .select("id, images")
+      .is("embedding", null)
+      .limit(BACKFILL_BATCH_LIMIT);
+    if (selectErr) {
+      res.status(500).json({ success: false, error: selectErr.message });
+      return;
+    }
+    const results = { indexed: 0, skipped: 0, failed: 0 };
+    for (const row of rows || []) {
+      /* eslint-disable no-await-in-loop */
+      const imageUrl = Array.isArray(row.images) ? row.images[0] : null;
+      if (!imageUrl) {
+        results.skipped++;
+        continue;
+      }
+      try {
+        const embedding = await marketImageSearch.computeMarketImageEmbeddingFromUrl(imageUrl);
+        await supabase
+          .from("market_items")
+          .update({ embedding, embedding_updated_at: new Date().toISOString() })
+          .eq("id", row.id);
+        results.indexed++;
+      } catch (e) {
+        console.error("[backfillMarketItemEmbeddings] 실패:", row.id, e && e.message);
+        results.failed++;
+      }
+      /* eslint-enable no-await-in-loop */
+    }
+    const { count: remaining } = await supabase
+      .from("market_items")
+      .select("id", { count: "exact", head: true })
+      .is("embedding", null);
+    res.status(200).json({ success: true, indexed: results.indexed, skipped: results.skipped, failed: results.failed, remaining: remaining || 0 });
+  } catch (e) {
+    console.error("[backfillMarketItemEmbeddings]", e);
+    res.status(500).json({ success: false, error: e.message || String(e) });
+  }
+});
 
 /**
  * 관리자 전용 — requestCompetitionRefund가 처리 못 하는 건(예: 웹훅 처리 누락으로 실제로는

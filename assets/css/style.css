@@ -30801,6 +30801,30 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 .market-card__stats .market-detail-stat__icon { width: 13px; height: 13px; }
 .market-card__stats span:not(.market-detail-stat--rating) { margin-right: 8px; }
 .market-card__stats .market-detail-stat--rating { font-size: 11.5px; font-weight: 400; color: #94a3b8; }
+.market-image-search-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #9a3412;
+}
+.market-image-search-banner__clear {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #9a3412;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 6px;
+}
 .market-loadmore-btn {
   display: block;
   width: 100%;
