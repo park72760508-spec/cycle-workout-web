@@ -1360,8 +1360,13 @@
 
   async function handleMarketImageSearch(file) {
     var imageBtn = document.getElementById('marketSearchImageBtn');
+    var grid = document.getElementById('marketItemGrid');
+    var moreBtn = document.getElementById('marketLoadMoreBtn');
     if (imageBtn) imageBtn.disabled = true;
-    toast('이미지를 분석하는 중...');
+    hideMarketImageSearchBanner();
+    if (moreBtn) moreBtn.style.display = 'none';
+    // 목록 로딩과 동일한 오렌지 원형 스피너 — 아래에 진행 상태 문구를 표시한다.
+    if (grid) grid.innerHTML = '<div class="market-loading market-loading--spinner"><div class="market-loading__spinner-circle"></div><div class="market-loading__spinner-text">검색 중....</div></div>';
     try {
       var s = await loadMarketService();
       var blob = await s.resizeAndCompressImage(file);
@@ -1396,6 +1401,7 @@
       toast(results.length ? ('비슷한 상품 ' + results.length + '건을 찾았습니다.') : '비슷한 상품을 찾지 못했습니다. 다른 사진으로 시도해 주세요.');
     } catch (err) {
       toast('이미지 검색 실패: ' + (err && err.message ? err.message : err));
+      reloadMarketHomeList();
     } finally {
       if (imageBtn) imageBtn.disabled = false;
     }
