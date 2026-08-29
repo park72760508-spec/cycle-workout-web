@@ -30898,9 +30898,9 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 .market-card--sold .market-card__heart { opacity: 0.6; }
 .market-card__img-wrap {
   position: relative;
-  /* 기존 그리드 카드 썸네일(약 90px) 대비 20% 확대 */
-  width: 108px;
-  height: 108px;
+  /* 기존 그리드 카드 썸네일(약 90px) 대비 20% 확대했던 108px에서 다시 20% 확대 */
+  width: 130px;
+  height: 130px;
   flex-shrink: 0;
   border-radius: 10px;
   overflow: hidden;
@@ -30919,8 +30919,8 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   width: 26px;
   height: 26px;
   border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.9);
+  border-radius: 6px;
+  background: transparent;
   color: #ef4444;
   font-size: 15px;
   line-height: 1;
@@ -30928,7 +30928,9 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  /* 사진 배경 위에서도 하트가 또렷이 보이도록 흰색 테두리(텍스트 글리프라 stroke로 구현) */
+  -webkit-text-stroke: 1px #fff;
+  text-stroke: 1px #fff;
 }
 /* 마이페이지 "내 상품" 카드 — 완결되지 않은 거래 요청이 걸려 있으면 이미지 좌측 상단에
    오렌지 점 + 펄스 애니메이션으로 알람처럼 시선을 끈다. */
