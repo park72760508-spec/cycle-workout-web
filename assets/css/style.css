@@ -10034,9 +10034,13 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   }
 }
 
-/* 사용자 카드 대시보드 버튼 - 반투명 효과 */
+/* 사용자 카드 대시보드 버튼 - 반투명 효과
+   (구 backdrop-filter: blur(8px) 제거 — 관리자 화면은 카드가 수백 장까지 한 번에 렌더되는데,
+   행마다 별도 blur 레이어가 생겨 스크롤 프레임마다 GPU가 다시 블러를 계산해야 했다. 카드가
+   1장뿐인 일반 사용자 화면에서는 티가 안 나지만 목록 전체를 넘겨보는 관리자 화면 발열의
+   핵심 원인이었다. 반투명 배경만으로도 시각적 차이는 거의 없다.) */
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard {
-  background: rgba(102, 126, 234, 0.6) !important; /* 반투명 효과 */
+  background: rgba(102, 126, 234, 0.75) !important; /* 반투명 효과 — blur 제거로 살짝 더 진하게 보정 */
   color: white !important;
   border: 1px solid rgba(102, 126, 234, 0.3) !important;
   border-radius: 6px;
@@ -10045,9 +10049,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   font-weight: 600;
   cursor: pointer;
   margin-right: 4px;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   box-shadow: 0 2px 4px rgba(102, 126, 234, 0.15);
 }
 
@@ -10221,10 +10223,10 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 
 /* 사용자 카드 - 화면 크기에 따라 넓이 조정 */
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card{
-  background:var(--card-bg); 
-  border:1px solid var(--card-border); 
+  background:var(--card-bg);
+  border:1px solid var(--card-border);
   border-radius:14px;
-  padding:14px; 
+  padding:14px;
   color:var(--text);
   box-shadow:0 6px 18px rgba(0,0,0,.06);
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
@@ -10232,6 +10234,11 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   min-width: 240px; /* 최소 넓이 */
   max-width: 100%; /* 모바일 대응 */
   box-sizing: border-box;
+  /* 관리자는 페이지네이션 없이 전체 사용자 카드가 한 번에 렌더된다(수백 장까지도) — 화면
+     밖 카드는 레이아웃·페인트를 건너뛰어 스크롤 중 발열을 낮춘다. 높이는 대략치라 실측과
+     달라도 화면에 들어오는 순간 자동 보정된다. */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 220px;
 }
 
 /* 모바일 화면 대응 - 카드 1열, 검색 섹션 세로 배치 */
@@ -10253,10 +10260,15 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   }
 }
 
-:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card:hover{ 
-  transform:translateY(-2px); 
-  box-shadow:0 10px 24px rgba(0,0,0,.08); 
-  border-color:#d1d5db; 
+/* hover:hover 가드 — 터치 기기는 손가락이 닿는 순간(:hover 발동) 카드가 2px 떠올라, 그 안의
+   작은 버튼이 손가락 아래에서 미끄러지며 클릭이 씹히는 원인이 됐다(관리자 화면 "수정" 버튼이
+   잘 안 눌리던 문제의 한 축). 실제 마우스 사용자에게만 남긴다. */
+@media (hover: hover) and (pointer: fine) {
+  :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card:hover{
+    transform:translateY(-2px);
+    box-shadow:0 10px 24px rgba(0,0,0,.08);
+    border-color:#d1d5db;
+  }
 }
 
 /* ── 1줄~4줄 수직 스택 컨테이너 ── */
@@ -10286,7 +10298,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .user-actions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -10660,18 +10672,22 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   color: #374151;
 }
 
-/* 프로필 카드: 수정/삭제 버튼 (이미지 버튼) */
+/* 프로필 카드: 수정/삭제 버튼 (이미지 버튼)
+   패딩 6px(아이콘 20px 포함 총 32×32px)로는 손가락 탭 목표로 작아서(권장 44px) 근처를
+   눌러도 반응하지 않는 경우가 많았다 — "수정 버튼이 잘 안 눌린다"는 문제의 핵심 원인.
+   아이콘 시각 크기는 그대로 두고 패딩만 키워 실제 터치 히트 영역을 넓힌다. */
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-edit,
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-delete {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  padding: 12px;
   border-radius: 8px;
   border: 1px solid transparent;
   cursor: pointer;
   background: transparent;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  touch-action: manipulation;
 }
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-edit:hover {
   background: rgba(59, 130, 246, 0.15);
@@ -14287,12 +14303,18 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 }
 
 .user-card, .workout-card {
-  transition: all 0.2s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
-.user-card:hover, .workout-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(46, 116, 232, 0.15);
+/* hover:hover 가드 — 터치 기기는 탭(touchstart) 시점에 :hover가 그대로 적용돼, 손가락이 닿는
+   순간 카드가 위로 2px 움직이면서 그 안의 작은 버튼이 손가락 아래에서 미끄러져 클릭이 씹히는
+   원인이 됐다(관리자 프로필 화면의 "수정" 버튼이 잘 안 눌리던 문제 중 하나). 실제 마우스
+   사용자에게만 호버 연출을 남긴다. */
+@media (hover: hover) and (pointer: fine) {
+  .user-card:hover, .workout-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(46, 116, 232, 0.15);
+  }
 }
 
 #profileScreenSubtitle .profile-view-mode-toggle {
@@ -14303,9 +14325,13 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 12px;
+  padding: 6px 12px;
   border-bottom: 1px solid #e5e7eb;
   cursor: pointer;
+  /* 관리자는 리스트형 보기에서도 전체 사용자 행이 페이지네이션 없이 한 번에 렌더된다 —
+     화면 밖 행은 레이아웃·페인트를 건너뛰어 스크롤 중 발열을 낮춘다. */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 40px;
 }
 
 .profile-list-row:last-child {
@@ -14352,16 +14378,19 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 .profile-list-col-dashboard,
 .profile-list-col-view {
   flex: 0 0 auto;
-  width: 24px;
+  width: 40px;
   display: flex;
   justify-content: center;
 }
 
+/* 아이콘 20px + padding 0 = 실제 히트 영역도 20px뿐이라 리스트형 보기에서 "보기/수정" 버튼이
+   가장 눌리기 어려웠다. 아이콘 크기는 그대로 두고 패딩으로 터치 영역만 넓힌다. */
 .profile-list-icon-btn {
   border: none;
   background: none;
-  padding: 0;
+  padding: 8px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .profile-list-col-expiry {

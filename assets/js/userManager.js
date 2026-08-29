@@ -4071,6 +4071,7 @@ function stelvioEscapeHtmlAttr(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
     .replace(/</g, '&lt;');
 }
 
@@ -4195,7 +4196,10 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
     getProfileUserDisplayName(a).localeCompare(getProfileUserDisplayName(b), 'ko')
   );
   const cardsHtml = sorted.map(user => {
-    const displayName = getProfileUserDisplayName(user);
+    // 이름에 " / ' / < / & 가 들어있으면 이스케이프 없이 그대로 HTML에 꽂아넣던 것이 그 줄의
+    // 마크업을 깨뜨려("수정" 버튼이 있는 행 자체가 망가짐) 특정 사용자 카드에서만 버튼이
+    // 전혀 반응하지 않는 원인이 됐다.
+    const displayName = stelvioEscapeHtmlAttr(getProfileUserDisplayName(user));
     const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
     const expRaw = user.expiry_date;
     let expiryText = '미설정';
@@ -4348,7 +4352,10 @@ function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetI
     getProfileUserDisplayName(a).localeCompare(getProfileUserDisplayName(b), 'ko')
   );
   const rowsHtml = sorted.map(user => {
-    const displayName = getProfileUserDisplayName(user);
+    // 카드형과 동일한 이유(마크업 손상 방지)로 이스케이프한다 — 특히 리스트형은
+    // title="${displayName}" 처럼 속성값으로도 쓰여, 따옴표가 포함된 이름이면 그 속성 자체가
+    // 잘려나가며 뒤쪽 마크업(수정 버튼 포함)이 통째로 깨질 수 있었다.
+    const displayName = stelvioEscapeHtmlAttr(getProfileUserDisplayName(user));
     const category = normalizeUserSportCategory(user.category || user.sport_category);
     let categoryIconsHtml = '';
     if (category === USER_SPORT_CATEGORY_CYCLE || category === USER_SPORT_CATEGORY_DUAL) {
@@ -4390,10 +4397,10 @@ function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetI
           <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결"></span>
         </span>
         <span class="profile-list-col-dashboard" onclick="event.stopPropagation();">
-          ${showDashboardBtn ? `<button class="profile-list-icon-btn" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기"><img src="assets/img/data-analytics.png" alt="대시보드" style="width:20px;height:20px;display:block;" /></button>` : ''}
+          ${showDashboardBtn ? `<button class="profile-list-icon-btn" onclick="event.stopPropagation();showPerformanceDashboard('${user.id}')" title="대시보드 보기"><img src="assets/img/data-analytics.png" alt="대시보드" style="width:20px;height:20px;display:block;" /></button>` : ''}
         </span>
         <span class="profile-list-col-view" onclick="event.stopPropagation();">
-          ${canEditFor(user) ? `<button class="profile-list-icon-btn" onclick="editUser('${user.id}')" title="상세보기"><img src="assets/img/glass.svg" alt="보기" style="width:20px;height:20px;display:block;" /></button>` : ''}
+          ${canEditFor(user) ? `<button class="profile-list-icon-btn" onclick="event.stopPropagation();editUser('${user.id}')" title="상세보기"><img src="assets/img/glass.svg" alt="보기" style="width:20px;height:20px;display:block;" /></button>` : ''}
         </span>
         <span class="profile-list-col-expiry ${expiryClass}">${expiryText}</span>
       </div>
@@ -4582,9 +4589,7 @@ async function loadUsers() {
       rawTotal: rawUsers.length,
       activeCount: activeCount,
       withdrawnCount: withdrawnCount,
-      isLoginAdmin: isLoginAdminEarly,
-      userIds: users.map(u => u.id),
-      userNames: users.map(u => u.name)
+      isLoginAdmin: isLoginAdminEarly
     });
 
     if (users.length === 0) {
