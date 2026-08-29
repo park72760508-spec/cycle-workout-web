@@ -3778,9 +3778,17 @@
         var accountText = accountParts.length
           ? escapeHtml(accountParts.join(' ')) + (r.holder_name ? ' (' + escapeHtml(r.holder_name) + ')' : '')
           : '-';
-        var transferredCellHtml = r.settlement_transferred_at
-          ? escapeHtml(marketFormatDate(r.settlement_transferred_at))
-          : '<button type="button" class="market-settlement-mark-btn" data-order-id="' + escapeHtml(r.order_id) + '">정산</button>';
+        // 정산 버튼은 거래종료(구매확정, settled_at)가 기록된 뒤에만 활성화한다 — 서버(
+        // adminMarkMarketOrderSettled)도 CONFIRMED 상태가 아니면 거절하므로, 클릭했다가
+        // 에러를 보는 대신 미리 비활성 상태로 보여준다.
+        var transferredCellHtml;
+        if (r.settlement_transferred_at) {
+          transferredCellHtml = escapeHtml(marketFormatDate(r.settlement_transferred_at));
+        } else if (r.settled_at) {
+          transferredCellHtml = '<button type="button" class="market-settlement-mark-btn" data-order-id="' + escapeHtml(r.order_id) + '">정산</button>';
+        } else {
+          transferredCellHtml = '<button type="button" class="market-settlement-mark-btn" disabled title="거래종료(구매확정) 후 활성화됩니다">정산</button>';
+        }
         return (
           '<tr>' +
             '<td data-field="seq">' + (i + 1) + '</td>' +
