@@ -3798,7 +3798,7 @@
             '<td data-field="buyer">' + escapeHtml(r.buyer_name || '') + '</td>' +
             '<td data-field="seller">' + escapeHtml(r.seller_name || '') + '</td>' +
             '<td data-field="account">' + accountText + '</td>' +
-            '<td data-field="price">' + formatPrice(r.item_price) + '원</td>' +
+            '<td data-field="price">' + formatPrice(r.item_price) + '</td>' +
             '<td data-field="transferred">' + transferredCellHtml + '</td>' +
           '</tr>'
         );
