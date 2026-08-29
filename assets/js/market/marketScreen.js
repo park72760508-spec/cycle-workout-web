@@ -203,6 +203,22 @@
     return '<div class="market-detail-price">' + formatPrice(item.price) + '원</div>';
   }
 
+  /** 구입가 대비 판매가 할인율(%) — 등록 폼의 할인 배지(updateMarketFormPriceDiscountBadge)와
+   * 동일한 계산식. 구입가가 없거나 판매가보다 낮으면(할인이 아니면) 0을 반환한다. */
+  function marketItemDiscountPercent(item) {
+    var purchasePrice = item.purchase_price != null ? Number(item.purchase_price) : 0;
+    var price = Number(item.price) || 0;
+    return purchasePrice > 0 && price > 0 && price < purchasePrice ? Math.round((1 - price / purchasePrice) * 100) : 0;
+  }
+
+  /** 목록 카드 가격 옆 할인율 배지 — 제휴사 화면의 은은한 회색 배지(만료 등 상태 표기용) 톤을
+   * 차용해, 산만하지 않게 가격 텍스트 크기 범위 안에서 작게 붙인다. */
+  function marketCardDiscountBadgeHtml(item) {
+    var pct = marketItemDiscountPercent(item);
+    if (!pct) return '';
+    return '<span class="market-card__discount-badge">' + pct + '% 할인</span>';
+  }
+
   function haptic(ms) {
     try {
       if (navigator.vibrate) navigator.vibrate(ms || 8);
@@ -916,7 +932,7 @@
         '</div>' +
         '<div class="market-card__info">' +
           '<div class="market-card__title">' + escapeHtml(item.title) + '</div>' +
-          '<div class="market-card__price">' + formatPrice(item.price) + '원</div>' +
+          '<div class="market-card__price">' + formatPrice(item.price) + '원' + marketCardDiscountBadgeHtml(item) + '</div>' +
           '<div class="market-card__condition">' + escapeHtml(item.condition || '') + '</div>' +
           '<div class="market-card__stats">' +
             MARKET_EYE_ICON_SVG + '<span>' + viewCount + '</span>' +

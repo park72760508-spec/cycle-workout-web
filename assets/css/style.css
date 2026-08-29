@@ -30721,6 +30721,18 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-weight: 700;
   color: #000;
 }
+.market-card__discount-badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1.5px 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 10.5px;
+  font-weight: 700;
+  vertical-align: middle;
+}
 .market-card__condition {
   font-size: 12.5px;
   font-weight: 400;
