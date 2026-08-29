@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260908marketSettlementTab1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260908marketSettlementTab3';
   var svc = null;
 
   function loadMarketService() {
@@ -3504,6 +3504,16 @@
         loadMyPageContent();
       };
     });
+    // "필드" 버튼은 탭 목록과 같은 줄, 우측에 고정 배치 — 정산 탭일 때만 보인다.
+    var fieldSlot = document.getElementById('marketMyPageFieldPickerSlot');
+    if (fieldSlot) {
+      if (myPageState.tab === 'settlement') {
+        fieldSlot.innerHTML = marketSettlementFieldPickerHtml();
+        wireMarketSettlementFieldPicker();
+      } else {
+        fieldSlot.innerHTML = '';
+      }
+    }
   }
 
   var MARKET_DEALS_RESERVED_STATUSES = ['PENDING', 'PAID'];
@@ -3558,14 +3568,188 @@
     return marketSettlementVisibleFields;
   }
 
-  function applyMarketSettlementFieldVisibility(grid) {
+  function applyMarketSettlementFieldVisibility() {
     var visible = getMarketSettlementVisibleFields();
     MARKET_SETTLEMENT_FIELDS.forEach(function (f) {
       var show = visible[f.key] !== false;
-      Array.prototype.forEach.call(grid.querySelectorAll('[data-field="' + f.key + '"]'), function (cell) {
+      Array.prototype.forEach.call(document.querySelectorAll('#marketMyPageGrid [data-field="' + f.key + '"]'), function (cell) {
         cell.style.display = show ? '' : 'none';
       });
     });
+  }
+
+  /** 상품명이 너무 길면 표 안에서 다른 컬럼을 밀어내므로 8자 초과 시 말줄임표로 자른다
+   * (CSS 폭 기준 ellipsis 대신 글자 수 기준 — 요청대로 8자까지만 보여준다). */
+  function marketTruncateTitle(title, maxLen) {
+    var t = String(title || '');
+    return t.length > maxLen ? t.slice(0, maxLen) + '...' : t;
+  }
+
+  /** 탭 목록과 같은 줄, 우측에 배치되는 "필드 ▾" 버튼 + 드롭다운 마크업. */
+  function marketSettlementFieldPickerHtml() {
+    return (
+      '<div class="market-settlement-field-picker">' +
+        '<button type="button" id="marketSettlementFieldBtn" class="market-settlement-field-btn">필드 ▾</button>' +
+        '<div class="market-settlement-field-dropdown" id="marketSettlementFieldDropdown" style="display:none;">' +
+          MARKET_SETTLEMENT_FIELDS.map(function (f) {
+            var checked = getMarketSettlementVisibleFields()[f.key] !== false;
+            return '<label><input type="checkbox" data-field-toggle="' + f.key + '"' + (checked ? ' checked' : '') + '> ' + escapeHtml(f.label) + '</label>';
+          }).join('') +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  /** "필드 ▾" 버튼 — 클릭하면 체크박스 목록이 펼쳐지고, 각 체크박스를 켜고 끄면 해당
+   * 컬럼(th+td)이 즉시 표에서 숨겨지거나 다시 보인다. 버튼은 탭 줄에, 표는 그 아래 그리드에
+   * 있어 서로 다른 컨테이너이므로 document 전역에서 셀을 찾아 토글한다. */
+  function wireMarketSettlementFieldPicker() {
+    var btn = document.getElementById('marketSettlementFieldBtn');
+    var dropdown = document.getElementById('marketSettlementFieldDropdown');
+    if (!btn || !dropdown) return;
+    btn.onclick = function (e) {
+      e.stopPropagation();
+      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    };
+    dropdown.onclick = function (e) { e.stopPropagation(); };
+    Array.prototype.forEach.call(dropdown.querySelectorAll('[data-field-toggle]'), function (cb) {
+      cb.onchange = function () {
+        var key = cb.getAttribute('data-field-toggle');
+        getMarketSettlementVisibleFields()[key] = cb.checked;
+        applyMarketSettlementFieldVisibility();
+      };
+    });
+    if (!document.__marketSettlementFieldDropdownCloseBound) {
+      document.__marketSettlementFieldDropdownCloseBound = true;
+      document.addEventListener('click', function () {
+        Array.prototype.forEach.call(document.querySelectorAll('.market-settlement-field-dropdown'), function (dd) {
+          dd.style.display = 'none';
+        });
+      });
+    }
+  }
+
+  // ── 정산일 선택용 미니 달력(STELVIO 스타일 — AI 스케줄 생성의 한글 달력 팝업과 동일한
+  // 보라 그라데이션 헤더/선택일 스타일을 그대로 이식했다, scheduleAIManager.js 참고) ──
+  var marketSettlementDatePickerYear = new Date().getFullYear();
+  var marketSettlementDatePickerMonth = new Date().getMonth() + 1;
+  var marketSettlementDatePickerSelected = '';
+  var marketSettlementDatePickerOnSelect = null;
+
+  function marketGetTodayStrLocal() {
+    try {
+      var formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+      var parts = formatter.formatToParts(new Date());
+      var y = parts.find(function (p) { return p.type === 'year'; }).value;
+      var m = parts.find(function (p) { return p.type === 'month'; }).value;
+      var d = parts.find(function (p) { return p.type === 'day'; }).value;
+      return y + '-' + m + '-' + d;
+    } catch (e) {
+      var n = new Date();
+      return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+    }
+  }
+  function marketSeoulWeekdaySun0FromYmd(ymd) {
+    var s = String(ymd || '').trim().substring(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return 0;
+    try {
+      var inst = new Date(s + 'T12:00:00+09:00');
+      var w = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' }).format(inst);
+      var map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      return map[w] !== undefined ? map[w] : 0;
+    } catch (e) { return 0; }
+  }
+  function marketDaysInMonthYearMonthIndex(y, monthIndex0) {
+    return new Date(y, monthIndex0 + 1, 0).getDate();
+  }
+  function marketYmdFromYmdParts(y, monthIndex0, day) {
+    return y + '-' + String(monthIndex0 + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
+
+  function updateMarketSettlementDatePickerTitle() {
+    var el = document.getElementById('marketSettlementDatePickerTitle');
+    if (el) el.textContent = marketSettlementDatePickerYear + '년 ' + marketSettlementDatePickerMonth + '월';
+  }
+
+  function renderMarketSettlementDatePickerGrid() {
+    var grid = document.getElementById('marketSettlementDatePickerGrid');
+    if (!grid) return;
+    var y = marketSettlementDatePickerYear;
+    var m0 = marketSettlementDatePickerMonth - 1;
+    var dim = marketDaysInMonthYearMonthIndex(y, m0);
+    var firstYmd = marketYmdFromYmdParts(y, m0, 1);
+    var startPad = marketSeoulWeekdaySun0FromYmd(firstYmd);
+    var selected = marketSettlementDatePickerSelected;
+    var today = marketGetTodayStrLocal();
+    var parts = [];
+    var i;
+    for (i = 0; i < startPad; i++) parts.push('<div class="market-settlement-date-picker__cell market-settlement-date-picker__cell--empty"></div>');
+    for (var day = 1; day <= dim; day++) {
+      var cellYmd = marketYmdFromYmdParts(y, m0, day);
+      var isSel = cellYmd === selected;
+      var isToday = cellYmd === today;
+      var dow = marketSeoulWeekdaySun0FromYmd(cellYmd);
+      var cls = 'market-settlement-date-picker__day';
+      if (dow === 0) cls += ' market-settlement-date-picker__day--sun';
+      if (dow === 6) cls += ' market-settlement-date-picker__day--sat';
+      if (isSel) cls += ' market-settlement-date-picker__day--selected';
+      if (isToday && !isSel) cls += ' market-settlement-date-picker__day--today';
+      parts.push('<button type="button" class="' + cls + '" data-ymd="' + cellYmd + '">' + day + '</button>');
+    }
+    grid.innerHTML = parts.join('');
+    grid.onclick = function (ev) {
+      var btn = ev.target && ev.target.closest && ev.target.closest('.market-settlement-date-picker__day[data-ymd]');
+      if (!btn) return;
+      var v = btn.getAttribute('data-ymd');
+      var onSelect = marketSettlementDatePickerOnSelect;
+      closeMarketSettlementDatePicker();
+      if (onSelect) onSelect(v);
+    };
+  }
+
+  /** "정산" 버튼을 누르면 열리는 팝업 — 날짜를 고르면 onSelect(YYYY-MM-DD)가 호출된다.
+   * 기본 선택일은 오늘. */
+  function openMarketSettlementDatePicker(triggerEl, onSelect) {
+    var root = document.getElementById('marketSettlementDatePickerRoot');
+    if (!root) return;
+    marketSettlementDatePickerOnSelect = onSelect;
+    var t = marketGetTodayStrLocal();
+    marketSettlementDatePickerYear = parseInt(t.substring(0, 4), 10);
+    marketSettlementDatePickerMonth = parseInt(t.substring(5, 7), 10);
+    marketSettlementDatePickerSelected = t;
+    updateMarketSettlementDatePickerTitle();
+    renderMarketSettlementDatePickerGrid();
+    root.style.display = 'flex';
+  }
+
+  function closeMarketSettlementDatePicker() {
+    var root = document.getElementById('marketSettlementDatePickerRoot');
+    if (root) root.style.display = 'none';
+    marketSettlementDatePickerOnSelect = null;
+  }
+
+  function shiftMarketSettlementDatePickerMonth(delta) {
+    marketSettlementDatePickerMonth += delta;
+    while (marketSettlementDatePickerMonth > 12) { marketSettlementDatePickerMonth -= 12; marketSettlementDatePickerYear += 1; }
+    while (marketSettlementDatePickerMonth < 1) { marketSettlementDatePickerMonth += 12; marketSettlementDatePickerYear -= 1; }
+    updateMarketSettlementDatePickerTitle();
+    renderMarketSettlementDatePickerGrid();
+  }
+
+  /** 정산 팝업의 이전/다음달·닫기·배경클릭 버튼은 정적 마크업(index.html)이라 마이페이지
+   * 화면 진입 시 한 번만(재진입해도 onclick 재대입은 안전) 연결한다. */
+  function wireMarketSettlementDatePickerChrome() {
+    var root = document.getElementById('marketSettlementDatePickerRoot');
+    if (!root) return;
+    Array.prototype.forEach.call(root.querySelectorAll('[data-picker-nav]'), function (btn) {
+      btn.onclick = function () { shiftMarketSettlementDatePickerMonth(parseInt(btn.getAttribute('data-picker-nav'), 10) || 0); };
+    });
+    var backdrop = root.querySelector('.market-settlement-date-picker__backdrop');
+    if (backdrop) backdrop.onclick = closeMarketSettlementDatePicker;
+    var panel = root.querySelector('.market-settlement-date-picker__panel');
+    if (panel) panel.onclick = function (e) { e.stopPropagation(); };
+    var closeBtn = document.getElementById('marketSettlementDatePickerCloseBtn');
+    if (closeBtn) closeBtn.onclick = closeMarketSettlementDatePicker;
   }
 
   /** 마이페이지 "정산" 탭(관리자 전용) — 안전거래 입금 확인건을 거래발생(입금일) 최신순으로
@@ -3574,21 +3758,8 @@
    * 관리자가 실제 계좌 이체 후 눌러 기록하는 버튼을 둔다. */
   function renderMySettlementTable(s, grid) {
     return s.getMarketSettlementsForAdmin().then(function (rows) {
-      var toolbarHtml =
-        '<div class="market-settlement-toolbar">' +
-          '<div class="market-settlement-field-picker">' +
-            '<button type="button" id="marketSettlementFieldBtn" class="market-settlement-field-btn">필드 ▾</button>' +
-            '<div class="market-settlement-field-dropdown" id="marketSettlementFieldDropdown" style="display:none;">' +
-              MARKET_SETTLEMENT_FIELDS.map(function (f) {
-                var checked = getMarketSettlementVisibleFields()[f.key] !== false;
-                return '<label><input type="checkbox" data-field-toggle="' + f.key + '"' + (checked ? ' checked' : '') + '> ' + escapeHtml(f.label) + '</label>';
-              }).join('') +
-            '</div>' +
-          '</div>' +
-        '</div>';
       if (!rows.length) {
-        grid.innerHTML = toolbarHtml + '<div class="market-empty">정산 대상 거래가 없습니다.</div>';
-        wireMarketSettlementFieldPicker(grid);
+        grid.innerHTML = '<div class="market-empty">정산 대상 거래가 없습니다.</div>';
         return;
       }
       var bodyRows = rows.map(function (r, i) {
@@ -3604,7 +3775,7 @@
         return (
           '<tr>' +
             '<td data-field="seq">' + (i + 1) + '</td>' +
-            '<td class="market-settlement-table__title" data-field="title">' + escapeHtml(r.item_title || '') + '</td>' +
+            '<td class="market-settlement-table__title" data-field="title" title="' + escapeHtml(r.item_title || '') + '">' + escapeHtml(marketTruncateTitle(r.item_title, 8)) + '</td>' +
             '<td data-field="paid">' + escapeHtml(marketFormatDate(r.paid_at)) + '</td>' +
             '<td data-field="settled">' + escapeHtml(marketFormatDate(r.settled_at)) + '</td>' +
             '<td data-field="buyer">' + escapeHtml(r.buyer_name || '') + '</td>' +
@@ -3616,7 +3787,6 @@
         );
       }).join('');
       grid.innerHTML =
-        toolbarHtml +
         '<div class="market-settlement-table-scroll">' +
           '<table class="market-settlement-table">' +
             '<thead><tr>' +
@@ -3627,52 +3797,25 @@
             '<tbody>' + bodyRows + '</tbody>' +
           '</table>' +
         '</div>';
-      wireMarketSettlementFieldPicker(grid);
-      applyMarketSettlementFieldVisibility(grid);
+      applyMarketSettlementFieldVisibility();
       Array.prototype.forEach.call(grid.querySelectorAll('.market-settlement-mark-btn'), function (btn) {
         btn.onclick = function () {
           var orderId = btn.getAttribute('data-order-id');
-          btn.disabled = true;
-          btn.textContent = '처리 중...';
-          s.adminMarkMarketOrderSettled(orderId).then(function () {
-            toast('정산 처리되었습니다.');
-            loadMyPageContent();
-          }).catch(function (err) {
-            toast('정산 처리 실패: ' + (err && err.message ? err.message : err));
-            btn.disabled = false;
-            btn.textContent = '정산';
+          openMarketSettlementDatePicker(btn, function (isoDate) {
+            btn.disabled = true;
+            btn.textContent = '처리 중...';
+            s.adminMarkMarketOrderSettled(orderId, isoDate).then(function () {
+              toast('정산 처리되었습니다.');
+              loadMyPageContent();
+            }).catch(function (err) {
+              toast('정산 처리 실패: ' + (err && err.message ? err.message : err));
+              btn.disabled = false;
+              btn.textContent = '정산';
+            });
           });
         };
       });
     });
-  }
-
-  /** "필드 ▾" 버튼 — 클릭하면 체크박스 목록이 펼쳐지고, 각 체크박스를 켜고 끄면 해당
-   * 컬럼(th+td)이 즉시 표에서 숨겨지거나 다시 보인다. */
-  function wireMarketSettlementFieldPicker(grid) {
-    var btn = grid.querySelector('#marketSettlementFieldBtn');
-    var dropdown = grid.querySelector('#marketSettlementFieldDropdown');
-    if (!btn || !dropdown) return;
-    btn.onclick = function (e) {
-      e.stopPropagation();
-      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-    };
-    dropdown.onclick = function (e) { e.stopPropagation(); };
-    Array.prototype.forEach.call(dropdown.querySelectorAll('[data-field-toggle]'), function (cb) {
-      cb.onchange = function () {
-        var key = cb.getAttribute('data-field-toggle');
-        getMarketSettlementVisibleFields()[key] = cb.checked;
-        applyMarketSettlementFieldVisibility(grid);
-      };
-    });
-    if (!document.__marketSettlementFieldDropdownCloseBound) {
-      document.__marketSettlementFieldDropdownCloseBound = true;
-      document.addEventListener('click', function () {
-        Array.prototype.forEach.call(document.querySelectorAll('.market-settlement-field-dropdown'), function (dd) {
-          dd.style.display = 'none';
-        });
-      });
-    }
   }
 
   function renderMyPageItemGrid(grid, rows, emptyMessage, activeOrderIds) {
@@ -3706,6 +3849,7 @@
   window.marketMyPageScreenInit = function () {
     syncMarketBottomNav('mypage');
     myPageState.tab = 'selling';
+    wireMarketSettlementDatePickerChrome();
     loadMarketService()
       .then(function (s) { return s.getMySupabaseUserId(); })
       .then(function (id) { homeState.myUserId = id; })

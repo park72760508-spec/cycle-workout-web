@@ -891,8 +891,8 @@ export async function getMarketSettlementsForAdmin() {
 /** 관리자가 판매자 계좌로 실제 이체를 완료한 뒤 정산일(settlement_transferred_at)을 기록한다.
  * us-central1에 배포되어 있어(다른 market 함수들과 달리 지역을 지정하지 않고 배포됨) 지역
  * 인자를 생략한다(callMarketFunction의 기본값과 일치). */
-export async function adminMarkMarketOrderSettled(orderId) {
-  return callMarketFunction('adminMarkMarketOrderSettled', { orderId });
+export async function adminMarkMarketOrderSettled(orderId, settlementDate) {
+  return callMarketFunction('adminMarkMarketOrderSettled', { orderId, settlementDate: settlementDate || undefined });
 }
 
 if (typeof window !== 'undefined') {

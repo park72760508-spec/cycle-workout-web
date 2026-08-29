@@ -19085,10 +19085,18 @@ exports.adminMarkMarketOrderSettled = onRequest(adminMarkMarketOrderSettledOptio
     res.status(400).json({ success: false, error: "구매확정된 주문만 정산 완료 처리할 수 있습니다." });
     return;
   }
+  // 관리자가 미니 달력에서 실제 이체일을 직접 골라 지정할 수 있다(YYYY-MM-DD) — 안 주면 지금
+  // 시각으로 기록한다. 날짜만 주어지면 하루 중 어느 시각에 저장하든 한국 기준 날짜가 밀리지
+  // 않도록 정오(KST)로 고정한다(다른 한글 달력 기능과 동일한 관례).
+  const settlementDateRaw = String(req.query.settlementDate || (req.body && req.body.settlementDate) || "").trim();
+  let settlementIso = new Date().toISOString();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(settlementDateRaw)) {
+    settlementIso = new Date(settlementDateRaw + "T12:00:00+09:00").toISOString();
+  }
   const nowIso = new Date().toISOString();
   const { error } = await supabase
     .from("market_orders")
-    .update({ settlement_transferred_at: nowIso, updated_at: nowIso })
+    .update({ settlement_transferred_at: settlementIso, updated_at: nowIso })
     .eq("id", orderId);
   if (error) {
     res.status(500).json({ success: false, error: error.message });
