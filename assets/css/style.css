@@ -30967,8 +30967,8 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 .market-card__info {
   flex: 1;
   min-width: 0;
-  /* 부모(.market-card)의 align-items:flex-start를 덮어써 이미지(108px) 높이만큼 늘어나게 하고,
-     5줄(상품명/가격/상태/통계/등록일)을 그 높이에 맞춰 고르게 분산 배치한다. */
+  /* 부모(.market-card)의 align-items:flex-start를 덮어써 이미지(130px) 높이만큼 늘어나게 하고,
+     6줄(상품명 2줄/가격/상태/통계/등록일)을 그 높이에 맞춰 고르게 분산 배치한다. */
   align-self: stretch;
   display: flex;
   flex-direction: column;
@@ -30976,15 +30976,20 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   padding: 2px 0;
 }
 .market-card__title {
-  font-size: 14.5px;
-  font-weight: 700;
+  /* 10% 확대(14.5px -> 16px), 굵기는 보통(400)으로, 최대 2줄까지 표시하고 넘치면 말줄임 */
+  font-size: 16px;
+  font-weight: 400;
   color: #1e293b;
-  white-space: nowrap;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
 }
 .market-card__price {
-  font-size: 15px;
+  font-size: 16.5px; /* 10% 확대(15px -> 16.5px) */
   font-weight: 700;
   color: #000;
 }
