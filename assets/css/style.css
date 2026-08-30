@@ -31034,6 +31034,10 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-size: 16.5px; /* 10% 확대(15px -> 16.5px) */
   font-weight: 700;
   color: #000;
+  /* line-height 미지정("normal")은 폰트 내부 메트릭 기준이라 플랫폼별로 실제 높이가 달라진다
+     (iOS는 좁게, 안드로이드는 넓게 계산되어 6줄 합계가 썸네일 130px를 넘어가는 문제의 원인) —
+     절대값으로 고정해 플랫폼 무관하게 동일한 높이로 렌더링되게 한다. */
+  line-height: 20px;
 }
 .market-card__discount-badge {
   display: inline-block;
@@ -31063,11 +31067,13 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-size: 12.5px;
   font-weight: 400;
   color: #64748b;
+  line-height: 16px; /* 플랫폼별 "normal" 높이 편차 방지 (안드로이드 썸네일 하단 이탈 방지) */
 }
 .market-card__date {
   font-size: 11px;
   font-weight: 400;
   color: #94a3b8;
+  line-height: 14px; /* 플랫폼별 "normal" 높이 편차 방지 */
 }
 .market-card__stats {
   display: flex;
@@ -31076,6 +31082,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   font-size: 11.5px;
   font-weight: 400;
   color: #94a3b8;
+  line-height: 15px; /* 플랫폼별 "normal" 높이 편차 방지 */
 }
 .market-card__stats .market-detail-stat__icon { width: 13px; height: 13px; }
 .market-card__stats span:not(.market-detail-stat--rating) { margin-right: 8px; }
