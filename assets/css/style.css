@@ -32284,7 +32284,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-return-address-form.is-hidden { display: none; }
 .market-return-address-form .market-form-input { margin-bottom: 0; }
 .market-address-search-row { display: flex; gap: 8px; }
-.market-address-search-row .market-return-zip { flex: 1; }
+.market-address-search-row .market-return-zip { flex: 1; width: auto; }
+.market-address-search-row .market-return-zip-search-btn { flex: 1; width: auto; }
 .market-return-dispute-notice { color: #b91c1c; font-weight: 700; }
 .market-return-complete-notice { color: #15803d; font-weight: 700; }
 
