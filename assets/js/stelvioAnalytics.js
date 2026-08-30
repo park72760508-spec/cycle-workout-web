@@ -72,7 +72,8 @@
     runningRankingScreen: true,
     runDashboardScreen: true,
     runTrainingJournalScreen: true,
-    runCrewScreen: true
+    runCrewScreen: true,
+    marketHomeScreen: true
   };
 
   global.STELVIO_ANALYTICS_LABELS = {
@@ -94,7 +95,8 @@
     trainingScreen: '훈련 화면 (태블릿)',
     bluetoothIndividualScreen: '훈련 화면 (그룹)',
     affiliateScreen: '제휴사 목록',
-    profileScreen: '사용자 정보'
+    profileScreen: '사용자 정보',
+    marketHomeScreen: '중고랜드'
   };
 
   /** openRidingRoomScreen — RUN 모드면 러닝 크루로 별도 집계 */
@@ -771,7 +773,8 @@
       { key: 'trainingScreen', val: screens.trainingScreen },
       { key: 'bluetoothIndividualScreen', val: screens.bluetoothIndividualScreen },
       { key: 'affiliateScreen', val: screens.affiliateScreen },
-      { key: 'profileScreen', val: screens.profileScreen }
+      { key: 'profileScreen', val: screens.profileScreen },
+      { key: 'marketHomeScreen', val: screens.marketHomeScreen }
     ];
 
     var parts = [];
