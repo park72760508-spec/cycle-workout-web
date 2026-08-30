@@ -22176,19 +22176,20 @@ if (originalCleanupMobileDashboard) {
     _applyCountBadge('basecampClubHouseNotiBadge', _counts.groups);
     _applyCountBadge('runBasecampRidingNotiBadge', notiRun);
 
-    /* 미입금 정산 배지(won.svg) — 같은 버튼에 빨강 알림 배지가 함께 뜨면 겹쳐 보이게 처리 */
+    /* 미입금 정산 배지(mwon.svg) — 우상단 단독 사용 (알림 배지는 좌상단으로 이동해 더 이상 겹치지 않음) */
     _applyCheckBadge('basecampRidingSettlementBadge', _counts.settlementUnpaidCycle > 0);
     _applyCheckBadge('runBasecampRidingSettlementBadge', _counts.settlementUnpaidRun > 0);
-    _toggleStackedClass('basecampRidingSettlementBadge', notiCycle > 0);
-    _toggleStackedClass('runBasecampRidingSettlementBadge', notiRun > 0);
 
     /* 카테고리 화면: 라이딩 모임 배지와 동일한 빨강원+흰숫자 배지로 표시 (친구 요청·크루 공통 + 각 종목 초대) */
     _applyCountBadge('sportCategoryCycleNotiBadge', _counts.ridesCycle + _counts.friends + crewCycle);
     _applyCountBadge('sportCategoryRunNotiBadge', _counts.ridesRun + _counts.friends + crewRun);
 
-    /* "내가 주최한 모임" 배지 — 초대 배지와 별개, 보라색 원(좌상단) */
+    /* "내가 주최한 모임" 배지 — 좌상단, 보라색 원. 알림 배지(빨강)도 좌상단으로 이동했으므로
+       같은 버튼에 알림 배지가 함께 뜨면 겹쳐 보이게 처리 */
     _applyCountBadge('basecampRidingHostBadge', _counts.hostedCycle);
     _applyCountBadge('runBasecampRidingHostBadge', _counts.hostedRun);
+    _toggleStackedClass('basecampRidingHostBadge', notiCycle > 0);
+    _toggleStackedClass('runBasecampRidingHostBadge', notiRun > 0);
 
     /* "나의 기록" 버튼: 오늘(KST) STRAVA 기록 수집 여부 — 참석확정 체크마크 배지 */
     _applyCheckBadge('basecampCareerNotiBadge', _counts.stravaTodayCycle);
