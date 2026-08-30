@@ -6390,7 +6390,7 @@
       <div style="display: flex; gap: 12px; align-items: center;">
         <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleExcelUpload(event)" />
         <a href="assets/data/sample.xlsx" download="sample.xlsx" class="btn btn-secondary btn-default-style" style="padding: 10px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px;" aria-label="샘플파일 다운로드" title="샘플파일 다운로드">
-          <img src="assets/img/download.png" alt="샘플파일 다운로드" class="btn-icon-image" style="width: 21px; height: 21px;" />
+          <img src="assets/img/download.png" loading="lazy" alt="샘플파일 다운로드" class="btn-icon-image" style="width: 21px; height: 21px;" />
         </a>
         <button type="button" class="btn btn-secondary btn-default-style" onclick="document.getElementById('excelFileInput').click()" style="padding: 10px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;" aria-label="파일 선택" title="파일 선택">
           <img src="assets/img/file.png" alt="파일 선택" class="btn-icon-image" style="width: 21px; height: 21px;" />
@@ -8057,7 +8057,7 @@
       <div class="journal-strava-legend-row" style="display: flex; align-items: center; justify-content: center; margin-top: 10px; position: relative;">
         <div style="display: flex; justify-content: center; align-items: center; flex: 1;">
           <button type="button" style="background: none; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; cursor: pointer; display: inline-block; line-height: 0; box-sizing: border-box;" onclick="(function(){try{var user=window.currentUser||(function(){try{return JSON.parse(localStorage.getItem('currentUser')||'null');}catch(e){return null;}})();var isStravaConnected=user&&(user.strava_refresh_token||user.strava_access_token);if(isStravaConnected){if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else{var modal=document.getElementById('stravaSyncModal');if(modal){modal.style.display='flex';modal.classList.remove('hidden');}else if(typeof showScreen==='function'){showScreen('stravaSyncScreen');}else{alert('Strava 동기화 화면을 열 수 없습니다.');}}}else{if(typeof openSettingsModal==='function'){openSettingsModal();}else{var settingsModal=document.getElementById('settingsModal');if(settingsModal){settingsModal.style.display='block';settingsModal.classList.remove('hidden');}else{alert('환경설정 모달을 열 수 없습니다.');}}}}catch(e){console.error('Strava 클릭 오류:',e);alert('오류가 발생했습니다: '+e.message);}})();" aria-label="Strava 동기화" title="Strava 동기화">
-            <img src="assets/img/download%20STRAVA.png" alt="Connect with Strava" style="height: 30px; width: auto; max-width: 160px; display: block;" />
+            <img src="assets/img/download%20STRAVA.png" loading="lazy" alt="Connect with Strava" style="height: 30px; width: auto; max-width: 160px; display: block;" />
           </button>
         </div>
         <!-- 우측 범례: 주황/녹색 같은 열 정렬, 문구 우측 정렬, 버튼과 수평(위아래 중앙) -->
@@ -8335,7 +8335,7 @@
     <div class="modal-content" style="max-width: 500px;" onclick="event.stopPropagation();">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <img id="rpeModalChallengeIcon" src="assets/img/yellow.png" alt="" style="width: 32px; height: 32px; object-fit: contain; flex-shrink: 0;">
+          <img id="rpeModalChallengeIcon" src="assets/img/yellow.png" loading="lazy" alt="" style="width: 32px; height: 32px; object-fit: contain; flex-shrink: 0;">
           <h2 style="margin: 0; flex: 1;">컨디션별 강도 보정</h2>
         </div>
         <button class="modal-close" onclick="closeRPEModal()">&times;</button>
@@ -8435,7 +8435,7 @@
           PDF 내보내기
         </button>
         <button class="btn btn-default-style btn-with-icon" onclick="closeTrainingAnalysisModal()">
-          <img src="assets/img/exit.png" alt="닫기" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          <img src="assets/img/exit.png" loading="lazy" alt="닫기" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
           닫기
         </button>
       </div>
@@ -33420,7 +33420,7 @@
              style="display: inline-flex; align-items: center; gap: 8px; color: #667eea; text-decoration: none; font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 6px; transition: all 0.3s ease;"
              onmouseover="this.style.backgroundColor='#f0f0f0'; this.style.textDecoration='underline';"
              onmouseout="this.style.backgroundColor='transparent'; this.style.textDecoration='none';">
-            <img src="assets/img/download.png" alt="다운로드" style="width: 18px; height: 18px;" />
+            <img src="assets/img/download.png" loading="lazy" alt="다운로드" style="width: 18px; height: 18px;" />
             USB Ant 수신기 인식 S/W 다운로드
           </a>
         </div>
