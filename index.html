@@ -30731,14 +30731,10 @@
                 });
               }
               async function stelvioRefreshV9IdToken(force) {
-                try {
-                  if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
-                    await Promise.race([
-                      window.authV9.authStateReady(),
-                      new Promise(function (r) { setTimeout(r, 1200); })
-                    ]);
-                  }
-                } catch (e0) {}
+                /* 이 함수는 항상 signInWithEmailAndPasswordV9 성공 이후(user 확보 후)에만 호출된다 —
+                   즉 authV9.currentUser는 이미 동기적으로 채워져 있어 authStateReady() 대기가 불필요하다.
+                   (이전에 같은 패턴의 대기 2곳을 제거했는데 재시도 루프 안의 이 자리를 놓쳤음 — 최대 3회
+                   반복 호출되어 안드로이드 등 느린 기기에서 "사용자 정보 로딩 중..." 표시가 누적 지연됨) */
                 try {
                   var u = window.authV9 && window.authV9.currentUser;
                   if (u && typeof u.getIdToken === 'function') {
