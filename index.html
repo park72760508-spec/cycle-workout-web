@@ -4167,11 +4167,11 @@
             <h3 style="margin-bottom: 10px;"><img src="assets/img/wifi.png" alt="무선 기기 페어링" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" /><img src="assets/img/antlogo.png" alt="ANT+" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" /> 무선 기기 페어링</h3>
             <div class="grid-2 gap-10" style="margin-bottom: 0;">
               <button class="btn btn-device" id="btnConnectTrainer" data-device="trainer">
-                <img src="assets/img/trainer_i.png" alt="스마트로라 연결" class="device-btn-icon" />
+                <img src="assets/img/trainer_i.png" loading="lazy" alt="스마트로라 연결" class="device-btn-icon" />
                 <span>스마트로라 연결</span>
               </button>
               <button class="btn btn-device" id="btnConnectHR" data-device="heartRate">
-                <img src="assets/img/bpm_i.png" alt="심박계 연결" class="device-btn-icon" />
+                <img src="assets/img/bpm_i.png" loading="lazy" alt="심박계 연결" class="device-btn-icon" />
                 <span>심박계 연결</span>
               </button>
               <button class="btn btn-device" id="btnConnectPM" data-device="powerMeter">
@@ -5027,7 +5027,7 @@
           <div class="connection-device-section basecamp-device-section">
             <div class="device-setting-grid">
               <button type="button" class="device-setting-item" id="deviceCardHr" data-device-type="hr" onclick="typeof startDeviceScan === 'function' && startDeviceScan('hr');">
-                <span class="device-setting-icon-wrap"><img src="assets/img/bpm_i.png" alt="" class="device-setting-icon" onerror="this.style.display='none'"></span>
+                <span class="device-setting-icon-wrap"><img src="assets/img/bpm_i.png" loading="lazy" alt="" class="device-setting-icon" onerror="this.style.display='none'"></span>
                 <span class="device-setting-label">심박계</span>
                 <span class="device-setting-status" id="deviceStatusHr">미연결</span>
                 <span class="device-setting-id" id="deviceIdHr" style="display: none;"></span>
@@ -5039,7 +5039,7 @@
                 <span class="device-setting-id" id="deviceIdPower" style="display: none;"></span>
               </button>
               <button type="button" class="device-setting-item" id="deviceCardTrainer" data-device-type="trainer" onclick="typeof startDeviceScan === 'function' && startDeviceScan('trainer');">
-                <span class="device-setting-icon-wrap"><img src="assets/img/trainer_i.png" alt="" class="device-setting-icon" onerror="this.style.display='none'"></span>
+                <span class="device-setting-icon-wrap"><img src="assets/img/trainer_i.png" loading="lazy" alt="" class="device-setting-icon" onerror="this.style.display='none'"></span>
                 <span class="device-setting-label">스마트로라</span>
                 <span class="device-setting-status" id="deviceStatusTrainer">미연결</span>
                 <span class="device-setting-id" id="deviceIdTrainer" style="display: none;"></span>
@@ -5447,7 +5447,7 @@
   <div id="profileScreen" class="screen">
     <div class="header" style="display: flex; align-items: center; justify-content: space-between;">
       <span style="width: 2.5em; flex-shrink: 0;" aria-hidden="true"></span>
-      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/add-user3.gif" alt="" class="profile-select-icon"> 프로필 선택</h1>
+      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/add-user3.gif" loading="lazy" alt="" class="profile-select-icon"> 프로필 선택</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
     <p id="profileScreenSubtitle" class="subtitle" style="text-align: center; margin: 0; display: none;"></p>
@@ -6224,7 +6224,7 @@
       <button type="button" id="btnAIScheduleReset" class="p-2 rounded-lg" onclick="if(typeof openAIScheduleResetModal==='function')openAIScheduleResetModal()" aria-label="초기화" title="훈련 스케줄 초기화" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
         <img src="assets/img/reset.png" alt="초기화" style="width: 24px; height: 24px; object-fit: contain;" />
       </button>
-      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold; min-width: 0;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="schedule-title-icon"> 훈련 스케줄</h1>
+      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold; min-width: 0;"><img src="assets/img/calendar_n.gif" loading="lazy" alt="캘린더" class="schedule-title-icon"> 훈련 스케줄</h1>
       <button type="button" class="p-2 rounded-lg" onclick="if(typeof openScheduleCreateAIModal==='function')openScheduleCreateAIModal()" aria-label="AI 스케줄 생성" title="AI 스케줄 생성" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
       </button>
@@ -6257,7 +6257,7 @@
   <!-- 스케줄 목록 화면 -->
   <div id="scheduleListScreen" class="screen">
     <div class="header">
-      <h1><img src="assets/img/calendar_n.gif" alt="캘린더" class="schedule-title-icon"> Training Rooms</h1>
+      <h1><img src="assets/img/calendar_n.gif" loading="lazy" alt="캘린더" class="schedule-title-icon"> Training Rooms</h1>
       <p class="subtitle">나의 훈련 계획을 관리하세요</p>
     </div>
     
@@ -6405,7 +6405,7 @@
   <!-- 훈련 캘린더 화면 -->
   <div id="scheduleCalendarScreen" class="screen">
     <div class="header">
-      <h1><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> 훈련 캘린더</h1>
+      <h1><img src="assets/img/calendar_n.gif" loading="lazy" alt="캘린더" class="calendar-title-icon"> 훈련 캘린더</h1>
       <p class="subtitle" id="calendarSubtitle">나의 훈련 일정과 결과를 확인하세요</p>
     </div>
     
@@ -6932,12 +6932,12 @@
             <div class="grid-2 training-ready-dashboard-grid">
               <!-- 좌측: 개인 훈련 화면 (워크아웃 선택 시 활성화) -->
               <button class="btn btn-device" id="btnStartTraining" disabled onclick="showScreen('trainingScreen'); if (typeof initTrainingScreenForReady === 'function') { setTimeout(function(){ initTrainingScreenForReady(); }, 200); }">
-                <img src="assets/img/laptop.png" alt="태블릿" class="device-btn-icon" />
+                <img src="assets/img/laptop.png" loading="lazy" alt="태블릿" class="device-btn-icon" />
                 <span>태블릿</span>
               </button>
               <!-- 우측: 모바일 대시보드 화면 (워크아웃 선택 시 활성화) -->
               <button class="btn btn-device" id="btnMobileDashboard" disabled onclick="showScreen('mobileDashboardScreen'); if (typeof startMobileDashboard === 'function') { setTimeout(() => startMobileDashboard(), 200); }">
-                <img src="assets/img/mobile.png" alt="모바일" class="device-btn-icon" />
+                <img src="assets/img/mobile.png" loading="lazy" alt="모바일" class="device-btn-icon" />
                 <span>모바일</span>
               </button>
             </div>
@@ -6971,7 +6971,7 @@
     </button>
     <div id="trainingScreenBluetoothDropdown" class="mobile-bluetooth-dropdown">
       <div id="trainingScreenBluetoothTrainerItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('trainer')">
-        <img src="assets/img/trainer_i.png" alt="스마트 트레이너">
+        <img src="assets/img/trainer_i.png" loading="lazy" alt="스마트 트레이너">
         <span>스마트 트레이너</span>
         <span class="status" id="trainingScreenTrainerStatus">미연결</span>
       </div>
@@ -6991,7 +6991,7 @@
         </div>
       </div>
       <div id="trainingScreenBluetoothHRItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('heartRate')">
-        <img src="assets/img/bpm_i.png" alt="심박계">
+        <img src="assets/img/bpm_i.png" loading="lazy" alt="심박계">
         <span>심박계</span>
         <span class="status" id="trainingScreenHeartRateStatus">미연결</span>
       </div>
@@ -7171,7 +7171,7 @@
           <canvas id="trainingSegmentGraph"></canvas>
           <!-- 마스코트 레이어 (FTP 라인 위에서 이동) -->
           <div id="segmentGraphMascotLayer" class="segment-graph-mascot-layer">
-            <img id="segmentGraphMascot" src="assets/img/cyclist.gif" alt="mascot" />
+            <img id="segmentGraphMascot" src="assets/img/cyclist.gif" loading="lazy" alt="mascot" />
             <!-- 깃발 이미지 제거됨 -->
           </div>
         </div>
@@ -7291,7 +7291,7 @@
           </button>
           <div id="mobileBluetoothDropdown" class="mobile-bluetooth-dropdown">
             <div id="mobileBluetoothTrainerItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('trainer')">
-              <img src="assets/img/trainer_i.png" alt="스마트 트레이너">
+              <img src="assets/img/trainer_i.png" loading="lazy" alt="스마트 트레이너">
               <span>스마트 트레이너</span>
               <span class="status" id="mobileTrainerStatus">미연결</span>
             </div>
@@ -7313,7 +7313,7 @@
               </div>
             </div>
             <div id="mobileBluetoothHRItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('heartRate')">
-              <img src="assets/img/bpm_i.png" alt="심박계">
+              <img src="assets/img/bpm_i.png" loading="lazy" alt="심박계">
               <span>심박계</span>
               <span class="status" id="mobileHeartRateStatus">미연결</span>
             </div>
@@ -7979,7 +7979,7 @@
   <div id="trainingJournalScreen" class="screen">
     <div class="header" style="display: flex; align-items: center; justify-content: space-between;">
       <span style="width: 2.5em; flex-shrink: 0;" aria-hidden="true"></span>
-      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> 라이딩 기록</h1>
+      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" loading="lazy" alt="캘린더" class="calendar-title-icon"> 라이딩 기록</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
     <p class="subtitle" style="margin-top: 0; margin-bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
@@ -8079,7 +8079,7 @@
   <div id="runTrainingJournalScreen" class="screen">
     <div class="header" style="display: flex; align-items: center; justify-content: space-between;">
       <span style="width: 2.5em; flex-shrink: 0;" aria-hidden="true"></span>
-      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/running1.gif" alt="러닝" class="calendar-title-icon"> Run 기록</h1>
+      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/running1.gif" loading="lazy" alt="러닝" class="calendar-title-icon"> Run 기록</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
     <p class="subtitle run-journal-screen-subtitle">
@@ -8454,7 +8454,7 @@
         <!-- RUN: 환경설정 상단 본인 프로필 (카드 없이 바로 표시) -->
         <div id="settingsProfileSection" class="settings-profile-section" style="display: none;">
           <div class="settings-profile-section__head">
-            <img src="assets/img/add-user3.gif" alt="" class="settings-profile-section__head-icon" decoding="async" />
+            <img src="assets/img/add-user3.gif" loading="lazy" alt="" class="settings-profile-section__head-icon" decoding="async" />
             <span class="settings-profile-section__head-title">내 프로필</span>
           </div>
           <div id="settingsUserList" class="settings-profile-panel-host profile-user-card-scope"></div>
@@ -8464,7 +8464,7 @@
           <div class="form-group" style="margin-bottom: 0;">
             <div style="margin-bottom: 8px;">
               <label style="font-size: 0.9em; margin: 0; display: flex; align-items: center; gap: 6px;">
-                <img src="assets/img/ai.gif" alt="AI" style="height: 2em; width: auto; vertical-align: middle;" />
+                <img src="assets/img/ai.gif" loading="lazy" alt="AI" style="height: 2em; width: auto; vertical-align: middle;" />
                 Gemini API 키 (<a href="javascript:void(0)" role="button" id="settingsGeminiApiKeyIssueLink" style="color: #2e74e8; text-decoration: underline; font-weight: normal; cursor: pointer;" onclick="event.preventDefault(); event.stopPropagation(); if (typeof window.openStelvioExternalUrl === 'function') { window.openStelvioExternalUrl('https://aistudio.google.com/app/apikey'); } else { window.open('https://aistudio.google.com/app/apikey', '_blank', 'noopener,noreferrer'); } return false;">API 키 발급받기</a>)
               </label>
             </div>
@@ -8502,7 +8502,7 @@
         <!-- 사용자 메뉴얼 블럭 -->
         <div class="card settings-block">
           <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; text-align: left;">
-            <img src="assets/img/add-user3.gif" alt="메뉴얼" style="height: 1.5em; width: auto; vertical-align: middle;" />
+            <img src="assets/img/add-user3.gif" loading="lazy" alt="메뉴얼" style="height: 1.5em; width: auto; vertical-align: middle;" />
             <span style="font-size: 0.9em; font-weight: bold; color: inherit;">사용자 메뉴얼</span>
           </div>
           <div style="display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap;">
@@ -12317,7 +12317,7 @@
         if (showStamp) {
           html = '<div class="weekly-top10-body-inner" style="position:relative;">' + html;
           html += '<div class="weekly-top10-stamp-overlay" style="position:absolute;left:0;top:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;pointer-events:none;">';
-          html += '<img src="assets/img/crop1.png" alt="" class="weekly-top10-stamp-img" style="width:240px;height:auto;display:block;" />';
+          html += '<img src="assets/img/crop1.png" loading="lazy" alt="" class="weekly-top10-stamp-img" style="width:240px;height:auto;display:block;" />';
           html += '</div></div>';
         }
         body.innerHTML = html;
@@ -33753,9 +33753,8 @@
   <!-- Google Charts for data visualization -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
   
-  <!-- SheetJS for Excel file reading -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  
+  <!-- SheetJS for Excel file reading — scheduleManager.js의 ensureXlsxLoaded()가 업로드 시점에만 지연 로드 -->
+
   <!-- ========== Indoor Training 대시보드 화면 ========== -->
   <div id="indoorTrainingDashboardScreen" class="screen">
     <div class="dashboard-header">
@@ -34080,7 +34079,7 @@
           </button>
           <div id="indiv-bluetoothDropdown" class="indiv-bluetooth-dropdown">
             <div id="indiv-bluetoothTrainerItem" class="indiv-bluetooth-dropdown-item" onclick="connectBluetoothDevice('trainer')">
-              <img src="assets/img/trainer_i.png" alt="스마트 트레이너">
+              <img src="assets/img/trainer_i.png" loading="lazy" alt="스마트 트레이너">
               <span>스마트 트레이너</span>
               <span class="indiv-status" id="indiv-trainerStatus">미연결</span>
             </div>
@@ -34100,7 +34099,7 @@
               </div>
             </div>
             <div id="indiv-bluetoothHRItem" class="indiv-bluetooth-dropdown-item" onclick="connectBluetoothDevice('heartRate')">
-              <img src="assets/img/bpm_i.png" alt="심박계">
+              <img src="assets/img/bpm_i.png" loading="lazy" alt="심박계">
               <span>심박계</span>
               <span class="indiv-status" id="indiv-heartRateStatus">미연결</span>
             </div>
@@ -34294,7 +34293,7 @@
             <input type="number" id="addTrackCountInput" min="1" max="50" value="5" 
                    style="width: 60px; padding: 6px 8px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; background: rgba(255, 255, 255, 0.1); color: #fff; font-size: 14px; text-align: center;">
             <button class="btn btn-primary btn-sm" id="btnAddTracksBluetoothCoach" onclick="addTracksToBluetoothCoach()">
-              <img src="assets/img/add-user2.gif" alt="트랙 생성" class="btn-icon-image" style="width: 18px; height: 18px; margin-right: 4px; vertical-align: middle;" />
+              <img src="assets/img/add-user2.gif" loading="lazy" alt="트랙 생성" class="btn-icon-image" style="width: 18px; height: 18px; margin-right: 4px; vertical-align: middle;" />
               트랙 생성
             </button>
           </div>
@@ -40423,7 +40422,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       }}
                       className="inline-flex items-center justify-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-blue-200 active:opacity-80 min-h-[44px] cursor-pointer"
                     >
-                      <img src="assets/img/ai.gif" alt="AI" style={{ height: '28px', width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+                      <img src="assets/img/ai.gif" loading="lazy" alt="AI" style={{ height: '28px', width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
                       <span>추천: {coachData.recommended_workout}</span>
                     </button>
                     {coachData.error_reason && (
@@ -43123,7 +43122,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       <p class="mobile-result-subtitle subscribe-overlay-warning" style="font-size: 0.9em; color: #ffffff; margin: 0 0 4px 0; opacity: 0.9; text-align: center;">⚠️ 구독연장을 위한 필수 인증번호 입력!!</p>
       <p class="subscribe-overlay-reflect-note" style="font-size: 0.85em; color: rgba(255,255,255,0.85); margin: 0 0 16px 0; text-align: center;">(구매 후 시스템 반영 30분 소요)</p>
       <div class="subscribe-overlay-image-wrap" style="margin-bottom: 16px; text-align: center;">
-        <img src="assets/img/STELVIO_Order.png" alt="구독 주문 안내" class="subscribe-overlay-image" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid rgba(0, 212, 170, 0.3);" />
+        <img src="assets/img/STELVIO_Order.png" loading="lazy" alt="구독 주문 안내" class="subscribe-overlay-image" style="max-width: 100%; height: auto; border-radius: 8px; border: 1px solid rgba(0, 212, 170, 0.3);" />
       </div>
       <button type="button" class="mobile-result-close-btn" id="btnSubscribeOverlayGo" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%); border: none; border-radius: 8px; color: #000; font-size: 1em; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);">네이버 스토어로 가기</button>
     </div>

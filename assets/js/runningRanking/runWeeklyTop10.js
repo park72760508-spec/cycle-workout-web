@@ -473,7 +473,7 @@
   /** CYCLE weeklyTop10 renderTop10 과 동일 도장 오버레이 (assets/img/crop1.png) */
   function weeklyTop10StampOverlayHtml() {
     return '<div class="weekly-top10-stamp-overlay" style="position:absolute;left:0;top:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;pointer-events:none;">' +
-      '<img src="assets/img/crop1.png" alt="" class="weekly-top10-stamp-img" style="width:240px;height:auto;display:block;" />' +
+      '<img src="assets/img/crop1.png" loading="lazy" alt="" class="weekly-top10-stamp-img" style="width:240px;height:auto;display:block;" />' +
       '</div>';
   }
 

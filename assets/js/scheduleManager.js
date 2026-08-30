@@ -2378,13 +2378,40 @@ function updateWeekdayCheckboxStyle(checkbox) {
   }
 }
 
+/** xlsx 라이브러리(201KB) 지연 로드 — 엑셀 업로드 시에만 필요하므로 부팅 시 eager 로드하지 않는다.
+ *  UMD 번들이라 동적 import() 대신 <script> 주입으로 로드한다(기존 코드는 window.XLSX 전역을 그대로 사용). */
+var _xlsxLoadPromise = null;
+function ensureXlsxLoaded() {
+  if (typeof window.XLSX !== 'undefined') return Promise.resolve();
+  if (_xlsxLoadPromise) return _xlsxLoadPromise;
+  _xlsxLoadPromise = new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = function () { resolve(); };
+    s.onerror = function () {
+      _xlsxLoadPromise = null;
+      reject(new Error('엑셀 라이브러리를 불러오지 못했습니다.'));
+    };
+    document.head.appendChild(s);
+  });
+  return _xlsxLoadPromise;
+}
+
 /**
  * 엑셀 파일 업로드 처리
  */
-function handleExcelUpload(event) {
+async function handleExcelUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
-  
+
+  try {
+    await ensureXlsxLoaded();
+  } catch (eLoad) {
+    console.error('[handleExcelUpload] xlsx 로드 실패:', eLoad);
+    showToast('엑셀 라이브러리를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
