@@ -4883,6 +4883,30 @@ function OpenRidingCalendarMain(props) {
     return s;
   }, [ridesMonth, userId]);
 
+  /** 해당 월에서 내가 확정 참가자이고 정산 미입금(분담액 > 0, paidUids에 없음)인 모임 날짜 */
+  var settlementUnpaidDateKeys = useMemo(function () {
+    var uid = String(userId || '');
+    if (!uid) return new Set();
+    var s = new Set();
+    ridesMonth.forEach(function (r) {
+      if (String(r.rideStatus || 'active') === 'cancelled') return;
+      var settlement = r.settlement;
+      if (!settlement) return;
+      var parts = Array.isArray(r.participants) ? r.participants : [];
+      if (!parts.some(function (p) { return String(p) === uid; })) return;
+      var breakdown = computeOpenRidingSettlementBreakdown(settlement.items);
+      var owed = breakdown.perParticipant[uid] || 0;
+      if (owed <= 0) return;
+      var paidUids = Array.isArray(settlement.paidUids) ? settlement.paidUids.map(String) : [];
+      if (paidUids.indexOf(uid) !== -1) return;
+      var ts = r.date;
+      var d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
+      if (!d) return;
+      s.add(dateKey(d.getFullYear(), d.getMonth(), d.getDate()));
+    });
+    return s;
+  }, [ridesMonth, userId]);
+
   /**
    * 컴팩트 라이딩 모임 [나의 라이딩]: 주최 · 전화 초대 · 그 외 참석 확정(비초대 경로)
    * — 행별 kind로 원 체크 색 구분(보라/녹/빨)
@@ -5968,6 +5992,7 @@ function OpenRidingCalendarMain(props) {
               if (isNextAdjacent) {
                 var isSelNext = selectedKey === key;
                 var isConfirmedNext = participantConfirmedDateKeys.has(key);
+                var hasUnpaidNext = settlementUnpaidDateKeys.has(key);
                 return (
                   <button
                     type="button"
@@ -6009,6 +6034,16 @@ function OpenRidingCalendarMain(props) {
                         </svg>
                       </span>
                     ) : null}
+                    {hasUnpaidNext ? (
+                      <span
+                        className="open-riding-cal-settlement-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 bg-red-600"
+                        style={{ width: '11px', height: '11px', top: 'calc(50% - 11.31px)', left: 'calc(50% - 11.31px)', transform: 'translate(-50%, -50%)', fontSize: '8px', fontWeight: 700, lineHeight: 1 }}
+                        title="미입금 정산 있음"
+                        aria-hidden
+                      >
+                        ₩
+                      </span>
+                    ) : null}
                     <span className={'relative z-10 tabular-nums ' + (isHostDay || hasMatch ? 'text-white font-medium' : 'text-slate-400')}>
                       {day}
                     </span>
@@ -6020,6 +6055,7 @@ function OpenRidingCalendarMain(props) {
               var isPastCell = key < calendarTodayYmd;
               var isSel = selectedKey === key;
               var isConfirmedDay = participantConfirmedDateKeys.has(key);
+              var hasUnpaidSettlement = settlementUnpaidDateKeys.has(key);
               var isTodayCell = key === calendarTodayYmd;
               /* 오늘 표시(주황 원)가 모임 배지(보라·초록·회색 원)와 같은 셀에서 겹치는 경우 —
                  오늘 표시가 모임 색을 완전히 가리지 않도록 평소보다 30% 더 투명하게 표시한다. */
@@ -6116,6 +6152,20 @@ function OpenRidingCalendarMain(props) {
                       </svg>
                     </span>
                   ) : null}
+                  {hasUnpaidSettlement ? (
+                    /* 참석 확정 배지(우상단 45도)와 대칭으로 좌상단 45도 지점에 배치 */
+                    <span
+                      className={
+                        'open-riding-cal-settlement-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 ' +
+                        (isPastCell ? 'bg-red-400/75 opacity-90' : 'bg-red-600')
+                      }
+                      style={{ width: '11px', height: '11px', top: 'calc(50% - 11.31px)', left: 'calc(50% - 11.31px)', transform: 'translate(-50%, -50%)', fontSize: '8px', fontWeight: 700, lineHeight: 1 }}
+                      title="미입금 정산 있음"
+                      aria-hidden
+                    >
+                      ₩
+                    </span>
+                  ) : null}
                   <span className={dayNumClass + (isTodayCell ? ' open-riding-cal-today-num' : '')}>{day}</span>
                 </button>
               );
@@ -6145,6 +6195,16 @@ function OpenRidingCalendarMain(props) {
                 </svg>
               </span>
               <span className="font-semibold text-slate-700 min-w-0 leading-tight">참석 확정</span>
+            </div>
+            <div className="flex gap-2 items-center min-w-0">
+              <span
+                className="open-riding-cal-legend-badge shrink-0 inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm"
+                style={{ width: '12px', height: '12px', fontSize: '8px', fontWeight: 700, lineHeight: 1 }}
+                aria-hidden
+              >
+                ₩
+              </span>
+              <span className="font-semibold text-slate-700 min-w-0 leading-tight">미입금 정산</span>
             </div>
           </div>
         </section>
