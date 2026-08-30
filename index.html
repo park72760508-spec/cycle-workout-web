@@ -101,11 +101,21 @@
       var firestoreV9 = null;
       var firestoreMod = null;
       var collectionFn, docFn, setDocFn, getDocFn;
+      var _fbInitOk = false;
+      for (var _fbInitAttempt = 1; _fbInitAttempt <= 3 && !_fbInitOk; _fbInitAttempt++) {
       try {
-        var _fbMods = await Promise.all([
-          import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'),
-          import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'),
-          import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
+        /* gstatic.com 동적 import가 모바일 네트워크(최신 기기의 HTTP/3 QUIC 협상 등)에서 간헐적으로
+           실패·정체되는 사례 대응 — 최신 안드로이드 기기에서 "Firebase 인증 모듈이 로드되지
+           않았습니다" 하드 실패로 보고됨. 5초 타임아웃 + 최대 3회 재시도로 감싼다. */
+        var _fbMods = await Promise.race([
+          Promise.all([
+            import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'),
+            import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'),
+            import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
+          ]),
+          new Promise(function (_, reject) {
+            setTimeout(function () { reject(new Error('Firebase 모듈 import 타임아웃')); }, 5000);
+          })
         ]);
         var appMod = _fbMods[0];
         var authMod = _fbMods[1];
@@ -247,8 +257,13 @@
             else console.log('✅ Firebase v9 SDK 초기화 완료');
           })();
         })();
+        _fbInitOk = true;
       } catch (error) {
-        console.error('❌ Firebase v9 초기화 실패:', error);
+        console.error('❌ Firebase v9 초기화 실패 (시도 ' + _fbInitAttempt + '/3):', error);
+        if (_fbInitAttempt < 3) {
+          await new Promise(function (r) { setTimeout(r, 500 * _fbInitAttempt); });
+        }
+      }
       }
       if (firestoreMod) {
         collectionFn = firestoreMod.collection;
@@ -30539,7 +30554,7 @@
         /* Android 등: compat script가 늦게 붙어도 authV9만 있으면 로그인 가능 — 짧게 대기·signIn 함수 보강 */
         async function waitForStelvioAuthReadyForLogin(maxMs) {
           var t0 = Date.now();
-          var maxWait = maxMs != null ? maxMs : 12000;
+          var maxWait = maxMs != null ? maxMs : 20000;
           var delay = 45;
           while (Date.now() - t0 < maxWait) {
             var authCompat = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
@@ -30566,7 +30581,7 @@
         }
 
         showAuthStatus('인증 모듈 준비 중…', 'info');
-        var _authReady = await waitForStelvioAuthReadyForLogin(12000);
+        var _authReady = await waitForStelvioAuthReadyForLogin(20000);
         const auth = _authReady.authCompat;
         if (!_authReady.ok) {
           throw new Error('Firebase 인증 모듈이 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.');
