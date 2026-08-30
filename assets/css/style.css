@@ -3459,7 +3459,7 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   z-index: 1; /* 이미지 위에 표시 */
 }
 
-.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#sportCategoryCycleNotiBadge):not(#sportCategoryRunNotiBadge):not(#basecampCareerNotiBadge):not(#runBasecampCareerNotiBadge):not(#basecampRidingHostBadge):not(#runBasecampRidingHostBadge) {
+.basecamp-btn span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#sportCategoryCycleNotiBadge):not(#sportCategoryRunNotiBadge):not(#basecampCareerNotiBadge):not(#runBasecampCareerNotiBadge):not(#basecampRidingHostBadge):not(#runBasecampRidingHostBadge):not(#basecampRidingSettlementBadge):not(#runBasecampRidingSettlementBadge) {
   color: #fff !important;
   position: relative;
   z-index: 2; /* 오버레이 위에 표시 */
@@ -3534,10 +3534,10 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
 #basecampScreen .basecamp-btn-riding-group-entry span:not(#basecampClubHouseNotiBadge),
 #basecampScreen .btn-device.basecamp-btn-affiliate-entry span,
 #basecampScreen .basecamp-btn-affiliate-entry span,
-#basecampScreen .btn-device.basecamp-btn-manual span:not(#basecampRidingNotiBadge):not(#basecampRidingHostBadge),
-#basecampScreen .basecamp-btn-manual span:not(#basecampRidingNotiBadge):not(#basecampRidingHostBadge),
-#basecampScreen .basecamp-path-grid .btn-device.basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#basecampRidingHostBadge),
-#basecampScreen .basecamp-path-grid .basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#basecampRidingHostBadge) {
+#basecampScreen .btn-device.basecamp-btn-manual span:not(#basecampRidingNotiBadge):not(#basecampRidingHostBadge):not(#basecampRidingSettlementBadge),
+#basecampScreen .basecamp-btn-manual span:not(#basecampRidingNotiBadge):not(#basecampRidingHostBadge):not(#basecampRidingSettlementBadge),
+#basecampScreen .basecamp-path-grid .btn-device.basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#basecampRidingHostBadge):not(#basecampRidingSettlementBadge),
+#basecampScreen .basecamp-path-grid .basecamp-btn > span:not(#basecampRidingNotiBadge):not(#basecampClubHouseNotiBadge):not(#basecampRidingHostBadge):not(#basecampRidingSettlementBadge) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -30302,7 +30302,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
-#runBasecampScreen .basecamp-path-grid .basecamp-btn > span:not(#runBasecampRidingNotiBadge):not(#runBasecampCareerNotiBadge):not(#runBasecampRidingHostBadge) {
+#runBasecampScreen .basecamp-path-grid .basecamp-btn > span:not(#runBasecampRidingNotiBadge):not(#runBasecampCareerNotiBadge):not(#runBasecampRidingHostBadge):not(#runBasecampRidingSettlementBadge) {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
