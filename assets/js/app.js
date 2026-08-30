@@ -22313,5 +22313,14 @@ if (originalCleanupMobileDashboard) {
   }
 
   window.refreshBasecampBadge = _fetchBadgeCounts;
+
+  /* 정산 입금완료/취소를 그 자리에서 즉시 배지에 반영 — 서버 재조회(폴링)는 15초 compute
+     캐시가 있어 방금 쓴 값이 곧바로 안 보일 수 있으므로, 다음 정기 폴링이 따라잡을 때까지
+     클라이언트에서 직접 카운트를 보정한다. OpenRidingScreens.jsx의 togglePaidStatus에서 호출. */
+  window.stelvioAdjustSettlementUnpaidCount = function (category, delta) {
+    var key = String(category || '').trim().toUpperCase() === 'RUN' ? 'settlementUnpaidRun' : 'settlementUnpaidCycle';
+    _counts[key] = Math.max(0, (Number(_counts[key]) || 0) + (Number(delta) || 0));
+    _renderBadges();
+  };
 })();
 

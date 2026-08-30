@@ -671,11 +671,26 @@ function OpenRidingSettlementFold(props) {
     setMyPaidOverride(nextPaid);
     setPaidToggleBusy(true);
     setErrMsg('');
+    /* 베이스캠프·모임 화면 하단 네비의 ₩ 배지도 폴링(최대 90초)을 기다리지 않고 즉시 반영 —
+       이 모임이 내 분담액(myAmount)이 있는 경우에만 카운트에 영향을 준다. */
+    var affectsBadge = myAmount > 0 && typeof window !== 'undefined' && typeof window.stelvioAdjustSettlementUnpaidCount === 'function';
+    if (affectsBadge) {
+      window.stelvioAdjustSettlementUnpaidCount(ride && ride.category, nextPaid ? -1 : 1);
+    }
     try {
       await svc.toggleMySettlementPaid(firestore, rideId, userId, nextPaid);
       reload(); // 배경에서 실데이터 동기화(await 불필요 — 화면은 이미 반영됨)
+      /* 서버 집계(15초 compute 캐시)가 이 변경을 반영할 시점에 한 번 더 재조회해 보정 —
+         낙관적 카운트 조정이 놓친 케이스(다른 항목의 분담액 등)를 다음 정기 폴링(최대 90초)보다
+         빨리 바로잡는다. */
+      if (affectsBadge && typeof window.refreshBasecampBadge === 'function') {
+        setTimeout(function () { window.refreshBasecampBadge(); }, 16000);
+      }
     } catch (e) {
       setMyPaidOverride(!nextPaid); // 실패 시 되돌림
+      if (affectsBadge) {
+        window.stelvioAdjustSettlementUnpaidCount(ride && ride.category, nextPaid ? 1 : -1);
+      }
       setErrMsg((e && e.message) || '입금 상태 변경에 실패했습니다.');
     } finally {
       setPaidToggleBusy(false);
