@@ -22121,6 +22121,11 @@ if (originalCleanupMobileDashboard) {
   var _counts     = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, hostedCycle: 0, hostedRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false, settlementUnpaidCycle: 0, settlementUnpaidRun: 0 };
   var _pollTimer  = null;
   var _inFlight   = false;
+  /* 정산 배지 낙관적 조정 직후: 서버(getBasecampBadgeCountsForRead)가 15초 compute 캐시를 쓰기
+     때문에, 그 사이 폴링/포그라운드 복귀로 들어오는 응답은 방금 조정 이전의 값을 되돌려줄 수 있다.
+     이 시각까지는 서버 응답의 settlementUnpaid* 필드를 무시하고 클라이언트 값을 신뢰한다
+     (배지가 사라졌다 다시 나타나는 깜빡임 방지). */
+  var _settlementAdjustGuardUntil = 0;
 
   /* ── UI 업데이트 (라이딩 모임·클럽 하우스 공통 배지 렌더) ── */
   function _applyCountBadge(badgeId, count) {
@@ -22252,8 +22257,10 @@ if (originalCleanupMobileDashboard) {
         _counts.friends = Number(json.friends) || 0;
         _counts.stravaTodayCycle = !!json.stravaTodayCycle;
         _counts.stravaTodayRun = !!json.stravaTodayRun;
-        _counts.settlementUnpaidCycle = Number(json.settlementUnpaidCycle) || 0;
-        _counts.settlementUnpaidRun = Number(json.settlementUnpaidRun) || 0;
+        if (Date.now() >= _settlementAdjustGuardUntil) {
+          _counts.settlementUnpaidCycle = Number(json.settlementUnpaidCycle) || 0;
+          _counts.settlementUnpaidRun = Number(json.settlementUnpaidRun) || 0;
+        }
         _renderBadges();
       }
     }).catch(function () {}).then(function () { _inFlight = false; });
@@ -22320,6 +22327,7 @@ if (originalCleanupMobileDashboard) {
   window.stelvioAdjustSettlementUnpaidCount = function (category, delta) {
     var key = String(category || '').trim().toUpperCase() === 'RUN' ? 'settlementUnpaidRun' : 'settlementUnpaidCycle';
     _counts[key] = Math.max(0, (Number(_counts[key]) || 0) + (Number(delta) || 0));
+    _settlementAdjustGuardUntil = Date.now() + 16000;
     _renderBadges();
   };
 })();

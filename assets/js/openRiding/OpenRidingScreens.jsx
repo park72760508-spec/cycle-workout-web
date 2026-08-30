@@ -534,23 +534,27 @@ function OpenRidingSettlementFold(props) {
   var _paidBusy = useState(false);
   var paidToggleBusy = _paidBusy[0];
   var setPaidToggleBusy = _paidBusy[1];
-  /* 서버 반영(Supabase 라우팅 지연 포함)을 기다리지 않고 클릭 즉시 내 상태를 화면에 반영하기 위한
-     낙관적 업데이트 값 — null이면 settlement.paidUids를 그대로 신뢰, true/false면 이 값을 우선한다. */
-  var _myPaidOverride = useState(null);
-  var myPaidOverride = _myPaidOverride[0];
-  var setMyPaidOverride = _myPaidOverride[1];
+  /* 서버 반영(Supabase 라우팅 지연 포함)을 기다리지 않고 클릭 즉시 화면에 반영하기 위한 낙관적
+     업데이트 값 — uid별 override 맵. 값이 없으면 settlement.paidUids를 그대로 신뢰, true/false면
+     이 값을 우선한다. 관리자가 타인의 상태를 대리 변경하는 경우도 이 맵으로 처리한다. */
+  var _paidOverrideByUid = useState({});
+  var paidOverrideByUid = _paidOverrideByUid[0];
+  var setPaidOverrideByUid = _paidOverrideByUid[1];
   var _acctCopied = useState(false);
   var accountCopied = _acctCopied[0];
   var setAccountCopied = _acctCopied[1];
 
   if (!isParticipant) return null;
 
+  var _viewerGrade = typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
+  var isAdminViewer =
+    typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' ? window.isStelvioAdminGrade(_viewerGrade) : false;
+
   var breakdown = computeOpenRidingSettlementBreakdown(settlement ? settlement.items : []);
   var myAmount = breakdown.perParticipant[String(userId)] || 0;
-  var myIsPaid =
-    myPaidOverride != null
-      ? myPaidOverride
-      : !!(settlement && (settlement.paidUids || []).indexOf(String(userId)) !== -1);
+  var myIsPaid = paidOverrideByUid.hasOwnProperty(String(userId))
+    ? paidOverrideByUid[String(userId)]
+    : !!(settlement && (settlement.paidUids || []).indexOf(String(userId)) !== -1);
 
   function displayNameFor(uid) {
     var n = participantDisplay[String(uid)];
@@ -668,30 +672,41 @@ function OpenRidingSettlementFold(props) {
     }
   }
 
-  async function togglePaidStatus(nextPaid) {
+  async function togglePaidStatus(targetUid, nextPaid) {
     var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
-    if (!firestore || !userId || typeof svc.toggleMySettlementPaid !== 'function' || paidToggleBusy) return;
+    var uidStr = String(targetUid);
+    var isSelf = uidStr === String(userId);
+    var canToggle = isSelf || isAdminViewer;
+    if (!firestore || !userId || typeof svc.toggleMySettlementPaid !== 'function' || paidToggleBusy || !canToggle) return;
     // 낙관적 업데이트 — Supabase 읽기 라우팅 지연을 기다리지 않고 클릭 즉시 화면에 반영한다.
-    setMyPaidOverride(nextPaid);
+    setPaidOverrideByUid(function (prev) {
+      var next = Object.assign({}, prev);
+      next[uidStr] = nextPaid;
+      return next;
+    });
     setPaidToggleBusy(true);
     setErrMsg('');
-    /* 베이스캠프·모임 화면 하단 네비의 ₩ 배지도 폴링(최대 90초)을 기다리지 않고 즉시 반영 —
-       이 모임이 내 분담액(myAmount)이 있는 경우에만 카운트에 영향을 준다. */
-    var affectsBadge = myAmount > 0 && typeof window !== 'undefined' && typeof window.stelvioAdjustSettlementUnpaidCount === 'function';
+    /* 베이스캠프·모임 화면 하단 네비의 ₩ 배지는 "내" 미입금 여부만 반영한다 — 관리자가 타인의
+       상태를 대리 변경하는 경우(!isSelf)는 관리자 본인의 배지와 무관하므로 건드리지 않는다. */
+    var affectsBadge = isSelf && myAmount > 0 && typeof window !== 'undefined' && typeof window.stelvioAdjustSettlementUnpaidCount === 'function';
     if (affectsBadge) {
       window.stelvioAdjustSettlementUnpaidCount(ride && ride.category, nextPaid ? -1 : 1);
     }
     try {
-      await svc.toggleMySettlementPaid(firestore, rideId, userId, nextPaid);
+      await svc.toggleMySettlementPaid(firestore, rideId, targetUid, nextPaid);
       reload(); // 배경에서 실데이터 동기화(await 불필요 — 화면은 이미 반영됨)
-      /* 서버 집계(15초 compute 캐시)가 이 변경을 반영할 시점에 한 번 더 재조회해 보정 —
+      /* 서버 집계(15초 compute 캐시)가 이 변경을 반영할 시점 이후 한 번 더 재조회해 보정 —
          낙관적 카운트 조정이 놓친 케이스(다른 항목의 분담액 등)를 다음 정기 폴링(최대 90초)보다
-         빨리 바로잡는다. */
+         빨리 바로잡는다. app.js의 가드(16초)가 풀린 직후에 호출되도록 약간 더 늦춘다. */
       if (affectsBadge && typeof window.refreshBasecampBadge === 'function') {
-        setTimeout(function () { window.refreshBasecampBadge(); }, 16000);
+        setTimeout(function () { window.refreshBasecampBadge(); }, 16500);
       }
     } catch (e) {
-      setMyPaidOverride(!nextPaid); // 실패 시 되돌림
+      setPaidOverrideByUid(function (prev) {
+        var next = Object.assign({}, prev);
+        next[uidStr] = !nextPaid; // 실패 시 되돌림
+        return next;
+      });
       if (affectsBadge) {
         window.stelvioAdjustSettlementUnpaidCount(ride && ride.category, nextPaid ? 1 : -1);
       }
@@ -914,10 +929,12 @@ function OpenRidingSettlementFold(props) {
                       return displayNameFor(a).localeCompare(displayNameFor(b), 'ko');
                     })
                     .map(function (uid) {
-                      var isMe = String(uid) === String(userId);
-                      var isPaid = isMe && myPaidOverride != null
-                        ? myPaidOverride
-                        : (settlement.paidUids || []).indexOf(String(uid)) !== -1;
+                      var uidStr = String(uid);
+                      var isMe = uidStr === String(userId);
+                      var canToggleThis = isMe || isAdminViewer;
+                      var isPaid = paidOverrideByUid.hasOwnProperty(uidStr)
+                        ? paidOverrideByUid[uidStr]
+                        : (settlement.paidUids || []).indexOf(uidStr) !== -1;
                       return (
                         <div key={uid} className="flex items-center justify-between text-xs gap-2">
                           <span className="flex items-center gap-1.5 min-w-0">
@@ -929,13 +946,13 @@ function OpenRidingSettlementFold(props) {
                                 (isPaid
                                   ? 'bg-emerald-500 text-white border-emerald-500'
                                   : 'bg-slate-100 text-slate-500 border-slate-300') +
-                                (isMe
+                                (canToggleThis
                                   ? ' cursor-pointer ring-2 ring-orange-400 ring-offset-1'
                                   : ' cursor-default opacity-60 pointer-events-none')
                               }
-                              disabled={!isMe || paidToggleBusy}
-                              onClick={isMe ? function () { togglePaidStatus(!isPaid); } : undefined}
-                              title={isMe ? '탭해서 입금 상태 변경' : undefined}
+                              disabled={!canToggleThis || paidToggleBusy}
+                              onClick={canToggleThis ? function () { togglePaidStatus(uid, !isPaid); } : undefined}
+                              title={canToggleThis ? (isMe ? '탭해서 입금 상태 변경' : '관리자: 탭해서 입금 상태 변경') : undefined}
                             >
                               {isPaid ? '입금완료' : '미입금'}
                             </button>
