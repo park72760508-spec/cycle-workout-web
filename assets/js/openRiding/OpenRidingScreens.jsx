@@ -547,6 +547,10 @@ function OpenRidingSettlementFold(props) {
 
   var breakdown = computeOpenRidingSettlementBreakdown(settlement ? settlement.items : []);
   var myAmount = breakdown.perParticipant[String(userId)] || 0;
+  var myIsPaid =
+    myPaidOverride != null
+      ? myPaidOverride
+      : !!(settlement && (settlement.paidUids || []).indexOf(String(userId)) !== -1);
 
   function displayNameFor(uid) {
     var n = participantDisplay[String(uid)];
@@ -740,7 +744,7 @@ function OpenRidingSettlementFold(props) {
               등록하기
             </button>
           ) : (
-            <span className="text-sm font-semibold text-orange-600">
+            <span className={'text-sm font-semibold ' + (myIsPaid ? 'text-emerald-600' : 'text-red-600')}>
               나의 정산금액 {myAmount.toLocaleString()}원
             </span>
           )}
