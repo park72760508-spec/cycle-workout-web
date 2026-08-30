@@ -32284,8 +32284,23 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-return-address-form.is-hidden { display: none; }
 .market-return-address-form .market-form-input { margin-bottom: 0; }
 .market-address-search-row { display: flex; gap: 8px; }
-.market-address-search-row .market-return-zip { flex: 1; width: auto; }
-.market-address-search-row .market-return-zip-search-btn { flex: 1; width: auto; }
+/* flex:1 두 요소가 정확히 50:50을 이루려면 min-width:0이 꼭 필요하다 — 기본값(auto)이면
+   버튼 텍스트("주소 검색")의 줄바꿈 없는 최소 너비가 우선시돼, 좁은 화면(모바일)에서 50%
+   지분보다 그 최소 너비가 더 넓게 요구되며 반대로 줄바꿈되어 2줄로 표시되는 문제가 있었다. */
+.market-address-search-row .market-return-zip { flex: 1; width: auto; min-width: 0; }
+.market-address-search-row .market-return-zip-search-btn {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+@media (max-width: 600px) {
+  .market-address-search-row .market-return-zip-search-btn { font-size: 13px; }
+}
 .market-return-dispute-notice { color: #b91c1c; font-weight: 700; }
 .market-return-complete-notice { color: #15803d; font-weight: 700; }
 
