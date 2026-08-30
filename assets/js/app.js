@@ -22188,6 +22188,13 @@ if (originalCleanupMobileDashboard) {
     /* "나의 기록" 버튼: 오늘(KST) STRAVA 기록 수집 여부 — 참석확정 체크마크 배지 */
     _applyCheckBadge('basecampCareerNotiBadge', _counts.stravaTodayCycle);
     _applyCheckBadge('runBasecampCareerNotiBadge', _counts.stravaTodayRun);
+
+    /* 모임 화면(OpenRidingScreens.jsx) 내부 하단 네비 배지가 재조회 없이 같은 값을 쓰도록
+       전역에 최신 집계를 노출 + 이벤트로 통지 (미입금 정산 배지 등) */
+    window.stelvioBasecampBadgeCounts = _counts;
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-badge-counts-updated', { detail: _counts }));
+    } catch (eDispatch) {}
   }
 
   function _clearAll() {

@@ -4171,6 +4171,7 @@ function OpenRidingBottomGlassNav(props) {
   var hostedInCrewCount = typeof props.hostedInCrewCount === 'number' ? props.hostedInCrewCount : 0;
   var pendingInvitedRidesCount = typeof props.pendingInvitedRidesCount === 'number' ? props.pendingInvitedRidesCount : 0;
   var hostedRidesCount = typeof props.hostedRidesCount === 'number' ? props.hostedRidesCount : 0;
+  var settlementUnpaidCount = typeof props.settlementUnpaidCount === 'number' ? props.settlementUnpaidCount : 0;
   var userId = props.userId || '';
   var moimCopy = props.moimCopy || getOpenRidingMoimCopy('CYCLE');
   var navMoimLabel = moimCopy.navMoimLabel || '라이딩';
@@ -4289,6 +4290,23 @@ function OpenRidingBottomGlassNav(props) {
                 {hostedInCrewCount > 99 ? '99+' : hostedInCrewCount}
               </span>
             ) : null}
+            {settlementUnpaidCount > 0 ? (
+              <span
+                className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-red-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
+                style={{
+                  width: '17px',
+                  height: '17px',
+                  fontSize: 10,
+                  top: 0,
+                  right: 0,
+                  transform: groupsBadgeTotal > 0 ? 'translate(78%, -12%) scale(0.82)' : 'translate(45%, -40%)',
+                  zIndex: groupsBadgeTotal > 0 ? 1 : undefined
+                }}
+                aria-hidden="true"
+              >
+                ₩
+              </span>
+            ) : null}
           </span>
           <span className="open-riding-bottom-glass-nav__label">{navGroupsLabel}</span>
         </button>
@@ -4326,6 +4344,23 @@ function OpenRidingBottomGlassNav(props) {
             {hostedRidesCount > 0 ? (
               <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: hostedRidesCount > 9 ? 9 : 10, paddingLeft: hostedRidesCount > 9 ? 3 : 4, paddingRight: hostedRidesCount > 9 ? 3 : 4, top: 0, left: 0, transform: 'translate(-45%, -40%)' }} aria-hidden="true">
                 {hostedRidesCount > 99 ? '99+' : hostedRidesCount}
+              </span>
+            ) : null}
+            {settlementUnpaidCount > 0 ? (
+              <span
+                className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-red-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
+                style={{
+                  width: '17px',
+                  height: '17px',
+                  fontSize: 10,
+                  top: 0,
+                  right: 0,
+                  transform: pendingInvitedRidesCount > 0 ? 'translate(78%, -12%) scale(0.82)' : 'translate(45%, -40%)',
+                  zIndex: pendingInvitedRidesCount > 0 ? 1 : undefined
+                }}
+                aria-hidden="true"
+              >
+                ₩
               </span>
             ) : null}
           </span>
@@ -14715,6 +14750,35 @@ function OpenRidingRoomApp(props) {
   var hostedInCrewCount = _hicc[0];
   var setHostedInCrewCount = _hicc[1];
 
+  /* 미입금 정산 배지(빨강 원 + ₩) — app.js의 베이스캠프 배지 폴링 결과(window.stelvioBasecampBadgeCounts)를
+     재사용한다(별도 조회 없음). app.js가 90초 폴링/포그라운드 복귀마다 갱신하며 'stelvio-badge-counts-updated'
+     이벤트로 통지한다. */
+  var _sus = useState(function () {
+    var c = (typeof window !== 'undefined' && window.stelvioBasecampBadgeCounts) || null;
+    if (!c) return 0;
+    return clubCategory === 'RUN' ? Number(c.settlementUnpaidRun) || 0 : Number(c.settlementUnpaidCycle) || 0;
+  });
+  var settlementUnpaidCount = _sus[0];
+  var setSettlementUnpaidCount = _sus[1];
+
+  useEffect(
+    function () {
+      function applyFromCounts(c) {
+        if (!c) return;
+        setSettlementUnpaidCount(clubCategory === 'RUN' ? Number(c.settlementUnpaidRun) || 0 : Number(c.settlementUnpaidCycle) || 0);
+      }
+      applyFromCounts(typeof window !== 'undefined' ? window.stelvioBasecampBadgeCounts : null);
+      function onBadgeCountsUpdated(e) {
+        applyFromCounts((e && e.detail) || (typeof window !== 'undefined' ? window.stelvioBasecampBadgeCounts : null));
+      }
+      if (typeof window !== 'undefined') window.addEventListener('stelvio-badge-counts-updated', onBadgeCountsUpdated);
+      return function () {
+        if (typeof window !== 'undefined') window.removeEventListener('stelvio-badge-counts-updated', onBadgeCountsUpdated);
+      };
+    },
+    [clubCategory]
+  );
+
   /* pendingInvitedRidesCount(하단 네비 라이딩/러닝 배지)는 이제 서버 폴링이 아니라
      OpenRidingCalendarMain의 [나의 라이딩] 리스트(초대됨 항목 수)에서 직접 보고받는다
      (onInvitedRidesCountChange) — 화면에 실제 표시되는 개수와 배지 숫자를 일치시키기 위함.
@@ -15252,6 +15316,7 @@ function OpenRidingRoomApp(props) {
           hostedInCrewCount={hostedInCrewCount}
           pendingInvitedRidesCount={pendingInvitedRidesCount}
           hostedRidesCount={hostedRidesCount}
+          settlementUnpaidCount={settlementUnpaidCount}
           userId={effectiveUserId}
           moimCopy={moimCopy}
         />
