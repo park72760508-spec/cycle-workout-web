@@ -12306,6 +12306,24 @@ function normalizePhoneDigitsForBadge(input) {
 }
 
 /**
+ * 모임 정산 항목에서 특정 uid의 분담액 합계 — 1/n 분담 후 10원 단위 절상.
+ * assets/js/openRiding/OpenRidingScreens.jsx의 openRidingRoundUpTo10 +
+ * computeOpenRidingSettlementBreakdown과 동일 로직(Node.js 버전).
+ */
+function computeRideSettlementUnpaidShareForUid(settlement, uid) {
+  if (!settlement || !Array.isArray(settlement.items)) return 0;
+  var uidStr = String(uid);
+  var total = 0;
+  settlement.items.forEach((item) => {
+    var amount = Number(item && item.amount) || 0;
+    var uids = Array.isArray(item && item.participantUids) ? item.participantUids.map(String) : [];
+    if (!uids.length || amount <= 0 || uids.indexOf(uidStr) === -1) return;
+    total += Math.ceil(amount / uids.length / 10) * 10;
+  });
+  return total;
+}
+
+/**
  * 베이스캠프 알림 배지 — 초대 라이딩/러닝·모임 가입신청·친구요청 집계 (1회성 조회).
  * assets/js/app.js 의 4개 전역 상시 onSnapshot(초대 rides, 소mo임 목록 + 그룹별 joinRequests 팬아웃,
  * friendRequests)을 대체하는 단발 조회 엔드포인트 — 클라이언트는 이 API를 주기적으로 폴링한다.
@@ -12483,12 +12501,41 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             })
             .catch(() => ({ hostedCycle: 0, hostedRun: 0, hostedInCrewMapCycle: {}, hostedInCrewMapRun: {} }));
 
-          const [ridesCounts, friends, groups, stravaToday, hostedCounts] = await Promise.all([
+          // "미입금 정산" 배지 — 내가 확정 참가자인 모임(과거 포함, 날짜 제한 없음) 중
+          // settlement.items로 계산한 내 분담액이 있고 아직 paidUids에 없는 것만 카운트.
+          // hostedRidesPromise와 동일하게 fetch-then-filter-in-JS — 정산은 모임이 끝난 뒤
+          // 이뤄지는 경우가 많아 날짜로 미리 거르면 안 된다.
+          const settlementPromise = db
+            .collection("rides")
+            .where("participants", "array-contains", requestedUid)
+            .get()
+            .then((snap) => {
+              var unpaidCycle = 0;
+              var unpaidRun = 0;
+              snap.forEach((doc) => {
+                var d = doc.data() || {};
+                if (String(d.rideStatus || "active") === "cancelled") return;
+                var settlement = d.settlement || null;
+                if (!settlement) return;
+                var owed = computeRideSettlementUnpaidShareForUid(settlement, requestedUid);
+                if (owed <= 0) return;
+                var paidUids = Array.isArray(settlement.paidUids) ? settlement.paidUids.map(String) : [];
+                if (paidUids.indexOf(requestedUid) !== -1) return;
+                var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
+                if (cat === "RUN") unpaidRun++;
+                else unpaidCycle++;
+              });
+              return { settlementUnpaidCycle: unpaidCycle, settlementUnpaidRun: unpaidRun };
+            })
+            .catch(() => ({ settlementUnpaidCycle: 0, settlementUnpaidRun: 0 }));
+
+          const [ridesCounts, friends, groups, stravaToday, hostedCounts, settlementCounts] = await Promise.all([
             ridesPromise,
             friendsPromise,
             groupsPromise,
             stravaTodayPromise,
             hostedRidesPromise,
+            settlementPromise,
           ]);
 
           return {
@@ -12507,6 +12554,8 @@ exports.getBasecampBadgeCountsForRead = onRequest(
             groups: groups || 0,
             stravaTodayCycle: !!stravaToday.hasCycle,
             stravaTodayRun: !!stravaToday.hasRun,
+            settlementUnpaidCycle: settlementCounts.settlementUnpaidCycle || 0,
+            settlementUnpaidRun: settlementCounts.settlementUnpaidRun || 0,
           };
         }
       );

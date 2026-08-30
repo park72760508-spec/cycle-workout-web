@@ -22118,7 +22118,7 @@ if (originalCleanupMobileDashboard) {
   var BADGE_API_URL = 'https://us-central1-stelvio-ai.cloudfunctions.net/getBasecampBadgeCountsForRead';
   var POLL_MS = 90 * 1000;
 
-  var _counts     = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, hostedCycle: 0, hostedRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false };
+  var _counts     = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, hostedCycle: 0, hostedRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false, settlementUnpaidCycle: 0, settlementUnpaidRun: 0 };
   var _pollTimer  = null;
   var _inFlight   = false;
 
@@ -22148,6 +22148,15 @@ if (originalCleanupMobileDashboard) {
     else badge.classList.remove('show');
   }
 
+  /* 미입금 정산 배지가 같은 버튼의 빨강 알림 배지와 동시에 뜰 때 겹쳐 보이도록 토글
+     (assets/css/style.css의 .badge-stacked — 알림 배지 뒤로 살짝 어긋나게 배치) */
+  function _toggleStackedClass(badgeId, stacked) {
+    var badge = document.getElementById(badgeId);
+    if (!badge) return;
+    if (stacked) badge.classList.add('badge-stacked');
+    else badge.classList.remove('badge-stacked');
+  }
+
   function _renderBadges() {
     /* 크루 배지 = 내가 방장인 그룹 가입신청 대기 + 크루(그룹)가 생성한 모임에 초대된 건수.
        ridesCycle/ridesRun은 서버에서 이미 크루 초대분을 제외한 개인 초대만 집계하므로
@@ -22156,9 +22165,17 @@ if (originalCleanupMobileDashboard) {
        RUN 러닝 크루   = 러닝(개인) 초대 + 친구 요청 + 크루 — 화면 안 하단 네비 배지 3개 합산(2026-08) */
     var crewCycle = _counts.groups + _counts.crewInviteCycle;
     var crewRun = _counts.groups + _counts.crewInviteRun;
-    _applyCountBadge('basecampRidingNotiBadge', _counts.ridesCycle + _counts.friends + crewCycle);
+    var notiCycle = _counts.ridesCycle + _counts.friends + crewCycle;
+    var notiRun = _counts.ridesRun + _counts.friends + crewRun;
+    _applyCountBadge('basecampRidingNotiBadge', notiCycle);
     _applyCountBadge('basecampClubHouseNotiBadge', _counts.groups);
-    _applyCountBadge('runBasecampRidingNotiBadge', _counts.ridesRun + _counts.friends + crewRun);
+    _applyCountBadge('runBasecampRidingNotiBadge', notiRun);
+
+    /* 미입금 정산 배지(won.svg) — 같은 버튼에 빨강 알림 배지가 함께 뜨면 겹쳐 보이게 처리 */
+    _applyCheckBadge('basecampRidingSettlementBadge', _counts.settlementUnpaidCycle > 0);
+    _applyCheckBadge('runBasecampRidingSettlementBadge', _counts.settlementUnpaidRun > 0);
+    _toggleStackedClass('basecampRidingSettlementBadge', notiCycle > 0);
+    _toggleStackedClass('runBasecampRidingSettlementBadge', notiRun > 0);
 
     /* 카테고리 화면: 라이딩 모임 배지와 동일한 빨강원+흰숫자 배지로 표시 (친구 요청·크루 공통 + 각 종목 초대) */
     _applyCountBadge('sportCategoryCycleNotiBadge', _counts.ridesCycle + _counts.friends + crewCycle);
@@ -22174,7 +22191,7 @@ if (originalCleanupMobileDashboard) {
   }
 
   function _clearAll() {
-    _counts = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, hostedCycle: 0, hostedRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false };
+    _counts = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, hostedCycle: 0, hostedRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false, settlementUnpaidCycle: 0, settlementUnpaidRun: 0 };
   }
 
   /* ── 현재 UID ── */
@@ -22228,6 +22245,8 @@ if (originalCleanupMobileDashboard) {
         _counts.friends = Number(json.friends) || 0;
         _counts.stravaTodayCycle = !!json.stravaTodayCycle;
         _counts.stravaTodayRun = !!json.stravaTodayRun;
+        _counts.settlementUnpaidCycle = Number(json.settlementUnpaidCycle) || 0;
+        _counts.settlementUnpaidRun = Number(json.settlementUnpaidRun) || 0;
         _renderBadges();
       }
     }).catch(function () {}).then(function () { _inFlight = false; });

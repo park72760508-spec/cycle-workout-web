@@ -3710,6 +3710,48 @@ html.open-riding-glass-nav-ios-phone #openRidingRoomScreen .open-riding-group-fo
   border-radius: 13px !important;
 }
 
+/* 미입금 정산 배지(won.svg) — 알림 배지(빨강)와 동일 위치(우상단)에 표시.
+ * 알림 배지와 동시에 뜨는 경우 .badge-stacked가 붙어 살짝 어긋나게 겹쳐 보인다
+ * (z-index를 알림 배지보다 한 단계 낮춰 알림 배지가 위, 정산 배지가 뒤에서 가장자리만 보임). */
+#basecampRidingSettlementBadge,
+#runBasecampRidingSettlementBadge {
+  display: none !important;
+  position: absolute !important;
+  top: 25% !important;
+  right: 25% !important;
+  transform: translate(50%, -50%) !important;
+  width: 26px !important;
+  min-width: 26px !important;
+  height: 26px !important;
+  background: #f59e0b !important;
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
+  z-index: 19 !important;
+  pointer-events: none !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35) !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  order: unset !important;
+  flex: none !important;
+  align-self: auto !important;
+}
+#basecampRidingSettlementBadge.show,
+#runBasecampRidingSettlementBadge.show {
+  display: flex !important;
+}
+#basecampRidingSettlementBadge img,
+#runBasecampRidingSettlementBadge img {
+  width: 16px !important;
+  height: 16px !important;
+  pointer-events: none !important;
+}
+#basecampRidingSettlementBadge.badge-stacked,
+#runBasecampRidingSettlementBadge.badge-stacked {
+  transform: translate(calc(50% + 4px), calc(-50% + 4px)) scale(0.82) !important;
+}
+
 /* "나의 기록" 버튼 — 오늘(KST) STRAVA 기록 수집 배지. 라이딩 모임 숫자 배지와 동일한 위치·크기,
    참석확정과 동일한 빨간 원 + 흰 체크마크(숫자 없음, boolean 표시). */
 #basecampCareerNotiBadge,

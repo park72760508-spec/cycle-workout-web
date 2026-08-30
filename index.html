@@ -3736,7 +3736,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260830marketCardTitleTabLabel1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260830settlementBadge1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4549,6 +4549,10 @@
                 <span id="basecampRidingNotiBadge" aria-label="알림 건수"></span>
                 <!-- 내가 주최한 모임 배지: top:25% / left:25% (버튼 4등분 좌상단 중앙), 보라색 -->
                 <span id="basecampRidingHostBadge" aria-label="내가 주최한 모임 건수"></span>
+                <!-- 미입금 정산 배지: 알림 배지와 동일 위치(우상단) — 동시 표시 시 겹쳐 보이도록 처리 -->
+                <span id="basecampRidingSettlementBadge" class="basecamp-settlement-badge" aria-label="미입금 정산 있음">
+                  <img src="assets/img/won.svg" alt="" />
+                </span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-cycle-competition" id="btnBasecampCompetition" onclick="if(typeof openCompetitionFromCycleBasecamp==='function')openCompetitionFromCycleBasecamp();else if(typeof showScreen==='function')showScreen('competitionScreen');" aria-label="대회">
                 <span>대회</span>
@@ -4614,6 +4618,9 @@
                 <span>러닝 크루</span>
                 <span id="runBasecampRidingNotiBadge" aria-label="알림 건수"></span>
                 <span id="runBasecampRidingHostBadge" aria-label="내가 주최한 모임 건수"></span>
+                <span id="runBasecampRidingSettlementBadge" class="basecamp-settlement-badge" aria-label="미입금 정산 있음">
+                  <img src="assets/img/won.svg" alt="" />
+                </span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-affiliate-entry" id="btnRunBasecampAffiliate" onclick="if(typeof openCompetitionFromRunBasecamp==='function')openCompetitionFromRunBasecamp();else if(typeof showScreen==='function')showScreen('competitionScreen');" aria-label="대회">
                 <span>대회</span>
@@ -33384,7 +33391,7 @@
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js"></script>
-  <script src="assets/js/app.js?v=20260830bootPerf1"></script>
+  <script src="assets/js/app.js?v=20260830settlementBadge1"></script>
   <script src="assets/js/stelvioAnalytics.js"></script>
 
   
