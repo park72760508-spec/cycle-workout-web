@@ -98,7 +98,7 @@
     return t[ageBracket];
   }
 
-  var FIRESTORE_MOD_VO2_STATS = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+  var FIRESTORE_MOD_VO2_STATS = '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
   var VO2_DEMOGRAPHIC_SAMPLE_RELAY =
     'https://us-central1-stelvio-ai.cloudfunctions.net/ingestVo2DemographicSampleRelay';
   var FITNESS_DEMOGRAPHIC_SAMPLE_RELAY =

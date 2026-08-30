@@ -1481,7 +1481,7 @@ function lookupOpenRidingUserNameByInvitePhone(firestoreDb, invitePhone) {
   if (candidates.length === 0) {
     return Promise.resolve(resolveOpenRidingInviteNameFromLocalUsers('', invitePhone) || '');
   }
-  return import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
+  return import('/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js')
     .then(function (mod) {
       var col = mod.collection(firestoreDb, 'users');
       var fields = ['contact', 'phone', 'phoneNumber', 'tel'];

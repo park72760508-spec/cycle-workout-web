@@ -245,7 +245,7 @@
 
   function preloadFirebaseStorageMod() {
     if (window._firebaseStorageModReady) return;
-    window._firebaseStorageModReady = import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js')
+    window._firebaseStorageModReady = import('/assets/js/vendor/firebasejs/10.14.1/firebase-storage.js')
       .then(function (m) {
         window.firebaseStorageModV9API = m;
         return m;

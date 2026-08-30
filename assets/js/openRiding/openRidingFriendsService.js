@@ -16,8 +16,8 @@ import {
   deleteDoc,
   writeBatch,
   serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import { normalizePhoneDigits } from './openRidingService.js?v=settlement-20260822a';
+} from '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
+import { normalizePhoneDigits } from './openRidingService.js?v=settlement-paid-20260822b';
 
 /** @param {string} a @param {string} b */
 export function friendRequestDocId(fromUid, toUid) {

@@ -156,7 +156,7 @@
     });
   }
 
-  var FIRESTORE_MOD_RUN_FITNESS = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+  var FIRESTORE_MOD_RUN_FITNESS = '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
   var firestoreModRunFitnessPromise = null;
   function getFirestoreModRunFitness() {
     if (typeof global.getFirestoreModVo2Stats === 'function') {

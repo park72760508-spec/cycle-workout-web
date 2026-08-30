@@ -223,7 +223,7 @@ const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
  * Firestore commit 후 rides 문서 재조회 → Secondary relay (Fault Isolated).
  */
 function fetchRideDocForDualWrite(db, rideId, attempt) {
-  return import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js').then(
+  return import('/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js').then(
     function (fs) {
       return fs.getDoc(fs.doc(db, 'rides', String(rideId).trim()));
     }
@@ -272,7 +272,7 @@ export function scheduleRidingGroupDualWriteFromFirestore(db, groupId, actorUid,
   opts = opts || {};
   if (!db || !groupId) return;
   Promise.allSettled([
-    import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js').then(function (fs) {
+    import('/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js').then(function (fs) {
       return fs.getDoc(fs.doc(db, RIDING_GROUP_COLLECTION, String(groupId).trim()));
     }),
   ])

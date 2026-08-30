@@ -322,10 +322,10 @@ export async function refreshDualRunFromRemoteConfig(force = false) {
 
   try {
     const appMod = await import(
-      'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'
+      '/assets/js/vendor/firebasejs/10.14.1/firebase-app.js'
     );
     const rcMod = await import(
-      'https://www.gstatic.com/firebasejs/10.14.1/firebase-remote-config.js'
+      '/assets/js/vendor/firebasejs/10.14.1/firebase-remote-config.js'
     );
     const getApp = appMod.getApp;
     const getRemoteConfig = rcMod.getRemoteConfig;
@@ -811,10 +811,10 @@ export async function refreshIndoorWriteFromRemoteConfig(force = false) {
   }
   try {
     const appMod = await import(
-      'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'
+      '/assets/js/vendor/firebasejs/10.14.1/firebase-app.js'
     );
     const rcMod = await import(
-      'https://www.gstatic.com/firebasejs/10.14.1/firebase-remote-config.js'
+      '/assets/js/vendor/firebasejs/10.14.1/firebase-remote-config.js'
     );
     const getApp = appMod.getApp;
     const getRemoteConfig = rcMod.getRemoteConfig;

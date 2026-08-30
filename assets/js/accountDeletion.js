@@ -39,7 +39,7 @@
     } catch (e1) {}
     try {
       if (window.authV9) {
-        var signOutMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+        var signOutMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js');
         if (signOutMod && signOutMod.signOut) await signOutMod.signOut(window.authV9);
       }
     } catch (e2) {}

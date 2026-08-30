@@ -15,12 +15,12 @@ import {
   serverTimestamp,
   writeBatch,
   runTransaction
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+} from '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
 import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
+} from '/assets/js/vendor/firebasejs/10.14.1/firebase-storage.js';
 import {
   subscribeRidingGroupsRouted,
   subscribeRidingGroupDetailRouted,

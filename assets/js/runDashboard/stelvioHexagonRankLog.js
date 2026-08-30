@@ -7,8 +7,8 @@
 (function () {
   'use strict';
 
-  var FIRESTORE_MOD_URL = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-  var FIREBASE_APP_MOD_URL = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+  var FIRESTORE_MOD_URL = '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
+  var FIREBASE_APP_MOD_URL = '/assets/js/vendor/firebasejs/10.14.1/firebase-app.js';
 
   var COL = 'hexagon_rank_log';
   /** 랭킹·이웃: Cloud Function `scheduledPeak28dHexagonOnly`(03:20 KST)가 채움 */

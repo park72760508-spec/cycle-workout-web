@@ -191,7 +191,7 @@
     return avg;
   }
 
-  var FIRESTORE_MOD_CYCLE_FITNESS = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+  var FIRESTORE_MOD_CYCLE_FITNESS = '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
   var FITNESS_DEMOGRAPHIC_SAMPLE_RELAY =
     'https://us-central1-stelvio-ai.cloudfunctions.net/ingestFitnessDemographicSampleRelay';
   var firestoreModCycleFitnessPromise = null;

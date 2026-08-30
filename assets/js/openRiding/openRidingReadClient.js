@@ -13,7 +13,7 @@ import {
   where,
   orderBy,
   Timestamp,
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+} from '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
 
 const API_BASE = 'https://us-central1-stelvio-ai.cloudfunctions.net';
 const GROUPS_READ_ROUTING_URL = API_BASE + '/getGroupsReadRoutingPublic';

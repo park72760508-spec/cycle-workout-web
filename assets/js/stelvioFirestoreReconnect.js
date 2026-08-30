@@ -12,7 +12,7 @@
   function getFirestoreMod() {
     if (!fsModPromise) {
       fsModPromise = import(
-        'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js'
+        '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js'
       ).catch(function () {
         fsModPromise = null;
         return null;

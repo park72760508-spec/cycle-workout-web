@@ -1326,7 +1326,7 @@
     if (global._firebaseStorageModReady) {
       return global._firebaseStorageModReady;
     }
-    return import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js')
+    return import('/assets/js/vendor/firebasejs/10.14.1/firebase-storage.js')
       .then(function (m) {
         global.firebaseStorageModV9API = m;
         return m;
