@@ -33,11 +33,11 @@
   <script>try { window.__CONFIG_LOADED__ = !!(window.__FIREBASE_CONFIG__ && window.__FIREBASE_CONFIG__.apiKey && window.__FIREBASE_CONFIG__.apiKey !== 'YOUR_FIREBASE_API_KEY'); } catch (e) { window.__CONFIG_LOADED__ = false; }</script>
   <!-- Firebase·랭킹 캐시 등이 localStorage를 채우기 전 용량 정리 (QuotaExceededError 방지) -->
   <script src="assets/js/stelvioLocalStorageQuotaGuard.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+  <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="assets/js/firebaseConfig.js"></script>
   <script src="assets/js/stelvioFirestoreReconnect.js"></script>
   <!-- 랭킹보드 성능: DOM diff + Worker fetch (기능 동일, 렌더/파싱 분리) -->
@@ -109,9 +109,9 @@
            않았습니다" 하드 실패로 보고됨. 5초 타임아웃 + 최대 3회 재시도로 감싼다. */
         var _fbMods = await Promise.race([
           Promise.all([
-            import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'),
-            import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'),
-            import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
+            import('/assets/js/vendor/firebasejs/10.14.1/firebase-app.js'),
+            import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js'),
+            import('/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js')
           ]),
           new Promise(function (_, reject) {
             setTimeout(function () { reject(new Error('Firebase 모듈 import 타임아웃')); }, 5000);
@@ -215,7 +215,7 @@
         (function stelvioLoadFirebaseExtrasDeferred() {
           (async function () {
             try {
-              var storageModMain = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js');
+              var storageModMain = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-storage.js');
               if (storageModMain && typeof storageModMain.getStorage === 'function') {
                 window.firebaseStorageV9 = storageModMain.getStorage(appV9);
                 window._firebaseStorageFns = {
@@ -237,7 +237,7 @@
               else console.warn('[Firebase v9] Storage 로드 실패:', se && se.message ? se.message : se);
             }
             try {
-              var funcMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js');
+              var funcMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-functions.js');
               if (funcMod && funcMod.getFunctions && funcMod.httpsCallable) {
                 window.functionsV9 = funcMod.getFunctions(appV9);
                 try {
@@ -277,8 +277,8 @@
       var el = document.querySelector('.auth-app-download-updated');
       if (!el) return;
       try {
-        var firebaseAppMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
-        var storageMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js');
+        var firebaseAppMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-app.js');
+        var storageMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-storage.js');
         var getApp = firebaseAppMod && firebaseAppMod.getApp;
         var getStorageFn = storageMod && storageMod.getStorage;
         var refFn = storageMod && storageMod.ref;
@@ -662,7 +662,7 @@
       if (!em) return [];
       try {
         if (window.authV9) {
-          var authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+          var authMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js');
           if (authMod && authMod.fetchSignInMethodsForEmail) {
             return await authMod.fetchSignInMethodsForEmail(window.authV9, em);
           }
@@ -11938,7 +11938,7 @@
       }
       function attach() {
         if (!window.firestoreV9) return;
-        import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
+        import('/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js')
           .then(function (mod) {
             var coll = mod.collection;
             var qFn = mod.query;
@@ -26769,7 +26769,7 @@
      * orderBy 쿼리 실패 시(인덱스 미생성 등) limit만 사용 후 메모리 정렬 시도
      */
     async function fetchJournalLogsInline(db, uid, limitVal) {
-      var mod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      var mod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js');
       if (!mod || typeof mod.collection !== 'function') {
         throw new Error('Firestore 모듈 로드 실패. 잠시 후 다시 시도해주세요.');
       }
@@ -28764,7 +28764,7 @@
   <script>
     (function () {
       if (window._firebaseStorageModReady) return;
-      window._firebaseStorageModReady = import('https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js')
+      window._firebaseStorageModReady = import('/assets/js/vendor/firebasejs/10.14.1/firebase-storage.js')
         .then(function (m) {
           window.firebaseStorageModV9API = m;
           return m;
@@ -30444,7 +30444,7 @@
       /* 인증 화면 진입 시 로그인 API 프리패치 — Android에서 첫 탭 지연 완화 */
       try {
         if (window.authV9 && typeof window.signInWithEmailAndPasswordV9 !== 'function') {
-          import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js').then(function (m) {
+          import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js').then(function (m) {
             if (m && m.signInWithEmailAndPassword && !window.signInWithEmailAndPasswordV9) {
               window.signInWithEmailAndPasswordV9 = m.signInWithEmailAndPassword;
             }
@@ -30565,7 +30565,7 @@
             }
             try {
               if (window.authV9 && typeof window.signInWithEmailAndPasswordV9 !== 'function') {
-                var _am = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+                var _am = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js');
                 if (_am && _am.signInWithEmailAndPassword) {
                   window.signInWithEmailAndPasswordV9 = _am.signInWithEmailAndPassword;
                 }
@@ -30636,7 +30636,7 @@
             try { window._stelvioStorageSet('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e) {}
             try { localStorage.setItem('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e2) {}
             try {
-              var _authModP = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+              var _authModP = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js');
               var _setPersistP = _authModP && _authModP.setPersistence;
               var _sessionP = _authModP && _authModP.browserSessionPersistence;
               if (typeof _setPersistP === 'function' && _sessionP) {
@@ -31937,9 +31937,9 @@
           try {
             var _fbConf = window.authV9 && window.authV9.app && window.authV9.app.options;
             if (_fbConf) {
-              var _fbMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
-              var _authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
-              var _fsMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+              var _fbMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-app.js');
+              var _authMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js');
+              var _fsMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js');
               var _secApp = _fbMod.initializeApp(_fbConf, 'stelvio-rejoin-' + Date.now());
               try {
                 var _secAuth = _authMod.getAuth(_secApp);
@@ -32205,9 +32205,9 @@
               try {
                 var _fb2Conf = window.authV9 && window.authV9.app && window.authV9.app.options;
                 if (_fb2Conf) {
-                  var _fb2AppMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
-                  var _fb2AuthMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
-                  var _fb2FsMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+                  var _fb2AppMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-app.js');
+                  var _fb2AuthMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js');
+                  var _fb2FsMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js');
                   var _fb2SecApp = _fb2AppMod.initializeApp(_fb2Conf, 'stelvio-rejoin-fb-' + Date.now());
                   try {
                     var _fb2SecAuth = _fb2AuthMod.getAuth(_fb2SecApp);
