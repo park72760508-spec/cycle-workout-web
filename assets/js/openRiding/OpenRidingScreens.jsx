@@ -4311,7 +4311,7 @@ function OpenRidingBottomGlassNav(props) {
             {groupsBadgeTotal > 0 ? (
               <span
                 className={'open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none ' + groupsBadgeColorClass}
-                style={{ minWidth: '17px', height: '17px', fontSize: groupsBadgeTotal > 9 ? 9 : 10, paddingLeft: groupsBadgeTotal > 9 ? 3 : 4, paddingRight: groupsBadgeTotal > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }}
+                style={{ minWidth: '17px', height: '17px', fontSize: groupsBadgeTotal > 9 ? 9 : 10, paddingLeft: groupsBadgeTotal > 9 ? 3 : 4, paddingRight: groupsBadgeTotal > 9 ? 3 : 4, top: 0, left: 0, transform: 'translate(-45%, -40%)' }}
                 aria-hidden="true"
               >
                 {groupsBadgeTotal > 99 ? '99+' : groupsBadgeTotal}
@@ -4320,7 +4320,17 @@ function OpenRidingBottomGlassNav(props) {
             {hostedInCrewCount > 0 ? (
               <span
                 className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
-                style={{ minWidth: '17px', height: '17px', fontSize: hostedInCrewCount > 9 ? 9 : 10, paddingLeft: hostedInCrewCount > 9 ? 3 : 4, paddingRight: hostedInCrewCount > 9 ? 3 : 4, top: 0, left: 0, transform: 'translate(-45%, -40%)' }}
+                style={{
+                  minWidth: '17px',
+                  height: '17px',
+                  fontSize: hostedInCrewCount > 9 ? 9 : 10,
+                  paddingLeft: hostedInCrewCount > 9 ? 3 : 4,
+                  paddingRight: hostedInCrewCount > 9 ? 3 : 4,
+                  top: 0,
+                  left: 0,
+                  transform: groupsBadgeTotal > 0 ? 'translate(-78%, -12%) scale(0.82)' : 'translate(-45%, -40%)',
+                  zIndex: groupsBadgeTotal > 0 ? 1 : undefined
+                }}
                 aria-hidden="true"
               >
                 {hostedInCrewCount > 99 ? '99+' : hostedInCrewCount}
@@ -4329,15 +4339,7 @@ function OpenRidingBottomGlassNav(props) {
             {settlementUnpaidCount > 0 ? (
               <span
                 className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-red-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
-                style={{
-                  width: '17px',
-                  height: '17px',
-                  fontSize: 10,
-                  top: 0,
-                  right: 0,
-                  transform: groupsBadgeTotal > 0 ? 'translate(78%, -12%) scale(0.82)' : 'translate(45%, -40%)',
-                  zIndex: groupsBadgeTotal > 0 ? 1 : undefined
-                }}
+                style={{ width: '17px', height: '17px', fontSize: 10, top: 0, right: 0, transform: 'translate(45%, -40%)' }}
                 aria-hidden="true"
               >
                 ₩
@@ -4373,27 +4375,33 @@ function OpenRidingBottomGlassNav(props) {
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
             {iconMoim()}
             {pendingInvitedRidesCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-emerald-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: pendingInvitedRidesCount > 9 ? 9 : 10, paddingLeft: pendingInvitedRidesCount > 9 ? 3 : 4, paddingRight: pendingInvitedRidesCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-emerald-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: pendingInvitedRidesCount > 9 ? 9 : 10, paddingLeft: pendingInvitedRidesCount > 9 ? 3 : 4, paddingRight: pendingInvitedRidesCount > 9 ? 3 : 4, top: 0, left: 0, transform: 'translate(-45%, -40%)' }} aria-hidden="true">
                 {pendingInvitedRidesCount > 99 ? '99+' : pendingInvitedRidesCount}
               </span>
             ) : null}
             {hostedRidesCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: hostedRidesCount > 9 ? 9 : 10, paddingLeft: hostedRidesCount > 9 ? 3 : 4, paddingRight: hostedRidesCount > 9 ? 3 : 4, top: 0, left: 0, transform: 'translate(-45%, -40%)' }} aria-hidden="true">
+              <span
+                className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
+                style={{
+                  minWidth: '17px',
+                  height: '17px',
+                  fontSize: hostedRidesCount > 9 ? 9 : 10,
+                  paddingLeft: hostedRidesCount > 9 ? 3 : 4,
+                  paddingRight: hostedRidesCount > 9 ? 3 : 4,
+                  top: 0,
+                  left: 0,
+                  transform: pendingInvitedRidesCount > 0 ? 'translate(-78%, -12%) scale(0.82)' : 'translate(-45%, -40%)',
+                  zIndex: pendingInvitedRidesCount > 0 ? 1 : undefined
+                }}
+                aria-hidden="true"
+              >
                 {hostedRidesCount > 99 ? '99+' : hostedRidesCount}
               </span>
             ) : null}
             {settlementUnpaidCount > 0 ? (
               <span
                 className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-red-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
-                style={{
-                  width: '17px',
-                  height: '17px',
-                  fontSize: 10,
-                  top: 0,
-                  right: 0,
-                  transform: pendingInvitedRidesCount > 0 ? 'translate(78%, -12%) scale(0.82)' : 'translate(45%, -40%)',
-                  zIndex: pendingInvitedRidesCount > 0 ? 1 : undefined
-                }}
+                style={{ width: '17px', height: '17px', fontSize: 10, top: 0, right: 0, transform: 'translate(45%, -40%)' }}
                 aria-hidden="true"
               >
                 ₩
