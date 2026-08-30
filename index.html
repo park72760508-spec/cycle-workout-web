@@ -15,6 +15,9 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
   <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
   <!-- 👆 여기까지 추가 -->
+  <!-- Firebase compat SDK(head 상단 blocking script)용 TLS 핸드셰이크 조기 시작 -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+
   <!-- 오픈라이딩 지도 등에만 필요: 초기 렌더 블록 완화 (로드 후 media 전환) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="" media="print" onload="this.media='all'" />
   <!-- Cropper.js 원형 크롭용 (npm: npm install cropperjs) -->
@@ -99,9 +102,14 @@
       var firestoreMod = null;
       var collectionFn, docFn, setDocFn, getDocFn;
       try {
-        var appMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
-        var authMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
-        firestoreMod = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+        var _fbMods = await Promise.all([
+          import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'),
+          import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'),
+          import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
+        ]);
+        var appMod = _fbMods[0];
+        var authMod = _fbMods[1];
+        firestoreMod = _fbMods[2];
         var initApp = appMod && appMod.initializeApp;
         var getAuthFn = authMod && authMod.getAuth;
         var setPersistenceFn = authMod && authMod.setPersistence;
@@ -593,7 +601,7 @@
       await setDocFn(userDocRef, userData);
     };
 
-    window.getUserByUid = async function (uid) {
+    async function _getUserByUidImpl(uid) {
       if (!firestoreV9 || !collectionFn || !docFn || !getDocFn) throw new Error('Firestore V9가 초기화되지 않았습니다.');
       var usersRef = collectionFn(firestoreV9, 'users');
       var userDocRef = docFn(usersRef, uid);
@@ -605,6 +613,32 @@
         return out;
       }
       return null;
+    }
+
+    /* 로그인 시점에 handlePhoneAuth/onAuthStateChanged/heavySyncAfterAuth 등 여러 곳에서
+       같은 uid를 거의 동시에 조회해 users/{uid}가 중복으로 읽히던 것을 in-flight 재사용 +
+       짧은 TTL 캐시로 합친다 (apiGetUsers의 __apiGetUsersInFlight 패턴과 동일). */
+    var __getUserByUidInFlight = Object.create(null);
+    var __getUserByUidCache = Object.create(null);
+    var GET_USER_BY_UID_CACHE_TTL_MS = 3000;
+    window.getUserByUid = async function (uid) {
+      var cached = __getUserByUidCache[uid];
+      if (cached && Date.now() - cached.at < GET_USER_BY_UID_CACHE_TTL_MS) {
+        return cached.data;
+      }
+      if (__getUserByUidInFlight[uid]) {
+        return __getUserByUidInFlight[uid];
+      }
+      var p = _getUserByUidImpl(uid).then(function (data) {
+        /* null(문서 없음)은 캐시하지 않음 — 가입 직후 전파 지연 등으로 인한 재시도 로직이
+           캐시된 null을 그대로 돌려받아 재시도가 무력화되는 것을 방지 */
+        if (data) __getUserByUidCache[uid] = { data: data, at: Date.now() };
+        return data;
+      }).finally(function () {
+        delete __getUserByUidInFlight[uid];
+      });
+      __getUserByUidInFlight[uid] = p;
+      return p;
     };
 
     /** Firebase Auth — 전화번호(@stelvio.ai) 계정 등록 여부 (비밀번호 검증 전) */
@@ -4242,7 +4276,7 @@
       <div class="auth-form-container">
         <div class="auth-form-card">
           <div class="auth-title-image">
-            <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" width="512" height="512" decoding="async" />
+            <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" width="512" height="512" decoding="async" loading="lazy" />
           </div>
           <div class="auth-form-header">
             <h3>사용자 등록</h3>
@@ -5335,7 +5369,7 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <img class="my-career-btn-img" src="assets/img/RANKING1.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                    <img class="my-career-btn-img" src="assets/img/RANKING1.png" alt="" width="256" height="256" decoding="async" loading="lazy" />
                   </picture>
                 </div>
               </button>
@@ -5343,7 +5377,7 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <img class="my-career-btn-img" src="assets/img/DASHBOARD.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                    <img class="my-career-btn-img" src="assets/img/DASHBOARD.png" alt="" width="256" height="256" decoding="async" loading="lazy" />
                   </picture>
                 </div>
               </button>
@@ -5351,7 +5385,7 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <img class="my-career-btn-img" src="assets/img/LOGS.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                    <img class="my-career-btn-img" src="assets/img/LOGS.png" alt="" width="256" height="256" decoding="async" loading="lazy" />
                   </picture>
                 </div>
               </button>
@@ -5359,7 +5393,7 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <img class="my-career-btn-img" src="assets/img/INFO.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                    <img class="my-career-btn-img" src="assets/img/INFO.png" alt="" width="256" height="256" decoding="async" loading="lazy" />
                   </picture>
                 </div>
               </button>
@@ -5367,7 +5401,7 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <img class="my-career-btn-img" src="assets/img/WORKOUT.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                    <img class="my-career-btn-img" src="assets/img/WORKOUT.png" alt="" width="256" height="256" decoding="async" loading="lazy" />
                   </picture>
                 </div>
               </button>
@@ -5375,7 +5409,7 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <img class="my-career-btn-img" src="assets/img/SCHEDULE.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                    <img class="my-career-btn-img" src="assets/img/SCHEDULE.png" alt="" width="256" height="256" decoding="async" loading="lazy" />
                   </picture>
                 </div>
               </button>
@@ -5383,7 +5417,7 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <img class="my-career-btn-img" src="assets/img/SUBSCRIBE.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                    <img class="my-career-btn-img" src="assets/img/SUBSCRIBE.png" alt="" width="256" height="256" decoding="async" loading="lazy" />
                   </picture>
                 </div>
               </button>
@@ -5391,7 +5425,7 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <img class="my-career-btn-img" src="assets/img/SETTINGS2.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                    <img class="my-career-btn-img" src="assets/img/SETTINGS2.png" alt="" width="256" height="256" decoding="async" loading="lazy" />
                   </picture>
                 </div>
               </button>
@@ -8601,7 +8635,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
-  <script src="assets/js/userManager.js?v=20260829profileDashboardIcon1"></script>
+  <script src="assets/js/userManager.js?v=20260830bootPerf1"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
   <!-- 워크아웃 화면 상태 관리: 카테고리(상태A) / 워크아웃 리스트(상태B) 전환 -->
@@ -28499,22 +28533,22 @@
   <script src="assets/js/runJournal/RunJournalDetailBottomSheet.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runJournal/RunTrainingJournalScreen.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <!-- 러닝 랭킹보드 -->
-  <script src="assets/js/openRiding/ridingGroupCategory.js"></script>
-  <script src="assets/js/runDistanceZoneColors.js"></script>
-  <script src="assets/js/runningRanking/runningRankingConfig.js"></script>
-  <script src="assets/js/runningRanking/runningRankingFormat.js"></script>
-  <script src="assets/js/runningRanking/runningRankingApi.js"></script>
-  <script src="assets/js/runningRanking/runningRankingData.js"></script>
-  <script src="assets/js/runningRanking/runningRankingMovement.js?v=run-rank-movement-weeklydist-absolute-20260706f"></script>
-  <script src="assets/js/runningRanking/runningRankingRankChange.js?v=run-rank-change-20260706e"></script>
-  <script src="assets/js/runningRanking/runningRankingAvatarOverlay.js?v=viewer-identity-fix-20260818v1"></script>
-  <script src="assets/js/runningRanking/runningRankingSocial.js"></script>
-  <script src="assets/js/runningRanking/runningRankingCrew.js"></script>
-  <script src="assets/js/runningRanking/runningRankingCrewTab.js?v=20260808globalSegRank1"></script>
-  <script src="assets/js/runningRanking/runningRankingRoutes.js"></script>
-  <script src="assets/js/runningRanking/runWeeklyTop10.js?v=run-weekly-top10-rankmv-consistency-20260706e"></script>
-  <script src="assets/js/runningRanking/runningRankingListView.js"></script>
-  <script src="assets/js/runningRanking/runningRankingSearch.js"></script>
+  <script defer src="assets/js/openRiding/ridingGroupCategory.js"></script>
+  <script defer src="assets/js/runDistanceZoneColors.js"></script>
+  <script defer src="assets/js/runningRanking/runningRankingConfig.js"></script>
+  <script defer src="assets/js/runningRanking/runningRankingFormat.js"></script>
+  <script defer src="assets/js/runningRanking/runningRankingApi.js"></script>
+  <script defer src="assets/js/runningRanking/runningRankingData.js"></script>
+  <script defer src="assets/js/runningRanking/runningRankingMovement.js?v=run-rank-movement-weeklydist-absolute-20260706f"></script>
+  <script defer src="assets/js/runningRanking/runningRankingRankChange.js?v=run-rank-change-20260706e"></script>
+  <script defer src="assets/js/runningRanking/runningRankingAvatarOverlay.js?v=viewer-identity-fix-20260818v1"></script>
+  <script defer src="assets/js/runningRanking/runningRankingSocial.js"></script>
+  <script defer src="assets/js/runningRanking/runningRankingCrew.js"></script>
+  <script defer src="assets/js/runningRanking/runningRankingCrewTab.js?v=20260808globalSegRank1"></script>
+  <script defer src="assets/js/runningRanking/runningRankingRoutes.js"></script>
+  <script defer src="assets/js/runningRanking/runWeeklyTop10.js?v=run-weekly-top10-rankmv-consistency-20260706e"></script>
+  <script defer src="assets/js/runningRanking/runningRankingListView.js"></script>
+  <script defer src="assets/js/runningRanking/runningRankingSearch.js"></script>
   <script src="assets/js/runningRanking/components/RunningRankingSkeleton.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runningRanking/components/RunningRankingRow.jsx?v=run-ranking-heat-opt-20260803" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runningRanking/components/RunningRankingGroupMemberRow.jsx?v=run-ranking-heat-opt-20260803" type="text/babel" data-presets="stelvio-react-classic"></script>
@@ -31065,8 +31099,7 @@
           }
         };
         
-        // 약간의 지연 후 화면 전환 (UI·세션 안정화)
-        setTimeout(switchToBasecamp, 450);
+        switchToBasecamp();
         } else {
           console.warn('[Login] Firestore 프로필 없음 — 베이스캠프 이동 생략');
           if (typeof window.hideAuthTransitionOverlay === 'function') {
@@ -33351,7 +33384,7 @@
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js"></script>
-  <script src="assets/js/app.js"></script>
+  <script src="assets/js/app.js?v=20260830bootPerf1"></script>
   <script src="assets/js/stelvioAnalytics.js"></script>
 
   
@@ -43216,48 +43249,48 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <p class="ai-loading-message" id="aiScheduleLoadingMessage">🚴 사용자님의 신체 데이터와 목표를 분석하고 있습니다...</p>
   </div>
   <!-- 대시보드 AI: 주간 실적·컨디션 점수 코멘트 일치 (통합 대시보드에서 사용) -->
-  <script src="assets/js/runDashboard/runTrainingZoneGuide.js"></script>
-  <script src="assets/js/geminiCoachPrompt.js"></script>
-  <script src="assets/js/dashboardCoach.js"></script>
-  <script src="assets/js/runDashboard/runDashboardCoach.js"></script>
-  <script src="assets/js/runDashboard/runProfileInsightAnalysis.js"></script>
-  <script src="assets/js/dashboard/dashboardAICache.js"></script>
+  <script defer src="assets/js/runDashboard/runTrainingZoneGuide.js"></script>
+  <script defer src="assets/js/geminiCoachPrompt.js"></script>
+  <script defer src="assets/js/dashboardCoach.js"></script>
+  <script defer src="assets/js/runDashboard/runDashboardCoach.js"></script>
+  <script defer src="assets/js/runDashboard/runProfileInsightAnalysis.js"></script>
+  <script defer src="assets/js/dashboard/dashboardAICache.js"></script>
   <!-- Dashboard 리팩터링: 반드시 마지막에 로드하여 window.PerformanceDashboard 덮어쓰기 -->
   <!-- defer: React(react.production.min.js)가 defer이므로 동기 로드 시 훅 초기화가 먼저 돌아 경고 발생 -->
   <!-- CYCLE PMC (CTL/ATL/TSB) — RUN pmcCalculator와 분리 -->
-  <script src="assets/js/dashboard/cyclePmcCalculator.js"></script>
-  <script src="assets/js/dashboard/cycleFitnessTrend.js"></script>
+  <script defer src="assets/js/dashboard/cyclePmcCalculator.js"></script>
+  <script defer src="assets/js/dashboard/cycleFitnessTrend.js"></script>
   <script defer src="assets/js/dashboard/useDashboardData.js"></script>
   <script src="assets/js/dashboard/components/AICoachHeroCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/dashboard/components/DailyQuickStats.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/stelvio/stelvioGcDisplayWindow.js"></script>
-  <script src="assets/js/dashboard/stelvioHeptagonRankLog.js"></script>
+  <script defer src="assets/js/stelvio/stelvioGcDisplayWindow.js"></script>
+  <script defer src="assets/js/dashboard/stelvioHeptagonRankLog.js"></script>
   <script src="assets/js/dashboard/components/StelvioOctagonRanksCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/dashboard/components/DashboardDetailTabs.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/dashboard/PerformanceDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <!-- RUN Dashboard (러닝 분석) -->
-  <script src="assets/js/runDashboard/pmcCalculator.js"></script>
-  <script src="assets/js/runDashboard/runFitnessTrend.js"></script>
-  <script src="assets/js/runDashboard/runDashboardAICache.js"></script>
-  <script src="assets/js/runDashboard/runVo2maxCalculator.js"></script>
-  <script src="assets/js/runDashboard/runDashboardPace.js"></script>
-  <script src="assets/js/runDashboard/analyzeStelvioHexagon.js"></script>
+  <script defer src="assets/js/runDashboard/pmcCalculator.js"></script>
+  <script defer src="assets/js/runDashboard/runFitnessTrend.js"></script>
+  <script defer src="assets/js/runDashboard/runDashboardAICache.js"></script>
+  <script defer src="assets/js/runDashboard/runVo2maxCalculator.js"></script>
+  <script defer src="assets/js/runDashboard/runDashboardPace.js"></script>
+  <script defer src="assets/js/runDashboard/analyzeStelvioHexagon.js"></script>
   <script defer src="assets/js/runDashboard/useRunDashboardData.js"></script>
   <script src="assets/js/runDashboard/components/RunAICoachHeroCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runDashboard/components/RunPaceGradeIndicator.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runDashboard/components/RunDailyQuickStats.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runDashboard/components/RunHexagonTendencyCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/runDashboard/stelvioHexagonRankLog.js"></script>
+  <script defer src="assets/js/runDashboard/stelvioHexagonRankLog.js"></script>
   <script src="assets/js/runDashboard/components/StelvioHexagonRanksCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runDashboard/RunDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/stelvio/StelvioRankingDistributionChart.jsx?v=run-ranking-heat-opt-20260803" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/competition/competitionApi.js"></script>
-  <script src="assets/js/competition/competitionBottomSheet.js?v=applicants-popup-20260906"></script>
-  <script src="assets/js/competition/competitionAdminForm.js"></script>
-  <script src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
+  <script defer src="assets/js/competition/competitionApi.js"></script>
+  <script defer src="assets/js/competition/competitionBottomSheet.js?v=applicants-popup-20260906"></script>
+  <script defer src="assets/js/competition/competitionAdminForm.js"></script>
+  <script defer src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
-  <script src="assets/js/competition/competitionScreen.js?v=applicants-popup-20260906"></script>
-  <script src="assets/js/market/marketScreen.js?v=20260830marketCardTitleTabLabel1"></script>
+  <script defer src="assets/js/competition/competitionScreen.js?v=applicants-popup-20260906"></script>
+  <script defer src="assets/js/market/marketScreen.js?v=20260830marketCardTitleTabLabel1"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

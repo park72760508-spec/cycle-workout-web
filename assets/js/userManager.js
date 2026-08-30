@@ -2169,13 +2169,6 @@ function initAuthStateListener() {
           }
         } catch (cacheErr) {}
 
-        if (isAuthV9 && typeof window.authV9.authStateReady === 'function') {
-          await Promise.race([
-            window.authV9.authStateReady(),
-            new Promise(function (r) { setTimeout(r, 1200); })
-          ]).catch(function () {});
-        }
-
         // authV9인 경우 firestoreV9 사용, 그 외에는 compat firestore 사용
         if (isAuthV9 && typeof window.getUserByUid === 'function') {
           var freshUserData = await window.getUserByUid(firebaseUser.uid);
