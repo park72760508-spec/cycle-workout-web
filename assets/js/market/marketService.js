@@ -326,7 +326,7 @@ export async function listMarketItems(opts) {
     let q = supabase
       .from('market_items')
       .select('id, user_id, title, price, purchase_price, condition, images, status, view_count, created_at')
-      .neq('status', 'HIDDEN')
+      .eq('hidden', false)
       .order('bumped_at', { ascending: false })
       .range(offset, offset + limit - 1);
     if (opts.category) q = q.eq('category', opts.category);
@@ -393,6 +393,19 @@ export async function deleteMarketItem(id) {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
     const { error } = await supabase.from('market_items').delete().eq('id', id);
+    if (error) throw error;
+  });
+}
+
+/** 관리자 본인 상품(구매확정 완료) 목록·검색 노출 토글 — RLS가 hidden=true 상품을
+ * 소유자·관리자 외에는 조회조차 못 하게 강제하므로, 여기서는 컬럼만 갱신하면 된다. */
+export async function setMarketItemHidden(id, hidden) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase
+      .from('market_items')
+      .update({ hidden: !!hidden, updated_at: new Date().toISOString() })
+      .eq('id', id);
     if (error) throw error;
   });
 }
@@ -907,6 +920,7 @@ if (typeof window !== 'undefined') {
     createMarketItem,
     updateMarketItem,
     deleteMarketItem,
+    setMarketItemHidden,
     bumpMarketItem,
     toggleMarketFavorite,
     getMyFavoriteItemIds,

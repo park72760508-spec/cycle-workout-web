@@ -2172,10 +2172,21 @@
     var dealMethodText = (item.deal_method || []).join(', ') + (item.direct_deal_location ? (' (' + escapeHtml(item.direct_deal_location) + ')') : '');
 
     var actionHtml;
-    if (isMine && item.status === 'SOLD' && !marketIsAdminUser()) {
+    if (isMine && item.status === 'SOLD' && marketIsAdminUser()) {
+      // 관리자 본인이 판매한 구매확정(SOLD) 상품 — 일반 판매자와 달리 삭제(실거래 기록이라
+      // DB 외래키로도 보호됨) 대신 끌어올리기·수정·숨기기(목록/검색 노출 토글)를 계속 쓸 수
+      // 있게 한다. 숨기기는 status를 건드리지 않고 별도 hidden 플래그만 토글(뱃지 등 기존
+      // SOLD 표시는 그대로 유지) — 서버(RLS)가 숨김 상태를 강제하므로 일반 사용자는 목록·검색
+      // 어디서도 이 상품을 볼 수 없다.
+      actionHtml =
+        '<div class="market-detail-actions">' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketDetailBumpBtn">끌어올리기</button>' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketDetailEditBtn">수정</button>' +
+          '<button type="button" class="market-btn market-btn--outline" id="marketDetailHideToggleBtn">' + (item.hidden ? '보이기' : '숨기기') + '</button>' +
+        '</div>';
+    } else if (isMine && item.status === 'SOLD') {
       // 판매 완료된 상품은 더 이상 끌어올리기·수정·삭제·거래 액션이 의미가 없으므로
       // 하단 버튼 블록 자체를 표시하지 않는다(그 외 상태에서는 버튼 블록 유지).
-      // 단, 관리자는 판매완료 후에도 점검·수정 목적으로 버튼 블록을 계속 사용할 수 있어야 한다.
       actionHtml = '';
     } else if (isMine) {
       // 예약중(거래 진행 중)인 상품은 구매자와의 거래가 완결되기 전까지 삭제할 수 없다.
@@ -2270,7 +2281,7 @@
       var supportsDirectDeal = item.deal_method && item.deal_method.indexOf('직거래') !== -1;
       actionHtml =
         '<div class="market-detail-actions">' +
-          '<button type="button" class="market-btn market-btn--primary" id="marketDetailBuyBtn">안전결제로 구매하기</button>' +
+          '<button type="button" class="market-btn market-btn--primary" id="marketDetailBuyBtn">택배거래(안전결제) 요청</button>' +
           (supportsDirectDeal
             ? '<button type="button" class="market-btn market-btn--outline" id="marketDetailDirectDealBtn">직거래 요청</button>'
             : '') +
@@ -2565,6 +2576,8 @@
     if (editBtn) editBtn.onclick = function () { window.navigateToMarketFormForEdit(item); };
     var deleteBtn = document.getElementById('marketDetailDeleteBtn');
     if (deleteBtn) deleteBtn.onclick = function () { handleMarketDelete(item.id); };
+    var hideToggleBtn = document.getElementById('marketDetailHideToggleBtn');
+    if (hideToggleBtn) hideToggleBtn.onclick = function () { handleMarketHideToggle(item.id, !item.hidden); };
     var sellerCompleteBtn = document.getElementById('marketDetailSellerCompleteBtn');
     if (sellerCompleteBtn) {
       sellerCompleteBtn.onclick = function () {
@@ -2761,7 +2774,7 @@
       );
     } catch (err) {
       toast('구매 요청 실패: ' + (err && err.message ? err.message : err));
-      if (btn) { btn.disabled = false; btn.textContent = '안전결제로 구매하기'; }
+      if (btn) { btn.disabled = false; btn.textContent = '택배거래(안전결제) 요청'; }
     }
   }
 
@@ -2931,6 +2944,25 @@
       window.navigateToMarketLand();
     } catch (err) {
       toast('삭제 실패: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  function handleMarketHideToggle(itemId, nextHidden) {
+    showMarketConfirmPopup(
+      nextHidden ? '이 상품을 목록·검색에서 숨길까요?' : '이 상품을 다시 목록·검색에 표시할까요?',
+      function () { doMarketHideToggle(itemId, nextHidden); },
+      { okText: nextHidden ? '숨기기' : '보이기' }
+    );
+  }
+
+  async function doMarketHideToggle(itemId, nextHidden) {
+    try {
+      var s = await loadMarketService();
+      await s.setMarketItemHidden(itemId, nextHidden);
+      toast(nextHidden ? '숨김 처리되었습니다.' : '다시 표시됩니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast((nextHidden ? '숨기기' : '보이기') + ' 실패: ' + (err && err.message ? err.message : err));
     }
   }
 
