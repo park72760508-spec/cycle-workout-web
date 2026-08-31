@@ -2864,6 +2864,10 @@
     try {
       var s = await loadMarketService();
       await s.requestMarketDirectDeal(item.id);
+      // 알림톡 발송은 부가 기능 — 실패해도 이미 성공한 직거래 요청 자체는 그대로 유지한다.
+      s.notifyMarketDirectDealRequest(item.id).catch(function (e) {
+        console.warn('[market] 직거래 요청 알림톡 발송 실패:', e && e.message ? e.message : e);
+      });
       toast('직거래를 요청했습니다. 판매자 연락처를 확인해 거래를 진행해 주세요.');
       openMarketItemDetail(item.id);
     } catch (err) {

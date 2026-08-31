@@ -1,12 +1,12 @@
 /**
- * 중고랜드 — 가격 조정 요구(네고) 카카오 알림톡(알리고) 발송.
+ * 중고랜드 — "거래 진행 상황 안내" 카카오 알림톡(알리고) 발송. 판매자 수신.
  * 카카오 채널: @stelvio_ai · 승인 템플릿 코드: UK_6794 · 템플릿명: STELVIO 중고랜드 거래 진행 상황 안내
  * 대체문자: 미사용(failover N) — competitionApplyAlimtalk.js와 동일 규칙을 참고해 구현.
  *
  * 이 템플릿은 "거래 진행 상황 안내"라는 범용 제목으로 승인되어 #{진행내용} 한 슬롯에 여러 단계
- * 안내문을 갈아끼우는 구조다. 현재는 "가격 조정 요구" 한 가지 진행내용만 구현한다(다른 단계 —
- * 수락/거절/구매확정 등 — 를 이 템플릿으로 보내려면 buildMarketNegoProgressLine과 유사한 새
- * 라인 빌더를 추가하면 된다).
+ * 안내문을 갈아끼우는 구조다. 현재 구현된 진행내용: 가격 조정 요구(buildMarketNegoProgressLine),
+ * 직거래 요청 접수(MARKET_DIRECT_DEAL_PROGRESS_LINE). 새 단계(수락/거절/구매확정 등)를 추가하려면
+ * 그 단계 전용 progressContent만 만들어 buildMarketAlimtalkMessage에 넘기면 된다.
  *
  * tpl_code 기본값 UK_6794 — 다른 값이 필요하면 ALIGO_MARKET_NEGO_TPL_CODE 또는
  * appConfig/aligo.market_nego_tpl_code 로 덮어쓴다.
@@ -72,19 +72,26 @@ function buildMarketNegoProgressLine(originalPrice, requestedPrice) {
   return `가격 조정 요구 : ${formatMarketAmountKo(originalPrice)}원 >> ${formatMarketAmountKo(requestedPrice)}원`;
 }
 
+/** #{진행내용} — 직거래 요청 접수 단계 전용 고정 문구 */
+const MARKET_DIRECT_DEAL_PROGRESS_LINE = "직거래 요청이 접수 되었습니다.";
+
 /**
- * 승인 템플릿 본문(message_1) 조립 — #{변수} 값만 실제 데이터로 치환, 문구 자체는 그대로 유지.
+ * 승인 템플릿(UK_6794) 본문(message_1) 조립 — #{변수} 값만 실제 데이터로 치환, 문구 자체는 그대로
+ * 유지. #{진행내용}(progressContent)은 이벤트 종류별로 호출측이 만들어 넘긴다 — 가격 조정 요구는
+ * buildMarketNegoProgressLine, 직거래 요청 접수는 MARKET_DIRECT_DEAL_PROGRESS_LINE 등. 이 템플릿은
+ * "거래 진행 상황 안내"라는 범용 제목으로 승인되어 있어, 새 단계(수락/거절/구매확정 등)를 추가하려면
+ * 그 단계 전용 progressContent만 만들어 이 함수에 그대로 넘기면 된다.
  * @param {{
  *   sellerName: string, itemName: string, category: string, subCategory: string,
- *   dealMethod: string[], negotiable: boolean, originalPrice: number|string, requestedPrice: number|string
+ *   dealMethod: string[], negotiable: boolean, progressContent: string
  * }} p
  */
-function buildMarketNegoAlimtalkMessage(p) {
+function buildMarketAlimtalkMessage(p) {
   const sellerName = String(p.sellerName || "회원").trim();
   const itemName = String(p.itemName || "").trim();
   const categoryText = formatMarketCategoryKo(p.category, p.subCategory);
   const dealTypeText = formatMarketDealTypeKo(p.dealMethod, p.negotiable);
-  const progressLine = buildMarketNegoProgressLine(p.originalPrice, p.requestedPrice);
+  const progressContent = String(p.progressContent || "").trim();
 
   return (
     `${MARKET_NEGO_ALIM_HEADER_LINE}\n\n` +
@@ -95,7 +102,7 @@ function buildMarketNegoAlimtalkMessage(p) {
     `- 카테고리: ${categoryText}\n` +
     `- 거래 방식: ${dealTypeText}\n\n` +
     `■ 단계별 안내 내용\n` +
-    `${progressLine}\n\n` +
+    `${progressContent}\n\n` +
     `자세한 내역 및 상세 확인은 하단 버튼을 통해  확인하실 수 있습니다.\n\n` +
     `감사합니다.`
   );
@@ -161,10 +168,11 @@ module.exports = {
   MARKET_NEGO_ALIM_SUBJECT_KO,
   MARKET_NEGO_ALIM_HEADER_LINE,
   DEFAULT_MARKET_NEGO_TPL_CODE,
+  MARKET_DIRECT_DEAL_PROGRESS_LINE,
   formatMarketAmountKo,
   formatMarketCategoryKo,
   formatMarketDealTypeKo,
   buildMarketNegoProgressLine,
-  buildMarketNegoAlimtalkMessage,
+  buildMarketAlimtalkMessage,
   loadMarketAlimtalkConfig,
 };

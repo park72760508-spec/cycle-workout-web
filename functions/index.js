@@ -18150,22 +18150,32 @@ function resolveMarketBuyerUuid(uid) {
 }
 
 /**
- * 중고랜드 가격 조정 요구(네고) — 판매자 알림톡(UK_6794) 발송.
- * 구매자가 submitMarketNegoRequest(Supabase RPC) 성공 직후 클라이언트에서 fire-and-forget으로
- * 호출한다(nego 자체는 이미 성공했으므로, 여기서 실패해도 nego 성공 응답을 막지 않는다 — 클라이언트가
- * .catch()로 무시). 알리고 kakaoapi는 IP 화이트리스트가 있어 이 함수 자체에 VPC egress를 붙여
- * competitionApplyAlimtalkHttpsRelay 같은 별도 릴레이 없이 바로 발송한다(단일 목적 함수라 relay용
- * 공유 시크릿이 불필요 — Firebase ID 토큰으로 이미 사용자 인증됨).
+ * 중고랜드 "거래 진행 상황 안내" 판매자 알림톡(UK_6794) 공용 옵션 — 알리고 kakaoapi는 IP
+ * 화이트리스트가 있어 이 함수들 자체에 VPC egress를 붙여 competitionApplyAlimtalkHttpsRelay 같은
+ * 별도 릴레이 없이 바로 발송한다(단일 목적 함수라 relay용 공유 시크릿이 불필요 — Firebase ID
+ * 토큰으로 이미 사용자 인증됨).
  */
-const notifyMarketNegoRequestOptions = Object.assign(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30, memory: "256MiB" }),
-  aligoKakaoNatEgress.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS
-);
-notifyMarketNegoRequestOptions.secrets = notifyMarketNegoRequestOptions.secrets.slice();
-[aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret].forEach((s) => {
-  if (!notifyMarketNegoRequestOptions.secrets.includes(s)) notifyMarketNegoRequestOptions.secrets.push(s);
-});
-exports.notifyMarketNegoRequest = onRequest(notifyMarketNegoRequestOptions, async (req, res) => {
+function buildMarketAlimtalkFunctionOptions() {
+  const o = Object.assign(
+    supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30, memory: "256MiB" }),
+    aligoKakaoNatEgress.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS
+  );
+  o.secrets = o.secrets.slice();
+  [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret].forEach((s) => {
+    if (!o.secrets.includes(s)) o.secrets.push(s);
+  });
+  return o;
+}
+
+/**
+ * 중고랜드 이벤트(가격 조정 요구/직거래 요청 등) 판매자 알림톡 공용 핸들러 — 구매자가 해당 요청을
+ * 성공시킨 직후 클라이언트에서 fire-and-forget으로 호출한다(원 요청은 이미 성공했으므로, 여기서
+ * 실패해도 그 응답을 막지 않는다 — 클라이언트가 .catch()로 무시).
+ * @param {(item: object, body: object) => string} computeProgressContent #{진행내용} 조립 —
+ *   유효성 문제가 있으면 status를 던지는 Error를 throw한다(예: requestedPrice 누락 400).
+ * @param {string} logTag
+ */
+async function handleMarketProgressAlimtalkNotify(req, res, computeProgressContent, logTag) {
   setCorsHeaders(req, res);
   if (req.method === "OPTIONS") {
     res.status(204).send("");
@@ -18180,9 +18190,8 @@ exports.notifyMarketNegoRequest = onRequest(notifyMarketNegoRequestOptions, asyn
     const uid = decoded.uid;
     const body = typeof req.body === "object" && req.body !== null ? req.body : {};
     const itemId = String(body.itemId || "").trim();
-    const requestedPrice = Number(body.requestedPrice);
-    if (!itemId || !requestedPrice || requestedPrice <= 0) {
-      res.status(400).json({ success: false, error: "itemId, requestedPrice가 필요합니다." });
+    if (!itemId) {
+      res.status(400).json({ success: false, error: "itemId가 필요합니다." });
       return;
     }
 
@@ -18207,6 +18216,8 @@ exports.notifyMarketNegoRequest = onRequest(notifyMarketNegoRequestOptions, asyn
       return;
     }
 
+    const progressContent = computeProgressContent(item, body);
+
     const { data: seller } = await supabase
       .from("users")
       .select("name, display_name, phone, contact")
@@ -18219,15 +18230,14 @@ exports.notifyMarketNegoRequest = onRequest(notifyMarketNegoRequestOptions, asyn
     }
     const sellerName = String((seller && (seller.name || seller.display_name)) || "회원").trim() || "회원";
 
-    const message = marketNegoAlimtalk.buildMarketNegoAlimtalkMessage({
+    const message = marketNegoAlimtalk.buildMarketAlimtalkMessage({
       sellerName,
       itemName: item.title,
       category: item.category,
       subCategory: item.sub_category,
       dealMethod: item.deal_method,
       negotiable: item.negotiable,
-      originalPrice: item.price,
-      requestedPrice,
+      progressContent,
     });
 
     const db = admin.firestore();
@@ -18237,15 +18247,43 @@ exports.notifyMarketNegoRequest = onRequest(notifyMarketNegoRequestOptions, asyn
       displayName: sellerName,
       subject: marketNegoAlimtalk.MARKET_NEGO_ALIM_SUBJECT_KO,
       message,
-      templateKind: "market_nego_request",
-      logTag: "[notifyMarketNegoRequest]",
+      templateKind: "market_progress",
+      logTag,
     });
     res.status(200).json({ success: true });
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
-    console.error("[notifyMarketNegoRequest] 알림톡 발송 실패(수동 확인 필요):", msg);
+    console.error(`${logTag} 알림톡 발송 실패(수동 확인 필요):`, msg);
     res.status(e && e.status ? e.status : 500).json({ success: false, error: msg });
   }
+}
+
+/** 가격 조정 요구(네고) — 구매자가 submitMarketNegoRequest(Supabase RPC) 성공 직후 호출 */
+exports.notifyMarketNegoRequest = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
+  await handleMarketProgressAlimtalkNotify(
+    req,
+    res,
+    (item, body) => {
+      const requestedPrice = Number(body.requestedPrice);
+      if (!requestedPrice || requestedPrice <= 0) {
+        const err = new Error("requestedPrice가 필요합니다.");
+        err.status = 400;
+        throw err;
+      }
+      return marketNegoAlimtalk.buildMarketNegoProgressLine(item.price, requestedPrice);
+    },
+    "[notifyMarketNegoRequest]"
+  );
+});
+
+/** 직거래 요청 접수 — 구매자가 requestMarketDirectDeal 성공 직후 호출 */
+exports.notifyMarketDirectDealRequest = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
+  await handleMarketProgressAlimtalkNotify(
+    req,
+    res,
+    () => marketNegoAlimtalk.MARKET_DIRECT_DEAL_PROGRESS_LINE,
+    "[notifyMarketDirectDealRequest]"
+  );
 });
 
 /**

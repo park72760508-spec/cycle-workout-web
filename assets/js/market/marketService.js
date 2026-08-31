@@ -794,6 +794,11 @@ export async function notifyMarketNegoRequest(itemId, requestedPrice) {
   return callMarketFunction('notifyMarketNegoRequest', { itemId, requestedPrice }, 'asia-northeast3');
 }
 
+/** 직거래 요청 접수 알림톡(UK_6794, 판매자 수신) — requestMarketDirectDeal 성공 이후 별도 호출. */
+export async function notifyMarketDirectDealRequest(itemId) {
+  return callMarketFunction('notifyMarketDirectDealRequest', { itemId }, 'asia-northeast3');
+}
+
 /** 판매자의 수락/거절 결정 — 본인 상품에 들어온 PENDING 제안만 가능(서버에서 검증) */
 export async function decideMarketNegoRequest(requestId, accept) {
   return withMarketAuthRetry(async () => {
@@ -959,6 +964,7 @@ if (typeof window !== 'undefined') {
     getBuyerPhone,
     submitMarketNegoRequest,
     notifyMarketNegoRequest,
+    notifyMarketDirectDealRequest,
     decideMarketNegoRequest,
     getMarketNegoRequestsForItem,
     getSellerRatingAggregate,
