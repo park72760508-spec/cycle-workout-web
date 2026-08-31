@@ -787,6 +787,13 @@ export async function submitMarketNegoRequest(itemId, price) {
   });
 }
 
+/** 가격 조정 요청 알림톡(UK_6794, 판매자 수신) — submitMarketNegoRequest 성공 이후 별도 호출.
+ * Supabase RPC가 아니라 Firebase Cloud Function(Firebase ID 토큰 인증)을 쓴다 — 알리고 발송에
+ * VPC egress(고정 IP)가 필요해 Cloud Functions 쪽에서만 처리 가능하기 때문. */
+export async function notifyMarketNegoRequest(itemId, requestedPrice) {
+  return callMarketFunction('notifyMarketNegoRequest', { itemId, requestedPrice }, 'asia-northeast3');
+}
+
 /** 판매자의 수락/거절 결정 — 본인 상품에 들어온 PENDING 제안만 가능(서버에서 검증) */
 export async function decideMarketNegoRequest(requestId, accept) {
   return withMarketAuthRetry(async () => {
@@ -951,6 +958,7 @@ if (typeof window !== 'undefined') {
     getSellerPhone,
     getBuyerPhone,
     submitMarketNegoRequest,
+    notifyMarketNegoRequest,
     decideMarketNegoRequest,
     getMarketNegoRequestsForItem,
     getSellerRatingAggregate,

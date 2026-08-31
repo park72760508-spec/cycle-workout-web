@@ -17509,6 +17509,7 @@ exports.reconcileCompetitionSlots = onRequest(reconcileCompetitionSlotsOptions, 
  * (missionSubscriptionAlimtalkHttpsRelay와 동일한 "범용 단건 발송" 구조 — 대회 데이터를 릴레이가 다시 조회하지 않음).
  */
 const competitionApplyAlimtalk = require("./competitionApplyAlimtalk");
+const marketNegoAlimtalk = require("./marketNegoAlimtalk");
 const aligoKakaoNatEgress = require("./lib/aligoKakaoNatEgress");
 const { sendAlimtalkUnified } = require("./lib/aligoAlimtalkUnified");
 const { scrubAligoCredential: scrubAligoCredentialForRace } = require("./lib/aligoCredentials");
@@ -18147,6 +18148,105 @@ function resolveMarketBuyerUuid(uid) {
   const uidMode = supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
   return supabaseDualWriteServer.resolveUserUuid(uid, uidNamespace, uidMode);
 }
+
+/**
+ * 중고랜드 가격 조정 요구(네고) — 판매자 알림톡(UK_6794) 발송.
+ * 구매자가 submitMarketNegoRequest(Supabase RPC) 성공 직후 클라이언트에서 fire-and-forget으로
+ * 호출한다(nego 자체는 이미 성공했으므로, 여기서 실패해도 nego 성공 응답을 막지 않는다 — 클라이언트가
+ * .catch()로 무시). 알리고 kakaoapi는 IP 화이트리스트가 있어 이 함수 자체에 VPC egress를 붙여
+ * competitionApplyAlimtalkHttpsRelay 같은 별도 릴레이 없이 바로 발송한다(단일 목적 함수라 relay용
+ * 공유 시크릿이 불필요 — Firebase ID 토큰으로 이미 사용자 인증됨).
+ */
+const notifyMarketNegoRequestOptions = Object.assign(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30, memory: "256MiB" }),
+  aligoKakaoNatEgress.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS
+);
+notifyMarketNegoRequestOptions.secrets = notifyMarketNegoRequestOptions.secrets.slice();
+[aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret].forEach((s) => {
+  if (!notifyMarketNegoRequestOptions.secrets.includes(s)) notifyMarketNegoRequestOptions.secrets.push(s);
+});
+exports.notifyMarketNegoRequest = onRequest(notifyMarketNegoRequestOptions, async (req, res) => {
+  setCorsHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+    return;
+  }
+  try {
+    const decoded = await verifyRaceRequestAuth(req);
+    const uid = decoded.uid;
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const itemId = String(body.itemId || "").trim();
+    const requestedPrice = Number(body.requestedPrice);
+    if (!itemId || !requestedPrice || requestedPrice <= 0) {
+      res.status(400).json({ success: false, error: "itemId, requestedPrice가 필요합니다." });
+      return;
+    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    if (!supabase) {
+      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+      return;
+    }
+
+    const buyerId = resolveMarketBuyerUuid(uid);
+    const { data: item, error: itemErr } = await supabase
+      .from("market_items")
+      .select("id, title, category, sub_category, deal_method, negotiable, price, status, user_id")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (itemErr || !item) {
+      res.status(404).json({ success: false, error: "존재하지 않는 상품입니다." });
+      return;
+    }
+    if (buyerId && item.user_id === buyerId) {
+      res.status(400).json({ success: false, error: "본인이 등록한 상품입니다." });
+      return;
+    }
+
+    const { data: seller } = await supabase
+      .from("users")
+      .select("name, display_name, phone, contact")
+      .eq("id", item.user_id)
+      .maybeSingle();
+    const sellerPhone = String((seller && (seller.phone || seller.contact)) || "").replace(/\D/g, "");
+    if (!sellerPhone) {
+      res.status(200).json({ success: true, skipped: true, reason: "seller_phone_missing" });
+      return;
+    }
+    const sellerName = String((seller && (seller.name || seller.display_name)) || "회원").trim() || "회원";
+
+    const message = marketNegoAlimtalk.buildMarketNegoAlimtalkMessage({
+      sellerName,
+      itemName: item.title,
+      category: item.category,
+      subCategory: item.sub_category,
+      dealMethod: item.deal_method,
+      negotiable: item.negotiable,
+      originalPrice: item.price,
+      requestedPrice,
+    });
+
+    const db = admin.firestore();
+    const cfg = await marketNegoAlimtalk.loadMarketAlimtalkConfig(db);
+    await sendAlimtalkUnified(cfg, {
+      receiverPhone: sellerPhone,
+      displayName: sellerName,
+      subject: marketNegoAlimtalk.MARKET_NEGO_ALIM_SUBJECT_KO,
+      message,
+      templateKind: "market_nego_request",
+      logTag: "[notifyMarketNegoRequest]",
+    });
+    res.status(200).json({ success: true });
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    console.error("[notifyMarketNegoRequest] 알림톡 발송 실패(수동 확인 필요):", msg);
+    res.status(e && e.status ? e.status : 500).json({ success: false, error: msg });
+  }
+});
 
 /**
  * tossPaymentWebhook에서 Firestore 대회 신청 컬렉션에 없는 orderId(market_ 접두)를 위임받아 처리 —

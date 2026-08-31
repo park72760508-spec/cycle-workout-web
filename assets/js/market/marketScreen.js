@@ -3042,6 +3042,10 @@
     try {
       var s = await loadMarketService();
       await s.submitMarketNegoRequest(item.id, price);
+      // 알림톡 발송은 부가 기능 — 실패해도 이미 성공한 가격 조정 요청 자체는 그대로 유지한다.
+      s.notifyMarketNegoRequest(item.id, price).catch(function (e) {
+        console.warn('[market] 가격 조정 요청 알림톡 발송 실패:', e && e.message ? e.message : e);
+      });
       toast('가격 조정을 요청했습니다.');
       openMarketItemDetail(item.id);
     } catch (err) {
