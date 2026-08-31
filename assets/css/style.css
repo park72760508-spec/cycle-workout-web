@@ -31448,6 +31448,62 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-form-submit { width: 100%; margin-top: 18px; }
 
+/* 통신판매중개자 면책 고지 — 등록 폼(동의 체크박스)·상세/홈(안내 배너)·안전결제 모달(동의
+   체크박스) 공용. 경고성 노란 market-form-guide와 구분되는 중립 회색 톤으로, 정보성 고지임을
+   시각적으로 구분한다. */
+.market-disclaimer-banner {
+  margin: 10px 0 0 0;
+  padding: 9px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.market-disclaimer-banner--footer {
+  margin: 14px 0 4px 0;
+  text-align: center;
+}
+.market-disclaimer-banner--footer .market-disclaimer-company {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0 0 4px 0;
+}
+.market-terms-agree-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 12px 0 0 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.market-terms-agree-row input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: #ea580c;
+}
+.market-terms-agree-row label {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.market-terms-agree-row.market-terms-agree-row--error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.market-terms-link {
+  color: #ea580c;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .market-image-slots { display: flex; gap: 8px; }
 .market-image-slot {
   width: 84px;
@@ -32215,6 +32271,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   padding: 28px 32px;
   min-width: 280px;
   max-width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
   background: rgba(255, 255, 255, 0.98);
   border-radius: 16px;
   border: 1px solid rgba(234, 88, 12, 0.25);

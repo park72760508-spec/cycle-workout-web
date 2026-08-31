@@ -4795,6 +4795,10 @@
       </div>
       <div id="marketItemGrid" class="market-grid"></div>
       <button type="button" id="marketLoadMoreBtn" class="market-loadmore-btn" style="display:none;">더보기</button>
+      <div class="market-disclaimer-banner market-disclaimer-banner--footer">
+        <p class="market-disclaimer-company">STELVIO | 상호명: 우원미디어 | 대표: 이소영 | 사업자등록번호: 880-47-01109</p>
+        STELVIO는 통신판매중개자이며 통신판매의 당사자가 아닙니다. 등록된 상품 정보 및 거래에 관한 책임은 개별 판매자에게 있습니다.
+      </div>
     </div>
     <button type="button" id="marketBackToTopBtn" class="market-back-to-top-btn" onclick="if(typeof handleMarketBackToTop==='function')handleMarketBackToTop();" aria-label="맨 위로 가기" title="맨 위로 가기">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
@@ -4878,6 +4882,11 @@
       <input type="text" id="marketFormSettlementHolderName" class="market-form-input" placeholder="예금주명" />
 
       <p class="market-form-guide">⚠️ 안전거래를 권장합니다. 허위매물·과장광고는 이용 제재 대상이 될 수 있습니다.</p>
+
+      <div class="market-terms-agree-row" id="marketFormTermsAgreeRow">
+        <input type="checkbox" id="marketFormTermsAgree" />
+        <label for="marketFormTermsAgree">[필수] 등록 상품에 대한 품질 보증, 배송 및 거래 분쟁에 대한 모든 책임은 판매자 본인에게 있으며, STELVIO는 통신판매중개자로서 거래에 관한 법적 책임을 지지 않는다는 점에 동의합니다. <span class="market-terms-link" onclick="if(typeof openMarketTermsModal==='function')openMarketTermsModal();">[전문보기]</span></label>
+      </div>
 
       <button type="button" id="marketFormSubmitBtn" class="market-btn market-btn--primary market-form-submit">등록 하기</button>
     </div>
@@ -4989,6 +4998,10 @@
         </div>
         <input type="text" class="market-form-input" id="marketPurchaseAddress1" placeholder="주소" readonly />
         <input type="text" class="market-form-input" id="marketPurchaseAddress2" placeholder="상세주소" />
+      </div>
+      <div class="market-terms-agree-row" id="marketPurchaseTermsAgreeRow">
+        <input type="checkbox" id="marketPurchaseTermsAgree" />
+        <label for="marketPurchaseTermsAgree">[필수] 개인 간 C2C 중고거래 특성상 단순 변심에 의한 환불이 제한될 수 있으며, STELVIO는 에스크로 정산 중개 서비스만 제공하고 거래 당사자 간 분쟁에 대해 책임을 지지 않습니다. <span class="market-terms-link" onclick="if(typeof openMarketTermsModal==='function')openMarketTermsModal();">[전문보기]</span></label>
       </div>
       <div class="market-confirm-buttons">
         <button type="button" class="market-confirm-btn market-confirm-btn-cancel" id="marketPurchaseAddressCancelBtn">취소</button>

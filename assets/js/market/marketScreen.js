@@ -17,6 +17,45 @@
     });
   }
 
+  /** 통신판매중개자 면책 고지 — 전자상거래법 제20조 등. STELVIO(우원미디어)는 통신판매의
+   * 당사자가 아니라 개인 간(C2C) 거래를 중개하는 플랫폼일 뿐이므로, 상품 정보의 진실성·
+   * 품질보증·배송·분쟁 등에 대한 책임은 거래 당사자(판매자·구매자)에게 있음을 상품 상세·
+   * 등록·결제·홈(푸터) 화면에 일관되게 고지한다. */
+  var MARKET_DISCLAIMER_SHORT =
+    'STELVIO는 통신판매중개자이며 통신판매의 당사자가 아닙니다. 등록된 상품 정보 및 거래에 관한 의무와 책임은 개별 판매자에게 있습니다.';
+  var MARKET_TERMS_FULL_TEXT =
+    '제1조 (통신판매중개자로서의 면책 및 지위)\n\n' +
+    'STELVIO(이하 "회사")는 개인 간 자전거, 러닝 기어 및 관련 중고 상품의 거래를 위한 온라인 플랫폼(장소) 및 결제 중개 시스템만을 제공할 뿐, 통신판매의 당사자가 아닙니다.\n\n' +
+    '상품의 등록, 상태 설명, 품질 보증, 배송, 교환, 환불 등 거래 일체의 의무와 법적 책임은 각 거래 당사자(판매자 및 구매자)에게 귀속됩니다.\n\n' +
+    '회사는 회원이 등록한 상품 정보의 진실성, 완전성, 적법성 및 제3자의 권리 침해 여부에 대하여 일체 보증하지 아니하며, 이와 관련하여 발생한 손해에 대하여 고의 또는 중과실이 없는 한 책임을 부담하지 않습니다.\n\n' +
+    '제2조 (거래 분쟁 및 중재의 한계)\n\n' +
+    '개인 간 거래 중 발생한 물품 하자, 미배송, 사기 거래 등의 분쟁은 거래 당사자 간 합의 해결을 원칙으로 합니다.\n\n' +
+    '회사는 원활한 거래를 지원하기 위해 거래 내역 제공, 에스크로 정산 보류 등의 제한적인 중재 지원을 제공할 수 있으나, 사법기관 또는 분쟁조정위원회의 최종 판단을 대행하지 않습니다.\n\n' +
+    '제3조 (거래 금지 품목 및 제재)\n\n' +
+    '도난/장물, 위조품(가품), 전기/전자 안전 미인증 기기, 기타 관련 법령상 유통이 금지된 물품의 등록을 엄격히 금지합니다.\n\n' +
+    '위반 시 사전 통보 없이 게시물이 삭제될 수 있으며, 계정 영구 이용정지 및 관련 수사기관에 정보가 제공될 수 있습니다.';
+
+  function marketDisclaimerBannerHtml(opts) {
+    opts = opts || {};
+    if (opts.footer) {
+      return (
+        '<div class="market-disclaimer-banner market-disclaimer-banner--footer">' +
+          '<p class="market-disclaimer-company">STELVIO | 상호명: 우원미디어 | 대표: 이소영 | 사업자등록번호: 880-47-01109</p>' +
+          escapeHtml(MARKET_DISCLAIMER_SHORT) +
+        '</div>'
+      );
+    }
+    return '<div class="market-disclaimer-banner">' + escapeHtml(MARKET_DISCLAIMER_SHORT) + '</div>';
+  }
+
+  /** [전문보기] 링크 — 기존 marketConfirmModal(showMarketAlertPopup)을 그대로 재사용해 별도
+   * 모달 마크업 없이 접근성·스타일이 이미 검증된 컴포넌트로 전문을 보여준다. */
+  function openMarketTermsModal() {
+    showMarketAlertPopup(MARKET_TERMS_FULL_TEXT, null, { title: '통신판매중개자 면책 및 이용약관' });
+  }
+  window.openMarketTermsModal = openMarketTermsModal;
+
+
   /** 라이딩 모임 글래스 네비와 동일한 iOS 폰 판별(assets/js/openRiding/OpenRidingScreens.jsx의
    * openRidingIsIOSPhoneUA와 동일 로직) — iOS Safari에서 안전영역 부근 버튼이 눌리지 않는 문제를
    * 같은 방식(html 클래스 + bottom 오프셋 보정)으로 대응하기 위함. */
@@ -1634,6 +1673,10 @@
     });
     var negotiableEl0 = document.getElementById('marketFormNegotiable');
     if (negotiableEl0) negotiableEl0.checked = false;
+    var termsEl0 = document.getElementById('marketFormTermsAgree');
+    if (termsEl0) termsEl0.checked = false;
+    var termsRow0 = document.getElementById('marketFormTermsAgreeRow');
+    if (termsRow0) termsRow0.classList.remove('market-terms-agree-row--error');
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-condition'), function (r) {
       r.checked = r.value === '중고 상품';
     });
@@ -1894,6 +1937,15 @@
     var settlementBank = bankEl ? bankEl.value : '';
     var settlementAccountNumber = (accNumEl ? accNumEl.value : '').replace(/[^0-9]/g, '');
     var settlementHolderName = (holderEl ? holderEl.value : '').trim();
+
+    var termsAgreeEl = document.getElementById('marketFormTermsAgree');
+    var termsAgreeRowEl = document.getElementById('marketFormTermsAgreeRow');
+    if (!termsAgreeEl || !termsAgreeEl.checked) {
+      if (termsAgreeRowEl) termsAgreeRowEl.classList.add('market-terms-agree-row--error');
+      toast('통신판매중개자 면책 고지 동의가 필요합니다.');
+      return;
+    }
+    if (termsAgreeRowEl) termsAgreeRowEl.classList.remove('market-terms-agree-row--error');
 
     if (!title) { toast('상품명을 입력해 주세요.'); return; }
     if (!catEl.value) { toast('종목을 선택해 주세요.'); return; }
@@ -2449,6 +2501,7 @@
       sliderHtml +
       '<div class="market-detail-info">' +
         sellerRowHtml +
+        marketDisclaimerBannerHtml() +
         '<div class="market-detail-title">' + escapeHtml(item.title) + '</div>' +
         priceRowHtml +
         '<div class="market-detail-meta">' +
@@ -2722,6 +2775,10 @@
     if (zipEl) zipEl.value = '';
     if (addr1El) addr1El.value = '';
     if (addr2El) addr2El.value = '';
+    var termsAgreeEl = document.getElementById('marketPurchaseTermsAgree');
+    var termsAgreeRowEl = document.getElementById('marketPurchaseTermsAgreeRow');
+    if (termsAgreeEl) termsAgreeEl.checked = false;
+    if (termsAgreeRowEl) termsAgreeRowEl.classList.remove('market-terms-agree-row--error');
     if (searchBtn) {
       searchBtn.onclick = function () {
         openDaumPostcode(function (result) {
@@ -2739,6 +2796,11 @@
         var address2 = addr2El ? addr2El.value.trim() : '';
         if (!zipCode || !address1) { toast('주소 검색으로 배송받을 주소를 입력해 주세요.'); return; }
         if (!address2) { toast('상세주소를 입력해 주세요.'); return; }
+        if (!termsAgreeEl || !termsAgreeEl.checked) {
+          if (termsAgreeRowEl) termsAgreeRowEl.classList.add('market-terms-agree-row--error');
+          toast('안전결제 이용 안내 동의가 필요합니다.');
+          return;
+        }
         closeMarketPurchaseAddressPopup();
         doMarketBuy(item, { zipCode: zipCode, address1: address1, address2: address2 });
       };
