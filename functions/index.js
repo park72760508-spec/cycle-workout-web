@@ -35,6 +35,10 @@ const competitionAlimRelaySecret = defineSecret("COMPETITION_ALIM_RELAY_SECRET")
 /** 중고랜드 알림톡 — tossPaymentWebhook(VPC 미적용, 결제 웹훅이라 네트워킹 변경 리스크를 피함) →
  *  marketAlimtalkHttpsRelay(VPC) 내부 호출 인증용. 위 경쟁 릴레이와 동일 이유·구조. */
 const marketAlimRelaySecret = defineSecret("MARKET_ALIM_RELAY_SECRET");
+/** Supabase Postgres 트리거(notify_market_order_delivered, market_orders AFTER UPDATE) →
+ *  notifyMarketOrderDeliveredWebhook 실시간 호출 인증용 공유 비밀. Supabase Vault의
+ *  market_delivery_notify_trigger_secret와 같은 값이어야 한다. */
+const marketDeliveryTriggerSecret = defineSecret("MARKET_DELIVERY_TRIGGER_SECRET");
 
 /** 대회 선착순 신청 — 토스페이먼츠 · Upstash Redis Secret Manager (functions:secrets:set로 등록). */
 const tossSecretKeySecret = defineSecret("TOSS_SECRET_KEY");
@@ -19418,12 +19422,92 @@ exports.autoCompleteReturnedMarketOrdersSchedule = onSchedule(autoCompleteReturn
 });
 
 /**
+ * 택배 배송완료 실시간 알림 — Supabase Postgres 트리거(notify_market_order_delivered,
+ * market_orders AFTER UPDATE, delivered_at NULL→NOT NULL 순간)가 net.http_post로 직접 호출한다.
+ * delivered_at은 market-delivery-webhook(즉시 수신)·market-check-delivery-status(안전망 폴링)·
+ * market-set-tracking(등록 시점 즉시확인) 세 Edge Function 중 어디서 UPDATE하든 같은 트리거가
+ * 공통으로 감지하므로, 경로별로 따로 연동할 필요가 없다.
+ * 인증은 x-market-delivery-trigger-secret 헤더(Supabase Vault의
+ * market_delivery_notify_trigger_secret와 동일 값)로 검증한다 — 트리거는 orderId만 넘기고,
+ * 이 함수가 authoritative하게 주문을 재조회한다(트리거 payload를 그대로 믿지 않음).
+ */
+const notifyMarketOrderDeliveredWebhookOptions = Object.assign(
+  { region: "asia-northeast3", cors: false, timeoutSeconds: 30, memory: "256MiB" },
+  supabaseDualWriteServer.appendServiceRoleSecret({})
+);
+notifyMarketOrderDeliveredWebhookOptions.secrets = notifyMarketOrderDeliveredWebhookOptions.secrets.slice();
+[marketAlimRelaySecret, marketDeliveryTriggerSecret].forEach((s) => {
+  if (!notifyMarketOrderDeliveredWebhookOptions.secrets.includes(s)) notifyMarketOrderDeliveredWebhookOptions.secrets.push(s);
+});
+exports.notifyMarketOrderDeliveredWebhook = onRequest(notifyMarketOrderDeliveredWebhookOptions, async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).send("Method Not Allowed");
+    return;
+  }
+  let expectedSecret;
+  try {
+    expectedSecret = scrubAligoCredentialForRace(marketDeliveryTriggerSecret.value());
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "MARKET_DELIVERY_TRIGGER_SECRET 없음" });
+    return;
+  }
+  const gotSecret = String(req.headers["x-market-delivery-trigger-secret"] || "").trim();
+  if (!expectedSecret || gotSecret !== expectedSecret) {
+    res.status(403).json({ ok: false, error: "Forbidden" });
+    return;
+  }
+
+  const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+  const orderId = String(body.orderId || "").trim();
+  if (!orderId) {
+    res.status(400).json({ ok: false, error: "orderId가 필요합니다." });
+    return;
+  }
+
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) {
+    res.status(503).json({ ok: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
+    return;
+  }
+
+  try {
+    // authoritative 재조회 — 트리거가 보낸 payload가 아니라 지금 시점의 실제 행 상태를 신뢰한다.
+    const { data: order } = await supabase
+      .from("market_orders")
+      .select("id, item_id, buyer_id, delivery_status, escrow_status, delivered_at, delivery_notified_at")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (
+      !order ||
+      order.delivery_status !== "DELIVERED" ||
+      order.escrow_status !== "PAID" ||
+      !order.delivered_at ||
+      order.delivery_notified_at
+    ) {
+      res.status(200).json({ ok: true, skipped: true }); // 이미 처리됐거나 조건 불충족 — 정상
+      return;
+    }
+    const sent = await sendMarketProgressAlimtalkServerSide({
+      supabase,
+      itemId: order.item_id,
+      recipientUserId: order.buyer_id,
+      progressContent: marketNegoAlimtalk.MARKET_DELIVERY_COMPLETED_PROGRESS_LINE,
+    });
+    await supabase.from("market_orders").update({ delivery_notified_at: new Date().toISOString() }).eq("id", order.id);
+    res.status(200).json({ ok: true, sent });
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    console.error("[notifyMarketOrderDeliveredWebhook] 배송완료 알림톡 발송 실패:", orderId, msg);
+    res.status(500).json({ ok: false, error: msg }); // notified 플래그를 세우지 않아 다음 하루 3회 안전망 폴링이 재시도한다
+  }
+});
+
+/**
  * 택배 배송완료(delivery_status='DELIVERED') 시 구매자에게 구매확정 안내 알림톡(UK_6794)을 보낸다.
- * delivered_at은 Supabase Edge Function 세 곳(market-delivery-webhook 즉시 수신·
- * market-check-delivery-status 매일 09:00 안전망 폴링·market-set-tracking 등록 시점에 이미
- * 배송완료인 경우)에서 각각 설정될 수 있어 Firebase 쪽에서 "방금 배송완료로 바뀐 순간"을 직접
- * 감지할 수 없다 — 대신 delivery_notified_at(알림톡 발송 여부 플래그)이 비어 있는 배송완료
- * 주문을 하루 3회(12·15·18시, KST) 폴링해 정확히 한 번만 보낸다.
+ * 위 notifyMarketOrderDeliveredWebhook(Postgres 트리거가 실시간으로 직접 호출)이 주 경로이고,
+ * 이 스케줄은 그 실시간 경로가 어떤 이유로든 실패했을 때(트리거 오류·pg_net 장애·Firebase 일시
+ * 장애 등)를 대비한 안전망으로 하루 3회(12·15·18시, KST) delivery_notified_at이 비어 있는
+ * 배송완료 주문을 폴링해 정확히 한 번만 보낸다.
  */
 const notifyMarketDeliveredOrdersOptions = Object.assign(
   { schedule: "0 12,15,18 * * *", timeZone: "Asia/Seoul", region: "asia-northeast3", memory: "256MiB" },
