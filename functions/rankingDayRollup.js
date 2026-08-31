@@ -398,7 +398,22 @@ function userLogWriteAffectsRankingAggregates(change) {
   return !rankingLogSignalEqual(before, after);
 }
 
-/** 버킷 payload 저장(0이면 삭제) + personal_speed/peak_28d rollup 갱신 — Supabase/Firestore 두 경로 공용 */
+/**
+ * 버킷 payload 저장(0이면 삭제) — Supabase/Firestore 두 경로 공용.
+ *
+ * 과거에는 여기서 매번 touchPersonalSpeed6mRollupAfterDayChange·touchPeak28dRollupAfterDayChange
+ * (각각 90일치 chunkedGetAll, ~90건 — 대부분 NOT_FOUND)를 호출해 personal_speed_6m/28d·peak_28d
+ * 롤업 문서를 갱신했다. 2026-09 조사로 이 두 롤업 문서를 실제로 읽는 코드가 functions/ 전체에
+ * 전무함을 확인했다(personalSpeed6mRollupRef는 애초에 @deprecated) — 유일한 소비 후보인
+ * peakBoardFast.js의 peak_28d 조회는 rebuildRankingAggregates(Firebase 랭킹 재빌드) 전용인데
+ * 그 경로 자체가 shouldRunFirebaseRankingScheduledJob() 기본 false로 이미 운영에서 꺼져 있다.
+ * 실제 랭킹 화면(getPeakPowerRanking/getWeeklyRanking)은 100% Supabase 라우팅이고 Supabase 쪽은
+ * rides→daily_summaries→user_ranking_metrics Postgres 트리거로 독립적으로 갱신된다.
+ *
+ * 이 함수는 야간 배치(scheduledPreMasterWeeklyTssParity 등, 300명×7일 반복 호출)에서도 호출되어
+ * 하루 수만~수십만 건의 죽은 Firestore 읽기의 직접 원인이었다 — 아무도 읽지 않는 롤업 갱신을
+ * 제거해 원천 차단한다(함수 자체는 향후 Firebase 랭킹 경로 롤백 시 대비해 남겨둔다).
+ */
 async function finalizeDayBucketWrite(db, userId, userData, ymd, payload) {
   const ref = bucketRef(db, userId, ymd);
   if (
@@ -409,25 +424,10 @@ async function finalizeDayBucketWrite(db, userId, userData, ymd, payload) {
     && Object.keys(DURATION_FIELDS).every((dt) => (payload[DURATION_FIELDS[dt]] || 0) <= 0)
   ) {
     await ref.delete().catch(() => {});
-    try {
-      await touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, null);
-    } catch (eTouch) {
-      console.warn("[rankingDayRollup] personal_speed touch(삭제) 실패:", userId, ymd, eTouch.message);
-    }
     return;
   }
 
   await ref.set(payload, { merge: false });
-  try {
-    await touchPersonalSpeed6mRollupAfterDayChange(db, userId, userData, ymd, payload);
-  } catch (eTouch2) {
-    console.warn("[rankingDayRollup] personal_speed touch 실패:", userId, ymd, eTouch2.message);
-  }
-  try {
-    await touchPeak28dRollupAfterDayChange(db, userId, userData, ymd, payload);
-  } catch (ePeak28) {
-    console.warn("[rankingDayRollup] peak_28d touch 실패:", userId, ymd, ePeak28.message);
-  }
 }
 
 /**
