@@ -18244,14 +18244,17 @@ function buildMarketAlimtalkFunctionOptions() {
 }
 
 /**
- * 중고랜드 이벤트(가격 조정 요구/직거래 요청 등) 판매자 알림톡 공용 핸들러 — 구매자가 해당 요청을
- * 성공시킨 직후 클라이언트에서 fire-and-forget으로 호출한다(원 요청은 이미 성공했으므로, 여기서
- * 실패해도 그 응답을 막지 않는다 — 클라이언트가 .catch()로 무시).
- * @param {(item: object, body: object) => string} computeProgressContent #{진행내용} 조립 —
- *   유효성 문제가 있으면 status를 던지는 Error를 throw한다(예: requestedPrice 누락 400).
- * @param {string} logTag
+ * 중고랜드 이벤트(가격 조정 요구/직거래 요청/가격 조정 수락·거절 등) 판매자 알림톡 공용 핸들러 —
+ * 구매자·판매자가 해당 요청을 성공시킨 직후 클라이언트에서 fire-and-forget으로 호출한다(원 요청은
+ * 이미 성공했으므로, 여기서 실패해도 그 응답을 막지 않는다 — 클라이언트가 .catch()로 무시).
+ * @param {{
+ *   requireCallerRole: 'buyer'|'seller',
+ *   computeProgressContent: (item: object, body: object, callerUuid: string|null) => string
+ *     #{진행내용} 조립 — 유효성 문제가 있으면 status를 던지는 Error를 throw한다(예: 400),
+ *   logTag: string
+ * }} opts
  */
-async function handleMarketProgressAlimtalkNotify(req, res, computeProgressContent, logTag) {
+async function handleMarketProgressAlimtalkNotify(req, res, opts) {
   setCorsHeaders(req, res);
   if (req.method === "OPTIONS") {
     res.status(204).send("");
@@ -18261,6 +18264,7 @@ async function handleMarketProgressAlimtalkNotify(req, res, computeProgressConte
     res.status(405).json({ success: false, error: "POST만 허용됩니다." });
     return;
   }
+  const logTag = opts.logTag;
   try {
     const decoded = await verifyRaceRequestAuth(req);
     const uid = decoded.uid;
@@ -18277,7 +18281,7 @@ async function handleMarketProgressAlimtalkNotify(req, res, computeProgressConte
       return;
     }
 
-    const buyerId = resolveMarketBuyerUuid(uid);
+    const callerUuid = resolveMarketBuyerUuid(uid);
     const { data: item, error: itemErr } = await supabase
       .from("market_items")
       .select("id, title, category, sub_category, deal_method, negotiable, price, status, user_id")
@@ -18287,13 +18291,20 @@ async function handleMarketProgressAlimtalkNotify(req, res, computeProgressConte
       res.status(404).json({ success: false, error: "존재하지 않는 상품입니다." });
       return;
     }
-    if (buyerId && item.user_id === buyerId) {
+    const isSeller = !!(callerUuid && item.user_id === callerUuid);
+    if (opts.requireCallerRole === "buyer" && isSeller) {
       res.status(400).json({ success: false, error: "본인이 등록한 상품입니다." });
       return;
     }
+    if (opts.requireCallerRole === "seller" && !isSeller) {
+      res.status(403).json({ success: false, error: "본인 상품에 대한 요청만 처리할 수 있습니다." });
+      return;
+    }
 
-    const progressContent = computeProgressContent(item, body);
+    const progressContent = await opts.computeProgressContent(item, body, callerUuid, supabase);
 
+    // 수신자는 항상 판매자(#{고객명}=판매자명) — 두 역할(구매자가 요청/판매자가 수락·거절) 모두
+    // 판매자에게 진행 상황을 안내하는 흐름이라 item.user_id 기준 조회 하나로 충분하다.
     const { data: seller } = await supabase
       .from("users")
       .select("name, display_name, phone, contact")
@@ -18336,10 +18347,9 @@ async function handleMarketProgressAlimtalkNotify(req, res, computeProgressConte
 
 /** 가격 조정 요구(네고) — 구매자가 submitMarketNegoRequest(Supabase RPC) 성공 직후 호출 */
 exports.notifyMarketNegoRequest = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
-  await handleMarketProgressAlimtalkNotify(
-    req,
-    res,
-    (item, body) => {
+  await handleMarketProgressAlimtalkNotify(req, res, {
+    requireCallerRole: "buyer",
+    computeProgressContent: (item, body) => {
       const requestedPrice = Number(body.requestedPrice);
       if (!requestedPrice || requestedPrice <= 0) {
         const err = new Error("requestedPrice가 필요합니다.");
@@ -18348,18 +18358,53 @@ exports.notifyMarketNegoRequest = onRequest(buildMarketAlimtalkFunctionOptions()
       }
       return marketNegoAlimtalk.buildMarketNegoProgressLine(item.price, requestedPrice);
     },
-    "[notifyMarketNegoRequest]"
-  );
+    logTag: "[notifyMarketNegoRequest]",
+  });
 });
 
 /** 직거래 요청 접수 — 구매자가 requestMarketDirectDeal 성공 직후 호출 */
 exports.notifyMarketDirectDealRequest = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
-  await handleMarketProgressAlimtalkNotify(
-    req,
-    res,
-    () => marketNegoAlimtalk.MARKET_DIRECT_DEAL_PROGRESS_LINE,
-    "[notifyMarketDirectDealRequest]"
-  );
+  await handleMarketProgressAlimtalkNotify(req, res, {
+    requireCallerRole: "buyer",
+    computeProgressContent: () => marketNegoAlimtalk.MARKET_DIRECT_DEAL_PROGRESS_LINE,
+    logTag: "[notifyMarketDirectDealRequest]",
+  });
+});
+
+/** 가격 조정 요구 수락/거절 — 판매자가 decideMarketNegoRequest(Supabase RPC) 성공 직후 호출.
+ * 다른 두 이벤트와 달리 요청자(구매자)가 아니라 상품 등록자(판매자) 본인만 호출할 수 있어야 한다 —
+ * requireCallerRole:'seller'로 반대 방향 검증. requestId로 실제 최종 상태(ACCEPTED/REJECTED)를
+ * 재조회해 사용한다(클라이언트가 보낸 accept 값을 그대로 믿지 않음 — 웹훅 payment.status 재조회와
+ * 동일한 관례). */
+exports.notifyMarketNegoDecision = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
+  await handleMarketProgressAlimtalkNotify(req, res, {
+    requireCallerRole: "seller",
+    computeProgressContent: async (item, body, callerUuid, supabase) => {
+      const requestId = String(body.requestId || "").trim();
+      if (!requestId) {
+        const err = new Error("requestId가 필요합니다.");
+        err.status = 400;
+        throw err;
+      }
+      const { data: negoReq } = await supabase
+        .from("market_nego_requests")
+        .select("status, item_id")
+        .eq("id", requestId)
+        .maybeSingle();
+      if (!negoReq || negoReq.item_id !== item.id) {
+        const err = new Error("가격 조정 요청을 찾을 수 없습니다.");
+        err.status = 404;
+        throw err;
+      }
+      if (negoReq.status !== "ACCEPTED" && negoReq.status !== "REJECTED") {
+        const err = new Error("아직 처리되지 않은 요청입니다.");
+        err.status = 409;
+        throw err;
+      }
+      return marketNegoAlimtalk.buildMarketNegoDecisionProgressLine(negoReq.status === "ACCEPTED");
+    },
+    logTag: "[notifyMarketNegoDecision]",
+  });
 });
 
 /**

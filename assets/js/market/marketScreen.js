@@ -3124,6 +3124,10 @@
         try {
           var s = await loadMarketService();
           await s.decideMarketNegoRequest(requestId, accept);
+          // 알림톡 발송은 부가 기능 — 실패해도 이미 성공한 수락/거절 처리 자체는 그대로 유지한다.
+          s.notifyMarketNegoDecision(itemId, requestId).catch(function (e) {
+            console.warn('[market] 가격 조정 수락/거절 알림톡 발송 실패:', e && e.message ? e.message : e);
+          });
           toast(accept ? '가격 조정을 수락했습니다.' : '가격 조정을 거절했습니다.');
           openMarketItemDetail(itemId);
         } catch (err) {

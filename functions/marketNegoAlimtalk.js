@@ -5,8 +5,10 @@
  *
  * 이 템플릿은 "거래 진행 상황 안내"라는 범용 제목으로 승인되어 #{진행내용} 한 슬롯에 여러 단계
  * 안내문을 갈아끼우는 구조다. 현재 구현된 진행내용: 가격 조정 요구(buildMarketNegoProgressLine),
- * 직거래 요청 접수(MARKET_DIRECT_DEAL_PROGRESS_LINE). 새 단계(수락/거절/구매확정 등)를 추가하려면
- * 그 단계 전용 progressContent만 만들어 buildMarketAlimtalkMessage에 넘기면 된다.
+ * 직거래 요청 접수(MARKET_DIRECT_DEAL_PROGRESS_LINE), 안전결제 입금 확인
+ * (MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE), 가격 조정 요구 수락/거절(buildMarketNegoDecisionProgressLine).
+ * 새 단계(구매확정 등)를 추가하려면 그 단계 전용 progressContent만 만들어 buildMarketAlimtalkMessage에
+ * 넘기면 된다.
  *
  * tpl_code 기본값 UK_6794 — 다른 값이 필요하면 ALIGO_MARKET_NEGO_TPL_CODE 또는
  * appConfig/aligo.market_nego_tpl_code 로 덮어쓴다.
@@ -78,6 +80,20 @@ const MARKET_DIRECT_DEAL_PROGRESS_LINE = "직거래 요청이 접수 되었습�
 /** #{진행내용} — 안전결제 가상계좌 입금 확인 단계 전용 고정 문구(공백 포함 등록 문구 그대로) */
 const MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE =
   "입금이 정상적으로 확인되었습니다.    판매상품에 대해서 택배발송을 진행해 주시고, 송장정보를 입력해주세요.";
+
+/** #{진행내용} — 판매자가 가격 조정 요구를 수락/거절한 직후 단계(공백 포함 등록 문구 그대로) */
+function buildMarketNegoDecisionProgressLine(accept) {
+  if (accept) {
+    return (
+      "요청하신 가격 조정요구가 수락되었습니다.    \n" +
+      "조정된 가격에 대해 가상계좌에 입금을 진행해 주시기 바랍니다."
+    );
+  }
+  return (
+    "요청하신 가격 조정요구가 거절되었습니다.    \n" +
+    "가격 조정 요구를 변경하여 재요청 하시기 바랍니다."
+  );
+}
 
 /**
  * 승인 템플릿(UK_6794) 본문(message_1) 조립 — #{변수} 값만 실제 데이터로 치환, 문구 자체는 그대로
@@ -174,6 +190,7 @@ module.exports = {
   DEFAULT_MARKET_NEGO_TPL_CODE,
   MARKET_DIRECT_DEAL_PROGRESS_LINE,
   MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE,
+  buildMarketNegoDecisionProgressLine,
   formatMarketAmountKo,
   formatMarketCategoryKo,
   formatMarketDealTypeKo,
