@@ -2326,14 +2326,21 @@
     } else if (item.status === 'RESERVED') {
       actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>거래 진행 중인 상품입니다</button>';
     } else {
+      var supportsPostDeal = item.deal_method && item.deal_method.indexOf('택배거래') !== -1;
       var supportsDirectDeal = item.deal_method && item.deal_method.indexOf('직거래') !== -1;
-      actionHtml =
-        '<div class="market-detail-actions">' +
-          '<button type="button" class="market-btn market-btn--primary" id="marketDetailBuyBtn">택배거래(안전결제)</button>' +
-          (supportsDirectDeal
-            ? '<button type="button" class="market-btn market-btn--outline" id="marketDetailDirectDealBtn">직거래</button>'
-            : '') +
-        '</div>';
+      if (!supportsPostDeal && !supportsDirectDeal) {
+        actionHtml = '<button type="button" class="market-btn market-btn--disabled" disabled>거래 방법이 설정되지 않은 상품입니다</button>';
+      } else {
+        actionHtml =
+          '<div class="market-detail-actions">' +
+            (supportsPostDeal
+              ? '<button type="button" class="market-btn market-btn--primary" id="marketDetailBuyBtn">택배거래(안전결제)</button>'
+              : '') +
+            (supportsDirectDeal
+              ? '<button type="button" class="market-btn market-btn--outline" id="marketDetailDirectDealBtn">직거래</button>'
+              : '') +
+          '</div>';
+      }
     }
 
     var seller = detailState.sellerProfile;
