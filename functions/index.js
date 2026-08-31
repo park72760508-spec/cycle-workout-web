@@ -6716,12 +6716,22 @@ exports.getWeeklyRanking = onRequest(
 );
 
 /** 일요일 21:00 Asia/Seoul 주간 랭킹 확정 및 1/2/3등 포인트 지급 (1000명 대비 타임아웃 9분)
- * 1일 500+ TSS 치팅: 합산 제외 + 포인트 적립 대상에서도 제외 (hasWeeklyTssCheatDay) */
-const finalizeWeeklyOptions = {
+ * 1일 500+ TSS 치팅: 합산 제외 + 포인트 적립 대상에서도 제외 (hasWeeklyTssCheatDay)
+ *
+ * 2026-09 조사: 이 함수에 SUPABASE_SERVICE_ROLE_KEY Secret이 누락되어 있어
+ * fetchWeeklyTssRanking(주간 TSS 정상 조회)이 "SUPABASE_URL 또는
+ * SUPABASE_SERVICE_ROLE_KEY 미설정"으로 매주 실패 → 항상 비상 폴백(getWeeklyRankingEntries,
+ * 전체 사용자 Firestore 풀스캔)으로 떨어지고 있었다. 그 폴백 내부에서도 사용자별
+ * tryFetchUserRangeSummaryFromSupabase가 같은 이유로 매번 실패해 다시 Firestore 버킷 스캔으로
+ * 재폴백 — 이중으로 비싸다. Cloud Monitoring으로 5주 연속 매주 일요일 20:55~21:00 KST에
+ * Firestore NOT_FOUND 읽기 약 22만 건이 반복되는 것을 실측 확인했다(로그에서도 실행마다
+ * "Supabase weekly TSS failed" 확인). Secret을 붙여 정상 경로(Supabase 단일 조회)가 항상
+ * 성공하도록 수정 — 랭킹·포인트 지급 로직 자체는 변경 없음. */
+const finalizeWeeklyOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "0 21 * * 0",
   timeZone: "Asia/Seoul",
   timeoutSeconds: 540,
-};
+});
 exports.finalizeWeeklyRanking = onSchedule(
   finalizeWeeklyOptions,
   async (event) => {
