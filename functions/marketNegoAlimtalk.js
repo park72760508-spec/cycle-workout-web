@@ -81,6 +81,10 @@ const MARKET_DIRECT_DEAL_PROGRESS_LINE = "직거래 요청이 접수 되었습�
 const MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE =
   "입금이 정상적으로 확인되었습니다.    판매상품에 대해서 택배발송을 진행해 주시고, 송장정보를 입력해주세요.";
 
+/** #{진행내용} — 택배 배송완료 단계 전용 고정 문구(공백 포함 등록 문구 그대로), 구매자 수신 */
+const MARKET_DELIVERY_COMPLETED_PROGRESS_LINE =
+  "상품 배송이 완료되었습니다. \n상품 수령 후 상품 상세 화면에서 [구매 확정]을 진행해 주세요.";
+
 /** #{진행내용} — 판매자가 가격 조정 요구를 수락/거절한 직후 단계(공백 포함 등록 문구 그대로) */
 function buildMarketNegoDecisionProgressLine(accept) {
   if (accept) {
@@ -192,6 +196,7 @@ module.exports = {
   DEFAULT_MARKET_NEGO_TPL_CODE,
   MARKET_DIRECT_DEAL_PROGRESS_LINE,
   MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE,
+  MARKET_DELIVERY_COMPLETED_PROGRESS_LINE,
   buildMarketNegoDecisionProgressLine,
   formatMarketAmountKo,
   formatMarketCategoryKo,

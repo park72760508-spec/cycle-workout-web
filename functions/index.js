@@ -18421,6 +18421,55 @@ exports.notifyMarketNegoDecision = onRequest(buildMarketAlimtalkFunctionOptions(
  * tossPaymentWebhook에서 Firestore 대회 신청 컬렉션에 없는 orderId(market_ 접두)를 위임받아 처리 —
  * Toss 콘솔에 등록된 웹훅 URL 하나를 그대로 재사용하기 위해 별도 웹훅 엔드포인트를 새로 등록하지 않는다.
  */
+/**
+ * Firebase 인증 컨텍스트가 없는 서버 트리거(결제 웹훅, 배송완료 폴링 등)에서 중고랜드 거래 진행
+ * 상황 알림톡(UK_6794)을 보낼 때 공용으로 쓰는 헬퍼 — item·수신자(users)를 조회해 메시지를 조립하고
+ * marketAlimtalkHttpsRelay로 전달한다. 실패하면 그대로 throw한다(호출측이 로그만 남기고 무시하는
+ * fire-and-forget 관례를 그대로 따르게 하기 위함 — 여기서 삼키지 않는다).
+ * @returns {Promise<boolean>} 실제 발송했으면 true, 수신자 전화번호가 없어 건너뛰었으면 false.
+ */
+async function sendMarketProgressAlimtalkServerSide({ supabase, itemId, recipientUserId, progressContent }) {
+  const { data: item } = await supabase
+    .from("market_items")
+    .select("title, category, sub_category, deal_method, negotiable")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (!item) return false;
+  const { data: recipient } = await supabase
+    .from("users")
+    .select("name, display_name, phone, contact")
+    .eq("id", recipientUserId)
+    .maybeSingle();
+  const recipientPhone = String((recipient && (recipient.phone || recipient.contact)) || "").replace(/\D/g, "");
+  if (!recipientPhone) return false;
+  const recipientName = String((recipient && (recipient.name || recipient.display_name)) || "회원").trim() || "회원";
+
+  const message = marketNegoAlimtalk.buildMarketAlimtalkMessage({
+    recipientName,
+    itemName: item.title,
+    category: item.category,
+    subCategory: item.sub_category,
+    dealMethod: item.deal_method,
+    negotiable: item.negotiable,
+    progressContent,
+  });
+  const relayUrl =
+    process.env.MARKET_ALIM_RELAY_URL || "https://asia-northeast3-stelvio-ai.cloudfunctions.net/marketAlimtalkHttpsRelay";
+  const ac = new AbortController();
+  const relayTimeout = setTimeout(() => ac.abort(), 10000);
+  try {
+    await fetch(relayUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-market-alim-relay-secret": marketAlimRelaySecret.value() },
+      body: JSON.stringify({ receiverPhone: recipientPhone, displayName: recipientName, subject: marketNegoAlimtalk.MARKET_NEGO_ALIM_SUBJECT_KO, message }),
+      signal: ac.signal,
+    });
+  } finally {
+    clearTimeout(relayTimeout);
+  }
+  return true;
+}
+
 async function handleMarketOrderWebhook(orderId, flat) {
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   if (!supabase) return;
@@ -18465,48 +18514,12 @@ async function handleMarketOrderWebhook(orderId, flat) {
 
   // 입금완료 알림톡(UK_6794, 판매자 수신) — 결제 확정 자체는 이미 끝났으므로 실패해도 무시(로그만).
   try {
-    const { data: item } = await supabase
-      .from("market_items")
-      .select("title, category, sub_category, deal_method, negotiable")
-      .eq("id", order.item_id)
-      .maybeSingle();
-    const { data: seller } = await supabase
-      .from("users")
-      .select("name, display_name, phone, contact")
-      .eq("id", order.seller_id)
-      .maybeSingle();
-    const sellerPhone = String((seller && (seller.phone || seller.contact)) || "").replace(/\D/g, "");
-    if (item && sellerPhone) {
-      const sellerName = String((seller && (seller.name || seller.display_name)) || "회원").trim() || "회원";
-      const message = marketNegoAlimtalk.buildMarketAlimtalkMessage({
-        recipientName: sellerName,
-        itemName: item.title,
-        category: item.category,
-        subCategory: item.sub_category,
-        dealMethod: item.deal_method,
-        negotiable: item.negotiable,
-        progressContent: marketNegoAlimtalk.MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE,
-      });
-      const relayUrl =
-        process.env.MARKET_ALIM_RELAY_URL || "https://asia-northeast3-stelvio-ai.cloudfunctions.net/marketAlimtalkHttpsRelay";
-      const ac = new AbortController();
-      const relayTimeout = setTimeout(() => ac.abort(), 10000);
-      try {
-        await fetch(relayUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-market-alim-relay-secret": marketAlimRelaySecret.value() },
-          body: JSON.stringify({
-            receiverPhone: sellerPhone,
-            displayName: sellerName,
-            subject: marketNegoAlimtalk.MARKET_NEGO_ALIM_SUBJECT_KO,
-            message,
-          }),
-          signal: ac.signal,
-        });
-      } finally {
-        clearTimeout(relayTimeout);
-      }
-    }
+    await sendMarketProgressAlimtalkServerSide({
+      supabase,
+      itemId: order.item_id,
+      recipientUserId: order.seller_id,
+      progressContent: marketNegoAlimtalk.MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE,
+    });
   } catch (alimErr) {
     console.error("[handleMarketOrderWebhook] 입금완료 알림톡 발송 실패(수동 확인 필요):", order.id, alimErr && alimErr.message ? alimErr.message : alimErr);
   }
@@ -19402,6 +19415,65 @@ exports.autoCompleteReturnedMarketOrdersSchedule = onSchedule(autoCompleteReturn
     /* eslint-enable no-await-in-loop */
   }
   console.log("[autoCompleteReturnedMarketOrdersSchedule] 자동 반품완료 처리:", due.length);
+});
+
+/**
+ * 택배 배송완료(delivery_status='DELIVERED') 시 구매자에게 구매확정 안내 알림톡(UK_6794)을 보낸다.
+ * delivered_at은 Supabase Edge Function 세 곳(market-delivery-webhook 즉시 수신·
+ * market-check-delivery-status 매일 09:00 안전망 폴링·market-set-tracking 등록 시점에 이미
+ * 배송완료인 경우)에서 각각 설정될 수 있어 Firebase 쪽에서 "방금 배송완료로 바뀐 순간"을 직접
+ * 감지할 수 없다 — 대신 delivery_notified_at(알림톡 발송 여부 플래그)이 비어 있는 배송완료
+ * 주문을 주기적으로 폴링해 정확히 한 번만 보낸다.
+ */
+const notifyMarketDeliveredOrdersOptions = Object.assign(
+  { schedule: "every 15 minutes", region: "asia-northeast3", memory: "256MiB" },
+  supabaseDualWriteServer.appendServiceRoleSecret({})
+);
+notifyMarketDeliveredOrdersOptions.secrets = notifyMarketDeliveredOrdersOptions.secrets.slice();
+if (!notifyMarketDeliveredOrdersOptions.secrets.includes(marketAlimRelaySecret)) {
+  notifyMarketDeliveredOrdersOptions.secrets.push(marketAlimRelaySecret);
+}
+exports.notifyMarketDeliveredOrdersSchedule = onSchedule(notifyMarketDeliveredOrdersOptions, async () => {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  if (!supabase) return;
+  const { data: due, error } = await supabase
+    .from("market_orders")
+    .select("id, item_id, buyer_id")
+    .eq("delivery_status", "DELIVERED")
+    .eq("escrow_status", "PAID")
+    .not("delivered_at", "is", null)
+    .is("delivery_notified_at", null);
+  if (error || !due || !due.length) return;
+  /* eslint-disable no-await-in-loop */
+  for (const order of due) {
+    let sent = false;
+    try {
+      sent = await sendMarketProgressAlimtalkServerSide({
+        supabase,
+        itemId: order.item_id,
+        recipientUserId: order.buyer_id,
+        progressContent: marketNegoAlimtalk.MARKET_DELIVERY_COMPLETED_PROGRESS_LINE,
+      });
+    } catch (e) {
+      console.error(
+        "[notifyMarketDeliveredOrdersSchedule] 배송완료 알림톡 발송 실패(다음 주기에 재시도):",
+        order.id,
+        e && e.message ? e.message : e
+      );
+      continue; // delivery_notified_at을 남기지 않아 다음 주기에 재시도
+    }
+    // sent===false(구매자 전화번호 없음 등)도 재시도해 봐야 계속 실패하므로 완료 처리한다.
+    if (!sent) {
+      console.warn("[notifyMarketDeliveredOrdersSchedule] 구매자 전화번호 없음 — 발송 생략:", order.id);
+    }
+    await supabase
+      .from("market_orders")
+      .update({ delivery_notified_at: new Date().toISOString() })
+      .eq("id", order.id)
+      .catch(() => {});
+  }
+  /* eslint-enable no-await-in-loop */
+  console.log("[notifyMarketDeliveredOrdersSchedule] 배송완료 알림톡 처리:", due.length);
 });
 
 /**
