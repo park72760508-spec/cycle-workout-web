@@ -2410,12 +2410,25 @@
       priceRowHtml = marketDetailPlainPriceHtml(item);
     }
 
-    // 가격 조정 요청은 구매자당 1건(유니크)이라, 주문이 이미 생긴 구매자의 요청은 해당 주문의
-    // 거래 상대 정보 카드 아래에 발생 순서대로 붙여서 보여준다(요청 → 주문 흐름이 한 곳에 보이게).
-    // 아직 주문으로 이어지지 않은(협상만 진행 중인) 요청만 별도 목록으로 상단에 남긴다.
+    // 판매자 전용 "거래내역" — 예약(RESERVED/PENDING) 시점부터 구매자 연락처를 노출하되,
+    // 본인(판매자) 연락처는 표시하지 않는다. 취소(CANCELLED)·환불(REFUNDED, 조기환불·반품환불
+    // 모두 포함)로 끝난 거래는 더 이상 진행 중이 아니므로 거래/반품 진행 상태를 표시하지 않고
+    // 초기 판매 등록 상태처럼 보이게 한다.
+    var orderRowsHtml = '';
+    var activeOrderHistory = (detailState.orderHistory || []).filter(function (o) {
+      return o.escrow_status !== 'CANCELLED' && o.escrow_status !== 'REFUNDED';
+    });
+
+    // 가격 조정 요청은 구매자당 1건(유니크)이라, "진행 중인(취소·환불로 끝나지 않은)" 주문이 이미
+    // 있는 구매자의 요청은 해당 주문의 거래 상대 정보 카드 아래에 발생 순서대로 붙여서 보여준다
+    // (요청 → 주문 흐름이 한 곳에 보이게). 아직 주문으로 이어지지 않았거나, 예전 주문이 취소·환불로
+    // 끝나 더 이상 진행 중이 아닌 구매자의 요청은 별도 목록으로 상단에 남긴다 — activeOrderHistory
+    // 기준으로 판단해야 한다(취소·환불된 "죽은" 주문만 있는 구매자를 orderBuyerIds에 잘못 포함시키면,
+    // 그 주문은 orderRowsHtml에서 이미 걸러졌는데 네고 요청도 이 필터에 걸려 두 곳 어디에도 표시되지
+    // 않는 버그가 생긴다).
     var orderBuyerIds = {};
-    if (isMine && detailState.orderHistory) {
-      detailState.orderHistory.forEach(function (o) { orderBuyerIds[o.buyer_id] = true; });
+    if (isMine) {
+      activeOrderHistory.forEach(function (o) { orderBuyerIds[o.buyer_id] = true; });
     }
     var negoRowsHtml = '';
     if (isMine && detailState.negoRequests && detailState.negoRequests.length) {
@@ -2425,14 +2438,6 @@
         .join('');
     }
 
-    // 판매자 전용 "거래내역" — 예약(RESERVED/PENDING) 시점부터 구매자 연락처를 노출하되,
-    // 본인(판매자) 연락처는 표시하지 않는다. 취소(CANCELLED)·환불(REFUNDED, 조기환불·반품환불
-    // 모두 포함)로 끝난 거래는 더 이상 진행 중이 아니므로 거래/반품 진행 상태를 표시하지 않고
-    // 초기 판매 등록 상태처럼 보이게 한다.
-    var orderRowsHtml = '';
-    var activeOrderHistory = (detailState.orderHistory || []).filter(function (o) {
-      return o.escrow_status !== 'CANCELLED' && o.escrow_status !== 'REFUNDED';
-    });
     if (isMine && activeOrderHistory.length) {
       orderRowsHtml = activeOrderHistory.map(function (o) {
         var bp = o.buyerProfile;
