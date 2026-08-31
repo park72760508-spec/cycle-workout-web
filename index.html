@@ -4974,8 +4974,10 @@
   </div>
 
   <!-- 중고랜드 확인 팝업 — 네이티브 confirm() 대신 스텔비오 스타일(stelvioExitConfirmModal)과
-       동일한 구조에 오렌지 톤을 적용한 중고랜드 전용 확인창. -->
-  <div id="marketConfirmModal" class="market-confirm-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10020001;">
+       동일한 구조에 오렌지 톤을 적용한 중고랜드 전용 확인창. 안전결제 확인 팝업 등 다른
+       market-confirm-modal(z-index 10020001) 위에 열릴 수 있어(예: 결제 확인창의 [전문보기]
+       링크로 이 팝업을 여는 경우) z-index를 더 높게 둔다. -->
+  <div id="marketConfirmModal" class="market-confirm-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10020010;">
     <div class="market-confirm-overlay" onclick="if(typeof closeMarketConfirmPopup==='function')closeMarketConfirmPopup();"></div>
     <div class="market-confirm-content">
       <p class="market-confirm-title" id="marketConfirmTitle" style="display: none;"></p>
