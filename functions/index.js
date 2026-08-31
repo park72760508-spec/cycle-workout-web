@@ -19423,10 +19423,10 @@ exports.autoCompleteReturnedMarketOrdersSchedule = onSchedule(autoCompleteReturn
  * market-check-delivery-status 매일 09:00 안전망 폴링·market-set-tracking 등록 시점에 이미
  * 배송완료인 경우)에서 각각 설정될 수 있어 Firebase 쪽에서 "방금 배송완료로 바뀐 순간"을 직접
  * 감지할 수 없다 — 대신 delivery_notified_at(알림톡 발송 여부 플래그)이 비어 있는 배송완료
- * 주문을 주기적으로 폴링해 정확히 한 번만 보낸다.
+ * 주문을 하루 3회(12·15·18시, KST) 폴링해 정확히 한 번만 보낸다.
  */
 const notifyMarketDeliveredOrdersOptions = Object.assign(
-  { schedule: "every 15 minutes", region: "asia-northeast3", memory: "256MiB" },
+  { schedule: "0 12,15,18 * * *", timeZone: "Asia/Seoul", region: "asia-northeast3", memory: "256MiB" },
   supabaseDualWriteServer.appendServiceRoleSecret({})
 );
 notifyMarketDeliveredOrdersOptions.secrets = notifyMarketDeliveredOrdersOptions.secrets.slice();
