@@ -1947,7 +1947,7 @@
     if (!catEl.value) { toast('종목을 선택해 주세요.'); return; }
     if (!purchasePriceRaw || purchasePrice < 0) { toast('구입가를 입력해 주세요.'); return; }
     if (!priceRaw || price < 0) { toast('판매가를 입력해 주세요.'); return; }
-    if (!dealMethods.length) { toast('거래 방법을 하나 이상 선택해 주세요.'); return; }
+    if (!dealMethods.length) { toast('거래 방법을 선택해 주세요.'); return; }
     if (dealMethods.indexOf('직거래') !== -1 && !directLocation) {
       toast('직거래 지역을 입력해 주세요.');
       return;
@@ -2383,7 +2383,7 @@
         (!isMine && !myOrder
           ? '<div class="market-nego-status market-nego-status--accepted">판매자가 가격 조정을 수락했습니다. 조정된 금액으로 구매할 수 있습니다.</div>'
           : '');
-    } else if (!isMine && item.negotiable && !myOrder) {
+    } else if (!isMine && item.negotiable && (!myOrder || !marketNegoStillActiveForOrder(myOrder))) {
       if (nego && nego.status === 'PENDING') {
         priceRowHtml =
           marketDetailPlainPriceHtml(item) +
