@@ -21,8 +21,8 @@
    * 당사자가 아니라 개인 간(C2C) 거래를 중개하는 플랫폼일 뿐이므로, 상품 정보의 진실성·
    * 품질보증·배송·분쟁 등에 대한 책임은 거래 당사자(판매자·구매자)에게 있음을 상품 상세·
    * 등록·결제·홈(푸터) 화면에 일관되게 고지한다. */
-  var MARKET_DISCLAIMER_SHORT =
-    'STELVIO는 통신판매중개자이며 통신판매의 당사자가 아닙니다. 등록된 상품 정보 및 거래에 관한 의무와 책임은 개별 판매자에게 있습니다.';
+  var MARKET_DISCLAIMER_DETAIL_LINE1 = 'STELVIO는 통신판매중개자이며 통신판매의 당사자가 아닙니다. ';
+  var MARKET_DISCLAIMER_DETAIL_LINE2 = '등록된 상품 정보 및 거래에 관한 의무와 책임은 개별 판매자에게 있습니다.';
   var MARKET_TERMS_FULL_TEXT =
     '제1조 (통신판매중개자로서의 면책 및 지위)\n\n' +
     'STELVIO(이하 "회사")는 개인 간 자전거, 러닝 기어 및 관련 중고 상품의 거래를 위한 온라인 플랫폼(장소) 및 결제 중개 시스템만을 제공할 뿐, 통신판매의 당사자가 아닙니다.\n\n' +
@@ -35,17 +35,13 @@
     '도난/장물, 위조품(가품), 전기/전자 안전 미인증 기기, 기타 관련 법령상 유통이 금지된 물품의 등록을 엄격히 금지합니다.\n\n' +
     '위반 시 사전 통보 없이 게시물이 삭제될 수 있으며, 계정 영구 이용정지 및 관련 수사기관에 정보가 제공될 수 있습니다.';
 
-  function marketDisclaimerBannerHtml(opts) {
-    opts = opts || {};
-    if (opts.footer) {
-      return (
-        '<div class="market-disclaimer-banner market-disclaimer-banner--footer">' +
-          '<p class="market-disclaimer-company">STELVIO | 상호명: 우원미디어 | 대표: 이소영 | 사업자등록번호: 880-47-01109</p>' +
-          escapeHtml(MARKET_DISCLAIMER_SHORT) +
-        '</div>'
-      );
-    }
-    return '<div class="market-disclaimer-banner">' + escapeHtml(MARKET_DISCLAIMER_SHORT) + '</div>';
+  function marketDisclaimerBannerHtml() {
+    return (
+      '<div class="market-disclaimer-banner">' +
+        escapeHtml(MARKET_DISCLAIMER_DETAIL_LINE1) + '<br/>' +
+        escapeHtml(MARKET_DISCLAIMER_DETAIL_LINE2) +
+      '</div>'
+    );
   }
 
   /** [전문보기] 링크 — 기존 marketConfirmModal(showMarketAlertPopup)을 그대로 재사용해 별도
@@ -2333,9 +2329,9 @@
       var supportsDirectDeal = item.deal_method && item.deal_method.indexOf('직거래') !== -1;
       actionHtml =
         '<div class="market-detail-actions">' +
-          '<button type="button" class="market-btn market-btn--primary" id="marketDetailBuyBtn">택배거래(안전결제) 요청</button>' +
+          '<button type="button" class="market-btn market-btn--primary" id="marketDetailBuyBtn">택배거래(안전결제)</button>' +
           (supportsDirectDeal
-            ? '<button type="button" class="market-btn market-btn--outline" id="marketDetailDirectDealBtn">직거래 요청</button>'
+            ? '<button type="button" class="market-btn market-btn--outline" id="marketDetailDirectDealBtn">직거래</button>'
             : '') +
         '</div>';
     }
@@ -2501,7 +2497,6 @@
       sliderHtml +
       '<div class="market-detail-info">' +
         sellerRowHtml +
-        marketDisclaimerBannerHtml() +
         '<div class="market-detail-title">' + escapeHtml(item.title) + '</div>' +
         priceRowHtml +
         '<div class="market-detail-meta">' +
@@ -2509,6 +2504,7 @@
           '<span>' + escapeHtml(dealMethodText) + '</span>' +
         '</div>' +
         '<div class="market-detail-desc">' + escapeHtml(item.description || '').replace(/\n/g, '<br/>') + '</div>' +
+        marketDisclaimerBannerHtml() +
         dealsHistoryHtml +
         buyerOrderHistoryHtml +
       '</div>';
@@ -2836,7 +2832,7 @@
       );
     } catch (err) {
       toast('구매 요청 실패: ' + (err && err.message ? err.message : err));
-      if (btn) { btn.disabled = false; btn.textContent = '택배거래(안전결제) 요청'; }
+      if (btn) { btn.disabled = false; btn.textContent = '택배거래(안전결제)'; }
     }
   }
 
@@ -2847,7 +2843,7 @@
     showMarketConfirmPopup(
       formatPrice(dealPrice) + '원에 직거래를 요청할까요? 안전결제(가상계좌 입금) 없이 예약되며, 판매자와 직접 만나 대금을 주고받습니다.',
       function () { doMarketDirectDeal(item, btn); },
-      { okText: '직거래 요청' }
+      { okText: '직거래' }
     );
   }
 
@@ -2860,7 +2856,7 @@
       openMarketItemDetail(item.id);
     } catch (err) {
       toast('직거래 요청 실패: ' + (err && err.message ? err.message : err));
-      if (btn) { btn.disabled = false; btn.textContent = '직거래 요청'; }
+      if (btn) { btn.disabled = false; btn.textContent = '직거래'; }
     }
   }
 

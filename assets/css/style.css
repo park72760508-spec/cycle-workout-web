@@ -31468,8 +31468,9 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-disclaimer-banner--footer .market-disclaimer-company {
   font-size: 11px;
   color: #94a3b8;
-  margin: 0 0 4px 0;
+  margin: 0 0 10px 0;
 }
+.market-disclaimer-banner--footer .market-disclaimer-text { margin: 0; }
 .market-terms-agree-row {
   display: flex;
   align-items: flex-start;
