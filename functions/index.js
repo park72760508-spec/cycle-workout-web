@@ -18244,13 +18244,17 @@ function buildMarketAlimtalkFunctionOptions() {
 }
 
 /**
- * 중고랜드 이벤트(가격 조정 요구/직거래 요청/가격 조정 수락·거절 등) 판매자 알림톡 공용 핸들러 —
- * 구매자·판매자가 해당 요청을 성공시킨 직후 클라이언트에서 fire-and-forget으로 호출한다(원 요청은
- * 이미 성공했으므로, 여기서 실패해도 그 응답을 막지 않는다 — 클라이언트가 .catch()로 무시).
+ * 중고랜드 이벤트(가격 조정 요구/직거래 요청/가격 조정 수락·거절 등) 거래 진행 상황 알림톡 공용
+ * 핸들러 — 구매자·판매자가 해당 요청을 성공시킨 직후 클라이언트에서 fire-and-forget으로 호출한다
+ * (원 요청은 이미 성공했으므로, 여기서 실패해도 그 응답을 막지 않는다 — 클라이언트가 .catch()로 무시).
  * @param {{
- *   requireCallerRole: 'buyer'|'seller',
- *   computeProgressContent: (item: object, body: object, callerUuid: string|null) => string
- *     #{진행내용} 조립 — 유효성 문제가 있으면 status를 던지는 Error를 throw한다(예: 400),
+ *   requireCallerRole: 'buyer'|'seller' — 이 알림톡을 트리거할 수 있는 사람(구매자 or 판매자),
+ *   computeProgressContent: (item: object, body: object, callerUuid: string|null, supabase: object)
+ *     => Promise<string | {progressContent: string, recipientUuid: string}> — #{진행내용} 조립.
+ *     문자열만 반환하면 수신자는 기본값인 판매자(item.user_id)다. 수신자를 판매자가 아닌 다른 사람
+ *     으로 바꿔야 하면(예: 가격 조정 수락/거절은 요청을 보낸 구매자에게 결과를 알려야 함)
+ *     {progressContent, recipientUuid}를 반환한다. 유효성 문제가 있으면 status를 던지는 Error를
+ *     throw한다(예: 400),
  *   logTag: string
  * }} opts
  */
@@ -18301,24 +18305,27 @@ async function handleMarketProgressAlimtalkNotify(req, res, opts) {
       return;
     }
 
-    const progressContent = await opts.computeProgressContent(item, body, callerUuid, supabase);
+    // computeProgressContent는 문자열(수신자=판매자, 기본값)이나 { progressContent, recipientUuid }
+    // (수신자를 판매자가 아닌 다른 사람 — 예: 가격 조정 수락/거절은 요청을 보낸 구매자 — 로 바꿔야 할
+    // 때)를 반환할 수 있다.
+    const computed = await opts.computeProgressContent(item, body, callerUuid, supabase);
+    const progressContent = typeof computed === "string" ? computed : computed.progressContent;
+    const recipientUuid = (typeof computed === "object" && computed.recipientUuid) || item.user_id;
 
-    // 수신자는 항상 판매자(#{고객명}=판매자명) — 두 역할(구매자가 요청/판매자가 수락·거절) 모두
-    // 판매자에게 진행 상황을 안내하는 흐름이라 item.user_id 기준 조회 하나로 충분하다.
-    const { data: seller } = await supabase
+    const { data: recipient } = await supabase
       .from("users")
       .select("name, display_name, phone, contact")
-      .eq("id", item.user_id)
+      .eq("id", recipientUuid)
       .maybeSingle();
-    const sellerPhone = String((seller && (seller.phone || seller.contact)) || "").replace(/\D/g, "");
-    if (!sellerPhone) {
-      res.status(200).json({ success: true, skipped: true, reason: "seller_phone_missing" });
+    const recipientPhone = String((recipient && (recipient.phone || recipient.contact)) || "").replace(/\D/g, "");
+    if (!recipientPhone) {
+      res.status(200).json({ success: true, skipped: true, reason: "recipient_phone_missing" });
       return;
     }
-    const sellerName = String((seller && (seller.name || seller.display_name)) || "회원").trim() || "회원";
+    const recipientName = String((recipient && (recipient.name || recipient.display_name)) || "회원").trim() || "회원";
 
     const message = marketNegoAlimtalk.buildMarketAlimtalkMessage({
-      sellerName,
+      recipientName,
       itemName: item.title,
       category: item.category,
       subCategory: item.sub_category,
@@ -18330,8 +18337,8 @@ async function handleMarketProgressAlimtalkNotify(req, res, opts) {
     const db = admin.firestore();
     const cfg = await marketNegoAlimtalk.loadMarketAlimtalkConfig(db);
     await sendAlimtalkUnified(cfg, {
-      receiverPhone: sellerPhone,
-      displayName: sellerName,
+      receiverPhone: recipientPhone,
+      displayName: recipientName,
       subject: marketNegoAlimtalk.MARKET_NEGO_ALIM_SUBJECT_KO,
       message,
       templateKind: "market_progress",
@@ -18372,10 +18379,10 @@ exports.notifyMarketDirectDealRequest = onRequest(buildMarketAlimtalkFunctionOpt
 });
 
 /** 가격 조정 요구 수락/거절 — 판매자가 decideMarketNegoRequest(Supabase RPC) 성공 직후 호출.
- * 다른 두 이벤트와 달리 요청자(구매자)가 아니라 상품 등록자(판매자) 본인만 호출할 수 있어야 한다 —
- * requireCallerRole:'seller'로 반대 방향 검증. requestId로 실제 최종 상태(ACCEPTED/REJECTED)를
- * 재조회해 사용한다(클라이언트가 보낸 accept 값을 그대로 믿지 않음 — 웹훅 payment.status 재조회와
- * 동일한 관례). */
+ * 이 알림톡을 트리거하는 사람(판매자, requireCallerRole:'seller')과 받는 사람(가격 조정을 요청한
+ * 구매자)이 다르다 — recipientUuid를 buyer_id로 지정해 기본값(판매자) 대신 구매자에게 보낸다.
+ * requestId로 실제 최종 상태(ACCEPTED/REJECTED)를 재조회해 사용한다(클라이언트가 보낸 accept 값을
+ * 그대로 믿지 않음 — 웹훅 payment.status 재조회와 동일한 관례). */
 exports.notifyMarketNegoDecision = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
   await handleMarketProgressAlimtalkNotify(req, res, {
     requireCallerRole: "seller",
@@ -18388,7 +18395,7 @@ exports.notifyMarketNegoDecision = onRequest(buildMarketAlimtalkFunctionOptions(
       }
       const { data: negoReq } = await supabase
         .from("market_nego_requests")
-        .select("status, item_id")
+        .select("status, item_id, buyer_id")
         .eq("id", requestId)
         .maybeSingle();
       if (!negoReq || negoReq.item_id !== item.id) {
@@ -18401,7 +18408,10 @@ exports.notifyMarketNegoDecision = onRequest(buildMarketAlimtalkFunctionOptions(
         err.status = 409;
         throw err;
       }
-      return marketNegoAlimtalk.buildMarketNegoDecisionProgressLine(negoReq.status === "ACCEPTED");
+      return {
+        progressContent: marketNegoAlimtalk.buildMarketNegoDecisionProgressLine(negoReq.status === "ACCEPTED"),
+        recipientUuid: negoReq.buyer_id,
+      };
     },
     logTag: "[notifyMarketNegoDecision]",
   });
@@ -18469,7 +18479,7 @@ async function handleMarketOrderWebhook(orderId, flat) {
     if (item && sellerPhone) {
       const sellerName = String((seller && (seller.name || seller.display_name)) || "회원").trim() || "회원";
       const message = marketNegoAlimtalk.buildMarketAlimtalkMessage({
-        sellerName,
+        recipientName: sellerName,
         itemName: item.title,
         category: item.category,
         subCategory: item.sub_category,

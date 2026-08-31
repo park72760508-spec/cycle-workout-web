@@ -101,13 +101,15 @@ function buildMarketNegoDecisionProgressLine(accept) {
  * buildMarketNegoProgressLine, 직거래 요청 접수는 MARKET_DIRECT_DEAL_PROGRESS_LINE 등. 이 템플릿은
  * "거래 진행 상황 안내"라는 범용 제목으로 승인되어 있어, 새 단계(수락/거절/구매확정 등)를 추가하려면
  * 그 단계 전용 progressContent만 만들어 이 함수에 그대로 넘기면 된다.
+ * #{고객명}(recipientName)은 이 알림톡을 받는 사람의 이름이다 — 이벤트에 따라 판매자일 수도(가격
+ * 조정 요구/직거래 요청 접수/입금 확인) 구매자일 수도(가격 조정 수락/거절) 있다.
  * @param {{
- *   sellerName: string, itemName: string, category: string, subCategory: string,
+ *   recipientName: string, itemName: string, category: string, subCategory: string,
  *   dealMethod: string[], negotiable: boolean, progressContent: string
  * }} p
  */
 function buildMarketAlimtalkMessage(p) {
-  const sellerName = String(p.sellerName || "회원").trim();
+  const recipientName = String(p.recipientName || "회원").trim();
   const itemName = String(p.itemName || "").trim();
   const categoryText = formatMarketCategoryKo(p.category, p.subCategory);
   const dealTypeText = formatMarketDealTypeKo(p.dealMethod, p.negotiable);
@@ -115,7 +117,7 @@ function buildMarketAlimtalkMessage(p) {
 
   return (
     `${MARKET_NEGO_ALIM_HEADER_LINE}\n\n` +
-    `${sellerName}님, 안전하고 스마트한 STELVIO 중고랜드입니다.\n` +
+    `${recipientName}님, 안전하고 스마트한 STELVIO 중고랜드입니다.\n` +
     `요청하신 거래의 진행 상황을 안내해 드립니다.\n\n` +
     `■ 상품 및 거래 정보\n` +
     `- 상품명: ${itemName}\n` +
