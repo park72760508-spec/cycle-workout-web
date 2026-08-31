@@ -31485,12 +31485,12 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex-shrink: 0;
   accent-color: #ea580c;
 }
-.market-terms-agree-row label {
+.market-terms-agree-row .market-terms-agree-text {
   font-size: 12px;
   color: #475569;
   line-height: 1.5;
-  cursor: pointer;
 }
+.market-terms-agree-row label { cursor: pointer; }
 .market-terms-agree-row.market-terms-agree-row--error {
   border-color: #fca5a5;
   background: #fef2f2;

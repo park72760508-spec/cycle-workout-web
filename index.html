@@ -4885,7 +4885,10 @@
 
       <div class="market-terms-agree-row" id="marketFormTermsAgreeRow">
         <input type="checkbox" id="marketFormTermsAgree" />
-        <label for="marketFormTermsAgree">[필수] 등록 상품에 대한 품질 보증, 배송 및 거래 분쟁에 대한 모든 책임은 판매자 본인에게 있으며, STELVIO는 통신판매중개자로서 거래에 관한 법적 책임을 지지 않는다는 점에 동의합니다. <span class="market-terms-link" onclick="if(typeof openMarketTermsModal==='function')openMarketTermsModal();">[전문보기]</span></label>
+        <span class="market-terms-agree-text">
+          <label for="marketFormTermsAgree">[필수] 등록 상품에 대한 품질 보증, 배송 및 거래 분쟁에 대한 모든 책임은 판매자 본인에게 있으며, STELVIO는 통신판매중개자로서 거래에 관한 법적 책임을 지지 않는다는 점에 동의합니다.</label>
+          <span class="market-terms-link" onclick="event.preventDefault();event.stopPropagation();if(typeof openMarketTermsModal==='function')openMarketTermsModal();">[전문보기]</span>
+        </span>
       </div>
 
       <button type="button" id="marketFormSubmitBtn" class="market-btn market-btn--primary market-form-submit">등록 하기</button>
@@ -5001,7 +5004,10 @@
       </div>
       <div class="market-terms-agree-row" id="marketPurchaseTermsAgreeRow">
         <input type="checkbox" id="marketPurchaseTermsAgree" />
-        <label for="marketPurchaseTermsAgree">[필수] 개인 간 C2C 중고거래 특성상 단순 변심에 의한 환불이 제한될 수 있으며, STELVIO는 에스크로 정산 중개 서비스만 제공하고 거래 당사자 간 분쟁에 대해 책임을 지지 않습니다. <span class="market-terms-link" onclick="if(typeof openMarketTermsModal==='function')openMarketTermsModal();">[전문보기]</span></label>
+        <span class="market-terms-agree-text">
+          <label for="marketPurchaseTermsAgree">[필수] 개인 간 C2C 중고거래 특성상 단순 변심에 의한 환불이 제한될 수 있으며, STELVIO는 에스크로 정산 중개 서비스만 제공하고 거래 당사자 간 분쟁에 대해 책임을 지지 않습니다.</label>
+          <span class="market-terms-link" onclick="event.preventDefault();event.stopPropagation();if(typeof openMarketTermsModal==='function')openMarketTermsModal();">[전문보기]</span>
+        </span>
       </div>
       <div class="market-confirm-buttons">
         <button type="button" class="market-confirm-btn market-confirm-btn-cancel" id="marketPurchaseAddressCancelBtn">취소</button>
