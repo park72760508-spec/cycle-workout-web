@@ -75,6 +75,10 @@ function buildMarketNegoProgressLine(originalPrice, requestedPrice) {
 /** #{진행내용} — 직거래 요청 접수 단계 전용 고정 문구 */
 const MARKET_DIRECT_DEAL_PROGRESS_LINE = "직거래 요청이 접수 되었습니다.";
 
+/** #{진행내용} — 안전결제 가상계좌 입금 확인 단계 전용 고정 문구(공백 포함 등록 문구 그대로) */
+const MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE =
+  "입금이 정상적으로 확인되었습니다.    판매상품에 대해서 택배발송을 진행해 주시고, 송장정보를 입력해주세요.";
+
 /**
  * 승인 템플릿(UK_6794) 본문(message_1) 조립 — #{변수} 값만 실제 데이터로 치환, 문구 자체는 그대로
  * 유지. #{진행내용}(progressContent)은 이벤트 종류별로 호출측이 만들어 넘긴다 — 가격 조정 요구는
@@ -169,6 +173,7 @@ module.exports = {
   MARKET_NEGO_ALIM_HEADER_LINE,
   DEFAULT_MARKET_NEGO_TPL_CODE,
   MARKET_DIRECT_DEAL_PROGRESS_LINE,
+  MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE,
   formatMarketAmountKo,
   formatMarketCategoryKo,
   formatMarketDealTypeKo,

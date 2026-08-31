@@ -32,6 +32,9 @@ const aligoTokenSecret = defineSecret("ALIGO_TOKEN");
  *  meetupInviteAlimtalkHttpsRelay와 동일 이유: 알리고 kakaoapi는 egress IP 화이트리스트가 있어
  *  Direct VPC egress가 적용된 릴레이(onRequest)에서만 알림톡을 직접 호출한다. */
 const competitionAlimRelaySecret = defineSecret("COMPETITION_ALIM_RELAY_SECRET");
+/** 중고랜드 알림톡 — tossPaymentWebhook(VPC 미적용, 결제 웹훅이라 네트워킹 변경 리스크를 피함) →
+ *  marketAlimtalkHttpsRelay(VPC) 내부 호출 인증용. 위 경쟁 릴레이와 동일 이유·구조. */
+const marketAlimRelaySecret = defineSecret("MARKET_ALIM_RELAY_SECRET");
 
 /** 대회 선착순 신청 — 토스페이먼츠 · Upstash Redis Secret Manager (functions:secrets:set로 등록). */
 const tossSecretKeySecret = defineSecret("TOSS_SECRET_KEY");
@@ -17580,6 +17583,78 @@ exports.competitionApplyAlimtalkHttpsRelay = onRequest(
 );
 
 /**
+ * 중고랜드 알림톡 릴레이(UK_6794) — competitionApplyAlimtalkHttpsRelay와 동일 구조·이유.
+ * tossPaymentWebhook(입금 확인 웹훅)처럼 VPC egress를 붙이기엔 리스크가 큰(결제 웹훅, 다른
+ * 목적의 외부 호출도 함께 함) 서버 쪽 트리거에서, receiverPhone/displayName/subject/message를
+ * 이미 완성해서 넘기면 이 릴레이가 그대로 알리고에 전달한다(범용 단건 발송 — 대상 데이터를
+ * 릴레이가 다시 조회하지 않음). notifyMarketNegoRequest/notifyMarketDirectDealRequest는 구매자의
+ * Firebase ID 토큰으로 직접 인증되는 별개 경로라 이 릴레이를 쓰지 않는다(자체 VPC egress 보유).
+ */
+exports.marketAlimtalkHttpsRelay = onRequest(
+  {
+    ...aligoKakaoNatEgress.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
+    timeoutSeconds: 60,
+    memory: "256MiB",
+    cors: false,
+    secrets: [marketAlimRelaySecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+  },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+    let expectedRelay;
+    try {
+      expectedRelay = scrubAligoCredentialForRace(marketAlimRelaySecret.value());
+    } catch (e) {
+      res.status(500).json({ ok: false, error: "MARKET_ALIM_RELAY_SECRET 없음" });
+      return;
+    }
+    const gotRelay = String(req.headers["x-market-alim-relay-secret"] || "").trim();
+    if (!expectedRelay || gotRelay !== expectedRelay) {
+      res.status(403).json({ ok: false, error: "Forbidden" });
+      return;
+    }
+
+    try {
+      process.env.ALIGO_API_KEY = scrubAligoCredentialForRace(aligoApiKeySecret.value()) || process.env.ALIGO_API_KEY;
+      process.env.ALIGO_USER_ID = scrubAligoCredentialForRace(aligoUserIdSecret.value()) || process.env.ALIGO_USER_ID;
+      process.env.ALIGO_TOKEN = scrubAligoCredentialForRace(aligoTokenSecret.value()) || process.env.ALIGO_TOKEN;
+    } catch (eEnv) {
+      // Secret 미설정 시 이후 loadMarketAlimtalkConfig에서 missing 필드로 명확히 실패
+    }
+
+    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    const receiverPhone = String(body.receiverPhone || "").trim();
+    const displayName = String(body.displayName || "").trim();
+    const subject = String(body.subject || "").trim();
+    const message = String(body.message || "").trim();
+    if (!receiverPhone || !subject || !message) {
+      res.status(400).json({ ok: false, error: "MISSING_FIELDS" });
+      return;
+    }
+
+    try {
+      const db = admin.firestore();
+      const cfg = await marketNegoAlimtalk.loadMarketAlimtalkConfig(db);
+      await sendAlimtalkUnified(cfg, {
+        receiverPhone,
+        displayName,
+        subject,
+        message,
+        templateKind: "market_progress",
+        logTag: "[marketAlimtalkHttpsRelay]",
+      });
+      res.status(200).json({ ok: true });
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      console.error("[marketAlimtalkHttpsRelay]", msg);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  }
+);
+
+/**
  * 대회 신청 — Redis 원자적 슬롯 예약 → 성공 시에만 토스 가상계좌 발급 → Firestore 기록.
  * 정원 초과는 에러가 아니라 { success:false, reason:'SOLD_OUT' } 정상 응답으로 처리한다(폭주 시 5xx 방지).
  * applicant(신청서 — competitionApplicationForm.js)는 서버에서도 화이트리스트 재검증 후 저장하며,
@@ -17919,6 +17994,7 @@ exports.getCompetitionStatus = onRequest(getCompetitionStatusOptions, async (req
 const tossPaymentWebhookOptions = supabaseDualWriteServer.appendServiceRoleSecret(
   appendRaceSecrets({ region: "asia-northeast3", cors: false, timeoutSeconds: 60 })
 );
+tossPaymentWebhookOptions.secrets.push(marketAlimRelaySecret);
 exports.tossPaymentWebhook = onRequest(tossPaymentWebhookOptions, async (req, res) => {
   if (req.method !== "POST") {
     res.status(200).send("OK");
@@ -18319,7 +18395,7 @@ async function handleMarketOrderWebhook(orderId, flat) {
   }
 
   const nowIso = new Date().toISOString();
-  await supabase
+  const { data: updatedOrders } = await supabase
     .from("market_orders")
     .update({
       escrow_status: "PAID",
@@ -18328,7 +18404,57 @@ async function handleMarketOrderWebhook(orderId, flat) {
       updated_at: nowIso,
     })
     .eq("id", order.id)
-    .eq("escrow_status", "PENDING");
+    .eq("escrow_status", "PENDING")
+    .select();
+  if (!updatedOrders || !updatedOrders.length) return; // 동시 웹훅 재시도 등으로 이미 처리됨(멱등)
+
+  // 입금완료 알림톡(UK_6794, 판매자 수신) — 결제 확정 자체는 이미 끝났으므로 실패해도 무시(로그만).
+  try {
+    const { data: item } = await supabase
+      .from("market_items")
+      .select("title, category, sub_category, deal_method, negotiable")
+      .eq("id", order.item_id)
+      .maybeSingle();
+    const { data: seller } = await supabase
+      .from("users")
+      .select("name, display_name, phone, contact")
+      .eq("id", order.seller_id)
+      .maybeSingle();
+    const sellerPhone = String((seller && (seller.phone || seller.contact)) || "").replace(/\D/g, "");
+    if (item && sellerPhone) {
+      const sellerName = String((seller && (seller.name || seller.display_name)) || "회원").trim() || "회원";
+      const message = marketNegoAlimtalk.buildMarketAlimtalkMessage({
+        sellerName,
+        itemName: item.title,
+        category: item.category,
+        subCategory: item.sub_category,
+        dealMethod: item.deal_method,
+        negotiable: item.negotiable,
+        progressContent: marketNegoAlimtalk.MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE,
+      });
+      const relayUrl =
+        process.env.MARKET_ALIM_RELAY_URL || "https://asia-northeast3-stelvio-ai.cloudfunctions.net/marketAlimtalkHttpsRelay";
+      const ac = new AbortController();
+      const relayTimeout = setTimeout(() => ac.abort(), 10000);
+      try {
+        await fetch(relayUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-market-alim-relay-secret": marketAlimRelaySecret.value() },
+          body: JSON.stringify({
+            receiverPhone: sellerPhone,
+            displayName: sellerName,
+            subject: marketNegoAlimtalk.MARKET_NEGO_ALIM_SUBJECT_KO,
+            message,
+          }),
+          signal: ac.signal,
+        });
+      } finally {
+        clearTimeout(relayTimeout);
+      }
+    }
+  } catch (alimErr) {
+    console.error("[handleMarketOrderWebhook] 입금완료 알림톡 발송 실패(수동 확인 필요):", order.id, alimErr && alimErr.message ? alimErr.message : alimErr);
+  }
 }
 
 const createMarketOrderOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
