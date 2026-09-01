@@ -906,6 +906,11 @@ export const stravaWebhook = onRequest(
       missionAlimRelaySecret,
       supabaseDualWriteServer.supabaseServiceRoleKey,
     ],
+    /**
+     * POST 처리는 res.send() 이후에도 Firestore 기록·활동 처리를 계속 await한다(아래 참고) —
+     * 기본 60초 타임아웃으로는 Strava API 조회+처리 체인이 빠듯할 수 있어 여유를 둔다.
+     */
+    timeoutSeconds: 120,
   } as any,
   async (req, res) => {
     if (req.method === "GET") {
@@ -944,8 +949,14 @@ export const stravaWebhook = onRequest(
        * 2026-08-02 사례처럼 Strava가 웹훅 자체를 보내지 않으면 재시도 큐(strava_webhook_retries)도
        * 비어있어 "정상"처럼 보인다 — stravaWebhookRetryMonitorSchedule이 이 lastReceivedAt으로
        * "구독은 있는데 이벤트가 안 옴" 상태(구독 만료 등)를 별도로 탐지한다.
+       *
+       * await하는 이유: res.send() 이후에도 함수가 계속 실행 중이어야(=invocation 미종료)
+       * Cloud Run이 CPU를 계속 배정한다. await 없는 fire-and-forget이면 핸들러가 곧바로
+       * 반환되어 invocation이 "종료"로 간주되고, 이 Firestore 쓰기가 CPU 미배정 구간에서
+       * 진행되다 DEADLINE_EXCEEDED로 실패하는 사례가 반복 관측됨(2026-08 Cloud Monitoring).
        */
-      db.collection("appConfig")
+      await db
+        .collection("appConfig")
         .doc("strava_webhook_health")
         .set(
           {
@@ -973,13 +984,15 @@ export const stravaWebhook = onRequest(
         String(body.updates.authorized) === "false";
 
       if (shouldFetchActivity) {
-        // 비동기 처리: await 없이 백그라운드에서 실행 (2초 제한 회피)
-            // create → Run 계열은 processRunningActivity, 그 외는 기존 사이클 파이프라인
-        routeStravaWebhookActivityAsync(db, ownerId, objectId, aspectType).catch((err) => {
+        // 응답(res.send())은 이미 보냈으므로 Strava는 지연을 겪지 않는다.
+        // 여기서 await하는 건 HTTP 응답을 늦추기 위해서가 아니라, invocation을 계속 "진행 중"으로
+        // 유지해 Cloud Run이 CPU 배정을 거두지 않게 하기 위함 — 위 health 기록 주석 참고.
+        // create → Run 계열은 processRunningActivity, 그 외는 기존 사이클 파이프라인
+        await routeStravaWebhookActivityAsync(db, ownerId, objectId, aspectType).catch((err) => {
           console.error("[Strava Webhook] Strava 활동 처리 실패:", err);
         });
       } else if (isAthleteDeauth) {
-        handleStravaAthleteDeauthAsync(db, ownerId).catch((err) => {
+        await handleStravaAthleteDeauthAsync(db, ownerId).catch((err) => {
           console.error("[Strava Webhook] deauth 처리 실패:", err);
         });
       } else {
