@@ -10075,47 +10075,28 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   }
 }
 
-/* 사용자 카드 대시보드 버튼 - 반투명 효과
-   (구 backdrop-filter: blur(8px) 제거 — 관리자 화면은 카드가 수백 장까지 한 번에 렌더되는데,
-   행마다 별도 blur 레이어가 생겨 스크롤 프레임마다 GPU가 다시 블러를 계산해야 했다. 카드가
-   1장뿐인 일반 사용자 화면에서는 티가 안 나지만 목록 전체를 넘겨보는 관리자 화면 발열의
-   핵심 원인이었다. 반투명 배경만으로도 시각적 차이는 거의 없다.) */
+/* 사용자 카드 대시보드 버튼 - .btn-edit/.btn-delete와 동일한 아이콘 전용 스타일 */
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(102, 126, 234, 0.75) !important; /* 반투명 효과 — blur 제거로 살짝 더 진하게 보정 */
-  color: white !important;
-  border: 1px solid rgba(102, 126, 234, 0.3) !important;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
   cursor: pointer;
+  background: transparent;
   margin-right: 4px;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.15);
-}
-/* 라이딩 기록 > 월간 상세 분석 차트 펼치기와 동일한 그래프 아이콘(data-analytics.png) —
-   원본이 검정 아이콘이라 버튼의 흰 글자색과 맞춰 흰색으로 반전한다. */
-:is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard-icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  display: block;
-  filter: brightness(0) invert(1);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  touch-action: manipulation;
 }
 
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard:hover {
-  background: rgba(102, 126, 234, 0.75) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.25);
+  background: rgba(102, 126, 234, 0.15);
+  border-color: rgba(102, 126, 234, 0.3);
 }
 
 :is(#profileScreen, #settingsModal .profile-user-card-scope) .user-card .btn-dashboard:active {
-  transform: translateY(0);
-  background: rgba(102, 126, 234, 0.5) !important;
-  box-shadow: 0 1px 2px rgba(102, 126, 234, 0.2);
+  background: rgba(102, 126, 234, 0.25);
 }
 
 /* 프로필 검색 블럭 래퍼: 제목과 사용자 카드 사이 1개 블럭 */
