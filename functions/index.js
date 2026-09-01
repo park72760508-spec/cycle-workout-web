@@ -10,6 +10,7 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const functions = require("firebase-functions/v1");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const zlib = require("zlib");
 
 // Secret Manager에서 STRAVA_CLIENT_SECRET 읽기
 // 임시: Secret 설정 문제로 인해 하드코딩된 값 사용 (보안상 권장하지 않음, 나중에 Secret으로 변경 필요)
@@ -13910,6 +13911,12 @@ exports.getPeakPowerRanking = onRequest(
       res.set("Cache-Control", "public, max-age=300, s-maxage=300, stale-while-revalidate=60");
     }
     const origJsonPeak = res.json.bind(res);
+    /**
+     * 응답이 카테고리별 전체 보드(수백 행)를 포함해 평균 300KB대 — gzip 미적용 상태로 매 요청
+     * 원문 그대로 전송되어 네트워크 비용의 대부분을 차지함(실측: 310KB→gzip 56KB, 약 82% 절감).
+     * byCategory/entries는 분포 차트·클럽 랭킹 등 여러 화면이 전체 행을 그대로 소비하므로
+     * 응답 자체를 줄이는 대신, 전송 단계에서만 압축한다(클라이언트 fetch()는 gzip을 자동 해제).
+     */
     res.json = (payload) => {
       if (payload && typeof payload === "object" && payload.success && !payload.readBackend) {
         const fbReadLegacy = rankingReadConfig.safeIsFirebaseRankingReadAllowed();
@@ -13919,7 +13926,24 @@ exports.getPeakPowerRanking = onRequest(
       if (payload && typeof payload === "object" && (payload.byCategory || payload.entries || payload.ranking)) {
         filterWithdrawnUsersFromRankingPayload(payload);
       }
-      return origJsonPeak(payload);
+      const acceptEncoding = String(req.headers["accept-encoding"] || "");
+      if (acceptEncoding.indexOf("gzip") === -1) {
+        return origJsonPeak(payload);
+      }
+      try {
+        const jsonStr = JSON.stringify(payload);
+        if (jsonStr.length < 2048) {
+          return origJsonPeak(payload);
+        }
+        const gzipped = zlib.gzipSync(Buffer.from(jsonStr, "utf8"));
+        res.set("Content-Type", "application/json; charset=utf-8");
+        res.set("Content-Encoding", "gzip");
+        res.set("Vary", "Accept-Encoding, Origin");
+        return res.send(gzipped);
+      } catch (eGzip) {
+        console.warn("[getPeakPowerRanking] gzip 압축 실패, 원문 전송:", eGzip && eGzip.message);
+        return origJsonPeak(payload);
+      }
     };
     try {
     let period = req.query.period || "monthly";
