@@ -32104,8 +32104,25 @@
           strava_expires_at: 0
         };
         
-        await new Promise(r => setTimeout(r, 200));
-        await window.saveNewUserToFirestore(user.uid, userData);
+        /* Auth 계정 생성 직후 ID 토큰이 Firestore 보안 규칙 평가 시점까지 전파되지 않아
+           permission-denied로 실패하는 경우가 실측 확인됨(문자인증 도입 후 인증은 성공하는데
+           최종 가입만 실패하는 사례 — Auth 계정은 생성됐지만 users 문서가 없는 상태로 남음).
+           200ms 고정 대기 1회로는 느린 네트워크에서 부족할 수 있어, 짧은 재시도를 추가한다. */
+        var _saveRetryDelays = [200, 500, 1000];
+        var _saveLastErr = null;
+        var _saveOk = false;
+        for (var _saveAttempt = 0; _saveAttempt < _saveRetryDelays.length; _saveAttempt++) {
+          await new Promise(r => setTimeout(r, _saveRetryDelays[_saveAttempt]));
+          try {
+            await window.saveNewUserToFirestore(user.uid, userData);
+            _saveOk = true;
+            break;
+          } catch (_saveErr) {
+            _saveLastErr = _saveErr;
+            console.warn('[Register] Firestore 저장 재시도(' + (_saveAttempt + 1) + '/' + _saveRetryDelays.length + '):', _saveErr && _saveErr.message);
+          }
+        }
+        if (!_saveOk) throw _saveLastErr || new Error('Firestore 프로필 저장에 실패했습니다.');
         console.log('✅ Firestore users 컬렉션에 저장 완료:', userData);
         if (typeof syncLoginAccountFlagForUser === 'function') {
           syncLoginAccountFlagForUser(user.uid, 'active').catch(function () {});
@@ -32184,6 +32201,86 @@
 
         /* ── auth/email-already-in-use: 탈퇴 사용자 재가입 안전망 ── */
         if (err.code === 'auth/email-already-in-use') {
+          /* ── 직전 시도로 생긴 "고아 Auth 계정" 자가 복구 ──
+             Auth 계정 생성(v9)이 서버에서는 성공했지만 응답을 못 받아 클라이언트가 실패로
+             처리하고 v8로 재시도하면서 email-already-in-use가 나거나, Auth 계정 생성 직후
+             Firestore 저장 단계에서만 실패한 경우 — Auth 계정은 있지만 users 문서가 없는
+             상태로 남는다. 방금 입력한 비밀번호로 로그인이 되면 "본인이 방금 만든 계정"이
+             확실하므로(다른 사람 계정이면 비밀번호가 달라 로그인 자체가 실패한다),
+             users 문서가 없을 때만 지금 채워 넣어 가입을 완료시킨다. */
+          try {
+            var _selfHealCred = null;
+            if (window.authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function') {
+              try { _selfHealCred = await window.signInWithEmailAndPasswordV9(window.authV9, email, password); }
+              catch (eSignInV9) { _selfHealCred = null; }
+            }
+            if (!_selfHealCred && auth && typeof auth.signInWithEmailAndPassword === 'function') {
+              _selfHealCred = await auth.signInWithEmailAndPassword(email, password).catch(function () { return null; });
+            }
+            var _selfHealUser = _selfHealCred && _selfHealCred.user;
+            if (_selfHealUser && _selfHealUser.uid) {
+              var _selfHealExisting = typeof window.getUserByUid === 'function'
+                ? await window.getUserByUid(_selfHealUser.uid)
+                : null;
+              if (!_selfHealExisting) {
+                console.log('[Register self-heal] 고아 Auth 계정 발견, Firestore 프로필을 생성해 가입을 완료합니다:', _selfHealUser.uid);
+                var _selfHealNow = new Date().toISOString();
+                var _selfHealExpiry = (function () {
+                  var d = new Date();
+                  d.setMonth(d.getMonth() + 6);
+                  return d.toISOString().split('T')[0];
+                })();
+                var _selfHealUserData = {
+                  id: _selfHealUser.uid,
+                  name: name,
+                  contact: phone,
+                  phone_verified: true,
+                  phone_verified_at: _selfHealNow,
+                  ftp: ftpToUse,
+                  weight: weight,
+                  birth_year: birthYear,
+                  gender: gender,
+                  category: challengeFields.category || category,
+                  challenge: challengeFields.challenge || challenge,
+                  run_challenge: challengeFields.run_challenge || '',
+                  grade: '2',
+                  created_at: _selfHealNow,
+                  expiry_date: _selfHealExpiry,
+                  acc_points: 0,
+                  rem_points: 0,
+                  last_training_date: '',
+                  strava_access_token: '',
+                  strava_refresh_token: '',
+                  strava_expires_at: 0
+                };
+                await window.saveNewUserToFirestore(_selfHealUser.uid, _selfHealUserData);
+                console.log('✅ [Register self-heal] Firestore 프로필 생성 완료:', _selfHealUser.uid);
+                if (typeof syncLoginAccountFlagForUser === 'function') {
+                  syncLoginAccountFlagForUser(_selfHealUser.uid, 'active').catch(function () {});
+                }
+                try {
+                  var _selfHealNormPhone = phone.replace(/-/g, '').replace(/\D/g, '');
+                  localStorage.setItem('userPassword_' + phone, password);
+                  localStorage.setItem('userPassword_' + _selfHealNormPhone, password);
+                  localStorage.setItem('lastPassword', password);
+                } catch (eSelfHealLs) {}
+                showRegisterStatus('✅ 회원가입 성공!', 'success');
+                if (typeof window.stelvioMarkExplicitSessionLogin === 'function') window.stelvioMarkExplicitSessionLogin();
+                window.isPhoneAuthenticated = true;
+                window.isAuthReady = true;
+                showRegisterCelebration(name);
+                Promise.all([
+                  typeof loadUsers === 'function' ? loadUsers() : Promise.resolve(),
+                  typeof syncUsersFromDB === 'function' ? syncUsersFromDB().catch(function () { return Promise.resolve(); }) : Promise.resolve()
+                ]).catch(function () {});
+                return;
+              }
+              /* users 문서가 이미 있으면 진짜 기존 계정 — 아래 공용 처리(탈퇴 확인 → 안내)로 진행 */
+            }
+          } catch (eSelfHeal) {
+            console.warn('[Register self-heal] 자가 복구 시도 실패(무시, 기존 로직으로 진행):', eSelfHeal && eSelfHeal.message);
+          }
+
           showRegisterStatus('기존 탈퇴 계정 확인 중...', 'info');
           var _fallbackPhone = (function() { var el = document.getElementById('registerPhoneInput'); return el ? el.value.trim() : ''; })();
           var _fallbackBirthYear = (function() { var el = document.getElementById('registerBirthYearInput'); return parseInt((el ? el.value : '') || '0', 10); })();
