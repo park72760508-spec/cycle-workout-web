@@ -775,8 +775,8 @@
   
   
   <style>
-    .toast{position:fixed;left:50%;bottom:max(20px, env(safe-area-inset-bottom, 0px));transform:translateX(-50%);
-      background:#333;color:#fff;padding:10px 16px;border-radius:8px;
+    .toast{position:fixed;left:50%;top:50%;transform:translate(-50%, -50%);
+      background:#333;color:#fff;padding:10px 16px;border-radius:8px;max-width:min(88vw, 420px);text-align:center;
       opacity:0;transition:opacity .35s;z-index:9999;touch-action:manipulation;-webkit-tap-highlight-color:transparent;pointer-events:auto}
     .toast.show{opacity:.92}
     .hidden{display:none}
