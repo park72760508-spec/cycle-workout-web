@@ -777,7 +777,15 @@
   <style>
     .toast{position:fixed;left:50%;top:50%;transform:translate(-50%, -50%);
       background:#333;color:#fff;padding:10px 16px;border-radius:8px;max-width:min(88vw, 420px);text-align:center;
-      opacity:0;transition:opacity .35s;z-index:9999;touch-action:manipulation;-webkit-tap-highlight-color:transparent;pointer-events:auto}
+      opacity:0;transition:opacity .35s;z-index:9999;touch-action:manipulation;-webkit-tap-highlight-color:transparent;pointer-events:none}
+    /* 토스트를 화면 정중앙으로 옮긴 뒤(끌어올리기 등 안내 메시지가 하단에서 안 보이던 문제 수정)
+       드러난 회귀 버그: showToast()는 최초 1회 표시 후 "hidden" 클래스를 다시 붙이지 않고
+       opacity만 0으로 되돌린다 — 즉 세션 중 토스트를 한 번이라도 띄운 화면은 이후 계속
+       화면 정중앙에 투명하지만 클릭은 그대로 먹는 요소가 고정 배치된 채로 남는다. 기존
+       pointer-events:auto는 아무 기능도 없었는데(토스트에는 클릭 핸들러가 없음) 이 투명
+       요소가 중앙에 있는 목록 카드 탭을 계속 가로채고 있었다(기종 무관 재현, 2026-09
+       실사례). 토스트는 클릭 대상이 아니므로 항상 pointer-events:none — 보이는 동안에도
+       클릭을 통과시켜 아래 콘텐츠가 눌리게 한다. */
     .toast.show{opacity:.92}
     .hidden{display:none}
     /* Ranking thermal guard: Time Slicing으로 붙은 행 중 화면 밖 row는 브라우저 렌더 비용을 지연한다. */
