@@ -4271,6 +4271,104 @@
     </div>
   </div>
 
+  <!-- 중고랜드 정식 오픈 + 앱 스토어 출시 안내 팝업 (인증 완료 직후 카테고리 화면 최초 진입 시) -->
+  <div id="launchNoticeModal" class="launch-notice-modal hidden" role="dialog" aria-modal="true" aria-labelledby="launchNoticeTitle">
+    <div class="launch-notice-modal__backdrop" onclick="if(typeof closeLaunchNoticeModal==='function')closeLaunchNoticeModal(false);"></div>
+    <div class="launch-notice-modal__card">
+      <button type="button" class="launch-notice-modal__close" aria-label="닫기" onclick="if(typeof closeLaunchNoticeModal==='function')closeLaunchNoticeModal(false);">&times;</button>
+      <div class="launch-notice-modal__body">
+        <div class="launch-notice-modal__hero">
+          <span class="launch-notice-modal__badge">🚀 STELVIO 중고랜드 정식 오픈</span>
+          <h2 class="launch-notice-modal__title" id="launchNoticeTitle">STELVIO 중고랜드<br/>정식 오픈!</h2>
+          <p class="launch-notice-modal__subtitle">라이더와 러너만을 위한 프리미엄 C2C 마켓플레이스</p>
+        </div>
+        <div class="launch-notice-modal__features">
+          <div class="launch-notice-feature">
+            <span class="launch-notice-feature__icon">🛡️</span>
+            <span class="launch-notice-feature__text"><strong>에스크로 안전결제</strong><br/>구매 확정 전까지 대금 안전 보호</span>
+          </div>
+          <div class="launch-notice-feature">
+            <span class="launch-notice-feature__icon">🤝</span>
+            <span class="launch-notice-feature__text"><strong>직거래 &amp; 택배거래</strong><br/>상황에 맞는 유연한 거래 선택</span>
+          </div>
+          <div class="launch-notice-feature">
+            <span class="launch-notice-feature__icon">🏷️</span>
+            <span class="launch-notice-feature__text"><strong>투명한 가격 비교</strong><br/>구입가 대비 판매가 및 가격 조정</span>
+          </div>
+          <div class="launch-notice-feature">
+            <span class="launch-notice-feature__icon">📊</span>
+            <span class="launch-notice-feature__text"><strong>실시간 거래 흐름</strong><br/>입금 ➔ 배송 ➔ 구매확정 단계 시각화</span>
+          </div>
+        </div>
+        <div class="launch-notice-modal__app-banner">
+          <p class="launch-notice-modal__app-banner-title">🎉 STELVIO AI 구글 플레이스토어 공식 출시!</p>
+          <p class="launch-notice-modal__app-banner-desc">전용 앱을 설치하고 실시간 알림과 빠른 거래를 경험하세요.</p>
+          <a class="launch-notice-modal__cta" href="https://play.google.com/store/apps/details?id=stelvio.ai.kr" target="_blank" rel="noopener noreferrer">
+            <img src="assets/img/android.png" alt="" class="launch-notice-modal__cta-icon" />
+            Google Play에서 STELVIO 앱 다운로드
+          </a>
+        </div>
+      </div>
+      <div class="launch-notice-modal__footer">
+        <a class="launch-notice-modal__footer-cta" href="https://play.google.com/store/apps/details?id=stelvio.ai.kr" target="_blank" rel="noopener noreferrer">Google Play 다운로드</a>
+        <div class="launch-notice-modal__footer-row">
+          <label class="launch-notice-modal__dismiss-label">
+            <input type="checkbox" id="launchNoticeDismissToday" />
+            오늘 하루 보지 않기
+          </label>
+          <button type="button" class="launch-notice-modal__footer-close" onclick="if(typeof closeLaunchNoticeModal==='function')closeLaunchNoticeModal(document.getElementById('launchNoticeDismissToday')&&document.getElementById('launchNoticeDismissToday').checked);">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    /* 중고랜드 정식 오픈 + 앱 출시 안내 팝업 — 인증 완료 직후 카테고리 화면 최초 진입 시에만
+       표시(handlePhoneAuth 로그인 성공 경로, closeRegisterCelebration 가입 완료 경로에서
+       showScreen('sportCategoryScreen') 직후 호출). "오늘 하루 보지 않기"는 날짜 문자열을
+       localStorage에 저장해두는 기존 runWeeklyTop10DontShowDate와 동일한 패턴을 재사용한다. */
+    (function () {
+      'use strict';
+      var LS_DISMISS_DATE_KEY = 'stelvioLaunchNoticeDismissDate';
+
+      function todayStr() {
+        try {
+          return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+        } catch (e) {
+          var d = new Date();
+          return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+      }
+
+      function isDismissedToday() {
+        try { return localStorage.getItem(LS_DISMISS_DATE_KEY) === todayStr(); } catch (e) { return false; }
+      }
+
+      function setDismissedToday() {
+        try { localStorage.setItem(LS_DISMISS_DATE_KEY, todayStr()); } catch (e) {}
+      }
+
+      window.maybeShowLaunchNoticeModal = function () {
+        if (isDismissedToday()) return;
+        var modal = document.getElementById('launchNoticeModal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        requestAnimationFrame(function () {
+          modal.classList.add('launch-notice-modal--visible');
+        });
+      };
+
+      window.closeLaunchNoticeModal = function (dontShowToday) {
+        var modal = document.getElementById('launchNoticeModal');
+        if (!modal) return;
+        if (dontShowToday) setDismissedToday();
+        modal.classList.remove('launch-notice-modal--visible');
+        setTimeout(function () {
+          modal.classList.add('hidden');
+        }, 220);
+      };
+    })();
+  </script>
+
   <!-- 훈련 화면 종료 확인 팝업 (모바일/노트북/블루투스 - 사용자 이름 클릭 시) -->
   <div id="stelvioExitConfirmModal" class="stelvio-exit-confirm-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10020000;">
     <div class="stelvio-exit-confirm-overlay" onclick="if(typeof closeStelvioExitConfirmPopup==='function')closeStelvioExitConfirmPopup();"></div>
@@ -31136,6 +31234,7 @@
                 } else if (typeof window.hideAuthTransitionOverlay === 'function') {
                   window.hideAuthTransitionOverlay();
                 }
+                if (typeof window.maybeShowLaunchNoticeModal === 'function') window.maybeShowLaunchNoticeModal();
               }, 100);
             } catch (err) {
               console.warn('⚠️ showScreen 함수 실행 중 오류, 직접 전환 시도:', err);
@@ -31146,7 +31245,7 @@
             directScreenSwitch();
           }
         };
-        
+
         switchToBasecamp();
         } else {
           console.warn('[Login] Firestore 프로필 없음 — 베이스캠프 이동 생략');
@@ -32519,8 +32618,12 @@
         basecampScreen.classList.add('active');
         basecampScreen.style.display = 'block';
       }
+
+      if (typeof window.maybeShowLaunchNoticeModal === 'function') {
+        setTimeout(function () { window.maybeShowLaunchNoticeModal(); }, 150);
+      }
     }
-    
+
     // 전역 함수로 등록
     window.closeRegisterCelebration = closeRegisterCelebration;
     
