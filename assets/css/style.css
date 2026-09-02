@@ -17264,18 +17264,8 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   padding: 32px 24px 20px;
 }
 .launch-notice-modal__hero { text-align: center; margin-bottom: 20px; }
-.launch-notice-modal__badge {
-  display: inline-block;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
 .launch-notice-modal__title {
-  margin: 14px 0 8px;
+  margin: 0 0 8px;
   font-size: 22px;
   font-weight: 800;
   color: #0f172a;
