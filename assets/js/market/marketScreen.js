@@ -2495,8 +2495,23 @@
     // 단, 거래가 취소(CANCELLED)되었거나 환불(REFUNDED, 조기환불·반품환불 모두 포함)로
     // 끝난 경우엔 더 이상 진행 중인 거래가 아니므로 기록을 표시하지 않고 초기 판매 등록
     // 상태처럼 보이게 한다(상단 액션 버튼은 이미 item.status 기준으로 "구매하기"로 복귀함).
+    var buyerHasActiveOrder = !!(myOrder && myOrder.escrow_status !== 'CANCELLED' && myOrder.escrow_status !== 'REFUNDED');
+
+    // 구매자 전용 — 아직 진행 중인 주문으로 이어지지 않은 내 가격 조정 요청의 결과(수락/거절)를
+    // 판매자 화면(negoRowsHtml)과 동일하게 "거래 진행 상태" 카드로 보여준다. 진행 중인 주문이
+    // 이미 있으면 그 주문 카드(아래 buyerOrderHistoryHtml)에 함께 표시하므로 여기서는 생략.
+    // PENDING은 상단 가격 영역에 이미 안내가 있어(priceRowHtml) 여기서는 결정된 건만 다룬다.
+    var buyerNegoOnlyHtml = '';
+    if (!isMine && !buyerHasActiveOrder && nego && (nego.status === 'ACCEPTED' || nego.status === 'REJECTED')) {
+      buyerNegoOnlyHtml =
+        '<div class="market-order-history"><div class="market-nego-divider"></div>' +
+        '<p class="market-order-history__title--deal-status">거래 진행 상태</p>' +
+        marketNegoAmountRowHtml(nego, true) +
+        '</div>';
+    }
+
     var buyerOrderHistoryHtml = '';
-    if (!isMine && myOrder && myOrder.escrow_status !== 'CANCELLED' && myOrder.escrow_status !== 'REFUNDED') {
+    if (!isMine && buyerHasActiveOrder) {
       var sp = detailState.sellerProfile;
       var sellerName = marketSellerDisplayName(sp);
       var sellerAvatar = (sp && sp.profile_image_url) || 'assets/img/profile-placeholder.svg';
@@ -2541,6 +2556,7 @@
         '<div class="market-detail-desc">' + escapeHtml(item.description || '').replace(/\n/g, '<br/>') + '</div>' +
         marketDisclaimerBannerHtml() +
         dealsHistoryHtml +
+        buyerNegoOnlyHtml +
         buyerOrderHistoryHtml +
       '</div>';
 
