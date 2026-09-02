@@ -17358,21 +17358,6 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   padding: 16px 24px calc(16px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #eef1f5;
 }
-.launch-notice-modal__footer-cta {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  text-align: center;
-  padding: 13px 16px;
-  border-radius: 12px;
-  background: #0f172a;
-  color: #fff;
-  font-size: 14.5px;
-  font-weight: 700;
-  text-decoration: none;
-  margin-bottom: 12px;
-}
-.launch-notice-modal__footer-cta:active { transform: translateY(1px); }
 .launch-notice-modal__footer-row {
   display: flex;
   align-items: center;
