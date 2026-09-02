@@ -30921,6 +30921,13 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   content-visibility: auto;
   contain-intrinsic-size: 0 160px;
 }
+/* 목록 진입 직후 항상 화면에 보이는 상위 카드(marketItemCardHtml의 eager 인자, 상위 12장)는
+   content-visibility 최적화 대상에서 완전히 제외한다 — 위 contain-intrinsic-size 보정만으로는
+   해결되지 않던 iOS Safari 탭 인식 불량(2026-09 실사례)의 재발을 원천 차단하기 위함. 목록
+   아래쪽 수백 장에서만 성능 이점이 크므로 상위 몇 장을 제외해도 체감 성능 차이는 없다. */
+.market-card--eager {
+  content-visibility: visible;
+}
 .market-card:last-child { border-bottom: none; }
 /* 거래 완료(판매완료) 상품 — 카드 전체를 비활성화 톤으로: 이미지는 흐리게+무채색, 텍스트도 반투명 */
 .market-card--sold .market-card__img { opacity: 0.45; filter: grayscale(0.4); }

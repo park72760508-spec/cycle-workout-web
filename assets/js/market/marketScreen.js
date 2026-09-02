@@ -967,15 +967,25 @@
     });
   }
 
-  function marketItemCardHtml(item, activeOrderIds) {
+  // content-visibility:auto(.market-card, 아래 CSS)는 화면 밖 카드의 레이아웃을 건너뛰어
+  // 스크롤 발열을 낮추지만, 목록 진입 직후(스크롤 전) 곧바로 탭하는 상위 몇 장은 아직 브라우저가
+  // "화면 안"으로 확정하기 전인 짧은 시점이 있어 WebKit(iOS Safari)에서 히트 테스트가 어긋나
+  // 탭이 씹히는 사례가 있었다(2번째 카드 상품명 클릭 불량, 2026-09 실사례 — contain-intrinsic-size
+  // 보정만으로는 해결 안 됨). 처음부터 항상 화면에 보이는 상위 카드는 아예 content-visibility
+  // 최적화 대상에서 제외해(market-card--eager) 이 문제 자체를 원천 차단한다 — 성능 이점은 목록
+  // 아래쪽 수백 장에서만 의미가 크므로 상위 몇 장을 제외해도 체감 차이는 없다.
+  var MARKET_CARD_EAGER_COUNT = 12;
+
+  function marketItemCardHtml(item, activeOrderIds, eager) {
     var img = (item.images && item.images[0]) || 'assets/img/profile-placeholder.svg';
     var isFav = homeState.favoriteIds.has(item.id);
     var soldClass = item.status === 'SOLD' ? ' market-card--sold' : '';
+    var eagerClass = eager ? ' market-card--eager' : '';
     var viewCount = Number(item.view_count) || 0;
     var favCount = Number(item.__favoriteCount) || 0;
     var hasActiveRequest = !!(activeOrderIds && activeOrderIds.has(item.id));
     return (
-      '<div class="market-card' + soldClass + '" data-item-id="' + item.id + '">' +
+      '<div class="market-card' + soldClass + eagerClass + '" data-item-id="' + item.id + '">' +
         '<div class="market-card__img-wrap">' +
           '<img class="market-card__img" src="' + escapeHtml(img) + '" alt="" loading="lazy" decoding="async" />' +
           statusBadgeHtml(item.status) +
@@ -1007,14 +1017,19 @@
     var grid = document.getElementById('marketItemGrid');
     if (!grid) return;
     if (!append) {
-      var html = homeState.items.map(function (item) { return marketItemCardHtml(item, homeState.activeOrderIds); }).join('');
+      var html = homeState.items.map(function (item, i) {
+        return marketItemCardHtml(item, homeState.activeOrderIds, i < MARKET_CARD_EAGER_COUNT);
+      }).join('');
       grid.innerHTML =
         html ||
         (homeState.keyword
           ? '<div class="market-empty">\'' + escapeHtml(homeState.keyword) + '\'에 대한 검색 결과가 없습니다.</div>'
           : '<div class="market-empty">등록된 상품이 없습니다.</div>');
     } else {
-      var appendHtml = (newItems || []).map(function (item) { return marketItemCardHtml(item, homeState.activeOrderIds); }).join('');
+      var alreadyRendered = homeState.items.length - (newItems || []).length;
+      var appendHtml = (newItems || []).map(function (item, i) {
+        return marketItemCardHtml(item, homeState.activeOrderIds, (alreadyRendered + i) < MARKET_CARD_EAGER_COUNT);
+      }).join('');
       if (appendHtml) grid.insertAdjacentHTML('beforeend', appendHtml);
     }
     wireMarketGridEvents(grid);
