@@ -17292,10 +17292,13 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   background: #f8fafc;
   border: 1px solid #eef1f5;
 }
+/* 대회 신청 화면 카드 라인 아이콘(#competitionScreen .competition-card-icon)과 동일한
+   스타일 — 컬러 이모지 대신 stroke 기반 모노톤 라인 아이콘으로 통일 */
 .launch-notice-feature__icon {
   flex-shrink: 0;
-  font-size: 22px;
-  line-height: 1;
+  width: 22px;
+  height: 22px;
+  color: #94a3b8;
 }
 .launch-notice-feature__text {
   font-size: 13.5px;
