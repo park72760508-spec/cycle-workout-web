@@ -905,15 +905,26 @@
   }
 
   /** 이미 주문이 있는 구매자의 가격 조정 요청 — 위쪽 거래 상대 정보 카드가 이미 구매자를
-   * 알려주므로 아바타·이름 없이, 아래 입금 금액 행과 동일한 형식(label : 값 + 상태)으로 표시. */
-  function marketNegoAmountRowHtml(r) {
+   * 알려주므로 아바타·이름 없이, 아래 입금 금액 행과 동일한 형식(label : 값 + 상태)으로 표시.
+   * readOnly=true면 수락/거절 버튼 없이 상태 배지만 표시 — 구매자 본인 화면(거래 진행 상태)에서
+   * 재사용할 때 판매자 전용 버튼이 노출되지 않도록 한다. */
+  function marketNegoAmountRowHtml(r, readOnly) {
     return '<div class="market-deal-amount-row">' +
       '<span class="market-tx-row__amount">' +
         '<span class="market-delivery-info__label">조정 가격 : </span>' +
         '<span class="market-delivery-info__value">' + formatPrice(r.requested_price) + '원</span>' +
       '</span>' +
-      marketNegoActionHtml(r) +
+      (readOnly ? marketNegoStatusOnlyHtml(r) : marketNegoActionHtml(r)) +
     '</div>';
+  }
+
+  function marketNegoStatusOnlyHtml(r) {
+    if (r.status === 'PENDING') {
+      return '<span class="market-nego-request-status market-nego-request-status--pending">대기 중</span>';
+    }
+    return '<span class="market-nego-request-status market-nego-request-status--' +
+      (r.status === 'ACCEPTED' ? 'accepted' : 'rejected') + '">' +
+      (r.status === 'ACCEPTED' ? '수락됨' : '거절') + '</span>';
   }
 
   function marketNegoActionHtml(r) {
@@ -923,9 +934,7 @@
         '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
       '</div>';
     }
-    return '<span class="market-nego-request-status market-nego-request-status--' +
-      (r.status === 'ACCEPTED' ? 'accepted' : 'rejected') + '">' +
-      (r.status === 'ACCEPTED' ? '수락됨' : '거절') + '</span>';
+    return marketNegoStatusOnlyHtml(r);
   }
 
   // ───────────────────────── 홈/목록 화면 ─────────────────────────
@@ -2105,9 +2114,18 @@
 
   /** 취소(CANCELLED)·환불(REFUNDED)로 끝난 주문은 협상가를 소비한 것으로 보고 무효화한다
    * (renderMarketDetail의 가격 표시 초기화와 동일한 정책 — 구매/직거래 버튼도 같은 기준을 써야
-   * 화면에 보이는 가격과 실제 결제 금액이 어긋나지 않는다). */
-  function marketNegoStillActiveForOrder(order) {
-    return !(order && (order.escrow_status === 'CANCELLED' || order.escrow_status === 'REFUNDED'));
+   * 화면에 보이는 가격과 실제 결제 금액이 어긋나지 않는다).
+   * getMarketOrderForItem은 "가장 최근" 주문 1건만 돌려주므로, 이 협상(nego)이 수락되기 이전에
+   * 이미 취소·환불로 끝나있던 옛 주문(이 협상과 무관)까지 무조건 "소비됨"으로 오판하지 않도록,
+   * 주문 생성 시각이 협상 수락 시각 이후일 때만 소비된 것으로 본다. 예: 구매자가 예전에 원가로
+   * 주문했다가 취소한 뒤, 나중에 새로 가격 조정을 요청해 수락받은 경우 — 그 옛 취소 주문 때문에
+   * 방금 수락된 조정가가 가려지던 버그(2026-09 실사례로 확인). */
+  function marketNegoStillActiveForOrder(order, nego) {
+    if (!order || (order.escrow_status !== 'CANCELLED' && order.escrow_status !== 'REFUNDED')) return true;
+    if (nego && nego.decided_at && order.created_at) {
+      return new Date(order.created_at).getTime() < new Date(nego.decided_at).getTime();
+    }
+    return false;
   }
 
   function openMarketItemDetail(itemId) {
@@ -2372,9 +2390,9 @@
       ? (detailState.negoRequests || []).filter(function (r) {
           if (r.status !== 'ACCEPTED') return false;
           var order = (detailState.orderHistory || []).find(function (o) { return o.buyer_id === r.buyer_id; });
-          return marketNegoStillActiveForOrder(order);
+          return marketNegoStillActiveForOrder(order, r);
         })[0] || null
-      : (nego && nego.status === 'ACCEPTED' && marketNegoStillActiveForOrder(myOrder) ? nego : null);
+      : (nego && nego.status === 'ACCEPTED' && marketNegoStillActiveForOrder(myOrder, nego) ? nego : null);
 
     var priceRowHtml;
     if (acceptedNego) {
@@ -2390,7 +2408,7 @@
         (!isMine && !myOrder
           ? '<div class="market-nego-status market-nego-status--accepted">판매자가 가격 조정을 수락했습니다. 조정된 금액으로 구매할 수 있습니다.</div>'
           : '');
-    } else if (!isMine && item.negotiable && (!myOrder || !marketNegoStillActiveForOrder(myOrder))) {
+    } else if (!isMine && item.negotiable && (!myOrder || !marketNegoStillActiveForOrder(myOrder, nego))) {
       if (nego && nego.status === 'PENDING') {
         priceRowHtml =
           marketDetailPlainPriceHtml(item) +
@@ -2491,12 +2509,17 @@
       var sellerCounterpartHtml = marketOrderRevealsPhone(myOrder.escrow_status)
         ? marketCounterpartCardHtml(sellerAvatar, sellerName, detailState.sellerPhone, myOrder.escrow_status === 'CONFIRMED')
         : '';
+      // 이 거래에 연결된 가격 조정 요청(있다면) — 판매자 화면(negoHtml, 위 dealsHistoryHtml)과
+      // 동일한 위치(거래 상대 정보 카드 바로 아래)에 보여준다. 구매자 화면이라 수락/거절 버튼은
+      // 감추고 상태 배지만 표시(readOnly=true).
+      var buyerNegoHtml = nego ? marketNegoAmountRowHtml(nego, true) : '';
       buyerOrderHistoryHtml =
         '<div class="market-order-history">' +
           '<div class="market-nego-divider"></div>' +
           '<p class="market-order-history__title--deal-status">거래 진행 상태</p>' +
           marketDealStepsHtml(myOrder) +
           sellerCounterpartHtml +
+          buyerNegoHtml +
           marketDealAmountStatusHtml(buyerAmountLabelText, buyerAmountValueText, myOrder.escrow_status, myOrder.va_due_at) +
           vaLineHtml +
           marketDeliveryAddressLineHtml(myOrder) +
@@ -2758,7 +2781,7 @@
 
   function handleMarketBuy(item) {
     var nego = detailState.myNegoRequest;
-    var negoActive = nego && nego.status === 'ACCEPTED' && marketNegoStillActiveForOrder(detailState.myOrder);
+    var negoActive = nego && nego.status === 'ACCEPTED' && marketNegoStillActiveForOrder(detailState.myOrder, nego);
     var buyPrice = negoActive ? Number(nego.requested_price) : Number(item.price);
     showMarketPurchaseAddressPopup(item, buyPrice);
   }
@@ -2850,7 +2873,7 @@
 
   function handleMarketDirectDeal(item, btn) {
     var nego = detailState.myNegoRequest;
-    var negoActive = nego && nego.status === 'ACCEPTED' && marketNegoStillActiveForOrder(detailState.myOrder);
+    var negoActive = nego && nego.status === 'ACCEPTED' && marketNegoStillActiveForOrder(detailState.myOrder, nego);
     var dealPrice = negoActive ? Number(nego.requested_price) : Number(item.price);
     showMarketConfirmPopup(
       formatPrice(dealPrice) + '원에 직거래를 요청할까요? 안전결제(가상계좌 입금) 없이 예약되며, 판매자와 직접 만나 대금을 주고받습니다.',

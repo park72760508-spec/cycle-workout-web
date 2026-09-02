@@ -32017,6 +32017,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-nego-request-status--accepted { background: #eff6ff; color: #1d4ed8; }
 .market-nego-request-status--rejected { background: #f8fafc; color: #94a3b8; }
+.market-nego-request-status--pending { background: #fff7ed; color: #ea580c; }
 
 .market-order-history { margin-top: 4px; }
 .market-order-history__title { font-size: 13px; font-weight: 700; color: #334155; margin: 16px 0 0 0; }
