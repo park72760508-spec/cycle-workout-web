@@ -661,32 +661,33 @@ export async function incrementMarketItemView(itemId) {
   });
 }
 
-/** 관심상품(하트) 클릭 수 — market_favorites 건수를 그대로 카운트(별도 카운터 불필요) */
+/** 관심상품(하트) 클릭 수 — market_favorites의 RLS 정책(market_favorites_own)이 본인 행만
+ * 조회 가능하도록 되어 있어(찜 개인정보 보호 목적), 테이블을 직접 SELECT하면 "전체 사용자
+ * 합산"이 아니라 "본인이 찜했는지(0/1)"만 세어지는 버그가 있었다(2026-09 실사례). RLS를
+ * 우회해 집계만 반환하는 SECURITY DEFINER RPC(get_market_favorite_counts)를 대신 쓴다. */
 export async function getMarketFavoriteCount(itemId) {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
-    const { count, error } = await supabase
-      .from('market_favorites')
-      .select('*', { count: 'exact', head: true })
-      .eq('item_id', itemId);
+    const { data, error } = await supabase.rpc('get_market_favorite_counts', { p_item_ids: [itemId] });
     if (error) throw error;
-    return count || 0;
+    const row = (data || [])[0];
+    return row ? Number(row.favorite_count) || 0 : 0;
   });
 }
 
-/** 목록 화면용 — 여러 상품의 관심수를 한 번의 쿼리로 배치 조회(N+1 방지). PostgREST에
- * group-by 카운트 API가 없어 item_id만 받아 클라이언트에서 빈도수를 센다(목록 페이지당
- * 건수가 적어 부담 없음). */
+/** 목록 화면용 — 여러 상품의 관심수를 한 번의 쿼리로 배치 조회(N+1 방지). get_market_favorite_counts
+ * RPC가 이미 item_id별로 GROUP BY해서 돌려주므로 클라이언트는 결과를 맵으로 옮기기만 하면 된다
+ * (개수가 0인 상품은 RPC 결과에 행 자체가 없음 — 아래에서 || 0으로 처리). */
 export async function getMarketFavoriteCountsForItems(itemIds) {
   return withMarketAuthRetry(async () => {
     const ids = Array.from(new Set(itemIds || [])).filter(Boolean);
     if (!ids.length) return {};
     const supabase = await ensureMarketSupabaseSession();
-    const { data, error } = await supabase.from('market_favorites').select('item_id').in('item_id', ids);
+    const { data, error } = await supabase.rpc('get_market_favorite_counts', { p_item_ids: ids });
     if (error) throw error;
     const counts = {};
     (data || []).forEach((row) => {
-      counts[row.item_id] = (counts[row.item_id] || 0) + 1;
+      counts[row.item_id] = Number(row.favorite_count) || 0;
     });
     return counts;
   });
