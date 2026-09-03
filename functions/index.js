@@ -18244,10 +18244,24 @@ exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, as
 const MARKET_ORDER_FEE_KRW = 1000;
 const MARKET_ORDER_VALID_HOURS = 24;
 
+/**
+ * Toss orderId는 결제 시도마다 고유해야 하고 최대 64자 제한이 있다. 기존 구현은
+ * `market_${itemId}_${uid}_${ts}${rand}`를 만든 뒤 64자로 잘랐는데, item_id(UUID, 36자)
+ * +uid(Firebase, 보통 28자)만으로 이미 64자를 넘어(실측 87자) 유일성의 유일한 원천인
+ * 타임스탬프+랜덤 접미사가 통째로 잘려나가는 버그가 있었다. 그 결과 같은 상품을 같은
+ * 구매자가 재구매 시도할 때마다(과거 주문이 취소·환불된 뒤 새 가격으로 재시도 등) 완전히
+ * 동일한 orderId가 생성되어, Toss가 "이미 사용된 주문번호"로 거부해 가상계좌 발급 자체가
+ * 실패하는 사례가 실측 확인됨(2026-09). item_id/uid는 문자열 안에 없어도 되므로(조회는
+ * 항상 DB의 toss_order_id 컬럼 정확 매칭이지 문자열 파싱이 아님) 식별용 짧은 접두사만
+ * 남기고, 유일성 접미사(타임스탬프+2단 랜덤)가 항상 살아남도록 전체 길이를 여유 있게
+ * 짧게(약 50자) 구성한다.
+ */
 function marketOrderIdFor(itemId, uid) {
+  const itemShort = String(itemId || "").replace(/-/g, "").slice(0, 8);
+  const uidShort = String(uid || "").slice(0, 8);
   const ts = Date.now().toString(36);
-  const rand = Math.random().toString(36).slice(2, 8);
-  return `market_${itemId}_${uid}_${ts}${rand}`.slice(0, 64);
+  const rand = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+  return `market_${itemShort}_${uidShort}_${ts}${rand}`.slice(0, 64);
 }
 
 function appendMarketSecrets(options) {
