@@ -1016,7 +1016,7 @@
           '<div class="market-card__condition">' + escapeHtml(item.condition || '') + '</div>' +
           '<div class="market-card__stats">' +
             MARKET_EYE_ICON_SVG + '<span>' + viewCount + '</span>' +
-            MARKET_HEART_ICON_SVG + '<span>' + favCount + '</span>' +
+            MARKET_HEART_ICON_SVG + '<span class="market-card__fav-count">' + favCount + '</span>' +
             marketRatingNumericHtml(item.__sellerRatingAvg) +
           '</div>' +
           '<div class="market-card__date">' + escapeHtml(marketFormatDate(item.created_at)) + '</div>' +
@@ -1072,11 +1072,27 @@
     });
   }
 
+  /** 카드 하단 통계(찜 카운트) 표시를 delta만큼 조정 — DOM(현재 목록에 렌더된 카드)과
+   * homeState.items(캐시된 데이터, 재렌더 시 이 값으로 다시 그려짐) 둘 다 갱신해야
+   * "새로고침 없이는 찜 카운트가 그대로"인 문제가 재발하지 않는다. */
+  function adjustMarketCardFavCount(itemId, delta) {
+    var item = homeState.items.find(function (it) { return it.id === itemId; });
+    if (item) {
+      item.__favoriteCount = Math.max(0, (Number(item.__favoriteCount) || 0) + delta);
+    }
+    var card = document.querySelector('.market-card[data-item-id="' + itemId + '"]');
+    var countEl = card ? card.querySelector('.market-card__fav-count') : null;
+    if (countEl) {
+      countEl.textContent = Math.max(0, (Number(countEl.textContent) || 0) + delta);
+    }
+  }
+
   function handleFavoriteToggle(itemId, btn) {
     var next = !homeState.favoriteIds.has(itemId);
     btn.textContent = next ? '♥' : '♡';
     if (next) homeState.favoriteIds.add(itemId);
     else homeState.favoriteIds.delete(itemId);
+    adjustMarketCardFavCount(itemId, next ? 1 : -1);
     haptic(8);
     loadMarketService().then(function (s) {
       return s.toggleMarketFavorite(itemId, next);
@@ -1084,6 +1100,7 @@
       // 실패 시 낙관적 업데이트 롤백
       if (next) homeState.favoriteIds.delete(itemId);
       else homeState.favoriteIds.add(itemId);
+      adjustMarketCardFavCount(itemId, next ? -1 : 1);
       btn.textContent = homeState.favoriteIds.has(itemId) ? '♥' : '♡';
       toast('관심상품 처리 실패: ' + (err && err.message ? err.message : err));
     });
