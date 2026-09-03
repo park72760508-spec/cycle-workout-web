@@ -593,7 +593,11 @@
 
       ['registerNameInput', 'registerPasswordInput', 'registerFTPInput', 'registerWeightInput', 'registerBirthYearInput'].forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.addEventListener('input', stelvioUpdateRegisterSubmitEnabled);
+        if (!el) return;
+        el.addEventListener('input', stelvioUpdateRegisterSubmitEnabled);
+        // input 이벤트가 안 잡히는 값 변경 경로(자동완성, 붙여넣기 후 별도 스크립트가 .value를
+        // 직접 대입하는 경우 등) 대비 — blur 시 발동하는 change도 함께 걸어 이중으로 재검증한다.
+        el.addEventListener('change', stelvioUpdateRegisterSubmitEnabled);
       });
       ['registerCategoryInput', 'registerGenderInput'].forEach(function (id) {
         var el = document.getElementById(id);
@@ -32746,6 +32750,10 @@
             var pastedText = cd.getData('text') || '';
             var numericOnly = pastedText.replace(/[^0-9]/g, '');
             registerPasswordInput.value = numericOnly;
+            // .value 직접 대입은 input 이벤트를 발생시키지 않아 가입 완료 버튼 활성화 검증이
+            // 재실행되지 않는다(iOS는 붙여넣기·실시간 텍스트 복사 등으로 이 경로를 자주 탄다) —
+            // 수동으로 재검증을 트리거한다.
+            if (typeof window.stelvioUpdateRegisterSubmitEnabled === 'function') window.stelvioUpdateRegisterSubmitEnabled();
           }
         });
         
@@ -32788,6 +32796,10 @@
             var pastedText = cd.getData('text') || '';
             var numericOnly = pastedText.replace(/[^0-9]/g, '').substring(0, 4);
             registerBirthYearInput.value = numericOnly;
+            // .value 직접 대입은 input 이벤트를 발생시키지 않아 가입 완료 버튼 활성화 검증이
+            // 재실행되지 않는다(iOS는 붙여넣기·실시간 텍스트 복사 등으로 이 경로를 자주 탄다) —
+            // 수동으로 재검증을 트리거한다.
+            if (typeof window.stelvioUpdateRegisterSubmitEnabled === 'function') window.stelvioUpdateRegisterSubmitEnabled();
           }
         });
       }
