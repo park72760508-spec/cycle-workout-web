@@ -576,10 +576,11 @@
     '<rect x="9" y="9" width="12" height="12" rx="2"></rect>' +
     '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>';
 
-  /** getUserMedia 카메라 스캔 지원 여부 — 네이티브 STELVIO 앱 WebView는 카메라 브릿지가
-   * 없어(과거 실측: navigator.mediaDevices가 undefined, 별도 시도인 <input capture>
-   * 방식은 실제 앱 크래시까지 유발해 긴급 롤백된 이력이 있음) 스캔 버튼 자체를 표시하지
-   * 않는다 — 일반 모바일/데스크톱 브라우저(Safari, Chrome 등 직접 접속)에서만 노출. */
+  /** getUserMedia 카메라 스캔 지원 여부 — 네이티브 STELVIO 앱 WebView는 페이지 내
+   * getUserMedia 카메라 브릿지가 없어(과거 실측: navigator.mediaDevices가 undefined,
+   * 별도 시도인 <input capture> 방식은 실제 앱 크래시까지 유발해 긴급 롤백된 이력이 있음)
+   * 이 경로를 쓰지 않는다 — 일반 모바일/데스크톱 브라우저(Safari, Chrome 등 직접 접속)
+   * 전용. 네이티브 앱에서는 marketBarcodeNativeScanSupported()의 별도 브릿지 경로를 쓴다. */
   function marketBarcodeScanSupported() {
     try {
       if (typeof window.isStelvioNativeApp === 'function' && window.isStelvioNativeApp()) return false;
@@ -589,8 +590,23 @@
     }
   }
 
+  /** 네이티브 앱 WebView 전용 스캔 경로 지원 여부 — 페이지 내 getUserMedia 대신 네이티브
+   * 카메라 화면을 호출하는 브릿지(marketBarcodeBridgeOpenScanner)를 쓴다. 오픈라이딩
+   * 주소록 브릿지(openRidingBridgeOpenAddressBook)와 동일하게 Android JSObject·iOS
+   * WKWebView messageHandlers·stelvio:// 커스텀 스킴 3단 폴백을 시도하므로, 이 값은
+   * "네이티브 앱으로 판별됐다"는 것 이상은 보장하지 않는다 — 실제 브릿지 미구현 시
+   * marketBarcodeBridgeOpenScanner()가 조용히 아무 효과 없이 끝나고 사용자는 직접 입력으로
+   * 폴백해야 한다(네이티브 쪽 구현은 별도 작업). */
+  function marketBarcodeNativeScanSupported() {
+    try {
+      return !!(typeof window.isStelvioNativeApp === 'function' && window.isStelvioNativeApp());
+    } catch (e) {
+      return false;
+    }
+  }
+
   function marketBarcodeScanBtnHtml(orderId, target) {
-    if (!marketBarcodeScanSupported()) return '';
+    if (!marketBarcodeScanSupported() && !marketBarcodeNativeScanSupported()) return '';
     return '<button type="button" class="market-barcode-scan-btn" data-order-id="' + orderId + '" data-scan-target="' + target + '" aria-label="바코드로 송장번호 스캔">' + MARKET_BARCODE_ICON_SVG + '</button>';
   }
 
@@ -3418,8 +3434,78 @@
     }
   };
 
+  // ─── 네이티브 앱 WebView 바코드 스캔 브릿지 ───
+  // 오픈라이딩 주소록 브릿지(openRidingBridgeOpenAddressBook, OpenRidingScreens.jsx)와
+  // 완전히 동일한 3단 폴백 프로토콜을 그대로 재사용한다 — Android JSObject
+  // (window.AndroidBridge/window.Android.openBarcodeScanner()) → iOS WKWebView
+  // messageHandlers(openBarcodeScanner/Stelvio/message에 문자열+JSON 두 형태 모두 postMessage)
+  // → stelvio://openBarcodeScanner 커스텀 스킴. 네이티브 쪽에는 별도 구현이 필요하며(카메라
+  // 스트림은 반드시 네이티브 화면에서만 열 것 — getUserMedia/<input capture>를 WebView 안에서
+  // 직접 쓰면 과거처럼 앱이 크래시한 이력이 있다), 스캔 완료 후 웹 페이지로 결과를 돌려줄 때는
+  // 아래 marketBarcodeReceiveNativeResult 콜백 규약을 따라야 한다.
+  var marketBarcodePendingNativeScan = null; // { orderId, target, trackingInput, courierSelect }
+
+  function marketBarcodeBridgeOpenScanner() {
+    try {
+      var and = window.AndroidBridge || window.Android;
+      if (and && and.openBarcodeScanner) {
+        and.openBarcodeScanner();
+        return;
+      }
+    } catch (e) {}
+
+    if (window.webkit && window.webkit.messageHandlers) {
+      var h = window.webkit.messageHandlers;
+      if (h.openBarcodeScanner) {
+        try { h.openBarcodeScanner.postMessage('STELVIO_COMMAND:OPEN_BARCODE_SCANNER'); } catch (e) {}
+        try { h.openBarcodeScanner.postMessage({ type: 'OPEN_BARCODE_SCANNER' }); } catch (e) {}
+      }
+      if (h.Stelvio) {
+        try { h.Stelvio.postMessage('STELVIO_COMMAND:OPEN_BARCODE_SCANNER'); } catch (e) {}
+      }
+      if (h.message) {
+        try { h.message.postMessage('STELVIO_COMMAND:OPEN_BARCODE_SCANNER'); } catch (e) {}
+      }
+    }
+
+    try {
+      window.location.href = 'stelvio://openBarcodeScanner';
+    } catch (e) {}
+  }
+
+  /** 네이티브 카메라 화면에서 인식된 원문(바코드 텍스트)을 받는 진입점 — 여러 이름으로
+   * 중복 노출해 네이티브 쪽 구현체가 어느 이름을 부르든 받아진다(주소록 브릿지의
+   * onOpenRidingAddressBookSelected/onAddressBookSelected/stelvioAddressBookPicked
+   * 다중 노출과 동일한 관례). rawText 하나만 필요하며, courierCode는 자릿수 기반으로
+   * 이 함수가 직접 추정한다(marketBarcodeGuessCourier). */
+  function marketBarcodeReceiveNativeResult(rawText) {
+    var digits = String(rawText || '').replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 13) {
+      toast('인식된 바코드가 송장번호 형식이 아닙니다. 다시 스캔하거나 직접 입력해 주세요.');
+      return;
+    }
+    var pending = marketBarcodePendingNativeScan;
+    marketBarcodePendingNativeScan = null;
+    var courierCode = marketBarcodeGuessCourier(digits);
+    marketBarcodeSuccessFeedback();
+    if (pending) {
+      if (pending.trackingInput) pending.trackingInput.value = digits;
+      if (courierCode && pending.courierSelect) pending.courierSelect.value = courierCode;
+    }
+    toast('송장번호를 인식했습니다: ' + digits);
+  }
+  window.onMarketBarcodeScanned = marketBarcodeReceiveNativeResult;
+  window.stelvioMarketBarcodeScanned = marketBarcodeReceiveNativeResult;
+  window.marketBarcodeScanned = marketBarcodeReceiveNativeResult;
+  window.addEventListener('marketBarcodeScanned', function (ev) {
+    var detail = ev && ev.detail;
+    var text = (detail && (detail.text || detail.rawText || detail.value)) || detail;
+    marketBarcodeReceiveNativeResult(text);
+  });
+
   /** 송장 입력 폼 옆 스캔 버튼 클릭 — data-scan-target(forward/return)으로 정확한 폼을
-   * 찾아 인식 결과를 해당 택배사 select·송장번호 input에 채운다. */
+   * 찾아 인식 결과를 해당 택배사 select·송장번호 input에 채운다. 네이티브 앱에서는 페이지 내
+   * getUserMedia 대신 네이티브 카메라 화면을 호출하는 브릿지 경로를 탄다. */
   function handleMarketBarcodeScanBtnClick(btn) {
     var orderId = btn.getAttribute('data-order-id');
     var target = btn.getAttribute('data-scan-target');
@@ -3430,6 +3516,13 @@
     if (!form) return;
     var trackingInput = form.querySelector(target === 'return' ? '.market-return-delivery-tracking-input' : '.market-delivery-tracking-input');
     var courierSelect = form.querySelector(target === 'return' ? '.market-return-delivery-courier-select' : '.market-delivery-courier-select');
+
+    if (marketBarcodeNativeScanSupported()) {
+      marketBarcodePendingNativeScan = { orderId: orderId, target: target, trackingInput: trackingInput, courierSelect: courierSelect };
+      marketBarcodeBridgeOpenScanner();
+      return;
+    }
+
     openMarketBarcodeScanner(function (digits, courierCode) {
       if (trackingInput) trackingInput.value = digits;
       if (courierCode && courierSelect) courierSelect.value = courierCode;
