@@ -815,6 +815,17 @@ export async function decideMarketNegoRequest(requestId, accept) {
   });
 }
 
+/** 수락된 가격 조정을 구매자·판매자 누구든 취소 — 변심 등으로 더 이상 그 가격으로 거래하지
+ * 않기로 한 경우. 이미 그 가격으로 진행 중인 실제 주문이 있으면 서버(RPC)에서 거부한다
+ * (그 경우엔 주문 자체를 취소해야 함 — cancelMarketOrder). */
+export async function cancelMarketNegoRequest(requestId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.rpc('cancel_market_nego_request', { p_request_id: requestId });
+    if (error) throw error;
+  });
+}
+
 /** 상품에 대한 네고 제안 목록 — RLS가 알아서 범위를 좁혀준다(판매자: 전체, 구매자: 본인 제안만) */
 export async function getMarketNegoRequestsForItem(itemId) {
   return withMarketAuthRetry(async () => {
@@ -974,6 +985,7 @@ if (typeof window !== 'undefined') {
     notifyMarketDirectDealRequest,
     notifyMarketNegoDecision,
     decideMarketNegoRequest,
+    cancelMarketNegoRequest,
     getMarketNegoRequestsForItem,
     getSellerRatingAggregate,
     getMyRatingForOrder,

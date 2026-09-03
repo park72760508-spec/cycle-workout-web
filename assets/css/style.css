@@ -32211,6 +32211,20 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-nego-request-status--accepted { background: #eff6ff; color: #1d4ed8; }
 .market-nego-request-status--rejected { background: #f8fafc; color: #94a3b8; }
 .market-nego-request-status--pending { background: #fff7ed; color: #ea580c; }
+.market-nego-request-status--cancelled { background: #f8fafc; color: #94a3b8; }
+/* 수락됨 배지 + 취소 버튼을 한 줄에 — 구매자·판매자 화면 공용(marketNegoStatusOnlyHtml) */
+.market-nego-accepted-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.market-nego-cancel-btn {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #fff;
+  color: #64748b;
+}
+.market-nego-cancel-btn:hover { background: #f8fafc; }
 
 .market-order-history { margin-top: 4px; }
 .market-order-history__title { font-size: 13px; font-weight: 700; color: #334155; margin: 16px 0 0 0; }

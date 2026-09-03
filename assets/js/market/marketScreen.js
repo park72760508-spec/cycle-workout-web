@@ -934,13 +934,24 @@
     '</div>';
   }
 
+  /** 수락됨 상태에는 구매자·판매자 누구나 누를 수 있는 취소 버튼을 함께 붙인다(변심 등으로
+   * 더 이상 그 조정가로 거래하지 않기로 한 경우) — 이 함수가 구매자 readOnly 뷰와 판매자
+   * 뷰(marketNegoActionHtml의 비-PENDING 분기) 양쪽에서 공용으로 쓰이므로 한 곳만 고치면
+   * 양쪽 화면에 동시에 반영된다. */
   function marketNegoStatusOnlyHtml(r) {
     if (r.status === 'PENDING') {
       return '<span class="market-nego-request-status market-nego-request-status--pending">대기 중</span>';
     }
-    return '<span class="market-nego-request-status market-nego-request-status--' +
-      (r.status === 'ACCEPTED' ? 'accepted' : 'rejected') + '">' +
-      (r.status === 'ACCEPTED' ? '수락됨' : '거절') + '</span>';
+    if (r.status === 'ACCEPTED') {
+      return '<span class="market-nego-accepted-wrap">' +
+        '<span class="market-nego-request-status market-nego-request-status--accepted">수락됨</span>' +
+        '<button type="button" class="market-nego-cancel-btn" data-nego-id="' + r.id + '">취소</button>' +
+      '</span>';
+    }
+    if (r.status === 'CANCELLED') {
+      return '<span class="market-nego-request-status market-nego-request-status--cancelled">취소됨</span>';
+    }
+    return '<span class="market-nego-request-status market-nego-request-status--rejected">거절</span>';
   }
 
   function marketNegoActionHtml(r) {
@@ -2467,6 +2478,9 @@
           (nego && nego.status === 'REJECTED'
             ? '<div class="market-nego-status market-nego-status--rejected">네고 불가 (이전 제안 ' + formatPrice(nego.requested_price) + '원이 거절되었습니다)</div>'
             : '') +
+          (nego && nego.status === 'CANCELLED'
+            ? '<div class="market-nego-status market-nego-status--rejected">이전 제안(' + formatPrice(nego.requested_price) + '원)이 취소되었습니다. 새로 제안할 수 있습니다.</div>'
+            : '') +
           '<div class="market-nego-form">' +
             '<input type="text" inputmode="numeric" id="marketNegoPriceInput" class="market-form-input market-nego-input" placeholder="희망 가격(숫자만)" />' +
             '<button type="button" class="market-btn market-btn--outline market-nego-submit-btn" id="marketNegoSubmitBtn">가격 조정 요구</button>' +
@@ -2550,7 +2564,7 @@
     // 이미 있으면 그 주문 카드(아래 buyerOrderHistoryHtml)에 함께 표시하므로 여기서는 생략.
     // PENDING은 상단 가격 영역에 이미 안내가 있어(priceRowHtml) 여기서는 결정된 건만 다룬다.
     var buyerNegoOnlyHtml = '';
-    if (!isMine && !buyerHasActiveOrder && nego && (nego.status === 'ACCEPTED' || nego.status === 'REJECTED')) {
+    if (!isMine && !buyerHasActiveOrder && nego && (nego.status === 'ACCEPTED' || nego.status === 'REJECTED' || nego.status === 'CANCELLED')) {
       buyerNegoOnlyHtml =
         '<div class="market-order-history"><div class="market-nego-divider"></div>' +
         '<p class="market-order-history__title--deal-status">거래 진행 상태</p>' +
@@ -2745,6 +2759,9 @@
     });
     Array.prototype.forEach.call(document.querySelectorAll('.market-nego-reject-btn'), function (btn) {
       btn.onclick = function () { handleMarketNegoDecide(item.id, btn.getAttribute('data-nego-id'), false); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-nego-cancel-btn'), function (btn) {
+      btn.onclick = function () { handleMarketNegoCancel(item.id, btn.getAttribute('data-nego-id')); };
     });
     Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-submit-btn'), function (btn) {
       btn.onclick = function () { handleMarketSetTracking(item.id, btn); };
@@ -3222,6 +3239,40 @@
         }
       },
       { okText: accept ? '수락' : '거절' }
+    );
+  }
+
+  /** 수락된 가격 조정 취소 — 구매자·판매자 누구든 가능(변심 등). 이미 그 가격으로 진행 중인
+   * 주문이 있으면 서버가 ORDER_ALREADY_IN_PROGRESS로 거부한다(그 경우엔 주문 자체를 취소해야
+   * 함 — 안내만 하고 별도 화면 이동은 하지 않는다). */
+  function marketNegoCancelErrorMessage(err) {
+    var msg = err && err.message ? err.message : String(err || '');
+    if (msg.indexOf('ORDER_ALREADY_IN_PROGRESS') !== -1) {
+      return '이미 이 가격으로 진행 중인 주문이 있어 취소할 수 없습니다. 주문을 취소해 주세요.';
+    }
+    if (msg.indexOf('NOT_CANCELLABLE') !== -1) {
+      return '이미 처리된 요청이라 취소할 수 없습니다.';
+    }
+    if (msg.indexOf('NOT_PARTICIPANT') !== -1) {
+      return '이 거래의 당사자만 취소할 수 있습니다.';
+    }
+    return '취소 실패: ' + msg;
+  }
+
+  async function handleMarketNegoCancel(itemId, requestId) {
+    showMarketConfirmPopup(
+      '수락된 가격 조정을 취소할까요? 취소 후에는 원래 가격으로 되돌아갑니다.',
+      async function () {
+        try {
+          var s = await loadMarketService();
+          await s.cancelMarketNegoRequest(requestId);
+          toast('가격 조정을 취소했습니다.');
+          openMarketItemDetail(itemId);
+        } catch (err) {
+          toast(marketNegoCancelErrorMessage(err));
+        }
+      },
+      { okText: '예, 취소합니다', cancelText: '아니오' }
     );
   }
 
