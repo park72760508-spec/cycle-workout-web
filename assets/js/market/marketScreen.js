@@ -2442,6 +2442,11 @@
       '</div>';
 
     var nego = detailState.myNegoRequest;
+    // buyerHasActiveOrder: 구매자에게 현재 진행 중(취소/환불로 끝나지 않은)인 주문이 있는지.
+    // "가격 조정 요구" 폼 노출 여부는 이 값만으로 판단해야 한다 — marketNegoStillActiveForOrder는
+    // "이 협상가가 이 주문 이력 기준으로 아직 유효한가"를 묻는 별개의 질문이라, 오래되고 이미
+    // 종료된 주문(현재 협상보다 앞선 시점)이 하나라도 있으면 오작동해 폼이 아예 사라지는 문제가 있었다.
+    var buyerHasActiveOrder = !!(myOrder && myOrder.escrow_status !== 'CANCELLED' && myOrder.escrow_status !== 'REFUNDED');
     // 수락된 가격 조정 — 판매자와 해당 예약자(구매 예정자) 화면에만 취소선 원가 + 조정가를 표시.
     // 다른 사용자가 보는 목록/상세에는 영향 없음(각자 화면 기준으로만 계산). 취소·환불로 끝난
     // 거래는 협상가를 소비한 것으로 보고 무효화한다(marketNegoStillActiveForOrder).
@@ -2467,7 +2472,7 @@
         (!isMine && !myOrder
           ? '<div class="market-nego-status market-nego-status--accepted">판매자가 가격 조정을 수락했습니다. 조정된 금액으로 구매할 수 있습니다.</div>'
           : '');
-    } else if (!isMine && item.negotiable && (!myOrder || !marketNegoStillActiveForOrder(myOrder, nego))) {
+    } else if (!isMine && item.negotiable && !buyerHasActiveOrder) {
       if (nego && nego.status === 'PENDING') {
         priceRowHtml =
           marketDetailPlainPriceHtml(item) +
@@ -2557,7 +2562,7 @@
     // 단, 거래가 취소(CANCELLED)되었거나 환불(REFUNDED, 조기환불·반품환불 모두 포함)로
     // 끝난 경우엔 더 이상 진행 중인 거래가 아니므로 기록을 표시하지 않고 초기 판매 등록
     // 상태처럼 보이게 한다(상단 액션 버튼은 이미 item.status 기준으로 "구매하기"로 복귀함).
-    var buyerHasActiveOrder = !!(myOrder && myOrder.escrow_status !== 'CANCELLED' && myOrder.escrow_status !== 'REFUNDED');
+    // (buyerHasActiveOrder는 위 priceRowHtml 계산에서 이미 선언됨)
 
     // 구매자 전용 — 아직 진행 중인 주문으로 이어지지 않은 내 가격 조정 요청의 결과(수락/거절)를
     // 판매자 화면(negoRowsHtml)과 동일하게 "거래 진행 상태" 카드로 보여준다. 진행 중인 주문이
