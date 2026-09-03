@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260908favCountRpcFix1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260908negoCancel1';
   var svc = null;
 
   function loadMarketService() {
