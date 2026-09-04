@@ -517,7 +517,17 @@
         var sendBtn = document.getElementById('registerPhoneSendCodeBtn');
         if (sendBtn) { sendBtn.disabled = true; if (window.__stelvioPhoneOtpState.cooldownTimer) clearInterval(window.__stelvioPhoneOtpState.cooldownTimer); }
         if (phoneInput) phoneInput.readOnly = true;
-        if (typeof window.stelvioUpdateRegisterSubmitEnabled === 'function') window.stelvioUpdateRegisterSubmitEnabled();
+        if (typeof window.stelvioUpdateRegisterSubmitEnabled === 'function') {
+          var stillMissing = (window.stelvioUpdateRegisterSubmitEnabled() || []).filter(function (label) {
+            return label !== '전화번호 인증';
+          });
+          // 전화번호 인증은 방금 끝났는데도 가입 완료 버튼이 계속 비활성 상태라면(다른
+          // 필수 항목 미입력), "인증했는데 왜 안 눌리지" 하는 혼란을 막기 위해 남은
+          // 항목을 바로 안내한다.
+          if (stillMissing.length && typeof showToast === 'function') {
+            showToast('전화번호 인증 완료! 남은 항목을 입력해 주세요: ' + stillMissing.join(', '));
+          }
+        }
       } catch (e) {
         stelvioSetPhoneOtpStatus((e && e.message) || '인증번호가 올바르지 않습니다.', 'error');
         if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.textContent = '확인'; }
@@ -527,9 +537,14 @@
     // 재인증 없이 다른 번호로 가입되는 것을 막는다.
     // 필수 항목 입력 + 전화번호 문자인증(또는 재가입 모드)이 모두 완료돼야 "가입 완료" 버튼이
     // 활성화된다 — handleRegister()의 검증 로직을 제출 전에 미리 반영(엄격한 재검증은 그대로 유지).
+    /**
+     * @returns {string[]} 아직 충족되지 않은 필수 항목의 한글 라벨 목록(버튼이 활성화되려면
+     *   비어야 함) — 전화번호 인증만 완료되고 다른 필수 항목이 비어 있을 때 "인증은
+     *   끝났는데 왜 버튼이 안 눌리지"라는 혼란을 없애기 위해, 인증 직후 이 목록을 안내한다.
+     */
     function stelvioUpdateRegisterSubmitEnabled() {
       var submitBtn = document.getElementById('registerSubmitBtn');
-      if (!submitBtn) return;
+      if (!submitBtn) return [];
       var phoneInput = document.getElementById('registerPhoneInput');
       var nameInput = document.getElementById('registerNameInput');
       var passwordInput = document.getElementById('registerPasswordInput');
@@ -538,7 +553,7 @@
       var birthYearInput = document.getElementById('registerBirthYearInput');
       var genderInput = document.getElementById('registerGenderInput');
       var categoryInput = document.getElementById('registerCategoryInput');
-      if (!phoneInput || !nameInput || !passwordInput || !birthYearInput) return;
+      if (!phoneInput || !nameInput || !passwordInput || !birthYearInput) return [];
 
       var phoneDigits = stelvioPhoneOtpDigits(phoneInput.value);
       var isRejoinMode =
@@ -562,23 +577,36 @@
       var isRunCategory = (typeof isRunSportCategory === 'function') ? isRunSportCategory(category) : category === 'RUN';
       var needsFtpCategory = (typeof needsFtpForCategory === 'function') ? needsFtpForCategory(category) : !isRunCategory;
 
-      var extraOk = true;
+      var weightOk = true;
+      var genderOk = true;
+      var ftpOk = true;
       if (!isRejoinMode) {
         var weight = parseFloat(weightInput ? weightInput.value : '');
         if (isRunCategory) {
-          if (weight == null || isNaN(weight) || weight < 0 || weight > 150) extraOk = false;
+          if (weight == null || isNaN(weight) || weight < 0 || weight > 150) weightOk = false;
         } else if (!weight || weight < 40 || weight > 150) {
-          extraOk = false;
+          weightOk = false;
         }
         var gender = genderInput ? genderInput.value : '';
-        if (!gender || (gender !== '남' && gender !== '여')) extraOk = false;
+        if (!gender || (gender !== '남' && gender !== '여')) genderOk = false;
         if (needsFtpCategory) {
           var ftpVal = parseInt(ftpInput ? ftpInput.value : '', 10);
-          if (Number.isFinite(ftpVal) && ftpVal > 600) extraOk = false;
+          if (Number.isFinite(ftpVal) && ftpVal > 600) ftpOk = false;
         }
       }
+      var extraOk = weightOk && genderOk && ftpOk;
 
       submitBtn.disabled = !(phoneOk && nameOk && passwordOk && birthYearOk && extraOk);
+
+      var missing = [];
+      if (!phoneOk) missing.push('전화번호 인증');
+      if (!nameOk) missing.push('이름(2자 이상)');
+      if (!passwordOk) missing.push('비밀번호(6자 이상)');
+      if (!birthYearOk) missing.push('출생연도');
+      if (!weightOk) missing.push('체중');
+      if (!genderOk) missing.push('성별');
+      if (!ftpOk) missing.push('FTP(600 이하)');
+      return missing;
     }
     window.stelvioUpdateRegisterSubmitEnabled = stelvioUpdateRegisterSubmitEnabled;
 
