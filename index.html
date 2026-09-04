@@ -452,6 +452,12 @@
         if (!res.ok || !data || data.success !== true) {
           throw new Error((data && data.error) || '인증번호 전송에 실패했습니다.');
         }
+        // fetch를 기다리는 동안 사용자가 전화번호를 수정했다면(오타 정정 등) 그 순간 input
+        // 리스너가 이미 상태를 초기화하고 재전송 UI를 되돌려놨다 — 이 응답은 더 이상 지금
+        // 입력값과 무관하므로 stale 값으로 상태를 덮어쓰지 않고 조용히 무시한다.
+        if (stelvioPhoneOtpDigits(phoneInput ? phoneInput.value : '') !== digits) {
+          return;
+        }
         window.__stelvioPhoneOtpState.sentDigits = digits;
         window.__stelvioPhoneOtpState.verifiedDigits = null;
         var codeRow = document.getElementById('registerPhoneCodeRow');
@@ -494,6 +500,15 @@
         var data = await res.json().catch(function () { return {}; });
         if (!res.ok || !data || data.success !== true) {
           throw new Error((data && data.error) || '인증번호가 올바르지 않습니다.');
+        }
+        // fetch를 기다리는 동안 전화번호가 바뀌었다면 이 인증 결과는 지금 입력된 번호와
+        // 무관하다 — verifiedDigits를 stale한 옛 번호로 세팅하면 실제로는 인증 안 된
+        // 현재 번호가 인증완료로 착각돼 검증 로직이 꼬인다(반대로 성공 메시지만 뜨고
+        // phoneOk가 거짓이 되어 가입 버튼이 계속 비활성으로 남는 형태로도 나타날 수 있다).
+        if (stelvioPhoneOtpDigits(phoneInput ? phoneInput.value : '') !== digits) {
+          stelvioSetPhoneOtpStatus('전화번호가 변경되어 인증이 취소되었습니다. 다시 인증해 주세요.', 'error');
+          if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.textContent = '확인'; }
+          return;
         }
         window.__stelvioPhoneOtpState.verifiedDigits = digits;
         stelvioSetPhoneOtpStatus('전화번호 인증이 완료되었습니다.', 'success');
