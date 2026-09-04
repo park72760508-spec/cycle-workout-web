@@ -247,12 +247,35 @@
     return purchasePrice > 0 && price > 0 && price < purchasePrice ? Math.round((1 - price / purchasePrice) * 100) : 0;
   }
 
-  /** 목록 카드 가격 옆 할인율 배지 — 제휴사 화면의 은은한 회색 배지(만료 등 상태 표기용) 톤을
-   * 차용해, 산만하지 않게 가격 텍스트 크기 범위 안에서 작게 붙인다. */
+  /** 스타버스트 배지 SVG 경로 생성 — assets/js/affiliate/AffiliateScreens.jsx의
+   * affiliateStarburstPath(제휴사 화면 할인 배지, 12각 톱니 도장 모양)와 동일한 로직을 그대로 이식. */
+  function marketStarburstPath(cx, cy, outerR, innerR, points) {
+    var pts = [];
+    for (var i = 0; i < points * 2; i++) {
+      var angle = (i * Math.PI) / points - Math.PI / 2;
+      var r = (i % 2 === 0) ? outerR : innerR;
+      pts.push((cx + r * Math.cos(angle)).toFixed(2) + ',' + (cy + r * Math.sin(angle)).toFixed(2));
+    }
+    return 'M' + pts.join('L') + 'Z';
+  }
+  /* 12-포인트 스타버스트(outerR=49, innerR=39) — 제휴사 배지와 동일한 좌표라 카드마다 다시
+     계산할 필요 없이 한 번만 구해 재사용한다. */
+  var MARKET_DISCOUNT_STARBURST_PATH = marketStarburstPath(50, 50, 49, 39, 12);
+
+  /** 목록 카드 가격 옆 할인율 배지 — 제휴사 화면의 스타버스트(톱니 도장) 배지와 동일한 모양을
+   * 회색 톤으로 옮겨와, 가격 텍스트("...원") 우측 상단에 떠 있는 배지로 표시한다. */
   function marketCardDiscountBadgeHtml(item) {
     var pct = marketItemDiscountPercent(item);
     if (!pct) return '';
-    return '<span class="market-card__discount-badge">' + pct + '% 할인</span>';
+    return '<span class="market-card__discount-badge" aria-label="' + pct + '% 할인">' +
+      '<svg viewBox="0 0 100 100" class="market-card__discount-badge-svg" aria-hidden="true">' +
+        '<path d="' + MARKET_DISCOUNT_STARBURST_PATH + '" fill="#475569"></path>' +
+      '</svg>' +
+      '<span class="market-card__discount-badge-text">' +
+        '<span class="market-card__discount-badge-pct">' + pct + '%</span>' +
+        '<span class="market-card__discount-badge-off">OFF</span>' +
+      '</span>' +
+    '</span>';
   }
 
   function haptic(ms) {

@@ -31232,6 +31232,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   word-break: break-word;
 }
 .market-card__price {
+  position: relative; /* 할인 배지(.market-card__discount-badge)를 우측 상단에 절대 위치시키는 기준점 */
   font-size: 16.5px; /* 10% 확대(15px -> 16.5px) */
   font-weight: 700;
   color: #000;
@@ -31240,17 +31241,45 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
      절대값으로 고정해 플랫폼 무관하게 동일한 높이로 렌더링되게 한다. */
   line-height: 20px;
 }
+/* 할인율 배지 — 제휴사 화면의 스타버스트(톱니 도장) 배지와 동일한 모양(12각, 흰 글씨
+   "N%"/"OFF" 두 줄)을 회색 톤으로 옮겨와, 가격("...원") 텍스트 우측 상단에 절대 위치로
+   떠 있게 표시한다(assets/js/affiliate/AffiliateScreens.jsx의 AffiliateDiscountBadge 참고). */
 .market-card__discount-badge {
-  display: inline-block;
-  margin-left: 5px;
-  padding: 1.5px 6px;
-  border-radius: 999px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #475569;
-  font-size: 10.5px;
-  font-weight: 700;
-  vertical-align: middle;
+  position: absolute;
+  top: -13px;
+  right: -8px;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+}
+.market-card__discount-badge-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.market-card__discount-badge-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  user-select: none;
+}
+.market-card__discount-badge-pct {
+  font-size: 8.5px;
+}
+.market-card__discount-badge-off {
+  font-size: 6px;
+  margin-top: 1px;
+  letter-spacing: 0.06em;
 }
 .market-card__similarity-badge {
   display: inline-block;
