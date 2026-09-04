@@ -17159,6 +17159,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   font-weight: 600;
   color: #2d3748;
   line-height: 1.4;
+  white-space: pre-line;
 }
 .stelvio-exit-confirm-buttons {
   display: flex;

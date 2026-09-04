@@ -3778,7 +3778,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260908negoCancel1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260904unregisteredConfirm1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -31044,7 +31044,11 @@
                 submitBtn.classList.remove('loading');
                 submitBtn.textContent = '시작하기';
               }
-              handleRegisterClick();
+              if (typeof window.hideAuthTransitionOverlay === 'function') {
+                window.hideAuthTransitionOverlay();
+              }
+              window.__stelvioPhoneAuthBusy = false;
+              showStelvioUnregisteredConfirmPopup();
               return;
             }
             if (
@@ -31096,7 +31100,7 @@
                 if (typeof window.hideAuthTransitionOverlay === 'function') {
                   window.hideAuthTransitionOverlay();
                 }
-                handleRegisterClick();
+                showStelvioUnregisteredConfirmPopup();
                 return;
               }
 
@@ -31307,7 +31311,7 @@
             errorMessage = '시도 횟수가 너무 많습니다. 잠시 후 다시 시도해주세요.';
             break;
           case 'auth/user-not-found':
-            handleRegisterClick();
+            showStelvioUnregisteredConfirmPopup();
             return;
           default:
             if (errMsg.indexOf('destructur') !== -1 || errMsg.indexOf('Right side') !== -1 || errMsg.indexOf('준비되지 않았습니다') !== -1) {
@@ -31762,6 +31766,24 @@
     
     /* 재가입 플로우(userManager.js)에서 접근할 수 있도록 전역 노출 */
     window.handleRegisterClick = handleRegisterClick;
+
+    /**
+     * 로그인 시도 결과 "가입되지 않은 사용자"로 판정됐을 때(예: 계정 완전 삭제 후 재로그인
+     * 시도) 곧바로 회원가입 화면으로 넘기지 않고, STELVIO 스타일 확인 팝업으로 먼저 물어본다.
+     * "예" → 회원가입 화면 이동, "아니오"/오버레이 클릭 → 로그인 화면에 그대로 머무른다.
+     */
+    function showStelvioUnregisteredConfirmPopup() {
+      if (typeof showStelvioExitConfirmPopup === 'function') {
+        showStelvioExitConfirmPopup(handleRegisterClick, {
+          message: '미가입 사용자입니다.\n사용자 등록을 하시겠습니까?',
+          cancelText: '아니오',
+          okText: '예'
+        });
+      } else {
+        handleRegisterClick();
+      }
+    }
+    window.showStelvioUnregisteredConfirmPopup = showStelvioUnregisteredConfirmPopup;
 
     /**
      * 사용자 등록 화면에서 뒤로 가기

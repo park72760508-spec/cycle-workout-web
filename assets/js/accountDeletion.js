@@ -48,6 +48,21 @@
       localStorage.removeItem('currentUser');
       localStorage.removeItem('authUser');
     } catch (eLs) {}
+    // 로그인 사전확인(stelvioPreflightPhoneLogin)이 login_account_flags 조회 결과를
+    // 브라우저에 6시간 캐시해둔다(assets/js/../index.html의 stelvioLookupLoginAccountFlag).
+    // 계정 삭제 직후 같은 기기에서 곧바로 로그인/재가입을 시도하면 이 캐시가 삭제 전
+    // 상태(예: 과거 재가입 이력이 있는 번호의 "active" 플래그)를 그대로 돌려줘, 이미
+    // 삭제된 계정이 "가입된 사용자"로 오판되어 "비밀번호가 잘못되었습니다"로 잘못
+    // 안내되는 문제가 있었다 — 삭제 시 이 캐시를 전부 비워 다음 조회가 항상 최신
+    // Firestore 상태를 다시 읽도록 한다.
+    try {
+      var flagCacheKeys = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('stelvio_login_flag_cache_') === 0) flagCacheKeys.push(k);
+      }
+      flagCacheKeys.forEach(function (k) { localStorage.removeItem(k); });
+    } catch (eFlagCache) {}
     if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
   }
 
