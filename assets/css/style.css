@@ -31257,9 +31257,11 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   top: 50%;
   left: 100%;
   margin-left: 2px;
-  transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
+  /* 세로 중앙(-50%)에서 배지 높이의 20%만큼 더 위로 띄워, 가격 텍스트와 수평으로 나란히
+     붙어 보이지 않고 살짝 떠 있는 느낌을 준다. */
+  transform: translateY(-70%);
+  width: 36px; /* 기존 30px에서 20% 확대 */
+  height: 36px;
   pointer-events: none;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
 }
@@ -31284,10 +31286,10 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   user-select: none;
 }
 .market-card__discount-badge-pct {
-  font-size: 8.5px;
+  font-size: 10.2px; /* 배지 확대(20%)에 맞춰 폰트도 8.5px -> 10.2px */
 }
 .market-card__discount-badge-off {
-  font-size: 6px;
+  font-size: 7.2px; /* 6px -> 7.2px */
   margin-top: 1px;
   letter-spacing: 0.06em;
 }
