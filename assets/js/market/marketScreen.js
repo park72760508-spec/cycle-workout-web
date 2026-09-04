@@ -262,6 +262,15 @@
      계산할 필요 없이 한 번만 구해 재사용한다. */
   var MARKET_DISCOUNT_STARBURST_PATH = marketStarburstPath(50, 50, 49, 39, 12);
 
+  /** 할인율 구간별 배지 색상 — 50% 이상은 기존 진한 회색을 유지, 20% 이하는 "판매완료"
+   * 상태 배지(.market-badge--sold)와 동일한 색으로 통일, 그 사이(20% 초과~50% 미만)는
+   * 두 색의 중간 톤을 준다. */
+  function marketCardDiscountBadgeFill(pct) {
+    if (pct >= 50) return '#475569';
+    if (pct <= 20) return '#64748b';
+    return '#56657a';
+  }
+
   /** 목록 카드 가격 옆 할인율 배지 — 제휴사 화면의 스타버스트(톱니 도장) 배지와 동일한 모양을
    * 회색 톤으로 옮겨와, 가격 텍스트("...원") 우측 상단에 떠 있는 배지로 표시한다. */
   function marketCardDiscountBadgeHtml(item) {
@@ -269,7 +278,7 @@
     if (!pct) return '';
     return '<span class="market-card__discount-badge" aria-label="' + pct + '% 할인">' +
       '<svg viewBox="0 0 100 100" class="market-card__discount-badge-svg" aria-hidden="true">' +
-        '<path d="' + MARKET_DISCOUNT_STARBURST_PATH + '" fill="#475569"></path>' +
+        '<path d="' + MARKET_DISCOUNT_STARBURST_PATH + '" fill="' + marketCardDiscountBadgeFill(pct) + '"></path>' +
       '</svg>' +
       '<span class="market-card__discount-badge-text">' +
         '<span class="market-card__discount-badge-pct">' + pct + '%</span>' +
