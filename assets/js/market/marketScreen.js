@@ -1583,8 +1583,13 @@
       if (typeof window.closeMarketBarcodeScanner === 'function') window.closeMarketBarcodeScanner();
     }
     var nav = document.getElementById('marketBottomNav');
-    if (!nav || nav.style.display === 'none') return;
-    if (!isMarketScreen) nav.style.display = 'none';
+    if (nav && nav.style.display !== 'none' && !isMarketScreen) nav.style.display = 'none';
+    // 상품 상세 화면 전용 body-level 플로팅 액션바(끌어올리기/수정/삭제 등)도 같은 이유로
+    // 마켓 화면을 벗어나면 반드시 숨긴다 — .screen 클래스가 없어 showScreen()의 화면 순회
+    // 로직 대상이 아니고, 상세화면 진입 시에만 display:block이 켜질 뿐 이탈 시 꺼주는
+    // 코드가 없어 다른 화면으로 이동해도 fixed 오버레이로 계속 떠 있던 버그의 원인이었다.
+    var floatingBar = document.getElementById('marketDetailFloatingBar');
+    if (floatingBar && floatingBar.style.display !== 'none' && !isMarketScreen) floatingBar.style.display = 'none';
   }
   (function installMarketBottomNavGuard() {
     function wrap() {
