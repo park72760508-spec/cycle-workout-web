@@ -668,9 +668,13 @@
      * 매번 NOT_FOUND로 끝난다 — Firestore는 NOT_FOUND도 과금되는 읽기라 SESSION-only 전환
      * 이후(앱을 열 때마다 재로그인 → 매번 이 조회) 트래픽이 급증한 원인 중 하나였다.
      * 최종 차단 여부는 Firebase 로그인 후 users 문서로 다시 판단하므로(아래 stelvioPreflightPhoneLogin
-     * 참고), 이 사전 확인은 UX용 조기 안내일 뿐 — 로컬 캐시(6시간)로 지연시켜도 보안엔 영향 없다.
+     * 참고), 이 사전 확인은 UX용 조기 안내일 뿐 — 로컬 캐시를 길게 잡아도 보안엔 영향 없다
+     * (탈퇴 처리 시 accountDeletion.js/apiDeleteUser가 이 기기의 캐시를 즉시 비워, 캐시가 오래
+     * 유지되는 동안에도 "방금 내가 탈퇴/삭제한 계정" 오탐 창구는 별도로 막혀 있다). 캐시가
+     * 만료돼 다시 읽어와야 할 때(수동 로그인 시 이 조회가 sign-in을 순차적으로 지연시킴)마다
+     * 체감 로그인 속도가 느려지므로, TTL을 6시간→7일로 늘려 이 지연이 발생하는 빈도를 낮춘다.
      */
-    var STELVIO_LOGIN_FLAG_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+    var STELVIO_LOGIN_FLAG_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
     window.stelvioLookupLoginAccountFlag = async function (phoneDigits) {
       var digits = String(phoneDigits || '').replace(/\D/g, '');
       if (!digits || digits.length < 10 || !firestoreV9 || !collectionFn || !docFn || !getDocFn) {
@@ -8774,7 +8778,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
-  <script src="assets/js/userManager.js?v=20260901dashboardBtnIconOnly1"></script>
+  <script src="assets/js/userManager.js?v=20260904flagCacheClear1"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
   <!-- 워크아웃 화면 상태 관리: 카테고리(상태A) / 워크아웃 리스트(상태B) 전환 -->

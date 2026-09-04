@@ -3150,6 +3150,21 @@ async function apiDeleteUser(id) {
         localStorage.removeItem('currentUser');
         localStorage.removeItem('authUser');
       } catch (eLs) {}
+      // 로그인 사전확인(stelvioPreflightPhoneLogin)이 login_account_flags 조회 결과를
+      // 이 기기에 6시간(STELVIO_LOGIN_FLAG_CACHE_TTL_MS) 캐시해둔다. 방금 탈퇴 처리한
+      // 서버 상태(withdrawn)와 이 캐시가 어긋나면 같은 기기에서 곧바로 재로그인 시도 시
+      // "탈퇴 계정" 안내가 잠깐 안 뜨는 간극이 생길 수 있다(최종 차단은 로그인 성공 후
+      // users 문서로 어차피 다시 판정되므로 실제 로그인 성공으로는 이어지지 않지만, 사전
+      // 안내가 정확하도록 이 기기의 캐시도 함께 비운다) — accountDeletion.js의 완전 삭제
+      // 경로와 동일한 처리.
+      try {
+        var flagCacheKeys = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf('stelvio_login_flag_cache_') === 0) flagCacheKeys.push(k);
+        }
+        flagCacheKeys.forEach(function (k) { localStorage.removeItem(k); });
+      } catch (eFlagCache) {}
       if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
     }
 
