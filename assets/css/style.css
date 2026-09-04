@@ -31232,6 +31232,12 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   word-break: break-word;
 }
 .market-card__price {
+  /* .market-card__info가 display:flex + flex-direction:column인데 align-items 기본값이
+     stretch라, 이 div(flex item)는 display 값과 무관하게 부모 폭 전체로 늘어난다 — 그 상태로
+     할인 배지를 이 박스 기준 우측 상단(right:-8px)에 절대 위치시키면 실제 "...원" 글자가
+     아니라 카드 우측 끝 쪽에 동떨어져 표시된다. align-self:flex-start로 stretch를 풀어야
+     박스가 텍스트 내용 크기만큼 줄어들어 배지가 "원" 글자 바로 위에 붙는다. */
+  align-self: flex-start;
   position: relative; /* 할인 배지(.market-card__discount-badge)를 우측 상단에 절대 위치시키는 기준점 */
   font-size: 16.5px; /* 10% 확대(15px -> 16.5px) */
   font-weight: 700;
