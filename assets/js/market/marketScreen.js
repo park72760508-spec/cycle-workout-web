@@ -1694,6 +1694,7 @@
     if (negotiableEditEl) negotiableEditEl.checked = !!item.negotiable;
     var directWrap = document.getElementById('marketFormDirectLocationWrap');
     if (directWrap) directWrap.style.display = dealMethods.indexOf('직거래') !== -1 ? 'block' : 'none';
+    updateMarketFormSettlementVisibility();
     resetMarketDirectRegionPicker();
     setMarketDirectLocation(item.direct_deal_location || '');
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-condition'), function (r) {
@@ -1709,6 +1710,14 @@
     }
     renderMarketImageSlots();
     updateMarketDescCounter();
+  }
+
+  /** 거래방법에 "택배거래" 체크 여부에 따라 안전거래 입금 계좌 섹션을 보이거나 숨긴다. */
+  function updateMarketFormSettlementVisibility() {
+    var wrap = document.getElementById('marketFormSettlementWrap');
+    if (!wrap) return;
+    var checkedDelivery = document.querySelector('.market-form-deal-checkbox[value="택배거래"]');
+    wrap.style.display = (checkedDelivery && checkedDelivery.checked) ? 'block' : 'none';
   }
 
   function resetMarketForm() {
@@ -1735,6 +1744,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('.market-form-deal-checkbox'), function (cb) {
       cb.checked = false;
     });
+    updateMarketFormSettlementVisibility();
     var negotiableEl0 = document.getElementById('marketFormNegotiable');
     if (negotiableEl0) negotiableEl0.checked = false;
     var termsEl0 = document.getElementById('marketFormTermsAgree');
@@ -2024,13 +2034,16 @@
       toast('사진을 최소 1장 첨부해 주세요.');
       return;
     }
-    if (!settlementAccountNumber || !/^[0-9]{6,20}$/.test(settlementAccountNumber)) {
-      toast('안전거래 입금 계좌번호를 정확히 입력해 주세요(숫자만).');
-      return;
-    }
-    if (!settlementHolderName || settlementHolderName.length < 2) {
-      toast('안전거래 입금 계좌의 예금주명을 입력해 주세요.');
-      return;
+    var isDeliveryDeal = dealMethods.indexOf('택배거래') !== -1;
+    if (isDeliveryDeal) {
+      if (!settlementAccountNumber || !/^[0-9]{6,20}$/.test(settlementAccountNumber)) {
+        toast('안전거래 입금 계좌번호를 정확히 입력해 주세요(숫자만).');
+        return;
+      }
+      if (!settlementHolderName || settlementHolderName.length < 2) {
+        toast('안전거래 입금 계좌의 예금주명을 입력해 주세요.');
+        return;
+      }
     }
 
     var isEditing = !!formState.editingId;
@@ -2064,9 +2077,9 @@
         description: description,
         images: images,
         image_hashes: hashes,
-        settlement_bank: settlementBank,
-        settlement_account_number: settlementAccountNumber,
-        settlement_holder_name: settlementHolderName,
+        settlement_bank: isDeliveryDeal ? settlementBank : null,
+        settlement_account_number: isDeliveryDeal ? settlementAccountNumber : null,
+        settlement_holder_name: isDeliveryDeal ? settlementHolderName : null,
       };
 
       if (isEditing) {
@@ -2150,6 +2163,7 @@
         var isDirect = !!(checkedDirect && checkedDirect.checked);
         if (directWrap) directWrap.style.display = isDirect ? 'block' : 'none';
         if (!isDirect) resetMarketDirectRegionPicker();
+        updateMarketFormSettlementVisibility();
       };
     });
     var submitBtn = document.getElementById('marketFormSubmitBtn');
