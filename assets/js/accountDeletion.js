@@ -25,6 +25,16 @@
     );
   }
 
+  function showAccountDeletionOverlay() {
+    var overlay = document.getElementById('stelvioAccountDeletionOverlay');
+    if (overlay) overlay.classList.remove('hidden');
+  }
+
+  function hideAccountDeletionOverlay() {
+    var overlay = document.getElementById('stelvioAccountDeletionOverlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
   function getAuthUser() {
     return (
       (window.authV9 && window.authV9.currentUser) ||
@@ -97,6 +107,9 @@
     }
 
     var url = getDeleteAccountUrl();
+    // 삭제 요청을 실제로 보내는 시점부터 사용자 인증(로그인) 화면으로 넘어갈 때까지
+    // 오버레이(주간 마일리지 TOP10과 동일한 초록 원 스피너 + "계정 삭제 중...")를 띄운다.
+    showAccountDeletionOverlay();
     try {
       var token = await user.getIdToken(true);
       var res = await fetch(url, {
@@ -135,6 +148,8 @@
     } catch (e) {
       console.error('[accountDeletion]', e);
       return { success: false, error: e && e.message ? e.message : String(e) };
+    } finally {
+      hideAccountDeletionOverlay();
     }
   }
 

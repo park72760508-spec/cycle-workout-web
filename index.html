@@ -3778,7 +3778,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260904unregisteredConfirm1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260904deleteOverlay1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4396,6 +4396,12 @@
         <button type="button" class="stelvio-exit-confirm-btn stelvio-exit-confirm-btn-ok" id="stelvioExitConfirmOkBtn" onclick="if(typeof window.__stelvioExitConfirmCallback==='function'){ window.__stelvioExitConfirmCallback(); } if(typeof closeStelvioExitConfirmPopup==='function')closeStelvioExitConfirmPopup();">확인</button>
       </div>
     </div>
+  </div>
+
+  <!-- 계정 및 데이터 삭제 진행 중 오버레이 (주간 마일리지 TOP10과 동일한 초록 원 스피너) -->
+  <div id="stelvioAccountDeletionOverlay" class="stelvio-account-deletion-overlay hidden">
+    <div class="weekly-top10-spinner" role="img" aria-label="계정 삭제 중"></div>
+    <p class="stelvio-account-deletion-overlay-text">계정 삭제 중...</p>
   </div>
 
   <!-- Device Settings 웹 사용자 안내 팝업 (베이스캠프 DEVICE SETTINGS - body 직계로 표시, 화면 정중앙) -->

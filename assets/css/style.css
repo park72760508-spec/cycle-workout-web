@@ -6536,6 +6536,30 @@ body:has(#trainingDetailModal:not(.hidden)) {
   to { transform: rotate(360deg); }
 }
 
+/* 계정 및 데이터 삭제 진행 중 전체화면 오버레이 — 스피너는 주간 마일리지 TOP10과 동일 */
+.stelvio-account-deletion-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.96);
+  z-index: 10030000;
+}
+.stelvio-account-deletion-overlay.hidden {
+  display: none !important;
+}
+.stelvio-account-deletion-overlay-text {
+  margin: 24px 0 0 0;
+  font-size: 0.95em;
+  font-weight: 600;
+  color: #374151;
+}
+
 /* 주간 마일리지 TOP10 모달 헤더 부가 문구 (제목 아래) */
 .weekly-top10-header-text {
   display: flex;
