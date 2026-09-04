@@ -6536,7 +6536,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   to { transform: rotate(360deg); }
 }
 
-/* 계정 및 데이터 삭제 진행 중 전체화면 오버레이 — 스피너는 주간 마일리지 TOP10과 동일 */
+/* 계정 및 데이터 삭제 진행 중 전체화면 오버레이 — 스피너는 주간 마일리지 TOP10과 동일.
+   환경설정 모달(.modal-overlay z-index 10100200)에서 트리거되므로 그보다 반드시 위에
+   와야 한다 — 프로젝트 내 최상위권 오버레이(tssRecalcProgressModal 10200000)보다도 위. */
 .stelvio-account-deletion-overlay {
   position: fixed;
   top: 0;
@@ -6548,7 +6550,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.96);
-  z-index: 10030000;
+  z-index: 10200001;
 }
 .stelvio-account-deletion-overlay.hidden {
   display: none !important;
