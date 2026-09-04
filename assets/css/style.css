@@ -31248,12 +31248,16 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   line-height: 20px;
 }
 /* 할인율 배지 — 제휴사 화면의 스타버스트(톱니 도장) 배지와 동일한 모양(12각, 흰 글씨
-   "N%"/"OFF" 두 줄)을 회색 톤으로 옮겨와, 가격("...원") 텍스트 우측 상단에 절대 위치로
-   떠 있게 표시한다(assets/js/affiliate/AffiliateScreens.jsx의 AffiliateDiscountBadge 참고). */
+   "N%"/"OFF" 두 줄)을 회색 톤으로 옮겨와 가격("...원") 텍스트 옆에 떠 있게 표시한다
+   (assets/js/affiliate/AffiliateScreens.jsx의 AffiliateDiscountBadge 참고). left:100%로
+   가격 박스(.market-card__price, 텍스트 크기만큼만 차지) 바로 오른쪽 바깥에 배치해
+   "원" 글자를 가리지 않고 그 우측 끝에 살짝 띄워서 붙는다. */
 .market-card__discount-badge {
   position: absolute;
-  top: -13px;
-  right: -8px;
+  top: 50%;
+  left: 100%;
+  margin-left: 2px;
+  transform: translateY(-50%);
   width: 30px;
   height: 30px;
   pointer-events: none;
