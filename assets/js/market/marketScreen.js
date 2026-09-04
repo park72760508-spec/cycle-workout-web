@@ -905,6 +905,12 @@
     '</div>';
   }
 
+  /** 연결된 주문이 입금완료(PAID) 이후 단계인지 — 이 단계부터는 수락된 가격 조정을
+   * 취소해도 이미 그 가격으로 결제까지 끝난 뒤라 의미가 없으므로 취소 버튼을 숨긴다. */
+  function marketNegoOrderPastPayment(escrowStatus) {
+    return escrowStatus === 'PAID' || escrowStatus === 'CONFIRMED';
+  }
+
   /** 아직 주문으로 이어지지 않은 가격 조정 요청 — 어떤 구매자인지 특정할 상대방 카드가
    * 아직 없으므로 이름을 함께 표시(요청당 1행, item+buyer 유니크). */
   function marketNegoRowHtml(r) {
@@ -923,29 +929,34 @@
   /** 이미 주문이 있는 구매자의 가격 조정 요청 — 위쪽 거래 상대 정보 카드가 이미 구매자를
    * 알려주므로 아바타·이름 없이, 아래 입금 금액 행과 동일한 형식(label : 값 + 상태)으로 표시.
    * readOnly=true면 수락/거절 버튼 없이 상태 배지만 표시 — 구매자 본인 화면(거래 진행 상태)에서
-   * 재사용할 때 판매자 전용 버튼이 노출되지 않도록 한다. */
-  function marketNegoAmountRowHtml(r, readOnly) {
+   * 재사용할 때 판매자 전용 버튼이 노출되지 않도록 한다. hideCancelBtn=true면(연결된 주문이
+   * 입금완료 이후 단계) 수락됨 취소 버튼도 함께 숨긴다. */
+  function marketNegoAmountRowHtml(r, readOnly, hideCancelBtn) {
     return '<div class="market-deal-amount-row">' +
       '<span class="market-tx-row__amount">' +
         '<span class="market-delivery-info__label">조정 가격 : </span>' +
         '<span class="market-delivery-info__value">' + formatPrice(r.requested_price) + '원</span>' +
       '</span>' +
-      (readOnly ? marketNegoStatusOnlyHtml(r) : marketNegoActionHtml(r)) +
+      (readOnly ? marketNegoStatusOnlyHtml(r, hideCancelBtn) : marketNegoActionHtml(r, hideCancelBtn)) +
     '</div>';
   }
 
   /** 수락됨 상태에는 구매자·판매자 누구나 누를 수 있는 취소 버튼을 함께 붙인다(변심 등으로
    * 더 이상 그 조정가로 거래하지 않기로 한 경우) — 이 함수가 구매자 readOnly 뷰와 판매자
    * 뷰(marketNegoActionHtml의 비-PENDING 분기) 양쪽에서 공용으로 쓰이므로 한 곳만 고치면
-   * 양쪽 화면에 동시에 반영된다. */
-  function marketNegoStatusOnlyHtml(r) {
+   * 양쪽 화면에 동시에 반영된다. hideCancelBtn=true면(연결된 주문이 이미 입금완료(PAID) 이후
+   * 단계) "수락됨" 배지는 그대로 두고 취소 버튼만 숨긴다 — 취소는 입금완료 전까지만 허용된다
+   * (서버 RPC도 진행 중인 주문이 있으면 어차피 거부하지만, 버튼 자체를 노출하지 않아 혼란을
+   * 없앤다). 연결된 주문이 없는 컨텍스트(주문 이전 네고 목록 등)에서는 hideCancelBtn을 넘기지
+   * 않으므로 기존과 동일하게 계속 노출된다. */
+  function marketNegoStatusOnlyHtml(r, hideCancelBtn) {
     if (r.status === 'PENDING') {
       return '<span class="market-nego-request-status market-nego-request-status--pending">대기 중</span>';
     }
     if (r.status === 'ACCEPTED') {
       return '<span class="market-nego-accepted-wrap">' +
         '<span class="market-nego-request-status market-nego-request-status--accepted">수락됨</span>' +
-        '<button type="button" class="market-nego-cancel-btn" data-nego-id="' + r.id + '">취소</button>' +
+        (hideCancelBtn ? '' : '<button type="button" class="market-nego-cancel-btn" data-nego-id="' + r.id + '">취소</button>') +
       '</span>';
     }
     if (r.status === 'CANCELLED') {
@@ -954,14 +965,14 @@
     return '<span class="market-nego-request-status market-nego-request-status--rejected">거절</span>';
   }
 
-  function marketNegoActionHtml(r) {
+  function marketNegoActionHtml(r, hideCancelBtn) {
     if (r.status === 'PENDING') {
       return '<div class="market-tx-row__actions">' +
         '<button type="button" class="market-nego-accept-btn" data-nego-id="' + r.id + '">수락</button>' +
         '<button type="button" class="market-nego-reject-btn" data-nego-id="' + r.id + '">거절</button>' +
       '</div>';
     }
-    return marketNegoStatusOnlyHtml(r);
+    return marketNegoStatusOnlyHtml(r, hideCancelBtn);
   }
 
   // ───────────────────────── 홈/목록 화면 ─────────────────────────
@@ -2553,8 +2564,10 @@
           ? marketCounterpartCardHtml(bAvatar, bName, o.buyerPhone, o.escrow_status === 'CONFIRMED')
           : '';
         // 이 구매자가 제출한 가격 조정 요청(있다면) — 거래 상대 정보 카드 바로 아래, 발생 순서에 표시.
+        // 이 주문이 이미 입금완료(PAID) 이후 단계면 수락된 가격 조정의 취소 버튼은 숨긴다(취소는
+        // 입금완료 전까지만 허용).
         var negoForThisOrder = (detailState.negoRequests || []).find(function (r) { return r.buyer_id === o.buyer_id; });
-        var negoHtml = negoForThisOrder ? marketNegoAmountRowHtml(negoForThisOrder) : '';
+        var negoHtml = negoForThisOrder ? marketNegoAmountRowHtml(negoForThisOrder, false, marketNegoOrderPastPayment(o.escrow_status)) : '';
         // 판매자에게는 실제 정산받는 금액(수수료 차감된 item_price)을 보여준다 — amount는
         // 구매자가 실제로 입금한 총액(수수료 포함)이라 판매자 관점에서는 오해를 줄 수 있다.
         var sellerAmountLabelText = o.deal_type === 'DIRECT_DEAL' ? '거래 금액 : ' : '입금 금액 : ';
@@ -2612,8 +2625,9 @@
         : '';
       // 이 거래에 연결된 가격 조정 요청(있다면) — 판매자 화면(negoHtml, 위 dealsHistoryHtml)과
       // 동일한 위치(거래 상대 정보 카드 바로 아래)에 보여준다. 구매자 화면이라 수락/거절 버튼은
-      // 감추고 상태 배지만 표시(readOnly=true).
-      var buyerNegoHtml = nego ? marketNegoAmountRowHtml(nego, true) : '';
+      // 감추고 상태 배지만 표시(readOnly=true). 이 주문이 이미 입금완료(PAID) 이후 단계면
+      // 수락된 가격 조정의 취소 버튼도 숨긴다(취소는 입금완료 전까지만 허용).
+      var buyerNegoHtml = nego ? marketNegoAmountRowHtml(nego, true, marketNegoOrderPastPayment(myOrder.escrow_status)) : '';
       buyerOrderHistoryHtml =
         '<div class="market-order-history">' +
           '<div class="market-nego-divider"></div>' +
