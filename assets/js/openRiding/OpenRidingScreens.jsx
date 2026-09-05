@@ -4336,15 +4336,6 @@ function OpenRidingBottomGlassNav(props) {
                 {hostedInCrewCount > 99 ? '99+' : hostedInCrewCount}
               </span>
             ) : null}
-            {settlementUnpaidCount > 0 ? (
-              <span
-                className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-red-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
-                style={{ width: '17px', height: '17px', fontSize: 10, top: 0, right: 0, transform: 'translate(45%, -40%)' }}
-                aria-hidden="true"
-              >
-                ₩
-              </span>
-            ) : null}
           </span>
           <span className="open-riding-bottom-glass-nav__label">{navGroupsLabel}</span>
         </button>
