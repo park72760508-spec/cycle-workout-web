@@ -112,6 +112,56 @@ async function writeRankingComputeCache(admin, cacheKey, payload) {
   }
 }
 
+/**
+ * GC·구간(peak)·독주(speed) 탭 전용 — 원본 데이터가 KST 하루 2회 배치(예: 01:00·03:15)로만
+ * 바뀌고 그 사이엔 절대 변하지 않으므로, TTL로 신선도를 관리하는 대신 "지금이 몇 번째 배치
+ * 구간인지"를 캐시 키에 새겨 넣는다 — 배치 시각을 넘어가면 키 자체가 바뀌어 자동으로 새로
+ * 계산되고, 같은 배치 구간 안에서는 몇 시간이 지나도 동일 키로 캐시를 그대로 재사용한다.
+ * (TSS·거리·클럽 탭처럼 당일 라이딩을 즉시 반영해야 하는 탭에는 절대 적용하면 안 됨 — 그
+ * 탭들은 raw 데이터 자체가 하루 중에도 계속 바뀌므로 이 배치-구간 캐싱을 쓰면 회귀가 된다.)
+ * @param {string[]} boundariesKst 오름차순 "HH:MM" KST 배열 (예: ["01:00", "03:15"])
+ */
+function currentBatchEpochKeyKst(boundariesKst) {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  function kstParts(date) {
+    const parts = fmt.formatToParts(date);
+    const get = (t) => parts.find((p) => p.type === t).value;
+    const hh = get("hour") === "24" ? 0 : Number(get("hour"));
+    return {
+      dateStr: `${get("year")}-${get("month")}-${get("day")}`,
+      minutes: hh * 60 + Number(get("minute")),
+    };
+  }
+  const boundaryMinutes = boundariesKst.map((b) => {
+    const [h, m] = b.split(":").map(Number);
+    return h * 60 + m;
+  });
+  const now = new Date();
+  const { dateStr, minutes } = kstParts(now);
+  let idx = -1;
+  for (let i = 0; i < boundaryMinutes.length; i++) {
+    if (minutes >= boundaryMinutes[i]) idx = i;
+  }
+  if (idx === -1) {
+    // 오늘 첫 배치 이전 시각 → 전날 마지막 배치 구간에 속함
+    const yesterday = kstParts(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    return `${yesterday.dateStr}_b${boundaryMinutes.length - 1}`;
+  }
+  return `${dateStr}_b${idx}`;
+}
+
+// 배치 구간 캐시의 안전판 TTL — 키가 이미 배치 구간별로 갈리므로 사실상 항상 이 값 이내에
+// 새 구간으로 넘어가 자동 갱신되지만, 만에 하나 재배포 등으로 갱신이 안 될 때의 상한선.
+const BATCH_EPOCH_CACHE_SAFETY_TTL_MS = 24 * 60 * 60 * 1000;
+
 function effectiveDayKmFromSummaryRow(row) {
   const ks = Number(row.km_strava_sum) || 0;
   const kk = Number(row.km_stelvio_sum) || 0;
@@ -857,9 +907,29 @@ async function fetchPeakPowerMonthlyCore(
   };
 }
 
+// mv_leaderboard_peak_28d 원본은 pg_cron KST 01:00·03:15 배치로만 갱신됨(구간 탭).
+const PEAK_POWER_BATCH_BOUNDARIES_KST = ["01:00", "03:15"];
+
+async function fetchPeakPowerMonthlyCoreCached(admin, startStr, endStr, durationType, gender) {
+  const epoch = currentBatchEpochKeyKst(PEAK_POWER_BATCH_BOUNDARIES_KST);
+  const cacheKey = "peak_power_core_v1__" + epoch + "__" + durationType + "__" + gender;
+  const t0 = Date.now();
+  const cached = await readRankingComputeCache(admin, cacheKey, BATCH_EPOCH_CACHE_SAFETY_TTL_MS);
+  if (cached) {
+    console.log("[rankingComputeCache] HIT", cacheKey, "readMs=", Date.now() - t0);
+    return cached;
+  }
+  const fresh = await fetchPeakPowerMonthlyCore(admin, startStr, endStr, durationType, gender);
+  console.log("[rankingComputeCache] MISS", cacheKey, "computeMs=", Date.now() - t0);
+  if (fresh) {
+    await writeRankingComputeCache(admin, cacheKey, fresh).catch(function () {});
+  }
+  return fresh;
+}
+
 async function fetchPeakPowerMonthly(admin, startStr, endStr, durationType, gender) {
   return fetchNonGcSupabaseBoard(
-    (a, s, e, g) => fetchPeakPowerMonthlyCore(a, s, e, durationType, g),
+    (a, s, e, g) => fetchPeakPowerMonthlyCoreCached(a, s, e, durationType, g),
     admin,
     [startStr, endStr],
     gender,
@@ -1070,9 +1140,29 @@ async function fetchPersonalSpeedCore(admin, startStr, endStr, gender) {
   };
 }
 
+// mv_leaderboard_speed_28d 원본도 구간 탭과 동일한 KST 01:00·03:15 배치로만 갱신됨(독주 탭).
+const PERSONAL_SPEED_BATCH_BOUNDARIES_KST = ["01:00", "03:15"];
+
+async function fetchPersonalSpeedCoreCached(admin, startStr, endStr, gender) {
+  const epoch = currentBatchEpochKeyKst(PERSONAL_SPEED_BATCH_BOUNDARIES_KST);
+  const cacheKey = "personal_speed_core_v1__" + epoch + "__" + gender;
+  const t0 = Date.now();
+  const cached = await readRankingComputeCache(admin, cacheKey, BATCH_EPOCH_CACHE_SAFETY_TTL_MS);
+  if (cached) {
+    console.log("[rankingComputeCache] HIT", cacheKey, "readMs=", Date.now() - t0);
+    return cached;
+  }
+  const fresh = await fetchPersonalSpeedCore(admin, startStr, endStr, gender);
+  console.log("[rankingComputeCache] MISS", cacheKey, "computeMs=", Date.now() - t0);
+  if (fresh) {
+    await writeRankingComputeCache(admin, cacheKey, fresh).catch(function () {});
+  }
+  return fresh;
+}
+
 async function fetchPersonalSpeed(admin, startStr, endStr, gender) {
   return fetchNonGcSupabaseBoard(
-    fetchPersonalSpeedCore,
+    fetchPersonalSpeedCoreCached,
     admin,
     [startStr, endStr],
     gender,
@@ -1536,17 +1626,20 @@ async function fetchGcRankingCore(admin, monthKey, queryGender) {
 }
 
 /**
- * fetchGcRankingCore(6개 부문 Supabase fan-out — GC 응답 중 가장 비싼 부분)를 짧게 캐싱.
+ * fetchGcRankingCore(6개 부문 Supabase fan-out — GC 응답 중 가장 비싼 부분)를 캐싱.
  * 뷰어 개인화(attachGcViewerHeptagonAxes 등)는 캐시와 무관하게 매 요청마다 그대로 붙는다.
- * 헵타곤 코호트는 하루 2회(01:15·03:30 KST)만 갱신되므로 2분 캐시로도 신선도 손실 없음.
+ * 헵타곤 코호트는 하루 2회(01:15·03:30 KST)만 갱신되고 그 사이엔 절대 안 바뀌므로,
+ * 짧은 TTL 대신 배치 구간을 캐시 키에 새겨 "이번 배치 이후 최초 1회만 계산 → 다음 배치
+ * 전까지 그대로 재사용"한다(currentBatchEpochKeyKst 참고 — 신선도 손실 없음).
  */
-const GC_CORE_CACHE_TTL_MS = 120000;
+const GC_BATCH_BOUNDARIES_KST = ["01:15", "03:30"];
 
 async function fetchGcRankingCoreCached(admin, monthKey, queryGender) {
   const fg = queryGender === "M" || queryGender === "F" ? queryGender : "all";
-  const cacheKey = "gc_cohort_core_v1__" + monthKey + "__" + fg;
+  const epoch = currentBatchEpochKeyKst(GC_BATCH_BOUNDARIES_KST);
+  const cacheKey = "gc_cohort_core_v2__" + epoch + "__" + monthKey + "__" + fg;
   const t0 = Date.now();
-  const cached = await readRankingComputeCache(admin, cacheKey, GC_CORE_CACHE_TTL_MS);
+  const cached = await readRankingComputeCache(admin, cacheKey, BATCH_EPOCH_CACHE_SAFETY_TTL_MS);
   if (cached) {
     console.log("[rankingComputeCache] HIT", cacheKey, "readMs=", Date.now() - t0);
     return cached;
