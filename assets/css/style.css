@@ -31484,9 +31484,21 @@ html.market-bottom-nav-glass-v2 .market-bottom-nav__pill {
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
   position: relative;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.75);
-  -webkit-backdrop-filter: blur(20px) saturate(175%);
-  backdrop-filter: blur(20px) saturate(175%);
+  /* "유광 유리" — 위에서 아래로 은은하게 밝기가 빠지는 유리 재질 그라디언트 + 더 짙은
+     블러/채도로 뒤 콘텐츠가 비치는 프로스티드 글래스 느낌을 강화한다. 모양(둥근 pill,
+     플로팅 위치, 그림자)은 기존과 완전히 동일 — 재질(광택) 표현만 보강한 것. */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.66) 100%);
+  -webkit-backdrop-filter: blur(26px) saturate(190%);
+  backdrop-filter: blur(26px) saturate(190%);
+}
+/* 유리 표면 상단의 광택(하이라이트) 레이어 — 클릭에 영향 없도록 pointer-events:none,
+   pill의 overflow:hidden + border-radius를 그대로 물려받아 모서리 밖으로 새지 않는다. */
+.market-bottom-nav__pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 55%);
+  pointer-events: none;
 }
 .market-bottom-nav__inner {
   display: flex;

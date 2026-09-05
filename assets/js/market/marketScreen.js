@@ -71,7 +71,7 @@
    * true면 화면 가장자리에 붙는 반투명 블러 바(하이라인 테두리, safe-area 패딩)로 표시되고,
    * false면 기존 플로팅 pill 스타일로 즉시 원복된다(assets/css/style.css의
    * html.market-bottom-nav-glass-v2 스코프 규칙 참고). 마음에 안 들면 이 한 줄만 바꾸면 됨. */
-  var MARKET_BOTTOM_NAV_GLASS_V2 = true;
+  var MARKET_BOTTOM_NAV_GLASS_V2 = false;
   if (typeof document !== 'undefined' && MARKET_BOTTOM_NAV_GLASS_V2) {
     document.documentElement.classList.add('market-bottom-nav-glass-v2');
   }
