@@ -2838,6 +2838,12 @@ async function recordStravaActivityFetchDiagnostic(db, userId, diagnostic) {
     }
     if (diagnostic && diagnostic.hint) {
       update.strava_last_activity_fetch_hint = String(diagnostic.hint).slice(0, 500);
+    } else {
+      // hint가 빈 문자열(정상 조회 성공)이면 이전 실패 때 남은 힌트 문구가 그대로 남아있지
+      // 않도록 지운다 — error 필드는 바로 아래에서 이미 이렇게 처리하고 있었는데 hint만
+      // 빠져 있었다. 방치하면 이후 정상 동기화된 뒤에도 "0건 조회" 같은 옛 힌트가 남아
+      // 관리자가 진단 시 최신 상태를 오판하는 원인이 된다.
+      update.strava_last_activity_fetch_hint = admin.firestore.FieldValue.delete();
     }
     if (diagnostic && diagnostic.error) {
       update.strava_last_activity_fetch_error = String(diagnostic.error).slice(0, 500);
@@ -5151,9 +5157,15 @@ exports.stravaSyncRetrySchedule = onSchedule(
  * 매 실행마다 일부 사용자만(batchSize) 스캔하고, appConfig/strava_rotating_gap_scan에 커서를
  * 저장해 다음 실행이 이어받는다 — 레이트리밋 예산 안에서 며칠에 걸쳐 전원을 커버한다.
  */
-const STRAVA_ROTATING_GAP_SCAN_BATCH_SIZE = 60;
-/** 배치(60) 중 활동 사용자에게 배정하는 슬롯 — 사용자 수가 늘어도 활동 사용자군은 매 회전마다 빠르게 커버 */
-const STRAVA_ROTATING_GAP_SCAN_ACTIVE_SLICE = 48;
+// 2026-09-05 재발(동일 사용자, 위 주석 사례): 활동 사용자 풀이 291명까지 늘어난 상태에서
+// 하루 4회 x active 48슬롯 = 192슬롯/일로는 291명을 하루 안에 다 못 돌아(1회전에 7회 실행,
+// 약 1.5일 소요) — 라이딩 직후 확인한 시점에 아직 그 사용자 차례가 안 돌아온 상태였다.
+// Strava 레이트리밋(6000회/day)에는 아직 여유가 커서(스캔 도입 당시 실측 사용량 1,665/6000),
+// 활동 사용자 슬롯을 하루 400개(291명 대비 여유 있게)로 늘려 최악의 경우에도 하루 안에는
+// 반드시 재스캔되도록 한다.
+const STRAVA_ROTATING_GAP_SCAN_BATCH_SIZE = 112;
+/** 배치 중 활동 사용자에게 배정하는 슬롯 — 사용자 수가 늘어도 활동 사용자군은 매 회전마다 빠르게 커버 */
+const STRAVA_ROTATING_GAP_SCAN_ACTIVE_SLICE = 100;
 /** 배치 중 비활동 사용자에게 배정하는 슬롯 — 느리더라도 결국 전원 커버(완전히 배제하지 않음) */
 const STRAVA_ROTATING_GAP_SCAN_INACTIVE_SLICE = 12;
 const stravaRotatingGapScanOptions = supabaseDualWriteServer.appendServiceRoleSecret({
