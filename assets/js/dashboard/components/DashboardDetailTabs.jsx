@@ -335,14 +335,14 @@
           }),
           logsLoading ? React.createElement(
             DashboardCard,
-            { title: '훈련 트렌드 (최근 1개월)' },
+            { title: '훈련 밸런스 (최근 1개월)' },
             React.createElement('div', { className: 'h-[200px] flex flex-col items-center justify-center' },
               React.createElement('div', { className: 'w-10 h-10 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3' }),
               React.createElement('span', { className: 'text-sm text-gray-500' }, '로딩 중...')
             )
           ) : logsLoadError ? React.createElement(
             DashboardCard,
-            { title: '훈련 트렌드 (최근 1개월)' },
+            { title: '훈련 밸런스 (최근 1개월)' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6' },
               React.createElement('span', { className: 'text-sm text-red-600 mb-3' }, logsLoadError),
               React.createElement('button', {
