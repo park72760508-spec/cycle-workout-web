@@ -67,6 +67,15 @@
     document.documentElement.classList.add('market-glass-nav-ios-phone');
   }
 
+  /** 인스타그램 스타일 엣지-투-엣지 프로스티드 글래스 하단 네비(v2) on/off 스위치 —
+   * true면 화면 가장자리에 붙는 반투명 블러 바(하이라인 테두리, safe-area 패딩)로 표시되고,
+   * false면 기존 플로팅 pill 스타일로 즉시 원복된다(assets/css/style.css의
+   * html.market-bottom-nav-glass-v2 스코프 규칙 참고). 마음에 안 들면 이 한 줄만 바꾸면 됨. */
+  var MARKET_BOTTOM_NAV_GLASS_V2 = true;
+  if (typeof document !== 'undefined' && MARKET_BOTTOM_NAV_GLASS_V2) {
+    document.documentElement.classList.add('market-bottom-nav-glass-v2');
+  }
+
   /** body 최상위 단일 네비(#marketBottomNav)의 표시 여부·활성 탭을 화면 전환마다 동기화한다.
    * activeKey가 null이면(상세 화면) 네비 자체를 숨긴다. */
   function syncMarketBottomNav(activeKey) {

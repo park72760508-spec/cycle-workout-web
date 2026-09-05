@@ -31448,6 +31448,31 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 html.market-glass-nav-ios-phone .market-bottom-nav {
   bottom: calc(16px + env(safe-area-inset-bottom, 0px) - (var(--market-glass-nav-inner-h) * 0.5));
 }
+
+/* 인스타그램 최신 UI 스타일의 엣지-투-엣지 프로스티드 글래스 하단 네비(v2) — 기존 플로팅
+   pill 스타일과 완전히 분리된 대체 스킨. marketScreen.js의 MARKET_BOTTOM_NAV_GLASS_V2
+   상수로 켜고 끈다(html.market-bottom-nav-glass-v2 클래스 유무) — 마음에 안 들면 그
+   상수 하나만 false로 바꾸면 아래 규칙이 전혀 적용되지 않아 원래 pill 스타일로 완전히
+   원복된다(이 블록 자체는 지우지 않아도 됨). 뒤에 선언해 ios-phone 오프셋 보정보다
+   우선 적용되게 한다 — 화면 가장자리에 붙는 바라 그 보정이 필요 없다. */
+html.market-bottom-nav-glass-v2 .market-bottom-nav {
+  bottom: 0;
+  left: 0;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+html.market-bottom-nav-glass-v2 .market-bottom-nav__pill {
+  border-radius: 0;
+  border: none;
+  /* iOS 시스템 하이라인과 동일한 톤의 1px 미만 옅은 경계선 */
+  border-top: 0.5px solid rgba(60, 60, 67, 0.29);
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+}
 .market-bottom-nav__pill {
   width: 100%;
   box-sizing: border-box;
