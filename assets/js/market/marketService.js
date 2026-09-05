@@ -922,6 +922,79 @@ export async function indexMarketItemImage(itemId) {
 /** 마이페이지 "정산" 탭(관리자 전용) — 안전거래로 입금 확인된 주문의 정산 내역을 조회한다.
  * market_orders를 새 테이블 없이 그대로 조회하되, 구매자·판매자 이름은 관리자 우회가 있는
  * RPC(get_market_settlements_for_admin)를 통해서만 가져올 수 있다. */
+/** 신고 접수 — 사기 피해 의심/가품·허위매물/기타(30자 이내). 동일 신고자가 동일 대상을
+ * 이미 신고(ACTIVE)한 상태면 서버(RPC)가 ALREADY_REPORTED로 거부한다. 신고자 기준 distinct
+ * 3건 이상 누적되면 서버가 대상 계정을 자동 차단(market_blocked)한다. */
+export async function submitMarketReport(targetUserId, itemId, reason, detail) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.rpc('submit_market_report', {
+      p_target_user_id: targetUserId,
+      p_item_id: itemId || null,
+      p_reason: reason,
+      p_detail: detail || null,
+    });
+    if (error) throw error;
+  });
+}
+
+/** 본인이 접수한 신고 철회 — 철회 후 대상의 활성 신고 수가 3건 미만이 되면 서버가 자동으로
+ * 차단을 해제한다(관리자의 강제 해제와는 별개 경로). */
+export async function withdrawMarketReport(reportId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.rpc('withdraw_market_report', { p_report_id: reportId });
+    if (error) throw error;
+  });
+}
+
+/** 관리자 전용 — 신고 수와 무관하게 대상 계정의 차단을 즉시 강제 해제(fn_is_admin() 서버 검증). */
+export async function releaseMarketUserPenalty(targetUserId) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.rpc('release_market_user_penalty', { p_target_user_id: targetUserId });
+    if (error) throw error;
+  });
+}
+
+/** 목록 카드에 "사기 피해 접수" 배지를 표시하기 위한 차단된 판매자 id 집합 — 다른 사용자
+ * 필드 노출 없이 market_blocked=true인 user_id만 공개하는 뷰(market_blocked_sellers)를 쓴다. */
+export async function getBlockedSellerIds() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.from('market_blocked_sellers').select('user_id');
+    if (error) throw error;
+    return new Set((data || []).map((r) => r.user_id));
+  });
+}
+
+/** 마이페이지 "신고" 탭(일반 사용자) — 본인이 신고자인 건만 RLS로 조회된다. */
+export async function getMyMarketReports() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_reports')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  });
+}
+
+/** 마이페이지 "신고" 탭(관리자) — 활성 신고 전체(RLS가 관리자에게 전체 조회를 허용). */
+export async function getAllActiveMarketReportsForAdmin() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_reports')
+      .select('*')
+      .eq('status', 'ACTIVE')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  });
+}
+
 export async function getMarketSettlementsForAdmin() {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
@@ -993,6 +1066,12 @@ if (typeof window !== 'undefined') {
     clearSellerRating,
     matchMarketItemsByImage,
     indexMarketItemImage,
+    submitMarketReport,
+    withdrawMarketReport,
+    releaseMarketUserPenalty,
+    getBlockedSellerIds,
+    getMyMarketReports,
+    getAllActiveMarketReportsForAdmin,
     getMarketSettlementsForAdmin,
     adminMarkMarketOrderSettled,
   };

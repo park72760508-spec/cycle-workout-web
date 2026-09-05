@@ -3748,7 +3748,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260905starburstBadgeSize4" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260906marketReports1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -5114,6 +5114,31 @@
       <div class="market-confirm-buttons">
         <button type="button" class="market-confirm-btn market-confirm-btn-cancel" id="marketPurchaseAddressCancelBtn">취소</button>
         <button type="button" class="market-confirm-btn market-confirm-btn-ok" id="marketPurchaseAddressOkBtn">결제하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 중고랜드 신고 접수 팝업 — 화면 전체 오버레이 위 최상위(z-index)에 표시. -->
+  <div id="marketReportModal" class="market-confirm-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10200002;">
+    <div class="market-confirm-overlay" onclick="if(typeof closeMarketReportModal==='function')closeMarketReportModal();"></div>
+    <div class="market-confirm-content">
+      <p class="market-confirm-title" style="display:block;">신고하기</p>
+      <div class="market-report-reasons">
+        <label class="market-report-reason"><input type="radio" name="marketReportReason" value="FRAUD_SUSPECTED" /> 사기 피해 의심 (연락 끊김, 입금 후 잠적 등)</label>
+        <label class="market-report-reason"><input type="radio" name="marketReportReason" value="FAKE_ITEM" /> 가품(짝퉁) 및 허위 매물 판매</label>
+        <label class="market-report-reason"><input type="radio" name="marketReportReason" value="OTHER" /> 기타</label>
+        <div id="marketReportOtherWrap" class="market-report-other-wrap" style="display:none;">
+          <textarea id="marketReportOtherDetail" class="market-form-input market-report-other-textarea" maxlength="30" placeholder="사유를 입력해 주세요 (30자 이내)"></textarea>
+        </div>
+      </div>
+      <div class="market-report-penalty-notice">
+        <p>· 3인 이상으로부터 신고 접수 시 계정이 차단됩니다(상품 등록·열람 제한).</p>
+        <p>· 등록된 상품은 목록에 "사기 피해 접수" 라벨이 표시됩니다.</p>
+        <p class="market-report-penalty-notice__warn">허위 신고의 경우 이용이 제한될 수 있습니다.</p>
+      </div>
+      <div class="market-confirm-buttons">
+        <button type="button" class="market-confirm-btn market-confirm-btn-cancel" id="marketReportCancelBtn">취소</button>
+        <button type="button" class="market-confirm-btn market-confirm-btn-ok" id="marketReportSubmitBtn">신고하기</button>
       </div>
     </div>
   </div>
@@ -43568,7 +43593,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script defer src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script defer src="assets/js/competition/competitionScreen.js?v=applicants-popup-20260906"></script>
-  <script defer src="assets/js/market/marketScreen.js?v=20260905badgeTierColor2"></script>
+  <script defer src="assets/js/market/marketScreen.js?v=20260906marketReports1"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

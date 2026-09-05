@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260908negoCancel1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260906marketReports1';
   var svc = null;
 
   function loadMarketService() {
@@ -200,6 +200,7 @@
     hasMore: true,
     loading: false,
     favoriteIds: new Set(),
+    blockedSellerIds: new Set(),
     myUserId: null,
     activeOrderIds: new Set(),
     categoryOverrideUserKey: null,
@@ -911,27 +912,29 @@
       body;
   }
 
-  /** 상대방(구매자/판매자) 정보 + 전화·문자 바로가기 카드 — 연락처가 아직 공개되지 않은
-   * 단계(marketOrderRevealsPhone 이전)에서는 통화/문자 버튼 없이 아바타+이름만 표시한다. */
-  function marketCounterpartCardHtml(avatarUrl, name, phone, disabled) {
+  /** 상대방(구매자/판매자) 정보 + 전화·문자·신고 바로가기 카드 — 연락처가 아직 공개되지 않은
+   * 단계(marketOrderRevealsPhone 이전)에서는 통화/문자 버튼 없이 아바타+이름만 표시한다.
+   * 신고 버튼은 targetUserId가 있으면(=상대방 uid를 알 수 있는 컨텍스트) 연락처 공개 여부와
+   * 무관하게 항상 노출한다 — 연락이 끊긴 사기 의심 상황이야말로 신고가 필요한 경우이기 때문. */
+  function marketCounterpartCardHtml(avatarUrl, name, phone, disabled, targetUserId, itemId) {
     var phoneFormatted = marketFormatPhone(phone);
     var digitsOnly = phoneFormatted.replace(/[^0-9]/g, '');
-    var actionsHtml = '';
+    var contactHtml = '';
     if (digitsOnly && disabled) {
       // 거래완료(구매확정) 후에는 더 이상 연락을 조율할 필요가 없으므로 전화·문자 버튼을
       // 비활성 표시로 전환한다(카드 자체는 유지).
-      actionsHtml =
-        '<div class="market-deal-contact-card__actions">' +
-          '<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_CALL_ICON_SVG + '</span>' +
-          '<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_SMS_ICON_SVG + '</span>' +
-        '</div>';
+      contactHtml =
+        '<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_CALL_ICON_SVG + '</span>' +
+        '<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_SMS_ICON_SVG + '</span>';
     } else if (digitsOnly) {
-      actionsHtml =
-        '<div class="market-deal-contact-card__actions">' +
-          '<a class="market-deal-contact-btn" href="tel:' + digitsOnly + '" aria-label="전화 걸기">' + MARKET_CALL_ICON_SVG + '</a>' +
-          '<a class="market-deal-contact-btn" href="sms:' + digitsOnly + '" aria-label="문자 보내기">' + MARKET_SMS_ICON_SVG + '</a>' +
-        '</div>';
+      contactHtml =
+        '<a class="market-deal-contact-btn" href="tel:' + digitsOnly + '" aria-label="전화 걸기">' + MARKET_CALL_ICON_SVG + '</a>' +
+        '<a class="market-deal-contact-btn" href="sms:' + digitsOnly + '" aria-label="문자 보내기">' + MARKET_SMS_ICON_SVG + '</a>';
     }
+    var reportHtml = targetUserId
+      ? '<button type="button" class="market-deal-contact-btn market-deal-contact-btn--report" data-report-target="' + escapeHtml(targetUserId) + '" data-report-item="' + escapeHtml(itemId || '') + '" aria-label="신고하기"><img src="assets/img/problem.svg" alt="" /></button>'
+      : '';
+    var actionsHtml = (contactHtml || reportHtml) ? ('<div class="market-deal-contact-card__actions">' + contactHtml + reportHtml + '</div>') : '';
     return '<div class="market-deal-contact-card">' +
       '<img class="market-deal-contact-card__avatar" src="' + escapeHtml(avatarUrl) + '" alt="" />' +
       '<span class="market-deal-contact-card__name">' + escapeHtml(name) + '</span>' +
@@ -1056,11 +1059,13 @@
     var viewCount = Number(item.view_count) || 0;
     var favCount = Number(item.__favoriteCount) || 0;
     var hasActiveRequest = !!(activeOrderIds && activeOrderIds.has(item.id));
+    var isFraudReported = homeState.blockedSellerIds.has(item.user_id);
     return (
       '<div class="market-card' + soldClass + eagerClass + '" data-item-id="' + item.id + '">' +
         '<div class="market-card__img-wrap">' +
           '<img class="market-card__img" src="' + escapeHtml(img) + '" alt="" loading="lazy" decoding="async" />' +
           statusBadgeHtml(item.status) +
+          (isFraudReported ? '<span class="market-badge market-badge--fraud">사기 피해 접수</span>' : '') +
           (hasActiveRequest ? '<span class="market-card__request-dot" aria-label="거래 요청 있음" title="거래 요청이 있습니다"></span>' : '') +
           '<button type="button" class="market-card__heart" data-fav-toggle="' + item.id + '" aria-label="관심상품">' +
             (isFav ? '♥' : '♡') +
@@ -1315,12 +1320,14 @@
           s.getMyFavoriteItemIds(),
           s.getMySupabaseUserId(),
           s.getMyActiveDealItemIds().catch(function () { return new Set(); }),
+          s.getBlockedSellerIds().catch(function () { return new Set(); }),
         ]);
       })
       .then(function (res) {
         homeState.favoriteIds = res[0] || new Set();
         homeState.myUserId = res[1] || null;
         homeState.activeOrderIds = res[2] || new Set();
+        homeState.blockedSellerIds = res[3] || new Set();
       })
       .catch(function () {})
       .finally(function () {
@@ -2340,6 +2347,13 @@
     var images = item.images && item.images.length ? item.images : ['assets/img/profile-placeholder.svg'];
     var isMine = myUserId && item.user_id === myUserId;
 
+    // 신고 3건 이상 누적으로 차단된 판매자의 상품 — 판매자 본인·관리자를 제외하고는 상세
+    // 열람을 안내 문구로 대체한다(목록에는 "사기 피해 접수" 배지와 함께 계속 노출됨).
+    if (homeState.blockedSellerIds.has(item.user_id) && !isMine && !marketIsAdminUser()) {
+      body.innerHTML = '<div class="market-empty market-report-blocked-notice">신고 누적으로 열람이 제한된 상품입니다.</div>';
+      return;
+    }
+
     var isUnavailableStatus = item.status === 'RESERVED' || item.status === 'SOLD';
     var sliderHtml =
       '<div class="market-detail-slider' + (isUnavailableStatus ? ' market-detail-slider--dimmed' : '') + '" id="marketDetailSlider">' +
@@ -2595,7 +2609,7 @@
         // 구매자 연락처는 전화·문자 버튼이 붙은 상대방 카드(marketCounterpartCardHtml)로 대체 —
         // 텍스트로 따로 또 보여주지 않는다.
         var counterpartHtml = marketOrderRevealsPhone(o.escrow_status)
-          ? marketCounterpartCardHtml(bAvatar, bName, o.buyerPhone, o.escrow_status === 'CONFIRMED')
+          ? marketCounterpartCardHtml(bAvatar, bName, o.buyerPhone, o.escrow_status === 'CONFIRMED', o.buyer_id, item.id)
           : '';
         // 이 구매자가 제출한 가격 조정 요청(있다면) — 거래 상대 정보 카드 바로 아래, 발생 순서에 표시.
         // 이 주문이 이미 입금완료(PAID) 이후 단계면 수락된 가격 조정의 취소 버튼은 숨긴다(취소는
@@ -2655,7 +2669,7 @@
         ? marketDealInfoLineHtml('가상 계좌 : ', escapeHtml((myOrder.va_bank_name || '') + ' ' + myOrder.va_account_number), myOrder.va_account_number)
         : '';
       var sellerCounterpartHtml = marketOrderRevealsPhone(myOrder.escrow_status)
-        ? marketCounterpartCardHtml(sellerAvatar, sellerName, detailState.sellerPhone, myOrder.escrow_status === 'CONFIRMED')
+        ? marketCounterpartCardHtml(sellerAvatar, sellerName, detailState.sellerPhone, myOrder.escrow_status === 'CONFIRMED', item.user_id, item.id)
         : '';
       // 이 거래에 연결된 가격 조정 요청(있다면) — 판매자 화면(negoHtml, 위 dealsHistoryHtml)과
       // 동일한 위치(거래 상대 정보 카드 바로 아래)에 보여준다. 구매자 화면이라 수락/거절 버튼은
@@ -2835,6 +2849,11 @@
     Array.prototype.forEach.call(document.querySelectorAll('.market-nego-cancel-btn'), function (btn) {
       btn.onclick = function () { handleMarketNegoCancel(item.id, btn.getAttribute('data-nego-id')); };
     });
+    Array.prototype.forEach.call(document.querySelectorAll('.market-deal-contact-btn--report'), function (btn) {
+      btn.onclick = function () {
+        showMarketReportModal(btn.getAttribute('data-report-target'), btn.getAttribute('data-report-item'));
+      };
+    });
     Array.prototype.forEach.call(document.querySelectorAll('.market-delivery-submit-btn'), function (btn) {
       btn.onclick = function () { handleMarketSetTracking(item.id, btn); };
     });
@@ -3001,6 +3020,76 @@
     }
   }
   window.closeMarketPurchaseAddressPopup = closeMarketPurchaseAddressPopup;
+
+  function marketReportErrorMessage(err) {
+    var msg = err && err.message ? err.message : String(err || '');
+    if (msg.indexOf('ALREADY_REPORTED') !== -1) return '이미 신고하셨습니다.';
+    if (msg.indexOf('CANNOT_REPORT_SELF') !== -1) return '본인은 신고할 수 없습니다.';
+    if (msg.indexOf('INVALID_DETAIL') !== -1) return '기타 사유를 1~30자로 입력해 주세요.';
+    if (msg.indexOf('AUTH_REQUIRED') !== -1) return '로그인이 필요합니다.';
+    return '신고 접수 실패: ' + msg;
+  }
+
+  /** 신고 접수 팝업 — 상세화면 거래 상대방 카드의 신고 버튼(marketCounterpartCardHtml)에서
+   * 연다. 라디오 3종(사기 피해 의심/가품·허위매물/기타 30자 이내) 중 하나를 골라 제출하며,
+   * 최종 제출 전 showMarketConfirmPopup으로 한 번 더 확인한다(다른 신고성 액션과 동일 패턴). */
+  function showMarketReportModal(targetUserId, itemId) {
+    var modal = document.getElementById('marketReportModal');
+    if (!modal || !targetUserId) return;
+    var radios = document.querySelectorAll('input[name="marketReportReason"]');
+    var otherWrap = document.getElementById('marketReportOtherWrap');
+    var otherInput = document.getElementById('marketReportOtherDetail');
+    Array.prototype.forEach.call(radios, function (radio) { radio.checked = false; });
+    if (otherWrap) otherWrap.style.display = 'none';
+    if (otherInput) otherInput.value = '';
+    Array.prototype.forEach.call(radios, function (radio) {
+      radio.onchange = function () {
+        if (otherWrap) otherWrap.style.display = (radio.value === 'OTHER' && radio.checked) ? 'block' : 'none';
+      };
+    });
+    var cancelBtn = document.getElementById('marketReportCancelBtn');
+    var okBtn = document.getElementById('marketReportSubmitBtn');
+    if (cancelBtn) cancelBtn.onclick = closeMarketReportModal;
+    if (okBtn) {
+      okBtn.onclick = function () {
+        var checked = document.querySelector('input[name="marketReportReason"]:checked');
+        if (!checked) { toast('신고 항목을 선택해 주세요.'); return; }
+        var reason = checked.value;
+        var detail = '';
+        if (reason === 'OTHER') {
+          detail = (otherInput ? otherInput.value : '').trim();
+          if (!detail) { toast('기타 사유를 입력해 주세요.'); return; }
+          if (detail.length > 30) { toast('기타 사유는 30자 이내로 입력해 주세요.'); return; }
+        }
+        showMarketConfirmPopup(
+          '신고를 접수할까요? 허위 신고의 경우 이용이 제한될 수 있습니다.',
+          async function () {
+            try {
+              var s = await loadMarketService();
+              await s.submitMarketReport(targetUserId, itemId || null, reason, detail);
+              toast('신고가 접수되었습니다.');
+              closeMarketReportModal();
+            } catch (err) {
+              toast(marketReportErrorMessage(err));
+            }
+          },
+          { okText: '예, 신고합니다', cancelText: '아니오' }
+        );
+      };
+    }
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+  window.showMarketReportModal = showMarketReportModal;
+
+  function closeMarketReportModal() {
+    var modal = document.getElementById('marketReportModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
+  }
+  window.closeMarketReportModal = closeMarketReportModal;
 
   async function doMarketBuy(item, address) {
     var btn = document.getElementById('marketDetailBuyBtn');
@@ -3897,6 +3986,10 @@
     // 기록하는 화면이라 클라이언트 판단(marketIsAdminUser)과 무관하게 서버 RPC도 다시
     // fn_is_admin()으로 막혀 있다(이중 방어).
     if (marketIsAdminUser()) tabs.push({ key: 'settlement', label: '정산', icon: 'won' });
+    // 신고 탭은 일반 사용자·관리자 모두에게 노출되지만 내용이 다르다(loadMyPageContent에서
+    // marketIsAdminUser()로 분기) — 일반 사용자는 본인이 접수한 신고만, 관리자는 신고
+    // 대상자별로 모은 전체 현황을 본다.
+    tabs.push({ key: 'reports', label: '신고', icon: 'problem' });
     wrap.innerHTML = tabs.map(function (t) {
       var iconUrl = 'assets/img/' + t.icon + '.svg';
       return '<button type="button" class="market-subtab' + (myPageState.tab === t.key ? ' active' : '') +
@@ -3933,11 +4026,13 @@
     if (!grid) return;
     grid.className = myPageState.tab === 'deals' ? 'market-deals-list'
       : myPageState.tab === 'settlement' ? 'market-settlement-wrap'
+      : myPageState.tab === 'reports' ? 'market-report-wrap'
       : 'market-grid';
     grid.innerHTML = '<div class="market-loading">불러오는 중...</div>';
     loadMarketService()
       .then(function (s) {
         if (myPageState.tab === 'settlement') return renderMySettlementTable(s, grid);
+        if (myPageState.tab === 'reports') return marketIsAdminUser() ? renderAdminReportsList(s, grid) : renderMyReportsList(s, grid);
         if (myPageState.tab === 'deals') return renderMyDeals(s, grid);
         if (myPageState.tab === 'favorites') {
           return s.getMyFavoriteItemIds().then(function (ids) {
@@ -4230,6 +4325,134 @@
             });
           });
         };
+      });
+    });
+  }
+
+  function marketReportReasonLabel(reason, detail) {
+    if (reason === 'FRAUD_SUSPECTED') return '사기 피해 의심';
+    if (reason === 'FAKE_ITEM') return '가품(짝퉁)/허위매물';
+    if (reason === 'OTHER') return '기타: ' + (detail || '');
+    return reason || '-';
+  }
+
+  /** 마이페이지 "신고" 탭(일반 사용자) — 본인이 신고자인 건만 조회된다(RLS). 접수 상태(ACTIVE)
+   * 건에 한해 철회 버튼을 붙인다. */
+  function renderMyReportsList(s, grid) {
+    return s.getMyMarketReports().then(function (rows) {
+      if (!rows.length) {
+        grid.innerHTML = '<div class="market-empty">신고 내역이 없습니다.</div>';
+        return;
+      }
+      var targetIds = Array.from(new Set(rows.map(function (r) { return r.target_user_id; })));
+      var itemIds = Array.from(new Set(rows.filter(function (r) { return r.item_id; }).map(function (r) { return r.item_id; })));
+      return Promise.all([
+        Promise.all(targetIds.map(function (id) { return s.getSellerPublicProfile(id).catch(function () { return null; }); })),
+        Promise.all(itemIds.map(function (id) { return s.getMarketItem(id).catch(function () { return null; }); })),
+      ]).then(function (res) {
+        var profileMap = {};
+        targetIds.forEach(function (id, i) { profileMap[id] = res[0][i]; });
+        var itemMap = {};
+        itemIds.forEach(function (id, i) { itemMap[id] = res[1][i]; });
+        var rowsHtml = rows.map(function (r) {
+          var targetName = marketSellerDisplayName(profileMap[r.target_user_id]);
+          var itemTitle = (r.item_id && itemMap[r.item_id]) ? itemMap[r.item_id].title : '-';
+          return (
+            '<div class="market-report-row">' +
+              '<div class="market-report-row__main">' +
+                '<span class="market-report-row__target">' + escapeHtml(targetName) + '</span>' +
+                '<span class="market-report-row__item">' + escapeHtml(itemTitle) + '</span>' +
+                '<span class="market-report-row__reason">' + escapeHtml(marketReportReasonLabel(r.reason, r.detail)) + '</span>' +
+                '<span class="market-report-row__status">' + (r.status === 'WITHDRAWN' ? '철회됨' : '접수됨') + '</span>' +
+              '</div>' +
+              (r.status === 'ACTIVE'
+                ? '<button type="button" class="market-btn market-btn--outline market-report-withdraw-btn" data-report-id="' + r.id + '">철회</button>'
+                : '') +
+            '</div>'
+          );
+        }).join('');
+        grid.innerHTML = '<div class="market-report-list">' + rowsHtml + '</div>';
+        Array.prototype.forEach.call(grid.querySelectorAll('.market-report-withdraw-btn'), function (btn) {
+          btn.onclick = function () {
+            showMarketConfirmPopup('신고를 철회할까요?', function () {
+              s.withdrawMarketReport(btn.getAttribute('data-report-id')).then(function () {
+                toast('신고를 철회했습니다.');
+                loadMyPageContent();
+              }).catch(function (err) {
+                toast('철회 실패: ' + (err && err.message ? err.message : err));
+              });
+            }, { okText: '예', cancelText: '아니오' });
+          };
+        });
+      });
+    });
+  }
+
+  /** 마이페이지 "신고" 탭(관리자) — 접수(ACTIVE)된 신고 전체를 신고 대상자별로 모아 보여주고,
+   * 대상자별 "패널티 해제"(releaseMarketUserPenalty)를 제공한다. 자동 차단/자동 해제(3건
+   * 기준)는 서버 RPC가 이미 처리하므로, 여기서는 신고 수와 무관하게 즉시 강제 해제만 한다. */
+  function renderAdminReportsList(s, grid) {
+    return s.getAllActiveMarketReportsForAdmin().then(function (rows) {
+      if (!rows.length) {
+        grid.innerHTML = '<div class="market-empty">접수된 신고가 없습니다.</div>';
+        return;
+      }
+      var targetIds = Array.from(new Set(rows.map(function (r) { return r.target_user_id; })));
+      var reporterIds = Array.from(new Set(rows.map(function (r) { return r.reporter_id; })));
+      var allProfileIds = Array.from(new Set(targetIds.concat(reporterIds)));
+      var itemIds = Array.from(new Set(rows.filter(function (r) { return r.item_id; }).map(function (r) { return r.item_id; })));
+      return Promise.all([
+        Promise.all(allProfileIds.map(function (id) { return s.getSellerPublicProfile(id).catch(function () { return null; }); })),
+        Promise.all(itemIds.map(function (id) { return s.getMarketItem(id).catch(function () { return null; }); })),
+      ]).then(function (res) {
+        var profileMap = {};
+        allProfileIds.forEach(function (id, i) { profileMap[id] = res[0][i]; });
+        var itemMap = {};
+        itemIds.forEach(function (id, i) { itemMap[id] = res[1][i]; });
+        var groups = {};
+        rows.forEach(function (r) {
+          if (!groups[r.target_user_id]) groups[r.target_user_id] = [];
+          groups[r.target_user_id].push(r);
+        });
+        var groupsHtml = Object.keys(groups).map(function (targetId) {
+          var list = groups[targetId];
+          var targetName = marketSellerDisplayName(profileMap[targetId]);
+          var detailRowsHtml = list.map(function (r) {
+            var reporterName = marketSellerDisplayName(profileMap[r.reporter_id]);
+            var itemTitle = (r.item_id && itemMap[r.item_id]) ? itemMap[r.item_id].title : '-';
+            return (
+              '<div class="market-report-admin-detail-row">' +
+                '<span>' + escapeHtml(reporterName) + '</span>' +
+                '<span>' + escapeHtml(itemTitle) + '</span>' +
+                '<span>' + escapeHtml(marketReportReasonLabel(r.reason, r.detail)) + '</span>' +
+              '</div>'
+            );
+          }).join('');
+          return (
+            '<div class="market-report-admin-group">' +
+              '<div class="market-report-admin-group__head">' +
+                '<span class="market-report-admin-group__target">' + escapeHtml(targetName) + '</span>' +
+                '<span class="market-report-admin-group__count">신고 ' + list.length + '건</span>' +
+                '<button type="button" class="market-btn market-btn--outline market-report-release-btn" data-target-id="' + escapeHtml(targetId) + '">패널티 해제</button>' +
+              '</div>' +
+              '<div class="market-report-admin-group__body">' + detailRowsHtml + '</div>' +
+            '</div>'
+          );
+        }).join('');
+        grid.innerHTML = '<div class="market-report-admin-list">' + groupsHtml + '</div>';
+        Array.prototype.forEach.call(grid.querySelectorAll('.market-report-release-btn'), function (btn) {
+          btn.onclick = function () {
+            var targetId = btn.getAttribute('data-target-id');
+            showMarketConfirmPopup('이 사용자의 패널티(계정 차단)를 해제할까요?', function () {
+              s.releaseMarketUserPenalty(targetId).then(function () {
+                toast('패널티를 해제했습니다.');
+                loadMyPageContent();
+              }).catch(function (err) {
+                toast('해제 실패: ' + (err && err.message ? err.message : err));
+              });
+            }, { okText: '예', cancelText: '아니오' });
+          };
+        });
       });
     });
   }
