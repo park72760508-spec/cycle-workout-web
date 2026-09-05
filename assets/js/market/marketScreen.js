@@ -916,6 +916,12 @@
    * 단계(marketOrderRevealsPhone 이전)에서는 통화/문자 버튼 없이 아바타+이름만 표시한다.
    * 신고 버튼은 targetUserId가 있으면(=상대방 uid를 알 수 있는 컨텍스트) 연락처 공개 여부와
    * 무관하게 항상 노출한다 — 연락이 끊긴 사기 의심 상황이야말로 신고가 필요한 경우이기 때문. */
+  /** 통화·문자·신고 버튼 아래 오렌지색 라벨을 붙이는 공통 래퍼 — 버튼 자체는 그대로 두고
+   * 세로로 버튼+라벨을 쌓는다. */
+  function marketDealContactItemHtml(btnHtml, label) {
+    return '<div class="market-deal-contact-item">' + btnHtml + '<span class="market-deal-contact-label">' + escapeHtml(label) + '</span></div>';
+  }
+
   function marketCounterpartCardHtml(avatarUrl, name, phone, disabled, targetUserId, itemId) {
     var phoneFormatted = marketFormatPhone(phone);
     var digitsOnly = phoneFormatted.replace(/[^0-9]/g, '');
@@ -924,15 +930,15 @@
       // 거래완료(구매확정) 후에는 더 이상 연락을 조율할 필요가 없으므로 전화·문자 버튼을
       // 비활성 표시로 전환한다(카드 자체는 유지).
       contactHtml =
-        '<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_CALL_ICON_SVG + '</span>' +
-        '<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_SMS_ICON_SVG + '</span>';
+        marketDealContactItemHtml('<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_CALL_ICON_SVG + '</span>', '통화') +
+        marketDealContactItemHtml('<span class="market-deal-contact-btn market-deal-contact-btn--disabled" aria-hidden="true">' + MARKET_SMS_ICON_SVG + '</span>', '문자');
     } else if (digitsOnly) {
       contactHtml =
-        '<a class="market-deal-contact-btn" href="tel:' + digitsOnly + '" aria-label="전화 걸기">' + MARKET_CALL_ICON_SVG + '</a>' +
-        '<a class="market-deal-contact-btn" href="sms:' + digitsOnly + '" aria-label="문자 보내기">' + MARKET_SMS_ICON_SVG + '</a>';
+        marketDealContactItemHtml('<a class="market-deal-contact-btn" href="tel:' + digitsOnly + '" aria-label="전화 걸기">' + MARKET_CALL_ICON_SVG + '</a>', '통화') +
+        marketDealContactItemHtml('<a class="market-deal-contact-btn" href="sms:' + digitsOnly + '" aria-label="문자 보내기">' + MARKET_SMS_ICON_SVG + '</a>', '문자');
     }
     var reportHtml = targetUserId
-      ? '<button type="button" class="market-deal-contact-btn market-deal-contact-btn--report" data-report-target="' + escapeHtml(targetUserId) + '" data-report-item="' + escapeHtml(itemId || '') + '" aria-label="신고하기"><img src="assets/img/problem.svg" alt="" /></button>'
+      ? marketDealContactItemHtml('<button type="button" class="market-deal-contact-btn market-deal-contact-btn--report" data-report-target="' + escapeHtml(targetUserId) + '" data-report-item="' + escapeHtml(itemId || '') + '" aria-label="신고하기"><img src="assets/img/problem.svg" alt="" /></button>', '신고')
       : '';
     var actionsHtml = (contactHtml || reportHtml) ? ('<div class="market-deal-contact-card__actions">' + contactHtml + reportHtml + '</div>') : '';
     return '<div class="market-deal-contact-card">' +

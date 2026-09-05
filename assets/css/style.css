@@ -32239,7 +32239,9 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.market-deal-contact-card__actions { display: flex; gap: 8px; flex-shrink: 0; }
+.market-deal-contact-card__actions { display: flex; align-items: flex-start; gap: 10px; flex-shrink: 0; }
+.market-deal-contact-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.market-deal-contact-label { font-size: 10px; font-weight: 600; color: #ea580c; line-height: 1; white-space: nowrap; }
 .market-deal-contact-btn {
   width: 34px;
   height: 34px;
