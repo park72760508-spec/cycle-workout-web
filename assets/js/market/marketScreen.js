@@ -283,9 +283,13 @@
     return '#64748b';
   }
 
+  /** 목록 카드 할인율 배지 노출 토글 — 요청 시 이 값만 true로 바꾸면 바로 재노출된다. */
+  var MARKET_LIST_DISCOUNT_BADGE_ENABLED = false;
+
   /** 목록 카드 가격 옆 할인율 배지 — 제휴사 화면의 스타버스트(톱니 도장) 배지와 동일한 모양을
    * 회색 톤으로 옮겨와, 가격 텍스트("...원") 우측 상단에 떠 있는 배지로 표시한다. */
   function marketCardDiscountBadgeHtml(item) {
+    if (!MARKET_LIST_DISCOUNT_BADGE_ENABLED) return '';
     var pct = marketItemDiscountPercent(item);
     if (!pct) return '';
     return '<span class="market-card__discount-badge" aria-label="' + pct + '% 할인">' +
