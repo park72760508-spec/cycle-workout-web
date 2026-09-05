@@ -3039,16 +3039,19 @@
     var radios = document.querySelectorAll('input[name="marketReportReason"]');
     var otherWrap = document.getElementById('marketReportOtherWrap');
     var otherInput = document.getElementById('marketReportOtherDetail');
+    var cancelBtn = document.getElementById('marketReportCancelBtn');
+    var okBtn = document.getElementById('marketReportSubmitBtn');
     Array.prototype.forEach.call(radios, function (radio) { radio.checked = false; });
     if (otherWrap) otherWrap.style.display = 'none';
     if (otherInput) otherInput.value = '';
+    // 신고 항목을 하나 선택하기 전까지는 "신고하기" 버튼을 비활성 상태로 둔다.
+    if (okBtn) okBtn.disabled = true;
     Array.prototype.forEach.call(radios, function (radio) {
       radio.onchange = function () {
         if (otherWrap) otherWrap.style.display = (radio.value === 'OTHER' && radio.checked) ? 'block' : 'none';
+        if (okBtn) okBtn.disabled = false;
       };
     });
-    var cancelBtn = document.getElementById('marketReportCancelBtn');
-    var okBtn = document.getElementById('marketReportSubmitBtn');
     if (cancelBtn) cancelBtn.onclick = closeMarketReportModal;
     if (okBtn) {
       okBtn.onclick = function () {
@@ -4025,14 +4028,13 @@
     var grid = document.getElementById('marketMyPageGrid');
     if (!grid) return;
     grid.className = myPageState.tab === 'deals' ? 'market-deals-list'
-      : myPageState.tab === 'settlement' ? 'market-settlement-wrap'
-      : myPageState.tab === 'reports' ? 'market-report-wrap'
+      : (myPageState.tab === 'settlement' || myPageState.tab === 'reports') ? 'market-settlement-wrap'
       : 'market-grid';
     grid.innerHTML = '<div class="market-loading">불러오는 중...</div>';
     loadMarketService()
       .then(function (s) {
         if (myPageState.tab === 'settlement') return renderMySettlementTable(s, grid);
-        if (myPageState.tab === 'reports') return marketIsAdminUser() ? renderAdminReportsList(s, grid) : renderMyReportsList(s, grid);
+        if (myPageState.tab === 'reports') return renderMarketReportsTable(s, grid);
         if (myPageState.tab === 'deals') return renderMyDeals(s, grid);
         if (myPageState.tab === 'favorites') {
           return s.getMyFavoriteItemIds().then(function (ids) {
@@ -4336,42 +4338,73 @@
     return reason || '-';
   }
 
-  /** 마이페이지 "신고" 탭(일반 사용자) — 본인이 신고자인 건만 조회된다(RLS). 접수 상태(ACTIVE)
-   * 건에 한해 철회 버튼을 붙인다. */
-  function renderMyReportsList(s, grid) {
-    return s.getMyMarketReports().then(function (rows) {
+  /** 마이페이지 "신고" 탭 — 정산 탭과 동일한 표 양식(market-settlement-table*)으로 표시한다.
+   * 일반 사용자는 본인이 신고자인 접수(ACTIVE) 건만 보이고(RLS), 관리자는 접수된 전체 건을
+   * 본다. "건수"는 같은 신고 대상(target_user_id)에 걸린 활성 신고 수(신고자 기준 distinct,
+   * 서버가 이미 그렇게 저장) — 대상이 같으면 모든 행에 동일하게 표시된다. "패널티" 칸은
+   * 본인이 접수한 행이면 철회, 관리자면 대상별 강제 해제 버튼을 보여준다(둘 다 해당하면
+   * 함께 표시). */
+  function renderMarketReportsTable(s, grid) {
+    var isAdmin = marketIsAdminUser();
+    return Promise.all([
+      isAdmin ? s.getAllActiveMarketReportsForAdmin() : s.getMyMarketReports(),
+      s.getMySupabaseUserId().catch(function () { return null; }),
+    ]).then(function (res) {
+      var rows = (res[0] || []).filter(function (r) { return r.status === 'ACTIVE'; });
+      var myUserId = res[1];
       if (!rows.length) {
-        grid.innerHTML = '<div class="market-empty">신고 내역이 없습니다.</div>';
+        grid.innerHTML = '<div class="market-empty">접수된 신고가 없습니다.</div>';
         return;
       }
+      var countByTarget = {};
+      rows.forEach(function (r) { countByTarget[r.target_user_id] = (countByTarget[r.target_user_id] || 0) + 1; });
+
       var targetIds = Array.from(new Set(rows.map(function (r) { return r.target_user_id; })));
+      var reporterIds = Array.from(new Set(rows.map(function (r) { return r.reporter_id; })));
+      var allProfileIds = Array.from(new Set(targetIds.concat(reporterIds)));
       var itemIds = Array.from(new Set(rows.filter(function (r) { return r.item_id; }).map(function (r) { return r.item_id; })));
       return Promise.all([
-        Promise.all(targetIds.map(function (id) { return s.getSellerPublicProfile(id).catch(function () { return null; }); })),
+        Promise.all(allProfileIds.map(function (id) { return s.getSellerPublicProfile(id).catch(function () { return null; }); })),
         Promise.all(itemIds.map(function (id) { return s.getMarketItem(id).catch(function () { return null; }); })),
-      ]).then(function (res) {
+      ]).then(function (res2) {
         var profileMap = {};
-        targetIds.forEach(function (id, i) { profileMap[id] = res[0][i]; });
+        allProfileIds.forEach(function (id, i) { profileMap[id] = res2[0][i]; });
         var itemMap = {};
-        itemIds.forEach(function (id, i) { itemMap[id] = res[1][i]; });
-        var rowsHtml = rows.map(function (r) {
+        itemIds.forEach(function (id, i) { itemMap[id] = res2[1][i]; });
+
+        var bodyRows = rows.map(function (r) {
           var targetName = marketSellerDisplayName(profileMap[r.target_user_id]);
+          var reporterName = marketSellerDisplayName(profileMap[r.reporter_id]);
           var itemTitle = (r.item_id && itemMap[r.item_id]) ? itemMap[r.item_id].title : '-';
+          var penaltyBtns = '';
+          if (myUserId && r.reporter_id === myUserId) {
+            penaltyBtns += '<button type="button" class="market-settlement-mark-btn market-report-withdraw-btn" data-report-id="' + escapeHtml(r.id) + '">철회</button>';
+          }
+          if (isAdmin) {
+            penaltyBtns += '<button type="button" class="market-settlement-mark-btn market-report-release-btn" data-target-id="' + escapeHtml(r.target_user_id) + '">해제</button>';
+          }
           return (
-            '<div class="market-report-row">' +
-              '<div class="market-report-row__main">' +
-                '<span class="market-report-row__target">' + escapeHtml(targetName) + '</span>' +
-                '<span class="market-report-row__item">' + escapeHtml(itemTitle) + '</span>' +
-                '<span class="market-report-row__reason">' + escapeHtml(marketReportReasonLabel(r.reason, r.detail)) + '</span>' +
-                '<span class="market-report-row__status">' + (r.status === 'WITHDRAWN' ? '철회됨' : '접수됨') + '</span>' +
-              '</div>' +
-              (r.status === 'ACTIVE'
-                ? '<button type="button" class="market-btn market-btn--outline market-report-withdraw-btn" data-report-id="' + r.id + '">철회</button>'
-                : '') +
-            '</div>'
+            '<tr>' +
+              '<td class="market-settlement-table__title" title="' + escapeHtml(targetName) + '">' + escapeHtml(targetName) + '</td>' +
+              '<td class="market-settlement-table__title" title="' + escapeHtml(itemTitle) + '">' + escapeHtml(marketTruncateTitle(itemTitle, 8)) + '</td>' +
+              '<td>' + escapeHtml(marketReportReasonLabel(r.reason, r.detail)) + '</td>' +
+              '<td>' + escapeHtml(reporterName) + '</td>' +
+              '<td>' + (countByTarget[r.target_user_id] || 1) + '</td>' +
+              '<td><div class="market-report-penalty-cell">' + (penaltyBtns || '-') + '</div></td>' +
+            '</tr>'
           );
         }).join('');
-        grid.innerHTML = '<div class="market-report-list">' + rowsHtml + '</div>';
+
+        grid.innerHTML =
+          '<div class="market-settlement-table-scroll">' +
+            '<table class="market-settlement-table">' +
+              '<thead><tr>' +
+                '<th>대상</th><th>상품명</th><th>신고항목</th><th>신고자</th><th>건수</th><th>패널티</th>' +
+              '</tr></thead>' +
+              '<tbody>' + bodyRows + '</tbody>' +
+            '</table>' +
+          '</div>';
+
         Array.prototype.forEach.call(grid.querySelectorAll('.market-report-withdraw-btn'), function (btn) {
           btn.onclick = function () {
             showMarketConfirmPopup('신고를 철회할까요?', function () {
@@ -4384,62 +4417,6 @@
             }, { okText: '예', cancelText: '아니오' });
           };
         });
-      });
-    });
-  }
-
-  /** 마이페이지 "신고" 탭(관리자) — 접수(ACTIVE)된 신고 전체를 신고 대상자별로 모아 보여주고,
-   * 대상자별 "패널티 해제"(releaseMarketUserPenalty)를 제공한다. 자동 차단/자동 해제(3건
-   * 기준)는 서버 RPC가 이미 처리하므로, 여기서는 신고 수와 무관하게 즉시 강제 해제만 한다. */
-  function renderAdminReportsList(s, grid) {
-    return s.getAllActiveMarketReportsForAdmin().then(function (rows) {
-      if (!rows.length) {
-        grid.innerHTML = '<div class="market-empty">접수된 신고가 없습니다.</div>';
-        return;
-      }
-      var targetIds = Array.from(new Set(rows.map(function (r) { return r.target_user_id; })));
-      var reporterIds = Array.from(new Set(rows.map(function (r) { return r.reporter_id; })));
-      var allProfileIds = Array.from(new Set(targetIds.concat(reporterIds)));
-      var itemIds = Array.from(new Set(rows.filter(function (r) { return r.item_id; }).map(function (r) { return r.item_id; })));
-      return Promise.all([
-        Promise.all(allProfileIds.map(function (id) { return s.getSellerPublicProfile(id).catch(function () { return null; }); })),
-        Promise.all(itemIds.map(function (id) { return s.getMarketItem(id).catch(function () { return null; }); })),
-      ]).then(function (res) {
-        var profileMap = {};
-        allProfileIds.forEach(function (id, i) { profileMap[id] = res[0][i]; });
-        var itemMap = {};
-        itemIds.forEach(function (id, i) { itemMap[id] = res[1][i]; });
-        var groups = {};
-        rows.forEach(function (r) {
-          if (!groups[r.target_user_id]) groups[r.target_user_id] = [];
-          groups[r.target_user_id].push(r);
-        });
-        var groupsHtml = Object.keys(groups).map(function (targetId) {
-          var list = groups[targetId];
-          var targetName = marketSellerDisplayName(profileMap[targetId]);
-          var detailRowsHtml = list.map(function (r) {
-            var reporterName = marketSellerDisplayName(profileMap[r.reporter_id]);
-            var itemTitle = (r.item_id && itemMap[r.item_id]) ? itemMap[r.item_id].title : '-';
-            return (
-              '<div class="market-report-admin-detail-row">' +
-                '<span>' + escapeHtml(reporterName) + '</span>' +
-                '<span>' + escapeHtml(itemTitle) + '</span>' +
-                '<span>' + escapeHtml(marketReportReasonLabel(r.reason, r.detail)) + '</span>' +
-              '</div>'
-            );
-          }).join('');
-          return (
-            '<div class="market-report-admin-group">' +
-              '<div class="market-report-admin-group__head">' +
-                '<span class="market-report-admin-group__target">' + escapeHtml(targetName) + '</span>' +
-                '<span class="market-report-admin-group__count">신고 ' + list.length + '건</span>' +
-                '<button type="button" class="market-btn market-btn--outline market-report-release-btn" data-target-id="' + escapeHtml(targetId) + '">패널티 해제</button>' +
-              '</div>' +
-              '<div class="market-report-admin-group__body">' + detailRowsHtml + '</div>' +
-            '</div>'
-          );
-        }).join('');
-        grid.innerHTML = '<div class="market-report-admin-list">' + groupsHtml + '</div>';
         Array.prototype.forEach.call(grid.querySelectorAll('.market-report-release-btn'), function (btn) {
           btn.onclick = function () {
             var targetId = btn.getAttribute('data-target-id');
