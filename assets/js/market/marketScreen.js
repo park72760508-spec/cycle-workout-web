@@ -1924,7 +1924,7 @@
     if (catSelect) catSelect.value = cat;
     if (!subSelect) return;
     var subs = SUB_CATEGORIES[cat] || [];
-    subSelect.innerHTML = subs.map(function (s) {
+    subSelect.innerHTML = '<option value="" disabled selected>품목선택</option>' + subs.map(function (s) {
       return '<option value="' + escapeHtml(s.label) + '">' + escapeHtml(s.label) + '</option>';
     }).join('');
   }
@@ -2099,7 +2099,8 @@
 
     if (!title) { toast('상품명을 입력해 주세요.'); return; }
     if (!catEl.value) { toast('종목을 선택해 주세요.'); return; }
-    if (!purchasePriceRaw || purchasePrice < 0) { toast('구입가를 입력해 주세요.'); return; }
+    if (!subEl.value) { toast('품목을 선택해 주세요.'); return; }
+    if (purchasePriceRaw && purchasePrice < 0) { toast('구입가를 정확히 입력해 주세요.'); return; }
     if (!priceRaw || price < 0) { toast('판매가를 입력해 주세요.'); return; }
     if (!dealMethods.length) { toast('거래 방법을 하나 이상 선택해 주세요.'); return; }
     if (dealMethods.indexOf('직거래') !== -1 && !directLocation) {
@@ -2144,7 +2145,7 @@
         title: title,
         category: catEl.value,
         sub_category: subEl.value,
-        purchase_price: purchasePrice,
+        purchase_price: purchasePriceRaw ? purchasePrice : null,
         price: price,
         condition: conditionEl ? conditionEl.value : '중고 상품',
         deal_method: dealMethods,
