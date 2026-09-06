@@ -32678,6 +32678,58 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .market-confirm-btn-cancel:active { transform: translateY(0); }
 .market-refund-form .market-btn { margin-top: 2px; }
 
+/* 상품 등록 — 사진 첨부 시 정사각형 가이드에 맞춰 확대/축소·이동하는 크롭 모달 */
+.market-photo-crop-content { max-width: 360px; }
+.market-photo-crop-stage {
+  position: relative;
+  width: min(74vw, 300px);
+  height: min(74vw, 300px);
+  margin: 0 auto 18px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #0f172a;
+  touch-action: none;
+  cursor: grab;
+}
+.market-photo-crop-stage.market-photo-crop-stage--dragging { cursor: grabbing; }
+.market-photo-crop-img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  max-height: none;
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+}
+.market-photo-crop-frame {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15) inset;
+  pointer-events: none;
+}
+.market-photo-crop-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+.market-photo-crop-zoom-range {
+  flex: 1;
+  accent-color: #ea580c;
+}
+.market-photo-crop-zoom-icon {
+  font-size: 16px;
+  font-weight: 700;
+  color: #94a3b8;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.market-photo-crop-zoom-icon--sm { font-size: 12px; }
+
 /* 반품 진행 — 판매자 "반품 확인" 클릭 후 주소 입력 폼(Daum 우편번호 embed 재사용)과
    이의제기/합의완료 상태 문구. 기존 market-delivery-form/market-refund-form 톤과 통일. */
 .market-return-address { margin-top: 8px; }

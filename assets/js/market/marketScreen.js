@@ -1960,7 +1960,8 @@
       input.onchange = function () {
         var idx = Number(input.getAttribute('data-slot'));
         var file = input.files && input.files[0];
-        if (file) handleMarketImageSelected(idx, file);
+        input.value = '';
+        if (file) openMarketPhotoCropModal(idx, file);
       };
     });
   }
@@ -1970,6 +1971,200 @@
     formState.previews[idx] = URL.createObjectURL(file);
     formState.uploaded[idx] = null;
     renderMarketImageSlots();
+  }
+
+  // ───────────────── 사진 첨부 가이드: 확대/축소·이동 크롭 모달 ─────────────────
+  // 목록·상세가 정사각형(cover)으로 잘라 보여주므로, 첨부 전에 사용자가 직접 원하는
+  // 부분을 정사각형 가이드 안에 맞춰 넣을 수 있게 한다(핀치줌·드래그·슬라이더 모두 지원).
+  var marketPhotoCropState = {
+    idx: null,
+    objectUrl: null,
+    naturalWidth: 0,
+    naturalHeight: 0,
+    minScale: 1,
+    scale: 1,
+    x: 0,
+    y: 0,
+    dragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    dragOrigX: 0,
+    dragOrigY: 0,
+    pinchStartDist: 0,
+    pinchStartScale: 1,
+    wired: false
+  };
+
+  function marketPhotoCropClampAndApply() {
+    var st = marketPhotoCropState;
+    var stage = document.getElementById('marketPhotoCropStage');
+    if (!stage) return;
+    var stageSize = stage.clientWidth || 1;
+    var scaledW = st.naturalWidth * st.scale;
+    var scaledH = st.naturalHeight * st.scale;
+    var maxOffsetX = Math.max(0, (scaledW - stageSize) / 2);
+    var maxOffsetY = Math.max(0, (scaledH - stageSize) / 2);
+    st.x = Math.max(-maxOffsetX, Math.min(maxOffsetX, st.x));
+    st.y = Math.max(-maxOffsetY, Math.min(maxOffsetY, st.y));
+    var img = document.getElementById('marketPhotoCropImg');
+    if (img) {
+      img.style.transform =
+        'translate(-50%, -50%) translate(' + st.x + 'px, ' + st.y + 'px) scale(' + st.scale + ')';
+    }
+  }
+
+  function marketPhotoCropSetScale(nextScale) {
+    var st = marketPhotoCropState;
+    var maxScale = st.minScale * 3;
+    st.scale = Math.max(st.minScale, Math.min(maxScale, nextScale));
+    var range = document.getElementById('marketPhotoCropZoomRange');
+    if (range) range.value = String(Math.round((st.scale / st.minScale) * 100));
+    marketPhotoCropClampAndApply();
+  }
+
+  function openMarketPhotoCropModal(idx, file) {
+    var modal = document.getElementById('marketPhotoCropModal');
+    var img = document.getElementById('marketPhotoCropImg');
+    var stage = document.getElementById('marketPhotoCropStage');
+    if (!modal || !img || !stage) { handleMarketImageSelected(idx, file); return; }
+    var st = marketPhotoCropState;
+    if (st.objectUrl) URL.revokeObjectURL(st.objectUrl);
+    st.idx = idx;
+    st.objectUrl = URL.createObjectURL(file);
+    st.x = 0;
+    st.y = 0;
+    img.src = st.objectUrl;
+    img.onload = function () {
+      st.naturalWidth = img.naturalWidth || 1;
+      st.naturalHeight = img.naturalHeight || 1;
+      var stageSize = stage.clientWidth || 300;
+      st.minScale = stageSize / Math.min(st.naturalWidth, st.naturalHeight);
+      st.scale = st.minScale;
+      var range = document.getElementById('marketPhotoCropZoomRange');
+      if (range) range.value = '100';
+      marketPhotoCropClampAndApply();
+    };
+    wireMarketPhotoCropModalOnce();
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+
+  window.closeMarketPhotoCropModal = function () {
+    var modal = document.getElementById('marketPhotoCropModal');
+    if (modal) { modal.classList.add('hidden'); modal.style.display = 'none'; }
+    var st = marketPhotoCropState;
+    if (st.objectUrl) { URL.revokeObjectURL(st.objectUrl); st.objectUrl = null; }
+    st.idx = null;
+  };
+
+  function marketPhotoCropPointerDist(t1, t2) {
+    var dx = t1.clientX - t2.clientX;
+    var dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function wireMarketPhotoCropModalOnce() {
+    var st = marketPhotoCropState;
+    if (st.wired) return;
+    st.wired = true;
+    var stage = document.getElementById('marketPhotoCropStage');
+    var range = document.getElementById('marketPhotoCropZoomRange');
+    var confirmBtn = document.getElementById('marketPhotoCropConfirmBtn');
+    var cancelBtn = document.getElementById('marketPhotoCropCancelBtn');
+
+    if (range) {
+      range.oninput = function () {
+        var pct = Number(range.value) || 100;
+        st.scale = st.minScale * (pct / 100);
+        marketPhotoCropClampAndApply();
+      };
+    }
+    if (cancelBtn) cancelBtn.onclick = function () { window.closeMarketPhotoCropModal(); };
+
+    if (stage) {
+      var activePointers = {};
+
+      stage.onpointerdown = function (ev) {
+        stage.setPointerCapture && stage.setPointerCapture(ev.pointerId);
+        activePointers[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+        var ids = Object.keys(activePointers);
+        if (ids.length === 1) {
+          st.dragging = true;
+          stage.classList.add('market-photo-crop-stage--dragging');
+          st.dragStartX = ev.clientX;
+          st.dragStartY = ev.clientY;
+          st.dragOrigX = st.x;
+          st.dragOrigY = st.y;
+        } else if (ids.length === 2) {
+          st.dragging = false;
+          var pts = ids.map(function (id) { return activePointers[id]; });
+          st.pinchStartDist = marketPhotoCropPointerDist(
+            { clientX: pts[0].x, clientY: pts[0].y },
+            { clientX: pts[1].x, clientY: pts[1].y }
+          ) || 1;
+          st.pinchStartScale = st.scale;
+        }
+      };
+      stage.onpointermove = function (ev) {
+        if (!activePointers[ev.pointerId]) return;
+        activePointers[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+        var ids = Object.keys(activePointers);
+        if (ids.length === 2) {
+          var pts = ids.map(function (id) { return activePointers[id]; });
+          var dist = marketPhotoCropPointerDist(
+            { clientX: pts[0].x, clientY: pts[0].y },
+            { clientX: pts[1].x, clientY: pts[1].y }
+          ) || 1;
+          marketPhotoCropSetScale(st.pinchStartScale * (dist / st.pinchStartDist));
+        } else if (st.dragging && ids.length === 1) {
+          st.x = st.dragOrigX + (ev.clientX - st.dragStartX);
+          st.y = st.dragOrigY + (ev.clientY - st.dragStartY);
+          marketPhotoCropClampAndApply();
+        }
+      };
+      var endPointer = function (ev) {
+        delete activePointers[ev.pointerId];
+        if (!Object.keys(activePointers).length) {
+          st.dragging = false;
+          stage.classList.remove('market-photo-crop-stage--dragging');
+        }
+      };
+      stage.onpointerup = endPointer;
+      stage.onpointercancel = endPointer;
+      stage.onpointerleave = endPointer;
+      stage.onwheel = function (ev) {
+        ev.preventDefault();
+        marketPhotoCropSetScale(st.scale * (ev.deltaY < 0 ? 1.08 : 0.92));
+      };
+    }
+
+    if (confirmBtn) {
+      confirmBtn.onclick = function () {
+        var idx = st.idx;
+        if (idx == null) { window.closeMarketPhotoCropModal(); return; }
+        var img = document.getElementById('marketPhotoCropImg');
+        var stageEl = document.getElementById('marketPhotoCropStage');
+        var stageSize = (stageEl && stageEl.clientWidth) || 300;
+        var OUTPUT_SIZE = 1080;
+        var canvas = document.createElement('canvas');
+        canvas.width = OUTPUT_SIZE;
+        canvas.height = OUTPUT_SIZE;
+        var ctx = canvas.getContext('2d');
+        // 스테이지(정사각형) 좌표계 → 원본 이미지 좌표계로 역산해 실제 보이는 부분만 그린다.
+        var visibleSizeInImagePx = stageSize / st.scale;
+        var centerXInImagePx = st.naturalWidth / 2 - st.x / st.scale;
+        var centerYInImagePx = st.naturalHeight / 2 - st.y / st.scale;
+        var srcX = centerXInImagePx - visibleSizeInImagePx / 2;
+        var srcY = centerYInImagePx - visibleSizeInImagePx / 2;
+        ctx.drawImage(img, srcX, srcY, visibleSizeInImagePx, visibleSizeInImagePx, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+        canvas.toBlob(function (blob) {
+          if (!blob) { toast('사진 처리에 실패했습니다. 다시 시도해 주세요.'); return; }
+          var croppedFile = new File([blob], 'market-photo-' + idx + '-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+          window.closeMarketPhotoCropModal();
+          handleMarketImageSelected(idx, croppedFile);
+        }, 'image/jpeg', 0.92);
+      };
+    }
   }
 
   function updateMarketDescCounter() {
