@@ -1262,7 +1262,34 @@
       });
   }
 
-  function applyMarketCategoryTabUI(cat) {
+  /** 선택된 탭(CYCLE/RUN)이 항상 왼쪽에 오도록 자리를 바꾼다. DOM 순서는 그대로 두고
+   * (cycleTab이 항상 첫 번째 자식) transform: translateX만 바꿔 자연스럽게 미끄러지듯
+   * 교체되게 한다 — offsetLeft는 transform의 영향을 받지 않는 레이아웃 값이라, 이미
+   * 이동해 있는 상태에서 다시 계산해도 항상 정확한 이동 거리가 나온다. */
+  function applyMarketCategoryTabSwap(cat, skipAnimation) {
+    var cycleTab = document.getElementById('marketCategoryTabCycle');
+    var runTab = document.getElementById('marketCategoryTabRun');
+    if (!cycleTab || !runTab) return;
+    var leftEl = cat === 'RUN' ? runTab : cycleTab;
+    var rightEl = cat === 'RUN' ? cycleTab : runTab;
+    if (skipAnimation) {
+      leftEl.style.transition = 'none';
+      rightEl.style.transition = 'none';
+    }
+    var leftSlotX = Math.min(cycleTab.offsetLeft, runTab.offsetLeft);
+    var rightSlotX = Math.max(cycleTab.offsetLeft, runTab.offsetLeft);
+    leftEl.style.transform = 'translateX(' + (leftSlotX - leftEl.offsetLeft) + 'px)';
+    rightEl.style.transform = 'translateX(' + (rightSlotX - rightEl.offsetLeft) + 'px)';
+    if (skipAnimation) {
+      // 강제 리플로우 후 트랜지션을 되돌려, 이번 배치만 즉시 반영되고 다음 변경부터는
+      // 다시 애니메이션이 걸리게 한다(최초 진입 시 탭이 미끄러지는 것처럼 보이는 것 방지).
+      void leftEl.offsetWidth;
+      leftEl.style.transition = '';
+      rightEl.style.transition = '';
+    }
+  }
+
+  function applyMarketCategoryTabUI(cat, skipAnimation) {
     var cycleTab = document.getElementById('marketCategoryTabCycle');
     var runTab = document.getElementById('marketCategoryTabRun');
     if (cycleTab) {
@@ -1273,6 +1300,7 @@
       runTab.classList.toggle('active', cat === 'RUN');
       runTab.setAttribute('aria-pressed', cat === 'RUN' ? 'true' : 'false');
     }
+    applyMarketCategoryTabSwap(cat, skipAnimation);
   }
 
   function setMarketCategory(cat) {
@@ -1320,7 +1348,7 @@
     if (homeState.categoryOverrideUserKey && homeState.categoryOverrideUserKey === userKey) return;
     homeState.category = getPreferredMarketCategoryFromCurrentUser();
     homeState.subCategory = '';
-    applyMarketCategoryTabUI(homeState.category);
+    applyMarketCategoryTabUI(homeState.category, true);
   }
 
   window.marketScreenInit = function () {
@@ -1358,6 +1386,13 @@
     var runTab = document.getElementById('marketCategoryTabRun');
     if (cycleTab) cycleTab.onclick = function () { setMarketCategory('CYCLE'); };
     if (runTab) runTab.onclick = function () { setMarketCategory('RUN'); };
+    // 화면 회전 등으로 탭바 폭이 바뀌면 이동 거리도 다시 계산해야 한다(애니메이션 없이 즉시 반영).
+    if (!window.__marketCategoryTabResizeWired) {
+      window.__marketCategoryTabResizeWired = true;
+      window.addEventListener('resize', function () {
+        applyMarketCategoryTabSwap(homeState.category, true);
+      });
+    }
     var moreBtn = document.getElementById('marketLoadMoreBtn');
     if (moreBtn) moreBtn.onclick = function () { loadMoreMarketItems(); };
     wireMarketSearchInput();
