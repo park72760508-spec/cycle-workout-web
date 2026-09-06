@@ -214,6 +214,9 @@
     activeOrderIds: new Set(),
     categoryOverrideUserKey: null,
     imageSearchActive: false,
+    // 서브 카테고리 순환 선택 ON/OFF — ON이면 선택 항목이 항상 맨 왼쪽으로 회전하고,
+    // OFF면 전체→완차→...→용품(CYCLE)/전체→런닝화→...→용품(RUN) 고정 순서로 표시된다.
+    subCategoryRotateEnabled: true,
   };
 
   var formState = {
@@ -1080,7 +1083,9 @@
     }
     marketSubTabsLastRenderedCategory = homeState.category;
 
-    var order = getRotatedSubCategoryOrder(homeState.category, homeState.subCategory);
+    var order = homeState.subCategoryRotateEnabled
+      ? getRotatedSubCategoryOrder(homeState.category, homeState.subCategory)
+      : getCanonicalSubCategoryKeys(homeState.category);
     var html = order.map(function (key) {
       var s = key === '' ? null : byLabel[key];
       var label = key === '' ? '전체' : (s ? s.label : key);
@@ -1448,6 +1453,19 @@
     }
     var moreBtn = document.getElementById('marketLoadMoreBtn');
     if (moreBtn) moreBtn.onclick = function () { loadMoreMarketItems(); };
+    var rotateToggleBtn = document.getElementById('marketSubCategoryRotateToggleBtn');
+    if (rotateToggleBtn) {
+      rotateToggleBtn.classList.toggle('active', homeState.subCategoryRotateEnabled);
+      rotateToggleBtn.setAttribute('aria-pressed', homeState.subCategoryRotateEnabled ? 'true' : 'false');
+      rotateToggleBtn.title = '서브 카테고리 순환 선택 ' + (homeState.subCategoryRotateEnabled ? '켜짐' : '꺼짐');
+      rotateToggleBtn.onclick = function () {
+        homeState.subCategoryRotateEnabled = !homeState.subCategoryRotateEnabled;
+        rotateToggleBtn.classList.toggle('active', homeState.subCategoryRotateEnabled);
+        rotateToggleBtn.setAttribute('aria-pressed', homeState.subCategoryRotateEnabled ? 'true' : 'false');
+        rotateToggleBtn.title = '서브 카테고리 순환 선택 ' + (homeState.subCategoryRotateEnabled ? '켜짐' : '꺼짐');
+        renderSubCategoryTabs();
+      };
+    }
     wireMarketSearchInput();
     initMarketBackToTopButton();
   };
