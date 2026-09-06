@@ -1939,7 +1939,19 @@
         '<label class="market-image-slot' + (preview ? ' has-image' : '') + '">' +
           (preview
             ? '<img src="' + preview + '" alt="" />'
-            : '<span class="market-image-slot__plus">+</span>') +
+            : (
+              /* 촬영/선택한 사진이 목록·상세에서 실제로 보이는 영역(정사각형 크롭)을
+                 미리 안내하는 뷰파인더 가이드 — 네이티브 카메라 화면 자체에는 오버레이를
+                 그릴 수 없어(OS 카메라 앱이 별도로 뜸), 빈 슬롯 단계에서 미리 보여준다. */
+              '<span class="market-image-slot__guide" aria-hidden="true">' +
+                '<span class="market-image-slot__guide-corner market-image-slot__guide-corner--tl"></span>' +
+                '<span class="market-image-slot__guide-corner market-image-slot__guide-corner--tr"></span>' +
+                '<span class="market-image-slot__guide-corner market-image-slot__guide-corner--bl"></span>' +
+                '<span class="market-image-slot__guide-corner market-image-slot__guide-corner--br"></span>' +
+              '</span>' +
+              '<span class="market-image-slot__plus">+</span>' +
+              '<span class="market-image-slot__guide-hint">정사각형</span>'
+            )) +
           '<input type="file" accept="image/*" data-slot="' + i + '" style="display:none" />' +
         '</label>';
     }
