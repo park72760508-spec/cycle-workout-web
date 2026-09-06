@@ -31939,18 +31939,26 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   min-width: 0;
 }
 .market-detail-seller-avatar {
-  width: 18px;
-  height: 18px;
+  /* 아바타·이름만 기존 대비 30% 확대(18px → 23.4px) */
+  width: 23.4px;
+  height: 23.4px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
   background: #e2e8f0;
   cursor: pointer;
+  line-height: 1;
 }
 .market-detail-seller-name {
+  /* 아바타와 동일 비율로 30% 확대(11.5px → 14.95px) — 나머지(평점·구분점·품목·날짜)는
+     행 기본 크기(11.5px)를 그대로 유지한다. */
+  font-size: 14.95px;
+  line-height: 1;
   color: #64748b;
   font-weight: 600;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
 }
 .market-detail-seller-rating { color: #f59e0b; font-weight: 700; }
 .market-detail-seller-sep { color: #cbd5e1; }
