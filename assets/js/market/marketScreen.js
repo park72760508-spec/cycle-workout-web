@@ -1988,15 +1988,24 @@
     scale: 1,
     x: 0,
     y: 0,
-    dragging: false,
+    // 제스처 상태 — 모달을 열 때마다 반드시 초기화한다(이전 세션에서 pointerup이 정상
+    // 발화하지 못하고 남은 낡은 포인터가 다음 사진의 제스처 계산에 섞여 들어가는 것을 방지).
+    activePointers: {},
+    gestureMode: 'none', // 'none' | 'drag' | 'pinch'
     dragStartX: 0,
     dragStartY: 0,
     dragOrigX: 0,
     dragOrigY: 0,
+    pinchId1: null,
+    pinchId2: null,
     pinchStartDist: 0,
     pinchStartScale: 1,
     wired: false
   };
+
+  function marketPhotoCropIsFiniteNum(n) {
+    return typeof n === 'number' && isFinite(n);
+  }
 
   function marketPhotoCropSetLoadingUi(isLoading) {
     var loadingEl = document.getElementById('marketPhotoCropLoading');
@@ -2011,10 +2020,25 @@
     if (confirmBtn) confirmBtn.disabled = isLoading;
   }
 
+  /**
+   * 사진 위치/배율을 화면에 반영 — x·y·scale 중 하나라도 유한수가 아니면(NaN/Infinity)
+   * 절대 style.transform에 쓰지 않고 즉시 안전값(중앙·cover 배율)으로 복구한다.
+   * 과거 이 가드가 없어, 드래그 중 어떤 경로로든 값이 깨지면 transform 전체가 무효화되어
+   * <img>가 변환 없이 원본 해상도로 튀어나가고, 그 결과 사진의 특정 픽셀(대개 흰 배경)만
+   * 스테이지를 가득 채워 "백색 화면"으로 보이며 이후 조작에도 반응하지 않는 문제가 있었다.
+   */
   function marketPhotoCropClampAndApply() {
     var st = marketPhotoCropState;
     var stage = document.getElementById('marketPhotoCropStage');
-    if (!stage) return;
+    var img = document.getElementById('marketPhotoCropImg');
+    if (!stage || !img) return;
+
+    if (!marketPhotoCropIsFiniteNum(st.scale) || st.scale <= 0) {
+      st.scale = marketPhotoCropIsFiniteNum(st.coverScale) && st.coverScale > 0 ? st.coverScale : 1;
+    }
+    if (!marketPhotoCropIsFiniteNum(st.x)) st.x = 0;
+    if (!marketPhotoCropIsFiniteNum(st.y)) st.y = 0;
+
     var stageSize = stage.clientWidth || 1;
     var scaledW = st.naturalWidth * st.scale;
     var scaledH = st.naturalHeight * st.scale;
@@ -2022,20 +2046,68 @@
     var maxOffsetY = Math.max(0, (scaledH - stageSize) / 2);
     st.x = Math.max(-maxOffsetX, Math.min(maxOffsetX, st.x));
     st.y = Math.max(-maxOffsetY, Math.min(maxOffsetY, st.y));
-    var img = document.getElementById('marketPhotoCropImg');
-    if (img) {
-      img.style.transform =
-        'translate(-50%, -50%) translate(' + st.x + 'px, ' + st.y + 'px) scale(' + st.scale + ')';
+
+    if (!marketPhotoCropIsFiniteNum(st.x) || !marketPhotoCropIsFiniteNum(st.y) || !marketPhotoCropIsFiniteNum(st.scale)) {
+      // 클램프 계산 자체가 어떤 이유로든 다시 깨졌다면(이론상 도달 불가하지만 안전망으로) 완전히 재중앙 정렬.
+      st.x = 0;
+      st.y = 0;
+      st.scale = marketPhotoCropIsFiniteNum(st.coverScale) && st.coverScale > 0 ? st.coverScale : 1;
     }
+
+    img.style.transform =
+      'translate(-50%, -50%) translate(' + st.x + 'px, ' + st.y + 'px) scale(' + st.scale + ')';
   }
 
   function marketPhotoCropSetScale(nextScale) {
     var st = marketPhotoCropState;
-    if (!st.loaded || !isFinite(nextScale)) return;
+    if (!st.loaded || !marketPhotoCropIsFiniteNum(nextScale) || nextScale <= 0) return;
     st.scale = Math.max(st.minScale, Math.min(st.maxScale, nextScale));
     var range = document.getElementById('marketPhotoCropZoomRange');
     if (range) range.value = String(st.scale);
     marketPhotoCropClampAndApply();
+  }
+
+  /**
+   * 현재 activePointers 구성(0/1/2개 이상)에 맞춰 드래그·핀치 기준점을 다시 잡는다.
+   * pointerdown·pointerup·pointercancel 등 포인터 "개수"가 바뀌는 모든 이벤트 직후
+   * 반드시 호출한다 — 예를 들어 두 손가락 핀치 중 한 손가락을 떼 한 손가락 드래그로
+   * 전환될 때도 여기서 다시 잡아주지 않으면 남은 손가락이 계속 반응하지 않는(먹통)
+   * 상태가 된다.
+   */
+  function marketPhotoCropRearmGesture() {
+    var st = marketPhotoCropState;
+    var stage = document.getElementById('marketPhotoCropStage');
+    var ids = Object.keys(st.activePointers);
+    if (ids.length === 0) {
+      st.gestureMode = 'none';
+      st.pinchId1 = null;
+      st.pinchId2 = null;
+      if (stage) stage.classList.remove('market-photo-crop-stage--dragging');
+      return;
+    }
+    if (ids.length === 1) {
+      var p = st.activePointers[ids[0]];
+      st.gestureMode = 'drag';
+      st.dragStartX = p.x;
+      st.dragStartY = p.y;
+      st.dragOrigX = st.x;
+      st.dragOrigY = st.y;
+      if (stage) stage.classList.add('market-photo-crop-stage--dragging');
+      return;
+    }
+    // 2개 이상이면 항상 처음 두 개(오름차순 id)만 핀치에 사용 — 나머지는 무시.
+    ids.sort(function (a, b) { return Number(a) - Number(b); });
+    var id1 = ids[0];
+    var id2 = ids[1];
+    var p1 = st.activePointers[id1];
+    var p2 = st.activePointers[id2];
+    var dist = marketPhotoCropPointerDist(p1, p2);
+    st.gestureMode = 'pinch';
+    st.pinchId1 = id1;
+    st.pinchId2 = id2;
+    st.pinchStartDist = marketPhotoCropIsFiniteNum(dist) && dist > 0.5 ? dist : 1;
+    st.pinchStartScale = st.scale;
+    if (stage) stage.classList.remove('market-photo-crop-stage--dragging');
   }
 
   function openMarketPhotoCropModal(idx, file) {
@@ -2050,26 +2122,46 @@
     st.objectUrl = URL.createObjectURL(file);
     st.x = 0;
     st.y = 0;
+    // 이전 사진에서 비정상 종료된 제스처(예: pointerup 유실)가 다음 사진에 섞이지 않도록
+    // 매번 완전히 새로 시작한다.
+    st.activePointers = {};
+    st.gestureMode = 'none';
+    st.pinchId1 = null;
+    st.pinchId2 = null;
+    if (stage) stage.classList.remove('market-photo-crop-stage--dragging');
     wireMarketPhotoCropModalOnce();
     marketPhotoCropSetLoadingUi(true);
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
+    var sessionToken = st.objectUrl;
     img.onload = function () {
       // 모달이 열리는 도중(레이아웃 전) 로드가 끝나 stage 크기를 0으로 읽는 경쟁 상태를 막기
-      // 위해 다음 프레임에 크기를 다시 읽는다 — 과거 이 값이 0이 되면 scale이 깨져 스테이지가
-      // 새하얗게 보이며 이후 조작이 전혀 반영되지 않는 문제가 있었다.
-      requestAnimationFrame(function () {
-        st.naturalWidth = img.naturalWidth || 1;
-        st.naturalHeight = img.naturalHeight || 1;
+      // 위해 다음 프레임에 크기를 다시 읽는다. 고해상도 카메라 사진(수천만 화소)은 onload
+      // 시점에 디코딩이 아직 끝나지 않아 naturalWidth/Height가 한두 프레임 동안 0으로
+      // 읽히는 브라우저가 있어, 유효한 값이 나올 때까지 몇 프레임 더 재시도한다(과거 이때
+      // 1×1로 잘못 확정되면 배율이 극단적으로 커져 사실상 백색에 가까운 확대 화면에 갇혔다).
+      var initAttemptsLeft = 20;
+      function initCropSizingWhenReady() {
+        // 재시도 대기 중 사용자가 취소하거나 다른 사진으로 넘어갔다면 낡은 결과를 덮어쓰지 않는다.
+        if (st.objectUrl !== sessionToken) return;
+        var nw = img.naturalWidth;
+        var nh = img.naturalHeight;
+        if ((!nw || !nh) && initAttemptsLeft > 0) {
+          initAttemptsLeft -= 1;
+          requestAnimationFrame(initCropSizingWhenReady);
+          return;
+        }
+        st.naturalWidth = nw || 1;
+        st.naturalHeight = nh || 1;
         var stageSize = stage.clientWidth || 300;
         var coverScale = stageSize / Math.min(st.naturalWidth, st.naturalHeight);
         var containScale = stageSize / Math.max(st.naturalWidth, st.naturalHeight);
-        st.coverScale = coverScale;
+        st.coverScale = marketPhotoCropIsFiniteNum(coverScale) && coverScale > 0 ? coverScale : 1;
         // 최소 배율을 "정사각형을 꽉 채우는 값(cover)"이 아니라 "사진 전체가 다 들어오는
         // 값(contain)"까지 낮춰, 원하는 만큼 더 축소해서 여백을 두고 첨부할 수 있게 한다.
-        st.minScale = containScale;
-        st.maxScale = coverScale * 3;
-        st.scale = coverScale;
+        st.minScale = marketPhotoCropIsFiniteNum(containScale) && containScale > 0 ? containScale : st.coverScale;
+        st.maxScale = st.coverScale * 3;
+        st.scale = st.coverScale;
         st.x = 0;
         st.y = 0;
         var range = document.getElementById('marketPhotoCropZoomRange');
@@ -2082,7 +2174,8 @@
         st.loaded = true;
         marketPhotoCropSetLoadingUi(false);
         marketPhotoCropClampAndApply();
-      });
+      }
+      requestAnimationFrame(initCropSizingWhenReady);
     };
     img.onerror = function () {
       st.loaded = false;
@@ -2100,11 +2193,13 @@
     if (st.objectUrl) { URL.revokeObjectURL(st.objectUrl); st.objectUrl = null; }
     st.idx = null;
     st.loaded = false;
+    st.activePointers = {};
+    st.gestureMode = 'none';
   };
 
   function marketPhotoCropPointerDist(t1, t2) {
-    var dx = t1.clientX - t2.clientX;
-    var dy = t1.clientY - t2.clientY;
+    var dx = t1.x - t2.x;
+    var dy = t1.y - t2.y;
     return Math.sqrt(dx * dx + dy * dy);
   }
 
@@ -2126,57 +2221,51 @@
     if (cancelBtn) cancelBtn.onclick = function () { window.closeMarketPhotoCropModal(); };
 
     if (stage) {
-      var activePointers = {};
+      var removePointer = function (ev) {
+        delete st.activePointers[ev.pointerId];
+        try { stage.releasePointerCapture(ev.pointerId); } catch (eRelease) {}
+        marketPhotoCropRearmGesture();
+      };
 
       stage.onpointerdown = function (ev) {
         if (!st.loaded) return;
-        stage.setPointerCapture && stage.setPointerCapture(ev.pointerId);
-        activePointers[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
-        var ids = Object.keys(activePointers);
-        if (ids.length === 1) {
-          st.dragging = true;
-          stage.classList.add('market-photo-crop-stage--dragging');
-          st.dragStartX = ev.clientX;
-          st.dragStartY = ev.clientY;
-          st.dragOrigX = st.x;
-          st.dragOrigY = st.y;
-        } else if (ids.length === 2) {
-          st.dragging = false;
-          var pts = ids.map(function (id) { return activePointers[id]; });
-          st.pinchStartDist = marketPhotoCropPointerDist(
-            { clientX: pts[0].x, clientY: pts[0].y },
-            { clientX: pts[1].x, clientY: pts[1].y }
-          ) || 1;
-          st.pinchStartScale = st.scale;
-        }
+        try { stage.setPointerCapture(ev.pointerId); } catch (eCapture) {}
+        st.activePointers[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+        marketPhotoCropRearmGesture();
       };
+
       stage.onpointermove = function (ev) {
-        if (!activePointers[ev.pointerId]) return;
-        activePointers[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
-        var ids = Object.keys(activePointers);
-        if (ids.length === 2) {
-          var pts = ids.map(function (id) { return activePointers[id]; });
-          var dist = marketPhotoCropPointerDist(
-            { clientX: pts[0].x, clientY: pts[0].y },
-            { clientX: pts[1].x, clientY: pts[1].y }
-          ) || 1;
-          marketPhotoCropSetScale(st.pinchStartScale * (dist / st.pinchStartDist));
-        } else if (st.dragging && ids.length === 1) {
-          st.x = st.dragOrigX + (ev.clientX - st.dragStartX);
-          st.y = st.dragOrigY + (ev.clientY - st.dragStartY);
+        if (!st.loaded) return;
+        if (!st.activePointers[ev.pointerId]) return;
+        st.activePointers[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+        try {
+          if (st.gestureMode === 'pinch' && st.pinchId1 != null && st.pinchId2 != null) {
+            var p1 = st.activePointers[st.pinchId1];
+            var p2 = st.activePointers[st.pinchId2];
+            if (p1 && p2) {
+              var dist = marketPhotoCropPointerDist(p1, p2);
+              if (marketPhotoCropIsFiniteNum(dist) && dist > 0.5) {
+                marketPhotoCropSetScale(st.pinchStartScale * (dist / st.pinchStartDist));
+              }
+            }
+          } else if (st.gestureMode === 'drag') {
+            st.x = st.dragOrigX + (ev.clientX - st.dragStartX);
+            st.y = st.dragOrigY + (ev.clientY - st.dragStartY);
+            marketPhotoCropClampAndApply();
+          }
+        } catch (eMove) {
+          // 어떤 경로로든 계산 중 예외가 나도 화면이 먹통으로 남지 않도록 안전 위치로 복구.
+          console.warn('[marketPhotoCrop] pointermove 처리 실패, 안전 위치로 복구:', eMove);
+          st.x = 0;
+          st.y = 0;
+          st.scale = st.coverScale;
           marketPhotoCropClampAndApply();
         }
       };
-      var endPointer = function (ev) {
-        delete activePointers[ev.pointerId];
-        if (!Object.keys(activePointers).length) {
-          st.dragging = false;
-          stage.classList.remove('market-photo-crop-stage--dragging');
-        }
-      };
-      stage.onpointerup = endPointer;
-      stage.onpointercancel = endPointer;
-      stage.onpointerleave = endPointer;
+
+      stage.onpointerup = removePointer;
+      stage.onpointercancel = removePointer;
+      stage.onpointerleave = removePointer;
       stage.onwheel = function (ev) {
         if (!st.loaded) return;
         ev.preventDefault();
@@ -2202,12 +2291,20 @@
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
         // 스테이지(정사각형) 좌표계 → 원본 이미지 좌표계로 역산해 실제 보이는 부분만 그린다.
-        var visibleSizeInImagePx = stageSize / st.scale;
-        var centerXInImagePx = st.naturalWidth / 2 - st.x / st.scale;
-        var centerYInImagePx = st.naturalHeight / 2 - st.y / st.scale;
+        var safeScale = marketPhotoCropIsFiniteNum(st.scale) && st.scale > 0 ? st.scale : st.coverScale;
+        var safeX = marketPhotoCropIsFiniteNum(st.x) ? st.x : 0;
+        var safeY = marketPhotoCropIsFiniteNum(st.y) ? st.y : 0;
+        var visibleSizeInImagePx = stageSize / safeScale;
+        var centerXInImagePx = st.naturalWidth / 2 - safeX / safeScale;
+        var centerYInImagePx = st.naturalHeight / 2 - safeY / safeScale;
         var srcX = centerXInImagePx - visibleSizeInImagePx / 2;
         var srcY = centerYInImagePx - visibleSizeInImagePx / 2;
-        ctx.drawImage(img, srcX, srcY, visibleSizeInImagePx, visibleSizeInImagePx, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+        try {
+          ctx.drawImage(img, srcX, srcY, visibleSizeInImagePx, visibleSizeInImagePx, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+        } catch (eDraw) {
+          toast('사진 처리에 실패했습니다. 다시 시도해 주세요.');
+          return;
+        }
         canvas.toBlob(function (blob) {
           if (!blob) { toast('사진 처리에 실패했습니다. 다시 시도해 주세요.'); return; }
           var croppedFile = new File([blob], 'market-photo-' + idx + '-' + Date.now() + '.jpg', { type: 'image/jpeg' });
