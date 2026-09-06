@@ -672,9 +672,9 @@
      * (탈퇴 처리 시 accountDeletion.js/apiDeleteUser가 이 기기의 캐시를 즉시 비워, 캐시가 오래
      * 유지되는 동안에도 "방금 내가 탈퇴/삭제한 계정" 오탐 창구는 별도로 막혀 있다). 캐시가
      * 만료돼 다시 읽어와야 할 때(수동 로그인 시 이 조회가 sign-in을 순차적으로 지연시킴)마다
-     * 체감 로그인 속도가 느려지므로, TTL을 6시간→7일로 늘려 이 지연이 발생하는 빈도를 낮춘다.
+     * 체감 로그인 속도가 느려지므로, TTL을 6시간→7일→30일로 늘려 이 지연이 발생하는 빈도를 낮춘다.
      */
-    var STELVIO_LOGIN_FLAG_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+    var STELVIO_LOGIN_FLAG_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
     window.stelvioLookupLoginAccountFlag = async function (phoneDigits) {
       var digits = String(phoneDigits || '').replace(/\D/g, '');
       if (!digits || digits.length < 10 || !firestoreV9 || !collectionFn || !docFn || !getDocFn) {
