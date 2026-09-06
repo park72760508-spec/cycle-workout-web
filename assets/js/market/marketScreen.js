@@ -2881,7 +2881,7 @@
       '<div class="market-detail-seller-row">' +
         '<div class="market-detail-seller-row__left">' +
           '<img id="marketDetailSellerAvatar" class="market-detail-seller-avatar" src="' + escapeHtml(sellerAvatarUrl) + '" alt="' + escapeHtml(sellerName) + '님 판매 상품 리스트 보기" />' +
-          '<span class="market-detail-seller-name">' + escapeHtml(sellerName) + '</span>' +
+          '<span id="marketDetailSellerName" class="market-detail-seller-name" title="' + escapeHtml(sellerName) + '님 판매 상품 리스트 보기">' + escapeHtml(sellerName) + '</span>' +
           '<span class="market-detail-seller-rating">(' + sellerRatingAvgFixed.toFixed(1) + '/5)</span>' +
           '<span class="market-detail-seller-sep">·</span>' +
           '<span>' + escapeHtml(item.sub_category || '') + '</span>' +
@@ -3109,8 +3109,11 @@
         });
       }, 1000);
     }
+    var openSellerItemsFn = function () { openMarketSellerItemsModal(item.user_id); };
     var sellerAvatarEl = document.getElementById('marketDetailSellerAvatar');
-    if (sellerAvatarEl) sellerAvatarEl.onclick = function () { openMarketSellerItemsModal(item.user_id); };
+    if (sellerAvatarEl) sellerAvatarEl.onclick = openSellerItemsFn;
+    var sellerNameEl = document.getElementById('marketDetailSellerName');
+    if (sellerNameEl) sellerNameEl.onclick = openSellerItemsFn;
     var buyBtn = document.getElementById('marketDetailBuyBtn');
     if (buyBtn) buyBtn.onclick = function () { handleMarketBuy(item); };
     var directDealBtn = document.getElementById('marketDetailDirectDealBtn');

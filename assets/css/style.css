@@ -31959,6 +31959,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
+  cursor: pointer;
 }
 .market-detail-seller-rating { color: #f59e0b; font-weight: 700; }
 .market-detail-seller-sep { color: #cbd5e1; }
