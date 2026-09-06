@@ -216,7 +216,7 @@
     imageSearchActive: false,
     // 서브 카테고리 순환 선택 ON/OFF — ON이면 선택 항목이 항상 맨 왼쪽으로 회전하고,
     // OFF면 전체→완차→...→용품(CYCLE)/전체→런닝화→...→용품(RUN) 고정 순서로 표시된다.
-    subCategoryRotateEnabled: true,
+    subCategoryRotateEnabled: false,
   };
 
   var formState = {
