@@ -30809,6 +30809,10 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   border: none;
   background: transparent;
   cursor: pointer;
+  /* 선택된 항목이 항상 맨 왼쪽으로 순환 이동하는 슬라이드 애니메이션 — 라이더/러너
+     장터 탭 자리바꿈(market-category-tab)과 동일한 지속시간·이징(JS의 FLIP 기법으로 적용) */
+  transition: transform 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 .market-subtab__icon-wrap {
   display: flex;

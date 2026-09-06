@@ -1043,15 +1043,68 @@
     '</button>';
   }
 
+  /** "전체"(빈 문자열 키)를 포함한 정식 순서 — 이 순서를 기준으로 매번 다시 회전시킨다
+   * (직전 화면 순서가 아니라 항상 이 고정 순서에서 회전해야 "전체→완차→...→용품"이
+   * 그대로 순환하는 것처럼 보인다). */
+  function getCanonicalSubCategoryKeys(cat) {
+    var subs = SUB_CATEGORIES[cat] || [];
+    return [''].concat(subs.map(function (s) { return s.label; }));
+  }
+
+  /** 선택된 키가 맨 앞에 오도록 정식 순서를 회전(순환)한다. */
+  function getRotatedSubCategoryOrder(cat, selectedKey) {
+    var keys = getCanonicalSubCategoryKeys(cat);
+    var idx = keys.indexOf(selectedKey);
+    if (idx <= 0) return keys;
+    return keys.slice(idx).concat(keys.slice(0, idx));
+  }
+
+  var marketSubTabsLastRenderedCategory = null;
+
   function renderSubCategoryTabs() {
     var wrap = document.getElementById('marketSubCategoryTabs');
     if (!wrap) return;
     var subs = SUB_CATEGORIES[homeState.category] || [];
-    var html = subCategoryButtonHtml('전체', subCategoryIconHtml(null), '', homeState.subCategory === '');
-    subs.forEach(function (s) {
-      html += subCategoryButtonHtml(s.label, subCategoryIconHtml(s), s.label, homeState.subCategory === s.label);
-    });
+    var byLabel = {};
+    subs.forEach(function (s) { byLabel[s.label] = s; });
+
+    // FLIP 1단계: 재배치 전 각 항목의 현재 화면 위치를 key(data-sub)별로 기록.
+    // 종목(CYCLE/RUN) 자체가 바뀌는 경우엔 같은 라벨("의류"/"용품")이 우연히 겹쳐도
+    // 서로 다른 항목이므로 애니메이션을 걸지 않는다.
+    var categoryChanged = marketSubTabsLastRenderedCategory !== null && marketSubTabsLastRenderedCategory !== homeState.category;
+    var oldRects = {};
+    if (!categoryChanged) {
+      Array.prototype.forEach.call(wrap.querySelectorAll('.market-subtab'), function (btn) {
+        oldRects[btn.getAttribute('data-sub')] = btn.getBoundingClientRect();
+      });
+    }
+    marketSubTabsLastRenderedCategory = homeState.category;
+
+    var order = getRotatedSubCategoryOrder(homeState.category, homeState.subCategory);
+    var html = order.map(function (key) {
+      var s = key === '' ? null : byLabel[key];
+      var label = key === '' ? '전체' : (s ? s.label : key);
+      return subCategoryButtonHtml(label, subCategoryIconHtml(s), key, homeState.subCategory === key);
+    }).join('');
     wrap.innerHTML = html;
+    wrap.scrollLeft = 0;
+
+    // FLIP 2단계: 새 위치를 측정해 이전 위치와의 차이만큼 즉시 되돌려놓은 뒤(트랜지션 없이),
+    // 다시 0으로 되돌아가게 해 실제로는 순간이동한 DOM이 미끄러져 이동한 것처럼 보이게 한다.
+    Array.prototype.forEach.call(wrap.querySelectorAll('.market-subtab'), function (btn) {
+      var key = btn.getAttribute('data-sub');
+      var oldRect = oldRects[key];
+      if (!oldRect) return;
+      var newRect = btn.getBoundingClientRect();
+      var delta = oldRect.left - newRect.left;
+      if (!delta) return;
+      btn.style.transition = 'none';
+      btn.style.transform = 'translateX(' + delta + 'px)';
+      void btn.offsetWidth;
+      btn.style.transition = '';
+      btn.style.transform = '';
+    });
+
     Array.prototype.forEach.call(wrap.querySelectorAll('.market-subtab'), function (btn) {
       btn.onclick = function () {
         homeState.subCategory = btn.getAttribute('data-sub') || '';
