@@ -30688,7 +30688,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   cursor: pointer;
   /* 선택된 탭이 항상 왼쪽으로 이동하는 자리바꿈 애니메이션(translateX, JS에서 계산해 적용) */
   transition: background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease,
-    transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+    transform 0.62s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
 .market-category-tab img {
