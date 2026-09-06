@@ -32729,6 +32729,18 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   flex-shrink: 0;
 }
 .market-photo-crop-zoom-icon--sm { font-size: 12px; }
+.market-photo-crop-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+  z-index: 3;
+}
+.market-photo-crop-loading.hidden { display: none !important; }
+.market-photo-crop-loading-text { color: rgba(255, 255, 255, 0.85); margin: 16px 0 0; }
 
 /* 반품 진행 — 판매자 "반품 확인" 클릭 후 주소 입력 폼(Daum 우편번호 embed 재사용)과
    이의제기/합의완료 상태 문구. 기존 market-delivery-form/market-refund-form 톤과 통일. */

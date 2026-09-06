@@ -1979,9 +1979,12 @@
   var marketPhotoCropState = {
     idx: null,
     objectUrl: null,
+    loaded: false,
     naturalWidth: 0,
     naturalHeight: 0,
+    coverScale: 1,
     minScale: 1,
+    maxScale: 1,
     scale: 1,
     x: 0,
     y: 0,
@@ -1994,6 +1997,19 @@
     pinchStartScale: 1,
     wired: false
   };
+
+  function marketPhotoCropSetLoadingUi(isLoading) {
+    var loadingEl = document.getElementById('marketPhotoCropLoading');
+    var img = document.getElementById('marketPhotoCropImg');
+    var stage = document.getElementById('marketPhotoCropStage');
+    var range = document.getElementById('marketPhotoCropZoomRange');
+    var confirmBtn = document.getElementById('marketPhotoCropConfirmBtn');
+    if (loadingEl) loadingEl.classList.toggle('hidden', !isLoading);
+    if (img) img.style.opacity = isLoading ? '0' : '1';
+    if (stage) stage.style.pointerEvents = isLoading ? 'none' : '';
+    if (range) range.disabled = isLoading;
+    if (confirmBtn) confirmBtn.disabled = isLoading;
+  }
 
   function marketPhotoCropClampAndApply() {
     var st = marketPhotoCropState;
@@ -2015,10 +2031,10 @@
 
   function marketPhotoCropSetScale(nextScale) {
     var st = marketPhotoCropState;
-    var maxScale = st.minScale * 3;
-    st.scale = Math.max(st.minScale, Math.min(maxScale, nextScale));
+    if (!st.loaded || !isFinite(nextScale)) return;
+    st.scale = Math.max(st.minScale, Math.min(st.maxScale, nextScale));
     var range = document.getElementById('marketPhotoCropZoomRange');
-    if (range) range.value = String(Math.round((st.scale / st.minScale) * 100));
+    if (range) range.value = String(st.scale);
     marketPhotoCropClampAndApply();
   }
 
@@ -2030,23 +2046,51 @@
     var st = marketPhotoCropState;
     if (st.objectUrl) URL.revokeObjectURL(st.objectUrl);
     st.idx = idx;
+    st.loaded = false;
     st.objectUrl = URL.createObjectURL(file);
     st.x = 0;
     st.y = 0;
-    img.src = st.objectUrl;
-    img.onload = function () {
-      st.naturalWidth = img.naturalWidth || 1;
-      st.naturalHeight = img.naturalHeight || 1;
-      var stageSize = stage.clientWidth || 300;
-      st.minScale = stageSize / Math.min(st.naturalWidth, st.naturalHeight);
-      st.scale = st.minScale;
-      var range = document.getElementById('marketPhotoCropZoomRange');
-      if (range) range.value = '100';
-      marketPhotoCropClampAndApply();
-    };
     wireMarketPhotoCropModalOnce();
+    marketPhotoCropSetLoadingUi(true);
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
+    img.onload = function () {
+      // 모달이 열리는 도중(레이아웃 전) 로드가 끝나 stage 크기를 0으로 읽는 경쟁 상태를 막기
+      // 위해 다음 프레임에 크기를 다시 읽는다 — 과거 이 값이 0이 되면 scale이 깨져 스테이지가
+      // 새하얗게 보이며 이후 조작이 전혀 반영되지 않는 문제가 있었다.
+      requestAnimationFrame(function () {
+        st.naturalWidth = img.naturalWidth || 1;
+        st.naturalHeight = img.naturalHeight || 1;
+        var stageSize = stage.clientWidth || 300;
+        var coverScale = stageSize / Math.min(st.naturalWidth, st.naturalHeight);
+        var containScale = stageSize / Math.max(st.naturalWidth, st.naturalHeight);
+        st.coverScale = coverScale;
+        // 최소 배율을 "정사각형을 꽉 채우는 값(cover)"이 아니라 "사진 전체가 다 들어오는
+        // 값(contain)"까지 낮춰, 원하는 만큼 더 축소해서 여백을 두고 첨부할 수 있게 한다.
+        st.minScale = containScale;
+        st.maxScale = coverScale * 3;
+        st.scale = coverScale;
+        st.x = 0;
+        st.y = 0;
+        var range = document.getElementById('marketPhotoCropZoomRange');
+        if (range) {
+          range.min = String(st.minScale);
+          range.max = String(st.maxScale);
+          range.step = String(Math.max(0.0001, (st.maxScale - st.minScale) / 200));
+          range.value = String(st.scale);
+        }
+        st.loaded = true;
+        marketPhotoCropSetLoadingUi(false);
+        marketPhotoCropClampAndApply();
+      });
+    };
+    img.onerror = function () {
+      st.loaded = false;
+      marketPhotoCropSetLoadingUi(false);
+      toast('사진을 불러오지 못했습니다. 다른 사진을 선택해 주세요.');
+      window.closeMarketPhotoCropModal();
+    };
+    img.src = st.objectUrl;
   }
 
   window.closeMarketPhotoCropModal = function () {
@@ -2055,6 +2099,7 @@
     var st = marketPhotoCropState;
     if (st.objectUrl) { URL.revokeObjectURL(st.objectUrl); st.objectUrl = null; }
     st.idx = null;
+    st.loaded = false;
   };
 
   function marketPhotoCropPointerDist(t1, t2) {
@@ -2074,9 +2119,8 @@
 
     if (range) {
       range.oninput = function () {
-        var pct = Number(range.value) || 100;
-        st.scale = st.minScale * (pct / 100);
-        marketPhotoCropClampAndApply();
+        if (!st.loaded) return;
+        marketPhotoCropSetScale(Number(range.value));
       };
     }
     if (cancelBtn) cancelBtn.onclick = function () { window.closeMarketPhotoCropModal(); };
@@ -2085,6 +2129,7 @@
       var activePointers = {};
 
       stage.onpointerdown = function (ev) {
+        if (!st.loaded) return;
         stage.setPointerCapture && stage.setPointerCapture(ev.pointerId);
         activePointers[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
         var ids = Object.keys(activePointers);
@@ -2133,6 +2178,7 @@
       stage.onpointercancel = endPointer;
       stage.onpointerleave = endPointer;
       stage.onwheel = function (ev) {
+        if (!st.loaded) return;
         ev.preventDefault();
         marketPhotoCropSetScale(st.scale * (ev.deltaY < 0 ? 1.08 : 0.92));
       };
@@ -2140,6 +2186,7 @@
 
     if (confirmBtn) {
       confirmBtn.onclick = function () {
+        if (!st.loaded) return;
         var idx = st.idx;
         if (idx == null) { window.closeMarketPhotoCropModal(); return; }
         var img = document.getElementById('marketPhotoCropImg');
@@ -2150,6 +2197,10 @@
         canvas.width = OUTPUT_SIZE;
         canvas.height = OUTPUT_SIZE;
         var ctx = canvas.getContext('2d');
+        // 축소(contain)로 여백이 생길 수 있어, JPEG로 저장될 때 빈 영역이 검게 나오지
+        // 않도록 흰 배경을 먼저 채운다.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
         // 스테이지(정사각형) 좌표계 → 원본 이미지 좌표계로 역산해 실제 보이는 부분만 그린다.
         var visibleSizeInImagePx = stageSize / st.scale;
         var centerXInImagePx = st.naturalWidth / 2 - st.x / st.scale;
