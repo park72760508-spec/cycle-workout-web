@@ -31945,6 +31945,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   object-fit: cover;
   flex-shrink: 0;
   background: #e2e8f0;
+  cursor: pointer;
 }
 .market-detail-seller-name {
   color: #64748b;
@@ -32741,6 +32742,38 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 .market-photo-crop-loading.hidden { display: none !important; }
 .market-photo-crop-loading-text { color: rgba(255, 255, 255, 0.85); margin: 16px 0 0; }
+
+/* 상품 상세 — 판매자 아바타 클릭 시 뜨는 "판매 상품 리스트" 팝업 */
+.market-seller-items-content { max-width: 420px; width: 92%; text-align: left; }
+.market-seller-items-content .market-confirm-title { text-align: center; }
+.market-seller-items-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 4px 16px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  min-height: 52px;
+}
+.market-seller-items-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #f1f5f9;
+}
+.market-seller-items-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.market-seller-items-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.market-seller-items-stats { display: flex; gap: 10px; font-size: 12.5px; font-weight: 600; color: #64748b; }
+.market-seller-items-scroll { max-height: 50vh; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
 
 /* 반품 진행 — 판매자 "반품 확인" 클릭 후 주소 입력 폼(Daum 우편번호 embed 재사용)과
    이의제기/합의완료 상태 문구. 기존 market-delivery-form/market-refund-form 톤과 통일. */

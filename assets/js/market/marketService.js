@@ -492,6 +492,24 @@ export async function getMyMarketItems() {
 }
 
 /** 마이페이지 "나의거래내역" — 내가 구매자인 주문을 상품 정보와 함께 조회 */
+/** 상품 상세 화면 — 판매자 아바타 클릭 시 "판매 상품 리스트" 팝업. 목록 카드(marketItemCardHtml)가
+ * 쓰는 컬럼만 조회하고, 홈 목록과 동일하게 관리자 숨김(hidden) 상품은 제외한다(판매완료 건수
+ * 집계에는 필요하므로 status는 필터하지 않고 그대로 내려보낸다). */
+export async function getPublicMarketItemsBySeller(sellerId) {
+  return withMarketAuthRetry(async () => {
+    if (!sellerId) return [];
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase
+      .from('market_items')
+      .select('id, user_id, title, price, purchase_price, condition, images, status, view_count, created_at')
+      .eq('user_id', sellerId)
+      .eq('hidden', false)
+      .order('bumped_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  });
+}
+
 export async function getMyMarketOrders() {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
@@ -1029,6 +1047,7 @@ if (typeof window !== 'undefined') {
     getMyFavoriteItemIds,
     getMySupabaseUserId,
     getMyMarketItems,
+    getPublicMarketItemsBySeller,
     getMyMarketOrders,
     getSellerActiveOrderItemIds,
     getMyActiveDealItemIds,

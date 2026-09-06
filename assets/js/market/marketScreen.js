@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260906marketReports1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20260906sellerItemsModal1';
   var svc = null;
 
   function loadMarketService() {
@@ -2880,7 +2880,7 @@
     var sellerRowHtml =
       '<div class="market-detail-seller-row">' +
         '<div class="market-detail-seller-row__left">' +
-          '<img class="market-detail-seller-avatar" src="' + escapeHtml(sellerAvatarUrl) + '" alt="" />' +
+          '<img id="marketDetailSellerAvatar" class="market-detail-seller-avatar" src="' + escapeHtml(sellerAvatarUrl) + '" alt="' + escapeHtml(sellerName) + '님 판매 상품 리스트 보기" />' +
           '<span class="market-detail-seller-name">' + escapeHtml(sellerName) + '</span>' +
           '<span class="market-detail-seller-rating">(' + sellerRatingAvgFixed.toFixed(1) + '/5)</span>' +
           '<span class="market-detail-seller-sep">·</span>' +
@@ -3109,6 +3109,8 @@
         });
       }, 1000);
     }
+    var sellerAvatarEl = document.getElementById('marketDetailSellerAvatar');
+    if (sellerAvatarEl) sellerAvatarEl.onclick = function () { openMarketSellerItemsModal(item.user_id); };
     var buyBtn = document.getElementById('marketDetailBuyBtn');
     if (buyBtn) buyBtn.onclick = function () { handleMarketBuy(item); };
     var directDealBtn = document.getElementById('marketDetailDirectDealBtn');
@@ -3263,6 +3265,83 @@
       }
     }
   }
+
+  /** 상품 상세 — 판매자 아바타 클릭 시 "판매 상품 리스트" 팝업. 카드는 목록 화면과
+   * 완전히 동일한 marketItemCardHtml을 그대로 재사용해 형식을 통일한다. */
+  function wireMarketSellerItemsGridEvents(scope) {
+    if (scope.__marketSellerItemsGridWired) return;
+    scope.__marketSellerItemsGridWired = true;
+    scope.addEventListener('click', function (e) {
+      var favBtn = e.target.closest('[data-fav-toggle]');
+      if (favBtn) {
+        e.stopPropagation();
+        handleFavoriteToggle(favBtn.getAttribute('data-fav-toggle'), favBtn);
+        return;
+      }
+      var card = e.target.closest('.market-card');
+      if (card) {
+        window.closeMarketSellerItemsModal();
+        openMarketItemDetail(card.getAttribute('data-item-id'));
+      }
+    });
+  }
+
+  async function openMarketSellerItemsModal(sellerId) {
+    var modal = document.getElementById('marketSellerItemsModal');
+    var profileEl = document.getElementById('marketSellerItemsProfile');
+    var gridEl = document.getElementById('marketSellerItemsGrid');
+    if (!modal || !sellerId) return;
+    if (profileEl) profileEl.innerHTML = '';
+    if (gridEl) gridEl.innerHTML = '<div class="market-empty">불러오는 중...</div>';
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    try {
+      var s = await loadMarketService();
+      var results = await Promise.all([
+        s.getSellerPublicProfile(sellerId),
+        s.getPublicMarketItemsBySeller(sellerId),
+        s.getSellerRatingAggregate(sellerId)
+      ]);
+      var profile = results[0];
+      var items = results[1] || [];
+      var ratingAgg = results[2];
+      var itemIds = items.map(function (it) { return it.id; });
+      var favCounts = itemIds.length ? await s.getMarketFavoriteCountsForItems(itemIds) : {};
+      items.forEach(function (it) {
+        it.__favoriteCount = (favCounts && favCounts[it.id]) || 0;
+        it.__sellerRatingAvg = ratingAgg ? ratingAgg.avg : 0;
+      });
+      var totalCount = items.length;
+      var soldCount = items.filter(function (it) { return it.status === 'SOLD'; }).length;
+      var avatarUrl = (profile && profile.profile_image_url) || 'assets/img/profile-placeholder.svg';
+      var name = marketSellerDisplayName(profile);
+      if (profileEl) {
+        profileEl.innerHTML =
+          '<img class="market-seller-items-avatar" src="' + escapeHtml(avatarUrl) + '" alt="" />' +
+          '<div class="market-seller-items-meta">' +
+            '<div class="market-seller-items-name">' + escapeHtml(name) + '</div>' +
+            '<div class="market-seller-items-stats">' +
+              '<span>업로드 상품 ' + totalCount + '건</span>' +
+              '<span>판매완료 ' + soldCount + '건</span>' +
+            '</div>' +
+          '</div>';
+      }
+      if (gridEl) {
+        gridEl.innerHTML = items.length
+          ? items.map(function (it, i) { return marketItemCardHtml(it, homeState.activeOrderIds, i < 6); }).join('')
+          : '<div class="market-empty">등록된 상품이 없습니다.</div>';
+        wireMarketSellerItemsGridEvents(gridEl);
+      }
+    } catch (err) {
+      if (gridEl) gridEl.innerHTML = '<div class="market-empty">판매 상품을 불러오지 못했습니다.</div>';
+      toast('판매 상품을 불러오지 못했습니다: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  window.closeMarketSellerItemsModal = function () {
+    var modal = document.getElementById('marketSellerItemsModal');
+    if (modal) { modal.classList.add('hidden'); modal.style.display = 'none'; }
+  };
 
   var marketRatingSaving = false;
   function handleMarketRateSeller(orderId, sellerId, score) {
