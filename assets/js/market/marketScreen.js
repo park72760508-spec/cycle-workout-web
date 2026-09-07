@@ -363,11 +363,13 @@
     return m[1] + '. ' + Number(m[2]) + '. ' + Number(m[3]) + '.';
   }
 
-  /** 대회 참가신청 입금기한 카운트다운(competitionBottomSheet.js의 formatRemaining)과 동일 로직 */
-  function marketFormatRemaining(dueDateStr) {
+  /** 대회 참가신청 입금기한 카운트다운(competitionBottomSheet.js의 formatRemaining)과 동일 로직.
+   * expiredText: 기한 만료 시 표시할 문구 — 미지정 시 입금기한용 기본 문구를 그대로 쓴다
+   * (자동 구매확정처럼 "입금"과 무관한 카운트다운은 호출부에서 별도 문구를 넘긴다). */
+  function marketFormatRemaining(dueDateStr, expiredText) {
     var due = new Date(dueDateStr).getTime();
     var diff = due - Date.now();
-    if (!isFinite(due) || diff <= 0) return '입금 기한이 지났습니다';
+    if (!isFinite(due) || diff <= 0) return expiredText || '입금 기한이 지났습니다';
     var totalSec = Math.floor(diff / 1000);
     var h = Math.floor(totalSec / 3600);
     var m = Math.floor((totalSec % 3600) / 60);
@@ -542,7 +544,8 @@
         timerHtml = '<div>자동 구매확정까지 : <span class="market-return-cancelled-text">시간표시 취소됨</span></div>';
       } else if (o.delivered_at) {
         var deadlineIso = new Date(new Date(o.delivered_at).getTime() + 72 * 3600 * 1000).toISOString();
-        timerHtml = '<div>자동 구매확정까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '">' + escapeHtml(marketFormatRemaining(deadlineIso)) + '</span></div>';
+        var autoConfirmExpiredText = '구매확정이 완료되었습니다.';
+        timerHtml = '<div>자동 구매확정까지 : <span class="market-due-countdown market-tx-row__due" data-va-due="' + escapeHtml(deadlineIso) + '" data-va-expired-text="' + escapeHtml(autoConfirmExpiredText) + '">' + escapeHtml(marketFormatRemaining(deadlineIso, autoConfirmExpiredText)) + '</span></div>';
       }
     }
     // 배송 상태 자체는 위쪽 6단계 진행 스텝바(marketDealStepsHtml)에서 이미 보여주므로
@@ -3211,7 +3214,7 @@
           return;
         }
         Array.prototype.forEach.call(els, function (el) {
-          el.textContent = marketFormatRemaining(el.getAttribute('data-va-due'));
+          el.textContent = marketFormatRemaining(el.getAttribute('data-va-due'), el.getAttribute('data-va-expired-text'));
         });
       }, 1000);
     }
