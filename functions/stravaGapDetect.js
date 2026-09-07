@@ -73,20 +73,13 @@ function webhookRetryDocId(ownerId, objectId) {
 }
 
 /**
- * strava_webhook_retries는 클라이언트가 접근하지 않는 백엔드 전용 재시도 큐라 Firestore 없이
- * Supabase(service_role)만으로 전량 이관했다(Firestore 읽기/쓰기 비용 절감). 롤백 시에는 호출부에서
- * db 인자를 다시 Firestore write 로직으로 되돌리면 된다(과거 구현은 git history 참고).
- */
-const supabaseDualWriteServer = require("./supabaseDualWriteServer");
-
-/**
+ * @param {import('firebase-admin').firestore.Firestore} db
  * @param {{ ownerId: number, objectId: number, userId?: string|null, reason?: string, status?: number, error?: string }} entry
  */
-async function enqueueStravaWebhookRetry(_db, entry) {
-  if (entry.ownerId == null || entry.objectId == null) return;
+async function enqueueStravaWebhookRetry(db, entry) {
+  if (!db || entry.ownerId == null || entry.objectId == null) return;
   const docId = webhookRetryDocId(entry.ownerId, entry.objectId);
   const payload = {
-    id: docId,
     object_id: Number(entry.objectId),
     owner_id: Number(entry.ownerId),
     user_id: entry.userId ? String(entry.userId) : null,
@@ -96,53 +89,99 @@ async function enqueueStravaWebhookRetry(_db, entry) {
     error: entry.error ? String(entry.error).slice(0, 500) : null,
     status_queue: "pending",
     processed_at: null,
-    updated_at: new Date().toISOString(),
   };
   try {
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    const { error } = await supabase.from("strava_webhook_retries").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
+    await db.collection(STRAVA_WEBHOOK_RETRIES_COLLECTION).doc(docId).set(payload, { merge: true });
   } catch (e) {
     console.warn("[stravaGapDetect] enqueue webhook retry failed:", docId, e.message || e);
   }
 }
 
-/** @param {number} ownerId @param {string|number} objectId */
-async function markStravaWebhookRetryDone(_db, ownerId, objectId) {
-  if (ownerId == null || objectId == null) return;
+/** @param {import('firebase-admin').firestore.Firestore} db @param {number} ownerId @param {string|number} objectId */
+async function markStravaWebhookRetryDone(db, ownerId, objectId) {
+  if (!db || ownerId == null || objectId == null) return;
   const docId = webhookRetryDocId(ownerId, objectId);
   try {
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    const { error } = await supabase
-      .from("strava_webhook_retries")
-      .update({
+    await db.collection(STRAVA_WEBHOOK_RETRIES_COLLECTION).doc(docId).set(
+      {
         status_queue: "done",
         processed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", docId);
-    if (error) throw error;
+      },
+      { merge: true }
+    );
   } catch (e) {
     console.warn("[stravaGapDetect] mark webhook retry done failed:", docId, e.message || e);
   }
 }
 
+/** 404/401/403 등 재시도해도 복구 불가 — hourly drain에서 제외 */
+function isPermanentStravaRetryFailure(status, reason) {
+  const st = Number(status) || 0;
+  if (st === 404 || st === 401 || st === 403) return true;
+  const r = String(reason || "").toLowerCase();
+  return r === "401" || r.includes("auth") || r === "user_unresolved";
+}
+
+/** Asia/Seoul 기준 오늘 YYYY-MM-DD */
+function getTodayYmdSeoul(now = new Date()) {
+  return now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
 /**
- * @param {{ maxEntries?: number }} [options]
+ * ISO/Timestamp/Date → Asia/Seoul YYYY-MM-DD
+ * @param {any} value
+ * @returns {string|null}
  */
-async function listPendingStravaWebhookRetries(_db, options = {}) {
-  const maxEntries = Math.max(1, Math.min(1000, Number(options.maxEntries) || 500));
-  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("strava_webhook_retries")
-    .select("*")
-    .eq("status_queue", "pending")
-    .limit(maxEntries);
-  if (error) {
-    console.warn("[stravaGapDetect] listPendingStravaWebhookRetries failed:", error.message);
-    return [];
+function toYmdSeoul(value) {
+  if (value == null || value === "") return null;
+  try {
+    if (typeof value === "object" && typeof value.toDate === "function") {
+      return value.toDate().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    }
+    const d = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(d.getTime())) return null;
+    return d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  } catch (_) {
+    return null;
   }
-  return (data || []).map((row) => ({ id: row.id, ...row }));
+}
+
+function isYmdSeoulToday(value, todayYmd) {
+  const ymd = toYmdSeoul(value);
+  return Boolean(ymd && todayYmd && ymd === todayYmd);
+}
+
+/**
+ * @param {import('firebase-admin').firestore.Firestore} db
+ * @param {{ maxEntries?: number, retryableOnly?: boolean, todayOnly?: boolean, todayYmd?: string }} [options]
+ */
+async function listPendingStravaWebhookRetries(db, options = {}) {
+  const maxEntries = Math.max(1, Math.min(1000, Number(options.maxEntries) || 500));
+  const retryableOnly = options.retryableOnly === true;
+  const todayOnly = options.todayOnly === true;
+  const todayYmd = String(options.todayYmd || getTodayYmdSeoul()).slice(0, 10);
+  // 필터(영구실패·당일) 때문에 앞쪽이 스킵될 수 있어 넉넉히 읽음
+  const fetchLimit =
+    retryableOnly || todayOnly
+      ? Math.min(1000, Math.max(maxEntries * 10, 300))
+      : maxEntries;
+  const snap = await db
+    .collection(STRAVA_WEBHOOK_RETRIES_COLLECTION)
+    .where("status_queue", "==", "pending")
+    .limit(fetchLimit)
+    .get();
+  let rows = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+  if (retryableOnly) {
+    rows = rows.filter((row) => !isPermanentStravaRetryFailure(row.status, row.reason));
+  }
+  if (todayOnly) {
+    // 당일 수신/실패 건만 — failed_at 우선, 없으면 문서에 남은 시각 필드
+    rows = rows.filter((row) => {
+      const at = row.failed_at || row.received_at || row.created_at || row.updated_at;
+      return isYmdSeoulToday(at, todayYmd);
+    });
+  }
+  return rows.slice(0, maxEntries);
 }
 
 const stravaConnectionReader = require("./stravaConnectionReader");
@@ -154,18 +193,40 @@ async function listStravaConnectedUserIds(db) {
 
 /**
  * @param {import('firebase-admin').firestore.Firestore} db
- * @param {{ dateFrom: string, dateTo: string, maxUsers?: number }} rangeOpts
+ * @param {{ dateFrom?: string, dateTo?: string, maxUsers?: number, retryableOnly?: boolean, todayOnly?: boolean, todayYmd?: string }} rangeOpts
  */
 async function listPendingRetryUserIds(db, rangeOpts = {}) {
-  const dateFrom = String(rangeOpts.dateFrom || "").slice(0, 10);
-  const dateTo = String(rangeOpts.dateTo || dateFrom).slice(0, 10);
   const maxUsers = Math.max(1, Math.min(2000, Number(rangeOpts.maxUsers) || 1000));
-  const snap = await db.collection("users").where("strava_sync_retry_pending", "==", true).limit(maxUsers).get();
+  const retryableOnly = rangeOpts.retryableOnly === true;
+  const todayOnly = rangeOpts.todayOnly === true;
+  const todayYmd = String(rangeOpts.todayYmd || getTodayYmdSeoul()).slice(0, 10);
+  const fetchLimit =
+    retryableOnly || todayOnly ? Math.min(2000, Math.max(maxUsers * 6, 120)) : maxUsers;
+  const snap = await db
+    .collection("users")
+    .where("strava_sync_retry_pending", "==", true)
+    .limit(fetchLimit)
+    .get();
   const out = [];
   for (const doc of snap.docs) {
     const d = doc.data() || {};
     if (stravaSyncRetry.isStravaAuthInvalidUserData(d)) continue;
+    if (
+      retryableOnly &&
+      isPermanentStravaRetryFailure(d.strava_sync_retry_status, d.strava_sync_retry_reason)
+    ) {
+      continue;
+    }
+    if (todayOnly) {
+      // 당일 미완료 수신만 — requested_at 우선
+      const at =
+        d.strava_sync_retry_requested_at ||
+        d.strava_last_activity_fetch_at ||
+        d.strava_sync_retry_pending_at;
+      if (!isYmdSeoulToday(at, todayYmd)) continue;
+    }
     out.push(doc.id);
+    if (out.length >= maxUsers) break;
   }
   return out;
 }
@@ -220,13 +281,15 @@ async function getExistingStravaActivityIdsForDateRange(db, userId, dateFrom, da
 
 /**
  * @param {import('firebase-admin').firestore.Firestore} db
- * @param {{ includeGapScanAllUsers?: boolean, maxUsers?: number, gapScanUserIds?: string[] }} options
- *   gapScanUserIds: includeGapScanAllUsers가 false일 때만 사용 — 전체 스캔 대신 이 목록의
- *   사용자만 needsGapScan으로 표시(회전 배치 스캔용, stravaRotatingGapScanSchedule 참고).
+ * @param {{ includeGapScanAllUsers?: boolean, maxUsers?: number, retryableOnly?: boolean, todayOnly?: boolean, todayYmd?: string }} options
  * @param {{ dateFrom: string, dateTo: string }} range
  */
 async function buildGapDetectWorklist(db, range, options = {}) {
   const includeGapScanAllUsers = options.includeGapScanAllUsers !== false;
+  const retryableOnly = options.retryableOnly === true;
+  const todayOnly = options.todayOnly === true;
+  const todayYmd = String(options.todayYmd || getTodayYmdSeoul()).slice(0, 10);
+  const maxUsers = Math.max(1, Math.min(2000, Number(options.maxUsers) || 1000));
   /** @type {Map<string, { userId: string, explicitActivityIds: Set<string>, needsGapScan: boolean, sources: Set<string>, webhookEntries: Array<{ owner_id: number, object_id: number }> }>} */
   const worklist = new Map();
 
@@ -248,7 +311,10 @@ async function buildGapDetectWorklist(db, range, options = {}) {
   const pendingUserIds = await listPendingRetryUserIds(db, {
     dateFrom: range.dateFrom,
     dateTo: range.dateTo,
-    maxUsers: options.maxUsers,
+    maxUsers,
+    retryableOnly,
+    todayOnly,
+    todayYmd,
   });
   for (const uid of pendingUserIds) {
     const entry = ensureUser(uid);
@@ -263,7 +329,12 @@ async function buildGapDetectWorklist(db, range, options = {}) {
     }
   }
 
-  const webhookRows = await listPendingStravaWebhookRetries(db, { maxEntries: options.maxUsers || 500 });
+  const webhookRows = await listPendingStravaWebhookRetries(db, {
+    maxEntries: maxUsers,
+    retryableOnly,
+    todayOnly,
+    todayYmd,
+  });
   for (const row of webhookRows) {
     const objectId = String(row.object_id || "").trim();
     const ownerId = Number(row.owner_id);
@@ -285,16 +356,16 @@ async function buildGapDetectWorklist(db, range, options = {}) {
       entry.sources.add("C_gap_scan");
       entry.needsGapScan = true;
     }
-  } else if (Array.isArray(options.gapScanUserIds) && options.gapScanUserIds.length) {
-    // 전체 스캔(Strava 레이트리밋 1000/day 초과로 해제됨) 대신, 호출자가 커서로 회전시킨
-    // 소규모 배치만 검사 — 웹훅이 아예 도착하지 않아 A_pending/B_webhook 큐에도 못 들어간
-    // 케이스(예: 2026-08-02 사례)를 레이트리밋 안에서 며칠에 걸쳐 전원 커버하기 위한 안전망.
-    for (const uid of options.gapScanUserIds) {
-      const entry = ensureUser(uid);
-      if (!entry) continue;
-      entry.sources.add("D_rotating_gap_scan");
-      entry.needsGapScan = true;
+  }
+
+  // hourly 상한: 유저 수 기준으로 자름 (웹훅·pending 합집합)
+  if (worklist.size > maxUsers) {
+    const trimmed = new Map();
+    for (const [uid, entry] of worklist) {
+      trimmed.set(uid, entry);
+      if (trimmed.size >= maxUsers) break;
     }
+    return trimmed;
   }
 
   return worklist;
@@ -453,7 +524,7 @@ async function detectMissingActivityIdsForUser(db, userId, userData, range, deps
  * @param {{ afterUnix: number, beforeUnix: number, dateFrom: string, dateTo: string }} range
  * @param {object} deps
  * @param {string} logPrefix
- * @param {{ includeGapScanAllUsers?: boolean, maxUsers?: number, gapScanUserIds?: string[] }} [options]
+ * @param {{ includeGapScanAllUsers?: boolean, maxUsers?: number, retryableOnly?: boolean, concurrency?: number, abortAfter429?: number }} [options]
  */
 async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
   const prefix = logPrefix || "[stravaGapDetect]";
@@ -465,19 +536,32 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
     dateTo: range.dateTo,
     users: userEntries.length,
     gapScanAll: options.includeGapScanAllUsers !== false,
+    retryableOnly: options.retryableOnly === true,
+    todayOnly: options.todayOnly === true,
+    todayYmd: options.todayYmd || null,
+    maxUsers: options.maxUsers || null,
   });
 
   if (userEntries.length === 0) {
     console.log(`${prefix} 처리 대상 없음`);
-    return { users: 0, ok: 0, fail: 0, ingested: 0, apiCalls: 0, results: [] };
+    return { users: 0, ok: 0, fail: 0, ingested: 0, apiCalls: 0, results: [], aborted429: false };
   }
 
-  const concurrency = stravaSyncRetry.STRAVA_SYNC_CONCURRENCY_SAFE;
+  const concurrency = Math.max(
+    1,
+    Math.min(
+      stravaSyncRetry.STRAVA_SYNC_CONCURRENCY_SAFE,
+      Number(options.concurrency) || stravaSyncRetry.STRAVA_SYNC_CONCURRENCY_SAFE
+    )
+  );
+  const abortAfter429 = Math.max(1, Number(options.abortAfter429) || 3);
   const results = [];
   let ok = 0;
   let fail = 0;
   let ingested = 0;
   let apiCalls = 0;
+  let consecutive429 = 0;
+  let aborted429 = false;
 
   async function processOneUser(entry) {
     const userSnap = await db.collection("users").doc(entry.userId).get();
@@ -701,6 +785,7 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
   }
 
   for (let i = 0; i < userEntries.length; i += concurrency) {
+    if (aborted429) break;
     const batch = userEntries.slice(i, i + concurrency);
     const settled = await Promise.allSettled(batch.map((entry) => processOneUser(entry)));
     for (const s of settled) {
@@ -716,54 +801,75 @@ async function runGapDetectSyncJob(db, range, deps, logPrefix, options = {}) {
       if (result.error && !result.skipped) fail += 1;
       else if (!result.skipped) ok += 1;
       ingested += Number(result.ingested) || 0;
+      const hit429 = stravaSyncRetry.is429StatusOrError(
+        result.gapStatus || result.status,
+        result.error
+      );
+      if (hit429) consecutive429 += 1;
+      else if (!result.error) consecutive429 = 0;
       console.log(`${prefix} user`, result.userId, {
         sources: result.sources,
         ingested: result.ingested,
         error: result.error || null,
       });
+      if (consecutive429 >= abortAfter429) {
+        aborted429 = true;
+        console.warn(`${prefix} 연속 429 ${consecutive429}회 — 한도 보호를 위해 이번 실행 중단`);
+        break;
+      }
     }
-    if (i + concurrency < userEntries.length) {
+    if (!aborted429 && i + concurrency < userEntries.length) {
       await sleep(stravaSyncRetry.STRAVA_USER_BATCH_DELAY_MS);
     }
   }
 
-  console.log(`${prefix} 완료`, { users: userEntries.length, ok, fail, ingested, apiCalls });
+  console.log(`${prefix} 완료`, {
+    users: userEntries.length,
+    processed: results.length,
+    ok,
+    fail,
+    ingested,
+    apiCalls,
+    aborted429,
+  });
 
-  // 429 갭 스캔 실패 유저 — 90초+ 순차 2차 패스 (당일 누락 즉시 보완, 타임아웃 방지로 상한 적용)
-  const gap429UserIds = results
-    .filter(
-      (r) =>
-        r &&
-        r.error &&
-        stravaSyncRetry.is429StatusOrError(r.gapStatus, r.error) &&
-        !r.skipped
-    )
-    .map((r) => r.userId)
-    .filter(Boolean);
-  const unique429 = Array.from(new Set(gap429UserIds)).slice(
-    0,
-    stravaSyncRetry.STRAVA_429_GAP_SECOND_PASS_MAX
-  );
-  if (unique429.length > 0 && typeof deps.processOneUserStravaSync === "function") {
-    console.log(`${prefix} 429 2차 패스 시작`, { users: unique429.length });
-    const secondPass = await stravaSyncRetry.runStravaSyncRetrySequential(
-      db,
-      range,
-      unique429,
-      `${prefix}:429-second-pass`,
-      deps.processOneUserStravaSync,
-      deps.processStravaActivity
+  // 429 갭 스캔 실패 유저 — 90초+ 순차 2차 패스 (hourly 저속 모드에서는 생략 — 다음 시간 슬롯에 재시도)
+  if (!aborted429 && options.skip429SecondPass !== true) {
+    const gap429UserIds = results
+      .filter(
+        (r) =>
+          r &&
+          r.error &&
+          stravaSyncRetry.is429StatusOrError(r.gapStatus, r.error) &&
+          !r.skipped
+      )
+      .map((r) => r.userId)
+      .filter(Boolean);
+    const unique429 = Array.from(new Set(gap429UserIds)).slice(
+      0,
+      stravaSyncRetry.STRAVA_429_GAP_SECOND_PASS_MAX
     );
-    ingested += (secondPass.results || []).reduce(
-      (s, r) => s + (Number(r && r.newActivities) || Number(r && r.ingested) || 0),
-      0
-    );
-    ok += Number(secondPass.ok) || 0;
-    fail = Math.max(0, fail - (Number(secondPass.ok) || 0));
-    results.push(...(secondPass.results || []).map((r) => ({ ...r, secondPass429: true })));
+    if (unique429.length > 0 && typeof deps.processOneUserStravaSync === "function") {
+      console.log(`${prefix} 429 2차 패스 시작`, { users: unique429.length });
+      const secondPass = await stravaSyncRetry.runStravaSyncRetrySequential(
+        db,
+        range,
+        unique429,
+        `${prefix}:429-second-pass`,
+        deps.processOneUserStravaSync,
+        deps.processStravaActivity
+      );
+      ingested += (secondPass.results || []).reduce(
+        (s, r) => s + (Number(r && r.newActivities) || Number(r && r.ingested) || 0),
+        0
+      );
+      ok += Number(secondPass.ok) || 0;
+      fail = Math.max(0, fail - (Number(secondPass.ok) || 0));
+      results.push(...(secondPass.results || []).map((r) => ({ ...r, secondPass429: true })));
+    }
   }
 
-  return { users: userEntries.length, ok, fail, ingested, apiCalls, results };
+  return { users: userEntries.length, ok, fail, ingested, apiCalls, results, aborted429 };
 }
 
 /**
@@ -954,6 +1060,10 @@ module.exports = {
   listPendingStravaWebhookRetries,
   listPendingRetryUserIds,
   listStravaConnectedUserIds,
+  isPermanentStravaRetryFailure,
+  getTodayYmdSeoul,
+  toYmdSeoul,
+  isYmdSeoulToday,
   buildGapDetectWorklist,
   classifyStravaListActivity,
   detectMissingActivityIdsForUser,

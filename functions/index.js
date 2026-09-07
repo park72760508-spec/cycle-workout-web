@@ -5025,17 +5025,31 @@ async function runStravaSyncRetryJob(db, dateFrom, dateTo, logPrefix) {
 }
 
 /**
- * 타겟 갭 드레인 — 전체 사용자 스캔 없이 A_pending(strava_sync_retry_pending) + B_webhook(strava_webhook_retries) 큐만 처리.
- * includeGapScanAllUsers:false 이므로 확장 안전(처리량 O(실패건수)). needsGapScan 경로에서 strava_athlete_id 자가복구도 수행.
- * (구 stravaSyncPreviousDay/stravaSyncTodayGap 전체 스캔의 웹훅 실패 복구 역할을 대체)
+ * 타겟 갭 드레인 — 전체 사용자 스캔 없이 A_pending + B_webhook 미완료 큐만 처리.
+ * includeGapScanAllUsers:false → 처리량 O(실패건수).
+ * todayOnly(기본 true for hourly): 과거 pending 스킵, Asia/Seoul 당일 수신 미완료만.
  */
-async function runStravaGapDetectTargetedJob(db, logPrefix) {
-  const yesterday = getYesterdayAfterBefore();
+async function runStravaGapDetectTargetedJob(db, logPrefix, options = {}) {
   const today = getTodayAfterBefore();
-  const range = stravaSyncRetry.ymdRangeToUnix({
-    dateFrom: yesterday.dateFrom,
-    dateTo: today.dateTo,
-  });
+  const todayOnly = options.todayOnly !== false;
+  const todayYmd = String(options.todayYmd || today.dateFrom).slice(0, 10);
+  // 당일 모드: 수집/갭 판정 구간도 오늘만. 그 외(수동 등)는 어제~오늘 유지 가능.
+  const range = todayOnly
+    ? stravaSyncRetry.ymdRangeToUnix({ dateFrom: todayYmd, dateTo: todayYmd })
+    : stravaSyncRetry.ymdRangeToUnix({
+        dateFrom: getYesterdayAfterBefore().dateFrom,
+        dateTo: today.dateTo,
+      });
+  const hourlyDefaults = {
+    includeGapScanAllUsers: false,
+    retryableOnly: true,
+    todayOnly: true,
+    todayYmd,
+    maxUsers: Number(options.maxUsers) > 0 ? Number(options.maxUsers) : 20,
+    concurrency: Number(options.concurrency) > 0 ? Number(options.concurrency) : 1,
+    abortAfter429: Number(options.abortAfter429) > 0 ? Number(options.abortAfter429) : 3,
+    skip429SecondPass: options.skip429SecondPass !== false,
+  };
   return stravaGapDetect.runGapDetectSyncJob(
     db,
     range,
@@ -5047,7 +5061,13 @@ async function runStravaGapDetectTargetedJob(db, logPrefix) {
       supabaseDualWriteServer,
     },
     logPrefix || "[stravaSyncRetryTargeted]",
-    { includeGapScanAllUsers: false }
+    {
+      ...hourlyDefaults,
+      ...options,
+      includeGapScanAllUsers: false,
+      todayOnly,
+      todayYmd,
+    }
   );
 }
 
@@ -5112,11 +5132,13 @@ exports.runStravaSync429Retry = onRequest(stravaSync429RetryOptions, async (req,
 });
 
 /**
- * pending 재수집(429·웹훅 등) — 매일 03:30·06:30·09:30(서울), 전날+당일 구간
- * [스케줄 정지 2026-09-07] 미수집 보완이 앱 공유 레이트리밋(429)을 소진·증폭 — Cloud Scheduler PAUSED.
+ * 미완료(재시도 가능) 큐만 시간당 저속 드레인 — Asia/Seoul 매시 20분.
+ * - A_pending + B_webhook 중 404/401/403 제외
+ * - **당일(KST) 수신/실패 미완료만** (과거 pending 스킵)
+ * - 회당 최대 20명, concurrency 1, 연속 429 시 중단
  */
 const stravaSyncRetryScheduleOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  schedule: "30 3,6,9 * * *",
+  schedule: "20 * * * *",
   timeZone: "Asia/Seoul",
   timeoutSeconds: 1800,
   memory: "1GiB",
@@ -5128,23 +5150,28 @@ if (STRAVA_CLIENT_SECRET) {
     stravaSyncRetryScheduleOptions.secrets.push(STRAVA_CLIENT_SECRET);
   }
 }
-// exports.stravaSyncRetrySchedule = onSchedule(
-//   stravaSyncRetryScheduleOptions,
-//   async () => {
-//     const db = admin.firestore();
-//     const yesterday = getYesterdayAfterBefore();
-//     const today = getTodayAfterBefore();
-//     console.log("[stravaSyncRetrySchedule] 시작", {
-//       yesterday: yesterday.dateFrom,
-//       today: today.dateFrom,
-//     });
-//     await runStravaSyncRetryJob(db, yesterday.dateFrom, yesterday.dateTo, "[stravaSyncRetrySchedule:yesterday]");
-//     await runStravaSyncRetryJob(db, today.dateFrom, today.dateTo, "[stravaSyncRetrySchedule:today]");
-//     await runStravaGapDetectTargetedJob(db, "[stravaSyncRetrySchedule:targeted]");
-//   }
-// );
-/** stravaSync429RetrySchedule 제거됨(2026-08-20) — stravaSyncRetrySchedule과 완전히 동일한 코드가
- * 별도 Cloud Function으로 중복 배포되어 03:30·06:30·09:30에 동일 작업이 두 번 실행되고 있었음. */
+exports.stravaSyncRetrySchedule = onSchedule(
+  stravaSyncRetryScheduleOptions,
+  async () => {
+    const db = admin.firestore();
+    const todayYmd = getTodayAfterBefore().dateFrom;
+    console.log("[stravaSyncRetrySchedule] hourly today-only incomplete drain 시작", {
+      at: new Date().toISOString(),
+      todayYmd,
+    });
+    const summary = await runStravaGapDetectTargetedJob(db, "[stravaSyncRetrySchedule:hourly]", {
+      maxUsers: 20,
+      concurrency: 1,
+      retryableOnly: true,
+      todayOnly: true,
+      todayYmd,
+      abortAfter429: 3,
+      skip429SecondPass: true,
+    });
+    console.log("[stravaSyncRetrySchedule] hourly today-only incomplete drain 완료", summary);
+  }
+);
+/** stravaSync429RetrySchedule 제거됨(2026-08-20) — 중복 스케줄 방지. 수동은 runStravaSync429Retry 사용. */
 
 /**
  * 전체 사용자 순환 갭 스캔 — Strava 웹훅이 아예 도착하지 않아 strava_sync_retry_pending /
