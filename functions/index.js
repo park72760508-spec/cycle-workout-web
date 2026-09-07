@@ -10345,6 +10345,13 @@ const scheduledWeeklyTssSupabaseParityOptions = supabaseDualWriteServer.appendSe
   memory: "1GiB",
   timeoutSeconds: 1800,
 });
+if (STRAVA_CLIENT_SECRET) {
+  scheduledWeeklyTssSupabaseParityOptions.secrets =
+    scheduledWeeklyTssSupabaseParityOptions.secrets || [];
+  if (!scheduledWeeklyTssSupabaseParityOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
+    scheduledWeeklyTssSupabaseParityOptions.secrets.push(STRAVA_CLIENT_SECRET);
+  }
+}
 // exports.scheduledWeeklyTssSupabaseParity = onSchedule(
 //   scheduledWeeklyTssSupabaseParityOptions,
 //   async () => {
